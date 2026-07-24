@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "generatedAtUtc": "2026-07-24T05:03:03.215059+00:00",
+  "sourcePackages": [
+    {
+      "id": "01_ui",
+      "archive": "package_01_ui_kit.zip",
+      "sha256": "71097aaa73979a1d250bd8844729eaac22decf9f1d363d2c573f11ab5798e472",
+      "entries": 54,
+      "crc_ok": true,
+      "bad_entry": null,
+      "uncompressed_bytes": 11193048
+    },
+    {
+      "id": "02_hunter",
+      "archive": "package_02_hunter_character.zip",
+      "sha256": "98e0abb6a28b94670cdcf67d5e992e65b1afdf2eb6a299fed4945b3e75e6057e",
+      "entries": 127,
+      "crc_ok": true,
+      "bad_entry": null,
+      "uncompressed_bytes": 5996559
+    },
+    {
+      "id": "02A_hunter_animation",
+      "archive": "package_02A_hunter_animation_expansion.zip",
+      "sha256": "8c97aab77dab108cdfbd7d095de9b76626798ba593939af3c80b92d2333be5a8",
+      "entries": 94,
+      "crc_ok": true,
+      "bad_entry": null,
+      "uncompressed_bytes": 18627151
+    },
+    {
+      "id": "03_enemies",
+      "archive": "package_03_enemy_creatures.zip",
+      "sha256": "efea96731a3e93d2d1c86e8bfd87d7e5cf18611d17d61adebef8a00bad43316a",
+      "entries": 252,
+      "crc_ok": true,
+      "bad_entry": null,
+      "uncompressed_bytes": 20002607
+    },
+    {
+      "id": "03A_enemy_animation",
+      "archive": "package_03A_enemy_animation_expansion.zip",
+      "sha256": "98cc0ac6caf9f3511729a17a5db42da5e55594a23d3a64ce31ea5d456c5afe99",
+      "entries": 148,
+      "crc_ok": true,
+      "bad_entry": null,
+      "uncompressed_bytes": 28817774
+    },
+    {
+      "id": "04_bosses",
+      "archive": "package_04_bosses.zip",
+      "sha256": "739894e7ec73207fcb09426a60613b7d9391712a44224a89bf826c4876ab1998",
+      "entries": 99,
+      "crc_ok": true,
+      "bad_entry": null,
+      "uncompressed_bytes": 40590250
+    },
+    {
+      "id": "04A_boss_animation",
+      "archive": "package_04A_boss_animation_expansion.zip",
+      "sha256": "6b321411baf30c572b945721894257f7ac072fce6b566b5120c8a549142e9e41",
+      "entries": 220,
+      "crc_ok": true,
+      "bad_entry": null,
+      "uncompressed_bytes": 97980676
+    },
+    {
+      "id": "05_items",
+      "archive": "package_05_items_loot.zip",
+      "sha256": "e9f0d7312a839be0851a9f56d1b09bd6f0a09cf1271af9f5670bf53c46c15b80",
+      "entries": 208,
+      "crc_ok": true,
+      "bad_entry": null,
+      "uncompressed_bytes": 15522481
+    },
+    {
+      "id": "06_vfx",
+      "archive": "package_06_vfx_animation_runtime.zip",
+      "sha256": "1568f6ca44e4d7e45217428f53fd4d15f88851e36ccefb8d73203a6d5b439f47",
+      "entries": 201,
+      "crc_ok": true,
+      "bad_entry": null,
+      "uncompressed_bytes": 33069574
+    },
+    {
+      "id": "07_environments",
+      "archive": "package_07_backgrounds_environments.zip",
+      "sha256": "e4eae0aa21c7104f4854399497f2c4e7bea3003a5f9e48f1ee52524f0640835e",
+      "entries": 98,
+      "crc_ok": true,
+      "bad_entry": null,
+      "uncompressed_bytes": 94608793
+    },
+    {
+      "id": "08_symbols",
+      "archive": "package_08_branding_glyphs_symbols.zip",
+      "sha256": "235908967fd767306534e476396deb5b4541ec47a62eb974f8e6b942ea9f908f",
+      "entries": 445,
+      "crc_ok": true,
+      "bad_entry": null,
+      "uncompressed_bytes": 22571261
+    }
+  ],
+  "runtimePngAssets": 1817,
+  "metadataJsonFiles": 43,
+  "collisions": [],
+  "pngErrors": [],
+  "jsonErrors": []
+}

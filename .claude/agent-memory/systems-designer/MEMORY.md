@@ -1,0 +1,3 @@
+- [Resonance Hunter project context](project_resonance_hunter.md) — MonoGame idle-RPG, systems-index dependency order, combat unproven
+- [Rush-mode authoring](feedback_rush_mode_authoring.md) — write full GDDs in one pass when active.md says rush mode, no per-section approval
+- [Registry and state file locations](reference_registry_and_state_files.md) — where cross-GDD facts and session checkpoints live

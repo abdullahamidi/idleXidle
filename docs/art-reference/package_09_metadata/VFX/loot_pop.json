@@ -1,0 +1,15 @@
+{
+  "id": "loot_pop",
+  "frameCount": 8,
+  "frameWidth": 512,
+  "frameHeight": 512,
+  "fps": 16,
+  "loop": false,
+  "blend": "Additive",
+  "origin": {
+    "x": 256,
+    "y": 450
+  },
+  "texturePath": "assets/vfx/loot/loot_pop/loot_pop_strip8_512.png",
+  "previewSource": "magical_loot_burst_animation_sequence.png"
+}

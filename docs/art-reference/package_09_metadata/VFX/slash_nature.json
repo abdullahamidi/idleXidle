@@ -1,0 +1,15 @@
+{
+  "id": "slash_nature",
+  "frameCount": 8,
+  "frameWidth": 512,
+  "frameHeight": 512,
+  "fps": 18,
+  "loop": false,
+  "blend": "AlphaBlend",
+  "origin": {
+    "x": 256,
+    "y": 256
+  },
+  "texturePath": "assets/vfx/slash/nature/slash_nature_strip8_512.png",
+  "previewSource": "nature_s_energy_slash_sequence.png"
+}

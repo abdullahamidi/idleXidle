@@ -1,0 +1,15 @@
+{
+  "id": "impact_gold",
+  "frameCount": 8,
+  "frameWidth": 512,
+  "frameHeight": 512,
+  "fps": 20,
+  "loop": false,
+  "blend": "Additive",
+  "origin": {
+    "x": 256,
+    "y": 256
+  },
+  "texturePath": "assets/vfx/impact/gold/impact_gold_strip8_512.png",
+  "previewSource": "explosion_sequence_on_white_canvas.png"
+}

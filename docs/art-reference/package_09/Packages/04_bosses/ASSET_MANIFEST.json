@@ -1,0 +1,872 @@
+[
+  {
+    "path": "assets/bosses/void_reaper/void_reaper_idle.png",
+    "boss": "void_reaper",
+    "type": "pose",
+    "name": "idle",
+    "size": {
+      "w": 263,
+      "h": 421
+    }
+  },
+  {
+    "path": "assets/bosses/void_reaper/normalized/void_reaper_idle_1024.png",
+    "boss": "void_reaper",
+    "type": "pose_normalized",
+    "name": "idle",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/void_reaper/void_reaper_attack.png",
+    "boss": "void_reaper",
+    "type": "pose",
+    "name": "attack",
+    "size": {
+      "w": 311,
+      "h": 420
+    }
+  },
+  {
+    "path": "assets/bosses/void_reaper/normalized/void_reaper_attack_1024.png",
+    "boss": "void_reaper",
+    "type": "pose_normalized",
+    "name": "attack",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/void_reaper/void_reaper_special.png",
+    "boss": "void_reaper",
+    "type": "pose",
+    "name": "special",
+    "size": {
+      "w": 366,
+      "h": 299
+    }
+  },
+  {
+    "path": "assets/bosses/void_reaper/normalized/void_reaper_special_1024.png",
+    "boss": "void_reaper",
+    "type": "pose_normalized",
+    "name": "special",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/void_reaper/void_reaper_hurt.png",
+    "boss": "void_reaper",
+    "type": "pose",
+    "name": "hurt",
+    "size": {
+      "w": 240,
+      "h": 343
+    }
+  },
+  {
+    "path": "assets/bosses/void_reaper/normalized/void_reaper_hurt_1024.png",
+    "boss": "void_reaper",
+    "type": "pose_normalized",
+    "name": "hurt",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/void_reaper/void_reaper_binding.png",
+    "boss": "void_reaper",
+    "type": "pose",
+    "name": "binding",
+    "size": {
+      "w": 314,
+      "h": 328
+    }
+  },
+  {
+    "path": "assets/bosses/void_reaper/normalized/void_reaper_binding_1024.png",
+    "boss": "void_reaper",
+    "type": "pose_normalized",
+    "name": "binding",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/portraits/void_reaper_portrait_square.png",
+    "boss": "void_reaper",
+    "type": "portrait_square",
+    "size": {
+      "w": 239,
+      "h": 242
+    }
+  },
+  {
+    "path": "assets/portraits/void_reaper_portrait_bust.png",
+    "boss": "void_reaper",
+    "type": "portrait_bust",
+    "size": {
+      "w": 303,
+      "h": 326
+    }
+  },
+  {
+    "path": "assets/silhouettes/void_reaper_silhouette.png",
+    "boss": "void_reaper",
+    "type": "silhouette",
+    "size": {
+      "w": 198,
+      "h": 314
+    }
+  },
+  {
+    "path": "assets/glyphs/void_reaper_glyph.png",
+    "boss": "void_reaper",
+    "type": "glyph",
+    "size": {
+      "w": 232,
+      "h": 326
+    }
+  },
+  {
+    "path": "assets/shadows/void_reaper_shadow.png",
+    "boss": "void_reaper",
+    "type": "shadow",
+    "size": {
+      "w": 349,
+      "h": 74
+    }
+  },
+  {
+    "path": "assets/bosses/lumen_angel/lumen_angel_idle.png",
+    "boss": "lumen_angel",
+    "type": "pose",
+    "name": "idle",
+    "size": {
+      "w": 267,
+      "h": 482
+    }
+  },
+  {
+    "path": "assets/bosses/lumen_angel/normalized/lumen_angel_idle_1024.png",
+    "boss": "lumen_angel",
+    "type": "pose_normalized",
+    "name": "idle",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/lumen_angel/lumen_angel_attack.png",
+    "boss": "lumen_angel",
+    "type": "pose",
+    "name": "attack",
+    "size": {
+      "w": 335,
+      "h": 420
+    }
+  },
+  {
+    "path": "assets/bosses/lumen_angel/normalized/lumen_angel_attack_1024.png",
+    "boss": "lumen_angel",
+    "type": "pose_normalized",
+    "name": "attack",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/lumen_angel/lumen_angel_special.png",
+    "boss": "lumen_angel",
+    "type": "pose",
+    "name": "special",
+    "size": {
+      "w": 281,
+      "h": 547
+    }
+  },
+  {
+    "path": "assets/bosses/lumen_angel/normalized/lumen_angel_special_1024.png",
+    "boss": "lumen_angel",
+    "type": "pose_normalized",
+    "name": "special",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/lumen_angel/lumen_angel_hurt.png",
+    "boss": "lumen_angel",
+    "type": "pose",
+    "name": "hurt",
+    "size": {
+      "w": 281,
+      "h": 414
+    }
+  },
+  {
+    "path": "assets/bosses/lumen_angel/normalized/lumen_angel_hurt_1024.png",
+    "boss": "lumen_angel",
+    "type": "pose_normalized",
+    "name": "hurt",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/lumen_angel/lumen_angel_binding.png",
+    "boss": "lumen_angel",
+    "type": "pose",
+    "name": "binding",
+    "size": {
+      "w": 288,
+      "h": 381
+    }
+  },
+  {
+    "path": "assets/bosses/lumen_angel/normalized/lumen_angel_binding_1024.png",
+    "boss": "lumen_angel",
+    "type": "pose_normalized",
+    "name": "binding",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/portraits/lumen_angel_portrait_square.png",
+    "boss": "lumen_angel",
+    "type": "portrait_square",
+    "size": {
+      "w": 249,
+      "h": 270
+    }
+  },
+  {
+    "path": "assets/portraits/lumen_angel_portrait_bust.png",
+    "boss": "lumen_angel",
+    "type": "portrait_bust",
+    "size": {
+      "w": 310,
+      "h": 383
+    }
+  },
+  {
+    "path": "assets/silhouettes/lumen_angel_silhouette.png",
+    "boss": "lumen_angel",
+    "type": "silhouette",
+    "size": {
+      "w": 182,
+      "h": 311
+    }
+  },
+  {
+    "path": "assets/glyphs/lumen_angel_glyph.png",
+    "boss": "lumen_angel",
+    "type": "glyph",
+    "size": {
+      "w": 213,
+      "h": 307
+    }
+  },
+  {
+    "path": "assets/shadows/lumen_angel_shadow.png",
+    "boss": "lumen_angel",
+    "type": "shadow",
+    "size": {
+      "w": 336,
+      "h": 88
+    }
+  },
+  {
+    "path": "assets/bosses/spirit_matron/spirit_matron_idle.png",
+    "boss": "spirit_matron",
+    "type": "pose",
+    "name": "idle",
+    "size": {
+      "w": 285,
+      "h": 444
+    }
+  },
+  {
+    "path": "assets/bosses/spirit_matron/normalized/spirit_matron_idle_1024.png",
+    "boss": "spirit_matron",
+    "type": "pose_normalized",
+    "name": "idle",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/spirit_matron/spirit_matron_attack.png",
+    "boss": "spirit_matron",
+    "type": "pose",
+    "name": "attack",
+    "size": {
+      "w": 366,
+      "h": 399
+    }
+  },
+  {
+    "path": "assets/bosses/spirit_matron/normalized/spirit_matron_attack_1024.png",
+    "boss": "spirit_matron",
+    "type": "pose_normalized",
+    "name": "attack",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/spirit_matron/spirit_matron_special.png",
+    "boss": "spirit_matron",
+    "type": "pose",
+    "name": "special",
+    "size": {
+      "w": 342,
+      "h": 530
+    }
+  },
+  {
+    "path": "assets/bosses/spirit_matron/normalized/spirit_matron_special_1024.png",
+    "boss": "spirit_matron",
+    "type": "pose_normalized",
+    "name": "special",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/spirit_matron/spirit_matron_hurt.png",
+    "boss": "spirit_matron",
+    "type": "pose",
+    "name": "hurt",
+    "size": {
+      "w": 256,
+      "h": 399
+    }
+  },
+  {
+    "path": "assets/bosses/spirit_matron/normalized/spirit_matron_hurt_1024.png",
+    "boss": "spirit_matron",
+    "type": "pose_normalized",
+    "name": "hurt",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/spirit_matron/spirit_matron_binding.png",
+    "boss": "spirit_matron",
+    "type": "pose",
+    "name": "binding",
+    "size": {
+      "w": 309,
+      "h": 427
+    }
+  },
+  {
+    "path": "assets/bosses/spirit_matron/normalized/spirit_matron_binding_1024.png",
+    "boss": "spirit_matron",
+    "type": "pose_normalized",
+    "name": "binding",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/portraits/spirit_matron_portrait_square.png",
+    "boss": "spirit_matron",
+    "type": "portrait_square",
+    "size": {
+      "w": 263,
+      "h": 269
+    }
+  },
+  {
+    "path": "assets/portraits/spirit_matron_portrait_bust.png",
+    "boss": "spirit_matron",
+    "type": "portrait_bust",
+    "size": {
+      "w": 278,
+      "h": 370
+    }
+  },
+  {
+    "path": "assets/silhouettes/spirit_matron_silhouette.png",
+    "boss": "spirit_matron",
+    "type": "silhouette",
+    "size": {
+      "w": 205,
+      "h": 314
+    }
+  },
+  {
+    "path": "assets/glyphs/spirit_matron_glyph.png",
+    "boss": "spirit_matron",
+    "type": "glyph",
+    "size": {
+      "w": 197,
+      "h": 336
+    }
+  },
+  {
+    "path": "assets/shadows/spirit_matron_shadow.png",
+    "boss": "spirit_matron",
+    "type": "shadow",
+    "size": {
+      "w": 363,
+      "h": 109
+    }
+  },
+  {
+    "path": "assets/bosses/crystal_lich/crystal_lich_idle.png",
+    "boss": "crystal_lich",
+    "type": "pose",
+    "name": "idle",
+    "size": {
+      "w": 282,
+      "h": 379
+    }
+  },
+  {
+    "path": "assets/bosses/crystal_lich/normalized/crystal_lich_idle_1024.png",
+    "boss": "crystal_lich",
+    "type": "pose_normalized",
+    "name": "idle",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/crystal_lich/crystal_lich_attack.png",
+    "boss": "crystal_lich",
+    "type": "pose",
+    "name": "attack",
+    "size": {
+      "w": 313,
+      "h": 379
+    }
+  },
+  {
+    "path": "assets/bosses/crystal_lich/normalized/crystal_lich_attack_1024.png",
+    "boss": "crystal_lich",
+    "type": "pose_normalized",
+    "name": "attack",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/crystal_lich/crystal_lich_special.png",
+    "boss": "crystal_lich",
+    "type": "pose",
+    "name": "special",
+    "size": {
+      "w": 343,
+      "h": 450
+    }
+  },
+  {
+    "path": "assets/bosses/crystal_lich/normalized/crystal_lich_special_1024.png",
+    "boss": "crystal_lich",
+    "type": "pose_normalized",
+    "name": "special",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/crystal_lich/crystal_lich_hurt.png",
+    "boss": "crystal_lich",
+    "type": "pose",
+    "name": "hurt",
+    "size": {
+      "w": 238,
+      "h": 404
+    }
+  },
+  {
+    "path": "assets/bosses/crystal_lich/normalized/crystal_lich_hurt_1024.png",
+    "boss": "crystal_lich",
+    "type": "pose_normalized",
+    "name": "hurt",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/crystal_lich/crystal_lich_binding.png",
+    "boss": "crystal_lich",
+    "type": "pose",
+    "name": "binding",
+    "size": {
+      "w": 316,
+      "h": 328
+    }
+  },
+  {
+    "path": "assets/bosses/crystal_lich/normalized/crystal_lich_binding_1024.png",
+    "boss": "crystal_lich",
+    "type": "pose_normalized",
+    "name": "binding",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/portraits/crystal_lich_portrait_square.png",
+    "boss": "crystal_lich",
+    "type": "portrait_square",
+    "size": {
+      "w": 250,
+      "h": 262
+    }
+  },
+  {
+    "path": "assets/portraits/crystal_lich_portrait_bust.png",
+    "boss": "crystal_lich",
+    "type": "portrait_bust",
+    "size": {
+      "w": 339,
+      "h": 333
+    }
+  },
+  {
+    "path": "assets/silhouettes/crystal_lich_silhouette.png",
+    "boss": "crystal_lich",
+    "type": "silhouette",
+    "size": {
+      "w": 253,
+      "h": 307
+    }
+  },
+  {
+    "path": "assets/glyphs/crystal_lich_glyph.png",
+    "boss": "crystal_lich",
+    "type": "glyph",
+    "size": {
+      "w": 245,
+      "h": 319
+    }
+  },
+  {
+    "path": "assets/shadows/crystal_lich_shadow.png",
+    "boss": "crystal_lich",
+    "type": "shadow",
+    "size": {
+      "w": 282,
+      "h": 45
+    }
+  },
+  {
+    "path": "assets/bosses/forge_colossus/forge_colossus_idle.png",
+    "boss": "forge_colossus",
+    "type": "pose",
+    "name": "idle",
+    "size": {
+      "w": 263,
+      "h": 465
+    }
+  },
+  {
+    "path": "assets/bosses/forge_colossus/normalized/forge_colossus_idle_1024.png",
+    "boss": "forge_colossus",
+    "type": "pose_normalized",
+    "name": "idle",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/forge_colossus/forge_colossus_attack.png",
+    "boss": "forge_colossus",
+    "type": "pose",
+    "name": "attack",
+    "size": {
+      "w": 448,
+      "h": 359
+    }
+  },
+  {
+    "path": "assets/bosses/forge_colossus/normalized/forge_colossus_attack_1024.png",
+    "boss": "forge_colossus",
+    "type": "pose_normalized",
+    "name": "attack",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/forge_colossus/forge_colossus_special.png",
+    "boss": "forge_colossus",
+    "type": "pose",
+    "name": "special",
+    "size": {
+      "w": 265,
+      "h": 441
+    }
+  },
+  {
+    "path": "assets/bosses/forge_colossus/normalized/forge_colossus_special_1024.png",
+    "boss": "forge_colossus",
+    "type": "pose_normalized",
+    "name": "special",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/forge_colossus/forge_colossus_hurt.png",
+    "boss": "forge_colossus",
+    "type": "pose",
+    "name": "hurt",
+    "size": {
+      "w": 251,
+      "h": 359
+    }
+  },
+  {
+    "path": "assets/bosses/forge_colossus/normalized/forge_colossus_hurt_1024.png",
+    "boss": "forge_colossus",
+    "type": "pose_normalized",
+    "name": "hurt",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/forge_colossus/forge_colossus_binding.png",
+    "boss": "forge_colossus",
+    "type": "pose",
+    "name": "binding",
+    "size": {
+      "w": 299,
+      "h": 473
+    }
+  },
+  {
+    "path": "assets/bosses/forge_colossus/normalized/forge_colossus_binding_1024.png",
+    "boss": "forge_colossus",
+    "type": "pose_normalized",
+    "name": "binding",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/portraits/forge_colossus_portrait_square.png",
+    "boss": "forge_colossus",
+    "type": "portrait_square",
+    "size": {
+      "w": 300,
+      "h": 304
+    }
+  },
+  {
+    "path": "assets/portraits/forge_colossus_portrait_bust.png",
+    "boss": "forge_colossus",
+    "type": "portrait_bust",
+    "size": {
+      "w": 285,
+      "h": 367
+    }
+  },
+  {
+    "path": "assets/silhouettes/forge_colossus_silhouette.png",
+    "boss": "forge_colossus",
+    "type": "silhouette",
+    "size": {
+      "w": 198,
+      "h": 338
+    }
+  },
+  {
+    "path": "assets/glyphs/forge_colossus_glyph.png",
+    "boss": "forge_colossus",
+    "type": "glyph",
+    "size": {
+      "w": 233,
+      "h": 312
+    }
+  },
+  {
+    "path": "assets/shadows/forge_colossus_shadow.png",
+    "boss": "forge_colossus",
+    "type": "shadow",
+    "size": {
+      "w": 351,
+      "h": 51
+    }
+  },
+  {
+    "path": "assets/bosses/thorn_regent/thorn_regent_idle.png",
+    "boss": "thorn_regent",
+    "type": "pose",
+    "name": "idle",
+    "size": {
+      "w": 224,
+      "h": 470
+    }
+  },
+  {
+    "path": "assets/bosses/thorn_regent/normalized/thorn_regent_idle_1024.png",
+    "boss": "thorn_regent",
+    "type": "pose_normalized",
+    "name": "idle",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/thorn_regent/thorn_regent_attack.png",
+    "boss": "thorn_regent",
+    "type": "pose",
+    "name": "attack",
+    "size": {
+      "w": 427,
+      "h": 425
+    }
+  },
+  {
+    "path": "assets/bosses/thorn_regent/normalized/thorn_regent_attack_1024.png",
+    "boss": "thorn_regent",
+    "type": "pose_normalized",
+    "name": "attack",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/thorn_regent/thorn_regent_special.png",
+    "boss": "thorn_regent",
+    "type": "pose",
+    "name": "special",
+    "size": {
+      "w": 290,
+      "h": 572
+    }
+  },
+  {
+    "path": "assets/bosses/thorn_regent/normalized/thorn_regent_special_1024.png",
+    "boss": "thorn_regent",
+    "type": "pose_normalized",
+    "name": "special",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/thorn_regent/thorn_regent_hurt.png",
+    "boss": "thorn_regent",
+    "type": "pose",
+    "name": "hurt",
+    "size": {
+      "w": 311,
+      "h": 418
+    }
+  },
+  {
+    "path": "assets/bosses/thorn_regent/normalized/thorn_regent_hurt_1024.png",
+    "boss": "thorn_regent",
+    "type": "pose_normalized",
+    "name": "hurt",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/bosses/thorn_regent/thorn_regent_binding.png",
+    "boss": "thorn_regent",
+    "type": "pose",
+    "name": "binding",
+    "size": {
+      "w": 312,
+      "h": 408
+    }
+  },
+  {
+    "path": "assets/bosses/thorn_regent/normalized/thorn_regent_binding_1024.png",
+    "boss": "thorn_regent",
+    "type": "pose_normalized",
+    "name": "binding",
+    "size": {
+      "w": 1024,
+      "h": 1024
+    }
+  },
+  {
+    "path": "assets/portraits/thorn_regent_portrait_square.png",
+    "boss": "thorn_regent",
+    "type": "portrait_square",
+    "size": {
+      "w": 253,
+      "h": 254
+    }
+  },
+  {
+    "path": "assets/portraits/thorn_regent_portrait_bust.png",
+    "boss": "thorn_regent",
+    "type": "portrait_bust",
+    "size": {
+      "w": 262,
+      "h": 346
+    }
+  },
+  {
+    "path": "assets/silhouettes/thorn_regent_silhouette.png",
+    "boss": "thorn_regent",
+    "type": "silhouette",
+    "size": {
+      "w": 180,
+      "h": 331
+    }
+  },
+  {
+    "path": "assets/glyphs/thorn_regent_glyph.png",
+    "boss": "thorn_regent",
+    "type": "glyph",
+    "size": {
+      "w": 225,
+      "h": 297
+    }
+  },
+  {
+    "path": "assets/shadows/thorn_regent_shadow.png",
+    "boss": "thorn_regent",
+    "type": "shadow",
+    "size": {
+      "w": 323,
+      "h": 57
+    }
+  }
+]

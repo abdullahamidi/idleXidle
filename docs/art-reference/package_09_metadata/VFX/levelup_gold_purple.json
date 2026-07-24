@@ -1,0 +1,15 @@
+{
+  "id": "levelup_gold_purple",
+  "frameCount": 8,
+  "frameWidth": 512,
+  "frameHeight": 512,
+  "fps": 14,
+  "loop": false,
+  "blend": "Additive",
+  "origin": {
+    "x": 256,
+    "y": 450
+  },
+  "texturePath": "assets/vfx/levelup/gold_purple/levelup_gold_purple_strip8_512.png",
+  "previewSource": "magical_burst_progression_in_gold_and_purple.png"
+}

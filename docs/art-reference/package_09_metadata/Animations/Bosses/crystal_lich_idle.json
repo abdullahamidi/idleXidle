@@ -1,0 +1,14 @@
+{
+  "id": "crystal_lich_idle",
+  "frameCount": 8,
+  "frameWidth": 1024,
+  "frameHeight": 1024,
+  "fps": 10,
+  "loop": true,
+  "origin": {
+    "x": 512,
+    "y": 901
+  },
+  "texturePath": "assets/animations/crystal_lich_idle/crystal_lich_idle_strip8_1024.png",
+  "previewSource": "a_clean_white_background_sprite_sheet_style_image_5_batch_1.png"
+}

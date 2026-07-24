@@ -1,0 +1,2 @@
+- [Resonance Hunter project context](project_resonance-hunter.md) — idle-action-RPG game, pillars, key GDDs read, Memory Dust design summary
+- [Rush-authoring convention](feedback_rush-authoring-convention.md) — how to write GDDs solo when told not to ask questions; file discipline rules

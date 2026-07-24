@@ -1,0 +1,49 @@
+{
+  "id": "nature_verdant_hollow",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "groundLineY": 900,
+  "safeCombatArea": [
+    160,
+    560,
+    1600,
+    360
+  ],
+  "backgrounds": {
+    "clean": "assets/backgrounds/nature_verdant_hollow/nature_verdant_hollow_clean.png",
+    "unconquered": "assets/backgrounds/nature_verdant_hollow/nature_verdant_hollow_unconquered.png",
+    "mastered": "assets/backgrounds/nature_verdant_hollow/nature_verdant_hollow_mastered.png"
+  },
+  "layers": [
+    {
+      "name": "far",
+      "texture": "assets/parallax/nature_verdant_hollow/nature_verdant_hollow_far.png",
+      "factor": 0.12
+    },
+    {
+      "name": "mid",
+      "texture": "assets/parallax/nature_verdant_hollow/nature_verdant_hollow_mid.png",
+      "factor": 0.32
+    },
+    {
+      "name": "near",
+      "texture": "assets/parallax/nature_verdant_hollow/nature_verdant_hollow_near.png",
+      "factor": 0.62
+    },
+    {
+      "name": "foreground",
+      "texture": "assets/parallax/nature_verdant_hollow/nature_verdant_hollow_foreground.png",
+      "factor": 1.0
+    }
+  ],
+  "overlays": {
+    "fog": "assets/overlays/nature_verdant_hollow/nature_verdant_hollow_fog.png",
+    "corruption": "assets/overlays/nature_verdant_hollow/nature_verdant_hollow_corruption.png",
+    "mastery": "assets/overlays/nature_verdant_hollow/nature_verdant_hollow_mastery.png",
+    "particles": "assets/overlays/nature_verdant_hollow/nature_verdant_hollow_particles.png",
+    "light_rays": "assets/overlays/nature_verdant_hollow/nature_verdant_hollow_light_rays.png",
+    "vignette": "assets/overlays/nature_verdant_hollow/nature_verdant_hollow_vignette.png"
+  }
+}

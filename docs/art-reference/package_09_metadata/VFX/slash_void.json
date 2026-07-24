@@ -1,0 +1,15 @@
+{
+  "id": "slash_void",
+  "frameCount": 8,
+  "frameWidth": 512,
+  "frameHeight": 512,
+  "fps": 18,
+  "loop": false,
+  "blend": "Additive",
+  "origin": {
+    "x": 256,
+    "y": 256
+  },
+  "texturePath": "assets/vfx/slash/void/slash_void_strip8_512.png",
+  "previewSource": "magical_slash_effect_sequence_in_motion.png"
+}

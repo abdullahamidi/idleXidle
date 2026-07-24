@@ -1,0 +1,1634 @@
+[
+  {
+    "path": "assets/frames/ui_frame_rarity_common.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/frames/ui_frame_rarity_epic.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/frames/ui_frame_rarity_legendary.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/frames/ui_frame_rarity_rare.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/frames/ui_frame_rarity_uncommon.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/glyphs/affix/affix_critical.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "affix_glyph"
+  },
+  {
+    "path": "assets/glyphs/affix/affix_defense.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "affix_glyph"
+  },
+  {
+    "path": "assets/glyphs/affix/affix_healing.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "affix_glyph"
+  },
+  {
+    "path": "assets/glyphs/affix/affix_health.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "affix_glyph"
+  },
+  {
+    "path": "assets/glyphs/affix/affix_power.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "affix_glyph"
+  },
+  {
+    "path": "assets/glyphs/affix/affix_resonance.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "affix_glyph"
+  },
+  {
+    "path": "assets/glyphs/affix/affix_timer.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "affix_glyph"
+  },
+  {
+    "path": "assets/glyphs/enchant/ench_coiled.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "enchant_glyph"
+  },
+  {
+    "path": "assets/glyphs/enchant/ench_desperation.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "enchant_glyph"
+  },
+  {
+    "path": "assets/glyphs/enchant/ench_execute.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "enchant_glyph"
+  },
+  {
+    "path": "assets/glyphs/enchant/ench_harvest.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "enchant_glyph"
+  },
+  {
+    "path": "assets/glyphs/enchant/ench_linger.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "enchant_glyph"
+  },
+  {
+    "path": "assets/glyphs/enchant/ench_overdraw.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "enchant_glyph"
+  },
+  {
+    "path": "assets/glyphs/enchant/ench_radiance.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "enchant_glyph"
+  },
+  {
+    "path": "assets/glyphs/enchant/ench_siphon.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "enchant_glyph"
+  },
+  {
+    "path": "assets/glyphs/enchant/ench_splinter.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "enchant_glyph"
+  },
+  {
+    "path": "assets/glyphs/enchant/ench_undying.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "enchant_glyph"
+  },
+  {
+    "path": "assets/glyphs/enchant/ench_venom.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "enchant_glyph"
+  },
+  {
+    "path": "assets/glyphs/source/category_icon_class_hunter.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "category_glyph"
+  },
+  {
+    "path": "assets/glyphs/source/category_icon_equipment_accessory.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "category_glyph"
+  },
+  {
+    "path": "assets/glyphs/source/category_icon_equipment_blade.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "category_glyph"
+  },
+  {
+    "path": "assets/glyphs/source/category_icon_equipment_boots.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "category_glyph"
+  },
+  {
+    "path": "assets/glyphs/source/category_icon_equipment_bow.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "category_glyph"
+  },
+  {
+    "path": "assets/glyphs/source/category_icon_equipment_chest.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "category_glyph"
+  },
+  {
+    "path": "assets/glyphs/source/category_icon_equipment_gloves.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "category_glyph"
+  },
+  {
+    "path": "assets/glyphs/source/category_icon_equipment_helmet.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "category_glyph"
+  },
+  {
+    "path": "assets/glyphs/source/category_icon_equipment_scythe.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "category_glyph"
+  },
+  {
+    "path": "assets/glyphs/source/category_icon_equipment_spear.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "category_glyph"
+  },
+  {
+    "path": "assets/glyphs/source/source_body.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "source_gem"
+  },
+  {
+    "path": "assets/glyphs/source/source_machine.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "source_gem"
+  },
+  {
+    "path": "assets/glyphs/source/source_mind.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "source_gem"
+  },
+  {
+    "path": "assets/glyphs/source/source_nature.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "source_gem"
+  },
+  {
+    "path": "assets/glyphs/source/source_shadow.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "source_gem"
+  },
+  {
+    "path": "assets/glyphs/source/source_spirit.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "source_gem"
+  },
+  {
+    "path": "assets/items/accessories/accessories/accessory_01.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/accessories/accessory_02.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/accessories/accessory_03.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/accessories/accessory_04.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/accessories/accessory_05.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/accessories/accessory_06.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/accessories/accessory_07.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/boots/boots_01.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/boots/boots_02.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/boots/boots_03.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/boots/boots_04.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/boots/boots_05.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/boots/boots_06.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/capes/cape_01.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/capes/cape_02.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/capes/cape_03.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/capes/cape_04.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/capes/cape_05.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/capes/cape_06.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/gloves/gloves_01.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/gloves/gloves_02.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/gloves/gloves_03.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/gloves/gloves_04.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/gloves/gloves_05.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/gloves/gloves_06.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/helmets/helmet_01.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/helmets/helmet_02.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/helmets/helmet_03.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/helmets/helmet_04.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/helmets/helmet_05.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/helmets/helmet_06.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/shoulders/shoulders_01.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/shoulders/shoulders_02.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/shoulders/shoulders_03.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/shoulders/shoulders_04.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/shoulders/shoulders_05.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/accessories/shoulders/shoulders_06.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/armor/iron_sentinel/iron_sentinel_boots.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/armor/iron_sentinel/iron_sentinel_cape.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/armor/iron_sentinel/iron_sentinel_chest.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/armor/iron_sentinel/iron_sentinel_glove.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/armor/iron_sentinel/iron_sentinel_helm.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/armor/iron_sentinel/iron_sentinel_legs.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/armor/shadow_warden/shadow_warden_boots.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/armor/shadow_warden/shadow_warden_cape.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/armor/shadow_warden/shadow_warden_chest.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/armor/shadow_warden/shadow_warden_glove.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/armor/shadow_warden/shadow_warden_helm.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/armor/shadow_warden/shadow_warden_legs.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/armor/verdant_guard/verdant_guard_boots.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/armor/verdant_guard/verdant_guard_cape.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/armor/verdant_guard/verdant_guard_chest.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/armor/verdant_guard/verdant_guard_glove.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/armor/verdant_guard/verdant_guard_helm.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/armor/verdant_guard/verdant_guard_legs.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/thumbnails/accessory_01.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/accessory_02.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/accessory_03.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/accessory_04.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/accessory_05.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/accessory_06.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/accessory_07.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/boots_01.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/boots_02.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/boots_03.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/boots_04.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/boots_05.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/boots_06.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/cape_01.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/cape_02.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/cape_03.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/cape_04.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/cape_05.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/cape_06.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/gloves_01.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/gloves_02.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/gloves_03.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/gloves_04.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/gloves_05.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/gloves_06.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/helmet_01.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/helmet_02.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/helmet_03.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/helmet_04.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/helmet_05.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/helmet_06.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/iron_sentinel_boots.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/iron_sentinel_cape.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/iron_sentinel_chest.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/iron_sentinel_glove.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/iron_sentinel_helm.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/iron_sentinel_legs.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/shadow_warden_boots.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/shadow_warden_cape.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/shadow_warden_chest.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/shadow_warden_glove.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/shadow_warden_helm.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/shadow_warden_legs.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/shoulders_01.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/shoulders_02.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/shoulders_03.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/shoulders_04.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/shoulders_05.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/shoulders_06.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/ui_frame_rarity_common.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/ui_frame_rarity_epic.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/ui_frame_rarity_legendary.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/ui_frame_rarity_rare.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/ui_frame_rarity_uncommon.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/verdant_guard_boots.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/verdant_guard_cape.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/verdant_guard_chest.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/verdant_guard_glove.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/verdant_guard_helm.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/verdant_guard_legs.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/weapon_blade_01.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/weapon_blade_02.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/weapon_blade_03.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/weapon_blade_04.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/weapon_blade_05.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/weapon_bow_01.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/weapon_bow_02.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/weapon_bow_03.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/weapon_bow_04.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/weapon_bow_05.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/weapon_scythe_01.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/weapon_scythe_02.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/weapon_scythe_03.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/weapon_scythe_04.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/weapon_scythe_05.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/weapon_spear_01.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/weapon_spear_02.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/weapon_spear_03.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/weapon_spear_04.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/thumbnails/weapon_spear_05.png",
+    "size": [
+      128,
+      128
+    ],
+    "type": "thumbnail"
+  },
+  {
+    "path": "assets/items/weapons/blade/weapon_blade_01.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/weapons/blade/weapon_blade_02.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/weapons/blade/weapon_blade_03.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/weapons/blade/weapon_blade_04.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/weapons/blade/weapon_blade_05.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/weapons/bow/weapon_bow_01.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/weapons/bow/weapon_bow_02.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/weapons/bow/weapon_bow_03.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/weapons/bow/weapon_bow_04.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/weapons/bow/weapon_bow_05.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/weapons/scythe/weapon_scythe_01.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/weapons/scythe/weapon_scythe_02.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/weapons/scythe/weapon_scythe_03.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/weapons/scythe/weapon_scythe_04.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/weapons/scythe/weapon_scythe_05.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/weapons/spear/weapon_spear_01.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/weapons/spear/weapon_spear_02.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/weapons/spear/weapon_spear_03.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/weapons/spear/weapon_spear_04.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/items/weapons/spear/weapon_spear_05.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "item_icon"
+  },
+  {
+    "path": "assets/loot/containers/chest_loot.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "container"
+  },
+  {
+    "path": "assets/loot/containers/core_hatch.png",
+    "size": [
+      512,
+      512
+    ],
+    "type": "container"
+  },
+  {
+    "path": "assets/loot/currency/currency_gleam.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "currency"
+  },
+  {
+    "path": "assets/loot/currency/currency_memory_dust.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "currency"
+  },
+  {
+    "path": "assets/loot/currency/currency_resonance_shard.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "currency"
+  },
+  {
+    "path": "assets/loot/materials/mat_core.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "material"
+  },
+  {
+    "path": "assets/loot/materials/mat_crystal.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "material"
+  },
+  {
+    "path": "assets/loot/materials/mat_essence.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "material"
+  },
+  {
+    "path": "assets/loot/materials/mat_scrap.png",
+    "size": [
+      256,
+      256
+    ],
+    "type": "material"
+  },
+  {
+    "path": "preview/runtime_assets_preview.png",
+    "size": [
+      1500,
+      1200
+    ],
+    "type": "preview"
+  }
+]

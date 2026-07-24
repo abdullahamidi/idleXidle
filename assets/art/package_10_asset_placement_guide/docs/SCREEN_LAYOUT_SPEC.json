@@ -1,0 +1,650 @@
+{
+  "01_main_menu.png": {
+    "resolution": {
+      "width": 1672,
+      "height": 941
+    },
+    "regions": [
+      {
+        "key": "A",
+        "title": "Player Summary",
+        "x": 22,
+        "y": 18,
+        "width": 345,
+        "height": 148,
+        "description": "Portrait, level, HP bar, combat power. Use UI panels + bars + portrait medallion."
+      },
+      {
+        "key": "B",
+        "title": "Primary Navigation Rail",
+        "x": 20,
+        "y": 168,
+        "width": 365,
+        "height": 718,
+        "description": "Vertical main actions: Play, Hunter, Forge, Warren, Map, Settings."
+      },
+      {
+        "key": "C",
+        "title": "Hero / Brand Focus",
+        "x": 420,
+        "y": 110,
+        "width": 840,
+        "height": 530,
+        "description": "Center logo / title focal zone over environment background."
+      },
+      {
+        "key": "D",
+        "title": "Offline Rewards Panel",
+        "x": 1230,
+        "y": 95,
+        "width": 400,
+        "height": 245,
+        "description": "Idle rewards summary with currency icons and claim CTA."
+      },
+      {
+        "key": "E",
+        "title": "Recent Progress Panel",
+        "x": 1230,
+        "y": 385,
+        "width": 400,
+        "height": 275,
+        "description": "Stage progress, activity summary, view details CTA."
+      },
+      {
+        "key": "F",
+        "title": "Bottom Utility Bar",
+        "x": 24,
+        "y": 812,
+        "width": 1600,
+        "height": 110,
+        "description": "Mail, Relics, Shop, Community, Help shortcuts + flavor text."
+      }
+    ],
+    "asset_families": [
+      "UI/panels/ui_panel_large, ui_panel_medium, ui_panel_small",
+      "UI/buttons/ui_button_primary, ui_button_secondary",
+      "UI/bars/ui_bar_progress_frame + fill",
+      "Branding/Symbols logo and emblem assets from Package 08",
+      "Environments/shadow_void_wastes_* or other background variant from Package 07"
+    ]
+  },
+  "02_hunt_auto_combat.png": {
+    "resolution": {
+      "width": 1672,
+      "height": 941
+    },
+    "regions": [
+      {
+        "key": "A",
+        "title": "Top-Left Hunter HUD",
+        "x": 18,
+        "y": 12,
+        "width": 350,
+        "height": 210,
+        "description": "Player portrait, HP, power, source icons."
+      },
+      {
+        "key": "B",
+        "title": "Stage Header",
+        "x": 560,
+        "y": 20,
+        "width": 555,
+        "height": 125,
+        "description": "Region name, wave/stage, progress bar."
+      },
+      {
+        "key": "C",
+        "title": "Top Resource Bar",
+        "x": 1120,
+        "y": 8,
+        "width": 530,
+        "height": 80,
+        "description": "Premium/resource currencies."
+      },
+      {
+        "key": "D",
+        "title": "Combat Arena",
+        "x": 180,
+        "y": 120,
+        "width": 980,
+        "height": 540,
+        "description": "Hunter, enemies, damage numbers, VFX, parallax background."
+      },
+      {
+        "key": "E",
+        "title": "Right Context Column",
+        "x": 1235,
+        "y": 90,
+        "width": 390,
+        "height": 620,
+        "description": "Idle rewards, objective, recent loot, expedition card."
+      },
+      {
+        "key": "F",
+        "title": "Auto Skill Dock",
+        "x": 280,
+        "y": 646,
+        "width": 920,
+        "height": 130,
+        "description": "Auto-trigger skill icons with cooldown numerals, all set to AUTO."
+      },
+      {
+        "key": "G",
+        "title": "Left Speed/Mode Controls",
+        "x": 30,
+        "y": 700,
+        "width": 200,
+        "height": 125,
+        "description": "Auto toggle and speed button."
+      },
+      {
+        "key": "H",
+        "title": "Bottom Stage Footer",
+        "x": 0,
+        "y": 812,
+        "width": 1672,
+        "height": 129,
+        "description": "Chat/system line, auto-hunt state, stage progress, bottom nav."
+      }
+    ],
+    "asset_families": [
+      "Hunter character assets from Package 02 / 02A",
+      "Enemy creature assets from Package 03 / 03A",
+      "VFX strips from Package 06",
+      "Environment layers from Package 07",
+      "UI bars, medallions, slots, buttons from Package 01",
+      "Loot item thumbnails and currencies from Package 05"
+    ]
+  },
+  "03_gear_loadout.png": {
+    "resolution": {
+      "width": 1672,
+      "height": 941
+    },
+    "regions": [
+      {
+        "key": "A",
+        "title": "Player Summary",
+        "x": 16,
+        "y": 12,
+        "width": 340,
+        "height": 190,
+        "description": "Top-left portrait, HP and currencies."
+      },
+      {
+        "key": "B",
+        "title": "Character Stats Column",
+        "x": 20,
+        "y": 190,
+        "width": 305,
+        "height": 510,
+        "description": "Class identity and stat list."
+      },
+      {
+        "key": "C",
+        "title": "Character Showcase",
+        "x": 340,
+        "y": 150,
+        "width": 470,
+        "height": 630,
+        "description": "Full body hunter preview with equipment slots around."
+      },
+      {
+        "key": "D",
+        "title": "Loadout Pager",
+        "x": 505,
+        "y": 752,
+        "width": 340,
+        "height": 74,
+        "description": "Preset slots 1-5."
+      },
+      {
+        "key": "E",
+        "title": "Inventory Grid & Tabs",
+        "x": 845,
+        "y": 90,
+        "width": 450,
+        "height": 675,
+        "description": "Arsenal, artifacts, materials and filters."
+      },
+      {
+        "key": "F",
+        "title": "Item Detail Panel",
+        "x": 1320,
+        "y": 90,
+        "width": 325,
+        "height": 680,
+        "description": "Selected item stats, set bonuses, compare context."
+      },
+      {
+        "key": "G",
+        "title": "Action CTA Row",
+        "x": 1300,
+        "y": 770,
+        "width": 350,
+        "height": 74,
+        "description": "Equip best / auto manage."
+      },
+      {
+        "key": "H",
+        "title": "Bottom Nav",
+        "x": 0,
+        "y": 842,
+        "width": 1672,
+        "height": 99,
+        "description": "Hunter, Skills, Resonance, Talents, Inventory, Relics, Shop, Mail, Settings."
+      }
+    ],
+    "asset_families": [
+      "Hunter portrait/full body assets from Package 02",
+      "Item thumbnails and rarity frames from Package 05",
+      "UI slots, panels, buttons from Package 01",
+      "Symbol/glyph support from Package 08"
+    ]
+  },
+  "04_forge.png": {
+    "resolution": {
+      "width": 1672,
+      "height": 941
+    },
+    "regions": [
+      {
+        "key": "A",
+        "title": "Recipe List",
+        "x": 20,
+        "y": 192,
+        "width": 375,
+        "height": 572,
+        "description": "Left list of craftable/upgradable items with filters."
+      },
+      {
+        "key": "B",
+        "title": "Forge Tabs",
+        "x": 445,
+        "y": 106,
+        "width": 770,
+        "height": 68,
+        "description": "Upgrade, Refine, Salvage, Craft."
+      },
+      {
+        "key": "C",
+        "title": "Item Showcase",
+        "x": 470,
+        "y": 195,
+        "width": 650,
+        "height": 420,
+        "description": "Center pedestal with selected item."
+      },
+      {
+        "key": "D",
+        "title": "Power Preview",
+        "x": 570,
+        "y": 616,
+        "width": 390,
+        "height": 150,
+        "description": "Current vs projected power, affix deltas."
+      },
+      {
+        "key": "E",
+        "title": "Materials Panel",
+        "x": 1236,
+        "y": 150,
+        "width": 395,
+        "height": 265,
+        "description": "Required currencies and parts."
+      },
+      {
+        "key": "F",
+        "title": "Chance / Helper Panel",
+        "x": 1230,
+        "y": 430,
+        "width": 400,
+        "height": 250,
+        "description": "Protection toggle, success rate."
+      },
+      {
+        "key": "G",
+        "title": "Forge Actions",
+        "x": 1200,
+        "y": 700,
+        "width": 430,
+        "height": 110,
+        "description": "Upgrade and auto-upgrade CTAs."
+      },
+      {
+        "key": "H",
+        "title": "Bottom Nav",
+        "x": 0,
+        "y": 840,
+        "width": 1672,
+        "height": 101,
+        "description": "Persistent global navigation."
+      }
+    ],
+    "asset_families": [
+      "Item thumbnails/materials/currencies from Package 05",
+      "UI panels/buttons/bars from Package 01",
+      "Forge environment background from Package 07",
+      "VFX impact/glow accents from Package 06"
+    ]
+  },
+  "05_warren.png": {
+    "resolution": {
+      "width": 1672,
+      "height": 941
+    },
+    "regions": [
+      {
+        "key": "A",
+        "title": "Warren Status",
+        "x": 20,
+        "y": 190,
+        "width": 320,
+        "height": 560,
+        "description": "Level, capacity, storage, upgrades, global boosts."
+      },
+      {
+        "key": "B",
+        "title": "Tab Strip",
+        "x": 485,
+        "y": 102,
+        "width": 640,
+        "height": 60,
+        "description": "Overview / Producers / Automation / Upgrades / Stats."
+      },
+      {
+        "key": "C",
+        "title": "Automation Chains",
+        "x": 350,
+        "y": 195,
+        "width": 865,
+        "height": 560,
+        "description": "Core producer rows and chain flow arrows."
+      },
+      {
+        "key": "D",
+        "title": "Passive Income Panel",
+        "x": 1250,
+        "y": 72,
+        "width": 380,
+        "height": 110,
+        "description": "Hourly resource totals."
+      },
+      {
+        "key": "E",
+        "title": "Storage Overview",
+        "x": 1260,
+        "y": 220,
+        "width": 365,
+        "height": 220,
+        "description": "Current stock and view storage CTA."
+      },
+      {
+        "key": "F",
+        "title": "Next Unlocks",
+        "x": 1260,
+        "y": 485,
+        "width": 365,
+        "height": 220,
+        "description": "Upcoming Warren unlocks."
+      },
+      {
+        "key": "G",
+        "title": "Claim / Bottom Nav",
+        "x": 0,
+        "y": 822,
+        "width": 1672,
+        "height": 119,
+        "description": "Bottom global nav plus claim all CTA."
+      }
+    ],
+    "asset_families": [
+      "Resource icons from Package 05",
+      "UI panels/buttons/progress bars from Package 01",
+      "Creature portraits / worker icons from Packages 03 and 08",
+      "Background environment from Package 07"
+    ]
+  },
+  "06_world_map.png": {
+    "resolution": {
+      "width": 1672,
+      "height": 941
+    },
+    "regions": [
+      {
+        "key": "A",
+        "title": "Top HUD",
+        "x": 12,
+        "y": 10,
+        "width": 360,
+        "height": 180,
+        "description": "Portrait summary and source icons."
+      },
+      {
+        "key": "B",
+        "title": "Map Field",
+        "x": 120,
+        "y": 100,
+        "width": 960,
+        "height": 700,
+        "description": "Region nodes / islands arranged around map plane."
+      },
+      {
+        "key": "C",
+        "title": "Selected Region Detail",
+        "x": 1118,
+        "y": 92,
+        "width": 515,
+        "height": 700,
+        "description": "Preview, progress, recommended power, loot, enter CTA."
+      },
+      {
+        "key": "D",
+        "title": "Bottom Nav",
+        "x": 0,
+        "y": 840,
+        "width": 1672,
+        "height": 101,
+        "description": "World, Hunter, Inventory, Relics, Codex, Shop, Mail, Settings."
+      }
+    ],
+    "asset_families": [
+      "Environment previews from Package 07",
+      "Buttons/panels/bars from Package 01",
+      "Loot and currency icons from Package 05",
+      "Glyph/sigil assets from Package 08"
+    ]
+  },
+  "07_memory_dust.png": {
+    "resolution": {
+      "width": 1672,
+      "height": 941
+    },
+    "regions": [
+      {
+        "key": "A",
+        "title": "Summary Panel",
+        "x": 20,
+        "y": 220,
+        "width": 472,
+        "height": 260,
+        "description": "Level ring, next threshold, view rewards CTA."
+      },
+      {
+        "key": "B",
+        "title": "Center Meta Focus",
+        "x": 470,
+        "y": 95,
+        "width": 730,
+        "height": 640,
+        "description": "Large Memory Dust emblem and total currency."
+      },
+      {
+        "key": "C",
+        "title": "Income Panel",
+        "x": 1240,
+        "y": 76,
+        "width": 392,
+        "height": 150,
+        "description": "Passive generation and total/hour."
+      },
+      {
+        "key": "D",
+        "title": "Permanent Upgrades",
+        "x": 1130,
+        "y": 240,
+        "width": 500,
+        "height": 540,
+        "description": "Upgrade list and spend costs."
+      },
+      {
+        "key": "E",
+        "title": "Milestones",
+        "x": 20,
+        "y": 520,
+        "width": 470,
+        "height": 240,
+        "description": "Unlock track with progress."
+      },
+      {
+        "key": "F",
+        "title": "Recent Acquisitions",
+        "x": 590,
+        "y": 600,
+        "width": 420,
+        "height": 160,
+        "description": "Recent sources/history CTA."
+      },
+      {
+        "key": "G",
+        "title": "Bottom Nav",
+        "x": 0,
+        "y": 842,
+        "width": 1672,
+        "height": 99,
+        "description": "Hunter, Inventory, Relics, Memory Dust, Shop, Mail, Settings."
+      }
+    ],
+    "asset_families": [
+      "Memory Dust / currency icon from Package 05 or 08",
+      "Panels/buttons from Package 01",
+      "Meta symbols/glyphs from Package 08",
+      "Environment backdrop from Package 07"
+    ]
+  },
+  "08_build_mastery.png": {
+    "resolution": {
+      "width": 1672,
+      "height": 941
+    },
+    "regions": [
+      {
+        "key": "A",
+        "title": "Build Summary",
+        "x": 20,
+        "y": 180,
+        "width": 390,
+        "height": 610,
+        "description": "Power score, source alignment, active bonuses."
+      },
+      {
+        "key": "B",
+        "title": "Top Subnav",
+        "x": 495,
+        "y": 78,
+        "width": 670,
+        "height": 74,
+        "description": "Hunt / Build / Stats / Mastery tabs."
+      },
+      {
+        "key": "C",
+        "title": "Mastery Graph",
+        "x": 430,
+        "y": 150,
+        "width": 820,
+        "height": 610,
+        "description": "Central node graph and mastery bonuses."
+      },
+      {
+        "key": "D",
+        "title": "Comparison Panel",
+        "x": 1242,
+        "y": 180,
+        "width": 380,
+        "height": 300,
+        "description": "Stat comparison vs previous."
+      },
+      {
+        "key": "E",
+        "title": "Growth Overview",
+        "x": 1242,
+        "y": 505,
+        "width": 380,
+        "height": 240,
+        "description": "Progress stats and CTA."
+      },
+      {
+        "key": "F",
+        "title": "Bottom Nav",
+        "x": 0,
+        "y": 842,
+        "width": 1672,
+        "height": 99,
+        "description": "Hunter, Inventory, Relics, Shop, Mail, Settings."
+      }
+    ],
+    "asset_families": [
+      "Glyphs, source symbols, mastery sigils from Package 08",
+      "Panels/buttons/bars from Package 01",
+      "Background environment from Package 07"
+    ]
+  },
+  "09_settings.png": {
+    "resolution": {
+      "width": 1672,
+      "height": 941
+    },
+    "regions": [
+      {
+        "key": "A",
+        "title": "Settings Category Rail",
+        "x": 20,
+        "y": 150,
+        "width": 290,
+        "height": 610,
+        "description": "System, Audio, Graphics, Accessibility, Notifications, Account, Language, Support."
+      },
+      {
+        "key": "B",
+        "title": "Primary Settings Columns",
+        "x": 345,
+        "y": 148,
+        "width": 870,
+        "height": 620,
+        "description": "Audio, Graphics, Accessibility, Notification controls."
+      },
+      {
+        "key": "C",
+        "title": "Account / Language / Help",
+        "x": 1240,
+        "y": 150,
+        "width": 390,
+        "height": 610,
+        "description": "Account binding, language, support tools."
+      },
+      {
+        "key": "D",
+        "title": "Bottom Nav",
+        "x": 0,
+        "y": 840,
+        "width": 1672,
+        "height": 101,
+        "description": "Global nav with settings highlighted."
+      }
+    ],
+    "asset_families": [
+      "Buttons/tabs/panels from Package 01",
+      "Navigation glyphs and state symbols from Package 08"
+    ]
+  }
+}

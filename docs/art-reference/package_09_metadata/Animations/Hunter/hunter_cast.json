@@ -1,0 +1,14 @@
+{
+  "id": "hunter_cast",
+  "frameCount": 8,
+  "frameWidth": 512,
+  "frameHeight": 512,
+  "fps": 14,
+  "loop": false,
+  "origin": {
+    "x": 256,
+    "y": 450
+  },
+  "texturePath": "assets/animations/hunter_cast/hunter_cast_strip8_512.png",
+  "previewSource": "a_clean_white_background_image_featuring_a_sprite_2_batch_2.png"
+}

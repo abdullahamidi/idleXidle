@@ -1,0 +1,105 @@
+using System;
+using System.Collections.Generic;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+
+namespace ResonanceHunter.Client;
+
+/// <summary>
+/// Plays one-shot sprite-strip animations at screen positions — hit sparks, breaks, casts, death.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Drives the impact effects of the solo fight — a hit spark on every blow, a burst on a Form's cast,
+/// a death puff when the enemy or the champion drops. It sat unwired for several commits (its only
+/// caller, manual combat, was deleted) until <see cref="SoloExpeditionScreen"/> picked it up.
+/// </para>
+/// <para>
+/// A strip is a horizontal PNG of equal-width frames; frame height = image height, frame count =
+/// width / height-derived count passed at spawn. Effects are point-sampled, integer-scaled, centered
+/// on their spawn point, and removed when they finish. A missing effect asset is simply skipped, so
+/// the game degrades to no-VFX rather than crashing.
+/// </para>
+/// </remarks>
+public sealed class VfxPlayer
+{
+    private sealed class Anim
+    {
+        public required Texture2D Sheet { get; init; }
+        public required int FrameW { get; init; }
+        public required int FrameH { get; init; }
+        public required int Frames { get; init; }
+        public required int CenterX { get; init; }
+        public required int CenterY { get; init; }
+        public required int Scale { get; init; }
+        public required float SecondsPerFrame { get; init; }
+        public required Color Tint { get; init; }
+        public float Elapsed;
+
+        public int CurrentFrame => Math.Min(Frames - 1, (int)(Elapsed / SecondsPerFrame));
+        public bool Done => Elapsed >= SecondsPerFrame * Frames;
+    }
+
+    private readonly AssetLibrary _assets;
+    private readonly List<Anim> _active = new();
+
+    public VfxPlayer(AssetLibrary assets) => _assets = assets;
+
+    /// <summary>
+    /// Spawn a strip animation centered at (x, y). Frame width is inferred from the sheet height
+    /// (frames are square) unless <paramref name="frameW"/> is given for non-square strips.
+    /// </summary>
+    public void Play(string key, int x, int y, int scale = 2, float fps = 18f, Color? tint = null, int frameW = 0)
+    {
+        if (_assets.Get(key) is not { } sheet) return;
+
+        var fw = frameW > 0 ? frameW : sheet.Height; // default: square frames
+        var frames = Math.Max(1, sheet.Width / fw);
+
+        _active.Add(new Anim
+        {
+            Sheet = sheet,
+            FrameW = fw,
+            FrameH = sheet.Height,
+            Frames = frames,
+            CenterX = x,
+            CenterY = y,
+            Scale = Math.Max(1, scale),
+            SecondsPerFrame = 1f / MathF.Max(1f, fps),
+            Tint = tint ?? Color.White,
+        });
+    }
+
+    public void Update(float dt)
+    {
+        for (var i = _active.Count - 1; i >= 0; i--)
+        {
+            _active[i].Elapsed += dt;
+            if (_active[i].Done) _active.RemoveAt(i);
+        }
+    }
+
+    public void Draw(SpriteBatch b)
+    {
+        if (_active.Count == 0) return;
+        // Additive sub-pass. These are radial GLOW effects; in the caller's AlphaBlend batch their soft edges
+        // read as hard ring OUTLINES (the "reticles" bug). Drawn additively they glow and layer as intended.
+        // End the caller's batch, run additive, then restore AlphaBlend for the HUD that draws after us. The
+        // 4x transform mirrors Game1's canvas scale (ArtScale).
+        b.End();
+        b.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp, null, null, null, Matrix.CreateScale(4f));
+        foreach (var a in _active)
+        {
+            var src = new Rectangle(a.CurrentFrame * a.FrameW, 0, a.FrameW, a.FrameH);
+            // `Scale` is a display multiplier of a base logical unit (~26 px), NOT a factor on the raw frame:
+            // package_06 frames are 512 px, so multiplying them directly would fill the screen. Aspect kept.
+            var h = a.Scale * 26;
+            var w = h * a.FrameW / a.FrameH;
+            b.Draw(a.Sheet, new Rectangle(a.CenterX - w / 2, a.CenterY - h / 2, w, h), src, a.Tint);
+        }
+        b.End();
+        b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, null, null, null, Matrix.CreateScale(4f));
+    }
+
+    public void Clear() => _active.Clear();
+}

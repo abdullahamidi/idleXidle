@@ -1,0 +1,14 @@
+{
+  "id": "spirit_matron_attack",
+  "frameCount": 8,
+  "frameWidth": 1024,
+  "frameHeight": 1024,
+  "fps": 14,
+  "loop": false,
+  "origin": {
+    "x": 512,
+    "y": 901
+  },
+  "texturePath": "assets/animations/spirit_matron_attack/spirit_matron_attack_strip8_1024.png",
+  "previewSource": "a_clean_white_background_sprite_sheet_style_image_5_batch_1.png"
+}

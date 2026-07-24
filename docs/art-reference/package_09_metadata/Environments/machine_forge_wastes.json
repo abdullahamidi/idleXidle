@@ -1,0 +1,49 @@
+{
+  "id": "machine_forge_wastes",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "groundLineY": 900,
+  "safeCombatArea": [
+    160,
+    560,
+    1600,
+    360
+  ],
+  "backgrounds": {
+    "clean": "assets/backgrounds/machine_forge_wastes/machine_forge_wastes_clean.png",
+    "unconquered": "assets/backgrounds/machine_forge_wastes/machine_forge_wastes_unconquered.png",
+    "mastered": "assets/backgrounds/machine_forge_wastes/machine_forge_wastes_mastered.png"
+  },
+  "layers": [
+    {
+      "name": "far",
+      "texture": "assets/parallax/machine_forge_wastes/machine_forge_wastes_far.png",
+      "factor": 0.12
+    },
+    {
+      "name": "mid",
+      "texture": "assets/parallax/machine_forge_wastes/machine_forge_wastes_mid.png",
+      "factor": 0.32
+    },
+    {
+      "name": "near",
+      "texture": "assets/parallax/machine_forge_wastes/machine_forge_wastes_near.png",
+      "factor": 0.62
+    },
+    {
+      "name": "foreground",
+      "texture": "assets/parallax/machine_forge_wastes/machine_forge_wastes_foreground.png",
+      "factor": 1.0
+    }
+  ],
+  "overlays": {
+    "fog": "assets/overlays/machine_forge_wastes/machine_forge_wastes_fog.png",
+    "corruption": "assets/overlays/machine_forge_wastes/machine_forge_wastes_corruption.png",
+    "mastery": "assets/overlays/machine_forge_wastes/machine_forge_wastes_mastery.png",
+    "particles": "assets/overlays/machine_forge_wastes/machine_forge_wastes_particles.png",
+    "light_rays": "assets/overlays/machine_forge_wastes/machine_forge_wastes_light_rays.png",
+    "vignette": "assets/overlays/machine_forge_wastes/machine_forge_wastes_vignette.png"
+  }
+}

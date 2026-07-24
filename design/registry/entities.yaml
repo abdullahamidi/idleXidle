@@ -1,0 +1,943 @@
+# Game World Entity Registry
+#
+# PURPOSE: Single source of truth for all named game-world facts that appear
+# in more than one document. Skills check this before writing new content to
+# detect cross-doc inconsistencies at authoring time.
+#
+# RULES:
+#   - Only register facts that cross system boundaries. Internal-only facts
+#     (a formula used in one GDD only) do NOT need to be registered.
+#   - Never delete entries — set status: deprecated instead.
+#   - When a value changes: update the value, set revised: to today's date,
+#     and add a comment with the old value and which GDD changed it.
+#   - source: is the authoritative GDD — the one that "owns" this fact.
+#     Other GDDs that reference it list themselves in referenced_by.
+#   - When a new GDD references an existing entry, append its path to
+#     referenced_by. Do not create a duplicate entry.
+#
+# WRITTEN BY: /design-system (Phase 5 — after GDD sections are approved)
+#             /consistency-check (when resolving conflicts)
+# READ BY:    /design-system (Phase 2 — before authoring begins, and after
+#               Section C/D writes to conflict-check new entities/formulas)
+#             /consistency-check (primary input — grep-first, GDD-second)
+#             /review-all-gdds (Phase 1 — baseline for Phase 2 checks)
+#             /architecture-review (data structure and interface validation)
+#
+# SEARCH PATTERNS (for skills using Grep):
+#   All entity names:        Grep pattern="^  - name:" path="design/registry/entities.yaml"
+#   Specific entity:         Grep pattern="  - name: goblin" path="design/registry/entities.yaml"
+#   All items:               Grep pattern="^  - name:" path="design/registry/entities.yaml" (items section)
+#   What combat.md owns:     Grep pattern="source: design/gdd/combat.md"
+#   What inventory.md uses:  Grep pattern="referenced_by.*inventory"
+#   All gold values:          Grep pattern="value_gold:"
+#   Deprecated entries:      Grep pattern="status: deprecated"
+#
+# FORMAT: YAML. Consistent indentation is critical for grep reliability.
+#   Sections: entities | items | formulas | constants
+#   Each entry: name, status, source, referenced_by[], attributes{}, added, revised
+
+version: 1
+last_updated: "2026-07-14"
+
+# ─── ENTITIES ────────────────────────────────────────────────────────────────
+# Named game-world objects: enemies, NPCs, characters, factions, bosses.
+# Register an entity here when it appears in more than one GDD — e.g., an
+# enemy defined in combat.md that also drops items listed in inventory.md.
+#
+# Required fields: name, status, source, referenced_by, added
+# Attribute fields: any key stats that could appear in another GDD
+#   (health, damage, drops, faction, etc.)
+
+entities:
+  - name: verdant_whelp
+    status: active
+    source: design/gdd/creature-data-schema.md
+    referenced_by:
+      - design/gdd/creature-data-schema.md
+      - design/gdd/rare-creature-capture-system.md
+      - design/gdd/encounter-spawn-system.md
+    base_health: 80
+    source_element: nature
+    role: attacker
+    notes: "The MVP reference creature. base_health = 80 is quoted verbatim in three
+      GDDs and is the input to encounter-spawn-system Formula 4's par-time derivation
+      (80 / 6.0 reference DPS + 2.0 overhead = 15s par for Whelp Thicket). Registered
+      2026-07-14 during the W16 consolidation pass — it was a shared literal in three
+      documents with no single owner."
+    added: 2026-07-14
+    revised: ""
+
+
+# ─── ITEMS ───────────────────────────────────────────────────────────────────
+# Named collectables, equipment, consumables, crafting materials, currency.
+# Register an item when its name or value appears in more than one GDD.
+#
+# Required fields: name, status, source, referenced_by, added
+# Attribute fields: value_gold, weight, stackable, category, and any stat
+#   modifiers that another system (e.g., economy, crafting) might reference.
+
+items:
+  - name: gleam
+    status: active
+    source: design/gdd/the-forge-system.md
+    referenced_by:
+      - design/gdd/the-forge-system.md
+      - design/gdd/forge-ui.md
+      - design/gdd/loot-drop-system.md
+      - design/gdd/region-mastery-automation-system.md
+      - design/gdd/resonance-weaving-system.md
+      - design/gdd/hunter-progression-system.md
+    category: currency
+    stackable: true
+    faucets:
+      - "Manual Sell (the-forge-system §3.7) — uncapped"
+      - "Automated region auto-sell (region-mastery-automation-system, Stage 3) —
+         HARD-CAPPED at region_auto_sell_gleam_cap_per_hour = 24"
+    sinks:
+      - "vow_binding_cost (~200 Gleam) — resonance-weaving-system"
+      - "Hunter Training ranks (hunter-progression-system) — 79,551 Gleam lifetime total.
+         This is the PRIMARY sink; it exists specifically because Gleam previously had
+         effectively none (warning W1)."
+    notes: "THE game's soft currency. Was entirely unregistered until the 2026-07-14 W16
+      consolidation pass despite appearing in six GDDs. Sell and creature-Feed convert at
+      the SAME rate by design, so the player's choice is 'which resource do I need', never
+      'which pays more' — forge-ui must never render them on a shared numeric axis."
+    added: 2026-07-14
+    revised: ""
+
+  - name: memory_dust
+    status: active
+    source: design/gdd/memory-dust-prestige-system.md
+    referenced_by:
+      - design/gdd/memory-dust-prestige-system.md
+    category: currency
+    stackable: true
+    tier: "Full Vision (deferred — not MVP)"
+    notes: "Prestige meta-currency. FINITE by design: a closed 19-unlock tree totalling
+      660 MD. Critically, NOTHING RESETS on prestige — a deliberate departure from genre
+      convention, taken because a reset would violate Pillars 2 and 3 (earned automation
+      would be un-earned, and idle progress would be retroactively worthless). Distinct
+      from and non-convertible with gleam. Registered 2026-07-14 (W16)."
+    added: 2026-07-14
+    revised: ""
+
+  - name: creature_core
+    status: active
+    source: design/gdd/loot-drop-system.md
+    referenced_by:
+      - design/gdd/loot-drop-system.md
+      - design/gdd/creature-jobs-evolution-system.md
+      - design/gdd/rare-creature-capture-system.md
+      - design/gdd/the-forge-system.md
+    category: crafting_material
+    stackable: true
+    drop_rate: 1.0
+    notes: "Drops on EVERY kill at 100%, active or automated — only its rarity varies
+      (loot-drop-system §3.7 rule 1, explicitly non-tunable). This is the structural
+      guarantee behind Pillar 3: idle play can never be locked out of core progression.
+      Consuming a core mints a creature at its evolution-tree root ('Core Hatching',
+      creature-jobs-evolution-system) — the ONLY way to acquire a workforce at MVP, since
+      rare-creature-capture is Vertical-Slice-deferred. Registered 2026-07-14 (W16)."
+    added: 2026-07-14
+    revised: ""
+
+
+# ─── FORMULAS ────────────────────────────────────────────────────────────────
+# Named calculations with defined variables and output ranges.
+# Register a formula when its output feeds into another system's input,
+# or when another GDD references it by name.
+#
+# Required fields: name, status, source, referenced_by, variables[],
+#   output_range[min, max], added
+# Optional: expression (the actual formula), notes
+
+formulas:
+  - name: effective_max_health_by_power_tier
+    status: active
+    source: design/gdd/creature-data-schema.md
+    referenced_by:
+      - design/gdd/creature-data-schema.md
+    variables:
+      - base_health
+      - tier_health_scalar
+      - power_tier
+    output_range: [1, null]
+    expression: "max(1, round(base_health * (1 + tier_health_scalar * (power_tier - 1))))"
+    notes: "Output feeds CreatureInstance.hostile_state.effective_max_health. Expected
+      to be consumed by combat-encounter-system (not yet written) for health-pool
+      resolution. tier_health_scalar default 0.15 is an unbalanced placeholder
+      pending combat-encounter-system design and vertical-slice playtesting."
+    added: 2026-07-14
+    revised: ""
+
+  - name: effective_break_threshold_by_power_tier
+    status: active
+    source: design/gdd/creature-data-schema.md
+    referenced_by:
+      - design/gdd/creature-data-schema.md
+    variables:
+      - base_break_threshold
+      - tier_break_scalar
+      - power_tier
+    output_range: [1, null]
+    expression: "max(1, round(base_break_threshold * (1 + tier_break_scalar * (power_tier - 1))))"
+    notes: "Output feeds PartState break-progress ceiling. Tuned independently of
+      effective_max_health_by_power_tier (separate scalar) so part-break pacing can
+      move without changing raw HP bloat. Expected to be consumed by
+      combat-encounter-system and creature-ai-telegraph-system (both not yet written)."
+    added: 2026-07-14
+    revised: ""
+
+  - name: crack_stage_trigger
+    status: active
+    source: design/gdd/creature-data-schema.md
+    referenced_by:
+      - design/gdd/creature-data-schema.md
+    variables:
+      - effective_break_threshold
+      - crack_stage_count
+      - n
+    output_range: [0, null]
+    expression: "round(effective_break_threshold * (n / (crack_stage_count + 1)))  for n = 1..crack_stage_count"
+    notes: "Evenly spaces 1-2 intermediate cracking-stage triggers (art-bible SS8.4)
+      between 0 and effective_break_threshold. Drives PartState.current_stage.
+      Expected to be consumed by animation-rig-system and combat-encounter-system
+      (both not yet written) for crack-decal state and part-break HUD-free rendering
+      (art-bible SS7.5)."
+    added: 2026-07-14
+    revised: ""
+
+  - name: elapsed_time_delta
+    status: active
+    source: design/gdd/save-load-persistence.md
+    referenced_by:
+      - design/gdd/save-load-persistence.md
+    variables:
+      - now_ms
+      - last_ticked_at_ms
+    output_range: [0, unbounded]
+    expression: "max(0, now_ms - last_ticked_at_ms)"
+    notes: "Wall-clock (UTC epoch milliseconds) delta since a persisted section (e.g.
+      a region_states entry's last_ticked_at) was last advanced. Computed by
+      save-load-persistence's load/tick path; floor-clamped at 0 to guard against
+      system-clock rollback. No upper clamp is applied here by design — any
+      gameplay-facing cap on how much elapsed time is 'worth' (e.g. capping
+      offline-progression gains) is owned by region-mastery-automation-system,
+      which is expected to reference this formula directly when it is designed,
+      rather than redefining the delta calculation itself."
+    added: 2026-07-14
+    revised: ""
+
+  - name: modifier_slot_count
+    status: active
+    source: design/gdd/item-data-schema.md
+    referenced_by:
+      - design/gdd/item-data-schema.md
+    variables:
+      - rarity_tier_index
+      - base_modifier_slots
+      - slots_per_tier
+    output_range: [0, null]
+    expression: "base_modifier_slots + rarity_tier_index * slots_per_tier"
+    notes: "Ceiling on the length of an Item Instance's modifiers array. rarity_tier_index
+      is 0 (common) to 4 (legendary), a 1:1 ordinal of the 5-tier rarity enum locked by
+      art-bible SS4.3. At default tuning (base_modifier_slots=1, slots_per_tier=1) this
+      resolves to 1-5 across the 5 rarity tiers. Expected to be consumed by
+      loot-drop-system (not yet written) to bound how many modifiers it may roll per drop."
+    added: 2026-07-14
+    revised: ""
+
+  - name: enchantment_slot_count
+    status: active
+    source: design/gdd/item-data-schema.md
+    referenced_by:
+      - design/gdd/item-data-schema.md
+    variables:
+      - rarity_tier_index
+      - enchantment_floor
+      - tier_divisor
+    output_range: [1, null]
+    expression: "enchantment_floor + floor(rarity_tier_index / tier_divisor)"
+    notes: "Ceiling on the length of an Item Instance's enchantments array. Minimum output
+      is always 1 by construction (enchantment_floor has a hard floor of 1) — this is a
+      deliberate Anti-Pillar compliance value from game-concept.md ('every rarity tier
+      must include behavior-changing options, not just bigger numbers'), not a free
+      tuning parameter. At default tuning (enchantment_floor=1, tier_divisor=2) this
+      resolves to 1-3 across the 5 rarity tiers. Expected to be consumed by
+      loot-drop-system (not yet written)."
+    added: 2026-07-14
+    revised: ""
+
+  - name: rarity_value_multiplier
+    status: active
+    source: design/gdd/item-data-schema.md
+    referenced_by:
+      - design/gdd/item-data-schema.md
+    variables:
+      - rarity_tier_index
+      - growth_rate
+    output_range: [1.0, null]
+    expression: "(1 + growth_rate) ^ rarity_tier_index"
+    notes: "Geometric multiplier applied on top of a stat's own base min/max roll range
+      (owned by loot-drop-system, not yet written) to produce a rarity-scaled final
+      modifier value. Monotonically increasing, min 1.0 at common (tier 0). At default
+      growth_rate=0.25: common 1.0, uncommon 1.25, rare 1.5625, epic 1.953,
+      legendary 2.441. loot-drop-system is expected to reference this formula directly
+      rather than inventing its own rarity-scaling curve, so all stats scale by rarity
+      consistently."
+    added: 2026-07-14
+    revised: ""
+
+  - name: hitbox_padding_by_part_size
+    status: active
+    source: design/gdd/input-targeting-system.md
+    referenced_by:
+      - design/gdd/input-targeting-system.md
+    variables:
+      - part_size_px
+      - reference_part_size_px
+      - padding_base_px
+      - padding_inverse_scalar
+      - padding_min_px
+      - padding_max_px
+    output_range: [3, 14]
+    expression: "clamp(padding_base_px + padding_inverse_scalar * max(0, reference_part_size_px - part_size_px), padding_min_px, padding_max_px)"
+    notes: "Mandatory (non-toggleable) mouse hit-test padding, in virtual-canvas px
+      (art-bible SS8.2's 480x270 canvas). Output range shown is the default
+      padding_min_px/padding_max_px tuning values, not a fixed mathematical bound
+      -- the true bound is whatever those two knobs are set to. Expected to be
+      read by accessibility-settings-system (not yet written) for its tuning
+      surface; combat-encounter-system does not consume this directly."
+    added: 2026-07-14
+    revised: ""
+
+  - name: aim_assist_effective_click_position
+    status: active
+    source: design/gdd/input-targeting-system.md
+    referenced_by:
+      - design/gdd/input-targeting-system.md
+    variables:
+      - raw_cursor_pos
+      - nearest_target_anchor_pos
+      - magnetism_radius_px
+      - magnetism_strength
+    output_range: [0, 1]
+    expression: "raw_cursor_pos + (nearest_target_anchor_pos - raw_cursor_pos) * magnetism_strength, applied only if distance(raw_cursor_pos, nearest_target_anchor_pos) <= magnetism_radius_px"
+    notes: "Output range [0,1] bounds magnetism_strength (the player-facing
+      accessibility slider, default 0.0/off), not the formula's actual return
+      value -- the formula itself returns a Vector2 position on the segment
+      between raw_cursor_pos and nearest_target_anchor_pos, in virtual-canvas px.
+      Mouse-path-only; has no effect on cycle-and-confirm targeting. Expected to
+      be consumed by accessibility-settings-system (not yet written) as the
+      owner of the magnetism_strength setting's UI/persistence."
+    added: 2026-07-14
+    revised: ""
+
+  - name: cycle_target_sort_key
+    status: active
+    source: design/gdd/input-targeting-system.md
+    referenced_by:
+      - design/gdd/input-targeting-system.md
+    variables:
+      - part_anchor
+      - core_anchor
+      - vulnerability_rank
+      - angular_position
+    output_range: [0, 12.566]
+    expression: "vulnerability_rank(part) * 2*pi + angular_position(part), where vulnerability_rank is 0 if part_id is in hostile_state.vulnerable_parts else 1"
+    notes: "Determines cycle-and-confirm traversal order (gamepad/keyboard
+      targeting path). Reads hostile_state.vulnerable_parts, which is written by
+      creature-ai-telegraph-system (not yet written) -- that system does not need
+      to reference this formula back, but should be aware its output feeds
+      targeting order, not just rendering. Ties broken by ascending
+      PartDefinition.break_priority (creature-data-schema, already unique per
+      template)."
+    added: 2026-07-14
+    revised: ""
+
+  # ─── Added 2026-07-14 by the W16 registry-consolidation pass ───
+  # These formulas all cross system boundaries and were previously unregistered —
+  # every GDD said "registry updates coordinated centrally" and that pass never ran.
+
+  - name: active_efficiency_percent
+    status: active
+    source: design/gdd/combat-encounter-system.md
+    referenced_by:
+      - design/gdd/combat-encounter-system.md
+      - design/gdd/loot-drop-system.md
+      - design/gdd/region-mastery-automation-system.md
+      - design/gdd/encounter-spawn-system.md
+    variables:
+      - par_clear_time_seconds
+      - active_clear_time_seconds
+      - VWS
+      - IR
+      - vws_bonus_scalar
+      - ir_bonus_scalar
+    output_range: [50, 300]
+    expression: "clamp(100 * (par_clear_time_seconds / active_clear_time_seconds) * (1 + VWS*vws_bonus_scalar + IR*ir_bonus_scalar), 50, 300)"
+    notes: "BALANCE-CRITICAL — the active half of the game's central contract.
+      *** THE NUMERATOR MUST BE A FIXED AUTHORED CONSTANT. *** It was originally
+      automation_baseline_clear_time_seconds, which region-mastery-automation-system
+      derives from live mastery and which therefore RISES as the player's automation
+      improves — so identical play scored 166% -> 92.5% -> 63.2% -> 50% as mastery
+      climbed, while automation did ~3.1x the kills/hour. Pillar 3 ('Active Is Better')
+      was arithmetically INVERTED. That was Blocker B1 (/review-all-gdds 2026-07-14).
+      If a future edit makes this numerator vary with the player's mastery, team, or
+      automation stage, the bug has regressed."
+    added: 2026-07-14
+    revised: ""
+
+  - name: idle_efficiency_percent
+    status: active
+    source: design/gdd/region-mastery-automation-system.md
+    referenced_by:
+      - design/gdd/region-mastery-automation-system.md
+      - design/gdd/combat-encounter-system.md
+      - design/gdd/automation-config-ui.md
+    variables:
+      - mastery_level
+      - team_quality_score
+    output_range: [25, 120]
+    expression: "band_min(mastery_level) + (band_max(mastery_level) - band_min(mastery_level)) * team_quality_score"
+    notes: "BALANCE-CRITICAL — the idle half of the contract. Bands are LOCKED by the
+      user: 25-40 (newly conquered) / 50-70 (partial) / 80-100 (fully mastered) /
+      100-120 (optimized team). Since 2026-07-14 this is a percentage of the SAME fixed
+      par_clear_time_seconds that active_efficiency_percent uses — which is what makes
+      the two directly comparable instead of circularly defined."
+    added: 2026-07-14
+    revised: ""
+
+  - name: damage_pipeline_creature_to_player
+    status: active
+    source: design/gdd/combat-encounter-system.md
+    referenced_by:
+      - design/gdd/combat-encounter-system.md
+      - design/gdd/resonance-weaving-system.md
+      - design/gdd/hunter-progression-system.md
+    variables:
+      - raw_damage_base
+      - power_tier
+      - tier_attack_scalar
+      - hunter_defense
+      - block_damage_reduction_percent
+      - vow_damage_taken_increases
+      - min_incoming_damage_floor
+    output_range: [0, null]
+    expression: "max(min_incoming_damage_floor, round( verb_adjusted * (100 / (100 + hunter_defense)) * (1 + vow_damage_taken_increases) ))  -- 0 only via a successful dodge or interrupt"
+    notes: "'Formula 3b'. ADDED 2026-07-14 to close Blocker B3. Before it existed, §3.10
+      routed INCOMING damage through the player-TO-creature pipeline, which mitigates using
+      the CREATURE's defense — so the player's `defense` stat was read by NOTHING anywhere
+      in the project. Mitigation is hyperbolic and hard-floored, so defense can never become
+      immunity (at the 120 cap the player still takes 45.5% of incoming damage). This is
+      load-bearing for Pillar 1: if defense could approach immunity, telegraphs would become
+      ignorable and the read-the-attack skill would collapse into a stat check. DODGING IS
+      THE ONLY ROUTE TO ZERO."
+    added: 2026-07-14
+    revised: ""
+
+  - name: power_tier_assignment
+    status: active
+    source: design/gdd/encounter-spawn-system.md
+    referenced_by:
+      - design/gdd/encounter-spawn-system.md
+      - design/gdd/combat-encounter-system.md
+      - design/gdd/creature-ai-telegraph-system.md
+      - design/gdd/loot-drop-system.md
+      - design/gdd/creature-data-schema.md
+    variables:
+      - power_tier_base
+      - region_progression_index
+      - mastery_power_tier_step_per_level
+      - variance_roll
+      - power_tier_min
+      - power_tier_max
+    output_range: [1, 20]
+    expression: "clamp(round(power_tier_base + region_progression_index * mastery_power_tier_step_per_level) + variance_roll, power_tier_min, power_tier_max)"
+    notes: "Closes Blocker B2. power_tier had FOUR consumers (creature health, telegraph
+      windup duration, loot rarity distribution, incoming damage) and NO producer — every
+      GDD deferred the question upstream and the buck never stopped. encounter-spawn-system
+      is now the sole owner."
+    added: 2026-07-14
+    revised: ""
+
+  - name: par_clear_time_seconds
+    status: active
+    source: design/gdd/encounter-spawn-system.md
+    referenced_by:
+      - design/gdd/encounter-spawn-system.md
+      - design/gdd/combat-encounter-system.md
+      - design/gdd/region-mastery-automation-system.md
+    variables:
+      - effective_max_health
+      - reference_team_effective_dps
+      - boss_overhead_multiplier
+      - overhead
+    output_range: [1, null]
+    expression: "round((effective_max_health / reference_team_effective_dps(power_tier_base)) * (boss_overhead_multiplier if is_boss else 1) + overhead)"
+    notes: "*** THE ANCHOR OF THE ENTIRE ACTIVE/IDLE CONTRACT. *** A hand-authored constant
+      per EncounterTemplate, defined as 'the clear time of a competent, FULLY-MASTERED
+      automated team'. It is evaluated once at the template's fixed power_tier_base — never
+      at a spawn's live rolled tier, and never against automation's live throughput. Both
+      active_efficiency_percent and idle_efficiency_percent are percentages OF THIS NUMBER,
+      which is precisely what makes the user's two locked tables (active 120-140/180-220/
+      250-300; idle 25-40/50-70/80-100/100-120) hold simultaneously and non-circularly.
+      MVP values: Whelp Thicket 15s, Mossling Grove 13s, Bramblehide Den 24s, Thornmaw
+      (boss) 591s. Sanity check: 15s reproduces, independently, the 15s that
+      region-mastery-automation-system Formula 6 arrives at from the Attacker's work-tick
+      cadence — two unrelated derivations converging."
+    added: 2026-07-14
+    revised: ""
+
+  - name: static_power_multiplier
+    status: active
+    source: design/gdd/resonance-weaving-system.md
+    referenced_by:
+      - design/gdd/resonance-weaving-system.md
+      - design/gdd/combat-encounter-system.md
+    variables:
+      - static_cost_conversion_rate
+      - static_cost_magnitude
+    output_range: [1.0, 4.0]
+    expression: "1 + static_cost_conversion_rate * static_cost_magnitude"
+    notes: "static_cost_magnitude is the fraction of EFFECTIVE HP sacrificed, NOT the raw
+      fraction of the named stat. This distinction is load-bearing and was got wrong twice.
+      eHP = max_health * (100 + hunter_defense) / 100. All static Vows must therefore lie on
+      one line (3.0 power per 1.0 eHP), so none can dominate. See fragility_damage_taken_increase."
+    added: 2026-07-14
+    revised: ""
+
+# Example:
+#
+# formulas:
+#   - name: damage_formula
+#     status: active
+#     source: design/gdd/combat.md
+#     referenced_by:
+#       - design/gdd/combat.md
+#       - design/gdd/progression.md   # progression GDD scales attack variable
+#     variables:
+#       - attack
+#       - defense
+#       - crit_chance
+#       - crit_multiplier
+#     output_range: [0, 999]
+#     expression: "max(0, attack - defense) * (1 + crit_chance * crit_multiplier)"
+#     notes: "Output feeds into health-system damage intake. Min is 0 (armour
+#       can absorb all damage). Max is uncapped in formula but tuning knob
+#       damage_cap in combat.md clamps at 999."
+#     added: 2026-03-26
+#     revised: ""
+
+
+# ─── CONSTANTS ───────────────────────────────────────────────────────────────
+# Named numerical values referenced across multiple systems.
+# Register a constant when it is defined in one GDD but another GDD must
+# agree with it (e.g., gold carry limit defined in economy but checked in
+# inventory, or base inventory slots defined in inventory but displayed in HUD).
+#
+# Required fields: name, status, source, referenced_by, value, unit, added
+
+constants:
+  - name: tier_health_scalar
+    status: active
+    source: design/gdd/creature-data-schema.md
+    referenced_by:
+      - design/gdd/creature-data-schema.md
+    value: 0.15
+    unit: "scalar (float, safe range 0.05-0.50)"
+    added: 2026-07-14
+    revised: ""
+
+  - name: tier_break_scalar
+    status: active
+    source: design/gdd/creature-data-schema.md
+    referenced_by:
+      - design/gdd/creature-data-schema.md
+    value: 0.15
+    unit: "scalar (float, safe range 0.05-0.50)"
+    added: 2026-07-14
+    revised: ""
+
+  - name: standard_creature_part_count_range
+    status: active
+    source: design/gdd/creature-data-schema.md
+    referenced_by:
+      - design/gdd/creature-data-schema.md
+    value: "3-5"
+    unit: parts
+    added: 2026-07-14
+    revised: ""
+
+  - name: boss_creature_part_count_range
+    status: active
+    source: design/gdd/creature-data-schema.md
+    referenced_by:
+      - design/gdd/creature-data-schema.md
+    value: "5-8"
+    unit: parts
+    added: 2026-07-14
+    revised: ""
+
+  - name: part_crack_stage_count_range
+    status: active
+    source: design/gdd/creature-data-schema.md
+    referenced_by:
+      - design/gdd/creature-data-schema.md
+    value: "1-2"
+    unit: stages
+    added: 2026-07-14
+    revised: ""
+
+  - name: base_modifier_slots
+    status: active
+    source: design/gdd/item-data-schema.md
+    referenced_by:
+      - design/gdd/item-data-schema.md
+    value: 1
+    unit: "modifier slots (int, safe range 0-2)"
+    added: 2026-07-14
+    revised: ""
+
+  - name: slots_per_tier
+    status: active
+    source: design/gdd/item-data-schema.md
+    referenced_by:
+      - design/gdd/item-data-schema.md
+    value: 1
+    unit: "modifier slots per rarity tier (int, safe range 1-2)"
+    added: 2026-07-14
+    revised: ""
+
+  - name: enchantment_floor
+    status: active
+    source: design/gdd/item-data-schema.md
+    referenced_by:
+      - design/gdd/item-data-schema.md
+    value: 1
+    unit: "enchantment slots (int, hard floor 1 — do not lower, Anti-Pillar compliance)"
+    added: 2026-07-14
+    revised: ""
+
+  - name: tier_divisor
+    status: active
+    source: design/gdd/item-data-schema.md
+    referenced_by:
+      - design/gdd/item-data-schema.md
+    value: 2
+    unit: "rarity tiers per enchantment slot (int, safe range 1-3)"
+    added: 2026-07-14
+    revised: ""
+
+  - name: growth_rate
+    status: active
+    source: design/gdd/item-data-schema.md
+    referenced_by:
+      - design/gdd/item-data-schema.md
+    value: 0.25
+    unit: "scalar (float, safe range 0.15-0.40)"
+    added: 2026-07-14
+    revised: ""
+
+  - name: max_stack_size
+    status: active
+    source: design/gdd/item-data-schema.md
+    referenced_by:
+      - design/gdd/item-data-schema.md
+    value: 999
+    unit: "quantity ceiling for stackable Item Instances (int, safe range 99-9999)"
+    added: 2026-07-14
+    revised: ""
+
+  - name: padding_base_px
+    status: active
+    source: design/gdd/input-targeting-system.md
+    referenced_by:
+      - design/gdd/input-targeting-system.md
+    value: 3
+    unit: "virtual-canvas px (480x270 canvas, art-bible SS8.2) (float, safe range 2-16)"
+    added: 2026-07-14
+    revised: ""
+
+  - name: padding_min_px
+    status: active
+    source: design/gdd/input-targeting-system.md
+    referenced_by:
+      - design/gdd/input-targeting-system.md
+    value: 3
+    unit: "virtual-canvas px (float, safe range 2-8)"
+    added: 2026-07-14
+    revised: ""
+
+  - name: padding_max_px
+    status: active
+    source: design/gdd/input-targeting-system.md
+    referenced_by:
+      - design/gdd/input-targeting-system.md
+    value: 14
+    unit: "virtual-canvas px (float, safe range 8-20)"
+    added: 2026-07-14
+    revised: ""
+
+  - name: reference_part_size_px
+    status: active
+    source: design/gdd/input-targeting-system.md
+    referenced_by:
+      - design/gdd/input-targeting-system.md
+    value: 40
+    unit: "virtual-canvas px (float, safe range 25-100)"
+    added: 2026-07-14
+    revised: ""
+
+  - name: magnetism_radius_px
+    status: active
+    source: design/gdd/input-targeting-system.md
+    referenced_by:
+      - design/gdd/input-targeting-system.md
+    value: 25
+    unit: "virtual-canvas px (float, safe range 10-50)"
+    added: 2026-07-14
+    revised: ""
+
+  - name: magnetism_strength_default
+    status: active
+    source: design/gdd/input-targeting-system.md
+    referenced_by:
+      - design/gdd/input-targeting-system.md
+    value: 0.0
+    unit: "scalar (float, safe range 0.0-1.0, player-facing accessibility slider default off)"
+    added: 2026-07-14
+    revised: ""
+
+  - name: cycle_initial_delay_ms
+    status: active
+    source: design/gdd/input-targeting-system.md
+    referenced_by:
+      - design/gdd/input-targeting-system.md
+    value: 350
+    unit: "milliseconds (int, safe range 200-600)"
+    added: 2026-07-14
+    revised: ""
+
+  - name: cycle_repeat_interval_ms
+    status: active
+    source: design/gdd/input-targeting-system.md
+    referenced_by:
+      - design/gdd/input-targeting-system.md
+    value: 120
+    unit: "milliseconds (int, safe range 60-250)"
+    added: 2026-07-14
+    revised: ""
+
+  # ─── Added 2026-07-14 by the W16 registry-consolidation pass ───
+  # BALANCE-CRITICAL cross-system constants. Several of these were quoted as bare
+  # literals in 3-5 GDDs each with no owner — exactly the drift the registry exists
+  # to prevent.
+
+  - name: active_efficiency_cap_percent
+    status: active
+    source: design/gdd/combat-encounter-system.md
+    referenced_by:
+      - design/gdd/combat-encounter-system.md
+      - design/gdd/region-mastery-automation-system.md
+      - design/gdd/loot-drop-system.md
+    value: 300
+    unit: "percent (HARD-LOCKED — do not raise without a pillar-level decision)"
+    notes: "Direct implementation of the user's 'avoid sustained active play being more
+      than roughly 3x better'. Against the optimized-idle ceiling (120%) this is 2.5x."
+    added: 2026-07-14
+    revised: ""
+
+  - name: telegraph_windup_floor_ms
+    status: active
+    source: design/gdd/creature-ai-telegraph-system.md
+    referenced_by:
+      - design/gdd/creature-ai-telegraph-system.md
+      - design/gdd/combat-encounter-system.md
+      - design/gdd/combat-hud.md
+      - design/gdd/accessibility-settings-system.md
+      - design/gdd/vow-condition-tracking.md
+    value: 600
+    unit: "milliseconds (floor — clamps at EVERY difficulty tier)"
+    notes: "Derived from WCAG 2.3.1 anti-strobe math (max 3 flashes/sec) plus Hick's Law.
+      ONE anti-strobe constant for the whole game, deliberately — the Vow HUD's
+      Schmitt-trigger dead-band reuses this exact value rather than defining a second one
+      that could silently drift out of sync."
+    added: 2026-07-14
+    revised: ""
+
+  - name: basic_attack_interval_ms
+    status: active
+    source: design/gdd/combat-encounter-system.md
+    referenced_by:
+      - design/gdd/combat-encounter-system.md
+      - design/gdd/combat-hud.md
+      - design/gdd/onboarding-tutorial-system.md
+    value: 1200
+    unit: "milliseconds (safe range 800-2000)"
+    notes: "The hard DPS-cap floor. Basic attacks auto-fire on this timer; CLICKING STEERS
+      THE NEXT TICK'S TARGET AND NEVER ADDS AN ATTACK. This is what gives the game clicker
+      tactility without becoming an APM test — DPS is mathematically independent of click
+      rate, which Pillar 1 (Precision Over Reflexes) requires."
+    added: 2026-07-14
+    revised: ""
+
+  - name: region_auto_sell_gleam_cap_per_hour
+    status: active
+    source: design/gdd/region-mastery-automation-system.md
+    referenced_by:
+      - design/gdd/region-mastery-automation-system.md
+      - design/gdd/loot-drop-system.md
+      - design/gdd/the-forge-system.md
+      - design/gdd/hunter-progression-system.md
+    value: 24
+    unit: "gleam per hour (HARD CAP — economic integrity)"
+    notes: "Defuses the Stage-3 inflation bomb. Without it, loot-drop-system's own faucet
+      model projected ~760,000 Gleam from a 100-hour unattended session (~3,800 Vow
+      bindings); with it, 2,400. Do not raise without re-running the sink math in
+      hunter-progression-system."
+    added: 2026-07-14
+    revised: ""
+
+  - name: tier_attack_scalar
+    status: active
+    source: design/gdd/combat-encounter-system.md
+    referenced_by:
+      - design/gdd/combat-encounter-system.md
+      - design/gdd/encounter-spawn-system.md
+    value: 0.15
+    unit: "scalar (float, safe range 0.05-0.50)"
+    notes: "Incoming-damage scaling per power_tier (Formula 3b Step 1). Deliberately
+      IDENTICAL to tier_defense_scalar, tier_health_scalar and tier_break_scalar — four
+      curves, one scalar, so tier difficulty scales coherently rather than compounding."
+    added: 2026-07-14
+    revised: ""
+
+  - name: tier_defense_scalar
+    status: active
+    source: design/gdd/combat-encounter-system.md
+    referenced_by:
+      - design/gdd/combat-encounter-system.md
+    value: 0.15
+    unit: "scalar (float, safe range 0.05-0.50)"
+    added: 2026-07-14
+    revised: ""
+
+  - name: block_damage_reduction_percent
+    status: active
+    source: design/gdd/combat-encounter-system.md
+    referenced_by:
+      - design/gdd/combat-encounter-system.md
+      - design/gdd/creature-ai-telegraph-system.md
+      - design/gdd/combat-hud.md
+    value: 0.80
+    unit: "fraction (float, safe range 0.50-0.95)"
+    notes: "Block reduces but NEVER negates. Full negation would make block strictly
+      dominate dodge (no charge cost, no cooldown), collapsing the defensive triad to a
+      single verb. Applied at Formula 3b Step 3. Preserves the locked reward gradient
+      interrupt > dodge > block."
+    added: 2026-07-14
+    revised: ""
+
+  - name: min_incoming_damage_floor
+    status: active
+    source: design/gdd/combat-encounter-system.md
+    referenced_by:
+      - design/gdd/combat-encounter-system.md
+    value: 1
+    unit: "hit points (int — STRUCTURAL, do not set to 0)"
+    notes: "An unavoided hit always costs SOMETHING, however much defense is stacked.
+      This is the backstop that stops defense from ever becoming immunity — which would
+      make telegraphs ignorable and flatten Pillar 1. Not a feel knob."
+    added: 2026-07-14
+    revised: ""
+
+  - name: hunter_defense_cap
+    status: active
+    source: design/gdd/hunter-progression-system.md
+    referenced_by:
+      - design/gdd/hunter-progression-system.md
+      - design/gdd/combat-encounter-system.md
+      - design/gdd/resonance-weaving-system.md
+    value: 120
+    unit: "defense points (base 0, +2 per Training rank, 60 ranks max)"
+    notes: "NOTE THE BASE VALUE IS 0. This is why vow_fragility could not be priced as a
+      percentage of defense — 20% of 0 is 0, so any player who simply never trained defense
+      would have paid nothing. At the 120 cap the player still takes 45.5% of incoming
+      damage (100/(100+120)); the last 20 points buy only 4.5 percentage points versus 16.7
+      for the first 20."
+    added: 2026-07-14
+    revised: ""
+
+  - name: static_cost_conversion_rate
+    status: active
+    source: design/gdd/resonance-weaving-system.md
+    referenced_by:
+      - design/gdd/resonance-weaving-system.md
+    value: 3.0
+    unit: "power per unit of effective-HP sacrificed (float, safe range 1.5-5.0)"
+    notes: "All static-cost Vows must lie on this one line, so that none dominates."
+    added: 2026-07-14
+    revised: ""
+
+  - name: fragility_damage_taken_increase
+    status: active
+    source: design/gdd/resonance-weaving-system.md
+    referenced_by:
+      - design/gdd/resonance-weaving-system.md
+      - design/gdd/combat-encounter-system.md
+    value: 0.125
+    unit: "fraction of final_damage, added post-mitigation (Formula 3b Step 5)"
+    notes: "vow_fragility's price. It is applied to the damage pipeline's OUTPUT rather
+      than as a reduction of the `defense` stat, and that placement is load-bearing: this
+      Vow has been accidentally FREE twice. (1) Originally `defense` was read by no formula
+      at all (Blocker B3), so '-20% defense' cost nothing — +60% ability power gratis.
+      (2) Once Formula 3b made defense live, '-20% of defense' STILL cost nothing to any
+      player who never trained defense, since the stat's base is 0. A cost expressed as a
+      fraction of an investable stat is always avoidable by declining the investment. You
+      cannot, however, decline to take damage. Costs 0.111 eHP -> multiplier 1.33
+      (was incorrectly 1.60)."
+    added: 2026-07-14
+    revised: ""
+
+  - name: efficiency_quantity_scalar
+    status: active
+    source: design/gdd/loot-drop-system.md
+    referenced_by:
+      - design/gdd/loot-drop-system.md
+    value: 0.8
+    unit: "scalar (float, safe range 0.3-1.2) — BALANCE-CRITICAL"
+    notes: "How strongly active_efficiency_percent raises drop count. Safe at 0.8 ONLY
+      because effective_bonus_drop_chance_percent is clamp(...,0,100): the drop-count
+      ceiling binds before the uplift can compound with the kills/hour term. If that clamp
+      is ever removed, peak active throughput grows without a ceiling and the ~3x contract
+      breaks. Verified peak total throughput: 2.63x a fully-mastered farm; sustained
+      focused play: 1.88x."
+    added: 2026-07-14
+    revised: ""
+
+# Example:
+#
+# constants:
+#   - name: gold_carry_limit
+#     status: active
+#     source: design/gdd/economy.md
+#     referenced_by:
+#       - design/gdd/economy.md
+#       - design/gdd/inventory.md   # inventory enforces the carry limit
+#       - design/gdd/ui.md          # HUD displays current gold vs limit
+#     value: 9999
+#     unit: gold
+#     added: 2026-03-26
+#     revised: ""
+#
+#   - name: base_inventory_slots
+#     status: active
+#     source: design/gdd/inventory.md
+#     referenced_by:
+#       - design/gdd/inventory.md
+#       - design/gdd/progression.md  # progression unlocks additional slots
+#     value: 20
+#     unit: slots
+#     added: 2026-03-26
+#     revised: ""

@@ -1,0 +1,296 @@
+[
+  {
+    "id": "body_blood_moors",
+    "resolution": [
+      1920,
+      1080
+    ],
+    "groundLineY": 900,
+    "safeCombatArea": [
+      160,
+      560,
+      1600,
+      360
+    ],
+    "backgrounds": {
+      "clean": "assets/backgrounds/body_blood_moors/body_blood_moors_clean.png",
+      "unconquered": "assets/backgrounds/body_blood_moors/body_blood_moors_unconquered.png",
+      "mastered": "assets/backgrounds/body_blood_moors/body_blood_moors_mastered.png"
+    },
+    "layers": [
+      {
+        "name": "far",
+        "texture": "assets/parallax/body_blood_moors/body_blood_moors_far.png",
+        "factor": 0.12
+      },
+      {
+        "name": "mid",
+        "texture": "assets/parallax/body_blood_moors/body_blood_moors_mid.png",
+        "factor": 0.32
+      },
+      {
+        "name": "near",
+        "texture": "assets/parallax/body_blood_moors/body_blood_moors_near.png",
+        "factor": 0.62
+      },
+      {
+        "name": "foreground",
+        "texture": "assets/parallax/body_blood_moors/body_blood_moors_foreground.png",
+        "factor": 1.0
+      }
+    ],
+    "overlays": {
+      "fog": "assets/overlays/body_blood_moors/body_blood_moors_fog.png",
+      "corruption": "assets/overlays/body_blood_moors/body_blood_moors_corruption.png",
+      "mastery": "assets/overlays/body_blood_moors/body_blood_moors_mastery.png",
+      "particles": "assets/overlays/body_blood_moors/body_blood_moors_particles.png",
+      "light_rays": "assets/overlays/body_blood_moors/body_blood_moors_light_rays.png",
+      "vignette": "assets/overlays/body_blood_moors/body_blood_moors_vignette.png"
+    }
+  },
+  {
+    "id": "mind_crystal_caverns",
+    "resolution": [
+      1920,
+      1080
+    ],
+    "groundLineY": 900,
+    "safeCombatArea": [
+      160,
+      560,
+      1600,
+      360
+    ],
+    "backgrounds": {
+      "clean": "assets/backgrounds/mind_crystal_caverns/mind_crystal_caverns_clean.png",
+      "unconquered": "assets/backgrounds/mind_crystal_caverns/mind_crystal_caverns_unconquered.png",
+      "mastered": "assets/backgrounds/mind_crystal_caverns/mind_crystal_caverns_mastered.png"
+    },
+    "layers": [
+      {
+        "name": "far",
+        "texture": "assets/parallax/mind_crystal_caverns/mind_crystal_caverns_far.png",
+        "factor": 0.12
+      },
+      {
+        "name": "mid",
+        "texture": "assets/parallax/mind_crystal_caverns/mind_crystal_caverns_mid.png",
+        "factor": 0.32
+      },
+      {
+        "name": "near",
+        "texture": "assets/parallax/mind_crystal_caverns/mind_crystal_caverns_near.png",
+        "factor": 0.62
+      },
+      {
+        "name": "foreground",
+        "texture": "assets/parallax/mind_crystal_caverns/mind_crystal_caverns_foreground.png",
+        "factor": 1.0
+      }
+    ],
+    "overlays": {
+      "fog": "assets/overlays/mind_crystal_caverns/mind_crystal_caverns_fog.png",
+      "corruption": "assets/overlays/mind_crystal_caverns/mind_crystal_caverns_corruption.png",
+      "mastery": "assets/overlays/mind_crystal_caverns/mind_crystal_caverns_mastery.png",
+      "particles": "assets/overlays/mind_crystal_caverns/mind_crystal_caverns_particles.png",
+      "light_rays": "assets/overlays/mind_crystal_caverns/mind_crystal_caverns_light_rays.png",
+      "vignette": "assets/overlays/mind_crystal_caverns/mind_crystal_caverns_vignette.png"
+    }
+  },
+  {
+    "id": "nature_verdant_hollow",
+    "resolution": [
+      1920,
+      1080
+    ],
+    "groundLineY": 900,
+    "safeCombatArea": [
+      160,
+      560,
+      1600,
+      360
+    ],
+    "backgrounds": {
+      "clean": "assets/backgrounds/nature_verdant_hollow/nature_verdant_hollow_clean.png",
+      "unconquered": "assets/backgrounds/nature_verdant_hollow/nature_verdant_hollow_unconquered.png",
+      "mastered": "assets/backgrounds/nature_verdant_hollow/nature_verdant_hollow_mastered.png"
+    },
+    "layers": [
+      {
+        "name": "far",
+        "texture": "assets/parallax/nature_verdant_hollow/nature_verdant_hollow_far.png",
+        "factor": 0.12
+      },
+      {
+        "name": "mid",
+        "texture": "assets/parallax/nature_verdant_hollow/nature_verdant_hollow_mid.png",
+        "factor": 0.32
+      },
+      {
+        "name": "near",
+        "texture": "assets/parallax/nature_verdant_hollow/nature_verdant_hollow_near.png",
+        "factor": 0.62
+      },
+      {
+        "name": "foreground",
+        "texture": "assets/parallax/nature_verdant_hollow/nature_verdant_hollow_foreground.png",
+        "factor": 1.0
+      }
+    ],
+    "overlays": {
+      "fog": "assets/overlays/nature_verdant_hollow/nature_verdant_hollow_fog.png",
+      "corruption": "assets/overlays/nature_verdant_hollow/nature_verdant_hollow_corruption.png",
+      "mastery": "assets/overlays/nature_verdant_hollow/nature_verdant_hollow_mastery.png",
+      "particles": "assets/overlays/nature_verdant_hollow/nature_verdant_hollow_particles.png",
+      "light_rays": "assets/overlays/nature_verdant_hollow/nature_verdant_hollow_light_rays.png",
+      "vignette": "assets/overlays/nature_verdant_hollow/nature_verdant_hollow_vignette.png"
+    }
+  },
+  {
+    "id": "machine_forge_wastes",
+    "resolution": [
+      1920,
+      1080
+    ],
+    "groundLineY": 900,
+    "safeCombatArea": [
+      160,
+      560,
+      1600,
+      360
+    ],
+    "backgrounds": {
+      "clean": "assets/backgrounds/machine_forge_wastes/machine_forge_wastes_clean.png",
+      "unconquered": "assets/backgrounds/machine_forge_wastes/machine_forge_wastes_unconquered.png",
+      "mastered": "assets/backgrounds/machine_forge_wastes/machine_forge_wastes_mastered.png"
+    },
+    "layers": [
+      {
+        "name": "far",
+        "texture": "assets/parallax/machine_forge_wastes/machine_forge_wastes_far.png",
+        "factor": 0.12
+      },
+      {
+        "name": "mid",
+        "texture": "assets/parallax/machine_forge_wastes/machine_forge_wastes_mid.png",
+        "factor": 0.32
+      },
+      {
+        "name": "near",
+        "texture": "assets/parallax/machine_forge_wastes/machine_forge_wastes_near.png",
+        "factor": 0.62
+      },
+      {
+        "name": "foreground",
+        "texture": "assets/parallax/machine_forge_wastes/machine_forge_wastes_foreground.png",
+        "factor": 1.0
+      }
+    ],
+    "overlays": {
+      "fog": "assets/overlays/machine_forge_wastes/machine_forge_wastes_fog.png",
+      "corruption": "assets/overlays/machine_forge_wastes/machine_forge_wastes_corruption.png",
+      "mastery": "assets/overlays/machine_forge_wastes/machine_forge_wastes_mastery.png",
+      "particles": "assets/overlays/machine_forge_wastes/machine_forge_wastes_particles.png",
+      "light_rays": "assets/overlays/machine_forge_wastes/machine_forge_wastes_light_rays.png",
+      "vignette": "assets/overlays/machine_forge_wastes/machine_forge_wastes_vignette.png"
+    }
+  },
+  {
+    "id": "shadow_void_wastes",
+    "resolution": [
+      1920,
+      1080
+    ],
+    "groundLineY": 900,
+    "safeCombatArea": [
+      160,
+      560,
+      1600,
+      360
+    ],
+    "backgrounds": {
+      "clean": "assets/backgrounds/shadow_void_wastes/shadow_void_wastes_clean.png",
+      "unconquered": "assets/backgrounds/shadow_void_wastes/shadow_void_wastes_unconquered.png",
+      "mastered": "assets/backgrounds/shadow_void_wastes/shadow_void_wastes_mastered.png"
+    },
+    "layers": [
+      {
+        "name": "far",
+        "texture": "assets/parallax/shadow_void_wastes/shadow_void_wastes_far.png",
+        "factor": 0.12
+      },
+      {
+        "name": "mid",
+        "texture": "assets/parallax/shadow_void_wastes/shadow_void_wastes_mid.png",
+        "factor": 0.32
+      },
+      {
+        "name": "near",
+        "texture": "assets/parallax/shadow_void_wastes/shadow_void_wastes_near.png",
+        "factor": 0.62
+      },
+      {
+        "name": "foreground",
+        "texture": "assets/parallax/shadow_void_wastes/shadow_void_wastes_foreground.png",
+        "factor": 1.0
+      }
+    ],
+    "overlays": {
+      "fog": "assets/overlays/shadow_void_wastes/shadow_void_wastes_fog.png",
+      "corruption": "assets/overlays/shadow_void_wastes/shadow_void_wastes_corruption.png",
+      "mastery": "assets/overlays/shadow_void_wastes/shadow_void_wastes_mastery.png",
+      "particles": "assets/overlays/shadow_void_wastes/shadow_void_wastes_particles.png",
+      "light_rays": "assets/overlays/shadow_void_wastes/shadow_void_wastes_light_rays.png",
+      "vignette": "assets/overlays/shadow_void_wastes/shadow_void_wastes_vignette.png"
+    }
+  },
+  {
+    "id": "spirit_twilight_sanctum",
+    "resolution": [
+      1920,
+      1080
+    ],
+    "groundLineY": 900,
+    "safeCombatArea": [
+      160,
+      560,
+      1600,
+      360
+    ],
+    "backgrounds": {
+      "clean": "assets/backgrounds/spirit_twilight_sanctum/spirit_twilight_sanctum_clean.png",
+      "unconquered": "assets/backgrounds/spirit_twilight_sanctum/spirit_twilight_sanctum_unconquered.png",
+      "mastered": "assets/backgrounds/spirit_twilight_sanctum/spirit_twilight_sanctum_mastered.png"
+    },
+    "layers": [
+      {
+        "name": "far",
+        "texture": "assets/parallax/spirit_twilight_sanctum/spirit_twilight_sanctum_far.png",
+        "factor": 0.12
+      },
+      {
+        "name": "mid",
+        "texture": "assets/parallax/spirit_twilight_sanctum/spirit_twilight_sanctum_mid.png",
+        "factor": 0.32
+      },
+      {
+        "name": "near",
+        "texture": "assets/parallax/spirit_twilight_sanctum/spirit_twilight_sanctum_near.png",
+        "factor": 0.62
+      },
+      {
+        "name": "foreground",
+        "texture": "assets/parallax/spirit_twilight_sanctum/spirit_twilight_sanctum_foreground.png",
+        "factor": 1.0
+      }
+    ],
+    "overlays": {
+      "fog": "assets/overlays/spirit_twilight_sanctum/spirit_twilight_sanctum_fog.png",
+      "corruption": "assets/overlays/spirit_twilight_sanctum/spirit_twilight_sanctum_corruption.png",
+      "mastery": "assets/overlays/spirit_twilight_sanctum/spirit_twilight_sanctum_mastery.png",
+      "particles": "assets/overlays/spirit_twilight_sanctum/spirit_twilight_sanctum_particles.png",
+      "light_rays": "assets/overlays/spirit_twilight_sanctum/spirit_twilight_sanctum_light_rays.png",
+      "vignette": "assets/overlays/spirit_twilight_sanctum/spirit_twilight_sanctum_vignette.png"
+    }
+  }
+]

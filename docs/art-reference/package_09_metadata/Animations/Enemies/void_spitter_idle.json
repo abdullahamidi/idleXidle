@@ -1,0 +1,14 @@
+{
+  "id": "void_spitter_idle",
+  "frameCount": 8,
+  "frameWidth": 512,
+  "frameHeight": 512,
+  "fps": 12,
+  "loop": true,
+  "origin": {
+    "x": 256,
+    "y": 450
+  },
+  "texturePath": "assets/animations/void_spitter_idle/void_spitter_idle_strip8_512.png",
+  "previewSource": "a_clean_white_background_sprite_sheet_game_art_r_3_batch_1.png"
+}

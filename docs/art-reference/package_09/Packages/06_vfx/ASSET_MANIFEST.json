@@ -1,0 +1,1752 @@
+[
+  {
+    "path": "assets/vfx/slash/nature/frames_native/slash_nature_00.png",
+    "id": "slash_nature",
+    "kind": "frame_native",
+    "frame": 0,
+    "size": {
+      "w": 192,
+      "h": 217
+    }
+  },
+  {
+    "path": "assets/vfx/slash/nature/frames_512/slash_nature_00_512.png",
+    "id": "slash_nature",
+    "kind": "frame_512",
+    "frame": 0,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/slash/nature/frames_native/slash_nature_01.png",
+    "id": "slash_nature",
+    "kind": "frame_native",
+    "frame": 1,
+    "size": {
+      "w": 222,
+      "h": 282
+    }
+  },
+  {
+    "path": "assets/vfx/slash/nature/frames_512/slash_nature_01_512.png",
+    "id": "slash_nature",
+    "kind": "frame_512",
+    "frame": 1,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/slash/nature/frames_native/slash_nature_02.png",
+    "id": "slash_nature",
+    "kind": "frame_native",
+    "frame": 2,
+    "size": {
+      "w": 221,
+      "h": 317
+    }
+  },
+  {
+    "path": "assets/vfx/slash/nature/frames_512/slash_nature_02_512.png",
+    "id": "slash_nature",
+    "kind": "frame_512",
+    "frame": 2,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/slash/nature/frames_native/slash_nature_03.png",
+    "id": "slash_nature",
+    "kind": "frame_native",
+    "frame": 3,
+    "size": {
+      "w": 209,
+      "h": 339
+    }
+  },
+  {
+    "path": "assets/vfx/slash/nature/frames_512/slash_nature_03_512.png",
+    "id": "slash_nature",
+    "kind": "frame_512",
+    "frame": 3,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/slash/nature/frames_native/slash_nature_04.png",
+    "id": "slash_nature",
+    "kind": "frame_native",
+    "frame": 4,
+    "size": {
+      "w": 214,
+      "h": 347
+    }
+  },
+  {
+    "path": "assets/vfx/slash/nature/frames_512/slash_nature_04_512.png",
+    "id": "slash_nature",
+    "kind": "frame_512",
+    "frame": 4,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/slash/nature/frames_native/slash_nature_05.png",
+    "id": "slash_nature",
+    "kind": "frame_native",
+    "frame": 5,
+    "size": {
+      "w": 221,
+      "h": 326
+    }
+  },
+  {
+    "path": "assets/vfx/slash/nature/frames_512/slash_nature_05_512.png",
+    "id": "slash_nature",
+    "kind": "frame_512",
+    "frame": 5,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/slash/nature/frames_native/slash_nature_06.png",
+    "id": "slash_nature",
+    "kind": "frame_native",
+    "frame": 6,
+    "size": {
+      "w": 222,
+      "h": 306
+    }
+  },
+  {
+    "path": "assets/vfx/slash/nature/frames_512/slash_nature_06_512.png",
+    "id": "slash_nature",
+    "kind": "frame_512",
+    "frame": 6,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/slash/nature/frames_native/slash_nature_07.png",
+    "id": "slash_nature",
+    "kind": "frame_native",
+    "frame": 7,
+    "size": {
+      "w": 161,
+      "h": 282
+    }
+  },
+  {
+    "path": "assets/vfx/slash/nature/frames_512/slash_nature_07_512.png",
+    "id": "slash_nature",
+    "kind": "frame_512",
+    "frame": 7,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/slash/nature/slash_nature_strip8_512.png",
+    "id": "slash_nature",
+    "kind": "strip_512",
+    "frameCount": 8,
+    "frameSize": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "metadata/slash_nature.json",
+    "id": "slash_nature",
+    "kind": "metadata"
+  },
+  {
+    "path": "assets/vfx/slash/void/frames_native/slash_void_00.png",
+    "id": "slash_void",
+    "kind": "frame_native",
+    "frame": 0,
+    "size": {
+      "w": 212,
+      "h": 251
+    }
+  },
+  {
+    "path": "assets/vfx/slash/void/frames_512/slash_void_00_512.png",
+    "id": "slash_void",
+    "kind": "frame_512",
+    "frame": 0,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/slash/void/frames_native/slash_void_01.png",
+    "id": "slash_void",
+    "kind": "frame_native",
+    "frame": 1,
+    "size": {
+      "w": 222,
+      "h": 374
+    }
+  },
+  {
+    "path": "assets/vfx/slash/void/frames_512/slash_void_01_512.png",
+    "id": "slash_void",
+    "kind": "frame_512",
+    "frame": 1,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/slash/void/frames_native/slash_void_02.png",
+    "id": "slash_void",
+    "kind": "frame_native",
+    "frame": 2,
+    "size": {
+      "w": 221,
+      "h": 401
+    }
+  },
+  {
+    "path": "assets/vfx/slash/void/frames_512/slash_void_02_512.png",
+    "id": "slash_void",
+    "kind": "frame_512",
+    "frame": 2,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/slash/void/frames_native/slash_void_03.png",
+    "id": "slash_void",
+    "kind": "frame_native",
+    "frame": 3,
+    "size": {
+      "w": 222,
+      "h": 423
+    }
+  },
+  {
+    "path": "assets/vfx/slash/void/frames_512/slash_void_03_512.png",
+    "id": "slash_void",
+    "kind": "frame_512",
+    "frame": 3,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/slash/void/frames_native/slash_void_04.png",
+    "id": "slash_void",
+    "kind": "frame_native",
+    "frame": 4,
+    "size": {
+      "w": 222,
+      "h": 431
+    }
+  },
+  {
+    "path": "assets/vfx/slash/void/frames_512/slash_void_04_512.png",
+    "id": "slash_void",
+    "kind": "frame_512",
+    "frame": 4,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/slash/void/frames_native/slash_void_05.png",
+    "id": "slash_void",
+    "kind": "frame_native",
+    "frame": 5,
+    "size": {
+      "w": 221,
+      "h": 388
+    }
+  },
+  {
+    "path": "assets/vfx/slash/void/frames_512/slash_void_05_512.png",
+    "id": "slash_void",
+    "kind": "frame_512",
+    "frame": 5,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/slash/void/frames_native/slash_void_06.png",
+    "id": "slash_void",
+    "kind": "frame_native",
+    "frame": 6,
+    "size": {
+      "w": 222,
+      "h": 365
+    }
+  },
+  {
+    "path": "assets/vfx/slash/void/frames_512/slash_void_06_512.png",
+    "id": "slash_void",
+    "kind": "frame_512",
+    "frame": 6,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/slash/void/frames_native/slash_void_07.png",
+    "id": "slash_void",
+    "kind": "frame_native",
+    "frame": 7,
+    "size": {
+      "w": 210,
+      "h": 299
+    }
+  },
+  {
+    "path": "assets/vfx/slash/void/frames_512/slash_void_07_512.png",
+    "id": "slash_void",
+    "kind": "frame_512",
+    "frame": 7,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/slash/void/slash_void_strip8_512.png",
+    "id": "slash_void",
+    "kind": "strip_512",
+    "frameCount": 8,
+    "frameSize": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "metadata/slash_void.json",
+    "id": "slash_void",
+    "kind": "metadata"
+  },
+  {
+    "path": "assets/vfx/impact/gold/frames_native/impact_gold_00.png",
+    "id": "impact_gold",
+    "kind": "frame_native",
+    "frame": 0,
+    "size": {
+      "w": 201,
+      "h": 281
+    }
+  },
+  {
+    "path": "assets/vfx/impact/gold/frames_512/impact_gold_00_512.png",
+    "id": "impact_gold",
+    "kind": "frame_512",
+    "frame": 0,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/impact/gold/frames_native/impact_gold_01.png",
+    "id": "impact_gold",
+    "kind": "frame_native",
+    "frame": 1,
+    "size": {
+      "w": 222,
+      "h": 264
+    }
+  },
+  {
+    "path": "assets/vfx/impact/gold/frames_512/impact_gold_01_512.png",
+    "id": "impact_gold",
+    "kind": "frame_512",
+    "frame": 1,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/impact/gold/frames_native/impact_gold_02.png",
+    "id": "impact_gold",
+    "kind": "frame_native",
+    "frame": 2,
+    "size": {
+      "w": 221,
+      "h": 262
+    }
+  },
+  {
+    "path": "assets/vfx/impact/gold/frames_512/impact_gold_02_512.png",
+    "id": "impact_gold",
+    "kind": "frame_512",
+    "frame": 2,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/impact/gold/frames_native/impact_gold_03.png",
+    "id": "impact_gold",
+    "kind": "frame_native",
+    "frame": 3,
+    "size": {
+      "w": 222,
+      "h": 246
+    }
+  },
+  {
+    "path": "assets/vfx/impact/gold/frames_512/impact_gold_03_512.png",
+    "id": "impact_gold",
+    "kind": "frame_512",
+    "frame": 3,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/impact/gold/frames_native/impact_gold_04.png",
+    "id": "impact_gold",
+    "kind": "frame_native",
+    "frame": 4,
+    "size": {
+      "w": 222,
+      "h": 212
+    }
+  },
+  {
+    "path": "assets/vfx/impact/gold/frames_512/impact_gold_04_512.png",
+    "id": "impact_gold",
+    "kind": "frame_512",
+    "frame": 4,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/impact/gold/frames_native/impact_gold_05.png",
+    "id": "impact_gold",
+    "kind": "frame_native",
+    "frame": 5,
+    "size": {
+      "w": 221,
+      "h": 188
+    }
+  },
+  {
+    "path": "assets/vfx/impact/gold/frames_512/impact_gold_05_512.png",
+    "id": "impact_gold",
+    "kind": "frame_512",
+    "frame": 5,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/impact/gold/frames_native/impact_gold_06.png",
+    "id": "impact_gold",
+    "kind": "frame_native",
+    "frame": 6,
+    "size": {
+      "w": 222,
+      "h": 179
+    }
+  },
+  {
+    "path": "assets/vfx/impact/gold/frames_512/impact_gold_06_512.png",
+    "id": "impact_gold",
+    "kind": "frame_512",
+    "frame": 6,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/impact/gold/frames_native/impact_gold_07.png",
+    "id": "impact_gold",
+    "kind": "frame_native",
+    "frame": 7,
+    "size": {
+      "w": 148,
+      "h": 159
+    }
+  },
+  {
+    "path": "assets/vfx/impact/gold/frames_512/impact_gold_07_512.png",
+    "id": "impact_gold",
+    "kind": "frame_512",
+    "frame": 7,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/impact/gold/impact_gold_strip8_512.png",
+    "id": "impact_gold",
+    "kind": "strip_512",
+    "frameCount": 8,
+    "frameSize": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "metadata/impact_gold.json",
+    "id": "impact_gold",
+    "kind": "metadata"
+  },
+  {
+    "path": "assets/vfx/projectile/arcane/frames_native/projectile_arcane_00.png",
+    "id": "projectile_arcane",
+    "kind": "frame_native",
+    "frame": 0,
+    "size": {
+      "w": 172,
+      "h": 188
+    }
+  },
+  {
+    "path": "assets/vfx/projectile/arcane/frames_512/projectile_arcane_00_512.png",
+    "id": "projectile_arcane",
+    "kind": "frame_512",
+    "frame": 0,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/projectile/arcane/frames_native/projectile_arcane_01.png",
+    "id": "projectile_arcane",
+    "kind": "frame_native",
+    "frame": 1,
+    "size": {
+      "w": 210,
+      "h": 155
+    }
+  },
+  {
+    "path": "assets/vfx/projectile/arcane/frames_512/projectile_arcane_01_512.png",
+    "id": "projectile_arcane",
+    "kind": "frame_512",
+    "frame": 1,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/projectile/arcane/frames_native/projectile_arcane_02.png",
+    "id": "projectile_arcane",
+    "kind": "frame_native",
+    "frame": 2,
+    "size": {
+      "w": 221,
+      "h": 150
+    }
+  },
+  {
+    "path": "assets/vfx/projectile/arcane/frames_512/projectile_arcane_02_512.png",
+    "id": "projectile_arcane",
+    "kind": "frame_512",
+    "frame": 2,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/projectile/arcane/frames_native/projectile_arcane_03.png",
+    "id": "projectile_arcane",
+    "kind": "frame_native",
+    "frame": 3,
+    "size": {
+      "w": 222,
+      "h": 152
+    }
+  },
+  {
+    "path": "assets/vfx/projectile/arcane/frames_512/projectile_arcane_03_512.png",
+    "id": "projectile_arcane",
+    "kind": "frame_512",
+    "frame": 3,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/projectile/arcane/frames_native/projectile_arcane_04.png",
+    "id": "projectile_arcane",
+    "kind": "frame_native",
+    "frame": 4,
+    "size": {
+      "w": 222,
+      "h": 153
+    }
+  },
+  {
+    "path": "assets/vfx/projectile/arcane/frames_512/projectile_arcane_04_512.png",
+    "id": "projectile_arcane",
+    "kind": "frame_512",
+    "frame": 4,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/projectile/arcane/frames_native/projectile_arcane_05.png",
+    "id": "projectile_arcane",
+    "kind": "frame_native",
+    "frame": 5,
+    "size": {
+      "w": 221,
+      "h": 169
+    }
+  },
+  {
+    "path": "assets/vfx/projectile/arcane/frames_512/projectile_arcane_05_512.png",
+    "id": "projectile_arcane",
+    "kind": "frame_512",
+    "frame": 5,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/projectile/arcane/frames_native/projectile_arcane_06.png",
+    "id": "projectile_arcane",
+    "kind": "frame_native",
+    "frame": 6,
+    "size": {
+      "w": 222,
+      "h": 175
+    }
+  },
+  {
+    "path": "assets/vfx/projectile/arcane/frames_512/projectile_arcane_06_512.png",
+    "id": "projectile_arcane",
+    "kind": "frame_512",
+    "frame": 6,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/projectile/arcane/frames_native/projectile_arcane_07.png",
+    "id": "projectile_arcane",
+    "kind": "frame_native",
+    "frame": 7,
+    "size": {
+      "w": 142,
+      "h": 175
+    }
+  },
+  {
+    "path": "assets/vfx/projectile/arcane/frames_512/projectile_arcane_07_512.png",
+    "id": "projectile_arcane",
+    "kind": "frame_512",
+    "frame": 7,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/projectile/arcane/projectile_arcane_strip8_512.png",
+    "id": "projectile_arcane",
+    "kind": "strip_512",
+    "frameCount": 8,
+    "frameSize": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "metadata/projectile_arcane.json",
+    "id": "projectile_arcane",
+    "kind": "metadata"
+  },
+  {
+    "path": "assets/vfx/aura/arcane_ring/frames_native/aura_arcane_ring_00.png",
+    "id": "aura_arcane_ring",
+    "kind": "frame_native",
+    "frame": 0,
+    "size": {
+      "w": 196,
+      "h": 278
+    }
+  },
+  {
+    "path": "assets/vfx/aura/arcane_ring/frames_512/aura_arcane_ring_00_512.png",
+    "id": "aura_arcane_ring",
+    "kind": "frame_512",
+    "frame": 0,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/aura/arcane_ring/frames_native/aura_arcane_ring_01.png",
+    "id": "aura_arcane_ring",
+    "kind": "frame_native",
+    "frame": 1,
+    "size": {
+      "w": 196,
+      "h": 276
+    }
+  },
+  {
+    "path": "assets/vfx/aura/arcane_ring/frames_512/aura_arcane_ring_01_512.png",
+    "id": "aura_arcane_ring",
+    "kind": "frame_512",
+    "frame": 1,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/aura/arcane_ring/frames_native/aura_arcane_ring_02.png",
+    "id": "aura_arcane_ring",
+    "kind": "frame_native",
+    "frame": 2,
+    "size": {
+      "w": 197,
+      "h": 284
+    }
+  },
+  {
+    "path": "assets/vfx/aura/arcane_ring/frames_512/aura_arcane_ring_02_512.png",
+    "id": "aura_arcane_ring",
+    "kind": "frame_512",
+    "frame": 2,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/aura/arcane_ring/frames_native/aura_arcane_ring_03.png",
+    "id": "aura_arcane_ring",
+    "kind": "frame_native",
+    "frame": 3,
+    "size": {
+      "w": 199,
+      "h": 298
+    }
+  },
+  {
+    "path": "assets/vfx/aura/arcane_ring/frames_512/aura_arcane_ring_03_512.png",
+    "id": "aura_arcane_ring",
+    "kind": "frame_512",
+    "frame": 3,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/aura/arcane_ring/frames_native/aura_arcane_ring_04.png",
+    "id": "aura_arcane_ring",
+    "kind": "frame_native",
+    "frame": 4,
+    "size": {
+      "w": 199,
+      "h": 292
+    }
+  },
+  {
+    "path": "assets/vfx/aura/arcane_ring/frames_512/aura_arcane_ring_04_512.png",
+    "id": "aura_arcane_ring",
+    "kind": "frame_512",
+    "frame": 4,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/aura/arcane_ring/frames_native/aura_arcane_ring_05.png",
+    "id": "aura_arcane_ring",
+    "kind": "frame_native",
+    "frame": 5,
+    "size": {
+      "w": 194,
+      "h": 278
+    }
+  },
+  {
+    "path": "assets/vfx/aura/arcane_ring/frames_512/aura_arcane_ring_05_512.png",
+    "id": "aura_arcane_ring",
+    "kind": "frame_512",
+    "frame": 5,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/aura/arcane_ring/frames_native/aura_arcane_ring_06.png",
+    "id": "aura_arcane_ring",
+    "kind": "frame_native",
+    "frame": 6,
+    "size": {
+      "w": 195,
+      "h": 273
+    }
+  },
+  {
+    "path": "assets/vfx/aura/arcane_ring/frames_512/aura_arcane_ring_06_512.png",
+    "id": "aura_arcane_ring",
+    "kind": "frame_512",
+    "frame": 6,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/aura/arcane_ring/frames_native/aura_arcane_ring_07.png",
+    "id": "aura_arcane_ring",
+    "kind": "frame_native",
+    "frame": 7,
+    "size": {
+      "w": 195,
+      "h": 263
+    }
+  },
+  {
+    "path": "assets/vfx/aura/arcane_ring/frames_512/aura_arcane_ring_07_512.png",
+    "id": "aura_arcane_ring",
+    "kind": "frame_512",
+    "frame": 7,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/aura/arcane_ring/aura_arcane_ring_strip8_512.png",
+    "id": "aura_arcane_ring",
+    "kind": "strip_512",
+    "frameCount": 8,
+    "frameSize": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "metadata/aura_arcane_ring.json",
+    "id": "aura_arcane_ring",
+    "kind": "metadata"
+  },
+  {
+    "path": "assets/vfx/heal/holy_burst/frames_native/heal_holy_burst_00.png",
+    "id": "heal_holy_burst",
+    "kind": "frame_native",
+    "frame": 0,
+    "size": {
+      "w": 206,
+      "h": 378
+    }
+  },
+  {
+    "path": "assets/vfx/heal/holy_burst/frames_512/heal_holy_burst_00_512.png",
+    "id": "heal_holy_burst",
+    "kind": "frame_512",
+    "frame": 0,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/heal/holy_burst/frames_native/heal_holy_burst_01.png",
+    "id": "heal_holy_burst",
+    "kind": "frame_native",
+    "frame": 1,
+    "size": {
+      "w": 222,
+      "h": 389
+    }
+  },
+  {
+    "path": "assets/vfx/heal/holy_burst/frames_512/heal_holy_burst_01_512.png",
+    "id": "heal_holy_burst",
+    "kind": "frame_512",
+    "frame": 1,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/heal/holy_burst/frames_native/heal_holy_burst_02.png",
+    "id": "heal_holy_burst",
+    "kind": "frame_native",
+    "frame": 2,
+    "size": {
+      "w": 221,
+      "h": 369
+    }
+  },
+  {
+    "path": "assets/vfx/heal/holy_burst/frames_512/heal_holy_burst_02_512.png",
+    "id": "heal_holy_burst",
+    "kind": "frame_512",
+    "frame": 2,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/heal/holy_burst/frames_native/heal_holy_burst_03.png",
+    "id": "heal_holy_burst",
+    "kind": "frame_native",
+    "frame": 3,
+    "size": {
+      "w": 222,
+      "h": 323
+    }
+  },
+  {
+    "path": "assets/vfx/heal/holy_burst/frames_512/heal_holy_burst_03_512.png",
+    "id": "heal_holy_burst",
+    "kind": "frame_512",
+    "frame": 3,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/heal/holy_burst/frames_native/heal_holy_burst_04.png",
+    "id": "heal_holy_burst",
+    "kind": "frame_native",
+    "frame": 4,
+    "size": {
+      "w": 222,
+      "h": 297
+    }
+  },
+  {
+    "path": "assets/vfx/heal/holy_burst/frames_512/heal_holy_burst_04_512.png",
+    "id": "heal_holy_burst",
+    "kind": "frame_512",
+    "frame": 4,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/heal/holy_burst/frames_native/heal_holy_burst_05.png",
+    "id": "heal_holy_burst",
+    "kind": "frame_native",
+    "frame": 5,
+    "size": {
+      "w": 221,
+      "h": 318
+    }
+  },
+  {
+    "path": "assets/vfx/heal/holy_burst/frames_512/heal_holy_burst_05_512.png",
+    "id": "heal_holy_burst",
+    "kind": "frame_512",
+    "frame": 5,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/heal/holy_burst/frames_native/heal_holy_burst_06.png",
+    "id": "heal_holy_burst",
+    "kind": "frame_native",
+    "frame": 6,
+    "size": {
+      "w": 212,
+      "h": 308
+    }
+  },
+  {
+    "path": "assets/vfx/heal/holy_burst/frames_512/heal_holy_burst_06_512.png",
+    "id": "heal_holy_burst",
+    "kind": "frame_512",
+    "frame": 6,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/heal/holy_burst/frames_native/heal_holy_burst_07.png",
+    "id": "heal_holy_burst",
+    "kind": "frame_native",
+    "frame": 7,
+    "size": {
+      "w": 152,
+      "h": 270
+    }
+  },
+  {
+    "path": "assets/vfx/heal/holy_burst/frames_512/heal_holy_burst_07_512.png",
+    "id": "heal_holy_burst",
+    "kind": "frame_512",
+    "frame": 7,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/heal/holy_burst/heal_holy_burst_strip8_512.png",
+    "id": "heal_holy_burst",
+    "kind": "strip_512",
+    "frameCount": 8,
+    "frameSize": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "metadata/heal_holy_burst.json",
+    "id": "heal_holy_burst",
+    "kind": "metadata"
+  },
+  {
+    "path": "assets/vfx/binding/void_bind/frames_native/binding_void_bind_00.png",
+    "id": "binding_void_bind",
+    "kind": "frame_native",
+    "frame": 0,
+    "size": {
+      "w": 194,
+      "h": 176
+    }
+  },
+  {
+    "path": "assets/vfx/binding/void_bind/frames_512/binding_void_bind_00_512.png",
+    "id": "binding_void_bind",
+    "kind": "frame_512",
+    "frame": 0,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/binding/void_bind/frames_native/binding_void_bind_01.png",
+    "id": "binding_void_bind",
+    "kind": "frame_native",
+    "frame": 1,
+    "size": {
+      "w": 214,
+      "h": 239
+    }
+  },
+  {
+    "path": "assets/vfx/binding/void_bind/frames_512/binding_void_bind_01_512.png",
+    "id": "binding_void_bind",
+    "kind": "frame_512",
+    "frame": 1,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/binding/void_bind/frames_native/binding_void_bind_02.png",
+    "id": "binding_void_bind",
+    "kind": "frame_native",
+    "frame": 2,
+    "size": {
+      "w": 216,
+      "h": 290
+    }
+  },
+  {
+    "path": "assets/vfx/binding/void_bind/frames_512/binding_void_bind_02_512.png",
+    "id": "binding_void_bind",
+    "kind": "frame_512",
+    "frame": 2,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/binding/void_bind/frames_native/binding_void_bind_03.png",
+    "id": "binding_void_bind",
+    "kind": "frame_native",
+    "frame": 3,
+    "size": {
+      "w": 213,
+      "h": 316
+    }
+  },
+  {
+    "path": "assets/vfx/binding/void_bind/frames_512/binding_void_bind_03_512.png",
+    "id": "binding_void_bind",
+    "kind": "frame_512",
+    "frame": 3,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/binding/void_bind/frames_native/binding_void_bind_04.png",
+    "id": "binding_void_bind",
+    "kind": "frame_native",
+    "frame": 4,
+    "size": {
+      "w": 204,
+      "h": 297
+    }
+  },
+  {
+    "path": "assets/vfx/binding/void_bind/frames_512/binding_void_bind_04_512.png",
+    "id": "binding_void_bind",
+    "kind": "frame_512",
+    "frame": 4,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/binding/void_bind/frames_native/binding_void_bind_05.png",
+    "id": "binding_void_bind",
+    "kind": "frame_native",
+    "frame": 5,
+    "size": {
+      "w": 221,
+      "h": 246
+    }
+  },
+  {
+    "path": "assets/vfx/binding/void_bind/frames_512/binding_void_bind_05_512.png",
+    "id": "binding_void_bind",
+    "kind": "frame_512",
+    "frame": 5,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/binding/void_bind/frames_native/binding_void_bind_06.png",
+    "id": "binding_void_bind",
+    "kind": "frame_native",
+    "frame": 6,
+    "size": {
+      "w": 222,
+      "h": 221
+    }
+  },
+  {
+    "path": "assets/vfx/binding/void_bind/frames_512/binding_void_bind_06_512.png",
+    "id": "binding_void_bind",
+    "kind": "frame_512",
+    "frame": 6,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/binding/void_bind/frames_native/binding_void_bind_07.png",
+    "id": "binding_void_bind",
+    "kind": "frame_native",
+    "frame": 7,
+    "size": {
+      "w": 216,
+      "h": 166
+    }
+  },
+  {
+    "path": "assets/vfx/binding/void_bind/frames_512/binding_void_bind_07_512.png",
+    "id": "binding_void_bind",
+    "kind": "frame_512",
+    "frame": 7,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/binding/void_bind/binding_void_bind_strip8_512.png",
+    "id": "binding_void_bind",
+    "kind": "strip_512",
+    "frameCount": 8,
+    "frameSize": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "metadata/binding_void_bind.json",
+    "id": "binding_void_bind",
+    "kind": "metadata"
+  },
+  {
+    "path": "assets/vfx/levelup/gold_purple/frames_native/levelup_gold_purple_00.png",
+    "id": "levelup_gold_purple",
+    "kind": "frame_native",
+    "frame": 0,
+    "size": {
+      "w": 211,
+      "h": 153
+    }
+  },
+  {
+    "path": "assets/vfx/levelup/gold_purple/frames_512/levelup_gold_purple_00_512.png",
+    "id": "levelup_gold_purple",
+    "kind": "frame_512",
+    "frame": 0,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/levelup/gold_purple/frames_native/levelup_gold_purple_01.png",
+    "id": "levelup_gold_purple",
+    "kind": "frame_native",
+    "frame": 1,
+    "size": {
+      "w": 222,
+      "h": 265
+    }
+  },
+  {
+    "path": "assets/vfx/levelup/gold_purple/frames_512/levelup_gold_purple_01_512.png",
+    "id": "levelup_gold_purple",
+    "kind": "frame_512",
+    "frame": 1,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/levelup/gold_purple/frames_native/levelup_gold_purple_02.png",
+    "id": "levelup_gold_purple",
+    "kind": "frame_native",
+    "frame": 2,
+    "size": {
+      "w": 221,
+      "h": 315
+    }
+  },
+  {
+    "path": "assets/vfx/levelup/gold_purple/frames_512/levelup_gold_purple_02_512.png",
+    "id": "levelup_gold_purple",
+    "kind": "frame_512",
+    "frame": 2,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/levelup/gold_purple/frames_native/levelup_gold_purple_03.png",
+    "id": "levelup_gold_purple",
+    "kind": "frame_native",
+    "frame": 3,
+    "size": {
+      "w": 222,
+      "h": 376
+    }
+  },
+  {
+    "path": "assets/vfx/levelup/gold_purple/frames_512/levelup_gold_purple_03_512.png",
+    "id": "levelup_gold_purple",
+    "kind": "frame_512",
+    "frame": 3,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/levelup/gold_purple/frames_native/levelup_gold_purple_04.png",
+    "id": "levelup_gold_purple",
+    "kind": "frame_native",
+    "frame": 4,
+    "size": {
+      "w": 222,
+      "h": 348
+    }
+  },
+  {
+    "path": "assets/vfx/levelup/gold_purple/frames_512/levelup_gold_purple_04_512.png",
+    "id": "levelup_gold_purple",
+    "kind": "frame_512",
+    "frame": 4,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/levelup/gold_purple/frames_native/levelup_gold_purple_05.png",
+    "id": "levelup_gold_purple",
+    "kind": "frame_native",
+    "frame": 5,
+    "size": {
+      "w": 221,
+      "h": 271
+    }
+  },
+  {
+    "path": "assets/vfx/levelup/gold_purple/frames_512/levelup_gold_purple_05_512.png",
+    "id": "levelup_gold_purple",
+    "kind": "frame_512",
+    "frame": 5,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/levelup/gold_purple/frames_native/levelup_gold_purple_06.png",
+    "id": "levelup_gold_purple",
+    "kind": "frame_native",
+    "frame": 6,
+    "size": {
+      "w": 222,
+      "h": 232
+    }
+  },
+  {
+    "path": "assets/vfx/levelup/gold_purple/frames_512/levelup_gold_purple_06_512.png",
+    "id": "levelup_gold_purple",
+    "kind": "frame_512",
+    "frame": 6,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/levelup/gold_purple/frames_native/levelup_gold_purple_07.png",
+    "id": "levelup_gold_purple",
+    "kind": "frame_native",
+    "frame": 7,
+    "size": {
+      "w": 210,
+      "h": 234
+    }
+  },
+  {
+    "path": "assets/vfx/levelup/gold_purple/frames_512/levelup_gold_purple_07_512.png",
+    "id": "levelup_gold_purple",
+    "kind": "frame_512",
+    "frame": 7,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/levelup/gold_purple/levelup_gold_purple_strip8_512.png",
+    "id": "levelup_gold_purple",
+    "kind": "strip_512",
+    "frameCount": 8,
+    "frameSize": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "metadata/levelup_gold_purple.json",
+    "id": "levelup_gold_purple",
+    "kind": "metadata"
+  },
+  {
+    "path": "assets/vfx/smoke/smoke_puff/frames_native/smoke_puff_00.png",
+    "id": "smoke_puff",
+    "kind": "frame_native",
+    "frame": 0,
+    "size": {
+      "w": 195,
+      "h": 190
+    }
+  },
+  {
+    "path": "assets/vfx/smoke/smoke_puff/frames_512/smoke_puff_00_512.png",
+    "id": "smoke_puff",
+    "kind": "frame_512",
+    "frame": 0,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/smoke/smoke_puff/frames_native/smoke_puff_01.png",
+    "id": "smoke_puff",
+    "kind": "frame_native",
+    "frame": 1,
+    "size": {
+      "w": 222,
+      "h": 214
+    }
+  },
+  {
+    "path": "assets/vfx/smoke/smoke_puff/frames_512/smoke_puff_01_512.png",
+    "id": "smoke_puff",
+    "kind": "frame_512",
+    "frame": 1,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/smoke/smoke_puff/frames_native/smoke_puff_02.png",
+    "id": "smoke_puff",
+    "kind": "frame_native",
+    "frame": 2,
+    "size": {
+      "w": 221,
+      "h": 207
+    }
+  },
+  {
+    "path": "assets/vfx/smoke/smoke_puff/frames_512/smoke_puff_02_512.png",
+    "id": "smoke_puff",
+    "kind": "frame_512",
+    "frame": 2,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/smoke/smoke_puff/frames_native/smoke_puff_03.png",
+    "id": "smoke_puff",
+    "kind": "frame_native",
+    "frame": 3,
+    "size": {
+      "w": 222,
+      "h": 223
+    }
+  },
+  {
+    "path": "assets/vfx/smoke/smoke_puff/frames_512/smoke_puff_03_512.png",
+    "id": "smoke_puff",
+    "kind": "frame_512",
+    "frame": 3,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/smoke/smoke_puff/frames_native/smoke_puff_04.png",
+    "id": "smoke_puff",
+    "kind": "frame_native",
+    "frame": 4,
+    "size": {
+      "w": 222,
+      "h": 229
+    }
+  },
+  {
+    "path": "assets/vfx/smoke/smoke_puff/frames_512/smoke_puff_04_512.png",
+    "id": "smoke_puff",
+    "kind": "frame_512",
+    "frame": 4,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/smoke/smoke_puff/frames_native/smoke_puff_05.png",
+    "id": "smoke_puff",
+    "kind": "frame_native",
+    "frame": 5,
+    "size": {
+      "w": 221,
+      "h": 215
+    }
+  },
+  {
+    "path": "assets/vfx/smoke/smoke_puff/frames_512/smoke_puff_05_512.png",
+    "id": "smoke_puff",
+    "kind": "frame_512",
+    "frame": 5,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/smoke/smoke_puff/frames_native/smoke_puff_06.png",
+    "id": "smoke_puff",
+    "kind": "frame_native",
+    "frame": 6,
+    "size": {
+      "w": 222,
+      "h": 213
+    }
+  },
+  {
+    "path": "assets/vfx/smoke/smoke_puff/frames_512/smoke_puff_06_512.png",
+    "id": "smoke_puff",
+    "kind": "frame_512",
+    "frame": 6,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/smoke/smoke_puff/frames_native/smoke_puff_07.png",
+    "id": "smoke_puff",
+    "kind": "frame_native",
+    "frame": 7,
+    "size": {
+      "w": 191,
+      "h": 153
+    }
+  },
+  {
+    "path": "assets/vfx/smoke/smoke_puff/frames_512/smoke_puff_07_512.png",
+    "id": "smoke_puff",
+    "kind": "frame_512",
+    "frame": 7,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/smoke/smoke_puff/smoke_puff_strip8_512.png",
+    "id": "smoke_puff",
+    "kind": "strip_512",
+    "frameCount": 8,
+    "frameSize": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "metadata/smoke_puff.json",
+    "id": "smoke_puff",
+    "kind": "metadata"
+  },
+  {
+    "path": "assets/vfx/loot/loot_pop/frames_native/loot_pop_00.png",
+    "id": "loot_pop",
+    "kind": "frame_native",
+    "frame": 0,
+    "size": {
+      "w": 143,
+      "h": 160
+    }
+  },
+  {
+    "path": "assets/vfx/loot/loot_pop/frames_512/loot_pop_00_512.png",
+    "id": "loot_pop",
+    "kind": "frame_512",
+    "frame": 0,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/loot/loot_pop/frames_native/loot_pop_01.png",
+    "id": "loot_pop",
+    "kind": "frame_native",
+    "frame": 1,
+    "size": {
+      "w": 193,
+      "h": 248
+    }
+  },
+  {
+    "path": "assets/vfx/loot/loot_pop/frames_512/loot_pop_01_512.png",
+    "id": "loot_pop",
+    "kind": "frame_512",
+    "frame": 1,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/loot/loot_pop/frames_native/loot_pop_02.png",
+    "id": "loot_pop",
+    "kind": "frame_native",
+    "frame": 2,
+    "size": {
+      "w": 177,
+      "h": 293
+    }
+  },
+  {
+    "path": "assets/vfx/loot/loot_pop/frames_512/loot_pop_02_512.png",
+    "id": "loot_pop",
+    "kind": "frame_512",
+    "frame": 2,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/loot/loot_pop/frames_native/loot_pop_03.png",
+    "id": "loot_pop",
+    "kind": "frame_native",
+    "frame": 3,
+    "size": {
+      "w": 222,
+      "h": 309
+    }
+  },
+  {
+    "path": "assets/vfx/loot/loot_pop/frames_512/loot_pop_03_512.png",
+    "id": "loot_pop",
+    "kind": "frame_512",
+    "frame": 3,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/loot/loot_pop/frames_native/loot_pop_04.png",
+    "id": "loot_pop",
+    "kind": "frame_native",
+    "frame": 4,
+    "size": {
+      "w": 222,
+      "h": 282
+    }
+  },
+  {
+    "path": "assets/vfx/loot/loot_pop/frames_512/loot_pop_04_512.png",
+    "id": "loot_pop",
+    "kind": "frame_512",
+    "frame": 4,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/loot/loot_pop/frames_native/loot_pop_05.png",
+    "id": "loot_pop",
+    "kind": "frame_native",
+    "frame": 5,
+    "size": {
+      "w": 221,
+      "h": 271
+    }
+  },
+  {
+    "path": "assets/vfx/loot/loot_pop/frames_512/loot_pop_05_512.png",
+    "id": "loot_pop",
+    "kind": "frame_512",
+    "frame": 5,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/loot/loot_pop/frames_native/loot_pop_06.png",
+    "id": "loot_pop",
+    "kind": "frame_native",
+    "frame": 6,
+    "size": {
+      "w": 131,
+      "h": 211
+    }
+  },
+  {
+    "path": "assets/vfx/loot/loot_pop/frames_512/loot_pop_06_512.png",
+    "id": "loot_pop",
+    "kind": "frame_512",
+    "frame": 6,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/loot/loot_pop/frames_native/loot_pop_07.png",
+    "id": "loot_pop",
+    "kind": "frame_native",
+    "frame": 7,
+    "size": {
+      "w": 94,
+      "h": 171
+    }
+  },
+  {
+    "path": "assets/vfx/loot/loot_pop/frames_512/loot_pop_07_512.png",
+    "id": "loot_pop",
+    "kind": "frame_512",
+    "frame": 7,
+    "size": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "assets/vfx/loot/loot_pop/loot_pop_strip8_512.png",
+    "id": "loot_pop",
+    "kind": "strip_512",
+    "frameCount": 8,
+    "frameSize": {
+      "w": 512,
+      "h": 512
+    }
+  },
+  {
+    "path": "metadata/loot_pop.json",
+    "id": "loot_pop",
+    "kind": "metadata"
+  }
+]

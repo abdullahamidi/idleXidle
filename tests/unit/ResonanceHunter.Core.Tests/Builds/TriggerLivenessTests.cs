@@ -1,0 +1,332 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using ResonanceHunter.Core.Abilities;
+using ResonanceHunter.Core.Builds;
+using ResonanceHunter.Core.Economy;
+using ResonanceHunter.Core.Expeditions;
+using ResonanceHunter.Core.Loot;
+using Xunit;
+
+namespace ResonanceHunter.Core.Tests.Builds;
+
+/// <summary>
+/// Every <see cref="BuildTrigger"/>, proved to change something.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>VENOM is why this file exists.</b> The venomancer keystone granted it, the tree taught it, a node
+/// was named THE SLOW ROAD after it, and <c>SoloBattle</c> never once read it. Every test passed. The
+/// keystone cost 20% damage for nothing at all, and the only reason it was caught is that someone
+/// counted the reads by hand before wiring the next system.
+/// </para>
+/// <para>
+/// That is the seventh time this project has built a complete, tested, entirely uncalled system —
+/// Weaving, Memory Dust, evolution branches, Charm/Focus, Forge.Feed and item Element were the first
+/// six. A trigger is exactly the shape that keeps slipping through: an enum that reads as a promise,
+/// granted in one file and consumed in another, with nothing in the compiler joining the two.
+/// </para>
+/// <para>
+/// So: one test per trigger, each showing an OUTCOME differ, and a roll-call that fails when a trigger
+/// is added without one. The roll-call cannot prove a trigger is read — only that someone claimed it
+/// is. The behavioural tests are the proof; the roll-call is what makes forgetting them loud.
+/// </para>
+/// </remarks>
+public class TriggerLivenessTests
+{
+    private static readonly global::ResonanceHunter.Core.Automation.Source Body
+        = global::ResonanceHunter.Core.Automation.Source.Body;
+
+    private static EquippedSkill Strike(Form form = Form.Strike)
+        => new(new WovenAbility { Name = "s", Source = Body, Form = form }, 1_500);
+
+    private static Build BuildWith(params string[] keystoneIds)
+    {
+        var build = new Build();
+        build.Weave(Strike());
+        foreach (var id in keystoneIds) build.Take(Keystones.ById(id)!);
+        return build;
+    }
+
+    /// <summary>Total damage dealt to an unkillable, optionally-swinging enemy over the full ceiling.</summary>
+    private static float Output(Build build, float enemyDamage = 0f)
+    {
+        var champ = new Champion { MaxHealth = 10_000, Health = 10_000 };
+        var (_, events) = SoloBattle.ResolveWave(
+            champ, build, new Hunter(),
+            enemyHealth: 10_000_000f, enemyDamage: enemyDamage, enemyIntervalMs: 1_000,
+            ExpeditionTuning.Default, new Random(99));
+
+        return events.Where(e => e.Kind == BattleEventKind.Strike).Sum(e => e.Amount);
+    }
+
+    // ── The roll-call ─────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void test_every_trigger_is_claimed_by_a_test_in_this_file()
+    {
+        // Hand-maintained ON PURPOSE. There is no reflection that can ask "does the sim read this?", so
+        // the honest move is to make the omission impossible to commit quietly: add a trigger, this
+        // fails, and the failure names the thing you have to go prove. The proof may live in a sibling
+        // file — the combo triggers and ZEAL are proven in SoloBattleTests, where the Form-combo home is
+        // — but it MUST exist and be named here, so this set stays the single index of "what is wired".
+        var proved = new HashSet<BuildTrigger>
+        {
+            BuildTrigger.Venom,         // test_venom_actually_poisons
+            BuildTrigger.Echo,          // test_echo_fires_twice
+            BuildTrigger.Bloodlust,     // test_bloodlust_pays_for_being_hurt
+            BuildTrigger.NoHealing,     // test_no_healing_switches_transformation_off
+            BuildTrigger.Undying,       // test_undying_buys_exactly_one_death
+            BuildTrigger.Splinter,      // test_splinter_pays_out_on_a_kill
+            BuildTrigger.Harvest,       // test_harvest_pays_out_on_a_kill
+            BuildTrigger.Zeal,          // SoloBattleTests.test_juggernaut_hits_harder_the_fuller_your_health
+            BuildTrigger.Overdraw,      // SoloBattleTests.test_overdraw_adds_a_projectile_cast
+            BuildTrigger.Linger,        // SoloBattleTests.test_linger_stretches_the_mark_window
+            BuildTrigger.Radiance,      // SoloBattleTests.test_radiance_makes_an_aura_tick_more
+            BuildTrigger.Execute,       // SoloBattleTests.test_execute_speeds_the_kill_of_a_weakened_enemy
+            BuildTrigger.Coiled,        // SoloBattleTests.test_coiled_fires_the_trap_more_often
+            BuildTrigger.Siphon,        // SoloBattleTests.test_siphon_deepens_the_transformation_leech
+            BuildTrigger.Desperation,   // SoloExpeditionTests.test_desperation_swells_the_haul_at_low_health
+        };
+
+        // DESPERATION was parked here for a long time as "dead" — a HAUL effect the squad Expedition read
+        // directly, knowing nothing about triggers. The solo model routes it through Build.Triggers, and
+        // SoloExpedition.HaulForWave reads it, so it is proven like the rest and no longer the exception.
+        foreach (var t in Enum.GetValues<BuildTrigger>())
+            Assert.True(proved.Contains(t),
+                $"{t} has no test proving anything reads it. This is how VENOM shipped dead.");
+    }
+
+    // ── VENOM ─────────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void test_venom_actually_poisons()
+    {
+        // The test that did not exist, for the trigger that did nothing.
+        var plain = Output(BuildWith());
+        var venom = Output(BuildWith("venomancer"));
+
+        Assert.True(venom > plain,
+            $"VENOMANCER changed nothing ({plain} -> {venom}) — the trigger is granted and never read");
+    }
+
+    [Fact]
+    public void test_venom_beats_its_own_damage_penalty_given_time()
+    {
+        // VENOMANCER is x0.8 damage. If poison could not out-earn that over a long fight, the keystone
+        // would be a strict downgrade — and a keystone nobody can justify is a dead branch, not a choice.
+        Assert.True(Output(BuildWith("venomancer")) > Output(BuildWith()));
+    }
+
+    [Fact]
+    public void test_venom_ramps_rather_than_arriving_whole()
+    {
+        // Its identity, and the reason it is allowed to out-damage a plain build at the ceiling: poison
+        // must be WORSE early. If a venom build were ahead from the first second there would be no trade,
+        // just a better button.
+        var champ = new Champion { MaxHealth = 10_000, Health = 10_000 };
+        var (_, events) = SoloBattle.ResolveWave(
+            champ, BuildWith("venomancer"), new Hunter(),
+            enemyHealth: 10_000_000f, enemyDamage: 0f, enemyIntervalMs: 1_000,
+            ExpeditionTuning.Default, new Random(99));
+
+        var poison = events.Where(e => e.Kind == BattleEventKind.Strike).ToList();
+        var early = poison.Where(e => e.AtMs <= 5_000).Sum(e => e.Amount);
+        var late = poison.Where(e => e.AtMs > 5_000 && e.AtMs <= 10_000).Sum(e => e.Amount);
+
+        Assert.True(late > early, $"venom did not ramp ({early} in the first 5s, {late} in the next)");
+    }
+
+    [Fact]
+    public void test_venom_stops_climbing_at_the_cap()
+    {
+        // Venom is no longer a stack count with a hard ceiling; it is a decaying POOL — each skill adds
+        // poison and half of the standing pool bleeds out every half-second — so it converges to an
+        // equilibrium rather than a wall. The invariant the old cap protected is unchanged: poison must
+        // PLATEAU. Under the old stacks model a 120-second fight ended at 120 stacks, an unbounded bleed
+        // no boss could be tuned against; that regression would make the late window dwarf the mid one.
+        var champ = new Champion { MaxHealth = 10_000, Health = 10_000 };
+        var (outcome, events) = SoloBattle.ResolveWave(
+            champ, BuildWith("venomancer"), new Hunter(),
+            enemyHealth: 10_000_000f, enemyDamage: 0f, enemyIntervalMs: 1_000,
+            ExpeditionTuning.Default, new Random(99));
+
+        // The dummy is unkillable, so the fight runs the full ceiling — ample time for venom to settle
+        // (the pool's half-life is one bleed tick, so it is fully converged within a few seconds).
+        Assert.Equal(WaveOutcome.Stalled, outcome);
+
+        float Window(int fromMs, int toMs) => events
+            .Where(e => e.Kind == BattleEventKind.Strike && e.AtMs > fromMs && e.AtMs <= toMs)
+            .Sum(e => e.Amount);
+
+        // Skills and auto-attacks land at a fixed cadence and magnitude, so two equal LATE windows —
+        // both well past the ramp — differ only by their venom contribution. Once poison has converged
+        // the later window cannot out-damage the earlier one. (Tolerance absorbs one skill cast landing
+        // on a window boundary; a pool that is still climbing would be multiples larger, not 10%.)
+        var mid = Window(30_000, 60_000);
+        var late = Window(90_000, 120_000);
+
+        Assert.True(late <= mid * 1.10f,
+            $"venom is still climbing late in the fight ({mid} over 30-60s, {late} over 90-120s) — the pool has no equilibrium");
+    }
+
+    [Fact]
+    public void test_an_auto_attack_does_not_apply_venom()
+    {
+        // If the free swing stung, poison would cost the build nothing to maintain and a venom build
+        // would want NO skills — which is the opposite of what the skill budget is for.
+        var noSkills = new Build();
+        noSkills.Take(Keystones.ById("venomancer")!);
+
+        var champ = new Champion { MaxHealth = 10_000, Health = 10_000 };
+        var (_, events) = SoloBattle.ResolveWave(
+            champ, noSkills, new Hunter(),
+            enemyHealth: 10_000_000f, enemyDamage: 0f, enemyIntervalMs: 1_000,
+            ExpeditionTuning.Default, new Random(99));
+
+        var mods = noSkills.Resolve(new Hunter());
+        var expectedAuto = (int)MathF.Round(SoloBattle.AutoAttackDamage * mods.Damage);
+
+        Assert.All(events.Where(e => e.Kind == BattleEventKind.Strike),
+            e => Assert.Equal(expectedAuto, e.Amount));
+    }
+
+    // ── The rest of the roll-call ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void test_echo_fires_twice()
+    {
+        // ECHO is x0.6 damage for two casts — a 1.2x net, and the point is the cast COUNT, so count them.
+        var plain = new Build(); plain.Weave(Strike());
+        var echo = new Build(); echo.Weave(Strike()); echo.Take(Keystones.ById("echo")!);
+
+        int Casts(Build b)
+        {
+            var champ = new Champion { MaxHealth = 10_000, Health = 10_000 };
+            var (_, events) = SoloBattle.ResolveWave(champ, b, new Hunter(),
+                10_000_000f, 0f, 1_000, ExpeditionTuning.Default, new Random(3));
+            return events.Count(e => e.Kind == BattleEventKind.Skill);
+        }
+
+        Assert.Equal(Casts(plain) * 2, Casts(echo));
+    }
+
+    [Fact]
+    public void test_bloodlust_pays_for_being_hurt()
+    {
+        // Damage scales with health MISSING, so the same build must hit harder while wounded. Compared
+        // against ITSELF at two health levels — comparing to a plain build would fold in the 0.75 health
+        // penalty and prove nothing about the trigger.
+        float Hurt(int startingHealth)
+        {
+            var build = new Build(); build.Weave(Strike());
+            build.Take(Keystones.ById("bloodlust")!);
+
+            var champ = new Champion { MaxHealth = 1_000, Health = startingHealth };
+            var (_, events) = SoloBattle.ResolveWave(champ, build, new Hunter(),
+                10_000_000f, 0f, 1_000, ExpeditionTuning.Default, new Random(5));
+            return events.Where(e => e.Kind == BattleEventKind.Strike).Sum(e => e.Amount);
+        }
+
+        Assert.True(Hurt(100) > Hurt(1_000), "BLOODLUST did not pay more at low health");
+    }
+
+    [Fact]
+    public void test_no_healing_switches_transformation_off()
+    {
+        // BLOOD MAGIC's cost is total: it does not reduce healing, it removes it. TRANSFORMATION is the
+        // Form it argues with, so that is the Form that proves it.
+        int HealEvents(bool bloodMagic)
+        {
+            var build = new Build();
+            build.Weave(Strike(Form.Transformation));
+            if (bloodMagic) build.Take(Keystones.ById("blood_magic")!);
+
+            var champ = new Champion { MaxHealth = 1_000, Health = 500 };
+            var (_, events) = SoloBattle.ResolveWave(champ, build, new Hunter(),
+                10_000_000f, 0f, 1_000, ExpeditionTuning.Default, new Random(11));
+            return events.Count(e => e.Kind == BattleEventKind.Heal);
+        }
+
+        Assert.True(HealEvents(false) > 0, "TRANSFORMATION never healed — the baseline is broken");
+        Assert.Equal(0, HealEvents(true));
+    }
+
+    [Fact]
+    public void test_undying_buys_exactly_one_death()
+    {
+        // "Once per EXPEDITION" is why it lives on the Champion rather than in a wave-scoped local. A
+        // second lethal wave must kill.
+        //
+        // ONE swing per wave, deliberately: the first cut of this let the enemy swing every second, and
+        // UNDYING correctly bought one extra second before the next blow finished the job — so the wave
+        // still read as Wiped and the test called a working trigger broken. What UNDYING promises is to
+        // survive A lethal blow, not to survive an enemy standing over you for two minutes.
+        const int OneSwingOnly = 100_000;
+
+        var build = new Build();
+        build.Take(Keystones.ById("undying")!);
+        var champ = new Champion { MaxHealth = 10, Health = 10 };
+
+        var (first, _) = SoloBattle.ResolveWave(champ, build, new Hunter(),
+            10_000_000f, 500f, OneSwingOnly, ExpeditionTuning.Default, new Random(13));
+        Assert.True(champ.UndyingSpent, "UNDYING was never spent — nothing read the trigger");
+        Assert.NotEqual(WaveOutcome.Wiped, first);
+        Assert.Equal(1, champ.Health);
+
+        champ.Health = 10;
+        var (second, _) = SoloBattle.ResolveWave(champ, build, new Hunter(),
+            10_000_000f, 500f, OneSwingOnly, ExpeditionTuning.Default, new Random(13));
+        Assert.Equal(WaveOutcome.Wiped, second);
+    }
+
+    [Fact]
+    public void test_splinter_pays_out_on_a_kill()
+    {
+        var build = new Build(); build.Weave(Strike());
+        build.Take(Keystones.ById("reaper")!);          // grants Splinter
+
+        var bonus = new WaveBonus();
+        var champ = new Champion { MaxHealth = 1_000, Health = 1_000 };
+        SoloBattle.ResolveWave(champ, build, new Hunter(),
+            enemyHealth: 1f, enemyDamage: 0f, enemyIntervalMs: 1_000,
+            ExpeditionTuning.Default, new Random(17), bonus);
+
+        Assert.True(bonus.Quality > 0f, "SPLINTER paid nothing on a kill");
+    }
+
+    [Fact]
+    public void test_harvest_pays_out_on_a_kill()
+    {
+        // HARVEST comes from an enchantment rather than a keystone, and its on-kill core is rolled at
+        // 25% — so this walks seeds until one pays rather than asserting on a single lucky run. It lives
+        // in the WEAPON pool ({Splinter, Venom, Harvest}), not the Charm pool — the combo-axis rework
+        // moved it — so this must roll weapons to reach it at all.
+        var build = new Build();
+        var hunter = new Hunter();
+
+        var weapon = Enumerable.Range(0, 500)
+            .Select(i => new ItemInstance
+            {
+                InstanceId = $"h{i}", BaseType = ItemBaseType.Weapon,
+                Rarity = Rarity.Legendary, SellValue = 200,
+            })
+            .FirstOrDefault(it => Enchantments.Of(it)?.Kind == EnchantKind.Harvest);
+
+        Assert.True(weapon is not null, "no weapon in 500 rolls carries HARVEST — the enchant is unreachable");
+        hunter.Equip(weapon!);
+        Assert.Contains(BuildTrigger.Harvest, build.Triggers(hunter));
+
+        var paid = Enumerable.Range(1, 40).Any(seed =>
+        {
+            var bonus = new WaveBonus();
+            var champ = new Champion { MaxHealth = 1_000, Health = 1_000 };
+            SoloBattle.ResolveWave(champ, build, hunter,
+                enemyHealth: 1f, enemyDamage: 0f, enemyIntervalMs: 1_000,
+                ExpeditionTuning.Default, new Random(seed), bonus);
+            return bonus.Cores > 0;
+        });
+
+        Assert.True(paid, "HARVEST never paid a core across 40 kills — nothing reads the trigger");
+    }
+}

@@ -1,0 +1,15 @@
+{
+  "id": "aura_arcane_ring",
+  "frameCount": 8,
+  "frameWidth": 512,
+  "frameHeight": 512,
+  "fps": 12,
+  "loop": true,
+  "blend": "Additive",
+  "origin": {
+    "x": 256,
+    "y": 450
+  },
+  "texturePath": "assets/vfx/aura/arcane_ring/aura_arcane_ring_strip8_512.png",
+  "previewSource": "mystical_purple_energy_circles_sequence.png"
+}

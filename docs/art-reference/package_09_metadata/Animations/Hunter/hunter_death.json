@@ -1,0 +1,14 @@
+{
+  "id": "hunter_death",
+  "frameCount": 8,
+  "frameWidth": 512,
+  "frameHeight": 512,
+  "fps": 12,
+  "loop": false,
+  "origin": {
+    "x": 256,
+    "y": 450
+  },
+  "texturePath": "assets/animations/hunter_death/hunter_death_strip8_512.png",
+  "previewSource": "a_clean_white_background_sprite_sheet_concept_ar_1_batch_1.png"
+}

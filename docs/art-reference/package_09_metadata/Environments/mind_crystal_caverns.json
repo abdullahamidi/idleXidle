@@ -1,0 +1,49 @@
+{
+  "id": "mind_crystal_caverns",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "groundLineY": 900,
+  "safeCombatArea": [
+    160,
+    560,
+    1600,
+    360
+  ],
+  "backgrounds": {
+    "clean": "assets/backgrounds/mind_crystal_caverns/mind_crystal_caverns_clean.png",
+    "unconquered": "assets/backgrounds/mind_crystal_caverns/mind_crystal_caverns_unconquered.png",
+    "mastered": "assets/backgrounds/mind_crystal_caverns/mind_crystal_caverns_mastered.png"
+  },
+  "layers": [
+    {
+      "name": "far",
+      "texture": "assets/parallax/mind_crystal_caverns/mind_crystal_caverns_far.png",
+      "factor": 0.12
+    },
+    {
+      "name": "mid",
+      "texture": "assets/parallax/mind_crystal_caverns/mind_crystal_caverns_mid.png",
+      "factor": 0.32
+    },
+    {
+      "name": "near",
+      "texture": "assets/parallax/mind_crystal_caverns/mind_crystal_caverns_near.png",
+      "factor": 0.62
+    },
+    {
+      "name": "foreground",
+      "texture": "assets/parallax/mind_crystal_caverns/mind_crystal_caverns_foreground.png",
+      "factor": 1.0
+    }
+  ],
+  "overlays": {
+    "fog": "assets/overlays/mind_crystal_caverns/mind_crystal_caverns_fog.png",
+    "corruption": "assets/overlays/mind_crystal_caverns/mind_crystal_caverns_corruption.png",
+    "mastery": "assets/overlays/mind_crystal_caverns/mind_crystal_caverns_mastery.png",
+    "particles": "assets/overlays/mind_crystal_caverns/mind_crystal_caverns_particles.png",
+    "light_rays": "assets/overlays/mind_crystal_caverns/mind_crystal_caverns_light_rays.png",
+    "vignette": "assets/overlays/mind_crystal_caverns/mind_crystal_caverns_vignette.png"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "id": "smoke_puff",
+  "frameCount": 8,
+  "frameWidth": 512,
+  "frameHeight": 512,
+  "fps": 16,
+  "loop": false,
+  "blend": "AlphaBlend",
+  "origin": {
+    "x": 256,
+    "y": 450
+  },
+  "texturePath": "assets/vfx/smoke/smoke_puff/smoke_puff_strip8_512.png",
+  "previewSource": "smoke_puff_animation_sequence.png"
+}

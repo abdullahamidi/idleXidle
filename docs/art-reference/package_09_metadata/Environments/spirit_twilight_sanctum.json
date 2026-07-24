@@ -1,0 +1,49 @@
+{
+  "id": "spirit_twilight_sanctum",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "groundLineY": 900,
+  "safeCombatArea": [
+    160,
+    560,
+    1600,
+    360
+  ],
+  "backgrounds": {
+    "clean": "assets/backgrounds/spirit_twilight_sanctum/spirit_twilight_sanctum_clean.png",
+    "unconquered": "assets/backgrounds/spirit_twilight_sanctum/spirit_twilight_sanctum_unconquered.png",
+    "mastered": "assets/backgrounds/spirit_twilight_sanctum/spirit_twilight_sanctum_mastered.png"
+  },
+  "layers": [
+    {
+      "name": "far",
+      "texture": "assets/parallax/spirit_twilight_sanctum/spirit_twilight_sanctum_far.png",
+      "factor": 0.12
+    },
+    {
+      "name": "mid",
+      "texture": "assets/parallax/spirit_twilight_sanctum/spirit_twilight_sanctum_mid.png",
+      "factor": 0.32
+    },
+    {
+      "name": "near",
+      "texture": "assets/parallax/spirit_twilight_sanctum/spirit_twilight_sanctum_near.png",
+      "factor": 0.62
+    },
+    {
+      "name": "foreground",
+      "texture": "assets/parallax/spirit_twilight_sanctum/spirit_twilight_sanctum_foreground.png",
+      "factor": 1.0
+    }
+  ],
+  "overlays": {
+    "fog": "assets/overlays/spirit_twilight_sanctum/spirit_twilight_sanctum_fog.png",
+    "corruption": "assets/overlays/spirit_twilight_sanctum/spirit_twilight_sanctum_corruption.png",
+    "mastery": "assets/overlays/spirit_twilight_sanctum/spirit_twilight_sanctum_mastery.png",
+    "particles": "assets/overlays/spirit_twilight_sanctum/spirit_twilight_sanctum_particles.png",
+    "light_rays": "assets/overlays/spirit_twilight_sanctum/spirit_twilight_sanctum_light_rays.png",
+    "vignette": "assets/overlays/spirit_twilight_sanctum/spirit_twilight_sanctum_vignette.png"
+  }
+}

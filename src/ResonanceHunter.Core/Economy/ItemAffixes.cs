@@ -1,0 +1,104 @@
+using System;
+using System.Collections.Generic;
+using ResonanceHunter.Core.Loot;
+
+namespace ResonanceHunter.Core.Economy;
+
+/// <summary>The stat an explicit affix grants. Each maps to a channel the fight already reads.</summary>
+public enum AffixStat { Damage, Health, SkillRate, Haul, Crit, Defense }
+
+/// <summary>One rolled property on an item: a stat and how much of it.</summary>
+public readonly record struct ItemAffix(AffixStat Stat, float Magnitude);
+
+/// <summary>
+/// An item's EXPLICIT affixes — the rolled bonuses on top of its base type's implicit trait + enchant.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The item model had one trait (a trade) and one enchant (a trigger). An item was two facts, so two items
+/// of the same type and rarity differed only in a coin-flip trait and a coin-flip enchant — not the varied,
+/// "which of these is the upgrade?" loot an ARPG runs on. Affixes are the missing axis: a LIST of stat
+/// bonuses whose COUNT is set by rarity (a Legendary carries four, a Common none) and whose MAGNITUDE grows
+/// with <see cref="ItemInstance.ItemLevel"/> — so a deep drop is a better piece even at the same rarity, the
+/// reason to push past "one more rarity tier".
+/// </para>
+/// <para>
+/// Derived from the InstanceId like the trait and enchant, and for the same reasons: nothing to store, no
+/// save migration, impossible to desync. A DIFFERENT hash salt again, so the affix roll does not correlate
+/// with the trait or the enchant — three independent axes, not one wearing three hats. The trait stays the
+/// item's identity (a trade you cannot avoid); these are pure bonuses that scale, which is what makes chasing
+/// a higher-ilvl copy of the same base worthwhile.
+/// </para>
+/// </remarks>
+public static class ItemAffixes
+{
+    /// <summary>How many explicit affixes a rarity carries. Common is implicit-only; a Legendary is loaded.</summary>
+    public static int CountFor(Rarity rarity) => rarity switch
+    {
+        Rarity.Common => 0,
+        Rarity.Uncommon => 1,
+        Rarity.Rare => 2,
+        Rarity.Epic => 3,
+        Rarity.Legendary => 4,
+        _ => 0,
+    };
+
+    /// <summary>Each stat's base per-affix magnitude at ilvl 0, before ilvl and rarity scaling.</summary>
+    private static readonly Dictionary<AffixStat, float> Base = new()
+    {
+        [AffixStat.Damage] = 0.04f,     // +4% damage
+        [AffixStat.Health] = 0.05f,     // +5% squad health
+        [AffixStat.SkillRate] = 0.03f,  // +3% skill speed
+        [AffixStat.Haul] = 0.06f,       // +6% haul
+        [AffixStat.Crit] = 1.5f,        // +1.5% crit chance
+        [AffixStat.Defense] = 8f,       // +8 flat defense
+    };
+
+    /// <summary>Per-ilvl growth of an affix's magnitude — the "a deeper drop is better" curve.</summary>
+    public const float IlvlScale = 0.04f;
+
+    /// <summary>
+    /// The affixes an item carries. Empty for non-wearables and Commons.
+    /// </summary>
+    public static IReadOnlyList<ItemAffix> Of(ItemInstance? item)
+    {
+        if (item is null || Gear.SlotFor(item.BaseType) is null) return Array.Empty<ItemAffix>();
+
+        var count = CountFor(item.Rarity);
+        if (count == 0) return Array.Empty<ItemAffix>();
+
+        var stats = Enum.GetValues<AffixStat>();
+        var ilvlFactor = 1f + Math.Max(0, item.ItemLevel) * IlvlScale;
+        var rarityFactor = 0.6f + Gear.RarityPower(item.Rarity) * 0.10f;   // modest — rarity mostly buys COUNT
+
+        var affixes = new List<ItemAffix>(count);
+        for (var i = 0; i < count; i++)
+        {
+            // A fresh salted hash per affix slot, so the stat AND the roll vary but stay deterministic.
+            var h = Fnv1a(item.InstanceId + "|affix" + i);
+            var stat = stats[(int)(h % (uint)stats.Length)];
+            var variance = 0.85f + (h >> 8) % 31u / 100f;   // 0.85 .. 1.15
+            var mag = Base[stat] * ilvlFactor * rarityFactor * variance;
+            affixes.Add(new ItemAffix(stat, mag));
+        }
+        return affixes;
+    }
+
+    /// <summary>A one-line, player-facing description of an affix (its sign and unit).</summary>
+    public static string Describe(ItemAffix a) => a.Stat switch
+    {
+        AffixStat.Damage => $"+{a.Magnitude * 100f:0}% DMG",
+        AffixStat.Health => $"+{a.Magnitude * 100f:0}% HP",
+        AffixStat.SkillRate => $"+{a.Magnitude * 100f:0}% SKILL",
+        AffixStat.Haul => $"+{a.Magnitude * 100f:0}% HAUL",
+        AffixStat.Crit => $"+{a.Magnitude:0.0}% CRIT",
+        _ => $"+{a.Magnitude:0} DEF",
+    };
+
+    private static uint Fnv1a(string s)
+    {
+        var hash = 2166136261u;
+        foreach (var ch in s) { hash ^= ch; hash *= 16777619u; }
+        return hash;
+    }
+}

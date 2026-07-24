@@ -1,0 +1,49 @@
+{
+  "id": "body_blood_moors",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "groundLineY": 900,
+  "safeCombatArea": [
+    160,
+    560,
+    1600,
+    360
+  ],
+  "backgrounds": {
+    "clean": "assets/backgrounds/body_blood_moors/body_blood_moors_clean.png",
+    "unconquered": "assets/backgrounds/body_blood_moors/body_blood_moors_unconquered.png",
+    "mastered": "assets/backgrounds/body_blood_moors/body_blood_moors_mastered.png"
+  },
+  "layers": [
+    {
+      "name": "far",
+      "texture": "assets/parallax/body_blood_moors/body_blood_moors_far.png",
+      "factor": 0.12
+    },
+    {
+      "name": "mid",
+      "texture": "assets/parallax/body_blood_moors/body_blood_moors_mid.png",
+      "factor": 0.32
+    },
+    {
+      "name": "near",
+      "texture": "assets/parallax/body_blood_moors/body_blood_moors_near.png",
+      "factor": 0.62
+    },
+    {
+      "name": "foreground",
+      "texture": "assets/parallax/body_blood_moors/body_blood_moors_foreground.png",
+      "factor": 1.0
+    }
+  ],
+  "overlays": {
+    "fog": "assets/overlays/body_blood_moors/body_blood_moors_fog.png",
+    "corruption": "assets/overlays/body_blood_moors/body_blood_moors_corruption.png",
+    "mastery": "assets/overlays/body_blood_moors/body_blood_moors_mastery.png",
+    "particles": "assets/overlays/body_blood_moors/body_blood_moors_particles.png",
+    "light_rays": "assets/overlays/body_blood_moors/body_blood_moors_light_rays.png",
+    "vignette": "assets/overlays/body_blood_moors/body_blood_moors_vignette.png"
+  }
+}

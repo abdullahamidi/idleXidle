@@ -1,0 +1,15 @@
+{
+  "id": "projectile_arcane",
+  "frameCount": 8,
+  "frameWidth": 512,
+  "frameHeight": 512,
+  "fps": 16,
+  "loop": false,
+  "blend": "Additive",
+  "origin": {
+    "x": 256,
+    "y": 256
+  },
+  "texturePath": "assets/vfx/projectile/arcane/projectile_arcane_strip8_512.png",
+  "previewSource": "arcane_energy_projectile_sequence.png"
+}

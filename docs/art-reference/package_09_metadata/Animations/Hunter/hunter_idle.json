@@ -1,0 +1,14 @@
+{
+  "id": "hunter_idle",
+  "frameCount": 8,
+  "frameWidth": 512,
+  "frameHeight": 512,
+  "fps": 12,
+  "loop": true,
+  "origin": {
+    "x": 256,
+    "y": 450
+  },
+  "texturePath": "assets/animations/hunter_idle/hunter_idle_strip8_512.png",
+  "previewSource": "a_clean_white_background_image_featuring_a_sprite_2_batch_2.png"
+}

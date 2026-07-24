@@ -1,0 +1,15 @@
+{
+  "id": "heal_holy_burst",
+  "frameCount": 8,
+  "frameWidth": 512,
+  "frameHeight": 512,
+  "fps": 16,
+  "loop": false,
+  "blend": "Additive",
+  "origin": {
+    "x": 256,
+    "y": 450
+  },
+  "texturePath": "assets/vfx/heal/holy_burst/heal_holy_burst_strip8_512.png",
+  "previewSource": "evolving_light_progression_sequence.png"
+}

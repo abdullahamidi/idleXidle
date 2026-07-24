@@ -1,0 +1,3047 @@
+{
+  "package": {
+    "package": "package_03_enemy_creatures",
+    "target_resolution": "1920x1080",
+    "native_source_size": "varied",
+    "normalized_canvas": [
+      512,
+      512
+    ],
+    "facing": "left / three-quarter side-view where applicable",
+    "anchor": {
+      "x": 0.5,
+      "y": 0.91796875,
+      "pixel": [
+        256,
+        470
+      ]
+    },
+    "enemies": {
+      "wisp": {
+        "tier": "common_1",
+        "source": "spirit",
+        "role": "support",
+        "actions": [
+          "idle",
+          "move",
+          "attack",
+          "die"
+        ]
+      },
+      "shadeling": {
+        "tier": "common_1",
+        "source": "shadow",
+        "role": "attacker",
+        "actions": [
+          "idle",
+          "move",
+          "attack",
+          "die"
+        ]
+      },
+      "bonecrawler": {
+        "tier": "common_1",
+        "source": "body",
+        "role": "attacker",
+        "actions": [
+          "idle",
+          "move",
+          "attack",
+          "die"
+        ]
+      },
+      "void_spitter": {
+        "tier": "common_1",
+        "source": "shadow",
+        "role": "producer",
+        "actions": [
+          "idle",
+          "move",
+          "attack",
+          "projectile"
+        ]
+      },
+      "gloombat": {
+        "tier": "common_1",
+        "source": "shadow",
+        "role": "support",
+        "actions": [
+          "idle",
+          "move",
+          "attack",
+          "die"
+        ]
+      },
+      "nightstalker": {
+        "tier": "common_2",
+        "source": "shadow",
+        "role": "attacker",
+        "actions": [
+          "idle",
+          "move",
+          "attack",
+          "die"
+        ]
+      },
+      "rift_hound": {
+        "tier": "common_2",
+        "source": "body",
+        "role": "attacker",
+        "actions": [
+          "idle",
+          "move",
+          "attack",
+          "die"
+        ]
+      },
+      "stone_sentinel": {
+        "tier": "common_2",
+        "source": "machine",
+        "role": "defender",
+        "actions": [
+          "idle",
+          "attack",
+          "slam",
+          "die"
+        ]
+      },
+      "soul_leech": {
+        "tier": "common_2",
+        "source": "mind",
+        "role": "support",
+        "actions": [
+          "idle",
+          "attack",
+          "drain",
+          "die"
+        ]
+      },
+      "void_mage": {
+        "tier": "common_2",
+        "source": "mind",
+        "role": "crafter",
+        "actions": [
+          "idle",
+          "attack",
+          "cast",
+          "die"
+        ]
+      },
+      "rift_guardian": {
+        "tier": "elite",
+        "source": "spirit",
+        "role": "defender",
+        "actions": [
+          "idle",
+          "attack_1",
+          "attack_2",
+          "die"
+        ]
+      },
+      "corrupted_brute": {
+        "tier": "elite",
+        "source": "body",
+        "role": "defender",
+        "actions": [
+          "idle",
+          "attack_1",
+          "attack_2",
+          "die"
+        ]
+      },
+      "baneling_wraith": {
+        "tier": "elite",
+        "source": "spirit",
+        "role": "attacker",
+        "actions": [
+          "idle",
+          "attack_1",
+          "attack_2",
+          "die"
+        ]
+      },
+      "oblivion_stalker": {
+        "tier": "elite",
+        "source": "shadow",
+        "role": "attacker",
+        "actions": [
+          "idle",
+          "attack",
+          "dash",
+          "die"
+        ]
+      },
+      "rift_harvester": {
+        "tier": "elite",
+        "source": "mind",
+        "role": "producer",
+        "actions": [
+          "idle",
+          "attack",
+          "channel",
+          "die"
+        ]
+      }
+    },
+    "frames": {
+      "wisp": {
+        "idle": [
+          "wisp_idle_01.png",
+          "wisp_idle_02.png"
+        ],
+        "move": [
+          "wisp_move_01.png",
+          "wisp_move_02.png"
+        ],
+        "attack": [
+          "wisp_attack_01.png",
+          "wisp_attack_02.png"
+        ],
+        "die": [
+          "wisp_die_01.png",
+          "wisp_die_02.png"
+        ]
+      },
+      "shadeling": {
+        "idle": [
+          "shadeling_idle_01.png",
+          "shadeling_idle_02.png"
+        ],
+        "move": [
+          "shadeling_move_01.png",
+          "shadeling_move_02.png"
+        ],
+        "attack": [
+          "shadeling_attack_01.png",
+          "shadeling_attack_02.png"
+        ],
+        "die": [
+          "shadeling_die_01.png",
+          "shadeling_die_02.png"
+        ]
+      },
+      "bonecrawler": {
+        "idle": [
+          "bonecrawler_idle_01.png",
+          "bonecrawler_idle_02.png"
+        ],
+        "move": [
+          "bonecrawler_move_01.png",
+          "bonecrawler_move_02.png"
+        ],
+        "attack": [
+          "bonecrawler_attack_01.png",
+          "bonecrawler_attack_02.png"
+        ],
+        "die": [
+          "bonecrawler_die_01.png",
+          "bonecrawler_die_02.png"
+        ]
+      },
+      "void_spitter": {
+        "idle": [
+          "void_spitter_idle_01.png",
+          "void_spitter_idle_02.png"
+        ],
+        "move": [
+          "void_spitter_move_01.png",
+          "void_spitter_move_02.png"
+        ],
+        "attack": [
+          "void_spitter_attack_01.png",
+          "void_spitter_attack_02.png"
+        ],
+        "projectile": [
+          "void_spitter_projectile_01.png",
+          "void_spitter_projectile_02.png"
+        ]
+      },
+      "gloombat": {
+        "idle": [
+          "gloombat_idle_01.png",
+          "gloombat_idle_02.png"
+        ],
+        "move": [
+          "gloombat_move_01.png",
+          "gloombat_move_02.png"
+        ],
+        "attack": [
+          "gloombat_attack_01.png",
+          "gloombat_attack_02.png"
+        ],
+        "die": [
+          "gloombat_die_01.png",
+          "gloombat_die_02.png"
+        ]
+      },
+      "nightstalker": {
+        "idle": [
+          "nightstalker_idle_01.png",
+          "nightstalker_idle_02.png"
+        ],
+        "move": [
+          "nightstalker_move_01.png",
+          "nightstalker_move_02.png"
+        ],
+        "attack": [
+          "nightstalker_attack_01.png",
+          "nightstalker_attack_02.png"
+        ],
+        "die": [
+          "nightstalker_die_01.png",
+          "nightstalker_die_02.png"
+        ]
+      },
+      "rift_hound": {
+        "idle": [
+          "rift_hound_idle_01.png",
+          "rift_hound_idle_02.png"
+        ],
+        "move": [
+          "rift_hound_move_01.png",
+          "rift_hound_move_02.png"
+        ],
+        "attack": [
+          "rift_hound_attack_01.png",
+          "rift_hound_attack_02.png"
+        ],
+        "die": [
+          "rift_hound_die_01.png",
+          "rift_hound_die_02.png"
+        ]
+      },
+      "stone_sentinel": {
+        "idle": [
+          "stone_sentinel_idle_01.png",
+          "stone_sentinel_idle_02.png"
+        ],
+        "attack": [
+          "stone_sentinel_attack_01.png",
+          "stone_sentinel_attack_02.png"
+        ],
+        "slam": [
+          "stone_sentinel_slam_01.png",
+          "stone_sentinel_slam_02.png"
+        ],
+        "die": [
+          "stone_sentinel_die_01.png",
+          "stone_sentinel_die_02.png"
+        ]
+      },
+      "soul_leech": {
+        "idle": [
+          "soul_leech_idle_01.png",
+          "soul_leech_idle_02.png"
+        ],
+        "attack": [
+          "soul_leech_attack_01.png",
+          "soul_leech_attack_02.png"
+        ],
+        "drain": [
+          "soul_leech_drain_01.png",
+          "soul_leech_drain_02.png"
+        ],
+        "die": [
+          "soul_leech_die_01.png",
+          "soul_leech_die_02.png"
+        ]
+      },
+      "void_mage": {
+        "idle": [
+          "void_mage_idle_01.png",
+          "void_mage_idle_02.png"
+        ],
+        "attack": [
+          "void_mage_attack_01.png",
+          "void_mage_attack_02.png"
+        ],
+        "cast": [
+          "void_mage_cast_01.png",
+          "void_mage_cast_02.png"
+        ],
+        "die": [
+          "void_mage_die_01.png",
+          "void_mage_die_02.png"
+        ]
+      },
+      "rift_guardian": {
+        "idle": [
+          "rift_guardian_idle_01.png"
+        ],
+        "attack_1": [
+          "rift_guardian_attack_1_01.png"
+        ],
+        "attack_2": [
+          "rift_guardian_attack_2_01.png"
+        ],
+        "die": [
+          "rift_guardian_die_01.png"
+        ]
+      },
+      "corrupted_brute": {
+        "idle": [
+          "corrupted_brute_idle_01.png"
+        ],
+        "attack_1": [
+          "corrupted_brute_attack_1_01.png"
+        ],
+        "attack_2": [
+          "corrupted_brute_attack_2_01.png"
+        ],
+        "die": [
+          "corrupted_brute_die_01.png"
+        ]
+      },
+      "baneling_wraith": {
+        "idle": [
+          "baneling_wraith_idle_01.png"
+        ],
+        "attack_1": [
+          "baneling_wraith_attack_1_01.png"
+        ],
+        "attack_2": [
+          "baneling_wraith_attack_2_01.png"
+        ],
+        "die": [
+          "baneling_wraith_die_01.png"
+        ]
+      },
+      "oblivion_stalker": {
+        "idle": [
+          "oblivion_stalker_idle_01.png"
+        ],
+        "attack": [
+          "oblivion_stalker_attack_01.png"
+        ],
+        "dash": [
+          "oblivion_stalker_dash_01.png"
+        ],
+        "die": [
+          "oblivion_stalker_die_01.png"
+        ]
+      },
+      "rift_harvester": {
+        "idle": [
+          "rift_harvester_idle_01.png"
+        ],
+        "attack": [
+          "rift_harvester_attack_01.png"
+        ],
+        "channel": [
+          "rift_harvester_channel_01.png"
+        ],
+        "die": [
+          "rift_harvester_die_01.png"
+        ]
+      }
+    },
+    "asset_count": 245
+  },
+  "assets": [
+    {
+      "path": "assets/enemies/wisp/native/wisp_idle_01.png",
+      "size": [
+        40,
+        54
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "wisp",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/wisp/normalized/wisp_idle_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "wisp",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/wisp/native/wisp_idle_02.png",
+      "size": [
+        46,
+        56
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "wisp",
+      "action": "idle",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/wisp/normalized/wisp_idle_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "wisp",
+      "action": "idle",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/wisp/native/wisp_move_01.png",
+      "size": [
+        42,
+        57
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "wisp",
+      "action": "move",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/wisp/normalized/wisp_move_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "wisp",
+      "action": "move",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/wisp/native/wisp_move_02.png",
+      "size": [
+        47,
+        57
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "wisp",
+      "action": "move",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/wisp/normalized/wisp_move_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "wisp",
+      "action": "move",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/wisp/native/wisp_attack_01.png",
+      "size": [
+        46,
+        55
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "wisp",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/wisp/normalized/wisp_attack_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "wisp",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/wisp/native/wisp_attack_02.png",
+      "size": [
+        44,
+        56
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "wisp",
+      "action": "attack",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/wisp/normalized/wisp_attack_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "wisp",
+      "action": "attack",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/wisp/native/wisp_die_01.png",
+      "size": [
+        42,
+        56
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "wisp",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/wisp/normalized/wisp_die_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "wisp",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/wisp/native/wisp_die_02.png",
+      "size": [
+        48,
+        58
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "wisp",
+      "action": "die",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/wisp/normalized/wisp_die_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "wisp",
+      "action": "die",
+      "frame": 2
+    },
+    {
+      "path": "assets/portraits/wisp_portrait.png",
+      "size": [
+        256,
+        256
+      ],
+      "kind": "portrait",
+      "enemy": "wisp"
+    },
+    {
+      "path": "assets/silhouettes/wisp_silhouette.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "silhouette",
+      "enemy": "wisp"
+    },
+    {
+      "path": "assets/shadows/wisp_ground_shadow.png",
+      "size": [
+        256,
+        96
+      ],
+      "kind": "ground_shadow",
+      "enemy": "wisp"
+    },
+    {
+      "path": "assets/enemies/shadeling/native/shadeling_idle_01.png",
+      "size": [
+        41,
+        57
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "shadeling",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/shadeling/normalized/shadeling_idle_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "shadeling",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/shadeling/native/shadeling_idle_02.png",
+      "size": [
+        42,
+        50
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "shadeling",
+      "action": "idle",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/shadeling/normalized/shadeling_idle_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "shadeling",
+      "action": "idle",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/shadeling/native/shadeling_move_01.png",
+      "size": [
+        41,
+        44
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "shadeling",
+      "action": "move",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/shadeling/normalized/shadeling_move_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "shadeling",
+      "action": "move",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/shadeling/native/shadeling_move_02.png",
+      "size": [
+        42,
+        50
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "shadeling",
+      "action": "move",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/shadeling/normalized/shadeling_move_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "shadeling",
+      "action": "move",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/shadeling/native/shadeling_attack_01.png",
+      "size": [
+        38,
+        57
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "shadeling",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/shadeling/normalized/shadeling_attack_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "shadeling",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/shadeling/native/shadeling_attack_02.png",
+      "size": [
+        37,
+        50
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "shadeling",
+      "action": "attack",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/shadeling/normalized/shadeling_attack_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "shadeling",
+      "action": "attack",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/shadeling/native/shadeling_die_01.png",
+      "size": [
+        36,
+        46
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "shadeling",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/shadeling/normalized/shadeling_die_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "shadeling",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/shadeling/native/shadeling_die_02.png",
+      "size": [
+        40,
+        60
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "shadeling",
+      "action": "die",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/shadeling/normalized/shadeling_die_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "shadeling",
+      "action": "die",
+      "frame": 2
+    },
+    {
+      "path": "assets/portraits/shadeling_portrait.png",
+      "size": [
+        256,
+        256
+      ],
+      "kind": "portrait",
+      "enemy": "shadeling"
+    },
+    {
+      "path": "assets/silhouettes/shadeling_silhouette.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "silhouette",
+      "enemy": "shadeling"
+    },
+    {
+      "path": "assets/shadows/shadeling_ground_shadow.png",
+      "size": [
+        256,
+        96
+      ],
+      "kind": "ground_shadow",
+      "enemy": "shadeling"
+    },
+    {
+      "path": "assets/enemies/bonecrawler/native/bonecrawler_idle_01.png",
+      "size": [
+        42,
+        49
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "bonecrawler",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/bonecrawler/normalized/bonecrawler_idle_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "bonecrawler",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/bonecrawler/native/bonecrawler_idle_02.png",
+      "size": [
+        45,
+        52
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "bonecrawler",
+      "action": "idle",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/bonecrawler/normalized/bonecrawler_idle_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "bonecrawler",
+      "action": "idle",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/bonecrawler/native/bonecrawler_move_01.png",
+      "size": [
+        50,
+        48
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "bonecrawler",
+      "action": "move",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/bonecrawler/normalized/bonecrawler_move_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "bonecrawler",
+      "action": "move",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/bonecrawler/native/bonecrawler_move_02.png",
+      "size": [
+        73,
+        50
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "bonecrawler",
+      "action": "move",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/bonecrawler/normalized/bonecrawler_move_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "bonecrawler",
+      "action": "move",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/bonecrawler/native/bonecrawler_attack_01.png",
+      "size": [
+        41,
+        47
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "bonecrawler",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/bonecrawler/normalized/bonecrawler_attack_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "bonecrawler",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/bonecrawler/native/bonecrawler_attack_02.png",
+      "size": [
+        46,
+        50
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "bonecrawler",
+      "action": "attack",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/bonecrawler/normalized/bonecrawler_attack_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "bonecrawler",
+      "action": "attack",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/bonecrawler/native/bonecrawler_die_01.png",
+      "size": [
+        49,
+        44
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "bonecrawler",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/bonecrawler/normalized/bonecrawler_die_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "bonecrawler",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/bonecrawler/native/bonecrawler_die_02.png",
+      "size": [
+        61,
+        35
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "bonecrawler",
+      "action": "die",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/bonecrawler/normalized/bonecrawler_die_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "bonecrawler",
+      "action": "die",
+      "frame": 2
+    },
+    {
+      "path": "assets/portraits/bonecrawler_portrait.png",
+      "size": [
+        256,
+        256
+      ],
+      "kind": "portrait",
+      "enemy": "bonecrawler"
+    },
+    {
+      "path": "assets/silhouettes/bonecrawler_silhouette.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "silhouette",
+      "enemy": "bonecrawler"
+    },
+    {
+      "path": "assets/shadows/bonecrawler_ground_shadow.png",
+      "size": [
+        256,
+        96
+      ],
+      "kind": "ground_shadow",
+      "enemy": "bonecrawler"
+    },
+    {
+      "path": "assets/enemies/void_spitter/native/void_spitter_idle_01.png",
+      "size": [
+        52,
+        64
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "void_spitter",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/void_spitter/normalized/void_spitter_idle_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "void_spitter",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/void_spitter/native/void_spitter_idle_02.png",
+      "size": [
+        47,
+        49
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "void_spitter",
+      "action": "idle",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/void_spitter/normalized/void_spitter_idle_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "void_spitter",
+      "action": "idle",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/void_spitter/native/void_spitter_move_01.png",
+      "size": [
+        51,
+        45
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "void_spitter",
+      "action": "move",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/void_spitter/normalized/void_spitter_move_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "void_spitter",
+      "action": "move",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/void_spitter/native/void_spitter_move_02.png",
+      "size": [
+        43,
+        54
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "void_spitter",
+      "action": "move",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/void_spitter/normalized/void_spitter_move_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "void_spitter",
+      "action": "move",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/void_spitter/native/void_spitter_attack_01.png",
+      "size": [
+        57,
+        64
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "void_spitter",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/void_spitter/normalized/void_spitter_attack_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "void_spitter",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/void_spitter/native/void_spitter_attack_02.png",
+      "size": [
+        54,
+        51
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "void_spitter",
+      "action": "attack",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/void_spitter/normalized/void_spitter_attack_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "void_spitter",
+      "action": "attack",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/void_spitter/native/void_spitter_projectile_01.png",
+      "size": [
+        62,
+        52
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "void_spitter",
+      "action": "projectile",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/void_spitter/normalized/void_spitter_projectile_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "void_spitter",
+      "action": "projectile",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/void_spitter/native/void_spitter_projectile_02.png",
+      "size": [
+        46,
+        54
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "void_spitter",
+      "action": "projectile",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/void_spitter/normalized/void_spitter_projectile_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "void_spitter",
+      "action": "projectile",
+      "frame": 2
+    },
+    {
+      "path": "assets/portraits/void_spitter_portrait.png",
+      "size": [
+        256,
+        256
+      ],
+      "kind": "portrait",
+      "enemy": "void_spitter"
+    },
+    {
+      "path": "assets/silhouettes/void_spitter_silhouette.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "silhouette",
+      "enemy": "void_spitter"
+    },
+    {
+      "path": "assets/shadows/void_spitter_ground_shadow.png",
+      "size": [
+        256,
+        96
+      ],
+      "kind": "ground_shadow",
+      "enemy": "void_spitter"
+    },
+    {
+      "path": "assets/enemies/gloombat/native/gloombat_idle_01.png",
+      "size": [
+        44,
+        44
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "gloombat",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/gloombat/normalized/gloombat_idle_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "gloombat",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/gloombat/native/gloombat_idle_02.png",
+      "size": [
+        43,
+        44
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "gloombat",
+      "action": "idle",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/gloombat/normalized/gloombat_idle_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "gloombat",
+      "action": "idle",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/gloombat/native/gloombat_move_01.png",
+      "size": [
+        68,
+        48
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "gloombat",
+      "action": "move",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/gloombat/normalized/gloombat_move_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "gloombat",
+      "action": "move",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/gloombat/native/gloombat_move_02.png",
+      "size": [
+        70,
+        45
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "gloombat",
+      "action": "move",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/gloombat/normalized/gloombat_move_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "gloombat",
+      "action": "move",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/gloombat/native/gloombat_attack_01.png",
+      "size": [
+        62,
+        43
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "gloombat",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/gloombat/normalized/gloombat_attack_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "gloombat",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/gloombat/native/gloombat_attack_02.png",
+      "size": [
+        65,
+        49
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "gloombat",
+      "action": "attack",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/gloombat/normalized/gloombat_attack_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "gloombat",
+      "action": "attack",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/gloombat/native/gloombat_die_01.png",
+      "size": [
+        66,
+        64
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "gloombat",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/gloombat/normalized/gloombat_die_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "gloombat",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/gloombat/native/gloombat_die_02.png",
+      "size": [
+        66,
+        69
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "gloombat",
+      "action": "die",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/gloombat/normalized/gloombat_die_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "gloombat",
+      "action": "die",
+      "frame": 2
+    },
+    {
+      "path": "assets/portraits/gloombat_portrait.png",
+      "size": [
+        256,
+        256
+      ],
+      "kind": "portrait",
+      "enemy": "gloombat"
+    },
+    {
+      "path": "assets/silhouettes/gloombat_silhouette.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "silhouette",
+      "enemy": "gloombat"
+    },
+    {
+      "path": "assets/shadows/gloombat_ground_shadow.png",
+      "size": [
+        256,
+        96
+      ],
+      "kind": "ground_shadow",
+      "enemy": "gloombat"
+    },
+    {
+      "path": "assets/enemies/nightstalker/native/nightstalker_idle_01.png",
+      "size": [
+        52,
+        67
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "nightstalker",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/nightstalker/normalized/nightstalker_idle_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "nightstalker",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/nightstalker/native/nightstalker_idle_02.png",
+      "size": [
+        47,
+        53
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "nightstalker",
+      "action": "idle",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/nightstalker/normalized/nightstalker_idle_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "nightstalker",
+      "action": "idle",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/nightstalker/native/nightstalker_move_01.png",
+      "size": [
+        51,
+        52
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "nightstalker",
+      "action": "move",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/nightstalker/normalized/nightstalker_move_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "nightstalker",
+      "action": "move",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/nightstalker/native/nightstalker_move_02.png",
+      "size": [
+        45,
+        60
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "nightstalker",
+      "action": "move",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/nightstalker/normalized/nightstalker_move_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "nightstalker",
+      "action": "move",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/nightstalker/native/nightstalker_attack_01.png",
+      "size": [
+        53,
+        53
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "nightstalker",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/nightstalker/normalized/nightstalker_attack_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "nightstalker",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/nightstalker/native/nightstalker_attack_02.png",
+      "size": [
+        52,
+        60
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "nightstalker",
+      "action": "attack",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/nightstalker/normalized/nightstalker_attack_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "nightstalker",
+      "action": "attack",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/nightstalker/native/nightstalker_die_01.png",
+      "size": [
+        53,
+        53
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "nightstalker",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/nightstalker/normalized/nightstalker_die_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "nightstalker",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/nightstalker/native/nightstalker_die_02.png",
+      "size": [
+        48,
+        62
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "nightstalker",
+      "action": "die",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/nightstalker/normalized/nightstalker_die_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "nightstalker",
+      "action": "die",
+      "frame": 2
+    },
+    {
+      "path": "assets/portraits/nightstalker_portrait.png",
+      "size": [
+        256,
+        256
+      ],
+      "kind": "portrait",
+      "enemy": "nightstalker"
+    },
+    {
+      "path": "assets/silhouettes/nightstalker_silhouette.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "silhouette",
+      "enemy": "nightstalker"
+    },
+    {
+      "path": "assets/shadows/nightstalker_ground_shadow.png",
+      "size": [
+        256,
+        96
+      ],
+      "kind": "ground_shadow",
+      "enemy": "nightstalker"
+    },
+    {
+      "path": "assets/enemies/rift_hound/native/rift_hound_idle_01.png",
+      "size": [
+        52,
+        54
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "rift_hound",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/rift_hound/normalized/rift_hound_idle_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "rift_hound",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/rift_hound/native/rift_hound_idle_02.png",
+      "size": [
+        52,
+        50
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "rift_hound",
+      "action": "idle",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/rift_hound/normalized/rift_hound_idle_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "rift_hound",
+      "action": "idle",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/rift_hound/native/rift_hound_move_01.png",
+      "size": [
+        73,
+        51
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "rift_hound",
+      "action": "move",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/rift_hound/normalized/rift_hound_move_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "rift_hound",
+      "action": "move",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/rift_hound/native/rift_hound_move_02.png",
+      "size": [
+        72,
+        50
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "rift_hound",
+      "action": "move",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/rift_hound/normalized/rift_hound_move_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "rift_hound",
+      "action": "move",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/rift_hound/native/rift_hound_attack_01.png",
+      "size": [
+        71,
+        53
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "rift_hound",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/rift_hound/normalized/rift_hound_attack_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "rift_hound",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/rift_hound/native/rift_hound_attack_02.png",
+      "size": [
+        71,
+        45
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "rift_hound",
+      "action": "attack",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/rift_hound/normalized/rift_hound_attack_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "rift_hound",
+      "action": "attack",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/rift_hound/native/rift_hound_die_01.png",
+      "size": [
+        45,
+        48
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "rift_hound",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/rift_hound/normalized/rift_hound_die_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "rift_hound",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/rift_hound/native/rift_hound_die_02.png",
+      "size": [
+        66,
+        46
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "rift_hound",
+      "action": "die",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/rift_hound/normalized/rift_hound_die_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "rift_hound",
+      "action": "die",
+      "frame": 2
+    },
+    {
+      "path": "assets/portraits/rift_hound_portrait.png",
+      "size": [
+        256,
+        256
+      ],
+      "kind": "portrait",
+      "enemy": "rift_hound"
+    },
+    {
+      "path": "assets/silhouettes/rift_hound_silhouette.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "silhouette",
+      "enemy": "rift_hound"
+    },
+    {
+      "path": "assets/shadows/rift_hound_ground_shadow.png",
+      "size": [
+        256,
+        96
+      ],
+      "kind": "ground_shadow",
+      "enemy": "rift_hound"
+    },
+    {
+      "path": "assets/enemies/stone_sentinel/native/stone_sentinel_idle_01.png",
+      "size": [
+        52,
+        67
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "stone_sentinel",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/stone_sentinel/normalized/stone_sentinel_idle_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "stone_sentinel",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/stone_sentinel/native/stone_sentinel_idle_02.png",
+      "size": [
+        55,
+        65
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "stone_sentinel",
+      "action": "idle",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/stone_sentinel/normalized/stone_sentinel_idle_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "stone_sentinel",
+      "action": "idle",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/stone_sentinel/native/stone_sentinel_attack_01.png",
+      "size": [
+        73,
+        67
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "stone_sentinel",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/stone_sentinel/normalized/stone_sentinel_attack_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "stone_sentinel",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/stone_sentinel/native/stone_sentinel_attack_02.png",
+      "size": [
+        73,
+        64
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "stone_sentinel",
+      "action": "attack",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/stone_sentinel/normalized/stone_sentinel_attack_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "stone_sentinel",
+      "action": "attack",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/stone_sentinel/native/stone_sentinel_slam_01.png",
+      "size": [
+        71,
+        56
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "stone_sentinel",
+      "action": "slam",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/stone_sentinel/normalized/stone_sentinel_slam_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "stone_sentinel",
+      "action": "slam",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/stone_sentinel/native/stone_sentinel_slam_02.png",
+      "size": [
+        74,
+        65
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "stone_sentinel",
+      "action": "slam",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/stone_sentinel/normalized/stone_sentinel_slam_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "stone_sentinel",
+      "action": "slam",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/stone_sentinel/native/stone_sentinel_die_01.png",
+      "size": [
+        62,
+        66
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "stone_sentinel",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/stone_sentinel/normalized/stone_sentinel_die_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "stone_sentinel",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/stone_sentinel/native/stone_sentinel_die_02.png",
+      "size": [
+        50,
+        60
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "stone_sentinel",
+      "action": "die",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/stone_sentinel/normalized/stone_sentinel_die_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "stone_sentinel",
+      "action": "die",
+      "frame": 2
+    },
+    {
+      "path": "assets/portraits/stone_sentinel_portrait.png",
+      "size": [
+        256,
+        256
+      ],
+      "kind": "portrait",
+      "enemy": "stone_sentinel"
+    },
+    {
+      "path": "assets/silhouettes/stone_sentinel_silhouette.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "silhouette",
+      "enemy": "stone_sentinel"
+    },
+    {
+      "path": "assets/shadows/stone_sentinel_ground_shadow.png",
+      "size": [
+        256,
+        96
+      ],
+      "kind": "ground_shadow",
+      "enemy": "stone_sentinel"
+    },
+    {
+      "path": "assets/enemies/soul_leech/native/soul_leech_idle_01.png",
+      "size": [
+        55,
+        68
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "soul_leech",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/soul_leech/normalized/soul_leech_idle_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "soul_leech",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/soul_leech/native/soul_leech_idle_02.png",
+      "size": [
+        35,
+        25
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "soul_leech",
+      "action": "idle",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/soul_leech/normalized/soul_leech_idle_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "soul_leech",
+      "action": "idle",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/soul_leech/native/soul_leech_attack_01.png",
+      "size": [
+        63,
+        68
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "soul_leech",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/soul_leech/normalized/soul_leech_attack_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "soul_leech",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/soul_leech/native/soul_leech_attack_02.png",
+      "size": [
+        33,
+        21
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "soul_leech",
+      "action": "attack",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/soul_leech/normalized/soul_leech_attack_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "soul_leech",
+      "action": "attack",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/soul_leech/native/soul_leech_drain_01.png",
+      "size": [
+        71,
+        68
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "soul_leech",
+      "action": "drain",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/soul_leech/normalized/soul_leech_drain_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "soul_leech",
+      "action": "drain",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/soul_leech/native/soul_leech_drain_02.png",
+      "size": [
+        55,
+        29
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "soul_leech",
+      "action": "drain",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/soul_leech/normalized/soul_leech_drain_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "soul_leech",
+      "action": "drain",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/soul_leech/native/soul_leech_die_01.png",
+      "size": [
+        49,
+        68
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "soul_leech",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/soul_leech/normalized/soul_leech_die_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "soul_leech",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/soul_leech/native/soul_leech_die_02.png",
+      "size": [
+        33,
+        20
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "soul_leech",
+      "action": "die",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/soul_leech/normalized/soul_leech_die_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "soul_leech",
+      "action": "die",
+      "frame": 2
+    },
+    {
+      "path": "assets/portraits/soul_leech_portrait.png",
+      "size": [
+        256,
+        256
+      ],
+      "kind": "portrait",
+      "enemy": "soul_leech"
+    },
+    {
+      "path": "assets/silhouettes/soul_leech_silhouette.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "silhouette",
+      "enemy": "soul_leech"
+    },
+    {
+      "path": "assets/shadows/soul_leech_ground_shadow.png",
+      "size": [
+        256,
+        96
+      ],
+      "kind": "ground_shadow",
+      "enemy": "soul_leech"
+    },
+    {
+      "path": "assets/enemies/void_mage/native/void_mage_idle_01.png",
+      "size": [
+        54,
+        68
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "void_mage",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/void_mage/normalized/void_mage_idle_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "void_mage",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/void_mage/native/void_mage_idle_02.png",
+      "size": [
+        58,
+        68
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "void_mage",
+      "action": "idle",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/void_mage/normalized/void_mage_idle_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "void_mage",
+      "action": "idle",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/void_mage/native/void_mage_attack_01.png",
+      "size": [
+        71,
+        68
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "void_mage",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/void_mage/normalized/void_mage_attack_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "void_mage",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/void_mage/native/void_mage_attack_02.png",
+      "size": [
+        73,
+        68
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "void_mage",
+      "action": "attack",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/void_mage/normalized/void_mage_attack_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "void_mage",
+      "action": "attack",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/void_mage/native/void_mage_cast_01.png",
+      "size": [
+        73,
+        68
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "void_mage",
+      "action": "cast",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/void_mage/normalized/void_mage_cast_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "void_mage",
+      "action": "cast",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/void_mage/native/void_mage_cast_02.png",
+      "size": [
+        74,
+        68
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "void_mage",
+      "action": "cast",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/void_mage/normalized/void_mage_cast_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "void_mage",
+      "action": "cast",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/void_mage/native/void_mage_die_01.png",
+      "size": [
+        68,
+        70
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "void_mage",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/void_mage/normalized/void_mage_die_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "void_mage",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/void_mage/native/void_mage_die_02.png",
+      "size": [
+        68,
+        73
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "void_mage",
+      "action": "die",
+      "frame": 2
+    },
+    {
+      "path": "assets/enemies/void_mage/normalized/void_mage_die_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "void_mage",
+      "action": "die",
+      "frame": 2
+    },
+    {
+      "path": "assets/portraits/void_mage_portrait.png",
+      "size": [
+        256,
+        256
+      ],
+      "kind": "portrait",
+      "enemy": "void_mage"
+    },
+    {
+      "path": "assets/silhouettes/void_mage_silhouette.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "silhouette",
+      "enemy": "void_mage"
+    },
+    {
+      "path": "assets/shadows/void_mage_ground_shadow.png",
+      "size": [
+        256,
+        96
+      ],
+      "kind": "ground_shadow",
+      "enemy": "void_mage"
+    },
+    {
+      "path": "assets/enemies/rift_guardian/native/rift_guardian_idle_01.png",
+      "size": [
+        59,
+        109
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "rift_guardian",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/rift_guardian/normalized/rift_guardian_idle_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "rift_guardian",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/rift_guardian/native/rift_guardian_attack_1_01.png",
+      "size": [
+        73,
+        113
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "rift_guardian",
+      "action": "attack_1",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/rift_guardian/normalized/rift_guardian_attack_1_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "rift_guardian",
+      "action": "attack_1",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/rift_guardian/native/rift_guardian_attack_2_01.png",
+      "size": [
+        74,
+        114
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "rift_guardian",
+      "action": "attack_2",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/rift_guardian/normalized/rift_guardian_attack_2_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "rift_guardian",
+      "action": "attack_2",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/rift_guardian/native/rift_guardian_die_01.png",
+      "size": [
+        66,
+        88
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "rift_guardian",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/rift_guardian/normalized/rift_guardian_die_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "rift_guardian",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/portraits/rift_guardian_portrait.png",
+      "size": [
+        256,
+        256
+      ],
+      "kind": "portrait",
+      "enemy": "rift_guardian"
+    },
+    {
+      "path": "assets/silhouettes/rift_guardian_silhouette.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "silhouette",
+      "enemy": "rift_guardian"
+    },
+    {
+      "path": "assets/shadows/rift_guardian_ground_shadow.png",
+      "size": [
+        256,
+        96
+      ],
+      "kind": "ground_shadow",
+      "enemy": "rift_guardian"
+    },
+    {
+      "path": "assets/enemies/corrupted_brute/native/corrupted_brute_idle_01.png",
+      "size": [
+        51,
+        113
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "corrupted_brute",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/corrupted_brute/normalized/corrupted_brute_idle_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "corrupted_brute",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/corrupted_brute/native/corrupted_brute_attack_1_01.png",
+      "size": [
+        73,
+        109
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "corrupted_brute",
+      "action": "attack_1",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/corrupted_brute/normalized/corrupted_brute_attack_1_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "corrupted_brute",
+      "action": "attack_1",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/corrupted_brute/native/corrupted_brute_attack_2_01.png",
+      "size": [
+        74,
+        111
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "corrupted_brute",
+      "action": "attack_2",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/corrupted_brute/normalized/corrupted_brute_attack_2_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "corrupted_brute",
+      "action": "attack_2",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/corrupted_brute/native/corrupted_brute_die_01.png",
+      "size": [
+        62,
+        112
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "corrupted_brute",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/corrupted_brute/normalized/corrupted_brute_die_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "corrupted_brute",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/portraits/corrupted_brute_portrait.png",
+      "size": [
+        256,
+        256
+      ],
+      "kind": "portrait",
+      "enemy": "corrupted_brute"
+    },
+    {
+      "path": "assets/silhouettes/corrupted_brute_silhouette.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "silhouette",
+      "enemy": "corrupted_brute"
+    },
+    {
+      "path": "assets/shadows/corrupted_brute_ground_shadow.png",
+      "size": [
+        256,
+        96
+      ],
+      "kind": "ground_shadow",
+      "enemy": "corrupted_brute"
+    },
+    {
+      "path": "assets/enemies/baneling_wraith/native/baneling_wraith_idle_01.png",
+      "size": [
+        53,
+        86
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "baneling_wraith",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/baneling_wraith/normalized/baneling_wraith_idle_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "baneling_wraith",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/baneling_wraith/native/baneling_wraith_attack_1_01.png",
+      "size": [
+        73,
+        93
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "baneling_wraith",
+      "action": "attack_1",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/baneling_wraith/normalized/baneling_wraith_attack_1_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "baneling_wraith",
+      "action": "attack_1",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/baneling_wraith/native/baneling_wraith_attack_2_01.png",
+      "size": [
+        74,
+        101
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "baneling_wraith",
+      "action": "attack_2",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/baneling_wraith/normalized/baneling_wraith_attack_2_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "baneling_wraith",
+      "action": "attack_2",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/baneling_wraith/native/baneling_wraith_die_01.png",
+      "size": [
+        57,
+        96
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "baneling_wraith",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/baneling_wraith/normalized/baneling_wraith_die_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "baneling_wraith",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/portraits/baneling_wraith_portrait.png",
+      "size": [
+        256,
+        256
+      ],
+      "kind": "portrait",
+      "enemy": "baneling_wraith"
+    },
+    {
+      "path": "assets/silhouettes/baneling_wraith_silhouette.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "silhouette",
+      "enemy": "baneling_wraith"
+    },
+    {
+      "path": "assets/shadows/baneling_wraith_ground_shadow.png",
+      "size": [
+        256,
+        96
+      ],
+      "kind": "ground_shadow",
+      "enemy": "baneling_wraith"
+    },
+    {
+      "path": "assets/enemies/oblivion_stalker/native/oblivion_stalker_idle_01.png",
+      "size": [
+        60,
+        94
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "oblivion_stalker",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/oblivion_stalker/normalized/oblivion_stalker_idle_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "oblivion_stalker",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/oblivion_stalker/native/oblivion_stalker_attack_01.png",
+      "size": [
+        59,
+        91
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "oblivion_stalker",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/oblivion_stalker/normalized/oblivion_stalker_attack_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "oblivion_stalker",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/oblivion_stalker/native/oblivion_stalker_dash_01.png",
+      "size": [
+        74,
+        82
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "oblivion_stalker",
+      "action": "dash",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/oblivion_stalker/normalized/oblivion_stalker_dash_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "oblivion_stalker",
+      "action": "dash",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/oblivion_stalker/native/oblivion_stalker_die_01.png",
+      "size": [
+        42,
+        73
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "oblivion_stalker",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/oblivion_stalker/normalized/oblivion_stalker_die_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "oblivion_stalker",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/portraits/oblivion_stalker_portrait.png",
+      "size": [
+        256,
+        256
+      ],
+      "kind": "portrait",
+      "enemy": "oblivion_stalker"
+    },
+    {
+      "path": "assets/silhouettes/oblivion_stalker_silhouette.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "silhouette",
+      "enemy": "oblivion_stalker"
+    },
+    {
+      "path": "assets/shadows/oblivion_stalker_ground_shadow.png",
+      "size": [
+        256,
+        96
+      ],
+      "kind": "ground_shadow",
+      "enemy": "oblivion_stalker"
+    },
+    {
+      "path": "assets/enemies/rift_harvester/native/rift_harvester_idle_01.png",
+      "size": [
+        50,
+        114
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "rift_harvester",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/rift_harvester/normalized/rift_harvester_idle_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "rift_harvester",
+      "action": "idle",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/rift_harvester/native/rift_harvester_attack_01.png",
+      "size": [
+        73,
+        114
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "rift_harvester",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/rift_harvester/normalized/rift_harvester_attack_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "rift_harvester",
+      "action": "attack",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/rift_harvester/native/rift_harvester_channel_01.png",
+      "size": [
+        74,
+        115
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "rift_harvester",
+      "action": "channel",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/rift_harvester/normalized/rift_harvester_channel_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "rift_harvester",
+      "action": "channel",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/rift_harvester/native/rift_harvester_die_01.png",
+      "size": [
+        68,
+        118
+      ],
+      "kind": "enemy_frame_native",
+      "enemy": "rift_harvester",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/enemies/rift_harvester/normalized/rift_harvester_die_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "enemy_frame_normalized",
+      "enemy": "rift_harvester",
+      "action": "die",
+      "frame": 1
+    },
+    {
+      "path": "assets/portraits/rift_harvester_portrait.png",
+      "size": [
+        256,
+        256
+      ],
+      "kind": "portrait",
+      "enemy": "rift_harvester"
+    },
+    {
+      "path": "assets/silhouettes/rift_harvester_silhouette.png",
+      "size": [
+        512,
+        512
+      ],
+      "kind": "silhouette",
+      "enemy": "rift_harvester"
+    },
+    {
+      "path": "assets/shadows/rift_harvester_ground_shadow.png",
+      "size": [
+        256,
+        96
+      ],
+      "kind": "ground_shadow",
+      "enemy": "rift_harvester"
+    }
+  ]
+}

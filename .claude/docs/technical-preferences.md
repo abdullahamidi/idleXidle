@@ -1,0 +1,99 @@
+# Technical Preferences
+
+<!-- Populated by /setup-engine. Updated as the user makes decisions throughout development. -->
+<!-- All agents reference this file for project-specific standards and conventions. -->
+
+## Engine & Language
+
+- **Engine**: MonoGame 3.8.4.1
+- **Language**: C# (.NET 8+)
+- **Rendering**: 2D Sprite Batch (MonoGame default) — no 3D pipeline needed
+- **Physics**: [TO BE CONFIGURED — MonoGame has no built-in physics engine; select a 2D physics library or custom solution when that work begins]
+
+## Input & Platform
+
+<!-- Written by /setup-engine. Read by /ux-design, /ux-review, /test-setup, /team-ui, and /dev-story -->
+<!-- to scope interaction specs, test helpers, and implementation to the correct input methods. -->
+
+- **Target Platforms**: PC (Steam / Epic)
+- **Input Methods**: Keyboard/Mouse (primary), Gamepad (full, via cycle-and-confirm targeting)
+- **Primary Input**: Keyboard/Mouse — precision weak-point targeting is mouse-driven
+- **Gamepad Support**: Full, but **not** via stick-cursor emulation. Combat targeting uses a discrete **cycle-and-confirm** model (bumper/D-pad cycles valid part targets, face button commits). See art-bible §7.7.
+- **Touch Support**: None
+- **Platform Notes**: Mouse targeting is the primary path, but every combat interaction must also be completable via cycle-and-confirm, which doubles as the keyboard-only and motor-accessibility path. Stick-cursor emulation is explicitly rejected — it converts a reading skill into a pointing skill and violates Pillar 1. Click-hitboxes must be padded generously beyond visual seam boundaries (Fitts's Law). No hover-only interactions.
+
+## Naming Conventions
+
+- **Classes**: PascalCase (e.g. `ResonanceAbility`)
+- **Variables**: Public fields/properties PascalCase (e.g. `MoveSpeed`); private fields `_camelCase` (e.g. `_currentHealth`)
+- **Signals/Events**: PascalCase + `EventHandler` suffix delegates (e.g. `HealthChangedEventHandler`)
+- **Files**: PascalCase matching class (e.g. `ResonanceAbility.cs`)
+- **Scenes/Prefabs**: N/A — MonoGame has no scene/prefab system; use PascalCase for equivalent content definitions (e.g. entity templates, level data classes)
+- **Constants**: PascalCase (e.g. `MaxHealth`)
+
+## Performance Budgets
+
+- **Target Framerate**: 60 FPS
+- **Frame Budget**: 16.6 ms
+- **Draw Calls**: No hard engine cap (MonoGame is lower-level). Planning budget: ~10–20 `SpriteBatch.Begin()`/`End()` boundaries per frame, low hundreds of GPU draw calls. `SpriteBatch` merges consecutive same-texture draws — batching is driven by **texture-switch count**, not sprite count. Never switch `Effect` per-entity. See art-bible §8.5.
+- **Memory Ceiling**: 512 MB resident texture memory (working estimate ~125–160 MB — headroom for roster growth). See art-bible §8.8.
+
+## Testing
+
+- **Framework**: xUnit
+- **Minimum Coverage**: [TO BE CONFIGURED]
+- **Required Tests**: Balance formulas, gameplay systems, networking (if applicable)
+
+## Forbidden Patterns
+
+<!-- Add patterns that should never appear in this project's codebase -->
+- **`SpriteSortMode.Immediate`** outside debugging — disables batching entirely (one GPU draw call per `Draw()`).
+- **Per-entity `Effect` switching** — forces a batch flush per entity. Use one shared shader per pass; vary per-entity via the `Draw()` Color tint parameter.
+- **BC/DXT texture compression on creature, glyph, or UI-content art** — block compression bleeds color across the hard flat-fill edges (seams, glyph containers) that the art bible's legibility and colorblind-safety model depends on. Decorative layers only.
+- **Bilinear/anisotropic filtering, mipmaps, or non-integer scaling on pixel art** — all reintroduce the blur that point-sampling exists to prevent. `SamplerState.PointClamp`, integer scale factors only.
+- **Stick-cursor gamepad emulation for combat targeting** — see Input & Platform above.
+- **Baking part-break damage states as full-body frame variants** — a ~12× texture multiplier. Part-break is a composited decal overlay. See art-bible §8.4.
+
+## Allowed Libraries / Addons
+
+<!-- Add approved third-party dependencies here. Each should have a corresponding ADR. -->
+Selected in art-bible §8.7; each still needs a formal ADR at `/create-architecture`, and should
+only be added here once actually integrated:
+
+- **Myra** — UI framework (MonoGame ships none). Chosen for real data-grid/list primitives, needed by the dense tabular screens.
+- **FontStashSharp** — dynamic TTF rasterization. `SpriteFont` is bitmap-only; art-bible §7.1 requires a scalable data font.
+- **MonoGame.Extended** (Tweening at minimum) — drives curve evaluation for the homebrew cutout animation rig.
+- **MonoGame.Aseprite** — atlas/frame import direct from `.aseprite` source (pending confirmation that Aseprite is the authoring tool; a custom MGCB pipeline extension is the no-dependency fallback).
+
+## Architecture Decisions Log
+
+<!-- Quick reference linking to full ADRs in docs/architecture/ -->
+- [No ADRs yet — use /architecture-decision to create one]
+
+## Engine Specialists
+
+<!-- Written by /setup-engine when engine is configured. -->
+<!-- Read by /code-review, /architecture-decision, /architecture-review, and team skills -->
+<!-- to know which specialist to spawn for engine-specific validation. -->
+
+- **Primary**: lead-programmer (architecture, ADR validation, cross-cutting code review — no dedicated MonoGame specialist agent exists in this template)
+- **Language/Code Specialist**: gameplay-programmer (feature/gameplay code), engine-programmer (engine-level, performance-critical systems)
+- **Shader Specialist**: technical-artist (HLSL/.fx shaders, VFX, rendering optimization — no dedicated shader specialist for MonoGame)
+- **UI Specialist**: ui-programmer (MonoGame ships no UI framework — all menus/HUD/widgets are custom-built)
+- **Additional Specialists**: tools-programmer (MGCB content pipeline extensions, custom importers/processors)
+- **Routing Notes**: MonoGame has no dedicated engine-specialist agent in this template. Route architecture and cross-cutting decisions to `lead-programmer` (or `technical-director` for the highest-stakes technical calls). Route general gameplay/feature code to `gameplay-programmer`, and engine-level or performance-critical code to `engine-programmer`. Route shader/VFX work to `technical-artist`. Route all UI implementation to `ui-programmer`, since MonoGame provides no built-in UI system. Route content-pipeline tooling (custom MGCB importers/processors) to `tools-programmer`.
+
+### File Extension Routing
+
+<!-- Skills use this table to select the right specialist per file type. -->
+<!-- If a row says [TO BE CONFIGURED], fall back to Primary for that file type. -->
+
+| File Extension / Type | Specialist to Spawn |
+|-----------------------|---------------------|
+| Game code (.cs — gameplay/feature code) | gameplay-programmer |
+| Game code (.cs — engine-level/performance-critical) | engine-programmer |
+| Shader / material files (.fx, HLSL) | technical-artist |
+| UI / screen files (custom UI framework code) | ui-programmer |
+| Content pipeline files (.mgcb, custom Content Importers/Processors) | tools-programmer |
+| Project/build files (.csproj, .sln) | lead-programmer |
+| General architecture review | lead-programmer |

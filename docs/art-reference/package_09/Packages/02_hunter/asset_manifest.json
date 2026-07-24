@@ -1,0 +1,1019 @@
+{
+  "package": "package_02_hunter_character",
+  "target_resolution": [
+    1920,
+    1080
+  ],
+  "assets": [
+    {
+      "path": "armor_sets/iron_sentinel/iron_sentinel_boots.png",
+      "size": [
+        68,
+        74
+      ],
+      "pivot": null
+    },
+    {
+      "path": "armor_sets/iron_sentinel/iron_sentinel_cape.png",
+      "size": [
+        68,
+        74
+      ],
+      "pivot": null
+    },
+    {
+      "path": "armor_sets/iron_sentinel/iron_sentinel_chest.png",
+      "size": [
+        67,
+        74
+      ],
+      "pivot": null
+    },
+    {
+      "path": "armor_sets/iron_sentinel/iron_sentinel_glove.png",
+      "size": [
+        57,
+        74
+      ],
+      "pivot": null
+    },
+    {
+      "path": "armor_sets/iron_sentinel/iron_sentinel_helm.png",
+      "size": [
+        51,
+        62
+      ],
+      "pivot": null
+    },
+    {
+      "path": "armor_sets/iron_sentinel/iron_sentinel_legs.png",
+      "size": [
+        62,
+        74
+      ],
+      "pivot": null
+    },
+    {
+      "path": "armor_sets/shadow_warden/shadow_warden_boots.png",
+      "size": [
+        68,
+        69
+      ],
+      "pivot": null
+    },
+    {
+      "path": "armor_sets/shadow_warden/shadow_warden_cape.png",
+      "size": [
+        68,
+        79
+      ],
+      "pivot": null
+    },
+    {
+      "path": "armor_sets/shadow_warden/shadow_warden_chest.png",
+      "size": [
+        66,
+        74
+      ],
+      "pivot": null
+    },
+    {
+      "path": "armor_sets/shadow_warden/shadow_warden_glove.png",
+      "size": [
+        58,
+        69
+      ],
+      "pivot": null
+    },
+    {
+      "path": "armor_sets/shadow_warden/shadow_warden_helm.png",
+      "size": [
+        55,
+        69
+      ],
+      "pivot": null
+    },
+    {
+      "path": "armor_sets/shadow_warden/shadow_warden_legs.png",
+      "size": [
+        62,
+        76
+      ],
+      "pivot": null
+    },
+    {
+      "path": "armor_sets/verdant_guard/verdant_guard_boots.png",
+      "size": [
+        68,
+        70
+      ],
+      "pivot": null
+    },
+    {
+      "path": "armor_sets/verdant_guard/verdant_guard_cape.png",
+      "size": [
+        68,
+        72
+      ],
+      "pivot": null
+    },
+    {
+      "path": "armor_sets/verdant_guard/verdant_guard_chest.png",
+      "size": [
+        65,
+        72
+      ],
+      "pivot": null
+    },
+    {
+      "path": "armor_sets/verdant_guard/verdant_guard_glove.png",
+      "size": [
+        55,
+        69
+      ],
+      "pivot": null
+    },
+    {
+      "path": "armor_sets/verdant_guard/verdant_guard_helm.png",
+      "size": [
+        53,
+        62
+      ],
+      "pivot": null
+    },
+    {
+      "path": "armor_sets/verdant_guard/verdant_guard_legs.png",
+      "size": [
+        60,
+        71
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/accessories/accessory_01.png",
+      "size": [
+        37,
+        51
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/accessories/accessory_02.png",
+      "size": [
+        40,
+        52
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/accessories/accessory_03.png",
+      "size": [
+        39,
+        53
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/accessories/accessory_04.png",
+      "size": [
+        46,
+        53
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/accessories/accessory_05.png",
+      "size": [
+        38,
+        52
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/accessories/accessory_06.png",
+      "size": [
+        46,
+        51
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/accessories/accessory_07.png",
+      "size": [
+        40,
+        52
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/boots/boots_01.png",
+      "size": [
+        52,
+        48
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/boots/boots_02.png",
+      "size": [
+        51,
+        49
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/boots/boots_03.png",
+      "size": [
+        52,
+        49
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/boots/boots_04.png",
+      "size": [
+        68,
+        48
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/boots/boots_05.png",
+      "size": [
+        44,
+        48
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/boots/boots_06.png",
+      "size": [
+        46,
+        49
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/capes/cape_01.png",
+      "size": [
+        57,
+        58
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/capes/cape_02.png",
+      "size": [
+        54,
+        58
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/capes/cape_03.png",
+      "size": [
+        52,
+        58
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/capes/cape_04.png",
+      "size": [
+        52,
+        58
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/capes/cape_05.png",
+      "size": [
+        53,
+        58
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/capes/cape_06.png",
+      "size": [
+        54,
+        58
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/gloves/gloves_01.png",
+      "size": [
+        57,
+        61
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/gloves/gloves_02.png",
+      "size": [
+        58,
+        62
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/gloves/gloves_03.png",
+      "size": [
+        51,
+        61
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/gloves/gloves_04.png",
+      "size": [
+        49,
+        61
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/gloves/gloves_05.png",
+      "size": [
+        45,
+        60
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/gloves/gloves_06.png",
+      "size": [
+        50,
+        61
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/helmets/helmet_01.png",
+      "size": [
+        54,
+        61
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/helmets/helmet_02.png",
+      "size": [
+        55,
+        61
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/helmets/helmet_03.png",
+      "size": [
+        50,
+        61
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/helmets/helmet_04.png",
+      "size": [
+        50,
+        61
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/helmets/helmet_05.png",
+      "size": [
+        52,
+        61
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/helmets/helmet_06.png",
+      "size": [
+        57,
+        61
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/shoulders/shoulders_01.png",
+      "size": [
+        61,
+        45
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/shoulders/shoulders_02.png",
+      "size": [
+        58,
+        45
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/shoulders/shoulders_03.png",
+      "size": [
+        51,
+        45
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/shoulders/shoulders_04.png",
+      "size": [
+        49,
+        45
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/shoulders/shoulders_05.png",
+      "size": [
+        52,
+        47
+      ],
+      "pivot": null
+    },
+    {
+      "path": "equipment/shoulders/shoulders_06.png",
+      "size": [
+        55,
+        47
+      ],
+      "pivot": null
+    },
+    {
+      "path": "icons/equipment/icon_class_hunter.png",
+      "size": [
+        62,
+        72
+      ],
+      "pivot": null
+    },
+    {
+      "path": "icons/equipment/icon_equipment_accessory.png",
+      "size": [
+        46,
+        46
+      ],
+      "pivot": null
+    },
+    {
+      "path": "icons/equipment/icon_equipment_blade.png",
+      "size": [
+        46,
+        46
+      ],
+      "pivot": null
+    },
+    {
+      "path": "icons/equipment/icon_equipment_boots.png",
+      "size": [
+        46,
+        46
+      ],
+      "pivot": null
+    },
+    {
+      "path": "icons/equipment/icon_equipment_bow.png",
+      "size": [
+        46,
+        46
+      ],
+      "pivot": null
+    },
+    {
+      "path": "icons/equipment/icon_equipment_chest.png",
+      "size": [
+        46,
+        39
+      ],
+      "pivot": null
+    },
+    {
+      "path": "icons/equipment/icon_equipment_gloves.png",
+      "size": [
+        46,
+        39
+      ],
+      "pivot": null
+    },
+    {
+      "path": "icons/equipment/icon_equipment_helmet.png",
+      "size": [
+        42,
+        38
+      ],
+      "pivot": null
+    },
+    {
+      "path": "icons/equipment/icon_equipment_scythe.png",
+      "size": [
+        46,
+        46
+      ],
+      "pivot": null
+    },
+    {
+      "path": "icons/equipment/icon_equipment_spear.png",
+      "size": [
+        44,
+        38
+      ],
+      "pivot": null
+    },
+    {
+      "path": "icons/status/icon_status_critical.png",
+      "size": [
+        46,
+        45
+      ],
+      "pivot": null
+    },
+    {
+      "path": "icons/status/icon_status_defense.png",
+      "size": [
+        46,
+        44
+      ],
+      "pivot": null
+    },
+    {
+      "path": "icons/status/icon_status_healing.png",
+      "size": [
+        46,
+        45
+      ],
+      "pivot": null
+    },
+    {
+      "path": "icons/status/icon_status_health.png",
+      "size": [
+        46,
+        44
+      ],
+      "pivot": null
+    },
+    {
+      "path": "icons/status/icon_status_power.png",
+      "size": [
+        46,
+        45
+      ],
+      "pivot": null
+    },
+    {
+      "path": "icons/status/icon_status_resonance.png",
+      "size": [
+        46,
+        45
+      ],
+      "pivot": null
+    },
+    {
+      "path": "icons/status/icon_status_timer.png",
+      "size": [
+        45,
+        45
+      ],
+      "pivot": null
+    },
+    {
+      "path": "portraits/hunter_portrait.png",
+      "size": [
+        99,
+        90
+      ],
+      "pivot": null
+    },
+    {
+      "path": "poses/native/hunter_attack_01.png",
+      "size": [
+        116,
+        160
+      ],
+      "pivot": null
+    },
+    {
+      "path": "poses/native/hunter_attack_02.png",
+      "size": [
+        120,
+        160
+      ],
+      "pivot": null
+    },
+    {
+      "path": "poses/native/hunter_defeated.png",
+      "size": [
+        129,
+        98
+      ],
+      "pivot": null
+    },
+    {
+      "path": "poses/native/hunter_hurt.png",
+      "size": [
+        100,
+        153
+      ],
+      "pivot": null
+    },
+    {
+      "path": "poses/native/hunter_idle.png",
+      "size": [
+        87,
+        159
+      ],
+      "pivot": null
+    },
+    {
+      "path": "poses/native/hunter_move_01.png",
+      "size": [
+        92,
+        159
+      ],
+      "pivot": null
+    },
+    {
+      "path": "poses/native/hunter_move_02.png",
+      "size": [
+        94,
+        159
+      ],
+      "pivot": null
+    },
+    {
+      "path": "poses/normalized/hunter_attack_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        492
+      ]
+    },
+    {
+      "path": "poses/normalized/hunter_attack_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        492
+      ]
+    },
+    {
+      "path": "poses/normalized/hunter_defeated.png",
+      "size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        492
+      ]
+    },
+    {
+      "path": "poses/normalized/hunter_ground_shadow.png",
+      "size": [
+        512,
+        128
+      ],
+      "pivot": null
+    },
+    {
+      "path": "poses/normalized/hunter_hurt.png",
+      "size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        492
+      ]
+    },
+    {
+      "path": "poses/normalized/hunter_idle.png",
+      "size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        492
+      ]
+    },
+    {
+      "path": "poses/normalized/hunter_move_01.png",
+      "size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        492
+      ]
+    },
+    {
+      "path": "poses/normalized/hunter_move_02.png",
+      "size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        492
+      ]
+    },
+    {
+      "path": "poses/normalized/hunter_silhouette.png",
+      "size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        492
+      ]
+    },
+    {
+      "path": "variants/native/hunter_variant_default.png",
+      "size": [
+        94,
+        154
+      ],
+      "pivot": null
+    },
+    {
+      "path": "variants/native/hunter_variant_ember.png",
+      "size": [
+        96,
+        154
+      ],
+      "pivot": null
+    },
+    {
+      "path": "variants/native/hunter_variant_forest.png",
+      "size": [
+        100,
+        154
+      ],
+      "pivot": null
+    },
+    {
+      "path": "variants/native/hunter_variant_frost.png",
+      "size": [
+        101,
+        154
+      ],
+      "pivot": null
+    },
+    {
+      "path": "variants/native/hunter_variant_golden.png",
+      "size": [
+        100,
+        154
+      ],
+      "pivot": null
+    },
+    {
+      "path": "variants/native/hunter_variant_void.png",
+      "size": [
+        104,
+        154
+      ],
+      "pivot": null
+    },
+    {
+      "path": "variants/normalized/hunter_variant_default.png",
+      "size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        492
+      ]
+    },
+    {
+      "path": "variants/normalized/hunter_variant_ember.png",
+      "size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        492
+      ]
+    },
+    {
+      "path": "variants/normalized/hunter_variant_forest.png",
+      "size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        492
+      ]
+    },
+    {
+      "path": "variants/normalized/hunter_variant_frost.png",
+      "size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        492
+      ]
+    },
+    {
+      "path": "variants/normalized/hunter_variant_golden.png",
+      "size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        492
+      ]
+    },
+    {
+      "path": "variants/normalized/hunter_variant_void.png",
+      "size": [
+        512,
+        512
+      ],
+      "pivot": [
+        256,
+        492
+      ]
+    },
+    {
+      "path": "weapons/blade/weapon_blade_01.png",
+      "size": [
+        67,
+        69
+      ],
+      "pivot": null
+    },
+    {
+      "path": "weapons/blade/weapon_blade_02.png",
+      "size": [
+        68,
+        69
+      ],
+      "pivot": null
+    },
+    {
+      "path": "weapons/blade/weapon_blade_03.png",
+      "size": [
+        68,
+        69
+      ],
+      "pivot": null
+    },
+    {
+      "path": "weapons/blade/weapon_blade_04.png",
+      "size": [
+        68,
+        69
+      ],
+      "pivot": null
+    },
+    {
+      "path": "weapons/blade/weapon_blade_05.png",
+      "size": [
+        68,
+        69
+      ],
+      "pivot": null
+    },
+    {
+      "path": "weapons/bow/weapon_bow_01.png",
+      "size": [
+        53,
+        68
+      ],
+      "pivot": null
+    },
+    {
+      "path": "weapons/bow/weapon_bow_02.png",
+      "size": [
+        56,
+        68
+      ],
+      "pivot": null
+    },
+    {
+      "path": "weapons/bow/weapon_bow_03.png",
+      "size": [
+        55,
+        68
+      ],
+      "pivot": null
+    },
+    {
+      "path": "weapons/bow/weapon_bow_04.png",
+      "size": [
+        56,
+        68
+      ],
+      "pivot": null
+    },
+    {
+      "path": "weapons/bow/weapon_bow_05.png",
+      "size": [
+        56,
+        68
+      ],
+      "pivot": null
+    },
+    {
+      "path": "weapons/scythe/weapon_scythe_01.png",
+      "size": [
+        63,
+        69
+      ],
+      "pivot": null
+    },
+    {
+      "path": "weapons/scythe/weapon_scythe_02.png",
+      "size": [
+        68,
+        67
+      ],
+      "pivot": null
+    },
+    {
+      "path": "weapons/scythe/weapon_scythe_03.png",
+      "size": [
+        68,
+        68
+      ],
+      "pivot": null
+    },
+    {
+      "path": "weapons/scythe/weapon_scythe_04.png",
+      "size": [
+        68,
+        68
+      ],
+      "pivot": null
+    },
+    {
+      "path": "weapons/scythe/weapon_scythe_05.png",
+      "size": [
+        68,
+        68
+      ],
+      "pivot": null
+    },
+    {
+      "path": "weapons/spear/weapon_spear_01.png",
+      "size": [
+        62,
+        58
+      ],
+      "pivot": null
+    },
+    {
+      "path": "weapons/spear/weapon_spear_02.png",
+      "size": [
+        68,
+        58
+      ],
+      "pivot": null
+    },
+    {
+      "path": "weapons/spear/weapon_spear_03.png",
+      "size": [
+        68,
+        58
+      ],
+      "pivot": null
+    },
+    {
+      "path": "weapons/spear/weapon_spear_04.png",
+      "size": [
+        68,
+        58
+      ],
+      "pivot": null
+    },
+    {
+      "path": "weapons/spear/weapon_spear_05.png",
+      "size": [
+        68,
+        58
+      ],
+      "pivot": null
+    }
+  ]
+}

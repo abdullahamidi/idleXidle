@@ -1,0 +1,14 @@
+{
+  "id": "nightstalker_attack",
+  "frameCount": 8,
+  "frameWidth": 512,
+  "frameHeight": 512,
+  "fps": 16,
+  "loop": false,
+  "origin": {
+    "x": 256,
+    "y": 450
+  },
+  "texturePath": "assets/animations/nightstalker_attack/nightstalker_attack_strip8_512.png",
+  "previewSource": "a_clean_white_background_sprite_sheet_style_image_4_batch_2.png"
+}

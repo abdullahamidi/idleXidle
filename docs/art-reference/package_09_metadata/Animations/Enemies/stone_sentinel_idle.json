@@ -1,0 +1,14 @@
+{
+  "id": "stone_sentinel_idle",
+  "frameCount": 8,
+  "frameWidth": 512,
+  "frameHeight": 512,
+  "fps": 10,
+  "loop": true,
+  "origin": {
+    "x": 256,
+    "y": 450
+  },
+  "texturePath": "assets/animations/stone_sentinel_idle/stone_sentinel_idle_strip8_512.png",
+  "previewSource": "a_clean_white_background_sprite_sheet_style_image_4_batch_2.png"
+}

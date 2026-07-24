@@ -1,0 +1,15 @@
+{
+  "id": "binding_void_bind",
+  "frameCount": 8,
+  "frameWidth": 512,
+  "frameHeight": 512,
+  "fps": 14,
+  "loop": false,
+  "blend": "Additive",
+  "origin": {
+    "x": 256,
+    "y": 450
+  },
+  "texturePath": "assets/vfx/binding/void_bind/binding_void_bind_strip8_512.png",
+  "previewSource": "magical_binding_ritual_sequence.png"
+}

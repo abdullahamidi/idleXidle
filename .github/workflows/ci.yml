@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      # Warnings are errors. This project has already shipped two bugs that a compiler
+      # warning would have caught, and a warning nobody reads is not a warning.
+      - name: Build
+        run: dotnet build --no-restore --configuration Release -warnaserror
+
+      # The unit suite is headless by design (ADR-001): all game logic lives in
+      # ResonanceHunter.Core, which has ZERO MonoGame references, so the balance math runs
+      # without a window or a GL context. That is the whole reason it is testable in CI.
+      - name: Unit tests
+        run: dotnet test tests/unit/ResonanceHunter.Core.Tests --no-build --configuration Release --verbosity normal
+
+      # Unit tests prove each system is internally correct. They cannot prove the systems FIT.
+      # The two worst bugs in this project were both integration failures that every unit test
+      # happily passed.
+      - name: Integration tests
+        run: dotnet test tests/integration/ResonanceHunter.Integration.Tests --no-build --configuration Release --verbosity normal

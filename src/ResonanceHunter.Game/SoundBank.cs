@@ -1,0 +1,119 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using Microsoft.Xna.Framework.Audio;
+
+namespace ResonanceHunter.Client;
+
+/// <summary>
+/// Loads raw WAV audio from disk at startup, keyed by filename, and plays named cues.
+/// </summary>
+/// <remarks>
+/// The audio twin of <see cref="AssetLibrary"/>, and deliberately the same shape: it bypasses the MGCB
+/// content pipeline, loads via <see cref="SoundEffect.FromStream"/>, and — most importantly — the game
+/// runs perfectly with NO audio present. Every <see cref="Play"/> / <see cref="PlayMusic"/> is a no-op
+/// when the cue is missing, so sound drops in file-by-file exactly like the art did.
+///
+/// It is also defensive about the audio DEVICE: a machine with no sound hardware (or a headless
+/// screenshot/CI run) must not crash. Construction and every playback call are guarded, and any audio
+/// failure disables the bank rather than propagating.
+/// </remarks>
+public sealed class SoundBank
+{
+    private readonly Dictionary<string, SoundEffect> _sounds = new(StringComparer.OrdinalIgnoreCase);
+    private readonly bool _enabled;
+
+    private SoundEffectInstance? _music;
+    private string _musicKey = "";
+
+    private float _masterSfx = 0.8f;
+    private float _masterMusic = 0.5f;
+
+    /// <param name="disable">
+    /// Force-off, used for headless screenshot/CI runs where no audio device exists. When true, nothing
+    /// is loaded and every call is inert.
+    /// </param>
+    public SoundBank(bool disable = false)
+    {
+        if (disable) { _enabled = false; return; }
+
+        var root = Path.Combine(AppContext.BaseDirectory, "assets", "audio");
+        if (!Directory.Exists(root)) { _enabled = false; return; }
+
+        var loadedAny = false;
+        foreach (var path in Directory.EnumerateFiles(root, "*.wav", SearchOption.AllDirectories))
+        {
+            try
+            {
+                using var stream = File.OpenRead(path);
+                _sounds[Path.GetFileNameWithoutExtension(path)] = SoundEffect.FromStream(stream);
+                loadedAny = true;
+            }
+            catch (Exception)
+            {
+                // A single bad/unsupported WAV must not take audio down — it just stays silent.
+            }
+        }
+
+        // Only "enable" if at least one sound loaded AND the audio device is actually usable. Touching
+        // MasterVolume forces OpenAL init; on hardware-less machines that throws, and we stay silent.
+        try
+        {
+            if (loadedAny) { _ = SoundEffect.MasterVolume; _enabled = true; }
+        }
+        catch (Exception)
+        {
+            _enabled = false;
+        }
+    }
+
+    public int Count => _sounds.Count;
+    public bool Enabled => _enabled;
+    public bool Has(string key) => _sounds.ContainsKey(key);
+
+    /// <summary>Play a one-shot cue. No-op if audio is off or the cue is missing.</summary>
+    public void Play(string key, float volume = 1f, float pitch = 0f, float pan = 0f)
+    {
+        if (!_enabled || !_sounds.TryGetValue(key, out var fx)) return;
+        try { fx.Play(Clamp01(volume * _masterSfx), Clamp(pitch, -1f, 1f), Clamp(pan, -1f, 1f)); }
+        catch (Exception) { /* an exhausted voice pool must never break a frame */ }
+    }
+
+    /// <summary>Play the first present cue among candidates — lets callers try specific-then-generic.</summary>
+    public void PlayFirst(float volume, params string[] keys)
+    {
+        foreach (var k in keys)
+            if (_sounds.ContainsKey(k)) { Play(k, volume); return; }
+    }
+
+    /// <summary>
+    /// Swap the looping music bed. No-op if audio is off, the track is missing, or it is already playing.
+    /// </summary>
+    public void PlayMusic(string key, float volume = 1f)
+    {
+        if (!_enabled || key == _musicKey) return;
+        if (!_sounds.TryGetValue(key, out var fx)) { StopMusic(); _musicKey = key; return; }
+
+        try
+        {
+            _music?.Stop();
+            _music?.Dispose();
+            _music = fx.CreateInstance();
+            _music.IsLooped = true;
+            _music.Volume = Clamp01(volume * _masterMusic);
+            _music.Play();
+            _musicKey = key;
+        }
+        catch (Exception) { _music = null; }
+    }
+
+    public void StopMusic()
+    {
+        try { _music?.Stop(); } catch (Exception) { /* ignore */ }
+        _music = null;
+        _musicKey = "";
+    }
+
+    private static float Clamp01(float v) => Clamp(v, 0f, 1f);
+    private static float Clamp(float v, float lo, float hi) => v < lo ? lo : v > hi ? hi : v;
+}

@@ -1,0 +1,464 @@
+[
+  {
+    "path": "assets/backgrounds/body_blood_moors/body_blood_moors_clean.png",
+    "type": "background_clean",
+    "region": "body_blood_moors"
+  },
+  {
+    "path": "assets/overlays/body_blood_moors/body_blood_moors_fog.png",
+    "type": "overlay",
+    "region": "body_blood_moors",
+    "overlay": "fog"
+  },
+  {
+    "path": "assets/overlays/body_blood_moors/body_blood_moors_corruption.png",
+    "type": "overlay",
+    "region": "body_blood_moors",
+    "overlay": "corruption"
+  },
+  {
+    "path": "assets/overlays/body_blood_moors/body_blood_moors_mastery.png",
+    "type": "overlay",
+    "region": "body_blood_moors",
+    "overlay": "mastery"
+  },
+  {
+    "path": "assets/overlays/body_blood_moors/body_blood_moors_particles.png",
+    "type": "overlay",
+    "region": "body_blood_moors",
+    "overlay": "particles"
+  },
+  {
+    "path": "assets/overlays/body_blood_moors/body_blood_moors_light_rays.png",
+    "type": "overlay",
+    "region": "body_blood_moors",
+    "overlay": "light_rays"
+  },
+  {
+    "path": "assets/overlays/body_blood_moors/body_blood_moors_vignette.png",
+    "type": "overlay",
+    "region": "body_blood_moors",
+    "overlay": "vignette"
+  },
+  {
+    "path": "assets/backgrounds/body_blood_moors/body_blood_moors_unconquered.png",
+    "type": "background",
+    "region": "body_blood_moors",
+    "state": "unconquered"
+  },
+  {
+    "path": "assets/backgrounds/body_blood_moors/body_blood_moors_mastered.png",
+    "type": "background",
+    "region": "body_blood_moors",
+    "state": "mastered"
+  },
+  {
+    "path": "assets/parallax/body_blood_moors/body_blood_moors_far.png",
+    "type": "parallax",
+    "region": "body_blood_moors",
+    "factor": 0.12
+  },
+  {
+    "path": "assets/parallax/body_blood_moors/body_blood_moors_mid.png",
+    "type": "parallax",
+    "region": "body_blood_moors",
+    "factor": 0.32
+  },
+  {
+    "path": "assets/parallax/body_blood_moors/body_blood_moors_near.png",
+    "type": "parallax",
+    "region": "body_blood_moors",
+    "factor": 0.62
+  },
+  {
+    "path": "assets/parallax/body_blood_moors/body_blood_moors_foreground.png",
+    "type": "parallax",
+    "region": "body_blood_moors",
+    "factor": 1.0
+  },
+  {
+    "path": "assets/backgrounds/mind_crystal_caverns/mind_crystal_caverns_clean.png",
+    "type": "background_clean",
+    "region": "mind_crystal_caverns"
+  },
+  {
+    "path": "assets/overlays/mind_crystal_caverns/mind_crystal_caverns_fog.png",
+    "type": "overlay",
+    "region": "mind_crystal_caverns",
+    "overlay": "fog"
+  },
+  {
+    "path": "assets/overlays/mind_crystal_caverns/mind_crystal_caverns_corruption.png",
+    "type": "overlay",
+    "region": "mind_crystal_caverns",
+    "overlay": "corruption"
+  },
+  {
+    "path": "assets/overlays/mind_crystal_caverns/mind_crystal_caverns_mastery.png",
+    "type": "overlay",
+    "region": "mind_crystal_caverns",
+    "overlay": "mastery"
+  },
+  {
+    "path": "assets/overlays/mind_crystal_caverns/mind_crystal_caverns_particles.png",
+    "type": "overlay",
+    "region": "mind_crystal_caverns",
+    "overlay": "particles"
+  },
+  {
+    "path": "assets/overlays/mind_crystal_caverns/mind_crystal_caverns_light_rays.png",
+    "type": "overlay",
+    "region": "mind_crystal_caverns",
+    "overlay": "light_rays"
+  },
+  {
+    "path": "assets/overlays/mind_crystal_caverns/mind_crystal_caverns_vignette.png",
+    "type": "overlay",
+    "region": "mind_crystal_caverns",
+    "overlay": "vignette"
+  },
+  {
+    "path": "assets/backgrounds/mind_crystal_caverns/mind_crystal_caverns_unconquered.png",
+    "type": "background",
+    "region": "mind_crystal_caverns",
+    "state": "unconquered"
+  },
+  {
+    "path": "assets/backgrounds/mind_crystal_caverns/mind_crystal_caverns_mastered.png",
+    "type": "background",
+    "region": "mind_crystal_caverns",
+    "state": "mastered"
+  },
+  {
+    "path": "assets/parallax/mind_crystal_caverns/mind_crystal_caverns_far.png",
+    "type": "parallax",
+    "region": "mind_crystal_caverns",
+    "factor": 0.12
+  },
+  {
+    "path": "assets/parallax/mind_crystal_caverns/mind_crystal_caverns_mid.png",
+    "type": "parallax",
+    "region": "mind_crystal_caverns",
+    "factor": 0.32
+  },
+  {
+    "path": "assets/parallax/mind_crystal_caverns/mind_crystal_caverns_near.png",
+    "type": "parallax",
+    "region": "mind_crystal_caverns",
+    "factor": 0.62
+  },
+  {
+    "path": "assets/parallax/mind_crystal_caverns/mind_crystal_caverns_foreground.png",
+    "type": "parallax",
+    "region": "mind_crystal_caverns",
+    "factor": 1.0
+  },
+  {
+    "path": "assets/backgrounds/nature_verdant_hollow/nature_verdant_hollow_clean.png",
+    "type": "background_clean",
+    "region": "nature_verdant_hollow"
+  },
+  {
+    "path": "assets/overlays/nature_verdant_hollow/nature_verdant_hollow_fog.png",
+    "type": "overlay",
+    "region": "nature_verdant_hollow",
+    "overlay": "fog"
+  },
+  {
+    "path": "assets/overlays/nature_verdant_hollow/nature_verdant_hollow_corruption.png",
+    "type": "overlay",
+    "region": "nature_verdant_hollow",
+    "overlay": "corruption"
+  },
+  {
+    "path": "assets/overlays/nature_verdant_hollow/nature_verdant_hollow_mastery.png",
+    "type": "overlay",
+    "region": "nature_verdant_hollow",
+    "overlay": "mastery"
+  },
+  {
+    "path": "assets/overlays/nature_verdant_hollow/nature_verdant_hollow_particles.png",
+    "type": "overlay",
+    "region": "nature_verdant_hollow",
+    "overlay": "particles"
+  },
+  {
+    "path": "assets/overlays/nature_verdant_hollow/nature_verdant_hollow_light_rays.png",
+    "type": "overlay",
+    "region": "nature_verdant_hollow",
+    "overlay": "light_rays"
+  },
+  {
+    "path": "assets/overlays/nature_verdant_hollow/nature_verdant_hollow_vignette.png",
+    "type": "overlay",
+    "region": "nature_verdant_hollow",
+    "overlay": "vignette"
+  },
+  {
+    "path": "assets/backgrounds/nature_verdant_hollow/nature_verdant_hollow_unconquered.png",
+    "type": "background",
+    "region": "nature_verdant_hollow",
+    "state": "unconquered"
+  },
+  {
+    "path": "assets/backgrounds/nature_verdant_hollow/nature_verdant_hollow_mastered.png",
+    "type": "background",
+    "region": "nature_verdant_hollow",
+    "state": "mastered"
+  },
+  {
+    "path": "assets/parallax/nature_verdant_hollow/nature_verdant_hollow_far.png",
+    "type": "parallax",
+    "region": "nature_verdant_hollow",
+    "factor": 0.12
+  },
+  {
+    "path": "assets/parallax/nature_verdant_hollow/nature_verdant_hollow_mid.png",
+    "type": "parallax",
+    "region": "nature_verdant_hollow",
+    "factor": 0.32
+  },
+  {
+    "path": "assets/parallax/nature_verdant_hollow/nature_verdant_hollow_near.png",
+    "type": "parallax",
+    "region": "nature_verdant_hollow",
+    "factor": 0.62
+  },
+  {
+    "path": "assets/parallax/nature_verdant_hollow/nature_verdant_hollow_foreground.png",
+    "type": "parallax",
+    "region": "nature_verdant_hollow",
+    "factor": 1.0
+  },
+  {
+    "path": "assets/backgrounds/machine_forge_wastes/machine_forge_wastes_clean.png",
+    "type": "background_clean",
+    "region": "machine_forge_wastes"
+  },
+  {
+    "path": "assets/overlays/machine_forge_wastes/machine_forge_wastes_fog.png",
+    "type": "overlay",
+    "region": "machine_forge_wastes",
+    "overlay": "fog"
+  },
+  {
+    "path": "assets/overlays/machine_forge_wastes/machine_forge_wastes_corruption.png",
+    "type": "overlay",
+    "region": "machine_forge_wastes",
+    "overlay": "corruption"
+  },
+  {
+    "path": "assets/overlays/machine_forge_wastes/machine_forge_wastes_mastery.png",
+    "type": "overlay",
+    "region": "machine_forge_wastes",
+    "overlay": "mastery"
+  },
+  {
+    "path": "assets/overlays/machine_forge_wastes/machine_forge_wastes_particles.png",
+    "type": "overlay",
+    "region": "machine_forge_wastes",
+    "overlay": "particles"
+  },
+  {
+    "path": "assets/overlays/machine_forge_wastes/machine_forge_wastes_light_rays.png",
+    "type": "overlay",
+    "region": "machine_forge_wastes",
+    "overlay": "light_rays"
+  },
+  {
+    "path": "assets/overlays/machine_forge_wastes/machine_forge_wastes_vignette.png",
+    "type": "overlay",
+    "region": "machine_forge_wastes",
+    "overlay": "vignette"
+  },
+  {
+    "path": "assets/backgrounds/machine_forge_wastes/machine_forge_wastes_unconquered.png",
+    "type": "background",
+    "region": "machine_forge_wastes",
+    "state": "unconquered"
+  },
+  {
+    "path": "assets/backgrounds/machine_forge_wastes/machine_forge_wastes_mastered.png",
+    "type": "background",
+    "region": "machine_forge_wastes",
+    "state": "mastered"
+  },
+  {
+    "path": "assets/parallax/machine_forge_wastes/machine_forge_wastes_far.png",
+    "type": "parallax",
+    "region": "machine_forge_wastes",
+    "factor": 0.12
+  },
+  {
+    "path": "assets/parallax/machine_forge_wastes/machine_forge_wastes_mid.png",
+    "type": "parallax",
+    "region": "machine_forge_wastes",
+    "factor": 0.32
+  },
+  {
+    "path": "assets/parallax/machine_forge_wastes/machine_forge_wastes_near.png",
+    "type": "parallax",
+    "region": "machine_forge_wastes",
+    "factor": 0.62
+  },
+  {
+    "path": "assets/parallax/machine_forge_wastes/machine_forge_wastes_foreground.png",
+    "type": "parallax",
+    "region": "machine_forge_wastes",
+    "factor": 1.0
+  },
+  {
+    "path": "assets/backgrounds/shadow_void_wastes/shadow_void_wastes_clean.png",
+    "type": "background_clean",
+    "region": "shadow_void_wastes"
+  },
+  {
+    "path": "assets/overlays/shadow_void_wastes/shadow_void_wastes_fog.png",
+    "type": "overlay",
+    "region": "shadow_void_wastes",
+    "overlay": "fog"
+  },
+  {
+    "path": "assets/overlays/shadow_void_wastes/shadow_void_wastes_corruption.png",
+    "type": "overlay",
+    "region": "shadow_void_wastes",
+    "overlay": "corruption"
+  },
+  {
+    "path": "assets/overlays/shadow_void_wastes/shadow_void_wastes_mastery.png",
+    "type": "overlay",
+    "region": "shadow_void_wastes",
+    "overlay": "mastery"
+  },
+  {
+    "path": "assets/overlays/shadow_void_wastes/shadow_void_wastes_particles.png",
+    "type": "overlay",
+    "region": "shadow_void_wastes",
+    "overlay": "particles"
+  },
+  {
+    "path": "assets/overlays/shadow_void_wastes/shadow_void_wastes_light_rays.png",
+    "type": "overlay",
+    "region": "shadow_void_wastes",
+    "overlay": "light_rays"
+  },
+  {
+    "path": "assets/overlays/shadow_void_wastes/shadow_void_wastes_vignette.png",
+    "type": "overlay",
+    "region": "shadow_void_wastes",
+    "overlay": "vignette"
+  },
+  {
+    "path": "assets/backgrounds/shadow_void_wastes/shadow_void_wastes_unconquered.png",
+    "type": "background",
+    "region": "shadow_void_wastes",
+    "state": "unconquered"
+  },
+  {
+    "path": "assets/backgrounds/shadow_void_wastes/shadow_void_wastes_mastered.png",
+    "type": "background",
+    "region": "shadow_void_wastes",
+    "state": "mastered"
+  },
+  {
+    "path": "assets/parallax/shadow_void_wastes/shadow_void_wastes_far.png",
+    "type": "parallax",
+    "region": "shadow_void_wastes",
+    "factor": 0.12
+  },
+  {
+    "path": "assets/parallax/shadow_void_wastes/shadow_void_wastes_mid.png",
+    "type": "parallax",
+    "region": "shadow_void_wastes",
+    "factor": 0.32
+  },
+  {
+    "path": "assets/parallax/shadow_void_wastes/shadow_void_wastes_near.png",
+    "type": "parallax",
+    "region": "shadow_void_wastes",
+    "factor": 0.62
+  },
+  {
+    "path": "assets/parallax/shadow_void_wastes/shadow_void_wastes_foreground.png",
+    "type": "parallax",
+    "region": "shadow_void_wastes",
+    "factor": 1.0
+  },
+  {
+    "path": "assets/backgrounds/spirit_twilight_sanctum/spirit_twilight_sanctum_clean.png",
+    "type": "background_clean",
+    "region": "spirit_twilight_sanctum"
+  },
+  {
+    "path": "assets/overlays/spirit_twilight_sanctum/spirit_twilight_sanctum_fog.png",
+    "type": "overlay",
+    "region": "spirit_twilight_sanctum",
+    "overlay": "fog"
+  },
+  {
+    "path": "assets/overlays/spirit_twilight_sanctum/spirit_twilight_sanctum_corruption.png",
+    "type": "overlay",
+    "region": "spirit_twilight_sanctum",
+    "overlay": "corruption"
+  },
+  {
+    "path": "assets/overlays/spirit_twilight_sanctum/spirit_twilight_sanctum_mastery.png",
+    "type": "overlay",
+    "region": "spirit_twilight_sanctum",
+    "overlay": "mastery"
+  },
+  {
+    "path": "assets/overlays/spirit_twilight_sanctum/spirit_twilight_sanctum_particles.png",
+    "type": "overlay",
+    "region": "spirit_twilight_sanctum",
+    "overlay": "particles"
+  },
+  {
+    "path": "assets/overlays/spirit_twilight_sanctum/spirit_twilight_sanctum_light_rays.png",
+    "type": "overlay",
+    "region": "spirit_twilight_sanctum",
+    "overlay": "light_rays"
+  },
+  {
+    "path": "assets/overlays/spirit_twilight_sanctum/spirit_twilight_sanctum_vignette.png",
+    "type": "overlay",
+    "region": "spirit_twilight_sanctum",
+    "overlay": "vignette"
+  },
+  {
+    "path": "assets/backgrounds/spirit_twilight_sanctum/spirit_twilight_sanctum_unconquered.png",
+    "type": "background",
+    "region": "spirit_twilight_sanctum",
+    "state": "unconquered"
+  },
+  {
+    "path": "assets/backgrounds/spirit_twilight_sanctum/spirit_twilight_sanctum_mastered.png",
+    "type": "background",
+    "region": "spirit_twilight_sanctum",
+    "state": "mastered"
+  },
+  {
+    "path": "assets/parallax/spirit_twilight_sanctum/spirit_twilight_sanctum_far.png",
+    "type": "parallax",
+    "region": "spirit_twilight_sanctum",
+    "factor": 0.12
+  },
+  {
+    "path": "assets/parallax/spirit_twilight_sanctum/spirit_twilight_sanctum_mid.png",
+    "type": "parallax",
+    "region": "spirit_twilight_sanctum",
+    "factor": 0.32
+  },
+  {
+    "path": "assets/parallax/spirit_twilight_sanctum/spirit_twilight_sanctum_near.png",
+    "type": "parallax",
+    "region": "spirit_twilight_sanctum",
+    "factor": 0.62
+  },
+  {
+    "path": "assets/parallax/spirit_twilight_sanctum/spirit_twilight_sanctum_foreground.png",
+    "type": "parallax",
+    "region": "spirit_twilight_sanctum",
+    "factor": 1.0
+  }
+]

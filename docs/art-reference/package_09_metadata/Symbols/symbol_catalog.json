@@ -1,0 +1,279 @@
+{
+  "package": "08",
+  "title": "Branding, Glyphs & Symbols",
+  "assets": [
+    {
+      "id": "source_body",
+      "category": "source",
+      "label": "Body"
+    },
+    {
+      "id": "source_mind",
+      "category": "source",
+      "label": "Mind"
+    },
+    {
+      "id": "source_nature",
+      "category": "source",
+      "label": "Nature"
+    },
+    {
+      "id": "source_machine",
+      "category": "source",
+      "label": "Machine"
+    },
+    {
+      "id": "source_shadow",
+      "category": "source",
+      "label": "Shadow"
+    },
+    {
+      "id": "source_spirit",
+      "category": "source",
+      "label": "Spirit"
+    },
+    {
+      "id": "role_attacker",
+      "category": "role",
+      "label": "Attacker"
+    },
+    {
+      "id": "role_defender",
+      "category": "role",
+      "label": "Defender"
+    },
+    {
+      "id": "role_support",
+      "category": "role",
+      "label": "Support"
+    },
+    {
+      "id": "role_crafter",
+      "category": "role",
+      "label": "Crafter"
+    },
+    {
+      "id": "role_producer",
+      "category": "role",
+      "label": "Producer"
+    },
+    {
+      "id": "vow_01",
+      "category": "vow",
+      "label": "Vow Slot 01",
+      "semantic": "unassigned"
+    },
+    {
+      "id": "vow_02",
+      "category": "vow",
+      "label": "Vow Slot 02",
+      "semantic": "unassigned"
+    },
+    {
+      "id": "vow_03",
+      "category": "vow",
+      "label": "Vow Slot 03",
+      "semantic": "unassigned"
+    },
+    {
+      "id": "vow_04",
+      "category": "vow",
+      "label": "Vow Slot 04",
+      "semantic": "unassigned"
+    },
+    {
+      "id": "vow_05",
+      "category": "vow",
+      "label": "Vow Slot 05",
+      "semantic": "unassigned"
+    },
+    {
+      "id": "vow_06",
+      "category": "vow",
+      "label": "Vow Slot 06",
+      "semantic": "unassigned"
+    },
+    {
+      "id": "nav_hunt",
+      "category": "navigation",
+      "label": "Hunt"
+    },
+    {
+      "id": "nav_warren",
+      "category": "navigation",
+      "label": "Warren"
+    },
+    {
+      "id": "nav_forge",
+      "category": "navigation",
+      "label": "Forge"
+    },
+    {
+      "id": "nav_evolve",
+      "category": "navigation",
+      "label": "Evolve"
+    },
+    {
+      "id": "nav_codex",
+      "category": "navigation",
+      "label": "Codex"
+    },
+    {
+      "id": "nav_relics",
+      "category": "navigation",
+      "label": "Relics"
+    },
+    {
+      "id": "nav_inventory",
+      "category": "navigation",
+      "label": "Inventory"
+    },
+    {
+      "id": "nav_shop",
+      "category": "navigation",
+      "label": "Shop"
+    },
+    {
+      "id": "nav_mail",
+      "category": "navigation",
+      "label": "Mail"
+    },
+    {
+      "id": "nav_settings",
+      "category": "navigation",
+      "label": "Settings"
+    },
+    {
+      "id": "state_resonance",
+      "category": "state",
+      "label": "Resonance"
+    },
+    {
+      "id": "state_corruption",
+      "category": "state",
+      "label": "Corruption"
+    },
+    {
+      "id": "state_ward",
+      "category": "state",
+      "label": "Ward"
+    },
+    {
+      "id": "state_binding",
+      "category": "state",
+      "label": "Binding"
+    },
+    {
+      "id": "state_mastery",
+      "category": "state",
+      "label": "Mastery"
+    },
+    {
+      "id": "state_automation",
+      "category": "state",
+      "label": "Automation"
+    },
+    {
+      "id": "state_prestige",
+      "category": "state",
+      "label": "Prestige"
+    },
+    {
+      "id": "state_evolution",
+      "category": "state",
+      "label": "Evolution"
+    }
+  ],
+  "atlases": {
+    "source": {
+      "path": "assets/atlases/atlas_sources_6x256.png",
+      "frameSize": [
+        256,
+        256
+      ],
+      "columns": 6,
+      "rows": 1,
+      "order": [
+        "source_body",
+        "source_mind",
+        "source_nature",
+        "source_machine",
+        "source_shadow",
+        "source_spirit"
+      ]
+    },
+    "role": {
+      "path": "assets/atlases/atlas_roles_5x256.png",
+      "frameSize": [
+        256,
+        256
+      ],
+      "columns": 5,
+      "rows": 1,
+      "order": [
+        "role_attacker",
+        "role_defender",
+        "role_support",
+        "role_crafter",
+        "role_producer"
+      ]
+    },
+    "vow": {
+      "path": "assets/atlases/atlas_vows_6x256.png",
+      "frameSize": [
+        256,
+        256
+      ],
+      "columns": 6,
+      "rows": 1,
+      "order": [
+        "vow_01",
+        "vow_02",
+        "vow_03",
+        "vow_04",
+        "vow_05",
+        "vow_06"
+      ]
+    },
+    "navigation": {
+      "path": "assets/atlases/atlas_navigation_5x2_256.png",
+      "frameSize": [
+        256,
+        256
+      ],
+      "columns": 5,
+      "rows": 2,
+      "order": [
+        "nav_hunt",
+        "nav_warren",
+        "nav_forge",
+        "nav_evolve",
+        "nav_codex",
+        "nav_relics",
+        "nav_inventory",
+        "nav_shop",
+        "nav_mail",
+        "nav_settings"
+      ]
+    },
+    "state": {
+      "path": "assets/atlases/atlas_states_4x2_256.png",
+      "frameSize": [
+        256,
+        256
+      ],
+      "columns": 4,
+      "rows": 2,
+      "order": [
+        "state_resonance",
+        "state_corruption",
+        "state_ward",
+        "state_binding",
+        "state_mastery",
+        "state_automation",
+        "state_prestige",
+        "state_evolution"
+      ]
+    }
+  }
+}

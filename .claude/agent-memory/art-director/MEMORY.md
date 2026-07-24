@@ -1,0 +1,1 @@
+- [Resonance Hunter Art Bible Progress](project_resonance-hunter-art-bible.md) — Sec 1-4 confirmed in file; Sec 5 (character) drafting concurrently; Sec 6 (environment) drafted 2026-07-13, pending approval — key calls: two compositions/region, Source-first region identity, hand-craft-terrain recommendation, staged automation infra.
