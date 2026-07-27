@@ -8,7 +8,9 @@ namespace ResonanceHunter.Client;
 public static class UiTypography
 {
     public const int RegionTitle = 36;
+    public const int ScreenTitle = 36;
     public const int StageLabel = 26;
+    public const int SectionTitle = 26;
     public const int PanelTitle = 24;
     public const int PrimaryValue = 30;
     public const int Body = 19;

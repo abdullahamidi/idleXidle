@@ -672,6 +672,17 @@ public class Game1 : Game
                         new() { InstanceId = "up_cht", BaseType = ItemBaseType.Chest, Rarity = Rarity.Epic, SellValue = 150, Element = Source.Nature, ItemLevel = 55 },
                     });
                     _forge.AddLoot(seed);
+                    // Extra unequipped drops so the inventory grid fills and overflows into a scroll (fixture §17).
+                    var srcs = new[] { Source.Shadow, Source.Body, Source.Mind, Source.Spirit, Source.Machine, Source.Nature };
+                    var extra = new List<ItemInstance>();
+                    for (var i = 0; i < 14; i++)
+                        extra.Add(new ItemInstance
+                        {
+                            InstanceId = $"cx{i}", BaseType = types[i % types.Length],
+                            Rarity = rar[i % rar.Length], SellValue = 15 + i * 5, Element = srcs[i % srcs.Length],
+                            ItemLevel = 20 + i * 3,
+                        });
+                    _forge.AddLoot(extra);
                     foreach (var it in seed) _hunter.Equip(it);   // one item per slot — all eight filled
                     _hunter.AddGleam(5000);
                     for (var i = 0; i < 8; i++) _hunter.Train(HunterStat.AttackPower);
@@ -838,7 +849,7 @@ public class Game1 : Game
         // binding here ran first every frame, hijacking the filter into a blank dev screen.
         if (Pressed(Keys.F9)) _showSpike = !_showSpike;
         if (Pressed(Keys.F6)) _expedition.DevForceBoss = !_expedition.DevForceBoss;   // dev: force the Crystal Lich boss render (Rev 4 §12)
-        if (Pressed(Keys.F7)) _expedition.DevBossDebug = !_expedition.DevBossDebug;   // dev: boss-bounds overlay (Rev 5 §17)
+        if (Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _character.DevGearDebug = !_character.DevGearDebug; }   // dev layout overlays
         if (Pressed(Keys.F1)) _showHelp = !_showHelp;
         if (Pressed(Keys.F10)) _showSettings = !_showSettings;
 
