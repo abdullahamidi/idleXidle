@@ -72,7 +72,9 @@ public sealed class SoloExpeditionScreen
         int FullX, int FullY, int FullW, int FullH, string Name);
     private static readonly Dictionary<string, BossMeta> BossMetaFor = new()
     {
-        ["crystal_lich"] = new(SrcTop: 305, BodyX: 388, BodyY: 430, BodyW: 214, BodyH: 500,
+        // BodyX corrected LEFT of the frame-0 estimate (388): the dense body (robe/torso) sat consistently
+        // left of anchor across frames, so the frame-0 measurement was biased right. Centres the figure.
+        ["crystal_lich"] = new(SrcTop: 305, BodyX: 296, BodyY: 430, BodyW: 214, BodyH: 500,
             FullX: 240, FullY: 350, FullW: 648, FullH: 580, Name: "CRYSTAL LICH"),
     };
     private static readonly BossMeta DefaultBossMeta = new(0, 300, 200, 424, 640, 200, 120, 624, 780, "BOSS");
