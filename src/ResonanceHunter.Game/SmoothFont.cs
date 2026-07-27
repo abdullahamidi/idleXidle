@@ -19,10 +19,15 @@ namespace ResonanceHunter.Client;
 /// </remarks>
 public sealed class SmoothFont
 {
-    private const int ArtScale = 4;
     private const int RasterPx = 32;                 // actual glyph height in px
-    private const float DrawScale = 1f / ArtScale;   // 32px atlas → 8 logical → 32 actual, crisp
     private const float VOffset = -0.5f;             // small nudge so it sits like the pixel font's top-left
+
+    /// <summary>
+    /// Counter-scale for the ×N canvas transform: 4 for 480×270 logical screens (default), 1 for screens
+    /// authored directly in 1920×1080. The atlas is rasterised at pixel size, then drawn at 1/Scale so it
+    /// lands 1:1 on the canvas. Set by the host before drawing per-region.
+    /// </summary>
+    public int Scale { get; set; } = 4;
 
     private readonly FontSystem? _system;
     private readonly SpriteFontBase? _font;
@@ -65,13 +70,13 @@ public sealed class SmoothFont
 
     /// <summary>Logical width of the text.</summary>
     public int Measure(string text)
-        => Loaded ? (int)MathF.Round(_font!.MeasureString(text).X * DrawScale) : PixelFont.Measure(text);
+        => Loaded ? (int)MathF.Round(_font!.MeasureString(text).X * (1f / Scale)) : PixelFont.Measure(text);
 
     public void Draw(SpriteBatch b, string text, int x, int y, Color c)
     {
         if (!Loaded) { _fallback.Draw(b, text, x, y, c); return; }
         // DrawText(batch, text, position, color, rotation, origin, scale?, …) — scale is the 7th arg.
-        _font!.DrawText(b, text, new Vector2(x, y + VOffset), c, 0f, Vector2.Zero, new Vector2(DrawScale));
+        _font!.DrawText(b, text, new Vector2(x, y + VOffset), c, 0f, Vector2.Zero, new Vector2(1f / Scale));
     }
 
     public void DrawRight(SpriteBatch b, string text, int right, int y, Color c) => Draw(b, text, right - Measure(text), y, c);
@@ -79,15 +84,15 @@ public sealed class SmoothFont
 
     // ── Sized variants: rasterise crisp at ANY logical height (default is 8). Lets the UI build a real type
     // hierarchy — big titles and damage numbers, small labels — instead of one flat size. ────────────────
-    private SpriteFontBase FontAt(int logicalPx) => _system!.GetFont(Math.Max(6, logicalPx) * ArtScale);
+    private SpriteFontBase FontAt(int logicalPx) => _system!.GetFont(Math.Max(6, logicalPx) * Scale);
 
     public int Measure(string text, int logicalPx)
-        => Loaded ? (int)MathF.Round(FontAt(logicalPx).MeasureString(text).X * DrawScale) : PixelFont.Measure(text);
+        => Loaded ? (int)MathF.Round(FontAt(logicalPx).MeasureString(text).X * (1f / Scale)) : PixelFont.Measure(text);
 
     public void Draw(SpriteBatch b, string text, int x, int y, Color c, int logicalPx)
     {
         if (!Loaded) { _fallback.Draw(b, text, x, y, c); return; }
-        FontAt(logicalPx).DrawText(b, text, new Vector2(x, y + VOffset), c, 0f, Vector2.Zero, new Vector2(DrawScale));
+        FontAt(logicalPx).DrawText(b, text, new Vector2(x, y + VOffset), c, 0f, Vector2.Zero, new Vector2(1f / Scale));
     }
 
     public void DrawRight(SpriteBatch b, string text, int right, int y, Color c, int logicalPx) => Draw(b, text, right - Measure(text, logicalPx), y, c, logicalPx);

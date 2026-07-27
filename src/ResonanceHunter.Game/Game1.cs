@@ -1233,6 +1233,22 @@ public class Game1 : Game
     private bool MouseClicked => _clicked && !_showSettings;
 
 
+    /// <summary>
+    /// Open a SpriteBatch for the virtual canvas at the given counter-scale, syncing the drawing helpers so
+    /// native-resolution assets and text land 1:1. <paramref name="scale"/> is 4 for 480×270 logical screens
+    /// (the default) or 1 for screens authored directly in 1920×1080.
+    /// </summary>
+    private void BeginCanvas(int scale)
+    {
+        _ui.Scale = scale;
+        _ui.Text2.Scale = scale;
+        _batch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
+            null, null, null, Matrix.CreateScale(scale));
+    }
+
+    /// <summary>The counter-scale the active screen draws at. 4 today; converted 1920-coord screens return 1.</summary>
+    private int ScreenScale() => 4;  // will return 1 for converted screens later
+
     // ══════════════════════════════════════════════════════════════════════════════════════════
     protected override void Draw(GameTime gameTime)
     {
@@ -1240,13 +1256,12 @@ public class Game1 : Game
         GraphicsDevice.SetRenderTarget(_canvas);
         GraphicsDevice.Clear(VoidInk);
         // LinearClamp, not PointClamp: this is hand-drawn art now, and the rule forbidding filtering
-        // existed to protect pixel art. The transform is what lets every screen keep its 480x270
-        // coordinates while the canvas underneath is 4x denser.
-        _batch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
-            null, null, null, Matrix.CreateScale(ArtScale));
+        // existed to protect pixel art. The canvas transform (see BeginCanvas) is what lets every screen
+        // keep its 480x270 coordinates while the canvas underneath is 4x denser.
 
         if (_showTitle)
         {
+            BeginCanvas(4);
             DrawTitle();
             if (_showSettings) DrawSettings();
             _batch.End();
@@ -1268,9 +1283,15 @@ public class Game1 : Game
             return;
         }
 
-        // Each screen is now a PLACE: draw its scene background first, then the UI on top.
+        // Three canvas regions, each in its own batch so the active screen can later run at a different
+        // scale (1920 coords) while the shared background and HUD stay at the 480-logical scale.
+        // Batch A — the scene background (always 480-logical).
+        BeginCanvas(4);
         DrawSceneBackground();
+        _batch.End();
 
+        // Batch B — the active screen. ScreenScale() is 4 today; converted screens will return 1.
+        BeginCanvas(ScreenScale());
         if (_showSpike) _rigSpike.Draw(_batch);
         else if (_showForge) _forge.Draw(_batch, _hunter, CanvasMouse, MouseClicked);
         else if (_showWorld) DrawWorld();
@@ -1280,7 +1301,10 @@ public class Game1 : Game
         else if (_showCharacter) _character.Draw(_batch, CanvasMouse, _hunter);
         else if (_showStats) _stats.Draw(_batch, CanvasMouse, _hunter);
         else _expedition.Draw(_batch, CanvasMouse, MouseClicked, Regions.Get(_activeRegion).Name, EnemyArtFor(_activeRegion));
+        _batch.End();
 
+        // Batch C — the shared overlays (pills, nav, help/settings, boot toast), always 480-logical.
+        BeginCanvas(4);
         DrawCurrencyPills();   // shared Gleam / Dust / Materials row, top-right of every screen
         DrawHexNav();   // the shared nav bar, over every screen
 

@@ -17,6 +17,13 @@ public sealed class UiKit
     public const int CanvasWidth = 480;
     public const int CanvasHeight = 270;
 
+    /// <summary>
+    /// Counter-scale for native-resolution drawing inside the ×N canvas transform. 4 for screens authored
+    /// in 480×270 logical units (the default), 1 for screens authored directly in 1920×1080. Set per-region
+    /// by the host before drawing so a source corner of S px still lands 1:1 on the canvas.
+    /// </summary>
+    public int Scale = 4;
+
     private static readonly Color VoidInk = new(0x1B, 0x16, 0x20);
     private static readonly Color PanelBg = new(0x24, 0x20, 0x2C);
     private static readonly Color PanelEdge = new(0x39, 0x33, 0x44);
@@ -247,7 +254,7 @@ public sealed class UiKit
     /// </summary>
     private void NineSlice(SpriteBatch b, Texture2D tex, Rectangle r, int srcCornerMax, Color tint)
     {
-        const int scale = 4;
+        var scale = Scale;
         var srcC = Math.Min(srcCornerMax, Math.Min(tex.Width, tex.Height) / 2 - 1);
         var dstC = Math.Max(2, Math.Min(srcC / scale, Math.Min(r.Width, r.Height) / 2));
         srcC = Math.Min(dstC * scale, Math.Min(tex.Width, tex.Height) / 2 - 1);
