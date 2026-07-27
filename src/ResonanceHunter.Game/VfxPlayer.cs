@@ -43,6 +43,11 @@ public sealed class VfxPlayer
     private readonly AssetLibrary _assets;
     private readonly List<Anim> _active = new();
 
+    /// <summary>Counter-scale of the canvas batch this player draws into: 4 for 480-logical screens, 1 for
+    /// screens authored in true 1920 coords. The Draw transform and the per-effect size derive from it so the
+    /// on-screen (physical) size stays constant regardless of which scale the caller is drawing at.</summary>
+    public int Scale = 4;
+
     public VfxPlayer(AssetLibrary assets) => _assets = assets;
 
     /// <summary>
@@ -85,20 +90,22 @@ public sealed class VfxPlayer
         // Additive sub-pass. These are radial GLOW effects; in the caller's AlphaBlend batch their soft edges
         // read as hard ring OUTLINES (the "reticles" bug). Drawn additively they glow and layer as intended.
         // End the caller's batch, run additive, then restore AlphaBlend for the HUD that draws after us. The
-        // 4x transform mirrors Game1's canvas scale (ArtScale).
+        // transform mirrors the caller's canvas scale (Scale) so effects land where the fight authored them.
         b.End();
-        b.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp, null, null, null, Matrix.CreateScale(4f));
+        b.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp, null, null, null, Matrix.CreateScale(Scale));
         foreach (var a in _active)
         {
             var src = new Rectangle(a.CurrentFrame * a.FrameW, 0, a.FrameW, a.FrameH);
-            // `Scale` is a display multiplier of a base logical unit (~26 px), NOT a factor on the raw frame:
-            // package_06 frames are 512 px, so multiplying them directly would fill the screen. Aspect kept.
-            var h = a.Scale * 26;
+            // `Scale` (the effect's) is a display multiplier of a base logical unit, NOT a factor on the raw
+            // frame: package_06 frames are 512 px, so multiplying them directly would fill the screen. The
+            // base unit is 104 physical px (26 at the old ×4 canvas); dividing by the canvas Scale keeps the
+            // on-screen size constant (×4 canvas → 26, ×1 canvas → 104). Aspect kept.
+            var h = a.Scale * 104 / Scale;
             var w = h * a.FrameW / a.FrameH;
             b.Draw(a.Sheet, new Rectangle(a.CenterX - w / 2, a.CenterY - h / 2, w, h), src, a.Tint);
         }
         b.End();
-        b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, null, null, null, Matrix.CreateScale(4f));
+        b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, null, null, null, Matrix.CreateScale(Scale));
     }
 
     public void Clear() => _active.Clear();

@@ -1257,8 +1257,10 @@ public class Game1 : Game
             null, null, null, Matrix.CreateScale(scale));
     }
 
-    /// <summary>The counter-scale the active screen draws at. 4 today; converted 1920-coord screens return 1.</summary>
-    private int ScreenScale() => 4;  // will return 1 for converted screens later
+    /// <summary>The counter-scale the active screen draws at. Converted 1920-coord screens return 1; the
+    /// HUNT screen is converted, so it returns 1 whenever no other screen flag is set (the else branch below).</summary>
+    private int ScreenScale() => (_showSpike || _showForge || _showWorld || _showPrestige
+        || _showAutomation || _showBuild || _showCharacter || _showStats) ? 4 : 1;
 
     // ══════════════════════════════════════════════════════════════════════════════════════════
     protected override void Draw(GameTime gameTime)
