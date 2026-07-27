@@ -376,7 +376,7 @@ public sealed class SoloExpeditionScreen
 
         // ── The enemy, with an anticipation ring before it swings, sliding in on a new wave. ─────────
         var elunge = (int)(_enemyLunge * -10f);
-        var enter = (int)(_enemyEnter * 140f);   // starts 140px right of home and slides to it
+        var enter = (int)(_enemyEnter * 70f);   // starts a bit right of home and slides to it
         var ebox = new Rectangle(EnemyBox.X + elunge + enter, EnemyBox.Y, EnemyBox.Width, EnemyBox.Height);
         _ui.Fill(b, new Rectangle(ebox.X + 8, ebox.Bottom - 6, ebox.Width - 16, 4), Shadow);
         // A boss wave shows the region's boss creature; every other wave shows the element's creature (art
@@ -387,8 +387,8 @@ public sealed class SoloExpeditionScreen
         // telegraph. Falls back to the package_03/04 static key poses for enemies/bosses without a strip.
         var bob = (int)(MathF.Sin(_anim * 2f) * 2f);
         var attacking = _enemyWindup > 0f;
-        var boxW = isBossWave ? (int)(ebox.Width * 1.25f) : ebox.Width;
-        var boxH = isBossWave ? (int)(ebox.Height * 1.4f) : ebox.Height - 6;
+        var boxW = isBossWave ? (int)(ebox.Width * 1.15f) : ebox.Width;
+        var boxH = isBossWave ? (int)(ebox.Height * 1.15f) : ebox.Height - 6;
         var figTop = ebox.Bottom - 4 - boxH;   // stable top of the drawn figure (no bob) — anchors the bar/label
         var ab = new Rectangle(ebox.Center.X - boxW / 2, figTop + bob, boxW, boxH);
         var crop = isBossWave ? 0.30f : 0.08f;   // boss frames have a big smoke STREAK across the top — trim it
@@ -527,44 +527,57 @@ public sealed class SoloExpeditionScreen
     /// <summary>Top-center stage header (region B): region name, current wave, and the conquest progress bar.</summary>
     private void DrawStageHeader(SpriteBatch b, string regionName, bool isBossWave)
     {
-        const int cx = 196;   // centered between the HUD (ends ~140) and the now-compact resource bar
-        _ui.TextCenterBig(b, regionName.ToUpperInvariant(), cx, 3, Gold, 12);   // prominent region title
-        _ui.TextCenter(b, $"WAVE {_run!.Wave + 1}", cx, 20, Bone);
-        var frac = ConquerAt > 0 ? Math.Clamp(Deepest / (float)ConquerAt, 0f, 1f) : 0f;
-        _ui.BarArt(b, new Rectangle(cx - 55, 31, 110, 6), frac, isBossWave ? Gold : Verdant);
-        _ui.TextCenter(b, Deepest >= ConquerAt ? "CONQUERED — PUSH FOR LOOT" : $"DEEPEST {Deepest} / {ConquerAt}",
-            cx, 40, Deepest >= ConquerAt ? Gold : Slate);
+        // Just region / wave / status — NO progress bar here (it overlapped the HUD and duplicated the
+        // HUNT LOG's objective bar). Centered between the HUD and the compact resource bar.
+        const int cx = 202;
+        _ui.TextCenterBig(b, regionName.ToUpperInvariant(), cx, 5, Gold, 12);
+        _ui.TextCenter(b, $"WAVE {_run!.Wave + 1}", cx, 22, Bone);
+        _ui.TextCenter(b, Deepest >= ConquerAt ? "CONQUERED" : $"DEEPEST {Deepest} / {ConquerAt}",
+            cx, 33, Deepest >= ConquerAt ? Gold : Slate);
     }
 
     /// <summary>Right context column (region E): objective + progress, the real to-do cues, and the
     /// current expedition state — all from live run data.</summary>
     private void DrawHuntLog(SpriteBatch b)
     {
-        var panel = new Rectangle(352, 24, 122, 152);
-        _ui.Panel(b, panel);
-        var x = panel.X + 11;
-        _ui.TextCenter(b, "HUNT LOG", panel.Center.X, panel.Y + 9, Gold);
+        var panel = new Rectangle(354, 24, 120, 150);
+        // Clean plate + thin brass edge (matches the HUD). The ornate Panel read as heavy and half-empty here.
+        _ui.Fill(b, panel, new Color(0x12, 0x0F, 0x1C, 0xE4));
+        var edge = new Color(0x74, 0x62, 0x3E);
+        _ui.Fill(b, new Rectangle(panel.X, panel.Y, panel.Width, 1), edge);
+        _ui.Fill(b, new Rectangle(panel.X, panel.Bottom - 1, panel.Width, 1), edge);
+        _ui.Fill(b, new Rectangle(panel.X, panel.Y, 1, panel.Height), edge);
+        _ui.Fill(b, new Rectangle(panel.Right - 1, panel.Y, 1, panel.Height), edge);
 
-        var y = panel.Y + 26;
-        _ui.Text(b, "OBJECTIVE", x, y, Slate); y += 11;
-        _ui.Text(b, Deepest >= ConquerAt ? "Region conquered" : $"Reach depth {ConquerAt}", x, y, Bone); y += 10;
-        _ui.BarArt(b, new Rectangle(x, y, panel.Width - 22, 6), ConquerAt > 0 ? Deepest / (float)ConquerAt : 0f, Gold); y += 15;
+        var x = panel.X + 12;
+        var right = panel.Right - 12;
+        _ui.TextCenter(b, "HUNT LOG", panel.Center.X, panel.Y + 7, Gold);
+        _ui.Fill(b, new Rectangle(panel.X + 8, panel.Y + 20, panel.Width - 16, 1), edge * 0.7f);
+
+        var y = panel.Y + 28;
+        _ui.Text(b, "OBJECTIVE", x, y, Slate); y += 12;
+        _ui.Text(b, Deepest >= ConquerAt ? "Region conquered" : $"Reach depth {ConquerAt}", x, y, Bone); y += 11;
+        _ui.BarArt(b, new Rectangle(x, y, right - x, 7), ConquerAt > 0 ? Math.Clamp(Deepest / (float)ConquerAt, 0f, 1f) : 0f, Gold); y += 18;
 
         if (ChestCount > 0)
         {
-            _ui.Diamond(b, new Rectangle(x, y + 1, 7, 7), Gold);
-            _ui.Text(b, $"{ChestCount} CHEST{(ChestCount == 1 ? "" : "S")} · F", x + 11, y, Bone); y += 12;
+            if (_ui.Assets.Get("chest_loot") is { } ci) b.Draw(ci, new Rectangle(x, y - 1, 13, 13), Color.White);
+            else _ui.Diamond(b, new Rectangle(x + 2, y + 2, 8, 8), Gold);
+            _ui.Text(b, $"{ChestCount} chest{(ChestCount == 1 ? "" : "s")} · F", x + 17, y + 2, Bone); y += 16;
         }
         if (Mastery.Available > 0)
         {
-            _ui.Diamond(b, new Rectangle(x, y + 1, 7, 7), Bloom);
-            _ui.Text(b, $"{Mastery.Available} MASTERY · B", x + 11, y, Bone); y += 12;
+            if (_ui.Assets.Get("state_mastery_128") is { } mi) b.Draw(mi, new Rectangle(x, y - 1, 13, 13), Color.White);
+            else _ui.Diamond(b, new Rectangle(x + 2, y + 2, 8, 8), Bloom);
+            _ui.Text(b, $"{Mastery.Available} mastery · B", x + 17, y + 2, Bone); y += 16;
         }
 
-        y = panel.Bottom - 40;
-        _ui.Text(b, "EXPEDITION", x, y, Slate); y += 11;
-        _ui.Text(b, $"Wave {_run!.Wave + 1}", x, y, Bone);
-        _ui.TextRight(b, _mode == Mode.Downed ? "DOWN" : "IN PROGRESS", panel.Right - 11, y, _mode == Mode.Downed ? Ember : Verdant);
+        // Expedition footer, anchored to the bottom with a divider.
+        _ui.Fill(b, new Rectangle(panel.X + 8, panel.Bottom - 34, panel.Width - 16, 1), edge * 0.7f);
+        var fy = panel.Bottom - 27;
+        _ui.Text(b, "EXPEDITION", x, fy, Slate); fy += 12;
+        _ui.Text(b, $"Wave {_run!.Wave + 1}", x, fy, Bone);
+        _ui.TextRight(b, _mode == Mode.Downed ? "DOWN" : "IN PROGRESS", right, fy, _mode == Mode.Downed ? Ember : Verdant);
     }
 
     /// <summary>Auto-skill dock (region F): the build as circular auto-cast medallions, centered under the
