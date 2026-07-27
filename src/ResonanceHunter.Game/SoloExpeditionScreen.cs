@@ -444,14 +444,20 @@ public sealed class SoloExpeditionScreen
 
         if (isBossWave)
         {
-            // Dedicated top-of-arena boss bar (§17.3) — the boss gets NO overhead bar.
-            _ui.TextCenterBig(b, "BOSS", 960, 158, Gold, 24);
-            _ui.BarArt(b, new Rectangle(510, 184, 900, 30), _replay.EnemyHealthFraction, "boss");
+            // Rev 4 §24.3: ONE dedicated boss bar near the arena top (clear of the stage header) with the label
+            // ON it — the boss gets NO overhead bar, and no bare "BOSS" floats behind other overlays (§19.3).
+            var bbar = new Rectangle(510, 156, 900, 44);
+            _ui.BarArt(b, bbar, _replay.EnemyHealthFraction, "boss");
+            _ui.TextCenterBig(b, "BOSS", bbar.Center.X, bbar.Y + 8, Gold, UiTypography.StageLabel);
         }
         else
         {
-            // Normal enemy: a QUIET minimal bar (§17.1), 130×12, ~18px above the figure — no ornate frame.
-            var ebar = new Rectangle(ebox.Center.X - 65, figTop - 24, 130, 12);
+            // Normal enemy: quiet 130×12 bar ~18px above the VISIBLE top of the figure (§24.1), located via the
+            // sprite's alpha bounds so it never floats over transparent padding (the old wisp-bar problem).
+            var boundsKey = staticKey ?? stripKey ?? "";
+            var topPad = boundsKey.Length > 0 ? _ui.TopPadFraction(boundsKey) : 0f;
+            var visTop = figTop + (int)(Math.Max(0f, (topPad - crop) / (1f - crop)) * ebox.Height);
+            var ebar = new Rectangle(ebox.Center.X - 65, visTop - 30, 130, 12);
             _ui.Fill(b, ebar, new Color(0x0D, 0x0B, 0x14, 0xDC));
             var fw = (int)(ebar.Width * Math.Clamp(_replay.EnemyHealthFraction, 0f, 1f));
             if (fw > 0) _ui.Fill(b, new Rectangle(ebar.X, ebar.Y, fw, ebar.Height), Ember);
@@ -555,20 +561,17 @@ public sealed class SoloExpeditionScreen
         if (_ui.Assets.Get("ui_panel_modal_wide") is { } bg) b.Draw(bg, bar, Color.White);
         else _ui.Panel(b, bar);
         const int cx = 910;
-        _ui.TextCenterBig(b, Ellipsize(regionName.ToUpperInvariant(), 490, 36), cx, 32, Gold, 36);
+        // §19.2: render the region title at 36, shrinking to a floor of 28 to fit 490px — never ellipsize the
+        // ACTIVE region title. (Two-line fallback below 28 is a noted follow-up; region names fit at 28.)
+        var title = regionName.ToUpperInvariant();
+        var titlePx = UiTypography.RegionTitle;
+        while (titlePx > 28 && _ui.MeasureBig(title, titlePx) > 490) titlePx--;
+        _ui.TextCenterBig(b, title, cx, 32 + (UiTypography.RegionTitle - titlePx) / 2, Gold, titlePx);
         _ui.TextCenterBig(b, Deepest >= ConquerAt ? "CONQUERED" : $"DEPTH {Deepest} / {ConquerAt}",
-            cx, 73, Deepest >= ConquerAt ? Gold : Bone, 24);
+            cx, 73, Deepest >= ConquerAt ? Gold : Bone, UiTypography.StageLabel);
         _ui.BarArt(b, new Rectangle(710, 102, 400, 18),
             ConquerAt > 0 ? Math.Clamp(Deepest / (float)ConquerAt, 0f, 1f) : 0f, "progress");
-        _ui.TextCenterBig(b, $"WAVE {_run!.Wave + 1}", cx, 124, isBossWave ? Gold : Bone, 22);
-    }
-
-    /// <summary>Clamp text to a pixel width at the given size, adding an ellipsis (spec §12.4 / §25.1).</summary>
-    private string Ellipsize(string s, int maxPx, int px)
-    {
-        if (_ui.MeasureBig(s, px) <= maxPx) return s;
-        while (s.Length > 1 && _ui.MeasureBig(s + "…", px) > maxPx) s = s[..^1];
-        return s + "…";
+        _ui.TextCenterBig(b, $"WAVE {_run!.Wave + 1}", cx, 124, isBossWave ? Gold : Bone, UiTypography.OverlayTitle);
     }
 
     private static readonly Color PlateEdge = new(0x74, 0x62, 0x3E);

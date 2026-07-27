@@ -403,16 +403,14 @@ public class Game1 : Game
             {
                 var hours = credited / 3600.0;
                 var span = hours >= 1.0 ? $"{hours:0.0} HOURS" : $"{credited / 60.0:0} MIN";
-                var champBit = champOffline > 0 ? $"YOUR CHAMPION EARNED +{champOffline} GLEAM. " : "";
-                var farmBit = kills > 0 || gleam > 0 ? $"THE FARM: {kills} KILLS, +{cores} CORES, +{gleam} GLEAM." : "";
-                _bootMessage = $"WELCOME BACK — AWAY {span}. {champBit}{farmBit}".Trim();
+                _bootMessage = $"WELCOME BACK — {span} AWAY\n+{Abbrev((long)champOffline + gleam)} GLEAM · {kills} KILLS · {cores} CORES";
                 _bootColor = Gold;
             }
         }
         else if (champOffline > 0)
         {
             // A short trip that the farm ignores can still have earned the champion something.
-            _bootMessage = $"WELCOME BACK. YOUR CHAMPION EARNED +{champOffline} GLEAM WHILE AWAY.";
+            _bootMessage = $"WELCOME BACK\n+{Abbrev(champOffline)} GLEAM EARNED WHILE AWAY";
             _bootColor = Gold;
         }
     }
@@ -699,7 +697,7 @@ public class Game1 : Game
                     _expedition.Mastery = _mastery;
                     // Pose the new fight-screen UX: the welcome-back toast, and the "you have things to do"
                     // attention cue (a waiting chest + unspent mastery points).
-                    _bootMessage = "WELCOME BACK — +140 GLEAM WHILE AWAY";
+                    _bootMessage = "WELCOME BACK — 18 MIN AWAY\n+140 GLEAM · 12 KILLS · 0 CORES";
                     _bootColor = Gold; _bootTimer = 7f;
                     _forge.AddChest(new Chest { Rarity = Rarity.Epic, Tier = 8, Element = Source.Nature });
                     _mastery.SetEarned(3);
@@ -1147,17 +1145,16 @@ public class Game1 : Game
     {
         if (_bootTimer <= 0f || _bootMessage.Length == 0) return;
         var fade = Math.Clamp(_bootTimer / 1.2f, 0f, 1f);   // fade over the last ~1.2s
-        // Rev 3 §23.2: a COMPACT welcome-back toast (≤740 wide) near the top of the arena — never a full-width
-        // band over the HUD. Text is truncated to fit the surface rather than widening it.
-        var msg = _bootMessage;
-        while (msg.Length > 6 && _ui.Measure(msg) > 664) msg = msg[..^2];
-        if (msg.Length != _bootMessage.Length) msg = msg.TrimEnd() + "…";
-        var w = Math.Min(740, _ui.Measure(msg) + 72);
-        var r = new Rectangle(960 - w / 2, 165, w, 70);
+        // Rev 4 §18.4: a FIXED two-line welcome-back toast at (590,165,740,82) — never a full-width band,
+        // never ellipsized. Line 1 (duration) at OverlayTitle, line 2 (haul) at OverlayBody. The message is
+        // authored as "line1\nline2" by the boot handlers.
+        var parts = _bootMessage.Split('\n');
+        var r = new Rectangle(590, 165, 740, 82);
         _ui.Fill(_batch, r, new Color(0x10, 0x0D, 0x16) * (0.9f * fade));
         _ui.Fill(_batch, new Rectangle(r.X, r.Y, r.Width, 4), _bootColor * (0.65f * fade));
         _ui.Fill(_batch, new Rectangle(r.X, r.Bottom - 4, r.Width, 4), _bootColor * (0.65f * fade));
-        _ui.TextCenter(_batch, msg, 960, r.Y + 22, _bootColor * fade);
+        _ui.TextCenterBig(_batch, parts[0], r.Center.X, r.Y + 14, _bootColor * fade, UiTypography.OverlayTitle);
+        if (parts.Length > 1) _ui.TextCenterBig(_batch, parts[1], r.Center.X, r.Y + 46, Bone * fade, UiTypography.OverlayBody);
     }
 
     private bool Pressed(Keys k) => _keys.IsKeyDown(k) && _prevKeys.IsKeyUp(k);
@@ -1456,9 +1453,11 @@ public class Game1 : Game
 
     private void DrawCurrencyPills()
     {
+        // Rev 4 §20: ONE currency per capsule — no packed "S.. E.. C.. X..". The three most Hunt-relevant
+        // (Gleam, Dust, Scrap); the finer materials (Essence/Core/Crystal) live on the Forge. Three capsules
+        // fit the bar's 686px without crossing into the stage header.
         var right = 1896;   // 1920-space right margin (was 474 in 480-space)
-        var mats = $"S{Abbrev(_hunter.MaterialOf(Material.Scrap))} E{Abbrev(_hunter.MaterialOf(Material.Essence))} C{Abbrev(_hunter.MaterialOf(Material.Core))} X{Abbrev(_hunter.MaterialOf(Material.Crystal))}";
-        right = _ui.Pill(_batch, right, 16, null, new Color(0x5F, 0xE0, 0xC8), mats, "", new Color(0x5F, 0xE0, 0xC8)) - 20;
+        right = _ui.Pill(_batch, right, 16, null, new Color(0x9A, 0xC0, 0x88), Abbrev(_hunter.MaterialOf(Material.Scrap)), "SCRAP", new Color(0x9A, 0xC0, 0x88)) - 20;
         right = _ui.Pill(_batch, right, 16, "ui_memory_dust", default, Abbrev(_dust.MemoryDust), "DUST", new Color(0x9E, 0x86, 0xFF)) - 20;
         _ui.Pill(_batch, right, 16, "ui_gleam_coin", default, Abbrev(_hunter.Gleam), "GLEAM", new Color(0xF0, 0xB2, 0x4A));
     }

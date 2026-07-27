@@ -41,6 +41,11 @@ public sealed class AssetLibrary
             // full-colour variant and skip the other two so they don't collide in this flat filename map.
             if (norm.Contains("/mask/") || norm.Contains("/medallion/")) continue;
 
+            // Rev 4 §5: after the folder skips, everything remaining is a runtime candidate. Assert it is
+            // NOT a preview / source-reference / concept / contact-sheet asset before we ever open it — a
+            // forbidden asset must never reach the screen, so a match is a hard error, not a silent skip.
+            ValidateRuntimeAssetPath(path);
+
             try
             {
                 using var stream = File.OpenRead(path);
@@ -53,6 +58,24 @@ public sealed class AssetLibrary
                 // A single corrupt PNG must not take the whole game down — it just falls back to shapes.
             }
         }
+    }
+
+    /// <summary>
+    /// Rev 4 §5: reject preview / source-reference / concept / contact-sheet assets at load time so a
+    /// non-runtime texture can never reach the screen. A forbidden load is a hard error, not a warning.
+    /// </summary>
+    public static void ValidateRuntimeAssetPath(string assetPath)
+    {
+        var normalized = assetPath.Replace('\\', '/').ToLowerInvariant();
+        string[] forbidden =
+        {
+            "/preview/", "source_reference", "source_sheet", "concept",
+            "contact_sheet", "runtime_assets_preview", "poster", "showcase",
+            "mood_board", "pitchboard"
+        };
+        foreach (var token in forbidden)
+            if (normalized.Contains(token))
+                throw new InvalidOperationException($"Forbidden runtime asset: {assetPath}");
     }
 
     public int Count => _textures.Count;

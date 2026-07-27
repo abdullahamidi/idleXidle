@@ -85,6 +85,7 @@ public sealed class UiKit
     private readonly Texture2D _pixel;
     private readonly Texture2D _hex;
     private readonly Texture2D _diamond;
+    private readonly System.Collections.Generic.Dictionary<string, float> _topPadCache = new();
 
     public UiKit(GraphicsDevice device, PixelFont font, AssetLibrary assets)
     {
@@ -121,6 +122,34 @@ public sealed class UiKit
         b.Draw(tex, new Rectangle(box.Center.X - w / 2, box.Bottom - box.Height, w, box.Height),
             new Rectangle(0, cropY, tex.Width, srcH), tint);
         return true;
+    }
+
+    /// <summary>
+    /// Fraction of a texture's height that is fully transparent across the TOP (max alpha ≤ 8 per row),
+    /// cached per key. Rev 4 §12: lets a caller anchor an overhead bar / shadow to a sprite's VISIBLE opaque
+    /// bounds instead of its padded canvas. A runtime alpha scan stands in for the offline bounds catalog the
+    /// spec asks for; it does not distinguish smoke/trails, so bosses still use their authored crop.
+    /// </summary>
+    public float TopPadFraction(string key)
+    {
+        if (_topPadCache.TryGetValue(key, out var cached)) return cached;
+        var frac = 0f;
+        if (Assets.Get(key) is { } t && t is { Width: > 0, Height: > 0 })
+        {
+            var data = new Color[t.Width * t.Height];
+            t.GetData(data);
+            var top = t.Height;
+            for (var y = 0; y < t.Height; y++)
+            {
+                var opaque = false;
+                for (var x = 0; x < t.Width; x++)
+                    if (data[y * t.Width + x].A > 8) { opaque = true; break; }
+                if (opaque) { top = y; break; }
+            }
+            frac = top >= t.Height ? 0f : top / (float)t.Height;
+        }
+        _topPadCache[key] = frac;
+        return frac;
     }
 
     public bool AnimSprite(SpriteBatch b, string stripKey, Rectangle box, float seconds, float fps, bool loop, Color tint, float topCrop = 0f)
