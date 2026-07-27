@@ -63,7 +63,7 @@ public sealed class SoloExpeditionScreen
     // Rev 3 §16.1: one normal enemy bottom-centred at (1160,735), visible ~320px (range 280–360). A boss is
     // drawn far larger from its own anchor (see the draw), so this box is the NORMAL-enemy size only.
     private static readonly Rectangle EnemyBox = new(1160 - 175, 735 - 340, 350, 340);
-    private static readonly Rectangle BossBox = new(1210 - 220, 750 - 540, 440, 540);   // §16.5: (1210,750), ~510px tall
+    private static readonly Rectangle BossBox = new(1210 - 250, 750 - 600, 500, 600);   // §16.5/§25: (1210,750), boss fills ~540px opaque
 
     // package_03: one representative common enemy per Source (no Nature enemy shipped — a wisp stands in).
     private static readonly Dictionary<Source, string> EnemyForSource = new()
@@ -115,6 +115,28 @@ public sealed class SoloExpeditionScreen
     private struct Callout { public string Text; public Color Color; public int X, Y; public float Life; public int Px; }
     private int _strikeCount;   // throttles per-strike damage numbers so they don't flood
 
+    // ── Arena clipping + overlay state (Rev 4 §1/§2/§11). ──
+    private static readonly Rectangle ArenaRect = new(170, 120, 1320, 650);
+    private RasterizerState? _arenaRasterizer;
+    private RasterizerState ArenaRasterizer => _arenaRasterizer ??= new RasterizerState { ScissorTestEnable = true };
+    private float _bossIncomingTimer;
+    private bool _isBossWave;
+    /// <summary>Dev fixture (F6 / RH_SHOT_MODE=boss): render the current wave as the Crystal Lich boss.</summary>
+    public bool DevForceBoss { get; set; }
+
+    // Exactly ONE major overlay may show. Priority (high→low): Modal/WelcomeBack (host) > HunterDown >
+    // BossIncoming > WaveCleared. The host draws WelcomeBack; when it does, the screen draws none of its own.
+    private enum HuntOverlay { None, HunterDown, BossIncoming, WaveCleared }
+    private HuntOverlay ResolveOverlay(bool welcome)
+    {
+        if (welcome) return HuntOverlay.None;
+        if (_mode == Mode.Downed) return HuntOverlay.HunterDown;
+        if (_bossIncomingTimer > 0f) return HuntOverlay.BossIncoming;
+        if (DevForceBoss) return HuntOverlay.None;   // boss verification fixture: active combat, no wave banner
+        if (_bannerTimer > 0f) return HuntOverlay.WaveCleared;
+        return HuntOverlay.None;
+    }
+
     /// <summary>The player's build choices and the tree that powers them. Set by the host each frame.</summary>
     public PlayerLoadout Loadout { get; set; } = PlayerLoadout.Starter();
     public MemoryDustTree Tree { get; set; } = new();
@@ -165,6 +187,7 @@ public sealed class SoloExpeditionScreen
         _enemyLunge = Math.Max(0f, _enemyLunge - dt * 5f);
         _enemyEnter = Math.Max(0f, _enemyEnter - dt * 2.5f);   // the new enemy slides in over ~0.4s
         _bannerTimer = Math.Max(0f, _bannerTimer - dt);
+        _bossIncomingTimer = Math.Max(0f, _bossIncomingTimer - dt);
         _deathFlash = Math.Max(0f, _deathFlash - dt * 1.5f);
         _vfx.Update(dt);
         for (var i = 0; i < _callouts.Count; i++) { var c = _callouts[i]; c.Life -= dt * 1.6f; _callouts[i] = c; }
@@ -222,6 +245,7 @@ public sealed class SoloExpeditionScreen
         _playheadMs = 0f;
         _nextEnemyStrikeMs = _replay.NextEnemyStrikeAfter(0f);
         _callouts.Clear();
+        if (_run.LastWaveWasBoss) _bossIncomingTimer = 1.6f;   // a BossIncoming announcement opens the boss wave
     }
 
     /// <summary>The host rolled a chest for the boss just felled — upgrade the banner to the reward beat.</summary>
@@ -379,40 +403,69 @@ public sealed class SoloExpeditionScreen
     public void Draw(SpriteBatch b, Point mouse, bool clicked, string regionName, string enemyArt = "", bool suppressBanner = false)
     {
         _enemyArt = enemyArt;
-        // This screen authors in true 1920 coords at canvas scale 1, so the VFX overlay draws at scale 1 too.
-        _vfx.Scale = 1;
+        _vfx.Scale = 1;   // this screen authors at canvas scale 1, so the VFX overlay draws at scale 1 too
         // The host hands us the mouse in 480-logical space; lift it into this screen's 1920 space so every
-        // hit-test below (the only clickables are the BATTLE SPEED buttons) lands on the drawn rects.
+        // hit-test (the only clickables are the BATTLE SPEED buttons) lands on the drawn rects.
         var hit = new Point(mouse.X * 4, mouse.Y * 4);
         if (_run is null || _replay is null || _champ is null) return;
 
-        // The top HUD, stage header, resource bar and hunt-log panel are drawn as overlays AFTER the arena.
+        // The dev boss fixture is a STATIC verification shot — clear transient combat churn (death smoke,
+        // callouts, flash, wave banner) so only the boss and its bar read.
+        if (DevForceBoss) { _vfx.Clear(); _callouts.Clear(); _deathFlash = 0f; _bannerTimer = 0f; }
 
-        // ── The enemy (Rev 3 §16-17): a normal enemy grounds at (1160,735) ~320px; a boss is far larger from
-        // its own anchor (1210,750) and gets a dedicated TOP-OF-ARENA bar, never an overhead one. ─────────
-        var isBossWave = WaveScaling.IsBossWave(_run.Wave + 1, ExpeditionTuning.Default);
+        _isBossWave = DevForceBoss || WaveScaling.IsBossWave(_run.Wave + 1, ExpeditionTuning.Default);
+        var overlay = ResolveOverlay(suppressBanner);
+        // Rev 4 §18.3: exactly one major overlay. The host draws WelcomeBack; when it does, the screen draws none.
+        System.Diagnostics.Debug.Assert(!(suppressBanner && overlay != HuntOverlay.None),
+            "Only one major Hunt overlay may be active.");
+
+        // ── ARENA — every world-space element is scissor-clipped to the arena rect (Rev 4 §1/§11). The host
+        // began a canvas batch for us; end it, run the clipped arena pass, then reopen an UNCLIPPED batch for
+        // the HUD (which the host closes). The VFX sub-pass inherits the same scissor via _vfx.Rasterizer. ──
+        b.End();
+        _ui.Device.ScissorRectangle = ArenaRect;
+        _vfx.Rasterizer = ArenaRasterizer;
+        b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, ArenaRasterizer);
+        DrawArena(b, overlay);
+        b.End();
+        _vfx.Rasterizer = null;
+
+        // ── HUD — unclipped chrome over the arena. ──
+        b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
+        DrawHunterHud(b);
+        DrawStageHeader(b, regionName, _isBossWave);
+        DrawRightColumn(b);
+        DrawSkillDock(b);
+        DrawBattleControls(b, hit, clicked);
+        // (the host closes this batch with b.End(); the shared hex nav is drawn by the host over every screen.)
+    }
+
+    /// <summary>Arena figures + effects, drawn inside the scissor clip so no actor/VFX/bar/number escapes it.</summary>
+    private void DrawArena(SpriteBatch b, HuntOverlay overlay)
+    {
+        // A normal enemy grounds at (1160,735) ~320px; a boss is far larger from its own anchor (1210,750)
+        // and gets a dedicated top-of-arena bar, never an overhead one (§16/§24).
         var elunge = (int)(_enemyLunge * -40f);
-        var enter = (int)(_enemyEnter * 280f);   // starts right of home and slides in
-        var baseBox = isBossWave ? BossBox : EnemyBox;
+        var enter = (int)(_enemyEnter * 280f);
+        var baseBox = _isBossWave ? BossBox : EnemyBox;
         var ebox = new Rectangle(baseBox.X + elunge + enter, baseBox.Y, baseBox.Width, baseBox.Height);
         _ui.Fill(b, new Rectangle(ebox.X + 60, ebox.Bottom - 14, ebox.Width - 120, 14), GroundShade);
 
-        // package_02A/03A/04A flipbook strips — idle loops; the attack/slam plays during the wind-up
-        // telegraph. Falls back to the package_03/04 static key poses for enemies/bosses without a strip.
         var bob = (int)(MathF.Sin(_anim * 2f) * 8f);
         var attacking = _enemyWindup > 0f;
-        var crop = isBossWave ? 0.30f : 0.08f;   // boss frames carry a smoke STREAK across the top — trim it
-        var figTop = ebox.Bottom - ebox.Height;   // stable figure top (no bob) — anchors the wind-up ring
+        var crop = _isBossWave ? 0.12f : 0.08f;   // trim the frame's transparent/smoke headroom so the boss fills its box
+        var figTop = ebox.Bottom - ebox.Height;
         var ab = new Rectangle(ebox.X, figTop + bob, ebox.Width, ebox.Height);
 
         string? stripKey = null, staticKey = null;
-        var fps = attacking ? 16f : isBossWave ? 10f : 12f;
+        var fps = attacking ? 16f : _isBossWave ? 10f : 12f;
         var loop = !attacking;
-        if (isBossWave && BossForRegion.TryGetValue(RegionId, out var boss))
+        var bossKey = _isBossWave ? (DevForceBoss ? "crystal_lich" : BossForRegion.GetValueOrDefault(RegionId)) : null;
+        if (bossKey is not null)
         {
             var act = attacking ? "attack" : "idle";
-            stripKey = $"{boss}_{act}_strip8_1024";
-            staticKey = $"{boss}_{act}_1024";
+            stripKey = $"{bossKey}_{act}_strip8_1024";
+            staticKey = $"{bossKey}_{act}_1024";
         }
         else if (EnemySource is { } es && EnemyForSource.TryGetValue(es, out var en))
         {
@@ -442,63 +495,66 @@ public sealed class SoloExpeditionScreen
             Outline(b, new Rectangle(ab.X - r, figTop - r, ab.Width + r * 2, ebox.Height + r * 2), Ember, 4);
         }
 
-        if (isBossWave)
+        if (_isBossWave)
         {
-            // Rev 4 §24.3: ONE dedicated boss bar near the arena top (clear of the stage header) with the label
-            // ON it — the boss gets NO overhead bar, and no bare "BOSS" floats behind other overlays (§19.3).
+            // ONE dedicated boss bar near the arena top (§24.3); the boss gets NO overhead bar and no bare
+            // "BOSS" floats behind other overlays (§19.3).
             var bbar = new Rectangle(510, 156, 900, 44);
-            _ui.BarArt(b, bbar, _replay.EnemyHealthFraction, "boss");
+            _ui.BarArt(b, bbar, _replay!.EnemyHealthFraction, "boss");
             _ui.TextCenterBig(b, "BOSS", bbar.Center.X, bbar.Y + 8, Gold, UiTypography.StageLabel);
         }
         else
         {
             // Normal enemy: quiet 130×12 bar ~18px above the VISIBLE top of the figure (§24.1), located via the
-            // sprite's alpha bounds so it never floats over transparent padding (the old wisp-bar problem).
+            // sprite's alpha bounds so it never floats over transparent padding.
             var boundsKey = staticKey ?? stripKey ?? "";
             var topPad = boundsKey.Length > 0 ? _ui.TopPadFraction(boundsKey) : 0f;
             var visTop = figTop + (int)(Math.Max(0f, (topPad - crop) / (1f - crop)) * ebox.Height);
             var ebar = new Rectangle(ebox.Center.X - 65, visTop - 30, 130, 12);
             _ui.Fill(b, ebar, new Color(0x0D, 0x0B, 0x14, 0xDC));
-            var fw = (int)(ebar.Width * Math.Clamp(_replay.EnemyHealthFraction, 0f, 1f));
+            var fw = (int)(ebar.Width * Math.Clamp(_replay!.EnemyHealthFraction, 0f, 1f));
             if (fw > 0) _ui.Fill(b, new Rectangle(ebar.X, ebar.Y, fw, ebar.Height), Ember);
             _ui.Fill(b, new Rectangle(ebar.X, ebar.Y, ebar.Width, 2), new Color(0, 0, 0, 0x50));
         }
 
-        // ── The champion (arena left). Name/HP now live in the top-left HUD. ──
+        // Champion (arena left). Name/HP live in the top-left HUD.
         var push = (int)(_champLunge * 40f);
         var cbox = new Rectangle(ChampBox.X + push, ChampBox.Y, ChampBox.Width, ChampBox.Height);
-        if (_replay.IsShielded(0)) Outline(b, new Rectangle(cbox.X - 4, cbox.Y - 4, cbox.Width + 8, cbox.Height + 8), Steel, 4);
+        if (_replay!.IsShielded(0)) Outline(b, new Rectangle(cbox.X - 4, cbox.Y - 4, cbox.Width + 8, cbox.Height + 8), Steel, 4);
         DrawChampion(b, cbox, dead: _mode == Mode.Downed);
 
         _vfx.Draw(b);
         DrawCallouts(b);
-
-        // A red wash over the whole frame the instant the champion falls — you can't miss the death.
         if (_deathFlash > 0f) _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), Ember * (_deathFlash * 0.35f));
 
-        // The wave-cleared banner: a gold flash above the fight that fades as the next wave opens. Rev 3 §23:
-        // only one major overlay at a time — the welcome-back toast (higher priority) suppresses this.
-        if (!suppressBanner && _bannerTimer > 0f)
+        DrawArenaOverlay(b, overlay);
+    }
+
+    /// <summary>The single active arena announcement (Rev 4 §2/§18) — never more than one at a time.</summary>
+    private void DrawArenaOverlay(SpriteBatch b, HuntOverlay overlay)
+    {
+        switch (overlay)
         {
-            var fade = Math.Clamp(_bannerTimer * 1.4f, 0f, 1f);
-            _ui.TextCenterBig(b, _bannerText, 960, 268, Gold * fade, 40);   // spec §18.2 — centred in the arena, clear of the header
+            case HuntOverlay.HunterDown:
+                _ui.Fill(b, new Rectangle(430, 470, 800, 130), PanelBg);
+                _ui.TextCenterBig(b, "CHAMPION DOWN — REGROUPING", 830, 496, Ember, UiTypography.StageLabel);
+                _ui.TextCenterBig(b, $"REACHED WAVE {_run!.Wave + 1}. STRENGTHEN THE BUILD (B).", 830, 544, Slate, UiTypography.OverlayBody);
+                break;
+            case HuntOverlay.BossIncoming:
+            {
+                var fade = Math.Clamp(_bossIncomingTimer * 1.4f, 0f, 1f);
+                _ui.Fill(b, new Rectangle(610, 200, 700, 110), PanelBg * fade);
+                _ui.TextCenterBig(b, "BOSS INCOMING", 960, 224, Gold * fade, UiTypography.RegionTitle);
+                _ui.TextCenterBig(b, "STEEL YOURSELF", 960, 274, Bone * fade, UiTypography.OverlayBody);
+                break;
+            }
+            case HuntOverlay.WaveCleared:
+            {
+                var fade = Math.Clamp(_bannerTimer * 1.4f, 0f, 1f);
+                _ui.TextCenterBig(b, _bannerText, 960, 268, Gold * fade, UiTypography.RegionTitle);
+                break;
+            }
         }
-
-        // ── package_10 HUD + panels, drawn over the arena. ──
-        DrawHunterHud(b);
-        DrawStageHeader(b, regionName, isBossWave);
-        DrawRightColumn(b);
-        DrawSkillDock(b);
-        DrawBattleControls(b, hit, clicked);
-
-        if (_mode == Mode.Downed)
-        {
-            _ui.Fill(b, new Rectangle(430, 470, 800, 130), PanelBg);
-            _ui.TextCenterBig(b, "CHAMPION DOWN — REGROUPING", 830, 496, Ember, 26);
-            _ui.TextCenterBig(b, $"REACHED WAVE {_run.Wave + 1}. STRENGTHEN THE BUILD (B).", 830, 544, Slate, 18);
-        }
-
-        // (The navigation bar is the shared hex nav the host draws over every screen.)
     }
 
     private const int ConquerAt = 7;   // mirrors Game1.ConquerWaveDepth — shown so the goal is visible
@@ -653,10 +709,15 @@ public sealed class SoloExpeditionScreen
                 if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } g)
                     b.Draw(g, new Rectangle(box.X + 28, box.Y + 24, box.Width - 56, box.Height - 56), Color.White);
                 else _ui.Diamond(b, new Rectangle(box.Center.X - 24, box.Center.Y - 24, 48, 48), sc);
-                // (§18.3 Layer 4 Vow glyph omitted: the loadout SkillChoice doesn't carry the Vow — it lives on
-                // the built ability. Wiring the built skills through would add it; deferred as optional.)
-                _ui.TextCenterBig(b, FormShort(s.Form), box.Center.X, box.Bottom + 2, Bone, 16);
-                _ui.TextCenterBig(b, "AUTO", box.Center.X, box.Bottom + 26, Gold, 14);
+                // (§16 Vow glyph omitted: the loadout SkillChoice doesn't carry the Vow — it lives on the built
+                // ability. Wiring the built skills through would add it; deferred, logged once below.)
+                // §16.2: a DESCRIPTIVE Source+Form label ("SHADOW STRIKE"), never a bare form name — shrunk to
+                // fit the slot pitch rather than clipped.
+                var label = $"{s.Source.ToString().ToUpperInvariant()} {FormShort(s.Form)}";
+                var lpx = UiTypography.Secondary;
+                while (lpx > 12 && _ui.MeasureBig(label, lpx) > 132) lpx--;
+                _ui.TextCenterBig(b, label, box.Center.X, box.Bottom + 2, Bone, lpx);
+                _ui.TextCenterBig(b, "AUTO", box.Center.X, box.Bottom + 28, Gold, 14);
             }
             else
             {

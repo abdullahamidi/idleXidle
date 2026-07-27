@@ -92,6 +92,7 @@ public sealed class UiKit
         Font = font;
         Text2 = new SmoothFont(font);   // smooth TTF, or transparently the pixel font if none loads
         Assets = assets;
+        Device = device;
         _pixel = new Texture2D(device, 1, 1);
         _pixel.SetData(new[] { Color.White });
         _hex = MakeHex(device, 120, 104);       // flat-top hexagon, drawn tinted + scaled (LinearClamp keeps it smooth)
@@ -157,6 +158,11 @@ public sealed class UiKit
         if (Assets.Get(stripKey) is not { } tex || tex.Height <= 0) return false;
         var fw = tex.Height;
         var frames = Math.Max(1, tex.Width / fw);
+        // Rev 4 §8/§9: a horizontal strip must be exactly N square frames, and we draw exactly ONE of them
+        // (the src rect below is a single frame). A width that isn't a whole multiple means the sheet is
+        // mis-declared (or a preview/contact sheet slipped in) and frame extraction would smear.
+        System.Diagnostics.Debug.Assert(tex.Width % fw == 0,
+            $"Animation strip '{stripKey}' width {tex.Width} is not a whole multiple of frame size {fw}.");
         var i = (int)(seconds * fps);
         i = loop ? (i % frames + frames) % frames : Math.Clamp(i, 0, frames - 1);
         // Trim the transparent headroom (and any streak artifacts) off the top of the frame, then FILL the
@@ -202,6 +208,8 @@ public sealed class UiKit
     /// <summary>The active text renderer — smooth when a TTF is present, else the pixel font.</summary>
     public SmoothFont Text2 { get; }
     public AssetLibrary Assets { get; }
+    /// <summary>The graphics device — exposed so screens can set a scissor rectangle for arena clipping.</summary>
+    public GraphicsDevice Device { get; }
 
     /// <summary>Logical width of a string in the active font. Use this instead of PixelFont.Measure.</summary>
     public int Measure(string s) => Text2.Measure(s);

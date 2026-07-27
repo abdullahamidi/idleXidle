@@ -43,6 +43,10 @@ public sealed class VfxPlayer
     private readonly AssetLibrary _assets;
     private readonly List<Anim> _active = new();
 
+    /// <summary>When set (the Hunt arena pass), the additive + restore batches use it so the glow is scissor-
+    /// clipped to the arena along with everything else. Null elsewhere = default (unclipped) rasterizer.</summary>
+    public RasterizerState? Rasterizer;
+
     /// <summary>Counter-scale of the canvas batch this player draws into: 4 for 480-logical screens, 1 for
     /// screens authored in true 1920 coords. The Draw transform and the per-effect size derive from it so the
     /// on-screen (physical) size stays constant regardless of which scale the caller is drawing at.</summary>
@@ -92,7 +96,7 @@ public sealed class VfxPlayer
         // End the caller's batch, run additive, then restore AlphaBlend for the HUD that draws after us. The
         // transform mirrors the caller's canvas scale (Scale) so effects land where the fight authored them.
         b.End();
-        b.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp, null, null, null, Matrix.CreateScale(Scale));
+        b.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp, null, Rasterizer, null, Matrix.CreateScale(Scale));
         foreach (var a in _active)
         {
             var src = new Rectangle(a.CurrentFrame * a.FrameW, 0, a.FrameW, a.FrameH);
@@ -105,7 +109,7 @@ public sealed class VfxPlayer
             b.Draw(a.Sheet, new Rectangle(a.CenterX - w / 2, a.CenterY - h / 2, w, h), src, a.Tint);
         }
         b.End();
-        b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, null, null, null, Matrix.CreateScale(Scale));
+        b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, null, Rasterizer, null, Matrix.CreateScale(Scale));
     }
 
     public void Clear() => _active.Clear();

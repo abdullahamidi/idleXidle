@@ -584,7 +584,7 @@ public class Game1 : Game
             // `telegraph`, `combat` and `boss2` posed the manual-combat screen for screenshots. That
             // screen is gone, so they had nothing to pose.
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
-                or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight"
+                or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "build" or "character" or "stats")
             {
                 _showTitle = false;
@@ -706,6 +706,18 @@ public class Game1 : Game
                     // This one stays standing long enough to capture skills firing.
                     _expedition.DevStart(_hunter, 1400f, 9f);
                 }
+                if (sm == "boss")
+                {
+                    // Rev 4 §12 boss verification fixture: force the current wave to render as the Crystal Lich
+                    // boss (crystal_lich_idle), no ordinary enemies, no welcome/wave overlay — a beefy pool so
+                    // the boss is standing for the shot.
+                    _expedition.Loadout = _loadout;
+                    _expedition.Tree = _dust;
+                    _expedition.Mastery = _mastery;
+                    _expedition.EnemySource = Source.Mind;
+                    _expedition.DevForceBoss = true;
+                    _expedition.DevStart(_hunter, 6000f, 6f);
+                }
                 if (sm == "conquered")
                 {
                     // Whole world conquered — show the map with the DEEPEN THE CORRUPTION button live.
@@ -824,6 +836,7 @@ public class Game1 : Game
         // The dev rig-spike tech demo moved OFF Tab (F9) — Tab is the Forge's loot filter, and the global
         // binding here ran first every frame, hijacking the filter into a blank dev screen.
         if (Pressed(Keys.F9)) _showSpike = !_showSpike;
+        if (Pressed(Keys.F6)) _expedition.DevForceBoss = !_expedition.DevForceBoss;   // dev: force the Crystal Lich boss render (Rev 4 §12)
         if (Pressed(Keys.F1)) _showHelp = !_showHelp;
         if (Pressed(Keys.F10)) _showSettings = !_showSettings;
 
@@ -1459,7 +1472,9 @@ public class Game1 : Game
         var right = 1896;   // 1920-space right margin (was 474 in 480-space)
         right = _ui.Pill(_batch, right, 16, null, new Color(0x9A, 0xC0, 0x88), Abbrev(_hunter.MaterialOf(Material.Scrap)), "SCRAP", new Color(0x9A, 0xC0, 0x88)) - 20;
         right = _ui.Pill(_batch, right, 16, "ui_memory_dust", default, Abbrev(_dust.MemoryDust), "DUST", new Color(0x9E, 0x86, 0xFF)) - 20;
-        _ui.Pill(_batch, right, 16, "ui_gleam_coin", default, Abbrev(_hunter.Gleam), "GLEAM", new Color(0xF0, 0xB2, 0x4A));
+        var leftEdge = _ui.Pill(_batch, right, 16, "ui_gleam_coin", default, Abbrev(_hunter.Gleam), "GLEAM", new Color(0xF0, 0xB2, 0x4A));
+        // Rev 4 §6.1/§6.2: the currency bar must clear the stage header (630..1190) with a 20px gap.
+        System.Diagnostics.Debug.Assert(leftEdge >= 1210, $"Currency bar (left {leftEdge}) overlaps the stage header.");
     }
 
     private void DrawTitle()
@@ -1746,9 +1761,8 @@ public class Game1 : Game
     private static Rectangle NavHexRect(int i)   // now a rectangular TILE (guide: package_01 nav tiles)
     {
         // 1920-space (scale-1 chrome): cell/tile/top ×4 of the old 480 values; the canvas centre is 1920/2.
-        const int cell = 228, tileW = 216, tileH = 128, top = 944;
-        var cx = CanvasWidth * ArtScale / 2 - Nav.Length * cell / 2 + cell / 2 + i * cell;
-        return new Rectangle(cx - tileW / 2, top, tileW, tileH);
+        // Rev 4 §22.4: eight equal 240px sections across the 1920 rail.
+        return new Rectangle(i * 240, 934, 240, 146);
     }
 
     private void DrawHexNav()
@@ -1758,7 +1772,11 @@ public class Game1 : Game
         // A dark shelf so the bar seats cleanly over whatever screen sits behind it. Nearly opaque and
         // starting a hair above the hexes, so the scene behind can't show through and clip their tops.
         // 1920-space (scale-1 chrome): shelf top 234→936, full 1920 width, 36→144 tall.
-        _ui.Fill(_batch, new Rectangle(0, 936, 1920, 144), new Color(0x0C, 0x09, 0x16) * 0.95f);
+        // Rev 4 §22: ONE shared QUIET rail — a dark background + thin dividers, NOT an ornate panel per item.
+        // Only the active item gets ornate emphasis (ui_tab_active + purple tint, full-contrast icon/label);
+        // inactive items are a quiet glyph + label at ~75% opacity.
+        _ui.Fill(_batch, new Rectangle(0, 934, 1920, 146), new Color(0x0C, 0x09, 0x16) * 0.96f);
+        _ui.Fill(_batch, new Rectangle(0, 934, 1920, 3), NavGem * 0.4f);   // a thin top seam
 
         var active = NavActive();
         for (var i = 0; i < Nav.Length; i++)
@@ -1766,15 +1784,26 @@ public class Game1 : Game
             var r = NavHexRect(i);
             var on = i == active;
             var hover = r.Contains(ChromeMouse);
-            // package_01 button TILE as the nav cell (guide), not a hexagon. Active uses the primary button.
-            var key = on ? "ui_button_primary" : "ui_button_secondary";
-            if (_assets.Get(key) is { } tile) _batch.Draw(tile, r, on || hover ? Color.White : new Color(0xB8, 0xB8, 0xC0));
-            else _ui.Fill(_batch, r, on ? NavGold : hover ? NavHover : NavIdle);
+            if (i > 0) _ui.Fill(_batch, new Rectangle(r.X, r.Y + 26, 2, r.Height - 52), new Color(0x22, 0x1C, 0x30));
+
+            if (on)
+            {
+                if (_assets.Get("ui_tab_active") is { } tab) _batch.Draw(tab, r, Color.White);
+                else if (_assets.Get("ui_button_primary") is { } bp) _batch.Draw(bp, r, Color.White);
+                else _ui.Fill(_batch, r, new Color(0x3A, 0x28, 0x54));
+                _ui.Fill(_batch, r, new Color(0x8A, 0x5A, 0xC8) * 0.18f);   // purple interior tint
+            }
+            else if (hover)
+            {
+                _ui.Fill(_batch, r, new Color(0x8A, 0x5A, 0xC8) * 0.10f);
+            }
+
+            var iconTint = on ? Color.White : Color.White * 0.75f;
             if (_assets.Get(Nav[i].Glyph) is { } g)
-                _batch.Draw(g, new Rectangle(r.Center.X - 32, r.Y + 12, 64, 64), on ? Color.White : new Color(0xD8, 0xD4, 0xE2));
+                _batch.Draw(g, new Rectangle(r.Center.X - 26, r.Y + 28, 52, 52), iconTint);
             else
-                _ui.Diamond(_batch, new Rectangle(r.Center.X - 20, r.Y + 20, 40, 40), on ? NavIdle : NavGem);
-            _ui.TextCenter(_batch, Nav[i].Label, r.Center.X, r.Bottom - 36, on ? NavGold : NavLabel);
+                _ui.Diamond(_batch, new Rectangle(r.Center.X - 22, r.Y + 32, 44, 44), on ? NavGold : NavGem * 0.75f);
+            _ui.TextCenterBig(_batch, Nav[i].Label, r.Center.X, r.Bottom - 44, on ? NavGold : NavLabel * 0.9f, UiTypography.NavigationLabel);
         }
     }
 
