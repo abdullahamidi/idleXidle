@@ -49,7 +49,9 @@ public sealed class SoloExpeditionScreen
     // the whole run blurred past — playtest: "waves flow too fast". Slowed to a watchable pace, and a short
     // BREATH now sits between waves so each clear reads as its own beat. The champion's own skill rate
     // (TEMPO, the Focus slot) still speeds combat back up on top of this, so the upgrade is now visible.
-    private const float PlaybackSpeed = 2.0f;
+    private const float PlaybackSpeed = 2.0f;   // default battle speed
+    private float _speedMul = PlaybackSpeed;     // player-adjustable via the HUD's BATTLE SPEED buttons (x1/x2/x4/x8)
+    private static readonly float[] SpeedSteps = { 1f, 2f, 4f, 8f };
     private const float WaveBreakSeconds = 0.8f;   // the pause after a clear, before the next enemy is fought
     private const float DownedSeconds = 1.6f;   // the recovery beat before the champion tries again
 
@@ -119,6 +121,8 @@ public sealed class SoloExpeditionScreen
     public AttackBias EnemyBias { get; set; } = AttackBias.Balanced;
     /// <summary>Unopened chests waiting in the Forge — drives the "you have things to do" nudge. Set by the host.</summary>
     public int ChestCount { get; set; }
+    /// <summary>Gleam per second the idle champion earns — shown in the HUNT idle-rewards panel. Set by the host.</summary>
+    public float IdleGleamRate { get; set; }
     private Source? _lastSource;
     private Hunter? _hunter;
 
@@ -269,7 +273,7 @@ public sealed class SoloExpeditionScreen
         // air while the enemy is still off to the right ("hunter hits before the enemy arrives").
         if (_enemyEnter > 0f) return;
 
-        _playheadMs += dt * 1000f * PlaybackSpeed;
+        _playheadMs += dt * 1000f * _speedMul;
 
         var lead = _nextEnemyStrikeMs - _playheadMs;
         _enemyWindup = lead is > 0 and < 600 ? 1f - lead / 600f : 0f;
@@ -457,9 +461,9 @@ public sealed class SoloExpeditionScreen
         // ── package_10 HUD + panels, drawn over the arena. ──
         DrawHunterHud(b);
         DrawStageHeader(b, regionName, isBossWave);
-        DrawHuntLog(b);
+        DrawRightColumn(b);
         DrawSkillDock(b);
-        DrawSpeedDial(b);
+        DrawBattleControls(b, mouse, clicked);
 
         if (_mode == Mode.Downed)
         {
@@ -536,48 +540,58 @@ public sealed class SoloExpeditionScreen
             cx, 33, Deepest >= ConquerAt ? Gold : Slate);
     }
 
-    /// <summary>Right context column (region E): objective + progress, the real to-do cues, and the
-    /// current expedition state — all from live run data.</summary>
-    private void DrawHuntLog(SpriteBatch b)
+    private static readonly Color PlateEdge = new(0x74, 0x62, 0x3E);
+
+    /// <summary>A clean titled plate (dark fill + thin brass edge + title + divider). Returns the inner
+    /// content rect. The reference's right column is a stack of these.</summary>
+    private Rectangle CleanPanel(SpriteBatch b, Rectangle r, string title)
     {
-        var panel = new Rectangle(354, 24, 120, 150);
-        // Clean plate + thin brass edge (matches the HUD). The ornate Panel read as heavy and half-empty here.
-        _ui.Fill(b, panel, new Color(0x12, 0x0F, 0x1C, 0xE4));
-        var edge = new Color(0x74, 0x62, 0x3E);
-        _ui.Fill(b, new Rectangle(panel.X, panel.Y, panel.Width, 1), edge);
-        _ui.Fill(b, new Rectangle(panel.X, panel.Bottom - 1, panel.Width, 1), edge);
-        _ui.Fill(b, new Rectangle(panel.X, panel.Y, 1, panel.Height), edge);
-        _ui.Fill(b, new Rectangle(panel.Right - 1, panel.Y, 1, panel.Height), edge);
+        _ui.Fill(b, r, new Color(0x12, 0x0F, 0x1C, 0xE4));
+        _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, 1), PlateEdge);
+        _ui.Fill(b, new Rectangle(r.X, r.Bottom - 1, r.Width, 1), PlateEdge);
+        _ui.Fill(b, new Rectangle(r.X, r.Y, 1, r.Height), PlateEdge);
+        _ui.Fill(b, new Rectangle(r.Right - 1, r.Y, 1, r.Height), PlateEdge);
+        _ui.Text(b, title, r.X + 8, r.Y + 5, Gold);
+        _ui.Fill(b, new Rectangle(r.X + 7, r.Y + 16, r.Width - 14, 1), PlateEdge * 0.7f);
+        return new Rectangle(r.X + 8, r.Y + 20, r.Width - 16, r.Height - 24);
+    }
 
-        var x = panel.X + 12;
-        var right = panel.Right - 12;
-        _ui.TextCenter(b, "HUNT LOG", panel.Center.X, panel.Y + 7, Gold);
-        _ui.Fill(b, new Rectangle(panel.X + 8, panel.Y + 20, panel.Width - 16, 1), edge * 0.7f);
+    /// <summary>Right context column (reference regions): a stack of four plates — Idle Rewards, Objective,
+    /// Loot, Expedition — all fed from live run data.</summary>
+    private void DrawRightColumn(SpriteBatch b)
+    {
+        const int px = 398, pw = 76;
 
-        var y = panel.Y + 28;
-        _ui.Text(b, "OBJECTIVE", x, y, Slate); y += 12;
-        _ui.Text(b, Deepest >= ConquerAt ? "Region conquered" : $"Reach depth {ConquerAt}", x, y, Bone); y += 11;
-        _ui.BarArt(b, new Rectangle(x, y, right - x, 7), ConquerAt > 0 ? Math.Clamp(Deepest / (float)ConquerAt, 0f, 1f) : 0f, Gold); y += 18;
+        // Idle rewards — the champion's real passive gleam rate.
+        var inner = CleanPanel(b, new Rectangle(px, 26, pw, 40), "IDLE REWARDS");
+        if (_ui.Assets.Get("currency_gleam") is { } gi) b.Draw(gi, new Rectangle(inner.X, inner.Y, 11, 11), Color.White);
+        _ui.Text(b, $"+{Game1.Abbrev((long)(IdleGleamRate * 60f))}/m", inner.X + 14, inner.Y, Gold);
+        _ui.Text(b, "GLEAM WHILE IDLE", inner.X, inner.Y + 12, Slate);
 
+        // Objective — conquest goal + progress.
+        inner = CleanPanel(b, new Rectangle(px, 70, pw, 42), "OBJECTIVE");
+        _ui.Text(b, Deepest >= ConquerAt ? "Region conquered" : $"Reach depth {ConquerAt}", inner.X, inner.Y, Bone);
+        _ui.BarArt(b, new Rectangle(inner.X, inner.Y + 12, inner.Width, 6), ConquerAt > 0 ? Math.Clamp(Deepest / (float)ConquerAt, 0f, 1f) : 0f, Gold);
+
+        // Loot / pending claims — real cues with icons.
+        inner = CleanPanel(b, new Rectangle(px, 116, pw, 52), "LOOT");
+        var ly = inner.Y;
         if (ChestCount > 0)
         {
-            if (_ui.Assets.Get("chest_loot") is { } ci) b.Draw(ci, new Rectangle(x, y - 1, 13, 13), Color.White);
-            else _ui.Diamond(b, new Rectangle(x + 2, y + 2, 8, 8), Gold);
-            _ui.Text(b, $"{ChestCount} chest{(ChestCount == 1 ? "" : "s")} · F", x + 17, y + 2, Bone); y += 16;
+            if (_ui.Assets.Get("chest_loot") is { } ci) b.Draw(ci, new Rectangle(inner.X, ly, 13, 13), Color.White);
+            _ui.Text(b, $"{ChestCount} chest{(ChestCount == 1 ? "" : "s")} · F", inner.X + 17, ly + 2, Bone); ly += 16;
         }
         if (Mastery.Available > 0)
         {
-            if (_ui.Assets.Get("state_mastery_128") is { } mi) b.Draw(mi, new Rectangle(x, y - 1, 13, 13), Color.White);
-            else _ui.Diamond(b, new Rectangle(x + 2, y + 2, 8, 8), Bloom);
-            _ui.Text(b, $"{Mastery.Available} mastery · B", x + 17, y + 2, Bone); y += 16;
+            if (_ui.Assets.Get("state_mastery_128") is { } mi) b.Draw(mi, new Rectangle(inner.X, ly, 13, 13), Color.White);
+            _ui.Text(b, $"{Mastery.Available} mastery · B", inner.X + 17, ly + 2, Bone); ly += 16;
         }
+        if (ChestCount == 0 && Mastery.Available == 0) _ui.Text(b, "No claims pending", inner.X, inner.Y + 2, Slate);
 
-        // Expedition footer, anchored to the bottom with a divider.
-        _ui.Fill(b, new Rectangle(panel.X + 8, panel.Bottom - 34, panel.Width - 16, 1), edge * 0.7f);
-        var fy = panel.Bottom - 27;
-        _ui.Text(b, "EXPEDITION", x, fy, Slate); fy += 12;
-        _ui.Text(b, $"Wave {_run!.Wave + 1}", x, fy, Bone);
-        _ui.TextRight(b, _mode == Mode.Downed ? "DOWN" : "IN PROGRESS", right, fy, _mode == Mode.Downed ? Ember : Verdant);
+        // Expedition — region wave + live status.
+        inner = CleanPanel(b, new Rectangle(px, 172, pw, 40), "EXPEDITION");
+        _ui.Text(b, $"Wave {_run!.Wave + 1}", inner.X, inner.Y + 2, Bone);
+        _ui.TextRight(b, _mode == Mode.Downed ? "DOWN" : "ACTIVE", inner.Right, inner.Y + 2, _mode == Mode.Downed ? Ember : Verdant);
     }
 
     /// <summary>Auto-skill dock (region F): the build as circular auto-cast medallions, centered under the
@@ -588,7 +602,13 @@ public sealed class SoloExpeditionScreen
         var n = PlayerLoadout.MaxSkills;
         const int d = 34, gap = 8;
         var x0 = 200 - (n * d + (n - 1) * gap) / 2;
-        const int y = 183;
+        const int y = 186;
+        // AUTO-CAST banner over the dock (reference).
+        const string cast = "AUTO-CAST";
+        var cw = _ui.Measure(cast) + 16;
+        _ui.Fill(b, new Rectangle(200 - cw / 2, y - 13, cw, 11), new Color(0x10, 0x22, 0x18, 0xE0));
+        _ui.Fill(b, new Rectangle(200 - cw / 2, y - 13, cw, 1), Verdant * 0.8f);
+        _ui.TextCenter(b, cast, 200, y - 11, Verdant);
         for (var i = 0; i < n; i++)
         {
             var box = new Rectangle(x0 + i * (d + gap), y, d, d);
@@ -612,14 +632,32 @@ public sealed class SoloExpeditionScreen
         }
     }
 
-    /// <summary>Bottom-left speed/mode controls (region G): an always-on AUTO dial + the playback speed.</summary>
-    private void DrawSpeedDial(SpriteBatch b)
+    /// <summary>Bottom-left battle controls (reference region G): adjustable BATTLE SPEED (x1/x2/x4/x8) driving
+    /// the real replay multiplier, plus the AUTO HUNT state.</summary>
+    private void DrawBattleControls(SpriteBatch b, Point mouse, bool clicked)
     {
-        var dial = new Rectangle(10, 190, 30, 30);
-        if (_ui.Assets.Get("ui_medallion_round") is { } mfr) b.Draw(mfr, dial, Color.White);   // frame first
-        _ui.TextCenter(b, "AUTO", dial.Center.X, dial.Center.Y - 3, Gold);
-        _ui.Text(b, $"x{PlaybackSpeed:0.0}", dial.Right + 6, dial.Center.Y - 6, Bone);
-        _ui.Text(b, "SPEED", dial.Right + 6, dial.Center.Y + 3, Slate);
+        var panel = new Rectangle(6, 180, 72, 50);
+        _ui.Fill(b, panel, new Color(0x12, 0x0F, 0x1C, 0xDC));
+        _ui.Fill(b, new Rectangle(panel.X, panel.Y, panel.Width, 1), PlateEdge);
+        _ui.Fill(b, new Rectangle(panel.X, panel.Bottom - 1, panel.Width, 1), PlateEdge);
+        _ui.Fill(b, new Rectangle(panel.X, panel.Y, 1, panel.Height), PlateEdge);
+        _ui.Fill(b, new Rectangle(panel.Right - 1, panel.Y, 1, panel.Height), PlateEdge);
+
+        _ui.Text(b, "BATTLE SPEED", panel.X + 5, panel.Y + 4, Slate);
+        for (var i = 0; i < SpeedSteps.Length; i++)
+        {
+            var r = new Rectangle(panel.X + 5 + i * 16, panel.Y + 14, 14, 12);
+            var on = Math.Abs(_speedMul - SpeedSteps[i]) < 0.01f;
+            var hover = r.Contains(mouse);
+            _ui.Fill(b, r, on ? Gold : hover ? new Color(0x2C, 0x25, 0x44) : new Color(0x1A, 0x14, 0x28));
+            _ui.TextCenter(b, $"x{(int)SpeedSteps[i]}", r.Center.X, r.Y + 3, on ? Shadow : Bone);
+            if (clicked && hover) _speedMul = SpeedSteps[i];
+        }
+
+        _ui.Text(b, "AUTO HUNT", panel.X + 5, panel.Y + 30, Slate);
+        _ui.Fill(b, new Rectangle(panel.X + 5, panel.Y + 40, 34, 9), new Color(0x1A, 0x30, 0x22));
+        _ui.Fill(b, new Rectangle(panel.X + 5, panel.Y + 40, 34, 1), Verdant * 0.7f);
+        _ui.TextCenter(b, "ON", panel.X + 22, panel.Y + 41, Verdant);
     }
 
     // The gear overlays register to the champion base's canvas; this is their back-to-front occlusion order.

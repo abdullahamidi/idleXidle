@@ -1025,6 +1025,7 @@ public class Game1 : Game
         _expedition.Tree = _dust;                     // …powered by the Dust tree's passive nodes
         _expedition.Mastery = _mastery;               // …and the mastery tree (affinity + node bonuses)
         _expedition.ChestCount = _forge.UnopenedChests.Count;   // drives the fight screen's "go open a chest" nudge
+        _expedition.IdleGleamRate = _champGleamRate;            // gleam/sec the champion earns idle → HUNT idle panel
 
         _forge.FeedTarget = _automation.Selected;
         _forge.ActiveForms = _loadout.Skills.Select(s => s.Form).ToList();   // so the Forge can flag live combos
