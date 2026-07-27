@@ -492,33 +492,28 @@ public sealed class SoloExpeditionScreen
     /// row of Source icons for the build's elements.</summary>
     private void DrawHunterHud(SpriteBatch b)
     {
-        // CLEAN backing, not the ornate Panel: its big corner art crowds a dense HUD this small and pushed
-        // the text into the frame. A flat dark plate + thin brass edge reads clean and gives full width.
-        var panel = new Rectangle(5, 5, 142, 52);
-        _ui.Fill(b, panel, new Color(0x12, 0x0F, 0x1C, 0xDC));
-        var edge = new Color(0x74, 0x62, 0x3E);
-        _ui.Fill(b, new Rectangle(panel.X, panel.Y, panel.Width, 1), edge);
-        _ui.Fill(b, new Rectangle(panel.X, panel.Bottom - 1, panel.Width, 1), edge);
-        _ui.Fill(b, new Rectangle(panel.X, panel.Y, 1, panel.Height), edge);
-        _ui.Fill(b, new Rectangle(panel.Right - 1, panel.Y, 1, panel.Height), edge);
+        // ORNATE frame (reference look). Content is inset past the corner gems; the portrait medallion sits
+        // over the left edge (decorative), name/level clear the top border, level/power clear the right corner.
+        var panel = new Rectangle(4, 3, 150, 62);
+        _ui.Panel(b, panel);
 
-        var med = new Rectangle(panel.X + 4, panel.Y + 3, 46, 46);
+        var med = new Rectangle(panel.X + 6, panel.Y + 8, 46, 46);
         if (_ui.Assets.Get("ui_medallion_round") is { } mfr) b.Draw(mfr, med, Color.White);
         if (_ui.Assets.Get("hunter_portrait") is { } por)
             b.Draw(por, new Rectangle(med.X + 8, med.Y + 8, med.Width - 16, med.Height - 16), Color.White);
 
-        var tx = med.Right + 6;
-        var rx = panel.Right - 6;
+        var tx = med.Right + 7;
+        var rx = panel.Right - 15;
         var adept = Mastery.MasteryForm() is { } mf ? $"{FormShort(mf)} ADEPT" : "SEEKER";
-        _ui.Text(b, adept, tx, panel.Y + 6, Bone);
-        _ui.TextRight(b, $"LV {_hunter?.HunterLevel ?? 1}", rx, panel.Y + 6, Gold);
+        _ui.Text(b, adept, tx, panel.Y + 14, Bone);
+        _ui.TextRight(b, $"LV {_hunter?.HunterLevel ?? 1}", rx, panel.Y + 14, Gold);
         var hp = Math.Max(0, _replay?.HealthOf(0) ?? 0);
-        var hpBar = new Rectangle(tx, panel.Y + 20, rx - tx, 9);
+        var hpBar = new Rectangle(tx, panel.Y + 28, rx - tx, 9);
         _ui.BarArt(b, hpBar, _replay?.HealthFractionOf(0) ?? 1f, Bloom);
         _ui.TextCenter(b, $"{hp}/{_champ?.MaxHealth ?? 0}", hpBar.Center.X, hpBar.Y + 1, Bone);   // on the bar
-        _ui.TextRight(b, $"PWR {_hunter?.PowerRating ?? 0}", rx, panel.Y + 34, Ember);
+        _ui.TextRight(b, $"PWR {_hunter?.PowerRating ?? 0}", rx, panel.Y + 42, Ember);
 
-        var sx = panel.X + 4;
+        var sx = panel.X + 8;
         foreach (var s in Loadout.Skills)
         {
             var box = new Rectangle(sx, panel.Bottom + 3, 14, 14);
@@ -542,54 +537,50 @@ public sealed class SoloExpeditionScreen
 
     private static readonly Color PlateEdge = new(0x74, 0x62, 0x3E);
 
-    /// <summary>A clean titled plate (dark fill + thin brass edge + title + divider). Returns the inner
-    /// content rect. The reference's right column is a stack of these.</summary>
+    /// <summary>A titled panel using the ORNATE ui_panel_* frame art (package_01) — the reference's look.
+    /// The title is left-aligned just inside the top edge so it clears the frame's top-centre gem. Returns
+    /// the inner content rect (inset past the ornate corners).</summary>
     private Rectangle CleanPanel(SpriteBatch b, Rectangle r, string title)
     {
-        _ui.Fill(b, r, new Color(0x12, 0x0F, 0x1C, 0xE4));
-        _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, 1), PlateEdge);
-        _ui.Fill(b, new Rectangle(r.X, r.Bottom - 1, r.Width, 1), PlateEdge);
-        _ui.Fill(b, new Rectangle(r.X, r.Y, 1, r.Height), PlateEdge);
-        _ui.Fill(b, new Rectangle(r.Right - 1, r.Y, 1, r.Height), PlateEdge);
-        _ui.Text(b, title, r.X + 8, r.Y + 5, Gold);
-        _ui.Fill(b, new Rectangle(r.X + 7, r.Y + 16, r.Width - 14, 1), PlateEdge * 0.7f);
-        return new Rectangle(r.X + 8, r.Y + 20, r.Width - 16, r.Height - 24);
+        _ui.Panel(b, r);
+        _ui.Text(b, title, r.X + 14, r.Y + 8, Gold);
+        return new Rectangle(r.X + 14, r.Y + 21, r.Width - 28, r.Height - 30);
     }
 
     /// <summary>Right context column (reference regions): a stack of four plates — Idle Rewards, Objective,
     /// Loot, Expedition — all fed from live run data.</summary>
     private void DrawRightColumn(SpriteBatch b)
     {
-        const int px = 398, pw = 76;
+        const int px = 390, pw = 86;
 
         // Idle rewards — the champion's real passive gleam rate.
-        var inner = CleanPanel(b, new Rectangle(px, 26, pw, 40), "IDLE REWARDS");
+        var inner = CleanPanel(b, new Rectangle(px, 24, pw, 48), "IDLE");
         if (_ui.Assets.Get("currency_gleam") is { } gi) b.Draw(gi, new Rectangle(inner.X, inner.Y, 11, 11), Color.White);
-        _ui.Text(b, $"+{Game1.Abbrev((long)(IdleGleamRate * 60f))}/m", inner.X + 14, inner.Y, Gold);
-        _ui.Text(b, "GLEAM WHILE IDLE", inner.X, inner.Y + 12, Slate);
+        _ui.Text(b, $"+{Game1.Abbrev((long)(IdleGleamRate * 60f))}/m", inner.X + 14, inner.Y + 1, Gold);
+        _ui.Text(b, "GLEAM IDLE", inner.X, inner.Y + 12, Slate);
 
         // Objective — conquest goal + progress.
-        inner = CleanPanel(b, new Rectangle(px, 70, pw, 42), "OBJECTIVE");
-        _ui.Text(b, Deepest >= ConquerAt ? "Region conquered" : $"Reach depth {ConquerAt}", inner.X, inner.Y, Bone);
+        inner = CleanPanel(b, new Rectangle(px, 74, pw, 48), "OBJECTIVE");
+        _ui.Text(b, Deepest >= ConquerAt ? "Conquered" : $"Reach depth {ConquerAt}", inner.X, inner.Y, Bone);
         _ui.BarArt(b, new Rectangle(inner.X, inner.Y + 12, inner.Width, 6), ConquerAt > 0 ? Math.Clamp(Deepest / (float)ConquerAt, 0f, 1f) : 0f, Gold);
 
         // Loot / pending claims — real cues with icons.
-        inner = CleanPanel(b, new Rectangle(px, 116, pw, 52), "LOOT");
+        inner = CleanPanel(b, new Rectangle(px, 124, pw, 52), "LOOT");
         var ly = inner.Y;
         if (ChestCount > 0)
         {
-            if (_ui.Assets.Get("chest_loot") is { } ci) b.Draw(ci, new Rectangle(inner.X, ly, 13, 13), Color.White);
-            _ui.Text(b, $"{ChestCount} chest{(ChestCount == 1 ? "" : "s")} · F", inner.X + 17, ly + 2, Bone); ly += 16;
+            if (_ui.Assets.Get("chest_loot") is { } ci) b.Draw(ci, new Rectangle(inner.X, ly, 12, 12), Color.White);
+            _ui.Text(b, $"{ChestCount} chest{(ChestCount == 1 ? "" : "s")} · F", inner.X + 15, ly + 2, Bone); ly += 15;
         }
         if (Mastery.Available > 0)
         {
-            if (_ui.Assets.Get("state_mastery_128") is { } mi) b.Draw(mi, new Rectangle(inner.X, ly, 13, 13), Color.White);
-            _ui.Text(b, $"{Mastery.Available} mastery · B", inner.X + 17, ly + 2, Bone); ly += 16;
+            if (_ui.Assets.Get("state_mastery_128") is { } mi) b.Draw(mi, new Rectangle(inner.X, ly, 12, 12), Color.White);
+            _ui.Text(b, $"{Mastery.Available} mastery · B", inner.X + 15, ly + 2, Bone); ly += 15;
         }
-        if (ChestCount == 0 && Mastery.Available == 0) _ui.Text(b, "No claims pending", inner.X, inner.Y + 2, Slate);
+        if (ChestCount == 0 && Mastery.Available == 0) _ui.Text(b, "No claims", inner.X, inner.Y + 2, Slate);
 
         // Expedition — region wave + live status.
-        inner = CleanPanel(b, new Rectangle(px, 172, pw, 40), "EXPEDITION");
+        inner = CleanPanel(b, new Rectangle(px, 178, pw, 46), "EXPEDITION");
         _ui.Text(b, $"Wave {_run!.Wave + 1}", inner.X, inner.Y + 2, Bone);
         _ui.TextRight(b, _mode == Mode.Downed ? "DOWN" : "ACTIVE", inner.Right, inner.Y + 2, _mode == Mode.Downed ? Ember : Verdant);
     }
@@ -636,17 +627,13 @@ public sealed class SoloExpeditionScreen
     /// the real replay multiplier, plus the AUTO HUNT state.</summary>
     private void DrawBattleControls(SpriteBatch b, Point mouse, bool clicked)
     {
-        var panel = new Rectangle(6, 180, 72, 50);
-        _ui.Fill(b, panel, new Color(0x12, 0x0F, 0x1C, 0xDC));
-        _ui.Fill(b, new Rectangle(panel.X, panel.Y, panel.Width, 1), PlateEdge);
-        _ui.Fill(b, new Rectangle(panel.X, panel.Bottom - 1, panel.Width, 1), PlateEdge);
-        _ui.Fill(b, new Rectangle(panel.X, panel.Y, 1, panel.Height), PlateEdge);
-        _ui.Fill(b, new Rectangle(panel.Right - 1, panel.Y, 1, panel.Height), PlateEdge);
+        var panel = new Rectangle(4, 172, 84, 58);
+        _ui.Panel(b, panel);   // ornate frame (matches the rest of the HUD)
 
-        _ui.Text(b, "BATTLE SPEED", panel.X + 5, panel.Y + 4, Slate);
+        _ui.Text(b, "SPEED", panel.X + 15, panel.Y + 10, Slate);
         for (var i = 0; i < SpeedSteps.Length; i++)
         {
-            var r = new Rectangle(panel.X + 5 + i * 16, panel.Y + 14, 14, 12);
+            var r = new Rectangle(panel.X + 15 + i * 14, panel.Y + 20, 12, 11);
             var on = Math.Abs(_speedMul - SpeedSteps[i]) < 0.01f;
             var hover = r.Contains(mouse);
             _ui.Fill(b, r, on ? Gold : hover ? new Color(0x2C, 0x25, 0x44) : new Color(0x1A, 0x14, 0x28));
@@ -654,10 +641,10 @@ public sealed class SoloExpeditionScreen
             if (clicked && hover) _speedMul = SpeedSteps[i];
         }
 
-        _ui.Text(b, "AUTO HUNT", panel.X + 5, panel.Y + 30, Slate);
-        _ui.Fill(b, new Rectangle(panel.X + 5, panel.Y + 40, 34, 9), new Color(0x1A, 0x30, 0x22));
-        _ui.Fill(b, new Rectangle(panel.X + 5, panel.Y + 40, 34, 1), Verdant * 0.7f);
-        _ui.TextCenter(b, "ON", panel.X + 22, panel.Y + 41, Verdant);
+        _ui.Text(b, "AUTO HUNT", panel.X + 15, panel.Y + 34, Slate);
+        _ui.Fill(b, new Rectangle(panel.X + 15, panel.Y + 44, 30, 9), new Color(0x1A, 0x30, 0x22));
+        _ui.Fill(b, new Rectangle(panel.X + 15, panel.Y + 44, 30, 1), Verdant * 0.7f);
+        _ui.TextCenter(b, "ON", panel.X + 30, panel.Y + 45, Verdant);
     }
 
     // The gear overlays register to the champion base's canvas; this is their back-to-front occlusion order.
