@@ -57,7 +57,7 @@ public sealed class PrestigeScreen
         var withDepth = tree.All.Select(u => (u, d: Depth(u.Id))).ToList();
         var maxD = withDepth.Max(x => x.d);
 
-        const int xL = 46, xR = 434, yT = 54, yB = 188;
+        const int xL = 184, xR = 1736, yT = 216, yB = 752;
         foreach (var col in withDepth.GroupBy(x => x.d).OrderBy(g => g.Key))
         {
             var d = col.Key;
@@ -81,10 +81,11 @@ public sealed class PrestigeScreen
         if (Pressed(keys, Keys.Down)) Move(1);
         if (Pressed(keys, Keys.Enter)) Buy(tree, _nodes[_cursor].U);
 
+        var hit = new Point(mouse.X * 4, mouse.Y * 4);
         for (var i = 0; i < _nodes.Count; i++)
         {
-            var hit = new Rectangle(_nodes[i].Pos.X - 9, _nodes[i].Pos.Y - 9, 18, 18);
-            if (UiKit.ClickedIn(hit, mouse, clicked)) { _cursor = i; Buy(tree, _nodes[i].U); }
+            var hitBox = new Rectangle(_nodes[i].Pos.X - 36, _nodes[i].Pos.Y - 36, 72, 72);
+            if (UiKit.ClickedIn(hitBox, hit, clicked)) { _cursor = i; Buy(tree, _nodes[i].U); }
         }
 
         _prevKeys = keys;
@@ -118,9 +119,9 @@ public sealed class PrestigeScreen
         var owned = tree.All.Count(u => tree.Owns(u.Id));
         _ui.Title(b, "MEMORY DUST", $"{owned} / {tree.All.Count} LIT");
         // Dust (and Gleam/Materials) are the shared currency pills top-right (Game1.DrawCurrencyPills).
-        _ui.TextRight(b, "NOTHING HERE EVER RESETS", 468, 22, Slate);
+        _ui.TextRight(b, "NOTHING HERE EVER RESETS", 1872, 88, Slate);
         var spent = tree.All.Where(u => tree.Owns(u.Id)).Sum(u => u.Cost);
-        _ui.Bar(b, 12, 34, 456, 4, (float)spent / tree.TotalTreeCost, Gold);
+        _ui.Bar(b, 48, 136, 1824, 16, (float)spent / tree.TotalTreeCost, Gold);
 
         // ═══ CONNECTOR LINES — the prerequisite constellation, drawn as dotted star-lines ══════════
         foreach (var (u, pos) in _nodes)
@@ -129,8 +130,8 @@ public sealed class PrestigeScreen
                 {
                     // A LIT path is a solid gold wire; an unwalked one stays a faint dotted trail.
                     var walked = tree.Owns(u.Id) && tree.Owns(reqId);
-                    if (walked) SolidLine(b, from, pos, Gold, 2);
-                    else if (tree.Owns(reqId)) SolidLine(b, from, pos, Slate, 1); // reachable next step
+                    if (walked) SolidLine(b, from, pos, Gold, 8);
+                    else if (tree.Owns(reqId)) SolidLine(b, from, pos, Slate, 4); // reachable next step
                     else DottedLine(b, from, pos, Dim);
                 }
 
@@ -143,46 +144,46 @@ public sealed class PrestigeScreen
             var selected = i == _cursor;
 
             var edge = isOwned ? Gold : buyable ? Bone : Slate;
-            var box = new Rectangle(pos.X - 11, pos.Y - 11, 22, 22);
+            var box = new Rectangle(pos.X - 44, pos.Y - 44, 88, 88);
 
             // Glow behind lit / buyable nodes (buyable ones breathe so they read as "you can take this").
             if (isOwned || buyable)
             {
-                var g = (int)(isOwned ? 4 : 2 + pulse * 4);
+                var g = (int)(isOwned ? 16 : 8 + pulse * 16);
                 _ui.Fill(b, new Rectangle(box.X - g, box.Y - g, box.Width + g * 2, box.Height + g * 2),
                     (isOwned ? Gold : Bloom) * 0.25f);
             }
 
             // Body + a full highlight border — this is what made them invisible before.
             _ui.Fill(b, box, isOwned ? new Color(0x3A, 0x2C, 0x10) : new Color(0x14, 0x13, 0x1C));
-            Border(b, box, edge, selected ? 2 : 1);
+            Border(b, box, edge, selected ? 8 : 4);
 
             // The icon inside.
             var icon = _ui.Assets.Get("ui_memory_dust");
-            var ib = new Rectangle(box.X + 4, box.Y + 4, 14, 14);
+            var ib = new Rectangle(box.X + 16, box.Y + 16, 56, 56);
             if (icon is not null) b.Draw(icon, ib, isOwned ? Gold : buyable ? Bone : new Color(0x50, 0x50, 0x5C));
-            else DrawDiamond(b, pos, 6, isOwned || buyable ? edge : Dim);
+            else DrawDiamond(b, pos, 24, isOwned || buyable ? edge : Dim);
 
-            if (selected) Reticle(b, new Rectangle(box.X - 3, box.Y - 3, box.Width + 6, box.Height + 6), Bone);
+            if (selected) Reticle(b, new Rectangle(box.X - 12, box.Y - 12, box.Width + 24, box.Height + 24), Bone);
         }
 
         // ═══ DETAIL BAR — the selected star ═══════════════════════════════════════════════════════
         var sel = _nodes[Math.Clamp(_cursor, 0, _nodes.Count - 1)].U;
         var selOwned = tree.Owns(sel.Id);
         var selBuyable = tree.CanUnlock(sel.Id);
-        _ui.Panel(b, new Rectangle(0, 200, 480, 32));
+        _ui.Panel(b, new Rectangle(0, 800, 1920, 128));
 
         // The bar is DARK glass, so it takes LIGHT text — it used to use dark parchment inks that were
         // invisible here. Buyable-ness shows in the gold cost; LIT is the earned gold the player chased.
-        _ui.Text(b, sel.Name, 10, 204, selOwned ? Gold : selBuyable ? Bone : Slate);
-        if (selOwned) _ui.TextRight(b, "LIT", 470, 204, Gold);
+        _ui.Text(b, sel.Name, 40, 816, selOwned ? Gold : selBuyable ? Bone : Slate);
+        if (selOwned) _ui.TextRight(b, "LIT", 1880, 816, Gold);
         else
         {
-            if (_ui.Assets.Get("ui_memory_dust") is { } d2) b.Draw(d2, new Rectangle(446, 204, 9, 9), selBuyable ? Bone : Dim);
-            _ui.TextRight(b, $"{sel.Cost}", 444, 204, selBuyable ? Gold : Slate);
+            if (_ui.Assets.Get("ui_memory_dust") is { } d2) b.Draw(d2, new Rectangle(1784, 816, 36, 36), selBuyable ? Bone : Dim);
+            _ui.TextRight(b, $"{sel.Cost}", 1776, 816, selBuyable ? Gold : Slate);
         }
-        _ui.Text(b, _msg.Length > 0 ? _msg : sel.Description, 10, 214, _msg.Length > 0 ? Gold : Bone);
-        _ui.TextRight(b, "CLICK A STAR TO LIGHT IT     P  BACK", 470, 224, Slate);
+        _ui.Text(b, _msg.Length > 0 ? _msg : sel.Description, 40, 856, _msg.Length > 0 ? Gold : Bone);
+        _ui.TextRight(b, "CLICK A STAR TO LIGHT IT     P  BACK", 1880, 896, Slate);
     }
 
     /// <summary>A full highlight border around a node — what makes it read as a clickable chip.</summary>
@@ -218,7 +219,7 @@ public sealed class PrestigeScreen
         {
             var x = a.X + (c.X - a.X) * s / steps;
             var y = a.Y + (c.Y - a.Y) * s / steps;
-            _ui.Fill(b, new Rectangle(x, y, 1, 1), col);
+            _ui.Fill(b, new Rectangle(x, y, 4, 4), col);
         }
     }
 
@@ -233,7 +234,7 @@ public sealed class PrestigeScreen
 
     private void Reticle(SpriteBatch b, Rectangle r, Color c)
     {
-        const int len = 5, t = 1;
+        const int len = 20, t = 4;
         _ui.Fill(b, new Rectangle(r.X, r.Y, len, t), c); _ui.Fill(b, new Rectangle(r.X, r.Y, t, len), c);
         _ui.Fill(b, new Rectangle(r.Right - len, r.Y, len, t), c); _ui.Fill(b, new Rectangle(r.Right - t, r.Y, t, len), c);
         _ui.Fill(b, new Rectangle(r.X, r.Bottom - t, len, t), c); _ui.Fill(b, new Rectangle(r.X, r.Bottom - len, t, len), c);

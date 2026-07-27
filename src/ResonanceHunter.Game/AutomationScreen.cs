@@ -247,11 +247,11 @@ public sealed class AutomationScreen
     private bool Pressed(KeyboardState now, Keys k) => now.IsKeyDown(k) && _prevKeys.IsKeyUp(k);
 
     // ── Layout ──────────────────────────────────────────────────────────────────────────────────
-    private static Rectangle Station(int i) => new(10 + i * 118, 34, 112, 114);
-    private static Rectangle PenChip(int i) => new(12 + i * 64, 170, 58, 40);
-    private static readonly Rectangle HatchBtn = new(330, 152, 138, 14);
-    private static readonly Rectangle WorkBtn = new(12, 220, 116, 14);
-    private static readonly Rectangle FeedBtn = new(132, 220, 60, 14);
+    private static Rectangle Station(int i) => new(40 + i * 472, 136, 448, 456);
+    private static Rectangle PenChip(int i) => new(48 + i * 256, 680, 232, 160);
+    private static readonly Rectangle HatchBtn = new(1320, 608, 552, 56);
+    private static readonly Rectangle WorkBtn = new(48, 880, 464, 56);
+    private static readonly Rectangle FeedBtn = new(528, 880, 240, 56);
 
     /// <summary>How many materials one press of FEED spends.</summary>
     private const int FeedPortion = 10;
@@ -278,9 +278,9 @@ public sealed class AutomationScreen
         c.Evolution.FeedMaterial(FeedPortion);
         _msg = "";
     }
-    private static readonly Rectangle EvolveBtn = new(196, 220, 70, 14);
-    private static readonly Rectangle StageMinus = new(372, 220, 16, 14);
-    private static readonly Rectangle StagePlus = new(452, 220, 16, 14);
+    private static readonly Rectangle EvolveBtn = new(784, 880, 280, 56);
+    private static readonly Rectangle StageMinus = new(1488, 880, 64, 56);
+    private static readonly Rectangle StagePlus = new(1808, 880, 64, 56);
 
     // ══════════════════════════════════════════════════════════════════════════════════════════
     public void Update(GameTime time, KeyboardState keys, Point mouse, bool clicked, int wheel, Region region, Hunter hunter)
@@ -308,24 +308,25 @@ public sealed class AutomationScreen
 
         if (clicked)
         {
-            if (UiKit.ClickedIn(HatchBtn, mouse, true)) Hatch();
+            var hit = new Point(mouse.X * 4, mouse.Y * 4);
+            if (UiKit.ClickedIn(HatchBtn, hit, true)) Hatch();
 
             for (var i = 0; i < Stations.Length; i++)
-                if (Station(i).Contains(mouse) && Occupant(region, i) is { } occ) _selectedId = occ.Id;
+                if (Station(i).Contains(hit) && Occupant(region, i) is { } occ) _selectedId = occ.Id;
 
             var pen = PenList(region);
             for (var i = 0; i < PenVisible && _penScroll + i < pen.Count; i++)
-                if (PenChip(i).Contains(mouse)) _selectedId = pen[_penScroll + i].Id;
+                if (PenChip(i).Contains(hit)) _selectedId = pen[_penScroll + i].Id;
 
             var sel = Selected;
             if (sel is not null)
             {
-                if (UiKit.ClickedIn(WorkBtn, mouse, true)) ToggleWork(region, sel);
-                if (UiKit.ClickedIn(FeedBtn, mouse, true)) Feed(sel, hunter);
-                if (UiKit.ClickedIn(EvolveBtn, mouse, true)) Evolve(region, sel);
+                if (UiKit.ClickedIn(WorkBtn, hit, true)) ToggleWork(region, sel);
+                if (UiKit.ClickedIn(FeedBtn, hit, true)) Feed(sel, hunter);
+                if (UiKit.ClickedIn(EvolveBtn, hit, true)) Evolve(region, sel);
             }
-            if (UiKit.ClickedIn(StageMinus, mouse, true)) region.AutomationStage = Math.Max(1, region.AutomationStage - 1);
-            if (UiKit.ClickedIn(StagePlus, mouse, true)) region.AutomationStage = Math.Min(3, region.AutomationStage + 1);
+            if (UiKit.ClickedIn(StageMinus, hit, true)) region.AutomationStage = Math.Max(1, region.AutomationStage - 1);
+            if (UiKit.ClickedIn(StagePlus, hit, true)) region.AutomationStage = Math.Min(3, region.AutomationStage + 1);
         }
 
         _prevKeys = keys;
@@ -361,15 +362,16 @@ public sealed class AutomationScreen
     {
         EnsureSelection(region);
         var pen = PenList(region);
+        var hit = new Point(mouse.X * 4, mouse.Y * 4);
 
         // ═══ HEADER + STATUS ═══════════════════════════════════════════════════════════════════════
         _ui.Title(b, "THE WARREN", MasteryNames[(int)region.MasteryLevel]);
         // Gleam/Dust/Materials are the shared currency pills top-right (Game1.DrawCurrencyPills).
 
         // Region-mastery progress — a full labelled bar (uiref_warren), not the old thin sliver.
-        _ui.Text(b, "MASTERY", 8, 20, Slate);
-        _ui.Bar(b, 66, 21, 320, 6, region.ProgressToNextLevel() ?? 1f, Gold);
-        _ui.TextRight(b, $"IDLE {region.IdleEfficiencyPercent():0}%", 468, 20, Slate);
+        _ui.Text(b, "MASTERY", 32, 80, Slate);
+        _ui.Bar(b, 264, 84, 1280, 24, region.ProgressToNextLevel() ?? 1f, Gold);
+        _ui.TextRight(b, $"IDLE {region.IdleEfficiencyPercent():0}%", 1872, 80, Slate);
 
         // Production toast — the payoff, made visible as it happens (rises and fades).
         if (_flash > 0f)
@@ -382,7 +384,7 @@ public sealed class AutomationScreen
             // thing AutomationYield.GleamForfeitedToCap was created to surface, and until now it never was.
             if (_flashYield.GleamForfeitedToCap > 0) parts.Add($"({_flashYield.GleamForfeitedToCap}g CAPPED)");
             if (parts.Count > 0)
-                _ui.TextCenter(b, string.Join("   ", parts), 240, (int)(150 - (1f - _flash / 1.7f) * 12), _flash > 0.5f ? Gold : Slate);
+                _ui.TextCenter(b, string.Join("   ", parts), 960, (int)(600 - (1f - _flash / 1.7f) * 48), _flash > 0.5f ? Gold : Slate);
         }
 
         // ═══ THE DEN — four role stations ══════════════════════════════════════════════════════════
@@ -395,44 +397,44 @@ public sealed class AutomationScreen
             if (isFilled) filled++;
 
             _ui.Fill(b, st, StallBg);
-            _ui.Fill(b, new Rectangle(st.X, st.Y, st.Width, 1), isFilled ? Gold : Slate);
-            _ui.Fill(b, new Rectangle(st.X, st.Bottom - 1, st.Width, 1), isFilled ? Gold : Dim);
+            _ui.Fill(b, new Rectangle(st.X, st.Y, st.Width, 4), isFilled ? Gold : Slate);
+            _ui.Fill(b, new Rectangle(st.X, st.Bottom - 4, st.Width, 4), isFilled ? Gold : Dim);
 
             // Role header — a gold diamond bullet + role name (uiref_warren), and a one-line purpose beneath.
-            _ui.Diamond(b, new Rectangle(st.X + 7, st.Y + 6, 8, 8), isFilled ? Gold : Slate);
-            _ui.Text(b, Stations[i].Label, st.X + 19, st.Y + 5, isFilled ? Gold : Slate);
-            _ui.Text(b, Stations[i].Sub, st.X + 8, st.Y + 15, Dim);
+            _ui.Diamond(b, new Rectangle(st.X + 28, st.Y + 24, 32, 32), isFilled ? Gold : Slate);
+            _ui.Text(b, Stations[i].Label, st.X + 76, st.Y + 20, isFilled ? Gold : Slate);
+            _ui.Text(b, Stations[i].Sub, st.X + 32, st.Y + 60, Dim);
 
-            var spriteBox = new Rectangle(st.X + 16, st.Y + 26, st.Width - 32, 60);
+            var spriteBox = new Rectangle(st.X + 64, st.Y + 104, st.Width - 128, 240);
             if (occ is not null)
             {
                 DrawCreature(b, spriteBox, occ, working: true);
-                _ui.Text(b, $"{occ.Source.ToString().ToUpperInvariant()}  T{occ.PowerTier}", st.X + 8, st.Bottom - 12, isFilled ? Bone : Ember);
-                if (occ.Id == _selectedId) Reticle(b, new Rectangle(st.X + 1, st.Y + 1, st.Width - 2, st.Height - 2), Bone);
+                _ui.Text(b, $"{occ.Source.ToString().ToUpperInvariant()}  T{occ.PowerTier}", st.X + 32, st.Bottom - 48, isFilled ? Bone : Ember);
+                if (occ.Id == _selectedId) Reticle(b, new Rectangle(st.X + 4, st.Y + 4, st.Width - 8, st.Height - 8), Bone);
             }
             else
             {
                 // Empty stall: a big dim role glyph and a clear call to action.
-                _ui.Icon(b, RoleIcon[Stations[i].Icon], new Rectangle(st.Center.X - 12, st.Y + 34, 24, 24), Dim);
-                _ui.TextCenter(b, "NEED", st.Center.X, st.Bottom - 12, Ember);
+                _ui.Icon(b, RoleIcon[Stations[i].Icon], new Rectangle(st.Center.X - 48, st.Y + 136, 96, 96), Dim);
+                _ui.TextCenter(b, "NEED", st.Center.X, st.Bottom - 48, Ember);
             }
         }
 
         // A refusal takes this line over — it is transient and the chain status is not urgent.
-        if (_msg.Length > 0) _ui.TextCenter(b, _msg, 240, 152, Ember);
+        if (_msg.Length > 0) _ui.TextCenter(b, _msg, 960, 608, Ember);
         else _ui.TextCenter(b, filled == 4 ? "CHAIN COMPLETE — FARM OPTIMIZED" : $"{filled} / 4 ROLES WORKING",
-            240, 152, filled == 4 ? Gold : Slate);
+            960, 608, filled == 4 ? Gold : Slate);
 
         // ═══ THE PEN — idle creatures + the hatchery ═══════════════════════════════════════════════
-        _ui.Fill(b, new Rectangle(6, 166, 468, 46), PenBg);
+        _ui.Fill(b, new Rectangle(24, 664, 1872, 184), PenBg);
         var idleLabel = pen.Count > PenVisible
             ? $"IDLE ({pen.Count})   SHOWING {_penScroll + 1}-{Math.Min(_penScroll + PenVisible, pen.Count)}  ( < > )"
             : $"IDLE ({pen.Count})";
-        _ui.Text(b, idleLabel, 12, 160, Slate);
-        _ui.Button(b, HatchBtn, $"HATCH A CORE  ({Cores})", mouse, clicked, enabled: Cores > 0); // acted on in Update
+        _ui.Text(b, idleLabel, 48, 640, Slate);
+        _ui.Button(b, HatchBtn, $"HATCH A CORE  ({Cores})", hit, clicked, enabled: Cores > 0); // acted on in Update
 
         if (_roster.Count == 0)
-            _ui.Text(b, "EVERY KILL DROPS A CORE — HATCH ONE, THEN FILL THE FOUR STATIONS ABOVE.", 12, 186, Dim);
+            _ui.Text(b, "EVERY KILL DROPS A CORE — HATCH ONE, THEN FILL THE FOUR STATIONS ABOVE.", 48, 744, Dim);
 
         for (var i = 0; i < PenVisible && _penScroll + i < pen.Count; i++)
         {
@@ -459,43 +461,43 @@ public sealed class AutomationScreen
             var detail = next.Edge is not null
                 ? next.Edge.Hint
                 : $"{sel.Source.ToString().ToUpperInvariant()} {sel.Role.ToString().ToUpperInvariant()}  ·  T{sel.PowerTier}";
-            _ui.Text(b, detail, 12, 213, Bone);
+            _ui.Text(b, detail, 48, 852, Bone);
 
-            _ui.Button(b, WorkBtn, assigned ? "SEND TO PEN" : "PUT TO WORK", mouse, clicked);
+            _ui.Button(b, WorkBtn, assigned ? "SEND TO PEN" : "PUT TO WORK", hit, clicked);
             if (evolvable)
             {
-                _ui.Button(b, FeedBtn, "FEED +10", mouse, clicked);
-                _ui.Button(b, EvolveBtn, "EVOLVE", mouse, clicked,
+                _ui.Button(b, FeedBtn, "FEED +10", hit, clicked);
+                _ui.Button(b, EvolveBtn, "EVOLVE", hit, clicked,
                     enabled: tree.EligibleBranch(sel.EvolutionNodeId, sel.Evolution!) is not null);
             }
         }
 
         // Automation stage — compact, on the right.
         var stageText = region.AutomationStage switch { 1 => "KILL", 2 => "KILL+KEEP", _ => "KILL+SELL" };
-        _ui.Text(b, $"STAGE {region.AutomationStage}/3", 300, 223, Slate);
-        _ui.Button(b, StageMinus, "-", mouse, clicked);
-        _ui.TextCenter(b, stageText, 420, 223, Slate);
-        _ui.Button(b, StagePlus, "+", mouse, clicked);
+        _ui.Text(b, $"STAGE {region.AutomationStage}/3", 1200, 892, Slate);
+        _ui.Button(b, StageMinus, "-", hit, clicked);
+        _ui.TextCenter(b, stageText, 1680, 892, Slate);
+        _ui.Button(b, StagePlus, "+", hit, clicked);
     }
 
     /// <summary>Draw a creature as a sprite (torso art, else a source-coloured critter + role glyph).</summary>
     private void DrawCreature(SpriteBatch b, Rectangle box, Creature c, bool working, bool selected = false, bool tag = false, bool needed = false)
     {
-        var bob = working ? (int)(MathF.Sin(_anim * 2.1f + box.X) * 2f) : 0;
+        var bob = working ? (int)(MathF.Sin(_anim * 2.1f + box.X) * 8f) : 0;
 
         if (selected) { _ui.Fill(b, box, StallBg); Reticle(b, box, Bone); }
         else if (needed)
         {
             // A gently breathing gold edge: "this worker fills an empty station."
             var a = 0.35f + 0.35f * MathF.Sin(_anim * 4f);
-            _ui.Fill(b, new Rectangle(box.X, box.Y, box.Width, 1), Gold * a);
-            _ui.Fill(b, new Rectangle(box.X, box.Bottom - 1, box.Width, 1), Gold * a);
+            _ui.Fill(b, new Rectangle(box.X, box.Y, box.Width, 4), Gold * a);
+            _ui.Fill(b, new Rectangle(box.X, box.Bottom - 4, box.Width, 4), Gold * a);
         }
 
         // Ground shadow so it stands, not floats.
-        _ui.Fill(b, new Rectangle(box.Center.X - box.Width / 4, box.Bottom - (tag ? 12 : 6), box.Width / 2, 4), GroundShadow);
+        _ui.Fill(b, new Rectangle(box.Center.X - box.Width / 4, box.Bottom - (tag ? 48 : 24), box.Width / 2, 16), GroundShadow);
 
-        var draw = new Rectangle(box.X, box.Y + bob, box.Width, box.Height - (tag ? 12 : 8));
+        var draw = new Rectangle(box.X, box.Y + bob, box.Width, box.Height - (tag ? 48 : 32));
 
         // Sprite pick, best-to-worst: a species-specific torso, else a role-generic worker sprite
         // tinted by the creature's Source colour, else a flat coloured critter. The middle path lets
@@ -515,23 +517,23 @@ public sealed class AutomationScreen
         }
         else
         {
-            var body = new Rectangle(draw.Center.X - 13, draw.Bottom - 24, 26, 22);
-            _ui.Fill(b, new Rectangle(body.X + 3, body.Y, body.Width - 6, body.Height), srcCol);
-            _ui.Fill(b, new Rectangle(body.X, body.Y + 4, body.Width, body.Height - 8), srcCol);
-            _ui.Icon(b, RoleIcon[c.Role], new Rectangle(body.Center.X - 7, body.Center.Y - 7, 14, 14), Bone);
+            var body = new Rectangle(draw.Center.X - 52, draw.Bottom - 96, 104, 88);
+            _ui.Fill(b, new Rectangle(body.X + 12, body.Y, body.Width - 24, body.Height), srcCol);
+            _ui.Fill(b, new Rectangle(body.X, body.Y + 16, body.Width, body.Height - 32), srcCol);
+            _ui.Icon(b, RoleIcon[c.Role], new Rectangle(body.Center.X - 28, body.Center.Y - 28, 56, 56), Bone);
         }
 
         // Small tier tag for pen chips (stations print their own detail line).
         if (tag)
         {
-            _ui.Icon(b, RoleIcon[c.Role], new Rectangle(box.X + 2, box.Bottom - 10, 9, 9));
-            _ui.Text(b, $"T{c.PowerTier}", box.X + 13, box.Bottom - 9, Slate);
+            _ui.Icon(b, RoleIcon[c.Role], new Rectangle(box.X + 8, box.Bottom - 40, 36, 36));
+            _ui.Text(b, $"T{c.PowerTier}", box.X + 52, box.Bottom - 36, Slate);
         }
     }
 
     private void Reticle(SpriteBatch b, Rectangle r, Color c)
     {
-        const int len = 5, t = 1;
+        const int len = 20, t = 4;
         _ui.Fill(b, new Rectangle(r.X, r.Y, len, t), c); _ui.Fill(b, new Rectangle(r.X, r.Y, t, len), c);
         _ui.Fill(b, new Rectangle(r.Right - len, r.Y, len, t), c); _ui.Fill(b, new Rectangle(r.Right - t, r.Y, t, len), c);
         _ui.Fill(b, new Rectangle(r.X, r.Bottom - t, len, t), c); _ui.Fill(b, new Rectangle(r.X, r.Bottom - len, t, len), c);

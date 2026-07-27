@@ -87,12 +87,12 @@ public sealed class StatsScreen
     };
 
     // ── Layout ─────────────────────────────────────────────────────────────────────────────────
-    private static readonly Rectangle ListPanel = new(6, 26, 200, 206);
-    private static readonly Rectangle DetailPanel = new(212, 26, 262, 150);
-    private static readonly Rectangle DpsPanel = new(212, 182, 262, 50);
+    private static readonly Rectangle ListPanel = new(24, 104, 800, 824);
+    private static readonly Rectangle DetailPanel = new(848, 104, 1048, 600);
+    private static readonly Rectangle DpsPanel = new(848, 728, 1048, 200);
 
-    private static Rectangle Row(int i) => new(ListPanel.X + 6, ListPanel.Y + 22 + i * 20, ListPanel.Width - 12, 18);
-    private static Rectangle TrainBtn(int i) { var r = Row(i); return new(r.Right - 48, r.Y + 3, 46, 16); }
+    private static Rectangle Row(int i) => new(ListPanel.X + 24, ListPanel.Y + 88 + i * 80, ListPanel.Width - 48, 72);
+    private static Rectangle TrainBtn(int i) { var r = Row(i); return new(r.Right - 192, r.Y + 12, 184, 64); }
 
     // ── Update ───────────────────────────────────────────────────────────────────────────────────
     public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, int wheel, Hunter hunter)
@@ -107,10 +107,11 @@ public sealed class StatsScreen
 
         if (!clicked) return;
 
+        var hit = new Point(mouse.X * 4, mouse.Y * 4);
         for (var i = 0; i < Stats.Length; i++)
         {
-            if (TrainBtn(i).Contains(mouse)) { TryTrain(hunter, Stats[i].Stat); _selected = i; return; }
-            if (Row(i).Contains(mouse)) { _selected = i; return; }
+            if (TrainBtn(i).Contains(hit)) { TryTrain(hunter, Stats[i].Stat); _selected = i; return; }
+            if (Row(i).Contains(hit)) { _selected = i; return; }
         }
     }
 
@@ -127,12 +128,13 @@ public sealed class StatsScreen
     // ── Draw ─────────────────────────────────────────────────────────────────────────────────────
     public void Draw(SpriteBatch b, Point mouse, Hunter hunter)
     {
-        _ui.Fill(b, new Rectangle(0, 0, 480, 270), Bg);
+        var hit = new Point(mouse.X * 4, mouse.Y * 4);
+        _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), Bg);
 
         _ui.Title(b, "COMMANDER STATS", $"LV {hunter.HunterLevel} · TRAIN WITH GLEAM");
         // Gleam/Dust/Materials come from the shared currency pills (Game1.DrawCurrencyPills).
 
-        DrawList(b, mouse, hunter);
+        DrawList(b, hit, hunter);
         DrawDetail(b, hunter);
         DrawDps(b);
 
@@ -142,10 +144,10 @@ public sealed class StatsScreen
         _ui.NavLegend(b);
     }
 
-    private void DrawList(SpriteBatch b, Point mouse, Hunter hunter)
+    private void DrawList(SpriteBatch b, Point hit, Hunter hunter)
     {
         _ui.Panel(b, ListPanel);
-        _ui.Text(b, "COMMANDER STATS", ListPanel.X + 6, ListPanel.Y + 8, Slate);
+        _ui.Text(b, "COMMANDER STATS", ListPanel.X + 24, ListPanel.Y + 32, Slate);
 
         for (var i = 0; i < Stats.Length; i++)
         {
@@ -154,17 +156,17 @@ public sealed class StatsScreen
             var sel = i == _selected;
             var btn = TrainBtn(i);
             var can = hunter.CanTrain(s.Stat);
-            var hot = btn.Contains(mouse) && can;
+            var hot = btn.Contains(hit) && can;
 
             _ui.Fill(b, row, sel ? RowHot : RowBg);
-            if (sel) _ui.Fill(b, new Rectangle(row.X, row.Y, 2, row.Height), Gold);
-            _ui.Text(b, s.Name, row.X + 6, row.Y + 3, sel ? Gold : Bone);
-            _ui.Text(b, s.Effect, row.X + 6, row.Y + 12, Slate);
-            _ui.TextRight(b, $"{(int)hunter.ValueOf(s.Stat)}", row.Right - 52, row.Y + 7, Sky);
+            if (sel) _ui.Fill(b, new Rectangle(row.X, row.Y, 8, row.Height), Gold);
+            _ui.Text(b, s.Name, row.X + 24, row.Y + 12, sel ? Gold : Bone);
+            _ui.Text(b, s.Effect, row.X + 24, row.Y + 48, Slate);
+            _ui.TextRight(b, $"{(int)hunter.ValueOf(s.Stat)}", row.Right - 208, row.Y + 28, Sky);
 
-            if (hunter.RankOf(s.Stat) >= 60) { _ui.TextRight(b, "MAX", btn.Right - 4, btn.Y + 4, Slate); continue; }
+            if (hunter.RankOf(s.Stat) >= 60) { _ui.TextRight(b, "MAX", btn.Right - 16, btn.Y + 16, Slate); continue; }
             _ui.Fill(b, btn, hot ? new Color(0x3A, 0x30, 0x14) : new Color(0x24, 0x20, 0x16));
-            _ui.TextCenter(b, $"+{hunter.NextRankCost(s.Stat)}", btn.Center.X, btn.Y + 4, can ? Gold : Dim);
+            _ui.TextCenter(b, $"+{hunter.NextRankCost(s.Stat)}", btn.Center.X, btn.Y + 16, can ? Gold : Dim);
         }
     }
 
@@ -173,34 +175,34 @@ public sealed class StatsScreen
         _ui.Panel(b, DetailPanel);
         var s = Stats[_selected];
 
-        _ui.Text(b, s.Name, DetailPanel.X + 10, DetailPanel.Y + 10, Gold);
-        _ui.TextRight(b, s.Effect, DetailPanel.Right - 10, DetailPanel.Y + 10, Sky);
+        _ui.Text(b, s.Name, DetailPanel.X + 40, DetailPanel.Y + 40, Gold);
+        _ui.TextRight(b, s.Effect, DetailPanel.Right - 40, DetailPanel.Y + 40, Sky);
 
         // The big current value.
-        _ui.Text(b, $"{(int)hunter.ValueOf(s.Stat)}", DetailPanel.X + 10, DetailPanel.Y + 24, Bone);
-        _ui.Text(b, $"RANK {hunter.RankOf(s.Stat)} / 60", DetailPanel.X + 44, DetailPanel.Y + 28, Slate);
+        _ui.Text(b, $"{(int)hunter.ValueOf(s.Stat)}", DetailPanel.X + 40, DetailPanel.Y + 96, Bone);
+        _ui.Text(b, $"RANK {hunter.RankOf(s.Stat)} / 60", DetailPanel.X + 176, DetailPanel.Y + 112, Slate);
 
-        var y = DetailPanel.Y + 52;
-        foreach (var line in s.Body) { _ui.Text(b, line, DetailPanel.X + 10, y, Bone); y += 11; }
+        var y = DetailPanel.Y + 208;
+        foreach (var line in s.Body) { _ui.Text(b, line, DetailPanel.X + 40, y, Bone); y += 44; }
 
         // The exact per-point promise, and where it stands right now.
-        _ui.Fill(b, new Rectangle(DetailPanel.X + 8, y + 4, DetailPanel.Width - 16, 1), Dim);
-        _ui.Text(b, s.PerPoint, DetailPanel.X + 10, y + 10, Slate);
-        _ui.Text(b, s.Readout(hunter), DetailPanel.X + 10, y + 22, new Color(0x6E, 0xC8, 0x7A));
+        _ui.Fill(b, new Rectangle(DetailPanel.X + 32, y + 16, DetailPanel.Width - 64, 4), Dim);
+        _ui.Text(b, s.PerPoint, DetailPanel.X + 40, y + 40, Slate);
+        _ui.Text(b, s.Readout(hunter), DetailPanel.X + 40, y + 88, new Color(0x6E, 0xC8, 0x7A));
 
         if (hunter.RankOf(s.Stat) < 60)
-            _ui.Text(b, $"NEXT RANK COSTS {hunter.NextRankCost(s.Stat)} GLEAM", DetailPanel.X + 10, DetailPanel.Bottom - 14, Gold);
+            _ui.Text(b, $"NEXT RANK COSTS {hunter.NextRankCost(s.Stat)} GLEAM", DetailPanel.X + 40, DetailPanel.Bottom - 56, Gold);
         else
-            _ui.Text(b, "MAXED — this stat is at its cap.", DetailPanel.X + 10, DetailPanel.Bottom - 14, Slate);
+            _ui.Text(b, "MAXED — this stat is at its cap.", DetailPanel.X + 40, DetailPanel.Bottom - 56, Slate);
     }
 
     private void DrawDps(SpriteBatch b)
     {
         _ui.Panel(b, DpsPanel, gold: true);
-        _ui.Text(b, "DAMAGE / SEC", DpsPanel.X + 10, DpsPanel.Y + 10, Slate);
-        _ui.Text(b, Short((long)MathF.Round(_readout.Dps)), DpsPanel.X + 10, DpsPanel.Y + 24, Ember);
-        _ui.TextRight(b, "VS DUMMY — TRAIN TO MOVE IT", DpsPanel.Right - 10, DpsPanel.Y + 26, Slate);
-        _ui.Text(b, $"OVER {_readout.Seconds:0}S AT FULL HP", DpsPanel.X + 10, DpsPanel.Bottom - 14, Slate);
+        _ui.Text(b, "DAMAGE / SEC", DpsPanel.X + 40, DpsPanel.Y + 40, Slate);
+        _ui.Text(b, Short((long)MathF.Round(_readout.Dps)), DpsPanel.X + 40, DpsPanel.Y + 96, Ember);
+        _ui.TextRight(b, "VS DUMMY — TRAIN TO MOVE IT", DpsPanel.Right - 40, DpsPanel.Y + 104, Slate);
+        _ui.Text(b, $"OVER {_readout.Seconds:0}S AT FULL HP", DpsPanel.X + 40, DpsPanel.Bottom - 56, Slate);
     }
 
     private static string Short(long n)

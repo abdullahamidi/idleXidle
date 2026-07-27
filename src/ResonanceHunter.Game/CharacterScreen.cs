@@ -61,10 +61,10 @@ public sealed class CharacterScreen
     public CharacterScreen(UiKit ui, ForgeScreen forge) { _ui = ui; _forge = forge; }
 
     // ── Layout: three columns so nothing is cramped; all end by y=232 to clear the shared nav bar. ────
-    private static readonly Rectangle DollPanel = new(6, 26, 146, 158);
-    private static readonly Rectangle DpsPanel = new(6, 188, 146, 44);
-    private static readonly Rectangle StatPanel = new(158, 26, 176, 206);
-    private static readonly Rectangle BagPanel = new(340, 26, 134, 206);
+    private static readonly Rectangle DollPanel = new(24, 104, 584, 632);
+    private static readonly Rectangle DpsPanel = new(24, 752, 584, 176);
+    private static readonly Rectangle StatPanel = new(632, 104, 704, 824);
+    private static readonly Rectangle BagPanel = new(1360, 104, 536, 824);
 
     // Eight slots: armour down the left, weapon + jewellery down the right, the champion between them.
     private static readonly GearSlot[] LeftSlots = { GearSlot.Helm, GearSlot.Chest, GearSlot.Gloves, GearSlot.Boots };
@@ -82,9 +82,9 @@ public sealed class CharacterScreen
         GearSlot.Chest, GearSlot.Gloves, GearSlot.Boots, GearSlot.Ring,
     };
 
-    private static readonly Rectangle SpriteBox = new(DollPanel.X + 44, DollPanel.Y + 18, 58, DollPanel.Height - 26);
-    private static Rectangle LeftSlotBox(int i) => new(DollPanel.X + 6, DollPanel.Y + 16 + i * 34, 28, 28);
-    private static Rectangle RightSlotBox(int i) => new(DollPanel.Right - 34, DollPanel.Y + 16 + i * 34, 28, 28);
+    private static readonly Rectangle SpriteBox = new(DollPanel.X + 176, DollPanel.Y + 72, 232, DollPanel.Height - 104);
+    private static Rectangle LeftSlotBox(int i) => new(DollPanel.X + 24, DollPanel.Y + 64 + i * 136, 112, 112);
+    private static Rectangle RightSlotBox(int i) => new(DollPanel.Right - 136, DollPanel.Y + 64 + i * 136, 112, 112);
 
     private static IEnumerable<(GearSlot Slot, Rectangle Box)> AllSlots()
     {
@@ -110,12 +110,12 @@ public sealed class CharacterScreen
         (HunterStat.Defense,           "DEFENSE",   "MITIGATE"),
         (HunterStat.Guile,             "GUILE",     "HAUL"),
     };
-    private static Rectangle StatRow(int i) => new(StatPanel.X + 6, StatPanel.Y + 24 + i * 20, StatPanel.Width - 12, 18);
-    private static Rectangle TrainBtn(int i) { var r = StatRow(i); return new(r.Right - 46, r.Y + 3, 44, 15); }
+    private static Rectangle StatRow(int i) => new(StatPanel.X + 24, StatPanel.Y + 96 + i * 80, StatPanel.Width - 48, 72);
+    private static Rectangle TrainBtn(int i) { var r = StatRow(i); return new(r.Right - 184, r.Y + 12, 176, 60); }
 
     private const int BagVisible = 7;   // a single readable column — full type + rarity words fit
     private int _bagScroll;
-    private static Rectangle BagCard(int vis) => new(BagPanel.X + 6, BagPanel.Y + 20 + vis * 24, BagPanel.Width - 12, 22);
+    private static Rectangle BagCard(int vis) => new(BagPanel.X + 24, BagPanel.Y + 80 + vis * 96, BagPanel.Width - 48, 88);
 
     private List<ItemInstance> Wearable()
         => _forge.Inventory.Where(i => Gear.SlotFor(i.BaseType) is not null).ToList();
@@ -123,6 +123,7 @@ public sealed class CharacterScreen
     // ── Update ───────────────────────────────────────────────────────────────────────────────────
     public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, int wheel, Hunter hunter)
     {
+        var hit = new Point(mouse.X * 4, mouse.Y * 4);
         var bag = Wearable();
 
         // Recompute the bench every frame — it is one deterministic wave sim, cheap for a menu, and
@@ -130,7 +131,7 @@ public sealed class CharacterScreen
         if (Loadout is not null && Tree is not null && Mastery is not null)
             _readout = DamageBench.Measure(Loadout.ToBuild(Tree, Mastery), hunter);
 
-        if (wheel != 0 && BagPanel.Contains(mouse))
+        if (wheel != 0 && BagPanel.Contains(hit))
         {
             var maxScroll = Math.Max(0, bag.Count - BagVisible);
             _bagScroll = Math.Clamp(_bagScroll - Math.Sign(wheel), 0, maxScroll);
@@ -140,7 +141,7 @@ public sealed class CharacterScreen
 
         // Take off a worn item by clicking its doll slot.
         foreach (var (slot, box) in AllSlots())
-            if (box.Contains(mouse) && hunter.Worn(slot) is { } worn)
+            if (box.Contains(hit) && hunter.Worn(slot) is { } worn)
             {
                 ToggleEquip(hunter, worn);
                 return;
@@ -154,7 +155,7 @@ public sealed class CharacterScreen
         {
             var idx = _bagScroll + vis;
             if (idx >= bag.Count) break;
-            if (BagCard(vis).Contains(mouse)) { ToggleEquip(hunter, bag[idx]); return; }
+            if (BagCard(vis).Contains(hit)) { ToggleEquip(hunter, bag[idx]); return; }
         }
     }
 
@@ -171,37 +172,38 @@ public sealed class CharacterScreen
     // ── Draw ─────────────────────────────────────────────────────────────────────────────────────
     public void Draw(SpriteBatch b, Point mouse, Hunter hunter)
     {
-        _ui.Fill(b, new Rectangle(0, 0, 480, 270), Bg);
+        var hit = new Point(mouse.X * 4, mouse.Y * 4);
+        _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), Bg);
 
         // Header band — CHARACTER, the gear score (average worn item level), then LV/POWER and Gleam.
         var wornItems = Slots.Select(hunter.Worn).OfType<ItemInstance>().ToList();
         var gearIl = wornItems.Count > 0 ? (int)Math.Round(wornItems.Average(i => i.ItemLevel)) : 0;
-        _ui.Diamond(b, new Rectangle(8, 5, 13, 13), new Color(0x5F, 0xE0, 0xC8));   // title gem, like the reference
-        _ui.Text(b, "CHAMPION GEAR", 26, 4, Gold);
-        _ui.Text(b, $"LV {hunter.HunterLevel} · POWER {hunter.PowerRating} · GEAR iL{gearIl}", 26, 14, Slate);
+        _ui.Diamond(b, new Rectangle(32, 20, 52, 52), new Color(0x5F, 0xE0, 0xC8));   // title gem, like the reference
+        _ui.Text(b, "CHAMPION GEAR", 104, 16, Gold);
+        _ui.Text(b, $"LV {hunter.HunterLevel} · POWER {hunter.PowerRating} · GEAR iL{gearIl}", 104, 56, Slate);
         // Gleam/Dust/Materials are drawn as the shared currency pills (Game1.DrawCurrencyPills).
 
-        DrawPaperDoll(b, mouse, hunter);
+        DrawPaperDoll(b, hit, hunter);
         DrawDps(b);
-        DrawStats(b, mouse, hunter);
-        DrawBag(b, mouse, hunter);
+        DrawStats(b, hit, hunter);
+        DrawBag(b, hit, hunter);
 
-        if (_hoverItem is { } hov) DrawItemTooltip(b, hov, hunter, mouse);
+        if (_hoverItem is { } hov) DrawItemTooltip(b, hov, hunter, hit);
 
         // No equip toast: the top-right is the shared currency row now, and the swap already shows itself —
         // the WORN badge lights, the doll re-dresses, POWER and DAMAGE/SEC update live.
         _ = _msg;
     }
 
-    private void DrawPaperDoll(SpriteBatch b, Point mouse, Hunter hunter)
+    private void DrawPaperDoll(SpriteBatch b, Point hit, Hunter hunter)
     {
         _ui.Panel(b, DollPanel);
-        _ui.Text(b, "GEAR", DollPanel.X + 6, DollPanel.Y + 6, Slate);
+        _ui.Text(b, "GEAR", DollPanel.X + 24, DollPanel.Y + 24, Slate);
 
         // The champion in the centre, DRESSED in whatever is equipped: a base body plus one overlay per worn
         // slot, every layer sharing the base's 800x1040 canvas so it registers when drawn into the same rect.
         // This is the whole point of the paper-doll — the gear you put on shows on the body, not just in a box.
-        _ui.Fill(b, new Rectangle(SpriteBox.X + 4, SpriteBox.Bottom - 3, SpriteBox.Width - 8, 3), Shadow);
+        _ui.Fill(b, new Rectangle(SpriteBox.X + 16, SpriteBox.Bottom - 12, SpriteBox.Width - 32, 12), Shadow);
         var baseTex = _ui.Assets.Get("hunter_idle");   // package_02 full-body pose (equipment overlays need per-pose tuning — deferred)
         if (baseTex is not null)
         {
@@ -215,21 +217,21 @@ public sealed class CharacterScreen
                     && _ui.Assets.Get($"overlay_{slot.ToString().ToLowerInvariant()}_idle") is { } ov)
                     b.Draw(ov, rect, Color.White);
         }
-        else _ui.Fill(b, new Rectangle(SpriteBox.Center.X - 8, SpriteBox.Bottom - 34, 16, 34), Gold);
+        else _ui.Fill(b, new Rectangle(SpriteBox.Center.X - 32, SpriteBox.Bottom - 136, 64, 136), Gold);
 
         // The eight worn slots, four each side — hexagons like the reference doll: a rarity rim, the item as
         // an element-tinted gem, the slot name beneath.
         foreach (var (slot, box) in AllSlots())
         {
-            var hot = box.Contains(mouse);
+            var hot = box.Contains(hit);
             var worn = hunter.Worn(slot);
             var rim = hot ? Gold : worn is { } wr ? RarityRim[(int)wr.Rarity] : new Color(0x39, 0x31, 0x52);
             _ui.Hex(b, box, rim);
-            _ui.Hex(b, new Rectangle(box.X + 2, box.Y + 2, box.Width - 4, box.Height - 4), new Color(0x16, 0x11, 0x28));
+            _ui.Hex(b, new Rectangle(box.X + 8, box.Y + 8, box.Width - 16, box.Height - 16), new Color(0x16, 0x11, 0x28));
             // Show the ACTUAL equipped piece (its own icon), not a generic gem — this is the reference doll.
             if (worn is { } w2)
-                _forge.DrawItemIcon(b, w2, new Rectangle(box.Center.X - 9, box.Center.Y - 10, 18, 18));
-            else _ui.TextCenter(b, "—", box.Center.X, box.Center.Y - 4, Dim);
+                _forge.DrawItemIcon(b, w2, new Rectangle(box.Center.X - 36, box.Center.Y - 40, 72, 72));
+            else _ui.TextCenter(b, "—", box.Center.X, box.Center.Y - 16, Dim);
             // Label BELOW the hex, bone-bright when filled — it used to sit inside the hex's bottom point
             // in dim Slate, where it clipped against the outline and could not be read.
             _ui.TextCenter(b, SlotAbbrev(slot), box.Center.X, box.Bottom, hot ? Gold : worn is not null ? Bone : Slate);
@@ -253,17 +255,17 @@ public sealed class CharacterScreen
     private void DrawDps(SpriteBatch b)
     {
         _ui.Panel(b, DpsPanel, gold: true);
-        _ui.Text(b, "DAMAGE / SEC", DpsPanel.X + 8, DpsPanel.Y + 7, Slate);
-        _ui.Text(b, Short((long)MathF.Round(_readout.Dps)), DpsPanel.X + 8, DpsPanel.Y + 20, Ember);
-        _ui.TextRight(b, "VS DUMMY", DpsPanel.Right - 8, DpsPanel.Y + 22, Slate);
-        _ui.Text(b, $"OVER {_readout.Seconds:0}S AT FULL HP", DpsPanel.X + 8, DpsPanel.Bottom - 12, Slate);
+        _ui.Text(b, "DAMAGE / SEC", DpsPanel.X + 32, DpsPanel.Y + 28, Slate);
+        _ui.Text(b, Short((long)MathF.Round(_readout.Dps)), DpsPanel.X + 32, DpsPanel.Y + 80, Ember);
+        _ui.TextRight(b, "VS DUMMY", DpsPanel.Right - 32, DpsPanel.Y + 88, Slate);
+        _ui.Text(b, $"OVER {_readout.Seconds:0}S AT FULL HP", DpsPanel.X + 32, DpsPanel.Bottom - 48, Slate);
     }
 
-    private void DrawStats(SpriteBatch b, Point mouse, Hunter hunter)
+    private void DrawStats(SpriteBatch b, Point hit, Hunter hunter)
     {
         _ui.Panel(b, StatPanel);
-        _ui.Text(b, "STATS", StatPanel.X + 6, StatPanel.Y + 8, Slate);
-        _ui.TextRight(b, "TRAIN ON V", StatPanel.Right - 6, StatPanel.Y + 8, Gold);
+        _ui.Text(b, "STATS", StatPanel.X + 24, StatPanel.Y + 32, Slate);
+        _ui.TextRight(b, "TRAIN ON V", StatPanel.Right - 24, StatPanel.Y + 32, Gold);
 
         // A READ-ONLY summary — the values only. Training lives on the STATS page (V) with full descriptions.
         for (var i = 0; i < Stats.Length; i++)
@@ -272,27 +274,27 @@ public sealed class CharacterScreen
             var row = StatRow(i);
 
             _ui.Fill(b, row, RowBg);
-            _ui.Text(b, label, row.X + 4, row.Y + 2, Bone);
-            _ui.Text(b, effect, row.X + 4, row.Y + 11, Slate);
-            _ui.TextRight(b, $"{(int)hunter.ValueOf(stat)}", row.Right - 6, row.Y + 6, Gold);
-            if (hunter.RankOf(stat) >= 60) _ui.TextRight(b, "MAX", row.Right - 34, row.Y + 6, Slate);
+            _ui.Text(b, label, row.X + 16, row.Y + 8, Bone);
+            _ui.Text(b, effect, row.X + 16, row.Y + 44, Slate);
+            _ui.TextRight(b, $"{(int)hunter.ValueOf(stat)}", row.Right - 24, row.Y + 24, Gold);
+            if (hunter.RankOf(stat) >= 60) _ui.TextRight(b, "MAX", row.Right - 136, row.Y + 24, Slate);
         }
     }
 
     private ItemInstance? _hoverItem;   // the bag item under the cursor this frame — its detail tooltip
 
-    private void DrawBag(SpriteBatch b, Point mouse, Hunter hunter)
+    private void DrawBag(SpriteBatch b, Point hit, Hunter hunter)
     {
         _ui.Panel(b, BagPanel);
         _hoverItem = null;
         var bag = Wearable();
-        _ui.Text(b, "BAG", BagPanel.X + 6, BagPanel.Y + 8, Slate);
-        _ui.TextRight(b, $"{bag.Count}", BagPanel.Right - 6, BagPanel.Y + 8, Dim);
+        _ui.Text(b, "BAG", BagPanel.X + 24, BagPanel.Y + 32, Slate);
+        _ui.TextRight(b, $"{bag.Count}", BagPanel.Right - 24, BagPanel.Y + 32, Dim);
 
         if (bag.Count == 0)
         {
-            _ui.TextCenter(b, "NO GEAR YET", BagPanel.Center.X, BagPanel.Y + 110, Dim);
-            _ui.TextCenter(b, "BOSSES DROP CHESTS", BagPanel.Center.X, BagPanel.Y + 122, Dim);
+            _ui.TextCenter(b, "NO GEAR YET", BagPanel.Center.X, BagPanel.Y + 440, Dim);
+            _ui.TextCenter(b, "BOSSES DROP CHESTS", BagPanel.Center.X, BagPanel.Y + 488, Dim);
             return;
         }
 
@@ -303,24 +305,24 @@ public sealed class CharacterScreen
             var item = bag[idx];
             var card = BagCard(vis);
             var worn = Gear.SlotFor(item.BaseType) is { } s && hunter.Worn(s)?.InstanceId == item.InstanceId;
-            var hot = card.Contains(mouse);
+            var hot = card.Contains(hit);
             if (hot) _hoverItem = item;
 
             _ui.Fill(b, card, hot ? RowHot : RowBg);
-            _forge.DrawItemIcon(b, item, new Rectangle(card.X + 3, card.Y + 3, 20, 20));
-            _ui.Text(b, SlotShort(item.BaseType), card.X + 28, card.Y + 4, worn ? Gold : Bone);
-            _ui.Text(b, RarityShort(item.Rarity), card.X + 28, card.Y + 14, RarityColor(item.Rarity));
-            _ui.TextRight(b, $"iL{item.ItemLevel}", card.Right - 4, card.Y + 4, Slate);
+            _forge.DrawItemIcon(b, item, new Rectangle(card.X + 12, card.Y + 12, 80, 80));
+            _ui.Text(b, SlotShort(item.BaseType), card.X + 112, card.Y + 16, worn ? Gold : Bone);
+            _ui.Text(b, RarityShort(item.Rarity), card.X + 112, card.Y + 56, RarityColor(item.Rarity));
+            _ui.TextRight(b, $"iL{item.ItemLevel}", card.Right - 16, card.Y + 16, Slate);
             // The idle affordance: a green UP when this beats what you have in its slot, answered before
             // the player even reads the stats.
-            if (worn) _ui.TextRight(b, "WORN", card.Right - 4, card.Y + 14, Gold);
+            if (worn) _ui.TextRight(b, "WORN", card.Right - 16, card.Y + 56, Gold);
             else if (Gear.SlotFor(item.BaseType) is { } sl && Gear.ItemScore(item) > Gear.ItemScore(hunter.Worn(sl)))
-                _ui.TextRight(b, "UP", card.Right - 4, card.Y + 14, new Color(0x6E, 0xC8, 0x7A));
+                _ui.TextRight(b, "UP", card.Right - 16, card.Y + 56, new Color(0x6E, 0xC8, 0x7A));
         }
 
         var below = bag.Count - (_bagScroll + BagVisible);
-        if (below > 0) _ui.TextRight(b, $"+{below} MORE - SCROLL", BagPanel.Right - 6, BagPanel.Bottom - 10, Dim);
-        else if (_bagScroll > 0) _ui.TextRight(b, "SCROLL UP", BagPanel.Right - 6, BagPanel.Bottom - 10, Dim);
+        if (below > 0) _ui.TextRight(b, $"+{below} MORE - SCROLL", BagPanel.Right - 24, BagPanel.Bottom - 40, Dim);
+        else if (_bagScroll > 0) _ui.TextRight(b, "SCROLL UP", BagPanel.Right - 24, BagPanel.Bottom - 40, Dim);
     }
 
     /// <summary>
@@ -329,7 +331,7 @@ public sealed class CharacterScreen
     /// passives (the trait trade and the enchant trigger) are shown for each; and it closes with the net
     /// power move. Answers "is this better, and in what way?" fully — not just on damage.
     /// </summary>
-    private void DrawItemTooltip(SpriteBatch b, ItemInstance item, Hunter hunter, Point mouse)
+    private void DrawItemTooltip(SpriteBatch b, ItemInstance item, Hunter hunter, Point hit)
     {
         var slot = Gear.SlotFor(item.BaseType);
         var equipped = slot is { } s ? hunter.Worn(s) : null;
@@ -349,51 +351,51 @@ public sealed class CharacterScreen
         var green = new Color(0x6E, 0xC8, 0x7A);
         var violet = new Color(0xC8, 0x8A, 0xE0);
 
-        const int w = 184;
+        const int w = 736;
         var contentRows = 1 /*NEW/WORN header*/ + Math.Max(1, stats.Count) + 2 /*two passive lines*/;
-        var h = 28 + contentRows * 10 + 14;
+        var h = 112 + contentRows * 40 + 56;
         // Grow LEFTWARD from the bag; clamp vertically so a tall card never runs off the canvas.
-        var x = BagPanel.X - w - 3;
-        var y = Math.Clamp(mouse.Y - 6, 26, 262 - h);
+        var x = BagPanel.X - w - 12;
+        var y = Math.Clamp(hit.Y - 24, 104, 1048 - h);
         var box = new Rectangle(x, y, w, h);
 
-        _ui.Fill(b, new Rectangle(box.X + 2, box.Y + 2, box.Width, box.Height), Shadow);
+        _ui.Fill(b, new Rectangle(box.X + 8, box.Y + 8, box.Width, box.Height), Shadow);
         _ui.Fill(b, box, new Color(0x14, 0x11, 0x1A));
-        _ui.Fill(b, new Rectangle(box.X, box.Y, box.Width, 1), RarityColor(item.Rarity));
+        _ui.Fill(b, new Rectangle(box.X, box.Y, box.Width, 4), RarityColor(item.Rarity));
 
         // Header — the NEW item's identity.
-        _ui.Text(b, $"{SlotShort(item.BaseType)}  iL{item.ItemLevel}", box.X + 6, box.Y + 6, Bone);
-        _ui.Text(b, RarityShort(item.Rarity), box.X + 6, box.Y + 16, RarityColor(item.Rarity));
+        _ui.Text(b, $"{SlotShort(item.BaseType)}  iL{item.ItemLevel}", box.X + 24, box.Y + 24, Bone);
+        _ui.Text(b, RarityShort(item.Rarity), box.X + 24, box.Y + 64, RarityColor(item.Rarity));
 
-        var colNew = box.Right - 52;   // right edge of the NEW value column
-        var colNow = box.Right - 6;    // right edge of the WORN value column
-        var ly = box.Y + 28;
+        var colNew = box.Right - 208;   // right edge of the NEW value column
+        var colNow = box.Right - 24;    // right edge of the WORN value column
+        var ly = box.Y + 112;
         _ui.TextRight(b, "NEW", colNew, ly, Slate);
         _ui.TextRight(b, equipped is null ? "EMPTY" : "WORN", colNow, ly, Slate);
-        ly += 10;
+        ly += 40;
 
         // Attributes — one aligned row per stat; the NEW value is green if it beats WORN, ember if worse.
-        if (stats.Count == 0) { _ui.Text(b, "NO ATTRIBUTES", box.X + 6, ly, Slate); ly += 10; }
+        if (stats.Count == 0) { _ui.Text(b, "NO ATTRIBUTES", box.X + 24, ly, Slate); ly += 40; }
         foreach (var st in stats)
         {
             var nv = newAff.GetValueOrDefault(st);
             var ev = eqAff.GetValueOrDefault(st);
             var col = nv > ev + 0.0001f ? green : nv < ev - 0.0001f ? Ember : Bone;
-            _ui.Text(b, StatShort(st), box.X + 6, ly, Slate);
+            _ui.Text(b, StatShort(st), box.X + 24, ly, Slate);
             _ui.TextRight(b, nv != 0 ? AffixVal(st, nv) : "—", colNew, ly, col);
             _ui.TextRight(b, ev != 0 ? AffixVal(st, ev) : "—", colNow, ly, Slate);
-            ly += 10;
+            ly += 40;
         }
 
         // Passives — trait trade + enchant. Names are too wide to column, so NEW on one row (trait gold,
         // enchant violet), the WORN piece's on the next in dim, to read the swap at a glance.
         var ntName = newTrait is { } nt ? GearTraits.NameOf(nt) : "—";
-        _ui.Text(b, ntName, box.X + 6, ly, newTrait is null ? Slate : Gold);
-        _ui.Text(b, "· " + (newEnch is { } ne ? ne.Name : "—"), box.X + 10 + _ui.Measure(ntName), ly,
+        _ui.Text(b, ntName, box.X + 24, ly, newTrait is null ? Slate : Gold);
+        _ui.Text(b, "· " + (newEnch is { } ne ? ne.Name : "—"), box.X + 40 + _ui.Measure(ntName), ly,
             newEnch is null ? Slate : violet);
-        ly += 10;
+        ly += 40;
         var etName = eqTrait is { } et ? GearTraits.NameOf(et) : "—";
-        _ui.Text(b, $"WAS  {etName} · {(eqEnch is { } ee ? ee.Name : "—")}", box.X + 6, ly, Slate);
+        _ui.Text(b, $"WAS  {etName} · {(eqEnch is { } ee ? ee.Name : "—")}", box.X + 24, ly, Slate);
 
         // Verdict — the net power move, coloured for the call.
         var delta = Gear.ItemScore(item) - Gear.ItemScore(equipped);
@@ -402,8 +404,8 @@ public sealed class CharacterScreen
             : delta > 0 ? ($"UPGRADE  +{delta} PWR", green)
             : delta < 0 ? ($"DOWNGRADE  {delta} PWR", Ember)
             : ("SIDEGRADE  =", Slate);
-        _ui.Fill(b, new Rectangle(box.X + 4, box.Bottom - 12, box.Width - 8, 1), Dim);
-        _ui.Text(b, verdict, box.X + 6, box.Bottom - 10, vColor);
+        _ui.Fill(b, new Rectangle(box.X + 16, box.Bottom - 48, box.Width - 32, 4), Dim);
+        _ui.Text(b, verdict, box.X + 24, box.Bottom - 40, vColor);
     }
 
     private static string StatShort(AffixStat s) => s switch
@@ -442,7 +444,7 @@ public sealed class CharacterScreen
 
     private void Reticle(SpriteBatch b, Rectangle r, Color c)
     {
-        const int len = 5, t = 1;
+        const int len = 20, t = 4;
         _ui.Fill(b, new Rectangle(r.X, r.Y, len, t), c); _ui.Fill(b, new Rectangle(r.X, r.Y, t, len), c);
         _ui.Fill(b, new Rectangle(r.Right - len, r.Y, len, t), c); _ui.Fill(b, new Rectangle(r.Right - t, r.Y, t, len), c);
         _ui.Fill(b, new Rectangle(r.X, r.Bottom - t, len, t), c); _ui.Fill(b, new Rectangle(r.X, r.Bottom - len, t, len), c);

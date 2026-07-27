@@ -109,8 +109,8 @@ public sealed class RigSpikeScreen
         new[]
         {
             new Bone { Id = "torso", Offset = Vec2.Zero },
-            new Bone { Id = "upper_arm", ParentId = "torso", Offset = new Vec2(0f, -18f) },
-            new Bone { Id = "forearm", ParentId = "upper_arm", Offset = new Vec2(22f, 0f) },
+            new Bone { Id = "upper_arm", ParentId = "torso", Offset = new Vec2(0f, -72f) },
+            new Bone { Id = "forearm", ParentId = "upper_arm", Offset = new Vec2(88f, 0f) },
         },
         snapSteps);
 
@@ -145,27 +145,27 @@ public sealed class RigSpikeScreen
     {
         var t = _hold ? WorstFrameSeconds : _time;
         var pose = _strike.Sample(t);
-        var scale = _zoom ? 4f : 1f;
+        var scale = _zoom ? 16f : 4f;
 
         // Zooming magnifies the pixels themselves (PointClamp), which is how you actually SEE
         // edge crawl rather than merely suspect it.
-        DrawRig(batch, _snappedRig, pose, new Vec2(120f, 165f), useSnapped: true, scale);
-        DrawRig(batch, _smoothRig, pose, new Vec2(340f, 165f), useSnapped: false, scale);
+        DrawRig(batch, _snappedRig, pose, new Vec2(480f, 660f), useSnapped: true, scale);
+        DrawRig(batch, _smoothRig, pose, new Vec2(1360f, 660f), useSnapped: false, scale);
 
-        Fill(batch, new Rectangle(239, 30, 1, 200), ColdSlate);
+        Fill(batch, new Rectangle(956, 120, 4, 800), ColdSlate);
 
-        Fill(batch, new Rectangle(80, 36, 80, 5), HearthGold);   // SNAPPED
-        Fill(batch, new Rectangle(300, 36, 80, 5), ColdSlate);   // CONTINUOUS
+        Fill(batch, new Rectangle(320, 144, 320, 20), HearthGold);   // SNAPPED
+        Fill(batch, new Rectangle(1200, 144, 320, 20), ColdSlate);   // CONTINUOUS
 
         for (var i = 0; i < _snapSteps && i < 64; i++)
-            Fill(batch, new Rectangle(60 + i * 5, 250, 3, 8), i % 4 == 0 ? HearthGold : BoneParchment);
+            Fill(batch, new Rectangle(240 + i * 20, 1000, 12, 32), i % 4 == 0 ? HearthGold : BoneParchment);
 
         var striking = t is >= 0.60f and <= 0.75f;
-        Fill(batch, new Rectangle(20, 20, 12, 12), striking ? EmberThreat : ColdSlate);
+        Fill(batch, new Rectangle(80, 80, 48, 48), striking ? EmberThreat : ColdSlate);
 
-        Fill(batch, new Rectangle(60, 236, 360, 2), ColdSlate);
-        var head = (int)(360f * Math.Clamp(t / _strike.DurationSeconds, 0f, 1f));
-        Fill(batch, new Rectangle(60 + head, 233, 2, 8), EmberThreat);
+        Fill(batch, new Rectangle(240, 944, 1440, 8), ColdSlate);
+        var head = (int)(1440f * Math.Clamp(t / _strike.DurationSeconds, 0f, 1f));
+        Fill(batch, new Rectangle(240 + head, 932, 8, 32), EmberThreat);
     }
 
     private void DrawRig(
@@ -194,7 +194,7 @@ public sealed class RigSpikeScreen
                 effects: SpriteEffects.None,
                 layerDepth: 0f);
 
-            Fill(batch, new Rectangle((int)bt.Position.X - 1, (int)bt.Position.Y - 1, 3, 3), EmberThreat);
+            Fill(batch, new Rectangle((int)bt.Position.X - 4, (int)bt.Position.Y - 4, 12, 12), EmberThreat);
         }
     }
 

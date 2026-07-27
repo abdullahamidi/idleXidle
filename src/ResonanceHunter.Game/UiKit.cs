@@ -367,7 +367,10 @@ public sealed class UiKit
         // Every button surface is dark or deep-green, so the label is always LIGHT — bright cream on hover
         // for feedback, dim when disabled. (No more dark-ink-on-hover; that was the unreadable flip.)
         var label3 = !enabled ? new Color(0x7C, 0x76, 0x88) : hover ? new Color(0xF6, 0xEA, 0xC6) : Bone;
-        Font.DrawCentered(b, label, r.Center.X, r.Center.Y - 3, label3);
+        // The pixel font is drawn 1:1 in the ×4 canvas (s==1) or ×4 in the ×1 native canvas (s==4), so the
+        // label keeps the SAME physical size either way. The vertical nudge scales with it.
+        var s = 4 / Scale;
+        Font.DrawCentered(b, label, r.Center.X, r.Center.Y - 3 * s, label3, s);
         return enabled && hover && clicked;
     }
 
@@ -457,8 +460,12 @@ public sealed class UiKit
     /// <summary>The reference's screen header: a turquoise gem, the title, and an optional subtitle.</summary>
     public void Title(SpriteBatch b, string title, string? sub = null)
     {
-        Diamond(b, new Rectangle(8, 5, 13, 13), new Color(0x5F, 0xE0, 0xC8));
-        Text2.Draw(b, title, 26, sub is null ? 6 : 4, new Color(0xF0, 0xB2, 0x4A));
-        if (sub is not null) Text2.Draw(b, sub, 26, 14, new Color(0x8A, 0x82, 0xA0));
+        // Baked 480-space coords → physical, scaled for the active canvas transform: s==1 at ×4 (480 screens,
+        // unchanged), s==4 at ×1 (native-1920 screens). Text2's glyph SIZE is already scale-invariant; only the
+        // POSITION literals need this. Keeps the header pixel-identical across the coordinate migration.
+        var s = 4 / Scale;
+        Diamond(b, new Rectangle(8 * s, 5 * s, 13 * s, 13 * s), new Color(0x5F, 0xE0, 0xC8));
+        Text2.Draw(b, title, 26 * s, (sub is null ? 6 : 4) * s, new Color(0xF0, 0xB2, 0x4A));
+        if (sub is not null) Text2.Draw(b, sub, 26 * s, 14 * s, new Color(0x8A, 0x82, 0xA0));
     }
 }

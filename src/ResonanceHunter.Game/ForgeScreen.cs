@@ -113,7 +113,7 @@ public sealed class ForgeScreen
     private const int Visible = Cols * VisRows;      // loot cards shown at once
 
     /// <summary>Grid rectangle for the visible card at slot <paramref name="vis"/> (0..Visible-1).</summary>
-    private static Rectangle Card(int vis) => new(16 + vis % Cols * 58, 56 + vis / Cols * 43, 56, 40);
+    private static Rectangle Card(int vis) => new(64 + vis % Cols * 232, 224 + vis / Cols * 172, 224, 160);
 
     // ── Loot FILTER. A bag of ninety across eight slots plus four material tiers is a haystack; the filter
     //    lets the player narrow it to what they came for. The grid, cursor and scroll all walk the FILTERED
@@ -269,8 +269,9 @@ public sealed class ForgeScreen
         if (Pressed(keys, Keys.J)) SalvageJunk(hunter);   // one press clears the Common/Uncommon clutter to Scrap
 
         // ── Mouse: click a loot card to make it active. ──
+        var hit = new Point(mouse.X * 4, mouse.Y * 4);
         for (var vis = 0; vis < Visible && _scroll + vis < view.Count; vis++)
-            if (UiKit.ClickedIn(Card(vis), mouse, clicked)) { _cursor = _scroll + vis; _msg = ""; }
+            if (UiKit.ClickedIn(Card(vis), hit, clicked)) { _cursor = _scroll + vis; _msg = ""; }
 
         // Action-button clicks are handled in Draw (where the SpriteBatch and button rects exist);
         // a click on a button rect and a click on a card never overlap, so this is unambiguous.
@@ -673,6 +674,9 @@ public sealed class ForgeScreen
 
     public void Draw(SpriteBatch b, Hunter hunter, Point mouse, bool clicked)
     {
+        // Every rect is authored ×4 (1920×1080) and rendered at scale 1, so hit-tests take the mouse ×4.
+        var hit = new Point(mouse.X * 4, mouse.Y * 4);
+
         // ── Header — a gem-title on the left, the chest pile in the centre. Gleam + Materials are the
         //    shared currency pills top-right now (Game1.DrawCurrencyPills). ─────────────────────────────
         _ui.Title(b, "THE FORGE", "SELL · MERGE · REFORGE");
@@ -682,29 +686,29 @@ public sealed class ForgeScreen
         if (_chests.Count > 0)
         {
             var best = _chests.Max(c => (int)c.Rarity);
-            _ui.Text(b, $"{_chests.Count} CHEST{(_chests.Count == 1 ? "" : "S")}", 10, 25, RarityColors[best]);
-            if (_ui.Button(b, new Rectangle(72, 22, 42, 15), "OPEN", mouse, clicked)) OpenBestChest(hunter);
-            if (_ui.Button(b, new Rectangle(118, 22, 60, 15), "OPEN ALL", mouse, clicked)) OpenAllChests(hunter);
+            _ui.Text(b, $"{_chests.Count} CHEST{(_chests.Count == 1 ? "" : "S")}", 40, 100, RarityColors[best]);
+            if (_ui.Button(b, new Rectangle(288, 88, 168, 60), "OPEN", hit, clicked)) OpenBestChest(hunter);
+            if (_ui.Button(b, new Rectangle(472, 88, 240, 60), "OPEN ALL", hit, clicked)) OpenAllChests(hunter);
         }
         else
-            _ui.Text(b, "NO CHESTS", 10, 25, Slate);
+            _ui.Text(b, "NO CHESTS", 40, 100, Slate);
 
         // ── Inventory — a loot-card grid, not a text list ────────────────────────────────────────
-        _ui.Panel(b, new Rectangle(8, 40, 250, 148));
+        _ui.Panel(b, new Rectangle(32, 160, 1000, 592));
         var view = View();
-        _ui.Text(b, $"LOOT ({view.Count})", 14, 44, InkFaint);
+        _ui.Text(b, $"LOOT ({view.Count})", 56, 176, InkFaint);
 
         // FILTER cycle — narrows a haystack of ninety to one slot or rarity. TAB cycles too. Rides the
         // toolbar row, right of the chest controls.
-        if (_ui.Button(b, new Rectangle(184, 22, 72, 15), FilterName(_filter), mouse, clicked))
+        if (_ui.Button(b, new Rectangle(736, 88, 288, 60), FilterName(_filter), hit, clicked))
             CycleFilter(1);
         if (view.Count > Visible)
-            _ui.TextRight(b, $"{_scroll / Cols + 1}/{(view.Count + Cols - 1) / Cols}", 250, 44, InkFaint);
+            _ui.TextRight(b, $"{_scroll / Cols + 1}/{(view.Count + Cols - 1) / Cols}", 1000, 176, InkFaint);
 
         if (_inv.Count == 0)
-            _ui.Text(b, "EMPTY — GO HUNT SOMETHING.", 16, 66, Dim);
+            _ui.Text(b, "EMPTY — GO HUNT SOMETHING.", 64, 264, Dim);
         else if (view.Count == 0)
-            _ui.Text(b, $"NOTHING MATCHES {FilterName(_filter)} — TAB TO CHANGE.", 16, 66, Dim);
+            _ui.Text(b, $"NOTHING MATCHES {FilterName(_filter)} — TAB TO CHANGE.", 64, 264, Dim);
 
         for (var vis = 0; vis < Visible && _scroll + vis < view.Count; vis++)
         {
@@ -717,39 +721,39 @@ public sealed class ForgeScreen
 
             // Card body: a dark cell edged in the item's rarity colour.
             _ui.Fill(b, card, active ? new Color(0x2A, 0x24, 0x14) : new Color(0x16, 0x14, 0x1C));
-            _ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, 1), rarity);
-            _ui.Fill(b, new Rectangle(card.X, card.Bottom - 1, card.Width, 1), active ? Gold : rarity * 0.5f);
+            _ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, 4), rarity);
+            _ui.Fill(b, new Rectangle(card.X, card.Bottom - 4, card.Width, 4), active ? Gold : rarity * 0.5f);
 
             // The item icon, big and centred.
-            DrawItemIcon(b, item, new Rectangle(card.Center.X - 13, card.Y + 4, 26, 26));
-            _ui.TextCenter(b, $"{item.SellValue}g", card.Center.X, card.Bottom - 10, Gold);
+            DrawItemIcon(b, item, new Rectangle(card.Center.X - 52, card.Y + 16, 104, 104));
+            _ui.TextCenter(b, $"{item.SellValue}g", card.Center.X, card.Bottom - 40, Gold);
 
-            if (queued) _ui.TextCenter(b, "*", card.Right - 6, card.Y + 2, Gold);   // in the merge tray
+            if (queued) _ui.TextCenter(b, "*", card.Right - 24, card.Y + 8, Gold);   // in the merge tray
 
             // The upgrade-at-a-glance signal — the same green UP the Character bag shows, now on the loot
             // grid where the whole haul actually lives, so you no longer click every card to learn its worth.
             if (Gear.SlotFor(item.BaseType) is { } sl && !IsWorn(hunter, item)
                 && Gear.ItemScore(item) > Gear.ItemScore(hunter.Worn(sl)))
-                _ui.Text(b, "UP", card.X + 3, card.Y + 2, new Color(0x6E, 0xC8, 0x7A));
+                _ui.Text(b, "UP", card.X + 12, card.Y + 8, new Color(0x6E, 0xC8, 0x7A));
 
             if (active) Reticle(b, card, Bone);
         }
 
         // ── Action panel ───────────────────────────────────────────────────────────────────────
-        _ui.Panel(b, new Rectangle(264, 22, 208, 138));
+        _ui.Panel(b, new Rectangle(1056, 88, 832, 552));
         var act = Active;
         if (act is null)
-            _ui.Text(b, "PICK AN ITEM ON THE LEFT.", 272, 30, InkFaint);
+            _ui.Text(b, "PICK AN ITEM ON THE LEFT.", 1088, 120, InkFaint);
         else
         {
-            DrawItemIcon(b, act, new Rectangle(272, 30, 16, 16));
+            DrawItemIcon(b, act, new Rectangle(1088, 120, 64, 64));
 
             // The ELEMENT is part of the item's name, because it is part of what the item IS — and it
             // is what the Source matchup and the Forge's carry-through rule both read. An element the
             // player cannot see is an element they cannot plan around.
             var element = act.Element is { } el ? $"{el.ToString().ToUpperInvariant()} " : "";
             var title = $"{RarityNames[(int)act.Rarity]} {element}{ItemNames[act.BaseType]}";
-            _ui.Text(b, title, 292, 33, RarityInk[(int)act.Rarity]);
+            _ui.Text(b, title, 1168, 132, RarityInk[(int)act.Rarity]);
 
             // The trait rides the same row — but only if it FITS. Measured, not estimated: at 480x270
             // "LEGENDARY MACHINE WEAPON" and "WARDING" want the same pixels, and I have already shipped
@@ -758,9 +762,9 @@ public sealed class ForgeScreen
             if (GearTraits.TraitOf(act) is { } tr)
             {
                 var traitName = GearTraits.NameOf(tr);
-                var titleEnd = 292 + _ui.Measure(title);
-                var traitStart = 464 - _ui.Measure(traitName);
-                if (traitStart > titleEnd + 4) _ui.TextRight(b, traitName, 464, 33, InkGold);
+                var titleEnd = 1168 + _ui.Measure(title);
+                var traitStart = 1856 - _ui.Measure(traitName);
+                if (traitStart > titleEnd + 16) _ui.TextRight(b, traitName, 1856, 132, InkGold);
             }
 
             // The ENCHANTMENT gets its own line: it is a sentence about WHEN, not a number, and it is
@@ -770,8 +774,8 @@ public sealed class ForgeScreen
                 // FIXED COLUMNS. Right-aligning the blurb was not enough: with a long name the two ends
                 // met in the middle and rendered as one word ("SPLINTERON A KILL"). A column each means
                 // neither can grow into the other, whatever the name.
-                _ui.Text(b, ench.Name, 272, 141, Bloom);
-                _ui.Text(b, ench.Blurb, 344, 141, Ink);
+                _ui.Text(b, ench.Name, 1088, 564, Bloom);
+                _ui.Text(b, ench.Blurb, 1376, 564, Ink);
 
                 // The loot philosophy, made visible: a Form-combo enchantment is LIVE only if your build
                 // runs its Form. Gold "COMBOS YOUR BUILD" when it fits; a grey "NEEDS … IN YOUR BUILD"
@@ -780,7 +784,7 @@ public sealed class ForgeScreen
                 {
                     var live = ActiveForms.Contains(need);
                     _ui.Text(b, live ? "COMBOS YOUR BUILD" : $"NEEDS {need.ToString().ToUpperInvariant()} IN YOUR BUILD",
-                        272, 152, live ? InkGold : InkFaint);
+                        1088, 608, live ? InkGold : InkFaint);
                 }
             }
 
@@ -790,31 +794,31 @@ public sealed class ForgeScreen
             // EQUIP is the headline action now — gear is the Hunter's power curve.
             if (wearable)
             {
-                var eq = new Rectangle(272, 50, 192, 18);
-                if (_ui.Button(b, eq, worn ? "TAKE OFF" : $"EQUIP   {GearBlurb(act)}", mouse, clicked))
+                var eq = new Rectangle(1088, 200, 768, 72);
+                if (_ui.Button(b, eq, worn ? "TAKE OFF" : $"EQUIP   {GearBlurb(act)}", hit, clicked))
                     ToggleEquip(hunter, act);
             }
 
-            var row = wearable ? 72 : 50;
-            var sell = new Rectangle(272, row, 92, 18);
-            var dis = new Rectangle(372, row, 92, 18);
-            var feed = new Rectangle(272, row + 22, 92, 18);
-            var add = new Rectangle(372, row + 22, 92, 18);
+            var row = wearable ? 288 : 200;
+            var sell = new Rectangle(1088, row, 368, 72);
+            var dis = new Rectangle(1488, row, 368, 72);
+            var feed = new Rectangle(1088, row + 88, 368, 72);
+            var add = new Rectangle(1488, row + 88, 368, 72);
 
             // A worn item must be taken off before it can be sold or scrapped.
-            if (_ui.Button(b, sell, $"SELL  +{act.SellValue}g", mouse, clicked, enabled: !worn)) Sell(hunter, act);
-            if (_ui.Button(b, dis, $"DISMANTLE +{Forge.Dismantle(act, Tuning)} MAT", mouse, clicked, enabled: !worn))
+            if (_ui.Button(b, sell, $"SELL  +{act.SellValue}g", hit, clicked, enabled: !worn)) Sell(hunter, act);
+            if (_ui.Button(b, dis, $"DISMANTLE +{Forge.Dismantle(act, Tuning)} MAT", hit, clicked, enabled: !worn))
                 Dismantle(hunter, act);
 
             // FEED — the third fate of unwanted loot, and the one that was never built. Efficient
             // (full rate) but COMMITTED: it all goes into one creature, right now. Dismantle is the
             // reverse trade — lossy, but liquid. Neither dominates, which is the whole point.
             var canFeed = !worn && FeedTarget?.Evolution is not null;
-            if (_ui.Button(b, feed, canFeed ? $"FEED +{Forge.Feed(act, Tuning)}" : "FEED", mouse, clicked, enabled: canFeed))
+            if (_ui.Button(b, feed, canFeed ? $"FEED +{Forge.Feed(act, Tuning)}" : "FEED", hit, clicked, enabled: canFeed))
                 Feed(hunter, act);
 
             var queued = _merge.Contains(act.InstanceId);
-            if (_ui.Button(b, add, queued ? "UNQUEUE" : "MERGE (3→1)", mouse, clicked, enabled: !worn))
+            if (_ui.Button(b, add, queued ? "UNQUEUE" : "MERGE (3→1)", hit, clicked, enabled: !worn))
                 ToggleMerge(hunter, act);
         }
 
@@ -823,26 +827,26 @@ public sealed class ForgeScreen
         if (Active is { } sel)
         {
             var affixes = ItemAffixes.Of(sel);
-            _ui.Text(b, $"iL{sel.ItemLevel}   {(affixes.Count > 0 ? "AFFIXES" : "NO AFFIXES")}", 272, 118, InkFaint);
+            _ui.Text(b, $"iL{sel.ItemLevel}   {(affixes.Count > 0 ? "AFFIXES" : "NO AFFIXES")}", 1088, 472, InkFaint);
             for (var i = 0; i < affixes.Count; i++)
-                _ui.Text(b, ItemAffixes.Describe(affixes[i]), 272 + i % 2 * 98, 128 + i / 2 * 10, InkGold);
+                _ui.Text(b, ItemAffixes.Describe(affixes[i]), 1088 + i % 2 * 392, 512 + i / 2 * 40, InkGold);
         }
-        _ui.TextRight(b, $"POWER {hunter.PowerRating}", 464, 120, InkGold);
+        _ui.TextRight(b, $"POWER {hunter.PowerRating}", 1856, 480, InkGold);
 
         // ── Merge tray ─────────────────────────────────────────────────────────────────────────
-        _ui.Panel(b, new Rectangle(264, 164, 208, 46));
-        _ui.Text(b, "MERGE TRAY", 272, 167, InkFaint);
+        _ui.Panel(b, new Rectangle(1056, 656, 832, 184));
+        _ui.Text(b, "MERGE TRAY", 1088, 668, InkFaint);
 
         var picked = _inv.Where(i => _merge.Contains(i.InstanceId)).ToList();
         for (var i = 0; i < 3; i++)
         {
-            var slot = new Rectangle(272 + i * 22, 178, 18, 18);
+            var slot = new Rectangle(1088 + i * 88, 712, 72, 72);
             _ui.Panel(b, slot);
-            if (i < picked.Count) DrawItemIcon(b, picked[i], new Rectangle(slot.X + 2, slot.Y + 2, 14, 14));
+            if (i < picked.Count) DrawItemIcon(b, picked[i], new Rectangle(slot.X + 8, slot.Y + 8, 56, 56));
         }
 
         var ready = MergeReady();
-        var mergeBtn = new Rectangle(344, 176, 120, 15);
+        var mergeBtn = new Rectangle(1376, 704, 480, 60);
 
         if (picked.Count == 3 && ready)
         {
@@ -855,25 +859,25 @@ public sealed class ForgeScreen
             // HYBRID; colour carries it, as it does for every other state on these screens.
             var (type, element, isHybrid) = Forge.Preview(picked);
             var attune = element is { } e ? $"{e.ToString().ToUpperInvariant()} " : "";
-            _ui.TextRight(b, $"-> {attune}{ItemNames[type]}", 464, 167,
+            _ui.TextRight(b, $"-> {attune}{ItemNames[type]}", 1856, 668,
                 isHybrid ? Bloom : RarityInk[(int)(picked[0].Rarity + 1)]);
         }
         else if (picked.Count == 3)
         {
-            _ui.TextRight(b, "SAME RARITY ONLY", 464, 167, InkFaint);
+            _ui.TextRight(b, "SAME RARITY ONLY", 1856, 668, InkFaint);
         }
 
-        if (_ui.Button(b, mergeBtn, "MERGE", mouse, clicked, enabled: ready)) DoMerge(hunter);
+        if (_ui.Button(b, mergeBtn, "MERGE", hit, clicked, enabled: ready)) DoMerge(hunter);
 
         // Fusing three-at-a-time by hand out of a bag of ninety is busywork. One button does the lot.
-        var autoBtn = new Rectangle(344, 193, 120, 15);
+        var autoBtn = new Rectangle(1376, 772, 480, 60);
         // The button is live only when a REAL trio exists: three distinct-id, non-worn wearables of one
         // sub-Legendary rarity. Counting raw items (materials, duplicate copies) lit it up when nothing
         // could actually merge — the "it won't merge though there's stuff to merge" the player hit.
         var anyTrio = _inv.Where(i => Gear.IsWearable(i) && !IsWorn(hunter, i))
                           .DistinctBy(i => i.InstanceId)
                           .GroupBy(i => i.Rarity).Any(g => g.Key != Rarity.Legendary && g.Count() >= 3);
-        if (_ui.Button(b, autoBtn, "AUTO-MERGE ALL", mouse, clicked, enabled: anyTrio)) AutoMergeAll(hunter);
+        if (_ui.Button(b, autoBtn, "AUTO-MERGE ALL", hit, clicked, enabled: anyTrio)) AutoMergeAll(hunter);
 
         // ── REFORGE — spend MATERIALS to re-roll the selected item's passives (RNG). This is what makes
         // an item CUSTOMISABLE: churn the trait toward the trade your build wants, or commit to re-rolling
@@ -887,7 +891,7 @@ public sealed class ForgeScreen
             // REFINE spends SCRAP + Gold to raise the level. Each tier drains through its own verb.
             var tCost = ReforgeTuning.Default.TraitCostFor(act.Rarity);
             var canTrait = !isWorn && hunter.MaterialOf(Material.Essence) >= tCost;
-            if (_ui.Button(b, new Rectangle(264, 214, 66, 15), $"TRAIT {tCost}E", mouse, clicked, enabled: canTrait))
+            if (_ui.Button(b, new Rectangle(1056, 856, 264, 60), $"TRAIT {tCost}E", hit, clicked, enabled: canTrait))
                 DoReforgeTrait(hunter, act);
 
             var hasEnch = act.Rarity >= Enchantments.MinimumRarity;
@@ -895,7 +899,7 @@ public sealed class ForgeScreen
             var eCost = ReforgeTuning.Default.EnchantCostFor(act.Rarity);
             var canEnch = !isWorn && hasEnch && hunter.MaterialOf(eTier) >= eCost;
             var eLabel = hasEnch ? $"ENCH {eCost}{(eTier == Material.Crystal ? "X" : "C")}" : "ENCH --";
-            if (_ui.Button(b, new Rectangle(334, 214, 66, 15), eLabel, mouse, clicked, enabled: canEnch))
+            if (_ui.Button(b, new Rectangle(1336, 856, 264, 60), eLabel, hit, clicked, enabled: canEnch))
                 DoReforgeEnchant(hunter, act);
 
             // REFINE spends SCRAP + Gold for +1 level. Holding SHIFT turns it into GREATER REFINE — one
@@ -909,20 +913,20 @@ public sealed class ForgeScreen
             var canRefine = !isWorn && (doGreat
                 ? hunter.Gleam >= greater.Gold
                 : hunter.MaterialOf(Material.Scrap) >= refine.Scrap && hunter.Gleam >= refine.Gold);
-            if (_ui.Button(b, new Rectangle(404, 214, 66, 15), doGreat ? "REFINE +5" : "REFINE +1", mouse, clicked, enabled: canRefine))
+            if (_ui.Button(b, new Rectangle(1616, 856, 264, 60), doGreat ? "REFINE +5" : "REFINE +1", hit, clicked, enabled: canRefine))
             {
                 if (doGreat) DoGreaterRefine(hunter, act); else DoRefine(hunter, act);
             }
         }
 
         // ── Message + footer ── in the strip under the loot panel (the nav owns the very bottom now) ──
-        if (_msg.Length > 0) _ui.Text(b, _msg, 12, 194, _msgColor);
+        if (_msg.Length > 0) _ui.Text(b, _msg, 48, 776, _msgColor);
         // The footer teaches Shift+Refine exactly when it becomes usable — the moment a Crystal is on hand.
         // A hint for an action you cannot take yet is noise; one that appears the instant you can is a tutor.
         // BACK is dropped — the nav bar teaches it now.
         _ui.Text(b, hunter.MaterialOf(Material.Crystal) >= 1
             ? "SHIFT+REFINE = +5 FOR A CRYSTAL   ·   J  SALVAGE JUNK"
-            : "CLICK AN ITEM, THEN A BUTTON   ·   J  SALVAGE JUNK", 12, 208, Slate);
+            : "CLICK AN ITEM, THEN A BUTTON   ·   J  SALVAGE JUNK", 48, 832, Slate);
 
         DrawReveal(b);   // the chest-open burst, on top of everything
     }
@@ -944,32 +948,32 @@ public sealed class ForgeScreen
         var grade = RarityColors[(int)_revealGrade];
 
         // Dim the Forge behind, so the eye goes to the burst.
-        _ui.Fill(b, new Rectangle(0, 0, 480, 270), new Color(0, 0, 0, (int)(150 * fade)));
+        _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0, 0, 0, (int)(150 * fade)));
 
         // A dark reward card edged in the chest's grade colour.
-        var card = new Rectangle(150, 84, 180, 104);
+        var card = new Rectangle(600, 336, 720, 416);
         _ui.Fill(b, card, new Color(0x16, 0x14, 0x1C) * fade);
-        _ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, 2), grade * fade);
-        _ui.Fill(b, new Rectangle(card.X, card.Bottom - 2, card.Width, 2), grade * fade);
+        _ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, 8), grade * fade);
+        _ui.Fill(b, new Rectangle(card.X, card.Bottom - 8, card.Width, 8), grade * fade);
 
-        _ui.TextCenter(b, $"{RarityNames[(int)_revealGrade]} CHEST", 240, 92, grade * fade);
+        _ui.TextCenter(b, $"{RarityNames[(int)_revealGrade]} CHEST", 960, 368, grade * fade);
 
         // The items that popped, big and framed by their own rarity.
         var n = _revealItems.Count;
         for (var i = 0; i < n; i++)
-            DrawItemIcon(b, _revealItems[i], new Rectangle(240 - n * 17 + i * 34, 108, 30, 30));
+            DrawItemIcon(b, _revealItems[i], new Rectangle(960 - n * 68 + i * 136, 432, 120, 120));
 
         var names = n == 0
             ? "SOLD ON SIGHT (FILTER)"
             : string.Join("   ", _revealItems.Select(it => $"{RarityNames[(int)it.Rarity]} {ItemNames[it.BaseType]}"));
         var nameColor = n > 0 ? RarityColors[_revealItems.Max(it => (int)it.Rarity)] : Slate;
-        _ui.TextCenter(b, names, 240, 146, nameColor * fade);
-        _ui.TextCenter(b, $"+{_revealMaterials} MATERIALS", 240, 160, Gold * fade);
+        _ui.TextCenter(b, names, 960, 584, nameColor * fade);
+        _ui.TextCenter(b, $"+{_revealMaterials} MATERIALS", 960, 640, Gold * fade);
     }
 
     private void Reticle(SpriteBatch b, Rectangle r, Color c)
     {
-        const int len = 5, t = 1;
+        const int len = 20, t = 4;
         _ui.Fill(b, new Rectangle(r.X, r.Y, len, t), c); _ui.Fill(b, new Rectangle(r.X, r.Y, t, len), c);
         _ui.Fill(b, new Rectangle(r.Right - len, r.Y, len, t), c); _ui.Fill(b, new Rectangle(r.Right - t, r.Y, t, len), c);
         _ui.Fill(b, new Rectangle(r.X, r.Bottom - t, len, t), c); _ui.Fill(b, new Rectangle(r.X, r.Bottom - len, t, len), c);
@@ -988,7 +992,7 @@ public sealed class ForgeScreen
         var glyph = TraitGlyph(item) ?? ItemThumb(item);
         if (glyph is not null)
         {
-            var pad = frame is null ? 0 : Math.Max(1, box.Width * 15 / 100);
+            var pad = frame is null ? 0 : Math.Max(4, box.Width * 15 / 100);
             b.Draw(glyph, new Rectangle(box.X + pad, box.Y + pad, box.Width - 2 * pad, box.Height - 2 * pad), Color.White);
             DrawSourceGem(b, item, box);
             DrawEnchantAccent(b, item, box);
@@ -1012,7 +1016,7 @@ public sealed class ForgeScreen
     /// <summary>The item's Source gem, top-left (package_05 source_&lt;element&gt;). Skipped on tiny boxes.</summary>
     private void DrawSourceGem(SpriteBatch b, ItemInstance item, Rectangle box)
     {
-        if (box.Width < 20 || item.Element is not { } el) return;
+        if (box.Width < 80 || item.Element is not { } el) return;
         if (_ui.Assets.Get($"source_{el.ToString().ToLowerInvariant()}") is not { } sg) return;
         var s = box.Width * 2 / 5;
         b.Draw(sg, new Rectangle(box.X, box.Y, s, s), Color.White);
@@ -1021,7 +1025,7 @@ public sealed class ForgeScreen
     /// <summary>A small corner glyph for the item's enchantment (Rare+ only). Skipped on tiny boxes.</summary>
     private void DrawEnchantAccent(SpriteBatch b, ItemInstance item, Rectangle box)
     {
-        if (box.Width < 22 || Enchantments.Of(item) is not { } ench) return;
+        if (box.Width < 88 || Enchantments.Of(item) is not { } ench) return;
         if (_ui.Assets.Get($"ench_{ench.Kind.ToString().ToLowerInvariant()}") is not { } g) return;
         var s = box.Width * 2 / 5;
         b.Draw(g, new Rectangle(box.Right - s, box.Bottom - s, s, s), Color.White);

@@ -1259,8 +1259,9 @@ public class Game1 : Game
 
     /// <summary>The counter-scale the active screen draws at. Converted 1920-coord screens return 1; the
     /// HUNT screen is converted, so it returns 1 whenever no other screen flag is set (the else branch below).</summary>
-    private int ScreenScale() => (_showSpike || _showForge || _showWorld || _showPrestige
-        || _showAutomation || _showBuild || _showCharacter || _showStats) ? 4 : 1;
+    // Every screen now authors in true 1920×1080 at canvas scale 1 (the migration is complete). This shim
+    // stays only so step 5 can flip the global constants and delete it in one place; it is now a constant 1.
+    private int ScreenScale() => 1;
 
     // ══════════════════════════════════════════════════════════════════════════════════════════
     protected override void Draw(GameTime gameTime)
@@ -1498,12 +1499,12 @@ public class Game1 : Game
     [
         // A serpentine path across the map: the lower row runs left-to-right, then the journey climbs and
         // the upper row runs right-to-left, so six regions fit and the route reads as a single winding climb.
-        new(24, 184, 106, 36),   // region 0
-        new(187, 184, 106, 36),  // region 1
-        new(350, 184, 106, 36),  // region 2
-        new(350, 110, 106, 36),  // region 3
-        new(187, 110, 106, 36),  // region 4
-        new(24, 110, 106, 36),   // region 5
+        new(96, 736, 424, 144),    // region 0   (×4 of 480-space 24,184,106,36)
+        new(748, 736, 424, 144),   // region 1
+        new(1400, 736, 424, 144),  // region 2
+        new(1400, 440, 424, 144),  // region 3
+        new(748, 440, 424, 144),   // region 4
+        new(96, 440, 424, 144),    // region 5
     ];
 
     private void UpdateWorld()
@@ -1515,7 +1516,7 @@ public class Game1 : Game
         if (Pressed(Keys.D)) DeepenCorruption(); // keyboard/gamepad path for the deepen button
 
         for (var i = 0; i < n; i++)
-            if (UiKit.ClickedIn(RegionNodes[i], CanvasMouse, MouseClicked)) { _worldCursor = i; SelectWorldNode(i); }
+            if (UiKit.ClickedIn(RegionNodes[i], ChromeMouse, MouseClicked)) { _worldCursor = i; SelectWorldNode(i); }
     }
 
     /// <summary>Push the fully-conquered world one corruption tier deeper: harder, richer, permanent.</summary>
@@ -1552,9 +1553,9 @@ public class Game1 : Game
             var bpt = RegionNodes[i + 1].Center;
             var color = _world.IsConquered(Regions.All[i].Id) ? Gold : Dim;
             if (a.X != bpt.X)
-                _batch.Draw(_pixel, new Rectangle(Math.Min(a.X, bpt.X), a.Y, Math.Abs(bpt.X - a.X), 2), color);
+                _batch.Draw(_pixel, new Rectangle(Math.Min(a.X, bpt.X), a.Y, Math.Abs(bpt.X - a.X), 8), color);
             if (a.Y != bpt.Y)
-                _batch.Draw(_pixel, new Rectangle(bpt.X, Math.Min(a.Y, bpt.Y), 2, Math.Abs(bpt.Y - a.Y)), color);
+                _batch.Draw(_pixel, new Rectangle(bpt.X, Math.Min(a.Y, bpt.Y), 8, Math.Abs(bpt.Y - a.Y)), color);
         }
 
         for (var i = 0; i < n; i++)
@@ -1572,43 +1573,43 @@ public class Game1 : Game
                 "umbral_reach" => "icon_region_umbral",
                 _ => "icon_region_verdant",
             };
-            _ui.Icon(_batch, emblem, new Rectangle(node.Center.X - 9, node.Y - 21, 18, 18),
+            _ui.Icon(_batch, emblem, new Rectangle(node.Center.X - 36, node.Y - 84, 72, 72),
                 unlocked ? Color.White : new Color(0x55, 0x55, 0x60));
 
             _ui.Panel(_batch, node, gold: active || conquered);
             // Gold plate (active/conquered) takes near-black; the dark plates take light text.
-            _ui.TextCenter(_batch, def.Name, node.Center.X, node.Y + 6,
+            _ui.TextCenter(_batch, def.Name, node.Center.X, node.Y + 24,
                 active || conquered ? new Color(0x20, 0x16, 0x06) : unlocked ? Bone : Slate);
 
             var status = conquered ? "CONQUERED" : !unlocked ? "LOCKED" : active ? "HERE NOW" : "AVAILABLE";
-            _ui.TextCenter(_batch, status, node.Center.X, node.Y + 18, conquered ? Gold : !unlocked ? Dim : active ? Gold : Bone);
+            _ui.TextCenter(_batch, status, node.Center.X, node.Y + 72, conquered ? Gold : !unlocked ? Dim : active ? Gold : Bone);
 
             // A small mastery pip-track for conquered/active regions.
             if (unlocked)
             {
                 var farm = _world.RegionFarm(def.Id);
-                _ui.Bar(_batch, node.X + 8, node.Bottom - 8, node.Width - 16, 4, (int)farm.MasteryLevel / 3f, Gold);
+                _ui.Bar(_batch, node.X + 32, node.Bottom - 32, node.Width - 64, 16, (int)farm.MasteryLevel / 3f, Gold);
             }
 
-            if (i == _worldCursor) Reticle(new Rectangle(node.X - 3, node.Y - 3, node.Width + 6, node.Height + 6), Bone);
+            if (i == _worldCursor) Reticle(new Rectangle(node.X - 12, node.Y - 12, node.Width + 24, node.Height + 24), Bone);
         }
 
         // In the clear band between the two node rows, so it never overlaps a region panel.
-        if (_conquerMsg.Length > 0) _ui.TextCenter(_batch, _conquerMsg, 240, 158, Gold);
+        if (_conquerMsg.Length > 0) _ui.TextCenter(_batch, _conquerMsg, 960, 632, Gold);
 
         // Endgame: once the whole world is conquered, offer to deepen the corruption — tougher fights,
         // richer Memory Dust, forever. A real button (works by mouse) with a keyboard shortcut (D).
         if (_world.CanDeepenCorruption)
         {
-            var btn = new Rectangle(140, 168, 200, 14);   // in the inter-row band, clear of the node panels
+            var btn = new Rectangle(560, 672, 800, 56);   // in the inter-row band, clear of the node panels
             if (_ui.Button(_batch, btn, $"DEEPEN THE CORRUPTION  {_world.CorruptionTier}→{_world.CorruptionTier + 1}  [D]",
-                    CanvasMouse, MouseClicked))
+                    ChromeMouse, MouseClicked))
                 DeepenCorruption();
         }
 
         // One footer line, clear of the nav shelf. Was two rows at y=250/260 — both buried under the nav.
         // Conquest is measured in waves held (ConquerWaveDepth); the nav bar already teaches W  BACK.
-        _ui.TextCenter(_batch, $"CLICK A REGION TO TRAVEL  ·  HOLD {ConquerWaveDepth} WAVES TO CONQUER IT AND UNLOCK THE NEXT", 240, 228, Slate);
+        _ui.TextCenter(_batch, $"CLICK A REGION TO TRAVEL  ·  HOLD {ConquerWaveDepth} WAVES TO CONQUER IT AND UNLOCK THE NEXT", 960, 912, Slate);
     }
 
     private void DrawHelp()
