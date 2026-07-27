@@ -265,6 +265,10 @@ public sealed class SoloExpeditionScreen
             return;
         }
 
+        // Hold the fight until the new enemy has finished sliding in — otherwise the champion swings at empty
+        // air while the enemy is still off to the right ("hunter hits before the enemy arrives").
+        if (_enemyEnter > 0f) return;
+
         _playheadMs += dt * 1000f * PlaybackSpeed;
 
         var lead = _nextEnemyStrikeMs - _playheadMs;
@@ -383,10 +387,11 @@ public sealed class SoloExpeditionScreen
         // telegraph. Falls back to the package_03/04 static key poses for enemies/bosses without a strip.
         var bob = (int)(MathF.Sin(_anim * 2f) * 2f);
         var attacking = _enemyWindup > 0f;
-        var boxW = isBossWave ? (int)(ebox.Width * 1.3f) : ebox.Width;
-        var boxH = isBossWave ? (int)(ebox.Height * 1.45f) : ebox.Height - 6;
-        var ab = new Rectangle(ebox.Center.X - boxW / 2, ebox.Bottom - 4 + bob - boxH, boxW, boxH);
-        var crop = isBossWave ? 0.20f : 0.08f;   // bosses have big top padding + streak artifacts to trim
+        var boxW = isBossWave ? (int)(ebox.Width * 1.15f) : ebox.Width;
+        var boxH = isBossWave ? (int)(ebox.Height * 1.25f) : ebox.Height - 6;
+        var figTop = ebox.Bottom - 4 - boxH;   // stable top of the drawn figure (no bob) — anchors the bar/label
+        var ab = new Rectangle(ebox.Center.X - boxW / 2, figTop + bob, boxW, boxH);
+        var crop = isBossWave ? 0.22f : 0.08f;   // bosses have big top padding + streak artifacts to trim
 
         string? stripKey = null, staticKey = null;
         var fps = attacking ? 16f : isBossWave ? 10f : 12f;
@@ -422,11 +427,13 @@ public sealed class SoloExpeditionScreen
         if (_enemyWindup > 0f)
         {
             var r = (int)(4 + _enemyWindup * 8);
-            Outline(b, new Rectangle(ebox.X - r, ebox.Y - r, ebox.Width + r * 2, ebox.Height + r * 2), Ember, 1);
+            Outline(b, new Rectangle(ab.X - r, figTop - r, ab.Width + r * 2, boxH + r * 2), Ember, 1);
         }
-        _ui.BarArt(b, new Rectangle(ebox.X + 6, ebox.Y - 10, ebox.Width - 12, 6), _replay.EnemyHealthFraction, Ember);
+        // HP bar + BOSS label ride just above the ACTUAL figure top, so they scale with the boss.
+        var barW = isBossWave ? boxW - 8 : ebox.Width - 12;
+        _ui.BarArt(b, new Rectangle(ebox.Center.X - barW / 2, figTop - 9, barW, 6), _replay.EnemyHealthFraction, Ember);
         if (_run.LastWaveWasBoss || isBossWave)
-            _ui.TextCenterBig(b, "BOSS", ebox.Center.X, ebox.Y - 22, Gold, 10);
+            _ui.TextCenterBig(b, "BOSS", ebox.Center.X, figTop - 21, Gold, 10);
 
         // ── The champion (arena left). Name/HP now live in the top-left HUD. ──
         var push = (int)(_champLunge * 10f);
@@ -563,11 +570,11 @@ public sealed class SoloExpeditionScreen
         for (var i = 0; i < n; i++)
         {
             var box = new Rectangle(x0 + i * (d + gap), y, d, d);
-            var inner = new Rectangle(box.X + 3, box.Y + 3, box.Width - 6, box.Height - 6);
             if (i < skills.Count)
             {
                 var s = skills[i];
-                _ui.Fill(b, inner, new Color(0x18, 0x14, 0x22) * 0.95f);
+                // Ornate round medallion (its own centre), then the source glyph on top — NO square fill
+                // behind it (that showed dark corners around the round frame).
                 if (_ui.Assets.Get("ui_medallion_round") is { } mfr) b.Draw(mfr, box, Color.White);
                 if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } g)
                     b.Draw(g, new Rectangle(box.X + 8, box.Y + 7, box.Width - 16, box.Height - 14), Color.White);
@@ -577,7 +584,6 @@ public sealed class SoloExpeditionScreen
             }
             else
             {
-                _ui.Fill(b, inner, Dim * 0.6f);
                 if (_ui.Assets.Get("ui_medallion_round") is { } mfr) b.Draw(mfr, box, Color.White * 0.5f);
                 _ui.TextCenter(b, i == skills.Count ? "+B" : "—", box.Center.X, box.Center.Y - 3, Dim);
             }
@@ -588,9 +594,8 @@ public sealed class SoloExpeditionScreen
     private void DrawSpeedDial(SpriteBatch b)
     {
         var dial = new Rectangle(10, 190, 30, 30);
-        _ui.Fill(b, new Rectangle(dial.X + 3, dial.Y + 3, dial.Width - 6, dial.Height - 6), new Color(0x18, 0x14, 0x22) * 0.95f);
+        if (_ui.Assets.Get("ui_medallion_round") is { } mfr) b.Draw(mfr, dial, Color.White);   // frame first
         _ui.TextCenter(b, "AUTO", dial.Center.X, dial.Center.Y - 3, Gold);
-        if (_ui.Assets.Get("ui_medallion_round") is { } mfr) b.Draw(mfr, dial, Color.White);
         _ui.Text(b, $"x{PlaybackSpeed:0.0}", dial.Right + 6, dial.Center.Y - 6, Bone);
         _ui.Text(b, "SPEED", dial.Right + 6, dial.Center.Y + 3, Slate);
     }
@@ -604,23 +609,15 @@ public sealed class SoloExpeditionScreen
 
     private void DrawChampion(SpriteBatch b, Rectangle box, bool dead)
     {
-        _ui.Fill(b, new Rectangle(box.X + 6, box.Bottom - 8, box.Width - 12, 3), Shadow);
+        _ui.Fill(b, new Rectangle(box.X + 10, box.Bottom - 5, box.Width - 20, 3), Shadow);
         var attacking = _champLunge > 0.3f;
         var tint = dead ? new Color(0x3A, 0x3A, 0x44) : Color.White;
 
-        // package_02A flipbooks (idle loop / attack / death-freeze); fall back to package_02 static poses.
-        var (strip, fps, loop) = dead ? ("hunter_death_strip8_512", 12f, false)
-            : attacking ? ("hunter_attack_strip8_512", 16f, true)
-            : ("hunter_idle_strip8_512", 12f, true);
-        if (_ui.AnimSprite(b, strip, box, _anim, fps, loop, tint, 0.05f)) return;
-
-        var baseTex = _ui.Assets.Get(dead ? "hunter_defeated" : attacking ? "hunter_attack_01" : "hunter_idle");
-        if (baseTex is null)
-        {
+        // FULL-BODY static poses (package_02). The package_02A "animation" strips are head-and-torso busts,
+        // so they're wrong for the arena figure — only a full body reads here. Pose swaps on lunge/death.
+        var key = dead ? "hunter_defeated" : attacking ? "hunter_attack_01" : "hunter_idle";
+        if (!_ui.Sprite(b, key, box, tint, 0.03f) && !_ui.Sprite(b, "hunter_idle", box, tint, 0.03f))
             _ui.Fill(b, new Rectangle(box.Center.X - 8, box.Bottom - 20, 16, 18), dead ? Dim : Gold);
-            return;
-        }
-        DrawLayeredChampion(b, box, baseTex, attacking ? "attack" : "idle", tint, _hunter);
     }
 
     /// <summary>

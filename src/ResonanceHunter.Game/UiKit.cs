@@ -102,6 +102,20 @@ public sealed class UiKit
     /// auto-detected. <paramref name="seconds"/> is a running clock; loop wraps, else it holds the last
     /// frame. Returns false if the strip asset is missing, so the caller can fall back to a static pose.
     /// </summary>
+    /// <summary>Draw a single static sprite (a full-body pose), trimming top padding and filling the box
+    /// height, anchored bottom-centre — same framing as <see cref="AnimSprite"/> but for one texture.</summary>
+    public bool Sprite(SpriteBatch b, string key, Rectangle box, Color tint, float topCrop = 0f)
+    {
+        if (Assets.Get(key) is not { } tex || tex.Height <= 0) return false;
+        var cropY = (int)(tex.Height * Math.Clamp(topCrop, 0f, 0.6f));
+        var srcH = tex.Height - cropY;
+        var sc = box.Height / (float)srcH;
+        var w = Math.Max(1, (int)(tex.Width * sc));
+        b.Draw(tex, new Rectangle(box.Center.X - w / 2, box.Bottom - box.Height, w, box.Height),
+            new Rectangle(0, cropY, tex.Width, srcH), tint);
+        return true;
+    }
+
     public bool AnimSprite(SpriteBatch b, string stripKey, Rectangle box, float seconds, float fps, bool loop, Color tint, float topCrop = 0f)
     {
         if (Assets.Get(stripKey) is not { } tex || tex.Height <= 0) return false;
