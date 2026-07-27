@@ -435,7 +435,7 @@ public sealed class SoloExpeditionScreen
         }
         // HP bar + BOSS label ride just above the ACTUAL figure top, so they scale with the boss.
         var barW = isBossWave ? boxW - 8 : ebox.Width - 12;
-        _ui.BarArt(b, new Rectangle(ebox.Center.X - barW / 2, figTop - 9, barW, 6), _replay.EnemyHealthFraction, Ember);
+        _ui.BarArt(b, new Rectangle(ebox.Center.X - barW / 2, figTop - 11, barW, 9), _replay.EnemyHealthFraction, isBossWave ? "boss" : "health");
         if (isBossWave)   // only the CURRENT boss wave — was also firing on the next enemy via LastWaveWasBoss
             _ui.TextCenterBig(b, "BOSS", ebox.Center.X, figTop - 21, Gold, 10);
 
@@ -497,10 +497,11 @@ public sealed class SoloExpeditionScreen
         var panel = new Rectangle(4, 3, 150, 62);
         _ui.Panel(b, panel);
 
-        var med = new Rectangle(panel.X + 6, panel.Y + 8, 46, 46);
-        if (_ui.Assets.Get("ui_medallion_round") is { } mfr) b.Draw(mfr, med, Color.White);
-        if (_ui.Assets.Get("hunter_portrait") is { } por)
-            b.Draw(por, new Rectangle(med.X + 8, med.Y + 8, med.Width - 16, med.Height - 16), Color.White);
+        // hunter_portrait already HAS its own ornate square frame — draw it alone (a round medallion on top
+        // was the "square frame over a round frame" bug).
+        var med = new Rectangle(panel.X + 7, panel.Y + 8, 46, 46);
+        if (_ui.Assets.Get("hunter_portrait") is { } por) b.Draw(por, med, Color.White);
+        else if (_ui.Assets.Get("ui_medallion_round") is { } mfr) b.Draw(mfr, med, Color.White);
 
         var tx = med.Right + 7;
         var rx = panel.Right - 15;
@@ -508,10 +509,12 @@ public sealed class SoloExpeditionScreen
         _ui.Text(b, adept, tx, panel.Y + 14, Bone);
         _ui.TextRight(b, $"LV {_hunter?.HunterLevel ?? 1}", rx, panel.Y + 14, Gold);
         var hp = Math.Max(0, _replay?.HealthOf(0) ?? 0);
-        var hpBar = new Rectangle(tx, panel.Y + 28, rx - tx, 9);
-        _ui.BarArt(b, hpBar, _replay?.HealthFractionOf(0) ?? 1f, Bloom);
-        _ui.TextCenter(b, $"{hp}/{_champ?.MaxHealth ?? 0}", hpBar.Center.X, hpBar.Y + 1, Bone);   // on the bar
-        _ui.TextRight(b, $"PWR {_hunter?.PowerRating ?? 0}", rx, panel.Y + 42, Ember);
+        var hpBar = new Rectangle(tx, panel.Y + 27, rx - tx, 11);
+        _ui.BarArt(b, hpBar, _replay?.HealthFractionOf(0) ?? 1f, "health");
+        _ui.TextCenter(b, $"{hp}/{_champ?.MaxHealth ?? 0}", hpBar.Center.X, hpBar.Y + 2, Bone);   // on the bar
+        // Power with the gleam-style icon (per guide: an icon, not a "PWR" label).
+        if (_ui.Assets.Get("state_resonance_128") is { } pi) b.Draw(pi, new Rectangle(tx, panel.Y + 42, 11, 11), Ember);
+        _ui.Text(b, $"{Game1.Abbrev(_hunter?.PowerRating ?? 0)}", tx + 13, panel.Y + 43, Ember);
 
         var sx = panel.X + 8;
         foreach (var s in Loadout.Skills)
@@ -526,13 +529,16 @@ public sealed class SoloExpeditionScreen
     /// <summary>Top-center stage header (region B): region name, current wave, and the conquest progress bar.</summary>
     private void DrawStageHeader(SpriteBatch b, string regionName, bool isBossWave)
     {
-        // Just region / wave / status — NO progress bar here (it overlapped the HUD and duplicated the
-        // HUNT LOG's objective bar). Centered between the HUD and the compact resource bar.
-        const int cx = 202;
-        _ui.TextCenterBig(b, regionName.ToUpperInvariant(), cx, 5, Gold, 12);
-        _ui.TextCenter(b, $"WAVE {_run!.Wave + 1}", cx, 22, Bone);
+        // Ornate banner behind the header text (guide: ui_panel_modal_wide), centered between the HUD and
+        // the resource bar.
+        var bar = new Rectangle(162, 2, 128, 46);
+        if (_ui.Assets.Get("ui_panel_modal_wide") is { } bg) b.Draw(bg, bar, Color.White);
+        else _ui.Panel(b, bar);
+        var cx = bar.Center.X;
+        _ui.TextCenterBig(b, regionName.ToUpperInvariant(), cx, 9, Gold, 11);
+        _ui.TextCenter(b, $"WAVE {_run!.Wave + 1}", cx, 25, Bone);
         _ui.TextCenter(b, Deepest >= ConquerAt ? "CONQUERED" : $"DEEPEST {Deepest} / {ConquerAt}",
-            cx, 33, Deepest >= ConquerAt ? Gold : Slate);
+            cx, 36, Deepest >= ConquerAt ? Gold : Slate);
     }
 
     private static readonly Color PlateEdge = new(0x74, 0x62, 0x3E);
@@ -562,7 +568,7 @@ public sealed class SoloExpeditionScreen
         // Objective — conquest goal + progress.
         inner = CleanPanel(b, new Rectangle(px, 74, pw, 48), "OBJECTIVE");
         _ui.Text(b, Deepest >= ConquerAt ? "Conquered" : $"Reach depth {ConquerAt}", inner.X, inner.Y, Bone);
-        _ui.BarArt(b, new Rectangle(inner.X, inner.Y + 12, inner.Width, 6), ConquerAt > 0 ? Math.Clamp(Deepest / (float)ConquerAt, 0f, 1f) : 0f, Gold);
+        _ui.BarArt(b, new Rectangle(inner.X, inner.Y + 12, inner.Width, 9), ConquerAt > 0 ? Math.Clamp(Deepest / (float)ConquerAt, 0f, 1f) : 0f, "progress");
 
         // Loot / pending claims — real cues with icons.
         inner = CleanPanel(b, new Rectangle(px, 124, pw, 52), "LOOT");
@@ -606,18 +612,17 @@ public sealed class SoloExpeditionScreen
             if (i < skills.Count)
             {
                 var s = skills[i];
-                // Ornate round medallion (its own centre), then the source glyph on top — NO square fill
-                // behind it (that showed dark corners around the round frame).
-                if (_ui.Assets.Get("ui_medallion_round") is { } mfr) b.Draw(mfr, box, Color.White);
+                // package_01 hex SKILL SLOT (guide), then the source glyph inside its window, then Form + AUTO.
+                if (_ui.Assets.Get("ui_slot_skill_hex") is { } slot) b.Draw(slot, box, Color.White);
                 if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } g)
-                    b.Draw(g, new Rectangle(box.X + 8, box.Y + 7, box.Width - 16, box.Height - 14), Color.White);
+                    b.Draw(g, new Rectangle(box.X + 9, box.Y + 8, box.Width - 18, box.Height - 16), Color.White);
                 else _ui.Diamond(b, new Rectangle(box.Center.X - 7, box.Center.Y - 7, 14, 14), SourceColor.GetValueOrDefault(s.Source, Bone));
                 _ui.TextCenter(b, FormShort(s.Form), box.Center.X, box.Bottom + 1, Bone);
                 _ui.TextCenter(b, "AUTO", box.Center.X, box.Bottom + 10, Gold);
             }
             else
             {
-                if (_ui.Assets.Get("ui_medallion_round") is { } mfr) b.Draw(mfr, box, Color.White * 0.5f);
+                if (_ui.Assets.Get("ui_slot_skill_hex") is { } slot) b.Draw(slot, box, Color.White * 0.5f);
                 _ui.TextCenter(b, i == skills.Count ? "+B" : "—", box.Center.X, box.Center.Y - 3, Dim);
             }
         }

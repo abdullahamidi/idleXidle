@@ -396,26 +396,29 @@ public sealed class UiKit
     public void TextCenterBig(SpriteBatch b, string s, int cx, int y, Color c, int px) => Text2.DrawCentered(b, s, cx, y, c, px);
     public int MeasureBig(string s, int px) => Text2.Measure(s, px);
 
-    /// <summary>A clean, modern progress bar: dark track, solid fill with a gloss band on top, and a thin
-    /// brass frame. Reads far better at HUD sizes than the very ornate package_01 bar art (that art suits
-    /// only large, standalone boss bars — stretched to a thin HUD bar it just looks like a divider).</summary>
-    public void BarArt(SpriteBatch b, Rectangle r, float pct, Color fillCol)
+    /// <summary>A bar from the package_01 art: the ornate frame (ui_bar_&lt;type&gt;_frame) with the pre-coloured
+    /// fill (ui_bar_&lt;type&gt;_fill) clipped to <paramref name="pct"/> drawn INSIDE its window (on top, because
+    /// the frame's centre is opaque). <paramref name="type"/> is health / mana / progress / boss / xp.</summary>
+    public void BarArt(SpriteBatch b, Rectangle r, float pct, string type)
     {
         pct = Math.Clamp(pct, 0f, 1f);
-        Fill(b, r, new Color(0, 0, 0, 160));   // dark track
-        var fw = (int)((r.Width - 2) * pct);
-        if (fw > 0)
+        var frame = Assets.Get($"ui_bar_{type}_frame");
+        if (frame is null)   // fallback: a clean styled bar
         {
-            var fill = new Rectangle(r.X + 1, r.Y + 1, fw, r.Height - 2);
-            Fill(b, fill, fillCol);
-            var gloss = new Color(Math.Min(255, fillCol.R + 70), Math.Min(255, fillCol.G + 70), Math.Min(255, fillCol.B + 70));
-            Fill(b, new Rectangle(fill.X, fill.Y, fill.Width, Math.Max(1, fill.Height / 3)), gloss);
+            Fill(b, r, new Color(0, 0, 0, 160));
+            if (pct > 0f) Fill(b, new Rectangle(r.X + 1, r.Y + 1, (int)((r.Width - 2) * pct), r.Height - 2), new Color(0xF0, 0xA8, 0x30));
+            return;
         }
-        var edge = new Color(0x70, 0x62, 0x42);   // subtle brass frame
-        Fill(b, new Rectangle(r.X, r.Y, r.Width, 1), edge);
-        Fill(b, new Rectangle(r.X, r.Bottom - 1, r.Width, 1), edge);
-        Fill(b, new Rectangle(r.X, r.Y, 1, r.Height), edge);
-        Fill(b, new Rectangle(r.Right - 1, r.Y, 1, r.Height), edge);
+        b.Draw(frame, r, Color.White);   // ornate frame + its (opaque) dark window
+        if (pct > 0f && Assets.Get($"ui_bar_{type}_fill") is { } fill && fill.Width > 0)
+        {
+            // The fill sits inside the frame window — insets carry the ornate border/gem out of the fill area.
+            var win = new Rectangle(r.X + Math.Max(2, r.Width * 7 / 100), r.Y + Math.Max(2, r.Height * 30 / 100),
+                                    r.Width - Math.Max(4, r.Width * 14 / 100), Math.Max(1, r.Height * 42 / 100));
+            var fw = Math.Max(1, (int)(win.Width * pct));
+            var src = new Rectangle(0, 0, Math.Max(1, (int)(fill.Width * pct)), fill.Height);
+            b.Draw(fill, new Rectangle(win.X, win.Y, fw, win.Height), src, Color.White);
+        }
     }
 
     private static readonly Color NavInk = new(0x57, 0x61, 0x6F);
