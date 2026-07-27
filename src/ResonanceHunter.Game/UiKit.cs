@@ -208,13 +208,17 @@ public sealed class UiKit
     /// <summary>Fill the whole canvas with a scene background, or the void colour if it's missing.</summary>
     public void Background(SpriteBatch b, string key, Color? tint = null)
     {
-        if (Assets.Get(key) is { } bg) b.Draw(bg, new Rectangle(0, 0, CanvasWidth, CanvasHeight), tint ?? Color.White);
-        else Fill(b, new Rectangle(0, 0, CanvasWidth, CanvasHeight), VoidInk);
+        // The shared chrome (batches A/C + title) draws at scale 1 in TRUE 1920×1080 coords, so the full-canvas
+        // background must span 1920×1080, not the 480×270 logical grid. All Background callers are chrome now.
+        if (Assets.Get(key) is { } bg) b.Draw(bg, new Rectangle(0, 0, 1920, 1080), tint ?? Color.White);
+        else Fill(b, new Rectangle(0, 0, 1920, 1080), VoidInk);
     }
 
     /// <summary>A translucent scrim over the whole screen — used to dim a reused background.</summary>
+    /// <remarks>Sized to the full 1920×1080 physical canvas: at scale-1 (settings modal) it fills exactly, and
+    /// at scale-4 (a batch-B screen dimming its scene) the oversize is a harmless uniform overdraw, clipped.</remarks>
     public void Scrim(SpriteBatch b, float alpha)
-        => Fill(b, new Rectangle(0, 0, CanvasWidth, CanvasHeight), VoidInk * Math.Clamp(alpha, 0f, 1f));
+        => Fill(b, new Rectangle(0, 0, 1920, 1080), VoidInk * Math.Clamp(alpha, 0f, 1f));
 
     // ── Panels (9-slice ui_panel — a 256×256 dark-glass plate with a ~34px cut-corner bevel) ────────
     // Corner MUST match the asset's bevel: at 16 the slice cut the diagonal in half, so every panel's
@@ -307,10 +311,12 @@ public sealed class UiKit
     /// </summary>
     public int Pill(SpriteBatch b, int right, int y, string? iconKey, Color gem, string value, string label, Color accent)
     {
+        // Measure returns width in the ACTIVE coordinate space; DrawCurrencyPills now draws this at scale 1 in
+        // 1920 coords, so every fixed size/inset below is ×4 of its old 480-space value to match valW/labW.
         var valW = Measure(value);
         var labW = label.Length > 0 ? Measure(label) : 0;
-        const int icon = 10, h = 15;
-        var w = 6 + icon + 3 + valW + (labW > 0 ? 4 + labW : 0) + 6;
+        const int icon = 40, h = 60;
+        var w = 24 + icon + 12 + valW + (labW > 0 ? 16 + labW : 0) + 24;
         var r = new Rectangle(right - w, y, w, h);
 
         // Ornate capsule from package_01 (guide), not a flat fill.
@@ -318,19 +324,19 @@ public sealed class UiKit
         else
         {
             Fill(b, r, new Color(0x1A, 0x16, 0x26));
-            Fill(b, new Rectangle(r.X, r.Y, r.Width, 1), accent * 0.55f);
-            Fill(b, new Rectangle(r.X, r.Bottom - 1, r.Width, 1), Color.Black * 0.35f);
+            Fill(b, new Rectangle(r.X, r.Y, r.Width, 4), accent * 0.55f);
+            Fill(b, new Rectangle(r.X, r.Bottom - 4, r.Width, 4), Color.Black * 0.35f);
         }
 
-        var ix = r.X + 6;
+        var ix = r.X + 24;
         if (iconKey is not null && Assets.Get(iconKey) is { } ic)
-            b.Draw(ic, new Rectangle(ix, r.Y + 3, icon, icon), Color.White);
+            b.Draw(ic, new Rectangle(ix, r.Y + 12, icon, icon), Color.White);
         else
-            Diamond(b, new Rectangle(ix + 1, r.Y + 4, 8, 8), gem);
+            Diamond(b, new Rectangle(ix + 4, r.Y + 16, 32, 32), gem);
 
-        var tx = ix + icon + 3;
-        Text(b, value, tx, r.Y + 4, new Color(0xEC, 0xE6, 0xF2));
-        if (labW > 0) Text(b, label, tx + valW + 4, r.Y + 5, new Color(0x8A, 0x82, 0xA0));
+        var tx = ix + icon + 12;
+        Text(b, value, tx, r.Y + 16, new Color(0xEC, 0xE6, 0xF2));
+        if (labW > 0) Text(b, label, tx + valW + 16, r.Y + 20, new Color(0x8A, 0x82, 0xA0));
         return r.X;
     }
 

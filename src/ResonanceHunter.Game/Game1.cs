@@ -1148,12 +1148,13 @@ public class Game1 : Game
         if (_bootTimer <= 0f || _bootMessage.Length == 0) return;
         var fade = Math.Clamp(_bootTimer / 1.2f, 0f, 1f);   // fade over the last ~1.2s
         // Compact toast centered in the arena (hunt spec 18.1) — NOT a full-width band over the top HUD.
-        var w = Math.Min(340, _ui.Measure(_bootMessage) + 22);
-        var r = new Rectangle(240 - w / 2, 92, w, 20);
+        // 1920-space: max width, measure padding, position and bevel thickness all ×4 of the old 480 values.
+        var w = Math.Min(1360, _ui.Measure(_bootMessage) + 88);
+        var r = new Rectangle(960 - w / 2, 368, w, 80);
         _ui.Fill(_batch, r, new Color(0x10, 0x0D, 0x16) * (0.9f * fade));
-        _ui.Fill(_batch, new Rectangle(r.X, r.Y, r.Width, 1), _bootColor * (0.65f * fade));
-        _ui.Fill(_batch, new Rectangle(r.X, r.Bottom - 1, r.Width, 1), _bootColor * (0.65f * fade));
-        _ui.TextCenter(_batch, _bootMessage, 240, r.Y + 6, _bootColor * fade);
+        _ui.Fill(_batch, new Rectangle(r.X, r.Y, r.Width, 4), _bootColor * (0.65f * fade));
+        _ui.Fill(_batch, new Rectangle(r.X, r.Bottom - 4, r.Width, 4), _bootColor * (0.65f * fade));
+        _ui.TextCenter(_batch, _bootMessage, 960, r.Y + 24, _bootColor * fade);
     }
 
     private bool Pressed(Keys k) => _keys.IsKeyDown(k) && _prevKeys.IsKeyUp(k);
@@ -1170,6 +1171,16 @@ public class Game1 : Game
         && int.TryParse(sx, out var mx) && int.TryParse(sy, out var my)
             ? new Point(mx, my)
             : Display.ToCanvas(new Point(_mouse.X, _mouse.Y), _present);
+
+    /// <summary>
+    /// The mouse in TRUE 1920×1080 space — <see cref="CanvasMouse"/> scaled ×4.
+    /// </summary>
+    /// <remarks>
+    /// The shared chrome (currency pills, hex nav, title, settings modal) now authors in 1920 coords at
+    /// scale 1, so its hit-tests must compare against a 1920-space cursor. <see cref="CanvasMouse"/> stays
+    /// 480-space for the unconverted screens (batch B, scale 4); this is its ×4 counterpart for chrome.
+    /// </remarks>
+    private Point ChromeMouse => new(CanvasMouse.X * 4, CanvasMouse.Y * 4);
 
     /// <summary>
     /// Push the chosen display mode to the device and recompute the letterbox.
@@ -1261,7 +1272,7 @@ public class Game1 : Game
 
         if (_showTitle)
         {
-            BeginCanvas(4);
+            BeginCanvas(1);   // the title chrome authors in true 1920×1080 coords
             DrawTitle();
             if (_showSettings) DrawSettings();
             _batch.End();
@@ -1285,8 +1296,8 @@ public class Game1 : Game
 
         // Three canvas regions, each in its own batch so the active screen can later run at a different
         // scale (1920 coords) while the shared background and HUD stay at the 480-logical scale.
-        // Batch A — the scene background (always 480-logical).
-        BeginCanvas(4);
+        // Batch A — the scene background, authored in true 1920×1080 coords at scale 1.
+        BeginCanvas(1);
         DrawSceneBackground();
         _batch.End();
 
@@ -1303,8 +1314,8 @@ public class Game1 : Game
         else _expedition.Draw(_batch, CanvasMouse, MouseClicked, Regions.Get(_activeRegion).Name, EnemyArtFor(_activeRegion));
         _batch.End();
 
-        // Batch C — the shared overlays (pills, nav, help/settings, boot toast), always 480-logical.
-        BeginCanvas(4);
+        // Batch C — the shared overlays (pills, nav, help/settings, boot toast), authored in true 1920 coords.
+        BeginCanvas(1);
         DrawCurrencyPills();   // shared Gleam / Dust / Materials row, top-right of every screen
         DrawHexNav();   // the shared nav bar, over every screen
 
@@ -1358,10 +1369,11 @@ public class Game1 : Game
     private void SaveDisplay() => Display.Save(_displayMode, _windowedScale);
 
     // ── Display settings ──────────────────────────────────────────────────────────────────────
-    private static readonly Rectangle SettingsPanel = new(120, 64, 240, 132);
-    private static Rectangle ModeBtn(int i) => new(134, 98 + i * 22, 96, 18);
-    private static Rectangle ScaleBtn(int i) => new(250, 98 + i * 22, 96, 18);
-    private static readonly Rectangle SettingsClose = new(200, 172, 80, 18);
+    // 1920-space (scale-1 chrome): every literal is ×4 of its old 480-space value.
+    private static readonly Rectangle SettingsPanel = new(480, 256, 960, 528);
+    private static Rectangle ModeBtn(int i) => new(536, 392 + i * 88, 384, 72);
+    private static Rectangle ScaleBtn(int i) => new(1000, 392 + i * 88, 384, 72);
+    private static readonly Rectangle SettingsClose = new(800, 688, 320, 72);
 
     /// <summary>
     /// Display options, drawn as an overlay over whatever is behind it.
@@ -1378,15 +1390,15 @@ public class Game1 : Game
         _ui.Panel(_batch, SettingsPanel);
         // The panel is DARK glass, so light text on it — gold heading, bone labels. (It used to use dark
         // parchment inks here, which were invisible on the dark panel.)
-        TextCenter("DISPLAY", 240, 72, Gold);
+        TextCenter("DISPLAY", 960, 288, Gold);
 
-        Text("MODE", 134, 86, Bone);
+        Text("MODE", 536, 344, Bone);
 
         // The right column's header doubles as its own explanation. A separate "fit to screen" line
         // had nowhere to live that wasn't already occupied — it landed on the greyed buttons. The
         // header is free space that is already describing exactly this, so it says it instead.
         var windowed = _displayMode == DisplayMode.Windowed;
-        Text(windowed ? "WINDOW SIZE" : $"AUTO FIT — {_scale}x", 250, 86, Bone);
+        Text(windowed ? "WINDOW SIZE" : $"AUTO FIT — {_scale}x", 1000, 344, Bone);
 
         var modes = new[] { DisplayMode.Windowed, DisplayMode.Borderless, DisplayMode.Fullscreen };
         var modeNames = new[] { "WINDOWED", "BORDERLESS", "FULLSCREEN" };
@@ -1395,8 +1407,8 @@ public class Game1 : Game
             var on = _displayMode == modes[i];
             var r = ModeBtn(i);
             _ui.Panel(_batch, r, gold: on);
-            _ui.TextCenter(_batch, modeNames[i], r.Center.X, r.Center.Y - 3, on ? new Color(0x1E, 0x14, 0x04) : Bone);
-            if (UiKit.ClickedIn(r, CanvasMouse, _clicked) && !on)
+            _ui.TextCenter(_batch, modeNames[i], r.Center.X, r.Center.Y - 12, on ? new Color(0x1E, 0x14, 0x04) : Bone);
+            if (UiKit.ClickedIn(r, ChromeMouse, _clicked) && !on)
             {
                 _displayMode = modes[i];
                 ApplyDisplay();
@@ -1411,8 +1423,8 @@ public class Game1 : Game
             var r = ScaleBtn(i);
             _ui.Panel(_batch, r, gold: on);
             var label = $"{Display.CanvasWidth * s}x{Display.CanvasHeight * s}";
-            _ui.TextCenter(_batch, label, r.Center.X, r.Center.Y - 3, on ? new Color(0x1E, 0x14, 0x04) : windowed ? Bone : Slate);
-            if (windowed && UiKit.ClickedIn(r, CanvasMouse, _clicked) && !on)
+            _ui.TextCenter(_batch, label, r.Center.X, r.Center.Y - 12, on ? new Color(0x1E, 0x14, 0x04) : windowed ? Bone : Slate);
+            if (windowed && UiKit.ClickedIn(r, ChromeMouse, _clicked) && !on)
             {
                 _windowedScale = s;
                 ApplyDisplay();
@@ -1420,7 +1432,7 @@ public class Game1 : Game
             }
         }
 
-        if (_ui.Button(_batch, SettingsClose, "CLOSE", CanvasMouse, _clicked))
+        if (_ui.Button(_batch, SettingsClose, "CLOSE", ChromeMouse, _clicked))
             _showSettings = false;
     }
 
@@ -1438,11 +1450,11 @@ public class Game1 : Game
 
     private void DrawCurrencyPills()
     {
-        var right = 474;
+        var right = 1896;   // 1920-space right margin (was 474 in 480-space)
         var mats = $"S{Abbrev(_hunter.MaterialOf(Material.Scrap))} E{Abbrev(_hunter.MaterialOf(Material.Essence))} C{Abbrev(_hunter.MaterialOf(Material.Core))} X{Abbrev(_hunter.MaterialOf(Material.Crystal))}";
-        right = _ui.Pill(_batch, right, 4, null, new Color(0x5F, 0xE0, 0xC8), mats, "", new Color(0x5F, 0xE0, 0xC8)) - 5;
-        right = _ui.Pill(_batch, right, 4, "ui_memory_dust", default, Abbrev(_dust.MemoryDust), "DUST", new Color(0x9E, 0x86, 0xFF)) - 5;
-        _ui.Pill(_batch, right, 4, "ui_gleam_coin", default, Abbrev(_hunter.Gleam), "GLEAM", new Color(0xF0, 0xB2, 0x4A));
+        right = _ui.Pill(_batch, right, 16, null, new Color(0x5F, 0xE0, 0xC8), mats, "", new Color(0x5F, 0xE0, 0xC8)) - 20;
+        right = _ui.Pill(_batch, right, 16, "ui_memory_dust", default, Abbrev(_dust.MemoryDust), "DUST", new Color(0x9E, 0x86, 0xFF)) - 20;
+        _ui.Pill(_batch, right, 16, "ui_gleam_coin", default, Abbrev(_hunter.Gleam), "GLEAM", new Color(0xF0, 0xB2, 0x4A));
     }
 
     private void DrawTitle()
@@ -1453,30 +1465,30 @@ public class Game1 : Game
         // its native 1200×400, which the 4× canvas transform would blow up to 4800px (only "SONAN" showed).
         if (_assets.Get("logo_horizontal_full") is { } logo)   // package_08 branding (2048×512)
         {
-            const int lw = 320;
+            const int lw = 1280;   // 1920-space logo width (was 320 in 480-space)
             var lh = lw * logo.Height / logo.Width;   // aspect-preserved
-            _batch.Draw(logo, new Rectangle((CanvasWidth - lw) / 2, 28, lw, lh), Color.White);
+            _batch.Draw(logo, new Rectangle((CanvasWidth * ArtScale - lw) / 2, 112, lw, lh), Color.White);
         }
         else
-            TextCenter("RESONANCE HUNTER", 240, 60, Gold);
+            TextCenter("RESONANCE HUNTER", 960, 240, Gold);
 
         var items = new[] { _hasSave ? "CONTINUE" : "BEGIN THE HUNT", "SETTINGS", "QUIT" };
         for (var i = 0; i < items.Length; i++)
         {
             var selected = i == _titleCursor;
-            var box = new Rectangle(160, 152 + i * 28, 160, 24);
+            var box = new Rectangle(640, 608 + i * 112, 640, 96);
             _ui.Panel(_batch, box, gold: selected);
             // The ornate menu plates are DARK (even the gold/selected one), so both states take LIGHT text —
             // warm gold when selected, bone otherwise.
-            _ui.TextCenter(_batch, items[i], box.Center.X, box.Center.Y - 3,
+            _ui.TextCenter(_batch, items[i], box.Center.X, box.Center.Y - 12,
                 selected ? new Color(0xF6, 0xD8, 0x88) : new Color(0xEC, 0xE6, 0xF2));
 
             // Clickable as well as keyed — every other menu in the game is.
-            if (!_showSettings && UiKit.ClickedIn(box, CanvasMouse, _clicked)) ChooseTitleItem(i);
-            else if (box.Contains(CanvasMouse)) _titleCursor = i;
+            if (!_showSettings && UiKit.ClickedIn(box, ChromeMouse, _clicked)) ChooseTitleItem(i);
+            else if (box.Contains(ChromeMouse)) _titleCursor = i;
         }
 
-        TextCenter("UP / DOWN     ENTER", 240, 246, Slate);
+        TextCenter("UP / DOWN     ENTER", 960, 984, Slate);
     }
 
     // ── World map ─────────────────────────────────────────────────────────────────────────────
@@ -1599,10 +1611,11 @@ public class Game1 : Game
 
     private void DrawHelp()
     {
-        Fill(new Rectangle(20, 20, 440, 230), Bone);
-        Fill(new Rectangle(21, 21, 438, 228), VoidInk);
+        // 1920-space (scale-1 chrome): every position/size ×4 of its old 480-space value.
+        Fill(new Rectangle(80, 80, 1760, 920), Bone);
+        Fill(new Rectangle(84, 84, 1752, 912), VoidInk);
 
-        Text("RESONANCE HUNTER — CONTROLS", 30, 28, Gold);
+        Text("RESONANCE HUNTER — CONTROLS", 120, 112, Gold);
 
         // Two columns: the build on the left, the screens on the right.
         var build = new (string Key, string What)[]
@@ -1627,29 +1640,29 @@ public class Game1 : Game
             ("F1", "CLOSE"),
         };
 
-        Text("YOUR BUILD", 30, 44, Slate);
+        Text("YOUR BUILD", 120, 176, Slate);
         for (var i = 0; i < build.Length; i++)
         {
-            Text(build[i].Key, 30, 58 + i * 12, Gold);
-            Text(build[i].What, 78, 58 + i * 12, Bone);
+            Text(build[i].Key, 120, 232 + i * 48, Gold);
+            Text(build[i].What, 312, 232 + i * 48, Bone);
         }
 
-        Text("SCREENS", 300, 44, Slate);
+        Text("SCREENS", 1200, 176, Slate);
         for (var i = 0; i < world.Length; i++)
         {
-            Text(world[i].Key, 300, 58 + i * 12, Gold);
-            Text(world[i].What, 330, 58 + i * 12, Bone);
+            Text(world[i].Key, 1200, 232 + i * 48, Gold);
+            Text(world[i].What, 1320, 232 + i * 48, Bone);
         }
 
-        Text("THE IDEA:", 30, 150, Gold);
+        Text("THE IDEA:", 120, 600, Gold);
         WrapText(
             "ONE CHAMPION, YOUR BUILD — IT FIGHTS ON ITS OWN, ON EVERY SCREEN, EVEN WHILE THE GAME IS " +
             "CLOSED. EACH WAVE IT CLEARS PAYS GLEAM AT ONCE. EVERY 5TH IS A BOSS, WITH A CHANCE AT A CHEST. " +
             "WHEN IT FALLS IT RECOVERS AND PUSHES ON — NOTHING IS BANKED, NOTHING IS LOST.",
-            30, 162, 410, Bone);
+            120, 648, 1640, Bone);
         WrapText(
             $"SPEND GLEAM ON COMMAND TO STRENGTHEN YOUR CHAMPION. REACH WAVE {ConquerWaveDepth} TO CONQUER A REGION AND UNLOCK THE NEXT.",
-            30, 210, 410, Slate);
+            120, 840, 1640, Slate);
     }
 
     // ── Drawing helpers ───────────────────────────────────────────────────────────────────────
@@ -1727,8 +1740,9 @@ public class Game1 : Game
 
     private static Rectangle NavHexRect(int i)   // now a rectangular TILE (guide: package_01 nav tiles)
     {
-        const int cell = 57, tileW = 54, tileH = 32, top = 236;
-        var cx = CanvasWidth / 2 - Nav.Length * cell / 2 + cell / 2 + i * cell;
+        // 1920-space (scale-1 chrome): cell/tile/top ×4 of the old 480 values; the canvas centre is 1920/2.
+        const int cell = 228, tileW = 216, tileH = 128, top = 944;
+        var cx = CanvasWidth * ArtScale / 2 - Nav.Length * cell / 2 + cell / 2 + i * cell;
         return new Rectangle(cx - tileW / 2, top, tileW, tileH);
     }
 
@@ -1738,31 +1752,33 @@ public class Game1 : Game
 
         // A dark shelf so the bar seats cleanly over whatever screen sits behind it. Nearly opaque and
         // starting a hair above the hexes, so the scene behind can't show through and clip their tops.
-        _ui.Fill(_batch, new Rectangle(0, 234, CanvasWidth, CanvasHeight - 234), new Color(0x0C, 0x09, 0x16) * 0.95f);
+        // 1920-space (scale-1 chrome): shelf top 234→936, full 1920 width, 36→144 tall.
+        _ui.Fill(_batch, new Rectangle(0, 936, 1920, 144), new Color(0x0C, 0x09, 0x16) * 0.95f);
 
         var active = NavActive();
         for (var i = 0; i < Nav.Length; i++)
         {
             var r = NavHexRect(i);
             var on = i == active;
-            var hover = r.Contains(CanvasMouse);
+            var hover = r.Contains(ChromeMouse);
             // package_01 button TILE as the nav cell (guide), not a hexagon. Active uses the primary button.
             var key = on ? "ui_button_primary" : "ui_button_secondary";
             if (_assets.Get(key) is { } tile) _batch.Draw(tile, r, on || hover ? Color.White : new Color(0xB8, 0xB8, 0xC0));
             else _ui.Fill(_batch, r, on ? NavGold : hover ? NavHover : NavIdle);
             if (_assets.Get(Nav[i].Glyph) is { } g)
-                _batch.Draw(g, new Rectangle(r.Center.X - 8, r.Y + 3, 16, 16), on ? Color.White : new Color(0xD8, 0xD4, 0xE2));
+                _batch.Draw(g, new Rectangle(r.Center.X - 32, r.Y + 12, 64, 64), on ? Color.White : new Color(0xD8, 0xD4, 0xE2));
             else
-                _ui.Diamond(_batch, new Rectangle(r.Center.X - 5, r.Y + 5, 10, 10), on ? NavIdle : NavGem);
-            _ui.TextCenter(_batch, Nav[i].Label, r.Center.X, r.Bottom - 9, on ? NavGold : NavLabel);
+                _ui.Diamond(_batch, new Rectangle(r.Center.X - 20, r.Y + 20, 40, 40), on ? NavIdle : NavGem);
+            _ui.TextCenter(_batch, Nav[i].Label, r.Center.X, r.Bottom - 36, on ? NavGold : NavLabel);
         }
     }
 
     private void HandleNavClick()
     {
         if (!MouseClicked || _showSettings || _showHelp || _showSpike) return;
+        // NavHexRect is 1920-space chrome now, so hit-test the 1920-space cursor.
         for (var i = 0; i < Nav.Length; i++)
-            if (NavHexRect(i).Contains(CanvasMouse)) { OpenNav(i); return; }
+            if (NavHexRect(i).Contains(ChromeMouse)) { OpenNav(i); return; }
     }
 
     /// <summary>Word-wrap, so explanatory copy does not run off the canvas.</summary>
@@ -1778,13 +1794,13 @@ public class Game1 : Game
 
             if (_ui.Measure(candidate) > maxWidth)
             {
-                Text(line, x, y + row * 9, c);
+                Text(line, x, y + row * 36, c);   // 1920-space line height (was 9 in 480-space); WrapText is DrawHelp-only
                 line = word;
                 row++;
             }
             else line = candidate;
         }
 
-        if (line.Length > 0) Text(line, x, y + row * 9, c);
+        if (line.Length > 0) Text(line, x, y + row * 36, c);
     }
 }
