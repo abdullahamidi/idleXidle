@@ -63,7 +63,24 @@ public sealed class SoloExpeditionScreen
     // Rev 3 §16.1: one normal enemy bottom-centred at (1160,735), visible ~320px (range 280–360). A boss is
     // drawn far larger from its own anchor (see the draw), so this box is the NORMAL-enemy size only.
     private static readonly Rectangle EnemyBox = new(1160 - 175, 735 - 340, 350, 340);
-    private static readonly Rectangle BossBox = new(1210 - 250, 750 - 600, 500, 600);   // §16.5/§25: (1210,750), boss fills ~540px opaque
+    // Rev 5 boss presentation metadata — measured from the crystal_lich_idle strip's frame 0 (1024²), shared
+    // across frames (Option A). Body = the central figure (torso/head/robe), EXCLUDING the wings, staff, and a
+    // top-of-frame BLEED-STREAK defect (rows 0..~305) that is trimmed via SrcTop and REPORTED as an asset
+    // issue (§19.3) — never hidden by shifting the body. Grounding, scale, centring, and the bar all key off
+    // BodyBounds, so the wings/staff may extend beyond the 540px body and are clipped by the arena.
+    private readonly record struct BossMeta(int SrcTop, int BodyX, int BodyY, int BodyW, int BodyH,
+        int FullX, int FullY, int FullW, int FullH, string Name);
+    private static readonly Dictionary<string, BossMeta> BossMetaFor = new()
+    {
+        ["crystal_lich"] = new(SrcTop: 305, BodyX: 388, BodyY: 430, BodyW: 214, BodyH: 500,
+            FullX: 240, FullY: 350, FullW: 648, FullH: 580, Name: "CRYSTAL LICH"),
+    };
+    private static readonly BossMeta DefaultBossMeta = new(0, 300, 200, 424, 640, 200, 120, 624, 780, "BOSS");
+    private const int BossTargetBodyHeight = 540;   // §6/§25: rendered BODY height (wings extend beyond)
+    private static readonly Point BossAnchor = new(1210, 750);
+    private Rectangle _bossBodyRect, _bossFullRect;   // rendered screen rects, set by DrawBoss for the bar/overlay
+    private int _bossFrame;
+    private string _bossName = "BOSS";
 
     // package_03: one representative common enemy per Source (no Nature enemy shipped — a wisp stands in).
     private static readonly Dictionary<Source, string> EnemyForSource = new()
@@ -123,6 +140,8 @@ public sealed class SoloExpeditionScreen
     private bool _isBossWave;
     /// <summary>Dev fixture (F6 / RH_SHOT_MODE=boss): render the current wave as the Crystal Lich boss.</summary>
     public bool DevForceBoss { get; set; }
+    /// <summary>Dev boss-bounds overlay (F7): draws ground pivot / body / full / arena rects (Rev 5 §17).</summary>
+    public bool DevBossDebug { get; set; }
 
     // Exactly ONE major overlay may show. Priority (high→low): Modal/WelcomeBack (host) > HunterDown >
     // BossIncoming > WaveCleared. The host draws WelcomeBack; when it does, the screen draws none of its own.
@@ -438,44 +457,53 @@ public sealed class SoloExpeditionScreen
         DrawRightColumn(b);
         DrawSkillDock(b);
         DrawBattleControls(b, hit, clicked);
+        if (_isBossWave) DrawBossBar(b);                          // §10/§12: screen-space, NOT arena-clipped
+        if (_isBossWave && DevBossDebug) DrawBossDebugOverlay(b); // §17: fixture-only bounds visualization (F7)
         // (the host closes this batch with b.End(); the shared hex nav is drawn by the host over every screen.)
     }
 
     /// <summary>Arena figures + effects, drawn inside the scissor clip so no actor/VFX/bar/number escapes it.</summary>
     private void DrawArena(SpriteBatch b, HuntOverlay overlay)
     {
-        // A normal enemy grounds at (1160,735) ~320px; a boss is far larger from its own anchor (1210,750)
-        // and gets a dedicated top-of-arena bar, never an overhead one (§16/§24).
+        var attacking = _enemyWindup > 0f;
+        if (_isBossWave) DrawBoss(b, attacking);
+        else DrawNormalEnemy(b, attacking);
+
+        // Champion (arena left). Name/HP live in the top-left HUD.
+        var push = (int)(_champLunge * 40f);
+        var cbox = new Rectangle(ChampBox.X + push, ChampBox.Y, ChampBox.Width, ChampBox.Height);
+        if (_replay!.IsShielded(0)) Outline(b, new Rectangle(cbox.X - 4, cbox.Y - 4, cbox.Width + 8, cbox.Height + 8), Steel, 4);
+        DrawChampion(b, cbox, dead: _mode == Mode.Downed);
+
+        _vfx.Draw(b);
+        DrawCallouts(b);
+        if (_deathFlash > 0f) _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), Ember * (_deathFlash * 0.35f));
+
+        DrawArenaOverlay(b, overlay);
+    }
+
+    private void DrawNormalEnemy(SpriteBatch b, bool attacking)
+    {
         var elunge = (int)(_enemyLunge * -40f);
         var enter = (int)(_enemyEnter * 280f);
-        var baseBox = _isBossWave ? BossBox : EnemyBox;
-        var ebox = new Rectangle(baseBox.X + elunge + enter, baseBox.Y, baseBox.Width, baseBox.Height);
+        var ebox = new Rectangle(EnemyBox.X + elunge + enter, EnemyBox.Y, EnemyBox.Width, EnemyBox.Height);
         _ui.Fill(b, new Rectangle(ebox.X + 60, ebox.Bottom - 14, ebox.Width - 120, 14), GroundShade);
 
         var bob = (int)(MathF.Sin(_anim * 2f) * 8f);
-        var attacking = _enemyWindup > 0f;
-        var crop = _isBossWave ? 0.12f : 0.08f;   // trim the frame's transparent/smoke headroom so the boss fills its box
+        const float crop = 0.08f;
         var figTop = ebox.Bottom - ebox.Height;
         var ab = new Rectangle(ebox.X, figTop + bob, ebox.Width, ebox.Height);
 
         string? stripKey = null, staticKey = null;
-        var fps = attacking ? 16f : _isBossWave ? 10f : 12f;
-        var loop = !attacking;
-        var bossKey = _isBossWave ? (DevForceBoss ? "crystal_lich" : BossForRegion.GetValueOrDefault(RegionId)) : null;
-        if (bossKey is not null)
-        {
-            var act = attacking ? "attack" : "idle";
-            stripKey = $"{bossKey}_{act}_strip8_1024";
-            staticKey = $"{bossKey}_{act}_1024";
-        }
-        else if (EnemySource is { } es && EnemyForSource.TryGetValue(es, out var en))
+        var fps = attacking ? 16f : 12f;
+        if (EnemySource is { } es && EnemyForSource.TryGetValue(es, out var en))
         {
             var act = attacking ? en == "stone_sentinel" ? "slam" : "attack" : "idle";
             stripKey = $"{en}_{act}_strip8_512";
             staticKey = attacking ? $"{en}_attack_01" : $"{en}_idle_01";
         }
 
-        if (stripKey is null || !_ui.AnimSprite(b, stripKey, ab, _anim, fps, loop, Color.White, crop))
+        if (stripKey is null || !_ui.AnimSprite(b, stripKey, ab, _anim, fps, !attacking, Color.White, crop))
         {
             var etorso = staticKey is not null ? _ui.Assets.Get(staticKey) : null;
             if (etorso is not null)
@@ -496,39 +524,90 @@ public sealed class SoloExpeditionScreen
             Outline(b, new Rectangle(ab.X - r, figTop - r, ab.Width + r * 2, ebox.Height + r * 2), Ember, 4);
         }
 
-        if (_isBossWave)
+        // Quiet 130×12 bar ~18px above the VISIBLE top of the figure (§24.1), via the sprite's alpha bounds.
+        var boundsKey = staticKey ?? stripKey ?? "";
+        var topPad = boundsKey.Length > 0 ? _ui.TopPadFraction(boundsKey) : 0f;
+        var visTop = figTop + (int)(Math.Max(0f, (topPad - crop) / (1f - crop)) * ebox.Height);
+        var ebar = new Rectangle(ebox.Center.X - 65, visTop - 30, 130, 12);
+        _ui.Fill(b, ebar, new Color(0x0D, 0x0B, 0x14, 0xDC));
+        var fw = (int)(ebar.Width * Math.Clamp(_replay!.EnemyHealthFraction, 0f, 1f));
+        if (fw > 0) _ui.Fill(b, new Rectangle(ebar.X, ebar.Y, fw, ebar.Height), Ember);
+        _ui.Fill(b, new Rectangle(ebar.X, ebar.Y, ebar.Width, 2), new Color(0, 0, 0, 0x50));
+    }
+
+    /// <summary>Rev 5: draw the boss by its BODY bounds — the ground pivot lands at the anchor, the body scales
+    /// to ~540px, and the wings/staff extend beyond (clipped by the arena). NOT box-fit on the full texture.</summary>
+    private void DrawBoss(SpriteBatch b, bool attacking)
+    {
+        var bossKey = DevForceBoss ? "crystal_lich" : BossForRegion.GetValueOrDefault(RegionId);
+        var m = bossKey is not null ? BossMetaFor.GetValueOrDefault(bossKey, DefaultBossMeta) : DefaultBossMeta;
+        _bossName = m.Name;
+        var tex = bossKey is not null ? _ui.Assets.Get($"{bossKey}_{(attacking ? "attack" : "idle")}_strip8_1024") : null;
+        if (tex is null || tex.Height <= 0)
         {
-            // ONE dedicated boss bar near the arena top (§24.3); the boss gets NO overhead bar and no bare
-            // "BOSS" floats behind other overlays (§19.3).
-            var bbar = new Rectangle(510, 156, 900, 44);
-            _ui.BarArt(b, bbar, _replay!.EnemyHealthFraction, "boss");
-            _ui.TextCenterBig(b, "BOSS", bbar.Center.X, bbar.Y + 8, Gold, UiTypography.StageLabel);
-        }
-        else
-        {
-            // Normal enemy: quiet 130×12 bar ~18px above the VISIBLE top of the figure (§24.1), located via the
-            // sprite's alpha bounds so it never floats over transparent padding.
-            var boundsKey = staticKey ?? stripKey ?? "";
-            var topPad = boundsKey.Length > 0 ? _ui.TopPadFraction(boundsKey) : 0f;
-            var visTop = figTop + (int)(Math.Max(0f, (topPad - crop) / (1f - crop)) * ebox.Height);
-            var ebar = new Rectangle(ebox.Center.X - 65, visTop - 30, 130, 12);
-            _ui.Fill(b, ebar, new Color(0x0D, 0x0B, 0x14, 0xDC));
-            var fw = (int)(ebar.Width * Math.Clamp(_replay!.EnemyHealthFraction, 0f, 1f));
-            if (fw > 0) _ui.Fill(b, new Rectangle(ebar.X, ebar.Y, fw, ebar.Height), Ember);
-            _ui.Fill(b, new Rectangle(ebar.X, ebar.Y, ebar.Width, 2), new Color(0, 0, 0, 0x50));
+            _bossBodyRect = new Rectangle(BossAnchor.X - 110, BossAnchor.Y - BossTargetBodyHeight, 220, BossTargetBodyHeight);
+            _bossFullRect = _bossBodyRect;
+            _ui.Fill(b, _bossBodyRect, Ember);
+            return;
         }
 
-        // Champion (arena left). Name/HP live in the top-left HUD.
-        var push = (int)(_champLunge * 40f);
-        var cbox = new Rectangle(ChampBox.X + push, ChampBox.Y, ChampBox.Width, ChampBox.Height);
-        if (_replay!.IsShielded(0)) Outline(b, new Rectangle(cbox.X - 4, cbox.Y - 4, cbox.Width + 8, cbox.Height + 8), Steel, 4);
-        DrawChampion(b, cbox, dead: _mode == Mode.Downed);
+        var frameW = tex.Height;                          // square frames
+        var frames = Math.Max(1, tex.Width / frameW);
+        _bossFrame = (int)(_anim * (attacking ? 16f : 10f)) % frames;   // EXACTLY one frame (§8)
+        if (tex.Width % frameW != 0)
+            System.Diagnostics.Debug.WriteLine($"Boss strip width {tex.Width} not a whole multiple of {frameW}.");
 
-        _vfx.Draw(b);
-        DrawCallouts(b);
-        if (_deathFlash > 0f) _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), Ember * (_deathFlash * 0.35f));
+        var scale = BossTargetBodyHeight / (float)m.BodyH;
+        // Source excludes the top bleed-streak defect (SrcTop). The ground pivot = body bottom-centre; place it
+        // at the anchor by choosing the destination so (BodyCenterX, BodyBottom) maps to BossAnchor.
+        var src = new Rectangle(_bossFrame * frameW, m.SrcTop, frameW, tex.Height - m.SrcTop);
+        var destLeft = (int)(BossAnchor.X - (m.BodyX + m.BodyW / 2f) * scale);
+        var destTop = (int)(BossAnchor.Y - (m.BodyY + m.BodyH - m.SrcTop) * scale);
+        var dest = new Rectangle(destLeft, destTop, (int)(frameW * scale), (int)(src.Height * scale));
 
-        DrawArenaOverlay(b, overlay);
+        // Boss ground shadow at the pivot (§13), sized off the rendered BODY width, not the full silhouette.
+        var bodyWpx = (int)(m.BodyW * scale);
+        _ui.Fill(b, new Rectangle(BossAnchor.X - (int)(bodyWpx * 0.34f), BossAnchor.Y - 9, (int)(bodyWpx * 0.68f), 16), GroundShade);
+
+        b.Draw(tex, dest, src, Color.White);
+
+        _bossBodyRect = new Rectangle(destLeft + (int)(m.BodyX * scale), destTop + (int)((m.BodyY - m.SrcTop) * scale),
+            (int)(m.BodyW * scale), (int)(m.BodyH * scale));
+        _bossFullRect = new Rectangle(destLeft + (int)(m.FullX * scale), destTop + (int)((m.FullY - m.SrcTop) * scale),
+            (int)(m.FullW * scale), (int)(m.FullH * scale));
+        if (_bossBodyRect.Height is < 500 or > 580)
+            System.Diagnostics.Debug.WriteLine($"Boss body height {_bossBodyRect.Height}px outside 500..580.");
+    }
+
+    /// <summary>The dedicated boss health bar — SCREEN-SPACE UI (§10/§12), drawn in the HUD pass, not clipped.</summary>
+    private void DrawBossBar(SpriteBatch b)
+    {
+        var bar = new Rectangle(510, 145, 900, 46);
+        // The dev fixture's underlying wave-2 enemy is already dead (0%), so pose a representative fill.
+        var frac = DevForceBoss ? 0.78f : Math.Clamp(_replay!.EnemyHealthFraction, 0f, 1f);
+        _ui.BarArt(b, bar, frac, "boss");
+        _ui.TextBig(b, _bossName, bar.X + 44, bar.Y + 13, Gold, UiTypography.PanelTitle);
+        _ui.TextRightBig(b, $"{(int)(frac * 100)}%", bar.Right - 44, bar.Y + 15, Bone, UiTypography.OverlayBody);
+    }
+
+    /// <summary>Rev 5 §17: fixture-only bounds visualization (ground pivot, body, full silhouette, arena).</summary>
+    private void DrawBossDebugOverlay(SpriteBatch b)
+    {
+        DebugRect(b, ArenaRect, Ember, 3);                                         // arena — red
+        DebugRect(b, _bossFullRect, new Color(0x40, 0xE0, 0xE0), 2);               // full visible — cyan
+        DebugRect(b, _bossBodyRect, new Color(0x48, 0xD0, 0x48), 3);               // body — green
+        _ui.Fill(b, new Rectangle(BossAnchor.X - 22, BossAnchor.Y - 2, 44, 4), Gold);   // ground pivot — yellow cross
+        _ui.Fill(b, new Rectangle(BossAnchor.X - 2, BossAnchor.Y - 22, 4, 44), Gold);
+        _ui.TextBig(b, $"body {_bossBodyRect.Width}x{_bossBodyRect.Height}  frame {_bossFrame}  anchor {BossAnchor.X},{BossAnchor.Y}",
+            190, 206, Gold, UiTypography.Secondary);
+    }
+
+    private void DebugRect(SpriteBatch b, Rectangle r, Color c, int t)
+    {
+        _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, t), c);
+        _ui.Fill(b, new Rectangle(r.X, r.Bottom - t, r.Width, t), c);
+        _ui.Fill(b, new Rectangle(r.X, r.Y, t, r.Height), c);
+        _ui.Fill(b, new Rectangle(r.Right - t, r.Y, t, r.Height), c);
     }
 
     /// <summary>The single active arena announcement (Rev 4 §2/§18) — never more than one at a time.</summary>

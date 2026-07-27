@@ -584,7 +584,7 @@ public class Game1 : Game
             // `telegraph`, `combat` and `boss2` posed the manual-combat screen for screenshots. That
             // screen is gone, so they had nothing to pose.
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
-                or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss"
+                or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "build" or "character" or "stats")
             {
                 _showTitle = false;
@@ -706,16 +706,17 @@ public class Game1 : Game
                     // This one stays standing long enough to capture skills firing.
                     _expedition.DevStart(_hunter, 1400f, 9f);
                 }
-                if (sm == "boss")
+                if (sm is "boss" or "bossdebug")
                 {
-                    // Rev 4 §12 boss verification fixture: force the current wave to render as the Crystal Lich
-                    // boss (crystal_lich_idle), no ordinary enemies, no welcome/wave overlay — a beefy pool so
-                    // the boss is standing for the shot.
+                    // Rev 4 §12 / Rev 5 boss fixture: force the current wave to render as the Crystal Lich boss
+                    // (crystal_lich_idle), no ordinary enemies, no welcome/wave overlay. `bossdebug` also shows
+                    // the §17 bounds overlay.
                     _expedition.Loadout = _loadout;
                     _expedition.Tree = _dust;
                     _expedition.Mastery = _mastery;
                     _expedition.EnemySource = Source.Mind;
                     _expedition.DevForceBoss = true;
+                    if (sm == "bossdebug") _expedition.DevBossDebug = true;
                     _expedition.DevStart(_hunter, 6000f, 6f);
                 }
                 if (sm == "conquered")
@@ -837,6 +838,7 @@ public class Game1 : Game
         // binding here ran first every frame, hijacking the filter into a blank dev screen.
         if (Pressed(Keys.F9)) _showSpike = !_showSpike;
         if (Pressed(Keys.F6)) _expedition.DevForceBoss = !_expedition.DevForceBoss;   // dev: force the Crystal Lich boss render (Rev 4 §12)
+        if (Pressed(Keys.F7)) _expedition.DevBossDebug = !_expedition.DevBossDebug;   // dev: boss-bounds overlay (Rev 5 §17)
         if (Pressed(Keys.F1)) _showHelp = !_showHelp;
         if (Pressed(Keys.F10)) _showSettings = !_showSettings;
 
