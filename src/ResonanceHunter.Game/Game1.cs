@@ -1395,13 +1395,24 @@ public class Game1 : Game
     }
 
     /// <summary>The reference's top-right currency row — Gleam, Dust, Materials — on every gameplay screen.</summary>
+    /// <summary>Compact number: 125802745 -> "125.8M". Keeps the top resource bar tight (late-game values
+    /// hit the hundreds of millions and were blowing out the bar into the region title).</summary>
+    internal static string Abbrev(long n)
+    {
+        if (n < 0) return "-" + Abbrev(-n);
+        return n >= 1_000_000_000 ? $"{n / 1e9:0.##}B"
+             : n >= 1_000_000 ? $"{n / 1e6:0.##}M"
+             : n >= 10_000 ? $"{n / 1e3:0.#}K"
+             : n.ToString();
+    }
+
     private void DrawCurrencyPills()
     {
         var right = 474;
-        var mats = $"S{_hunter.MaterialOf(Material.Scrap)} E{_hunter.MaterialOf(Material.Essence)} C{_hunter.MaterialOf(Material.Core)} X{_hunter.MaterialOf(Material.Crystal)}";
+        var mats = $"S{Abbrev(_hunter.MaterialOf(Material.Scrap))} E{Abbrev(_hunter.MaterialOf(Material.Essence))} C{Abbrev(_hunter.MaterialOf(Material.Core))} X{Abbrev(_hunter.MaterialOf(Material.Crystal))}";
         right = _ui.Pill(_batch, right, 4, null, new Color(0x5F, 0xE0, 0xC8), mats, "", new Color(0x5F, 0xE0, 0xC8)) - 5;
-        right = _ui.Pill(_batch, right, 4, "ui_memory_dust", default, $"{_dust.MemoryDust}", "DUST", new Color(0x9E, 0x86, 0xFF)) - 5;
-        _ui.Pill(_batch, right, 4, "ui_gleam_coin", default, $"{_hunter.Gleam}", "GLEAM", new Color(0xF0, 0xB2, 0x4A));
+        right = _ui.Pill(_batch, right, 4, "ui_memory_dust", default, Abbrev(_dust.MemoryDust), "DUST", new Color(0x9E, 0x86, 0xFF)) - 5;
+        _ui.Pill(_batch, right, 4, "ui_gleam_coin", default, Abbrev(_hunter.Gleam), "GLEAM", new Color(0xF0, 0xB2, 0x4A));
     }
 
     private void DrawTitle()

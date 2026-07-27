@@ -444,7 +444,7 @@ public sealed class SoloExpeditionScreen
         if (_bannerTimer > 0f)
         {
             var fade = Math.Clamp(_bannerTimer * 1.4f, 0f, 1f);
-            _ui.TextCenter(b, _bannerText, 195, 74, Gold * fade);
+            _ui.TextCenterBig(b, _bannerText, 196, 78, Gold * fade, 11);   // floats above the fight, clear of the header/HUD
         }
 
         // ── package_10 HUD + panels, drawn over the arena. ──
@@ -511,8 +511,8 @@ public sealed class SoloExpeditionScreen
     /// <summary>Top-center stage header (region B): region name, current wave, and the conquest progress bar.</summary>
     private void DrawStageHeader(SpriteBatch b, string regionName, bool isBossWave)
     {
-        const int cx = 222;   // centered between the HUD (ends ~140) and the resource bar (starts ~320)
-        _ui.TextCenterBig(b, regionName.ToUpperInvariant(), cx, 2, Gold, 14);   // prominent region title
+        const int cx = 196;   // centered between the HUD (ends ~140) and the now-compact resource bar
+        _ui.TextCenterBig(b, regionName.ToUpperInvariant(), cx, 3, Gold, 12);   // prominent region title
         _ui.TextCenter(b, $"WAVE {_run!.Wave + 1}", cx, 20, Bone);
         var frac = ConquerAt > 0 ? Math.Clamp(Deepest / (float)ConquerAt, 0f, 1f) : 0f;
         _ui.BarArt(b, new Rectangle(cx - 55, 31, 110, 6), frac, isBossWave ? Gold : Verdant);
