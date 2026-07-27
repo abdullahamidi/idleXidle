@@ -60,7 +60,10 @@ public sealed class SoloExpeditionScreen
     // at the front-melee anchor (1110,750), smaller (~250px) so the hunter reads as the focal point. The old
     // layout over-sized the enemy/boss ("boss too big, masked in a box") — the spec's ranges fix that.
     private static readonly Rectangle ChampBox = new(560 - 180, 735 - 390, 360, 390);
-    private static readonly Rectangle EnemyBox = new(1110 - 150, 750 - 250, 300, 250);
+    // Rev 3 §16.1: one normal enemy bottom-centred at (1160,735), visible ~320px (range 280–360). A boss is
+    // drawn far larger from its own anchor (see the draw), so this box is the NORMAL-enemy size only.
+    private static readonly Rectangle EnemyBox = new(1160 - 175, 735 - 340, 350, 340);
+    private static readonly Rectangle BossBox = new(1210 - 220, 750 - 540, 440, 540);   // §16.5: (1210,750), ~510px tall
 
     // package_03: one representative common enemy per Source (no Nature enemy shipped — a wisp stands in).
     private static readonly Dictionary<Source, string> EnemyForSource = new()
@@ -373,7 +376,7 @@ public sealed class SoloExpeditionScreen
     private static int Jitter(int seed, int spread) => (int)(seed * 2654435761L % (spread * 2 + 1)) - spread;
 
     // ══════════════════════════════════════════════════════════════════════════════════════════
-    public void Draw(SpriteBatch b, Point mouse, bool clicked, string regionName, string enemyArt = "")
+    public void Draw(SpriteBatch b, Point mouse, bool clicked, string regionName, string enemyArt = "", bool suppressBanner = false)
     {
         _enemyArt = enemyArt;
         // This screen authors in true 1920 coords at canvas scale 1, so the VFX overlay draws at scale 1 too.
@@ -385,24 +388,22 @@ public sealed class SoloExpeditionScreen
 
         // The top HUD, stage header, resource bar and hunt-log panel are drawn as overlays AFTER the arena.
 
-        // ── The enemy, with an anticipation ring before it swings, sliding in on a new wave. ─────────
-        var elunge = (int)(_enemyLunge * -40f);
-        var enter = (int)(_enemyEnter * 280f);   // starts a bit right of home and slides to it
-        var ebox = new Rectangle(EnemyBox.X + elunge + enter, EnemyBox.Y, EnemyBox.Width, EnemyBox.Height);
-        _ui.Fill(b, new Rectangle(ebox.X + 48, ebox.Bottom - 14, ebox.Width - 96, 12), GroundShade);
-        // A boss wave shows the region's boss creature; every other wave shows the element's creature (art
-        // pack v1 is one creature per SOURCE — see design/art/asset-integration-spec.md §4). Nothing is
-        // substituted: an unmatched key falls to the flat marker below.
+        // ── The enemy (Rev 3 §16-17): a normal enemy grounds at (1160,735) ~320px; a boss is far larger from
+        // its own anchor (1210,750) and gets a dedicated TOP-OF-ARENA bar, never an overhead one. ─────────
         var isBossWave = WaveScaling.IsBossWave(_run.Wave + 1, ExpeditionTuning.Default);
+        var elunge = (int)(_enemyLunge * -40f);
+        var enter = (int)(_enemyEnter * 280f);   // starts right of home and slides in
+        var baseBox = isBossWave ? BossBox : EnemyBox;
+        var ebox = new Rectangle(baseBox.X + elunge + enter, baseBox.Y, baseBox.Width, baseBox.Height);
+        _ui.Fill(b, new Rectangle(ebox.X + 60, ebox.Bottom - 14, ebox.Width - 120, 14), GroundShade);
+
         // package_02A/03A/04A flipbook strips — idle loops; the attack/slam plays during the wind-up
         // telegraph. Falls back to the package_03/04 static key poses for enemies/bosses without a strip.
         var bob = (int)(MathF.Sin(_anim * 2f) * 8f);
         var attacking = _enemyWindup > 0f;
-        var boxW = isBossWave ? (int)(ebox.Width * 1.15f) : ebox.Width;
-        var boxH = isBossWave ? (int)(ebox.Height * 1.15f) : ebox.Height - 24;
-        var figTop = ebox.Bottom - 16 - boxH;   // stable top of the drawn figure (no bob) — anchors the bar/label
-        var ab = new Rectangle(ebox.Center.X - boxW / 2, figTop + bob, boxW, boxH);
-        var crop = isBossWave ? 0.30f : 0.08f;   // boss frames have a big smoke STREAK across the top — trim it
+        var crop = isBossWave ? 0.30f : 0.08f;   // boss frames carry a smoke STREAK across the top — trim it
+        var figTop = ebox.Bottom - ebox.Height;   // stable figure top (no bob) — anchors the wind-up ring
+        var ab = new Rectangle(ebox.X, figTop + bob, ebox.Width, ebox.Height);
 
         string? stripKey = null, staticKey = null;
         var fps = attacking ? 16f : isBossWave ? 10f : 12f;
@@ -438,13 +439,24 @@ public sealed class SoloExpeditionScreen
         if (_enemyWindup > 0f)
         {
             var r = (int)(16 + _enemyWindup * 32);
-            Outline(b, new Rectangle(ab.X - r, figTop - r, ab.Width + r * 2, boxH + r * 2), Ember, 4);
+            Outline(b, new Rectangle(ab.X - r, figTop - r, ab.Width + r * 2, ebox.Height + r * 2), Ember, 4);
         }
-        // HP bar + BOSS label ride just above the ACTUAL figure top, so they scale with the boss.
-        var barW = isBossWave ? boxW - 32 : ebox.Width - 48;
-        _ui.BarArt(b, new Rectangle(ebox.Center.X - barW / 2, figTop - 44, barW, 36), _replay.EnemyHealthFraction, isBossWave ? "boss" : "health");
-        if (isBossWave)   // only the CURRENT boss wave — was also firing on the next enemy via LastWaveWasBoss
-            _ui.TextCenterBig(b, "BOSS", ebox.Center.X, figTop - 84, Gold, 40);
+
+        if (isBossWave)
+        {
+            // Dedicated top-of-arena boss bar (§17.3) — the boss gets NO overhead bar.
+            _ui.TextCenterBig(b, "BOSS", 960, 158, Gold, 24);
+            _ui.BarArt(b, new Rectangle(510, 184, 900, 30), _replay.EnemyHealthFraction, "boss");
+        }
+        else
+        {
+            // Normal enemy: a QUIET minimal bar (§17.1), 130×12, ~18px above the figure — no ornate frame.
+            var ebar = new Rectangle(ebox.Center.X - 65, figTop - 24, 130, 12);
+            _ui.Fill(b, ebar, new Color(0x0D, 0x0B, 0x14, 0xDC));
+            var fw = (int)(ebar.Width * Math.Clamp(_replay.EnemyHealthFraction, 0f, 1f));
+            if (fw > 0) _ui.Fill(b, new Rectangle(ebar.X, ebar.Y, fw, ebar.Height), Ember);
+            _ui.Fill(b, new Rectangle(ebar.X, ebar.Y, ebar.Width, 2), new Color(0, 0, 0, 0x50));
+        }
 
         // ── The champion (arena left). Name/HP now live in the top-left HUD. ──
         var push = (int)(_champLunge * 40f);
@@ -458,8 +470,9 @@ public sealed class SoloExpeditionScreen
         // A red wash over the whole frame the instant the champion falls — you can't miss the death.
         if (_deathFlash > 0f) _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), Ember * (_deathFlash * 0.35f));
 
-        // The wave-cleared banner: a gold flash above the fight that fades as the next wave opens.
-        if (_bannerTimer > 0f)
+        // The wave-cleared banner: a gold flash above the fight that fades as the next wave opens. Rev 3 §23:
+        // only one major overlay at a time — the welcome-back toast (higher priority) suppresses this.
+        if (!suppressBanner && _bannerTimer > 0f)
         {
             var fade = Math.Clamp(_bannerTimer * 1.4f, 0f, 1f);
             _ui.TextCenterBig(b, _bannerText, 960, 268, Gold * fade, 40);   // spec §18.2 — centred in the arena, clear of the header
@@ -536,18 +549,26 @@ public sealed class SoloExpeditionScreen
     /// <summary>Top-center stage header (region B): region name, current wave, and the conquest progress bar.</summary>
     private void DrawStageHeader(SpriteBatch b, string regionName, bool isBossWave)
     {
-        // Spec §9: stage header on ui_panel_modal_wide (630,18,660,135). One clean hierarchy: region → depth
-        // → progress → wave, all centred on the banner (cx=960).
-        var bar = new Rectangle(630, 18, 660, 135);
+        // Rev 3 §12: stage header (630,18,560,135) — narrower, so it clears the currency bar (≥20px gap). One
+        // clean hierarchy region → depth → progress → wave, all centred at x=910 (the banner centre).
+        var bar = new Rectangle(630, 18, 560, 135);
         if (_ui.Assets.Get("ui_panel_modal_wide") is { } bg) b.Draw(bg, bar, Color.White);
         else _ui.Panel(b, bar);
-        var cx = bar.Center.X;   // 960
-        _ui.TextCenterBig(b, regionName.ToUpperInvariant(), cx, 32, Gold, 38);
+        const int cx = 910;
+        _ui.TextCenterBig(b, Ellipsize(regionName.ToUpperInvariant(), 490, 36), cx, 32, Gold, 36);
         _ui.TextCenterBig(b, Deepest >= ConquerAt ? "CONQUERED" : $"DEPTH {Deepest} / {ConquerAt}",
-            cx, 76, Deepest >= ConquerAt ? Gold : Bone, 22);
-        _ui.BarArt(b, new Rectangle(720, 105, 480, 18),
+            cx, 73, Deepest >= ConquerAt ? Gold : Bone, 24);
+        _ui.BarArt(b, new Rectangle(710, 102, 400, 18),
             ConquerAt > 0 ? Math.Clamp(Deepest / (float)ConquerAt, 0f, 1f) : 0f, "progress");
-        _ui.TextCenterBig(b, $"WAVE {_run!.Wave + 1}", cx, 127, isBossWave ? Gold : Bone, 20);
+        _ui.TextCenterBig(b, $"WAVE {_run!.Wave + 1}", cx, 124, isBossWave ? Gold : Bone, 22);
+    }
+
+    /// <summary>Clamp text to a pixel width at the given size, adding an ellipsis (spec §12.4 / §25.1).</summary>
+    private string Ellipsize(string s, int maxPx, int px)
+    {
+        if (_ui.MeasureBig(s, px) <= maxPx) return s;
+        while (s.Length > 1 && _ui.MeasureBig(s + "…", px) > maxPx) s = s[..^1];
+        return s + "…";
     }
 
     private static readonly Color PlateEdge = new(0x74, 0x62, 0x3E);
@@ -566,40 +587,42 @@ public sealed class SoloExpeditionScreen
     /// Loot, Expedition — all fed from live run data.</summary>
     private void DrawRightColumn(SpriteBatch b)
     {
-        // Spec §16: right context rail (1570,110,326,690) — a stack of secondary panels, all live data.
+        // Rev 3 §20: right context rail (1570,110,326,690) — secondary panels, all live data, NO keyboard
+        // hints (§21). Idle-rate → objective → reward activity → expedition.
         const int px = 1570, pw = 326;
 
-        // Idle rewards (1570,110,326,145). Rewards are auto-credited, so no Claim button (spec §16.2).
-        var inner = CleanPanel(b, new Rectangle(px, 110, pw, 145), "IDLE REWARDS");
+        // Idle rate (1570,110,326,130). Auto-credited, so no Claim button (§20.2).
+        var inner = CleanPanel(b, new Rectangle(px, 110, pw, 130), "IDLE RATE");
         if (_ui.Assets.Get("currency_gleam") is { } gi) b.Draw(gi, new Rectangle(inner.X, inner.Y + 2, 38, 38), Color.White);
         _ui.TextBig(b, $"+{Game1.Abbrev((long)(IdleGleamRate * 60f))}/min", inner.X + 48, inner.Y + 8, Gold, 24);
-        _ui.TextBig(b, "GLEAM · AUTO", inner.Right - _ui.MeasureBig("GLEAM · AUTO", 14), inner.Y + 14, Slate, 14);
 
-        // Objective (1570,269,326,150).
-        inner = CleanPanel(b, new Rectangle(px, 269, pw, 150), "OBJECTIVE");
+        // Objective (1570,254,326,150).
+        inner = CleanPanel(b, new Rectangle(px, 254, pw, 150), "OBJECTIVE");
         _ui.TextBig(b, Deepest >= ConquerAt ? "Conquered" : $"Reach depth {ConquerAt}", inner.X, inner.Y, Bone, 19);
         _ui.TextRightBig(b, $"{Math.Min(Deepest, ConquerAt)} / {ConquerAt}", inner.Right, inner.Y, Gold, 18);
         _ui.BarArt(b, new Rectangle(inner.X, inner.Y + 40, inner.Width, 26), ConquerAt > 0 ? Math.Clamp(Deepest / (float)ConquerAt, 0f, 1f) : 0f, "progress");
 
-        // Recent rewards / pending claims (spec §16.4 fallback: real data, no fake loot grid).
-        inner = CleanPanel(b, new Rectangle(px, 433, pw, 223), "REWARDS");
-        var ly = inner.Y;
+        // Reward activity (1570,418,326,210) — real summary, no fake loot grid, no keyboard hints (§20.4/§21).
+        inner = CleanPanel(b, new Rectangle(px, 418, pw, 210), "REWARD ACTIVITY");
+        var ry = inner.Y;
+        var anyReward = false;
         if (ChestCount > 0)
         {
-            if (_ui.Assets.Get("chest_loot") is { } ci) b.Draw(ci, new Rectangle(inner.X, ly, 44, 44), Color.White);
-            _ui.TextBig(b, $"{ChestCount} chest{(ChestCount == 1 ? "" : "s")} - Forge (F)", inner.X + 56, ly + 10, Bone, 18); ly += 56;
+            _ui.TextBig(b, $"{ChestCount} chest{(ChestCount == 1 ? "" : "s")} available", inner.X, ry, Bone, 18); ry += 40; anyReward = true;
         }
         if (Mastery.Available > 0)
         {
-            if (_ui.Assets.Get("state_mastery_128") is { } mi) b.Draw(mi, new Rectangle(inner.X, ly, 44, 44), Color.White);
-            _ui.TextBig(b, $"{Mastery.Available} mastery - Build (B)", inner.X + 56, ly + 10, Bone, 18); ly += 56;
+            _ui.TextBig(b, $"{Mastery.Available} Mastery Point{(Mastery.Available == 1 ? "" : "s")}", inner.X, ry, Bone, 18); ry += 40; anyReward = true;
         }
-        if (ChestCount == 0 && Mastery.Available == 0) _ui.TextBig(b, "No pending claims", inner.X, inner.Y, Slate, 18);
+        if (Deepest > 0) _ui.TextBig(b, $"Deepest wave reached: {Deepest}", inner.X, ry, Slate, 16);
+        else if (!anyReward) _ui.TextBig(b, "No rewards pending", inner.X, inner.Y, Slate, 18);
 
-        // Expedition (1570,672,326,128) — region wave + live status.
-        inner = CleanPanel(b, new Rectangle(px, 672, pw, 128), "EXPEDITION");
+        // Expedition (1570,642,326,145) — region wave + live status.
+        inner = CleanPanel(b, new Rectangle(px, 642, pw, 145), "EXPEDITION");
         _ui.TextBig(b, $"Wave {_run!.Wave + 1}", inner.X, inner.Y, Bone, 19);
-        _ui.TextRightBig(b, _mode == Mode.Downed ? "RECOVERING" : "IN PROGRESS", inner.Right, inner.Y + 2, _mode == Mode.Downed ? Ember : Verdant, 16);
+        var state = _mode == Mode.Downed ? "RECOVERING"
+            : WaveScaling.IsBossWave(_run.Wave + 1, ExpeditionTuning.Default) ? "BOSS WAVE" : "ACTIVE";
+        _ui.TextRightBig(b, state, inner.Right, inner.Y + 2, _mode == Mode.Downed ? Ember : state == "BOSS WAVE" ? Gold : Verdant, 16);
     }
 
     /// <summary>Auto-skill dock (region F): the build as circular auto-cast medallions, centered under the
@@ -619,10 +642,16 @@ public sealed class SoloExpeditionScreen
             if (i < skills.Count)
             {
                 var s = skills[i];
+                var sc = SourceColor.GetValueOrDefault(s.Source, Bone);
                 if (_ui.Assets.Get("ui_slot_skill_hex") is { } sl) b.Draw(sl, box, Color.White);
+                // §18.3 Layer 1: source-coloured inner glow (no Form-glyph asset ships, so the Source glyph is
+                // the central identity and the Form name labels it — a quieter composition per §36).
+                _ui.Diamond(b, new Rectangle(box.Center.X - 33, box.Center.Y - 33, 66, 66), sc * 0.28f);
                 if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } g)
                     b.Draw(g, new Rectangle(box.X + 28, box.Y + 24, box.Width - 56, box.Height - 56), Color.White);
-                else _ui.Diamond(b, new Rectangle(box.Center.X - 24, box.Center.Y - 24, 48, 48), SourceColor.GetValueOrDefault(s.Source, Bone));
+                else _ui.Diamond(b, new Rectangle(box.Center.X - 24, box.Center.Y - 24, 48, 48), sc);
+                // (§18.3 Layer 4 Vow glyph omitted: the loadout SkillChoice doesn't carry the Vow — it lives on
+                // the built ability. Wiring the built skills through would add it; deferred as optional.)
                 _ui.TextCenterBig(b, FormShort(s.Form), box.Center.X, box.Bottom + 2, Bone, 16);
                 _ui.TextCenterBig(b, "AUTO", box.Center.X, box.Bottom + 26, Gold, 14);
             }

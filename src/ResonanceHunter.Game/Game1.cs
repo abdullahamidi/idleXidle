@@ -699,7 +699,7 @@ public class Game1 : Game
                     _expedition.Mastery = _mastery;
                     // Pose the new fight-screen UX: the welcome-back toast, and the "you have things to do"
                     // attention cue (a waiting chest + unspent mastery points).
-                    _bootMessage = "WELCOME BACK — YOUR CHAMPION EARNED +140 GLEAM WHILE AWAY.";
+                    _bootMessage = "WELCOME BACK — +140 GLEAM WHILE AWAY";
                     _bootColor = Gold; _bootTimer = 7f;
                     _forge.AddChest(new Chest { Rarity = Rarity.Epic, Tier = 8, Element = Source.Nature });
                     _mastery.SetEarned(3);
@@ -1147,14 +1147,17 @@ public class Game1 : Game
     {
         if (_bootTimer <= 0f || _bootMessage.Length == 0) return;
         var fade = Math.Clamp(_bootTimer / 1.2f, 0f, 1f);   // fade over the last ~1.2s
-        // Compact toast centered in the arena (hunt spec 18.1) — NOT a full-width band over the top HUD.
-        // 1920-space: max width, measure padding, position and bevel thickness all ×4 of the old 480 values.
-        var w = Math.Min(1360, _ui.Measure(_bootMessage) + 88);
-        var r = new Rectangle(960 - w / 2, 368, w, 80);
+        // Rev 3 §23.2: a COMPACT welcome-back toast (≤740 wide) near the top of the arena — never a full-width
+        // band over the HUD. Text is truncated to fit the surface rather than widening it.
+        var msg = _bootMessage;
+        while (msg.Length > 6 && _ui.Measure(msg) > 664) msg = msg[..^2];
+        if (msg.Length != _bootMessage.Length) msg = msg.TrimEnd() + "…";
+        var w = Math.Min(740, _ui.Measure(msg) + 72);
+        var r = new Rectangle(960 - w / 2, 165, w, 70);
         _ui.Fill(_batch, r, new Color(0x10, 0x0D, 0x16) * (0.9f * fade));
         _ui.Fill(_batch, new Rectangle(r.X, r.Y, r.Width, 4), _bootColor * (0.65f * fade));
         _ui.Fill(_batch, new Rectangle(r.X, r.Bottom - 4, r.Width, 4), _bootColor * (0.65f * fade));
-        _ui.TextCenter(_batch, _bootMessage, 960, r.Y + 24, _bootColor * fade);
+        _ui.TextCenter(_batch, msg, 960, r.Y + 22, _bootColor * fade);
     }
 
     private bool Pressed(Keys k) => _keys.IsKeyDown(k) && _prevKeys.IsKeyUp(k);
@@ -1314,7 +1317,7 @@ public class Game1 : Game
         else if (_showBuild) _buildScreen.Draw(_batch, CanvasMouse, _dust);
         else if (_showCharacter) _character.Draw(_batch, CanvasMouse, _hunter);
         else if (_showStats) _stats.Draw(_batch, CanvasMouse, _hunter);
-        else _expedition.Draw(_batch, CanvasMouse, MouseClicked, Regions.Get(_activeRegion).Name, EnemyArtFor(_activeRegion));
+        else _expedition.Draw(_batch, CanvasMouse, MouseClicked, Regions.Get(_activeRegion).Name, EnemyArtFor(_activeRegion), _bootTimer > 0f);
         _batch.End();
 
         // Batch C — the shared overlays (pills, nav, help/settings, boot toast), authored in true 1920 coords.
