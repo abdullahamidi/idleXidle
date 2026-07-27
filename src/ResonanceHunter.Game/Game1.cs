@@ -205,7 +205,9 @@ public class Game1 : Game
     /// leading line" all along; the luminance rule was modelling the wrong mechanism. Trust the ink.
     /// </para>
     /// </remarks>
-    private static readonly Color ArenaDim = new(150, 150, 162);
+    // A LIGHT readability tint only (~15% darken), per the hunt spec — the old (150,150,162) multiply cut
+    // the background to ~59% brightness and read as muddy/blurred.
+    private static readonly Color ArenaDim = new(216, 216, 224);
 
 
 
@@ -1145,10 +1147,13 @@ public class Game1 : Game
     {
         if (_bootTimer <= 0f || _bootMessage.Length == 0) return;
         var fade = Math.Clamp(_bootTimer / 1.2f, 0f, 1f);   // fade over the last ~1.2s
-        _ui.Fill(_batch, new Rectangle(0, 40, 480, 22), new Color(0x12, 0x0F, 0x18) * (0.92f * fade));
-        _ui.Fill(_batch, new Rectangle(0, 40, 480, 1), _bootColor * fade);
-        _ui.Fill(_batch, new Rectangle(0, 61, 480, 1), _bootColor * fade);
-        _ui.TextCenter(_batch, _bootMessage, 240, 47, _bootColor * fade);
+        // Compact toast centered in the arena (hunt spec 18.1) — NOT a full-width band over the top HUD.
+        var w = Math.Min(340, _ui.Measure(_bootMessage) + 22);
+        var r = new Rectangle(240 - w / 2, 92, w, 20);
+        _ui.Fill(_batch, r, new Color(0x10, 0x0D, 0x16) * (0.9f * fade));
+        _ui.Fill(_batch, new Rectangle(r.X, r.Y, r.Width, 1), _bootColor * (0.65f * fade));
+        _ui.Fill(_batch, new Rectangle(r.X, r.Bottom - 1, r.Width, 1), _bootColor * (0.65f * fade));
+        _ui.TextCenter(_batch, _bootMessage, 240, r.Y + 6, _bootColor * fade);
     }
 
     private bool Pressed(Keys k) => _keys.IsKeyDown(k) && _prevKeys.IsKeyUp(k);
