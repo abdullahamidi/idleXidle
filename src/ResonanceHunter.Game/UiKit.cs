@@ -306,9 +306,14 @@ public sealed class UiKit
         var w = 6 + icon + 3 + valW + (labW > 0 ? 4 + labW : 0) + 6;
         var r = new Rectangle(right - w, y, w, h);
 
-        Fill(b, r, new Color(0x1A, 0x16, 0x26));
-        Fill(b, new Rectangle(r.X, r.Y, r.Width, 1), accent * 0.55f);                 // top rim, tinted
-        Fill(b, new Rectangle(r.X, r.Bottom - 1, r.Width, 1), Color.Black * 0.35f);
+        // Ornate capsule from package_01 (guide), not a flat fill.
+        if (Assets.Get("ui_panel_small") is { } cap) b.Draw(cap, r, Color.White);
+        else
+        {
+            Fill(b, r, new Color(0x1A, 0x16, 0x26));
+            Fill(b, new Rectangle(r.X, r.Y, r.Width, 1), accent * 0.55f);
+            Fill(b, new Rectangle(r.X, r.Bottom - 1, r.Width, 1), Color.Black * 0.35f);
+        }
 
         var ix = r.X + 6;
         if (iconKey is not null && Assets.Get(iconKey) is { } ic)

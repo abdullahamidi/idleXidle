@@ -1696,11 +1696,11 @@ public class Game1 : Game
         }
     }
 
-    private static Rectangle NavHexRect(int i)
+    private static Rectangle NavHexRect(int i)   // now a rectangular TILE (guide: package_01 nav tiles)
     {
-        const int cell = 38, hexW = 27, hexH = 22, top = 239;
+        const int cell = 57, tileW = 54, tileH = 32, top = 236;
         var cx = CanvasWidth / 2 - Nav.Length * cell / 2 + cell / 2 + i * cell;
-        return new Rectangle(cx - hexW / 2, top, hexW, hexH);
+        return new Rectangle(cx - tileW / 2, top, tileW, tileH);
     }
 
     private void DrawHexNav()
@@ -1714,16 +1714,18 @@ public class Game1 : Game
         var active = NavActive();
         for (var i = 0; i < Nav.Length; i++)
         {
-            var hex = NavHexRect(i);
+            var r = NavHexRect(i);
             var on = i == active;
-            var fill = on ? NavGold : hex.Contains(CanvasMouse) ? NavHover : NavIdle;
-            _ui.Hex(_batch, hex, fill);
-            // package_08 navigation/state glyph inside the hex; fall back to the gem if the art is missing.
+            var hover = r.Contains(CanvasMouse);
+            // package_01 button TILE as the nav cell (guide), not a hexagon. Active uses the primary button.
+            var key = on ? "ui_button_primary" : "ui_button_secondary";
+            if (_assets.Get(key) is { } tile) _batch.Draw(tile, r, on || hover ? Color.White : new Color(0xB8, 0xB8, 0xC0));
+            else _ui.Fill(_batch, r, on ? NavGold : hover ? NavHover : NavIdle);
             if (_assets.Get(Nav[i].Glyph) is { } g)
-                _batch.Draw(g, new Rectangle(hex.Center.X - 8, hex.Center.Y - 9, 16, 16), Color.White);
+                _batch.Draw(g, new Rectangle(r.Center.X - 8, r.Y + 3, 16, 16), on ? Color.White : new Color(0xD8, 0xD4, 0xE2));
             else
-                _ui.Diamond(_batch, new Rectangle(hex.Center.X - 5, hex.Center.Y - 6, 10, 10), on ? NavIdle : NavGem);
-            _ui.TextCenter(_batch, Nav[i].Label, hex.Center.X, hex.Bottom + 1, on ? NavGold : NavLabel);
+                _ui.Diamond(_batch, new Rectangle(r.Center.X - 5, r.Y + 5, 10, 10), on ? NavIdle : NavGem);
+            _ui.TextCenter(_batch, Nav[i].Label, r.Center.X, r.Bottom - 9, on ? NavGold : NavLabel);
         }
     }
 
