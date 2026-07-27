@@ -387,11 +387,11 @@ public sealed class SoloExpeditionScreen
         // telegraph. Falls back to the package_03/04 static key poses for enemies/bosses without a strip.
         var bob = (int)(MathF.Sin(_anim * 2f) * 2f);
         var attacking = _enemyWindup > 0f;
-        var boxW = isBossWave ? (int)(ebox.Width * 1.15f) : ebox.Width;
-        var boxH = isBossWave ? (int)(ebox.Height * 1.25f) : ebox.Height - 6;
+        var boxW = isBossWave ? (int)(ebox.Width * 1.25f) : ebox.Width;
+        var boxH = isBossWave ? (int)(ebox.Height * 1.4f) : ebox.Height - 6;
         var figTop = ebox.Bottom - 4 - boxH;   // stable top of the drawn figure (no bob) — anchors the bar/label
         var ab = new Rectangle(ebox.Center.X - boxW / 2, figTop + bob, boxW, boxH);
-        var crop = isBossWave ? 0.22f : 0.08f;   // bosses have big top padding + streak artifacts to trim
+        var crop = isBossWave ? 0.30f : 0.08f;   // boss frames have a big smoke STREAK across the top — trim it
 
         string? stripKey = null, staticKey = null;
         var fps = attacking ? 16f : isBossWave ? 10f : 12f;
@@ -432,7 +432,7 @@ public sealed class SoloExpeditionScreen
         // HP bar + BOSS label ride just above the ACTUAL figure top, so they scale with the boss.
         var barW = isBossWave ? boxW - 8 : ebox.Width - 12;
         _ui.BarArt(b, new Rectangle(ebox.Center.X - barW / 2, figTop - 9, barW, 6), _replay.EnemyHealthFraction, Ember);
-        if (_run.LastWaveWasBoss || isBossWave)
+        if (isBossWave)   // only the CURRENT boss wave — was also firing on the next enemy via LastWaveWasBoss
             _ui.TextCenterBig(b, "BOSS", ebox.Center.X, figTop - 21, Gold, 10);
 
         // ── The champion (arena left). Name/HP now live in the top-left HUD. ──
@@ -488,24 +488,33 @@ public sealed class SoloExpeditionScreen
     /// row of Source icons for the build's elements.</summary>
     private void DrawHunterHud(SpriteBatch b)
     {
-        var panel = new Rectangle(5, 4, 134, 52);
-        _ui.Panel(b, panel);
-        // Medallion disc first (it's opaque), then the portrait INSET on top so the ornate ring frames it.
+        // CLEAN backing, not the ornate Panel: its big corner art crowds a dense HUD this small and pushed
+        // the text into the frame. A flat dark plate + thin brass edge reads clean and gives full width.
+        var panel = new Rectangle(5, 5, 142, 52);
+        _ui.Fill(b, panel, new Color(0x12, 0x0F, 0x1C, 0xDC));
+        var edge = new Color(0x74, 0x62, 0x3E);
+        _ui.Fill(b, new Rectangle(panel.X, panel.Y, panel.Width, 1), edge);
+        _ui.Fill(b, new Rectangle(panel.X, panel.Bottom - 1, panel.Width, 1), edge);
+        _ui.Fill(b, new Rectangle(panel.X, panel.Y, 1, panel.Height), edge);
+        _ui.Fill(b, new Rectangle(panel.Right - 1, panel.Y, 1, panel.Height), edge);
+
         var med = new Rectangle(panel.X + 4, panel.Y + 3, 46, 46);
         if (_ui.Assets.Get("ui_medallion_round") is { } mfr) b.Draw(mfr, med, Color.White);
         if (_ui.Assets.Get("hunter_portrait") is { } por)
             b.Draw(por, new Rectangle(med.X + 8, med.Y + 8, med.Width - 16, med.Height - 16), Color.White);
 
-        var tx = med.Right + 5;
+        var tx = med.Right + 6;
+        var rx = panel.Right - 6;
         var adept = Mastery.MasteryForm() is { } mf ? $"{FormShort(mf)} ADEPT" : "SEEKER";
-        _ui.Text(b, adept, tx, panel.Y + 5, Bone);
-        _ui.TextRight(b, $"LV {_hunter?.HunterLevel ?? 1}", panel.Right - 7, panel.Y + 5, Gold);
+        _ui.Text(b, adept, tx, panel.Y + 6, Bone);
+        _ui.TextRight(b, $"LV {_hunter?.HunterLevel ?? 1}", rx, panel.Y + 6, Gold);
         var hp = Math.Max(0, _replay?.HealthOf(0) ?? 0);
-        _ui.BarArt(b, new Rectangle(tx, panel.Y + 21, panel.Right - tx - 7, 7), _replay?.HealthFractionOf(0) ?? 1f, Bloom);
-        _ui.Text(b, $"{hp}/{_champ?.MaxHealth ?? 0}", tx, panel.Y + 31, Slate);
-        _ui.TextRight(b, $"PWR {_hunter?.PowerRating ?? 0}", panel.Right - 7, panel.Y + 31, Ember);
+        var hpBar = new Rectangle(tx, panel.Y + 20, rx - tx, 9);
+        _ui.BarArt(b, hpBar, _replay?.HealthFractionOf(0) ?? 1f, Bloom);
+        _ui.TextCenter(b, $"{hp}/{_champ?.MaxHealth ?? 0}", hpBar.Center.X, hpBar.Y + 1, Bone);   // on the bar
+        _ui.TextRight(b, $"PWR {_hunter?.PowerRating ?? 0}", rx, panel.Y + 34, Ember);
 
-        var sx = panel.X + 3;
+        var sx = panel.X + 4;
         foreach (var s in Loadout.Skills)
         {
             var box = new Rectangle(sx, panel.Bottom + 3, 14, 14);
