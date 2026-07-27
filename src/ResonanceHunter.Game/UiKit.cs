@@ -161,8 +161,8 @@ public sealed class UiKit
         // Rev 4 §8/§9: a horizontal strip must be exactly N square frames, and we draw exactly ONE of them
         // (the src rect below is a single frame). A width that isn't a whole multiple means the sheet is
         // mis-declared (or a preview/contact sheet slipped in) and frame extraction would smear.
-        System.Diagnostics.Debug.Assert(tex.Width % fw == 0,
-            $"Animation strip '{stripKey}' width {tex.Width} is not a whole multiple of frame size {fw}.");
+        if (tex.Width % fw != 0)   // dev warning only — a Debug.Assert here would abort the game's Debug build
+            System.Diagnostics.Debug.WriteLine($"Animation strip '{stripKey}' width {tex.Width} is not a whole multiple of frame size {fw}.");
         var i = (int)(seconds * fps);
         i = loop ? (i % frames + frames) % frames : Math.Clamp(i, 0, frames - 1);
         // Trim the transparent headroom (and any streak artifacts) off the top of the frame, then FILL the

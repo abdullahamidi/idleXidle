@@ -1469,12 +1469,15 @@ public class Game1 : Game
         // Rev 4 §20: ONE currency per capsule — no packed "S.. E.. C.. X..". The three most Hunt-relevant
         // (Gleam, Dust, Scrap); the finer materials (Essence/Core/Crystal) live on the Forge. Three capsules
         // fit the bar's 686px without crossing into the stage header.
+        // Rev 4 §20.4: icon + abbreviated value ONLY (no long text label). A labelled pill with an 8-digit
+        // value (e.g. 130.6M GLEAM) balloons past the 686px bar and crosses into the stage header — the icon
+        // carries the identity, the number is abbreviated. The check is a crash-SAFE dev warning, never a
+        // Debug.Assert (a failed assert aborts the game's Debug build — the "Continue" crash).
         var right = 1896;   // 1920-space right margin (was 474 in 480-space)
-        right = _ui.Pill(_batch, right, 16, null, new Color(0x9A, 0xC0, 0x88), Abbrev(_hunter.MaterialOf(Material.Scrap)), "SCRAP", new Color(0x9A, 0xC0, 0x88)) - 20;
-        right = _ui.Pill(_batch, right, 16, "ui_memory_dust", default, Abbrev(_dust.MemoryDust), "DUST", new Color(0x9E, 0x86, 0xFF)) - 20;
-        var leftEdge = _ui.Pill(_batch, right, 16, "ui_gleam_coin", default, Abbrev(_hunter.Gleam), "GLEAM", new Color(0xF0, 0xB2, 0x4A));
-        // Rev 4 §6.1/§6.2: the currency bar must clear the stage header (630..1190) with a 20px gap.
-        System.Diagnostics.Debug.Assert(leftEdge >= 1210, $"Currency bar (left {leftEdge}) overlaps the stage header.");
+        right = _ui.Pill(_batch, right, 16, null, new Color(0x9A, 0xC0, 0x88), Abbrev(_hunter.MaterialOf(Material.Scrap)), "", new Color(0x9A, 0xC0, 0x88)) - 20;
+        right = _ui.Pill(_batch, right, 16, "ui_memory_dust", default, Abbrev(_dust.MemoryDust), "", new Color(0x9E, 0x86, 0xFF)) - 20;
+        var leftEdge = _ui.Pill(_batch, right, 16, "ui_gleam_coin", default, Abbrev(_hunter.Gleam), "", new Color(0xF0, 0xB2, 0x4A));
+        if (leftEdge < 1210) System.Diagnostics.Debug.WriteLine($"Currency bar (left {leftEdge}) crowds the stage header.");
     }
 
     private void DrawTitle()

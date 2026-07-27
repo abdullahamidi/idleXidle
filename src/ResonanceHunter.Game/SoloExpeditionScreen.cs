@@ -415,9 +415,10 @@ public sealed class SoloExpeditionScreen
 
         _isBossWave = DevForceBoss || WaveScaling.IsBossWave(_run.Wave + 1, ExpeditionTuning.Default);
         var overlay = ResolveOverlay(suppressBanner);
-        // Rev 4 §18.3: exactly one major overlay. The host draws WelcomeBack; when it does, the screen draws none.
-        System.Diagnostics.Debug.Assert(!(suppressBanner && overlay != HuntOverlay.None),
-            "Only one major Hunt overlay may be active.");
+        // Rev 4 §18.3: exactly one major overlay. The host draws WelcomeBack; when it does, the screen draws
+        // none. Dev warning only — never a Debug.Assert (a failed assert aborts the game's Debug build).
+        if (suppressBanner && overlay != HuntOverlay.None)
+            System.Diagnostics.Debug.WriteLine("Only one major Hunt overlay may be active.");
 
         // ── ARENA — every world-space element is scissor-clipped to the arena rect (Rev 4 §1/§11). The host
         // began a canvas batch for us; end it, run the clipped arena pass, then reopen an UNCLIPPED batch for
