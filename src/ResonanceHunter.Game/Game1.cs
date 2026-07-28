@@ -105,7 +105,7 @@ public class Game1 : Game
     private string _activeRegion = VerdantHollow.RegionId;
     private Region _region = null!;   // == _world.RegionFarm(_activeRegion); reassigned on region change
     private bool _showWorld;
-    private int _worldCursor;
+    private MapScreen _mapScreen = null!;   // MAP nav: the region-selection dashboard (spec rev 1)
     private string _conquerMsg = "";
 
     private int _regionProgression;
@@ -597,6 +597,7 @@ public class Game1 : Game
         _character = new CharacterScreen(_ui, _forge);
         _stats = new StatsScreen(_ui);
         _warrenScreen = new WarrenScreen(_ui);
+        _mapScreen = new MapScreen(_ui);
         // The canvas is now 1920x1080; screens still draw in 480x270 logical units (see ArtScale).
         _canvas = new RenderTarget2D(GraphicsDevice, CanvasWidth * ArtScale, CanvasHeight * ArtScale);
 
@@ -650,7 +651,7 @@ public class Game1 : Game
             // screen is gone, so they had nothing to pose.
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
-                or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "reforge" or "build" or "character" or "stats" or "warren")
+                or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "reforge" or "build" or "character" or "stats" or "warren" or "map")
             {
                 _showTitle = false;
                 // Muster screen with a real roster to arrange.
@@ -816,6 +817,21 @@ public class Game1 : Game
                     _conquerMsg = "VERDANT HOLLOW CONQUERED!  CINDERWORKS UNLOCKED — OPEN THE MAP (W).";
                     _showWorld = true;
                 }
+                if (sm == "map")
+                {
+                    // The reference's pattern: three regions cleared, one in progress (selected), the rest locked.
+                    _world.Conquer(VerdantHollow.RegionId);
+                    _world.Conquer("cinderworks");
+                    _world.Conquer("umbral_reach");
+                    SetActiveRegion("marrow_wastes");   // unlocked by conquering umbral_reach; the in-progress region
+                    _world.RegionFarm("marrow_wastes").RestoreMasteryPoints(650);   // a real Partially-Mastered farm
+                    _deepestEver = 24;
+                    _showWorld = true;
+                    _mapScreen.ActiveRegion = _activeRegion;
+                    _mapScreen.SelectActive();
+                    _hunter.AddGleam(131_900_000);      // top currency pills read like the reference
+                    _dust.AwardFromMastery(77_400);
+                }
                 if (sm == "region2")
                 {
                     // Travel to the second region and fight one of its standard creatures.
@@ -948,7 +964,7 @@ public class Game1 : Game
         // binding here ran first every frame, hijacking the filter into a blank dev screen.
         if (Pressed(Keys.F9)) _showSpike = !_showSpike;
         if (Pressed(Keys.F6)) _expedition.DevForceBoss = !_expedition.DevForceBoss;   // dev: force the Crystal Lich boss render (Rev 4 §12)
-        if (Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _character.DevGearDebug = !_character.DevGearDebug; _stats.DevStatsDebug = !_stats.DevStatsDebug; _buildScreen.DevBuildDebug = !_buildScreen.DevBuildDebug; _forge.DevForgeDebug = !_forge.DevForgeDebug; _warrenScreen.DevWarrenDebug = !_warrenScreen.DevWarrenDebug; }   // dev layout overlays
+        if (Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _character.DevGearDebug = !_character.DevGearDebug; _stats.DevStatsDebug = !_stats.DevStatsDebug; _buildScreen.DevBuildDebug = !_buildScreen.DevBuildDebug; _forge.DevForgeDebug = !_forge.DevForgeDebug; _warrenScreen.DevWarrenDebug = !_warrenScreen.DevWarrenDebug; _mapScreen.DevMapDebug = !_mapScreen.DevMapDebug; }   // dev layout overlays
         if (Pressed(Keys.F1)) _showHelp = !_showHelp;
         if (Pressed(Keys.F10)) _showSettings = !_showSettings;
 
@@ -962,7 +978,7 @@ public class Game1 : Game
 
         if (Pressed(Keys.A)) { _showAutomation = !_showAutomation; _warrenShowDen = false; _showForge = false; _showPrestige = false; _showWorld = false; _showBuild = false; _showCharacter = false; _showStats = false; }
         if (Pressed(Keys.P)) { _showPrestige = !_showPrestige; _showAutomation = false; _showForge = false; _showWorld = false; _showBuild = false; _showCharacter = false; _showStats = false; }
-        if (Pressed(Keys.W)) { _showWorld = !_showWorld; _showAutomation = false; _showForge = false; _showPrestige = false; _showBuild = false; _showCharacter = false; _showStats = false; }
+        if (Pressed(Keys.W)) { _showWorld = !_showWorld; _showAutomation = false; _showForge = false; _showPrestige = false; _showBuild = false; _showCharacter = false; _showStats = false; if (_showWorld) { _mapScreen.ActiveRegion = _activeRegion; _mapScreen.SelectActive(); } }
 
         // B — WEAVE YOUR BUILD. The whole decision layer of the solo model: four skills, three sockets.
         if (Pressed(Keys.B)) { _showBuild = !_showBuild; _showAutomation = false; _showForge = false; _showPrestige = false; _showWorld = false; _showCharacter = false; _showStats = false; }
@@ -1638,28 +1654,34 @@ public class Game1 : Game
     }
 
     // ── World map ─────────────────────────────────────────────────────────────────────────────
-    private static readonly Rectangle[] RegionNodes =
-    [
-        // A serpentine path across the map: the lower row runs left-to-right, then the journey climbs and
-        // the upper row runs right-to-left, so six regions fit and the route reads as a single winding climb.
-        new(96, 736, 424, 144),    // region 0   (×4 of 480-space 24,184,106,36)
-        new(748, 736, 424, 144),   // region 1
-        new(1400, 736, 424, 144),  // region 2
-        new(1400, 440, 424, 144),  // region 3
-        new(748, 440, 424, 144),   // region 4
-        new(96, 440, 424, 144),    // region 5
-    ];
 
     private void UpdateWorld()
     {
-        var n = Math.Min(Regions.All.Count, RegionNodes.Length);
-        if (Pressed(Keys.Left)) _worldCursor = (_worldCursor - 1 + n) % n;
-        if (Pressed(Keys.Right)) _worldCursor = (_worldCursor + 1) % n;
-        if (Pressed(Keys.Enter)) SelectWorldNode(_worldCursor);
-        if (Pressed(Keys.D)) DeepenCorruption(); // keyboard/gamepad path for the deepen button
+        PushMapState();
+        _mapScreen.Update(_keys, _prevKeys, CanvasMouse, MouseClicked);
+        ConsumeMapRequests();
+    }
 
-        for (var i = 0; i < n; i++)
-            if (UiKit.ClickedIn(RegionNodes[i], ChromeMouse, MouseClicked)) { _worldCursor = i; SelectWorldNode(i); }
+    /// <summary>Feed the Map screen the live world state each frame (host owns the model, the screen renders it).</summary>
+    private void PushMapState()
+    {
+        _mapScreen.World = _world;
+        _mapScreen.ActiveRegion = _activeRegion;
+        _mapScreen.DeepestWave = _deepestEver;
+        _mapScreen.HunterPower = _hunter.PowerRating;
+        _mapScreen.ConquerWaves = ConquerWaveDepth;
+        _mapScreen.Message = _conquerMsg;
+    }
+
+    /// <summary>Act on the Map screen's ENTER / DEEPEN requests (set by keyboard in Update or buttons in Draw).</summary>
+    private void ConsumeMapRequests()
+    {
+        if (_mapScreen.ConsumeEnter() is { } id)
+        {
+            if (_world.IsUnlocked(id)) { SetActiveRegion(id); _showWorld = false; }
+            else _conquerMsg = $"{Regions.Get(id).Name} IS LOCKED — CONQUER THE PREVIOUS REGION.";
+        }
+        if (_mapScreen.ConsumeDeepen()) DeepenCorruption();
     }
 
     /// <summary>Push the fully-conquered world one corruption tier deeper: harder, richer, permanent.</summary>
@@ -1673,86 +1695,11 @@ public class Game1 : Game
         Save();
     }
 
-    private void SelectWorldNode(int i)
-    {
-        var def = Regions.All[i];
-        if (!_world.IsUnlocked(def.Id)) { _conquerMsg = $"{def.Name} IS LOCKED — CONQUER THE PREVIOUS REGION."; return; }
-        SetActiveRegion(def.Id);
-        _showWorld = false;
-    }
-
     private void DrawWorld()
     {
-        var title = _world.CorruptionTier > 0 ? $"THE WORLD — CORRUPTION {_world.CorruptionTier}" : "THE WORLD";
-        _ui.Title(_batch, title);
-        var n = Math.Min(Regions.All.Count, RegionNodes.Length);
-
-        // The winding path between nodes. Drawn as an L (a horizontal run then a vertical one) so the
-        // serpentine's ROW-CHANGE link — where two nodes share an X — is visible; the old single horizontal
-        // segment collapsed to zero width there, leaving the two rows looking disconnected.
-        for (var i = 0; i < n - 1; i++)
-        {
-            var a = RegionNodes[i].Center;
-            var bpt = RegionNodes[i + 1].Center;
-            var color = _world.IsConquered(Regions.All[i].Id) ? Gold : Dim;
-            if (a.X != bpt.X)
-                _batch.Draw(_pixel, new Rectangle(Math.Min(a.X, bpt.X), a.Y, Math.Abs(bpt.X - a.X), 8), color);
-            if (a.Y != bpt.Y)
-                _batch.Draw(_pixel, new Rectangle(bpt.X, Math.Min(a.Y, bpt.Y), 8, Math.Abs(bpt.Y - a.Y)), color);
-        }
-
-        for (var i = 0; i < n; i++)
-        {
-            var def = Regions.All[i];
-            var node = RegionNodes[i];
-            var unlocked = _world.IsUnlocked(def.Id);
-            var conquered = _world.IsConquered(def.Id);
-            var active = def.Id == _activeRegion;
-
-            // Region emblem, a signpost above the node — dimmed while the region is still locked.
-            var emblem = def.Id switch
-            {
-                "cinderworks" => "icon_region_cinderworks",
-                "umbral_reach" => "icon_region_umbral",
-                _ => "icon_region_verdant",
-            };
-            _ui.Icon(_batch, emblem, new Rectangle(node.Center.X - 36, node.Y - 84, 72, 72),
-                unlocked ? Color.White : new Color(0x55, 0x55, 0x60));
-
-            _ui.Panel(_batch, node, gold: active || conquered);
-            // Gold plate (active/conquered) takes near-black; the dark plates take light text.
-            _ui.TextCenter(_batch, def.Name, node.Center.X, node.Y + 24,
-                active || conquered ? new Color(0x20, 0x16, 0x06) : unlocked ? Bone : Slate);
-
-            var status = conquered ? "CONQUERED" : !unlocked ? "LOCKED" : active ? "HERE NOW" : "AVAILABLE";
-            _ui.TextCenter(_batch, status, node.Center.X, node.Y + 72, conquered ? Gold : !unlocked ? Dim : active ? Gold : Bone);
-
-            // A small mastery pip-track for conquered/active regions.
-            if (unlocked)
-            {
-                var farm = _world.RegionFarm(def.Id);
-                _ui.Bar(_batch, node.X + 32, node.Bottom - 32, node.Width - 64, 16, (int)farm.MasteryLevel / 3f, Gold);
-            }
-
-            if (i == _worldCursor) Reticle(new Rectangle(node.X - 12, node.Y - 12, node.Width + 24, node.Height + 24), Bone);
-        }
-
-        // In the clear band between the two node rows, so it never overlaps a region panel.
-        if (_conquerMsg.Length > 0) _ui.TextCenter(_batch, _conquerMsg, 960, 632, Gold);
-
-        // Endgame: once the whole world is conquered, offer to deepen the corruption — tougher fights,
-        // richer Memory Dust, forever. A real button (works by mouse) with a keyboard shortcut (D).
-        if (_world.CanDeepenCorruption)
-        {
-            var btn = new Rectangle(560, 672, 800, 56);   // in the inter-row band, clear of the node panels
-            if (_ui.Button(_batch, btn, $"DEEPEN THE CORRUPTION  {_world.CorruptionTier}→{_world.CorruptionTier + 1}  [D]",
-                    ChromeMouse, MouseClicked))
-                DeepenCorruption();
-        }
-
-        // One footer line, clear of the nav shelf. Was two rows at y=250/260 — both buried under the nav.
-        // Conquest is measured in waves held (ConquerWaveDepth); the nav bar already teaches W  BACK.
-        _ui.TextCenter(_batch, $"CLICK A REGION TO TRAVEL  ·  HOLD {ConquerWaveDepth} WAVES TO CONQUER IT AND UNLOCK THE NEXT", 960, 912, Slate);
+        PushMapState();
+        _mapScreen.Draw(_batch, CanvasMouse, MouseClicked);
+        ConsumeMapRequests();
     }
 
     private void DrawHelp()
@@ -1879,7 +1826,7 @@ public class Game1 : Game
             case 3: _showBuild = true; break;
             case 4: _showForge = true; break;
             case 5: _showAutomation = true; break;
-            case 6: _showWorld = true; break;
+            case 6: _showWorld = true; _mapScreen.ActiveRegion = _activeRegion; _mapScreen.SelectActive(); break;
             case 7: _showPrestige = true; break;
             // case 0 HUNT: everything cleared above → back to the fight.
         }
