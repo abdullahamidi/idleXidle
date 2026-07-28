@@ -851,7 +851,7 @@ public class Game1 : Game
         // binding here ran first every frame, hijacking the filter into a blank dev screen.
         if (Pressed(Keys.F9)) _showSpike = !_showSpike;
         if (Pressed(Keys.F6)) _expedition.DevForceBoss = !_expedition.DevForceBoss;   // dev: force the Crystal Lich boss render (Rev 4 §12)
-        if (Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _character.DevGearDebug = !_character.DevGearDebug; _stats.DevStatsDebug = !_stats.DevStatsDebug; }   // dev layout overlays
+        if (Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _character.DevGearDebug = !_character.DevGearDebug; _stats.DevStatsDebug = !_stats.DevStatsDebug; _buildScreen.DevBuildDebug = !_buildScreen.DevBuildDebug; }   // dev layout overlays
         if (Pressed(Keys.F1)) _showHelp = !_showHelp;
         if (Pressed(Keys.F10)) _showSettings = !_showSettings;
 
@@ -891,6 +891,8 @@ public class Game1 : Game
         {
             _buildScreen.Loadout = _loadout;
             _buildScreen.Mastery = _mastery;
+            _buildScreen.Power = _hunter.PowerRating;   // the Build screen has no Hunter ref of its own
+            _buildScreen.Level = _hunter.HunterLevel;
             _buildScreen.Update(_keys, _prevKeys, CanvasMouse, MouseClicked, _dust);
             if (_buildScreen.Dirty) { _buildScreen.ClearDirty(); Save(); }
             Latch(gameTime);
