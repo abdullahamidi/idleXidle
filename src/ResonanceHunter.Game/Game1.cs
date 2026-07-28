@@ -699,6 +699,8 @@ public class Game1 : Game
                     for (var i = 0; i < 12; i++) _hunter.Train(HunterStat.AttackPower);
                     for (var i = 0; i < 6; i++) _hunter.Train(HunterStat.CriticalChance);
                     for (var i = 0; i < 5; i++) _hunter.Train(HunterStat.Defense);
+                    for (var i = 0; i < 8; i++) _hunter.Train(HunterStat.Vitality);
+                    _deepestEver = 23; _mastery.SetEarned(77400);   // fixture career values (Stats §13)
                 }
 
                 if (sm == "fight")
@@ -849,7 +851,7 @@ public class Game1 : Game
         // binding here ran first every frame, hijacking the filter into a blank dev screen.
         if (Pressed(Keys.F9)) _showSpike = !_showSpike;
         if (Pressed(Keys.F6)) _expedition.DevForceBoss = !_expedition.DevForceBoss;   // dev: force the Crystal Lich boss render (Rev 4 §12)
-        if (Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _character.DevGearDebug = !_character.DevGearDebug; }   // dev layout overlays
+        if (Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _character.DevGearDebug = !_character.DevGearDebug; _stats.DevStatsDebug = !_stats.DevStatsDebug; }   // dev layout overlays
         if (Pressed(Keys.F1)) _showHelp = !_showHelp;
         if (Pressed(Keys.F10)) _showSettings = !_showSettings;
 
@@ -911,6 +913,9 @@ public class Game1 : Game
             _stats.Loadout = _loadout;
             _stats.Mastery = _mastery;
             _stats.Tree = _dust;
+            _stats.HighestWave = _deepestEver;          // real career counters (Stats spec §9.2)
+            _stats.ChestsOpened = _forge.ChestsOpened;
+            _stats.MasteryPoints = _mastery.Earned;
             _stats.Update(_keys, _prevKeys, CanvasMouse, MouseClicked, MouseWheel, _hunter);
             if (_stats.Dirty) { _stats.ClearDirty(); Save(); }
             Latch(gameTime);
