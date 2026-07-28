@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using ResonanceHunter.Core.Automation;
 using ResonanceHunter.Core.Economy;
 using ResonanceHunter.Core.Loot;
+using ResonanceHunter.Core.Warrens;
 
 namespace ResonanceHunter.Core.Persistence;
 
@@ -92,6 +93,24 @@ public sealed record SaveGame
     /// Default-empty means pre-chest saves load clean, so no version bump.
     /// </remarks>
     public List<SavedChest> UnopenedChests { get; init; } = new();
+
+    // ── The Warren facility economy ──────────────────────────────────────────────────────────────
+    /// <summary>Warren level. Defaults to 1 so pre-Warren saves load a fresh level-1 base — no version bump.</summary>
+    public int WarrenLevel { get; init; } = 1;
+    public int WarrenXp { get; init; }
+
+    /// <summary>Facility levels, by FacilityKind name. Empty on a pre-Warren save → every facility loads at 1.</summary>
+    public Dictionary<string, int> WarrenFacilities { get; init; } = new();
+
+    /// <summary>
+    /// Total Mastery Points the Warren has produced over the game's life.
+    /// </summary>
+    /// <remarks>
+    /// Mastery Earned is DERIVED each frame (depth + conquests), not accumulated, so facility-produced
+    /// mastery cannot live in the tree — it lives here and the host adds it into SetEarned. Persisted, or a
+    /// reload would silently erase every mastery point the Warren ever made.
+    /// </remarks>
+    public long WarrenMasteryPool { get; init; }
 }
 
 /// <summary>An unopened chest in the save — grade, loot tier, and region element, by primitive.</summary>
@@ -278,10 +297,17 @@ public static class SaveSystem
         Hunter hunter, Region region, IReadOnlyList<Creature> roster,
         IReadOnlyList<ItemInstance> inventory, int unhatchedCores, long nowMs,
         Prestige.MemoryDustTree? prestige = null, int highestMasteryAwarded = 0,
-        Encounters.World? world = null, string activeRegion = "")
+        Encounters.World? world = null, string activeRegion = "",
+        Warren? warren = null, long warrenMasteryPool = 0)
         => new()
         {
             SavedAtMs = nowMs,
+            WarrenLevel = warren?.Level ?? 1,
+            WarrenXp = warren?.Xp ?? 0,
+            WarrenFacilities = warren is null
+                ? new Dictionary<string, int>()
+                : warren.FacilityLevels.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value),
+            WarrenMasteryPool = warrenMasteryPool,
             Gleam = hunter.Gleam,
             Materials = hunter.Materials,
             Essence = hunter.MaterialOf(Material.Essence),
@@ -421,6 +447,16 @@ public static class SaveSystem
                 if (!hunter.Train(stat)) { hunter.SpendGleam(cost); break; }
             }
         }
+    }
+
+    /// <summary>Restore the Warren's level, XP, and facility levels from a save (crash-safe on unknown keys).</summary>
+    public static void RestoreWarren(SaveGame save, Warren warren)
+    {
+        ArgumentNullException.ThrowIfNull(warren);
+        var levels = new Dictionary<FacilityKind, int>();
+        foreach (var (name, lvl) in save.WarrenFacilities)
+            if (Enum.TryParse<FacilityKind>(name, out var kind)) levels[kind] = lvl;
+        warren.Restore(save.WarrenLevel, save.WarrenXp, levels);
     }
 
     /// <summary>

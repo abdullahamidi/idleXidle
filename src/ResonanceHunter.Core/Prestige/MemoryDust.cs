@@ -97,6 +97,17 @@ public sealed class MemoryDustTree
     /// </remarks>
     public void AwardFromMastery(int amount) => MemoryDust += Math.Max(0, amount);
 
+    /// <summary>
+    /// Spend Dust on a cost outside the unlock tree (a Warren facility upgrade). Spends nothing and returns
+    /// false if unaffordable, so a caller can gate on it exactly like <see cref="Purchase"/>.
+    /// </summary>
+    public bool Spend(int amount)
+    {
+        if (amount < 0 || MemoryDust < amount) return false;
+        MemoryDust -= amount;
+        return true;
+    }
+
     public bool CanUnlock(string id)
     {
         if (!_unlocks.TryGetValue(id, out var unlock)) return false;

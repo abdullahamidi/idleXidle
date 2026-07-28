@@ -14,6 +14,7 @@ using ResonanceHunter.Core.Forging;
 using ResonanceHunter.Core.Loot;
 using ResonanceHunter.Core.Persistence;
 using ResonanceHunter.Core.Prestige;
+using ResonanceHunter.Core.Warrens;
 
 namespace ResonanceHunter.Client;
 
@@ -140,6 +141,13 @@ public class Game1 : Game
 
     private AutomationScreen _automation = null!;
     private bool _showAutomation;
+
+    // The Warren is a facility-production dashboard now (spec rev 1). The creature den (_automation) is a
+    // sub-view of it, reached from the CREATURES button; _warrenShowDen picks which face is drawn.
+    private WarrenScreen _warrenScreen = null!;
+    private readonly Warren _warren = new();
+    private bool _warrenShowDen;
+    private long _warrenMasteryPool;   // Mastery the facilities have produced — feeds SetEarned, and is the spendable pool
 
     // ── Memory Dust prestige (Full Vision). NOTHING RESETS — Dust accrues from mastery. ───────
     private PrestigeScreen _prestige = null!;
@@ -309,6 +317,11 @@ public class Game1 : Game
         _deepestEver = save.MasteryEarned;         // stored the deepest-ever; Earned re-derives from it
         _mastery.RestoreTaken(save.MasteryTaken);
 
+        // The Warren facility economy — levels/XP restored before the offline tick below so its production
+        // is computed against the real facility levels, not a fresh level-1 base.
+        SaveSystem.RestoreWarren(save, _warren);
+        _warrenMasteryPool = save.WarrenMasteryPool;
+
         var roster = SaveSystem.RestoreRoster(save);
         _automationRoster = roster;
         _pendingCores = save.UnhatchedCores;
@@ -363,6 +376,13 @@ public class Game1 : Game
         // Always apply the elapsed time (even a few seconds), but only greet the player when the trip
         // actually produced something — a "0.0 HOURS, 0 kills" banner is noise, not a welcome.
         var credited = SaveSystem.CreditedOfflineSeconds(result.OfflineSeconds);
+
+        // The Warren produced the whole time you were away — credit it into the real balances (Gleam and
+        // Dust are shared accumulators; Mastery banks into the pool that feeds SetEarned).
+        var wOffline = _warren.Tick((float)credited);
+        _hunter.AddGleam((int)wOffline.Gleam);
+        _dust.AwardFromMastery((int)wOffline.Dust);
+        _warrenMasteryPool += wOffline.Mastery;
 
         // THE CHAMPION earned while you were away too, at HALF the rate it was managing live (offline is
         // never as good as playing — that's what brings you back). Its gleam-rate was measured last
@@ -464,7 +484,7 @@ public class Game1 : Game
 
         var save = SaveSystem.Capture(
             _hunter, _region, _automation.Roster, _forge.Inventory, _automation.Cores, SaveFile.NowMs,
-            _dust, _highestMasteryAwarded, _world, _activeRegion) with
+            _dust, _highestMasteryAwarded, _world, _activeRegion, _warren, _warrenMasteryPool) with
         {
             // The build rides along via `with`, so Core's Capture stays unaware of the Game-layer loadout.
             WovenSkills = _loadout.SaveSkills()
@@ -505,6 +525,50 @@ public class Game1 : Game
             _automation.Cores += y.CoresProduced;              // cores feed the one shared hatchery
             if (def.Id == _activeRegion) _automation.ReportOffline(y); // the farm screen shows the active region
         }
+
+        // The Warren's facilities produce every second too, on every screen — Gleam/Dust into the real
+        // balances, Mastery into the pool that feeds the build tree (see the SetEarned call below).
+        var w = _warren.Tick(span);
+        if (w.Gleam > 0) _hunter.AddGleam((int)w.Gleam);
+        if (w.Dust > 0) _dust.AwardFromMastery((int)w.Dust);
+        _warrenMasteryPool += w.Mastery;
+    }
+
+    /// <summary>
+    /// Draw the WARREN nav destination: the facility dashboard, or its CREATURES sub-view (the old den).
+    /// </summary>
+    /// <remarks>
+    /// The dashboard performs its upgrade in the DRAW pass (the same place Forge does its Refine), so the
+    /// spend + <see cref="Warren.Upgrade"/> happen here, right after Draw sets the request. Gleam and Dust
+    /// spend from their real balances; Mastery spends from the produced pool.
+    /// </remarks>
+    private void DrawWarren()
+    {
+        if (_warrenShowDen)
+        {
+            _automation.Draw(_batch, _region, _hunter, CanvasMouse, MouseClicked);
+            return;
+        }
+
+        _warren.Name = Regions.Find(_activeRegion)?.Name ?? "THE WARREN";
+        _warrenScreen.Warren = _warren;
+        _warrenScreen.GleamOwned = _hunter.Gleam;
+        _warrenScreen.MasteryOwned = _warrenMasteryPool;
+        _warrenScreen.DustOwned = _dust.MemoryDust;
+        _warrenScreen.Draw(_batch, CanvasMouse, MouseClicked);
+
+        if (_warrenScreen.ConsumeDen()) { _warrenShowDen = true; return; }
+
+        if (_warrenScreen.ConsumeUpgrade() is { } kind
+            && _warren.CanAfford(kind, _hunter.Gleam, _warrenMasteryPool, _dust.MemoryDust))
+        {
+            var c = _warren.UpgradeCost(kind);
+            _hunter.SpendGleam(c.Gleam);
+            _warrenMasteryPool -= c.Mastery;
+            _dust.Spend(c.Dust);
+            _warren.Upgrade(kind);
+            Save();
+        }
     }
 
     protected override void OnExiting(object sender, ExitingEventArgs args)
@@ -532,6 +596,7 @@ public class Game1 : Game
         _buildScreen = new BuildScreen(_ui);
         _character = new CharacterScreen(_ui, _forge);
         _stats = new StatsScreen(_ui);
+        _warrenScreen = new WarrenScreen(_ui);
         // The canvas is now 1920x1080; screens still draw in 480x270 logical units (see ArtScale).
         _canvas = new RenderTarget2D(GraphicsDevice, CanvasWidth * ArtScale, CanvasHeight * ArtScale);
 
@@ -585,7 +650,7 @@ public class Game1 : Game
             // screen is gone, so they had nothing to pose.
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
-                or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "reforge" or "build" or "character" or "stats")
+                or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "reforge" or "build" or "character" or "stats" or "warren")
             {
                 _showTitle = false;
                 // Muster screen with a real roster to arrange.
@@ -800,9 +865,27 @@ public class Game1 : Game
                     if (sm == "hybrid") { _forge.DevQueueHybrid(); _forge.DevManage(); }
                     if (sm == "reforge") _forge.DevReforge();
                 }
+                if (sm == "warren")
+                {
+                    _showAutomation = true;
+                    _warrenShowDen = false;
+                    _activeRegion = "pale_choir";   // so the Warren name reads "THE PALE CHOIR", per the reference
+                    // Seed the reference's exact facility state (spec §6-9): level 23, the listed facility levels.
+                    _warren.Restore(23, 18_540, new Dictionary<FacilityKind, int>
+                    {
+                        [FacilityKind.Nursery] = 18, [FacilityKind.Tunnels] = 17, [FacilityKind.ForagingPits] = 16,
+                        [FacilityKind.ScavengerRuns] = 15, [FacilityKind.BreedingChamber] = 16, [FacilityKind.RitualNest] = 14,
+                        [FacilityKind.HoardVaults] = 13, [FacilityKind.SentryBurrows] = 12,
+                    });
+                    // Owned balances at the reference's scale so the upgrade requirements read as MET.
+                    _hunter.AddGleam(131_900_000);
+                    _warrenMasteryPool = 77_400;
+                    _dust.AwardFromMastery(12_600);
+                }
                 if (sm == "farm")
                 {
                     _showAutomation = true;
+                    _warrenShowDen = true;   // the farm fixture audits the CREATURES den, the Warren's sub-view
                     _automation.DevPopulate(_region);
                 }
                 if (sm == "dust")
@@ -865,7 +948,7 @@ public class Game1 : Game
         // binding here ran first every frame, hijacking the filter into a blank dev screen.
         if (Pressed(Keys.F9)) _showSpike = !_showSpike;
         if (Pressed(Keys.F6)) _expedition.DevForceBoss = !_expedition.DevForceBoss;   // dev: force the Crystal Lich boss render (Rev 4 §12)
-        if (Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _character.DevGearDebug = !_character.DevGearDebug; _stats.DevStatsDebug = !_stats.DevStatsDebug; _buildScreen.DevBuildDebug = !_buildScreen.DevBuildDebug; _forge.DevForgeDebug = !_forge.DevForgeDebug; }   // dev layout overlays
+        if (Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _character.DevGearDebug = !_character.DevGearDebug; _stats.DevStatsDebug = !_stats.DevStatsDebug; _buildScreen.DevBuildDebug = !_buildScreen.DevBuildDebug; _forge.DevForgeDebug = !_forge.DevForgeDebug; _warrenScreen.DevWarrenDebug = !_warrenScreen.DevWarrenDebug; }   // dev layout overlays
         if (Pressed(Keys.F1)) _showHelp = !_showHelp;
         if (Pressed(Keys.F10)) _showSettings = !_showSettings;
 
@@ -877,7 +960,7 @@ public class Game1 : Game
 
         HandleNavClick();   // a click on the shared hex nav works from any screen
 
-        if (Pressed(Keys.A)) { _showAutomation = !_showAutomation; _showForge = false; _showPrestige = false; _showWorld = false; _showBuild = false; _showCharacter = false; _showStats = false; }
+        if (Pressed(Keys.A)) { _showAutomation = !_showAutomation; _warrenShowDen = false; _showForge = false; _showPrestige = false; _showWorld = false; _showBuild = false; _showCharacter = false; _showStats = false; }
         if (Pressed(Keys.P)) { _showPrestige = !_showPrestige; _showAutomation = false; _showForge = false; _showWorld = false; _showBuild = false; _showCharacter = false; _showStats = false; }
         if (Pressed(Keys.W)) { _showWorld = !_showWorld; _showAutomation = false; _showForge = false; _showPrestige = false; _showBuild = false; _showCharacter = false; _showStats = false; }
 
@@ -984,8 +1067,11 @@ public class Game1 : Game
 
         if (_showAutomation)
         {
-            // The farm runs whether or not you are watching it — that is the point of an idle game.
-            _automation.Update(gameTime, _keys, CanvasMouse, MouseClicked, MouseWheel, _region, _hunter);
+            // WARREN is the facility dashboard now; the creature den is its CREATURES sub-view. The farm and
+            // Warren production run every frame regardless (in TickFarms) — this only routes on-screen input.
+            // The dashboard handles its clicks in Draw (like Forge/Stats), so it needs no Update here.
+            if (_warrenShowDen)
+                _automation.Update(gameTime, _keys, CanvasMouse, MouseClicked, MouseWheel, _region, _hunter);
             Latch(gameTime);
             return;
         }
@@ -1133,7 +1219,10 @@ public class Game1 : Game
         // one per five waves of your deepest-ever run, plus five per region conquered. Pure function of
         // progress, recomputed every frame; only _deepestEver needs saving.
         _deepestEver = Math.Max(_deepestEver, _expedition.Deepest);
-        _mastery.SetEarned(3 + _deepestEver / 5 + _world.ConqueredIds.Count * 5);
+        // Mastery Earned is DERIVED from progress each frame, plus the (unspent) mastery the Warren has
+        // produced — so a Breeding/Ritual facility genuinely funds the build tree, and spending that pool on
+        // a facility upgrade correctly lowers your available tree points.
+        _mastery.SetEarned(3 + _deepestEver / 5 + _world.ConqueredIds.Count * 5 + (int)_warrenMasteryPool);
 
         // Conquest: the deepest the champion has held this region. Fires once, unlocks the next region.
         if (_expedition.Deepest >= ConquerWaveDepth && !_world.IsConquered(_activeRegion))
@@ -1357,7 +1446,7 @@ public class Game1 : Game
         else if (_showForge) _forge.Draw(_batch, _hunter, CanvasMouse, MouseClicked);
         else if (_showWorld) DrawWorld();
         else if (_showPrestige) _prestige.Draw(_batch, _dust, CanvasMouse, MouseClicked);
-        else if (_showAutomation) _automation.Draw(_batch, _region, _hunter, CanvasMouse, MouseClicked);
+        else if (_showAutomation) DrawWarren();
         else if (_showBuild) _buildScreen.Draw(_batch, CanvasMouse, _dust);
         else if (_showCharacter) _character.Draw(_batch, CanvasMouse, _hunter);
         else if (_showStats) _stats.Draw(_batch, CanvasMouse, _hunter);
@@ -1782,6 +1871,7 @@ public class Game1 : Game
     private void OpenNav(int i)
     {
         _showCharacter = _showStats = _showBuild = _showForge = _showAutomation = _showWorld = _showPrestige = false;
+        _warrenShowDen = false;   // re-entering the Warren always lands on the facility dashboard, not the den
         switch (i)
         {
             case 1: _showCharacter = true; break;
