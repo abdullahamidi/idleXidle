@@ -150,6 +150,60 @@ public sealed class ForgeScreen
 
     public ForgeScreen(UiKit ui) => _ui = ui;
 
+    // ── FORGE MODES (Forge production spec rev 1). The reference is a left-rail workshop: UPGRADE, then a
+    //    set of other verbs. The real forge has exactly three that are BACKED BY THE MODEL, so the rail
+    //    lists those and no invented ones (data-honesty §11): UPGRADE = Refine (+item level & affixes),
+    //    REFORGE = re-roll the trait / enchant, SALVAGE = the bag + chests + merge + sell + dismantle hub.
+    //    The reference's IMBUE and SET CRAFT have no backing system, so they are dropped, not faked. ──
+    private enum ForgeMode { Upgrade, Reforge, Salvage }
+    private ForgeMode _mode = ForgeMode.Upgrade;
+
+    /// <summary>The item the focused (UPGRADE / REFORGE) modes act on — resolved by id so a re-forge that
+    /// replaces the object keeps the selection. Defaults to the first wearable in the bag.</summary>
+    private string? _focusId;
+
+    /// <summary>F7 layout-debug overlay (UX standard §16 — component bounds).</summary>
+    public bool DevForgeDebug { get; set; }
+
+    // Spec §4 rectangles, adapted to the reference's rail + three content panels (all clear the nav at y≥934).
+    private static readonly Rectangle Rail = new(24, 140, 276, 730);
+    private static readonly Rectangle ItemPanel = new(320, 140, 470, 730);   // "ITEM PREVIEW"
+    private static readonly Rectangle CostPanel = new(814, 140, 512, 730);   // "REQUIRED MATERIALS"
+    private static readonly Rectangle ResultPanel = new(1350, 140, 546, 730);// "RESULT PREVIEW"
+    private static readonly Rectangle ReforgePanel = new(814, 140, 1082, 730);// REFORGE action column
+
+    private static readonly Color Met = new(0x6E, 0xC8, 0x7A);
+    // Scrap / Essence / Core / Crystal — no dedicated icons exist, so a tinted gem stands in (matches the
+    // Scrap currency pill's own fallback). One colour per tier so the four read apart at a glance.
+    private static readonly Color[] MatColor =
+        { new(0x9A, 0xC0, 0x88), new(0x74, 0xC6, 0xE8), new(0xC0, 0x6E, 0xE0), new(0xF0, 0xC0, 0x48) };
+
+    /// <summary>The wearable the focused modes upgrade — the id-matched item, or the first wearable.</summary>
+    private ItemInstance? Target()
+    {
+        var wear = _inv.Where(Gear.IsWearable).ToList();
+        if (wear.Count == 0) return null;
+        return (_focusId is not null ? wear.FirstOrDefault(i => i.InstanceId == _focusId) : null) ?? wear[0];
+    }
+
+    /// <summary>Step the focused selection to the next / previous wearable in the bag.</summary>
+    private void CycleTarget(int dir)
+    {
+        var wear = _inv.Where(Gear.IsWearable).ToList();
+        if (wear.Count == 0) { _focusId = null; return; }
+        var idx = Math.Max(0, wear.FindIndex(i => i.InstanceId == _focusId));
+        _focusId = wear[(idx + dir % wear.Count + wear.Count) % wear.Count].InstanceId;
+    }
+
+    /// <summary>DEV ONLY: pose the UPGRADE view on a specific bag item, for the screenshot fixture.</summary>
+    public void DevFocus(string instanceId) { _focusId = instanceId; _mode = ForgeMode.Upgrade; }
+
+    /// <summary>DEV ONLY: pose the SALVAGE hub (chests / merge / grid) for the loot-forge fixture.</summary>
+    public void DevManage() => _mode = ForgeMode.Salvage;
+
+    /// <summary>DEV ONLY: pose the REFORGE view, for auditing that mode.</summary>
+    public void DevReforge() => _mode = ForgeMode.Reforge;
+
     public IReadOnlyList<ItemInstance> Inventory => _inv;
 
     /// <summary>Cumulative chests cracked open — the host polls the delta to credit CRAFTER evolution.</summary>
@@ -244,6 +298,17 @@ public sealed class ForgeScreen
     {
         // The chest-open REVEAL fades on its own clock — the anticipation beat that loot design lives on.
         if (_revealTimer > 0f) _revealTimer -= (float)time.ElapsedGameTime.TotalSeconds;
+
+        // In the focused modes the grid is not shown — arrows cycle which wearable you are upgrading, and
+        // the mode-switch and action clicks are handled in Draw. The bag/grid interactions below belong to
+        // SALVAGE mode only, so a key never sells the item you are previewing on another screen.
+        if (_mode != ForgeMode.Salvage)
+        {
+            if (Pressed(keys, Keys.Left)) CycleTarget(-1);
+            if (Pressed(keys, Keys.Right)) CycleTarget(1);
+            _prevKeys = keys;
+            return;
+        }
 
         var view = View();
 
@@ -672,15 +737,353 @@ public sealed class ForgeScreen
     // ══════════════════════════════════════════════════════════════════════════════════════════
     public void Draw(SpriteBatch b, Hunter hunter) => Draw(b, hunter, new Point(-1, -1), false);
 
+    /// <summary>
+    /// The Forge, spec rev 1: a centred title, a mode rail, and one of three mode surfaces. UPGRADE and
+    /// REFORGE are the reference's focused item flows; SALVAGE is the full bag/chest hub (unchanged).
+    /// </summary>
     public void Draw(SpriteBatch b, Hunter hunter, Point mouse, bool clicked)
     {
         // Every rect is authored ×4 (1920×1080) and rendered at scale 1, so hit-tests take the mouse ×4.
         var hit = new Point(mouse.X * 4, mouse.Y * 4);
 
-        // ── Header — a gem-title on the left, the chest pile in the centre. Gleam + Materials are the
-        //    shared currency pills top-right now (Game1.DrawCurrencyPills). ─────────────────────────────
-        _ui.Title(b, "THE FORGE", "SELL · MERGE · REFORGE");
+        _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xC0));   // scrim so panels pop
+        _ui.TextCenterBig(b, "THE FORGE", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle);
+        _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
+        // The subtitle rides under the title in the focused modes; SALVAGE has its own dense toolbar there.
+        if (_mode != ForgeMode.Salvage) _ui.TextCenterBig(b, ModeSubtitle(), 960, 80, Slate, UiTypography.Secondary);
 
+        switch (_mode)
+        {
+            case ForgeMode.Upgrade: DrawUpgradeMode(b, hunter, hit, clicked); break;
+            case ForgeMode.Reforge: DrawReforgeMode(b, hunter, hit, clicked); break;
+            default: DrawSalvageMode(b, hunter, hit, clicked); break;
+        }
+
+        DrawReveal(b);   // the chest-open burst rides on top of every mode
+        if (DevForgeDebug) DrawDebug(b);
+    }
+
+    private string ModeSubtitle() => _mode switch
+    {
+        ForgeMode.Upgrade => "UPGRADE  ·  MATERIALS  ·  RESULT",
+        ForgeMode.Reforge => "RE-ROLL TRAIT  ·  RE-ROLL ENCHANT",
+        _ => "SALVAGE  ·  MERGE  ·  CHESTS",
+    };
+
+    // ── The mode rail — the reference's left column, listing only the verbs the model actually has. ──
+    private void DrawRail(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
+    {
+        _ui.Panel(b, Rail);
+        _ui.TextCenterBig(b, "FORGE", Rail.Center.X, Rail.Y + 20, Gold, UiTypography.PanelTitle);
+
+        var modes = new[] { (ForgeMode.Upgrade, "UPGRADE"), (ForgeMode.Reforge, "REFORGE"), (ForgeMode.Salvage, "SALVAGE") };
+        var y = Rail.Y + 66;
+        foreach (var (m, label) in modes)
+        {
+            var r = new Rectangle(Rail.X + 20, y, Rail.Width - 40, 64);
+            if (_mode == m)
+            {
+                _ui.Fill(b, r, new Color(0x3A, 0x2E, 0x52));
+                _ui.Fill(b, new Rectangle(r.X, r.Y, 5, r.Height), Gold);
+                _ui.TextCenterBig(b, label, r.Center.X, r.Center.Y - 11, new Color(0xF6, 0xEA, 0xC6), UiTypography.Body);
+            }
+            else if (_ui.Button(b, r, label, hit, clicked)) { _mode = m; }
+            y += 74;
+        }
+
+        _ui.Fill(b, new Rectangle(Rail.X + 20, y + 4, Rail.Width - 40, 2), Dim);
+        _ui.Text(b, "REFINE THE ITEM:", Rail.X + 24, y + 20, Slate);
+        _ui.Text(b, "+LEVEL, +AFFIXES", Rail.X + 24, y + 46, Slate);
+
+        // The chest beat survives the redesign: a boss's drop still nags here, and OPEN drops into SALVAGE.
+        if (_chests.Count > 0)
+        {
+            var best = _chests.Max(c => (int)c.Rarity);
+            _ui.TextCenterBig(b, $"{_chests.Count} CHEST{(_chests.Count == 1 ? "" : "S")}", Rail.Center.X, y + 96, RarityColors[best], UiTypography.Body);
+            if (_ui.Button(b, new Rectangle(Rail.X + 20, y + 128, Rail.Width - 40, 56), "OPEN IN SALVAGE", hit, clicked))
+                _mode = ForgeMode.Salvage;
+        }
+
+        _ui.TextCenter(b, "< >  CYCLE ITEM", Rail.Center.X, Rail.Bottom - 38, Slate);
+    }
+
+    // ── UPGRADE = the real REFINE: +1 item level, which raises every affix. Deterministic, so the "after"
+    //    column is a truthful preview, not a gamble — there is no success rate or downgrade to display. ──
+    private void DrawUpgradeMode(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
+    {
+        DrawRail(b, hunter, hit, clicked);
+        var item = Target();
+        var refined = item is null ? null : Forge.Refine(item, Tuning).Product;
+        DrawItemPanel(b, item, refined, hunter);
+
+        _ui.Panel(b, CostPanel);
+        _ui.TextCenterBig(b, "REQUIRED MATERIALS", CostPanel.Center.X, CostPanel.Y + 22, Gold, UiTypography.SectionTitle);
+
+        if (item is null)
+        {
+            _ui.TextCenter(b, "NOTHING TO UPGRADE.", CostPanel.Center.X, CostPanel.Y + 320, Slate);
+            _ui.Panel(b, ResultPanel);
+            _ui.TextCenterBig(b, "RESULT PREVIEW", ResultPanel.Center.X, ResultPanel.Y + 22, Gold, UiTypography.SectionTitle);
+            return;
+        }
+
+        // Your four salvage tiers, at a glance — Refine spends SCRAP + Gold, the others fund REFORGE.
+        _ui.Text(b, "YOUR MATERIALS", CostPanel.X + 28, CostPanel.Y + 68, Slate);
+        var mats = new[] { Material.Scrap, Material.Essence, Material.Core, Material.Crystal };
+        for (var i = 0; i < 4; i++)
+        {
+            var cell = new Rectangle(CostPanel.X + 28 + i * 118, CostPanel.Y + 100, 106, 94);
+            _ui.Fill(b, cell, new Color(0x16, 0x12, 0x20, 0xC0));
+            _ui.Diamond(b, new Rectangle(cell.Center.X - 20, cell.Y + 12, 40, 40), MatColor[i]);
+            _ui.TextCenter(b, MaterialTiers.Name(mats[i]), cell.Center.X, cell.Bottom - 38, Slate);
+            _ui.TextCenter(b, $"{hunter.MaterialOf(mats[i]):N0}", cell.Center.X, cell.Bottom - 20, Bone);
+        }
+
+        var r = Forge.Refine(item, Tuning);
+        var worn = IsWorn(hunter, item);
+        _ui.Fill(b, new Rectangle(CostPanel.X + 28, CostPanel.Y + 216, CostPanel.Width - 56, 2), Dim);
+        _ui.Text(b, "UPGRADE COST", CostPanel.X + 28, CostPanel.Y + 236, Slate);
+        DrawCostRow(b, CostPanel.Y + 274, "SCRAP", hunter.MaterialOf(Material.Scrap), r.Scrap, MatColor[0], false);
+        DrawCostRow(b, CostPanel.Y + 326, "GLEAM", hunter.Gleam, r.Gold, Gold, true);
+
+        _ui.Fill(b, new Rectangle(CostPanel.X + 28, CostPanel.Y + 392, CostPanel.Width - 56, 2), Dim);
+        _ui.Text(b, "GUARANTEED  ·  NEVER DOWNGRADES", CostPanel.X + 28, CostPanel.Y + 412, Met);
+        DrawWrapped(b, "No cap — the cost climbs each level.", CostPanel.X + 28, CostPanel.Y + 442, CostPanel.Width - 56, Slate);
+
+        var can = !worn && hunter.MaterialOf(Material.Scrap) >= r.Scrap && hunter.Gleam >= r.Gold;
+        var greater = Forge.GreaterRefine(item, Tuning);
+        var hasCrystal = hunter.MaterialOf(Material.Crystal) >= greater.Crystal;
+        var kb = Keyboard.GetState();
+        var doGreat = (kb.IsKeyDown(Keys.LeftShift) || kb.IsKeyDown(Keys.RightShift)) && hasCrystal;
+        var canGreat = !worn && hunter.Gleam >= greater.Gold;
+
+        if (worn) _ui.TextCenter(b, "EQUIPPED — UNEQUIP ON GEAR TO UPGRADE", CostPanel.Center.X, CostPanel.Bottom - 120, Ember);
+        else if (hasCrystal) _ui.TextCenter(b, "HOLD SHIFT: +5 LEVELS FOR 1 CRYSTAL", CostPanel.Center.X, CostPanel.Bottom - 120, Slate);
+
+        var btn = new Rectangle(CostPanel.X + 40, CostPanel.Bottom - 96, CostPanel.Width - 80, 72);
+        if (_ui.Button(b, btn, doGreat ? "GREATER UPGRADE  +5 iL" : "UPGRADE  +1 iL", hit, clicked, enabled: doGreat ? canGreat : can))
+        {
+            if (doGreat) DoGreaterRefine(hunter, item); else DoRefine(hunter, item);
+        }
+
+        DrawResultPanel(b, item, refined!, hunter, hit, clicked, worn, can);
+    }
+
+    private void DrawResultPanel(SpriteBatch b, ItemInstance item, ItemInstance refined, Hunter hunter, Point hit, bool clicked, bool worn, bool can)
+    {
+        _ui.Panel(b, ResultPanel);
+        _ui.TextCenterBig(b, "RESULT PREVIEW", ResultPanel.Center.X, ResultPanel.Y + 22, Gold, UiTypography.SectionTitle);
+
+        var rc = RarityColors[(int)item.Rarity];
+        var el = item.Element is { } e ? e.ToString().ToUpperInvariant() + " " : "";
+        _ui.TextBig(b, $"{el}{ItemNames[item.BaseType]}", ResultPanel.X + 28, ResultPanel.Y + 66, rc, UiTypography.PanelTitle);
+        _ui.TextRightBig(b, $"iL{refined.ItemLevel}", ResultPanel.Right - 28, ResultPanel.Y + 66, Met, UiTypography.PanelTitle);
+
+        _ui.Text(b, "AFFIX PREVIEW", ResultPanel.X + 28, ResultPanel.Y + 114, Slate);
+        var nxt = ItemAffixes.Of(refined);
+        var y = ResultPanel.Y + 148;
+        foreach (var a in nxt)
+        {
+            _ui.Diamond(b, new Rectangle(ResultPanel.X + 30, y + 4, 16, 16), Bloom);
+            _ui.Text(b, AffixName(a.Stat), ResultPanel.X + 58, y, Bone);
+            _ui.TextRight(b, AffixVal(a), ResultPanel.Right - 28, y, Met);
+            y += 34;
+        }
+        if (nxt.Count == 0) _ui.Text(b, "This rarity carries no explicit affixes.", ResultPanel.X + 28, y, Dim);
+
+        // The reference's "ADDED BENEFIT" panel, made honest: an item's standing benefit is its real enchant
+        // (Rare+) or trait — refine does not unlock a new passive, so none is invented.
+        y = ResultPanel.Y + 360;
+        _ui.Fill(b, new Rectangle(ResultPanel.X + 28, y - 14, ResultPanel.Width - 56, 2), Dim);
+        if (Enchantments.Of(item) is { } ench)
+        {
+            _ui.Text(b, "STANDING BENEFIT", ResultPanel.X + 28, y, Slate);
+            _ui.TextBig(b, ench.Name, ResultPanel.X + 28, y + 28, Bloom, UiTypography.Body);
+            DrawWrapped(b, ench.Blurb, ResultPanel.X + 28, y + 60, ResultPanel.Width - 56, Bone);
+        }
+        else if (GearTraits.TraitOf(item) is { } tr)
+        {
+            _ui.Text(b, "ITEM TRAIT", ResultPanel.X + 28, y, Slate);
+            _ui.TextBig(b, GearTraits.NameOf(tr), ResultPanel.X + 28, y + 28, InkGold, UiTypography.Body);
+        }
+
+        _ui.Text(b, "FORGE NOTES", ResultPanel.X + 28, ResultPanel.Bottom - 200, Slate);
+        DrawWrapped(b, "Level and affixes rise. Trait, enchant and source stay.",
+            ResultPanel.X + 28, ResultPanel.Bottom - 170, ResultPanel.Width - 56, Slate);
+
+        var cbtn = new Rectangle(ResultPanel.X + 40, ResultPanel.Bottom - 96, ResultPanel.Width - 80, 72);
+        if (_ui.Button(b, cbtn, "CONFIRM UPGRADE", hit, clicked, enabled: can && !worn)) DoRefine(hunter, item);
+    }
+
+    // ── REFORGE = re-roll the TRAIT (Essence) or the ENCHANT (Core / Crystal). Same item preview at left. ──
+    private void DrawReforgeMode(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
+    {
+        DrawRail(b, hunter, hit, clicked);
+        var item = Target();
+        DrawItemPanel(b, item, null, hunter);
+
+        _ui.Panel(b, ReforgePanel);
+        _ui.TextCenterBig(b, "REFORGE", ReforgePanel.Center.X, ReforgePanel.Y + 22, Gold, UiTypography.SectionTitle);
+        if (item is null)
+        {
+            _ui.TextCenter(b, "NO GEAR TO REFORGE.", ReforgePanel.Center.X, ReforgePanel.Y + 320, Slate);
+            return;
+        }
+
+        var worn = IsWorn(hunter, item);
+
+        // TRAIT — the item's trade, re-rolled with ESSENCE.
+        var tRow = ReforgePanel.Y + 96;
+        var tCost = ReforgeTuning.Default.TraitCostFor(item.Rarity);
+        var canTrait = !worn && hunter.MaterialOf(Material.Essence) >= tCost;
+        _ui.Text(b, "TRAIT  —  THE ITEM'S TRADE", ReforgePanel.X + 32, tRow, Slate);
+        _ui.TextBig(b, GearTraits.TraitOf(item) is { } t ? GearTraits.NameOf(t) : "—", ReforgePanel.X + 32, tRow + 28, InkGold, UiTypography.PanelTitle);
+        _ui.TextRight(b, $"{hunter.MaterialOf(Material.Essence):N0} / {tCost} ESSENCE", ReforgePanel.Right - 360, tRow + 34, canTrait ? Met : Ember);
+        if (_ui.Button(b, new Rectangle(ReforgePanel.Right - 340, tRow + 12, 300, 60), "RE-ROLL", hit, clicked, enabled: canTrait))
+            DoReforgeTrait(hunter, item);
+
+        _ui.Fill(b, new Rectangle(ReforgePanel.X + 32, tRow + 108, ReforgePanel.Width - 64, 2), Dim);
+
+        // ENCHANT — the build-defining trigger, Rare+ only, re-rolled with CORE (Legendary spends CRYSTAL).
+        var eRow = tRow + 140;
+        var hasEnch = item.Rarity >= Enchantments.MinimumRarity;
+        var eTier = EnchantReforgeTier(item.Rarity);
+        var eCost = ReforgeTuning.Default.EnchantCostFor(item.Rarity);
+        var canEnch = !worn && hasEnch && hunter.MaterialOf(eTier) >= eCost;
+        var ench = Enchantments.Of(item);
+        _ui.Text(b, "ENCHANT  —  THE BUILD-DEFINING TRIGGER (RARE+)", ReforgePanel.X + 32, eRow, Slate);
+        _ui.TextBig(b, hasEnch ? ench?.Name ?? "—" : "LOCKED — RARE+ ONLY", ReforgePanel.X + 32, eRow + 28, hasEnch ? Bloom : Dim, UiTypography.PanelTitle);
+        if (ench is not null) DrawWrapped(b, ench.Blurb, ReforgePanel.X + 32, eRow + 64, ReforgePanel.Width - 400, Bone);
+        _ui.TextRight(b, $"{hunter.MaterialOf(eTier):N0} / {eCost} {MaterialTiers.Name(eTier)}", ReforgePanel.Right - 360, eRow + 34, canEnch ? Met : Ember);
+        if (_ui.Button(b, new Rectangle(ReforgePanel.Right - 340, eRow + 12, 300, 60), "RE-ROLL", hit, clicked, enabled: canEnch))
+            DoReforgeEnchant(hunter, item);
+
+        _ui.Fill(b, new Rectangle(ReforgePanel.X + 32, eRow + 130, ReforgePanel.Width - 64, 2), Dim);
+        if (worn) _ui.Text(b, "EQUIPPED — UNEQUIP ON GEAR TO REFORGE.", ReforgePanel.X + 32, eRow + 150, Ember);
+        else _ui.Text(b, "Re-forging changes only the trait or enchant; level, source and affixes are kept.", ReforgePanel.X + 32, eRow + 150, Slate);
+        if (_msg.Length > 0) _ui.Text(b, _msg, ReforgePanel.X + 32, ReforgePanel.Bottom - 40, _msgColor);
+    }
+
+    // ── The shared "ITEM PREVIEW" column: the item, its source, and (in UPGRADE) the before→after readout. ──
+    private void DrawItemPanel(SpriteBatch b, ItemInstance? item, ItemInstance? refined, Hunter hunter)
+    {
+        _ui.Panel(b, ItemPanel);
+        _ui.TextCenterBig(b, "ITEM PREVIEW", ItemPanel.Center.X, ItemPanel.Y + 22, Gold, UiTypography.SectionTitle);
+        if (item is null)
+        {
+            _ui.TextCenter(b, "NO GEAR IN THE BAG.", ItemPanel.Center.X, ItemPanel.Y + 300, Slate);
+            _ui.TextCenter(b, "GO HUNT SOMETHING.", ItemPanel.Center.X, ItemPanel.Y + 330, Dim);
+            return;
+        }
+
+        var rc = RarityColors[(int)item.Rarity];
+        var el = item.Element is { } e ? e.ToString().ToUpperInvariant() + " " : "";
+        _ui.TextCenterBig(b, $"{el}{ItemNames[item.BaseType]}", ItemPanel.Center.X, ItemPanel.Y + 56, rc, UiTypography.PanelTitle);
+        _ui.TextCenterBig(b, $"{RarityNames[(int)item.Rarity]}  ·  ITEM LEVEL {item.ItemLevel}", ItemPanel.Center.X, ItemPanel.Y + 90, Slate, UiTypography.Secondary);
+
+        DrawItemIcon(b, item, new Rectangle(ItemPanel.Center.X - 100, ItemPanel.Y + 120, 200, 200));
+
+        if (item.Element is { } src)
+        {
+            if (_ui.Assets.Get($"source_{src.ToString().ToLowerInvariant()}") is { } sg)
+                b.Draw(sg, new Rectangle(ItemPanel.Center.X - 24, ItemPanel.Y + 330, 48, 48), Color.White);
+            _ui.TextCenterBig(b, $"SOURCE  ·  {src.ToString().ToUpperInvariant()}", ItemPanel.Center.X, ItemPanel.Y + 386, Bloom, UiTypography.Secondary);
+        }
+
+        DrawTransition(b, "ITEM LEVEL", $"iL{item.ItemLevel}", refined is null ? null : $"iL{refined.ItemLevel}", ItemPanel.Y + 422);
+        DrawTransition(b, "ITEM POWER", $"{Gear.ItemScore(item):N0}", refined is null ? null : $"{Gear.ItemScore(refined):N0}", ItemPanel.Y + 470);
+
+        var cur = ItemAffixes.Of(item);
+        var nxt = refined is null ? null : ItemAffixes.Of(refined);
+        var ay = ItemPanel.Y + 524;
+        _ui.Text(b, cur.Count > 0 ? "AFFIXES" : "NO AFFIXES (RARITY GATES COUNT)", ItemPanel.X + 28, ay, Slate);
+        ay += 32;
+        for (var i = 0; i < cur.Count; i++)
+        {
+            _ui.Text(b, AffixName(cur[i].Stat), ItemPanel.X + 28, ay, Bone);
+            if (nxt is not null && i < nxt.Count)
+            {
+                _ui.TextRight(b, AffixVal(nxt[i]), ItemPanel.Right - 28, ay, Met);
+                var aw = _ui.Measure(AffixVal(nxt[i]));
+                Arrow(b, ItemPanel.Right - 28 - aw - 26, ay + 3, Bloom);
+                _ui.TextRight(b, AffixVal(cur[i]), ItemPanel.Right - 28 - aw - 52, ay, Slate);
+            }
+            else _ui.TextRight(b, AffixVal(cur[i]), ItemPanel.Right - 28, ay, InkGold);
+            ay += 34;
+        }
+    }
+
+    private void DrawTransition(SpriteBatch b, string label, string cur, string? after, int y)
+    {
+        _ui.Text(b, label, ItemPanel.X + 28, y + 6, Slate);
+        if (after is null) { _ui.TextRightBig(b, cur, ItemPanel.Right - 28, y, Bone, UiTypography.Body); return; }
+        _ui.TextRightBig(b, after, ItemPanel.Right - 28, y, Met, UiTypography.Body);
+        var aw = _ui.MeasureBig(after, UiTypography.Body);
+        Arrow(b, ItemPanel.Right - 28 - aw - 28, y + 5, Bloom);
+        _ui.TextRightBig(b, cur, ItemPanel.Right - 28 - aw - 54, y, Slate, UiTypography.Body);
+    }
+
+    private void DrawCostRow(SpriteBatch b, int y, string label, long owned, int required, Color gem, bool gleam)
+    {
+        var ok = owned >= required;
+        if (gleam && _ui.Assets.Get("currency_gleam") is { } gi) b.Draw(gi, new Rectangle(CostPanel.X + 30, y, 40, 40), Color.White);
+        else _ui.Diamond(b, new Rectangle(CostPanel.X + 32, y + 4, 36, 36), gem);
+        _ui.TextBig(b, label, CostPanel.X + 84, y + 6, Bone, UiTypography.Body);
+        _ui.TextRightBig(b, $"{owned:N0} / {required:N0}", CostPanel.Right - 30, y + 6, ok ? Met : Ember, UiTypography.Body);
+    }
+
+    /// <summary>A small solid right-pointing triangle — the before→after arrow, sized ~20px tall.</summary>
+    private void Arrow(SpriteBatch b, int x, int cy, Color c)
+    {
+        for (var i = 0; i < 10; i++) _ui.Fill(b, new Rectangle(x + i, cy - (10 - i), 2, (10 - i) * 2), c);
+    }
+
+    private void DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c)
+    {
+        var line = "";
+        foreach (var w in text.Split(' '))
+        {
+            var probe = line.Length == 0 ? w : line + " " + w;
+            if (_ui.Measure(probe) > width && line.Length > 0) { _ui.Text(b, line, x, y, c); y += 26; line = w; }
+            else line = probe;
+        }
+        if (line.Length > 0) _ui.Text(b, line, x, y, c);
+    }
+
+    private static string AffixName(AffixStat s) => s switch
+    {
+        AffixStat.Damage => "DAMAGE", AffixStat.Health => "HEALTH", AffixStat.SkillRate => "SKILL RATE",
+        AffixStat.Haul => "HAUL", AffixStat.Crit => "CRIT CHANCE", _ => "DEFENSE",
+    };
+
+    private static string AffixVal(ItemAffix a) => a.Stat switch
+    {
+        AffixStat.Crit => $"+{a.Magnitude:0.0}%",
+        AffixStat.Defense => $"+{a.Magnitude:0}",
+        _ => $"+{a.Magnitude * 100f:0}%",
+    };
+
+    private void DrawDebug(SpriteBatch b)
+    {
+        var rects = _mode switch
+        {
+            ForgeMode.Upgrade => new[] { Rail, ItemPanel, CostPanel, ResultPanel },
+            ForgeMode.Reforge => new[] { Rail, ItemPanel, ReforgePanel },
+            _ => new[] { new Rectangle(32, 160, 1000, 592), new Rectangle(1056, 88, 832, 552) },
+        };
+        foreach (var r in rects)
+        {
+            _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, 2), Ember);
+            _ui.Fill(b, new Rectangle(r.X, r.Bottom - 2, r.Width, 2), Ember);
+            _ui.Fill(b, new Rectangle(r.X, r.Y, 2, r.Height), Ember);
+            _ui.Fill(b, new Rectangle(r.Right - 2, r.Y, 2, r.Height), Ember);
+        }
+        _ui.TextBig(b, $"nav FORGE  mode {_mode}  focus {_focusId ?? "—"}", 320, 112, Gold, UiTypography.Secondary);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+    private void DrawSalvageMode(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
+    {
         // ── CHESTS — a toolbar row under the title (the currency pills own the top-right now). A boss's
         // drop lands here as an unopened chest; OPEN reveals the best (grade coloured), OPEN ALL clears it. ──
         if (_chests.Count > 0)
@@ -879,56 +1282,20 @@ public sealed class ForgeScreen
                           .GroupBy(i => i.Rarity).Any(g => g.Key != Rarity.Legendary && g.Count() >= 3);
         if (_ui.Button(b, autoBtn, "AUTO-MERGE ALL", hit, clicked, enabled: anyTrio)) AutoMergeAll(hunter);
 
-        // ── REFORGE — spend MATERIALS to re-roll the selected item's passives (RNG). This is what makes
-        // an item CUSTOMISABLE: churn the trait toward the trade your build wants, or commit to re-rolling
-        // the Form-combo enchant until it fits your Forms. Acts on the selected item, like SELL/DISMANTLE.
-        // A worn item greys out here for the same reason it does there — take it off before reworking it.
+        // REFINE and REFORGE now live in their own polished modes. From the bag these two buttons carry the
+        // selected item straight there — de-cluttering the hub and linking the modes (the reference's rail).
         if (act is not null && Gear.IsWearable(act))
         {
-            var isWorn = IsWorn(hunter, act);
-
-            // TRAIT re-roll spends ESSENCE, ENCH re-roll spends CORE (or CRYSTAL on a Legendary), and
-            // REFINE spends SCRAP + Gold to raise the level. Each tier drains through its own verb.
-            var tCost = ReforgeTuning.Default.TraitCostFor(act.Rarity);
-            var canTrait = !isWorn && hunter.MaterialOf(Material.Essence) >= tCost;
-            if (_ui.Button(b, new Rectangle(1056, 856, 264, 60), $"TRAIT {tCost}E", hit, clicked, enabled: canTrait))
-                DoReforgeTrait(hunter, act);
-
-            var hasEnch = act.Rarity >= Enchantments.MinimumRarity;
-            var eTier = EnchantReforgeTier(act.Rarity);
-            var eCost = ReforgeTuning.Default.EnchantCostFor(act.Rarity);
-            var canEnch = !isWorn && hasEnch && hunter.MaterialOf(eTier) >= eCost;
-            var eLabel = hasEnch ? $"ENCH {eCost}{(eTier == Material.Crystal ? "X" : "C")}" : "ENCH --";
-            if (_ui.Button(b, new Rectangle(1336, 856, 264, 60), eLabel, hit, clicked, enabled: canEnch))
-                DoReforgeEnchant(hunter, act);
-
-            // REFINE spends SCRAP + Gold for +1 level. Holding SHIFT turns it into GREATER REFINE — one
-            // CRYSTAL (+ Gold) for +5 at once — but only when a Crystal is actually on hand, so the button
-            // never silently changes verb on a player who has none. The footer teaches this when it applies.
-            var refine = Forge.Refine(act, Tuning);
-            var greater = Forge.GreaterRefine(act, Tuning);
-            var hasCrystal = hunter.MaterialOf(Material.Crystal) >= greater.Crystal;
-            var kb = Keyboard.GetState();
-            var doGreat = (kb.IsKeyDown(Keys.LeftShift) || kb.IsKeyDown(Keys.RightShift)) && hasCrystal;
-            var canRefine = !isWorn && (doGreat
-                ? hunter.Gleam >= greater.Gold
-                : hunter.MaterialOf(Material.Scrap) >= refine.Scrap && hunter.Gleam >= refine.Gold);
-            if (_ui.Button(b, new Rectangle(1616, 856, 264, 60), doGreat ? "REFINE +5" : "REFINE +1", hit, clicked, enabled: canRefine))
-            {
-                if (doGreat) DoGreaterRefine(hunter, act); else DoRefine(hunter, act);
-            }
+            if (_ui.Button(b, new Rectangle(1056, 856, 400, 60), "UPGRADE (REFINE)  >", hit, clicked))
+            { _focusId = act.InstanceId; _mode = ForgeMode.Upgrade; }
+            if (_ui.Button(b, new Rectangle(1480, 856, 400, 60), "REFORGE  >", hit, clicked))
+            { _focusId = act.InstanceId; _mode = ForgeMode.Reforge; }
         }
 
         // ── Message + footer ── in the strip under the loot panel (the nav owns the very bottom now) ──
         if (_msg.Length > 0) _ui.Text(b, _msg, 48, 776, _msgColor);
-        // The footer teaches Shift+Refine exactly when it becomes usable — the moment a Crystal is on hand.
-        // A hint for an action you cannot take yet is noise; one that appears the instant you can is a tutor.
-        // BACK is dropped — the nav bar teaches it now.
-        _ui.Text(b, hunter.MaterialOf(Material.Crystal) >= 1
-            ? "SHIFT+REFINE = +5 FOR A CRYSTAL   ·   J  SALVAGE JUNK"
-            : "CLICK AN ITEM, THEN A BUTTON   ·   J  SALVAGE JUNK", 48, 832, Slate);
-
-        DrawReveal(b);   // the chest-open burst, on top of everything
+        _ui.Text(b, "CLICK AN ITEM, THEN A BUTTON   ·   J  SALVAGE JUNK   ·   UPGRADE / REFORGE FOR THE FORGE", 48, 832, Slate);
+        // The chest-open reveal is drawn by the mode dispatcher, so it rides on top of every mode.
     }
 
     /// <summary>

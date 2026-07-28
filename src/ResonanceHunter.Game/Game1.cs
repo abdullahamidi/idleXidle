@@ -585,7 +585,7 @@ public class Game1 : Game
             // screen is gone, so they had nothing to pose.
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
-                or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "build" or "character" or "stats")
+                or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "reforge" or "build" or "character" or "stats")
             {
                 _showTitle = false;
                 // Muster screen with a real roster to arrange.
@@ -619,6 +619,7 @@ public class Game1 : Game
                     });
                     _forge.AddLoot(seed);
                     _forge.ActiveForms = _loadout.Skills.Select(s => s.Form).ToList();
+                    _forge.DevManage();   // the loot-forge fixture poses the SALVAGE hub (grid, chests, merge)
                     _forge.DevSelect(_forge.Inventory.Count - 1);   // the SIPHON charm (added last) — poses a new combo
                     // Stock every tier so the reforge/refine buttons pose live, not greyed.
                     _hunter.AddMaterials(500);   // SCRAP
@@ -763,10 +764,10 @@ public class Game1 : Game
                     _world.Conquer("cinderworks");
                     SetActiveRegion("umbral_reach");
                 }
-                if (sm is "forge" or "hybrid")
+                if (sm is "forge" or "hybrid" or "reforge")
                 {
                     _showForge = true;
-                    // Seed some loot so the Forge screen can be audited with content.
+                    // Seed a spread of loot so SALVAGE has content, and a hero item the UPGRADE view poses.
                     var rar = new[] { Rarity.Common, Rarity.Uncommon, Rarity.Rare, Rarity.Epic, Rarity.Legendary };
                     var types = new[] { ItemBaseType.Weapon, ItemBaseType.Charm, ItemBaseType.Material, ItemBaseType.AbilityFocus };
                     var loot = new List<ItemInstance>();
@@ -777,14 +778,27 @@ public class Game1 : Game
                             Rarity = rar[i % rar.Length], SellValue = 12 + i * 7,
                             Element = (Source)(i % 6),
                         });
+                    // The hero: a deep Legendary Shadow weapon — four affixes, a real enchant, a mid item level
+                    // so a refine reads (current→next power, before→after affixes). Mirrors the spec fixture.
+                    loot.Add(new ItemInstance
+                    {
+                        InstanceId = "dev_hero", BaseType = ItemBaseType.Weapon, Rarity = Rarity.Legendary,
+                        SellValue = 200, Element = Source.Shadow, ItemLevel = 8,
+                    });
                     _forge.AddLoot(loot);
+                    _forge.DevFocus("dev_hero");   // pose the UPGRADE screen on the hero item
 
-                    // Land the cursor on a LEGENDARY: Commons carry no enchantment by design, so a shot
-                    // of the default selection cannot show the enchantment row at all.
-                    _forge.DevSelect(4);
+                    // Stock the tiers + Gleam so the cost rows read as MET and the top pills show real values.
+                    _hunter.AddGleam(131_900_000);
+                    _hunter.AddMaterials(12_600);                 // SCRAP
+                    _hunter.AddMaterial(Material.Essence, 3_400);
+                    _hunter.AddMaterial(Material.Core, 820);
+                    _hunter.AddMaterial(Material.Crystal, 400);
+                    _dust.AwardFromMastery(77_400);               // the Memory-Dust pill, so it reads like the ref
 
-                    // Queue a cross-family trio so the HYBRID recipe row can be screenshotted.
-                    if (sm == "hybrid") _forge.DevQueueHybrid();
+                    // The HYBRID shot poses the merge recipe row, which lives in the SALVAGE hub.
+                    if (sm == "hybrid") { _forge.DevQueueHybrid(); _forge.DevManage(); }
+                    if (sm == "reforge") _forge.DevReforge();
                 }
                 if (sm == "farm")
                 {
@@ -851,7 +865,7 @@ public class Game1 : Game
         // binding here ran first every frame, hijacking the filter into a blank dev screen.
         if (Pressed(Keys.F9)) _showSpike = !_showSpike;
         if (Pressed(Keys.F6)) _expedition.DevForceBoss = !_expedition.DevForceBoss;   // dev: force the Crystal Lich boss render (Rev 4 §12)
-        if (Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _character.DevGearDebug = !_character.DevGearDebug; _stats.DevStatsDebug = !_stats.DevStatsDebug; _buildScreen.DevBuildDebug = !_buildScreen.DevBuildDebug; }   // dev layout overlays
+        if (Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _character.DevGearDebug = !_character.DevGearDebug; _stats.DevStatsDebug = !_stats.DevStatsDebug; _buildScreen.DevBuildDebug = !_buildScreen.DevBuildDebug; _forge.DevForgeDebug = !_forge.DevForgeDebug; }   // dev layout overlays
         if (Pressed(Keys.F1)) _showHelp = !_showHelp;
         if (Pressed(Keys.F10)) _showSettings = !_showSettings;
 
