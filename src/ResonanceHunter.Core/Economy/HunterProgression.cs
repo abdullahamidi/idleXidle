@@ -147,6 +147,30 @@ public sealed class Hunter
     /// <summary>One glanceable number for "am I getting stronger". Shown in the HUD.</summary>
     public int PowerRating => Gear.PowerRating(GearDamageMultiplier, AttackPower, Defense, MaxHealth);
 
+    /// <summary>
+    /// How much this item would add to <see cref="PowerRating"/> if worn in its slot — its marginal power.
+    /// </summary>
+    /// <remarks>
+    /// This is the number the gear screen must compare with, NOT <see cref="Gear.ItemScore"/>. ItemScore is a
+    /// rarity + affix heuristic that can rank an item BELOW what you wear while equipping it actually RAISES
+    /// PowerRating (it weights crit/haul affixes that PowerRating never reads, and under-weights the weapon
+    /// multiplier) — which reads to the player as "the item shows less power but my power went up". Defined as
+    /// PowerRating with the item in its slot minus PowerRating with that slot empty, so a swap's shown delta
+    /// (contribution(new) − contribution(old)) is EXACTLY the change to PowerRating; the two can never disagree.
+    /// Pure: it momentarily swaps the worn slot to measure, then restores it (the game is single-threaded).
+    /// </remarks>
+    public int PowerContribution(ItemInstance? item)
+    {
+        if (item is null || Gear.SlotFor(item.BaseType) is not { } slot) return 0;
+        var prev = _worn[slot];
+        _worn[slot] = item;
+        var with = PowerRating;
+        _worn[slot] = null;
+        var without = PowerRating;
+        _worn[slot] = prev;
+        return with - without;
+    }
+
     // ── Commander stats — what training BUYS now that the Hunter no longer swings ─────────────────
     // The pivot to auto-battle orphaned every one of these: the squad fights, so the Hunter's personal
     // AttackPower/Defense/Health fed nothing, and Gleam had no sink at all. Rather than delete

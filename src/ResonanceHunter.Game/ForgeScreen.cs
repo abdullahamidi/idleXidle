@@ -991,7 +991,7 @@ public sealed class ForgeScreen
         }
 
         DrawTransition(b, "ITEM LEVEL", $"iL{item.ItemLevel}", refined is null ? null : $"iL{refined.ItemLevel}", ItemPanel.Y + 422);
-        DrawTransition(b, "ITEM POWER", $"{Gear.ItemScore(item):N0}", refined is null ? null : $"{Gear.ItemScore(refined):N0}", ItemPanel.Y + 470);
+        DrawTransition(b, "ITEM POWER", $"{hunter.PowerContribution(item):N0}", refined is null ? null : $"{hunter.PowerContribution(refined):N0}", ItemPanel.Y + 470);
 
         var cur = ItemAffixes.Of(item);
         var nxt = refined is null ? null : ItemAffixes.Of(refined);
@@ -1136,7 +1136,7 @@ public sealed class ForgeScreen
             // The upgrade-at-a-glance signal — the same green UP the Character bag shows, now on the loot
             // grid where the whole haul actually lives, so you no longer click every card to learn its worth.
             if (Gear.SlotFor(item.BaseType) is { } sl && !IsWorn(hunter, item)
-                && Gear.ItemScore(item) > Gear.ItemScore(hunter.Worn(sl)))
+                && hunter.PowerContribution(item) > hunter.PowerContribution(hunter.Worn(sl)))
                 _ui.Text(b, "UP", card.X + 12, card.Y + 8, new Color(0x6E, 0xC8, 0x7A));
 
             if (active) Reticle(b, card, Bone);

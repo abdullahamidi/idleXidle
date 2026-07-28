@@ -178,8 +178,8 @@ public sealed class CharacterScreen
         foreach (var slot in AllSlots)
         {
             var best = Wearable().Where(i => Gear.SlotFor(i.BaseType) == slot)
-                .OrderByDescending(Gear.ItemScore).FirstOrDefault();
-            if (best is not null && Gear.ItemScore(best) > Gear.ItemScore(hunter.Worn(slot))) hunter.Equip(best);
+                .OrderByDescending(hunter.PowerContribution).FirstOrDefault();
+            if (best is not null && hunter.PowerContribution(best) > hunter.PowerContribution(hunter.Worn(slot))) hunter.Equip(best);
         }
         Dirty = true;
     }
@@ -328,7 +328,7 @@ public sealed class CharacterScreen
             _forge.DrawItemIcon(b, item, new Rectangle(cell.X + 6, cell.Y + 6, cell.Width - 12, cell.Height - 12));
             _ui.Fill(b, new Rectangle(cell.X, cell.Y, cell.Width, 4), RarityColor(item.Rarity));
             if (worn) _ui.TextRightBig(b, "E", cell.Right - 8, cell.Y + 6, Gold, UiTypography.Secondary);
-            else if (Gear.SlotFor(item.BaseType) is { } sl && Gear.ItemScore(item) > Gear.ItemScore(hunter.Worn(sl)))
+            else if (Gear.SlotFor(item.BaseType) is { } sl && hunter.PowerContribution(item) > hunter.PowerContribution(hunter.Worn(sl)))
                 _ui.TextRightBig(b, "▲", cell.Right - 8, cell.Y + 6, Green, UiTypography.Secondary);
             if (sel) Reticle(b, cell, Gold);
         }
@@ -382,7 +382,7 @@ public sealed class CharacterScreen
 
         // Stat list (§10.7): ITEM POWER + the item's real affixes.
         var sy = hero.Bottom + 100;
-        StatRow(b, "ITEM POWER", $"{Gear.ItemScore(item):N0}", ref sy, Bone);
+        StatRow(b, "ITEM POWER", $"{hunter.PowerContribution(item):N0}", ref sy, Bone);
         foreach (var af in ItemAffixes.Of(item))
             StatRow(b, AffixLabel(af.Stat), AffixVal(af.Stat, af.Magnitude), ref sy, Green);
         if (GearTraits.TraitOf(item) is { } tr) StatRow(b, "TRAIT", GearTraits.NameOf(tr), ref sy, Gold);
@@ -396,7 +396,7 @@ public sealed class CharacterScreen
             _ui.TextBig(b, "EQUIPPED", cmp.X + 16, cmp.Y + 12, Gold, UiTypography.Secondary);
         else
         {
-            var delta = Gear.ItemScore(item) - Gear.ItemScore(worn);
+            var delta = hunter.PowerContribution(item) - hunter.PowerContribution(worn);
             _ui.TextBig(b, worn is null ? "SLOT EMPTY" : $"EQUIPPED: {(worn.Element?.ToString().ToUpperInvariant() ?? "PLAIN")} {SlotWord(worn.BaseType)}",
                 cmp.X + 16, cmp.Y + 12, Slate, UiTypography.Secondary);
             _ui.TextRightBig(b, $"{(delta >= 0 ? "+" : "")}{delta} POWER", cmp.Right - 16, cmp.Y + 10,
