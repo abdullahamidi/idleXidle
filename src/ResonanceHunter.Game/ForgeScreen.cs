@@ -235,16 +235,6 @@ public sealed class ForgeScreen
     public ForgeTuning Tuning { get; set; } = ForgeTuning.Default;
 
     /// <summary>
-    /// The creature a FEED would go to — whichever one the Warren has selected.
-    /// </summary>
-    /// <remarks>
-    /// Feeding needs a mouth. Set by the host from the Warren's selection rather than duplicating a
-    /// roster picker into the Forge: the player already chose a creature over there, and asking twice
-    /// would be the kind of ceremony that turns a decision back into a chore.
-    /// </remarks>
-    public Creature? FeedTarget { get; set; }
-
-    /// <summary>
     /// The Forms the player's current build runs. Set by the host so the Forge can tell you whether an
     /// item's Form-combo enchantment is LIVE for your build or dead weight — the whole loot philosophy in
     /// one line: not "is this a bigger number", but "does this fit what I'm building".
@@ -525,26 +515,6 @@ public sealed class ForgeScreen
         Say($"SOLD FOR {item.SellValue} GLEAM.", Gold);
     }
 
-    /// <summary>Feed an item straight into the selected creature's evolution.</summary>
-    private void Feed(Hunter hunter, ItemInstance? item)
-    {
-        if (item is null) return;
-        if (IsWorn(hunter, item)) { Say("TAKE IT OFF BEFORE FEEDING IT.", Ember); return; }
-        if (FeedTarget?.Evolution is not { } progress)
-        {
-            Say("SELECT A CREATURE IN THE WARREN [A] FIRST.", Ember);
-            return;
-        }
-
-        var reason = Forge.CheckEligible(item);
-        if (reason != IneligibleReason.Eligible) { Say(Forge.Explain(reason), Ember); return; }
-
-        var m = Forge.Feed(item, Tuning);
-        _inv.Remove(item); _merge.Remove(item.InstanceId);
-        progress.FeedMaterial(m);
-        _cursor = Math.Clamp(_cursor, 0, Math.Max(0, _inv.Count - 1));
-        Say($"FED {m} TO {FeedTarget.Source.ToString().ToUpperInvariant()} {FeedTarget.Role.ToString().ToUpperInvariant()}.", Gold);
-    }
 
     private void Dismantle(Hunter hunter, ItemInstance? item)
     {
@@ -1205,23 +1175,16 @@ public sealed class ForgeScreen
             var row = wearable ? 288 : 200;
             var sell = new Rectangle(1088, row, 368, 72);
             var dis = new Rectangle(1488, row, 368, 72);
-            var feed = new Rectangle(1088, row + 88, 368, 72);
-            var add = new Rectangle(1488, row + 88, 368, 72);
+            var merge = new Rectangle(1088, row + 88, 368, 72);
 
-            // A worn item must be taken off before it can be sold or scrapped.
+            // A worn item must be taken off before it can be sold or scrapped. (FEED was retired with the
+            // creature system — the fates of unwanted loot are now SELL / DISMANTLE / MERGE / EQUIP.)
             if (_ui.Button(b, sell, $"SELL  +{act.SellValue}g", hit, clicked, enabled: !worn)) Sell(hunter, act);
             if (_ui.Button(b, dis, $"DISMANTLE +{Forge.Dismantle(act, Tuning)} MAT", hit, clicked, enabled: !worn))
                 Dismantle(hunter, act);
 
-            // FEED — the third fate of unwanted loot, and the one that was never built. Efficient
-            // (full rate) but COMMITTED: it all goes into one creature, right now. Dismantle is the
-            // reverse trade — lossy, but liquid. Neither dominates, which is the whole point.
-            var canFeed = !worn && FeedTarget?.Evolution is not null;
-            if (_ui.Button(b, feed, canFeed ? $"FEED +{Forge.Feed(act, Tuning)}" : "FEED", hit, clicked, enabled: canFeed))
-                Feed(hunter, act);
-
             var queued = _merge.Contains(act.InstanceId);
-            if (_ui.Button(b, add, queued ? "UNQUEUE" : "MERGE (3→1)", hit, clicked, enabled: !worn))
+            if (_ui.Button(b, merge, queued ? "UNQUEUE" : "MERGE (3→1)", hit, clicked, enabled: !worn))
                 ToggleMerge(hunter, act);
         }
 

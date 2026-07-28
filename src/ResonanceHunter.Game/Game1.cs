@@ -142,11 +142,10 @@ public class Game1 : Game
     private AutomationScreen _automation = null!;
     private bool _showAutomation;
 
-    // The Warren is a facility-production dashboard now (spec rev 1). The creature den (_automation) is a
-    // sub-view of it, reached from the CREATURES button; _warrenShowDen picks which face is drawn.
+    // The Warren is a facility-production dashboard (spec rev 1). The old creature den (_automation) is
+    // retired from the UI; _automation is kept only to carry the saved roster/cores forward (dormant).
     private WarrenScreen _warrenScreen = null!;
     private readonly Warren _warren = new();
-    private bool _warrenShowDen;
     private long _warrenMasteryPool;   // Mastery the facilities have produced — feeds SetEarned, and is the spendable pool
 
     // ── Memory Dust prestige (Full Vision). NOTHING RESETS — Dust accrues from mastery. ───────
@@ -535,7 +534,7 @@ public class Game1 : Game
     }
 
     /// <summary>
-    /// Draw the WARREN nav destination: the facility dashboard, or its CREATURES sub-view (the old den).
+    /// Draw the WARREN nav destination: the facility-production dashboard.
     /// </summary>
     /// <remarks>
     /// The dashboard performs its upgrade in the DRAW pass (the same place Forge does its Refine), so the
@@ -544,20 +543,12 @@ public class Game1 : Game
     /// </remarks>
     private void DrawWarren()
     {
-        if (_warrenShowDen)
-        {
-            _automation.Draw(_batch, _region, _hunter, CanvasMouse, MouseClicked);
-            return;
-        }
-
         _warren.Name = Regions.Find(_activeRegion)?.Name ?? "THE WARREN";
         _warrenScreen.Warren = _warren;
         _warrenScreen.GleamOwned = _hunter.Gleam;
         _warrenScreen.MasteryOwned = _warrenMasteryPool;
         _warrenScreen.DustOwned = _dust.MemoryDust;
         _warrenScreen.Draw(_batch, CanvasMouse, MouseClicked);
-
-        if (_warrenScreen.ConsumeDen()) { _warrenShowDen = true; return; }
 
         if (_warrenScreen.ConsumeUpgrade() is { } kind
             && _warren.CanAfford(kind, _hunter.Gleam, _warrenMasteryPool, _dust.MemoryDust))
@@ -884,7 +875,6 @@ public class Game1 : Game
                 if (sm == "warren")
                 {
                     _showAutomation = true;
-                    _warrenShowDen = false;
                     _activeRegion = "pale_choir";   // so the Warren name reads "THE PALE CHOIR", per the reference
                     // Seed the reference's exact facility state (spec §6-9): level 23, the listed facility levels.
                     _warren.Restore(23, 18_540, new Dictionary<FacilityKind, int>
@@ -900,9 +890,7 @@ public class Game1 : Game
                 }
                 if (sm == "farm")
                 {
-                    _showAutomation = true;
-                    _warrenShowDen = true;   // the farm fixture audits the CREATURES den, the Warren's sub-view
-                    _automation.DevPopulate(_region);
+                    _showAutomation = true;   // deprecated: the creature den was removed; shows the Warren dashboard
                 }
                 if (sm == "dust")
                 {
@@ -979,7 +967,7 @@ public class Game1 : Game
 
         HandleNavClick();   // a click on the shared hex nav works from any screen
 
-        if (Pressed(Keys.A)) { _showAutomation = !_showAutomation; _warrenShowDen = false; _showForge = false; _showPrestige = false; _showWorld = false; _showBuild = false; _showCharacter = false; _showStats = false; }
+        if (Pressed(Keys.A)) { _showAutomation = !_showAutomation; _showForge = false; _showPrestige = false; _showWorld = false; _showBuild = false; _showCharacter = false; _showStats = false; }
         if (Pressed(Keys.P)) { _showPrestige = !_showPrestige; _showAutomation = false; _showForge = false; _showWorld = false; _showBuild = false; _showCharacter = false; _showStats = false; }
         if (Pressed(Keys.W)) { _showWorld = !_showWorld; _showAutomation = false; _showForge = false; _showPrestige = false; _showBuild = false; _showCharacter = false; _showStats = false; if (_showWorld) { _mapScreen.ActiveRegion = _activeRegion; _mapScreen.SelectActive(); } }
 
@@ -1086,11 +1074,8 @@ public class Game1 : Game
 
         if (_showAutomation)
         {
-            // WARREN is the facility dashboard now; the creature den is its CREATURES sub-view. The farm and
-            // Warren production run every frame regardless (in TickFarms) — this only routes on-screen input.
-            // The dashboard handles its clicks in Draw (like Forge/Stats), so it needs no Update here.
-            if (_warrenShowDen)
-                _automation.Update(gameTime, _keys, CanvasMouse, MouseClicked, MouseWheel, _region, _hunter);
+            // WARREN is the facility-production dashboard. Production runs every frame in TickFarms; the
+            // dashboard handles its clicks in Draw (like Forge/Stats), so it needs no Update here.
             Latch(gameTime);
             return;
         }
@@ -1179,7 +1164,6 @@ public class Game1 : Game
         _expedition.ChestCount = _forge.UnopenedChests.Count;   // drives the fight screen's "go open a chest" nudge
         _expedition.IdleGleamRate = _champGleamRate;            // gleam/sec the champion earns idle → HUNT idle panel
 
-        _forge.FeedTarget = _automation.Selected;
         _forge.ActiveForms = _loadout.Skills.Select(s => s.Form).ToList();   // so the Forge can flag live combos
         _forge.Tuning = ForgeTuning.Default with
         {
@@ -1821,7 +1805,6 @@ public class Game1 : Game
     private void OpenNav(int i)
     {
         _showCharacter = _showStats = _showBuild = _showForge = _showAutomation = _showWorld = _showPrestige = false;
-        _warrenShowDen = false;   // re-entering the Warren always lands on the facility dashboard, not the den
         switch (i)
         {
             case 1: _showCharacter = true; break;

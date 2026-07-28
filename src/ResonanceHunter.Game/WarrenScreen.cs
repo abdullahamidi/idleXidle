@@ -39,9 +39,7 @@ public sealed class WarrenScreen
 
     // ── Host-consumed requests ──────────────────────────────────────────────────────────────────
     private FacilityKind? _upgradeRequest;
-    private bool _denRequest;
     public FacilityKind? ConsumeUpgrade() { var r = _upgradeRequest; _upgradeRequest = null; return r; }
-    public bool ConsumeDen() { var r = _denRequest; _denRequest = false; return r; }
 
     private FacilityKind _selected = FacilityKind.Nursery;
 
@@ -122,10 +120,10 @@ public sealed class WarrenScreen
             y += 52;
         }
 
-        // The real, useful CTA: the creature den (the old Warren) lives here now.
-        _ui.Text(b, "TEND THE CREATURE DEN:", OverviewPanel.X + 34, OverviewPanel.Bottom - 118, Slate);
-        if (_ui.Button(b, new Rectangle(OverviewPanel.X + 40, OverviewPanel.Bottom - 92, OverviewPanel.Width - 80, 64), "CREATURES", hit, clicked))
-            _denRequest = true;
+        // Production runs on every screen (see Game1.TickFarms) — a quiet reminder that the base earns idle.
+        _ui.Fill(b, new Rectangle(OverviewPanel.X + 24, OverviewPanel.Bottom - 116, OverviewPanel.Width - 48, 2), Dim);
+        DrawWrapped(b, "Facilities earn idle income every second, even while away.",
+            OverviewPanel.X + 30, OverviewPanel.Bottom - 96, OverviewPanel.Width - 60, Slate);
     }
 
     private void DrawGrid(SpriteBatch b, Point hit, bool clicked)
