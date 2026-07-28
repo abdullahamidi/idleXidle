@@ -907,10 +907,13 @@ public class Game1 : Game
                 if (sm == "dust")
                 {
                     _showPrestige = true;
-                    _dust.AwardFromMastery(400);
-                    // Light a handful of stars so the screenshot shows lit/buyable/locked states.
-                    foreach (var u in _dust.All.OrderBy(u => u.Requires.Count).ThenBy(u => u.Cost).Take(4))
-                        _dust.Purchase(u.Id);
+                    // Award enough that, after the fixture purchases below, the balance reads the reference's 77,420.
+                    _dust.AwardFromMastery(77_605);
+                    foreach (var id in new[] { "recall_1", "ledger", "might_1", "might_2", "grit_1", "grit_2", "tempo_1", "forge_insight", "filter_common" })
+                        _dust.Purchase(id);
+                    _prestige.DevSelect("blood_1");   // an AVAILABLE blessing whose prerequisite (might_2) is owned
+                    _hunter.AddGleam(131_900_000);     // the top currency pills read like the reference
+                    _hunter.AddMaterials(12_600);
                 }
             }
             else {
@@ -964,7 +967,7 @@ public class Game1 : Game
         // binding here ran first every frame, hijacking the filter into a blank dev screen.
         if (Pressed(Keys.F9)) _showSpike = !_showSpike;
         if (Pressed(Keys.F6)) _expedition.DevForceBoss = !_expedition.DevForceBoss;   // dev: force the Crystal Lich boss render (Rev 4 §12)
-        if (Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _character.DevGearDebug = !_character.DevGearDebug; _stats.DevStatsDebug = !_stats.DevStatsDebug; _buildScreen.DevBuildDebug = !_buildScreen.DevBuildDebug; _forge.DevForgeDebug = !_forge.DevForgeDebug; _warrenScreen.DevWarrenDebug = !_warrenScreen.DevWarrenDebug; _mapScreen.DevMapDebug = !_mapScreen.DevMapDebug; }   // dev layout overlays
+        if (Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _character.DevGearDebug = !_character.DevGearDebug; _stats.DevStatsDebug = !_stats.DevStatsDebug; _buildScreen.DevBuildDebug = !_buildScreen.DevBuildDebug; _forge.DevForgeDebug = !_forge.DevForgeDebug; _warrenScreen.DevWarrenDebug = !_warrenScreen.DevWarrenDebug; _mapScreen.DevMapDebug = !_mapScreen.DevMapDebug; _prestige.DevDustDebug = !_prestige.DevDustDebug; }   // dev layout overlays
         if (Pressed(Keys.F1)) _showHelp = !_showHelp;
         if (Pressed(Keys.F10)) _showSettings = !_showSettings;
 
@@ -1052,7 +1055,7 @@ public class Game1 : Game
             _highestMasteryAwarded = totalMasteryLevels;
         }
 
-        if (_showPrestige) { _prestige.Update(_keys, CanvasMouse, MouseClicked, _dust); Latch(gameTime); return; }
+        if (_showPrestige) { _prestige.Update(_keys, CanvasMouse, MouseClicked, MouseWheel, _dust); Latch(gameTime); return; }
 
         // F opens the Forge — but NOT while the automation screen is up, where F feeds materials to the
         // selected creature.
