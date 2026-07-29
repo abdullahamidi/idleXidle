@@ -95,13 +95,6 @@ public sealed class MapScreen
 
     private static readonly string[] MasteryShort = { "NEWLY", "PARTIAL", "FULLY", "OPTIMIZED" };
 
-    private static string BiasText(AttackBias bias) => bias switch
-    {
-        AttackBias.Heavy => "HEAVY, PUNISHING BLOWS",
-        AttackBias.Fast => "FAST, RELENTLESS STRIKES",
-        _ => "BALANCED TEMPO",
-    };
-
     public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked)
     {
         bool P(Keys k) => keys.IsKeyDown(k) && prev.IsKeyUp(k);
@@ -278,7 +271,10 @@ public sealed class MapScreen
         if (_ui.Assets.Get($"source_{def.Theme.ToString().ToLowerInvariant()}") is { } tg)
             b.Draw(tg, new Rectangle(DetailPanel.X + 30, DetailPanel.Y + 384, 34, 34), Color.White);
         _ui.TextBig(b, $"{def.Theme.ToString().ToUpperInvariant()} AFFINITY", DetailPanel.X + 74, DetailPanel.Y + 388, Bone, UiTypography.Body);
-        _ui.TextBig(b, BiasText(def.CombatBias), DetailPanel.X + 30, DetailPanel.Y + 428, Slate, UiTypography.Secondary);
+        // Region modifier — the themed combat twist (replaces the old flavor-only bias line).
+        var mod = RegionModifiers.For(def.Id);
+        _ui.TextBig(b, mod.Name, DetailPanel.X + 30, DetailPanel.Y + 420, Ember, UiTypography.Body);
+        _ui.TextBig(b, mod.Blurb, DetailPanel.X + 30, DetailPanel.Y + 444, Slate, UiTypography.Secondary);
 
         // Objective + idle-farm status (real).
         _ui.TextBig(b, "OBJECTIVE", DetailPanel.X + 28, DetailPanel.Y + 470, Gold, UiTypography.Secondary);

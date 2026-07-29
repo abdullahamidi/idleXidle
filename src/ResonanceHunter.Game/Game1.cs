@@ -1178,13 +1178,15 @@ public class Game1 : Game
         _forge.AutoSellFloor = DustEffects.AutoSellAtOrBelow(_dust);
         _forge.AutoMergeOnOpen = DustEffects.AutoMergeAfterRuns(_dust);
         var scale = CorruptionScaling.HealthMultiplier(_world.CorruptionTier);
+        var mod = RegionModifiers.For(_activeRegion);   // the region's themed combat twist (Map variety)
 
         _expedition.Update(
             gameTime, _keys, CanvasMouse, MouseClicked && interactive, MouseWheel, _hunter,
             // Every region is a rung up the ladder for the champion, not just a new element — so reaching
             // the sixth region is a real climb, and "more regions" is more progression, not more of the same.
-            enemyBaseHealth: 110f * (1f + 0.35f * _regionProgression) * (1f + 0.35f * RegionLadder(_activeRegion)) * scale,
-            enemyBaseDamage: 9f * (1f + 0.20f * _regionProgression) * (1f + 0.25f * RegionLadder(_activeRegion)) * scale);
+            // The region MODIFIER twists this region's health/damage on top of the ladder + corruption.
+            enemyBaseHealth: 110f * (1f + 0.35f * _regionProgression) * (1f + 0.35f * RegionLadder(_activeRegion)) * scale * mod.EnemyHealthMult,
+            enemyBaseDamage: 9f * (1f + 0.20f * _regionProgression) * (1f + 0.25f * RegionLadder(_activeRegion)) * scale * mod.EnemyDamageMult);
 
         // Measure the champion's gleam/second over this session, for offline earnings later.
         _champSecondsAccrued += gameTime.ElapsedGameTime.TotalSeconds;
@@ -1258,7 +1260,8 @@ public class Game1 : Game
         // farmed this region, how deep this run reached, and the world's corruption. A deeper region's
         // chests are innately better — "lootların kalitesi ilerlemeye göre artmalı".
         var lootTier = 1 + RegionLadder(_activeRegion) + _regionProgression + depthTier
-                       + CorruptionScaling.TierBonus(_world.CorruptionTier);
+                       + CorruptionScaling.TierBonus(_world.CorruptionTier)
+                       + RegionModifiers.For(_activeRegion).LootTierBonus;   // the region modifier's loot bump
         if (_rng.NextDouble() >= Chests.DropChance(lootTier)) return false;         // most bosses give nothing
         _forge.AddChest(Chests.RollDrop(lootTier, def.Theme, _rng));
         return true;
