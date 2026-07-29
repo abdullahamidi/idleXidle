@@ -17,10 +17,11 @@ public class MemoryDustTests
 
         // The exact figures are not the property under test — the HORIZON is: a player must be able to
         // see the end of this system rather than face an infinite multiplier grind. These are pinned so
-        // that a catalog edit has to be deliberate about the shape of that horizon. (36/1,430 after adding
-        // THE UNMOVED, the JUGGERNAUT gate; was 35/1,370 before, and 19/660 before the Resonance rewrite.)
-        Assert.Equal(36, tree.All.Count);
-        Assert.Equal(1_430, tree.TotalTreeCost);
+        // that a catalog edit has to be deliberate about the shape of that horizon. (44/1,775 after the
+        // release-variety pass added the FORTUNE road, four third-rung nodes, and the FORTUNE + TITAN
+        // keystone gates; was 36/1,430 before.)
+        Assert.Equal(44, tree.All.Count);
+        Assert.Equal(1_775, tree.TotalTreeCost);
     }
 
     /// <summary>The whole tree can actually be bought — no unlock is unreachable.</summary>

@@ -104,6 +104,23 @@ public static class Keystones
             Blurb = "THE FULLER YOUR HEALTH, THE HARDER YOU HIT. YOU CANNOT BE HEALED.",
             Grants = new[] { BuildTrigger.Zeal, BuildTrigger.NoHealing },
         },
+        new()
+        {
+            // The loot build's keystone — trade raw killing power for a flood of rarity. Refuses the
+            // damage keystones; wants the FORTUNE road and a GREED/DISCERNING-EYE haul build.
+            Id = "fortune", Name = "FORTUNE",
+            Blurb = "DOUBLE LOOT RARITY. YOU HIT 25% SOFTER.",
+            Mods = new BuildMods(Damage: 0.75f, Health: 1f, SkillRate: 1f, Haul: 1f, Rarity: 2.0f),
+        },
+        new()
+        {
+            // The immovable fortress — even tougher than IRONCLAD, and it pays for it in cadence. Pure
+            // trade, no trigger: triple health, but skills far slower than IRONCLAD's — so it does NOT
+            // dominate IRONCLAD (more health, worse cadence). Pulls hard against GLASS CANNON/ECHO.
+            Id = "titan", Name = "TITAN",
+            Blurb = "TRIPLE HEALTH. YOUR SKILLS COME BACK 60% SLOWER.",
+            Mods = new BuildMods(Damage: 1f, Health: 3.0f, SkillRate: 0.4f, Haul: 1f, Rarity: 1f),
+        },
     };
 
     public static Keystone? ById(string? id) => id is null ? null : Catalog.FirstOrDefault(k => k.Id == id);

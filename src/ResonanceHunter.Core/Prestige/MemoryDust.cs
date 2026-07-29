@@ -332,6 +332,28 @@ public sealed class MemoryDustTree
         new() { Id = "filter_uncommon", Name = "SORTER'S DISCIPLINE", Cost = 45, Effect = UnlockEffect.Convenience,
                 Requires = new[] { "filter_common" }, Description = "AUTO-SELL UNCOMMONS TOO." },
 
+        // ── Deepened core roads (release variety) — a third rung on each attribute line. ─────────
+        new() { Id = "might_3", Name = "RUINOUS FORCE", Cost = 45, Effect = UnlockEffect.Amplifier,
+                Requires = new[] { "might_2" }, Mods = new BuildMods(1.08f, 1f, 1f, 1f, 1f), Description = "+8% DAMAGE." },
+        new() { Id = "grit_3", Name = "IRONHIDE", Cost = 45, Effect = UnlockEffect.Amplifier,
+                Requires = new[] { "grit_2" }, Mods = new BuildMods(1f, 1.10f, 1f, 1f, 1f), Description = "+10% HEALTH." },
+        new() { Id = "tempo_3", Name = "FLOW STATE", Cost = 45, Effect = UnlockEffect.Amplifier,
+                Requires = new[] { "tempo_2" }, Mods = new BuildMods(1f, 1f, 1.08f, 1f, 1f), Description = "SKILLS RETURN 8% FASTER." },
+        new() { Id = "avarice_3", Name = "HOARDER", Cost = 45, Effect = UnlockEffect.Amplifier,
+                Requires = new[] { "avarice_2" }, Mods = new BuildMods(1f, 1f, 1f, 1.10f, 1f), Description = "+10% HAUL." },
+
+        // ── FORTUNE — the loot-rarity road. BuildMods.Rarity tilts the drop roll (see SoloExpedition). ──
+        new() { Id = "fortune_1", Name = "LUCKY FIND", Cost = 15, Effect = UnlockEffect.Amplifier,
+                Mods = new BuildMods(1f, 1f, 1f, 1f, 1.08f), Description = "+8% LOOT RARITY." },
+        new() { Id = "fortune_2", Name = "TREASURE SENSE", Cost = 30, Effect = UnlockEffect.Amplifier,
+                Requires = new[] { "fortune_1" }, Mods = new BuildMods(1f, 1f, 1f, 1f, 1.08f), Description = "+8% LOOT RARITY." },
+        new() { Id = "ks_fortune", Name = "THE GILDED ROAD", Cost = 60, Effect = UnlockEffect.Expansion,
+                Requires = new[] { "fortune_2" }, GrantsKeystone = "fortune", Description = "LEARN FORTUNE." },
+
+        // ── TITAN — a fortress keystone hung off the deepened GRIT road. ─────────────────────────
+        new() { Id = "ks_titan", Name = "THE TITAN ROAD", Cost = 60, Effect = UnlockEffect.Expansion,
+                Requires = new[] { "grit_3" }, GrantsKeystone = "titan", Description = "LEARN TITAN." },
+
         // ── Capstone ──────────────────────────────────────────────────────────────────────────
         new() { Id = "attunement", Name = "COMPLETE ATTUNEMENT", Cost = 45, Effect = UnlockEffect.Convenience,
                 Requires = new[] { "recall_4", "vow_sacrifice", "filter_uncommon", "blood_1" },
