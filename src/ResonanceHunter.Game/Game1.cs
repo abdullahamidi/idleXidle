@@ -527,6 +527,7 @@ public class Game1 : Game
 
         // The Warren's facilities produce every second too, on every screen — Gleam/Dust into the real
         // balances, Mastery into the pool that feeds the build tree (see the SetEarned call below).
+        _warren.ConqueredRegions = _world.ConqueredIds.Count;   // conquest → a standing production bonus
         var w = _warren.Tick(span);
         if (w.Gleam > 0) _hunter.AddGleam((int)w.Gleam);
         if (w.Dust > 0) _dust.AwardFromMastery((int)w.Dust);
@@ -544,6 +545,7 @@ public class Game1 : Game
     private void DrawWarren()
     {
         _warren.Name = Regions.Find(_activeRegion)?.Name ?? "THE WARREN";
+        _warren.ConqueredRegions = _world.ConqueredIds.Count;
         _warrenScreen.Warren = _warren;
         _warrenScreen.GleamOwned = _hunter.Gleam;
         _warrenScreen.MasteryOwned = _warrenMasteryPool;
@@ -876,6 +878,8 @@ public class Game1 : Game
                 {
                     _showAutomation = true;
                     _activeRegion = "pale_choir";   // so the Warren name reads "THE PALE CHOIR", per the reference
+                    foreach (var id in new[] { "verdant_hollow", "cinderworks", "umbral_reach", "marrow_wastes" })
+                        _world.Conquer(id);   // 4 conquered → the CONQUEST production bonus reads +40%
                     // Seed the reference's exact facility state (spec §6-9): level 23, the listed facility levels.
                     _warren.Restore(23, 18_540, new Dictionary<FacilityKind, int>
                     {

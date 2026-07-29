@@ -71,6 +71,9 @@ public sealed record WarrenTuning
     /// <summary>Warren XP granted per upgrade = the facility's new level × this.</summary>
     public int XpPerUpgradeLevel { get; init; } = 100;
 
+    /// <summary>Global production bonus granted per conquered region — ties the world map into the idle economy.</summary>
+    public float ConquestBonusPerRegion { get; init; } = 0.10f;
+
     /// <summary>A facility crosses a MILESTONE every this-many levels — a permanent step-up in its output.</summary>
     public int MilestoneEvery { get; init; } = 5;
 
@@ -164,6 +167,9 @@ public sealed class Warren
     /// <summary>The Warren's display name — the deepest conquered region's, set by the host.</summary>
     public string Name { get; set; } = "THE WARREN";
 
+    /// <summary>How many regions the player has conquered — set by the host; drives <see cref="ConquestBonus"/>.</summary>
+    public int ConqueredRegions { get; set; }
+
     public int Level { get; private set; } = 1;
     public int Xp { get; private set; }
 
@@ -184,8 +190,11 @@ public sealed class Warren
         _ => Level * _t.DustBonusPerLevel,
     };
 
+    /// <summary>The global production bonus from conquered regions — every region taken makes the base earn more.</summary>
+    public float ConquestBonus => ConqueredRegions * _t.ConquestBonusPerRegion;
+
     /// <summary>The total production multiplier applied to a resource's raw facility output.</summary>
-    public float Multiplier(WarrenResource r) => 1f + AllProductionBonus + ResourceBonus(r);
+    public float Multiplier(WarrenResource r) => 1f + AllProductionBonus + ConquestBonus + ResourceBonus(r);
 
     /// <summary>Total production per minute for a resource, Warren bonuses applied — the overview readout.</summary>
     public long ProductionPerMinute(WarrenResource r)

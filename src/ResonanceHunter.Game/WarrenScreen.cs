@@ -160,11 +160,12 @@ public sealed class WarrenScreen
 
         var entries = new (Color Gem, string Value, string Label)[]
         {
-            (GleamC, $"+{Warren.ResourceBonus(WarrenResource.Gleam) * 100f:0}%", "GOLD PRODUCTION"),
-            (MasteryC, $"+{Warren.ResourceBonus(WarrenResource.Mastery) * 100f:0}%", "MASTERY PRODUCTION"),
-            (DustC, $"+{Warren.ResourceBonus(WarrenResource.Dust) * 100f:0}%", "NATURE PRODUCTION"),
-            (Met, $"+{Warren.AllProductionBonus * 100f:0}%", "ALL PRODUCTION"),
-            (Gold, $"LV {Warren.Level}", "WARREN LEVEL"),
+            (GleamC, $"+{Warren.ResourceBonus(WarrenResource.Gleam) * 100f:0}%", "GOLD"),
+            (MasteryC, $"+{Warren.ResourceBonus(WarrenResource.Mastery) * 100f:0}%", "MASTERY"),
+            (DustC, $"+{Warren.ResourceBonus(WarrenResource.Dust) * 100f:0}%", "NATURE"),
+            (Met, $"+{Warren.AllProductionBonus * 100f:0}%", "ALL PROD"),
+            (Ember, $"+{Warren.ConquestBonus * 100f:0}%", "CONQUEST"),
+            (Gold, $"LV {Warren.Level}", "WARREN"),
         };
         var slot = (BonusStrip.Width - 48) / entries.Length;
         for (var i = 0; i < entries.Length; i++)

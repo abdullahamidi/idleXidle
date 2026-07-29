@@ -72,6 +72,16 @@ public class WarrenTests
     }
 
     [Fact]
+    public void test_conquering_regions_raises_production()
+    {
+        var none = new Warren();
+        var some = new Warren { ConqueredRegions = 4 };
+
+        Assert.True(some.ConquestBonus > 0f);
+        Assert.True(some.ProductionPerMinute(WarrenResource.Gleam) > none.ProductionPerMinute(WarrenResource.Gleam));
+    }
+
+    [Fact]
     public void test_each_currency_is_produced_by_at_least_one_facility()
     {
         var w = new Warren();
