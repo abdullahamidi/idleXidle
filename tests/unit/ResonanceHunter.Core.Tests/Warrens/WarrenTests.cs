@@ -19,16 +19,45 @@ public class WarrenTests
     }
 
     [Fact]
-    public void test_facility_output_scales_with_level()
+    public void test_facility_output_scales_linearly_within_a_milestone_band()
     {
         var w = new Warren();
-        var atOne = w.Facility(FacilityKind.Nursery).BaseOutputPerMin;
+        var atOne = w.Facility(FacilityKind.Nursery).BaseOutputPerMin;   // L1, milestone tier 0
 
-        w.Restore(level: 1, xp: 0, facilityLevels: new Dictionary<FacilityKind, int> { [FacilityKind.Nursery] = 10 });
-        var atTen = w.Facility(FacilityKind.Nursery).BaseOutputPerMin;
+        w.Restore(level: 1, xp: 0, facilityLevels: new Dictionary<FacilityKind, int> { [FacilityKind.Nursery] = 4 });
+        var atFour = w.Facility(FacilityKind.Nursery).BaseOutputPerMin;   // L4, still tier 0
 
-        Assert.True(atTen > atOne);
-        Assert.Equal(atOne * 10, atTen);   // base rate is linear in level
+        Assert.True(atFour > atOne);
+        Assert.Equal(atOne * 4, atFour);   // linear in level below the first milestone
+    }
+
+    [Fact]
+    public void test_facility_crosses_a_milestone_every_five_levels_and_output_jumps()
+    {
+        var below = new Warren();
+        below.Restore(1, 0, new Dictionary<FacilityKind, int> { [FacilityKind.Nursery] = 4 });
+        var at = new Warren();
+        at.Restore(1, 0, new Dictionary<FacilityKind, int> { [FacilityKind.Nursery] = 5 });
+
+        Assert.Equal(0, below.Facility(FacilityKind.Nursery).MilestoneTier);
+        Assert.Equal(1, at.Facility(FacilityKind.Nursery).MilestoneTier);
+        Assert.True(at.Facility(FacilityKind.Nursery).MilestoneMultiplier > 1f);
+
+        // Crossing the milestone is worth MORE than a plain linear level (L5 beats 5/4 of L4).
+        Assert.True(at.Facility(FacilityKind.Nursery).BaseOutputPerMin
+                    > below.Facility(FacilityKind.Nursery).BaseOutputPerMin * 5 / 4);
+    }
+
+    [Fact]
+    public void test_next_level_output_includes_a_milestone_jump()
+    {
+        var w = new Warren();
+        w.Restore(1, 0, new Dictionary<FacilityKind, int> { [FacilityKind.Nursery] = 4 });
+        var f = w.Facility(FacilityKind.Nursery);
+
+        // Upgrading L4 -> L5 crosses a milestone, so NEXT output beats a plain linear step.
+        Assert.True(f.NextLevelOutput > f.BaseOutputPerMin * 5 / 4);
+        Assert.Equal(5, f.NextMilestoneLevel);   // from L4, the next milestone lands at L5
     }
 
     [Fact]

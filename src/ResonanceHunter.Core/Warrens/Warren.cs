@@ -59,9 +59,10 @@ public sealed record WarrenTuning
     public float DustBonusPerLevel { get; init; } = 0.009f;
 
     // Facility upgrade cost — geometric in the facility's current level (cost to go level -> level+1).
-    // Bases/growths are tuned so an ~L18 facility costs on the reference's scale (~8M gold, ~2.4K mastery).
-    public int GleamCostBase { get; init; } = 18_700;
-    public float GleamCostGrowth { get; init; } = 1.40f;
+    // Balance pass: a gentle on-ramp (L1 ≈ 8K gleam) that steepens hard (L18 ≈ 7.8M, ~the reference scale)
+    // so the Warren supports progression early and stays a real sink late. Mastery/Dust stay modest.
+    public int GleamCostBase { get; init; } = 5_300;
+    public float GleamCostGrowth { get; init; } = 1.50f;
     public int MasteryCostBase { get; init; } = 43;
     public float MasteryCostGrowth { get; init; } = 1.25f;
     public int DustCostBase { get; init; } = 22;
@@ -69,6 +70,12 @@ public sealed record WarrenTuning
 
     /// <summary>Warren XP granted per upgrade = the facility's new level × this.</summary>
     public int XpPerUpgradeLevel { get; init; } = 100;
+
+    /// <summary>A facility crosses a MILESTONE every this-many levels — a permanent step-up in its output.</summary>
+    public int MilestoneEvery { get; init; } = 5;
+
+    /// <summary>Output multiplier added per milestone crossed (e.g. +15% at L5, +30% at L10, …).</summary>
+    public float MilestoneBonusPerTier { get; init; } = 0.15f;
 
     public static WarrenTuning Default { get; } = new();
 }
@@ -89,8 +96,34 @@ public sealed class Facility
     public int Level { get; private set; }
     public FacilityInfo Info => Facilities.Info(Kind);
 
-    /// <summary>Raw per-minute output at this level, BEFORE Warren bonuses — the number shown on the card.</summary>
-    public int BaseOutputPerMin => (int)MathF.Round(Info.BaseRatePerMin * Level);
+    // ── Milestones — the long-term goal beyond "+1 level". Every `MilestoneEvery` levels the facility
+    //    crosses a milestone that permanently steps up its output. Derived from Level, so nothing extra
+    //    is saved. ────────────────────────────────────────────────────────────────────────────────────
+    /// <summary>How many milestones this facility has crossed (0 below the first).</summary>
+    public int MilestoneTier => Level / _t.MilestoneEvery;
+
+    /// <summary>The level at which the next milestone lands.</summary>
+    public int NextMilestoneLevel => (MilestoneTier + 1) * _t.MilestoneEvery;
+
+    /// <summary>True the moment a facility sits exactly on a milestone level (for UI emphasis).</summary>
+    public bool OnMilestone => Level >= _t.MilestoneEvery && Level % _t.MilestoneEvery == 0;
+
+    /// <summary>The permanent output multiplier the crossed milestones grant.</summary>
+    public float MilestoneMultiplier => 1f + _t.MilestoneBonusPerTier * MilestoneTier;
+
+    /// <summary>Raw per-minute output at this level (level × milestone step-ups), BEFORE Warren bonuses.</summary>
+    public int BaseOutputPerMin => (int)MathF.Round(Info.BaseRatePerMin * Level * MilestoneMultiplier);
+
+    /// <summary>Raw output after one more upgrade — milestone jumps included, so "NEXT" reads the real step.</summary>
+    public int NextLevelOutput
+    {
+        get
+        {
+            var nl = Level + 1;
+            var mult = 1f + _t.MilestoneBonusPerTier * (nl / _t.MilestoneEvery);
+            return (int)MathF.Round(Info.BaseRatePerMin * nl * mult);
+        }
+    }
 
     /// <summary>The cost to raise this facility one level (grows with its current level).</summary>
     public WarrenCost UpgradeCost() => new(

@@ -121,9 +121,9 @@ public sealed class WarrenScreen
         }
 
         // Production runs on every screen (see Game1.TickFarms) — a quiet reminder that the base earns idle.
-        _ui.Fill(b, new Rectangle(OverviewPanel.X + 24, OverviewPanel.Bottom - 116, OverviewPanel.Width - 48, 2), Dim);
-        DrawWrapped(b, "Facilities earn idle income every second, even while away.",
-            OverviewPanel.X + 30, OverviewPanel.Bottom - 96, OverviewPanel.Width - 60, Slate);
+        _ui.Fill(b, new Rectangle(OverviewPanel.X + 24, OverviewPanel.Bottom - 124, OverviewPanel.Width - 48, 2), Dim);
+        DrawWrapped(b, "Facilities earn idle income even while away.",
+            OverviewPanel.X + 30, OverviewPanel.Bottom - 104, OverviewPanel.Width - 60, Slate);
     }
 
     private void DrawGrid(SpriteBatch b, Point hit, bool clicked)
@@ -143,6 +143,9 @@ public sealed class WarrenScreen
             if (sel) { _ui.Fill(b, new Rectangle(card.X, card.Y, 4, card.Height), Gold); _ui.Fill(b, new Rectangle(card.Right - 4, card.Y, 4, card.Height), Gold); }
 
             _ui.TextCenterBig(b, f.Info.Name, card.Center.X, card.Y + 14, sel ? Bone : Slate, UiTypography.Secondary);
+            // Milestone pips (top-right) — one gold gem per milestone crossed, the at-a-glance long-term goal.
+            for (var m = 0; m < f.MilestoneTier && m < 5; m++)
+                _ui.Diamond(b, new Rectangle(card.Right - 18 - m * 15, card.Y + 10, 11, 11), Gold);
             _ui.Hex(b, new Rectangle(card.Center.X - 44, card.Y + 46, 88, 76), rc);
             _ui.TextCenterBig(b, $"LEVEL {f.Level}", card.Center.X, card.Bottom - 70, Gold, UiTypography.Body);
             _ui.Diamond(b, new Rectangle(card.Center.X - 62, card.Bottom - 38, 18, 18), rc);
@@ -186,25 +189,30 @@ public sealed class WarrenScreen
 
         DrawWrapped(b, f.Info.Description, DetailPanel.X + 28, DetailPanel.Y + 112, DetailPanel.Width - 56, Bone);
 
-        // Output: current -> next.
-        var nextOut = (int)MathF.Round(f.Info.BaseRatePerMin * (f.Level + 1));
+        // Output: current -> next (the NEXT figure includes any milestone jump the upgrade crosses).
         _ui.TextBig(b, "OUTPUT", DetailPanel.X + 28, DetailPanel.Y + 190, Slate, UiTypography.Body);
         _ui.Diamond(b, new Rectangle(DetailPanel.X + 30, DetailPanel.Y + 226, 30, 30), rc);
         _ui.TextBig(b, $"+{Ab(f.BaseOutputPerMin)} /min", DetailPanel.X + 72, DetailPanel.Y + 226, Bone, UiTypography.PanelTitle);
-        _ui.TextRightBig(b, $"NEXT  +{Ab(nextOut)} /min", DetailPanel.Right - 28, DetailPanel.Y + 230, Met, UiTypography.Secondary);
+        _ui.TextRightBig(b, $"NEXT  +{Ab(f.NextLevelOutput)} /min", DetailPanel.Right - 28, DetailPanel.Y + 230, Met, UiTypography.Secondary);
 
-        _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 280, DetailPanel.Width - 56, 2), Dim);
-        _ui.TextBig(b, "UPGRADE REQUIREMENTS", DetailPanel.X + 28, DetailPanel.Y + 298, Slate, UiTypography.Body);
+        // Milestones — the long-term goal. Show the crossed multiplier and where the next one lands.
+        var mile = new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 274, DetailPanel.Width - 56, 44);
+        _ui.Fill(b, mile, new Color(0x16, 0x12, 0x20, 0xC0));
+        _ui.TextBig(b, f.MilestoneTier > 0 ? $"MILESTONES  ×{f.MilestoneMultiplier:0.00} OUTPUT" : "MILESTONES  —", mile.X + 12, mile.Y + 12, Gold, UiTypography.Secondary);
+        _ui.TextRightBig(b, $"NEXT AT Lv{f.NextMilestoneLevel}", mile.Right - 12, mile.Y + 12, Slate, UiTypography.Secondary);
+
+        _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 336, DetailPanel.Width - 56, 2), Dim);
+        _ui.TextBig(b, "UPGRADE REQUIREMENTS", DetailPanel.X + 28, DetailPanel.Y + 352, Slate, UiTypography.Body);
 
         var cost = f.UpgradeCost();
-        var y = DetailPanel.Y + 340;
+        var y = DetailPanel.Y + 388;
         DrawReq(b, y, GleamC, "GOLD", GleamOwned, cost.Gleam);
-        DrawReq(b, y + 46, MasteryC, "MASTERY", MasteryOwned, cost.Mastery);
-        DrawReq(b, y + 92, DustC, "NATURE", DustOwned, cost.Dust);
+        DrawReq(b, y + 42, MasteryC, "MASTERY", MasteryOwned, cost.Mastery);
+        DrawReq(b, y + 84, DustC, "NATURE", DustOwned, cost.Dust);
 
         var afford = GleamOwned >= cost.Gleam && MasteryOwned >= cost.Mastery && DustOwned >= cost.Dust;
-        _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 496, DetailPanel.Width - 56, 2), Dim);
-        _ui.TextBig(b, "INSTANT UPGRADE  ·  NO WAIT", DetailPanel.X + 28, DetailPanel.Y + 512, Met, UiTypography.Secondary);
+        _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 502, DetailPanel.Width - 56, 2), Dim);
+        _ui.TextBig(b, "INSTANT UPGRADE  ·  NO WAIT", DetailPanel.X + 28, DetailPanel.Y + 518, Met, UiTypography.Secondary);
 
         if (_ui.Button(b, new Rectangle(DetailPanel.X + 40, DetailPanel.Bottom - 96, DetailPanel.Width - 80, 72), "UPGRADE", hit, clicked, enabled: afford))
             _upgradeRequest = _selected;
