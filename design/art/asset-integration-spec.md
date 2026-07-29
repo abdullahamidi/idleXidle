@@ -52,6 +52,15 @@ y=744), boss **1120×960**, item **512×512**, skill **256×256**, fx cell **128
 
 ## 2. THE CHARACTER + ITEM CONTRACT (the important part)
 
+> **SUPERSEDED 2026-07-29 — replaced by the cutout-rig equipment model (Option B).** The full-canvas
+> base + `overlay_<slot>_<pose>` layering in this section is being replaced by a homebrew **cutout rig**:
+> the champion is authored as separated rigged part sprites, and equipment attaches to named **sockets**
+> on the rig as single sprites (not full-canvas per-pose overlays). The `champion_*` / `overlay_*` art
+> here is not being produced; the shipped code paths (`DrawLayeredChampion`, the Character-sheet overlay
+> loop) will be retired when the rig lands. See `design/art/character-art-spec-batch1.md` (batch 1: the
+> Hunter) and `ADR-002`. §2 is retained for history; §3–§7 (icons, frames, glyphs, FX, canvases) remain
+> valid.
+
 The requirement: **whatever the player has equipped must appear worn on the champion** — on the Character
 sheet (where they dress it) and in the fight. This is done with a **base body + one overlay per equipped
 slot**, all drawn at the *same* rectangle so they register automatically. No per-item body art; no

@@ -5,7 +5,16 @@
 | **Status** | **Accepted** — spike built and validated by playtest, 2026-07-14. |
 | **Date** | 2026-07-14 |
 | **Deciders** | technical-director + user (spike reviewed in-game) |
-| **Related** | ADR-001 (pure-logic core), ADR-003 (pixel-perfect render path) |
+| **Related** | ADR-001 (pure-logic core), ADR-003 (pixel-perfect render path — now Superseded) |
+
+> **UPDATED 2026-07-29.** Two things changed under this ADR without invalidating it. (1) The render
+> pipeline pivoted to hand-drawn "vector" art (`SamplerState.LinearClamp`, non-integer scaling; ADR-003
+> Superseded), so **angle-snapping's original anti-"pixel-edge-crawl" justification no longer applies** —
+> the spike had already found that artifact didn't reproduce. Snapping is kept only as an *optional
+> art-direction* (stop-motion) knob; `SnapSteps` stays a tuning value. (2) The cutout rig is now being
+> **adopted for the player champion** (Option B), authored **front-facing and painterly** to match the
+> shipped art — see `design/art/character-art-spec-batch1.md`. The core decision (a homebrew cutout rig
+> over frame-by-frame sheets, to fit the texture budget) stands.
 
 ## Context
 

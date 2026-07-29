@@ -7,6 +7,17 @@
 - **Status**: Complete — all 9 sections authored
 - **Review Mode**: `lean` — AD-ART-BIBLE creative-director sign-off skipped (director gates run only at phase transitions; see `production/review-mode.txt`). Validate at `/gate-check`.
 
+> **⚠ PARTIALLY SUPERSEDED 2026-07-29 — the render/art pipeline pivoted to hand-drawn "vector" art.**
+> The game now ships **smooth, painterly, front-facing** character/creature art rendered with
+> `SamplerState.LinearClamp` (non-integer scaling, premultiplied-at-load) — **not** the flat-fill,
+> hard-1px-edge, PointClamp, 480×270 pixel-perfect model this bible describes in §3 / §6.4 / §7 / §8.
+> The **structural** guidance still holds — silhouette-first readability, colorblind-safe-by-construction
+> (value + shape, not hue alone), and the homebrew **cutout rig** (§8.5). But treat every *flat-fill /
+> PointClamp / indexed-palette / integer-scale / "10 colors per creature" / 480×270-canvas* rule as
+> **stale**. Authoritative art contract: `design/art/asset-integration-spec.md`; champion canvas is
+> **800×1040 @2x, feet y=992**; current character work: `design/art/character-art-spec-batch1.md`.
+> See also `ADR-003` (Superseded) and `.claude/docs/technical-preferences.md` (updated).
+
 ## The Bible in One Page
 
 **Master rule**: *Read the world, don't just watch it — every mechanically important state renders

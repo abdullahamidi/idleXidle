@@ -2,10 +2,17 @@
 
 | Field | Value |
 |---|---|
-| **Status** | **Accepted** — validated by playtest, 2026-07-14. |
+| **Status** | **Superseded** (2026-07-29) — the project pivoted to hand-drawn "vector" art; the live renderer now uses `SamplerState.LinearClamp` with non-integer scaling. See the note below. |
 | **Date** | 2026-07-14 |
 | **Deciders** | technical-director + user (both paths compared in-game) |
 | **Related** | ADR-002 (animation rig) |
+
+> **SUPERSEDED 2026-07-29.** This ADR chose a 480×270 pixel-perfect, integer-upscale, PointClamp render
+> path for flat-fill pixel art. The project has since pivoted to **hand-drawn "vector" art**: the live
+> renderer draws with `SamplerState.LinearClamp` (smooth) at a 1920×1080 target, with **non-integer**
+> scaling and premultiplied-at-load alpha (see `Game1.cs`, `SoloExpeditionScreen.cs`). The decision
+> below is retained for history only. Pipeline of record: `design/art/asset-integration-spec.md` +
+> `.claude/docs/technical-preferences.md`.
 
 ## Context
 

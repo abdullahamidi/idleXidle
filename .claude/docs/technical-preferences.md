@@ -47,10 +47,15 @@
 ## Forbidden Patterns
 
 <!-- Add patterns that should never appear in this project's codebase -->
+> **UPDATED 2026-07-29 — render pipeline pivoted to hand-drawn "vector" art.** The project moved off the
+> flat-fill/pixel-perfect direction: the live renderer uses `SamplerState.LinearClamp` (smooth filtering)
+> with **non-integer scaling allowed** and premultiplied-at-load alpha (see `Game1.cs`,
+> `SoloExpeditionScreen.cs`; authoritative art contract: `design/art/asset-integration-spec.md`;
+> `docs/architecture/ADR-003` is now Superseded). The two pixel-art bullets below were corrected to match.
 - **`SpriteSortMode.Immediate`** outside debugging — disables batching entirely (one GPU draw call per `Draw()`).
 - **Per-entity `Effect` switching** — forces a batch flush per entity. Use one shared shader per pass; vary per-entity via the `Draw()` Color tint parameter.
-- **BC/DXT texture compression on creature, glyph, or UI-content art** — block compression bleeds color across the hard flat-fill edges (seams, glyph containers) that the art bible's legibility and colorblind-safety model depends on. Decorative layers only.
-- **Bilinear/anisotropic filtering, mipmaps, or non-integer scaling on pixel art** — all reintroduce the blur that point-sampling exists to prevent. `SamplerState.PointClamp`, integer scale factors only.
+- **BC/DXT texture compression on character, creature, glyph, or UI-content art** — block compression bands/bleeds across the hand-painted gradients and edges the art depends on. Author RGBA8 uncompressed; block compression is for large decorative layers only.
+- **PointClamp / integer-only scaling as a hard rule** — *no longer required.* The art is hand-drawn and rendered with `SamplerState.LinearClamp`; non-integer scaling is expected and fine. (The old rule — PointClamp + integer scale for flat-fill pixel art — described the abandoned direction; pixel art is no longer the house style.)
 - **Stick-cursor gamepad emulation for combat targeting** — see Input & Platform above.
 - **Baking part-break damage states as full-body frame variants** — a ~12× texture multiplier. Part-break is a composited decal overlay. See art-bible §8.4.
 
