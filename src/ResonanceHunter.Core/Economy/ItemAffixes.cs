@@ -57,6 +57,11 @@ public static class ItemAffixes
     /// <summary>Per-ilvl growth of an affix's magnitude — the "a deeper drop is better" curve.</summary>
     public const float IlvlScale = 0.04f;
 
+    /// <summary>The base per-affix magnitude of a stat (before ilvl/rarity/variance). Lets callers compare
+    /// affixes of different stats on a common "how many multiples of a typical roll" scale — e.g. to pick an
+    /// item's dominant affix for naming.</summary>
+    public static float BaseMagnitude(AffixStat stat) => Base[stat];
+
     /// <summary>
     /// The affixes an item carries. Empty for non-wearables and Commons.
     /// </summary>
@@ -77,7 +82,7 @@ public static class ItemAffixes
             // A fresh salted hash per affix slot, so the stat AND the roll vary but stay deterministic.
             var h = Fnv1a(item.InstanceId + "|affix" + i);
             var stat = stats[(int)(h % (uint)stats.Length)];
-            var variance = 0.85f + (h >> 8) % 31u / 100f;   // 0.85 .. 1.15
+            var variance = 0.75f + (h >> 8) % 51u / 100f;   // 0.75 .. 1.25 — a wider spread so same-base items differ more
             var mag = Base[stat] * ilvlFactor * rarityFactor * variance;
             affixes.Add(new ItemAffix(stat, mag));
         }

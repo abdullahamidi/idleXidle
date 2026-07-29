@@ -373,9 +373,8 @@ public sealed class CharacterScreen
         if (Enchantments.Of(item) is { } ench2) _ui.Diamond(b, new Rectangle(hero.Right - 58, hero.Y + 72, 40, 40), Purple);
         _ui.TextCenterBig(b, RarityShort(item.Rarity) + " " + SlotWord(item.BaseType), hero.Center.X, hero.Bottom - 40, RarityColor(item.Rarity), UiTypography.Body);
 
-        // Identity (§10.6) — composed from real fields (no authored item names exist).
-        var name = $"{(item.Element?.ToString().ToUpperInvariant() ?? "PLAIN")} {SlotWord(item.BaseType)}";
-        _ui.TextBig(b, name, DetailPanel.X + 24, hero.Bottom + 20, Bone, UiTypography.PanelTitle);
+        // Identity (§10.6) — the rolled name: PREFIX (dominant affix) + ELEMENT + TYPE, e.g. "FURIOUS SHADOW BLADE".
+        _ui.TextBig(b, ItemNaming.FullName(item), DetailPanel.X + 24, hero.Bottom + 20, Bone, UiTypography.PanelTitle);
         var ench = Enchantments.Of(item);
         _ui.TextBig(b, $"{(item.Element?.ToString().ToUpperInvariant() ?? "PLAIN")}  ·  ENCHANT: {(ench?.Name ?? "NONE")}",
             DetailPanel.X + 24, hero.Bottom + 54, Purple, UiTypography.Secondary);

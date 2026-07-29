@@ -79,10 +79,12 @@ public sealed class ForgeScreen
 
     private Texture2D? ItemThumb(ItemInstance item)
     {
-        var seed = Math.Abs(item.ItemLevel * 13 + (int)item.BaseType * 7 + (int)item.Rarity * 3);
+        // Weapons use the shared, InstanceId-stable family/variant that also drives the item's NAME, so the
+        // art and the "…BLADE/BOW…" name always agree. Other slots pick a stable thumbnail from the same seed.
+        if (item.BaseType == ItemBaseType.Weapon) return _ui.Assets.Get(ItemNaming.WeaponArtKey(item));
+        var seed = (int)(ItemNaming.ArtSeed(item) % 1000);
         var key = item.BaseType switch
         {
-            ItemBaseType.Weapon => $"{WeaponFams[seed % WeaponFams.Length]}_{seed / 4 % 5 + 1:00}",
             ItemBaseType.Chest => ChestSets[seed % ChestSets.Length],
             _ => ThumbFor.TryGetValue(item.BaseType, out var m) ? $"{m.Prefix}_{seed % m.Count + 1:00}" : "",
         };
@@ -947,8 +949,7 @@ public sealed class ForgeScreen
         }
 
         var rc = RarityColors[(int)item.Rarity];
-        var el = item.Element is { } e ? e.ToString().ToUpperInvariant() + " " : "";
-        _ui.TextCenterBig(b, $"{el}{ItemNames[item.BaseType]}", ItemPanel.Center.X, ItemPanel.Y + 56, rc, UiTypography.PanelTitle);
+        _ui.TextCenterBig(b, ItemNaming.FullName(item), ItemPanel.Center.X, ItemPanel.Y + 56, rc, UiTypography.PanelTitle);
         _ui.TextCenterBig(b, $"{RarityNames[(int)item.Rarity]}  ·  ITEM LEVEL {item.ItemLevel}", ItemPanel.Center.X, ItemPanel.Y + 90, Slate, UiTypography.Secondary);
 
         DrawItemIcon(b, item, new Rectangle(ItemPanel.Center.X - 100, ItemPanel.Y + 120, 200, 200));
@@ -1124,8 +1125,8 @@ public sealed class ForgeScreen
             // The ELEMENT is part of the item's name, because it is part of what the item IS — and it
             // is what the Source matchup and the Forge's carry-through rule both read. An element the
             // player cannot see is an element they cannot plan around.
-            var element = act.Element is { } el ? $"{el.ToString().ToUpperInvariant()} " : "";
-            var title = $"{RarityNames[(int)act.Rarity]} {element}{ItemNames[act.BaseType]}";
+            // Full rolled name — "FURIOUS SHADOW BLADE" — rarity carried by the colour, not the words.
+            var title = ItemNaming.FullName(act);
             _ui.Text(b, title, 1168, 132, RarityInk[(int)act.Rarity]);
 
             // The trait rides the same row — but only if it FITS. Measured, not estimated: at 480x270
