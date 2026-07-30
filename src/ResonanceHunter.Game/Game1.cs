@@ -112,6 +112,8 @@ public class Game1 : Game
 
     private RigSpikeScreen _rigSpike = null!;
     private bool _showSpike;
+    private HunterRigScreen _hunterRig = null!;
+    private bool _showRigPreview;
     private bool _showHelp;
     private bool _showSettings;
 
@@ -582,6 +584,7 @@ public class Game1 : Game
         _sound = new SoundBank(disable: Environment.GetEnvironmentVariable("RH_SHOT") is not null);
         _ui = new UiKit(GraphicsDevice, _font, _assets);
         _rigSpike = new RigSpikeScreen(GraphicsDevice, _pixel);
+        _hunterRig = new HunterRigScreen(_ui);
         _automation = new AutomationScreen(_ui);
         _forge = new ForgeScreen(_ui);
         _prestige = new PrestigeScreen(_ui, _dust);
@@ -644,9 +647,10 @@ public class Game1 : Game
             // screen is gone, so they had nothing to pose.
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
-                or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "reforge" or "build" or "character" or "stats" or "warren" or "map")
+                or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "reforge" or "build" or "character" or "stats" or "warren" or "map" or "rig")
             {
                 _showTitle = false;
+                if (sm == "rig") _showRigPreview = true;
                 // Muster screen with a real roster to arrange.
                 if (sm == "expedition") _automation.DevPopulate(_region);
                 if (sm == "vow")
@@ -958,6 +962,7 @@ public class Game1 : Game
         // The dev rig-spike tech demo moved OFF Tab (F9) — Tab is the Forge's loot filter, and the global
         // binding here ran first every frame, hijacking the filter into a blank dev screen.
         if (Pressed(Keys.F9)) _showSpike = !_showSpike;
+        if (Pressed(Keys.F8)) _showRigPreview = !_showRigPreview;
         if (Pressed(Keys.F6)) _expedition.DevForceBoss = !_expedition.DevForceBoss;   // dev: force the Crystal Lich boss render (Rev 4 §12)
         if (Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _character.DevGearDebug = !_character.DevGearDebug; _stats.DevStatsDebug = !_stats.DevStatsDebug; _buildScreen.DevBuildDebug = !_buildScreen.DevBuildDebug; _forge.DevForgeDebug = !_forge.DevForgeDebug; _warrenScreen.DevWarrenDebug = !_warrenScreen.DevWarrenDebug; _mapScreen.DevMapDebug = !_mapScreen.DevMapDebug; _prestige.DevDustDebug = !_prestige.DevDustDebug; }   // dev layout overlays
         if (Pressed(Keys.F1)) _showHelp = !_showHelp;
@@ -990,7 +995,7 @@ public class Game1 : Game
         // `interactive` flag), so a click in the Forge never falls through into the fight.
         _regionProgression = Math.Clamp((int)_region.MasteryLevel + (_region.MasteryLevel > 0 ? 1 : 0), 0, 4);
         var watchingFight = !(_showWorld || _showPrestige || _showForge || _showAutomation || _showBuild
-            || _showCharacter || _showStats || _showSpike || _showHelp || _showSettings);
+            || _showCharacter || _showStats || _showSpike || _showRigPreview || _showHelp || _showSettings);
         UpdateExpedition(gameTime, watchingFight);
 
         if (_showWorld) { UpdateWorld(); Latch(gameTime); return; }
@@ -1065,6 +1070,7 @@ public class Game1 : Game
         }
 
         if (_showSpike) { _rigSpike.Update(gameTime, _keys); Latch(gameTime); return; }
+        if (_showRigPreview) { Latch(gameTime); return; }
 
         if (_showForge)
         {
@@ -1452,7 +1458,8 @@ public class Game1 : Game
 
         // Batch B — the active screen. ScreenScale() is 4 today; converted screens will return 1.
         BeginCanvas(ScreenScale());
-        if (_showSpike) _rigSpike.Draw(_batch);
+        if (_showRigPreview) _hunterRig.Draw(_batch);
+        else if (_showSpike) _rigSpike.Draw(_batch);
         else if (_showForge) _forge.Draw(_batch, _hunter, CanvasMouse, MouseClicked);
         else if (_showWorld) DrawWorld();
         else if (_showPrestige) _prestige.Draw(_batch, _dust, CanvasMouse, MouseClicked);
@@ -1834,7 +1841,7 @@ public class Game1 : Game
 
     private void DrawHexNav()
     {
-        if (_showSettings || _showHelp || _showSpike) return;   // a modal owns the frame
+        if (_showSettings || _showHelp || _showSpike || _showRigPreview) return;   // a modal owns the frame
 
         // A dark shelf so the bar seats cleanly over whatever screen sits behind it. Nearly opaque and
         // starting a hair above the hexes, so the scene behind can't show through and clip their tops.
@@ -1876,7 +1883,7 @@ public class Game1 : Game
 
     private void HandleNavClick()
     {
-        if (!MouseClicked || _showSettings || _showHelp || _showSpike) return;
+        if (!MouseClicked || _showSettings || _showHelp || _showSpike || _showRigPreview) return;
         // NavHexRect is 1920-space chrome now, so hit-test the 1920-space cursor.
         for (var i = 0; i < Nav.Length; i++)
             if (NavHexRect(i).Contains(ChromeMouse)) { OpenNav(i); return; }
