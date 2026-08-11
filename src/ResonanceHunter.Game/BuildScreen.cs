@@ -72,7 +72,9 @@ public sealed class BuildScreen
     private static readonly Rectangle EditBtn = new(704, 902, 260, 44);
     private static readonly Rectangle ResetBtn = new(984, 902, 232, 44);
     private static Rectangle AuraCard(int i) => new(452 + i * 182, 648, 168, 198);
-    private static readonly Rectangle ViewTreeBtn = new(1600, 200, 260, 44);
+    // Under the panel's top crest, which the title now clears too — at y=196 the button was drawn
+    // straight through it.
+    private static readonly Rectangle ViewTreeBtn = new(1576, 250, 250, 44);
 
     // ── Edit sub-view: the mastery tree + skill sidebar (unchanged geometry). ──
     private const int Cx = 600, Cy = 520, R = 464;
@@ -292,16 +294,19 @@ public sealed class BuildScreen
     private void DrawPassives(SpriteBatch b, Point hit, MemoryDustTree tree)
     {
         _ui.Panel(b, PassivePanel);
-        _ui.TextCenterBig(b, "PASSIVES & RESONANCE", PassivePanel.Center.X, PassivePanel.Y + 24, Gold, UiTypography.SectionTitle);
+        // +44 clears the panel art's centred top crest, which a centred title at +24 ran into.
+        _ui.TextCenterBig(b, "PASSIVES & RESONANCE", PassivePanel.Center.X, PassivePanel.Y + 62, Gold, UiTypography.SectionTitle);
 
-        var x = PassivePanel.X + 32;
-        _ui.TextBig(b, $"MASTERY NODES   {Mastery.Spent} / {MasteryCatalog.Nodes.Count(n => n.Kind != MasteryKind.Start)}", x, PassivePanel.Y + 74, Bone, UiTypography.Body);
+        // 52px, the width of the ornate border. At 32 the left column sat ON the frame and the
+        // right-aligned resonance percentages were clipped by the opposite edge.
+        var x = PassivePanel.X + 52;
+        _ui.TextBig(b, $"MASTERY NODES   {Mastery.Spent} / {MasteryCatalog.Nodes.Count(n => n.Kind != MasteryKind.Start)}", x, PassivePanel.Y + 122, Bone, UiTypography.Body);
         Button(b, ViewTreeBtn, "VIEW TREE", hit, true);
 
         // PASSIVES — the real taken mastery nodes (notables + mastery). No invented "trait bonus %" table.
-        _ui.TextBig(b, "PASSIVES", x, PassivePanel.Y + 150, Gold, UiTypography.Secondary);
+        _ui.TextBig(b, "PASSIVES", x, PassivePanel.Y + 190, Gold, UiTypography.Secondary);
         var taken = MasteryCatalog.Nodes.Where(n => n.Kind is MasteryKind.Notable or MasteryKind.Mastery && Mastery.IsTaken(n.Id)).ToList();
-        var py = PassivePanel.Y + 184;
+        var py = PassivePanel.Y + 224;
         if (taken.Count == 0) _ui.TextBig(b, "None yet — walk the tree.", x, py, Slate, UiTypography.Body);
         foreach (var n in taken.Take(6))
         {
@@ -321,15 +326,16 @@ public sealed class BuildScreen
             var pct = skills.Count == 0 ? 0 : 100 * g.Count() / skills.Count;
             _ui.Diamond(b, new Rectangle(x, ry + 2, 18, 18), SourceColor.GetValueOrDefault(g.Key, Bone));
             _ui.TextBig(b, $"{g.Key.ToString().ToUpperInvariant()} RESONANCE", x + 30, ry, Bone, UiTypography.Body);
-            _ui.TextRightBig(b, $"{pct}%", PassivePanel.Right - 32, ry, SourceColor.GetValueOrDefault(g.Key, Bone), UiTypography.Body);
+            _ui.TextRightBig(b, $"{pct}%", PassivePanel.Right - 52, ry, SourceColor.GetValueOrDefault(g.Key, Bone), UiTypography.Body);
             ry += 40;
         }
 
         // KEYSTONES — worn sockets (real).
         var worn = DustEffects.LearnedKeystones(tree).Where(k => Loadout.HasKeystone(k.Id)).ToList();
-        _ui.TextBig(b, "KEYSTONES", x, PassivePanel.Y + 636, Gold, UiTypography.Secondary);
-        if (worn.Count == 0) _ui.TextBig(b, "None socketed.", x, PassivePanel.Y + 670, Slate, UiTypography.Body);
-        else _ui.TextBig(b, string.Join("  ·  ", worn.Select(k => k.Name.ToUpperInvariant())), x, PassivePanel.Y + 670, Bone, UiTypography.Body);
+        // Above the panel art's bottom crest.
+        _ui.TextBig(b, "KEYSTONES", x, PassivePanel.Y + 596, Gold, UiTypography.Secondary);
+        if (worn.Count == 0) _ui.TextBig(b, "None socketed.", x, PassivePanel.Y + 630, Slate, UiTypography.Body);
+        else _ui.TextBig(b, string.Join("  ·  ", worn.Select(k => k.Name.ToUpperInvariant())), x, PassivePanel.Y + 630, Bone, UiTypography.Body);
     }
 
     private void Big(SpriteBatch b, string label, string value, Color color, int x, ref int y)

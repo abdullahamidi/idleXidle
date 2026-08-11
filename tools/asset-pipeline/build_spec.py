@@ -444,6 +444,34 @@ def stills() -> list[dict]:
             negative_description="frame, border, ring, circle, medallion, rim, filigree, coin, "
                                  "badge, gold trim, text")
 
+    # --- The MAP screen's chart field.
+    #
+    # It had been reusing bg_regionmap — the cartographer's-chamber art already covering the whole screen
+    # behind the panels — under an 0x88 scrim, so the map panel read as a black void with six cards
+    # floating in it. The nodes want to sit ON a map; this is that map.
+    a.append({
+        "key": "bg_mapfield", "dest": "assets/art/Environments/screens", "model": "pixen",
+        # pixen caps the canvas at a 512x512 AREA (262144 px), so 768x576 is refused; 576x428 keeps the
+        # map panel's 1.35 aspect inside that budget and doubles cleanly to cover it.
+        "width": 576, "height": 428, "knockout": False, "upscale": 2,
+        "prompt": "An aged parchment campaign map, blank hand-inked chart with faint coastlines, "
+                  "contour hatching, compass rose in one corner and a worn creased border. "
+                  "Dark fantasy pixel art, muted browns and dim ochre, low contrast, evenly lit, "
+                  "NO characters, NO icons, NO markers, NO pins, NO text, NO labels, NO UI, NO frame",
+    })
+
+    # --- Memory-Dust blessing category icons: icon_blessing_<category> (PrestigeScreen)
+    #
+    # Every one of the 44 blessing cards drew the SAME ui_memory_dust blob, recoloured by state — so the
+    # grid gave the player no way to tell an Amplifier from an Expansion without reading the label. Three
+    # icons, one per category, is the smallest set that makes the grid scannable.
+    for cat, motif in {
+        "amplifier": "a rising three-step chevron arrow pointing up",
+        "expansion": "an open archway gate with a keystone",
+        "convenience": "a slim hourglass with running sand",
+    }.items():
+        add(f"icon_blessing_{cat}", "assets/art/UI/icons/blessings", "medallion", motif)
+
     # --- Loot chest
     add("chest_loot", "assets/art/ItemsLoot/chests", "item", "a closed ornate treasure chest with gold bands")
 

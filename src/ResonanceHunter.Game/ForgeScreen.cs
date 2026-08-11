@@ -766,7 +766,7 @@ public sealed class ForgeScreen
         }
 
         _ui.Fill(b, new Rectangle(Rail.X + 20, y + 4, Rail.Width - 40, 2), Dim);
-        _ui.Text(b, "REFINE THE ITEM:", Rail.X + 24, y + 20, Slate);
+        _ui.Text(b, "REFINE THE ITEM:", Rail.X + UiKit.PanelCorner, y + 20, Slate);
         _ui.Text(b, "+LEVEL, +AFFIXES", Rail.X + 24, y + 46, Slate);
 
         // The chest beat survives the redesign: a boss's drop still nags here, and OPEN drops into SALVAGE.
@@ -778,7 +778,8 @@ public sealed class ForgeScreen
                 _mode = ForgeMode.Salvage;
         }
 
-        _ui.TextCenter(b, "< >  CYCLE ITEM", Rail.Center.X, Rail.Bottom - 38, Slate);
+        // Above the frame's bottom border, not through it.
+        _ui.TextCenter(b, "< >  CYCLE ITEM", Rail.Center.X, Rail.Bottom - 60, Slate);
     }
 
     // ── UPGRADE = the real REFINE: +1 item level, which raises every affix. Deterministic, so the "after"
@@ -802,11 +803,11 @@ public sealed class ForgeScreen
         }
 
         // Your four salvage tiers, at a glance — Refine spends SCRAP + Gold, the others fund REFORGE.
-        _ui.Text(b, "YOUR MATERIALS", CostPanel.X + 28, CostPanel.Y + 68, Slate);
+        _ui.Text(b, "YOUR MATERIALS", CostPanel.X + 40, CostPanel.Y + 68, Slate);
         var mats = new[] { Material.Scrap, Material.Essence, Material.Core, Material.Crystal };
         for (var i = 0; i < 4; i++)
         {
-            var cell = new Rectangle(CostPanel.X + 28 + i * 118, CostPanel.Y + 100, 106, 94);
+            var cell = new Rectangle(CostPanel.X + 40 + i * 108, CostPanel.Y + 100, 98, 94);
             _ui.Fill(b, cell, new Color(0x16, 0x12, 0x20, 0xC0));
             _ui.Diamond(b, new Rectangle(cell.Center.X - 20, cell.Y + 12, 40, 40), MatColor[i]);
             _ui.TextCenter(b, MaterialTiers.Name(mats[i]), cell.Center.X, cell.Bottom - 38, Slate);
@@ -815,14 +816,15 @@ public sealed class ForgeScreen
 
         var r = Forge.Refine(item, Tuning);
         var worn = IsWorn(hunter, item);
-        _ui.Fill(b, new Rectangle(CostPanel.X + 28, CostPanel.Y + 216, CostPanel.Width - 56, 2), Dim);
-        _ui.Text(b, "UPGRADE COST", CostPanel.X + 28, CostPanel.Y + 236, Slate);
+        _ui.Fill(b, new Rectangle(CostPanel.X + 40, CostPanel.Y + 216, CostPanel.Width - 80, 2), Dim);
+        _ui.Text(b, "UPGRADE COST", CostPanel.X + 40, CostPanel.Y + 236, Slate);
         DrawCostRow(b, CostPanel.Y + 274, "SCRAP", hunter.MaterialOf(Material.Scrap), r.Scrap, MatColor[0], false);
         DrawCostRow(b, CostPanel.Y + 326, "GLEAM", hunter.Gleam, r.Gold, Gold, true);
 
-        _ui.Fill(b, new Rectangle(CostPanel.X + 28, CostPanel.Y + 392, CostPanel.Width - 56, 2), Dim);
-        _ui.Text(b, "GUARANTEED  ·  NEVER DOWNGRADES", CostPanel.X + 28, CostPanel.Y + 412, Met);
-        DrawWrapped(b, "No cap — the cost climbs each level.", CostPanel.X + 28, CostPanel.Y + 442, CostPanel.Width - 56, Slate);
+        _ui.Fill(b, new Rectangle(CostPanel.X + 40, CostPanel.Y + 392, CostPanel.Width - 80, 2), Dim);
+        // Shortened: the long form ran 76px past the panel interior.
+        _ui.Text(b, "GUARANTEED  ·  NO DOWNGRADE", CostPanel.X + 40, CostPanel.Y + 412, Met);
+        DrawWrapped(b, "No cap — the cost climbs each level.", CostPanel.X + 40, CostPanel.Y + 442, CostPanel.Width - 80, Slate);
 
         var can = !worn && hunter.MaterialOf(Material.Scrap) >= r.Scrap && hunter.Gleam >= r.Gold;
         var greater = Forge.GreaterRefine(item, Tuning);
@@ -832,7 +834,7 @@ public sealed class ForgeScreen
         var canGreat = !worn && hunter.Gleam >= greater.Gold;
 
         if (worn) _ui.TextCenter(b, "EQUIPPED — UNEQUIP ON GEAR TO UPGRADE", CostPanel.Center.X, CostPanel.Bottom - 120, Ember);
-        else if (hasCrystal) _ui.TextCenter(b, "HOLD SHIFT: +5 LEVELS FOR 1 CRYSTAL", CostPanel.Center.X, CostPanel.Bottom - 120, Slate);
+        else if (hasCrystal) _ui.TextCenter(b, "HOLD SHIFT: +5 FOR 1 CRYSTAL", CostPanel.Center.X, CostPanel.Bottom - 152, Slate);
 
         var btn = new Rectangle(CostPanel.X + 40, CostPanel.Bottom - 96, CostPanel.Width - 80, 72);
         if (_ui.Button(b, btn, doGreat ? "GREATER UPGRADE  +5 iL" : "UPGRADE  +1 iL", hit, clicked, enabled: doGreat ? canGreat : can))
@@ -850,40 +852,40 @@ public sealed class ForgeScreen
 
         var rc = RarityColors[(int)item.Rarity];
         var el = item.Element is { } e ? e.ToString().ToUpperInvariant() + " " : "";
-        _ui.TextBig(b, $"{el}{ItemNames[item.BaseType]}", ResultPanel.X + 28, ResultPanel.Y + 66, rc, UiTypography.PanelTitle);
-        _ui.TextRightBig(b, $"iL{refined.ItemLevel}", ResultPanel.Right - 28, ResultPanel.Y + 66, Met, UiTypography.PanelTitle);
+        _ui.TextBig(b, $"{el}{ItemNames[item.BaseType]}", ResultPanel.X + 40, ResultPanel.Y + 66, rc, UiTypography.PanelTitle);
+        _ui.TextRightBig(b, $"iL{refined.ItemLevel}", ResultPanel.Right - 40, ResultPanel.Y + 66, Met, UiTypography.PanelTitle);
 
-        _ui.Text(b, "AFFIX PREVIEW", ResultPanel.X + 28, ResultPanel.Y + 114, Slate);
+        _ui.Text(b, "AFFIX PREVIEW", ResultPanel.X + 40, ResultPanel.Y + 114, Slate);
         var nxt = ItemAffixes.Of(refined);
         var y = ResultPanel.Y + 148;
         foreach (var a in nxt)
         {
-            _ui.Diamond(b, new Rectangle(ResultPanel.X + 30, y + 4, 16, 16), Bloom);
+            _ui.Diamond(b, new Rectangle(ResultPanel.X + 42, y + 4, 16, 16), Bloom);
             _ui.Text(b, AffixName(a.Stat), ResultPanel.X + 58, y, Bone);
-            _ui.TextRight(b, AffixVal(a), ResultPanel.Right - 28, y, Met);
+            _ui.TextRight(b, AffixVal(a), ResultPanel.Right - 40, y, Met);
             y += 34;
         }
-        if (nxt.Count == 0) _ui.Text(b, "This rarity carries no explicit affixes.", ResultPanel.X + 28, y, Dim);
+        if (nxt.Count == 0) _ui.Text(b, "This rarity carries no explicit affixes.", ResultPanel.X + 40, y, Dim);
 
         // The reference's "ADDED BENEFIT" panel, made honest: an item's standing benefit is its real enchant
         // (Rare+) or trait — refine does not unlock a new passive, so none is invented.
         y = ResultPanel.Y + 360;
-        _ui.Fill(b, new Rectangle(ResultPanel.X + 28, y - 14, ResultPanel.Width - 56, 2), Dim);
+        _ui.Fill(b, new Rectangle(ResultPanel.X + 40, y - 14, ResultPanel.Width - 80, 2), Dim);
         if (Enchantments.Of(item) is { } ench)
         {
-            _ui.Text(b, "STANDING BENEFIT", ResultPanel.X + 28, y, Slate);
-            _ui.TextBig(b, ench.Name, ResultPanel.X + 28, y + 28, Bloom, UiTypography.Body);
-            DrawWrapped(b, ench.Blurb, ResultPanel.X + 28, y + 60, ResultPanel.Width - 56, Bone);
+            _ui.Text(b, "STANDING BENEFIT", ResultPanel.X + 40, y, Slate);
+            _ui.TextBig(b, ench.Name, ResultPanel.X + 40, y + 28, Bloom, UiTypography.Body);
+            DrawWrapped(b, ench.Blurb, ResultPanel.X + 40, y + 60, ResultPanel.Width - 80, Bone);
         }
         else if (GearTraits.TraitOf(item) is { } tr)
         {
-            _ui.Text(b, "ITEM TRAIT", ResultPanel.X + 28, y, Slate);
-            _ui.TextBig(b, GearTraits.NameOf(tr), ResultPanel.X + 28, y + 28, InkGold, UiTypography.Body);
+            _ui.Text(b, "ITEM TRAIT", ResultPanel.X + 40, y, Slate);
+            _ui.TextBig(b, GearTraits.NameOf(tr), ResultPanel.X + 40, y + 28, InkGold, UiTypography.Body);
         }
 
-        _ui.Text(b, "FORGE NOTES", ResultPanel.X + 28, ResultPanel.Bottom - 200, Slate);
+        _ui.Text(b, "FORGE NOTES", ResultPanel.X + 40, ResultPanel.Bottom - 200, Slate);
         DrawWrapped(b, "Level and affixes rise. Trait, enchant and source stay.",
-            ResultPanel.X + 28, ResultPanel.Bottom - 170, ResultPanel.Width - 56, Slate);
+            ResultPanel.X + 40, ResultPanel.Bottom - 170, ResultPanel.Width - 80, Slate);
 
         var cbtn = new Rectangle(ResultPanel.X + 40, ResultPanel.Bottom - 96, ResultPanel.Width - 80, 72);
         if (_ui.Button(b, cbtn, "CONFIRM UPGRADE", hit, clicked, enabled: can && !worn)) DoRefine(hunter, item);
@@ -999,7 +1001,7 @@ public sealed class ForgeScreen
     private void DrawCostRow(SpriteBatch b, int y, string label, long owned, int required, Color gem, bool gleam)
     {
         var ok = owned >= required;
-        if (gleam && _ui.Assets.Get("currency_gleam") is { } gi) b.Draw(gi, new Rectangle(CostPanel.X + 30, y, 40, 40), Color.White);
+        if (gleam && _ui.Assets.Get("currency_gleam") is { } gi) b.Draw(gi, new Rectangle(CostPanel.X + 42, y, 40, 40), Color.White);
         else _ui.Diamond(b, new Rectangle(CostPanel.X + 32, y + 4, 36, 36), gem);
         _ui.TextBig(b, label, CostPanel.X + 84, y + 6, Bone, UiTypography.Body);
         _ui.TextRightBig(b, $"{owned:N0} / {required:N0}", CostPanel.Right - 30, y + 6, ok ? Met : Ember, UiTypography.Body);

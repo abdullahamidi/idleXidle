@@ -2046,6 +2046,34 @@
       "negative_description": "frame, border, ring, circle, medallion, rim, filigree, coin, badge, gold trim, text"
     },
     {
+      "key": "bg_mapfield",
+      "dest": "assets/art/Environments/screens",
+      "model": "pixen",
+      "width": 576,
+      "height": 428,
+      "knockout": false,
+      "upscale": 2,
+      "prompt": "An aged parchment campaign map, blank hand-inked chart with faint coastlines, contour hatching, compass rose in one corner and a worn creased border. Dark fantasy pixel art, muted browns and dim ochre, low contrast, evenly lit, NO characters, NO icons, NO markers, NO pins, NO text, NO labels, NO UI, NO frame"
+    },
+    {
+      "key": "icon_blessing_amplifier",
+      "dest": "assets/art/UI/icons/blessings",
+      "style": "medallion",
+      "subject": "a rising three-step chevron arrow pointing up"
+    },
+    {
+      "key": "icon_blessing_expansion",
+      "dest": "assets/art/UI/icons/blessings",
+      "style": "medallion",
+      "subject": "an open archway gate with a keystone"
+    },
+    {
+      "key": "icon_blessing_convenience",
+      "dest": "assets/art/UI/icons/blessings",
+      "style": "medallion",
+      "subject": "a slim hourglass with running sand"
+    },
+    {
       "key": "chest_loot",
       "dest": "assets/art/ItemsLoot/chests",
       "style": "item",

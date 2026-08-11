@@ -55,11 +55,20 @@ public sealed class PrestigeScreen
 
     private const int Cols = 3, VisRows = 4;
 
+    /// <summary>
+    /// One blessing card, laid out inside the grid panel's ORNATE INTERIOR.
+    /// </summary>
+    /// <remarks>
+    /// The old geometry (origin +24/+58, pitch 274×160) was measured against a plain rectangle: the
+    /// right-hand column ran 16px into the frame's border and the bottom row 12px through it, and the
+    /// scroll footer fell outside the panel entirely. Everything here is derived from the 44px inset
+    /// UiKit.Panel reserves, so the grid stays inside whatever the panel is resized to.
+    /// </remarks>
     private static Rectangle Card(int vis)
     {
         var col = vis % Cols;
         var row = vis / Cols;
-        return new Rectangle(GridPanel.X + 24 + col * 274, GridPanel.Y + 58 + row * 160, 258, 148);
+        return new Rectangle(GridPanel.X + 44 + col * 258, GridPanel.Y + 84 + row * 140, 242, 128);
     }
 
     private static string CatName(UnlockEffect e) => e switch
@@ -70,6 +79,13 @@ public sealed class PrestigeScreen
     private static Color CatColor(UnlockEffect e) => e switch
     {
         UnlockEffect.Amplifier => Gold, UnlockEffect.Expansion => Violet, _ => Teal,
+    };
+
+    private static string CatIcon(UnlockEffect e) => e switch
+    {
+        UnlockEffect.Amplifier => "icon_blessing_amplifier",
+        UnlockEffect.Expansion => "icon_blessing_expansion",
+        _ => "icon_blessing_convenience",
     };
 
     // Display order: Amplifier (the common boosts) first, then Expansion (keystones/vows), then Convenience.
@@ -201,7 +217,9 @@ public sealed class PrestigeScreen
     {
         _ui.Panel(b, GridPanel);
         var owned = tree.All.Count(u => tree.Owns(u.Id));
-        _ui.TextCenterBig(b, "DUST BLESSINGS", GridPanel.Center.X, GridPanel.Y + 20, Gold, UiTypography.SectionTitle);
+        // +44, not +26: this is the WIDE panel art, whose top ornament is a centred medallion that a
+        // centred title runs straight into. The tall side panels have no such crest at +26.
+        _ui.TextCenterBig(b, "DUST BLESSINGS", GridPanel.Center.X, GridPanel.Y + 44, Gold, UiTypography.SectionTitle);
         _ui.TextRightBig(b, $"{owned} / {tree.All.Count} LIT", GridPanel.Right - 28, GridPanel.Y + 24, Slate, UiTypography.Secondary);
 
         var list = Filtered(tree);
@@ -228,22 +246,27 @@ public sealed class PrestigeScreen
             _ui.Fill(b, new Rectangle(card.Right - t, card.Y, t, card.Height), edge);
 
             var iconTint = isOwned ? Gold : buyable ? CatColor(u.Effect) : new Color(0x50, 0x50, 0x5C);
-            var ib = new Rectangle(card.Center.X - 26, card.Y + 16, 52, 52);
-            if (_ui.Assets.Get("ui_memory_dust") is { } ic) b.Draw(ic, ib, iconTint);
-            else _ui.Diamond(b, ib, iconTint);
+            // One icon PER CATEGORY. Every card used to draw the same dust blob recoloured by state, so
+            // the grid could not be scanned — an Amplifier and an Expansion were the same picture.
+            var ib = new Rectangle(card.Center.X - 22, card.Y + 8, 44, 44);
+            if (!_ui.Icon(b, CatIcon(u.Effect), ib, iconTint)
+                && _ui.Assets.Get("ui_memory_dust") is { } ic) b.Draw(ic, ib, iconTint);
 
-            _ui.TextCenterBig(b, u.Name, card.Center.X, card.Y + 76, isOwned || buyable ? Bone : Slate, UiTypography.Secondary);
+            _ui.TextCenterBig(b, u.Name, card.Center.X, card.Y + 58, isOwned || buyable ? Bone : Slate, UiTypography.Secondary);
             var state = isOwned ? "LIT" : buyable ? "AVAILABLE" : "LOCKED";
-            _ui.TextCenter(b, state, card.Center.X, card.Bottom - 46, isOwned ? Gold : buyable ? Met : Slate);
+            _ui.TextCenter(b, state, card.Center.X, card.Bottom - 56, isOwned ? Gold : buyable ? Met : Slate);
             if (!isOwned)
             {
-                if (_ui.Assets.Get("ui_memory_dust") is { } di) b.Draw(di, new Rectangle(card.Center.X - 42, card.Bottom - 26, 18, 18), buyable ? Violet : Dim);
-                _ui.TextCenter(b, $"{u.Cost}", card.Center.X + 8, card.Bottom - 24, buyable ? Bone : Slate);
+                if (_ui.Assets.Get("ui_memory_dust") is { } di) b.Draw(di, new Rectangle(card.Center.X - 42, card.Bottom - 30, 18, 18), buyable ? Violet : Dim);
+                _ui.TextCenter(b, $"{u.Cost}", card.Center.X + 8, card.Bottom - 28, buyable ? Bone : Slate);
             }
         }
 
         if (maxScroll > 0)
-            _ui.TextCenter(b, $"ROW {_scroll + 1} / {maxScroll + 1}   ·   SCROLL", GridPanel.Center.X, GridPanel.Bottom - 30, Slate);
+            // Beside the title, not at the foot: the panel's bottom edge is a centred ornament, and any
+            // centred line there reads as struck through.
+            _ui.TextRightBig(b, $"ROW {_scroll + 1} / {maxScroll + 1}  ·  SCROLL",
+                GridPanel.Right - 52, GridPanel.Y + 48, Slate, UiTypography.Secondary);
     }
 
     private void DrawDetail(SpriteBatch b, MemoryDustTree tree, Point hit, bool clicked)
@@ -257,8 +280,8 @@ public sealed class PrestigeScreen
         _ui.TextCenterBig(b, "BLESSING DETAIL", DetailPanel.Center.X, DetailPanel.Y + 18, Gold, UiTypography.SectionTitle);
 
         var icon = new Rectangle(DetailPanel.Center.X - 52, DetailPanel.Y + 58, 104, 104);
-        if (_ui.Assets.Get("ui_memory_dust") is { } ic) b.Draw(ic, icon, isOwned ? Gold : cat);
-        else _ui.Diamond(b, icon, isOwned ? Gold : cat);
+        if (!_ui.Icon(b, CatIcon(u.Effect), icon, isOwned ? Gold : cat)
+            && _ui.Assets.Get("ui_memory_dust") is { } ic) b.Draw(ic, icon, isOwned ? Gold : cat);
 
         _ui.TextCenterBig(b, u.Name, DetailPanel.Center.X, DetailPanel.Y + 176, isOwned ? Gold : buyable ? Bone : Slate, UiTypography.PanelTitle);
         var state = isOwned ? "LIT" : buyable ? "AVAILABLE" : "LOCKED";

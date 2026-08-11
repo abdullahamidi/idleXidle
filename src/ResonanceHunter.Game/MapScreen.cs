@@ -177,17 +177,26 @@ public sealed class MapScreen
     private void DrawMap(SpriteBatch b, Point hit, bool clicked)
     {
         // The illustrated map backdrop, cropped to fill the canvas (AspectFillCrop), then a dark scrim so nodes read.
-        if (_ui.Assets.Get("bg_regionmap") is { } bg)
-        {
-            var scale = MathF.Max(MapCanvas.Width / (float)bg.Width, MapCanvas.Height / (float)bg.Height);
-            var w = (int)(bg.Width * scale);
-            var h = (int)(bg.Height * scale);
-            b.Draw(bg, new Rectangle(MapCanvas.Center.X - w / 2, MapCanvas.Center.Y - h / 2, w, h),
-                new Rectangle(0, 0, bg.Width, bg.Height), Color.White);
-        }
-        else _ui.Fill(b, MapCanvas, new Color(0x12, 0x0E, 0x1C));
-        _ui.Fill(b, MapCanvas, new Color(0x08, 0x06, 0x12, 0x88));
+        // bg_mapfield, not bg_regionmap: the latter is the cartographer's-chamber art already covering the
+        // whole SCREEN behind these panels, so reusing it here under a scrim made the map panel a black
+        // void with cards floating in it. This is a chart, which is what the nodes want to sit on.
+        // FRAME FIRST, then the chart inside it. The panel art's centre slice is opaque near-black, so
+        // drawing the backdrop first and the panel over it painted the map out entirely — which is why
+        // this canvas has always been an empty black rectangle.
         _ui.Panel(b, MapCanvas);
+        var field = UiKit.PanelInner(MapCanvas);
+        if (_ui.Assets.Get("bg_mapfield") is { } bg)
+        {
+            // Aspect-fill by cropping the SOURCE, not by overdrawing the destination. Scaling the whole
+            // texture up and centring it meant the overflow was painted outside the canvas: at 1280x720
+            // the backdrop bled 154px to each side and covered half the campaign panel next to it.
+            var srcW = Math.Min(bg.Width, (int)(bg.Height * (field.Width / (float)field.Height)));
+            var srcH = Math.Min(bg.Height, (int)(bg.Width * (field.Height / (float)field.Width)));
+            b.Draw(bg, field,
+                new Rectangle((bg.Width - srcW) / 2, (bg.Height - srcH) / 2, srcW, srcH), Color.White);
+        }
+        else _ui.Fill(b, field, new Color(0x12, 0x0E, 0x1C));
+        _ui.Fill(b, field, new Color(0x08, 0x06, 0x12, 0x66));   // scrim, so the node cards still read
 
         // Connection lines along the conquer-chain (gold once the source region is conquered).
         for (var i = 0; i < RegionCount - 1; i++)
@@ -228,7 +237,12 @@ public sealed class MapScreen
             else _ui.Diamond(b, eb, unlocked ? sc : Dim);
 
             _ui.TextCenterBig(b, def.Name, node.Center.X, node.Y + 70, unlocked ? Bone : Slate, UiTypography.Secondary);
-            _ui.TextCenter(b, $"PWR {RegionPower(def):N0}", node.Center.X, node.Bottom - 22, unlocked ? Slate : Dim);
+            // BELOW the card, not across its bottom border — the power was printed straight through the
+            // node's frame edge on every region.
+            // Vellum, not Slate/Dim: these labels now sit on the parchment chart rather than on black, and
+            // Slate (1.6:1 either way) was invisible on both.
+            _ui.TextCenter(b, $"PWR {RegionPower(def):N0}", node.Center.X, node.Bottom + 8,
+                unlocked ? UiKit.Vellum : UiKit.Vellum * 0.55f);
 
             // State badge, top-right of the node.
             if (!unlocked) DrawLock(b, new Rectangle(node.Right - 30, node.Y + 8, 20, 22), Slate);

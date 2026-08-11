@@ -407,8 +407,24 @@ public sealed class UiKit
             return;
         }
 
-        NineSlice(b, tex, r, 52, gold ? new Color(0xFF, 0xDC, 0xA0) : Color.White);
+        NineSlice(b, tex, r, PanelCorner, gold ? new Color(0xFF, 0xDC, 0xA0) : Color.White);
     }
+
+    /// <summary>
+    /// How far a <see cref="Panel"/>'s ornate border reaches in from its rectangle.
+    /// </summary>
+    /// <remarks>
+    /// Was 52. Screens had been written against a plain rectangle and inset their content by 24–32, so on
+    /// several panels the first column of text sat ON the filigree and right-aligned values were clipped by
+    /// the opposite edge. Thinning the border to 40 is the change that costs nothing — the corner art is
+    /// sampled whole and drawn smaller, so it reads as a FINER frame rather than a cropped one — and it
+    /// closes most of the gap without touching several hundred hand-placed literals.
+    /// </remarks>
+    public const int PanelCorner = 40;
+
+    /// <summary>The usable interior of a panel: its rectangle less the ornate border.</summary>
+    public static Rectangle PanelInner(Rectangle r)
+        => new(r.X + PanelCorner, r.Y + PanelCorner, r.Width - PanelCorner * 2, r.Height - PanelCorner * 2);
 
     /// <summary>
     /// A 9-slice at NATIVE resolution: a source corner of S px is drawn at S/4 logical, landing 1:1 on the

@@ -76,6 +76,13 @@ def existing_keys() -> dict[str, str]:
 
 
 def build_prompt(manifest: dict, asset: dict) -> str:
+    """The asset's full prompt: its own verbatim `prompt`, or its subject in its style's template.
+
+    A few assets are one-offs whose wording fights every shared style (the drawn pauldron, whose
+    style prefix reintroduced the body nouns that summoned a whole cuirass). Those carry a literal
+    `prompt` instead of a `subject`."""
+    if asset.get("prompt"):
+        return asset["prompt"]
     defaults = manifest["defaults"]
     template = manifest["styles"][asset.get("style", "medallion")]
     return template.format(
