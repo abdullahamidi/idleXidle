@@ -115,7 +115,10 @@ public sealed class ForgeScreen
     private const int Visible = Cols * VisRows;      // loot cards shown at once
 
     /// <summary>Grid rectangle for the visible card at slot <paramref name="vis"/> (0..Visible-1).</summary>
-    private static Rectangle Card(int vis) => new(64 + vis % Cols * 232, 224 + vis / Cols * 172, 224, 160);
+    // Inside the loot panel (32,160,1000,592), whose ornate border reaches 40px in. The old geometry
+    // (origin 64/224, pitch 232x172) put the left column on the frame and ran the bottom row 16px
+    // through it, so the third row of loot was always sliced off.
+    private static Rectangle Card(int vis) => new(72 + vis % Cols * 230, 216 + vis / Cols * 166, 222, 152);
 
     // ── Loot FILTER. A bag of ninety across eight slots plus four material tiers is a haystack; the filter
     //    lets the player narrow it to what they came for. The grid, cursor and scroll all walk the FILTERED
@@ -1074,14 +1077,15 @@ public sealed class ForgeScreen
         // ── Inventory — a loot-card grid, not a text list ────────────────────────────────────────
         _ui.Panel(b, new Rectangle(32, 160, 1000, 592));
         var view = View();
-        _ui.Text(b, $"LOOT ({view.Count})", 56, 176, InkFaint);
+        // The loot panel starts at x=32 and its border reaches 40px in; the header was written at +24.
+        _ui.Text(b, $"LOOT ({view.Count})", 76, 186, InkFaint);
 
         // FILTER cycle — narrows a haystack of ninety to one slot or rarity. TAB cycles too. Rides the
         // toolbar row, right of the chest controls.
         if (_ui.Button(b, new Rectangle(736, 88, 288, 60), FilterName(_filter), hit, clicked))
             CycleFilter(1);
         if (view.Count > Visible)
-            _ui.TextRight(b, $"{_scroll / Cols + 1}/{(view.Count + Cols - 1) / Cols}", 1000, 176, InkFaint);
+            _ui.TextRight(b, $"{_scroll / Cols + 1}/{(view.Count + Cols - 1) / Cols}", 992, 186, InkFaint);
 
         if (_inv.Count == 0)
             _ui.Text(b, "EMPTY — GO HUNT SOMETHING.", 64, 264, Dim);
@@ -1103,8 +1107,8 @@ public sealed class ForgeScreen
             _ui.Fill(b, new Rectangle(card.X, card.Bottom - 4, card.Width, 4), active ? Gold : rarity * 0.5f);
 
             // The item icon, big and centred.
-            DrawItemIcon(b, item, new Rectangle(card.Center.X - 52, card.Y + 16, 104, 104));
-            _ui.TextCenter(b, $"{item.SellValue}g", card.Center.X, card.Bottom - 40, Gold);
+            DrawItemIcon(b, item, new Rectangle(card.Center.X - 48, card.Y + 12, 96, 96));
+            _ui.TextCenter(b, $"{item.SellValue}g", card.Center.X, card.Bottom - 34, Gold);
 
             if (queued) _ui.TextCenter(b, "*", card.Right - 24, card.Y + 8, Gold);   // in the merge tray
 
@@ -1124,14 +1128,14 @@ public sealed class ForgeScreen
             _ui.Text(b, "PICK AN ITEM ON THE LEFT.", 1088, 120, InkFaint);
         else
         {
-            DrawItemIcon(b, act, new Rectangle(1088, 120, 64, 64));
+            DrawItemIcon(b, act, new Rectangle(1096, 130, 64, 64));
 
             // The ELEMENT is part of the item's name, because it is part of what the item IS — and it
             // is what the Source matchup and the Forge's carry-through rule both read. An element the
             // player cannot see is an element they cannot plan around.
             // Full rolled name — "FURIOUS SHADOW BLADE" — rarity carried by the colour, not the words.
             var title = ItemNaming.FullName(act);
-            _ui.Text(b, title, 1168, 132, RarityInk[(int)act.Rarity]);
+            _ui.Text(b, title, 1168, 142, RarityInk[(int)act.Rarity]);
 
             // The trait rides the same row — but only if it FITS. Measured, not estimated: at 480x270
             // "LEGENDARY MACHINE WEAPON" and "WARDING" want the same pixels, and I have already shipped
@@ -1141,8 +1145,8 @@ public sealed class ForgeScreen
             {
                 var traitName = GearTraits.NameOf(tr);
                 var titleEnd = 1168 + _ui.Measure(title);
-                var traitStart = 1856 - _ui.Measure(traitName);
-                if (traitStart > titleEnd + 16) _ui.TextRight(b, traitName, 1856, 132, InkGold);
+                var traitStart = 1840 - _ui.Measure(traitName);
+                if (traitStart > titleEnd + 16) _ui.TextRight(b, traitName, 1840, 142, InkGold);
             }
 
             // The ENCHANTMENT gets its own line: it is a sentence about WHEN, not a number, and it is
@@ -1285,25 +1289,26 @@ public sealed class ForgeScreen
         // Dim the Forge behind, so the eye goes to the burst.
         _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0, 0, 0, (int)(150 * fade)));
 
-        // A dark reward card edged in the chest's grade colour.
+        // A framed reward card. It had been a flat slab with two coloured rules — the one moment the game
+        // shouts, presented as the least finished surface on the screen.
         var card = new Rectangle(600, 336, 720, 416);
-        _ui.Fill(b, card, new Color(0x16, 0x14, 0x1C) * fade);
-        _ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, 8), grade * fade);
-        _ui.Fill(b, new Rectangle(card.X, card.Bottom - 8, card.Width, 8), grade * fade);
+        _ui.Panel(b, card);
+        _ui.Fill(b, UiKit.PanelInner(card), grade * (0.10f * fade));   // a wash of the chest's grade
 
-        _ui.TextCenter(b, $"{RarityNames[(int)_revealGrade]} CHEST", 960, 368, grade * fade);
+        _ui.TextCenterBig(b, $"{RarityNames[(int)_revealGrade]} CHEST", card.Center.X, card.Y + 52,
+            grade * fade, UiTypography.SectionTitle);
 
         // The items that popped, big and framed by their own rarity.
         var n = _revealItems.Count;
         for (var i = 0; i < n; i++)
-            DrawItemIcon(b, _revealItems[i], new Rectangle(960 - n * 68 + i * 136, 432, 120, 120));
+            DrawItemIcon(b, _revealItems[i], new Rectangle(960 - n * 68 + i * 136, 448, 120, 120));
 
         var names = n == 0
             ? "SOLD ON SIGHT (FILTER)"
             : string.Join("   ", _revealItems.Select(it => $"{RarityNames[(int)it.Rarity]} {ItemNames[it.BaseType]}"));
         var nameColor = n > 0 ? RarityColors[_revealItems.Max(it => (int)it.Rarity)] : Slate;
-        _ui.TextCenter(b, names, 960, 584, nameColor * fade);
-        _ui.TextCenter(b, $"+{_revealMaterials} MATERIALS", 960, 640, Gold * fade);
+        _ui.TextCenter(b, names, 960, 604, nameColor * fade);
+        _ui.TextCenterBig(b, $"+{_revealMaterials} MATERIALS", 960, 652, Gold * fade, UiTypography.Body);
     }
 
     private void Reticle(SpriteBatch b, Rectangle r, Color c)

@@ -1605,8 +1605,12 @@ public class Game1 : Game
         {
             var on = _displayMode == modes[i];
             var r = ModeBtn(i);
+            // The SELECTED row has to be the most readable one, not the least. `gold: true` only TINTS the
+            // frame art — the interior of a row this short is still near-black — so the dark ink chosen for
+            // "a gold surface" was drawn black on black, and the live display mode was the one thing on the
+            // panel you could not read. Gold ink on the dark interior, which is the pairing that works here.
             _ui.Panel(_batch, r, gold: on);
-            _ui.TextCenter(_batch, modeNames[i], r.Center.X, r.Center.Y - 12, on ? new Color(0x1E, 0x14, 0x04) : Bone);
+            _ui.TextCenter(_batch, modeNames[i], r.Center.X, r.Center.Y - 12, on ? Gold : Bone);
             if (UiKit.ClickedIn(r, ChromeMouse, _clicked) && !on)
             {
                 _displayMode = modes[i];
@@ -1622,7 +1626,7 @@ public class Game1 : Game
             var r = ScaleBtn(i);
             _ui.Panel(_batch, r, gold: on);
             var label = $"{Display.CanvasWidth * s}x{Display.CanvasHeight * s}";
-            _ui.TextCenter(_batch, label, r.Center.X, r.Center.Y - 12, on ? new Color(0x1E, 0x14, 0x04) : windowed ? Bone : Slate);
+            _ui.TextCenter(_batch, label, r.Center.X, r.Center.Y - 12, on ? Gold : windowed ? Bone : Slate);
             if (windowed && UiKit.ClickedIn(r, ChromeMouse, _clicked) && !on)
             {
                 _windowedScale = s;
@@ -1748,11 +1752,13 @@ public class Game1 : Game
 
     private void DrawHelp()
     {
-        // 1920-space (scale-1 chrome): every position/size ×4 of its old 480-space value.
-        Fill(new Rectangle(80, 80, 1760, 920), Bone);
-        Fill(new Rectangle(84, 84, 1752, 912), VoidInk);
+        // Framed like every other surface. This was a bone rectangle with a black rectangle inside it —
+        // the last flat two-rect panel in the game, on the screen a new player is most likely to open.
+        _ui.Scrim(_batch, 0.72f);
+        var panel = new Rectangle(112, 92, 1696, 840);
+        _ui.Panel(_batch, panel);
 
-        Text("RESONANCE HUNTER — CONTROLS", 120, 112, Gold);
+        _ui.TextCenterBig(_batch, "RESONANCE HUNTER — CONTROLS", panel.Center.X, panel.Y + 46, Gold, UiTypography.SectionTitle);
 
         // Two columns: the build on the left, the screens on the right.
         var build = new (string Key, string What)[]
@@ -1761,8 +1767,7 @@ public class Game1 : Game
             ("", "SOURCE x FORM x VOW"),
             ("3", "KEYSTONE SOCKETS"),
             ("", "EACH ONE A TRADE"),
-            ("", "FORM IS YOUR"),
-            ("", "  PLAYSTYLE"),
+            ("", "FORM IS YOUR PLAYSTYLE"),
             ("", "SOURCE VS REGION"),
         };
         var world = new (string Key, string What)[]
@@ -1777,29 +1782,29 @@ public class Game1 : Game
             ("F1", "CLOSE"),
         };
 
-        Text("YOUR BUILD", 120, 176, Slate);
+        Text("YOUR BUILD", 176, 200, Bone);
         for (var i = 0; i < build.Length; i++)
         {
-            Text(build[i].Key, 120, 232 + i * 48, Gold);
-            Text(build[i].What, 312, 232 + i * 48, Bone);
+            Text(build[i].Key, 176, 254 + i * 46, Gold);
+            Text(build[i].What, 356, 254 + i * 46, Bone);
         }
 
-        Text("SCREENS", 1200, 176, Slate);
+        Text("SCREENS", 1140, 200, Bone);
         for (var i = 0; i < world.Length; i++)
         {
-            Text(world[i].Key, 1200, 232 + i * 48, Gold);
-            Text(world[i].What, 1320, 232 + i * 48, Bone);
+            Text(world[i].Key, 1140, 254 + i * 46, Gold);
+            Text(world[i].What, 1256, 254 + i * 46, Bone);
         }
 
-        Text("THE IDEA:", 120, 600, Gold);
+        Text("THE IDEA:", 176, 620, Gold);
         WrapText(
             "ONE CHAMPION, YOUR BUILD — IT FIGHTS ON ITS OWN, ON EVERY SCREEN, EVEN WHILE THE GAME IS " +
             "CLOSED. EACH WAVE IT CLEARS PAYS GLEAM AT ONCE. EVERY 5TH IS A BOSS, WITH A CHANCE AT A CHEST. " +
             "WHEN IT FALLS IT RECOVERS AND PUSHES ON — NOTHING IS BANKED, NOTHING IS LOST.",
-            120, 648, 1640, Bone);
+            176, 664, 1568, Bone);
         WrapText(
             $"SPEND GLEAM ON COMMAND TO STRENGTHEN YOUR CHAMPION. REACH WAVE {ConquerWaveDepth} TO CONQUER A REGION AND UNLOCK THE NEXT.",
-            120, 840, 1640, Slate);
+            176, 832, 1568, Bone * 0.7f);
     }
 
     // ── Drawing helpers ───────────────────────────────────────────────────────────────────────

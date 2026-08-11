@@ -422,9 +422,19 @@ public sealed class UiKit
     /// </remarks>
     public const int PanelCorner = 40;
 
-    /// <summary>The usable interior of a panel: its rectangle less the ornate border.</summary>
+    /// <summary>
+    /// The usable interior of a panel: its rectangle less the ornate border.
+    /// </summary>
+    /// <remarks>
+    /// The inset is clamped the same way <see cref="NineSlice"/> clamps its corner, so a SHORT panel (a
+    /// settings row is 54px tall) gets a proportionally smaller border rather than an inverted rectangle.
+    /// Without the clamp this returned a negative-height rect and everything drawn into it vanished.
+    /// </remarks>
     public static Rectangle PanelInner(Rectangle r)
-        => new(r.X + PanelCorner, r.Y + PanelCorner, r.Width - PanelCorner * 2, r.Height - PanelCorner * 2);
+    {
+        var c = Math.Max(2, Math.Min(PanelCorner, Math.Min(r.Width, r.Height) / 2 - 2));
+        return new Rectangle(r.X + c, r.Y + c, r.Width - c * 2, r.Height - c * 2);
+    }
 
     /// <summary>
     /// A 9-slice at NATIVE resolution: a source corner of S px is drawn at S/4 logical, landing 1:1 on the
