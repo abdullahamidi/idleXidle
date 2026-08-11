@@ -214,11 +214,13 @@ public sealed class MapScreen
                                       new Rectangle(node.X, node.Y, 3, node.Height), new Rectangle(node.Right - 3, node.Y, 3, node.Height) })
                 _ui.Fill(b, e, edge);
 
-            // Emblem (only three region icons exist; the rest fall back to a Source gem).
+            // Emblem — one crest per region; unknown ids still fall back to a Source gem.
             var emblem = def.Id switch
             {
                 "cinderworks" => "icon_region_cinderworks", "umbral_reach" => "icon_region_umbral",
-                "verdant_hollow" => "icon_region_verdant", _ => (string?)null,
+                "verdant_hollow" => "icon_region_verdant", "marrow_wastes" => "icon_region_marrow_wastes",
+                "still_archive" => "icon_region_still_archive", "pale_choir" => "icon_region_pale_choir",
+                _ => (string?)null,
             };
             var eb = new Rectangle(node.Center.X - 26, node.Y + 12, 52, 52);
             if (emblem is not null && _ui.Assets.Get(emblem) is { } em) b.Draw(em, eb, unlocked ? Color.White : new Color(0x55, 0x55, 0x60));

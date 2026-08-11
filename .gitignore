@@ -170,3 +170,9 @@ production/session-state/
 # Re-include source, and keep ignoring anything that is actually build output.
 !src/**/Builds/
 !tests/**/Builds/
+
+# Asset pipeline staging (raw generator output + logs)
+tools/asset-pipeline/.staging/
+
+# PixelLab API token (secret - never commit)
+tools/asset-pipeline/.env

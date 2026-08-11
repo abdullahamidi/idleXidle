@@ -225,6 +225,14 @@ public class Game1 : Game
 
     public Game1()
     {
+        // Every number on screen is formatted with the current culture, so on a machine set to a
+        // comma-decimal locale the HUD read "TEMPO 4,94x" and costs printed with the wrong separators.
+        // The UI is authored in English with '.' decimals; pin the culture so it renders identically
+        // everywhere (and so save files round-trip regardless of the player's regional settings).
+        System.Globalization.CultureInfo.DefaultThreadCurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+        System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = System.Globalization.CultureInfo.InvariantCulture;
+        System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+
         _graphics = new GraphicsDeviceManager(this)
         {
             PreferredBackBufferWidth = CanvasWidth * 3,
@@ -647,7 +655,8 @@ public class Game1 : Game
             // screen is gone, so they had nothing to pose.
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
-                or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "reforge" or "build" or "character" or "stats" or "warren" or "map" or "rig")
+                or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "reforge" or "build" or "character" or "stats" or "warren" or "map" or "rig"
+                or "fightgear")
             {
                 _showTitle = false;
                 if (sm == "rig") _showRigPreview = true;
@@ -767,8 +776,26 @@ public class Game1 : Game
                     _deepestEver = 23; _mastery.SetEarned(77400);   // fixture career values (Stats §13)
                 }
 
-                if (sm == "fight")
+                if (sm is "fight" or "fightgear")
                 {
+                    // `fightgear` dresses the Hunter before the fight opens. A fresh save wears nothing, so
+                    // a plain `fight` capture can never show worn equipment — and worn equipment is exactly
+                    // what the rig bindings need verifying against.
+                    if (sm == "fightgear")
+                    {
+                        var worn = new[]
+                        {
+                            ItemBaseType.Weapon, ItemBaseType.Helm, ItemBaseType.Chest,
+                            ItemBaseType.Gloves, ItemBaseType.Boots,
+                        };
+                        var wrar = new[] { Rarity.Legendary, Rarity.Epic, Rarity.Rare, Rarity.Epic, Rarity.Rare };
+                        for (var i = 0; i < worn.Length; i++)
+                            _hunter.Equip(new ItemInstance
+                            {
+                                InstanceId = $"fg{i}", BaseType = worn[i], Rarity = wrar[i],
+                                SellValue = 40 + i * 20, Element = Source.Nature, ItemLevel = 30 + i * 5,
+                            });
+                    }
                     _expedition.Loadout = _loadout;
                     _expedition.Tree = _dust;
                     _expedition.Mastery = _mastery;
@@ -1301,12 +1328,14 @@ public class Game1 : Game
         // never ellipsized. Line 1 (duration) at OverlayTitle, line 2 (haul) at OverlayBody. The message is
         // authored as "line1\nline2" by the boot handlers.
         var parts = _bootMessage.Split('\n');
-        var r = new Rectangle(590, 165, 740, 82);
-        _ui.Fill(_batch, r, new Color(0x10, 0x0D, 0x16) * (0.9f * fade));
-        _ui.Fill(_batch, new Rectangle(r.X, r.Y, r.Width, 4), _bootColor * (0.65f * fade));
-        _ui.Fill(_batch, new Rectangle(r.X, r.Bottom - 4, r.Width, 4), _bootColor * (0.65f * fade));
-        _ui.TextCenterBig(_batch, parts[0], r.Center.X, r.Y + 14, _bootColor * fade, UiTypography.OverlayTitle);
-        if (parts.Length > 1) _ui.TextCenterBig(_batch, parts[1], r.Center.X, r.Y + 46, Bone * fade, UiTypography.OverlayBody);
+        // Framed panel art rather than a flat band with two gold rules. The flat version butted straight
+        // against the stage banner above it and read as a seam in the chrome; a panel with its own border
+        // sits clearly ON TOP of the scene, which is what a transient toast should do.
+        var r = new Rectangle(660, 176, 600, 96);
+        if (_assets.Get("ui_panel_modal_wide") is { } bg) _batch.Draw(bg, r, Color.White * fade);
+        else _ui.Panel(_batch, r);
+        _ui.TextCenterBig(_batch, parts[0], r.Center.X, r.Y + 22, _bootColor * fade, UiTypography.OverlayTitle);
+        if (parts.Length > 1) _ui.TextCenterBig(_batch, parts[1], r.Center.X, r.Y + 56, Bone * fade, UiTypography.OverlayBody);
     }
 
     private bool Pressed(Keys k) => _keys.IsKeyDown(k) && _prevKeys.IsKeyUp(k);
@@ -1832,11 +1861,16 @@ public class Game1 : Game
         }
     }
 
-    private static Rectangle NavHexRect(int i)   // now a rectangular TILE (guide: package_01 nav tiles)
+    /// <summary>Width of the vertical navigation rail down the left edge.</summary>
+    internal const int NavRailWidth = 180;
+    private const int NavTileHeight = 1080 / 8;   // eight items fill the full height exactly
+
+    private static Rectangle NavHexRect(int i)   // a rectangular TILE (guide: package_01 nav tiles)
     {
-        // 1920-space (scale-1 chrome): cell/tile/top ×4 of the old 480 values; the canvas centre is 1920/2.
-        // Rev 4 §22.4: eight equal 240px sections across the 1920 rail.
-        return new Rectangle(i * 240, 934, 240, 146);
+        // Vertical rail down the LEFT edge. It used to be eight 240px sections along the bottom
+        // (0, 934, 1920, 146), which ate a full band of the stage and cut the actors off at the shins.
+        // Stacked on the left it frees that height back to the arena.
+        return new Rectangle(0, i * NavTileHeight, NavRailWidth, NavTileHeight);
     }
 
     private void DrawHexNav()
@@ -1849,8 +1883,11 @@ public class Game1 : Game
         // Rev 4 §22: ONE shared QUIET rail — a dark background + thin dividers, NOT an ornate panel per item.
         // Only the active item gets ornate emphasis (ui_tab_active + purple tint, full-contrast icon/label);
         // inactive items are a quiet glyph + label at ~75% opacity.
-        _ui.Fill(_batch, new Rectangle(0, 934, 1920, 146), new Color(0x0C, 0x09, 0x16) * 0.96f);
-        _ui.Fill(_batch, new Rectangle(0, 934, 1920, 3), NavGem * 0.4f);   // a thin top seam
+        // Fully opaque. At 96% the rail let whatever a screen happened to draw underneath bleed through as
+        // ghost shapes; chrome should never show the scene behind it.
+        _ui.Fill(_batch, new Rectangle(0, 0, NavRailWidth, 1080), new Color(0x0C, 0x09, 0x16));
+        // Seam runs down the rail's trailing edge now that the rail is vertical.
+        _ui.Fill(_batch, new Rectangle(NavRailWidth - 3, 0, 3, 1080), NavGem * 0.4f);
 
         var active = NavActive();
         for (var i = 0; i < Nav.Length; i++)
@@ -1858,7 +1895,8 @@ public class Game1 : Game
             var r = NavHexRect(i);
             var on = i == active;
             var hover = r.Contains(ChromeMouse);
-            if (i > 0) _ui.Fill(_batch, new Rectangle(r.X, r.Y + 26, 2, r.Height - 52), new Color(0x22, 0x1C, 0x30));
+            // Dividers are horizontal between stacked tiles, not vertical between side-by-side ones.
+            if (i > 0) _ui.Fill(_batch, new Rectangle(r.X + 26, r.Y, r.Width - 52, 2), new Color(0x22, 0x1C, 0x30));
 
             if (on)
             {
@@ -1872,12 +1910,13 @@ public class Game1 : Game
                 _ui.Fill(_batch, r, new Color(0x8A, 0x5A, 0xC8) * 0.10f);
             }
 
+            // Icon above, label below, both centred in the shorter tile.
             var iconTint = on ? Color.White : Color.White * 0.75f;
             if (_assets.Get(Nav[i].Glyph) is { } g)
-                _batch.Draw(g, new Rectangle(r.Center.X - 26, r.Y + 28, 52, 52), iconTint);
+                _batch.Draw(g, new Rectangle(r.Center.X - 24, r.Y + 24, 48, 48), iconTint);
             else
-                _ui.Diamond(_batch, new Rectangle(r.Center.X - 22, r.Y + 32, 44, 44), on ? NavGold : NavGem * 0.75f);
-            _ui.TextCenterBig(_batch, Nav[i].Label, r.Center.X, r.Bottom - 44, on ? NavGold : NavLabel * 0.9f, UiTypography.NavigationLabel);
+                _ui.Diamond(_batch, new Rectangle(r.Center.X - 20, r.Y + 28, 40, 40), on ? NavGold : NavGem * 0.75f);
+            _ui.TextCenterBig(_batch, Nav[i].Label, r.Center.X, r.Bottom - 34, on ? NavGold : NavLabel * 0.9f, UiTypography.NavigationLabel);
         }
     }
 

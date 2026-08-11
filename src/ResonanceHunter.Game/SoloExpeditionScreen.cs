@@ -5,6 +5,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using ResonanceHunter.Core.Abilities;
+using ResonanceHunter.Core.Animation;
 using ResonanceHunter.Core.Automation;
 using ResonanceHunter.Core.Builds;
 using ResonanceHunter.Core.Combat;
@@ -45,7 +46,17 @@ public sealed class SoloExpeditionScreen
     private static readonly Color GroundShade = new(0x00, 0x00, 0x00, 0x64);   // soft translucent contact shadow
     private static readonly Color OnScene = UiKit.Vellum;
 
-    private const int GroundY = 735;   // spec §11.4 — the ground line every actor stands on
+    /// <summary>The ground line every actor stands on. All actor boxes derive from it.</summary>
+    /// <remarks>
+    /// Was 735 and, despite the comment, referenced nowhere — the boxes below hardcoded "735 - h"
+    /// instead, so the two could drift apart. It is now the single source of truth.
+    /// Moved to 890: the regenerated arena backdrops put their walkable floor in the lower band, and
+    /// the host nav rail is an OPAQUE bar at (0, 934, 1920, 146) (Game1.cs:1852), so anything below
+    /// 934 was hidden outright. The nav bar has since moved to a VERTICAL rail down the left edge
+    /// (Game1.NavHexRect), which frees that whole 146 px band back to the stage — so the ground line
+    /// drops to 1000, giving the actors the full height of the arena to stand in.
+    /// </remarks>
+    private const int GroundY = 1000;
     // A wave is resolved instantly then REPLAYED at this speed. It was 3.5x with no gap between waves, so
     // the whole run blurred past — playtest: "waves flow too fast". Slowed to a watchable pace, and a short
     // BREATH now sits between waves so each clear reads as its own beat. The champion's own skill rate
@@ -59,10 +70,12 @@ public sealed class SoloExpeditionScreen
     // Spec §12: the hunter is the DOMINANT figure, bottom-centred at (560,735), ~390px tall; the enemy grounds
     // at the front-melee anchor (1110,750), smaller (~250px) so the hunter reads as the focal point. The old
     // layout over-sized the enemy/boss ("boss too big, masked in a box") — the spec's ranges fix that.
-    private static readonly Rectangle ChampBox = new(560 - 180, 735 - 390, 360, 390);
+    // Shifted right (centre 560 -> 700) to clear the vertical control rail down the left edge, and
+    // enlarged so the figure holds the larger stage.
+    private static readonly Rectangle ChampBox = new(760 - 224, GroundY - 500, 448, 500);
     // Rev 3 §16.1: one normal enemy bottom-centred at (1160,735), visible ~320px (range 280–360). A boss is
     // drawn far larger from its own anchor (see the draw), so this box is the NORMAL-enemy size only.
-    private static readonly Rectangle EnemyBox = new(1160 - 175, 735 - 340, 350, 340);
+    private static readonly Rectangle EnemyBox = new(1320 - 218, GroundY - 440, 436, 440);
     // Rev 5 boss presentation metadata — measured from the crystal_lich_idle strip's frame 0 (1024²), shared
     // across frames (Option A). Body = the central figure (torso/head/robe), EXCLUDING the wings, staff, and a
     // top-of-frame BLEED-STREAK defect (rows 0..~305) that is trimmed via SrcTop and REPORTED as an asset
@@ -79,7 +92,9 @@ public sealed class SoloExpeditionScreen
     };
     private static readonly BossMeta DefaultBossMeta = new(0, 300, 200, 424, 640, 200, 120, 624, 780, "BOSS");
     private const int BossTargetBodyHeight = 540;   // §6/§25: rendered BODY height (wings extend beyond)
-    private static readonly Point BossAnchor = new(1210, 750);
+    // Pulled in from x=1360: the boss is far wider than an ordinary creature, and anchored that far right
+    // its wing ran into the arena's scissor edge at 1554 and read as sliced off behind the side panels.
+    private static readonly Point BossAnchor = new(1230, GroundY + 10);
     private Rectangle _bossBodyRect, _bossFullRect;   // rendered screen rects, set by DrawBoss for the bar/overlay
     private int _bossFrame;
     private string _bossName = "BOSS";
@@ -90,6 +105,12 @@ public sealed class SoloExpeditionScreen
         [Source.Body] = "bonecrawler", [Source.Mind] = "soul_leech", [Source.Nature] = "wisp",
         [Source.Machine] = "stone_sentinel", [Source.Shadow] = "shadeling", [Source.Spirit] = "rift_guardian",
     };
+
+    /// <summary>Display name for the wave's creature ("STONE SENTINEL"), from its art key.</summary>
+    private static string PrettyName(Source? src)
+        => src is { } s && EnemyForSource.TryGetValue(s, out var k)
+            ? k.Replace('_', ' ').ToUpperInvariant()
+            : "CORRUPTED";
     // package_04: the six region bosses, matched to region theme.
     private static readonly Dictionary<string, string> BossForRegion = new()
     {
@@ -135,7 +156,9 @@ public sealed class SoloExpeditionScreen
     private int _strikeCount;   // throttles per-strike damage numbers so they don't flood
 
     // ── Arena clipping + overlay state (Rev 4 §1/§2/§11). ──
-    private static readonly Rectangle ArenaRect = new(170, 120, 1320, 650);
+    // Widened and shifted right: left edge clears the control rail (ends x=280), right edge stops
+    // short of the existing right rail (starts x=1570), bottom stops short of the nav rail (y=934).
+    private static readonly Rectangle ArenaRect = new(492, 100, 1062, 940);
     private RasterizerState? _arenaRasterizer;
     private RasterizerState ArenaRasterizer => _arenaRasterizer ??= new RasterizerState { ScissorTestEnable = true };
     private float _bossIncomingTimer;
@@ -204,6 +227,12 @@ public sealed class SoloExpeditionScreen
         _hunter = hunter;
         var dt = (float)time.ElapsedGameTime.TotalSeconds;
         _anim += dt;
+        // The swing clock is SEPARATE from _champLunge. The lunge is a 0.2s positional shove
+        // (it decays at dt*5), and driving a 1.1s animation off it played the whole swing in
+        // 0.2s — the arm blurred. This advances at real time so the clip reads at the pace it
+        // was authored, and re-arms when a new strike lands.
+        if (_champLunge > 0.3f && _strikeTime <= 0f) _strikeTime = _strikeClip.DurationSeconds;
+        if (_strikeTime > 0f) _strikeTime = Math.Max(0f, _strikeTime - dt);
         _champLunge = Math.Max(0f, _champLunge - dt * 5f);
         _enemyLunge = Math.Max(0f, _enemyLunge - dt * 5f);
         _enemyEnter = Math.Max(0f, _enemyEnter - dt * 2.5f);   // the new enemy slides in over ~0.4s
@@ -457,8 +486,11 @@ public sealed class SoloExpeditionScreen
         DrawHunterHud(b);
         DrawStageHeader(b, regionName, _isBossWave);
         DrawRightColumn(b);
-        DrawSkillDock(b);
+        // Rail frame first, then its contents. The old order relied on the rail being TRANSLUCENT — the
+        // skill dock was drawn under it and read through as a washed-out ghost. With a real opaque panel
+        // that hid the dock outright.
         DrawBattleControls(b, hit, clicked);
+        DrawSkillDock(b);
         if (_isBossWave) DrawBossBar(b);                          // §10/§12: screen-space, NOT arena-clipped
         if (_isBossWave && DevBossDebug) DrawBossDebugOverlay(b); // §17: fixture-only bounds visualization (F7)
         // (the host closes this batch with b.End(); the shared hex nav is drawn by the host over every screen.)
@@ -489,7 +521,7 @@ public sealed class SoloExpeditionScreen
         var elunge = (int)(_enemyLunge * -40f);
         var enter = (int)(_enemyEnter * 280f);
         var ebox = new Rectangle(EnemyBox.X + elunge + enter, EnemyBox.Y, EnemyBox.Width, EnemyBox.Height);
-        _ui.Fill(b, new Rectangle(ebox.X + 60, ebox.Bottom - 14, ebox.Width - 120, 14), GroundShade);
+        _ui.GroundShadow(b, ebox.Center.X, ebox.Bottom - 10, (int)(ebox.Width * 0.60f), 42, 0.6f);
 
         var bob = (int)(MathF.Sin(_anim * 2f) * 8f);
         const float crop = 0.08f;
@@ -507,17 +539,10 @@ public sealed class SoloExpeditionScreen
 
         if (stripKey is null || !_ui.AnimSprite(b, stripKey, ab, _anim, fps, !attacking, Color.White, crop))
         {
-            var etorso = staticKey is not null ? _ui.Assets.Get(staticKey) : null;
-            if (etorso is not null)
-            {
-                var cropY = (int)(etorso.Height * crop);
-                var srcH = etorso.Height - cropY;
-                var sc = ab.Height / (float)srcH;
-                var w = Math.Max(1, (int)(etorso.Width * sc));
-                b.Draw(etorso, new Rectangle(ab.Center.X - w / 2, ab.Bottom - ab.Height, w, ab.Height),
-                    new Rectangle(0, cropY, etorso.Width, srcH), Color.White);
-            }
-            else _ui.Fill(b, new Rectangle(ebox.X + 40, ebox.Y + 40, ebox.Width - 80, ebox.Height - 80), Ember);
+            // Grounded so the static fallback stands where the animated strip does — otherwise the enemy
+            // visibly hopped whenever the strip was missing and this path took over.
+            if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, ab, Color.White, crop))
+                _ui.Fill(b, new Rectangle(ebox.X + 40, ebox.Y + 40, ebox.Width - 80, ebox.Height - 80), Ember);
         }
 
         if (_enemyWindup > 0f)
@@ -530,11 +555,14 @@ public sealed class SoloExpeditionScreen
         var boundsKey = staticKey ?? stripKey ?? "";
         var topPad = boundsKey.Length > 0 ? _ui.TopPadFraction(boundsKey) : 0f;
         var visTop = figTop + (int)(Math.Max(0f, (topPad - crop) / (1f - crop)) * ebox.Height);
-        var ebar = new Rectangle(ebox.Center.X - 65, visTop - 30, 130, 12);
-        _ui.Fill(b, ebar, new Color(0x0D, 0x0B, 0x14, 0xDC));
-        var fw = (int)(ebar.Width * Math.Clamp(_replay!.EnemyHealthFraction, 0f, 1f));
-        if (fw > 0) _ui.Fill(b, new Rectangle(ebar.X, ebar.Y, fw, ebar.Height), Ember);
-        _ui.Fill(b, new Rectangle(ebar.X, ebar.Y, ebar.Width, 2), new Color(0, 0, 0, 0x50));
+        // Framed bar art, matching the Hunter's own HUD bar. A bare 130x12 red rectangle was the one
+        // unstyled element left inside the arena, and at full health it read as a floating red streak
+        // with nothing tying it to the creature underneath.
+        var ebar = new Rectangle(ebox.Center.X - 92, visTop - 46, 184, 34);
+        _ui.BarArt(b, ebar, Math.Clamp(_replay!.EnemyHealthFraction, 0f, 1f), "health");
+        // The creature was never named on screen — the player fought an anonymous sprite for the whole run.
+        if (stripKey is not null || staticKey is not null)
+            _ui.TextCenterBig(b, PrettyName(EnemySource), ebar.Center.X, ebar.Y - 28, UiKit.Vellum, UiTypography.Secondary);
     }
 
     /// <summary>Rev 5: draw the boss by its BODY bounds — the ground pivot lands at the anchor, the body scales
@@ -584,12 +612,17 @@ public sealed class SoloExpeditionScreen
     /// <summary>The dedicated boss health bar — SCREEN-SPACE UI (§10/§12), drawn in the HUD pass, not clipped.</summary>
     private void DrawBossBar(SpriteBatch b)
     {
-        var bar = new Rectangle(510, 145, 900, 46);
+        // Below the stage header (which ends at y=153) and right of the Hunter HUD (which ends at x=596).
+        // At (510,145,900,46) it drove straight through both of them.
+        var bar = new Rectangle(660, 200, 600, 54);
         // The dev fixture's underlying wave-2 enemy is already dead (0%), so pose a representative fill.
         var frac = DevForceBoss ? 0.78f : Math.Clamp(_replay!.EnemyHealthFraction, 0f, 1f);
+        // Name ABOVE the bar, not on it. Gold on the molten fill was gold-on-gold — the boss's name, the
+        // one label that has to land, was the least readable thing on screen. Same rule as the parchment
+        // panels: when the surface is already gold, the word moves off it.
         _ui.BarArt(b, bar, frac, "boss");
-        _ui.TextBig(b, _bossName, bar.X + 44, bar.Y + 13, Gold, UiTypography.PanelTitle);
-        _ui.TextRightBig(b, $"{(int)(frac * 100)}%", bar.Right - 44, bar.Y + 15, Bone, UiTypography.OverlayBody);
+        _ui.TextCenterBig(b, _bossName, bar.Center.X, bar.Y - 34, UiKit.Vellum, UiTypography.PanelTitle);
+        _ui.TextCenterBig(b, $"{(int)(frac * 100)}%", bar.Center.X, bar.Y + 17, UiKit.Ink, UiTypography.OverlayBody);
     }
 
     /// <summary>Rev 5 §17: fixture-only bounds visualization (ground pivot, body, full silhouette, arena).</summary>
@@ -658,32 +691,35 @@ public sealed class SoloExpeditionScreen
     {
         // Spec §8: player summary, exact rectangles. Ornate primary frame; portrait AspectFit (it already
         // carries its own frame — no second medallion); name/level/power/HP/tempo/source-icons per §8.3.
-        var panel = new Rectangle(24, 20, 420, 205);
+        var panel = new Rectangle(196, 20, 420, 205);
         _ui.Panel(b, panel);
 
-        var por = new Rectangle(42, 39, 104, 104);
+        var por = new Rectangle(214, 39, 104, 104);
         if (_ui.Assets.Get("hunter_portrait") is { } p) b.Draw(p, por, Color.White);
         else if (_ui.Assets.Get("ui_medallion_round") is { } mfr) b.Draw(mfr, por, Color.White);
 
         var adept = Mastery.MasteryForm() is { } mf ? $"{FormShort(mf)} ADEPT" : "SEEKER";
-        _ui.TextBig(b, adept, 162, 43, Bone, 26);                                   // name
-        _ui.TextBig(b, $"LV {_hunter?.HunterLevel ?? 1}", 162, 80, Gold, 20);        // level
+        _ui.TextBig(b, adept, 334, 43, Bone, 26);                                   // name
+        _ui.TextBig(b, $"LV {_hunter?.HunterLevel ?? 1}", 334, 80, Gold, 20);        // level
         // Combat power — an icon + value (spec: an icon, not a "PWR" label).
-        if (_ui.Assets.Get("state_resonance_128") is { } pi) b.Draw(pi, new Rectangle(268, 74, 30, 30), Ember);
-        _ui.TextBig(b, Game1.Abbrev(_hunter?.PowerRating ?? 0), 304, 76, Ember, 24);
+        if (_ui.Assets.Get("state_resonance_128") is { } pi) b.Draw(pi, new Rectangle(440, 74, 30, 30), Ember);
+        _ui.TextBig(b, Game1.Abbrev(_hunter?.PowerRating ?? 0), 476, 76, Ember, 24);
         // HP bar (162,112,220,24), value centred on it.
         var hp = Math.Max(0, _replay?.HealthOf(0) ?? 0);
-        var hpBar = new Rectangle(162, 112, 220, 24);
+        var hpBar = new Rectangle(334, 112, 220, 24);
         _ui.BarArt(b, hpBar, _replay?.HealthFractionOf(0) ?? 1f, "health");
         _ui.TextCenterBig(b, $"{hp}/{_champ?.MaxHealth ?? 0}", hpBar.Center.X, hpBar.Y + 3, Bone, 16);
         // Secondary stat line — TEMPO × skill rate (spec §8.6: no fake mana bar; real SquadSkillRate).
-        _ui.TextBig(b, $"TEMPO {(_hunter?.SquadSkillRate ?? 1f):0.00}x SKILL RATE", 162, 145, Slate, 15);
+        _ui.TextBig(b, $"TEMPO {(_hunter?.SquadSkillRate ?? 1f):0.00}x SKILL RATE", 334, 145, Slate, 15);
 
-        // Source icons (42,160,330,32) — the build's real elements.
-        var sx = 42;
+        // Source icons — the build's real elements. These sat at x=42, coordinates from the layout where
+        // the HUD panel started near the left edge. Once the panel moved to x=196 to clear the vertical nav
+        // rail, the row stayed behind and painted four medallions onto the NAV RAIL, where they showed
+        // through its 96%-opaque shelf as ghosts beside the GEAR tile. Aligned to the panel's text column.
+        var sx = 334;
         foreach (var s in Loadout.Skills)
         {
-            var box = new Rectangle(sx, 162, 32, 32);
+            var box = new Rectangle(sx, 172, 32, 32);
             if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } g) b.Draw(g, box, Color.White);
             else _ui.Diamond(b, box, SourceColor.GetValueOrDefault(s.Source, Slate));
             sx += 40;
@@ -774,12 +810,14 @@ public sealed class SoloExpeditionScreen
         // Source glyph inside, Form + AUTO beneath. Presentation Model C (§14.4): AUTO/READY, no fake cooldowns.
         var skills = Loadout.Skills;
         var n = PlayerLoadout.MaxSkills;
-        const int slot = 104, gap = 18, y = 792, dockCx = 960;
-        var total = n * slot + (n - 1) * gap;
-        var x0 = dockCx - total / 2;
+        // Stacked down the control rail instead of a horizontal dock across the bottom centre, which
+        // sat over the stage and collided with the nav rail at y=934.
+        const int slot = 68, pitch = 74, y0 = 632;
+        _ui.TextBig(b, "SKILLS", RailContentX, 608, Slate, 15);
+        _ui.Fill(b, new Rectangle(RailContentX, 588, RailContentW, 2), Slate * 0.35f);
         for (var i = 0; i < n; i++)
         {
-            var box = new Rectangle(x0 + i * (slot + gap), y, slot, slot);
+            var box = new Rectangle(RailContentX, y0 + i * pitch, slot, slot);
             if (i < skills.Count)
             {
                 var s = skills[i];
@@ -787,9 +825,9 @@ public sealed class SoloExpeditionScreen
                 if (_ui.Assets.Get("ui_slot_skill_hex") is { } sl) b.Draw(sl, box, Color.White);
                 // §18.3 Layer 1: source-coloured inner glow (no Form-glyph asset ships, so the Source glyph is
                 // the central identity and the Form name labels it — a quieter composition per §36).
-                _ui.Diamond(b, new Rectangle(box.Center.X - 33, box.Center.Y - 33, 66, 66), sc * 0.28f);
+                _ui.Diamond(b, new Rectangle(box.Center.X - 22, box.Center.Y - 22, 44, 44), sc * 0.28f);
                 if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } g)
-                    b.Draw(g, new Rectangle(box.X + 28, box.Y + 24, box.Width - 56, box.Height - 56), Color.White);
+                    b.Draw(g, new Rectangle(box.X + 16, box.Y + 14, box.Width - 32, box.Height - 28), Color.White);
                 else _ui.Diamond(b, new Rectangle(box.Center.X - 24, box.Center.Y - 24, 48, 48), sc);
                 // (§16 Vow glyph omitted: the loadout SkillChoice doesn't carry the Vow — it lives on the built
                 // ability. Wiring the built skills through would add it; deferred, logged once below.)
@@ -797,9 +835,11 @@ public sealed class SoloExpeditionScreen
                 // fit the slot pitch rather than clipped.
                 var label = $"{s.Source.ToString().ToUpperInvariant()} {FormShort(s.Form)}";
                 var lpx = UiTypography.Secondary;
-                while (lpx > 12 && _ui.MeasureBig(label, lpx) > 132) lpx--;
-                _ui.TextCenterBig(b, label, box.Center.X, box.Bottom + 2, Bone, lpx);
-                _ui.TextCenterBig(b, "AUTO", box.Center.X, box.Bottom + 28, Gold, 14);
+                while (lpx > 12 && _ui.MeasureBig(label, lpx) > 128) lpx--;
+                // Beside the slot, not beneath it: the rail is narrow and tall, so the label reads
+                // left-aligned in the space to the slot's right.
+                _ui.TextBig(b, label, box.Right + 12, box.Y + 6, Bone, lpx);
+                _ui.TextBig(b, "AUTO", box.Right + 12, box.Y + 32, Gold, 13);
             }
             else
             {
@@ -816,26 +856,117 @@ public sealed class SoloExpeditionScreen
         // Spec §15 + §4.4: speed / auto-hunt controls, bottom-left (24,785,250,140). A QUIET surface (not a
         // heavy ornate frame) — these are minor controls; the arena stays dominant. SPEED drives the real
         // replay multiplier; AUTO HUNT is always ON (this is a pure idle-watch screen).
-        var panel = new Rectangle(24, 785, 252, 140);
-        _ui.Fill(b, panel, new Color(0x0D, 0x0B, 0x14, 0xD2));
-        _ui.Fill(b, new Rectangle(panel.X, panel.Y, panel.Width, 3), Bloom * 0.5f);
+        // Ornate frame art, like every other panel on this screen. A flat translucent slab was the only
+        // unstyled surface left in the scene, and because its alpha was constant it changed apparent
+        // brightness with whatever background it happened to be over — dark against the trunk, washed out
+        // against the foliage. A real panel is opaque, so it reads the same everywhere.
+        _ui.Panel(b, ControlRail);
 
-        _ui.TextBig(b, "SPEED", 42, 796, Slate, 15);
+        _ui.TextBig(b, "BATTLE SPEED", RailContentX, 268, Slate, 15);
         for (var i = 0; i < SpeedSteps.Length; i++)
         {
-            var r = new Rectangle(42 + i * 50, 824, 44, 34);
+            var r = new Rectangle(RailContentX, 292 + i * 52, RailContentW, 44);
             var on = Math.Abs(_speedMul - SpeedSteps[i]) < 0.01f;
             var hover = r.Contains(mouse);
             _ui.Fill(b, r, on ? Gold : hover ? new Color(0x2C, 0x25, 0x44) : new Color(0x1A, 0x14, 0x28));
-            _ui.TextCenterBig(b, $"x{(int)SpeedSteps[i]}", r.Center.X, r.Y + 8, on ? Shadow : Bone, 16);
+            // Vertical centring: the old "r.Y + 8" was tuned for a 34px-tall button and sits too high
+            // in a 44px one. Glyph box is ~1.35x the point size.
+            _ui.TextCenterBig(b, $"x{(int)SpeedSteps[i]}", r.Center.X, r.Y + (r.Height - 16 * 27 / 20) / 2,
+                on ? Shadow : Bone, 16);
             if (clicked && hover) _speedMul = SpeedSteps[i];
         }
 
-        _ui.TextBig(b, "AUTO HUNT", 42, 872, Slate, 15);
-        _ui.Fill(b, new Rectangle(150, 868, 106, 30), new Color(0x1A, 0x30, 0x22));
-        _ui.Fill(b, new Rectangle(150, 868, 106, 3), Verdant * 0.7f);
-        _ui.TextCenterBig(b, "ON", 203, 873, Verdant, 16);
+        _ui.TextBig(b, "AUTO HUNT", RailContentX, 508, Slate, 15);
+        var auto = new Rectangle(RailContentX, 532, RailContentW, 36);
+        _ui.Fill(b, auto, new Color(0x1A, 0x30, 0x22));
+        _ui.Fill(b, new Rectangle(auto.X, auto.Y, auto.Width, 3), Verdant * 0.7f);
+        _ui.TextCenterBig(b, "ON", auto.Center.X, auto.Y + (auto.Height - 16 * 27 / 20) / 2, Verdant, 16);
     }
+
+    /// <summary>
+    /// Where each gear slot hangs on the champion, and how big it draws.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Positions are fractions of the champion box: (cx, cy) is the item's centre, <c>h</c> its drawn
+    /// height as a fraction of box height. Tuned against the hunter sprite's content bounds
+    /// (x 146..351, y 70..457 of its 512² canvas).
+    /// </para>
+    /// <para>
+    /// WITHDRAWN — kept only as the record of a dead end. Fixed fractions of the champion box cannot
+    /// track an articulated figure: in play the weapon floated diagonally across the torso, the boots
+    /// glowed on the shins rather than the feet, and the glove sat on the hip. A socket is a constant,
+    /// but a hand is not — it moves every frame of every animation, so any constant is wrong for all
+    /// but one pose.
+    /// </para>
+    /// <para>
+    /// The replacement is to bind equipment to BONES, not to the box. <see cref="HunterRig"/> already
+    /// defines the hierarchy (pelvis - torso - head, arms, legs) with a parent-local offset and a pivot
+    /// per part, and <c>Rig.Evaluate</c> returns a position and angle per bone. Gear drawn at a bone's
+    /// transform inherits that bone's motion for free, which is what makes it stay on the hand while
+    /// the arm swings. That also gives the swappable-part model directly: a helm is a part bound to
+    /// <c>head</c>, boots bind to <c>foot_main</c>/<c>foot_off</c>, a weapon to <c>hand_main</c>.
+    /// </para>
+    /// </remarks>
+    private readonly record struct GearSocket(float Cx, float Cy, float H);
+
+    /// <remarks>
+    /// Only the five body-worn slots appear on the figure. Ring, Charm and Focus are deliberately
+    /// absent: drawn at a socket they read as objects hovering beside the character rather than
+    /// equipment, and most RPGs likewise show armour and weapon on the model while trinkets live in
+    /// the sheet. They still contribute stats and still show in the Gear screen.
+    /// </remarks>
+    private static readonly Dictionary<GearSlot, GearSocket> Sockets = new()
+    {
+        [GearSlot.Chest] = new(0.50f, 0.47f, 0.25f),
+        [GearSlot.Boots] = new(0.50f, 0.90f, 0.19f),
+        [GearSlot.Gloves] = new(0.66f, 0.62f, 0.12f),
+        [GearSlot.Helm] = new(0.50f, 0.25f, 0.18f),
+        [GearSlot.Weapon] = new(0.33f, 0.60f, 0.40f),
+    };
+
+    /// <summary>
+    /// Draw the player's equipped gear onto the champion, back to front.
+    /// </summary>
+    /// <remarks>
+    /// Prefers the trait-specific sprite (<c>item_&lt;slot&gt;_&lt;trait&gt;</c>) so the character visibly reflects
+    /// WHICH item is equipped, and falls back to the generic slot glyph. An empty slot draws nothing;
+    /// a slot whose art is missing draws nothing rather than borrowing another slot's sprite.
+    /// </remarks>
+    private void DrawEquippedGear(SpriteBatch b, Rectangle box, Hunter? hunter, Color tint)
+    {
+        if (hunter is null) return;
+        foreach (var slot in OverlayOrder)
+        {
+            if (hunter.Worn(slot) is not { } item || !Sockets.TryGetValue(slot, out var s)) continue;
+
+            var name = slot.ToString().ToLowerInvariant();
+            var trait = GearTraits.TraitOf(item);
+            var tex = (trait is { } tr ? _ui.Assets.Get($"item_{name}_{tr.ToString().ToLowerInvariant()}") : null)
+                      ?? _ui.Assets.Get($"item_slot_{name}");
+            if (tex is null || tex.Height <= 0) continue;
+
+            var h = Math.Max(1, (int)(box.Height * s.H));
+            var w = Math.Max(1, (int)(tex.Width * (h / (float)tex.Height)));
+            b.Draw(tex, new Rectangle((int)(box.X + box.Width * s.Cx) - w / 2,
+                                      (int)(box.Y + box.Height * s.Cy) - h / 2, w, h), tint);
+        }
+    }
+
+    /// <summary>
+    /// The vertical control rail down the left edge, replacing the old horizontal bottom strip.
+    /// </summary>
+    /// <remarks>
+    /// Bounded above by the hunter HUD panel (bottom 225) and below by the host nav rail (top 934),
+    /// so it occupies the full clear height between them. Moving the controls here is what frees the
+    /// stage to shift right.
+    /// </remarks>
+    // Sits just right of the vertical nav rail (width 180).
+    // Below the hunter HUD (bottom 225) and right of the nav rail (width 180).
+    private static readonly Rectangle ControlRail = new(190, 236, 286, 700);
+    // Inset by the ornate frame's border (UiKit.Panel reserves 44px), not by the 20px a flat slab needed.
+    private const int RailContentX = 234;
+    private const int RailContentW = 198;
 
     // The gear overlays register to the champion base's canvas; this is their back-to-front occlusion order.
     private static readonly GearSlot[] OverlayOrder =
@@ -844,17 +975,55 @@ public sealed class SoloExpeditionScreen
         GearSlot.Weapon, GearSlot.Ring, GearSlot.Charm, GearSlot.Focus,
     };
 
+    private HunterRigRenderer? _rigRenderer;
+    private float _strikeTime;
+    private readonly Clip _idleClip = Clip.Idle();
+    private readonly Clip _strikeClip = Clip.AttackerStrike();
+
+    /// <summary>
+    /// Draw the champion as the assembled rig, posed by the idle or strike clip.
+    /// </summary>
+    /// <remarks>
+    /// The strike clip is not looped — it is sampled by how far into the lunge we are, so the swing
+    /// stays in step with the combat beat that drives <c>_champLunge</c> rather than running on its
+    /// own clock.
+    /// </remarks>
+    private bool DrawRiggedChampion(SpriteBatch b, Rectangle box, bool attacking, bool dead, Color tint)
+    {
+        _rigRenderer ??= new HunterRigRenderer(_ui);
+        if (dead)
+            return _rigRenderer.Draw(b, box, HunterRigRenderer.DeathPose, _hunter, tint);
+        var swinging = _strikeTime > 0f;
+        var sampled = swinging
+            ? _strikeClip.Sample(_strikeClip.DurationSeconds - _strikeTime)
+            : _idleClip.Sample(_anim % _idleClip.DurationSeconds);
+        return _rigRenderer.Draw(b, box, HunterRigRenderer.MapPose(sampled), _hunter, tint);
+    }
+
     private void DrawChampion(SpriteBatch b, Rectangle box, bool dead)
     {
-        _ui.Fill(b, new Rectangle(box.X + 60, box.Bottom - 14, box.Width - 120, 14), GroundShade);
+        // Soft contact shadow, not a hard bar: the flat rectangle that shipped here read as a painted
+        // slab under the feet rather than as the figure touching the floor.
+        _ui.GroundShadow(b, box.Center.X, box.Bottom - 10, (int)(box.Width * 0.62f), 46, 0.6f);
         var attacking = _champLunge > 0.3f;
         var tint = dead ? new Color(0x3A, 0x3A, 0x44) : Color.White;
+
+        // Preferred path: the assembled cutout rig, so equipped gear rides the bones and follows the
+        // animation. Falls back to the flat pose sprite when the rig art is unavailable, which keeps
+        // the screen working while rig parts are still being authored.
+        if (DrawRiggedChampion(b, box, attacking, dead, tint)) return;
 
         // FULL-BODY static poses (package_02). The package_02A "animation" strips are head-and-torso busts,
         // so they're wrong for the arena figure — only a full body reads here. Pose swaps on lunge/death.
         var key = dead ? "hunter_defeated" : attacking ? "hunter_attack_01" : "hunter_idle";
-        if (!_ui.Sprite(b, key, box, tint, 0.03f) && !_ui.Sprite(b, "hunter_idle", box, tint, 0.03f))
+        // SpriteGrounded, not Sprite: the poses carry different amounts of empty canvas under the feet
+        // (hunter_idle 54 rows, hunter_attack_01 26), so plain Sprite both floated the figure and made it
+        // bob vertically on every pose swap. Anchoring by the opaque sole fixes both.
+        if (!_ui.SpriteGrounded(b, key, box, tint, 0.03f) && !_ui.SpriteGrounded(b, "hunter_idle", box, tint, 0.03f))
             _ui.Fill(b, new Rectangle(box.Center.X - 32, box.Bottom - 80, 64, 72), dead ? Dim : Gold);
+
+        // Gear is deliberately NOT drawn here yet — see DrawEquippedGear for why the socket approach
+        // was withdrawn. Visible equipment now depends on the bone-bound rig path.
     }
 
     /// <summary>

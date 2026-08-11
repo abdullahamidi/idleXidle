@@ -1,0 +1,577 @@
+#!/usr/bin/env python3
+"""Emit the complete asset spec from the game's runtime contract.
+
+This does NOT mirror the legacy library. It enumerates every key the code can
+actually ask for — including the ones built by string interpolation — and
+designs one asset per key. Anything the legacy tree held that nothing asks for
+(loose animation frames, `_1024` duplicates, mask/medallion triplicates,
+placement guides) is simply not in the output.
+
+Sources of truth, all verified against the code:
+  Source     6  Creature.cs        Body Mind Nature Machine Shadow Spirit
+  Role       5  Creature.cs        Attacker Defender Support Crafter Producer
+  GearSlot   8  Gear.cs            Weapon Charm Focus Helm Chest Gloves Boots Ring
+  GearTrait 10  GearTraits.cs      Keen Heavy Swift Savage Warding Vital Greedy Attuned Focused Wild
+  enemies    6  SoloExpeditionScreen.EnemyForSource
+  bosses     6  SoloExpeditionScreen.BossForRegion
+  bar types  5  UiKit.BarArt        health mana progress boss xp
+
+Run:  python3 tools/asset-pipeline/build_spec.py
+Writes manifest.json (stills) and animations.json (strips).
+"""
+
+from __future__ import annotations
+
+import json
+import os
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+SOURCES = ["body", "mind", "nature", "machine", "shadow", "spirit"]
+ROLES = ["attacker", "defender", "support", "crafter", "producer"]
+SLOTS = ["weapon", "charm", "focus", "helm", "chest", "gloves", "boots", "ring"]
+TRAITS = ["keen", "heavy", "swift", "savage", "warding", "vital", "greedy", "attuned", "focused", "wild"]
+BAR_TYPES = ["health", "mana", "progress", "boss", "xp"]
+
+# Source identity: colour + the edge quality the art bible mandates (§4.2).
+SOURCE_ART = {
+    "body":    ("blood crimson red", "convex smooth symmetric arcs, bulging musculature"),
+    "mind":    ("crystal cyan",      "hard faceted symmetric cuts, mirrored halves"),
+    "nature":  ("moss green",        "branching asymmetric outgrowths, thorns and forks"),
+    "machine": ("rust iron orange",  "orthogonal rigid bolted plates, modular segments"),
+    "shadow":  ("deep indigo violet", "torn discontinuous silhouette, jagged bite-notches"),
+    "spirit":  ("pale lavender white", "soft dissolving contours tapering into wisps"),
+}
+
+# One enemy per Source (SoloExpeditionScreen.EnemyForSource). The attack clip is
+# "slam" for stone_sentinel and "attack" for everyone else.
+ENEMIES = {
+    "bonecrawler":    ("body",    "a skittering crimson bone crawler with many clawed legs", "attack"),
+    "soul_leech":     ("mind",    "a hovering cyan robed leech-wraith with a hollow hood",    "attack"),
+    "wisp":           ("nature",  "a floating green spirit wisp with trailing tendrils",      "attack"),
+    "stone_sentinel": ("machine", "a hulking rust-iron stone sentinel golem",                 "slam"),
+    "shadeling":      ("shadow",  "a lean indigo shadow imp with tattered edges",             "attack"),
+    "rift_guardian":  ("spirit",  "a tall pale armoured rift guardian wreathed in wisps",     "attack"),
+}
+
+# One boss per region (SoloExpeditionScreen.BossForRegion).
+BOSSES = {
+    "thorn_regent":   ("nature",  "a towering antlered thorn regent crowned in brambles"),
+    "forge_colossus": ("machine", "a massive rust-iron forge colossus with molten seams"),
+    "void_reaper":    ("shadow",  "a shrouded void reaper with a great curved scythe"),
+    "crystal_lich":   ("mind",    "a floating crystal lich wreathed in faceted cyan shards"),
+    "lumen_angel":    ("spirit",  "a radiant many-winged lumen angel of pale light"),
+    "spirit_matron":  ("body",    "a gaunt crimson spirit matron trailing bone and sinew"),
+}
+
+TRAIT_LOOK = {
+    # MATERIAL, not effect. These double as the character overlay, where a piece is
+    # only ~50 px tall — anything described as glowing, floating or surrounding the
+    # object becomes pure haze at that size (an "attuned" boot read as a purple
+    # blob). Describing the metal instead survives the downscale and still tells
+    # the traits apart at a glance.
+    "keen":    "polished razor-edged bright steel",
+    "heavy":   "thick blunt blackened iron",
+    "swift":   "slender lightweight pale steel",
+    "savage":  "jagged barbed battle-scarred iron",
+    "warding": "rune-etched blue-steel",
+    "vital":   "warm red-bronze with crimson inlay",
+    "greedy":  "gilded gold with fine ornament",
+    "attuned": "deep violet arcane metal",
+    "focused": "dark steel with a single bright inset gem",
+    "wild":    "mossy bronze with green vine engraving",
+}
+
+SLOT_OBJECT = {
+    "weapon": "a sword blade", "charm": "a hanging amulet", "focus": "a round floating crystal orb",
+    "helm": "a knight helm", "chest": "a breastplate", "gloves": "a gauntlet",
+    "boots": "an armoured boot", "ring": "a jewelled ring",
+}
+
+RARITY_RING = {
+    "common": "a plain dark border, no ring",
+    "uncommon": "a single thin gold ring",
+    "rare": "a double concentric gold ring",
+    "epic": "a double gold ring with four corner flourishes",
+    "legendary": "a full ward-seal of concentric rings with radiating flourishes",
+}
+
+STILL_STYLES = {
+    "medallion": "Ornate gold heraldic medallion badge icon, dark near-black center, {subject}, "
+                 "baroque filigree rim, warm gold #F0A830 metal on void black #1B1620, "
+                 "dark fantasy RPG inventory icon, flat bold shapes, centered, symmetrical, no text",
+    "creature":  "A single small fantasy creature, front facing, full body, {subject}. "
+                 "Dark fantasy RPG creature icon, bold readable silhouette, flat bold shapes, "
+                 "centered, plain background, no text, no border, no frame",
+    "item":      "{subject}. Dark fantasy RPG item icon, single object, three-quarter view, "
+                 "bold readable silhouette, flat bold shapes, centered, plain background, "
+                 "no text, no border, no frame",
+    "chrome":    "{subject}. Dark fantasy RPG user-interface element, ornate gold trim on "
+                 "near-black #1B1620, flat, clean edges, plain background, no text",
+    # A bar FILL is not chrome. The chrome style literally asks for "ornate gold trim", so every
+    # ui_bar_*_fill came back as another empty ornate frame — which is why the boss bar rendered with
+    # no visible fill at all, and why the xp bar had filigree floating in the middle of its liquid.
+    # A fill is clipped horizontally and drawn inside the frame's window, so it must be full-bleed
+    # colour with no edge features of any kind.
+    "barfill":   "A plain solid slab of {subject} filling the ENTIRE image edge to edge, a flat "
+                 "colour field with a subtle vertical gradient and faint grain. NO frame, NO border, "
+                 "NO trim, NO gold, NO ornament, NO filigree, NO corners, NO panel, NO window, "
+                 "NO text, NO icons, NO objects — nothing but the colour itself, full bleed",
+    "background": "{subject}. Dark fantasy pixel-art game background, VERY DARK and desaturated, "
+                  "low contrast, dim ambient atmosphere only, deep near-black, muted colours, "
+                  "wide establishing shot, no characters, no text, no UI elements, no borders",
+    # Arenas are a STAGE, not a vista. The first pass generated free-form
+    # establishing shots whose horizon landed anywhere from 63% to 97% of the
+    # height, so no single GroundY could plant characters on the floor and they
+    # read as fighting in mid-air. These prompts pin the ground plane instead.
+    "arena": "{subject}. Side-on 2D fighting-stage background. COMPOSITION IS CRITICAL: "
+             "a wide FLAT EMPTY GROUND PLANE fills the entire bottom third of the image, "
+             "unobstructed and clear from left edge to right edge, with a clean horizon line "
+             "about two thirds of the way down. All scenery, walls and canopy stay in the upper "
+             "two thirds. The lower third is bare walkable floor with NOTHING standing on it. "
+             "Dark fantasy pixel art, VERY DARK and desaturated, low contrast, dim ambient only, "
+             "deep near-black, muted, no characters, no creatures, no text, no UI, no borders",
+    # Purpose-drawn RIG PARTS. Cutting a joint cover out of the body sprite gives you
+    # pixels lit for the resting pose, so the moment the limb rotates the cover reads
+    # as a patch. A drawn piece is lit for itself and reads as armour at any angle —
+    # generate the right asset instead of masking the wrong one.
+    "rigpart": "ONLY {subject}, and nothing else. A single isolated piece, front view, "
+               "cut out on an empty background. NO character, NO body, NO head, NO arms, "
+               "NO background, NO frame, no text, NO glow, NO aura — a solid opaque object. "
+               "Dark fantasy RPG pixel art, bone-parchment cloth and cold-slate leather, "
+               "bold readable silhouette, flat bold shapes, centered",
+
+    # Worn rig gear. Fundamentally different from an item ICON: an icon is drawn on
+    # the diagonal to fill a square inventory cell, which reads as a sword worn like
+    # a sash once it is pinned to a hand bone. Rig gear must be FRONT-ON in its worn
+    # orientation, isolated, and shaped to the body part it covers.
+    "geararmor": "ONLY {subject}, and nothing else. Front view, straight on, exactly as it is worn. "
+                 "A single isolated piece of equipment lying flat, cut out on an empty background. "
+                 "NO character, NO body, NO mannequin, NO hands, NO head, NO other equipment, "
+                 "NO background, NO frame, NO border, no text. NO glow, NO aura, NO particles, "
+                 "NO floating effects — a solid opaque object. Dark fantasy RPG pixel art, "
+                 "bold readable silhouette, flat bold shapes, centered",
+    # A weapon is authored VERTICAL, hilt at the bottom, blade pointing straight up.
+    # Then the hand bone's own angle is the only rotation needed.
+    "gearweapon": "ONLY {subject}, and nothing else. Held UPRIGHT and VERTICAL, hilt at the bottom, "
+                  "blade pointing straight up, perfectly vertical. A single isolated weapon cut out "
+                  "on an empty background. NO character, NO hands, NO background, NO frame, no text. "
+                  "NO glow, NO aura, NO particles — a solid opaque weapon. Dark fantasy RPG pixel art, "
+                  "bold readable silhouette, flat bold shapes, centered",
+
+    # The rig style must say "ONLY" and name the exclusions explicitly. Without
+    # that the model drew a whole hooded figure for every part, which is useless
+    # for a cutout rig that composes parts itself.
+    "rig":       "ONLY {subject} and nothing else. A single detached body part lying alone, "
+                 "cut out for a 2D puppet rig. NO full character, NO whole body, NO head unless "
+                 "asked, NO other limbs. Dark fantasy hunter garb in bone-parchment cloth and "
+                 "cold-slate leather. Flat bold shapes, one isolated object centered on a plain "
+                 "empty background, no text, no border, no frame",
+}
+
+ANIM_STYLE_VFX = ("{subject}, pixel-art VFX sprite, bright saturated energy, bold readable shape, "
+                  "centered, plain background, no text, no character, no border")
+
+
+def stills() -> list[dict]:
+    a: list[dict] = []
+
+    def add(key, dest, style, subject, **kw):
+        a.append({"key": key, "dest": dest, "style": style, "subject": subject, **kw})
+
+    # --- Source medallions: source_<element> (MapScreen/CharacterScreen/BuildScreen/ForgeScreen)
+    for s in SOURCES:
+        col, edge = SOURCE_ART[s]
+        add(f"source_{s}", "assets/art/UI/icons/sources", "medallion",
+            f"a {col} elemental gem with {edge}")
+
+    # --- Role badges: icon_role_<role> (AutomationScreen)
+    role_motif = {"attacker": "two large crossed golden swords filling the whole center", "defender": "a stout golden tower shield",
+                  "support": "a golden chalice radiating light", "crafter": "a golden hammer resting on an anvil",
+                  "producer": "a tall stack of golden coins"}
+    for r in ROLES:
+        add(f"icon_role_{r}", "assets/art/UI/icons/roles", "medallion", role_motif[r])
+
+    # --- Region crests: icon_region_<id> (MapScreen)
+    region_motif = {
+        "verdant": ("nature", "a thorned branching antler-leaf"),
+        "cinderworks": ("machine", "one large rust-orange cogwheel gear"),
+        "umbral": ("shadow", "one jagged torn crescent moon"),
+        "marrow_wastes": ("body", "one pale bone skull"),
+        "still_archive": ("mind", "one large faceted cyan crystal shard"),
+        "pale_choir": ("spirit", "one glowing pale lavender halo ring"),
+    }
+    for rid, (src, motif) in region_motif.items():
+        col, _ = SOURCE_ART[src]
+        add(f"icon_region_{rid}", "assets/art/UI/icons/regions", "medallion",
+            f"{motif} in {col} filling the center")
+
+    # --- Warren roster: crea_<source>_<role>_<name> (AutomationScreen)
+    warren = {
+        "nature":  [("atk","whelp"),("sup","mossling"),("def","bramble"),("prd","sporeling"),("crf","sapwright")],
+        "machine": [("atk","warden"),("sup","drone"),("def","bulwark"),("crf","cogwright"),("prd","boiler")],
+        "shadow":  [("atk","stalker"),("sup","wisp"),("def","bulwark"),("crf","weaver"),("prd","spore")],
+        "body":    [("atk","sinew"),("def","bonewall"),("sup","pulsekin"),("crf","marrow"),("prd","brood")],
+        "mind":    [("atk","lance"),("def","aegis"),("sup","chorus"),("crf","schema"),("prd","bloom")],
+        "spirit":  [("atk","echofang"),("def","vigil"),("sup","solace"),("crf","rite"),("prd","emberfont")],
+    }
+    mass = {"atk": "lean forward-leaning predatory body, bladed claws, top-heavy mass",
+            "def": "broad squat armoured body, heavy wide base, shielded carapace",
+            "sup": "slender upright body, glowing emissive core, raised thin limbs",
+            "crf": "hunched compact body with many fine working limbs and tool-claws",
+            "prd": "rounded bulbous nurturing body, swollen abdomen, short legs"}
+    for s, entries in warren.items():
+        col, edge = SOURCE_ART[s]
+        for rk, name in entries:
+            add(f"crea_{s}_{rk}_{name}", "assets/art/UI/icons/creatures", "creature",
+                f"a creature called the {name}, {col} colouring, {edge}, {mass[rk]}")
+
+    # --- Trait item icons: item_<slot>_<trait> (ForgeScreen.TraitGlyph) — 8 x 10
+    for slot in SLOTS:
+        for tr in TRAITS:
+            add(f"item_{slot}_{tr}", f"assets/art/ItemsLoot/traits/{slot}", "item",
+                f"{SLOT_OBJECT[slot]} with {TRAIT_LOOK[tr]}")
+
+    # --- Generic slot glyphs (alias targets for item_glyph_<slot>)
+    for slot in SLOTS:
+        add(f"item_slot_{slot}", "assets/art/UI/icons/slots", "medallion",
+            f"{SLOT_OBJECT[slot]} in plain silver-grey metal, neutral mid-value for engine tinting")
+
+    # --- Rarity frames: ui_frame_rarity_<tier> (alias target for item_frame_<tier>)
+    for tier, ring in RARITY_RING.items():
+        add(f"ui_frame_rarity_{tier}", "assets/art/UI/slots", "chrome",
+            f"an empty square item slot frame with {ring}, hollow transparent center")
+
+    # --- Bars: ui_bar_<type>_frame / _fill (UiKit.BarArt)
+    bar_col = {"health": "glowing crimson red", "mana": "glowing deep blue", "progress": "glowing warm gold",
+               "boss": "glowing molten orange-red", "xp": "glowing violet"}
+    NEG_FILL = ("frame, border, trim, ornament, filigree, gold leaf, corners, panel, window, "
+                "bar frame, text, icon, object, character")
+    for t in BAR_TYPES:
+        add(f"ui_bar_{t}_frame", "assets/art/UI/bars", "chrome",
+            "an ornate horizontal bar frame with a hollow dark window and gold trim",
+            width=256, height=64)
+        add(f"ui_bar_{t}_fill", "assets/art/UI/bars", "barfill",
+            bar_col[t], width=256, height=64, knockout=False, no_background=False,
+            negative_description=NEG_FILL)
+    # Legacy generic pair still referenced by UiKit.Bar
+    add("ui_bar_frame", "assets/art/UI/bars", "chrome",
+        "an ornate horizontal bar frame with a hollow dark window and gold trim", width=256, height=64)
+    add("ui_bar_fill", "assets/art/UI/bars", "barfill",
+        "glowing pale bone white", width=256, height=64, knockout=False, no_background=False,
+        negative_description=NEG_FILL)
+
+    # --- Currencies / materials / affixes
+    for key, subj in [
+        ("currency_gleam", "a glowing gold coin marked with a rune"),
+        ("currency_memory_dust", "a pinch of luminous violet dust motes"),
+        ("currency_resonance_shard", "a humming pale blue crystal shard"),
+        ("mat_scrap", "a bundle of rusted scrap metal offcuts"),
+        ("mat_essence", "a small vial of glowing green essence"),
+        ("mat_core", "a dense glowing machine core"),
+        ("mat_crystal", "a cluster of clear faceted crystals"),
+    ]:
+        add(key, "assets/art/ItemsLoot/materials", "item", subj)
+    for key, subj in [
+        ("affix_critical", "a red starburst crit sigil"), ("affix_defense", "a blue shield sigil"),
+        ("affix_healing", "a green cross-leaf sigil"), ("affix_health", "a crimson heart sigil"),
+        ("affix_power", "a gold fist sigil"), ("affix_resonance", "a violet tuning-fork sigil"),
+        ("affix_timer", "a pale hourglass sigil"),
+    ]:
+        add(key, "assets/art/ItemsLoot/affixes", "medallion", subj)
+
+    # --- Status / equipment / class icons
+    for key, subj in [
+        ("icon_status_health", "a crimson heart"), ("icon_status_power", "a gold clenched fist"),
+        ("icon_status_defense", "a steel shield"), ("icon_status_critical", "a red starburst"),
+        ("icon_status_healing", "a green leaf cross"), ("icon_status_resonance", "a violet tuning fork"),
+        ("icon_status_timer", "a pale hourglass"), ("icon_class_hunter", "a hooded hunter head in profile"),
+    ]:
+        add(key, "assets/art/UI/icons/status", "medallion", subj)
+    for key, subj in [
+        ("icon_equipment_blade", "a sword blade"), ("icon_equipment_bow", "a longbow"),
+        ("icon_equipment_spear", "a spear"), ("icon_equipment_scythe", "a scythe"),
+        ("icon_equipment_helmet", "a knight helm"), ("icon_equipment_chest", "a breastplate"),
+        ("icon_equipment_gloves", "a gauntlet"), ("icon_equipment_boots", "an armoured boot"),
+        ("icon_equipment_accessory", "a jewelled amulet"),
+    ]:
+        add(key, "assets/art/UI/icons/equipment", "medallion", subj)
+
+    # --- Navigation glyphs
+    for key, subj in [
+        ("nav_hunt", "crossed swords"), ("nav_forge", "a blacksmith hammer resting on an anvil, no cross"),
+        ("nav_map", "a folded map"), ("nav_warren", "a burrow arch"),
+        ("nav_build", "a branching skill tree"), ("nav_gear", "a breastplate"),
+        ("nav_codex", "an open book"), ("nav_evolve", "a spiral of ascending motes"),
+        ("nav_shop", "a coin pouch"), ("nav_mail", "a sealed envelope"),
+        ("nav_stats", "a bar chart"), ("nav_prestige", "a many-pointed star"),
+    ]:
+        add(key, "assets/art/UI/icons/nav", "medallion", subj)
+
+    # --- UI chrome
+    for key, subj, w, h in [
+        ("ui_panel_small", "an ornate rectangular panel with gold trim and a dark inset field", 256, 256),
+        ("ui_panel_large", "a large ornate rectangular panel with gold trim and a dark inset field", 384, 256),
+        ("ui_button_primary", "a raised rectangular button with gold trim", 256, 96),
+        ("ui_button_secondary", "a flat rectangular button with thin gold trim", 256, 96),
+        ("ui_button_confirm", "a raised green-tinted confirm button with gold trim", 256, 96),
+        ("ui_button_danger", "a raised red-tinted danger button with gold trim", 256, 96),
+        ("ui_button_disabled", "a flat grey inactive button", 256, 96),
+        ("ui_tab_active", "a solid filled raised tab plate with a bright gold underline bar", 256, 96),
+        ("ui_tab_inactive", "a dim recessed inactive tab", 256, 96),
+        ("ui_slot_empty", "an empty square inventory slot with a dark recessed field", 128, 128),
+        ("ui_slot_locked", "a square inventory slot with a padlock over a dark field", 128, 128),
+        ("ui_medallion_round", "a plain round gold medallion frame with a hollow center", 128, 128),
+        ("ui_medallion_hex", "a plain hexagonal gold medallion frame with a hollow center", 128, 128),
+        ("ui_divider_long", "a long thin ornate horizontal divider rule", 256, 32),
+        ("ui_divider_short", "a short ornate horizontal divider rule", 128, 32),
+        ("ui_scrollbar_track", "a narrow vertical scrollbar track groove", 32, 256),
+        ("ui_scrollbar_handle", "a narrow vertical scrollbar handle with gold trim", 32, 128),
+        ("ui_keycap_square_blank", "a blank square keyboard keycap", 64, 64),
+        ("ui_keycap_space_blank", "a blank wide spacebar keycap", 192, 64),
+        ("ui_corner_top_left", "an ornate gold corner bracket, top-left", 64, 64),
+        ("ui_corner_top_right", "an ornate gold corner bracket, top-right", 64, 64),
+        ("ui_corner_bottom_left", "an ornate gold corner bracket, bottom-left", 64, 64),
+        ("ui_corner_bottom_right", "an ornate gold corner bracket, bottom-right", 64, 64),
+        ("ui_button_icon_close", "a small square button with an X glyph", 64, 64),
+        ("ui_button_icon_back", "a small square button with a left arrow glyph", 64, 64),
+        ("ui_button_icon_square", "a small blank square icon button", 64, 64),
+    ]:
+        add(key, "assets/art/UI/chrome", "chrome", subj, width=w, height=h)
+
+    # --- Hunter cutout rig parts (HunterRig). Authored separately, assembled at runtime.
+    for key, subj in [
+        ("hunter_part_head", "a hooded hunter head facing forward"),
+        ("hunter_part_torso", "a hunter torso in a dark leather jerkin"),
+        ("hunter_part_pelvis", "a hunter pelvis and belt"),
+        ("hunter_part_cloak", "a hanging tattered cloak"),
+        ("hunter_part_arm_upper_main", "an upper arm in leather, right side"),
+        ("hunter_part_arm_fore_main", "a forearm in leather, right side"),
+        ("hunter_part_hand_main", "a gloved hand, right side"),
+        ("hunter_part_arm_upper_off", "an upper arm in leather, left side"),
+        ("hunter_part_arm_fore_off", "a forearm in leather, left side"),
+        ("hunter_part_hand_off", "a gloved hand, left side"),
+        ("hunter_part_leg_thigh_main", "a thigh in leather trousers, right side"),
+        ("hunter_part_leg_shin_main", "a shin in leather trousers, right side"),
+        ("hunter_part_foot_main", "a leather boot, right side"),
+        ("hunter_part_leg_thigh_off", "a thigh in leather trousers, left side"),
+        ("hunter_part_leg_shin_off", "a shin in leather trousers, left side"),
+        ("hunter_part_foot_off", "a leather boot, left side"),
+    ]:
+        add(key, "assets/art/rig", "rig", subj, width=128, height=128)
+
+    # --- Arena backgrounds: bg_arena_<theme> (Game1). 640x360 x3 = 1920x1080.
+    arena = {
+        "nature": "a mossy earth clearing floor, with vast twisted green trees and hanging moss behind it",
+        "machine": "a flat riveted iron foundry floor, with cold furnaces and broken gantries behind it",
+        "shadow": "a flat cracked black stone floor, with a torn void and dead sky behind it",
+        "body": "a flat red bone-strewn moor floor, with a low blood moon and marsh behind it",
+        "mind": "a flat polished crystal cavern floor, with vast faceted cyan formations behind it",
+        "spirit": "a flat pale marble sanctum floor, with broken columns and drifting light behind it",
+    }
+    for s, subj in arena.items():
+        add(f"bg_arena_{s}", "assets/art/Environments/arenas", "arena", subj,
+            model="pixen", width=640, height=360, upscale=3, knockout=False, detail="highly detailed")
+
+    # --- Screen backgrounds
+    for key, subj in [
+        ("bg_title", "a vast ruined cathedral of pale bone and tarnished gold, arches receding into blackness"),
+        ("bg_forge", "a dark underground smithy, banked forge coals glowing dim orange, heavy anvils in shadow"),
+        ("bg_warren", "a dark underground burrow complex of low nesting chambers lit by dim lanterns"),
+        ("bg_regionmap", "a dark cartographer's chamber, weathered charts and brass instruments, dim candlelight"),
+        ("bg_constellation", "a deep night sky of dim violet stars with faint constellation lines"),
+    ]:
+        add(key, "assets/art/Environments/screens", "background", subj,
+            model="pixen", width=640, height=360, upscale=3, knockout=False, detail="highly detailed")
+
+    # --- Worn rig gear: gear_<slot>_<trait>, bound to bones by HunterRigRenderer.
+    #     Resolution order there is gear_<slot>_<trait> -> gear_<slot> -> item_<slot>_<trait>,
+    #     so these take precedence over the inventory icons that were standing in.
+    GEAR_WORN = {
+        "helm":   ("geararmor", "a knight's helmet, visor forward", 192, 192),
+        "chest":  ("geararmor", "a chest breastplate cuirass", 224, 224),
+        "gloves": ("geararmor", "a single left-hand armoured gauntlet", 128, 128),
+        "boots":  ("geararmor", "a single armoured boot, side profile", 128, 128),
+        "weapon": ("gearweapon", "a straight double-edged sword", 128, 320),
+    }
+    for slot, (style, base, gw, gh) in GEAR_WORN.items():
+        for tr in TRAITS:
+            add(f"gear_{slot}_{tr}", f"assets/art/rig/gear/{slot}", style,
+                f"{base} with {TRAIT_LOOK[tr]}", width=gw, height=gh)
+
+    # --- Drawn rig joint pieces. These REPLACE cut-from-sprite shoulder caps.
+    #
+    # ONE piece, mirrored for the other shoulder. The first pass generated the two sides
+    # independently and got two different materials — a tan leather cop on one shoulder and a
+    # grey steel one on the other. Symmetric armour has to come from a single authored piece.
+    #
+    # It also has to be told what a pauldron IS. Asked for "a shoulder pauldron", the model drew
+    # a full cuirass WITH pauldrons attached both times; scaled down to the 52px a shoulder
+    # occupies, that reads as a lump of torso stuck to the arm. Naming the shape (a single curved
+    # plate, a fan of lames) and listing the body as a negative is what gets one piece back.
+    # NOTE the wording: it never says "pauldron" or "shoulder". Every prompt that did — including one
+    # that spelled out "a single curved shoulder plate on its own" with the torso in the negatives —
+    # came back a full cuirass, because those words are learned attached to a body. Describing the
+    # SHAPE instead ("scallop-shaped plate, three overlapping riveted bands fanning outward") returns
+    # the piece alone. Same lesson as the trait looks: name the object, not its context.
+    #
+    # This entry bypasses the shared "rigpart" prefix — the prefix's own "NO character, NO body" list
+    # reintroduces the very nouns that summon the body.
+    a.append({
+        "key": "hunter_pauldron_main", "dest": "assets/art/rig", "width": 128, "height": 128,
+        "prompt": "A scallop-shaped curved armour plate lying alone, three overlapping riveted "
+                  "leather bands fanning outward, front view, a single small object on an empty "
+                  "background, dark fantasy RPG pixel art, flat bold shapes, no text, no border",
+        "text_guidance_scale": 9.0,
+        "negative_description": "breastplate, cuirass, chestplate, torso, body, chest, ribs, "
+                                "abdomen, belt, waist, character, person, mannequin, armour set, "
+                                "sleeves, arms, neck, collar, pair, two",
+    })
+
+    # --- Loot chest
+    add("chest_loot", "assets/art/ItemsLoot/chests", "item", "a closed ornate treasure chest with gold bands")
+
+    # --- Keys referenced by the code that predate this spec. Kept so nothing is
+    #     left rendering old painted art next to the new set.
+    for key, subj, w, h in [
+        ("ui_panel_medium", "an ornate rectangular panel with gold trim and a dark inset field", 256, 192),
+        ("ui_panel_square", "an ornate square panel with gold trim and a dark inset field", 256, 256),
+        ("ui_panel_vertical", "a tall ornate panel with gold trim and a dark inset field", 192, 256),
+        ("ui_panel_modal_wide", "a wide ornate modal panel with gold trim and a dark inset field", 384, 224),
+        ("ui_slot_skill_hex", "an empty hexagonal skill slot with a dark recessed field and gold rim", 128, 128),
+        ("ui_slot_trinket_round", "an empty round trinket slot with a dark recessed field and gold rim", 128, 128),
+    ]:
+        add(key, "assets/art/UI/chrome", "chrome", subj, width=w, height=h)
+
+    for key, subj in [
+        ("nav_hunt_128", "crossed swords"), ("nav_forge_128", "a blacksmith hammer on an anvil"),
+        ("nav_warren_128", "a burrow arch"), ("nav_inventory_128", "an open satchel"),
+        ("nav_relics_128", "an ancient rune stone"),
+        ("state_mastery_128", "a laurel wreath around a star"),
+        ("state_resonance_128", "a vibrating tuning fork"),
+    ]:
+        add(key, "assets/art/UI/icons/nav", "medallion", subj, width=128, height=128)
+
+    add("core_hatch", "assets/art/ItemsLoot/materials", "item",
+        "a cracked glowing egg-like machine core hatching open")
+    add("hunter_portrait", "assets/art/Characters/Hunter/portraits", "medallion",
+        "a hooded hunter face in three-quarter view under a deep cowl")
+    add("logo_horizontal_full", "assets/art/BrandingSymbols/branding", "chrome",
+        "an ornate gold heraldic crest emblem with radiating filigree wings", width=384, height=192)
+    return a
+
+
+def animations() -> list[dict]:
+    a: list[dict] = []
+
+    # Enemy idle + attack strips. Statics (<en>_idle_01 / <en>_attack_01) are
+    # sliced out of these afterwards, so they cost nothing extra.
+    for en, (src, desc, act) in ENEMIES.items():
+        col, edge = SOURCE_ART[src]
+        base = f"{desc}, {col} colouring, {edge}"
+        a.append({"key": f"{en}_idle_strip8_512", "dest": f"assets/art/Animations/Enemies/{en}_idle",
+                  "prompt": f"{base}. Dark fantasy RPG enemy sprite, front facing, full body, "
+                            f"bold readable silhouette, flat bold shapes, centered, plain background, no text",
+                  "action": "breathing and swaying gently in place", "frame_count": 8})
+        a.append({"key": f"{en}_{act}_strip8_512", "dest": f"assets/art/Animations/Enemies/{en}_{act}",
+                  "prompt": f"{base}. Dark fantasy RPG enemy sprite, front facing, full body, attacking pose, "
+                            f"bold readable silhouette, flat bold shapes, centered, plain background, no text",
+                  "action": "lunging forward to strike then recoiling back", "frame_count": 8,
+                  "drift_threshold": 0.35})
+
+    # Boss idle + attack strips at 1024 frames (Game draws body ~540px tall).
+    for boss, (src, desc) in BOSSES.items():
+        col, edge = SOURCE_ART[src]
+        base = f"{desc}, {col} colouring, {edge}"
+        for clip, action in [("idle", "breathing slowly and swaying in place"),
+                             ("attack", "raising up and striking forward then recovering")]:
+            a.append({"key": f"{boss}_{clip}_strip8_1024",
+                      "dest": f"assets/art/Animations/Bosses/{boss}_{clip}",
+                      "prompt": f"{base}. Imposing dark fantasy RPG boss sprite, front facing, full body, "
+                                f"bold readable silhouette, flat bold shapes, centered, plain background, no text",
+                      "action": action, "frame_count": 8, "frame_size": 1024,
+                      "drift_threshold": 0.35})
+
+    # Hunter clips. hunter_idle / hunter_attack_01 / hunter_defeated statics are
+    # sliced from these.
+    # EMPTY-HANDED on purpose. Equipped gear is drawn over this base at sockets
+    # (SoloExpeditionScreen.Sockets), so a weapon baked into the base gives the
+    # champion two swords the moment the player equips one.
+    hunter = ("a lone hooded hunter in bone-parchment cloth and cold-slate leather, "
+              "EMPTY HANDS, no weapon, no sword, no shield, unarmed")
+    for clip, action in [("idle", "standing and breathing in place"),
+                         ("attack", "swinging a blade forward then recovering"),
+                         ("cast", "raising a hand and channelling energy"),
+                         ("hurt_recover", "flinching back from a hit then straightening"),
+                         ("death", "staggering and collapsing to the ground")]:
+        a.append({"key": f"hunter_{clip}_strip8_512", "dest": f"assets/art/Animations/Hunter/hunter_{clip}",
+                  "prompt": f"{hunter}. Dark fantasy RPG player sprite, front facing, full body, "
+                            f"bold readable silhouette, flat bold shapes, centered, plain background, no text",
+                  "action": action, "frame_count": 8, "drift_threshold": 0.35})
+
+    # VFX. No sprite to animate from, so frame 1 is generated then animated.
+    for key, dest, subj, action in [
+        ("impact_gold_strip8_512", "assets/art/VFX/impact/gold",
+         "a bright gold impact starburst", "the burst expanding outward and fading"),
+        ("impact_crit_strip8_512", "assets/art/VFX/impact/crit",
+         "a fierce gold and crimson crit burst of shards", "the burst expanding outward and fading"),
+        ("smoke_puff_strip8_512", "assets/art/VFX/smoke/smoke_puff",
+         "a grey smoke puff", "the smoke billowing out and dissipating"),
+        ("death_dissolve_strip8_512", "assets/art/VFX/death/dissolve",
+         "a swirl of dark violet motes and ash", "the motes rising and scattering apart"),
+        ("interrupt_break_strip8_512", "assets/art/VFX/interrupt/break",
+         "a cracked white shield sigil", "the sigil cracking then shattering apart"),
+        ("heal_holy_burst_strip8_512", "assets/art/VFX/heal/holy_burst",
+         "a warm green and gold healing bloom", "the bloom opening upward and fading"),
+        ("levelup_gold_purple_strip8_512", "assets/art/VFX/levelup/gold_purple",
+         "a column of gold and violet ascending light", "the column rising and flaring out"),
+        ("loot_pop_strip8_512", "assets/art/VFX/loot/loot_pop",
+         "a small gold sparkle pop", "the sparkle bursting outward and fading"),
+        ("projectile_arcane_strip8_512", "assets/art/VFX/projectile/arcane",
+         "a violet arcane energy bolt", "the bolt streaking forward with a trailing tail"),
+        ("aura_arcane_ring_strip8_512", "assets/art/VFX/aura/arcane_ring",
+         "a flat violet arcane ground ring", "the ring pulsing and rotating slowly"),
+        ("binding_void_bind_strip8_512", "assets/art/VFX/binding/void_bind",
+         "dark violet binding chains in a circle", "the chains tightening inward"),
+    ] + [
+        (f"slash_{s}_strip8_512", f"assets/art/VFX/slash/{s}",
+         f"a curved {SOURCE_ART[s][0]} slash arc with {SOURCE_ART[s][1]}",
+         "the slash sweeping across and fading")
+        for s in SOURCES
+    ]:
+        a.append({"key": key, "dest": dest, "prompt": ANIM_STYLE_VFX.format(subject=subj),
+                  "action": action, "frame_count": 8, "outline": "selective outline"})
+    return a
+
+
+def main() -> None:
+    still = stills()
+    anim = animations()
+
+    manifest = {
+        "$comment": ["Generated by build_spec.py from the game's runtime contract.",
+                     "Do not hand-edit — edit build_spec.py and re-run."],
+        "defaults": {"width": 256, "height": 256, "no_background": True,
+                     "outline": "single color black outline", "shading": "medium shading",
+                     "detail": "medium detail", "text_guidance_scale": 9, "knockout": True,
+                     "style_suffix": ""},
+        "styles": STILL_STYLES,
+        "assets": still,
+    }
+    with open(os.path.join(HERE, "manifest.json"), "w", encoding="utf-8") as fh:
+        json.dump(manifest, fh, indent=2)
+    with open(os.path.join(HERE, "animations.json"), "w", encoding="utf-8") as fh:
+        json.dump({"$comment": ["Generated by build_spec.py."], "animations": anim}, fh, indent=2)
+
+    keys = [x["key"] for x in still]
+    assert len(keys) == len(set(keys)), "duplicate still key"
+    akeys = [x["key"] for x in anim]
+    assert len(akeys) == len(set(akeys)), "duplicate animation key"
+
+    print(f"stills     : {len(still):4d}  ({len(still)} generations)")
+    print(f"animations : {len(anim):4d}  ({sum(8 + (0 if x.get('source') else 1) for x in anim)} generations)")
+    print(f"TOTAL COST : {len(still) + sum(8 + (0 if x.get('source') else 1) for x in anim)} generations")
+
+
+if __name__ == "__main__":
+    main()

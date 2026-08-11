@@ -25,6 +25,9 @@ public sealed class AssetLibrary
 {
     private readonly Dictionary<string, Texture2D> _textures = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Winning source path per key, so collision tie-breaks stay deterministic.</summary>
+    private readonly Dictionary<string, string> _sources = new(StringComparer.OrdinalIgnoreCase);
+
     public AssetLibrary(GraphicsDevice device)
     {
         var root = Path.Combine(AppContext.BaseDirectory, "assets", "art");
@@ -51,7 +54,31 @@ public sealed class AssetLibrary
                 using var stream = File.OpenRead(path);
                 var texture = Texture2D.FromStream(device, stream);
                 Premultiply(texture);
-                _textures[Path.GetFileNameWithoutExtension(path)] = texture;
+
+                // 98 basenames exist at two or three runtime paths with DIFFERENT content —
+                // typically a full-size sprite plus a smaller thumbnails/ copy. Keys are flat
+                // basenames, so "last writer wins" made the winner depend on directory
+                // enumeration order: the same item could render full-res or thumbnail-res
+                // between runs. Resolve deterministically and in favour of quality by keeping
+                // the larger image; equal areas tie-break on path so the choice is stable.
+                var key = Path.GetFileNameWithoutExtension(path);
+                if (_textures.TryGetValue(key, out var existing))
+                {
+                    var incomingArea = texture.Width * texture.Height;
+                    var existingArea = existing.Width * existing.Height;
+                    var keepIncoming = incomingArea > existingArea
+                        || (incomingArea == existingArea
+                            && string.CompareOrdinal(norm, _sources[key]) < 0);
+                    if (!keepIncoming)
+                    {
+                        texture.Dispose();
+                        continue;
+                    }
+                    existing.Dispose();
+                }
+
+                _textures[key] = texture;
+                _sources[key] = norm;
             }
             catch (Exception ex) when (ex is IOException or InvalidOperationException)
             {
@@ -91,14 +118,21 @@ public sealed class AssetLibrary
     {
         ["ui_gleam_coin"] = "currency_gleam",       // package_05 currencies
         ["ui_memory_dust"] = "currency_memory_dust",
-        ["item_glyph_weapon"] = "item_weapon", ["item_glyph_charm"] = "item_charm",
-        ["item_glyph_focus"] = "item_focus", ["item_glyph_helm"] = "item_helm",
-        ["item_glyph_chest"] = "item_chest", ["item_glyph_gloves"] = "item_gloves",
-        ["item_glyph_boots"] = "item_boots", ["item_glyph_ring"] = "item_ring",
+        // Generic per-slot glyphs. The previous item_<slot> targets never existed on disk, so every
+        // equipment slot glyph resolved to null; these point at the shipped item_slot_<slot> art.
+        ["item_glyph_weapon"] = "item_slot_weapon", ["item_glyph_charm"] = "item_slot_charm",
+        ["item_glyph_focus"] = "item_slot_focus", ["item_glyph_helm"] = "item_slot_helm",
+        ["item_glyph_chest"] = "item_slot_chest", ["item_glyph_gloves"] = "item_slot_gloves",
+        ["item_glyph_boots"] = "item_slot_boots", ["item_glyph_ring"] = "item_slot_ring",
         ["item_glyph_core"] = "core_hatch",
-        ["item_frame_common"] = "frame_common", ["item_frame_uncommon"] = "frame_uncommon",
-        ["item_frame_rare"] = "frame_rare", ["item_frame_epic"] = "frame_epic",
-        ["item_frame_legendary"] = "frame_legendary",
+        // Rarity frames ship as ui_frame_rarity_<tier> (assets/art/UI/slots + ItemsLoot/frames). The
+        // earlier frame_<tier> targets never existed on disk, so every one of these keys resolved to
+        // null and no item ever drew a rarity frame.
+        ["item_frame_common"] = "ui_frame_rarity_common", ["item_frame_uncommon"] = "ui_frame_rarity_uncommon",
+        ["item_frame_rare"] = "ui_frame_rarity_rare", ["item_frame_epic"] = "ui_frame_rarity_epic",
+        ["item_frame_legendary"] = "ui_frame_rarity_legendary",
+        // UiKit.KeyCap asks for ui_keycap; the pack ships the blank square variant under a longer name.
+        ["ui_keycap"] = "ui_keycap_square_blank",
         // Per-source creatures → package_03 enemy idle poses. One representative enemy per element (the
         // Warren's per-role keys fall back here; no Nature enemy shipped, so a wisp stands in).
         ["crea_body"] = "bonecrawler_idle_01", ["crea_machine"] = "stone_sentinel_idle_01",
@@ -108,22 +142,22 @@ public sealed class AssetLibrary
         ["boss_verdant_hollow"] = "thorn_regent_idle_1024", ["boss_cinderworks"] = "forge_colossus_idle_1024",
         ["boss_umbral_reach"] = "void_reaper_idle_1024", ["boss_still_archive"] = "crystal_lich_idle_1024",
         ["boss_pale_choir"] = "lumen_angel_idle_1024", ["boss_marrow_wastes"] = "spirit_matron_idle_1024",
-        // package_07 region arenas — the fight draws bg_arena_<Source theme>; resolve to the element's
-        // full-screen background (the 'unconquered' variant is the in-combat look).
-        // Use the CLEAN variant — the 'unconquered' variant bakes purple corruption-marker circles into the
-        // art (they read as stray targeting reticles over the arena).
-        ["bg_arena_body"] = "body_blood_moors_clean", ["bg_arena_mind"] = "mind_crystal_caverns_clean",
-        ["bg_arena_nature"] = "nature_verdant_hollow_clean", ["bg_arena_machine"] = "machine_forge_wastes_clean",
-        ["bg_arena_shadow"] = "shadow_void_wastes_clean", ["bg_arena_spirit"] = "spirit_twilight_sanctum_clean",
-        ["bg_arena_verdant"] = "nature_verdant_hollow_clean",   // the DrawSceneBackground fallback key
-        // Combat FX: the sim fires semantic events; the pack ships GENERIC effect strips meant to serve them
-        // (a crit reads as a slash, an interrupt as a shield). This is the strips' intended use, not a stand-in
-        // for a missing bespoke effect. fx_bolt / fx_aura / fx_heal are authored but not yet triggered anywhere.
-        // package_06 VFX strips (8 square 512 frames each). VfxPlayer resolves these keys through Get().
+        // Arena backgrounds now ship under their own bg_arena_<Source> keys, so the old
+        // <element>_<region>_clean indirection is gone. Only the legacy fallback key still
+        // needs a bridge.
+        ["bg_arena_verdant"] = "bg_arena_nature",   // the DrawSceneBackground fallback key
+        // Combat FX (8 square 512 frames each). VfxPlayer resolves these keys through Get().
+        // crit / death / interrupt now have DEDICATED strips. Previously crit shared slash_void with
+        // ability_ruinstrike, death shared smoke_puff with weakhit, and interrupt drew a holy HEAL burst —
+        // so a interrupted cast and a heal looked identical. Each semantic event now reads as itself.
         ["vfx_hit"] = "impact_gold_strip8_512", ["vfx_weakhit"] = "smoke_puff_strip8_512",
-        ["vfx_crit"] = "slash_void_strip8_512", ["vfx_ability_ruinstrike"] = "slash_void_strip8_512",
-        ["vfx_death"] = "smoke_puff_strip8_512", ["vfx_interrupt"] = "heal_holy_burst_strip8_512",
+        ["vfx_crit"] = "impact_crit_strip8_512", ["vfx_ability_ruinstrike"] = "slash_shadow_strip8_512",
+        ["vfx_death"] = "death_dissolve_strip8_512", ["vfx_interrupt"] = "interrupt_break_strip8_512",
         ["vfx_levelup"] = "levelup_gold_purple_strip8_512",
+        // Per-Source slash strips, for damage-type-aware hit FX.
+        ["vfx_slash_body"] = "slash_body_strip8_512", ["vfx_slash_mind"] = "slash_mind_strip8_512",
+        ["vfx_slash_machine"] = "slash_machine_strip8_512", ["vfx_slash_nature"] = "slash_nature_strip8_512",
+        ["vfx_slash_shadow"] = "slash_shadow_strip8_512", ["vfx_slash_spirit"] = "slash_spirit_strip8_512",
     };
 
     private Texture2D? Resolve(string key)

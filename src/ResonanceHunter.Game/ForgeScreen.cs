@@ -1341,7 +1341,11 @@ public sealed class ForgeScreen
     /// <summary>The item's trait-specific icon, or null if that slot/trait pair hasn't been drawn yet.</summary>
     private Texture2D? TraitGlyph(ItemInstance item)
         => Gear.SlotFor(item.BaseType) is { } slot && GearTraits.TraitOf(item) is { } trait
-            ? _ui.Assets.Get($"item_{slot.ToString().ToLowerInvariant()}_{trait.ToString().ToLowerInvariant()}")
+            // Prefer the WORN art: it is drawn front-on as the piece actually looks on the
+            // character, which reads better in a grid than a display-angle icon, and it means
+            // one asset serves both the inventory and the paperdoll.
+            ? _ui.Assets.Get($"gear_{slot.ToString().ToLowerInvariant()}_{trait.ToString().ToLowerInvariant()}")
+              ?? _ui.Assets.Get($"item_{slot.ToString().ToLowerInvariant()}_{trait.ToString().ToLowerInvariant()}")
             : null;
 
     /// <summary>The item's Source gem, top-left (package_05 source_&lt;element&gt;). Skipped on tiny boxes.</summary>

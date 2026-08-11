@@ -85,7 +85,9 @@ public sealed class UiKit
     private readonly Texture2D _pixel;
     private readonly Texture2D _hex;
     private readonly Texture2D _diamond;
+    private readonly Texture2D _blob;
     private readonly System.Collections.Generic.Dictionary<string, float> _topPadCache = new();
+    private readonly System.Collections.Generic.Dictionary<string, float> _bottomPadCache = new();
 
     public UiKit(GraphicsDevice device, PixelFont font, AssetLibrary assets)
     {
@@ -97,6 +99,7 @@ public sealed class UiKit
         _pixel.SetData(new[] { Color.White });
         _hex = MakeHex(device, 120, 104);       // flat-top hexagon, drawn tinted + scaled (LinearClamp keeps it smooth)
         _diamond = MakeDiamond(device, 64);      // a gem for the nav / accents
+        _blob = MakeBlob(device, 128);           // soft contact shadow under the fighters
     }
 
     /// <summary>Draw the flat-top hexagon filling <paramref name="dest"/>, tinted.</summary>
@@ -153,6 +156,61 @@ public sealed class UiKit
         return frac;
     }
 
+    /// <summary>
+    /// Fraction of a texture's height that is fully transparent across the BOTTOM, cached per key.
+    /// </summary>
+    /// <remarks>
+    /// The mirror of <see cref="TopPadFraction"/>, and the fix for characters that look like they are
+    /// fighting in mid-air. <see cref="Sprite"/> scales the WHOLE texture — padding included — to fill
+    /// the destination box, so a sprite with empty rows under its feet lands its visible sole that many
+    /// pixels ABOVE the box bottom. Measured on the shipped art that gap is 43 px for the hunter and
+    /// 15 px for an enemy at the arena's box size, which is plainly visible against a ground line.
+    /// Callers that must stand something on the floor use <see cref="SpriteGrounded"/>, which pushes the
+    /// draw down by this fraction so the opaque sole meets <c>box.Bottom</c>.
+    /// </remarks>
+    public float BottomPadFraction(string key)
+    {
+        if (_bottomPadCache.TryGetValue(key, out var cached)) return cached;
+        var frac = 0f;
+        if (Assets.Get(key) is { } t && t is { Width: > 0, Height: > 0 })
+        {
+            var data = new Color[t.Width * t.Height];
+            t.GetData(data);
+            var bottom = -1;
+            for (var y = t.Height - 1; y >= 0; y--)
+            {
+                var opaque = false;
+                for (var x = 0; x < t.Width; x++)
+                    if (data[y * t.Width + x].A > 8) { opaque = true; break; }
+                if (opaque) { bottom = y; break; }
+            }
+            frac = bottom < 0 ? 0f : (t.Height - 1 - bottom) / (float)t.Height;
+        }
+        _bottomPadCache[key] = frac;
+        return frac;
+    }
+
+    /// <summary>
+    /// Draw a sprite so its VISIBLE bottom edge rests on <paramref name="box"/>.Bottom, rather than its
+    /// padded canvas bottom. Use for anything that stands on the ground.
+    /// </summary>
+    /// <returns>false if the texture is missing, so callers can fall back exactly as with <see cref="Sprite"/>.</returns>
+    public bool SpriteGrounded(SpriteBatch b, string key, Rectangle box, Color tint, float topCrop = 0f)
+    {
+        if (Assets.Get(key) is not { } tex || tex.Height <= 0) return false;
+        var cropY = (int)(tex.Height * Math.Clamp(topCrop, 0f, 0.6f));
+        var srcH = tex.Height - cropY;
+        var sc = box.Height / (float)srcH;
+        var w = Math.Max(1, (int)(tex.Width * sc));
+
+        // The pad fraction is of the FULL texture; the visible gap after scaling is that
+        // fraction of the drawn height. Shifting down by it plants the sole on box.Bottom.
+        var drop = (int)MathF.Round(BottomPadFraction(key) * tex.Height * sc);
+        b.Draw(tex, new Rectangle(box.Center.X - w / 2, box.Y + drop, w, box.Height),
+            new Rectangle(0, cropY, tex.Width, srcH), tint);
+        return true;
+    }
+
     public bool AnimSprite(SpriteBatch b, string stripKey, Rectangle box, float seconds, float fps, bool loop, Color tint, float topCrop = 0f)
     {
         if (Assets.Get(stripKey) is not { } tex || tex.Height <= 0) return false;
@@ -173,8 +231,42 @@ public sealed class UiKit
         var src = new Rectangle(i * fw, cropY, fw, srcH);
         var sc = box.Height / (float)srcH;
         var w = Math.Max(1, (int)(fw * sc));
-        b.Draw(tex, new Rectangle(box.Center.X - w / 2, box.Bottom - box.Height, w, box.Height), src, tint);
+        // Same grounding as SpriteGrounded. The pad is measured once for the whole strip rather than
+        // per frame on purpose: a per-frame sole would make the figure slide up and down as the
+        // animation played. One offset for the clip keeps the feet planted while it animates.
+        var drop = (int)MathF.Round(StripBottomPadFraction(stripKey) * fw * sc);
+        b.Draw(tex, new Rectangle(box.Center.X - w / 2, box.Y + drop, w, box.Height), src, tint);
         return true;
+    }
+
+    /// <summary>
+    /// Empty rows under the lowest opaque pixel of an animation strip, as a fraction of FRAME height.
+    /// </summary>
+    /// <remarks>
+    /// Measured across the whole strip, so every frame of a clip shares one ground offset and the figure
+    /// does not bob as it plays. Cached per key — this scans the full texture, which for a boss strip is
+    /// 8192x1024.
+    /// </remarks>
+    public float StripBottomPadFraction(string stripKey)
+    {
+        if (_bottomPadCache.TryGetValue(stripKey, out var cached)) return cached;
+        var frac = 0f;
+        if (Assets.Get(stripKey) is { } t && t is { Width: > 0, Height: > 0 })
+        {
+            var data = new Color[t.Width * t.Height];
+            t.GetData(data);
+            var bottom = -1;
+            for (var y = t.Height - 1; y >= 0; y--)
+            {
+                var opaque = false;
+                for (var x = 0; x < t.Width; x++)
+                    if (data[y * t.Width + x].A > 8) { opaque = true; break; }
+                if (opaque) { bottom = y; break; }
+            }
+            frac = bottom < 0 ? 0f : (t.Height - 1 - bottom) / (float)t.Height;
+        }
+        _bottomPadCache[stripKey] = frac;
+        return frac;
     }
 
     private static Texture2D MakeHex(GraphicsDevice d, int w, int h)
@@ -191,6 +283,36 @@ public sealed class UiKit
         tex.SetData(data);
         return tex;
     }
+
+    /// <summary>
+    /// A soft radial blob, used as the fighters' contact shadow.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately procedural rather than a generated sprite: a shadow is pure alpha falloff, and the
+    /// art pipeline's border flood-fill knockout keys on a background colour, so it would clip the very
+    /// gradient that makes a shadow read. A hard-edged rectangle under each fighter — which is what shipped
+    /// — announces itself as a rectangle; this fades out and just reads as ground contact.
+    /// </remarks>
+    private static Texture2D MakeBlob(GraphicsDevice d, int s)
+    {
+        var tex = new Texture2D(d, s, s);
+        var data = new Color[s * s];
+        var c = (s - 1) / 2f;
+        for (var y = 0; y < s; y++)
+            for (var x = 0; x < s; x++)
+            {
+                var r = MathF.Sqrt((x - c) * (x - c) + (y - c) * (y - c)) / c;
+                // Squared falloff: a linear ramp still shows a visible disc edge at low alpha.
+                var a = r >= 1f ? 0f : (1f - r) * (1f - r);
+                data[y * s + x] = new Color(0f, 0f, 0f, a);
+            }
+        tex.SetData(data);
+        return tex;
+    }
+
+    /// <summary>A soft elliptical contact shadow centred on (cx, cy).</summary>
+    public void GroundShadow(SpriteBatch b, int cx, int cy, int width, int height, float strength = 0.55f)
+        => b.Draw(_blob, new Rectangle(cx - width / 2, cy - height / 2, width, height), Color.White * strength);
 
     private static Texture2D MakeDiamond(GraphicsDevice d, int s)
     {
