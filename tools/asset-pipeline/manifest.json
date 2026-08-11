@@ -1449,134 +1449,6 @@
       "height": 64
     },
     {
-      "key": "hunter_part_head",
-      "dest": "assets/art/rig",
-      "style": "rig",
-      "subject": "a hooded hunter head facing forward",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "hunter_part_torso",
-      "dest": "assets/art/rig",
-      "style": "rig",
-      "subject": "a hunter torso in a dark leather jerkin",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "hunter_part_pelvis",
-      "dest": "assets/art/rig",
-      "style": "rig",
-      "subject": "a hunter pelvis and belt",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "hunter_part_cloak",
-      "dest": "assets/art/rig",
-      "style": "rig",
-      "subject": "a hanging tattered cloak",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "hunter_part_arm_upper_main",
-      "dest": "assets/art/rig",
-      "style": "rig",
-      "subject": "an upper arm in leather, right side",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "hunter_part_arm_fore_main",
-      "dest": "assets/art/rig",
-      "style": "rig",
-      "subject": "a forearm in leather, right side",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "hunter_part_hand_main",
-      "dest": "assets/art/rig",
-      "style": "rig",
-      "subject": "a gloved hand, right side",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "hunter_part_arm_upper_off",
-      "dest": "assets/art/rig",
-      "style": "rig",
-      "subject": "an upper arm in leather, left side",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "hunter_part_arm_fore_off",
-      "dest": "assets/art/rig",
-      "style": "rig",
-      "subject": "a forearm in leather, left side",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "hunter_part_hand_off",
-      "dest": "assets/art/rig",
-      "style": "rig",
-      "subject": "a gloved hand, left side",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "hunter_part_leg_thigh_main",
-      "dest": "assets/art/rig",
-      "style": "rig",
-      "subject": "a thigh in leather trousers, right side",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "hunter_part_leg_shin_main",
-      "dest": "assets/art/rig",
-      "style": "rig",
-      "subject": "a shin in leather trousers, right side",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "hunter_part_foot_main",
-      "dest": "assets/art/rig",
-      "style": "rig",
-      "subject": "a leather boot, right side",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "hunter_part_leg_thigh_off",
-      "dest": "assets/art/rig",
-      "style": "rig",
-      "subject": "a thigh in leather trousers, left side",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "hunter_part_leg_shin_off",
-      "dest": "assets/art/rig",
-      "style": "rig",
-      "subject": "a shin in leather trousers, left side",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "hunter_part_foot_off",
-      "dest": "assets/art/rig",
-      "style": "rig",
-      "subject": "a leather boot, left side",
-      "width": 128,
-      "height": 128
-    },
-    {
       "key": "bg_arena_nature",
       "dest": "assets/art/Environments/arenas",
       "style": "arena",
@@ -2116,6 +1988,62 @@
       "prompt": "A scallop-shaped curved armour plate lying alone, three overlapping riveted leather bands fanning outward, front view, a single small object on an empty background, dark fantasy RPG pixel art, flat bold shapes, no text, no border",
       "text_guidance_scale": 9.0,
       "negative_description": "breastplate, cuirass, chestplate, torso, body, chest, ribs, abdomen, belt, waist, character, person, mannequin, armour set, sleeves, arms, neck, collar, pair, two"
+    },
+    {
+      "key": "icon_facility_nursery",
+      "dest": "assets/art/UI/icons/facilities",
+      "style": "item",
+      "subject": "a woven straw nest cradling three pale speckled eggs, filling the frame",
+      "negative_description": "frame, border, ring, circle, medallion, rim, filigree, coin, badge, gold trim, text"
+    },
+    {
+      "key": "icon_facility_tunnels",
+      "dest": "assets/art/UI/icons/facilities",
+      "style": "item",
+      "subject": "a dark round burrow mouth cut into earth, timber-braced, filling the frame",
+      "negative_description": "frame, border, ring, circle, medallion, rim, filigree, coin, badge, gold trim, text"
+    },
+    {
+      "key": "icon_facility_foragingpits",
+      "dest": "assets/art/UI/icons/facilities",
+      "style": "item",
+      "subject": "a shallow dug pit heaped with roots and mushrooms, filling the frame",
+      "negative_description": "frame, border, ring, circle, medallion, rim, filigree, coin, badge, gold trim, text"
+    },
+    {
+      "key": "icon_facility_scavengerruns",
+      "dest": "assets/art/UI/icons/facilities",
+      "style": "item",
+      "subject": "a bundle of scavenged scrap bones and rags tied with cord, filling the frame",
+      "negative_description": "frame, border, ring, circle, medallion, rim, filigree, coin, badge, gold trim, text"
+    },
+    {
+      "key": "icon_facility_breedingchamber",
+      "dest": "assets/art/UI/icons/facilities",
+      "style": "item",
+      "subject": "a warm bedded alcove lined with fur, filling the frame",
+      "negative_description": "frame, border, ring, circle, medallion, rim, filigree, coin, badge, gold trim, text"
+    },
+    {
+      "key": "icon_facility_ritualnest",
+      "dest": "assets/art/UI/icons/facilities",
+      "style": "item",
+      "subject": "a ring of standing candles around a rune-marked stone, filling the frame",
+      "negative_description": "frame, border, ring, circle, medallion, rim, filigree, coin, badge, gold trim, text"
+    },
+    {
+      "key": "icon_facility_hoardvaults",
+      "dest": "assets/art/UI/icons/facilities",
+      "style": "item",
+      "subject": "a heavy iron-banded strongbox spilling coins, filling the frame",
+      "negative_description": "frame, border, ring, circle, medallion, rim, filigree, coin, badge, gold trim, text"
+    },
+    {
+      "key": "icon_facility_sentryburrows",
+      "dest": "assets/art/UI/icons/facilities",
+      "style": "item",
+      "subject": "a raised watch-mound with a wooden lookout stake, filling the frame",
+      "negative_description": "frame, border, ring, circle, medallion, rim, filigree, coin, badge, gold trim, text"
     },
     {
       "key": "chest_loot",

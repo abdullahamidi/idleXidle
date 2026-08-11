@@ -97,6 +97,7 @@ public sealed class CharacterScreen
     private static readonly Rectangle EquipBestBtn = new(44, 700, 260, 52);
     private static readonly Rectangle UnequipAllBtn = new(44, 762, 260, 52);
 
+    private HunterRigRenderer? _rigRenderer;
     private int _tab;
     private int _invScroll;
     private string? _selectedId;
@@ -119,7 +120,8 @@ public sealed class CharacterScreen
     // ── Update ───────────────────────────────────────────────────────────────────────────────────
     public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, int wheel, Hunter hunter)
     {
-        var hit = new Point(mouse.X * 4, mouse.Y * 4);
+        // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
+        var hit = Game1.ToOverlay(mouse);
         var list = Filtered();
         _selectedId ??= list.FirstOrDefault()?.InstanceId;   // default selection = first item (spec §9.6)
 
@@ -187,7 +189,8 @@ public sealed class CharacterScreen
     // ── Draw ─────────────────────────────────────────────────────────────────────────────────────
     public void Draw(SpriteBatch b, Point mouse, Hunter hunter)
     {
-        var hit = new Point(mouse.X * 4, mouse.Y * 4);
+        // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
+        var hit = Game1.ToOverlay(mouse);
         // The shared batch-A backdrop already draws the region scene behind us; a translucent scrim keeps it
         // subdued and the UI legible (§6), rather than a flat opaque fill.
         _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xD8));
@@ -208,7 +211,8 @@ public sealed class CharacterScreen
     {
         _ui.Panel(b, LoadoutPanel);
         var x = LoadoutPanel.X + 24;
-        _ui.TextBig(b, "LOADOUT", x, LoadoutPanel.Y + 26, Gold, UiTypography.SectionTitle);
+        // Centred like EQUIPPED. Left-aligned at +24 the title sat on the frame's corner filigree.
+        _ui.TextCenterBig(b, "LOADOUT", LoadoutPanel.Center.X, LoadoutPanel.Y + 26, Gold, UiTypography.SectionTitle);
 
         var por = new Rectangle(LoadoutPanel.X + 98, LoadoutPanel.Y + 82, 105, 105);   // §7.6
         if (_ui.Assets.Get("hunter_portrait") is { } p) b.Draw(p, por, Color.White);
@@ -254,17 +258,19 @@ public sealed class CharacterScreen
         _ui.TextCenterBig(b, "EQUIPPED", EquippedPanel.Center.X, EquippedPanel.Y + 26, Gold, UiTypography.SectionTitle);
 
         // The champion, dressed (base body + one overlay per worn slot), NativeScale (fit, not stretched).
-        _ui.Fill(b, new Rectangle(HunterBox.X + 40, HunterBox.Bottom - 12, HunterBox.Width - 80, 12), Shadow);
-        if (_ui.Assets.Get("hunter_idle") is { } baseTex)
+        _ui.GroundShadow(b, HunterBox.Center.X, HunterBox.Bottom - 8, (int)(HunterBox.Width * 0.7f), 40, 0.55f);
+        // The paper doll is the SAME cutout rig the arena draws, so equipment shown here is literally the
+        // equipment worn in the fight — one binding table, no second set of overlay art to keep in sync.
+        // The old path drew a bare hunter_idle plus "overlay_<slot>_idle" sprites that were never authored,
+        // so the doll showed no gear at all while the panel beside it said 8/8 EQUIPPED.
+        _rigRenderer ??= new HunterRigRenderer(_ui);
+        if (!_rigRenderer.Draw(b, HunterBox, null, hunter, Color.White)
+            && _ui.Assets.Get("hunter_idle") is { } baseTex)
         {
             var sc = MathF.Min(HunterBox.Width / (float)baseTex.Width, HunterBox.Height / (float)baseTex.Height);
             var w = Math.Max(1, (int)(baseTex.Width * sc));
             var h = Math.Max(1, (int)(baseTex.Height * sc));
-            var rect = new Rectangle(HunterBox.Center.X - w / 2, HunterBox.Bottom - h, w, h);
-            b.Draw(baseTex, rect, Color.White);
-            foreach (var slot in OverlayOrder)
-                if (hunter.Worn(slot) is not null && _ui.Assets.Get($"overlay_{slot.ToString().ToLowerInvariant()}_idle") is { } ov)
-                    b.Draw(ov, rect, Color.White);
+            b.Draw(baseTex, new Rectangle(HunterBox.Center.X - w / 2, HunterBox.Bottom - h, w, h), Color.White);
         }
 
         foreach (var (slot, label, box) in SlotLayout)
@@ -289,7 +295,9 @@ public sealed class CharacterScreen
 
         // Equipped summary strip (§8.11) — no armour sets, so a real substitute: coverage + gear iLvl.
         var wornAll = AllSlots.Select(hunter.Worn).OfType<ItemInstance>().ToList();
-        var strip = new Rectangle(452, 838, 406, 56);
+        // Inside the panel, clear of its bottom border (EquippedPanel is 340..970, y..910). At
+        // (452,838,406,56) the strip ran through the frame's bottom ornament and out its right edge.
+        var strip = new Rectangle(EquippedPanel.X + 44, EquippedPanel.Bottom - 106, EquippedPanel.Width - 88, 52);
         _ui.Fill(b, strip, Quiet);
         _ui.Fill(b, new Rectangle(strip.X, strip.Y, 4, strip.Height), Purple);
         _ui.TextBig(b, $"{wornAll.Count} / 8 EQUIPPED", strip.X + 20, strip.Y + 8, Bone, UiTypography.Body);
@@ -300,7 +308,7 @@ public sealed class CharacterScreen
     private void DrawInventory(SpriteBatch b, Point hit, Hunter hunter)
     {
         _ui.Panel(b, InventoryPanel);
-        _ui.TextBig(b, "INVENTORY", InventoryPanel.X + 24, InventoryPanel.Y + 26, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "INVENTORY", InventoryPanel.Center.X, InventoryPanel.Y + 26, Gold, UiTypography.SectionTitle);
 
         for (var i = 0; i < Tabs.Length; i++)
         {
@@ -347,14 +355,15 @@ public sealed class CharacterScreen
 
         // Footer (§9.9) — real slot count + sort note.
         var total = Wearable().Count;
-        _ui.TextBig(b, $"{total} / 64 SLOTS", InventoryPanel.X + 24, InventoryPanel.Bottom - 48, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, "SORT: RARITY", InventoryPanel.Right - 24, InventoryPanel.Bottom - 48, Slate, UiTypography.Secondary);
+        // +44, clear of the ornate border; at +24 the count read "4 / 64 SLOTS" with its first glyph under the frame.
+        _ui.TextBig(b, $"{total} / 64 SLOTS", InventoryPanel.X + 44, InventoryPanel.Bottom - 56, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, "SORT: RARITY", InventoryPanel.Right - 44, InventoryPanel.Bottom - 56, Slate, UiTypography.Secondary);
     }
 
     private void DrawDetail(SpriteBatch b, Point hit, Hunter hunter)
     {
         _ui.Panel(b, DetailPanel);
-        _ui.TextBig(b, "ITEM DETAIL", DetailPanel.X + 24, DetailPanel.Y + 26, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "ITEM DETAIL", DetailPanel.Center.X, DetailPanel.Y + 26, Gold, UiTypography.SectionTitle);
 
         var item = Selected(hunter);
         if (item is null)
@@ -389,7 +398,7 @@ public sealed class CharacterScreen
         // Comparison strip (§10.8) — the matching worn item + the net power delta. Concise, not a full sim.
         var slot = Gear.SlotFor(item.BaseType);
         var worn = slot is { } s ? hunter.Worn(s) : null;
-        var cmp = new Rectangle(DetailPanel.X + 24, 792, DetailPanel.Width - 48, 44);
+        var cmp = new Rectangle(DetailPanel.X + 44, 792, DetailPanel.Width - 88, 44);
         _ui.Fill(b, cmp, Quiet);
         if (IsWorn(hunter, item))
             _ui.TextBig(b, "EQUIPPED", cmp.X + 16, cmp.Y + 12, Gold, UiTypography.Secondary);

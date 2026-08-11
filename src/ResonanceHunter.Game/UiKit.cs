@@ -526,10 +526,12 @@ public sealed class UiKit
         // Every button surface is dark or deep-green, so the label is always LIGHT — bright cream on hover
         // for feedback, dim when disabled. (No more dark-ink-on-hover; that was the unreadable flip.)
         var label3 = !enabled ? new Color(0x7C, 0x76, 0x88) : hover ? new Color(0xF6, 0xEA, 0xC6) : Bone;
-        // The pixel font is drawn 1:1 in the ×4 canvas (s==1) or ×4 in the ×1 native canvas (s==4), so the
-        // label keeps the SAME physical size either way. The vertical nudge scales with it.
-        var s = 4 / Scale;
-        Font.DrawCentered(b, label, r.Center.X, r.Center.Y - 3 * s, label3, s);
+        // The SAME font as every other label. Buttons alone still went through the blocky pixel font, so
+        // "UPGRADE" / "RE-ENTER" / "CONFIRM UPGRADE" rendered in a wide monospace face that belongs to no
+        // other text on the screen — the single loudest inconsistency in the UI.
+        var px = Math.Clamp(r.Height / 2, 14, 22);
+        while (px > 12 && Text2.Measure(label, px) > r.Width - 24) px--;
+        TextCenterBig(b, label, r.Center.X, r.Center.Y - px * 27 / 40, label3, px);
         return enabled && hover && clicked;
     }
 

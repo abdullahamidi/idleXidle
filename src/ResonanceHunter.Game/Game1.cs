@@ -1438,6 +1438,20 @@ public class Game1 : Game
             null, null, null, Matrix.CreateScale(scale));
     }
 
+    /// <summary>Begin the batch for a menu screen: authored 1920-wide, drawn inset right of the nav rail.</summary>
+    private void BeginOverlayCanvas()
+    {
+        _ui.Scale = 1;
+        _ui.Text2.Scale = 1;
+        _batch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
+            null, null, null,
+            Matrix.CreateScale(OverlayScale) * Matrix.CreateTranslation(OverlayLeft, 0f, 0f));
+    }
+
+    /// <summary>True when a menu screen owns the frame — those draw inset; the fight screen does not.</summary>
+    private bool OverlayActive =>
+        _showForge || _showWorld || _showPrestige || _showAutomation || _showBuild || _showCharacter || _showStats;
+
     /// <summary>The counter-scale the active screen draws at. Converted 1920-coord screens return 1; the
     /// HUNT screen is converted, so it returns 1 whenever no other screen flag is set (the else branch below).</summary>
     // Every screen now authors in true 1920×1080 at canvas scale 1 (the migration is complete). This shim
@@ -1485,8 +1499,8 @@ public class Game1 : Game
         DrawSceneBackground();
         _batch.End();
 
-        // Batch B — the active screen. ScreenScale() is 4 today; converted screens will return 1.
-        BeginCanvas(ScreenScale());
+        // Batch B — the active screen. Menu screens draw through the overlay inset (see OverlayScale).
+        if (OverlayActive) BeginOverlayCanvas(); else BeginCanvas(ScreenScale());
         if (_showRigPreview) _hunterRig.Draw(_batch);
         else if (_showSpike) _rigSpike.Draw(_batch);
         else if (_showForge) _forge.Draw(_batch, _hunter, CanvasMouse, MouseClicked);
@@ -1863,6 +1877,38 @@ public class Game1 : Game
 
     /// <summary>Width of the vertical navigation rail down the left edge.</summary>
     internal const int NavRailWidth = 180;
+
+    // ── Overlay inset ───────────────────────────────────────────────────────────────────────────
+    //
+    // Every menu screen (GEAR, STATS, BUILD, FORGE, WARREN, MAP, DUST) was laid out against a full
+    // 1920-wide canvas, back when navigation was a bar across the bottom. The nav rail is vertical now
+    // and owns x 0..180, so each of those screens had its leftmost panel sliced in half — the Hunter
+    // summary on STATS read "KER / EL 3 / OWER".
+    //
+    // Rather than re-derive several hundred hand-placed literals per screen (and re-derive them again
+    // the next time the rail changes width), the whole screen is drawn through one transform: uniformly
+    // scaled to the free width and pushed right of the rail. Uniform, so no medallion turns into an
+    // ellipse; one transform, so layout and hit-testing cannot drift apart.
+    //
+    // The fight screen is NOT inset — its layout was rebuilt around the rail directly, and its arena
+    // wants every pixel of the free space.
+
+    /// <summary>Free width right of the nav rail, as a fraction of the authored 1920.</summary>
+    internal const float OverlayScale = (1920f - NavRailWidth - 20f) / 1920f;
+
+    /// <summary>Canvas x the inset content starts at.</summary>
+    internal const float OverlayLeft = NavRailWidth;
+
+    /// <summary>
+    /// The 480-space cursor, mapped into an inset screen's own 1920-space coordinates.
+    /// </summary>
+    /// <remarks>
+    /// Menu screens hit-test with <c>mouse * 4</c>. Under the inset that lands 180px right of where the
+    /// player is actually pointing, so every one of them must invert the same transform its drawing goes
+    /// through — hence one shared helper rather than the multiplication repeated per screen.
+    /// </remarks>
+    internal static Point ToOverlay(Point canvasMouse)
+        => new((int)((canvasMouse.X * 4 - OverlayLeft) / OverlayScale), (int)(canvasMouse.Y * 4 / OverlayScale));
     private const int NavTileHeight = 1080 / 8;   // eight items fill the full height exactly
 
     private static Rectangle NavHexRect(int i)   // a rectangular TILE (guide: package_01 nav tiles)

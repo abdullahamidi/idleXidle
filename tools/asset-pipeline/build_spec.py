@@ -339,26 +339,17 @@ def stills() -> list[dict]:
     ]:
         add(key, "assets/art/UI/chrome", "chrome", subj, width=w, height=h)
 
-    # --- Hunter cutout rig parts (HunterRig). Authored separately, assembled at runtime.
-    for key, subj in [
-        ("hunter_part_head", "a hooded hunter head facing forward"),
-        ("hunter_part_torso", "a hunter torso in a dark leather jerkin"),
-        ("hunter_part_pelvis", "a hunter pelvis and belt"),
-        ("hunter_part_cloak", "a hanging tattered cloak"),
-        ("hunter_part_arm_upper_main", "an upper arm in leather, right side"),
-        ("hunter_part_arm_fore_main", "a forearm in leather, right side"),
-        ("hunter_part_hand_main", "a gloved hand, right side"),
-        ("hunter_part_arm_upper_off", "an upper arm in leather, left side"),
-        ("hunter_part_arm_fore_off", "a forearm in leather, left side"),
-        ("hunter_part_hand_off", "a gloved hand, left side"),
-        ("hunter_part_leg_thigh_main", "a thigh in leather trousers, right side"),
-        ("hunter_part_leg_shin_main", "a shin in leather trousers, right side"),
-        ("hunter_part_foot_main", "a leather boot, right side"),
-        ("hunter_part_leg_thigh_off", "a thigh in leather trousers, left side"),
-        ("hunter_part_leg_shin_off", "a shin in leather trousers, left side"),
-        ("hunter_part_foot_off", "a leather boot, left side"),
-    ]:
-        add(key, "assets/art/rig", "rig", subj, width=128, height=128)
+    # --- Hunter cutout rig parts: NOT GENERATED.
+    #
+    # hunter_part_* is produced by tools/asset-pipeline/cut_rig_parts.py, which slices them out of the
+    # single hunter_idle sprite. They must RECONNECT, and independently generated limbs never do — the
+    # first assembled figure came out as parts strung down the screen because each was invented with its
+    # own proportions, lighting and joint width.
+    #
+    # Leaving them in this manifest was actively dangerous: the filenames match, so any --force run would
+    # have quietly overwritten the cut parts with generated ones and broken the rig. (One did slip
+    # through: hunter_part_cloak, for a bone that no longer exists.) The drawn pauldron is the exception
+    # and is declared on its own, above.
 
     # --- Arena backgrounds: bg_arena_<theme> (Game1). 640x360 x3 = 1920x1080.
     arena = {
@@ -427,6 +418,31 @@ def stills() -> list[dict]:
                                 "abdomen, belt, waist, character, person, mannequin, armour set, "
                                 "sleeves, arms, neck, collar, pair, two",
     })
+
+    # --- Warren facility icons: icon_facility_<kind> (WarrenScreen grid)
+    #
+    # These cards drew a flat coloured HEXAGON where the facility's picture belongs — eight identical
+    # shapes distinguished only by tint, so the grid read as a colour swatch chart. A facility is a
+    # place; give each one an image of itself.
+    facility_motif = {
+        "nursery": "a woven straw nest cradling three pale speckled eggs",
+        "tunnels": "a dark round burrow mouth cut into earth, timber-braced",
+        "foragingpits": "a shallow dug pit heaped with roots and mushrooms",
+        "scavengerruns": "a bundle of scavenged scrap bones and rags tied with cord",
+        "breedingchamber": "a warm bedded alcove lined with fur",
+        "ritualnest": "a ring of standing candles around a rune-marked stone",
+        "hoardvaults": "a heavy iron-banded strongbox spilling coins",
+        "sentryburrows": "a raised watch-mound with a wooden lookout stake",
+    }
+    # Style "item", not "medallion". The medallion style spends the canvas on a baroque gold RIM around a
+    # "dark near-black center" — at the 88px a card gives it, seven of the eight came back as an ornate
+    # ring with an empty black hole in the middle. The card already supplies the frame (a tinted hex
+    # plate), so what is needed here is the object filling the frame, nothing else.
+    for kind, motif in facility_motif.items():
+        add(f"icon_facility_{kind}", "assets/art/UI/icons/facilities", "item",
+            f"{motif}, filling the frame",
+            negative_description="frame, border, ring, circle, medallion, rim, filigree, coin, "
+                                 "badge, gold trim, text")
 
     # --- Loot chest
     add("chest_loot", "assets/art/ItemsLoot/chests", "item", "a closed ornate treasure chest with gold bands")

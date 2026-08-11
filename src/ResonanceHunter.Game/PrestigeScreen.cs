@@ -131,7 +131,8 @@ public sealed class PrestigeScreen
 
     public void Draw(SpriteBatch b, MemoryDustTree tree, Point mouse, bool clicked)
     {
-        var hit = new Point(mouse.X * 4, mouse.Y * 4);
+        // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
+        var hit = Game1.ToOverlay(mouse);
 
         _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xC0));
         _ui.TextCenterBig(b, "DUST", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle);

@@ -326,7 +326,8 @@ public sealed class ForgeScreen
         if (Pressed(keys, Keys.J)) SalvageJunk(hunter);   // one press clears the Common/Uncommon clutter to Scrap
 
         // ── Mouse: click a loot card to make it active. ──
-        var hit = new Point(mouse.X * 4, mouse.Y * 4);
+        // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
+        var hit = Game1.ToOverlay(mouse);
         for (var vis = 0; vis < Visible && _scroll + vis < view.Count; vis++)
             if (UiKit.ClickedIn(Card(vis), hit, clicked)) { _cursor = _scroll + vis; _msg = ""; }
 
@@ -716,7 +717,8 @@ public sealed class ForgeScreen
     public void Draw(SpriteBatch b, Hunter hunter, Point mouse, bool clicked)
     {
         // Every rect is authored ×4 (1920×1080) and rendered at scale 1, so hit-tests take the mouse ×4.
-        var hit = new Point(mouse.X * 4, mouse.Y * 4);
+        // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
+        var hit = Game1.ToOverlay(mouse);
 
         _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xC0));   // scrim so panels pop
         _ui.TextCenterBig(b, "THE FORGE", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle);

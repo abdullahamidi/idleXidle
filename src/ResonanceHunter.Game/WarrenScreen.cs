@@ -74,7 +74,8 @@ public sealed class WarrenScreen
 
     public void Draw(SpriteBatch b, Point mouse, bool clicked)
     {
-        var hit = new Point(mouse.X * 4, mouse.Y * 4);
+        // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
+        var hit = Game1.ToOverlay(mouse);
 
         _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xC0));   // scrim so panels pop
         _ui.TextCenterBig(b, "WARREN", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle);
@@ -146,7 +147,13 @@ public sealed class WarrenScreen
             // Milestone pips (top-right) — one gold gem per milestone crossed, the at-a-glance long-term goal.
             for (var m = 0; m < f.MilestoneTier && m < 5; m++)
                 _ui.Diamond(b, new Rectangle(card.Right - 18 - m * 15, card.Y + 10, 11, 11), Gold);
-            _ui.Hex(b, new Rectangle(card.Center.X - 44, card.Y + 46, 88, 76), rc);
+            // The facility's own picture, on a resource-tinted hex plate. Eight identical hexagons
+            // distinguished only by colour told the player nothing about what each place does.
+            var plate = new Rectangle(card.Center.X - 44, card.Y + 46, 88, 76);
+            _ui.Hex(b, plate, rc * (sel ? 0.55f : 0.38f));
+            var icon = $"icon_facility_{f.Kind.ToString().ToLowerInvariant()}";
+            if (!_ui.Icon(b, icon, new Rectangle(plate.X + 2, plate.Y - 4, plate.Width - 4, plate.Height + 8)))
+                _ui.Hex(b, plate, rc);
             _ui.TextCenterBig(b, $"LEVEL {f.Level}", card.Center.X, card.Bottom - 70, Gold, UiTypography.Body);
             _ui.Diamond(b, new Rectangle(card.Center.X - 62, card.Bottom - 38, 18, 18), rc);
             _ui.TextCenterBig(b, $"+{Ab(f.BaseOutputPerMin)} /min", card.Center.X + 8, card.Bottom - 38, Bone, UiTypography.Secondary);
@@ -224,8 +231,10 @@ public sealed class WarrenScreen
         var ok = owned >= required;
         _ui.Diamond(b, new Rectangle(DetailPanel.X + 30, y + 2, 26, 26), gem);
         _ui.TextBig(b, label, DetailPanel.X + 68, y, Bone, UiTypography.Body);
-        _ui.TextRightBig(b, $"{Ab(owned)} / {Ab(required)}", DetailPanel.Right - 58, y, ok ? Met : Ember, UiTypography.Secondary);
-        _ui.TextRight(b, ok ? "OK" : "X", DetailPanel.Right - 30, y, ok ? Met : Ember);
+        // The verdict is a fixed 46px column; the ratio ends where that column starts. Previously both were
+        // right-aligned 28px apart, so "131.9M / 7.8M" ran straight through the "OK" beside it.
+        _ui.TextRightBig(b, $"{Ab(owned)} / {Ab(required)}", DetailPanel.Right - 90, y, ok ? Met : Ember, UiTypography.Secondary);
+        _ui.TextRightBig(b, ok ? "OK" : "X", DetailPanel.Right - 44, y, ok ? Met : Ember, UiTypography.Secondary);
     }
 
     private void DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c)

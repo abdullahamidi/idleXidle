@@ -308,7 +308,8 @@ public sealed class AutomationScreen
 
         if (clicked)
         {
-            var hit = new Point(mouse.X * 4, mouse.Y * 4);
+            // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
+        var hit = Game1.ToOverlay(mouse);
             if (UiKit.ClickedIn(HatchBtn, hit, true)) Hatch();
 
             for (var i = 0; i < Stations.Length; i++)
@@ -362,7 +363,8 @@ public sealed class AutomationScreen
     {
         EnsureSelection(region);
         var pen = PenList(region);
-        var hit = new Point(mouse.X * 4, mouse.Y * 4);
+        // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
+        var hit = Game1.ToOverlay(mouse);
 
         // ═══ HEADER + STATUS ═══════════════════════════════════════════════════════════════════════
         _ui.Title(b, "THE WARREN", MasteryNames[(int)region.MasteryLevel]);
