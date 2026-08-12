@@ -169,6 +169,121 @@ scaling continues underneath them, but the wall a player hits should almost alwa
 be a demand they have not answered rather than a number they have not reached —
 because only the first kind tells them what to do next.
 
+### 3.4 The post-run report
+
+With no in-run decisions, the report is the only moment the player can learn
+anything. It is the most important screen in the game and should be designed
+before the combat visuals, not after.
+
+**It gives a diagnosis, never a prescription.** It tells the player *which demand
+beat them* and shows the measurements that prove it. It never says which node to
+buy. That line is what keeps theorycrafting in the player's hands while still
+making the game teachable — a report that says "take Heavy Strike" has played the
+game for them.
+
+The report shows:
+
+1. **Depth reached**, and whether it is a record for this region.
+2. **The wall** — the wave that ended the run, its composition, the archetypes in
+   it and the active affix. Named plainly: *"Wave 27 · Armoured x2 · PLATED."*
+3. **The measurements**, taken over the last band only, because that is where the
+   run actually failed:
+   - damage delivered vs. damage absorbed by enemy mitigation
+   - average hit size and hits per second
+   - targets struck per skill activation, against creatures present
+   - time-to-kill per creature vs. incoming damage per second
+   - health lost per wave (the attrition curve)
+4. **Haul** earned and **unlocks** crossed.
+5. **What changed since the last run in this region** — the same measurements,
+   diffed. This is what makes iteration legible: the player sees that their change
+   raised average hit size by 60% and their wall moved from Armoured to Swarm.
+
+**Every number in the report must map to something the player can change.** That
+is the acceptance test for adding one. "61% of your damage was absorbed" points at
+armour. "1.2 targets struck per cast against 4 creatures" points at action economy.
+"22% health lost per wave" points at sustain. A number that does not point at a
+lever is decoration and belongs somewhere else.
+
+### 3.5 What an expedition pays
+
+Three different things come out of a descent, and they deliberately buy three
+different layers.
+
+**Haul — pays gear.** Gleam and materials, credited per wave, never at risk. Boss
+waves add a chest. This is the fast, continuous currency.
+
+**Mastery points — pay the build tree.** One point per **first-time** depth
+milestone (every 5 waves) in each region. Only the first time: farming a depth you
+have already reached pays haul but no points. Pushing deeper is the only way to
+earn them.
+
+**Trait points — pay the permanent tree.** Rare and lumpy: region conquest,
+corruption tiers, and mastery goals (§3.9). A player earns a handful across the
+whole game, not a stream.
+
+**Part-breaks** pay materials and raise the chest grade of the wave that produced
+them. Whether a build breaks parts at all is a consequence of its damage shape
+(§3.2), so this is income a build either has access to or does not — another
+reason for large-hit builds to exist.
+
+**The Warren pays neither kind of point.** It produces Gleam and materials only.
+This is Pillar 3 in its revised form: idle buys gear, play buys identity. A player
+who leaves the game running overnight comes back richer, not further along the
+tree.
+
+### 3.6 The two trees
+
+The audit found three permanent trees all multiplying the same five numbers, with
+the mastery tree handing out for free the triggers the Dust tree sold at a
+permanent cost. The fix is not to merge them but to give them genuinely different
+jobs.
+
+**Mastery tree — scarce but fluid.** Buys how skills *behave*: target counts, hit
+sizes, cooldowns, triggers, affinity. Points come from depth. **Respec is free and
+instant.** The scarcity bites not because a choice is permanent but because the
+player cannot have everything *at once* — so the tree is where they answer the band
+in front of them. Re-solving it after a wall is the main activity of the game, and
+charging for that would tax the thing the player is supposed to be doing.
+
+**Trait tree — scarce and permanent.** Buys who the Hunter *is*: keystones,
+structural unlocks, new build axes. Points come from conquests and goals.
+**No respec.** Keystones sit at branch ends so reaching one costs the path to
+another. These are the decisions the player lives with.
+
+Two rules govern both:
+
+- **Neither tree may be completed.** The point budget is authored so that clearing
+  all current content reaches roughly a third of the nodes. When content is added,
+  points and nodes grow together — the fraction is the invariant, not the count.
+- **A node must change a shape, not just a number.** The audit found 31 of 43
+  mastery nodes were flat percentage bonuses; a tree of those is a shopping list
+  with a progress bar. Nodes change target counts, hit sizes, cooldowns, triggers
+  and thresholds. Flat nodes exist only as connective tissue between real ones and
+  are capped as a share of the tree.
+
+### 3.7 Gear and the Forge
+
+Gear is the third layer and the one idle time buys. It supplies the raw scaling
+numbers plus, on each piece, one **trait** (a material property) and — on Rare and
+above — one **enchant** (a behaviour trigger).
+
+Three fixes the audit makes non-optional:
+
+- **`PowerRating` must read what it ranks.** It currently reads a weapon
+  multiplier, Defense and Health, and is blind to every trait and enchant — which
+  means the EQUIP BEST button confidently equips the wrong item. Either it learns
+  the whole item, or the button goes.
+- **Rarity needs a sink.** It is a full build axis that is computed all the way
+  through the simulation and then read by nothing. Rarity determines affix count
+  and enchant availability.
+- **Traits must interact with build shape.** HEAVY trading skill rate for hit size
+  is a good answer to Armoured and a bad one against Swarm. That is the whole point
+  of having traits; today they are flavour text on a number.
+
+The Forge spends materials — the Warren's output — on upgrade (item level), reforge
+(reroll the trait) and merge (combine duplicates). This is the loop that turns idle
+time into build capability without letting idle time buy a decision.
+
 ---
 
 ## 4. Formulas
