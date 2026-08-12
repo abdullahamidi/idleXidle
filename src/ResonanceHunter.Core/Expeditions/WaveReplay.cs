@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace ResonanceHunter.Core.Expeditions;
 
@@ -49,6 +50,39 @@ public sealed class WaveReplay
         EnemyMaxHealth = MathF.Max(1f, enemyHealth);
         EnemyHealth = enemyHealth;
     }
+
+    /// <summary>
+    /// Per-creature health, so the screen can show a composition dying one creature at a time.
+    /// </summary>
+    /// <remarks>
+    /// The aggregate <see cref="EnemyHealth"/> stays: it is what the wave's own bar shows and what the
+    /// existing tests prove against. This is additive — a wave of one behaves exactly as before.
+    /// </remarks>
+    private readonly Dictionary<int, float> _creatureHealth = new();
+    private readonly Dictionary<int, float> _creatureMax = new();
+
+    /// <summary>Tell the replay what the wave's composition was, so it can track each creature.</summary>
+    public void SetComposition(IReadOnlyList<float> maxHealths)
+    {
+        ArgumentNullException.ThrowIfNull(maxHealths);
+        _creatureHealth.Clear();
+        _creatureMax.Clear();
+        for (var i = 0; i < maxHealths.Count; i++)
+        {
+            _creatureHealth[i] = maxHealths[i];
+            _creatureMax[i] = MathF.Max(1f, maxHealths[i]);
+        }
+    }
+
+    public int CreatureCount => _creatureMax.Count;
+
+    public bool CreatureAlive(int index)
+        => !_creatureHealth.TryGetValue(index, out var hp) || hp > 0f;
+
+    public float CreatureHealthFraction(int index)
+        => _creatureHealth.TryGetValue(index, out var hp) && _creatureMax.TryGetValue(index, out var max)
+            ? Math.Clamp(hp / max, 0f, 1f)
+            : 1f;
 
     /// <summary>Live health per slot, as of the playhead.</summary>
     public IReadOnlyDictionary<int, int> Health => _health;
@@ -108,6 +142,8 @@ public sealed class WaveReplay
         {
             case BattleEventKind.Strike:
                 EnemyHealth = MathF.Max(0f, EnemyHealth - e.Amount);
+                if (_creatureHealth.ContainsKey(e.Slot))
+                    _creatureHealth[e.Slot] = MathF.Max(0f, _creatureHealth[e.Slot] - e.Amount);
                 break;
 
             case BattleEventKind.EnemyStrike:
@@ -126,7 +162,11 @@ public sealed class WaveReplay
                 break;
 
             case BattleEventKind.EnemyDown:
-                EnemyHealth = 0f;
+                // Now emitted once per CREATURE as it falls, not once per wave. Zeroing that creature
+                // keeps the screen honest when rounding leaves a fraction behind; the aggregate only
+                // hits zero when the last one does.
+                if (e.Slot >= 0 && _creatureHealth.ContainsKey(e.Slot)) _creatureHealth[e.Slot] = 0f;
+                if (_creatureMax.Count == 0 || _creatureHealth.Values.All(h => h <= 0f)) EnemyHealth = 0f;
                 break;
 
             case BattleEventKind.Shield:

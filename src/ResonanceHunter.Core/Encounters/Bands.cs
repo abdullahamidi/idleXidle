@@ -93,6 +93,36 @@ public static class Bands
     public static float RepeatScale(int wave, int cycleLength)
         => MathF.Pow(BandRepeatScale, ScaleTier(wave, cycleLength));
 
+    /// <summary>
+    /// A stable seed for one wave of one descent.
+    /// </summary>
+    /// <remarks>
+    /// NOT <see cref="HashCode.Combine(object, object, object)"/>. That is randomised per PROCESS by
+    /// design, so it would give the same wave a different composition after a restart — and the whole
+    /// point of seeding from (region, wave, run) is that fast-forward can pay the haul a wave originally
+    /// paid. A test in one process would never catch it; a player closing the game would.
+    ///
+    /// FNV-1a over the region's characters, then the two integers. Cheap, stable, and portable.
+    /// </remarks>
+    public static int Seed(string regionId, int wave, int runIndex)
+    {
+        unchecked
+        {
+            const uint prime = 16777619;
+            var hash = 2166136261;
+            foreach (var ch in regionId ?? string.Empty)
+            {
+                hash ^= ch;
+                hash *= prime;
+            }
+            hash ^= (uint)wave;
+            hash *= prime;
+            hash ^= (uint)runIndex;
+            hash *= prime;
+            return (int)(hash & 0x7FFFFFFF);
+        }
+    }
+
     /// <summary>Pick this wave's archetype from the band's weighting.</summary>
     public static Archetype Roll(BandDefinition band, Random rng)
     {

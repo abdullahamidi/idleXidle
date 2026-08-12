@@ -266,7 +266,8 @@ public static class SoloBattle
 
         (WaveOutcome, List<BattleEvent>) Kill(int atMs)
         {
-            events.Add(new BattleEvent(BattleEventKind.EnemyDown, -1, 0, atMs));
+            // No EnemyDown here — LandOn emits one per creature as it falls, so this would double the
+            // last one and the screen would remove a sprite that was already gone.
 
             if (harvestChance > 0f && rng.NextDouble() < harvestChance) bonus?.AddCores(1);
             if (triggers.Contains(BuildTrigger.Splinter)) bonus?.AddQuality(0.15f);   // richer loot on a kill (see the blurb)
@@ -316,6 +317,13 @@ public static class SoloBattle
             return null;
         }
 
+        int IndexOf(WaveCreature c)
+        {
+            for (var i = 0; i < creatures.Count; i++)
+                if (ReferenceEquals(creatures[i], c)) return i;
+            return 0;
+        }
+
         void LandOn(WaveCreature? target, float dmg, int atMs, bool fromSkill = false, bool ignoresArmour = false)
         {
             if (target is null || !target.Alive) return;
@@ -341,8 +349,15 @@ public static class SoloBattle
             // 30-health swarm creature wastes 80, and that waste is the whole cost of bringing a
             // large-hit build to a Swarm band.
             target.Health -= dmg;
-            if (!target.Alive) alive--;
-            events.Add(new BattleEvent(BattleEventKind.Strike, 0, (int)MathF.Round(dmg), atMs));
+            var idx = IndexOf(target);
+            events.Add(new BattleEvent(BattleEventKind.Strike, idx, (int)MathF.Round(dmg), atMs));
+            if (!target.Alive)
+            {
+                alive--;
+                // One EnemyDown per CREATURE, not per wave. The screen needs to know which sprite to
+                // remove; the wave-cleared signal is the outcome, not this event.
+                events.Add(new BattleEvent(BattleEventKind.EnemyDown, idx, 0, atMs));
+            }
         }
 
         /// <summary>

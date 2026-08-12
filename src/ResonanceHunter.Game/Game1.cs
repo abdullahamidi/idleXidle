@@ -815,6 +815,13 @@ public class Game1 : Game
                     // A DELIBERATELY beefy enemy: a real wave-1 fight is over in ~1.5s, so a shot taken a
                     // second in only ever caught the aftermath — useless for verifying the fight itself.
                     // This one stays standing long enough to capture skills firing.
+                    // Umbral Reach, the swarm region, so the capture can show whether compositions
+                    // render at all. Set through SetActiveRegion — Game1 rewrites _expedition.RegionId
+                    // from the active region every frame, so assigning the screen directly is overwritten
+                    // before the first draw.
+                    _world.Conquer(VerdantHollow.RegionId);
+                    _world.Conquer("cinderworks");
+                    SetActiveRegion("umbral_reach");
                     _expedition.DevStart(_hunter, 1400f, 9f);
                 }
                 if (sm is "boss" or "bossdebug")

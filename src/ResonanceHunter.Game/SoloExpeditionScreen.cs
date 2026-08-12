@@ -10,6 +10,7 @@ using ResonanceHunter.Core.Automation;
 using ResonanceHunter.Core.Builds;
 using ResonanceHunter.Core.Combat;
 using ResonanceHunter.Core.Economy;
+using ResonanceHunter.Core.Encounters;
 using ResonanceHunter.Core.Expeditions;
 using ResonanceHunter.Core.Prestige;
 
@@ -303,6 +304,10 @@ public sealed class SoloExpeditionScreen
         _outcome = _run.PushWave();
 
         _replay = new WaveReplay(_run.LastWaveEvents, startHealth, maxHealth, enemyHp);
+        // Hand the replay the composition so each creature drains its own bar and vanishes on its own
+        // beat. Without this a wave of five reads as one bar going down, which hides the single most
+        // useful fact in a Swarm band: how many of them you actually got through.
+        _replay.SetComposition(_run.LastWaveCreatures.Select(c => c.MaxHealth).ToList());
         _playheadMs = 0f;
         _nextEnemyStrikeMs = _replay.NextEnemyStrikeAfter(0f);
         _callouts.Clear();
@@ -527,8 +532,115 @@ public sealed class SoloExpeditionScreen
         DrawArenaOverlay(b, overlay);
     }
 
+    /// <summary>
+    /// How big each archetype draws, relative to the enemy box.
+    /// </summary>
+    /// <remarks>
+    /// Scale is the fastest read in the arena. A Swarm is small and there are several; a Bruiser fills
+    /// the box alone. Together with the archetype name above the wave's bar, this is how a player learns
+    /// what beat them without being told.
+    /// </remarks>
+    private static float ArchetypeScale(Archetype a) => a switch
+    {
+        Archetype.Swarm => 0.58f,
+        Archetype.Caster => 0.78f,
+        Archetype.Armoured => 0.92f,
+        _ => 1.12f,   // Bruiser
+    };
+
+    /// <summary>
+    /// Draw a wave of several creatures: laid out across the arena's right half, scaled by archetype,
+    /// each with its own health pip, each vanishing as it dies.
+    /// </summary>
+    /// <remarks>
+    /// The arena drew exactly one enemy for the whole life of the project. A player looking at a Swarm
+    /// band could not see that there were five of them, which meant the one thing the band was trying to
+    /// teach — that a single-target build spends its cooldown on one of five while the other four keep
+    /// biting — was invisible.
+    /// </remarks>
+    private void DrawComposition(SpriteBatch b, bool attacking, IReadOnlyList<WaveCreature> comp)
+    {
+        var scale = ArchetypeScale(_run?.LastWaveArchetype ?? Archetype.Bruiser);
+        var enter = (int)(_enemyEnter * 280f);
+        var lunge = (int)(_enemyLunge * -40f);
+
+        var w = (int)(EnemyBox.Width * scale);
+        var h = (int)(EnemyBox.Height * scale);
+
+        // Lay the row out INSIDE the arena, clamped by each creature's own half-width. The first version
+        // spread from the enemy box's centre by a fixed span and pushed the last creature past the
+        // arena's scissor edge, so a wave of five showed four and a sliver — which is exactly the fact
+        // the player most needs to read.
+        var half = w / 2;
+        var spacing = (int)(w * 0.62f);   // overlap slightly; a row of five must still fit
+        var wanted = spacing * (comp.Count - 1);
+        var centre = Math.Clamp(
+            EnemyBox.Center.X + enter + lunge,
+            ArenaRect.X + half + 20 + wanted / 2,
+            ArenaRect.Right - half - 20 - wanted / 2);
+        var left = centre - wanted / 2;
+
+        string? stripKey = null, staticKey = null;
+        if (EnemySource is { } es && EnemyForSource.TryGetValue(es, out var en))
+        {
+            var act = attacking ? en == "stone_sentinel" ? "slam" : "attack" : "idle";
+            stripKey = $"{en}_{act}_strip8_512";
+            staticKey = attacking ? $"{en}_attack_01" : $"{en}_idle_01";
+        }
+
+        for (var i = 0; i < comp.Count; i++)
+        {
+            if (_replay is not null && !_replay.CreatureAlive(i)) continue;
+
+            // Back-to-front by index so the row overlaps consistently, and each creature bobs on its own
+            // phase — five sprites bobbing in unison read as one animated object, not as five creatures.
+            var cx = left + spacing * i;
+            var bob = (int)(MathF.Sin(_anim * 2f + i * 1.7f) * 7f);
+            var box = new Rectangle(cx - w / 2, EnemyBox.Bottom - h + bob, w, h);
+
+            _ui.GroundShadow(b, box.Center.X, EnemyBox.Bottom - 10, (int)(w * 0.55f), (int)(38 * scale), 0.55f);
+
+            const float crop = 0.08f;
+            if (stripKey is null || !_ui.AnimSprite(b, stripKey, box, _anim + i * 0.31f, attacking ? 16f : 12f,
+                    !attacking, Color.White, crop))
+                if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, box, Color.White, crop))
+                    _ui.Fill(b, new Rectangle(box.X + 20, box.Y + 20, box.Width - 40, box.Height - 40), Ember);
+
+            // A pip per creature rather than a framed bar — at five across, ornate frames become noise.
+            if (_replay is null) continue;
+            var frac = _replay.CreatureHealthFraction(i);
+            // Sits on the creature's own visible top, not on its padded canvas — otherwise the pip
+            // floats a sprite's worth of empty pixels above its head.
+            // A MEASURED constant rather than the sprite's alpha bounds. TopPadFraction reports the
+            // minimum padding across the whole strip, and these creatures reach the top of the frame in
+            // at least one animation frame, so it returns ~0 and the pip floated 55px above every head.
+            // The creature art fills roughly the lower four-fifths of its frame; captured and checked.
+            const float headFraction = 0.22f;
+            var pip = new Rectangle(box.Center.X - 28, box.Y + (int)(h * headFraction) - 10, 56, 6);
+            _ui.Fill(b, pip, new Color(0x12, 0x0C, 0x10));
+            if (frac > 0f) _ui.Fill(b, new Rectangle(pip.X, pip.Y, (int)(pip.Width * frac), pip.Height), Ember);
+        }
+
+        // One wave-level nameplate: what this wave IS, which is the thing the player has to learn.
+        var label = $"{_run?.LastWaveArchetype.ToString().ToUpperInvariant()}  x{comp.Count}";
+        var affixes = _run?.LastWaveAffixes ?? Array.Empty<Affix>();
+        if (affixes.Count > 0)
+            label += "   ·   " + string.Join(" + ", affixes.Select(a => a.ToString().ToUpperInvariant()));
+
+        var bar = new Rectangle(EnemyBox.Center.X - 92, EnemyBox.Y + 10, 184, 34);
+        _ui.BarArt(b, bar, Math.Clamp(_replay?.EnemyHealthFraction ?? 1f, 0f, 1f), "health");
+        _ui.TextCenterBig(b, label, bar.Center.X, bar.Y - 28, UiKit.Vellum, UiTypography.Secondary);
+    }
+
     private void DrawNormalEnemy(SpriteBatch b, bool attacking)
     {
+        var comp = _run?.LastWaveCreatures ?? Array.Empty<WaveCreature>();
+        if (comp.Count > 1)
+        {
+            DrawComposition(b, attacking, comp);
+            return;
+        }
+
         var elunge = (int)(_enemyLunge * -40f);
         var enter = (int)(_enemyEnter * 280f);
         var ebox = new Rectangle(EnemyBox.X + elunge + enter, EnemyBox.Y, EnemyBox.Width, EnemyBox.Height);

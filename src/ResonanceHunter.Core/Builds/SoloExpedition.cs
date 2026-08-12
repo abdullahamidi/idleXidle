@@ -182,7 +182,7 @@ public sealed class SoloExpedition
         var wavesIntoBand = (next - 1) % Bands.WavesPerBand;
         var repeat = Bands.RepeatScale(next, cycle.Count);
 
-        var compRng = new Random(HashCode.Combine(RegionId, next, RunIndex));
+        var compRng = new Random(Bands.Seed(RegionId, next, RunIndex));
         var archetype = Bands.Roll(band, compRng);
 
         var health = _enemyBaseHealth * scale * repeat * Bands.HealthMultiplier(affixes);

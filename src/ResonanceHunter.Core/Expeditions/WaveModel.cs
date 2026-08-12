@@ -46,6 +46,18 @@ public enum WaveOutcome { Cleared, Wiped, Stalled }
 public enum BattleEventKind { Strike, EnemyStrike, Down, Heal, EnemyDown, Skill, Shield }
 
 /// <summary>A single beat of the fight, for the presentation layer to replay.</summary>
+/// <param name="Slot">
+/// Who the beat is about. For <see cref="BattleEventKind.EnemyStrike"/> and
+/// <see cref="BattleEventKind.Heal"/> this is the champion's slot; for
+/// <see cref="BattleEventKind.Strike"/> and <see cref="BattleEventKind.EnemyDown"/> it is the INDEX OF
+/// THE CREATURE in the wave's composition.
+/// </param>
+/// <remarks>
+/// A wave used to hold one enemy, so every Strike carried slot 0 and the replay could keep a single
+/// aggregate health bar. Now that a wave is a composition, the index is what lets the screen show five
+/// creatures dying one at a time instead of one bar draining — which is the difference between a player
+/// being able to see "I killed two of five" and not.
+/// </remarks>
 public readonly record struct BattleEvent(BattleEventKind Kind, int Slot, int Amount, int AtMs);
 
 /// <summary>Skill payouts earned mid-wave (SALVAGE quality, BLOOM/HARVEST cores), collected at wave end.</summary>

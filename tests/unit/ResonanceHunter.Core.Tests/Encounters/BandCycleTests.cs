@@ -161,7 +161,7 @@ public class BandCycleTests
 
         List<float> Roll()
         {
-            var rng = new Random(HashCode.Combine("cinderworks", 23, 0));
+            var rng = new Random(Bands.Seed("cinderworks", 23, 0));
             var archetype = Bands.Roll(band, rng);
             return Archetypes
                 .Compose(archetype, 300f, 20f, 23, BandCycles.RosterFor("cinderworks"), rng)
@@ -170,6 +170,27 @@ public class BandCycleTests
         }
 
         Assert.Equal(Roll(), Roll());
+    }
+
+    /// <summary>
+    /// The wave seed must be stable across PROCESSES, not merely within one.
+    /// </summary>
+    /// <remarks>
+    /// REGRESSION. This used HashCode.Combine, which .NET randomises per process by design — so the same
+    /// wave of the same descent produced different creatures after a restart, and fast-forward would
+    /// have paid the haul of a wave the player never fought. A same-process test cannot catch it, which
+    /// is why the value is pinned here instead: if the algorithm changes, this fails loudly.
+    /// </remarks>
+    [Fact]
+    public void test_the_wave_seed_is_stable_across_processes()
+    {
+        Assert.Equal(Bands.Seed("cinderworks", 23, 1), Bands.Seed("cinderworks", 23, 1));
+        Assert.NotEqual(Bands.Seed("cinderworks", 23, 1), Bands.Seed("cinderworks", 24, 1));
+        Assert.NotEqual(Bands.Seed("cinderworks", 23, 1), Bands.Seed("umbral_reach", 23, 1));
+        Assert.NotEqual(Bands.Seed("cinderworks", 23, 1), Bands.Seed("cinderworks", 23, 2));
+
+        // Pinned: a literal, so a change of algorithm is a deliberate act rather than an accident.
+        Assert.Equal(218177418, Bands.Seed("cinderworks", 23, 1));
     }
 
     /// <summary>Armour thickens with depth, or Weight solves Armoured once and never again.</summary>

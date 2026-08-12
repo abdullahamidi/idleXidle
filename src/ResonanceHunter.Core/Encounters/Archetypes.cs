@@ -71,11 +71,32 @@ public static class Archetypes
     public static IReadOnlyDictionary<Archetype, ArchetypeShape> Shapes { get; } =
         new Dictionary<Archetype, ArchetypeShape>
         {
-            [Archetype.Swarm] = new(Archetype.Swarm, 3, 5, 0.30f, 0.45f, 0f),
-            [Archetype.Armoured] = new(Archetype.Armoured, 1, 2, 1.20f, 0.90f, 25f),
-            [Archetype.Caster] = new(Archetype.Caster, 1, 2, 0.55f, 2.20f, 0f),
-            [Archetype.Bruiser] = new(Archetype.Bruiser, 1, 1, 2.40f, 1.30f, 10f),
+            [Archetype.Swarm] = new(Archetype.Swarm, 3, 5, 0.30f, 0.32f, 0f),
+            [Archetype.Armoured] = new(Archetype.Armoured, 1, 2, 1.25f, 0.85f, 25f),
+            [Archetype.Caster] = new(Archetype.Caster, 1, 2, 0.50f, 1.00f, 0f),
+            [Archetype.Bruiser] = new(Archetype.Bruiser, 1, 1, 2.40f, 1.35f, 10f),
         };
+
+    /// <summary>
+    /// The per-creature multipliers are balanced on their TOTALS, not on their face values.
+    /// </summary>
+    /// <remarks>
+    /// The first draft read well per creature and was wrong per wave. Multiplied by count, a Swarm of
+    /// five at 0.45 threw 2.25x a single enemy's damage and two Casters at 2.20 threw 4.4x — against a
+    /// baseline tuned when every wave held exactly one creature. Depth collapsed to 4, and a test that
+    /// only asked "does more damage push deeper" caught it because BOTH builds died in the same place.
+    ///
+    /// Expected totals now, at average count:
+    ///
+    ///     Swarm     4 x 0.32 = 1.28 damage,  4 x 0.30 = 1.20 health
+    ///     Armoured  1.5 x 0.85 = 1.28,       1.5 x 1.25 = 1.88
+    ///     Caster    1.5 x 1.00 = 1.50,       1.5 x 0.50 = 0.75
+    ///     Bruiser   1 x 1.35 = 1.35,         1 x 2.40 = 2.40
+    ///
+    /// Threat stays comparable across archetypes while the SHAPES stay distinct: the Caster still hits
+    /// hardest per creature and dies fastest, the Bruiser is still the wall, the Swarm still wins on
+    /// action economy rather than on raw output.
+    /// </remarks>
 
     /// <summary>How fast an Armoured creature's plate thickens with depth.</summary>
     /// <remarks>
