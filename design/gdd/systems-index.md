@@ -26,6 +26,7 @@ time constraint.
 
 | # | System Name | Category | Priority | Status | Design Doc | Depends On |
 |---|---|---|---|---|---|---|
+| [Game Flow](game-flow.md) | **Foundation** | End-to-end loop: expedition, enemy archetypes, band rotation, the post-run report, the two trees. Supersedes combat-encounter-system and expedition-auto-battle. |
 | 1 | creature-data-schema (inferred) | Core | MVP | Designed | design/gdd/creature-data-schema.md | — |
 | 2 | item-data-schema (inferred) | Core | MVP | Designed | design/gdd/item-data-schema.md | — |
 | 3 | save-load-persistence (inferred) | Persistence | MVP | Designed | design/gdd/save-load-persistence.md | — |

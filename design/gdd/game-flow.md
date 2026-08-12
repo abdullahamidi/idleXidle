@@ -1,7 +1,7 @@
 # Game Flow
 
 *Created: 2026-08-12*
-*Status: Drafting — sections 1–3.3 written, 3.4 onward pending*
+*Status: Complete draft — all 8 sections written, awaiting implementation planning*
 
 > **This document supersedes the end-to-end loop described in `game-concept.md`,
 > `combat-encounter-system.md` and `expedition-auto-battle.md`.** Those describe a
@@ -284,24 +284,243 @@ The Forge spends materials — the Warren's output — on upgrade (item level), 
 (reroll the trait) and merge (combine duplicates). This is the loop that turns idle
 time into build capability without letting idle time buy a decision.
 
+### 3.8 The Warren as a gated idle layer
+
+Today the Warren is eight always-unlocked, mechanically identical facilities that
+mint every currency in the game from the first frame, on every screen and while the
+game is closed. It out-produces every other faucet by three to four orders of
+magnitude, which is why nothing in the game is ever scarce.
+
+It becomes a **support layer whose ceiling is set by play**:
+
+- **Facilities unlock by conquest.** One per region conquered, plus a few from
+  mastery goals. A new player has one facility, not eight.
+- **Each facility's level is capped by depth.** `maxLevel = floor(deepestDepth / 5)`.
+  Idle output can never run ahead of the player's own progress, and a player who
+  stops descending stops growing. This single rule is what converts the Warren from
+  a printer into a reward for playing.
+- **It produces Gleam and materials only.** Never mastery points, never trait
+  points. Idle buys gear; play buys identity.
+- **Facilities produce different material tiers**, so which one to raise is a real
+  question tied to what the Forge currently needs rather than a fixed optimal order.
+- **Offline pays the full rate, capped at a generous window.** The cap respects a
+  player's time without letting an absence become the best way to play.
+
+### 3.9 The long-term ladder
+
+Four chase axes run in parallel, so a player who exhausts one still has somewhere
+to go.
+
+**Corruption tiers — the world deepens.** Once every region is conquered, the world
+ratchets: enemy scaling rises, the loot tier rises, and each band gains a second
+affix stacked on its first. Every tier pays trait points. This axis is infinite and
+slow, and it is the one that keeps a finished player playing.
+
+**Content unlocks — new shapes, not bigger numbers.** New regions, new creature
+families, and above all new **Forms and Sources**. A new Form is a new build shape
+and is worth more to this design than any multiplier, because the game's depth
+lives in how a build is shaped rather than how large it is.
+
+**Vows and keystones — restriction for power.** A Vow trades a condition for
+strength on one skill. Because the player cannot react inside a run, a Vow's
+condition must be a **build** condition rather than a reaction: *"this skill deals
++60% but cannot fire while any enemy is above 80% health"* rewards a build that
+opens with something else; *"+80% but costs 15% of max health per cast"* plugs
+directly into the health budget from §3.1. Vows are therefore another way for
+content to demand a shape.
+
+**Mastery goals — depth without content.** Authored challenges against the content
+that already exists: reach depth N using a single Form, with a named Vow active,
+with no flat nodes taken, or with nothing above Rare equipped. Each pays a trait
+point. This is the cheapest depth in the game to author and the most demanding to
+complete.
+
+### 3.10 Session shape
+
+**First ten minutes.** Descend, die somewhere around depth 8–12, read the report,
+spend two mastery points, descend again, go deeper. The lesson being taught is not
+"combat is automatic" — the player will work that out — but *the report is the
+game*. If a new player does not open the report and then change something, the
+onboarding has failed.
+
+**First hour.** Reach the first region's conquest depth. That unlocks the second
+region and the first Warren facility. Somewhere in here the player meets an
+Armoured band and stalls for the first time on a *demand* rather than a number —
+their first real build decision, and the moment the game explains itself.
+
+**First week.** Three or four regions conquered. The mastery tree is perhaps a
+quarter filled and has been respecced several times, because respeccing is free and
+each new band asks a different question. The first keystone is chosen from the
+trait tree and will not be given back. The Forge is turning Warren materials into
+item levels.
+
+**Long term.** Corruption tiers, mastery goals, and the real endgame problem: a
+build that spans several bands instead of dominating one. A specialist reaches
+band 3 quickly and stops; a generalist crawls but does not wall. Finding the shape
+that does both is the thing the player is actually optimising.
+
 ---
 
 ## 4. Formulas
 
-*Pending — to be written after §3 is settled.*
+### 4.1 Flat mitigation (this is what makes Armoured exist)
+
+    hitDamage = max(rawHit × MinHitFraction, rawHit − enemyDefense)
+
+| Variable | Meaning | Range |
+|---|---|---|
+| `rawHit` | one hit's damage before enemy mitigation | 5 – 50,000 |
+| `enemyDefense` | flat per-hit reduction, authored per creature | 0 – 400 |
+| `MinHitFraction` | floor so a hit always lands for something | 0.10 – 0.25 (default 0.15) |
+
+*Example.* Against `enemyDefense = 25`: ten hits of 40 deliver
+`10 × max(6, 15) = 150`. One hit of 400 delivers `max(60, 375) = 375`. Same total
+raw damage, 2.5× the result — that gap is the Armoured archetype.
+
+This replaces the current `100/(100+Defense)` multiplicative curve, which scales
+every hit identically and is therefore blind to hit count. Under the old formula
+the Armoured archetype is not merely weak, it is unrepresentable.
+
+### 4.2 Action economy (this is what makes Swarm exist)
+
+    targetsStruck   = min(Form.targets, creaturesAlive)
+    damagePerCast   = targetsStruck × hitDamage
+
+`Form.targets` is authored per Form (Strike 1, Trap 1, Projectile 2, Aura all).
+Raising it is something a build buys.
+
+### 4.3 Depth to mastery points
+
+    masteryPoints = Σ over regions of floor(bestDepth_region / DepthPerPoint)
+
+`DepthPerPoint = 5`. Credited on **first** arrival only. Six regions at depth 50
+each yields 60 points.
+
+### 4.4 The budget invariant
+
+    reachableFraction = totalPointsAvailable / totalNodeCost ≈ 1/3
+
+This is the number that must hold, not the node count. When nodes are added, points
+are added to preserve it; when a new region ships, its depth milestones are part of
+the same equation. A build that can afford more than half a tree has stopped making
+choices.
+
+### 4.5 Warren ceiling
+
+    facilityMaxLevel = floor(deepestDepthAnyRegion / 5)
+
+### 4.6 Bands and affixes
+
+    band(wave)  = floor((wave - 1) / WavesPerBand)          WavesPerBand = 10
+    affix(wave) = region.affixCycle[band(wave) mod cycleLength]
+
+### 4.7 Enemy scaling, with the boss bug fixed
+
+    enemyHealth = base × EnemyScaleBase^wave × (isBoss ? BossHealthScale : 1)
+    enemyDamage = base × EnemyScaleBase^wave
+
+`EnemyScaleBase = 1.06`, `BossHealthScale = 2.2`. **The boss multiplier applies to
+health only.** The code currently passes the same scale to both parameters
+(`SoloExpedition.cs:136`), which is why 20 of 21 simulated runs end on a boss wave
+and depth is quantised to multiples of five. Fixing this is a prerequisite for
+bands to be readable at all — a player cannot diagnose a wall they always hit in
+the same place for an unrelated reason.
+
+### 4.8 Fast-forward threshold
+
+    liveFrom = max(1, bestDepth_region - 5)
+
+---
 
 ## 5. Edge Cases
 
-*Pending.*
+| Situation | What happens |
+|---|---|
+| New save, no region unlocked | The first region is always unlocked; there is no state with nothing to descend into. |
+| Hunter dies on wave 1 | The report still opens, shows depth 0, names the wave and pays nothing. It must not be blank — a first-run failure is exactly when the player most needs the report to explain itself. |
+| A fast-forwarded wave would kill the Hunter | Fast-forward stops at that wave and plays it live. The player is watching the exact wave where their build got *worse*, which is the most useful thing that can be shown. |
+| Player tries to change build mid-expedition | Not possible. The build is locked at descend; the gear and tree screens are readable but not editable until the run ends. |
+| Respec while an expedition is running | Same as above — blocked, not queued. |
+| All regions conquered, corruption tier 0 | The DEEPEN action becomes available on the map. |
+| Warren facility at its depth cap | The upgrade button states the reason — "capped at level 9 by depth 47" — rather than greying out silently. |
+| Points exceed total node cost | A content bug, not a player state. Assert in dev builds; the budget invariant (§4.4) is violated. |
+| All creatures in a wave die to the same hit | The wave clears normally; overkill is discarded. |
+| A part breaks on the hit that kills its creature | The part-break still pays. Denying it would make large-hit builds worse at the one thing they are for. |
+| A wave cannot be cleared within the tick ceiling | Recorded as a **stall**, not a death. The report names it as a stall so the player knows their damage, not their health, is the wall. |
+| Region changed mid-session | Depth is tracked per region; switching does not reset the other region's record or its fast-forward threshold. |
+
+---
 
 ## 6. Dependencies
 
-*Pending.*
+This document sets the frame; these systems supply or consume parts of it. Each
+listed doc needs a matching back-reference.
+
+| System | Relationship |
+|---|---|
+| `resonance-weaving-system.md` | Supplies Forms, Sources and Vows. **Needs a `targets` count per Form** (§4.2) and Vow conditions restated as build conditions rather than reactions (§3.9). |
+| `item-data-schema.md` | Supplies traits and enchants. **Needs traits to interact with build shape** (§3.7). |
+| `the-forge-system.md` | Consumes Warren materials; is the sink that makes idle time worth something. |
+| `loot-drop-system.md` | **Needs a Rarity sink** (§3.7) — rarity currently has a source and no reader. |
+| `region-mastery-automation-system.md` | Supersedes its automation staging with the depth-capped Warren (§3.8). |
+| `memory-dust-prestige-system.md` | Becomes the **trait tree** (§3.6). No reset ever existed; the rename makes the code and the design agree. |
+| `hunter-progression-system.md` | Its nine trainable stats are currently unreachable (`Hunter.Train()` has no player call site). Either they become a real spender or they are cut — the flow has no room for a frozen system four screens display. |
+| `combat-encounter-system.md` | **Superseded.** Retained for enemy vocabulary only. |
+| `expedition-auto-battle.md` | **Superseded.** |
+
+---
 
 ## 7. Tuning Knobs
 
-*Pending.*
+| Knob | Default | Safe range | Affects |
+|---|---|---|---|
+| `MinHitFraction` | 0.15 | 0.10 – 0.25 | How hard Armoured punishes small hits. Lower = sharper archetype, higher = gentler. Below 0.10 a small-hit build cannot function at all. |
+| `WavesPerBand` | 10 | 5 – 20 | How often the demand rotates. Lower = faster variety but less time to feel a band; higher = long stretches of one question. |
+| `DepthPerPoint` | 5 | 3 – 10 | Mastery point income. Directly moves the budget invariant — change with §4.4 in hand, not alone. |
+| `reachableFraction` | 0.33 | 0.25 – 0.45 | How much of a tree a finished player owns. Above ~0.5 the trees stop being choices. |
+| `EnemyScaleBase` | 1.06 | 1.04 – 1.08 | Run length. Compounds — small changes move the ceiling a long way. |
+| `BossHealthScale` | 2.2 | 1.5 – 3.0 | Boss spike. **Health only** (§4.7). |
+| `FastForwardMargin` | 5 | 3 – 10 | How many proven waves are replayed live. Lower = tighter iteration, higher = more context before the wall. |
+| `WarrenDepthDivisor` | 5 | 3 – 10 | How fast idle capacity follows play. |
+| `OfflineCapHours` | 8 | 4 – 24 | How much an absence is worth. |
+| Region affix cycle | per region | — | The identity of a region. This is content, not a number: two regions with the same cycle are the same region. |
+
+---
 
 ## 8. Acceptance Criteria
 
-*Pending.*
+**Flow**
+
+1. A new player can start an expedition, die, and see a report naming the wave, its
+   composition and its affix — within 3 minutes of a new save.
+2. The report shows at least one measurement that differs from the previous run in
+   the same region, once a second run exists.
+3. No screen offers an in-combat input other than playback speed.
+
+**The archetype engine**
+
+4. A build with `Form.targets = 1` and high hit size reaches a *measurably* deeper
+   band against Armoured than against Swarm, and the inverse holds for a build with
+   `Form.targets ≥ 3` and small hits. Deltas of at least one full band.
+5. Ten hits of 40 against Defense 25 deliver less than half the damage of one hit
+   of 400 (§4.1).
+6. No single build reaches the maximum authored band of every region without a
+   respec.
+
+**Scarcity**
+
+7. Clearing all shipped content leaves both trees between 25% and 45% purchased.
+8. No Warren facility can exceed `floor(deepestDepth / 5)`.
+9. Idle time alone — with zero expeditions — earns zero mastery points and zero
+   trait points, verified over a simulated 24-hour absence.
+
+**Regressions the audit found, which must not survive**
+
+10. `Hunter.Train()` is reachable from the Stats screen, or the nine stats and the
+    Hunter Level readout are removed from every screen.
+11. `PowerRating` changes when an item's trait or enchant changes, or EQUIP BEST is
+    removed.
+12. `BuildMods.Rarity` is read by at least one drop calculation.
+13. Boss waves multiply enemy health but not enemy damage.
+14. Warren mastery and build-tree points are separate variables; spending one does
+    not change the other.
