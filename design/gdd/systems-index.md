@@ -28,6 +28,7 @@ time constraint.
 |---|---|---|---|---|---|---|
 | [Game Flow](game-flow.md) | **Foundation** | End-to-end loop: expedition, enemy archetypes, band rotation, the post-run report, the two trees. Supersedes combat-encounter-system and expedition-auto-battle. |
 | [Skill Tree and Trait Tree](skill-and-trait-trees.md) | **Core** | The game's main decision surface: four opposed branches answering the four enemy archetypes, and four permanent keystone paths. |
+| [Regions, Rosters and Band Cycles](regions-and-rosters.md) | **Core** | The content the trees answer: six regions, archetype-as-role, ten affixes, and the band cycle per region. |
 | 1 | creature-data-schema (inferred) | Core | MVP | Designed | design/gdd/creature-data-schema.md | — |
 | 2 | item-data-schema (inferred) | Core | MVP | Designed | design/gdd/item-data-schema.md | — |
 | 3 | save-load-persistence (inferred) | Persistence | MVP | Designed | design/gdd/save-load-persistence.md | — |
