@@ -398,7 +398,13 @@ public sealed class CharacterScreen
         // Comparison strip (§10.8) — the matching worn item + the net power delta. Concise, not a full sim.
         var slot = Gear.SlotFor(item.BaseType);
         var worn = slot is { } s ? hunter.Worn(s) : null;
-        var cmp = new Rectangle(DetailPanel.X + 44, 792, DetailPanel.Width - 88, 44);
+        // Below whatever the stat list actually ended at, not at a fixed y. The rows are dynamic —
+        // affix count and the optional TRAIT line move the bottom — so a constant put the comparison
+        // strip through the last row on any item with a trait.
+        // Clamped, not just floored: the buttons live at y=848, so the strip has a hard ceiling of
+        // 796 no matter how long the stat list got.
+        var cmpY = Math.Clamp(sy + 8, 760, 796);
+        var cmp = new Rectangle(DetailPanel.X + 44, cmpY, DetailPanel.Width - 88, 44);
         _ui.Fill(b, cmp, Quiet);
         if (IsWorn(hunter, item))
             _ui.TextBig(b, "EQUIPPED", cmp.X + 16, cmp.Y + 12, Gold, UiTypography.Secondary);
@@ -418,10 +424,12 @@ public sealed class CharacterScreen
 
     private void StatRow(SpriteBatch b, string label, string value, ref int y, Color valColor)
     {
-        _ui.TextBig(b, label, DetailPanel.X + 24, y, Slate, UiTypography.Body);
-        _ui.TextRightBig(b, value, DetailPanel.Right - 24, y, valColor, UiTypography.Body);
-        _ui.Fill(b, new Rectangle(DetailPanel.X + 24, y + 32, DetailPanel.Width - 48, 2), Dim * 0.6f);
-        y += 44;
+        // +44 inset and a 38px pitch: at +24 the labels sat on the frame's filigree, and at 44px a
+        // Legendary with four affixes plus a TRAIT line ran the list into the comparison strip below.
+        _ui.TextBig(b, label, DetailPanel.X + 44, y, Slate, UiTypography.Body);
+        _ui.TextRightBig(b, value, DetailPanel.Right - 44, y, valColor, UiTypography.Body);
+        _ui.Fill(b, new Rectangle(DetailPanel.X + 44, y + 28, DetailPanel.Width - 88, 2), Dim * 0.6f);
+        y += 38;
     }
 
     private void Button(SpriteBatch b, Rectangle r, string label, Point hit, bool enabled)

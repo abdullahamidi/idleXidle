@@ -146,7 +146,7 @@ public sealed class WarrenScreen
             _ui.TextCenterBig(b, f.Info.Name, card.Center.X, card.Y + 14, sel ? Bone : Slate, UiTypography.Secondary);
             // Milestone pips (top-right) — one gold gem per milestone crossed, the at-a-glance long-term goal.
             for (var m = 0; m < f.MilestoneTier && m < 5; m++)
-                _ui.Diamond(b, new Rectangle(card.Right - 18 - m * 15, card.Y + 10, 11, 11), Gold);
+                _ui.Diamond(b, new Rectangle(card.Right - 18 - m * 30, card.Y + 30, 11, 11), Gold);
             // The facility's own picture, on a resource-tinted hex plate. Eight identical hexagons
             // distinguished only by colour told the player nothing about what each place does.
             var plate = new Rectangle(card.Center.X - 44, card.Y + 46, 88, 76);

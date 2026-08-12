@@ -1857,7 +1857,7 @@ public class Game1 : Game
         ("HUNT", 'H', "nav_hunt_128"), ("GEAR", 'C', "nav_inventory_128"),
         ("STATS", 'V', "state_resonance_128"), ("BUILD", 'B', "state_mastery_128"),
         ("FORGE", 'F', "nav_forge_128"), ("WARREN", 'A', "nav_warren_128"),
-        ("MAP", 'W', "nav_relics_128"), ("DUST", 'P', "state_prestige_128"),
+        ("MAP", 'W', "nav_relics_128"), ("DUST", 'P', "nav_prestige"),
     };
 
     private static readonly Color NavGold = new(0xF0, 0xB2, 0x4A);

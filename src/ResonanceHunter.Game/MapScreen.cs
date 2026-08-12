@@ -203,7 +203,9 @@ public sealed class MapScreen
         {
             var a = Node(i).Center;
             var c = Node(i + 1).Center;
-            var col = World.IsConquered(Def(i).Id) ? Gold * 0.9f : Dim * 0.9f;
+            // Vellum, not Dim: these connectors sit on the parchment chart now, and Dim (1.6:1 on both
+            // surfaces) was the colour that failed everywhere else on this screen too.
+            var col = World.IsConquered(Def(i).Id) ? Gold * 0.9f : UiKit.Vellum * 0.5f;
             DrawDottedLine(b, a, c, col);
         }
 
@@ -241,8 +243,8 @@ public sealed class MapScreen
             // node's frame edge on every region.
             // Vellum, not Slate/Dim: these labels now sit on the parchment chart rather than on black, and
             // Slate (1.6:1 either way) was invisible on both.
-            _ui.TextCenter(b, $"PWR {RegionPower(def):N0}", node.Center.X, node.Bottom + 8,
-                unlocked ? UiKit.Vellum : UiKit.Vellum * 0.55f);
+            _ui.TextCenterBig(b, $"PWR {RegionPower(def):N0}", node.Center.X, node.Bottom + 8,
+                unlocked ? UiKit.Vellum : UiKit.Vellum * 0.55f, UiTypography.Secondary);
 
             // State badge, top-right of the node.
             if (!unlocked) DrawLock(b, new Rectangle(node.Right - 30, node.Y + 8, 20, 22), Slate);

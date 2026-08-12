@@ -74,7 +74,7 @@ public sealed class BuildScreen
     private static Rectangle AuraCard(int i) => new(452 + i * 182, 648, 168, 198);
     // Under the panel's top crest, which the title now clears too — at y=196 the button was drawn
     // straight through it.
-    private static readonly Rectangle ViewTreeBtn = new(1576, 250, 250, 44);
+    private static readonly Rectangle ViewTreeBtn = new(1544, 250, 250, 44);
 
     // ── Edit sub-view: the mastery tree + skill sidebar (unchanged geometry). ──
     private const int Cx = 600, Cy = 520, R = 464;

@@ -179,3 +179,7 @@ tools/asset-pipeline/.env
 
 # Dev screenshot captures (tools/asset-pipeline/capture.sh) — regenerable, not source.
 shot_*.png
+
+# Verification captures written by audit agents — never source.
+v_*.png
+audit_*.png
