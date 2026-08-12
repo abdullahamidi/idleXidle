@@ -129,11 +129,16 @@ public sealed class Clip
                 new(0.75f, 1.75f, Easing.EaseOut),     // ~170 degrees of sweep
                 new(1.10f, 0.00f),
             },
+            // The forearm's relative angle is the ELBOW. Zero is a straight arm, because the art draws
+            // the forearm continuing the upper arm's line. So the strike keyframe must be near zero:
+            // the arm EXTENDS into the blow. It used to be +0.60 — the elbow folded shut at the moment
+            // of impact, which parked the hand (and the sword in it) beside the character's own face.
+            // Cocked at the windup, straight at the strike, is both correct and what reads.
             ["forearm"] = new List<Keyframe>
             {
                 new(0.00f, 0.00f, Easing.EaseIn),
-                new(0.60f, -0.90f, Easing.EaseInOut),
-                new(0.75f, 0.60f, Easing.EaseOut),
+                new(0.60f, -0.95f, Easing.EaseInOut),   // cocked back
+                new(0.75f, -0.10f, Easing.EaseOut),     // extended through the blow
                 new(1.10f, 0.00f),
             },
             ["torso"] = new List<Keyframe>

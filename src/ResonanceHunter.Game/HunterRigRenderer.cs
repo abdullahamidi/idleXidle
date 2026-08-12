@@ -78,11 +78,13 @@ public sealed class HunterRigRenderer
         // gear_weapon_* is authored VERTICAL with the hilt at the bottom, so the pivot sits low in
         // the texture (the grip).
         //
-        // The tilt is NEGATIVE, and that is the whole point: the main hand is on the screen-left of a
-        // figure that faces right, so a positive (clockwise) tilt lays the blade up across the chest —
-        // which is exactly what it did, a sword worn like a sash. Tilting the other way carries it
-        // clear of the silhouette.
-        [GearSlot.Weapon] = new("hand_main", 0.50f, 0.88f, 148f, 21, -0.30f),
+        // The tilt was SWEPT against real captures, not derived — two poses have to be right at once and
+        // they pull against each other. At rest the blade must hang clear of the body; at the strike
+        // apex, where the hand has rotated ~150 degrees, it must point at the enemy rather than back
+        // across the character's own face. -0.30 satisfied only the first, and the sword swept through
+        // the helmet on every attack. -2.10 lays the blade alongside the leg at rest and level at the
+        // target on impact.
+        [GearSlot.Weapon] = new("hand_main", 0.50f, 0.88f, 148f, 21, -2.10f),
     };
 
     /// <summary>Boots and gloves are worn on both limbs; the mirror bone draws the same texture.</summary>
