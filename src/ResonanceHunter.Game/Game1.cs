@@ -1668,7 +1668,7 @@ public class Game1 : Game
         // carries the identity, the number is abbreviated. The check is a crash-SAFE dev warning, never a
         // Debug.Assert (a failed assert aborts the game's Debug build — the "Continue" crash).
         var right = 1896;   // 1920-space right margin (was 474 in 480-space)
-        right = _ui.Pill(_batch, right, 16, null, new Color(0x9A, 0xC0, 0x88), Abbrev(_hunter.MaterialOf(Material.Scrap)), "", new Color(0x9A, 0xC0, 0x88)) - 20;
+        right = _ui.Pill(_batch, right, 16, "mat_scrap", new Color(0x9A, 0xC0, 0x88), Abbrev(_hunter.MaterialOf(Material.Scrap)), "", new Color(0x9A, 0xC0, 0x88)) - 20;
         right = _ui.Pill(_batch, right, 16, "ui_memory_dust", default, Abbrev(_dust.MemoryDust), "", new Color(0x9E, 0x86, 0xFF)) - 20;
         var leftEdge = _ui.Pill(_batch, right, 16, "ui_gleam_coin", default, Abbrev(_hunter.Gleam), "", new Color(0xF0, 0xB2, 0x4A));
         if (leftEdge < 1210) System.Diagnostics.Debug.WriteLine($"Currency bar (left {leftEdge}) crowds the stage header.");

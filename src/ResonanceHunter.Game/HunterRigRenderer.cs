@@ -288,14 +288,32 @@ public sealed class HunterRigRenderer
         return true;
     }
 
+    /// <summary>
+    /// The armour TIER an item shows as, from its rarity.
+    /// </summary>
+    /// <remarks>
+    /// Rarity, not trait. Ten trait materials across five slots meant fifty independently generated
+    /// pieces, and a player looking at the character saw a gold helm over a violet boot over a teal
+    /// gauntlet — each correct on its own, none of them designed to sit together. Four tiers are
+    /// designed as complete sets, so whatever combination is equipped agrees with itself, and the
+    /// change from leather to steel to gold-trimmed plate is a progression the player can read at a
+    /// glance. Trait still decides the item's stats and its inventory icon; it just stops deciding
+    /// what the character's armour is made of.
+    /// </remarks>
+    private static string TierFor(Rarity rarity) => rarity switch
+    {
+        Rarity.Legendary => "warplate",
+        Rarity.Epic => "runic",
+        Rarity.Rare => "steel",
+        _ => "worn",
+    };
+
     /// <summary>The worn replacement for a bone, or null to draw the bare body part.</summary>
     private Texture2D? WornTexture(string boneId, Hunter? hunter)
     {
         if (hunter is null || !PartSlot.TryGetValue(boneId, out var slot)) return null;
         if (hunter.Worn(slot) is not { } item) return null;
-        var trait = GearTraits.TraitOf(item)?.ToString().ToLowerInvariant();
-        if (trait is null) return null;
-        return _ui.Assets.Get($"worn_{slot.ToString().ToLowerInvariant()}_{trait}_{boneId}");
+        return _ui.Assets.Get($"worn_{TierFor(item.Rarity)}_{boneId}");
     }
 
     private static IEnumerable<string> BonesFor(GearSlot slot, GearBinding bind)

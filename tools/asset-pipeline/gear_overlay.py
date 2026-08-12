@@ -80,8 +80,7 @@ def ramp(dark: tuple[int, int, int], mid: tuple[int, int, int], light: tuple[int
 
     Three anchors, not two, and that middle one is the whole point. A straight ramp from near-black
     to a pale tint passes through desaturated grey in the middle, where most of a shaded surface
-    actually lives — so a "violet" plate came back looking like plain steel with a purple edge. The
-    mid anchor keeps the hue alive across the tones that do the work.
+    actually lives — so a "violet" plate came back looking like plain steel with a purple edge.
 
     The step count matters too: four tones forced the colour but flattened the form, twelve tones
     that included the body's browns let brown win and the armour came back as the leather it was
@@ -98,30 +97,26 @@ def ramp(dark: tuple[int, int, int], mid: tuple[int, int, int], light: tuple[int
     return out
 
 
-TRAIT_PALETTE = {
-    "keen":    ramp((0x0C, 0x0E, 0x12), (0x6E, 0x86, 0xA4), (0xE8, 0xF2, 0xFC)),   # bright steel
-    "heavy":   ramp((0x08, 0x08, 0x0A), (0x3A, 0x3C, 0x46), (0x92, 0x96, 0xA2)),   # blackened iron
-    "swift":   ramp((0x14, 0x18, 0x1E), (0x86, 0x9A, 0xAE), (0xF2, 0xF8, 0xFC)),   # pale steel
-    "savage":  ramp((0x18, 0x0C, 0x06), (0xA8, 0x4C, 0x18), (0xF0, 0xB0, 0x64)),   # scarred rust
-    "warding": ramp((0x06, 0x0E, 0x24), (0x2A, 0x62, 0xD0), (0xAE, 0xD6, 0xFA)),   # blue-steel
-    "vital":   ramp((0x1C, 0x06, 0x06), (0xC0, 0x30, 0x28), (0xF6, 0xAA, 0x86)),   # red-bronze
-    "greedy":  ramp((0x1E, 0x14, 0x02), (0xD8, 0x9E, 0x14), (0xFC, 0xEE, 0xA0)),   # gold
-    "attuned": ramp((0x12, 0x08, 0x20), (0x7A, 0x26, 0xE0), (0xDC, 0xBC, 0xFC)),   # violet arcane
-    "focused": ramp((0x0A, 0x10, 0x12), (0x18, 0xA8, 0xC0), (0xA8, 0xF2, 0xFA)),   # cyan-gem steel
-    "wild":    ramp((0x0C, 0x12, 0x08), (0x4C, 0xA0, 0x2E), (0xCE, 0xE8, 0x96)),   # mossy bronze
-}
-
-TRAIT_MATERIAL = {
-    "keen":    "polished razor-edged bright steel",
-    "heavy":   "thick blunt blackened iron",
-    "swift":   "slender lightweight pale steel",
-    "savage":  "jagged barbed battle-scarred iron",
-    "warding": "rune-etched blue-steel",
-    "vital":   "warm red-bronze with crimson inlay",
-    "greedy":  "gilded gold with fine ornament",
-    "attuned": "deep violet arcane metal",
-    "focused": "dark steel with a single bright inset gem",
-    "wild":    "mossy bronze with green vine engraving",
+# ARMOUR TIERS, keyed to item RARITY, replacing a ten-materials-per-slot matrix.
+#
+# That matrix was the mistake. Fifty independent generations meant fifty independent dice rolls with
+# no quality gate, and it showed: a gold helm above a violet boot above a teal gauntlet, every piece
+# designed in isolation and none of them agreeing. Nobody ships armour that way. A handful of tiers,
+# each designed once as a COMPLETE set under one palette, is both far easier to get right and a much
+# better signal to the player — "my gear got better" reads from the metal changing across the whole
+# figure at once, not from four slots disagreeing about colour.
+#
+# Per-slot visibility is unchanged: equip only boots and only the boots change. What the tier fixes
+# is that every piece a player can see at once was designed to sit beside the others.
+TIERS: dict[str, tuple[str, list[tuple[int, int, int]]]] = {
+    "worn":     ("dark studded leather and blackened iron",
+                 ramp((0x0A, 0x08, 0x08), (0x4A, 0x3A, 0x2A), (0xA8, 0x90, 0x70))),
+    "steel":    ("polished steel plate with bright edges",
+                 ramp((0x0C, 0x0E, 0x14), (0x74, 0x8A, 0xA6), (0xEC, 0xF4, 0xFC))),
+    "runic":    ("deep blue-steel plate with glowing rune inlay",
+                 ramp((0x06, 0x0C, 0x22), (0x2E, 0x6A, 0xD8), (0xB4, 0xDA, 0xFC))),
+    "warplate": ("black plate armour with bright gold trim",
+                 ramp((0x0A, 0x08, 0x06), (0xC8, 0x94, 0x1E), (0xFC, 0xEC, 0xA8))),
 }
 
 MARGIN = 30   # context kept around each region, so the repaint has the body's own shading to match
@@ -144,9 +139,8 @@ def to_b64(img: Image) -> str:
         return base64.b64encode(fh.read()).decode("ascii")
 
 
-def palette_b64(trait: str) -> str | None:
-    """A tiny swatch of the trait's colours, handed to /inpaint as a forced palette."""
-    colours = TRAIT_PALETTE.get(trait)
+def palette_b64(colours: list[tuple[int, int, int]]) -> str | None:
+    """A tiny swatch of the tier's colours, handed to /inpaint as a forced palette."""
     if not colours:
         return None
     sw = Image(len(colours) * 8, 8)
@@ -192,7 +186,8 @@ def mask_for(size: tuple[int, int], white: tuple[int, int, int, int]) -> Image:
     return m
 
 
-def run(slot: str, material: str, trait: str, seed: int | None) -> str:
+def run(slot: str, tier: str, seed: int | None) -> str:
+    material, palette = TIERS[tier]
     parts, regions = SLOTS[slot]
     base = read(BASE)
     merged = read(BASE)
@@ -211,11 +206,11 @@ def run(slot: str, material: str, trait: str, seed: int | None) -> str:
             to_b64(context), to_b64(mask), prompt, context.w, context.h,
             outline="single color black outline", shading="medium shading", detail="highly detailed",
             negative_description=NEGATIVE + ", skull, bone, skeleton, face, corset, lacing",
-            text_guidance_scale=10.0, color_b64=palette_b64(trait), seed=seed,
+            text_guidance_scale=10.0, color_b64=palette_b64(palette), seed=seed,
         )
 
         os.makedirs(STAGING, exist_ok=True)
-        raw_path = os.path.join(STAGING, f"worn_{slot}_{trait}_{index}.raw.png")
+        raw_path = os.path.join(STAGING, f"worn_{tier}_{slot}_{index}.raw.png")
         with open(raw_path, "wb") as fh:
             fh.write(payload)
 
@@ -226,7 +221,7 @@ def run(slot: str, material: str, trait: str, seed: int | None) -> str:
 
     # The whole repainted figure is a debugging artefact, not a shipping asset — it stays in staging,
     # because AssetLibrary keys on bare filenames and a second full-body PNG would just be dead weight.
-    write(os.path.join(STAGING, f"worn_{slot}_{trait}_full.png"), merged)
+    write(os.path.join(STAGING, f"worn_{tier}_{slot}_full.png"), merged)
 
     # Cut with the SAME boxes as the body, so each result is a drop-in replacement texture for that
     # bone. No scale, no pivot, no rotation to tune — the transform is the body part's own.
@@ -234,32 +229,26 @@ def run(slot: str, material: str, trait: str, seed: int | None) -> str:
     written = []
     for name in parts:
         l, t, r, b = PARTS[name][1]
-        write(os.path.join(OUT_DIR, f"worn_{slot}_{trait}_{name}.png"), crop(merged, (l, t, r, b)))
+        write(os.path.join(OUT_DIR, f"worn_{tier}_{name}.png"), crop(merged, (l, t, r, b)))
         written.append(name)
     return f"{len(written)} parts: " + ", ".join(written)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--slot", choices=sorted(SLOTS), help="one slot; omit with --all")
-    ap.add_argument("--material", help="e.g. 'purple arcane steel'; omit with --all")
-    ap.add_argument("--trait", default="test")
-    ap.add_argument("--all", action="store_true", help="every slot x every trait")
-    ap.add_argument("--only-trait", action="append", default=None)
+    ap.add_argument("--tier", choices=sorted(TIERS), help="one tier; omit with --all")
+    ap.add_argument("--slot", choices=sorted(SLOTS), help="one slot (default: every slot of the tier)")
+    ap.add_argument("--all", action="store_true", help="every tier x every slot")
     ap.add_argument("--seed", type=int, default=None)
     args = ap.parse_args()
 
-    if args.all:
-        traits = args.only_trait or sorted(TRAIT_MATERIAL)
-        for trait in traits:
-            for slot in sorted(SLOTS):
-                print(f"{slot} / {trait}")
-                print("   ", run(slot, TRAIT_MATERIAL[trait], trait, args.seed))
-        return 0
-
-    if not args.slot or not args.material:
-        ap.error("--slot and --material are required without --all")
-    print(run(args.slot, args.material, args.trait, args.seed))
+    tiers = sorted(TIERS) if args.all else ([args.tier] if args.tier else [])
+    if not tiers:
+        ap.error("pass --tier or --all")
+    for tier in tiers:
+        for slot in ([args.slot] if args.slot else sorted(SLOTS)):
+            print(f"{tier} / {slot}")
+            print("   ", run(slot, tier, args.seed))
     return 0
 
 
