@@ -420,11 +420,17 @@ choices.
     enemyDamage = base × EnemyScaleBase^wave
 
 `EnemyScaleBase = 1.06`, `BossHealthScale = 2.2`. **The boss multiplier applies to
-health only.** The code currently passes the same scale to both parameters
-(`SoloExpedition.cs:136`), which is why 20 of 21 simulated runs end on a boss wave
-and depth is quantised to multiples of five. Fixing this is a prerequisite for
-bands to be readable at all — a player cannot diagnose a wall they always hit in
-the same place for an unrelated reason.
+health only.** The code passed the same scale to both parameters, so every boss also
+hit 2.2x harder than the wave before it — a spike nothing in the design asked for.
+
+*Corrected 2026-08-12.* An earlier draft of this section claimed the bug made 20 of
+21 runs end on a boss wave. That number came from the system audit and does not
+reproduce: over a health sweep from 200 to 2000 the bug costs two to four waves of
+depth, and the share of run-ending depths landing on a multiple of five is
+unchanged. The fix is still correct — the code contradicted its own documentation,
+and a boss that hits harder cannot be tuned separately from a boss that has more
+health — but the justification is consistency, not a dramatic change in run shape.
+**Fixed**, with a direct contract test rather than a statistical one.
 
 ### 4.8 Fast-forward threshold
 

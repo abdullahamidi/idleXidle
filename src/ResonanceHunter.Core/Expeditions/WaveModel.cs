@@ -75,9 +75,27 @@ public readonly record struct Haul(int Cores, int Gleam, float Quality)
 /// </remarks>
 public static class WaveScaling
 {
-    /// <summary>Threat compounds; see <see cref="ExpeditionTuning.EnemyScaleBase"/>.</summary>
+    /// <summary>Threat compounds; see <see cref="ExpeditionTuning.EnemyScaleBase"/>. Includes the boss
+    /// spike, so this is the HEALTH scale — pair it with <see cref="EnemyDamageScale"/>.</summary>
     public static float EnemyScale(int wave, ExpeditionTuning t)
         => MathF.Pow(t.EnemyScaleBase, wave) * (IsBossWave(wave, t) ? t.BossHealthScale : 1f);
+
+    /// <summary>
+    /// The same compounding threat WITHOUT the boss spike — the scale enemy DAMAGE uses.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="EnemyScale"/> folds in <see cref="ExpeditionTuning.BossHealthScale"/>, and callers were
+    /// passing it to both the health and the damage parameter. A boss therefore also hit 2.2x harder than
+    /// the wave before it — a spike this type's own documentation never claimed, and which no tuning knob
+    /// could remove without also removing the health spike it is named for.
+    ///
+    /// MEASURED, so the claim stays honest: over a health sweep from 200 to 2000 the bug costs roughly
+    /// two to four waves of depth. It did NOT visibly quantise depth to boss waves on that axis — two of
+    /// twelve distinct depths landed on a multiple of five with the bug, two of fifteen without it — so
+    /// the case for the fix is the contradiction with the design, not a dramatic shape change.
+    /// </remarks>
+    public static float EnemyDamageScale(int wave, ExpeditionTuning t)
+        => MathF.Pow(t.EnemyScaleBase, wave);
 
     /// <summary>
     /// Every fifth wave is a boss. The run needs a heartbeat, not a gradient.

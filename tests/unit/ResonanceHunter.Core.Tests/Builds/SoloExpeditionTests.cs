@@ -227,4 +227,45 @@ public class SoloExpeditionTests
         Assert.Equal(WaveOutcome.Wiped, run.PushWave());
         Assert.Equal(wave, run.Wave);
     }
+
+    /// <summary>
+    /// A boss wave multiplies enemy HEALTH and must not touch enemy DAMAGE.
+    /// </summary>
+    /// <remarks>
+    /// REGRESSION. <see cref="WaveScaling.EnemyScale"/> folds in the boss health spike, and
+    /// <see cref="SoloExpedition.PushWave"/> passed it to the damage parameter as well — so every boss
+    /// also hit 2.2x harder than the wave before it. Nothing in the design ever asked for that, and no
+    /// tuning knob could have removed it without also removing the health spike it is named for.
+    ///
+    /// This asserts the contract directly rather than measuring run outcomes. A statistical version of
+    /// this test (sweeping health and counting how many depths land on a multiple of five) passed with
+    /// the bug present and is therefore worthless — the bug costs a couple of waves of depth, but it
+    /// does not visibly quantise where runs end.
+    /// </remarks>
+    [Fact]
+    public void test_a_boss_wave_spikes_health_but_not_damage()
+    {
+        var t = ExpeditionTuning.Default;
+        var boss = 5;                       // t.BossEvery
+        Assert.True(WaveScaling.IsBossWave(boss, t));
+        Assert.False(WaveScaling.IsBossWave(boss - 1, t));
+
+        var healthStep = WaveScaling.EnemyScale(boss, t) / WaveScaling.EnemyScale(boss - 1, t);
+        var damageStep = WaveScaling.EnemyDamageScale(boss, t) / WaveScaling.EnemyDamageScale(boss - 1, t);
+
+        Assert.Equal(t.EnemyScaleBase * t.BossHealthScale, healthStep, 3);
+        Assert.Equal(t.EnemyScaleBase, damageStep, 3);
+    }
+
+    /// <summary>The two scales agree on every non-boss wave — the split must not introduce a drift.</summary>
+    [Fact]
+    public void test_health_and_damage_scales_agree_off_boss_waves()
+    {
+        var t = ExpeditionTuning.Default;
+        for (var w = 1; w <= 24; w++)
+        {
+            if (WaveScaling.IsBossWave(w, t)) continue;
+            Assert.Equal(WaveScaling.EnemyScale(w, t), WaveScaling.EnemyDamageScale(w, t), 3);
+        }
+    }
 }

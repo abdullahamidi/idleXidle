@@ -131,9 +131,13 @@ public sealed class SoloExpedition
         var bonus = new WaveBonus();
         var (interval, dmgMult) = BiasTempo();   // the region's combat character bends the enemy's tempo
 
+        // Health takes the boss spike; damage does not. They used to be the same number — see
+        // WaveScaling.EnemyDamageScale.
+        var damageScale = WaveScaling.EnemyDamageScale(next, _tuning);
+
         var (outcome, events) = SoloBattle.ResolveWave(
             _champion, _build, _hunter,
-            _enemyBaseHealth * scale, _enemyBaseDamage * scale * dmgMult,
+            _enemyBaseHealth * scale, _enemyBaseDamage * damageScale * dmgMult,
             interval, _tuning, _rng, bonus,
             _enemySource, WaveScaling.IsBossWave(next, _tuning));
 
