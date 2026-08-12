@@ -28,6 +28,40 @@ public sealed class Champion
 }
 
 /// <summary>
+/// One enemy in a wave. A wave holds between one and five of these.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Waves used to be a single float of health, which meant a build could only ever be too SMALL, never
+/// the wrong SHAPE — there was nothing for target count to be about and no way for an archetype to
+/// punish anything. Everything the redesign asks of content (Swarm, Armoured, Caster, Bruiser) is
+/// expressed here: count, health, damage, and flat armour.
+/// </para>
+/// <para>
+/// <see cref="Source"/> is per creature, not per wave. A composition draws mixed Sources so that
+/// picking a Source is a bet on the wave's weighting rather than a lookup with one correct answer.
+/// </para>
+/// </remarks>
+public sealed class WaveCreature
+{
+    public required float MaxHealth { get; init; }
+    public float Health { get; set; }
+
+    /// <summary>What this creature deals per bite, before the champion's mitigation.</summary>
+    public required float Damage { get; init; }
+
+    /// <summary>FLAT per-hit mitigation — see <see cref="SoloBattle.MinHitFraction"/>.</summary>
+    public float Defense { get; init; }
+
+    public Source? Source { get; init; }
+
+    public bool Alive => Health > 0f;
+
+    public static WaveCreature Single(float health, float damage, float defense = 0f, Source? source = null)
+        => new() { MaxHealth = health, Health = health, Damage = damage, Defense = defense, Source = source };
+}
+
+/// <summary>
 /// The fight, for a single character. No squad, no slots, no roles.
 /// </summary>
 /// <remarks>
@@ -128,6 +162,10 @@ public static class SoloBattle
     /// <summary>
     /// Resolve one wave. Terminates on a kill, a death, or the tick ceiling — never hangs.
     /// </summary>
+    /// <summary>
+    /// Resolve a wave holding ONE enemy. Kept because most of the game and its tests describe a wave
+    /// that way; it builds a single-creature composition and calls the real overload.
+    /// </summary>
     public static (WaveOutcome Outcome, List<BattleEvent> Events) ResolveWave(
         Champion champ,
         Build build,
@@ -141,7 +179,27 @@ public static class SoloBattle
         Source? enemySource = null,
         bool isBoss = false,
         float enemyDefense = 0f)
+        => ResolveWave(
+            champ, build, hunter,
+            new[] { WaveCreature.Single(enemyHealth, enemyDamage, enemyDefense, enemySource) },
+            enemyIntervalMs, tuning, rng, bonus, isBoss);
+
+    /// <summary>
+    /// Resolve one wave against a composition. Terminates on a clear, a death, or the tick ceiling.
+    /// </summary>
+    public static (WaveOutcome Outcome, List<BattleEvent> Events) ResolveWave(
+        Champion champ,
+        Build build,
+        Economy.Hunter hunter,
+        IReadOnlyList<WaveCreature> creatures,
+        int enemyIntervalMs,
+        ExpeditionTuning tuning,
+        Random rng,
+        WaveBonus? bonus = null,
+        bool isBoss = false)
     {
+        ArgumentNullException.ThrowIfNull(creatures);
+        if (creatures.Count == 0) throw new ArgumentException("A wave needs at least one creature.", nameof(creatures));
         ArgumentNullException.ThrowIfNull(champ);
         ArgumentNullException.ThrowIfNull(build);
         ArgumentNullException.ThrowIfNull(hunter);
@@ -190,7 +248,13 @@ public static class SoloBattle
         foreach (var sk in skills)
             if (sk.Vow is { DamageTakenIncrease: > 0f } v) fragilityMult *= 1f + v.DamageTakenIncrease;
 
-        var hp = enemyHealth;
+        // TARGETING is "first alive in spawn order", deliberately, and overkill is discarded.
+        //
+        // Focusing the weakest would let a single-target build tidy up a Swarm efficiently, which is
+        // exactly the pressure Swarm exists to apply. Spawn order is also predictable, which matters
+        // when the player cannot watch and react — they must be able to reason about a composition
+        // before they descend.
+        var alive = creatures.Count;
         var since = champ.ElapsedMs;
         var nextAuto = AutoAttackIntervalMs;
 
@@ -211,7 +275,7 @@ public static class SoloBattle
         }
 
         // How much a hit is worth right now: build mods, AFFINITY, the Source matchup, BLOODLUST, and MARK.
-        float Amp(int absMs, Source? skillSource, Form? skillForm = null)
+        float Amp(int absMs, Source? skillSource, Form? skillForm = null, WaveCreature? against = null)
         {
             var m = mods.Damage;
 
@@ -220,7 +284,7 @@ public static class SoloBattle
             if (build.Affinity is { } aff && skillForm is { } f)
                 m *= FormBehaviour.AffinityFactor(aff, f);
 
-            if (enemySource is { } target && skillSource is { } s)
+            if (against?.Source is { } target && skillSource is { } s)
                 m *= Weaving.SourceEffectiveness(s, target, wt);
 
             // BLOODLUST — damage scales with health MISSING. The keystone that rewards the edge.
@@ -244,29 +308,65 @@ public static class SoloBattle
             return m;
         }
 
-        void Land(float dmg, int atMs, bool fromSkill = false, bool ignoresArmour = false)
+        /// <summary>The first living creature in spawn order, or null when the wave is clear.</summary>
+        WaveCreature? FirstAlive()
         {
+            for (var i = 0; i < creatures.Count; i++)
+                if (creatures[i].Alive) return creatures[i];
+            return null;
+        }
+
+        void LandOn(WaveCreature? target, float dmg, int atMs, bool fromSkill = false, bool ignoresArmour = false)
+        {
+            if (target is null || !target.Alive) return;
+
             // CRIT lands on SKILL hits only — the idle auto-swing and the poison bleed never crit (both
-            // call this with fromSkill:false). Applied before the split, so a crit stings with more poison too.
+            // call this with fromSkill:false). Applied first, so a crit stings with more poison too.
             if (fromSkill) dmg *= critFactor;
 
-            // ENEMY ARMOUR is flat and per-hit (see MinHitFraction), so it reads hit SIZE. Poison bypasses
-            // it entirely: a bleed tick is small by construction and flat armour would erase it, which
-            // would leave the Venom path with nothing to be good at. Bypassing instead gives it a clear
-            // identity — poison is the answer to a plate you cannot hit hard enough to crack.
             // VENOM poisons on SKILL hits only (the blurb says "SKILLS POISON") — never on the auto-attack,
-            // and never on the poison's own bleed, or it would feed itself.
-            //
-            // Fed from the hit's RAW force, before armour. Poison is a fraction of how hard you swung,
-            // not of how much got through — otherwise armour would shrink the pool AND the bleed, and
-            // "poison answers armour" would be false twice over.
+            // and never on the poison's own bleed, or it would feed itself. Fed from the hit's RAW force,
+            // before armour: poison is a fraction of how hard you swung, not of how much got through,
+            // otherwise armour would shrink the pool AND the bleed and "poison answers armour" would be
+            // false twice over.
             if (fromSkill && venomFrac > 0f) poison += dmg * venomFrac;
 
-            if (!ignoresArmour && enemyDefense > 0f)
-                dmg = MathF.Max(dmg * MinHitFraction, dmg - enemyDefense);
+            // ENEMY ARMOUR is flat and per-hit (see MinHitFraction), so it reads hit SIZE. Poison bypasses
+            // it entirely — a bleed tick is small by construction and flat armour would erase it, which
+            // would leave the Venom path with nothing to be good at.
+            if (!ignoresArmour && target.Defense > 0f)
+                dmg = MathF.Max(dmg * MinHitFraction, dmg - target.Defense);
 
-            hp -= dmg;
+            // Overkill is DISCARDED rather than carried to the next creature. A 110 Trap hit into a
+            // 30-health swarm creature wastes 80, and that waste is the whole cost of bringing a
+            // large-hit build to a Swarm band.
+            target.Health -= dmg;
+            if (!target.Alive) alive--;
             events.Add(new BattleEvent(BattleEventKind.Strike, 0, (int)MathF.Round(dmg), atMs));
+        }
+
+        /// <summary>
+        /// Land one activation across up to <paramref name="targets"/> living creatures. Returns the raw
+        /// total dealt, which is what leech reads.
+        /// </summary>
+        float LandSpread(float raw, int atMs, int targets, Source? skillSource, Form? skillForm, int absMs,
+                         bool fromSkill = true)
+        {
+            if (targets <= 0) return 0f;
+            var dealt = 0f;
+            var struck = 0;
+            for (var i = 0; i < creatures.Count && struck < targets; i++)
+            {
+                var c = creatures[i];
+                if (!c.Alive) continue;
+                // Amp is per TARGET: the Source matchup belongs to the creature being hit, so one cast
+                // can be strong against one creature in a wave and weak against another.
+                var hit = raw * Amp(absMs, skillSource, skillForm, c);
+                LandOn(c, hit, atMs, fromSkill);
+                dealt += hit;
+                struck++;
+            }
+            return dealt;
         }
 
         void Heal(int amount, int atMs)
@@ -286,8 +386,10 @@ public static class SoloBattle
             {
                 var bite = poison * VenomBleedPerHalfSecond;
                 poison -= bite;
-                Land(bite, ms, ignoresArmour: true);   // not fromSkill — poison must not re-poison
-                if (hp <= 0) return Kill(ms);
+                // Poison bleeds into the front of the wave. It is a single pool, not per creature — a
+                // build that poisons then watches its target die keeps the standing damage.
+                LandOn(FirstAlive(), bite, ms, ignoresArmour: true);   // not fromSkill — must not re-poison
+                if (alive == 0) return Kill(ms);
             }
 
             // ── SKILLS ────────────────────────────────────────────────────────────────────────
@@ -308,10 +410,9 @@ public static class SoloBattle
                     if (ms % auraTick != 0) continue;
                     var aura = FormBehaviour.BaseDamage(form, resonance, wt)
                                * VowFactor(sk, champ, abs, isBoss, wt)
-                               * Amp(abs, sk.Source, sk.Form)
                                * (FormBehaviour.AuraTickMs / 1000f);
-                    Land(aura, ms, fromSkill: true);
-                    if (hp <= 0) return Kill(ms);
+                    LandSpread(aura, ms, FormBehaviour.Targets(form), sk.Source, form, abs);
+                    if (alive == 0) return Kill(ms);
                     continue;
                 }
 
@@ -336,30 +437,32 @@ public static class SoloBattle
                 if (form == Form.Projectile && triggers.Contains(BuildTrigger.Overdraw)) casts += 1;
                 for (var c = 0; c < casts; c++)
                 {
-                    var dmg = FormBehaviour.BaseDamage(form, resonance, wt)
-                              * VowFactor(sk, champ, abs, isBoss, wt)
-                              * Amp(abs, sk.Source, sk.Form);
+                    var raw = FormBehaviour.BaseDamage(form, resonance, wt)
+                              * VowFactor(sk, champ, abs, isBoss, wt);
 
-                    // EXECUTE — a STRIKE finishes a weakened enemy. Checks LIVE hp, so a second cast of a
-                    // multi-hit can execute a target the first cast brought low. Dead without a Strike, and
-                    // strongest on bosses — trash is dead before it reaches the threshold.
+                    // EXECUTE — a STRIKE finishes a weakened enemy. Reads the CURRENT target's own health
+                    // fraction, so in a multi-creature wave it fires on whichever creature is in front and
+                    // hurt, not on the wave as a whole. Dead without a Strike, and strongest on bosses —
+                    // trash is dead before it reaches the threshold.
                     if (form == Form.Strike && triggers.Contains(BuildTrigger.Execute)
-                        && hp < enemyHealth * ExecuteThreshold)
-                        dmg *= ExecuteMultiplier;
+                        && FirstAlive() is { } victim
+                        && victim.Health < victim.MaxHealth * ExecuteThreshold)
+                        raw *= ExecuteMultiplier;
 
                     events.Add(new BattleEvent(BattleEventKind.Skill, 0, (int)form, ms));
-                    Land(dmg, ms, fromSkill: true);
+                    var dealt = LandSpread(raw, ms, FormBehaviour.Targets(form), sk.Source, form, abs);
 
                     if (FormBehaviour.Heals(form))
                     {
                         // SIPHON deepens TRANSFORMATION's leech. Dead without Transformation — nothing else
-                        // heals on hit, so the enchant is inert on any other build.
+                        // heals on hit, so the enchant is inert on any other build. Leeches from the TOTAL
+                        // dealt, so a multi-target Transformation heals from every creature it touches.
                         var leech = FormBehaviour.TransformationLeech;
                         if (triggers.Contains(BuildTrigger.Siphon)) leech *= SiphonLeechMultiplier;
-                        Heal((int)MathF.Round(dmg * leech), ms);
+                        Heal((int)MathF.Round(dealt * leech), ms);
                     }
 
-                    if (hp <= 0) return Kill(ms);
+                    if (alive == 0) return Kill(ms);
                 }
             }
 
@@ -367,14 +470,22 @@ public static class SoloBattle
             if (ms >= nextAuto)
             {
                 nextAuto += AutoAttackIntervalMs;
-                Land(AutoAttackDamage * Amp(abs, null), ms);
-                if (hp <= 0) return Kill(ms);
+                LandSpread(AutoAttackDamage, ms, 1, null, null, abs, fromSkill: false);
+                if (alive == 0) return Kill(ms);
             }
 
             // ── THE ENEMY BITES BACK ──────────────────────────────────────────────────────────
             if (ms % enemyIntervalMs == 0)
             {
-                var taken = enemyDamage / Math.Max(0.05f, mods.Health) * defenseFactor * fragilityMult;
+                // EVERY LIVING CREATURE BITES. This is what makes action economy real: a Swarm's combined
+                // damage is its threat, and every creature killed is incoming damage removed. A build that
+                // cannot clear a Swarm quickly does not merely kill slowly, it takes the full wave's
+                // damage for the whole fight.
+                var incoming = 0f;
+                for (var ci = 0; ci < creatures.Count; ci++)
+                    if (creatures[ci].Alive) incoming += creatures[ci].Damage;
+
+                var taken = incoming / Math.Max(0.05f, mods.Health) * defenseFactor * fragilityMult;
                 champ.Health -= (int)MathF.Round(taken);
                 events.Add(new BattleEvent(BattleEventKind.EnemyStrike, 0, (int)MathF.Round(taken), ms));
 
@@ -392,12 +503,11 @@ public static class SoloBattle
                     if (abs < champ.ReadyAt.GetValueOrDefault(idx, 0)) continue;
                     champ.ReadyAt[idx] = abs + cd;
 
-                    var dmg = FormBehaviour.BaseDamage(Form.Trap, resonance, wt)
-                              * VowFactor(sk, champ, abs, isBoss, wt)
-                              * Amp(abs, sk.Source, sk.Form);
+                    var trapRaw = FormBehaviour.BaseDamage(Form.Trap, resonance, wt)
+                                  * VowFactor(sk, champ, abs, isBoss, wt);
                     events.Add(new BattleEvent(BattleEventKind.Skill, 0, (int)Form.Trap, ms));
-                    Land(dmg, ms, fromSkill: true);
-                    if (hp <= 0) return Kill(ms);
+                    LandSpread(trapRaw, ms, FormBehaviour.Targets(Form.Trap), sk.Source, Form.Trap, abs);
+                    if (alive == 0) return Kill(ms);
                 }
 
                 if (!champ.Alive)

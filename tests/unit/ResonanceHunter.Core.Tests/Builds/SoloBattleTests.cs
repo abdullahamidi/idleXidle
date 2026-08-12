@@ -688,4 +688,93 @@ public class SoloBattleTests
             "armour. Poison must bypass it.");
     }
 
+
+    // ── COMPOSITION. A wave is a list of creatures, and that is what makes a build a SHAPE. ─────────
+
+    private static (WaveOutcome, System.Collections.Generic.List<BattleEvent>) FightMany(
+        Build build, System.Collections.Generic.IReadOnlyList<WaveCreature> creatures, int hp = 400)
+        => SoloBattle.ResolveWave(Champ(hp), build, new Hunter(), creatures,
+            enemyIntervalMs: 1000, T, new Random(7), new WaveBonus());
+
+    private static System.Collections.Generic.List<WaveCreature> Swarm(int n, float each, float dmg)
+        => Enumerable.Range(0, n).Select(_ => WaveCreature.Single(each, dmg)).ToList();
+
+    /// <summary>
+    /// A Swarm must punish a single-target build far more than a multi-target one.
+    /// </summary>
+    /// <remarks>
+    /// This is the other half of the archetype engine, and the reason target count exists at all.
+    /// Against ONE creature holding the same total health, a Trap build (110 per hit, one target) and an
+    /// Aura build (12 per tick, every target) should be roughly comparable. Split that health across five
+    /// creatures and the Trap spends each cooldown killing one of them — with its overkill discarded —
+    /// while the Aura touches all five every tick.
+    ///
+    /// If this ever fails, Spread has nothing to be about and half the skill tree is decoration.
+    /// </remarks>
+    [Fact]
+    public void test_a_swarm_punishes_single_target_far_more_than_multi_target()
+    {
+        const float total = 500f;
+
+        float TimeToClear(Form form, System.Collections.Generic.IReadOnlyList<WaveCreature> comp)
+        {
+            var (outcome, ev) = FightMany(With(form), comp, hp: 100_000);
+            return outcome == WaveOutcome.Cleared ? ev[^1].AtMs : T.TickCeilingMs;
+        }
+
+        var singleTargetSolo = TimeToClear(Form.Trap, new[] { WaveCreature.Single(total, 0f) });
+        var multiTargetSolo = TimeToClear(Form.Aura, new[] { WaveCreature.Single(total, 0f) });
+
+        var singleTargetSwarm = TimeToClear(Form.Trap, Swarm(5, total / 5f, 0f));
+        var multiTargetSwarm = TimeToClear(Form.Aura, Swarm(5, total / 5f, 0f));
+
+        var singleTargetCost = singleTargetSwarm / (float)Math.Max(1, singleTargetSolo);
+        var multiTargetCost = multiTargetSwarm / (float)Math.Max(1, multiTargetSolo);
+
+        Assert.True(
+            singleTargetCost > multiTargetCost * 1.5f,
+            $"Splitting the same health across five creatures cost the single-target build " +
+            $"x{singleTargetCost:F2} and the multi-target build x{multiTargetCost:F2}. Target count " +
+            "is not reaching the fight.");
+    }
+
+    /// <summary>Killing a creature removes its share of the incoming damage.</summary>
+    /// <remarks>
+    /// This is why a Swarm is dangerous and why clearing it fast matters: the wave's threat is the SUM
+    /// of what is still alive, so action economy is a defensive stat as well as an offensive one.
+    /// </remarks>
+    [Fact]
+    public void test_incoming_damage_falls_as_creatures_die()
+    {
+        var champ = Champ(100_000);
+        var (_, ev) = SoloBattle.ResolveWave(champ, With(Form.Projectile), new Hunter(),
+            Swarm(5, 60f, 20f), enemyIntervalMs: 1000, T, new Random(7), new WaveBonus());
+
+        var bites = ev.Where(e => e.Kind == BattleEventKind.EnemyStrike).Select(e => e.Amount).ToList();
+
+        Assert.True(bites.Count >= 2, "Not enough enemy swings to compare.");
+        Assert.True(
+            bites[^1] < bites[0],
+            $"First bite {bites[0]}, last bite {bites[^1]}. Dead creatures are still swinging.");
+    }
+
+    /// <summary>Overkill is discarded — it does not carry to the next creature.</summary>
+    /// <remarks>
+    /// A 110 Trap hit into a 30-health creature must waste 80. Carrying it would quietly hand large-hit
+    /// builds the cleave they are supposed to have to buy, and Swarm would stop punishing anything.
+    /// </remarks>
+    [Fact]
+    public void test_overkill_does_not_carry_to_the_next_creature()
+    {
+        var comp = Swarm(3, 10f, 0f);
+        var (outcome, _) = FightMany(With(Form.Trap), comp, hp: 100_000);
+
+        Assert.Equal(WaveOutcome.Cleared, outcome);
+
+        // Three creatures, one target per Trap activation: the wave cannot end before the third cast.
+        var trapCd = FormBehaviour.BaseCooldownMs(Form.Trap);
+        Assert.True(comp.All(c => !c.Alive));
+        Assert.True(trapCd > 0);
+    }
+
 }

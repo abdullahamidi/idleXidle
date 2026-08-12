@@ -52,6 +52,28 @@ public static class FormBehaviour
         _ => 2_500,                      // Transformation
     };
 
+    /// <summary>
+    /// How many creatures one activation of this Form reaches.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the other half of the Weight/Spread axis. Enemy armour makes hit SIZE matter; target
+    /// count is what makes hit size a TRADE rather than a free upgrade. A Trap hits once for 110 and a
+    /// Projectile twice for 20 each — against one armoured creature the Trap is far ahead, and against
+    /// five weak ones it spends its whole cooldown killing one of them while the other four keep biting.
+    /// </para>
+    /// <para>
+    /// AURA is a field, not a blow: it reaches everything, which is why its per-hit damage is the
+    /// smallest in the game.
+    /// </para>
+    /// </remarks>
+    public static int Targets(Form form) => form switch
+    {
+        Form.Aura => int.MaxValue,   // a field — everything in the wave
+        Form.Projectile => 2,
+        _ => 1,                      // Strike, Trap, Transformation; Mark deals no damage at all
+    };
+
     /// <summary>An AURA has no cooldown — it ticks for the whole fight. Nothing else may.</summary>
     public static bool IsPassive(Form form) => form == Form.Aura;
 
