@@ -29,9 +29,9 @@ public class SoloBattleTests
 
     private static (WaveOutcome, System.Collections.Generic.List<BattleEvent>) Fight(
         Build build, float enemyHp = 300f, float enemyDmg = 5f, int hp = 400,
-        Source? enemySrc = null, Champion? champ = null, bool boss = false)
+        Source? enemySrc = null, Champion? champ = null, bool boss = false, float enemyDef = 0f)
         => SoloBattle.ResolveWave(champ ?? Champ(hp), build, new Hunter(), enemyHp, enemyDmg,
-            enemyIntervalMs: 1000, T, new Random(7), new WaveBonus(), enemySrc, boss);
+            enemyIntervalMs: 1000, T, new Random(7), new WaveBonus(), enemySrc, boss, enemyDef);
 
     private static Build With(params Form[] forms)
     {
@@ -609,4 +609,83 @@ public class SoloBattleTests
         Assert.True(SoloBattle.VowHealthMultiplier(withVow) < 1f, "RECKLESS OFFERING cost no health");
         Assert.Equal(1f, SoloBattle.VowHealthMultiplier(without), 3);
     }
+
+    // ── ENEMY ARMOUR. Flat per hit, which is what makes hit SIZE a build axis. ──────────────────────
+
+    /// <summary>
+    /// Flat armour must punish many small hits far more than a few large ones.
+    /// </summary>
+    /// <remarks>
+    /// This is the load-bearing property of the whole Armoured archetype, and it is the one a
+    /// multiplicative curve cannot have. If enemy mitigation ever goes back to K/(K+def), this test
+    /// fails and the Weight branch of the skill tree loses its reason to exist.
+    ///
+    /// PROJECTILE fires roughly twice as often as STRIKE for less per hit, so it is the natural
+    /// small-hit build; STRIKE is the large-hit one. Both are given the same armoured enemy.
+    /// </remarks>
+    [Fact]
+    public void test_flat_armour_punishes_small_hits_much_harder_than_large_ones()
+    {
+        const float armour = 25f;
+
+        float DealtBy(Form form, float def)
+        {
+            var (_, ev) = Fight(With(form), enemyHp: 100_000f, enemyDmg: 0f, enemyDef: def);
+            return ev.Where(e => e.Kind == BattleEventKind.Strike).Sum(e => e.Amount);
+        }
+
+        var strikeLoss = 1f - DealtBy(Form.Strike, armour) / DealtBy(Form.Strike, 0f);
+        var projLoss = 1f - DealtBy(Form.Projectile, armour) / DealtBy(Form.Projectile, 0f);
+
+        Assert.True(
+            projLoss > strikeLoss * 1.3f,
+            $"Armour cost the small-hit build {projLoss:P0} and the large-hit build {strikeLoss:P0}. " +
+            "Flat armour must read hit size; these being close means it is behaving multiplicatively.");
+    }
+
+    /// <summary>A hit never lands for nothing, however armoured the target.</summary>
+    [Fact]
+    public void test_armour_can_never_reduce_a_hit_below_the_floor()
+    {
+        var (_, ev) = Fight(With(Form.Projectile), enemyHp: 100_000f, enemyDmg: 0f, enemyDef: 100_000f);
+        var hits = ev.Where(e => e.Kind == BattleEventKind.Strike && e.Amount > 0).ToList();
+
+        Assert.True(hits.Count > 0, "Armour erased every hit — MinHitFraction is not being applied.");
+    }
+
+    /// <summary>
+    /// Poison bypasses armour, which is the Venom path's whole niche.
+    /// </summary>
+    /// <remarks>
+    /// A bleed tick is small by construction, so flat armour would erase it and leave VENOMANCER — a
+    /// keystone that already pays -20% damage — with nothing to be good at. Bypassing gives it a clear
+    /// identity instead: poison is the answer to a plate you cannot hit hard enough to crack.
+    /// </remarks>
+    [Fact]
+    public void test_poison_ignores_enemy_armour()
+    {
+        var b = WithTrigger(BuildTrigger.Venom, Form.Strike);
+
+        float Total(float def)
+        {
+            var (_, ev) = Fight(b, enemyHp: 100_000f, enemyDmg: 0f, enemyDef: def);
+            return ev.Where(e => e.Kind == BattleEventKind.Strike).Sum(e => e.Amount);
+        }
+
+        var plain = With(Form.Strike);
+        float TotalPlain(float def)
+        {
+            var (_, ev) = Fight(plain, enemyHp: 100_000f, enemyDmg: 0f, enemyDef: def);
+            return ev.Where(e => e.Kind == BattleEventKind.Strike).Sum(e => e.Amount);
+        }
+
+        var venomEdgeUnarmoured = Total(0f) - TotalPlain(0f);
+        var venomEdgeArmoured = Total(40f) - TotalPlain(40f);
+
+        Assert.True(
+            venomEdgeArmoured >= venomEdgeUnarmoured * 0.9f,
+            $"Venom's contribution fell from {venomEdgeUnarmoured:F0} to {venomEdgeArmoured:F0} against " +
+            "armour. Poison must bypass it.");
+    }
+
 }

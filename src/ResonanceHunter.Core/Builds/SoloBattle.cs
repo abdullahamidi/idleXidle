@@ -91,6 +91,25 @@ public static class SoloBattle
     /// <summary>DEFENSE mitigates a bite on a diminishing curve: taken × K / (K + defense). Never 100%.</summary>
     public const float DefenseMitigationConstant = 100f;
 
+    /// <summary>
+    /// The floor under a hit after ENEMY armour. Armour subtracts a flat amount per hit; this stops it
+    /// subtracting everything.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Enemy mitigation is FLAT and per-hit, unlike the champion's own <see cref="DefenseMitigationConstant"/>
+    /// curve, and the difference is the entire reason the Armoured archetype can exist. A multiplicative
+    /// curve scales every hit by the same factor, so it is completely indifferent to whether damage arrives
+    /// as ten hits of 40 or one hit of 400. Under it, "few large hits" and "many small hits" are the same
+    /// build and there is nothing for a Weight branch to be about.
+    /// </para>
+    /// <para>
+    /// Flat subtraction makes hit SIZE the thing armour reads. Against 25 armour, ten hits of 40 deliver
+    /// 150 and one hit of 400 delivers 375 — same raw damage, 2.5x the result.
+    /// </para>
+    /// </remarks>
+    public const float MinHitFraction = 0.15f;
+
     // ── Form-combo enchantment tuning. Each effect only fires for its Form, so the item is dead weight
     //    on a build that doesn't run that Form — the whole point of a combo. See Enchantments.NeedsForm. ──
 
@@ -120,7 +139,8 @@ public static class SoloBattle
         Random rng,
         WaveBonus? bonus = null,
         Source? enemySource = null,
-        bool isBoss = false)
+        bool isBoss = false,
+        float enemyDefense = 0f)
     {
         ArgumentNullException.ThrowIfNull(champ);
         ArgumentNullException.ThrowIfNull(build);
@@ -224,15 +244,28 @@ public static class SoloBattle
             return m;
         }
 
-        void Land(float dmg, int atMs, bool fromSkill = false)
+        void Land(float dmg, int atMs, bool fromSkill = false, bool ignoresArmour = false)
         {
             // CRIT lands on SKILL hits only — the idle auto-swing and the poison bleed never crit (both
             // call this with fromSkill:false). Applied before the split, so a crit stings with more poison too.
             if (fromSkill) dmg *= critFactor;
-            hp -= dmg;
+
+            // ENEMY ARMOUR is flat and per-hit (see MinHitFraction), so it reads hit SIZE. Poison bypasses
+            // it entirely: a bleed tick is small by construction and flat armour would erase it, which
+            // would leave the Venom path with nothing to be good at. Bypassing instead gives it a clear
+            // identity — poison is the answer to a plate you cannot hit hard enough to crack.
             // VENOM poisons on SKILL hits only (the blurb says "SKILLS POISON") — never on the auto-attack,
             // and never on the poison's own bleed, or it would feed itself.
+            //
+            // Fed from the hit's RAW force, before armour. Poison is a fraction of how hard you swung,
+            // not of how much got through — otherwise armour would shrink the pool AND the bleed, and
+            // "poison answers armour" would be false twice over.
             if (fromSkill && venomFrac > 0f) poison += dmg * venomFrac;
+
+            if (!ignoresArmour && enemyDefense > 0f)
+                dmg = MathF.Max(dmg * MinHitFraction, dmg - enemyDefense);
+
+            hp -= dmg;
             events.Add(new BattleEvent(BattleEventKind.Strike, 0, (int)MathF.Round(dmg), atMs));
         }
 
@@ -253,7 +286,7 @@ public static class SoloBattle
             {
                 var bite = poison * VenomBleedPerHalfSecond;
                 poison -= bite;
-                Land(bite, ms);   // not fromSkill — poison must not re-poison
+                Land(bite, ms, ignoresArmour: true);   // not fromSkill — poison must not re-poison
                 if (hp <= 0) return Kill(ms);
             }
 

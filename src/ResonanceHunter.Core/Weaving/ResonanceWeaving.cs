@@ -112,14 +112,37 @@ public sealed record WeavingTuning
     public float StrongMultiplier { get; init; } = 1.5f;
     public float WeakMultiplier { get; init; } = 0.667f;
 
+    /// <summary>
+    /// What one activation of each Form is worth. These are HIT SIZES, and the spread between them is
+    /// load-bearing.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// They used to sit between 22 and 55 — a 2.5x spread, and only 1.18x between Strike and Projectile.
+    /// Enemy armour is flat per hit (<see cref="Builds.SoloBattle.MinHitFraction"/>), so it reads hit
+    /// SIZE; with the old numbers it cost a small-hit build 58% and a large-hit build 52%, which is the
+    /// same thing twice. The Armoured archetype and the whole Weight axis of the skill tree had nothing
+    /// to be about, because there was no such thing as a large hit.
+    /// </para>
+    /// <para>
+    /// Cooldowns are deliberately UNCHANGED. They are tuned against wave length, and this file's own
+    /// history records what happens when that is forgotten: 5-10s cooldowns meant skills that never
+    /// fired at all. Spreading damage alone is the change that creates the axis without touching that.
+    /// </para>
+    /// <para>
+    /// The cost is that Projectile and Aura lose single-target throughput. That is intended and is
+    /// repaid in target COUNT once waves hold more than one creature — they are the Spread Forms, and
+    /// their value is meant to be how many things they touch, not how hard.
+    /// </para>
+    /// </remarks>
     public IReadOnlyDictionary<Form, float> FormBaseValue { get; init; } = new Dictionary<Form, float>
     {
-        [Form.Strike] = 45f,
-        [Form.Projectile] = 38f,
-        [Form.Aura] = 22f,
-        [Form.Trap] = 55f,
+        [Form.Trap] = 110f,        // the largest hit in the game, and the rarest
+        [Form.Strike] = 70f,       // the large-hit workhorse
+        [Form.Transformation] = 40f,
+        [Form.Projectile] = 20f,   // small and fast — pays in targets, not in size
+        [Form.Aura] = 12f,         // smallest of all; it is a field, not a blow
         [Form.Mark] = 0f,          // Mark deals no direct damage — it amplifies other sources.
-        [Form.Transformation] = 30f,
     };
 
     public static WeavingTuning Default { get; } = new();
