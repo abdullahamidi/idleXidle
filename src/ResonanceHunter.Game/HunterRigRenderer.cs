@@ -61,8 +61,8 @@ public sealed class HunterRigRenderer
     private static readonly Dictionary<GearSlot, GearBinding> Bindings = new()
     {
         // Heights are calibrated against the assembled figure's NATIVE size (~476 tall) and the part
-        // each piece covers, measured off hunter_rig_base: head 175x112, torso 101x102, hand 112x28,
-        // shin+foot 110 tall. Re-tuning these is the cost of changing the rig source — the numbers are
+        // each piece covers, measured off hunter_rig_base: figure 512 tall, head 210x168, torso 103x90,
+        // hand 54x42, shin+foot 112 tall. Re-tuning these is the cost of changing the rig source — the numbers are
         // rig pixels, not fractions, so a figure with different proportions needs new ones.
         // Pivot V sits low in the texture so a piece hangs DOWN from its joint, the way a helm sits on
         // a neck and a blade hangs from a grip.
@@ -71,10 +71,10 @@ public sealed class HunterRigRenderer
         // pulled over the character's own boot; bound to the shin it covered the shaft but the foot
         // juts ~18px forward of the shin bone, so the body's leather toe kept showing beyond it. The
         // foot bone carries that forward offset for free, and a boot IS attached to a foot.
-        [GearSlot.Boots] = new("foot_main", 0.50f, 0.70f, 124f, 18),
-        [GearSlot.Chest] = new("torso", 0.50f, 0.76f, 132f, 9),
-        [GearSlot.Gloves] = new("hand_main", 0.50f, 0.30f, 54f, 20),
-        [GearSlot.Helm] = new("head", 0.50f, 0.78f, 120f, 13),
+        [GearSlot.Boots] = new("foot_main", 0.50f, 0.62f, 142f, 18),
+        [GearSlot.Chest] = new("torso", 0.50f, 0.80f, 120f, 9),
+        [GearSlot.Gloves] = new("hand_main", 0.50f, 0.26f, 52f, 20),
+        [GearSlot.Helm] = new("head", 0.50f, 0.84f, 168f, 13),
         // gear_weapon_* is authored VERTICAL with the hilt at the bottom, so the pivot sits low in
         // the texture (the grip).
         //
@@ -84,7 +84,7 @@ public sealed class HunterRigRenderer
         // across the character's own face. -0.30 satisfied only the first, and the sword swept through
         // the helmet on every attack. -2.10 lays the blade alongside the leg at rest and level at the
         // target on impact.
-        [GearSlot.Weapon] = new("hand_main", 0.50f, 0.88f, 148f, 21, -2.10f),
+        [GearSlot.Weapon] = new("hand_main", 0.50f, 0.87f, 160f, 21, -2.10f),
     };
 
     /// <summary>Boots and gloves are worn on both limbs; the mirror bone draws the same texture.</summary>

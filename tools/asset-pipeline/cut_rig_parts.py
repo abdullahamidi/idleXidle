@@ -51,25 +51,25 @@ SOURCE_KEY = "hunter_rig_base"
 # Boundaries below are the measured gaps: x=206 and x=307 split arm|torso|arm, x=257 splits the legs.
 PARTS: dict[str, tuple[str | None, tuple[int, int, int, int], tuple[int, int], int]] = {
     #                parent               l    t    r    b        joint         order
-    "arm_upper_off":  ("torso",          (307, 128, 400, 190),  (312, 160),  1),
-    "arm_fore_off":   ("arm_upper_off",  (307, 190, 440, 222),  (364, 190),  2),
-    "hand_off":       ("arm_fore_off",   (330, 222, 440, 250),  (408, 222),  3),
-    "leg_thigh_off":  ("pelvis",         (257, 286, 350, 382),  (291, 286),  4),
-    "leg_shin_off":   ("leg_thigh_off",  (257, 382, 350, 452),  (308, 382),  5),
-    "foot_off":       ("leg_shin_off",   (257, 452, 350, 492),  (314, 452),  6),
-    "pelvis":         (None,             (180, 230, 330, 286),  (256, 230),  7),
-    "torso":          ("pelvis",         (206, 128, 307, 230),  (256, 230),  8),
-    "leg_thigh_main": ("pelvis",         (165, 286, 257, 382),  (220, 286),  9),
-    "leg_shin_main":  ("leg_thigh_main", (165, 382, 257, 452),  (206, 382), 10),
-    "foot_main":      ("leg_shin_main",  (160, 452, 257, 492),  (202, 452), 11),
-    "head":           ("torso",          (170,  16, 345, 128),  (256, 128), 12),
-    "arm_upper_main": ("torso",          (110, 128, 206, 190),  (200, 160), 13),
-    "arm_fore_main":  ("arm_upper_main", ( 68, 190, 206, 222),  (147, 190), 14),
-    "hand_main":      ("arm_fore_main",  ( 68, 222, 180, 250),  (101, 222), 15),
+    "arm_upper_off":  ("torso",          (307, 168, 382, 222),  (311, 176),  1),
+    "arm_fore_off":   ("arm_upper_off",  (307, 222, 396, 258),  (357, 222),  2),
+    "hand_off":       ("arm_fore_off",   (340, 258, 396, 300),  (369, 258),  3),
+    "leg_thigh_off":  ("pelvis",         (257, 300, 362, 400),  (293, 300),  4),
+    "leg_shin_off":   ("leg_thigh_off",  (257, 400, 362, 460),  (321, 400),  5),
+    "foot_off":       ("leg_shin_off",   (257, 460, 380, 512),  (335, 460),  6),
+    "pelvis":         (None,             (170, 258, 340, 300),  (256, 258),  7),
+    "torso":          ("pelvis",         (204, 168, 307, 258),  (256, 258),  8),
+    "leg_thigh_main": ("pelvis",         (140, 300, 257, 400),  (213, 300),  9),
+    "leg_shin_main":  ("leg_thigh_main", (140, 400, 257, 460),  (194, 400), 10),
+    "foot_main":      ("leg_shin_main",  (130, 460, 257, 512),  (182, 460), 11),
+    "head":           ("torso",          (150,   0, 360, 168),  (256, 168), 12),
+    "arm_upper_main": ("torso",          (128, 168, 204, 222),  (200, 176), 13),
+    "arm_fore_main":  ("arm_upper_main", (116, 222, 204, 258),  (154, 222), 14),
+    "hand_main":      ("arm_fore_main",  (116, 258, 170, 300),  (141, 258), 15),
     # Shoulder joints are covered by DRAWN pauldrons, not by a disc cut from the torso: a cut cover
     # carries the resting pose's lighting and reads as a patch the moment the arm swings.
-    "shoulder_main":  ("torso",          (170, 140, 230, 180),  (200, 160), 16),
-    "shoulder_off":   ("torso",          (282, 140, 342, 180),  (312, 160), 17),
+    "shoulder_main":  ("torso",          (170, 156, 230, 196),  (200, 176), 16),
+    "shoulder_off":   ("torso",          (282, 156, 342, 196),  (311, 176), 17),
 }
 
 
