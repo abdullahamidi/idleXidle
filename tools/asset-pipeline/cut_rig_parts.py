@@ -34,102 +34,51 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
 OUT_DIR = os.path.join(REPO, "assets", "art", "rig")
 
-SOURCE_KEY = "hunter_idle"
+SOURCE_KEY = "hunter_rig_base"
 
 # name -> (parent, box(l,t,r,b), joint(x,y), draw_order)
-# Boxes and joints are in SOURCE sprite pixels, read off the 512x512 hunter_idle
-# with a 32px grid. The joint is each part's PROXIMAL end — the point it rotates
-# about and attaches to its parent by.
+#
+# All coordinates are MEASURED from hunter_rig_base, which is drawn for this cutter: the arms are held
+# out in an A-pose so background separates them from the torso from y=162 down, the legs part at
+# y=286, the hands are empty, and there is no cloak. The three rules that used to be fought are simply
+# satisfied by the source now:
+#
+#   * DISJOINT — two boxes sharing pixels draw the same limb twice (four arms, four legs).
+#   * TILING   — an opaque pixel in no box is never drawn (a band sawn through the shoulders).
+#   * NOTHING DRAPED — a rectangle cannot separate an arm from a cape hanging behind it, which is
+#     why the previous source needed static cloak strips and 4,000 px of baked-sword erasing.
+#
+# Boundaries below are the measured gaps: x=206 and x=307 split arm|torso|arm, x=257 splits the legs.
 PARTS: dict[str, tuple[str | None, tuple[int, int, int, int], tuple[int, int], int]] = {
-    # name -> (parent, box(l,t,r,b), joint(x,y), draw_order)
-    #
-    # BOXES MUST BE DISJOINT. Every part is a rectangle cut from ONE sprite, so any
-    # two boxes that overlap copy the same pixels into both parts and the figure
-    # draws them twice — that is what produced a hunter with four arms and four
-    # legs. The columns below are therefore hard-separated:
-    #     arms   x 168..214   |  body x 214..304  |  arms x 304..352
-    #     main leg x 214..258 |  off leg x 258..304
-    # and the body column is split vertically at the waist (266) and hip (302).
-    #
-    # The cloak parts here are 18px and 4px STRIPS at the outer edges. An earlier
-    # attempt at a cloak part spanned x 170..348, y 118..400 — most of the body —
-    # and was the single biggest source of the four-arms doubling. The hood still
-    # reads as part of the head cut.
-    # BOXES MUST ALSO TILE. Disjoint is not enough: any opaque sprite pixel that falls in NO box is
-    # simply never drawn, and the figure gets a hole. The arms used to start at y=128 while the
-    # head/torso seam sat at 122, leaving a 6px strip across both shoulders unclaimed — it rendered as
-    # a background-coloured band sawn straight through the hood. `--write` now reports any unclaimed
-    # opaque pixel, so the next box edit cannot reintroduce one silently.
-    #                parent              l    t    r    b        joint          order
-    # cloak_* are STATIC strips parented to the torso, not part of the arms.
-    #
-    # Closing the shoulder gap meant widening the arm columns outward, and the pixels out there are
-    # CLOAK, not sleeve. At rest that is invisible; the moment the arm swings, an 18px-wide slab of
-    # cloak flies out with it and reads as a second dark blade. A rectangle decomposition cannot
-    # separate an arm from the cloak hanging behind it, so the cloak edge gets its own bone that
-    # never rotates.
-    "cloak_main":      ("torso",        (150, 112, 168, 334),  (159, 112),  0),
-    "cloak_off":       ("torso",        (348, 112, 352, 334),  (350, 112),  0),
-    "arm_upper_off":   ("torso",        (304, 112, 348, 238),  (315, 146),  1),
-    "arm_fore_off":    ("arm_upper_off", (304, 238, 348, 288), (318, 240),  2),
-    "hand_off":        ("arm_fore_off", (304, 288, 348, 334),  (322, 290),  3),
-    # Columns below are MEASURED from the sprite, not guessed: at thigh level the
-    # tunic is one connected mass (x 108..340), and the legs only separate at the
-    # shin (x 174..256 and 268..332) with the feet at 170..224 and 296..338.
-    # Earlier boxes sat in the wrong columns, so foot_main came out 15% filled.
-    # Shin and foot are also split at y=455 so they do not overlap.
-    "leg_thigh_off":   ("pelvis",       (258, 302, 352, 402),  (282, 304),  4),
-    "leg_shin_off":    ("leg_thigh_off", (262, 402, 340, 455), (300, 404),  5),
-    "foot_off":        ("leg_shin_off", (262, 455, 345, 494),  (317, 458),  6),
-    "pelvis":          (None,           (214, 238, 304, 302),  (259, 238),  7),
-    "torso":           ("pelvis",       (214, 112, 304, 238),  (259, 238),  8),
-    "leg_thigh_main":  ("pelvis",       (108, 302, 258, 402),  (236, 304),  9),
-    "leg_shin_main":   ("leg_thigh_main", (168, 402, 262, 455), (215, 404), 10),
-    "foot_main":       ("leg_shin_main", (160, 455, 262, 494), (197, 458), 11),
-    "head":            ("torso",        (188,  16, 328, 112),  (259, 120), 12),
-    "arm_upper_main":  ("torso",        (168, 112, 214, 238),  (205, 146), 13),
-    "arm_fore_main":   ("arm_upper_main", (168, 238, 214, 288), (200, 240), 14),
-    "hand_main":       ("arm_fore_main", (168, 288, 214, 334), (196, 290), 15),
-    # Shoulder caps sit ON THE TORSO, not the arm, so they hold still while the arm
-    # swings beneath and cover the gap that opens at the joint. Without them a hard
-    # swing (AttackerStrike reaches 1.2 rad) tears the shoulder open.
-    # Shoulder joints are covered by DRAWN pauldrons (hunter_pauldron_*), not by a
-    # disc cut from the torso. A cut disc carries lighting for the resting pose and
-    # shows as a patch the moment the arm swings; a drawn piece is lit for itself.
-    # These entries stay so the bones exist — the texture key points at the art.
-    "shoulder_main":   ("torso",        (182, 126, 228, 172),  (205, 146), 16),
-    "shoulder_off":    ("torso",        (292, 126, 338, 172),  (315, 146), 17),
+    #                parent               l    t    r    b        joint         order
+    "arm_upper_off":  ("torso",          (307, 128, 400, 190),  (312, 160),  1),
+    "arm_fore_off":   ("arm_upper_off",  (307, 190, 440, 222),  (364, 190),  2),
+    "hand_off":       ("arm_fore_off",   (330, 222, 440, 250),  (408, 222),  3),
+    "leg_thigh_off":  ("pelvis",         (257, 286, 350, 382),  (291, 286),  4),
+    "leg_shin_off":   ("leg_thigh_off",  (257, 382, 350, 452),  (308, 382),  5),
+    "foot_off":       ("leg_shin_off",   (257, 452, 350, 492),  (314, 452),  6),
+    "pelvis":         (None,             (180, 230, 330, 286),  (256, 230),  7),
+    "torso":          ("pelvis",         (206, 128, 307, 230),  (256, 230),  8),
+    "leg_thigh_main": ("pelvis",         (165, 286, 257, 382),  (220, 286),  9),
+    "leg_shin_main":  ("leg_thigh_main", (165, 382, 257, 452),  (206, 382), 10),
+    "foot_main":      ("leg_shin_main",  (160, 452, 257, 492),  (202, 452), 11),
+    "head":           ("torso",          (170,  16, 345, 128),  (256, 128), 12),
+    "arm_upper_main": ("torso",          (110, 128, 206, 190),  (200, 160), 13),
+    "arm_fore_main":  ("arm_upper_main", ( 68, 190, 206, 222),  (147, 190), 14),
+    "hand_main":      ("arm_fore_main",  ( 68, 222, 180, 250),  (101, 222), 15),
+    # Shoulder joints are covered by DRAWN pauldrons, not by a disc cut from the torso: a cut cover
+    # carries the resting pose's lighting and reads as a patch the moment the arm swings.
+    "shoulder_main":  ("torso",          (170, 140, 230, 180),  (200, 160), 16),
+    "shoulder_off":   ("torso",          (282, 140, 342, 180),  (312, 160), 17),
 }
 
 
-# Regions holding pixels of the sprite's baked-in sword. The blade hangs diagonally
-# down-left of the grip and falls inside cuts that own other things — most visibly
-# leg_thigh_main, where it then swung with the leg like a floating weapon. Only
-# STEEL pixels (bright, low-saturation) inside these boxes are cleared, so the dark
-# cloak and the tunic behind the blade survive.
-# The sprite has a sword BAKED IN — it hangs diagonally down-left of the grip, across pixels that
-# belong to the leg, the forearm and the hand. Left in, it swings with whichever limb owns it, so a
-# second weapon floats around the figure while the equipped one is drawn at the hand.
-#
-# These regions are in SPRITE coordinates, and the cutter maps them into each part it overlaps. They
-# used to be per-part LOCAL rectangles, which silently pointed at the wrong pixels the moment a box
-# moved — widening the main-side boxes by 18px to close the shoulder gap left the blade untouched and
-# exposed 18 more columns of it.
-#
-# ERASE_SPRITE clears outright; it is used where the blade sits over empty canvas or where colour
-# keying cannot separate it (its black outline shares the cloak's luma exactly).
-ERASE_SPRITE: list[tuple[int, int, int, int]] = [
-    (140, 268, 170, 348),   # blade + pommel, clear of the body silhouette
-    (108, 302, 192, 400),   # the lower blade, over the thigh
-    (188, 248, 204, 266),   # a detached fragment beside the forearm
-    (198, 108, 216, 128),   # a stray highlight at the shoulder, under the pauldron's edge
-]
-
-# STEEL_SPRITE keys only bright low-saturation pixels, for where the blade crosses the body and the
-# cloak behind it has to survive.
-STEEL_SPRITE: list[tuple[int, int, int, int]] = [
-    (166, 268, 192, 330),
-]
+# The source figure carries no weapon and nothing draped, so there is nothing to erase. These stay as
+# the mechanism — a future source that does need cleanup declares it here in SPRITE coordinates, which
+# the cutter maps into whichever parts they cross. Per-part LOCAL regions were the earlier design and
+# silently pointed at the wrong pixels the moment a box moved.
+ERASE_SPRITE: list[tuple[int, int, int, int]] = []
+STEEL_SPRITE: list[tuple[int, int, int, int]] = []
 
 
 def to_local(region: tuple[int, int, int, int], box: tuple[int, int, int, int]) -> tuple[int, int, int, int] | None:

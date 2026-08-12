@@ -265,7 +265,7 @@ public sealed class CharacterScreen
         // so the doll showed no gear at all while the panel beside it said 8/8 EQUIPPED.
         _rigRenderer ??= new HunterRigRenderer(_ui);
         if (!_rigRenderer.Draw(b, HunterBox, null, hunter, Color.White)
-            && _ui.Assets.Get("hunter_idle") is { } baseTex)
+            && _ui.Assets.Get("hunter_rig_base") is { } baseTex)
         {
             var sc = MathF.Min(HunterBox.Width / (float)baseTex.Width, HunterBox.Height / (float)baseTex.Height);
             var w = Math.Max(1, (int)(baseTex.Width * sc));

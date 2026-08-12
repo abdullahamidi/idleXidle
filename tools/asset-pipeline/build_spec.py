@@ -339,6 +339,37 @@ def stills() -> list[dict]:
     ]:
         add(key, "assets/art/UI/chrome", "chrome", subj, width=w, height=h)
 
+    # --- The cutout rig's SOURCE FIGURE.
+    #
+    # The rig used to be cut out of `hunter_idle`, which is frame 0 of an animation strip — a pose
+    # authored to look good in motion, not to be sliced. Everything that fought the cutter came from
+    # that: a sword baked into the sprite crossing the leg, forearm and hand (4,000+ px of erasing); a
+    # cloak wrapping the arms so no rectangle could separate sleeve from cape; and limbs pressed
+    # against the torso, leaving no measurable boundary to cut on.
+    #
+    # This asset is authored FOR the cutter. The prompt asks for the three properties a rectangle
+    # decomposition actually needs — a gap of background between each arm and the body, a gap between
+    # the legs, and nothing draped across a joint — plus empty hands, because worn equipment is drawn
+    # at the hand bone and the figure must not bring its own.
+    a.append({
+        "key": "hunter_rig_base", "dest": "assets/art/Characters/Hunter", "model": "pixen",
+        "width": 512, "height": 512, "knockout": True, "single_subject": True,
+        # Written entirely in the POSITIVE. A first attempt listed "NO cloak, NO cape, NO weapon,
+        # NO straps across the chest" and got back a caped figure with a baldric — the same failure
+        # as the pauldron prompts, where naming a thing summons it. What works is describing the
+        # silhouette you want and then saying what the clothing IS, tightly.
+        "prompt": "A fantasy hunter standing in a wide A-pose, front view, full body from hood to "
+                  "boots, both arms angled outward and away from the sides so there is a large "
+                  "triangle of empty background under each armpit, legs straight and set apart with "
+                  "empty background between them, hands open and empty. "
+                  "The outfit is CLOSE-FITTING ONLY: a short hood, a fitted leather jerkin ending at "
+                  "the hip, bracers, trousers and boots. The empty background is visible everywhere "
+                  "around the figure — behind the shoulders, behind the arms, behind the legs — "
+                  "because there is nothing behind him. "
+                  "Dark fantasy RPG pixel art, flat bold shapes, symmetrical, one figure centered on "
+                  "a completely empty background, no text, no border, no frame",
+    })
+
     # --- Hunter cutout rig parts: NOT GENERATED.
     #
     # hunter_part_* is produced by tools/asset-pipeline/cut_rig_parts.py, which slices them out of the
@@ -410,9 +441,12 @@ def stills() -> list[dict]:
     # reintroduces the very nouns that summon the body.
     a.append({
         "key": "hunter_pauldron_main", "dest": "assets/art/rig", "width": 128, "height": 128,
-        "prompt": "A scallop-shaped curved armour plate lying alone, three overlapping riveted "
-                  "leather bands fanning outward, front view, a single small object on an empty "
-                  "background, dark fantasy RPG pixel art, flat bold shapes, no text, no border",
+        # Material follows the rig source. It was tan leather, drawn for the old cream-and-teal figure;
+        # over hunter_rig_base's dark steel spaulders that read as a pink patch stuck on the shoulder.
+        "prompt": "A scallop-shaped curved armour plate lying alone, three overlapping riveted dark "
+                  "steel bands fanning outward over a brown leather strap, front view, a single small "
+                  "object on an empty background, dark fantasy RPG pixel art, flat bold shapes, "
+                  "no text, no border",
         "text_guidance_scale": 9.0,
         "negative_description": "breastplate, cuirass, chestplate, torso, body, chest, ribs, "
                                 "abdomen, belt, waist, character, person, mannequin, armour set, "
@@ -498,8 +532,11 @@ def stills() -> list[dict]:
 
     add("core_hatch", "assets/art/ItemsLoot/materials", "item",
         "a cracked glowing egg-like machine core hatching open")
+    # Matches hunter_rig_base: a stern man's face under a dark green hood, not the faceless void the
+    # previous figure had. The HUD portrait sits beside the character it is supposed to BE.
     add("hunter_portrait", "assets/art/Characters/Hunter/portraits", "medallion",
-        "a hooded hunter face in three-quarter view under a deep cowl")
+        "the face of a stern bearded man looking forward from under a dark green hood, "
+        "brown leather collar")
     add("logo_horizontal_full", "assets/art/BrandingSymbols/branding", "chrome",
         "an ornate gold heraldic crest emblem with radiating filigree wings", width=384, height=192)
     return a

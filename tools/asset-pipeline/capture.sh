@@ -14,5 +14,10 @@ MODE="${1:-fight}"
 OUT="${2:-shot_$MODE.png}"
 cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1
 WINDIR="$(wslpath -w "$PWD")"
+# BUILD FIRST. Asset PNGs are copied into the output directory as a build step, so a --no-build run
+# renders whatever art was there last time. That silently verified a stale portrait once; a three
+# second build is much cheaper than trusting a screenshot that lies.
+cmd.exe /c "cd /d $WINDIR && dotnet build src\\ResonanceHunter.Game -v q --nologo" >/dev/null 2>&1 \
+  || { echo "build failed" >&2; exit 1; }
 cmd.exe /c "cd /d $WINDIR && set RH_SHOT=$WINDIR\\$OUT&& set RH_SHOT_MODE=$MODE&& dotnet run --project src\\ResonanceHunter.Game --no-build" >/dev/null 2>&1
 [ -f "$OUT" ] && echo "captured $OUT ($(stat -c%s "$OUT") bytes)" || { echo "capture failed" >&2; exit 1; }

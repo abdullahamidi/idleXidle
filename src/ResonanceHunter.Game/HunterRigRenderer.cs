@@ -60,9 +60,10 @@ public sealed class HunterRigRenderer
     /// </remarks>
     private static readonly Dictionary<GearSlot, GearBinding> Bindings = new()
     {
-        // Heights are calibrated against the assembled figure's NATIVE size (~182x502) and the part
-        // each piece covers: head 112x136, torso 164x150, hand 66x58, foot 82x46. An earlier set was
-        // sized for a broken 1143-tall assembly and rendered a helm half the height of the body.
+        // Heights are calibrated against the assembled figure's NATIVE size (~476 tall) and the part
+        // each piece covers, measured off hunter_rig_base: head 175x112, torso 101x102, hand 112x28,
+        // shin+foot 110 tall. Re-tuning these is the cost of changing the rig source — the numbers are
+        // rig pixels, not fractions, so a figure with different proportions needs new ones.
         // Pivot V sits low in the texture so a piece hangs DOWN from its joint, the way a helm sits on
         // a neck and a blade hangs from a grip.
         // Boots bind to the FOOT with a tall shaft that rises past the knee, rather than to the shin.
@@ -70,10 +71,10 @@ public sealed class HunterRigRenderer
         // pulled over the character's own boot; bound to the shin it covered the shaft but the foot
         // juts ~18px forward of the shin bone, so the body's leather toe kept showing beyond it. The
         // foot bone carries that forward offset for free, and a boot IS attached to a foot.
-        [GearSlot.Boots] = new("foot_main", 0.50f, 0.62f, 104f, 18),
-        [GearSlot.Chest] = new("torso", 0.50f, 0.82f, 116f, 9),
-        [GearSlot.Gloves] = new("hand_main", 0.50f, 0.34f, 46f, 20),
-        [GearSlot.Helm] = new("head", 0.50f, 0.72f, 102f, 13),
+        [GearSlot.Boots] = new("foot_main", 0.50f, 0.70f, 124f, 18),
+        [GearSlot.Chest] = new("torso", 0.50f, 0.76f, 132f, 9),
+        [GearSlot.Gloves] = new("hand_main", 0.50f, 0.30f, 54f, 20),
+        [GearSlot.Helm] = new("head", 0.50f, 0.78f, 120f, 13),
         // gear_weapon_* is authored VERTICAL with the hilt at the bottom, so the pivot sits low in
         // the texture (the grip).
         //
@@ -148,6 +149,42 @@ public sealed class HunterRigRenderer
         ["leg_shin_off"] = 0.18f,
     };
 
+    private static readonly Dictionary<string, float> RestPose =
+        HunterRig.Parts.Where(p => p.RestAngle != 0f).ToDictionary(p => p.Id, p => p.RestAngle);
+
+    private (float MinX, float MinY, float MaxX, float MaxY, int Resolved)? _restBounds;
+
+    /// <summary>Clip angles added on top of the parts' rest angles (see <see cref="HunterPart.RestAngle"/>).</summary>
+    private static Dictionary<string, float> Compose(IReadOnlyDictionary<string, float>? pose)
+    {
+        var merged = new Dictionary<string, float>(RestPose);
+        if (pose is not null)
+            foreach (var (bone, angle) in pose)
+                merged[bone] = merged.TryGetValue(bone, out var rest) ? rest + angle : angle;
+        return merged;
+    }
+
+    /// <summary>The assembled figure's native bounds at rest, computed once.</summary>
+    private (float MinX, float MinY, float MaxX, float MaxY, int Resolved) RestBounds()
+    {
+        if (_restBounds is { } cached) return cached;
+        float minX = float.MaxValue, minY = float.MaxValue, maxX = float.MinValue, maxY = float.MinValue;
+        var resolved = 0;
+        foreach (var bt in _rig.Evaluate(RestPose, Vec2.Zero))
+        {
+            if (!_byId.TryGetValue(bt.BoneId, out var p)) continue;
+            var tex = _ui.Assets.Get(p.TextureKey);
+            if (tex is not null) resolved++;
+            float w = tex?.Width ?? 40, h = tex?.Height ?? 40;
+            float l = bt.Position.X - p.Pivot.X, t = bt.Position.Y - p.Pivot.Y;
+            minX = MathF.Min(minX, l); minY = MathF.Min(minY, t);
+            maxX = MathF.Max(maxX, l + w); maxY = MathF.Max(maxY, t + h);
+        }
+        var r = (minX, minY, maxX, maxY, resolved);
+        if (resolved > 0) _restBounds = r;
+        return r;
+    }
+
     public HunterRigRenderer(UiKit ui) => _ui = ui;
 
     /// <summary>Joint dots, for tuning pivots in the dev preview.</summary>
@@ -166,22 +203,13 @@ public sealed class HunterRigRenderer
     public bool Draw(SpriteBatch b, Rectangle box, IReadOnlyDictionary<string, float>? pose,
                      Hunter? hunter, Color tint, bool groundToBottom = true)
     {
-        var frame = _rig.Evaluate(pose ?? new Dictionary<string, float>(), Vec2.Zero);
+        var frame = _rig.Evaluate(Compose(pose), Vec2.Zero);
 
-        // Native bounds of the assembled figure. Each part is drawn with origin=pivot at its bone, so
-        // its top-left in rig space is (bonePos - pivot).
-        float minX = float.MaxValue, minY = float.MaxValue, maxX = float.MinValue, maxY = float.MinValue;
-        var resolved = 0;
-        foreach (var bt in frame)
-        {
-            if (!_byId.TryGetValue(bt.BoneId, out var p)) continue;
-            var tex = _ui.Assets.Get(p.TextureKey);
-            if (tex is not null) resolved++;
-            float w = tex?.Width ?? 40, h = tex?.Height ?? 40;
-            float l = bt.Position.X - p.Pivot.X, t = bt.Position.Y - p.Pivot.Y;
-            minX = MathF.Min(minX, l); minY = MathF.Min(minY, t);
-            maxX = MathF.Max(maxX, l + w); maxY = MathF.Max(maxY, t + h);
-        }
+        // Bounds come from the REST pose, not from this frame. Measuring the current frame made the
+        // figure rescale and shift on every animation frame — a swing widens the bounds, the fit
+        // shrinks, and the whole character breathes in and out mid-attack. A character's footprint is
+        // a property of the character, not of what it is doing.
+        var (minX, minY, maxX, maxY, resolved) = RestBounds();
         if (resolved == 0) return false;
 
         var bw = MathF.Max(1, maxX - minX);

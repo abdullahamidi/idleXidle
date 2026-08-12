@@ -27,7 +27,7 @@ from concurrent import futures
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import pixellab_client as api  # noqa: E402
-from knockout import fit_canvas, knockout, stats, trim_and_center, upscale_integer  # noqa: E402
+from knockout import fit_canvas, keep_largest_component, knockout, stats, trim_and_center, upscale_integer  # noqa: E402
 from pixelpng import read, write  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -109,12 +109,20 @@ def process(
     height: int | None = None,
     upscale: int = 1,
     loose_alpha: bool = False,
+    single_subject: bool = False,
 ) -> dict:
     """Knockout + normalise a downloaded PNG, then write it to its final home."""
     img = read(raw_path)
     report: dict = {}
     if do_knockout:
         img, report = knockout(img)
+        if single_subject:
+            # Drop hallucinated spare parts and stray streaks before the canvas is trimmed to
+            # "content" — otherwise a floating extra limb defines the bounds and the subject is
+            # centred around empty space.
+            gone = keep_largest_component(img)
+            if gone:
+                report["stray_px"] = gone
         # Square assets get a padded, centred canvas so icons share an optical
         # weight. Non-square assets (stretched bar art) keep their aspect.
         if height is None or height == size:
@@ -249,6 +257,7 @@ def main() -> int:
                 upscale=upscale,
                 # Full-bleed chrome covers its canvas; no transparency floor.
                 loose_alpha=asset.get("style") == "chrome",
+                single_subject=asset.get("single_subject", False),
             )
             with lock:
                 done += 1

@@ -224,3 +224,44 @@ def stats(img: Image) -> dict:
         "distinct_alphas": len(set(alpha)),
         "distinct_colors": len(colors),
     }
+
+def keep_largest_component(img, min_alpha: int = 16) -> int:
+    """Erase every opaque blob except the biggest one. Returns the pixels removed.
+
+    Generators hallucinate spare parts — the rig base came back with a whole extra forearm and hand
+    floating beside the figure, and pixflux/pixen both leave faint diagonal streaks across the canvas.
+    They are always DISCONNECTED from the subject, so "keep the largest connected blob" removes them
+    without touching a pixel of the subject. That is not masking the art: it is deleting a duplicate
+    limb the model invented.
+    """
+    w, h, px = img.w, img.h, img.px
+    label = [0] * (w * h)
+    sizes = [0]
+    cur = 0
+    for start in range(w * h):
+        if label[start] or px[start * 4 + 3] < min_alpha:
+            continue
+        cur += 1
+        n = 0
+        stack = [start]
+        label[start] = cur
+        while stack:
+            i = stack.pop()
+            n += 1
+            x, y = i % w, i // w
+            for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+                if 0 <= nx < w and 0 <= ny < h:
+                    j = ny * w + nx
+                    if not label[j] and px[j * 4 + 3] >= min_alpha:
+                        label[j] = cur
+                        stack.append(j)
+        sizes.append(n)
+    if cur <= 1:
+        return 0
+    best = max(range(1, cur + 1), key=lambda c: sizes[c])
+    removed = 0
+    for i in range(w * h):
+        if label[i] and label[i] != best:
+            px[i * 4:i * 4 + 4] = b"\x00\x00\x00\x00"
+            removed += 1
+    return removed

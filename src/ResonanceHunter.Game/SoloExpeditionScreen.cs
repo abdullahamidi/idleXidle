@@ -1026,13 +1026,15 @@ public sealed class SoloExpeditionScreen
         // the screen working while rig parts are still being authored.
         if (DrawRiggedChampion(b, box, attacking, dead, tint)) return;
 
-        // FULL-BODY static poses (package_02). The package_02A "animation" strips are head-and-torso busts,
-        // so they're wrong for the arena figure — only a full body reads here. Pose swaps on lunge/death.
-        var key = dead ? "hunter_defeated" : attacking ? "hunter_attack_01" : "hunter_idle";
+        // The flat fallback, for the case where rig art is missing entirely. It draws hunter_rig_base —
+        // the SAME figure the rig is cut from — rather than the old hunter_idle/attack/defeated poses,
+        // which are a different-looking character. A fallback that changes who the player is looking at
+        // is worse than one that loses a pose.
+        const string key = "hunter_rig_base";
         // SpriteGrounded, not Sprite: the poses carry different amounts of empty canvas under the feet
         // (hunter_idle 54 rows, hunter_attack_01 26), so plain Sprite both floated the figure and made it
         // bob vertically on every pose swap. Anchoring by the opaque sole fixes both.
-        if (!_ui.SpriteGrounded(b, key, box, tint, 0.03f) && !_ui.SpriteGrounded(b, "hunter_idle", box, tint, 0.03f))
+        if (!_ui.SpriteGrounded(b, key, box, tint, 0.03f))
             _ui.Fill(b, new Rectangle(box.Center.X - 32, box.Bottom - 80, 64, 72), dead ? Dim : Gold);
 
         // Gear is deliberately NOT drawn here yet — see DrawEquippedGear for why the socket approach
