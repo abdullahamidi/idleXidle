@@ -172,13 +172,24 @@ prestige resets.
 
 ## Game Pillars
 
-### Pillar 1: Precision Over Reflexes
+### Pillar 1: Build Decisions, Not Reflexes
 
-Mastery is expressed through pattern recognition and high-value execution,
-not movement or twitch reflexes.
+*(Replaced "Precision Over Reflexes" on 2026-08-12.)*
 
-*Design test*: If we're debating free-roam dodging vs. deeper weak-point/
-telegraph mechanics, this pillar says we choose weak-point depth.
+Mastery is expressed entirely in decisions made BEFORE a descent — which Forms,
+which Vows, which branch of a tree you refuse in order to afford another. Combat
+resolves automatically; the player never targets, dodges or fires.
+
+*Design test*: If we're debating adding an in-combat input, this pillar says no —
+put the decision in the build layer and make the content demand it instead.
+
+> **Why this changed.** The original pillar called for weak-point targeting,
+> telegraph reading and a limited dodge. None of it was ever implemented: the fight
+> screen's only control is a speed selector, and the 1,300-line
+> `combat-encounter-system.md` has zero corresponding code. Rather than carry a
+> pillar the game has never honoured, the design now commits to what it actually
+> is — an automatic benchmark wrapped around a build laboratory. See
+> `design/gdd/game-flow.md`.
 
 ### Pillar 2: Automation Is Earned, Not Assumed
 
@@ -189,15 +200,17 @@ it exists — nothing is automatic by default.
 auto-playable from the start or require an active-mastery unlock first, this
 pillar says we choose the unlock.
 
-### Pillar 3: Active Is Better, Idle Is Never Worthless
+### Pillar 3: Play Feeds the Build, Idle Feeds the Gear
 
-Active play should feel meaningfully more rewarding (~2x) than automation, but
-automation must always produce genuine core progression — never busywork or
-fake numbers.
+*(Revised 2026-08-12 — there is no longer an "active play" mode to be better than.)*
 
-*Design test*: If we're debating whether a resource/creature/evolution should
-be idle-farmable, this pillar says yes — unless it fundamentally requires a
-decision idle can't make.
+Progression currency that buys build identity — tree points, keystones — comes only
+from descending: first-time depth, boss kills, part-breaks. The idle layer (the
+Warren) produces Gleam and materials, which buy gear. Idle therefore never
+purchases a decision, and play is never a worse way to earn anything.
+
+*Design test*: If we're debating whether a new faucet should be idle, this pillar
+asks what it buys. Gear: yes. A tree point or a keystone: no.
 
 ### Pillar 4: Builds Are Trade-offs, Not Stat Stacks
 

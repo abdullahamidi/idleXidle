@@ -1,5 +1,14 @@
 # Combat Encounter System: Resonance Hunter
 
+
+> **SUPERSEDED 2026-08-12 by `design/gdd/game-flow.md`.**
+>
+> This document describes weak-point targeting, telegraph reading, dodge/block and a
+> priced bank-or-push exit. None of it was ever implemented — the fight screen's only
+> control is a speed selector — and the design has since committed to fully automatic
+> combat with all decisions in the build layer. Kept for the enemy/encounter vocabulary
+> it defines, which the archetype system reuses. Do not treat its rules as current.
+
 ## Document Status
 
 | Field | Value |
