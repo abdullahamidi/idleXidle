@@ -78,7 +78,7 @@ public class Game1 : Game
     private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
     private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
     private static readonly Color Ember = new(0xD8, 0x48, 0x3A);
-    private static readonly Color Slate = new(0x57, 0x61, 0x6F);
+    private static readonly Color Slate = new(0x8A, 0x96, 0xA8);
     private static readonly Color Dim = new(0x3A, 0x3A, 0x44);
 
     /// <summary>A soft, dark panel tone for HUD bands — lighter than the void so UI sits on a surface,
@@ -1854,9 +1854,15 @@ public class Game1 : Game
     // ── The shared hexagonal navigation bar — drawn over every screen, driven by click OR the hotkeys. ──
     private static readonly (string Label, char Key, string Glyph)[] Nav =
     {
+        // Each entry is the asset that actually carries a SYMBOL, measured rather than assumed:
+        // scoring every candidate by bright-pixel fraction inside its centre disc shows the six here
+        // score 0.26-0.69 while nav_forge, nav_forge_128, nav_warren and nav_warren_128 all score
+        // 0.00 — ornate rings around an empty centre. FORGE and WARREN had no usable emblem in any
+        // shipped set, which is why every scene audit reported the rail as half-blank; theirs are
+        // generated (icon_nav_*).
         ("HUNT", 'H', "nav_hunt_128"), ("GEAR", 'C', "nav_inventory_128"),
         ("STATS", 'V', "state_resonance_128"), ("BUILD", 'B', "state_mastery_128"),
-        ("FORGE", 'F', "nav_forge_128"), ("WARREN", 'A', "nav_warren_128"),
+        ("FORGE", 'F', "icon_nav_forge"), ("WARREN", 'A', "icon_nav_warren"),
         ("MAP", 'W', "nav_relics_128"), ("DUST", 'P', "nav_prestige"),
     };
 

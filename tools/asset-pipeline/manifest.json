@@ -2000,6 +2000,20 @@
       "negative_description": "breastplate, cuirass, chestplate, torso, body, chest, ribs, abdomen, belt, waist, character, person, mannequin, armour set, sleeves, arms, neck, collar, pair, two"
     },
     {
+      "key": "icon_nav_forge",
+      "dest": "assets/art/UI/icons/nav",
+      "style": "item",
+      "subject": "a bright polished gold blacksmith hammer crossed over a gold anvil, glowing warm gold, filling the frame",
+      "negative_description": "frame, border, ring, circle, medallion, rim, coin, badge, dark center, black center, text"
+    },
+    {
+      "key": "icon_nav_warren",
+      "dest": "assets/art/UI/icons/nav",
+      "style": "item",
+      "subject": "three bright gold arched burrow entrances in a mound, glowing warm gold, filling the frame",
+      "negative_description": "frame, border, ring, circle, medallion, rim, coin, badge, dark center, black center, text"
+    },
+    {
       "key": "icon_facility_nursery",
       "dest": "assets/art/UI/icons/facilities",
       "style": "item",

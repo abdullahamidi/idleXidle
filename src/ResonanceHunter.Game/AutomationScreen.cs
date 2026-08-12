@@ -25,7 +25,7 @@ public sealed class AutomationScreen
     private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
     private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
     private static readonly Color Ember = new(0xD8, 0x48, 0x3A);
-    private static readonly Color Slate = new(0x57, 0x61, 0x6F);
+    private static readonly Color Slate = new(0x8A, 0x96, 0xA8);
     private static readonly Color Dim = new(0x2C, 0x2C, 0x36);
     private static readonly Color GroundShadow = new(0x10, 0x0E, 0x14);
     private static readonly Color StallBg = new(0x14, 0x11, 0x1A, 0xC8);   // translucent, so the warren shows behind

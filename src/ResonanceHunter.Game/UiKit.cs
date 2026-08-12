@@ -566,7 +566,11 @@ public sealed class UiKit
     // ── Buttons (mouse-clickable) ───────────────────────────────────────────────────────────────
     private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
     private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
-    private static readonly Color Slate = new(0x57, 0x61, 0x6F);
+    // 0x8A96A8, was 0x57616F. The old value measured 1.77:1 on parchment and 1.63:1 on the dim
+    // arena — it failed on BOTH of this game's surfaces, which is why every secondary label ("TEMPO
+    // 4.94x SKILL RATE", "BATTLE SPEED", "Deepest wave reached") read as a ghost. This one measures
+    // ~6.9:1 on the dark panels while staying clearly below Bone, so the hierarchy survives.
+    private static readonly Color Slate = new(0x8A, 0x96, 0xA8);
 
     /// <summary>
     /// Draw a clickable button and return true if it was clicked this frame.
@@ -655,12 +659,15 @@ public sealed class UiKit
             if (pct > 0f) Fill(b, new Rectangle(r.X + 1, r.Y + 1, (int)((r.Width - 2) * pct), r.Height - 2), new Color(0xF0, 0xA8, 0x30));
             return;
         }
+        // An opaque TRACK first. The frame art's window is not opaque everywhere, and on the enemy
+        // nameplate — the one bar that floats over the scene rather than sitting on a panel — the
+        // forest showed through the depleted section, so a half-dead enemy read as a bar with a hole.
+        var win = new Rectangle(r.X + Math.Max(2, r.Width * 7 / 100), r.Y + Math.Max(2, r.Height * 30 / 100),
+                                r.Width - Math.Max(4, r.Width * 14 / 100), Math.Max(1, r.Height * 42 / 100));
+        Fill(b, win, new Color(0x12, 0x0C, 0x10));
         b.Draw(frame, r, Color.White);   // ornate frame + its (opaque) dark window
         if (pct > 0f && Assets.Get($"ui_bar_{type}_fill") is { } fill && fill.Width > 0)
         {
-            // The fill sits inside the frame window — insets carry the ornate border/gem out of the fill area.
-            var win = new Rectangle(r.X + Math.Max(2, r.Width * 7 / 100), r.Y + Math.Max(2, r.Height * 30 / 100),
-                                    r.Width - Math.Max(4, r.Width * 14 / 100), Math.Max(1, r.Height * 42 / 100));
             var fw = Math.Max(1, (int)(win.Width * pct));
             var src = new Rectangle(0, 0, Math.Max(1, (int)(fill.Width * pct)), fill.Height);
             b.Draw(fill, new Rectangle(win.X, win.Y, fw, win.Height), src, Color.White);

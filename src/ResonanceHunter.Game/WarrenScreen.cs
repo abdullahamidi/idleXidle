@@ -20,7 +20,7 @@ public sealed class WarrenScreen
     private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
     private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
     private static readonly Color Ember = new(0xD8, 0x48, 0x3A);
-    private static readonly Color Slate = new(0x57, 0x61, 0x6F);
+    private static readonly Color Slate = new(0x8A, 0x96, 0xA8);
     private static readonly Color Dim = new(0x3A, 0x3A, 0x44);
     private static readonly Color Met = new(0x6E, 0xC8, 0x7A);
     private static readonly Color GleamC = new(0xF0, 0xA8, 0x30);   // gold coin track
@@ -104,7 +104,11 @@ public sealed class WarrenScreen
         var bar = new Rectangle(OverviewPanel.X + 32, OverviewPanel.Y + 176, OverviewPanel.Width - 64, 26);
         var pct = Warren.XpToNext > 0 ? Warren.Xp / (float)Warren.XpToNext : 1f;
         _ui.Bar(b, bar.X, bar.Y, bar.Width, bar.Height, pct, Gold);
-        _ui.TextCenterBig(b, $"{Warren.Xp:N0} / {Warren.XpToNext:N0}", bar.Center.X, bar.Y + 4, Bone, UiTypography.Secondary);
+        // Ink on the gold fill, Bone off it. Cream on gold measures ~1.6:1 — the same gold-on-gold
+        // failure the boss bar had, and the reason this readout was invisible for most of the bar.
+        var xpFrac = Warren.XpToNext > 0 ? Warren.Xp / (float)Warren.XpToNext : 0f;
+        _ui.TextCenterBig(b, $"{Warren.Xp:N0} / {Warren.XpToNext:N0}", bar.Center.X, bar.Y + 4,
+            xpFrac > 0.55f ? UiKit.Ink : Bone, UiTypography.Secondary);
         _ui.TextBig(b, $"NEXT LEVEL {Warren.Level + 1}", OverviewPanel.X + 32, OverviewPanel.Y + 214, Slate, UiTypography.Secondary);
         _ui.TextRightBig(b, $"+{Warren.AllProductionBonus * 100f:0}% ALL PRODUCTION", OverviewPanel.Right - 32, OverviewPanel.Y + 214, Met, UiTypography.Secondary);
 
@@ -237,16 +241,32 @@ public sealed class WarrenScreen
         _ui.TextRightBig(b, ok ? "OK" : "X", DetailPanel.Right - 44, y, ok ? Met : Ember, UiTypography.Secondary);
     }
 
+    /// <summary>
+    /// Word-wrapped body text at the shared Body size.
+    /// </summary>
+    /// <remarks>
+    /// It used to MEASURE with <c>_ui.Measure</c> (the default size) and DRAW with <c>_ui.Text</c>
+    /// (also the default), while every other label on this screen goes through the sized calls. The
+    /// default is much larger than <see cref="UiTypography.Body"/>, so the description paragraphs
+    /// rendered roughly twice the size of their own headings and wrapped in the wrong places — the
+    /// only text on the screen off the type scale.
+    /// </remarks>
     private void DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c)
     {
+        const int px = UiTypography.Body;
         var line = "";
         foreach (var w in text.Split(' '))
         {
             var probe = line.Length == 0 ? w : line + " " + w;
-            if (_ui.Measure(probe) > width && line.Length > 0) { _ui.Text(b, line, x, y, c); y += 26; line = w; }
+            if (_ui.MeasureBig(probe, px) > width && line.Length > 0)
+            {
+                _ui.TextBig(b, line, x, y, c, px);
+                y += px * 3 / 2;
+                line = w;
+            }
             else line = probe;
         }
-        if (line.Length > 0) _ui.Text(b, line, x, y, c);
+        if (line.Length > 0) _ui.TextBig(b, line, x, y, c, px);
     }
 
     private void DrawDebug(SpriteBatch b)

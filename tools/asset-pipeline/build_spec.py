@@ -453,6 +453,25 @@ def stills() -> list[dict]:
                                 "sleeves, arms, neck, collar, pair, two",
     })
 
+    # --- The two nav emblems that do not exist in any shipped set.
+    #
+    # Measured, not guessed: scoring every nav_*/state_* asset by how much BRIGHT pixel there is in
+    # its centre disc shows HUNT/GEAR/STATS/BUILD/MAP/DUST all carry a symbol (0.26-0.69) while
+    # nav_forge, nav_forge_128, nav_warren and nav_warren_128 all score 0.00 — they are ornate rings
+    # around an empty dark centre. Every scene audit independently reported the rail as "some tabs
+    # have a symbol, some are blank", and this is why.
+    # Style "item", not "medallion", for the same reason the facility icons needed it: the medallion
+    # prompt asks for a "dark near-black center", so the symbol comes out dark on dark and vanishes at
+    # the 48px a nav tile gives it. Measured 0.00 bright-centre both times before the switch.
+    for key, motif in {
+        "icon_nav_forge": "a bright polished gold blacksmith hammer crossed over a gold anvil",
+        "icon_nav_warren": "three bright gold arched burrow entrances in a mound",
+    }.items():
+        add(key, "assets/art/UI/icons/nav", "item",
+            f"{motif}, glowing warm gold, filling the frame",
+            negative_description="frame, border, ring, circle, medallion, rim, coin, badge, "
+                                 "dark center, black center, text")
+
     # --- Warren facility icons: icon_facility_<kind> (WarrenScreen grid)
     #
     # These cards drew a flat coloured HEXAGON where the facility's picture belongs — eight identical

@@ -27,7 +27,7 @@ public sealed class StatsScreen
     private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
     private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
     private static readonly Color Ember = new(0xD8, 0x48, 0x3A);
-    private static readonly Color Slate = new(0x57, 0x61, 0x6F);
+    private static readonly Color Slate = new(0x8A, 0x96, 0xA8);
     private static readonly Color Dim = new(0x3A, 0x3A, 0x44);
     private static readonly Color Sky = new(0x7A, 0x9A, 0xC0);
     private static readonly Color Quiet = new(0x16, 0x12, 0x20, 0xE0);
