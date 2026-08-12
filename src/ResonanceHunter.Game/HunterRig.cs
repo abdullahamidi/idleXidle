@@ -41,23 +41,25 @@ public static class HunterRig
         // Body parts are cut from hunter_idle on disjoint, measured columns. The two
         // shoulder bones instead use DRAWN pauldrons: a joint cover taken from the body
         // carries the resting pose's lighting and shows as a patch once the arm moves.
-        new HunterPart("arm_upper_off", "torso", "hunter_part_arm_upper_off", new Vec2(56, -92), new Vec2(11, 18), 1),
+        new HunterPart("cloak_main", "torso", "hunter_part_cloak_main", new Vec2(-100, -126), new Vec2(9, 0), 0),
+        new HunterPart("cloak_off", "torso", "hunter_part_cloak_off", new Vec2(91, -126), new Vec2(2, 0), 0),
+        new HunterPart("arm_upper_off", "torso", "hunter_part_arm_upper_off", new Vec2(56, -92), new Vec2(11, 34), 1),
         new HunterPart("arm_fore_off", "arm_upper_off", "hunter_part_arm_fore_off", new Vec2(3, 94), new Vec2(14, 2), 2),
         new HunterPart("hand_off", "arm_fore_off", "hunter_part_hand_off", new Vec2(4, 50), new Vec2(18, 2), 3),
         new HunterPart("leg_thigh_off", "pelvis", "hunter_part_leg_thigh_off", new Vec2(23, 66), new Vec2(24, 2), 4),
         new HunterPart("leg_shin_off", "leg_thigh_off", "hunter_part_leg_shin_off", new Vec2(18, 100), new Vec2(38, 2), 5),
         new HunterPart("foot_off", "leg_shin_off", "hunter_part_foot_off", new Vec2(17, 54), new Vec2(55, 3), 6),
         new HunterPart("pelvis", null, "hunter_part_pelvis", new Vec2(0, 0), new Vec2(45, 0), 7),
-        new HunterPart("torso", "pelvis", "hunter_part_torso", new Vec2(0, 0), new Vec2(45, 116), 8),
+        new HunterPart("torso", "pelvis", "hunter_part_torso", new Vec2(0, 0), new Vec2(45, 126), 8),
         new HunterPart("leg_thigh_main", "pelvis", "hunter_part_leg_thigh_main", new Vec2(-23, 66), new Vec2(128, 2), 9),
         new HunterPart("leg_shin_main", "leg_thigh_main", "hunter_part_leg_shin_main", new Vec2(-21, 100), new Vec2(47, 2), 10),
         new HunterPart("foot_main", "leg_shin_main", "hunter_part_foot_main", new Vec2(-18, 54), new Vec2(37, 3), 11),
-        new HunterPart("head", "torso", "hunter_part_head", new Vec2(0, -118), new Vec2(57, 104), 12),
-        new HunterPart("arm_upper_main", "torso", "hunter_part_arm_upper_main", new Vec2(-54, -92), new Vec2(37, 18), 13),
+        new HunterPart("head", "torso", "hunter_part_head", new Vec2(0, -118), new Vec2(71, 104), 12),
+        new HunterPart("arm_upper_main", "torso", "hunter_part_arm_upper_main", new Vec2(-54, -92), new Vec2(37, 34), 13),
         new HunterPart("arm_fore_main", "arm_upper_main", "hunter_part_arm_fore_main", new Vec2(-5, 94), new Vec2(32, 2), 14),
         new HunterPart("hand_main", "arm_fore_main", "hunter_part_hand_main", new Vec2(-4, 50), new Vec2(28, 2), 15),
-        new HunterPart("shoulder_main", "torso", "hunter_part_shoulder_main", new Vec2(-54, -92), new Vec2(27, 11), 16),
-        new HunterPart("shoulder_off", "torso", "hunter_part_shoulder_off", new Vec2(56, -92), new Vec2(27, 11), 17),
+        new HunterPart("shoulder_main", "torso", "hunter_part_shoulder_main", new Vec2(-54, -92), new Vec2(29, 20), 16),
+        new HunterPart("shoulder_off", "torso", "hunter_part_shoulder_off", new Vec2(56, -92), new Vec2(29, 20), 17),
     };
 
     /// <summary>Build the Core geometry rig (no textures) from the part table.</summary>

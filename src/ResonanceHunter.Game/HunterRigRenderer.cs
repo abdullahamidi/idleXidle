@@ -54,7 +54,8 @@ public sealed class HunterRigRenderer
     /// <remarks>
     /// Draw orders interleave with <see cref="HunterRig.Parts"/>. The body occupies 0..17 (the shoulder
     /// caps are 16/17 and the elbow caps 18/19), so gear painting over a limb sits above that —
-    /// gloves 20, weapon 21.
+    /// boots 18, gloves 20, weapon 21. Boots at 11 tied with foot_main's own order, so the body's
+    /// leather boot sometimes painted over the worn one.
     /// Helm at 13 still paints over the head (12) while the off-hand arm (1..3) passes behind the torso.
     /// </remarks>
     private static readonly Dictionary<GearSlot, GearBinding> Bindings = new()
@@ -64,14 +65,23 @@ public sealed class HunterRigRenderer
         // sized for a broken 1143-tall assembly and rendered a helm half the height of the body.
         // Pivot V sits low in the texture so a piece hangs DOWN from its joint, the way a helm sits on
         // a neck and a blade hangs from a grip.
-        [GearSlot.Boots] = new("foot_main", 0.46f, 0.20f, 62f, 11),
-        [GearSlot.Chest] = new("torso", 0.50f, 0.82f, 126f, 9),
-        [GearSlot.Gloves] = new("hand_main", 0.50f, 0.34f, 54f, 20),
-        [GearSlot.Helm] = new("head", 0.50f, 0.72f, 104f, 13),
+        // Boots bind to the FOOT with a tall shaft that rises past the knee, rather than to the shin.
+        // Both were tried: at 62px on the foot the piece covered the toe only and read as a bootie
+        // pulled over the character's own boot; bound to the shin it covered the shaft but the foot
+        // juts ~18px forward of the shin bone, so the body's leather toe kept showing beyond it. The
+        // foot bone carries that forward offset for free, and a boot IS attached to a foot.
+        [GearSlot.Boots] = new("foot_main", 0.50f, 0.62f, 104f, 18),
+        [GearSlot.Chest] = new("torso", 0.50f, 0.82f, 116f, 9),
+        [GearSlot.Gloves] = new("hand_main", 0.50f, 0.34f, 46f, 20),
+        [GearSlot.Helm] = new("head", 0.50f, 0.72f, 102f, 13),
         // gear_weapon_* is authored VERTICAL with the hilt at the bottom, so the pivot sits low in
-        // the texture (the grip) and only a slight tilt is added for a natural carry. The old +0.85
-        // rad existed solely to undo the diagonal of the inventory icons this replaced.
-        [GearSlot.Weapon] = new("hand_main", 0.50f, 0.88f, 150f, 21, 0.55f),
+        // the texture (the grip).
+        //
+        // The tilt is NEGATIVE, and that is the whole point: the main hand is on the screen-left of a
+        // figure that faces right, so a positive (clockwise) tilt lays the blade up across the chest —
+        // which is exactly what it did, a sword worn like a sash. Tilting the other way carries it
+        // clear of the silhouette.
+        [GearSlot.Weapon] = new("hand_main", 0.50f, 0.88f, 148f, 21, -0.30f),
     };
 
     /// <summary>Boots and gloves are worn on both limbs; the mirror bone draws the same texture.</summary>
@@ -212,13 +222,19 @@ public sealed class HunterRigRenderer
                     if (bt.BoneId is null) continue;
                     var pos = ToScreen(bt.Position);
                     var angle = bt.Angle;
-                    // Scale so the gear's drawn height matches its rig-native height, then apply the
-                    // same figure fit — gear then grows and shrinks with the body automatically.
-                    var gearScale = bind.Height / tex.Height * fit;
+                    // Sized and pivoted against the art's CONTENT, not its canvas. Height is how tall the
+                    // visible piece should be in rig pixels, and the pivot fractions address the content
+                    // box — so a generated piece carrying 6% empty canvas and one carrying 18% both land
+                    // in the same place, which canvas-relative numbers could never do.
+                    var pad = _ui.ContentPad(tex);
+                    var contentH = MathF.Max(1f, tex.Height * (1f - pad.Y - pad.W));
+                    var contentW = MathF.Max(1f, tex.Width * (1f - pad.X - pad.Z));
+                    var gearScale = bind.Height / contentH * fit;
+                    var pivot = new Vector2(tex.Width * pad.X + contentW * bind.PivotU,
+                                            tex.Height * pad.Y + contentH * bind.PivotV);
                     var texRef = tex;
                     paint.Add((bind.DrawOrder, () => b.Draw(texRef, pos, null, tint, angle + bind.Rotation,
-                        new Vector2(texRef.Width * bind.PivotU, texRef.Height * bind.PivotV),
-                        gearScale, SpriteEffects.None, 0f)));
+                        pivot, gearScale, SpriteEffects.None, 0f)));
                 }
             }
 

@@ -656,7 +656,7 @@ public class Game1 : Game
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "reforge" or "build" or "character" or "stats" or "warren" or "map" or "rig"
-                or "fightgear")
+                or "fightgear" or "fightswing")
             {
                 _showTitle = false;
                 if (sm == "rig") _showRigPreview = true;
@@ -776,12 +776,19 @@ public class Game1 : Game
                     _deepestEver = 23; _mastery.SetEarned(77400);   // fixture career values (Stats §13)
                 }
 
-                if (sm is "fight" or "fightgear")
+                if (sm is "fight" or "fightgear" or "fightswing")
                 {
+                    // fightswing holds the strike clip at its apex, so the one pose a timed capture can
+                    // never catch — the blade at full extension — is checkable.
+                    if (sm == "fightswing")
+                        _expedition.DevSwingPhase =
+                            float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_SWING"),
+                                System.Globalization.NumberStyles.Float,
+                                System.Globalization.CultureInfo.InvariantCulture, out var swp) ? swp : 0.55f;
                     // `fightgear` dresses the Hunter before the fight opens. A fresh save wears nothing, so
                     // a plain `fight` capture can never show worn equipment — and worn equipment is exactly
                     // what the rig bindings need verifying against.
-                    if (sm == "fightgear")
+                    if (sm is "fightgear" or "fightswing")
                     {
                         var worn = new[]
                         {

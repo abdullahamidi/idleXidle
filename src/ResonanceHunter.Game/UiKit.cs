@@ -310,6 +310,44 @@ public sealed class UiKit
         return tex;
     }
 
+    private readonly System.Collections.Generic.Dictionary<Texture2D, Vector4> _contentPad = new();
+
+    /// <summary>
+    /// A texture's transparent margins as fractions of its size: (left, top, right, bottom).
+    /// </summary>
+    /// <remarks>
+    /// Generated art arrives on a square canvas with however much empty space the model felt like
+    /// leaving — measured across the ten boot variants that is anywhere from 6% to 18% vertically. Any
+    /// placement expressed against the CANVAS therefore lands somewhere different for every variant,
+    /// which is why a worn boot calibrated on one trait sat halfway up the shin on another. Callers
+    /// that place art by its content are immune to that.
+    /// </remarks>
+    public Vector4 ContentPad(Texture2D t)
+    {
+        if (_contentPad.TryGetValue(t, out var cached)) return cached;
+        var pad = Vector4.Zero;
+        if (t is { Width: > 0, Height: > 0 })
+        {
+            var data = new Color[t.Width * t.Height];
+            t.GetData(data);
+            int l = t.Width, r = 0, top = t.Height, bot = 0;
+            for (var y = 0; y < t.Height; y++)
+                for (var x = 0; x < t.Width; x++)
+                    if (data[y * t.Width + x].A > 8)
+                    {
+                        if (x < l) l = x;
+                        if (x >= r) r = x + 1;
+                        if (y < top) top = y;
+                        if (y >= bot) bot = y + 1;
+                    }
+            if (r > l && bot > top)
+                pad = new Vector4(l / (float)t.Width, top / (float)t.Height,
+                                  (t.Width - r) / (float)t.Width, (t.Height - bot) / (float)t.Height);
+        }
+        _contentPad[t] = pad;
+        return pad;
+    }
+
     /// <summary>A soft elliptical contact shadow centred on (cx, cy).</summary>
     public void GroundShadow(SpriteBatch b, int cx, int cy, int width, int height, float strength = 0.55f)
         => b.Draw(_blob, new Rectangle(cx - width / 2, cy - height / 2, width, height), Color.White * strength);

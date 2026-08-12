@@ -977,6 +977,16 @@ public sealed class SoloExpeditionScreen
 
     private HunterRigRenderer? _rigRenderer;
     private float _strikeTime;
+
+    /// <summary>
+    /// DEV: hold the strike clip at a fixed point (0..1 of its duration) instead of letting combat drive it.
+    /// </summary>
+    /// <remarks>
+    /// A one-second screenshot lands wherever the fight happens to be, which is almost never mid-swing —
+    /// so the pose that most needs checking (does the equipped blade sweep through the body?) was the one
+    /// pose no capture could reliably show.
+    /// </remarks>
+    public float? DevSwingPhase;
     private readonly Clip _idleClip = Clip.Idle();
     private readonly Clip _strikeClip = Clip.AttackerStrike();
 
@@ -993,6 +1003,9 @@ public sealed class SoloExpeditionScreen
         _rigRenderer ??= new HunterRigRenderer(_ui);
         if (dead)
             return _rigRenderer.Draw(b, box, HunterRigRenderer.DeathPose, _hunter, tint);
+        if (DevSwingPhase is { } ph)
+            return _rigRenderer.Draw(b, box, HunterRigRenderer.MapPose(
+                _strikeClip.Sample(ph * _strikeClip.DurationSeconds)), _hunter, tint);
         var swinging = _strikeTime > 0f;
         var sampled = swinging
             ? _strikeClip.Sample(_strikeClip.DurationSeconds - _strikeTime)

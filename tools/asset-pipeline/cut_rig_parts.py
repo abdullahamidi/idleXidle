@@ -51,13 +51,28 @@ PARTS: dict[str, tuple[str | None, tuple[int, int, int, int], tuple[int, int], i
     #     main leg x 214..258 |  off leg x 258..304
     # and the body column is split vertically at the waist (266) and hip (302).
     #
-    # There is no cloak part: its cut spanned x 170..348, y 118..400, which is
-    # most of the body — it was the single biggest source of the doubling. The
-    # hood reads as part of the head cut instead.
+    # The cloak parts here are 18px and 4px STRIPS at the outer edges. An earlier
+    # attempt at a cloak part spanned x 170..348, y 118..400 — most of the body —
+    # and was the single biggest source of the four-arms doubling. The hood still
+    # reads as part of the head cut.
+    # BOXES MUST ALSO TILE. Disjoint is not enough: any opaque sprite pixel that falls in NO box is
+    # simply never drawn, and the figure gets a hole. The arms used to start at y=128 while the
+    # head/torso seam sat at 122, leaving a 6px strip across both shoulders unclaimed — it rendered as
+    # a background-coloured band sawn straight through the hood. `--write` now reports any unclaimed
+    # opaque pixel, so the next box edit cannot reintroduce one silently.
     #                parent              l    t    r    b        joint          order
-    "arm_upper_off":   ("torso",        (304, 128, 348, 238),  (315, 146),  1),
+    # cloak_* are STATIC strips parented to the torso, not part of the arms.
+    #
+    # Closing the shoulder gap meant widening the arm columns outward, and the pixels out there are
+    # CLOAK, not sleeve. At rest that is invisible; the moment the arm swings, an 18px-wide slab of
+    # cloak flies out with it and reads as a second dark blade. A rectangle decomposition cannot
+    # separate an arm from the cloak hanging behind it, so the cloak edge gets its own bone that
+    # never rotates.
+    "cloak_main":      ("torso",        (150, 112, 168, 334),  (159, 112),  0),
+    "cloak_off":       ("torso",        (348, 112, 352, 334),  (350, 112),  0),
+    "arm_upper_off":   ("torso",        (304, 112, 348, 238),  (315, 146),  1),
     "arm_fore_off":    ("arm_upper_off", (304, 238, 348, 288), (318, 240),  2),
-    "hand_off":        ("arm_fore_off", (304, 288, 352, 334),  (322, 290),  3),
+    "hand_off":        ("arm_fore_off", (304, 288, 348, 334),  (322, 290),  3),
     # Columns below are MEASURED from the sprite, not guessed: at thigh level the
     # tunic is one connected mass (x 108..340), and the legs only separate at the
     # shin (x 174..256 and 268..332) with the feet at 170..224 and 296..338.
@@ -67,12 +82,12 @@ PARTS: dict[str, tuple[str | None, tuple[int, int, int, int], tuple[int, int], i
     "leg_shin_off":    ("leg_thigh_off", (262, 402, 340, 455), (300, 404),  5),
     "foot_off":        ("leg_shin_off", (262, 455, 345, 494),  (317, 458),  6),
     "pelvis":          (None,           (214, 238, 304, 302),  (259, 238),  7),
-    "torso":           ("pelvis",       (214, 122, 304, 238),  (259, 238),  8),
+    "torso":           ("pelvis",       (214, 112, 304, 238),  (259, 238),  8),
     "leg_thigh_main":  ("pelvis",       (108, 302, 258, 402),  (236, 304),  9),
     "leg_shin_main":   ("leg_thigh_main", (168, 402, 262, 455), (215, 404), 10),
     "foot_main":       ("leg_shin_main", (160, 455, 262, 494), (197, 458), 11),
-    "head":            ("torso",        (202,  16, 316, 122),  (259, 120), 12),
-    "arm_upper_main":  ("torso",        (168, 128, 214, 238),  (205, 146), 13),
+    "head":            ("torso",        (188,  16, 328, 112),  (259, 120), 12),
+    "arm_upper_main":  ("torso",        (168, 112, 214, 238),  (205, 146), 13),
     "arm_fore_main":   ("arm_upper_main", (168, 238, 214, 288), (200, 240), 14),
     "hand_main":       ("arm_fore_main", (168, 288, 214, 334), (196, 290), 15),
     # Shoulder caps sit ON THE TORSO, not the arm, so they hold still while the arm
@@ -92,21 +107,38 @@ PARTS: dict[str, tuple[str | None, tuple[int, int, int, int], tuple[int, int], i
 # leg_thigh_main, where it then swung with the leg like a floating weapon. Only
 # STEEL pixels (bright, low-saturation) inside these boxes are cleared, so the dark
 # cloak and the tunic behind the blade survive.
-ERASE_STEEL: dict[str, list[tuple[int, int, int, int]]] = {
-    "leg_thigh_main": [(0, 0, 98, 95)],
-    "hand_main":      [(0, 4, 18, 30)],
-    "arm_fore_main":  [(0, 12, 34, 32)],
-}
+# The sprite has a sword BAKED IN — it hangs diagonally down-left of the grip, across pixels that
+# belong to the leg, the forearm and the hand. Left in, it swings with whichever limb owns it, so a
+# second weapon floats around the figure while the equipped one is drawn at the hand.
+#
+# These regions are in SPRITE coordinates, and the cutter maps them into each part it overlaps. They
+# used to be per-part LOCAL rectangles, which silently pointed at the wrong pixels the moment a box
+# moved — widening the main-side boxes by 18px to close the shoulder gap left the blade untouched and
+# exposed 18 more columns of it.
+#
+# ERASE_SPRITE clears outright; it is used where the blade sits over empty canvas or where colour
+# keying cannot separate it (its black outline shares the cloak's luma exactly).
+ERASE_SPRITE: list[tuple[int, int, int, int]] = [
+    (140, 268, 170, 348),   # blade + pommel, clear of the body silhouette
+    (108, 302, 192, 400),   # the lower blade, over the thigh
+    (188, 248, 204, 266),   # a detached fragment beside the forearm
+    (198, 108, 216, 128),   # a stray highlight at the shoulder, under the pauldron's edge
+]
+
+# STEEL_SPRITE keys only bright low-saturation pixels, for where the blade crosses the body and the
+# cloak behind it has to survive.
+STEEL_SPRITE: list[tuple[int, int, int, int]] = [
+    (166, 268, 192, 330),
+]
 
 
-# Regions cleared OUTRIGHT. Colour-keying the blade only removed its steel
-# interior — the black outline shares the cloak's luma, so no threshold separates
-# them. These boxes cover only blade and empty canvas, so a full clear is safe
-# where a colour key was not.
-# Caps are masked to a CIRCLE about their joint. A rectangular cap carries the
-# cloak edge and background at its corners, and once the arm swings out from under
-# it those straight edges read as a patch stuck on the shoulder. A disc has no
-# corners to notice.
+def to_local(region: tuple[int, int, int, int], box: tuple[int, int, int, int]) -> tuple[int, int, int, int] | None:
+    """A sprite-space region clipped into a part's own pixels, or None if they do not overlap."""
+    l = max(region[0], box[0]); t = max(region[1], box[1])
+    r = min(region[2], box[2]); b = min(region[3], box[3])
+    return (l - box[0], t - box[1], r - box[0], b - box[1]) if r > l and b > t else None
+
+
 CIRCLE_MASK: set[str] = set()
 
 
@@ -121,8 +153,10 @@ CIRCLE_MASK: set[str] = set()
 # that is meant to be symmetric has to come from a single authored asset.
 #   name -> (asset key, width in source px, joint as (u, v) fraction of the piece, mirror)
 DRAWN: dict[str, tuple[str, int, tuple[float, float], bool]] = {
-    "shoulder_main": ("hunter_pauldron_main", 54, (0.50, 0.26), False),
-    "shoulder_off":  ("hunter_pauldron_main", 54, (0.50, 0.26), True),
+    # Pivot V raised from 0.26: at that value the pauldron hung low enough that the body's own
+    # shoulder showed as a bare lump above it.
+    "shoulder_main": ("hunter_pauldron_main", 58, (0.50, 0.44), False),
+    "shoulder_off":  ("hunter_pauldron_main", 58, (0.50, 0.44), True),
 }
 
 
@@ -199,11 +233,6 @@ def circle_mask(img: Image, cx: float, cy: float, radius: float) -> int:
     return cleared
 
 
-ERASE_ALL: dict[str, list[tuple[int, int, int, int]]] = {
-    "leg_thigh_main": [(0, 0, 84, 98)],
-}
-
-
 def erase_all(img: Image, boxes: list[tuple[int, int, int, int]]) -> int:
     cleared = 0
     for l, t, r, b in boxes:
@@ -240,6 +269,38 @@ def crop(src: Image, box: tuple[int, int, int, int]) -> Image:
         so = (y * src.w + l) * 4
         do = ((y - t) * out.w) * 4
         out.px[do:do + (r - l) * 4] = src.px[so:so + (r - l) * 4]
+    return out
+
+
+def coverage(src: Image, boxes: list[tuple[int, int, int, int]]) -> list[tuple[int, int, int, int, int]]:
+    """Opaque sprite pixels claimed by NO box, grouped into contiguous row bands.
+
+    A hole in the figure is invisible in the part PNGs — each one looks fine on its own — and only
+    shows up once they are assembled, which is why the shoulder band survived several passes. This
+    checks the property that actually matters: every pixel of the source is somewhere."""
+    claimed = bytearray(src.w * src.h)
+    for l, t, r, b in boxes:
+        for y in range(max(0, t), min(src.h, b)):
+            row = y * src.w
+            claimed[row + max(0, l):row + min(src.w, r)] = b"\x01" * (min(src.w, r) - max(0, l))
+
+    per_row: dict[int, list[int]] = {}
+    for y in range(src.h):
+        row = y * src.w
+        xs = [x for x in range(src.w) if src.px[(row + x) * 4 + 3] > 16 and not claimed[row + x]]
+        if xs:
+            per_row[y] = xs
+
+    bands: list[list[int]] = []
+    for y in sorted(per_row):
+        if bands and y == bands[-1][-1] + 1:
+            bands[-1].append(y)
+        else:
+            bands.append([y])
+    out = []
+    for g in bands:
+        xs = [x for y in g for x in per_row[y]]
+        out.append((g[0], g[-1] + 1, min(xs), max(xs) + 1, len(xs)))
     return out
 
 
@@ -283,14 +344,29 @@ def main() -> int:
                 write(os.path.join(OUT_DIR, f"hunter_part_{name}.png"), part)
                 continue
             part = crop(src, box)
-            if name in ERASE_ALL:
-                print(f"  cleared {erase_all(part, ERASE_ALL[name])} px (blade region) from {name}")
-            if name in ERASE_STEEL:
-                print(f"  erased {erase_steel(part, ERASE_STEEL[name])} blade px from {name}")
+            clears = [z for z in (to_local(rg, box) for rg in ERASE_SPRITE) if z]
+            steels = [z for z in (to_local(rg, box) for rg in STEEL_SPRITE) if z]
+            if clears:
+                n = erase_all(part, clears)
+                if n:
+                    print(f"  cleared {n} baked-sword px from {name}")
+            if steels:
+                n = erase_steel(part, steels)
+                if n:
+                    print(f"  keyed out {n} steel px from {name}")
             if name in CIRCLE_MASK:
                 r = min(part.w, part.h) / 2.0
                 print(f"  masked {circle_mask(part, pivot[0], pivot[1], r)} px outside the disc on {name}")
             write(os.path.join(OUT_DIR, f"hunter_part_{name}.png"), part)
+
+    holes = coverage(src, [box for name, (_, box, _, _) in PARTS.items() if name not in DRAWN])
+    if holes:
+        print("UNCLAIMED opaque pixels — these render as holes in the assembled figure:")
+        for t, b, l, r, n in holes:
+            print(f"  y {t}..{b}  x {l}..{r}  {n} px")
+        print()
+    else:
+        print("coverage: every opaque source pixel is claimed by a box\n")
 
     print("Derived rig table (paste into HunterRig.Parts):\n")
     for name, parent, tex, off, piv, order, box in sorted(rows, key=lambda r: r[5]):
