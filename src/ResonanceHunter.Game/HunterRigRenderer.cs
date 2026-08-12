@@ -60,31 +60,40 @@ public sealed class HunterRigRenderer
     /// </remarks>
     private static readonly Dictionary<GearSlot, GearBinding> Bindings = new()
     {
-        // Heights are calibrated against the assembled figure's NATIVE size (~476 tall) and the part
-        // each piece covers, measured off hunter_rig_base: figure 512 tall, head 210x168, torso 103x90,
-        // hand 54x42, shin+foot 112 tall. Re-tuning these is the cost of changing the rig source — the numbers are
-        // rig pixels, not fractions, so a figure with different proportions needs new ones.
-        // Pivot V sits low in the texture so a piece hangs DOWN from its joint, the way a helm sits on
-        // a neck and a blade hangs from a grip.
-        // Boots bind to the FOOT with a tall shaft that rises past the knee, rather than to the shin.
-        // Both were tried: at 62px on the foot the piece covered the toe only and read as a bootie
-        // pulled over the character's own boot; bound to the shin it covered the shaft but the foot
-        // juts ~18px forward of the shin bone, so the body's leather toe kept showing beyond it. The
-        // foot bone carries that forward offset for free, and a boot IS attached to a foot.
-        [GearSlot.Boots] = new("foot_main", 0.50f, 0.62f, 142f, 18),
-        [GearSlot.Chest] = new("torso", 0.50f, 0.80f, 120f, 9),
-        [GearSlot.Gloves] = new("hand_main", 0.50f, 0.26f, 52f, 20),
-        [GearSlot.Helm] = new("head", 0.50f, 0.84f, 168f, 13),
-        // gear_weapon_* is authored VERTICAL with the hilt at the bottom, so the pivot sits low in
-        // the texture (the grip).
+        // ONLY the weapon. Armour is no longer pinned to a bone as a separately-drawn sprite.
         //
-        // The tilt was SWEPT against real captures, not derived — two poses have to be right at once and
-        // they pull against each other. At rest the blade must hang clear of the body; at the strike
-        // apex, where the hand has rotated ~150 degrees, it must point at the enemy rather than back
-        // across the character's own face. -0.30 satisfied only the first, and the sword swept through
-        // the helmet on every attack. -2.10 lays the blade alongside the leg at rest and level at the
-        // target on impact.
+        // That approach could not work, and the reason is worth keeping: an isolated item icon carries
+        // its own perspective, its own light direction, its own outline weight and its own palette.
+        // Scaling it onto a body matches none of those, so the piece reads as a sticker no matter how
+        // carefully its height, pivot and rotation are tuned — and two mirrored copies of one boot icon
+        // read as two stickers. Armour is now PAINTED ONTO the figure (tools/asset-pipeline/gear_overlay.py
+        // inpaints it in place) and cut with the body's own boxes, so a worn part is a drop-in
+        // replacement texture for the bone it covers. See PartSlot below.
+        //
+        // A weapon is genuinely a held OBJECT rather than a layer of the body, so it keeps a binding:
+        // gear_weapon_* is authored vertical with the hilt at the bottom, the pivot sits at the grip,
+        // and the tilt was swept against captures at rest and at the strike apex.
         [GearSlot.Weapon] = new("hand_main", 0.50f, 0.87f, 160f, 21, -2.10f),
+    };
+
+    /// <summary>
+    /// Which equipment slot's worn art replaces which bone's texture.
+    /// </summary>
+    /// <remarks>
+    /// This is the whole armour path. A bone listed here draws <c>worn_&lt;slot&gt;_&lt;trait&gt;_&lt;bone&gt;</c>
+    /// when that slot is equipped, and its own body texture otherwise — same pivot, same scale, same
+    /// transform, because the worn art was cut from the same box on the same figure.
+    /// </remarks>
+    private static readonly Dictionary<string, GearSlot> PartSlot = new()
+    {
+        ["head"] = GearSlot.Helm,
+        ["torso"] = GearSlot.Chest,
+        ["hand_main"] = GearSlot.Gloves,
+        ["hand_off"] = GearSlot.Gloves,
+        ["leg_shin_main"] = GearSlot.Boots,
+        ["foot_main"] = GearSlot.Boots,
+        ["leg_shin_off"] = GearSlot.Boots,
+        ["foot_off"] = GearSlot.Boots,
     };
 
     /// <summary>Boots and gloves are worn on both limbs; the mirror bone draws the same texture.</summary>
@@ -231,7 +240,7 @@ public sealed class HunterRigRenderer
         foreach (var bt in frame)
         {
             if (!_byId.TryGetValue(bt.BoneId, out var p)) continue;
-            var tex = _ui.Assets.Get(p.TextureKey);
+            var tex = WornTexture(p.Id, hunter) ?? _ui.Assets.Get(p.TextureKey);
             if (tex is null) continue;
             var pos = ToScreen(bt.Position);
             var angle = bt.Angle;
@@ -277,6 +286,16 @@ public sealed class HunterRigRenderer
                 _ui.Fill(b, new Rectangle((int)pos.X - 3, (int)pos.Y - 3, 6, 6), new Color(0xF0, 0xA8, 0x30));
             }
         return true;
+    }
+
+    /// <summary>The worn replacement for a bone, or null to draw the bare body part.</summary>
+    private Texture2D? WornTexture(string boneId, Hunter? hunter)
+    {
+        if (hunter is null || !PartSlot.TryGetValue(boneId, out var slot)) return null;
+        if (hunter.Worn(slot) is not { } item) return null;
+        var trait = GearTraits.TraitOf(item)?.ToString().ToLowerInvariant();
+        if (trait is null) return null;
+        return _ui.Assets.Get($"worn_{slot.ToString().ToLowerInvariant()}_{trait}_{boneId}");
     }
 
     private static IEnumerable<string> BonesFor(GearSlot slot, GearBinding bind)

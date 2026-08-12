@@ -191,6 +191,67 @@ def create_image_pixen(
     return payload
 
 
+def inpaint(
+    image_b64: str,
+    mask_b64: str,
+    description: str,
+    width: int,
+    height: int,
+    *,
+    outline: str | None = None,
+    shading: str | None = None,
+    detail: str | None = None,
+    negative_description: str | None = None,
+    text_guidance_scale: float | None = None,
+    color_b64: str | None = None,
+    seed: int | None = None,
+) -> bytes:
+    """Repaint the WHITE area of ``mask_b64`` inside ``image_b64``. Returns raw PNG bytes.
+
+    This is how worn equipment is authored: the armour is painted ONTO the character, in the
+    character's own pose, lighting and line weight, instead of being drawn as an isolated icon and
+    pasted on at some scale. An icon can never match — it carries its own perspective and its own
+    light — which is exactly what made worn gear read as stickers.
+
+    /inpaint (v2), because /inpaint-v3 answers "Tier 2 is required for this" on this subscription.
+    v2 is synchronous and takes the same style controls as the rest of the pipeline, but it caps each
+    side at 200px — which is why a slot covering two limbs is repainted as two regions rather than
+    one wide one.
+    """
+    body: dict = {
+        "description": description,
+        "image_size": {"width": width, "height": height},
+        "inpainting_image": {"type": "base64", "base64": image_b64},
+        "mask_image": {"type": "base64", "base64": mask_b64},
+        "no_background": True,
+    }
+    for name, value in (
+        ("outline", outline),
+        ("shading", shading),
+        ("detail", detail),
+        ("negative_description", negative_description),
+        ("text_guidance_scale", text_guidance_scale),
+        ("seed", seed),
+    ):
+        if value is not None:
+            body[name] = value
+    if color_b64 is not None:
+        # A forced palette. Without it the model matches the surrounding figure's muted browns and a
+        # "deep violet arcane metal" breastplate comes back as the same leather it was replacing —
+        # the material was the one thing the prompt could not make stick.
+        body["color_image"] = {"type": "base64", "base64": color_b64}
+
+    result = _request("POST", "/inpaint", body)
+    image = result.get("image") or {}
+    b64 = image.get("base64")
+    if not b64:
+        raise PixelLabError(f"no image in response: {json.dumps(result)[:300]}")
+    payload = base64.b64decode(b64)
+    if payload[:8] != b"\x89PNG\r\n\x1a\n":
+        raise PixelLabError(f"decoded payload was not a PNG ({len(payload)} bytes)")
+    return payload
+
+
 def save_image(payload: bytes, dest_path: str) -> str:
     with open(dest_path, "wb") as fh:
         fh.write(payload)
