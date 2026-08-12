@@ -269,14 +269,25 @@ public sealed class SoloExpeditionScreen
         }
     }
 
+    /// <summary>Counts descents, so each one seeds its own compositions. See SoloExpedition.RunIndex.</summary>
+    private int _runIndex;
+
     private void StartRun(Hunter hunter)
     {
         var build = Loadout.ToBuild(Tree, Mastery);
         // RECKLESS OFFERING's price: a smaller pool for the whole run, charged once here at mint.
         var hp = Math.Max(1, (int)MathF.Round(Math.Max(60, hunter.MaxHealth) * SoloBattle.VowHealthMultiplier(build)));
         _champ = new Champion { MaxHealth = hp, Health = hp };
+        // RegionId reaches the sim, not just the boss art: it selects the band cycle and the creature
+        // roster, which is what makes one region a different PLACE rather than the same place with
+        // bigger numbers. RunIndex seeds each descent's compositions so a replay is identical.
         _run = new SoloExpedition(build, _champ, hunter, _enemyBaseHealth, _enemyBaseDamage,
-            ExpeditionTuning.Default, EnemySource, _rng) { EnemyBias = EnemyBias };
+            ExpeditionTuning.Default, EnemySource, _rng)
+        {
+            EnemyBias = EnemyBias,
+            RegionId = RegionId,
+            RunIndex = ++_runIndex,
+        };
         _mode = Mode.Fighting;
         BeginWave();
     }

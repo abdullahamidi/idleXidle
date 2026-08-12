@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using ResonanceHunter.Core.Automation;
+using ResonanceHunter.Core.Abilities;
 using ResonanceHunter.Core.Combat;
 using ResonanceHunter.Core.Economy;
+using ResonanceHunter.Core.Encounters;
 using ResonanceHunter.Core.Expeditions;
 
 namespace ResonanceHunter.Core.Builds;
@@ -56,6 +58,39 @@ public sealed class SoloExpedition
     /// is FEEL and build-synergy, not a difficulty knob — depth and the region ladder own difficulty.
     /// </remarks>
     public AttackBias EnemyBias { get; set; } = AttackBias.Balanced;
+
+    /// <summary>
+    /// Which region's band cycle this run walks. Empty falls back to the baseline cycle.
+    /// </summary>
+    /// <remarks>
+    /// The cycle decides what each wave IS — which archetypes turn up and which affix holds — so this is
+    /// the single hook that turns six identically-shaped regions into six places with reputations.
+    /// </remarks>
+    public string RegionId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Distinguishes one descent from another when seeding a wave's composition.
+    /// </summary>
+    /// <remarks>
+    /// Composition is a pure function of (region, wave, runIndex), never of wall time, so replaying a
+    /// wave produces the same creatures. Fast-forward pays the haul a wave originally paid, and a
+    /// re-rolled composition would let a player bank a wave they never actually proved.
+    /// </remarks>
+    public int RunIndex { get; set; }
+
+    /// <summary>The Form that dealt the most damage last wave — what WARDED reads.</summary>
+    /// <remarks>
+    /// It deliberately lags by a wave. An affix that reacted to the wave in progress would be
+    /// unanswerable in a game with no in-run decisions; lagging lets the player see it coming.
+    /// </remarks>
+    public Form? LastWaveTopForm { get; private set; }
+
+    /// <summary>The composition the last resolved wave held — the report reads this.</summary>
+    public IReadOnlyList<WaveCreature> LastWaveCreatures { get; private set; } = Array.Empty<WaveCreature>();
+
+    /// <summary>The archetype and affixes the last resolved wave carried.</summary>
+    public Archetype LastWaveArchetype { get; private set; }
+    public IReadOnlyList<Affix> LastWaveAffixes { get; private set; } = Array.Empty<Affix>();
 
     private (int IntervalMs, float DamageMult) BiasTempo() => EnemyBias switch
     {
@@ -134,14 +169,63 @@ public sealed class SoloExpedition
         // Health takes the boss spike; damage does not. They used to be the same number — see
         // WaveScaling.EnemyDamageScale.
         var damageScale = WaveScaling.EnemyDamageScale(next, _tuning);
+        var isBoss = WaveScaling.IsBossWave(next, _tuning);
+
+        // ── WHAT THIS WAVE IS ────────────────────────────────────────────────────────────────────
+        //
+        // The band decides the archetype and the affix; the affix bends the numbers; the archetype
+        // decides how many creatures carry them. Seeded from (region, wave, run) and never from wall
+        // time, so a replayed wave is the same wave.
+        var cycle = BandCycles.For(RegionId);
+        var band = cycle[Bands.CycleIndex(next, cycle.Count)];
+        var affixes = Bands.AffixesOf(band).ToList();
+        var wavesIntoBand = (next - 1) % Bands.WavesPerBand;
+        var repeat = Bands.RepeatScale(next, cycle.Count);
+
+        var compRng = new Random(HashCode.Combine(RegionId, next, RunIndex));
+        var archetype = Bands.Roll(band, compRng);
+
+        var health = _enemyBaseHealth * scale * repeat * Bands.HealthMultiplier(affixes);
+        var damage = _enemyBaseDamage * damageScale * dmgMult * repeat
+                     * Bands.DamageMultiplier(affixes, wavesIntoBand);
+
+        var creatures = Archetypes.Compose(
+            archetype, health, damage, next, BandCycles.RosterFor(RegionId), compRng, forceSingle: isBoss);
+
+        // PLATED thickens whatever armour the composition brought. On a Swarm band that is zero, and the
+        // affix is wasted — which is allowed. Re-rolling affixes to avoid it would cost the player the
+        // one thing this system gives them: a ladder they can learn before they descend.
+        var defMult = Bands.DefenceMultiplierOrOne(affixes);
+        if (defMult != 1f)
+            creatures = creatures
+                .Select(c => new WaveCreature
+                {
+                    MaxHealth = c.MaxHealth, Health = c.Health, Damage = c.Damage,
+                    Defense = c.Defense * defMult, Source = c.Source,
+                })
+                .ToList();
+
+        // NUMBERS adds a creature — but never to a BOSS. A boss is one creature by definition; its band
+        // supplies the stat shape only. Letting the affix add a second would turn the run's heartbeat
+        // into a different encounter every fifth wave depending on which band it landed in.
+        var extra = isBoss ? 0 : Bands.ExtraCreatures(affixes);
+        for (var i = 0; i < extra; i++)
+            creatures.Add(new WaveCreature
+            {
+                MaxHealth = creatures[0].MaxHealth, Health = creatures[0].MaxHealth,
+                Damage = creatures[0].Damage, Defense = creatures[0].Defense,
+                Source = creatures[0].Source,
+            });
+
+        var biteInterval = Math.Max(100, (int)(interval * Bands.IntervalMultiplier(affixes)));
 
         var (outcome, events) = SoloBattle.ResolveWave(
-            _champion, _build, _hunter,
-            _enemyBaseHealth * scale, _enemyBaseDamage * damageScale * dmgMult,
-            interval, _tuning, _rng, bonus,
-            _enemySource, WaveScaling.IsBossWave(next, _tuning));
+            _champion, _build, _hunter, creatures, biteInterval, _tuning, _rng, bonus, isBoss);
 
         LastWaveEvents = events;
+        LastWaveCreatures = creatures;
+        LastWaveArchetype = archetype;
+        LastWaveAffixes = affixes;
 
         if (outcome != WaveOutcome.Cleared)
         {

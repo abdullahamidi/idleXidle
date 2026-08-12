@@ -136,6 +136,9 @@ public static class Bands
     public static float DefenseMultiplier(IEnumerable<Affix> affixes)
         => affixes.Aggregate(1f, (m, a) => m * (a == Affix.Plated ? 1.5f : 1f));
 
+    /// <summary>The same, named for the call site that only wants to know whether to rebuild the list.</summary>
+    public static float DefenceMultiplierOrOne(IEnumerable<Affix> affixes) => DefenseMultiplier(affixes);
+
     public static int ExtraCreatures(IEnumerable<Affix> affixes)
         => affixes.Count(a => a == Affix.Numbers);
 

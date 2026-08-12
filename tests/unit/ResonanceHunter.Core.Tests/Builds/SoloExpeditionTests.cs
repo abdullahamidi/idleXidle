@@ -6,6 +6,7 @@ using ResonanceHunter.Core.Automation;
 using ResonanceHunter.Core.Builds;
 using ResonanceHunter.Core.Combat;
 using ResonanceHunter.Core.Economy;
+using ResonanceHunter.Core.Encounters;
 using ResonanceHunter.Core.Expeditions;
 using Xunit;
 
@@ -268,4 +269,113 @@ public class SoloExpeditionTests
             Assert.Equal(WaveScaling.EnemyScale(w, t), WaveScaling.EnemyDamageScale(w, t), 3);
         }
     }
+
+    // ── THE ARCHETYPE ENGINE, END TO END. ───────────────────────────────────────────────────────────
+
+    private static SoloExpedition RunIn(string region, Build build, int hp = 600)
+    {
+        var run = new SoloExpedition(build, Champ(hp), new Hunter(), 120f, 9f,
+            ExpeditionTuning.Default, enemySource: null, rng: new Random(7))
+        { RegionId = region, RunIndex = 1 };
+        return run;
+    }
+
+    private static int DepthIn(string region, Build build, int hp = 600)
+    {
+        var run = RunIn(region, build, hp);
+        while (!run.Over && run.Wave < 120) run.PushWave();
+        return run.Wave;
+    }
+
+    /// <summary>
+    /// A region must reward the shape it is built around and punish the other one.
+    /// </summary>
+    /// <remarks>
+    /// THE ACCEPTANCE TEST FOR THE WHOLE REDESIGN. Combat is automatic, so the only way a build can be
+    /// WRONG rather than merely small is if content punishes shapes. Cinderworks is the armoured region
+    /// and Umbral Reach is the swarm region; a large-hit build must do relatively better in the first
+    /// and a multi-target build relatively better in the second.
+    ///
+    /// It compares RATIOS, not absolute depths, because the two regions are not equally hard and never
+    /// will be — what matters is that changing the build changes which region suits you.
+    ///
+    /// If this fails, the archetype system is decorative: the bands roll, the creatures spawn, and none
+    /// of it reaches the one number the player is scored on.
+    /// </remarks>
+    [Fact]
+    public void test_a_region_rewards_the_build_shape_it_is_built_around()
+    {
+        var weight = BuildOf(BuildMods.None, Form.Trap, Form.Strike);       // few, enormous hits
+        var spread = BuildOf(BuildMods.None, Form.Aura, Form.Projectile);   // many, small hits
+
+        var weightArmoured = DepthIn("cinderworks", weight);
+        var weightSwarm = DepthIn("umbral_reach", weight);
+        var spreadArmoured = DepthIn("cinderworks", spread);
+        var spreadSwarm = DepthIn("umbral_reach", spread);
+
+        var weightPrefersArmour = weightArmoured / (float)Math.Max(1, weightSwarm);
+        var spreadPrefersArmour = spreadArmoured / (float)Math.Max(1, spreadSwarm);
+
+        Assert.True(
+            weightPrefersArmour > spreadPrefersArmour,
+            $"Weight build: {weightArmoured} in Cinderworks vs {weightSwarm} in Umbral Reach " +
+            $"(ratio {weightPrefersArmour:F2}). Spread build: {spreadArmoured} vs {spreadSwarm} " +
+            $"(ratio {spreadPrefersArmour:F2}). The regions do not distinguish build shape — the " +
+            "archetype engine is not reaching depth.");
+    }
+
+    /// <summary>The band cycle must actually change what a wave holds.</summary>
+    [Fact]
+    public void test_bands_change_the_composition_as_depth_grows()
+    {
+        var run = RunIn("umbral_reach", BuildOf(BuildMods.None, Form.Aura, Form.Projectile), hp: 500_000);
+
+        var seen = new HashSet<Archetype>();
+        while (!run.Over && run.Wave < 45)
+        {
+            run.PushWave();
+            seen.Add(run.LastWaveArchetype);
+        }
+
+        Assert.True(seen.Count >= 3,
+            $"Across 45 waves only {seen.Count} archetype(s) appeared ({string.Join(", ", seen)}). " +
+            "A region that asks one question has no lesson in it.");
+    }
+
+    /// <summary>Two descents of the same region produce the same waves.</summary>
+    /// <remarks>
+    /// Fast-forward pays the haul a wave originally paid. If a composition re-rolled, a player could
+    /// bank a wave they never actually proved.
+    /// </remarks>
+    [Fact]
+    public void test_the_same_run_index_replays_the_same_waves()
+    {
+        List<(Archetype, int)> Walk()
+        {
+            var run = RunIn("marrow_wastes", BuildOf(BuildMods.None, Form.Strike), hp: 500_000);
+            var seen = new List<(Archetype, int)>();
+            for (var i = 0; i < 12 && !run.Over; i++)
+            {
+                run.PushWave();
+                seen.Add((run.LastWaveArchetype, run.LastWaveCreatures.Count));
+            }
+            return seen;
+        }
+
+        Assert.Equal(Walk(), Walk());
+    }
+
+    /// <summary>A boss is always a single creature, whatever shape its band supplies.</summary>
+    [Fact]
+    public void test_a_boss_wave_holds_exactly_one_creature()
+    {
+        var run = RunIn("verdant_hollow", BuildOf(BuildMods.None, Form.Strike), hp: 500_000);
+        while (!run.Over && run.Wave < 20)
+        {
+            run.PushWave();
+            if (run.LastWaveWasBoss)
+                Assert.Single(run.LastWaveCreatures);
+        }
+    }
+
 }
