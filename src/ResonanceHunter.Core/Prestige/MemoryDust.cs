@@ -18,8 +18,36 @@ public enum UnlockEffect
     Amplifier,
 }
 
+/// <summary>Which of the tree's five parts a node belongs to.</summary>
+/// <remarks>
+/// Declared on the node rather than inferred from its id or its prerequisite chain. The screen has to
+/// group by road — a tree whose whole point is "one road, not two" cannot be presented as an
+/// undifferentiated grid — and inferring the grouping from a naming convention would break silently the
+/// first time somebody named a node badly.
+/// </remarks>
+public enum TraitRoad
+{
+    /// <summary>Cheap and structural: sockets, weaves, vows, filters, forge. Everyone walks most of it.</summary>
+    Spine,
+
+    /// <summary>Power bought with safety. GLASS CANNON -> BLOODLUST -> BLOOD MAGIC -> REAPER.</summary>
+    Ruin,
+
+    /// <summary>The wall. IRONCLAD -> JUGGERNAUT -> UNDYING -> TITAN.</summary>
+    Aegis,
+
+    /// <summary>The economy build. GREED -> DISCERNING EYE -> FORTUNE -> HOARDER.</summary>
+    Avarice,
+
+    /// <summary>Behaviour over numbers. ECHO -> VENOMANCER -> THE BOUND HAND -> WEAVER.</summary>
+    Artifice,
+}
+
 public sealed record MemoryDustUnlock
 {
+    /// <summary>Which road this node sits on. See <see cref="TraitRoad"/>.</summary>
+    public TraitRoad Road { get; init; } = TraitRoad.Spine;
+
     public required string Id { get; init; }
     public required string Name { get; init; }
     public required string Description { get; init; }
@@ -310,47 +338,47 @@ public sealed class MemoryDustTree
         // ── RUIN — power bought with safety. A Ruin hunter lives at low health on purpose, which makes
         //    the skill tree's ENDURE branch nearly worthless to them: the two trees interact rather
         //    than stack, and that is what stops "take everything good" being a strategy. ────────────
-        new() { Id = "ks_glass_cannon", Name = "THE GLASS ROAD", Cost = 4, Effect = UnlockEffect.Expansion,
+        new() { Id = "ks_glass_cannon", Road = TraitRoad.Ruin, Name = "THE GLASS ROAD", Cost = 4, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "socket_2" }, GrantsKeystone = "glass_cannon",
                 Description = "LEARN GLASS CANNON." },
-        new() { Id = "ks_bloodlust", Name = "THE EDGE", Cost = 6, Effect = UnlockEffect.Expansion,
+        new() { Id = "ks_bloodlust", Road = TraitRoad.Ruin, Name = "THE EDGE", Cost = 6, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_glass_cannon" }, GrantsKeystone = "bloodlust",
                 Description = "LEARN BLOODLUST." },
-        new() { Id = "ks_blood_magic", Name = "THE RED ROAD", Cost = 8, Effect = UnlockEffect.Expansion,
+        new() { Id = "ks_blood_magic", Road = TraitRoad.Ruin, Name = "THE RED ROAD", Cost = 8, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_bloodlust" }, GrantsKeystone = "blood_magic",
                 Description = "LEARN BLOOD MAGIC." },
-        new() { Id = "ks_reaper", Name = "THE HARVEST", Cost = 12, Effect = UnlockEffect.Expansion,
+        new() { Id = "ks_reaper", Road = TraitRoad.Ruin, Name = "THE HARVEST", Cost = 12, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_blood_magic" }, GrantsKeystone = "reaper",
                 Description = "LEARN REAPER — THE RUIN TERMINAL." },
 
         // ── AEGIS — the wall. The only path that makes Bruiser bands routine, and the natural partner
         //    of the skill tree's ENDURE branch. ──────────────────────────────────────────────────
-        new() { Id = "ks_ironclad", Name = "THE IRON ROAD", Cost = 4, Effect = UnlockEffect.Expansion,
+        new() { Id = "ks_ironclad", Road = TraitRoad.Aegis, Name = "THE IRON ROAD", Cost = 4, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "socket_2" }, GrantsKeystone = "ironclad",
                 Description = "LEARN IRONCLAD." },
-        new() { Id = "ks_juggernaut", Name = "THE UNMOVED", Cost = 6, Effect = UnlockEffect.Expansion,
+        new() { Id = "ks_juggernaut", Road = TraitRoad.Aegis, Name = "THE UNMOVED", Cost = 6, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_ironclad" }, GrantsKeystone = "juggernaut",
                 Description = "LEARN JUGGERNAUT." },
-        new() { Id = "ks_undying", Name = "THE LAST BREATH", Cost = 8, Effect = UnlockEffect.Expansion,
+        new() { Id = "ks_undying", Road = TraitRoad.Aegis, Name = "THE LAST BREATH", Cost = 8, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_juggernaut" }, GrantsKeystone = "undying",
                 Description = "LEARN UNDYING." },
-        new() { Id = "ks_titan", Name = "THE TITAN ROAD", Cost = 12, Effect = UnlockEffect.Expansion,
+        new() { Id = "ks_titan", Road = TraitRoad.Aegis, Name = "THE TITAN ROAD", Cost = 12, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_undying" }, GrantsKeystone = "titan",
                 Description = "LEARN TITAN — THE AEGIS TERMINAL." },
 
         // ── AVARICE — the economy build. It buys no combat power at all, which is what makes it a real
         //    choice: it trades depth for the gear that eventually buys depth. HOARDER is what stops it
         //    being a dead end — the haul becomes force. ───────────────────────────────────────────
-        new() { Id = "ks_greed", Name = "THE GOLDEN ROAD", Cost = 4, Effect = UnlockEffect.Expansion,
+        new() { Id = "ks_greed", Road = TraitRoad.Avarice, Name = "THE GOLDEN ROAD", Cost = 4, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ledger" }, GrantsKeystone = "greed",
                 Description = "LEARN GREED." },
-        new() { Id = "ks_discerning_eye", Name = "THE NARROW EYE", Cost = 6, Effect = UnlockEffect.Expansion,
+        new() { Id = "ks_discerning_eye", Road = TraitRoad.Avarice, Name = "THE NARROW EYE", Cost = 6, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_greed" }, GrantsKeystone = "discerning_eye",
                 Description = "LEARN DISCERNING EYE." },
-        new() { Id = "ks_fortune", Name = "THE GILDED ROAD", Cost = 8, Effect = UnlockEffect.Expansion,
+        new() { Id = "ks_fortune", Road = TraitRoad.Avarice, Name = "THE GILDED ROAD", Cost = 8, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_discerning_eye" }, GrantsKeystone = "fortune",
                 Description = "LEARN FORTUNE." },
-        new() { Id = "ks_hoarder", Name = "THE FULL VAULT", Cost = 12, Effect = UnlockEffect.Expansion,
+        new() { Id = "ks_hoarder", Road = TraitRoad.Avarice, Name = "THE FULL VAULT", Cost = 12, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_fortune" }, GrantsKeystone = "hoarder",
                 Description = "LEARN HOARDER — THE AVARICE TERMINAL." },
 
@@ -358,19 +386,19 @@ public sealed class MemoryDustTree
         //    something strange rather than something large. Its third rung is the SACRIFICIAL VOWS
         //    rather than a keystone: the Form-combo triggers it used to hold now belong to the skill
         //    tree, and vows are the purest "behaviour, not numbers" thing the game has. ───────────
-        new() { Id = "ks_echo", Name = "THE TWICE-SPOKEN", Cost = 4, Effect = UnlockEffect.Expansion,
+        new() { Id = "ks_echo", Road = TraitRoad.Artifice, Name = "THE TWICE-SPOKEN", Cost = 4, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "vow_study_1" }, GrantsKeystone = "echo",
                 Description = "LEARN ECHO." },
-        new() { Id = "ks_venomancer", Name = "THE SLOW ROAD", Cost = 6, Effect = UnlockEffect.Expansion,
+        new() { Id = "ks_venomancer", Road = TraitRoad.Artifice, Name = "THE SLOW ROAD", Cost = 6, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_echo" }, GrantsKeystone = "venomancer",
                 Description = "LEARN VENOMANCER." },
         // Requires only its own path, NOT the whole vow chain. Hanging it off vow_sacrifice made ARTIFICE
         // cost 38 against the other paths' 31-32 and put its terminal out of reach on its own — measured,
         // not guessed. A path that is more expensive than the others is not "flavourful", it is dead.
-        new() { Id = "artifice_vows", Name = "THE BOUND HAND", Cost = 8, Effect = UnlockEffect.Expansion,
+        new() { Id = "artifice_vows", Road = TraitRoad.Artifice, Name = "THE BOUND HAND", Cost = 8, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_venomancer" },
                 Description = "EVERY VOW YOU KNOW MAY BE CARRIED AT ONCE." },
-        new() { Id = "ks_weaver", Name = "THE DOUBLE THREAD", Cost = 12, Effect = UnlockEffect.Expansion,
+        new() { Id = "ks_weaver", Road = TraitRoad.Artifice, Name = "THE DOUBLE THREAD", Cost = 12, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "artifice_vows" }, GrantsKeystone = "weaver",
                 Description = "LEARN WEAVER — THE ARTIFICE TERMINAL." },
 

@@ -32,7 +32,7 @@ public sealed class PrestigeScreen
 
     private readonly UiKit _ui;
     private string _selectedId = "";
-    private UnlockEffect? _filter;
+    private TraitRoad? _filter;
     private int _scroll;
     private string _msg = "";
     private KeyboardState _prevKeys;
@@ -76,6 +76,42 @@ public sealed class PrestigeScreen
         UnlockEffect.Amplifier => "AMPLIFIER", UnlockEffect.Expansion => "EXPANSION", _ => "CONVENIENCE",
     };
 
+    /// <summary>
+    /// The tree is grouped by ROAD, not by effect category.
+    /// </summary>
+    /// <remarks>
+    /// Amplifier / Expansion / Convenience describes what a node DOES to the engine, which is an
+    /// implementation fact and tells a player nothing about the decision in front of them. The decision
+    /// is which of four roads to walk, and it is the one thing the screen has to communicate: two roads
+    /// cost sixty against roughly thirty-four earnable, so the road you do not take is permanent.
+    /// </remarks>
+    private static string RoadName(TraitRoad r) => r switch
+    {
+        TraitRoad.Spine => "THE SPINE",
+        TraitRoad.Ruin => "RUIN",
+        TraitRoad.Aegis => "AEGIS",
+        TraitRoad.Avarice => "AVARICE",
+        _ => "ARTIFICE",
+    };
+
+    private static string RoadBlurb(TraitRoad r) => r switch
+    {
+        TraitRoad.Spine => "CAPACITY — SOCKETS, WEAVES, VOWS",
+        TraitRoad.Ruin => "POWER BOUGHT WITH SAFETY",
+        TraitRoad.Aegis => "THE WALL",
+        TraitRoad.Avarice => "THE ECONOMY BUILD",
+        _ => "BEHAVIOUR, NOT NUMBERS",
+    };
+
+    private static Color RoadColor(TraitRoad r) => r switch
+    {
+        TraitRoad.Spine => Teal,
+        TraitRoad.Ruin => new Color(0xD6, 0x48, 0x5C),
+        TraitRoad.Aegis => new Color(0x74, 0x9A, 0xE8),
+        TraitRoad.Avarice => Gold,
+        _ => Violet,
+    };
+
     private static Color CatColor(UnlockEffect e) => e switch
     {
         UnlockEffect.Amplifier => Gold, UnlockEffect.Expansion => Violet, _ => Teal,
@@ -88,18 +124,13 @@ public sealed class PrestigeScreen
         _ => "icon_blessing_convenience",
     };
 
-    // Display order: Amplifier (the common boosts) first, then Expansion (keystones/vows), then Convenience.
-    // NOT the raw enum order (which is Convenience, Expansion, Amplifier) — that buries the everyday nodes.
-    private static int CatOrder(UnlockEffect e) => e switch
-    {
-        UnlockEffect.Amplifier => 0, UnlockEffect.Expansion => 1, _ => 2,
-    };
-
+    // Spine first (everyone walks it), then the four roads in enum order. WITHIN a road, by cost —
+    // which is the order it is walked, so a road reads left to right as the chain it actually is.
     private List<MemoryDustUnlock> Ordered(MemoryDustTree tree) =>
-        tree.All.OrderBy(u => CatOrder(u.Effect)).ThenBy(u => u.Cost).ThenBy(u => u.Name).ToList();
+        tree.All.OrderBy(u => (int)u.Road).ThenBy(u => u.Cost).ThenBy(u => u.Name).ToList();
 
     private List<MemoryDustUnlock> Filtered(MemoryDustTree tree) =>
-        (_filter is { } f ? Ordered(tree).Where(u => u.Effect == f) : Ordered(tree)).ToList();
+        (_filter is { } f ? Ordered(tree).Where(u => u.Road == f) : Ordered(tree)).ToList();
 
     private MemoryDustUnlock Selected(MemoryDustTree tree) =>
         tree.All.FirstOrDefault(u => u.Id == _selectedId) ?? Ordered(tree).First();
@@ -136,8 +167,8 @@ public sealed class PrestigeScreen
 
     private void Buy(MemoryDustTree tree, MemoryDustUnlock u)
     {
-        if (tree.Owns(u.Id)) _msg = "ALREADY LIT — PURCHASES ARE PERMANENT.";
-        else if (tree.Purchase(u.Id)) _msg = $"LIT: {u.Name}.";
+        if (tree.Owns(u.Id)) _msg = "ALREADY TAKEN — TRAITS ARE PERMANENT.";
+        else if (tree.Purchase(u.Id)) _msg = $"TAKEN: {u.Name}.";
         else if (tree.Available < u.Cost) _msg = "NOT ENOUGH TRAIT POINTS — CONQUER, CORRUPT, MASTER.";
         else _msg = "LOCKED — LIGHT ITS PREREQUISITES FIRST.";
     }
@@ -157,7 +188,7 @@ public sealed class PrestigeScreen
         // material, and it still sits in the top bar.
         _ui.TextCenterBig(b, "TRAITS", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle);
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
-        _ui.TextCenterBig(b, "BLESSINGS  ·  INVESTMENT  ·  UPGRADES", 960, 80, Slate, UiTypography.Secondary);
+        _ui.TextCenterBig(b, "THE SPINE  ·  FOUR ROADS  ·  NO RESPEC", 960, 80, Slate, UiTypography.Secondary);
 
         DrawOverview(b, tree, hit, clicked);
         DrawGrid(b, tree, hit, clicked);
@@ -189,30 +220,41 @@ public sealed class PrestigeScreen
         // career earns, and the path you did not walk is the permanent shape of your character.
         DrawStat(b, OverviewPanel.Y + 328, "TREE COSTS", $"{tree.TotalTreeCost:N0}");
 
-        // FILTER BY CATEGORY — the real UnlockEffect axis (with counts).
+        // THE ROADS, priced. The number on each row is what the WHOLE road costs including everything it
+        // hangs off — which is the only figure that answers the question the tree is built around. Two
+        // roads is sixty against roughly thirty-four earnable, and seeing both prices side by side is
+        // how a player learns that before they spend rather than after.
         _ui.Fill(b, new Rectangle(OverviewPanel.X + 24, OverviewPanel.Y + 372, OverviewPanel.Width - 48, 2), Dim);
-        _ui.TextBig(b, "FILTER BY CATEGORY", OverviewPanel.X + 30, OverviewPanel.Y + 388, Gold, UiTypography.Body);
+        _ui.TextBig(b, "THE ROADS", OverviewPanel.X + 30, OverviewPanel.Y + 388, Gold, UiTypography.Body);
 
-        var cats = new (UnlockEffect? Cat, string Label)[]
+        var roads = new TraitRoad?[]
         {
-            (null, "ALL"), (UnlockEffect.Amplifier, "AMPLIFIER"), (UnlockEffect.Expansion, "EXPANSION"), (UnlockEffect.Convenience, "CONVENIENCE"),
+            null, TraitRoad.Spine, TraitRoad.Ruin, TraitRoad.Aegis, TraitRoad.Avarice, TraitRoad.Artifice,
         };
-        var y = OverviewPanel.Y + 426;
-        foreach (var (cat, label) in cats)
+        var y = OverviewPanel.Y + 404;
+        foreach (var road in roads)
         {
-            var row = new Rectangle(OverviewPanel.X + 26, y, OverviewPanel.Width - 52, 46);
-            if (UiKit.ClickedIn(row, hit, clicked)) { _filter = cat; _scroll = 0; }
-            var active = _filter?.Equals(cat) ?? cat is null;
+            // 38, not 50: six rows at fifty ran the last two straight through the SHOW ALL button, and
+            // ARTIFICE — one of the four decisions the whole screen exists to present — was invisible.
+            var row = new Rectangle(OverviewPanel.X + 26, y, OverviewPanel.Width - 52, 38);
+            if (UiKit.ClickedIn(row, hit, clicked)) { _filter = road; _scroll = 0; }
+            var active = _filter?.Equals(road) ?? road is null;
             _ui.Fill(b, row, active ? new Color(0x3A, 0x2E, 0x52) : new Color(0x16, 0x12, 0x20, 0xC0));
-            var col = cat is { } c ? CatColor(c) : Bone;
+
+            var col = road is { } r ? RoadColor(r) : Bone;
             _ui.Fill(b, new Rectangle(row.X, row.Y, 4, row.Height), col);
-            _ui.TextBig(b, label, row.X + 18, row.Y + 12, active ? Bone : Slate, UiTypography.Body);
-            var count = cat is { } cc ? tree.All.Count(u => u.Effect == cc) : tree.All.Count;
-            _ui.TextRightBig(b, $"{count}", row.Right - 18, row.Y + 12, col, UiTypography.Body);
-            y += 52;
+            _ui.TextBig(b, road is { } rr ? RoadName(rr) : "EVERYTHING", row.X + 18, row.Y + 7,
+                        active ? Bone : Slate, UiTypography.Body);
+
+            var nodes = road is { } r2 ? tree.All.Where(u => u.Road == r2).ToList() : tree.All.ToList();
+            var cost = nodes.Sum(u => u.Cost);
+            var lit = nodes.Count(u => tree.Owns(u.Id));
+            _ui.TextRightBig(b, lit > 0 ? $"{lit}/{nodes.Count}  ·  {cost}" : $"{cost}",
+                             row.Right - 18, row.Y + 7, col, UiTypography.Body);
+            y += 42;
         }
 
-        if (_ui.Button(b, new Rectangle(OverviewPanel.X + 30, OverviewPanel.Bottom - 78, OverviewPanel.Width - 60, 54), "RESET", hit, clicked, enabled: _filter is not null))
+        if (_ui.Button(b, new Rectangle(OverviewPanel.X + 30, OverviewPanel.Bottom - 70, OverviewPanel.Width - 60, 48), "SHOW ALL", hit, clicked, enabled: _filter is not null))
         { _filter = null; _scroll = 0; }
     }
 
@@ -247,14 +289,14 @@ public sealed class PrestigeScreen
             if (UiKit.ClickedIn(card, hit, clicked)) _selectedId = u.Id;
 
             _ui.Fill(b, card, isOwned ? new Color(0x2A, 0x22, 0x10, 0xF0) : new Color(0x16, 0x12, 0x20, 0xE0));
-            var edge = sel ? Bone : isOwned ? Gold : buyable ? CatColor(u.Effect) : Dim;
+            var edge = sel ? Bone : isOwned ? Gold : buyable ? RoadColor(u.Road) : Dim;
             var t = sel ? 4 : 3;
             _ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, t), edge);
             _ui.Fill(b, new Rectangle(card.X, card.Bottom - t, card.Width, t), edge);
             _ui.Fill(b, new Rectangle(card.X, card.Y, t, card.Height), edge);
             _ui.Fill(b, new Rectangle(card.Right - t, card.Y, t, card.Height), edge);
 
-            var iconTint = isOwned ? Gold : buyable ? CatColor(u.Effect) : new Color(0x50, 0x50, 0x5C);
+            var iconTint = isOwned ? Gold : buyable ? RoadColor(u.Road) : new Color(0x50, 0x50, 0x5C);
             // One icon PER CATEGORY. Every card used to draw the same dust blob recoloured by state, so
             // the grid could not be scanned — an Amplifier and an Expansion were the same picture.
             var ib = new Rectangle(card.Center.X - 22, card.Y + 8, 44, 44);
@@ -286,7 +328,7 @@ public sealed class PrestigeScreen
         var buyable = tree.CanUnlock(u.Id);
         var cat = CatColor(u.Effect);
 
-        _ui.TextCenterBig(b, "BLESSING DETAIL", DetailPanel.Center.X, DetailPanel.Y + 18, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "TRAIT DETAIL", DetailPanel.Center.X, DetailPanel.Y + 18, Gold, UiTypography.SectionTitle);
 
         var icon = new Rectangle(DetailPanel.Center.X - 52, DetailPanel.Y + 58, 104, 104);
         if (!_ui.Icon(b, CatIcon(u.Effect), icon, isOwned ? Gold : cat)
@@ -306,7 +348,7 @@ public sealed class PrestigeScreen
         _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 392, DetailPanel.Width - 56, 2), Dim);
         _ui.TextBig(b, "PREREQUISITES", DetailPanel.X + 28, DetailPanel.Y + 406, Gold, UiTypography.Secondary);
         var py = DetailPanel.Y + 440;
-        if (u.Requires.Count == 0) _ui.TextBig(b, "NONE — A ROOT BLESSING.", DetailPanel.X + 30, py, Slate, UiTypography.Body);
+        if (u.Requires.Count == 0) _ui.TextBig(b, "NONE — START HERE.", DetailPanel.X + 30, py, Slate, UiTypography.Body);
         else
             foreach (var reqId in u.Requires)
             {
@@ -331,7 +373,11 @@ public sealed class PrestigeScreen
         if (_ui.Button(b, new Rectangle(DetailPanel.X + 40, DetailPanel.Bottom - 92, DetailPanel.Width - 80, 68), label, hit, clicked, enabled: buyable))
             Buy(tree, u);
         if (!isOwned && !buyable)
-            _ui.TextCenter(b, tree.MemoryDust < u.Cost ? "NOT ENOUGH DUST" : "LIGHT ITS PREREQUISITES FIRST", DetailPanel.Center.X, DetailPanel.Bottom - 108, Ember);
+            // Above the COST divider, not on top of the cost row it was overlapping — and it names TRAIT
+            // POINTS, because this screen has not charged Memory Dust since the tree stopped being
+            // buyable by idling.
+            _ui.TextCenter(b, tree.Available < u.Cost ? "NOT ENOUGH TRAIT POINTS" : "WALK ITS PREREQUISITES FIRST",
+                           DetailPanel.Center.X, DetailPanel.Bottom - 186, Ember);
     }
 
     private static string Cap(string s) => s.Length > 0 ? char.ToUpperInvariant(s[0]) + s[1..].ToLowerInvariant() : s;
