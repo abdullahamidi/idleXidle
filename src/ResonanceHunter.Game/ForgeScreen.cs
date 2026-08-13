@@ -161,7 +161,7 @@ public sealed class ForgeScreen
     //    lists those and no invented ones (data-honesty §11): UPGRADE = Refine (+item level & affixes),
     //    REFORGE = re-roll the trait / enchant, SALVAGE = the bag + chests + merge + sell + dismantle hub.
     //    The reference's IMBUE and SET CRAFT have no backing system, so they are dropped, not faked. ──
-    private enum ForgeMode { Upgrade, Reforge, Salvage }
+    public enum ForgeMode { Upgrade, Reforge, Salvage }
     private ForgeMode _mode = ForgeMode.Upgrade;
 
     /// <summary>The item the focused (UPGRADE / REFORGE) modes act on — resolved by id so a re-forge that
@@ -220,6 +220,25 @@ public sealed class ForgeScreen
 
     /// <summary>DEV ONLY: pose the UPGRADE view on a specific bag item, for the screenshot fixture.</summary>
     public void DevFocus(string instanceId) { _focusId = instanceId; _mode = ForgeMode.Upgrade; }
+
+    /// <summary>
+    /// Arrive here from somewhere else already pointed at an item, and say so.
+    /// </summary>
+    /// <remarks>
+    /// The gear screen's item menu routes through this. It sets the mode AND the focus AND flashes the
+    /// item's name, because a screen that changes under you without saying why is indistinguishable from
+    /// a misclick — the player needs to see that the thing they right-clicked is the thing now in the
+    /// preview.
+    /// </remarks>
+    public void FocusFor(string instanceId, ForgeMode mode)
+    {
+        _focusId = instanceId;
+        _mode = mode;
+        _bagScroll = 0;
+
+        var it = _inv.FirstOrDefault(i => i.InstanceId == instanceId);
+        if (it is not null) Say($"{ItemNaming.FullName(it)} — READY.", Met);
+    }
 
     /// <summary>DEV ONLY: pose the SALVAGE hub (chests / merge / grid) for the loot-forge fixture.</summary>
     public void DevManage() => _mode = ForgeMode.Salvage;

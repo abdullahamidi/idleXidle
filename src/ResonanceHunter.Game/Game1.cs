@@ -94,6 +94,7 @@ public class Game1 : Game
     private KeyboardState _keys, _prevKeys;
     private MouseState _mouse, _prevMouse;
     private bool _clicked; // the left-click EDGE for this frame, latched in Update so Draw can read it
+    private bool _rightClicked; // the right-click EDGE, latched the same way — the item context menu
     private int _wheel;    // mouse-wheel notches this frame, latched alongside the click
 
     // ── Game state ────────────────────────────────────────────────────────────────────────────
@@ -646,6 +647,11 @@ public class Game1 : Game
         // detected. Latching into a field keeps the click live through this frame's Draw.
         _clicked = _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released;
 
+        // The RIGHT click edge, latched identically. It opens the inventory's item menu — the one place
+        // a player should be able to say "wear this / upgrade this / break this up" without first
+        // finding the screen that owns the verb.
+        _rightClicked = _mouse.RightButton == ButtonState.Pressed && _prevMouse.RightButton == ButtonState.Released;
+
         // Mouse wheel, latched the same way. One notch is 120; screens scroll by ROWS, not pixels.
         // Nothing in the game read the wheel at all before this, which left long lists unreachable.
         _wheel = (_mouse.ScrollWheelValue - _prevMouse.ScrollWheelValue) / 120;
@@ -662,7 +668,7 @@ public class Game1 : Game
             // screen is gone, so they had nothing to pose.
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
-                or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "reforge" or "build" or "buildtree" or "character" or "stats" or "warren" or "map" or "rig"
+                or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "reforge" or "build" or "buildtree" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig"
                 or "fightgear" or "fightswing" or "fightreport")
             {
                 _showTitle = false;
@@ -723,9 +729,12 @@ public class Game1 : Game
                         _mastery.Take(id);
 
                     if (sm == "buildtree") _buildScreen.DevOpenTree();
+
                 }
 
-                if (sm == "character")
+                // ITEMMENU reuses the CHARACTER fixture wholesale and then opens the menu on it —
+                // seeding a second, different bag would pose a screen the game never shows.
+                if (sm is "character" or "itemmenu")
                 {
                     _showCharacter = true;
                     _character.Loadout = _loadout;
@@ -771,6 +780,10 @@ public class Game1 : Game
                     _hunter.AddGleam(5000);
                     for (var i = 0; i < 8; i++) _hunter.Train(HunterStat.AttackPower);
                     for (var i = 0; i < 4; i++) _hunter.Train(HunterStat.Vitality);
+
+                    // LAST, and inside this block: the item menu poses ON this fixture, so it can only
+                    // open after the bag it points into has actually been filled.
+                    if (sm == "itemmenu") _character.DevOpenItemMenu();
                 }
 
                 if (sm == "stats")
@@ -1075,7 +1088,36 @@ public class Game1 : Game
             _character.Loadout = _loadout;
             _character.Mastery = _mastery;
             _character.Tree = _dust;
-            _character.Update(_keys, _prevKeys, CanvasMouse, MouseClicked, MouseWheel, _hunter);
+            _character.Update(_keys, _prevKeys, CanvasMouse, MouseClicked, MouseRightClicked, MouseWheel, _hunter);
+
+            // ── THE ITEM MENU'S VERBS. Three of the four live in the Forge, so the gear screen names
+            //    what it wants and the host carries the player there, already pointed at the item.
+            //    EQUIP is the exception: it is the gear screen's own verb and never leaves. ────────
+            if (_character.ConsumeItemAction() is { } request)
+            {
+                if (request.Action == ItemAction.Equip)
+                {
+                    if (_forge.Inventory.FirstOrDefault(i => i.InstanceId == request.InstanceId) is { } toWear)
+                        _hunter.Equip(toWear);
+                    else if (Enum.GetValues<GearSlot>().Select(_hunter.Worn).OfType<ItemInstance>()
+                                 .FirstOrDefault(i => i.InstanceId == request.InstanceId) is { } toDoff
+                             && Gear.SlotFor(toDoff.BaseType) is { } sl)
+                        _hunter.Unequip(sl);
+                    Save();
+                }
+                else
+                {
+                    _forge.FocusFor(request.InstanceId, request.Action switch
+                    {
+                        ItemAction.Upgrade => ForgeScreen.ForgeMode.Upgrade,
+                        ItemAction.Reforge => ForgeScreen.ForgeMode.Reforge,
+                        _ => ForgeScreen.ForgeMode.Salvage,
+                    });
+                    _showCharacter = false;
+                    _showForge = true;
+                    _sound.PlayFirst(1f, "sfx_forge", "sfx_click");
+                }
+            }
             if (_character.Dirty) { _character.ClearDirty(); Save(); }
             Latch(gameTime);
             return;
@@ -1473,6 +1515,7 @@ public class Game1 : Game
     /// The settings panel deliberately reads the raw <c>_clicked</c> instead, since it IS the modal.
     /// </remarks>
     private bool MouseClicked => _clicked && !_showSettings;
+    private bool MouseRightClicked => _rightClicked && !_showSettings;
 
 
     /// <summary>

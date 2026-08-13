@@ -12,6 +12,14 @@ using ResonanceHunter.Core.Prestige;
 
 namespace ResonanceHunter.Client;
 
+/// <summary>The four verbs the game has for a single item, as one menu.</summary>
+/// <remarks>
+/// Named on the ITEM rather than on the screen that owns them. UPGRADE, REFORGE and SALVAGE all live in
+/// the Forge, and a player holding a new drop in the gear screen had no way to reach any of them without
+/// knowing that — which is knowledge about the software, not about the game.
+/// </remarks>
+public enum ItemAction { Equip, Upgrade, Reforge, Salvage }
+
 /// <summary>
 /// The GEAR screen (nav: GEAR): a four-panel Champion Gear sheet — a loadout summary, the equipped
 /// presentation with the dressed champion + eight slots, the inventory grid, and the selected-item detail
@@ -118,7 +126,36 @@ public sealed class CharacterScreen
             .OrderByDescending(i => (int)i.Rarity).ThenByDescending(i => i.ItemLevel).ToList();
 
     // ── Update ───────────────────────────────────────────────────────────────────────────────────
-    public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, int wheel, Hunter hunter)
+    /// <summary>What the item menu asked the host to do, taken once.</summary>
+    /// <remarks>
+    /// Request/consume, like every other cross-screen action here: this screen must not know how to open
+    /// the Forge or how to play its animation. It names the verb and the item; Game1 routes it.
+    /// </remarks>
+    public (string InstanceId, ItemAction Action)? ConsumeItemAction()
+    {
+        var r = _itemAction;
+        _itemAction = null;
+        return r;
+    }
+
+    private (string InstanceId, ItemAction Action)? _itemAction;
+
+    // The open context menu: which item, and where it was opened. Null = closed.
+    private string? _menuItemId;
+    private Point _menuAt;
+
+    private static readonly (ItemAction Action, string Label)[] MenuEntries =
+    {
+        (ItemAction.Equip, "EQUIP"),
+        (ItemAction.Upgrade, "UPGRADE"),
+        (ItemAction.Reforge, "REFORGE"),
+        (ItemAction.Salvage, "SALVAGE"),
+    };
+
+    private const int MenuW = 250, MenuRowH = 44, MenuHeaderH = 34;
+    private Rectangle MenuRect => new(_menuAt.X, _menuAt.Y, MenuW, MenuEntries.Length * MenuRowH + MenuHeaderH + 12);
+
+    public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, bool rightClicked, int wheel, Hunter hunter)
     {
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
         var hit = Game1.ToOverlay(mouse);
@@ -131,7 +168,44 @@ public sealed class CharacterScreen
             _invScroll = Math.Clamp(_invScroll - Math.Sign(wheel), 0, maxScroll);
         }
 
+        // ── THE ITEM MENU. Right-click anything wearable — worn or in the bag — and the four verbs the
+        //    game has for an item are right there, instead of scattered across two screens. ────────
+        if (rightClicked)
+        {
+            var list2 = Filtered();
+            for (var vis = 0; vis < InvCols * InvRows; vis++)
+            {
+                var idx = _invScroll * InvCols + vis;
+                if (idx >= list2.Count) break;
+                if (!InvCellRect(vis).Contains(hit)) continue;
+                _selectedId = list2[idx].InstanceId;
+                OpenMenu(list2[idx].InstanceId, InvCellRect(vis));
+                return;
+            }
+
+            foreach (var (slot, _, box) in SlotLayout)
+                if (box.Contains(hit) && hunter.Worn(slot) is { } wornItem)
+                {
+                    _selectedId = wornItem.InstanceId;
+                    OpenMenu(wornItem.InstanceId, box);
+                    return;
+                }
+
+            _menuItemId = null;   // right-click on nothing closes it
+            return;
+        }
+
         if (!clicked) return;
+
+        // A click anywhere resolves the open menu FIRST — otherwise the click also lands on whatever
+        // sits under the menu, and choosing SALVAGE would silently re-select an item at the same time.
+        if (_menuItemId is not null)
+        {
+            var chosen = MenuHit(hit);
+            _menuItemId = null;
+            if (chosen is null) return;
+            return;
+        }
 
         for (var i = 0; i < Tabs.Length; i++)
             if (TabRect(i).Contains(hit)) { _tab = i; _invScroll = 0; _selectedId = Filtered().FirstOrDefault()?.InstanceId; return; }
@@ -162,6 +236,32 @@ public sealed class CharacterScreen
 
         if (EquipBestBtn.Contains(hit)) { EquipBest(hunter); return; }
         if (UnequipAllBtn.Contains(hit)) { foreach (var s in AllSlots) hunter.Unequip(s); Dirty = true; return; }
+    }
+
+    private static string TrimName(string n) => n.Length <= 20 ? n : n[..19] + "\u2026";
+
+    /// <summary>Open the menu beside a cell, nudged so it never runs off the canvas.</summary>
+    private void OpenMenu(string instanceId, Rectangle anchor)
+    {
+        _menuItemId = instanceId;
+        var x = Math.Min(anchor.Right + 8, 1920 - MenuW - 16);
+        var y = Math.Min(anchor.Y, 1080 - (MenuEntries.Length * MenuRowH + MenuHeaderH + 12) - 16);
+        _menuAt = new Point(x, y);
+    }
+
+    /// <summary>Which entry a click landed on, raising the request. Null if it missed the menu.</summary>
+    private ItemAction? MenuHit(Point hit)
+    {
+        if (_menuItemId is null || !MenuRect.Contains(hit)) return null;
+
+        for (var i = 0; i < MenuEntries.Length; i++)
+        {
+            var row = new Rectangle(MenuRect.X + 6, MenuRect.Y + MenuHeaderH + 6 + i * MenuRowH, MenuW - 12, MenuRowH - 4);
+            if (!row.Contains(hit)) continue;
+            _itemAction = (_menuItemId, MenuEntries[i].Action);
+            return MenuEntries[i].Action;
+        }
+        return null;
     }
 
     private ItemInstance? Selected(Hunter hunter)
@@ -204,7 +304,66 @@ public sealed class CharacterScreen
         DrawEquipped(b, hit, hunter);
         DrawInventory(b, hit, hunter);
         DrawDetail(b, hit, hunter);
+        DrawItemMenu(b, hit, hunter);   // LAST — it floats over everything it was opened from
         if (DevGearDebug) DrawDebug(b, hunter);
+    }
+
+    /// <summary>Open the item menu on a cell — used by the headless capture to pose it.</summary>
+    public void DevOpenItemMenu()
+    {
+        var first = Filtered().FirstOrDefault();
+        if (first is null) return;
+        _selectedId = first.InstanceId;
+        OpenMenu(first.InstanceId, InvCellRect(0));
+    }
+
+    /// <summary>
+    /// The four verbs, on the item, where the player is holding it.
+    /// </summary>
+    /// <remarks>
+    /// UPGRADE, REFORGE and SALVAGE all live in the Forge, and a player who had just picked up a drop had
+    /// no way to reach any of them from here without already knowing which screen owned which verb —
+    /// knowledge about the software rather than about the game. Choosing one carries the item across and
+    /// opens the Forge already pointed at it.
+    /// </remarks>
+    private void DrawItemMenu(SpriteBatch b, Point hit, Hunter hunter)
+    {
+        if (_menuItemId is null) return;
+        var item = Wearable().FirstOrDefault(i => i.InstanceId == _menuItemId)
+                   ?? AllSlots.Select(hunter.Worn).OfType<ItemInstance>()
+                              .FirstOrDefault(i => i.InstanceId == _menuItemId);
+        if (item is null) { _menuItemId = null; return; }
+
+        var worn = IsWorn(hunter, item);
+        var rc = RarityColor(item.Rarity);
+        var box = MenuRect;
+
+        _ui.Fill(b, new Rectangle(box.X + 4, box.Y + 4, box.Width, box.Height), new Color(0, 0, 0, 0xA0));
+        _ui.Fill(b, box, new Color(0x14, 0x11, 0x1E, 0xF6));
+        _ui.Fill(b, new Rectangle(box.X, box.Y, box.Width, 3), rc);
+        _ui.Fill(b, new Rectangle(box.X, box.Bottom - 3, box.Width, 3), rc);
+        _ui.Fill(b, new Rectangle(box.X, box.Y, 3, box.Height), rc);
+        _ui.Fill(b, new Rectangle(box.Right - 3, box.Y, 3, box.Height), rc);
+
+        // The item's NAME heads the menu. Without it, "SALVAGE" is a verb with no object — the player is
+        // about to destroy something and the only clue as to WHAT is which cell they happened to be over.
+        _ui.Text(b, TrimName(ItemNaming.FullName(item)), box.X + 14, box.Y + 10, rc);
+        _ui.Fill(b, new Rectangle(box.X + 8, box.Y + MenuHeaderH - 4, box.Width - 16, 1), Dim);
+
+        for (var i = 0; i < MenuEntries.Length; i++)
+        {
+            var (action, label) = MenuEntries[i];
+            var row = new Rectangle(box.X + 6, box.Y + MenuHeaderH + 6 + i * MenuRowH, box.Width - 12, MenuRowH - 4);
+
+            // A worn piece cannot be re-forged, refined or broken up — the Forge refuses it, so the menu
+            // says so here rather than letting the player travel to a dead button.
+            var enabled = action == ItemAction.Equip || !worn;
+            var shown = action == ItemAction.Equip && worn ? "TAKE OFF" : label;
+
+            var hover = enabled && row.Contains(hit);
+            if (hover) _ui.Fill(b, row, new Color(0x36, 0x2A, 0x4E));
+            _ui.Text(b, shown, row.X + 16, row.Y + 12, enabled ? (hover ? Bone : Slate) : Dim);
+        }
     }
 
     private void DrawLoadout(SpriteBatch b, Point hit, Hunter hunter)
@@ -357,6 +516,12 @@ public sealed class CharacterScreen
         var total = Wearable().Count;
         // +44, clear of the ornate border; at +24 the count read "4 / 64 SLOTS" with its first glyph under the frame.
         _ui.TextBig(b, $"{total} / 64 SLOTS", InventoryPanel.X + 44, InventoryPanel.Bottom - 56, Slate, UiTypography.Secondary);
+
+        // The menu is worth nothing if nobody finds it. Right-click is not a convention this game has
+        // used anywhere else, so it has to be said out loud once.
+        // Above the slots line, not below it: the panel's bottom edge is ornate frame art and anything
+        // drawn on it is unreadable — the first attempt put this hint straight through the border.
+        _ui.Text(b, "RIGHT-CLICK AN ITEM", InventoryPanel.X + 44, InventoryPanel.Bottom - 88, Dim);
         _ui.TextRightBig(b, "SORT: RARITY", InventoryPanel.Right - 44, InventoryPanel.Bottom - 56, Slate, UiTypography.Secondary);
     }
 
