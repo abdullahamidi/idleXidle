@@ -247,7 +247,8 @@
       "source": "assets/art/Characters/Roster/char_seeker_base.png",
       "action": "standing and breathing in place, shifting weight very slightly",
       "frame_count": 8,
-      "pad_fraction": 0.62
+      "pad_fraction": 0.62,
+      "single_subject": true
     },
     {
       "key": "char_seeker_attack_strip8_512",
@@ -255,7 +256,8 @@
       "source": "assets/art/Characters/Roster/char_seeker_base.png",
       "action": "swinging forward to strike and then recovering to a stand",
       "frame_count": 8,
-      "pad_fraction": 0.62,
+      "pad_fraction": 0.5,
+      "single_subject": true,
       "drift_threshold": 0.35
     },
     {
@@ -264,7 +266,8 @@
       "source": "assets/art/Characters/Roster/char_anvil_base.png",
       "action": "standing and breathing in place, shifting weight very slightly",
       "frame_count": 8,
-      "pad_fraction": 0.62
+      "pad_fraction": 0.62,
+      "single_subject": true
     },
     {
       "key": "char_anvil_attack_strip8_512",
@@ -272,7 +275,8 @@
       "source": "assets/art/Characters/Roster/char_anvil_base.png",
       "action": "swinging forward to strike and then recovering to a stand",
       "frame_count": 8,
-      "pad_fraction": 0.62,
+      "pad_fraction": 0.5,
+      "single_subject": true,
       "drift_threshold": 0.35
     },
     {
@@ -281,7 +285,8 @@
       "source": "assets/art/Characters/Roster/char_chorus_base.png",
       "action": "standing and breathing in place, shifting weight very slightly",
       "frame_count": 8,
-      "pad_fraction": 0.62
+      "pad_fraction": 0.62,
+      "single_subject": true
     },
     {
       "key": "char_chorus_attack_strip8_512",
@@ -289,7 +294,8 @@
       "source": "assets/art/Characters/Roster/char_chorus_base.png",
       "action": "swinging forward to strike and then recovering to a stand",
       "frame_count": 8,
-      "pad_fraction": 0.62,
+      "pad_fraction": 0.5,
+      "single_subject": true,
       "drift_threshold": 0.35
     },
     {
@@ -298,7 +304,8 @@
       "source": "assets/art/Characters/Roster/char_metronome_base.png",
       "action": "standing and breathing in place, shifting weight very slightly",
       "frame_count": 8,
-      "pad_fraction": 0.62
+      "pad_fraction": 0.62,
+      "single_subject": true
     },
     {
       "key": "char_metronome_attack_strip8_512",
@@ -306,7 +313,8 @@
       "source": "assets/art/Characters/Roster/char_metronome_base.png",
       "action": "swinging forward to strike and then recovering to a stand",
       "frame_count": 8,
-      "pad_fraction": 0.62,
+      "pad_fraction": 0.5,
+      "single_subject": true,
       "drift_threshold": 0.35
     },
     {
@@ -315,7 +323,8 @@
       "source": "assets/art/Characters/Roster/char_unbroken_base.png",
       "action": "standing and breathing in place, shifting weight very slightly",
       "frame_count": 8,
-      "pad_fraction": 0.62
+      "pad_fraction": 0.62,
+      "single_subject": true
     },
     {
       "key": "char_unbroken_attack_strip8_512",
@@ -323,7 +332,8 @@
       "source": "assets/art/Characters/Roster/char_unbroken_base.png",
       "action": "swinging forward to strike and then recovering to a stand",
       "frame_count": 8,
-      "pad_fraction": 0.62,
+      "pad_fraction": 0.5,
+      "single_subject": true,
       "drift_threshold": 0.35
     },
     {
@@ -332,7 +342,8 @@
       "source": "assets/art/Characters/Roster/char_tower_base.png",
       "action": "standing and breathing in place, shifting weight very slightly",
       "frame_count": 8,
-      "pad_fraction": 0.62
+      "pad_fraction": 0.62,
+      "single_subject": true
     },
     {
       "key": "char_tower_attack_strip8_512",
@@ -340,7 +351,8 @@
       "source": "assets/art/Characters/Roster/char_tower_base.png",
       "action": "swinging forward to strike and then recovering to a stand",
       "frame_count": 8,
-      "pad_fraction": 0.62,
+      "pad_fraction": 0.5,
+      "single_subject": true,
       "drift_threshold": 0.35
     },
     {
@@ -349,7 +361,8 @@
       "source": "assets/art/Characters/Roster/char_quiver_base.png",
       "action": "standing and breathing in place, shifting weight very slightly",
       "frame_count": 8,
-      "pad_fraction": 0.62
+      "pad_fraction": 0.62,
+      "single_subject": true
     },
     {
       "key": "char_quiver_attack_strip8_512",
@@ -357,7 +370,8 @@
       "source": "assets/art/Characters/Roster/char_quiver_base.png",
       "action": "swinging forward to strike and then recovering to a stand",
       "frame_count": 8,
-      "pad_fraction": 0.62,
+      "pad_fraction": 0.5,
+      "single_subject": true,
       "drift_threshold": 0.35
     },
     {
@@ -366,7 +380,8 @@
       "source": "assets/art/Characters/Roster/char_thornwall_base.png",
       "action": "standing and breathing in place, shifting weight very slightly",
       "frame_count": 8,
-      "pad_fraction": 0.62
+      "pad_fraction": 0.62,
+      "single_subject": true
     },
     {
       "key": "char_thornwall_attack_strip8_512",
@@ -374,7 +389,8 @@
       "source": "assets/art/Characters/Roster/char_thornwall_base.png",
       "action": "swinging forward to strike and then recovering to a stand",
       "frame_count": 8,
-      "pad_fraction": 0.62,
+      "pad_fraction": 0.5,
+      "single_subject": true,
       "drift_threshold": 0.35
     },
     {
@@ -383,7 +399,8 @@
       "source": "assets/art/Characters/Roster/char_oathbound_base.png",
       "action": "standing and breathing in place, shifting weight very slightly",
       "frame_count": 8,
-      "pad_fraction": 0.62
+      "pad_fraction": 0.62,
+      "single_subject": true
     },
     {
       "key": "char_oathbound_attack_strip8_512",
@@ -391,7 +408,8 @@
       "source": "assets/art/Characters/Roster/char_oathbound_base.png",
       "action": "swinging forward to strike and then recovering to a stand",
       "frame_count": 8,
-      "pad_fraction": 0.62,
+      "pad_fraction": 0.5,
+      "single_subject": true,
       "drift_threshold": 0.35
     },
     {
@@ -400,7 +418,8 @@
       "source": "assets/art/Characters/Roster/char_magpie_base.png",
       "action": "standing and breathing in place, shifting weight very slightly",
       "frame_count": 8,
-      "pad_fraction": 0.62
+      "pad_fraction": 0.62,
+      "single_subject": true
     },
     {
       "key": "char_magpie_attack_strip8_512",
@@ -408,7 +427,8 @@
       "source": "assets/art/Characters/Roster/char_magpie_base.png",
       "action": "swinging forward to strike and then recovering to a stand",
       "frame_count": 8,
-      "pad_fraction": 0.62,
+      "pad_fraction": 0.5,
+      "single_subject": true,
       "drift_threshold": 0.35
     },
     {

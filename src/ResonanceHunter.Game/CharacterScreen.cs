@@ -431,10 +431,8 @@ public sealed class CharacterScreen
         // screens can never show different people. It used to be the assembled cutout rig, whose whole
         // reason for being here was that gear rode its bones; the figure wears nothing now, so the rig
         // was carrying seventeen cut parts to display a person standing still.
-        var bob = (int)(MathF.Sin(_anim * 2.1f) * 4f);
-        _ui.SpriteGrounded(b, Character.SpriteKey,
-                           new Rectangle(HunterBox.X, HunterBox.Y + bob, HunterBox.Width, HunterBox.Height),
-                           Color.White, 0.02f);
+        if (!_ui.AnimSprite(b, Character.StripKey("idle"), HunterBox, _anim, 10f, loop: true, Color.White, -1f))
+            _ui.SpriteGrounded(b, Character.SpriteKey, HunterBox, Color.White, 0.02f);
 
         foreach (var (slot, label, box) in SlotLayout)
         {

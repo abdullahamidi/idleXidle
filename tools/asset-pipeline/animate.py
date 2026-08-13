@@ -41,7 +41,7 @@ from concurrent import futures
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import pixellab_client as api  # noqa: E402
-from knockout import knockout, stats  # noqa: E402
+from knockout import keep_largest_component, knockout, stats  # noqa: E402
 from pixelpng import Image, read, write  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -262,9 +262,18 @@ def main() -> int:
             )
 
             cleaned = []
+            strays = 0
             for frame in frames:
                 if entry.get("knockout", True) and frame.px[3] == 255:
                     frame, _ = knockout(frame)
+                # PER FRAME, not per strip. The animator hallucinates spare parts the same way the
+                # still generators do — an idle clip came back with a black spike floating a head's
+                # height above the character on two of its eight frames — and a stray blob is always
+                # DISCONNECTED from the figure, so keeping the largest component removes it without
+                # touching a pixel of the subject. Doing this once over the assembled strip would not
+                # work: the eight frames are eight separate blobs, and the largest is one frame.
+                if entry.get("single_subject"):
+                    strays += keep_largest_component(frame)
                 cleaned.append(frame)
 
             strip = build_strip(cleaned, entry.get("frame_size", FRAME_OUT))
@@ -274,7 +283,8 @@ def main() -> int:
             info = stats(strip)
             with lock:
                 done += 1
-                print(f"  [ok]   {key:34s} {info['size']} {info['transparent_pct']:>5}% clear")
+                note = f"  {strays}px stray removed" if strays else ""
+                print(f"  [ok]   {key:34s} {info['size']} {info['transparent_pct']:>5}% clear{note}")
         except Exception as exc:  # noqa: BLE001
             with lock:
                 failures.append((key, str(exc)))

@@ -869,11 +869,20 @@ def animations() -> list[dict]:
                 "dest": f"assets/art/Animations/Roster/{cid}_{clip}",
                 "source": f"assets/art/Characters/Roster/char_{cid}_base.png",
                 "action": action, "frame_count": 8,
-                # The animator RE-FRAMES its input. Fed a full-body figure that filled its canvas it
-                # returned a waist-up bust, so every character's strip was their top half and the arena
-                # drew a torso standing on the floor with no legs. Padding the source to 62% of a square
-                # canvas gives the zoom somewhere to land that is not the character.
-                "pad_fraction": 0.62,
+                # HOW MUCH ROOM TO LEAVE THE ANIMATOR, and it is not the same for both clips.
+                #
+                # The animator crops what it is given, so the source is letterboxed to leave the crop
+                # somewhere to land that is not the character. 0.62 holds for an IDLE. An ATTACK does
+                # not: measured over four rolls, every seeker attack came back a waist-up bust at 0.62
+                # while its idle passed at the same value on the second. A swing is a more cinematic
+                # instruction than standing still, and the model answers it with a closer shot — so an
+                # attack gets half the canvas rather than five eighths.
+                "pad_fraction": 0.50 if clip == "attack" else 0.62,
+                # Per-frame stray removal. The animator hallucinates spare parts exactly as the still
+                # generators do — measured across the first twenty clips: a black spike floating above
+                # a head, and one attack clip carrying seventeen loose blobs. They are always
+                # DISCONNECTED, so keeping the largest component deletes them and touches nothing else.
+                "single_subject": True,
                 # The attack clip moves the figure a long way from frame 0, so the drift guard has to be
                 # loose or every attack strip is rejected — same value the hunter and enemy attacks use.
                 **({"drift_threshold": 0.35} if clip == "attack" else {}),

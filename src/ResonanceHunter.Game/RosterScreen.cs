@@ -161,10 +161,11 @@ public sealed class RosterScreen
             // Each breathes on its own phase, so ten cards do not pulse in unison — and the sprite is
             // the approved full-body design rather than a generated clip, for the reason set out in
             // SoloExpeditionScreen.DrawChampion.
-            var bob = (int)(MathF.Sin(_anim * 1.8f + i * 0.7f) * 3f);
-            var portrait = new Rectangle(card.X + 16, card.Y + 12 + bob, card.Width - 32, 168);
+            var portrait = new Rectangle(card.X + 16, card.Y + 12, card.Width - 32, 168);
             var tint = unlocked ? Color.White : new Color(0x2A, 0x28, 0x30);
-            _ui.SpriteGrounded(b, c.SpriteKey, portrait, tint, 0.02f);
+            // Each on its own phase, so ten cards do not breathe in unison.
+            if (!_ui.AnimSprite(b, c.StripKey("idle"), portrait, _anim + i * 0.37f, 10f, loop: true, tint, -1f))
+                _ui.SpriteGrounded(b, c.SpriteKey, portrait, tint, 0.02f);
 
             _ui.TextCenterBig(b, c.Name, card.Center.X, card.Bottom - 92,
                               unlocked ? Bone : Slate, UiTypography.Secondary);

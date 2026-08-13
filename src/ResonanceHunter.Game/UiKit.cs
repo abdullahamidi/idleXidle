@@ -223,6 +223,15 @@ public sealed class UiKit
             System.Diagnostics.Debug.WriteLine($"Animation strip '{stripKey}' width {tex.Width} is not a whole multiple of frame size {fw}.");
         var i = (int)(seconds * fps);
         i = loop ? (i % frames + frames) % frames : Math.Clamp(i, 0, frames - 1);
+        // A NEGATIVE topCrop means "measure it". Character strips are generated from a source that was
+        // deliberately letterboxed to leave the animator's crop somewhere to land, so a third of the
+        // frame is empty sky — and drawn as-is, that empty sky is a third of the box and the champion
+        // renders two thirds the size the layout asked for. The pad differs per clip (an attack is
+        // letterboxed harder than an idle), so it has to be measured rather than passed in.
+        //
+        // TopPadFraction scans the WHOLE strip and reports the LEAST headroom any frame has, so
+        // cropping by it can never cut into the figure on the one frame that raises its arms.
+        if (topCrop < 0f) topCrop = TopPadFraction(stripKey);
         // Trim the transparent headroom (and any streak artifacts) off the top of the frame, then FILL the
         // box height with the remaining figure, anchored bottom-centre. Side padding overflows harmlessly.
         // Fitting the whole square frame instead left the figure tiny and "boxed" inside the panel.

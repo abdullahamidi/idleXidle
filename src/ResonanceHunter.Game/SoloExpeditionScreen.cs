@@ -1265,23 +1265,23 @@ public sealed class SoloExpeditionScreen
             ? ph * StrikeSeconds
             : swinging ? StrikeSeconds - _strikeTime : _anim;
 
-        // THE BASE SPRITE, not the generated strip.
+        // The generated strip, then the base sprite, then a block.
         //
-        // Twenty clips were generated from these designs and every one of them came back RE-FRAMED:
-        // handed a full-body figure, the animation endpoint returns a waist-up bust, so the arena drew
-        // a torso standing on the floor with no legs. Padding the source to 62% of its canvas — the
-        // same "author the input so the tool succeeds" move the rig source made for the cutter — made
-        // the endpoint preserve the framing and crop the CHARACTER instead. It re-frames whatever it
-        // is given, and it cannot be told not to.
+        // The strips were briefly abandoned on a wrong diagnosis worth recording: the first clip came
+        // back as a waist-up bust and the animator was blamed for re-framing its input. It was not.
+        // The BASE SPRITE was a bust at that moment — the hero style had returned one and "full body"
+        // in the prompt had not been enough to stop it — so the clip was a faithful animation of a
+        // cropped design. Padding the source (animate.py:pad_to_fraction) is what keeps the framing,
+        // and it works.
         //
-        // So the champion is the approved full-body design, breathing. The bob is three lines against
-        // a whole clip's worth of generations, it can never go off-model because there is only one
-        // image, and the strike already has a positional shove of its own driving it (_champLunge).
-        // The strips stay on disk; when a framing-stable animator exists they drop straight back in.
-        var breathe = (int)(MathF.Sin(seconds * (swinging ? 9f : 2.1f)) * (swinging ? 7f : 4f));
-        var lean = swinging ? (int)(MathF.Sin(seconds * 7f) * 10f) : 0;
-        var posed = new Rectangle(box.X + lean, box.Y + breathe, box.Width, box.Height);
-        if (_ui.SpriteGrounded(b, Character.SpriteKey, posed, tint, 0.02f)) return;
+        // A missing or rejected clip falls back to the still design, so a character whose strip did
+        // not survive the quality gate stands there as themselves rather than vanishing.
+        if (_ui.AnimSprite(b, Character.StripKey(clip), box, seconds, ChampionFps, loop: !swinging, tint, -1f)) return;
+        if (_ui.AnimSprite(b, Character.StripKey("idle"), box, _anim, ChampionFps, loop: true, tint, -1f)) return;
+
+        var breathe = (int)(MathF.Sin(seconds * 2.1f) * 4f);
+        if (_ui.SpriteGrounded(b, Character.SpriteKey,
+                               new Rectangle(box.X, box.Y + breathe, box.Width, box.Height), tint, 0.02f)) return;
 
         _ui.Fill(b, new Rectangle(box.Center.X - 32, box.Bottom - 80, 64, 72), dead ? Dim : Gold);
     }
