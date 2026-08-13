@@ -331,7 +331,15 @@ public class Game1 : Game
         // is computed against the real facility levels, not a fresh level-1 base.
         SaveSystem.RestoreWarren(save, _warren);
         _warrenMasteryPool = save.WarrenMasteryPool;
-        _expedition.Log.Restore(save.RunLog.Select(RunLog.FromSave));
+        // PARKED, not applied. This method runs from Initialize(); every screen — _expedition included —
+        // is constructed in LoadContent(), which has not run yet, so reaching through _expedition here
+        // dereferences null and takes the whole game down before the window opens.
+        //
+        // It did exactly that, for every player who had ever saved: a first launch has no save file and
+        // returns above, so the crash began on the SECOND launch and never once appeared in a capture,
+        // because LoadOrStartFresh returns at the top when RH_SHOT is set. The screenshot rig cannot see
+        // this code path at all. Anything restored here belongs in a _pending* field.
+        _pendingRunLog = save.RunLog.Select(RunLog.FromSave).ToList();
 
         var roster = SaveSystem.RestoreRoster(save);
         _automationRoster = roster;
@@ -484,6 +492,7 @@ public class Game1 : Game
     private List<Creature>? _automationRoster;
     private List<ItemInstance>? _pendingInventory;
     private List<Chest>? _pendingChests;
+    private List<RunReport>? _pendingRunLog;
     private Dictionary<GearSlot, string?> _pendingWorn = new();
     private int _pendingCores;
     private AutomationYield? _pendingOfflineYield;
@@ -634,6 +643,7 @@ public class Game1 : Game
                 _hunter.RestoreWorn(slot, Find(id));
         }
         if (_pendingChests is not null) _forge.RestoreChests(_pendingChests);
+        if (_pendingRunLog is not null) _expedition.Log.Restore(_pendingRunLog);
         if (_pendingOfflineYield is not null) _automation.ReportOffline(_pendingOfflineYield);
         _automation.Cores += _pendingCores;
     }
