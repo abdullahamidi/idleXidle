@@ -205,12 +205,33 @@ public sealed class Warren
 
     public WarrenCost UpgradeCost(FacilityKind kind) => _facilities[kind].UpgradeCost();
 
+    /// <summary>
+    /// The highest level any facility may reach, set by the host from the champion's deepest descent.
+    /// </summary>
+    /// <remarks>
+    /// THE WARREN CANNOT OUTRUN THE CHAMPION. Without a cap, an idle player's facilities out-scale the
+    /// player who actually descends: the Warren pays in gleam and materials, so a long enough absence
+    /// buys gear the descent never earned, and the game's answer to "how do I get stronger" becomes
+    /// "close the game". One facility level per five waves of proven depth keeps the idle layer as
+    /// what the design calls it — a multiplier on progress, never a substitute for it.
+    ///
+    /// int.MaxValue by default so the pure model stays testable without a host.
+    /// </remarks>
+    public int FacilityLevelCap { get; set; } = int.MaxValue;
+
+    /// <summary>Is this facility already at the depth-derived ceiling?</summary>
+    public bool IsAtLevelCap(FacilityKind kind) => _facilities[kind].Level >= FacilityLevelCap;
+
     /// <summary>Can the given balances afford this facility's next upgrade?</summary>
     public bool CanAfford(FacilityKind kind, long gleam, long mastery, long dust)
     {
         var c = UpgradeCost(kind);
         return gleam >= c.Gleam && mastery >= c.Mastery && dust >= c.Dust;
     }
+
+    /// <summary>Affordable AND under the cap — what a caller should actually check before spending.</summary>
+    public bool CanUpgrade(FacilityKind kind, long gleam, long mastery, long dust)
+        => !IsAtLevelCap(kind) && CanAfford(kind, gleam, mastery, dust);
 
     /// <summary>
     /// Raise a facility one level and grant Warren XP. The CALLER must already have checked affordability

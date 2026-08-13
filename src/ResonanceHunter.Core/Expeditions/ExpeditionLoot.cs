@@ -21,6 +21,20 @@ public sealed record ExpeditionLootTuning
     /// <summary>The ceiling the loot system's tilt was designed around.</summary>
     public float MaxTiltPercent { get; init; } = 40f;
 
+    /// <summary>
+    /// The BUILD's rarity tilt gets its own ceiling, stacked on top of the source's.
+    /// </summary>
+    /// <remarks>
+    /// It cannot share <see cref="MaxTiltPercent"/>. A Rare chest already spends 22 of those 40 points on
+    /// its own grade, so a build sharing the budget bought at most 18 — measured, a TRIPLED rarity stat
+    /// moved average item rarity by 6%, which is indistinguishable from nothing across a play session.
+    /// The whole FORTUNE road would have been technically wired and practically still decoration.
+    ///
+    /// Separate ceilings also keep the two honest about what they are: grade is what DEPTH pays out, and
+    /// the tilt is what the BUILD pays for. Neither can cannibalise the other's range.
+    /// </remarks>
+    public float MaxBuildTiltPercent { get; init; } = 40f;
+
     public static ExpeditionLootTuning Default { get; } = new();
 }
 
@@ -53,9 +67,13 @@ public static class ExpeditionLoot
     /// gives one item (a lucky second sometimes); the boss's DEPTH is folded into <paramref name="powerTier"/>
     /// so a wave-40 boss drops a genuinely rarer item than a wave-5 one — a reason to push, not a firehose.
     /// </remarks>
+    /// <param name="buildTilt">
+    /// The player build's rarity multiplier (1 = neutral), clamped on its OWN ceiling and added to the
+    /// source's tilt rather than folded into <paramref name="quality"/>.
+    /// </param>
     public static IReadOnlyList<ItemInstance> RollBoss(
         int powerTier, float quality, Random rng, LootTuning? lootTuning = null,
-        ExpeditionLootTuning? tuning = null, Automation.Source? element = null)
+        ExpeditionLootTuning? tuning = null, Automation.Source? element = null, float buildTilt = 1f)
     {
         ArgumentNullException.ThrowIfNull(rng);
         lootTuning ??= LootTuning.Default;
@@ -64,7 +82,9 @@ public static class ExpeditionLoot
         var ctx = new KillContext
         {
             PowerTier = Math.Max(1, powerTier),
-            LootTiltPercent = Math.Clamp((quality - 1f) * tuning.QualityTiltScalar, 0f, tuning.MaxTiltPercent),
+            LootTiltPercent =
+                Math.Clamp((quality - 1f) * tuning.QualityTiltScalar, 0f, tuning.MaxTiltPercent)
+                + Math.Clamp((buildTilt - 1f) * tuning.QualityTiltScalar, 0f, tuning.MaxBuildTiltPercent),
             Element = element,
         };
 

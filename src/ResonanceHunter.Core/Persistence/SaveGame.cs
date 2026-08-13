@@ -134,6 +134,10 @@ public sealed record RegionFarmSave
 {
     public required string Id { get; init; }
     public float MasteryPoints { get; init; }
+
+    /// <summary>Deepest wave ever held here — the source of skill points. See Region.BestDepth.</summary>
+    public int BestDepth { get; init; }
+
     public int Stage { get; init; } = 1;
     public List<string> AssignedIds { get; init; } = new();
 }
@@ -334,6 +338,7 @@ public static class SaveSystem
                 {
                     Id = def.Id,
                     MasteryPoints = f.RegionMasteryPoints,
+                    BestDepth = f.BestDepth,
                     Stage = f.AutomationStage,
                     AssignedIds = f.Team.Select(c => c.Id).ToList(),
                 };

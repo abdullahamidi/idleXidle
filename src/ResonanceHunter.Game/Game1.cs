@@ -367,6 +367,7 @@ public class Game1 : Game
             {
                 var farm = _world.RegionFarm(rf.Id);
                 farm.RestoreMasteryPoints(rf.MasteryPoints);
+                farm.RestoreBestDepth(rf.BestDepth);
                 farm.AutomationStage = rf.Stage;
                 foreach (var c in roster.Where(c => rf.AssignedIds.Contains(c.Id))) farm.Assign(c);
             }
@@ -557,13 +558,19 @@ public class Game1 : Game
         _warren.Name = Regions.Find(_activeRegion)?.Name ?? "THE WARREN";
         _warren.ConqueredRegions = _world.ConqueredIds.Count;
         _warrenScreen.Warren = _warren;
+
+        // One facility level per five waves of proven depth. Recomputed every frame it draws, so a
+        // record set this session raises the ceiling without a restart. Floor of 1: a new player must
+        // still be able to see what a facility does before their first descent ends.
+        _warren.FacilityLevelCap = Math.Max(1, DeepestAnywhere() / 5);
+
         _warrenScreen.GleamOwned = _hunter.Gleam;
         _warrenScreen.MasteryOwned = _warrenMasteryPool;
         _warrenScreen.DustOwned = _dust.MemoryDust;
         _warrenScreen.Draw(_batch, CanvasMouse, MouseClicked);
 
         if (_warrenScreen.ConsumeUpgrade() is { } kind
-            && _warren.CanAfford(kind, _hunter.Gleam, _warrenMasteryPool, _dust.MemoryDust))
+            && _warren.CanUpgrade(kind, _hunter.Gleam, _warrenMasteryPool, _dust.MemoryDust))
         {
             var c = _warren.UpgradeCost(kind);
             _hunter.SpendGleam(c.Gleam);
@@ -1229,6 +1236,10 @@ public class Game1 : Game
         // A chest's rolled loot honours the same Dust filters a boss drop did — auto-sell floor and the
         // tireless-forge auto-merge — now applied at OPEN, since that is where a chest's items land.
         _forge.AutoSellFloor = DustEffects.AutoSellAtOrBelow(_dust);
+
+        // The loot-quality tilt reaches the roll that opens a chest. Until this line, Rarity was resolved
+        // from keystones, gear and the trait tree, carried as Haul.Quality, and read by nothing at all.
+        _forge.RarityBonus = _loadout.ToBuild(_dust, _mastery).Resolve(_hunter).Rarity;
         _forge.AutoMergeOnOpen = DustEffects.AutoMergeAfterRuns(_dust);
         var scale = CorruptionScaling.HealthMultiplier(_world.CorruptionTier);
         var mod = RegionModifiers.For(_activeRegion);   // the region's themed combat twist (Map variety)
@@ -1284,7 +1295,18 @@ public class Game1 : Game
         // Mastery Earned is DERIVED from progress each frame, plus the (unspent) mastery the Warren has
         // produced — so a Breeding/Ritual facility genuinely funds the build tree, and spending that pool on
         // a facility upgrade correctly lowers your available tree points.
-        _mastery.SetEarned(3 + _deepestEver / 5 + _world.ConqueredIds.Count * 5 + (int)_warrenMasteryPool);
+        // SKILL POINTS COME FROM DEPTH, AND ONLY FROM DEPTH.
+        //
+        // The old formula added the Warren's mastery pool, so idle time bought build identity: eight
+        // facilities minting 240 mastery a minute at level 1 meant the whole tree was affordable before
+        // a player had descended once, and no point in it was ever a choice. It also paid five per
+        // conquest, which belongs to the permanent tree, and read one GLOBAL deepest-ever, which let a
+        // player bank the entire game's tree progress in a single region.
+        //
+        // One point per five waves of FIRST-TIME depth, per region. Farming a depth already reached pays
+        // haul but no points, so the only way to earn one is to push somewhere new.
+        _world.RegionFarm(_activeRegion).RecordDepth(_expedition.Deepest);
+        _mastery.SetEarned(SkillPointsEarned());
 
         // Conquest: the deepest the champion has held this region. Fires once, unlocks the next region.
         if (_expedition.Deepest >= ConquerWaveDepth && !_world.IsConquered(_activeRegion))
@@ -1529,7 +1551,14 @@ public class Game1 : Game
         else if (_showAutomation) DrawWarren();
         else if (_showBuild) _buildScreen.Draw(_batch, CanvasMouse, _dust);
         else if (_showCharacter) _character.Draw(_batch, CanvasMouse, _hunter);
-        else if (_showStats) _stats.Draw(_batch, CanvasMouse, _hunter);
+        else if (_showStats)
+        {
+            _stats.Draw(_batch, CanvasMouse, _hunter, MouseClicked);
+
+            // Gleam is one of the three payouts a descent makes, and this is the layer it buys. The model
+            // (geometric cost, rank cap) has always been here; until now nothing in the game called it.
+            if (_stats.ConsumeTrain() is { } stat && _hunter.Train(stat)) { _sound.Play("sfx_click", 0.8f); Save(); }
+        }
         else _expedition.Draw(_batch, CanvasMouse, MouseClicked, Regions.Get(_activeRegion).Name, EnemyArtFor(_activeRegion), _bootTimer > 0f);
         _batch.End();
 
@@ -1884,6 +1913,28 @@ public class Game1 : Game
     private static readonly Color NavIdle = new(0x1A, 0x14, 0x30);
     private static readonly Color NavHover = new(0x2C, 0x25, 0x44);
     private static readonly Color NavLabel = new(0x8A, 0x82, 0xA0);
+
+    /// <summary>
+    /// Skill-tree points: one per five waves of first-time depth, summed across regions.
+    /// </summary>
+    /// <remarks>
+    /// Three grants at the start so a new player has something to spend before their first descent
+    /// ends. Nothing else feeds this — not the Warren, not conquest. See game-flow.md §3.5.
+    /// </remarks>
+    private int SkillPointsEarned()
+    {
+        var total = 3;
+        foreach (var def in Regions.All) total += _world.RegionFarm(def.Id).BestDepth / 5;
+        return total;
+    }
+
+    /// <summary>The deepest wave held in any region — what the Warren's ceiling is derived from.</summary>
+    private int DeepestAnywhere()
+    {
+        var best = _deepestEver;
+        foreach (var def in Regions.All) best = Math.Max(best, _world.RegionFarm(def.Id).BestDepth);
+        return best;
+    }
 
     /// <summary>Which nav slot is lit: 0 HUNT (fight), else the open overlay.</summary>
     private int NavActive() =>

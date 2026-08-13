@@ -223,10 +223,19 @@ public sealed class WarrenScreen
         DrawReq(b, y + 84, DustC, "NATURE", DustOwned, cost.Dust);
 
         var afford = GleamOwned >= cost.Gleam && MasteryOwned >= cost.Mastery && DustOwned >= cost.Dust;
-        _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 502, DetailPanel.Width - 56, 2), Dim);
-        _ui.TextBig(b, "INSTANT UPGRADE  ·  NO WAIT", DetailPanel.X + 28, DetailPanel.Y + 518, Met, UiTypography.Secondary);
 
-        if (_ui.Button(b, new Rectangle(DetailPanel.X + 40, DetailPanel.Bottom - 96, DetailPanel.Width - 80, 72), "UPGRADE", hit, clicked, enabled: afford))
+        // The cap is stated, not merely enforced. A greyed button with no reason reads as a bug; a
+        // player who is told the ceiling is theirs to raise knows the answer is to go and descend.
+        var capped = Warren!.IsAtLevelCap(_selected);
+        _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 502, DetailPanel.Width - 56, 2), Dim);
+        _ui.TextBig(b,
+            capped
+                ? $"CAPPED AT LEVEL {Warren.FacilityLevelCap}  ·  DESCEND DEEPER TO RAISE IT"
+                : "INSTANT UPGRADE  ·  NO WAIT",
+            DetailPanel.X + 28, DetailPanel.Y + 518, capped ? GleamC : Met, UiTypography.Secondary);
+
+        if (_ui.Button(b, new Rectangle(DetailPanel.X + 40, DetailPanel.Bottom - 96, DetailPanel.Width - 80, 72),
+                capped ? "DEPTH LOCKED" : "UPGRADE", hit, clicked, enabled: afford && !capped))
             _upgradeRequest = _selected;
     }
 

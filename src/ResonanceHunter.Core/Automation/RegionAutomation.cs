@@ -99,6 +99,27 @@ public sealed class Region
 
     /// <summary>Restore mastery from a save. Never call this during play — mastery is earned, not set.</summary>
     public void RestoreMasteryPoints(float points) => RegionMasteryPoints = MathF.Max(0f, points);
+
+    /// <summary>
+    /// The deepest wave ever held in THIS region, which is what skill points are paid for.
+    /// </summary>
+    /// <remarks>
+    /// Per region, and first-time only: farming a depth already reached pays haul but no points, so the
+    /// only way to earn them is to push somewhere new. A single global "deepest ever" would let a player
+    /// bank the whole game's tree progress in one region and walk every other one for free.
+    /// </remarks>
+    public int BestDepth { get; private set; }
+
+    /// <summary>Record a depth reached here. Returns true if it was a new record.</summary>
+    public bool RecordDepth(int depth)
+    {
+        if (depth <= BestDepth) return false;
+        BestDepth = depth;
+        return true;
+    }
+
+    /// <summary>Restore from a save. Like mastery, never called during play.</summary>
+    public void RestoreBestDepth(int depth) => BestDepth = Math.Max(0, depth);
     public IReadOnlyList<Creature> Team => _team;
 
     /// <summary>1 = auto-attack, 2 = auto-loot, 3 = auto-sell. Earned, not given.</summary>

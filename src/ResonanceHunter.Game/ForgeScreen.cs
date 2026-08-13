@@ -252,6 +252,15 @@ public sealed class ForgeScreen
     /// </summary>
     public Rarity? AutoSellFloor { get; set; }
 
+    /// <summary>
+    /// The build's loot-quality tilt, set by the host each frame. 1 is neutral.
+    /// </summary>
+    /// <remarks>
+    /// Host-set like AutoSellFloor rather than resolved here, because the screen has no Build and the
+    /// tilt is a build property (keystones + gear + the trait tree's FORTUNE road), not a Forge one.
+    /// </remarks>
+    public float RarityBonus { get; set; } = 1f;
+
     /// <summary>TIRELESS FORGE (Memory Dust): auto-merge the bag after OPEN ALL, so a bulk crack tidies itself.</summary>
     public bool AutoMergeOnOpen { get; set; }
 
@@ -691,7 +700,7 @@ public sealed class ForgeScreen
     /// <summary>Roll a chest's contents, honour the loot filter, land the items + materials. Returns what landed.</summary>
     private (int Materials, List<ItemInstance> Items) LandChest(Chest chest, Hunter hunter)
     {
-        var reward = Chests.Open(chest, _rng, LootTuning.Default);
+        var reward = Chests.Open(chest, _rng, LootTuning.Default, rarityBonus: RarityBonus);
         _chestsOpened++;   // the CRAFTER evolution path's earn — Game1 polls this and credits the warren
         hunter.AddMaterials(reward.Materials);
 

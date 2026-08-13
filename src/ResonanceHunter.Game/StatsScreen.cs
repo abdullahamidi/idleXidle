@@ -19,8 +19,9 @@ namespace ResonanceHunter.Client;
 /// time) the model does not have. Per the UX standard's data-honesty rules those are replaced with the game's
 /// real nine commander stats, a real secondary-attributes panel in place of resistances (no resistance model
 /// exists), and only the career counters the game actually tracks (highest wave, chests opened, mastery).
-/// The spec makes this screen read-only, so stat TRAINING (hunter.Train) is intentionally not here — flagged
-/// for the owner, since it currently has no other home.
+/// The spec called this screen read-only, which left stat TRAINING (hunter.Train) with no home anywhere in
+/// the game: nine stats with geometric costs and a rank cap, fully modelled, and no button that bought one.
+/// Gleam is one of the three payouts a descent makes, and this is the layer it buys — so the rows train here.
 /// </remarks>
 public sealed class StatsScreen
 {
@@ -60,7 +61,21 @@ public sealed class StatsScreen
     public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, int wheel, Hunter hunter) { }
 
     // ── Draw ─────────────────────────────────────────────────────────────────────────────────────
-    public void Draw(SpriteBatch b, Point mouse, Hunter hunter)
+    /// <summary>The stat a TRAIN button was pressed for this frame, taken once.</summary>
+    /// <remarks>
+    /// Request/consume, like WarrenScreen: the screen never mutates the Hunter, so the host stays the
+    /// only place a currency is spent and the screen stays drawable in a capture with no game state.
+    /// </remarks>
+    private HunterStat? _trainRequest;
+
+    public HunterStat? ConsumeTrain()
+    {
+        var r = _trainRequest;
+        _trainRequest = null;
+        return r;
+    }
+
+    public void Draw(SpriteBatch b, Point mouse, Hunter hunter, bool clicked = false)
     {
         _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xD8));   // scrim over the shared backdrop
 
@@ -69,9 +84,9 @@ public sealed class StatsScreen
         _ui.TextCenterBig(b, "OVERVIEW   ·   ATTRIBUTES   ·   PROGRESSION", 960, 80, Slate, UiTypography.Secondary);
 
         DrawHunterCard(b, hunter);
-        DrawPrimary(b, hunter);
+        DrawPrimary(b, hunter, mouse, clicked);
         DrawDerived(b, hunter);
-        DrawCombat(b, hunter);
+        DrawCombat(b, hunter, mouse, clicked);
         DrawProgression(b, hunter);
         if (DevStatsDebug) DrawDebug(b);
     }
@@ -106,7 +121,7 @@ public sealed class StatsScreen
         _ui.TextBig(b, $"{MasteryPoints:N0}", HunterCard.X + 88, HunterCard.Y + 376, Bone, UiTypography.PrimaryValue);
     }
 
-    private void DrawPrimary(SpriteBatch b, Hunter hunter)
+    private void DrawPrimary(SpriteBatch b, Hunter hunter, Point mouse, bool clicked)
     {
         _ui.Panel(b, PrimaryPanel);
         _ui.TextCenterBig(b, "PRIMARY ATTRIBUTES", PrimaryPanel.Center.X, PrimaryPanel.Y + 22, Gold, UiTypography.SectionTitle);
@@ -122,7 +137,8 @@ public sealed class StatsScreen
         {
             _ui.Diamond(b, new Rectangle(PrimaryPanel.X + 30, y + 2, 26, 26), gem);
             _ui.TextBig(b, label, PrimaryPanel.X + 74, y, Bone, UiTypography.Body);
-            _ui.TextRightBig(b, $"{(int)hunter.ValueOf(stat)}", PrimaryPanel.Right - 34, y, Bone, UiTypography.Body);
+            _ui.TextRightBig(b, $"{(int)hunter.ValueOf(stat)}", PrimaryPanel.Right - 168, y, Bone, UiTypography.Body);
+            DrawTrain(b, hunter, stat, PrimaryPanel.Right - 152, y - 6, mouse, clicked);
             y += 44;
         }
     }
@@ -153,7 +169,7 @@ public sealed class StatsScreen
         }
     }
 
-    private void DrawCombat(SpriteBatch b, Hunter hunter)
+    private void DrawCombat(SpriteBatch b, Hunter hunter, Point mouse, bool clicked)
     {
         // Spec §9.1 is RESISTANCES, but the game has no elemental resistance model (§12 fallback). This is the
         // honest substitute: the remaining real commander attributes with their one-line effect.
@@ -173,9 +189,31 @@ public sealed class StatsScreen
             _ui.Fill(b, new Rectangle(CombatPanel.X + 24, y - 6, CombatPanel.Width - 48, 44), RowBg);
             _ui.TextBig(b, label, CombatPanel.X + 40, y, Bone, UiTypography.Body);
             _ui.TextBig(b, effect, CombatPanel.X + 220, y + 2, Slate, UiTypography.Secondary);
-            _ui.TextRightBig(b, $"{(int)hunter.ValueOf(stat)}", CombatPanel.Right - 40, y, Sky, UiTypography.Body);
+            _ui.TextRightBig(b, $"{(int)hunter.ValueOf(stat)}", CombatPanel.Right - 172, y, Sky, UiTypography.Body);
+            DrawTrain(b, hunter, stat, CombatPanel.Right - 156, y - 4, mouse, clicked);
             y += 52;
         }
+    }
+
+    /// <summary>
+    /// One rank of one stat, priced. The cost is on the button because it changes every purchase.
+    /// </summary>
+    /// <remarks>
+    /// Geometric growth means the tenth rank of a stat costs many times the first, so a player choosing
+    /// where gleam goes is making a real decision — and a button that only said "TRAIN" would hide the
+    /// entire decision behind a click.
+    /// </remarks>
+    private void DrawTrain(SpriteBatch b, Hunter hunter, HunterStat stat, int x, int y, Point mouse, bool clicked)
+    {
+        var maxed = !hunter.CanTrain(stat) && hunter.Gleam >= hunter.NextRankCost(stat);
+        var cost = hunter.NextRankCost(stat);
+        var rect = new Rectangle(x, y, 118, 36);
+
+        // "G" for gleam, not a bare number: in a capture the button read "+ 45" beside a stat of 34, which
+        // is indistinguishable from "this adds 45". The unit is the whole difference between a price and a
+        // gain, and it is the only thing on the button that says which one this is.
+        if (_ui.Button(b, rect, maxed ? "MAX" : $"{cost:N0} G", mouse, clicked, enabled: hunter.CanTrain(stat)))
+            _trainRequest = stat;
     }
 
     private void DrawProgression(SpriteBatch b, Hunter hunter)

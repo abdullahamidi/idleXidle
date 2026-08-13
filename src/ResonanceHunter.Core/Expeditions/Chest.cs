@@ -164,7 +164,18 @@ public static class Chests
     /// materials, exactly as the Forge's merge and reforge are pure and the screen owns the mutation.
     /// </para>
     /// </remarks>
-    public static ChestReward Open(Chest chest, Random rng, LootTuning? loot = null, ChestTuning? tuning = null)
+    /// <param name="rarityBonus">
+    /// The build's loot-quality tilt, from <see cref="Builds.BuildMods.Rarity"/> — 1 is neutral.
+    /// </param>
+    /// <remarks>
+    /// REGRESSION FIX. Rarity was resolved from keystones, gear and the trait tree, carried through the
+    /// expedition as Haul.Quality, summed across waves — and then read by nothing. Every node on the
+    /// FORTUNE road, and every "+RARITY" affix, was inert. The tilt multiplies the chest grade's own
+    /// quality so a rarity build makes GOOD chests better rather than making bad ones adequate.
+    /// </remarks>
+    public static ChestReward Open(
+        Chest chest, Random rng, LootTuning? loot = null, ChestTuning? tuning = null,
+        float rarityBonus = 1f)
     {
         ArgumentNullException.ThrowIfNull(chest);
         ArgumentNullException.ThrowIfNull(rng);
@@ -189,7 +200,9 @@ public static class Chests
         // item would be redundant clutter and an anticlimactic reveal ("a Legendary chest gave me… a
         // material"). Material rolls are discarded; if the whole roll happened to be materials, one gear
         // piece is minted at the grade's floor so a chest is never "just materials".
-        var gear = ExpeditionLoot.RollBoss(chest.Tier, quality, rng, loot, element: chest.Element)
+        var gear = ExpeditionLoot.RollBoss(
+                chest.Tier, quality, rng, loot, element: chest.Element,
+                buildTilt: MathF.Max(0.05f, rarityBonus))
             .Where(i => i.BaseType is not ItemBaseType.Material)
             .ToList();
         if (gear.Count == 0)
