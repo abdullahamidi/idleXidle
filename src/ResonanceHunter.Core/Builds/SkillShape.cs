@@ -1,0 +1,292 @@
+using System;
+using System.Collections.Generic;
+using ResonanceHunter.Core.Abilities;
+
+namespace ResonanceHunter.Core.Builds;
+
+/// <summary>
+/// Everything the skill tree changes about HOW a build fights, as opposed to how big its numbers are.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This type exists to make the design's first rule enforceable: <b>no node may be a bare multiplier</b>.
+/// <see cref="BuildMods"/> holds five scalars (damage, health, rate, haul, rarity) and a tree built on it
+/// can only ever be a list of percentages — which is exactly what the audit found, 31 of 43 nodes being
+/// flat numbers. A branch needs to be able to say "hits below 60 deal nothing", "every skill strikes every
+/// creature at 40%", "the first hit taken each wave is free". None of those are a scalar, and none of them
+/// can be expressed at all until the sim has somewhere to read them from.
+/// </para>
+/// <para>
+/// Every field here is READ by <see cref="SoloBattle"/>. That is not a nicety: a shape field nothing reads
+/// is a node that does nothing, which is the failure mode that left the entire FORTUNE road inert for the
+/// whole of development. If a field stops being read, its nodes must be deleted with it.
+/// </para>
+/// <para>
+/// Neutral defaults throughout, so <see cref="None"/> is exactly "no tree allocated" and every call site
+/// can take a shape unconditionally instead of null-checking one.
+/// </para>
+/// </remarks>
+public sealed record SkillShape
+{
+    public static SkillShape None { get; } = new();
+
+    // ── HIT SIZE — the WEIGHT axis. What flat enemy armour reads. ─────────────────────────────────
+
+    /// <summary>Multiplies every skill hit's raw size. The axis's primary currency.</summary>
+    public float HitSize { get; init; } = 1f;
+
+    /// <summary>Flat armour subtracted before mitigation — the cheap answer to Plated bands.</summary>
+    public float ArmourPenetration { get; init; }
+
+    /// <summary>Fraction of the remaining armour a qualifying hit ignores (CRUSH).</summary>
+    public float ArmourIgnoreFraction { get; init; }
+
+    /// <summary>A hit must exceed this multiple of the target's armour to qualify for CRUSH.</summary>
+    public float CrushArmourMultiple { get; init; }
+
+    /// <summary>
+    /// OVERWHELM. Hits below <see cref="OverwhelmFloor"/> deal NOTHING; hits at or above it ignore armour
+    /// completely. Zero disables both halves.
+    /// </summary>
+    /// <remarks>
+    /// The single most consequential node in the game, and the reason the shape has a floor at all: it
+    /// makes armour stop existing for a Weight build and makes any build that delivers damage in small
+    /// pieces stop working. A multiplier could not express either half.
+    /// </remarks>
+    public float OverwhelmFloor { get; init; }
+
+    /// <summary>SUNDER — a hit above this size permanently strips <see cref="SunderAmount"/> armour.</summary>
+    public float SunderThreshold { get; init; }
+    public float SunderAmount { get; init; }
+
+    /// <summary>
+    /// BREAKER — the fraction of a hit's OVERKILL that carries to the next living creature.
+    /// </summary>
+    /// <remarks>
+    /// The design named a part-break bonus here. The sim has no part-break model, and a node that reads
+    /// nothing is worse than a node that reads something else — so this answers the same complaint from
+    /// inside the model that exists: overkill is normally discarded, and discarded overkill is precisely
+    /// the tax a large-hit build pays in a Swarm band.
+    /// </remarks>
+    public float OverkillCarry { get; init; }
+
+    // ── TARGET COUNT — the SPREAD axis. What action economy reads. ────────────────────────────────
+
+    /// <summary>Extra creatures every Form reaches per activation.</summary>
+    public int ExtraTargets { get; init; }
+
+    /// <summary>Extra targets for one Form specifically — the Form specialisations.</summary>
+    public IReadOnlyDictionary<Form, int> FormTargets { get; init; } = new Dictionary<Form, int>();
+
+    /// <summary>EVERYWHERE — every skill strikes every creature, at <see cref="HitSize"/>'s cost.</summary>
+    public bool StrikesEveryCreature { get; init; }
+
+    /// <summary>CHAIN — an extra creature struck for this fraction of the hit. Zero disables.</summary>
+    public float ChainFraction { get; init; }
+
+    /// <summary>RICOCHET — chance a hit also strikes a second creature for <see cref="RicochetFraction"/>.</summary>
+    public float RicochetChance { get; init; }
+    public float RicochetFraction { get; init; }
+
+    /// <summary>CASCADE — after a kill, the next activation strikes every living creature.</summary>
+    public bool CascadeOnKill { get; init; }
+
+    // ── CONDITIONAL DAMAGE. Each one is a shape: it asks a question about the target or the clock. ──
+
+    /// <summary>Multiplier on the first hit each creature takes (FOLLOW THROUGH, OPENER, ALPHA).</summary>
+    public float FirstHitMultiplier { get; init; } = 1f;
+
+    /// <summary>Multiplier on every hit after the first — ALPHA's price.</summary>
+    public float LaterHitMultiplier { get; init; } = 1f;
+
+    /// <summary>CULL — bonus against creatures below <see cref="CullThreshold"/> of their health.</summary>
+    public float CullThreshold { get; init; }
+    public float CullBonus { get; init; }
+
+    /// <summary>SWARMBANE — damage bonus per living creature in the wave.</summary>
+    public float PerCreatureBonus { get; init; }
+
+    /// <summary>SIEGE — bonus against Armoured, and the penalty against everything else.</summary>
+    public float VsArmouredBonus { get; init; }
+    public float VsOtherPenalty { get; init; }
+
+    /// <summary>FIRST STRIKE — the opening seconds are amplified, everything after is cut.</summary>
+    public float OpeningSeconds { get; init; }
+    public float OpeningBonus { get; init; }
+    public float AfterOpeningPenalty { get; init; }
+
+    /// <summary>
+    /// INTERRUPT — damage amplified in the run-up to an enemy swing.
+    /// </summary>
+    /// <remarks>
+    /// The design said "during an enemy windup". There is no windup model; the enemy bite is instantaneous
+    /// on an interval. This is the same idea inside the model that exists — the last quarter of the bite
+    /// interval IS the windup, and a build that lands its damage there is interrupting.
+    /// </remarks>
+    public float InterruptBonus { get; init; }
+
+    /// <summary>BASTION — damage bonus per point of maximum health.</summary>
+    public float DamagePerMaxHealth { get; init; }
+
+    /// <summary>ANCHOR — hit size bonus per point of maximum health.</summary>
+    public float HitSizePerMaxHealth { get; init; }
+
+    /// <summary>Flat multiplier on all damage dealt — only ever a PRICE (Bulwark, Blitz).</summary>
+    public float DamageDealt { get; init; } = 1f;
+
+    // ── TEMPO. ────────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>Multiplies skill rate; below 1 lengthens cooldowns.</summary>
+    public float SkillRate { get; init; } = 1f;
+
+    /// <summary>PREPARATION — every skill's first cast of a wave is free of its cooldown.</summary>
+    public bool FreeOpeningCast { get; init; }
+
+    /// <summary>FOCUS — added to the champion's critical chance, in percentage points.</summary>
+    public float BonusCritPercent { get; init; }
+
+    /// <summary>MARK MASTERY — stretches the amplify window and deepens it.</summary>
+    public float MarkWindowMultiplier { get; init; } = 1f;
+    public float MarkPowerBonus { get; init; }
+
+    /// <summary>ASSASSINATE — once per wave, a creature below this health fraction dies to the next hit.</summary>
+    public float AssassinateThreshold { get; init; }
+
+    // ── ENDURE. ───────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>Fraction of damage dealt returned as health.</summary>
+    public float Leech { get; init; }
+
+    /// <summary>FEEDBACK — health healed per creature struck, as a fraction of maximum.</summary>
+    public float HealPerTargetStruck { get; init; }
+
+    /// <summary>PADDING — flat damage removed from every incoming bite.</summary>
+    public float FlatDamageReduction { get; init; }
+
+    /// <summary>Multiplier on damage taken. Below 1 is mitigation, above 1 is a price.</summary>
+    public float DamageTaken { get; init; } = 1f;
+
+    /// <summary>ABSORB — extra mitigation as health falls, up to this fraction at death's door.</summary>
+    public float AbsorbAtLowHealth { get; init; }
+
+    /// <summary>FORTIFY — the first bite of each wave deals nothing.</summary>
+    public bool FirstBiteFree { get; init; }
+
+    /// <summary>SECOND WIND — fraction of maximum health healed on clearing a wave.</summary>
+    public float HealOnClear { get; init; }
+
+    /// <summary>RECOVERY — fraction of maximum health regained between waves.</summary>
+    /// <remarks>
+    /// A structural exception. game-flow.md §3.3 makes "health does not regenerate between waves" a rule
+    /// of the game; this node is the one thing that buys an exception to it, which is what makes ENDURE
+    /// the only branch that raises the ceiling of all four bands.
+    /// </remarks>
+    public float BetweenWaveRegen { get; init; }
+
+    /// <summary>ENDLESS — full health every wave, for half the pool.</summary>
+    public bool FullHealBetweenWaves { get; init; }
+
+    /// <summary>Multiplier on maximum health, applied at champion mint.</summary>
+    public float MaxHealth { get; init; } = 1f;
+
+    /// <summary>Targets this Form reaches, after the shape's general and per-Form additions.</summary>
+    public int TargetsFor(Form form)
+    {
+        if (StrikesEveryCreature) return int.MaxValue;
+
+        var baseline = FormBehaviour.Targets(form);
+        if (baseline == int.MaxValue) return baseline;   // Aura already reaches everything
+
+        var extra = ExtraTargets + (FormTargets.TryGetValue(form, out var f) ? f : 0);
+        return Math.Max(1, baseline + extra);
+    }
+
+    /// <summary>
+    /// Combine two shapes. Multipliers multiply, additives add, flags OR, thresholds take the more
+    /// generous value.
+    /// </summary>
+    /// <remarks>
+    /// Thresholds do NOT add. Two nodes that each execute below 25% must not execute below 50% — a
+    /// threshold is a condition, and stacking conditions by addition turns two modest nodes into one
+    /// absurd one. The kinder of the two wins, which is what a player expects and what keeps the
+    /// combination bounded.
+    /// </remarks>
+    public static SkillShape Combine(SkillShape a, SkillShape b)
+    {
+        ArgumentNullException.ThrowIfNull(a);
+        ArgumentNullException.ThrowIfNull(b);
+
+        var targets = new Dictionary<Form, int>(a.FormTargets);
+        foreach (var (form, n) in b.FormTargets)
+            targets[form] = targets.TryGetValue(form, out var have) ? have + n : n;
+
+        return new SkillShape
+        {
+            HitSize = a.HitSize * b.HitSize,
+            ArmourPenetration = a.ArmourPenetration + b.ArmourPenetration,
+            ArmourIgnoreFraction = Math.Max(a.ArmourIgnoreFraction, b.ArmourIgnoreFraction),
+            CrushArmourMultiple = Pick(a.CrushArmourMultiple, b.CrushArmourMultiple, lower: true),
+            OverwhelmFloor = Math.Max(a.OverwhelmFloor, b.OverwhelmFloor),
+            SunderThreshold = Pick(a.SunderThreshold, b.SunderThreshold, lower: true),
+            SunderAmount = a.SunderAmount + b.SunderAmount,
+            OverkillCarry = Math.Max(a.OverkillCarry, b.OverkillCarry),
+
+            ExtraTargets = a.ExtraTargets + b.ExtraTargets,
+            FormTargets = targets,
+            StrikesEveryCreature = a.StrikesEveryCreature || b.StrikesEveryCreature,
+            ChainFraction = Math.Max(a.ChainFraction, b.ChainFraction),
+            RicochetChance = Math.Max(a.RicochetChance, b.RicochetChance),
+            RicochetFraction = Math.Max(a.RicochetFraction, b.RicochetFraction),
+            CascadeOnKill = a.CascadeOnKill || b.CascadeOnKill,
+
+            FirstHitMultiplier = a.FirstHitMultiplier * b.FirstHitMultiplier,
+            LaterHitMultiplier = a.LaterHitMultiplier * b.LaterHitMultiplier,
+            CullThreshold = Math.Max(a.CullThreshold, b.CullThreshold),
+            CullBonus = a.CullBonus + b.CullBonus,
+            PerCreatureBonus = a.PerCreatureBonus + b.PerCreatureBonus,
+            VsArmouredBonus = a.VsArmouredBonus + b.VsArmouredBonus,
+            VsOtherPenalty = a.VsOtherPenalty + b.VsOtherPenalty,
+            OpeningSeconds = Math.Max(a.OpeningSeconds, b.OpeningSeconds),
+            OpeningBonus = a.OpeningBonus + b.OpeningBonus,
+            AfterOpeningPenalty = a.AfterOpeningPenalty + b.AfterOpeningPenalty,
+            InterruptBonus = a.InterruptBonus + b.InterruptBonus,
+            DamagePerMaxHealth = a.DamagePerMaxHealth + b.DamagePerMaxHealth,
+            HitSizePerMaxHealth = a.HitSizePerMaxHealth + b.HitSizePerMaxHealth,
+            DamageDealt = a.DamageDealt * b.DamageDealt,
+
+            SkillRate = a.SkillRate * b.SkillRate,
+            FreeOpeningCast = a.FreeOpeningCast || b.FreeOpeningCast,
+            BonusCritPercent = a.BonusCritPercent + b.BonusCritPercent,
+            MarkWindowMultiplier = a.MarkWindowMultiplier * b.MarkWindowMultiplier,
+            MarkPowerBonus = a.MarkPowerBonus + b.MarkPowerBonus,
+            AssassinateThreshold = Math.Max(a.AssassinateThreshold, b.AssassinateThreshold),
+
+            Leech = a.Leech + b.Leech,
+            HealPerTargetStruck = a.HealPerTargetStruck + b.HealPerTargetStruck,
+            FlatDamageReduction = a.FlatDamageReduction + b.FlatDamageReduction,
+            DamageTaken = a.DamageTaken * b.DamageTaken,
+            AbsorbAtLowHealth = Math.Max(a.AbsorbAtLowHealth, b.AbsorbAtLowHealth),
+            FirstBiteFree = a.FirstBiteFree || b.FirstBiteFree,
+            HealOnClear = a.HealOnClear + b.HealOnClear,
+            BetweenWaveRegen = a.BetweenWaveRegen + b.BetweenWaveRegen,
+            FullHealBetweenWaves = a.FullHealBetweenWaves || b.FullHealBetweenWaves,
+            MaxHealth = a.MaxHealth * b.MaxHealth,
+        };
+    }
+
+    /// <summary>Take whichever value is set, preferring the more generous when both are.</summary>
+    private static float Pick(float a, float b, bool lower)
+    {
+        if (a <= 0f) return b;
+        if (b <= 0f) return a;
+        return lower ? Math.Min(a, b) : Math.Max(a, b);
+    }
+
+    public static SkillShape Sum(IEnumerable<SkillShape> shapes)
+    {
+        ArgumentNullException.ThrowIfNull(shapes);
+        var total = None;
+        foreach (var s in shapes) total = Combine(total, s);
+        return total;
+    }
+}

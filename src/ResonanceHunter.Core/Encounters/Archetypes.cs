@@ -146,6 +146,7 @@ public static class Archetypes
                 Damage = baseDamage * shape.DamageMult,
                 Defense = defense,
                 Source = src,
+                Archetype = archetype,
             });
         }
 

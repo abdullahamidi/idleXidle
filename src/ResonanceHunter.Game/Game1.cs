@@ -662,7 +662,7 @@ public class Game1 : Game
             // screen is gone, so they had nothing to pose.
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
-                or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "reforge" or "build" or "character" or "stats" or "warren" or "map" or "rig"
+                or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "reforge" or "build" or "buildtree" or "character" or "stats" or "warren" or "map" or "rig"
                 or "fightgear" or "fightswing" or "fightreport")
             {
                 _showTitle = false;
@@ -711,14 +711,18 @@ public class Game1 : Game
                     _forge.DevOpenOneChest(_hunter);   // pose the chest-open REVEAL burst
                 }
 
-                if (sm == "build")
+                if (sm is "build" or "buildtree")
                 {
                     _showBuild = true;
-                    // Pose a partly-walked tree so the shot shows taken/takeable/bridge states + RESET.
-                    _mastery.SetEarned(8);
-                    _mastery.Take("strike_1");
-                    _mastery.Take("strike_2");
-                    _mastery.Take("bridge_strike_volley");
+
+                    // Pose a partly-walked tree so the shot shows taken / takeable / locked states, a
+                    // bridge with only one side satisfied, and a mastery still out of reach.
+                    _mastery.SetEarned(24);
+                    foreach (var id in new[] { "heavy_hand", "sharpened", "sunder", "crush", "monolith",
+                                               "opener", "hasten", "alpha" })
+                        _mastery.Take(id);
+
+                    if (sm == "buildtree") _buildScreen.DevOpenTree();
                 }
 
                 if (sm == "character")

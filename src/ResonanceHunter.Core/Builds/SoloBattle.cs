@@ -50,10 +50,21 @@ public sealed class WaveCreature
     /// <summary>What this creature deals per bite, before the champion's mitigation.</summary>
     public required float Damage { get; init; }
 
-    /// <summary>FLAT per-hit mitigation — see <see cref="SoloBattle.MinHitFraction"/>.</summary>
-    public float Defense { get; init; }
+    /// <summary>
+    /// FLAT per-hit mitigation — see <see cref="SoloBattle.MinHitFraction"/>.
+    /// </summary>
+    /// <remarks>
+    /// Settable, not init-only, because SUNDER strips armour permanently FOR THE REST OF THE WAVE. That
+    /// is the whole node: a Weight build gets stronger as an Armoured wave goes on, which is the opposite
+    /// of how flat mitigation normally behaves. Creatures are minted per wave, so the mutation cannot
+    /// leak into the next one.
+    /// </remarks>
+    public float Defense { get; set; }
 
     public Source? Source { get; init; }
+
+    /// <summary>What this creature IS — read by SIEGE, which pays against Armoured and taxes the rest.</summary>
+    public Encounters.Archetype? Archetype { get; init; }
 
     public bool Alive => Health > 0f;
 
@@ -263,6 +274,18 @@ public static class SoloBattle
 
         var events = new List<BattleEvent>();
         var mods = build.Resolve(hunter);
+
+        // THE SKILL TREE'S SHAPE. Everything below that reads `shape` is a node in MasteryCatalog; if a
+        // field of it stops being read here, its nodes must be deleted, because a node that does nothing
+        // is the failure that left the whole loot-rarity chain inert for the length of development.
+        var shape = build.Shape;
+
+        // Per-wave state the shape's conditional nodes need. All of it is local, so nothing leaks into
+        // the next wave — which matters most for SUNDER, whose armour strip is explicitly wave-scoped.
+        var struckOnce = new HashSet<WaveCreature>();   // FOLLOW THROUGH / OPENER / ALPHA
+        var cascadeArmed = false;                       // CASCADE
+        var assassinated = false;                       // ASSASSINATE — once per wave
+        var firstBiteTaken = false;                     // FORTIFY
         var triggers = build.Triggers(hunter);
         var skills = build.Skills;
         var wt = WeavingTuning.Default;
@@ -287,7 +310,8 @@ public static class SoloBattle
         // so the sim stays reproducible — no rng draw, no crit-lottery variance to break a seeded test.
         // DEFENSE (including the worn charm's, itself long inert) mitigates each incoming bite below.
         var critChance = Math.Clamp(
-            (hunter.ValueOf(Economy.HunterStat.CriticalChance) + hunter.AffixTotal(Economy.AffixStat.Crit)) / 100f,
+            (hunter.ValueOf(Economy.HunterStat.CriticalChance) + hunter.AffixTotal(Economy.AffixStat.Crit)
+             + shape.BonusCritPercent) / 100f,
             0f, 0.75f);
         var critMult = CritBaseMultiplier + hunter.ValueOf(Economy.HunterStat.Focus) * FocusCritDamagePerPoint;
         var critFactor = 1f + critChance * (critMult - 1f);
@@ -331,6 +355,10 @@ public static class SoloBattle
             // No EnemyDown here — LandOn emits one per creature as it falls, so this would double the
             // last one and the screen would remove a sprite that was already gone.
 
+            // SECOND WIND — healed on the CLEAR, so it is a reward for finishing rather than a trickle.
+            if (shape.HealOnClear > 0f)
+                Heal((int)MathF.Round(champ.MaxHealth * shape.HealOnClear), atMs);
+
             if (harvestChance > 0f && rng.NextDouble() < harvestChance) bonus?.AddCores(1);
             if (triggers.Contains(BuildTrigger.Splinter)) bonus?.AddQuality(0.15f);   // richer loot on a kill (see the blurb)
 
@@ -367,7 +395,51 @@ public static class SoloBattle
                 m *= 1f + 0.8f * present;
             }
 
-            if (champ.MarkUntilMs > absMs) m *= FormBehaviour.MarkMultiplier;
+            if (champ.MarkUntilMs > absMs) m *= FormBehaviour.MarkMultiplier + shape.MarkPowerBonus;
+
+            // ── THE SKILL TREE. Everything past here is gated on skillForm, so the background
+            //    auto-attack never triggers a node — it is a trickle, not a build. ────────────────────
+            if (skillForm is null) return m;
+
+            m *= shape.HitSize * shape.DamageDealt;
+            if (shape.HitSizePerMaxHealth > 0f) m *= 1f + shape.HitSizePerMaxHealth * champ.MaxHealth;   // ANCHOR
+            if (shape.DamagePerMaxHealth > 0f) m *= 1f + shape.DamagePerMaxHealth * champ.MaxHealth;     // BASTION
+
+            if (against is not null)
+            {
+                // FOLLOW THROUGH / OPENER / ALPHA — the first hit a creature takes, and the price ALPHA
+                // charges on every later one.
+                m *= struckOnce.Contains(against) ? shape.LaterHitMultiplier : shape.FirstHitMultiplier;
+
+                // CULL — finishing damage. Reads the creature in front, so in a multi-creature wave it
+                // fires on whichever is hurt rather than on the wave as a whole.
+                if (shape.CullBonus > 0f && against.Health < against.MaxHealth * shape.CullThreshold)
+                    m *= 1f + shape.CullBonus;
+
+                // SIEGE — the branch's one explicitly narrow node.
+                if (shape.VsArmouredBonus > 0f || shape.VsOtherPenalty > 0f)
+                    m *= against.Archetype == Encounters.Archetype.Armoured
+                        ? 1f + shape.VsArmouredBonus
+                        : 1f - shape.VsOtherPenalty;
+            }
+
+            // SWARMBANE — the more of them there are, the harder you hit. The mirror of what a Swarm
+            // band does to a single-target build.
+            if (shape.PerCreatureBonus > 0f) m *= 1f + shape.PerCreatureBonus * alive;
+
+            // FIRST STRIKE — the opening seconds are everything, and everything after is nothing.
+            if (shape.OpeningSeconds > 0f)
+                m *= absMs - since < shape.OpeningSeconds * 1000f
+                    ? 1f + shape.OpeningBonus
+                    : 1f - shape.AfterOpeningPenalty;
+
+            // INTERRUPT. There is no windup model; the enemy bites on an interval, so the last quarter of
+            // that interval IS the windup, and damage landed there is what interrupting means here.
+            if (shape.InterruptBonus > 0f
+                && absMs - since > 0
+                && (absMs - since) % enemyIntervalMs >= enemyIntervalMs * 3 / 4)
+                m *= 1f + shape.InterruptBonus;
+
             return m;
         }
 
@@ -406,8 +478,38 @@ public static class SoloBattle
             // would leave the Venom path with nothing to be good at.
             if (metrics is not null) metrics.RawDamage += dmg;
 
+            var raw = dmg;
+
+            // OVERWHELM. Both halves of the mastery: a hit under the floor lands for NOTHING, and a hit
+            // over it ignores armour entirely. It is the one node in the tree that can make a build deal
+            // literally zero, which is exactly why it is priced at a mastery and why it makes every
+            // Spread build unplayable.
+            if (fromSkill && shape.OverwhelmFloor > 0f)
+            {
+                if (dmg < shape.OverwhelmFloor)
+                {
+                    if (metrics is not null) metrics.Hits++;
+                    return;
+                }
+                ignoresArmour = true;
+            }
+
             if (!ignoresArmour && target.Defense > 0f)
-                dmg = MathF.Max(dmg * MinHitFraction, dmg - target.Defense);
+            {
+                var armour = target.Defense;
+
+                // SHARPENED / EXECUTIONER cut flat armour; CRUSH halves whatever is left, but only for a
+                // hit already many times the creature's mitigation — it rewards size, not persistence.
+                if (fromSkill)
+                {
+                    armour = MathF.Max(0f, armour - shape.ArmourPenetration);
+                    if (shape.CrushArmourMultiple > 0f && armour > 0f
+                        && dmg > armour * shape.CrushArmourMultiple)
+                        armour *= 1f - shape.ArmourIgnoreFraction;
+                }
+
+                if (armour > 0f) dmg = MathF.Max(dmg * MinHitFraction, dmg - armour);
+            }
 
             if (metrics is not null)
             {
@@ -419,15 +521,32 @@ public static class SoloBattle
             // 30-health swarm creature wastes 80, and that waste is the whole cost of bringing a
             // large-hit build to a Swarm band.
             target.Health -= dmg;
+            if (fromSkill) struckOnce.Add(target);
+
+            // SUNDER — armour stripped for the rest of the wave. Reads the RAW force of the swing, not
+            // what got through: a hit that armour mostly absorbed still bent the plate.
+            if (fromSkill && shape.SunderThreshold > 0f && raw >= shape.SunderThreshold)
+                target.Defense = MathF.Max(0f, target.Defense - shape.SunderAmount);
+
             if (metrics is not null && target.Health <= 0f) metrics.CreaturesKilled++;
             var idx = IndexOf(target);
             events.Add(new BattleEvent(BattleEventKind.Strike, idx, (int)MathF.Round(dmg), atMs));
             if (!target.Alive)
             {
                 alive--;
+                if (shape.CascadeOnKill) cascadeArmed = true;
+
                 // One EnemyDown per CREATURE, not per wave. The screen needs to know which sprite to
                 // remove; the wave-cleared signal is the outcome, not this event.
                 events.Add(new BattleEvent(BattleEventKind.EnemyDown, idx, 0, atMs));
+
+                // BREAKER — half of the overkill carries on. The design named a part-break bonus here;
+                // the sim has no part-break model, and this answers the same complaint from inside the
+                // model that exists, because discarded overkill IS the tax a large-hit build pays in a
+                // Swarm band. One level only: a chain of carries would let one hit clear a whole wave.
+                var spill = -target.Health;
+                if (fromSkill && shape.OverkillCarry > 0f && spill > 0f && FirstAlive() is { } next)
+                    LandOn(next, spill * shape.OverkillCarry, atMs, fromSkill: false, ignoresArmour: true);
             }
         }
 
@@ -440,8 +559,14 @@ public static class SoloBattle
         {
             if (targets <= 0) return 0f;
             if (fromSkill && metrics is not null) metrics.Activations++;
+
+            // CASCADE — one activation after a kill reaches everything. Armed in LandOn, spent here, so
+            // the reward lands on the NEXT cast and a player can see the ripple rather than guess at it.
+            if (fromSkill && cascadeArmed) { targets = int.MaxValue; cascadeArmed = false; }
+
             var dealt = 0f;
             var struck = 0;
+            var lastIndex = -1;
             for (var i = 0; i < creatures.Count && struck < targets; i++)
             {
                 var c = creatures[i];
@@ -452,8 +577,41 @@ public static class SoloBattle
                 LandOn(c, hit, atMs, fromSkill);
                 dealt += hit;
                 struck++;
+                lastIndex = i;
                 if (fromSkill && metrics is not null) metrics.TargetsStruck++;
             }
+
+            if (!fromSkill) return dealt;
+
+            // CHAIN and RICOCHET both reach PAST the activation's own target count, which is what makes
+            // them Spread nodes rather than damage nodes — they buy action economy, and a build already
+            // striking everything gains nothing from either.
+            var extraFraction = shape.ChainFraction;
+            if (shape.RicochetChance > 0f && rng.NextDouble() < shape.RicochetChance)
+                extraFraction = MathF.Max(extraFraction, shape.RicochetFraction);
+
+            if (extraFraction > 0f)
+                for (var i = lastIndex + 1; i < creatures.Count; i++)
+                {
+                    var c = creatures[i];
+                    if (!c.Alive) continue;
+                    var hit = raw * extraFraction * Amp(absMs, skillSource, skillForm, c);
+                    LandOn(c, hit, atMs, fromSkill: true);
+                    dealt += hit;
+                    struck++;
+                    if (metrics is not null) metrics.TargetsStruck++;
+                    break;
+                }
+
+            // FEEDBACK — the Spread/Endure bridge. Sustain that scales with how WIDE you are, which is
+            // the only way the two branches have of paying each other.
+            if (shape.HealPerTargetStruck > 0f && struck > 0)
+                Heal((int)MathF.Round(champ.MaxHealth * shape.HealPerTargetStruck * struck), atMs);
+
+            // LEECH. Reads the total dealt across every creature touched, so a wide build heals wider.
+            if (shape.Leech > 0f && dealt > 0f)
+                Heal((int)MathF.Round(dealt * shape.Leech), atMs);
+
             return dealt;
         }
 
@@ -499,13 +657,19 @@ public static class SoloBattle
                     var aura = FormBehaviour.BaseDamage(form, resonance, wt)
                                * VowFactor(sk, champ, abs, isBoss, wt)
                                * (FormBehaviour.AuraTickMs / 1000f);
-                    LandSpread(aura, ms, FormBehaviour.Targets(form), sk.Source, form, abs);
+                    LandSpread(aura, ms, shape.TargetsFor(form), sk.Source, form, abs);
                     if (alive == 0) return Kill(ms);
                     continue;
                 }
 
-                var cd = Math.Max(1, (int)(FormBehaviour.BaseCooldownMs(form) / Math.Max(0.1f, mods.SkillRate)));
-                if (abs < champ.ReadyAt.GetValueOrDefault(i, cd)) continue;
+                var cd = Math.Max(1, (int)(FormBehaviour.BaseCooldownMs(form)
+                                           / Math.Max(0.1f, mods.SkillRate * shape.SkillRate)));
+
+                // PREPARATION — every skill's FIRST cast of a wave is free of its cooldown. The default
+                // ReadyAt of `cd` is what normally makes a skill wait one cooldown before its opener;
+                // dropping that to 0 is the whole node, and it is worth most to a slow, heavy build.
+                var opening = shape.FreeOpeningCast ? 0 : cd;
+                if (abs < champ.ReadyAt.GetValueOrDefault(i, opening)) continue;
                 champ.ReadyAt[i] = abs + cd;
 
                 if (FormBehaviour.IsAmplifier(form))
@@ -513,6 +677,7 @@ public static class SoloBattle
                     // MARK deals nothing. It opens a window. LINGER (an item enchantment) stretches that
                     // window, so a Mark build gets far more of its big hits inside the amplify.
                     var window = triggers.Contains(BuildTrigger.Linger) ? FormBehaviour.MarkWindowMs * 9 / 5 : FormBehaviour.MarkWindowMs;
+                    window = (int)(window * shape.MarkWindowMultiplier);   // MARK MASTERY
                     champ.MarkUntilMs = abs + window;
                     events.Add(new BattleEvent(BattleEventKind.Skill, 0, (int)Form.Mark, ms));
                     continue;
@@ -537,8 +702,20 @@ public static class SoloBattle
                         && victim.Health < victim.MaxHealth * ExecuteThreshold)
                         raw *= ExecuteMultiplier;
 
+                    // ASSASSINATE — once a wave, a weakened creature simply dies. Deliberately not a
+                    // damage bonus: against a Bruiser with a large pool, "kill it outright" and "hit it
+                    // hard" are different promises, and only the first one answers a Caster band.
+                    if (!assassinated && shape.AssassinateThreshold > 0f
+                        && FirstAlive() is { } mark
+                        && mark.Health < mark.MaxHealth * shape.AssassinateThreshold)
+                    {
+                        assassinated = true;
+                        LandOn(mark, mark.Health, ms, fromSkill: false, ignoresArmour: true);
+                        if (alive == 0) return Kill(ms);
+                    }
+
                     events.Add(new BattleEvent(BattleEventKind.Skill, 0, (int)form, ms));
-                    var dealt = LandSpread(raw, ms, FormBehaviour.Targets(form), sk.Source, form, abs);
+                    var dealt = LandSpread(raw, ms, shape.TargetsFor(form), sk.Source, form, abs);
 
                     if (FormBehaviour.Heals(form))
                     {
@@ -574,6 +751,27 @@ public static class SoloBattle
                     if (creatures[ci].Alive) incoming += creatures[ci].Damage;
 
                 var taken = incoming / Math.Max(0.05f, mods.Health) * defenseFactor * fragilityMult;
+
+                // ── ENDURE. Applied in this order on purpose: multipliers first, then the flat cut, so
+                //    PADDING is worth MORE to a build that already mitigates — small bites are what a
+                //    flat reduction erases, and that is the branch's whole answer to a Swarm. ────────
+                taken *= shape.DamageTaken;
+
+                // ABSORB — mitigation rises as health falls, to its cap at death's door. The node that
+                // makes a low-health build survivable without making a healthy one invincible.
+                if (shape.AbsorbAtLowHealth > 0f)
+                {
+                    var missing = 1f - champ.Health / (float)Math.Max(1, champ.MaxHealth);
+                    taken *= 1f - shape.AbsorbAtLowHealth * missing;
+                }
+
+                taken = MathF.Max(0f, taken - shape.FlatDamageReduction);
+
+                // FORTIFY — the first bite of each wave deals nothing. Worth most where bites are large
+                // and rare, which is precisely a Bruiser band.
+                if (shape.FirstBiteFree && !firstBiteTaken) taken = 0f;
+                firstBiteTaken = true;
+
                 champ.Health -= (int)MathF.Round(taken);
                 events.Add(new BattleEvent(BattleEventKind.EnemyStrike, 0, (int)MathF.Round(taken), ms));
 
@@ -587,14 +785,14 @@ public static class SoloBattle
                     // a woven Trap, so the enchant is naturally dead on any build without one.
                     var trapBase = FormBehaviour.BaseCooldownMs(Form.Trap);
                     if (triggers.Contains(BuildTrigger.Coiled)) trapBase = (int)(trapBase * CoiledCooldownFactor);
-                    var cd = Math.Max(1, (int)(trapBase / Math.Max(0.1f, mods.SkillRate)));
+                    var cd = Math.Max(1, (int)(trapBase / Math.Max(0.1f, mods.SkillRate * shape.SkillRate)));
                     if (abs < champ.ReadyAt.GetValueOrDefault(idx, 0)) continue;
                     champ.ReadyAt[idx] = abs + cd;
 
                     var trapRaw = FormBehaviour.BaseDamage(Form.Trap, resonance, wt)
                                   * VowFactor(sk, champ, abs, isBoss, wt);
                     events.Add(new BattleEvent(BattleEventKind.Skill, 0, (int)Form.Trap, ms));
-                    LandSpread(trapRaw, ms, FormBehaviour.Targets(Form.Trap), sk.Source, Form.Trap, abs);
+                    LandSpread(trapRaw, ms, shape.TargetsFor(Form.Trap), sk.Source, Form.Trap, abs);
                     if (alive == 0) return Kill(ms);
                 }
 
@@ -637,6 +835,12 @@ public static class SoloBattle
         foreach (var sk in build.Skills)
             if (sk.Vow is { Kind: VowKind.StaticCost, StaticCostMagnitude: > 0f, DamageTakenIncrease: 0f } v)
                 mult *= 1f - v.StaticCostMagnitude;
+
+        // TOUGHNESS raises the pool and ENDLESS halves it, and both belong here rather than in the wave
+        // sim for the same reason a Vow's health price does: the champion persists across a whole descent,
+        // so a per-wave multiplier would compound the change once for every wave walked.
+        mult *= build.Shape.MaxHealth;
+
         return MathF.Max(0.05f, mult);
     }
 

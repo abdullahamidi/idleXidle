@@ -295,6 +295,20 @@ public sealed class Build
     /// </remarks>
     public IReadOnlySet<BuildTrigger> ExtraTriggers { get; set; } = new HashSet<BuildTrigger>();
 
+    /// <summary>
+    /// How the skill tree changes the WAY this build fights, as opposed to how big its numbers are.
+    /// </summary>
+    /// <remarks>
+    /// A third channel alongside <see cref="PassiveMods"/> and <see cref="ExtraTriggers"/>, set by whoever
+    /// owns the MasteryTree, for the same reason: Core.Builds must not know what a MasteryTree is.
+    ///
+    /// Left at <see cref="SkillShape.None"/> it changes nothing — which is the correct reading for an
+    /// unallocated tree and also the reading for a wire someone forgot to connect. The tests in
+    /// SkillShapeBattleTests are what tell those two apart, and they exist because exactly that silent
+    /// failure left the entire loot-rarity chain inert for the whole of development.
+    /// </remarks>
+    public SkillShape Shape { get; set; } = SkillShape.None;
+
     /// <summary>Every behaviour this build turns on — from keystones and from worn gear alike.</summary>
     /// <remarks>
     /// A HashSet: two sources granting the same trigger is one trigger, not two. UNDYING from a

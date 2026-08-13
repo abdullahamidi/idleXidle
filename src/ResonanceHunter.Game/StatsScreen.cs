@@ -100,7 +100,7 @@ public sealed class StatsScreen
         if (_ui.Assets.Get("hunter_portrait") is { } p) b.Draw(p, por, Color.White);
 
         var tx = por.Right + 20;
-        var adept = Mastery?.MasteryForm() is { } mf ? $"{FormShort(mf)} ADEPT" : "SEEKER";
+        var adept = Mastery?.Affinity() is { } mf ? $"{FormShort(mf)} ADEPT" : "SEEKER";
         _ui.TextBig(b, adept, tx, HunterCard.Y + 74, Bone, UiTypography.PanelTitle);
         _ui.TextBig(b, $"LEVEL {hunter.HunterLevel}", tx, HunterCard.Y + 106, Gold, UiTypography.Body);
         var hpBar = new Rectangle(tx, HunterCard.Y + 138, HunterCard.Right - tx - 24, 26);
@@ -115,7 +115,7 @@ public sealed class StatsScreen
         _ui.TextBig(b, "GEAR POWER", HunterCard.X + 88, HunterCard.Y + 256, Slate, UiTypography.Secondary);
         _ui.TextBig(b, $"{hunter.PowerRating:N0}", HunterCard.X + 88, HunterCard.Y + 284, Bone, UiTypography.PrimaryValue);
 
-        var srcTxt = Mastery?.MasteryForm() is not null ? "AURA" : "—";
+        var srcTxt = Mastery?.Affinity() is not null ? "AURA" : "—";
         if (_ui.Assets.Get("state_mastery_128") is { } mi) b.Draw(mi, new Rectangle(HunterCard.X + 32, HunterCard.Y + 350, 44, 44), Gold);
         _ui.TextBig(b, "MASTERY POINTS", HunterCard.X + 88, HunterCard.Y + 348, Slate, UiTypography.Secondary);
         _ui.TextBig(b, $"{MasteryPoints:N0}", HunterCard.X + 88, HunterCard.Y + 376, Bone, UiTypography.PrimaryValue);

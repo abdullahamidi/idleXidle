@@ -257,6 +257,23 @@ public sealed class SoloExpedition
         }
 
         Wave = next;
+
+        // ── BETWEEN WAVES. game-flow.md §3.3 makes "health does not regenerate between waves" a rule of
+        //    the game — it is what turns a descent into one continuous fight rather than a series of
+        //    independent ones. RECOVERY and ENDLESS are the only two things in the game that buy an
+        //    exception to it, which is why the ENDURE branch is the one that raises every band's
+        //    ceiling and why its nodes are priced honestly rather than generously. ──────────────────
+        var shape = _build.Shape;
+        if (shape.FullHealBetweenWaves)
+        {
+            _champion.Health = _champion.MaxHealth;
+        }
+        else if (shape.BetweenWaveRegen > 0f)
+        {
+            var back = (int)MathF.Round(_champion.MaxHealth * shape.BetweenWaveRegen);
+            _champion.Health = Math.Min(_champion.MaxHealth, _champion.Health + back);
+        }
+
         LastWaveHaul = HaulForWave(next, bonus);
         LastWaveWasBoss = WaveScaling.IsBossWave(next, _tuning);
         Carried = Carried.Plus(LastWaveHaul);

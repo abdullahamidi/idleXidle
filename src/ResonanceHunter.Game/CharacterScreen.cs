@@ -217,7 +217,7 @@ public sealed class CharacterScreen
         var por = new Rectangle(LoadoutPanel.X + 98, LoadoutPanel.Y + 82, 105, 105);   // §7.6
         if (_ui.Assets.Get("hunter_portrait") is { } p) b.Draw(p, por, Color.White);
 
-        var adept = Mastery?.MasteryForm() is { } mf ? $"{FormShort(mf)} ADEPT" : "SEEKER";
+        var adept = Mastery?.Affinity() is { } mf ? $"{FormShort(mf)} ADEPT" : "SEEKER";
         _ui.TextCenterBig(b, adept, LoadoutPanel.Center.X, LoadoutPanel.Y + 200, Bone, UiTypography.PanelTitle);
         _ui.TextCenterBig(b, $"LEVEL {hunter.HunterLevel}", LoadoutPanel.Center.X, LoadoutPanel.Y + 234, Gold, UiTypography.Body);
 

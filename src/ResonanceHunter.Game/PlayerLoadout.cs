@@ -118,8 +118,9 @@ public sealed class PlayerLoadout
         var build = new Build
         {
             PassiveMods = DustEffects.TreeMods(tree).Combine(mastery.Mods()),
-            Affinity = mastery.MasteryForm(),
+            Affinity = mastery.Affinity(),
             ExtraTriggers = mastery.Triggers(),
+            Shape = mastery.Shape(),
         };
 
         var learned = DustEffects.LearnedKeystones(tree);

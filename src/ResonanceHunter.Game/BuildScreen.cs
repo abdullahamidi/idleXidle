@@ -43,6 +43,8 @@ public sealed class BuildScreen
         [Source.Machine] = new(0xBC, 0x78, 0x40), [Source.Nature] = new(0x48, 0xB8, 0x88),
         [Source.Mind] = new(0x74, 0xC6, 0xE8), [Source.Spirit] = new(0xDC, 0xD4, 0xEC),
     };
+    private static string Short(Branch b) => b.ToString().ToUpperInvariant();
+
     private static string Short(Form f) => f switch
     {
         Form.Projectile => "VOLLEY", Form.Transformation => "MORPH", _ => f.ToString().ToUpperInvariant(),
@@ -52,6 +54,9 @@ public sealed class BuildScreen
     private string _msg = "";
     private string _hoverInfo = "";
     private bool _editMode;   // false = the overview; true = the mastery-tree + skill editor sub-view
+
+    /// <summary>Open straight onto the tree — used by the headless capture so the shot shows the tree.</summary>
+    public void DevOpenTree() => _editMode = true;
 
     public BuildScreen(UiKit ui) => _ui = ui;
 
@@ -79,39 +84,89 @@ public sealed class BuildScreen
     // ── Edit sub-view: the mastery tree + skill sidebar (unchanged geometry). ──
     private const int Cx = 600, Cy = 520, R = 464;
     private static Point Centre => new(Cx, Cy);
-    private static Point Corner(Form arm)
+    /// <summary>
+    /// The four branches are laid out as a CROSS, not a hexagon: Weight up, Spread down, Tempo right,
+    /// Endure left.
+    /// </summary>
+    /// <remarks>
+    /// The geometry states the design. Weight sits directly opposite Spread and Tempo directly opposite
+    /// Endure because those pairs are opposed — a player looking at the screen should be able to see that
+    /// walking north means walking away from south, before reading a single node. The old hexagon had six
+    /// Form arms with no opposition in it at all, so its shape carried no information.
+    /// </remarks>
+    private static float AngleOf(Branch b) => b switch
     {
-        var a = (-90 + (int)arm * 60) * MathF.PI / 180f;
+        Branch.Weight => -90f,
+        Branch.Tempo => 0f,
+        Branch.Spread => 90f,
+        _ => 180f,
+    } * MathF.PI / 180f;
+
+    private static Point Corner(Branch b)
+    {
+        var a = AngleOf(b);
         return new Point((int)(Cx + R * MathF.Cos(a)), (int)(Cy + R * MathF.Sin(a)));
     }
+
+    /// <summary>Which of its ring's siblings this is, and how many there are — drives the fan.</summary>
+    private static (int Index, int Count) Sibling(MasteryNode n)
+    {
+        var peers = MasteryCatalog.Nodes
+            .Where(x => x.Branch == n.Branch && x.Kind == n.Kind && x.Link is null)
+            .ToList();
+        return (Math.Max(0, peers.FindIndex(x => x.Id == n.Id)), Math.Max(1, peers.Count));
+    }
+
     private static Point NodePos(MasteryNode n)
     {
         if (n.Kind == MasteryKind.Start) return Centre;
+
+        // A BRIDGE sits between the two branches it spans, close in — it is a shortcut, and drawing it
+        // out at the rim would suggest it is a destination.
         if (n.Link is { } link)
         {
-            float mx = (Corner(n.Arm).X + Corner(link).X) / 2f - Cx;
-            float my = (Corner(n.Arm).Y + Corner(link).Y) / 2f - Cy;
-            var len = MathF.Max(1f, MathF.Sqrt(mx * mx + my * my));
-            return new Point(Cx + (int)(mx / len * R * 0.42f), Cy + (int)(my / len * R * 0.42f));
+            var mid = (AngleOf(n.Branch) + AngleOf(link)) / 2f;
+            // Endure (180) and Weight (-90) average to 45, which points at Tempo. Rotate that one case.
+            if (MathF.Abs(AngleOf(n.Branch) - AngleOf(link)) > MathF.PI) mid += MathF.PI;
+            return new Point(Cx + (int)(R * 0.46f * MathF.Cos(mid)), Cy + (int)(R * 0.46f * MathF.Sin(mid)));
         }
-        var baseAng = (-90 + (int)n.Arm * 60) * MathF.PI / 180f;
-        if (n.Ring is 1 or 2)
+
+        var baseAng = AngleOf(n.Branch);
+        var (idx, count) = Sibling(n);
+
+        // A SPECIALISATION hangs off the side of its branch rather than on the spine, so the spine still
+        // reads as one walk outward and the Form nodes read as an aside.
+        if (n.Kind == MasteryKind.Specialisation)
         {
-            var side = n.Id.EndsWith("b1") || n.Id.EndsWith("b2") ? 1f : -1f;
-            var spread = (n.Ring == 1 ? 15f : 9f) * MathF.PI / 180f;
-            var ang = baseAng + side * spread;
-            var rad = R * (n.Ring / 4f);
-            return new Point(Cx + (int)(rad * MathF.Cos(ang)), Cy + (int)(rad * MathF.Sin(ang)));
+            var side = idx == 0 ? -1f : 1f;
+            var ang = baseAng + side * 26f * MathF.PI / 180f;
+            return new Point(Cx + (int)(R * 0.86f * MathF.Cos(ang)), Cy + (int)(R * 0.86f * MathF.Sin(ang)));
         }
-        var c = Corner(n.Arm);
-        var t = n.Ring / 4f;
-        return new Point(Cx + (int)((c.X - Cx) * t), Cy + (int)((c.Y - Cy) * t));
+
+        // Rings fan their siblings across a spread that narrows as they go out, so a branch reads as a
+        // funnel: four minors converging on three notables, on two greaters, on one mastery.
+        var spreadDeg = n.Ring switch { 1 => 26f, 2 => 16f, 3 => 9f, _ => 0f };
+        var offset = count <= 1 ? 0f : (idx - (count - 1) / 2f) * spreadDeg;
+        var angle = baseAng + offset * MathF.PI / 180f;
+
+        // NOT ring/4. Even spacing put ring 1 at a quarter of the radius, which is inside the START node's
+        // own box — the four minors of the left and right branches sat on top of "YOU". The first ring has
+        // to clear the centre, and after that the gaps can close up as the fan narrows.
+        var rad = R * n.Ring switch { 1 => 0.37f, 2 => 0.61f, 3 => 0.81f, _ => 1f };
+        return new Point(Cx + (int)(rad * MathF.Cos(angle)), Cy + (int)(rad * MathF.Sin(angle)));
     }
+
     private static readonly Rectangle TreeResetBtn = new(48, 128, 216, 52);
     private static readonly Rectangle BackBtn = new(48, 128, 216, 52);
+    /// <summary>Size states price: a node you can see is expensive before you read it.</summary>
     private static int NodeRadius(MasteryKind k) => k switch
     {
-        MasteryKind.Start => 60, MasteryKind.Mastery => 64, MasteryKind.Notable => 40, _ => 28,
+        MasteryKind.Start => 60,
+        MasteryKind.Mastery => 64,
+        MasteryKind.Greater => 46,
+        MasteryKind.Bridge or MasteryKind.Specialisation => 42,
+        MasteryKind.Notable => 38,
+        _ => 26,
     };
     private const int SbX = 1200;
     private static readonly Rectangle Sidebar = new(SbX, 200, 1920 - SbX - 16, 728);
@@ -150,7 +205,7 @@ public sealed class BuildScreen
             if (Mastery.Take(node.Id)) { _msg = ""; Dirty = true; }
             else _msg = Mastery.IsTaken(node.Id) ? "ALREADY TAKEN." :
                 Mastery.Available <= 0 ? "NO MASTERY POINTS — GO DEEPER." :
-                node.Kind == MasteryKind.Mastery && Mastery.MasteryForm() is not null ? "YOU'VE ALREADY MASTERED A FORM." :
+                node.Kind == MasteryKind.Mastery && Mastery.Affinity() is not null ? "YOU'VE ALREADY MASTERED A FORM." :
                 "TAKE A CONNECTED NODE FIRST.";
             return;
         }
@@ -218,7 +273,7 @@ public sealed class BuildScreen
         var por = new Rectangle(SummaryPanel.Center.X - 66, SummaryPanel.Y + 72, 132, 132);
         if (_ui.Assets.Get("hunter_portrait") is { } p) b.Draw(p, por, Color.White);
 
-        var adept = Mastery.MasteryForm() is { } mf ? $"{Short(mf)} ADEPT" : "SEEKER";
+        var adept = Mastery.Affinity() is { } mf ? $"{Short(mf)} ADEPT" : "SEEKER";
         _ui.TextCenterBig(b, adept, SummaryPanel.Center.X, SummaryPanel.Y + 220, Bone, UiTypography.PanelTitle);
         _ui.TextCenterBig(b, $"LEVEL {Level}", SummaryPanel.Center.X, SummaryPanel.Y + 254, Gold, UiTypography.Body);
         _ui.TextCenterBig(b, "BUILD POWER", SummaryPanel.Center.X, SummaryPanel.Y + 300, Slate, UiTypography.Secondary);
@@ -252,7 +307,7 @@ public sealed class BuildScreen
 
         // A real, derived synergy note (no invented copy).
         _ui.Fill(b, new Rectangle(CorePanel.X + 44, CorePanel.Bottom - 96, CorePanel.Width - 88, 2), Dim);
-        var affinity = Mastery.MasteryForm() is { } mf ? Short(mf) : "no";
+        var affinity = Mastery.Affinity() is { } mf ? Short(mf) : "no";
         var note = focus is null
             ? "Add skills to compose Source × Form × Vow."
             : $"{focus.Key.ToString().ToUpperInvariant()}-led auto-skills with {affinity} mastery and layered vow uptime.";
@@ -300,7 +355,7 @@ public sealed class BuildScreen
         // 52px, the width of the ornate border. At 32 the left column sat ON the frame and the
         // right-aligned resonance percentages were clipped by the opposite edge.
         var x = PassivePanel.X + 52;
-        _ui.TextBig(b, $"MASTERY NODES   {Mastery.Spent} / {MasteryCatalog.Nodes.Count(n => n.Kind != MasteryKind.Start)}", x, PassivePanel.Y + 122, Bone, UiTypography.Body);
+        _ui.TextBig(b, $"SKILL POINTS   {Mastery.Spent} SPENT  ·  {Mastery.Available} FREE", x, PassivePanel.Y + 122, Bone, UiTypography.Body);
         Button(b, ViewTreeBtn, "VIEW TREE", hit, true);
 
         // PASSIVES — the real taken mastery nodes (notables + mastery). No invented "trait bonus %" table.
@@ -311,7 +366,7 @@ public sealed class BuildScreen
         foreach (var n in taken.Take(6))
         {
             _ui.Diamond(b, new Rectangle(x, py + 2, 18, 18), n.Kind == MasteryKind.Mastery ? Gold : Purple);
-            _ui.TextBig(b, n.Kind == MasteryKind.Mastery ? $"{Short(n.Arm)} MASTERY" : n.Label, x + 30, py, Bone, UiTypography.Body);
+            _ui.TextBig(b, n.Label, x + 30, py, Bone, UiTypography.Body);
             py += 36;
         }
 
@@ -375,19 +430,45 @@ public sealed class BuildScreen
     {
         _ui.Scrim(b, 0.6f);
         _ui.Title(b, "MASTERY TREE");
-        _ui.Text(b, $"POINTS  {Mastery.Available}", 104, 60, Mastery.Available > 0 ? Gold : Slate);
+        _ui.Text(b, $"POINTS  {Mastery.Available}  ·  {Mastery.Spent} SPENT", 104, 60, Mastery.Available > 0 ? Gold : Slate);
         _ui.Fill(b, BackBtn, BackBtn.Contains(hit) ? Hi : PanelBg);
         _ui.TextCenter(b, "‹ BACK", BackBtn.Center.X, BackBtn.Y + 12, BackBtn.Contains(hit) ? Gold : Slate);
-        var aff = Mastery.MasteryForm();
+        var aff = Mastery.Affinity();
 
+        // ONE EDGE PER NODE, to its NEAREST prerequisite.
+        //
+        // Drawing every prerequisite drew a spider's web: each notable lists all four of its branch's
+        // minors and each minor lists START, so a single branch produced sixteen crossing lines and the
+        // whole screen read as scribble. A prerequisite list is an "any of these" rule, not a diagram —
+        // so the drawing shows the SPINE (what the funnel looks like) and the tooltip carries the rule.
+        // Gold only when both ends are taken, so a walked branch reads as one continuous path.
         foreach (var node in MasteryCatalog.Nodes)
-            foreach (var pre in node.Prereqs)
-                if (MasteryCatalog.ById(pre) is { } p)
-                    Line(b, NodePos(p), NodePos(node), Mastery.IsTaken(node.Id) && Mastery.IsTaken(pre) ? Gold : Path);
+        {
+            if (node.Prereqs.Count == 0) continue;
+            var to = NodePos(node);
+
+            MasteryNode? nearest = null;
+            var best = float.MaxValue;
+            foreach (var pre in node.Prereqs.Concat(node.SecondPrereqs))
+            {
+                if (MasteryCatalog.ById(pre) is not { } p) continue;
+                var from = NodePos(p);
+                // Prefer a TAKEN prerequisite when there is one, so the gold path follows the route the
+                // player actually walked rather than whichever node happens to sit closest.
+                var d = (from.X - to.X) * (from.X - to.X) + (from.Y - to.Y) * (from.Y - to.Y)
+                        - (Mastery.IsTaken(pre) ? 1_000_000 : 0);
+                if (d >= best) continue;
+                best = d;
+                nearest = p;
+            }
+
+            if (nearest is null) continue;
+            Line(b, NodePos(nearest), to, Mastery.IsTaken(node.Id) && Mastery.IsTaken(nearest.Id) ? Gold : Path);
+        }
         foreach (var node in MasteryCatalog.Nodes) DrawNode(b, node, hit, aff);
         DrawSidebar(b, hit, tree);
 
-        var info = _hoverInfo.Length > 0 ? _hoverInfo : _msg.Length > 0 ? _msg : "WALK A PATH TO A CORNER TO MASTER THAT FORM.";
+        var info = _hoverInfo.Length > 0 ? _hoverInfo : _msg.Length > 0 ? _msg : "WEIGHT ↔ SPREAD AND TEMPO ↔ ENDURE ARE OPPOSED.  ONE BRANCH IS AFFORDABLE; TWO ARE NOT.";
         var infoColor = _hoverInfo.Length > 0 ? Bone : _msg.Length > 0 ? Ember : Dim;
         _ui.Text(b, info, 48, 904, infoColor);
     }
@@ -444,8 +525,9 @@ public sealed class BuildScreen
         {
             var wide = new Rectangle(p.X - 120, p.Y - 44, 240, 88);
             _ui.Fill(b, wide, taken ? Hi : PanelBg);
-            Outline(b, wide, node.Arm == aff ? Gold : hover ? Bone : edge, node.Arm == aff ? 8 : 4);
-            _ui.TextCenter(b, Short(node.Arm), wide.Center.X, wide.Y + 28, node.Arm == aff ? Gold : taken ? Gold : Slate);
+            var owned = Mastery.MasteredBranch() == node.Branch;
+            Outline(b, wide, owned ? Gold : hover ? Bone : edge, owned ? 8 : 4);
+            _ui.TextCenter(b, Short(node.Branch), wide.Center.X, wide.Y + 28, owned || taken ? Gold : Slate);
         }
         else if (node.Kind == MasteryKind.Start)
         {
@@ -453,7 +535,7 @@ public sealed class BuildScreen
         }
         else { _ui.Fill(b, box, fill); Outline(b, box, hover ? Bone : edge, 4); }
         if (hover && node.Kind != MasteryKind.Start)
-            _hoverInfo = node.Kind == MasteryKind.Mastery ? $"{Short(node.Arm)} MASTERY — SPECIALISE IN {Short(node.Arm)}" : node.Label;
+            _hoverInfo = $"{node.Label}   ({node.Cost} PT{(node.Cost == 1 ? "" : "S")})";
     }
 
     private void DrawCell(SpriteBatch b, Rectangle r, string text, Color color, Point mouse)

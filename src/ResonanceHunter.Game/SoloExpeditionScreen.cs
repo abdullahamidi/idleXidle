@@ -912,7 +912,7 @@ public sealed class SoloExpeditionScreen
         if (_ui.Assets.Get("hunter_portrait") is { } p) b.Draw(p, por, Color.White);
         else if (_ui.Assets.Get("ui_medallion_round") is { } mfr) b.Draw(mfr, por, Color.White);
 
-        var adept = Mastery.MasteryForm() is { } mf ? $"{FormShort(mf)} ADEPT" : "SEEKER";
+        var adept = Mastery.Affinity() is { } mf ? $"{FormShort(mf)} ADEPT" : "SEEKER";
         _ui.TextBig(b, adept, 334, 43, Bone, 26);                                   // name
         _ui.TextBig(b, $"LV {_hunter?.HunterLevel ?? 1}", 334, 80, Gold, 20);        // level
         // Combat power — an icon + value (spec: an icon, not a "PWR" label).
