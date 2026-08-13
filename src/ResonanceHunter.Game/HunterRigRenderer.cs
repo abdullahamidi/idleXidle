@@ -10,35 +10,31 @@ using ResonanceHunter.Core.Loot;
 namespace ResonanceHunter.Client;
 
 /// <summary>
-/// Where a gear slot hangs on the skeleton, and how big it draws relative to the bone it rides.
-/// </summary>
-/// <param name="Bone">Bone id from <see cref="HunterRig"/> whose transform this part inherits.</param>
-/// <param name="PivotU">Pivot X as a fraction of the gear texture's own width.</param>
-/// <param name="PivotV">Pivot Y as a fraction of the gear texture's own height.</param>
-/// <param name="Height">Drawn height in RIG-NATIVE pixels (the same space as the part table).</param>
-/// <param name="DrawOrder">Back-to-front paint order, interleaved with the body parts.</param>
-/// <param name="Rotation">
-/// Extra rotation in radians, added to the bone's angle. Item art is drawn on the diagonal for an
-/// inventory grid, which reads as a sword swept up across the chest once it is pinned to a hand —
-/// this rotates it back to a natural carry.
-/// </param>
-public readonly record struct GearBinding(string Bone, float PivotU, float PivotV, float Height,
-                                          int DrawOrder, float Rotation = 0f);
-
-/// <summary>
-/// Assembles the Hunter cutout rig — body parts plus equipped gear — and draws it into a box.
+/// Assembles the Hunter cutout rig and draws it into a box.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Extracted so the dev preview and the battle screen share ONE assembly path. They had diverged:
-/// the preview assembled the rig while the battle screen drew a flat <c>hunter_idle</c> sprite, which
-/// is why equipment had nowhere to attach.
+/// the preview assembled the rig while the battle screen drew a flat <c>hunter_idle</c> sprite.
 /// </para>
 /// <para>
-/// Gear binds to BONES, not to the champion box. A bone's transform already carries the animation, so a
-/// helm bound to <c>head</c> or a blade bound to <c>hand_main</c> follows the pose for free — that is
-/// the whole reason for doing it this way rather than at fixed offsets. Swapping a part is then just
-/// swapping the texture the binding resolves to.
+/// THE FIGURE NO LONGER WEARS ANYTHING. Equipped gear used to change how the champion looked, by two
+/// routes: a weapon pinned to the <c>hand_main</c> bone, and armour as drop-in replacement textures
+/// for the bones a slot covers (<c>worn_&lt;tier&gt;_&lt;bone&gt;</c>). Both are gone.
+/// </para>
+/// <para>
+/// The reason is worth keeping, because it cost a great deal of work to learn twice. A piece of gear
+/// drawn onto a body has to agree with that body's perspective, light direction, outline weight and
+/// palette, at every frame of every pose. An item icon never does — it is authored to fill a square
+/// cell — so it reads as a sticker however carefully its height, pivot and rotation are tuned. Painting
+/// armour onto the figure and re-cutting it on the body's own boxes fixed the perspective but not the
+/// combinatorics: a helm, chest, gloves and boots chosen independently are four sets of art that were
+/// never designed to sit together, and the character ends up wearing an argument.
+/// </para>
+/// <para>
+/// A character now has ONE fixed appearance, which is also what the roster needs: each character is
+/// recognisable at a glance, and gear is a sheet of numbers rather than a wardrobe. The art and the
+/// binding tables are in git history if the wardrobe is ever worth another attempt.
 /// </para>
 /// </remarks>
 public sealed class HunterRigRenderer
@@ -47,61 +43,6 @@ public sealed class HunterRigRenderer
     private readonly Rig _rig = HunterRig.BuildRig();
     private readonly Dictionary<string, HunterPart> _byId = HunterRig.Parts.ToDictionary(p => p.Id);
 
-    /// <summary>
-    /// Gear bindings. Pivots are fractions of the gear texture so art of any size can be dropped in
-    /// without re-deriving pixel pivots; heights are rig-native so gear scales with the body.
-    /// </summary>
-    /// <remarks>
-    /// Draw orders interleave with <see cref="HunterRig.Parts"/>. The body occupies 0..17 (the shoulder
-    /// caps are 16/17 and the elbow caps 18/19), so gear painting over a limb sits above that —
-    /// boots 18, gloves 20, weapon 21. Boots at 11 tied with foot_main's own order, so the body's
-    /// leather boot sometimes painted over the worn one.
-    /// Helm at 13 still paints over the head (12) while the off-hand arm (1..3) passes behind the torso.
-    /// </remarks>
-    private static readonly Dictionary<GearSlot, GearBinding> Bindings = new()
-    {
-        // ONLY the weapon. Armour is no longer pinned to a bone as a separately-drawn sprite.
-        //
-        // That approach could not work, and the reason is worth keeping: an isolated item icon carries
-        // its own perspective, its own light direction, its own outline weight and its own palette.
-        // Scaling it onto a body matches none of those, so the piece reads as a sticker no matter how
-        // carefully its height, pivot and rotation are tuned — and two mirrored copies of one boot icon
-        // read as two stickers. Armour is now PAINTED ONTO the figure (tools/asset-pipeline/gear_overlay.py
-        // inpaints it in place) and cut with the body's own boxes, so a worn part is a drop-in
-        // replacement texture for the bone it covers. See PartSlot below.
-        //
-        // A weapon is genuinely a held OBJECT rather than a layer of the body, so it keeps a binding:
-        // gear_weapon_* is authored vertical with the hilt at the bottom, the pivot sits at the grip,
-        // and the tilt was swept against captures at rest and at the strike apex.
-        [GearSlot.Weapon] = new("hand_main", 0.50f, 0.87f, 160f, 21, -2.10f),
-    };
-
-    /// <summary>
-    /// Which equipment slot's worn art replaces which bone's texture.
-    /// </summary>
-    /// <remarks>
-    /// This is the whole armour path. A bone listed here draws <c>worn_&lt;slot&gt;_&lt;trait&gt;_&lt;bone&gt;</c>
-    /// when that slot is equipped, and its own body texture otherwise — same pivot, same scale, same
-    /// transform, because the worn art was cut from the same box on the same figure.
-    /// </remarks>
-    private static readonly Dictionary<string, GearSlot> PartSlot = new()
-    {
-        ["head"] = GearSlot.Helm,
-        ["torso"] = GearSlot.Chest,
-        ["hand_main"] = GearSlot.Gloves,
-        ["hand_off"] = GearSlot.Gloves,
-        ["leg_shin_main"] = GearSlot.Boots,
-        ["foot_main"] = GearSlot.Boots,
-        ["leg_shin_off"] = GearSlot.Boots,
-        ["foot_off"] = GearSlot.Boots,
-    };
-
-    /// <summary>Boots and gloves are worn on both limbs; the mirror bone draws the same texture.</summary>
-    private static readonly Dictionary<GearSlot, string> MirrorBone = new()
-    {
-        [GearSlot.Boots] = "foot_off",
-        [GearSlot.Gloves] = "hand_off",
-    };
 
     /// <summary>
     /// Clip track name -> rig bone id.
@@ -205,14 +146,13 @@ public sealed class HunterRigRenderer
     /// Draw the assembled hunter into <paramref name="box"/>.
     /// </summary>
     /// <param name="pose">Per-bone angle deltas, e.g. from <c>Clip.Sample(t)</c>. Empty = rest pose.</param>
-    /// <param name="hunter">Supplies equipped gear; null draws the bare body.</param>
     /// <param name="groundToBottom">
     /// Sit the figure's lowest pixel on <c>box.Bottom</c> rather than centring it — actors stand on a
     /// ground line, so the battle screen always wants this.
     /// </param>
     /// <returns>false if not one body part resolved, so callers can fall back to the flat sprite.</returns>
     public bool Draw(SpriteBatch b, Rectangle box, IReadOnlyDictionary<string, float>? pose,
-                     Hunter? hunter, Color tint, bool groundToBottom = true)
+                     Color tint, bool groundToBottom = true)
     {
         var frame = _rig.Evaluate(Compose(pose), Vec2.Zero);
 
@@ -233,49 +173,20 @@ public sealed class HunterRigRenderer
 
         Vector2 ToScreen(Vec2 v) => origin + (new Vector2(v.X, v.Y) - boundsMin) * fit;
 
-        // One paint list for body and gear so they interleave by DrawOrder instead of gear always
-        // sitting on top — otherwise a weapon in the off hand would draw over the torso.
+        // A paint list rather than drawing in place, because DrawOrder is not bone order — the off-hand
+        // arm passes behind the torso.
         var paint = new List<(int Order, Action Draw)>();
 
         foreach (var bt in frame)
         {
             if (!_byId.TryGetValue(bt.BoneId, out var p)) continue;
-            var tex = WornTexture(p.Id, hunter) ?? _ui.Assets.Get(p.TextureKey);
+            var tex = _ui.Assets.Get(p.TextureKey);
             if (tex is null) continue;
             var pos = ToScreen(bt.Position);
             var angle = bt.Angle;
             paint.Add((p.DrawOrder, () => b.Draw(tex, pos, null, tint, angle,
                 new Vector2(p.Pivot.X, p.Pivot.Y), fit, SpriteEffects.None, 0f)));
         }
-
-        if (hunter is not null)
-            foreach (var (slot, bind) in Bindings)
-            {
-                if (hunter.Worn(slot) is not { } item) continue;
-                var tex = GearTexture(slot, item);
-                if (tex is null || tex.Height <= 0) continue;
-
-                foreach (var boneId in BonesFor(slot, bind))
-                {
-                    var bt = frame.FirstOrDefault(t => t.BoneId == boneId);
-                    if (bt.BoneId is null) continue;
-                    var pos = ToScreen(bt.Position);
-                    var angle = bt.Angle;
-                    // Sized and pivoted against the art's CONTENT, not its canvas. Height is how tall the
-                    // visible piece should be in rig pixels, and the pivot fractions address the content
-                    // box — so a generated piece carrying 6% empty canvas and one carrying 18% both land
-                    // in the same place, which canvas-relative numbers could never do.
-                    var pad = _ui.ContentPad(tex);
-                    var contentH = MathF.Max(1f, tex.Height * (1f - pad.Y - pad.W));
-                    var contentW = MathF.Max(1f, tex.Width * (1f - pad.X - pad.Z));
-                    var gearScale = bind.Height / contentH * fit;
-                    var pivot = new Vector2(tex.Width * pad.X + contentW * bind.PivotU,
-                                            tex.Height * pad.Y + contentH * bind.PivotV);
-                    var texRef = tex;
-                    paint.Add((bind.DrawOrder, () => b.Draw(texRef, pos, null, tint, angle + bind.Rotation,
-                        pivot, gearScale, SpriteEffects.None, 0f)));
-                }
-            }
 
         foreach (var (_, draw) in paint.OrderBy(e => e.Order)) draw();
 
@@ -288,54 +199,4 @@ public sealed class HunterRigRenderer
         return true;
     }
 
-    /// <summary>
-    /// The armour TIER an item shows as, from its rarity.
-    /// </summary>
-    /// <remarks>
-    /// Rarity, not trait. Ten trait materials across five slots meant fifty independently generated
-    /// pieces, and a player looking at the character saw a gold helm over a violet boot over a teal
-    /// gauntlet — each correct on its own, none of them designed to sit together. Four tiers are
-    /// designed as complete sets, so whatever combination is equipped agrees with itself, and the
-    /// change from leather to steel to gold-trimmed plate is a progression the player can read at a
-    /// glance. Trait still decides the item's stats and its inventory icon; it just stops deciding
-    /// what the character's armour is made of.
-    /// </remarks>
-    private static string TierFor(Rarity rarity) => rarity switch
-    {
-        Rarity.Legendary => "warplate",
-        Rarity.Epic => "runic",
-        Rarity.Rare => "steel",
-        _ => "worn",
-    };
-
-    /// <summary>The worn replacement for a bone, or null to draw the bare body part.</summary>
-    private Texture2D? WornTexture(string boneId, Hunter? hunter)
-    {
-        if (hunter is null || !PartSlot.TryGetValue(boneId, out var slot)) return null;
-        if (hunter.Worn(slot) is not { } item) return null;
-        return _ui.Assets.Get($"worn_{TierFor(item.Rarity)}_{boneId}");
-    }
-
-    private static IEnumerable<string> BonesFor(GearSlot slot, GearBinding bind)
-    {
-        yield return bind.Bone;
-        if (MirrorBone.TryGetValue(slot, out var mirror)) yield return mirror;
-    }
-
-    /// <summary>
-    /// Resolve a slot's art: the trait-specific rig part, else a generic one, else the inventory icon.
-    /// </summary>
-    /// <remarks>
-    /// The inventory-icon fallback keeps gear visible while the dedicated rig art is still being
-    /// authored — an icon on the right bone reads far better than a hole where the helm should be.
-    /// </remarks>
-    private Texture2D? GearTexture(GearSlot slot, ItemInstance item)
-    {
-        var name = slot.ToString().ToLowerInvariant();
-        var trait = GearTraits.TraitOf(item)?.ToString().ToLowerInvariant();
-        return (trait is not null ? _ui.Assets.Get($"gear_{name}_{trait}") : null)
-               ?? _ui.Assets.Get($"gear_{name}")
-               ?? (trait is not null ? _ui.Assets.Get($"item_{name}_{trait}") : null)
-               ?? _ui.Assets.Get($"item_slot_{name}");
-    }
 }

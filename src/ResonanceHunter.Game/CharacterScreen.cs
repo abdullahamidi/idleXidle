@@ -423,7 +423,7 @@ public sealed class CharacterScreen
         // The old path drew a bare hunter_idle plus "overlay_<slot>_idle" sprites that were never authored,
         // so the doll showed no gear at all while the panel beside it said 8/8 EQUIPPED.
         _rigRenderer ??= new HunterRigRenderer(_ui);
-        if (!_rigRenderer.Draw(b, HunterBox, null, hunter, Color.White)
+        if (!_rigRenderer.Draw(b, HunterBox, null, Color.White)
             && _ui.Assets.Get("hunter_rig_base") is { } baseTex)
         {
             var sc = MathF.Min(HunterBox.Width / (float)baseTex.Width, HunterBox.Height / (float)baseTex.Height);

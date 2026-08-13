@@ -1178,75 +1178,18 @@ public sealed class SoloExpeditionScreen
         _ui.TextCenterBig(b, "ON", auto.Center.X, auto.Y + (auto.Height - 16 * 27 / 20) / 2, Verdant, 16);
     }
 
-    /// <summary>
-    /// Where each gear slot hangs on the champion, and how big it draws.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Positions are fractions of the champion box: (cx, cy) is the item's centre, <c>h</c> its drawn
-    /// height as a fraction of box height. Tuned against the hunter sprite's content bounds
-    /// (x 146..351, y 70..457 of its 512² canvas).
-    /// </para>
-    /// <para>
-    /// WITHDRAWN — kept only as the record of a dead end. Fixed fractions of the champion box cannot
-    /// track an articulated figure: in play the weapon floated diagonally across the torso, the boots
-    /// glowed on the shins rather than the feet, and the glove sat on the hip. A socket is a constant,
-    /// but a hand is not — it moves every frame of every animation, so any constant is wrong for all
-    /// but one pose.
-    /// </para>
-    /// <para>
-    /// The replacement is to bind equipment to BONES, not to the box. <see cref="HunterRig"/> already
-    /// defines the hierarchy (pelvis - torso - head, arms, legs) with a parent-local offset and a pivot
-    /// per part, and <c>Rig.Evaluate</c> returns a position and angle per bone. Gear drawn at a bone's
-    /// transform inherits that bone's motion for free, which is what makes it stay on the hand while
-    /// the arm swings. That also gives the swappable-part model directly: a helm is a part bound to
-    /// <c>head</c>, boots bind to <c>foot_main</c>/<c>foot_off</c>, a weapon to <c>hand_main</c>.
-    /// </para>
-    /// </remarks>
-    private readonly record struct GearSocket(float Cx, float Cy, float H);
-
-    /// <remarks>
-    /// Only the five body-worn slots appear on the figure. Ring, Charm and Focus are deliberately
-    /// absent: drawn at a socket they read as objects hovering beside the character rather than
-    /// equipment, and most RPGs likewise show armour and weapon on the model while trinkets live in
-    /// the sheet. They still contribute stats and still show in the Gear screen.
-    /// </remarks>
-    private static readonly Dictionary<GearSlot, GearSocket> Sockets = new()
-    {
-        [GearSlot.Chest] = new(0.50f, 0.47f, 0.25f),
-        [GearSlot.Boots] = new(0.50f, 0.90f, 0.19f),
-        [GearSlot.Gloves] = new(0.66f, 0.62f, 0.12f),
-        [GearSlot.Helm] = new(0.50f, 0.25f, 0.18f),
-        [GearSlot.Weapon] = new(0.33f, 0.60f, 0.40f),
-    };
-
-    /// <summary>
-    /// Draw the player's equipped gear onto the champion, back to front.
-    /// </summary>
-    /// <remarks>
-    /// Prefers the trait-specific sprite (<c>item_&lt;slot&gt;_&lt;trait&gt;</c>) so the character visibly reflects
-    /// WHICH item is equipped, and falls back to the generic slot glyph. An empty slot draws nothing;
-    /// a slot whose art is missing draws nothing rather than borrowing another slot's sprite.
-    /// </remarks>
-    private void DrawEquippedGear(SpriteBatch b, Rectangle box, Hunter? hunter, Color tint)
-    {
-        if (hunter is null) return;
-        foreach (var slot in OverlayOrder)
-        {
-            if (hunter.Worn(slot) is not { } item || !Sockets.TryGetValue(slot, out var s)) continue;
-
-            var name = slot.ToString().ToLowerInvariant();
-            var trait = GearTraits.TraitOf(item);
-            var tex = (trait is { } tr ? _ui.Assets.Get($"item_{name}_{tr.ToString().ToLowerInvariant()}") : null)
-                      ?? _ui.Assets.Get($"item_slot_{name}");
-            if (tex is null || tex.Height <= 0) continue;
-
-            var h = Math.Max(1, (int)(box.Height * s.H));
-            var w = Math.Max(1, (int)(tex.Width * (h / (float)tex.Height)));
-            b.Draw(tex, new Rectangle((int)(box.X + box.Width * s.Cx) - w / 2,
-                                      (int)(box.Y + box.Height * s.Cy) - h / 2, w, h), tint);
-        }
-    }
+    // THE GEAR OVERLAY IS GONE, by both routes it ever had.
+    //
+    // First a socket table: fixed fractions of the champion box, one per slot. That cannot track an
+    // articulated figure — a hand moves every frame, so any constant is wrong for all but one pose —
+    // and in play the weapon floated across the torso and the glove sat on the hip.
+    //
+    // Then bone-bound gear on the rig, which fixed the tracking and did not fix the look: an item icon
+    // carries its own perspective, light and palette, so it reads as a sticker wherever it is pinned,
+    // and four independently-chosen pieces never agree with each other. See HunterRigRenderer.
+    //
+    // The champion's appearance is FIXED. Gear is still worn, still carries every stat, and still shows
+    // in GEAR and the inventory — it just no longer decides what the character looks like.
 
     /// <summary>
     /// The vertical control rail down the left edge, replacing the old horizontal bottom strip.
@@ -1262,13 +1205,6 @@ public sealed class SoloExpeditionScreen
     // Inset by the ornate frame's border (UiKit.Panel reserves 44px), not by the 20px a flat slab needed.
     private const int RailContentX = 234;
     private const int RailContentW = 198;
-
-    // The gear overlays register to the champion base's canvas; this is their back-to-front occlusion order.
-    private static readonly GearSlot[] OverlayOrder =
-    {
-        GearSlot.Chest, GearSlot.Boots, GearSlot.Gloves, GearSlot.Helm,
-        GearSlot.Weapon, GearSlot.Ring, GearSlot.Charm, GearSlot.Focus,
-    };
 
     private HunterRigRenderer? _rigRenderer;
     private float _strikeTime;
@@ -1297,15 +1233,15 @@ public sealed class SoloExpeditionScreen
     {
         _rigRenderer ??= new HunterRigRenderer(_ui);
         if (dead)
-            return _rigRenderer.Draw(b, box, HunterRigRenderer.DeathPose, _hunter, tint);
+            return _rigRenderer.Draw(b, box, HunterRigRenderer.DeathPose, tint);
         if (DevSwingPhase is { } ph)
             return _rigRenderer.Draw(b, box, HunterRigRenderer.MapPose(
-                _strikeClip.Sample(ph * _strikeClip.DurationSeconds)), _hunter, tint);
+                _strikeClip.Sample(ph * _strikeClip.DurationSeconds)), tint);
         var swinging = _strikeTime > 0f;
         var sampled = swinging
             ? _strikeClip.Sample(_strikeClip.DurationSeconds - _strikeTime)
             : _idleClip.Sample(_anim % _idleClip.DurationSeconds);
-        return _rigRenderer.Draw(b, box, HunterRigRenderer.MapPose(sampled), _hunter, tint);
+        return _rigRenderer.Draw(b, box, HunterRigRenderer.MapPose(sampled), tint);
     }
 
     private void DrawChampion(SpriteBatch b, Rectangle box, bool dead)
@@ -1332,17 +1268,16 @@ public sealed class SoloExpeditionScreen
         if (!_ui.SpriteGrounded(b, key, box, tint, 0.03f))
             _ui.Fill(b, new Rectangle(box.Center.X - 32, box.Bottom - 80, 64, 72), dead ? Dim : Gold);
 
-        // Gear is deliberately NOT drawn here yet — see DrawEquippedGear for why the socket approach
-        // was withdrawn. Visible equipment now depends on the bone-bound rig path.
     }
 
     /// <summary>
-    /// Draw the champion as a base body plus one overlay per EQUIPPED slot — so the player's actual gear
-    /// shows on the champion. Every layer shares the base's 800x1040 canvas, so drawing each into the same
-    /// bottom-anchored rect registers it automatically; an empty slot draws nothing, and a slot whose
-    /// overlay for this pose isn't authored yet simply isn't drawn (never a borrowed asset).
+    /// Draw the champion's base body, bottom-anchored inside the box.
     /// </summary>
-    private void DrawLayeredChampion(SpriteBatch b, Rectangle box, Texture2D baseTex, string pose, Color tint, Hunter? hunter)
+    /// <remarks>
+    /// It used to layer one <c>overlay_&lt;slot&gt;_&lt;pose&gt;</c> per equipped slot on top. That path is gone
+    /// with the rest of the wardrobe — the appearance is fixed.
+    /// </remarks>
+    private void DrawLayeredChampion(SpriteBatch b, Rectangle box, Texture2D baseTex, string pose, Color tint)
     {
         var draw = new Rectangle(box.X + 8, box.Y + 8, box.Width - 16, box.Height - 40);
         var sc = MathF.Min(draw.Width / (float)baseTex.Width, draw.Height / (float)baseTex.Height);
@@ -1351,11 +1286,6 @@ public sealed class SoloExpeditionScreen
         var rect = new Rectangle(draw.Center.X - w / 2, draw.Bottom - h, w, h);
 
         b.Draw(baseTex, rect, tint);
-        if (hunter is null) return;
-        foreach (var slot in OverlayOrder)
-            if (hunter.Worn(slot) is not null
-                && _ui.Assets.Get($"overlay_{slot.ToString().ToLowerInvariant()}_{pose}") is { } ov)
-                b.Draw(ov, rect, tint);
     }
 
     private void DrawCallouts(SpriteBatch b)

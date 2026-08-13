@@ -42,7 +42,7 @@ public sealed class HunterRigScreen
         _ui.Fill(b, box, Panel);
 
         _renderer.ShowMarkers = ShowMarkers;
-        _renderer.Draw(b, box, pose: null, hunter: null, Color.White, groundToBottom: false);
+        _renderer.Draw(b, box, pose: null, Color.White, groundToBottom: false);
 
         _ui.TextCenterBig(b, "HUNTER RIG - REST POSE", 960, 16, Marker, 30);
         _ui.TextCenter(b, $"{HunterRig.Parts.Count} parts", 960, 1044, Ink);
