@@ -383,6 +383,98 @@ def stills() -> list[dict]:
                   "a completely empty background, no text, no border, no frame",
     })
 
+    # --- THE ROSTER'S other four source figures.
+    #
+    # Every one is authored for the CUTTER first and for its character second, because a body a
+    # rectangle decomposition cannot cut is not a character, it is a picture. The four structural
+    # clauses are identical in all five prompts and are not negotiable per character:
+    #
+    #   * a wide A-pose with a triangle of empty background under each armpit,
+    #   * legs set apart with empty background between them,
+    #   * open, empty hands (nothing held — the rig owns what a hand carries),
+    #   * CLOSE-FITTING clothing only, because a rectangle cannot separate an arm from a cloak
+    #     hanging behind it. This is the clause that cost the original rig 4,000px of erasing.
+    #
+    # What varies is mass and material — which is the whole job, since the roster's silhouettes have to
+    # be told apart at the 300px the HUNT stage gives them. Written in the POSITIVE throughout: naming
+    # a cloak to forbid it summons one.
+    # Measured, not hoped. measure_rig_source.py reads the two armpit gaps and the leg gap straight out
+    # of the alpha channel, and the first pass through these prompts scored 1 usable body out of 4:
+    # both heavy characters came back with their upper arms flat against a wide torso (no gap at chest
+    # height at all), and the two that named a hood or a monument came back wearing a cloak and standing
+    # in a scene. Hence:
+    #
+    #   * ELBOWS LOCKED STRAIGHT, arms down at forty-five degrees. "Angled outward" is satisfied by a
+    #     bent arm with the hand forward, which leaves the upper arm against the ribs.
+    #   * "touch the body only at the shoulder" — states the gap as a fact about the arm rather than
+    #     asking for a triangle of background and hoping the pose follows.
+    #   * The background is described by what it CONTAINS (nothing) and where it is VISIBLE, never by
+    #     forbidding a cloak. Naming a cloak is how the first pass got one.
+    #   * THE ARM ANGLE IS PER BODY TYPE. Forty-five degrees clears a lean torso and does not clear a
+    #     broad one — measured, twice: both heavy characters came back with 3-4px seams where a lean
+    #     character had 26-34px, because the same angle over a wider chest puts the upper arm on the
+    #     ribs. The heavies hold their arms nearly horizontal instead.
+    def pose(angle: str, stance: str) -> str:
+        return ("standing in a wide A-pose, front view, full body. Both arms are held straight out from "
+                f"the shoulders {angle} with the elbows locked straight, so each arm touches the body "
+                "only at the shoulder and is separated from the torso along its whole length by a wide "
+                f"wedge of empty background. The legs are straight and {stance}. "
+                "The hands are open and empty. ")
+
+    LEAN_POSE = pose("and angled down at forty-five degrees", "set well apart")
+    HEAVY_POSE = pose("and held out almost horizontally, level with the shoulders and only slightly "
+                      "below them",
+                      # The legs need the same treatment the arms needed, and for the same reason: a
+                      # heavy figure's thighs meet unless the stance is described as a measured
+                      # distance rather than as "apart". Measured: the first heavy pass had no
+                      # central gap at all.
+                      "planted far apart with the feet a full shoulder-width outside the hips, so a "
+                      "clear straight column of empty background runs between the legs from the hip "
+                      "all the way down to the floor")
+    TAIL = ("The figure stands against nothing at all: the background is completely empty, and that "
+            "empty background is visible in the wedge between each arm and the body, in the gap "
+            "between the legs, and immediately behind the shoulders and the back. "
+            "Dark fantasy RPG pixel art, flat bold shapes, symmetrical, one figure centered on "
+            "a completely empty background, no text, no border, no frame")
+    for key, subject, outfit, POSE in [
+        # WEIGHT. Reads as mass: the widest shoulders and the lowest stance in the roster.
+        ("anvil_rig_base",
+         "A heavy broad-shouldered warrior with a thick neck and a low heavy stance, ",
+         "The outfit is CLOSE-FITTING ONLY: a riveted dark steel cuirass moulded to the chest, a "
+         "banded skirt ending at the hip, heavy plated boots, bare forearms. ", HEAVY_POSE),
+        # SPREAD. Reads as many: a silhouette broken up by many small repeated shapes. NOT "hooded" and
+        # not "hung with" — the first attempt used both and came back in a full cloak. A hood is a
+        # cloak's neighbour, and "hung with" is a request for things to drape.
+        ("chorus_rig_base",
+         "A lean bare-headed figure with short cropped hair and many small bone charms threaded flat "
+         "onto a tight belt, ",
+         "The outfit is CLOSE-FITTING ONLY: a fitted quilted tunic ending at the hip, a belt strung "
+         "with many small bone charms, wrapped forearms, low soft boots. ", LEAN_POSE),
+        # TEMPO. Reads as fast: the narrowest figure, everything drawn in tight to the body.
+        ("metronome_rig_base",
+         "A lean wiry runner with a narrow frame and long legs, ",
+         "The outfit is CLOSE-FITTING ONLY: a light fitted gambeson ending above the hip, tight "
+         "wrapped arms, narrow trousers and tall light boots. ", LEAN_POSE),
+        # ENDURE. Reads as heavy: short, broad, and faceless. NOT "immovable" and not "monument" —
+        # those are words about scale, and the first attempt answered them with a whole scene:
+        # a grey sky, a crowd, and 31% background left after knockout.
+        # Third attempt on the background. Twice this one came back standing in a SCENE — a grey sky,
+        # a crowd, a stone slab — while its four siblings came back cut out. The difference is the
+        # subject: "warrior in a faceplate helm" is a portrait subject, and portrait subjects arrive
+        # with a setting. Describing a person instead of a knight, and putting the empty background in
+        # the FIRST clause rather than the last, is the lever left to pull.
+        ("unbroken_rig_base",
+         "Cut out on a completely empty background with nothing behind them at all: a short broad "
+         "heavy-set person with wide square shoulders and a plain smooth iron mask covering the face, ",
+         "The outfit is CLOSE-FITTING ONLY: a fitted scale coat ending at the hip, thick banded "
+         "greaves, heavy gauntlets. ", HEAVY_POSE),
+    ]:
+        a.append({
+            "key": key, "dest": "assets/art/Characters/Roster", "model": "pixen",
+            "width": 512, "height": 512, "knockout": True, "single_subject": True,
+            "prompt": subject + POSE + outfit + TAIL,
+        })
+
     # --- Hunter cutout rig parts: NOT GENERATED.
     #
     # hunter_part_* is produced by tools/asset-pipeline/cut_rig_parts.py, which slices them out of the
