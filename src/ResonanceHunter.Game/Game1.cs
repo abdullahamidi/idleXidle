@@ -6,6 +6,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using ResonanceHunter.Core.Automation;
 using ResonanceHunter.Core.Builds;
+using ResonanceHunter.Core.Characters;
 using ResonanceHunter.Core.Economy;
 using ResonanceHunter.Core.Encounters;
 using ResonanceHunter.Core.Evolution;
@@ -111,10 +112,6 @@ public class Game1 : Game
 
     private int _regionProgression;
 
-    private RigSpikeScreen _rigSpike = null!;
-    private bool _showSpike;
-    private HunterRigScreen _hunterRig = null!;
-    private bool _showRigPreview;
     private bool _showHelp;
     private bool _showSettings;
 
@@ -153,6 +150,11 @@ public class Game1 : Game
 
     // ── Memory Dust prestige (Full Vision). NOTHING RESETS — Dust accrues from mastery. ───────
     private PrestigeScreen _prestige = null!;
+
+    /// <summary>Which characters are yours, and which one you are. Unlocks derive from conquest.</summary>
+    private readonly CharacterState _characters = new();
+    private RosterScreen _roster = null!;
+    private bool _showRoster;
     private bool _showPrestige;
     private readonly MemoryDustTree _dust = new();
     private int _highestMasteryAwarded;
@@ -173,7 +175,6 @@ public class Game1 : Game
     /// <summary>Pick the scene background for whatever screen is currently showing.</summary>
     private void DrawSceneBackground()
     {
-        if (_showSpike) { _ui.Background(_batch, "__none__"); return; } // void — it's a tech demo
         if (_showForge) { _ui.Background(_batch, "bg_forge"); return; }
         if (_showWorld) { _ui.Background(_batch, "bg_regionmap"); return; }
         if (_showPrestige) { _ui.Background(_batch, "bg_constellation"); return; }
@@ -340,6 +341,9 @@ public class Game1 : Game
         // because LoadOrStartFresh returns at the top when RH_SHOT is set. The screenshot rig cannot see
         // this code path at all. Anything restored here belongs in a _pending* field.
         _pendingRunLog = save.RunLog.Select(RunLog.FromSave).ToList();
+        // Safe here, unlike the run log: CharacterState is a plain field constructed with this class,
+        // not a screen built in LoadContent. That distinction is exactly what crashed the game once.
+        _characters.Restore(save.ActiveCharacterId, save.QuestsDone);
 
         var roster = SaveSystem.RestoreRoster(save);
         _automationRoster = roster;
@@ -516,6 +520,10 @@ public class Game1 : Game
             // being closed.
             RunLog = _expedition.Log.Entries.Select(RunLog.ToSave).ToList(),
             MasteryTaken = _mastery.Taken.ToList(),
+            // Only WHICH character, never which are unlocked — that is derived from conquest every
+            // frame, so there is nothing here to fall out of step with the world.
+            ActiveCharacterId = _characters.ActiveId,
+            QuestsDone = _characters.SaveQuests().ToList(),
             MasteryEarned = _deepestEver,          // stored as deepest-ever; Earned is re-derived on load
             ChampionGleamRate = _champGleamRate,
             // Unopened chests ride along too — a boss's drop must survive a reload, opened or not.
@@ -613,11 +621,10 @@ public class Game1 : Game
         // no sound device, and a screenshot never needs sound. Real runs get the full audio bank.
         _sound = new SoundBank(disable: Environment.GetEnvironmentVariable("RH_SHOT") is not null);
         _ui = new UiKit(GraphicsDevice, _font, _assets);
-        _rigSpike = new RigSpikeScreen(GraphicsDevice, _pixel);
-        _hunterRig = new HunterRigScreen(_ui);
         _automation = new AutomationScreen(_ui);
         _forge = new ForgeScreen(_ui);
         _prestige = new PrestigeScreen(_ui, _dust);
+        _roster = new RosterScreen(_ui);
         _expedition = new SoloExpeditionScreen(_ui);
         _buildScreen = new BuildScreen(_ui);
         _character = new CharacterScreen(_ui, _forge);
@@ -684,10 +691,10 @@ public class Game1 : Game
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig"
-                or "fightgear" or "fightswing" or "fightreport" or "traitlit" or "traitterm" or "traitterminal")
+                or "fightgear" or "fightswing" or "fightreport" or "traitlit" or "traitterm" or "traitterminal"
+                or "roster" or "rosterlocked")
             {
                 _showTitle = false;
-                if (sm == "rig") _showRigPreview = true;
                 // Muster screen with a real roster to arrange.
                 if (sm == "expedition") _automation.DevPopulate(_region);
                 if (sm == "vow")
@@ -1012,6 +1019,24 @@ public class Game1 : Game
                 // TRAITLIT / TRAITTERM pose the unlock flourish mid-animation. A celebration is over in
                 // a second and the capture rig renders a fixed frame count then exits, so without a
                 // fixture "the flourish works" could only ever be a claim.
+                // ROSTER poses the whole cast unlocked so every card's art can be checked at once;
+                // ROSTERLOCKED leaves it as a fresh save, which is the state a new player actually
+                // sees and the one where a locked card still has to explain itself.
+                if (sm is "roster" or "rosterlocked")
+                {
+                    _showRoster = true;
+                    if (sm == "roster")
+                    {
+                        _world.RestoreConquered(Regions.All.Select(r => r.Id));
+                        foreach (var c in CharacterRoster.All)
+                            if (c.Unlock.QuestId is { } q) _characters.CompleteQuest(q);
+                        _characters.Refresh(_world.ConqueredIds);
+                        _characters.Select("anvil");
+                        _roster.DevSelect("oathbound");
+                    }
+                    else _roster.DevSelect("unbroken");
+                }
+
                 if (sm is "dust" or "traitlit" or "traitterm" or "traitterminal")
                 {
                     _showPrestige = true;
@@ -1107,8 +1132,6 @@ public class Game1 : Game
 
         // The dev rig-spike tech demo moved OFF Tab (F9) — Tab is the Forge's loot filter, and the global
         // binding here ran first every frame, hijacking the filter into a blank dev screen.
-        if (Pressed(Keys.F9)) _showSpike = !_showSpike;
-        if (Pressed(Keys.F8)) _showRigPreview = !_showRigPreview;
         if (Pressed(Keys.F6)) _expedition.DevForceBoss = !_expedition.DevForceBoss;   // dev: force the Crystal Lich boss render (Rev 4 §12)
         if (Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _character.DevGearDebug = !_character.DevGearDebug; _stats.DevStatsDebug = !_stats.DevStatsDebug; _buildScreen.DevBuildDebug = !_buildScreen.DevBuildDebug; _forge.DevForgeDebug = !_forge.DevForgeDebug; _warrenScreen.DevWarrenDebug = !_warrenScreen.DevWarrenDebug; _mapScreen.DevMapDebug = !_mapScreen.DevMapDebug; _prestige.DevDustDebug = !_prestige.DevDustDebug; }   // dev layout overlays
         if (Pressed(Keys.F1)) _showHelp = !_showHelp;
@@ -1140,7 +1163,8 @@ public class Game1 : Game
             if (Pressed(Keys.Right)) _expedition.StepLog(-1);
         }
 
-        if (Pressed(Keys.P)) { _showPrestige = !_showPrestige; _showAutomation = false; _showForge = false; _showWorld = false; _showBuild = false; _showCharacter = false; _showStats = false; }
+        if (Pressed(Keys.P)) { _showPrestige = !_showPrestige; _showAutomation = false; _showForge = false; _showWorld = false; _showBuild = false; _showCharacter = false; _showStats = false; _showRoster = false; }
+        if (Pressed(Keys.R)) { _showRoster = !_showRoster; _showPrestige = false; _showAutomation = false; _showForge = false; _showWorld = false; _showBuild = false; _showCharacter = false; _showStats = false; }
         if (Pressed(Keys.W)) { _showWorld = !_showWorld; _showAutomation = false; _showForge = false; _showPrestige = false; _showBuild = false; _showCharacter = false; _showStats = false; if (_showWorld) { _mapScreen.ActiveRegion = _activeRegion; _mapScreen.SelectActive(); } }
 
         // B — WEAVE YOUR BUILD. The whole decision layer of the solo model: four skills, three sockets.
@@ -1158,7 +1182,7 @@ public class Game1 : Game
         // `interactive` flag), so a click in the Forge never falls through into the fight.
         _regionProgression = Math.Clamp((int)_region.MasteryLevel + (_region.MasteryLevel > 0 ? 1 : 0), 0, 4);
         var watchingFight = !(_showWorld || _showPrestige || _showForge || _showAutomation || _showBuild
-            || _showCharacter || _showStats || _showSpike || _showRigPreview || _showHelp || _showSettings);
+            || _showCharacter || _showStats || _showHelp || _showSettings);
         UpdateExpedition(gameTime, watchingFight);
 
         if (_showWorld) { UpdateWorld(); Latch(gameTime); return; }
@@ -1245,6 +1269,13 @@ public class Game1 : Game
             _highestMasteryAwarded = totalMasteryLevels;
         }
 
+        if (_showRoster)
+        {
+            _roster.Update(CanvasMouse, MouseClicked, _characters);
+            Latch(gameTime);
+            return;
+        }
+
         if (_showPrestige)
         {
             _prestige.Update(_keys, CanvasMouse, MouseClicked, MouseWheel, _dust, dt);
@@ -1275,8 +1306,6 @@ public class Game1 : Game
             _showCharacter = false;
         }
 
-        if (_showSpike) { _rigSpike.Update(gameTime, _keys); Latch(gameTime); return; }
-        if (_showRigPreview) { Latch(gameTime); return; }
 
         if (_showForge)
         {
@@ -1391,7 +1420,15 @@ public class Game1 : Game
 
         // The loot-quality tilt reaches the roll that opens a chest. Until this line, Rarity was resolved
         // from keystones, gear and the trait tree, carried as Haul.Quality, and read by nothing at all.
-        _forge.RarityBonus = _loadout.ToBuild(_dust, _mastery).Resolve(_hunter).Rarity;
+        _forge.RarityBonus = _loadout.ToBuild(_dust, _mastery, _characters.Active).Resolve(_hunter).Rarity;
+
+        // The roster derives from conquest, every frame, exactly like both trees' points. A character
+        // unlocked by a conquest the player made three regions ago should not depend on having been
+        // logged in when it happened.
+        foreach (var got in _characters.Refresh(_world.ConqueredIds))
+            _bootMessage = $"{got.Name} JOINS YOU — {got.PassiveName}";
+        _expedition.Character = _characters.Active;
+        _character.Character = _characters.Active;
 
         // The spine's capacity nodes reach the loadout. Without this the sockets and the fifth weave are
         // bought and never granted — the shape of the failure this codebase keeps repeating.
@@ -1657,7 +1694,8 @@ public class Game1 : Game
 
     /// <summary>True when a menu screen owns the frame — those draw inset; the fight screen does not.</summary>
     private bool OverlayActive =>
-        _showForge || _showWorld || _showPrestige || _showAutomation || _showBuild || _showCharacter || _showStats;
+        _showForge || _showWorld || _showPrestige || _showAutomation || _showBuild || _showCharacter
+        || _showStats || _showRoster;
 
     /// <summary>The counter-scale the active screen draws at. Converted 1920-coord screens return 1; the
     /// HUNT screen is converted, so it returns 1 whenever no other screen flag is set (the else branch below).</summary>
@@ -1708,11 +1746,10 @@ public class Game1 : Game
 
         // Batch B — the active screen. Menu screens draw through the overlay inset (see OverlayScale).
         if (OverlayActive) BeginOverlayCanvas(); else BeginCanvas(ScreenScale());
-        if (_showRigPreview) _hunterRig.Draw(_batch);
-        else if (_showSpike) _rigSpike.Draw(_batch);
-        else if (_showForge) _forge.Draw(_batch, _hunter, CanvasMouse, MouseClicked);
+        if (_showForge) _forge.Draw(_batch, _hunter, CanvasMouse, MouseClicked);
         else if (_showWorld) DrawWorld();
         else if (_showPrestige) _prestige.Draw(_batch, _dust, CanvasMouse, MouseClicked);
+        else if (_showRoster) _roster.Draw(_batch, _characters, CanvasMouse, MouseClicked);
         else if (_showAutomation) DrawWarren();
         else if (_showBuild) _buildScreen.Draw(_batch, CanvasMouse, _dust);
         else if (_showCharacter) _character.Draw(_batch, CanvasMouse, _hunter);
@@ -2075,6 +2112,7 @@ public class Game1 : Game
         ("STATS", 'V', "state_resonance_128"), ("BUILD", 'B', "state_mastery_128"),
         ("FORGE", 'F', "icon_nav_forge"), ("WARREN", 'A', "icon_nav_warren"),
         ("MAP", 'W', "nav_relics_128"), ("TRAITS", 'P', "nav_prestige"),
+        ("ROSTER", 'R', "icon_class_hunter"),
     };
 
     private static readonly Color NavGold = new(0xF0, 0xB2, 0x4A);
@@ -2127,11 +2165,11 @@ public class Game1 : Game
     /// <summary>Which nav slot is lit: 0 HUNT (fight), else the open overlay.</summary>
     private int NavActive() =>
         _showCharacter ? 1 : _showStats ? 2 : _showBuild ? 3 : _showForge ? 4 :
-        _showAutomation ? 5 : _showWorld ? 6 : _showPrestige ? 7 : 0;
+        _showAutomation ? 5 : _showWorld ? 6 : _showPrestige ? 7 : _showRoster ? 8 : 0;
 
     private void OpenNav(int i)
     {
-        _showCharacter = _showStats = _showBuild = _showForge = _showAutomation = _showWorld = _showPrestige = false;
+        _showCharacter = _showStats = _showBuild = _showForge = _showAutomation = _showWorld = _showPrestige = _showRoster = false;
         switch (i)
         {
             case 1: _showCharacter = true; break;
@@ -2141,6 +2179,7 @@ public class Game1 : Game
             case 5: _showAutomation = true; break;
             case 6: _showWorld = true; _mapScreen.ActiveRegion = _activeRegion; _mapScreen.SelectActive(); break;
             case 7: _showPrestige = true; break;
+            case 8: _showRoster = true; break;
             // case 0 HUNT: everything cleared above → back to the fight.
         }
     }
@@ -2179,7 +2218,10 @@ public class Game1 : Game
     /// </remarks>
     internal static Point ToOverlay(Point canvasMouse)
         => new((int)((canvasMouse.X * 4 - OverlayLeft) / OverlayScale), (int)(canvasMouse.Y * 4 / OverlayScale));
-    private const int NavTileHeight = 1080 / 8;   // eight items fill the full height exactly
+    // DERIVED from the table, not a literal. It was 1080/8 with a comment saying "eight items fill the
+    // full height exactly", which was true right up until the roster added a ninth and the last tile
+    // hung 135px off the bottom of the screen.
+    private static readonly int NavTileHeight = 1080 / Nav.Length;
 
     private static Rectangle NavHexRect(int i)   // a rectangular TILE (guide: package_01 nav tiles)
     {
@@ -2191,7 +2233,7 @@ public class Game1 : Game
 
     private void DrawHexNav()
     {
-        if (_showSettings || _showHelp || _showSpike || _showRigPreview) return;   // a modal owns the frame
+        if (_showSettings || _showHelp) return;   // a modal owns the frame
 
         // A dark shelf so the bar seats cleanly over whatever screen sits behind it. Nearly opaque and
         // starting a hair above the hexes, so the scene behind can't show through and clip their tops.
@@ -2238,7 +2280,7 @@ public class Game1 : Game
 
     private void HandleNavClick()
     {
-        if (!MouseClicked || _showSettings || _showHelp || _showSpike || _showRigPreview) return;
+        if (!MouseClicked || _showSettings || _showHelp) return;
         // NavHexRect is 1920-space chrome now, so hit-test the 1920-space cursor.
         for (var i = 0; i < Nav.Length; i++)
             if (NavHexRect(i).Contains(ChromeMouse)) { OpenNav(i); return; }

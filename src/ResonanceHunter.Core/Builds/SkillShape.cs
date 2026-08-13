@@ -78,6 +78,24 @@ public sealed record SkillShape
     /// <summary>Extra targets for one Form specifically — the Form specialisations.</summary>
     public IReadOnlyDictionary<Form, int> FormTargets { get; init; } = new Dictionary<Form, int>();
 
+    /// <summary>
+    /// A damage multiplier that applies to ONE Form only. A character's APTITUDE lives here.
+    /// </summary>
+    /// <remarks>
+    /// Per-Form rather than flat, because that is what an aptitude means: the QUIVER is better with a
+    /// Projectile than you would be, not better at everything. It also has to be a number the SIM
+    /// reads — this codebase's recurring failure is a value resolved, carried and summed by correct
+    /// code at every step and read by nothing, and an aptitude that existed only as screen text would
+    /// be exactly that again.
+    ///
+    /// Multiplicative on combine, like every other multiplier here, so a character's aptitude and a
+    /// Form specialisation node on the same Form compound instead of racing.
+    /// </remarks>
+    public IReadOnlyDictionary<Form, float> FormPower { get; init; } = new Dictionary<Form, float>();
+
+    /// <summary>This Form's damage multiplier, or 1 when nothing favours it.</summary>
+    public float FormPowerFor(Form form) => FormPower.TryGetValue(form, out var f) && f > 0f ? f : 1f;
+
     /// <summary>EVERYWHERE — every skill strikes every creature, at <see cref="HitSize"/>'s cost.</summary>
     public bool StrikesEveryCreature { get; init; }
 
@@ -220,6 +238,10 @@ public sealed record SkillShape
         foreach (var (form, n) in b.FormTargets)
             targets[form] = targets.TryGetValue(form, out var have) ? have + n : n;
 
+        var power = new Dictionary<Form, float>(a.FormPower);
+        foreach (var (form, f) in b.FormPower)
+            power[form] = power.TryGetValue(form, out var had) ? had * f : f;
+
         return new SkillShape
         {
             HitSize = a.HitSize * b.HitSize,
@@ -233,6 +255,7 @@ public sealed record SkillShape
 
             ExtraTargets = a.ExtraTargets + b.ExtraTargets,
             FormTargets = targets,
+            FormPower = power,
             StrikesEveryCreature = a.StrikesEveryCreature || b.StrikesEveryCreature,
             ChainFraction = Math.Max(a.ChainFraction, b.ChainFraction),
             RicochetChance = Math.Max(a.RicochetChance, b.RicochetChance),

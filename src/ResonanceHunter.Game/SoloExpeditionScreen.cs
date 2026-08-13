@@ -8,6 +8,7 @@ using ResonanceHunter.Core.Abilities;
 using ResonanceHunter.Core.Animation;
 using ResonanceHunter.Core.Automation;
 using ResonanceHunter.Core.Builds;
+using ResonanceHunter.Core.Characters;
 using ResonanceHunter.Core.Combat;
 using ResonanceHunter.Core.Economy;
 using ResonanceHunter.Core.Encounters;
@@ -73,7 +74,12 @@ public sealed class SoloExpeditionScreen
     // layout over-sized the enemy/boss ("boss too big, masked in a box") — the spec's ranges fix that.
     // Shifted right (centre 560 -> 700) to clear the vertical control rail down the left edge, and
     // enlarged so the figure holds the larger stage.
-    private static readonly Rectangle ChampBox = new(760 - 224, GroundY - 500, 448, 500);
+    // 430, not 500. The rig fitted its ASSEMBLED bounds into this box and those bounds carried the
+    // rig's own layout spacing, so the figure came out well short of the box it was given. A sprite
+    // strip has no such slack — the generated frames are trimmed to their content, so the character
+    // renders at exactly the box height and the champion suddenly stood a head taller than before,
+    // dominating a stage it shares with enemies less than half that size.
+    private static readonly Rectangle ChampBox = new(760 - 200, GroundY - 430, 400, 430);
     // Rev 3 §16.1: one normal enemy bottom-centred at (1160,735), visible ~320px (range 280–360). A boss is
     // drawn far larger from its own anchor (see the draw), so this box is the NORMAL-enemy size only.
     private static readonly Rectangle EnemyBox = new(1320 - 218, GroundY - 440, 436, 440);
@@ -252,7 +258,7 @@ public sealed class SoloExpeditionScreen
         // (it decays at dt*5), and driving a 1.1s animation off it played the whole swing in
         // 0.2s — the arm blurred. This advances at real time so the clip reads at the pace it
         // was authored, and re-arms when a new strike lands.
-        if (_champLunge > 0.3f && _strikeTime <= 0f) _strikeTime = _strikeClip.DurationSeconds;
+        if (_champLunge > 0.3f && _strikeTime <= 0f) _strikeTime = StrikeSeconds;
         if (_strikeTime > 0f) _strikeTime = Math.Max(0f, _strikeTime - dt);
         _champLunge = Math.Max(0f, _champLunge - dt * 5f);
         _enemyLunge = Math.Max(0f, _enemyLunge - dt * 5f);
@@ -300,7 +306,7 @@ public sealed class SoloExpeditionScreen
 
     private void StartRun(Hunter hunter)
     {
-        var build = Loadout.ToBuild(Tree, Mastery);
+        var build = Loadout.ToBuild(Tree, Mastery, Character);
         // RECKLESS OFFERING's price: a smaller pool for the whole run, charged once here at mint.
         var hp = Math.Max(1, (int)MathF.Round(Math.Max(60, hunter.MaxHealth) * SoloBattle.VowHealthMultiplier(build)));
         _champ = new Champion { MaxHealth = hp, Health = hp };
@@ -1206,69 +1212,83 @@ public sealed class SoloExpeditionScreen
     private const int RailContentX = 234;
     private const int RailContentW = 198;
 
-    private HunterRigRenderer? _rigRenderer;
     private float _strikeTime;
 
     /// <summary>
     /// DEV: hold the strike clip at a fixed point (0..1 of its duration) instead of letting combat drive it.
     /// </summary>
     /// <remarks>
-    /// A one-second screenshot lands wherever the fight happens to be, which is almost never mid-swing —
-    /// so the pose that most needs checking (does the equipped blade sweep through the body?) was the one
-    /// pose no capture could reliably show.
+    /// A one-second screenshot lands wherever the fight happens to be, which is almost never mid-swing,
+    /// so the frame that most wants checking is the one no capture reliably catches.
     /// </remarks>
     public float? DevSwingPhase;
-    private readonly Clip _idleClip = Clip.Idle();
-    private readonly Clip _strikeClip = Clip.AttackerStrike();
+
+    /// <summary>The character being played. The host sets it; it decides which sprite strip is drawn.</summary>
+    public Character Character { get; set; } = CharacterRoster.Get(CharacterRoster.StarterId);
 
     /// <summary>
-    /// Draw the champion as the assembled rig, posed by the idle or strike clip.
+    /// Draw the champion from the active character's animation strip.
     /// </summary>
     /// <remarks>
-    /// The strike clip is not looped — it is sampled by how far into the lunge we are, so the swing
-    /// stays in step with the combat beat that drives <c>_champLunge</c> rather than running on its
-    /// own clock.
+    /// <para>
+    /// This replaced an assembled cutout RIG. The rig articulated real limbs and charged for it in
+    /// constraints that reached all the way back into the art: every source body had to stand in a wide
+    /// A-pose with a measurable gap under each armpit and between the legs, hold nothing, and wear
+    /// nothing that hung, because a rectangle cannot separate an arm from a cloak behind it. With one
+    /// character that was a curiosity. With ten it was the whole art direction, decided by the renderer.
+    /// </para>
+    /// <para>
+    /// A strip is also FEWER assets, not more — one sprite and two eight-frame clips per character,
+    /// against seventeen cut parts, a drawn pauldron and a pose table — and the motion is authored
+    /// rather than assembled from rotating rectangles, which the rig could never get past: its own
+    /// death pose is capped at 0.4 rad with a comment explaining that flat cutouts visibly come apart
+    /// beyond it.
+    /// </para>
+    /// <para>
+    /// Falls back to the still base sprite when a clip is missing, so a character whose strips have not
+    /// been generated yet still shows the right person standing still rather than nothing at all.
+    /// </para>
     /// </remarks>
-    private bool DrawRiggedChampion(SpriteBatch b, Rectangle box, bool attacking, bool dead, Color tint)
-    {
-        _rigRenderer ??= new HunterRigRenderer(_ui);
-        if (dead)
-            return _rigRenderer.Draw(b, box, HunterRigRenderer.DeathPose, tint);
-        if (DevSwingPhase is { } ph)
-            return _rigRenderer.Draw(b, box, HunterRigRenderer.MapPose(
-                _strikeClip.Sample(ph * _strikeClip.DurationSeconds)), tint);
-        var swinging = _strikeTime > 0f;
-        var sampled = swinging
-            ? _strikeClip.Sample(_strikeClip.DurationSeconds - _strikeTime)
-            : _idleClip.Sample(_anim % _idleClip.DurationSeconds);
-        return _rigRenderer.Draw(b, box, HunterRigRenderer.MapPose(sampled), tint);
-    }
-
     private void DrawChampion(SpriteBatch b, Rectangle box, bool dead)
     {
         // Soft contact shadow, not a hard bar: the flat rectangle that shipped here read as a painted
         // slab under the feet rather than as the figure touching the floor.
         _ui.GroundShadow(b, box.Center.X, box.Bottom - 10, (int)(box.Width * 0.62f), 46, 0.6f);
-        var attacking = _champLunge > 0.3f;
         var tint = dead ? new Color(0x3A, 0x3A, 0x44) : Color.White;
 
-        // Preferred path: the assembled cutout rig, so equipped gear rides the bones and follows the
-        // animation. Falls back to the flat pose sprite when the rig art is unavailable, which keeps
-        // the screen working while rig parts are still being authored.
-        if (DrawRiggedChampion(b, box, attacking, dead, tint)) return;
+        // ATTACK does not loop, and is driven by the combat beat rather than its own clock — the same
+        // rule the rig's strike clip followed, for the same reason: a swing that runs free drifts out of
+        // step with the hit it is supposed to be delivering.
+        var swinging = _strikeTime > 0f && !dead;
+        var clip = swinging ? "attack" : "idle";
+        var seconds = DevSwingPhase is { } ph && !dead
+            ? ph * StrikeSeconds
+            : swinging ? StrikeSeconds - _strikeTime : _anim;
 
-        // The flat fallback, for the case where rig art is missing entirely. It draws hunter_rig_base —
-        // the SAME figure the rig is cut from — rather than the old hunter_idle/attack/defeated poses,
-        // which are a different-looking character. A fallback that changes who the player is looking at
-        // is worse than one that loses a pose.
-        const string key = "hunter_rig_base";
-        // SpriteGrounded, not Sprite: the poses carry different amounts of empty canvas under the feet
-        // (hunter_idle 54 rows, hunter_attack_01 26), so plain Sprite both floated the figure and made it
-        // bob vertically on every pose swap. Anchoring by the opaque sole fixes both.
-        if (!_ui.SpriteGrounded(b, key, box, tint, 0.03f))
-            _ui.Fill(b, new Rectangle(box.Center.X - 32, box.Bottom - 80, 64, 72), dead ? Dim : Gold);
+        // THE BASE SPRITE, not the generated strip.
+        //
+        // Twenty clips were generated from these designs and every one of them came back RE-FRAMED:
+        // handed a full-body figure, the animation endpoint returns a waist-up bust, so the arena drew
+        // a torso standing on the floor with no legs. Padding the source to 62% of its canvas — the
+        // same "author the input so the tool succeeds" move the rig source made for the cutter — made
+        // the endpoint preserve the framing and crop the CHARACTER instead. It re-frames whatever it
+        // is given, and it cannot be told not to.
+        //
+        // So the champion is the approved full-body design, breathing. The bob is three lines against
+        // a whole clip's worth of generations, it can never go off-model because there is only one
+        // image, and the strike already has a positional shove of its own driving it (_champLunge).
+        // The strips stay on disk; when a framing-stable animator exists they drop straight back in.
+        var breathe = (int)(MathF.Sin(seconds * (swinging ? 9f : 2.1f)) * (swinging ? 7f : 4f));
+        var lean = swinging ? (int)(MathF.Sin(seconds * 7f) * 10f) : 0;
+        var posed = new Rectangle(box.X + lean, box.Y + breathe, box.Width, box.Height);
+        if (_ui.SpriteGrounded(b, Character.SpriteKey, posed, tint, 0.02f)) return;
 
+        _ui.Fill(b, new Rectangle(box.Center.X - 32, box.Bottom - 80, 64, 72), dead ? Dim : Gold);
     }
+
+    /// <summary>How long a strike clip runs. Eight frames at the champion's frame rate.</summary>
+    private const float StrikeSeconds = 8f / ChampionFps;
+    private const float ChampionFps = 10f;
 
     /// <summary>
     /// Draw the champion's base body, bottom-anchored inside the box.

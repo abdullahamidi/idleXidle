@@ -6,6 +6,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using ResonanceHunter.Core.Abilities;
 using ResonanceHunter.Core.Builds;
+using ResonanceHunter.Core.Characters;
 using ResonanceHunter.Core.Economy;
 using ResonanceHunter.Core.Loot;
 using ResonanceHunter.Core.Prestige;
@@ -105,7 +106,6 @@ public sealed class CharacterScreen
     private static readonly Rectangle EquipBestBtn = new(44, 700, 260, 52);
     private static readonly Rectangle UnequipAllBtn = new(44, 762, 260, 52);
 
-    private HunterRigRenderer? _rigRenderer;
     private int _tab;
     private int _invScroll;
     private string? _selectedId;
@@ -154,6 +154,12 @@ public sealed class CharacterScreen
 
     private const int MenuW = 250, MenuRowH = 44, MenuHeaderH = 34;
     private Rectangle MenuRect => new(_menuAt.X, _menuAt.Y, MenuW, MenuEntries.Length * MenuRowH + MenuHeaderH + 12);
+
+    /// <summary>The character being played — the doll shows them, not a fixed hunter.</summary>
+    public Character Character { get; set; } = CharacterRoster.Get(CharacterRoster.StarterId);
+
+    /// <summary>Seconds, so the doll's idle loop plays. Advanced by Draw, which is the only clock it needs.</summary>
+    private float _anim;
 
     public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, bool rightClicked, int wheel, Hunter hunter)
     {
@@ -289,6 +295,9 @@ public sealed class CharacterScreen
     // ── Draw ─────────────────────────────────────────────────────────────────────────────────────
     public void Draw(SpriteBatch b, Point mouse, Hunter hunter)
     {
+        // A fixed step rather than a real delta: this screen has no GameTime and does not need one — the
+        // doll only idles, and an idle that is a frame out of step with the arena's is not observable.
+        _anim += 1f / 60f;
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
         var hit = Game1.ToOverlay(mouse);
         // The shared batch-A backdrop already draws the region scene behind us; a translucent scrim keeps it
@@ -418,19 +427,14 @@ public sealed class CharacterScreen
 
         // The champion, dressed (base body + one overlay per worn slot), NativeScale (fit, not stretched).
         _ui.GroundShadow(b, HunterBox.Center.X, HunterBox.Bottom - 8, (int)(HunterBox.Width * 0.7f), 40, 0.55f);
-        // The paper doll is the SAME cutout rig the arena draws, so equipment shown here is literally the
-        // equipment worn in the fight — one binding table, no second set of overlay art to keep in sync.
-        // The old path drew a bare hunter_idle plus "overlay_<slot>_idle" sprites that were never authored,
-        // so the doll showed no gear at all while the panel beside it said 8/8 EQUIPPED.
-        _rigRenderer ??= new HunterRigRenderer(_ui);
-        if (!_rigRenderer.Draw(b, HunterBox, null, Color.White)
-            && _ui.Assets.Get("hunter_rig_base") is { } baseTex)
-        {
-            var sc = MathF.Min(HunterBox.Width / (float)baseTex.Width, HunterBox.Height / (float)baseTex.Height);
-            var w = Math.Max(1, (int)(baseTex.Width * sc));
-            var h = Math.Max(1, (int)(baseTex.Height * sc));
-            b.Draw(baseTex, new Rectangle(HunterBox.Center.X - w / 2, HunterBox.Bottom - h, w, h), Color.White);
-        }
+        // The doll is the character you are playing, idling — the same strip the arena draws, so the two
+        // screens can never show different people. It used to be the assembled cutout rig, whose whole
+        // reason for being here was that gear rode its bones; the figure wears nothing now, so the rig
+        // was carrying seventeen cut parts to display a person standing still.
+        var bob = (int)(MathF.Sin(_anim * 2.1f) * 4f);
+        _ui.SpriteGrounded(b, Character.SpriteKey,
+                           new Rectangle(HunterBox.X, HunterBox.Y + bob, HunterBox.Width, HunterBox.Height),
+                           Color.White, 0.02f);
 
         foreach (var (slot, label, box) in SlotLayout)
         {

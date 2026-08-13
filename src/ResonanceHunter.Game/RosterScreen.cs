@@ -1,0 +1,256 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+using ResonanceHunter.Core.Abilities;
+using ResonanceHunter.Core.Builds;
+using ResonanceHunter.Core.Characters;
+using ResonanceHunter.Core.Encounters;
+
+namespace ResonanceHunter.Client;
+
+/// <summary>
+/// The ROSTER screen: who you can be, and what changes when you are them.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Built around the one question a roster has to answer before any other: <i>what do I lose by
+/// switching?</i> The answer here is nothing — both trees, gear, Gleam and the Warren are shared and
+/// none of them resets — and the screen says so in a line at the top rather than leaving the player to
+/// discover it by risking a build.
+/// </para>
+/// <para>
+/// A locked character shows everything about itself except the ability to be picked. Hiding a locked
+/// character's passive would make the roster a list of question marks, and the roster's job is to be a
+/// reason to go conquer something.
+/// </para>
+/// </remarks>
+public sealed class RosterScreen
+{
+    private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
+    private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
+    private static readonly Color Ember = new(0xD8, 0x48, 0x3A);
+    private static readonly Color Slate = new(0x8A, 0x96, 0xA8);
+    private static readonly Color Dim = new(0x3A, 0x3A, 0x44);
+    private static readonly Color Met = new(0x6E, 0xC8, 0x7A);
+
+    private readonly UiKit _ui;
+    private string _selectedId = CharacterRoster.StarterId;
+    private float _anim;
+    private string _msg = "";
+
+    public RosterScreen(UiKit ui) => _ui = ui;
+
+    /// <summary>DEV: pose the detail panel on a given character for the capture fixture.</summary>
+    public void DevSelect(string id) => _selectedId = id;
+
+    public bool DevRosterDebug { get; set; }
+
+    // Two panels: the grid of everyone, and the one you are reading.
+    private static readonly Rectangle GridPanel = new(38, 144, 1180, 718);
+    private static readonly Rectangle DetailPanel = new(1250, 144, 630, 718);
+
+    private const int Cols = 5;
+
+    private static Rectangle Card(int i) =>
+        new(GridPanel.X + 52 + i % Cols * 218, GridPanel.Y + 96 + i / Cols * 300, 200, 280);
+
+    private static string BranchName(Branch b) => b switch
+    {
+        Branch.Weight => "WEIGHT", Branch.Spread => "SPREAD", Branch.Tempo => "TEMPO", _ => "ENDURE",
+    };
+
+    // The same four colours the mastery tree uses. A character's lean has to read as the SAME road the
+    // player walks on the tree, or the mapping is a coincidence rather than a design.
+    private static Color BranchColor(Branch b) => b switch
+    {
+        Branch.Weight => new Color(0xD6, 0x48, 0x5C),
+        Branch.Spread => new Color(0x48, 0xB8, 0x88),
+        Branch.Tempo => new Color(0x74, 0xC6, 0xE8),
+        _ => new Color(0xC0, 0x6E, 0xE0),
+    };
+
+    private static Color LeanColor(Character c) => c.Lean is { } b ? BranchColor(b) : Slate;
+
+    /// <summary>What a locked character is waiting for, in the player's terms.</summary>
+    private static string UnlockText(Character c) => c.Unlock.Kind switch
+    {
+        UnlockKind.Start => "YOURS FROM THE START",
+        UnlockKind.Conquest => c.Unlock.RegionId is { } r && Regions.Find(r) is { } def
+            ? $"CONQUER {def.Name}"
+            : "CONQUER A REGION",
+        _ => c.Unlock.QuestText?.ToUpperInvariant() ?? "FINISH A QUEST",
+    };
+
+    public void Update(Point mouse, bool clicked, CharacterState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        var hit = Game1.ToOverlay(mouse);
+
+        for (var i = 0; i < CharacterRoster.All.Count; i++)
+            if (UiKit.ClickedIn(Card(i), hit, clicked))
+            {
+                _selectedId = CharacterRoster.All[i].Id;
+                _msg = "";
+            }
+    }
+
+    /// <summary>Try to become the selected character. Returns true when the active character changed.</summary>
+    public bool Confirm(CharacterState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        var c = CharacterRoster.Get(_selectedId);
+        if (state.ActiveId == c.Id) { _msg = $"YOU ARE ALREADY {c.Name}."; return false; }
+        if (!state.IsUnlocked(c.Id)) { _msg = $"LOCKED — {UnlockText(c)}."; return false; }
+        state.Select(c.Id);
+        _msg = $"YOU ARE {c.Name}.";
+        return true;
+    }
+
+    public void Draw(SpriteBatch b, CharacterState state, Point mouse, bool clicked)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        _anim += 1f / 60f;
+        var hit = Game1.ToOverlay(mouse);
+
+        _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xC0));
+        _ui.TextCenterBig(b, "ROSTER", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle);
+        _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
+        // The line that makes the screen safe to use. Everything else on it is a comparison a player
+        // will not make until they believe switching cannot cost them anything.
+        _ui.TextCenterBig(b, "SWITCH FREELY — SKILLS, TRAITS, GEAR AND THE WARREN ARE SHARED",
+                          960, 80, Slate, UiTypography.Secondary);
+
+        DrawGrid(b, state, hit);
+        DrawDetail(b, state, hit, clicked);
+        if (DevRosterDebug)
+            foreach (var r in new[] { GridPanel, DetailPanel })
+            {
+                _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, 2), Ember);
+                _ui.Fill(b, new Rectangle(r.X, r.Bottom - 2, r.Width, 2), Ember);
+            }
+    }
+
+    private void DrawGrid(SpriteBatch b, CharacterState state, Point hit)
+    {
+        _ui.Panel(b, GridPanel);
+        var have = CharacterRoster.All.Count(c => state.IsUnlocked(c.Id));
+        _ui.TextCenterBig(b, "THE ROSTER", GridPanel.Center.X, GridPanel.Y + 44, Gold, UiTypography.SectionTitle);
+        _ui.TextRightBig(b, $"{have} / {CharacterRoster.All.Count}", GridPanel.Right - 56, GridPanel.Y + 30,
+                         Slate, UiTypography.Secondary);
+
+        for (var i = 0; i < CharacterRoster.All.Count; i++)
+        {
+            var c = CharacterRoster.All[i];
+            var card = Card(i);
+            var unlocked = state.IsUnlocked(c.Id);
+            var active = state.ActiveId == c.Id;
+            var sel = _selectedId == c.Id;
+            var lean = LeanColor(c);
+
+            _ui.Fill(b, card, active ? new Color(0x2A, 0x22, 0x10, 0xF0) : new Color(0x16, 0x12, 0x20, 0xE0));
+            var edge = sel ? Bone : active ? Gold : unlocked ? lean : Dim;
+            var t = sel || active ? 4 : 3;
+            _ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, t), edge);
+            _ui.Fill(b, new Rectangle(card.X, card.Bottom - t, card.Width, t), edge);
+            _ui.Fill(b, new Rectangle(card.X, card.Y, t, card.Height), edge);
+            _ui.Fill(b, new Rectangle(card.Right - t, card.Y, t, card.Height), edge);
+
+            // The character themselves. A roster of names is a menu; a roster of people is a roster.
+            // Each breathes on its own phase, so ten cards do not pulse in unison — and the sprite is
+            // the approved full-body design rather than a generated clip, for the reason set out in
+            // SoloExpeditionScreen.DrawChampion.
+            var bob = (int)(MathF.Sin(_anim * 1.8f + i * 0.7f) * 3f);
+            var portrait = new Rectangle(card.X + 16, card.Y + 12 + bob, card.Width - 32, 168);
+            var tint = unlocked ? Color.White : new Color(0x2A, 0x28, 0x30);
+            _ui.SpriteGrounded(b, c.SpriteKey, portrait, tint, 0.02f);
+
+            _ui.TextCenterBig(b, c.Name, card.Center.X, card.Bottom - 92,
+                              unlocked ? Bone : Slate, UiTypography.Secondary);
+            if (c.Lean is { } br)
+                _ui.TextCenter(b, BranchName(br), card.Center.X, card.Bottom - 62, unlocked ? lean : Dim);
+            else
+                _ui.TextCenter(b, "NO ROAD", card.Center.X, card.Bottom - 62, Dim);
+
+            _ui.TextCenter(b, active ? "PLAYING" : unlocked ? "READY" : "LOCKED",
+                           card.Center.X, card.Bottom - 30, active ? Gold : unlocked ? Met : Slate);
+        }
+    }
+
+    private void DrawDetail(SpriteBatch b, CharacterState state, Point hit, bool clicked)
+    {
+        _ui.Panel(b, DetailPanel);
+        var c = CharacterRoster.Get(_selectedId);
+        var unlocked = state.IsUnlocked(c.Id);
+        var active = state.ActiveId == c.Id;
+        var lean = LeanColor(c);
+        // +74, not +46. The recorded layout fact for this panel art: the SIDE ornaments eat about
+        // seventy pixels, so content at +40 runs underneath them — which is exactly what the passive
+        // text did, starting on top of the left flourish.
+        var left = DetailPanel.X + 74;
+        var width = DetailPanel.Width - 148;
+
+        _ui.TextCenterBig(b, "WHO THEY ARE", DetailPanel.Center.X, DetailPanel.Y + 44, Gold, UiTypography.SectionTitle);
+
+        // A cursor, not twelve literal offsets — the same lesson the trait panel learned when one extra
+        // row silently pushed its prerequisite list through the divider below it.
+        var y = DetailPanel.Y + 96;
+
+        _ui.TextCenterBig(b, c.Name, DetailPanel.Center.X, y, unlocked ? Bone : Slate, UiTypography.PanelTitle);
+        y += 34;
+        _ui.TextCenterBig(b, c.Blurb, DetailPanel.Center.X, y, Slate, UiTypography.Secondary);
+        y += 34;
+
+        // Lean and aptitude, side by side: the two facts that decide whether this character suits the
+        // build the player has already spent thirty points on.
+        _ui.Fill(b, new Rectangle(left, y, width, 2), Dim);
+        y += 14;
+        _ui.TextBig(b, "ROAD", left, y, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, c.Lean is { } br ? BranchName(br) : "NONE — WALKS ANY",
+                         DetailPanel.Right - 74, y - 2, lean, UiTypography.Body);
+        y += 32;
+        _ui.TextBig(b, "APTITUDE", left, y, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, c.Aptitude is { } f
+                            ? $"{f.ToString().ToUpperInvariant()}  +{(int)Math.Round((c.AptitudePower - 1f) * 100)}%"
+                            : "NONE",
+                         DetailPanel.Right - 74, y - 2, c.Aptitude is null ? Dim : Bone, UiTypography.Body);
+        y += 40;
+
+        _ui.Fill(b, new Rectangle(left, y, width, 2), Dim);
+        y += 14;
+        _ui.TextBig(b, "PASSIVE", left, y, Slate, UiTypography.Secondary);
+        y += 30;
+        _ui.TextBig(b, c.PassiveName, left, y, Gold, UiTypography.Body);
+        y += 32;
+        y = DrawWrapped(b, c.PassiveText, left, y, width, Bone) + 40;
+
+        _ui.Fill(b, new Rectangle(left, y, width, 2), Dim);
+        y += 14;
+        _ui.TextBig(b, unlocked ? "EARNED" : "LOCKED", left, y, unlocked ? Met : Ember, UiTypography.Secondary);
+        y += 30;
+        DrawWrapped(b, UnlockText(c), left, y, width, unlocked ? Slate : Bone);
+
+        var btn = new Rectangle(DetailPanel.X + 40, DetailPanel.Bottom - 96, DetailPanel.Width - 80, 68);
+        var label = active ? "PLAYING" : unlocked ? "BECOME THEM" : "LOCKED";
+        if (_ui.Button(b, btn, label, hit, clicked, enabled: unlocked && !active))
+            Confirm(state);
+
+        if (_msg.Length > 0)
+            _ui.TextCenter(b, _msg, DetailPanel.Center.X, DetailPanel.Bottom - 128, Gold);
+    }
+
+    /// <summary>Word-wrap into a width. Returns the y of the last line so a cursor can carry on.</summary>
+    private int DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c)
+    {
+        var line = "";
+        foreach (var w in text.ToUpperInvariant().Split(' '))
+        {
+            var probe = line.Length == 0 ? w : line + " " + w;
+            if (_ui.Measure(probe) > width && line.Length > 0) { _ui.Text(b, line, x, y, c); y += 28; line = w; }
+            else line = probe;
+        }
+        if (line.Length > 0) _ui.Text(b, line, x, y, c);
+        return y;
+    }
+}

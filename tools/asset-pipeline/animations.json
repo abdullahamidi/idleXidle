@@ -242,6 +242,176 @@
       "drift_threshold": 0.35
     },
     {
+      "key": "char_seeker_idle_strip8_512",
+      "dest": "assets/art/Animations/Roster/seeker_idle",
+      "source": "assets/art/Characters/Roster/char_seeker_base.png",
+      "action": "standing and breathing in place, shifting weight very slightly",
+      "frame_count": 8,
+      "pad_fraction": 0.62
+    },
+    {
+      "key": "char_seeker_attack_strip8_512",
+      "dest": "assets/art/Animations/Roster/seeker_attack",
+      "source": "assets/art/Characters/Roster/char_seeker_base.png",
+      "action": "swinging forward to strike and then recovering to a stand",
+      "frame_count": 8,
+      "pad_fraction": 0.62,
+      "drift_threshold": 0.35
+    },
+    {
+      "key": "char_anvil_idle_strip8_512",
+      "dest": "assets/art/Animations/Roster/anvil_idle",
+      "source": "assets/art/Characters/Roster/char_anvil_base.png",
+      "action": "standing and breathing in place, shifting weight very slightly",
+      "frame_count": 8,
+      "pad_fraction": 0.62
+    },
+    {
+      "key": "char_anvil_attack_strip8_512",
+      "dest": "assets/art/Animations/Roster/anvil_attack",
+      "source": "assets/art/Characters/Roster/char_anvil_base.png",
+      "action": "swinging forward to strike and then recovering to a stand",
+      "frame_count": 8,
+      "pad_fraction": 0.62,
+      "drift_threshold": 0.35
+    },
+    {
+      "key": "char_chorus_idle_strip8_512",
+      "dest": "assets/art/Animations/Roster/chorus_idle",
+      "source": "assets/art/Characters/Roster/char_chorus_base.png",
+      "action": "standing and breathing in place, shifting weight very slightly",
+      "frame_count": 8,
+      "pad_fraction": 0.62
+    },
+    {
+      "key": "char_chorus_attack_strip8_512",
+      "dest": "assets/art/Animations/Roster/chorus_attack",
+      "source": "assets/art/Characters/Roster/char_chorus_base.png",
+      "action": "swinging forward to strike and then recovering to a stand",
+      "frame_count": 8,
+      "pad_fraction": 0.62,
+      "drift_threshold": 0.35
+    },
+    {
+      "key": "char_metronome_idle_strip8_512",
+      "dest": "assets/art/Animations/Roster/metronome_idle",
+      "source": "assets/art/Characters/Roster/char_metronome_base.png",
+      "action": "standing and breathing in place, shifting weight very slightly",
+      "frame_count": 8,
+      "pad_fraction": 0.62
+    },
+    {
+      "key": "char_metronome_attack_strip8_512",
+      "dest": "assets/art/Animations/Roster/metronome_attack",
+      "source": "assets/art/Characters/Roster/char_metronome_base.png",
+      "action": "swinging forward to strike and then recovering to a stand",
+      "frame_count": 8,
+      "pad_fraction": 0.62,
+      "drift_threshold": 0.35
+    },
+    {
+      "key": "char_unbroken_idle_strip8_512",
+      "dest": "assets/art/Animations/Roster/unbroken_idle",
+      "source": "assets/art/Characters/Roster/char_unbroken_base.png",
+      "action": "standing and breathing in place, shifting weight very slightly",
+      "frame_count": 8,
+      "pad_fraction": 0.62
+    },
+    {
+      "key": "char_unbroken_attack_strip8_512",
+      "dest": "assets/art/Animations/Roster/unbroken_attack",
+      "source": "assets/art/Characters/Roster/char_unbroken_base.png",
+      "action": "swinging forward to strike and then recovering to a stand",
+      "frame_count": 8,
+      "pad_fraction": 0.62,
+      "drift_threshold": 0.35
+    },
+    {
+      "key": "char_tower_idle_strip8_512",
+      "dest": "assets/art/Animations/Roster/tower_idle",
+      "source": "assets/art/Characters/Roster/char_tower_base.png",
+      "action": "standing and breathing in place, shifting weight very slightly",
+      "frame_count": 8,
+      "pad_fraction": 0.62
+    },
+    {
+      "key": "char_tower_attack_strip8_512",
+      "dest": "assets/art/Animations/Roster/tower_attack",
+      "source": "assets/art/Characters/Roster/char_tower_base.png",
+      "action": "swinging forward to strike and then recovering to a stand",
+      "frame_count": 8,
+      "pad_fraction": 0.62,
+      "drift_threshold": 0.35
+    },
+    {
+      "key": "char_quiver_idle_strip8_512",
+      "dest": "assets/art/Animations/Roster/quiver_idle",
+      "source": "assets/art/Characters/Roster/char_quiver_base.png",
+      "action": "standing and breathing in place, shifting weight very slightly",
+      "frame_count": 8,
+      "pad_fraction": 0.62
+    },
+    {
+      "key": "char_quiver_attack_strip8_512",
+      "dest": "assets/art/Animations/Roster/quiver_attack",
+      "source": "assets/art/Characters/Roster/char_quiver_base.png",
+      "action": "swinging forward to strike and then recovering to a stand",
+      "frame_count": 8,
+      "pad_fraction": 0.62,
+      "drift_threshold": 0.35
+    },
+    {
+      "key": "char_thornwall_idle_strip8_512",
+      "dest": "assets/art/Animations/Roster/thornwall_idle",
+      "source": "assets/art/Characters/Roster/char_thornwall_base.png",
+      "action": "standing and breathing in place, shifting weight very slightly",
+      "frame_count": 8,
+      "pad_fraction": 0.62
+    },
+    {
+      "key": "char_thornwall_attack_strip8_512",
+      "dest": "assets/art/Animations/Roster/thornwall_attack",
+      "source": "assets/art/Characters/Roster/char_thornwall_base.png",
+      "action": "swinging forward to strike and then recovering to a stand",
+      "frame_count": 8,
+      "pad_fraction": 0.62,
+      "drift_threshold": 0.35
+    },
+    {
+      "key": "char_oathbound_idle_strip8_512",
+      "dest": "assets/art/Animations/Roster/oathbound_idle",
+      "source": "assets/art/Characters/Roster/char_oathbound_base.png",
+      "action": "standing and breathing in place, shifting weight very slightly",
+      "frame_count": 8,
+      "pad_fraction": 0.62
+    },
+    {
+      "key": "char_oathbound_attack_strip8_512",
+      "dest": "assets/art/Animations/Roster/oathbound_attack",
+      "source": "assets/art/Characters/Roster/char_oathbound_base.png",
+      "action": "swinging forward to strike and then recovering to a stand",
+      "frame_count": 8,
+      "pad_fraction": 0.62,
+      "drift_threshold": 0.35
+    },
+    {
+      "key": "char_magpie_idle_strip8_512",
+      "dest": "assets/art/Animations/Roster/magpie_idle",
+      "source": "assets/art/Characters/Roster/char_magpie_base.png",
+      "action": "standing and breathing in place, shifting weight very slightly",
+      "frame_count": 8,
+      "pad_fraction": 0.62
+    },
+    {
+      "key": "char_magpie_attack_strip8_512",
+      "dest": "assets/art/Animations/Roster/magpie_attack",
+      "source": "assets/art/Characters/Roster/char_magpie_base.png",
+      "action": "swinging forward to strike and then recovering to a stand",
+      "frame_count": 8,
+      "pad_fraction": 0.62,
+      "drift_threshold": 0.35
+    },
+    {
       "key": "impact_gold_strip8_512",
       "dest": "assets/art/VFX/impact/gold",
       "prompt": "a bright gold impact starburst, pixel-art VFX sprite, bright saturated energy, bold readable shape, centered, plain background, no text, no character, no border",

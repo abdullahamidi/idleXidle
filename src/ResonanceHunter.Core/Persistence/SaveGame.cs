@@ -76,6 +76,19 @@ public sealed record SaveGame
     /// <summary>The endgame corruption ratchet — how deep the fully-conquered world has been pushed.</summary>
     public int CorruptionTier { get; init; }
 
+    /// <summary>
+    /// Which character is being played. Empty or unknown falls back to the starter.
+    /// </summary>
+    /// <remarks>
+    /// The ONLY roster field worth saving. Which characters are unlocked is derived from conquest every
+    /// frame — the same rule both skill trees follow — so there is nothing here to fall out of step with
+    /// the world, and a region id that changes migrates itself.
+    /// </remarks>
+    public string ActiveCharacterId { get; init; } = "";
+
+    /// <summary>Quest ids finished. Quests do not exist yet; two characters are gated behind them.</summary>
+    public List<string> QuestsDone { get; init; } = new();
+
     /// <summary>The player's woven build — four skills. Empty on a pre-solo-model save (keeps the starter).</summary>
     public List<SavedSkill> WovenSkills { get; init; } = new();
 

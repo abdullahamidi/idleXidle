@@ -4,6 +4,7 @@ using System.Linq;
 using ResonanceHunter.Core.Abilities;
 using ResonanceHunter.Core.Automation;
 using ResonanceHunter.Core.Builds;
+using ResonanceHunter.Core.Characters;
 using ResonanceHunter.Core.Prestige;
 
 namespace ResonanceHunter.Client;
@@ -121,20 +122,33 @@ public sealed class PlayerLoadout
     /// node must show up on the very next expedition without the player re-opening the editor. Keystones
     /// no longer taught (impossible today — purchases are permanent — but cheap to guard) are dropped.
     /// </remarks>
-    public Build ToBuild(MemoryDustTree tree, MasteryTree mastery)
+    public Build ToBuild(MemoryDustTree tree, MasteryTree mastery) => ToBuild(tree, mastery, null);
+
+    /// <param name="character">
+    /// The character being played. Null keeps the pre-roster behaviour, which is what every test that
+    /// does not care about characters wants.
+    /// </param>
+    public Build ToBuild(MemoryDustTree tree, MasteryTree mastery, Character? character)
     {
         ArgumentNullException.ThrowIfNull(tree);
         ArgumentNullException.ThrowIfNull(mastery);
 
-        // The build's passive numbers are the Dust tree AND the Mastery tree, multiplied together. Its
-        // affinity and its extra triggers come from the Mastery tree — the corner you took and the
-        // notables you walked past to reach it.
+        // The build's passive numbers are the Dust tree, the Mastery tree AND the character, multiplied
+        // together. Its affinity and its extra triggers come from the Mastery tree — the corner you took
+        // and the notables you walked past to reach it — plus whatever the character grants outright.
+        //
+        // This is the ONE place a character reaches the simulation. Everything a character is — its
+        // passive, its aptitude, its granted behaviours — arrives as the same three things the two trees
+        // already contribute, so the sim never learns that characters exist and there is exactly one
+        // seam to get wrong instead of one per effect.
         var build = new Build
         {
-            PassiveMods = DustEffects.TreeMods(tree).Combine(mastery.Mods()),
+            PassiveMods = DustEffects.TreeMods(tree).Combine(mastery.Mods())
+                                     .Combine(character?.Mods ?? BuildMods.None),
             Affinity = mastery.Affinity(),
-            ExtraTriggers = mastery.Triggers(),
-            Shape = mastery.Shape(),
+            ExtraTriggers = new HashSet<BuildTrigger>(
+                mastery.Triggers().Concat(character?.Grants ?? Array.Empty<BuildTrigger>())),
+            Shape = SkillShape.Combine(mastery.Shape(), character?.TotalShape ?? SkillShape.None),
         };
 
         var learned = DustEffects.LearnedKeystones(tree);

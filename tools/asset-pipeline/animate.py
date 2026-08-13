@@ -70,6 +70,42 @@ def scale_nearest(img: Image, size: int) -> Image:
     return out
 
 
+def pad_to_fraction(img: Image, fraction: float) -> Image:
+    """Letterbox a sprite so its CONTENT occupies `fraction` of a square canvas.
+
+    The animation endpoint re-frames what it is given: fed a full-body figure that filled
+    its canvas, it returned a waist-up bust — every character's strip was their top half,
+    and the arena drew a torso standing on the floor with no legs.
+
+    It cannot be told not to. What it can be given is room: a figure occupying 62% of the
+    canvas survives the zoom as a whole body, because the crop it applies lands inside the
+    margin instead of inside the character. This is the same move the rig source made for
+    the cutter — author the input so the tool succeeds, rather than arguing with the tool.
+    """
+    xs = [x for x in range(img.w)
+          if any(img.get(x, y)[3] > 8 for y in range(img.h))]
+    ys = [y for y in range(img.h)
+          if any(img.get(x, y)[3] > 8 for x in range(img.w))]
+    if not xs or not ys:
+        return img
+
+    l, r, t, b = xs[0], xs[-1] + 1, ys[0], ys[-1] + 1
+    cw, ch = r - l, b - t
+    side = max(1, int(round(max(cw, ch) / max(0.05, min(0.95, fraction)))))
+
+    out = Image(side, side)
+    # Centred horizontally, and sat on the FLOOR of the canvas rather than centred
+    # vertically: a character re-framed from a bottom-anchored source keeps its feet.
+    ox = (side - cw) // 2
+    oy = side - ch - max(2, side // 40)
+    for y in range(ch):
+        for x in range(cw):
+            cr, cg, cb, ca = img.get(l + x, t + y)
+            if ca > 0:
+                out.set(ox + x, oy + y, cr, cg, cb, ca)
+    return out
+
+
 def encode_png(img: Image) -> str:
     tmp = os.path.join(STAGING, f"_enc_{threading.get_ident()}.png")
     write(tmp, img)
@@ -214,6 +250,8 @@ def main() -> int:
                     raw,
                 )
                 source = read(raw)
+            if entry.get("pad_fraction"):
+                source = pad_to_fraction(source, float(entry["pad_fraction"]))
             first = scale_nearest(source, API_MAX_INPUT)
             frames = animate(
                 encode_png(first),

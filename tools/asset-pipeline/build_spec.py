@@ -168,8 +168,13 @@ STILL_STYLES = {
     # animator has a clean neutral frame to work from, and nothing whatsoever behind them — no ground,
     # no shadow, no vignette, because those survive knockout and then ride along under the figure on
     # the battle stage.
-    "hero":      "{subject}. ONE single character alone, front facing, full body, standing upright and "
-                 "still, facing the viewer. Dark fantasy RPG hero sprite, bold readable silhouette, "
+    # "full body" is not enough on its own — the starter came back cropped at the belt, which the arena
+    # then drew as a torso standing on the floor. Naming the FEET is what gets the legs: a model that
+    # has been told to include both boots cannot frame the shot above them.
+    "hero":      "{subject}. ONE single character alone, front facing, standing upright and still, "
+                 "facing the viewer. The ENTIRE body is visible from the top of the head all the way "
+                 "down to both feet, with both legs and both boots fully in frame and a little empty "
+                 "space below them. Dark fantasy RPG hero sprite, bold readable silhouette, "
                  "flat bold shapes, strong rim light, centered on a COMPLETELY EMPTY background with "
                  "nothing behind the figure at all: no scene, no wall, no ground, no floor, no cast "
                  "shadow, no circle, no vignette. One figure only, no companion, no second character, "
@@ -200,6 +205,12 @@ STILL_STYLES = {
 
 ANIM_STYLE_VFX = ("{subject}, pixel-art VFX sprite, bright saturated energy, bold readable shape, "
                   "centered, plain background, no text, no character, no border")
+
+
+# The roster's ids, at module scope: stills() designs them and animations() clips them, and a list
+# that drifted between the two would quietly animate nine characters and leave the tenth a statue.
+ROSTER_IDS = ["seeker", "anvil", "chorus", "metronome", "unbroken",
+              "tower", "quiver", "thornwall", "oathbound", "magpie"]
 
 
 def stills() -> list[dict]:
@@ -399,7 +410,9 @@ def stills() -> list[dict]:
                   "a completely empty background, no text, no border, no frame",
     })
 
-    # --- THE ROSTER: ten characters, as FLAT SPRITES.
+    # --- THE ROSTER: ten characters, as FLAT SPRITES. Ids in ROSTER_IDS at module scope, because
+    # animations() needs the same list and a roster that drifted between the two would silently
+    # animate nine characters and leave the tenth as a still.
     #
     # The cutout rig is retired. It bought articulated limbs and charged for them in constraints that
     # reached all the way back into the art: every source body had to stand in a wide A-pose with a
@@ -847,6 +860,35 @@ def animations() -> list[dict]:
                   "prompt": f"{hunter}. Dark fantasy RPG player sprite, front facing, full body, "
                             f"bold readable silhouette, flat bold shapes, centered, plain background, no text",
                   "action": action, "frame_count": 8, "drift_threshold": 0.35})
+
+    # THE ROSTER'S CLIPS. Animated FROM the approved base sprite (`source`), never from a fresh prompt.
+    #
+    # That is the whole reason the roster can be flat sprites at all. A prompt-driven strip re-invents
+    # the character on every clip — the idle and the attack come back as two different people, which is
+    # exactly what the cutout rig existed to prevent and what it charged four art constraints for.
+    # Animating from the sprite keeps the design fixed and lets the motion be authored, so a strip is
+    # both cheaper (8 generations, not 9) and more on-model than the rig ever was.
+    #
+    # Two clips each, and only two: idle is what the champion does for almost the whole expedition, and
+    # attack is the one beat the combat loop drives. Death and cast can follow once these are proven —
+    # every clip is eight more generations per character, and ten characters make that a real number.
+    for cid in ROSTER_IDS:
+        for clip, action in [("idle", "standing and breathing in place, shifting weight very slightly"),
+                             ("attack", "swinging forward to strike and then recovering to a stand")]:
+            a.append({
+                "key": f"char_{cid}_{clip}_strip8_512",
+                "dest": f"assets/art/Animations/Roster/{cid}_{clip}",
+                "source": f"assets/art/Characters/Roster/char_{cid}_base.png",
+                "action": action, "frame_count": 8,
+                # The animator RE-FRAMES its input. Fed a full-body figure that filled its canvas it
+                # returned a waist-up bust, so every character's strip was their top half and the arena
+                # drew a torso standing on the floor with no legs. Padding the source to 62% of a square
+                # canvas gives the zoom somewhere to land that is not the character.
+                "pad_fraction": 0.62,
+                # The attack clip moves the figure a long way from frame 0, so the drift guard has to be
+                # loose or every attack strip is rejected — same value the hunter and enemy attacks use.
+                **({"drift_threshold": 0.35} if clip == "attack" else {}),
+            })
 
     # VFX. No sprite to animate from, so frame 1 is generated then animated.
     for key, dest, subj, action in [

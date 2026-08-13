@@ -413,6 +413,10 @@ public static class SoloBattle
 
             m *= shape.HitSize * shape.DamageDealt;
 
+            // The character's APTITUDE. Behind the same skillForm gate as everything else here, so it
+            // lifts woven skills and never the background auto-attack.
+            m *= shape.FormPowerFor(skillForm.Value);
+
             // HOARDER — the AVARICE terminal. Every point of haul the path bought becomes force, so a
             // Greed/Fortune build finally has a reason to exist in a fight instead of only in the bag.
             // A fifth of the haul multiplier, so a doubled haul is +20% hit size — enough to matter,
