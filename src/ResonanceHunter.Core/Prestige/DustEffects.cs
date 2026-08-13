@@ -189,11 +189,42 @@ public static class DustEffects
         "vow_study_1", "vow_study_2", "vow_study_3", "vow_binding", "vow_sacrifice",
         "filter_common", "filter_uncommon",
         "ledger", "attunement",
+        "socket_2", "socket_3", "weave_5", "artifice_vows",
     };
 
+    /// <summary>
+    /// How many keystone sockets the character has. One to start; the spine sells the other two.
+    /// </summary>
+    /// <remarks>
+    /// Three free sockets meant a player wore every keystone they had learned, so learning one was the
+    /// only decision and wearing it was automatic. Starting at one makes the SOCKET the scarce thing and
+    /// the keystone the choice — which is what the paths are for.
+    /// </remarks>
+    public static int KeystoneSockets(MemoryDustTree tree)
+    {
+        ArgumentNullException.ThrowIfNull(tree);
+        return 1 + (tree.Owns("socket_2") ? 1 : 0) + (tree.Owns("socket_3") ? 1 : 0);
+    }
+
+    /// <summary>Skill slots — four to start, five once the spine buys the fifth weave.</summary>
+    public static int SkillSlots(MemoryDustTree tree)
+    {
+        ArgumentNullException.ThrowIfNull(tree);
+        return 4 + (tree.Owns("weave_5") ? 1 : 0);
+    }
+
+    /// <summary>THE BOUND HAND — every Vow known may be carried at once, rather than one at a time.</summary>
+    public static bool UnboundVows(MemoryDustTree tree)
+    {
+        ArgumentNullException.ThrowIfNull(tree);
+        return tree.Owns("artifice_vows");
+    }
+
     public static IReadOnlySet<string> WiredIds { get; } = NamedWires
-        // Attribute nodes and keystone gates need no hand-written wire: TreeMods and LearnedKeystones
-        // read them generically off the node itself, so carrying an id here is the wire.
+        // Keystone gates need no hand-written wire: LearnedKeystones reads them generically off the
+        // node itself, so carrying an id there is the wire. (The attribute nodes that TreeMods used to
+        // cover are gone — numbers belong to the skill tree now, and this tree sells only capacity,
+        // keystones and behaviour.)
         .Concat(MemoryDustTree.Catalog
             .Where(u => u.Mods != BuildMods.None || u.GrantsKeystone is not null)
             .Select(u => u.Id))

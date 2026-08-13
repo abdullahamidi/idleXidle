@@ -87,6 +87,8 @@ public class TriggerLivenessTests
             BuildTrigger.Coiled,        // SoloBattleTests.test_coiled_fires_the_trap_more_often
             BuildTrigger.Siphon,        // SoloBattleTests.test_siphon_deepens_the_transformation_leech
             BuildTrigger.Desperation,   // SoloExpeditionTests.test_desperation_swells_the_haul_at_low_health
+            BuildTrigger.Hoarder,       // test_hoarder_turns_haul_into_force
+            BuildTrigger.Weaver,        // test_weaver_fires_the_next_form_as_well
         };
 
         // DESPERATION was parked here for a long time as "dead" — a HAUL effect the squad Expedition read
@@ -328,5 +330,74 @@ public class TriggerLivenessTests
         });
 
         Assert.True(paid, "HARVEST never paid a core across 40 kills — nothing reads the trigger");
+    }
+
+    // ── HOARDER — the AVARICE terminal ────────────────────────────────────────────────────────
+
+    /// <summary>Haul becomes force, or the whole economy path ends in money and nothing else.</summary>
+    /// <remarks>
+    /// The path HOARDER terminates buys no combat power at all — that is what makes choosing it a real
+    /// decision — so this terminal is the only thing standing between "the economy build" and "the build
+    /// that cannot fight". If it reads nothing, twelve permanent points buy a label.
+    /// </remarks>
+    [Fact]
+    public void test_hoarder_turns_haul_into_force()
+    {
+        // GREED is the haul keystone; HOARDER is what converts what it bought.
+        var greedy = BuildWith("greed");
+        var hoarding = BuildWith("greed", "hoarder");
+
+        Assert.True(Output(hoarding) > Output(greedy),
+            $"HOARDER changed nothing ({Output(greedy):F0} -> {Output(hoarding):F0}). The AVARICE path's " +
+            "terminal is inert and its whole road ends in money.");
+    }
+
+    /// <summary>Without haul to convert, HOARDER is nearly all price.</summary>
+    /// <remarks>
+    /// The other half of the trade, and what stops it being a free damage keystone. NOT "pays nothing":
+    /// the Hunter's base Guile puts the haul multiplier a little above 1 before any investment, so a
+    /// bare build does gain about 2% — measured, not assumed. What matters is the GAP: the same keystone
+    /// is worth an order of magnitude more to a build that actually walked the economy path.
+    /// </remarks>
+    [Fact]
+    public void test_hoarder_is_worth_far_more_to_a_haul_build()
+    {
+        var bareGain = Output(BuildWith("hoarder")) / Output(BuildWith()) - 1f;
+        var haulGain = Output(BuildWith("greed", "hoarder")) / Output(BuildWith("greed")) - 1f;
+
+        Assert.True(haulGain > bareGain * 5f,
+            $"HOARDER gave {haulGain:P1} to a haul build and {bareGain:P1} to a bare one. It is meant " +
+            "to convert what the AVARICE path bought, not to be a damage keystone anyone can splash.");
+        Assert.True(Keystones.ById("hoarder")!.Mods.Rarity < 1f, "HOARDER must still charge its price.");
+    }
+
+    // ── WEAVER — the ARTIFICE terminal ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Every skill also fires as the NEXT Form carried — one slot answering two demands.
+    /// </summary>
+    /// <remarks>
+    /// The design's "two Forms in one slot", and the only thing in the game that lets a single
+    /// activation be both a Weight hit and a Spread hit. Needs two Forms woven to mean anything, which
+    /// is exactly the build commitment it is meant to demand.
+    /// </remarks>
+    [Fact]
+    public void test_weaver_fires_the_next_form_as_well()
+    {
+        Build TwoForms(params string[] keystones)
+        {
+            var b = new Build();
+            b.Weave(Strike(Form.Strike));
+            b.Weave(Strike(Form.Projectile));
+            foreach (var id in keystones) b.Take(Keystones.ById(id)!);
+            return b;
+        }
+
+        var plain = Output(TwoForms());
+        var woven = Output(TwoForms("weaver"));
+
+        Assert.True(woven > plain,
+            $"WEAVER changed nothing ({plain:F0} -> {woven:F0}) — the ARTIFICE terminal is a label. " +
+            "It costs 30% cadence, so an inert one is strictly worse than not taking it.");
     }
 }

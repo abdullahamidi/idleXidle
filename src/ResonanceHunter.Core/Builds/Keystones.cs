@@ -121,6 +121,27 @@ public static class Keystones
             Blurb = "TRIPLE HEALTH. YOUR SKILLS COME BACK 60% SLOWER.",
             Mods = new BuildMods(Damage: 1f, Health: 3.0f, SkillRate: 0.4f, Haul: 1f, Rarity: 1f),
         },
+        new()
+        {
+            // THE AVARICE TERMINAL. The path that ends here buys no combat power at all — that is what
+            // makes choosing it a real decision — and this is what stops it being a dead end: the haul a
+            // Greed build stacks becomes hit size. It pays for it in RARITY, the loot build's other half,
+            // so taking it means choosing between being rich and being dangerous rather than getting both.
+            Id = "hoarder", Name = "HOARDER",
+            Blurb = "YOUR HAUL BECOMES FORCE — HITS GROW WITH IT. HALF LOOT RARITY.",
+            Mods = new BuildMods(Damage: 1f, Health: 1f, SkillRate: 1f, Haul: 1f, Rarity: 0.5f),
+            Grants = new[] { BuildTrigger.Hoarder },
+        },
+        new()
+        {
+            // THE ARTIFICE TERMINAL. Strange rather than large: one slot answers two of the content's
+            // four demands, which no other thing in the game can do. The cadence price is what keeps it
+            // from being simply "more damage" — a Weaver casts less often and covers more ground.
+            Id = "weaver", Name = "WEAVER",
+            Blurb = "EVERY SKILL ALSO FIRES AS THE NEXT FORM YOU CARRY, AT 45%. SKILLS RETURN 30% SLOWER.",
+            Mods = new BuildMods(Damage: 1f, Health: 1f, SkillRate: 0.70f, Haul: 1f, Rarity: 1f),
+            Grants = new[] { BuildTrigger.Weaver },
+        },
     };
 
     public static Keystone? ById(string? id) => id is null ? null : Catalog.FirstOrDefault(k => k.Id == id);

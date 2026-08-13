@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using ResonanceHunter.Core.Abilities;
 using ResonanceHunter.Core.Builds;
@@ -32,7 +33,7 @@ public class PassiveTreeTests
     private static MemoryDustTree Bought(params string[] ids)
     {
         var tree = new MemoryDustTree();
-        tree.AwardFromMastery(5_000);
+        tree.SetEarned(5_000);
         foreach (var id in ids)
             Assert.True(tree.Purchase(id), $"could not buy {id} — prerequisite or cost changed");
         return tree;
@@ -83,19 +84,22 @@ public class PassiveTreeTests
     [Fact]
     public void test_the_passive_tree_reaches_the_fight()
     {
-        // Buying nodes and dealing more damage are separated by four systems here, and the ONLY claim
-        // under test is that they are connected. PassiveMods left at None reads exactly like a player
-        // who bought nothing; this is what tells those two apart.
+        // Buying nodes and fighting differently are separated by four systems here, and the ONLY claim
+        // under test is that they are connected.
+        //
+        // It reads a KEYSTONE now, not an attribute node. The tree's flat rungs (+8% DAMAGE, three
+        // times, and the same for health, tempo, haul and rarity) are gone: they were the bare
+        // multipliers the design forbids, they made this tree read as the skill tree in another colour,
+        // and numbers are the skill tree's job. What is left is what only a permanent tree can sell.
+        var tree = Bought("socket_2", "ks_glass_cannon");
+
         var naked = DamageDealt(BuildFrom(new MemoryDustTree()));
-        var might = DamageDealt(BuildFrom(Bought("might_1", "might_2")));
+        var socketed = DamageDealt(BuildFrom(tree, "glass_cannon"));
 
-        Assert.True(might > naked,
-            $"two DAMAGE nodes changed nothing ({naked} -> {might}) — Build.PassiveMods is not wired");
-
-        // A RANGE, not an equality: every hit is banked as (int)MathF.Round, so forty rounded hits are
-        // not the float total scaled — they drift by up to half a point each. Demanding 1.1664 exactly
-        // would be demanding the sim stop rounding, which is not the property under test.
-        Assert.InRange(might / naked, 1.15f, 1.19f);   // 1.08 x 1.08 = 1.1664
+        Assert.True(socketed > naked,
+            $"a learned and socketed keystone changed nothing ({naked} -> {socketed}) — the tree is " +
+            "not reaching the fight at all");
+        Assert.InRange(socketed / naked, 1.9f, 2.1f);   // GLASS CANNON is x2.0, minus per-hit rounding
     }
 
     [Fact]
@@ -122,15 +126,15 @@ public class PassiveTreeTests
         }
 
         var naked = Survive(BuildFrom(new MemoryDustTree()));
-        var tough = Survive(BuildFrom(Bought("grit_1", "grit_2")));
+        var tough = Survive(BuildFrom(Bought("socket_2", "ks_ironclad"), "ironclad"));
 
-        Assert.True(tough > naked, $"two HEALTH nodes changed nothing ({naked} -> {tough})");
+        Assert.True(tough > naked, $"a socketed IRONCLAD changed nothing ({naked} -> {tough})");
     }
 
     [Fact]
     public void test_a_socketed_keystone_reaches_the_fight()
     {
-        var tree = Bought("might_1", "might_2", "ks_glass_cannon");
+        var tree = Bought("socket_2", "ks_glass_cannon");
 
         var walked = DamageDealt(BuildFrom(tree));                    // path only
         var socketed = DamageDealt(BuildFrom(tree, "glass_cannon"));  // path + the keystone worn
@@ -142,8 +146,8 @@ public class PassiveTreeTests
     public void test_learning_a_keystone_is_not_wearing_it()
     {
         // The load-bearing distinction. If buying the gate applied the keystone, this would be 2x.
-        var gated = DamageDealt(BuildFrom(Bought("might_1", "might_2", "ks_glass_cannon")));
-        var pathOnly = DamageDealt(BuildFrom(Bought("might_1", "might_2")));
+        var gated = DamageDealt(BuildFrom(Bought("socket_2", "ks_glass_cannon")));
+        var pathOnly = DamageDealt(BuildFrom(Bought("socket_2")));
 
         Assert.Equal(pathOnly, gated, 0);
     }
@@ -158,7 +162,7 @@ public class PassiveTreeTests
         // between "I finished the tree" and "I wear all ten opposed keystones and stopped choosing" is
         // Build.KeystoneSlots. If it is ever removed to be generous, this is the test that objects.
         var tree = new MemoryDustTree();
-        tree.AwardFromMastery(tree.TotalTreeCost);
+        tree.SetEarned(tree.TotalTreeCost);
         while (!tree.IsComplete)
         {
             var next = tree.All.FirstOrDefault(u => tree.CanUnlock(u.Id));
@@ -177,29 +181,65 @@ public class PassiveTreeTests
     [Fact]
     public void test_the_branches_pull_against_each_other()
     {
-        // A tree whose branches all improve the same thing is a shopping list with extra steps. MIGHT
-        // must buy something GRIT does not, or walking one instead of the other decides nothing.
-        var might = DustEffects.TreeMods(Bought("might_1", "might_2"));
-        var grit = DustEffects.TreeMods(Bought("grit_1", "grit_2"));
+        // A tree whose paths all improve the same thing is a shopping list with extra steps. RUIN must
+        // buy something AEGIS does not, or walking one instead of the other decides nothing. Read off
+        // the terminals, because a terminal is what the path is FOR.
+        var ruin = Keystones.ById("reaper")!.Mods;
+        var aegis = Keystones.ById("titan")!.Mods;
+        var avarice = Keystones.ById("hoarder")!.Mods;
 
-        Assert.True(might.Damage > grit.Damage, "MIGHT does not out-damage GRIT");
-        Assert.True(grit.Health > might.Health, "GRIT does not out-live MIGHT");
+        Assert.True(aegis.Health > ruin.Health, "AEGIS does not out-live RUIN");
+        Assert.True(ruin.SkillRate > aegis.SkillRate || ruin.Damage > aegis.Damage,
+            "RUIN buys neither speed nor damage over AEGIS");
+        Assert.True(avarice.Rarity < 1f, "AVARICE's terminal charges nothing for its force");
     }
 
     [Fact]
-    public void test_every_keystone_gate_sits_behind_attribute_nodes_of_its_own_branch()
+    public void test_each_path_is_a_chain_of_four_rising_costs()
     {
-        // A gate whose prerequisite is another GATE would let a player collect keystones without ever
-        // walking a branch, and the path — which is the actual cost — would evaporate.
+        // THE PATHS ARE CHAINS NOW, and deliberately so — the old rule was the opposite ("a gate must
+        // never hang off another gate") because gates hung off attribute rungs that no longer exist.
+        // What replaced that rule is this: three keystones and a terminal at 4 / 6 / 8 / 12, so the
+        // terminal costs more than the rest of its path and cannot be splashed.
+        var terminals = new[] { "ks_reaper", "ks_titan", "ks_hoarder", "ks_weaver" };
         var byId = MemoryDustTree.Catalog.ToDictionary(u => u.Id);
 
-        foreach (var gate in MemoryDustTree.Catalog.Where(u => u.GrantsKeystone is not null))
+        foreach (var terminalId in terminals)
         {
-            foreach (var req in gate.Requires)
+            var chain = new List<MemoryDustUnlock>();
+            var id = terminalId;
+            while (true)
             {
-                Assert.True(byId[req].GrantsKeystone is null,
-                    $"{gate.Id} is reached through another keystone gate ({req}) — the branch is a chain, not a path");
+                var node = byId[id];
+                chain.Add(node);
+                // Walk back along the path — the prerequisite that is itself part of a path.
+                var next = node.Requires.FirstOrDefault(r => r.StartsWith("ks_") || r == "artifice_vows");
+                if (next is null) break;
+                id = next;
             }
+            chain.Reverse();
+
+            Assert.Equal(4, chain.Count);
+            Assert.Equal(new[] { 4, 6, 8, 12 }, chain.Select(n => n.Cost).ToArray());
+            Assert.True(chain[^1].Cost > chain[0].Cost + chain[1].Cost,
+                $"{terminalId} costs less than the two rungs that open its path — a terminal has to be " +
+                "the commitment, or a player reaches it as a side effect of browsing.");
+        }
+    }
+
+    /// <summary>Every terminal is a keystone the game can actually teach.</summary>
+    /// <remarks>
+    /// HOARDER and WEAVER were authored for this rebuild; the design named them as missing. A terminal
+    /// that grants nothing is twelve points for a label.
+    /// </remarks>
+    [Fact]
+    public void test_every_terminal_teaches_a_keystone()
+    {
+        foreach (var id in new[] { "ks_reaper", "ks_titan", "ks_hoarder", "ks_weaver" })
+        {
+            var node = MemoryDustTree.Catalog.First(u => u.Id == id);
+            Assert.NotNull(node.GrantsKeystone);
+            Assert.NotNull(Keystones.ById(node.GrantsKeystone));
         }
     }
 }

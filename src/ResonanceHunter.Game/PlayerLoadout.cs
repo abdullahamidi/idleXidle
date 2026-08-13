@@ -36,14 +36,28 @@ public sealed class PlayerLoadout
     public IReadOnlyList<string> KeystoneIds => _keystoneIds;
 
     public const int MaxSkills = Build.SkillSlots;        // 4 — a build is a CHOICE of Forms
-    public const int MaxKeystones = Build.KeystoneSlots;  // 3 — the tree teaches ten, you wear three
+    public const int MaxKeystones = Build.KeystoneSlots;  // 3 — the tree teaches fifteen, you wear three
+
+    /// <summary>
+    /// How many skill slots and keystone sockets the character currently HAS, set by the host from the
+    /// trait tree's spine. The consts above are the hard ceiling; these are what is unlocked.
+    /// </summary>
+    /// <remarks>
+    /// Host-set rather than resolved here, like every other cross-system value the loadout reads, and
+    /// defaulted to the ceiling so a caller that never sets them (a test, a bench) behaves as before.
+    /// A socket the player has not bought is the scarce thing the AVARICE and RUIN paths compete over —
+    /// with three free sockets, learning a keystone was the only decision and wearing it was automatic.
+    /// </remarks>
+    public int SkillCapacity { get; set; } = MaxSkills;
+
+    public int KeystoneCapacity { get; set; } = MaxKeystones;
 
     // ── Skill editing ───────────────────────────────────────────────────────────────────────────
 
     /// <summary>Add an empty-ish skill slot if there is room. Returns its index, or -1 when full.</summary>
     public int AddSkill()
     {
-        if (_skills.Count >= MaxSkills) return -1;
+        if (_skills.Count >= Math.Min(MaxSkills, SkillCapacity)) return -1;
         _skills.Add(new SkillChoice(Source.Body, Form.Strike, null));
         return _skills.Count - 1;
     }
@@ -91,7 +105,7 @@ public sealed class PlayerLoadout
         ArgumentNullException.ThrowIfNull(learned);
 
         if (_keystoneIds.Contains(id)) { _keystoneIds.Remove(id); return true; }
-        if (_keystoneIds.Count >= MaxKeystones) return false;      // three sockets, no more
+        if (_keystoneIds.Count >= Math.Min(MaxKeystones, KeystoneCapacity)) return false;   // no free socket
         if (learned.All(k => k.Id != id)) return false;            // must be taught first
         _keystoneIds.Add(id);
         return true;

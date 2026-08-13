@@ -14,7 +14,7 @@ public class DustEffectsTests
     private static MemoryDustTree Rich()
     {
         var tree = new MemoryDustTree();
-        tree.AwardFromMastery(5000);
+        tree.SetEarned(5000);
         return tree;
     }
 
@@ -83,23 +83,40 @@ public class DustEffectsTests
     [Fact]
     public void test_attribute_nodes_actually_reach_the_character()
     {
-        Assert.Equal(1.08f, DustEffects.TreeMods(With("might_1")).Damage, 3);
-        Assert.Equal(1.10f, DustEffects.TreeMods(With("grit_1")).Health, 3);
+        // The tree sells CAPACITY now, not numbers — its attribute rungs were the bare multipliers the
+        // design forbids and the skill tree owns numbers. One socket to start, three once bought.
+        Assert.Equal(1, DustEffects.KeystoneSockets(With()));
+        Assert.Equal(2, DustEffects.KeystoneSockets(With("socket_2")));
+        Assert.Equal(3, DustEffects.KeystoneSockets(With("socket_2", "weave_5", "socket_3")));
+        Assert.Equal(4, DustEffects.SkillSlots(With()));
+        Assert.Equal(5, DustEffects.SkillSlots(With("socket_2", "weave_5")));
     }
 
+    /// <summary>
+    /// This tree contributes NO numbers, and that is deliberate.
+    /// </summary>
+    /// <remarks>
+    /// It used to compound attribute rungs (1.08 x 1.08 across three tiers, five times over), which is
+    /// exactly what made three separate trees feel like one screen in different colours. Numbers belong
+    /// to the skill tree; this one sells capacity, keystones and behaviour. A regression that quietly
+    /// re-adds a Mods value to a node here would be that failure creeping back.
+    /// </remarks>
     [Fact]
-    public void test_walking_a_branch_compounds_it()
+    public void test_the_trait_tree_contributes_no_bare_multipliers()
     {
-        // Multiplicative, not additive: 1.08 x 1.08 = 1.1664, not 1.16. The difference is invisible at
-        // two nodes and is the whole difference between a curve and a runaway at twenty.
-        var m = DustEffects.TreeMods(With("might_1", "might_2"));
-        Assert.Equal(1.08f * 1.08f, m.Damage, 4);
+        var everything = new MemoryDustTree();
+        everything.SetEarned(everything.TotalTreeCost);
+        for (var i = 0; i < 100 && !everything.IsComplete; i++)
+            if (everything.All.FirstOrDefault(u => everything.CanUnlock(u.Id)) is { } next)
+                everything.Purchase(next.Id);
+
+        Assert.Equal(BuildMods.None, DustEffects.TreeMods(everything));
     }
 
     [Fact]
     public void test_a_keystone_gate_teaches_its_keystone()
     {
-        var learned = DustEffects.LearnedKeystones(With("might_1", "might_2", "ks_glass_cannon"));
+        var learned = DustEffects.LearnedKeystones(With("socket_2", "ks_glass_cannon"));
         Assert.Single(learned);
         Assert.Equal("glass_cannon", learned[0].Id);
     }
@@ -110,10 +127,12 @@ public class DustEffectsTests
         // The distinction the whole design rests on: the tree TEACHES, the build WEARS. If buying the
         // node also wore the keystone, a completed tree would wear all ten opposed keystones at once and
         // every build in the game would converge on the same mush.
-        var tree = With("might_1", "might_2", "ks_glass_cannon");
+        var tree = With("socket_2", "ks_glass_cannon");
 
-        // GLASS CANNON is x2.0 damage. If the gate applied it, this would not be 1.1664.
-        Assert.Equal(1.08f * 1.08f, DustEffects.TreeMods(tree).Damage, 4);
+        // GLASS CANNON is x2.0 damage. The tree contributes no numbers at all, so if the gate applied
+        // its keystone this would be 2, not 1.
+        Assert.Equal(1f, DustEffects.TreeMods(tree).Damage, 4);
+        Assert.Single(DustEffects.LearnedKeystones(tree));
     }
 
     [Fact]

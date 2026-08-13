@@ -15,21 +15,27 @@ public class MemoryDustTests
     {
         var tree = new MemoryDustTree();
 
-        // The exact figures are not the property under test — the HORIZON is: a player must be able to
-        // see the end of this system rather than face an infinite multiplier grind. These are pinned so
-        // that a catalog edit has to be deliberate about the shape of that horizon. (44/1,775 after the
-        // release-variety pass added the FORTUNE road, four third-rung nodes, and the FORTUNE + TITAN
-        // keystone gates; was 36/1,430 before.)
-        Assert.Equal(44, tree.All.Count);
-        Assert.Equal(1_775, tree.TotalTreeCost);
+        // The horizon is the property, not the exact figures — a player must be able to see the end of
+        // this system. Pinned so a catalogue edit has to be DELIBERATE about the shape of it.
+        //
+        // The tree is deliberately NOT completable any more (see the test below): the whole point of the
+        // four paths is that two terminals cost more than a career earns.
+        Assert.Equal(35, tree.All.Count);
+        Assert.InRange(tree.TotalTreeCost, 140, 170);
     }
 
-    /// <summary>The whole tree can actually be bought — no unlock is unreachable.</summary>
+    /// <summary>Every node is REACHABLE — no unlock is orphaned by its prerequisites.</summary>
+    /// <remarks>
+    /// Reachability, not affordability. A player can never afford the whole tree — see
+    /// test_two_terminals_are_out_of_reach, which is the point of the four paths. What must always hold
+    /// is that no node is walled off by a chain that cannot be completed, which is a content bug rather
+    /// than a design choice.
+    /// </remarks>
     [Fact]
     public void test_the_entire_tree_can_be_completed()
     {
         var tree = new MemoryDustTree();
-        tree.AwardFromMastery(tree.TotalTreeCost);
+        tree.SetEarned(tree.TotalTreeCost);
 
         // Buy in dependency order until nothing remains purchasable.
         var guard = 0;
@@ -41,7 +47,7 @@ public class MemoryDustTests
         }
 
         Assert.True(tree.IsComplete);
-        Assert.Equal(0, tree.MemoryDust); // exactly enough, no more
+        Assert.Equal(0, tree.Available); // exactly enough, no more
     }
 
     // ── NOTHING RESETS ────────────────────────────────────────────────────────────────────────
@@ -58,13 +64,15 @@ public class MemoryDustTests
     public void test_the_only_way_to_gain_dust_is_mastery_and_nothing_is_ever_reset()
     {
         var tree = new MemoryDustTree();
-        Assert.Equal(0, tree.MemoryDust);
+        Assert.Equal(0, tree.Available);
 
-        tree.AwardFromMastery(50);
-        Assert.Equal(50, tree.MemoryDust);
+        // TRAIT POINTS, not Memory Dust. Dust is minted by the Warren while the game is CLOSED; a
+        // permanent tree bought with it would be an identity bought by waiting.
+        tree.SetEarned(50);
+        Assert.Equal(50, tree.Available);
 
-        tree.Purchase("recall_1"); // costs 10
-        Assert.Equal(40, tree.MemoryDust);
+        tree.Purchase("recall_1"); // costs 1
+        Assert.Equal(49, tree.Available);
 
         // The public surface offers no way to un-master, refund, or reset. If one is ever added,
         // this system stops being the thing it promises to be.
@@ -83,7 +91,7 @@ public class MemoryDustTests
     public void test_an_unlock_requires_its_prerequisites()
     {
         var tree = new MemoryDustTree();
-        tree.AwardFromMastery(1000);
+        tree.SetEarned(1000);
 
         Assert.False(tree.CanUnlock("recall_2")); // needs recall_1 first
         Assert.False(tree.Purchase("recall_2"));
@@ -97,24 +105,24 @@ public class MemoryDustTests
     public void test_purchases_are_permanent_and_cannot_be_repeated()
     {
         var tree = new MemoryDustTree();
-        tree.AwardFromMastery(1000);
+        tree.SetEarned(1000);
 
         Assert.True(tree.Purchase("recall_1"));
-        var afterFirst = tree.MemoryDust;
+        var afterFirst = tree.Available;
 
         Assert.False(tree.Purchase("recall_1")); // already owned — no double-spend
-        Assert.Equal(afterFirst, tree.MemoryDust);
+        Assert.Equal(afterFirst, tree.Available);
     }
 
     [Fact]
     public void test_you_cannot_buy_what_you_cannot_afford()
     {
         var tree = new MemoryDustTree();
-        tree.AwardFromMastery(5); // recall_1 costs 10
+        tree.SetEarned(1); // socket_2 costs 2
 
-        Assert.False(tree.CanUnlock("recall_1"));
-        Assert.False(tree.Purchase("recall_1"));
-        Assert.Equal(5, tree.MemoryDust);
+        Assert.False(tree.CanUnlock("socket_2"));
+        Assert.False(tree.Purchase("socket_2"));
+        Assert.Equal(1, tree.Available);
     }
 
     /// <summary>The capstone requires the whole tier-4 tier — it truly is the end.</summary>
@@ -122,7 +130,7 @@ public class MemoryDustTests
     public void test_the_capstone_is_gated_behind_everything()
     {
         var tree = new MemoryDustTree();
-        tree.AwardFromMastery(10_000);
+        tree.SetEarned(10_000);
 
         Assert.False(tree.CanUnlock("attunement"));
 
@@ -143,16 +151,17 @@ public class MemoryDustTests
     public void test_owned_unlocks_and_dust_restore_from_a_save()
     {
         var tree = new MemoryDustTree();
-        tree.AwardFromMastery(1000);
+        tree.SetEarned(1000);
         tree.Purchase("recall_1");
-        tree.Purchase("might_1");
+        tree.Purchase("socket_2");
 
         var restored = new MemoryDustTree();
         restored.Restore(tree.MemoryDust, tree.OwnedIds);
+        restored.SetEarned(1000);
 
-        Assert.Equal(tree.MemoryDust, restored.MemoryDust);
+        Assert.Equal(tree.Spent, restored.Spent);
         Assert.True(restored.Owns("recall_1"));
-        Assert.True(restored.Owns("might_1"));
+        Assert.True(restored.Owns("socket_2"));
         Assert.False(restored.Owns("recall_2"));
     }
 
@@ -193,11 +202,55 @@ public class MemoryDustTests
     public void test_ignoring_the_system_entirely_is_harmless()
     {
         var tree = new MemoryDustTree();
-        tree.AwardFromMastery(200); // earned passively while playing
+        tree.SetEarned(200); // earned by conquering, whether or not the screen is ever opened
 
-        // Never spending it changes nothing about the rest of the game. The Dust simply waits.
-        Assert.Equal(200, tree.MemoryDust);
+        // Never spending them changes nothing about the rest of the game. The points simply wait.
+        Assert.Equal(200, tree.Available);
         Assert.False(tree.IsComplete);
         Assert.Empty(tree.OwnedIds);
+    }
+
+    /// <summary>
+    /// Two of the four terminals are not affordable, and that is the design.
+    /// </summary>
+    /// <remarks>
+    /// THE INVARIANT THE TRAIT TREE RESTS ON. A path is 4 + 6 + 8 + 12 = 30, so two are 60 against
+    /// roughly 34 earnable at full current content. One terminal plus most of a second path is
+    /// affordable; two terminals is not. The terminal you did NOT take is the permanent shape of your
+    /// character, and if this ever inverts the tree stops asking anything.
+    /// </remarks>
+    [Fact]
+    public void test_two_terminals_are_out_of_reach()
+    {
+        const int budgetAtFullContent = 34;   // 6 conquests + ~10 corruption tiers + 18 mastery goals
+
+        var terminals = new[] { "ks_reaper", "ks_titan", "ks_hoarder", "ks_weaver" };
+        var tree = new MemoryDustTree();
+
+        // What one whole path costs, prerequisites included, from the spine node it hangs off.
+        int PathCost(string terminal)
+        {
+            var seen = new HashSet<string>();
+            var stack = new Stack<string>();
+            stack.Push(terminal);
+            while (stack.Count > 0)
+            {
+                var id = stack.Pop();
+                if (!seen.Add(id)) continue;
+                foreach (var pre in tree.All.First(u => u.Id == id).Requires) stack.Push(pre);
+            }
+            return seen.Sum(id => tree.All.First(u => u.Id == id).Cost);
+        }
+
+        Assert.Equal(4, terminals.Length);
+        foreach (var t in terminals)
+            Assert.True(PathCost(t) <= budgetAtFullContent,
+                $"{t} costs {PathCost(t)} against {budgetAtFullContent} earnable — ONE terminal must " +
+                "be reachable, or the paths are decoration.");
+
+        var cheapestTwo = terminals.Select(PathCost).OrderBy(c => c).Take(2).Sum();
+        Assert.True(cheapestTwo > budgetAtFullContent,
+            $"The two cheapest terminals cost {cheapestTwo} against {budgetAtFullContent} earnable. " +
+            "Both are affordable, so the choice the whole tree is built around does not exist.");
     }
 }

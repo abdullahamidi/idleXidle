@@ -224,6 +224,12 @@ public static class SoloBattle
     /// <summary>SIPHON multiplies TRANSFORMATION's on-hit leech.</summary>
     public const float SiphonLeechMultiplier = 2.0f;
 
+    /// <summary>HOARDER — how much of the haul multiplier above 1 becomes hit size.</summary>
+    public const float HoarderHaulToForce = 0.20f;
+
+    /// <summary>WEAVER — the share of a hit its woven second Form delivers.</summary>
+    public const float WeaverEchoFraction = 0.45f;
+
     /// <summary>
     /// Resolve one wave. Terminates on a kill, a death, or the tick ceiling — never hangs.
     /// </summary>
@@ -402,6 +408,13 @@ public static class SoloBattle
             if (skillForm is null) return m;
 
             m *= shape.HitSize * shape.DamageDealt;
+
+            // HOARDER — the AVARICE terminal. Every point of haul the path bought becomes force, so a
+            // Greed/Fortune build finally has a reason to exist in a fight instead of only in the bag.
+            // A fifth of the haul multiplier, so a doubled haul is +20% hit size — enough to matter,
+            // far short of making the economy path the strongest damage road in the game.
+            if (triggers.Contains(BuildTrigger.Hoarder))
+                m *= 1f + HoarderHaulToForce * MathF.Max(0f, mods.Haul - 1f);
             if (shape.HitSizePerMaxHealth > 0f) m *= 1f + shape.HitSizePerMaxHealth * champ.MaxHealth;   // ANCHOR
             if (shape.DamagePerMaxHealth > 0f) m *= 1f + shape.DamagePerMaxHealth * champ.MaxHealth;     // BASTION
 
@@ -716,6 +729,29 @@ public static class SoloBattle
 
                     events.Add(new BattleEvent(BattleEventKind.Skill, 0, (int)form, ms));
                     var dealt = LandSpread(raw, ms, shape.TargetsFor(form), sk.Source, form, abs);
+
+                    // WEAVER — the ARTIFICE terminal. The cast ALSO lands as the next Form in the loadout,
+                    // with that Form's own base damage, target count and Source matchup. One slot answers
+                    // two of the content's four demands, which nothing else in the game does: a Strike
+                    // followed by an Aura is a Weight hit and a Spread hit from one activation.
+                    //
+                    // Skipped for Mark (which deals nothing and only opens a window) and for Trap (which
+                    // fires on being bitten, not on a cooldown) — weaving into either would be a silent
+                    // no-op or a second Trap that ignored its own rule.
+                    if (triggers.Contains(BuildTrigger.Weaver) && skills.Count > 1)
+                    {
+                        var woven = skills[(i + 1) % skills.Count];
+                        if (!FormBehaviour.IsAmplifier(woven.Form) && !FormBehaviour.FiresOnBeingHit(woven.Form))
+                        {
+                            var wovenRaw = FormBehaviour.BaseDamage(woven.Form, resonance, wt)
+                                           * VowFactor(woven, champ, abs, isBoss, wt)
+                                           * WeaverEchoFraction;
+                            events.Add(new BattleEvent(BattleEventKind.Skill, 0, (int)woven.Form, ms));
+                            dealt += LandSpread(wovenRaw, ms, shape.TargetsFor(woven.Form),
+                                                woven.Source, woven.Form, abs);
+                            if (alive == 0) return Kill(ms);
+                        }
+                    }
 
                     if (FormBehaviour.Heals(form))
                     {

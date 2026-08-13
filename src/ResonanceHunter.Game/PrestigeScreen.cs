@@ -138,7 +138,7 @@ public sealed class PrestigeScreen
     {
         if (tree.Owns(u.Id)) _msg = "ALREADY LIT — PURCHASES ARE PERMANENT.";
         else if (tree.Purchase(u.Id)) _msg = $"LIT: {u.Name}.";
-        else if (tree.MemoryDust < u.Cost) _msg = "NOT ENOUGH MEMORY DUST.";
+        else if (tree.Available < u.Cost) _msg = "NOT ENOUGH TRAIT POINTS — CONQUER, CORRUPT, MASTER.";
         else _msg = "LOCKED — LIGHT ITS PREREQUISITES FIRST.";
     }
 
@@ -151,7 +151,11 @@ public sealed class PrestigeScreen
         var hit = Game1.ToOverlay(mouse);
 
         _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xC0));
-        _ui.TextCenterBig(b, "DUST", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle);
+        // TRAITS, not DUST. The screen stopped spending Memory Dust when the tree stopped being buyable
+        // by idling; a title naming a currency it does not charge is the kind of small lie that makes a
+        // player mistrust every other number on the screen. Dust is still real — it is the Warren's
+        // material, and it still sits in the top bar.
+        _ui.TextCenterBig(b, "TRAITS", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle);
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
         _ui.TextCenterBig(b, "BLESSINGS  ·  INVESTMENT  ·  UPGRADES", 960, 80, Slate, UiTypography.Secondary);
 
@@ -164,7 +168,7 @@ public sealed class PrestigeScreen
     private void DrawOverview(SpriteBatch b, MemoryDustTree tree, Point hit, bool clicked)
     {
         _ui.Panel(b, OverviewPanel);
-        _ui.TextCenterBig(b, "MEMORY DUST", OverviewPanel.Center.X, OverviewPanel.Y + 20, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "TRAIT POINTS", OverviewPanel.Center.X, OverviewPanel.Y + 20, Gold, UiTypography.SectionTitle);
 
         var crest = new Rectangle(OverviewPanel.Center.X - 44, OverviewPanel.Y + 60, 88, 88);
         if (_ui.Assets.Get("ui_memory_dust") is { } ic) b.Draw(ic, crest, Violet);
@@ -172,13 +176,18 @@ public sealed class PrestigeScreen
 
         var owned = tree.All.Count(u => tree.Owns(u.Id));
         var invested = tree.All.Where(u => tree.Owns(u.Id)).Sum(u => u.Cost);
-        _ui.TextCenterBig(b, "CURRENT BALANCE", OverviewPanel.Center.X, OverviewPanel.Y + 162, Slate, UiTypography.Secondary);
-        _ui.TextCenterBig(b, $"{tree.MemoryDust:N0}", OverviewPanel.Center.X, OverviewPanel.Y + 188, Violet, UiTypography.PrimaryValue);
+        // POINTS, not Dust. Dust is minted by the Warren while the game is closed; a permanent tree
+        // bought with it is an identity bought by waiting. These come from conquests, corruption tiers
+        // and mastery goals — things that only happen because somebody descended.
+        _ui.TextCenterBig(b, "UNSPENT", OverviewPanel.Center.X, OverviewPanel.Y + 162, Slate, UiTypography.Secondary);
+        _ui.TextCenterBig(b, $"{tree.Available:N0}", OverviewPanel.Center.X, OverviewPanel.Y + 188, Violet, UiTypography.PrimaryValue);
 
         _ui.Fill(b, new Rectangle(OverviewPanel.X + 24, OverviewPanel.Y + 236, OverviewPanel.Width - 48, 2), Dim);
-        DrawStat(b, OverviewPanel.Y + 252, "BLESSINGS ACTIVE", $"{owned} / {tree.All.Count}");
-        DrawStat(b, OverviewPanel.Y + 290, "TOTAL INVESTED", $"{invested:N0}");
-        DrawStat(b, OverviewPanel.Y + 328, "TREE VALUE", $"{tree.TotalTreeCost:N0}");
+        DrawStat(b, OverviewPanel.Y + 252, "TRAITS TAKEN", $"{owned} / {tree.All.Count}");
+        DrawStat(b, OverviewPanel.Y + 290, "POINTS SPENT", $"{invested:N0}");
+        // The whole tree, which is deliberately unaffordable: two of the four terminals cost more than a
+        // career earns, and the path you did not walk is the permanent shape of your character.
+        DrawStat(b, OverviewPanel.Y + 328, "TREE COSTS", $"{tree.TotalTreeCost:N0}");
 
         // FILTER BY CATEGORY — the real UnlockEffect axis (with counts).
         _ui.Fill(b, new Rectangle(OverviewPanel.X + 24, OverviewPanel.Y + 372, OverviewPanel.Width - 48, 2), Dim);
@@ -219,7 +228,7 @@ public sealed class PrestigeScreen
         var owned = tree.All.Count(u => tree.Owns(u.Id));
         // +44, not +26: this is the WIDE panel art, whose top ornament is a centred medallion that a
         // centred title runs straight into. The tall side panels have no such crest at +26.
-        _ui.TextCenterBig(b, "DUST BLESSINGS", GridPanel.Center.X, GridPanel.Y + 44, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "PERMANENT TRAITS", GridPanel.Center.X, GridPanel.Y + 44, Gold, UiTypography.SectionTitle);
         _ui.TextRightBig(b, $"{owned} / {tree.All.Count} LIT", GridPanel.Right - 28, GridPanel.Y + 24, Slate, UiTypography.Secondary);
 
         var list = Filtered(tree);

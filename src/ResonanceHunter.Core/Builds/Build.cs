@@ -100,6 +100,26 @@ public enum BuildTrigger
 
     /// <summary>TRANSFORMATION leeches far more health.</summary>
     Siphon,
+
+    /// <summary>
+    /// HOARDER — the AVARICE terminal. Haul becomes force.
+    /// </summary>
+    /// <remarks>
+    /// The path it ends buys no combat power at all, which is what makes it a real choice; the terminal
+    /// is what stops it being a dead end. Without this, an Avarice hunter's reward for a whole permanent
+    /// path is money, and money's only use is gear they could have had by pushing depth instead.
+    /// </remarks>
+    Hoarder,
+
+    /// <summary>
+    /// WEAVER — the ARTIFICE terminal. Every skill also fires as the NEXT Form in the loadout.
+    /// </summary>
+    /// <remarks>
+    /// The design's "two Forms in one slot", expressed with the loadout that exists. It is the path for
+    /// players who want their build to do something strange rather than something large, and it is the
+    /// only thing in the game that lets a single slot answer two of the content's four demands.
+    /// </remarks>
+    Weaver,
 }
 
 /// <summary>

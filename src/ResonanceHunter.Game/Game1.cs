@@ -1244,6 +1244,11 @@ public class Game1 : Game
         // The loot-quality tilt reaches the roll that opens a chest. Until this line, Rarity was resolved
         // from keystones, gear and the trait tree, carried as Haul.Quality, and read by nothing at all.
         _forge.RarityBonus = _loadout.ToBuild(_dust, _mastery).Resolve(_hunter).Rarity;
+
+        // The spine's capacity nodes reach the loadout. Without this the sockets and the fifth weave are
+        // bought and never granted — the shape of the failure this codebase keeps repeating.
+        _loadout.KeystoneCapacity = DustEffects.KeystoneSockets(_dust);
+        _loadout.SkillCapacity = DustEffects.SkillSlots(_dust);
         _forge.AutoMergeOnOpen = DustEffects.AutoMergeAfterRuns(_dust);
         var scale = CorruptionScaling.HealthMultiplier(_world.CorruptionTier);
         var mod = RegionModifiers.For(_activeRegion);   // the region's themed combat twist (Map variety)
@@ -1311,6 +1316,7 @@ public class Game1 : Game
         // haul but no points, so the only way to earn one is to push somewhere new.
         _world.RegionFarm(_activeRegion).RecordDepth(_expedition.Deepest);
         _mastery.SetEarned(SkillPointsEarned());
+        _dust.SetEarned(TraitPointsEarned());
 
         // Conquest: the deepest the champion has held this region. Fires once, unlocks the next region.
         if (_expedition.Deepest >= ConquerWaveDepth && !_world.IsConquered(_activeRegion))
@@ -1909,7 +1915,7 @@ public class Game1 : Game
         ("HUNT", 'H', "nav_hunt_128"), ("GEAR", 'C', "nav_inventory_128"),
         ("STATS", 'V', "state_resonance_128"), ("BUILD", 'B', "state_mastery_128"),
         ("FORGE", 'F', "icon_nav_forge"), ("WARREN", 'A', "icon_nav_warren"),
-        ("MAP", 'W', "nav_relics_128"), ("DUST", 'P', "nav_prestige"),
+        ("MAP", 'W', "nav_relics_128"), ("TRAITS", 'P', "nav_prestige"),
     };
 
     private static readonly Color NavGold = new(0xF0, 0xB2, 0x4A);
@@ -1929,6 +1935,25 @@ public class Game1 : Game
     {
         var total = 3;
         foreach (var def in Regions.All) total += _world.RegionFarm(def.Id).BestDepth / 5;
+        return total;
+    }
+
+    /// <summary>
+    /// Trait points: conquests, corruption tiers, and region-mastery goals.
+    /// </summary>
+    /// <remarks>
+    /// NOT Memory Dust, which the Warren mints tick by tick while the game is closed. A permanent tree
+    /// bought with an idle currency is a permanent tree bought by WAITING, and worse than the same
+    /// failure in the skill tree, because these choices can never be taken back. Every term here is
+    /// something that only happens because somebody descended.
+    ///
+    /// At full current content: 6 conquests + ~10 corruption tiers + 18 mastery goals = ~34 against a
+    /// tree costing about 150 — roughly a quarter, and two of the four terminals out of reach.
+    /// </remarks>
+    private int TraitPointsEarned()
+    {
+        var total = _world.ConqueredIds.Count + _world.CorruptionTier;
+        foreach (var def in Regions.All) total += (int)_world.RegionFarm(def.Id).MasteryLevel;
         return total;
     }
 

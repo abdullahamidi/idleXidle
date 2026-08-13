@@ -426,9 +426,10 @@ public class SaveSystemTests
     public void test_memory_dust_and_unlocks_survive_a_reload()
     {
         var tree = new ResonanceHunter.Core.Prestige.MemoryDustTree();
-        tree.AwardFromMastery(200);
+        tree.AwardFromMastery(200);   // dust, the Warren material — still saved
+        tree.SetEarned(200);          // trait points, which is what the tree actually spends
         tree.Purchase("recall_1");
-        tree.Purchase("might_1");
+        tree.Purchase("socket_2");
 
         var region = new Region("r", 15);
         var save = SaveSystem.Capture(new Hunter(), region, Array.Empty<Creature>(),
@@ -439,12 +440,12 @@ public class SaveSystemTests
         Assert.Equal(tree.MemoryDust, loaded.MemoryDust);
         Assert.Equal(2, loaded.HighestMasteryAwarded);
         Assert.Contains("recall_1", loaded.MemoryDustUnlocks);
-        Assert.Contains("might_1", loaded.MemoryDustUnlocks);
+        Assert.Contains("socket_2", loaded.MemoryDustUnlocks);
 
         var restored = new ResonanceHunter.Core.Prestige.MemoryDustTree();
         restored.Restore(loaded.MemoryDust, loaded.MemoryDustUnlocks);
         Assert.True(restored.Owns("recall_1"));
-        Assert.True(restored.Owns("might_1"));
+        Assert.True(restored.Owns("socket_2"));
     }
 
     [Fact]
