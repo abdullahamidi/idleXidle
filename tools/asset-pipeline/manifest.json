@@ -25,6 +25,7 @@
     "rigpart": "ONLY {subject}, and nothing else. A single isolated piece, front view, cut out on an empty background. NO character, NO body, NO head, NO arms, NO background, NO frame, no text, NO glow, NO aura \u2014 a solid opaque object. Dark fantasy RPG pixel art, bone-parchment cloth and cold-slate leather, bold readable silhouette, flat bold shapes, centered",
     "geararmor": "ONLY {subject}, and nothing else. Front view, straight on, exactly as it is worn. A single isolated piece of equipment lying flat, cut out on an empty background. NO character, NO body, NO mannequin, NO hands, NO head, NO other equipment, NO background, NO frame, NO border, no text. NO glow, NO aura, NO particles, NO floating effects \u2014 a solid opaque object. Dark fantasy RPG pixel art, bold readable silhouette, flat bold shapes, centered",
     "gearweapon": "ONLY {subject}, and nothing else. Held UPRIGHT and VERTICAL, hilt at the bottom, blade pointing straight up, perfectly vertical. A single isolated weapon cut out on an empty background. NO character, NO hands, NO background, NO frame, no text. NO glow, NO aura, NO particles \u2014 a solid opaque weapon. Dark fantasy RPG pixel art, bold readable silhouette, flat bold shapes, centered",
+    "hero": "{subject}. ONE single character alone, front facing, full body, standing upright and still, facing the viewer. Dark fantasy RPG hero sprite, bold readable silhouette, flat bold shapes, strong rim light, centered on a COMPLETELY EMPTY background with nothing behind the figure at all: no scene, no wall, no ground, no floor, no cast shadow, no circle, no vignette. One figure only, no companion, no second character, no text, no border, no frame",
     "glyph": "{subject}, drawn as ONE flat heraldic emblem in solid pale bone-white, a single uniform light tone with no colour in it, filling the whole frame edge to edge, bold thick chunky silhouette, strongly symmetrical, centered on an empty background. It is a stencil, not a picture: NO ring, NO circle, NO rim, NO frame, NO border, NO badge, NO medallion, NO plaque, NO coin, NO background, NO scene, NO text, NO gold trim, NO filigree",
     "rig": "ONLY {subject} and nothing else. A single detached body part lying alone, cut out for a 2D puppet rig. NO full character, NO whole body, NO head unless asked, NO other limbs. Dark fantasy hunter garb in bone-parchment cloth and cold-slate leather. Flat bold shapes, one isolated object centered on a plain empty background, no text, no border, no frame"
   },
@@ -1460,44 +1461,104 @@
       "prompt": "A fantasy hunter standing in a wide A-pose, front view, full body from hood to boots, both arms angled outward and away from the sides so there is a large triangle of empty background under each armpit, legs straight and set apart with empty background between them, hands open and empty. The outfit is CLOSE-FITTING ONLY: a short hood, a fitted leather jerkin ending at the hip, bracers, trousers and boots. The empty background is visible everywhere around the figure \u2014 behind the shoulders, behind the arms, behind the legs \u2014 because there is nothing behind him. Dark fantasy RPG pixel art, flat bold shapes, symmetrical, one figure centered on a completely empty background, no text, no border, no frame"
     },
     {
-      "key": "anvil_rig_base",
+      "key": "char_seeker_base",
       "dest": "assets/art/Characters/Roster",
+      "style": "hero",
+      "subject": "a lean HUMAN hooded ranger, an ordinary adult person with a plain human face, in a fitted leather jerkin and bracers, a short knife at the belt, hood up, watchful",
       "model": "pixen",
       "width": 512,
       "height": 512,
-      "knockout": true,
-      "single_subject": true,
-      "prompt": "A heavy broad-shouldered warrior with a thick neck and a low heavy stance, standing in a wide A-pose, front view, full body. Both arms are held straight out from the shoulders and held out almost horizontally, level with the shoulders and only slightly below them with the elbows locked straight, so each arm touches the body only at the shoulder and is separated from the torso along its whole length by a wide wedge of empty background. The legs are straight and planted far apart with the feet a full shoulder-width outside the hips, so a clear straight column of empty background runs between the legs from the hip all the way down to the floor. The hands are open and empty. The outfit is CLOSE-FITTING ONLY: a riveted dark steel cuirass moulded to the chest, a banded skirt ending at the hip, heavy plated boots, bare forearms. The figure stands against nothing at all: the background is completely empty, and that empty background is visible in the wedge between each arm and the body, in the gap between the legs, and immediately behind the shoulders and the back. Dark fantasy RPG pixel art, flat bold shapes, symmetrical, one figure centered on a completely empty background, no text, no border, no frame"
+      "single_subject": true
     },
     {
-      "key": "chorus_rig_base",
+      "key": "char_anvil_base",
       "dest": "assets/art/Characters/Roster",
+      "style": "hero",
+      "subject": "a huge broad-shouldered warrior in a riveted dark steel cuirass and banded skirt, bare heavy forearms, a thick braided beard, standing with feet planted wide and fists closed",
       "model": "pixen",
       "width": 512,
       "height": 512,
-      "knockout": true,
-      "single_subject": true,
-      "prompt": "A lean bare-headed figure with short cropped hair and many small bone charms threaded flat onto a tight belt, standing in a wide A-pose, front view, full body. Both arms are held straight out from the shoulders and angled down at forty-five degrees with the elbows locked straight, so each arm touches the body only at the shoulder and is separated from the torso along its whole length by a wide wedge of empty background. The legs are straight and set well apart. The hands are open and empty. The outfit is CLOSE-FITTING ONLY: a fitted quilted tunic ending at the hip, a belt strung with many small bone charms, wrapped forearms, low soft boots. The figure stands against nothing at all: the background is completely empty, and that empty background is visible in the wedge between each arm and the body, in the gap between the legs, and immediately behind the shoulders and the back. Dark fantasy RPG pixel art, flat bold shapes, symmetrical, one figure centered on a completely empty background, no text, no border, no frame"
+      "single_subject": true
     },
     {
-      "key": "metronome_rig_base",
+      "key": "char_chorus_base",
       "dest": "assets/art/Characters/Roster",
+      "style": "hero",
+      "subject": "a bald ascetic in a plain quilted tunic, arms and throat wrapped in cord, a heavy belt strung with dozens of small bone charms that hang down the thigh",
       "model": "pixen",
       "width": 512,
       "height": 512,
-      "knockout": true,
-      "single_subject": true,
-      "prompt": "A lean wiry runner with a narrow frame and long legs, standing in a wide A-pose, front view, full body. Both arms are held straight out from the shoulders and angled down at forty-five degrees with the elbows locked straight, so each arm touches the body only at the shoulder and is separated from the torso along its whole length by a wide wedge of empty background. The legs are straight and set well apart. The hands are open and empty. The outfit is CLOSE-FITTING ONLY: a light fitted gambeson ending above the hip, tight wrapped arms, narrow trousers and tall light boots. The figure stands against nothing at all: the background is completely empty, and that empty background is visible in the wedge between each arm and the body, in the gap between the legs, and immediately behind the shoulders and the back. Dark fantasy RPG pixel art, flat bold shapes, symmetrical, one figure centered on a completely empty background, no text, no border, no frame"
+      "single_subject": true
     },
     {
-      "key": "unbroken_rig_base",
+      "key": "char_metronome_base",
       "dest": "assets/art/Characters/Roster",
+      "style": "hero",
+      "subject": "a wiry runner in a light fitted gambeson with tightly wrapped forearms and tall soft boots, hair tied back, poised mid-step on the balls of the feet",
       "model": "pixen",
       "width": 512,
       "height": 512,
-      "knockout": true,
-      "single_subject": true,
-      "prompt": "Cut out on a completely empty background with nothing behind them at all: a short broad heavy-set person with wide square shoulders and a plain smooth iron mask covering the face, standing in a wide A-pose, front view, full body. Both arms are held straight out from the shoulders and held out almost horizontally, level with the shoulders and only slightly below them with the elbows locked straight, so each arm touches the body only at the shoulder and is separated from the torso along its whole length by a wide wedge of empty background. The legs are straight and planted far apart with the feet a full shoulder-width outside the hips, so a clear straight column of empty background runs between the legs from the hip all the way down to the floor. The hands are open and empty. The outfit is CLOSE-FITTING ONLY: a fitted scale coat ending at the hip, thick banded greaves, heavy gauntlets. The figure stands against nothing at all: the background is completely empty, and that empty background is visible in the wedge between each arm and the body, in the gap between the legs, and immediately behind the shoulders and the back. Dark fantasy RPG pixel art, flat bold shapes, symmetrical, one figure centered on a completely empty background, no text, no border, no frame"
+      "single_subject": true
+    },
+    {
+      "key": "char_unbroken_base",
+      "dest": "assets/art/Characters/Roster",
+      "style": "hero",
+      "subject": "a short immensely broad figure in a heavy overlapping scale coat, a plain featureless iron mask covering the whole face, thick banded greaves, arms folded",
+      "model": "pixen",
+      "width": 512,
+      "height": 512,
+      "single_subject": true
+    },
+    {
+      "key": "char_tower_base",
+      "dest": "assets/art/Characters/Roster",
+      "style": "hero",
+      "subject": "a very tall top-heavy knight in dark plate, visor down, gripping the haft of an enormous two-handed maul in both gauntlets with the head of the maul resting on the ground between their own feet, leaning their weight onto it",
+      "model": "pixen",
+      "width": 512,
+      "height": 512,
+      "single_subject": true
+    },
+    {
+      "key": "char_quiver_base",
+      "dest": "assets/art/Characters/Roster",
+      "style": "hero",
+      "subject": "a lean archer holding a tall unstrung longbow like a staff, a full back quiver of arrows over one shoulder, a short half-cape, hood down, sharp attentive face",
+      "model": "pixen",
+      "width": 512,
+      "height": 512,
+      "single_subject": true
+    },
+    {
+      "key": "char_thornwall_base",
+      "dest": "assets/art/Characters/Roster",
+      "style": "hero",
+      "subject": "a heavy-set warden behind a battered tower shield planted on the ground, coils of black bramble and barbed wire wound around the shield and both forearms",
+      "model": "pixen",
+      "width": 512,
+      "height": 512,
+      "single_subject": true
+    },
+    {
+      "key": "char_oathbound_base",
+      "dest": "assets/art/Characters/Roster",
+      "style": "hero",
+      "subject": "a tall gaunt penitent in dark robes bound with many wound chains across the chest and arms, a strip of cloth sealed over the eyes, hands clasped and bound together",
+      "model": "pixen",
+      "width": 512,
+      "height": 512,
+      "single_subject": true
+    },
+    {
+      "key": "char_magpie_base",
+      "dest": "assets/art/Characters/Roster",
+      "style": "hero",
+      "subject": "a grinning scavenger in cheerfully mismatched scavenged armour, an enormous overstuffed pack of loot on the back with pans and trinkets hanging off it, pouches everywhere",
+      "model": "pixen",
+      "width": 512,
+      "height": 512,
+      "single_subject": true
     },
     {
       "key": "bg_arena_nature",

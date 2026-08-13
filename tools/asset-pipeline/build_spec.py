@@ -159,6 +159,22 @@ STILL_STYLES = {
                   "NO glow, NO aura, NO particles — a solid opaque weapon. Dark fantasy RPG pixel art, "
                   "bold readable silhouette, flat bold shapes, centered",
 
+    # A playable character is not a "creature". Routed through the creature style the roster came back
+    # as a bestiary: the starter arrived as a goblin, two characters brought a painted backdrop with
+    # them, and one returned as TWO figures standing side by side. The creature style says "a single
+    # small fantasy creature", and every one of those is that phrase being answered honestly.
+    #
+    # What a hero sprite needs instead: one person, standing straight and facing front so the strip
+    # animator has a clean neutral frame to work from, and nothing whatsoever behind them — no ground,
+    # no shadow, no vignette, because those survive knockout and then ride along under the figure on
+    # the battle stage.
+    "hero":      "{subject}. ONE single character alone, front facing, full body, standing upright and "
+                 "still, facing the viewer. Dark fantasy RPG hero sprite, bold readable silhouette, "
+                 "flat bold shapes, strong rim light, centered on a COMPLETELY EMPTY background with "
+                 "nothing behind the figure at all: no scene, no wall, no ground, no floor, no cast "
+                 "shadow, no circle, no vignette. One figure only, no companion, no second character, "
+                 "no text, no border, no frame",
+
     # A GLYPH is drawn to be TINTED. The screens that use these pick the colour at draw time — a
     # skill-tree node is coloured by its branch, a trait row by its road — so the art must arrive as
     # one flat light value and nothing else. The "item" and "medallion" styles both bake colour in,
@@ -383,97 +399,71 @@ def stills() -> list[dict]:
                   "a completely empty background, no text, no border, no frame",
     })
 
-    # --- THE ROSTER'S other four source figures.
+    # --- THE ROSTER: ten characters, as FLAT SPRITES.
     #
-    # Every one is authored for the CUTTER first and for its character second, because a body a
-    # rectangle decomposition cannot cut is not a character, it is a picture. The four structural
-    # clauses are identical in all five prompts and are not negotiable per character:
+    # The cutout rig is retired. It bought articulated limbs and charged for them in constraints that
+    # reached all the way back into the art: every source body had to stand in a wide A-pose with a
+    # measurable gap under each armpit and between the legs, hold nothing, and wear nothing that hung —
+    # because a rectangle cannot separate an arm from a cloak behind it. Four of those clauses are
+    # design decisions the rig was making on the artist's behalf, and the roster is where that bill came
+    # due: no weapons, no capes, no asymmetry, and a hit rate that needed an automated gate and repeated
+    # re-rolls to reach.
     #
-    #   * a wide A-pose with a triangle of empty background under each armpit,
-    #   * legs set apart with empty background between them,
-    #   * open, empty hands (nothing held — the rig owns what a hand carries),
-    #   * CLOSE-FITTING clothing only, because a rectangle cannot separate an arm from a cloak
-    #     hanging behind it. This is the clause that cost the original rig 4,000px of erasing.
+    # A sprite strip has none of that. It is also FEWER assets, not more — one base sprite plus two
+    # eight-frame clips per character, against seventeen cut parts plus a drawn pauldron plus a pose
+    # table — and the animation is authored rather than assembled from rotating rectangles, which is a
+    # ceiling the rig could never get past (see HunterRigRenderer.DeathPose, capped at 0.4 rad because
+    # flat cutouts visibly separate past it).
     #
-    # What varies is mass and material — which is the whole job, since the roster's silhouettes have to
-    # be told apart at the 300px the HUNT stage gives them. Written in the POSITIVE throughout: naming
-    # a cloak to forbid it summons one.
-    # Measured, not hoped. measure_rig_source.py reads the two armpit gaps and the leg gap straight out
-    # of the alpha channel, and the first pass through these prompts scored 1 usable body out of 4:
-    # both heavy characters came back with their upper arms flat against a wide torso (no gap at chest
-    # height at all), and the two that named a hood or a monument came back wearing a cloak and standing
-    # in a scene. Hence:
-    #
-    #   * ELBOWS LOCKED STRAIGHT, arms down at forty-five degrees. "Angled outward" is satisfied by a
-    #     bent arm with the hand forward, which leaves the upper arm against the ribs.
-    #   * "touch the body only at the shoulder" — states the gap as a fact about the arm rather than
-    #     asking for a triangle of background and hoping the pose follows.
-    #   * The background is described by what it CONTAINS (nothing) and where it is VISIBLE, never by
-    #     forbidding a cloak. Naming a cloak is how the first pass got one.
-    #   * THE ARM ANGLE IS PER BODY TYPE. Forty-five degrees clears a lean torso and does not clear a
-    #     broad one — measured, twice: both heavy characters came back with 3-4px seams where a lean
-    #     character had 26-34px, because the same angle over a wider chest puts the upper arm on the
-    #     ribs. The heavies hold their arms nearly horizontal instead.
-    def pose(angle: str, stance: str) -> str:
-        return ("standing in a wide A-pose, front view, full body. Both arms are held straight out from "
-                f"the shoulders {angle} with the elbows locked straight, so each arm touches the body "
-                "only at the shoulder and is separated from the torso along its whole length by a wide "
-                f"wedge of empty background. The legs are straight and {stance}. "
-                "The hands are open and empty. ")
-
-    LEAN_POSE = pose("and angled down at forty-five degrees", "set well apart")
-    HEAVY_POSE = pose("and held out almost horizontally, level with the shoulders and only slightly "
-                      "below them",
-                      # The legs need the same treatment the arms needed, and for the same reason: a
-                      # heavy figure's thighs meet unless the stance is described as a measured
-                      # distance rather than as "apart". Measured: the first heavy pass had no
-                      # central gap at all.
-                      "planted far apart with the feet a full shoulder-width outside the hips, so a "
-                      "clear straight column of empty background runs between the legs from the hip "
-                      "all the way down to the floor")
-    TAIL = ("The figure stands against nothing at all: the background is completely empty, and that "
-            "empty background is visible in the wedge between each arm and the body, in the gap "
-            "between the legs, and immediately behind the shoulders and the back. "
-            "Dark fantasy RPG pixel art, flat bold shapes, symmetrical, one figure centered on "
-            "a completely empty background, no text, no border, no frame")
-    for key, subject, outfit, POSE in [
-        # WEIGHT. Reads as mass: the widest shoulders and the lowest stance in the roster.
-        ("anvil_rig_base",
-         "A heavy broad-shouldered warrior with a thick neck and a low heavy stance, ",
-         "The outfit is CLOSE-FITTING ONLY: a riveted dark steel cuirass moulded to the chest, a "
-         "banded skirt ending at the hip, heavy plated boots, bare forearms. ", HEAVY_POSE),
-        # SPREAD. Reads as many: a silhouette broken up by many small repeated shapes. NOT "hooded" and
-        # not "hung with" — the first attempt used both and came back in a full cloak. A hood is a
-        # cloak's neighbour, and "hung with" is a request for things to drape.
-        ("chorus_rig_base",
-         "A lean bare-headed figure with short cropped hair and many small bone charms threaded flat "
-         "onto a tight belt, ",
-         "The outfit is CLOSE-FITTING ONLY: a fitted quilted tunic ending at the hip, a belt strung "
-         "with many small bone charms, wrapped forearms, low soft boots. ", LEAN_POSE),
-        # TEMPO. Reads as fast: the narrowest figure, everything drawn in tight to the body.
-        ("metronome_rig_base",
-         "A lean wiry runner with a narrow frame and long legs, ",
-         "The outfit is CLOSE-FITTING ONLY: a light fitted gambeson ending above the hip, tight "
-         "wrapped arms, narrow trousers and tall light boots. ", LEAN_POSE),
-        # ENDURE. Reads as heavy: short, broad, and faceless. NOT "immovable" and not "monument" —
-        # those are words about scale, and the first attempt answered them with a whole scene:
-        # a grey sky, a crowd, and 31% background left after knockout.
-        # Third attempt on the background. Twice this one came back standing in a SCENE — a grey sky,
-        # a crowd, a stone slab — while its four siblings came back cut out. The difference is the
-        # subject: "warrior in a faceplate helm" is a portrait subject, and portrait subjects arrive
-        # with a setting. Describing a person instead of a knight, and putting the empty background in
-        # the FIRST clause rather than the last, is the lever left to pull.
-        ("unbroken_rig_base",
-         "Cut out on a completely empty background with nothing behind them at all: a short broad "
-         "heavy-set person with wide square shoulders and a plain smooth iron mask covering the face, ",
-         "The outfit is CLOSE-FITTING ONLY: a fitted scale coat ending at the hip, thick banded "
-         "greaves, heavy gauntlets. ", HEAVY_POSE),
-    ]:
-        a.append({
-            "key": key, "dest": "assets/art/Characters/Roster", "model": "pixen",
-            "width": 512, "height": 512, "knockout": True, "single_subject": True,
-            "prompt": subject + POSE + outfit + TAIL,
-        })
+    # The structure mirrors the MASTERY TREE, so the roster is legible rather than arbitrary: four
+    # characters sit on the four opposed roads, four sit on the bridges between adjacent roads exactly
+    # where the tree puts its own bridges, and two stand off the tree entirely.
+    ROSTER = [
+        # ── The four roads ────────────────────────────────────────────────────────────────────────
+        ("seeker",
+         "a lean HUMAN hooded ranger, an ordinary adult person with a plain human face, in a fitted "
+         "leather jerkin and bracers, a short knife at the belt, hood up, watchful"),
+        ("anvil",
+         "a huge broad-shouldered warrior in a riveted dark steel cuirass and banded skirt, bare "
+         "heavy forearms, a thick braided beard, standing with feet planted wide and fists closed"),
+        ("chorus",
+         "a bald ascetic in a plain quilted tunic, arms and throat wrapped in cord, a heavy belt "
+         "strung with dozens of small bone charms that hang down the thigh"),
+        ("metronome",
+         "a wiry runner in a light fitted gambeson with tightly wrapped forearms and tall soft "
+         "boots, hair tied back, poised mid-step on the balls of the feet"),
+        ("unbroken",
+         "a short immensely broad figure in a heavy overlapping scale coat, a plain featureless iron "
+         "mask covering the whole face, thick banded greaves, arms folded"),
+        # ── The four bridges, in the tree's own pairs ─────────────────────────────────────────────
+        # "holding an enormous maul upright beside them" drew the maul BESIDE them — as a second
+        # object standing on its own, twice, with the knight off to one side of it. A weapon has to be
+        # described as connected to the body that carries it: both hands on the haft, the head on the
+        # ground between the feet.
+        ("tower",
+         "a very tall top-heavy knight in dark plate, visor down, gripping the haft of an enormous "
+         "two-handed maul in both gauntlets with the head of the maul resting on the ground between "
+         "their own feet, leaning their weight onto it"),
+        ("quiver",
+         "a lean archer holding a tall unstrung longbow like a staff, a full back quiver of "
+         "arrows over one shoulder, a short half-cape, hood down, sharp attentive face"),
+        ("thornwall",
+         "a heavy-set warden behind a battered tower shield planted on the ground, coils of black "
+         "bramble and barbed wire wound around the shield and both forearms"),
+        # The Endure+Weight bridge has no character. Ten was the brief and the structure wanted
+        # eleven, and this is the corner ANVIL and UNBROKEN already stand on either side of — a
+        # stone-skinned giant between them read as a boss rather than as somebody you play.
+        # ── Off the tree ─────────────────────────────────────────────────────────────────────────
+        ("oathbound",
+         "a tall gaunt penitent in dark robes bound with many wound chains across the chest and "
+         "arms, a strip of cloth sealed over the eyes, hands clasped and bound together"),
+        ("magpie",
+         "a grinning scavenger in cheerfully mismatched scavenged armour, an enormous overstuffed "
+         "pack of loot on the back with pans and trinkets hanging off it, pouches everywhere"),
+    ]
+    for cid, look in ROSTER:
+        add(f"char_{cid}_base", "assets/art/Characters/Roster", "hero", look,
+            model="pixen", width=512, height=512, single_subject=True)
 
     # --- Hunter cutout rig parts: NOT GENERATED.
     #
