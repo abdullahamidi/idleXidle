@@ -81,4 +81,57 @@ public class PowerContributionTests
         Assert.Equal(0, hunter.PowerContribution(Item("mat", ItemBaseType.Material, Rarity.Rare)));
         Assert.Equal(0, hunter.PowerContribution(null));
     }
+
+    /// <summary>
+    /// The power number must move when the things the SIM multiplies by move.
+    /// </summary>
+    /// <remarks>
+    /// REGRESSION. PowerRating read the raw weapon multiplier and the raw attack-power stat, so gear
+    /// TRAITS and DAMAGE/HEALTH affixes — which multiply every hit and every health pool in the sim —
+    /// moved it by nothing. A player equipping a piece that genuinely made them stronger watched their
+    /// "power" sit still, and EQUIP BEST, which ranks by this number, would hand back the weaker item.
+    ///
+    /// Nothing caught it: the whole suite passed with the bug in place, because every existing test
+    /// compared PowerRating against ITSELF (contribution deltas) rather than against what the fight
+    /// actually reads.
+    /// </remarks>
+    [Fact]
+    public void test_power_rating_moves_with_the_multipliers_the_sim_reads()
+    {
+        var checkedAny = false;
+
+        foreach (var type in new[]
+                 {
+                     ItemBaseType.Ring, ItemBaseType.Helm, ItemBaseType.Boots,
+                     ItemBaseType.Gloves, ItemBaseType.Chest, ItemBaseType.AbilityFocus,
+                 })
+            foreach (var rarity in new[] { Rarity.Rare, Rarity.Epic, Rarity.Legendary })
+            {
+                var bare = new Hunter();
+                var worn = new Hunter();
+                worn.Equip(Item($"{type}-{rarity}", type, rarity, ilvl: 40));
+
+                // STRICT improvements only. Gear traits are trades — a Rare Ring raises health 12% and
+                // costs 10% damage — so "either multiplier went up" is not a claim about power at all,
+                // and the first version of this test failed on exactly that piece while PowerRating was
+                // behaving correctly. Only a piece that is better on one axis and no worse on the other
+                // says anything about whether the number follows the sim.
+                var damageUp = worn.SquadDamageMultiplier > bare.SquadDamageMultiplier * 1.001f;
+                var healthUp = worn.SquadHealthMultiplier > bare.SquadHealthMultiplier * 1.001f;
+                var damageDown = worn.SquadDamageMultiplier < bare.SquadDamageMultiplier * 0.999f;
+                var healthDown = worn.SquadHealthMultiplier < bare.SquadHealthMultiplier * 0.999f;
+                if (!((damageUp && !healthDown) || (healthUp && !damageDown))) continue;
+
+                checkedAny = true;
+                Assert.True(worn.PowerRating > bare.PowerRating,
+                    $"{rarity} {type} raised the multipliers the sim reads " +
+                    $"(damage {bare.SquadDamageMultiplier:F3} -> {worn.SquadDamageMultiplier:F3}, " +
+                    $"health {bare.SquadHealthMultiplier:F3} -> {worn.SquadHealthMultiplier:F3}) " +
+                    $"and PowerRating did not move ({bare.PowerRating} -> {worn.PowerRating}).");
+            }
+
+        Assert.True(checkedAny,
+            "No generated item moved the sim's multipliers, so this test proved nothing. Either the " +
+            "affix roller stopped producing DAMAGE/HEALTH affixes or the fixture is wrong.");
+    }
 }

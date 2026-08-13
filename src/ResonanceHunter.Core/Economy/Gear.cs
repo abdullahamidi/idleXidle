@@ -107,11 +107,25 @@ public static class Gear
     // this flat-resonance helper was left orphaned. The live Focus contribution is FocusAttunement.
 
     /// <summary>
-    /// A single glanceable "how strong am I" number for the HUD. Growth you can SEE is the whole point —
-    /// an invisible power curve is the same as no power curve.
+    /// A single glanceable "how strong am I" number for the HUD.
     /// </summary>
-    public static int PowerRating(float damageMultiplier, int attackPower, int defense, int maxHealth)
-        => (int)MathF.Round(damageMultiplier * attackPower * 2f + defense * 2f + maxHealth * 0.5f);
+    /// <remarks>
+    /// <para>
+    /// Growth you can SEE is the whole point — an invisible power curve is the same as no power curve.
+    /// Which is exactly why it has to read what the SIM reads.
+    /// </para>
+    /// <para>
+    /// It used to take the raw weapon multiplier and the raw attack-power stat, so worn ENCHANTMENTS —
+    /// which multiply damage and health in every fight the game runs — moved it by nothing at all. A
+    /// player equipping a Legendary enchant watched their "power" stay still, and the EQUIP BEST button
+    /// that ranks by this number would happily hand back the weaker piece. It now takes the same two
+    /// multipliers <see cref="SoloBattle"/> does.
+    /// </para>
+    /// </remarks>
+    /// <param name="damageMultiplier">The build's REAL damage multiplier (Hunter.SquadDamageMultiplier).</param>
+    /// <param name="healthMultiplier">The build's REAL health multiplier (Hunter.SquadHealthMultiplier).</param>
+    public static int PowerRating(float damageMultiplier, float healthMultiplier, int defense, int maxHealth)
+        => (int)MathF.Round(damageMultiplier * 120f + defense * 2f + healthMultiplier * maxHealth * 0.5f);
 
     /// <summary>
     /// A rough "how good is this piece" score, for the inventory's "is this an upgrade?" badge.
