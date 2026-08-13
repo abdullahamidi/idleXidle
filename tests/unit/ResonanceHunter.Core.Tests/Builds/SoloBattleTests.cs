@@ -311,48 +311,70 @@ public class SoloBattleTests
         Assert.True(DamageDealt(strong) > DamageDealt(weak), "the Source matchup did not reach the fight");
     }
 
-    [Fact]
-    public void test_a_vow_still_pays_only_when_its_condition_holds()
-    {
-        var vow = Weaving.ById("vow_bloodied")!;   // only below 40% health
-        var build = new Build();
-        build.Weave(Sk(Form.Strike, Source.Nature, vow));
-
-        var healthy = Champ(400); healthy.Health = 400;
-        var (_, whole) = SoloBattle.ResolveWave(healthy, build, new Hunter(), 100_000f, 0f,
-            1000, T, new Random(9), new WaveBonus());
-
-        var bloodied = Champ(400); bloodied.Health = 40;
-        var (_, hurt) = SoloBattle.ResolveWave(bloodied, build, new Hunter(), 100_000f, 0f,
-            1000, T, new Random(9), new WaveBonus());
-
-        Assert.True(DamageDealt(hurt) > DamageDealt(whole), "the Vow paid nothing while bloodied");
-    }
-
     /// <summary>
-    /// THE UNBROKEN pays only while WHOLE — the mirror of THE BLOODIED, and proof its fix reaches the fight.
+    /// A Vow pays only when the BUILD meets its demand — proven through the sim, not the pure layer.
     /// </summary>
     /// <remarks>
-    /// Before the re-point it was always active in solo (it watched the phantom front slot), so a champ at
-    /// 10% HP dealt exactly as much as one at 100%. Now the two must DIVERGE, the opposite way round from
-    /// bloodied — the whole champion hits harder, the hurt one loses the Vow entirely.
+    /// Rewritten with the Vow system. The two tests here used to drive a champion to 10% health and back
+    /// to prove a Vow read the fight; a Vow that reads the fight is a lottery in a game with no in-run
+    /// decisions, so both of those properties are gone along with the Vows that had them. What replaced
+    /// them is the same claim about the new axis: two BUILDS, one satisfying the demand and one not.
     /// </remarks>
     [Fact]
-    public void test_the_unbroken_vow_pays_only_while_whole()
+    public void test_a_vow_pays_only_when_the_build_meets_its_demand()
     {
-        var vow = Weaving.ById("vow_vanguard")!;   // now: only ABOVE 70% health
-        var build = new Build();
-        build.Weave(Sk(Form.Strike, Source.Nature, vow));
+        var vow = Weaving.ById("vow_singular")!;   // every skill must be the same Form
 
-        var healthy = Champ(400); healthy.Health = 400;   // 100% — above the threshold
-        var (_, whole) = SoloBattle.ResolveWave(healthy, build, new Hunter(), 100_000f, 0f,
+        var mono = new Build();
+        mono.Weave(Sk(Form.Strike, Source.Nature, vow));
+
+        var mixed = new Build();
+        mixed.Weave(Sk(Form.Strike, Source.Nature, vow));
+        mixed.Weave(Sk(Form.Aura, Source.Nature));
+
+        var (_, kept) = SoloBattle.ResolveWave(Champ(400), mono, new Hunter(), 100_000f, 0f,
+            1000, T, new Random(9), new WaveBonus());
+        var (_, broken) = SoloBattle.ResolveWave(Champ(400), mixed, new Hunter(), 100_000f, 0f,
             1000, T, new Random(9), new WaveBonus());
 
-        var battered = Champ(400); battered.Health = 40;  // 10% — below it, so the Vow is dead
-        var (_, hurt) = SoloBattle.ResolveWave(battered, build, new Hunter(), 100_000f, 0f,
+        // The mixed build casts MORE (it carries an extra skill) and must still land a smaller Strike,
+        // so the comparison is on the Strike events alone.
+        int StrikeOnly(List<BattleEvent> ev) =>
+            ev.Where(e => e.Kind == BattleEventKind.Strike).Select(e => e.Amount).DefaultIfEmpty(0).Max();
+
+        Assert.True(StrikeOnly(kept) > StrikeOnly(broken),
+            $"The one-Form build's biggest hit was {StrikeOnly(kept)} and the two-Form build's was " +
+            $"{StrikeOnly(broken)}. THE SINGULAR is paying a build that breaks it.");
+    }
+
+    /// <summary>A Vow whose demand the build cannot meet grants nothing at all. That is the trade.</summary>
+    [Fact]
+    public void test_a_broken_vow_grants_nothing()
+    {
+        var vow = Weaving.ById("vow_unbound")!;   // no keystone may be socketed
+
+        var bare = new Build();
+        bare.Weave(Sk(Form.Strike, Source.Nature, vow));
+
+        var socketed = new Build();
+        socketed.Weave(Sk(Form.Strike, Source.Nature, vow));
+        socketed.Take(Keystones.ById("ironclad")!);
+
+        var plain = new Build();
+        plain.Weave(Sk(Form.Strike, Source.Nature));
+        plain.Take(Keystones.ById("ironclad")!);
+
+        var (_, withVow) = SoloBattle.ResolveWave(Champ(400), socketed, new Hunter(), 100_000f, 0f,
+            1000, T, new Random(9), new WaveBonus());
+        var (_, without) = SoloBattle.ResolveWave(Champ(400), plain, new Hunter(), 100_000f, 0f,
             1000, T, new Random(9), new WaveBonus());
 
-        Assert.True(DamageDealt(whole) > DamageDealt(hurt), "THE UNBROKEN paid nothing while whole");
+        Assert.Equal(DamageDealt(without), DamageDealt(withVow));
+
+        var (_, honoured) = SoloBattle.ResolveWave(Champ(400), bare, new Hunter(), 100_000f, 0f,
+            1000, T, new Random(9), new WaveBonus());
+        Assert.True(DamageDealt(honoured) > DamageDealt(withVow),
+            "Keeping THE UNBOUND paid no more than breaking it.");
     }
 
     // ── The build budget bites ────────────────────────────────────────────────────────────────

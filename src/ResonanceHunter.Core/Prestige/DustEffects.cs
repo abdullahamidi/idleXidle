@@ -102,11 +102,19 @@ public static class DustEffects
     /// </remarks>
     private static readonly Dictionary<string, string[]> VowGrants = new()
     {
-        ["vow_study_1"] = new[] { "vow_patience" },
-        ["vow_study_2"] = new[] { "vow_vanguard" },
-        ["vow_study_3"] = new[] { "vow_bloodied" },
-        ["vow_binding"] = new[] { "vow_boss_bound" },
-        ["vow_sacrifice"] = new[] { "vow_fragility", "vow_reckless_offering" },
+        // Repointed with the Vow rewrite: the old ids named run-state Vows (below 40% health, against a
+        // boss, after ten seconds) that no longer exist. Ordered gentlest first — a player's FIRST VOW
+        // should be one most builds already satisfy, and the ones that cost a gear slot come late.
+        ["vow_study_1"] = new[] { "vow_complete", "vow_deliberate" },
+        ["vow_study_2"] = new[] { "vow_pure", "vow_frantic" },
+        ["vow_study_3"] = new[] { "vow_singular", "vow_bluntedge" },
+        // BINDING VOWS teaches the three that cost a gear SLOT — its stats, its enchantment and its
+        // affixes all at once, which is the harshest thing the catalogue asks and the most visible.
+        ["vow_binding"] = new[] { "vow_barefoot", "vow_openhand", "vow_bareskull" },
+        ["vow_sacrifice"] = new[]
+        {
+            "vow_fragility", "vow_reckless_offering", "vow_unguarded", "vow_unbound",
+        },
     };
 
     /// <summary>Every Vow the player has learned. Empty until the first study is bought.</summary>

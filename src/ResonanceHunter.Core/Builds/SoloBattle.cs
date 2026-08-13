@@ -286,6 +286,10 @@ public static class SoloBattle
         // is the failure that left the whole loot-rarity chain inert for the length of development.
         var shape = build.Shape;
 
+        // The Vow context is a property of the BUILD, so it is built once and every skill of every tick
+        // is judged against the same one. See DescribeBuild.
+        var weaveCtx = DescribeBuild(build, hunter);
+
         // Per-wave state the shape's conditional nodes need. All of it is local, so nothing leaks into
         // the next wave — which matters most for SUNDER, whose armour strip is explicitly wave-scoped.
         var struckOnce = new HashSet<WaveCreature>();   // FOLLOW THROUGH / OPENER / ALPHA
@@ -668,7 +672,7 @@ public static class SoloBattle
                     var auraTick = triggers.Contains(BuildTrigger.Radiance) ? FormBehaviour.AuraTickMs * 3 / 5 : FormBehaviour.AuraTickMs;
                     if (ms % auraTick != 0) continue;
                     var aura = FormBehaviour.BaseDamage(form, resonance, wt)
-                               * VowFactor(sk, champ, abs, isBoss, wt)
+                               * VowFactor(sk, weaveCtx, wt)
                                * (FormBehaviour.AuraTickMs / 1000f);
                     LandSpread(aura, ms, shape.TargetsFor(form), sk.Source, form, abs);
                     if (alive == 0) return Kill(ms);
@@ -704,7 +708,7 @@ public static class SoloBattle
                 for (var c = 0; c < casts; c++)
                 {
                     var raw = FormBehaviour.BaseDamage(form, resonance, wt)
-                              * VowFactor(sk, champ, abs, isBoss, wt);
+                              * VowFactor(sk, weaveCtx, wt);
 
                     // EXECUTE — a STRIKE finishes a weakened enemy. Reads the CURRENT target's own health
                     // fraction, so in a multi-creature wave it fires on whichever creature is in front and
@@ -744,7 +748,7 @@ public static class SoloBattle
                         if (!FormBehaviour.IsAmplifier(woven.Form) && !FormBehaviour.FiresOnBeingHit(woven.Form))
                         {
                             var wovenRaw = FormBehaviour.BaseDamage(woven.Form, resonance, wt)
-                                           * VowFactor(woven, champ, abs, isBoss, wt)
+                                           * VowFactor(woven, weaveCtx, wt)
                                            * WeaverEchoFraction;
                             events.Add(new BattleEvent(BattleEventKind.Skill, 0, (int)woven.Form, ms));
                             dealt += LandSpread(wovenRaw, ms, shape.TargetsFor(woven.Form),
@@ -826,7 +830,7 @@ public static class SoloBattle
                     champ.ReadyAt[idx] = abs + cd;
 
                     var trapRaw = FormBehaviour.BaseDamage(Form.Trap, resonance, wt)
-                                  * VowFactor(sk, champ, abs, isBoss, wt);
+                                  * VowFactor(sk, weaveCtx, wt);
                     events.Add(new BattleEvent(BattleEventKind.Skill, 0, (int)Form.Trap, ms));
                     LandSpread(trapRaw, ms, shape.TargetsFor(Form.Trap), sk.Source, Form.Trap, abs);
                     if (alive == 0) return Kill(ms);
@@ -880,14 +884,49 @@ public static class SoloBattle
         return MathF.Max(0.05f, mult);
     }
 
-    /// <summary>A skill's Vow multiplier, if its condition holds right now.</summary>
-    private static float VowFactor(EquippedSkill sk, Champion champ, int absMs, bool isBoss, WeavingTuning wt)
+    /// <summary>A skill's Vow multiplier, if the BUILD meets its demand.</summary>
+    /// <remarks>
+    /// The context is a property of the build, not of the moment, so it is built once per wave and every
+    /// skill is judged against the same one. A Vow that read the fight — below 40% health, against a
+    /// boss — was a lottery on how the wave went in a game where the player cannot react; this is a
+    /// decision they made at the workbench and can see the consequences of in the report.
+    /// </remarks>
+    private static float VowFactor(EquippedSkill sk, WeaveContext ctx, WeavingTuning wt)
     {
         if (sk.Vow is not { } vow) return 1f;
-
-        var frac = champ.Health / (float)Math.Max(1, champ.MaxHealth);
-        // Slot 0: the character is always "in the front" now — there is no line to stand in.
-        var ctx = new WeaveContext(frac, absMs, isBoss, 0);
         return Weaving.IsActive(vow, ctx) ? Weaving.VowMultiplier(vow, wt) : 1f;
+    }
+
+    /// <summary>Describe a build to the Vow layer.</summary>
+    public static WeaveContext DescribeBuild(Build build, Economy.Hunter hunter)
+    {
+        ArgumentNullException.ThrowIfNull(build);
+        ArgumentNullException.ThrowIfNull(hunter);
+
+        var worn = new HashSet<BareSlot>();
+        foreach (var (slot, bare) in new[]
+                 {
+                     (Economy.GearSlot.Boots, BareSlot.Boots),
+                     (Economy.GearSlot.Gloves, BareSlot.Gloves),
+                     (Economy.GearSlot.Helm, BareSlot.Helm),
+                     (Economy.GearSlot.Ring, BareSlot.Ring),
+                     (Economy.GearSlot.Charm, BareSlot.Charm),
+                 })
+            if (hunter.Worn(slot) is not null) worn.Add(bare);
+
+        var mods = build.Resolve(hunter);
+        return new WeaveContext(
+            DistinctForms: build.Skills.Select(s => s.Form).Distinct().Count(),
+            DistinctSources: build.Skills.Select(s => s.Source).Distinct().Count(),
+            SkillsWoven: build.Skills.Count,
+            SkillSlots: Build.SkillSlots,
+            CritPercent: hunter.ValueOf(Economy.HunterStat.CriticalChance)
+                         + hunter.AffixTotal(Economy.AffixStat.Crit)
+                         + build.Shape.BonusCritPercent,
+            BaseCritPercent: Economy.ProgressionTuning.Default.BaseValue[Economy.HunterStat.CriticalChance],
+            SkillRate: mods.SkillRate * build.Shape.SkillRate,
+            Defence: hunter.Defense,
+            KeystonesWorn: build.Keystones.Count,
+            WornSlots: worn);
     }
 }

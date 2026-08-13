@@ -221,14 +221,21 @@ public class DustEffectsTests
     [Fact]
     public void test_studying_vows_actually_teaches_them()
     {
+        // The chain teaches gentlest first, and each rung teaches more than one — a Vow catalogue of
+        // thirteen against five teaching nodes.
         var tree = With("vow_study_1");
-        Assert.Single(DustEffects.KnownVows(tree));
-        Assert.True(DustEffects.KnowsVow(tree, "vow_patience"));
-        Assert.False(DustEffects.KnowsVow(tree, "vow_vanguard"));
+        Assert.Equal(2, DustEffects.KnownVows(tree).Count);
+        Assert.True(DustEffects.KnowsVow(tree, "vow_complete"));
+        Assert.False(DustEffects.KnowsVow(tree, "vow_pure"));
 
         var deeper = With("vow_study_1", "vow_study_2");
-        Assert.Equal(2, DustEffects.KnownVows(deeper).Count);
-        Assert.True(DustEffects.KnowsVow(deeper, "vow_vanguard"));
+        Assert.Equal(4, DustEffects.KnownVows(deeper).Count);
+        Assert.True(DustEffects.KnowsVow(deeper, "vow_pure"));
+
+        // The gear-slot sacrifices are late, and never reachable from the study chain alone.
+        Assert.False(DustEffects.KnowsVow(deeper, "vow_barefoot"));
+        var bound = With("vow_study_1", "vow_study_2", "vow_study_3", "vow_binding");
+        Assert.True(DustEffects.KnowsVow(bound, "vow_barefoot"));
     }
 
     [Fact]

@@ -290,15 +290,15 @@ public sealed class MemoryDustTree
 
         // Vows — ability OPTIONS rather than bigger numbers, which is the spine's whole character.
         new() { Id = "vow_study_1", Name = "FIRST VOW", Cost = 1, Effect = UnlockEffect.Expansion,
-                Description = "LEARN THE VOW OF PATIENCE." },
+                Description = "LEARN COMPLETION AND THE DELIBERATE." },
         new() { Id = "vow_study_2", Name = "SECOND VOW", Cost = 2, Effect = UnlockEffect.Expansion,
-                Requires = new[] { "vow_study_1" }, Description = "LEARN THE VOW OF THE UNBROKEN." },
+                Requires = new[] { "vow_study_1" }, Description = "LEARN THE PURE AND THE FRANTIC." },
         new() { Id = "vow_study_3", Name = "THIRD VOW", Cost = 2, Effect = UnlockEffect.Expansion,
-                Requires = new[] { "vow_study_2" }, Description = "LEARN THE VOW OF THE BLOODIED." },
+                Requires = new[] { "vow_study_2" }, Description = "LEARN THE SINGULAR AND THE BLUNT EDGE." },
         new() { Id = "vow_binding", Name = "BINDING VOWS", Cost = 3, Effect = UnlockEffect.Expansion,
-                Requires = new[] { "vow_study_3" }, Description = "LEARN THE VOW OF THE BOUND." },
+                Requires = new[] { "vow_study_3" }, Description = "LEARN THE THREE VOWS THAT COST A GEAR SLOT." },
         new() { Id = "vow_sacrifice", Name = "SACRIFICIAL VOWS", Cost = 3, Effect = UnlockEffect.Expansion,
-                Requires = new[] { "vow_study_3" }, Description = "LEARN FRAGILITY AND RECKLESS OFFERING." },
+                Requires = new[] { "vow_study_3" }, Description = "LEARN FRAGILITY, RECKLESS OFFERING, THE UNGUARDED AND THE UNBOUND." },
 
         // Attention, not power. An idle game's real currency is ATTENTION, and a bag of ninety Commons
         // spends it on nothing.

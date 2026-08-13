@@ -2,6 +2,8 @@ using System.Linq;
 using ResonanceHunter.Core.Abilities;
 using ResonanceHunter.Core.Automation;
 using ResonanceHunter.Core.Expeditions;
+using ResonanceHunter.Core.Builds;
+using ResonanceHunter.Core.Economy;
 using Xunit;
 
 namespace ResonanceHunter.Core.Tests.Expeditions;
@@ -41,42 +43,54 @@ public class WeaveInBattleTests
     // ── Vow pricing ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void test_a_rarer_vow_is_worth_more_power()
+    public void test_a_harsher_vow_is_worth_more_power()
     {
-        // The pricing promise: a Vow that is easier to satisfy is always worth less, so no conditional
-        // Vow can dominate another.
+        // The pricing promise: a Vow that costs the build less is always worth less, so no demand Vow
+        // can dominate another.
         var t = WeavingTuning.Default;
-        var bloodied = Weaving.ById("vow_bloodied")!;  // uptime 0.25
-        var patience = Weaving.ById("vow_patience")!;  // uptime 0.60
+        var unbound = Weaving.ById("vow_unbound")!;    // severity 0.80 — refuse the trait tree's payoff
+        var complete = Weaving.ById("vow_complete")!;  // severity 0.20 — most builds already satisfy it
 
-        Assert.True(Weaving.VowMultiplier(bloodied, t) > Weaving.VowMultiplier(patience, t));
+        Assert.True(Weaving.VowMultiplier(unbound, t) > Weaving.VowMultiplier(complete, t));
     }
 
+    /// <summary>
+    /// Every demand is answered by the BUILD the sim actually describes.
+    /// </summary>
+    /// <remarks>
+    /// The other half of WeavingTests.test_every_demand_can_be_both_met_and_unmet. That one proves the
+    /// demands are satisfiable in the abstract; this one proves SoloBattle.DescribeBuild produces a
+    /// context that can satisfy them — the join between the two halves, which is where every dead system
+    /// in this project has hidden.
+    /// </remarks>
     [Fact]
-    public void test_every_conditional_vow_can_both_hold_and_fail()
+    public void test_the_sim_describes_a_build_the_vows_can_read()
     {
-        // A real restriction sits STRICTLY between two dead ends. VOW OF THE OPENING could never hold — it
-        // waited on a weak-point window manual combat took with it, priced +90% for a bonus that never
-        // paid. VOW OF THE VANGUARD had the mirror flaw after the solo pivot: it watched the front slot the
-        // lone champion ALWAYS occupies, so it could never fail — a full multiplier for a restriction it
-        // never bore. Both are dead content. Every conditional Vow must provably do BOTH — the old version
-        // of this test only checked "can hold", which is exactly why the always-on Vanguard slipped past.
-        foreach (var vow in Weaving.Catalog.Where(v => v.Kind == VowKind.Conditional))
-        {
-            Assert.NotEqual(VowTrigger.None, vow.Trigger);
+        static EquippedSkill Sk(Form form, Source src)
+            => new(new WovenAbility { Name = "s", Source = src, Form = form }, 1_500);
 
-            var (hold, fail) = vow.Trigger switch
-            {
-                VowTrigger.BelowHealthFraction => (new WeaveContext(0f, 0, false, 0), new WeaveContext(1f, 0, false, 0)),
-                VowTrigger.AboveHealthFraction => (new WeaveContext(1f, 0, false, 0), new WeaveContext(0f, 0, false, 0)),
-                VowTrigger.AgainstBoss => (new WeaveContext(1f, 0, true, 0), new WeaveContext(1f, 0, false, 0)),
-                VowTrigger.AfterElapsedMs => (new WeaveContext(1f, 999_999, false, 0), new WeaveContext(1f, 0, false, 0)),
-                _ => (new WeaveContext(0f, 0, false, 0), new WeaveContext(0f, 0, false, 0)),
-            };
+        var mono = new Build();
+        mono.Weave(Sk(Form.Strike, Source.Body));
 
-            Assert.True(Weaving.IsActive(vow, hold), $"{vow.Id} has a condition that can never hold");
-            Assert.False(Weaving.IsActive(vow, fail), $"{vow.Id} has a condition that can never fail — not a restriction");
-        }
+        var broad = new Build();
+        broad.Weave(Sk(Form.Strike, Source.Body));
+        broad.Weave(Sk(Form.Aura, Source.Mind));
+
+        var monoCtx = SoloBattle.DescribeBuild(mono, new Hunter());
+        var broadCtx = SoloBattle.DescribeBuild(broad, new Hunter());
+
+        Assert.True(Weaving.IsActive(Weaving.ById("vow_singular")!, monoCtx),
+            "A one-Form build does not satisfy THE SINGULAR — the sim is not describing Forms.");
+        Assert.False(Weaving.IsActive(Weaving.ById("vow_singular")!, broadCtx));
+
+        Assert.True(Weaving.IsActive(Weaving.ById("vow_pure")!, monoCtx));
+        Assert.False(Weaving.IsActive(Weaving.ById("vow_pure")!, broadCtx));
+
+        // A fresh Hunter trains no crit, wears nothing and sockets nothing.
+        Assert.True(Weaving.IsActive(Weaving.ById("vow_bluntedge")!, monoCtx));
+        Assert.True(Weaving.IsActive(Weaving.ById("vow_unguarded")!, monoCtx));
+        Assert.True(Weaving.IsActive(Weaving.ById("vow_unbound")!, monoCtx));
+        Assert.True(Weaving.IsActive(Weaving.ById("vow_barefoot")!, monoCtx));
     }
 
     // ── Boss waves ────────────────────────────────────────────────────────────────────────────

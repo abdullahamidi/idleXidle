@@ -13,49 +13,81 @@ public enum Form { Strike, Projectile, Aura, Trap, Mark, Transformation }
 /// </summary>
 public enum VowKind
 {
-    /// <summary>Only usable while a condition holds. Rarer condition = more power.</summary>
-    Conditional,
+    /// <summary>
+    /// Pays only if the BUILD meets its demand. Harsher demand = more power.
+    /// </summary>
+    /// <remarks>
+    /// Named for what it reads. It was Conditional when the condition was a moment in the fight; the
+    /// distinction that matters now is that a demand is answered at the workbench, before the descent,
+    /// and holds for every wave of it.
+    /// </remarks>
+    Demand,
 
     /// <summary>Always active, always costing you something. Priced on effective-HP given up.</summary>
     StaticCost,
 }
 
 /// <summary>
-/// What a conditional Vow actually watches. The machine-readable half of the restriction.
+/// What a Vow demands of the BUILD. The machine-readable half of the restriction.
 /// </summary>
 /// <remarks>
-/// A Vow used to carry only an <see cref="Vow.ExpectedUptime"/> and a prose description, which meant
-/// the CALLER had to decide when the condition held — and no caller ever existed, so no Vow condition
-/// was ever evaluated by anything. Naming the trigger in the data puts the rule next to the number it
-/// prices, so a Vow cannot promise "only while bloodied" and be checked for something else.
+/// <para>
+/// These used to watch the FIGHT — below 40% health, against a boss, after ten seconds. In a game with
+/// no in-run decisions that is not a restriction a player accepts, it is a lottery on how the fight
+/// happens to go: whether the Vow paid at all was decided by the wave, not by them. A player who cannot
+/// tell "I built this wrong" from "that wave went badly" is the failure the whole flow document is
+/// written against.
+/// </para>
+/// <para>
+/// A build demand is the opposite. It is known before the descent starts, it is visible on the
+/// workbench, it holds for every wave equally, and the post-run report can state it as a fact. Most
+/// importantly it PULLS AGAINST THE SKILL TREE: a Vow that pays for carrying one Form is an argument
+/// against the Spread branch, and one that pays for owning no crit is an argument against Tempo.
+/// </para>
 /// </remarks>
-public enum VowTrigger
+public enum VowDemand
 {
-    /// <summary>Static-cost Vows: always on, always costing.</summary>
+    /// <summary>No demand — a static-cost Vow, always on and always paying.</summary>
     None,
 
-    /// <summary>The weaver's own health is at or below <see cref="Vow.Threshold"/> (0..1).</summary>
-    BelowHealthFraction,
+    /// <summary>Every woven skill is the same Form. Argues against SPREAD's breadth.</summary>
+    SingleForm,
 
-    /// <summary>The current wave is a boss wave.</summary>
-    AgainstBoss,
+    /// <summary>Every woven skill draws the same Source. Costs you the Source matchup wheel.</summary>
+    SingleSource,
 
-    /// <summary>At least <see cref="Vow.Threshold"/> ms have elapsed in the expedition.</summary>
-    AfterElapsedMs,
+    /// <summary>No skill slot is empty. A real cost only while slots are scarce.</summary>
+    EveryWeaveFilled,
 
-    /// <summary>
-    /// The weaver's own health is at or ABOVE <see cref="Vow.Threshold"/> (0..1) — the mirror of
-    /// <see cref="BelowHealthFraction"/>. Power while you are still whole.
-    /// </summary>
+    /// <summary>Critical chance is untouched from base. Argues directly against TEMPO's FOCUS road.</summary>
+    NoCritInvestment,
+
+    /// <summary>Skill rate at or below the threshold. The slow, heavy build's Vow.</summary>
+    CadenceAtOrBelow,
+
+    /// <summary>Skill rate at or above the threshold. The frantic build's Vow.</summary>
+    CadenceAtOrAbove,
+
+    /// <summary>Defence is zero — no training, no charm, no affix. Nothing between you and the wave.</summary>
+    NoDefence,
+
+    /// <summary>A named gear slot must be EMPTY. The purest sacrifice the game can ask.</summary>
     /// <remarks>
-    /// This replaced <c>InTheFront</c>, which watched <c>Slot == 0</c>. Once the squad was gone the
-    /// champion is ALWAYS slot 0, so that trigger could never be false — a conditional Vow priced for
-    /// 20% uptime that paid its full multiplier for free, every fight. A condition that can never be
-    /// false is as broken as one that can never be true (the reason VOW OF THE OPENING was deleted). A
-    /// solo fight has no slots to stand in; it does have a health bar that a real fight actually moves.
+    /// It costs the slot's stats AND its enchantment AND its affixes, all of which the player can see
+    /// before agreeing. Priced highest for that reason, and the only demand that touches the gear layer.
     /// </remarks>
-    AboveHealthFraction,
+    SlotLeftBare,
+
+    /// <summary>No keystone socketed. Refuses the trait tree's whole payoff.</summary>
+    NoKeystone,
 }
+
+/// <summary>Which slot a <see cref="VowDemand.SlotLeftBare"/> Vow forbids.</summary>
+/// <remarks>
+/// A local enum rather than Economy.GearSlot: Weaving must not depend on the economy layer, and the
+/// host maps this to the real slot when it builds the context. Only the slots worth refusing are here.
+/// </remarks>
+public enum BareSlot { None, Boots, Gloves, Helm, Ring, Charm }
 
 public sealed record Vow
 {
@@ -63,11 +95,14 @@ public sealed record Vow
     public required string Name { get; init; }
     public required VowKind Kind { get; init; }
 
-    /// <summary>What the condition watches. <see cref="VowTrigger.None"/> for static-cost Vows.</summary>
-    public VowTrigger Trigger { get; init; } = VowTrigger.None;
+    /// <summary>What the Vow demands of the build. <see cref="VowDemand.None"/> for static-cost Vows.</summary>
+    public VowDemand Demand { get; init; } = VowDemand.None;
 
-    /// <summary>The trigger's threshold — a health fraction, or a duration in ms. Ignored otherwise.</summary>
+    /// <summary>The demand's threshold — a skill-rate multiplier. Ignored by demands that take none.</summary>
     public float Threshold { get; init; }
+
+    /// <summary>Which slot must be left empty, for <see cref="VowDemand.SlotLeftBare"/>.</summary>
+    public BareSlot Bare { get; init; } = BareSlot.None;
 
     /// <summary>
     /// The restriction in a few words, for a UI row. <see cref="Description"/> is the prose version.
@@ -79,8 +114,17 @@ public sealed record Vow
     /// </remarks>
     public required string Short { get; init; }
 
-    /// <summary>Conditional only: 0..1, how often the condition holds. Must be strictly inside (0,1).</summary>
-    public float ExpectedUptime { get; init; } = 0.5f;
+    /// <summary>
+    /// Demand Vows only: 0..1, how much of the build space this demand forbids. Strictly inside (0,1).
+    /// </summary>
+    /// <remarks>
+    /// This replaced EXPECTED UPTIME and prices the Vow the same way, because it is the same quantity
+    /// asked honestly. Uptime made sense when a Vow watched the fight — how often is the condition true?
+    /// A build demand is true for a whole descent or false for a whole descent, so the question becomes
+    /// how much it COSTS you to satisfy, and that is what severity names. A demand nearly every build
+    /// already meets is worth almost nothing; one that forbids a whole branch is worth a great deal.
+    /// </remarks>
+    public float Severity { get; init; } = 0.5f;
 
     /// <summary>Static-cost only: the fraction of EFFECTIVE HP sacrificed — never a raw stat fraction.</summary>
     public float StaticCostMagnitude { get; init; }
@@ -216,8 +260,12 @@ public static class Weaving
     {
         if (vow is null) return 1f;
 
-        return vow.Kind == VowKind.Conditional
-            ? ConditionalMultiplier(vow.ExpectedUptime, tuning)
+        return vow.Kind == VowKind.Demand
+            // 1 - Severity, because the formula prices RARITY: a lower argument means a condition that
+            // holds less often and therefore pays more. Severity runs the other way by design — it names
+            // how much the demand COSTS you, which is the honest question for a build condition — so it
+            // is inverted here rather than the catalogue being written backwards to suit the formula.
+            ? ConditionalMultiplier(1f - vow.Severity, tuning)
             : StaticMultiplier(vow.StaticCostMagnitude, tuning);
     }
 
@@ -271,43 +319,95 @@ public static class Weaving
     /// </remarks>
     public static IReadOnlyList<Vow> Catalog { get; } = new List<Vow>
     {
+        // ── BUILD SHAPE. Each one argues against a branch of the skill tree, which is the point: a Vow
+        //    that costs you nothing you wanted is not a Vow. ──────────────────────────────────────
         new()
         {
-            Id = "vow_bloodied", Name = "VOW OF THE BLOODIED", Kind = VowKind.Conditional,
-            Trigger = VowTrigger.BelowHealthFraction, Threshold = 0.40f,
-            ExpectedUptime = 0.25f,
-            Short = "BELOW 40% HP",
-            Description = "ONLY WHILE BELOW 40% HEALTH. DESPERATION IS POWER.",
+            Id = "vow_singular", Name = "VOW OF THE SINGULAR", Kind = VowKind.Demand,
+            Demand = VowDemand.SingleForm, Severity = 0.75f,
+            Short = "ONE FORM ONLY",
+            Description = "EVERY SKILL YOU CARRY MUST BE THE SAME FORM. DEPTH INSTEAD OF BREADTH.",
         },
         new()
         {
-            Id = "vow_boss_bound", Name = "VOW OF THE BOUND", Kind = VowKind.Conditional,
-            Trigger = VowTrigger.AgainstBoss,
-            ExpectedUptime = 0.25f,
-            Short = "VS BOSSES ONLY",
-            Description = "ONLY AGAINST BOSSES. SAVED FOR WHAT MATTERS.",
+            Id = "vow_pure", Name = "VOW OF THE PURE", Kind = VowKind.Demand,
+            Demand = VowDemand.SingleSource, Severity = 0.6f,
+            Short = "ONE SOURCE ONLY",
+            Description = "EVERY SKILL MUST DRAW ONE SOURCE. THE MATCHUP WHEEL STOPS BEING YOURS.",
         },
         new()
         {
-            // Re-pointed for the solo model. Its old trigger, InTheFront, was ALWAYS true once the squad
-            // was gone — the champion is always slot 0 — so a Vow priced at 0.2 uptime paid its full 2.2x
-            // for nothing: a strictly-dominant pick, the exact Pillar-4 sin this catalog forbids, and the
-            // mirror of the deleted VOW OF THE OPENING (never-true instead of never-false). It now watches
-            // your own health — the mirror of THE BLOODIED — a condition a real fight actually moves.
-            Id = "vow_vanguard", Name = "VOW OF THE UNBROKEN", Kind = VowKind.Conditional,
-            Trigger = VowTrigger.AboveHealthFraction, Threshold = 0.70f,
-            ExpectedUptime = 0.6f,          // usually whole, but a fight that threatens you drops it
-            Short = "ABOVE 70% HP",
-            Description = "ONLY WHILE ABOVE 70% HEALTH. POWER WHILE YOU ARE STILL WHOLE.",
+            // The one Vow most builds already satisfy, and priced accordingly — it exists so the
+            // catalogue has an entry a new player can take without giving anything up yet.
+            Id = "vow_complete", Name = "VOW OF COMPLETION", Kind = VowKind.Demand,
+            Demand = VowDemand.EveryWeaveFilled, Severity = 0.2f,
+            Short = "NO EMPTY WEAVE",
+            Description = "EVERY SKILL SLOT YOU OWN MUST BE FILLED. NOTHING HELD BACK.",
+        },
+
+        // ── STAT SHAPE. These read the character sheet, so they pull against the STATS screen's
+        //    training and against the skill tree's numbered nodes at the same time. ───────────────
+        new()
+        {
+            Id = "vow_bluntedge", Name = "VOW OF THE BLUNT EDGE", Kind = VowKind.Demand,
+            Demand = VowDemand.NoCritInvestment, Severity = 0.55f,
+            Short = "NO CRIT TRAINING",
+            Description = "YOUR CRITICAL CHANCE MUST BE UNTOUCHED. NO LUCKY BLOWS, ONLY CERTAIN ONES.",
         },
         new()
         {
-            Id = "vow_patience", Name = "VOW OF PATIENCE", Kind = VowKind.Conditional,
-            Trigger = VowTrigger.AfterElapsedMs, Threshold = 10_000f,
-            ExpectedUptime = 0.6f,
-            Short = "AFTER 10S",
-            Description = "ONLY AFTER 10 SECONDS OF EXPEDITION. WEAKER, BUT EASY TO MEET.",
+            Id = "vow_deliberate", Name = "VOW OF THE DELIBERATE", Kind = VowKind.Demand,
+            Demand = VowDemand.CadenceAtOrBelow, Threshold = 1.0f, Severity = 0.5f,
+            Short = "CADENCE AT OR BELOW 1.00x",
+            Description = "YOUR SKILLS MUST NOT RETURN FASTER THAN BASE. SLOW HANDS, HEAVY BLOWS.",
         },
+        new()
+        {
+            Id = "vow_frantic", Name = "VOW OF THE FRANTIC", Kind = VowKind.Demand,
+            Demand = VowDemand.CadenceAtOrAbove, Threshold = 1.4f, Severity = 0.5f,
+            Short = "CADENCE AT OR ABOVE 1.40x",
+            Description = "YOUR SKILLS MUST RETURN AT LEAST 40% FASTER THAN BASE. NEVER STILL.",
+        },
+        new()
+        {
+            Id = "vow_unguarded", Name = "VOW OF THE UNGUARDED", Kind = VowKind.Demand,
+            Demand = VowDemand.NoDefence, Severity = 0.7f,
+            Short = "NO DEFENCE AT ALL",
+            Description = "NO DEFENCE FROM TRAINING, CHARM OR AFFIX. NOTHING BETWEEN YOU AND THE WAVE.",
+        },
+        new()
+        {
+            Id = "vow_unbound", Name = "VOW OF THE UNBOUND", Kind = VowKind.Demand,
+            Demand = VowDemand.NoKeystone, Severity = 0.8f,
+            Short = "NO KEYSTONE SOCKETED",
+            Description = "YOU MAY SOCKET NO KEYSTONE. THE PERMANENT TREE'S PAYOFF, REFUSED.",
+        },
+
+        // ── SACRIFICE. A bare slot costs its stats AND its enchantment AND its affixes, all of which
+        //    the player can see before agreeing — which is what makes it the purest ask here. ─────
+        new()
+        {
+            Id = "vow_barefoot", Name = "VOW OF THE BAREFOOT", Kind = VowKind.Demand,
+            Demand = VowDemand.SlotLeftBare, Bare = BareSlot.Boots, Severity = 0.65f,
+            Short = "NO BOOTS",
+            Description = "YOU MAY WEAR NO BOOTS. WALK THE DEPTHS ON YOUR OWN FEET.",
+        },
+        new()
+        {
+            Id = "vow_openhand", Name = "VOW OF THE OPEN HAND", Kind = VowKind.Demand,
+            Demand = VowDemand.SlotLeftBare, Bare = BareSlot.Gloves, Severity = 0.65f,
+            Short = "NO GLOVES",
+            Description = "YOU MAY WEAR NO GLOVES. NOTHING BETWEEN YOUR HANDS AND THE WORK.",
+        },
+        new()
+        {
+            Id = "vow_bareskull", Name = "VOW OF THE BARE SKULL", Kind = VowKind.Demand,
+            Demand = VowDemand.SlotLeftBare, Bare = BareSlot.Helm, Severity = 0.7f,
+            Short = "NO HELM",
+            Description = "YOU MAY WEAR NO HELM. LOOK THE DEPTHS IN THE FACE.",
+        },
+
+        // ── STATIC COST. Always on, always paying — the entire distinction from a demand. ────────
         new()
         {
             Id = "vow_fragility", Name = "VOW OF FRAGILITY", Kind = VowKind.StaticCost,
@@ -339,18 +439,45 @@ public static class Weaving
         if (vow is null) return false;
         if (vow.Kind == VowKind.StaticCost) return true;
 
-        return vow.Trigger switch
+        return vow.Demand switch
         {
-            VowTrigger.BelowHealthFraction => ctx.HealthFraction <= vow.Threshold,
-            VowTrigger.AgainstBoss => ctx.IsBoss,
-            VowTrigger.AfterElapsedMs => ctx.ElapsedMs >= vow.Threshold,
-            VowTrigger.AboveHealthFraction => ctx.HealthFraction >= vow.Threshold,
+            VowDemand.SingleForm => ctx.DistinctForms <= 1,
+            VowDemand.SingleSource => ctx.DistinctSources <= 1,
+            VowDemand.EveryWeaveFilled => ctx.SkillsWoven >= ctx.SkillSlots,
+            VowDemand.NoCritInvestment => ctx.CritPercent <= ctx.BaseCritPercent + 0.01f,
+            VowDemand.CadenceAtOrBelow => ctx.SkillRate <= vow.Threshold + 0.001f,
+            VowDemand.CadenceAtOrAbove => ctx.SkillRate >= vow.Threshold - 0.001f,
+            VowDemand.NoDefence => ctx.Defence <= 0,
+            VowDemand.NoKeystone => ctx.KeystonesWorn == 0,
+            VowDemand.SlotLeftBare => !ctx.WornSlots.Contains(vow.Bare),
             _ => false,
         };
     }
 }
 
 /// <summary>
-/// The battle state a Vow's condition is judged against. Pure data — no MonoGame, no sim internals.
+/// The BUILD a Vow's demand is judged against. Pure data — no MonoGame, no sim internals.
 /// </summary>
-public readonly record struct WeaveContext(float HealthFraction, int ElapsedMs, bool IsBoss, int Slot);
+/// <remarks>
+/// It used to carry the fight — health fraction, elapsed milliseconds, whether the enemy was a boss —
+/// because Vows watched the fight. Every field here is instead something the player SET before they
+/// descended, which is what makes a Vow a decision rather than a lottery on how the wave went.
+///
+/// Static for a whole descent, so the sim builds one per wave and reuses it for every skill.
+/// </remarks>
+public readonly record struct WeaveContext(
+    int DistinctForms,
+    int DistinctSources,
+    int SkillsWoven,
+    int SkillSlots,
+    float CritPercent,
+    float BaseCritPercent,
+    float SkillRate,
+    int Defence,
+    int KeystonesWorn,
+    IReadOnlySet<BareSlot> WornSlots)
+{
+    /// <summary>A build that satisfies nothing — the safe default for a caller with no build to hand.</summary>
+    public static WeaveContext Empty { get; } =
+        new(0, 0, 0, 0, 0f, 0f, 1f, 0, 0, new HashSet<BareSlot>());
+}
