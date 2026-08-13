@@ -125,6 +125,19 @@ public sealed class SoloExpeditionScreen
 
     /// <summary>The report for the run just ended, and the one before it — the diff is the whole point.</summary>
     private RunReport? _lastReport;
+
+    /// <summary>
+    /// Every run's report, kept and readable — set by the host so it can be saved.
+    /// </summary>
+    /// <remarks>
+    /// The report used to live for four seconds inside the CHAMPION DOWN overlay and then be gone. In a
+    /// game whose whole premise is that you are not watching, a lesson delivered only to someone looking
+    /// at the exact second their champion fell is a lesson delivered to nobody.
+    /// </remarks>
+    public RunLog Log { get; set; } = new();
+
+    private bool _logOpen;
+    private int _logIndex;   // 0 = newest
     private RunReport? _previousReport;
 
     /// <summary>Deepest wave reached in this region, so a report can say whether it was a record.</summary>
@@ -450,8 +463,10 @@ public sealed class SoloExpeditionScreen
             //
             // The REPORT is taken here, at the exact moment the run ended. With no in-run decisions this
             // is the only thing the player can learn from, so it is captured before anything resets.
-            _previousReport = _lastReport is { } prev && prev.RegionId == RegionId ? prev : null;
+            _previousReport = Log.PreviousIn(RegionId);
             _lastReport = _run!.Report(isRecord: _run.Wave >= _bestDepth);
+            Log.Add(_lastReport);   // kept and saved — see the Log property
+            LogDirty = true;
             _bestDepth = Math.Max(_bestDepth, _run.Wave);
 
             _deathFlash = 1f;
@@ -802,6 +817,60 @@ public sealed class SoloExpeditionScreen
     /// change; a number that points at no lever is decoration and does not belong here.
     /// </para>
     /// </remarks>
+    /// <summary>Set when a report was added, so the host knows to save. Cleared by the host.</summary>
+    public bool LogDirty { get; set; }
+
+    /// <summary>Open or close the log, and step through it. Called by the host from its key handling.</summary>
+    public void ToggleLog()
+    {
+        _logOpen = !_logOpen;
+        _logIndex = 0;
+    }
+
+    public bool LogOpen => _logOpen;
+
+    public void StepLog(int dir)
+    {
+        if (Log.Count == 0) return;
+        _logIndex = Math.Clamp(_logIndex + dir, 0, Log.Count - 1);
+    }
+
+    /// <summary>
+    /// The log, as the same report panel with a way to walk backwards through it.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately the SAME drawing as the death overlay rather than a second, summarised view: the
+    /// player has learned to read one layout, and a history that presented the same facts differently
+    /// would make comparing two runs — the entire reason to keep them — harder, not easier.
+    /// </remarks>
+    public void DrawLog(SpriteBatch b, Point hit, bool clicked)
+    {
+        if (!_logOpen) return;
+
+        _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xE6));
+
+        if (Log.Count == 0)
+        {
+            _ui.TextCenterBig(b, "NO EXPEDITIONS YET", 960, 480, Slate, UiTypography.RegionTitle);
+            _ui.TextCenter(b, "L CLOSES THIS.", 960, 540, Dim);
+            return;
+        }
+
+        _logIndex = Math.Clamp(_logIndex, 0, Log.Count - 1);
+        var shown = Log.Entries[_logIndex];
+        var older = Log.OlderThan(_logIndex);
+
+        _ui.TextCenterBig(b, "EXPEDITION LOG", 960, 120, Gold, UiTypography.ScreenTitle);
+        _ui.TextCenter(b, $"{_logIndex + 1} OF {Log.Count}   \u00b7   \u2039 \u203a TO STEP   \u00b7   L CLOSES", 960, 172, Slate);
+
+        DrawReportPanel(b, shown, older);
+
+        var prev = new Rectangle(300, 480, 120, 64);
+        var next = new Rectangle(1500, 480, 120, 64);
+        if (_ui.Button(b, prev, "\u2039", hit, clicked) && _logIndex < Log.Count - 1) _logIndex++;
+        if (_ui.Button(b, next, "\u203a", hit, clicked) && _logIndex > 0) _logIndex--;
+    }
+
     private void DrawRunReport(SpriteBatch b)
     {
         if (_lastReport is not { } r)
@@ -810,6 +879,18 @@ public sealed class SoloExpeditionScreen
             return;
         }
 
+        DrawReportPanel(b, r, _previousReport);
+    }
+
+    /// <summary>
+    /// The report itself. Shared by the death overlay and the log, deliberately.
+    /// </summary>
+    /// <remarks>
+    /// One layout, two contexts. A history screen that summarised the same facts differently would make
+    /// comparing two runs — the entire reason to keep them — harder rather than easier.
+    /// </remarks>
+    private void DrawReportPanel(SpriteBatch b, RunReport r, RunReport? previous)
+    {
         var panel = new Rectangle(ArenaRect.X + 40, 250, ArenaRect.Width - 80, 620);
         _ui.Panel(b, panel);
         var x = panel.X + 44;
@@ -847,7 +928,7 @@ public sealed class SoloExpeditionScreen
         _ui.TextBig(b, $"measured over the last {r.SampledWaves} wave(s)", x, y + 4, Slate, UiTypography.Secondary);
 
         // THE DIFF — what changed since the last attempt here. This is what makes iteration legible.
-        var diff = r.DiffAgainst(_previousReport).ToList();
+        var diff = r.DiffAgainst(previous).ToList();
         if (diff.Count > 0)
         {
             var dy = y + 44;
@@ -1327,7 +1408,9 @@ public sealed class SoloExpeditionScreen
 
         if (_run is null) return;
         _previousReport = null;
+        _previousReport = Log.PreviousIn(RegionId);
         _lastReport = _run.Report(isRecord: true);
+        Log.Add(_lastReport);   // the fixture must exercise the same path the game does
         _bestDepth = _run.Wave;
         _mode = Mode.Downed;
         _downedTimer = DownedSeconds;

@@ -331,6 +331,7 @@ public class Game1 : Game
         // is computed against the real facility levels, not a fresh level-1 base.
         SaveSystem.RestoreWarren(save, _warren);
         _warrenMasteryPool = save.WarrenMasteryPool;
+        _expedition.Log.Restore(save.RunLog.Select(RunLog.FromSave));
 
         var roster = SaveSystem.RestoreRoster(save);
         _automationRoster = roster;
@@ -501,6 +502,10 @@ public class Game1 : Game
             WovenSkills = _loadout.SaveSkills()
                 .Select(s => new SavedSkill { Source = s.Source, Form = s.Form, VowId = s.VowId }).ToList(),
             SocketedKeystoneIds = _loadout.KeystoneIds.ToList(),
+            // The expedition log rides along the same way. The report is the only place this game can
+            // teach, and the player it teaches is by definition not watching — the lesson has to survive
+            // being closed.
+            RunLog = _expedition.Log.Entries.Select(RunLog.ToSave).ToList(),
             MasteryTaken = _mastery.Taken.ToList(),
             MasteryEarned = _deepestEver,          // stored as deepest-ever; Earned is re-derived on load
             ChampionGleamRate = _champGleamRate,
@@ -668,7 +673,7 @@ public class Game1 : Game
             // screen is gone, so they had nothing to pose.
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
-                or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "reforge" or "build" or "buildtree" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig"
+                or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "runlog" or "reforge" or "build" or "buildtree" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig"
                 or "fightgear" or "fightswing" or "fightreport")
             {
                 _showTitle = false;
@@ -800,7 +805,7 @@ public class Game1 : Game
                     _deepestEver = 23; _mastery.SetEarned(77400);   // fixture career values (Stats §13)
                 }
 
-                if (sm is "fight" or "fightgear" or "fightswing" or "fightreport")
+                if (sm is "fight" or "fightgear" or "fightswing" or "fightreport" or "runlog")
                 {
                     // fightswing holds the strike clip at its apex, so the one pose a timed capture can
                     // never catch — the blade at full extension — is checkable.
@@ -812,7 +817,7 @@ public class Game1 : Game
                     // `fightgear` dresses the Hunter before the fight opens. A fresh save wears nothing, so
                     // a plain `fight` capture can never show worn equipment — and worn equipment is exactly
                     // what the rig bindings need verifying against.
-                    if (sm is "fightgear" or "fightswing" or "fightreport")
+                    if (sm is "fightgear" or "fightswing" or "fightreport" or "runlog")
                     {
                         var worn = new[]
                         {
@@ -834,7 +839,7 @@ public class Game1 : Game
                     // attention cue (a waiting chest + unspent mastery points).
                     // Not for fightreport: the welcome-back toast outranks the HunterDown overlay in the
                     // arena's priority list, so it would hide the very screen that capture exists to show.
-                    if (sm != "fightreport")
+                    if (sm is not ("fightreport" or "runlog"))
                     {
                         _bootMessage = "WELCOME BACK — 18 MIN AWAY\n+140 GLEAM · 12 KILLS · 0 CORES";
                         _bootColor = Gold; _bootTimer = 7f;
@@ -851,7 +856,17 @@ public class Game1 : Game
                     _world.Conquer(VerdantHollow.RegionId);
                     _world.Conquer("cinderworks");
                     SetActiveRegion("umbral_reach");
-                    if (sm == "fightreport") _expedition.DevRunToDeath(_hunter);
+                    if (sm == "fightreport")
+                    {
+                        _expedition.DevRunToDeath(_hunter);
+                    }
+                    else if (sm == "runlog")
+                    {
+                        // Three descents, so the log has something to step BACK through — a one-entry
+                        // log proves nothing about the thing it exists for.
+                        for (var i = 0; i < 3; i++) _expedition.DevRunToDeath(_hunter);
+                        _expedition.ToggleLog();
+                    }
                     else _expedition.DevStart(_hunter, 1400f, 9f);
                 }
                 if (sm is "boss" or "bossdebug")
@@ -1048,6 +1063,23 @@ public class Game1 : Game
         HandleNavClick();   // a click on the shared hex nav works from any screen
 
         if (Pressed(Keys.A)) { _showAutomation = !_showAutomation; _showForge = false; _showPrestige = false; _showWorld = false; _showBuild = false; _showCharacter = false; _showStats = false; }
+        // L — THE EXPEDITION LOG. It closes every other overlay, because it is a full-screen read and
+        // the one thing the player opens specifically to think, not to act.
+        if (Pressed(Keys.L))
+        {
+            _expedition.ToggleLog();
+            if (_expedition.LogOpen)
+            {
+                _showPrestige = _showAutomation = _showForge = _showWorld = false;
+                _showBuild = _showCharacter = _showStats = false;
+            }
+        }
+        if (_expedition.LogOpen)
+        {
+            if (Pressed(Keys.Left)) _expedition.StepLog(1);    // left = older
+            if (Pressed(Keys.Right)) _expedition.StepLog(-1);
+        }
+
         if (Pressed(Keys.P)) { _showPrestige = !_showPrestige; _showAutomation = false; _showForge = false; _showWorld = false; _showBuild = false; _showCharacter = false; _showStats = false; }
         if (Pressed(Keys.W)) { _showWorld = !_showWorld; _showAutomation = false; _showForge = false; _showPrestige = false; _showBuild = false; _showCharacter = false; _showStats = false; if (_showWorld) { _mapScreen.ActiveRegion = _activeRegion; _mapScreen.SelectActive(); } }
 
@@ -1355,6 +1387,8 @@ public class Game1 : Game
         // One point per five waves of FIRST-TIME depth, per region. Farming a depth already reached pays
         // haul but no points, so the only way to earn one is to push somewhere new.
         _world.RegionFarm(_activeRegion).RecordDepth(_expedition.Deepest);
+        if (_expedition.LogDirty) { _expedition.LogDirty = false; Save(); }
+
         _mastery.SetEarned(SkillPointsEarned());
         _dust.SetEarned(TraitPointsEarned());
 
@@ -1611,6 +1645,10 @@ public class Game1 : Game
             if (_stats.ConsumeTrain() is { } stat && _hunter.Train(stat)) { _sound.Play("sfx_click", 0.8f); Save(); }
         }
         else _expedition.Draw(_batch, CanvasMouse, MouseClicked, Regions.Get(_activeRegion).Name, EnemyArtFor(_activeRegion), _bootTimer > 0f);
+
+        // The LOG draws over everything, including the nav rail: it is a full-screen read, and the one
+        // overlay a player opens to think rather than to act.
+        _expedition.DrawLog(_batch, CanvasMouse, MouseClicked);
         _batch.End();
 
         // Batch C — the shared overlays (pills, nav, help/settings, boot toast), authored in true 1920 coords.

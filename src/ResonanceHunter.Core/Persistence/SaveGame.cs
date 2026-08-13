@@ -64,6 +64,15 @@ public sealed record SaveGame
     public string ActiveRegion { get; init; } = "";
     public List<RegionFarmSave> RegionFarms { get; init; } = new();
 
+    /// <summary>
+    /// The last ten run reports, newest first.
+    /// </summary>
+    /// <remarks>
+    /// Saved, because the report is the only place this game can teach and the player it is teaching is
+    /// by definition not watching — an idle game's lesson has to survive being closed.
+    /// </remarks>
+    public List<RunReportSave> RunLog { get; init; } = new();
+
     /// <summary>The endgame corruption ratchet — how deep the fully-conquered world has been pushed.</summary>
     public int CorruptionTier { get; init; }
 
@@ -130,6 +139,31 @@ public sealed record SavedSkill
 }
 
 /// <summary>A single region's farm: its mastery, automation stage, and which creatures are assigned to it.</summary>
+/// <summary>One post-run report, flattened for the save file.</summary>
+/// <remarks>
+/// A separate shape rather than serialising <c>RunReport</c> directly: the live record carries an
+/// affix LIST and an enum, and a save format that mirrors a gameplay type breaks the moment the gameplay
+/// type gains a field. Flattening it here means an old save loads into a newer report.
+/// </remarks>
+public sealed record RunReportSave
+{
+    public required string RegionId { get; init; }
+    public int Depth { get; init; }
+    public bool IsRecord { get; init; }
+    public int Outcome { get; init; }
+    public int WallWave { get; init; }
+    public int WallArchetype { get; init; }
+    public List<int> WallAffixes { get; init; } = new();
+    public int WallCreatures { get; init; }
+    public float AbsorbedFraction { get; init; }
+    public float AverageHitSize { get; init; }
+    public float TargetsPerActivation { get; init; }
+    public float CreaturesPerWave { get; init; }
+    public float HealthLostPerWaveFraction { get; init; }
+    public float SecondsPerWave { get; init; }
+    public int SampledWaves { get; init; }
+}
+
 public sealed record RegionFarmSave
 {
     public required string Id { get; init; }
