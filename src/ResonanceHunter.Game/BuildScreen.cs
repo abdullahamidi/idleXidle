@@ -495,10 +495,26 @@ public sealed class BuildScreen
                 _ui.Text(b, $"SLOT {i + 1}", card.X + 16, card.Y + 8, Slate);
                 var rm = CRemove(i);
                 _ui.TextCenter(b, "X", rm.Center.X, rm.Y + 8, rm.Contains(mouse) ? Ember : Slate);
-                DrawCell(b, CSource(i), s.Source.ToString().ToUpperInvariant(), SourceColor.GetValueOrDefault(s.Source, Bone), mouse);
+                // SOURCE and FORM carry no inline label: their cells are half-width and a label plus a
+                // centred value overprint each other ("SOURCEBODY"). The VOW row is full width and is the
+                // one that needed naming — it is the only row whose value can be NONE, so without a label
+                // it read as a status message rather than a control.
+                DrawCell(b, CSource(i), s.Source.ToString().ToUpperInvariant(),
+                         SourceColor.GetValueOrDefault(s.Source, Bone), mouse);
                 DrawCell(b, CForm(i), Short(s.Form), Bone, mouse);
+
                 var vow = Weaving.ById(s.VowId);
-                DrawCell(b, CVow(i), vow is null ? "NO VOW" : vow.Short.ToUpperInvariant(), vow is null ? Dim : Gold, mouse);
+                DrawCell(b, CVow(i),
+                         vow is null ? "NONE — SWEAR ONE" : vow.Short.ToUpperInvariant(),
+                         vow is null ? Slate : Gold, mouse, "VOW");
+
+                // The Vow's full demand, on hover. A Vow is a restriction the build must MEET, and the
+                // four-word Short cannot carry that — "ONE FORM ONLY" does not say it pays nothing if
+                // you break it, which is the entire bargain.
+                if (CVow(i).Contains(mouse))
+                    _hoverInfo = vow is null
+                        ? "A VOW PAYS BIG, BUT ONLY IF YOUR BUILD MEETS ITS DEMAND. LEARN THEM IN TRAITS (P)."
+                        : vow.Description;
             }
             else if (i == skills.Count) _ui.TextCenter(b, "+ ADD SKILL", card.Center.X, card.Y + 56, card.Contains(mouse) ? Gold : Slate);
             else _ui.TextCenter(b, "— LOCKED —", card.Center.X, card.Y + 56, Dim);
@@ -544,11 +560,21 @@ public sealed class BuildScreen
             _hoverInfo = $"{node.Label}   ({node.Cost} PT{(node.Cost == 1 ? "" : "S")})";
     }
 
-    private void DrawCell(SpriteBatch b, Rectangle r, string text, Color color, Point mouse)
+    /// <summary>
+    /// One cycling row of a skill card. <paramref name="label"/> names what is being cycled.
+    /// </summary>
+    /// <remarks>
+    /// The label is not decoration. All three rows of a card were arrow-flanked values with nothing
+    /// saying which was which, so the Vow row — the only one whose value can be NONE — read as a status
+    /// message rather than a control, and a player looking for "where do I set a Vow" had no reason to
+    /// think the row that said NO VOW was the answer.
+    /// </remarks>
+    private void DrawCell(SpriteBatch b, Rectangle r, string text, Color color, Point mouse, string label = "")
     {
         _ui.Fill(b, r, r.Contains(mouse) ? Hi : PanelBg);
         _ui.Text(b, "<", r.X + 4, r.Y + 12, Slate);
         _ui.Text(b, ">", r.Right - 28, r.Y + 12, Slate);
+        if (label.Length > 0) _ui.Text(b, label, r.X + 30, r.Y + 12, Dim);
         _ui.TextCenter(b, text, r.Center.X, r.Y + 12, color);
     }
 
