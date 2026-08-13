@@ -1296,14 +1296,12 @@ public class Game1 : Game
             for (var i = 0; i < chestsOpenedNow; i++) EvolutionCredit.CreditChestOpened(_automation.Roster);
         }
 
-        // MASTERY POINTS — the currency you spend walking the mastery tree, DERIVED so it can never
-        // double-count across reloads: three to start (so a new character can take a node at once), plus
-        // one per five waves of your deepest-ever run, plus five per region conquered. Pure function of
-        // progress, recomputed every frame; only _deepestEver needs saving.
         _deepestEver = Math.Max(_deepestEver, _expedition.Deepest);
-        // Mastery Earned is DERIVED from progress each frame, plus the (unspent) mastery the Warren has
-        // produced — so a Breeding/Ritual facility genuinely funds the build tree, and spending that pool on
-        // a facility upgrade correctly lowers your available tree points.
+
+        // BOTH TREES' POINTS ARE DERIVED FROM PROGRESS, every frame, so they can never double-count
+        // across a reload — nothing is persisted but which nodes were taken. See SkillPointsEarned and
+        // TraitPointsEarned for what each one reads.
+        //
         // SKILL POINTS COME FROM DEPTH, AND ONLY FROM DEPTH.
         //
         // The old formula added the Warren's mastery pool, so idle time bought build identity: eight
