@@ -109,6 +109,7 @@ public sealed class ForgeScreen
     private const float RevealHold = 1.9f;
     private KeyboardState _prevKeys;
     private int _scroll;                             // index of the first visible card
+    private int _bagScroll;                          // first visible row of the left-column bag list
 
     private const int Cols = 4;
     private const int VisRows = 3;                    // 4x3 = 12, matching uiref_forge; the freed strip below holds the footer
@@ -171,8 +172,25 @@ public sealed class ForgeScreen
     public bool DevForgeDebug { get; set; }
 
     // Spec §4 rectangles, adapted to the reference's rail + three content panels (all clear the nav at y≥934).
-    private static readonly Rectangle Rail = new(24, 140, 276, 730);
-    private static readonly Rectangle ItemPanel = new(320, 140, 470, 730);   // "ITEM PREVIEW"
+    // The left column is TWO panels now: the verbs on top, a real BAG under them.
+    //
+    // It used to be one rail whose only way to change the item you were working on was "< >  CYCLE ITEM"
+    // — a keyboard-only, invisible, one-at-a-time walk through a bag that can hold ninety things. There
+    // was no way to see what you owned, no way to jump to a piece, and no way to tell where you were.
+    //
+    // 366 wide, not 276: a row carries an icon, a name and a level, and at the old width the names ran
+    // off the panel and the level column was clipped away entirely. The preview column gives back the 90.
+    private static readonly Rectangle Rail = new(24, 140, 366, 330);
+    private static readonly Rectangle BagPanel = new(24, 486, 366, 384);
+
+    private const int BagRowH = 40;
+    private static int BagRows => (BagPanel.Height - 124) / BagRowH;
+
+    // +30 inset: UiKit.Panel's frame art eats the outer edge, and rows drawn flush to it sit ON the
+    // ornament rather than inside the panel.
+    private static Rectangle BagRow(int vis)
+        => new(BagPanel.X + 30, BagPanel.Y + 84 + vis * BagRowH, BagPanel.Width - 60, BagRowH - 4);
+    private static readonly Rectangle ItemPanel = new(406, 140, 384, 730);   // "ITEM PREVIEW"
     private static readonly Rectangle CostPanel = new(814, 140, 512, 730);   // "REQUIRED MATERIALS"
     private static readonly Rectangle ResultPanel = new(1350, 140, 546, 730);// "RESULT PREVIEW"
     private static readonly Rectangle ReforgePanel = new(814, 140, 1082, 730);// REFORGE action column
@@ -315,6 +333,16 @@ public sealed class ForgeScreen
         }
 
         var view = View();
+
+        // The wheel serves whichever list the pointer is over — the bag on the left, the loot grid on
+        // the right. Routing it only to the grid would leave the new list keyboard-bound, which is the
+        // problem it exists to replace.
+        if (wheel != 0 && BagPanel.Contains(mouse))
+        {
+            var wearCount = _inv.Count(Gear.IsWearable);
+            _bagScroll = Math.Clamp(_bagScroll - wheel, 0, Math.Max(0, wearCount - BagRows));
+            wheel = 0;
+        }
 
         // Mouse wheel scrolls the loot grid a row at a time.
         if (wheel != 0)
@@ -784,13 +812,19 @@ public sealed class ForgeScreen
     private void DrawRail(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
     {
         _ui.Panel(b, Rail);
-        _ui.TextCenterBig(b, "FORGE", Rail.Center.X, Rail.Y + 20, Gold, UiTypography.PanelTitle);
+        // +40, not +16.
+        //
+        // UiKit.Panel SCALES its frame art to the rectangle, so a short panel gets a proportionally
+        // TALLER ornament band than a tall one — the title that reads cleanly at +18 on the 730px item
+        // panel is drawn underneath the ornament on a 330px rail. Left-aligning it to dodge the centre
+        // medallion only moved it into the corner piece, which was worse: it vanished outright.
+        _ui.TextCenterBig(b, "FORGE", Rail.Center.X, Rail.Y + 40, Gold, UiTypography.PanelTitle);
 
         var modes = new[] { (ForgeMode.Upgrade, "UPGRADE"), (ForgeMode.Reforge, "REFORGE"), (ForgeMode.Salvage, "SALVAGE") };
-        var y = Rail.Y + 66;
+        var y = Rail.Y + 86;
         foreach (var (m, label) in modes)
         {
-            var r = new Rectangle(Rail.X + 20, y, Rail.Width - 40, 64);
+            var r = new Rectangle(Rail.X + 30, y, Rail.Width - 60, 58);
             if (_mode == m)
             {
                 _ui.Fill(b, r, new Color(0x3A, 0x2E, 0x52));
@@ -798,25 +832,95 @@ public sealed class ForgeScreen
                 _ui.TextCenterBig(b, label, r.Center.X, r.Center.Y - 11, new Color(0xF6, 0xEA, 0xC6), UiTypography.Body);
             }
             else if (_ui.Button(b, r, label, hit, clicked)) { _mode = m; }
-            y += 74;
+            y += 66;
         }
 
-        _ui.Fill(b, new Rectangle(Rail.X + 20, y + 4, Rail.Width - 40, 2), Dim);
-        _ui.Text(b, "REFINE THE ITEM:", Rail.X + UiKit.PanelCorner, y + 20, Slate);
-        _ui.Text(b, "+LEVEL, +AFFIXES", Rail.X + 24, y + 46, Slate);
+        _ui.Fill(b, new Rectangle(Rail.X + 30, y + 4, Rail.Width - 60, 2), Dim);
+        _ui.TextCenter(b, ModeHint(), Rail.Center.X, y + 20, Slate);
 
-        // The chest beat survives the redesign: a boss's drop still nags here, and OPEN drops into SALVAGE.
+        DrawBag(b, hunter, hit, clicked);
+    }
+
+    private string ModeHint() => _mode switch
+    {
+        ForgeMode.Upgrade => "+LEVEL, +AFFIXES",
+        ForgeMode.Reforge => "RE-ROLL ITS TRADE",
+        _ => "BREAK DOWN, MERGE UP",
+    };
+
+    /// <summary>
+    /// The bag, as a list you can see and click.
+    /// </summary>
+    /// <remarks>
+    /// Every row carries the one thing that decides whether you care about it — its rarity, as a colour
+    /// bar and as the name's ink — plus its LEVEL, because level is what UPGRADE moves and a player
+    /// choosing what to refine is choosing between levels. Worn pieces are marked, because the Forge
+    /// refuses to work on them and a greyed button with no reason reads as a bug.
+    /// </remarks>
+    private void DrawBag(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
+    {
+        _ui.Panel(b, BagPanel);
+
+        var bag = _inv.Where(Gear.IsWearable).ToList();
+        _ui.TextCenterBig(b, "YOUR BAG", BagPanel.Center.X, BagPanel.Y + 40, Gold, UiTypography.PanelTitle);
+
+        if (bag.Count == 0)
+        {
+            _ui.TextCenter(b, "EMPTY — GO AND HUNT.", BagPanel.Center.X, BagPanel.Y + 150, Dim);
+            return;
+        }
+
+        // Keep the focused item on screen without stealing the wheel from the player.
+        var focus = Math.Max(0, bag.FindIndex(i => i.InstanceId == _focusId));
+        if (focus < _bagScroll) _bagScroll = focus;
+        if (focus >= _bagScroll + BagRows) _bagScroll = focus - BagRows + 1;
+        _bagScroll = Math.Clamp(_bagScroll, 0, Math.Max(0, bag.Count - BagRows));
+
+        for (var vis = 0; vis < BagRows; vis++)
+        {
+            var idx = _bagScroll + vis;
+            if (idx >= bag.Count) break;
+
+            var it = bag[idx];
+            var row = BagRow(vis);
+            var rc = RarityColors[(int)it.Rarity];
+            var sel = it.InstanceId == _focusId;
+            var hover = row.Contains(hit);
+            var isWorn = Gear.SlotFor(it.BaseType) is { } sl && hunter.Worn(sl)?.InstanceId == it.InstanceId;
+
+            if (UiKit.ClickedIn(row, hit, clicked)) _focusId = it.InstanceId;
+
+            _ui.Fill(b, row, sel ? new Color(0x3A, 0x2E, 0x52)
+                           : hover ? new Color(0x22, 0x1C, 0x30)
+                           : new Color(0x14, 0x11, 0x1C, 0xC0));
+            _ui.Fill(b, new Rectangle(row.X, row.Y, 5, row.Height), rc);
+
+            DrawItemIcon(b, it, new Rectangle(row.X + 10, row.Y + 3, 30, 30));
+            // 13 characters, measured: at eighteen the longest generated names ran into the level column
+            // and the two overprinted each other.
+            _ui.Text(b, Truncate(ItemNaming.FullName(it), 13), row.X + 50, row.Y + 10, sel ? Bone : rc);
+            _ui.TextRight(b, isWorn ? "WORN" : $"iL{it.ItemLevel}", row.Right - 8, row.Y + 10,
+                          isWorn ? Gold : Slate);
+        }
+
+        // The chest beat survives, sitting IN the list where the items are rather than in a header strip
+        // that stole a row from them whether or not a chest existed.
         if (_chests.Count > 0)
         {
             var best = _chests.Max(c => (int)c.Rarity);
-            _ui.TextCenterBig(b, $"{_chests.Count} CHEST{(_chests.Count == 1 ? "" : "S")}", Rail.Center.X, y + 96, RarityColors[best], UiTypography.Body);
-            if (_ui.Button(b, new Rectangle(Rail.X + 20, y + 128, Rail.Width - 40, 56), "OPEN IN SALVAGE", hit, clicked))
+            var cr = new Rectangle(BagPanel.X + 30, BagPanel.Bottom - 92, BagPanel.Width - 60, 40);
+            _ui.Fill(b, new Rectangle(cr.X, cr.Y, 5, cr.Height), RarityColors[best]);
+            if (_ui.Button(b, cr, $"OPEN {_chests.Count} CHEST{(_chests.Count == 1 ? "" : "S")}", hit, clicked))
                 _mode = ForgeMode.Salvage;
         }
-
-        // Above the frame's bottom border, not through it.
-        _ui.TextCenter(b, "< >  CYCLE ITEM", Rail.Center.X, Rail.Bottom - 60, Slate);
+        else if (bag.Count > BagRows)
+        {
+            _ui.TextCenter(b, $"{_bagScroll + 1}-{Math.Min(bag.Count, _bagScroll + BagRows)} OF {bag.Count}  \u00b7  SCROLL",
+                           BagPanel.Center.X, BagPanel.Bottom - 40, Dim);
+        }
     }
+
+    private static string Truncate(string s, int n) => s.Length <= n ? s : s[..(n - 1)] + "\u2026";
 
     // ── UPGRADE = the real REFINE: +1 item level, which raises every affix. Deterministic, so the "after"
     //    column is a truthful preview, not a gamble — there is no success rate or downgrade to display. ──
