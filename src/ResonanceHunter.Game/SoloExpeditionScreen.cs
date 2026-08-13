@@ -123,6 +123,13 @@ public sealed class SoloExpeditionScreen
     private readonly VfxPlayer _vfx;
     private readonly Random _rng = new();
 
+    /// <summary>The report for the run just ended, and the one before it — the diff is the whole point.</summary>
+    private RunReport? _lastReport;
+    private RunReport? _previousReport;
+
+    /// <summary>Deepest wave reached in this region, so a report can say whether it was a record.</summary>
+    private int _bestDepth;
+
     private enum Mode { Fighting, Downed }
     private Mode _mode = Mode.Fighting;
 
@@ -245,7 +252,11 @@ public sealed class SoloExpeditionScreen
         _callouts.RemoveAll(c => c.Life <= 0f);
 
         // Travelling to a new region (its element changes) restarts the champion there, fresh.
-        if (EnemySource != _lastSource)
+        // A source change restarts the run — travelling to a new region should not continue the old
+        // descent. DevHoldReport is exempt: the capture fixture builds its report before the host has
+        // pushed the region's Source down, so the very next frame would discard the run and the report
+        // with it. That is what made the report screenshot show a fresh descent every time.
+        if (EnemySource != _lastSource && !DevHoldReport)
         {
             _lastSource = EnemySource;
             _run = null;
@@ -264,6 +275,7 @@ public sealed class SoloExpeditionScreen
         {
             case Mode.Fighting: UpdateFight(dt); break;
             case Mode.Downed:
+                if (DevHoldReport) break;   // capture fixture: keep the report up instead of restarting
                 _downedTimer -= dt;
                 if (_downedTimer <= 0f) StartRun(hunter);
                 break;
@@ -435,6 +447,13 @@ public sealed class SoloExpeditionScreen
         else
         {
             // Fell (or stalled). A red flash, a short breath, then the champion regroups.
+            //
+            // The REPORT is taken here, at the exact moment the run ended. With no in-run decisions this
+            // is the only thing the player can learn from, so it is captured before anything resets.
+            _previousReport = _lastReport is { } prev && prev.RegionId == RegionId ? prev : null;
+            _lastReport = _run!.Report(isRecord: _run.Wave >= _bestDepth);
+            _bestDepth = Math.Max(_bestDepth, _run.Wave);
+
             _deathFlash = 1f;
             _mode = Mode.Downed;
             _downedTimer = DownedSeconds;
@@ -768,15 +787,87 @@ public sealed class SoloExpeditionScreen
         _ui.Fill(b, new Rectangle(r.Right - t, r.Y, t, r.Height), c);
     }
 
+    /// <summary>
+    /// The post-run report — the most important screen in the game.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Combat is automatic and a run holds no decisions, so this is the only moment a player can learn
+    /// anything. It replaced a two-line "CHAMPION DOWN — REGROUPING" banner that told them the wave
+    /// number and nothing else, which meant a player who died at 23 four times in a row had no way to
+    /// tell whether their build was too small or the wrong shape.
+    /// </para>
+    /// <para>
+    /// It gives a DIAGNOSIS, never a prescription. Every figure shown maps to something the player can
+    /// change; a number that points at no lever is decoration and does not belong here.
+    /// </para>
+    /// </remarks>
+    private void DrawRunReport(SpriteBatch b)
+    {
+        if (_lastReport is not { } r)
+        {
+            _ui.TextCenterBig(b, "CHAMPION DOWN", ArenaRect.Center.X, 500, Ember, UiTypography.StageLabel);
+            return;
+        }
+
+        var panel = new Rectangle(ArenaRect.X + 40, 250, ArenaRect.Width - 80, 620);
+        _ui.Panel(b, panel);
+        var x = panel.X + 44;
+        var right = panel.Right - 44;
+
+        _ui.TextCenterBig(b, r.IsRecord ? $"NEW RECORD — DEPTH {r.Depth}" : $"DEPTH {r.Depth}",
+            panel.Center.X, panel.Y + 34, r.IsRecord ? Gold : Ember, UiTypography.RegionTitle);
+
+        // THE WALL — named plainly, because the player has to be able to go and look at it.
+        var affixes = r.WallAffixes.Count > 0
+            ? string.Join(" + ", r.WallAffixes.Select(a => a.ToString().ToUpperInvariant()))
+            : "NO AFFIX";
+        _ui.TextCenterBig(b, $"WAVE {r.WallWave}  ·  {r.WallArchetype.ToString().ToUpperInvariant()} x{r.WallCreatures}  ·  {affixes}",
+            panel.Center.X, panel.Y + 88, UiKit.Vellum, UiTypography.OverlayBody);
+
+        _ui.TextCenterBig(b, r.Verdict(), panel.Center.X, panel.Y + 126, Gold, UiTypography.Body);
+        _ui.Fill(b, new Rectangle(x, panel.Y + 166, panel.Width - 88, 2), Slate * 0.4f);
+
+        // THE MEASUREMENTS. Each line is a lever.
+        var y = panel.Y + 186;
+        void Row(string label, string value, string points)
+        {
+            _ui.TextBig(b, label, x, y, Slate, UiTypography.Secondary);
+            _ui.TextBig(b, value, x + 300, y, UiKit.Vellum, UiTypography.Body);
+            _ui.TextRightBig(b, points, right, y + 2, Slate, UiTypography.Secondary);
+            y += 44;
+        }
+
+        Row("ARMOUR ABSORBED", $"{r.AbsorbedFraction:P0}", "hit size");
+        Row("AVERAGE HIT", $"{r.AverageHitSize:F0}", "hit size");
+        Row("REACH", $"{r.TargetsPerActivation:F1} of {r.CreaturesPerWave:F1} per cast", "action economy");
+        Row("HEALTH LOST / WAVE", $"{r.HealthLostPerWaveFraction:P0}", "sustain");
+        Row("SECONDS / WAVE", $"{r.SecondsPerWave:F1}s", "throughput");
+
+        _ui.TextBig(b, $"measured over the last {r.SampledWaves} wave(s)", x, y + 4, Slate, UiTypography.Secondary);
+
+        // THE DIFF — what changed since the last attempt here. This is what makes iteration legible.
+        var diff = r.DiffAgainst(_previousReport).ToList();
+        if (diff.Count > 0)
+        {
+            var dy = y + 44;
+            _ui.TextBig(b, "SINCE YOUR LAST RUN HERE", x, dy, Gold, UiTypography.Secondary);
+            dy += 32;
+            foreach (var line in diff.Take(5))
+            {
+                _ui.TextBig(b, line, x, dy, UiKit.Vellum, UiTypography.Secondary);
+                dy += 28;
+            }
+        }
+    }
+
     /// <summary>The single active arena announcement (Rev 4 §2/§18) — never more than one at a time.</summary>
     private void DrawArenaOverlay(SpriteBatch b, HuntOverlay overlay)
     {
         switch (overlay)
         {
             case HuntOverlay.HunterDown:
-                _ui.Fill(b, new Rectangle(430, 470, 800, 130), PanelBg);
-                _ui.TextCenterBig(b, "CHAMPION DOWN — REGROUPING", 830, 496, Ember, UiTypography.StageLabel);
-                _ui.TextCenterBig(b, $"REACHED WAVE {_run!.Wave + 1}. STRENGTHEN THE BUILD (B).", 830, 544, Slate, UiTypography.OverlayBody);
+                DrawRunReport(b);
                 break;
             case HuntOverlay.BossIncoming:
             {
@@ -1202,6 +1293,45 @@ public sealed class SoloExpeditionScreen
         _ui.Fill(b, new Rectangle(r.X, r.Bottom - t, r.Width, t), c);
         _ui.Fill(b, new Rectangle(r.X, r.Y, t, r.Height), c);
         _ui.Fill(b, new Rectangle(r.Right - t, r.Y, t, r.Height), c);
+    }
+
+    /// <summary>
+    /// DEV: run a whole descent to its end immediately, so the post-run report can be captured.
+    /// </summary>
+    /// <remarks>
+    /// The report only exists after a run ends, and when a run ends is a property of the build — so a
+    /// timed screenshot can never reliably catch it. This is the same reasoning as RH_SHOT_SWING: the
+    /// states that most need checking are the ones a clock cannot be aimed at.
+    /// </remarks>
+    /// <summary>
+    /// DEV: hold the post-run report open instead of restarting after the recovery beat.
+    /// </summary>
+    /// <remarks>
+    /// The recovery beat is 1.6s and a headless capture lands at frame 60, which ought to be inside it —
+    /// but the first frames of a run carry loading time, so the timer had already expired and the shot
+    /// caught a fresh descent every time. Holding is the honest fix for a fixture: it changes when the
+    /// screen leaves, not what it shows.
+    /// </remarks>
+    public bool DevHoldReport { get; set; }
+
+    public void DevRunToDeath(Hunter hunter)
+    {
+        DevHoldReport = true;
+        DevStart(hunter, 900f, 14f);
+
+        // DevStart already plays wave 1, and at these numbers that wave can be the one that kills. The
+        // first version checked _run.Over at the TOP of the loop and so broke out without ever building
+        // the report — the capture caught a fresh descent every time.
+        var guard = 0;
+        while (_run is { Over: false } && guard++ < 400) _outcome = _run.PushWave();
+
+        if (_run is null) return;
+        _previousReport = null;
+        _lastReport = _run.Report(isRecord: true);
+        _bestDepth = _run.Wave;
+        _mode = Mode.Downed;
+        _downedTimer = DownedSeconds;
+        _bannerTimer = 0f;   // the wave-cleared banner would otherwise sit over the report
     }
 
     /// <summary>DEV: start a run and play partway into a wave, for screenshots.</summary>

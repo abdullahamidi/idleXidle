@@ -656,7 +656,7 @@ public class Game1 : Game
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "reforge" or "build" or "character" or "stats" or "warren" or "map" or "rig"
-                or "fightgear" or "fightswing")
+                or "fightgear" or "fightswing" or "fightreport")
             {
                 _showTitle = false;
                 if (sm == "rig") _showRigPreview = true;
@@ -776,7 +776,7 @@ public class Game1 : Game
                     _deepestEver = 23; _mastery.SetEarned(77400);   // fixture career values (Stats §13)
                 }
 
-                if (sm is "fight" or "fightgear" or "fightswing")
+                if (sm is "fight" or "fightgear" or "fightswing" or "fightreport")
                 {
                     // fightswing holds the strike clip at its apex, so the one pose a timed capture can
                     // never catch — the blade at full extension — is checkable.
@@ -788,7 +788,7 @@ public class Game1 : Game
                     // `fightgear` dresses the Hunter before the fight opens. A fresh save wears nothing, so
                     // a plain `fight` capture can never show worn equipment — and worn equipment is exactly
                     // what the rig bindings need verifying against.
-                    if (sm is "fightgear" or "fightswing")
+                    if (sm is "fightgear" or "fightswing" or "fightreport")
                     {
                         var worn = new[]
                         {
@@ -808,8 +808,13 @@ public class Game1 : Game
                     _expedition.Mastery = _mastery;
                     // Pose the new fight-screen UX: the welcome-back toast, and the "you have things to do"
                     // attention cue (a waiting chest + unspent mastery points).
-                    _bootMessage = "WELCOME BACK — 18 MIN AWAY\n+140 GLEAM · 12 KILLS · 0 CORES";
-                    _bootColor = Gold; _bootTimer = 7f;
+                    // Not for fightreport: the welcome-back toast outranks the HunterDown overlay in the
+                    // arena's priority list, so it would hide the very screen that capture exists to show.
+                    if (sm != "fightreport")
+                    {
+                        _bootMessage = "WELCOME BACK — 18 MIN AWAY\n+140 GLEAM · 12 KILLS · 0 CORES";
+                        _bootColor = Gold; _bootTimer = 7f;
+                    }
                     _forge.AddChest(new Chest { Rarity = Rarity.Epic, Tier = 8, Element = Source.Nature });
                     _mastery.SetEarned(3);
                     // A DELIBERATELY beefy enemy: a real wave-1 fight is over in ~1.5s, so a shot taken a
@@ -822,7 +827,8 @@ public class Game1 : Game
                     _world.Conquer(VerdantHollow.RegionId);
                     _world.Conquer("cinderworks");
                     SetActiveRegion("umbral_reach");
-                    _expedition.DevStart(_hunter, 1400f, 9f);
+                    if (sm == "fightreport") _expedition.DevRunToDeath(_hunter);
+                    else _expedition.DevStart(_hunter, 1400f, 9f);
                 }
                 if (sm is "boss" or "bossdebug")
                 {

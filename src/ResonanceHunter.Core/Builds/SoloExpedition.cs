@@ -88,6 +88,15 @@ public sealed class SoloExpedition
     /// <summary>The composition the last resolved wave held — the report reads this.</summary>
     public IReadOnlyList<WaveCreature> LastWaveCreatures { get; private set; } = Array.Empty<WaveCreature>();
 
+    /// <summary>
+    /// Per-wave measurements for this descent, which the post-run report reads.
+    /// </summary>
+    /// <remarks>
+    /// The run has no decisions in it, so the report afterwards is the only place a player can learn
+    /// anything. That makes recording these a requirement of the design rather than telemetry.
+    /// </remarks>
+    public RunRecorder Recorder { get; } = new();
+
     /// <summary>The archetype and affixes the last resolved wave carried.</summary>
     public Archetype LastWaveArchetype { get; private set; }
     public IReadOnlyList<Affix> LastWaveAffixes { get; private set; } = Array.Empty<Affix>();
@@ -155,6 +164,17 @@ public sealed class SoloExpedition
     public bool LastWaveWasBoss { get; private set; }
 
     /// <summary>Push one wave deeper. In the idle loop this is called on a timer, not a button.</summary>
+    /// <summary>Build the report for this descent. Safe to call at any time; most useful once over.</summary>
+    public RunReport Report(bool isRecord)
+        => Recorder.Build(
+            RegionId, Wave, isRecord, LastOutcome,
+            wallWave: Math.Max(1, Wave + 1),
+            LastWaveArchetype, LastWaveAffixes, LastWaveCreatures.Count,
+            _champion.MaxHealth);
+
+    /// <summary>The outcome of the most recent wave — what the report calls the run's ending.</summary>
+    public WaveOutcome LastOutcome { get; private set; } = WaveOutcome.Cleared;
+
     public WaveOutcome PushWave()
     {
         LastWaveHaul = default;
@@ -219,9 +239,12 @@ public sealed class SoloExpedition
 
         var biteInterval = Math.Max(100, (int)(interval * Bands.IntervalMultiplier(affixes)));
 
+        var metrics = new WaveMetrics();
         var (outcome, events) = SoloBattle.ResolveWave(
-            _champion, _build, _hunter, creatures, biteInterval, _tuning, _rng, bonus, isBoss);
+            _champion, _build, _hunter, creatures, biteInterval, _tuning, _rng, bonus, isBoss, metrics);
+        Recorder.Record(next, metrics);
 
+        LastOutcome = outcome;
         LastWaveEvents = events;
         LastWaveCreatures = creatures;
         LastWaveArchetype = archetype;

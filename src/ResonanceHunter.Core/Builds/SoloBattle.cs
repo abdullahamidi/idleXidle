@@ -62,6 +62,60 @@ public sealed class WaveCreature
 }
 
 /// <summary>
+/// What one wave actually did, measured while it resolved.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This exists because the player cannot watch the fight and change anything. With no in-run decisions
+/// the run is a measurement, and the ONLY moment they can learn is the report afterwards — so the sim
+/// has to record the facts that point at a lever. Every field here maps to something the player can
+/// change: absorbed damage points at hit size, targets-per-activation points at action economy, health
+/// lost points at sustain.
+/// </para>
+/// <para>
+/// <see cref="RawDamage"/> is measured BEFORE enemy armour and <see cref="DeliveredDamage"/> after, and
+/// the gap between them is the single most useful number in the game — it is the difference between
+/// "my build is too small" and "my build is the wrong shape", which is exactly the distinction the
+/// design says the player must never be unable to make.
+/// </para>
+/// </remarks>
+public sealed class WaveMetrics
+{
+    /// <summary>Damage swung, before enemy armour ate any of it.</summary>
+    public float RawDamage { get; set; }
+
+    /// <summary>Damage that actually landed.</summary>
+    public float DeliveredDamage { get; set; }
+
+    /// <summary>Individual hits landed, of any kind.</summary>
+    public int Hits { get; set; }
+
+    /// <summary>Skill activations — one per cast, however many creatures it reached.</summary>
+    public int Activations { get; set; }
+
+    /// <summary>Creatures struck, summed across activations. Divided by Activations this is reach.</summary>
+    public int TargetsStruck { get; set; }
+
+    /// <summary>Creatures present when the wave began.</summary>
+    public int CreaturesPresent { get; set; }
+
+    public int CreaturesKilled { get; set; }
+
+    /// <summary>Health the champion lost during this wave.</summary>
+    public int HealthLost { get; set; }
+
+    public int DurationMs { get; set; }
+
+    /// <summary>How much of the swing enemy armour ate. The Weight axis, as one number.</summary>
+    public float AbsorbedFraction => RawDamage <= 0f ? 0f : 1f - DeliveredDamage / RawDamage;
+
+    public float AverageHitSize => Hits <= 0 ? 0f : DeliveredDamage / Hits;
+
+    /// <summary>Creatures reached per cast. The Spread axis, as one number.</summary>
+    public float TargetsPerActivation => Activations <= 0 ? 0f : TargetsStruck / (float)Activations;
+}
+
+/// <summary>
 /// The fight, for a single character. No squad, no slots, no roles.
 /// </summary>
 /// <remarks>
@@ -196,7 +250,8 @@ public static class SoloBattle
         ExpeditionTuning tuning,
         Random rng,
         WaveBonus? bonus = null,
-        bool isBoss = false)
+        bool isBoss = false,
+        WaveMetrics? metrics = null)
     {
         ArgumentNullException.ThrowIfNull(creatures);
         if (creatures.Count == 0) throw new ArgumentException("A wave needs at least one creature.", nameof(creatures));
@@ -256,11 +311,18 @@ public static class SoloBattle
         // before they descend.
         var alive = creatures.Count;
         var since = champ.ElapsedMs;
+        var healthAtStart = champ.Health;
+        if (metrics is not null) metrics.CreaturesPresent = creatures.Count;
         var nextAuto = AutoAttackIntervalMs;
 
         (WaveOutcome, List<BattleEvent>) Finish(WaveOutcome o, int atMs)
         {
             champ.ElapsedMs += atMs;
+            if (metrics is not null)
+            {
+                metrics.DurationMs = atMs;
+                metrics.HealthLost = Math.Max(0, healthAtStart - champ.Health);
+            }
             return (o, events);
         }
 
@@ -342,13 +404,22 @@ public static class SoloBattle
             // ENEMY ARMOUR is flat and per-hit (see MinHitFraction), so it reads hit SIZE. Poison bypasses
             // it entirely — a bleed tick is small by construction and flat armour would erase it, which
             // would leave the Venom path with nothing to be good at.
+            if (metrics is not null) metrics.RawDamage += dmg;
+
             if (!ignoresArmour && target.Defense > 0f)
                 dmg = MathF.Max(dmg * MinHitFraction, dmg - target.Defense);
+
+            if (metrics is not null)
+            {
+                metrics.DeliveredDamage += dmg;
+                metrics.Hits++;
+            }
 
             // Overkill is DISCARDED rather than carried to the next creature. A 110 Trap hit into a
             // 30-health swarm creature wastes 80, and that waste is the whole cost of bringing a
             // large-hit build to a Swarm band.
             target.Health -= dmg;
+            if (metrics is not null && target.Health <= 0f) metrics.CreaturesKilled++;
             var idx = IndexOf(target);
             events.Add(new BattleEvent(BattleEventKind.Strike, idx, (int)MathF.Round(dmg), atMs));
             if (!target.Alive)
@@ -368,6 +439,7 @@ public static class SoloBattle
                          bool fromSkill = true)
         {
             if (targets <= 0) return 0f;
+            if (fromSkill && metrics is not null) metrics.Activations++;
             var dealt = 0f;
             var struck = 0;
             for (var i = 0; i < creatures.Count && struck < targets; i++)
@@ -380,6 +452,7 @@ public static class SoloBattle
                 LandOn(c, hit, atMs, fromSkill);
                 dealt += hit;
                 struck++;
+                if (fromSkill && metrics is not null) metrics.TargetsStruck++;
             }
             return dealt;
         }
