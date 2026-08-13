@@ -37,6 +37,49 @@ public sealed class PrestigeScreen
     private string _msg = "";
     private KeyboardState _prevKeys;
 
+    // ── The unlock flourish ──────────────────────────────────────────────────────────────────────
+    //
+    // A trait is PERMANENT and there is no respec. That is the most consequential button in the game,
+    // and pressing it used to change one word in a status line from AVAILABLE to LIT. The screen was
+    // accused of being "çok basit ve kalitesiz" and this was the heart of it: nothing about taking a
+    // trait felt like it had happened.
+    //
+    // Time-driven, not frame-driven, so the shape of the celebration is the same on any machine.
+    private float _litT = -1f;             // seconds into the flourish; negative means idle
+    private string _litName = "";
+    private TraitRoad _litRoad;
+    private string? _litArt;               // the terminal's own emblem, when a terminal was taken
+    private bool _litTerminal;
+    private bool _litFrozen;               // DEV: hold one frame of the flourish for a capture
+    private string? _cue;                  // sound cue waiting for the host to play
+
+    /// <summary>How long the flourish runs. A terminal ends a road; it is allowed to take twice as long.</summary>
+    private float LitDuration => _litTerminal ? 2.2f : 1.0f;
+
+    /// <summary>
+    /// The camera kick, in 1920-space pixels. The host adds it to the overlay transform.
+    /// </summary>
+    /// <remarks>
+    /// Owned here rather than in the host's present blit, which is where a global shake used to live and
+    /// where it sat at a permanent zero for the whole of development because nothing drove it. A screen
+    /// that wants a kick should own one; a shared one nobody owns decays into dead code.
+    ///
+    /// Deliberately NOT applied to the mouse mapping: a pointer that slides out from under the cursor
+    /// for a fifth of a second is a bug, not game feel.
+    /// </remarks>
+    public Vector2 Shake { get; private set; }
+
+    /// <summary>
+    /// The sound cue for a trait just taken, cleared by reading — the host owns audio, this screen does not.
+    /// </summary>
+    /// <remarks>Same shape as StatsScreen.ConsumeTrain, so the host's Update reads one way everywhere.</remarks>
+    public string? ConsumeCue()
+    {
+        var c = _cue;
+        _cue = null;
+        return c;
+    }
+
     public bool DevDustDebug { get; set; }
 
     public PrestigeScreen(UiKit ui, MemoryDustTree tree)
@@ -47,6 +90,26 @@ public sealed class PrestigeScreen
 
     /// <summary>DEV ONLY: pose the detail panel on a specific blessing for the screenshot fixture.</summary>
     public void DevSelect(string id) => _selectedId = id;
+
+    /// <summary>DEV ONLY: freeze the unlock flourish part-way through so a capture can prove it draws.</summary>
+    /// <remarks>
+    /// A celebration is the one thing a still screenshot cannot catch by accident — it is over in a
+    /// second, and the capture rig renders a fixed frame count and exits. Without this, "the flourish
+    /// works" would be a claim rather than a verified fact, which is exactly what this project's
+    /// verification rule exists to prevent.
+    /// </remarks>
+    public void DevPoseLit(MemoryDustTree tree, string id, float t)
+    {
+        if (tree.All.FirstOrDefault(u => u.Id == id) is not { } u) return;
+        _selectedId = id;
+        BeginLit(u);
+        _litT = t;
+        // FROZEN, or the fixture is useless: the capture rig renders sixty frames before it saves, so
+        // an un-frozen pose advances a full second and every mode would screenshot the same empty
+        // moment after the flourish had already finished.
+        _litFrozen = true;
+        TickFlourish(0f);   // settle Shake for the posed instant, so the kick is in the picture too
+    }
 
     // ── Spec §4 rectangles ──────────────────────────────────────────────────────────────────────
     private static readonly Rectangle OverviewPanel = new(38, 144, 366, 718);
@@ -117,6 +180,34 @@ public sealed class PrestigeScreen
         UnlockEffect.Amplifier => Gold, UnlockEffect.Expansion => Violet, _ => Teal,
     };
 
+    /// <summary>The road's emblem. Tinted at the draw site, so one asset serves every state.</summary>
+    private static string RoadGlyph(TraitRoad r) => r switch
+    {
+        TraitRoad.Spine => "icon_road_spine",
+        TraitRoad.Ruin => "icon_road_ruin",
+        TraitRoad.Aegis => "icon_road_aegis",
+        TraitRoad.Avarice => "icon_road_avarice",
+        _ => "icon_road_artifice",
+    };
+
+    /// <summary>
+    /// A TERMINAL's own emblem — the four 12-point nodes each road ends on, and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// Keyed off the granted keystone rather than the cost, because "costs 12" is a balance value that
+    /// may move and "is the end of the Ruin road" is not. Everything else on the screen shares three
+    /// category icons; these four are the only traits expensive enough to deserve a picture of their own,
+    /// and two of them cost more than a career earns — a player will mostly meet them by reading them.
+    /// </remarks>
+    private static string? TerminalArt(MemoryDustUnlock u) => u.GrantsKeystone switch
+    {
+        "reaper" => "art_terminal_reaper",
+        "titan" => "art_terminal_titan",
+        "hoarder" => "art_terminal_hoarder",
+        "weaver" => "art_terminal_weaver",
+        _ => null,
+    };
+
     private static string CatIcon(UnlockEffect e) => e switch
     {
         UnlockEffect.Amplifier => "icon_blessing_amplifier",
@@ -138,7 +229,11 @@ public sealed class PrestigeScreen
     private bool Pressed(KeyboardState now, Keys k) => now.IsKeyDown(k) && _prevKeys.IsKeyUp(k);
 
     public void Update(KeyboardState keys, Point mouse, bool clicked, int wheel, MemoryDustTree tree)
+        => Update(keys, mouse, clicked, wheel, tree, 1f / 60f);
+
+    public void Update(KeyboardState keys, Point mouse, bool clicked, int wheel, MemoryDustTree tree, float dt)
     {
+        TickFlourish(dt);
         var list = Filtered(tree);
         if (wheel != 0)
         {
@@ -168,9 +263,48 @@ public sealed class PrestigeScreen
     private void Buy(MemoryDustTree tree, MemoryDustUnlock u)
     {
         if (tree.Owns(u.Id)) _msg = "ALREADY TAKEN — TRAITS ARE PERMANENT.";
-        else if (tree.Purchase(u.Id)) _msg = $"TAKEN: {u.Name}.";
+        else if (tree.Purchase(u.Id)) { _msg = $"TAKEN: {u.Name}."; BeginLit(u); }
         else if (tree.Available < u.Cost) _msg = "NOT ENOUGH TRAIT POINTS — CONQUER, CORRUPT, MASTER.";
         else _msg = "LOCKED — LIGHT ITS PREREQUISITES FIRST.";
+    }
+
+    /// <summary>Arm the flourish for a trait that was just bought.</summary>
+    private void BeginLit(MemoryDustUnlock u)
+    {
+        _litT = 0f;
+        _litFrozen = false;
+        _litName = u.Name;
+        _litRoad = u.Road;
+        _litArt = TerminalArt(u);
+        _litTerminal = _litArt is not null;
+        // Specific first, then generic: a terminal gets its own cue if one is authored, and falls back
+        // to the ordinary one rather than to silence.
+        _cue = _litTerminal ? "sfx_trait_terminal" : "sfx_trait_lit";
+    }
+
+    /// <summary>
+    /// Advance the flourish and the camera kick it drives.
+    /// </summary>
+    /// <remarks>
+    /// The kick is a decaying oscillation, NOT a random jitter: a capture has to be able to reproduce
+    /// the same frame twice, and a shake sampled from an RNG makes every screenshot of it a different
+    /// picture. Two incommensurate frequencies read as a knock rather than a wobble.
+    /// </remarks>
+    private void TickFlourish(float dt)
+    {
+        if (_litT < 0f) { Shake = Vector2.Zero; return; }
+
+        if (!_litFrozen) _litT += dt;
+        if (_litT >= LitDuration) { _litT = -1f; Shake = Vector2.Zero; return; }
+
+        // Shake belongs to the first third and then gets out of the way — a screen that is still
+        // moving while the player reads the name is a screen they cannot read.
+        var window = LitDuration * 0.34f;
+        if (_litT > window) { Shake = Vector2.Zero; return; }
+
+        var energy = 1f - _litT / window;
+        var amp = (_litTerminal ? 22f : 8f) * energy * energy;
+        Shake = new Vector2(MathF.Sin(_litT * 71f) * amp, MathF.Cos(_litT * 53f) * amp * 0.7f);
     }
 
     // ══════════════════════════════════════════════════════════════════════════════════════════
@@ -193,7 +327,141 @@ public sealed class PrestigeScreen
         DrawOverview(b, tree, hit, clicked);
         DrawGrid(b, tree, hit, clicked);
         DrawDetail(b, tree, hit, clicked);
+        DrawFlourish(b);
         if (DevDustDebug) DrawDebug(b);
+    }
+
+    /// <summary>
+    /// What taking a trait looks like: a flash, a shockwave, a burst, and the name of what you just
+    /// became — over the whole screen, because the whole screen is what changed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Drawn LAST and over everything, including the three panels. The decision it is celebrating is
+    /// irreversible, so it is allowed to interrupt; it also never blocks input, because a player who
+    /// wants to keep spending should not be made to wait out an animation they have already seen.
+    /// </para>
+    /// <para>
+    /// Every beat is a slice of one normalised clock, so retiming the whole thing is one constant.
+    /// A terminal ends a road and gets the long version: its own emblem, a third ring, and a second
+    /// line naming the road that just finished.
+    /// </para>
+    /// </remarks>
+    private void DrawFlourish(SpriteBatch b)
+    {
+        if (_litT < 0f) return;
+
+        var p = Math.Clamp(_litT / LitDuration, 0f, 1f);
+        var accent = _litTerminal ? Gold : RoadColor(_litRoad);
+        var centre = new Point(960, 486);
+
+        // EVERY fade below is `colour * float`, never `new Color(r, g, b, someByte)`.
+        //
+        // This batch blends PREMULTIPLIED, so a colour's RGB must already be scaled by its own alpha.
+        // Building one component-wise leaves the RGB at full strength, and the blend then reads it as
+        // "add all of this gold, keep most of what was underneath" — the first capture of this flourish
+        // came out as a solid amber sheet with the entire screen visible faintly through it. MonoGame's
+        // Color*float scales all four components, which is exactly the premultiplied form.
+        //
+        // 1. THE PAGE STANDS BACK. Ramped in over a tenth of a second and out over the last quarter, so
+        // the celebration owns the screen while it runs instead of competing with a grid of forty-four
+        // cards for the player's eye. Without it the burst and the banner are just more things drawn on
+        // a busy page, which is the whole complaint this pass is answering.
+        var hold = Math.Min(1f, p / 0.10f) * Math.Min(1f, (1f - p) / 0.25f);
+        _ui.Fill(b, new Rectangle(0, 0, 1920, 1080),
+                 new Color(0x06, 0x04, 0x0A) * (hold * (_litTerminal ? 0.66f : 0.55f)));
+
+        // 2. THE FLASH. Short and bright: it is the frame in which the decision landed.
+        if (p < 0.14f)
+        {
+            var f = 1f - p / 0.14f;
+            _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), accent * (f * f * 0.55f));
+        }
+
+        // 3. THE SHOCKWAVES. Plotted, not scaled from a sprite — see build_spec.py, where the generated
+        // ring was abandoned. A 256px texture blown up to 900 across is softest exactly when it is
+        // biggest; a plotted circumference is one crisp band at any radius.
+        var waves = _litTerminal ? 3 : 2;
+        for (var i = 0; i < waves; i++)
+        {
+            var lead = p - i * 0.10f;
+            if (lead <= 0f || lead >= 1f) continue;
+            var eased = 1f - (1f - lead) * (1f - lead);            // fast out, settling
+            var radius = (int)(60 + eased * (_litTerminal ? 940 : 620));
+            var fade = (1f - lead) * (1f - lead) * 0.9f;
+            Ring(b, centre, radius, Math.Max(2, (int)(9 * (1f - lead))), accent * fade);
+        }
+
+        // 4. THE BURST, twice: a wide slow one for the glare and a tight fast one for the spark.
+        if (_ui.Assets.Get("vfx_trait_burst") is { } burst)
+            for (var i = 0; i < 2; i++)
+            {
+                var lead = p / (i == 0 ? 1f : 0.55f);
+                if (lead >= 1f) continue;
+                var size = (int)((_litTerminal ? 560 : 380) * (i == 0 ? 0.5f + lead * 1.9f : 0.3f + lead * 0.9f));
+                var fade = (1f - lead) * (1f - lead) * (i == 0 ? 0.75f : 1f);
+                b.Draw(burst, new Rectangle(centre.X - size / 2, centre.Y - size / 2, size, size), accent * fade);
+            }
+
+        // 5. THE FACE. A terminal shows its own emblem; every other trait shows the ROAD it just moved
+        // you along — which is the thing that actually changed, and the reason a burst alone was not
+        // enough. Either way the picture swells out of the flare and settles behind the name, so the
+        // celebration has a subject rather than being light with a caption under it.
+        var faceKey = _litTerminal ? _litArt : RoadGlyph(_litRoad);
+        if (faceKey is { } key && _ui.Assets.Get(key) is { } art)
+        {
+            var grow = Math.Min(1f, p / 0.30f);
+            var eased = 1f - (1f - grow) * (1f - grow) * (1f - grow);
+            var size = (int)(_litTerminal ? 150 + eased * 250 : 90 + eased * 130);
+            var fade = Math.Min(1f, (1f - p) * 3.4f);
+            _ui.SpriteFit(b, art, new Rectangle(centre.X - size / 2, centre.Y - size / 2 - 40, size, size),
+                          (_litTerminal ? Color.White : accent) * fade);
+        }
+
+        // 6. THE NAME. It arrives after the flash rather than under it, rises as it settles, and holds
+        // legible for most of the run — this is the only part a player actually has to READ.
+        if (p < 0.08f) return;
+        var t = (p - 0.08f) / 0.92f;
+        var rise = (int)((1f - Math.Min(1f, t * 4f)) * 46f);
+        var alpha = Math.Min(1f, t * 6f) * Math.Min(1f, (1f - t) * 5f);
+        if (alpha <= 0.01f) return;
+
+        var y = (_litTerminal ? 706 : 626) + rise;
+        // Edge to edge. At 1320 wide it started and stopped at two arbitrary points inside the overview
+        // and detail panels, so its two rules read as a box someone had dropped on the page rather than
+        // as a banner the page was showing.
+        var plate = new Rectangle(0, y - 26, 1920, _litTerminal ? 154 : 114);
+        _ui.Fill(b, plate, new Color(0x0A, 0x08, 0x10) * (alpha * 0.86f));
+        _ui.Fill(b, new Rectangle(plate.X, plate.Y, plate.Width, 3), accent * alpha);
+        _ui.Fill(b, new Rectangle(plate.X, plate.Bottom - 3, plate.Width, 3), accent * alpha);
+
+        _ui.TextCenterBig(b, _litTerminal ? "A ROAD ENDS HERE" : "TRAIT LIT — AND IT IS PERMANENT",
+                          centre.X, plate.Y + 16, accent * alpha, UiTypography.Secondary);
+        _ui.TextCenterBig(b, _litName, centre.X, plate.Y + 48, Bone * alpha, UiTypography.ScreenTitle);
+        if (_litTerminal)
+            _ui.TextCenterBig(b, RoadName(_litRoad) + "  ·  WALKED TO ITS END", centre.X, plate.Y + 106,
+                              Gold * alpha, UiTypography.Body);
+    }
+
+    /// <summary>
+    /// A hollow circle of small squares. The shockwave the generator would not draw.
+    /// </summary>
+    /// <remarks>
+    /// Step count follows the radius so the band stays continuous as it expands — a fixed step count
+    /// draws a solid ring when it is small and a dotted one when it is large, which is precisely
+    /// backwards from what an expanding shockwave should do.
+    /// </remarks>
+    private void Ring(SpriteBatch b, Point c, int radius, int thick, Color col)
+    {
+        var steps = Math.Clamp(radius * 4, 48, 1600);
+        for (var i = 0; i < steps; i++)
+        {
+            var a = i / (float)steps * MathF.Tau;
+            var x = c.X + (int)(MathF.Cos(a) * radius);
+            var y = c.Y + (int)(MathF.Sin(a) * radius);
+            if (x < -thick || x > 1920 + thick || y < -thick || y > 1080 + thick) continue;
+            _ui.Fill(b, new Rectangle(x - thick / 2, y - thick / 2, thick, thick), col);
+        }
     }
 
     private void DrawOverview(SpriteBatch b, MemoryDustTree tree, Point hit, bool clicked)
@@ -243,7 +511,11 @@ public sealed class PrestigeScreen
 
             var col = road is { } r ? RoadColor(r) : Bone;
             _ui.Fill(b, new Rectangle(row.X, row.Y, 4, row.Height), col);
-            _ui.TextBig(b, road is { } rr ? RoadName(rr) : "EVERYTHING", row.X + 18, row.Y + 7,
+            // The road's own emblem, not just its colour stripe. Five colour stripes ask a player to
+            // learn a key before the list means anything; a skull, a wall, a purse and a gear do not.
+            var pip = new Rectangle(row.X + 12, row.Y + 6, 26, 26);
+            var named = road is { } rg && _ui.Icon(b, RoadGlyph(rg), pip, active ? Bone : col);
+            _ui.TextBig(b, road is { } rr ? RoadName(rr) : "EVERYTHING", row.X + (named ? 46 : 18), row.Y + 7,
                         active ? Bone : Slate, UiTypography.Body);
 
             var nodes = road is { } r2 ? tree.All.Where(u => u.Road == r2).ToList() : tree.All.ToList();
@@ -288,29 +560,48 @@ public sealed class PrestigeScreen
             var sel = u.Id == _selectedId;
             if (UiKit.ClickedIn(card, hit, clicked)) _selectedId = u.Id;
 
-            _ui.Fill(b, card, isOwned ? new Color(0x2A, 0x22, 0x10, 0xF0) : new Color(0x16, 0x12, 0x20, 0xE0));
-            var edge = sel ? Bone : isOwned ? Gold : buyable ? RoadColor(u.Road) : Dim;
-            var t = sel ? 4 : 3;
+            var terminal = TerminalArt(u);
+            _ui.Fill(b, card, isOwned ? new Color(0x2A, 0x22, 0x10, 0xF0)
+                              : terminal is not null ? new Color(0x1E, 0x16, 0x24, 0xF0)
+                              : new Color(0x16, 0x12, 0x20, 0xE0));
+
+            // The road, printed faintly across the whole card. It is the one fact every card shares and
+            // the one a player is choosing between, and it costs no room at all as a watermark.
+            if (_ui.Assets.Get(RoadGlyph(u.Road)) is { } mark)
+                _ui.SpriteFit(b, mark, new Rectangle(card.Right - 60, card.Bottom - 58, 50, 50),
+                              RoadColor(u.Road) * (isOwned ? 0.18f : 0.10f));
+
+            // A terminal wears a thicker frame than anything else on the page, because it costs more
+            // than anything else on the page — three times a keystone and, for two of the four roads,
+            // more than a whole career earns.
+            var edge = sel ? Bone : isOwned ? Gold : buyable ? RoadColor(u.Road) : terminal is not null ? Gold * 0.55f : Dim;
+            var t = sel ? 4 : terminal is not null ? 4 : 3;
             _ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, t), edge);
             _ui.Fill(b, new Rectangle(card.X, card.Bottom - t, card.Width, t), edge);
             _ui.Fill(b, new Rectangle(card.X, card.Y, t, card.Height), edge);
             _ui.Fill(b, new Rectangle(card.Right - t, card.Y, t, card.Height), edge);
 
             var iconTint = isOwned ? Gold : buyable ? RoadColor(u.Road) : new Color(0x50, 0x50, 0x5C);
-            // One icon PER CATEGORY. Every card used to draw the same dust blob recoloured by state, so
-            // the grid could not be scanned — an Amplifier and an Expansion were the same picture.
+            // One icon PER CATEGORY — every card used to draw the same dust blob recoloured by state, so
+            // the grid could not be scanned. The four terminals show themselves instead, and untinted:
+            // they are the only art on this screen that is a picture rather than a symbol.
             var ib = new Rectangle(card.Center.X - 22, card.Y + 8, 44, 44);
-            if (!_ui.Icon(b, CatIcon(u.Effect), ib, iconTint)
-                && _ui.Assets.Get("ui_memory_dust") is { } ic) b.Draw(ic, ib, iconTint);
+            if (terminal is not null)
+                _ui.Icon(b, terminal, new Rectangle(card.Center.X - 26, card.Y + 6, 52, 52),
+                         isOwned || buyable ? Color.White : new Color(0x80, 0x78, 0x70));
+            else if (!_ui.Icon(b, CatIcon(u.Effect), ib, iconTint)
+                     && _ui.Assets.Get("ui_memory_dust") is { } ic) b.Draw(ic, ib, iconTint);
 
             _ui.TextCenterBig(b, u.Name, card.Center.X, card.Y + 58, isOwned || buyable ? Bone : Slate, UiTypography.Secondary);
             var state = isOwned ? "LIT" : buyable ? "AVAILABLE" : "LOCKED";
             _ui.TextCenter(b, state, card.Center.X, card.Bottom - 56, isOwned ? Gold : buyable ? Met : Slate);
+            // "N PTS", not a Dust mote beside a number. The card drew the Memory Dust blob as its price
+            // tag, which stopped being true when the tree stopped being buyable by idling — and it is
+            // the most expensive kind of small lie, because Dust is a currency the player HAS 77,000 of
+            // while the thing this actually costs is the one they have nine of.
             if (!isOwned)
-            {
-                if (_ui.Assets.Get("ui_memory_dust") is { } di) b.Draw(di, new Rectangle(card.Center.X - 42, card.Bottom - 30, 18, 18), buyable ? Violet : Dim);
-                _ui.TextCenter(b, $"{u.Cost}", card.Center.X + 8, card.Bottom - 28, buyable ? Bone : Slate);
-            }
+                _ui.TextCenter(b, $"{u.Cost} PT{(u.Cost == 1 ? "" : "S")}", card.Center.X, card.Bottom - 28,
+                               buyable ? Bone : Slate);
         }
 
         if (maxScroll > 0)
@@ -328,45 +619,100 @@ public sealed class PrestigeScreen
         var buyable = tree.CanUnlock(u.Id);
         var cat = CatColor(u.Effect);
 
+        var terminal = TerminalArt(u);
+        var roadCol = RoadColor(u.Road);
+        var left = DetailPanel.X + 28;
+        var width = DetailPanel.Width - 56;
+
         _ui.TextCenterBig(b, "TRAIT DETAIL", DetailPanel.Center.X, DetailPanel.Y + 18, Gold, UiTypography.SectionTitle);
 
-        var icon = new Rectangle(DetailPanel.Center.X - 52, DetailPanel.Y + 58, 104, 104);
-        if (!_ui.Icon(b, CatIcon(u.Effect), icon, isOwned ? Gold : cat)
-            && _ui.Assets.Get("ui_memory_dust") is { } ic) b.Draw(ic, icon, isOwned ? Gold : cat);
+        // Everything below runs off ONE CURSOR. This panel used to be a column of twelve literal offsets
+        // from DetailPanel.Y, which meant adding a single row — the road, which is the whole decision the
+        // screen presents — would silently have pushed the prerequisite list down through the cost
+        // divider, and a terminal's taller art would have pushed it further. A cursor turns "this layout
+        // has a spare row in it somewhere" into a question the code answers rather than one a capture has
+        // to catch.
+        var y = DetailPanel.Y + 56;
 
-        _ui.TextCenterBig(b, u.Name, DetailPanel.Center.X, DetailPanel.Y + 176, isOwned ? Gold : buyable ? Bone : Slate, UiTypography.PanelTitle);
+        // THE ROAD, named and drawn. The detail panel — the one place a trait is read properly — did not
+        // mention which of the five roads it belonged to at all.
+        var badge = new Rectangle(left, y, 28, 28);
+        var hasGlyph = _ui.Icon(b, RoadGlyph(u.Road), badge, roadCol);
+        _ui.TextBig(b, RoadName(u.Road), hasGlyph ? badge.Right + 10 : left, y + 5, roadCol, UiTypography.Body);
+        _ui.TextRightBig(b, RoadBlurb(u.Road), DetailPanel.Right - 28, y + 7, Slate, UiTypography.Secondary);
+        y += 40;
+
+        // A TERMINAL gets its own face, larger and untinted. This is the panel where a player decides
+        // whether thirty points go here or somewhere they can then never also reach, and until now it
+        // showed them the same up-arrow that a one-point convenience node shows.
+        var size = terminal is not null ? 132 : 100;
+        var icon = new Rectangle(DetailPanel.Center.X - size / 2, y, size, size);
+        if (terminal is not null)
+            _ui.Icon(b, terminal, icon, isOwned || buyable ? Color.White : new Color(0x8A, 0x82, 0x7A));
+        else if (!_ui.Icon(b, CatIcon(u.Effect), icon, isOwned ? Gold : cat)
+                 && _ui.Assets.Get("ui_memory_dust") is { } ic) b.Draw(ic, icon, isOwned ? Gold : cat);
+        y += size + 10;
+
+        _ui.TextCenterBig(b, u.Name, DetailPanel.Center.X, y, isOwned ? Gold : buyable ? Bone : Slate, UiTypography.PanelTitle);
+        y += 34;
         var state = isOwned ? "LIT" : buyable ? "AVAILABLE" : "LOCKED";
-        _ui.TextCenterBig(b, $"{CatName(u.Effect)}  ·  {state}", DetailPanel.Center.X, DetailPanel.Y + 210, isOwned ? Gold : buyable ? Met : Slate, UiTypography.Secondary);
+        _ui.TextCenterBig(b, terminal is not null ? $"TERMINAL — THE END OF A ROAD  ·  {state}"
+                                                  : $"{CatName(u.Effect)}  ·  {state}",
+                          DetailPanel.Center.X, y, isOwned ? Gold : buyable ? Met : Slate, UiTypography.Secondary);
+        y += 30;
 
-        _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 244, DetailPanel.Width - 56, 2), Dim);
-        _ui.TextBig(b, "EFFECT", DetailPanel.X + 28, DetailPanel.Y + 258, Slate, UiTypography.Secondary);
-        DrawWrapped(b, Cap(u.Description), DetailPanel.X + 28, DetailPanel.Y + 290, DetailPanel.Width - 56, Bone);
+        _ui.Fill(b, new Rectangle(left, y, width, 2), Dim);
+        y += 14;
+        _ui.TextBig(b, "EFFECT", left, y, Slate, UiTypography.Secondary);
+        y += 30;
+        y = DrawWrapped(b, Cap(u.Description), left, y, width, Bone) + 30;
         if (u.GrantsKeystone is not null)
-            _ui.TextBig(b, "GRANTS A KEYSTONE — A BUILD-DEFINING CHOICE.", DetailPanel.X + 28, DetailPanel.Y + 356, Violet, UiTypography.Secondary);
+        {
+            _ui.TextBig(b, "GRANTS A KEYSTONE — A BUILD-DEFINING CHOICE.", left, y, Violet, UiTypography.Secondary);
+            y += 30;
+        }
 
         // Prerequisites (real Requires), each with an owned check.
-        _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 392, DetailPanel.Width - 56, 2), Dim);
-        _ui.TextBig(b, "PREREQUISITES", DetailPanel.X + 28, DetailPanel.Y + 406, Gold, UiTypography.Secondary);
-        var py = DetailPanel.Y + 440;
-        if (u.Requires.Count == 0) _ui.TextBig(b, "NONE — START HERE.", DetailPanel.X + 30, py, Slate, UiTypography.Body);
+        _ui.Fill(b, new Rectangle(left, y, width, 2), Dim);
+        y += 14;
+        _ui.TextBig(b, "PREREQUISITES", left, y, Gold, UiTypography.Secondary);
+        y += 32;
+        // The cost block below is anchored to the panel's bottom, so the list has a hard floor. Say what
+        // was dropped rather than drawing a row through the divider — a silently truncated list reads as
+        // "these are all the prerequisites", which is the one thing it must never say.
+        var floor = DetailPanel.Bottom - 172;
+        if (u.Requires.Count == 0) _ui.TextBig(b, "NONE — START HERE.", left + 2, y, Slate, UiTypography.Body);
         else
-            foreach (var reqId in u.Requires)
+            for (var i = 0; i < u.Requires.Count; i++)
             {
+                if (y > floor)
+                {
+                    _ui.TextBig(b, $"+{u.Requires.Count - i} MORE", left + 2, y, Slate, UiTypography.Secondary);
+                    break;
+                }
+                var reqId = u.Requires[i];
                 var req = tree.All.FirstOrDefault(x => x.Id == reqId);
                 var got = tree.Owns(reqId);
-                DrawTick(b, new Rectangle(DetailPanel.X + 30, py + 2, 20, 18), got);
-                _ui.TextBig(b, req?.Name ?? reqId, DetailPanel.X + 60, py, got ? Bone : Slate, UiTypography.Body);
-                py += 34;
+                DrawTick(b, new Rectangle(left + 2, y + 2, 20, 18), got);
+                _ui.TextBig(b, req?.Name ?? reqId, left + 32, y, got ? Bone : Slate, UiTypography.Body);
+                y += 34;
             }
 
         // Cost + UPGRADE.
         _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Bottom - 156, DetailPanel.Width - 56, 2), Dim);
         _ui.TextBig(b, "COST", DetailPanel.X + 28, DetailPanel.Bottom - 138, Slate, UiTypography.Body);
+        if (!isOwned)
+            // On the COST line, not under it: at Bottom-112 this ran into the UPGRADE button's own top
+            // ornament, and the panel has no spare row between the two.
+            _ui.TextBig(b, $"YOU HAVE {tree.Available}", DetailPanel.X + 96, DetailPanel.Bottom - 136,
+                        tree.Available >= u.Cost ? Dim : Ember, UiTypography.Secondary);
         if (isOwned) _ui.TextRightBig(b, "OWNED", DetailPanel.Right - 28, DetailPanel.Bottom - 140, Gold, UiTypography.PanelTitle);
         else
         {
-            if (_ui.Assets.Get("ui_memory_dust") is { } di) b.Draw(di, new Rectangle(DetailPanel.Right - 150, DetailPanel.Bottom - 144, 34, 34), Violet);
-            _ui.TextRightBig(b, $"{u.Cost:N0}", DetailPanel.Right - 28, DetailPanel.Bottom - 140, buyable ? Bone : Ember, UiTypography.PanelTitle);
+            // Priced in TRAIT POINTS and it says so, next to how many you have. The Dust mote that used
+            // to sit here named the wrong currency entirely — see the card's cost line.
+            _ui.TextRightBig(b, $"{u.Cost:N0} PT{(u.Cost == 1 ? "" : "S")}", DetailPanel.Right - 28,
+                             DetailPanel.Bottom - 140, buyable ? Bone : Ember, UiTypography.PanelTitle);
         }
 
         var label = isOwned ? "LIT" : "UPGRADE";
@@ -382,7 +728,8 @@ public sealed class PrestigeScreen
 
     private static string Cap(string s) => s.Length > 0 ? char.ToUpperInvariant(s[0]) + s[1..].ToLowerInvariant() : s;
 
-    private void DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c)
+    /// <summary>Word-wrap into a width. Returns the y of the LAST line, so a cursor can carry on from it.</summary>
+    private int DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c)
     {
         var line = "";
         foreach (var w in text.Split(' '))
@@ -392,6 +739,7 @@ public sealed class PrestigeScreen
             else line = probe;
         }
         if (line.Length > 0) _ui.Text(b, line, x, y, c);
+        return y;
     }
 
     private void DrawTick(SpriteBatch b, Rectangle r, bool on)

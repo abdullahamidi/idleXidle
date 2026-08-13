@@ -999,16 +999,53 @@ public class Game1 : Game
                 {
                     _showAutomation = true;   // deprecated: the creature den was removed; shows the Warren dashboard
                 }
-                if (sm == "dust")
+                // TRAITLIT / TRAITTERM pose the unlock flourish mid-animation. A celebration is over in
+                // a second and the capture rig renders a fixed frame count then exits, so without a
+                // fixture "the flourish works" could only ever be a claim.
+                if (sm is "dust" or "traitlit" or "traitterm" or "traitterminal")
                 {
                     _showPrestige = true;
-                    // Award enough that, after the fixture purchases below, the balance reads the reference's 77,420.
-                    _dust.AwardFromMastery(77_605);
-                    foreach (var id in new[] { "recall_1", "ledger", "might_1", "might_2", "grit_1", "grit_2", "tempo_1", "forge_insight", "filter_common" })
+                    _dust.AwardFromMastery(77_605);   // Dust still shows in the top pills; it no longer buys traits
+
+                    // TRAIT POINTS, and real ids. This fixture used to award Dust and then buy
+                    // "might_1", "might_2", "grit_1", "grit_2", "tempo_1" and "blood_1" — none of which
+                    // have existed since the trait tree was rebuilt around the spine and the four roads.
+                    // Every Purchase silently returned false and DevSelect fell back to the cheapest
+                    // node, so for the whole of that rebuild the capture showed an untouched tree with
+                    // zero points: forty-four LOCKED cards and NOT ENOUGH TRAIT POINTS. The screen was
+                    // being reviewed on a screenshot of its own empty state.
+                    // Set the INPUTS, not the total. Both trees derive their points from world progress
+                    // every frame inside UpdateExpedition, which runs before this screen's early return
+                    // — so a fixture that calls SetEarned directly is overwritten one frame later and
+                    // has been posing a career with ZERO points ever since the derivation landed. A
+                    // fully conquered world at corruption 16 is a real, reachable 22.
+                    _world.RestoreConquered(Regions.All.Select(r => r.Id));
+                    _world.RestoreCorruption(16);
+                    // And once directly, because the derivation does not run until later in this same
+                    // frame — without it the fixture's own Purchase calls see zero available points and
+                    // every one of them silently fails.
+                    _dust.SetEarned(22);
+                    foreach (var id in new[] { "socket_2", "ledger", "vow_study_1", "forge_insight",
+                                               "filter_common", "recall_1", "ks_glass_cannon" })
                         _dust.Purchase(id);
-                    _prestige.DevSelect("blood_1");   // an AVAILABLE blessing whose prerequisite (might_2) is owned
+                    _prestige.DevSelect("ks_bloodlust");   // AVAILABLE: its prerequisite (THE GLASS ROAD) is lit
                     _hunter.AddGleam(131_900_000);     // the top currency pills read like the reference
                     _hunter.AddMaterials(12_600);
+
+                    // Frozen at 0.30s: past the flash, into the shockwaves, with the name plate risen
+                    // and readable. RH_SHOT_T moves the freeze so the other beats can be checked too.
+                    var poseT = float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_T"),
+                                               System.Globalization.CultureInfo.InvariantCulture, out var pt)
+                        ? pt : 0.30f;
+                    if (sm == "traitlit") _prestige.DevPoseLit(_dust, "ks_bloodlust", poseT);
+                    if (sm is "traitterm" or "traitterminal")
+                    {
+                        // The Ruin road walked to its end — the one purchase in the game that costs
+                        // twelve points and closes off three other roads.
+                        foreach (var id in new[] { "socket_2", "ks_glass_cannon", "ks_bloodlust", "ks_blood_magic" })
+                            _dust.Purchase(id);
+                        _prestige.DevPoseLit(_dust, "ks_reaper", poseT);
+                    }
                 }
             }
             else {
@@ -1198,7 +1235,20 @@ public class Game1 : Game
             _highestMasteryAwarded = totalMasteryLevels;
         }
 
-        if (_showPrestige) { _prestige.Update(_keys, CanvasMouse, MouseClicked, MouseWheel, _dust); Latch(gameTime); return; }
+        if (_showPrestige)
+        {
+            _prestige.Update(_keys, CanvasMouse, MouseClicked, MouseWheel, _dust, dt);
+            // Taking a trait is permanent and there is no respec, so it is worth a sound and worth
+            // writing to disk immediately. The screen owns neither: it hands back a cue the same way
+            // StatsScreen hands back a trained stat.
+            if (_prestige.ConsumeCue() is { } cue)
+            {
+                _sound.PlayFirst(1f, cue, "sfx_conquer", "sfx_levelup", "sfx_click");
+                Save();
+            }
+            Latch(gameTime);
+            return;
+        }
 
         // F opens the Forge — but NOT while the automation screen is up, where F feeds materials to the
         // selected creature.
@@ -1584,9 +1634,15 @@ public class Game1 : Game
     {
         _ui.Scale = 1;
         _ui.Text2.Scale = 1;
+        // The camera kick belongs to the screen that wants one. A global shake used to live in the
+        // present blit, driven by manual combat, and sat at a permanent zero from the pivot onward
+        // because nothing owned it; this asks the active screen instead, so the kick exists only while
+        // something is actually asking for it.
+        var kick = _showPrestige ? _prestige.Shake : Vector2.Zero;
         _batch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
             null, null, null,
-            Matrix.CreateScale(OverlayScale) * Matrix.CreateTranslation(OverlayLeft, 0f, 0f));
+            Matrix.CreateScale(OverlayScale)
+                * Matrix.CreateTranslation(OverlayLeft + kick.X, kick.Y, 0f));
     }
 
     /// <summary>True when a menu screen owns the frame — those draw inset; the fight screen does not.</summary>
