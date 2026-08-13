@@ -59,7 +59,17 @@ public sealed class BuildScreen
     private bool _editMode;   // false = the overview; true = the mastery-tree + skill editor sub-view
 
     /// <summary>Open straight onto the tree — used by the headless capture so the shot shows the tree.</summary>
-    public void DevOpenTree() => _editMode = true;
+    /// <summary>DEV ONLY: open the tree sub-view, optionally framed on the centre at a given zoom.</summary>
+    /// <remarks>
+    /// The zoom argument exists because node ART cannot be verified from the default 0.30 overview —
+    /// at that scale a Notable is thirty pixels across and a capture proves only that something was
+    /// drawn there. The whole point of a camera is that the same layout has a near view.
+    /// </remarks>
+    public void DevOpenTree(float zoom = 0f)
+    {
+        _editMode = true;
+        if (zoom > 0f) _zoom = zoom;
+    }
 
     public BuildScreen(UiKit ui) => _ui = ui;
 
@@ -704,6 +714,27 @@ public sealed class BuildScreen
         _ => new Color(0xC0, 0x6E, 0xE0),
     };
 
+    /// <summary>The socket a node is set in. Shape says KIND — how big a commitment this is.</summary>
+    private static string KindFrame(MasteryKind k) => k switch
+    {
+        MasteryKind.Start => "ui_node_start",
+        MasteryKind.Minor => "ui_node_minor",
+        MasteryKind.Notable => "ui_node_notable",
+        MasteryKind.Greater => "ui_node_greater",
+        MasteryKind.Mastery => "ui_node_mastery",
+        MasteryKind.Bridge => "ui_node_bridge",
+        _ => "ui_node_spec",
+    };
+
+    /// <summary>What is set in the socket. The glyph says BRANCH — which of the four roads this is.</summary>
+    private static string BranchGlyph(Branch b) => b switch
+    {
+        Branch.Weight => "icon_branch_weight",
+        Branch.Spread => "icon_branch_spread",
+        Branch.Tempo => "icon_branch_tempo",
+        _ => "icon_branch_endure",
+    };
+
     private void DrawSidebar(SpriteBatch b, Point mouse, MemoryDustTree tree)
     {
         _ui.Fill(b, Sidebar, SbBg);
@@ -793,38 +824,83 @@ public sealed class BuildScreen
         var edge = taken ? Gold : canTake ? branchCol : Path;
         var thick = Math.Max(2, (int)(4 * _zoom * 1.6f));
 
-        if (node.Kind == MasteryKind.Start)
-        {
-            _ui.Fill(b, box, PanelBg);
-            Outline(b, box, Slate, thick);
-            if (_zoom > 0.3f) _ui.TextCenter(b, "YOU", cx, cy - 12, Bone);
-        }
-        else if (node.Kind == MasteryKind.Mastery)
+        // A Mastery is drawn as a wide plaque, not a stud: it is the branch's whole identity and its
+        // name is printed inside it. Everything below shares one path, so the box is decided first.
+        if (node.Kind == MasteryKind.Mastery)
         {
             var half = (int)(120 * _zoom * 1.9f);
-            var wide = new Rectangle(cx - half, cy - rad, half * 2, rad * 2);
-            _ui.Fill(b, wide, taken ? branchCol : new Color(0x14, 0x11, 0x1E, 0xF0));
-            var owned = Mastery.MasteredBranch() == node.Branch;
-            Outline(b, wide, owned ? Gold : hover ? Bone : edge, owned ? thick * 2 : thick);
-            if (_zoom > 0.28f)
-                _ui.TextCenter(b, Short(node.Branch), wide.Center.X, wide.Center.Y - 11,
-                               owned || taken ? Bone : branchCol);
-            hover = wide.Contains(mouse);
+            box = new Rectangle(cx - half, cy - rad, half * 2, rad * 2);
+            hover = box.Contains(mouse);
+        }
+
+        // THE ART. Three channels, one fact each: the FRAME's shape is the kind, the GLYPH inside it is
+        // the branch, and the tint on both is the state. Before this the three facts shared one channel
+        // — a coloured square, sized by kind, with a smaller square in the middle of the expensive ones
+        // — so "which road is this" and "how much does it cost me" were both answered in area and hue,
+        // the two things a player reads last.
+        //
+        // Stretched, not fitted: these are frames, and a frame that letterboxes stops framing what is
+        // inside it. The square art goes into a square box, so only the Mastery plaque scales unevenly,
+        // and it is authored at almost exactly the plaque's aspect.
+        var frame = _ui.Assets.Get(KindFrame(node.Kind));
+        var owned = node.Kind == MasteryKind.Mastery && Mastery.MasteredBranch() == node.Branch;
+
+        if (frame is not null)
+        {
+            // The socket's field, inset well inside the rim so it fits the DIAMOND and the octagon too,
+            // not just the round frames. This is the only surface that goes bright when a node is taken.
+            //
+            // START is exempt. It is permanently allocated, so it takes the "taken" branch of `fill`
+            // and came out as a bright WEIGHT-red square at the dead centre of the tree — reading as
+            // the most emphatic Weight node on the page when it belongs to no branch at all.
+            var pad = (int)(box.Width * 0.30f);
+            if (node.Kind != MasteryKind.Mastery)   // the plaque brings its own dark centre
+                _ui.Fill(b, new Rectangle(box.X + pad, box.Y + pad, box.Width - pad * 2, box.Height - pad * 2),
+                         node.Kind == MasteryKind.Start ? PanelBg : fill);
+
+            b.Draw(frame, box, hover ? Bone : owned ? Gold : taken ? Gold : canTake ? branchCol : Path);
         }
         else
         {
-            _ui.Fill(b, box, fill);
-            Outline(b, box, hover ? Bone : edge, thick);
+            // No art on disk: the flat shapes this screen shipped with. The game must run with an empty
+            // assets/art, so every draw site keeps its greybox rather than borrowing someone else's art.
+            _ui.Fill(b, box, node.Kind == MasteryKind.Start ? PanelBg : fill);
+            Outline(b, box, node.Kind == MasteryKind.Start ? Slate : hover ? Bone : edge,
+                    owned ? thick * 2 : thick);
+        }
 
-            // A KIND mark, so a mastery is not merely a bigger square than a minor. Cheap shapes until
-            // the node art lands; they already carry the one fact a glance needs — how big a commitment.
-            if (_zoom > 0.34f && node.Kind is MasteryKind.Notable or MasteryKind.Greater
+        if (node.Kind == MasteryKind.Start)
+        {
+            // >= the default zoom, not >. The threshold was 0.3 and HOME resets to exactly 0.30, so the
+            // one label naming the centre of the tree was absent from the default view of it.
+            if (_zoom >= 0.3f) _ui.TextCenter(b, "YOU", cx, cy - 12, Bone);
+        }
+        else if (node.Kind == MasteryKind.Mastery)
+        {
+            if (_zoom > 0.28f)
+                _ui.TextCenter(b, Short(node.Branch), box.Center.X, box.Center.Y - 11,
+                               owned || taken ? Bone : branchCol);
+        }
+        // The branch glyph, over the frame's hollow centre. Below about twenty pixels it is a smudge
+        // that only muddies the socket, and the frame alone still carries the kind — so it drops out
+        // rather than degrading, the same way the labels do.
+        else if (box.Width >= 20
+                 && _ui.Assets.Get(BranchGlyph(node.Branch)) is { } glyph)
+        {
+            var g = (int)(box.Width * 0.46f);
+            // Dark on a lit field once taken, lit on a dark field before: whichever way round, the
+            // glyph is the thing with contrast against what is behind it.
+            var tint = taken ? new Color(0x14, 0x11, 0x1E) : canTake ? branchCol : new Color(0x4A, 0x46, 0x58);
+            _ui.SpriteFit(b, glyph, new Rectangle(cx - g / 2, cy - g / 2, g, g), tint);
+        }
+        else if (frame is null && _zoom > 0.34f
+                 && node.Kind is MasteryKind.Notable or MasteryKind.Greater
                                  or MasteryKind.Bridge or MasteryKind.Specialisation)
-            {
-                var pip = Math.Max(3, rad / 4);
-                var col = taken ? new Color(0x14, 0x11, 0x1E) : branchCol;
-                _ui.Fill(b, new Rectangle(cx - pip, cy - pip, pip * 2, pip * 2), col);
-            }
+        {
+            // The greybox kind mark, kept for the no-art path only.
+            var pip = Math.Max(3, rad / 4);
+            _ui.Fill(b, new Rectangle(cx - pip, cy - pip, pip * 2, pip * 2),
+                     taken ? new Color(0x14, 0x11, 0x1E) : branchCol);
         }
 
         if (hover && node.Kind != MasteryKind.Start)

@@ -673,8 +673,8 @@ public class Game1 : Game
             // screen is gone, so they had nothing to pose.
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
-                or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "runlog" or "reforge" or "build" or "buildtree" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig"
-                or "fightgear" or "fightswing" or "fightreport")
+                or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig"
+                or "fightgear" or "fightswing" or "fightreport" or "traitlit" or "traitterm" or "traitterminal")
             {
                 _showTitle = false;
                 if (sm == "rig") _showRigPreview = true;
@@ -722,18 +722,31 @@ public class Game1 : Game
                     _forge.DevOpenOneChest(_hunter);   // pose the chest-open REVEAL burst
                 }
 
-                if (sm is "build" or "buildtree")
+                if (sm is "build" or "buildtree" or "buildzoom")
                 {
                     _showBuild = true;
 
                     // Pose a partly-walked tree so the shot shows taken / takeable / locked states, a
                     // bridge with only one side satisfied, and a mastery still out of reach.
+                    // Depth per region, not a point total: SkillPointsEarned reads BestDepth/5 per
+                    // region every frame and would otherwise stamp this back down to the base 3. Three
+                    // regions at depth 35 is 3 + 21 = 24, the number this fixture always meant.
+                    foreach (var def in Regions.All.Take(3)) _world.RegionFarm(def.Id).RestoreBestDepth(35);
                     _mastery.SetEarned(24);
                     foreach (var id in new[] { "heavy_hand", "sharpened", "sunder", "crush", "monolith",
                                                "opener", "hasten", "alpha" })
                         _mastery.Take(id);
 
                     if (sm == "buildtree") _buildScreen.DevOpenTree();
+                    // The same tree at a working zoom. Node art is thirty pixels across in the
+                    // overview, where a capture can only prove that something was drawn. RH_SHOT_ZOOM
+                    // picks the scale, so the rim (masteries) and the hub (minors) are both reachable
+                    // from the capture script without editing this file again.
+                    if (sm == "buildzoom")
+                        _buildScreen.DevOpenTree(
+                            float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_ZOOM"),
+                                           System.Globalization.CultureInfo.InvariantCulture, out var dz)
+                                ? dz : 0.95f);
 
                 }
 

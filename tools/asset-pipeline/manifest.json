@@ -25,6 +25,7 @@
     "rigpart": "ONLY {subject}, and nothing else. A single isolated piece, front view, cut out on an empty background. NO character, NO body, NO head, NO arms, NO background, NO frame, no text, NO glow, NO aura \u2014 a solid opaque object. Dark fantasy RPG pixel art, bone-parchment cloth and cold-slate leather, bold readable silhouette, flat bold shapes, centered",
     "geararmor": "ONLY {subject}, and nothing else. Front view, straight on, exactly as it is worn. A single isolated piece of equipment lying flat, cut out on an empty background. NO character, NO body, NO mannequin, NO hands, NO head, NO other equipment, NO background, NO frame, NO border, no text. NO glow, NO aura, NO particles, NO floating effects \u2014 a solid opaque object. Dark fantasy RPG pixel art, bold readable silhouette, flat bold shapes, centered",
     "gearweapon": "ONLY {subject}, and nothing else. Held UPRIGHT and VERTICAL, hilt at the bottom, blade pointing straight up, perfectly vertical. A single isolated weapon cut out on an empty background. NO character, NO hands, NO background, NO frame, no text. NO glow, NO aura, NO particles \u2014 a solid opaque weapon. Dark fantasy RPG pixel art, bold readable silhouette, flat bold shapes, centered",
+    "glyph": "{subject}, drawn as ONE flat heraldic emblem in solid pale bone-white, a single uniform light tone with no colour in it, filling the whole frame edge to edge, bold thick chunky silhouette, strongly symmetrical, centered on an empty background. It is a stencil, not a picture: NO ring, NO circle, NO rim, NO frame, NO border, NO badge, NO medallion, NO plaque, NO coin, NO background, NO scene, NO text, NO gold trim, NO filigree",
     "rig": "ONLY {subject} and nothing else. A single detached body part lying alone, cut out for a 2D puppet rig. NO full character, NO whole body, NO head unless asked, NO other limbs. Dark fantasy hunter garb in bone-parchment cloth and cold-slate leather. Flat bold shapes, one isolated object centered on a plain empty background, no text, no border, no frame"
   },
   "assets": [
@@ -2096,6 +2097,199 @@
       "dest": "assets/art/UI/icons/blessings",
       "style": "medallion",
       "subject": "a slim hourglass with running sand"
+    },
+    {
+      "key": "icon_branch_weight",
+      "dest": "assets/art/UI/icons/branches",
+      "style": "glyph",
+      "subject": "a massive blunt double-headed iron maul head, squat and heavy, seen straight on",
+      "width": 192,
+      "height": 192,
+      "shading": "flat shading",
+      "detail": "low detail",
+      "single_subject": true
+    },
+    {
+      "key": "icon_branch_tempo",
+      "dest": "assets/art/UI/icons/branches",
+      "style": "glyph",
+      "subject": "one jagged forked lightning bolt striking downward",
+      "width": 192,
+      "height": 192,
+      "shading": "flat shading",
+      "detail": "low detail",
+      "single_subject": true
+    },
+    {
+      "key": "icon_branch_endure",
+      "dest": "assets/art/UI/icons/branches",
+      "style": "glyph",
+      "subject": "one tall rectangular tower shield with a raised centre spine and a studded rim",
+      "width": 192,
+      "height": 192,
+      "shading": "flat shading",
+      "detail": "low detail",
+      "single_subject": true
+    },
+    {
+      "key": "ui_node_start",
+      "dest": "assets/art/UI/nodes",
+      "style": "chrome",
+      "subject": "a heavy eight-pointed compass rose star with a thick round rim band around it and a hollow centre, transparent hollow middle, empty centre",
+      "width": 192,
+      "height": 192,
+      "negative_description": "text, letters, numbers, icon, symbol, glyph, emblem, face, creature, filled centre, solid centre, plate, disc"
+    },
+    {
+      "key": "ui_node_minor",
+      "dest": "assets/art/UI/nodes",
+      "style": "chrome",
+      "subject": "one plain smooth undecorated circular socket frame drawn perfectly flat and face on, a single unbroken narrow band of dull metal, no ornament of any kind anywhere on it, hollow centre, transparent hollow middle, empty centre",
+      "width": 192,
+      "height": 192,
+      "negative_description": "text, letters, numbers, icon, symbol, glyph, emblem, face, creature, filled centre, solid centre, plate, disc, spikes, studs, rivets, gems, jewels, flourishes, filigree, ornament, engraving, scrollwork, points, teeth, perspective, tilted, angled, three-quarter view, isometric, ring, bracelet, bangle, jewellery, wedding band"
+    },
+    {
+      "key": "ui_node_notable",
+      "dest": "assets/art/UI/nodes",
+      "style": "chrome",
+      "subject": "a hexagonal socket frame with a beaded rim and a small stud at each of the six corners, hollow centre, transparent hollow middle, empty centre",
+      "width": 192,
+      "height": 192,
+      "negative_description": "text, letters, numbers, icon, symbol, glyph, emblem, face, creature, filled centre, solid centre, plate, disc"
+    },
+    {
+      "key": "ui_node_greater",
+      "dest": "assets/art/UI/nodes",
+      "style": "chrome",
+      "subject": "a heavy round socket frame ringed by twelve short radiating spikes, hollow centre, transparent hollow middle, empty centre",
+      "width": 192,
+      "height": 192,
+      "negative_description": "text, letters, numbers, icon, symbol, glyph, emblem, face, creature, filled centre, solid centre, plate, disc"
+    },
+    {
+      "key": "ui_node_bridge",
+      "dest": "assets/art/UI/nodes",
+      "style": "chrome",
+      "subject": "a square socket frame clasped by one heavy chain link across its left side and another across its right side, hollow centre, transparent hollow middle, empty centre",
+      "width": 192,
+      "height": 192,
+      "negative_description": "text, letters, numbers, icon, symbol, glyph, emblem, face, creature, filled centre, solid centre, plate, disc"
+    },
+    {
+      "key": "ui_node_spec",
+      "dest": "assets/art/UI/nodes",
+      "style": "chrome",
+      "subject": "a diamond socket frame standing on one point with a small flourish at each of its four corners, hollow centre, transparent hollow middle, empty centre",
+      "width": 192,
+      "height": 192,
+      "negative_description": "text, letters, numbers, icon, symbol, glyph, emblem, face, creature, filled centre, solid centre, plate, disc"
+    },
+    {
+      "key": "ui_node_mastery",
+      "dest": "assets/art/UI/nodes",
+      "style": "chrome",
+      "subject": "a wide ornate banner plaque with scrolled ends, a heavy trimmed rim and a hollow centre field, transparent hollow middle, empty centre",
+      "width": 320,
+      "height": 160,
+      "negative_description": "text, letters, numbers, icon, symbol, glyph, emblem, face, creature, filled centre, solid centre, plate, disc"
+    },
+    {
+      "key": "icon_road_spine",
+      "dest": "assets/art/UI/icons/roads",
+      "style": "glyph",
+      "subject": "an upright segmented backbone column of five stacked vertebrae",
+      "width": 192,
+      "height": 192,
+      "shading": "flat shading",
+      "detail": "low detail",
+      "single_subject": true
+    },
+    {
+      "key": "icon_road_ruin",
+      "dest": "assets/art/UI/icons/roads",
+      "style": "glyph",
+      "subject": "one cracked skull split down the middle by a jagged fissure",
+      "width": 192,
+      "height": 192,
+      "shading": "flat shading",
+      "detail": "low detail",
+      "single_subject": true
+    },
+    {
+      "key": "icon_road_aegis",
+      "dest": "assets/art/UI/icons/roads",
+      "style": "glyph",
+      "subject": "one battlemented fortress wall with a crenellated top and a barred gate",
+      "width": 192,
+      "height": 192,
+      "shading": "flat shading",
+      "detail": "low detail",
+      "single_subject": true
+    },
+    {
+      "key": "icon_road_avarice",
+      "dest": "assets/art/UI/icons/roads",
+      "style": "glyph",
+      "subject": "one heaped mound of coins overflowing from a torn purse",
+      "width": 192,
+      "height": 192,
+      "shading": "flat shading",
+      "detail": "low detail",
+      "single_subject": true
+    },
+    {
+      "key": "icon_road_artifice",
+      "dest": "assets/art/UI/icons/roads",
+      "style": "glyph",
+      "subject": "two interlocking toothed gears with a single thread woven between them",
+      "width": 192,
+      "height": 192,
+      "shading": "flat shading",
+      "detail": "low detail",
+      "single_subject": true
+    },
+    {
+      "key": "art_terminal_reaper",
+      "dest": "assets/art/UI/terminals",
+      "style": "medallion",
+      "subject": "a long curved reaping scythe crossed over a full blood-red harvest moon, ears of black wheat below",
+      "width": 256,
+      "height": 256
+    },
+    {
+      "key": "art_terminal_titan",
+      "dest": "assets/art/UI/terminals",
+      "style": "medallion",
+      "subject": "a colossal horned iron helm set into a mountain crag, unbroken and immovable",
+      "width": 256,
+      "height": 256
+    },
+    {
+      "key": "art_terminal_hoarder",
+      "dest": "assets/art/UI/terminals",
+      "style": "medallion",
+      "subject": "a great vault door standing open with a wave of gold coins pouring out of it",
+      "width": 256,
+      "height": 256
+    },
+    {
+      "key": "art_terminal_weaver",
+      "dest": "assets/art/UI/terminals",
+      "style": "medallion",
+      "subject": "a spindle with two glowing threads twisting together into one braided cord",
+      "width": 256,
+      "height": 256
+    },
+    {
+      "key": "vfx_trait_burst",
+      "dest": "assets/art/VFX/traits",
+      "width": 256,
+      "height": 256,
+      "knockout": true,
+      "prompt": "A radial star flare: many long thin straight rays of light shooting outward in every direction from one small brilliant point at the exact centre, perfectly symmetrical, pale white and warm gold, fading out toward the edges, on an empty background. Pixel art. NO object, NO character, NO creature, NO frame, NO border, NO ring, NO circle outline, NO text",
+      "outline": "lineless",
+      "shading": "flat shading"
     },
     {
       "key": "chest_loot",

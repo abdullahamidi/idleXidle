@@ -159,6 +159,19 @@ STILL_STYLES = {
                   "NO glow, NO aura, NO particles — a solid opaque weapon. Dark fantasy RPG pixel art, "
                   "bold readable silhouette, flat bold shapes, centered",
 
+    # A GLYPH is drawn to be TINTED. The screens that use these pick the colour at draw time — a
+    # skill-tree node is coloured by its branch, a trait row by its road — so the art must arrive as
+    # one flat light value and nothing else. The "item" and "medallion" styles both bake colour in,
+    # and multiplying a tint through an already-coloured object gives mud; the medallion style also
+    # spends the canvas on a gold RIM, which is the one thing a glyph must not have, because the
+    # frame around it is a separate asset that has to fit.
+    "glyph":     "{subject}, drawn as ONE flat heraldic emblem in solid pale bone-white, a single "
+                 "uniform light tone with no colour in it, filling the whole frame edge to edge, "
+                 "bold thick chunky silhouette, strongly symmetrical, centered on an empty "
+                 "background. It is a stencil, not a picture: NO ring, NO circle, NO rim, NO frame, "
+                 "NO border, NO badge, NO medallion, NO plaque, NO coin, NO background, NO scene, "
+                 "NO text, NO gold trim, NO filigree",
+
     # The rig style must say "ONLY" and name the exclusions explicitly. Without
     # that the model drew a whole hooded figure for every part, which is useless
     # for a cutout rig that composes parts itself.
@@ -524,6 +537,150 @@ def stills() -> list[dict]:
         "convenience": "a slim hourglass with running sand",
     }.items():
         add(f"icon_blessing_{cat}", "assets/art/UI/icons/blessings", "medallion", motif)
+
+    # --- MASTERY TREE node art: icon_branch_<branch> + ui_node_<kind> (BuildScreen.DrawNode)
+    #
+    # A node was a branch-coloured square with, on the bigger kinds, a smaller square in the middle of
+    # it. That carries two facts — which branch, roughly how expensive — and it carries them in the two
+    # channels a player reads LAST (hue and area). Everything else about a node lived in text.
+    #
+    # The split is deliberate: the FRAME says what KIND of commitment this is, the GLYPH inside says
+    # which BRANCH it belongs to. One is the socket, the other is what is set in it, so four glyphs and
+    # seven frames cover all thirty-odd nodes instead of thirty-odd bespoke pictures — and a new node
+    # added to the catalogue arrives already drawn.
+    branch_glyph = {
+        # WEIGHT is fewer, heavier hits. A maul head is the blunt-mass silhouette, and it is the one
+        # weapon shape that cannot be confused with the Spread arrows or a Tempo bolt at 40px.
+        "weight": "a massive blunt double-headed iron maul head, squat and heavy, seen straight on",
+        # SPREAD is generated OUT OF BAND — see the literal prompt below the loop. Left here so the
+        # four branches read as one set in source; the loop skips it.
+        "spread": None,
+        # TEMPO is rate. A forked bolt reads as speed at any size and needs no legend.
+        "tempo": "one jagged forked lightning bolt striking downward",
+        # ENDURE is staying alive. A tower shield, not a round one: round reads as a boss or a coin.
+        "endure": "one tall rectangular tower shield with a raised centre spine and a studded rim",
+    }
+    for br, motif in branch_glyph.items():
+        if motif is None:
+            continue
+        add(f"icon_branch_{br}", "assets/art/UI/icons/branches", "glyph", motif,
+            width=192, height=192, shading="flat shading", detail="low detail", single_subject=True)
+
+    # SPREAD is NOT generated, and is deliberately absent from this manifest — see
+    # draw_branch_spread.py, which authors it. Six attempts returned a feathered trident, a single
+    # arrow, a spread-winged phoenix, a solid crescent moon, a trident embossed on a SHIELD (Endure's
+    # glyph, the worst collision available) and a bare corner bracket. "One line that becomes three"
+    # has no name of its own in the model's vocabulary, so every phrasing landed on the nearest shape
+    # that does — and the last two attempts dropped the "heraldic" style prefix and still failed.
+    #
+    # It is listed here only so a reader of this file finds out where it went. Adding a key back into
+    # the manifest would let a `--force` run overwrite the authored art with a seventh guess, which is
+    # exactly the trap the cut rig parts are kept out of the manifest to avoid.
+
+    # The FRAMES. Each is a socket with a hollow middle, because the branch glyph and the node's state
+    # colour are both drawn through it. Ring count and spikes climb with price so the shape of a
+    # commitment reads before its label does — a Mastery must not be merely a bigger Minor.
+    for key, w, h, subj in [
+        # The hub the whole tree grows from, and the only node that is not a purchase. A heavy
+        # eight-pointed rose, because the first pass returned a hairline ring that read as the least
+        # important thing on a page it is the centre of.
+        ("ui_node_start", 192, 192,
+         "a heavy eight-pointed compass rose star with a thick round rim band around it and a hollow "
+         "centre"),
+        # The CHEAPEST node must look the cheapest. The first pass came back studded and gold-flecked —
+        # more ornate than the Notable that costs three times as much — which inverted the whole
+        # price ladder the shapes exist to state. Undecorated, and say so several ways.
+        # ...and "ring" on its own is a piece of JEWELLERY, so the second pass returned a bangle drawn
+        # in three-quarter perspective. Every other frame in this set is flat and face-on; a tilted one
+        # would read as an item that had fallen into the tree.
+        ("ui_node_minor", 192, 192,
+         "one plain smooth undecorated circular socket frame drawn perfectly flat and face on, a "
+         "single unbroken narrow band of dull metal, no ornament of any kind anywhere on it, "
+         "hollow centre"),
+        ("ui_node_notable", 192, 192,
+         "a hexagonal socket frame with a beaded rim and a small stud at each of the six corners, "
+         "hollow centre"),
+        ("ui_node_greater", 192, 192,
+         "a heavy round socket frame ringed by twelve short radiating spikes, hollow centre"),
+        ("ui_node_bridge", 192, 192,
+         "a square socket frame clasped by one heavy chain link across its left side and another "
+         "across its right side, hollow centre"),
+        ("ui_node_spec", 192, 192,
+         "a diamond socket frame standing on one point with a small flourish at each of its four "
+         "corners, hollow centre"),
+        # The one wide asset: a Mastery is drawn as a plaque, not a stud, because it is the branch's
+        # whole identity and its name is printed inside it.
+        ("ui_node_mastery", 320, 160,
+         "a wide ornate banner plaque with scrolled ends, a heavy trimmed rim and a hollow centre "
+         "field"),
+    ]:
+        # The Minor carries an extra refusal list of its own: the shared "chrome" style asks for ornate
+        # gold trim in its very first clause, and on the plainest frame in the set that clause is the
+        # thing fighting the subject.
+        extra = (", spikes, studs, rivets, gems, jewels, flourishes, filigree, ornament, engraving, "
+                 "scrollwork, points, teeth, perspective, tilted, angled, three-quarter view, "
+                 "isometric, ring, bracelet, bangle, jewellery, wedding band"
+                 if key == "ui_node_minor" else "")
+        add(key, "assets/art/UI/nodes", "chrome", subj + ", transparent hollow middle, empty centre",
+            width=w, height=h,
+            negative_description="text, letters, numbers, icon, symbol, glyph, emblem, face, "
+                                 "creature, filled centre, solid centre, plate, disc" + extra)
+
+    # --- TRAIT ROAD glyphs: icon_road_<road> (PrestigeScreen)
+    #
+    # The four roads plus the spine are the entire decision this screen exists to present, and they were
+    # five words in five colours. Tinted at the draw site, so they arrive as flat stencils.
+    road_glyph = {
+        "spine": "an upright segmented backbone column of five stacked vertebrae",
+        "ruin": "one cracked skull split down the middle by a jagged fissure",
+        "aegis": "one battlemented fortress wall with a crenellated top and a barred gate",
+        "avarice": "one heaped mound of coins overflowing from a torn purse",
+        "artifice": "two interlocking toothed gears with a single thread woven between them",
+    }
+    for rd, motif in road_glyph.items():
+        add(f"icon_road_{rd}", "assets/art/UI/icons/roads", "glyph", motif,
+            width=192, height=192, shading="flat shading", detail="low detail", single_subject=True)
+
+    # --- TERMINAL emblems: art_terminal_<keystone> (PrestigeScreen detail panel)
+    #
+    # The four 12-point terminals are the most expensive things in the game and two of them are
+    # unreachable in a career. Every one of them drew the same generic category blob. These are the only
+    # trait art that is NOT tinted — a terminal should look like the thing you spent thirty points on.
+    for key, subj in [
+        ("art_terminal_reaper", "a long curved reaping scythe crossed over a full blood-red harvest "
+                                "moon, ears of black wheat below"),
+        ("art_terminal_titan", "a colossal horned iron helm set into a mountain crag, unbroken and "
+                               "immovable"),
+        ("art_terminal_hoarder", "a great vault door standing open with a wave of gold coins pouring "
+                                 "out of it"),
+        ("art_terminal_weaver", "a spindle with two glowing threads twisting together into one "
+                                "braided cord"),
+    ]:
+        add(key, "assets/art/UI/terminals", "medallion", subj, width=256, height=256)
+
+    # --- The unlock flourish: vfx_trait_burst / vfx_trait_ring (PrestigeScreen celebration)
+    #
+    # Both carry a literal prompt. Every shared still style asks for an OBJECT — an icon, an item, a
+    # framed badge — and what is wanted here is light with no subject in it at all.
+    a.append({
+        "key": "vfx_trait_burst", "dest": "assets/art/VFX/traits",
+        "width": 256, "height": 256, "knockout": True,
+        "prompt": "A radial star flare: many long thin straight rays of light shooting outward in "
+                  "every direction from one small brilliant point at the exact centre, perfectly "
+                  "symmetrical, pale white and warm gold, fading out toward the edges, on an empty "
+                  "background. Pixel art. NO object, NO character, NO creature, NO frame, NO border, "
+                  "NO ring, NO circle outline, NO text",
+        "outline": "lineless", "shading": "flat shading",
+    })
+    # There is NO generated shockwave ring, on purpose. Two attempts both returned a SUN — a filled
+    # disc with a corona — because that is what a bright circle is in almost all training data, and the
+    # second attempt refused "disc, filled circle, ball, sphere, orb, sun, moon, planet, coin" by name
+    # and still filled the middle in. A hole is not a subject the model can be argued into drawing.
+    #
+    # It is also the one effect that does not want a texture. A ring expands, and a scaled-up 256px
+    # sprite goes soft exactly when it is biggest; PrestigeScreen plots the circumference directly
+    # (PrestigeScreen.Ring), which stays one crisp pixel band at any radius and costs no asset at all.
+    # Generate the right asset — or, when the right asset is a formula, do not generate one.
 
     # --- Loot chest
     add("chest_loot", "assets/art/ItemsLoot/chests", "item", "a closed ornate treasure chest with gold bands")
