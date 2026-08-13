@@ -84,9 +84,63 @@ public sealed class BuildScreen
     // straight through it.
     private static readonly Rectangle ViewTreeBtn = new(1544, 250, 250, 44);
 
-    // ── Edit sub-view: the mastery tree + skill sidebar (unchanged geometry). ──
-    private const int Cx = 600, Cy = 520, R = 464;
-    private static Point Centre => new(Cx, Cy);
+    // ══ THE TREE'S OWN SPACE ═══════════════════════════════════════════════════════════════════
+    //
+    // Node positions are computed in WORLD units around (0,0) and a camera decides what is on screen.
+    // The tree used to be laid out directly in pixels around (600,520) with a radius of 464 — which
+    // meant the LAYOUT was the size of the window, so every node added made the tree tighter and there
+    // was no way to add a second cross, a deeper ring, or a whole new branch without the thing becoming
+    // unreadable. A world plus a camera has no such ceiling: growing the tree moves the far edge, not
+    // the spacing.
+    private const float WorldR = 1500f;
+
+    private Vector2 _pan;                 // world point at the centre of the view
+    // 0.30 frames the whole tree: WorldR is 1500 and the view is 900 tall, so anything above
+    // 450/1500 pushes the north and south masteries off the top and bottom edges — which is what 0.42
+    // did, hiding two of the four things the layout exists to show.
+    private float _zoom = 0.30f;          // screen pixels per world unit
+    private Point? _dragFrom;             // where a drag started, in screen space
+    private bool _draggedThisPress;       // the drag moved far enough to swallow the click
+    private Vector2 _dragPanFrom;
+
+    private const float MinZoom = 0.16f, MaxZoom = 1.40f;
+
+    /// <summary>The tree owns the whole canvas. It is the only thing on its page.</summary>
+    private static readonly Rectangle TreeView = new(180, 96, 1740, 900);
+
+    private Vector2 Screen(Vector2 world)
+        => new(TreeView.Center.X + (world.X - _pan.X) * _zoom,
+               TreeView.Center.Y + (world.Y - _pan.Y) * _zoom);
+
+    private Vector2 World(Point screen)
+        => new((screen.X - TreeView.Center.X) / _zoom + _pan.X,
+               (screen.Y - TreeView.Center.Y) / _zoom + _pan.Y);
+
+    /// <summary>
+    /// Zoom about the POINTER, not about the centre.
+    /// </summary>
+    /// <remarks>
+    /// Zooming about the centre makes the thing under the cursor slide away, so a player who scrolls to
+    /// look closer at a node has to chase it. Anchoring on the pointer is what makes a map feel like a
+    /// map rather than a slider.
+    /// </remarks>
+    private void ZoomAt(Point anchor, float factor)
+    {
+        var before = World(anchor);
+        _zoom = Math.Clamp(_zoom * factor, MinZoom, MaxZoom);
+        var after = World(anchor);
+        _pan += before - after;
+        ClampPan();
+    }
+
+    /// <summary>Keep the tree reachable: the centre may leave the view, but never by more than a screen.</summary>
+    private void ClampPan()
+    {
+        var limit = WorldR * 1.25f;
+        _pan = new Vector2(Math.Clamp(_pan.X, -limit, limit), Math.Clamp(_pan.Y, -limit, limit));
+    }
+
+    private static Point Centre => new(0, 0);
     /// <summary>
     /// The four branches are laid out as a CROSS, not a hexagon: Weight up, Spread down, Tempo right,
     /// Endure left.
@@ -105,10 +159,10 @@ public sealed class BuildScreen
         _ => 180f,
     } * MathF.PI / 180f;
 
-    private static Point Corner(Branch b)
+    private static Vector2 Corner(Branch b)
     {
         var a = AngleOf(b);
-        return new Point((int)(Cx + R * MathF.Cos(a)), (int)(Cy + R * MathF.Sin(a)));
+        return new Vector2(WorldR * MathF.Cos(a), WorldR * MathF.Sin(a));
     }
 
     /// <summary>Which of its ring's siblings this is, and how many there are — drives the fan.</summary>
@@ -120,9 +174,10 @@ public sealed class BuildScreen
         return (Math.Max(0, peers.FindIndex(x => x.Id == n.Id)), Math.Max(1, peers.Count));
     }
 
-    private static Point NodePos(MasteryNode n)
+    /// <summary>Where a node lives in WORLD units. Independent of zoom, pan, and the window.</summary>
+    private static Vector2 NodePos(MasteryNode n)
     {
-        if (n.Kind == MasteryKind.Start) return Centre;
+        if (n.Kind == MasteryKind.Start) return Vector2.Zero;
 
         // A BRIDGE sits between the two branches it spans, close in — it is a shortcut, and drawing it
         // out at the rim would suggest it is a destination.
@@ -131,7 +186,7 @@ public sealed class BuildScreen
             var mid = (AngleOf(n.Branch) + AngleOf(link)) / 2f;
             // Endure (180) and Weight (-90) average to 45, which points at Tempo. Rotate that one case.
             if (MathF.Abs(AngleOf(n.Branch) - AngleOf(link)) > MathF.PI) mid += MathF.PI;
-            return new Point(Cx + (int)(R * 0.46f * MathF.Cos(mid)), Cy + (int)(R * 0.46f * MathF.Sin(mid)));
+            return new Vector2(WorldR * 0.46f * MathF.Cos(mid), WorldR * 0.46f * MathF.Sin(mid));
         }
 
         var baseAng = AngleOf(n.Branch);
@@ -143,7 +198,7 @@ public sealed class BuildScreen
         {
             var side = idx == 0 ? -1f : 1f;
             var ang = baseAng + side * 26f * MathF.PI / 180f;
-            return new Point(Cx + (int)(R * 0.86f * MathF.Cos(ang)), Cy + (int)(R * 0.86f * MathF.Sin(ang)));
+            return new Vector2(WorldR * 0.86f * MathF.Cos(ang), WorldR * 0.86f * MathF.Sin(ang));
         }
 
         // Rings fan their siblings across a spread that narrows as they go out, so a branch reads as a
@@ -155,8 +210,8 @@ public sealed class BuildScreen
         // NOT ring/4. Even spacing put ring 1 at a quarter of the radius, which is inside the START node's
         // own box — the four minors of the left and right branches sat on top of "YOU". The first ring has
         // to clear the centre, and after that the gaps can close up as the fan narrows.
-        var rad = R * n.Ring switch { 1 => 0.37f, 2 => 0.61f, 3 => 0.81f, _ => 1f };
-        return new Point(Cx + (int)(rad * MathF.Cos(angle)), Cy + (int)(rad * MathF.Sin(angle)));
+        var rad = WorldR * n.Ring switch { 1 => 0.37f, 2 => 0.61f, 3 => 0.81f, _ => 1f };
+        return new Vector2(rad * MathF.Cos(angle), rad * MathF.Sin(angle));
     }
 
     private static readonly Rectangle TreeResetBtn = new(48, 128, 216, 52);
@@ -172,8 +227,10 @@ public sealed class BuildScreen
         _ => 26,
     };
     private const int SbX = 1200;
-    private static readonly Rectangle SkillsToggle = new(SbX + 16, 148, 200, 40);
-    private static readonly Rectangle NodePanel = new(SbX, 200, 1920 - SbX - 16, 700);
+    private static readonly Rectangle SkillsToggle = new(1700, 100, 200, 40);
+    // A DOCKED CARD, not a column. The tree is the page now; a 700px panel permanently taking a third
+    // of the canvas is exactly the "sıkışmış" the layout was accused of.
+    private static readonly Rectangle NodePanel = new(1408, 588, 496, 460);
     // Sized for FIVE skill cards, not four.
     //
     // The trait tree's spine sells a fifth weave, and the old geometry (four cards of 132 at a pitch of
@@ -190,9 +247,51 @@ public sealed class BuildScreen
 
     // ── Update ───────────────────────────────────────────────────────────────────────────────────
     public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, MemoryDustTree tree)
+        => Update(keys, prev, mouse, clicked, false, 0, tree);
+
+    public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked,
+                       bool held, int wheel, MemoryDustTree tree)
     {
         Tree = tree;
+
+        // ── THE CAMERA. Only while the tree page is open; the overview has nothing to pan. ────────
+        if (_editMode)
+        {
+            var over = Game1.ToOverlay(mouse);
+
+            if (wheel != 0 && TreeView.Contains(over))
+                ZoomAt(over, wheel > 0 ? 1.16f : 1f / 1.16f);
+
+            // DRAG TO PAN. Held, not clicked: a click is a node take, and a tree you can only move with
+            // a scrollbar is a tree nobody moves.
+            if (held && TreeView.Contains(over))
+            {
+                if (_dragFrom is null) { _dragFrom = over; _dragPanFrom = _pan; }
+                else
+                {
+                    var d = _dragFrom.Value;
+                    _pan = _dragPanFrom + new Vector2((d.X - over.X) / _zoom, (d.Y - over.Y) / _zoom);
+                    ClampPan();
+                    if (Math.Abs(d.X - over.X) + Math.Abs(d.Y - over.Y) > 6) _draggedThisPress = true;
+                }
+            }
+            else _dragFrom = null;
+
+            // Keyboard, for anyone who would rather not drag.
+            var step = 260f / _zoom * 0.06f;
+            if (keys.IsKeyDown(Keys.A)) { _pan.X -= step; ClampPan(); }
+            if (keys.IsKeyDown(Keys.D)) { _pan.X += step; ClampPan(); }
+            bool Tapped(Keys k) => keys.IsKeyDown(k) && prev.IsKeyUp(k);
+            if (Tapped(Keys.OemPlus) || Tapped(Keys.Add)) ZoomAt(TreeView.Center, 1.25f);
+            if (Tapped(Keys.OemMinus) || Tapped(Keys.Subtract)) ZoomAt(TreeView.Center, 1f / 1.25f);
+            if (Tapped(Keys.Home)) { _pan = Vector2.Zero; _zoom = 0.30f; }
+        }
+
         if (!clicked) return;
+
+        // A click that ENDED a drag is a pan, not a take. Without this every attempt to move the tree
+        // also spent a point on whatever node the pointer happened to stop over.
+        if (_draggedThisPress) { _draggedThisPress = false; return; }
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
         var hit = Game1.ToOverlay(mouse);
 
@@ -211,9 +310,11 @@ public sealed class BuildScreen
         foreach (var node in MasteryCatalog.Nodes)
         {
             if (node.Kind == MasteryKind.Start) continue;
-            var p = NodePos(node);
-            var rad = NodeRadius(node.Kind) + 8;
-            if (Math.Abs(hit.X - p.X) > rad || Math.Abs(hit.Y - p.Y) > rad) continue;
+            // The SAME transform the drawing uses, or the click lands where the node used to be.
+            var sp = Screen(NodePos(node));
+            var rad = Math.Max(6, (int)(NodeRadius(node.Kind) * _zoom * 1.9f)) + 6;
+            var halfW = node.Kind == MasteryKind.Mastery ? (int)(120 * _zoom * 1.9f) + 6 : rad;
+            if (Math.Abs(hit.X - sp.X) > halfW || Math.Abs(hit.Y - sp.Y) > rad) continue;
             // Clicking a node PINS it in the detail panel whether or not it could be taken — a node you
             // cannot afford is exactly the one you most want to read.
             _pinnedNodeId = node.Id;
@@ -480,7 +581,10 @@ public sealed class BuildScreen
             }
 
             if (nearest is null) continue;
-            Line(b, NodePos(nearest), to, Mastery.IsTaken(node.Id) && Mastery.IsTaken(nearest.Id) ? Gold : Path);
+            var a = Screen(NodePos(nearest));
+            var c = Screen(to);
+            Line(b, new Point((int)a.X, (int)a.Y), new Point((int)c.X, (int)c.Y),
+                 Mastery.IsTaken(node.Id) && Mastery.IsTaken(nearest.Id) ? Gold : Path);
         }
         foreach (var node in MasteryCatalog.Nodes) DrawNode(b, node, hit, aff);
 
@@ -499,7 +603,7 @@ public sealed class BuildScreen
 
         var info = _hoverInfo.Length > 0 ? _hoverInfo : _msg.Length > 0 ? _msg : "WEIGHT ↔ SPREAD AND TEMPO ↔ ENDURE ARE OPPOSED.  ONE BRANCH IS AFFORDABLE; TWO ARE NOT.";
         var infoColor = _hoverInfo.Length > 0 ? Bone : _msg.Length > 0 ? Ember : Dim;
-        _ui.Text(b, info, 48, 904, infoColor);
+        _ui.Text(b, info, 200, 1024, infoColor);
     }
 
     /// <summary>
@@ -521,10 +625,12 @@ public sealed class BuildScreen
         {
             // No panel title: the frame's centred top medallion sits exactly where one would go, and the
             // two lines below already say what this panel is.
-            _ui.TextCenter(b, "HOVER A NODE TO READ IT.", NodePanel.Center.X, NodePanel.Y + 130, Slate);
-            _ui.TextCenter(b, "CLICK TO TAKE IT.", NodePanel.Center.X, NodePanel.Y + 162, Slate);
+            _ui.TextCenter(b, "HOVER A NODE TO READ IT.", NodePanel.Center.X, NodePanel.Y + 96, Slate);
+            // Three words, not a sentence: the card is 496 wide and the long form ran out of both sides
+            // of its own frame.
+            _ui.TextCenter(b, "DRAG  \u00b7  WHEEL  \u00b7  HOME", NodePanel.Center.X, NodePanel.Y + 132, Dim);
 
-            var y0 = NodePanel.Y + 230;
+            var y0 = NodePanel.Y + 190;
             foreach (var br in new[] { Branch.Weight, Branch.Spread, Branch.Tempo, Branch.Endure })
             {
                 var taken = MasteryCatalog.Nodes.Count(x => x.Branch == br && Mastery.IsTaken(x.Id));
@@ -533,7 +639,7 @@ public sealed class BuildScreen
                 _ui.TextBig(b, Short(br), NodePanel.X + 94, y0, Bone, UiTypography.Body);
                 _ui.TextRightBig(b, $"{taken} \u00b7 {spent} PTS", NodePanel.Right - 74, y0,
                                  spent > 0 ? Gold : Dim, UiTypography.Body);
-                y0 += 52;
+                y0 += 46;
             }
             return;
         }
@@ -652,29 +758,75 @@ public sealed class BuildScreen
         }
     }
 
+    /// <summary>
+    /// One node, drawn through the camera.
+    /// </summary>
+    /// <remarks>
+    /// Radius, outline and label all scale with zoom, so zooming out is a real overview rather than the
+    /// same glyphs at the same size on a shrinking layout — which is what makes a big tree navigable at
+    /// all. Labels vanish below a threshold: forty overlapping words is less readable than none, and the
+    /// detail panel is where reading happens anyway.
+    /// </remarks>
     private void DrawNode(SpriteBatch b, MasteryNode node, Point mouse, Form? aff)
     {
-        var p = NodePos(node);
-        var rad = NodeRadius(node.Kind);
-        var box = new Rectangle(p.X - rad, p.Y - rad, rad * 2, rad * 2);
-        var hover = Math.Abs(mouse.X - p.X) <= rad + 8 && Math.Abs(mouse.Y - p.Y) <= rad + 8;
+        var w = NodePos(node);
+        var sp = Screen(w);
+        var rad = Math.Max(4, (int)(NodeRadius(node.Kind) * _zoom * 1.9f));
+
+        // Cull. A tree meant to grow will one day have far more nodes off screen than on it.
+        if (sp.X < TreeView.X - 200 || sp.X > TreeView.Right + 200
+            || sp.Y < TreeView.Y - 200 || sp.Y > TreeView.Bottom + 200) return;
+
+        var cx = (int)sp.X;
+        var cy = (int)sp.Y;
+        var box = new Rectangle(cx - rad, cy - rad, rad * 2, rad * 2);
+        var hover = Math.Abs(mouse.X - cx) <= rad + 6 && Math.Abs(mouse.Y - cy) <= rad + 6;
+
         var taken = Mastery.IsTaken(node.Id);
         var canTake = Mastery.CanTake(node.Id);
-        var fill = taken ? Gold : canTake ? Hi : PanelBg;
-        var edge = taken ? Gold : canTake ? Verd : Path;
-        if (node.Kind == MasteryKind.Mastery)
+        var branchCol = BranchColor(node.Branch);
+
+        // Colour says BRANCH; brightness says state. A field of identical grey boxes told the player
+        // neither, and the tree's whole shape — four opposed roads — was invisible until they read
+        // labels one at a time.
+        var fill = taken ? branchCol : canTake ? branchCol * 0.34f : new Color(0x14, 0x11, 0x1E, 0xE0);
+        var edge = taken ? Gold : canTake ? branchCol : Path;
+        var thick = Math.Max(2, (int)(4 * _zoom * 1.6f));
+
+        if (node.Kind == MasteryKind.Start)
         {
-            var wide = new Rectangle(p.X - 120, p.Y - 44, 240, 88);
-            _ui.Fill(b, wide, taken ? Hi : PanelBg);
+            _ui.Fill(b, box, PanelBg);
+            Outline(b, box, Slate, thick);
+            if (_zoom > 0.3f) _ui.TextCenter(b, "YOU", cx, cy - 12, Bone);
+        }
+        else if (node.Kind == MasteryKind.Mastery)
+        {
+            var half = (int)(120 * _zoom * 1.9f);
+            var wide = new Rectangle(cx - half, cy - rad, half * 2, rad * 2);
+            _ui.Fill(b, wide, taken ? branchCol : new Color(0x14, 0x11, 0x1E, 0xF0));
             var owned = Mastery.MasteredBranch() == node.Branch;
-            Outline(b, wide, owned ? Gold : hover ? Bone : edge, owned ? 8 : 4);
-            _ui.TextCenter(b, Short(node.Branch), wide.Center.X, wide.Y + 28, owned || taken ? Gold : Slate);
+            Outline(b, wide, owned ? Gold : hover ? Bone : edge, owned ? thick * 2 : thick);
+            if (_zoom > 0.28f)
+                _ui.TextCenter(b, Short(node.Branch), wide.Center.X, wide.Center.Y - 11,
+                               owned || taken ? Bone : branchCol);
+            hover = wide.Contains(mouse);
         }
-        else if (node.Kind == MasteryKind.Start)
+        else
         {
-            _ui.Fill(b, box, PanelBg); Outline(b, box, Slate, 4); _ui.TextCenter(b, "YOU", p.X, p.Y - 12, Bone);
+            _ui.Fill(b, box, fill);
+            Outline(b, box, hover ? Bone : edge, thick);
+
+            // A KIND mark, so a mastery is not merely a bigger square than a minor. Cheap shapes until
+            // the node art lands; they already carry the one fact a glance needs — how big a commitment.
+            if (_zoom > 0.34f && node.Kind is MasteryKind.Notable or MasteryKind.Greater
+                                 or MasteryKind.Bridge or MasteryKind.Specialisation)
+            {
+                var pip = Math.Max(3, rad / 4);
+                var col = taken ? new Color(0x14, 0x11, 0x1E) : branchCol;
+                _ui.Fill(b, new Rectangle(cx - pip, cy - pip, pip * 2, pip * 2), col);
+            }
         }
-        else { _ui.Fill(b, box, fill); Outline(b, box, hover ? Bone : edge, 4); }
+
         if (hover && node.Kind != MasteryKind.Start)
         {
             _hoverInfo = $"{node.Label}   ({node.Cost} PT{(node.Cost == 1 ? "" : "S")})";

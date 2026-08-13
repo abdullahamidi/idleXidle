@@ -1109,7 +1109,8 @@ public class Game1 : Game
             _buildScreen.Mastery = _mastery;
             _buildScreen.Power = _hunter.PowerRating;   // the Build screen has no Hunter ref of its own
             _buildScreen.Level = _hunter.HunterLevel;
-            _buildScreen.Update(_keys, _prevKeys, CanvasMouse, MouseClicked, _dust);
+            _buildScreen.Update(_keys, _prevKeys, CanvasMouse, MouseClicked,
+                                _mouse.LeftButton == ButtonState.Pressed, MouseWheel, _dust);
             if (_buildScreen.Dirty) { _buildScreen.ClearDirty(); Save(); }
             Latch(gameTime);
             return;
