@@ -169,13 +169,19 @@ public sealed class BuildScreen
         _ => 26,
     };
     private const int SbX = 1200;
-    private static readonly Rectangle Sidebar = new(SbX, 200, 1920 - SbX - 16, 728);
-    private static Rectangle SkillCard(int i) => new(SbX + 16, 260 + i * 144, 680, 132);
-    private static Rectangle CSource(int i) { var c = SkillCard(i); return new(c.X, c.Y + 44, 328, 44); }
-    private static Rectangle CForm(int i) { var c = SkillCard(i); return new(c.X + 344, c.Y + 44, 336, 44); }
-    private static Rectangle CVow(int i) { var c = SkillCard(i); return new(c.X, c.Y + 88, 680, 44); }
-    private static Rectangle CRemove(int i) { var c = SkillCard(i); return new(c.Right - 52, c.Y, 52, 44); }
-    private static Rectangle KeystoneChip(int i) => new(SbX + 16, 830 + i * 52, 680, 48);
+    // Sized for FIVE skill cards, not four.
+    //
+    // The trait tree's spine sells a fifth weave, and the old geometry (four cards of 132 at a pitch of
+    // 144, sidebar ending at 928) had no room for it — the fifth card would have run over the keystone
+    // chips, and the keystone header already sat on top of slot four's Vow row in a capture. Everything
+    // below is derived from fitting five cards plus a header plus three chips inside 1080.
+    private static readonly Rectangle Sidebar = new(SbX, 200, 1920 - SbX - 16, 860);
+    private static Rectangle SkillCard(int i) => new(SbX + 16, 252 + i * 128, 680, 120);
+    private static Rectangle CSource(int i) { var c = SkillCard(i); return new(c.X, c.Y + 40, 328, 40); }
+    private static Rectangle CForm(int i) { var c = SkillCard(i); return new(c.X + 344, c.Y + 40, 336, 40); }
+    private static Rectangle CVow(int i) { var c = SkillCard(i); return new(c.X, c.Y + 80, 680, 40); }
+    private static Rectangle CRemove(int i) { var c = SkillCard(i); return new(c.Right - 52, c.Y, 52, 40); }
+    private static Rectangle KeystoneChip(int i) => new(SbX + 16, 920 + i * 44, 680, 40);
 
     // ── Update ───────────────────────────────────────────────────────────────────────────────────
     public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, MemoryDustTree tree)
@@ -498,7 +504,7 @@ public sealed class BuildScreen
             else _ui.TextCenter(b, "— LOCKED —", card.Center.X, card.Y + 56, Dim);
         }
         var learned = DustEffects.LearnedKeystones(tree);
-        _ui.Text(b, learned.Count == 0 ? "KEYSTONES — LEARN IN DUST (P)" : $"KEYSTONES — WEAR {PlayerLoadout.MaxKeystones}", SbX + 24, 806, Slate);
+        _ui.Text(b, learned.Count == 0 ? "KEYSTONES — LEARN IN TRAITS (P)" : $"KEYSTONES — {Loadout.KeystoneCapacity} SOCKET(S)", SbX + 24, 894, Slate);
         for (var i = 0; i < learned.Count && i < 3; i++)
         {
             var chip = KeystoneChip(i);
