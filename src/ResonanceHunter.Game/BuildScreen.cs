@@ -53,6 +53,9 @@ public sealed class BuildScreen
     private readonly UiKit _ui;
     private string _msg = "";
     private string _hoverInfo = "";
+    private string? _hoverNodeId;          // the node under the pointer this frame
+    private string? _pinnedNodeId;         // the last node clicked — what the detail panel shows when nothing is hovered
+    private bool _showSkills;              // the tree page's right panel: node detail (false) or the skill editor (true)
     private bool _editMode;   // false = the overview; true = the mastery-tree + skill editor sub-view
 
     /// <summary>Open straight onto the tree — used by the headless capture so the shot shows the tree.</summary>
@@ -169,6 +172,8 @@ public sealed class BuildScreen
         _ => 26,
     };
     private const int SbX = 1200;
+    private static readonly Rectangle SkillsToggle = new(SbX + 16, 148, 200, 40);
+    private static readonly Rectangle NodePanel = new(SbX, 200, 1920 - SbX - 16, 700);
     // Sized for FIVE skill cards, not four.
     //
     // The trait tree's spine sells a fifth weave, and the old geometry (four cards of 132 at a pitch of
@@ -198,8 +203,9 @@ public sealed class BuildScreen
             return;
         }
 
-        // ── Edit sub-view: tree + sidebar. ──
+        // ── Edit sub-view: tree + right column. ──
         if (BackBtn.Contains(hit)) { _editMode = false; return; }
+        if (SkillsToggle.Contains(hit)) { _showSkills = !_showSkills; return; }
         if (Mastery.Spent > 0 && TreeResetBtn.Contains(hit)) { /* Back occupies the same corner; handled above */ }
 
         foreach (var node in MasteryCatalog.Nodes)
@@ -208,6 +214,10 @@ public sealed class BuildScreen
             var p = NodePos(node);
             var rad = NodeRadius(node.Kind) + 8;
             if (Math.Abs(hit.X - p.X) > rad || Math.Abs(hit.Y - p.Y) > rad) continue;
+            // Clicking a node PINS it in the detail panel whether or not it could be taken — a node you
+            // cannot afford is exactly the one you most want to read.
+            _pinnedNodeId = node.Id;
+            _showSkills = false;
             if (Mastery.Take(node.Id)) { _msg = ""; Dirty = true; }
             else _msg = Mastery.IsTaken(node.Id) ? "ALREADY TAKEN." :
                 Mastery.Available <= 0 ? "NO MASTERY POINTS — GO DEEPER." :
@@ -251,6 +261,7 @@ public sealed class BuildScreen
     {
         Tree = tree;
         _hoverInfo = "";
+        _hoverNodeId = null;
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
         var hit = Game1.ToOverlay(mouse);
         _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xD8));
@@ -472,12 +483,120 @@ public sealed class BuildScreen
             Line(b, NodePos(nearest), to, Mastery.IsTaken(node.Id) && Mastery.IsTaken(nearest.Id) ? Gold : Path);
         }
         foreach (var node in MasteryCatalog.Nodes) DrawNode(b, node, hit, aff);
-        DrawSidebar(b, hit, tree);
+
+        // The right column answers "what am I looking at", not "what are my skill slots".
+        //
+        // It used to be the SKILL EDITOR — four slots and a keystone strip — sitting beside a tree it has
+        // nothing to do with, so the screen asked the player to hold two unrelated jobs at once and
+        // answered neither. The tree's own question ("what does this node do, can I afford it, what does
+        // it cost me") had no home at all except a one-line strip at the very bottom of the screen.
+        _ui.Fill(b, SkillsToggle, SkillsToggle.Contains(hit) ? Hi : PanelBg);
+        _ui.TextCenter(b, _showSkills ? "\u2039 NODE" : "SKILLS \u203a",
+                       SkillsToggle.Center.X, SkillsToggle.Y + 12, SkillsToggle.Contains(hit) ? Gold : Slate);
+
+        if (_showSkills) DrawSidebar(b, hit, tree);
+        else DrawNodeDetail(b, hit);
 
         var info = _hoverInfo.Length > 0 ? _hoverInfo : _msg.Length > 0 ? _msg : "WEIGHT ↔ SPREAD AND TEMPO ↔ ENDURE ARE OPPOSED.  ONE BRANCH IS AFFORDABLE; TWO ARE NOT.";
         var infoColor = _hoverInfo.Length > 0 ? Bone : _msg.Length > 0 ? Ember : Dim;
         _ui.Text(b, info, 48, 904, infoColor);
     }
+
+    /// <summary>
+    /// What the node under the pointer — or the last one clicked — actually does.
+    /// </summary>
+    /// <remarks>
+    /// The one thing the tree page never had. A node was a coloured rectangle whose entire description
+    /// was a single line of text at the bottom of the screen, printed only while the pointer was exactly
+    /// on it; a player could not read a node and then look at the tree, which is what reading a tree IS.
+    /// Hover shows, click PINS — including a node you cannot afford, which is the one you most want to
+    /// read before deciding what to walk toward.
+    /// </remarks>
+    private void DrawNodeDetail(SpriteBatch b, Point hit)
+    {
+        _ui.Panel(b, NodePanel);
+
+        var id = _hoverNodeId ?? _pinnedNodeId;
+        if (id is null || MasteryCatalog.ById(id) is not { } n)
+        {
+            // No panel title: the frame's centred top medallion sits exactly where one would go, and the
+            // two lines below already say what this panel is.
+            _ui.TextCenter(b, "HOVER A NODE TO READ IT.", NodePanel.Center.X, NodePanel.Y + 130, Slate);
+            _ui.TextCenter(b, "CLICK TO TAKE IT.", NodePanel.Center.X, NodePanel.Y + 162, Slate);
+
+            var y0 = NodePanel.Y + 230;
+            foreach (var br in new[] { Branch.Weight, Branch.Spread, Branch.Tempo, Branch.Endure })
+            {
+                var taken = MasteryCatalog.Nodes.Count(x => x.Branch == br && Mastery.IsTaken(x.Id));
+                var spent = MasteryCatalog.Nodes.Where(x => x.Branch == br && Mastery.IsTaken(x.Id)).Sum(x => x.Cost);
+                _ui.Fill(b, new Rectangle(NodePanel.X + 74, y0 - 4, 6, 34), BranchColor(br));
+                _ui.TextBig(b, Short(br), NodePanel.X + 94, y0, Bone, UiTypography.Body);
+                _ui.TextRightBig(b, $"{taken} \u00b7 {spent} PTS", NodePanel.Right - 74, y0,
+                                 spent > 0 ? Gold : Dim, UiTypography.Body);
+                y0 += 52;
+            }
+            return;
+        }
+
+        var col = BranchColor(n.Branch);
+        var taken2 = Mastery.IsTaken(n.Id);
+        var can = Mastery.CanTake(n.Id);
+
+        _ui.Fill(b, new Rectangle(NodePanel.X + 64, NodePanel.Y + 40, NodePanel.Width - 128, 4), col);
+        _ui.TextBig(b, KindWord(n.Kind), NodePanel.X + 68, NodePanel.Y + 56, col, UiTypography.Secondary);
+        _ui.TextRightBig(b, Short(n.Branch), NodePanel.Right - 68, NodePanel.Y + 56, Slate, UiTypography.Secondary);
+
+        DrawWrapped(b, n.Label, NodePanel.X + 68, NodePanel.Y + 100, NodePanel.Width - 136, Bone);
+
+        var y = NodePanel.Y + 240;
+        _ui.Fill(b, new Rectangle(NodePanel.X + 64, y - 16, NodePanel.Width - 128, 2), Dim);
+        _ui.TextBig(b, "COST", NodePanel.X + 68, y, Slate, UiTypography.Body);
+        _ui.TextRightBig(b, $"{n.Cost} PT{(n.Cost == 1 ? "" : "S")}", NodePanel.Right - 68, y,
+                         taken2 ? Gold : can ? Bone : Ember, UiTypography.PanelTitle);
+
+        y += 56;
+        _ui.TextBig(b, "YOU HAVE", NodePanel.X + 68, y, Slate, UiTypography.Body);
+        _ui.TextRightBig(b, $"{Mastery.Available}", NodePanel.Right - 68, y,
+                         Mastery.Available >= n.Cost ? Bone : Ember, UiTypography.PanelTitle);
+
+        y += 72;
+        var state = taken2 ? "TAKEN" : can ? "AVAILABLE — CLICK THE NODE"
+                    : Mastery.Available < n.Cost ? "NOT ENOUGH POINTS"
+                    : "LOCKED — WALK TO IT FIRST";
+        _ui.TextCenter(b, state, NodePanel.Center.X, y, taken2 ? Gold : can ? Verd : Ember);
+    }
+
+    /// <summary>Word-wrap a node's label into the panel. Node labels are sentences, not headings.</summary>
+    private void DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c)
+    {
+        var line = "";
+        foreach (var w in text.Split(' '))
+        {
+            var probe = line.Length == 0 ? w : line + " " + w;
+            if (_ui.Measure(probe) > width && line.Length > 0) { _ui.Text(b, line, x, y, c); y += 30; line = w; }
+            else line = probe;
+        }
+        if (line.Length > 0) _ui.Text(b, line, x, y, c);
+    }
+
+    private static string KindWord(MasteryKind k) => k switch
+    {
+        MasteryKind.Minor => "MINOR",
+        MasteryKind.Notable => "NOTABLE",
+        MasteryKind.Greater => "GREATER",
+        MasteryKind.Mastery => "MASTERY",
+        MasteryKind.Bridge => "BRIDGE",
+        MasteryKind.Specialisation => "FORM SPECIALIST",
+        _ => "START",
+    };
+
+    private static Color BranchColor(Branch b) => b switch
+    {
+        Branch.Weight => new Color(0xD6, 0x48, 0x5C),
+        Branch.Spread => new Color(0x48, 0xB8, 0x88),
+        Branch.Tempo => new Color(0x74, 0xC6, 0xE8),
+        _ => new Color(0xC0, 0x6E, 0xE0),
+    };
 
     private void DrawSidebar(SpriteBatch b, Point mouse, MemoryDustTree tree)
     {
@@ -557,7 +676,10 @@ public sealed class BuildScreen
         }
         else { _ui.Fill(b, box, fill); Outline(b, box, hover ? Bone : edge, 4); }
         if (hover && node.Kind != MasteryKind.Start)
+        {
             _hoverInfo = $"{node.Label}   ({node.Cost} PT{(node.Cost == 1 ? "" : "S")})";
+            _hoverNodeId = node.Id;
+        }
     }
 
     /// <summary>
