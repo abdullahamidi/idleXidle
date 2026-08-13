@@ -472,6 +472,30 @@ public sealed class ForgeScreen
     /// <see cref="GearMods"/> the squad reads, so the label cannot drift from the effect again — and it
     /// leads with the cost, because a trade you can't see before you equip it isn't a decision.
     /// </remarks>
+    /// <summary>
+    /// What the TRAIT alone does — no weapon multiplier folded in.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="GearBlurb"/> deliberately folds a weapon's own damage multiplier into its damage figure,
+    /// because on an inventory card the question is "what does this item give me". On the REFORGE row the
+    /// question is different: re-rolling changes the TRAIT and nothing else. Sharing the helper printed
+    /// "DMG+1637%" beside the word HEAVY on a Legendary bow — true about the item, and a lie about the
+    /// thing the button next to it would change.
+    /// </remarks>
+    private static string TraitOnlyBlurb(ItemInstance item)
+    {
+        if (GearTraits.TraitOf(item) is null) return "";
+
+        var m = GearTraits.ModsOf(item);
+        var parts = new List<string>();
+        void Add(string label, float v) { if (MathF.Abs(v - 1f) > 0.005f) parts.Add($"{label}{Pct(v)}"); }
+        Add("DMG", m.Damage);
+        Add("HP", m.Health);
+        Add("SKL", m.SkillRate);
+        Add("HAUL", m.Haul);
+        return string.Join("  ", parts);
+    }
+
     private static string GearBlurb(ItemInstance item)
     {
         if (GearTraits.TraitOf(item) is not { } trait) return "";
@@ -926,6 +950,15 @@ public sealed class ForgeScreen
         var canTrait = !worn && hunter.MaterialOf(Material.Essence) >= tCost;
         _ui.Text(b, "TRAIT  —  THE ITEM'S TRADE", ReforgePanel.X + 32, tRow, Slate);
         _ui.TextBig(b, GearTraits.TraitOf(item) is { } t ? GearTraits.NameOf(t) : "—", ReforgePanel.X + 32, tRow + 28, InkGold, UiTypography.PanelTitle);
+
+        // WHAT THE TRAIT DOES. The row calls it "the item's trade" and then printed only its NAME, while
+        // the enchant row beneath it printed a full sentence — so the one thing on this screen that both
+        // gives and takes was the one thing the player could not read. GearBlurb already existed and was
+        // drawn on the inventory card; it simply was not drawn here.
+        var traitBlurb = TraitOnlyBlurb(item);
+        if (traitBlurb.Length > 0)
+            _ui.Text(b, traitBlurb, ReforgePanel.X + 32, tRow + 68, Bone);
+
         _ui.TextRight(b, $"{hunter.MaterialOf(Material.Essence):N0} / {tCost} ESSENCE", ReforgePanel.Right - 360, tRow + 34, canTrait ? Met : Ember);
         if (_ui.Button(b, new Rectangle(ReforgePanel.Right - 340, tRow + 12, 300, 60), "RE-ROLL", hit, clicked, enabled: canTrait))
             DoReforgeTrait(hunter, item);

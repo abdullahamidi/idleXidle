@@ -288,4 +288,54 @@ public class GearTraitsTests
                 Assert.Contains("No drawback", blurb);
         }
     }
+
+    /// <summary>
+    /// REFINE must change something, in every slot, at every rarity.
+    /// </summary>
+    /// <remarks>
+    /// REGRESSION, and the reason the upgrade layer felt hollow. A weapon's damage multiplier and a
+    /// charm's defence and health scaled with item level; a gear TRAIT did not. Helm, boots, gloves and
+    /// ring contribute through their trait and their affixes and nothing else, and a COMMON has no
+    /// affixes at all — so refining a Common helm cost scrap and gold and moved not one number in the
+    /// game. There was no way for the player to find that out except by not getting stronger.
+    ///
+    /// This walks every wearable type at every rarity and asserts a refined piece beats an unrefined
+    /// one, measured on the two multipliers the sim actually reads.
+    /// </remarks>
+    [Fact]
+    public void test_refining_any_wearable_changes_the_character()
+    {
+        var types = new[]
+        {
+            ItemBaseType.Weapon, ItemBaseType.Charm, ItemBaseType.AbilityFocus,
+            ItemBaseType.Helm, ItemBaseType.Chest, ItemBaseType.Gloves,
+            ItemBaseType.Boots, ItemBaseType.Ring,
+        };
+
+        foreach (var type in types)
+            foreach (var rarity in new[] { Rarity.Common, Rarity.Uncommon, Rarity.Rare, Rarity.Epic, Rarity.Legendary })
+            {
+                ItemInstance At(int ilvl) => new()
+                {
+                    InstanceId = $"{type}-{rarity}", BaseType = type, Rarity = rarity,
+                    SellValue = 10, ItemLevel = ilvl,
+                };
+
+                var plain = new Hunter();
+                plain.Equip(At(1));
+                var refined = new Hunter();
+                refined.Equip(At(30));
+
+                var moved =
+                    refined.SquadDamageMultiplier > plain.SquadDamageMultiplier * 1.0001f ||
+                    refined.SquadHealthMultiplier > plain.SquadHealthMultiplier * 1.0001f ||
+                    refined.Defense > plain.Defense ||
+                    refined.SquadSkillRate > plain.SquadSkillRate * 1.0001f ||
+                    refined.HaulMultiplier > plain.HaulMultiplier * 1.0001f;
+
+                Assert.True(moved,
+                    $"Refining a {rarity} {type} from level 1 to 30 changed nothing the sim reads. " +
+                    "The player pays scrap and gold for it.");
+            }
+    }
 }

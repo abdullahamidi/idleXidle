@@ -111,10 +111,24 @@ public static class GearTraits
     /// <c>up</c> scales with the rarity curve; the downside is a flat constant. See the class remarks —
     /// this asymmetry is deliberate and is what keeps a Legendary feeling like a Legendary.
     /// </remarks>
-    public static GearMods ModsFor(GearTrait trait, Rarity rarity)
+    /// <param name="itemLevel">
+    /// The item's REFINE level. 1 leaves the trait exactly where rarity alone put it.
+    /// </param>
+    /// <remarks>
+    /// Item level was ignored here for the whole of development, and it is the reason REFINE felt like
+    /// nothing. A weapon's damage multiplier and a charm's defence and health all scale with level; a
+    /// TRAIT did not. For a helm, boots, gloves or a ring — slots that contribute through their trait and
+    /// their affixes and nothing else — that meant refining a COMMON one cost scrap and gold and changed
+    /// literally zero, and refining any other rarity moved only half of what the item was worth.
+    ///
+    /// The same <see cref="Gear.ItemLevelFactor"/> the weapon and charm already used, applied to the
+    /// rarity term, so a level-1 item is unchanged and the curves stay in the same family.
+    /// </remarks>
+    public static GearMods ModsFor(GearTrait trait, Rarity rarity, int itemLevel = 1)
     {
-        // 0.20 (Common) → 7.00 (Legendary), damped so a Legendary is a big deal and not a 700% one.
-        var up = 1f + 0.10f * Gear.RarityPower(rarity);
+        // 0.20 (Common) → 7.00 (Legendary), damped so a Legendary is a big deal and not a 700% one,
+        // then deepened by however much the player has poured into this particular piece.
+        var up = 1f + 0.10f * Gear.RarityPower(rarity) * Gear.ItemLevelFactor(itemLevel);
 
         return trait switch
         {
@@ -136,5 +150,5 @@ public static class GearTraits
     }
 
     public static GearMods ModsOf(ItemInstance? item)
-        => TraitOf(item) is { } t && item is not null ? ModsFor(t, item.Rarity) : GearMods.None;
+        => TraitOf(item) is { } t && item is not null ? ModsFor(t, item.Rarity, item.ItemLevel) : GearMods.None;
 }
