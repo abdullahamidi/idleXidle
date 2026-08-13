@@ -514,52 +514,19 @@ def stills() -> list[dict]:
         add(key, "assets/art/Environments/screens", "background", subj,
             model="pixen", width=640, height=360, upscale=3, knockout=False, detail="highly detailed")
 
-    # --- Worn rig gear: gear_<slot>_<trait>, bound to bones by HunterRigRenderer.
-    #     Resolution order there is gear_<slot>_<trait> -> gear_<slot> -> item_<slot>_<trait>,
-    #     so these take precedence over the inventory icons that were standing in.
-    GEAR_WORN = {
-        "helm":   ("geararmor", "a knight's helmet, visor forward", 192, 192),
-        "chest":  ("geararmor", "a chest breastplate cuirass", 224, 224),
-        "gloves": ("geararmor", "a single left-hand armoured gauntlet", 128, 128),
-        "boots":  ("geararmor", "a single armoured boot, side profile", 128, 128),
-        "weapon": ("gearweapon", "a straight double-edged sword", 128, 320),
-    }
-    for slot, (style, base, gw, gh) in GEAR_WORN.items():
-        for tr in TRAITS:
-            add(f"gear_{slot}_{tr}", f"assets/art/rig/gear/{slot}", style,
-                f"{base} with {TRAIT_LOOK[tr]}", width=gw, height=gh)
-
-    # --- Drawn rig joint pieces. These REPLACE cut-from-sprite shoulder caps.
+    # --- THE RIG'S ART IS NOT GENERATED ANY MORE, because the rig is gone.
     #
-    # ONE piece, mirrored for the other shoulder. The first pass generated the two sides
-    # independently and got two different materials — a tan leather cop on one shoulder and a
-    # grey steel one on the other. Symmetric armour has to come from a single authored piece.
+    # Fifty gear_<slot>_<trait> pieces, the drawn pauldron and the worn_<tier>_<bone> armour sets were
+    # all authored for HunterRigRenderer: gear bound to bones, armour as drop-in replacement textures
+    # for the bones a slot covers. That renderer is deleted, the champion is a flat sprite, and a
+    # character's appearance is fixed.
     #
-    # It also has to be told what a pauldron IS. Asked for "a shoulder pauldron", the model drew
-    # a full cuirass WITH pauldrons attached both times; scaled down to the 52px a shoulder
-    # occupies, that reads as a lump of torso stuck to the arm. Naming the shape (a single curved
-    # plate, a fan of lames) and listing the body as a negative is what gets one piece back.
-    # NOTE the wording: it never says "pauldron" or "shoulder". Every prompt that did — including one
-    # that spelled out "a single curved shoulder plate on its own" with the torso in the negatives —
-    # came back a full cuirass, because those words are learned attached to a body. Describing the
-    # SHAPE instead ("scallop-shaped plate, three overlapping riveted bands fanning outward") returns
-    # the piece alone. Same lesson as the trait looks: name the object, not its context.
+    # Removed from the SPEC, not merely deleted from disk, because a manifest entry is a standing
+    # order: a plain `generate.py` run regenerates whatever is missing, and one did — it resurrected
+    # the whole megabyte the same afternoon the rig was deleted, straight back into AssetLibrary's
+    # startup scan. Dead art with a live manifest entry does not stay dead.
     #
-    # This entry bypasses the shared "rigpart" prefix — the prefix's own "NO character, NO body" list
-    # reintroduces the very nouns that summon the body.
-    a.append({
-        "key": "hunter_pauldron_main", "dest": "assets/art/rig", "width": 128, "height": 128,
-        # Material follows the rig source. It was tan leather, drawn for the old cream-and-teal figure;
-        # over hunter_rig_base's dark steel spaulders that read as a pink patch stuck on the shoulder.
-        "prompt": "A scallop-shaped curved armour plate lying alone, three overlapping riveted dark "
-                  "steel bands fanning outward over a brown leather strap, front view, a single small "
-                  "object on an empty background, dark fantasy RPG pixel art, flat bold shapes, "
-                  "no text, no border",
-        "text_guidance_scale": 9.0,
-        "negative_description": "breastplate, cuirass, chestplate, torso, body, chest, ribs, "
-                                "abdomen, belt, waist, character, person, mannequin, armour set, "
-                                "sleeves, arms, neck, collar, pair, two",
-    })
+    # Recoverable from git if the wardrobe is ever attempted again.
 
     # --- The two nav emblems that do not exist in any shipped set.
     #
@@ -720,6 +687,28 @@ def stills() -> list[dict]:
             width=w, height=h,
             negative_description="text, letters, numbers, icon, symbol, glyph, emblem, face, "
                                  "creature, filled centre, solid centre, plate, disc" + extra)
+
+    # --- FORM glyphs: icon_form_<form> (WeaveScreen)
+    #
+    # The six Forms are the whole of what a skill IS, and until now they were six words in a cycling
+    # cell. A Form is picked far more often than a road is, so it earns a picture more than a road does.
+    # Tinted at the draw site by the skill's Source, so one glyph serves every colour.
+    form_glyph = {
+        "strike": "one heavy straight sword blade pointing straight down, plain crossguard",
+        "projectile": "one arrow pointing straight up with a broad head and flights at the bottom",
+        "aura": "three plain concentric rings, one inside the next, with clear gaps between them",
+        "trap": "one open toothed jaw trap seen from the side, both jaws sprung wide apart",
+        "mark": "one crosshair: a plain circle with four short straight lines crossing it, and one solid "
+                "dot at the exact centre",
+        # A thin spiral knocked out to 100% transparency — there was not enough of it left to be an
+        # image. A transform symbol needs MASS: one thick band bent nearly into a circle reads the same
+        # and survives the background removal.
+        "transformation": "one very thick curved arrow bent around into a nearly complete circle, its "
+                          "broad arrowhead almost touching its own tail, wide heavy band",
+    }
+    for fm, motif in form_glyph.items():
+        add(f"icon_form_{fm}", "assets/art/UI/icons/forms", "glyph", motif,
+            width=192, height=192, shading="flat shading", detail="low detail", single_subject=True)
 
     # --- TRAIT ROAD glyphs: icon_road_<road> (PrestigeScreen)
     #

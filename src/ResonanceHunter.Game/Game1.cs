@@ -155,6 +155,8 @@ public class Game1 : Game
     private readonly CharacterState _characters = new();
     private RosterScreen _roster = null!;
     private bool _showRoster;
+    private WeaveScreen _weave = null!;
+    private bool _showWeave;
     private bool _showPrestige;
     private readonly MemoryDustTree _dust = new();
     private int _highestMasteryAwarded;
@@ -625,6 +627,7 @@ public class Game1 : Game
         _forge = new ForgeScreen(_ui);
         _prestige = new PrestigeScreen(_ui, _dust);
         _roster = new RosterScreen(_ui);
+        _weave = new WeaveScreen(_ui);
         _expedition = new SoloExpeditionScreen(_ui);
         _buildScreen = new BuildScreen(_ui);
         _character = new CharacterScreen(_ui, _forge);
@@ -692,7 +695,7 @@ public class Game1 : Game
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig"
                 or "fightgear" or "fightswing" or "fightreport" or "traitlit" or "traitterm" or "traitterminal"
-                or "roster" or "rosterlocked")
+                or "roster" or "rosterlocked" or "weave")
             {
                 _showTitle = false;
                 // Muster screen with a real roster to arrange.
@@ -1022,6 +1025,15 @@ public class Game1 : Game
                 // ROSTER poses the whole cast unlocked so every card's art can be checked at once;
                 // ROSTERLOCKED leaves it as a fresh save, which is the state a new player actually
                 // sees and the one where a locked card still has to explain itself.
+                if (sm == "weave")
+                {
+                    _showWeave = true;
+                    _dust.SetEarned(22);
+                    foreach (var id in new[] { "socket_2", "vow_study_1", "vow_study_2", "vow_binding" })
+                        _dust.Purchase(id);
+                    _weave.DevPose(1, null);
+                }
+
                 if (sm is "roster" or "rosterlocked")
                 {
                     _showRoster = true;
@@ -1164,7 +1176,8 @@ public class Game1 : Game
         }
 
         if (Pressed(Keys.P)) { _showPrestige = !_showPrestige; _showAutomation = false; _showForge = false; _showWorld = false; _showBuild = false; _showCharacter = false; _showStats = false; _showRoster = false; }
-        if (Pressed(Keys.R)) { _showRoster = !_showRoster; _showPrestige = false; _showAutomation = false; _showForge = false; _showWorld = false; _showBuild = false; _showCharacter = false; _showStats = false; }
+        if (Pressed(Keys.T)) { _showWeave = !_showWeave; _showRoster = false; _showPrestige = false; _showAutomation = false; _showForge = false; _showWorld = false; _showBuild = false; _showCharacter = false; _showStats = false; }
+        if (Pressed(Keys.R)) { _showRoster = !_showRoster; _showWeave = false; _showPrestige = false; _showAutomation = false; _showForge = false; _showWorld = false; _showBuild = false; _showCharacter = false; _showStats = false; }
         if (Pressed(Keys.W)) { _showWorld = !_showWorld; _showAutomation = false; _showForge = false; _showPrestige = false; _showBuild = false; _showCharacter = false; _showStats = false; if (_showWorld) { _mapScreen.ActiveRegion = _activeRegion; _mapScreen.SelectActive(); } }
 
         // B — WEAVE YOUR BUILD. The whole decision layer of the solo model: four skills, three sockets.
@@ -1196,6 +1209,8 @@ public class Game1 : Game
             _buildScreen.Update(_keys, _prevKeys, CanvasMouse, MouseClicked,
                                 _mouse.LeftButton == ButtonState.Pressed, MouseWheel, _dust);
             if (_buildScreen.Dirty) { _buildScreen.ClearDirty(); Save(); }
+            // The BUILD page asks for the weave editor; the host owns which screen is open.
+            if (_buildScreen.WantsWeave) { _buildScreen.WantsWeave = false; _showBuild = false; _showWeave = true; }
             Latch(gameTime);
             return;
         }
@@ -1267,6 +1282,19 @@ public class Game1 : Game
             var reward = CorruptionScaling.RewardMultiplier(_world.CorruptionTier);
             _dust.AwardFromMastery((int)((totalMasteryLevels - _highestMasteryAwarded) * 15 * reward));
             _highestMasteryAwarded = totalMasteryLevels;
+        }
+
+        if (_showWeave)
+        {
+            _weave.Loadout = _loadout;
+            _weave.Mastery = _mastery;
+            _weave.Tree = _dust;
+            _weave.Hunter = _hunter;
+            _weave.Character = _characters.Active;
+            _weave.Update(CanvasMouse, MouseClicked, MouseWheel);
+            if (_weave.Dirty) { _weave.ClearDirty(); Save(); }
+            Latch(gameTime);
+            return;
         }
 
         if (_showRoster)
@@ -1695,7 +1723,7 @@ public class Game1 : Game
     /// <summary>True when a menu screen owns the frame — those draw inset; the fight screen does not.</summary>
     private bool OverlayActive =>
         _showForge || _showWorld || _showPrestige || _showAutomation || _showBuild || _showCharacter
-        || _showStats || _showRoster;
+        || _showStats || _showRoster || _showWeave;
 
     /// <summary>The counter-scale the active screen draws at. Converted 1920-coord screens return 1; the
     /// HUNT screen is converted, so it returns 1 whenever no other screen flag is set (the else branch below).</summary>
@@ -1750,6 +1778,7 @@ public class Game1 : Game
         else if (_showWorld) DrawWorld();
         else if (_showPrestige) _prestige.Draw(_batch, _dust, CanvasMouse, MouseClicked);
         else if (_showRoster) _roster.Draw(_batch, _characters, CanvasMouse, MouseClicked);
+        else if (_showWeave) _weave.Draw(_batch, CanvasMouse, MouseClicked);
         else if (_showAutomation) DrawWarren();
         else if (_showBuild) _buildScreen.Draw(_batch, CanvasMouse, _dust);
         else if (_showCharacter) _character.Draw(_batch, CanvasMouse, _hunter);
@@ -2169,7 +2198,7 @@ public class Game1 : Game
 
     private void OpenNav(int i)
     {
-        _showCharacter = _showStats = _showBuild = _showForge = _showAutomation = _showWorld = _showPrestige = _showRoster = false;
+        _showCharacter = _showStats = _showBuild = _showForge = _showAutomation = _showWorld = _showPrestige = _showRoster = _showWeave = false;
         switch (i)
         {
             case 1: _showCharacter = true; break;

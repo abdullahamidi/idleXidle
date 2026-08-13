@@ -96,6 +96,47 @@ public sealed class PlayerLoadout
         _skills[slot] = _skills[slot] with { VowId = ids[next] };
     }
 
+    // ── Direct setters. ───────────────────────────────────────────────────────────────────────────
+    //
+    // The cycling methods above exist because the editor used to be three `< VALUE >` cells, where the
+    // only verb available is "next". That is a fine control for a list of two and a poor one for a list
+    // of six: picking SPIRIT from BODY is five clicks and five reads, and nothing on screen says what
+    // the other five even are. The weave editor shows all six and sets the one you point at.
+    //
+    // The cyclers stay — the gamepad path is cycle-and-confirm by design (technical-preferences.md),
+    // and it needs a "next" that does not depend on pointing at a specific cell.
+
+    /// <summary>Set a slot's Source outright.</summary>
+    public void SetSource(int slot, Source source)
+    {
+        if (!InRange(slot)) return;
+        _skills[slot] = _skills[slot] with { Source = source };
+    }
+
+    /// <summary>Set a slot's Form outright.</summary>
+    public void SetForm(int slot, Form form)
+    {
+        if (!InRange(slot)) return;
+        _skills[slot] = _skills[slot] with { Form = form };
+    }
+
+    /// <summary>
+    /// Swear a Vow on a slot, or clear it with null. Refuses a Vow that has not been studied.
+    /// </summary>
+    /// <remarks>
+    /// The guard is not defensive padding: a Vow is a permanent-feeling commitment bought from the
+    /// trait tree, and a screen that could set one the player never learned would be granting the
+    /// trait tree's reward for free.
+    /// </remarks>
+    public bool SetVow(int slot, string? vowId, IReadOnlyList<Vow> knownVows)
+    {
+        ArgumentNullException.ThrowIfNull(knownVows);
+        if (!InRange(slot)) return false;
+        if (vowId is not null && knownVows.All(v => v.Id != vowId)) return false;
+        _skills[slot] = _skills[slot] with { VowId = vowId };
+        return true;
+    }
+
     // ── Keystone sockets ──────────────────────────────────────────────────────────────────────────
 
     public bool HasKeystone(string id) => _keystoneIds.Contains(id);

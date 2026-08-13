@@ -1693,415 +1693,6 @@
       "detail": "highly detailed"
     },
     {
-      "key": "gear_helm_keen",
-      "dest": "assets/art/rig/gear/helm",
-      "style": "geararmor",
-      "subject": "a knight's helmet, visor forward with polished razor-edged bright steel",
-      "width": 192,
-      "height": 192
-    },
-    {
-      "key": "gear_helm_heavy",
-      "dest": "assets/art/rig/gear/helm",
-      "style": "geararmor",
-      "subject": "a knight's helmet, visor forward with thick blunt blackened iron",
-      "width": 192,
-      "height": 192
-    },
-    {
-      "key": "gear_helm_swift",
-      "dest": "assets/art/rig/gear/helm",
-      "style": "geararmor",
-      "subject": "a knight's helmet, visor forward with slender lightweight pale steel",
-      "width": 192,
-      "height": 192
-    },
-    {
-      "key": "gear_helm_savage",
-      "dest": "assets/art/rig/gear/helm",
-      "style": "geararmor",
-      "subject": "a knight's helmet, visor forward with jagged barbed battle-scarred iron",
-      "width": 192,
-      "height": 192
-    },
-    {
-      "key": "gear_helm_warding",
-      "dest": "assets/art/rig/gear/helm",
-      "style": "geararmor",
-      "subject": "a knight's helmet, visor forward with rune-etched blue-steel",
-      "width": 192,
-      "height": 192
-    },
-    {
-      "key": "gear_helm_vital",
-      "dest": "assets/art/rig/gear/helm",
-      "style": "geararmor",
-      "subject": "a knight's helmet, visor forward with warm red-bronze with crimson inlay",
-      "width": 192,
-      "height": 192
-    },
-    {
-      "key": "gear_helm_greedy",
-      "dest": "assets/art/rig/gear/helm",
-      "style": "geararmor",
-      "subject": "a knight's helmet, visor forward with gilded gold with fine ornament",
-      "width": 192,
-      "height": 192
-    },
-    {
-      "key": "gear_helm_attuned",
-      "dest": "assets/art/rig/gear/helm",
-      "style": "geararmor",
-      "subject": "a knight's helmet, visor forward with deep violet arcane metal",
-      "width": 192,
-      "height": 192
-    },
-    {
-      "key": "gear_helm_focused",
-      "dest": "assets/art/rig/gear/helm",
-      "style": "geararmor",
-      "subject": "a knight's helmet, visor forward with dark steel with a single bright inset gem",
-      "width": 192,
-      "height": 192
-    },
-    {
-      "key": "gear_helm_wild",
-      "dest": "assets/art/rig/gear/helm",
-      "style": "geararmor",
-      "subject": "a knight's helmet, visor forward with mossy bronze with green vine engraving",
-      "width": 192,
-      "height": 192
-    },
-    {
-      "key": "gear_chest_keen",
-      "dest": "assets/art/rig/gear/chest",
-      "style": "geararmor",
-      "subject": "a chest breastplate cuirass with polished razor-edged bright steel",
-      "width": 224,
-      "height": 224
-    },
-    {
-      "key": "gear_chest_heavy",
-      "dest": "assets/art/rig/gear/chest",
-      "style": "geararmor",
-      "subject": "a chest breastplate cuirass with thick blunt blackened iron",
-      "width": 224,
-      "height": 224
-    },
-    {
-      "key": "gear_chest_swift",
-      "dest": "assets/art/rig/gear/chest",
-      "style": "geararmor",
-      "subject": "a chest breastplate cuirass with slender lightweight pale steel",
-      "width": 224,
-      "height": 224
-    },
-    {
-      "key": "gear_chest_savage",
-      "dest": "assets/art/rig/gear/chest",
-      "style": "geararmor",
-      "subject": "a chest breastplate cuirass with jagged barbed battle-scarred iron",
-      "width": 224,
-      "height": 224
-    },
-    {
-      "key": "gear_chest_warding",
-      "dest": "assets/art/rig/gear/chest",
-      "style": "geararmor",
-      "subject": "a chest breastplate cuirass with rune-etched blue-steel",
-      "width": 224,
-      "height": 224
-    },
-    {
-      "key": "gear_chest_vital",
-      "dest": "assets/art/rig/gear/chest",
-      "style": "geararmor",
-      "subject": "a chest breastplate cuirass with warm red-bronze with crimson inlay",
-      "width": 224,
-      "height": 224
-    },
-    {
-      "key": "gear_chest_greedy",
-      "dest": "assets/art/rig/gear/chest",
-      "style": "geararmor",
-      "subject": "a chest breastplate cuirass with gilded gold with fine ornament",
-      "width": 224,
-      "height": 224
-    },
-    {
-      "key": "gear_chest_attuned",
-      "dest": "assets/art/rig/gear/chest",
-      "style": "geararmor",
-      "subject": "a chest breastplate cuirass with deep violet arcane metal",
-      "width": 224,
-      "height": 224
-    },
-    {
-      "key": "gear_chest_focused",
-      "dest": "assets/art/rig/gear/chest",
-      "style": "geararmor",
-      "subject": "a chest breastplate cuirass with dark steel with a single bright inset gem",
-      "width": 224,
-      "height": 224
-    },
-    {
-      "key": "gear_chest_wild",
-      "dest": "assets/art/rig/gear/chest",
-      "style": "geararmor",
-      "subject": "a chest breastplate cuirass with mossy bronze with green vine engraving",
-      "width": 224,
-      "height": 224
-    },
-    {
-      "key": "gear_gloves_keen",
-      "dest": "assets/art/rig/gear/gloves",
-      "style": "geararmor",
-      "subject": "a single left-hand armoured gauntlet with polished razor-edged bright steel",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "gear_gloves_heavy",
-      "dest": "assets/art/rig/gear/gloves",
-      "style": "geararmor",
-      "subject": "a single left-hand armoured gauntlet with thick blunt blackened iron",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "gear_gloves_swift",
-      "dest": "assets/art/rig/gear/gloves",
-      "style": "geararmor",
-      "subject": "a single left-hand armoured gauntlet with slender lightweight pale steel",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "gear_gloves_savage",
-      "dest": "assets/art/rig/gear/gloves",
-      "style": "geararmor",
-      "subject": "a single left-hand armoured gauntlet with jagged barbed battle-scarred iron",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "gear_gloves_warding",
-      "dest": "assets/art/rig/gear/gloves",
-      "style": "geararmor",
-      "subject": "a single left-hand armoured gauntlet with rune-etched blue-steel",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "gear_gloves_vital",
-      "dest": "assets/art/rig/gear/gloves",
-      "style": "geararmor",
-      "subject": "a single left-hand armoured gauntlet with warm red-bronze with crimson inlay",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "gear_gloves_greedy",
-      "dest": "assets/art/rig/gear/gloves",
-      "style": "geararmor",
-      "subject": "a single left-hand armoured gauntlet with gilded gold with fine ornament",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "gear_gloves_attuned",
-      "dest": "assets/art/rig/gear/gloves",
-      "style": "geararmor",
-      "subject": "a single left-hand armoured gauntlet with deep violet arcane metal",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "gear_gloves_focused",
-      "dest": "assets/art/rig/gear/gloves",
-      "style": "geararmor",
-      "subject": "a single left-hand armoured gauntlet with dark steel with a single bright inset gem",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "gear_gloves_wild",
-      "dest": "assets/art/rig/gear/gloves",
-      "style": "geararmor",
-      "subject": "a single left-hand armoured gauntlet with mossy bronze with green vine engraving",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "gear_boots_keen",
-      "dest": "assets/art/rig/gear/boots",
-      "style": "geararmor",
-      "subject": "a single armoured boot, side profile with polished razor-edged bright steel",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "gear_boots_heavy",
-      "dest": "assets/art/rig/gear/boots",
-      "style": "geararmor",
-      "subject": "a single armoured boot, side profile with thick blunt blackened iron",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "gear_boots_swift",
-      "dest": "assets/art/rig/gear/boots",
-      "style": "geararmor",
-      "subject": "a single armoured boot, side profile with slender lightweight pale steel",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "gear_boots_savage",
-      "dest": "assets/art/rig/gear/boots",
-      "style": "geararmor",
-      "subject": "a single armoured boot, side profile with jagged barbed battle-scarred iron",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "gear_boots_warding",
-      "dest": "assets/art/rig/gear/boots",
-      "style": "geararmor",
-      "subject": "a single armoured boot, side profile with rune-etched blue-steel",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "gear_boots_vital",
-      "dest": "assets/art/rig/gear/boots",
-      "style": "geararmor",
-      "subject": "a single armoured boot, side profile with warm red-bronze with crimson inlay",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "gear_boots_greedy",
-      "dest": "assets/art/rig/gear/boots",
-      "style": "geararmor",
-      "subject": "a single armoured boot, side profile with gilded gold with fine ornament",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "gear_boots_attuned",
-      "dest": "assets/art/rig/gear/boots",
-      "style": "geararmor",
-      "subject": "a single armoured boot, side profile with deep violet arcane metal",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "gear_boots_focused",
-      "dest": "assets/art/rig/gear/boots",
-      "style": "geararmor",
-      "subject": "a single armoured boot, side profile with dark steel with a single bright inset gem",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "gear_boots_wild",
-      "dest": "assets/art/rig/gear/boots",
-      "style": "geararmor",
-      "subject": "a single armoured boot, side profile with mossy bronze with green vine engraving",
-      "width": 128,
-      "height": 128
-    },
-    {
-      "key": "gear_weapon_keen",
-      "dest": "assets/art/rig/gear/weapon",
-      "style": "gearweapon",
-      "subject": "a straight double-edged sword with polished razor-edged bright steel",
-      "width": 128,
-      "height": 320
-    },
-    {
-      "key": "gear_weapon_heavy",
-      "dest": "assets/art/rig/gear/weapon",
-      "style": "gearweapon",
-      "subject": "a straight double-edged sword with thick blunt blackened iron",
-      "width": 128,
-      "height": 320
-    },
-    {
-      "key": "gear_weapon_swift",
-      "dest": "assets/art/rig/gear/weapon",
-      "style": "gearweapon",
-      "subject": "a straight double-edged sword with slender lightweight pale steel",
-      "width": 128,
-      "height": 320
-    },
-    {
-      "key": "gear_weapon_savage",
-      "dest": "assets/art/rig/gear/weapon",
-      "style": "gearweapon",
-      "subject": "a straight double-edged sword with jagged barbed battle-scarred iron",
-      "width": 128,
-      "height": 320
-    },
-    {
-      "key": "gear_weapon_warding",
-      "dest": "assets/art/rig/gear/weapon",
-      "style": "gearweapon",
-      "subject": "a straight double-edged sword with rune-etched blue-steel",
-      "width": 128,
-      "height": 320
-    },
-    {
-      "key": "gear_weapon_vital",
-      "dest": "assets/art/rig/gear/weapon",
-      "style": "gearweapon",
-      "subject": "a straight double-edged sword with warm red-bronze with crimson inlay",
-      "width": 128,
-      "height": 320
-    },
-    {
-      "key": "gear_weapon_greedy",
-      "dest": "assets/art/rig/gear/weapon",
-      "style": "gearweapon",
-      "subject": "a straight double-edged sword with gilded gold with fine ornament",
-      "width": 128,
-      "height": 320
-    },
-    {
-      "key": "gear_weapon_attuned",
-      "dest": "assets/art/rig/gear/weapon",
-      "style": "gearweapon",
-      "subject": "a straight double-edged sword with deep violet arcane metal",
-      "width": 128,
-      "height": 320
-    },
-    {
-      "key": "gear_weapon_focused",
-      "dest": "assets/art/rig/gear/weapon",
-      "style": "gearweapon",
-      "subject": "a straight double-edged sword with dark steel with a single bright inset gem",
-      "width": 128,
-      "height": 320
-    },
-    {
-      "key": "gear_weapon_wild",
-      "dest": "assets/art/rig/gear/weapon",
-      "style": "gearweapon",
-      "subject": "a straight double-edged sword with mossy bronze with green vine engraving",
-      "width": 128,
-      "height": 320
-    },
-    {
-      "key": "hunter_pauldron_main",
-      "dest": "assets/art/rig",
-      "width": 128,
-      "height": 128,
-      "prompt": "A scallop-shaped curved armour plate lying alone, three overlapping riveted dark steel bands fanning outward over a brown leather strap, front view, a single small object on an empty background, dark fantasy RPG pixel art, flat bold shapes, no text, no border",
-      "text_guidance_scale": 9.0,
-      "negative_description": "breastplate, cuirass, chestplate, torso, body, chest, ribs, abdomen, belt, waist, character, person, mannequin, armour set, sleeves, arms, neck, collar, pair, two"
-    },
-    {
       "key": "icon_nav_forge",
       "dest": "assets/art/UI/icons/nav",
       "style": "item",
@@ -2294,6 +1885,72 @@
       "width": 320,
       "height": 160,
       "negative_description": "text, letters, numbers, icon, symbol, glyph, emblem, face, creature, filled centre, solid centre, plate, disc"
+    },
+    {
+      "key": "icon_form_strike",
+      "dest": "assets/art/UI/icons/forms",
+      "style": "glyph",
+      "subject": "one heavy straight sword blade pointing straight down, plain crossguard",
+      "width": 192,
+      "height": 192,
+      "shading": "flat shading",
+      "detail": "low detail",
+      "single_subject": true
+    },
+    {
+      "key": "icon_form_projectile",
+      "dest": "assets/art/UI/icons/forms",
+      "style": "glyph",
+      "subject": "one arrow pointing straight up with a broad head and flights at the bottom",
+      "width": 192,
+      "height": 192,
+      "shading": "flat shading",
+      "detail": "low detail",
+      "single_subject": true
+    },
+    {
+      "key": "icon_form_aura",
+      "dest": "assets/art/UI/icons/forms",
+      "style": "glyph",
+      "subject": "three plain concentric rings, one inside the next, with clear gaps between them",
+      "width": 192,
+      "height": 192,
+      "shading": "flat shading",
+      "detail": "low detail",
+      "single_subject": true
+    },
+    {
+      "key": "icon_form_trap",
+      "dest": "assets/art/UI/icons/forms",
+      "style": "glyph",
+      "subject": "one open toothed jaw trap seen from the side, both jaws sprung wide apart",
+      "width": 192,
+      "height": 192,
+      "shading": "flat shading",
+      "detail": "low detail",
+      "single_subject": true
+    },
+    {
+      "key": "icon_form_mark",
+      "dest": "assets/art/UI/icons/forms",
+      "style": "glyph",
+      "subject": "one crosshair: a plain circle with four short straight lines crossing it, and one solid dot at the exact centre",
+      "width": 192,
+      "height": 192,
+      "shading": "flat shading",
+      "detail": "low detail",
+      "single_subject": true
+    },
+    {
+      "key": "icon_form_transformation",
+      "dest": "assets/art/UI/icons/forms",
+      "style": "glyph",
+      "subject": "one very thick curved arrow bent around into a nearly complete circle, its broad arrowhead almost touching its own tail, wide heavy band",
+      "width": 192,
+      "height": 192,
+      "shading": "flat shading",
+      "detail": "low detail",
+      "single_subject": true
     },
     {
       "key": "icon_road_spine",

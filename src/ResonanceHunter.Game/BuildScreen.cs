@@ -55,7 +55,8 @@ public sealed class BuildScreen
     private string _hoverInfo = "";
     private string? _hoverNodeId;          // the node under the pointer this frame
     private string? _pinnedNodeId;         // the last node clicked — what the detail panel shows when nothing is hovered
-    private bool _showSkills;              // the tree page's right panel: node detail (false) or the skill editor (true)
+    /// <summary>Set when the player asked for the weave editor. The host opens it and clears this.</summary>
+    public bool WantsWeave { get; set; }
     private bool _editMode;   // false = the overview; true = the mastery-tree + skill editor sub-view
 
     /// <summary>Open straight onto the tree — used by the headless capture so the shot shows the tree.</summary>
@@ -89,6 +90,9 @@ public sealed class BuildScreen
     private static readonly Rectangle PassivePanel = new(1228, 138, 652, 746);
     private static readonly Rectangle EditBtn = new(704, 902, 260, 44);
     private static readonly Rectangle ResetBtn = new(984, 902, 232, 44);
+    // The overview's own door to the weave editor. "EDIT BUILD" opens the TREE, which is a different
+    // question — the tree is what you are, the weave is what you carry.
+    private static readonly Rectangle WeaveBtn = new(426, 902, 260, 44);
     private static Rectangle AuraCard(int i) => new(452 + i * 182, 648, 168, 198);
     // Under the panel's top crest, which the title now clears too — at y=196 the button was drawn
     // straight through it.
@@ -248,12 +252,6 @@ public sealed class BuildScreen
     // chips, and the keystone header already sat on top of slot four's Vow row in a capture. Everything
     // below is derived from fitting five cards plus a header plus three chips inside 1080.
     private static readonly Rectangle Sidebar = new(SbX, 200, 1920 - SbX - 16, 860);
-    private static Rectangle SkillCard(int i) => new(SbX + 16, 252 + i * 128, 680, 120);
-    private static Rectangle CSource(int i) { var c = SkillCard(i); return new(c.X, c.Y + 40, 328, 40); }
-    private static Rectangle CForm(int i) { var c = SkillCard(i); return new(c.X + 344, c.Y + 40, 336, 40); }
-    private static Rectangle CVow(int i) { var c = SkillCard(i); return new(c.X, c.Y + 80, 680, 40); }
-    private static Rectangle CRemove(int i) { var c = SkillCard(i); return new(c.Right - 52, c.Y, 52, 40); }
-    private static Rectangle KeystoneChip(int i) => new(SbX + 16, 920 + i * 44, 680, 40);
 
     // ── Update ───────────────────────────────────────────────────────────────────────────────────
     public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, MemoryDustTree tree)
@@ -308,13 +306,14 @@ public sealed class BuildScreen
         if (!_editMode)
         {
             if (EditBtn.Contains(hit) || ViewTreeBtn.Contains(hit)) { _editMode = true; return; }
+            if (WeaveBtn.Contains(hit)) { WantsWeave = true; return; }
             if (ResetBtn.Contains(hit) && Mastery.Spent > 0) { Mastery.Respec(); _msg = "MASTERY RESET."; Dirty = true; }
             return;
         }
 
         // ── Edit sub-view: tree + right column. ──
         if (BackBtn.Contains(hit)) { _editMode = false; return; }
-        if (SkillsToggle.Contains(hit)) { _showSkills = !_showSkills; return; }
+        if (SkillsToggle.Contains(hit)) { WantsWeave = true; return; }
         if (Mastery.Spent > 0 && TreeResetBtn.Contains(hit)) { /* Back occupies the same corner; handled above */ }
 
         foreach (var node in MasteryCatalog.Nodes)
@@ -328,7 +327,6 @@ public sealed class BuildScreen
             // Clicking a node PINS it in the detail panel whether or not it could be taken — a node you
             // cannot afford is exactly the one you most want to read.
             _pinnedNodeId = node.Id;
-            _showSkills = false;
             if (Mastery.Take(node.Id)) { _msg = ""; Dirty = true; }
             else _msg = Mastery.IsTaken(node.Id) ? "ALREADY TAKEN." :
                 Mastery.Available <= 0 ? "NO MASTERY POINTS — GO DEEPER." :
@@ -337,34 +335,7 @@ public sealed class BuildScreen
             return;
         }
 
-        var known = DustEffects.KnownVows(tree);
-        var skills = Loadout.Skills;
-        for (var i = 0; i < skills.Count; i++)
-        {
-            if (Cycle(CSource(i), hit, out var d1)) { Loadout.CycleSource(i, d1); Dirty = true; return; }
-            if (Cycle(CForm(i), hit, out var d2)) { Loadout.CycleForm(i, d2); Dirty = true; return; }
-            if (Cycle(CVow(i), hit, out var d3)) { Loadout.CycleVow(i, d3, known); Dirty = true; return; }
-            if (CRemove(i).Contains(hit)) { Loadout.RemoveSkill(i); Dirty = true; return; }
-        }
-        if (skills.Count < PlayerLoadout.MaxSkills && SkillCard(skills.Count).Contains(hit)) { Loadout.AddSkill(); Dirty = true; return; }
-
-        var learned = DustEffects.LearnedKeystones(tree);
-        for (var i = 0; i < learned.Count && i < 3; i++)
-            if (KeystoneChip(i).Contains(hit))
-            {
-                if (!Loadout.ToggleKeystone(learned[i].Id, learned)) _msg = $"ONLY {PlayerLoadout.MaxKeystones} SOCKETS.";
-                else _msg = "";
-                Dirty = true;
-                return;
-            }
-    }
-
-    private static bool Cycle(Rectangle r, Point mouse, out int dir)
-    {
-        dir = 0;
-        if (!r.Contains(mouse)) return false;
-        dir = mouse.X < r.Center.X ? -1 : 1;
-        return true;
+        // Skills, Vows and keystone sockets are all WeaveScreen's now.
     }
 
     // ── Draw ─────────────────────────────────────────────────────────────────────────────────────
@@ -388,6 +359,7 @@ public sealed class BuildScreen
         DrawAuraCards(b, hit);
         DrawPassives(b, hit, tree);
 
+        Button(b, WeaveBtn, "WEAVE SKILLS", hit, true);
         Button(b, EditBtn, "EDIT BUILD", hit, true);
         Button(b, ResetBtn, "RESET MASTERY", hit, Mastery.Spent > 0);
         if (DevBuildDebug) DrawDebug(b);
@@ -513,12 +485,15 @@ public sealed class BuildScreen
             ry += 40;
         }
 
-        // KEYSTONES — worn sockets (real).
+        // KEYSTONES — worn sockets (real). Anchored BELOW the resonance list rather than at a fixed
+        // +596: the list is one row per Source in the loadout, so a four-Source build ran its last row
+        // (SPIRIT RESONANCE, at +584) straight through this heading. Four is the common case.
         var worn = DustEffects.LearnedKeystones(tree).Where(k => Loadout.HasKeystone(k.Id)).ToList();
         // Above the panel art's bottom crest.
-        _ui.TextBig(b, "KEYSTONES", x, PassivePanel.Y + 596, Gold, UiTypography.Secondary);
-        if (worn.Count == 0) _ui.TextBig(b, "None socketed.", x, PassivePanel.Y + 630, Slate, UiTypography.Body);
-        else _ui.TextBig(b, string.Join("  ·  ", worn.Select(k => k.Name.ToUpperInvariant())), x, PassivePanel.Y + 630, Bone, UiTypography.Body);
+        var keyY = Math.Max(PassivePanel.Y + 596, ry + 16);
+        _ui.TextBig(b, "KEYSTONES", x, keyY, Gold, UiTypography.Secondary);
+        if (worn.Count == 0) _ui.TextBig(b, "NONE SOCKETED — WEAVE SKILLS", x, keyY + 34, Slate, UiTypography.Body);
+        else _ui.TextBig(b, string.Join("  \u00b7  ", worn.Select(k => k.Name.ToUpperInvariant())), x, keyY + 34, Bone, UiTypography.Body);
     }
 
     private void Big(SpriteBatch b, string label, string value, Color color, int x, ref int y)
@@ -605,11 +580,10 @@ public sealed class BuildScreen
         // answered neither. The tree's own question ("what does this node do, can I afford it, what does
         // it cost me") had no home at all except a one-line strip at the very bottom of the screen.
         _ui.Fill(b, SkillsToggle, SkillsToggle.Contains(hit) ? Hi : PanelBg);
-        _ui.TextCenter(b, _showSkills ? "\u2039 NODE" : "SKILLS \u203a",
-                       SkillsToggle.Center.X, SkillsToggle.Y + 12, SkillsToggle.Contains(hit) ? Gold : Slate);
+        _ui.TextCenter(b, "WEAVE \u203a", SkillsToggle.Center.X, SkillsToggle.Y + 12,
+                       SkillsToggle.Contains(hit) ? Gold : Slate);
 
-        if (_showSkills) DrawSidebar(b, hit, tree);
-        else DrawNodeDetail(b, hit);
+        DrawNodeDetail(b, hit);
 
         var info = _hoverInfo.Length > 0 ? _hoverInfo : _msg.Length > 0 ? _msg : "WEIGHT ↔ SPREAD AND TEMPO ↔ ENDURE ARE OPPOSED.  ONE BRANCH IS AFFORDABLE; TWO ARE NOT.";
         var infoColor = _hoverInfo.Length > 0 ? Bone : _msg.Length > 0 ? Ember : Dim;
@@ -735,59 +709,16 @@ public sealed class BuildScreen
         _ => "icon_branch_endure",
     };
 
-    private void DrawSidebar(SpriteBatch b, Point mouse, MemoryDustTree tree)
-    {
-        _ui.Fill(b, Sidebar, SbBg);
-        _ui.Fill(b, new Rectangle(Sidebar.X, Sidebar.Y, 4, Sidebar.Height), Path);
-        _ui.Text(b, "YOUR SKILLS", SbX + 24, 204, Slate);
-        var skills = Loadout.Skills;
-        for (var i = 0; i < PlayerLoadout.MaxSkills; i++)
-        {
-            var card = SkillCard(i);
-            _ui.Fill(b, card, PanelBg);
-            if (i < skills.Count)
-            {
-                var s = skills[i];
-                _ui.Text(b, $"SLOT {i + 1}", card.X + 16, card.Y + 8, Slate);
-                var rm = CRemove(i);
-                _ui.TextCenter(b, "X", rm.Center.X, rm.Y + 8, rm.Contains(mouse) ? Ember : Slate);
-                // SOURCE and FORM carry no inline label: their cells are half-width and a label plus a
-                // centred value overprint each other ("SOURCEBODY"). The VOW row is full width and is the
-                // one that needed naming — it is the only row whose value can be NONE, so without a label
-                // it read as a status message rather than a control.
-                DrawCell(b, CSource(i), s.Source.ToString().ToUpperInvariant(),
-                         SourceColor.GetValueOrDefault(s.Source, Bone), mouse);
-                DrawCell(b, CForm(i), Short(s.Form), Bone, mouse);
-
-                var vow = Weaving.ById(s.VowId);
-                DrawCell(b, CVow(i),
-                         vow is null ? "NONE — SWEAR ONE" : vow.Short.ToUpperInvariant(),
-                         vow is null ? Slate : Gold, mouse, "VOW");
-
-                // The Vow's full demand, on hover. A Vow is a restriction the build must MEET, and the
-                // four-word Short cannot carry that — "ONE FORM ONLY" does not say it pays nothing if
-                // you break it, which is the entire bargain.
-                if (CVow(i).Contains(mouse))
-                    _hoverInfo = vow is null
-                        ? "A VOW PAYS BIG, BUT ONLY IF YOUR BUILD MEETS ITS DEMAND. LEARN THEM IN TRAITS (P)."
-                        : vow.Description;
-            }
-            else if (i == skills.Count) _ui.TextCenter(b, "+ ADD SKILL", card.Center.X, card.Y + 56, card.Contains(mouse) ? Gold : Slate);
-            else _ui.TextCenter(b, "— LOCKED —", card.Center.X, card.Y + 56, Dim);
-        }
-        var learned = DustEffects.LearnedKeystones(tree);
-        _ui.Text(b, learned.Count == 0 ? "KEYSTONES — LEARN IN TRAITS (P)" : $"KEYSTONES — {Loadout.KeystoneCapacity} SOCKET(S)", SbX + 24, 894, Slate);
-        for (var i = 0; i < learned.Count && i < 3; i++)
-        {
-            var chip = KeystoneChip(i);
-            var worn = Loadout.HasKeystone(learned[i].Id);
-            var hover = chip.Contains(mouse);
-            _ui.Fill(b, chip, worn ? Hi : PanelBg);
-            if (worn) _ui.Fill(b, new Rectangle(chip.X, chip.Y, 8, chip.Height), Gold);
-            _ui.Text(b, learned[i].Name, chip.X + 24, chip.Y + 16, worn ? Gold : hover ? Bone : Slate);
-            if (hover) _hoverInfo = learned[i].Blurb.ToUpperInvariant();
-        }
-    }
+    // THE SKILL EDITOR MOVED OUT. It was a column of `< VALUE >` cycling cells wedged into this page's
+    // right margin, and it lived here only because the tree happened to have spare width. Cycling is
+    // the wrong verb for a list of six — picking SPIRIT from BODY was five clicks and five reads, with
+    // nothing on screen naming the other five — and a Vow's whole bargain (does my BUILD meet its
+    // demand?) could not be answered from a cell that showed one word at a time.
+    //
+    // WeaveScreen owns it now, at full width, with every Source, every Form and every studied Vow
+    // visible at once and each Vow's demand checked live against the build. Deleted rather than left
+    // behind a flag: two editors for one loadout is the parallel-systems failure this codebase has
+    // been bitten by twice already.
 
     /// <summary>
     /// One node, drawn through the camera.
