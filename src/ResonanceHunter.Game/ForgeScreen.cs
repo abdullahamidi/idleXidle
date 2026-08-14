@@ -195,6 +195,15 @@ public sealed class ForgeScreen
     private static readonly Rectangle ResultPanel = new(1350, 140, 546, 730);// "RESULT PREVIEW"
     private static readonly Rectangle ReforgePanel = new(814, 140, 1082, 730);// REFORGE action column
 
+    // ── The SALVAGE hub's three panels. Named, because they were open-coded at their use sites and the
+    //    three things that sat OUTSIDE them — the chest toolbar, the two mode buttons, the footer hint —
+    //    each looked correct on its own line. A panel you cannot see the bounds of is a panel nothing
+    //    gets checked against. Both columns now end level, at y=956. ──
+    private static readonly Rectangle LootPanel = new(32, 72, 1000, 680);
+    private static readonly Rectangle ActionPanel = new(1056, 72, 832, 624);
+    private static readonly Rectangle TrayPanel = new(1056, 712, 832, 344);
+    private static readonly Rectangle FooterPanel = new(32, 768, 1000, 288);
+
     private static readonly Color Met = new(0x6E, 0xC8, 0x7A);
     // Scrap / Essence / Core / Crystal — no dedicated icons exist, so a tinted gem stands in (matches the
     // Scrap currency pill's own fallback). One colour per tier so the four read apart at a glance.
@@ -1227,30 +1236,33 @@ public sealed class ForgeScreen
     // ══════════════════════════════════════════════════════════════════════════════════════════
     private void DrawSalvageMode(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
     {
-        // ── CHESTS — a toolbar row under the title (the currency pills own the top-right now). A boss's
-        // drop lands here as an unopened chest; OPEN reveals the best (grade coloured), OPEN ALL clears it. ──
+        // ── Inventory — a loot-card grid, not a text list. The panel starts ABOVE the chest toolbar and
+        //    swallows it: the toolbar, the filter and the grid are one thing (what you have and what you
+        //    can do to the pile of it), and a row of buttons floating on the bare scene above a panel
+        //    read as leftovers from a different screen. ──────────────────────────────────────────────
+        _ui.Panel(b, LootPanel);
+        var view = View();
+
+        // ── CHESTS — the toolbar row inside the panel's head. A boss's drop lands here as an unopened
+        //    chest; OPEN reveals the best (grade coloured), OPEN ALL clears the lot. ──
         if (_chests.Count > 0)
         {
             var best = _chests.Max(c => (int)c.Rarity);
-            _ui.Text(b, $"{_chests.Count} CHEST{(_chests.Count == 1 ? "" : "S")}", 40, 100, RarityColors[best]);
-            if (_ui.Button(b, new Rectangle(288, 88, 168, 60), "OPEN", hit, clicked)) OpenBestChest(hunter);
-            if (_ui.Button(b, new Rectangle(472, 88, 240, 60), "OPEN ALL", hit, clicked)) OpenAllChests(hunter);
+            _ui.Text(b, $"{_chests.Count} CHEST{(_chests.Count == 1 ? "" : "S")}", 112, 132, RarityColors[best]);
+            if (_ui.Button(b, new Rectangle(284, 112, 156, 56), "OPEN", hit, clicked)) OpenBestChest(hunter);
+            if (_ui.Button(b, new Rectangle(452, 112, 204, 56), "OPEN ALL", hit, clicked)) OpenAllChests(hunter);
         }
         else
-            _ui.Text(b, "NO CHESTS", 40, 100, Slate);
-
-        // ── Inventory — a loot-card grid, not a text list ────────────────────────────────────────
-        _ui.Panel(b, new Rectangle(32, 160, 1000, 592));
-        var view = View();
-        // The loot panel starts at x=32 and its border reaches 40px in; the header was written at +24.
-        _ui.Text(b, $"LOOT ({view.Count})", 76, 186, InkFaint);
+            _ui.Text(b, "NO CHESTS", 112, 132, Slate);
 
         // FILTER cycle — narrows a haystack of ninety to one slot or rarity. TAB cycles too. Rides the
-        // toolbar row, right of the chest controls.
-        if (_ui.Button(b, new Rectangle(736, 88, 288, 60), FilterName(_filter), hit, clicked))
+        // toolbar row, right of the chest controls, and stops short of the panel's side ornament.
+        if (_ui.Button(b, new Rectangle(668, 112, 292, 56), FilterName(_filter), hit, clicked))
             CycleFilter(1);
+
+        _ui.Text(b, $"LOOT ({view.Count})", 112, 178, InkFaint);
         if (view.Count > Visible)
-            _ui.TextRight(b, $"{_scroll / Cols + 1}/{(view.Count + Cols - 1) / Cols}", 992, 186, InkFaint);
+            _ui.TextRight(b, $"{_scroll / Cols + 1}/{(view.Count + Cols - 1) / Cols}", 960, 178, InkFaint);
 
         if (_inv.Count == 0)
             _ui.Text(b, "EMPTY — GO HUNT SOMETHING.", 64, 264, Dim);
@@ -1287,7 +1299,7 @@ public sealed class ForgeScreen
         }
 
         // ── Action panel ───────────────────────────────────────────────────────────────────────
-        _ui.Panel(b, new Rectangle(1056, 88, 832, 552));
+        _ui.Panel(b, ActionPanel);
         var act = Active;
         if (act is null)
             _ui.Text(b, "PICK AN ITEM ON THE LEFT.", 1088, 120, InkFaint);
@@ -1316,13 +1328,15 @@ public sealed class ForgeScreen
 
             // The ENCHANTMENT gets its own line: it is a sentence about WHEN, not a number, and it is
             // the only thing on this panel that changes what the fight does rather than by how much.
+            // It sits BELOW the affix rows with real clearance — at 564 it landed 12px into the second
+            // affix row, and an item with four affixes rendered "+6% HP" through "TRANSFORM LEECHES 2X".
             if (Enchantments.Of(act) is { } ench)
             {
                 // FIXED COLUMNS. Right-aligning the blurb was not enough: with a long name the two ends
                 // met in the middle and rendered as one word ("SPLINTERON A KILL"). A column each means
                 // neither can grow into the other, whatever the name.
-                _ui.Text(b, ench.Name, 1088, 564, Bloom);
-                _ui.Text(b, ench.Blurb, 1376, 564, Ink);
+                _ui.Text(b, ench.Name, 1088, 596, Bloom);
+                _ui.Text(b, ench.Blurb, 1376, 596, Ink);
 
                 // The loot philosophy, made visible: a Form-combo enchantment is LIVE only if your build
                 // runs its Form. Gold "COMBOS YOUR BUILD" when it fits; a grey "NEEDS … IN YOUR BUILD"
@@ -1331,7 +1345,7 @@ public sealed class ForgeScreen
                 {
                     var live = ActiveForms.Contains(need);
                     _ui.Text(b, live ? "COMBOS YOUR BUILD" : $"NEEDS {need.ToString().ToUpperInvariant()} IN YOUR BUILD",
-                        1088, 608, live ? InkGold : InkFaint);
+                        1088, 634, live ? InkGold : InkFaint);
                 }
             }
 
@@ -1374,19 +1388,19 @@ public sealed class ForgeScreen
         _ui.TextRight(b, $"POWER {hunter.PowerRating}", 1856, 480, InkGold);
 
         // ── Merge tray ─────────────────────────────────────────────────────────────────────────
-        _ui.Panel(b, new Rectangle(1056, 656, 832, 184));
-        _ui.Text(b, "MERGE TRAY", 1088, 668, InkFaint);
+        _ui.Panel(b, TrayPanel);
+        _ui.Text(b, "MERGE TRAY", 1128, 756, InkFaint);
 
         var picked = _inv.Where(i => _merge.Contains(i.InstanceId)).ToList();
         for (var i = 0; i < 3; i++)
         {
-            var slot = new Rectangle(1088 + i * 88, 712, 72, 72);
+            var slot = new Rectangle(1128 + i * 80, 796, 68, 68);
             _ui.Panel(b, slot);
-            if (i < picked.Count) DrawItemIcon(b, picked[i], new Rectangle(slot.X + 8, slot.Y + 8, 56, 56));
+            if (i < picked.Count) DrawItemIcon(b, picked[i], new Rectangle(slot.X + 8, slot.Y + 8, 52, 52));
         }
 
         var ready = MergeReady();
-        var mergeBtn = new Rectangle(1376, 704, 480, 60);
+        var mergeBtn = new Rectangle(1388, 800, 430, 60);
 
         if (picked.Count == 3 && ready)
         {
@@ -1399,18 +1413,18 @@ public sealed class ForgeScreen
             // HYBRID; colour carries it, as it does for every other state on these screens.
             var (type, element, isHybrid) = Forge.Preview(picked);
             var attune = element is { } e ? $"{e.ToString().ToUpperInvariant()} " : "";
-            _ui.TextRight(b, $"-> {attune}{ItemNames[type]}", 1856, 668,
+            _ui.TextRight(b, $"-> {attune}{ItemNames[type]}", 1818, 756,
                 isHybrid ? Bloom : RarityInk[(int)(picked[0].Rarity + 1)]);
         }
         else if (picked.Count == 3)
         {
-            _ui.TextRight(b, "SAME RARITY ONLY", 1856, 668, InkFaint);
+            _ui.TextRight(b, "SAME RARITY ONLY", 1818, 756, InkFaint);
         }
 
         if (_ui.Button(b, mergeBtn, "MERGE", hit, clicked, enabled: ready)) DoMerge(hunter);
 
         // Fusing three-at-a-time by hand out of a bag of ninety is busywork. One button does the lot.
-        var autoBtn = new Rectangle(1376, 772, 480, 60);
+        var autoBtn = new Rectangle(1128, 880, 690, 60);
         // The button is live only when a REAL trio exists: three distinct-id, non-worn wearables of one
         // sub-Legendary rarity. Counting raw items (materials, duplicate copies) lit it up when nothing
         // could actually merge — the "it won't merge though there's stuff to merge" the player hit.
@@ -1423,15 +1437,21 @@ public sealed class ForgeScreen
         // selected item straight there — de-cluttering the hub and linking the modes (the reference's rail).
         if (act is not null && Gear.IsWearable(act))
         {
-            if (_ui.Button(b, new Rectangle(1056, 856, 400, 60), "UPGRADE (REFINE)  >", hit, clicked))
+            if (_ui.Button(b, new Rectangle(1128, 952, 336, 60), "UPGRADE  >", hit, clicked))
             { _focusId = act.InstanceId; _mode = ForgeMode.Upgrade; }
-            if (_ui.Button(b, new Rectangle(1480, 856, 400, 60), "REFORGE  >", hit, clicked))
+            if (_ui.Button(b, new Rectangle(1482, 952, 336, 60), "REFORGE  >", hit, clicked))
             { _focusId = act.InstanceId; _mode = ForgeMode.Reforge; }
         }
 
-        // ── Message + footer ── in the strip under the loot panel (the nav owns the very bottom now) ──
-        if (_msg.Length > 0) _ui.Text(b, _msg, 48, 776, _msgColor);
-        _ui.Text(b, "CLICK AN ITEM, THEN A BUTTON   ·   J  SALVAGE JUNK   ·   UPGRADE / REFORGE FOR THE FORGE", 48, 832, Slate);
+        // ── Message + footer ── a panel of its own, under the loot column and level with the tray. The
+        //    message is this hub's only feedback channel ("OPENED 4 CHESTS — +80 MAT, 3 ITEMS"), and it
+        //    was being drawn on bare scene where it read as a caption for the floor tiles. The hint is
+        //    two lines because one line of it is wider than the column it belongs to. ──
+        _ui.Panel(b, FooterPanel);
+        if (_msg.Length > 0) _ui.Text(b, _msg, 112, 820, _msgColor);
+        _ui.Text(b, "CLICK AN ITEM, THEN A BUTTON ON THE RIGHT", 112, 884, Slate);
+        _ui.Text(b, "TAB FILTERS THE PILE   ·   WHEEL SCROLLS IT   ·   J SALVAGES THE JUNK", 112, 928, Slate);
+        _ui.Text(b, "UPGRADE AND REFORGE OPEN IN THEIR OWN VIEWS", 112, 972, Slate);
         // The chest-open reveal is drawn by the mode dispatcher, so it rides on top of every mode.
     }
 
