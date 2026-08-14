@@ -35,6 +35,24 @@ public sealed record SkillShape
     /// <summary>Multiplies every skill hit's raw size. The axis's primary currency.</summary>
     public float HitSize { get; init; } = 1f;
 
+    /// <summary>Multiplies the EXTRA a Vow pays, over and above the unsworn baseline of 1.</summary>
+    /// <remarks>
+    /// <para>
+    /// Applied to the bonus, not to the total, which is the only formulation that means anything. A Vow
+    /// worth x1.90 pays +0.90; at <c>VowPowerMultiplier = 1.4</c> it pays +1.26, so x2.26. Multiplying
+    /// the whole factor instead would pay 1.4x on a build with NO Vow sworn, which is the opposite of
+    /// what a Vow-specialist passive should do — it would be a flat damage bonus wearing a Vow's name.
+    /// </para>
+    /// <para>
+    /// Exists because THE OATHBOUND's headline passive, TWICE SWORN, reads "Vows pay far more, and the
+    /// Mark window they buy lasts longer" and only the second half was implemented. The character's
+    /// Shape carried MarkWindowMultiplier and MarkPowerBonus and nothing whatever about Vows — the
+    /// first clause of the sentence had no field to write to, on the one character built around a
+    /// SYSTEM rather than a branch.
+    /// </para>
+    /// </remarks>
+    public float VowPowerMultiplier { get; init; } = 1f;
+
     /// <summary>Flat armour subtracted before mitigation — the cheap answer to Plated bands.</summary>
     public float ArmourPenetration { get; init; }
 
@@ -245,6 +263,7 @@ public sealed record SkillShape
         return new SkillShape
         {
             HitSize = a.HitSize * b.HitSize,
+            VowPowerMultiplier = a.VowPowerMultiplier * b.VowPowerMultiplier,
             ArmourPenetration = a.ArmourPenetration + b.ArmourPenetration,
             ArmourIgnoreFraction = Math.Max(a.ArmourIgnoreFraction, b.ArmourIgnoreFraction),
             CrushArmourMultiple = Pick(a.CrushArmourMultiple, b.CrushArmourMultiple, lower: true),

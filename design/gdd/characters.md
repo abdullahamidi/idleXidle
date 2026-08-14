@@ -44,7 +44,7 @@ Laid out on the mastery tree, so a player who has read the tree already knows ha
 | THE FALLING TOWER | Weight→Tempo | Strike | **MOMENTUM** — first hit weaker, every later hit stronger | Conquer The Pale Choir |
 | THE QUIVER | Tempo→Spread | Projectile | **LOOSE AGAIN** — a kill fires the next shot immediately | Quest: THE HOLLOW HUNT |
 | THE THORNWALL | Spread→Endure | Trap | **REPRISAL** — every bite worth less, every trap worth more | Conquer Verdant Hollow |
-| THE OATHBOUND | — | Mark | **TWICE SWORN** — Vows pay more, Mark windows last longer | Quest: THE FIRST VOW |
+| THE OATHBOUND | — | Mark | **TWICE SWORN** — a Vow's bonus is worth +50%, Mark windows last longer | Quest: THE FIRST VOW |
 | THE MAGPIE | — | Trap | **FULL POCKETS** — richer haul, better rarity | Conquer Cinderworks |
 
 The Endure+Weight bridge deliberately has no character: ANVIL and UNBROKEN already stand either side

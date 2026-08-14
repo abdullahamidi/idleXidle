@@ -143,7 +143,14 @@ public static class CharacterRoster
             // The only character built around a SYSTEM rather than a branch. A player with no Vows
             // sworn gets the Mark aptitude and nothing else, which is the correct price for a passive
             // that doubles down on a choice they have not made.
-            Shape = new SkillShape { MarkWindowMultiplier = 1.5f, MarkPowerBonus = 0.25f },
+            // BOTH clauses of the sentence. "Vows pay far more" had no field to write to until
+            // SkillShape.VowPowerMultiplier existed, so the half of this passive the character is
+            // NAMED for did nothing at all — on the one character built around a system rather than
+            // a branch, and the one gated behind the quest that teaches Vows.
+            Shape = new SkillShape
+            {
+                VowPowerMultiplier = 1.5f, MarkWindowMultiplier = 1.5f, MarkPowerBonus = 0.25f,
+            },
             Unlock = CharacterUnlock.Quest("q_first_vow", "Swear and keep a Vow through a full descent"),
         },
         new()

@@ -1,8 +1,12 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using ResonanceHunter.Core.Abilities;
 using ResonanceHunter.Core.Builds;
+using ResonanceHunter.Core.Automation;
 using ResonanceHunter.Core.Characters;
+using ResonanceHunter.Core.Economy;
+using ResonanceHunter.Core.Expeditions;
 using Xunit;
 
 namespace ResonanceHunter.Core.Tests;
@@ -152,6 +156,53 @@ public class CharactersRosterTest
             Assert.True(touchesMods || touchesShape || grants || hasAptitude,
                         $"{c.Name} contributes nothing the simulation reads.");
         }
+    }
+
+    [Fact]
+    public void test_twice_sworn_actually_makes_a_vow_pay_more()
+    {
+        // THE TEST THE ONE ABOVE COULD NOT BE. `test_every_character_changes_something_the_sim_reads`
+        // passes if ANY of the four channels is non-default, and THE OATHBOUND's Shape carried its Mark
+        // half — so the character sailed through it while the clause it is NAMED for, "Vows pay far
+        // more", had no field in SkillShape to write to at all. A passive with two promises needs a
+        // test per promise.
+        var oathbound = CharacterRoster.All.Single(c => c.Id == "oathbound");
+        Assert.True(oathbound.TotalShape.VowPowerMultiplier > 1f,
+                    "TWICE SWORN says Vows pay far more; nothing in its Shape says so");
+        Assert.True(oathbound.TotalShape.MarkWindowMultiplier > 1f,
+                    "…and the other half of the same sentence must still hold");
+    }
+
+    [Fact]
+    public void test_a_vow_power_multiplier_scales_the_bonus_and_not_the_baseline()
+    {
+        // The formulation matters more than the number. A Vow worth x1.90 pays +0.90, and TWICE SWORN
+        // scales THAT. Scaling the whole factor would pay out on a build with no Vow sworn — a flat
+        // damage bonus wearing a Vow's name, worth most to the player ignoring the system it is about.
+        var vow = Weaving.Catalog.First(v => v.Id == "vow_pure");
+        var plain = DamageWith(SkillShape.None, vow);
+        var sworn = DamageWith(SkillShape.None with { VowPowerMultiplier = 1.5f }, vow);
+        var noVowPlain = DamageWith(SkillShape.None, null);
+        var noVowTwice = DamageWith(SkillShape.None with { VowPowerMultiplier = 1.5f }, null);
+
+        Assert.True(sworn > plain, $"a sworn Vow must pay more under TWICE SWORN — {sworn:N0} vs {plain:N0}");
+        Assert.Equal(noVowPlain, noVowTwice);
+    }
+
+    /// <summary>Damage a one-skill build lands over a fixed window, with the Vow sworn on that skill.</summary>
+    private static float DamageWith(SkillShape shape, Vow? vow)
+    {
+        var build = new Build { PassiveMods = BuildMods.None, Shape = shape };
+        build.Weave(new EquippedSkill(
+            new WovenAbility { Name = "S", Source = Source.Nature, Form = Form.Strike, Vow = vow },
+            FormBehaviour.BaseCooldownMs(Form.Strike)));
+
+        var champ = new Champion { MaxHealth = 100_000, Health = 100_000 };
+        var target = new WaveCreature { MaxHealth = 1e9f, Health = 1e9f, Damage = 0f };
+        var (_, events) = SoloBattle.ResolveWave(
+            champ, build, new Hunter(), new[] { target },
+            enemyIntervalMs: 100_000, ExpeditionTuning.Default, new Random(11));
+        return events.Where(e => e.Kind == BattleEventKind.Strike).Sum(e => e.Amount);
     }
 
     [Fact]

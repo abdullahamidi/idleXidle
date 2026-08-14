@@ -693,7 +693,7 @@ public static class SoloBattle
                     var auraTick = triggers.Contains(BuildTrigger.Radiance) ? FormBehaviour.AuraTickMs * 3 / 5 : FormBehaviour.AuraTickMs;
                     if (ms % auraTick != 0) continue;
                     var aura = FormBehaviour.BaseDamage(form, resonance, wt)
-                               * VowFactor(sk, weaveCtx, wt)
+                               * VowFactor(sk, weaveCtx, wt, shape)
                                * (FormBehaviour.AuraTickMs / 1000f);
                     LandSpread(aura, ms, shape.TargetsFor(form), sk.Source, form, abs);
                     if (alive == 0) return Kill(ms);
@@ -729,7 +729,7 @@ public static class SoloBattle
                 for (var c = 0; c < casts; c++)
                 {
                     var raw = FormBehaviour.BaseDamage(form, resonance, wt)
-                              * VowFactor(sk, weaveCtx, wt);
+                              * VowFactor(sk, weaveCtx, wt, shape);
 
                     // EXECUTE — a STRIKE finishes a weakened enemy. Reads the CURRENT target's own health
                     // fraction, so in a multi-creature wave it fires on whichever creature is in front and
@@ -769,7 +769,7 @@ public static class SoloBattle
                         if (!FormBehaviour.IsAmplifier(woven.Form) && !FormBehaviour.FiresOnBeingHit(woven.Form))
                         {
                             var wovenRaw = FormBehaviour.BaseDamage(woven.Form, resonance, wt)
-                                           * VowFactor(woven, weaveCtx, wt)
+                                           * VowFactor(woven, weaveCtx, wt, shape)
                                            * WeaverEchoFraction;
                             events.Add(new BattleEvent(BattleEventKind.Skill, 0, (int)woven.Form, ms));
                             dealt += LandSpread(wovenRaw, ms, shape.TargetsFor(woven.Form),
@@ -866,7 +866,7 @@ public static class SoloBattle
                     champ.ReadyAt[idx] = abs + cd;
 
                     var trapRaw = FormBehaviour.BaseDamage(Form.Trap, resonance, wt)
-                                  * VowFactor(sk, weaveCtx, wt);
+                                  * VowFactor(sk, weaveCtx, wt, shape);
                     events.Add(new BattleEvent(BattleEventKind.Skill, 0, (int)Form.Trap, ms));
                     LandSpread(trapRaw, ms, shape.TargetsFor(Form.Trap), sk.Source, Form.Trap, abs);
                     if (alive == 0) return Kill(ms);
@@ -994,10 +994,17 @@ public static class SoloBattle
     /// boss — was a lottery on how the wave went in a game where the player cannot react; this is a
     /// decision they made at the workbench and can see the consequences of in the report.
     /// </remarks>
-    private static float VowFactor(EquippedSkill sk, WeaveContext ctx, WeavingTuning wt)
+    private static float VowFactor(EquippedSkill sk, WeaveContext ctx, WeavingTuning wt, SkillShape shape)
     {
         if (sk.Vow is not { } vow) return 1f;
-        return Weaving.IsActive(vow, ctx) ? Weaving.VowMultiplier(vow, wt) : 1f;
+        if (!Weaving.IsActive(vow, ctx)) return 1f;
+
+        // THE BONUS is scaled, not the factor. A Vow worth x1.90 pays +0.90; TWICE SWORN at 1.4 makes
+        // that +1.26. Scaling the whole factor would pay out on a build with no Vow sworn at all, which
+        // would make a Vow-specialist passive into a flat damage bonus that happens to be named after
+        // Vows — and would pay most to the player who ignored the system it is about.
+        var bonus = Weaving.VowMultiplier(vow, wt) - 1f;
+        return 1f + bonus * MathF.Max(0f, shape.VowPowerMultiplier);
     }
 
     /// <summary>Describe a build to the Vow layer.</summary>
