@@ -502,23 +502,39 @@ public sealed class PrestigeScreen
 
         // The four road labels, above their terminals — the diagram's only text, and the one line that
         // names what the player is choosing between.
-        foreach (var (road, id) in new[]
-                 {
-                     (TraitRoad.Ruin, "ks_reaper"), (TraitRoad.Aegis, "ks_titan"),
-                     (TraitRoad.Artifice, "ks_weaver"), (TraitRoad.Avarice, "ks_hoarder"),
-                 })
+        var heads = new[]
+            {
+                (TraitRoad.Ruin, "ks_reaper"), (TraitRoad.Aegis, "ks_titan"),
+                (TraitRoad.Artifice, "ks_weaver"), (TraitRoad.Avarice, "ks_hoarder"),
+            }
+            .Where(h => TraitTreeLayout.Positions.ContainsKey(h.Item2))
+            .Select(h => (h.Item1, At: ToScreen(TraitTreeLayout.Positions[h.Item2])))
+            .OrderBy(h => h.At.X)
+            .ToList();
+
+        // THE COLUMN, MEASURED. These four summaries are centred on their terminals at fixed positions,
+        // and each was drawn at whatever width its text happened to be — so ARTIFICE's "30 PTS" ran
+        // straight into AVARICE's "0/4" and the row read "…30 PTS0/4 · 30 PTS". Deriving the width from
+        // the actual gap between neighbouring roads means the label shortens instead of colliding, and
+        // it keeps holding when a road's cost grows a digit. A road's whole price beside the points a
+        // career earns IS the decision this screen exists to present, so it has to stay readable.
+        var column = heads.Count < 2
+            ? 400
+            : (int)Enumerable.Range(1, heads.Count - 1)
+                             .Min(i => heads[i].At.X - heads[i - 1].At.X) - 24;
+
+        foreach (var (road, p) in heads)
         {
-            if (!TraitTreeLayout.Positions.TryGetValue(id, out var w)) continue;
-            var p = ToScreen(w);
             var nodes = tree.All.Where(u => u.Road == road).ToList();
             var lit = nodes.Count(u => tree.Owns(u.Id));
             var top = (int)p.Y - (int)(NodeR * 1.5f);
-            _ui.TextCenterBig(b, RoadName(road), (int)p.X, top - 56, lit > 0 ? RoadColor(road) : RoadColor(road) * 0.75f,
-                              UiTypography.Body);
-            // The road's whole price, over its terminal. Four of these side by side against the points
-            // a career earns IS the decision the screen exists to present.
-            _ui.TextCenter(b, $"{lit}/{nodes.Count}  ·  {nodes.Sum(u => u.Cost)} PTS", (int)p.X, top - 28,
-                           lit > 0 ? Gold : Slate);
+            _ui.TextCenterBig(b, _ui.ShortenBig(RoadName(road), column, UiTypography.Body),
+                              (int)p.X, top - 56,
+                              lit > 0 ? RoadColor(road) : RoadColor(road) * 0.75f, UiTypography.Body);
+            _ui.TextCenterBig(b,
+                _ui.ShortenBig($"{lit}/{nodes.Count}  ·  {nodes.Sum(u => u.Cost)} PTS", column,
+                               UiTypography.Secondary),
+                (int)p.X, top - 26, lit > 0 ? Gold : Slate, UiTypography.Secondary);
         }
 
         foreach (var u in tree.All) DrawNode(b, tree, u, hit, clicked);

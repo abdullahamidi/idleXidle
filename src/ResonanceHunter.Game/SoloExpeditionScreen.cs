@@ -1025,7 +1025,11 @@ public sealed class SoloExpeditionScreen
     /// </remarks>
     private void DrawReportPanel(SpriteBatch b, RunReport r, RunReport? previous)
     {
-        var panel = new Rectangle(ArenaRect.X + 40, 250, ArenaRect.Width - 80, 620);
+        // 690, not 620. The diff block below draws five lines and only three of them cleared the
+        // bottom frame — the last two were painted over the panel's own ornament. The clipped lines
+        // are the WALL and the ABSORBED delta: the two that answer "what stopped me" and "did my
+        // change help", which is the entire reason the report exists.
+        var panel = new Rectangle(ArenaRect.X + 40, 250, ArenaRect.Width - 80, 690);
         _ui.Panel(b, panel);
         var x = panel.X + 44;
         var right = panel.Right - 44;
@@ -1068,10 +1072,19 @@ public sealed class SoloExpeditionScreen
             var dy = y + 44;
             _ui.TextBig(b, "SINCE YOUR LAST RUN HERE", x, dy, Gold, UiTypography.Secondary);
             dy += 32;
-            foreach (var line in diff.Take(5))
+
+            // AND CLAMPED TO THE ROOM THERE ACTUALLY IS. Growing the panel fixes today's five lines;
+            // this is what stops the next line added to RunReport.DiffAgainst from silently going
+            // under the frame again. A report that quietly drops its last row is better than one that
+            // draws it where it cannot be read — and the count is derived, so neither happens.
+            const int lineHeight = 28;
+            var lastBaseline = panel.Bottom - UiKit.PanelCorner - 22;
+            var room = Math.Max(0, (lastBaseline - dy) / lineHeight + 1);
+
+            foreach (var line in diff.Take(Math.Min(5, room)))
             {
                 _ui.TextBig(b, line, x, dy, UiKit.Vellum, UiTypography.Secondary);
-                dy += 28;
+                dy += lineHeight;
             }
         }
     }

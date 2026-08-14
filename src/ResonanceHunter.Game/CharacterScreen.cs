@@ -421,18 +421,37 @@ public sealed class CharacterScreen
         SummaryRow(b, "EQUIPPED", $"{worn.Count} / 8", ref ry);
         SummaryRow(b, "GEAR iLVL", $"{gearIl}", ref ry);
         SummaryRow(b, "LEGENDARY", $"{legend}", ref ry);
-        SummaryRow(b, "SOURCE FOCUS", $"{srcTxt} {srcPct}%", ref ry);
+        // "SOURCE", not "SOURCE FOCUS". The row above will now shorten a value rather than collide with
+        // it, but shortening THIS value loses the number, and the number is the whole row. The label is
+        // the half that can afford to be shorter — it sits beside "NATURE 100%" and reads the same.
+        SummaryRow(b, "SOURCE", $"{srcTxt} {srcPct}%", ref ry);
 
         // Quick actions (§7.8) — both real. EQUIP BEST fills each slot with the highest-scoring item.
         Button(b, EquipBestBtn, "EQUIP BEST", hit, true);
         Button(b, UnequipAllBtn, "UNEQUIP ALL", hit, worn.Count > 0);
     }
 
+    /// <summary>
+    /// One label-and-value row in the loadout panel.
+    /// </summary>
+    /// <remarks>
+    /// A COLUMN EACH, not a left label and a right-aligned value trusted to stay apart. This row is
+    /// 224px wide between its margins and "SOURCE FOCUS" against "NATURE 100%" is wider than that, so
+    /// the two ends met in the middle and drew as one word: "SOURCE FOCUSNATURE 100%". The Forge's
+    /// item panel learned this exact lesson once already, where it read "SPLINTERON A KILL" — the
+    /// comment there says a column each is the fix precisely because neither side can then grow into
+    /// the other. Measuring the label and handing the value what is left does that generally, so the
+    /// next long value shortens instead of colliding.
+    /// </remarks>
     private void SummaryRow(SpriteBatch b, string label, string value, ref int y)
     {
         _ui.Fill(b, new Rectangle(LoadoutPanel.X + 24, y, LoadoutPanel.Width - 48, 44), Quiet);
         _ui.TextBig(b, label, LoadoutPanel.X + 38, y + 12, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, value, LoadoutPanel.Right - 38, y + 10, Bone, UiTypography.Body);
+
+        var labelEnd = LoadoutPanel.X + 38 + _ui.MeasureBig(label, UiTypography.Secondary);
+        var valueRight = LoadoutPanel.Right - 38;
+        _ui.TextRightBig(b, _ui.ShortenBig(value, valueRight - labelEnd - 16, UiTypography.Body),
+            valueRight, y + 10, Bone, UiTypography.Body);
         y += 52;
     }
 
