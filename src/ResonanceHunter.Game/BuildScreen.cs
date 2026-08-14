@@ -174,91 +174,35 @@ public sealed class BuildScreen
     }
 
     private static Point Centre => new(0, 0);
-    /// <summary>
-    /// The four branches are laid out as a CROSS, not a hexagon: Weight up, Spread down, Tempo right,
-    /// Endure left.
-    /// </summary>
-    /// <remarks>
-    /// The geometry states the design. Weight sits directly opposite Spread and Tempo directly opposite
-    /// Endure because those pairs are opposed — a player looking at the screen should be able to see that
-    /// walking north means walking away from south, before reading a single node. The old hexagon had six
-    /// Form arms with no opposition in it at all, so its shape carried no information.
-    /// </remarks>
-    private static float AngleOf(Branch b) => b switch
-    {
-        Branch.Weight => -90f,
-        Branch.Tempo => 0f,
-        Branch.Spread => 90f,
-        _ => 180f,
-    } * MathF.PI / 180f;
 
     private static Vector2 Corner(Branch b)
     {
-        var a = AngleOf(b);
+        var a = MasteryLayout.AngleOf(b);
         return new Vector2(WorldR * MathF.Cos(a), WorldR * MathF.Sin(a));
     }
 
-    /// <summary>Which of its ring's siblings this is, and how many there are — drives the fan.</summary>
-    private static (int Index, int Count) Sibling(MasteryNode n)
-    {
-        var peers = MasteryCatalog.Nodes
-            .Where(x => x.Branch == n.Branch && x.Kind == n.Kind && x.Link is null)
-            .ToList();
-        return (Math.Max(0, peers.FindIndex(x => x.Id == n.Id)), Math.Max(1, peers.Count));
-    }
-
     /// <summary>Where a node lives in WORLD units. Independent of zoom, pan, and the window.</summary>
+    /// <remarks>
+    /// The geometry itself is <see cref="MasteryLayout"/>, in Core. It was here, which meant the one
+    /// claim worth making about a tree layout — that no two nodes land on top of each other — could not
+    /// be tested at all. This is now the conversion to the drawing library's vector type and nothing
+    /// else.
+    /// </remarks>
     private static Vector2 NodePos(MasteryNode n)
     {
-        if (n.Kind == MasteryKind.Start) return Vector2.Zero;
-
-        // A BRIDGE sits between the two branches it spans, close in — it is a shortcut, and drawing it
-        // out at the rim would suggest it is a destination.
-        if (n.Link is { } link)
-        {
-            var mid = (AngleOf(n.Branch) + AngleOf(link)) / 2f;
-            // Endure (180) and Weight (-90) average to 45, which points at Tempo. Rotate that one case.
-            if (MathF.Abs(AngleOf(n.Branch) - AngleOf(link)) > MathF.PI) mid += MathF.PI;
-            return new Vector2(WorldR * 0.46f * MathF.Cos(mid), WorldR * 0.46f * MathF.Sin(mid));
-        }
-
-        var baseAng = AngleOf(n.Branch);
-        var (idx, count) = Sibling(n);
-
-        // A SPECIALISATION hangs off the side of its branch rather than on the spine, so the spine still
-        // reads as one walk outward and the Form nodes read as an aside.
-        if (n.Kind == MasteryKind.Specialisation)
-        {
-            var side = idx == 0 ? -1f : 1f;
-            var ang = baseAng + side * 26f * MathF.PI / 180f;
-            return new Vector2(WorldR * 0.86f * MathF.Cos(ang), WorldR * 0.86f * MathF.Sin(ang));
-        }
-
-        // Rings fan their siblings across a spread that narrows as they go out, so a branch reads as a
-        // funnel: four minors converging on three notables, on two greaters, on one mastery.
-        var spreadDeg = n.Ring switch { 1 => 26f, 2 => 16f, 3 => 9f, _ => 0f };
-        var offset = count <= 1 ? 0f : (idx - (count - 1) / 2f) * spreadDeg;
-        var angle = baseAng + offset * MathF.PI / 180f;
-
-        // NOT ring/4. Even spacing put ring 1 at a quarter of the radius, which is inside the START node's
-        // own box — the four minors of the left and right branches sat on top of "YOU". The first ring has
-        // to clear the centre, and after that the gaps can close up as the fan narrows.
-        var rad = WorldR * n.Ring switch { 1 => 0.37f, 2 => 0.61f, 3 => 0.81f, _ => 1f };
-        return new Vector2(rad * MathF.Cos(angle), rad * MathF.Sin(angle));
+        var p = MasteryLayout.PositionOf(n);
+        return new Vector2(p.X, p.Y);
     }
 
     private static readonly Rectangle TreeResetBtn = new(48, 128, 216, 52);
     private static readonly Rectangle BackBtn = new(48, 128, 216, 52);
     /// <summary>Size states price: a node you can see is expensive before you read it.</summary>
-    private static int NodeRadius(MasteryKind k) => k switch
-    {
-        MasteryKind.Start => 60,
-        MasteryKind.Mastery => 64,
-        MasteryKind.Greater => 46,
-        MasteryKind.Bridge or MasteryKind.Specialisation => 42,
-        MasteryKind.Notable => 38,
-        _ => 26,
-    };
+    /// <remarks>
+    /// The sizes live in <see cref="MasteryLayout.NodeWorldRadius"/> with the 1.9 already folded in,
+    /// because the overlap test has to reason about how big a node actually is. Divided back out here
+    /// so the two call sites below keep the multiply they have always had.
+    /// </remarks>
+    private static int NodeRadius(MasteryKind k) => (int)(MasteryLayout.NodeWorldRadius(k) / 1.9f);
     private const int SbX = 1200;
     private static readonly Rectangle SkillsToggle = new(1700, 100, 200, 40);
     // A DOCKED CARD, not a column. The tree is the page now; a 700px panel permanently taking a third
