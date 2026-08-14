@@ -611,7 +611,7 @@ public sealed class BuildScreen
 
         DrawNodeDetail(b, hit);
 
-        var info = _hoverInfo.Length > 0 ? _hoverInfo : _msg.Length > 0 ? _msg : "WEIGHT ↔ SPREAD AND TEMPO ↔ ENDURE ARE OPPOSED.  ONE BRANCH IS AFFORDABLE; TWO ARE NOT.";
+        var info = _hoverInfo.Length > 0 ? _hoverInfo : _msg.Length > 0 ? _msg : "WEIGHT OPPOSES SPREAD.  TEMPO OPPOSES ENDURE.  ONE BRANCH IS AFFORDABLE; TWO ARE NOT.";
         var infoColor = _hoverInfo.Length > 0 ? Bone : _msg.Length > 0 ? Ember : Dim;
         _ui.Text(b, info, 200, 1024, infoColor);
     }

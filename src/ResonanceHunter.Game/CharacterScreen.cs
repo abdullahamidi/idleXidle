@@ -516,7 +516,7 @@ public sealed class CharacterScreen
             _ui.Fill(b, new Rectangle(cell.X, cell.Y, cell.Width, 4), RarityColor(item.Rarity));
             if (worn) _ui.TextRightBig(b, "E", cell.Right - 8, cell.Y + 6, Gold, UiTypography.Secondary);
             else if (Gear.SlotFor(item.BaseType) is { } sl && hunter.PowerContribution(item) > hunter.PowerContribution(hunter.Worn(sl)))
-                _ui.TextRightBig(b, "▲", cell.Right - 8, cell.Y + 6, Green, UiTypography.Secondary);
+                _ui.TextRightBig(b, "UP", cell.Right - 8, cell.Y + 6, Green, UiTypography.Secondary);
             if (sel) Reticle(b, cell, Gold);
         }
 

@@ -145,6 +145,17 @@ public sealed class PixelFont
         ['×'] = [".....", ".....", ".#.#.", "..#..", ".#.#.", ".....", "....."],   // times, not the letter X
         ['→'] = [".....", "..#..", "...#.", "#####", "...#.", "..#..", "....."],
         ['←'] = [".....", "..#..", ".#...", "#####", ".#...", "..#..", "....."],
+        // The three that were being DRAWN and were not here. A char with no glyph renders as nothing,
+        // silently, so the sentence just closes over the hole:
+        //   ↔  BuildScreen's "WEIGHT ↔ SPREAD AND TEMPO ↔ ENDURE ARE OPPOSED" read as
+        //      "WEIGHT SPREAD AND TEMPO ENDURE ARE OPPOSED", which is a different and wrong claim.
+        //   ▲  the inventory's UPGRADE badge — the whole "this beats what you are wearing" signal was
+        //      invisible, and looked exactly like having no upgrades in the bag.
+        //   ‹  the tree's BACK affordance.
+        ['↔'] = [".....", ".....", ".#.#.", "#####", ".#.#.", ".....", "....."],
+        ['▲'] = [".....", "..#..", "..#..", ".###.", ".###.", "#####", "....."],
+        ['‹'] = ["...#.", "..#..", ".#...", "#....", ".#...", "..#..", "...#."],
+        ['›'] = [".#...", "..#..", "...#.", "....#", "...#.", "..#..", ".#..."],
         ['+'] = [".....", "..#..", "..#..", "#####", "..#..", "..#..", "....."],
         ['/'] = ["....#", "....#", "...#.", "..#..", ".#...", "#....", "#...."],
         ['%'] = ["##..#", "##.#.", "...#.", "..#..", ".#...", "#.###", "..###"],
