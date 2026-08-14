@@ -36,6 +36,14 @@ public sealed class PlayerLoadout
     public IReadOnlyList<SkillChoice> Skills => _skills;
     public IReadOnlyList<string> KeystoneIds => _keystoneIds;
 
+    /// <summary>The skill slots every character starts with. The FLOOR, not the rule — see <see cref="SkillCapacity"/>.</summary>
+    /// <remarks>
+    /// This const used to be the rule, and that was the bug. <c>AddSkill</c> took
+    /// <c>Math.Min(MaxSkills, SkillCapacity)</c>, so FIFTH WEAVE — three points on the trait spine —
+    /// was bought, saved, resolved to 5, written into the capacity by a host line whose own comment
+    /// reads "without this the fifth weave is bought and never granted", and then clamped straight back
+    /// to 4 one call later. Nothing reads it as a ceiling any more.
+    /// </remarks>
     public const int MaxSkills = Build.SkillSlots;        // 4 — a build is a CHOICE of Forms
     public const int MaxKeystones = Build.KeystoneSlots;  // 3 — the tree teaches fifteen, you wear three
 
@@ -58,7 +66,7 @@ public sealed class PlayerLoadout
     /// <summary>Add an empty-ish skill slot if there is room. Returns its index, or -1 when full.</summary>
     public int AddSkill()
     {
-        if (_skills.Count >= Math.Min(MaxSkills, SkillCapacity)) return -1;
+        if (_skills.Count >= SkillCapacity) return -1;
         _skills.Add(new SkillChoice(Source.Body, Form.Strike, null));
         return _skills.Count - 1;
     }
@@ -174,6 +182,10 @@ public sealed class PlayerLoadout
         ArgumentNullException.ThrowIfNull(tree);
         ArgumentNullException.ThrowIfNull(mastery);
 
+        // The capacity travels WITH the build, because the sim asks about it: VOW OF COMPLETION wants
+        // "no skill slot empty", and against the type's floor a player who owned the fifth weave met
+        // that demand while looking at an empty fifth slot.
+
         // The build's passive numbers are the Dust tree, the Mastery tree AND the character, multiplied
         // together. Its affinity and its extra triggers come from the Mastery tree — the corner you took
         // and the notables you walked past to reach it — plus whatever the character grants outright.
@@ -190,6 +202,7 @@ public sealed class PlayerLoadout
             ExtraTriggers = new HashSet<BuildTrigger>(
                 mastery.Triggers().Concat(character?.Grants ?? Array.Empty<BuildTrigger>())),
             Shape = SkillShape.Combine(mastery.Shape(), character?.TotalShape ?? SkillShape.None),
+            SlotCapacity = SkillCapacity,
         };
 
         var learned = DustEffects.LearnedKeystones(tree);
@@ -222,7 +235,10 @@ public sealed class PlayerLoadout
         _skills.Clear();
         _keystoneIds.Clear();
         if (skills is not null)
-            foreach (var (src, form, vow) in skills.Take(MaxSkills))
+            // Take(SkillCapacity), not Take(MaxSkills) — a saved fifth skill would otherwise be dropped
+            // on the way in. The host sets the capacity from the trait tree BEFORE calling this, which
+            // is the ordering that makes the truncation right rather than merely smaller.
+            foreach (var (src, form, vow) in skills.Take(SkillCapacity))
                 if (Enum.TryParse<Source>(src, out var s) && Enum.TryParse<Form>(form, out var f))
                     _skills.Add(new SkillChoice(s, f, vow));
         if (keystoneIds is not null)

@@ -187,13 +187,36 @@ public sealed record EquippedSkill(WovenAbility Ability, int CooldownMs)
 /// </remarks>
 public sealed class Build
 {
-    /// <summary>How many skills a character may have woven at once.</summary>
+    /// <summary>How many skills a character STARTS able to weave.</summary>
     /// <remarks>
     /// Four, because a build must be a CHOICE of Forms. Six Forms and six slots would mean everyone
     /// carries everything and the Form axis collapses — the same way an unbounded gear budget collapsed
     /// "which item" into "the biggest number".
+    ///
+    /// This is the FLOOR, not the rule. The trait spine sells a fifth (<c>weave_5</c>); see
+    /// <see cref="SlotCapacity"/>, which is what <see cref="Weave"/> actually enforces.
     /// </remarks>
     public const int SkillSlots = 4;
+
+    /// <summary>How many skills THIS build may weave — four, or five once the spine has sold the fifth.</summary>
+    /// <remarks>
+    /// An instance value rather than the const above, because the const was the whole bug. FIFTH WEAVE
+    /// is a three-point node on the trait spine; <c>DustEffects.SkillSlots</c> returned 5 for a player
+    /// who owned it, the host wrote that into <c>PlayerLoadout.SkillCapacity</c>, and then <c>AddSkill</c>
+    /// took <c>Math.Min(MaxSkills, SkillCapacity)</c> against a hard 4 and threw it away. The node was
+    /// bought, persisted, resolved, displayed — and clamped off at the last step, which is this
+    /// codebase's signature failure wearing a different hat.
+    ///
+    /// Never below <see cref="SkillSlots"/>: a build handed a smaller capacity than the floor would
+    /// silently unweave skills the player already had.
+    /// </remarks>
+    public int SlotCapacity
+    {
+        get => _slotCapacity;
+        set => _slotCapacity = Math.Max(SkillSlots, value);
+    }
+
+    private int _slotCapacity = SkillSlots;
 
     /// <summary>
     /// The character's Form AFFINITY — the Nen-hexagon axis. Null means unchosen (everything neutral).
@@ -214,7 +237,7 @@ public sealed class Build
     public bool Weave(EquippedSkill skill)
     {
         ArgumentNullException.ThrowIfNull(skill);
-        if (_skills.Count >= SkillSlots) return false;
+        if (_skills.Count >= SlotCapacity) return false;
         _skills.Add(skill);
         return true;
     }

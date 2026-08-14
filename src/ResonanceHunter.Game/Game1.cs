@@ -330,6 +330,12 @@ public class Game1 : Game
 
         SaveSystem.RestoreHunter(save, _hunter);
         _dust.Restore(save.MemoryDust, save.MemoryDustUnlocks);
+
+        // BEFORE the loadout is restored, because Restore truncates to the capacity. Restoring first and
+        // deriving after would drop a saved fifth skill on every load and then look correct forever
+        // after, since the player would simply never see it again.
+        _loadout.SkillCapacity = DustEffects.SkillSlots(_dust);
+        _loadout.KeystoneCapacity = DustEffects.KeystoneSockets(_dust);
         _highestMasteryAwarded = save.HighestMasteryAwarded;
 
         // The woven build. Only overwrite the Starter when the save actually carries one — a pre-solo
@@ -766,6 +772,23 @@ public class Game1 : Game
                     // regions at depth 35 is 3 + 21 = 24, the number this fixture always meant.
                     foreach (var def in Regions.All.Take(3)) _world.RegionFarm(def.Id).RestoreBestDepth(35);
                     _mastery.SetEarned(24);
+
+                    // FIVE auto-skill cards, not four. The fifth slot is the thing this screen was
+                    // silently unable to draw, and a fixture that poses the easy case would not have
+                    // caught it — nor would it catch the card row walking off the panel again, which is
+                    // what a fixed pitch of 182 did the moment a fifth card existed.
+                    //
+                    // The world INPUTS, then the total: trait points are derived from conquests and
+                    // corruption every frame, so a fixture that only calls SetEarned is stamped back to
+                    // zero before it draws. (Conquest does not touch the mastery total above — that
+                    // reads BestDepth/5 per region — so the 24 this fixture means still holds.)
+                    _world.RestoreConquered(Regions.All.Select(r => r.Id));
+                    _world.RestoreCorruption(16);
+                    _dust.SetEarned(22);
+                    _dust.Purchase("socket_2");   // weave_5 hangs off it on the capacity chain
+                    _dust.Purchase("weave_5");
+                    _loadout.SkillCapacity = DustEffects.SkillSlots(_dust);
+                    _loadout.AddSkill();
                     foreach (var id in new[] { "heavy_hand", "sharpened", "sunder", "crush", "monolith",
                                                "opener", "hasten", "alpha" })
                         _mastery.Take(id);
@@ -1042,8 +1065,13 @@ public class Game1 : Game
                 {
                     _showWeave = true;
                     _dust.SetEarned(22);
-                    foreach (var id in new[] { "socket_2", "vow_study_1", "vow_study_2", "vow_binding" })
+                    // weave_5 is in the fixture ON PURPOSE: the fifth slot is the one that was bought
+                    // and silently discarded for the whole of development, and a capture that poses four
+                    // slots is a capture that would not have caught it.
+                    foreach (var id in new[] { "socket_2", "weave_5", "vow_study_1", "vow_study_2", "vow_binding" })
                         _dust.Purchase(id);
+                    _loadout.SkillCapacity = DustEffects.SkillSlots(_dust);
+                    _loadout.AddSkill();
                     _weave.DevPose(1, null);
                 }
 

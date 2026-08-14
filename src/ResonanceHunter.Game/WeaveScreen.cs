@@ -71,22 +71,28 @@ public sealed class WeaveScreen
     public void DevPose(int slot, string? vowId) { _slot = slot; _readingVowId = vowId; }
 
     // ── Layout ────────────────────────────────────────────────────────────────────────────────────
-    private static readonly Rectangle SlotsPanel = new(38, 144, 520, 718);
-    private static readonly Rectangle PickPanel = new(578, 144, 640, 718);
-    private static readonly Rectangle VowPanel = new(1238, 144, 642, 718);
+    // 800, not 718. The left column's height is DATA — one row per skill slot, then the add button,
+    // then the keystone sockets — and the fifth weave pushed the third socket 68px through the frame.
+    // (At four slots it already cleared the interior by 12; the fifth only made it obvious.) All three
+    // grow together so the row of panels still reads as a row.
+    private static readonly Rectangle SlotsPanel = new(38, 144, 520, 800);
+    private static readonly Rectangle PickPanel = new(578, 144, 640, 800);
+    private static readonly Rectangle VowPanel = new(1238, 144, 642, 800);
 
     private static Rectangle SlotRow(int i) => new(SlotsPanel.X + 74, SlotsPanel.Y + 96 + i * 86, 372, 76);
     private static Rectangle DropX(int i) { var r = SlotRow(i); return new(r.Right - 34, r.Y + 4, 30, 30); }
-    private static Rectangle AddBtn =>
-        new(SlotsPanel.X + 74, SlotsPanel.Y + 96 + PlayerLoadout.MaxSkills * 86, 372, 48);
+
+    /// <summary>Everything below the slot list hangs off the CAPACITY, not off the type's floor.</summary>
+    private int SlotsEnd => SlotsPanel.Y + 96 + Loadout.SkillCapacity * 86;
+
+    private Rectangle AddBtn => new(SlotsPanel.X + 74, SlotsEnd, 372, 48);
 
     // KEYSTONE SOCKETS live here too. They were chips at the bottom of the deleted sidebar, and a
     // keystone is a loadout decision exactly like a Vow is — the trait tree TEACHES them, this screen
     // is where you decide which of them you are carrying. Losing the only UI for them along with the
     // sidebar would have been a silent regression: the tree would keep selling a payoff with nowhere
     // left to equip it.
-    private static Rectangle KeystoneChip(int i) =>
-        new(SlotsPanel.X + 74, SlotsPanel.Y + 96 + PlayerLoadout.MaxSkills * 86 + 106 + i * 50, 372, 44);
+    private Rectangle KeystoneChip(int i) => new(SlotsPanel.X + 74, SlotsEnd + 106 + i * 50, 372, 44);
 
     private static readonly Source[] Sources = Enum.GetValues<Source>();
     private static readonly Form[] Forms = Enum.GetValues<Form>();
@@ -106,12 +112,10 @@ public sealed class WeaveScreen
 
     // Five rows, not six. Six fitted only by squeezing each to 54px, where a Vow's name and its
     // verdict printed over one another.
-    // FOUR, not five. The reading block underneath is not optional furniture — a Vow's row carries its
-    // demand, and its DESCRIPTION carries the cost, which is the half that decides whether to swear it.
-    // At five rows a three-line description started at y=784 and ran to 848 against a panel whose
-    // interior ends at 822, so the cost ran out through the bottom ornament. The list scrolls; the
-    // description does not.
-    private const int VowRows = 4;
+    // Five again. This was cut to four when the panel was 718 tall and a three-line description ran
+    // out through the bottom ornament; at 800 both fit, and the reading block is still bounded so the
+    // next long Vow ellipsises instead of escaping.
+    private const int VowRows = 5;
     private const int VowRowH = 70;
     private static Rectangle VowRow(int i) => new(VowPanel.X + 74, VowPanel.Y + 136 + i * (VowRowH + 8), 494, VowRowH);
     private static Rectangle VowClear => new(VowPanel.X + 74, VowPanel.Y + 136 + VowRows * (VowRowH + 8) + 4, 494, 44);
@@ -172,7 +176,7 @@ public sealed class WeaveScreen
             if (SlotRow(i).Contains(hit)) { _slot = i; _msg = ""; return; }
         }
 
-        if (skills.Count < PlayerLoadout.MaxSkills && AddBtn.Contains(hit))
+        if (skills.Count < Loadout.SkillCapacity && AddBtn.Contains(hit))
         {
             var added = Loadout.AddSkill();
             if (added >= 0) { _slot = added; Dirty = true; _msg = "SLOT WOVEN."; }
@@ -244,7 +248,7 @@ public sealed class WeaveScreen
 
         var skills = Loadout.Skills;
         var ctx = Context;
-        for (var i = 0; i < PlayerLoadout.MaxSkills; i++)
+        for (var i = 0; i < Loadout.SkillCapacity; i++)
         {
             if (i >= skills.Count) break;
             var s = skills[i];
@@ -280,7 +284,7 @@ public sealed class WeaveScreen
             }
         }
 
-        if (skills.Count < PlayerLoadout.MaxSkills)
+        if (skills.Count < Loadout.SkillCapacity)
         {
             var r = AddBtn;
             _ui.Fill(b, r, r.Contains(hit) ? new Color(0x2C, 0x25, 0x44) : Quiet);

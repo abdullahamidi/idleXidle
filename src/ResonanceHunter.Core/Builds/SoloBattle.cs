@@ -998,7 +998,10 @@ public static class SoloBattle
             DistinctForms: build.Skills.Select(s => s.Form).Distinct().Count(),
             DistinctSources: build.Skills.Select(s => s.Source).Distinct().Count(),
             SkillsWoven: build.Skills.Count,
-            SkillSlots: Build.SkillSlots,
+            // The BUILD's capacity, not the type's floor. VOW OF COMPLETION demands "no skill slot is
+            // empty", and against a hard 4 a player who had bought the fifth weave met it with four
+            // skills and an empty fifth slot in front of them.
+            SkillSlots: build.SlotCapacity,
             CritPercent: hunter.ValueOf(Economy.HunterStat.CriticalChance)
                          + hunter.AffixTotal(Economy.AffixStat.Crit)
                          + build.Shape.BonusCritPercent,

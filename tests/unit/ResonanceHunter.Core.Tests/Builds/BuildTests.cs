@@ -222,4 +222,41 @@ public class BuildTests
     {
         Assert.Empty(new Build().Triggers(new Hunter()));
     }
+
+    // ── THE FIFTH WEAVE ───────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void test_a_build_weaves_up_to_its_own_capacity_not_the_types_floor()
+    {
+        // FIFTH WEAVE is a three-point node on the trait spine. It was bought, saved, resolved to 5 and
+        // written into the loadout's capacity by a host line whose own comment reads "without this the
+        // fifth weave is bought and never granted" — and then clamped back to 4 one call later by
+        // Math.Min against a const. Bought, carried, displayed, discarded: this codebase's signature
+        // failure. The test drives the END of the chain, which is the only place it was ever visible.
+        var build = new Build { SlotCapacity = 5 };
+        for (var i = 0; i < 5; i++)
+            Assert.True(build.Weave(Skill($"s{i}")), $"slot {i} was refused at a capacity of 5");
+
+        Assert.Equal(5, build.Skills.Count);
+        Assert.False(build.Weave(Skill("sixth")), "capacity 5 must still refuse a sixth");
+    }
+
+    [Fact]
+    public void test_capacity_never_falls_below_the_floor()
+    {
+        // A build handed a smaller capacity than the type's floor would silently refuse skills the
+        // player already owns — worse than the bug it replaces, because it takes something away.
+        var build = new Build { SlotCapacity = 1 };
+        Assert.Equal(Build.SkillSlots, build.SlotCapacity);
+        for (var i = 0; i < Build.SkillSlots; i++) Assert.True(build.Weave(Skill($"s{i}")));
+    }
+
+    [Fact]
+    public void test_a_default_build_still_stops_at_four()
+    {
+        var build = new Build();
+        Assert.Equal(Build.SkillSlots, build.SlotCapacity);
+        for (var i = 0; i < Build.SkillSlots; i++) Assert.True(build.Weave(Skill($"s{i}")));
+        Assert.False(build.Weave(Skill("fifth")), "a build nobody expanded must not grow one for free");
+    }
 }

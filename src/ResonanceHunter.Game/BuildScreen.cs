@@ -96,7 +96,21 @@ public sealed class BuildScreen
     // The overview's own door to the weave editor. "EDIT BUILD" opens the TREE, which is a different
     // question — the tree is what you are, the weave is what you carry.
     private static readonly Rectangle WeaveBtn = new(426, 902, 260, 44);
-    private static Rectangle AuraCard(int i) => new(452 + i * 182, 648, 168, 198);
+    /// <summary>The i-th of <paramref name="n"/> auto-skill cards, sharing the panel's width between them.</summary>
+    /// <remarks>
+    /// Divided rather than fixed at a pitch of 182, which fitted exactly four and put a fifth at
+    /// x=1180..1348 — off the end of a panel that stops at 1200 and across the passives column beside
+    /// it. FIFTH WEAVE is a node the player can buy, so "four" was never a safe constant to lay out
+    /// against; the cards now narrow to make room instead of walking off the edge.
+    /// </remarks>
+    private static Rectangle AuraCard(int i, int n)
+    {
+        const int gap = 14;
+        var left = AuraPanel.X + UiKit.PanelCorner;
+        var usable = AuraPanel.Width - UiKit.PanelCorner * 2;
+        var w = (usable - (Math.Max(1, n) - 1) * gap) / Math.Max(1, n);
+        return new Rectangle(left + i * (w + gap), 648, w, 198);
+    }
     // Under the panel's top crest, which the title now clears too — at y=196 the button was drawn
     // straight through it.
     private static readonly Rectangle ViewTreeBtn = new(1544, 250, 250, 44);
@@ -423,9 +437,11 @@ public sealed class BuildScreen
         _ui.Panel(b, AuraPanel);
         _ui.TextCenterBig(b, "AUTO-SKILL LOADOUT", AuraPanel.Center.X, AuraPanel.Y + 14, Gold, UiTypography.SectionTitle);
         var skills = Loadout.Skills;
-        for (var i = 0; i < PlayerLoadout.MaxSkills; i++)
+        // The slots this player HAS. Against the const, a fifth woven skill was invisible on the one
+        // screen whose whole job is to show the build.
+        for (var i = 0; i < Loadout.SkillCapacity; i++)
         {
-            var card = AuraCard(i);
+            var card = AuraCard(i, Loadout.SkillCapacity);
             if (i < skills.Count)
             {
                 var s = skills[i];
@@ -534,8 +550,8 @@ public sealed class BuildScreen
     {
         foreach (var r in new[] { SummaryPanel, CorePanel, AuraPanel, PassivePanel })
             Outline(b, r, Ember, 2);
-        for (var i = 0; i < 4; i++) Outline(b, AuraCard(i), Verd, 2);
-        _ui.TextBig(b, "nav BUILD  overview  4 aura cards", 60, 112, Gold, UiTypography.Secondary);
+        for (var i = 0; i < Loadout.SkillCapacity; i++) Outline(b, AuraCard(i, Loadout.SkillCapacity), Verd, 2);
+        _ui.TextBig(b, $"nav BUILD  overview  {Loadout.SkillCapacity} aura cards", 60, 112, Gold, UiTypography.Secondary);
     }
 
     // ── Edit sub-view (the existing tree + skill sidebar). ──

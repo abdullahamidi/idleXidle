@@ -1110,7 +1110,7 @@ public sealed class SoloExpeditionScreen
         // Spec §14: auto-skill dock centred under the arena (500,770,920,145). Hex slots (ui_slot_skill_hex),
         // Source glyph inside, Form + AUTO beneath. Presentation Model C (§14.4): AUTO/READY, no fake cooldowns.
         var skills = Loadout.Skills;
-        var n = PlayerLoadout.MaxSkills;
+        var n = Loadout.SkillCapacity;     // the dock shows the slots you have, not the four everyone starts with
         // Stacked down the control rail instead of a horizontal dock across the bottom centre, which
         // sat over the stage and collided with the nav rail at y=934.
         const int slot = 68, pitch = 74, y0 = 632;
