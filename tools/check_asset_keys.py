@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+"""Every asset key the game asks for by name must exist on disk.
+
+    python3 tools/check_asset_keys.py
+
+Same failure family as the font gate, one layer up. `AssetLibrary.Get` returns null for a
+key it does not have, and every caller is written to fall back to a coloured rectangle or
+to nothing at all — deliberately, so a missing file can never crash a screen. The cost of
+that kindness is that a typo, a renamed file or a deleted sprite is INVISIBLE: the screen
+still draws, just without the art, and it looks like a design choice.
+
+Keys are flat basenames (AssetLibrary strips the directory and the extension), so this
+walks assets/art for every image, applies the same alias table the loader uses, and
+compares against every literal handed to Get / GetFirst / Has / SpriteFit / AnimSprite and
+friends.
+
+WHAT IT CANNOT SEE, and does not pretend to: keys built at runtime from data —
+$"boss_{region}", Character.StripKey(clip), the per-trait item glyphs. Those are covered by
+their own tests and by the roster fixtures. This catches the hand-typed ones, which is
+where typos live.
+"""
+import glob
+import os
+import re
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+GAME = os.path.join(ROOT, "src", "ResonanceHunter.Game")
+ART = os.path.join(ROOT, "assets", "art")
+
+# The call sites that take a key. Anything else that grows one should be added here.
+CALLS = re.compile(
+    r'\b(?:Assets\.Get|Assets\.GetFirst|Assets\.Has|Get|GetFirst|Has|SpriteFit|Sprite|'
+    r'SpriteGrounded|AnimSprite|Background|BarArt|Panel)\s*\(\s*([^)]*)')
+LITERAL = re.compile(r'"([a-z0-9_]+)"')
+
+
+def on_disk() -> set:
+    keys = set()
+    for path in glob.glob(os.path.join(ART, "**", "*.png"), recursive=True):
+        keys.add(os.path.splitext(os.path.basename(path))[0])
+    return keys
+
+
+def aliases() -> dict:
+    """The loader's migration table, parsed out of AssetLibrary rather than duplicated."""
+    src = open(os.path.join(GAME, "AssetLibrary.cs"), encoding="utf-8").read()
+    block = re.search(r"Aliases\s*(?::|=)[^{]*\{(.*?)\n    \};", src, re.S)
+    if not block:
+        return {}
+    return dict(re.findall(r'\["([^"]+)"\]\s*=\s*"([^"]+)"', block.group(1)))
+
+
+def strip_comments(text: str) -> str:
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+    return re.sub(r"^[ \t]*//.*$", "", text, flags=re.M)
+
+
+def main() -> int:
+    have = on_disk()
+    alias = aliases()
+    missing = {}
+
+    for path in sorted(glob.glob(os.path.join(GAME, "*.cs"))):
+        text = strip_comments(open(path, encoding="utf-8").read())
+        for line_no, line in enumerate(text.split("\n"), 1):
+            for call in CALLS.finditer(line):
+                for key in LITERAL.findall(call.group(1)):
+                    # A bare word with no underscore is almost never an asset key — it is a
+                    # label, a mode name, a format. Keys in this project are all snake_case.
+                    if "_" not in key:
+                        continue
+                    resolved = alias.get(key, key)
+                    if resolved in have or key in have:
+                        continue
+                    missing.setdefault(key, []).append(
+                        f"{os.path.basename(path)}:{line_no}")
+
+    # AND THE ALIAS TABLE ITSELF. A migration alias whose TARGET has been deleted is the same
+    # silent hole one indirection further along, and it is likelier than a typo — the alias
+    # exists precisely because the file it points at was renamed once already.
+    for key, target in sorted(alias.items()):
+        if target not in have:
+            missing.setdefault(f"{key} -> {target}", []).append("AssetLibrary.cs (alias table)")
+
+    if not missing:
+        print(f"every hand-typed asset key resolves ({len(have)} images, "
+              f"{len(alias)} aliases).")
+        return 0
+
+    print("KEYS WITH NO FILE — these draw as a fallback shape, or as nothing:\n")
+    for key, where in sorted(missing.items()):
+        seen = ", ".join(dict.fromkeys(where))[:110]
+        print(f"  {key:<34} {seen}")
+    print("\nEither the art is missing, the name drifted, or the key is built at runtime "
+          "and this gate cannot see it — in which case say so here.")
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
