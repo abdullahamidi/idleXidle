@@ -70,6 +70,19 @@ endings.
 2. **`2f5e9c2` roster parity, measured** — answers the old candidate #1 below.
 3. **`b707d2d` fight callout legibility** — the damage numbers had three independent
    reasons to overlap. Fixed and screenshot-verified.
+6. **`0989168` FITS on the loot grid** — the combo line answers one item at a time and a
+   chest drops fourteen. The grid now badges items whose enchantment combos with your build.
+   The rule moved to Core (`EnchantNeed.MetBy`) where it can be tested — it was three ANDed
+   clauses inside a Draw method.
+7. **`242f456` five UI legibility defects + the gate hole that hid the worst.**
+   `check_font_coverage.py` read SOURCE characters, so `"✕"` was seven ASCII characters
+   and sailed through while a typed one was flagged. Every ellipsis in the codebase is written
+   escaped, so the gate had never looked at the non-ASCII glyph it draws most. It now decodes
+   escapes — which immediately found that **U+2715 draws as nothing**, making the Weave
+   screen's remove-skill button an invisible 30px square that worked when clicked. Also: the
+   Build screen's points line was clipped by the VIEW TREE button, RESONANCE was pinned under
+   a variable-length list, ACTIVE FORMS counted skills not forms, and long node labels ran off
+   the panel onto the frame art.
 5. **`368f934` four combo enchantments on the keystone and Vow axes** — the combo axis was
    complete on ONE of the build's three axes (all six Forms). Keystones and Vows had no loot
    that cared. FERVOUR/REVERB/BULWARK sharpen BLOODLUST/ECHO/ZEAL; TITHE pays per distinct
