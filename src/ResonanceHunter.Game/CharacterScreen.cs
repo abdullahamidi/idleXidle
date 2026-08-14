@@ -94,6 +94,14 @@ public sealed class CharacterScreen
     private static readonly Rectangle HunterBox = new(516, 210, 278, 588);   // between the slot columns
 
     // Inventory grid (§9.6): 4 columns, 5 rows, 82×82, gap 8, origin (1026,260).
+    /// <summary>The item under the pointer this frame, or null. Set during draw, used after it.</summary>
+    /// <remarks>
+    /// Established every frame rather than tracked on mouse-move, because the grid scrolls, filters and
+    /// re-sorts under a stationary pointer — a remembered id would go on describing an item that is no
+    /// longer in that cell.
+    /// </remarks>
+    private ItemInstance? _hovered;
+
     private const int InvCols = 4, InvRows = 5, InvCell = 82, InvGap = 8;
     private static readonly Point InvOrigin = new(1026, 260);
     private static Rectangle InvCellRect(int i)
@@ -310,10 +318,18 @@ public sealed class CharacterScreen
         _ui.TextCenterBig(b, "EQUIPMENT   ·   INVENTORY   ·   ITEM DETAIL", 960, 80, Slate, UiTypography.Secondary);
 
         DrawLoadout(b, hit, hunter);
+        _hovered = null;                // re-established by whichever draw finds the pointer over an item
         DrawEquipped(b, hit, hunter);
         DrawInventory(b, hit, hunter);
         DrawDetail(b, hit, hunter);
         DrawItemMenu(b, hit, hunter);   // LAST — it floats over everything it was opened from
+
+        // THE HOVER CARD, after everything and before nothing. It answers "what is this" without a
+        // click, which is the question twenty identical-looking icons in a grid otherwise force you to
+        // ask one at a time. Suppressed while the right-click menu is open: two floating things fighting
+        // over the same pointer is worse than either alone.
+        if (_hovered is { } hov && _menuItemId is null)
+            ItemTooltip.Draw(_ui, b, hov, hunter, hit, new Rectangle(0, 0, 1920, 1080));
         if (DevGearDebug) DrawDebug(b, hunter);
     }
 
@@ -446,6 +462,7 @@ public sealed class CharacterScreen
 
             if (worn is { } w2)
             {
+                if (hot) _hovered = w2;      // the worn piece answers the same question the bag does
                 _forge.DrawItemIcon(b, w2, new Rectangle(box.X + 12, box.Y + 12, box.Width - 24, box.Height - 24));
                 _ui.Fill(b, new Rectangle(box.X, box.Y, box.Width, 4), RarityColor(w2.Rarity));
             }
@@ -493,6 +510,7 @@ public sealed class CharacterScreen
             var hot = cell.Contains(hit);
             var sel = item.InstanceId == _selectedId;
             var worn = IsWorn(hunter, item);
+            if (hot) _hovered = item;
             if (hot && !sel) _ui.Fill(b, cell, CellHot);
             _forge.DrawItemIcon(b, item, new Rectangle(cell.X + 6, cell.Y + 6, cell.Width - 12, cell.Height - 12));
             _ui.Fill(b, new Rectangle(cell.X, cell.Y, cell.Width, 4), RarityColor(item.Rarity));

@@ -1,0 +1,172 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+using ResonanceHunter.Core.Economy;
+using ResonanceHunter.Core.Loot;
+
+namespace ResonanceHunter.Client;
+
+/// <summary>
+/// Everything an item IS, in one card, drawn under the pointer.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Written because a player said they could not read what their items did — and they were right, but
+/// not because the text was small. The text was ABSENT. The detail panel printed "TRAIT — KEEN" and
+/// "ENCHANT: HARVEST", which are names, not effects: nothing on screen said what KEEN does to a hit or
+/// what HARVEST does on a kill, though both sentences have existed in <c>GearTraits.BlurbOf</c> and
+/// <c>Enchantment.Blurb</c> the whole time. And the inventory was twenty icons with a coloured edge, so
+/// telling two items apart meant clicking each one.
+/// </para>
+/// <para>
+/// One card, shared by every screen that shows an item, for the reason every other shared thing in this
+/// codebase exists: four screens drawing four subsets of an item's facts is four chances to leave one
+/// out, and the one left out is always the one that mattered.
+/// </para>
+/// <para>
+/// It compares against what is WORN whenever a Hunter is passed, because "is this better than mine" is
+/// the only question anyone opens an item to ask. The comparison uses
+/// <see cref="Hunter.PowerContribution"/> — the marginal PowerRating of the piece — never
+/// <c>Gear.ItemScore</c>, so what the card claims and what equipping actually does can never disagree.
+/// </para>
+/// </remarks>
+public static class ItemTooltip
+{
+    public const int Width = 460;
+
+    private static readonly Color Ink = new(0xE8, 0xE2, 0xD4);
+    private static readonly Color Dim = new(0x8A, 0x82, 0x74);
+    private static readonly Color Gold = new(0xE8, 0xC8, 0x7A);
+    private static readonly Color Good = new(0x6E, 0xC8, 0x7A);
+    private static readonly Color Bad = new(0xC8, 0x5A, 0x5A);
+    private static readonly Color Violet = new(0xB0, 0x8A, 0xE0);
+
+    private static readonly Color[] RarityInk =
+        [new(0xC8, 0xC2, 0xB4), new(0x6E, 0xC8, 0x7A), new(0x4A, 0x90, 0xD9), new(0xB0, 0x6A, 0xC8), new(0xE8, 0xC8, 0x7A)];
+
+    /// <summary>How tall the card will be for this item — so a caller can place it before drawing.</summary>
+    public static int HeightFor(ItemInstance item, Hunter? hunter)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        var h = 96;                                             // name + the rarity/slot line
+        h += 34;                                                // item power
+        h += ItemAffixes.Of(item).Count * 28;
+        if (ItemAffixes.Of(item).Count > 0) h += 10;
+        if (GearTraits.TraitOf(item) is not null) h += 62;
+        if (Enchantments.Of(item) is not null) h += 62;
+        if (hunter is not null && Gear.SlotFor(item.BaseType) is not null) h += 46;
+        return h + 28;
+    }
+
+    /// <summary>
+    /// Draw the card with its top-left at <paramref name="at"/>, nudged to stay on the canvas.
+    /// </summary>
+    /// <param name="canvas">The drawable area, so a card raised near the right edge flips to the left.</param>
+    public static void Draw(UiKit ui, SpriteBatch b, ItemInstance item, Hunter? hunter, Point at, Rectangle canvas)
+    {
+        ArgumentNullException.ThrowIfNull(ui);
+        ArgumentNullException.ThrowIfNull(item);
+
+        var h = HeightFor(item, hunter);
+
+        // FLIP, don't clamp. A card pinned to the edge sits ON the thing the pointer is over, which is
+        // the one thing it must never cover — you are hovering an item to see it, not to have it hidden.
+        var x = at.X + Width + 24 <= canvas.Right ? at.X + 24 : at.X - Width - 24;
+        var y = Math.Clamp(at.Y - 20, canvas.Top + 8, Math.Max(canvas.Top + 8, canvas.Bottom - h - 8));
+        var card = new Rectangle(x, y, Width, h);
+
+        // Its own dark ground rather than UiKit.Panel: the panel art's 40px inset would eat a third of a
+        // card this size, and a tooltip wants to read as a floating label, not as another window.
+        ui.Fill(b, new Rectangle(card.X + 4, card.Y + 4, card.Width, card.Height), new Color(0, 0, 0, 140));
+        ui.Fill(b, card, new Color(0x0E, 0x0C, 0x14, 0xF2));
+        var edge = RarityInk[(int)item.Rarity];
+        ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, 3), edge);
+        ui.Fill(b, new Rectangle(card.X, card.Bottom - 3, card.Width, 3), edge * 0.5f);
+        ui.Fill(b, new Rectangle(card.X, card.Y, 3, card.Height), edge * 0.5f);
+        ui.Fill(b, new Rectangle(card.Right - 3, card.Y, 3, card.Height), edge * 0.5f);
+
+        var lx = card.X + 20;
+        var rx = card.Right - 20;
+        var cy = card.Y + 18;
+
+        ui.TextBig(b, ItemNaming.FullName(item), lx, cy, edge, UiTypography.PanelTitle);
+        cy += 34;
+
+        // ONE LINE, not a left run and a right-aligned element. Right-aligning the source put "NATURE"
+        // on top of "iL2" the moment a name was long enough — a card that exists to make things readable
+        // must not be the thing overlapping itself.
+        var slot = Gear.SlotFor(item.BaseType);
+        var line = $"{item.Rarity.ToString().ToUpperInvariant()}  ·  "
+                   + $"{(slot?.ToString() ?? item.BaseType.ToString()).ToUpperInvariant()}  ·  iL{item.ItemLevel}";
+        if (item.Element is { } el) line += $"  ·  {el.ToString().ToUpperInvariant()}";
+        ui.Text(b, line, lx, cy, Dim);
+        cy += 32;
+
+        ui.Fill(b, new Rectangle(lx, cy, card.Width - 40, 1), new Color(0x2A, 0x26, 0x34));
+        cy += 14;
+
+        // ── ITEM POWER, and what swapping would do to yours ──
+        if (hunter is not null && slot is { } s)
+        {
+            var mine = hunter.PowerContribution(item);
+            ui.Text(b, "ITEM POWER", lx, cy, Dim);
+            ui.TextRight(b, $"{mine:N0}", rx, cy, Ink);
+            cy += 34;
+
+            var worn = hunter.Worn(s);
+            if (worn is not null && worn.InstanceId != item.InstanceId)
+            {
+                var delta = mine - hunter.PowerContribution(worn);
+                var word = delta > 0 ? "UPGRADE" : delta < 0 ? "DOWNGRADE" : "SIDEGRADE";
+                var tone = delta > 0 ? Good : delta < 0 ? Bad : Dim;
+                ui.Text(b, $"{word}  ·  REPLACES {ItemNaming.FullName(worn)}", lx, cy, tone);
+                ui.TextRight(b, $"{delta:+#,0;-#,0;0}", rx, cy, tone);
+                cy += 46;
+            }
+            else if (worn is not null)
+            {
+                ui.Text(b, "WORN", lx, cy, Gold);
+                cy += 46;
+            }
+            else
+            {
+                ui.Text(b, "THE SLOT IS EMPTY", lx, cy, Good);
+                cy += 46;
+            }
+        }
+        else
+        {
+            ui.Text(b, "MATERIAL", lx, cy, Dim);
+            cy += 34;
+        }
+
+        // ── AFFIXES — the rolled numbers ──
+        var affixes = ItemAffixes.Of(item);
+        foreach (var a in affixes)
+        {
+            ui.Text(b, ItemAffixes.Describe(a), lx, cy, Good);
+            cy += 28;
+        }
+        if (affixes.Count > 0) cy += 10;
+
+        // ── TRAIT and ENCHANT — the NAME AND WHAT IT DOES. The half that was missing. ──
+        if (GearTraits.TraitOf(item) is { } trait)
+        {
+            ui.Text(b, GearTraits.NameOf(trait), lx, cy, Gold);
+            ui.TextRight(b, "TRAIT", rx, cy, Dim);
+            cy += 26;
+            ui.Text(b, GearTraits.BlurbOf(trait).ToUpperInvariant(), lx, cy, Ink);
+            cy += 36;
+        }
+
+        if (Enchantments.Of(item) is { } ench)
+        {
+            ui.Text(b, ench.Name, lx, cy, Violet);
+            ui.TextRight(b, "ENCHANT", rx, cy, Dim);
+            cy += 26;
+            ui.Text(b, ench.Blurb.ToUpperInvariant(), lx, cy, Ink);
+        }
+    }
+}

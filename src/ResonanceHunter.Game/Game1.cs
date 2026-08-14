@@ -132,6 +132,7 @@ public class Game1 : Game
     private double _champGleamAccrued, _champSecondsAccrued;
     private float _champGleamRate;
     private int _chestsCredited;   // chests already credited to CRAFTER evolution (delta vs _forge.ChestsOpened)
+    private float? _pendingRevealPose;   // RH_SHOT_T for the chest reveal, applied once the fixture has opened one
     private BuildScreen _buildScreen = null!;
     private bool _showBuild;
 
@@ -732,6 +733,12 @@ public class Game1 : Game
                 }
                 // lootforge: seed the Forge with a spread of loot so it can be screenshotted with content
                 // (the idle loop drops items only on boss waves, which a 1-second shot won't reach).
+                // RH_SHOT_T poses the chest reveal at a chosen instant — the shake, the burst, the card.
+                // Read BEFORE the fixture runs; applied after it opens a chest, or the open overwrites it.
+                if (sm == "lootforge" && Environment.GetEnvironmentVariable("RH_SHOT_T") is { } rt
+                    && float.TryParse(rt, System.Globalization.CultureInfo.InvariantCulture, out var revealT))
+                    _pendingRevealPose = revealT;
+
                 if (sm == "lootforge")
                 {
                     _showForge = true;
@@ -764,6 +771,9 @@ public class Game1 : Game
                     foreach (var cr in new[] { Rarity.Common, Rarity.Rare, Rarity.Epic, Rarity.Legendary, Rarity.Rare })
                         _forge.AddChest(new Chest { Rarity = cr, Tier = 8, Element = Source.Nature });
                     _forge.DevOpenOneChest(_hunter);   // pose the chest-open REVEAL burst
+                    // AFTER the open, never before: opening a chest resets the reveal clock, so a pose
+                    // applied earlier is silently overwritten and every RH_SHOT_T lands on t=0.
+                    if (_pendingRevealPose is { } rp) _forge.DevPoseReveal(rp);
                 }
 
                 if (sm is "build" or "buildtree" or "buildzoom")
@@ -2424,6 +2434,20 @@ public class Game1 : Game
             else
                 _ui.Diamond(_batch, new Rectangle(r.Center.X - 20, r.Y + 28, 40, 40), on ? NavGold : NavGem * 0.75f);
             _ui.TextCenterBig(_batch, Nav[i].Label, r.Center.X, r.Bottom - 34, on ? NavGold : NavLabel * 0.9f, UiTypography.NavigationLabel);
+
+            // UNOPENED CHESTS, as a count on the FORGE tile. A player told us the chest-opening feature
+            // felt hidden in the game, and it was: chests live three clicks deep — FORGE, then the
+            // SALVAGE mode, then a small toolbar row — with nothing anywhere else in the game saying one
+            // is waiting. The most valuable thing the game gives you should not be the hardest to find.
+            if (Nav[i].Label == "FORGE" && _forge is not null && _forge.UnopenedChests.Count > 0)
+            {
+                var n = _forge.UnopenedChests.Count;
+                var badge = new Rectangle(r.Right - 54, r.Y + 16, 38, 30);
+                _ui.Fill(_batch, badge, new Color(0xC8, 0x3A, 0x3A));
+                _ui.Fill(_batch, new Rectangle(badge.X, badge.Y, badge.Width, 3), new Color(0xF0, 0x8A, 0x6A));
+                _ui.TextCenterBig(_batch, n > 9 ? "9+" : n.ToString(), badge.Center.X, badge.Y + 4,
+                                  Color.White, UiTypography.Secondary);
+            }
         }
     }
 

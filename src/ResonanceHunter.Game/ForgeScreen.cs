@@ -97,16 +97,35 @@ public sealed class ForgeScreen
     private readonly List<ItemInstance> _inv = new();
     private readonly List<Chest> _chests = new();    // unopened chests, waiting for the click
     private readonly List<string> _merge = new();   // up to 3 ids queued to merge
+    /// <summary>The item under the pointer this frame. Re-established every draw; see CharacterScreen.</summary>
+    private ItemInstance? _hovered;
+
     private int _cursor;                             // the active item (click or arrows)
     private string _msg = "";
     private Color _msgColor = Bone;
 
     // The chest-open reveal: a centred burst that holds, then fades — the payoff beat.
     private float _revealTimer;
+
+    /// <summary>Hold the reveal at one instant so a capture can inspect a beat that lasts 0.2 seconds.</summary>
+    /// <remarks>
+    /// The capture rig renders sixty frames and saves the last, so an un-frozen animation is always shot
+    /// at the same ~1 second in — which is beat three, and says nothing about whether beats one and two
+    /// look right. Same lesson the Trait screen's flourish taught: a posed animation needs a brake.
+    /// </remarks>
+    private bool _revealFrozen;
     private Rarity _revealGrade;
     private int _revealMaterials;
     private readonly List<ItemInstance> _revealItems = new();
-    private const float RevealHold = 1.9f;
+    // 2.9s, and it is a SEQUENCE now rather than a card that appears. See DrawReveal for the beats.
+    private const float RevealHold = 2.9f;
+
+    // The beats, in seconds from the moment the chest cracks. Named because the arithmetic below reads
+    // as nonsense otherwise, and because a designer retiming this should not have to count decimals.
+    private const float ShakeEnds = 0.55f;    // the chest rattles, harder and harder
+    private const float BurstEnds = 0.78f;    // the ring goes out, the chest is gone
+    private const float CardIn = 0.20f;       // how long the card takes to spring open
+    private const float ItemStagger = 0.13f;  // one item lands, then the next
     private KeyboardState _prevKeys;
     private int _scroll;                             // index of the first visible card
     private int _bagScroll;                          // first visible row of the left-column bag list
@@ -350,7 +369,7 @@ public sealed class ForgeScreen
     public void Update(GameTime time, KeyboardState keys, Point mouse, bool clicked, int wheel, Hunter hunter)
     {
         // The chest-open REVEAL fades on its own clock — the anticipation beat that loot design lives on.
-        if (_revealTimer > 0f) _revealTimer -= (float)time.ElapsedGameTime.TotalSeconds;
+        if (_revealTimer > 0f && !_revealFrozen) _revealTimer -= (float)time.ElapsedGameTime.TotalSeconds;
 
         // In the focused modes the grid is not shown — arrows cycle which wearable you are upgrading, and
         // the mode-switch and action clicks are handled in Draw. The bag/grid interactions below belong to
@@ -814,6 +833,7 @@ public sealed class ForgeScreen
         // Every rect is authored ×4 (1920×1080) and rendered at scale 1, so hit-tests take the mouse ×4.
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
         var hit = Game1.ToOverlay(mouse);
+        _hovered = null;                 // re-established by whichever surface finds the pointer over an item
 
         _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xC0));   // scrim so panels pop
         _ui.TextCenterBig(b, "THE FORGE", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle);
@@ -829,6 +849,12 @@ public sealed class ForgeScreen
         }
 
         DrawReveal(b);   // the chest-open burst rides on top of every mode
+
+        // The hover card, above the surfaces and below nothing but the reveal — which is modal, and
+        // whose whole job is to be the only thing you are looking at.
+        if (_hovered is { } hov && _revealTimer <= 0f)
+            ItemTooltip.Draw(_ui, b, hov, hunter, hit, new Rectangle(0, 0, 1920, 1080));
+
         if (DevForgeDebug) DrawDebug(b);
     }
 
@@ -917,6 +943,7 @@ public sealed class ForgeScreen
             var rc = RarityColors[(int)it.Rarity];
             var sel = it.InstanceId == _focusId;
             var hover = row.Contains(hit);
+            if (hover) _hovered = it;
             var isWorn = Gear.SlotFor(it.BaseType) is { } sl && hunter.Worn(sl)?.InstanceId == it.InstanceId;
 
             if (UiKit.ClickedIn(row, hit, clicked)) _focusId = it.InstanceId;
@@ -1153,19 +1180,42 @@ public sealed class ForgeScreen
         var ay = ItemPanel.Y + 524;
         _ui.Text(b, cur.Count > 0 ? "AFFIXES" : "NO AFFIXES (RARITY GATES COUNT)", ItemPanel.X + 28, ay, Slate);
         ay += 32;
+        // BUILT RIGHT TO LEFT, so the name gets whatever the numbers leave and never one pixel more.
+        // Drawn left-first, the row rendered "CRIT CHANCE2.7%" — the label ran under the before-value
+        // with no gap at all, which is the single most-reported unreadable thing on this screen. The
+        // values are the part you cannot abbreviate; the name is.
+        var nameX = ItemPanel.X + 28;
         for (var i = 0; i < cur.Count; i++)
         {
-            _ui.Text(b, AffixName(cur[i].Stat), ItemPanel.X + 28, ay, Bone);
+            int valuesStart;
             if (nxt is not null && i < nxt.Count)
             {
                 _ui.TextRight(b, AffixVal(nxt[i]), ItemPanel.Right - 28, ay, Met);
                 var aw = _ui.Measure(AffixVal(nxt[i]));
                 Arrow(b, ItemPanel.Right - 28 - aw - 26, ay + 3, Bloom);
-                _ui.TextRight(b, AffixVal(cur[i]), ItemPanel.Right - 28 - aw - 52, ay, Slate);
+                var beforeRight = ItemPanel.Right - 28 - aw - 52;
+                _ui.TextRight(b, AffixVal(cur[i]), beforeRight, ay, Slate);
+                valuesStart = beforeRight - _ui.Measure(AffixVal(cur[i]));
             }
-            else _ui.TextRight(b, AffixVal(cur[i]), ItemPanel.Right - 28, ay, InkGold);
+            else
+            {
+                _ui.TextRight(b, AffixVal(cur[i]), ItemPanel.Right - 28, ay, InkGold);
+                valuesStart = ItemPanel.Right - 28 - _ui.Measure(AffixVal(cur[i]));
+            }
+
+            _ui.Text(b, Shorten(AffixName(cur[i].Stat), valuesStart - nameX - 16), nameX, ay, Bone);
             ay += 34;
         }
+    }
+
+    /// <summary>Trim to a pixel width with an ellipsis. A short label beats a label drawn through a number.</summary>
+    private string Shorten(string text, int width)
+    {
+        if (width <= 0) return "";
+        if (_ui.Measure(text) <= width) return text;
+        var s = text;
+        while (s.Length > 1 && _ui.Measure(s + "\u2026") > width) s = s[..^1];
+        return s.TrimEnd() + "\u2026";
     }
 
     private void DrawTransition(SpriteBatch b, string label, string cur, string? after, int y)
@@ -1280,6 +1330,8 @@ public sealed class ForgeScreen
             var active = idx == _cursor;
             var queued = _merge.Contains(item.InstanceId);
             var rarity = RarityColors[(int)item.Rarity];
+
+            if (card.Contains(hit)) _hovered = item;
 
             // Card body: a dark cell edged in the item's rarity colour.
             _ui.Fill(b, card, active ? new Color(0x2A, 0x24, 0x14) : new Color(0x16, 0x14, 0x1C));
@@ -1471,32 +1523,128 @@ public sealed class ForgeScreen
     {
         if (_revealTimer <= 0f) return;
 
-        var fade = Math.Clamp(_revealTimer / 0.45f, 0f, 1f);   // fade out over the last ~0.45s
+        var t = RevealHold - _revealTimer;                      // seconds SINCE the chest cracked
+        var fade = Math.Clamp(_revealTimer / 0.45f, 0f, 1f);    // fade out over the last ~0.45s
         var grade = RarityColors[(int)_revealGrade];
 
-        // Dim the Forge behind, so the eye goes to the burst.
-        _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0, 0, 0, (int)(150 * fade)));
+        // Dim the Forge behind, deepening as the chest works itself up. The scrim arriving at full
+        // strength on frame one is what made the old reveal read as a dialog rather than an event.
+        var dim = Math.Clamp(t / (ShakeEnds * 0.6f), 0f, 1f);
+        _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0, 0, 0, (int)(215 * dim * fade)));
 
-        // A framed reward card. It had been a flat slab with two coloured rules — the one moment the game
-        // shouts, presented as the least finished surface on the screen.
-        var card = new Rectangle(600, 336, 720, 416);
+        // ── BEAT 1 · THE CHEST RATTLES ────────────────────────────────────────────────────────────
+        if (t < ShakeEnds)
+        {
+            var p = Math.Clamp(t / ShakeEnds, 0f, 1f);
+
+            // Shake amplitude climbs with the square of progress, so the first half is a twitch and the
+            // last moment is violent — the anticipation curve every loot box in the genre is built on.
+            var amp = 26f * p * p;
+            var jitterX = MathF.Sin(t * 61f) * amp;
+            var jitterY = MathF.Cos(t * 47f) * amp * 0.5f;
+
+            // A grade-coloured glow swelling out of the seams — four nested squares with falling alpha
+            // rather than one, because a single Fill is a hard-edged RECTANGLE OF LIGHT sitting behind
+            // the chest, and it reads as a bug. Four steps is enough to pass for a falloff at this size.
+            for (var ring = 0; ring < 4; ring++)
+            {
+                var halo = (int)(130 + 150 * p) + ring * 70;
+                _ui.Fill(b, new Rectangle(960 - halo / 2, 520 - halo / 2, halo, halo),
+                         grade * (0.16f * p / (ring + 1)));
+            }
+
+            var box = new Rectangle((int)(960 - 110 + jitterX), (int)(520 - 110 + jitterY), 220, 220);
+            if (_ui.Assets.Get("chest_loot") is { } art) b.Draw(art, box, Color.White);
+            else { _ui.Fill(b, box, grade * 0.8f); }
+
+            // ABOVE the chest. At 700 it sat behind the loot panel's lower half and read as a smudge.
+            _ui.TextCenterBig(b, $"{RarityNames[(int)_revealGrade]} CHEST", 960, 340,
+                grade * (0.4f + 0.6f * p), UiTypography.SectionTitle);
+        }
+
+        // ── BEAT 2 · THE BURST ────────────────────────────────────────────────────────────────────
+        // A ring, PLOTTED rather than drawn from an asset: a circle of short segments whose radius
+        // sweeps out and whose alpha falls away. Nothing to author, nothing to load, and retiming it is
+        // editing a number — the same reasoning as the Trait screen's unlock flourish.
+        if (t >= ShakeEnds && t < ShakeEnds + 0.5f)
+        {
+            var p = (t - ShakeEnds) / 0.5f;
+            // Starts at the chest's own edge, not at 60. A ring that opens INSIDE the sprite it is
+            // supposed to be bursting out of is a ring nobody sees.
+            var radius = (int)(115 + 405 * p);
+            var alpha = (1f - p) * (1f - p);
+            // Segment count follows the RADIUS. At a fixed 64 the ring starts solid and ends as a dotted
+            // circle, because the same number of dots is being spread around a circumference four times
+            // longer. Density is the thing to hold constant, not count.
+            var segments = Math.Clamp(radius / 6, 48, 220);
+            for (var i = 0; i < segments; i++)
+            {
+                var a = MathF.PI * 2f * i / segments;
+                var px = 960 + (int)(MathF.Cos(a) * radius);
+                var py = 520 + (int)(MathF.Sin(a) * radius);
+                var w = (int)(3 + 9 * (1f - p));
+                _ui.Fill(b, new Rectangle(px - w / 2, py - w / 2, w, w), grade * alpha);
+            }
+            // The flash, brief and white-hot at the centre.
+            if (p < 0.25f)
+                _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), Color.White * (0.35f * (1f - p / 0.25f)));
+        }
+
+        // ── BEAT 3 · THE CARD ─────────────────────────────────────────────────────────────────────
+        if (t < BurstEnds) return;
+
+        // Springs open with an overshoot, then settles. A card that simply appears is information; a
+        // card that arrives is a reward.
+        var cp = Math.Clamp((t - BurstEnds) / CardIn, 0f, 1f);
+        var scale = cp >= 1f ? 1f : 1f + 0.18f * MathF.Sin(cp * MathF.PI) - 0.35f * (1f - cp);
+        var full = new Rectangle(600, 336, 720, 416);
+        var card = Grow(full, scale);
+
         _ui.Panel(b, card);
-        _ui.Fill(b, UiKit.PanelInner(card), grade * (0.10f * fade));   // a wash of the chest's grade
+        _ui.Fill(b, UiKit.PanelInner(card), grade * (0.10f * fade));
+
+        if (cp < 0.6f) return;      // the contents wait for the frame to stop moving
 
         _ui.TextCenterBig(b, $"{RarityNames[(int)_revealGrade]} CHEST", card.Center.X, card.Y + 52,
             grade * fade, UiTypography.SectionTitle);
 
-        // The items that popped, big and framed by their own rarity.
+        // The items that popped, big and framed by their own rarity — one at a time, each dropping the
+        // last few pixels into place so the eye is led along the row instead of at all of it at once.
         var n = _revealItems.Count;
         for (var i = 0; i < n; i++)
-            DrawItemIcon(b, _revealItems[i], new Rectangle(960 - n * 68 + i * 136, 448, 120, 120));
+        {
+            var ip = Math.Clamp((t - BurstEnds - CardIn - i * ItemStagger) / 0.18f, 0f, 1f);
+            if (ip <= 0f) continue;
+            var drop = (int)(-40f * (1f - ip) * (1f - ip));
+            DrawItemIcon(b, _revealItems[i], new Rectangle(960 - n * 68 + i * 136, 448 + drop, 120, 120));
+        }
 
         var names = n == 0
             ? "SOLD ON SIGHT (FILTER)"
             : string.Join("   ", _revealItems.Select(it => $"{RarityNames[(int)it.Rarity]} {ItemNames[it.BaseType]}"));
         var nameColor = n > 0 ? RarityColors[_revealItems.Max(it => (int)it.Rarity)] : Slate;
         _ui.TextCenter(b, names, 960, 604, nameColor * fade);
-        _ui.TextCenterBig(b, $"+{_revealMaterials} MATERIALS", 960, 652, Gold * fade, UiTypography.Body);
+
+        // Materials COUNT UP rather than landing finished. The number is the same; watching it arrive is
+        // the difference between being told what you got and seeing it paid out.
+        var mp = Math.Clamp((t - BurstEnds - CardIn) / 0.5f, 0f, 1f);
+        _ui.TextCenterBig(b, $"+{(int)MathF.Round(_revealMaterials * mp)} MATERIALS", 960, 652,
+            Gold * fade, UiTypography.Body);
+    }
+
+    /// <summary>Pose the chest reveal at <paramref name="t"/> seconds in, and hold it there.</summary>
+    public void DevPoseReveal(float t)
+    {
+        _revealTimer = Math.Max(0.01f, RevealHold - t);
+        _revealFrozen = true;
+    }
+
+    /// <summary>A rectangle scaled about its own centre.</summary>
+    private static Rectangle Grow(Rectangle r, float scale)
+    {
+        var w = (int)(r.Width * scale);
+        var h = (int)(r.Height * scale);
+        return new Rectangle(r.Center.X - w / 2, r.Center.Y - h / 2, w, h);
     }
 
     private void Reticle(SpriteBatch b, Rectangle r, Color c)
