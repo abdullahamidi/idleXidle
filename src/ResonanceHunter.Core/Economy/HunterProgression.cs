@@ -145,7 +145,7 @@ public sealed class Hunter
     public int MaxHealth => (int)ValueOf(HunterStat.MaxHealth) + Gear.CharmHealthBonus(_worn[GearSlot.Charm]);
 
     /// <summary>One glanceable number for "am I getting stronger". Shown in the HUD.</summary>
-    public int PowerRating => Gear.PowerRating(SquadDamageMultiplier, SquadHealthMultiplier, Defense, MaxHealth);
+    public int PowerRating => Gear.PowerRating(SquadDamageMultiplier, SquadSkillRate, SquadHealthMultiplier, Defense, MaxHealth);
 
     /// <summary>
     /// How much this item would add to <see cref="PowerRating"/> if worn in its slot — its marginal power.

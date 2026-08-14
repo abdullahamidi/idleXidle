@@ -121,11 +121,37 @@ public static class Gear
     /// that ranks by this number would happily hand back the weaker piece. It now takes the same two
     /// multipliers <see cref="SoloBattle"/> does.
     /// </para>
+    /// <para>
+    /// SKILL RATE was the second thing it did not read, and it inverted the number. Damage per second is
+    /// hit size TIMES cadence; the rating counted only the size. Half the armour traits in the game buy
+    /// cadence with hit size — SWIFT is x0.90 damage for x1.10 rate, FOCUSED x0.85 for x1.20 — so wearing
+    /// them made the number go DOWN while making the character stronger. Measured against median depth
+    /// over forty runs on a trained fixture:
+    /// </para>
+    /// <code>
+    ///   worn                 old power   new power   depth
+    ///   weapon only               1270        1370      41
+    ///   + chest WARDING           1295        1385      43
+    ///   + chest SWIFT             1186        1923      49
+    ///   + chest FOCUSED           1187        1982      47
+    ///   + chest VITAL             1419        1526      44
+    ///   + full WARDING set        2201        2369      53
+    /// </code>
+    /// <para>
+    /// The old column ranks the two BEST pieces last and the worst-but-one first; the new column matches
+    /// the depth order outright, bar the SWIFT/FOCUSED pair which sit two waves apart inside the noise.
+    /// This is what the player was reporting as "wearing armour lowers my power": the armour was fine,
+    /// the number was lying about it.
+    /// </para>
     /// </remarks>
     /// <param name="damageMultiplier">The build's REAL damage multiplier (Hunter.SquadDamageMultiplier).</param>
+    /// <param name="skillRate">The build's REAL cadence (Hunter.SquadSkillRate). Damage per second, not per hit.</param>
     /// <param name="healthMultiplier">The build's REAL health multiplier (Hunter.SquadHealthMultiplier).</param>
-    public static int PowerRating(float damageMultiplier, float healthMultiplier, int defense, int maxHealth)
-        => (int)MathF.Round(damageMultiplier * 120f + defense * 2f + healthMultiplier * maxHealth * 0.5f);
+    public static int PowerRating(float damageMultiplier, float skillRate, float healthMultiplier,
+                                  int defense, int maxHealth)
+        => (int)MathF.Round(damageMultiplier * MathF.Max(0.05f, skillRate) * 120f
+                            + defense * 2f
+                            + healthMultiplier * maxHealth * 0.5f);
 
     /// <summary>
     /// A rough "how good is this piece" score, for the inventory's "is this an upgrade?" badge.
