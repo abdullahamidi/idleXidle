@@ -10,7 +10,7 @@ set -u
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 
 fail=0
-for gate in check_font_coverage.py check_asset_keys.py; do
+for gate in check_font_coverage.py check_asset_keys.py check_init_order.py; do
   echo "── $gate"
   py "tools/$gate" | sed 's/^/   /' || fail=1
   [ "${PIPESTATUS[0]}" -eq 0 ] || fail=1

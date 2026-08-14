@@ -365,7 +365,17 @@ public class Game1 : Game
         // not a screen built in LoadContent. That distinction is exactly what crashed the game once.
         _characters.Restore(save.ActiveCharacterId, save.QuestsDone);
         _runsWithVowKept = save.RunsWithVowKept;
-        _forge.RestoreChestsOpened(save.ChestsOpened);
+        // PARKED, exactly like the run log above and for exactly the reason the comment above gives.
+        // This line was `_forge.RestoreChestsOpened(...)`, and _forge is a ForgeScreen built in
+        // LoadContent — which has not run yet. It threw a NullReferenceException and took the game down
+        // before the window opened, on EVERY launch that had a save to load.
+        //
+        // The comment two lines above describes this precise failure, names _expedition as the example,
+        // and says "anything restored here belongs in a _pending* field". The very next screen touched
+        // did not follow it. That is worth stating plainly rather than quietly fixing: the warning was
+        // correct, present, and not enough — which is why the guard for it is now a test rather than a
+        // paragraph.
+        _pendingChestsOpened = save.ChestsOpened;
         _chestsCredited = save.ChestsCredited;
 
         var roster = SaveSystem.RestoreRoster(save);
@@ -523,6 +533,7 @@ public class Game1 : Game
     private List<RunReport>? _pendingRunLog;
     private Dictionary<GearSlot, string?> _pendingWorn = new();
     private int _pendingCores;
+    private int _pendingChestsOpened;
     private AutomationYield? _pendingOfflineYield;
 
     private void Save()
@@ -678,6 +689,7 @@ public class Game1 : Game
                 _hunter.RestoreWorn(slot, Find(id));
         }
         if (_pendingChests is not null) _forge.RestoreChests(_pendingChests);
+        _forge.RestoreChestsOpened(_pendingChestsOpened);
         if (_pendingRunLog is not null) _expedition.Log.Restore(_pendingRunLog);
         if (_pendingOfflineYield is not null) _automation.ReportOffline(_pendingOfflineYield);
         _automation.Cores += _pendingCores;
