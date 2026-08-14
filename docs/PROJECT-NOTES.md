@@ -70,6 +70,16 @@ endings.
 2. **`2f5e9c2` roster parity, measured** — answers the old candidate #1 below.
 3. **`b707d2d` fight callout legibility** — the damage numbers had three independent
    reasons to overlap. Fixed and screenshot-verified.
+5. **`368f934` four combo enchantments on the keystone and Vow axes** — the combo axis was
+   complete on ONE of the build's three axes (all six Forms). Keystones and Vows had no loot
+   that cared. FERVOUR/REVERB/BULWARK sharpen BLOODLUST/ECHO/ZEAL; TITHE pays per distinct
+   Vow sworn. Each is read inside its partner's branch, so unpaired is zero, and each has a
+   paired test asserting both halves. **Enchant pools must stay coprime to 4** (now 5/5/5) —
+   that is why this landed four and not two. The more durable half is a new guard:
+   `test_every_enchantment_is_claimed_by_a_test_that_proves_it_does_something`, the
+   enchant-axis twin of `TriggerLivenessTests` — which could not cover these, because they
+   deliberately have no `BuildTrigger` (they are magnitudes, not yes/no questions, and adding
+   them would have put four unread values in that enum).
 4. **`3ca8bf5` the six arena music beds** — `music_arena_{theme}` had a working lookup, a
    working fallback, and no files, so the branch had never once evaluated true and all six
    regions shared one bed. One bed per region Source now. The gate was extended to cover the
