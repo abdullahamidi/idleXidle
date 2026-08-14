@@ -105,7 +105,29 @@ public sealed record EnchantNeed(
     string Label,
     Abilities.Form? Form = null,
     Builds.BuildTrigger? Keystone = null,
-    bool AnyVow = false);
+    bool AnyVow = false)
+{
+    /// <summary>Is this requirement satisfied by the build the player is actually running?</summary>
+    /// <remarks>
+    /// It lives in Core rather than beside the screen that draws the answer, for two reasons. Two
+    /// screens ask it — the Forge's loot grid and its detail panel — and a three-clause predicate
+    /// copied per call site is how one of them ends up saying COMBOS YOUR BUILD while the other says
+    /// nothing. And a rule that lives in a Draw method cannot be unit-tested at all; here it can, and
+    /// is. The clauses are ANDed, but each enchantment sets exactly one, so in practice this asks the
+    /// single question that enchantment cares about.
+    /// </remarks>
+    public bool MetBy(IReadOnlyCollection<Abilities.Form> forms,
+                      IReadOnlyCollection<Builds.BuildTrigger> triggers,
+                      int swornVows)
+    {
+        ArgumentNullException.ThrowIfNull(forms);
+        ArgumentNullException.ThrowIfNull(triggers);
+
+        return (Form is not { } f || forms.Contains(f))
+               && (Keystone is not { } k || triggers.Contains(k))
+               && (!AnyVow || swornVows > 0);
+    }
+}
 
 /// <summary>An enchantment on a specific item, at a specific strength.</summary>
 public sealed record Enchantment(EnchantKind Kind, float Magnitude)

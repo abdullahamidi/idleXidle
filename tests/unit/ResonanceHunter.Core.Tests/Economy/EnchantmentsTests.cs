@@ -200,6 +200,37 @@ public class EnchantmentsTests
     }
 
     [Fact]
+    public void test_a_requirement_is_met_only_by_the_axis_it_names()
+    {
+        // The rule the Forge draws its COMBOS / NEEDS line from, and the FITS badge on the loot grid.
+        // It used to live inside a Draw method, where no test could reach it.
+        var noForms = System.Array.Empty<ResonanceHunter.Core.Abilities.Form>();
+        var noTriggers = System.Array.Empty<ResonanceHunter.Core.Builds.BuildTrigger>();
+
+        var form = new Enchantment(EnchantKind.Overdraw, 1f).Needs!;
+        Assert.True(form.MetBy(new[] { ResonanceHunter.Core.Abilities.Form.Projectile }, noTriggers, 0));
+        Assert.False(form.MetBy(new[] { ResonanceHunter.Core.Abilities.Form.Strike }, noTriggers, 0));
+
+        var keystone = new Enchantment(EnchantKind.Fervour, 1f).Needs!;
+        Assert.True(keystone.MetBy(noForms, new[] { ResonanceHunter.Core.Builds.BuildTrigger.Bloodlust }, 0));
+        Assert.False(keystone.MetBy(noForms, new[] { ResonanceHunter.Core.Builds.BuildTrigger.Echo }, 0));
+
+        var vow = new Enchantment(EnchantKind.Tithe, 1f).Needs!;
+        Assert.True(vow.MetBy(noForms, noTriggers, swornVows: 1));
+        Assert.False(vow.MetBy(noForms, noTriggers, swornVows: 0));
+
+        // AND THE CROSS-AXIS CHECK, which is the one worth having. A keystone combo must not read as
+        // live because the player happens to run a Form, and a Form combo must not read as live because
+        // they happen to have sworn a Vow. Each requirement answers its own axis and ignores the rest.
+        Assert.False(keystone.MetBy(
+            new[] { ResonanceHunter.Core.Abilities.Form.Projectile,
+                    ResonanceHunter.Core.Abilities.Form.Strike }, noTriggers, swornVows: 4));
+        Assert.False(vow.MetBy(
+            new[] { ResonanceHunter.Core.Abilities.Form.Projectile },
+            new[] { ResonanceHunter.Core.Builds.BuildTrigger.Bloodlust }, swornVows: 0));
+    }
+
+    [Fact]
     public void test_every_enchantment_blurb_fits_the_forge_row()
     {
         // The Forge gives the blurb a fixed column, x=344 to the panel edge: 21 characters. Right-

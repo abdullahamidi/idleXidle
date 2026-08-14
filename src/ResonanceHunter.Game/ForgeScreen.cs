@@ -330,6 +330,19 @@ public sealed class ForgeScreen
     public int SwornVows { get; set; }
 
     /// <summary>
+    /// Does this item's enchantment combo with the build the player is actually running?
+    /// </summary>
+    /// <remarks>
+    /// The rule itself is <see cref="EnchantNeed.MetBy"/>, in Core, where it can be unit-tested — this
+    /// only supplies the three facts this screen happens to hold. Both the grid badge and the detail
+    /// panel's combo line come through here, because two copies of a three-clause predicate is how a
+    /// card ends up saying COMBOS YOUR BUILD while the grid it sits in says nothing, and the player
+    /// believes whichever one they read first.
+    /// </remarks>
+    private bool CombosWithBuild(ItemInstance? item)
+        => Enchantments.Of(item)?.Needs?.MetBy(ActiveForms, ActiveTriggers, SwornVows) == true;
+
+    /// <summary>
     /// The Memory Dust auto-sell floor. Set by the host so a chest's rolled loot honours the same filter a
     /// boss drop does — filtered items are sold for gleam, not dumped in the bag. Null keeps everything.
     /// </summary>
@@ -1365,6 +1378,17 @@ public sealed class ForgeScreen
                 && hunter.PowerContribution(item) > hunter.PowerContribution(hunter.Worn(sl)))
                 _ui.Text(b, "UP", card.X + 12, card.Y + 8, new Color(0x6E, 0xC8, 0x7A));
 
+            // FITS — this item's enchantment combos with the build you are actually running.
+            //
+            // The combo line on the detail panel answers this one item at a time, and a chest drops
+            // fourteen. Reading them meant clicking every card, which is exactly the friction that makes
+            // a player stop reading and sort by rarity instead — and rarity is the one axis the loot
+            // rework exists to stop being the answer. UP already says "bigger"; this says "yours", and
+            // the two are deliberately different words in different colours, because an item is often
+            // one and not the other and that tension IS the decision.
+            if (CombosWithBuild(item))
+                _ui.Text(b, "FITS", card.X + 12, card.Bottom - 34, Gold);
+
             if (active) Reticle(b, card, Bone);
         }
 
@@ -1417,9 +1441,7 @@ public sealed class ForgeScreen
                 // happened to run the right Form would be the same lie in the other direction.
                 if (ench.Needs is { } need)
                 {
-                    var live = (need.Form is not { } f || ActiveForms.Contains(f))
-                               && (need.Keystone is not { } k || ActiveTriggers.Contains(k))
-                               && (!need.AnyVow || SwornVows > 0);
+                    var live = CombosWithBuild(act);
                     _ui.Text(b, live ? "COMBOS YOUR BUILD" : $"NEEDS {need.Label} IN YOUR BUILD",
                         1088, 634, live ? InkGold : InkFaint);
                 }
