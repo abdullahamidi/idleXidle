@@ -27,6 +27,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GAME = os.path.join(ROOT, "src", "ResonanceHunter.Game")
 ART = os.path.join(ROOT, "assets", "art")
+AUDIO = os.path.join(ROOT, "assets", "audio")
 
 # The call sites that take a key. Anything else that grows one should be added here.
 CALLS = re.compile(
@@ -56,6 +57,14 @@ def strip_comments(text: str) -> str:
     return re.sub(r"^[ \t]*//.*$", "", text, flags=re.M)
 
 
+def cues() -> set:
+    return {os.path.splitext(os.path.basename(p))[0]
+            for p in glob.glob(os.path.join(AUDIO, "**", "*.wav"), recursive=True)}
+
+
+SOUND_CALL = re.compile(r'\b(?:PlayFirst|Play)\s*\(([^)]*)')
+
+
 def main() -> int:
     have = on_disk()
     alias = aliases()
@@ -76,6 +85,19 @@ def main() -> int:
                     missing.setdefault(key, []).append(
                         f"{os.path.basename(path)}:{line_no}")
 
+    # AND THE SOUND CUES, which fail exactly the same way: SoundBank no-ops on a name it does
+    # not have, so five of the game's seven cues — click, forge, level-up, conquest, deepen —
+    # were called for the whole of development and played silence.
+    wavs = cues()
+    for path in sorted(glob.glob(os.path.join(GAME, "*.cs"))):
+        text = strip_comments(open(path, encoding="utf-8").read())
+        for line_no, line in enumerate(text.split("\n"), 1):
+            for call in SOUND_CALL.finditer(line):
+                for key in re.findall(r'"(sfx_[a-z0-9_]+)"', call.group(1)):
+                    if key not in wavs:
+                        missing.setdefault(key, []).append(
+                            f"{os.path.basename(path)}:{line_no}")
+
     # AND THE ALIAS TABLE ITSELF. A migration alias whose TARGET has been deleted is the same
     # silent hole one indirection further along, and it is likelier than a typo — the alias
     # exists precisely because the file it points at was renamed once already.
@@ -85,10 +107,10 @@ def main() -> int:
 
     if not missing:
         print(f"every hand-typed asset key resolves ({len(have)} images, "
-              f"{len(alias)} aliases).")
+              f"{len(alias)} aliases, {len(cues())} cues).")
         return 0
 
-    print("KEYS WITH NO FILE — these draw as a fallback shape, or as nothing:\n")
+    print("KEYS WITH NO FILE — these draw a fallback shape, or play silence:\n")
     for key, where in sorted(missing.items()):
         seen = ", ".join(dict.fromkeys(where))[:110]
         print(f"  {key:<34} {seen}")

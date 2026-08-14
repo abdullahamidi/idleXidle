@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synthesise the trait-unlock cues into assets/audio.
+"""Synthesise the UI cues into assets/audio.
 
 Usage:
     python3 tools/asset-pipeline/make_sfx.py
@@ -143,6 +143,70 @@ def trait_terminal() -> None:
     write(os.path.join(OUT_DIR, "sfx_trait_terminal.wav"), buf)
 
 
+def click() -> None:
+    """Every button. Has to be SHORT and quiet — this one plays hundreds of times an hour,
+    and the cue you hear most is the cue that has to stay out of the way."""
+    rng = Noise(0x0C11)
+    buf = [0.0] * int(0.11 * RATE)
+    air(buf, 0.0, 0.03, 0.13, rng)
+    bell(buf, 0.0, 1174.66, 0.20, 0.045, partials=(1.0, 2.0))   # D6, two partials only
+    write(os.path.join(OUT_DIR, "sfx_click.wav"), buf)
+
+
+def forge() -> None:
+    """Refine, reforge, merge. A struck anvil: low body, bright ring, gone in half a beat."""
+    rng = Noise(0xF0F0)
+    buf = [0.0] * int(0.75 * RATE)
+    air(buf, 0.0, 0.05, 0.30, rng)
+    sweep(buf, 0.0, 0.09, 180.0, 90.0, 0.42)                     # the mass of the hammer
+    bell(buf, 0.01, 1046.50, 0.34, 0.26, partials=(1.0, 2.76, 5.40, 8.93))  # metal, inharmonic
+    bell(buf, 0.02, 1567.98, 0.18, 0.20, partials=(1.0, 2.76))
+    write(os.path.join(OUT_DIR, "sfx_forge.wav"), buf)
+
+
+def levelup() -> None:
+    """A rank bought. Three notes UP — the one unambiguous "you gained something" shape."""
+    rng = Noise(0x1EAF)
+    buf = [0.0] * int(1.05 * RATE)
+    air(buf, 0.0, 0.08, 0.18, rng)
+    for i, f in enumerate((523.25, 659.25, 783.99)):             # C5 E5 G5, a major triad
+        bell(buf, 0.02 + i * 0.075, f, 0.40 - i * 0.04, 0.40)
+    sweep(buf, 0.0, 0.20, 260.0, 800.0, 0.16)
+    write(os.path.join(OUT_DIR, "sfx_levelup.wav"), buf)
+
+
+def conquer() -> None:
+    """A region taken. The biggest cue the game has that is not a terminal: a swell, an
+    impact, and a MAJOR chord that hangs — the mirror of trait_terminal's minor one."""
+    rng = Noise(0xC0FE)
+    buf = [0.0] * int(2.4 * RATE)
+    air(buf, 0.0, 0.40, 0.28, rng, rise=True)
+    sweep(buf, 0.34, 0.36, 70.0, 44.0, 0.80)
+    air(buf, 0.36, 0.34, 0.30, rng)
+    for f, g in ((261.63, 0.44), (329.63, 0.36), (392.00, 0.32), (523.25, 0.26)):
+        bell(buf, 0.37, f, g, 1.05)                              # C major — a reward, not a price
+    bell(buf, 0.70, 1046.50, 0.18, 0.85)
+    write(os.path.join(OUT_DIR, "sfx_conquer.wav"), buf)
+
+
+def deepen() -> None:
+    """Corruption deepened. Descending, and it should NOT feel good — the player has just
+    made the whole world harder in exchange for more."""
+    rng = Noise(0xDEEB)
+    buf = [0.0] * int(2.0 * RATE)
+    air(buf, 0.0, 0.30, 0.24, rng, rise=True)
+    sweep(buf, 0.24, 0.70, 120.0, 34.0, 0.66)                    # a long fall
+    for f, g in ((196.00, 0.40), (233.08, 0.30), (293.66, 0.26)):  # G minor, low and close
+        bell(buf, 0.26, f, g, 0.90)
+    air(buf, 0.90, 0.50, 0.16, rng)
+    write(os.path.join(OUT_DIR, "sfx_deepen.wav"), buf)
+
+
 if __name__ == "__main__":
     trait_lit()
     trait_terminal()
+    click()
+    forge()
+    levelup()
+    conquer()
+    deepen()
