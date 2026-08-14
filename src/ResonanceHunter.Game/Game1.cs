@@ -2146,39 +2146,52 @@ public class Game1 : Game
         _ui.TextCenterBig(_batch, "RESONANCE HUNTER — CONTROLS", panel.Center.X, panel.Y + 46, Gold, UiTypography.SectionTitle);
 
         // Two columns: the build on the left, the screens on the right.
+        // DERIVED where it can be, and honest where it cannot. This panel is the only place a new player
+        // is told how the game works, and it had drifted: it stated a flat "4 WOVEN SKILLS" when the
+        // trait spine sells a fifth, and "3 KEYSTONE SOCKETS" when a player starts with ONE and buys the
+        // others. Both numbers now come from the live loadout, so the help cannot be wrong about what
+        // the player actually has.
         var build = new (string Key, string What)[]
         {
-            ("4", "WOVEN SKILLS"),
+            ($"{_loadout.SkillCapacity}", "WOVEN SKILLS"),
             ("", "SOURCE x FORM x VOW"),
-            ("3", "KEYSTONE SOCKETS"),
+            ($"{_loadout.KeystoneCapacity}", "KEYSTONE SOCKETS"),
             ("", "EACH ONE A TRADE"),
+            ("", "THE SPINE SELLS MORE OF BOTH"),
             ("", "FORM IS YOUR PLAYSTYLE"),
             ("", "SOURCE VS REGION"),
         };
+        // Every tile on the nav rail, plus the two keys that open nothing on it. HUNT and ROSTER were
+        // missing outright — ROSTER is ten characters and a quest chain, and nothing in the game told
+        // anyone the key existed.
         var world = new (string Key, string What)[]
         {
+            ("H", "HUNT — THE FIGHT"),
             ("C", "CHARACTER — GEAR & BAG"),
             ("V", "STATS — TRAIN"),
             ("B", "WEAVE YOUR BUILD"),
             ("W", "WORLD MAP"),
-            ("F", "FORGE — CRAFT LOOT"),
+            ("F", "FORGE — CRAFT & CHESTS"),
             ("A", "WARREN — HATCH"),
-            ("P", "MEMORY DUST"),
+            ("P", "TRAITS — THE SPINE"),
+            ("R", "ROSTER — YOUR CHAMPIONS"),
+            ("L", "THE EXPEDITION LOG"),
             ("F1", "CLOSE"),
         };
 
         Text("YOUR BUILD", 176, 200, Bone);
         for (var i = 0; i < build.Length; i++)
         {
-            Text(build[i].Key, 176, 254 + i * 46, Gold);
-            Text(build[i].What, 356, 254 + i * 46, Bone);
+            Text(build[i].Key, 176, 254 + i * 38, Gold);
+            Text(build[i].What, 356, 254 + i * 38, Bone);
         }
 
+        // 38px pitch, not 46: eleven rows at 46 would run to y=754 and through THE IDEA block below.
         Text("SCREENS", 1140, 200, Bone);
         for (var i = 0; i < world.Length; i++)
         {
-            Text(world[i].Key, 1140, 254 + i * 46, Gold);
-            Text(world[i].What, 1256, 254 + i * 46, Bone);
+            Text(world[i].Key, 1140, 254 + i * 38, Gold);
+            Text(world[i].What, 1256, 254 + i * 38, Bone);
         }
 
         Text("THE IDEA:", 176, 620, Gold);

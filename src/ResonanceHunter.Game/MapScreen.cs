@@ -254,7 +254,21 @@ public sealed class MapScreen
             if (sel) _ui.Fill(b, new Rectangle(node.X - 4, node.Y - 4, node.Width + 8, 4), Gold);
         }
 
-        if (Message.Length > 0) _ui.TextCenter(b, Message, MapCanvas.Center.X, MapCanvas.Bottom - 30, Gold);
+        // BELOW the panels, on a ground of its own. At MapCanvas.Bottom - 30 it sat on the map panel's
+        // bottom ornament, and the string is wider than the map — "VERDANT HOLLOW CONQUERED! CINDERWORKS
+        // UNLOCKED — OPEN THE MAP (W)." ran out through the frames of the two panels either side of it,
+        // with no background behind any of it. This is how the game announces that a region opened, which
+        // makes it the last line in the game that should be hard to read.
+        if (Message.Length > 0)
+        {
+            var w = Math.Min(1780, _ui.Measure(Message) + 96);
+            var band = new Rectangle(960 - w / 2, MapCanvas.Bottom + 22, w, 60);
+            _ui.Fill(b, new Rectangle(band.X + 3, band.Y + 3, band.Width, band.Height), new Color(0, 0, 0, 120));
+            _ui.Fill(b, band, new Color(0x14, 0x10, 0x1E, 0xF0));
+            _ui.Fill(b, new Rectangle(band.X, band.Y, band.Width, 3), Gold);
+            _ui.Fill(b, new Rectangle(band.X, band.Bottom - 3, band.Width, 3), Gold * 0.4f);
+            _ui.TextCenter(b, Message, band.Center.X, band.Y + 20, Gold);
+        }
     }
 
     private void DrawDetail(SpriteBatch b, Point hit, bool clicked)
