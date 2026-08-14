@@ -117,7 +117,10 @@ public static class CharacterRoster
             Lean = Branch.Tempo, Aptitude = Form.Projectile, AptitudePower = 1.35f,
             PassiveName = "LOOSE AGAIN",
             PassiveText = "A kill sends the next shot immediately.",
-            Grants = new[] { BuildTrigger.Splinter },
+            // LooseAgain, not Splinter. The card reads "a kill sends the next shot immediately" and the
+            // grant was SPLINTER, whose own blurb is "on kill: richer loot" — an action-economy promise
+            // paid out as a loot bonus, on the passive a player unlocks by finishing a quest for it.
+            Grants = new[] { BuildTrigger.LooseAgain },
             Shape = new SkillShape { SkillRate = 1.10f },
             Unlock = CharacterUnlock.Quest("q_hollow_hunt", "Finish the hunt in the Verdant Hollow"),
         },

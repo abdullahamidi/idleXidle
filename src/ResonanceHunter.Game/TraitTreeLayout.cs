@@ -30,7 +30,8 @@ namespace ResonanceHunter.Client;
 /// </remarks>
 public static class TraitTreeLayout
 {
-    private const float ChainStep = 1.45f;   // one rung down a spine chain
+    /// <summary>One rung — the diagram's unit of distance. Public so a wire can ask how long it is.</summary>
+    public const float ChainStep = 1.45f;   // one rung down a spine chain
     private const float RoadStep = 1.45f;    // one rung up a road
 
     public static IReadOnlyDictionary<string, Vector2> Positions { get; } = Build();

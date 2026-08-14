@@ -563,6 +563,16 @@ public sealed class PrestigeScreen
             _ui.TextCenter(b, $"{u.Cost}", box.Center.X, box.Bottom + 2, buyable ? Bone : Dim);
     }
 
+    /// <summary>How many screen pixels one rung of the diagram is worth. Shared with <see cref="Line"/>.</summary>
+    private float RungPixels()
+    {
+        var (min, max) = TraitTreeLayout.Bounds();
+        var view = new Rectangle(TreePanel.X + 84, TreePanel.Y + 168,
+                                 TreePanel.Width - 168, TreePanel.Height - 244);
+        var span = Vector2.Max(max - min, new Vector2(0.001f));
+        return MathF.Min(view.Width / span.X, view.Height / span.Y) * TraitTreeLayout.ChainStep;
+    }
+
     /// <summary>World units to screen pixels, fitted to the panel once.</summary>
     private Vector2 ToScreen(Vector2 world)
     {
@@ -581,15 +591,30 @@ public sealed class PrestigeScreen
                            view.Y + (view.Height - drawn.Y) / 2f + (world.Y - min.Y) * scale);
     }
 
+    /// <summary>A wire between two nodes. Long ones are DASHED — see remarks.</summary>
+    /// <remarks>
+    /// A road segment joins neighbours; ATTUNEMENT wants one node from the head of every road, so its
+    /// edge crosses a third of the diagram whichever prerequisite is nearest. Drawn solid, at any alpha,
+    /// a line that long reads as structure — as though the two roads it cuts between were joined — and
+    /// the eye follows it instead of the roads. Dashed, it reads as what it is: a dependency that lives
+    /// somewhere else. The detail panel still states the full prerequisite list exactly.
+    /// </remarks>
     private void Line(SpriteBatch b, Vector2 a, Vector2 c, Color col, int thick)
     {
         var dx = c.X - a.X;
         var dy = c.Y - a.Y;
         var steps = (int)MathF.Max(MathF.Abs(dx), MathF.Abs(dy));
         if (steps <= 0) return;
+
+        // Measured against the diagram's own rung, so it follows the layout rather than a screen size:
+        // anything more than twice a normal step is a wire that has left its neighbourhood.
+        var longRun = steps > (int)(RungPixels() * 2.2f);
         for (var i = 0; i <= steps; i++)
+        {
+            if (longRun && (i / 9) % 2 == 1) continue;   // 9 on, 9 off
             _ui.Fill(b, new Rectangle((int)(a.X + dx * i / steps) - thick / 2,
                                       (int)(a.Y + dy * i / steps) - thick / 2, thick, thick), col);
+        }
     }
 
     private void Outline(SpriteBatch b, Rectangle r, Color c, int t)

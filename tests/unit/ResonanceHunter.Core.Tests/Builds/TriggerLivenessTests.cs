@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using ResonanceHunter.Core.Abilities;
+using ResonanceHunter.Core.Automation;
 using ResonanceHunter.Core.Builds;
 using ResonanceHunter.Core.Economy;
 using ResonanceHunter.Core.Expeditions;
@@ -60,6 +61,54 @@ public class TriggerLivenessTests
         return events.Where(e => e.Kind == BattleEventKind.Strike).Sum(e => e.Amount);
     }
 
+    [Fact]
+    public void test_loose_again_actually_looses_again()
+    {
+        // THE QUIVER's card reads "a kill sends the next shot immediately" and the character granted
+        // SPLINTER, whose own blurb is "on kill: richer loot". Two different sentences, and the one on
+        // the card was the one nothing implemented — on a passive a player unlocks by finishing a quest
+        // specifically to get it.
+        //
+        // Measured on a SWARM: many weak creatures, so kills come often and the readied cooldowns
+        // compound. A single-creature fixture would show nothing, which is correct — the passive is
+        // meant to be dead weight on a boss.
+        var swarm = Enumerable.Range(0, 8)
+            .Select(_ => new WaveCreature { MaxHealth = 40f, Health = 40f, Damage = 0f })
+            .ToArray();
+
+        // CLEAR TIME, not cast count. Counting casts measures the creatures, not the cadence: a wave
+        // ends when the last one dies, so eight creatures take eight killing casts however fast they
+        // arrive. What the passive buys is those casts arriving SOONER.
+        var plain = ClearMs(swarm.Select(Fresh).ToArray());
+        var loose = ClearMs(swarm.Select(Fresh).ToArray(), BuildTrigger.LooseAgain);
+
+        Assert.True(loose < plain,
+                    $"LOOSE AGAIN must clear a swarm faster — {loose}ms against {plain}ms");
+    }
+
+    private static WaveCreature Fresh(WaveCreature c)
+        => new() { MaxHealth = c.MaxHealth, Health = c.MaxHealth, Damage = c.Damage };
+
+    /// <summary>The millisecond the wave was cleared — lower is a faster build.</summary>
+    private static int ClearMs(WaveCreature[] creatures, params BuildTrigger[] triggers)
+    {
+        var build = new Build
+        {
+            PassiveMods = BuildMods.None,
+            Shape = SkillShape.None,
+            ExtraTriggers = new HashSet<BuildTrigger>(triggers),
+        };
+        build.Weave(new EquippedSkill(
+            new WovenAbility { Name = "P", Source = Source.Nature, Form = Form.Projectile },
+            FormBehaviour.BaseCooldownMs(Form.Projectile)));
+
+        var champ = new Champion { MaxHealth = 100_000, Health = 100_000 };
+        var (_, events) = SoloBattle.ResolveWave(
+            champ, build, new Hunter(), creatures,
+            enemyIntervalMs: 100_000, ExpeditionTuning.Default, new Random(5));
+        return events.Count == 0 ? int.MaxValue : events.Max(e => e.AtMs);
+    }
+
     // ── The roll-call ─────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -89,6 +138,7 @@ public class TriggerLivenessTests
             BuildTrigger.Desperation,   // SoloExpeditionTests.test_desperation_swells_the_haul_at_low_health
             BuildTrigger.Hoarder,       // test_hoarder_turns_haul_into_force
             BuildTrigger.Weaver,        // test_weaver_fires_the_next_form_as_well
+            BuildTrigger.LooseAgain,    // test_loose_again_actually_looses_again
         };
 
         // DESPERATION was parked here for a long time as "dead" — a HAUL effect the squad Expedition read

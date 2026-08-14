@@ -82,6 +82,19 @@ public enum BuildTrigger
     /// <summary>Damage scales with how much health is PRESENT — the mirror of <see cref="Bloodlust"/>.</summary>
     Zeal,
 
+    /// <summary>A KILL readies every skill at once — the next shot goes out immediately.</summary>
+    /// <remarks>
+    /// Written because THE QUIVER's card said it and nothing did it. The character granted
+    /// <see cref="Splinter"/>, whose own blurb is "on kill: richer loot", so the passive a player
+    /// unlocks by finishing a quest promised an action-economy payoff and delivered a loot one — two
+    /// different sentences, neither of them the one on the card.
+    ///
+    /// Worth most in a Swarm band and nothing at all against a single creature, which is exactly the
+    /// shape a Projectile specialist's passive should have: it rewards the build that can convert one
+    /// kill into the next, and it is dead weight on a boss.
+    /// </remarks>
+    LooseAgain,
+
     // ── Form-combo triggers, granted by item enchantments. Each is dead weight without its Form. ─────
     /// <summary>PROJECTILE fires one extra time.</summary>
     Overdraw,

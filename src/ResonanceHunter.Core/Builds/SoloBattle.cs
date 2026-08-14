@@ -569,6 +569,11 @@ public static class SoloBattle
                 // remove; the wave-cleared signal is the outcome, not this event.
                 events.Add(new BattleEvent(BattleEventKind.EnemyDown, idx, 0, atMs));
 
+                // LOOSE AGAIN — every skill is ready the instant something dies. Clearing the whole
+                // table rather than one entry is deliberate: the card says "the NEXT shot", and which
+                // skill that is depends on what the rotation reaches first.
+                if (triggers.Contains(BuildTrigger.LooseAgain)) champ.ReadyAt.Clear();
+
                 // BREAKER — half of the overkill carries on. The design named a part-break bonus here;
                 // the sim has no part-break model, and this answers the same complaint from inside the
                 // model that exists, because discarded overkill IS the tax a large-hit build pays in a
