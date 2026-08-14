@@ -62,7 +62,7 @@ def cues() -> set:
             for p in glob.glob(os.path.join(AUDIO, "**", "*.wav"), recursive=True)}
 
 
-SOUND_CALL = re.compile(r'\b(?:PlayFirst|Play)\s*\(([^)]*)')
+SOUND_CALL = re.compile(r'\b(?:PlayFirst|Play|PlayMusic)\s*\(([^)]*)')
 
 
 def main() -> int:
@@ -85,15 +85,16 @@ def main() -> int:
                     missing.setdefault(key, []).append(
                         f"{os.path.basename(path)}:{line_no}")
 
-    # AND THE SOUND CUES, which fail exactly the same way: SoundBank no-ops on a name it does
-    # not have, so five of the game's seven cues — click, forge, level-up, conquest, deepen —
-    # were called for the whole of development and played silence.
+    # AND THE SOUND CUES AND MUSIC BEDS, which fail exactly the same way: SoundBank no-ops on a
+    # name it does not have. Five of the seven cues and ALL SIX music tracks were called for the
+    # whole of development and played silence — the looping player was written, wired per screen,
+    # given a per-theme arena variant with a fallback, and never given a file.
     wavs = cues()
     for path in sorted(glob.glob(os.path.join(GAME, "*.cs"))):
         text = strip_comments(open(path, encoding="utf-8").read())
         for line_no, line in enumerate(text.split("\n"), 1):
             for call in SOUND_CALL.finditer(line):
-                for key in re.findall(r'"(sfx_[a-z0-9_]+)"', call.group(1)):
+                for key in re.findall(r'"((?:sfx|music)_[a-z0-9_]+)"', call.group(1)):
                     if key not in wavs:
                         missing.setdefault(key, []).append(
                             f"{os.path.basename(path)}:{line_no}")
