@@ -178,6 +178,17 @@ tools/asset-pipeline/.staging/
 tools/asset-pipeline/.env
 
 # Dev screenshot captures (tools/asset-pipeline/capture.sh) — regenerable, not source.
+#
+# THIS PREFIX IS THE POLICY, and production/qa/evidence/ relies on it. coding-standards.md wants a
+# screenshot on file for every Visual/Feel and UI story, and the working rule that emerged is: a
+# capture taken to LOOK at something is named shot_* and is ignored wherever it lands, including
+# inside the evidence directory; a capture KEPT as the evidence for a story is given a real name
+# (armour_tiers.png, roster_designs.png) and is committed. So "put it in evidence/" is not what makes
+# something evidence — naming it is. Both of the tracked files got there that way.
+#
+# The alternative — negating the rule for evidence/ — was considered and rejected: that directory
+# currently holds 21 files and 15 MB, and nineteen of them are this week's iteration captures. A
+# trail that keeps everything is not a trail.
 shot_*.png
 
 # Verification captures written by audit agents — never source.
