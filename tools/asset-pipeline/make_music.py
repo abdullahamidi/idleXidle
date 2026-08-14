@@ -203,9 +203,88 @@ def world_map() -> float:
     return write(os.path.join(OUT_DIR, "music_map.wav"), buf)
 
 
+# ── The six arenas, one per region Source. ───────────────────────────────────────────────
+#
+# Game1.UpdateMusic has always asked for `music_arena_{theme}` and fallen back to music_combat
+# when the file was absent — which it always was, so all six regions shared one bed and the
+# lookup was a branch that had never once been taken.
+#
+# Every one of these is still THE COMBAT BED first and a colour second: a low fundamental with
+# real weight, a mid voice, and a pulse slow enough to live under a fight that runs for hours.
+# What changes between them is temperature and interval, not activity. The brief from combat()
+# holds — pressure, not urgency — because the champion fights on its own and the player is
+# usually looking at another screen entirely.
+
+def arena_nature() -> float:
+    """VERDANT HOLLOW — E minor, warm and breathing, the most air of the six."""
+    buf = [0.0] * N
+    pad(buf, 41.20, 0.52, partials=6, lfo_cycles=3, depth=0.40, detune=0.005)   # E1
+    pad(buf, 61.74, 0.32, partials=5, lfo_cycles=4, depth=0.45)                 # B1, the fifth
+    pad(buf, 98.00, 0.18, partials=4, lfo_cycles=6, depth=0.55)                 # G2, minor third
+    wind(buf, 0.34, Noise(0x4EAF), cycles=3)                                    # leaves
+    return write(os.path.join(OUT_DIR, "music_arena_nature.wav"), buf)
+
+
+def arena_machine() -> float:
+    """CINDERWORKS — bare octaves and a ringing top. Hard, and the fastest pulse of the six."""
+    buf = [0.0] * N
+    pad(buf, 32.70, 0.55, partials=7, lfo_cycles=6, depth=0.50, detune=0.006)   # C1
+    pad(buf, 65.41, 0.34, partials=5, lfo_cycles=8, depth=0.50)                 # C2 — an OCTAVE,
+    pad(buf, 98.00, 0.20, partials=4, lfo_cycles=12, depth=0.60)                # G2   no third at
+    pad(buf, 261.63, 0.09, partials=3, lfo_cycles=16, depth=0.75)               # C4, the hammer
+    wind(buf, 0.18, Noise(0xC0A1), cycles=6)
+    return write(os.path.join(OUT_DIR, "music_arena_machine.wav"), buf)
+
+
+def arena_shadow() -> float:
+    """UMBRAL REACH — a tritone that never resolves, and almost nothing above it."""
+    buf = [0.0] * N
+    pad(buf, 55.00, 0.55, partials=6, lfo_cycles=2, depth=0.45, detune=0.004)   # A1
+    pad(buf, 77.78, 0.30, partials=4, lfo_cycles=3, depth=0.55)                 # D#2 — the tritone
+    pad(buf, 110.00, 0.14, partials=3, lfo_cycles=5, depth=0.65)                # A2
+    wind(buf, 0.32, Noise(0x5AD0), cycles=2)
+    return write(os.path.join(OUT_DIR, "music_arena_shadow.wav"), buf)
+
+
+def arena_body() -> float:
+    """MARROW WASTES — the lowest and thickest. A slow deep swell, felt more than heard."""
+    buf = [0.0] * N
+    pad(buf, 36.71, 0.60, partials=7, lfo_cycles=2, depth=0.55, detune=0.007)   # D1
+    pad(buf, 55.00, 0.34, partials=5, lfo_cycles=3, depth=0.50)                 # A1
+    pad(buf, 87.31, 0.16, partials=3, lfo_cycles=4, depth=0.60)                 # F2, minor third
+    wind(buf, 0.24, Noise(0xB0D1), cycles=2)
+    return write(os.path.join(OUT_DIR, "music_arena_body.wav"), buf)
+
+
+def arena_mind() -> float:
+    """THE STILL ARCHIVE — cold and exact. A high glint over a nearly empty floor."""
+    buf = [0.0] * N
+    pad(buf, 61.74, 0.48, partials=5, lfo_cycles=2, depth=0.35, detune=0.002)   # B1
+    pad(buf, 92.50, 0.28, partials=4, lfo_cycles=4, depth=0.45)                 # F#2
+    pad(buf, 311.13, 0.09, partials=2, lfo_cycles=9, depth=0.80)                # D#4, the glint
+    wind(buf, 0.12, Noise(0x11D5), cycles=3)
+    return write(os.path.join(OUT_DIR, "music_arena_mind.wav"), buf)
+
+
+def arena_spirit() -> float:
+    """THE PALE CHOIR — voices. Every partial detuned into a pair, so the whole bed shimmers."""
+    buf = [0.0] * N
+    pad(buf, 55.00, 0.48, partials=6, lfo_cycles=2, depth=0.35, detune=0.008)   # A1
+    pad(buf, 82.41, 0.30, partials=5, lfo_cycles=3, depth=0.45, detune=0.007)   # E2
+    pad(buf, 110.00, 0.20, partials=4, lfo_cycles=4, depth=0.50, detune=0.006)  # A2
+    pad(buf, 138.59, 0.12, partials=3, lfo_cycles=6, depth=0.65, detune=0.005)  # C#3 — major third
+    wind(buf, 0.20, Noise(0x5717), cycles=3)
+    return write(os.path.join(OUT_DIR, "music_arena_spirit.wav"), buf)
+
+
+SCREEN_BEDS = (title, combat, forge, warren, constellation, world_map)
+ARENA_BEDS = (arena_nature, arena_machine, arena_shadow, arena_body, arena_mind, arena_spirit)
+
 if __name__ == "__main__":
-    worst = max(t() for t in (title, combat, forge, warren, constellation, world_map))
+    worst = max(t() for t in SCREEN_BEDS + ARENA_BEDS)
     print()
     if worst > 1.8:
         raise SystemExit(f"a join {worst:.1f}x the steps around it will tick once per loop")
-    print(f"six beds, worst join {worst:.2f}x the steps it sits between — every loop closes silently.")
+    total = len(SCREEN_BEDS) + len(ARENA_BEDS)
+    print(f"{total} beds, worst join {worst:.2f}x the steps it sits between — "
+          "every loop closes silently.")

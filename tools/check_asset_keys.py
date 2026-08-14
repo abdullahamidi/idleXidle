@@ -99,6 +99,26 @@ def main() -> int:
                         missing.setdefault(key, []).append(
                             f"{os.path.basename(path)}:{line_no}")
 
+    # AND THE ONE INTERPOLATED FAMILY THAT FAILS QUIETLY INSTEAD OF LOUDLY.
+    #
+    # Everything above only sees fully-literal keys, and the docstring is honest that runtime-built
+    # names are out of scope because their own tests cover them. `music_arena_{theme}` is the
+    # exception worth hard-coding, because it does not merely fail — it SUCCEEDS, quietly, into the
+    # fallback. Game1.UpdateMusic reads `Has($"music_arena_{theme}") ? ... : "music_combat"`, so a
+    # missing or misnamed bed is not silence anyone would notice; it is the generic combat track,
+    # which is exactly what a region without a bed is supposed to sound like. That branch went
+    # untaken for the whole of development and nothing said so.
+    #
+    # The themes come from Regions.cs, so adding a seventh region fails this the day it lands
+    # rather than the day someone notices two regions share a bed.
+    regions_cs = os.path.join(ROOT, "src", "ResonanceHunter.Core", "Encounters", "Regions.cs")
+    if os.path.exists(regions_cs):
+        themes = set(re.findall(r"Source\.([A-Z][a-z]+)", open(regions_cs, encoding="utf-8").read()))
+        for theme in sorted(themes):
+            key = f"music_arena_{theme.lower()}"
+            if key not in wavs:
+                missing.setdefault(key, []).append("Game1.cs (UpdateMusic, per-theme arena bed)")
+
     # AND THE ALIAS TABLE ITSELF. A migration alias whose TARGET has been deleted is the same
     # silent hole one indirection further along, and it is likelier than a typo — the alias
     # exists precisely because the file it points at was renamed once already.
