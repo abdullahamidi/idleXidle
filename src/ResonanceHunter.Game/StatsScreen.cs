@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using ResonanceHunter.Core.Abilities;
 using ResonanceHunter.Core.Builds;
+using ResonanceHunter.Core.Characters;
 using ResonanceHunter.Core.Economy;
 using ResonanceHunter.Core.Prestige;
 
@@ -41,6 +42,18 @@ public sealed class StatsScreen
     public MasteryTree Mastery { get; set; } = null!;
     public PlayerLoadout Loadout { get; set; } = null!;
     public MemoryDustTree Tree { get; set; } = null!;
+
+    /// <summary>
+    /// The active character, because this page states the player's numbers and a character is one of
+    /// the three things that changes them.
+    /// </summary>
+    /// <remarks>
+    /// Passing this to <c>ToBuild</c> is not optional bookkeeping. The two-argument overload silently
+    /// substitutes <c>null</c>, and a shape built without the character is a shape the sim never uses —
+    /// which is the exact bug <see cref="DrawDerived"/> already carries a comment about having fixed
+    /// once for the mastery tree. The character layer arrived later and re-opened it.
+    /// </remarks>
+    public Character? Character { get; set; }
     public int HighestWave { get; set; }
     public int ChestsOpened { get; set; }
     public int MasteryPoints { get; set; }
@@ -150,7 +163,7 @@ public sealed class StatsScreen
         // THE SIM'S OWN FUNCTIONS, not a second copy of its arithmetic. This screen used to add the
         // trained stat to the gear affixes and stop, which dropped the mastery tree's crit nodes — real
         // in every fight, absent from the one page whose job is to state the player's numbers.
-        var shape = Loadout.ToBuild(Tree, Mastery).Shape;
+        var shape = Loadout.ToBuild(Tree, Mastery, Character).Shape;
         var critChance = 100f * SoloBattle.CritChance(hunter, shape);
         var rows = new (string, string)[]
         {

@@ -881,6 +881,7 @@ public class Game1 : Game
                     _stats.Loadout = _loadout;
                     _stats.Mastery = _mastery;
                     _stats.Tree = _dust;
+                    _stats.Character = _characters.Active;
                     _hunter.AddGleam(20000);
                     for (var i = 0; i < 12; i++) _hunter.Train(HunterStat.AttackPower);
                     for (var i = 0; i < 6; i++) _hunter.Train(HunterStat.CriticalChance);
@@ -1331,6 +1332,7 @@ public class Game1 : Game
             _stats.Loadout = _loadout;
             _stats.Mastery = _mastery;
             _stats.Tree = _dust;
+            _stats.Character = _characters.Active;
             _stats.HighestWave = _deepestEver;          // real career counters (Stats spec §9.2)
             _stats.ChestsOpened = _forge.ChestsOpened;
             _stats.MasteryPoints = _mastery.Earned;

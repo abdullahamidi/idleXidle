@@ -171,12 +171,18 @@ public sealed class PlayerLoadout
     /// node must show up on the very next expedition without the player re-opening the editor. Keystones
     /// no longer taught (impossible today — purchases are permanent — but cheap to guard) are dropped.
     /// </remarks>
-    public Build ToBuild(MemoryDustTree tree, MasteryTree mastery) => ToBuild(tree, mastery, null);
-
     /// <param name="character">
-    /// The character being played. Null keeps the pre-roster behaviour, which is what every test that
-    /// does not care about characters wants.
+    /// The character being played, or null for no character at all.
     /// </param>
+    /// <remarks>
+    /// There is deliberately NO two-argument overload defaulting this to null. There was one, and the
+    /// Stats screen called it — so the page whose entire job is to state the player's numbers computed
+    /// them against a build the sim never runs, silently dropping the character's passive and aptitude.
+    /// That is the second time this screen lost a whole layer that way; the first was the mastery tree,
+    /// and <c>DrawDerived</c> still carries the comment about fixing it. An omitted argument is
+    /// indistinguishable from a deliberate null at the call site, so the omission is no longer offered:
+    /// callers that mean "no character" now have to say so.
+    /// </remarks>
     public Build ToBuild(MemoryDustTree tree, MasteryTree mastery, Character? character)
     {
         ArgumentNullException.ThrowIfNull(tree);
