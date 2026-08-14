@@ -153,6 +153,9 @@ that stat and a Vow that can be made free is not a Vow.
 
 ## 6. Dependencies
 
+- **Quests** (`quests.md`) — THE FIRST VOW is completed by finishing a descent with a Vow's
+  demand still MET, judged by the same `Weaving.IsActive` the simulation uses.
+
 - `Weaving` — the Vow catalogue, severity pricing, and `IsActive`.
 - `SoloBattle.DescribeBuild` — builds the `WeaveContext` from the Build and Hunter.
 - `MemoryDustTree` spine — teaches them.
