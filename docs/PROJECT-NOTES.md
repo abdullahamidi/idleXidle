@@ -34,7 +34,84 @@ A machine-switch checklist, since the repo cannot carry everything:
 
 ---
 
-## START HERE (handover, 2026-08-14 — session closed cleanly)
+## START HERE (handover, 2026-08-14 — second session, closed cleanly)
+
+**Everything is committed and pushed** on `feat/hunter-cutout-rig`. Working tree clean,
+**611/611 tests pass**, `bash tools/check_all.sh` is green, and the screenshot rig works.
+Nothing is half-finished.
+
+### The environment changed — read this before running anything
+
+This repo moved to a **native-Windows checkout (Git Bash)**. The old notes below describe
+Windows+WSL and are still true THERE, but on a Git Bash machine every one of their
+workarounds is wrong. `tools/shellenv.sh` now resolves the toolchain by PROBING instead of
+naming, and every script in `tools/` sources it — so `bash tools/check_all.sh`,
+`tools/asset-pipeline/capture.sh` and `tools/run.sh` all just work on either machine.
+Do not re-add `wslpath`, `/mnt/c/...`, `pgrep` or a bare `python3` to a script.
+
+> **`python3` is not the interpreter on Windows.** Windows keeps an App Execution Alias at
+> `WindowsApps\python3.exe` that prints a localized "Python was not found" and exits — it
+> resolves, it is executable, and it is not Python. The python.org installer meanwhile
+> installs `python.exe` and **no** `python3.exe`. The working interpreter has the wrong name
+> and the broken one has the right name, so only RUNNING a candidate tells them apart.
+> Python 3.12 was installed on this machine via winget; the pipeline needs no pip packages
+> (`pixelpng.py` is a hand-rolled stdlib PNG codec).
+
+`.gitattributes` now pins `*.sh` to `eol=lf`, because `core.autocrlf=true` was writing CRLF
+into the working tree. **Do not run `git add --renormalize .`** — the repo stores many `.md`
+and `.cs` blobs as CRLF, and renormalising restages ~400 files whose only diff is line
+endings.
+
+### What this session did
+
+1. **`a1cd235` toolchain portability** — the above. It was blocking: `check_all.sh` died on
+   "Python was not found" and `capture.sh` on `wslpath: command not found`, which took the
+   screenshot rig with it, and that rig is the only visual verification this project has.
+2. **`2f5e9c2` roster parity, measured** — answers the old candidate #1 below.
+3. **`b707d2d` fight callout legibility** — the damage numbers had three independent
+   reasons to overlap. Fixed and screenshot-verified.
+
+### THE ROSTER IS BALANCED — that question is closed
+
+`tests/unit/.../Characters/roster_parity_test.cs` runs every character through one gauntlet
+and prints the table on every run (`--logger "console;verbosity=detailed"`). Every character
+clears faster than a no-character control on the same Form, **1.12x to 1.82x**, with THE
+SEEKER correctly last (it is documented as a floor, not a build). THE ANVIL 1.36x and THE
+MAGPIE 1.34x — the two the old handover asked about — land on top of each other, and THE
+MAGPIE keeps haul 1.35 / rarity 1.20 on top. Nobody is dominant, nobody is dead weight.
+
+**Four fixtures were wrong before one was right**, all recorded in that file so nobody
+rebuilds them: damage is bounded by enemy health so it measures overkill and not power (use
+TIME); a four-Mark build swings nothing because Mark is an amplifier; the 120s tick ceiling
+is an anti-hang guard that saturates the clock; and shrinking the fixture instead pushes
+every effect below the 100ms tick quantum.
+
+### OPEN DESIGN QUESTION — the Form gap (needs a decision, do not retune blind)
+
+The same harness measured single-target throughput per Form, and the spread is **19.2x**:
+
+| Form | dmg/sec into one armoured target |
+|---|---|
+| Mark (1 Mark + 3 Strike) | 338 |
+| Strike | 254 |
+| Trap | 245 |
+| Transformation | 89 |
+| Projectile | 32 |
+| **Aura** | **18** |
+
+Aura clears a ten-creature swarm in 3.0s — the fastest in the game, and the honest shape of a
+spread Form. But bosses are a flat `base x 1.06^wave x 2.2` for everyone, so an Aura build
+needs ~14x longer on **every** boss, and boss waves come every 5th wave. A wave that runs out
+the 120s ceiling is handled exactly like a death (`SoloExpeditionScreen`, the `else` branch):
+red flash, run over, restart at wave 1. So a committed Aura build does not hit a soft wall —
+it hits a **hard progression ceiling, burns the slowest possible 120s reaching it, and is
+told nothing about why.**
+
+Whether that is an acceptable price for the best swarm clear in the game is a design call,
+not a bug fix, and the project's own rule is that the enemy curve is not retuned without a
+playtest. Numbers are in the test output whenever someone wants to decide.
+
+## START HERE (handover, 2026-08-14 — first session, closed cleanly)
 
 **Everything is committed and pushed** on `feat/hunter-cutout-rig`. Working tree clean,
 **606/606 tests pass**, and **`bash tools/check_all.sh` is green.** Nothing is half-finished
@@ -76,9 +153,9 @@ Every item that was open at the start of this session is closed, including all e
 the multi-agent audit. There is no agreed next task — the next session picks a direction.
 Candidates, none of them committed to:
 
-1. **Balance the roster.** Ten characters exist and are wired, but only the mastery
-   branches, trait roads and Vows have been measured against each other. Nobody has asked
-   whether THE ANVIL and THE MAGPIE are worth the same.
+1. ~~**Balance the roster.**~~ **DONE — see the newer handover above.** Measured: the roster
+   is balanced (1.12x–1.82x), THE ANVIL and THE MAGPIE are worth the same. The measurement
+   turned up a separate open question about the six Forms, which is recorded up there.
 2. **The arena's per-theme music variant.** `music_arena_{theme}` has a working lookup and
    a fallback; six themed beds would use it. `make_music.py` already has the primitives.
 3. **`design/` has drifted** in places from the code this session changed — `vows.md` and
