@@ -217,7 +217,29 @@ public sealed class Warren
     ///
     /// int.MaxValue by default so the pure model stays testable without a host.
     /// </remarks>
+    /// <summary>Waves of depth each facility level costs. The host derives <see cref="FacilityLevelCap"/> from it.</summary>
+    /// <remarks>
+    /// Lives here rather than in the host because the SCREEN needs it too: a facility that cannot be
+    /// upgraded has to say what would unlock it, and "descend deeper" without a number is not an
+    /// instruction. With the constant on the model, the screen can name the exact depth instead of
+    /// re-deriving the host's arithmetic and drifting from it.
+    /// </remarks>
+    public const int DepthPerFacilityLevel = 5;
+
+    /// <summary>The depth-derived ceiling on every facility's level.</summary>
     public int FacilityLevelCap { get; set; } = int.MaxValue;
+
+    /// <summary>The depth that would let <paramref name="kind"/> take its next level.</summary>
+    /// <remarks>
+    /// Reads the facility's OWN level, not the cap. The two are normally the same when a facility is
+    /// blocked, but they can part: the cap is derived from the deepest run anywhere, and if that number
+    /// ever falls — a region id renamed out from under its recorded BestDepth would do it — a level 18
+    /// facility would sit under a cap of 1 and the screen would announce "CAPPED AT LEVEL 1" to a
+    /// player looking at LEVEL 18. Answering with the depth the NEXT level needs is both the useful
+    /// answer and one that cannot contradict what is on screen beside it.
+    /// </remarks>
+    public int DepthForNextLevel(FacilityKind kind) =>
+        (_facilities[kind].Level + 1) * DepthPerFacilityLevel;
 
     /// <summary>Is this facility already at the depth-derived ceiling?</summary>
     public bool IsAtLevelCap(FacilityKind kind) => _facilities[kind].Level >= FacilityLevelCap;

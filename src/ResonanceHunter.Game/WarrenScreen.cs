@@ -226,11 +226,16 @@ public sealed class WarrenScreen
 
         // The cap is stated, not merely enforced. A greyed button with no reason reads as a bug; a
         // player who is told the ceiling is theirs to raise knows the answer is to go and descend.
+        //
+        // It names the DEPTH the next level wants, not the cap. The cap is the wrong number twice over:
+        // it is not actionable (the player cannot spend a cap), and it can contradict the level printed
+        // directly above it — the ceiling comes from the deepest run anywhere, so if that figure ever
+        // falls the screen announces "CAPPED AT LEVEL 1" beneath a facility reading LEVEL 18.
         var capped = Warren!.IsAtLevelCap(_selected);
         _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 502, DetailPanel.Width - 56, 2), Dim);
         _ui.TextBig(b,
             capped
-                ? $"CAPPED AT LEVEL {Warren.FacilityLevelCap}  ·  DESCEND DEEPER TO RAISE IT"
+                ? $"NEEDS DEPTH {Warren.DepthForNextLevel(_selected)}  ·  DESCEND THAT DEEP TO RAISE IT"
                 : "INSTANT UPGRADE  ·  NO WAIT",
             DetailPanel.X + 28, DetailPanel.Y + 518, capped ? GleamC : Met, UiTypography.Secondary);
 

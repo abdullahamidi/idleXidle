@@ -87,7 +87,10 @@ public sealed class BuildScreen
     private static readonly Rectangle SummaryPanel = new(40, 138, 360, 746);
     private static readonly Rectangle CorePanel = new(426, 138, 774, 450);
     private static readonly Rectangle AuraPanel = new(426, 606, 774, 278);
-    private static readonly Rectangle PassivePanel = new(1228, 138, 652, 746);
+    // 800, not 746. This column is the only one on the screen whose height is DATA — six passives, up
+    // to five resonance rows, then the keystone block — and at 746 the worst case ran off the bottom.
+    // The extra 54 puts its foot level with the middle column's button row rather than short of it.
+    private static readonly Rectangle PassivePanel = new(1228, 138, 652, 800);
     private static readonly Rectangle EditBtn = new(704, 902, 260, 44);
     private static readonly Rectangle ResetBtn = new(984, 902, 232, 44);
     // The overview's own door to the weave editor. "EDIT BUILD" opens the TREE, which is a different
@@ -489,8 +492,15 @@ public sealed class BuildScreen
         // +596: the list is one row per Source in the loadout, so a four-Source build ran its last row
         // (SPIRIT RESONANCE, at +584) straight through this heading. Four is the common case.
         var worn = DustEffects.LearnedKeystones(tree).Where(k => Loadout.HasKeystone(k.Id)).ToList();
-        // Above the panel art's bottom crest.
-        var keyY = Math.Max(PassivePanel.Y + 596, ry + 16);
+
+        // AND CLAMPED, because pushing it down only moved the collision. Anchoring to the resonance
+        // list fixed the overlap and handed the block to the panel's bottom ornament instead — the
+        // heading and its line were being drawn on the frame art. The floor here is the last position
+        // at which BOTH rows still clear the frame, so the block gets pushed down by a long resonance
+        // list exactly as far as there is room for and no further.
+        const int keystoneBlockH = 34 + 24;                       // heading, then its line
+        var floor = PassivePanel.Bottom - UiKit.PanelCorner - keystoneBlockH;
+        var keyY = Math.Min(Math.Max(PassivePanel.Y + 596, ry + 16), floor);
         _ui.TextBig(b, "KEYSTONES", x, keyY, Gold, UiTypography.Secondary);
         if (worn.Count == 0) _ui.TextBig(b, "NONE SOCKETED — WEAVE SKILLS", x, keyY + 34, Slate, UiTypography.Body);
         else _ui.TextBig(b, string.Join("  \u00b7  ", worn.Select(k => k.Name.ToUpperInvariant())), x, keyY + 34, Bone, UiTypography.Body);

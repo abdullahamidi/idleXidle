@@ -188,4 +188,35 @@ public class WarrenTests
         Assert.Equal(12, w.Facility(FacilityKind.SentryBurrows).Level);
         Assert.Equal(levels, w.FacilityLevels);
     }
+
+    [Fact]
+    public void test_the_depth_a_facility_needs_follows_its_own_level_not_the_cap()
+    {
+        // The screen used to answer a blocked upgrade with the CAP, and the cap is the wrong number
+        // twice: a player cannot spend it, and it can contradict the level printed directly above it.
+        // FacilityLevelCap is derived by the host from the deepest run ANYWHERE, so if that figure
+        // falls — a region id renamed out from under its recorded BestDepth would do it — a level 18
+        // facility sits under a cap of 1 and the panel announces "CAPPED AT LEVEL 1" beside "LEVEL 18".
+        var w = new Warren();
+        w.Restore(level: 23, xp: 0, facilityLevels: new Dictionary<FacilityKind, int>
+        {
+            [FacilityKind.Nursery] = 18,
+        });
+
+        w.FacilityLevelCap = 1;   // the contradictory state, reproduced
+
+        Assert.True(w.IsAtLevelCap(FacilityKind.Nursery));
+        Assert.Equal(95, w.DepthForNextLevel(FacilityKind.Nursery));   // (18 + 1) * 5
+        Assert.True(w.DepthForNextLevel(FacilityKind.Nursery)
+                    > w.Facility(FacilityKind.Nursery).Level,
+                    "the answer must never be a number below the level already on screen");
+    }
+
+    [Fact]
+    public void test_a_fresh_facility_asks_for_one_levels_worth_of_depth()
+    {
+        var w = new Warren();
+        Assert.Equal(1, w.Facility(FacilityKind.Nursery).Level);
+        Assert.Equal(2 * Warren.DepthPerFacilityLevel, w.DepthForNextLevel(FacilityKind.Nursery));
+    }
 }

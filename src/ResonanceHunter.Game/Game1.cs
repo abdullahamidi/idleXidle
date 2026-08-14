@@ -600,7 +600,7 @@ public class Game1 : Game
         // One facility level per five waves of proven depth. Recomputed every frame it draws, so a
         // record set this session raises the ceiling without a restart. Floor of 1: a new player must
         // still be able to see what a facility does before their first descent ends.
-        _warren.FacilityLevelCap = Math.Max(1, DeepestAnywhere() / 5);
+        _warren.FacilityLevelCap = Math.Max(1, DeepestAnywhere() / Warren.DepthPerFacilityLevel);
 
         _warrenScreen.GleamOwned = _hunter.Gleam;
         _warrenScreen.MasteryOwned = _warrenMasteryPool;
