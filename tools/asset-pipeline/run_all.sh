@@ -12,6 +12,7 @@
 # Usage: bash tools/asset-pipeline/run_all.sh [--replace]
 
 set -uo pipefail
+. "$(dirname "${BASH_SOURCE[0]}")/../shellenv.sh" || exit 1
 cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1
 
 REPLACE="${1:-}"
@@ -24,21 +25,21 @@ mkdir -p "$LOG_DIR"
 stamp() { date -u +%H:%M:%S; }
 
 echo "[$(stamp)] === STAGE 1/4: stills ==="
-python3 -u tools/asset-pipeline/generate.py $REPLACE 2>&1 | tail -60
+py -u tools/asset-pipeline/generate.py $REPLACE 2>&1 | tail -60
 echo "[$(stamp)] stills rc=${PIPESTATUS[0]}"
 
 echo
 echo "[$(stamp)] === STAGE 2/4: animation + VFX strips ==="
-python3 -u tools/asset-pipeline/animate.py --workers 3 $REPLACE_ANIM 2>&1 | tail -60
+py -u tools/asset-pipeline/animate.py --workers 3 $REPLACE_ANIM 2>&1 | tail -60
 echo "[$(stamp)] animate rc=${PIPESTATUS[0]}"
 
 echo
 echo "[$(stamp)] === STAGE 3/4: derive statics from strips ==="
-python3 -u tools/asset-pipeline/derive_statics.py 2>&1 | tail -30
+py -u tools/asset-pipeline/derive_statics.py 2>&1 | tail -30
 
 echo
 echo "[$(stamp)] === STAGE 4/4: audit ==="
-python3 -u tools/asset-pipeline/audit.py 2>&1 | head -30
+py -u tools/asset-pipeline/audit.py 2>&1 | head -30
 
 echo
 echo "[$(stamp)] === DONE ==="

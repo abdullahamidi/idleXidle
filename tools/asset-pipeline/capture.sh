@@ -19,16 +19,20 @@
 MODE="${1:-fight}"
 OUT="${2:-shot_$MODE.png}"
 ZOOM="${3:-}"
+. "$(dirname "${BASH_SOURCE[0]}")/../shellenv.sh" || exit 1
 cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1
-WINDIR="$(wslpath -w "$PWD")"
+WINDIR="$(winpath "$PWD")"
 # BUILD FIRST. Asset PNGs are copied into the output directory as a build step, so a --no-build run
 # renders whatever art was there last time. That silently verified a stale portrait once; a three
 # second build is much cheaper than trusting a screenshot that lies.
-cmd.exe /c "cd /d $WINDIR && dotnet build src\\ResonanceHunter.Game -v q --nologo" >/dev/null 2>&1 \
+dn build src/ResonanceHunter.Game -v q --nologo >/dev/null 2>&1 \
   || { echo "build failed" >&2; exit 1; }
+# RH_SHOT is read by a Windows process, so it must be a Windows path even when this shell
+# is using /c or /mnt/c. OUT stays repo-relative — an absolute one fails with a bare
+# "capture failed", because the check at the bottom looks for it relative to the repo.
+RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 # The third argument means "zoom" to buildzoom and "seconds into the flourish" to
 # traitlit/traitterm — both are the one dial that mode's capture needs.
-ZOOMSET=""
-[ -n "$ZOOM" ] && ZOOMSET="set RH_SHOT_ZOOM=$ZOOM&& set RH_SHOT_T=$ZOOM&& "
-cmd.exe /c "cd /d $WINDIR && set RH_SHOT=$WINDIR\\$OUT&& set RH_SHOT_MODE=$MODE&& ${ZOOMSET}dotnet run --project src\\ResonanceHunter.Game --no-build" >/dev/null 2>&1
+[ -n "$ZOOM" ] && RH_ENV+=(RH_SHOT_ZOOM="$ZOOM" RH_SHOT_T="$ZOOM")
+dn run --project src/ResonanceHunter.Game --no-build >/dev/null 2>&1
 [ -f "$OUT" ] && echo "captured $OUT ($(stat -c%s "$OUT") bytes)" || { echo "capture failed" >&2; exit 1; }

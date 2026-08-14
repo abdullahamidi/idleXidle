@@ -13,6 +13,7 @@
 # is safe: nothing unmeasured is ever kept. The current file is backed up first and restored
 # if every attempt fails.
 set -uo pipefail
+. "$(dirname "${BASH_SOURCE[0]}")/../shellenv.sh" || exit 1
 cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1
 
 KEY="${1:?usage: roll_strip.sh <key> [attempts]}"
@@ -23,7 +24,7 @@ BACKUP=""
 if [ -n "$FILE" ]; then
   BACKUP="$(mktemp)"
   cp "$FILE" "$BACKUP"
-  if python3 tools/asset-pipeline/measure_strip.py "$KEY" >/dev/null 2>&1; then
+  if py tools/asset-pipeline/measure_strip.py "$KEY" >/dev/null 2>&1; then
     echo "$KEY already passes the gate."
     rm -f "$BACKUP"; exit 0
   fi
@@ -31,8 +32,8 @@ fi
 
 for i in $(seq 1 "$ATTEMPTS"); do
   echo "── $KEY: attempt $i/$ATTEMPTS"
-  python3 tools/asset-pipeline/animate.py --force --only "$KEY" >/dev/null 2>&1
-  OUT="$(python3 tools/asset-pipeline/measure_strip.py "$KEY" 2>&1)"
+  py tools/asset-pipeline/animate.py --force --only "$KEY" >/dev/null 2>&1
+  OUT="$(py tools/asset-pipeline/measure_strip.py "$KEY" 2>&1)"
   RC=$?
   echo "$OUT" | sed 's/^/   /'
   if [ $RC -eq 0 ]; then

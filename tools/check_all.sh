@@ -6,12 +6,13 @@
 # right behaviour at runtime and it means a mistake is invisible until someone looks at the
 # pixels. These scripts are the "someone looks" step, automated.
 set -u
+. "$(dirname "${BASH_SOURCE[0]}")/shellenv.sh" || exit 1
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 
 fail=0
 for gate in check_font_coverage.py check_asset_keys.py; do
   echo "── $gate"
-  python3 "tools/$gate" | sed 's/^/   /' || fail=1
+  py "tools/$gate" | sed 's/^/   /' || fail=1
   [ "${PIPESTATUS[0]}" -eq 0 ] || fail=1
 done
 

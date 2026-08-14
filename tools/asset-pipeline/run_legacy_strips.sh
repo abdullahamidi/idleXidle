@@ -9,6 +9,7 @@
 # Order matters: if this is interrupted, the tiers that got done are the ones
 # the player looks at most.
 
+. "$(dirname "${BASH_SOURCE[0]}")/../shellenv.sh" || exit 1
 cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1
 LOG=tools/asset-pipeline/.staging
 stamp() { date -u +%H:%M:%S; }
@@ -23,22 +24,22 @@ for b in $BOSSES; do
   ARGS="$ARGS --only ${b}_idle_strip8_1024 --only ${b}_attack_strip8_1024"
 done
 echo "[$(stamp)] TIER 1: 12 boss strips"
-python3 -u tools/asset-pipeline/animate.py --force --workers 1 $ARGS 2>&1 | tail -20
+py -u tools/asset-pipeline/animate.py --force --workers 1 $ARGS 2>&1 | tail -20
 
 # Tier 2 — the player character and the one enemy still on old art.
 ARGS=""
 for h in $HUNTER; do ARGS="$ARGS --only ${h}_strip8_512"; done
 ARGS="$ARGS --only stone_sentinel_idle_strip8_512 --only stone_sentinel_slam_strip8_512"
 echo "[$(stamp)] TIER 2: hunter + stone_sentinel (7 strips)"
-python3 -u tools/asset-pipeline/animate.py --force --workers 1 $ARGS 2>&1 | tail -20
+py -u tools/asset-pipeline/animate.py --force --workers 1 $ARGS 2>&1 | tail -20
 
 # Tier 3 — remaining legacy VFX.
 ARGS=""
 for v in $VFX; do ARGS="$ARGS --only ${v}_strip8_512"; done
 echo "[$(stamp)] TIER 3: 10 legacy VFX strips"
-python3 -u tools/asset-pipeline/animate.py --force --workers 1 $ARGS 2>&1 | tail -20
+py -u tools/asset-pipeline/animate.py --force --workers 1 $ARGS 2>&1 | tail -20
 
 echo "[$(stamp)] TIER 4: derive statics from strips"
-python3 -u tools/asset-pipeline/derive_statics.py 2>&1 | tail -20
+py -u tools/asset-pipeline/derive_statics.py 2>&1 | tail -20
 
 echo "[$(stamp)] ALL TIERS DONE"

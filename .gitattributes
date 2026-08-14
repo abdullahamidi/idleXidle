@@ -1,0 +1,17 @@
+# Shell scripts must check out with LF on every platform.
+#
+# This repo is developed on Windows, where the common `core.autocrlf=true` rewrites the
+# working tree to CRLF on checkout. Git Bash tolerates a stray \r in most lines, so the
+# damage is intermittent rather than obvious — but a heredoc delimiter, a `set -e` guard
+# or a trailing-backslash continuation with \r attached fails in ways that read as a logic
+# bug, not a line-ending bug. The blobs in this repo are already LF; this keeps the
+# checkout that way regardless of the user's global setting.
+*.sh text eol=lf
+
+# The asset pipeline's PNGs, audio and fonts are binary — never touch them.
+*.png binary
+*.wav binary
+*.ogg binary
+*.ttf binary
+*.otf binary
+*.aseprite binary
