@@ -63,6 +63,23 @@ public sealed record ExpeditionTuning
     /// left and it runs away again. 1.04 is the floor of that curve, not a round number chosen for
     /// looking tidy.
     /// </para>
+    /// <para>
+    /// EARLY PACING IS UNAFFECTED, which was checked rather than assumed — skill points are
+    /// <c>BestDepth / 5</c> per region, so anything that moves depth moves the income curve with it.
+    /// Median depth for an untouched build across forty runs, at 1.06 against 1.04:
+    /// </para>
+    /// <code>
+    ///   ranks   before  after   points/region
+    ///       0        5      5     1 -> 1
+    ///       2        5      5     1 -> 1
+    ///       5        7      8     1 -> 1
+    ///      10       10     10     2 -> 2
+    ///      20       13     14     2 -> 2
+    /// </code>
+    /// <para>
+    /// Identical income at every training level. The two rates barely differ before wave 15, so the
+    /// change reshapes the deep game only — which is where the imbalance was.
+    /// </para>
     /// </remarks>
     public float EnemyDamageScaleBase { get; init; } = 1.04f;
 
