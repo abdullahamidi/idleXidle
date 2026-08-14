@@ -362,9 +362,18 @@ public sealed class SoloExpeditionScreen
 
         var startHealth = new Dictionary<int, int> { [0] = _champ.Health };
         var maxHealth = new Dictionary<int, int> { [0] = _champ.MaxHealth };
-        var enemyHp = _enemyBaseHealth * WaveScaling.EnemyScale(_run.Wave + 1, ExpeditionTuning.Default);
 
         _outcome = _run.PushWave();
+
+        // THE WAVE'S ACTUAL TOTAL, summed from the creatures the sim just built — not
+        // `_enemyBaseHealth * EnemyScale(wave + 1)`, which is what this used to be. That was a
+        // PRE-COMPOSITION estimate: computed before PushWave, it could not know the archetype's health
+        // multiplier, could not know PLATED had thickened anything, and could not know NUMBERS had added
+        // a creature. The bar the player watches is the only readout of how a wave is going, and on
+        // exactly the waves that differ from the average it was measuring against a number the
+        // simulation never used — draining to empty with creatures still standing, or stalling above
+        // zero on a wave already won.
+        var enemyHp = _run.LastWaveCreatures.Sum(c => c.MaxHealth);
 
         _replay = new WaveReplay(_run.LastWaveEvents, startHealth, maxHealth, enemyHp);
         // Hand the replay the composition so each creature drains its own bar and vanishes on its own

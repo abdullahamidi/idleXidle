@@ -159,6 +159,35 @@ public class AffixLivenessTests
         Assert.Equal(HealthAfterAWave(leech, 1f), HealthAfterAWave(leech, Bands.SustainMultiplier(Array.Empty<Affix>())));
     }
 
+    // ── THE BAR THE PLAYER WATCHES ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void test_a_waves_true_total_health_is_not_its_pre_composition_estimate()
+    {
+        // The fight screen sized its enemy bar with `baseHealth * EnemyScale(wave + 1)`, computed BEFORE
+        // PushWave and therefore blind to everything PushWave decides: the archetype's health
+        // multiplier, PLATED thickening armour, NUMBERS adding a creature. On an average wave the two
+        // agree and nothing looks wrong; on exactly the waves that are NOT average — which is to say
+        // the interesting ones — the bar was measuring against a number the simulation never used.
+        //
+        // This does not test the screen (there is no test project for the Game layer). It tests the
+        // premise the screen was relying on, which is the part that was false.
+        var run = Run("cinderworks", seed: 7);
+        var disagreed = 0;
+
+        for (var w = 1; w <= 30 && !run.Over; w++)
+        {
+            run.PushWave();
+            var estimate = 1f * WaveScaling.EnemyScale(run.Wave, ExpeditionTuning.Default);
+            var truth = run.LastWaveCreatures.Sum(c => c.MaxHealth);
+            if (MathF.Abs(truth - estimate) > 0.001f) disagreed++;
+        }
+
+        _out.WriteLine($"{disagreed} of the waves walked had a real total the estimate did not predict");
+        Assert.True(disagreed > 0,
+                    "if the estimate always matched, the bar would have been fine and this fix pointless");
+    }
+
     // ── fixtures ──────────────────────────────────────────────────────────────────────────────────
 
     private static SoloExpedition Run(string region, int seed)
