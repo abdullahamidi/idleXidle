@@ -377,6 +377,7 @@ public class Game1 : Game
                 Rarity = (Rarity)s.Rarity,
                 Tier = s.Tier,
                 Element = Enum.TryParse<Source>(s.Element, out var e) ? e : null,   // unknown element → inert, never a throw
+                RunTilt = s.RunTilt <= 0f ? 1f : s.RunTilt,   // a pre-tilt save reads 0; neutral is 1
             })
             .ToList();
         _pendingWorn = new Dictionary<GearSlot, string?>
@@ -553,7 +554,7 @@ public class Game1 : Game
             ChampionGleamRate = _champGleamRate,
             // Unopened chests ride along too — a boss's drop must survive a reload, opened or not.
             UnopenedChests = _forge.UnopenedChests
-                .Select(c => new SavedChest { Rarity = (int)c.Rarity, Tier = c.Tier, Element = c.Element?.ToString() })
+                .Select(c => new SavedChest { Rarity = (int)c.Rarity, Tier = c.Tier, Element = c.Element?.ToString(), RunTilt = c.RunTilt })
                 .ToList(),
         };
 
@@ -1636,7 +1637,13 @@ public class Game1 : Game
                        + CorruptionScaling.TierBonus(_world.CorruptionTier)
                        + RegionModifiers.For(_activeRegion).LootTierBonus;   // the region modifier's loot bump
         if (_rng.NextDouble() >= Chests.DropChance(lootTier)) return false;         // most bosses give nothing
-        _forge.AddChest(Chests.RollDrop(lootTier, def.Theme, _rng));
+
+        // The run's carried QUALITY rides along on the chest. This is where SPLINTER — "on kill, richer
+        // loot" — finally lands: the trigger adds quality per kill, Haul carries the best wave's worth to
+        // the end of the descent, and the chest that descent earned remembers it. Without this the whole
+        // chain terminated in a field nothing read, which made REAPER a keystone you pay for and get
+        // nothing from.
+        _forge.AddChest(Chests.RollDrop(lootTier, def.Theme, _rng, runTilt: _expedition.CarriedQuality));
         return true;
     }
 

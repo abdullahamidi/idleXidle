@@ -169,6 +169,15 @@ public sealed record SavedChest
     public required int Rarity { get; init; }
     public required int Tier { get; init; }
     public string? Element { get; init; }
+
+    /// <summary>The rarity tilt earned by the descent that dropped it. 1 on a save written before it existed.</summary>
+    /// <remarks>
+    /// Defaulted to 1 rather than 0 for the same reason <c>Chest.RunTilt</c> is: it multiplies into the
+    /// loot roll, so an old chest deserialised without the field has to come back NEUTRAL. A 0 default
+    /// would quietly make every chest a player was holding at upgrade time worthless, which is the kind
+    /// of migration bug nobody reports because it looks like bad luck.
+    /// </remarks>
+    public float RunTilt { get; init; } = 1f;
 }
 
 /// <summary>One woven skill in the saved build — Source x Form x Vow, all by name/id so it survives.</summary>

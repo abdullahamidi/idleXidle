@@ -162,6 +162,13 @@ public sealed class SoloExpeditionScreen
     /// </remarks>
     public int BestDepthHere { get; set; }
 
+    /// <summary>The quality this descent accumulated — the tilt a chest it drops should remember.</summary>
+    /// <remarks>
+    /// Neutral 1.0 when there is no run, so a chest dropped outside one (a fixture, a test) rolls exactly
+    /// as it always did rather than being silently zeroed.
+    /// </remarks>
+    public float CarriedQuality => _run?.Carried.Quality ?? 1f;
+
     /// <summary>The figure this descent has to beat, latched when it STARTS.</summary>
     /// <remarks>
     /// Latched, because <see cref="BestDepthHere"/> is live: the host calls

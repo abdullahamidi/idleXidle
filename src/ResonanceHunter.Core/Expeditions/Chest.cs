@@ -34,6 +34,27 @@ public sealed record Chest
 
     /// <summary>The region's element, so the items inside are attuned like any other regional drop.</summary>
     public Source? Element { get; init; }
+
+    /// <summary>How well the descent that earned this chest was fought — a rarity tilt, 1.0 for neutral.</summary>
+    /// <remarks>
+    /// <para>
+    /// THE CHEST REMEMBERS ITS RUN, and it has to, because a chest is opened long after the fight that
+    /// dropped it. Without this the run's <c>Haul.Quality</c> had nowhere to go: it was accumulated
+    /// correctly wave by wave, carried correctly to the end, and then read by nothing at all — the
+    /// SPLINTER trigger's ONLY effect in the whole simulation, spent into a field with no consumer.
+    /// </para>
+    /// <para>
+    /// That made everything granting SPLINTER pay nothing: the REAPER keystone, which costs -25% skill
+    /// rate for it and was therefore a strictly negative socket; the Splinter weapon enchant, one of
+    /// three in the weapon pool, including its rarity-scaled magnitude; and THE QUIVER's grant.
+    /// </para>
+    /// <para>
+    /// Neutral is 1.0 rather than 0, because it multiplies through the same <c>buildTilt</c> path the
+    /// build's own rarity uses — an old chest deserialised without the field must behave exactly as it
+    /// did before, and 0 would silently make every one of them worthless.
+    /// </para>
+    /// </remarks>
+    public float RunTilt { get; init; } = 1f;
 }
 
 /// <summary>What a chest paid out when opened: materials, and the items to land in the bag.</summary>
@@ -145,10 +166,17 @@ public static class Chests
     }
 
     /// <summary>Mint a chest a boss drops at this tier — grade rolled now, contents rolled at open.</summary>
-    public static Chest RollDrop(int tier, Source? element, Random rng, ChestTuning? tuning = null)
+    public static Chest RollDrop(int tier, Source? element, Random rng, ChestTuning? tuning = null,
+                                 float runTilt = 1f)
     {
         ArgumentNullException.ThrowIfNull(rng);
-        return new Chest { Rarity = RollRarity(tier, rng, tuning), Tier = Math.Max(1, tier), Element = element };
+        return new Chest
+        {
+            Rarity = RollRarity(tier, rng, tuning),
+            Tier = Math.Max(1, tier),
+            Element = element,
+            RunTilt = MathF.Max(0.05f, runTilt),
+        };
     }
 
     /// <summary>
@@ -200,9 +228,12 @@ public static class Chests
         // item would be redundant clutter and an anticlimactic reveal ("a Legendary chest gave me… a
         // material"). Material rolls are discarded; if the whole roll happened to be materials, one gear
         // piece is minted at the grade's floor so a chest is never "just materials".
+        // The build's standing rarity AND how the run that won this chest was fought, multiplied: both
+        // are "you earned better odds", and they compose the way every other pair of multipliers here
+        // does. RunTilt defaults to 1, so a chest from before it existed rolls exactly as it always did.
         var gear = ExpeditionLoot.RollBoss(
                 chest.Tier, quality, rng, loot, element: chest.Element,
-                buildTilt: MathF.Max(0.05f, rarityBonus))
+                buildTilt: MathF.Max(0.05f, rarityBonus * MathF.Max(0.05f, chest.RunTilt)))
             .Where(i => i.BaseType is not ItemBaseType.Material)
             .ToList();
         if (gear.Count == 0)
