@@ -86,7 +86,7 @@ TIME); a four-Mark build swings nothing because Mark is an amplifier; the 120s t
 is an anti-hang guard that saturates the clock; and shrinking the fixture instead pushes
 every effect below the 100ms tick quantum.
 
-### OPEN DESIGN QUESTION — the Form gap (needs a decision, do not retune blind)
+### THE FORM GAP — measured, raised, and DECIDED: intended, do not touch
 
 The same harness measured single-target throughput per Form, and the spread is **19.2x**:
 
@@ -107,9 +107,15 @@ red flash, run over, restart at wave 1. So a committed Aura build does not hit a
 it hits a **hard progression ceiling, burns the slowest possible 120s reaching it, and is
 told nothing about why.**
 
-Whether that is an acceptable price for the best swarm clear in the game is a design call,
-not a bug fix, and the project's own rule is that the enemy curve is not retuned without a
-playtest. Numbers are in the test output whenever someone wants to decide.
+**The user was asked and ruled: this is intended. Do not "fix" it.** The 19.2x is the honest
+price of the best swarm clear in the game, and learning to mix the build is the player's
+job. Nothing here is a defect — the table is kept because it took a harness to produce and
+because the next person to see an Aura run stall will otherwise file it as a bug.
+
+The one thing NOT ruled on is whether the stall should stay silent, since that was bundled
+into the question rather than asked separately. Leaving it alone is consistent with the
+ruling; if a future playtest finds the failure illegible, the cheap move is a line of
+feedback on the stall, not a change to the curve.
 
 ## START HERE (handover, 2026-08-14 — first session, closed cleanly)
 
