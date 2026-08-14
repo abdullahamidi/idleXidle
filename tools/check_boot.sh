@@ -29,9 +29,27 @@ before=""
 [ -f "$SAVE" ] && before="$(sha256sum "$SAVE" | cut -d' ' -f1)"
 [ -n "$before" ] || echo "note: no save file at $SAVE — this run proves the FRESH path only."
 
-RH_ENV=(RH_BOOTCHECK=1)
-out="$(dn run --project src/ResonanceHunter.Game --no-build 2>&1)"
+# A WALL CLOCK on top of the in-game frame ceiling. Two independent stops, because they fail
+# differently: the frame ceiling catches a walk that stops advancing, and this catches a process that
+# never reaches Update at all. A hung run once held the built exe open and made the NEXT build fail
+# with a file lock, which reads as a broken repo rather than a stuck test.
+# Wrapped in a subshell because `dn` is a shell FUNCTION and timeout(1) can only wrap an executable —
+# `timeout 120 dn ...` fails with "No such file or directory" and reports it as a boot failure, which
+# is a check lying about the thing it is checking.
+out="$(timeout 120 bash -c '
+  . tools/shellenv.sh || exit 1
+  RH_ENV=(RH_BOOTCHECK=1)
+  dn run --project src/ResonanceHunter.Game --no-build
+' 2>&1)"
 rc=$?
+
+if [ $rc -eq 124 ]; then
+  echo "BOOT TIMED OUT after 120s — the game never finished starting." >&2
+  # Do not leave it holding the exe; the next build would fail on a file lock instead.
+  powershell.exe -NoProfile -Command \
+    "Get-Process ResonanceHunter.Game -ErrorAction SilentlyContinue | Stop-Process -Force" >/dev/null 2>&1
+  exit 1
+fi
 
 echo "$out" | grep -aE "BOOT OK|Unhandled|Exception" | head -5
 

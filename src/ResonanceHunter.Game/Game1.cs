@@ -722,14 +722,76 @@ public class Game1 : Game
     /// would pass a check meant to prove the first.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Every screen, in the order the boot check walks them.
+    /// </summary>
+    /// <remarks>
+    /// Starting is not the same claim as WORKING. A crash that needs real save data to reach — an
+    /// empty roster, a worn item whose id no longer resolves, a run log written by an older format —
+    /// hides behind a title screen that comes up perfectly, and the screenshot fixtures cannot find it
+    /// because each one seeds its own data instead of loading yours. Walking every screen with the real
+    /// save loaded is the difference between "it launched" and "you can open the things you were about
+    /// to open".
+    /// </remarks>
+    private (string Name, Action Open)[] BootCheckScreens() => new (string, Action)[]
+    {
+        ("title", () => _showTitle = true),
+        ("hunt", () => _showTitle = false),
+        ("gear", () => _showCharacter = true),
+        ("stats", () => { _showCharacter = false; _showStats = true; }),
+        ("build", () => { _showStats = false; _showBuild = true; }),
+        ("weave", () => { _showBuild = false; _showWeave = true; }),
+        ("forge", () => { _showWeave = false; _showForge = true; }),
+        ("warren", () => { _showForge = false; _showAutomation = true; }),
+        ("map", () => { _showAutomation = false; _showWorld = true; }),
+        ("traits", () => { _showWorld = false; _showPrestige = true; }),
+        ("roster", () => { _showPrestige = false; _showRoster = true; }),
+        ("help", () => { _showRoster = false; _showHelp = true; }),
+        ("settings", () => { _showHelp = false; _showSettings = true; }),
+        ("hunt again", () => _showSettings = false),
+    };
+
+    private int _bootCheckScreensSeen;
+
     private void BootCheck()
     {
         if (Environment.GetEnvironmentVariable("RH_BOOTCHECK") is null) return;
-        if (++_bootCheckFrames < 90) return;   // ~1.5s of real Update/Draw before calling it survived
+
+        _bootCheckFrames++;
+
+        // A CEILING, so a stuck walk fails instead of hanging. When this method sat lower in Update it
+        // stopped being reached at all while the title was up, and the run simply never ended — a
+        // ten-minute timeout killed it and the failure looked like a slow machine rather than a broken
+        // harness. A check that can hang has a failure mode nobody reads.
+        if (_bootCheckFrames > 1200)
+        {
+            Console.WriteLine($"BOOT STUCK — {_bootCheckScreensSeen} screens reached, then no progress.");
+            Environment.Exit(2);
+        }
+
+        // Settle first, then walk. The opening frames restore the save and run the offline catch-up;
+        // switching screens under that would be testing the transition rather than the screen.
+        const int Settle = 45, PerScreen = 12;
+        if (_bootCheckFrames < Settle) return;
+
+        var screens = BootCheckScreens();
+        var elapsed = _bootCheckFrames - Settle;
+        var step = elapsed / PerScreen;
+
+        if (step < screens.Length)
+        {
+            if (elapsed % PerScreen == 0)
+            {
+                _bootCheckScreensSeen = step + 1;
+                screens[step].Open();
+            }
+            return;
+        }
 
         Console.WriteLine(_hasSave
-            ? $"BOOT OK — save loaded, {_bootCheckFrames} frames, hunter level {_hunter.HunterLevel}"
-            : "BOOT OK — no save present, started fresh");
+            ? $"BOOT OK — save loaded, hunter level {_hunter.HunterLevel}, "
+              + $"{_bootCheckScreensSeen} screens drawn"
+            : $"BOOT OK — no save present, started fresh, {_bootCheckScreensSeen} screens drawn");
         Exit();
     }
 
@@ -746,6 +808,16 @@ public class Game1 : Game
         // where every screen's action buttons (Forge Sell/Merge, Farm Hatch/Assign/Evolve, …) are
         // detected. Latching into a field keeps the click live through this frame's Draw.
         _clicked = _mouse.LeftButton == ButtonState.Pressed && _prevMouse.LeftButton == ButtonState.Released;
+
+        // THE BOOT CHECK SWITCHES SCREENS HERE, at the top, and the position took two tries to get
+        // right. At the END of Update it flipped a flag after the `if (_showX)` blocks that hand each
+        // screen its data, so the next Draw ran against null fields and it reported a
+        // NullReferenceException in StatsScreen that a player cannot produce. Beside the hotkeys it
+        // was better but still wrong: while the title is up, Update returns long before reaching them,
+        // so the walk never left the first screen and the run hung until it was killed. Ahead of every
+        // early return, a flag set here is fed by the same blocks that feed a keypress, on the same
+        // frame. A smoke test that does not take the player's path only generates false alarms.
+        BootCheck();
 
         // The RIGHT click edge, latched identically. It opens the inventory's item menu — the one place
         // a player should be able to say "wear this / upgrade this / break this up" without first
@@ -1505,8 +1577,6 @@ public class Game1 : Game
         // effects at all (a hit on REND, a sparkle on MEND), which is a feature gap worth filling, not
         // rot worth deleting.
         UpdateMusic();
-
-        BootCheck();
 
         _prevKeys = _keys;
         _prevMouse = _mouse;
