@@ -36,11 +36,17 @@ before=""
 # Wrapped in a subshell because `dn` is a shell FUNCTION and timeout(1) can only wrap an executable —
 # `timeout 120 dn ...` fails with "No such file or directory" and reports it as a boot failure, which
 # is a check lying about the thing it is checking.
-out="$(timeout 120 bash -c '
-  . tools/shellenv.sh || exit 1
-  RH_ENV=(RH_BOOTCHECK=1)
-  dn run --project src/ResonanceHunter.Game --no-build
-' 2>&1)"
+# Runs the game once under RH_BOOTCHECK. $1 is an optional RH_SAVE_DIR; empty means the real save.
+boot_run() {
+  timeout 120 bash -c '
+    . tools/shellenv.sh || exit 1
+    RH_ENV=(RH_BOOTCHECK=1)
+    [ -n "$1" ] && RH_ENV+=(RH_SAVE_DIR="$1")
+    dn run --project src/ResonanceHunter.Game --no-build
+  ' _ "$1" 2>&1
+}
+
+out="$(boot_run "")"
 rc=$?
 
 if [ $rc -eq 124 ]; then
@@ -69,4 +75,33 @@ if [ -n "$before" ]; then
   echo "save untouched."
 fi
 
-echo "boot green"
+# ── AND THE FIRST LAUNCH, which is a different branch and the one that hid the crash. ──────────
+#
+# With no file, LoadOrStartFresh returns early and seeds a new game — so the code that restores a
+# save never runs, and any fault in it waits for the SECOND launch. That is precisely how the
+# startup crash reached a player: launch one proved the game worked, launch two would not open.
+# Testing it used to mean moving the real save aside, a procedure that only has to go wrong once.
+# RH_SAVE_DIR points the whole save system at an empty directory instead.
+FRESH="${TEMP:-/tmp}/rh_bootcheck_fresh"
+mkdir -p "$FRESH"
+rm -f "$FRESH/save.json"
+
+fresh_out="$(boot_run "$(winpath "$FRESH")")"
+fresh_rc=$?
+
+echo "$fresh_out" | grep -aE "BOOT OK|Unhandled|Exception" | head -3
+
+if [ $fresh_rc -ne 0 ] || ! echo "$fresh_out" | grep -aq "BOOT OK"; then
+  echo "FIRST LAUNCH FAILED — a new player cannot start the game." >&2
+  echo "$fresh_out" | tail -20 >&2
+  exit 1
+fi
+
+# And the real save must still be untouched after a run that was pointed somewhere else entirely —
+# the redirect is only useful if it actually redirects.
+if [ -n "$before" ] && [ "$before" != "$(sha256sum "$SAVE" | cut -d' ' -f1)" ]; then
+  echo "THE FRESH RUN TOUCHED THE REAL SAVE — RH_SAVE_DIR is not being honoured." >&2
+  exit 1
+fi
+
+echo "boot green — save path and first-launch path both start."

@@ -13,10 +13,33 @@ namespace ResonanceHunter.Client;
 /// </remarks>
 public static class SaveFile
 {
-    private static string Path => System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "ResonanceHunter",
-        "save.json");
+    /// <summary>
+    /// Where the save lives — LocalApplicationData, unless <c>RH_SAVE_DIR</c> redirects it.
+    /// </summary>
+    /// <remarks>
+    /// The override exists so the save SYSTEM can be exercised without a player's save being the only
+    /// available subject. Two paths matter and neither could be reached safely before: a FIRST launch
+    /// with no file at all — the branch that seeds a new game, and the branch whose early return hid a
+    /// startup crash for the whole of development — and a corrupt file, where the rule is that a bad
+    /// save is never silently replaced. Testing either meant moving the real save aside, which is a
+    /// procedure that only has to go wrong once.
+    ///
+    /// It is read every time rather than cached, so a test can point it somewhere, run, and point it
+    /// back without the process holding a stale answer.
+    /// </remarks>
+    private static string Path
+    {
+        get
+        {
+            var dir = Environment.GetEnvironmentVariable("RH_SAVE_DIR");
+            if (string.IsNullOrWhiteSpace(dir))
+                dir = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "ResonanceHunter");
+
+            return System.IO.Path.Combine(dir, "save.json");
+        }
+    }
 
     public static long NowMs => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
