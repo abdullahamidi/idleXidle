@@ -104,4 +104,30 @@ if [ -n "$before" ] && [ "$before" != "$(sha256sum "$SAVE" | cut -d' ' -f1)" ]; 
   exit 1
 fi
 
-echo "boot green — save path and first-launch path both start."
+# ── THE ROUND TRIP, which is the half that costs an hour when it breaks. ───────────────────────
+#
+# Everything above proves the game READS. Writing is the failure with no symptom: you play, you
+# close it, and the progress was never there. The fresh run above played for ten seconds inside a
+# redirected directory and should have autosaved, so there is now a file to check — and a second
+# run against the same directory has to come back reporting a save rather than a fresh start.
+if [ ! -f "$FRESH/save.json" ]; then
+  echo "NOTHING WAS SAVED — ten seconds of play in a clean directory produced no save.json." >&2
+  echo "The game reads fine and would lose a session." >&2
+  exit 1
+fi
+
+reload="$(boot_run "$(winpath "$FRESH")")"
+echo "$reload" | grep -aE "BOOT OK|Unhandled|Exception" | head -3
+
+if ! echo "$reload" | grep -aq "save loaded"; then
+  echo "WHAT IT WROTE, IT CANNOT READ — the second run did not see a save." >&2
+  echo "$reload" | tail -20 >&2
+  exit 1
+fi
+
+if [ -n "$before" ] && [ "$before" != "$(sha256sum "$SAVE" | cut -d' ' -f1)" ]; then
+  echo "THE ROUND-TRIP RUN TOUCHED THE REAL SAVE." >&2
+  exit 1
+fi
+
+echo "boot green — reads, writes, and reads back what it wrote."

@@ -546,7 +546,17 @@ public class Game1 : Game
         // needs to be unable to write it — sharing this line means no second write site can appear
         // without inheriting the protection.
         if (Environment.GetEnvironmentVariable("RH_SHOT") is not null) return;
-        if (Environment.GetEnvironmentVariable("RH_BOOTCHECK") is not null) return;
+
+        // A BOOT CHECK MAY WRITE, BUT ONLY SOMEWHERE ELSE. The guard exists to protect the player's
+        // save, and RH_SAVE_DIR already protects it by pointing the whole save system at another
+        // directory — so blocking the write there would only prevent the check from testing the half
+        // of persistence that matters most. Saving is the thing that, if broken, costs an hour of
+        // play and shows no symptom until it is too late to fix.
+        //
+        // The condition is exact: with RH_SAVE_DIR unset, a boot check still cannot write at all, so
+        // the real file is untouchable by the same rule as before.
+        if (Environment.GetEnvironmentVariable("RH_BOOTCHECK") is not null
+            && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("RH_SAVE_DIR"))) return;
 
         var save = SaveSystem.Capture(
             _hunter, _region, _automation.Roster, _forge.Inventory, _automation.Cores, SaveFile.NowMs,
