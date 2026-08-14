@@ -70,6 +70,12 @@ endings.
 2. **`2f5e9c2` roster parity, measured** — answers the old candidate #1 below.
 3. **`b707d2d` fight callout legibility** — the damage numbers had three independent
    reasons to overlap. Fixed and screenshot-verified.
+4. **`3ca8bf5` the six arena music beds** — `music_arena_{theme}` had a working lookup, a
+   working fallback, and no files, so the branch had never once evaluated true and all six
+   regions shared one bed. One bed per region Source now. The gate was extended to cover the
+   family: it reads the themes out of `Regions.cs`, because an interpolated key is invisible
+   to the literal-key regex AND a missing bed fails *quietly* — it plays the generic combat
+   track, which is exactly what a region without a bed is supposed to sound like.
 
 ### THE ROSTER IS BALANCED — that question is closed
 
@@ -162,8 +168,7 @@ Candidates, none of them committed to:
 1. ~~**Balance the roster.**~~ **DONE — see the newer handover above.** Measured: the roster
    is balanced (1.12x–1.82x), THE ANVIL and THE MAGPIE are worth the same. The measurement
    turned up a separate open question about the six Forms, which is recorded up there.
-2. **The arena's per-theme music variant.** `music_arena_{theme}` has a working lookup and
-   a fallback; six themed beds would use it. `make_music.py` already has the primitives.
+2. ~~**The arena's per-theme music variant.**~~ **DONE — `3ca8bf5`, see above.**
 3. **`design/` has drifted** in places from the code this session changed — `vows.md` and
    `characters.md` were updated, others were not audited.
 4. **A playtest.** Nobody has actually played a long session since the balance pass; the
