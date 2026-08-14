@@ -763,7 +763,7 @@ public class Game1 : Game
         // stopped being reached at all while the title was up, and the run simply never ended — a
         // ten-minute timeout killed it and the failure looked like a slow machine rather than a broken
         // harness. A check that can hang has a failure mode nobody reads.
-        if (_bootCheckFrames > 1200)
+        if (_bootCheckFrames > 2400)
         {
             Console.WriteLine($"BOOT STUCK — {_bootCheckScreensSeen} screens reached, then no progress.");
             Environment.Exit(2);
@@ -788,9 +788,18 @@ public class Game1 : Game
             return;
         }
 
+        // THEN SIT IN THE FIGHT AND LET IT RUN. Drawing the hunt screen for twelve frames proves it
+        // renders; it does not prove a wave can resolve. Clearing waves is where the loot roll, the
+        // chest drop, the level-up and the conquest counter all fire, and those run against the
+        // player's real numbers — which is the combination no fixture reproduces and no capture holds
+        // still long enough to reach. This is the part of the check that touches the actual game.
+        const int SoakFrames = 600;   // ~10s of real ticking, several waves at the saved battle speed
+        var soak = elapsed - screens.Length * PerScreen;
+        if (soak < SoakFrames) return;
+
         Console.WriteLine(_hasSave
             ? $"BOOT OK — save loaded, hunter level {_hunter.HunterLevel}, "
-              + $"{_bootCheckScreensSeen} screens drawn"
+              + $"{_bootCheckScreensSeen} screens drawn, deepest wave {_deepestEver}"
             : $"BOOT OK — no save present, started fresh, {_bootCheckScreensSeen} screens drawn");
         Exit();
     }
