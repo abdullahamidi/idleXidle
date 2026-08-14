@@ -34,6 +34,40 @@ A machine-switch checklist, since the repo cannot carry everything:
 
 ---
 
+## READ THIS FIRST (2026-08-15) — THE GAME WOULD NOT START, AND NOW DOES
+
+You said you could not launch it. You were right, and it was not your machine.
+
+**`Game1.LoadOrStartFresh()` dereferenced `_forge`, which is built in `LoadContent()` and is
+therefore null during `Initialize()`.** NullReferenceException before the window opened, on
+**every launch that had a save to load**. Fixed in `28c0d42` — the value is parked in a
+`_pending*` field and applied after LoadContent, like every other screen-bound restore.
+
+Two things hid it for the whole of development, and both are worth understanding:
+
+1. A FIRST launch has no save and returns early, so the crash only began on the **second**
+   launch — after the game had already proved to you that it worked.
+2. `LoadOrStartFresh` returns immediately when `RH_SHOT` is set, deliberately, so a capture can
+   never entangle with real progress. **The save-load path is the one path no screenshot can
+   reach.** Every gate and every capture in this repo was green while the game would not start.
+
+### To play
+
+**Double-click `PLAY.bat`.** It builds, launches, and pauses on failure so an error cannot
+vanish with the window.
+
+### The two new gates that close this hole
+
+- `bash tools/check_all.sh` now also runs **`check_init_order.py`** — parses Game1, collects the
+  fields CONSTRUCTED in LoadContent, walks Initialize and everything it calls, and fails on any
+  dereference. Verified by reintroducing the real line and watching it fail.
+- **`bash tools/check_boot.sh`** (separate — it builds and runs, ~20s) launches the game with
+  `RH_BOOTCHECK=1`, loads your REAL save, **walks all fourteen screens**, and checks the save's
+  hash is unchanged afterwards. It cannot write: RH_BOOTCHECK shares the single guard in
+  `Game1.Save()` with RH_SHOT. Run it before shipping anything touching startup or persistence.
+
+Current: **BOOT OK — save loaded, 14 screens drawn, save untouched.**
+
 ## START HERE (handover, 2026-08-14 — second session, closed cleanly)
 
 **Everything is committed and pushed** on `feat/hunter-cutout-rig`. Working tree clean,
