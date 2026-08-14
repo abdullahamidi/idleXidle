@@ -84,6 +84,16 @@ They exist as the floor of the system — something a player with no build ident
 at all can still take — and their price is charged in effective HP so it is
 invariant across every build.
 
+**A Vow is charged once, however many skills carry it.** Both prices used to compound
+per skill wearing the Vow, so a four-skill weave paid `1.125^4` (+60% damage taken)
+against a card that said +12.5%, and `0.85^4` (−48% health) against a card that said
+−15%. The benefit never compounded that way — a Vow multiplies each skill it is woven
+into, so four skills at x1.45 is still x1.45 of damage — and the asymmetry made both
+static-cost Vows strictly negative to swear: measured at −1 depth each, the only two
+Vows in the game that cost more than they paid. Swearing is a promise about the build,
+and a promise made on four skills is one promise. `SoloBattle.DistinctVows` is the one
+place that decides this, so the two price sites cannot answer it differently.
+
 ### 3.5 Learning Vows
 
 The Trait Tree spine teaches them, gentlest first:

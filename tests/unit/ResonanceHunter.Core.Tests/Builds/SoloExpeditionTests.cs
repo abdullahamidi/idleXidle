@@ -255,19 +255,37 @@ public class SoloExpeditionTests
         var damageStep = WaveScaling.EnemyDamageScale(boss, t) / WaveScaling.EnemyDamageScale(boss - 1, t);
 
         Assert.Equal(t.EnemyScaleBase * t.BossHealthScale, healthStep, 3);
-        Assert.Equal(t.EnemyScaleBase, damageStep, 3);
+        Assert.Equal(t.EnemyDamageScaleBase, damageStep, 3);
     }
 
-    /// <summary>The two scales agree on every non-boss wave — the split must not introduce a drift.</summary>
+    /// <summary>Enemy damage compounds more slowly than enemy health, and always has to.</summary>
+    /// <remarks>
+    /// This test used to assert the opposite — that the two scales AGREE off boss waves — because they
+    /// did, and the assertion was guarding the boss-damage bug above rather than stating a design rule.
+    /// Making them agree turned out to be the reason the mastery tree was a ranking instead of four
+    /// choices: when damage keeps pace with health, no build ever stalls, so nothing ends a run except
+    /// the champion dying, so depth measures survival alone and the survival branch wins every region.
+    /// See <c>ExpeditionTuning.EnemyDamageScaleBase</c> for the measurements. The gap is the mechanism,
+    /// so the gap is what gets asserted.
+    /// </remarks>
     [Fact]
-    public void test_health_and_damage_scales_agree_off_boss_waves()
+    public void test_enemy_damage_grows_more_slowly_than_enemy_health()
     {
         var t = ExpeditionTuning.Default;
-        for (var w = 1; w <= 24; w++)
+        Assert.True(t.EnemyDamageScaleBase < t.EnemyScaleBase,
+                    "damage must compound below health or every build is survival-bound");
+
+        for (var w = 2; w <= 24; w++)
         {
             if (WaveScaling.IsBossWave(w, t)) continue;
-            Assert.Equal(WaveScaling.EnemyScale(w, t), WaveScaling.EnemyDamageScale(w, t), 3);
+            Assert.True(WaveScaling.EnemyDamageScale(w, t) < WaveScaling.EnemyScale(w, t),
+                        $"wave {w}: damage scale caught up with health scale");
         }
+
+        // And the gap widens, rather than being a constant offset applied once at wave one.
+        var early = WaveScaling.EnemyScale(4, t) - WaveScaling.EnemyDamageScale(4, t);
+        var late = WaveScaling.EnemyScale(24, t) - WaveScaling.EnemyDamageScale(24, t);
+        Assert.True(late > early, "the health/damage gap must grow with depth, not sit still");
     }
 
     // ── THE ARCHETYPE ENGINE, END TO END. ───────────────────────────────────────────────────────────

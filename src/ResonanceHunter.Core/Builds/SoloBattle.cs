@@ -333,9 +333,15 @@ public static class SoloBattle
         // is deliberately NOT billed here — doing both would bill the same effective-HP twice.) The Vow's
         // BENEFIT is applied per-skill in VowFactor; this is the other half, which the solo model had lost
         // when the squad engine that used to charge it was retired.
+        // ONCE PER VOW, not once per skill wearing it. A Vow is sworn, not equipped: FRAGILITY's card
+        // says "+12.5% damage taken" and a build that wove it onto four skills was charged 1.125^4 =
+        // +60%, because the price compounded per skill while the BENEFIT did not — a skill's Vow bonus
+        // is a multiplier on that skill, so four skills at x1.33 is still x1.33 of damage, never x1.33^4.
+        // The asymmetry made both static-cost Vows strictly negative to swear, which is what the balance
+        // sweep found: FRAGILITY -1 depth, RECKLESS OFFERING -1 depth, while every demand Vow paid.
         var fragilityMult = 1f;
-        foreach (var sk in skills)
-            if (sk.Vow is { DamageTakenIncrease: > 0f } v) fragilityMult *= 1f + v.DamageTakenIncrease;
+        foreach (var v in DistinctVows(skills))
+            if (v.DamageTakenIncrease > 0f) fragilityMult *= 1f + v.DamageTakenIncrease;
 
         // TARGETING is "first alive in spawn order", deliberately, and overkill is discarded.
         //
@@ -862,6 +868,9 @@ public static class SoloBattle
         return Finish(WaveOutcome.Stalled, tuning.TickCeilingMs);
     }
 
+    /// <summary>The floor under a champion's pool, so an untrained Hunter still has a run to lose.</summary>
+    private const int MinimumChampionHealth = 60;
+
     /// <summary>
     /// A StaticCost Vow's HEALTH price, as a multiplier on the champion's max health at mint.
     /// </summary>
@@ -872,12 +881,37 @@ public static class SoloBattle
     /// Applied ONCE at mint (the champion persists across waves), which is why it lives here as a helper the
     /// mint sites call rather than inside the per-wave sim. The product across every such Vow the build wears.
     /// </remarks>
+    /// <summary>The champion's starting health for a run: the Hunter's pool, as the BUILD changes it.</summary>
+    /// <remarks>
+    /// <para>
+    /// EVERY mint site calls this. It exists because there were three of them — the live screen, the
+    /// bench, and a balance harness — each open-coding <c>Math.Max(60, hunter.MaxHealth) * ...</c>, and
+    /// the third had quietly dropped the <see cref="VowHealthMultiplier"/> term. Nothing shipped was
+    /// wrong; the MEASUREMENTS were, which is worse in its way, because a measurement that lies is
+    /// trusted. RECKLESS OFFERING looked like the best Vow in the game for a while on the strength of a
+    /// harness that never charged its health price, and a build's health looked worthless because a
+    /// third of the multiplier chain was missing from the only place anybody was reading numbers off.
+    /// </para>
+    /// <para>
+    /// The lesson is the one this codebase keeps relearning: a formula copied is a formula that will
+    /// drift, and the copy that drifts is never the one you are looking at.
+    /// </para>
+    /// </remarks>
+    public static int ChampionHealth(Build build, Economy.Hunter hunter)
+    {
+        ArgumentNullException.ThrowIfNull(build);
+        ArgumentNullException.ThrowIfNull(hunter);
+        // VowHealthMultiplier already folds in the build's own MaxHealth term; do not apply it twice.
+        var pool = Math.Max(MinimumChampionHealth, hunter.MaxHealth) * VowHealthMultiplier(build);
+        return Math.Max(1, (int)MathF.Round(pool));
+    }
+
     public static float VowHealthMultiplier(Build build)
     {
         ArgumentNullException.ThrowIfNull(build);
         var mult = 1f;
-        foreach (var sk in build.Skills)
-            if (sk.Vow is { Kind: VowKind.StaticCost, StaticCostMagnitude: > 0f, DamageTakenIncrease: 0f } v)
+        foreach (var v in DistinctVows(build.Skills))
+            if (v is { Kind: VowKind.StaticCost, StaticCostMagnitude: > 0f, DamageTakenIncrease: 0f })
                 mult *= 1f - v.StaticCostMagnitude;
 
         // TOUGHNESS raises the pool and ENDLESS halves it, and both belong here rather than in the wave
@@ -886,6 +920,21 @@ public static class SoloBattle
         mult *= build.Shape.MaxHealth;
 
         return MathF.Max(0.05f, mult);
+    }
+
+    /// <summary>Every Vow the build has sworn, counted once however many skills carry it.</summary>
+    /// <remarks>
+    /// The single place that decides what "wearing a Vow twice" means, so the two price sites cannot
+    /// answer it differently. It means nothing: a Vow is a promise about the build, and a promise made
+    /// on four skills is one promise. Keyed on Id rather than the record, because two catalogue entries
+    /// could in principle be value-equal and still be different Vows.
+    /// </remarks>
+    private static IEnumerable<Vow> DistinctVows(IEnumerable<EquippedSkill> skills)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var sk in skills)
+            if (sk.Vow is { } v && seen.Add(v.Id))
+                yield return v;
     }
 
     /// <summary>A skill's Vow multiplier, if the BUILD meets its demand.</summary>

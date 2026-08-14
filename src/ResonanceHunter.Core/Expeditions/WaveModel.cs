@@ -14,7 +14,57 @@ namespace ResonanceHunter.Core.Expeditions;
 public sealed record ExpeditionTuning
 {
     /// <summary>Threat COMPOUNDS per wave...</summary>
+    /// <summary>How enemy HEALTH compounds per wave.</summary>
+    /// <remarks>
+    /// MEASURED AND LEFT ALONE. Making health outgrow damage looks like the obvious answer to ENDURE
+    /// dominating the depth metric, and it is not: swept across six pairs from 1.06/1.06 to 1.150/1.030,
+    /// the best-to-worst branch ratio never once improved on the 1.52 it starts at, and the first step
+    /// away made it WORSE (1.72). Longer fights feed a sustain branch — it out-heals the extra hits and
+    /// banks the extra time — while the damage branches simply eat more bites per wave.
+    ///
+    /// The separate damage base stays because health and damage compounding at one rate was an
+    /// unexamined coupling, and having the two knobs is worth more than the one line it costs.
+    /// </remarks>
     public float EnemyScaleBase { get; init; } = 1.06f;
+
+    /// <summary>
+    /// How enemy DAMAGE compounds per wave. Deliberately below <see cref="EnemyScaleBase"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE ONE NUMBER THAT MADE THE MASTERY TREE FOUR CHOICES. Health and damage used to compound at the
+    /// same 1.06, and the consequence was structural rather than numeric: nothing ever stalled, so the
+    /// only thing that ended a run was the champion dying, so depth measured survival and nothing else.
+    /// ENDURE won all six regions. Tightening the stall ceiling from 120s to 25s changed not one wave,
+    /// because a run never reached the ceiling.
+    /// </para>
+    /// <para>
+    /// Two wrong answers were measured first, and both are worth recording. Raising HEALTH growth makes
+    /// it WORSE (1.52 -> 1.72): longer fights feed a sustain branch, which out-heals the extra bites and
+    /// banks the extra time, while a damage branch just eats more of them. And no single ENDURE field is
+    /// the culprit — knocking out leech, absorb, regen or the health multiplier one at a time costs
+    /// between zero and seven waves, because ENDURE is not dying at all. It is STALL-bound at ~50 while
+    /// the other three die at 29-41.
+    /// </para>
+    /// <para>
+    /// So the fix is to let the damage branches live long enough to reach their own stall walls, which
+    /// sit further out than ENDURE's precisely because they kill faster. Isolating this one knob with
+    /// health held at 1.06:
+    /// </para>
+    /// <code>
+    ///   dmg    Weight  Spread  Tempo  Endure   ratio
+    ///   1.060      31      38     41      47    1.52
+    ///   1.050      35      40     42      51    1.46
+    ///   1.040      39      41     43      52    1.33   &lt;- here
+    ///   1.030      41      43     45      60    1.46
+    /// </code>
+    /// <para>
+    /// Below 1.04 it turns back: everyone survives so long that ENDURE's stall wall is the only limit
+    /// left and it runs away again. 1.04 is the floor of that curve, not a round number chosen for
+    /// looking tidy.
+    /// </para>
+    /// </remarks>
+    public float EnemyDamageScaleBase { get; init; } = 1.04f;
 
     /// <summary>...while reward only grows LINEARLY. The gap is the whole design.</summary>
     public float HaulScaleSlope { get; init; } = 0.35f;
@@ -107,7 +157,7 @@ public static class WaveScaling
     /// the case for the fix is the contradiction with the design, not a dramatic shape change.
     /// </remarks>
     public static float EnemyDamageScale(int wave, ExpeditionTuning t)
-        => MathF.Pow(t.EnemyScaleBase, wave);
+        => MathF.Pow(t.EnemyDamageScaleBase, wave);
 
     /// <summary>
     /// Every fifth wave is a boss. The run needs a heartbeat, not a gradient.

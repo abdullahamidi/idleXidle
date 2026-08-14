@@ -307,8 +307,8 @@ public sealed class SoloExpeditionScreen
     private void StartRun(Hunter hunter)
     {
         var build = Loadout.ToBuild(Tree, Mastery, Character);
-        // RECKLESS OFFERING's price: a smaller pool for the whole run, charged once here at mint.
-        var hp = Math.Max(1, (int)MathF.Round(Math.Max(60, hunter.MaxHealth) * SoloBattle.VowHealthMultiplier(build)));
+        // Charged once here at mint: RECKLESS OFFERING's health price and the build's health multipliers.
+        var hp = SoloBattle.ChampionHealth(build, hunter);
         _champ = new Champion { MaxHealth = hp, Health = hp };
         // RegionId reaches the sim, not just the boss art: it selects the band cycle and the creature
         // roster, which is what makes one region a different PLACE rather than the same place with
