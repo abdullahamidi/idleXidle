@@ -209,7 +209,36 @@ public sealed class SoloExpeditionScreen
     public int Deepest { get; private set; }
 
     private readonly List<Callout> _callouts = new();
-    private struct Callout { public string Text; public Color Color; public int X, Y; public float Life; public int Px; }
+    /// <summary>Which column a callout stacks in. Two columns that never collide must not push each other.</summary>
+    private enum CalloutLane { Champion, Enemy }
+
+    private struct Callout
+    {
+        public string Text; public Color Color; public int X, Y; public float Life; public int Px;
+        public CalloutLane Lane;
+    }
+
+    /// <summary>
+    /// Vertical gap between stacked callouts. MUST exceed <see cref="CritPx"/>, the tallest thing stacked.
+    /// </summary>
+    /// <remarks>
+    /// This was 44 while damage numbers drew at 52px and crits at 72px, so consecutive numbers were
+    /// guaranteed to overlap by 8 to 28 pixels — the stack existed, did its arithmetic correctly, and
+    /// still produced a smear, because the spacing was smaller than the glyphs it was spacing.
+    /// </remarks>
+    private const int CalloutLineHeight = 54;
+
+    /// <summary>
+    /// How many lines the stack climbs before wrapping back to the bottom.
+    /// </summary>
+    /// <remarks>
+    /// Counting every live callout without a wrap sends a sustained flurry marching off the top of the
+    /// arena. Wrapping reuses the lowest slot, by which time the number that was there has faded.
+    /// </remarks>
+    private const int CalloutLanesDeep = 5;
+
+    private const int DamagePx = 34;
+    private const int CritPx = 46;
     private int _strikeCount;   // throttles per-strike damage numbers so they don't flood
 
     // ── Arena clipping + overlay state (Rev 4 §1/§2/§11). ──
@@ -394,11 +423,53 @@ public sealed class SoloExpeditionScreen
         _bannerTimer = 2.4f;
     }
 
-    private void Say(string text, Color color, int yOffset = -40)
+    /// <summary>
+    /// Float a line over the champion — a skill name, a heal, a triggered keystone.
+    /// </summary>
+    /// <remarks>
+    /// There is deliberately no per-call vertical offset. There was one, and it defeated the stack: heals
+    /// spawned 32px lower than skill names, so the two kinds interleaved instead of queueing, and a heal
+    /// landing on the same frame as a cast drew straight through it. A column can only have one origin —
+    /// once the callers disagree about where line zero is, the slot arithmetic is spacing them from
+    /// different places and the overlap it exists to prevent comes back.
+    /// </remarks>
+    private void Say(string text, Color color)
     {
-        var stack = _callouts.Count(c => c.Life > 0.6f);
-        _callouts.Add(new Callout { Text = text, Color = color, X = ChampBox.Center.X, Y = ChampBox.Y + yOffset - stack * 36, Life = 1f, Px = 36 });
+        _callouts.Add(new Callout
+        {
+            Text = text,
+            Color = color,
+            X = ChampBox.Center.X,
+            Y = ChampBox.Y - 40 - StackSlot(CalloutLane.Champion) * CalloutLineHeight,
+            Life = 1f,
+            Px = 36,
+            Lane = CalloutLane.Champion,
+        });
     }
+
+    /// <summary>
+    /// Which line of its column the next callout takes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two fixes over the counter this replaces, both of which showed up together as an unreadable
+    /// smear over the enemy.
+    /// </para>
+    /// <para>
+    /// It counts only callouts in the SAME lane. The skill names over the champion and the damage
+    /// numbers over the creature share one list but are drawn in columns hundreds of pixels apart, so
+    /// each was shoving the other up a line to avoid a collision that could not happen — three skills
+    /// firing pushed the next damage number three lines into empty sky, and vice versa.
+    /// </para>
+    /// <para>
+    /// And it counts everything still VISIBLE, not everything still fresh. The old threshold was
+    /// Life &gt; 0.55, but a callout is drawn until Life reaches 0 — nearly twice as long. So the counter
+    /// returned to zero while the earlier numbers were still on screen, and the next number spawned
+    /// underneath one it could not see.
+    /// </para>
+    /// </remarks>
+    private int StackSlot(CalloutLane lane)
+        => _callouts.Count(c => c.Lane == lane && c.Life > 0f) % CalloutLanesDeep;
 
     /// <summary>A floating combat number over the enemy — the fight's "action" read (package_10). Scaled off
     /// the hunter's real PowerRating, jittered so numbers don't stack; crits are gold and linger.</summary>
@@ -411,15 +482,24 @@ public sealed class SoloExpeditionScreen
         //
         // The stack counter is the same trick the wave callouts already use: each number still on
         // screen pushes the next one up a line, so a flurry reads as a column instead of a smear.
-        var stack = _callouts.Count(c => c.Life > 0.55f);
+        //
+        // The X jitter is GONE, and its removal is half the fix. It predates the stack — it was the
+        // original anti-collision trick, scattering numbers up to 72px sideways so two of them rarely
+        // landed on the same spot. Once the stack arrived the two devices fought: the stack builds a
+        // column and the jitter immediately kicked every entry out of it, so a tidy vertical list read
+        // as a scatter and numbers on neighbouring lines still crossed. A column only reads as a column
+        // if it is one.
         _callouts.Add(new Callout
         {
             Text = crit ? $"-{amount:N0} CRIT" : $"-{amount:N0}",
             Color = crit ? Gold : Bone,
-            X = EnemyBox.Center.X + Jitter((int)_playheadMs, 72),
-            Y = EnemyBox.Y - 96 - stack * 44 - Jitter((int)_playheadMs + 11, 20),
+            X = EnemyBox.Center.X,
+            Y = EnemyBox.Y - 96 - StackSlot(CalloutLane.Enemy) * CalloutLineHeight,
             Life = crit ? 1.3f : 1f,
-            Px = crit ? 72 : 52,
+            // Was 52 and 72. The fight "reads loud" was the standing playtest note, and a damage number
+            // two-thirds the height of the creature it is describing is most of why.
+            Px = crit ? CritPx : DamagePx,
+            Lane = CalloutLane.Enemy,
         });
     }
 
@@ -477,7 +557,7 @@ public sealed class SoloExpeditionScreen
                     SpawnDamage(HitDamage(form == Form.Trap ? 3f : 2f), form == Form.Trap);   // skills hit big
                     break;
                 case BattleEventKind.Heal:
-                    Say($"+{e.Amount}", Verdant, -8);
+                    Say($"+{e.Amount}", Verdant);
                     _vfx.Play("vfx_levelup", ChampBox.Center.X, ChampBox.Y + 32, tint: Verdant);
                     break;
                 case BattleEventKind.Shield:
