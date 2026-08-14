@@ -540,7 +540,13 @@ public class Game1 : Game
     {
         // A screenshot run seeds throwaway fixed-id items; it must NEVER write them into the player's real
         // save. Autosave and conquest both call this, so the guard lives here, at the one write site.
+        //
+        // RH_BOOTCHECK sits on the SAME guard, and that is what makes it safe to point at the real save.
+        // It is the one mode that deliberately reads a player's progress, so it is also the one that most
+        // needs to be unable to write it — sharing this line means no second write site can appear
+        // without inheriting the protection.
         if (Environment.GetEnvironmentVariable("RH_SHOT") is not null) return;
+        if (Environment.GetEnvironmentVariable("RH_BOOTCHECK") is not null) return;
 
         var save = SaveSystem.Capture(
             _hunter, _region, _automation.Roster, _forge.Inventory, _automation.Cores, SaveFile.NowMs,
@@ -693,6 +699,38 @@ public class Game1 : Game
         if (_pendingRunLog is not null) _expedition.Log.Restore(_pendingRunLog);
         if (_pendingOfflineYield is not null) _automation.ReportOffline(_pendingOfflineYield);
         _automation.Cores += _pendingCores;
+    }
+
+    /// <summary>Frames survived under RH_BOOTCHECK. See <see cref="BootCheck"/>.</summary>
+    private int _bootCheckFrames;
+
+    /// <summary>
+    /// RH_BOOTCHECK: boot against the REAL save, prove it, and exit.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The save-load path is the one path nothing could verify. LoadOrStartFresh returns immediately
+    /// when RH_SHOT is set — deliberately, so a capture can never entangle with real progress — which
+    /// means every screenshot and every gate in this repo was green while the game crashed on startup
+    /// for anyone with a save. That is not a gap in the rig, it is a hole the rig's own safety created.
+    /// </para>
+    /// <para>
+    /// So this mode does what a capture must not: it loads the real save. It is safe to do because it
+    /// can never write one — RH_BOOTCHECK is on the same guard in <c>Save()</c> that RH_SHOT is, at the
+    /// single write site. It reports whether a save was actually restored rather than only that nothing
+    /// threw, because "no crash" and "no save file" look identical from outside and the second one
+    /// would pass a check meant to prove the first.
+    /// </para>
+    /// </remarks>
+    private void BootCheck()
+    {
+        if (Environment.GetEnvironmentVariable("RH_BOOTCHECK") is null) return;
+        if (++_bootCheckFrames < 90) return;   // ~1.5s of real Update/Draw before calling it survived
+
+        Console.WriteLine(_hasSave
+            ? $"BOOT OK — save loaded, {_bootCheckFrames} frames, hunter level {_hunter.HunterLevel}"
+            : "BOOT OK — no save present, started fresh");
+        Exit();
     }
 
 
@@ -1467,6 +1505,8 @@ public class Game1 : Game
         // effects at all (a hit on REND, a sparkle on MEND), which is a feature gap worth filling, not
         // rot worth deleting.
         UpdateMusic();
+
+        BootCheck();
 
         _prevKeys = _keys;
         _prevMouse = _mouse;
