@@ -24,8 +24,8 @@ one figure for hundreds of hours, and it should be a figure you chose.
 - **Unlocks are derived, never banked.** `CharacterState.Refresh` is handed the world's conquered set
   every frame, exactly as both trees derive their points. Nothing about unlocks is persisted, so a
   region rename migrates itself and a conquest can never be double-counted across a reload.
-- Two characters are gated behind **quests**, which do not exist yet. They read as LOCKED and name
-  their quest; `CharacterState.CompleteQuest` is the hook the quest system will call.
+- Two characters are gated behind **quests** (`design/gdd/quests.md`). The roster shows the quest's
+  demand and live progress; the host completes them through `CharacterState.CompleteQuest`.
 - The save carries **only the active id** and the finished-quest set.
 - A character contributes to the build at exactly one place — `PlayerLoadout.ToBuild` — as the same
   three channels the two trees already use: `BuildMods`, `SkillShape`, and granted `BuildTrigger`s.
@@ -42,9 +42,9 @@ Laid out on the mastery tree, so a player who has read the tree already knows ha
 | THE METRONOME | Tempo | Projectile | **FIRST BEAT** — opening cast free, at double force | Conquer Marrow Wastes |
 | THE UNBROKEN | Endure | Transformation | **SECOND WIND** — first killing blow leaves you at 1 | Conquer The Still Archive |
 | THE FALLING TOWER | Weight→Tempo | Strike | **MOMENTUM** — first hit weaker, every later hit stronger | Conquer The Pale Choir |
-| THE QUIVER | Tempo→Spread | Projectile | **LOOSE AGAIN** — a kill fires the next shot immediately | Quest: the Hollow hunt |
+| THE QUIVER | Tempo→Spread | Projectile | **LOOSE AGAIN** — a kill fires the next shot immediately | Quest: THE HOLLOW HUNT |
 | THE THORNWALL | Spread→Endure | Trap | **REPRISAL** — every bite worth less, every trap worth more | Conquer Verdant Hollow |
-| THE OATHBOUND | — | Mark | **TWICE SWORN** — Vows pay more, Mark windows last longer | Quest: keep a Vow |
+| THE OATHBOUND | — | Mark | **TWICE SWORN** — Vows pay more, Mark windows last longer | Quest: THE FIRST VOW |
 | THE MAGPIE | — | Trap | **FULL POCKETS** — richer haul, better rarity | Conquer Cinderworks |
 
 The Endure+Weight bridge deliberately has no character: ANVIL and UNBROKEN already stand either side
@@ -82,7 +82,7 @@ of that corner.
 - `SkillShape` / `BuildMods` / `BuildTrigger` — the three channels a passive speaks through.
 - `Encounters.World.ConqueredIds` — the unlock source.
 - `UiKit.AnimSprite` — the strips the roster and the arena both draw.
-- **Quests** — not built. Two unlocks wait on it.
+- `Quests.QuestCatalogue` — two unlocks wait on it.
 
 ## 7. Tuning Knobs
 

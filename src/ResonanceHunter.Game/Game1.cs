@@ -4,6 +4,7 @@ using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using ResonanceHunter.Core.Abilities;
 using ResonanceHunter.Core.Automation;
 using ResonanceHunter.Core.Builds;
 using ResonanceHunter.Core.Characters;
@@ -15,6 +16,7 @@ using ResonanceHunter.Core.Forging;
 using ResonanceHunter.Core.Loot;
 using ResonanceHunter.Core.Persistence;
 using ResonanceHunter.Core.Prestige;
+using ResonanceHunter.Core.Quests;
 using ResonanceHunter.Core.Warrens;
 
 namespace ResonanceHunter.Client;
@@ -153,6 +155,15 @@ public class Game1 : Game
 
     /// <summary>Which characters are yours, and which one you are. Unlocks derive from conquest.</summary>
     private readonly CharacterState _characters = new();
+
+    /// <summary>
+    /// Descents finished with a Vow's demand still met — the one quest counter that cannot be derived.
+    /// </summary>
+    /// <remarks>
+    /// Every other quest reads a fact still true when you look at it. A run's Vow is gone the moment the
+    /// run ends, so if this is not latched at that instant it can never be proved afterwards.
+    /// </remarks>
+    private int _runsWithVowKept;
     private RosterScreen _roster = null!;
     private bool _showRoster;
     private WeaveScreen _weave = null!;
@@ -346,6 +357,7 @@ public class Game1 : Game
         // Safe here, unlike the run log: CharacterState is a plain field constructed with this class,
         // not a screen built in LoadContent. That distinction is exactly what crashed the game once.
         _characters.Restore(save.ActiveCharacterId, save.QuestsDone);
+        _runsWithVowKept = save.RunsWithVowKept;
 
         var roster = SaveSystem.RestoreRoster(save);
         _automationRoster = roster;
@@ -526,6 +538,7 @@ public class Game1 : Game
             // frame, so there is nothing here to fall out of step with the world.
             ActiveCharacterId = _characters.ActiveId,
             QuestsDone = _characters.SaveQuests().ToList(),
+            RunsWithVowKept = _runsWithVowKept,
             MasteryEarned = _deepestEver,          // stored as deepest-ever; Earned is re-derived on load
             ChampionGleamRate = _champGleamRate,
             // Unopened chests ride along too — a boss's drop must survive a reload, opened or not.
@@ -1046,7 +1059,13 @@ public class Game1 : Game
                         _characters.Select("anvil");
                         _roster.DevSelect("oathbound");
                     }
-                    else _roster.DevSelect("unbroken");
+                    else
+                    {
+                        // A fresh save posed part-way into one quest and nowhere on the other, so the
+                        // capture shows a live count rather than two identical LOCKED cards.
+                        _world.RegionFarm(VerdantHollow.RegionId).RestoreBestDepth(14);
+                        _roster.DevSelect("quiver");
+                    }
                 }
 
                 if (sm is "dust" or "traitlit" or "traitterm" or "traitterminal")
@@ -1299,6 +1318,7 @@ public class Game1 : Game
 
         if (_showRoster)
         {
+            _roster.Progress = QuestSnapshot();
             _roster.Update(CanvasMouse, MouseClicked, _characters);
             Latch(gameTime);
             return;
@@ -1453,6 +1473,16 @@ public class Game1 : Game
         // The roster derives from conquest, every frame, exactly like both trees' points. A character
         // unlocked by a conquest the player made three regions ago should not depend on having been
         // logged in when it happened.
+        // Quests, then characters — in that order, because a quest finishing is what makes a
+        // quest-gated character available on the SAME frame rather than the next one.
+        foreach (var done in QuestCatalogue.Satisfied(QuestSnapshot()))
+            if (!_characters.QuestDone(done.Id))
+            {
+                _characters.CompleteQuest(done.Id);
+                _bootMessage = $"QUEST DONE — {done.Name}";
+                Save();
+            }
+
         foreach (var got in _characters.Refresh(_world.ConqueredIds))
             _bootMessage = $"{got.Name} JOINS YOU — {got.PassiveName}";
         _expedition.Character = _characters.Active;
@@ -1526,7 +1556,19 @@ public class Game1 : Game
         // One point per five waves of FIRST-TIME depth, per region. Farming a depth already reached pays
         // haul but no points, so the only way to earn one is to push somewhere new.
         _world.RegionFarm(_activeRegion).RecordDepth(_expedition.Deepest);
-        if (_expedition.LogDirty) { _expedition.LogDirty = false; Save(); }
+        if (_expedition.LogDirty)
+        {
+            _expedition.LogDirty = false;
+            // A RUN JUST ENDED. This is the only frame on which "was a Vow kept for that descent?" can
+            // be answered — the run's build is still assembled and its context still describes it. One
+            // frame later the expedition has reset and there is nothing left to ask.
+            //
+            // "Kept" is judged the way the simulation judged it while the run was paying out: the Vow's
+            // demand tested against the same WeaveContext. That matters — a Vow SWORN and a Vow KEPT are
+            // different things, and the quest is about the second.
+            if (VowWasKept()) _runsWithVowKept++;
+            Save();
+        }
 
         _mastery.SetEarned(SkillPointsEarned());
         _dust.SetEarned(TraitPointsEarned());
@@ -1777,7 +1819,7 @@ public class Game1 : Game
         if (_showForge) _forge.Draw(_batch, _hunter, CanvasMouse, MouseClicked);
         else if (_showWorld) DrawWorld();
         else if (_showPrestige) _prestige.Draw(_batch, _dust, CanvasMouse, MouseClicked);
-        else if (_showRoster) _roster.Draw(_batch, _characters, CanvasMouse, MouseClicked);
+        else if (_showRoster) { _roster.Progress = QuestSnapshot(); _roster.Draw(_batch, _characters, CanvasMouse, MouseClicked); }
         else if (_showWeave) _weave.Draw(_batch, CanvasMouse, MouseClicked);
         else if (_showAutomation) DrawWarren();
         else if (_showBuild) _buildScreen.Draw(_batch, CanvasMouse, _dust);
@@ -2176,6 +2218,35 @@ public class Game1 : Game
     /// At full current content: 6 conquests + ~10 corruption tiers + 18 mastery goals = ~34 against a
     /// tree costing about 150 — roughly a quarter, and two of the four terminals out of reach.
     /// </remarks>
+    /// <summary>
+    /// The world as the quest layer is allowed to see it: flat, pure, rebuilt every frame.
+    /// </summary>
+    /// <remarks>
+    /// Derived rather than banked, exactly as both trees' points and the character unlocks are. The one
+    /// exception is <c>_runsWithVowKept</c>, which is an event and has to be latched — see the run-end
+    /// branch in UpdateExpedition.
+    /// </remarks>
+    private QuestProgress QuestSnapshot() => new(
+        DepthByRegion: Regions.All.ToDictionary(d => d.Id, d => _world.RegionFarm(d.Id).BestDepth),
+        RegionsConquered: _world.ConqueredIds.Count,
+        ChestsOpened: _forge.ChestsOpened,
+        RunsWithVowKept: _runsWithVowKept);
+
+    /// <summary>
+    /// Did the descent that just ended run under a Vow whose demand the build actually met?
+    /// </summary>
+    /// <remarks>
+    /// Not "was a Vow sworn". A Vow pays nothing while its demand is unmet, and a quest that counted
+    /// sworn-but-unmet Vows would hand THE OATHBOUND to a player who never engaged with the system the
+    /// character exists to reward.
+    /// </remarks>
+    private bool VowWasKept()
+    {
+        var build = _loadout.ToBuild(_dust, _mastery, _characters.Active);
+        var ctx = SoloBattle.DescribeBuild(build, _hunter);
+        return build.Skills.Any(s => s.Vow is { } v && Weaving.IsActive(v, ctx));
+    }
+
     private int TraitPointsEarned()
     {
         var total = _world.ConqueredIds.Count + _world.CorruptionTier;

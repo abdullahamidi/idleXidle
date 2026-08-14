@@ -7,6 +7,7 @@ using ResonanceHunter.Core.Abilities;
 using ResonanceHunter.Core.Builds;
 using ResonanceHunter.Core.Characters;
 using ResonanceHunter.Core.Encounters;
+using ResonanceHunter.Core.Quests;
 
 namespace ResonanceHunter.Client;
 
@@ -73,14 +74,23 @@ public sealed class RosterScreen
 
     private static Color LeanColor(Character c) => c.Lean is { } b ? BranchColor(b) : Slate;
 
+    /// <summary>Live quest progress, set by the host each frame. Empty until quests are wired.</summary>
+    public QuestProgress Progress { get; set; } = QuestProgress.Empty;
+
     /// <summary>What a locked character is waiting for, in the player's terms.</summary>
+    /// <remarks>
+    /// A quest gate reads its demand from the QUEST, not from the character's own copy of the words.
+    /// Two strings saying the same thing is two strings that can disagree, and the one the player would
+    /// have believed is whichever screen they happened to be on.
+    /// </remarks>
     private static string UnlockText(Character c) => c.Unlock.Kind switch
     {
         UnlockKind.Start => "YOURS FROM THE START",
         UnlockKind.Conquest => c.Unlock.RegionId is { } r && Regions.Find(r) is { } def
             ? $"CONQUER {def.Name}"
             : "CONQUER A REGION",
-        _ => c.Unlock.QuestText?.ToUpperInvariant() ?? "FINISH A QUEST",
+        _ => (QuestCatalogue.Find(c.Unlock.QuestId)?.Demand ?? c.Unlock.QuestText ?? "FINISH A QUEST")
+             .ToUpperInvariant(),
     };
 
     public void Update(Point mouse, bool clicked, CharacterState state)
@@ -174,8 +184,12 @@ public sealed class RosterScreen
             else
                 _ui.TextCenter(b, "NO ROAD", card.Center.X, card.Bottom - 62, Dim);
 
-            _ui.TextCenter(b, active ? "PLAYING" : unlocked ? "READY" : "LOCKED",
-                           card.Center.X, card.Bottom - 30, active ? Gold : unlocked ? Met : Slate);
+            // `state` is the CharacterState parameter; this is the word on the card.
+            var stateText = active ? "PLAYING" : unlocked ? "READY" : "LOCKED";
+            if (!unlocked && QuestCatalogue.Find(c.Unlock.QuestId) is { } cq)
+                stateText = cq.ProgressText(Progress);
+            _ui.TextCenter(b, stateText, card.Center.X, card.Bottom - 30,
+                           active ? Gold : unlocked ? Met : Slate);
         }
     }
 
@@ -229,6 +243,11 @@ public sealed class RosterScreen
         _ui.Fill(b, new Rectangle(left, y, width, 2), Dim);
         y += 14;
         _ui.TextBig(b, unlocked ? "EARNED" : "LOCKED", left, y, unlocked ? Met : Ember, UiTypography.Secondary);
+        // HOW CLOSE, not just what. A gate that names a demand and nothing else is a gate a player
+        // cannot tell they are one descent away from.
+        if (!unlocked && QuestCatalogue.Find(c.Unlock.QuestId) is { } q)
+            _ui.TextRightBig(b, q.ProgressText(Progress), DetailPanel.Right - 74, y,
+                             q.IsDone(Progress) ? Met : Gold, UiTypography.Body);
         y += 30;
         DrawWrapped(b, UnlockText(c), left, y, width, unlocked ? Slate : Bone);
 

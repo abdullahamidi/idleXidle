@@ -86,8 +86,18 @@ public sealed record SaveGame
     /// </remarks>
     public string ActiveCharacterId { get; init; } = "";
 
-    /// <summary>Quest ids finished. Quests do not exist yet; two characters are gated behind them.</summary>
+    /// <summary>Quest ids finished.</summary>
     public List<string> QuestsDone { get; init; } = new();
+
+    /// <summary>
+    /// Descents finished with a Vow's demand still met. The one quest counter that must be saved.
+    /// </summary>
+    /// <remarks>
+    /// Every other quest reads a fact that is still true when you look at it — the depth you reached is
+    /// on the region, the chests you opened are counted. This one is an EVENT, and an event that is not
+    /// latched when it happens cannot be proved afterwards: a run's Vow is gone the moment the run ends.
+    /// </remarks>
+    public int RunsWithVowKept { get; init; }
 
     /// <summary>The player's woven build — four skills. Empty on a pre-solo-model save (keeps the starter).</summary>
     public List<SavedSkill> WovenSkills { get; init; } = new();
