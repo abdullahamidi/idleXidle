@@ -140,9 +140,13 @@ public sealed class MapScreen
         _ui.Diamond(b, new Rectangle(ProgressPanel.Center.X - 28, ProgressPanel.Y + 50, 56, 64), Violet);
         _ui.TextCenterBig(b, stage, ProgressPanel.Center.X, ProgressPanel.Y + 122, Bone, UiTypography.PanelTitle);
 
-        var bar = new Rectangle(ProgressPanel.X + 32, ProgressPanel.Y + 158, ProgressPanel.Width - 64, 20);
+        // The count sits UNDER the bar, not on it. A 20px bar is shorter than the line it was carrying,
+        // and at 6/6 the fill is solid violet edge to edge — so the one moment the number says something
+        // worth reading ("the world is yours") was the moment it was least legible.
+        var bar = new Rectangle(ProgressPanel.X + 32, ProgressPanel.Y + 152, ProgressPanel.Width - 64, 20);
         _ui.Bar(b, bar.X, bar.Y, bar.Width, bar.Height, total > 0 ? conquered / (float)total : 0f, Violet);
-        _ui.TextCenterBig(b, $"{conquered} / {total} REGIONS CONQUERED", bar.Center.X, bar.Y + 2, Bone, UiTypography.Secondary);
+        _ui.TextCenterBig(b, $"{conquered} / {total} REGIONS CONQUERED", bar.Center.X, bar.Bottom + 8,
+                          conquered == total ? Gold : Bone, UiTypography.Secondary);
 
         _ui.Fill(b, new Rectangle(ProgressPanel.X + 24, ProgressPanel.Y + 192, ProgressPanel.Width - 48, 2), Dim);
         _ui.TextBig(b, "DISCOVERED REGIONS", ProgressPanel.X + 30, ProgressPanel.Y + 206, Gold, UiTypography.Body);
