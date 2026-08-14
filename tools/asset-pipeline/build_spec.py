@@ -861,9 +861,32 @@ def animations() -> list[dict]:
     # Two clips each, and only two: idle is what the champion does for almost the whole expedition, and
     # attack is the one beat the combat loop drives. Death and cast can follow once these are proven —
     # every clip is eight more generations per character, and ten characters make that a real number.
+    # AN ACTION A POSE CAN ACTUALLY PERFORM.
+    #
+    # One attack line for ten characters worked for seven of them and could not work for three, and the
+    # gate said so in numbers before I read the prompts: TOWER's clip drifted 21-48% in silhouette height
+    # against a 12% cap, over six rolls, while every passing attack sat between 1.3% and 8.6%. The cause
+    # is in the BASE pose, not the animator. TOWER stands with the head of its maul resting on the ground
+    # between its feet, leaning its weight onto it — "swinging forward to strike" orders the model to
+    # hoist a weapon off the floor, and the silhouette grows by half doing it. QUIVER holds an unstrung
+    # longbow LIKE A STAFF; you cannot swing that. OATHBOUND's hands are clasped AND BOUND TOGETHER, and
+    # its eyes are sealed. The seven that passed all have free hands and a neutral stance.
+    #
+    # So the three get an action their own body can do without re-inventing itself. Same principle the
+    # padding uses: author the input so the tool succeeds, rather than arguing with the tool.
+    ATTACK_ACTION = {
+        # The maul never leaves the floor — it is driven INTO it. Also what MOMENTUM should look like.
+        "tower": "leaning hard onto the maul and driving its head down into the ground, then straightening",
+        # A drawn bow is the same height as a held one; a swung one is not.
+        "quiver": "raising the longbow and drawing the string back to the cheek, then loosing",
+        # Bound hands can still be thrust forward, and the chains pull taut when they are.
+        "oathbound": "bowing the head and thrusting both bound hands forward, the chains pulling taut",
+    }
+    DEFAULT_ATTACK = "swinging forward to strike and then recovering to a stand"
+
     for cid in ROSTER_IDS:
         for clip, action in [("idle", "standing and breathing in place, shifting weight very slightly"),
-                             ("attack", "swinging forward to strike and then recovering to a stand")]:
+                             ("attack", ATTACK_ACTION.get(cid, DEFAULT_ATTACK))]:
             a.append({
                 "key": f"char_{cid}_{clip}_strip8_512",
                 "dest": f"assets/art/Animations/Roster/{cid}_{clip}",
