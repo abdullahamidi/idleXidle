@@ -113,7 +113,9 @@ public sealed class BuildScreen
     }
     // Under the panel's top crest, which the title now clears too — at y=196 the button was drawn
     // straight through it.
-    private static readonly Rectangle ViewTreeBtn = new(1544, 250, 250, 44);
+    // Left-aligned to the panel's text column (PassivePanel.X + 52) and on its OWN row, below the
+    // points line rather than beside it. See DrawPassives — sharing that row clipped the line.
+    private static readonly Rectangle ViewTreeBtn = new(1280, 286, 250, 44);
 
     // ══ THE TREE'S OWN SPACE ═══════════════════════════════════════════════════════════════════
     //
@@ -401,7 +403,12 @@ public sealed class BuildScreen
         var vows = skills.Count(s => Weaving.ById(s.VowId) is not null);
         var y = SummaryPanel.Y + 400;
         Row(b, SummaryPanel, "SOURCE FOCUS", focus is null ? "—" : focus.Key.ToString().ToUpperInvariant(), ref y);
-        Row(b, SummaryPanel, "ACTIVE FORMS", $"{skills.Count}", ref y);
+        // DISTINCT Forms, because that is what the row is labelled. It read skills.Count, so a build
+        // running two BODY STRIKEs reported "ACTIVE FORMS 5" a glance away from the CORE COMPOSITION
+        // panel listing four — the same screen contradicting itself, and the wrong half is the one a
+        // player uses to reason about Form combos and affinity. How many SKILLS there are is already
+        // visible: they are the cards in the loadout row underneath.
+        Row(b, SummaryPanel, "ACTIVE FORMS", $"{skills.Select(s => s.Form).Distinct().Count()}", ref y);
         Row(b, SummaryPanel, "VOW-BOUND", $"{vows}", ref y);
         Row(b, SummaryPanel, "MASTERY", $"{Mastery.Spent} NODES", ref y);
     }
@@ -474,25 +481,49 @@ public sealed class BuildScreen
         // 52px, the width of the ornate border. At 32 the left column sat ON the frame and the
         // right-aligned resonance percentages were clipped by the opposite edge.
         var x = PassivePanel.X + 52;
-        _ui.TextBig(b, $"SKILL POINTS   {Mastery.Spent} SPENT  ·  {Mastery.Available} FREE", x, PassivePanel.Y + 122, Bone, UiTypography.Body);
+
+        // THE POINTS LINE GETS ITS OWN ROW. It shared one with the VIEW TREE button, whose left edge is
+        // at 1544 — 264px from the text's start, and the string needs about 300. It rendered as
+        // "SKILL POINTS   18 SPENT  ·  6 FI" with the rest under the button. Shortening the label would
+        // have hidden it for now and brought it back the moment a player earned a third digit: mastery
+        // points are 3 + deepestEver/5 + conquered*5, so three digits is a real endgame value, not a
+        // hypothetical. The row is free instead.
+        _ui.TextBig(b, $"SKILL POINTS   {Mastery.Spent} SPENT  ·  {Mastery.Available} FREE", x, PassivePanel.Y + 112, Bone, UiTypography.Body);
         Button(b, ViewTreeBtn, "VIEW TREE", hit, true);
 
         // PASSIVES — the real taken mastery nodes (notables + mastery). No invented "trait bonus %" table.
-        _ui.TextBig(b, "PASSIVES", x, PassivePanel.Y + 190, Gold, UiTypography.Secondary);
+        _ui.TextBig(b, "PASSIVES", x, PassivePanel.Y + 206, Gold, UiTypography.Secondary);
         var taken = MasteryCatalog.Nodes.Where(n => n.Kind is MasteryKind.Notable or MasteryKind.Mastery && Mastery.IsTaken(n.Id)).ToList();
-        var py = PassivePanel.Y + 224;
+        var py = PassivePanel.Y + 240;
         if (taken.Count == 0) _ui.TextBig(b, "None yet — walk the tree.", x, py, Slate, UiTypography.Body);
+        // SHORTENED TO THE COLUMN. Node labels are authored freely and nothing caps their length —
+        // MARK MASTERY's runs off the panel and was drawn through the frame art, ending mid-word on
+        // "…HITS 40% HA". That reads as a rendering glitch rather than as a label that is too long,
+        // which is the worst way for it to fail: nobody files it, and the sentence a player needs in
+        // order to evaluate the node is the part that went missing.
+        // To the FRAME, not to the 52px text margin. That margin exists so the right-aligned resonance
+        // percentages clear the ornate border; these labels are left-aligned and run the other way, so
+        // holding them to it truncated three that fit with pixels to spare. The frame's own inset is
+        // the real edge.
+        var labelWidth = PassivePanel.Right - UiKit.PanelCorner - 4 - (x + 30);
         foreach (var n in taken.Take(6))
         {
             _ui.Diamond(b, new Rectangle(x, py + 2, 18, 18), n.Kind == MasteryKind.Mastery ? Gold : Purple);
-            _ui.TextBig(b, n.Label, x + 30, py, Bone, UiTypography.Body);
+            _ui.TextBig(b, _ui.ShortenBig(n.Label, labelWidth, UiTypography.Body), x + 30, py, Bone, UiTypography.Body);
             py += 36;
         }
 
         // RESONANCE — the real source composition of the equipped skills (share per source).
-        _ui.TextBig(b, "RESONANCE", x, PassivePanel.Y + 430, Gold, UiTypography.Secondary);
+        //
+        // ANCHORED BELOW THE PASSIVES LIST, not pinned at a fixed +430, for the same reason KEYSTONES
+        // below is anchored below the resonance list: the block above it is variable-length. The list
+        // takes up to six nodes at 36px from +240, so a player who has walked six notables ends at
+        // +456 and this heading at +430 was drawn THROUGH their last passive. Six is not an unusual
+        // build; it is what the tree is for. The old fixed position stays as a floor, so a short list
+        // still puts the heading exactly where it has always been.
+        _ui.TextBig(b, "RESONANCE", x, Math.Max(PassivePanel.Y + 430, py + 16), Gold, UiTypography.Secondary);
         var skills = Loadout.Skills;
-        var ry = PassivePanel.Y + 464;
+        var ry = Math.Max(PassivePanel.Y + 464, py + 50);
         var groups = skills.GroupBy(s => s.Source).OrderByDescending(g => g.Count()).ToList();
         if (groups.Count == 0) _ui.TextBig(b, "No skills equipped.", x, ry, Slate, UiTypography.Body);
         foreach (var g in groups)

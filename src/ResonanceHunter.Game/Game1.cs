@@ -812,8 +812,13 @@ public class Game1 : Game
                     _dust.Purchase("weave_5");
                     _loadout.SkillCapacity = DustEffects.SkillSlots(_dust);
                     _loadout.AddSkill();
-                    foreach (var id in new[] { "heavy_hand", "sharpened", "sunder", "crush", "monolith",
-                                               "opener", "hasten", "alpha" })
+                    // SIX passives, which is the most the panel will list (it Takes 6). Same reasoning as
+                    // the fifth skill card above: the passives list is variable-length and the RESONANCE
+                    // heading below it used to be pinned at a fixed offset, so a full list was drawn
+                    // straight through the heading. A fixture stopping at three could never show that.
+                    foreach (var id in new[] { "heavy_hand", "sharpened", "sunder", "crush", "breaker",
+                                               "monolith", "opener", "hasten", "alpha", "mark_mastery",
+                                               "interrupt" })
                         _mastery.Take(id);
 
                     if (sm == "buildtree") _buildScreen.DevOpenTree();

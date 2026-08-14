@@ -1237,14 +1237,8 @@ public sealed class ForgeScreen
     }
 
     /// <summary>Trim to a pixel width with an ellipsis. A short label beats a label drawn through a number.</summary>
-    private string Shorten(string text, int width)
-    {
-        if (width <= 0) return "";
-        if (_ui.Measure(text) <= width) return text;
-        var s = text;
-        while (s.Length > 1 && _ui.Measure(s + "\u2026") > width) s = s[..^1];
-        return s.TrimEnd() + "\u2026";
-    }
+    /// <remarks>Moved to <see cref="UiKit.Shorten"/> \u2014 the Build screen's passives list needed it too.</remarks>
+    private string Shorten(string text, int width) => _ui.Shorten(text, width);
 
     private void DrawTransition(SpriteBatch b, string label, string cur, string? after, int y)
     {

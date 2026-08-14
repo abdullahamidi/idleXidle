@@ -289,7 +289,11 @@ public sealed class WeaveScreen
             if (skills.Count > 1)
             {
                 var x = DropX(i);
-                _ui.TextCenter(b, "\u2715", x.Center.X, x.Y + 6, x.Contains(hit) ? Ember : Slate);
+                // U+00D7, not U+2715. The heavier multiplication X drew as NOTHING on the system-font
+                // path, so this button \u2014 the only way to remove a skill \u2014 was an invisible 30px square
+                // that worked perfectly when clicked and advertised itself not at all. It hid behind a
+                // `"\u2715"` escape, which the font gate could not see until it learned to decode them.
+                _ui.TextCenter(b, "\u00d7", x.Center.X, x.Y + 6, x.Contains(hit) ? Ember : Slate);
             }
 
             var vow = Weaving.ById(s.VowId);

@@ -655,6 +655,35 @@ public sealed class UiKit
     public void TextCenterBig(SpriteBatch b, string s, int cx, int y, Color c, int px) => Text2.DrawCentered(b, s, cx, y, c, px);
     public int MeasureBig(string s, int px) => Text2.Measure(s, px);
 
+    /// <summary>
+    /// Trim a string until it fits <paramref name="width"/> pixels, ending in an ellipsis.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than on one screen because the alternative is a second copy, and a screen without
+    /// one does not fail loudly — it draws the label straight off the panel and through whatever the
+    /// frame art has there, which reads as a rendering glitch rather than as a string that is too long.
+    /// Every catalogue label is authored freely and no rule caps its length, so any list that draws one
+    /// into a fixed column needs this.
+    /// </remarks>
+    public string Shorten(string text, int width)
+    {
+        if (string.IsNullOrEmpty(text) || width <= 0) return "";
+        if (Measure(text) <= width) return text;
+        var s = text;
+        while (s.Length > 1 && Measure(s + "…") > width) s = s[..^1];
+        return s.TrimEnd() + "…";
+    }
+
+    /// <summary>The sized-text twin of <see cref="Shorten"/>, for anything drawn with TextBig.</summary>
+    public string ShortenBig(string text, int width, int px)
+    {
+        if (string.IsNullOrEmpty(text) || width <= 0) return "";
+        if (MeasureBig(text, px) <= width) return text;
+        var s = text;
+        while (s.Length > 1 && MeasureBig(s + "…", px) > width) s = s[..^1];
+        return s.TrimEnd() + "…";
+    }
+
     /// <summary>A bar from the package_01 art: the ornate frame (ui_bar_&lt;type&gt;_frame) with the pre-coloured
     /// fill (ui_bar_&lt;type&gt;_fill) clipped to <paramref name="pct"/> drawn INSIDE its window (on top, because
     /// the frame's centre is opaque). <paramref name="type"/> is health / mana / progress / boss / xp.</summary>

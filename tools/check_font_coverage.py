@@ -48,7 +48,11 @@ EXEMPT = {
 #   ·  × — –   currency pills, item lines, wave counts — everywhere, all the time
 #   → ←        the Forge's merge preview and the fight screen's callouts
 #   ‹          the mastery tree's BACK, verified in the buildtree capture
-PROVEN = set(" ·×—–→←‹")
+#   …          truncated labels — the Forge's item rows and the Build screen's passives list.
+#              Verified in shot_forge_combo_line.png, which renders "CRIT…" in the affix column.
+#   ›          the mirror of ‹ — "WEAVE ›" on the mastery tree, "UPGRADE ›" / "REFORGE ›" in the
+#              Forge. Verified in shot_look_buildtree.png and shot_forge_combo_line.png.
+PROVEN = set(" ·×—–→←‹›…")
 
 
 def font_glyphs() -> set:
@@ -62,10 +66,27 @@ def strip_comments(text: str) -> str:
     return re.sub(r"^[ \t]*//.*$", "", text, flags=re.M)
 
 
+def unescape(lit: str) -> str:
+    r"""Resolve \uXXXX and \xXX so an escaped glyph is checked like a typed one.
+
+    THE HOLE THIS CLOSES. The scan reads source characters, so `"…"` is seven ASCII
+    characters and sails through while a typed `"…"` is flagged — the same glyph, the same
+    pixels on screen, two different verdicts decided by how somebody happened to type it. Every
+    ellipsis in the codebase was written the escaped way, so the gate had never once looked at
+    the character it draws most often outside ASCII. An escape is the EASIER thing to write when
+    a keyboard makes a symbol awkward, which is exactly when a glyph is most likely to be one
+    the font has never rendered.
+    """
+    def sub(m):
+        return chr(int(m.group(1) or m.group(2), 16))
+
+    return re.sub(r"\\u([0-9a-fA-F]{4})|\\x([0-9a-fA-F]{2})", sub, lit)
+
+
 def literals(text: str):
     """Every double-quoted literal, including interpolated ones. Verbatim strings included."""
     for m in re.finditer(r'@?"((?:[^"\\]|\\.)*)"', text):
-        yield m.group(1)
+        yield unescape(m.group(1))
 
 
 def main() -> int:
@@ -91,7 +112,11 @@ def main() -> int:
     print("UNPROVEN CHARACTERS — these may draw as nothing on the system font:\n")
     for ch, where in sorted(missing.items()):
         seen = ", ".join(dict.fromkeys(where))[:110]
-        print(f"  {ch!r}  U+{ord(ch):04X}   {seen}")
+        # The CODEPOINT, never the character. A gate that reports an unrenderable glyph by trying to
+        # render it dies on the console that cannot render it — this one crashed with a
+        # UnicodeEncodeError on a Turkish-locale cp1254 terminal, so the very failure it had correctly
+        # detected was invisible and the run looked like a broken script instead of a real finding.
+        print(f"  U+{ord(ch):04X}   {seen}")
     print("\nUse a character from the proven set, or prove this one with a capture and add it.")
     return 1
 
