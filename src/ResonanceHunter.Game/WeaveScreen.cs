@@ -106,7 +106,12 @@ public sealed class WeaveScreen
 
     // Five rows, not six. Six fitted only by squeezing each to 54px, where a Vow's name and its
     // verdict printed over one another.
-    private const int VowRows = 5;
+    // FOUR, not five. The reading block underneath is not optional furniture — a Vow's row carries its
+    // demand, and its DESCRIPTION carries the cost, which is the half that decides whether to swear it.
+    // At five rows a three-line description started at y=784 and ran to 848 against a panel whose
+    // interior ends at 822, so the cost ran out through the bottom ornament. The list scrolls; the
+    // description does not.
+    private const int VowRows = 4;
     private const int VowRowH = 70;
     private static Rectangle VowRow(int i) => new(VowPanel.X + 74, VowPanel.Y + 136 + i * (VowRowH + 8), 494, VowRowH);
     private static Rectangle VowClear => new(VowPanel.X + 74, VowPanel.Y + 136 + VowRows * (VowRowH + 8) + 4, 494, 44);
@@ -420,7 +425,9 @@ public sealed class WeaveScreen
         y += 16;
         _ui.TextBig(b, reading.Name.ToUpperInvariant(), VowPanel.X + 74, y, Gold, UiTypography.Body);
         y += 32;
-        DrawWrapped(b, reading.Description, VowPanel.X + 74, y, 494, Bone);
+        // Bounded, so a longer Vow than any in the catalogue today cannot reintroduce the overflow: the
+        // panel's frame art reaches 40px in, and text drawn past that is text on the ornament.
+        DrawWrapped(b, reading.Description, VowPanel.X + 74, y, 494, Bone, VowPanel.Bottom - 40);
     }
 
     /// <summary>Truncate to a pixel width, with an ellipsis, so a long line cannot invade its neighbour.</summary>
@@ -432,16 +439,24 @@ public sealed class WeaveScreen
         return s.TrimEnd() + "\u2026";
     }
 
-    private void DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c)
+    /// <summary>Wrap to <paramref name="width"/>, and stop at <paramref name="maxY"/> rather than run past it.</summary>
+    private void DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c, int maxY = int.MaxValue)
     {
+        const int lineH = 28;
         var line = "";
         foreach (var w in text.ToUpperInvariant().Split(' '))
         {
             var probe = line.Length == 0 ? w : line + " " + w;
-            if (_ui.Measure(probe) > width && line.Length > 0) { _ui.Text(b, line, x, y, c); y += 28; line = w; }
+            if (_ui.Measure(probe) > width && line.Length > 0)
+            {
+                if (y + lineH > maxY) { _ui.Text(b, line + "\u2026", x, y, c); return; }
+                _ui.Text(b, line, x, y, c);
+                y += lineH;
+                line = w;
+            }
             else line = probe;
         }
-        if (line.Length > 0) _ui.Text(b, line, x, y, c);
+        if (line.Length > 0 && y + lineH <= maxY) _ui.Text(b, line, x, y, c);
     }
 
     private void Outline(SpriteBatch b, Rectangle r, Color c, int t)
