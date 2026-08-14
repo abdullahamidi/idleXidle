@@ -83,6 +83,12 @@ endings.
    Build screen's points line was clipped by the VIEW TREE button, RESONANCE was pinned under
    a variable-length list, ACTIVE FORMS counted skills not forms, and long node labels ran off
    the panel onto the frame art.
+8. **`a0749d7` the mastery tree is growable now** — nothing was wrong on screen, which is why
+   it was worth doing. Ring radius and sibling spread were lookup tables whose fallthroughs put
+   a ring 5 at ring 4's radius with zero spread — the whole ring on one point. Both are formulas
+   now, the layout moved to `Core/Builds/MasteryLayout.cs` where it can be TESTED, and the
+   sideways limit is fixed too (four ring-1 minors already spanned 87% of the 90° between arms,
+   so a fifth would have collided). **Adding tree nodes is catalogue-only work from here.**
 5. **`368f934` four combo enchantments on the keystone and Vow axes** — the combo axis was
    complete on ONE of the build's three axes (all six Forms). Keystones and Vows had no loot
    that cared. FERVOUR/REVERB/BULWARK sharpen BLOODLUST/ECHO/ZEAL; TITHE pays per distinct
