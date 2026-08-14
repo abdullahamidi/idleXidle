@@ -89,6 +89,11 @@ endings.
    now, the layout moved to `Core/Builds/MasteryLayout.cs` where it can be TESTED, and the
    sideways limit is fixed too (four ring-1 minors already spanned 87% of the 90° between arms,
    so a fifth would have collided). **Adding tree nodes is catalogue-only work from here.**
+9. **`79738c5` three more overflows**, from sweeping the six screens the session had not
+   opened. Map/Warren/Roster clean; the other three each lost the text carrying the point —
+   the Expedition Log clipped its WALL and ABSORBED deltas (the "what stopped me" lines),
+   Gear read "SOURCE FOCUSNATURE 100%", Traits read "30 PTS0/4". **Screenshot sweeps of
+   untouched screens have been the highest-yield activity two sessions running.**
 5. **`368f934` four combo enchantments on the keystone and Vow axes** — the combo axis was
    complete on ONE of the build's three axes (all six Forms). Keystones and Vows had no loot
    that cared. FERVOUR/REVERB/BULWARK sharpen BLOODLUST/ECHO/ZEAL; TITHE pays per distinct
