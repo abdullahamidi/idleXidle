@@ -147,14 +147,18 @@ public sealed class StatsScreen
     {
         _ui.Panel(b, DerivedPanel);
         _ui.TextCenterBig(b, "DERIVED STATS", DerivedPanel.Center.X, DerivedPanel.Y + 22, Gold, UiTypography.SectionTitle);
-        var critChance = Math.Min(75f, hunter.ValueOf(HunterStat.CriticalChance) + hunter.AffixTotal(AffixStat.Crit));
+        // THE SIM'S OWN FUNCTIONS, not a second copy of its arithmetic. This screen used to add the
+        // trained stat to the gear affixes and stop, which dropped the mastery tree's crit nodes — real
+        // in every fight, absent from the one page whose job is to state the player's numbers.
+        var shape = Loadout.ToBuild(Tree, Mastery).Shape;
+        var critChance = 100f * SoloBattle.CritChance(hunter, shape);
         var rows = new (string, string)[]
         {
             ("MAX HEALTH", $"{hunter.MaxHealth:N0}"),
             ("POWER RATING", $"{hunter.PowerRating:N0}"),
             ("ATTACK POWER", $"{hunter.AttackPower:N0}"),
             ("CRITICAL CHANCE", $"{critChance:0.0}%"),
-            ("CRITICAL DAMAGE", $"{100f * (1.5f + 0.01f * hunter.ValueOf(HunterStat.Focus)):0}%"),
+            ("CRITICAL DAMAGE", $"{100f * SoloBattle.CritMultiplier(hunter):0}%"),
             ("SKILL RATE", $"{hunter.SquadSkillRate:0.00}x"),
             ("MITIGATION", $"{100f - 100f * (100f / (100f + hunter.Defense)):0.0}%"),
             ("GOLD / LOOT HAUL", $"+{100f * (hunter.HaulMultiplier - 1f):0}%"),

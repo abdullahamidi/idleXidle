@@ -184,6 +184,9 @@ public static class SoloBattle
     /// <summary>A critical skill hit's floor multiplier, before FOCUS raises it.</summary>
     public const float CritBaseMultiplier = 1.5f;
 
+    /// <summary>The ceiling on critical chance. Shared by the sim and every screen that states it.</summary>
+    public const float MaxCritChance = 0.75f;
+
     /// <summary>Each point of FOCUS adds this to the crit multiplier — FOCUS is the crit-DAMAGE stat.</summary>
     public const float FocusCritDamagePerPoint = 0.01f;
 
@@ -320,11 +323,8 @@ public static class SoloBattle
         // CRIT × FOCUS, folded to a deterministic expected-value factor on SKILL damage (chance × extra),
         // so the sim stays reproducible — no rng draw, no crit-lottery variance to break a seeded test.
         // DEFENSE (including the worn charm's, itself long inert) mitigates each incoming bite below.
-        var critChance = Math.Clamp(
-            (hunter.ValueOf(Economy.HunterStat.CriticalChance) + hunter.AffixTotal(Economy.AffixStat.Crit)
-             + shape.BonusCritPercent) / 100f,
-            0f, 0.75f);
-        var critMult = CritBaseMultiplier + hunter.ValueOf(Economy.HunterStat.Focus) * FocusCritDamagePerPoint;
+        var critChance = CritChance(hunter, shape);
+        var critMult = CritMultiplier(hunter);
         var critFactor = 1f + critChance * (critMult - 1f);
         var defenseFactor = DefenseMitigationConstant / (DefenseMitigationConstant + hunter.Defense);
 
@@ -907,6 +907,30 @@ public static class SoloBattle
     /// Applied ONCE at mint (the champion persists across waves), which is why it lives here as a helper the
     /// mint sites call rather than inside the per-wave sim. The product across every such Vow the build wears.
     /// </remarks>
+    /// <summary>Critical chance as a 0..0.75 fraction — trained, plus affixes, plus the tree's nodes.</summary>
+    /// <remarks>
+    /// PUBLIC because the STATS screen needs the same answer, and it was computing its own: it summed
+    /// the trained stat and the gear affixes and left out <see cref="SkillShape.BonusCritPercent"/>
+    /// entirely, so every crit node the player bought on the mastery tree was real in the fight and
+    /// invisible on the page that exists to tell them what their numbers are. A screen that recomputes
+    /// a formula is a second implementation of it, and the second one is the one that drifts.
+    /// </remarks>
+    public static float CritChance(Economy.Hunter hunter, SkillShape shape)
+    {
+        ArgumentNullException.ThrowIfNull(hunter);
+        return Math.Clamp(
+            (hunter.ValueOf(Economy.HunterStat.CriticalChance) + hunter.AffixTotal(Economy.AffixStat.Crit)
+             + shape.BonusCritPercent) / 100f,
+            0f, MaxCritChance);
+    }
+
+    /// <summary>What a critical hit multiplies by — the base, raised by FOCUS.</summary>
+    public static float CritMultiplier(Economy.Hunter hunter)
+    {
+        ArgumentNullException.ThrowIfNull(hunter);
+        return CritBaseMultiplier + hunter.ValueOf(Economy.HunterStat.Focus) * FocusCritDamagePerPoint;
+    }
+
     /// <summary>The champion's starting health for a run: the Hunter's pool, as the BUILD changes it.</summary>
     /// <remarks>
     /// <para>

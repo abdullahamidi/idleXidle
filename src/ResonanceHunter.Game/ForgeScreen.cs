@@ -261,6 +261,9 @@ public sealed class ForgeScreen
     public int ChestsOpened => _chestsOpened;
     private int _chestsOpened;
 
+    /// <summary>Put a saved career's chest count back. Called on load, before anything reads it.</summary>
+    public void RestoreChestsOpened(int count) => _chestsOpened = Math.Max(0, count);
+
     /// <summary>The chests waiting to be opened. Persisted, so a boss's drop survives a reload.</summary>
     public IReadOnlyList<Chest> UnopenedChests => _chests;
 

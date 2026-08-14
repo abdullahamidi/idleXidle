@@ -525,4 +525,40 @@ public class WorldSaveTests
         Xunit.Assert.Empty(loaded.Save!.RegionFarms);          // no multi-region data...
         Xunit.Assert.Equal(1500, loaded.Save.RegionMasteryPoints); // ...but the old fields are intact
     }
+
+    /// <summary>
+    /// A career counter shown beside persisted ones must itself be persisted.
+    /// </summary>
+    /// <remarks>
+    /// CHESTS OPENED sat on the STATS page between HIGHEST WAVE and MASTERY POINTS, both of which
+    /// survive a reload, and it did not — it lived in a field on the Forge screen that nothing saved,
+    /// so a career of hundreds read zero after every launch. It also feeds the CRAFTER evolution path
+    /// and <c>QuestGoal.ChestsOpened</c>, so the loss was not only cosmetic.
+    ///
+    /// The CREDITED counter round-trips with it, and has to: CRAFTER is paid on the delta between the
+    /// two, so restoring the total alone would hand a whole restored career to the evolution path again
+    /// on the first frame after every load.
+    /// </remarks>
+    [Fact]
+    public void test_the_career_chest_count_and_its_credited_half_survive_a_reload()
+    {
+        var save = new SaveGame { ChestsOpened = 412, ChestsCredited = 400 };
+
+        var loaded = SaveSystem.Deserialize(SaveSystem.Serialize(save), Now);
+        Assert.True(loaded.Ok);
+
+        Assert.Equal(412, loaded.Save!.ChestsOpened);
+        Assert.Equal(400, loaded.Save!.ChestsCredited);
+    }
+
+    [Fact]
+    public void test_a_save_written_before_chests_were_counted_restores_to_zero_not_to_garbage()
+    {
+        // The migration case. An older save has neither field; both must come back as 0 so the delta
+        // the host credits is 0 - 0 rather than "everything you ever opened".
+        var loaded = SaveSystem.Deserialize(SaveSystem.Serialize(new SaveGame()), Now);
+        Assert.True(loaded.Ok);
+        Assert.Equal(0, loaded.Save!.ChestsOpened);
+        Assert.Equal(0, loaded.Save!.ChestsCredited);
+    }
 }

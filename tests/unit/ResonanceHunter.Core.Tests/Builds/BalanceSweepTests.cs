@@ -454,4 +454,48 @@ public class BalanceSweepTests
                     $"the roads cost {min}..{max} points — a road that costs more must be worth more, "
                     + "and nothing in the design says which one is meant to be dearer");
     }
+
+    [Fact]
+    public void test_the_crit_formula_counts_the_masterys_own_crit_nodes()
+    {
+        // The STATS screen used to sum the trained stat and the gear affixes and stop, so every crit
+        // node bought on the mastery tree was real in the fight and absent from the page whose whole
+        // job is to state the player's numbers. Both now call this function, which is the point of it
+        // being a function — a screen that recomputes a formula is a second implementation, and the
+        // second one is the one that drifts.
+        var hunter = MidCareerHunter();
+        var plain = SoloBattle.CritChance(hunter, SkillShape.None);
+        var withNodes = SoloBattle.CritChance(hunter, SkillShape.None with { BonusCritPercent = 12f });
+
+        Assert.True(withNodes > plain,
+                    $"a build carrying +12% crit must read above one carrying none — {withNodes:P1} vs {plain:P1}");
+        Assert.Equal(plain + 0.12f, withNodes, 3);
+    }
+
+    [Fact]
+    public void test_crit_chance_is_capped_and_never_negative()
+    {
+        var hunter = MidCareerHunter();
+        Assert.Equal(SoloBattle.MaxCritChance,
+                     SoloBattle.CritChance(hunter, SkillShape.None with { BonusCritPercent = 500f }), 3);
+        Assert.Equal(0f,
+                     SoloBattle.CritChance(new Hunter(), SkillShape.None with { BonusCritPercent = -500f }), 3);
+    }
+
+    [Fact]
+    public void test_focus_is_the_only_thing_that_raises_crit_damage()
+    {
+        var untrained = new Hunter();
+        var focused = new Hunter();
+        focused.AddGleam(2_000_000);
+        for (var i = 0; i < 20; i++) focused.Train(HunterStat.Focus);
+
+        // Against the RELATIONSHIP, not against 1.5: a fresh Hunter already carries a base 10 FOCUS from
+        // ProgressionTuning, so the untrained multiplier is 1.6. Asserting the constant would have been
+        // asserting a starting stat, which is a different fact and one that is allowed to be tuned.
+        Assert.Equal(SoloBattle.CritBaseMultiplier
+                     + untrained.ValueOf(HunterStat.Focus) * SoloBattle.FocusCritDamagePerPoint,
+                     SoloBattle.CritMultiplier(untrained), 3);
+        Assert.True(SoloBattle.CritMultiplier(focused) > SoloBattle.CritMultiplier(untrained));
+    }
 }

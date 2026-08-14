@@ -364,6 +364,8 @@ public class Game1 : Game
         // not a screen built in LoadContent. That distinction is exactly what crashed the game once.
         _characters.Restore(save.ActiveCharacterId, save.QuestsDone);
         _runsWithVowKept = save.RunsWithVowKept;
+        _forge.RestoreChestsOpened(save.ChestsOpened);
+        _chestsCredited = save.ChestsCredited;
 
         var roster = SaveSystem.RestoreRoster(save);
         _automationRoster = roster;
@@ -545,6 +547,8 @@ public class Game1 : Game
             ActiveCharacterId = _characters.ActiveId,
             QuestsDone = _characters.SaveQuests().ToList(),
             RunsWithVowKept = _runsWithVowKept,
+            ChestsOpened = _forge.ChestsOpened,
+            ChestsCredited = _chestsCredited,
             MasteryEarned = _deepestEver,          // stored as deepest-ever; Earned is re-derived on load
             ChampionGleamRate = _champGleamRate,
             // Unopened chests ride along too — a boss's drop must survive a reload, opened or not.
@@ -1482,6 +1486,7 @@ public class Game1 : Game
         _expedition.Loadout = _loadout;               // the player's build, handed over live…
         _expedition.Tree = _dust;                     // …powered by the Dust tree's passive nodes
         _expedition.Mastery = _mastery;               // …and the mastery tree (affinity + node bonuses)
+        _expedition.BestDepthHere = _world.RegionFarm(def.Id).BestDepth;   // so NEW RECORD means it
         _expedition.ChestCount = _forge.UnopenedChests.Count;   // drives the fight screen's "go open a chest" nudge
         _expedition.IdleGleamRate = _champGleamRate;            // gleam/sec the champion earns idle → HUNT idle panel
 

@@ -99,6 +99,24 @@ public sealed record SaveGame
     /// </remarks>
     public int RunsWithVowKept { get; init; }
 
+    /// <summary>Chests opened over the whole career. Shown on STATS, feeds CRAFTER and a quest goal.</summary>
+    /// <remarks>
+    /// The remark above claimed "the chests you opened are counted", and they were — in a field on the
+    /// Forge screen that nothing saved. STATS printed it beside HIGHEST WAVE and MASTERY POINTS, both
+    /// persisted, so a career counter read zero after every reload while its neighbours read true.
+    /// </remarks>
+    public int ChestsOpened { get; init; }
+
+    /// <summary>
+    /// How much of <see cref="ChestsOpened"/> the CRAFTER evolution path has already been paid for.
+    /// </summary>
+    /// <remarks>
+    /// Persisted TOGETHER with the counter above, and it has to be: the host credits CRAFTER on the
+    /// delta between the two. Saving the total alone would hand a restored career's entire chest count
+    /// to the evolution path again on the next frame after every single load.
+    /// </remarks>
+    public int ChestsCredited { get; init; }
+
     /// <summary>The player's woven build — four skills. Empty on a pre-solo-model save (keeps the starter).</summary>
     public List<SavedSkill> WovenSkills { get; init; } = new();
 

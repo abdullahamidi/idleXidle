@@ -147,7 +147,30 @@ public sealed class SoloExpeditionScreen
     private RunReport? _previousReport;
 
     /// <summary>Deepest wave reached in this region, so a report can say whether it was a record.</summary>
-    private int _bestDepth;
+    /// <summary>The deepest this region has ever been taken — set by the host from persisted world state.</summary>
+    /// <remarks>
+    /// A HOST-FED value, not a screen-local counter, and the difference is the whole bug. It used to be
+    /// a private int starting at 0 every session and restored by nothing, so `Wave >= _bestDepth` was
+    /// true on the FIRST run of every launch: the report announced NEW RECORD for a wave-3 death after a
+    /// career of forty, and `Log.Add` then saved it that way, so the lie outlived the session that told
+    /// it. It was also per-SCREEN rather than per-REGION, so switching regions carried the wrong figure
+    /// across even within one session.
+    ///
+    /// The right number was already persisted and already per-region — `RegionFarm.BestDepth`, which
+    /// funds skill points and gates conquest. There was never a second source of truth to keep; there
+    /// was a second COPY, kept badly.
+    /// </remarks>
+    public int BestDepthHere { get; set; }
+
+    /// <summary>The figure this descent has to beat, latched when it STARTS.</summary>
+    /// <remarks>
+    /// Latched, because <see cref="BestDepthHere"/> is live: the host calls
+    /// <c>RegionFarm.RecordDepth(_expedition.Deepest)</c> every frame, so a player pushing past their
+    /// own record moves the target while they are still standing on it. Compared live, a run that beat
+    /// forty and died at forty-five would find the record already reading forty-five and report nothing
+    /// — the exact opposite failure to the one this replaced, and just as invisible.
+    /// </remarks>
+    private int _recordToBeat;
 
     private enum Mode { Fighting, Downed }
     private Mode _mode = Mode.Fighting;
@@ -307,6 +330,8 @@ public sealed class SoloExpeditionScreen
     private void StartRun(Hunter hunter)
     {
         var build = Loadout.ToBuild(Tree, Mastery, Character);
+        _recordToBeat = BestDepthHere;   // before a wave is pushed, or the run competes with itself
+
         // Charged once here at mint: RECKLESS OFFERING's health price and the build's health multipliers.
         var hp = SoloBattle.ChampionHealth(build, hunter);
         _champ = new Champion { MaxHealth = hp, Health = hp };
@@ -470,10 +495,9 @@ public sealed class SoloExpeditionScreen
             // The REPORT is taken here, at the exact moment the run ended. With no in-run decisions this
             // is the only thing the player can learn from, so it is captured before anything resets.
             _previousReport = Log.PreviousIn(RegionId);
-            _lastReport = _run!.Report(isRecord: _run.Wave >= _bestDepth);
+            _lastReport = _run!.Report(isRecord: _run.Wave > _recordToBeat);
             Log.Add(_lastReport);   // kept and saved — see the Log property
             LogDirty = true;
-            _bestDepth = Math.Max(_bestDepth, _run.Wave);
 
             _deathFlash = 1f;
             _mode = Mode.Downed;
@@ -1361,7 +1385,6 @@ public sealed class SoloExpeditionScreen
         _previousReport = Log.PreviousIn(RegionId);
         _lastReport = _run.Report(isRecord: true);
         Log.Add(_lastReport);   // the fixture must exercise the same path the game does
-        _bestDepth = _run.Wave;
         _mode = Mode.Downed;
         _downedTimer = DownedSeconds;
         _bannerTimer = 0f;   // the wave-cleared banner would otherwise sit over the report
