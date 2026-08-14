@@ -1073,7 +1073,16 @@ public class Game1 : Game
                     // weave_5 is in the fixture ON PURPOSE: the fifth slot is the one that was bought
                     // and silently discarded for the whole of development, and a capture that poses four
                     // slots is a capture that would not have caught it.
-                    foreach (var id in new[] { "socket_2", "weave_5", "vow_study_1", "vow_study_2", "vow_binding" })
+                    // Four keystones LEARNED against three visible chips, so the shot poses the case the
+                    // list was silently unable to show: a player who walked a road past its third node
+                    // could never see the fourth, let alone choose it over the first three.
+                    _world.RestoreConquered(Regions.All.Select(r => r.Id));
+                    _world.RestoreCorruption(16);
+                    // The head of all FOUR roads, which is what a spread-out 22-point career looks like —
+                    // and four learned keystones against three visible chips, which is the case the list
+                    // was silently unable to show.
+                    foreach (var id in new[] { "socket_2", "weave_5", "vow_study_1", "ledger",
+                                               "ks_glass_cannon", "ks_ironclad", "ks_echo", "ks_greed" })
                         _dust.Purchase(id);
                     _loadout.SkillCapacity = DustEffects.SkillSlots(_dust);
                     _loadout.AddSkill();

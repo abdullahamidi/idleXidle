@@ -55,6 +55,15 @@ public sealed class WeaveScreen
     private string _msg = "";
     private int _vowScroll;
 
+    /// <summary>First VISIBLE keystone. Three fit; the tree teaches far more than three.</summary>
+    /// <remarks>
+    /// The list used to be drawn `for (i = 0; i < 3; i++)` straight off the learned collection, and 3 is
+    /// the SOCKET count, not a list length — a player who learned a fourth keystone could never see it,
+    /// let alone choose it over the three the catalogue happened to order first. Sockets stay scarce;
+    /// the CHOICE of what goes in them is the decision the trait tree's roads are selling.
+    /// </remarks>
+    private int _keystoneScroll;
+
     public WeaveScreen(UiKit ui) => _ui = ui;
 
     public PlayerLoadout Loadout { get; set; } = PlayerLoadout.Starter();
@@ -92,7 +101,13 @@ public sealed class WeaveScreen
     // is where you decide which of them you are carrying. Losing the only UI for them along with the
     // sidebar would have been a silent regression: the tree would keep selling a payoff with nowhere
     // left to equip it.
-    private Rectangle KeystoneChip(int i) => new(SlotsPanel.X + 74, SlotsEnd + 106 + i * 50, 372, 44);
+    /// <summary>How many keystone chips are on screen at once. A WINDOW, not the socket count.</summary>
+    private const int KeystoneRows = 3;
+
+    // 94/46/42, measured against the WORST case rather than the current one: at five slots SlotsEnd is
+    // 670, so a 102/48/44 row ends at 912 against a panel interior that closes at 904. Eight pixels, and
+    // the third chip is drawn on the frame.
+    private Rectangle KeystoneChip(int i) => new(SlotsPanel.X + 74, SlotsEnd + 94 + i * 46, 372, 42);
 
     private static readonly Source[] Sources = Enum.GetValues<Source>();
     private static readonly Form[] Forms = Enum.GetValues<Form>();
@@ -159,6 +174,9 @@ public sealed class WeaveScreen
 
         if (wheel != 0 && VowPanel.Contains(hit))
             _vowScroll = Math.Clamp(_vowScroll - wheel, 0, Math.Max(0, known.Count - VowRows));
+        if (wheel != 0 && SlotsPanel.Contains(hit))
+            _keystoneScroll = Math.Clamp(_keystoneScroll - wheel, 0,
+                                         Math.Max(0, DustEffects.LearnedKeystones(Tree).Count - KeystoneRows));
 
         if (!clicked) return;
 
@@ -185,10 +203,11 @@ public sealed class WeaveScreen
         }
 
         var learned = DustEffects.LearnedKeystones(Tree);
-        for (var i = 0; i < learned.Count && i < 3; i++)
+        _keystoneScroll = Math.Clamp(_keystoneScroll, 0, Math.Max(0, learned.Count - KeystoneRows));
+        for (var i = 0; i < KeystoneRows && _keystoneScroll + i < learned.Count; i++)
         {
             if (!KeystoneChip(i).Contains(hit)) continue;
-            if (Loadout.ToggleKeystone(learned[i].Id, learned)) { Dirty = true; _msg = ""; }
+            if (Loadout.ToggleKeystone(learned[_keystoneScroll + i].Id, learned)) { Dirty = true; _msg = ""; }
             else _msg = $"ONLY {Loadout.KeystoneCapacity} SOCKET(S) — THE SPINE SELLS MORE.";
             return;
         }
@@ -293,22 +312,30 @@ public sealed class WeaveScreen
 
         // ── KEYSTONE SOCKETS ──
         var learned = DustEffects.LearnedKeystones(Tree);
+        _keystoneScroll = Math.Clamp(_keystoneScroll, 0, Math.Max(0, learned.Count - KeystoneRows));
         var head = new Rectangle(SlotsPanel.X + 74, KeystoneChip(0).Y - 44, 372, 30);
         _ui.TextBig(b, "KEYSTONES", head.X, head.Y, Gold, UiTypography.Body);
-        _ui.TextRight(b, learned.Count == 0 ? "LEARN IN TRAITS (P)"
-                                            : $"{Loadout.KeystoneIds.Count} / {Loadout.KeystoneCapacity}",
+        // Sockets used, then the window into the list — a player with six learned needs to know both
+        // that they may wear two and that there are three more below the fold.
+        _ui.TextRight(b, learned.Count == 0
+                          ? "LEARN IN TRAITS (P)"
+                          : learned.Count > KeystoneRows
+                              ? $"{Loadout.KeystoneIds.Count} / {Loadout.KeystoneCapacity}   "
+                                + $"[{_keystoneScroll + 1}-{Math.Min(learned.Count, _keystoneScroll + KeystoneRows)} of {learned.Count}]"
+                              : $"{Loadout.KeystoneIds.Count} / {Loadout.KeystoneCapacity}",
                       head.Right, head.Y + 6, Slate);
 
-        for (var i = 0; i < 3; i++)
+        for (var i = 0; i < KeystoneRows; i++)
         {
             var chip = KeystoneChip(i);
-            if (i >= learned.Count)
+            var idx = _keystoneScroll + i;
+            if (idx >= learned.Count)
             {
                 _ui.Fill(b, chip, new Color(0x11, 0x0E, 0x18, 0xC0));
                 _ui.Text(b, "—", chip.X + 18, chip.Y + 12, Dim);
                 continue;
             }
-            var k = learned[i];
+            var k = learned[idx];
             var worn = Loadout.HasKeystone(k.Id);
             var hover = chip.Contains(hit);
             _ui.Fill(b, chip, worn ? new Color(0x2A, 0x24, 0x14) : hover ? new Color(0x1E, 0x18, 0x2C) : Quiet);
