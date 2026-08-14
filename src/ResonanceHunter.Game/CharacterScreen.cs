@@ -558,10 +558,16 @@ public sealed class CharacterScreen
         }
 
         // Hero block (§10.5): rarity frame + large icon + source + enchant glyphs.
-        var hero = new Rectangle(1510, 205, 318, 280);
+        //
+        // 200 tall, not 280. The panel's job changed: it has to say what the TRAIT and the ENCHANT DO,
+        // not just name them, and two sentences need room that a 280px picture of a helmet was holding.
+        // The old layout did not fit even without them — a Legendary with four affixes ran its stat list
+        // to y=813 while the comparison strip is clamped to 796, so the two overlapped on exactly the
+        // items a player most wants to read.
+        var hero = new Rectangle(1510, 205, 318, 150);
         _ui.Fill(b, hero, new Color(0x12, 0x0F, 0x1C));
         _ui.Fill(b, new Rectangle(hero.X, hero.Y, hero.Width, 4), RarityColor(item.Rarity));
-        _forge.DrawItemIcon(b, item, new Rectangle(hero.Center.X - 96, hero.Y + 24, 192, 192));
+        _forge.DrawItemIcon(b, item, new Rectangle(hero.Center.X - 52, hero.Y + 10, 104, 104));
         if (item.Element is { } el && _ui.Assets.Get($"source_{el.ToString().ToLowerInvariant()}") is { } sg)
             b.Draw(sg, new Rectangle(hero.Right - 60, hero.Y + 16, 44, 44), Color.White);
         if (Enchantments.Of(item) is { } ench2) _ui.Diamond(b, new Rectangle(hero.Right - 58, hero.Y + 72, 40, 40), Purple);
@@ -570,25 +576,25 @@ public sealed class CharacterScreen
         // Identity (§10.6) — the rolled name: PREFIX (dominant affix) + ELEMENT + TYPE, e.g. "FURIOUS SHADOW BLADE".
         _ui.TextBig(b, ItemNaming.FullName(item), DetailPanel.X + 24, hero.Bottom + 20, Bone, UiTypography.PanelTitle);
         var ench = Enchantments.Of(item);
-        _ui.TextBig(b, $"{(item.Element?.ToString().ToUpperInvariant() ?? "PLAIN")}  ·  ENCHANT: {(ench?.Name ?? "NONE")}",
+        // The enchant NAME moved down to sit with the sentence that explains it; repeating it here
+        // spent a line on a word the reader still could not act on.
+        _ui.TextBig(b, $"{(item.Element?.ToString().ToUpperInvariant() ?? "PLAIN")}  ·  iL{item.ItemLevel}",
             DetailPanel.X + 24, hero.Bottom + 54, Purple, UiTypography.Secondary);
 
         // Stat list (§10.7): ITEM POWER + the item's real affixes.
-        var sy = hero.Bottom + 100;
+        var sy = hero.Bottom + 90;
         StatRow(b, "ITEM POWER", $"{hunter.PowerContribution(item):N0}", ref sy, Bone);
         foreach (var af in ItemAffixes.Of(item))
             StatRow(b, AffixLabel(af.Stat), AffixVal(af.Stat, af.Magnitude), ref sy, Green);
-        if (GearTraits.TraitOf(item) is { } tr) StatRow(b, "TRAIT", GearTraits.NameOf(tr), ref sy, Gold);
 
         // Comparison strip (§10.8) — the matching worn item + the net power delta. Concise, not a full sim.
         var slot = Gear.SlotFor(item.BaseType);
         var worn = slot is { } s ? hunter.Worn(s) : null;
-        // Below whatever the stat list actually ended at, not at a fixed y. The rows are dynamic —
-        // affix count and the optional TRAIT line move the bottom — so a constant put the comparison
-        // strip through the last row on any item with a trait.
-        // Clamped, not just floored: the buttons live at y=848, so the strip has a hard ceiling of
-        // 796 no matter how long the stat list got.
-        var cmpY = Math.Clamp(sy + 8, 760, 796);
+        // ABOVE the trait and enchant sentences, not below them. It is the answer to "should I put this
+        // on", which is the question the panel is open to settle, and it was previously last — under a
+        // list whose length is DATA. With four affixes and two blurbs it landed at y=855, past the
+        // buttons at 848, and rendered underneath them.
+        var cmpY = sy + 8;
         var cmp = new Rectangle(DetailPanel.X + 44, cmpY, DetailPanel.Width - 88, 44);
         _ui.Fill(b, cmp, Quiet);
         if (IsWorn(hunter, item))
@@ -602,19 +608,63 @@ public sealed class CharacterScreen
                 delta > 0 ? Green : delta < 0 ? Ember : Slate, UiTypography.Body);
         }
 
+        // ── WHAT THEY DO, not what they are called. ───────────────────────────────────────────────
+        // This panel printed "TRAIT — KEEN" and, above, "ENCHANT: HARVEST". Both are names. Nothing on
+        // the screen said what KEEN does to a hit or what HARVEST does on a kill, though the sentences
+        // have sat in GearTraits.BlurbOf and Enchantment.Blurb since they were written — which is what
+        // the player meant by "I struggle to read what my items do". They were not reading badly; there
+        // was nothing there to read.
+        sy = cmp.Bottom + 14;
+        if (GearTraits.TraitOf(item) is { } tr)
+        {
+            _ui.TextBig(b, GearTraits.NameOf(tr), DetailPanel.X + 44, sy, Gold, UiTypography.Body);
+            _ui.TextRightBig(b, "TRAIT", DetailPanel.Right - 44, sy, Slate, UiTypography.Secondary);
+            sy += 26;
+            sy = Wrapped(b, GearTraits.BlurbOf(tr).ToUpperInvariant(), DetailPanel.X + 44, sy,
+                         DetailPanel.Width - 88, Bone) + 10;
+        }
+        if (ench is not null)
+        {
+            _ui.TextBig(b, ench.Name, DetailPanel.X + 44, sy, Purple, UiTypography.Body);
+            _ui.TextRightBig(b, "ENCHANT", DetailPanel.Right - 44, sy, Slate, UiTypography.Secondary);
+            sy += 26;
+            sy = Wrapped(b, ench.Blurb.ToUpperInvariant(), DetailPanel.X + 44, sy,
+                         DetailPanel.Width - 88, Bone) + 10;
+        }
+
         // Actions (§10.9): EQUIP (real). LOCK disabled — no lock system in the model.
         Button(b, EquipBtn, IsWorn(hunter, item) ? "EQUIPPED" : "EQUIP", hit, !IsWorn(hunter, item));
         Button(b, LockBtn, "LOCK", hit, false);
     }
 
+    /// <summary>Wrap to a width and return the y AFTER the last line. Two sentences, never one clipped.</summary>
+    private int Wrapped(SpriteBatch b, string text, int x, int y, int width, Color c)
+    {
+        const int lineH = 26;
+        var line = "";
+        foreach (var w in text.Split(' '))
+        {
+            var probe = line.Length == 0 ? w : line + " " + w;
+            if (_ui.Measure(probe) > width && line.Length > 0)
+            {
+                _ui.Text(b, line, x, y, c);
+                y += lineH;
+                line = w;
+            }
+            else line = probe;
+        }
+        if (line.Length > 0) { _ui.Text(b, line, x, y, c); y += lineH; }
+        return y;
+    }
+
     private void StatRow(SpriteBatch b, string label, string value, ref int y, Color valColor)
     {
-        // +44 inset and a 38px pitch: at +24 the labels sat on the frame's filigree, and at 44px a
-        // Legendary with four affixes plus a TRAIT line ran the list into the comparison strip below.
+        // +44 inset and a 34px pitch. At +24 the labels sat on the frame's filigree; the pitch came down
+        // from 38 when the panel took on two explanatory sentences it had never carried.
         _ui.TextBig(b, label, DetailPanel.X + 44, y, Slate, UiTypography.Body);
         _ui.TextRightBig(b, value, DetailPanel.Right - 44, y, valColor, UiTypography.Body);
         _ui.Fill(b, new Rectangle(DetailPanel.X + 44, y + 28, DetailPanel.Width - 88, 2), Dim * 0.6f);
-        y += 38;
+        y += 34;
     }
 
     private void Button(SpriteBatch b, Rectangle r, string label, Point hit, bool enabled)
