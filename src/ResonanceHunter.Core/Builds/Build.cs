@@ -114,6 +114,15 @@ public enum BuildTrigger
     /// <summary>TRANSFORMATION leeches far more health.</summary>
     Siphon,
 
+    // NOTE — the keystone/Vow combo enchantments (FERVOUR, REVERB, BULWARK, TITHE) deliberately have
+    // NO entry here. A BuildTrigger earns its place by being something more than one source can grant
+    // and the sim can ASK about: VENOM comes from a keystone or a weapon, UNDYING from a keystone, a
+    // charm or a character. Those four come from exactly one place, an item, and what the sim needs
+    // from them is a magnitude rather than a yes — so they are read straight off the worn enchantments
+    // like Venom's and Harvest's strengths are. Adding them here would have put four values in this
+    // enum that nothing ever reads, which is precisely the shape of failure
+    // TriggerLivenessTests exists to refuse. Their own guard lives in EnchantmentsTests.
+
     /// <summary>
     /// HOARDER — the AVARICE terminal. Haul becomes force.
     /// </summary>
@@ -395,6 +404,8 @@ public sealed class Build
         EnchantKind.Execute => BuildTrigger.Execute,
         EnchantKind.Coiled => BuildTrigger.Coiled,
         EnchantKind.Siphon => BuildTrigger.Siphon,
+        // FERVOUR / REVERB / BULWARK / TITHE fall through to null on purpose — see the note in the
+        // BuildTrigger enum. They are magnitudes, not answers to a yes/no question.
         _ => null,
     };
 }

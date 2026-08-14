@@ -143,6 +143,63 @@ public class EnchantmentsTests
     }
 
     [Fact]
+    public void test_every_enchantment_is_claimed_by_a_test_that_proves_it_does_something()
+    {
+        // The enchant-axis twin of Builds/TriggerLivenessTests, and it exists because that guard could
+        // not cover this. It indexes BuildTrigger, and the four keystone/Vow combos deliberately have no
+        // BuildTrigger — they are magnitudes read straight off the worn items, so they could have been
+        // added, shipped and read by nothing with every existing test still green. That is exactly how
+        // VENOM shipped dead: a correct catalogue entry, a correct blurb, and no sim.
+        //
+        // Hand-maintained, for the same reason its twin is: no reflection can ask "does the fight read
+        // this?". Adding an EnchantKind fails this test, and the failure names what you must go prove.
+        var proved = new HashSet<EnchantKind>
+        {
+            EnchantKind.Splinter,    // Builds/TriggerLivenessTests.test_splinter_pays_out_on_a_kill
+            EnchantKind.Harvest,     // Builds/TriggerLivenessTests.test_harvest_pays_out_on_a_kill
+            EnchantKind.Venom,       // Builds/TriggerLivenessTests.test_venom_actually_poisons
+            EnchantKind.Desperation, // Builds/SoloExpeditionTests.test_desperation_swells_the_haul_at_low_health
+            EnchantKind.Undying,     // Builds/TriggerLivenessTests.test_undying_buys_exactly_one_death
+            EnchantKind.Overdraw,    // Builds/SoloBattleTests.test_overdraw_adds_a_projectile_cast
+            EnchantKind.Linger,      // Builds/SoloBattleTests.test_linger_stretches_the_mark_window
+            EnchantKind.Radiance,    // Builds/SoloBattleTests.test_radiance_makes_an_aura_tick_more
+            EnchantKind.Execute,     // Builds/SoloBattleTests.test_execute_speeds_the_kill_of_a_weakened_enemy
+            EnchantKind.Coiled,      // Builds/SoloBattleTests.test_coiled_fires_the_trap_more_often
+            EnchantKind.Siphon,      // Builds/SoloBattleTests.test_siphon_deepens_the_transformation_leech
+            EnchantKind.Fervour,     // Builds/SoloBattleTests.test_fervour_steepens_bloodlust_and_is_dead_without_it
+            EnchantKind.Reverb,      // Builds/SoloBattleTests.test_reverb_sharpens_echo_and_is_dead_without_it
+            EnchantKind.Bulwark,     // Builds/SoloBattleTests.test_bulwark_steepens_zeal_and_is_dead_without_it
+            EnchantKind.Tithe,       // Builds/SoloBattleTests.test_tithe_pays_per_sworn_vow_and_is_dead_without_one
+        };
+
+        foreach (var k in System.Enum.GetValues<EnchantKind>())
+            Assert.True(proved.Contains(k),
+                $"{k} has no test proving the fight reads it. This is how VENOM shipped dead.");
+    }
+
+    [Fact]
+    public void test_every_combo_enchantment_names_what_it_needs()
+    {
+        // A combo whose requirement is null reads to the player as an unconditional effect, because the
+        // Forge only draws the "NEEDS … IN YOUR BUILD" line when there is a requirement to draw. An
+        // enchantment that is dead without a partner and does not SAY so is worse than one that is
+        // simply weak — the player equips it and concludes the game is broken.
+        foreach (var kind in new[]
+                 {
+                     EnchantKind.Overdraw, EnchantKind.Linger, EnchantKind.Radiance, EnchantKind.Execute,
+                     EnchantKind.Coiled, EnchantKind.Siphon, EnchantKind.Fervour, EnchantKind.Reverb,
+                     EnchantKind.Bulwark, EnchantKind.Tithe,
+                 })
+        {
+            var need = new Enchantment(kind, 1f).Needs;
+            Assert.True(need is not null, $"{kind} is a combo and names no requirement");
+            Assert.False(string.IsNullOrWhiteSpace(need!.Label), $"{kind}'s requirement has no label");
+            Assert.True(need.Form is not null || need.Keystone is not null || need.AnyVow,
+                        $"{kind} has a label but no actual condition — the Forge would always call it live");
+        }
+    }
+
+    [Fact]
     public void test_every_enchantment_blurb_fits_the_forge_row()
     {
         // The Forge gives the blurb a fixed column, x=344 to the panel edge: 21 characters. Right-

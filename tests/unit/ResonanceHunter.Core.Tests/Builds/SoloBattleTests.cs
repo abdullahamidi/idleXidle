@@ -4,6 +4,7 @@ using ResonanceHunter.Core.Abilities;
 using ResonanceHunter.Core.Automation;
 using ResonanceHunter.Core.Builds;
 using ResonanceHunter.Core.Economy;
+using ResonanceHunter.Core.Loot;
 using ResonanceHunter.Core.Expeditions;
 using Xunit;
 
@@ -579,6 +580,156 @@ public class SoloBattleTests
         Assert.True(FinalHealth(WithTrigger(BuildTrigger.Siphon, Form.Transformation))
                     > FinalHealth(With(Form.Transformation)),
             "SIPHON did not heal more than a bare Transformation");
+    }
+
+    // ── The KEYSTONE and VOW combos ───────────────────────────────────────────────────────────
+    //
+    // Every test in this block is written as a PAIR, and the second half is the one that matters. A
+    // combo that pays out is easy to write and easy to get wrong in the invisible direction: the
+    // failure mode this project keeps hitting is not "the bonus is missing", it is "the bonus is there
+    // unconditionally and the condition is decoration". So each proves the effect fires WITH its
+    // partner and that the fight is byte-identical WITHOUT it.
+
+    /// <summary>
+    /// A hunter wearing ONE weapon that carries exactly this enchantment.
+    /// </summary>
+    /// <remarks>
+    /// The InstanceId is FIXED rather than derived from the kind, and that detail is the whole test.
+    /// Equipping does not just hand over an enchantment — it hands over a Legendary weapon's stats, and
+    /// the id is what the trait and its numbers are rolled from. The first version of these tests used
+    /// <c>$"e_{kind}"</c> and compared a hunter wearing this against a hunter wearing NOTHING, so the
+    /// "dead without its partner" half failed at 96,332 against 6,118: it was measuring the weapon, not
+    /// the enchantment. One id means every hunter below carries the identical item and the only thing
+    /// that differs between two runs is the one line under test.
+    /// </remarks>
+    private static Hunter Wearing(EnchantKind kind)
+    {
+        var h = new Hunter();
+        h.Equip(new ItemInstance
+        {
+            InstanceId = "combo_probe",
+            BaseType = ItemBaseType.Weapon,
+            Rarity = Rarity.Legendary,   // the magnitude curve's top, so the effect is easy to see
+            SellValue = 100,
+            EnchantOverride = kind,      // overrules the id-derived roll — see Enchantments.Of
+        });
+        return h;
+    }
+
+    /// <summary>
+    /// The control: the same weapon carrying an enchantment that cannot touch damage.
+    /// </summary>
+    /// <remarks>
+    /// HARVEST buds a spare core ON A KILL, and every fight in this block runs against a creature with
+    /// a health pool nothing can exhaust — so it never fires, and even if it did it pays economy rather
+    /// than damage. It is the neutral element for a damage comparison.
+    /// </remarks>
+    private static Hunter WearingNeutral() => Wearing(EnchantKind.Harvest);
+
+    private static float DamageWith(Build build, Hunter hunter, int hp, int startHealth)
+    {
+        var champ = new Champion { MaxHealth = hp, Health = startHealth };
+        var (_, events) = SoloBattle.ResolveWave(
+            champ, build, hunter, enemyHealth: 1e9f, enemyDamage: 0f,
+            enemyIntervalMs: 1_000_000, T, new Random(11), new WaveBonus());
+        return DamageDealt(events);
+    }
+
+    [Fact]
+    public void test_fervour_steepens_bloodlust_and_is_dead_without_it()
+    {
+        // Half health, so BLOODLUST's missing-health term is live and FERVOUR has something to steepen.
+        const int Max = 1000, Now = 500;
+
+        var keystoneOnly = DamageWith(WithTrigger(BuildTrigger.Bloodlust, Form.Strike), WearingNeutral(), Max, Now);
+        var withBoth = DamageWith(WithTrigger(BuildTrigger.Bloodlust, Form.Strike),
+                                  Wearing(EnchantKind.Fervour), Max, Now);
+        Assert.True(withBoth > keystoneOnly,
+            $"FERVOUR did not steepen BLOODLUST — {withBoth:N0} vs {keystoneOnly:N0}");
+
+        // And the half that matters: no BLOODLUST, no payout at all.
+        var neutral = DamageWith(With(Form.Strike), WearingNeutral(), Max, Now);
+        var alone = DamageWith(With(Form.Strike), Wearing(EnchantKind.Fervour), Max, Now);
+        Assert.Equal(neutral, alone);
+    }
+
+    [Fact]
+    public void test_bulwark_steepens_zeal_and_is_dead_without_it()
+    {
+        const int Max = 1000, Now = 1000;   // whole, so ZEAL's present-health term is at its strongest
+
+        var keystoneOnly = DamageWith(WithTrigger(BuildTrigger.Zeal, Form.Strike), WearingNeutral(), Max, Now);
+        var withBoth = DamageWith(WithTrigger(BuildTrigger.Zeal, Form.Strike),
+                                  Wearing(EnchantKind.Bulwark), Max, Now);
+        Assert.True(withBoth > keystoneOnly,
+            $"BULWARK did not steepen ZEAL — {withBoth:N0} vs {keystoneOnly:N0}");
+
+        var neutral = DamageWith(With(Form.Strike), WearingNeutral(), Max, Now);
+        Assert.Equal(neutral, DamageWith(With(Form.Strike), Wearing(EnchantKind.Bulwark), Max, Now));
+    }
+
+    [Fact]
+    public void test_reverb_sharpens_echo_and_is_dead_without_it()
+    {
+        const int Max = 1000, Now = 1000;
+
+        var keystoneOnly = DamageWith(WithTrigger(BuildTrigger.Echo, Form.Strike), WearingNeutral(), Max, Now);
+        var withBoth = DamageWith(WithTrigger(BuildTrigger.Echo, Form.Strike),
+                                  Wearing(EnchantKind.Reverb), Max, Now);
+        Assert.True(withBoth > keystoneOnly,
+            $"REVERB did not sharpen ECHO — {withBoth:N0} vs {keystoneOnly:N0}");
+
+        var neutral = DamageWith(With(Form.Strike), WearingNeutral(), Max, Now);
+        Assert.Equal(neutral, DamageWith(With(Form.Strike), Wearing(EnchantKind.Reverb), Max, Now));
+    }
+
+    [Fact]
+    public void test_tithe_pays_per_sworn_vow_and_is_dead_without_one()
+    {
+        const int Max = 1000, Now = 1000;
+        var vow = Weaving.Catalog.First(v => v.Id == "vow_pure");
+
+        Build Sworn()
+        {
+            var b = new Build();
+            b.Weave(Sk(Form.Strike, vow: vow));
+            return b;
+        }
+
+        var plain = DamageWith(Sworn(), WearingNeutral(), Max, Now);
+        var tithed = DamageWith(Sworn(), Wearing(EnchantKind.Tithe), Max, Now);
+        Assert.True(tithed > plain, $"TITHE did not pay on a sworn Vow — {tithed:N0} vs {plain:N0}");
+
+        // No Vow sworn, no tithe. The build that promised nothing gets nothing.
+        var unsworn = DamageWith(With(Form.Strike), WearingNeutral(), Max, Now);
+        Assert.Equal(unsworn, DamageWith(With(Form.Strike), Wearing(EnchantKind.Tithe), Max, Now));
+    }
+
+    [Fact]
+    public void test_tithe_counts_distinct_vows_not_skills_wearing_one()
+    {
+        // The same rule the FRAGILITY price already follows. A Vow is SWORN, not equipped: weaving one
+        // promise onto four skills is one promise. Paying it four times would make the tithe worth most
+        // to the player who diversified least, which inverts what the whole Vow system is for.
+        const int Max = 1000, Now = 1000;
+        var vow = Weaving.Catalog.First(v => v.Id == "vow_pure");
+
+        Build OneVowNSkills(int n)
+        {
+            var b = new Build();
+            for (var i = 0; i < n; i++) b.Weave(Sk(Form.Strike, vow: vow));
+            return b;
+        }
+
+        // Compare the tithe's SHARE, not raw damage — four skills swing more than one either way.
+        float Share(int n)
+        {
+            var plain = DamageWith(OneVowNSkills(n), WearingNeutral(), Max, Now);
+            var tithed = DamageWith(OneVowNSkills(n), Wearing(EnchantKind.Tithe), Max, Now);
+            return tithed / plain;
+        }
+
+        Assert.Equal(Share(1), Share(4), precision: 3);
     }
 
     /// <summary>

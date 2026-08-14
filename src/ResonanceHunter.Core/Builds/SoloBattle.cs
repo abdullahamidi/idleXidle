@@ -230,6 +230,19 @@ public static class SoloBattle
     /// <summary>HOARDER — how much of the haul multiplier above 1 becomes hit size.</summary>
     public const float HoarderHaulToForce = 0.20f;
 
+    // ── Keystone tuning, and the enchantments that sharpen it. ─────────────────────────────────────
+    //
+    // These two were bare 0.8f literals at their use sites. Naming them is not tidying: FERVOUR and
+    // BULWARK are defined as "steeper than the keystone alone", which is a claim about a number that
+    // has to be readable from one place to stay true. A tuning pass that changed the literal and not
+    // the enchantment would silently rebalance both.
+
+    /// <summary>BLOODLUST — how much damage the FULL missing-health fraction is worth.</summary>
+    public const float BloodlustScale = 0.8f;
+
+    /// <summary>ZEAL — the mirror, over the health still PRESENT.</summary>
+    public const float ZealScale = 0.8f;
+
     /// <summary>WEAVER — the share of a hit its woven second Form delivers.</summary>
     public const float WeaverEchoFraction = 0.45f;
 
@@ -320,6 +333,21 @@ public static class SoloBattle
             ? Math.Max(0.10f, Economy.Enchantments.MagnitudeOf(hunter.WornEnchantments, Economy.EnchantKind.Harvest))
             : 0f;
 
+        // THE KEYSTONE AND VOW COMBOS. Hoisted here like Venom and Harvest, and read below only INSIDE
+        // the branch their partner opens, so an unpaired one contributes exactly nothing rather than a
+        // little. Sharpening a keystone is the whole promise on the item's card; paying out without the
+        // keystone would make it a flat damage roll wearing a combo's name, which is the trap this
+        // project already walked into once with VENOMANCER.
+        var fervour = Economy.Enchantments.MagnitudeOf(hunter.WornEnchantments, Economy.EnchantKind.Fervour);
+        var bulwark = Economy.Enchantments.MagnitudeOf(hunter.WornEnchantments, Economy.EnchantKind.Bulwark);
+        var reverb = Economy.Enchantments.MagnitudeOf(hunter.WornEnchantments, Economy.EnchantKind.Reverb);
+        var tithe = Economy.Enchantments.MagnitudeOf(hunter.WornEnchantments, Economy.EnchantKind.Tithe);
+
+        // TITHE counts DISTINCT Vows, the same way the FRAGILITY price does. A Vow is sworn, not
+        // equipped: weaving one Vow onto all four skills is one promise kept, not four, and paying it
+        // four times would make the tithe strongest on the build that committed least.
+        var swornVows = tithe > 0f ? DistinctVows(build.Skills).Count() : 0;
+
         // CRIT × FOCUS, folded to a deterministic expected-value factor on SKILL damage (chance × extra),
         // so the sim stays reproducible — no rng draw, no crit-lottery variance to break a seeded test.
         // DEFENSE (including the worn charm's, itself long inert) mitigates each incoming bite below.
@@ -400,7 +428,7 @@ public static class SoloBattle
             if (triggers.Contains(BuildTrigger.Bloodlust))
             {
                 var missing = 1f - champ.Health / (float)Math.Max(1, champ.MaxHealth);
-                m *= 1f + 0.8f * missing;
+                m *= 1f + (BloodlustScale + fervour) * missing;   // FERVOUR steepens it; dead alone
             }
 
             // ZEAL — the mirror: damage scales with health PRESENT. JUGGERNAUT's reward for staying whole,
@@ -410,8 +438,16 @@ public static class SoloBattle
             if (triggers.Contains(BuildTrigger.Zeal))
             {
                 var present = champ.Health / (float)Math.Max(1, champ.MaxHealth);
-                m *= 1f + 0.8f * present;
+                m *= 1f + (ZealScale + bulwark) * present;        // BULWARK steepens it; dead alone
             }
+
+            // REVERB — ECHO trades power for a second cast (60% damage, twice). This buys some of that
+            // price back, and only while ECHO is socketed.
+            if (reverb > 0f && triggers.Contains(BuildTrigger.Echo)) m *= 1f + reverb;
+
+            // TITHE — every Vow sworn pays. Dead on a build that has promised nothing, and worth most to
+            // the player who has given up the most, which is the same bargain the Vows themselves make.
+            if (swornVows > 0) m *= 1f + tithe * swornVows;
 
             if (champ.MarkUntilMs > absMs) m *= FormBehaviour.MarkMultiplier + shape.MarkPowerBonus;
 

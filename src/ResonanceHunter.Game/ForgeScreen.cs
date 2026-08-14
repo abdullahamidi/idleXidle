@@ -6,6 +6,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using ResonanceHunter.Core.Abilities;
 using ResonanceHunter.Core.Automation;
+using ResonanceHunter.Core.Builds;
 using ResonanceHunter.Core.Economy;
 using ResonanceHunter.Core.Expeditions;
 using ResonanceHunter.Core.Forging;
@@ -313,6 +314,20 @@ public sealed class ForgeScreen
     /// one line: not "is this a bigger number", but "does this fit what I'm building".
     /// </summary>
     public IReadOnlyCollection<Form> ActiveForms { get; set; } = Array.Empty<Form>();
+
+    /// <summary>
+    /// The triggers the worn build carries, so a KEYSTONE combo can say whether it is live.
+    /// </summary>
+    /// <remarks>
+    /// Set by the host beside <see cref="ActiveForms"/>. An empty set is not "no keystones" so much as
+    /// "nobody told this screen", and the failure is quiet either way — every keystone combo simply
+    /// reads as dead. That is the safe direction: an item wrongly greyed is a player who looks again,
+    /// an item wrongly gilded is a player who equips it and wonders why nothing changed.
+    /// </remarks>
+    public IReadOnlyCollection<BuildTrigger> ActiveTriggers { get; set; } = Array.Empty<BuildTrigger>();
+
+    /// <summary>How many DISTINCT Vows the worn build has sworn — what TITHE is paid on.</summary>
+    public int SwornVows { get; set; }
 
     /// <summary>
     /// The Memory Dust auto-sell floor. Set by the host so a chest's rolled loot honours the same filter a
@@ -1396,10 +1411,16 @@ public sealed class ForgeScreen
                 // The loot philosophy, made visible: a Form-combo enchantment is LIVE only if your build
                 // runs its Form. Gold "COMBOS YOUR BUILD" when it fits; a grey "NEEDS … IN YOUR BUILD"
                 // when it is dead weight for you — so the choice is "does this fit my build", not "bigger".
-                if (ench.NeedsForm is { } need)
+                // A combo can now ask about any of the build's three axes — an equipped Form, a socketed
+                // keystone, or a sworn Vow — so the question is asked of whichever one the enchantment
+                // names rather than of Forms alone. A keystone combo shown as live because the player
+                // happened to run the right Form would be the same lie in the other direction.
+                if (ench.Needs is { } need)
                 {
-                    var live = ActiveForms.Contains(need);
-                    _ui.Text(b, live ? "COMBOS YOUR BUILD" : $"NEEDS {need.ToString().ToUpperInvariant()} IN YOUR BUILD",
+                    var live = (need.Form is not { } f || ActiveForms.Contains(f))
+                               && (need.Keystone is not { } k || ActiveTriggers.Contains(k))
+                               && (!need.AnyVow || SwornVows > 0);
+                    _ui.Text(b, live ? "COMBOS YOUR BUILD" : $"NEEDS {need.Label} IN YOUR BUILD",
                         1088, 634, live ? InkGold : InkFaint);
                 }
             }

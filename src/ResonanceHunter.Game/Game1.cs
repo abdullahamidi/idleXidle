@@ -758,8 +758,16 @@ public class Game1 : Game
                         InstanceId = "dev_siphon", BaseType = ItemBaseType.Charm, Rarity = Rarity.Legendary,
                         SellValue = 200, Element = Source.Nature, EnchantOverride = EnchantKind.Siphon,
                     });
+                    // And a KEYSTONE combo, because the combo line no longer only asks about Forms. This
+                    // one poses the other branch of that check — a requirement the build cannot satisfy
+                    // by equipping a skill, only by socketing a keystone.
+                    seed.Add(new ItemInstance
+                    {
+                        InstanceId = "dev_fervour", BaseType = ItemBaseType.Weapon, Rarity = Rarity.Legendary,
+                        SellValue = 240, Element = Source.Body, EnchantOverride = EnchantKind.Fervour,
+                    });
                     _forge.AddLoot(seed);
-                    _forge.ActiveForms = _loadout.Skills.Select(s => s.Form).ToList();
+                    TellForgeTheBuild(_loadout.ToBuild(_dust, _mastery, _characters.Active));
                     _forge.DevManage();   // the loot-forge fixture poses the SALVAGE hub (grid, chests, merge)
                     _forge.DevSelect(_forge.Inventory.Count - 1);   // the SIPHON charm (added last) — poses a new combo
                     // Stock every tier so the reforge/refine buttons pose live, not greyed.
@@ -1029,10 +1037,14 @@ public class Game1 : Game
                         });
                     // The hero: a deep Legendary Shadow weapon — four affixes, a real enchant, a mid item level
                     // so a refine reads (current→next power, before→after affixes). Mirrors the spec fixture.
+                    // Its enchant is PINNED to a keystone combo, so this shot also poses the branch of the
+                    // combo line that asks about something other than a Form. The id-derived roll was a
+                    // Form combo, which the SIPHON charm in the lootforge fixture already covers.
                     loot.Add(new ItemInstance
                     {
                         InstanceId = "dev_hero", BaseType = ItemBaseType.Weapon, Rarity = Rarity.Legendary,
                         SellValue = 200, Element = Source.Shadow, ItemLevel = 8,
+                        EnchantOverride = EnchantKind.Fervour,
                     });
                     _forge.AddLoot(loot);
                     _forge.DevFocus("dev_hero");   // pose the UPGRADE screen on the hero item
@@ -1413,7 +1425,7 @@ public class Game1 : Game
         {
             // Keep the Forge told which Forms the build runs, so it can flag live combos here too (not
             // only when arrived at from the fight).
-            _forge.ActiveForms = _loadout.Skills.Select(s => s.Form).ToList();
+            TellForgeTheBuild(_loadout.ToBuild(_dust, _mastery, _characters.Active));
             _forge.Update(gameTime, _keys, CanvasMouse, MouseClicked, MouseWheel, _hunter);
             Latch(gameTime);
             return;
@@ -1442,6 +1454,27 @@ public class Game1 : Game
         _prevKeys = _keys;
         _prevMouse = _mouse;
         base.Update(gameTime);
+    }
+
+    /// <summary>
+    /// Tell the Forge what the worn build actually is, so it can mark a combo live or dead.
+    /// </summary>
+    /// <remarks>
+    /// All three axes travel together, in one call, on purpose. They used to be one line setting
+    /// <c>ActiveForms</c>, repeated at three call sites — and the moment a combo could ask about a
+    /// keystone or a Vow instead, three separate places each had to remember to set three things. Two
+    /// of them would have kept answering for Forms alone, and a keystone combo would have read as dead
+    /// on a build that ran it. One method means a fourth axis is one edit, not four.
+    /// </remarks>
+    private void TellForgeTheBuild(Build build)
+    {
+        _forge.ActiveForms = _loadout.Skills.Select(s => s.Form).ToList();
+        _forge.ActiveTriggers = build.Triggers(_hunter).ToList();
+        _forge.SwornVows = _loadout.Skills
+                                   .Select(s => s.VowId)
+                                   .Where(id => !string.IsNullOrEmpty(id))
+                                   .Distinct()
+                                   .Count();
     }
 
     /// <summary>Pick the looping music bed for the current screen. No-op until the music_* WAVs exist.</summary>
@@ -1512,7 +1545,6 @@ public class Game1 : Game
         _expedition.ChestCount = _forge.UnopenedChests.Count;   // drives the fight screen's "go open a chest" nudge
         _expedition.IdleGleamRate = _champGleamRate;            // gleam/sec the champion earns idle → HUNT idle panel
 
-        _forge.ActiveForms = _loadout.Skills.Select(s => s.Form).ToList();   // so the Forge can flag live combos
         _forge.Tuning = ForgeTuning.Default with
         {
             DismantleReturnRate = DustEffects.DismantleRate(_dust, ForgeTuning.Default.DismantleReturnRate),
@@ -1523,7 +1555,10 @@ public class Game1 : Game
 
         // The loot-quality tilt reaches the roll that opens a chest. Until this line, Rarity was resolved
         // from keystones, gear and the trait tree, carried as Haul.Quality, and read by nothing at all.
-        _forge.RarityBonus = _loadout.ToBuild(_dust, _mastery, _characters.Active).Resolve(_hunter).Rarity;
+        // The build is made ONCE and used twice — the Forge's combo line needs the same object.
+        var wornBuild = _loadout.ToBuild(_dust, _mastery, _characters.Active);
+        _forge.RarityBonus = wornBuild.Resolve(_hunter).Rarity;
+        TellForgeTheBuild(wornBuild);
 
         // The roster derives from conquest, every frame, exactly like both trees' points. A character
         // unlocked by a conquest the player made three regions ago should not depend on having been
