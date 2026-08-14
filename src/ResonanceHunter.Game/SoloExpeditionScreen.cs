@@ -404,12 +404,20 @@ public sealed class SoloExpeditionScreen
     /// the hunter's real PowerRating, jittered so numbers don't stack; crits are gold and linger.</summary>
     private void SpawnDamage(int amount, bool crit)
     {
+        // ABOVE the creature's health bar, and STACKED. Numbers used to spawn at EnemyBox.Y + 8..40,
+        // which is exactly where the wave's health bar is drawn — so a hit printed "-203" through the
+        // bar and the next one printed "-344" through the first. Two unreadable numbers and an
+        // unreadable bar, at the one moment the player is watching to see how the fight is going.
+        //
+        // The stack counter is the same trick the wave callouts already use: each number still on
+        // screen pushes the next one up a line, so a flurry reads as a column instead of a smear.
+        var stack = _callouts.Count(c => c.Life > 0.55f);
         _callouts.Add(new Callout
         {
             Text = crit ? $"-{amount:N0} CRIT" : $"-{amount:N0}",
             Color = crit ? Gold : Bone,
-            X = EnemyBox.Center.X + Jitter((int)_playheadMs, 104),
-            Y = EnemyBox.Y + 40 - Jitter((int)_playheadMs + 11, 32),
+            X = EnemyBox.Center.X + Jitter((int)_playheadMs, 72),
+            Y = EnemyBox.Y - 96 - stack * 44 - Jitter((int)_playheadMs + 11, 20),
             Life = crit ? 1.3f : 1f,
             Px = crit ? 72 : 52,
         });
@@ -1399,7 +1407,13 @@ public sealed class SoloExpeditionScreen
         if (_run is null) return;
         _previousReport = null;
         _previousReport = Log.PreviousIn(RegionId);
-        _lastReport = _run.Report(isRecord: true);
+
+        // THE REAL COMPARISON, not a hard true. Forcing the flag made the capture print
+        // "NEW RECORD — DEPTH 52" directly above its own "DEPTH 53.0 -> 52.0 (-1.0)" line, which is a
+        // report contradicting itself in the same panel. A fixture that lies cannot catch the bug it is
+        // posing for — and the live path had exactly this bug until yesterday, announcing a record on
+        // the first run of every session because nothing restored the figure to beat.
+        _lastReport = _run.Report(isRecord: _run.Wave > (_previousReport?.Depth ?? 0));
         Log.Add(_lastReport);   // the fixture must exercise the same path the game does
         _mode = Mode.Downed;
         _downedTimer = DownedSeconds;
