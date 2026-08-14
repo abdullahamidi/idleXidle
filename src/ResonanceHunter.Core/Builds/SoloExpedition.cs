@@ -218,10 +218,16 @@ public sealed class SoloExpedition
         var defMult = Bands.DefenceMultiplierOrOne(affixes);
         if (defMult != 1f)
             creatures = creatures
+                // Archetype is COPIED, and forgetting it inverted the one node that reads it. A creature
+                // re-minted here kept its numbers and lost its tag, and WaveCreature.Archetype has exactly
+                // one consumer in the game: SIEGE, "+45% to ARMOURED, -25% to everything else". A null tag
+                // is not Armoured, so on a PLATED wave — the armoured wave, the wave this affix exists to
+                // make more armoured — the anti-armour Greater applied its penalty instead of its bonus.
+                // The player who bought the answer to armour was the one punished by it.
                 .Select(c => new WaveCreature
                 {
                     MaxHealth = c.MaxHealth, Health = c.Health, Damage = c.Damage,
-                    Defense = c.Defense * defMult, Source = c.Source,
+                    Defense = c.Defense * defMult, Source = c.Source, Archetype = c.Archetype,
                 })
                 .ToList();
 
@@ -234,14 +240,16 @@ public sealed class SoloExpedition
             {
                 MaxHealth = creatures[0].MaxHealth, Health = creatures[0].MaxHealth,
                 Damage = creatures[0].Damage, Defense = creatures[0].Defense,
-                Source = creatures[0].Source,
+                Source = creatures[0].Source, Archetype = creatures[0].Archetype,
             });
 
         var biteInterval = Math.Max(100, (int)(interval * Bands.IntervalMultiplier(affixes)));
 
         var metrics = new WaveMetrics();
+        var sustain = Bands.SustainMultiplier(affixes);
         var (outcome, events) = SoloBattle.ResolveWave(
-            _champion, _build, _hunter, creatures, biteInterval, _tuning, _rng, bonus, isBoss, metrics);
+            _champion, _build, _hunter, creatures, biteInterval, _tuning, _rng, bonus, isBoss, metrics,
+            sustain);
         Recorder.Record(next, metrics);
 
         LastOutcome = outcome;
@@ -270,7 +278,11 @@ public sealed class SoloExpedition
         }
         else if (shape.BetweenWaveRegen > 0f)
         {
-            var back = (int)MathF.Round(_champion.MaxHealth * shape.BetweenWaveRegen);
+            // The band's ENDLESS affix reaches here too — RECOVERY is regeneration by name, and an affix
+            // that halves regeneration but spares the one node called REGAIN HEALTH BETWEEN WAVES would
+            // be pressuring ENDURE everywhere except its own answer. (Note the name collision: the
+            // mastery node "endless" is FullHealBetweenWaves above; Affix.Endless is the band.)
+            var back = (int)MathF.Round(_champion.MaxHealth * shape.BetweenWaveRegen * sustain);
             _champion.Health = Math.Min(_champion.MaxHealth, _champion.Health + back);
         }
 

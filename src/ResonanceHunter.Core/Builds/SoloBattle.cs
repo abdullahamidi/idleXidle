@@ -268,7 +268,8 @@ public static class SoloBattle
         Random rng,
         WaveBonus? bonus = null,
         bool isBoss = false,
-        WaveMetrics? metrics = null)
+        WaveMetrics? metrics = null,
+        float sustain = 1f)
     {
         ArgumentNullException.ThrowIfNull(creatures);
         if (creatures.Count == 0) throw new ArgumentException("A wave needs at least one creature.", nameof(creatures));
@@ -354,6 +355,7 @@ public static class SoloBattle
         var healthAtStart = champ.Health;
         if (metrics is not null) metrics.CreaturesPresent = creatures.Count;
         var nextAuto = AutoAttackIntervalMs;
+        var nextBite = enemyIntervalMs;
 
         (WaveOutcome, List<BattleEvent>) Finish(WaveOutcome o, int atMs)
         {
@@ -646,6 +648,15 @@ public static class SoloBattle
         {
             // BLOOD MAGIC. The cost is total: it does not reduce healing, it removes it.
             if (triggers.Contains(BuildTrigger.NoHealing)) return;
+
+            // THE BAND'S SUSTAIN MULTIPLIER, applied at the one funnel every heal already passes through
+            // — leech, HEAL PER TARGET, SECOND WIND's on-clear heal, all four call sites. Bands.Endless
+            // ("leech and regeneration halved") computed its 0.5 and had NO CALLER anywhere in the
+            // solution, so the affix that exists to pressure ENDURE did nothing to it whatever.
+            // Deliberately NOT applied to FullHealBetweenWaves: that is a reset, not regeneration, and
+            // halving a binary is a design change rather than a repair.
+            amount = (int)MathF.Round(amount * sustain);
+            if (amount <= 0) return;
             champ.Health = Math.Min(champ.MaxHealth, champ.Health + amount);
             events.Add(new BattleEvent(BattleEventKind.Heal, 0, amount, atMs));
         }
@@ -790,8 +801,23 @@ public static class SoloBattle
             }
 
             // ── THE ENEMY BITES BACK ──────────────────────────────────────────────────────────
-            if (ms % enemyIntervalMs == 0)
+            //
+            // ACCUMULATED, never `ms % enemyIntervalMs`, which is what it used to be and which made the
+            // SWIFT affix do the opposite of its name. The loop steps in TickMs (100ms), so an exact
+            // modulo only fires where the interval divides a multiple of the tick — the real gap between
+            // bites is lcm(tick, interval), not the interval. SWIFT multiplies the interval by 0.7:
+            //
+            //   attack bias   plain      SWIFT wanted    SWIFT actually got
+            //   Normal 1500   1500 ms    1050 ms         2100 ms   (40% FEWER bites)
+            //   Heavy  2200   2200 ms    1540 ms         7700 ms   (5x fewer)
+            //   Fast   1000   1000 ms     700 ms          700 ms   (correct, by luck of the divisor)
+            //
+            // "The creatures strike more often" was a band the player could learn to fear, and on two of
+            // the three attack biases it was a band that let them rest. The auto-attack ten lines above
+            // has always accumulated its own next time; this now does the same.
+            if (ms >= nextBite)
             {
+                nextBite += enemyIntervalMs;
                 // EVERY LIVING CREATURE BITES. This is what makes action economy real: a Swarm's combined
                 // damage is its threat, and every creature killed is incoming damage removed. A build that
                 // cannot clear a Swarm quickly does not merely kill slowly, it takes the full wave's
