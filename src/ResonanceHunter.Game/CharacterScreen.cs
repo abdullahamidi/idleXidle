@@ -639,8 +639,22 @@ public sealed class CharacterScreen
             _ui.TextBig(b, GearTraits.NameOf(tr), DetailPanel.X + 44, sy, Gold, UiTypography.Body);
             _ui.TextRightBig(b, "TRAIT", DetailPanel.Right - 44, sy, Slate, UiTypography.Secondary);
             sy += 26;
-            sy = Wrapped(b, GearTraits.BlurbOf(tr).ToUpperInvariant(), DetailPanel.X + 44, sy,
-                         DetailPanel.Width - 88, Bone) + 10;
+
+            // THE NUMBERS, NOT THE ADJECTIVE. The blurb gives a direction — "far harder hits, skills come
+            // slower" — and a direction alone is not a decision: "harder" is worth knowing only once you
+            // know whether it means four percent or forty. It could never carry the figure either,
+            // because the real one depends on this item's rarity AND its refine level, neither of which
+            // a sentence written next to the enum knows.
+            //
+            // So the computed effect REPLACES the blurb rather than joining it. "+80% DMG  -20% SKILL" is
+            // both shorter and stricter than "far harder hits — skills come slower", and the panel has
+            // no room for a line that says less. The blurb stays the fallback for anything with no
+            // measurable channel.
+            var effect = GearTraits.EffectOf(item);
+            sy = effect.Length > 0
+                ? Wrapped(b, effect, DetailPanel.X + 44, sy, DetailPanel.Width - 88, Gold) + 10
+                : Wrapped(b, GearTraits.BlurbOf(tr).ToUpperInvariant(), DetailPanel.X + 44, sy,
+                          DetailPanel.Width - 88, Bone) + 10;
         }
         if (ench is not null)
         {

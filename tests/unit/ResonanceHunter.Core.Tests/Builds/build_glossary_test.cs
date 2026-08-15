@@ -3,6 +3,8 @@ using System.Linq;
 using ResonanceHunter.Core.Abilities;
 using ResonanceHunter.Core.Automation;
 using ResonanceHunter.Core.Builds;
+using ResonanceHunter.Core.Economy;
+using ResonanceHunter.Core.Loot;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -91,6 +93,49 @@ public class BuildGlossaryTest
         // nothing on screen said so — the player just watched a slot do nothing and blamed the game.
         Assert.Contains("ONLY pays when the enemy attacks", BuildGlossary.FormRule(Form.Trap));
         Assert.True(FormBehaviour.FiresOnBeingHit(Form.Trap));
+    }
+
+    [Fact]
+    public void test_an_items_trait_effect_states_its_real_numbers()
+    {
+        // The trait line on the gear panel is now the computed effect rather than the blurb, which
+        // means it is an assertion about the item and can be wrong. It must agree with the mods the
+        // fight will actually apply — a stated "+60% DMG" that the sim does not honour is worse than
+        // the vague sentence it replaced, because the player will build around it.
+        foreach (var rarity in new[] { Rarity.Common, Rarity.Rare, Rarity.Legendary })
+        foreach (var level in new[] { 1, 20, 200 })
+        {
+            var item = new ItemInstance
+            {
+                InstanceId = "trait_probe",
+                BaseType = ItemBaseType.Weapon,
+                Rarity = rarity,
+                ItemLevel = level,
+                SellValue = 10,
+            };
+
+            var trait = GearTraits.TraitOf(item)!.Value;
+            var mods = GearTraits.ModsFor(trait, rarity, level);
+            var text = GearTraits.EffectOf(item);
+
+            _out.WriteLine($"   {rarity,-10} iL{level,-4} {trait,-8} {text}");
+
+            // Every channel that actually moved must appear, and nothing that did not may.
+            var moved = new (string Label, float Value)[]
+            {
+                ("DMG", mods.Damage), ("HP", mods.Health),
+                ("SKILL", mods.SkillRate), ("HAUL", mods.Haul),
+            };
+
+            foreach (var (label, value) in moved)
+            {
+                var pct = (value - 1f) * 100f;
+                if (MathF.Abs(pct) >= 0.5f)
+                    Assert.Contains(label, text);
+                else
+                    Assert.DoesNotContain($" {label}", text);
+            }
+        }
     }
 
     [Fact]

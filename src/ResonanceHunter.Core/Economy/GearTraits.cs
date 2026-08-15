@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using ResonanceHunter.Core.Loot;
 
 namespace ResonanceHunter.Core.Economy;
@@ -89,7 +90,47 @@ public static class GearTraits
 
     public static string NameOf(GearTrait t) => t.ToString().ToUpperInvariant();
 
+    /// <summary>
+    /// What a trait does <b>on this exact item</b>, in numbers.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="BlurbOf"/> can only ever be qualitative — "far harder hits, skills come slower" — because
+    /// the real figures depend on the item's rarity AND its refine level, and a sentence written next to
+    /// the enum knows neither. So the player was told the DIRECTION of every trait and never the size of
+    /// one, which is the same as not being told: "harder hits" is a decision only once you know whether
+    /// it means four percent or forty.
+    /// </para>
+    /// <para>
+    /// This reads the item's own <see cref="ModsFor"/> result and prints every channel that moved, with
+    /// its sign. It is generated, so it cannot drift from the trait it describes, and it answers the
+    /// question the blurb raises rather than repeating it.
+    /// </para>
+    /// </remarks>
+    public static string EffectOf(ItemInstance? item)
+    {
+        if (item is null || TraitOf(item) is not { } trait) return "";
+
+        var m = ModsFor(trait, item.Rarity, item.ItemLevel);
+        var parts = new List<string>(4);
+
+        void Channel(string label, float value)
+        {
+            var pct = (value - 1f) * 100f;
+            if (MathF.Abs(pct) < 0.5f) return;                    // a rounding artefact is not an effect
+            parts.Add($"{(pct > 0 ? "+" : "")}{pct:0}% {label}");
+        }
+
+        Channel("DMG", m.Damage);
+        Channel("HP", m.Health);
+        Channel("SKILL", m.SkillRate);
+        Channel("HAUL", m.Haul);
+
+        return parts.Count == 0 ? "" : string.Join("  ", parts);
+    }
+
     /// <summary>One line, player-facing. States the cost as plainly as the benefit.</summary>
+    /// <remarks>The DIRECTION of the trade. <see cref="EffectOf"/> gives the size, per item.</remarks>
     public static string BlurbOf(GearTrait t) => t switch
     {
         GearTrait.Keen => "Cleaner hits. No drawback.",
