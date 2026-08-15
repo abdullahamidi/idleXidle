@@ -238,6 +238,15 @@ public sealed class SoloExpeditionScreen
     private float _playheadMs;
     private WaveReplay? _replay;
     private float _champLunge, _enemyLunge, _enemyWindup;
+    /// <summary>Where DrawComposition last put the creature row — what its labels anchor to.</summary>
+    /// <remarks>
+    /// Published rather than recomputed because the row's position is the product of an archetype
+    /// scale, a spacing compression and two clamps, and every place that re-derived it got a different
+    /// answer from the one on screen.
+    /// </remarks>
+    private int _rowCentreX = EnemyBox.Center.X;
+    private int _rowTopY = EnemyBox.Y;
+
     private int _nextEnemyStrikeMs;
 
     /// <summary>When the champion's next blow lands, so its swing can ANTICIPATE the hit.</summary>
@@ -624,8 +633,8 @@ public sealed class SoloExpeditionScreen
         {
             Text = crit ? $"-{amount:N0} CRIT" : $"-{amount:N0}",
             Color = crit ? Gold : Bone,
-            X = EnemyBox.Center.X,
-            Y = EnemyBox.Y - 96 - StackSlot(CalloutLane.Enemy) * CalloutLineHeight,
+            X = _rowCentreX,
+            Y = _rowTopY - 56 - StackSlot(CalloutLane.Enemy) * CalloutLineHeight,
             Life = crit ? 1.3f : 1f,
             // Was 52 and 72. The fight "reads loud" was the standing playtest note, and a damage number
             // two-thirds the height of the creature it is describing is most of why.
@@ -942,6 +951,20 @@ public sealed class SoloExpeditionScreen
         var centre = resting + enter + lunge;
         var left = centre - wanted / 2;
 
+        // WHERE THE ROW ACTUALLY IS, published for the labels.
+        //
+        // The nameplate, the health bar and the damage callouts all anchored to the raw EnemyBox — a
+        // 440-tall box centred at 1320 — while the row is clamped into the arena and scaled by its
+        // archetype. A swarm of four occupies the bottom 255px of that box and clamps to x≈1174, so the
+        // bar hung 200px above the creatures and 146px to their right, and the damage numbers stacked
+        // 340px up in bare rock. Every label described something that was not there.
+        //
+        // Deliberately NOT the lunge-shifted centre: a nameplate that slides 40px every time the row
+        // shoves forward reads as jitter. The labels follow the row's RESTING position and its real
+        // height, which is what actually moved.
+        _rowCentreX = resting;
+        _rowTopY = EnemyBox.Bottom - h;
+
         string? stripKey = null, staticKey = null;
         if (EnemySource is { } es && EnemyForSource.TryGetValue(es, out var en))
         {
@@ -991,7 +1014,7 @@ public sealed class SoloExpeditionScreen
         if (affixes.Count > 0)
             label += "   ·   " + string.Join(" + ", affixes.Select(a => a.ToString().ToUpperInvariant()));
 
-        var bar = new Rectangle(EnemyBox.Center.X - 92, EnemyBox.Y + 10, 184, 34);
+        var bar = new Rectangle(_rowCentreX - 92, _rowTopY - 52, 184, 34);
         _ui.BarArt(b, bar, Math.Clamp(_replay?.EnemyHealthFraction ?? 1f, 0f, 1f), "health");
         _ui.TextCenterBig(b, label, bar.Center.X, bar.Y - 28, UiKit.Vellum, UiTypography.Secondary);
     }
@@ -1424,11 +1447,19 @@ public sealed class SoloExpeditionScreen
     /// <summary>A titled panel using the ORNATE ui_panel_* frame art (package_01) — the reference's look.
     /// The title is left-aligned just inside the top edge so it clears the frame's top-centre gem. Returns
     /// the inner content rect (inset past the ornate corners).</summary>
+    /// <summary>A plate in the right rail, returning the space its content may actually use.</summary>
+    /// <remarks>
+    /// THE BOTTOM INSET WAS 22px WHERE THE FRAME NEEDS 40. `Height - 92` reserved 70 at the top and only
+    /// 22 at the bottom, so EVERY plate in this rail overhung its own border by 18px — the OBJECTIVE
+    /// progress bar was drawn on the frame's bottom band, its ends colliding with the corner filigree so
+    /// the two pieces of art merged, and REWARD ACTIVITY's third row clips the same way the moment
+    /// Deepest rises above zero. UiKit.PanelCorner is the number the art actually uses.
+    /// </remarks>
     private Rectangle CleanPanel(SpriteBatch b, Rectangle r, string title)
     {
         _ui.Panel(b, r);
         _ui.TextBig(b, title, r.X + 44, r.Y + 26, Gold, 20);
-        return new Rectangle(r.X + 44, r.Y + 70, r.Width - 88, r.Height - 92);
+        return new Rectangle(r.X + 44, r.Y + 70, r.Width - 88, r.Height - 70 - UiKit.PanelCorner);
     }
 
     /// <summary>Right context column (reference regions): a stack of four plates — Idle Rewards, Objective,
@@ -1445,13 +1476,15 @@ public sealed class SoloExpeditionScreen
         _ui.TextBig(b, $"+{Game1.Abbrev((long)(IdleGleamRate * 60f))}/min", inner.X + 48, inner.Y + 8, Gold, 24);
 
         // Objective (1570,254,326,150).
-        inner = CleanPanel(b, new Rectangle(px, 254, pw, 150), "OBJECTIVE");
+        // 176, not 150: the plate has to hold a label row AND a 26px bar, and the corrected inset
+        // above took back the 18px it had been borrowing from its own frame.
+        inner = CleanPanel(b, new Rectangle(px, 254, pw, 176), "OBJECTIVE");
         _ui.TextBig(b, Deepest >= ConquerAt ? "Conquered" : $"Reach depth {ConquerAt}", inner.X, inner.Y, Bone, 19);
         _ui.TextRightBig(b, $"{Math.Min(Deepest, ConquerAt)} / {ConquerAt}", inner.Right, inner.Y, Gold, 18);
         _ui.BarArt(b, new Rectangle(inner.X, inner.Y + 40, inner.Width, 26), ConquerAt > 0 ? Math.Clamp(Deepest / (float)ConquerAt, 0f, 1f) : 0f, "progress");
 
         // Reward activity (1570,418,326,210) — real summary, no fake loot grid, no keyboard hints (§20.4/§21).
-        inner = CleanPanel(b, new Rectangle(px, 418, pw, 210), "REWARD ACTIVITY");
+        inner = CleanPanel(b, new Rectangle(px, 444, pw, 210), "REWARD ACTIVITY");
         var ry = inner.Y;
         var anyReward = false;
         if (ChestCount > 0)
