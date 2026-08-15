@@ -1627,12 +1627,11 @@ public class Game1 : Game
 
         // THE CHAMPION FIGHTS EVERYWHERE. Ticked here, before any overlay can early-return, so a run
         // keeps clearing waves and paying out while you're in the Forge, the tree, or another region's
-        // menu — the whole point of an idle game. Only COMMAND clicks are gated to the combat view (the
-        // `interactive` flag), so a click in the Forge never falls through into the fight.
+        // menu — the whole point of an idle game. The fight screen's own clicks are handled in its Draw,
+        // which only runs when that screen is the one on top, so a click in the Forge cannot fall
+        // through into the fight without any flag being threaded down for it.
         _regionProgression = Math.Clamp((int)_region.MasteryLevel + (_region.MasteryLevel > 0 ? 1 : 0), 0, 4);
-        var watchingFight = !(_showWorld || _showPrestige || _showForge || _showAutomation || _showBuild
-            || _showCharacter || _showStats || _showHelp || _showSettings);
-        UpdateExpedition(gameTime, watchingFight);
+        UpdateExpedition(gameTime);
 
         // A modal eats the frame's INPUT, but not the frame, and not the fight. The autosave and the
         // farms tick above; the champion ticks on the line above this one. What must not happen is the
@@ -2183,12 +2182,14 @@ public class Game1 : Game
     /// credit the instant it lands: gleam and cores every wave, ITEMS on boss waves only (so the Forge
     /// isn't flooded and depth is what earns loot). Conquest is measured by the deepest wave reached.
     /// </remarks>
-    /// <param name="interactive">
-    /// True only when the combat screen is the one on top — so the champion fights on EVERY screen and
-    /// while the game is minimised (that is what "idle" means), but the COMMAND clicks only register when
-    /// you are actually looking at the fight and not clicking through it into the Forge.
-    /// </param>
-    private void UpdateExpedition(GameTime gameTime, bool interactive)
+    /// <remarks>
+    /// THE `interactive` PARAMETER IS GONE. It carried "is the combat screen the one on top", threaded
+    /// down to SoloExpeditionScreen.Update — which read none of its four input arguments, because click
+    /// handling had migrated into Draw and the Update-side plumbing was left standing. A gate that gates
+    /// nothing is worse than no gate: the next person to need one would have found this and believed it
+    /// was already handled. The fight screen's clicks are gated where they are actually read, in Draw.
+    /// </remarks>
+    private void UpdateExpedition(GameTime gameTime)
     {
         var def = Regions.Get(_activeRegion);
         _expedition.EnemySource = def.Theme;          // region element → the Source matchup
@@ -2273,7 +2274,7 @@ public class Game1 : Game
         var mod = RegionModifiers.For(_activeRegion);   // the region's themed combat twist (Map variety)
 
         _expedition.Update(
-            gameTime, _keys, CanvasMouse, MouseClicked && interactive, MouseWheel, _hunter,
+            gameTime, _hunter,
             // Every region is a rung up the ladder for the champion, not just a new element — so reaching
             // the sixth region is a real climb, and "more regions" is more progression, not more of the same.
             // The region MODIFIER twists this region's health/damage on top of the ladder + corruption.

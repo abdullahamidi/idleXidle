@@ -390,8 +390,16 @@ public sealed class SoloExpeditionScreen
     };
 
     // ══════════════════════════════════════════════════════════════════════════════════════════
-    public void Update(GameTime time, KeyboardState keys, Point mouse, bool clicked, int wheel,
-        Hunter hunter, float enemyBaseHealth, float enemyBaseDamage)
+    /// <summary>Advance the fight. Takes no input — this screen's clicks are handled in Draw.</summary>
+    /// <remarks>
+    /// <b>IT USED TO TAKE FOUR INPUT PARAMETERS AND READ NONE OF THEM</b> — keys, mouse, clicked and
+    /// wheel, all dead. Click handling migrated into Draw (DrawBattleControls) and the Update-side
+    /// plumbing was left standing, which meant the host computed a `watchingFight` flag every frame,
+    /// threaded it down as `interactive`, and handed it to a method that ignored it. A gate that gates
+    /// nothing is worse than no gate: the next person to need one would have found this and believed it
+    /// was already handled.
+    /// </remarks>
+    public void Update(GameTime time, Hunter hunter, float enemyBaseHealth, float enemyBaseDamage)
     {
         _hunter = hunter;
         var dt = (float)time.ElapsedGameTime.TotalSeconds;
