@@ -302,6 +302,13 @@ public sealed class SoloExpedition
     /// <see cref="BuildMods.Rarity"/> is the quality that tilts the loot roll. So the composition puzzle
     /// moved from "which five creatures" to "which keystones and gear", and this reads it off the build.
     /// </remarks>
+    /// <summary>Gleam paid per wave, before depth scale and the build's Haul multiplier.</summary>
+    /// <remarks>
+    /// Named rather than inline so the economy test can cite it and so a retune is one edit in one
+    /// place. Every other term in the wave payout is a multiplier on this.
+    /// </remarks>
+    public const float GleamPerWaveCoefficient = 3f;
+
     private Haul HaulForWave(int wave, WaveBonus bonus)
     {
         var scale = WaveScaling.HaulScale(wave, _tuning);
@@ -327,7 +334,16 @@ public sealed class SoloExpedition
 
         return new Haul(
             Cores: cores + bonus.Cores,                                   // HARVEST adds cores
-            Gleam: (int)MathF.Round(8f * scale * haul),
+            // THE COEFFICIENT WAS 8 AND IS MEASURED, NOT GUESSED. At 8 a trained champion earned 287
+            // Gleam per minute of fight time, which funds the whole 79,578 lifetime training sink in
+            // 4.6 hours — and that was the SMALL faucet, next to the Warren's 1,994/min. Playtest:
+            // "çok fazla gold geliyor."
+            //
+            // At 3 the champion is the PRIMARY earner (roughly twice the retuned Warren), which is the
+            // relationship the game wants: playing pays more than leaving it running. See
+            // gleam_economy_test, which states both sides of the economy as hours of play — the only
+            // form in which either number means anything.
+            Gleam: (int)MathF.Round(GleamPerWaveCoefficient * scale * haul),
             Quality: MathF.Max(0.05f, mods.Rarity) + bonus.Quality);      // SPLINTER adds quality
     }
 

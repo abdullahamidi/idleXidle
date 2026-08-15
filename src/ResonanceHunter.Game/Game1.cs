@@ -473,7 +473,17 @@ public class Game1 : Game
 
         // The Warren produced the whole time you were away — credit it into the real balances (Gleam and
         // Dust are shared accumulators; Mastery banks into the pool that feeds SetEarned).
-        var wOffline = _warren.Tick((float)credited);
+        //
+        // ConqueredRegions IS SET HERE, and was not before. Its only other assignments live in TickFarms
+        // and DrawWarren, both of which run from Update/Draw — while this runs from Initialize, before
+        // either has executed. So every offline credit in the game was computed with the conquest bonus
+        // at zero: the one payout that most needed it, silently missing it.
+        //
+        // Gated like the live tick — a player who has not taken a region has no Warren, awake or asleep.
+        _warren.ConqueredRegions = _world.ConqueredIds.Count;
+        var wOffline = Unlocks.IsOpen(Activity.Warren, GuideUnlockFacts())
+            ? _warren.Tick((float)credited)
+            : default;
         _hunter.AddGleam((int)wOffline.Gleam);
         _dust.AwardFromMastery((int)wOffline.Dust);
         _warrenMasteryPool += wOffline.Mastery;
@@ -517,7 +527,15 @@ public class Game1 : Game
             {
                 var hours = credited / 3600.0;
                 var span = hours >= 1.0 ? $"{hours:0.0} HOURS" : $"{credited / 60.0:0} MIN";
-                _bootMessage = $"WELCOME BACK — {span} AWAY\n+{Abbrev((long)champOffline + gleam)} GLEAM · {kills} KILLS · {cores} CORES";
+                // wOffline.Gleam WAS MISSING FROM THIS SUM. It is credited to the balance forty lines
+                // above and was then left out of the only report of it, so the largest single payment
+                // in the game was invisible to the player receiving it. Attribution matters more than
+                // the total: it is the difference between "the game gave me money" and knowing WHICH of
+                // your two economies is paying you.
+                _bootMessage = $"WELCOME BACK — {span} AWAY\n"
+                               + $"+{Abbrev((long)champOffline + gleam + wOffline.Gleam)} GLEAM "
+                               + $"({Abbrev(wOffline.Gleam)} WARREN · {Abbrev((long)champOffline + gleam)} HUNT)"
+                               + $" · {kills} KILLS · {cores} CORES";
                 _bootColor = Gold;
             }
         }
@@ -655,6 +673,15 @@ public class Game1 : Game
 
         // The Warren's facilities produce every second too, on every screen — Gleam/Dust into the real
         // balances, Mastery into the pool that feeds the build tree (see the SetEarned call below).
+        //
+        // GATED ON THE WARREN BEING OPEN, which it was not. The gradual-unlock pass gated the Warren's
+        // nav TILE on the first conquest but nothing gated its PRODUCTION, so a brand-new player was
+        // paid by a building they had never been told existed and could not visit. That is the inverse
+        // of this codebase's usual bug — not a feature that never runs, but one that runs before the
+        // player has met it — and it made the Warren 87% of all Gleam income in the game from minute
+        // zero. Now it is what it reads as: the reward for taking a region.
+        if (!Unlocks.IsOpen(Activity.Warren, GuideUnlockFacts())) return;
+
         _warren.ConqueredRegions = _world.ConqueredIds.Count;   // conquest → a standing production bonus
         var w = _warren.Tick(span);
         if (w.Gleam > 0) _hunter.AddGleam((int)w.Gleam);

@@ -190,14 +190,35 @@ public class HunterProgressionTests
         Assert.Equal(0, hunter.RankOf(HunterStat.AttackPower));
     }
 
-    /// <summary>Gleam finally has a sink big enough to matter — W1's whole point.</summary>
+    /// <summary>Gleam's sink exists and is geometric. Whether it BALANCES lives in GleamEconomyTest.</summary>
+    /// <remarks>
+    /// <b>THIS TEST USED TO CLAIM MORE THAN IT CHECKED, and that is how a 13x income imbalance shipped
+    /// through a green suite.</b> It asserted <c>total &gt; 50_000</c> with the message "too small to
+    /// absorb the faucet" — a one-sided assertion, naming a faucet it never measured. 79,578 passed
+    /// comfortably while the live faucet ran at 2,281 Gleam/min, funding the entire nine-stat
+    /// progression in under 40 minutes. The playtest found what the test could not: "çok fazla gold
+    /// geliyor."
+    ///
+    /// An economy is a RATIO, so it cannot be asserted from one side. This test now checks only the
+    /// property it can actually see from here — the sink is geometric and non-trivial — and the balance
+    /// question lives in <c>GleamEconomyTest</c>, which measures both sides and states the answer in
+    /// hours of play.
+    /// </remarks>
     [Fact]
-    public void test_the_lifetime_gleam_sink_is_substantial()
+    public void test_the_lifetime_gleam_sink_is_geometric_and_non_trivial()
     {
         var total = Hunter.TotalLifetimeSink(Tuning);
 
         // Previously Gleam's only sink was vow-binding (~200 each), saturating in "low tens" of buys.
-        Assert.True(total > 50_000, $"Sink is only {total} Gleam — too small to absorb the faucet.");
+        Assert.True(total > 50_000, $"Sink is only {total} Gleam.");
+
+        // The shape matters more than the size: a late rank must cost meaningfully more than an early
+        // one, or the "which stat" decision collapses into "buy everything in any order".
+        var first = Hunter.CostOfRank(0, Tuning);
+        var last = Hunter.CostOfRank(Tuning.StatRankCap - 1, Tuning);
+        Assert.True(last > first * 10,
+            $"rank {Tuning.StatRankCap} costs {last} against {first} for the first — the curve is flat, "
+            + "so there is no point at which a player must choose between stats.");
     }
 
     /// <summary>An equipped charm is ineligible for sale. The hole that got shipped once already.</summary>
