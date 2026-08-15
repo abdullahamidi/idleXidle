@@ -80,6 +80,7 @@ public static class Gear
     /// How much ITEM LEVEL refines a piece within its rarity tier.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Rarity sets the TIER; item level refines WITHIN it. Without this, a wave-40 boss drop was barely
     /// stronger than a wave-5 drop of the same rarity — the probe measured a full iL1→iL60 loadout adding
     /// ~6% depth, so "push deeper for better loot" (the whole reason ilvl exists — a drop's depth is a stat)
@@ -87,8 +88,31 @@ public static class Gear
     /// maxed piece is roughly <b>1.7×</b> its own tier's floor by iL60, while staying below the next rarity
     /// up — the ladder is still rarity-first, but the rungs have depth now. (Affixes already scale with iL;
     /// this closes the gap on the levers that did not.)
+    /// </para>
+    /// <para>
+    /// <b>IT SATURATES.</b> It used to be linear — <c>1 + (iL-1) × 0.012</c>, unbounded — against a Refine
+    /// the Forge deliberately documents as an <i>infinite sink</i>. An infinite sink is good economy
+    /// design; an infinite sink that pays unbounded POWER is a different thing, and it is what the
+    /// playtest hit. Measured on the old curve: a Legendary reached 13× at iL60, 25× at iL200 and
+    /// <b>92× at iL1000</b>, which is where "gear power ninety thousand, hits for 30–40k" came from. Worse,
+    /// it broke the sentence directly above this one: a Rare ground to iL1000 reached 16.6× and sailed
+    /// past a Legendary's 8.0× floor, so rarity stopped being the ladder and grinding replaced it.
+    /// </para>
+    /// <para>
+    /// The curve below keeps every number the old one produced up to the level it was tuned for — iL60
+    /// lands on 1.70 either way — and then flattens instead of climbing, approaching 2.0 and never
+    /// reaching it. The gold sink stays infinite; only the power it buys is bounded. Held to both
+    /// properties by <c>ProgressionCurveTest</c>.
+    /// </para>
     /// </remarks>
-    public static float ItemLevelFactor(int itemLevel) => 1f + Math.Max(0, itemLevel - 1) * 0.012f;
+    public static float ItemLevelFactor(int itemLevel)
+    {
+        var levels = Math.Max(0, itemLevel - 1);
+
+        // 1 + x/(x + 25.3): zero at iL1, 0.700 at iL60 (matching the old linear 59 × 0.012), and
+        // asymptotic to 1 — so the factor spans 1.0 to 2.0 across every level a player can ever buy.
+        return 1f + levels / (levels + 25.3f);
+    }
 
     /// <summary>A worn weapon multiplies damage: x1 with nothing, up to x8 with a Legendary — and deeper with item level.</summary>
     public static float WeaponDamageMultiplier(ItemInstance? weapon)
