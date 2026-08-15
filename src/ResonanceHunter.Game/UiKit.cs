@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
@@ -672,6 +673,39 @@ public sealed class UiKit
         var s = text;
         while (s.Length > 1 && Measure(s + "…") > width) s = s[..^1];
         return s.TrimEnd() + "…";
+    }
+
+    /// <summary>
+    /// Break a sentence into lines that each fit <paramref name="width"/> pixels.
+    /// </summary>
+    /// <remarks>
+    /// There was no wrapping in this codebase at all, which is why every explanatory string in it is a
+    /// fragment sized to a column — "ON KILL: RICHER LOOT", 21 characters, because that is what fits on
+    /// one line. That constraint is fine for a label and fatal for an explanation: a build game has to
+    /// be able to say "deals NO damage; it opens a window in which everything else hits harder", and
+    /// there is no way to shorten that into a caption without deleting the part the player needs.
+    /// Breaks on spaces only — a word longer than the column is left long rather than cut mid-word,
+    /// because a truncated word reads as a rendering fault.
+    /// </remarks>
+    public IReadOnlyList<string> WrapBig(string text, int width, int px)
+    {
+        var lines = new List<string>();
+        if (string.IsNullOrWhiteSpace(text) || width <= 0) return lines;
+
+        var line = "";
+        foreach (var word in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var candidate = line.Length == 0 ? word : line + " " + word;
+            if (line.Length > 0 && MeasureBig(candidate, px) > width)
+            {
+                lines.Add(line);
+                line = word;
+            }
+            else line = candidate;
+        }
+
+        if (line.Length > 0) lines.Add(line);
+        return lines;
     }
 
     /// <summary>The sized-text twin of <see cref="Shorten"/>, for anything drawn with TextBig.</summary>

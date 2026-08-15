@@ -363,10 +363,17 @@ public sealed class WeaveScreen
         _ui.TextCenterBig(b, "SOURCE", PickPanel.Center.X, PickPanel.Y + 66, Gold, UiTypography.SectionTitle);
         _ui.TextCenter(b, "WHAT IT IS MADE OF", PickPanel.Center.X, PickPanel.Y + 102, Slate);
 
+        // What the player is ASKING about — whatever the cursor is over, falling back to what they
+        // already picked. Hovering is the question "what is this?", and until now the screen had no
+        // answer to it at all: six Source icons and six Form icons, named and otherwise silent.
+        Source? hoverSource = null;
+        Form? hoverForm = null;
+
         for (var i = 0; i < Sources.Length; i++)
         {
             var cell = SourceCell(i);
             var s = Sources[i];
+            if (cell.Contains(hit)) hoverSource = s;
             var on = cur.Source == s;
             var col = SourceColor.GetValueOrDefault(s, Bone);
             _ui.Fill(b, cell, on ? new Color(0x2C, 0x25, 0x44) : Quiet);
@@ -384,6 +391,7 @@ public sealed class WeaveScreen
         {
             var cell = FormCell(i);
             var f = Forms[i];
+            if (cell.Contains(hit)) hoverForm = f;
             var on = cur.Form == f;
             var tint = on ? Bone : Slate;
             _ui.Fill(b, cell, on ? new Color(0x2C, 0x25, 0x44) : Quiet);
@@ -396,6 +404,47 @@ public sealed class WeaveScreen
                 _ui.Diamond(b, new Rectangle(cell.Center.X - 20, cell.Y + 18, 40, 40), glyphTint);
             _ui.TextCenterBig(b, FormName(f), cell.Center.X, cell.Bottom - 24, tint, UiTypography.Secondary);
         }
+
+        DrawExplainer(b, hoverForm ?? cur.Form, hoverSource ?? cur.Source, hoverForm is null && hoverSource is null);
+    }
+
+    /// <summary>
+    /// What the Form and Source under the cursor actually DO.
+    /// </summary>
+    /// <remarks>
+    /// The playtest's flattest sentence was "I do not know what the skills do, or what difference the
+    /// ones I picked make", and it was a fair description of this screen: it asked for four picks out
+    /// of thirty-six combinations and printed only their names. The text is <see cref="BuildGlossary"/>,
+    /// in Core, derived from the same constants the fight reads — so a retuned cooldown cannot leave a
+    /// lie behind on this panel.
+    /// </remarks>
+    private void DrawExplainer(SpriteBatch b, Form form, Source source, bool showingSelection)
+    {
+        var x = PickPanel.X + 34;
+        var width = PickPanel.Width - 68;
+
+        // ANCHORED TO THE LAST CELL, not to a measured-once offset. The first version used
+        // PickPanel.Y + 626 and drew straight over the second row of Form cells — the panel's contents
+        // move when a row is added or a cell is resized, and a magic number does not move with them.
+        var top = FormCell(Forms.Length - 1).Bottom + 16;
+        var y = top;
+
+        _ui.Fill(b, new Rectangle(x - 10, top - 10, width + 20, PickPanel.Bottom - top - 16), Quiet);
+
+        _ui.TextBig(b, $"{FormName(form)} — {BuildGlossary.FormHeadline(form)}", x, y,
+                    showingSelection ? Gold : Bone, UiTypography.Body);
+        y += 26;
+
+        foreach (var line in _ui.WrapBig(BuildGlossary.FormRule(form), width, UiTypography.Secondary))
+        {
+            _ui.TextBig(b, line, x, y, Bone, UiTypography.Secondary);
+            y += 20;
+        }
+
+        y += 8;
+        var col = SourceColor.GetValueOrDefault(source, Bone);
+        _ui.TextBig(b, SourceName(source), x, y, col, UiTypography.Secondary);
+        _ui.TextBig(b, BuildGlossary.SourceLine(source), x + 92, y, Slate, UiTypography.Secondary);
     }
 
     private void DrawVows(SpriteBatch b, Point hit)
