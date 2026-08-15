@@ -740,12 +740,26 @@ public sealed class SoloExpeditionScreen
         // arena's scissor edge, so a wave of five showed four and a sliver — which is exactly the fact
         // the player most needs to read.
         var half = w / 2;
-        var spacing = (int)(w * 0.62f);   // overlap slightly; a row of five must still fit
-        var wanted = spacing * (comp.Count - 1);
-        var centre = Math.Clamp(
-            EnemyBox.Center.X + enter + lunge,
-            ArenaRect.X + half + 20 + wanted / 2,
-            ArenaRect.Right - half - 20 - wanted / 2);
+
+        // THE ROW COMPRESSES BEFORE IT OVERFLOWS. Spacing was a fixed fraction of the creature width,
+        // so a wide enough wave made the row wider than the arena — and then the clamp below was handed
+        // a minimum greater than its maximum, which is not a layout mistake but an ArgumentException:
+        // "'1028' cannot be greater than 1018", thrown out of Draw, killing the game mid-fight. It only
+        // appears on a big composition, which is why it survived every screenshot and every short run
+        // and was found by soaking the fight for five minutes.
+        var room = ArenaRect.Width - w - 40;   // the span a row may occupy inside the arena
+        var spacing = (int)(w * 0.62f);        // overlap slightly; a row of five must still fit
+        if (comp.Count > 1 && room > 0) spacing = Math.Min(spacing, room / (comp.Count - 1));
+        var wanted = Math.Max(0, spacing) * (comp.Count - 1);
+
+        // AND THE CLAMP STILL CANNOT INVERT. Compression handles every wave that can be made to fit;
+        // this handles the one that cannot — a single creature wider than the arena leaves no room at
+        // all, and an overhanging row is a cosmetic problem where a thrown exception is a lost session.
+        var lo = ArenaRect.X + half + 20 + wanted / 2;
+        var hi = ArenaRect.Right - half - 20 - wanted / 2;
+        var centre = lo > hi
+            ? ArenaRect.Center.X
+            : Math.Clamp(EnemyBox.Center.X + enter + lunge, lo, hi);
         var left = centre - wanted / 2;
 
         string? stripKey = null, staticKey = null;

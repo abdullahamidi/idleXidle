@@ -769,11 +769,18 @@ public class Game1 : Game
 
         _bootCheckFrames++;
 
+        // RH_BOOTCHECK=<frames> lengthens the soak; anything non-numeric (including "1") keeps the
+        // default. A gate wants ten seconds; hunting a crash that only shows after minutes of real
+        // ticking wants thousands of frames, and that is a different job for the same machinery.
+        var soakFrames = int.TryParse(
+            Environment.GetEnvironmentVariable("RH_BOOTCHECK"), out var want) && want > 600 ? want : 600;
+
         // A CEILING, so a stuck walk fails instead of hanging. When this method sat lower in Update it
         // stopped being reached at all while the title was up, and the run simply never ended — a
         // ten-minute timeout killed it and the failure looked like a slow machine rather than a broken
         // harness. A check that can hang has a failure mode nobody reads.
-        if (_bootCheckFrames > 2400)
+        var soakCeiling = soakFrames + 1800;
+        if (_bootCheckFrames > soakCeiling)
         {
             Console.WriteLine($"BOOT STUCK — {_bootCheckScreensSeen} screens reached, then no progress.");
             Environment.Exit(2);
@@ -803,9 +810,8 @@ public class Game1 : Game
         // chest drop, the level-up and the conquest counter all fire, and those run against the
         // player's real numbers — which is the combination no fixture reproduces and no capture holds
         // still long enough to reach. This is the part of the check that touches the actual game.
-        const int SoakFrames = 600;   // ~10s of real ticking, several waves at the saved battle speed
         var soak = elapsed - screens.Length * PerScreen;
-        if (soak < SoakFrames) return;
+        if (soak < soakFrames) return;
 
         Console.WriteLine(_hasSave
             ? $"BOOT OK — save loaded, hunter level {_hunter.HunterLevel}, "

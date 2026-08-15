@@ -4,7 +4,16 @@
 #   bash tools/check_boot.sh
 #
 # NOT part of check_all.sh, which is the build-free set. This one builds and runs the game, so it
-# costs ~15 seconds; run it before shipping anything that touches startup, saves or persistence.
+# costs ~40 seconds; run it before shipping anything that touches startup, saves or persistence.
+#
+# FOR A LONGER HUNT, drive the mode directly with a frame count:
+#
+#   RH_BOOTCHECK=18000 RH_SAVE_DIR="$(cygpath -w "$TEMP/rh_soak")" \
+#     dotnet run --project src/ResonanceHunter.Game --no-build
+#
+# That soaks the fight for about five minutes against a throwaway save directory, which is how the
+# DrawComposition crash was found — a Math.Clamp whose minimum overtook its maximum once a wave grew
+# wide enough. Nothing shorter reached a composition big enough to trigger it.
 #
 # WHY IT EXISTS. `LoadOrStartFresh` returns immediately when RH_SHOT is set — deliberately, so a
 # screenshot can never entangle with or write back real progress. The consequence is that the
