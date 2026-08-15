@@ -1453,7 +1453,14 @@ public sealed class SoloExpeditionScreen
         var n = Loadout.SkillCapacity;     // the dock shows the slots you have, not the four everyone starts with
         // Stacked down the control rail instead of a horizontal dock across the bottom centre, which
         // sat over the stage and collided with the nav rail at y=934.
-        const int slot = 68, pitch = 74, y0 = 632;
+        // PITCH IS DERIVED FROM THE SPACE, not fixed at 74. The dock was laid out against a four-slot
+        // maximum, but the loop runs to Loadout.SkillCapacity, which reaches five once the trait tree's
+        // weave_5 node is bought — and the fifth medallion then drew 60px BELOW the bottom of the panel
+        // it lives in (ControlRail ends at y=936). The reward for the largest single upgrade in the game
+        // was a slot hanging off the frame.
+        const int y0 = 632;
+        var pitch = n <= 1 ? 74 : Math.Clamp((ControlRail.Bottom - 12 - y0 - 68) / (n - 1), 40, 74);
+        var slot = Math.Min(68, pitch - 6);
         _ui.TextBig(b, "SKILLS", RailContentX, 608, Slate, 15);
         _ui.Fill(b, new Rectangle(RailContentX, 588, RailContentW, 2), Slate * 0.35f);
         for (var i = 0; i < n; i++)

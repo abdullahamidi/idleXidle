@@ -1522,7 +1522,11 @@ public class Game1 : Game
         // autosave above still fires — an idle game does not pause because you opened a menu. What it
         // must not do is let the hotkeys and buttons underneath the panel keep responding: without
         // this, clicking FULLSCREEN also presses whatever the panel happens to be covering.
-        if (_showSettings) { Latch(gameTime); return; }
+        // THE SETTINGS RETURN MOVED BELOW UpdateExpedition — see the note beside it. It used to sit
+        // here, which stopped the champion fighting for as long as the display-options panel was open:
+        // the one overlay in the game that paused the idle loop, contradicting the comments on both
+        // sides of it. Its INPUT gating is unaffected, because `watchingFight` already carries a
+        // !_showSettings term.
 
         // AN UNLOCK EXPLANATION SWALLOWS INPUT while it is up: it is drawn over the nav rail, so a click
         // meant to dismiss it would otherwise also land on whatever tile is underneath and throw the
@@ -1629,6 +1633,11 @@ public class Game1 : Game
         var watchingFight = !(_showWorld || _showPrestige || _showForge || _showAutomation || _showBuild
             || _showCharacter || _showStats || _showHelp || _showSettings);
         UpdateExpedition(gameTime, watchingFight);
+
+        // A modal eats the frame's INPUT, but not the frame, and not the fight. The autosave and the
+        // farms tick above; the champion ticks on the line above this one. What must not happen is the
+        // hotkeys and buttons underneath the panel continuing to respond.
+        if (_showSettings) { Latch(gameTime); return; }
 
         if (_showWorld) { UpdateWorld(); Latch(gameTime); return; }
 
