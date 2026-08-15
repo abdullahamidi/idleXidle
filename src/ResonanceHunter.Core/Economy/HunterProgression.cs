@@ -145,7 +145,37 @@ public sealed class Hunter
     public int MaxHealth => (int)ValueOf(HunterStat.MaxHealth) + Gear.CharmHealthBonus(_worn[GearSlot.Charm]);
 
     /// <summary>One glanceable number for "am I getting stronger". Shown in the HUD.</summary>
-    public int PowerRating => Gear.PowerRating(SquadDamageMultiplier, SquadSkillRate, SquadHealthMultiplier, Defense, MaxHealth);
+    public int PowerRating => Gear.PowerRating(SquadDamageMultiplier, SquadSkillRate, SquadHealthMultiplier,
+                                              Defense, MaxHealth, CritFactor);
+
+    /// <summary>
+    /// The expected-damage multiplier crit is worth: <c>1 + chance * (multiplier - 1)</c>.
+    /// </summary>
+    /// <remarks>
+    /// Computed here rather than in <c>SoloBattle</c> because Economy must not depend on Builds. It
+    /// deliberately reads only the HUNTER's terms — trained Focus, trained crit chance, and gear affixes
+    /// — and not a skill shape's bonus, because this is the number a GEAR page shows and a piece of gear
+    /// does not change which skills you have woven. The cap mirrors the fight's.
+    /// </remarks>
+    public float CritFactor
+    {
+        get
+        {
+            var chance = Math.Clamp(
+                (ValueOf(HunterStat.CriticalChance) + AffixTotal(AffixStat.Crit)) / 100f,
+                0f, MaxCritChanceMirror);
+            var multiplier = CritBaseMultiplierMirror
+                             + ValueOf(HunterStat.Focus) * FocusCritDamagePerPointMirror;
+            return 1f + chance * MathF.Max(0f, multiplier - 1f);
+        }
+    }
+
+    // The fight's crit constants, mirrored because Economy must not depend on Builds. Pinned against
+    // SoloBattle by test_the_crit_constants_match_the_fight — a silent divergence here would make the
+    // gear page state a number the fight does not use, which is the drift this codebase keeps finding.
+    public const float CritBaseMultiplierMirror = 1.5f;
+    public const float MaxCritChanceMirror = 0.75f;
+    public const float FocusCritDamagePerPointMirror = 0.01f;
 
     /// <summary>
     /// How much this item would add to <see cref="PowerRating"/> if worn in its slot — its marginal power.

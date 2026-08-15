@@ -171,9 +171,26 @@ public static class Gear
     /// <param name="damageMultiplier">The build's REAL damage multiplier (Hunter.SquadDamageMultiplier).</param>
     /// <param name="skillRate">The build's REAL cadence (Hunter.SquadSkillRate). Damage per second, not per hit.</param>
     /// <param name="healthMultiplier">The build's REAL health multiplier (Hunter.SquadHealthMultiplier).</param>
+    /// <param name="critFactor">
+    /// Expected-damage multiplier from crit: <c>1 + chance * (multiplier - 1)</c>. 1 means no crit.
+    /// </param>
+    /// <remarks>
+    /// <b>CRIT WAS MISSING, AND ITS ABSENCE READ AS A DIFFERENT BUG.</b> Crit is one of six rollable
+    /// affix stats and it is fully live in the fight, but this function consumed only the damage, skill
+    /// rate, health and defense channels — so two items of the same rarity and item level could show
+    /// wildly different ITEM POWER purely on which affixes they rolled, and the crit-heavy one showed
+    /// LESS while being worth more. Playtest read that scatter as an element correlation: "a Nature item
+    /// shows higher in an all-Spirit setup". The element was never involved; the number was just blind
+    /// to a third of what makes an item good.
+    ///
+    /// HAUL IS DELIBERATELY STILL EXCLUDED. It is loot volume, not combat power, and folding it in would
+    /// make a Gleam-finding charm read as a weapon upgrade. That is a real omission from "how good is
+    /// this item" but the right answer is a second number, not a dishonest first one.
+    /// </remarks>
     public static int PowerRating(float damageMultiplier, float skillRate, float healthMultiplier,
-                                  int defense, int maxHealth)
-        => (int)MathF.Round(damageMultiplier * MathF.Max(0.05f, skillRate) * 120f
+                                  int defense, int maxHealth, float critFactor = 1f)
+        => (int)MathF.Round(damageMultiplier * MathF.Max(0.05f, skillRate)
+                                             * MathF.Max(1f, critFactor) * 120f
                             + defense * 2f
                             + healthMultiplier * maxHealth * 0.5f);
 

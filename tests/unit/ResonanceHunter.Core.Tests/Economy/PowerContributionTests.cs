@@ -134,4 +134,37 @@ public class PowerContributionTests
             "No generated item moved the sim's multipliers, so this test proved nothing. Either the " +
             "affix roller stopped producing DAMAGE/HEALTH affixes or the fixture is wrong.");
     }
+
+    [Fact]
+    public void test_the_crit_constants_match_the_fight()
+    {
+        // Economy cannot reference Builds, so Hunter mirrors the fight's three crit constants. A silent
+        // divergence would make the gear page state a number the simulation does not use — which is
+        // exactly the "the screen says one thing and the fight does another" drift this codebase keeps
+        // finding, and the reason ITEM POWER was rebuilt to read the sim's own functions in the first
+        // place.
+        Assert.Equal(ResonanceHunter.Core.Builds.SoloBattle.CritBaseMultiplier,
+                     Hunter.CritBaseMultiplierMirror);
+        Assert.Equal(ResonanceHunter.Core.Builds.SoloBattle.MaxCritChance,
+                     Hunter.MaxCritChanceMirror);
+        Assert.Equal(ResonanceHunter.Core.Builds.SoloBattle.FocusCritDamagePerPoint,
+                     Hunter.FocusCritDamagePerPointMirror);
+    }
+
+    [Fact]
+    public void test_a_crit_affix_raises_item_power()
+    {
+        // THE BUG THIS CLOSES. PowerRating consumed only damage / skill rate / health / defense, so an
+        // item that rolled Crit — one of six rollable affix stats, fully live in the fight — added
+        // nothing to the number that exists to say how good it is. Two same-rarity, same-item-level
+        // pieces could differ wildly on affix luck alone, and the crit-heavy one showed LESS.
+        var hunter = new Hunter();
+        var before = hunter.PowerRating;
+
+        hunter.AddGleam(1_000_000);
+        for (var i = 0; i < 12; i++) hunter.Train(HunterStat.CriticalChance);
+
+        Assert.True(hunter.PowerRating > before,
+            "training critical chance did not move PowerRating — the number is still blind to crit.");
+    }
 }

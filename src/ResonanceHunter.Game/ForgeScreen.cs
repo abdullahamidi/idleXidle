@@ -1228,7 +1228,23 @@ public sealed class ForgeScreen
         {
             if (_ui.Assets.Get($"source_{src.ToString().ToLowerInvariant()}") is { } sg)
                 b.Draw(sg, new Rectangle(ItemPanel.Center.X - 24, ItemPanel.Y + 330, 48, 48), Color.White);
-            _ui.TextCenterBig(b, $"SOURCE  ·  {src.ToString().ToUpperInvariant()}", ItemPanel.Center.X, ItemPanel.Y + 386, Bloom, UiTypography.Secondary);
+            // CALLED "FORGE ELEMENT", NOT "SOURCE", and the difference is the whole point.
+            //
+            // Playtest: "gear power hesaplamasında bir hata olabilir. Nature item tamamen spirit skill
+            // setupunda daha yüksekmiş gibi gösteriliyor." The maths is fine — every ITEM POWER in the
+            // game comes from one function, Gear.PowerRating, and an item's Element is not one of its
+            // five inputs at any depth. What was wrong was this label.
+            //
+            // The game has two unrelated things called "Source". The FIGHT's Source matchup keys off
+            // the woven SKILL's source against the CREATURE's; an item's Element is a CRAFTING axis
+            // that the Forge's element-hoarding merge reads and nothing else. Labelling the second one
+            // "SOURCE" and drawing it with the same source_* gem art as the first told the player they
+            // were the same system — so a Nature item in a Spirit build looked like a mismatch that
+            // should be costing them power, and the number that ignored it looked like a bug.
+            _ui.TextCenterBig(b, $"FORGE ELEMENT  ·  {src.ToString().ToUpperInvariant()}",
+                              ItemPanel.Center.X, ItemPanel.Y + 386, Bloom, UiTypography.Secondary);
+            _ui.TextCenterBig(b, "for merging — the fight reads your SKILL's source, not this",
+                              ItemPanel.Center.X, ItemPanel.Y + 410, Slate, UiTypography.Secondary);
         }
 
         DrawTransition(b, "ITEM LEVEL", $"iL{item.ItemLevel}", refined is null ? null : $"iL{refined.ItemLevel}", ItemPanel.Y + 422);

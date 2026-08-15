@@ -443,7 +443,11 @@ public sealed class CharacterScreen
         // "SOURCE", not "SOURCE FOCUS". The row above will now shorten a value rather than collide with
         // it, but shortening THIS value loses the number, and the number is the whole row. The label is
         // the half that can afford to be shorter — it sits beside "NATURE 100%" and reads the same.
-        SummaryRow(b, "SOURCE", $"{srcTxt} {srcPct}%", ref ry);
+        // "FORGE ELEM", not "SOURCE" — see the long note at the matching line in ForgeScreen. This row
+        // reports the element your WORN GEAR mostly shares, which decides nothing in a fight and
+        // everything about whether you can merge a matched trio. Calling it SOURCE made it read as the
+        // combat matchup and made ITEM POWER look broken for not accounting for it.
+        SummaryRow(b, "FORGE ELEM", $"{srcTxt} {srcPct}%", ref ry);
 
         // Quick actions (§7.8) — both real. EQUIP BEST fills each slot with the highest-scoring item.
         Button(b, EquipBestBtn, "EQUIP BEST", hit, true);
