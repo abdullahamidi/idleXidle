@@ -71,21 +71,30 @@ public static class ExpeditionLoot
     /// The player build's rarity multiplier (1 = neutral), clamped on its OWN ceiling and added to the
     /// source's tilt rather than folded into <paramref name="quality"/>.
     /// </param>
+    /// <param name="region">
+    /// Where this boss fell. Decides which slots the drop leans toward and adds the region's own rarity
+    /// tilt — the difference between a map that is a difficulty ladder and one that is a set of places.
+    /// </param>
     public static IReadOnlyList<ItemInstance> RollBoss(
         int powerTier, float quality, Random rng, LootTuning? lootTuning = null,
-        ExpeditionLootTuning? tuning = null, Automation.Source? element = null, float buildTilt = 1f)
+        ExpeditionLootTuning? tuning = null, Automation.Source? element = null, float buildTilt = 1f,
+        string? region = null)
     {
         ArgumentNullException.ThrowIfNull(rng);
         lootTuning ??= LootTuning.Default;
         tuning ??= ExpeditionLootTuning.Default;
+
+        var profile = Encounters.RegionDrops.For(region);
 
         var ctx = new KillContext
         {
             PowerTier = Math.Max(1, powerTier),
             LootTiltPercent =
                 Math.Clamp((quality - 1f) * tuning.QualityTiltScalar, 0f, tuning.MaxTiltPercent)
-                + Math.Clamp((buildTilt - 1f) * tuning.QualityTiltScalar, 0f, tuning.MaxBuildTiltPercent),
+                + Math.Clamp((buildTilt - 1f) * tuning.QualityTiltScalar, 0f, tuning.MaxBuildTiltPercent)
+                + profile.RarityTilt,
             Element = element,
+            FavouredTypes = profile.Favoured,
         };
 
         // ONE ROLL, THEN TAKE. This used to run the loop `count` times and add EVERY item each roll

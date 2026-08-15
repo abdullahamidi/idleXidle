@@ -320,6 +320,22 @@ public sealed class MapScreen
         if (unlocked)
             _ui.TextBig(b, $"IDLE FARM: {MasteryShort[(int)farm.MasteryLevel]} · {farm.IdleEfficiencyPercent():0}%", DetailPanel.X + 30, DetailPanel.Y + 540, Slate, UiTypography.Secondary);
 
+        // WHAT THIS PLACE DROPS. The map decided a difficulty and an element and said nothing about
+        // reward, so "where should I farm" had no answer on the screen built to answer it. Each region
+        // now leans toward its own slots, and this is where a player finds that out — before walking in,
+        // not after twenty chests.
+        var drops = RegionDrops.For(def.Id);
+        if (drops.Favoured.Count > 0)
+        {
+            _ui.TextBig(b, "DROPS", DetailPanel.X + 28, DetailPanel.Y + 578, Gold, UiTypography.Secondary);
+            var y = DetailPanel.Y + 606;
+            foreach (var line in _ui.WrapBig(drops.Blurb, DetailPanel.Width - 60, UiTypography.Secondary))
+            {
+                _ui.TextBig(b, line, DetailPanel.X + 30, y, Bone, UiTypography.Secondary);
+                y += 22;
+            }
+        }
+
         // CTA. ENTER for an unlocked region; a locked one disables honestly. DEEPEN once the world is yours.
         var cta = new Rectangle(DetailPanel.X + 40, DetailPanel.Bottom - 92, DetailPanel.Width - 80, 68);
         if (World.CanDeepenCorruption)

@@ -389,6 +389,7 @@ public class Game1 : Game
                 Rarity = (Rarity)s.Rarity,
                 Tier = s.Tier,
                 Element = Enum.TryParse<Source>(s.Element, out var e) ? e : null,   // unknown element → inert, never a throw
+                Region = s.Region,                            // null on a pre-profile save → uniform loot, as before
                 RunTilt = s.RunTilt <= 0f ? 1f : s.RunTilt,   // a pre-tilt save reads 0; neutral is 1
             })
             .ToList();
@@ -583,7 +584,11 @@ public class Game1 : Game
             ChampionGleamRate = _champGleamRate,
             // Unopened chests ride along too — a boss's drop must survive a reload, opened or not.
             UnopenedChests = _forge.UnopenedChests
-                .Select(c => new SavedChest { Rarity = (int)c.Rarity, Tier = c.Tier, Element = c.Element?.ToString(), RunTilt = c.RunTilt })
+                .Select(c => new SavedChest
+                {
+                    Rarity = (int)c.Rarity, Tier = c.Tier, Element = c.Element?.ToString(),
+                    Region = c.Region, RunTilt = c.RunTilt,
+                })
                 .ToList(),
         };
 
@@ -1904,7 +1909,8 @@ public class Game1 : Game
         // the end of the descent, and the chest that descent earned remembers it. Without this the whole
         // chain terminated in a field nothing read, which made REAPER a keystone you pay for and get
         // nothing from.
-        _forge.AddChest(Chests.RollDrop(lootTier, def.Theme, _rng, runTilt: _expedition.CarriedQuality));
+        _forge.AddChest(Chests.RollDrop(lootTier, def.Theme, _rng, runTilt: _expedition.CarriedQuality,
+                                        region: _activeRegion));
         return true;
     }
 

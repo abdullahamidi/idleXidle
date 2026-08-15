@@ -170,6 +170,9 @@ public sealed record SavedChest
     public required int Tier { get; init; }
     public string? Element { get; init; }
 
+    /// <summary>Where it was won, so its drop profile survives a save. Null on a pre-profile save.</summary>
+    public string? Region { get; init; }
+
     /// <summary>The rarity tilt earned by the descent that dropped it. 1 on a save written before it existed.</summary>
     /// <remarks>
     /// Defaulted to 1 rather than 0 for the same reason <c>Chest.RunTilt</c> is: it multiplies into the

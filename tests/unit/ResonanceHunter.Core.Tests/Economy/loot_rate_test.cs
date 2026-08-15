@@ -23,6 +23,15 @@ namespace ResonanceHunter.Core.Tests.Economy;
 /// "one item per boss" and "a boss every fifth wave" and "a wave every two seconds" multiply into a
 /// number nobody chose.
 /// </para>
+/// <para>
+/// <b>And it must count the path the GAME takes.</b> The first version of this file rolled
+/// <c>ExpeditionLoot.RollBoss</c> as a separate per-boss source and reported 65 items per hundred
+/// waves. The live loop does not do that: Game1's reward drain pays Gleam, Cores and a material
+/// trickle per wave, and a boss drops a CHEST or nothing — <c>RollBoss</c> is reached only from inside
+/// <c>Chests.Open</c>. The real figure was about 13. A probe that measures a path the game does not
+/// take gives a precise answer about an imaginary game, and this one over-stated the problem four
+/// times over before anyone checked where loot actually enters the bag.
+/// </para>
 /// </remarks>
 public class LootRateTest
 {
@@ -50,8 +59,13 @@ public class LootRateTest
             if (!WaveScaling.IsBossWave(wave, T)) continue;
             bosses++;
 
+            // NO DIRECT BOSS ITEM. The first version of this probe rolled ExpeditionLoot.RollBoss here
+            // as a separate source and reported 65 items per hundred waves — but the live loop
+            // (Game1's reward drain) pays only Gleam, Cores and a material trickle per wave, and a boss
+            // drops a CHEST or nothing. RollBoss is reached ONLY from inside Chests.Open. A probe that
+            // measures a path the game does not take produces a real number for an imaginary game, and
+            // it over-stated this one by four times.
             var tier = wave;   // depth is the tier the drop rolls against
-            bossItems += ExpeditionLoot.RollBoss(tier, quality: 1f, rng).Count;
 
             if (rng.NextDouble() >= Chests.DropChance(tier, chestTuning)) continue;
             chests++;
@@ -82,8 +96,7 @@ public class LootRateTest
         _out.WriteLine("A HUNDRED WAVES, averaged over 40 runs:");
         _out.WriteLine($"   bosses          {h.Bosses,5}   (one every {T.BossEvery})");
         _out.WriteLine($"   chests          {h.Chests,5}   ({100f * h.Chests / Math.Max(1, h.Bosses):0}% of bosses)");
-        _out.WriteLine($"   items from boss {h.BossItems,5}");
-        _out.WriteLine($"   items from chest{h.ChestItems,5}");
+        _out.WriteLine($"   items (chests are the ONLY source) {h.ChestItems,5}");
         _out.WriteLine($"   ITEMS TOTAL     {h.Items,5}   ({(float)h.Items / h.Bosses:0.00} per boss)");
         _out.WriteLine("");
 
@@ -111,11 +124,11 @@ public class LootRateTest
 
         _out.WriteLine($"{h.Items} items from {h.Bosses} bosses = {perBoss:0.00} per boss");
 
-        // 1.6 is the sum of the design's own stated intent, not a number picked to make this pass:
-        // 1.25 from the boss itself ("one item, a lucky second sometimes" — 1 + a 25% second) and about
-        // 0.3 from the chest that sometimes drops alongside it. It measured 3.28 before, because the
-        // boss roll multiplied two layers that each read as "one".
-        Assert.True(perBoss <= 1.6f,
+        // Chests are the only source of items in the running game, so this is the chest rate times what
+        // a chest holds: about 0.3 chests a boss, one or two items inside. The earlier version of this
+        // assertion allowed 1.6 because the probe was also counting a direct boss drop that the live
+        // loop does not perform.
+        Assert.True(perBoss <= 0.6f,
             $"a boss hands over {perBoss:0.00} items on average. Every rule reads modest on its own — "
             + "one item plus a lucky second, a chest only sometimes, one or two items inside — and they "
             + "multiply into a firehose. Depth is supposed to buy RARITY, not volume.");

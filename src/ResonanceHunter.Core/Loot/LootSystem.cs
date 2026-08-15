@@ -150,6 +150,16 @@ public sealed record KillContext
     /// <summary>Formula 7's output. Exactly 100 for an automated kill — automation IS the reference.</summary>
     public float ActiveEfficiencyPercent { get; init; } = 100f;
 
+    /// <summary>
+    /// The slots the REGION is known for. Twice as likely to drop here; never exclusive.
+    /// </summary>
+    /// <remarks>
+    /// Empty means "anywhere", which is what every region used to be: eight slots at uniform odds, so
+    /// the only thing a place decided about its loot was the element. A tilt rather than a lock, because
+    /// a region that could only drop two slots would force a tour of the map to finish a set.
+    /// </remarks>
+    public IReadOnlyList<ItemBaseType> FavouredTypes { get; init; } = Array.Empty<ItemBaseType>();
+
     /// <summary>Null for an active kill. Set for an automated one.</summary>
     public int? AutomationStage { get; init; }
 
@@ -159,6 +169,9 @@ public sealed record KillContext
 public static class LootSystem
 {
     /// <summary>The eight wearable base types. Spelled out here so Loot keeps no dependency on Economy's Gear.</summary>
+    /// <summary>How often a region's wearable drop comes from its favoured pool rather than the full set.</summary>
+    public const double RegionFavourShare = 0.5;
+
     private static readonly ItemBaseType[] Wearables =
     {
         ItemBaseType.Weapon, ItemBaseType.Charm, ItemBaseType.AbilityFocus,
@@ -188,8 +201,14 @@ public static class LootSystem
         var count = DropCount(ctx, rng, tuning);
         for (var i = 0; i < count; i++)
         {
-            // 45% material, the rest split evenly across the eight wearable slots.
-            var baseType = rng.NextDouble() < 0.45 ? ItemBaseType.Material : Wearables[rng.Next(Wearables.Length)];
+            // 45% material; the rest across the wearable slots, tilted toward what this region is for.
+            // Half of a region's wearables come from its favoured pool — so a forge really does hand you
+            // weapons — and the other half stay uniform, so nothing is ever unobtainable in the wrong place.
+            var baseType = rng.NextDouble() < 0.45
+                ? ItemBaseType.Material
+                : ctx.FavouredTypes.Count > 0 && rng.NextDouble() < RegionFavourShare
+                    ? ctx.FavouredTypes[rng.Next(ctx.FavouredTypes.Count)]
+                    : Wearables[rng.Next(Wearables.Length)];
             items.Add(Mint(baseType, RollRarity(ctx, rng, tuning), rng, tuning, ctx.Element, ctx.PowerTier));
         }
 

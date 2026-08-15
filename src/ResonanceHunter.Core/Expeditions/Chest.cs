@@ -35,6 +35,16 @@ public sealed record Chest
     /// <summary>The region's element, so the items inside are attuned like any other regional drop.</summary>
     public Source? Element { get; init; }
 
+    /// <summary>
+    /// WHERE this chest was won, so its contents lean toward what that place is known for.
+    /// </summary>
+    /// <remarks>
+    /// A chest is opened long after the fight that dropped it, often in another region entirely, so the
+    /// place has to travel WITH the chest — the same reason <see cref="RunTilt"/> exists. Null is a
+    /// chest from before regions had drop profiles, and it rolls exactly as it always did.
+    /// </remarks>
+    public string? Region { get; init; }
+
     /// <summary>How well the descent that earned this chest was fought — a rarity tilt, 1.0 for neutral.</summary>
     /// <remarks>
     /// <para>
@@ -178,7 +188,7 @@ public static class Chests
 
     /// <summary>Mint a chest a boss drops at this tier — grade rolled now, contents rolled at open.</summary>
     public static Chest RollDrop(int tier, Source? element, Random rng, ChestTuning? tuning = null,
-                                 float runTilt = 1f)
+                                 float runTilt = 1f, string? region = null)
     {
         ArgumentNullException.ThrowIfNull(rng);
         return new Chest
@@ -186,6 +196,7 @@ public static class Chests
             Rarity = RollRarity(tier, rng, tuning),
             Tier = Math.Max(1, tier),
             Element = element,
+            Region = region,
             RunTilt = MathF.Max(0.05f, runTilt),
         };
     }
@@ -244,7 +255,8 @@ public static class Chests
         // does. RunTilt defaults to 1, so a chest from before it existed rolls exactly as it always did.
         var gear = ExpeditionLoot.RollBoss(
                 chest.Tier, quality, rng, loot, element: chest.Element,
-                buildTilt: MathF.Max(0.05f, rarityBonus * MathF.Max(0.05f, chest.RunTilt)))
+                buildTilt: MathF.Max(0.05f, rarityBonus * MathF.Max(0.05f, chest.RunTilt)),
+                region: chest.Region)
             .Where(i => i.BaseType is not ItemBaseType.Material)
             .ToList();
         if (gear.Count == 0)
