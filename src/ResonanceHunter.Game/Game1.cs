@@ -1995,6 +1995,12 @@ public class Game1 : Game
     /// </remarks>
     private void NoticeUnlocks()
     {
+        // NOT UNDER THE CAPTURE RIG. RH_SHOT deliberately never reads the save, so every shot looks like
+        // a first launch — and since the fixtures also grant mastery, items and conquests to pose their
+        // screens, the panel fires over the exact thing each fixture exists to photograph. The rig is
+        // not a player. A fixture that wants to pose the panel can still enqueue one itself.
+        if (Environment.GetEnvironmentVariable("RH_SHOT") is not null) return;
+
         var now = GuideUnlockFacts();
         var slots = Unlocks.SkillSlots(now);
 

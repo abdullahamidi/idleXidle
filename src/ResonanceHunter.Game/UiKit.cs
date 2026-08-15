@@ -196,7 +196,7 @@ public sealed class UiKit
     /// padded canvas bottom. Use for anything that stands on the ground.
     /// </summary>
     /// <returns>false if the texture is missing, so callers can fall back exactly as with <see cref="Sprite"/>.</returns>
-    public bool SpriteGrounded(SpriteBatch b, string key, Rectangle box, Color tint, float topCrop = 0f)
+    public bool SpriteGrounded(SpriteBatch b, string key, Rectangle box, Color tint, float topCrop = 0f, bool flip = false)
     {
         if (Assets.Get(key) is not { } tex || tex.Height <= 0) return false;
         var cropY = (int)(tex.Height * Math.Clamp(topCrop, 0f, 0.6f));
@@ -208,11 +208,24 @@ public sealed class UiKit
         // fraction of the drawn height. Shifting down by it plants the sole on box.Bottom.
         var drop = (int)MathF.Round(BottomPadFraction(key) * tex.Height * sc);
         b.Draw(tex, new Rectangle(box.Center.X - w / 2, box.Y + drop, w, box.Height),
-            new Rectangle(0, cropY, tex.Width, srcH), tint);
+            new Rectangle(0, cropY, tex.Width, srcH), tint,
+            0f, Vector2.Zero, flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
         return true;
     }
 
-    public bool AnimSprite(SpriteBatch b, string stripKey, Rectangle box, float seconds, float fps, bool loop, Color tint, float topCrop = 0f)
+    /// <param name="flip">
+    /// Mirror horizontally. THE RENDERER HAD NO CONCEPT OF FACING AT ALL before this parameter.
+    /// </param>
+    /// <remarks>
+    /// <b>Every sprite entry point here ended in the four-argument <c>SpriteBatch.Draw</c> overload,
+    /// which cannot express orientation</b> — <c>SpriteEffects</c> appeared in zero source files in the
+    /// whole repository. Meanwhile the arena is an explicit left-versus-right composition and encodes
+    /// that direction in MOTION: the champion lunges +40 right, the enemies lunge -40 left and slide in
+    /// from +280 right. So every figure was drawn in whatever orientation its generator happened to
+    /// produce, and the starter champion's attack clip swings LEFT — away from the enemies it is
+    /// hitting. Playtest: "Karakter animasyonları ters tarafa oynuyor gibi, yön hatası var sanırım."
+    /// </remarks>
+    public bool AnimSprite(SpriteBatch b, string stripKey, Rectangle box, float seconds, float fps, bool loop, Color tint, float topCrop = 0f, bool flip = false)
     {
         if (Assets.Get(stripKey) is not { } tex || tex.Height <= 0) return false;
         var fw = tex.Height;
@@ -245,7 +258,8 @@ public sealed class UiKit
         // per frame on purpose: a per-frame sole would make the figure slide up and down as the
         // animation played. One offset for the clip keeps the feet planted while it animates.
         var drop = (int)MathF.Round(StripBottomPadFraction(stripKey) * fw * sc);
-        b.Draw(tex, new Rectangle(box.Center.X - w / 2, box.Y + drop, w, box.Height), src, tint);
+        b.Draw(tex, new Rectangle(box.Center.X - w / 2, box.Y + drop, w, box.Height), src, tint,
+               0f, Vector2.Zero, flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
         return true;
     }
 

@@ -92,6 +92,32 @@ public sealed class SoloExpeditionScreen
     // Rev 3 §16.1: one normal enemy bottom-centred at (1160,735), visible ~320px (range 280–360). A boss is
     // drawn far larger from its own anchor (see the draw), so this box is the NORMAL-enemy size only.
     private static readonly Rectangle EnemyBox = new(1320 - 218, GroundY - 440, 436, 440);
+
+    /// <summary>
+    /// Does the champion need mirroring to face the enemies?
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>DERIVED FROM THE LAYOUT, not asserted.</b> The champion stands at x=760 and the enemies at
+    /// x=1320, so the champion faces RIGHT — and if either box ever moves, this follows rather than
+    /// silently becoming wrong. The whole bug being fixed here is a direction that was decided in one
+    /// place (the lunge offsets, the slide-in) and ignored in another (the draw).
+    /// </para>
+    /// <para>
+    /// The generated character art faces LEFT: the roster's attack strips wind up and swing toward the
+    /// left of the frame, which before this was away from everything they were hitting. Playtest:
+    /// "Karakter animasyonları ters tarafa oynuyor gibi." The ENEMY art already faces left and is
+    /// therefore already correct — enemies stand on the right and their target is on the left — so
+    /// only the champion is mirrored. Flipping both would break the half that worked.
+    /// </para>
+    /// <para>
+    /// The idle strip is close to front-on, so mirroring costs it nothing visible; the attack strip is
+    /// where the direction actually reads.
+    /// </para>
+    /// </remarks>
+    private const bool ArtFacesLeft = true;
+
+    private static bool ChampionFacesRight => ArtFacesLeft && ChampBox.Center.X < EnemyBox.Center.X;
     // Rev 5 boss presentation metadata — measured from the crystal_lich_idle strip's frame 0 (1024²), shared
     // across frames (Option A). Body = the central figure (torso/head/robe), EXCLUDING the wings, staff, and a
     // top-of-frame BLEED-STREAK defect (rows 0..~305) that is trimmed via SrcTop and REPORTED as an asset
@@ -202,6 +228,19 @@ public sealed class SoloExpeditionScreen
     private WaveReplay? _replay;
     private float _champLunge, _enemyLunge, _enemyWindup;
     private int _nextEnemyStrikeMs;
+
+    /// <summary>When the champion's next blow lands, so its swing can ANTICIPATE the hit.</summary>
+    /// <remarks>
+    /// The mirror of <see cref="_nextEnemyStrikeMs"/>. Before this the two actors ran in opposite
+    /// animation phase: the enemy's clip was scrubbed across the 600ms BEFORE its blow (so it completed
+    /// at impact) while the champion's was ARMED BY the impact and therefore played entirely afterwards.
+    /// The champion struck and then wound up. Playtest: "animasyon geçişleri ve saldırma animasyonları
+    /// garip görünüyor."
+    /// </remarks>
+    private int _nextChampStrikeMs;
+
+    /// <summary>0 to 1 across the champion's swing, completing exactly as the blow lands.</summary>
+    private float _champWindup;
     private float _enemyBaseHealth = 120f, _enemyBaseDamage = 9f;
     private WaveOutcome _outcome = WaveOutcome.Cleared;
 
@@ -357,12 +396,10 @@ public sealed class SoloExpeditionScreen
         _hunter = hunter;
         var dt = (float)time.ElapsedGameTime.TotalSeconds;
         _anim += dt;
-        // The swing clock is SEPARATE from _champLunge. The lunge is a 0.2s positional shove
-        // (it decays at dt*5), and driving a 1.1s animation off it played the whole swing in
-        // 0.2s — the arm blurred. This advances at real time so the clip reads at the pace it
-        // was authored, and re-arms when a new strike lands.
-        if (_champLunge > 0.3f && _strikeTime <= 0f) _strikeTime = StrikeSeconds;
-        if (_strikeTime > 0f) _strikeTime = Math.Max(0f, _strikeTime - dt);
+        // _strikeTime WAS THE OLD SWING CLOCK and is gone. It was armed by the impact and counted down,
+        // so the clip played entirely AFTER the blow it was meant to deliver. The champion now runs on
+        // _champWindup, the same anticipation model the enemy already used. Leaving a decaying timer
+        // here that nothing reads is exactly the kind of dead machinery this codebase keeps finding.
         _champLunge = Math.Max(0f, _champLunge - dt * 5f);
         _enemyLunge = Math.Max(0f, _enemyLunge - dt * 5f);
         _enemyEnter = Math.Max(0f, _enemyEnter - dt * 2.5f);   // the new enemy slides in over ~0.4s
@@ -455,6 +492,7 @@ public sealed class SoloExpeditionScreen
         _replay.SetComposition(_run.LastWaveCreatures.Select(c => c.MaxHealth).ToList());
         _playheadMs = 0f;
         _nextEnemyStrikeMs = _replay.NextEnemyStrikeAfter(0f);
+        _nextChampStrikeMs = _replay.NextChampionStrikeAfter(0f);
         _callouts.Clear();
         if (_run.LastWaveWasBoss) _bossIncomingTimer = 1.6f;   // a BossIncoming announcement opens the boss wave
     }
@@ -580,8 +618,13 @@ public sealed class SoloExpeditionScreen
         // The between-wave breath: hold on the cleared frame for a beat, THEN walk into the next wave. This
         // also gates re-entry — the just-finished replay stays "finished", so the clear payout below fires
         // exactly once.
+        // BOTH EARLY RETURNS CLEAR THE WINDUPS FIRST. They sit above the lines that recompute them, so a
+        // wave that ended mid-swing left _enemyWindup frozen at whatever it held — and the NEXT wave then
+        // slid in holding that pose, a creature entering the arena already halfway through an attack it
+        // was not making. The champion's clock has the same shape and the same hazard.
         if (_breakTimer > 0f)
         {
+            _enemyWindup = _champWindup = 0f;
             _breakTimer -= dt;
             if (_breakTimer <= 0f) { BeginWave(); _enemyEnter = 1f; }
             return;
@@ -589,12 +632,21 @@ public sealed class SoloExpeditionScreen
 
         // Hold the fight until the new enemy has finished sliding in — otherwise the champion swings at empty
         // air while the enemy is still off to the right ("hunter hits before the enemy arrives").
-        if (_enemyEnter > 0f) return;
+        if (_enemyEnter > 0f) { _enemyWindup = _champWindup = 0f; return; }
 
         _playheadMs += dt * 1000f * _speedMul;
 
         var lead = _nextEnemyStrikeMs - _playheadMs;
         _enemyWindup = lead is > 0 and < 600 ? 1f - lead / 600f : 0f;
+
+        // The champion's swing, on the same anticipation model. StrikeSeconds is the authored clip
+        // length, so the arm is fully drawn back one clip-length out and connects on the frame the blow
+        // is credited — instead of the blow landing on a figure still standing at rest.
+        var champLead = _nextChampStrikeMs - _playheadMs;
+        var champWindowMs = StrikeSeconds * 1000f;
+        _champWindup = champLead > 0f && champLead < champWindowMs
+            ? 1f - champLead / champWindowMs
+            : 0f;
 
         foreach (var e in _replay.Advance(_playheadMs))
         {
@@ -605,6 +657,7 @@ public sealed class SoloExpeditionScreen
                     // constantly) was the "too many red slashes" the playtest flagged — loudness has to be
                     // budgeted against importance, so the loud VFX are reserved for the SKILL casts below.
                     _champLunge = 1f;
+                    _nextChampStrikeMs = _replay.NextChampionStrikeAfter(e.AtMs);
                     if ((_strikeCount++ & 1) == 0) SpawnDamage(HitDamage(1f), false);   // every other auto-hit
                     break;
                 case BattleEventKind.EnemyStrike:
@@ -843,9 +896,20 @@ public sealed class SoloExpeditionScreen
         // all, and an overhanging row is a cosmetic problem where a thrown exception is a lost session.
         var lo = ArenaRect.X + half + 20 + wanted / 2;
         var hi = ArenaRect.Right - half - 20 - wanted / 2;
-        var centre = lo > hi
-            ? ArenaRect.Center.X
-            : Math.Clamp(EnemyBox.Center.X + enter + lunge, lo, hi);
+
+        // THE MOTION IS ADDED AFTER THE CLAMP, and that is the whole fix. It used to be clamped WITH the
+        // resting position — `Clamp(EnemyBox.Center.X + enter + lunge, lo, hi)` — and for essentially
+        // every archetype and count the arena can produce, `hi` already sits below EnemyBox.Center.X
+        // (a swarm of four lands hi ~1160 against a centre of 1320). So the clamp saturated and BOTH the
+        // slide-in and the lunge were swallowed whole: the champion shoved right and the enemies never
+        // shoved back, on 19 of 20 multi-creature waves. The animation existed and never moved a pixel.
+        //
+        // Clamping only the RESTING layout keeps the guarantee that matters — a row that fits, and a
+        // clamp that can never invert — while letting the two 40-to-280px offsets do what they were
+        // written to do. Overhang is handled by the arena scissor (see ArenaRasterizer), which is
+        // already active for exactly this kind of transient overshoot.
+        var resting = lo > hi ? ArenaRect.Center.X : Math.Clamp(EnemyBox.Center.X, lo, hi);
+        var centre = resting + enter + lunge;
         var left = centre - wanted / 2;
 
         string? stripKey = null, staticKey = null;
@@ -1498,7 +1562,6 @@ public sealed class SoloExpeditionScreen
     private const int RailContentX = 234;
     private const int RailContentW = 198;
 
-    private float _strikeTime;
 
     /// <summary>
     /// DEV: hold the strike clip at a fixed point (0..1 of its duration) instead of letting combat drive it.
@@ -1571,11 +1634,19 @@ public sealed class SoloExpeditionScreen
         // ATTACK does not loop, and is driven by the combat beat rather than its own clock — the same
         // rule the rig's strike clip followed, for the same reason: a swing that runs free drifts out of
         // step with the hit it is supposed to be delivering.
-        var swinging = _strikeTime > 0f && !dead;
+        // ANTICIPATION, not reaction. _strikeTime (armed by the impact and counting DOWN) drove this
+        // before, which put the whole swing after the blow. _champWindup runs 0 to 1 across the clip
+        // length ENDING at the blow, exactly as _enemyWindup does on the other side of the arena, so the
+        // two actors finally read as the same fight.
+        // DevSwingPhase forces the ATTACK clip as well as its phase. Moving the swing onto _champWindup
+        // silently broke the fightswing fixture: the pose set `seconds` but not `clip`, so the capture
+        // that exists to check the blade at full extension was posing an IDLE frame instead — a dev
+        // fixture quietly photographing something other than what it claims.
+        var swinging = !dead && (_champWindup > 0f || DevSwingPhase is not null);
         var clip = swinging ? "attack" : "idle";
         var seconds = DevSwingPhase is { } ph && !dead
             ? ph * StrikeSeconds
-            : swinging ? StrikeSeconds - _strikeTime : _anim;
+            : swinging ? _champWindup * StrikeSeconds : _anim;
 
         // A DEAD CHAMPION HOLDS ITS LAST POSE. Passing the free clock here would keep the idle strip
         // cycling under the tint and the sink — the figure would sag into the floor while still walking
@@ -1593,12 +1664,15 @@ public sealed class SoloExpeditionScreen
         //
         // A missing or rejected clip falls back to the still design, so a character whose strip did
         // not survive the quality gate stands there as themselves rather than vanishing.
-        if (_ui.AnimSprite(b, Character.StripKey(clip), box, seconds, ChampionFps, loop: !swinging, tint, -1f)) return;
-        if (_ui.AnimSprite(b, Character.StripKey("idle"), box, _anim, ChampionFps, loop: true, tint, -1f)) return;
+        if (_ui.AnimSprite(b, Character.StripKey(clip), box, seconds, ChampionFps, loop: !swinging, tint, -1f,
+                           flip: ChampionFacesRight)) return;
+        if (_ui.AnimSprite(b, Character.StripKey("idle"), box, _anim, ChampionFps, loop: true, tint, -1f,
+                           flip: ChampionFacesRight)) return;
 
         var breathe = (int)(MathF.Sin(seconds * 2.1f) * 4f);
         if (_ui.SpriteGrounded(b, Character.SpriteKey,
-                               new Rectangle(box.X, box.Y + breathe, box.Width, box.Height), tint, 0.02f)) return;
+                               new Rectangle(box.X, box.Y + breathe, box.Width, box.Height), tint, 0.02f,
+                               flip: ChampionFacesRight)) return;
 
         _ui.Fill(b, new Rectangle(box.Center.X - 32, box.Bottom - 80, 64, 72), dead ? Dim : Gold);
     }

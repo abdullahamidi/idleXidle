@@ -127,10 +127,25 @@ public sealed class WaveReplay
         _shieldUntil.TryGetValue(slot, out var until) && _playheadMs < until;
 
     /// <summary>The next enemy swing after <paramref name="ms"/>, for the anticipation windup.</summary>
-    public int NextEnemyStrikeAfter(float ms)
+    public int NextEnemyStrikeAfter(float ms) => NextAfter(ms, BattleEventKind.EnemyStrike);
+
+    /// <summary>
+    /// The next CHAMPION swing after <paramref name="ms"/>, so its clip can anticipate the blow too.
+    /// </summary>
+    /// <remarks>
+    /// The twin of <see cref="NextEnemyStrikeAfter"/>, and it exists because the two actors were running
+    /// in opposite animation phase. The enemy's clip was driven by an anticipation clock and completed
+    /// AT the impact; the champion's was armed by the impact itself and therefore played entirely AFTER
+    /// its own hit landed. On screen the champion struck and then wound up, which is the reported
+    /// "animasyon geçişleri garip görünüyor" — the same fight running forwards on one side of the arena
+    /// and backwards on the other.
+    /// </remarks>
+    public int NextChampionStrikeAfter(float ms) => NextAfter(ms, BattleEventKind.Strike);
+
+    private int NextAfter(float ms, BattleEventKind kind)
     {
         foreach (var e in _events)
-            if (e.Kind == BattleEventKind.EnemyStrike && e.AtMs > ms)
+            if (e.Kind == kind && e.AtMs > ms)
                 return e.AtMs;
 
         return int.MaxValue;
