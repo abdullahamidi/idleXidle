@@ -210,4 +210,45 @@ public class TutorialTest
             Assert.False(string.IsNullOrWhiteSpace(Tutorial.Body(step)), $"{step} has no body.");
         }
     }
+
+    [Fact]
+    public void test_the_guide_never_sends_the_player_at_a_locked_door()
+    {
+        // TWO SYSTEMS WRITTEN DAYS APART, each correct alone. The guide's bodies are a list of hotkeys;
+        // Unlocks decides which of those screens exist yet. A step that says "press F for the FORGE"
+        // while the Forge is a dimmed tile teaches the player that the guide does not know what is going
+        // on — worse than saying nothing at all.
+        //
+        // Walked over the same career the display test uses, checking at every point that the step being
+        // SHOWN points at a screen that is OPEN.
+        var journey = new (string moment, TutorialFacts t, UnlockFacts u)[]
+        {
+            ("fresh save",         new TutorialFacts(), new UnlockFacts()),
+            ("first wave, 30g",    new TutorialFacts(WavesCleared: 1, DeepestWave: 1, Gleam: 30),
+                                   new UnlockFacts(WavesCleared: 1, DeepestWave: 1)),
+            ("trained, wave 4",    new TutorialFacts(WavesCleared: 4, DeepestWave: 4, StatsTrained: 1),
+                                   new UnlockFacts(WavesCleared: 4, DeepestWave: 4)),
+            ("boss felled",        new TutorialFacts(WavesCleared: 6, DeepestWave: 6, StatsTrained: 1),
+                                   new UnlockFacts(WavesCleared: 6, DeepestWave: 6)),
+            ("a chest is held",    new TutorialFacts(WavesCleared: 9, DeepestWave: 9, StatsTrained: 1, ChestsHeld: 1),
+                                   new UnlockFacts(WavesCleared: 9, DeepestWave: 9, ChestsHeld: 1)),
+            ("opened it",          new TutorialFacts(WavesCleared: 11, DeepestWave: 11, StatsTrained: 1, ItemsOwned: 1),
+                                   new UnlockFacts(WavesCleared: 11, DeepestWave: 11, ItemsOwned: 1)),
+            ("equipped it",        new TutorialFacts(WavesCleared: 13, DeepestWave: 13, StatsTrained: 1, ItemsOwned: 1, ItemsWorn: 1),
+                                   new UnlockFacts(WavesCleared: 13, DeepestWave: 13, ItemsOwned: 1)),
+        };
+
+        foreach (var (moment, t, u) in journey)
+        {
+            if (Tutorial.Showing(t) is not { } step) continue;
+            if (Tutorial.Sends(step, t) is not { } activity) continue;
+
+            var open = Unlocks.IsOpen(activity, u);
+            _out.WriteLine($"{moment,-18} {step,-11} sends to {activity,-6} {(open ? "OPEN" : "LOCKED")}");
+
+            Assert.True(open,
+                $"at \"{moment}\" the guide shows {step}, which sends the player to {activity} — and "
+                + $"{activity} is still locked. The guide is naming a door the game has not opened.");
+        }
+    }
 }

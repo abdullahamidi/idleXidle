@@ -210,6 +210,34 @@ public static class Tutorial
         _ => "",
     };
 
+    /// <summary>
+    /// The screen a step sends the player to, or null if it asks nothing of the rail.
+    /// </summary>
+    /// <remarks>
+    /// <b>Exists so a test can check the guide never names a locked door.</b> Every body from SpendGleam
+    /// onward tells the player to press a key, and those keys are gated by <see cref="Unlocks"/> — two
+    /// systems written days apart, each correct on its own. A step that says "press F for the FORGE"
+    /// while the Forge is still a dimmed tile teaches the player that the guide does not know what is
+    /// going on, which is worse than saying nothing.
+    ///
+    /// Kept here rather than in the test so the mapping is part of the design and moves with the copy.
+    /// </remarks>
+    public static Activity? Sends(TutorialStep step, TutorialFacts f) => step switch
+    {
+        TutorialStep.SpendGleam => Activity.Stats,
+
+        // OpenChest is the one step that speaks DURING A WAIT — a chest is a 20% roll and the guide
+        // would otherwise go silent for tens of waves. Until one actually drops its body is in the
+        // future tense ("when one does, press K"), and the dimmed VAULT tile says the same thing in the
+        // same breath, so the two agree rather than contradict. It only SENDS you anywhere once there
+        // is something to go and read.
+        TutorialStep.OpenChest => f.ChestsHeld >= 1 ? Activity.Vault : null,
+
+        TutorialStep.EquipItem => Activity.Gear,
+        TutorialStep.WeaveBuild => Activity.Build,
+        _ => null,   // Watch, MeetABoss and Conquer are about the fight itself
+    };
+
     /// <summary>Is there anything to show at all?</summary>
     public static bool HasGuidance(TutorialStep step) => step != TutorialStep.Done;
 }
