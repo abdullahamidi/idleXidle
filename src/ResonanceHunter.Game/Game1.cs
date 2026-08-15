@@ -3272,11 +3272,14 @@ public class Game1 : Game
                 _ui.TextCenterBig(_batch, _ui.ShortenBig(Unlocks.Requirement(NavActivity[i]), NavRailWidth - 24, UiTypography.Secondary),
                                   r.Center.X, r.Bottom - 16, NavGem * 0.8f, UiTypography.Secondary);
 
-            // UNOPENED CHESTS, as a count on the FORGE tile. A player told us the chest-opening feature
-            // felt hidden in the game, and it was: chests live three clicks deep — FORGE, then the
-            // SALVAGE mode, then a small toolbar row — with nothing anywhere else in the game saying one
-            // is waiting. The most valuable thing the game gives you should not be the hardest to find.
-            if (Nav[i].Label == "FORGE" && _forge is not null && _forge.UnopenedChests.Count > 0)
+            // UNOPENED CHESTS, as a count on the VAULT tile — the page chests actually live on.
+            //
+            // It was on FORGE, correctly, when the Forge was the only place a chest existed: they sat
+            // three clicks deep (FORGE, then SALVAGE mode, then a toolbar row) with nothing anywhere
+            // saying one was waiting, and the most valuable thing the game gives you should not be the
+            // hardest to find. The Vault took that job, and a badge pointing at the old address is a
+            // signpost to the wrong door — worse than none, because the player follows it.
+            if (Nav[i].Label == "VAULT" && _forge is not null && _forge.UnopenedChests.Count > 0)
             {
                 var n = _forge.UnopenedChests.Count;
                 var badge = new Rectangle(r.Right - 54, r.Y + 16, 38, 30);

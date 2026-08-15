@@ -182,7 +182,10 @@ public sealed class RosterScreen
             if (c.Lean is { } br)
                 _ui.TextCenter(b, BranchName(br), card.Center.X, card.Bottom - 62, unlocked ? lean : Dim);
             else
-                _ui.TextCenter(b, "NO ROAD", card.Center.X, card.Bottom - 62, Dim);
+                // SLATE, NOT DIM: on the card plate this measured ~1.65:1, so the one word explaining
+                // why a champion has no lean was effectively invisible on exactly the cards that need
+                // explaining.
+                _ui.TextCenter(b, "NO ROAD", card.Center.X, card.Bottom - 62, Slate);
 
             // `state` is the CharacterState parameter; this is the word on the card.
             var stateText = active ? "PLAYING" : unlocked ? "READY" : "LOCKED";
@@ -206,11 +209,17 @@ public sealed class RosterScreen
         var left = DetailPanel.X + 74;
         var width = DetailPanel.Width - 148;
 
-        _ui.TextCenterBig(b, "WHO THEY ARE", DetailPanel.Center.X, DetailPanel.Y + 44, Gold, UiTypography.SectionTitle);
+        // DERIVED FROM THE PANEL'S INTERIOR, not a hand-picked +44. UiKit.Panel picks its plate art by
+        // ASPECT: the wide grid panel gets a slim top flourish, this near-square one gets a tall hanging
+        // finial. The same +44 that clears the first buries this title in the second — "WHO THEY ARE"
+        // was drawn in gold ON gold filigree, the least readable text on the screen, while the identical
+        // offset on the panel beside it looked perfect. Two panels on one screen disagreeing is the tell.
+        _ui.TextCenterBig(b, "WHO THEY ARE", DetailPanel.Center.X, UiKit.PanelInner(DetailPanel).Y + 34,
+                          Gold, UiTypography.SectionTitle);
 
         // A cursor, not twelve literal offsets — the same lesson the trait panel learned when one extra
         // row silently pushed its prerequisite list through the divider below it.
-        var y = DetailPanel.Y + 96;
+        var y = DetailPanel.Y + 126;
 
         _ui.TextCenterBig(b, c.Name, DetailPanel.Center.X, y, unlocked ? Bone : Slate, UiTypography.PanelTitle);
         y += 34;

@@ -329,8 +329,15 @@ public sealed class MapScreen
         {
             _ui.TextBig(b, "DROPS", DetailPanel.X + 28, DetailPanel.Y + 578, Gold, UiTypography.Secondary);
             var y = DetailPanel.Y + 606;
+
+            // CLAMPED TO THE ROW ABOVE THE CTA. The blurb wrapped freely and its second line ran under
+            // the button's frame — and on a deepenable world the CORRUPTION line lands in the same band,
+            // so the two printed straight through each other. A wrap with no floor is a wrap that will
+            // eventually meet whatever is below it.
+            var dropsFloor = DetailPanel.Bottom - 150;
             foreach (var line in _ui.WrapBig(drops.Blurb, DetailPanel.Width - 60, UiTypography.Secondary))
             {
+                if (y + 22 > dropsFloor) break;
                 _ui.TextBig(b, line, DetailPanel.X + 30, y, Bone, UiTypography.Secondary);
                 y += 22;
             }
@@ -340,7 +347,11 @@ public sealed class MapScreen
         var cta = new Rectangle(DetailPanel.X + 40, DetailPanel.Bottom - 92, DetailPanel.Width - 80, 68);
         if (World.CanDeepenCorruption)
         {
-            _ui.TextCenter(b, $"CORRUPTION {World.CorruptionTier} -> {World.CorruptionTier + 1}", DetailPanel.Center.X, DetailPanel.Bottom - 116, Violet);
+            // SIZED LIKE THE REST OF THE PANEL. At the unsized 32px face this was the biggest text in the
+            // detail column and it sat in the band the DROPS blurb wraps into, so the two overprinted.
+            // The blurb now has a floor above this line; this now fits between that floor and the CTA.
+            _ui.TextCenterBig(b, $"CORRUPTION {World.CorruptionTier} → {World.CorruptionTier + 1}",
+                              DetailPanel.Center.X, DetailPanel.Bottom - 124, Violet, UiTypography.Secondary);
             if (_ui.Button(b, cta, "DEEPEN", hit, clicked)) _deepenRequest = true;
         }
         else if (_ui.Button(b, cta, def.Id == ActiveRegion ? "RE-ENTER" : "ENTER REGION", hit, clicked, enabled: unlocked))

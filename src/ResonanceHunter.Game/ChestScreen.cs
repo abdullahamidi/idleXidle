@@ -206,7 +206,10 @@ public sealed class ChestScreen
             // belongs where they see it before clicking anything.
             _ui.TextBig(b, _ui.ShortenBig(d.FloorShort, card.Width - 32, UiTypography.Secondary),
                         card.X + 16, card.Y + 96,
-                        d.GuaranteedFloor > Rarity.Common ? Gem : Dim, UiTypography.Secondary);
+                        // SLATE FOR THE GAMBLE CASE, not Dim: at ~1.6:1 the promise line vanished on
+                        // precisely the two grades whose promise is "there isn't one", which is the
+                        // fact a player most needs before spending the click.
+                        d.GuaranteedFloor > Rarity.Common ? Gem : Slate, UiTypography.Secondary);
 
             _ui.TextBig(b, _ui.ShortenBig(d.RegionShort, card.Width - 32, UiTypography.Secondary),
                         card.X + 16, card.Y + 128, Slate, UiTypography.Secondary);
@@ -236,9 +239,12 @@ public sealed class ChestScreen
         var d = ChestDossiers.For(chest);
         var grade = RarityColors[(int)chest.Rarity];
 
-        // Clear of the panel art's ornate top border, which the first pass drew straight through.
+        // ANCHORED TO THE PANEL'S INTERIOR, not to a hand-picked offset. UiKit.Panel chooses its plate by
+        // aspect, so "clear of the border" is not a constant — the first pass guessed +28, the second
+        // +52, and both were painted over the top-left corner filigree. PanelInner knows.
+        var inner = UiKit.PanelInner(DetailPanel);
         _ui.TextBig(b, $"{chest.Rarity.ToString().ToUpperInvariant()} CHEST",
-                    DetailPanel.X + 40, DetailPanel.Y + 52, grade, UiTypography.SectionTitle);
+                    inner.X + 8, inner.Y + 6, grade, UiTypography.SectionTitle);
         _ui.Fill(b, new Rectangle(DetailPanel.X + 40, DetailPanel.Y + 92, DetailPanel.Width - 80, 2),
                  grade * 0.6f);
 
@@ -258,12 +264,17 @@ public sealed class ChestScreen
 
         if (!string.IsNullOrWhiteSpace(d.RegionBlurb))
         {
+            // INSET TO MATCH THE BULLET TEXT ABOVE (+60, not +40). The panel art carries a large diamond
+            // ornament on each side at its vertical midpoint, which is exactly where this block lands —
+            // at +40 the label and its first line ran under it. The bullets above already clear it
+            // because their text starts past the bullet mark; this had no bullet and no reason to.
+            const int textX = 60;
             y += 12;
-            _ui.TextBig(b, "WHERE IT WAS WON", DetailPanel.X + 40, y, Slate, UiTypography.Secondary);
+            _ui.TextBig(b, "WHERE IT WAS WON", DetailPanel.X + textX, y, Slate, UiTypography.Secondary);
             y += 30;
             foreach (var wrapped in Wrapped(d.RegionBlurb))
             {
-                _ui.TextBig(b, wrapped, DetailPanel.X + 40, y, Slate, UiTypography.Secondary);
+                _ui.TextBig(b, wrapped, DetailPanel.X + textX, y, Slate, UiTypography.Secondary);
                 y += 26;
             }
         }
@@ -280,5 +291,5 @@ public sealed class ChestScreen
 
     /// <summary>Wrap into the detail panel's text column.</summary>
     private IReadOnlyList<string> Wrapped(string text)
-        => _ui.WrapBig(text, DetailPanel.Width - 100, UiTypography.Body);
+        => _ui.WrapBig(text, DetailPanel.Width - 130, UiTypography.Body);
 }

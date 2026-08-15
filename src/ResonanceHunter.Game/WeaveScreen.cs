@@ -170,8 +170,16 @@ public sealed class WeaveScreen
         VowDemand.SingleSource => "EVERY SKILL THE SAME SOURCE",
         VowDemand.EveryWeaveFilled => "NO EMPTY SKILL SLOT",
         VowDemand.NoCritInvestment => "NO CRIT INVESTED",
-        VowDemand.CadenceAtOrBelow => $"SKILL RATE AT OR BELOW {v.Threshold:0.##}x",
-        VowDemand.CadenceAtOrAbove => $"SKILL RATE AT OR ABOVE {v.Threshold:0.##}x",
+        // SHORTENED SO THE NUMBER SURVIVES. "SKILL RATE AT OR BELOW 1.20x" is wider than the 338px the
+        // row leaves, and Fit() cut it at "SKILL RATE AT OR BE..." — deleting the threshold, which is
+        // the entire content of the demand.
+        //
+        // MAX/MIN rather than the obvious mathematical symbols: check_font_coverage.py refused U+2264
+        // and U+2265, because the shipping font's proven set is ASCII plus nine marks and an unproven
+        // glyph draws as NOTHING. The gate caught it on the frame after I wrote it — which is the whole
+        // reason it exists, and worth recording as a case where it earned its keep.
+        VowDemand.CadenceAtOrBelow => $"SKILL RATE MAX {v.Threshold:0.##}x",
+        VowDemand.CadenceAtOrAbove => $"SKILL RATE MIN {v.Threshold:0.##}x",
         VowDemand.NoDefence => "NO DEFENCE AT ALL",
         VowDemand.NoKeystone => "NO KEYSTONE SOCKETED",
         VowDemand.SlotLeftBare => $"{v.Bare.ToString().ToUpperInvariant()} SLOT LEFT EMPTY",
@@ -459,7 +467,10 @@ public sealed class WeaveScreen
         }
         else
         {
-            _ui.Text(b, "hover a SOURCE or FORM to compare", x, y, Dim);
+            // SIZED AND INKED FOR THE COLUMN. At the default 32px raster this measured ~540px against a
+            // 440px column, so it ran across the panel's ornate frame and into the gutter — and in Dim
+            // it was barely visible while doing it.
+            _ui.TextBig(b, "hover a SOURCE or FORM to compare", x, y, Slate, UiTypography.Secondary);
             y += 54;
         }
 
@@ -685,8 +696,12 @@ public sealed class WeaveScreen
             const int verdict = 124;
             _ui.TextBig(b, v.Name.ToUpperInvariant(), row.X + 18, row.Y + 8, on ? Gold : Bone, UiTypography.Body);
             _ui.Text(b, Fit(DemandText(v), row.Width - 32 - verdict), row.X + 18, row.Y + 40, live ? Met : Slate);
+            // SLATE, NOT DIM, WHEN UNMET. Dim on this row plate measures ~1.6:1, so the payoff — the
+            // number the whole Vow is offering you — was the hardest thing on the row to read, and it is
+            // hardest exactly when the player is deciding whether to chase it. Gold-when-live against
+            // slate-when-not is still an unmistakable two-state.
             _ui.TextRight(b, $"x{Weaving.VowMultiplier(v, WeavingTuning.Default):0.00}",
-                          row.Right - 16, row.Y + 8, live ? Gold : Dim);
+                          row.Right - 16, row.Y + 8, live ? Gold : Slate);
             _ui.TextRight(b, live ? "MET" : "UNMET", row.Right - 16, row.Y + 40, live ? Met : Ember);
         }
 

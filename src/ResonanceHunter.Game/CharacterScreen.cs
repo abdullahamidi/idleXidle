@@ -372,7 +372,12 @@ public sealed class CharacterScreen
 
         // The item's NAME heads the menu. Without it, "SALVAGE" is a verb with no object — the player is
         // about to destroy something and the only clue as to WHAT is which cell they happened to be over.
-        _ui.Text(b, TrimName(ItemNaming.FullName(item)), box.X + 14, box.Y + 10, rc);
+        // MEASURED AGAINST THE MENU, not trimmed to a character count. TrimName caps at 20 characters and
+        // this drew them at the unsized 32px face, which measures ~367px against a 250px menu — the name
+        // ran 116px past the box, across the inventory's scrollbar and the panel frame behind it. The
+        // menu is a fixed width, so the type has to fit it.
+        _ui.TextBig(b, _ui.ShortenBig(ItemNaming.FullName(item), box.Width - 28, UiTypography.Secondary),
+                    box.X + 14, box.Y + 12, rc, UiTypography.Secondary);
         _ui.Fill(b, new Rectangle(box.X + 8, box.Y + MenuHeaderH - 4, box.Width - 16, 1), Dim);
 
         for (var i = 0; i < MenuEntries.Length; i++)
@@ -423,9 +428,14 @@ public sealed class CharacterScreen
         // the sentence in full — this is the reminder, not the reference.
         _ui.TextCenterBig(b, Character.PassiveName, LoadoutPanel.Center.X, LoadoutPanel.Y + 346,
                           Gold, UiTypography.Secondary);
-        _ui.TextCenterBig(b,
-            _ui.ShortenBig(Character.PassiveText, LoadoutPanel.Width - 60, UiTypography.Secondary),
-            LoadoutPanel.Center.X, LoadoutPanel.Y + 366, Slate, UiTypography.Secondary);
+        // WRAPPED TO TWO LINES, not shortened to one. A single 240px line for a 69-character sentence cut
+        // every champion's passive mid-clause — and these sentences end in their number ("Every skill
+        // hits 8% harder"), so the truncation deleted the only mechanical fact in the line and left the
+        // flavour. There is room below for the second line; there was never room for the first.
+        var passive = _ui.WrapBig(Character.PassiveText, LoadoutPanel.Width - 60, UiTypography.Secondary);
+        for (var pi = 0; pi < Math.Min(2, passive.Count); pi++)
+            _ui.TextCenterBig(b, passive[pi], LoadoutPanel.Center.X, LoadoutPanel.Y + 366 + pi * 20,
+                              Slate, UiTypography.Secondary);
 
         // Real summary rows (no fake armour set / vow-bound rows — those systems don't exist).
         var worn = AllSlots.Select(hunter.Worn).OfType<ItemInstance>().ToList();
@@ -590,7 +600,11 @@ public sealed class CharacterScreen
         // used anywhere else, so it has to be said out loud once.
         // Above the slots line, not below it: the panel's bottom edge is ornate frame art and anything
         // drawn on it is unreadable — the first attempt put this hint straight through the border.
-        _ui.Text(b, "RIGHT-CLICK AN ITEM", InventoryPanel.X + 44, InventoryPanel.Bottom - 88, Dim);
+        // SLATE, NOT DIM. This is the only place the game teaches that items have a context menu, and in
+        // Dim it measured under 2:1 against the panel — an instruction nobody can read is not an
+        // instruction. It matches the SORT hint beside it now, which was already legible.
+        _ui.TextBig(b, "RIGHT-CLICK AN ITEM", InventoryPanel.X + 44, InventoryPanel.Bottom - 84,
+                    Slate, UiTypography.Secondary);
         _ui.TextRightBig(b, "SORT: RARITY", InventoryPanel.Right - 44, InventoryPanel.Bottom - 56, Slate, UiTypography.Secondary);
     }
 

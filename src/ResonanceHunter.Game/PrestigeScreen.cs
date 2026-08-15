@@ -575,8 +575,13 @@ public sealed class PrestigeScreen
 
         // The cost, under the node. Small, because it is the answer to a question the player asks
         // second — the first is "what road is this on", which the position already answered.
+        // DRAWN INSIDE THE NODE, not under it. At the unsized 32px face this needed ~24px of clearance
+        // below the box, and one rung of the tree is only ~16px taller than a node — so every cost digit
+        // in the diagram was printed on top of the node beneath it. Inside its own node it cannot
+        // collide with anything at any zoom.
         if (!isOwned)
-            _ui.TextCenter(b, $"{u.Cost}", box.Center.X, box.Bottom + 2, buyable ? Bone : Dim);
+            _ui.TextCenterBig(b, $"{u.Cost}", box.Center.X, box.Bottom - 20,
+                              buyable ? Bone : Slate, UiTypography.Secondary);
     }
 
     /// <summary>How many screen pixels one rung of the diagram is worth. Shared with <see cref="Line"/>.</summary>

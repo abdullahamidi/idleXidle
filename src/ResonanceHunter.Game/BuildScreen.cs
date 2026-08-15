@@ -354,7 +354,10 @@ public sealed class BuildScreen
         // visible: they are the cards in the loadout row underneath.
         Row(b, SummaryPanel, "ACTIVE FORMS", $"{skills.Select(s => s.Form).Distinct().Count()}", ref y);
         Row(b, SummaryPanel, "VOW-BOUND", $"{vows}", ref y);
-        Row(b, SummaryPanel, "MASTERY", $"{Mastery.Spent} NODES", ref y);
+        // POINTS, NOT NODES. MasteryTree.Spent is documented as the SUM OF COSTS, so this row printed
+        // "24 NODES" for a tree whose own legend, two panels away, said 11 nodes — two numbers for the
+        // same thing, one of them wrong, on the same screen.
+        Row(b, SummaryPanel, "MASTERY", $"{Mastery.Spent} PTS", ref y);
     }
 
     private void DrawCore(SpriteBatch b)
@@ -453,8 +456,16 @@ public sealed class BuildScreen
         foreach (var n in taken.Take(6))
         {
             _ui.Diamond(b, new Rectangle(x, py + 2, 18, 18), n.Kind == MasteryKind.Mastery ? Gold : Purple);
-            _ui.TextBig(b, _ui.ShortenBig(n.Label, labelWidth, UiTypography.Body), x + 30, py, Bone, UiTypography.Body);
-            py += 36;
+            // WRAPPED, NOT SHORTENED. These labels are sentences — cutting them mid-clause left four of
+            // five reading as fragments while 150px of the same panel sat empty underneath. Bounded to
+            // two lines so six notables still cannot push the KEYSTONES block off the bottom.
+            var wrapped = _ui.WrapBig(n.Label, labelWidth, UiTypography.Body);
+            for (var li = 0; li < Math.Min(2, wrapped.Count); li++)
+            {
+                _ui.TextBig(b, wrapped[li], x + 30, py, Bone, UiTypography.Body);
+                py += 26;
+            }
+            py += 12;
         }
 
         // RESONANCE — the real source composition of the equipped skills (share per source).
@@ -587,7 +598,10 @@ public sealed class BuildScreen
         DrawNodeDetail(b, hit);
 
         var info = _hoverInfo.Length > 0 ? _hoverInfo : _msg.Length > 0 ? _msg : "WEIGHT OPPOSES SPREAD.  TEMPO OPPOSES ENDURE.  ONE BRANCH IS AFFORDABLE; TWO ARE NOT.";
-        var infoColor = _hoverInfo.Length > 0 ? Bone : _msg.Length > 0 ? Ember : Dim;
+        // SLATE FOR THE IDLE HINT. In Dim this measured ~1.35:1 — the single line that explains the
+        // tree's central rule ("one branch is affordable; two are not") was the least readable text on
+        // the screen it governs. Bone and Ember still mark the hover and message states.
+        var infoColor = _hoverInfo.Length > 0 ? Bone : _msg.Length > 0 ? Ember : Slate;
         _ui.Text(b, info, 200, 1024, infoColor);
     }
 

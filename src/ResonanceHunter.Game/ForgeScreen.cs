@@ -979,7 +979,11 @@ public sealed class ForgeScreen
         _ui.TextCenterBig(b, "FORGE", Rail.Center.X, Rail.Y + 40, Gold, UiTypography.PanelTitle);
 
         var modes = new[] { (ForgeMode.Upgrade, "UPGRADE"), (ForgeMode.Reforge, "REFORGE"), (ForgeMode.Salvage, "SALVAGE") };
-        var y = Rail.Y + 86;
+        // TIGHTENED TO FIT THE RAIL. At +86 with a 66px pitch the loop ended at y = 470, which IS
+        // Rail.Bottom — so the divider landed on the frame's bottom ornament and the hint line was drawn
+        // below the panel entirely, floating on the bare dungeon wall with nothing behind it. The frame
+        // art eats ~30px inward, so everything has to finish by Rail.Bottom - 30.
+        var y = Rail.Y + 74;
         foreach (var (m, label) in modes)
         {
             var r = new Rectangle(Rail.X + 30, y, Rail.Width - 60, 58);
@@ -990,11 +994,11 @@ public sealed class ForgeScreen
                 _ui.TextCenterBig(b, label, r.Center.X, r.Center.Y - 11, new Color(0xF6, 0xEA, 0xC6), UiTypography.Body);
             }
             else if (_ui.Button(b, r, label, hit, clicked)) { _mode = m; }
-            y += 66;
+            y += 58;
         }
 
-        _ui.Fill(b, new Rectangle(Rail.X + 30, y + 4, Rail.Width - 60, 2), Dim);
-        _ui.TextCenter(b, ModeHint(), Rail.Center.X, y + 20, Slate);
+        _ui.Fill(b, new Rectangle(Rail.X + 30, y + 2, Rail.Width - 60, 2), Dim);
+        _ui.TextCenterBig(b, ModeHint(), Rail.Center.X, y + 14, Slate, UiTypography.Secondary);
 
         DrawBag(b, hunter, hit, clicked);
     }
@@ -1021,6 +1025,14 @@ public sealed class ForgeScreen
 
         var bag = _inv.Where(Gear.IsWearable).ToList();
         _ui.TextCenterBig(b, "YOUR BAG", BagPanel.Center.X, BagPanel.Y + 40, Gold, UiTypography.PanelTitle);
+
+        // THE SCROLL COUNTER LIVES IN THE HEADER. It was a centred line in the strip between the last
+        // row and the frame — a band only ~26px tall, whose centre carries the panel art's bottom
+        // diamond, which ate the separator whichever y it was given. The header has clear space, and a
+        // count belongs beside the thing it counts anyway.
+        if (bag.Count > BagRows)
+            _ui.TextRightBig(b, $"{_bagScroll + 1}-{Math.Min(bag.Count, _bagScroll + BagRows)} / {bag.Count}",
+                             BagPanel.Right - 52, BagPanel.Y + 48, Slate, UiTypography.Secondary);
 
         if (bag.Count == 0)
         {
@@ -1055,11 +1067,19 @@ public sealed class ForgeScreen
             _ui.Fill(b, new Rectangle(row.X, row.Y, 5, row.Height), rc);
 
             DrawItemIcon(b, it, new Rectangle(row.X + 10, row.Y + 3, 30, 30));
-            // 13 characters, measured: at eighteen the longest generated names ran into the level column
-            // and the two overprinted each other.
-            _ui.Text(b, Truncate(ItemNaming.FullName(it), 13), row.X + 50, row.Y + 10, sel ? Bone : rc);
-            _ui.TextRight(b, isWorn ? "WORN" : $"iL{it.ItemLevel}", row.Right - 8, row.Y + 10,
-                          isWorn ? Gold : Slate);
+
+            // TRUNCATED BY PIXELS, NOT BY CHARACTER COUNT. The old comment said "13 characters,
+            // measured" — but a character count cannot be measured against a proportional font, and it
+            // was not: thirteen wide glyphs overran the right-aligned level column and every row in the
+            // bag printed its name straight through its own item level. "GREEDY MACHIiL1". The one
+            // number the UPGRADE mode exists to move was illegible on every row of every mode.
+            //
+            // The level is measured FIRST and the name is given exactly what is left.
+            var lvl = isWorn ? "WORN" : $"iL{it.ItemLevel}";
+            var nameRoom = row.Right - 8 - _ui.Measure(lvl) - 16 - (row.X + 50);
+            _ui.Text(b, _ui.Shorten(ItemNaming.FullName(it), nameRoom), row.X + 50, row.Y + 10,
+                     sel ? Bone : rc);
+            _ui.TextRight(b, lvl, row.Right - 8, row.Y + 10, isWorn ? Gold : Slate);
         }
 
         // The chest beat survives, sitting IN the list where the items are rather than in a header strip
@@ -1072,11 +1092,10 @@ public sealed class ForgeScreen
             if (_ui.Button(b, cr, $"OPEN {_chests.Count} CHEST{(_chests.Count == 1 ? "" : "S")}", hit, clicked))
                 _mode = ForgeMode.Salvage;
         }
-        else if (bag.Count > BagRows)
-        {
-            _ui.TextCenter(b, $"{_bagScroll + 1}-{Math.Min(bag.Count, _bagScroll + BagRows)} OF {bag.Count}  \u00b7  SCROLL",
-                           BagPanel.Center.X, BagPanel.Bottom - 40, Dim);
-        }
+
+        // (The scroll counter that used to live here moved into the header — see the note beside it.
+        // The strip between the last row and the frame is ~26px and its centre carries the panel art's
+        // bottom diamond, so nothing legible fits in it.)
     }
 
     private static string Truncate(string s, int n) => s.Length <= n ? s : s[..(n - 1)] + "\u2026";
@@ -1146,8 +1165,14 @@ public sealed class ForgeScreen
             var cell = new Rectangle(CostPanel.X + 40 + i * 108, CostPanel.Y + 100, 98, 94);
             _ui.Fill(b, cell, new Color(0x16, 0x12, 0x20, 0xC0));
             _ui.Diamond(b, new Rectangle(cell.Center.X - 20, cell.Y + 12, 40, 40), MatColor[i]);
-            _ui.TextCenter(b, MaterialTiers.Name(mats[i]), cell.Center.X, cell.Bottom - 38, Slate);
-            _ui.TextCenter(b, $"{hunter.MaterialOf(mats[i]):N0}", cell.Center.X, cell.Bottom - 20, Bone);
+            // AT THE DEFAULT SIZE "ESSENCE" AND "CRYSTAL" ARE WIDER THAN THEIR 98px CELL, so the four
+            // labels ran together into "SCRAPESSENCECORECRYSTAL" and each sat across its own tile's
+            // lower border. CostPanel is 512 wide, so the cells cannot grow — the type has to shrink,
+            // and it is shortened to the cell as a backstop for a future longer name.
+            _ui.TextCenterBig(b, _ui.ShortenBig(MaterialTiers.Name(mats[i]), cell.Width - 10, UiTypography.Secondary),
+                              cell.Center.X, cell.Bottom - 42, Slate, UiTypography.Secondary);
+            _ui.TextCenterBig(b, $"{hunter.MaterialOf(mats[i]):N0}", cell.Center.X, cell.Bottom - 22,
+                              Bone, UiTypography.Secondary);
         }
 
         var r = Forge.Refine(item, Tuning);
@@ -1272,7 +1297,11 @@ public sealed class ForgeScreen
         var eCost = ReforgeTuning.Default.EnchantCostFor(item.Rarity);
         var canEnch = !worn && hasEnch && hunter.MaterialOf(eTier) >= eCost;
         var ench = Enchantments.Of(item);
-        _ui.Text(b, "ENCHANT  —  THE BUILD-DEFINING TRIGGER (RARE+)", ReforgePanel.X + 32, eRow, Slate);
+        // CLAMPED TO THE COLUMN THE BUTTON LEAVES. The heading had no width bound and ran under the
+        // RE-ROLL button's ornate left frame at ReforgePanel.Right - 340, eating "RE+)".
+        _ui.Text(b, _ui.Shorten("ENCHANT  —  THE BUILD-DEFINING TRIGGER (RARE+)",
+                                (ReforgePanel.Right - 360) - (ReforgePanel.X + 32) - 24),
+                 ReforgePanel.X + 32, eRow, Slate);
         _ui.TextBig(b, hasEnch ? ench?.Name ?? "—" : "LOCKED — RARE+ ONLY", ReforgePanel.X + 32, eRow + 28, hasEnch ? Bloom : Dim, UiTypography.PanelTitle);
         if (ench is not null) DrawWrapped(b, ench.Blurb, ReforgePanel.X + 32, eRow + 64, ReforgePanel.Width - 400, Bone);
         _ui.TextRight(b, $"{hunter.MaterialOf(eTier):N0} / {eCost} {MaterialTiers.Name(eTier)}", ReforgePanel.Right - 360, eRow + 34, canEnch ? Met : Ember);
@@ -1281,7 +1310,11 @@ public sealed class ForgeScreen
 
         _ui.Fill(b, new Rectangle(ReforgePanel.X + 32, eRow + 130, ReforgePanel.Width - 64, 2), Dim);
         if (worn) _ui.Text(b, "EQUIPPED — UNEQUIP ON GEAR TO REFORGE.", ReforgePanel.X + 32, eRow + 150, Ember);
-        else _ui.Text(b, "Re-forging changes only the trait or enchant; level, source and affixes are kept.", ReforgePanel.X + 32, eRow + 150, Slate);
+        // WRAPPED. As a single _ui.Text line this measured ~1100px against 1018px of interior, so it ran
+        // through the panel's right rail and was chopped at the screen edge mid-word — the sentence
+        // ended on "ke". The enchant blurb six lines above already uses this helper.
+        else DrawWrapped(b, "Re-forging changes only the trait or enchant; level, source and affixes are kept.",
+                         ReforgePanel.X + 32, eRow + 150, ReforgePanel.Width - 64, Slate);
         if (_msg.Length > 0) _ui.Text(b, _msg, ReforgePanel.X + 32, ReforgePanel.Bottom - 40, _msgColor);
     }
 
@@ -1322,12 +1355,17 @@ public sealed class ForgeScreen
             // should be costing them power, and the number that ignored it looked like a bug.
             _ui.TextCenterBig(b, $"FORGE ELEMENT  ·  {src.ToString().ToUpperInvariant()}",
                               ItemPanel.Center.X, ItemPanel.Y + 386, Bloom, UiTypography.Secondary);
-            _ui.TextCenterBig(b, "for merging — the fight reads your SKILL's source, not this",
-                              ItemPanel.Center.X, ItemPanel.Y + 410, Slate, UiTypography.Secondary);
+            // SHORTENED TO THE COLUMN. The full sentence measured ~435px against a 384-wide panel, so it
+            // painted "for me" on the bare stone left of the frame and "t this" past the right rail, and
+            // its descenders touched the ITEM LEVEL row twelve pixels below. The panel cannot grow —
+            // this is the narrow preview column — so the copy fits it, and the rows below move down.
+            _ui.TextCenterBig(b, _ui.ShortenBig("for merging — not the fight's Source",
+                                                ItemPanel.Width - 40, UiTypography.Secondary),
+                              ItemPanel.Center.X, ItemPanel.Y + 408, Slate, UiTypography.Secondary);
         }
 
-        DrawTransition(b, "ITEM LEVEL", $"iL{item.ItemLevel}", refined is null ? null : $"iL{refined.ItemLevel}", ItemPanel.Y + 422);
-        DrawTransition(b, "ITEM POWER", $"{hunter.PowerContribution(item):N0}", refined is null ? null : $"{hunter.PowerContribution(refined):N0}", ItemPanel.Y + 470);
+        DrawTransition(b, "ITEM LEVEL", $"iL{item.ItemLevel}", refined is null ? null : $"iL{refined.ItemLevel}", ItemPanel.Y + 436);
+        DrawTransition(b, "ITEM POWER", $"{hunter.PowerContribution(item):N0}", refined is null ? null : $"{hunter.PowerContribution(refined):N0}", ItemPanel.Y + 480);
 
         var cur = ItemAffixes.Of(item);
         var nxt = refined is null ? null : ItemAffixes.Of(refined);
@@ -1366,9 +1404,17 @@ public sealed class ForgeScreen
     /// <remarks>Moved to <see cref="UiKit.Shorten"/> \u2014 the Build screen's passives list needed it too.</remarks>
     private string Shorten(string text, int width) => _ui.Shorten(text, width);
 
+    /// <summary>One before/after row in the item preview.</summary>
+    /// <remarks>
+    /// THE LABEL AND THE VALUE ARE DRAWN AT THE SAME SIZE, and that is the fix rather than a style
+    /// preference. SmoothFont draws from the TOP-LEFT of the em box, so two different type sizes sharing
+    /// a y are top-aligned rather than baseline-aligned — the label went through the default ~32px
+    /// raster and the values through the 19px Body role, leaving a ~13px baseline gap that made every
+    /// value read as a superscript hanging off its label's shoulder.
+    /// </remarks>
     private void DrawTransition(SpriteBatch b, string label, string cur, string? after, int y)
     {
-        _ui.Text(b, label, ItemPanel.X + 28, y + 6, Slate);
+        _ui.TextBig(b, label, ItemPanel.X + 28, y, Slate, UiTypography.Body);
         if (after is null) { _ui.TextRightBig(b, cur, ItemPanel.Right - 28, y, Bone, UiTypography.Body); return; }
         _ui.TextRightBig(b, after, ItemPanel.Right - 28, y, Met, UiTypography.Body);
         var aw = _ui.MeasureBig(after, UiTypography.Body);
@@ -1382,8 +1428,18 @@ public sealed class ForgeScreen
         if (gleam && _ui.Assets.Get("currency_gleam") is { } gi) b.Draw(gi, new Rectangle(CostPanel.X + 42, y, 40, 40), Color.White);
         else _ui.Diamond(b, new Rectangle(CostPanel.X + 32, y + 4, 36, 36), gem);
         _ui.TextBig(b, label, CostPanel.X + 84, y + 6, Bone, UiTypography.Body);
-        _ui.TextRightBig(b, $"{owned:N0} / {required:N0}", CostPanel.Right - 30, y + 6, ok ? Met : Ember, UiTypography.Body);
+        // ABBREVIATED, like the currency pill directly above it on the same screen. The raw form printed
+        // "131,900,000 / 79" beside a pill reading "131.9M" — the same number, twice, in two notations —
+        // and it dwarfed the SCRAP row so the two costs stopped reading as a pair. It also crowds the
+        // panel's right ornament as balances grow.
+        _ui.TextRightBig(b, $"{Ab(owned)} / {Ab(required)}", CostPanel.Right - 30, y + 6,
+                         ok ? Met : Ember, UiTypography.Body);
     }
+
+    /// <summary>The house abbreviation, shared with the currency pills and the Warren.</summary>
+    private static string Ab(long v) => v >= 1_000_000
+        ? $"{v / 1_000_000.0:0.#}M"
+        : v >= 1000 ? $"{v / 1000.0:0.#}K" : v.ToString();
 
     /// <summary>A small solid right-pointing triangle — the before→after arrow, sized ~20px tall.</summary>
     private void Arrow(SpriteBatch b, int x, int cy, Color c)
@@ -1463,7 +1519,11 @@ public sealed class ForgeScreen
 
         _ui.Text(b, $"LOOT ({view.Count})", 112, 178, InkFaint);
         if (view.Count > Visible)
-            _ui.TextRight(b, $"{_scroll / Cols + 1}/{(view.Count + Cols - 1) / Cols}", 960, 178, InkFaint);
+            // ROWS, NOT PAGES — and it now says so. The denominator counted ROWS (ceil(13/4) = 4) while
+            // the grid shows three rows at a time, so a 13-item bag in a 12-slot grid read "1/4" for
+            // what is two screenfuls. Either number is defensible; printing one and meaning the other
+            // is not.
+            _ui.TextRight(b, $"ROW {_scroll / Cols + 1} OF {(view.Count + Cols - 1) / Cols}", 960, 178, InkFaint);
 
         if (_inv.Count == 0)
             _ui.Text(b, "EMPTY — GO HUNT SOMETHING.", 64, 264, Dim);
