@@ -449,7 +449,28 @@ public static class SoloBattle
             // the player who has given up the most, which is the same bargain the Vows themselves make.
             if (swornVows > 0) m *= 1f + tithe * swornVows;
 
-            if (champ.MarkUntilMs > absMs) m *= FormBehaviour.MarkMultiplier + shape.MarkPowerBonus;
+            // MARK, and where a Mark adept's AFFINITY finally lands.
+            //
+            // Affinity is applied at the top of this method against the skill's own Form — which Mark
+            // can never reach, because Mark deals no damage and its branch returns before any hit
+            // exists to multiply. So MARK SPECIALIST, a six-point mastery node, applied its x2.00 to
+            // NOTHING while still imposing its off-Form penalties on every other skill in the build
+            // (Projectile to x0.45, Strike and Aura to x0.75). A Mark build is necessarily mostly other
+            // Forms — an amplifier with nothing to amplify is zero damage — so the node landed its
+            // entire cost on the build's only damage source and none of its benefit anywhere. It could
+            // only make you weaker, and the tree sold it as a specialisation.
+            //
+            // Amplifying the MARK ITSELF is the honest reading of "you have specialised in Mark", and it
+            // is the one lever that scales with the whole build rather than with one skill. Measured
+            // against the real simulation in affinity_test: it turns a -23% node into a positive one, in
+            // the same band as the other five.
+            if (champ.MarkUntilMs > absMs)
+            {
+                var mark = FormBehaviour.MarkMultiplier + shape.MarkPowerBonus;
+                if (build.Affinity is { } markAff)
+                    mark *= FormBehaviour.AffinityFactor(markAff, Form.Mark);
+                m *= mark;
+            }
 
             // ── THE SKILL TREE. Everything past here is gated on skillForm, so the background
             //    auto-attack never triggers a node — it is a trickle, not a build. ────────────────────
@@ -757,6 +778,12 @@ public static class SoloBattle
                     // window, so a Mark build gets far more of its big hits inside the amplify.
                     var window = triggers.Contains(BuildTrigger.Linger) ? FormBehaviour.MarkWindowMs * 9 / 5 : FormBehaviour.MarkWindowMs;
                     window = (int)(window * shape.MarkWindowMultiplier);   // MARK MASTERY
+
+                    // (Affinity does NOT land on the window. Measured: the window is 2,500ms against a
+                    // 4,000ms cooldown, so doubling it only lifts uptime from 62% to continuous and buys
+                    // about 1.5% — the mark is already up most of the time. It lands on the mark's POWER
+                    // instead; see the Amp() line that consumes MarkUntilMs.)
+
                     champ.MarkUntilMs = abs + window;
                     events.Add(new BattleEvent(BattleEventKind.Skill, 0, (int)Form.Mark, ms));
                     continue;
