@@ -99,16 +99,35 @@ would reasonably read as an element correlation.
 - Every nav HOTKEY bypassed the unlock gate, which was only enforced on the mouse path — and the
   tutorial's own text is a list of those hotkeys, so the guide was teaching the bypass.
 
-### Still open
+### Closed after the first write-up of this pass
 
-- **MARK SPECIALIST** (MasteryCatalog) grants x2.00 affinity on the one Form that never reaches `Amp`,
-  so a 6-point node only lowers your damage. Real balance bug, not yet fixed.
-- **No unseen-champion badge** on the ROSTER tile — needs a persisted "seen" set the save has no
-  concept of.
-- **THE WEAVE still has no rail tile** (it is gated and the rail highlights BUILD correctly now).
-- **Upgrade/reforge/salvage/merge "papers"** — asked for two passes ago, still not built.
-- Dead code the sweep proved: `Gear.ItemScore`, and the `watchingFight`/`interactive` plumbing that
-  `SoloExpeditionScreen.Update` ignores entirely.
+- **The papers shipped.** `Charter` — four single-use Forge permissions, one wave in forty from wave 5.
+  Refine and Reforge waive the cost; Salvage doubles the yield; Merge lifts the same-rarity rule with
+  the LOWEST input setting the grade (it prices the exception rather than deleting the protection).
+  Every call site is validate-then-spend, because a paper burned on a refusal at that drop rate is far
+  worse than the same mistake with a material.
+- **MARK SPECIALIST is positive now.** It applied x2.00 to nothing — Mark deals no damage, so its
+  branch returns before `Amp()` where affinity lives — while its off-Form penalties hit every other
+  skill. A Mark build is *necessarily* mostly other Forms, so the node landed all of its cost and none
+  of its benefit: measured -23%. **The first fix was the wrong lever and the test said so** — putting
+  affinity on the mark's WINDOW bought 1.5%, because the window (2,500ms) already nearly covers the
+  cooldown (4,000ms). It lands on the mark's POWER instead. All six specialisations are now positive
+  for the build they name (+43% to +104%), and the commitment still costs: a Projectile build under a
+  MARK affinity reads 55 against 112 neutral.
+- **The dead `interactive` gate is gone.** `SoloExpeditionScreen.Update` took four input parameters and
+  read none of them — proven, zero occurrences in the body — while three files carried comments
+  explaining what the flag protected. A gate that gates nothing is worse than no gate.
+
+### Still open, and why
+
+- **No unseen-champion badge** on the ROSTER tile. Needs a persisted "seen" set the save has no concept
+  of. The unlock panel covers the reported complaint; the badge is a separate feature.
+- **THE WEAVE has no rail tile, deliberately.** The rail is at ten and an eleventh shrinks every tile;
+  the Weave is reached from BUILD, the rail highlights BUILD while you are on it (fixed this pass), and
+  the tutorial names the route. Decided, not deferred.
+- **`Gear.ItemScore` kept.** The sweep called it dead; it has one live caller (a measurement probe) and
+  three doc comments cite it as the cautionary example PowerContribution replaced. Deleting it would
+  cost the docs their referent to save nothing.
 
 ---
 
