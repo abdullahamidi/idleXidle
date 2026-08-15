@@ -408,6 +408,25 @@ public sealed class CharacterScreen
         _ui.TextCenterBig(b, "GEAR POWER", LoadoutPanel.Center.X, LoadoutPanel.Y + 284, Slate, UiTypography.Secondary);
         _ui.TextCenterBig(b, $"{hunter.PowerRating:N0}", LoadoutPanel.Center.X, LoadoutPanel.Y + 312, Bone, UiTypography.PrimaryValue);
 
+        // WHO YOU ARE PLAYING, and what that buys. The champion's name and portrait are on every screen
+        // and the passive behind them was on exactly one — the Roster, which a player only opens in order
+        // to SWITCH. So the thing that most changes how a build performs was invisible from the screen
+        // where builds are assembled.
+        //
+        // Under the portrait rather than under the buttons, which is where it went first: below
+        // UNEQUIP ALL there are 56 pixels before the frame, the name alone takes 22, and the clamp
+        // correctly rendered zero lines of body text. The passive describes the champion, so it belongs
+        // beside the champion — and there is room here.
+        // A NAME AND ONE LINE, because that is the room there is: the gap between the power figure and
+        // the summary rows is 42 pixels. Four lines of passive text would push the rows into the action
+        // buttons, and this panel is already full. The name is the identity hook and the ROSTER carries
+        // the sentence in full — this is the reminder, not the reference.
+        _ui.TextCenterBig(b, Character.PassiveName, LoadoutPanel.Center.X, LoadoutPanel.Y + 346,
+                          Gold, UiTypography.Secondary);
+        _ui.TextCenterBig(b,
+            _ui.ShortenBig(Character.PassiveText, LoadoutPanel.Width - 60, UiTypography.Secondary),
+            LoadoutPanel.Center.X, LoadoutPanel.Y + 366, Slate, UiTypography.Secondary);
+
         // Real summary rows (no fake armour set / vow-bound rows — those systems don't exist).
         var worn = AllSlots.Select(hunter.Worn).OfType<ItemInstance>().ToList();
         var gearIl = worn.Count > 0 ? (int)Math.Round(worn.Average(i => i.ItemLevel)) : 0;
@@ -429,6 +448,13 @@ public sealed class CharacterScreen
         // Quick actions (§7.8) — both real. EQUIP BEST fills each slot with the highest-scoring item.
         Button(b, EquipBestBtn, "EQUIP BEST", hit, true);
         Button(b, UnequipAllBtn, "UNEQUIP ALL", hit, worn.Count > 0);
+
+        // WHO YOU ARE PLAYING, and what that buys. The champion's name and portrait are on every screen
+        // and the passive behind them was on exactly one — the Roster, which a player only opens to
+        // SWITCH. So the thing that most changes how a build performs was invisible from the screen
+        // where builds are assembled. It is one line and a sentence; it belongs beside the loadout it
+        // modifies.
+
     }
 
     /// <summary>
