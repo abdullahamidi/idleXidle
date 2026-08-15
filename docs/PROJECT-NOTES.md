@@ -71,6 +71,16 @@ the collection-count ones are guarded by `Math.Max(0, …)` or an empty-collecti
 one that broke was the only one whose bounds were computed GEOMETRY rather than a count, which is
 where the discipline had no habit to fall back on.
 
+### The soak is now the tool that finds these
+
+`RH_BOOTCHECK` walks all fourteen screens, then leaves the fight running, then walks them again —
+so a long run redraws every screen against a bag, inventory and run log that keep moving. A 6,200
+frame run reports **154 screens drawn** rather than 14. That matters because the failures left in a
+codebase this well-gated are the ones that need the game to have HAPPENED first.
+
+Verified overnight, from a COPY of your real save so yours was never at risk: **a sixteen-minute
+soak ran to completion with an empty log** — no exception at all after the DrawComposition fix.
+
 ### To play
 
 **Double-click `PLAY.bat`.** It builds, launches, and pauses on failure so an error cannot
