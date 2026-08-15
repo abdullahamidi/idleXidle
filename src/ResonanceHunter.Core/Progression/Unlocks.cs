@@ -116,6 +116,10 @@ public static class Unlocks
 
         // Champions come from conquest, so the roster is empty until there is more than one.
         Activity.Roster => f.RegionsConquered >= 2,
+
+        // An out-of-range cast. Throwing rather than defaulting to true, because a gate that silently
+        // opens is the failure this whole file exists to prevent.
+        _ => throw new ArgumentOutOfRangeException(nameof(activity), activity, null),
     };
 
     /// <summary>One short line for a locked tile: what the player must do to open it.</summary>
@@ -134,6 +138,10 @@ public static class Unlocks
         Activity.Warren => "Conquer a region",
         Activity.Traits => "Earn a trait point",
         Activity.Roster => "Conquer two regions",
+
+        // A cast that is not a declared Activity is a programming error, and a blank string here would
+        // reach the player as an empty panel instead of as the bug it is.
+        _ => throw new ArgumentOutOfRangeException(nameof(activity), activity, null),
     };
 
     /// <summary>The headline shown when an activity opens — what this thing IS, in one line.</summary>
@@ -148,6 +156,10 @@ public static class Unlocks
         Activity.Warren => "THE WARREN — WORK THAT RUNS WITHOUT YOU",
         Activity.Traits => "TRAITS — WHAT SURVIVES DEATH",
         Activity.Roster => "THE ROSTER — OTHER CHAMPIONS",
+
+        // A cast that is not a declared Activity is a programming error, and a blank string here would
+        // reach the player as an empty panel instead of as the bug it is.
+        _ => throw new ArgumentOutOfRangeException(nameof(activity), activity, null),
     };
 
     /// <summary>
@@ -220,6 +232,8 @@ public static class Unlocks
             "Other champions, unlocked by conquering regions. Each has a passive of its own that changes "
             + "how a build wants to be put together. Switching champion is not a small change — it is a "
             + "different set of assumptions about what your skills are for.",
+
+        _ => throw new ArgumentOutOfRangeException(nameof(activity), activity, null),
     };
 
     /// <summary>

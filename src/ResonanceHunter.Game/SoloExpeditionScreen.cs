@@ -1412,7 +1412,17 @@ public sealed class SoloExpeditionScreen
                 // Beside the slot, not beneath it: the rail is narrow and tall, so the label reads
                 // left-aligned in the space to the slot's right.
                 _ui.TextBig(b, label, box.Right + 12, box.Y + 6, Bone, lpx);
-                _ui.TextBig(b, "AUTO", box.Right + 12, box.Y + 32, Gold, 13);
+
+                // WHAT THE SKILL ACTUALLY DOES, on the screen where the player first meets it.
+                // This line used to read "AUTO" on every row — true of every skill in the game, so it
+                // distinguished nothing and used the only spare line for it. Playtest: "Skillerin
+                // açıklamaları yok, ne olduklarını anlamadım." The Weave screen explains a Form
+                // properly, but a player who has not gone looking for it never sees a word.
+                //
+                // From BuildGlossary, so this cannot drift from the rule the simulation runs.
+                var head = BuildGlossary.FormHeadline(s.Form);
+                _ui.TextBig(b, _ui.ShortenBig(head, RailContentW - (box.Width + 16), 13),
+                            box.Right + 12, box.Y + 32, Gold, 13);
             }
             else
             {
