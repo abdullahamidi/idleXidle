@@ -17,7 +17,7 @@ public enum TutorialStep
     /// <summary>Every fifth wave is a boss, and a boss is the only thing that drops a chest.</summary>
     MeetABoss,
 
-    /// <summary>A chest is where items come from, and it is opened in the Forge.</summary>
+    /// <summary>A chest is where items come from. The VAULT reads one; the Forge cracks it.</summary>
     OpenChest,
 
     /// <summary>Something dropped. Gear is worn, not collected.</summary>
@@ -191,8 +191,9 @@ public static class Tutorial
             + "Survive to wave " + BossEvery + " to meet one.",
 
         TutorialStep.OpenChest =>
-            "About one boss in five drops one, so this takes a few tries. When one does, press F for "
-            + "the FORGE and open it — a chest names its guaranteed rarity before you do.",
+            "About one boss in five drops one, so this takes a few tries. When one does, press K for "
+            + "the VAULT — it names the chest's guaranteed rarity, its tier and what its region favours "
+            + "before you decide to crack it.",
 
         TutorialStep.EquipItem =>
             "Press C for GEAR and equip it. An item in the bag does nothing; the fight only reads "

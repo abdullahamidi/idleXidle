@@ -177,4 +177,26 @@ public class UnlocksTest
             $"a champion is earned on conquest {earliest}, but the ROSTER is still locked then — the "
             + "player is handed something they cannot look at.");
     }
+
+    [Fact]
+    public void test_a_requirement_that_names_a_conquest_count_matches_its_gate()
+    {
+        // A CAPTION THAT DRIFTED FROM ITS RULE. Activity.Roster's gate moved from two conquests to one
+        // and its requirement line was left saying "Conquer two regions" — which reads to a player as a
+        // lock that opened early, a bug in the opposite direction. Every gate in this file states its
+        // own price, so the price has to be checked against the gate.
+        foreach (var activity in Enum.GetValues<Activity>())
+        {
+            var text = Unlocks.Requirement(activity);
+            if (!text.Contains("Conquer", StringComparison.OrdinalIgnoreCase)) continue;
+
+            var claimed = text.Contains(" two ", StringComparison.OrdinalIgnoreCase) ? 2 : 1;
+
+            // Open exactly at the claimed count, and shut one below it.
+            Assert.True(Unlocks.IsOpen(activity, new UnlockFacts(RegionsConquered: claimed)),
+                $"{activity} says \"{text}\" but is still locked at {claimed} conquest(s).");
+            Assert.False(Unlocks.IsOpen(activity, new UnlockFacts(RegionsConquered: claimed - 1)),
+                $"{activity} says \"{text}\" but is already open at {claimed - 1} conquest(s).");
+        }
+    }
 }

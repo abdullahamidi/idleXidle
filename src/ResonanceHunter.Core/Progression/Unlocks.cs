@@ -148,7 +148,10 @@ public static class Unlocks
         Activity.Map => "Conquer a region",
         Activity.Warren => "Conquer a region",
         Activity.Traits => "Earn a trait point",
-        Activity.Roster => "Conquer two regions",
+        // WAS "Conquer two regions" AFTER THE GATE MOVED TO ONE. A caption that drifted from the rule it
+        // describes, which is the same failure this file's own remarks warn about — and it would have
+        // read to a player as a lock that opened early, i.e. as a bug in the opposite direction.
+        Activity.Roster => "Conquer a region",
 
         // A cast that is not a declared Activity is a programming error, and a blank string here would
         // reach the player as an empty panel instead of as the bug it is.
@@ -212,12 +215,13 @@ public static class Unlocks
             + "it, which is the whole point of a chest.",
 
         Activity.Forge =>
-            "Chests open here, and this is where items stop being what they dropped as. REFINE raises "
+            "This is where items stop being what they dropped as. REFINE raises "
             + "an item's level. REFORGE rerolls its rolled properties — the same item, a new set of "
             + "numbers, and the reason a good item is rare is that you have to roll into the properties "
             + "you actually want. SALVAGE breaks what you will not wear into materials. MERGE fuses "
             + "three of a kind into one better piece. Materials come from waves; the deeper you fight, "
-            + "the better the material a wave pays.",
+            + "the better the material a wave pays — and waves occasionally drop a CHART, a single-use "
+            + "paper that pays for one of these operations outright.",
 
         Activity.Build =>
             "This is the game. You weave SKILLS — each one a SOURCE (what element it is) and a FORM "
