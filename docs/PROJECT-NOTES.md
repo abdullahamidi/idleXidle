@@ -34,6 +34,92 @@ A machine-switch checklist, since the repo cannot carry everything:
 
 ---
 
+## THE SECOND PLAYTEST PASS (2026-08-15) — read this first
+
+The first playtest came back with seven items. All seven are in. Read the two entries below
+before touching balance or onboarding, because both correct something this project believed.
+
+### 1. My pacing measurement was wrong, and the way it was wrong is worth remembering
+
+`PacingTest` said a fresh champion dies at wave 8 against a conquest bar of 7, so I reported
+that pacing was fine and deliberately left it alone. The player then cleared the FOURTH map
+with no items, doing nothing, and said the game would have finished itself.
+
+Both were true. **PacingTest scores ONE run. The live game scores the BEST RUN EVER.** The
+champion auto-restarts free, conquest fires on `Deepest >= ConquerWaveDepth`, so a region only
+ever asks whether the dice can reach seven ONCE given unlimited attempts. That is a waiting
+time, not a difficulty.
+
+**This is the third time I have shipped a probe that measured a path the live game does not
+take** (the first two were the loot rate, twice). The pattern is always the same: the probe
+models one iteration of a mechanic correctly and models the LOOP around it wrongly. Before
+trusting any new measurement here, ask what the loop does with a failure — if failure is free
+and progress is best-ever, the mechanic's per-attempt difficulty tells you almost nothing.
+
+`tests/unit/.../Economy/attrition_test.cs` is the corrected probe. It is the file to read
+before touching region difficulty again.
+
+### 2. The region ladder was linear, which meant it got flatter as you climbed
+
+Enemy health was `110 * (1 + 0.35 * regionIndex)`. Written out, the steps a player FEELS are
++35%, +26%, +21%, +17%, +15% — **the ladder flattens while player power (ranks, keystones,
+gear) multiplies.** The probe caught it exactly: regions 2 and 3 fell at the same 80 ranks of
+training, i.e. the step between them cost nothing.
+
+`Core/Encounters/RegionLadder.cs` makes the chain geometric — every region +62% on the last,
+1.62 chosen as the smallest multiplier at which each region demands strictly more than its
+predecessor. What it costs now, measured:
+
+| region | 0 | 1 | 2 | 3 | 4–5 |
+|---|---|---|---|---|---|
+| training needed | free | 40 ranks | 80 ranks | 200 ranks | beyond the stat cap |
+
+That last column is the design, not an accident: **the back half of the world is a GEAR gate.**
+Stats alone top out at region 3. Asserted in both directions — a champion at 200 ranks wearing
+a full set the live loot table produced takes both remaining regions 4 of 4, because a gate
+nobody can open would be the one way this change is quietly catastrophic.
+
+### 3. What else shipped
+
+- **Chests are one flat percentage** (20% per boss, every depth). The old base+slope+cap was
+  unreadable from inside the game and quietly made deep farming the only sensible place to be.
+  Depth still buys the chest's grade and the tier inside it.
+- **Waves pay tiered materials** — Essence from wave 8, Core from 25, Crystal from 60, about a
+  third of the time. `WaveSpoils`. Its own test caught that the inherited `1 + wave/20` Scrap
+  ramp survived the change, so depth was multiplying quality AND quantity. The ramp is cut: one
+  unit per wave at every depth.
+- **Activities open one at a time** — `Core/Progression/Unlocks.cs`, derived from save facts,
+  never stored, so it is correct on every pre-existing save. Nine rail destinations from frame
+  one is what produced "thrown straight in and confused". Each opens with a panel explaining
+  what it is, what you do there and why you should care (three sentences minimum, asserted).
+- **The champion starts with ONE skill**, not four. Slots 2/3/4 arrive with their own note.
+- **The fight screen names what a skill does.** Every row read `AUTO`, which is true of every
+  skill in the game; it now carries the Form headline from `BuildGlossary`.
+
+### 4. Two bugs I caused and the gates caught — both the house species
+
+- The skill-capacity gate runs BEFORE the save is restored, and `Restore` truncates. Applying
+  the gate there would have cut every existing player's four-skill build to one and written it
+  back. The restore floor is now the save's own skill count.
+- The unlock panel first swallowed input with an early `return`, copying the settings panel.
+  Settings cannot be open on frame one; this can — a fresh save queues an explanation
+  immediately — so the return skipped the block that feeds every screen its dependencies and
+  `Draw` hit a null `Loadout`. **That is the second time a `return` placed ahead of the feeds
+  has taken the game down.** Swallow input via a flag; never skip the frame.
+
+`tools/check_nav_gates.py` is new and registered in `check_all.sh`: the rail and its gate table
+are parallel arrays matched by index and C# enforces nothing, so a tenth tile without a tenth
+gate reads as ALWAYS OPEN. Verified by reintroducing that exact bug.
+
+### 5. Still open
+
+- **Upgrade/reforge/salvage/merge "papers"** were asked for and are NOT built. Waves drop
+  tiered materials instead. Consumable operation-tokens need storage, save, drop, spend and UI —
+  a real feature, deliberately not half-done in the same pass as the balance work.
+- **None of this has been played.** Every number above is measured, not felt.
+
+---
+
 ## THE BALANCE + CLARITY PASS (2026-08-15) — read before the playtest
 
 Everything the playtest asked for is in. Measurements first, because most of the fixes came from
