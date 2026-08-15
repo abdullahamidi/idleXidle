@@ -51,6 +51,26 @@ Two things hid it for the whole of development, and both are worth understanding
    never entangle with real progress. **The save-load path is the one path no screenshot can
    reach.** Every gate and every capture in this repo was green while the game would not start.
 
+### A SECOND crash, found by playing rather than looking
+
+`87a1441`. `SoloExpeditionScreen.DrawComposition` laid the enemy row out at a fixed fraction of the
+creature width, then clamped the row's centre inside the arena. A wide enough wave made the row
+wider than the arena, so `Math.Clamp` got a minimum greater than its maximum — an
+**ArgumentException thrown out of Draw, mid-fight**: `'1028' cannot be greater than 1018`.
+
+It needed a big composition to reach, so no capture and no short run could find it. It was found by
+**soaking the fight for five minutes**, which is the first thing in this repo ever to play the game
+for longer than a screenshot:
+
+```bash
+RH_BOOTCHECK=18000 RH_SAVE_DIR="$(cygpath -w "$TEMP/rh_soak")"   dotnet run --project src/ResonanceHunter.Game --no-build
+```
+
+I then audited every other `Math.Clamp` in the Game assembly for the same inversion. **All clean** —
+the collection-count ones are guarded by `Math.Max(0, …)` or an empty-collection early return. The
+one that broke was the only one whose bounds were computed GEOMETRY rather than a count, which is
+where the discipline had no habit to fall back on.
+
 ### To play
 
 **Double-click `PLAY.bat`.** It builds, launches, and pauses on failure so an error cannot
