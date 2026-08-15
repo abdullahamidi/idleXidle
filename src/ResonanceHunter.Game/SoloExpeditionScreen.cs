@@ -458,6 +458,25 @@ public sealed class SoloExpeditionScreen
         _bannerTimer = 2.4f;
     }
 
+    /// <summary>The wave paid a material better than Scrap — say which, on the clear banner.</summary>
+    /// <remarks>
+    /// <para>
+    /// APPENDS rather than replaces. The host pays the wave out on the same frame the clear banner is
+    /// written, so a replacing call would delete "WAVE 12 CLEARED" and leave the player looking at a
+    /// material with no idea what earned it. Appending keeps the cause and the reward in one line.
+    /// </para>
+    /// <para>
+    /// Scrap deliberately never reaches here. It drops on nearly every wave, and a banner that fires
+    /// every wave is wallpaper — the announcement has to stay rare enough to still read as an event.
+    /// </para>
+    /// </remarks>
+    public void FlashSpoil(Material material)
+    {
+        var name = material.ToString().ToUpperInvariant();
+        _bannerText = string.IsNullOrEmpty(_bannerText) ? $"+1 {name}" : $"{_bannerText}   +1 {name}";
+        _bannerTimer = MathF.Max(_bannerTimer, 1.6f);
+    }
+
     /// <summary>
     /// Float a line over the champion — a skill name, a heal, a triggered keystone.
     /// </summary>

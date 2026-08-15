@@ -1823,9 +1823,12 @@ public class Game1 : Game
             // asks for a "banked run", a mechanic the idle loop deleted — a re-theme left for design.)
             EvolutionCredit.CreditWave(_automation.Roster, r.IsBoss);
 
-            // MATERIALS FROM MONSTERS — a small trickle every wave, deeper waves paying a little more. The
-            // steady drip; chests and dismantling are the bulk. (The farm is no longer a material source.)
-            _hunter.AddMaterials(1 + r.Wave / 20);
+            // MATERIALS FROM MONSTERS — a small trickle every wave, and deeper waves pay in BETTER STUFF
+            // rather than more of the same. The steady drip; chests and dismantling are still the bulk.
+            // (The farm is no longer a material source.) Rule and tiers live in WaveSpoils.
+            var spoil = WaveSpoils.Roll(r.Wave, _rng);
+            _hunter.AddMaterial(spoil.Material, spoil.Amount);
+            if (spoil.Material != Material.Scrap) _expedition.FlashSpoil(spoil.Material);
 
             if (r.IsBoss && DropBossChest(r, def)) _expedition.FlashChest();   // a chest is a LOW-rate drop now, not a given
         }

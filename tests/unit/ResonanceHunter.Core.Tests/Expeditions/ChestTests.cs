@@ -175,16 +175,19 @@ public class ChestTests
     }
 
     [Fact]
-    public void test_a_boss_chest_is_a_low_rate_drop_that_rises_with_depth_and_is_capped()
+    public void test_a_boss_chest_is_one_flat_percentage_at_every_depth()
     {
-        // A chest is an event, not a paycheck: a shallow boss gives one well under half the time, a deeper
-        // one somewhat more often, and it never climbs back to a guarantee.
+        // THIS TEST USED TO ASSERT THE OPPOSITE — that the chance rose with depth and was capped. It was
+        // replaced on player direction: from inside the game the ramp was invisible (nobody feels 12%
+        // creeping toward 35%), so it bought no felt progression and quietly made deep farming the only
+        // sensible place to be. A chest is now "one boss in five", the same sentence everywhere.
+        //
+        // Depth still buys the chest's GRADE and the tier of what is inside. Only the frequency is flat.
         var shallow = Chests.DropChance(0);
-        var deep = Chests.DropChance(20);
+        var deep = Chests.DropChance(1000);
 
-        Assert.InRange(shallow, 0.01f, 0.5f);                 // low — most shallow bosses give nothing
-        Assert.True(deep > shallow, "depth did not raise the drop chance");
-        Assert.True(Chests.DropChance(1000) <= ChestTuning.Default.MaxDropChance + 0.001f, "the drop chance is uncapped");
-        Assert.True(Chests.DropChance(1000) < 1f, "a chest must never be guaranteed again");
+        Assert.Equal(shallow, deep, 4);
+        Assert.InRange(shallow, 0.01f, 0.5f);        // an event, not a paycheck
+        Assert.True(shallow < 1f, "a chest must never be guaranteed.");
     }
 }

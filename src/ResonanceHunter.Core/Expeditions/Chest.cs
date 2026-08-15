@@ -139,9 +139,17 @@ public sealed record ChestTuning
     /// nudge readable: farming deep genuinely pays out more often instead of both ends sitting at the
     /// cap.
     /// </remarks>
-    public float BaseDropChance { get; init; } = 0.12f;
-    public float DropChancePerTier { get; init; } = 0.006f;
-    public float MaxDropChance { get; init; } = 0.35f;
+    /// <remarks>
+    /// <b>ONE FLAT PERCENTAGE, no depth ramp.</b> Player direction after playing it: a chest should be
+    /// "a percent chance to drop from a boss", not a number you have to reconstruct from a base, a
+    /// per-tier slope and a cap. The ramp was invisible from inside the game — nobody can feel 12%
+    /// creeping toward 35% — so it bought nothing except a rule the player could not hold in their head,
+    /// and it quietly made deep farming the only sensible place to be.
+    ///
+    /// Depth still buys everything it should: the chest's GRADE, and the item tier inside it. What it no
+    /// longer buys is how OFTEN, which is now the same promise everywhere in the game: one boss in five.
+    /// </remarks>
+    public float DropChance { get; init; } = 0.20f;
 
     public static ChestTuning Default { get; } = new();
 }
@@ -179,12 +187,14 @@ public static class Chests
         return Rarity.Legendary;
     }
 
-    /// <summary>How likely a felled boss at this tier is to drop a chest at all. Low, rising with depth, capped.</summary>
+    /// <summary>How likely a felled boss is to drop a chest at all — one flat chance, everywhere.</summary>
+    /// <remarks>
+    /// Keeps the tier parameter it no longer reads. Callers pass a depth because a chest's GRADE and
+    /// item TIER are still depth-driven, and removing it from this one signature would make the call
+    /// sites disagree about whether depth matters here at all — it does, just not to the frequency.
+    /// </remarks>
     public static float DropChance(int tier, ChestTuning? tuning = null)
-    {
-        tuning ??= ChestTuning.Default;
-        return Math.Min(tuning.MaxDropChance, tuning.BaseDropChance + Math.Max(0, tier) * tuning.DropChancePerTier);
-    }
+        => (tuning ?? ChestTuning.Default).DropChance;
 
     /// <summary>Mint a chest a boss drops at this tier — grade rolled now, contents rolled at open.</summary>
     public static Chest RollDrop(int tier, Source? element, Random rng, ChestTuning? tuning = null,
