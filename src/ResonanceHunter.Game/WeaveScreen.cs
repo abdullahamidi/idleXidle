@@ -8,6 +8,7 @@ using ResonanceHunter.Core.Automation;
 using ResonanceHunter.Core.Builds;
 using ResonanceHunter.Core.Characters;
 using ResonanceHunter.Core.Economy;
+using ResonanceHunter.Core.Encounters;
 using ResonanceHunter.Core.Prestige;
 
 namespace ResonanceHunter.Client;
@@ -64,6 +65,21 @@ public sealed class WeaveScreen
     /// </remarks>
     private int _keystoneScroll;
 
+    // ── The build readout ───────────────────────────────────────────────────────────────────────
+    // DamageBench measures a build against a reference dummy and has lived in Core, fully tested, with
+    // ZERO callers in the game — the exact "built and never reaches the player" shape this codebase
+    // keeps producing. It is what this screen was missing: the player picks from thirty-six
+    // combinations and had no way to see what any of them DID to their damage.
+    //
+    // Cached by the thing being previewed, because a reading costs ~0.5ms and only changes when the
+    // hover or the build does. Measured, not assumed — a per-frame bench would have been fine too, but
+    // the cache makes that a fact rather than a hope.
+    private (Source S, Form F, int Slot, int Rev)? _previewKey;
+    private float _previewDps;
+    private float _currentDps;
+    private int _currentRev = -1;
+    private int _buildRev;
+
     public WeaveScreen(UiKit ui) => _ui = ui;
 
     public PlayerLoadout Loadout { get; set; } = PlayerLoadout.Starter();
@@ -71,6 +87,15 @@ public sealed class WeaveScreen
     public MemoryDustTree Tree { get; set; } = new();
     public Hunter? Hunter { get; set; }
     public Character? Character { get; set; }
+
+    /// <summary>Where the champion is hunting, so a Source pick can be judged against real creatures.</summary>
+    /// <remarks>
+    /// The screen told the player "BODY is strong against MIND and NATURE" and stopped there — a rule
+    /// with no board to play it on. The region's roster is what turns that into a decision, and it was
+    /// available in Core the whole time (<c>BandCycles.RosterFor</c>) with nothing on this screen asking.
+    /// </remarks>
+    public string RegionId { get; set; } = "";
+    public string RegionName { get; set; } = "";
 
     /// <summary>Set when the loadout changed, so the host can save. Same shape as the other editors.</summary>
     public bool Dirty { get; private set; }
@@ -187,7 +212,7 @@ public sealed class WeaveScreen
             {
                 Loadout.RemoveSkill(i);
                 _slot = Math.Max(0, Math.Min(_slot, Loadout.Skills.Count - 1));
-                Dirty = true;
+                Dirty = true; _buildRev++;
                 _msg = "SLOT UNWOVEN.";
                 return;
             }
@@ -197,7 +222,7 @@ public sealed class WeaveScreen
         if (skills.Count < Loadout.SkillCapacity && AddBtn.Contains(hit))
         {
             var added = Loadout.AddSkill();
-            if (added >= 0) { _slot = added; Dirty = true; _msg = "SLOT WOVEN."; }
+            if (added >= 0) { _slot = added; Dirty = true; _buildRev++; _msg = "SLOT WOVEN."; }
             else _msg = "NO MORE SLOTS — THE SPINE SELLS THEM IN TRAITS (P).";
             return;
         }
@@ -207,7 +232,7 @@ public sealed class WeaveScreen
         for (var i = 0; i < KeystoneRows && _keystoneScroll + i < learned.Count; i++)
         {
             if (!KeystoneChip(i).Contains(hit)) continue;
-            if (Loadout.ToggleKeystone(learned[_keystoneScroll + i].Id, learned)) { Dirty = true; _msg = ""; }
+            if (Loadout.ToggleKeystone(learned[_keystoneScroll + i].Id, learned)) { Dirty = true; _buildRev++; _msg = ""; }
             else _msg = $"ONLY {Loadout.KeystoneCapacity} SOCKET(S) — THE SPINE SELLS MORE.";
             return;
         }
@@ -215,10 +240,10 @@ public sealed class WeaveScreen
         if (_slot >= skills.Count) return;
 
         for (var i = 0; i < Sources.Length; i++)
-            if (SourceCell(i).Contains(hit)) { Loadout.SetSource(_slot, Sources[i]); Dirty = true; return; }
+            if (SourceCell(i).Contains(hit)) { Loadout.SetSource(_slot, Sources[i]); Dirty = true; _buildRev++; return; }
 
         for (var i = 0; i < Forms.Length; i++)
-            if (FormCell(i).Contains(hit)) { Loadout.SetForm(_slot, Forms[i]); Dirty = true; return; }
+            if (FormCell(i).Contains(hit)) { Loadout.SetForm(_slot, Forms[i]); Dirty = true; _buildRev++; return; }
 
         for (var r = 0; r < VowRows; r++)
         {
@@ -231,7 +256,7 @@ public sealed class WeaveScreen
             var already = skills[_slot].VowId == v.Id;
             if (Loadout.SetVow(_slot, already ? null : v.Id, known))
             {
-                Dirty = true;
+                Dirty = true; _buildRev++;
                 _msg = already ? $"{v.Name.ToUpperInvariant()} BROKEN." : $"{v.Name.ToUpperInvariant()} SWORN.";
             }
             return;
@@ -239,7 +264,7 @@ public sealed class WeaveScreen
 
         if (VowClear.Contains(hit) && Loadout.SetVow(_slot, null, known))
         {
-            Dirty = true;
+            Dirty = true; _buildRev++;
             _msg = "NO VOW ON THIS SLOT.";
         }
     }
@@ -349,6 +374,167 @@ public sealed class WeaveScreen
         }
     }
 
+    /// <summary>
+    /// What this build DOES, and what the pick under the cursor would do to it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Playtest: <i>"Skiller hala yavan, skill oluşturma kısmı oyunun en unique kısımlarından biri.
+    /// Buranın çok özenli olması lazım ve mantığını arayüzünden anlatabilmesi lazım."</i>
+    /// </para>
+    /// <para>
+    /// The screen already explained each Form and Source in isolation. What it could not do was answer
+    /// the only question a player actually has at the moment of choosing: <b>is this better than what I
+    /// have?</b> Thirty-six combinations, four slots, and no way to compare any two of them except by
+    /// committing and going to watch. That is what "yavan" describes — not missing text, missing
+    /// consequence.
+    /// </para>
+    /// <para>
+    /// Three things, in the order they matter: what the build does now, what it would do with the pick
+    /// under the cursor, and whether that Source is any good WHERE YOU ARE HUNTING. The last one turns
+    /// the matchup from a rule into a decision — "BODY beats MIND and NATURE" means nothing until you
+    /// know the place you are going fields them.
+    /// </para>
+    /// </remarks>
+    private void DrawReadout(SpriteBatch b, Source? hoverSource, Form? hoverForm)
+    {
+        if (Hunter is not { } hunter) return;
+
+        var top = KeystoneChip(KeystoneRows - 1).Bottom + 26;
+        var x = SlotsPanel.X + 40;
+        var width = SlotsPanel.Width - 80;
+        if (top > SlotsPanel.Bottom - 120) return;   // no room; never draw through the frame
+
+        _ui.Fill(b, new Rectangle(x - 12, top - 12, width + 24, SlotsPanel.Bottom - top - 16), Quiet);
+        _ui.Text(b, "WHAT THIS BUILD DOES", x, top, Slate);
+
+        var y = top + 34;
+
+        // CURRENT. Re-measured only when the build actually changes.
+        if (_currentRev != _buildRev)
+        {
+            _currentDps = Dps(Loadout, hunter);
+            _currentRev = _buildRev;
+        }
+
+        _ui.TextBig(b, "NOW", x, y, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, $"{_currentDps:N0} dmg/s", x + width, y, Bone, UiTypography.Body);
+        y += 30;
+
+        // THE PICK UNDER THE CURSOR, measured on a COPY so hovering never mutates the real loadout.
+        if ((hoverSource is not null || hoverForm is not null) && _slot >= 0 && _slot < Loadout.Skills.Count)
+        {
+            var cur = Loadout.Skills[_slot];
+            var s2 = hoverSource ?? cur.Source;
+            var f2 = hoverForm ?? cur.Form;
+            var key = (s2, f2, _slot, _buildRev);
+
+            if (_previewKey != key)
+            {
+                // MEASURED ON THE REAL LOADOUT, then put back — the same trick
+                // Hunter.PowerContribution uses to price an item, and for the same reason: a second
+                // "copy of the build" type would be a second place for the build's rules to live, and
+                // the copy is the one that goes stale. The game is single-threaded and this runs inside
+                // Draw, so nothing observes the intermediate state.
+                var keepSource = cur.Source;
+                var keepForm = cur.Form;
+                Loadout.SetSource(_slot, s2);
+                Loadout.SetForm(_slot, f2);
+                _previewDps = Dps(Loadout, hunter);
+                Loadout.SetSource(_slot, keepSource);
+                Loadout.SetForm(_slot, keepForm);
+                _previewKey = key;
+            }
+
+            var delta = _previewDps - _currentDps;
+            var pct = _currentDps > 0.01f ? delta / _currentDps * 100f : 0f;
+            var tint = MathF.Abs(pct) < 0.5f ? Slate : pct > 0f ? Met : Ember;
+
+            _ui.TextBig(b, "WITH THIS", x, y, Slate, UiTypography.Secondary);
+            _ui.TextRightBig(b, $"{_previewDps:N0} dmg/s", x + width, y, tint, UiTypography.Body);
+            y += 24;
+            _ui.TextRightBig(b, MathF.Abs(pct) < 0.5f ? "no change" : $"{(pct > 0 ? "+" : "")}{pct:0}%",
+                             x + width, y, tint, UiTypography.Secondary);
+            y += 30;
+        }
+        else
+        {
+            _ui.Text(b, "hover a SOURCE or FORM to compare", x, y, Dim);
+            y += 54;
+        }
+
+        // WHAT YOUR GEAR IS WAITING FOR. The badge on the Form cell draws the eye; this says which item
+        // and which enchantment, because a marker with no sentence behind it is a riddle.
+        var wants = GearWants();
+        if (wants.Count > 0)
+        {
+            _ui.Fill(b, new Rectangle(x, y, width, 2), Dim);
+            y += 14;
+            foreach (var (form, enchant) in wants.Take(2))
+            {
+                _ui.Text(b, $"{enchant.ToUpperInvariant()} WANTS", x + 10, y, Slate);
+                _ui.TextRight(b, FormName(form), x + width, y, Met);
+                y += 24;
+            }
+            y += 6;
+        }
+
+        // WHERE YOU ARE HUNTING. The matchup, against the creatures that actually live there.
+        if (RegionId.Length == 0) return;
+
+        var roster = BandCycles.RosterFor(RegionId);
+        if (roster.Count == 0) return;
+
+        _ui.Fill(b, new Rectangle(x, y, width, 2), Dim);
+        y += 14;
+        _ui.Text(b, $"IN {(RegionName.Length > 0 ? RegionName : RegionId).ToUpperInvariant()}", x, y, Slate);
+        y += 30;
+
+        var judged = hoverSource ?? (_slot >= 0 && _slot < Loadout.Skills.Count
+            ? Loadout.Skills[_slot].Source
+            : Source.Body);
+
+        foreach (var enemy in roster.Distinct().Take(4))
+        {
+            var mult = Weaving.SourceEffectiveness(judged, enemy, new WeavingTuning());
+            var verdict = mult > 1.01f ? "STRONG" : mult < 0.99f ? "WEAK" : "even";
+            var tint = mult > 1.01f ? Met : mult < 0.99f ? Ember : Slate;
+
+            _ui.Text(b, SourceName(enemy), x + 10, y, SourceColor.GetValueOrDefault(enemy, Bone));
+            _ui.TextRight(b, $"{verdict}  x{mult:0.00}", x + width, y, tint);
+            y += 24;
+        }
+    }
+
+    /// <summary>
+    /// Forms your WORN GEAR is waiting for, that your build does not yet fire.
+    /// </summary>
+    /// <remarks>
+    /// Six enchantments are Form combos — Overdraw wants a PROJECTILE, Execute wants a STRIKE — and
+    /// without that Form they are dead weight on the item. The dependency ran ONE WAY: the Forge greys
+    /// out a combo the build cannot meet, but the screen where Forms are actually CHOSEN never mentioned
+    /// that a piece of your gear was waiting on one. Core has carried the requirement, machine-readable,
+    /// the whole time (<c>Enchantment.NeedsForm</c>); nothing on this screen asked it.
+    ///
+    /// This is the cheapest possible way to make the Weave feel connected to the rest of the game, and
+    /// it turns a shrug into a reason: not "pick a Form" but "your focus is waiting for a VOLLEY".
+    /// </remarks>
+    private IReadOnlyList<(Form Form, string Enchant)> GearWants()
+    {
+        if (Hunter is not { } h) return Array.Empty<(Form, string)>();
+
+        var have = Loadout.Skills.Select(sk => sk.Form).ToHashSet();
+        return h.WornEnchantments
+                .Where(e => e.NeedsForm is { } f && !have.Contains(f))
+                .Select(e => (e.NeedsForm!.Value, e.Name))
+                .DistinctBy(t => t.Item1)
+                .ToList();
+    }
+
+    /// <summary>One damage reading for a loadout, through the same bench the balance tests use.</summary>
+    private float Dps(PlayerLoadout loadout, Hunter hunter)
+        => DamageBench.Measure(loadout.ToBuild(Tree, Mastery, Character), hunter).Dps;
+
     private void DrawPicker(SpriteBatch b, Point hit)
     {
         _ui.Panel(b, PickPanel);
@@ -387,6 +573,8 @@ public sealed class WeaveScreen
         _ui.TextCenterBig(b, "FORM", PickPanel.Center.X, PickPanel.Y + 384, Gold, UiTypography.SectionTitle);
         _ui.TextCenter(b, "HOW IT REACHES", PickPanel.Center.X, PickPanel.Y + 420, Slate);
 
+        var wanted = GearWants();
+
         for (var i = 0; i < Forms.Length; i++)
         {
             var cell = FormCell(i);
@@ -403,9 +591,19 @@ public sealed class WeaveScreen
                           new Rectangle(cell.Center.X - 26, cell.Y + 8, 52, 52), glyphTint))
                 _ui.Diamond(b, new Rectangle(cell.Center.X - 20, cell.Y + 18, 40, 40), glyphTint);
             _ui.TextCenterBig(b, FormName(f), cell.Center.X, cell.Bottom - 24, tint, UiTypography.Secondary);
+
+            // YOUR GEAR IS WAITING FOR THIS ONE. A small mark rather than a line of text: the cell is
+            // 130px wide and the point is to draw the eye, not to explain here — the readout panel
+            // spells out which item and which enchantment.
+            if (wanted.Any(w => w.Form == f))
+            {
+                var dot = new Rectangle(cell.Right - 22, cell.Y + 10, 12, 12);
+                _ui.Fill(b, dot, Met);
+            }
         }
 
         DrawExplainer(b, hoverForm ?? cur.Form, hoverSource ?? cur.Source, hoverForm is null && hoverSource is null);
+        DrawReadout(b, hoverSource, hoverForm);
     }
 
     /// <summary>

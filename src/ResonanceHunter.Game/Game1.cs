@@ -1758,6 +1758,8 @@ public class Game1 : Game
             _weave.Tree = _dust;
             _weave.Hunter = _hunter;
             _weave.Character = _characters.Active;
+            _weave.RegionId = _activeRegion;
+            _weave.RegionName = Regions.Get(_activeRegion).Name;
             _weave.Update(CanvasMouse, MouseClicked, MouseWheel);
             if (_weave.Dirty) { _weave.ClearDirty(); Save(); }
             Latch(gameTime);

@@ -127,7 +127,7 @@ public class TutorialTest
     {
         // The constant is a copy, so it is pinned against its source. A retune of the training curve
         // that left this behind would re-create the unobeyable prompt exactly.
-        Assert.Equal(Hunter.CostOfRank(0, new ProgressionTuning()), Tutorial.FirstRankCost);
+        Assert.Equal(Tutorial.FirstRankCost, Hunter.CostOfRank(0, new ProgressionTuning()));
     }
 
     [Fact]
