@@ -34,6 +34,70 @@ A machine-switch checklist, since the repo cannot carry everything:
 
 ---
 
+## THE BALANCE + CLARITY PASS (2026-08-15) — read before the playtest
+
+Everything the playtest asked for is in. Measurements first, because most of the fixes came from
+counting rather than from opinion.
+
+### Numbers stopped exploding
+
+`Refine` is documented as an infinite GOLD SINK, which is right — but it paid unbounded POWER, in
+BOTH item-level levers, and they had to be fixed together (capping the weapon alone left affixes
+climbing after it stopped).
+
+| weapon | before | after |
+|---|---|---|
+| Legendary iL60 | 13.0x · 5,697/s | 12.9x · 5,324 *(tuned point preserved)* |
+| Legendary iL200 | 24.7x · **34,633** | 14.2x · **6,397** |
+| Legendary iL1000 | 91.9x · **1,139,298** | 14.8x · **6,964** |
+
+The rarity LADDER came back with it: a Rare ground to iL1000 used to beat a Legendary's floor.
+
+### Loot volume, and a correction to my own measurement
+
+Chest rate was a metronome (60% of bosses = one every eight waves) and is now 12%→35% by depth.
+The boss roll also multiplied two layers that each read as "one".
+
+**I over-reported this.** My first probe rolled `ExpeditionLoot.RollBoss` as a per-boss source and
+said 65 items per hundred waves. The live loop does not do that — a boss drops a CHEST or nothing,
+and `RollBoss` is reached only from inside `Chests.Open`. Real figures: **~13 before, 6 now.**
+
+### Regions are places now
+
+Each favours its own slots (measured: Cinderworks 61% weapons vs 25% uniform) and carries a rarity
+tilt by chain position. A tilt, never a lock — half the wearables stay uniform so no set needs a
+tour of the map. The chest remembers where it was won, and persists it.
+
+### Clarity
+
+- **Weave** hover explains every Form and Source, derived from the rules and TESTED against them.
+  The two traps finally say so: MARK deals NO damage, TRAP only pays when attacked.
+- **Gear** shows an item trait's real numbers (`+60% DMG`) instead of "cleaner hits, no drawback" —
+  the blurb could never carry the figure, which depends on rarity AND refine level.
+- **Champion passive** now sits on the gear screen, not only the Roster.
+
+### HUNT animations
+
+The enemy attack clip was drawn with `loop:false` off the free-running clock, so it was CLAMPED to
+its last frame — eight frames existed, one was ever drawn. Death was a grey idle loop (there is no
+death clip; characters ship idle + attack only), and the run report covered the fall on the same
+frame it happened.
+
+### Tutorial
+
+Six lessons in the LOOP's order, gated on facts the save already carried (no new field, no
+migration). Forward-only by construction; a step that is not yet actionable shows nothing rather
+than skipping ahead.
+
+### Pacing — measured, and deliberately NOT retuned
+
+    wave 1 3.8s · wave 2 0.1s · wave 3 1.9s · wave 5 3.7s (boss) · dies at wave 8, ~15s
+
+Raising enemy health does NOT lengthen the run — across 110→400 the champion dies at wave 8, 6, 5,
+4, 4, because enemy damage scales with it. A new player lives a fifteen-second run that ENDS,
+repeatedly, until they can hold seven waves. That is a coherent idle loop, so the constant is
+unchanged and `PacingTest` keeps the sweep as instrumentation for the next pass.
+
 ## READ THIS FIRST (2026-08-15) — THE GAME WOULD NOT START, AND NOW DOES
 
 You said you could not launch it. You were right, and it was not your machine.
