@@ -69,6 +69,14 @@ public sealed class SoloExpeditionScreen
     private const float WaveBreakSeconds = 0.8f;   // the pause after a clear, before the next enemy is fought
     private const float DownedSeconds = 1.6f;   // the recovery beat before the champion tries again
 
+    /// <summary>How long the fall is left uncovered before the run report slides over it.</summary>
+    /// <remarks>
+    /// Long enough to read as a death, short enough that a player who has seen a hundred of them is not
+    /// waiting. It is taken OUT of the existing downed beat rather than added to it, so the loop keeps
+    /// exactly the rhythm it had.
+    /// </remarks>
+    private const float DeathBeatSeconds = 0.55f;
+
     // Spec §12: the hunter is the DOMINANT figure, bottom-centred at (560,735), ~390px tall; the enemy grounds
     // at the front-melee anchor (1110,750), smaller (~250px) so the hunter reads as the focal point. The old
     // layout over-sized the enemy/boss ("boss too big, masked in a box") — the spec's ranges fix that.
@@ -260,7 +268,23 @@ public sealed class SoloExpeditionScreen
     private HuntOverlay ResolveOverlay(bool welcome)
     {
         if (welcome) return HuntOverlay.None;
-        if (_mode == Mode.Downed) return HuntOverlay.HunterDown;
+
+        // LET THE FALL LAND BEFORE THE PAPERWORK. The report used to appear on the same frame the
+        // champion went down, and it is a large centred panel — so the death was covered by a table of
+        // numbers before anyone could see it happen. That is most of why the death "looked strange":
+        // there was nothing to look at, only a red flash and then a summary.
+        //
+        // Holding the report back for the first stretch of the downed beat costs nothing (the wait was
+        // already there) and gives the collapse a moment to read as a collapse.
+        //
+        // DevHoldReport is exempt. That fixture freezes the downed timer at its full value so the
+        // report can be photographed, and the beat is measured from that same value — so without this
+        // the fixture would sit forever in the uncovered moment and capture a report that never
+        // appeared. Found by running it: the shot came back with no panel at all.
+        if (_mode == Mode.Downed)
+            return DevShowFall || (!DevHoldReport && _downedTimer > DownedSeconds - DeathBeatSeconds)
+                ? HuntOverlay.None
+                : HuntOverlay.HunterDown;
         if (_bossIncomingTimer > 0f) return HuntOverlay.BossIncoming;
         if (DevForceBoss) return HuntOverlay.None;   // boss verification fixture: active combat, no wave banner
         if (_bannerTimer > 0f) return HuntOverlay.WaveCleared;
@@ -726,6 +750,28 @@ public sealed class SoloExpeditionScreen
     /// teach — that a single-target build spends its cooldown on one of five while the other four keep
     /// biting — was invisible.
     /// </remarks>
+    /// <summary>Frames in a generated enemy strip. Every one of them is eight.</summary>
+    private const float EnemyClipFrames = 8f;
+
+    /// <summary>
+    /// The clock an enemy's clip runs on — the SWING for an attack, the free clock for an idle.
+    /// </summary>
+    /// <remarks>
+    /// This is the fix for "the attack animations look strange". An attack clip is drawn with
+    /// <c>loop: false</c>, and it was handed <c>_anim</c> — the free-running screen clock, which by the
+    /// second wave is a large number. A non-looping clip at a large time is CLAMPED to its last frame,
+    /// so every enemy attack in the game was a single frozen pose: the creature snapped to the end of
+    /// its swing and held it, then snapped back to idle. Eight frames of animation existed and one of
+    /// them was ever drawn.
+    ///
+    /// <c>_enemyWindup</c> already runs 0 to 1 across the 600ms before the blow lands, so it is exactly
+    /// the phase the clip wants. Driving the clip from it means the swing plays THROUGH, and plays in
+    /// step with the hit it is delivering rather than beside it — the same rule the champion's strike
+    /// already followed, and the reason the champion's swing looked right while the enemy's did not.
+    /// </remarks>
+    private float EnemyClipSeconds(bool attacking, float fps, float stagger = 0f)
+        => attacking ? _enemyWindup * (EnemyClipFrames / fps) : _anim + stagger;
+
     private void DrawComposition(SpriteBatch b, bool attacking, IReadOnlyList<WaveCreature> comp)
     {
         var scale = ArchetypeScale(_run?.LastWaveArchetype ?? Archetype.Bruiser);
@@ -783,7 +829,9 @@ public sealed class SoloExpeditionScreen
             _ui.GroundShadow(b, box.Center.X, EnemyBox.Bottom - 10, (int)(w * 0.55f), (int)(38 * scale), 0.55f);
 
             const float crop = 0.08f;
-            if (stripKey is null || !_ui.AnimSprite(b, stripKey, box, _anim + i * 0.31f, attacking ? 16f : 12f,
+            var compFps = attacking ? 16f : 12f;
+            if (stripKey is null || !_ui.AnimSprite(b, stripKey, box,
+                    EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps,
                     !attacking, Color.White, crop))
                 if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, box, Color.White, crop))
                     _ui.Fill(b, new Rectangle(box.X + 20, box.Y + 20, box.Width - 40, box.Height - 40), Ember);
@@ -842,7 +890,8 @@ public sealed class SoloExpeditionScreen
             staticKey = attacking ? $"{en}_attack_01" : $"{en}_idle_01";
         }
 
-        if (stripKey is null || !_ui.AnimSprite(b, stripKey, ab, _anim, fps, !attacking, Color.White, crop))
+        if (stripKey is null || !_ui.AnimSprite(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps,
+                                                !attacking, Color.White, crop))
         {
             // Grounded so the static fallback stands where the animated strip does — otherwise the enemy
             // visibly hopped whenever the strip was missing and this path took over.
@@ -888,7 +937,12 @@ public sealed class SoloExpeditionScreen
 
         var frameW = tex.Height;                          // square frames
         var frames = Math.Max(1, tex.Width / frameW);
-        _bossFrame = (int)(_anim * (attacking ? 16f : 10f)) % frames;   // EXACTLY one frame (§8)
+        // The boss swing rides the same windup as everything else. It used to loop its attack strip on
+        // the free clock, so a boss "attacking" was really a boss cycling frames at a faster rate — the
+        // swing never lined up with the blow, which reads as flailing rather than striking.
+        _bossFrame = attacking
+            ? Math.Min(frames - 1, (int)(_enemyWindup * frames))
+            : (int)(_anim * 10f) % frames;   // EXACTLY one frame (§8)
         if (tex.Width % frameW != 0)
             System.Diagnostics.Debug.WriteLine($"Boss strip width {tex.Width} not a whole multiple of {frameW}.");
 
@@ -1408,8 +1462,34 @@ public sealed class SoloExpeditionScreen
     {
         // Soft contact shadow, not a hard bar: the flat rectangle that shipped here read as a painted
         // slab under the feet rather than as the figure touching the floor.
-        _ui.GroundShadow(b, box.Center.X, box.Bottom - 10, (int)(box.Width * 0.62f), 46, 0.6f);
-        var tint = dead ? new Color(0x3A, 0x3A, 0x44) : Color.White;
+        // THE FALL. There is no death CLIP — every character ships an idle and an attack strip and
+        // nothing else — so "dead" was drawn as the idle loop in grey, which is a corpse standing up
+        // and breathing. That is the whole of "the death animation looks strange".
+        //
+        // Without new art the honest reading is a COLLAPSE: freeze the pose (a dead thing does not
+        // animate), sink it into the floor, shrink it as it goes, and fade. Three cheap channels moving
+        // together read as falling far better than one grey loop reads as dying, and the shadow
+        // contracts with it so the figure stays planted rather than sliding down a wall.
+        var fallen = dead ? 1f - Math.Clamp(_downedTimer / DownedSeconds, 0f, 1f) : 0f;
+        var ease = fallen * fallen * (3f - 2f * fallen);   // smoothstep — a body accelerates, then settles
+
+        if (dead)
+        {
+            // The drop and the shrink are the SAME number on purpose. Sprites are bottom-anchored, so
+            // moving the box down by d and shortening it by d leaves the feet exactly where they were
+            // and brings the head down — a body folding onto the floor. When the two differed the feet
+            // travelled too, and the figure read as sinking THROUGH the ground rather than falling onto
+            // it, which is a different and much worse animation.
+            var fold = (int)(box.Height * 0.42f * ease);
+            box = new Rectangle(box.X, box.Y + fold, box.Width, Math.Max(8, box.Height - fold));
+        }
+
+        _ui.GroundShadow(b, box.Center.X, box.Bottom - 10,
+                         (int)(box.Width * (0.62f - 0.18f * ease)), 46, 0.6f - 0.25f * ease);
+
+        var tint = dead
+            ? Color.Lerp(new Color(0x6A, 0x5A, 0x62), new Color(0x2A, 0x28, 0x34), ease) * (1f - 0.45f * ease)
+            : Color.White;
 
         // ATTACK does not loop, and is driven by the combat beat rather than its own clock — the same
         // rule the rig's strike clip followed, for the same reason: a swing that runs free drifts out of
@@ -1419,6 +1499,11 @@ public sealed class SoloExpeditionScreen
         var seconds = DevSwingPhase is { } ph && !dead
             ? ph * StrikeSeconds
             : swinging ? StrikeSeconds - _strikeTime : _anim;
+
+        // A DEAD CHAMPION HOLDS ITS LAST POSE. Passing the free clock here would keep the idle strip
+        // cycling under the tint and the sink — the figure would sag into the floor while still walking
+        // on the spot, which is worse than either treatment alone.
+        if (dead) seconds = 0f;
 
         // The generated strip, then the base sprite, then a block.
         //
@@ -1500,7 +1585,21 @@ public sealed class SoloExpeditionScreen
     /// </remarks>
     public bool DevHoldReport { get; set; }
 
-    public void DevRunToDeath(Hunter hunter)
+    /// <summary>DEV: freeze in the downed beat but keep the report OFF, to photograph the fall.</summary>
+    /// <remarks>
+    /// Separate from <see cref="DevHoldReport"/> because the two jobs are different and conflating them
+    /// broke the capture: holding is what stops the timer running out and restarting the run, and
+    /// suppressing is what keeps the panel off the body. The first attempt cleared the hold in order to
+    /// suppress, so the beat simply expired mid-capture and photographed a fresh wave instead.
+    /// </remarks>
+    public bool DevShowFall { get; set; }
+
+    /// <param name="fallProgress">
+    /// 0 poses the instant of the fall, 1 the settled body. Anything other than null ALSO suppresses the
+    /// report, so the collapse can be photographed uncovered — the report is a large centred panel and
+    /// sits directly on top of the thing this poses.
+    /// </param>
+    public void DevRunToDeath(Hunter hunter, float? fallProgress = null)
     {
         DevHoldReport = true;
         DevStart(hunter, 900f, 14f);
@@ -1525,6 +1624,15 @@ public sealed class SoloExpeditionScreen
         _mode = Mode.Downed;
         _downedTimer = DownedSeconds;
         _bannerTimer = 0f;   // the wave-cleared banner would otherwise sit over the report
+
+        if (fallProgress is { } fp)
+        {
+            // Wind the downed clock to a chosen point in the fall and FREEZE it there. The collapse is
+            // driven by how much of the beat has elapsed, so this is the only way to photograph a moment
+            // of it — a capture takes one frame, and the fall is over in half a second.
+            _downedTimer = DownedSeconds * (1f - Math.Clamp(fp, 0f, 1f));
+            DevShowFall = true;   // hold stays ON so the beat cannot expire mid-capture
+        }
     }
 
     /// <summary>DEV: start a run and play partway into a wave, for screenshots.</summary>

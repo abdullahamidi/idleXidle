@@ -880,7 +880,7 @@ public class Game1 : Game
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig"
-                or "fightgear" or "fightswing" or "fightreport" or "traitlit" or "traitterm" or "traitterminal"
+                or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "traitlit" or "traitterm" or "traitterminal"
                 or "roster" or "rosterlocked" or "weave")
             {
                 _showTitle = false;
@@ -1064,7 +1064,7 @@ public class Game1 : Game
                     _deepestEver = 23; _mastery.SetEarned(77400);   // fixture career values (Stats §13)
                 }
 
-                if (sm is "fight" or "fightgear" or "fightswing" or "fightreport" or "runlog")
+                if (sm is "fight" or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "runlog")
                 {
                     // fightswing holds the strike clip at its apex, so the one pose a timed capture can
                     // never catch — the blade at full extension — is checkable.
@@ -1076,7 +1076,7 @@ public class Game1 : Game
                     // `fightgear` dresses the Hunter before the fight opens. A fresh save wears nothing, so
                     // a plain `fight` capture can never show worn equipment — and worn equipment is exactly
                     // what the rig bindings need verifying against.
-                    if (sm is "fightgear" or "fightswing" or "fightreport" or "runlog")
+                    if (sm is "fightgear" or "fightswing" or "fightreport" or "fightfall" or "runlog")
                     {
                         var worn = new[]
                         {
@@ -1098,7 +1098,7 @@ public class Game1 : Game
                     // attention cue (a waiting chest + unspent mastery points).
                     // Not for fightreport: the welcome-back toast outranks the HunterDown overlay in the
                     // arena's priority list, so it would hide the very screen that capture exists to show.
-                    if (sm is not ("fightreport" or "runlog"))
+                    if (sm is not ("fightreport" or "fightfall" or "runlog"))
                     {
                         _bootMessage = "WELCOME BACK — 18 MIN AWAY\n+140 GLEAM · 12 KILLS · 0 CORES";
                         _bootColor = Gold; _bootTimer = 7f;
@@ -1118,6 +1118,18 @@ public class Game1 : Game
                     if (sm == "fightreport")
                     {
                         _expedition.DevRunToDeath(_hunter);
+                    }
+                    else if (sm == "fightfall")
+                    {
+                        // The COLLAPSE, uncovered. The report is a large centred panel that lands on top
+                        // of the champion, so the death could never be photographed from "fightreport" —
+                        // and a death nobody can photograph is a death nobody reviewed. RH_SHOT_T picks
+                        // the moment: 0 is the instant of the fall, 1 the settled body.
+                        var t = float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_T"),
+                                               System.Globalization.NumberStyles.Float,
+                                               System.Globalization.CultureInfo.InvariantCulture, out var v)
+                            ? v : 0.6f;
+                        _expedition.DevRunToDeath(_hunter, fallProgress: t);
                     }
                     else if (sm == "runlog")
                     {
