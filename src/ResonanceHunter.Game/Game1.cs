@@ -136,6 +136,17 @@ public class Game1 : Game
     private string _unlockShowing = "";
     private string _unlockHeadline = "";
 
+    /// <summary>
+    /// False until the first roster Refresh has been absorbed silently.
+    /// </summary>
+    /// <remarks>
+    /// The unlocked set is derived from conquest and held in memory only — the save carries just the
+    /// active champion's id — so the first Refresh after every load reports EVERY champion the player
+    /// already owns as newly gained. Without this the game would open with a stack of "X JOINS YOU"
+    /// panels for champions earned hours ago.
+    /// </remarks>
+    private bool _rosterBaselined;
+
     /// <summary>Last frame's facts, so an unlock can be noticed exactly once, when it happens.</summary>
     private UnlockFacts _lastUnlockFacts;
     private int _lastSkillSlots = -1;
@@ -2201,12 +2212,35 @@ public class Game1 : Game
             if (!_characters.QuestDone(done.Id))
             {
                 _characters.CompleteQuest(done.Id);
-                _bootMessage = $"QUEST DONE — {done.Name}";
+                // WAS _bootMessage, WHICH IS A BOOT-ONLY CHANNEL. See the champion block below.
+                _unlockQueue.Enqueue(("QUEST COMPLETE", $"{done.Name} — {done.Demand}"));
                 Save();
             }
 
+        // NEW CHAMPIONS. Playtest: "Karakterler hemen açılıyor, açılma geri bildirimi de gelmiyor,
+        // haberim olmadı."
+        //
+        // THE FEEDBACK WAS BEING WRITTEN AND THROWN AWAY. This loop set _bootMessage — but that field is
+        // half of a two-part mechanism, and the other half is _bootTimer, which gates the draw and is
+        // armed in exactly one live place: Initialize(). A conquest happens minutes into a session, by
+        // which time the timer has been zero for a long time, so DrawBootToast returned on its first
+        // line. There was no sound, no banner, no panel and no badge for a champion anywhere in the
+        // game. The player was right that nothing told them.
+        //
+        // It also had a second failure in the opposite direction. CharacterState._unlocked is in-memory
+        // only — the save carries just the active id — so on the FIRST gameplay frame of every launch
+        // Refresh re-reports every champion the player already owns, and the last one clobbered the
+        // WELCOME BACK offline summary with a false "X JOINS YOU". _rosterBaselined absorbs that first
+        // pass silently, the same way NoticeUnlocks seeds its own baseline.
         foreach (var got in _characters.Refresh(_world.ConqueredIds))
-            _bootMessage = $"{got.Name} JOINS YOU — {got.PassiveName}";
+        {
+            if (!_rosterBaselined) continue;
+            _unlockQueue.Enqueue(($"{got.Name} JOINS YOU",
+                                  $"{got.PassiveName} — {got.PassiveText}\n\n"
+                                  + "Switch champion on the ROSTER (R). Nothing resets when you do: both "
+                                  + "trees, your gear, your Gleam and the Warren are shared."));
+        }
+        _rosterBaselined = true;
         _expedition.Character = _characters.Active;
         _character.Character = _characters.Active;
 

@@ -1,5 +1,7 @@
 using System;
 using System.Linq;
+using ResonanceHunter.Core.Characters;
+using ResonanceHunter.Core.Encounters;
 using ResonanceHunter.Core.Progression;
 using Xunit;
 using Xunit.Abstractions;
@@ -152,5 +154,27 @@ public class UnlocksTest
         var everything = new UnlockFacts(WavesCleared: 9999, DeepestWave: 9999, ItemsOwned: 999,
                                          ChestsHeld: 99, RegionsConquered: 6, TraitPointsEarned: 99);
         Assert.Equal(4, Unlocks.SkillSlots(everything));
+    }
+
+    [Fact]
+    public void test_the_roster_opens_no_later_than_the_first_champion_it_would_show()
+    {
+        // A GATE AND ITS REWARD TUNED INDEPENDENTLY. Activity.Roster asked for two conquests while
+        // THE THORNWALL is earned by conquering the FIRST region — so the player's second champion
+        // arrived while the only screen that could show it was still a dimmed tile. Nothing in either
+        // table knew about the other; this test is the thing that knows.
+        var earliest = CharacterRoster.All
+            .Where(c => c.Unlock.RegionId is not null)
+            .Select(c => Regions.All.ToList().FindIndex(r => r.Id == c.Unlock.RegionId) + 1)
+            .Where(conquests => conquests > 0)
+            .DefaultIfEmpty(int.MaxValue)
+            .Min();
+
+        _out.WriteLine($"the first conquest-earned champion arrives after {earliest} conquest(s)");
+
+        var atThatPoint = new UnlockFacts(RegionsConquered: earliest);
+        Assert.True(Unlocks.IsOpen(Activity.Roster, atThatPoint),
+            $"a champion is earned on conquest {earliest}, but the ROSTER is still locked then — the "
+            + "player is handed something they cannot look at.");
     }
 }

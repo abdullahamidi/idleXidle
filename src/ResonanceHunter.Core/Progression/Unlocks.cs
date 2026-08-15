@@ -121,8 +121,11 @@ public static class Unlocks
         // The permanent tree only means anything once there are points in it.
         Activity.Traits => f.TraitPointsEarned >= 1,
 
-        // Champions come from conquest, so the roster is empty until there is more than one.
-        Activity.Roster => f.RegionsConquered >= 2,
+        // WAS `>= 2`, WHICH WAS OFF BY ONE AGAINST THE THING IT GATES. Champions are earned by
+        // conquering, and THE THORNWALL arrives on the FIRST conquest — so the player's second champion
+        // turned up while the only screen that could show it was still a dimmed tile. The gate and the
+        // reward were tuned independently and never checked against each other.
+        Activity.Roster => f.RegionsConquered >= 1,
 
         // An out-of-range cast. Throwing rather than defaulting to true, because a gate that silently
         // opens is the failure this whole file exists to prevent.
