@@ -769,6 +769,9 @@ public class Game1 : Game
 
         _bootCheckFrames++;
 
+        // How long each lap leaves the fight running before touring the screens again.
+        const int FightFramesPerLap = 450;
+
         // RH_BOOTCHECK=<frames> lengthens the soak; anything non-numeric (including "1") keeps the
         // default. A gate wants ten seconds; hunting a crash that only shows after minutes of real
         // ticking wants thousands of frames, and that is a different job for the same machinery.
@@ -793,25 +796,36 @@ public class Game1 : Game
 
         var screens = BootCheckScreens();
         var elapsed = _bootCheckFrames - Settle;
-        var step = elapsed / PerScreen;
+
+        // A CYCLE, not a single tour. Touring the screens once at the start only ever draws them
+        // against the state the save arrived in — an empty merge tray, no chests, a bag that has not
+        // grown. The interesting failures are the ones that need the game to have HAPPENED first: the
+        // Forge after a chest drops, the log after a run ends, the map after a conquest. So each lap
+        // walks every screen and then leaves the fight running for a while, and a long soak is many
+        // laps, redrawing everything against state that keeps moving.
+        var lapLength = screens.Length * PerScreen + FightFramesPerLap;
+        var inLap = elapsed % lapLength;
+        var step = inLap / PerScreen;
 
         if (step < screens.Length)
         {
-            if (elapsed % PerScreen == 0)
+            if (inLap % PerScreen == 0)
             {
-                _bootCheckScreensSeen = step + 1;
+                _bootCheckScreensSeen++;
                 screens[step].Open();
             }
             return;
         }
+
+        // Make sure the lap ends back in the fight, whatever the last screen visited was.
+        if (inLap == screens.Length * PerScreen) screens[1].Open();
 
         // THEN SIT IN THE FIGHT AND LET IT RUN. Drawing the hunt screen for twelve frames proves it
         // renders; it does not prove a wave can resolve. Clearing waves is where the loot roll, the
         // chest drop, the level-up and the conquest counter all fire, and those run against the
         // player's real numbers — which is the combination no fixture reproduces and no capture holds
         // still long enough to reach. This is the part of the check that touches the actual game.
-        var soak = elapsed - screens.Length * PerScreen;
-        if (soak < soakFrames) return;
+        if (elapsed < soakFrames) return;
 
         Console.WriteLine(_hasSave
             ? $"BOOT OK — save loaded, hunter level {_hunter.HunterLevel}, "
