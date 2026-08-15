@@ -505,6 +505,17 @@ public sealed class SoloExpeditionScreen
         _bannerTimer = 2.4f;
     }
 
+    /// <summary>A charter dropped — say so on its own, louder than a material.</summary>
+    /// <remarks>
+    /// REPLACES the banner rather than appending, unlike FlashSpoil. A charter is one wave in forty and
+    /// a whole Forge operation; sharing a line with "+1 ESSENCE" would bury the rarer of the two.
+    /// </remarks>
+    public void FlashCharter(string name)
+    {
+        _bannerText = $"{name} FOUND  —  SPEND IT IN THE FORGE (F)";
+        _bannerTimer = 3.0f;
+    }
+
     /// <summary>The wave paid a material better than Scrap — say which, on the clear banner.</summary>
     /// <remarks>
     /// <para>

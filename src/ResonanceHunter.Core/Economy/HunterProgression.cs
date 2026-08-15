@@ -102,6 +102,40 @@ public sealed class Hunter
     public void AddMaterials(int amount) => AddMaterial(Material.Scrap, amount);
     public bool SpendMaterials(int amount) => SpendMaterial(Material.Scrap, amount);
 
+    // ── CHARTERS — single-use papers that pay for one Forge operation ────────────────────────────
+    private readonly Dictionary<Charter, int> _charters =
+        Enum.GetValues<Charter>().ToDictionary(c => c, _ => 0);
+
+    public int CharterCount(Charter c) => _charters[c];
+    public void AddCharter(Charter c, int amount = 1) => _charters[c] += Math.Max(0, amount);
+
+    /// <summary>
+    /// Spend one charter. Returns false and takes nothing if you have none.
+    /// </summary>
+    /// <remarks>
+    /// <b>Callers must validate the operation FIRST and spend this LAST.</b> A charter consumed before a
+    /// rejection is a charter the player paid for a refusal — and because these drop rarely, that is far
+    /// worse than the same mistake with a material. Every call site in the Forge is ordered
+    /// validate-then-spend for exactly that reason.
+    /// </remarks>
+    public bool SpendCharter(Charter c)
+    {
+        if (_charters[c] <= 0) return false;
+        _charters[c]--;
+        return true;
+    }
+
+    /// <summary>Restore from a save. Replaces rather than adds, so a reload cannot double a stock.</summary>
+    public void RestoreCharters(IEnumerable<KeyValuePair<Charter, int>> stock)
+    {
+        ArgumentNullException.ThrowIfNull(stock);
+        foreach (var c in Enum.GetValues<Charter>()) _charters[c] = 0;
+        foreach (var (c, n) in stock) _charters[c] = Math.Max(0, n);
+    }
+
+    /// <summary>Every charter and how many you hold — what the save writes.</summary>
+    public IReadOnlyDictionary<Charter, int> AllCharters => _charters;
+
     /// <summary>Cosmetic only — never a gate. Gating on it would make it a second progression axis.</summary>
     public int HunterLevel => 1 + _ranks.Values.Sum() / 5;
 

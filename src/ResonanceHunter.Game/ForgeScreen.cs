@@ -538,10 +538,15 @@ public sealed class ForgeScreen
         var junk = _inv.Where(i => Gear.IsWearable(i) && i.Rarity <= Rarity.Uncommon && !IsWornItem(i)).ToList();
         if (junk.Count == 0) { Say("NO JUNK TO SALVAGE (COMMON / UNCOMMON GEAR).", Slate); return; }
 
+        // A SALVAGE CHART DOUBLES THE YIELD. Salvage is the one Forge operation that costs nothing, so
+        // its charter cannot waive a price — it raises the return instead. Spent here, after the junk
+        // check above has already proven there is something to salvage.
+        var chart = hunter.SpendCharter(Charter.Salvage);
+
         var gained = 0;
         foreach (var it in junk)
         {
-            var m = Forge.Dismantle(it, Tuning);
+            var m = Forge.Dismantle(it, Tuning) * (chart ? 2 : 1);
             hunter.AddMaterial(MaterialTiers.ForRarity(it.Rarity), m);
             gained += m;
             _inv.Remove(it);
@@ -549,7 +554,8 @@ public sealed class ForgeScreen
         }
 
         _cursor = Math.Clamp(_cursor, 0, Math.Max(0, _inv.Count - 1));
-        Say($"SALVAGED {junk.Count} JUNK — +{gained} {MaterialTiers.Name(Material.Scrap)}.", Gold);
+        Say($"SALVAGED {junk.Count} JUNK — +{gained} {MaterialTiers.Name(Material.Scrap)}"
+            + (chart ? "  (SALVAGE CHART — DOUBLED)." : "."), Gold);
     }
 
     private void DoMerge(Hunter hunter)
@@ -558,14 +564,24 @@ public sealed class ForgeScreen
         // Defence in depth: ToggleMerge already refuses to queue worn gear, but an item can be queued and
         // THEN equipped. Consuming it would delete equipped gear (and orphan its worn-slot pointer).
         if (inputs.Any(i => IsWorn(hunter, i))) { Say("TAKE WORN GEAR OFF BEFORE MERGING IT.", Ember); return; }
+        // A MERGE CHART lifts the same-rarity rule. Tried WITHOUT it first, so a perfectly ordinary
+        // matched trio never silently burns a paper the player was saving for a mixed one.
         var result = Forge.Merge(inputs, _rng, Tuning, LootTuning.Default);
+        var chart = false;
+        if (!result.Success && hunter.CharterCount(Charter.Merge) > 0)
+        {
+            var withChart = Forge.Merge(inputs, _rng, Tuning, LootTuning.Default, ignoreRarity: true);
+            if (withChart.Success) { result = withChart; chart = true; }
+        }
         if (!result.Success) { Say(result.Rejection!, Ember); return; }
+        if (chart) hunter.SpendCharter(Charter.Merge);
 
         foreach (var i in inputs) _inv.Remove(i);
         _merge.Clear();
         _inv.Add(result.Product!);
         _cursor = Math.Clamp(_cursor, 0, Math.Max(0, _inv.Count - 1));
-        Say($"MERGED INTO A {RarityNames[(int)result.Product!.Rarity]} {ItemNames[result.Product.BaseType]}.", Gold);
+        Say($"MERGED INTO A {RarityNames[(int)result.Product!.Rarity]} {ItemNames[result.Product.BaseType]}"
+            + (chart ? "  (MERGE CHART — MIXED RARITIES)." : "."), Gold);
     }
 
     /// <summary>
@@ -690,12 +706,19 @@ public sealed class ForgeScreen
         if (IsWorn(hunter, item)) { Say("TAKE IT OFF BEFORE REFORGING.", Ember); return; }
 
         var cost = ReforgeTuning.Default.TraitCostFor(item.Rarity);
-        if (hunter.MaterialOf(Material.Essence) < cost) { Say($"NEED {cost} ESSENCE TO REFORGE THE TRAIT.", Ember); return; }
+        var chart = hunter.CharterCount(Charter.Reforge) > 0;
+        if (!chart && hunter.MaterialOf(Material.Essence) < cost)
+        {
+            Say($"NEED {cost} ESSENCE TO REFORGE THE TRAIT.", Ember);
+            return;
+        }
 
         var result = Reforge.ReforgeTrait(item, _rng, ReforgeTuning.Default);
         if (!result.Success) { Say(result.Rejection!, Ember); return; }
 
-        hunter.SpendMaterial(Material.Essence, result.Cost);
+        // Spent only now that the re-roll has actually succeeded.
+        if (chart) hunter.SpendCharter(Charter.Reforge);
+        else hunter.SpendMaterial(Material.Essence, result.Cost);
         ReplaceItem(item, result.Product!);
         var name = GearTraits.NameOf(GearTraits.TraitOf(result.Product!)!.Value);
         Say($"REFORGED — TRAIT IS NOW {name}.", Gold);
@@ -714,12 +737,18 @@ public sealed class ForgeScreen
         // Rare/Epic spend CORE. That is what gives Crystal — the Legendary-salvage tier — its own sink.
         var tier = EnchantReforgeTier(item.Rarity);
         var cost = ReforgeTuning.Default.EnchantCostFor(item.Rarity);
-        if (hunter.MaterialOf(tier) < cost) { Say($"NEED {cost} {MaterialTiers.Name(tier)} TO REFORGE THE ENCHANTMENT.", Ember); return; }
+        var chart = hunter.CharterCount(Charter.Reforge) > 0;
+        if (!chart && hunter.MaterialOf(tier) < cost)
+        {
+            Say($"NEED {cost} {MaterialTiers.Name(tier)} TO REFORGE THE ENCHANTMENT.", Ember);
+            return;
+        }
 
         var result = Reforge.ReforgeEnchant(item, _rng, ReforgeTuning.Default);
         if (!result.Success) { Say(result.Rejection!, Ember); return; }
 
-        hunter.SpendMaterial(tier, result.Cost);
+        if (chart) hunter.SpendCharter(Charter.Reforge);
+        else hunter.SpendMaterial(tier, result.Cost);
         ReplaceItem(item, result.Product!);
         var ench = Enchantments.Of(result.Product!);
         Say(ench is not null ? $"REFORGED — ENCHANT IS NOW {ench.Name}." : "REFORGED THE ENCHANTMENT.", Gold);
@@ -737,13 +766,24 @@ public sealed class ForgeScreen
         if (IsWorn(hunter, item)) { Say("TAKE IT OFF BEFORE REFINING.", Ember); return; }
 
         var r = Forge.Refine(item, Tuning);
-        if (hunter.MaterialOf(Material.Scrap) < r.Scrap) { Say($"NEED {r.Scrap} SCRAP TO REFINE.", Ember); return; }
-        if (hunter.Gleam < r.Gold) { Say($"NEED {r.Gold}g TO REFINE.", Ember); return; }
 
-        hunter.SpendMaterial(Material.Scrap, r.Scrap);
-        hunter.SpendGleam(r.Gold);
+        // A CHART PAYS FOR IT. Validated first and spent last, per Hunter.SpendCharter's contract: a
+        // charter consumed before a rejection is a paper the player spent on a refusal, and these drop
+        // one wave in forty.
+        var chart = hunter.CharterCount(Charter.Refine) > 0;
+        if (!chart)
+        {
+            if (hunter.MaterialOf(Material.Scrap) < r.Scrap) { Say($"NEED {r.Scrap} SCRAP TO REFINE.", Ember); return; }
+            if (hunter.Gleam < r.Gold) { Say($"NEED {r.Gold}g TO REFINE.", Ember); return; }
+        }
+
+        if (chart) hunter.SpendCharter(Charter.Refine);
+        else { hunter.SpendMaterial(Material.Scrap, r.Scrap); hunter.SpendGleam(r.Gold); }
+
         ReplaceItem(item, r.Product);
-        Say($"REFINED TO iL{r.Product.ItemLevel}  ({r.Scrap} SCRAP + {r.Gold}g).", Gold);
+        Say(chart
+                ? $"REFINED TO iL{r.Product.ItemLevel}  (REFINE CHART — FREE)."
+                : $"REFINED TO iL{r.Product.ItemLevel}  ({r.Scrap} SCRAP + {r.Gold}g).", Gold);
     }
 
     /// <summary>
@@ -900,6 +940,8 @@ public sealed class ForgeScreen
         // The subtitle rides under the title in the focused modes; SALVAGE has its own dense toolbar there.
         if (_mode != ForgeMode.Salvage) _ui.TextCenterBig(b, ModeSubtitle(), 960, 80, Slate, UiTypography.Secondary);
 
+        DrawCharters(b, hunter);
+
         switch (_mode)
         {
             case ForgeMode.Upgrade: DrawUpgradeMode(b, hunter, hit, clicked); break;
@@ -1041,6 +1083,43 @@ public sealed class ForgeScreen
 
     // ── UPGRADE = the real REFINE: +1 item level, which raises every affix. Deterministic, so the "after"
     //    column is a truthful preview, not a gamble — there is no success rate or downgrade to display. ──
+    /// <summary>
+    /// The charters you are holding, across the top of every Forge mode.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A permission you do not know you hold is not a permission. These are spent AUTOMATICALLY by the
+    /// operation they name — there is no "use charter" button, because a button would be a second
+    /// decision on top of a decision the player has already made ("refine this"). So the only thing the
+    /// screen owes them is a visible count and a clear statement that the next one is free.
+    /// </para>
+    /// <para>
+    /// Drawn on every mode rather than only the relevant one: a REFORGE CHART is a reason to switch to
+    /// the REFORGE tab, and it cannot be that if it is only visible once you get there.
+    /// </para>
+    /// </remarks>
+    private void DrawCharters(SpriteBatch b, Hunter hunter)
+    {
+        var held = Enum.GetValues<Charter>().Where(c => hunter.CharterCount(c) > 0).ToList();
+        if (held.Count == 0) return;
+
+        const int y = 108;
+        var x = 1000;
+
+        _ui.TextRight(b, "CHARTS", 980, y, Slate);
+        foreach (var c in held)
+        {
+            var n = hunter.CharterCount(c);
+            var label = n > 1 ? $"{Charters.Short(c)} x{n}" : Charters.Short(c);
+            var w = _ui.Measure(label) + 26;
+
+            _ui.Fill(b, new Rectangle(x, y - 6, w, 30), new Color(0x1C, 0x2A, 0x24));
+            _ui.Fill(b, new Rectangle(x, y - 6, 4, 30), Met);
+            _ui.Text(b, label, x + 14, y, Met);
+            x += w + 12;
+        }
+    }
+
     private void DrawUpgradeMode(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
     {
         DrawRail(b, hunter, hit, clicked);

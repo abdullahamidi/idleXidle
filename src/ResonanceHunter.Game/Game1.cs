@@ -2310,6 +2310,14 @@ public class Game1 : Game
             _hunter.AddMaterial(spoil.Material, spoil.Amount);
             if (spoil.Material != Material.Scrap) _expedition.FlashSpoil(spoil.Material);
 
+            // A CHARTER — one wave in forty. Announced loudly and by NAME, because it is a permission
+            // rather than a number: "+1 SCRAP" needs no explanation and "REFINE CHART" does.
+            if (spoil.Charter is { } chart)
+            {
+                _hunter.AddCharter(chart);
+                _expedition.FlashCharter(Charters.Name(chart));
+            }
+
             if (r.IsBoss && DropBossChest(r, def)) _expedition.FlashChest();   // a chest is a LOW-rate drop now, not a given
         }
         if (_champSecondsAccrued > 10) _champGleamRate = (float)(_champGleamAccrued / _champSecondsAccrued);

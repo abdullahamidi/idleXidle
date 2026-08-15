@@ -3,8 +3,15 @@ using ResonanceHunter.Core.Economy;
 
 namespace ResonanceHunter.Core.Expeditions;
 
-/// <summary>What an ordinary wave hands over, besides Gleam.</summary>
-public readonly record struct WaveSpoil(Material Material, int Amount);
+/// <summary>
+/// What an ordinary wave hands over, besides Gleam: always a material, and rarely a charter.
+/// </summary>
+/// <remarks>
+/// The charter is nullable rather than a second roll the caller has to remember to make. A wave's
+/// payout is ONE thing to credit, so a caller cannot accidentally implement half of it — which is how
+/// this codebase loses features.
+/// </remarks>
+public readonly record struct WaveSpoil(Material Material, int Amount, Charter? Charter = null);
 
 /// <summary>
 /// The per-wave material trickle — the reward for the waves that are not bosses.
@@ -35,6 +42,30 @@ public static class WaveSpoils
     /// (<c>test_depth_buys_quality_and_not_quantity</c>) is what caught it.
     /// </remarks>
     public const int UnitsPerWave = 1;
+
+    /// <summary>
+    /// How often a wave also pays a single-use Forge charter.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One wave in forty. Deliberately rarer than the tiered material, because a charter is a whole
+    /// operation rather than a step toward one — a REFINE CHART skips a cost the player would otherwise
+    /// spend real Gleam on, and Gleam is scarce now. At this rate a session that clears a couple of
+    /// hundred waves sees a handful, which is a pleasant surprise rather than a supply line.
+    /// </para>
+    /// <para>
+    /// It does NOT replace the material — the wave pays both. A drop that sometimes swaps one reward for
+    /// another reads as the game taking something away.
+    /// </para>
+    /// </remarks>
+    public const double CharterChance = 0.025;
+
+    /// <summary>The depth at which the charters start appearing at all.</summary>
+    /// <remarks>
+    /// The Forge opens on the first chest, so a charter before then is a permission for a screen the
+    /// player has not met — the same mistake the Warren was making by paying before it unlocked.
+    /// </remarks>
+    public const int ChartersFromWave = 5;
 
     /// <summary>The depth at which each tier starts appearing at all.</summary>
     public const int EssenceFromWave = 8;
@@ -69,10 +100,18 @@ public static class WaveSpoils
     {
         ArgumentNullException.ThrowIfNull(rng);
 
+        // Rolled FIRST and unconditionally, so the material branch below cannot change how often a
+        // charter appears. Two rewards, two independent rolls — the alternative (rolling the charter
+        // only on the Scrap path) would have made charters commoner in the shallows than at depth,
+        // which is backwards and would have been invisible until someone measured it.
+        var charter = wave >= ChartersFromWave && rng.NextDouble() < CharterChance
+            ? (Charter?)(Charter)rng.Next(Enum.GetValues<Charter>().Length)
+            : null;
+
         var best = BestTierFor(wave);
         if (best != Material.Scrap && rng.NextDouble() < TieredChance)
-            return new WaveSpoil(best, 1);
+            return new WaveSpoil(best, 1, charter);
 
-        return new WaveSpoil(Material.Scrap, UnitsPerWave);
+        return new WaveSpoil(Material.Scrap, UnitsPerWave, charter);
     }
 }

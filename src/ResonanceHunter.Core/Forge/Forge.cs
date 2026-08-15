@@ -101,7 +101,17 @@ public static class Forge
     /// Legendary into the machine and lose the Legendary, which is a trap, not a decision.
     /// Legendary cannot be merged: there is nothing above it, so it would be a pure destruction.
     /// </remarks>
-    public static MergeResult Merge(IReadOnlyList<ItemInstance> inputs, Random rng, ForgeTuning tuning, LootTuning loot)
+    /// <param name="ignoreRarity">
+    /// A MERGE CHART was spent: mix rarities, and the LOWEST of the three sets the grade.
+    /// </param>
+    /// <remarks>
+    /// The same-rarity rule exists so a player cannot feed a Legendary in beside two Commons and lose
+    /// it — a trap, not a decision. The chart does not remove that protection, it PRICES it: the output
+    /// is built from the lowest input, so mixing still costs you the difference and you can see exactly
+    /// what you are giving up before you spend the paper.
+    /// </remarks>
+    public static MergeResult Merge(IReadOnlyList<ItemInstance> inputs, Random rng, ForgeTuning tuning, LootTuning loot,
+                                    bool ignoreRarity = false)
     {
         ArgumentNullException.ThrowIfNull(inputs);
 
@@ -120,7 +130,13 @@ public static class Forge
 
         var rarity = inputs[0].Rarity;
         if (inputs.Any(i => i.Rarity != rarity))
-            return new MergeResult { Rejection = "ALL THREE ITEMS MUST BE THE SAME RARITY." };
+        {
+            if (!ignoreRarity)
+                return new MergeResult { Rejection = "ALL THREE ITEMS MUST BE THE SAME RARITY." };
+
+            // The chart's whole effect, and its whole price: the weakest input decides the grade.
+            rarity = inputs.Min(i => i.Rarity);
+        }
 
         if (rarity == Rarity.Legendary)
             return new MergeResult { Rejection = "LEGENDARY IS THE HIGHEST RARITY. NOTHING TO MERGE INTO." };

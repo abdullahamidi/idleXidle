@@ -31,6 +31,16 @@ public sealed record SaveGame
     public int Core { get; init; }
     public int Crystal { get; init; }
 
+    /// <summary>
+    /// Single-use Forge charters, by name. Absent on every save written before they existed, which
+    /// loads as "none" — the right answer, and no migration.
+    /// </summary>
+    /// <remarks>
+    /// Keyed by the enum's NAME rather than its ordinal, so inserting a charter into the middle of the
+    /// enum later cannot silently turn every player's REFORGE stock into SALVAGE.
+    /// </remarks>
+    public Dictionary<string, int> Charters { get; init; } = new();
+
     public Dictionary<string, int> TrainingRanks { get; init; } = new();
 
     public float RegionMasteryPoints { get; init; }
@@ -401,6 +411,7 @@ public static class SaveSystem
             WarrenMasteryPool = warrenMasteryPool,
             Gleam = hunter.Gleam,
             Materials = hunter.Materials,
+            Charters = hunter.AllCharters.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value),
             Essence = hunter.MaterialOf(Material.Essence),
             Core = hunter.MaterialOf(Material.Core),
             Crystal = hunter.MaterialOf(Material.Crystal),
@@ -522,6 +533,12 @@ public static class SaveSystem
         hunter.AddMaterial(Material.Essence, save.Essence);
         hunter.AddMaterial(Material.Core, save.Core);
         hunter.AddMaterial(Material.Crystal, save.Crystal);
+
+        // RESTORE, not add: this method runs once per load, but "replace" is the honest verb for a
+        // stock read off disk and it makes a double-call harmless rather than a duplication bug.
+        hunter.RestoreCharters(save.Charters
+            .Where(kv => Enum.TryParse<Charter>(kv.Key, out _))
+            .Select(kv => new KeyValuePair<Charter, int>(Enum.Parse<Charter>(kv.Key), kv.Value)));
 
         // Re-buy each rank, but credit the Gleam first — otherwise restoring a maxed Hunter would
         // fail on affordability and silently drop their progress.
