@@ -118,9 +118,20 @@ public sealed record ChestTuning
     /// does is a moment. The chance rises a little with depth — farming a deeper region pays out somewhat
     /// more often, "seviyeye göre" — but is capped so it never becomes a guarantee again.
     /// </remarks>
-    public float BaseDropChance { get; init; } = 0.30f;
-    public float DropChancePerTier { get; init; } = 0.015f;
-    public float MaxDropChance { get; init; } = 0.60f;
+    /// <remarks>
+    /// <b>Retuned after counting.</b> 0.30 rising to 0.60 sounded like "sometimes" and measured as a
+    /// metronome: 60% of bosses, and a boss every fifth wave, is a chest every eight waves — about one
+    /// every twenty seconds at the speed waves actually die. The playtest's "still too many chests"
+    /// was correct and the old numbers said so if anyone added them up.
+    ///
+    /// A chest is now roughly one boss in eight at the surface and one in three at depth. That keeps
+    /// the promise the comment above always made — an event, not a paycheck — and it makes the depth
+    /// nudge readable: farming deep genuinely pays out more often instead of both ends sitting at the
+    /// cap.
+    /// </remarks>
+    public float BaseDropChance { get; init; } = 0.12f;
+    public float DropChancePerTier { get; init; } = 0.006f;
+    public float MaxDropChance { get; init; } = 0.35f;
 
     public static ChestTuning Default { get; } = new();
 }

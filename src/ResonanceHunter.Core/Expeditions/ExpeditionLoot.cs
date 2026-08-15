@@ -88,11 +88,18 @@ public static class ExpeditionLoot
             Element = element,
         };
 
+        // ONE ROLL, THEN TAKE. This used to run the loop `count` times and add EVERY item each roll
+        // produced — and LootSystem.Roll does not return an item, it returns a core plus DropCount of
+        // them. So "one, occasionally two" was one-or-two ROLLS of about two items each, and a boss
+        // actually handed over 2.55. Measured, not guessed: LootRateTest counted 65 items across a
+        // hundred waves, which at two seconds a wave is nineteen items a minute.
+        //
+        // The docstring above was right and the code under it was not. Rolling once and taking the
+        // intended count makes the number the comment already promised.
         var count = 1 + (rng.NextDouble() < 0.25 ? 1 : 0);   // one, occasionally two — never a pile
-        var items = new List<ItemInstance>();
-        for (var i = 0; i < count; i++)
-            items.AddRange(LootSystem.Roll(ctx, rng, lootTuning).Where(it => it.BaseType != ItemBaseType.CreatureCore));
-
-        return items;
+        return LootSystem.Roll(ctx, rng, lootTuning)
+                         .Where(it => it.BaseType != ItemBaseType.CreatureCore)
+                         .Take(count)
+                         .ToList();
     }
 }
