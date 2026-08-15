@@ -2286,7 +2286,20 @@ public class Game1 : Game
             enemyBaseDamage: 9f * (1f + 0.20f * _regionProgression) * RegionLadder.Damage(LadderIndex(_activeRegion)) * scale * mod.EnemyDamageMult);
 
         // Measure the champion's gleam/second over this session, for offline earnings later.
-        _champSecondsAccrued += gameTime.ElapsedGameTime.TotalSeconds;
+        //
+        // ACCRUED IN SIMULATED SECONDS, NOT REAL ONES — divided by the playback speed, which is the whole
+        // point. A wave is resolved instantly by the sim and then replayed at x1..x8, so the speed the
+        // player is WATCHING at is also a multiplier on waves-per-real-second and therefore on every
+        // Gleam a wave pays. Live, that is a fair fast-forward: they are sitting there.
+        //
+        // The offline rate is a different animal. It is measured here and then applied to hours during
+        // which nobody is watching anything — so leaving the speed in it meant a player could click x8,
+        // close the game, and come back with four times the offline earnings (the 50% offline haircut
+        // against an 8x measurement). Free, silent, and available from the first minute. Normalising to
+        // x1 here makes the stored rate mean "what this champion earns per second of fight", which is
+        // the only reading that survives being applied to time the player was not present for.
+        _champSecondsAccrued += gameTime.ElapsedGameTime.TotalSeconds
+                                * Math.Max(0.01f, _expedition.SpeedMultiplier);
 
         // Credit every wave the champion cleared since last frame.
         while (_expedition.HasReward)

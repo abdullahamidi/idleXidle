@@ -38,6 +38,26 @@ public class GleamEconomyTest
 
     private static readonly ExpeditionTuning T = ExpeditionTuning.Default;
 
+    /// <summary>
+    /// The battle speed a player actually watches at — the game opens on x2.
+    /// </summary>
+    /// <remarks>
+    /// <b>THE FIRST VERSION OF THIS FILE REPORTED FIGHT TIME AND CALLED IT PLAY TIME.</b> A wave is
+    /// resolved instantly by the simulation and then REPLAYED at the HUD's battle speed, so the
+    /// multiplier the player is watching at is also a multiplier on waves-per-real-second — and
+    /// therefore on every Gleam a wave pays. Measuring the champion in fight-seconds and quoting the
+    /// answer in hours understated real income by exactly that factor: the "7.6 hours" this file first
+    /// printed is 3.8 at the default speed and under an hour at x8.
+    ///
+    /// Which is the same mistake this project keeps making in a new costume — a number measured
+    /// correctly for a loop the game does not run. Every figure below is now stated in REAL time at the
+    /// speed the game opens on, and the sweep prints the whole range so the ceiling is visible too.
+    /// </remarks>
+    private const float DefaultBattleSpeed = 2f;
+
+    /// <summary>Every speed the HUD offers, so the report shows the range rather than one point.</summary>
+    private static readonly float[] BattleSpeeds = { 1f, 2f, 4f, 8f };
+
     /// <summary>Every Gleam a player can ever spend on training, from rank 0 to the cap on all stats.</summary>
     private static long LifetimeTrainingSink()
     {
@@ -118,19 +138,29 @@ public class GleamEconomyTest
 
         Row("Warren, level 1, 0 conquests", warren0);
         Row("Warren, level 1, 1 conquest", warren1);
-        Row("champion, fresh, waves 1-8", champShallow);
-        Row("champion, trained, waves 1-40", champDeep);
-        Row("TOTAL (warren@1 + trained champion)", warren1 + champDeep);
+        Row("champion, fresh, waves 1-8 (x1)", champShallow);
+        Row("champion, trained, waves 1-40 (x1)", champDeep);
+        Row($"TOTAL at the default x{DefaultBattleSpeed:0}", warren1 + champDeep * DefaultBattleSpeed);
 
         _out.WriteLine("");
-        _out.WriteLine("The ladder measured in attrition_test, priced in Gleam:");
+        _out.WriteLine("THE SAME ECONOMY AT EVERY BATTLE SPEED — the champion's waves resolve that much");
+        _out.WriteLine("faster in real time, so the HUD's speed control is also an income multiplier:");
+        foreach (var speed in BattleSpeeds)
+        {
+            var income = warren1 + champDeep * speed;
+            _out.WriteLine($"   x{speed,-3:0}  {income,8:N0} gleam/min   full progression in "
+                           + $"{sink / income / 60,6:N1} hours");
+        }
+
+        _out.WriteLine("");
+        _out.WriteLine($"The ladder measured in attrition_test, priced in Gleam at the default x{DefaultBattleSpeed:0}:");
         foreach (var (region, ranks) in new[] { (1, 40), (2, 80), (3, 200) })
         {
             var tuning = new ProgressionTuning();
             long cost = 0;
             var per = new int[4];
             for (var i = 0; i < ranks; i++) cost += Hunter.CostOfRank(per[i % 4]++, tuning);
-            var mins = cost / Math.Max(1.0, warren1 + champDeep);
+            var mins = cost / Math.Max(1.0, warren1 + champDeep * DefaultBattleSpeed);
             _out.WriteLine($"   region {region}: {ranks,3} ranks = {cost,8:N0} Gleam = {mins,7:N1} minutes");
         }
     }
@@ -158,20 +188,36 @@ public class GleamEconomyTest
         //
         // Stated as play time, both sides named, so it can never pass by growing the sink alone.
         var sink = LifetimeTrainingSink();
-        var income = WarrenGleamPerMinute(conquered: 1) + ChampionGleamPerMinute(stopAtWave: 40, ranks: 120);
+
+        // AT THE DEFAULT BATTLE SPEED, because that is the game a player opens. The champion's half of
+        // the income scales with the replay multiplier; the Warren's does not (it ticks on real time).
+        var income = WarrenGleamPerMinute(conquered: 1)
+                     + ChampionGleamPerMinute(stopAtWave: 40, ranks: 120) * DefaultBattleSpeed;
         var hours = sink / income / 60.0;
 
-        _out.WriteLine($"the full stat progression funds itself in {hours:N1} hours of play "
-                       + $"({income:N0} Gleam/min against a {sink:N0} sink)");
+        _out.WriteLine($"the full stat progression funds itself in {hours:N1} real hours at the default "
+                       + $"x{DefaultBattleSpeed:0} ({income:N0} Gleam/min against a {sink:N0} sink)");
 
-        Assert.True(hours >= 5,
-            $"the entire nine-stat progression is affordable in {hours * 60:N0} minutes. Gleam is not a "
-            + "currency, it is a formality — every training decision is 'yes' and the stat screen is a "
-            + "list of buttons to press in any order.");
+        // THE BOUND IS ON THE FASTEST SPEED, not the default, and that is deliberate. The HUD offers x8
+        // one click away and it is free, so the worst case is the one a player can actually reach — and
+        // a guard written against the default would pass while the game was over in an hour for anyone
+        // who pressed the button. Same lesson as the sink assertion this file replaced: bound what the
+        // player can do, not what you expect them to do.
+        var fastest = sink / (WarrenGleamPerMinute(conquered: 1)
+                              + ChampionGleamPerMinute(stopAtWave: 40, ranks: 120) * BattleSpeeds[^1]) / 60.0;
 
-        // And the other end: a progression nobody can finish is not a progression either.
-        Assert.True(hours <= 120,
-            $"the full progression needs {hours:N0} hours. That is a grind, not a curve.");
+        _out.WriteLine($"at the fastest battle speed (x{BattleSpeeds[^1]:0}) it is {fastest:N1} hours");
+
+        Assert.True(fastest >= 1,
+            $"the entire nine-stat progression is affordable in {fastest * 60:N0} minutes at x{BattleSpeeds[^1]:0}. "
+            + "Gleam is not a currency, it is a formality — every training decision is 'yes' and the "
+            + "stat screen is a list of buttons to press in any order.");
+
+        // And the other end, at the slowest: a progression nobody can finish is not a progression.
+        var slowest = sink / (WarrenGleamPerMinute(conquered: 1)
+                              + ChampionGleamPerMinute(stopAtWave: 40, ranks: 120) * BattleSpeeds[0]) / 60.0;
+        Assert.True(slowest <= 120,
+            $"the full progression needs {slowest:N0} hours at x{BattleSpeeds[0]:0}. That is a grind, not a curve.");
     }
 
     [Fact]

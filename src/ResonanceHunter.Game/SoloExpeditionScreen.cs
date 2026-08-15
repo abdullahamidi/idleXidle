@@ -66,6 +66,17 @@ public sealed class SoloExpeditionScreen
     // (TEMPO, the Focus slot) still speeds combat back up on top of this, so the upgrade is now visible.
     private const float PlaybackSpeed = 2.0f;   // default battle speed
     private float _speedMul = PlaybackSpeed;     // player-adjustable via the HUD's BATTLE SPEED buttons (x1/x2/x4/x8)
+
+    /// <summary>
+    /// How fast the replay is being watched. Read by the host to keep the OFFLINE rate honest.
+    /// </summary>
+    /// <remarks>
+    /// A wave is resolved instantly by the simulation and then REPLAYED, so this multiplier is also a
+    /// multiplier on waves-per-real-second — and therefore on everything a wave pays. While the player
+    /// is watching, that is a legitimate fast-forward. It must NOT leak into the offline rate, which is
+    /// measured live and then applied to hours when nobody is watching anything.
+    /// </remarks>
+    public float SpeedMultiplier => _speedMul;
     private static readonly float[] SpeedSteps = { 1f, 2f, 4f, 8f };
     private const float WaveBreakSeconds = 0.8f;   // the pause after a clear, before the next enemy is fought
     private const float DownedSeconds = 1.6f;   // the recovery beat before the champion tries again
