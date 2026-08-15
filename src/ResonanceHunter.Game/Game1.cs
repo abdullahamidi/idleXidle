@@ -113,6 +113,30 @@ public class Game1 : Game
     private MapScreen _mapScreen = null!;   // MAP nav: the region-selection dashboard (spec rev 1)
     private string _conquerMsg = "";
 
+    // ── Gradual unlocking ───────────────────────────────────────────────────────────────────────
+    // "Oyundaki etkinlikler yavaş yavaş açılmalı. Hepsi detaylı şekilde anlatılmalı." The gates live in
+    // Core/Progression/Unlocks; these three fields are the whole of the presentation.
+
+    /// <summary>Toast for clicking a rail tile that is not open yet — it names its own price.</summary>
+    private string _lockedMsg = "";
+    private float _lockedTimer;
+
+    /// <summary>Activities whose explanation has not been shown yet, oldest first.</summary>
+    /// <remarks>
+    /// A QUEUE rather than a single slot, because two gates can open on the same frame (conquering the
+    /// first region opens both the Map and the Warren). Showing one and dropping the other would leave a
+    /// screen permanently unexplained — the silent kind of gap this codebase keeps finding.
+    /// </remarks>
+    private readonly Queue<(string Head, string Body)> _unlockQueue = new();
+
+    /// <summary>The explanation currently on screen, or empty. Dismissed by any click or key.</summary>
+    private string _unlockShowing = "";
+    private string _unlockHeadline = "";
+
+    /// <summary>Last frame's facts, so an unlock can be noticed exactly once, when it happens.</summary>
+    private UnlockFacts _lastUnlockFacts;
+    private int _lastSkillSlots = -1;
+
     private int _regionProgression;
 
     private bool _showHelp;
@@ -336,7 +360,17 @@ public class Game1 : Game
         // BEFORE the loadout is restored, because Restore truncates to the capacity. Restoring first and
         // deriving after would drop a saved fifth skill on every load and then look correct forever
         // after, since the player would simply never see it again.
-        _loadout.SkillCapacity = DustEffects.SkillSlots(_dust);
+        //
+        // THE UNLOCK GATE DELIBERATELY DOES NOT APPLY HERE, and getting that wrong would have been
+        // catastrophic and silent. Skill slots are now gated by progress (Unlocks.SkillSlots), but the
+        // facts that gate reads — deepest wave, regions conquered — are restored BELOW this line and on
+        // line 407. Asking the gate here would see an all-zero player, return a capacity of one, and
+        // Restore would truncate every existing player's four-skill build down to one. They would then
+        // never see the other three again, because the save it wrote back would agree.
+        //
+        // So the restore floor is the save's OWN skill count: whatever a player had, they keep. The
+        // gate is applied per-frame afterwards, by which point the facts are real.
+        _loadout.SkillCapacity = Math.Max(save.WovenSkills.Count, DustEffects.SkillSlots(_dust));
         _loadout.KeystoneCapacity = DustEffects.KeystoneSockets(_dust);
         _highestMasteryAwarded = save.HighestMasteryAwarded;
 
@@ -977,7 +1011,7 @@ public class Game1 : Game
                     _dust.SetEarned(22);
                     _dust.Purchase("socket_2");   // weave_5 hangs off it on the capacity chain
                     _dust.Purchase("weave_5");
-                    _loadout.SkillCapacity = DustEffects.SkillSlots(_dust);
+                    ApplySkillCapacity();
                     _loadout.AddSkill();
                     // SIX passives, which is the most the panel will list (it Takes 6). Same reasoning as
                     // the fifth skill card above: the passives list is variable-length and the RESONANCE
@@ -1291,7 +1325,7 @@ public class Game1 : Game
                     foreach (var id in new[] { "socket_2", "weave_5", "vow_study_1", "ledger",
                                                "ks_glass_cannon", "ks_ironclad", "ks_echo", "ks_greed" })
                         _dust.Purchase(id);
-                    _loadout.SkillCapacity = DustEffects.SkillSlots(_dust);
+                    ApplySkillCapacity();
                     _loadout.AddSkill();
                     _weave.DevPose(1, null);
                 }
@@ -1397,6 +1431,7 @@ public class Game1 : Game
         }
 
         if (_bootTimer > 0f) _bootTimer = Math.Max(0f, _bootTimer - dt);
+        if (_lockedTimer > 0f) _lockedTimer = Math.Max(0f, _lockedTimer - dt);
 
         // Autosave. An idle game that loses your farm to a crash has taken your hours, not your time.
         _sinceAutosave += dt;
@@ -1422,6 +1457,28 @@ public class Game1 : Game
         // must not do is let the hotkeys and buttons underneath the panel keep responding: without
         // this, clicking FULLSCREEN also presses whatever the panel happens to be covering.
         if (_showSettings) { Latch(gameTime); return; }
+
+        // AN UNLOCK EXPLANATION SWALLOWS INPUT while it is up: it is drawn over the nav rail, so a click
+        // meant to dismiss it would otherwise also land on whatever tile is underneath and throw the
+        // player onto a screen they did not ask for.
+        //
+        // IT DOES NOT RETURN EARLY, and that is not a style choice. The settings panel can, because it
+        // is impossible to have open on the first frame. This one is not: a brand-new save queues an
+        // explanation immediately, so an early return here skipped the per-frame block that feeds every
+        // screen its dependencies, and the first Draw hit a null Loadout in StatsScreen. check_boot.sh
+        // caught it, which is the second time this exact shape — a return placed ahead of the feeds —
+        // has taken the game down. Swallow the input; never skip the frame.
+        //
+        // The champion keeps fighting behind it. An idle game does not pause to talk to you.
+        var readingUnlock = _unlockShowing.Length > 0;
+        if (readingUnlock && (_clicked || AnyKeyPressed()))
+        {
+            _unlockShowing = "";
+            _unlockHeadline = "";
+            _sound.Play("sfx_click", 0.7f);
+            readingUnlock = false;
+        }
+        _swallowInput = readingUnlock;
 
         HandleNavClick();   // a click on the shared hex nav works from any screen
 
@@ -1719,6 +1776,152 @@ public class Game1 : Game
     };
 
     /// <summary>A region's rung on the world ladder (0 = home). Deeper regions are innately tougher.</summary>
+
+    /// <summary>
+    /// How many skills the player may weave right now: the onboarding gate first, the trait tree after.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two sources, and they hand over cleanly rather than competing. While the onboarding gate is still
+    /// below the built-in four slots it RULES, because that is the whole point of it — slots arriving
+    /// one at a time with something said about each. Once it reaches four it steps aside entirely and
+    /// the trait tree decides, which is the pre-existing rule and the only way the fifth-slot node stays
+    /// a real reward.
+    /// </para>
+    /// <para>
+    /// Never reduces below what is already woven. A capacity that shrinks silently deletes a skill the
+    /// player chose, and the only way to find out would be to notice it missing.
+    /// </para>
+    /// </remarks>
+    private void ApplySkillCapacity()
+    {
+        var gate = Unlocks.SkillSlots(GuideUnlockFacts());
+        var fromTree = DustEffects.SkillSlots(_dust);
+        var capacity = gate >= Build.SkillSlots ? fromTree : gate;
+        _loadout.SkillCapacity = Math.Max(capacity, _loadout.Skills.Count);
+    }
+
+    /// <summary>The facts the unlock gates read, all of them already carried by the save.</summary>
+    private UnlockFacts GuideUnlockFacts() => new(
+        WavesCleared: _deepestEver,
+        DeepestWave: _deepestEver,
+        // Null-guarded because ApplySkillCapacity is reachable from paths that run before LoadContent
+        // has built the Forge. A hard dereference here is the exact shape of the boot crash this file
+        // has already shipped once.
+        ItemsOwned: _forge?.Inventory.Count(Gear.IsWearable) ?? 0,
+        ChestsHeld: _forge?.UnopenedChests.Count ?? 0,
+        RegionsConquered: _world.ConqueredIds.Count,
+        TraitPointsEarned: _dust.Earned);
+
+
+    /// <summary>
+    /// Notice anything that just opened, and queue its explanation.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Called every frame from Update, and cheap: it is two struct comparisons and an enum walk. The
+    /// alternative — firing the announcement from each of the places that CAUSE an unlock (the conquest
+    /// branch, the chest drop, the item pickup) — is how a gate ends up with three call sites and one of
+    /// them missing, which is precisely the bug species this project keeps shipping.
+    /// </para>
+    /// <para>
+    /// The FIRST frame seeds the baseline instead of announcing. Without that, every existing player
+    /// would be handed nine explanation panels in a row on the launch after this shipped.
+    /// </para>
+    /// </remarks>
+    private void NoticeUnlocks()
+    {
+        var now = GuideUnlockFacts();
+        var slots = Unlocks.SkillSlots(now);
+
+        if (_lastSkillSlots < 0)
+        {
+            _lastUnlockFacts = now;
+            _lastSkillSlots = slots;
+            return;
+        }
+
+        foreach (var opened in Unlocks.NewlyOpened(_lastUnlockFacts, now))
+            _unlockQueue.Enqueue((Unlocks.Headline(opened), Unlocks.Explain(opened)));
+
+        for (var slot = _lastSkillSlots + 1; slot <= slots; slot++)
+            if (Unlocks.SkillSlotNote(slot) is { Length: > 0 } note)
+                _unlockQueue.Enqueue(("A NEW SKILL SLOT", note));
+
+        _lastUnlockFacts = now;
+        _lastSkillSlots = slots;
+
+        // One at a time, and only while the player is not already reading one.
+        if (_unlockShowing.Length == 0 && _unlockQueue.Count > 0)
+        {
+            (_unlockHeadline, _unlockShowing) = _unlockQueue.Dequeue();
+            _sound.PlayFirst(0.9f, "sfx_levelup", "sfx_click");
+        }
+    }
+
+
+    /// <summary>The toast for clicking a locked rail tile. Says the price, then fades.</summary>
+    private void DrawLockedToast()
+    {
+        if (_lockedTimer <= 0f || _lockedMsg.Length == 0) return;
+
+        var fade = MathF.Min(1f, _lockedTimer / 0.5f);
+        var w = 900;
+        var box = new Rectangle((1920 - w) / 2, 96, w, 62);
+        _ui.Fill(_batch, box, new Color(0x18, 0x10, 0x24) * (0.92f * fade));
+        _ui.Fill(_batch, new Rectangle(box.X, box.Y, box.Width, 3), NavGem * fade);
+        _ui.TextCenterBig(_batch, _ui.ShortenBig(_lockedMsg, w - 40, UiTypography.OverlayBody), box.Center.X, box.Y + 18,
+                          Color.White * fade, UiTypography.OverlayBody);
+    }
+
+    /// <summary>
+    /// The explanation panel for something that just opened. Modal, and dismissed by the player.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Deliberately NOT a timed toast. The brief was that every activity be explained in detail, and a
+    /// paragraph that slides away on a timer is a paragraph nobody finishes — the player is watching a
+    /// fight, the text is competing with it, and the one thing they needed to read is the thing that
+    /// left. It waits to be dismissed.
+    /// </para>
+    /// <para>
+    /// Sized from the WRAPPED line count rather than a fixed height, because these strings differ by a
+    /// factor of two in length and a fixed box would either clip the Build explanation or leave the
+    /// Roster one floating in a mostly-empty panel. Wrapping is what makes it possible to write these
+    /// as prose at all.
+    /// </para>
+    /// </remarks>
+    private void DrawUnlockPanel()
+    {
+        if (_unlockShowing.Length == 0) return;
+
+        const int pad = 44;
+        const int wrapWidth = 900;
+        var lines = _ui.WrapBig(_unlockShowing, wrapWidth, UiTypography.Body);
+        var height = pad * 2 + 58 + lines.Count * 30 + 44;
+        var box = new Rectangle((1920 - (wrapWidth + pad * 2)) / 2, Math.Max(80, (1080 - height) / 2),
+                                wrapWidth + pad * 2, height);
+
+        _ui.Fill(_batch, new Rectangle(0, 0, 1920, 1080), new Color(0x05, 0x03, 0x0A) * 0.72f);
+        _ui.Fill(_batch, box, new Color(0x15, 0x0E, 0x24));
+        _ui.Fill(_batch, new Rectangle(box.X, box.Y, box.Width, 4), NavGold);
+        _ui.Fill(_batch, new Rectangle(box.X, box.Bottom - 2, box.Width, 2), NavGem * 0.5f);
+
+        _ui.TextBig(_batch, "NEWLY OPEN", box.X + pad, box.Y + 20, NavGem, UiTypography.Secondary);
+        _ui.TextBig(_batch, _ui.ShortenBig(_unlockHeadline, wrapWidth, UiTypography.PanelTitle),
+                    box.X + pad, box.Y + 46, NavGold, UiTypography.PanelTitle);
+
+        var y = box.Y + pad + 58;
+        foreach (var line in lines)
+        {
+            _ui.TextBig(_batch, line, box.X + pad, y, new Color(0xD8, 0xD2, 0xE4), UiTypography.Body);
+            y += 30;
+        }
+
+        _ui.TextCenterBig(_batch, "CLICK OR PRESS ANY KEY TO CONTINUE", box.Center.X, box.Bottom - 34,
+                          NavLabel, UiTypography.Secondary);
+    }
+
     /// <summary>Where a region sits on the world chain. The curve itself lives in Core/RegionLadder.</summary>
     private static int LadderIndex(string regionId)
     {
@@ -1792,7 +1995,10 @@ public class Game1 : Game
         // The spine's capacity nodes reach the loadout. Without this the sockets and the fifth weave are
         // bought and never granted — the shape of the failure this codebase keeps repeating.
         _loadout.KeystoneCapacity = DustEffects.KeystoneSockets(_dust);
-        _loadout.SkillCapacity = DustEffects.SkillSlots(_dust);
+        ApplySkillCapacity();
+        // Sits immediately after the capacity is applied, so a slot the player just earned is announced
+        // on the same frame it becomes usable rather than the frame after.
+        NoticeUnlocks();
         _forge.AutoMergeOnOpen = DustEffects.AutoMergeAfterRuns(_dust);
         var scale = CorruptionScaling.HealthMultiplier(_world.CorruptionTier);
         var mod = RegionModifiers.For(_activeRegion);   // the region's themed combat twist (Map variety)
@@ -1960,7 +2166,19 @@ public class Game1 : Game
         if (parts.Length > 1) _ui.TextCenterBig(_batch, parts[1], r.Center.X, r.Y + 56, Bone * fade, UiTypography.OverlayBody);
     }
 
-    private bool Pressed(Keys k) => _keys.IsKeyDown(k) && _prevKeys.IsKeyUp(k);
+    private bool Pressed(Keys k) => !_swallowInput && _keys.IsKeyDown(k) && _prevKeys.IsKeyUp(k);
+
+    /// <summary>Any key going down this frame — for "press anything to continue" panels.</summary>
+    /// <remarks>
+    /// Edge-triggered against the previous frame, so a key still held from whatever the player was doing
+    /// when the panel appeared does not dismiss it before they have seen it.
+    /// </remarks>
+    private bool AnyKeyPressed()
+    {
+        foreach (var k in _keys.GetPressedKeys())
+            if (_prevKeys.IsKeyUp(k)) return true;
+        return false;
+    }
 
     /// <summary>The mouse position in 480×270 canvas space (the backbuffer is upscaled 3×).</summary>
     /// <summary>Screen → canvas, through the letterbox. Never divide by a bare scale again.</summary>
@@ -2044,7 +2262,10 @@ public class Game1 : Game
     /// by drawing over it: both would fire. Gating here is the single choke point every screen reads.
     /// The settings panel deliberately reads the raw <c>_clicked</c> instead, since it IS the modal.
     /// </remarks>
-    private bool MouseClicked => _clicked && !_showSettings;
+    /// <summary>True while a modal explanation is up — every input path below reads it.</summary>
+    private bool _swallowInput;
+
+    private bool MouseClicked => _clicked && !_showSettings && !_swallowInput;
     private bool MouseRightClicked => _rightClicked && !_showSettings;
 
 
@@ -2163,6 +2384,10 @@ public class Game1 : Game
         if (_showSettings) DrawSettings();
 
         DrawBootToast();
+        DrawLockedToast();
+        // LAST of the chrome, so the explanation of a thing that just opened sits over everything —
+        // including the nav rail it is usually talking about.
+        DrawUnlockPanel();
 
         _batch.End();
 
@@ -2595,8 +2820,39 @@ public class Game1 : Game
         _showCharacter ? 1 : _showStats ? 2 : _showBuild ? 3 : _showForge ? 4 :
         _showAutomation ? 5 : _showWorld ? 6 : _showPrestige ? 7 : _showRoster ? 8 : 0;
 
+    /// <summary>
+    /// Which activity each rail tile is, so one table decides both what a tile opens and whether it may.
+    /// </summary>
+    /// <remarks>
+    /// Parallel to <see cref="Nav"/> by index, and asserted to stay that length by check_nav_gates.py —
+    /// a tenth nav entry added without a tenth activity here would silently be ungated, which is the
+    /// failure mode this whole gating pass exists to end.
+    /// </remarks>
+    private static readonly Activity[] NavActivity =
+    {
+        Activity.Hunt, Activity.Gear, Activity.Stats, Activity.Build,
+        Activity.Forge, Activity.Warren, Activity.Map, Activity.Traits, Activity.Roster,
+    };
+
+    /// <summary>Is the rail tile at this index open to the player yet?</summary>
+    private bool NavUnlocked(int i)
+        => i < 0 || i >= NavActivity.Length || Unlocks.IsOpen(NavActivity[i], GuideUnlockFacts());
+
     private void OpenNav(int i)
     {
+        // A LOCKED TILE SAYS WHY, rather than doing nothing. A dead click reads as a broken button, and
+        // the player learns to distrust the rail instead of learning what opens the door.
+        if (!NavUnlocked(i))
+        {
+            var activity = NavActivity[i];
+            _lockedMsg = $"{Unlocks.Headline(activity)} IS NOT OPEN YET — {Unlocks.Requirement(activity).ToUpperInvariant()}.";
+            _lockedTimer = 3.2f;
+            // No dedicated refusal cue exists; the click at low volume reads as "heard you,
+            // nothing happened", which is exactly what a locked tile means.
+            _sound.Play("sfx_click", 0.45f);
+            return;
+        }
+
         _showCharacter = _showStats = _showBuild = _showForge = _showAutomation = _showWorld = _showPrestige = _showRoster = _showWeave = false;
         switch (i)
         {
@@ -2681,6 +2937,10 @@ public class Game1 : Game
             var r = NavHexRect(i);
             var on = i == active;
             var hover = r.Contains(ChromeMouse);
+            // A LOCKED TILE STILL DRAWS, dimmed. Hiding it would make the rail change length as the game
+            // opens up, which moves every tile under the player's cursor and hides the shape of what is
+            // still to come — the promise of the locked tile is half of why unlocking it lands.
+            var unlocked = NavUnlocked(i);
             // Dividers are horizontal between stacked tiles, not vertical between side-by-side ones.
             if (i > 0) _ui.Fill(_batch, new Rectangle(r.X + 26, r.Y, r.Width - 52, 2), new Color(0x22, 0x1C, 0x30));
 
@@ -2697,12 +2957,19 @@ public class Game1 : Game
             }
 
             // Icon above, label below, both centred in the shorter tile.
-            var iconTint = on ? Color.White : Color.White * 0.75f;
+            var iconTint = !unlocked ? Color.White * 0.22f : on ? Color.White : Color.White * 0.75f;
             if (_assets.Get(Nav[i].Glyph) is { } g)
                 _batch.Draw(g, new Rectangle(r.Center.X - 24, r.Y + 24, 48, 48), iconTint);
             else
                 _ui.Diamond(_batch, new Rectangle(r.Center.X - 20, r.Y + 28, 40, 40), on ? NavGold : NavGem * 0.75f);
-            _ui.TextCenterBig(_batch, Nav[i].Label, r.Center.X, r.Bottom - 34, on ? NavGold : NavLabel * 0.9f, UiTypography.NavigationLabel);
+            _ui.TextCenterBig(_batch, Nav[i].Label, r.Center.X, r.Bottom - 34,
+                              !unlocked ? NavLabel * 0.35f : on ? NavGold : NavLabel * 0.9f, UiTypography.NavigationLabel);
+
+            // The price, on the tile, so the rail teaches the progression without being clicked. Hover
+            // only — nine requirement lines drawn permanently is the wall this pass exists to remove.
+            if (!unlocked && hover)
+                _ui.TextCenterBig(_batch, _ui.ShortenBig(Unlocks.Requirement(NavActivity[i]), NavRailWidth - 24, UiTypography.Secondary),
+                                  r.Center.X, r.Bottom - 16, NavGem * 0.8f, UiTypography.Secondary);
 
             // UNOPENED CHESTS, as a count on the FORGE tile. A player told us the chest-opening feature
             // felt hidden in the game, and it was: chests live three clicks deep — FORGE, then the

@@ -255,17 +255,25 @@ public sealed class PlayerLoadout
     /// A functional starter build so a new character can fight before opening the editor.
     /// </summary>
     /// <remarks>
-    /// Four Forms that show off the axis the whole model rests on: a STRIKE for weight, a PROJECTILE for
-    /// volume, a TRANSFORMATION for sustain, a MARK to amplify the rest. No Vow, no keystone — the
-    /// refusals are for the player to make, not to inherit.
+    /// <para>
+    /// <b>ONE skill. This used to hand out four.</b> The old version added a Strike, a Projectile, a
+    /// Transformation and a Mark, on the reasoning that it showed off the Form axis the whole model
+    /// rests on. Playtest: <i>"4 skill açık şekilde başladığımı gördüm. Skillerin açıklamaları yok, ne
+    /// olduklarını anlamadım."</i> — four skills open at the start, unexplained, and none of them
+    /// understood. Four systems arriving at once does not demonstrate an axis; it hides it, because
+    /// nothing on screen can be attributed to anything.
+    /// </para>
+    /// <para>
+    /// A Body Strike, because it is the most legible thing in the game: one heavy hit, on one target,
+    /// with a visible windup. The other three slots arrive one at a time with their own explanation —
+    /// see <c>Unlocks.SkillSlots</c> for the gates and <c>Unlocks.SkillSlotNote</c> for what each says.
+    /// No Vow, no keystone — the refusals are for the player to make, not to inherit.
+    /// </para>
     /// </remarks>
     public static PlayerLoadout Starter()
     {
         var l = new PlayerLoadout();
         l._skills.Add(new SkillChoice(Source.Body, Form.Strike, null));
-        l._skills.Add(new SkillChoice(Source.Mind, Form.Projectile, null));
-        l._skills.Add(new SkillChoice(Source.Nature, Form.Transformation, null));
-        l._skills.Add(new SkillChoice(Source.Spirit, Form.Mark, null));
         return l;
     }
 

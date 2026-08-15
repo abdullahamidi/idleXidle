@@ -1,0 +1,281 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace ResonanceHunter.Core.Progression;
+
+/// <summary>The things a player can go and do, in the order the game opens them.</summary>
+/// <remarks>
+/// The order is the LOOP's order. Each one is opened by the fact that makes it make sense: the Forge
+/// opens when a chest is waiting, not when a wave counter says so, because a Forge with nothing in it
+/// teaches a player that the Forge is empty.
+/// </remarks>
+public enum Activity
+{
+    /// <summary>The hunt itself. Never locked — it is the game.</summary>
+    Hunt,
+
+    /// <summary>Spending Gleam on the champion. The first decision anyone makes.</summary>
+    Stats,
+
+    /// <summary>Wearing what dropped.</summary>
+    Gear,
+
+    /// <summary>Cracking chests, refining, reforging, salvaging.</summary>
+    Forge,
+
+    /// <summary>Weaving skills, keystones and Vows.</summary>
+    Build,
+
+    /// <summary>Travelling between regions.</summary>
+    Map,
+
+    /// <summary>The facility economy that runs while you are away.</summary>
+    Warren,
+
+    /// <summary>The permanent trait tree.</summary>
+    Traits,
+
+    /// <summary>The champions you have collected.</summary>
+    Roster,
+}
+
+/// <summary>What the game knows about a player, in the terms the unlock gates care about.</summary>
+/// <remarks>
+/// Every field defaults to zero — the state of a save that does not exist yet — so a caller naming only
+/// the facts it cares about gets "a brand-new player" for the rest, rather than a compile error that
+/// pushes it toward passing placeholder numbers it does not mean.
+/// </remarks>
+public readonly record struct UnlockFacts(
+    int WavesCleared = 0,
+    int DeepestWave = 0,
+    int ItemsOwned = 0,
+    int ChestsHeld = 0,
+    int RegionsConquered = 0,
+    int TraitPointsEarned = 0);
+
+/// <summary>
+/// Which of the game's activities are open yet, and what each one is for.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Every screen in the game was reachable from the first frame.</b> Playtest, verbatim: <i>"Hemen
+/// oyunun içine atıldım ve bilmeme rağmen kafam karıştı. Oyundaki etkinlikler yavaş yavaş açılmalı.
+/// Hepsi detaylı şekilde anlatılmalı."</i> — thrown straight in and confused despite knowing the game;
+/// activities should open gradually and all be explained in detail. That is from the person who
+/// designed it, which is the strongest possible version of the complaint: nine destinations on the rail
+/// at once is not a menu, it is a wall.
+/// </para>
+/// <para>
+/// <b>Derived, never stored.</b> Same discipline as <see cref="Tutorial"/> and for the same reason: an
+/// "unlocked" flag in the save is a second source of truth that drifts, and the drift is silent —
+/// a player who lost their flags would find the game had re-locked itself around them. Everything here
+/// is a question asked of facts the save already carries, so it is correct on any save, including every
+/// save that existed before this file did.
+/// </para>
+/// <para>
+/// A gate is only ever opened by something the player DID. No timers, no "after 5 minutes" — the game
+/// should read as responding to you, and a thing that unlocks on a clock reads as a thing that was
+/// always going to unlock.
+/// </para>
+/// </remarks>
+public static class Unlocks
+{
+    /// <summary>Is this activity open to the player yet?</summary>
+    public static bool IsOpen(Activity activity, UnlockFacts f) => activity switch
+    {
+        // The game. If this is ever gated, the player is looking at a locked screen on launch.
+        Activity.Hunt => true,
+
+        // The first wave pays Gleam, so the first wave is when spending it becomes a real thought.
+        Activity.Stats => f.WavesCleared >= 1,
+
+        // Opens the moment there is something to wear. Gated on OWNING, not on a wave count — a Gear
+        // screen with an empty bag teaches a new player that gear is not part of this game.
+        Activity.Gear => f.ItemsOwned >= 1,
+
+        // Chests are what the Forge is FOR. Also opened by owning items, because salvaging is the other
+        // half of it and a player with junk and no chest still has a reason to be here.
+        Activity.Forge => f.ChestsHeld >= 1 || f.ItemsOwned >= 2,
+
+        // The build is the deepest system in the game and the least self-explanatory, so it waits until
+        // the player has watched enough fights to have seen skills actually fire. Asking someone to
+        // choose four skills before they have seen one go off is asking them to guess.
+        Activity.Build => f.DeepestWave >= 5,
+
+        // There is nowhere to travel to until a region has been taken, so the Map is a map of one place
+        // until then. It opens as the reward for the first conquest — which is also when it is exciting.
+        Activity.Map => f.RegionsConquered >= 1,
+
+        // The idle economy. Opens with the Map: both are "the world beyond this fight", and splitting
+        // them across two milestones makes the first conquest pay out twice for no reason.
+        Activity.Warren => f.RegionsConquered >= 1,
+
+        // The permanent tree only means anything once there are points in it.
+        Activity.Traits => f.TraitPointsEarned >= 1,
+
+        // Champions come from conquest, so the roster is empty until there is more than one.
+        Activity.Roster => f.RegionsConquered >= 2,
+    };
+
+    /// <summary>One short line for a locked tile: what the player must do to open it.</summary>
+    /// <remarks>
+    /// A lock without a reason is just a closed door, and a closed door with no sign on it is the thing
+    /// players actually resent. Every gate in this file states its own price.
+    /// </remarks>
+    public static string Requirement(Activity activity) => activity switch
+    {
+        Activity.Hunt => "",
+        Activity.Stats => "Clear your first wave",
+        Activity.Gear => "Find your first item",
+        Activity.Forge => "Earn a chest from a boss",
+        Activity.Build => "Reach wave 5",
+        Activity.Map => "Conquer a region",
+        Activity.Warren => "Conquer a region",
+        Activity.Traits => "Earn a trait point",
+        Activity.Roster => "Conquer two regions",
+    };
+
+    /// <summary>The headline shown when an activity opens — what this thing IS, in one line.</summary>
+    public static string Headline(Activity activity) => activity switch
+    {
+        Activity.Hunt => "THE HUNT",
+        Activity.Stats => "COMMAND — YOUR CHAMPION'S STATS",
+        Activity.Gear => "GEAR — WHAT YOU WEAR",
+        Activity.Forge => "THE FORGE — WHERE ITEMS ARE MADE",
+        Activity.Build => "THE BUILD — THE ACTUAL GAME",
+        Activity.Map => "THE MAP — THE WORLD BEYOND",
+        Activity.Warren => "THE WARREN — WORK THAT RUNS WITHOUT YOU",
+        Activity.Traits => "TRAITS — WHAT SURVIVES DEATH",
+        Activity.Roster => "THE ROSTER — OTHER CHAMPIONS",
+    };
+
+    /// <summary>
+    /// The detailed explanation, shown once when the activity opens. Several sentences, deliberately.
+    /// </summary>
+    /// <remarks>
+    /// The brief was "hepsi detaylı şekilde anlatılmalı" — all of it explained in detail — so these are
+    /// paragraphs rather than tooltips. Each one answers the same three questions in the same order:
+    /// what is this, what do I do here, and why should I care. A player who reads only the first
+    /// sentence still learns what the screen is.
+    /// </remarks>
+    public static string Explain(Activity activity) => activity switch
+    {
+        Activity.Hunt =>
+            "Your champion fights on its own, forever, without you. Waves come one after another and "
+            + "every fifth is a boss. You never click an attack — what you change is WHO the champion "
+            + "is, on the other screens, and then you watch that decision play out here.",
+
+        Activity.Stats =>
+            "Every wave you clear pays Gleam, and Gleam is spent here on the champion's own body: "
+            + "attack, health, defence, critical chance. Each rank costs a little more than the last, so "
+            + "early ranks are cheap and the choice of WHAT to raise matters more than how much. "
+            + "This is the fastest way to get stronger, and it is also the one with a ceiling — the "
+            + "deepest regions cannot be taken on stats alone.",
+
+        Activity.Gear =>
+            "Items are worn, not collected. Everything you find has a slot, a rarity, and rolled "
+            + "properties that are different on every copy — two swords of the same name are not the "
+            + "same sword. A higher item level is not automatically an upgrade: read what it rolled. "
+            + "Anything you are not wearing is material for the Forge.",
+
+        Activity.Forge =>
+            "Chests open here, and this is where items stop being what they dropped as. REFINE raises "
+            + "an item's level. REFORGE rerolls its rolled properties — the same item, a new set of "
+            + "numbers, and the reason a good item is rare is that you have to roll into the properties "
+            + "you actually want. SALVAGE breaks what you will not wear into materials. MERGE fuses "
+            + "three of a kind into one better piece. Materials come from waves; the deeper you fight, "
+            + "the better the material a wave pays.",
+
+        Activity.Build =>
+            "This is the game. You weave SKILLS — each one a SOURCE (what element it is) and a FORM "
+            + "(how it behaves). A Strike is heavy and single-target. A Projectile is fast and hits "
+            + "many. A Transformation sustains you. A Mark amplifies everything else you are running. "
+            + "Sources decide the matchup against a region's element; Forms decide the shape of your "
+            + "damage. You also socket KEYSTONES, which bend a rule, and may swear VOWS, which give up "
+            + "something real for something bigger. Nothing here is a stat increase — it all changes "
+            + "how the fight actually goes.",
+
+        Activity.Map =>
+            "The world is a chain of six regions and each is meaningfully harder than the one before "
+            + "it — about half again as tough, every step. Reach the required depth in a region to "
+            + "conquer it, which opens the next. Each region has its own element and its own drops: it "
+            + "favours particular slots, and the later ones carry a better rarity floor. Where you hunt "
+            + "is a loot decision as much as a difficulty one.",
+
+        Activity.Warren =>
+            "Facilities that produce while you are away, and the reason closing the game is not the same "
+            + "as stopping. They level up, they pay out on their own schedule, and conquering regions "
+            + "raises what they produce. Check in, spend, leave — that is the whole loop, and it is "
+            + "meant to be checked rather than watched.",
+
+        Activity.Traits =>
+            "Points earned by pushing into depth you have never reached before — farming a depth you "
+            + "have already cleared pays loot but no points, so the only way to earn one is to go "
+            + "somewhere new. What you spend them on is permanent and survives every death. Some nodes "
+            + "give you a fifth skill slot or another keystone socket, which are the largest single "
+            + "upgrades in the game.",
+
+        Activity.Roster =>
+            "Other champions, unlocked by conquering regions. Each has a passive of its own that changes "
+            + "how a build wants to be put together. Switching champion is not a small change — it is a "
+            + "different set of assumptions about what your skills are for.",
+    };
+
+    /// <summary>
+    /// How many skill slots are open. Starts at ONE.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The game used to hand out four woven skills before the player had seen a fight.</b> Playtest:
+    /// <i>"4 skill açık şekilde başladığımı gördüm. Skillerin açıklamaları yok, ne olduklarını
+    /// anlamadım."</i> — started with four skills open, with no explanation of what they were. The old
+    /// starter build had a reason (it showed off all four Forms at once) and the reason was wrong: four
+    /// unexplained systems arriving simultaneously is not a demonstration, it is noise.
+    /// </para>
+    /// <para>
+    /// So the champion starts with ONE skill, and each new slot arrives on its own, with its own line of
+    /// explanation, at a moment when the player has already seen the last one fire. Four slots is where
+    /// the gate stops — beyond that the trait tree takes over, which is the existing rule and a real
+    /// reward rather than a starting condition.
+    /// </para>
+    /// </remarks>
+    public static int SkillSlots(UnlockFacts f)
+    {
+        var slots = 1;
+        if (f.DeepestWave >= 5) slots++;      // with the Build screen itself
+        if (f.DeepestWave >= 12) slots++;
+        if (f.RegionsConquered >= 1) slots++;
+        return slots;
+    }
+
+    /// <summary>What opening a new skill slot should say, for the slot just gained.</summary>
+    /// <remarks>
+    /// Indexed by the slot NUMBER rather than by a milestone, so the copy cannot drift out of step with
+    /// <see cref="SkillSlots"/> when the gates are retuned.
+    /// </remarks>
+    public static string SkillSlotNote(int slot) => slot switch
+    {
+        2 => "A SECOND SKILL. Two skills fire on their own cooldowns, so what you pair matters — a slow "
+             + "heavy hit alongside a fast one covers the gap the heavy one leaves.",
+        3 => "A THIRD SKILL. Enough room for a shape now: something to sustain you, or a Mark to make "
+             + "the other two hit harder.",
+        4 => "A FOURTH SKILL. The full weave. Every Source and every Form is available to you — the "
+             + "build is now the main thing you are playing with.",
+        _ => "",
+    };
+
+    /// <summary>Every activity that is open to these facts, in unlock order.</summary>
+    public static IReadOnlyList<Activity> Open(UnlockFacts f)
+        => Enum.GetValues<Activity>().Where(a => IsOpen(a, f)).ToList();
+
+    /// <summary>
+    /// What is newly open, comparing where the player was against where they are.
+    /// </summary>
+    /// <remarks>
+    /// The host keeps the previous facts and asks this each frame, so an unlock announces itself once,
+    /// at the moment it happens, rather than being something the player has to notice on the rail.
+    /// </remarks>
+    public static IReadOnlyList<Activity> NewlyOpened(UnlockFacts before, UnlockFacts now)
+        => Enum.GetValues<Activity>().Where(a => IsOpen(a, now) && !IsOpen(a, before)).ToList();
+}
