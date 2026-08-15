@@ -300,6 +300,15 @@ public sealed class SoloExpeditionScreen
     /// first and most important sentence is that the fight needs nothing from them, and a prompt about
     /// that belongs over the fight, not behind a menu they have no reason to open.
     /// </remarks>
+    /// <summary>
+    /// UNUSED — the guide moved to the host as shared chrome (Game1.DrawGuideBanner).
+    /// </summary>
+    /// <remarks>
+    /// Kept as a deliberate tombstone rather than deleted silently, because the capture fixtures and
+    /// the scene audits both reference "the guide on the hunt screen" and the next person to look for
+    /// it here should find out where it went rather than conclude the feature was cut.
+    /// </remarks>
+    [Obsolete("The guide is drawn by Game1.DrawGuideBanner over every screen. Setting this does nothing.")]
     public TutorialStep? Guide { get; set; }
 
     /// <summary>The player's build choices and the tree that powers them. Set by the host each frame.</summary>
@@ -751,7 +760,6 @@ public sealed class SoloExpeditionScreen
         DrawCallouts(b);
         if (_deathFlash > 0f) _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), Ember * (_deathFlash * 0.35f));
 
-        DrawGuide(b);
 
         DrawArenaOverlay(b, overlay);
     }
@@ -1207,27 +1215,14 @@ public sealed class SoloExpeditionScreen
     /// step completes when its lesson is performed, so a player who already knows the loop never has to
     /// acknowledge a single one of these.
     /// </remarks>
-    private void DrawGuide(SpriteBatch b)
-    {
-        if (Guide is not { } step || !Tutorial.HasGuidance(step)) return;
-
-        var width = ArenaRect.Width - 160;
-        var x = ArenaRect.X + 80;
-        var body = _ui.WrapBig(Tutorial.Body(step), width - 40, UiTypography.Secondary);
-        var height = 58 + body.Count * 22;
-        var y = ArenaRect.Bottom - height - 26;
-
-        _ui.Fill(b, new Rectangle(x, y, width, height), new Color(0x10, 0x0D, 0x18, 0xE6));
-        _ui.Fill(b, new Rectangle(x, y, 5, height), Gold);
-
-        _ui.TextBig(b, Tutorial.Title(step), x + 22, y + 14, Gold, UiTypography.Body);
-        var ty = y + 44;
-        foreach (var line in body)
-        {
-            _ui.TextBig(b, line, x + 22, ty, UiKit.Vellum, UiTypography.Secondary);
-            ty += 22;
-        }
-    }
+    // DrawGuide MOVED TO Game1.DrawGuideBanner — it is shared chrome now, not arena furniture.
+    //
+    // It lived here, inside DrawArena, which is reached only through the terminal `else` of Game1's
+    // screen chain. So the guide drew on the HUNT screen and nowhere else — and every step from
+    // SpendGleam onward names a key that navigates AWAY from the hunt. The player read "press V for
+    // STATS", pressed V, and the instruction vanished with no confirmation it had been understood or
+    // completed. Playtest: "Tutorial bozuk, düzgün ilerlemiyor." That is what a guide that disappears
+    // the instant you obey it looks like from the outside.
 
     /// <summary>The single active arena announcement (Rev 4 §2/§18) — never more than one at a time.</summary>
     private void DrawArenaOverlay(SpriteBatch b, HuntOverlay overlay)

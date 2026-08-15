@@ -117,6 +117,9 @@ public class Game1 : Game
     // "Oyundaki etkinlikler yavaş yavaş açılmalı. Hepsi detaylı şekilde anlatılmalı." The gates live in
     // Core/Progression/Unlocks; these three fields are the whole of the presentation.
 
+    /// <summary>The first-run guide's current rung, recomputed every frame. Null once outgrown.</summary>
+    private TutorialStep? _guideStep;
+
     /// <summary>Toast for clicking a rail tile that is not open yet — it names its own price.</summary>
     private string _lockedMsg = "";
     private float _lockedTimer;
@@ -1497,19 +1500,46 @@ public class Game1 : Game
         // has taken the game down. Swallow the input; never skip the frame.
         //
         // The champion keeps fighting behind it. An idle game does not pause to talk to you.
-        var readingUnlock = _unlockShowing.Length > 0;
-        if (readingUnlock && (_clicked || AnyKeyPressed()))
+        // THE ORDER HERE IS THE WHOLE FIX. The first version cleared a local flag inside the dismissal
+        // branch and then assigned _swallowInput from it — so on the very frame the dismissing click was
+        // consumed, _swallowInput came out FALSE while _clicked was still latched true for the rest of
+        // the frame. The click closed the panel AND went on to hit HandleNavClick, all nine hotkeys and
+        // every button hit-tested during Draw. The guard was written and then defeated by its own
+        // sequencing, which is why the swallow is now set BEFORE the branch and never cleared by it.
+        _swallowInput = _unlockShowing.Length > 0;
+        if (_swallowInput && (_clicked || AnyKeyPressed()))
         {
             _unlockShowing = "";
             _unlockHeadline = "";
             _sound.Play("sfx_click", 0.7f);
-            readingUnlock = false;
+            // _swallowInput deliberately STAYS true: this frame's input was spent closing the panel.
         }
-        _swallowInput = readingUnlock;
 
         HandleNavClick();   // a click on the shared hex nav works from any screen
 
-        if (Pressed(Keys.A)) { _showAutomation = !_showAutomation; _showForge = false; _showPrestige = false; _showWorld = false; _showBuild = false; _showCharacter = false; _showStats = false; }
+        // EVERY NAV HOTKEY GOES THROUGH OpenNav — the unlock gate, the refusal toast and the
+        // flag-clearing all live in exactly one place now.
+        //
+        // THEY DID NOT BEFORE, AND THAT HOLE SWALLOWED THE WHOLE GRADUAL-UNLOCK FEATURE. NavUnlocked was
+        // consulted from OpenNav (mouse) and DrawHexNav (dimming) and nowhere else, so the nine keyboard
+        // bindings — written long before the gating pass — set the _showX flags directly. A first-run
+        // player who pressed B landed on the full Build screen while the rail tile beside it read "THE
+        // BUILD IS NOT OPEN YET — REACH WAVE 5". Nine destinations at once, the exact wall the feature
+        // exists to remove, was one keypress away. Worse, the tutorial's own bodies are a list of these
+        // keys: the guide was teaching the bypass.
+        //
+        // Each handler also cleared its own idiosyncratic subset of the flags, and three of them forgot
+        // _showRoster and _showWeave — so the player could see one screen while an invisible one
+        // consumed their clicks. OpenNav clears all nine, every time.
+        for (var navKey = 0; navKey < Nav.Length; navKey++)
+        {
+            // Keys.A..Keys.Z are the ASCII letter codes, so the table's char IS the key.
+            if (!Pressed((Keys)Nav[navKey].Key)) continue;
+            // Pressing the key of the screen you are already on returns you to the hunt, preserving the
+            // toggle these handlers used to have.
+            OpenNav(NavActive() == navKey ? 0 : navKey);
+            break;
+        }
         // L — THE EXPEDITION LOG. It closes every other overlay, because it is a full-screen read and
         // the one thing the player opens specifically to think, not to act.
         if (Pressed(Keys.L))
@@ -1532,19 +1562,28 @@ public class Game1 : Game
             if (Pressed(Keys.Right)) _expedition.StepLog(-1);
         }
 
-        if (Pressed(Keys.P)) { _showPrestige = !_showPrestige; _showAutomation = false; _showForge = false; _showWorld = false; _showBuild = false; _showCharacter = false; _showStats = false; _showRoster = false; }
-        if (Pressed(Keys.T)) { _showWeave = !_showWeave; _showRoster = false; _showPrestige = false; _showAutomation = false; _showForge = false; _showWorld = false; _showBuild = false; _showCharacter = false; _showStats = false; }
-        if (Pressed(Keys.R)) { _showRoster = !_showRoster; _showWeave = false; _showPrestige = false; _showAutomation = false; _showForge = false; _showWorld = false; _showBuild = false; _showCharacter = false; _showStats = false; }
-        if (Pressed(Keys.W)) { _showWorld = !_showWorld; _showAutomation = false; _showForge = false; _showPrestige = false; _showBuild = false; _showCharacter = false; _showStats = false; if (_showWorld) { _mapScreen.ActiveRegion = _activeRegion; _mapScreen.SelectActive(); } }
+        // T — THE WEAVE. The one screen with no rail tile of its own, so it cannot go through OpenNav;
+        // it is gated on Activity.Build, which is the screen it is reached from and the thing it is
+        // part of. Without this it was the last remaining way to walk past the unlock gate.
+        if (Pressed(Keys.T))
+        {
+            if (!Unlocks.IsOpen(Activity.Build, GuideUnlockFacts()))
+            {
+                _lockedMsg = $"{Unlocks.Headline(Activity.Build)} IS NOT OPEN YET — "
+                             + $"{Unlocks.Requirement(Activity.Build).ToUpperInvariant()}.";
+                _lockedTimer = 3.2f;
+                _sound.Play("sfx_click", 0.45f);
+            }
+            else
+            {
+                var wasWeave = _showWeave;
+                OpenNav(0);              // clears all nine flags in one place
+                _showWeave = !wasWeave;
+            }
+        }
 
-        // B — WEAVE YOUR BUILD. The whole decision layer of the solo model: four skills, three sockets.
-        if (Pressed(Keys.B)) { _showBuild = !_showBuild; _showAutomation = false; _showForge = false; _showPrestige = false; _showWorld = false; _showCharacter = false; _showStats = false; }
 
-        // C — CHARACTER. Equipment and the bag — the gear half of the sheet.
-        if (Pressed(Keys.C)) { _showCharacter = !_showCharacter; _showStats = false; _showBuild = false; _showAutomation = false; _showForge = false; _showPrestige = false; _showWorld = false; }
 
-        // V — STATS. Commander training, spelled out, on its own page apart from the inventory.
-        if (Pressed(Keys.V)) { _showStats = !_showStats; _showCharacter = false; _showBuild = false; _showAutomation = false; _showForge = false; _showPrestige = false; _showWorld = false; }
 
         // THE CHAMPION FIGHTS EVERYWHERE. Ticked here, before any overlay can early-return, so a run
         // keeps clearing waves and paying out while you're in the Forge, the tree, or another region's
@@ -1768,12 +1807,35 @@ public class Game1 : Game
         WavesCleared: _deepestEver,
         Gleam: _hunter.Gleam,
         StatsTrained: Enum.GetValues<HunterStat>().Sum(_hunter.RankOf),
-        ItemsOwned: _forge.Inventory.Count(Gear.IsWearable),
+        ItemsOwned: _forge?.Inventory.Count(Gear.IsWearable) ?? 0,
         ItemsWorn: Enum.GetValues<GearSlot>().Count(sl => _hunter.Worn(sl) is not null),
-        BossesFelled: _deepestEver >= ExpeditionTuning.Default.BossEvery ? 1 : 0,
-        SkillsWoven: _mastery.Spent > 0 ? 1 : 0,
+        // A CHEST WAITING is now its own fact, because the guide has a rung about opening one. The step
+        // it feeds shows during the wait as well as after it — a 20% drop off a boss every fifth wave is
+        // tens of waves, and the guide going quiet for all of them was the reported bug.
+        ChestsHeld: _forge?.UnopenedChests.Count ?? 0,
+        // WAS `_mastery.Spent > 0`, WHICH MEASURED THE WRONG SYSTEM. The step says "press B for BUILD,
+        // then WEAVE", and weaving a skill touches _loadout — it never touches the mastery tree. So a
+        // player who did exactly what they were told stayed on that prompt forever, while a player who
+        // idly poked the tree in minute one completed a step they were never shown. It also went
+        // BACKWARDS on a respec, which the tree offers free and unlimited.
+        //
+        // The real signal is "the build is no longer the one you were handed": a second skill woven, or
+        // the first one changed away from the starter's Body Strike.
+        SkillsWoven: BuildDiffersFromStarter() ? 1 : 0,
         DeepestWave: _deepestEver,
         RegionsConquered: _world.ConqueredIds.Count);
+
+    /// <summary>Has the player actually changed their weave, rather than keeping what they were given?</summary>
+    /// <remarks>
+    /// Compared against <see cref="PlayerLoadout.Starter"/>'s single Body Strike rather than a stored
+    /// flag, so it needs no save migration and is honest on every existing save.
+    /// </remarks>
+    private bool BuildDiffersFromStarter()
+    {
+        var skills = _loadout.Skills;
+        if (skills.Count != 1) return true;
+        return skills[0].Source != Source.Body || skills[0].Form != Form.Strike || skills[0].VowId is not null;
+    }
 
     /// <summary>Pick the looping music bed for the current screen. No-op until the music_* WAVs exist.</summary>
     private void UpdateMusic()
@@ -1868,6 +1930,15 @@ public class Game1 : Game
 
         if (_lastSkillSlots < 0)
         {
+            // THE HUNT'S OWN EXPLANATION HAD NO WAY TO BE SHOWN. Activity.Hunt is open unconditionally,
+            // so it is open in both `before` and `now` on every frame and NewlyOpened never yields it —
+            // meaning the single best onboarding paragraph in the codebase ("your champion fights on its
+            // own, forever, without you… you never click an attack") ran for nobody. The seeding guard
+            // below is correct and necessary; Hunt just needs to be announced outside it, once, to
+            // someone who has never played.
+            if (!_hasSave)
+                _unlockQueue.Enqueue((Unlocks.Headline(Activity.Hunt), Unlocks.Explain(Activity.Hunt)));
+
             _lastUnlockFacts = now;
             _lastSkillSlots = slots;
             return;
@@ -1888,9 +1959,62 @@ public class Game1 : Game
         {
             (_unlockHeadline, _unlockShowing) = _unlockQueue.Dequeue();
             _sound.PlayFirst(0.9f, "sfx_levelup", "sfx_click");
+
+            // SWALLOW THIS FRAME TOO. _swallowInput is computed near the top of Update, ~40 lines before
+            // this method runs, so on the frame a panel first appears the flag was still false and the
+            // panel drew over live, clickable chrome. Whatever the player happened to be clicking when
+            // the unlock fired went through underneath it.
+            _swallowInput = true;
         }
     }
 
+
+    /// <summary>
+    /// The first-run guide, drawn as shared chrome over every screen in the game.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>THIS USED TO LIVE INSIDE THE ARENA, and that was the reported bug.</b> DrawGuide was called
+    /// from SoloExpeditionScreen.DrawArena, which is reached only through the terminal <c>else</c> of
+    /// the screen chain — so the guide appeared on HUNT and nowhere else. Every step from SpendGleam
+    /// onward names a key that navigates away from the hunt, so the player read "press V for STATS",
+    /// pressed V, and the instruction vanished. Nothing confirmed the step had completed; nothing
+    /// carried the lesson onto the screen it had just sent them to. Playtest: "Tutorial bozuk, düzgün
+    /// ilerlemiyor."
+    /// </para>
+    /// <para>
+    /// As chrome it follows the player. Press V and the guide is still there on the STATS screen saying
+    /// what to do; train a stat and it visibly advances to the next rung. That transition IS the sense
+    /// of progress the guide was missing.
+    /// </para>
+    /// <para>
+    /// Drawn beneath the unlock panel and above everything else, and suppressed while that panel is up
+    /// so two pieces of teaching never compete for the same attention.
+    /// </para>
+    /// </remarks>
+    private void DrawGuideBanner()
+    {
+        if (_showTitle || _showHelp || _showSettings) return;
+        if (_unlockShowing.Length > 0) return;
+        if (_guideStep is not { } step || !Tutorial.HasGuidance(step)) return;
+
+        const int width = 980;
+        var x = (1920 - width) / 2;
+        var body = _ui.WrapBig(Tutorial.Body(step), width - 44, UiTypography.Secondary);
+        var height = 58 + body.Count * 22;
+        var y = 1080 - height - 26;
+
+        _ui.Fill(_batch, new Rectangle(x, y, width, height), new Color(0x10, 0x0D, 0x18, 0xEE));
+        _ui.Fill(_batch, new Rectangle(x, y, 5, height), NavGold);
+
+        _ui.TextBig(_batch, Tutorial.Title(step), x + 22, y + 14, NavGold, UiTypography.Body);
+        var ty = y + 44;
+        foreach (var line in body)
+        {
+            _ui.TextBig(_batch, line, x + 22, ty, UiKit.Vellum, UiTypography.Secondary);
+            ty += 22;
+        }
+    }
 
     /// <summary>The toast for clicking a locked rail tile. Says the price, then fades.</summary>
     private void DrawLockedToast()
@@ -1989,7 +2113,10 @@ public class Game1 : Game
         _expedition.BestDepthHere = _world.RegionFarm(def.Id).BestDepth;   // so NEW RECORD means it
         _expedition.ChestCount = _forge.UnopenedChests.Count;   // drives the fight screen's "go open a chest" nudge
         _expedition.IdleGleamRate = _champGleamRate;            // gleam/sec the champion earns idle → HUNT idle panel
-        _expedition.Guide = Tutorial.Showing(GuideFacts());     // the first-run guide, or null once outgrown
+        // The first-run guide, or null once outgrown. Held on the HOST, not on the fight screen: it is
+        // drawn as chrome over every screen now (DrawGuideBanner), because a guide that vanishes the
+        // moment you obey it reads as a guide that has stopped working.
+        _guideStep = Tutorial.Showing(GuideFacts());
 
         _forge.Tuning = ForgeTuning.Default with
         {
@@ -2416,6 +2543,7 @@ public class Game1 : Game
         if (_showSettings) DrawSettings();
 
         DrawBootToast();
+        DrawGuideBanner();
         DrawLockedToast();
         // LAST of the chrome, so the explanation of a thing that just opened sits over everything —
         // including the nav rail it is usually talking about.
@@ -2848,8 +2976,15 @@ public class Game1 : Game
     }
 
     /// <summary>Which nav slot is lit: 0 HUNT (fight), else the open overlay.</summary>
+    /// <summary>Which rail tile is lit. The Weave has no tile of its own, so it lights BUILD's.</summary>
+    /// <remarks>
+    /// <c>_showWeave</c> had no case here at all and fell through to 0, so the rail cheerfully reported
+    /// HUNT while the player was standing on the Weave — the game's most distinctive screen, telling
+    /// them they were somewhere else. It is reached from the Build overview and is part of the same
+    /// activity, so it lights that tile rather than claiming one.
+    /// </remarks>
     private int NavActive() =>
-        _showCharacter ? 1 : _showStats ? 2 : _showBuild ? 3 : _showForge ? 4 :
+        _showCharacter ? 1 : _showStats ? 2 : _showBuild || _showWeave ? 3 : _showForge ? 4 :
         _showAutomation ? 5 : _showWorld ? 6 : _showPrestige ? 7 : _showRoster ? 8 : 0;
 
     /// <summary>
