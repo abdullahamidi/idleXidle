@@ -34,6 +34,84 @@ A machine-switch checklist, since the repo cannot carry everything:
 
 ---
 
+## THE THIRD PLAYTEST PASS (2026-08-15) — read this first
+
+Ten commits. Every item the player reported is closed. 688 tests, five gates green, boot green.
+
+The investigation ran as a fan-out with an **adversarial verify stage**: every finding was handed to a
+second agent whose only job was to refute it. Two claims died there (one was half-wrong in an
+instructive way — an icon was missing because its art files had been deleted in an earlier commit, not
+because of the size gate the finding blamed). Do this again. It cost little and it stopped two wrong
+fixes.
+
+### The bugs worth remembering
+
+**The stat buttons could not be clicked at ANY cursor position.** Screens are authored in 1920x1080 and
+drawn through an inset, but the host hands them a 480x270 cursor. Nine screens invert it; StatsScreen
+did not, so its nearest TRAIN button (authored x=938) was hit-tested against a cursor whose x cannot
+exceed ~479. The whole stat economy was unreachable. The identical bug was live in the expedition log's
+page arrows, where the parameter was even NAMED `hit` — a parameter name is not a conversion.
+`tools/check_mouse_space.py` now enforces it. **Its first draft would have missed the bug it was written
+for**, because StatsScreen.Draw contains no hit-test of its own — the dead button was two helper calls
+below. It walks the call graph now. Verified by reintroducing the bug.
+
+**Gleam was worth nothing, and a green test said otherwise.** The full nine-stat progression funded
+itself in 35 minutes. 87% of income came from the Warren, whose rates its own comment admits were
+"chosen so a mid-Warren reads on the reference's scale" — an art mock-up whose currency pill reads
+131,900,000, against a most-expensive-purchase of 445. It also paid before the player could open it.
+The guarding test asserted `sink > 50_000` with the message "too small to absorb the faucet", **naming
+a faucet it never measured**. An economy is a ratio and cannot be asserted from one side. Now: first
+rank 33s, region 1 at 7 min, region 3 at 2h, full training 7.6 hours (`gleam_economy_test`).
+
+**The tutorial deadlocked, and two of its six rungs were structurally unreachable.** "Equip an item"
+waited on owning an item; items come only from a chest; the only rung that mentions chests sat BEHIND
+it. The instruction for escaping the room was locked inside the room. And that rung could never display
+at all, because owning an item implies a chest implies a felled boss, so its condition was always
+already satisfied when it became current. **The rule that prevents this: a step may not depend on a
+resource that a later step explains how to get.** The guide also drew only on the HUNT screen while
+every step names a key that navigates away from it — so obeying an instruction made it vanish. It is
+shared chrome now.
+
+**The renderer had no concept of facing.** `SpriteEffects` appeared in zero source files, while the
+arena is an explicit left-vs-right composition that encodes direction in motion. The champion swung
+LEFT, away from the enemies. Checked against the art, not assumed. Enemy art already faces left and is
+correct, so only the champion is mirrored. Also: the two actors ran in opposite animation phase (enemy
+anticipates, champion reacted), and the enemy row's lunge was swallowed by a clamp that had already
+saturated on 19 of 20 multi-creature waves.
+
+**"Gear power is wrong" was a vocabulary bug plus a real blindness.** The maths was fine and there was
+no drifted copy. But the game has two unrelated things called "Source" — the fight's matchup keys off
+the woven SKILL's source, while an item's Element is a crafting axis — and labelling the second one
+"SOURCE" with the same gem art made a Nature item in a Spirit build look like a mismatch. Separately,
+PowerRating genuinely ignored Crit, which is live in the fight, so affix luck produced scatter a player
+would reasonably read as an element correlation.
+
+### Things that were built and never reached the player (this keeps happening)
+
+- `DamageBench` — a full damage bench in Core, tested, **zero callers in the game**, one call away from
+  the screen that needed it most. It now drives the Weave screen's "what would this pick do" preview.
+- `ChestScreen` — shipped compiling and unreachable in the commit before it was wired. The sweep
+  flagged it by name before a player could.
+- The champion-unlock and quest-done notices wrote `_bootMessage` without arming `_bootTimer`, which is
+  only armed in `Initialize()`. Every announcement was produced and discarded.
+- `Unlocks.Explain(Hunt)` could never fire: Hunt is open unconditionally, so `NewlyOpened` never yields
+  it. The best onboarding paragraph in the codebase ran for nobody.
+- Every nav HOTKEY bypassed the unlock gate, which was only enforced on the mouse path — and the
+  tutorial's own text is a list of those hotkeys, so the guide was teaching the bypass.
+
+### Still open
+
+- **MARK SPECIALIST** (MasteryCatalog) grants x2.00 affinity on the one Form that never reaches `Amp`,
+  so a 6-point node only lowers your damage. Real balance bug, not yet fixed.
+- **No unseen-champion badge** on the ROSTER tile — needs a persisted "seen" set the save has no
+  concept of.
+- **THE WEAVE still has no rail tile** (it is gated and the rail highlights BUILD correctly now).
+- **Upgrade/reforge/salvage/merge "papers"** — asked for two passes ago, still not built.
+- Dead code the sweep proved: `Gear.ItemScore`, and the `watchingFight`/`interactive` plumbing that
+  `SoloExpeditionScreen.Update` ignores entirely.
+
+---
+
 ## THE SECOND PLAYTEST PASS (2026-08-15) — read this first
 
 The first playtest came back with seven items. All seven are in. Read the two entries below
