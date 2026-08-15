@@ -14,6 +14,7 @@ using ResonanceHunter.Core.Economy;
 using ResonanceHunter.Core.Encounters;
 using ResonanceHunter.Core.Expeditions;
 using ResonanceHunter.Core.Prestige;
+using ResonanceHunter.Core.Progression;
 
 namespace ResonanceHunter.Client;
 
@@ -290,6 +291,16 @@ public sealed class SoloExpeditionScreen
         if (_bannerTimer > 0f) return HuntOverlay.WaveCleared;
         return HuntOverlay.None;
     }
+
+    /// <summary>
+    /// The first-run lesson to show, or null once the player has outgrown the guide.
+    /// </summary>
+    /// <remarks>
+    /// Drawn on the HUNT screen because that is where a new player is actually looking — the guide's
+    /// first and most important sentence is that the fight needs nothing from them, and a prompt about
+    /// that belongs over the fight, not behind a menu they have no reason to open.
+    /// </remarks>
+    public TutorialStep? Guide { get; set; }
 
     /// <summary>The player's build choices and the tree that powers them. Set by the host each frame.</summary>
     public PlayerLoadout Loadout { get; set; } = PlayerLoadout.Starter();
@@ -720,6 +731,8 @@ public sealed class SoloExpeditionScreen
         _vfx.Draw(b);
         DrawCallouts(b);
         if (_deathFlash > 0f) _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), Ember * (_deathFlash * 0.35f));
+
+        DrawGuide(b);
 
         DrawArenaOverlay(b, overlay);
     }
@@ -1154,6 +1167,37 @@ public sealed class SoloExpeditionScreen
                 _ui.TextBig(b, line, x, dy, UiKit.Vellum, UiTypography.Secondary);
                 dy += lineHeight;
             }
+        }
+    }
+
+    /// <summary>
+    /// The first-run guide: one lesson, low on the arena, out of the way of the fight.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not a modal and not a pointer. An idle game's first minute is spent WATCHING, so the
+    /// guide has to be readable without stopping anything and ignorable without dismissing anything — a
+    /// step completes when its lesson is performed, so a player who already knows the loop never has to
+    /// acknowledge a single one of these.
+    /// </remarks>
+    private void DrawGuide(SpriteBatch b)
+    {
+        if (Guide is not { } step || !Tutorial.HasGuidance(step)) return;
+
+        var width = ArenaRect.Width - 160;
+        var x = ArenaRect.X + 80;
+        var body = _ui.WrapBig(Tutorial.Body(step), width - 40, UiTypography.Secondary);
+        var height = 58 + body.Count * 22;
+        var y = ArenaRect.Bottom - height - 26;
+
+        _ui.Fill(b, new Rectangle(x, y, width, height), new Color(0x10, 0x0D, 0x18, 0xE6));
+        _ui.Fill(b, new Rectangle(x, y, 5, height), Gold);
+
+        _ui.TextBig(b, Tutorial.Title(step), x + 22, y + 14, Gold, UiTypography.Body);
+        var ty = y + 44;
+        foreach (var line in body)
+        {
+            _ui.TextBig(b, line, x + 22, ty, UiKit.Vellum, UiTypography.Secondary);
+            ty += 22;
         }
     }
 

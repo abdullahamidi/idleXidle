@@ -16,6 +16,7 @@ using ResonanceHunter.Core.Forging;
 using ResonanceHunter.Core.Loot;
 using ResonanceHunter.Core.Persistence;
 using ResonanceHunter.Core.Prestige;
+using ResonanceHunter.Core.Progression;
 using ResonanceHunter.Core.Quests;
 using ResonanceHunter.Core.Warrens;
 
@@ -1655,6 +1656,31 @@ public class Game1 : Game
                                    .Count();
     }
 
+    /// <summary>
+    /// What the first-run guide knows about this player.
+    /// </summary>
+    /// <remarks>
+    /// Every field is read from state the save ALREADY carries, so the guide needed no new persisted
+    /// field and no migration — and a player who is already deep into the game arrives with every step
+    /// satisfied rather than being taught the loop they have been playing for hours.
+    ///
+    /// Two are deliberately proxies. "Felled a boss" is read as having reached the first boss wave,
+    /// because bosses are every fifth wave and depth is what the save keeps. "Touched the build" is read
+    /// as having SPENT a mastery point, which cannot happen without opening the build screen — the
+    /// woven skills themselves are seeded on a new game, so counting those would mark the lesson done
+    /// before the player had seen it.
+    /// </remarks>
+    private TutorialFacts GuideFacts() => new(
+        WavesCleared: _deepestEver,
+        Gleam: _hunter.Gleam,
+        StatsTrained: Enum.GetValues<HunterStat>().Sum(_hunter.RankOf),
+        ItemsOwned: _forge.Inventory.Count(Gear.IsWearable),
+        ItemsWorn: Enum.GetValues<GearSlot>().Count(sl => _hunter.Worn(sl) is not null),
+        BossesFelled: _deepestEver >= ExpeditionTuning.Default.BossEvery ? 1 : 0,
+        SkillsWoven: _mastery.Spent > 0 ? 1 : 0,
+        DeepestWave: _deepestEver,
+        RegionsConquered: _world.ConqueredIds.Count);
+
     /// <summary>Pick the looping music bed for the current screen. No-op until the music_* WAVs exist.</summary>
     private void UpdateMusic()
     {
@@ -1722,6 +1748,7 @@ public class Game1 : Game
         _expedition.BestDepthHere = _world.RegionFarm(def.Id).BestDepth;   // so NEW RECORD means it
         _expedition.ChestCount = _forge.UnopenedChests.Count;   // drives the fight screen's "go open a chest" nudge
         _expedition.IdleGleamRate = _champGleamRate;            // gleam/sec the champion earns idle → HUNT idle panel
+        _expedition.Guide = Tutorial.Showing(GuideFacts());     // the first-run guide, or null once outgrown
 
         _forge.Tuning = ForgeTuning.Default with
         {
