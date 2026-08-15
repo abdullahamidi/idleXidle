@@ -135,7 +135,7 @@ public class TutorialTest
     {
         // Same reason: the guide tells the player "survive to wave 5", and that number lives in a
         // different assembly's tuning.
-        Assert.Equal(ExpeditionTuning.Default.BossEvery, Tutorial.BossEvery);
+        Assert.Equal(Tutorial.BossEvery, ExpeditionTuning.Default.BossEvery);
     }
 
     [Fact]

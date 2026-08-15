@@ -242,13 +242,29 @@ public class BuildTests
     }
 
     [Fact]
-    public void test_capacity_never_falls_below_the_floor()
+    public void test_capacity_never_reports_fewer_slots_than_there_are_skills_in_them()
     {
-        // A build handed a smaller capacity than the type's floor would silently refuse skills the
-        // player already owns — worse than the bug it replaces, because it takes something away.
-        var build = new Build { SlotCapacity = 1 };
-        Assert.Equal(Build.SkillSlots, build.SlotCapacity);
-        for (var i = 0; i < Build.SkillSlots; i++) Assert.True(build.Weave(Skill($"s{i}")));
+        // THIS TEST USED TO PIN THE WRONG RULE. It asserted the capacity floors at Build.SkillSlots (4),
+        // which was sound while every player had four slots from the first frame. The gradual-unlock
+        // pass ended that — a new champion has ONE — and against a hard floor of 4 the build reported
+        // four slots to a player who had one. That is not cosmetic: VOW OF COMPLETION demands "no skill
+        // slot is empty", so it compared one woven against four slots and was UNMEETABLE for the whole
+        // of onboarding, showing UNMET on the Weave screen for a build with no empty slot at all.
+        //
+        // The protection it was reaching for is real and is kept: a capacity must never be small enough
+        // to unweave something. That is a floor of WHAT IS WOVEN, not of a constant.
+        var narrow = new Build { SlotCapacity = 1 };
+        Assert.Equal(1, narrow.SlotCapacity);
+        Assert.True(narrow.Weave(Skill("only")));
+        Assert.False(narrow.Weave(Skill("second")), "a one-slot build accepted a second skill");
+
+        // Now shrink a build that already holds more than the new capacity: it must not lose any.
+        var full = new Build { SlotCapacity = 4 };
+        for (var i = 0; i < 4; i++) Assert.True(full.Weave(Skill($"s{i}")));
+
+        full.SlotCapacity = 1;
+        Assert.Equal(4, full.SlotCapacity);
+        Assert.Equal(4, full.Skills.Count);
     }
 
     [Fact]
@@ -258,5 +274,32 @@ public class BuildTests
         Assert.Equal(Build.SkillSlots, build.SlotCapacity);
         for (var i = 0; i < Build.SkillSlots; i++) Assert.True(build.Weave(Skill($"s{i}")));
         Assert.False(build.Weave(Skill("fifth")), "a build nobody expanded must not grow one for free");
+    }
+
+    [Fact]
+    public void test_the_vow_of_completion_is_meetable_during_onboarding()
+    {
+        // THE PLAYER-VISIBLE HALF OF THE CAPACITY BUG. A champion in the unlock window holds one skill
+        // in one slot — which is, plainly, no empty slot — and the Weave screen showed VOW OF COMPLETION
+        // as UNMET because the build believed it had four. A Vow that cannot be met is a Vow nobody can
+        // swear, and it sat at the top of the list on the game's most distinctive screen.
+        var hunter = new Hunter();
+
+        var onboarding = new Build { SlotCapacity = 1 };
+        onboarding.Weave(Skill("only"));
+
+        var ctx = SoloBattle.DescribeBuild(onboarding, hunter);
+        Assert.Equal(1, ctx.SkillSlots);
+        Assert.Equal(1, ctx.SkillsWoven);
+
+        var vow = Weaving.Catalog.First(v => v.Id == "vow_complete");
+        Assert.True(Weaving.IsActive(vow, ctx),
+            "a one-skill champion with one slot has no empty slot, but VOW OF COMPLETION reads UNMET.");
+
+        // And it must still REFUSE a build that genuinely has a gap.
+        var gappy = new Build { SlotCapacity = 3 };
+        gappy.Weave(Skill("a"));
+        Assert.False(Weaving.IsActive(vow, SoloBattle.DescribeBuild(gappy, hunter)),
+            "a build with two empty slots met a Vow that demands none.");
     }
 }

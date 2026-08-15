@@ -229,13 +229,23 @@ public sealed class Build
     /// bought, persisted, resolved, displayed — and clamped off at the last step, which is this
     /// codebase's signature failure wearing a different hat.
     ///
-    /// Never below <see cref="SkillSlots"/>: a build handed a smaller capacity than the floor would
-    /// silently unweave skills the player already had.
+    /// <b>The floor is WHAT IS ALREADY WOVEN, not <see cref="SkillSlots"/>.</b> It used to be the
+    /// constant 4, on the reasoning that a build handed a smaller capacity would silently unweave skills
+    /// the player already had — which was sound while every player had four slots from the first frame.
+    ///
+    /// The gradual-unlock pass ended that: a new champion has ONE slot and earns the rest. Against a
+    /// hard floor of 4 the build reported four slots to a player who had one, and the consequence was
+    /// not cosmetic — VOW OF COMPLETION demands "no skill slot is empty", so it compared 1 woven against
+    /// 4 slots and was UNMEETABLE for the entire onboarding, reading UNMET on the Weave screen for a
+    /// build that in fact had no empty slot at all.
+    ///
+    /// Keeping the real protection and dropping the wrong constant: the capacity can never report fewer
+    /// slots than there are skills in them, so nothing is ever unwoven, and it is otherwise honest.
     /// </remarks>
     public int SlotCapacity
     {
-        get => _slotCapacity;
-        set => _slotCapacity = Math.Max(SkillSlots, value);
+        get => Math.Max(_slotCapacity, _skills.Count);
+        set => _slotCapacity = Math.Max(1, value);
     }
 
     private int _slotCapacity = SkillSlots;
