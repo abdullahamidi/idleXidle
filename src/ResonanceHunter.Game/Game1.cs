@@ -1490,8 +1490,13 @@ public class Game1 : Game
             _expedition.ToggleLog();
             if (_expedition.LogOpen)
             {
+                // ALL NINE, not seven. _showRoster and _showWeave were missing, so opening the log from
+                // the roster or the weave left that screen live underneath it — and because the log is
+                // drawn in the same batch, OverlayActive stayed true and the batch kept the OVERLAY
+                // inset transform instead of the plain canvas one. DrawLog's own hit-tests assume the
+                // plain one, so its page buttons landed in a third coordinate space.
                 _showPrestige = _showAutomation = _showForge = _showWorld = false;
-                _showBuild = _showCharacter = _showStats = false;
+                _showBuild = _showCharacter = _showStats = _showRoster = _showWeave = false;
             }
         }
         if (_expedition.LogOpen)

@@ -90,6 +90,20 @@ public sealed class StatsScreen
 
     public void Draw(SpriteBatch b, Point mouse, Hunter hunter, bool clicked = false)
     {
+        // INVERT THE OVERLAY INSET BEFORE ANY HIT-TEST. Every rect on this screen is authored in
+        // 1920x1080 and drawn through Game1.BeginOverlayCanvas; the cursor arrives in 480x270 canvas
+        // space. Without this conversion the two spaces never meet.
+        //
+        // THIS IS WHY THE TRAIN BUTTONS COULD NOT BE CLICKED. Playtest: "Stat upgrade tıklayamıyorum."
+        // The nearest TRAIN button sits at authored x=938 while the incoming cursor's x cannot exceed
+        // ~479, so Rectangle.Contains was false at EVERY cursor position, on every frame, for every
+        // button — the stat economy was unreachable, not merely awkward.
+        //
+        // Nine other screens already do exactly this (ForgeScreen.cs:863 is the twin). StatsScreen was
+        // the only one that did not, which is the whole bug: a shared transform that each screen has to
+        // remember to invert is a rule enforced by nobody. check_mouse_space.py now enforces it.
+        var hit = Game1.ToOverlay(mouse);
+
         _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xD8));   // scrim over the shared backdrop
 
         _ui.TextCenterBig(b, "STATS", 960, 24, Gold, UiTypography.ScreenTitle);
@@ -97,9 +111,9 @@ public sealed class StatsScreen
         _ui.TextCenterBig(b, "OVERVIEW   ·   ATTRIBUTES   ·   PROGRESSION", 960, 80, Slate, UiTypography.Secondary);
 
         DrawHunterCard(b, hunter);
-        DrawPrimary(b, hunter, mouse, clicked);
+        DrawPrimary(b, hunter, hit, clicked);
         DrawDerived(b, hunter);
-        DrawCombat(b, hunter, mouse, clicked);
+        DrawCombat(b, hunter, hit, clicked);
         DrawProgression(b, hunter);
         if (DevStatsDebug) DrawDebug(b);
     }

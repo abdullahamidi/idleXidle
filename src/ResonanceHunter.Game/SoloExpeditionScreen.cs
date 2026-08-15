@@ -1077,9 +1077,18 @@ public sealed class SoloExpeditionScreen
     /// player has learned to read one layout, and a history that presented the same facts differently
     /// would make comparing two runs — the entire reason to keep them — harder, not easier.
     /// </remarks>
-    public void DrawLog(SpriteBatch b, Point hit, bool clicked)
+    public void DrawLog(SpriteBatch b, Point mouse, bool clicked)
     {
         if (!_logOpen) return;
+
+        // THE PARAMETER USED TO BE CALLED `hit`, which promised the caller had already lifted it into
+        // this screen's 1920 space. The caller had not — Game1 passes CanvasMouse, 480x270 — so the
+        // log's page buttons were hit-tested against a cursor that could never reach them, and both
+        // arrows were dead at every resolution. A parameter name is not a conversion.
+        //
+        // The same lift the sibling Draw does (:697). Safe unconditionally because opening the log now
+        // closes all nine overlay screens, so this batch is never under the overlay inset transform.
+        var hit = new Point(mouse.X * 4, mouse.Y * 4);
 
         _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xE6));
 
