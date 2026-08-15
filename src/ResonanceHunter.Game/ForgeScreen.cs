@@ -781,6 +781,31 @@ public sealed class ForgeScreen
     // ── CHESTS — the dopamine beat. Boss drops land here; the player cracks them for materials + items. ──
 
     /// <summary>Open the BEST unopened chest — the grade you actually want to see revealed.</summary>
+    /// <summary>
+    /// Open ONE named chest — what the Vault's OPEN THIS button drives.
+    /// </summary>
+    /// <remarks>
+    /// The Forge's own button opens whichever chest is best, because the Forge shows a count and nothing
+    /// else. The Vault shows the pile, so the player can point at one — and a page that lets you read
+    /// six chests and then opens a seventh of its own choosing would be worse than no page at all.
+    ///
+    /// Routed through the Forge rather than done in the Vault because everything downstream of a chest
+    /// lives here: the loot filter, the reveal burst, auto-merge, the footer line. A second opener would
+    /// be a second copy of all of it.
+    /// </remarks>
+    public void OpenOneChest(Chest chest, Hunter hunter)
+    {
+        ArgumentNullException.ThrowIfNull(chest);
+        var idx = _chests.IndexOf(chest);
+        if (idx < 0) { Say("THAT CHEST IS ALREADY OPEN.", Slate); return; }
+
+        _chests.RemoveAt(idx);
+        Reveal(chest, LandChest(chest, hunter));
+    }
+
+    /// <summary>Crack every chest at once — the Vault's OPEN ALL, and the Forge's.</summary>
+    public void OpenEveryChest(Hunter hunter) => OpenAllChests(hunter);
+
     private void OpenBestChest(Hunter hunter)
     {
         if (_chests.Count == 0) { Say("NO CHESTS YET — CLEAR A BOSS WAVE.", Slate); return; }
@@ -791,7 +816,13 @@ public sealed class ForgeScreen
 
         var chest = _chests[idx];
         _chests.RemoveAt(idx);
-        var (mat, items) = LandChest(chest, hunter);
+        Reveal(chest, LandChest(chest, hunter));
+    }
+
+    /// <summary>The reveal burst and the footer line for one opened chest. Shared by both openers.</summary>
+    private void Reveal(Chest chest, (int Materials, List<ItemInstance> Items) landed)
+    {
+        var (mat, items) = landed;
 
         // The REVEAL: a centred burst you can't miss — the anticipation payoff loot design is built on.
         _revealGrade = chest.Rarity;

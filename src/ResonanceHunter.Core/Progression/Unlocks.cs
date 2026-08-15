@@ -21,6 +21,9 @@ public enum Activity
     /// <summary>Wearing what dropped.</summary>
     Gear,
 
+    /// <summary>Reading an unopened chest before deciding to crack it.</summary>
+    Vault,
+
     /// <summary>Cracking chests, refining, reforging, salvaging.</summary>
     Forge,
 
@@ -94,6 +97,10 @@ public static class Unlocks
         // screen with an empty bag teaches a new player that gear is not part of this game.
         Activity.Gear => f.ItemsOwned >= 1,
 
+        // The first chest is a moment, and the Vault is where it is read. Opens on that chest alone —
+        // never on owning items, because a Vault with nothing in it is a page about nothing.
+        Activity.Vault => f.ChestsHeld >= 1,
+
         // Chests are what the Forge is FOR. Also opened by owning items, because salvaging is the other
         // half of it and a player with junk and no chest still has a reason to be here.
         Activity.Forge => f.ChestsHeld >= 1 || f.ItemsOwned >= 2,
@@ -132,6 +139,7 @@ public static class Unlocks
         Activity.Hunt => "",
         Activity.Stats => "Clear your first wave",
         Activity.Gear => "Find your first item",
+        Activity.Vault => "Earn a chest from a boss",
         Activity.Forge => "Earn a chest from a boss",
         Activity.Build => "Reach wave 5",
         Activity.Map => "Conquer a region",
@@ -150,6 +158,7 @@ public static class Unlocks
         Activity.Hunt => "THE HUNT",
         Activity.Stats => "COMMAND — YOUR CHAMPION'S STATS",
         Activity.Gear => "GEAR — WHAT YOU WEAR",
+        Activity.Vault => "THE VAULT — CHESTS YOU HAVE NOT OPENED",
         Activity.Forge => "THE FORGE — WHERE ITEMS ARE MADE",
         Activity.Build => "THE BUILD — THE ACTUAL GAME",
         Activity.Map => "THE MAP — THE WORLD BEYOND",
@@ -190,6 +199,14 @@ public static class Unlocks
             + "properties that are different on every copy — two swords of the same name are not the "
             + "same sword. A higher item level is not automatically an upgrade: read what it rolled. "
             + "Anything you are not wearing is material for the Forge.",
+
+        Activity.Vault =>
+            "Every chest you are holding, and what each one already promises before you crack it. A "
+            + "chest's GRADE is rolled when it drops and decides the rarity floor of what is inside — a "
+            + "Legendary chest cannot pay you less than an Epic, and the page says so. Its TIER is the "
+            + "depth you were at, and the region it came from tilts the contents toward what that place "
+            + "is known for. What it does not tell you is the actual roll: that happens when you open "
+            + "it, which is the whole point of a chest.",
 
         Activity.Forge =>
             "Chests open here, and this is where items stop being what they dropped as. REFINE raises "

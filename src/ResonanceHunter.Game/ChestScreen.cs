@@ -116,6 +116,12 @@ public sealed class ChestScreen
         ArgumentNullException.ThrowIfNull(chests);
         _anim += dt;
 
+        // Every rect here is authored in 1920x1080 and this screen draws through the overlay inset, so
+        // the 480-space cursor has to be lifted before any hit-test — the same one line ForgeScreen and
+        // eight others carry. StatsScreen forgot it and its buttons were dead at every cursor position;
+        // check_mouse_space.py caught this file the moment it was wired up.
+        var hit = Game1.ToOverlay(mouse);
+
         var sorted = ChestDossiers.BestFirst(chests);
         Clamp(sorted.Count);
 
@@ -125,7 +131,7 @@ public sealed class ChestScreen
         if (!clicked) return;
 
         for (var vis = 0; vis < PerPage && _scroll + vis < sorted.Count; vis++)
-            if (Card(vis).Contains(mouse)) { _cursor = _scroll + vis; return; }
+            if (Card(vis).Contains(hit)) { _cursor = _scroll + vis; return; }
     }
 
     public void Draw(SpriteBatch b, IReadOnlyList<Chest> chests, Point mouse, bool clicked)
@@ -133,11 +139,14 @@ public sealed class ChestScreen
         ArgumentNullException.ThrowIfNull(b);
         ArgumentNullException.ThrowIfNull(chests);
 
+        // See the note in Update: authored 1920, cursor arrives 480.
+        var hit = Game1.ToOverlay(mouse);
+
         var sorted = ChestDossiers.BestFirst(chests);
         Clamp(sorted.Count);
 
-        DrawGrid(b, sorted, mouse, clicked);
-        DrawDetail(b, sorted, mouse, clicked);
+        DrawGrid(b, sorted, hit, clicked);
+        DrawDetail(b, sorted, hit, clicked);
     }
 
     private void DrawGrid(SpriteBatch b, IReadOnlyList<Chest> sorted, Point mouse, bool clicked)
@@ -195,11 +204,11 @@ public sealed class ChestScreen
 
             // THE PROMISE, on the card itself. This is the line the player was missing entirely, so it
             // belongs where they see it before clicking anything.
-            _ui.TextBig(b, _ui.ShortenBig(d.FloorLine, card.Width - 32, UiTypography.Secondary),
+            _ui.TextBig(b, _ui.ShortenBig(d.FloorShort, card.Width - 32, UiTypography.Secondary),
                         card.X + 16, card.Y + 96,
                         d.GuaranteedFloor > Rarity.Common ? Gem : Dim, UiTypography.Secondary);
 
-            _ui.TextBig(b, _ui.ShortenBig(d.RegionLine, card.Width - 32, UiTypography.Secondary),
+            _ui.TextBig(b, _ui.ShortenBig(d.RegionShort, card.Width - 32, UiTypography.Secondary),
                         card.X + 16, card.Y + 128, Slate, UiTypography.Secondary);
 
             if (card.Contains(mouse) && clicked) _cursor = idx;
@@ -227,12 +236,13 @@ public sealed class ChestScreen
         var d = ChestDossiers.For(chest);
         var grade = RarityColors[(int)chest.Rarity];
 
+        // Clear of the panel art's ornate top border, which the first pass drew straight through.
         _ui.TextBig(b, $"{chest.Rarity.ToString().ToUpperInvariant()} CHEST",
-                    DetailPanel.X + 40, DetailPanel.Y + 28, grade, UiTypography.ScreenTitle);
-        _ui.Fill(b, new Rectangle(DetailPanel.X + 40, DetailPanel.Y + 76, DetailPanel.Width - 80, 2),
+                    DetailPanel.X + 40, DetailPanel.Y + 52, grade, UiTypography.SectionTitle);
+        _ui.Fill(b, new Rectangle(DetailPanel.X + 40, DetailPanel.Y + 92, DetailPanel.Width - 80, 2),
                  grade * 0.6f);
 
-        var y = DetailPanel.Y + 100;
+        var y = DetailPanel.Y + 116;
         foreach (var line in d.Lines)
         {
             // A bullet, so six statements of fact read as a list rather than as a paragraph that

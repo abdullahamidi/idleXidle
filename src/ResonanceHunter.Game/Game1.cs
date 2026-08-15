@@ -197,6 +197,10 @@ public class Game1 : Game
     private bool _showRoster;
     private WeaveScreen _weave = null!;
     private bool _showWeave;
+
+    /// <summary>THE VAULT — unopened chests, read before they are cracked.</summary>
+    private ChestScreen _chests = null!;
+    private bool _showChests;
     private bool _showPrestige;
     private readonly MemoryDustTree _dust = new();
     private int _highestMasteryAwarded;
@@ -749,6 +753,7 @@ public class Game1 : Game
         _forge = new ForgeScreen(_ui);
         _prestige = new PrestigeScreen(_ui, _dust);
         _roster = new RosterScreen(_ui);
+        _chests = new ChestScreen(_ui);
         _weave = new WeaveScreen(_ui);
         _expedition = new SoloExpeditionScreen(_ui);
         _buildScreen = new BuildScreen(_ui);
@@ -951,7 +956,7 @@ public class Game1 : Game
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig"
                 or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "traitlit" or "traitterm" or "traitterminal"
-                or "roster" or "rosterlocked" or "weave")
+                or "roster" or "rosterlocked" or "weave" or "vault")
             {
                 _showTitle = false;
                 // Muster screen with a real roster to arrange.
@@ -1337,6 +1342,26 @@ public class Game1 : Game
                 // ROSTER poses the whole cast unlocked so every card's art can be checked at once;
                 // ROSTERLOCKED leaves it as a fresh save, which is the state a new player actually
                 // sees and the one where a locked card still has to explain itself.
+                // THE VAULT — a pile of chests of different grades, regions and depths, so the page poses
+                // with the variety it exists to show rather than five copies of one card.
+                if (sm == "vault")
+                {
+                    _showChests = true;
+                    var grades = new[] { Rarity.Legendary, Rarity.Epic, Rarity.Rare, Rarity.Rare,
+                                         Rarity.Uncommon, Rarity.Common };
+                    var regions = new[] { "cinderworks", "umbral_reach", VerdantHollow.RegionId,
+                                          "pale_choir", "marrow_wastes", "still_archive" };
+                    for (var i = 0; i < grades.Length; i++)
+                        _forge.AddChest(new Chest
+                        {
+                            Rarity = grades[i],
+                            Tier = 6 + i * 7,
+                            Element = (Source)(i % 6),
+                            Region = regions[i],
+                            RunTilt = i == 0 ? 1.35f : 1f,
+                        });
+                }
+
                 if (sm == "weave")
                 {
                     _showWeave = true;
@@ -1553,7 +1578,7 @@ public class Game1 : Game
                 // inset transform instead of the plain canvas one. DrawLog's own hit-tests assume the
                 // plain one, so its page buttons landed in a third coordinate space.
                 _showPrestige = _showAutomation = _showForge = _showWorld = false;
-                _showBuild = _showCharacter = _showStats = _showRoster = _showWeave = false;
+                _showBuild = _showCharacter = _showStats = _showRoster = _showWeave = _showChests = false;
             }
         }
         if (_expedition.LogOpen)
@@ -1647,6 +1672,40 @@ public class Game1 : Game
                 }
             }
             if (_character.Dirty) { _character.ClearDirty(); Save(); }
+            Latch(gameTime);
+            return;
+        }
+
+        // THE VAULT. Placed here, in the SAME relative position as its Draw branch, because Update's and
+        // Draw's screen chains are two independent statements of the same priority and nothing enforces
+        // that they agree — a screen inserted at a different point in each is a screen the player sees
+        // while an invisible one eats their clicks.
+        if (_showChests)
+        {
+            _chests.Update(dt, _forge.UnopenedChests, CanvasMouse, MouseClicked, MouseWheel);
+
+            switch (_chests.ConsumeOpen())
+            {
+                case ChestScreen.OpenRequest.Selected:
+                {
+                    // The screen sorts for display, so its index is into the SORTED pile, not the
+                    // Forge's storage order. Resolve it here rather than exposing storage order to a view.
+                    var sorted = ChestDossiers.BestFirst(_forge.UnopenedChests);
+                    if (sorted.Count > 0)
+                    {
+                        _forge.OpenOneChest(sorted[Math.Clamp(_chests.SelectedIndex, 0, sorted.Count - 1)], _hunter);
+                        _sound.Play("sfx_forge", 0.9f);
+                        Save();
+                    }
+                    break;
+                }
+                case ChestScreen.OpenRequest.All:
+                    _forge.OpenEveryChest(_hunter);
+                    _sound.Play("sfx_forge", 0.9f);
+                    Save();
+                    break;
+            }
+
             Latch(gameTime);
             return;
         }
@@ -2460,7 +2519,7 @@ public class Game1 : Game
     /// <summary>True when a menu screen owns the frame — those draw inset; the fight screen does not.</summary>
     private bool OverlayActive =>
         _showForge || _showWorld || _showPrestige || _showAutomation || _showBuild || _showCharacter
-        || _showStats || _showRoster || _showWeave;
+        || _showStats || _showRoster || _showWeave || _showChests;
 
     /// <summary>The counter-scale the active screen draws at. Converted 1920-coord screens return 1; the
     /// HUNT screen is converted, so it returns 1 whenever no other screen flag is set (the else branch below).</summary>
@@ -2515,6 +2574,7 @@ public class Game1 : Game
         else if (_showWorld) DrawWorld();
         else if (_showPrestige) _prestige.Draw(_batch, _dust, CanvasMouse, MouseClicked);
         else if (_showRoster) { _roster.Progress = QuestSnapshot(); _roster.Draw(_batch, _characters, CanvasMouse, MouseClicked); }
+        else if (_showChests) _chests.Draw(_batch, _forge.UnopenedChests, CanvasMouse, MouseClicked);
         else if (_showWeave) _weave.Draw(_batch, CanvasMouse, MouseClicked);
         else if (_showAutomation) DrawWarren();
         else if (_showBuild) _buildScreen.Draw(_batch, CanvasMouse, _dust);
@@ -2894,7 +2954,7 @@ public class Game1 : Game
         // generated (icon_nav_*).
         ("HUNT", 'H', "nav_hunt_128"), ("GEAR", 'C', "nav_inventory_128"),
         ("STATS", 'V', "state_resonance_128"), ("BUILD", 'B', "state_mastery_128"),
-        ("FORGE", 'F', "icon_nav_forge"), ("WARREN", 'A', "icon_nav_warren"),
+        ("VAULT", 'K', "chest_loot"), ("FORGE", 'F', "icon_nav_forge"), ("WARREN", 'A', "icon_nav_warren"),
         ("MAP", 'W', "nav_relics_128"), ("TRAITS", 'P', "nav_prestige"),
         ("ROSTER", 'R', "icon_class_hunter"),
     };
@@ -2984,8 +3044,8 @@ public class Game1 : Game
     /// activity, so it lights that tile rather than claiming one.
     /// </remarks>
     private int NavActive() =>
-        _showCharacter ? 1 : _showStats ? 2 : _showBuild || _showWeave ? 3 : _showForge ? 4 :
-        _showAutomation ? 5 : _showWorld ? 6 : _showPrestige ? 7 : _showRoster ? 8 : 0;
+        _showCharacter ? 1 : _showStats ? 2 : _showBuild || _showWeave ? 3 : _showChests ? 4 :
+        _showForge ? 5 : _showAutomation ? 6 : _showWorld ? 7 : _showPrestige ? 8 : _showRoster ? 9 : 0;
 
     /// <summary>
     /// Which activity each rail tile is, so one table decides both what a tile opens and whether it may.
@@ -2998,7 +3058,7 @@ public class Game1 : Game
     private static readonly Activity[] NavActivity =
     {
         Activity.Hunt, Activity.Gear, Activity.Stats, Activity.Build,
-        Activity.Forge, Activity.Warren, Activity.Map, Activity.Traits, Activity.Roster,
+        Activity.Vault, Activity.Forge, Activity.Warren, Activity.Map, Activity.Traits, Activity.Roster,
     };
 
     /// <summary>Is the rail tile at this index open to the player yet?</summary>
@@ -3020,17 +3080,18 @@ public class Game1 : Game
             return;
         }
 
-        _showCharacter = _showStats = _showBuild = _showForge = _showAutomation = _showWorld = _showPrestige = _showRoster = _showWeave = false;
+        _showCharacter = _showStats = _showBuild = _showForge = _showAutomation = _showWorld = _showPrestige = _showRoster = _showWeave = _showChests = false;
         switch (i)
         {
             case 1: _showCharacter = true; break;
             case 2: _showStats = true; break;
             case 3: _showBuild = true; break;
-            case 4: _showForge = true; break;
-            case 5: _showAutomation = true; break;
-            case 6: _showWorld = true; _mapScreen.ActiveRegion = _activeRegion; _mapScreen.SelectActive(); break;
-            case 7: _showPrestige = true; break;
-            case 8: _showRoster = true; break;
+            case 4: _showChests = true; break;
+            case 5: _showForge = true; break;
+            case 6: _showAutomation = true; break;
+            case 7: _showWorld = true; _mapScreen.ActiveRegion = _activeRegion; _mapScreen.SelectActive(); break;
+            case 8: _showPrestige = true; break;
+            case 9: _showRoster = true; break;
             // case 0 HUNT: everything cleared above → back to the fight.
         }
     }

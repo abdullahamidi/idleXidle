@@ -94,16 +94,42 @@ public sealed record ChestDossier
         ? $"Attuned to {e.ToString().ToUpperInvariant()}."
         : "Unattuned.";
 
+    /// <summary>The player-facing name of a gear slot. <c>AbilityFocus</c> is called a FOCUS everywhere.</summary>
+    /// <remarks>
+    /// The enum name leaked into the UI as "ABILITYFOCUS", which appears nowhere else in the game — the
+    /// Forge and the Gear screen both call it a FOCUS. One vocabulary, or the player has to work out
+    /// that two words are the same slot.
+    /// </remarks>
+    private static string SlotName(ItemBaseType t) => t switch
+    {
+        ItemBaseType.AbilityFocus => "FOCUS",
+        ItemBaseType.CreatureCore => "CORE",
+        _ => t.ToString().ToUpperInvariant(),
+    };
+
     /// <summary>What the place it came from leans toward.</summary>
     public string RegionLine
     {
         get
         {
             if (Favoured.Count == 0) return "No regional lean.";
-            var slots = string.Join(" and ", Favoured.Select(f => f.ToString().ToUpperInvariant()));
-            return $"Favours {slots}.";
+            return $"Favours {string.Join(" and ", Favoured.Select(SlotName))}.";
         }
     }
+
+    /// <summary>The same fact at card width — no verb, no punctuation, just the slots.</summary>
+    /// <remarks>
+    /// A card is 256px wide and the sentence form truncated to "Favours HELM and CHEST an…", which
+    /// costs the reader the one word that mattered. Two vocabularies for one fact would be worse, so
+    /// both forms are derived from the same list.
+    /// </remarks>
+    public string RegionShort =>
+        Favoured.Count == 0 ? "no lean" : string.Join(" · ", Favoured.Select(SlotName));
+
+    /// <summary>The floor promise at card width.</summary>
+    public string FloorShort => GuaranteedFloor <= Rarity.Common
+        ? "no floor — a gamble"
+        : $"{GuaranteedFloor.ToString().ToUpperInvariant()} or better";
 
     /// <summary>The run's own tilt, mentioned only when it actually did something.</summary>
     /// <remarks>
