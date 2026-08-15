@@ -52,7 +52,10 @@ public static class Regions
             tierBase: 9, bossHealth: 6000, bossTier: 14, stdBaseHealth: new[] { 180, 150, 240 },
             bias: AttackBias.Fast),
         // The back half of the world — one region per remaining Source, so all six get a home and the
-        // Source matchup has somewhere to land every element. Shorter to conquer (see ConquerWaveDepth), so
+        // Source matchup has somewhere to land every element. (An older comment here promised these were
+        // "shorter to conquer"; they never were — the conquest bar is one constant for the whole world.
+        // What actually separates them is RegionLadder, which prices each one at a fixed multiple of the
+        // last, so the back half asks for gear rather than for more waves.) So
         // the journey is SPREAD across more, sharper places rather than three long grinds.
         // Marrow Wastes: BODY. Brutal, heavy blows — a slaughterhouse that grinds you down.
         BuildRegion("marrow_wastes", "MARROW WASTES", Source.Body, prereq: "umbral_reach",

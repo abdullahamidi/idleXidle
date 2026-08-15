@@ -1719,7 +1719,8 @@ public class Game1 : Game
     };
 
     /// <summary>A region's rung on the world ladder (0 = home). Deeper regions are innately tougher.</summary>
-    private static int RegionLadder(string regionId)
+    /// <summary>Where a region sits on the world chain. The curve itself lives in Core/RegionLadder.</summary>
+    private static int LadderIndex(string regionId)
     {
         for (var i = 0; i < Regions.All.Count; i++)
             if (Regions.All[i].Id == regionId) return i;
@@ -1801,8 +1802,12 @@ public class Game1 : Game
             // Every region is a rung up the ladder for the champion, not just a new element — so reaching
             // the sixth region is a real climb, and "more regions" is more progression, not more of the same.
             // The region MODIFIER twists this region's health/damage on top of the ladder + corruption.
-            enemyBaseHealth: 110f * (1f + 0.35f * _regionProgression) * (1f + 0.35f * RegionLadder(_activeRegion)) * scale * mod.EnemyHealthMult,
-            enemyBaseDamage: 9f * (1f + 0.20f * _regionProgression) * (1f + 0.25f * RegionLadder(_activeRegion)) * scale * mod.EnemyDamageMult);
+            // THE REGION STEP IS GEOMETRIC, not linear — see Core/Encounters/RegionLadder for why the
+            // linear form let a player conquer the fourth map with no gear at all. Region MASTERY stays
+            // linear on purpose: it is a difficulty a player opts into inside one place, and it should
+            // stack in even increments rather than compound with the chain.
+            enemyBaseHealth: 110f * (1f + 0.35f * _regionProgression) * RegionLadder.Health(LadderIndex(_activeRegion)) * scale * mod.EnemyHealthMult,
+            enemyBaseDamage: 9f * (1f + 0.20f * _regionProgression) * RegionLadder.Damage(LadderIndex(_activeRegion)) * scale * mod.EnemyDamageMult);
 
         // Measure the champion's gleam/second over this session, for offline earnings later.
         _champSecondsAccrued += gameTime.ElapsedGameTime.TotalSeconds;
@@ -1902,7 +1907,7 @@ public class Game1 : Game
         // Loot quality climbs with PROGRESSION: how far up the region ladder you are, how deeply you have
         // farmed this region, how deep this run reached, and the world's corruption. A deeper region's
         // chests are innately better — "lootların kalitesi ilerlemeye göre artmalı".
-        var lootTier = 1 + RegionLadder(_activeRegion) + _regionProgression + depthTier
+        var lootTier = 1 + LadderIndex(_activeRegion) + _regionProgression + depthTier
                        + CorruptionScaling.TierBonus(_world.CorruptionTier)
                        + RegionModifiers.For(_activeRegion).LootTierBonus;   // the region modifier's loot bump
         if (_rng.NextDouble() >= Chests.DropChance(lootTier)) return false;         // most bosses give nothing
