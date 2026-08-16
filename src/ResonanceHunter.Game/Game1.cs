@@ -1639,6 +1639,11 @@ public class Game1 : Game
 
 
 
+        // THE CHEST REVEAL RUNS EVERYWHERE TOO, and for the same reason as the champion below it: a
+        // beat that only advances on one screen is a beat the player watches somewhere they did not
+        // start it. Ticked before any overlay branch can return.
+        _forge.TickReveal((float)gameTime.ElapsedGameTime.TotalSeconds);
+
         // THE CHAMPION FIGHTS EVERYWHERE. Ticked here, before any overlay can early-return, so a run
         // keeps clearing waves and paying out while you're in the Forge, the tree, or another region's
         // menu — the whole point of an idle game. The fight screen's own clicks are handled in its Draw,
@@ -2715,6 +2720,10 @@ public class Game1 : Game
         BeginCanvas(1);
         DrawCurrencyPills();   // shared Gleam / Dust / Materials row, top-right of every screen
         DrawHexNav();   // the shared nav bar, over every screen
+
+        // The chest burst, over the rail and over whatever screen is open — it is the one moment the
+        // game asks the player to stop and look, so nothing on the page should sit on top of it.
+        if (_forge.RevealActive) _forge.DrawRevealOverlay(_batch);
 
         if (_showHelp) DrawHelp();
         if (_showSettings) DrawSettings();

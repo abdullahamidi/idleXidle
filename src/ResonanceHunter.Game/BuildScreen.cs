@@ -122,7 +122,11 @@ public sealed class BuildScreen
     // Docked in AuraPanel's foot, sharing its interior width. EditBtn is gone: it ran the same line as
     // VIEW TREE, and the tree has its own rail tile now.
     private static readonly Rectangle WeaveBtn = new(466, 842, 337, 44);
-    private static readonly Rectangle ResetBtn = new(823, 842, 337, 44);
+    // ON THE TREE PAGE, NOT THE OVERVIEW. Playtest: "'Take all mastery points back' buranın butonu
+    // değil, mastery tree'nin butonu." Right — it un-spends every point in a tree the overview does not
+    // even draw, so pressing it there meant watching nothing happen to anything on screen. Beside BACK,
+    // on the page whose contents it empties.
+    private static readonly Rectangle ResetBtn = new(280, 128, 300, 52);
     /// <summary>The i-th of <paramref name="n"/> auto-skill cards, sharing the panel's width between them.</summary>
     /// <remarks>
     /// Divided rather than fixed at a pitch of 182, which fitted exactly four and put a fifth at
@@ -142,7 +146,6 @@ public sealed class BuildScreen
     // straight through it.
     // Left-aligned to the panel's text column (PassivePanel.X + 52) and on its OWN row, below the
     // points line rather than beside it. See DrawPassives — sharing that row clipped the line.
-    private static readonly Rectangle ViewTreeBtn = new(1280, 286, 250, 44);
 
     // ══ THE TREE'S OWN SPACE ═══════════════════════════════════════════════════════════════════
     //
@@ -325,33 +328,36 @@ public sealed class BuildScreen
 
         if (!_editMode)
         {
-            if (ViewTreeBtn.Contains(hit)) { if (TreeUnlocked) _editMode = true; return; }
             if (WeaveBtn.Contains(hit)) { WantsWeave = true; return; }
             // AN EMPTY SKILL CARD IS A DOOR. It drew a "+B" hint and did nothing when clicked, which is
             // the one place on this screen a player is most likely to press: the hole where a skill
             // should be.
             for (var i = Loadout.Skills.Count; i < Loadout.SkillCapacity; i++)
                 if (AuraCard(i, Loadout.SkillCapacity).Contains(hit)) { WantsWeave = true; return; }
-            if (ResetBtn.Contains(hit) && Mastery.Spent > 0)
-            {
-                // TWO CLICKS, because it un-spends every point in the tree and there is no undo prompt
-                // anywhere else in this game. The respec itself stays free and instant — that is the
-                // load-bearing difference between this tree and the permanent one — so the guard is
-                // deliberation, not cost.
-                if (!_resetArmed) { _resetArmed = true; _msg = "PRESS AGAIN TO TAKE ALL POINTS BACK."; return; }
-                _resetArmed = false;
-                Mastery.Respec();
-                _msg = $"ALL MASTERY POINTS RETURNED.";
-                Dirty = true;
-                return;
-            }
-            _resetArmed = false;   // any other click on the overview disarms it
+            _resetArmed = false;
             return;
         }
 
         // ── Edit sub-view: tree + right column. ──
-        if (BackBtn.Contains(hit)) { _editMode = false; return; }
+        if (BackBtn.Contains(hit)) { _editMode = false; _resetArmed = false; return; }
         if (SkillsToggle.Contains(hit)) { WantsWeave = true; return; }
+
+        if (ResetBtn.Contains(hit) && Mastery.Spent > 0)
+        {
+            // TWO CLICKS, because it un-spends every point in the tree and there is no undo prompt
+            // anywhere else in this game. The respec itself stays free and instant — that is the
+            // load-bearing difference between this tree and the permanent one — so the guard is
+            // deliberation, not cost.
+            if (!_resetArmed) { _resetArmed = true; _msg = "PRESS AGAIN TO TAKE EVERY POINT BACK."; return; }
+            _resetArmed = false;
+            Mastery.Respec();
+            _msg = "ALL MASTERY POINTS RETURNED.";
+            Dirty = true;
+            return;
+        }
+        // Any other click on the tree disarms it — but must NOT return, or no node could be taken.
+        _resetArmed = false;
+
         foreach (var node in MasteryCatalog.Nodes)
         {
             if (node.Kind == MasteryKind.Start) continue;
@@ -404,11 +410,6 @@ public sealed class BuildScreen
         // _editMode — so the screen offered two differently-named doors into one room while the room
         // itself is now a rail tile. What is left names what it opens and what it costs.
         Button(b, WeaveBtn, "CHOOSE YOUR SKILLS", hit, true);
-        Button(b, ResetBtn, _resetArmed ? "PRESS AGAIN TO CONFIRM" : "TAKE ALL MASTERY POINTS BACK",
-               hit, Mastery.Spent > 0);
-        // The reset writes to _msg, which only the TREE page draws — so its confirmation and its result
-        // were both invisible on the page carrying the button. Drawn under the row that produces it.
-        if (_msg.Length > 0) _ui.TextCenterBig(b, _msg, AuraPanel.Center.X, ResetBtn.Bottom + 8, Gold, UiTypography.Secondary);
         if (DevBuildDebug) DrawDebug(b);
     }
 
@@ -547,7 +548,6 @@ public sealed class BuildScreen
         // MASTERY POINTS and the rail tile that spends them is now labelled MASTERY. Three names for one
         // currency is three currencies as far as a player is concerned.
         _ui.TextBig(b, $"MASTERY POINTS   {Mastery.Spent} SPENT  ·  {Mastery.Available} FREE", x, PassivePanel.Y + 112, Bone, UiTypography.Body);
-        Button(b, ViewTreeBtn, "OPEN THE MASTERY TREE", hit, TreeUnlocked);
 
         // PASSIVES — the real taken mastery nodes (notables + mastery). No invented "trait bonus %" table.
         _ui.TextBig(b, "PASSIVES", x, PassivePanel.Y + 206, Gold, UiTypography.Secondary);
@@ -663,6 +663,8 @@ public sealed class BuildScreen
         _ui.Text(b, $"POINTS  {Mastery.Available}  ·  {Mastery.Spent} SPENT", 104, 60, Mastery.Available > 0 ? Gold : Slate);
         _ui.Fill(b, BackBtn, BackBtn.Contains(hit) ? Hi : PanelBg);
         _ui.TextCenter(b, "‹ BACK", BackBtn.Center.X, BackBtn.Y + 12, BackBtn.Contains(hit) ? Gold : Slate);
+        if (Mastery.Spent > 0)
+            Button(b, ResetBtn, _resetArmed ? "PRESS AGAIN TO CONFIRM" : "TAKE EVERY POINT BACK", hit, true);
         var aff = Mastery.Affinity();
 
         // ONE EDGE PER NODE, to its NEAREST prerequisite.

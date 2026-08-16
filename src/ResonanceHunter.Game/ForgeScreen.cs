@@ -445,10 +445,34 @@ public sealed class ForgeScreen
 
     private ItemInstance? Active { get { var v = View(); return v.Count == 0 ? null : v[Math.Clamp(_cursor, 0, v.Count - 1)]; } }
 
+    /// <summary>
+    /// Advance the chest-open reveal. Called by the HOST every frame, from every screen.
+    /// </summary>
+    /// <remarks>
+    /// <b>THE REVEAL USED TO TICK INSIDE THIS SCREEN'S Update, AND THAT UPDATE ONLY RUNS ON THE FORGE.</b>
+    /// Playtest: "Open Chest diyorum chest açılma animasyonu gelmiyor, FORGE ekranına geçince geliyor."
+    /// Exactly that: the Vault's OPEN routes to ForgeScreen.OpenOneChest, which sets a 2.9-second timer —
+    /// and then nothing decrements it, because Game1's _showChests branch returns above the _showForge
+    /// branch that owns the clock. The animation waited, frozen, until the player happened to walk into
+    /// the Forge, and then played for a chest they had opened minutes earlier.
+    ///
+    /// The state stays here (this class is the chest model as well as a view); what moved is who calls
+    /// the clock and who calls the draw. Both are the host's job now, so the reveal plays WHERE THE
+    /// PLAYER PRESSED — which is the only place it means anything.
+    /// </remarks>
+    public void TickReveal(float dt)
+    {
+        if (_revealTimer > 0f && !_revealFrozen) _revealTimer -= dt;
+    }
+
+    /// <summary>Is a reveal on screen right now? The host asks, because the host draws it.</summary>
+    public bool RevealActive => _revealTimer > 0f;
+
+    /// <summary>The chest-open burst. Drawn by the host as chrome, over whatever screen is open.</summary>
+    public void DrawRevealOverlay(SpriteBatch b) => DrawReveal(b);
+
     public void Update(GameTime time, KeyboardState keys, Point mouse, bool clicked, int wheel, Hunter hunter)
     {
-        // The chest-open REVEAL fades on its own clock — the anticipation beat that loot design lives on.
-        if (_revealTimer > 0f && !_revealFrozen) _revealTimer -= (float)time.ElapsedGameTime.TotalSeconds;
 
         // THE CURSOR, IN THE SPACE THE RECTANGLES ARE AUTHORED IN. Every rect on this screen is written
         // in 1920x1080 and drawn through Game1's overlay inset; the incoming cursor is in 480x270 canvas
@@ -1019,7 +1043,8 @@ public sealed class ForgeScreen
             default: DrawSalvageMode(b, hunter, hit, clicked); break;
         }
 
-        DrawReveal(b);   // the chest-open burst rides on top of every mode
+        // (The reveal is drawn by the HOST now, as chrome — see Game1 and TickReveal. Drawing it here
+        //  too would double-draw it on the one screen that used to be its only home.)
 
         // The hover card, above the surfaces and below nothing but the reveal — which is modal, and
         // whose whole job is to be the only thing you are looking at.
