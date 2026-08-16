@@ -121,7 +121,13 @@ public sealed class MapScreen
         _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xB0));
         _ui.TextCenterBig(b, "MAP", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle);
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
-        _ui.TextCenterBig(b, "REGIONS  ·  DEPTH  ·  PROGRESSION", 960, 80, Slate, UiTypography.Secondary);
+        // THE SUBTITLE SAYS WHAT THIS SCREEN IS FOR, not what its panels are called.
+        //
+        // It used to recite the headers directly beneath it, which spends the largest 100px on the page
+        // to tell the player something they can already read, and teaches them that big text in this
+        // band is not worth reading. Same slot, same cost, real content.
+        _ui.TextCenterBig(b, "EACH REGION IS ABOUT HALF AGAIN AS TOUGH AS THE LAST, AND DROPS ITS OWN THINGS",
+                          960, 80, Slate, UiTypography.Secondary);
 
         DrawProgress(b, hit, clicked);
         DrawMap(b, hit, clicked);

@@ -63,12 +63,21 @@ public sealed class StatsScreen
 
     public StatsScreen(UiKit ui) => _ui = ui;
 
+    /// <summary>The house abbreviation, so the subtitle agrees with the currency pill above it.</summary>
+    private static string Ab(long v) => v >= 1_000_000
+        ? $"{v / 1_000_000.0:0.#}M"
+        : v >= 1000 ? $"{v / 1000.0:0.#}K" : v.ToString();
+
     // ── Spec §4 layout: hunter card + two stacked columns, all clearing the shared nav rail. ──
-    private static readonly Rectangle HunterCard = new(56, 150, 372, 702);
-    private static readonly Rectangle PrimaryPanel = new(500, 150, 590, 270);
-    private static readonly Rectangle DerivedPanel = new(500, 436, 590, 416);
+    // PANELS SIZED TO WHAT THEY DRAW. The hunter card was 702 tall for ~430 of content, so a third of
+    // the tallest panel on the page was framed emptiness — which reads as "failed to load", never as
+    // headroom. Deleting DERIVED STATS left the same hole in the centre, so PROGRESSION moves under
+    // PRIMARY and the right column keeps COMBAT alone. Three columns that each end where their content
+    // does, instead of three columns padded to the same arbitrary floor.
+    private static readonly Rectangle HunterCard = new(56, 150, 372, 480);
+    private static readonly Rectangle PrimaryPanel = new(500, 150, 590, 356);
     private static readonly Rectangle CombatPanel = new(1144, 150, 646, 356);      // real secondary attributes (no resistances)
-    private static readonly Rectangle ProgressPanel = new(1144, 524, 646, 328);
+    private static readonly Rectangle ProgressPanel = new(500, 546, 590, 300);
 
     // The read-only screen only needs the frame's readout; training moved off this screen (spec §1).
     public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, int wheel, Hunter hunter) { }
@@ -108,11 +117,15 @@ public sealed class StatsScreen
 
         _ui.TextCenterBig(b, "STATS", 960, 24, Gold, UiTypography.ScreenTitle);
         _ui.Fill(b, new Rectangle(700, 74, 520, 3), Gold * 0.5f);
-        _ui.TextCenterBig(b, "OVERVIEW   ·   ATTRIBUTES   ·   PROGRESSION", 960, 80, Slate, UiTypography.Secondary);
+        // THE SUBTITLE SAYS WHAT THIS SCREEN IS FOR, not what its panels are called.
+        //
+        // It used to recite the headers directly beneath it, which spends the largest 100px on the page
+        // to tell the player something they can already read, and teaches them that big text in this
+        // band is not worth reading. Same slot, same cost, real content.
+        _ui.TextCenterBig(b, $"SPEND GLEAM TO RAISE A STAT — YOU HAVE {Ab(hunter.Gleam)}", 960, 80, Slate, UiTypography.Secondary);
 
         DrawHunterCard(b, hunter);
         DrawPrimary(b, hunter, hit, clicked);
-        DrawDerived(b, hunter);
         DrawCombat(b, hunter, hit, clicked);
         DrawProgression(b, hunter);
         if (DevStatsDebug) DrawDebug(b);
@@ -159,69 +172,56 @@ public sealed class StatsScreen
             ("TEMPO", HunterStat.Engineering, new(0x48, 0xB8, 0x88)),
             ("VITALITY", HunterStat.Vitality, new(0xC0, 0x6E, 0xE0)),
         };
-        var y = PrimaryPanel.Y + 68;
+        var y = PrimaryPanel.Y + 84;
         foreach (var (label, stat, gem) in rows)
         {
             _ui.Diamond(b, new Rectangle(PrimaryPanel.X + 30, y + 2, 26, 26), gem);
             _ui.TextBig(b, label, PrimaryPanel.X + 74, y, Bone, UiTypography.Body);
-            _ui.TextRightBig(b, $"{(int)hunter.ValueOf(stat)}", PrimaryPanel.Right - 168, y, Bone, UiTypography.Body);
-            DrawTrain(b, hunter, stat, PrimaryPanel.Right - 152, y - 6, mouse, clicked);
-            y += 44;
+            _ui.TextRightBig(b, $"{(int)hunter.ValueOf(stat)}", PrimaryPanel.Right - 218, y, Bone, UiTypography.Body);
+            DrawTrain(b, hunter, stat, PrimaryPanel.Right - 202, y - 6, mouse, clicked);
+            y += 58;
         }
     }
 
-    private void DrawDerived(SpriteBatch b, Hunter hunter)
-    {
-        _ui.Panel(b, DerivedPanel);
-        _ui.TextCenterBig(b, "DERIVED STATS", DerivedPanel.Center.X, DerivedPanel.Y + 22, Gold, UiTypography.SectionTitle);
-        // THE SIM'S OWN FUNCTIONS, not a second copy of its arithmetic. This screen used to add the
-        // trained stat to the gear affixes and stop, which dropped the mastery tree's crit nodes — real
-        // in every fight, absent from the one page whose job is to state the player's numbers.
-        var shape = Loadout.ToBuild(Tree, Mastery, Character).Shape;
-        var critChance = 100f * SoloBattle.CritChance(hunter, shape);
-        var rows = new (string, string)[]
-        {
-            ("MAX HEALTH", $"{hunter.MaxHealth:N0}"),
-            ("POWER RATING", $"{hunter.PowerRating:N0}"),
-            ("ATTACK POWER", $"{hunter.AttackPower:N0}"),
-            ("CRITICAL CHANCE", $"{critChance:0.0}%"),
-            ("CRITICAL DAMAGE", $"{100f * SoloBattle.CritMultiplier(hunter):0}%"),
-            ("SKILL RATE", $"{hunter.SquadSkillRate:0.00}x"),
-            ("MITIGATION", $"{100f - 100f * (100f / (100f + hunter.Defense)):0.0}%"),
-            ("GOLD / LOOT HAUL", $"+{100f * (hunter.HaulMultiplier - 1f):0}%"),
-        };
-        var y = DerivedPanel.Y + 62;
-        foreach (var (label, value) in rows)
-        {
-            _ui.TextBig(b, label, DerivedPanel.X + 32, y, Slate, UiTypography.Body);
-            _ui.TextRightBig(b, value, DerivedPanel.Right - 34, y, Bone, UiTypography.Body);
-            _ui.Fill(b, new Rectangle(DerivedPanel.X + 32, y + 32, DerivedPanel.Width - 64, 2), Dim * 0.5f);
-            y += 40;
-        }
-    }
-
+    // DERIVED STATS IS GONE, and every row of it now lives in the panel that produces it.
+    //
+    // It was eight rows and every one restated something already on screen: MAX HEALTH and CRITICAL
+    // CHANCE and MITIGATION and HAUL are what the COMBAT rows buy (they say so now), ATTACK POWER was
+    // MIGHT under a second name, and POWER RATING and SKILL RATE were already in the hunter card. It
+    // occupied the centre of the screen — the largest single panel — to say nothing new, while the nine
+    // buttons that are the screen's actual purpose sat unlabelled in the margin.
+    //
+    // Checked row by row before deleting: all eight have a home, so nothing was lost with it.
     private void DrawCombat(SpriteBatch b, Hunter hunter, Point mouse, bool clicked)
     {
         // Spec §9.1 is RESISTANCES, but the game has no elemental resistance model (§12 fallback). This is the
         // honest substitute: the remaining real commander attributes with their one-line effect.
         _ui.Panel(b, CombatPanel);
         _ui.TextCenterBig(b, "COMBAT ATTRIBUTES", CombatPanel.Center.X, CombatPanel.Y + 22, Gold, UiTypography.SectionTitle);
+        // EACH ROW STATES WHAT IT PRODUCES, not just what it is called.
+        //
+        // This panel used to print the effect's NAME ("CRIT CHANCE") while a separate DERIVED STATS
+        // panel printed the effect's VALUE ("6.5%") — so neither panel alone answered the only question
+        // a player has here, which is what a rank actually buys. The two panels also disagreed under
+        // identical labels: this one showed the rank, that one showed the result. Merged, the row says
+        // "CRIT · 6 · 6.5% CHANCE · [TRAIN 34 G]" and DERIVED STATS is deleted.
+        var shape = Loadout.ToBuild(Tree, Mastery, Character).Shape;
         var rows = new (string, HunterStat, string)[]
         {
-            ("CRIT", HunterStat.CriticalChance, "CRIT CHANCE"),
-            ("FOCUS", HunterStat.Focus, "CRIT DAMAGE"),
-            ("HEALTH", HunterStat.MaxHealth, "FLAT MAX HP"),
-            ("DEFENSE", HunterStat.Defense, "MITIGATION"),
-            ("GUILE", HunterStat.Guile, "HAUL"),
+            ("CRIT", HunterStat.CriticalChance, $"{100f * SoloBattle.CritChance(hunter, shape):0.0}% CHANCE"),
+            ("FOCUS", HunterStat.Focus, $"{100f * SoloBattle.CritMultiplier(hunter):0}% CRIT DMG"),
+            ("HEALTH", HunterStat.MaxHealth, $"{hunter.MaxHealth:N0} MAX HP"),
+            ("DEFENSE", HunterStat.Defense, $"{100f - 100f * (100f / (100f + hunter.Defense)):0.0}% MITIGATION"),
+            ("GUILE", HunterStat.Guile, $"+{100f * (hunter.HaulMultiplier - 1f):0}% HAUL"),
         };
         var y = CombatPanel.Y + 74;
         foreach (var (label, stat, effect) in rows)
         {
             _ui.Fill(b, new Rectangle(CombatPanel.X + 24, y - 6, CombatPanel.Width - 48, 44), RowBg);
             _ui.TextBig(b, label, CombatPanel.X + 40, y, Bone, UiTypography.Body);
-            _ui.TextBig(b, effect, CombatPanel.X + 220, y + 2, Slate, UiTypography.Secondary);
-            _ui.TextRightBig(b, $"{(int)hunter.ValueOf(stat)}", CombatPanel.Right - 172, y, Sky, UiTypography.Body);
-            DrawTrain(b, hunter, stat, CombatPanel.Right - 156, y - 4, mouse, clicked);
+            _ui.TextBig(b, effect, CombatPanel.X + 176, y + 2, Sky, UiTypography.Secondary);
+            _ui.TextRightBig(b, $"{(int)hunter.ValueOf(stat)}", CombatPanel.Right - 222, y, Slate, UiTypography.Body);
+            DrawTrain(b, hunter, stat, CombatPanel.Right - 206, y - 4, mouse, clicked);
             y += 52;
         }
     }
@@ -238,12 +238,21 @@ public sealed class StatsScreen
     {
         var maxed = !hunter.CanTrain(stat) && hunter.Gleam >= hunter.NextRankCost(stat);
         var cost = hunter.NextRankCost(stat);
-        var rect = new Rectangle(x, y, 118, 36);
+        var rect = new Rectangle(x, y, 168, 38);
+        var afford = hunter.CanTrain(stat);
 
-        // "G" for gleam, not a bare number: in a capture the button read "+ 45" beside a stat of 34, which
-        // is indistinguishable from "this adds 45". The unit is the whole difference between a price and a
-        // gain, and it is the only thing on the button that says which one this is.
-        if (_ui.Button(b, rect, maxed ? "MAX" : $"{cost:N0} G", mouse, clicked, enabled: hunter.CanTrain(stat)))
+        // VERB FIRST, THEN THE PRICE. These nine buttons ARE the screen's purpose — Gleam exists to be
+        // spent here — and they used to read "45 G" in a chip with no verb on it at all, so the one
+        // interactive thing on the page looked like another data column. A reviewer seeing the screen
+        // cold could not tell the stats were buyable.
+        //
+        // The price stays ON the button (geometric growth means the tenth rank costs many times the
+        // first, so the cost IS the decision), but it is now the object of a verb rather than a bare
+        // number: "TRAIN 45 G" cannot be misread as "this adds 45", which "45 G" beside a stat of 34
+        // could.
+        var label = maxed ? "MAXED" : afford ? $"TRAIN  {cost:N0} G" : $"NEED  {cost:N0} G";
+
+        if (_ui.Button(b, rect, label, mouse, clicked, enabled: afford))
             _trainRequest = stat;
     }
 
@@ -271,7 +280,7 @@ public sealed class StatsScreen
 
     private void DrawDebug(SpriteBatch b)
     {
-        foreach (var r in new[] { HunterCard, PrimaryPanel, DerivedPanel, CombatPanel, ProgressPanel })
+        foreach (var r in new[] { HunterCard, PrimaryPanel, CombatPanel, ProgressPanel })
         {
             _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, 2), Ember);
             _ui.Fill(b, new Rectangle(r.X, r.Bottom - 2, r.Width, 2), Ember);

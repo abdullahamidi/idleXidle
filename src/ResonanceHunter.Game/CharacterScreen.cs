@@ -315,7 +315,13 @@ public sealed class CharacterScreen
         // Title band (§5) — centred title + subtitle; currency is the shared top-right chrome (Game1).
         _ui.TextCenterBig(b, "CHAMPION GEAR", 960, 24, Gold, UiTypography.RegionTitle);
         _ui.Fill(b, new Rectangle(700, 74, 520, 3), Gold * 0.5f);
-        _ui.TextCenterBig(b, "EQUIPMENT   ·   INVENTORY   ·   ITEM DETAIL", 960, 80, Slate, UiTypography.Secondary);
+        // THE SUBTITLE SAYS WHAT THIS SCREEN IS FOR, not what its panels are called.
+        //
+        // It used to recite the headers directly beneath it, which spends the largest 100px on the page
+        // to tell the player something they can already read, and teaches them that big text in this
+        // band is not worth reading. Same slot, same cost, real content.
+        _ui.TextCenterBig(b, "THE FIGHT ONLY READS WHAT IS WORN — RIGHT-CLICK AN ITEM TO ACT ON IT",
+                          960, 80, Slate, UiTypography.Secondary);
 
         DrawLoadout(b, hit, hunter);
         _hovered = null;                // re-established by whichever draw finds the pointer over an item

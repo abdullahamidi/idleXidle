@@ -961,9 +961,10 @@ public sealed class ForgeScreen
 
     private string ModeSubtitle() => _mode switch
     {
-        ForgeMode.Upgrade => "UPGRADE  ·  MATERIALS  ·  RESULT",
-        ForgeMode.Reforge => "RE-ROLL TRAIT  ·  RE-ROLL ENCHANT",
-        _ => "SALVAGE  ·  MERGE  ·  CHESTS",
+        // Says what the mode DOES rather than naming the three panels under it.
+        ForgeMode.Upgrade => "SPEND MATERIALS TO RAISE THIS ITEM'S LEVEL",
+        ForgeMode.Reforge => "RE-ROLL WHAT AN ITEM ROLLED — ITS LEVEL AND SOURCE STAY",
+        _ => "BREAK DOWN WHAT YOU WILL NOT WEAR, OR FUSE THREE INTO ONE",
     };
 
     // ── The mode rail — the reference's left column, listing only the verbs the model actually has. ──
