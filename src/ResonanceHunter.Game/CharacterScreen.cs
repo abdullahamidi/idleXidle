@@ -621,17 +621,41 @@ public sealed class CharacterScreen
             // Different shapes in different places, none of them competing for a hue.
             _ui.Fill(b, new Rectangle(cell.X, cell.Y, 5, cell.Height), RarityColor(item.Rarity));
 
-            // The state banner, in words. "E" and "UP" were abbreviations with no legend anywhere on the
-            // screen, and E is not even the first letter of a word the game uses — the tooltip says WORN
-            // and the button says EQUIP.
+            // STATE IS A FRAME NOW, NOT A WORD.
+            //
+            // Playtest: "giyili olanların altına WORN yazmışsın ama o da güzel durmuyor. Bir çerçeve
+            // ekleyerek giyili olanları gösterebiliriz, yazıya ihtiyaç duymayalım. Aynı şekilde daha iyi
+            // olanlar için çerçeve içinde parlama efekti olabilir." Right on both counts: a 20px black
+            // band across the foot of an 82px cell covers a quarter of the art to say one word, twenty
+            // times over, in a grid the eye is meant to scan rather than read.
+            //
+            // THE THREE MARKS ARE SEPARATED BY TEXTURE, NOT BY HUE, so none of them needs colour to be
+            // legible and none can be mistaken for a rarity (which owns the frame tint and the left bar):
+            //
+            //   WORN      two crisp concentric lines, inset 5 and 9 — a mounted, framed look. Static.
+            //   BETTER    a soft three-step halo, inset 2/5/8 at falling alpha — a glow, not a border.
+            //   SELECTED  the outermost ring, brightest, plus the faintest wash.
+            //
+            // A worn item that is also selected therefore reads as both at once, which the old mutually
+            // exclusive band could not do at all.
             var better = !worn && Gear.SlotFor(item.BaseType) is { } bs && hunter.Worn(bs) is not null
                          && hunter.PowerContribution(item) > hunter.PowerContribution(hunter.Worn(bs));
-            if (worn || better)
+
+            // WEIGHTED BY RARITY OF THE MARK, NOT BY IMPORTANCE OF THE FACT — which is the opposite of
+            // the first attempt and the reason it failed. BETTER is the COMMON state: on a fresh bag most
+            // of the grid beats what you are wearing, so a three-ring halo there flooded the page and the
+            // two marks that are actually rare drowned in it. The most frequent mark has to be the
+            // quietest one, or the grid has no figure and no ground.
+            if (worn)
             {
-                var band = new Rectangle(cell.X + 5, cell.Bottom - 20, cell.Width - 5, 20);
-                _ui.Fill(b, band, new Color(0x0C, 0x0A, 0x12, 0xEE));
-                _ui.TextCenterBig(b, worn ? "WORN" : "BETTER", band.Center.X, band.Y + 2,
-                                  worn ? Gold : Green, UiTypography.Secondary);
+                Ring(b, Shrink(cell, 5), new Color(0xE8, 0xDF, 0xC8), 2);
+                Ring(b, Shrink(cell, 9), new Color(0xE8, 0xDF, 0xC8, 0x66), 1);
+            }
+            else if (better)
+            {
+                // One hairline, inside the frame, at the edge of noticeable. It is a hint that this cell
+                // is worth a second look — the ITEM DETAIL panel is where the case gets made.
+                Ring(b, Shrink(cell, 3), new Color(0x6E, 0xC8, 0x7A, 0x9E), 1);
             }
 
             // BETTER no longer fires on an EMPTY slot. PowerContribution(null) returns 0, so the old test
@@ -641,8 +665,20 @@ public sealed class CharacterScreen
 
             if (sel)
             {
-                _ui.Fill(b, cell, new Color(0x8A, 0x5A, 0xC8, 0x3C));
+                // 0x18, not 0x3C. Playtest: "seçili itemin üstüne mor bir image koymuşsun ama çok
+                // belirgin, kötü görünüyor." It was a flat violet sheet over the art at 24% — it did not
+                // read as "this one is chosen", it read as "this one is broken". The ring carries the
+                // selection; the wash only has to warm the cell enough to separate it from its neighbours.
+                // NO WASH AT ALL. Two were tried and both failed the same way: a violet sheet at 24% read
+                // as damage on a violet item, and a cream sheet at 8% bleached a Legendary's own pale
+                // frame until the cell looked blank. Any full-cell tint fights the art it sits on, and
+                // the art is the thing the player is choosing between.
+                //
+                // The ring carries it alone — three pixels at the cell's edge, the brightest thing in the
+                // grid, and outside every other mark so it can coexist with WORN. A selection needs to be
+                // FOUND, not shouted; the ITEM DETAIL panel beside it confirms what is selected.
                 Ring(b, cell, new Color(0xF6, 0xEA, 0xC6), 3);
+                Ring(b, Shrink(cell, 3), new Color(0x14, 0x10, 0x1A, 0x88), 1);
             }
             else if (hot) Ring(b, cell, Slate, 2);
         }
@@ -847,6 +883,10 @@ public sealed class CharacterScreen
     /// perimeter lose to the item frame's own gold corner ornaments, which are in the same places; a
     /// closed ring has no corner to hide behind and reads as one shape rather than eight marks.
     /// </remarks>
+    /// <summary>A rect inset equally on all four sides — for concentric marks inside one cell.</summary>
+    private static Rectangle Shrink(Rectangle r, int by)
+        => new(r.X + by, r.Y + by, Math.Max(1, r.Width - by * 2), Math.Max(1, r.Height - by * 2));
+
     private void Ring(SpriteBatch b, Rectangle r, Color c, int t)
     {
         _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, t), c);
