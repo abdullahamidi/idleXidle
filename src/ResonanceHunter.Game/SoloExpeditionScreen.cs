@@ -723,7 +723,7 @@ public sealed class SoloExpeditionScreen
                     _vfx.Play("vfx_death", ChampBox.Center.X, ChampBox.Center.Y, fps: 14f);
                     break;
                 case BattleEventKind.EnemyDown:
-                    _vfx.Play("vfx_death", EnemyBox.Center.X, EnemyBox.Center.Y, scale: 2, fps: 14f);
+                    _vfx.Play("vfx_death", _rowCentreX, _rowTopY + 110, scale: 2, fps: 14f);
                     break;
             }
         }
@@ -769,19 +769,19 @@ public sealed class SoloExpeditionScreen
         switch (form)
         {
             case Form.Strike:
-                _vfx.Play("vfx_ability_ruinstrike", EnemyBox.Center.X, EnemyBox.Center.Y, fps: 22f, tint: Ember);
+                _vfx.Play("vfx_ability_ruinstrike", _rowCentreX, _rowTopY + 110, fps: 22f, tint: Ember);
                 break;
             case Form.Trap:
-                _vfx.Play("vfx_crit", EnemyBox.Center.X, EnemyBox.Center.Y, fps: 20f, tint: Gold);
+                _vfx.Play("vfx_crit", _rowCentreX, _rowTopY + 110, fps: 20f, tint: Gold);
                 break;
             case Form.Mark:
-                _vfx.Play("vfx_interrupt", EnemyBox.Center.X, EnemyBox.Center.Y, fps: 20f, tint: Bone);
+                _vfx.Play("vfx_interrupt", _rowCentreX, _rowTopY + 110, fps: 20f, tint: Bone);
                 break;
             case Form.Transformation:
                 _vfx.Play("vfx_levelup", ChampBox.Center.X, ChampBox.Y + 24, fps: 18f, tint: Verdant);
                 break;
             default:
-                _vfx.Play("vfx_weakhit", EnemyBox.Center.X, EnemyBox.Center.Y, fps: 18f, tint: Steel);
+                _vfx.Play("vfx_weakhit", _rowCentreX, _rowTopY + 110, fps: 18f, tint: Steel);
                 break;
         }
     }
@@ -964,6 +964,11 @@ public sealed class SoloExpeditionScreen
         // height, which is what actually moved.
         _rowCentreX = resting;
         _rowTopY = EnemyBox.Bottom - h;
+
+        // THE HIT EFFECTS USE THIS TOO. Every enemy-side VFX played at EnemyBox.Center — 146px right of
+        // where a swarm actually stands — so the spark, the crit burst and the death plume all went off
+        // beside the creatures rather than on them. They are spawned at (_rowCentreX, _rowTopY + 110):
+        // the row's centre, and roughly its upper body rather than its feet.
 
         string? stripKey = null, staticKey = null;
         if (EnemySource is { } es && EnemyForSource.TryGetValue(es, out var en))

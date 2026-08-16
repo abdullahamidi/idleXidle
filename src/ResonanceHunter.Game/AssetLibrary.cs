@@ -150,6 +150,13 @@ public sealed class AssetLibrary
         // crit / death / interrupt now have DEDICATED strips. Previously crit shared slash_void with
         // ability_ruinstrike, death shared smoke_puff with weakhit, and interrupt drew a holy HEAL burst —
         // so a interrupted cast and a heal looked identical. Each semantic event now reads as itself.
+        // THE TWO IMPACT STRIPS NO LONGER HAVE EIGHT FRAMES, whatever their filenames say: gold was
+        // trimmed to 7 and crit to 6. Both carried frames that were not part of the animation — gold
+        // decayed to 4% coverage and then POPPED BACK to 17% on the last frame, crit went empty on 7
+        // and flashed again on 8 — so in the fight every hit sparked a second time after it had
+        // finished. VfxPlayer derives the frame count from width/height, so nothing reads the "8";
+        // the names are left alone because renaming would mean editing the content pipeline in three
+        // places for a string no code parses.
         ["vfx_hit"] = "impact_gold_strip8_512", ["vfx_weakhit"] = "smoke_puff_strip8_512",
         ["vfx_crit"] = "impact_crit_strip8_512", ["vfx_ability_ruinstrike"] = "slash_shadow_strip8_512",
         ["vfx_death"] = "death_dissolve_strip8_512", ["vfx_interrupt"] = "interrupt_break_strip8_512",

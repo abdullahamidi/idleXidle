@@ -38,6 +38,45 @@ public sealed class VfxPlayer
 
         public int CurrentFrame => Math.Min(Frames - 1, (int)(Elapsed / SecondsPerFrame));
         public bool Done => Elapsed >= SecondsPerFrame * Frames;
+
+        /// <summary>
+        /// 1 for most of the clip, easing to 0 across its final third — so every effect ENDS.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The strips do not agree on how to finish, and until now none of them had to. Measured, per
+        /// frame, as a fraction of the frame that is opaque:
+        /// </para>
+        /// <code>
+        ///   impact_gold   32 38 42 24 10  4  4 [17]   decays, then POPS BACK on the last frame
+        ///   impact_crit   18 24 29 19  9  3  0 [ 5]   decays to empty, then flashes once more
+        ///   death_dissolve 23 24 24 23 22 22 21  21   a LOOP, played once as a one-shot
+        ///   levelup        8  8  8  8  8  8  9   9    also a loop
+        /// </code>
+        /// <para>
+        /// So half the effects in the fight ended by simply vanishing at full brightness, and two of
+        /// them flickered back on after they had finished. A fade is the one change that fixes every
+        /// shape of ending at once — a decaying burst gets a soft tail, a looping flame gets an exit,
+        /// and a stray final frame is dim enough not to read as a second hit.
+        /// </para>
+        /// <para>
+        /// Cubed rather than linear because these draw ADDITIVELY: additive alpha reads far brighter
+        /// than its number suggests, so a linear ramp still looks like a hard cut at the end.
+        /// </para>
+        /// </remarks>
+        public float Fade
+        {
+            get
+            {
+                var total = SecondsPerFrame * Frames;
+                if (total <= 0f) return 1f;
+                const float tail = 0.35f;
+                var t = Math.Clamp(Elapsed / total, 0f, 1f);
+                if (t <= 1f - tail) return 1f;
+                var k = (1f - t) / tail;
+                return k * k * k;
+            }
+        }
     }
 
     private readonly AssetLibrary _assets;
@@ -106,7 +145,7 @@ public sealed class VfxPlayer
             // on-screen size constant (×4 canvas → 26, ×1 canvas → 104). Aspect kept.
             var h = a.Scale * 104 / Scale;
             var w = h * a.FrameW / a.FrameH;
-            b.Draw(a.Sheet, new Rectangle(a.CenterX - w / 2, a.CenterY - h / 2, w, h), src, a.Tint);
+            b.Draw(a.Sheet, new Rectangle(a.CenterX - w / 2, a.CenterY - h / 2, w, h), src, a.Tint * a.Fade);
         }
         b.End();
         b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, null, Rasterizer, null, Matrix.CreateScale(Scale));
