@@ -152,7 +152,7 @@ public sealed class ChestScreen
     private void DrawGrid(SpriteBatch b, IReadOnlyList<Chest> sorted, Point mouse, bool clicked)
     {
         _ui.Panel(b, GridPanel);
-        _ui.TextBig(b, "THE VAULT", GridPanel.X + 46, GridPanel.Y + 26, Gold, UiTypography.ScreenTitle);
+        _ui.TextBig(b, "THE VAULT", GridPanel.X + 46, GridPanel.Y + 26, Gold, UiTypography.ScreenTitle, TextFace.Display);
 
         // The tally, so the pile reads at a glance without counting cards.
         var tally = ChestDossiers.Tally(sorted);

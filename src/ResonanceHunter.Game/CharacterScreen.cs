@@ -313,7 +313,7 @@ public sealed class CharacterScreen
         _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xD8));
 
         // Title band (§5) — centred title + subtitle; currency is the shared top-right chrome (Game1).
-        _ui.TextCenterBig(b, "CHAMPION GEAR", 960, 24, Gold, UiTypography.RegionTitle);
+        _ui.TextCenterBig(b, "CHAMPION GEAR", 960, 24, Gold, UiTypography.RegionTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(700, 74, 520, 3), Gold * 0.5f);
         // THE SUBTITLE SAYS WHAT THIS SCREEN IS FOR, not what its panels are called.
         //

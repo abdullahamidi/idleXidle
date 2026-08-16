@@ -313,7 +313,7 @@ public sealed class BuildScreen
 
         if (_editMode) { DrawEditor(b, hit, tree); return; }
 
-        _ui.TextCenterBig(b, "BUILD", 960, 24, Gold, UiTypography.ScreenTitle);
+        _ui.TextCenterBig(b, "BUILD", 960, 24, Gold, UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(700, 74, 520, 3), Gold * 0.5f);
         _ui.TextCenterBig(b, "SOURCE   ·   FORM   ·   VOW   ·   AURAS", 960, 80, Slate, UiTypography.Secondary);
 

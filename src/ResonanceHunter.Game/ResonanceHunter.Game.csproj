@@ -46,6 +46,19 @@
     <Content Include="..\..\assets\audio\**\*.wav" Link="assets\audio\%(RecursiveDir)%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <!--
+      The bundled typefaces, read at runtime by SmoothFont. THIS RULE DID NOT EXIST, which meant the
+      loader's bundled-font branch had never executed once: assets/fonts was never copied next to the
+      executable, so every player was silently rendered in whatever bahnschrift.ttf their own Windows
+      install happened to have — and on a machine without it, in the blocky pixel fallback. Both faces
+      are SIL OFL, so the licences ship beside them.
+    -->
+    <Content Include="..\..\assets\fonts\*.ttf" Link="assets\fonts\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\assets\fonts\OFL-*.txt" Link="assets\fonts\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <Target Name="RestoreDotnetTools" BeforeTargets="CollectPackageReferences">
     <Message Text="Restoring dotnet tools (this might take a while depending on your internet speed and should only happen upon building your project for the first time, or after upgrading MonoGame, or clearing your nuget cache)" Importance="High" />

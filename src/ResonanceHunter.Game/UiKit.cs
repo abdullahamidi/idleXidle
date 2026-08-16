@@ -621,9 +621,12 @@ public sealed class UiKit
         // The SAME font as every other label. Buttons alone still went through the blocky pixel font, so
         // "UPGRADE" / "RE-ENTER" / "CONFIRM UPGRADE" rendered in a wide monospace face that belongs to no
         // other text on the screen — the single loudest inconsistency in the UI.
+        // ALWAYS the structural weight, never the size-derived one. A button label is an action, and a
+        // short button that shrank its text to fit would otherwise drop below the weight threshold and
+        // come out lighter than the button beside it — the same control, two different voices.
         var px = Math.Clamp(r.Height / 2, 14, 22);
-        while (px > 12 && Text2.Measure(label, px) > r.Width - 24) px--;
-        TextCenterBig(b, label, r.Center.X, r.Center.Y - px * 27 / 40, label3, px);
+        while (px > 12 && Text2.Measure(label, px, TextFace.Strong) > r.Width - 24) px--;
+        TextCenterBig(b, label, r.Center.X, r.Center.Y - px * 27 / 40, label3, px, TextFace.Strong);
         return enabled && hover && clicked;
     }
 
@@ -668,10 +671,12 @@ public sealed class UiKit
     public void TextCenter(SpriteBatch b, string s, int cx, int y, Color c) => Text2.DrawCentered(b, s, cx, y, c, UiTypography.Label);
 
     // Sized text — build a type hierarchy (big titles/numbers, small labels). `px` is the logical height.
-    public void TextBig(SpriteBatch b, string s, int x, int y, Color c, int px) => Text2.Draw(b, s, x, y, c, px);
-    public void TextRightBig(SpriteBatch b, string s, int right, int y, Color c, int px) => Text2.DrawRight(b, s, right, y, c, px);
-    public void TextCenterBig(SpriteBatch b, string s, int cx, int y, Color c, int px) => Text2.DrawCentered(b, s, cx, y, c, px);
-    public int MeasureBig(string s, int px) => Text2.Measure(s, px);
+    // `face` picks the typeface: the data face at the weight `px` implies by default, or the ceremony
+    // face for a screen title. See SmoothFont for why weight is derived from size rather than passed in.
+    public void TextBig(SpriteBatch b, string s, int x, int y, Color c, int px, TextFace face = TextFace.Data) => Text2.Draw(b, s, x, y, c, px, face);
+    public void TextRightBig(SpriteBatch b, string s, int right, int y, Color c, int px, TextFace face = TextFace.Data) => Text2.DrawRight(b, s, right, y, c, px, face);
+    public void TextCenterBig(SpriteBatch b, string s, int cx, int y, Color c, int px, TextFace face = TextFace.Data) => Text2.DrawCentered(b, s, cx, y, c, px, face);
+    public int MeasureBig(string s, int px, TextFace face = TextFace.Data) => Text2.Measure(s, px, face);
 
     /// <summary>
     /// Trim a string until it fits <paramref name="width"/> pixels, ending in an ellipsis.

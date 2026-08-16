@@ -281,7 +281,7 @@ public sealed class WeaveScreen
     {
         var hit = Game1.ToOverlay(mouse);
         _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xC8));
-        _ui.TextCenterBig(b, "THE WEAVE", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle);
+        _ui.TextCenterBig(b, "THE WEAVE", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
         _ui.TextCenterBig(b, "A SKILL IS A SOURCE, A FORM, AND WHAT YOU SWORE FOR IT",
                           960, 80, Slate, UiTypography.Secondary);

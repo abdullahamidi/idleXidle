@@ -125,7 +125,7 @@ public sealed class RosterScreen
         var hit = Game1.ToOverlay(mouse);
 
         _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xC0));
-        _ui.TextCenterBig(b, "ROSTER", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle);
+        _ui.TextCenterBig(b, "ROSTER", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
         // The line that makes the screen safe to use. Everything else on it is a comparison a player
         // will not make until they believe switching cannot cost them anything.

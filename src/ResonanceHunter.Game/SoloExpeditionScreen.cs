@@ -1320,7 +1320,7 @@ public sealed class SoloExpeditionScreen
 
         if (Log.Count == 0)
         {
-            _ui.TextCenterBig(b, "NO EXPEDITIONS YET", 960, 480, Slate, UiTypography.RegionTitle);
+            _ui.TextCenterBig(b, "NO EXPEDITIONS YET", 960, 480, Slate, UiTypography.RegionTitle, TextFace.Display);
             _ui.TextCenter(b, "L CLOSES THIS.", 960, 540, Dim);
             return;
         }
@@ -1329,7 +1329,7 @@ public sealed class SoloExpeditionScreen
         var shown = Log.Entries[_logIndex];
         var older = Log.OlderThan(_logIndex);
 
-        _ui.TextCenterBig(b, "EXPEDITION LOG", 960, 120, Gold, UiTypography.ScreenTitle);
+        _ui.TextCenterBig(b, "EXPEDITION LOG", 960, 120, Gold, UiTypography.ScreenTitle, TextFace.Display);
         _ui.TextCenter(b, $"{_logIndex + 1} OF {Log.Count}   \u00b7   \u2039 \u203a TO STEP   \u00b7   L CLOSES", 960, 172, Slate);
 
         DrawReportPanel(b, shown, older);
@@ -1466,14 +1466,14 @@ public sealed class SoloExpeditionScreen
             {
                 var fade = Math.Clamp(_bossIncomingTimer * 1.4f, 0f, 1f);
                 _ui.Fill(b, new Rectangle(610, 200, 700, 110), PanelBg * fade);
-                _ui.TextCenterBig(b, "BOSS INCOMING", 960, 224, Gold * fade, UiTypography.RegionTitle);
+                _ui.TextCenterBig(b, "BOSS INCOMING", 960, 224, Gold * fade, UiTypography.RegionTitle, TextFace.Display);
                 _ui.TextCenterBig(b, "STEEL YOURSELF", 960, 274, Bone * fade, UiTypography.OverlayBody);
                 break;
             }
             case HuntOverlay.WaveCleared:
             {
                 var fade = Math.Clamp(_bannerTimer * 1.4f, 0f, 1f);
-                _ui.TextCenterBig(b, _bannerText, 960, 268, Gold * fade, UiTypography.RegionTitle);
+                _ui.TextCenterBig(b, _bannerText, 960, 268, Gold * fade, UiTypography.RegionTitle, TextFace.Display);
                 break;
             }
         }
@@ -1547,7 +1547,7 @@ public sealed class SoloExpeditionScreen
         var title = regionName.ToUpperInvariant();
         var titlePx = UiTypography.RegionTitle;
         while (titlePx > 28 && _ui.MeasureBig(title, titlePx) > 490) titlePx--;
-        _ui.TextCenterBig(b, title, cx, 32 + (UiTypography.RegionTitle - titlePx) / 2, Gold, titlePx);
+        _ui.TextCenterBig(b, title, cx, 32 + (UiTypography.RegionTitle - titlePx) / 2, Gold, titlePx, TextFace.Display);
         _ui.TextCenterBig(b, Deepest >= ConquerAt ? "CONQUERED" : $"DEPTH {Deepest} / {ConquerAt}",
             cx, 73, Deepest >= ConquerAt ? Gold : Bone, UiTypography.StageLabel);
         _ui.BarArt(b, new Rectangle(710, 102, 400, 18),

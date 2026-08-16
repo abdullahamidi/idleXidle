@@ -291,7 +291,7 @@ public sealed class PrestigeScreen
         // by idling; a title naming a currency it does not charge is the kind of small lie that makes a
         // player mistrust every other number on the screen. Dust is still real — it is the Warren's
         // material, and it still sits in the top bar.
-        _ui.TextCenterBig(b, "TRAITS", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle);
+        _ui.TextCenterBig(b, "TRAITS", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
         _ui.TextCenterBig(b, "THE SPINE  ·  FOUR ROADS  ·  NO RESPEC", 960, 80, Slate, UiTypography.Secondary);
 
@@ -417,7 +417,7 @@ public sealed class PrestigeScreen
 
         _ui.TextCenterBig(b, _litTerminal ? "A ROAD ENDS HERE" : "TRAIT LIT — AND IT IS PERMANENT",
                           centre.X, plate.Y + 16, accent * alpha, UiTypography.Secondary);
-        _ui.TextCenterBig(b, _litName, centre.X, plate.Y + 48, Bone * alpha, UiTypography.ScreenTitle);
+        _ui.TextCenterBig(b, _litName, centre.X, plate.Y + 48, Bone * alpha, UiTypography.ScreenTitle, TextFace.Display);
         if (_litTerminal)
             _ui.TextCenterBig(b, RoadName(_litRoad) + "  ·  WALKED TO ITS END", centre.X, plate.Y + 106,
                               Gold * alpha, UiTypography.Body);
