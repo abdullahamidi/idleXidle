@@ -210,6 +210,18 @@ public sealed class ForgeScreen
     // ornament rather than inside the panel.
     private static Rectangle BagRow(int vis)
         => new(BagPanel.X + 30, BagPanel.Y + 84 + vis * BagRowH, BagPanel.Width - 60, BagRowH - 4);
+    /// <summary>What an operation costs, written so the two numbers cannot be read the wrong way round.</summary>
+    /// <remarks>
+    /// The rows printed "{have} / {cost} MATERIAL" — "3,400 / 100 ESSENCE" — which reads as a progress
+    /// fraction, so the natural parse is "100 of the 3,400 I need". It is exactly backwards, and the only
+    /// thing distinguishing affordable from not was the row's colour, which is the one channel a
+    /// colourblind player does not have. Neither number needs to be a mystery: when you can pay, the
+    /// balance is already in the currency pills at the top of the screen and only the price matters; when
+    /// you cannot, the shortfall is the whole message.
+    /// </remarks>
+    private static string CostLabel(long have, int cost, string material)
+        => have >= cost ? $"COSTS {cost:N0} {material}" : $"NEED {cost:N0} {material} — YOU HAVE {have:N0}";
+
     private static readonly Rectangle ItemPanel = new(406, 140, 384, 730);   // "ITEM PREVIEW"
     private static readonly Rectangle CostPanel = new(814, 140, 512, 730);   // "REQUIRED MATERIALS"
     private static readonly Rectangle ResultPanel = new(1350, 140, 546, 730);// "RESULT PREVIEW"
@@ -1027,13 +1039,20 @@ public sealed class ForgeScreen
         var bag = _inv.Where(Gear.IsWearable).ToList();
         _ui.TextCenterBig(b, "YOUR BAG", BagPanel.Center.X, BagPanel.Y + 40, Gold, UiTypography.PanelTitle);
 
-        // THE SCROLL COUNTER LIVES IN THE HEADER. It was a centred line in the strip between the last
-        // row and the frame — a band only ~26px tall, whose centre carries the panel art's bottom
-        // diamond, which ate the separator whichever y it was given. The header has clear space, and a
-        // count belongs beside the thing it counts anyway.
+        // THE SCROLL COUNTER SITS UNDER THE TITLE, CENTRED — the only clear ground in this header.
+        //
+        // It has now failed in both corners. First as a centred line in the strip between the last row
+        // and the frame, where the panel art's bottom diamond ate it. Then right-aligned in the header
+        // at Right - 52, which looked safe against UiKit.PanelCorner's nominal 40 — and was not: this
+        // panel's aspect selects the SQUARE frame, whose corner filigree reaches about 95px inward at
+        // this size, so "3-8 / 8" rendered as "3-8" with the slash and the total lost in the ornament.
+        // A partial number is worse than none; it reads as a bag with 3 items in it.
+        //
+        // The frame's clear interior here is only ~177px wide, which is barely the title itself, so
+        // there is no arrangement that puts two things on this line. Under it, there is room.
         if (bag.Count > BagRows)
-            _ui.TextRightBig(b, $"{_bagScroll + 1}-{Math.Min(bag.Count, _bagScroll + BagRows)} / {bag.Count}",
-                             BagPanel.Right - 52, BagPanel.Y + 48, Slate, UiTypography.Secondary);
+            _ui.TextCenterBig(b, $"{_bagScroll + 1}-{Math.Min(bag.Count, _bagScroll + BagRows)} / {bag.Count}",
+                              BagPanel.Center.X, BagPanel.Y + 62, Slate, UiTypography.Secondary);
 
         if (bag.Count == 0)
         {
@@ -1270,6 +1289,7 @@ public sealed class ForgeScreen
 
         _ui.Panel(b, ReforgePanel);
         _ui.TextCenterBig(b, "REFORGE", ReforgePanel.Center.X, ReforgePanel.Y + 22, Gold, UiTypography.SectionTitle);
+        // Cost rows below use CostLabel — see the note on it for why "3,400 / 100 ESSENCE" is gone.
         if (item is null)
         {
             _ui.TextCenter(b, "NO GEAR TO REFORGE.", ReforgePanel.Center.X, ReforgePanel.Y + 320, Slate);
@@ -1293,7 +1313,7 @@ public sealed class ForgeScreen
         if (traitBlurb.Length > 0)
             _ui.Text(b, traitBlurb, ReforgePanel.X + 32, tRow + 68, Bone);
 
-        _ui.TextRight(b, $"{hunter.MaterialOf(Material.Essence):N0} / {tCost} ESSENCE", ReforgePanel.Right - 360, tRow + 34, canTrait ? Met : Ember);
+        _ui.TextRight(b, CostLabel(hunter.MaterialOf(Material.Essence), tCost, "ESSENCE"), ReforgePanel.Right - 360, tRow + 34, canTrait ? Met : Ember);
         if (_ui.Button(b, new Rectangle(ReforgePanel.Right - 340, tRow + 12, 300, 60), "RE-ROLL", hit, clicked, enabled: canTrait))
             DoReforgeTrait(hunter, item);
 
@@ -1313,7 +1333,7 @@ public sealed class ForgeScreen
                  ReforgePanel.X + 32, eRow, Slate);
         _ui.TextBig(b, hasEnch ? ench?.Name ?? "—" : "LOCKED — RARE+ ONLY", ReforgePanel.X + 32, eRow + 28, hasEnch ? Bloom : Dim, UiTypography.PanelTitle);
         if (ench is not null) DrawWrapped(b, ench.Blurb, ReforgePanel.X + 32, eRow + 64, ReforgePanel.Width - 400, Bone);
-        _ui.TextRight(b, $"{hunter.MaterialOf(eTier):N0} / {eCost} {MaterialTiers.Name(eTier)}", ReforgePanel.Right - 360, eRow + 34, canEnch ? Met : Ember);
+        _ui.TextRight(b, CostLabel(hunter.MaterialOf(eTier), eCost, MaterialTiers.Name(eTier)), ReforgePanel.Right - 360, eRow + 34, canEnch ? Met : Ember);
         if (_ui.Button(b, new Rectangle(ReforgePanel.Right - 340, eRow + 12, 300, 60), "RE-ROLL", hit, clicked, enabled: canEnch))
             DoReforgeEnchant(hunter, item);
 
