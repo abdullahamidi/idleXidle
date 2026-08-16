@@ -271,6 +271,14 @@ public sealed class SoloExpeditionScreen
 
     // Replay state.
     private float _playheadMs;
+
+    /// <summary>Seconds of flash left on each Form's medallion, keyed by (int)Form. Set when it fires.</summary>
+    /// <remarks>
+    /// Playtest: "Skill kullanımlarını ve cooldownlarını da takip edemiyorum." The screen already knew
+    /// the moment a skill went off — it plays a VFX and a callout for it — but nothing on the rail, the
+    /// one place the skills are listed, moved at all. So the medallions were a legend, not an instrument.
+    /// </remarks>
+    private readonly Dictionary<int, float> _skillFlash = new();
     private WaveReplay? _replay;
     private float _champLunge, _enemyLunge, _enemyWindup;
     /// <summary>Where DrawComposition last put the creature row — what its labels anchor to.</summary>
@@ -779,6 +787,12 @@ public sealed class SoloExpeditionScreen
         if (_enemyEnter > 0f) { _enemyWindup = _champWindup = 0f; return; }
 
         _playheadMs += dt * 1000f * _speedMul;
+        if (_skillFlash.Count > 0)
+            foreach (var key in _skillFlash.Keys.ToList())
+            {
+                var left = _skillFlash[key] - dt;
+                if (left <= 0f) _skillFlash.Remove(key); else _skillFlash[key] = left;
+            }
 
         // THE WINDOW, NOT THE FPS, IS WHAT MAKES THIS SWING LEGIBLE — and getting that wrong is easy.
         // EnemyClipSeconds maps the windup 0..1 onto the clip's FULL length, so the clip always completes
@@ -801,6 +815,13 @@ public sealed class SoloExpeditionScreen
 
         foreach (var e in _replay.Advance(_playheadMs))
         {
+            // EVERY EFFECT USED THE SAME DEFAULT SIZE, so a glancing blow, a critical and a death all
+            // burst at 208px — on a 430px champion and on swarm creatures barely 100px across. Playtest:
+            // "HUNT ekranında efektlerin boyutları düzgün değil." Size is the loudest channel an effect
+            // has, and spending all of it on "something happened" leaves nothing for "something big
+            // happened". They are graded now: a weak hit is 1, an ordinary hit 1, an interrupt or a
+            // level-up 2, a crit, a Ruin strike or a death 3. The champion's own hit also drops 40px to
+            // the torso, because centred on ChampBox it burst over the head.
             switch (e.Kind)
             {
                 case BattleEventKind.Strike:
@@ -814,10 +835,11 @@ public sealed class SoloExpeditionScreen
                 case BattleEventKind.EnemyStrike:
                     _enemyLunge = 1f;
                     _nextEnemyStrikeMs = _replay.NextEnemyStrikeAfter(e.AtMs);
-                    _vfx.Play("vfx_hit", ChampBox.Center.X, ChampBox.Center.Y, fps: 12f, tint: Ember);
+                    _vfx.Play("vfx_hit", ChampBox.Center.X, ChampBox.Center.Y + 40, scale: 1, fps: 12f, tint: Ember);
                     break;
                 case BattleEventKind.Skill:
                     var form = (Form)e.Amount;
+                    _skillFlash[e.Amount] = 0.42f;
                     var (text, colour) = CalloutFor(form);
                     Say(text, colour);
                     PlayFormVfx(form);
@@ -825,14 +847,14 @@ public sealed class SoloExpeditionScreen
                     break;
                 case BattleEventKind.Heal:
                     Say($"+{e.Amount}", Verdant);
-                    _vfx.Play("vfx_levelup", ChampBox.Center.X, ChampBox.Y + 32, fps: 10f, tint: Verdant);
+                    _vfx.Play("vfx_levelup", ChampBox.Center.X, ChampBox.Y + 32, scale: 2, fps: 10f, tint: Verdant);
                     break;
                 case BattleEventKind.Shield:
                     Say("UNDYING", Gold);
-                    _vfx.Play("vfx_interrupt", ChampBox.Center.X, ChampBox.Center.Y, fps: 12f, tint: Gold);
+                    _vfx.Play("vfx_interrupt", ChampBox.Center.X, ChampBox.Center.Y, scale: 2, fps: 12f, tint: Gold);
                     break;
                 case BattleEventKind.Down:
-                    _vfx.Play("vfx_death", ChampBox.Center.X, ChampBox.Center.Y, fps: 9f);
+                    _vfx.Play("vfx_death", ChampBox.Center.X, ChampBox.Center.Y, scale: 3, fps: 9f);
                     break;
                 case BattleEventKind.EnemyDown:
                     _vfx.Play("vfx_death", _rowCentreX, _rowTopY + 110, scale: 2, fps: 9f);
@@ -881,19 +903,19 @@ public sealed class SoloExpeditionScreen
         switch (form)
         {
             case Form.Strike:
-                _vfx.Play("vfx_ability_ruinstrike", _rowCentreX, _rowTopY + 110, fps: 11f, tint: Ember);
+                _vfx.Play("vfx_ability_ruinstrike", _rowCentreX, _rowTopY + 110, scale: 3, fps: 11f, tint: Ember);
                 break;
             case Form.Trap:
-                _vfx.Play("vfx_crit", _rowCentreX, _rowTopY + 110, fps: 9f, tint: Gold);
+                _vfx.Play("vfx_crit", _rowCentreX, _rowTopY + 110, scale: 3, fps: 9f, tint: Gold);
                 break;
             case Form.Mark:
-                _vfx.Play("vfx_interrupt", _rowCentreX, _rowTopY + 110, fps: 12f, tint: Bone);
+                _vfx.Play("vfx_interrupt", _rowCentreX, _rowTopY + 110, scale: 2, fps: 12f, tint: Bone);
                 break;
             case Form.Transformation:
-                _vfx.Play("vfx_levelup", ChampBox.Center.X, ChampBox.Y + 24, fps: 10f, tint: Verdant);
+                _vfx.Play("vfx_levelup", ChampBox.Center.X, ChampBox.Y + 24, scale: 2, fps: 10f, tint: Verdant);
                 break;
             default:
-                _vfx.Play("vfx_weakhit", _rowCentreX, _rowTopY + 110, fps: 14f, tint: Steel);
+                _vfx.Play("vfx_weakhit", _rowCentreX, _rowTopY + 110, scale: 1, fps: 14f, tint: Steel);
                 break;
         }
     }
@@ -1040,7 +1062,12 @@ public sealed class SoloExpeditionScreen
         // appears on a big composition, which is why it survived every screenshot and every short run
         // and was found by soaking the fight for five minutes.
         var room = ArenaRect.Width - w - 40;   // the span a row may occupy inside the arena
-        var spacing = (int)(w * 0.62f);        // overlap slightly; a row of five must still fit
+        // 0.54, not 0.62. Playtest: "düşmanlar çok yakında geliyor onları biraz daha sağa alabiliriz."
+        // The row is already pinned as far right as the clamp allows, so the creatures were not too far
+        // right — the ROW WAS TOO WIDE, and its left end reached back toward the champion. At 0.62 a
+        // swarm of four spans 372px, putting its leftmost creature 102px from ChampBox's right edge;
+        // at 0.54 it spans 324 and that gap becomes 150.
+        var spacing = (int)(w * 0.54f);        // overlap slightly; a row of five must still fit
         if (comp.Count > 1 && room > 0) spacing = Math.Min(spacing, room / (comp.Count - 1));
         var wanted = Math.Max(0, spacing) * (comp.Count - 1);
 
@@ -1049,6 +1076,11 @@ public sealed class SoloExpeditionScreen
         // all, and an overhanging row is a cosmetic problem where a thrown exception is a lost session.
         var lo = ArenaRect.X + half + 20 + wanted / 2;
         var hi = ArenaRect.Right - half - 20 - wanted / 2;
+
+        // AND A FLOOR THAT KEEPS THE ROW OFF THE CHAMPION. Raised only as far as `hi` allows, so it can
+        // never invert the clamp — a wave too wide to leave the gap simply gets whatever gap there is,
+        // which is the same graceful degradation the fallback below already provides.
+        lo = Math.Min(hi, Math.Max(lo, ChampBox.Right + 80 + wanted / 2));
 
         // THE MOTION IS ADDED AFTER THE CLAMP, and that is the whole fix. It used to be clamped WITH the
         // resting position — `Clamp(EnemyBox.Center.X + enter + lunge, lo, hi)` — and for essentially
@@ -1716,7 +1748,33 @@ public sealed class SoloExpeditionScreen
             {
                 var s = skills[i];
                 var sc = SourceColor.GetValueOrDefault(s.Source, Bone);
-                if (_ui.Assets.Get("ui_slot_skill_hex") is { } sl) b.Draw(sl, box, Color.White);
+
+                // THE RHYTHM OF THIS SKILL, read off the resolved wave rather than invented.
+                //
+                // WaveReplay carries a Skill event per cast, with the Form in Amount and the moment in
+                // AtMs, so "when did this last fire" and "when does it fire next" are both answerable —
+                // and a bar built on them is the fight's real cadence, not a decorative tick at a rate
+                // nobody chose. Before this the rail listed the skills and then never moved again, so a
+                // player could see WHAT their champion carries and never WHEN any of it happens.
+                var formKey = (int)s.Form;
+                var flash = _skillFlash.TryGetValue(formKey, out var fl) ? Math.Clamp(fl / 0.42f, 0f, 1f) : 0f;
+                var ready = 0f;
+                if (_replay is not null)
+                {
+                    var next = _replay.NextSkillAfter(_playheadMs, formKey);
+                    var prev = _replay.LastSkillBefore(_playheadMs, formKey);
+                    if (next != int.MaxValue)
+                    {
+                        // From the previous cast, or from the top of the wave for the very first one.
+                        var from = prev >= 0 ? prev : 0;
+                        var span = MathF.Max(1f, next - from);
+                        ready = Math.Clamp((_playheadMs - from) / span, 0f, 1f);
+                    }
+                    else if (prev >= 0) ready = 1f;   // fired already and will not fire again this wave
+                }
+
+                if (_ui.Assets.Get("ui_slot_skill_hex") is { } sl)
+                    b.Draw(sl, box, flash > 0f ? Color.Lerp(Color.White, Gold, flash) : Color.White);
                 // §18.3 Layer 1: source-coloured inner glow (no Form-glyph asset ships, so the Source glyph is
                 // the central identity and the Form name labels it — a quieter composition per §36).
                 _ui.Diamond(b, new Rectangle(box.Center.X - 22, box.Center.Y - 22, 44, 44), sc * 0.28f);
@@ -1744,8 +1802,25 @@ public sealed class SoloExpeditionScreen
                 // Removing the speed control gave this rail its height back, and the sensible use of it
                 // is to let the one line that says what the skill DOES actually be read. Wrapped rather
                 // than shortened: "ONE HEAVY BL…" is a fragment, and a fragment teaches nothing.
+                // A four-pixel line under the medallion, filling toward the next cast. It sits in the gap
+                // the label already leaves, so it costs no height — and a full bar plus a lit medallion
+                // is the moment the callout in the arena fires, which is what ties the two together.
+                var track = new Rectangle(box.X, box.Bottom + 2, RailContentW, 4);
+                _ui.Fill(b, track, new Color(0x22, 0x1C, 0x30));
+                if (ready > 0f)
+                    _ui.Fill(b, new Rectangle(track.X, track.Y, (int)(track.Width * ready), track.Height),
+                             flash > 0f ? Gold : sc * 0.85f);
+                if (flash > 0f)
+                {
+                    var halo = new Rectangle(box.X - 3, box.Y - 3, box.Width + 6, box.Height + 6);
+                    _ui.Fill(b, new Rectangle(halo.X, halo.Y, halo.Width, 2), Gold * flash);
+                    _ui.Fill(b, new Rectangle(halo.X, halo.Bottom - 2, halo.Width, 2), Gold * flash);
+                    _ui.Fill(b, new Rectangle(halo.X, halo.Y, 2, halo.Height), Gold * flash);
+                    _ui.Fill(b, new Rectangle(halo.Right - 2, halo.Y, 2, halo.Height), Gold * flash);
+                }
+
                 var head = BuildGlossary.FormHeadline(s.Form);
-                var hy = box.Bottom + 4;
+                var hy = box.Bottom + 12;
                 foreach (var line in _ui.WrapBig(head, RailContentW, 13).Take(2))
                 {
                     _ui.TextBig(b, line, RailContentX, hy, Gold, 13);

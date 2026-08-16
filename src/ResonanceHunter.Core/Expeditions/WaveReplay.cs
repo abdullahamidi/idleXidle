@@ -142,6 +142,41 @@ public sealed class WaveReplay
     /// </remarks>
     public int NextChampionStrikeAfter(float ms) => NextAfter(ms, BattleEventKind.Strike);
 
+    /// <summary>
+    /// When a given FORM next fires after <paramref name="ms"/>, and when it last fired before it.
+    /// </summary>
+    /// <remarks>
+    /// The fight screen could show a skill going off — it already reads Skill events and plays a VFX for
+    /// them — but it could not show a skill WAITING, which is the half a player actually watches. The
+    /// events already carry the Form in <c>Amount</c> and the moment in <c>AtMs</c>, so a cooldown
+    /// readout built on these is the real rhythm of the resolved wave rather than a decorative bar
+    /// ticking at a rate nobody chose.
+    ///
+    /// Returns <see cref="int.MaxValue"/> when the Form never fires again in this wave, and -1 when it
+    /// has not fired yet — the caller needs to tell "waiting for the first cast" from "on cooldown".
+    /// </remarks>
+    public int NextSkillAfter(float ms, int form)
+    {
+        foreach (var e in _events)
+            if (e.Kind == BattleEventKind.Skill && e.Amount == form && e.AtMs > ms)
+                return e.AtMs;
+
+        return int.MaxValue;
+    }
+
+    /// <inheritdoc cref="NextSkillAfter"/>
+    public int LastSkillBefore(float ms, int form)
+    {
+        var last = -1;
+        foreach (var e in _events)
+        {
+            if (e.Kind != BattleEventKind.Skill || e.Amount != form) continue;
+            if (e.AtMs > ms) break;
+            last = e.AtMs;
+        }
+        return last;
+    }
+
     private int NextAfter(float ms, BattleEventKind kind)
     {
         foreach (var e in _events)
