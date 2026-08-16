@@ -226,9 +226,34 @@ public sealed class ChestScreen
                 _ui.Fill(b, new Rectangle(card.Right - 3, card.Y, 3, card.Height), grade);
             }
 
-            _ui.TextBig(b, chest.Rarity.ToString().ToUpperInvariant(), card.X + 16, card.Y + 20,
-                        grade, UiTypography.PanelTitle);
-            _ui.TextBig(b, $"TIER {chest.Tier}", card.X + 16, card.Y + 56, Bone, UiTypography.Secondary);
+            // THE CHEST IS THE PICTURE NOW, and the grade is counted rather than spelled.
+            //
+            // Playtest: "yazılarla chestleri belirtmek yerine düzgün bir kategorizasyonla ve chest
+            // ikonlarıyla gösterim sağlanabilir." The card led with the word LEGENDARY set in the
+            // largest type on it, so six chests were six paragraphs to read rather than six objects to
+            // recognise — and the one image the game has for a chest was not on the card at all.
+            //
+            // Only chest_loot.png ships, so grade rides on its TINT — and a tint alone would make grade
+            // a hue-only channel, which the art bible forbids and a colourblind player cannot use. The
+            // pip row is the second channel: one to five filled diamonds, countable at a glance and
+            // readable in greyscale. Common is one pip, Legendary is five.
+            var iconBox = new Rectangle(card.X + 16, card.Y + 14, 96, 96);
+            // LIFTED TOWARD WHITE FOR THE ICON ONLY. SpriteBatch tint MULTIPLIES, so a Rare blue or an
+            // Epic crimson at full saturation turns the chest into a dark silhouette while Legendary
+            // gold stays bright — the grade would have decided how VISIBLE the chest is, not just what
+            // colour it is. The strip and the pips keep the true rarity colour.
+            if (_ui.Assets.Get("chest_loot") is { } chestArt)
+                _ui.SpriteFit(b, chestArt, iconBox, Color.Lerp(grade, Color.White, 0.45f));
+            else _ui.Diamond(b, iconBox, grade);
+
+            for (var pip = 0; pip < 5; pip++)
+            {
+                var dot = new Rectangle(card.X + 18 + pip * 20, card.Y + 118, 14, 14);
+                if (pip <= (int)chest.Rarity) _ui.Diamond(b, dot, grade);
+                else _ui.Diamond(b, dot, new Color(0x2A, 0x26, 0x34));
+            }
+
+            _ui.TextBig(b, $"TIER {chest.Tier}", card.X + 128, card.Y + 26, Bone, UiTypography.PanelTitle);
 
             // The element as a coloured chip rather than a word — it is an identity, and at card size a
             // word competes with the grade for the same glance.
@@ -241,14 +266,14 @@ public sealed class ChestScreen
             // THE PROMISE, on the card itself. This is the line the player was missing entirely, so it
             // belongs where they see it before clicking anything.
             _ui.TextBig(b, _ui.ShortenBig(d.FloorShort, card.Width - 32, UiTypography.Secondary),
-                        card.X + 16, card.Y + 96,
+                        card.X + 16, card.Y + 142,
                         // SLATE FOR THE GAMBLE CASE, not Dim: at ~1.6:1 the promise line vanished on
                         // precisely the two grades whose promise is "there isn't one", which is the
                         // fact a player most needs before spending the click.
                         d.GuaranteedFloor > Rarity.Common ? Gem : Slate, UiTypography.Secondary);
 
             _ui.TextBig(b, _ui.ShortenBig(d.RegionShort, card.Width - 32, UiTypography.Secondary),
-                        card.X + 16, card.Y + 128, Slate, UiTypography.Secondary);
+                        card.X + 16, card.Y + 166, Slate, UiTypography.Secondary);
 
             if (card.Contains(mouse) && clicked) { _cursor = idx; _cursorFollow = true; }
         }
