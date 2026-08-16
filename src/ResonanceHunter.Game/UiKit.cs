@@ -518,6 +518,27 @@ public sealed class UiKit
     /// sampled whole and drawn smaller, so it reads as a FINER frame rather than a cropped one — and it
     /// closes most of the gap without touching several hundred hand-placed literals.
     /// </remarks>
+    /// <summary>A straight line of a given thickness, as ONE rotated quad rather than a stamp of squares.</summary>
+    /// <remarks>
+    /// <b>THE MASTERY TREE DREW EVERY EDGE BY STAMPING AN 8x8 SQUARE AT EVERY PIXEL OF ITS LONGER AXIS.</b>
+    /// Three consequences, all of them visible: the thickness was a hardcoded 8 with no zoom term, so at
+    /// the default zoom a wire was 29% of the node it connected and at minimum zoom 57% — the tree read
+    /// as a grey asterisk; a square brush is 8*sqrt(2) = 11.3px across on a diagonal, so the diagonals
+    /// were half again as fat as the horizontals; and fifty edges averaging 150px cost about 7,500
+    /// sprite draws per frame, rising to 35,000 zoomed in.
+    ///
+    /// One quad is one draw, its thickness is perpendicular so a diagonal is no fatter than a
+    /// horizontal, and the width can be fractional — which is what lets it scale with the camera.
+    /// </remarks>
+    public void LineSeg(SpriteBatch b, Vector2 a, Vector2 c, float thickness, Color col)
+    {
+        var d = c - a;
+        var len = d.Length();
+        if (len < 0.5f || thickness <= 0f) return;
+        b.Draw(_pixel, a, null, col, MathF.Atan2(d.Y, d.X), new Vector2(0f, 0.5f),
+               new Vector2(len, thickness), SpriteEffects.None, 0f);
+    }
+
     /// <summary>
     /// A scrim rect, in AUTHORED coordinates, that actually covers the whole picture.
     /// </summary>

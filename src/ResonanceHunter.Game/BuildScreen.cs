@@ -716,8 +716,11 @@ public sealed class BuildScreen
             if (nearest is null) continue;
             var a = Screen(NodePos(nearest));
             var c = Screen(to);
-            Line(b, new Point((int)a.X, (int)a.Y), new Point((int)c.X, (int)c.Y),
-                 Mastery.IsTaken(node.Id) && Mastery.IsTaken(nearest.Id) ? Gold : Path);
+            // AN UNWALKED WIRE IS DIMMER THAN THE NODE IT TOUCHES, which it was not before: Path is also
+            // the locked-node frame tint, so a node and the fatter wire running into it were the same
+            // colour and the node disappeared into the web. Half-alpha puts the wire behind the studs.
+            var walked = Mastery.IsTaken(node.Id) && Mastery.IsTaken(nearest.Id);
+            _ui.LineSeg(b, a, c, WireThickness, walked ? Gold : Path * 0.55f);
         }
         foreach (var node in MasteryCatalog.Nodes) DrawNode(b, node, hit, aff);
 
@@ -935,10 +938,20 @@ public sealed class BuildScreen
             // START is exempt. It is permanently allocated, so it takes the "taken" branch of `fill`
             // and came out as a bright WEIGHT-red square at the dead centre of the tree — reading as
             // the most emphatic Weight node on the page when it belongs to no branch at all.
+            // THE FIELD FOLLOWS THE FRAME'S SHAPE. It was an axis-aligned Rectangle inset 30% into every
+            // frame — a square patch inside a circle, an octagon and a diamond, so a taken Minor read as
+            // a coloured square wearing a ring and the DIAMOND kind wore a square that poked out of its
+            // own points. The three procedural shapes UiKit already owns cover all four frame outlines.
+            //
+            // START is exempt. It is permanently allocated, so it takes the "taken" branch of `fill` and
+            // came out as a bright WEIGHT-red field at the dead centre of the tree — reading as the most
+            // emphatic Weight node on the page when it belongs to no branch at all.
             var pad = (int)(box.Width * 0.30f);
-            if (node.Kind != MasteryKind.Mastery)   // the plaque brings its own dark centre
-                _ui.Fill(b, new Rectangle(box.X + pad, box.Y + pad, box.Width - pad * 2, box.Height - pad * 2),
-                         node.Kind == MasteryKind.Start ? PanelBg : fill);
+            var field = new Rectangle(box.X + pad, box.Y + pad, box.Width - pad * 2, box.Height - pad * 2);
+            var fieldCol = node.Kind == MasteryKind.Start ? PanelBg : fill;
+            if (node.Kind == MasteryKind.Specialisation) _ui.Diamond(b, field, fieldCol);
+            else if (node.Kind == MasteryKind.Notable || node.Kind == MasteryKind.Bridge) _ui.Hex(b, field, fieldCol);
+            else if (node.Kind != MasteryKind.Mastery) _ui.Diamond(b, Circleish(field), fieldCol);
 
             b.Draw(frame, box, hover ? Bone : owned ? Gold : taken ? Gold : canTake ? branchCol : Path);
         }
@@ -1010,13 +1023,31 @@ public sealed class BuildScreen
         _ui.TextCenter(b, text, r.Center.X, r.Y + 12, color);
     }
 
-    private void Line(SpriteBatch b, Point a, Point c, Color col)
+    /// <summary>
+    /// A wire's thickness in pixels at the current zoom.
+    /// </summary>
+    /// <remarks>
+    /// 5.7 is not a taste call. PrestigeScreen — the tree the same playtester has NOT complained about —
+    /// draws a 3px wire against a 52px node, a ratio of 1:17.3. A Minor node here is 98.8 * _zoom pixels
+    /// across, and 98.8 / 17.3 = 5.7. So these wires land at exactly the weight the trait tree already
+    /// ships, at every zoom, instead of a constant 8 that is 29% of a node at the default camera and 57%
+    /// of one when the player zooms out to see the whole tree.
+    /// </remarks>
+    private float WireThickness => Math.Clamp(5.7f * _zoom, 1.2f, 9f);
+
+    /// <summary>
+    /// A field for a ROUND frame, drawn as a diamond grown to touch the circle it sits in.
+    /// </summary>
+    /// <remarks>
+    /// UiKit has no disc primitive and this file must not add art. A diamond inscribed in the circle
+    /// leaves visible gaps at the diagonals, so it is grown by sqrt(2)/2 of the inset instead: the
+    /// points now reach the rim and the flats sit just inside it, which at a Minor's 28px default size
+    /// reads as a filled socket rather than as a rotated square.
+    /// </remarks>
+    private static Rectangle Circleish(Rectangle r)
     {
-        var dx = c.X - a.X; var dy = c.Y - a.Y;
-        var steps = Math.Max(Math.Abs(dx), Math.Abs(dy));
-        if (steps == 0) return;
-        for (var i = 0; i <= steps; i++)
-            _ui.Fill(b, new Rectangle(a.X + dx * i / steps - 4, a.Y + dy * i / steps - 4, 8, 8), col);
+        var grow = (int)MathF.Round(r.Width * 0.14f);
+        return new Rectangle(r.X - grow, r.Y - grow, r.Width + grow * 2, r.Height + grow * 2);
     }
 
     private void Outline(SpriteBatch b, Rectangle r, Color c, int t)
