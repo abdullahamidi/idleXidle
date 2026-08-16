@@ -192,7 +192,10 @@ public sealed class MapScreen
         // It used to recite the headers directly beneath it, which spends the largest 100px on the page
         // to tell the player something they can already read, and teaches them that big text in this
         // band is not worth reading. Same slot, same cost, real content.
-        _ui.TextCenterBig(b, "EACH REGION IS ABOUT HALF AGAIN AS TOUGH AS THE LAST, AND DROPS ITS OWN THINGS",
+        // THE NUMBER COMES FROM THE LADDER THAT SETS IT. "About half again" was written when the step was
+        // 50% and the tuning has moved since; a subtitle that states a balance figure has to read that
+        // figure, or it becomes a confident lie the first time someone retunes the curve.
+        _ui.TextCenterBig(b, $"EACH REGION IS ABOUT {RegionLadder.StepPercent:0}% TOUGHER THAN THE LAST, AND DROPS ITS OWN THINGS",
                           960, 80, Slate, UiTypography.Secondary);
 
         DrawProgress(b, hit, clicked);
@@ -399,6 +402,20 @@ public sealed class MapScreen
         if (_ui.Assets.Get($"source_{def.Theme.ToString().ToLowerInvariant()}") is { } tg)
             b.Draw(tg, new Rectangle(DetailPanel.X + 30, DetailPanel.Y + 296, 34, 34), Color.White);
         _ui.TextBig(b, $"{def.Theme.ToString().ToUpperInvariant()} AFFINITY", DetailPanel.X + 74, DetailPanel.Y + 300, Bone, UiTypography.Body);
+        // HOW THE PLACE FIGHTS, which the region model has carried since it was written and no screen has
+        // ever shown. It decides whether you are hit by a few heavy blows or a fast flurry — a real
+        // difference to a build, and the kind of thing you want to know BEFORE walking in.
+        //
+        // RIGHT-ALIGNED ON THE AFFINITY'S OWN LINE, not on a new one. Added below, it landed on the
+        // region modifier's name six pixels lower — inserting a row without moving what follows it is
+        // the exact fault this panel's DROPS section was already suffering from, and this panel has no
+        // spare vertical space at all. The affinity label is short and the line is 418px wide.
+        _ui.TextRightBig(b, def.CombatBias switch
+        {
+            AttackBias.Heavy => "IT HITS SLOWLY AND HARD",
+            AttackBias.Fast => "IT HITS FAST AND OFTEN",
+            _ => "IT HITS AT AN EVEN PACE",
+        }, DetailPanel.Right - 28, DetailPanel.Y + 302, Slate, UiTypography.Secondary);
         // Region modifier — the themed combat twist (replaces the old flavor-only bias line).
         var mod = RegionModifiers.For(def.Id);
         _ui.TextBig(b, mod.Name, DetailPanel.X + 30, DetailPanel.Y + 332, Ember, UiTypography.Body);
