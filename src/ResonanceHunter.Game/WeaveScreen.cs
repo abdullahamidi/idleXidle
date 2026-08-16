@@ -122,9 +122,12 @@ public sealed class WeaveScreen
     /// <summary>Top-left, in the band the centred title leaves empty on both sides.</summary>
     private static readonly Rectangle BackBtn = new(38, 26, 240, 46);
 
-    private static readonly Rectangle SlotsPanel = new(38, 144, 520, 800);
-    private static readonly Rectangle PickPanel = new(578, 144, 640, 800);
-    private static readonly Rectangle VowPanel = new(1238, 144, 642, 800);
+    // 850, not 800 — bottom 994, which is canvas 890 and still 168 canvas px clear of the picture's
+    // floor. The three columns keep a shared baseline. Aspects 0.612 / 0.753 / 0.755 stay in
+    // ui_panel_vertical's bucket (< 0.82), so no frame art changes.
+    private static readonly Rectangle SlotsPanel = new(38, 144, 520, 850);
+    private static readonly Rectangle PickPanel = new(578, 144, 640, 850);
+    private static readonly Rectangle VowPanel = new(1238, 144, 642, 850);
 
     private static Rectangle SlotRow(int i) => new(SlotsPanel.X + 74, SlotsPanel.Y + 96 + i * 86, 372, 76);
     private static Rectangle DropX(int i) { var r = SlotRow(i); return new(r.Right - 34, r.Y + 4, 30, 30); }
@@ -139,8 +142,15 @@ public sealed class WeaveScreen
     // is where you decide which of them you are carrying. Losing the only UI for them along with the
     // sidebar would have been a silent regression: the tree would keep selling a payoff with nowhere
     // left to equip it.
-    /// <summary>How many keystone chips are on screen at once. A WINDOW, not the socket count.</summary>
-    private const int KeystoneRows = 3;
+    /// <summary>
+    /// How many keystone chips are on screen at once. A WINDOW, not the socket count.
+    /// </summary>
+    /// <remarks>
+    /// TWO AT FIVE SLOTS, because everything below the slot list hangs off SkillCapacity and the fifth
+    /// slot pushes the chips 86px down. The list already scrolls, so a shorter window costs a scroll;
+    /// a third chip at five slots costs the WHAT THIS BUILD DOES readout entirely — see DrawReadout.
+    /// </remarks>
+    private int KeystoneRows => Loadout.SkillCapacity >= 5 ? 2 : 3;
 
     // 94/46/42, measured against the WORST case rather than the current one: at five slots SlotsEnd is
     // 670, so a 102/48/44 row ends at 912 against a panel interior that closes at 904. Eight pixels, and
@@ -426,9 +436,20 @@ public sealed class WeaveScreen
         var top = KeystoneChip(KeystoneRows - 1).Bottom + 26;
         var x = SlotsPanel.X + 40;
         var width = SlotsPanel.Width - 80;
-        if (top > SlotsPanel.Bottom - 120) return;   // no room; never draw through the frame
 
-        _ui.Fill(b, new Rectangle(x - 12, top - 12, width + 24, SlotsPanel.Bottom - top - 16), Quiet);
+        // A FLOOR, NOT A BAIL — this readout was DEAD for most of the game.
+        //
+        // Everything in this column hangs off SkillCapacity: top = 494 + 86*capacity. The old guard was
+        // `if (top > SlotsPanel.Bottom - 120) return;` = 824, so at FOUR slots (top 838) and five (924)
+        // the whole block vanished — and four is where a normal build lives. The one readout that
+        // answers "is this pick better than what I have" was invisible for the entire mid and late game,
+        // silently, on the screen it exists for.
+        //
+        // It now draws what fits and stops, which is what the guard's own comment said it was for.
+        var floor = SlotsPanel.Bottom - UiKit.PanelCorner - 8;
+        if (top + 64 > floor) return;   // not even a heading and one row; never draw through the frame
+
+        _ui.Fill(b, new Rectangle(x - 12, top - 12, width + 24, floor - top + 4), Quiet);
         _ui.Text(b, "WHAT THIS BUILD DOES", x, top, Slate);
 
         var y = top + 34;
@@ -443,6 +464,7 @@ public sealed class WeaveScreen
         _ui.TextBig(b, "NOW", x, y, Slate, UiTypography.Secondary);
         _ui.TextRightBig(b, $"{_currentDps:N0} dmg/s", x + width, y, Bone, UiTypography.Body);
         y += 30;
+        if (y + 30 > floor) return;
 
         // THE PICK UNDER THE CURSOR, measured on a COPY so hovering never mutates the real loadout.
         if ((hoverSource is not null || hoverForm is not null) && _slot >= 0 && _slot < Loadout.Skills.Count)

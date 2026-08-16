@@ -139,7 +139,14 @@ public sealed class WarrenScreen
 
         // Production runs on every screen (see Game1.TickFarms) — a quiet reminder that the base earns idle.
         _ui.Fill(b, new Rectangle(OverviewPanel.X + 24, OverviewPanel.Bottom - 124, OverviewPanel.Width - 48, 2), Dim);
-        DrawWrapped(b, "Facilities earn idle income even while away.",
+        // WHAT EACH OF THE THREE IS FOR, because the screen was silent about it and one of them is
+        // unlike the other two. GLEAM and DUST are the game's shared currencies — spent on stats and on
+        // the trait tree — while INSIGHT is produced here and spent here, on nothing else. That is a
+        // legitimate design (it paces the base's own growth) but the player has no way to learn it from
+        // a row of three coloured diamonds, and its old name made it look like the mastery points it
+        // has nothing to do with.
+        DrawWrapped(b, "Facilities earn while you are away. GLEAM and DUST are spent all over the game; "
+                     + "INSIGHT is only ever spent here, on the facilities that make it.",
             OverviewPanel.X + 30, OverviewPanel.Bottom - 104, OverviewPanel.Width - 60, Slate);
     }
 

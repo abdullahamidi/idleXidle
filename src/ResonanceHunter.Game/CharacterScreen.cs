@@ -64,10 +64,13 @@ public sealed class CharacterScreen
 
     // ── Spec §4 layout: four content panels + a title band, all clearing the shared nav rail at y=934. ──
     private static readonly Rectangle TitleBand = new(0, 0, 1920, 106);
-    private static readonly Rectangle LoadoutPanel = new(24, 120, 300, 790);
-    private static readonly Rectangle EquippedPanel = new(340, 120, 630, 790);
-    private static readonly Rectangle InventoryPanel = new(986, 120, 440, 790);
-    private static readonly Rectangle DetailPanel = new(1442, 120, 454, 790);
+    // 890, not 790 — bottom 1010, which is canvas 905 and clear of everything. The four columns keep a
+    // shared baseline and the page stops looking like a strip pinned to the top of the picture. Aspects
+    // 0.337 / 0.708 / 0.494 / 0.510 all stay under 0.82, so every panel keeps ui_panel_vertical.
+    private static readonly Rectangle LoadoutPanel = new(24, 120, 300, 890);
+    private static readonly Rectangle EquippedPanel = new(340, 120, 630, 890);
+    private static readonly Rectangle InventoryPanel = new(986, 120, 440, 890);
+    private static readonly Rectangle DetailPanel = new(1442, 120, 454, 890);
 
     // Real eight slots placed in the spec's slot rectangles (§8.7): armour left, weapon+jewellery right.
     private static readonly (GearSlot Slot, string Label, Rectangle Box)[] SlotLayout =
@@ -109,10 +112,13 @@ public sealed class CharacterScreen
 
     private static readonly string[] Tabs = { "ALL", "WEAPONS", "ARMOR", "ACCESSORY" };
     private static Rectangle TabRect(int i) => new(1010 + i * 100, 190, 94, 44);
-    private static readonly Rectangle EquipBtn = new(1462, 848, 200, 48);
-    private static readonly Rectangle LockBtn = new(1676, 848, 200, 48);
-    private static readonly Rectangle EquipBestBtn = new(44, 700, 260, 52);
-    private static readonly Rectangle UnequipAllBtn = new(44, 762, 260, 52);
+    // DERIVED FROM THEIR PANELS, not written as absolutes. At fixed y they would have floated a hundred
+    // pixels above the foot of a panel that grew underneath them — which is how a control stops looking
+    // like it belongs to the thing it acts on.
+    private static readonly Rectangle EquipBtn = new(DetailPanel.X + 20, DetailPanel.Bottom - 100, 200, 48);
+    private static readonly Rectangle LockBtn = new(DetailPanel.Right - 220, DetailPanel.Bottom - 100, 200, 48);
+    private static readonly Rectangle EquipBestBtn = new(LoadoutPanel.X + 20, LoadoutPanel.Bottom - 162, 260, 52);
+    private static readonly Rectangle UnequipAllBtn = new(LoadoutPanel.X + 20, LoadoutPanel.Bottom - 100, 260, 52);
 
     private int _tab;
     private int _invScroll;

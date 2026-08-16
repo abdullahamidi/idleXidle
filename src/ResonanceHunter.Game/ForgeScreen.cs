@@ -239,10 +239,12 @@ public sealed class ForgeScreen
     private static string CostLabel(long have, int cost, string material)
         => have >= cost ? $"COSTS {cost:N0} {material}" : $"NEED {cost:N0} {material} — YOU HAVE {have:N0}";
 
-    private static readonly Rectangle ItemPanel = new(406, 140, 384, 730);   // "ITEM PREVIEW"
-    private static readonly Rectangle CostPanel = new(814, 140, 512, 730);   // "REQUIRED MATERIALS"
-    private static readonly Rectangle ResultPanel = new(1350, 140, 546, 730);// "RESULT PREVIEW"
-    private static readonly Rectangle ReforgePanel = new(814, 140, 1082, 730);// REFORGE action column
+    // 890, not 730 — bottom 1030 (canvas 923). Aspects 0.431 / 0.575 keep ui_panel_vertical, and the
+    // three-column UPGRADE view stops ending 300px above the bottom of the picture.
+    private static readonly Rectangle ItemPanel = new(406, 140, 384, 890);   // "ITEM PREVIEW"
+    private static readonly Rectangle CostPanel = new(814, 140, 512, 890);   // "REQUIRED MATERIALS"
+    private static readonly Rectangle ResultPanel = new(1350, 140, 546, 890);// "RESULT PREVIEW"
+    private static readonly Rectangle ReforgePanel = new(814, 140, 1082, 890);// REFORGE action column
 
     // ── The SALVAGE hub's three panels. Named, because they were open-coded at their use sites and the
     //    three things that sat OUTSIDE them — the chest toolbar, the two mode buttons, the footer hint —
