@@ -2201,6 +2201,12 @@ public class Game1 : Game
         _expedition.BestDepthHere = _world.RegionFarm(def.Id).BestDepth;   // so NEW RECORD means it
         _expedition.ChestCount = _forge.UnopenedChests.Count;   // drives the fight screen's "go open a chest" nudge
         _expedition.IdleGleamRate = _champGleamRate;            // gleam/sec the champion earns idle → HUNT idle panel
+        // THE FIGHT RAIL'S REWARD BUTTONS NAVIGATE, and the host is what navigates. The screen only
+        // records that they were pressed — a fight screen that opened chests itself would be a second
+        // Forge, and the errand belongs to the screen that owns the verb.
+        if (_expedition.WantsVault) { _expedition.WantsVault = false; OpenNav(4); }
+        if (_expedition.WantsBuild) { _expedition.WantsBuild = false; OpenNav(3); }
+
         // The first-run guide, or null once outgrown. Held on the HOST, not on the fight screen: it is
         // drawn as chrome over every screen now (DrawGuideBanner), because a guide that vanishes the
         // moment you obey it reads as a guide that has stopped working.

@@ -279,6 +279,10 @@ public sealed class SoloExpeditionScreen
     /// scale, a spacing compression and two clamps, and every place that re-derived it got a different
     /// answer from the one on screen.
     /// </remarks>
+    /// <summary>Set when the rail's reward buttons are pressed — the host navigates, the screen does not.</summary>
+    public bool WantsVault { get; set; }
+    public bool WantsBuild { get; set; }
+
     private int _rowCentreX = EnemyBox.Center.X;
     private int _rowTopY = EnemyBox.Y;
 
@@ -913,7 +917,7 @@ public sealed class SoloExpeditionScreen
         b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
         DrawHunterHud(b);
         DrawStageHeader(b, regionName, _isBossWave);
-        DrawRightColumn(b);
+        DrawRightColumn(b, hit, clicked);
         // Rail frame first, then its contents. The old order relied on the rail being TRANSLUCENT — the
         // skill dock was drawn under it and read through as a washed-out ghost. With a real opaque panel
         // that hid the dock outright.
@@ -1330,10 +1334,22 @@ public sealed class SoloExpeditionScreen
 
         DrawReportPanel(b, shown, older);
 
-        var prev = new Rectangle(300, 480, 120, 64);
-        var next = new Rectangle(1500, 480, 120, 64);
-        if (_ui.Button(b, prev, "\u2039", hit, clicked) && _logIndex < Log.Count - 1) _logIndex++;
-        if (_ui.Button(b, next, "\u203a", hit, clicked) && _logIndex > 0) _logIndex--;
+        // THE PAGE BUTTONS BELONG TO THE PANEL THEY PAGE, and they were placed by absolute literals
+        // that landed on top of other things entirely: "back" at x=300 sat in the middle of the
+        // battle-control rail and covered the AUTO HUNT label, while "forward" at x=1500 overlapped the
+        // report panel's own right ornament and then ate the leading characters of the REWARD ACTIVITY
+        // rows behind it. The only two interactive things on this screen were drawn over two panels
+        // that had nothing to do with them.
+        //
+        // Docked inside the report, in the band it already leaves empty at its foot, and labelled with
+        // a verb \u2014 a bare chevron tells a new player nothing about what it steps through.
+        var reportPanel = new Rectangle(ArenaRect.X + 40, 250, ArenaRect.Width - 80, 690);
+        var prev = new Rectangle(reportPanel.X + 44, reportPanel.Bottom - 104, 200, 64);
+        var next = new Rectangle(reportPanel.Right - 244, reportPanel.Bottom - 104, 200, 64);
+        if (_ui.Button(b, prev, "\u2039  OLDER", hit, clicked, enabled: _logIndex < Log.Count - 1)
+            && _logIndex < Log.Count - 1) _logIndex++;
+        if (_ui.Button(b, next, "NEWER  \u203a", hit, clicked, enabled: _logIndex > 0)
+            && _logIndex > 0) _logIndex--;
     }
 
     private void DrawRunReport(SpriteBatch b)
@@ -1561,7 +1577,7 @@ public sealed class SoloExpeditionScreen
 
     /// <summary>Right context column (reference regions): a stack of four plates — Idle Rewards, Objective,
     /// Loot, Expedition — all fed from live run data.</summary>
-    private void DrawRightColumn(SpriteBatch b)
+    private void DrawRightColumn(SpriteBatch b, Point hit, bool clicked)
     {
         // Rev 3 §20: right context rail (1570,110,326,690) — secondary panels, all live data, NO keyboard
         // hints (§21). Idle-rate → objective → reward activity → expedition.
@@ -1582,15 +1598,29 @@ public sealed class SoloExpeditionScreen
 
         // Reward activity (1570,418,326,210) — real summary, no fake loot grid, no keyboard hints (§20.4/§21).
         inner = CleanPanel(b, new Rectangle(px, 444, pw, 210), "REWARD ACTIVITY");
+        // THE TWO THINGS A PLAYER SHOULD DO NOW WERE INERT GREY TEXT, drawn in exactly the same style as
+        // the dead career stat below them — so "1 chest available" read as trivia rather than as an
+        // errand, and the most valuable thing the game had given them sat unclaimed. They are buttons
+        // with verbs now, naming their own key, so the rail tells you what to press as well as what you
+        // have.
+        //
+        // They only navigate: the actual work still happens on the screen that owns it. A rail that
+        // opened chests would be a second Forge.
         var ry = inner.Y;
         var anyReward = false;
         if (ChestCount > 0)
         {
-            _ui.TextBig(b, $"{ChestCount} chest{(ChestCount == 1 ? "" : "s")} available", inner.X, ry, Bone, 18); ry += 40; anyReward = true;
+            if (_ui.Button(b, new Rectangle(inner.X, ry, inner.Width, 46),
+                           $"OPEN {ChestCount} CHEST{(ChestCount == 1 ? "" : "S")}  (K)", hit, clicked))
+                WantsVault = true;
+            ry += 54; anyReward = true;
         }
         if (Mastery.Available > 0)
         {
-            _ui.TextBig(b, $"{Mastery.Available} Mastery Point{(Mastery.Available == 1 ? "" : "s")}", inner.X, ry, Bone, 18); ry += 40; anyReward = true;
+            if (_ui.Button(b, new Rectangle(inner.X, ry, inner.Width, 46),
+                           $"SPEND {Mastery.Available} POINT{(Mastery.Available == 1 ? "" : "S")}  (B)", hit, clicked))
+                WantsBuild = true;
+            ry += 54; anyReward = true;
         }
         if (Deepest > 0) _ui.TextBig(b, $"Deepest wave reached: {Deepest}", inner.X, ry, Slate, 16);
         else if (!anyReward) _ui.TextBig(b, "No rewards pending", inner.X, inner.Y, Slate, 18);
