@@ -2332,6 +2332,16 @@ public class Game1 : Game
                 _expedition.FlashCharter(Charters.Name(chart));
             }
 
+            // AND SHOW IT WHERE IT CAME FROM. The banners above say what happened; this makes the haul
+            // rise out of the creatures that just died, during the transition's SPOILS beat. Until now
+            // every reward the fight paid was either a line of text at the top of the arena or a number
+            // that silently changed in a corner pill — a player could clear forty waves without ever
+            // seeing where their materials came from.
+            _expedition.ShowSpoils(
+                r.Haul.Gleam,
+                spoil.Material.ToString().ToUpperInvariant(),
+                spoil.Charter is { } c2 ? Charters.Name(c2) : null);
+
             if (r.IsBoss && DropBossChest(r, def)) _expedition.FlashChest();   // a chest is a LOW-rate drop now, not a given
         }
         if (_champSecondsAccrued > 10) _champGleamRate = (float)(_champGleamAccrued / _champSecondsAccrued);

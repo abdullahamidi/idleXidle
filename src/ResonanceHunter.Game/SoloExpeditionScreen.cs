@@ -64,8 +64,25 @@ public sealed class SoloExpeditionScreen
     // the whole run blurred past — playtest: "waves flow too fast". Slowed to a watchable pace, and a short
     // BREATH now sits between waves so each clear reads as its own beat. The champion's own skill rate
     // (TEMPO, the Focus slot) still speeds combat back up on top of this, so the upgrade is now visible.
-    private const float PlaybackSpeed = 2.0f;   // default battle speed
-    private float _speedMul = PlaybackSpeed;     // player-adjustable via the HUD's BATTLE SPEED buttons (x1/x2/x4/x8)
+    /// <summary>
+    /// The one speed the fight plays at. There is no control for it any more.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The HUD used to offer x1/x2/x4/x8, defaulting to x2. It was removed on the designer's call, and
+    /// the call is right for a reason worth writing down: <b>a wave is resolved instantly by the
+    /// simulation and then REPLAYED, so the multiplier was not "how fast you watch" — it was how many
+    /// waves per real second, and therefore a multiplier on every Gleam, material and chest.</b> A
+    /// control that hands the player their own income rate is not a choice; it is a button everyone
+    /// presses once and then the economy is whatever they picked. It was also leaking into the OFFLINE
+    /// rate, which is how x8-then-quit paid four times as much.
+    /// </para>
+    /// <para>
+    /// x1, not the old x2 default: the standing complaint is that the fight is too fast to read.
+    /// </para>
+    /// </remarks>
+    private const float PlaybackSpeed = 1.0f;
+    private const float _speedMul = PlaybackSpeed;
 
     /// <summary>
     /// How fast the replay is being watched. Read by the host to keep the OFFLINE rate honest.
@@ -77,8 +94,26 @@ public sealed class SoloExpeditionScreen
     /// measured live and then applied to hours when nobody is watching anything.
     /// </remarks>
     public float SpeedMultiplier => _speedMul;
-    private static readonly float[] SpeedSteps = { 1f, 2f, 4f, 8f };
-    private const float WaveBreakSeconds = 0.8f;   // the pause after a clear, before the next enemy is fought
+    // ── THE WAVE TRANSITION, as named beats ─────────────────────────────────────────────────────
+    //
+    // It used to be one 0.8s pause followed by a 0.4s slide-in, and the designer's note was exactly
+    // right: "ölüm animasyonları ve düşmanların sahneye gelişi çok hızlı oluyor, anlaşılmıyor." The
+    // wave ended, a banner appeared, and the next wave was already walking in — the moment a player is
+    // supposed to READ (what died, and what it paid) had no time of its own at all.
+    //
+    // Three beats now, each tunable on its own line, and each answering one question:
+    //   FALLEN  — what just died. The death effect gets room to finish before anything else moves.
+    //   SPOILS  — what it paid. The haul rises from where the creatures actually stood, so the reward
+    //             is attached to the thing that dropped it rather than to a banner in the corner.
+    //   BREATH  — an empty stage, so the next wave arrives as an arrival and not as a continuation.
+    //
+    // Derived from one countdown rather than a state machine: _breakTimer already existed, already
+    // gated re-entry correctly, and a second source of truth for "where are we in the transition" is
+    // how these things drift.
+    private const float FallenBeat = 0.70f;
+    private const float SpoilsBeat = 1.00f;
+    private const float BreathBeat = 0.35f;
+    private const float WaveBreakSeconds = FallenBeat + SpoilsBeat + BreathBeat;
     private const float DownedSeconds = 1.6f;   // the recovery beat before the champion tries again
 
     /// <summary>How long the fall is left uncovered before the run report slides over it.</summary>
@@ -430,7 +465,10 @@ public sealed class SoloExpeditionScreen
         // here that nothing reads is exactly the kind of dead machinery this codebase keeps finding.
         _champLunge = Math.Max(0f, _champLunge - dt * 5f);
         _enemyLunge = Math.Max(0f, _enemyLunge - dt * 5f);
-        _enemyEnter = Math.Max(0f, _enemyEnter - dt * 2.5f);   // the new enemy slides in over ~0.4s
+        // 1.25, not 2.5: the slide-in was over in 0.4s, which is too quick to register as creatures
+        // ARRIVING rather than simply appearing. Twice as long, and the beat before it is now empty
+        // stage, so the entrance has something to be an entrance from.
+        _enemyEnter = Math.Max(0f, _enemyEnter - dt * 1.25f);   // the new enemy slides in over ~0.8s
         _bannerTimer = Math.Max(0f, _bannerTimer - dt);
         _bossIncomingTimer = Math.Max(0f, _bossIncomingTimer - dt);
         _deathFlash = Math.Max(0f, _deathFlash - dt * 1.5f);
@@ -542,6 +580,50 @@ public sealed class SoloExpeditionScreen
     {
         _bannerText = $"{name} FOUND  —  SPEND IT IN THE FORGE (F)";
         _bannerTimer = 3.0f;
+    }
+
+    /// <summary>
+    /// Show what the wave paid, rising from where the creatures actually stood.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The designer asked for this directly: <i>"ölen düşmandan düşen dropu da gösterip, sonra bir
+    /// sonraki waveye geçerek daha anlaşılabilir bir sahne yapabiliriz."</i>
+    /// </para>
+    /// <para>
+    /// Every reward the fight paid used to appear as text in a banner at the top of the arena, or as a
+    /// number silently added to a pill in the corner — nowhere near the thing that dropped it, and gone
+    /// before the next wave had finished walking in. A player could clear forty waves without ever
+    /// seeing where their materials came from.
+    /// </para>
+    /// <para>
+    /// Spawned at the ROW anchor, so the haul rises out of the creatures rather than out of the middle
+    /// of the screen, and staggered so a wave that paid three things reads as three things.
+    /// </para>
+    /// </remarks>
+    public void ShowSpoils(int gleam, string? material, string? charter)
+    {
+        var slot = 0;
+
+        void Rise(string text, Color tint, int px)
+        {
+            _callouts.Add(new Callout
+            {
+                Text = text,
+                Color = tint,
+                X = _rowCentreX,
+                // Stacked UPWARD from the row's shoulder, and started low so the whole beat is a rise.
+                Y = _rowTopY + 40 - slot * CalloutLineHeight,
+                Life = SpoilsBeat + 0.35f - slot * 0.06f,
+                Px = px,
+                Lane = CalloutLane.Enemy,
+            });
+            slot++;
+        }
+
+        if (gleam > 0) Rise($"+{gleam:N0}", Gold, DamagePx);
+        if (material is not null) Rise($"+1 {material}", Verdant, DamagePx);
+        if (charter is not null) Rise(charter, Bloom, CritPx);
     }
 
     /// <summary>The wave paid a material better than Scrap — say which, on the clear banner.</summary>
@@ -1526,11 +1608,18 @@ public sealed class SoloExpeditionScreen
         // weave_5 node is bought — and the fifth medallion then drew 60px BELOW the bottom of the panel
         // it lives in (ControlRail ends at y=936). The reward for the largest single upgrade in the game
         // was a slot hanging off the frame.
-        const int y0 = 632;
-        var pitch = n <= 1 ? 74 : Math.Clamp((ControlRail.Bottom - 12 - y0 - 68) / (n - 1), 40, 74);
-        var slot = Math.Min(68, pitch - 6);
-        _ui.TextBig(b, "SKILLS", RailContentX, 608, Slate, 15);
-        _ui.Fill(b, new Rectangle(RailContentX, 588, RailContentW, 2), Slate * 0.35f);
+        // STARTS AT THE TOP OF THE RAIL NOW. It used to begin at y=632 because BATTLE SPEED and AUTO HUNT
+        // occupied everything above it — so the one block a player actually reads sat in the bottom
+        // third, squeezed, while two thirds of the panel reported a constant and offered a control that
+        // should not have existed. With both gone the slots get the whole rail: bigger medallions, a
+        // pitch that breathes, and the Form's rule beside each one with room to be read.
+        const int y0 = 300;
+        // Each row is now a medallion, a name beside it, and up to two wrapped lines under both — so the
+        // pitch has to clear the medallion PLUS that text, and the medallion shrinks to pay for it.
+        var pitch = n <= 1 ? 128 : Math.Clamp((ControlRail.Bottom - 24 - y0 - 64) / (n - 1), 96, 128);
+        var slot = Math.Min(64, pitch - 56);
+        _ui.TextBig(b, "SKILLS", RailContentX, 272, Slate, 15);
+        _ui.Fill(b, new Rectangle(RailContentX, 252, RailContentW, 2), Slate * 0.35f);
         for (var i = 0; i < n; i++)
         {
             var box = new Rectangle(RailContentX, y0 + i * pitch, slot, slot);
@@ -1551,10 +1640,9 @@ public sealed class SoloExpeditionScreen
                 // fit the slot pitch rather than clipped.
                 var label = $"{s.Source.ToString().ToUpperInvariant()} {FormShort(s.Form)}";
                 var lpx = UiTypography.Secondary;
-                while (lpx > 12 && _ui.MeasureBig(label, lpx) > 128) lpx--;
-                // Beside the slot, not beneath it: the rail is narrow and tall, so the label reads
-                // left-aligned in the space to the slot's right.
-                _ui.TextBig(b, label, box.Right + 12, box.Y + 6, Bone, lpx);
+                while (lpx > 12 && _ui.MeasureBig(label, lpx) > RailContentW - box.Width - 20) lpx--;
+                // Beside the slot: the name is short and pairs with the medallion.
+                _ui.TextBig(b, label, box.Right + 12, box.Y + 10, Bone, lpx);
 
                 // WHAT THE SKILL ACTUALLY DOES, on the screen where the player first meets it.
                 // This line used to read "AUTO" on every row — true of every skill in the game, so it
@@ -1563,9 +1651,17 @@ public sealed class SoloExpeditionScreen
                 // properly, but a player who has not gone looking for it never sees a word.
                 //
                 // From BuildGlossary, so this cannot drift from the rule the simulation runs.
+                // BENEATH BOTH, ACROSS THE FULL RAIL — not squeezed into the ~98px beside a medallion.
+                // Removing the speed control gave this rail its height back, and the sensible use of it
+                // is to let the one line that says what the skill DOES actually be read. Wrapped rather
+                // than shortened: "ONE HEAVY BL…" is a fragment, and a fragment teaches nothing.
                 var head = BuildGlossary.FormHeadline(s.Form);
-                _ui.TextBig(b, _ui.ShortenBig(head, RailContentW - (box.Width + 16), 13),
-                            box.Right + 12, box.Y + 32, Gold, 13);
+                var hy = box.Bottom + 4;
+                foreach (var line in _ui.WrapBig(head, RailContentW, 13).Take(2))
+                {
+                    _ui.TextBig(b, line, RailContentX, hy, Gold, 13);
+                    hy += 16;
+                }
             }
             else
             {
@@ -1588,25 +1684,15 @@ public sealed class SoloExpeditionScreen
         // against the foliage. A real panel is opaque, so it reads the same everywhere.
         _ui.Panel(b, ControlRail);
 
-        _ui.TextBig(b, "BATTLE SPEED", RailContentX, 268, Slate, 15);
-        for (var i = 0; i < SpeedSteps.Length; i++)
-        {
-            var r = new Rectangle(RailContentX, 292 + i * 52, RailContentW, 44);
-            var on = Math.Abs(_speedMul - SpeedSteps[i]) < 0.01f;
-            var hover = r.Contains(mouse);
-            _ui.Fill(b, r, on ? Gold : hover ? new Color(0x2C, 0x25, 0x44) : new Color(0x1A, 0x14, 0x28));
-            // Vertical centring: the old "r.Y + 8" was tuned for a 34px-tall button and sits too high
-            // in a 44px one. Glyph box is ~1.35x the point size.
-            _ui.TextCenterBig(b, $"x{(int)SpeedSteps[i]}", r.Center.X, r.Y + (r.Height - 16 * 27 / 20) / 2,
-                on ? Shadow : Bone, 16);
-            if (clicked && hover) _speedMul = SpeedSteps[i];
-        }
-
-        _ui.TextBig(b, "AUTO HUNT", RailContentX, 508, Slate, 15);
-        var auto = new Rectangle(RailContentX, 532, RailContentW, 36);
-        _ui.Fill(b, auto, new Color(0x1A, 0x30, 0x22));
-        _ui.Fill(b, new Rectangle(auto.X, auto.Y, auto.Width, 3), Verdant * 0.7f);
-        _ui.TextCenterBig(b, "ON", auto.Center.X, auto.Y + (auto.Height - 16 * 27 / 20) / 2, Verdant, 16);
+        // THE RAIL HELD TWO THINGS THAT ARE GONE, and the skills inherit the room.
+        //
+        // BATTLE SPEED (four buttons) was removed with the feature — see PlaybackSpeed. AUTO HUNT went
+        // with it: a bordered chip whose only state was the word "ON", occupying a sixth of the rail to
+        // report a constant. The tutorial's first line already says the champion fights on its own, and
+        // a control that cannot be changed is not a control, it is furniture.
+        //
+        // What is left is the thing a player actually reads here — WHAT THEIR CHAMPION IS — and it now
+        // starts at the top of the rail instead of two thirds of the way down it.
     }
 
     // THE GEAR OVERLAY IS GONE, by both routes it ever had.
