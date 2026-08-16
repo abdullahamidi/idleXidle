@@ -346,6 +346,25 @@ public sealed class SoloExpeditionScreen
 
     private const int DamagePx = 34;
     private const int CritPx = 46;
+
+    /// <summary>Where the enemy nameplate sits, relative to the row anchor, and how tall it is.</summary>
+    private const int NameplateOffset = -52, NameplateHeight = 34;
+
+    /// <summary>
+    /// Where the enemy callout stack begins — clear above the nameplate.
+    /// </summary>
+    /// <remarks>
+    /// <b>THE STACK USED TO CLIMB STRAIGHT THROUGH THE HEALTH BAR.</b> Damage numbers were spawned at
+    /// <c>_rowTopY + 40</c> and each further one 54px higher, while the nameplate is drawn at
+    /// <c>_rowTopY - 52</c> — so the first number was below the bar, the second landed on it, and the
+    /// third cleared it. Nothing was wrong with either piece of code; they simply did not know about
+    /// each other, and the collision only appears on the second hit of a burst, which is exactly the
+    /// moment a player is looking at the number.
+    ///
+    /// Derived from the nameplate's own offset and the tallest glyph that stacks here, so moving the
+    /// bar moves the numbers with it.
+    /// </remarks>
+    private int EnemyCalloutBase => _rowTopY + NameplateOffset - CritPx - 6;
     private int _strikeCount;   // throttles per-strike damage numbers so they don't flood
 
     // ── Arena clipping + overlay state (Rev 4 §1/§2/§11). ──
@@ -617,7 +636,7 @@ public sealed class SoloExpeditionScreen
                 Color = tint,
                 X = _rowCentreX,
                 // Stacked UPWARD from the row's shoulder, and started low so the whole beat is a rise.
-                Y = _rowTopY + 40 - slot * CalloutLineHeight,
+                Y = EnemyCalloutBase - slot * CalloutLineHeight,
                 Life = SpoilsBeat + 0.35f - slot * 0.06f,
                 Px = px,
                 Lane = CalloutLane.Enemy,
@@ -720,7 +739,7 @@ public sealed class SoloExpeditionScreen
             Text = crit ? $"-{amount:N0} CRIT" : $"-{amount:N0}",
             Color = crit ? Gold : Bone,
             X = _rowCentreX,
-            Y = _rowTopY - 56 - StackSlot(CalloutLane.Enemy) * CalloutLineHeight,
+            Y = EnemyCalloutBase - StackSlot(CalloutLane.Enemy) * CalloutLineHeight,
             Life = crit ? 1.3f : 1f,
             // Was 52 and 72. The fight "reads loud" was the standing playtest note, and a damage number
             // two-thirds the height of the creature it is describing is most of why.
@@ -1112,7 +1131,7 @@ public sealed class SoloExpeditionScreen
         if (affixes.Count > 0)
             label += "   ·   " + string.Join(" + ", affixes.Select(a => a.ToString().ToUpperInvariant()));
 
-        var bar = new Rectangle(_rowCentreX - 92, _rowTopY - 52, 184, 34);
+        var bar = new Rectangle(_rowCentreX - 92, _rowTopY + NameplateOffset, 184, NameplateHeight);
         _ui.BarArt(b, bar, Math.Clamp(_replay?.EnemyHealthFraction ?? 1f, 0f, 1f), "health");
         _ui.TextCenterBig(b, label, bar.Center.X, bar.Y - 28, UiKit.Vellum, UiTypography.Secondary);
     }
@@ -1552,7 +1571,20 @@ public sealed class SoloExpeditionScreen
             cx, 73, Deepest >= ConquerAt ? Gold : Bone, UiTypography.StageLabel);
         _ui.BarArt(b, new Rectangle(710, 102, 400, 18),
             ConquerAt > 0 ? Math.Clamp(Deepest / (float)ConquerAt, 0f, 1f) : 0f, "progress");
-        _ui.TextCenterBig(b, $"WAVE {_run!.Wave + 1}", cx, 124, isBossWave ? Gold : Bone, UiTypography.OverlayTitle);
+        // THE WAVE LINE CARRIES THE RUN'S STATE NOW, which is what the deleted EXPEDITION plate was for.
+        // Nothing is appended while the run is simply running: "ACTIVE" was true of every frame this
+        // screen has ever drawn, so it distinguished nothing and only made the line longer.
+        var wave = $"WAVE {_run!.Wave + 1}";
+        if (RunState() is { } st)
+        {
+            var gap = _ui.MeasureBig("  —  ", UiTypography.OverlayTitle);
+            var full = _ui.MeasureBig(wave, UiTypography.OverlayTitle) + gap + _ui.MeasureBig(st.Text, UiTypography.OverlayTitle);
+            var wx = cx - full / 2;
+            _ui.TextBig(b, wave, wx, 124, isBossWave ? Gold : Bone, UiTypography.OverlayTitle);
+            _ui.TextBig(b, "  —  ", wx + _ui.MeasureBig(wave, UiTypography.OverlayTitle), 124, Slate, UiTypography.OverlayTitle);
+            _ui.TextBig(b, st.Text, wx + _ui.MeasureBig(wave, UiTypography.OverlayTitle) + gap, 124, st.Tint, UiTypography.OverlayTitle);
+        }
+        else _ui.TextCenterBig(b, wave, cx, 124, isBossWave ? Gold : Bone, UiTypography.OverlayTitle);
     }
 
     private static readonly Color PlateEdge = new(0x74, 0x62, 0x3E);
@@ -1588,16 +1620,21 @@ public sealed class SoloExpeditionScreen
         if (_ui.Assets.Get("currency_gleam") is { } gi) b.Draw(gi, new Rectangle(inner.X, inner.Y + 2, 38, 38), Color.White);
         _ui.TextBig(b, $"+{Game1.Abbrev((long)(IdleGleamRate * 60f))}/min", inner.X + 48, inner.Y + 8, Gold, 24);
 
-        // Objective (1570,254,326,150).
-        // 176, not 150: the plate has to hold a label row AND a 26px bar, and the corrected inset
-        // above took back the 18px it had been borrowing from its own frame.
-        inner = CleanPanel(b, new Rectangle(px, 254, pw, 176), "OBJECTIVE");
-        _ui.TextBig(b, Deepest >= ConquerAt ? "Conquered" : $"Reach depth {ConquerAt}", inner.X, inner.Y, Bone, 19);
-        _ui.TextRightBig(b, $"{Math.Min(Deepest, ConquerAt)} / {ConquerAt}", inner.Right, inner.Y, Gold, 18);
-        _ui.BarArt(b, new Rectangle(inner.X, inner.Y + 40, inner.Width, 26), ConquerAt > 0 ? Math.Clamp(Deepest / (float)ConquerAt, 0f, 1f) : 0f, "progress");
+        // OBJECTIVE AND EXPEDITION ARE GONE. Between them they held four facts, and the banner over the
+        // arena was already printing all four: "DEPTH 0 / 7", the same progress bar, and "WAVE 2". Two
+        // ornate frames and a second copy of the same bar three hundred pixels from the first — and a
+        // player scanning the rail for what to do next had to read past both to reach the one panel that
+        // answers it. That is the "iç içe geçmiş" the playtest reported, and the cause was not density:
+        // it was that most of the density said nothing new.
+        //
+        // The one thing they carried that the banner did NOT is the run's state — BOSS WAVE, or
+        // RECOVERING after a fall — so that moved onto the banner's wave line, beside the wave it
+        // describes. See RunState and DrawStageHeader.
 
-        // Reward activity (1570,418,326,210) — real summary, no fake loot grid, no keyboard hints (§20.4/§21).
-        inner = CleanPanel(b, new Rectangle(px, 444, pw, 210), "REWARD ACTIVITY");
+        // Reward activity — real summary, no fake loot grid, no keyboard hints (§20.4/§21). It takes the
+        // slot OBJECTIVE had, because it is now the first plate under the idle rate and the rail reads
+        // downward.
+        inner = CleanPanel(b, new Rectangle(px, 254, pw, 210), "REWARD ACTIVITY");
         // THE TWO THINGS A PLAYER SHOULD DO NOW WERE INERT GREY TEXT, drawn in exactly the same style as
         // the dead career stat below them — so "1 chest available" read as trivia rather than as an
         // errand, and the most valuable thing the game had given them sat unclaimed. They are buttons
@@ -1622,15 +1659,22 @@ public sealed class SoloExpeditionScreen
                 WantsBuild = true;
             ry += 54; anyReward = true;
         }
-        if (Deepest > 0) _ui.TextBig(b, $"Deepest wave reached: {Deepest}", inner.X, ry, Slate, 16);
-        else if (!anyReward) _ui.TextBig(b, "No rewards pending", inner.X, inner.Y, Slate, 18);
+        if (Deepest > 0) _ui.TextBig(b, $"DEEPEST WAVE REACHED  {Deepest}", inner.X, ry, Slate, 16);
+        else if (!anyReward) _ui.TextBig(b, "NOTHING TO CLAIM YET", inner.X, inner.Y, Slate, 18);
+    }
 
-        // Expedition (1570,642,326,145) — region wave + live status.
-        inner = CleanPanel(b, new Rectangle(px, 642, pw, 145), "EXPEDITION");
-        _ui.TextBig(b, $"Wave {_run!.Wave + 1}", inner.X, inner.Y, Bone, 19);
-        var state = _mode == Mode.Downed ? "RECOVERING"
-            : WaveScaling.IsBossWave(_run.Wave + 1, ExpeditionTuning.Default) ? "BOSS WAVE" : "ACTIVE";
-        _ui.TextRightBig(b, state, inner.Right, inner.Y + 2, _mode == Mode.Downed ? Ember : state == "BOSS WAVE" ? Gold : Verdant, 16);
+    /// <summary>The run's state, or null when it is simply running and there is nothing to say.</summary>
+    /// <remarks>
+    /// Was the right half of an EXPEDITION plate whose left half repeated the banner's wave number. The
+    /// word it printed most often was "ACTIVE" — true of every frame the screen is drawn in, so it
+    /// distinguished nothing and cost a whole plate to say. Only the two states that mean something now
+    /// reach the player, and they reach them on the banner beside the wave they describe.
+    /// </remarks>
+    private (string Text, Color Tint)? RunState()
+    {
+        if (_mode == Mode.Downed) return ("RECOVERING", Ember);
+        if (WaveScaling.IsBossWave(_run!.Wave + 1, ExpeditionTuning.Default)) return ("BOSS WAVE", Gold);
+        return null;
     }
 
     /// <summary>Auto-skill dock (region F): the build as circular auto-cast medallions, centered under the
@@ -1653,13 +1697,11 @@ public sealed class SoloExpeditionScreen
         // third, squeezed, while two thirds of the panel reported a constant and offered a control that
         // should not have existed. With both gone the slots get the whole rail: bigger medallions, a
         // pitch that breathes, and the Form's rule beside each one with room to be read.
-        const int y0 = 300;
-        // Each row is now a medallion, a name beside it, and up to two wrapped lines under both — so the
+        // Each row is a medallion, a name beside it, and up to two wrapped lines under both — so the
         // pitch has to clear the medallion PLUS that text, and the medallion shrinks to pay for it.
-        var pitch = n <= 1 ? 128 : Math.Clamp((ControlRail.Bottom - 24 - y0 - 64) / (n - 1), 96, 128);
-        var slot = Math.Min(64, pitch - 56);
-        _ui.TextBig(b, "SKILLS", RailContentX, 272, Slate, 15);
-        _ui.Fill(b, new Rectangle(RailContentX, 252, RailContentW, 2), Slate * 0.35f);
+        var (_, pitch, slot) = SkillRailMetrics();
+        const int y0 = RailTop + RailHeadroom;
+        _ui.TextBig(b, "SKILLS", RailContentX, RailTop + 26, Gold, 20);
         for (var i = 0; i < n; i++)
         {
             var box = new Rectangle(RailContentX, y0 + i * pitch, slot, slot);
@@ -1722,7 +1764,7 @@ public sealed class SoloExpeditionScreen
         // unstyled surface left in the scene, and because its alpha was constant it changed apparent
         // brightness with whatever background it happened to be over — dark against the trunk, washed out
         // against the foliage. A real panel is opaque, so it reads the same everywhere.
-        _ui.Panel(b, ControlRail);
+        _ui.Panel(b, SkillRailMetrics().Rail);
 
         // THE RAIL HELD TWO THINGS THAT ARE GONE, and the skills inherit the room.
         //
@@ -1758,7 +1800,50 @@ public sealed class SoloExpeditionScreen
     /// </remarks>
     // Sits just right of the vertical nav rail (width 180).
     // Below the hunter HUD (bottom 225) and right of the nav rail (width 180).
-    private static readonly Rectangle ControlRail = new(190, 236, 286, 700);
+    private const int RailX = 190, RailTop = 236, RailW = 286, RailMaxH = 700;
+    private const int RailHeadroom = 64;      // rail top to the first medallion
+    private const int RailFootroom = 34;      // the ornate frame's bottom band
+    private const int SkillSlotMax = 64;
+    private const int SkillTextBlock = 40;    // two wrapped lines under each medallion
+
+    /// <summary>The skills rail, its pitch and its medallion size — all derived from the slots you HAVE.</summary>
+    /// <remarks>
+    /// <b>THE RAIL WAS A FIXED 700px TALL AND ITS CONTENTS WERE NOT.</b> A player with two skills got two
+    /// medallions in the top third and four hundred pixels of framed nothing under them — on the screen
+    /// they spend nearly all their time on, in the most ornate frame in the game. An empty frame is not
+    /// neutral: it is a heavy border drawn around a void, and the eye reads it as content it has somehow
+    /// failed to find. Playtest, on this screen among others: "gizlenmiş gibi, iç içe geçmiş gibi".
+    ///
+    /// It is sized to its content now, so it grows as the trait tree buys slots instead of standing at
+    /// its five-slot maximum from the first minute of the game. The pitch only compresses at the largest
+    /// capacity, where the natural 128 would overrun the nav rail.
+    /// </remarks>
+    private (Rectangle Rail, int Pitch, int Slot) SkillRailMetrics()
+    {
+        var n = Math.Max(1, Loadout.SkillCapacity);
+        var fixedH = RailHeadroom + SkillSlotMax + SkillTextBlock + RailFootroom;
+        var pitch = 128;
+        if (n > 1 && fixedH + (n - 1) * pitch > RailMaxH)
+            pitch = Math.Max(96, (RailMaxH - fixedH) / (n - 1));
+        var h = Math.Clamp(fixedH + (n - 1) * pitch, RailMinH, RailMaxH);
+        return (new Rectangle(RailX, RailTop, RailW, h), pitch, Math.Min(SkillSlotMax, pitch - 56));
+    }
+
+    /// <summary>
+    /// The shortest this rail may be — enough to keep <see cref="UiKit.Panel"/> on the same frame art.
+    /// </summary>
+    /// <remarks>
+    /// <b>UiKit.Panel PICKS ITS TEXTURE BY ASPECT RATIO</b> — vertical below 0.82, square below 1.30,
+    /// medium above — so sizing this rail to its contents silently SWAPPED ITS FRAME. At two skills the
+    /// 286x330 rail crossed into the square art, whose corner ornament is proportionally heavier, and it
+    /// covered the SKILLS heading that had sat clear of the vertical frame for the whole project. The
+    /// panel would then have changed identity again at three slots and again at four, so the rail's
+    /// appearance would have depended on how far through the trait tree the player was.
+    ///
+    /// 350 is 286 / 0.82 rounded up: every capacity from one to five now lands in the vertical bucket.
+    /// It costs a little empty space at one skill and buys a frame that does not change under the player.
+    /// </remarks>
+    private const int RailMinH = 350;
     // Inset by the ornate frame's border (UiKit.Panel reserves 44px), not by the 20px a flat slab needed.
     private const int RailContentX = 234;
     private const int RailContentW = 198;
