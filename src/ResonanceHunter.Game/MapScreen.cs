@@ -83,6 +83,46 @@ public sealed class MapScreen
     /// <summary>A real, monotonic "recommended power" derived from the region's boss power tier.</summary>
     private static int RegionPower(RegionDefinition def) => def.Boss.PowerTierBase * 350;
 
+
+    /// <summary>The arena texture for a Source. Literal arms, so check_asset_keys can see every key.</summary>
+    /// <remarks>
+    /// Interpolating the key (<c>$"bg_arena_{theme}"</c>, which the host does) is invisible to the asset
+    /// gate: it scans string literals, so a themed key that stops existing would fail silently as a
+    /// missing background rather than loudly as a broken build.
+    /// </remarks>
+    private static string ArenaKey(Source theme) => theme switch
+    {
+        Source.Body => "bg_arena_body",
+        Source.Machine => "bg_arena_machine",
+        Source.Mind => "bg_arena_mind",
+        Source.Nature => "bg_arena_nature",
+        Source.Shadow => "bg_arena_shadow",
+        _ => "bg_arena_spirit",
+    };
+
+    /// <summary>One crest per region, in one place — the node, the detail panel and the progress list share it.</summary>
+    private static string? EmblemKey(string regionId) => regionId switch
+    {
+        "cinderworks" => "icon_region_cinderworks", "umbral_reach" => "icon_region_umbral",
+        "verdant_hollow" => "icon_region_verdant", "marrow_wastes" => "icon_region_marrow_wastes",
+        "still_archive" => "icon_region_still_archive", "pale_choir" => "icon_region_pale_choir",
+        _ => null,
+    };
+
+    /// <summary>The largest centred part of a texture that has the destination's shape — a crop, not a squash.</summary>
+    private static Rectangle CentreCrop(Texture2D t, Rectangle dst)
+    {
+        var want = dst.Width / MathF.Max(1f, dst.Height);
+        var have = t.Width / MathF.Max(1f, t.Height);
+        if (have > want)
+        {
+            var w = (int)(t.Height * want);
+            return new Rectangle((t.Width - w) / 2, 0, Math.Max(1, w), t.Height);
+        }
+        var h = (int)(t.Width / want);
+        return new Rectangle(0, (t.Height - h) / 2, t.Width, Math.Max(1, h));
+    }
+
     private static string Description(Source theme) => theme switch
     {
         Source.Nature => "A verdant hollow of primal, creeping growth.",
@@ -169,9 +209,15 @@ public sealed class MapScreen
             _ui.Fill(b, row, i == _selected ? new Color(0x3A, 0x2E, 0x52) : new Color(0x16, 0x12, 0x20, 0xC0));
             _ui.Fill(b, new Rectangle(row.X, row.Y, 4, row.Height), unlocked ? SourceColor[def.Theme] : Dim);
 
-            _ui.TextBig(b, $"{i + 1}. {def.Name}", row.X + 16, row.Y + 5, unlocked ? Bone : Slate, UiTypography.Secondary);
+            // THE CREST, so the list is scannable by picture and not only by reading six names that all
+            // begin with "THE". It is the same emblem the node on the chart carries, which is what makes
+            // the two halves of this screen one screen.
+            if (EmblemKey(def.Id) is { } rowEmblem && _ui.Assets.Get(rowEmblem) is { } re)
+                b.Draw(re, new Rectangle(row.X + 10, row.Y + 9, 32, 32), unlocked ? Color.White : new Color(0x4A, 0x4A, 0x54));
+
+            _ui.TextBig(b, $"{i + 1}. {def.Name}", row.X + 50, row.Y + 5, unlocked ? Bone : Slate, UiTypography.Secondary);
             var (label, col) = conq ? ("CONQUERED", Met) : active ? ("IN PROGRESS", Violet) : !unlocked ? ("LOCKED", Slate) : ("AVAILABLE", Bone);
-            _ui.TextBig(b, label, row.X + 16, row.Y + 28, col, UiTypography.Secondary);
+            _ui.TextBig(b, label, row.X + 50, row.Y + 28, col, UiTypography.Secondary);
             _ui.TextRightBig(b, $"{RegionPower(def):N0}", row.Right - 34, row.Y + 28, Slate, UiTypography.Secondary);
             if (!unlocked) DrawLock(b, new Rectangle(row.Right - 24, row.Y + 6, 18, 20), Slate);
             else if (conq) DrawCheck(b, new Rectangle(row.Right - 26, row.Y + 8, 20, 16), Met);
@@ -179,6 +225,13 @@ public sealed class MapScreen
             y += 56;
         }
 
+        // YOUR POWER BESIDE THE ONE IT IS MEANT TO BE COMPARED WITH. HunterPower has been pushed to this
+        // screen every frame and read by nothing, so the panel asked "is 5,950 a lot?" and answered it
+        // nowhere. Green when you are over the bar, ember when you are under it — the whole decision this
+        // screen exists for, in one row.
+        _ui.TextBig(b, "YOUR POWER", ProgressPanel.X + 30, ProgressPanel.Bottom - 100, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, $"{HunterPower:N0}", ProgressPanel.Right - 30, ProgressPanel.Bottom - 104,
+                         HunterPower >= RegionPower(Def(_selected)) ? Met : Ember, UiTypography.PanelTitle);
         _ui.TextBig(b, "RECOMMENDED POWER", ProgressPanel.X + 30, ProgressPanel.Bottom - 62, Slate, UiTypography.Secondary);
         _ui.TextRightBig(b, $"{RegionPower(Def(_selected)):N0}", ProgressPanel.Right - 30, ProgressPanel.Bottom - 66, Violet, UiTypography.PanelTitle);
     }
@@ -229,20 +282,20 @@ public sealed class MapScreen
             if (UiKit.ClickedIn(node, hit, clicked)) _selected = i;
 
             var sc = SourceColor[def.Theme];
-            _ui.Fill(b, node, unlocked ? new Color(0x1A, 0x14, 0x28, 0xF0) : new Color(0x12, 0x10, 0x16, 0xE0));
+            // THE REGION'S OWN GROUND, not a flat swatch. The arena art the fight already draws for this
+            // theme is cropped into the node and scrimmed back, so a place on the map looks like the
+            // place you land in. A locked region gets a heavier, colder scrim: it reads as somewhere you
+            // can SEE but have not been, which a uniform grey rectangle cannot say.
+            if (_ui.Assets.Get(ArenaKey(def.Theme)) is { } ground)
+                b.Draw(ground, node, CentreCrop(ground, node), Color.White);
+            _ui.Fill(b, node, unlocked ? new Color(0x0A, 0x08, 0x14, 0xB4) : new Color(0x10, 0x10, 0x16, 0xE4));
             var edge = sel ? Gold : conq ? Met : active ? Violet : unlocked ? sc : Dim;
             foreach (var e in new[] { new Rectangle(node.X, node.Y, node.Width, 3), new Rectangle(node.X, node.Bottom - 3, node.Width, 3),
                                       new Rectangle(node.X, node.Y, 3, node.Height), new Rectangle(node.Right - 3, node.Y, 3, node.Height) })
                 _ui.Fill(b, e, edge);
 
             // Emblem — one crest per region; unknown ids still fall back to a Source gem.
-            var emblem = def.Id switch
-            {
-                "cinderworks" => "icon_region_cinderworks", "umbral_reach" => "icon_region_umbral",
-                "verdant_hollow" => "icon_region_verdant", "marrow_wastes" => "icon_region_marrow_wastes",
-                "still_archive" => "icon_region_still_archive", "pale_choir" => "icon_region_pale_choir",
-                _ => (string?)null,
-            };
+            var emblem = EmblemKey(def.Id);
             var eb = new Rectangle(node.Center.X - 26, node.Y + 12, 52, 52);
             if (emblem is not null && _ui.Assets.Get(emblem) is { } em) b.Draw(em, eb, unlocked ? Color.White : new Color(0x55, 0x55, 0x60));
             else _ui.Diamond(b, eb, unlocked ? sc : Dim);
@@ -294,7 +347,11 @@ public sealed class MapScreen
 
         // Preview plate — a Source-tinted band with the emblem (no per-region illustration exists).
         var prev = new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 92, DetailPanel.Width - 56, 100);
-        _ui.Fill(b, prev, sc * 0.28f);
+        // The same ground as the node, so the panel and the map agree about where you are looking.
+        if (_ui.Assets.Get(ArenaKey(def.Theme)) is { } plate)
+            b.Draw(plate, prev, CentreCrop(plate, prev), Color.White);
+        _ui.Fill(b, prev, new Color(0x0A, 0x08, 0x14, 0x9E));
+        _ui.Fill(b, prev, sc * 0.16f);
         _ui.Fill(b, new Rectangle(prev.X, prev.Y, prev.Width, 3), sc);
         _ui.Fill(b, new Rectangle(prev.X, prev.Bottom - 3, prev.Width, 3), sc);
         if (_ui.Assets.Get($"source_{def.Theme.ToString().ToLowerInvariant()}") is { } gem)
