@@ -115,8 +115,12 @@ public sealed class PrestigeScreen
     // The diagram takes the grid's slot AND the overview's. The overview existed to carry a road
     // FILTER and a table of road prices; a drawn tree answers both — you can see the roads, and each
     // one prints its own count and price over its terminal.
-    private static readonly Rectangle TreePanel = new(38, 144, 1246, 718);
-    private static readonly Rectangle DetailPanel = new(1320, 144, 560, 718);
+    // 790, NOT 718 — the two panels stopped at y=862 while the page runs to 934, so the screen wore a
+    // 72px empty margin under both columns AND squeezed the diagram into what was left. The tree's scale
+    // is derived from the view height, so those 72 pixels are worth about 15% on every node and every
+    // gap between them: this is the only lever that makes the diagram bigger without moving a node.
+    private static readonly Rectangle TreePanel = new(38, 144, 1246, 790);
+    private static readonly Rectangle DetailPanel = new(1320, 144, 560, 790);
 
     /// <summary>Node radius in pixels. A terminal draws at 1.5x this.</summary>
     private const int NodeR = 26;

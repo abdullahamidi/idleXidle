@@ -1576,8 +1576,10 @@ public class Game1 : Game
             // Keys.A..Keys.Z are the ASCII letter codes, so the table's char IS the key.
             if (!Pressed((Keys)Nav[navKey].Key)) continue;
             // Pressing the key of the screen you are already on returns you to the hunt, preserving the
-            // toggle these handlers used to have.
-            OpenNav(NavActive() == navKey ? 0 : navKey);
+            // toggle these handlers used to have — EXCEPT from the Weave. The Weave lights the BUILD
+            // tile (it is a sub-screen of it), so NavActive() reports 3 there, and pressing B to "go to
+            // BUILD" read as "you are already on BUILD" and dropped the player onto the fight instead.
+            OpenNav(NavActive() == navKey && !_showWeave ? 0 : navKey);
             break;
         }
         // L — THE EXPEDITION LOG. It closes every other overlay, because it is a full-screen read and
@@ -1647,10 +1649,11 @@ public class Game1 : Game
             _buildScreen.Power = _hunter.PowerRating;   // the Build screen has no Hunter ref of its own
             _buildScreen.Level = _hunter.HunterLevel;
             _buildScreen.Update(_keys, _prevKeys, CanvasMouse, MouseClicked,
-                                _mouse.LeftButton == ButtonState.Pressed, MouseWheel, _dust);
+                                _mouse.LeftButton == ButtonState.Pressed, MouseWheel, _dust, MouseRightClicked);
             if (_buildScreen.Dirty) { _buildScreen.ClearDirty(); Save(); }
             // The BUILD page asks for the weave editor; the host owns which screen is open.
             if (_buildScreen.WantsWeave) { _buildScreen.WantsWeave = false; _showBuild = false; _showWeave = true; }
+            if (_weave.WantsBack) { _weave.WantsBack = false; _showWeave = false; _showBuild = true; _buildScreen.ShowTree = false; }
             Latch(gameTime);
             return;
         }

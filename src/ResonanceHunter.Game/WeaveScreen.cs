@@ -109,6 +109,19 @@ public sealed class WeaveScreen
     // then the keystone sockets — and the fifth weave pushed the third socket 68px through the frame.
     // (At four slots it already cleared the interior by 12; the fifth only made it obvious.) All three
     // grow together so the row of panels still reads as a row.
+    /// <summary>
+    /// The way out. Set when the player asked to go back; the host clears it and opens BUILD.
+    /// </summary>
+    /// <remarks>
+    /// THIS SCREEN HAD NO EXIT. It is opened FROM the Build overview, and the only way to leave was T —
+    /// which toggles, so it landed on the HUNT rather than back where you came from. A sub-screen you
+    /// can enter and not return from teaches the player to avoid entering it.
+    /// </remarks>
+    public bool WantsBack { get; set; }
+
+    /// <summary>Top-left, in the band the centred title leaves empty on both sides.</summary>
+    private static readonly Rectangle BackBtn = new(38, 26, 240, 46);
+
     private static readonly Rectangle SlotsPanel = new(38, 144, 520, 800);
     private static readonly Rectangle PickPanel = new(578, 144, 640, 800);
     private static readonly Rectangle VowPanel = new(1238, 144, 642, 800);
@@ -285,6 +298,8 @@ public sealed class WeaveScreen
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
         _ui.TextCenterBig(b, "A SKILL IS A SOURCE, A FORM, AND WHAT YOU SWORE FOR IT",
                           960, 80, Slate, UiTypography.Secondary);
+
+        if (_ui.Button(b, BackBtn, "‹  BACK TO BUILD", hit, clicked)) WantsBack = true;
 
         DrawSlots(b, hit);
         DrawPicker(b, hit);

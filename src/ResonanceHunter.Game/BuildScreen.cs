@@ -205,7 +205,6 @@ public sealed class BuildScreen
         return new Vector2(p.X, p.Y);
     }
 
-    private static readonly Rectangle TreeResetBtn = new(48, 128, 216, 52);
     private static readonly Rectangle BackBtn = new(48, 128, 216, 52);
     /// <summary>Size states price: a node you can see is expensive before you read it.</summary>
     /// <remarks>
@@ -232,7 +231,7 @@ public sealed class BuildScreen
         => Update(keys, prev, mouse, clicked, false, 0, tree);
 
     public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked,
-                       bool held, int wheel, MemoryDustTree tree)
+                       bool held, int wheel, MemoryDustTree tree, bool rightClicked = false)
     {
         Tree = tree;
 
@@ -313,8 +312,6 @@ public sealed class BuildScreen
         // ── Edit sub-view: tree + right column. ──
         if (BackBtn.Contains(hit)) { _editMode = false; return; }
         if (SkillsToggle.Contains(hit)) { WantsWeave = true; return; }
-        if (Mastery.Spent > 0 && TreeResetBtn.Contains(hit)) { /* Back occupies the same corner; handled above */ }
-
         foreach (var node in MasteryCatalog.Nodes)
         {
             if (node.Kind == MasteryKind.Start) continue;
@@ -326,6 +323,20 @@ public sealed class BuildScreen
             // Clicking a node PINS it in the detail panel whether or not it could be taken — a node you
             // cannot afford is exactly the one you most want to read.
             _pinnedNodeId = node.Id;
+
+            // RIGHT-CLICK TAKES ONE POINT BACK. MasteryTree.Refund has existed, unit-tested, with the
+            // stranding guard already written — and with ZERO callers anywhere in src. The only way to
+            // undo a misclick was to respec the entire tree, which meant a single wrong node cost every
+            // other decision in it. Right-click, because left-click on a taken node has a job already.
+            if (rightClicked)
+            {
+                if (Mastery.Refund(node.Id)) { _msg = "ONE POINT RETURNED."; Dirty = true; }
+                else _msg = Mastery.IsTaken(node.Id)
+                    ? "ANOTHER NODE DEPENDS ON THIS ONE."
+                    : "NOTHING SPENT HERE.";
+                return;
+            }
+
             if (Mastery.Take(node.Id)) { _msg = ""; Dirty = true; }
             else _msg = Mastery.IsTaken(node.Id) ? "ALREADY TAKEN." :
                 Mastery.Available <= 0 ? "NO MASTERY POINTS — GO DEEPER." :

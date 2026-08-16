@@ -86,7 +86,32 @@ public sealed class ChestScreen
     public int SelectedIndex => _cursor;
 
     // ── Layout ──────────────────────────────────────────────────────────────────────────────────
+    /// <summary>The anchor the cards are laid out from. Its HEIGHT is decided per-frame — see below.</summary>
     private static readonly Rectangle GridPanel = new(38, 144, 1180, 718);
+
+    /// <summary>
+    /// The grid panel, sized to the pile in it.
+    /// </summary>
+    /// <remarks>
+    /// A three-row frame is drawn around one row of chests for almost the whole game — the pile is
+    /// usually two or three, and this panel reserved space for twelve. Four hundred pixels of ornate
+    /// frame around nothing reads as content that failed to load, not as headroom.
+    ///
+    /// The height is the LAST CARD'S BOTTOM plus the frame's own band, not the row pitch: a card is 190
+    /// of its 208-pixel pitch, and UiKit.Panel's border reaches 40px inward. Sizing to the pitch put the
+    /// bottom row 36px into the frame — which is what the fixed 718 was already doing to row three, so
+    /// the clipped last row is older than this change and was simply never at the bottom of the screen.
+    ///
+    /// The three heights are 338 / 546 / 754, whose aspects against a 1180 width are 3.49 / 2.16 / 1.56
+    /// — all above 1.30, so <see cref="UiKit.Panel"/> stays on the SAME frame texture at every size.
+    /// It picks its art by aspect ratio, and a panel that changes its own frame as it resizes is worse
+    /// than one that is too big.
+    /// </remarks>
+    private static Rectangle GridPanelFor(int count)
+    {
+        var rows = Math.Clamp((count + Cols - 1) / Cols, 1, Rows);
+        return GridPanel with { Height = 338 + (rows - 1) * 208 };
+    }
     private static readonly Rectangle DetailPanel = new(1250, 144, 630, 718);
 
     private const int Cols = 4;
@@ -151,7 +176,7 @@ public sealed class ChestScreen
 
     private void DrawGrid(SpriteBatch b, IReadOnlyList<Chest> sorted, Point mouse, bool clicked)
     {
-        _ui.Panel(b, GridPanel);
+        _ui.Panel(b, GridPanelFor(sorted.Count));
         _ui.TextBig(b, "THE VAULT", GridPanel.X + 46, GridPanel.Y + 26, Gold, UiTypography.ScreenTitle, TextFace.Display);
 
         // The tally, so the pile reads at a glance without counting cards.
