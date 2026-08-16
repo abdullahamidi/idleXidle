@@ -46,7 +46,6 @@ public sealed class MapScreen
     // ── Host-set each frame ───────────────────────────────────────────────────────────────────────
     public World World { get; set; } = null!;
     public string ActiveRegion { get; set; } = "";
-    public int DeepestWave { get; set; }
     public int HunterPower { get; set; }
     public int ConquerWaves { get; set; } = 7;
     public string Message { get; set; } = "";
@@ -184,7 +183,7 @@ public sealed class MapScreen
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
         var hit = Game1.ToOverlay(mouse);
 
-        _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xB0));
+        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xB0));
         _ui.TextCenterBig(b, "MAP", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
         // THE SUBTITLE SAYS WHAT THIS SCREEN IS FOR, not what its panels are called.

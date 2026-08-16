@@ -322,7 +322,7 @@ public sealed class CharacterScreen
         var hit = Game1.ToOverlay(mouse);
         // The shared batch-A backdrop already draws the region scene behind us; a translucent scrim keeps it
         // subdued and the UI legible (§6), rather than a flat opaque fill.
-        _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xD8));
+        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xD8));
 
         // Title band (§5) — centred title + subtitle; currency is the shared top-right chrome (Game1).
         _ui.TextCenterBig(b, "CHAMPION GEAR", 960, 24, Gold, UiTypography.RegionTitle, TextFace.Display);
@@ -655,8 +655,10 @@ public sealed class CharacterScreen
 
         // Footer (§9.9) — real slot count + sort note.
         var total = Wearable().Count;
-        // +44, clear of the ornate border; at +24 the count read "4 / 64 SLOTS" with its first glyph under the frame.
-        _ui.TextBig(b, $"{total} / 64 SLOTS", InventoryPanel.X + 44, InventoryPanel.Bottom - 56, Slate, UiTypography.Secondary);
+        // "/ 64 SLOTS" WAS FICTION. There is no bag cap anywhere in this game — _inv is an unbounded
+        // List and no tuning names a limit — so the footer invented a ceiling, and a player watching it
+        // approach 64 would have been hoarding against a wall that does not exist.
+        _ui.TextBig(b, $"{total} ITEM{(total == 1 ? "" : "S")}", InventoryPanel.X + 44, InventoryPanel.Bottom - 56, Slate, UiTypography.Secondary);
 
         // The menu is worth nothing if nobody finds it. Right-click is not a convention this game has
         // used anywhere else, so it has to be said out loud once.

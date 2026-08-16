@@ -113,7 +113,7 @@ public sealed class StatsScreen
         // remember to invert is a rule enforced by nobody. check_mouse_space.py now enforces it.
         var hit = Game1.ToOverlay(mouse);
 
-        _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xD8));   // scrim over the shared backdrop
+        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xD8));   // scrim over the shared backdrop
 
         _ui.TextCenterBig(b, "STATS", 960, 24, Gold, UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(700, 74, 520, 3), Gold * 0.5f);
@@ -222,7 +222,10 @@ public sealed class StatsScreen
         var y = CombatPanel.Y + 74;
         foreach (var (label, stat, effect) in rows)
         {
-            _ui.Fill(b, new Rectangle(CombatPanel.X + 24, y - 6, CombatPanel.Width - 48, 44), RowBg);
+            // X+40 / W-80, not X+24 / W-48. UiKit.PanelCorner is 40, so at +24 the row strip was painted
+            // 16px onto the frame on both sides — and the fifth row (426..470) also overran the panel's
+            // inner floor of 466, so the bottom strip merged with the bottom filigree.
+            _ui.Fill(b, new Rectangle(CombatPanel.X + 40, y - 6, CombatPanel.Width - 80, 40), RowBg);
             _ui.TextBig(b, label, CombatPanel.X + 40, y, Bone, UiTypography.Body);
             _ui.TextBig(b, effect, CombatPanel.X + 176, y + 2, Sky, UiTypography.Secondary);
             _ui.TextRightBig(b, $"{(int)hunter.ValueOf(stat)}", CombatPanel.Right - 222, y, Slate, UiTypography.Body);
@@ -241,7 +244,7 @@ public sealed class StatsScreen
     /// </remarks>
     private void DrawTrain(SpriteBatch b, Hunter hunter, HunterStat stat, int x, int y, Point mouse, bool clicked)
     {
-        var maxed = !hunter.CanTrain(stat) && hunter.Gleam >= hunter.NextRankCost(stat);
+        var maxed = hunter.RankOf(stat) >= hunter.StatRankCap;
         var cost = hunter.NextRankCost(stat);
         var rect = new Rectangle(x, y, 168, 38);
         var afford = hunter.CanTrain(stat);

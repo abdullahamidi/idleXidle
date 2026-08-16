@@ -518,6 +518,25 @@ public sealed class UiKit
     /// sampled whole and drawn smaller, so it reads as a FINER frame rather than a cropped one — and it
     /// closes most of the gap without touching several hundred hand-placed literals.
     /// </remarks>
+    /// <summary>
+    /// A scrim rect, in AUTHORED coordinates, that actually covers the whole picture.
+    /// </summary>
+    /// <remarks>
+    /// <b>EVERY MENU SCREEN WAS DIMMING 1920x1080 AND THE PICTURE IS BIGGER THAN THAT.</b> These screens
+    /// are authored in 1920x1080 and drawn through Game1's overlay inset — scale 1720/1920 = 0.8958,
+    /// translated right by the nav rail's 180px. So authored y 1080 lands at canvas y 967, and authored
+    /// x 1920 lands at canvas x 1900: a 112px band across the bottom of every menu screen, plus a 20px
+    /// strip down the right, showed the fight scene UNDIMMED behind the panels.
+    ///
+    /// That band is most of what "çok fazla boş alan var, her şey yukarıya sıkışmış" was pointing at. It
+    /// is not empty space a panel failed to fill — it is a brighter, busier strip that makes the dimmed
+    /// area above it read as a box the content has been squeezed into.
+    ///
+    /// 2144 x 1206 authored covers canvas 1920 x 1080 with a margin: 2144 * 0.8958 + 180 = 2100, and
+    /// 1206 * 0.8958 = 1080. Overshoot is free — Fill clips to the render target.
+    /// </remarks>
+    public static readonly Rectangle OverlayScrim = new(0, 0, 2144, 1206);
+
     public const int PanelCorner = 40;
 
     /// <summary>

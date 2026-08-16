@@ -141,6 +141,14 @@ public sealed class Hunter
 
     public int RankOf(HunterStat stat) => _ranks[stat];
 
+    /// <summary>The rank ceiling every stat shares. Public so a screen can say MAXED without inferring it.</summary>
+    /// <remarks>
+    /// STATS was inferring it from `!CanTrain && Gleam >= cost`, which is only true when you can AFFORD
+    /// the rank you cannot buy — so a capped stat read "NEED 45 GLEAM" to a poor player, offering to
+    /// sell something that does not exist.
+    /// </remarks>
+    public int StatRankCap => _tuning.StatRankCap;
+
     public float ValueOf(HunterStat stat)
         => _tuning.BaseValue[stat] + _tuning.GainPerRank[stat] * _ranks[stat];
 

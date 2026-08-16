@@ -962,6 +962,8 @@ public sealed class SoloExpeditionScreen
 
         _vfx.Draw(b);
         DrawCallouts(b);
+        // The HUNT screen is NOT drawn through the overlay inset (see Game1.OverlayActive), so its own
+        // full-page effects are authored 1:1 against the canvas and must NOT use the oversized scrim.
         if (_deathFlash > 0f) _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), Ember * (_deathFlash * 0.35f));
 
 

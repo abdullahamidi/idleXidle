@@ -2918,7 +2918,9 @@ public class Game1 : Game
     {
         _mapScreen.World = _world;
         _mapScreen.ActiveRegion = _activeRegion;
-        _mapScreen.DeepestWave = _deepestEver;
+        // (_mapScreen.DeepestWave was pushed here every frame and read by nothing in that file —
+        //  the third instance of this exact shape found in one week. Deleted rather than wired:
+        //  the screen already shows per-region power and YOUR POWER, which is what it needed it for.)
         _mapScreen.HunterPower = _hunter.PowerRating;
         _mapScreen.ConquerWaves = ConquerWaveDepth;
         _mapScreen.Message = _conquerMsg;

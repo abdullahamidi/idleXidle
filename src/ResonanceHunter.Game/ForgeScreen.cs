@@ -1002,7 +1002,7 @@ public sealed class ForgeScreen
         var hit = Game1.ToOverlay(mouse);
         _hovered = null;                 // re-established by whichever surface finds the pointer over an item
 
-        _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xC0));   // scrim so panels pop
+        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xC0));   // scrim so panels pop
         _ui.TextCenterBig(b, "THE FORGE", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
         // The subtitle rides under the title in the focused modes; SALVAGE has its own dense toolbar there.
@@ -1318,7 +1318,12 @@ public sealed class ForgeScreen
             if (doGreat) DoGreaterRefine(hunter, item); else DoRefine(hunter, item);
         }
 
-        DrawResultPanel(b, item, refined!, hunter, hit, clicked, worn, can);
+        // THE PREVIEW HAS TO PREVIEW THE BUTTON. Holding SHIFT changes the button to GREATER UPGRADE +5
+        // LEVELS and the commit to DoGreaterRefine — and the RESULT panel went on showing the +1 outcome,
+        // because `greater` was computed for its COST and its Product thrown away. The one panel whose
+        // whole job is "here is what you will get" was describing the operation you were not about to do.
+        DrawResultPanel(b, item, doGreat ? greater.Product : refined!, hunter, hit, clicked, worn,
+                        doGreat ? canGreat : can);
     }
 
     private void DrawResultPanel(SpriteBatch b, ItemInstance item, ItemInstance refined, Hunter hunter, Point hit, bool clicked, bool worn, bool can)
@@ -1877,7 +1882,7 @@ public sealed class ForgeScreen
         // Dim the Forge behind, deepening as the chest works itself up. The scrim arriving at full
         // strength on frame one is what made the old reveal read as a dialog rather than an event.
         var dim = Math.Clamp(t / (ShakeEnds * 0.6f), 0f, 1f);
-        _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0, 0, 0, (int)(215 * dim * fade)));
+        _ui.Fill(b, UiKit.OverlayScrim, new Color(0, 0, 0, (int)(215 * dim * fade)));
 
         // ── BEAT 1 · THE CHEST RATTLES ────────────────────────────────────────────────────────────
         if (t < ShakeEnds)
@@ -1934,7 +1939,7 @@ public sealed class ForgeScreen
             }
             // The flash, brief and white-hot at the centre.
             if (p < 0.25f)
-                _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), Color.White * (0.35f * (1f - p / 0.25f)));
+                _ui.Fill(b, UiKit.OverlayScrim, Color.White * (0.35f * (1f - p / 0.25f)));
         }
 
         // ── BEAT 3 · THE CARD ─────────────────────────────────────────────────────────────────────

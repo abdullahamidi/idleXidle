@@ -384,7 +384,7 @@ public sealed class BuildScreen
         _hoverNodeId = null;
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
         var hit = Game1.ToOverlay(mouse);
-        _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xD8));
+        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xD8));
 
         if (_editMode) { DrawEditor(b, hit, tree); return; }
 
@@ -599,6 +599,10 @@ public sealed class BuildScreen
             _ui.TextBig(b, $"{g.Key.ToString().ToUpperInvariant()} RESONANCE", x + 30, ry, Bone, UiTypography.Body);
             _ui.TextRightBig(b, $"{pct}%", PassivePanel.Right - 52, ry, SourceColor.GetValueOrDefault(g.Key, Bone), UiTypography.Body);
             ry += 40;
+            // A FLOOR, which the keystone block below already has and this loop did not. One row per
+            // Source in the loadout, so a six-Source build walks this list straight through the panel's
+            // bottom frame and out the other side — and the list is data, so "six" is not hypothetical.
+            if (ry > PassivePanel.Bottom - UiKit.PanelCorner - 58) break;
         }
 
         // KEYSTONES — worn sockets (real). Anchored BELOW the resonance list rather than at a fixed

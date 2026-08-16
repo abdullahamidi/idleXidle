@@ -290,7 +290,7 @@ public sealed class PrestigeScreen
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
         var hit = Game1.ToOverlay(mouse);
 
-        _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xC0));
+        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xC0));
         // TRAITS, not DUST. The screen stopped spending Memory Dust when the tree stopped being buyable
         // by idling; a title naming a currency it does not charge is the kind of small lie that makes a
         // player mistrust every other number on the screen. Dust is still real — it is the Warren's
@@ -352,14 +352,14 @@ public sealed class PrestigeScreen
         // cards for the player's eye. Without it the burst and the banner are just more things drawn on
         // a busy page, which is the whole complaint this pass is answering.
         var hold = Math.Min(1f, p / 0.10f) * Math.Min(1f, (1f - p) / 0.25f);
-        _ui.Fill(b, new Rectangle(0, 0, 1920, 1080),
+        _ui.Fill(b, UiKit.OverlayScrim,
                  new Color(0x06, 0x04, 0x0A) * (hold * (_litTerminal ? 0.66f : 0.55f)));
 
         // 2. THE FLASH. Short and bright: it is the frame in which the decision landed.
         if (p < 0.14f)
         {
             var f = 1f - p / 0.14f;
-            _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), accent * (f * f * 0.55f));
+            _ui.Fill(b, UiKit.OverlayScrim, accent * (f * f * 0.55f));
         }
 
         // 3. THE SHOCKWAVES. Plotted, not scaled from a sprite — see build_spec.py, where the generated
@@ -756,6 +756,13 @@ public sealed class PrestigeScreen
             _ui.TextRightBig(b, $"{u.Cost:N0} PT{(u.Cost == 1 ? "" : "S")}", DetailPanel.Right - 28,
                              DetailPanel.Bottom - 140, buyable ? Bone : Ember, UiTypography.PanelTitle);
         }
+
+        // _msg IS WRITTEN FOUR TIMES AND WAS DRAWN NOWHERE. Every refusal this screen has — already
+        // taken, not enough points, prerequisites unlit — was assigned to a field no draw call read, so
+        // clicking a node you cannot afford did nothing at all and said nothing at all. On the page that
+        // produced it, above the button that produced it.
+        if (_msg.Length > 0)
+            _ui.TextCenterBig(b, _msg, DetailPanel.Center.X, DetailPanel.Bottom - 120, Ember, UiTypography.Secondary);
 
         var label = isOwned ? "LIT" : "UPGRADE";
         if (_ui.Button(b, new Rectangle(DetailPanel.X + 40, DetailPanel.Bottom - 92, DetailPanel.Width - 80, 68), label, hit, clicked, enabled: buyable))
