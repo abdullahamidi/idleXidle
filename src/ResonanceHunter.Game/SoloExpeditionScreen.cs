@@ -757,8 +757,15 @@ public sealed class SoloExpeditionScreen
 
         _playheadMs += dt * 1000f * _speedMul;
 
+        // THE WINDOW, NOT THE FPS, IS WHAT MAKES THIS SWING LEGIBLE — and getting that wrong is easy.
+        // EnemyClipSeconds maps the windup 0..1 onto the clip's FULL length, so the clip always completes
+        // across this window whatever its fps: lowering frames-per-second changes the idle loop and
+        // nothing at all about the attack. Widened from 600ms to 900ms, near the champion's own swing
+        // (StrikeSeconds = 8 frames / 8fps = 1.0s), so the two actors wind up at comparable speeds and a
+        // player can see a creature commit before it lands.
+        const float windupMs = 900f;
         var lead = _nextEnemyStrikeMs - _playheadMs;
-        _enemyWindup = lead is > 0 and < 600 ? 1f - lead / 600f : 0f;
+        _enemyWindup = lead > 0f && lead < windupMs ? 1f - lead / windupMs : 0f;
 
         // The champion's swing, on the same anticipation model. StrikeSeconds is the authored clip
         // length, so the arm is fully drawn back one clip-length out and connects on the frame the blow
@@ -784,7 +791,7 @@ public sealed class SoloExpeditionScreen
                 case BattleEventKind.EnemyStrike:
                     _enemyLunge = 1f;
                     _nextEnemyStrikeMs = _replay.NextEnemyStrikeAfter(e.AtMs);
-                    _vfx.Play("vfx_hit", ChampBox.Center.X, ChampBox.Center.Y, tint: Ember);
+                    _vfx.Play("vfx_hit", ChampBox.Center.X, ChampBox.Center.Y, fps: 12f, tint: Ember);
                     break;
                 case BattleEventKind.Skill:
                     var form = (Form)e.Amount;
@@ -795,17 +802,17 @@ public sealed class SoloExpeditionScreen
                     break;
                 case BattleEventKind.Heal:
                     Say($"+{e.Amount}", Verdant);
-                    _vfx.Play("vfx_levelup", ChampBox.Center.X, ChampBox.Y + 32, tint: Verdant);
+                    _vfx.Play("vfx_levelup", ChampBox.Center.X, ChampBox.Y + 32, fps: 10f, tint: Verdant);
                     break;
                 case BattleEventKind.Shield:
                     Say("UNDYING", Gold);
-                    _vfx.Play("vfx_interrupt", ChampBox.Center.X, ChampBox.Center.Y, tint: Gold);
+                    _vfx.Play("vfx_interrupt", ChampBox.Center.X, ChampBox.Center.Y, fps: 12f, tint: Gold);
                     break;
                 case BattleEventKind.Down:
-                    _vfx.Play("vfx_death", ChampBox.Center.X, ChampBox.Center.Y, fps: 14f);
+                    _vfx.Play("vfx_death", ChampBox.Center.X, ChampBox.Center.Y, fps: 9f);
                     break;
                 case BattleEventKind.EnemyDown:
-                    _vfx.Play("vfx_death", _rowCentreX, _rowTopY + 110, scale: 2, fps: 14f);
+                    _vfx.Play("vfx_death", _rowCentreX, _rowTopY + 110, scale: 2, fps: 9f);
                     break;
             }
         }
@@ -851,19 +858,19 @@ public sealed class SoloExpeditionScreen
         switch (form)
         {
             case Form.Strike:
-                _vfx.Play("vfx_ability_ruinstrike", _rowCentreX, _rowTopY + 110, fps: 22f, tint: Ember);
+                _vfx.Play("vfx_ability_ruinstrike", _rowCentreX, _rowTopY + 110, fps: 11f, tint: Ember);
                 break;
             case Form.Trap:
-                _vfx.Play("vfx_crit", _rowCentreX, _rowTopY + 110, fps: 20f, tint: Gold);
+                _vfx.Play("vfx_crit", _rowCentreX, _rowTopY + 110, fps: 9f, tint: Gold);
                 break;
             case Form.Mark:
-                _vfx.Play("vfx_interrupt", _rowCentreX, _rowTopY + 110, fps: 20f, tint: Bone);
+                _vfx.Play("vfx_interrupt", _rowCentreX, _rowTopY + 110, fps: 12f, tint: Bone);
                 break;
             case Form.Transformation:
-                _vfx.Play("vfx_levelup", ChampBox.Center.X, ChampBox.Y + 24, fps: 18f, tint: Verdant);
+                _vfx.Play("vfx_levelup", ChampBox.Center.X, ChampBox.Y + 24, fps: 10f, tint: Verdant);
                 break;
             default:
-                _vfx.Play("vfx_weakhit", _rowCentreX, _rowTopY + 110, fps: 18f, tint: Steel);
+                _vfx.Play("vfx_weakhit", _rowCentreX, _rowTopY + 110, fps: 14f, tint: Steel);
                 break;
         }
     }
@@ -1126,7 +1133,10 @@ public sealed class SoloExpeditionScreen
         var ab = new Rectangle(ebox.X, figTop + bob, ebox.Width, ebox.Height);
 
         string? stripKey = null, staticKey = null;
-        var fps = attacking ? 16f : 12f;
+        // 11/9, was 16/12. The whole complaint is legibility: an 8-frame swing at 16fps is over in half
+        // a second, which is not long enough to see a creature wind up and commit. Held above ~9 so the
+        // frames still read as motion rather than as a slideshow.
+        var fps = attacking ? 11f : 9f;
         if (EnemySource is { } es && EnemyForSource.TryGetValue(es, out var en))
         {
             var act = attacking ? en == "stone_sentinel" ? "slam" : "attack" : "idle";
@@ -1840,7 +1850,13 @@ public sealed class SoloExpeditionScreen
 
     /// <summary>How long a strike clip runs. Eight frames at the champion's frame rate.</summary>
     private const float StrikeSeconds = 8f / ChampionFps;
-    private const float ChampionFps = 10f;
+    /// <summary>Frames per second for the champion's clips. Slower than it was, deliberately.</summary>
+    /// <remarks>
+    /// 8, was 10. The champion's swing is the single most-watched animation in the game and it was
+    /// finishing in 0.8s. It now takes a full second, which is also the window its anticipation clock
+    /// scrubs across — so the arm draws back visibly instead of snapping.
+    /// </remarks>
+    private const float ChampionFps = 8f;
 
     /// <summary>
     /// Draw the champion's base body, bottom-anchored inside the box.
