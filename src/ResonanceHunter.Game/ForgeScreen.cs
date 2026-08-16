@@ -982,7 +982,7 @@ public sealed class ForgeScreen
     // ── The mode rail — the reference's left column, listing only the verbs the model actually has. ──
     private void DrawRail(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
     {
-        _ui.Panel(b, Rail);
+        _ui.PanelQuiet(b, Rail);
         // +40, not +16.
         //
         // UiKit.Panel SCALES its frame art to the rectangle, so a short panel gets a proportionally
@@ -1034,7 +1034,7 @@ public sealed class ForgeScreen
     /// </remarks>
     private void DrawBag(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
     {
-        _ui.Panel(b, BagPanel);
+        _ui.PanelQuiet(b, BagPanel);
 
         var bag = _inv.Where(Gear.IsWearable).ToList();
         _ui.TextCenterBig(b, "YOUR BAG", BagPanel.Center.X, BagPanel.Y + 40, Gold, UiTypography.PanelTitle);
@@ -1166,13 +1166,13 @@ public sealed class ForgeScreen
         var refined = item is null ? null : Forge.Refine(item, Tuning).Product;
         DrawItemPanel(b, item, refined, hunter);
 
-        _ui.Panel(b, CostPanel);
+        _ui.PanelQuiet(b, CostPanel);
         _ui.TextCenterBig(b, "REQUIRED MATERIALS", CostPanel.Center.X, CostPanel.Y + 22, Gold, UiTypography.SectionTitle);
 
         if (item is null)
         {
             _ui.TextCenter(b, "NOTHING TO UPGRADE.", CostPanel.Center.X, CostPanel.Y + 320, Slate);
-            _ui.Panel(b, ResultPanel);
+            _ui.PanelQuiet(b, ResultPanel);
             _ui.TextCenterBig(b, "RESULT PREVIEW", ResultPanel.Center.X, ResultPanel.Y + 22, Gold, UiTypography.SectionTitle);
             return;
         }
@@ -1228,7 +1228,7 @@ public sealed class ForgeScreen
 
     private void DrawResultPanel(SpriteBatch b, ItemInstance item, ItemInstance refined, Hunter hunter, Point hit, bool clicked, bool worn, bool can)
     {
-        _ui.Panel(b, ResultPanel);
+        _ui.PanelQuiet(b, ResultPanel);
         _ui.TextCenterBig(b, "RESULT PREVIEW", ResultPanel.Center.X, ResultPanel.Y + 22, Gold, UiTypography.SectionTitle);
 
         var rc = RarityColors[(int)item.Rarity];
@@ -1287,7 +1287,7 @@ public sealed class ForgeScreen
         var item = Target();
         DrawItemPanel(b, item, null, hunter);
 
-        _ui.Panel(b, ReforgePanel);
+        _ui.PanelQuiet(b, ReforgePanel);
         _ui.TextCenterBig(b, "REFORGE", ReforgePanel.Center.X, ReforgePanel.Y + 22, Gold, UiTypography.SectionTitle);
         // Cost rows below use CostLabel — see the note on it for why "3,400 / 100 ESSENCE" is gone.
         if (item is null)
@@ -1602,7 +1602,7 @@ public sealed class ForgeScreen
         }
 
         // ── Action panel ───────────────────────────────────────────────────────────────────────
-        _ui.Panel(b, ActionPanel);
+        _ui.PanelQuiet(b, ActionPanel);
         var act = Active;
         if (act is null)
             _ui.Text(b, "PICK AN ITEM ON THE LEFT.", 1088, 120, InkFaint);
@@ -1695,14 +1695,14 @@ public sealed class ForgeScreen
         _ui.TextRight(b, $"POWER {hunter.PowerRating}", 1856, 480, InkGold);
 
         // ── Merge tray ─────────────────────────────────────────────────────────────────────────
-        _ui.Panel(b, TrayPanel);
+        _ui.PanelQuiet(b, TrayPanel);
         _ui.Text(b, "MERGE TRAY", 1128, 756, InkFaint);
 
         var picked = _inv.Where(i => _merge.Contains(i.InstanceId)).ToList();
         for (var i = 0; i < 3; i++)
         {
             var slot = new Rectangle(1128 + i * 80, 796, 68, 68);
-            _ui.Panel(b, slot);
+            _ui.PanelQuiet(b, slot);
             if (i < picked.Count) DrawItemIcon(b, picked[i], new Rectangle(slot.X + 8, slot.Y + 8, 52, 52));
         }
 
@@ -1754,7 +1754,7 @@ public sealed class ForgeScreen
         //    message is this hub's only feedback channel ("OPENED 4 CHESTS — +80 MAT, 3 ITEMS"), and it
         //    was being drawn on bare scene where it read as a caption for the floor tiles. The hint is
         //    two lines because one line of it is wider than the column it belongs to. ──
-        _ui.Panel(b, FooterPanel);
+        _ui.PanelQuiet(b, FooterPanel);
         if (_msg.Length > 0) _ui.Text(b, _msg, 112, 820, _msgColor);
         _ui.Text(b, "CLICK AN ITEM, THEN A BUTTON ON THE RIGHT", 112, 884, Slate);
         _ui.Text(b, "TAB FILTERS THE PILE   ·   WHEEL SCROLLS IT   ·   J SALVAGES THE JUNK", 112, 928, Slate);
@@ -1852,7 +1852,7 @@ public sealed class ForgeScreen
         var full = new Rectangle(600, 336, 720, 416);
         var card = Grow(full, scale);
 
-        _ui.Panel(b, card);
+        _ui.PanelQuiet(b, card);
         _ui.Fill(b, UiKit.PanelInner(card), grade * (0.10f * fade));
 
         if (cp < 0.6f) return;      // the contents wait for the frame to stop moving

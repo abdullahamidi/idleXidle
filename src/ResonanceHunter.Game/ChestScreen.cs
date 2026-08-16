@@ -220,7 +220,7 @@ public sealed class ChestScreen
 
     private void DrawDetail(SpriteBatch b, IReadOnlyList<Chest> sorted, Point mouse, bool clicked)
     {
-        _ui.Panel(b, DetailPanel);
+        _ui.PanelQuiet(b, DetailPanel);
 
         if (sorted.Count == 0)
         {

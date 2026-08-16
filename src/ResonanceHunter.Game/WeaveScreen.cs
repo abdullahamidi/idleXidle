@@ -548,7 +548,7 @@ public sealed class WeaveScreen
 
     private void DrawPicker(SpriteBatch b, Point hit)
     {
-        _ui.Panel(b, PickPanel);
+        _ui.PanelQuiet(b, PickPanel);
         var skills = Loadout.Skills;
         if (_slot >= skills.Count)
         {
@@ -658,7 +658,7 @@ public sealed class WeaveScreen
 
     private void DrawVows(SpriteBatch b, Point hit)
     {
-        _ui.Panel(b, VowPanel);
+        _ui.PanelQuiet(b, VowPanel);
         _ui.TextCenterBig(b, "VOWS", VowPanel.Center.X, VowPanel.Y + 66, Gold, UiTypography.SectionTitle);
 
         var known = Known;

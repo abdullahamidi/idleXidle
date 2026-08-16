@@ -133,7 +133,7 @@ public sealed class StatsScreen
 
     private void DrawHunterCard(SpriteBatch b, Hunter hunter)
     {
-        _ui.Panel(b, HunterCard);
+        _ui.PanelQuiet(b, HunterCard);
         _ui.TextCenterBig(b, "HUNTER", HunterCard.Center.X, HunterCard.Y + 22, Gold, UiTypography.SectionTitle);
 
         var por = new Rectangle(HunterCard.X + 40, HunterCard.Y + 66, 118, 118);
@@ -263,7 +263,7 @@ public sealed class StatsScreen
 
     private void DrawProgression(SpriteBatch b, Hunter hunter)
     {
-        _ui.Panel(b, ProgressPanel);
+        _ui.PanelQuiet(b, ProgressPanel);
         _ui.TextCenterBig(b, "PROGRESSION", ProgressPanel.Center.X, ProgressPanel.Y + 22, Gold, UiTypography.SectionTitle);
         // Only the counters the game actually tracks (§12) — monsters/bosses/play-time/deaths aren't recorded.
         var rows = new (string, string)[]

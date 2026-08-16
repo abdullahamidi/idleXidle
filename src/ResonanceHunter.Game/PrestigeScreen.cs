@@ -648,7 +648,7 @@ public sealed class PrestigeScreen
 
     private void DrawDetail(SpriteBatch b, MemoryDustTree tree, Point hit, bool clicked)
     {
-        _ui.Panel(b, DetailPanel);
+        _ui.PanelQuiet(b, DetailPanel);
         // Hover reads, click PINS — the lesson the mastery tree's node panel learned. A player cannot
         // read a node and then look at the tree if reading requires keeping the pointer still.
         var u = (_hoverId is not null ? tree.All.FirstOrDefault(x => x.Id == _hoverId) : null)

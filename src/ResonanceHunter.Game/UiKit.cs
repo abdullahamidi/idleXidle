@@ -454,7 +454,43 @@ public sealed class UiKit
     /// known cost of scaling a decorated frame to arbitrary panel sizes.
     /// </summary>
     public void Panel(SpriteBatch b, Rectangle r, bool gold = false)
+        => PanelAt(b, r, gold ? new Color(0xFF, 0xDC, 0xA0) : Color.White, gold);
+
+    /// <summary>
+    /// Tier 2: a SUPPORTING surface. The same frame, drawn quiet, so the ornate one is the subject.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>EVERY PANEL IN THE GAME WORE THE SAME GOLD FILIGREE</b>, from a 630px paper-doll down to a
+    /// 60x28 training chip. A frame that heavy is a claim — "look here" — and when eleven regions on one
+    /// screen all make it, none of them wins and the screen reads as an undifferentiated thicket. That is
+    /// the "her şey çok karmaşıkmış gibi" from the playtest, and it is not a density problem: the same
+    /// information inside two visual weights reads as half as much.
+    /// </para>
+    /// <para>
+    /// <b>This tints the art rather than replacing it with a flat rectangle</b>, which was the other
+    /// option and the wrong one. The ornate frame IS the game's visual identity; ninety percent of the
+    /// screens turning into plain boxes would read as unfinished, not as calm. Tinted, the filigree
+    /// survives as a dark bronze texture at the edge — present if you look at it, silent if you are
+    /// looking for something else.
+    /// </para>
+    /// <para>
+    /// It also costs NOTHING in layout. A quiet panel occupies exactly the rectangle its ornate twin did,
+    /// so a screen converts by changing the call and nothing else — no content moves, and no hand-placed
+    /// literal can collide with a border that was already there.
+    /// </para>
+    /// </remarks>
+    public void PanelQuiet(SpriteBatch b, Rectangle r) => PanelAt(b, r, QuietFrame, false);
+
+    /// <summary>The tint that turns the gold frame to dark bronze. Multiplied, so the interior stays black.</summary>
+    private static readonly Color QuietFrame = new(0x58, 0x52, 0x62);
+
+    private void PanelAt(SpriteBatch b, Rectangle r, Color tint, bool gold)
     {
+        // THE FRAME ART IS CHOSEN BY ASPECT RATIO, which means resizing a panel silently changes which
+        // texture it wears — and the three have visibly different corner ornaments. It bit twice in one
+        // session (the HUNT skills rail, the Forge bag's counter), so it is called out here rather than
+        // left to be rediscovered.
         var aspect = r.Width / MathF.Max(1f, r.Height);
         var key = aspect >= 1.30f ? "ui_panel_medium"
                 : aspect >= 0.82f ? "ui_panel_square"
@@ -469,7 +505,7 @@ public sealed class UiKit
             return;
         }
 
-        NineSlice(b, tex, r, PanelCorner, gold ? new Color(0xFF, 0xDC, 0xA0) : Color.White);
+        NineSlice(b, tex, r, PanelCorner, tint);
     }
 
     /// <summary>

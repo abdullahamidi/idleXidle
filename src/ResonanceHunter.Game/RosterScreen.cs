@@ -198,7 +198,7 @@ public sealed class RosterScreen
 
     private void DrawDetail(SpriteBatch b, CharacterState state, Point hit, bool clicked)
     {
-        _ui.Panel(b, DetailPanel);
+        _ui.PanelQuiet(b, DetailPanel);
         var c = CharacterRoster.Get(_selectedId);
         var unlocked = state.IsUnlocked(c.Id);
         var active = state.ActiveId == c.Id;

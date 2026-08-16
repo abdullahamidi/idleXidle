@@ -136,7 +136,7 @@ public sealed class MapScreen
 
     private void DrawProgress(SpriteBatch b, Point hit, bool clicked)
     {
-        _ui.Panel(b, ProgressPanel);
+        _ui.PanelQuiet(b, ProgressPanel);
         _ui.TextCenterBig(b, "CAMPAIGN PROGRESS", ProgressPanel.Center.X, ProgressPanel.Y + 18, Gold, UiTypography.SectionTitle);
 
         var conquered = Regions.All.Count(r => World.IsConquered(r.Id));
@@ -282,7 +282,7 @@ public sealed class MapScreen
 
     private void DrawDetail(SpriteBatch b, Point hit, bool clicked)
     {
-        _ui.Panel(b, DetailPanel);
+        _ui.PanelQuiet(b, DetailPanel);
         var def = Def(_selected);
         var unlocked = World.IsUnlocked(def.Id);
         var conq = World.IsConquered(def.Id);

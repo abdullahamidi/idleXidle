@@ -97,7 +97,7 @@ public sealed class WarrenScreen
 
     private void DrawOverview(SpriteBatch b, Point hit, bool clicked)
     {
-        _ui.Panel(b, OverviewPanel);
+        _ui.PanelQuiet(b, OverviewPanel);
         _ui.TextCenterBig(b, "WARREN OVERVIEW", OverviewPanel.Center.X, OverviewPanel.Y + 22, Gold, UiTypography.SectionTitle);
 
         // Crest + level + name.
@@ -172,7 +172,7 @@ public sealed class WarrenScreen
 
     private void DrawBonuses(SpriteBatch b)
     {
-        _ui.Panel(b, BonusStrip);
+        _ui.PanelQuiet(b, BonusStrip);
         _ui.TextCenterBig(b, "WARREN BONUSES", BonusStrip.Center.X, BonusStrip.Y + 16, Gold, UiTypography.PanelTitle);
 
         var entries = new (Color Gem, string Value, string Label)[]
@@ -180,7 +180,7 @@ public sealed class WarrenScreen
             (GleamC, $"+{Warren.ResourceBonus(WarrenResource.Gleam) * 100f:0}%", "GOLD"),
             (MasteryC, $"+{Warren.ResourceBonus(WarrenResource.Mastery) * 100f:0}%", "MASTERY"),
             (DustC, $"+{Warren.ResourceBonus(WarrenResource.Dust) * 100f:0}%", "NATURE"),
-            (Met, $"+{Warren.AllProductionBonus * 100f:0}%", "ALL PROD"),
+            (Met, $"+{Warren.AllProductionBonus * 100f:0}%", "ALL PRODUCTION"),
             (Ember, $"+{Warren.ConquestBonus * 100f:0}%", "CONQUEST"),
             (Gold, $"LV {Warren.Level}", "WARREN"),
         };
@@ -197,7 +197,7 @@ public sealed class WarrenScreen
 
     private void DrawDetail(SpriteBatch b, Point hit, bool clicked)
     {
-        _ui.Panel(b, DetailPanel);
+        _ui.PanelQuiet(b, DetailPanel);
         var f = Warren.Facility(_selected);
         var rc = ResColor(f.Info.Produces);
 

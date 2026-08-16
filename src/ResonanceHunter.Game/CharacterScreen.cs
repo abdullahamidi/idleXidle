@@ -404,7 +404,7 @@ public sealed class CharacterScreen
 
     private void DrawLoadout(SpriteBatch b, Point hit, Hunter hunter)
     {
-        _ui.Panel(b, LoadoutPanel);
+        _ui.PanelQuiet(b, LoadoutPanel);
         var x = LoadoutPanel.X + 24;
         // Centred like EQUIPPED. Left-aligned at +24 the title sat on the frame's corner filigree.
         _ui.TextCenterBig(b, "LOADOUT", LoadoutPanel.Center.X, LoadoutPanel.Y + 26, Gold, UiTypography.SectionTitle);
@@ -557,7 +557,7 @@ public sealed class CharacterScreen
 
     private void DrawInventory(SpriteBatch b, Point hit, Hunter hunter)
     {
-        _ui.Panel(b, InventoryPanel);
+        _ui.PanelQuiet(b, InventoryPanel);
         _ui.TextCenterBig(b, "INVENTORY", InventoryPanel.Center.X, InventoryPanel.Y + 26, Gold, UiTypography.SectionTitle);
 
         for (var i = 0; i < Tabs.Length; i++)
@@ -623,7 +623,7 @@ public sealed class CharacterScreen
 
     private void DrawDetail(SpriteBatch b, Point hit, Hunter hunter)
     {
-        _ui.Panel(b, DetailPanel);
+        _ui.PanelQuiet(b, DetailPanel);
         _ui.TextCenterBig(b, "ITEM DETAIL", DetailPanel.Center.X, DetailPanel.Y + 26, Gold, UiTypography.SectionTitle);
 
         var item = Selected(hunter);

@@ -1429,7 +1429,7 @@ public sealed class SoloExpeditionScreen
         Row("HEALTH LOST / WAVE", $"{r.HealthLostPerWaveFraction:P0}", "sustain");
         Row("SECONDS / WAVE", $"{r.SecondsPerWave:F1}s", "throughput");
 
-        _ui.TextBig(b, $"measured over the last {r.SampledWaves} wave(s)", x, y + 4, Slate, UiTypography.Secondary);
+        _ui.TextBig(b, $"MEASURED OVER THE LAST {r.SampledWaves} WAVE{(r.SampledWaves == 1 ? "" : "S")}", x, y + 4, Slate, UiTypography.Secondary);
 
         // THE DIFF — what changed since the last attempt here. This is what makes iteration legible.
         var diff = r.DiffAgainst(previous).ToList();
@@ -1518,7 +1518,7 @@ public sealed class SoloExpeditionScreen
         // Spec §8: player summary, exact rectangles. Ornate primary frame; portrait AspectFit (it already
         // carries its own frame — no second medallion); name/level/power/HP/tempo/source-icons per §8.3.
         var panel = new Rectangle(196, 20, 420, 205);
-        _ui.Panel(b, panel);
+        _ui.PanelQuiet(b, panel);
 
         var por = new Rectangle(214, 39, 104, 104);
         if (_ui.Assets.Get("hunter_portrait") is { } p) b.Draw(p, por, Color.White);
@@ -1602,7 +1602,7 @@ public sealed class SoloExpeditionScreen
     /// </remarks>
     private Rectangle CleanPanel(SpriteBatch b, Rectangle r, string title)
     {
-        _ui.Panel(b, r);
+        _ui.PanelQuiet(b, r);
         _ui.TextBig(b, title, r.X + 44, r.Y + 26, Gold, 20);
         return new Rectangle(r.X + 44, r.Y + 70, r.Width - 88, r.Height - 70 - UiKit.PanelCorner);
     }
@@ -1764,7 +1764,7 @@ public sealed class SoloExpeditionScreen
         // unstyled surface left in the scene, and because its alpha was constant it changed apparent
         // brightness with whatever background it happened to be over — dark against the trunk, washed out
         // against the foliage. A real panel is opaque, so it reads the same everywhere.
-        _ui.Panel(b, SkillRailMetrics().Rail);
+        _ui.PanelQuiet(b, SkillRailMetrics().Rail);
 
         // THE RAIL HELD TWO THINGS THAT ARE GONE, and the skills inherit the room.
         //

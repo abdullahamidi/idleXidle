@@ -2784,7 +2784,7 @@ public class Game1 : Game
             // frame art — the interior of a row this short is still near-black — so the dark ink chosen for
             // "a gold surface" was drawn black on black, and the live display mode was the one thing on the
             // panel you could not read. Gold ink on the dark interior, which is the pairing that works here.
-            _ui.Panel(_batch, r, gold: on);
+            if (on) _ui.Panel(_batch, r, gold: true); else _ui.PanelQuiet(_batch, r);
             _ui.TextCenter(_batch, modeNames[i], r.Center.X, r.Center.Y - 12, on ? Gold : Bone);
             if (UiKit.ClickedIn(r, ChromeMouse, _clicked) && !on)
             {
@@ -2799,7 +2799,7 @@ public class Game1 : Game
             var s = Display.WindowedScales[i];
             var on = windowed && _windowedScale == s;
             var r = ScaleBtn(i);
-            _ui.Panel(_batch, r, gold: on);
+            if (on) _ui.Panel(_batch, r, gold: true); else _ui.PanelQuiet(_batch, r);
             var label = $"{Display.CanvasWidth * s}x{Display.CanvasHeight * s}";
             _ui.TextCenter(_batch, label, r.Center.X, r.Center.Y - 12, on ? Gold : windowed ? Bone : Slate);
             if (windowed && UiKit.ClickedIn(r, ChromeMouse, _clicked) && !on)
@@ -2862,7 +2862,7 @@ public class Game1 : Game
         {
             var selected = i == _titleCursor;
             var box = new Rectangle(640, 608 + i * 112, 640, 96);
-            _ui.Panel(_batch, box, gold: selected);
+            if (selected) _ui.Panel(_batch, box, gold: true); else _ui.PanelQuiet(_batch, box);
             // The ornate menu plates are DARK (even the gold/selected one), so both states take LIGHT text —
             // warm gold when selected, bone otherwise.
             _ui.TextCenter(_batch, items[i], box.Center.X, box.Center.Y - 12,

@@ -333,7 +333,7 @@ public sealed class BuildScreen
 
     private void DrawSummary(SpriteBatch b)
     {
-        _ui.Panel(b, SummaryPanel);
+        _ui.PanelQuiet(b, SummaryPanel);
         _ui.TextCenterBig(b, "BUILD OVERVIEW", SummaryPanel.Center.X, SummaryPanel.Y + 24, Gold, UiTypography.SectionTitle);
 
         var por = new Rectangle(SummaryPanel.Center.X - 66, SummaryPanel.Y + 72, 132, 132);
@@ -365,7 +365,7 @@ public sealed class BuildScreen
 
     private void DrawCore(SpriteBatch b)
     {
-        _ui.Panel(b, CorePanel);
+        _ui.PanelQuiet(b, CorePanel);
         _ui.TextCenterBig(b, "CORE COMPOSITION", CorePanel.Center.X, CorePanel.Y + 24, Gold, UiTypography.SectionTitle);
         var skills = Loadout.Skills;
         var focus = skills.GroupBy(s => s.Source).OrderByDescending(g => g.Count()).FirstOrDefault();
@@ -454,7 +454,7 @@ public sealed class BuildScreen
 
     private void DrawPassives(SpriteBatch b, Point hit, MemoryDustTree tree)
     {
-        _ui.Panel(b, PassivePanel);
+        _ui.PanelQuiet(b, PassivePanel);
         // +44 clears the panel art's centred top crest, which a centred title at +24 ran into.
         _ui.TextCenterBig(b, "PASSIVES & RESONANCE", PassivePanel.Center.X, PassivePanel.Y + 62, Gold, UiTypography.SectionTitle);
 
@@ -650,7 +650,7 @@ public sealed class BuildScreen
     /// </remarks>
     private void DrawNodeDetail(SpriteBatch b, Point hit)
     {
-        _ui.Panel(b, NodePanel);
+        _ui.PanelQuiet(b, NodePanel);
 
         var id = _hoverNodeId ?? _pinnedNodeId;
         if (id is null || MasteryCatalog.ById(id) is not { } n)
