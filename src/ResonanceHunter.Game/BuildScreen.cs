@@ -424,8 +424,27 @@ public sealed class BuildScreen
         var adept = Mastery.Affinity() is { } mf ? $"{Short(mf)} ADEPT" : "SEEKER";
         _ui.TextCenterBig(b, adept, SummaryPanel.Center.X, SummaryPanel.Y + 220, Bone, UiTypography.PanelTitle);
         _ui.TextCenterBig(b, $"LEVEL {Level}", SummaryPanel.Center.X, SummaryPanel.Y + 254, Gold, UiTypography.Body);
-        _ui.TextCenterBig(b, "BUILD POWER", SummaryPanel.Center.X, SummaryPanel.Y + 300, Slate, UiTypography.Secondary);
-        _ui.TextCenterBig(b, $"{Power:N0}", SummaryPanel.Center.X, SummaryPanel.Y + 328, Bone, UiTypography.PrimaryValue);
+        // "BUILD POWER" IS DELETED, AND THE REASON IS THAT IT WAS NOT A BUILD NUMBER.
+        //
+        // Playtest: "Build power denen şey nedir? Neye bağlı? Ben skillerimi neye göre seçiyorum da
+        // artıyor azalıyor?" Traced it: this was Hunter.PowerRating (Game1 assigns it), which is
+        //
+        //     damage x skillRate x critFactor x 120  +  defence x 2  +  healthMultiplier x maxHealth x 0.5
+        //
+        // and every one of those three multipliers is built from GEAR AND STATS ONLY —
+        // SquadDamageMultiplier is gear x AttackPower x worn item mods, SquadSkillRate is focus
+        // attunement x worn mods x Engineering, SquadHealthMultiplier is Vitality x charm x worn mods.
+        // Nothing in it reads a woven skill, a Source, a Form, a Vow, a keystone or the mastery tree.
+        //
+        // So the answer to "why does it move when I choose skills" is that IT DOES NOT. It is the gear
+        // number, printed in the largest type on the one screen where gear is not the subject — and the
+        // same figure is already the headline of the GEAR screen (GEAR POWER) and of the STATS card.
+        // Detailing it, which was the other option offered, would have meant explaining at length why a
+        // number on this page cannot respond to anything on this page.
+        //
+        // What belongs here instead is the readout the Weave already computes and this screen does not
+        // show: damage per second for the build as woven. That arrives with the Weave merge; until then
+        // an honest gap beats a confident wrong number.
 
         // THE FOUR ROWS THAT USED TO SIT HERE ARE GONE, and the panel is a pure identity card.
         //
