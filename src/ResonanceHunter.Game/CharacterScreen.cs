@@ -174,7 +174,13 @@ public sealed class CharacterScreen
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
         var hit = Game1.ToOverlay(mouse);
         var list = Filtered();
-        _selectedId ??= list.FirstOrDefault()?.InstanceId;   // default selection = first item (spec §9.6)
+        // THE SELECTION MUST BE SOMETHING THE GRID IS SHOWING. `??=` only fills a null, so after a tab
+        // change — or after the selected item is equipped, merged or salvaged away — the ITEM DETAIL
+        // panel went on describing an item that is not in the grid beside it, with no cell highlighted
+        // anywhere. Adopting the first visible item keeps the two halves of this screen talking about
+        // the same thing, which is the same rule the Forge bag now follows.
+        if (_selectedId is null || list.All(i => i.InstanceId != _selectedId))
+            _selectedId = list.FirstOrDefault()?.InstanceId;
 
         if (wheel != 0 && InventoryPanel.Contains(hit))
         {
@@ -585,11 +591,48 @@ public sealed class CharacterScreen
             if (hot) _hovered = item;
             if (hot && !sel) _ui.Fill(b, cell, CellHot);
             _forge.DrawItemIcon(b, item, new Rectangle(cell.X + 6, cell.Y + 6, cell.Width - 12, cell.Height - 12));
-            _ui.Fill(b, new Rectangle(cell.X, cell.Y, cell.Width, 4), RarityColor(item.Rarity));
-            if (worn) _ui.TextRightBig(b, "E", cell.Right - 8, cell.Y + 6, Gold, UiTypography.Secondary);
-            else if (Gear.SlotFor(item.BaseType) is { } sl && hunter.PowerContribution(item) > hunter.PowerContribution(hunter.Worn(sl)))
-                _ui.TextRightBig(b, "UP", cell.Right - 8, cell.Y + 6, Green, UiTypography.Secondary);
-            if (sel) Reticle(b, cell, Gold);
+
+            // EVERY MARK IN THIS CELL IS NOW DRAWN AFTER THE ICON, and each one owns a different part of
+            // the cell. The item frame's centre is fully opaque, so anything drawn before it is painted
+            // over — which is why the hover fill was invisible and why the rarity strip was the only
+            // thing that survived (it sat in the 6px margin).
+            //
+            // Playtest: "envanter ekranında seçili ve kuşanılan item belirgin değil." Both were true and
+            // both had the same cause: every state was competing for the same gold pixels at the top of
+            // the cell. Selection was `Reticle(cell, Gold)` — and Legendary's rarity colour IS Gold, and
+            // the list sorts rarity-descending with cell 0 selected by default, so THE FIRST THING THE
+            // PLAYER SEES ON OPENING GEAR was a screen with no discernible selection. "Worn" was a
+            // single 16px letter E on the frame's brightest corner ornament: the smallest, lowest
+            // contrast mark in the cell, carrying the most important fact in the grid.
+            //
+            // So: rarity takes the LEFT EDGE, state takes the BOTTOM, selection takes the PERIMETER.
+            // Different shapes in different places, none of them competing for a hue.
+            _ui.Fill(b, new Rectangle(cell.X, cell.Y, 5, cell.Height), RarityColor(item.Rarity));
+
+            // The state banner, in words. "E" and "UP" were abbreviations with no legend anywhere on the
+            // screen, and E is not even the first letter of a word the game uses — the tooltip says WORN
+            // and the button says EQUIP.
+            var better = !worn && Gear.SlotFor(item.BaseType) is { } bs && hunter.Worn(bs) is not null
+                         && hunter.PowerContribution(item) > hunter.PowerContribution(hunter.Worn(bs));
+            if (worn || better)
+            {
+                var band = new Rectangle(cell.X + 5, cell.Bottom - 20, cell.Width - 5, 20);
+                _ui.Fill(b, band, new Color(0x0C, 0x0A, 0x12, 0xEE));
+                _ui.TextCenterBig(b, worn ? "WORN" : "BETTER", band.Center.X, band.Y + 2,
+                                  worn ? Gold : Green, UiTypography.Secondary);
+            }
+
+            // BETTER no longer fires on an EMPTY slot. PowerContribution(null) returns 0, so the old test
+            // was true for every item whose slot was bare — which on a fresh character, or one frame
+            // after UNEQUIP ALL, meant every visible cell claimed to be an upgrade. A mark that is on
+            // everything says nothing, and it teaches the player to stop reading that row.
+
+            if (sel)
+            {
+                _ui.Fill(b, cell, new Color(0x8A, 0x5A, 0xC8, 0x3C));
+                Ring(b, cell, new Color(0xF6, 0xEA, 0xC6), 3);
+            }
+            else if (hot) Ring(b, cell, Slate, 2);
         }
 
         // Scrollbar (§9.8) — only when the list overflows the visible rows.
@@ -782,6 +825,20 @@ public sealed class CharacterScreen
         _ui.Fill(b, new Rectangle(r.X, r.Bottom - 2, r.Width, 2), c);
         _ui.Fill(b, new Rectangle(r.X, r.Y, 2, r.Height), c);
         _ui.Fill(b, new Rectangle(r.Right - 2, r.Y, 2, r.Height), c);
+    }
+
+    /// <summary>A continuous border inside a rect — the one mark in a cell that reads at a glance.</summary>
+    /// <remarks>
+    /// Replaces <see cref="Reticle"/> for selection. Eight corner ticks totalling 328px of a cell's
+    /// perimeter lose to the item frame's own gold corner ornaments, which are in the same places; a
+    /// closed ring has no corner to hide behind and reads as one shape rather than eight marks.
+    /// </remarks>
+    private void Ring(SpriteBatch b, Rectangle r, Color c, int t)
+    {
+        _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, t), c);
+        _ui.Fill(b, new Rectangle(r.X, r.Bottom - t, r.Width, t), c);
+        _ui.Fill(b, new Rectangle(r.X, r.Y, t, r.Height), c);
+        _ui.Fill(b, new Rectangle(r.Right - t, r.Y, t, r.Height), c);
     }
 
     private void Reticle(SpriteBatch b, Rectangle r, Color c)

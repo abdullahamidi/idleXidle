@@ -57,7 +57,16 @@ public sealed class BuildScreen
     private string? _pinnedNodeId;         // the last node clicked — what the detail panel shows when nothing is hovered
     /// <summary>Set when the player asked for the weave editor. The host opens it and clears this.</summary>
     public bool WantsWeave { get; set; }
+    private bool _resetArmed;   // the reset button has been pressed once and is waiting for the second
     private bool _editMode;   // false = the overview; true = the mastery-tree + skill editor sub-view
+
+    /// <summary>Which of this screen's two views is open. The rail's BUILD and MASTERY tiles both set it.</summary>
+    /// <remarks>
+    /// The tree used to be reachable only from inside this screen, so the flag was private. It has its
+    /// own rail tile now, and a tile that opened "whichever view you happened to leave open" would read
+    /// as a broken button rather than as stale state.
+    /// </remarks>
+    public bool ShowTree { get => _editMode; set => _editMode = value; }
 
     /// <summary>Open straight onto the tree — used by the headless capture so the shot shows the tree.</summary>
     /// <summary>DEV ONLY: open the tree sub-view, optionally framed on the centre at a given zoom.</summary>
@@ -84,18 +93,20 @@ public sealed class BuildScreen
     public bool DevBuildDebug { get; set; }
 
     // ── Spec §4 overview layout. ──
-    private static readonly Rectangle SummaryPanel = new(40, 138, 360, 746);
+    private static readonly Rectangle SummaryPanel = new(40, 138, 360, 460);
     private static readonly Rectangle CorePanel = new(426, 138, 774, 450);
-    private static readonly Rectangle AuraPanel = new(426, 606, 774, 278);
+    // 330, NOT 278 — the buttons live inside it now. They sat at y=902 while this panel ended at 884,
+    // so the two controls that act on the build floated on the dungeon wall below the frame holding it,
+    // reading as chrome that belonged to no panel at all.
+    private static readonly Rectangle AuraPanel = new(426, 606, 774, 330);
     // 800, not 746. This column is the only one on the screen whose height is DATA — six passives, up
     // to five resonance rows, then the keystone block — and at 746 the worst case ran off the bottom.
     // The extra 54 puts its foot level with the middle column's button row rather than short of it.
     private static readonly Rectangle PassivePanel = new(1228, 138, 652, 800);
-    private static readonly Rectangle EditBtn = new(704, 902, 260, 44);
-    private static readonly Rectangle ResetBtn = new(984, 902, 232, 44);
-    // The overview's own door to the weave editor. "EDIT BUILD" opens the TREE, which is a different
-    // question — the tree is what you are, the weave is what you carry.
-    private static readonly Rectangle WeaveBtn = new(426, 902, 260, 44);
+    // Docked in AuraPanel's foot, sharing its interior width. EditBtn is gone: it ran the same line as
+    // VIEW TREE, and the tree has its own rail tile now.
+    private static readonly Rectangle WeaveBtn = new(466, 842, 337, 44);
+    private static readonly Rectangle ResetBtn = new(823, 842, 337, 44);
     /// <summary>The i-th of <paramref name="n"/> auto-skill cards, sharing the panel's width between them.</summary>
     /// <remarks>
     /// Divided rather than fixed at a pitch of 182, which fitted exactly four and put a fifth at
@@ -109,7 +120,7 @@ public sealed class BuildScreen
         var left = AuraPanel.X + UiKit.PanelCorner;
         var usable = AuraPanel.Width - UiKit.PanelCorner * 2;
         var w = (usable - (Math.Max(1, n) - 1) * gap) / Math.Max(1, n);
-        return new Rectangle(left + i * (w + gap), 648, w, 198);
+        return new Rectangle(left + i * (w + gap), 648, w, 178);
     }
     // Under the panel's top crest, which the title now clears too — at y=196 the button was drawn
     // straight through it.
@@ -275,9 +286,27 @@ public sealed class BuildScreen
 
         if (!_editMode)
         {
-            if (EditBtn.Contains(hit) || ViewTreeBtn.Contains(hit)) { _editMode = true; return; }
+            if (ViewTreeBtn.Contains(hit)) { _editMode = true; return; }
             if (WeaveBtn.Contains(hit)) { WantsWeave = true; return; }
-            if (ResetBtn.Contains(hit) && Mastery.Spent > 0) { Mastery.Respec(); _msg = "MASTERY RESET."; Dirty = true; }
+            // AN EMPTY SKILL CARD IS A DOOR. It drew a "+B" hint and did nothing when clicked, which is
+            // the one place on this screen a player is most likely to press: the hole where a skill
+            // should be.
+            for (var i = Loadout.Skills.Count; i < Loadout.SkillCapacity; i++)
+                if (AuraCard(i, Loadout.SkillCapacity).Contains(hit)) { WantsWeave = true; return; }
+            if (ResetBtn.Contains(hit) && Mastery.Spent > 0)
+            {
+                // TWO CLICKS, because it un-spends every point in the tree and there is no undo prompt
+                // anywhere else in this game. The respec itself stays free and instant — that is the
+                // load-bearing difference between this tree and the permanent one — so the guard is
+                // deliberation, not cost.
+                if (!_resetArmed) { _resetArmed = true; _msg = "PRESS AGAIN TO TAKE ALL POINTS BACK."; return; }
+                _resetArmed = false;
+                Mastery.Respec();
+                _msg = $"ALL MASTERY POINTS RETURNED.";
+                Dirty = true;
+                return;
+            }
+            _resetArmed = false;   // any other click on the overview disarms it
             return;
         }
 
@@ -332,9 +361,12 @@ public sealed class BuildScreen
         DrawAuraCards(b, hit);
         DrawPassives(b, hit, tree);
 
-        Button(b, WeaveBtn, "WEAVE SKILLS", hit, true);
-        Button(b, EditBtn, "EDIT BUILD", hit, true);
-        Button(b, ResetBtn, "RESET MASTERY", hit, Mastery.Spent > 0);
+        // TWO BUTTONS, NOT THREE. "EDIT BUILD" and "VIEW TREE" ran the same line of code — both set
+        // _editMode — so the screen offered two differently-named doors into one room while the room
+        // itself is now a rail tile. What is left names what it opens and what it costs.
+        Button(b, WeaveBtn, "CHOOSE YOUR SKILLS", hit, true);
+        Button(b, ResetBtn, _resetArmed ? "PRESS AGAIN TO CONFIRM" : "TAKE ALL MASTERY POINTS BACK",
+               hit, Mastery.Spent > 0);
         if (DevBuildDebug) DrawDebug(b);
     }
 
@@ -352,22 +384,16 @@ public sealed class BuildScreen
         _ui.TextCenterBig(b, "BUILD POWER", SummaryPanel.Center.X, SummaryPanel.Y + 300, Slate, UiTypography.Secondary);
         _ui.TextCenterBig(b, $"{Power:N0}", SummaryPanel.Center.X, SummaryPanel.Y + 328, Bone, UiTypography.PrimaryValue);
 
-        var skills = Loadout.Skills;
-        var focus = skills.GroupBy(s => s.Source).OrderByDescending(g => g.Count()).FirstOrDefault();
-        var vows = skills.Count(s => Weaving.ById(s.VowId) is not null);
-        var y = SummaryPanel.Y + 400;
-        Row(b, SummaryPanel, "SOURCE FOCUS", focus is null ? "—" : focus.Key.ToString().ToUpperInvariant(), ref y);
-        // DISTINCT Forms, because that is what the row is labelled. It read skills.Count, so a build
-        // running two BODY STRIKEs reported "ACTIVE FORMS 5" a glance away from the CORE COMPOSITION
-        // panel listing four — the same screen contradicting itself, and the wrong half is the one a
-        // player uses to reason about Form combos and affinity. How many SKILLS there are is already
-        // visible: they are the cards in the loadout row underneath.
-        Row(b, SummaryPanel, "ACTIVE FORMS", $"{skills.Select(s => s.Form).Distinct().Count()}", ref y);
-        Row(b, SummaryPanel, "VOW-BOUND", $"{vows}", ref y);
-        // POINTS, NOT NODES. MasteryTree.Spent is documented as the SUM OF COSTS, so this row printed
-        // "24 NODES" for a tree whose own legend, two panels away, said 11 nodes — two numbers for the
-        // same thing, one of them wrong, on the same screen.
-        Row(b, SummaryPanel, "MASTERY", $"{Mastery.Spent} POINTS", ref y);
+        // THE FOUR ROWS THAT USED TO SIT HERE ARE GONE, and the panel is a pure identity card.
+        //
+        // SOURCE FOCUS / ACTIVE FORMS / VOW-BOUND / MASTERY restated, one panel to the right and in
+        // larger type, exactly what CORE COMPOSITION already says: SOURCE, FORMS, VOWS. Two panels, the
+        // same three facts, four hundred pixels apart — and they had already contradicted each other
+        // once (ACTIVE FORMS counted skills while CORE counted distinct Forms, so a build running two
+        // BODY STRIKEs reported five against four on one screen).
+        //
+        // CORE keeps them because it is the panel the screen is named for and it has the room to say
+        // them properly; what is left here is who you are and what that is worth.
     }
 
     private void DrawCore(SpriteBatch b)
@@ -471,12 +497,15 @@ public sealed class BuildScreen
 
         // THE POINTS LINE GETS ITS OWN ROW. It shared one with the VIEW TREE button, whose left edge is
         // at 1544 — 264px from the text's start, and the string needs about 300. It rendered as
-        // "SKILL POINTS   18 SPENT  ·  6 FI" with the rest under the button. Shortening the label would
+        // "MASTERY POINTS   18 SPENT  ·  6 FI" with the rest under the button. Shortening the label would
         // have hidden it for now and brought it back the moment a player earned a third digit: mastery
         // points are 3 + deepestEver/5 + conquered*5, so three digits is a real endgame value, not a
         // hypothetical. The row is free instead.
-        _ui.TextBig(b, $"SKILL POINTS   {Mastery.Spent} SPENT  ·  {Mastery.Available} FREE", x, PassivePanel.Y + 112, Bone, UiTypography.Body);
-        Button(b, ViewTreeBtn, "VIEW TREE", hit, true);
+        // ONE NAME FOR ONE POOL. This line called them SKILL POINTS while STATS calls the same number
+        // MASTERY POINTS and the rail tile that spends them is now labelled MASTERY. Three names for one
+        // currency is three currencies as far as a player is concerned.
+        _ui.TextBig(b, $"MASTERY POINTS   {Mastery.Spent} SPENT  ·  {Mastery.Available} FREE", x, PassivePanel.Y + 112, Bone, UiTypography.Body);
+        Button(b, ViewTreeBtn, "OPEN THE MASTERY TREE", hit, true);
 
         // PASSIVES — the real taken mastery nodes (notables + mastery). No invented "trait bonus %" table.
         _ui.TextBig(b, "PASSIVES", x, PassivePanel.Y + 206, Gold, UiTypography.Secondary);

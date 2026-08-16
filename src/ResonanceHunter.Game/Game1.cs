@@ -2205,7 +2205,8 @@ public class Game1 : Game
         // THE FIGHT RAIL'S REWARD BUTTONS NAVIGATE, and the host is what navigates. The screen only
         // records that they were pressed — a fight screen that opened chests itself would be a second
         // Forge, and the errand belongs to the screen that owns the verb.
-        if (_expedition.WantsVault) { _expedition.WantsVault = false; OpenNav(4); }
+        // Indices, not names — they moved when MASTERY was inserted at 4. VAULT is 5 now.
+        if (_expedition.WantsVault) { _expedition.WantsVault = false; OpenNav(5); }
         if (_expedition.WantsBuild) { _expedition.WantsBuild = false; OpenNav(3); }
 
         // The first-run guide, or null once outgrown. Held on the HOST, not on the fight screen: it is
@@ -2957,14 +2958,20 @@ public class Game1 : Game
         // anyone the key existed.
         var world = new (string Key, string What)[]
         {
+            // IN RAIL ORDER, and complete. K and T were missing entirely — the VAULT is where chests are
+            // read and the WEAVE is where skills are chosen, so the two keys a new player most needs were
+            // the two this list did not have. B said "WEAVE YOUR BUILD", which is the OTHER screen.
             ("H", "HUNT — THE FIGHT"),
-            ("C", "CHARACTER — GEAR & BAG"),
-            ("V", "STATS — TRAIN"),
-            ("B", "WEAVE YOUR BUILD"),
-            ("W", "WORLD MAP"),
+            ("C", "GEAR — WHAT YOU WEAR"),
+            ("V", "STATS — SPEND GLEAM"),
+            ("B", "BUILD — YOUR SKILLS AT A GLANCE"),
+            ("E", "MASTERY — HOW YOUR SKILLS BEHAVE"),
+            ("T", "THE WEAVE — CHOOSE YOUR SKILLS"),
+            ("K", "VAULT — CHESTS YOU HAVE NOT OPENED"),
             ("F", "FORGE — CRAFT & CHESTS"),
-            ("A", "WARREN — HATCH"),
-            ("P", "TRAITS — THE SPINE"),
+            ("A", "WARREN — WORK WHILE YOU ARE AWAY"),
+            ("W", "MAP — WHERE TO HUNT"),
+            ("P", "TRAITS — WHAT SURVIVES DEATH"),
             ("R", "ROSTER — YOUR CHAMPIONS"),
             ("L", "THE EXPEDITION LOG"),
             ("F1", "CLOSE"),
@@ -2978,6 +2985,10 @@ public class Game1 : Game
         }
 
         // 38px pitch, not 46: eleven rows at 46 would run to y=754 and through THE IDEA block below.
+        // The list is FOURTEEN rows now, so it reaches y=748 — and the two prose blocks below were
+        // wrapped to 1568px, the full width of the panel, so they ran straight through it. They are
+        // wrapped to the left column's width instead: two columns that share a page rather than two
+        // blocks that share pixels.
         Text("SCREENS", 1140, 200, Bone);
         for (var i = 0; i < world.Length; i++)
         {
@@ -2990,10 +3001,10 @@ public class Game1 : Game
             "ONE CHAMPION, YOUR BUILD — IT FIGHTS ON ITS OWN, ON EVERY SCREEN, EVEN WHILE THE GAME IS " +
             "CLOSED. EACH WAVE IT CLEARS PAYS GLEAM AT ONCE. EVERY 5TH IS A BOSS, WITH A CHANCE AT A CHEST. " +
             "WHEN IT FALLS IT RECOVERS AND PUSHES ON — NOTHING IS BANKED, NOTHING IS LOST.",
-            176, 664, 1568, Bone);
+            176, 664, 900, Bone);
         WrapText(
             $"SPEND GLEAM ON COMMAND TO STRENGTHEN YOUR CHAMPION. REACH WAVE {ConquerWaveDepth} TO CONQUER A REGION AND UNLOCK THE NEXT.",
-            176, 832, 1568, Bone * 0.7f);
+            176, 788, 900, Bone * 0.7f);
     }
 
     // ── Drawing helpers ───────────────────────────────────────────────────────────────────────
@@ -3044,6 +3055,11 @@ public class Game1 : Game
         // generated (icon_nav_*).
         ("HUNT", 'H', "nav_hunt_128"), ("GEAR", 'C', "nav_inventory_128"),
         ("STATS", 'V', "state_resonance_128"), ("BUILD", 'B', "state_mastery_128"),
+        // THE MASTERY TREE GETS ITS OWN DOOR. It was reachable only through a button labelled EDIT BUILD
+        // on the Build overview — neither what it edits nor what anyone would go looking for — and it is
+        // the second-largest system in the game. nav_build is the only unused nav emblem with a real
+        // centre (bright-pixel fraction 0.31; nav_evolve and nav_codex are empty rings at 0.00 / 0.01).
+        ("MASTERY", 'E', "nav_build"),
         ("VAULT", 'K', "chest_loot"), ("FORGE", 'F', "icon_nav_forge"), ("WARREN", 'A', "icon_nav_warren"),
         ("MAP", 'W', "nav_relics_128"), ("TRAITS", 'P', "nav_prestige"),
         ("ROSTER", 'R', "icon_class_hunter"),
@@ -3134,8 +3150,11 @@ public class Game1 : Game
     /// activity, so it lights that tile rather than claiming one.
     /// </remarks>
     private int NavActive() =>
-        _showCharacter ? 1 : _showStats ? 2 : _showBuild || _showWeave ? 3 : _showChests ? 4 :
-        _showForge ? 5 : _showAutomation ? 6 : _showWorld ? 7 : _showPrestige ? 8 : _showRoster ? 9 : 0;
+        _showCharacter ? 1 : _showStats ? 2 :
+        // The tree lights its OWN tile. Both views live on _showBuild, so the mode decides which.
+        _showBuild && _buildScreen.ShowTree ? 4 : _showBuild || _showWeave ? 3 :
+        _showChests ? 5 : _showForge ? 6 : _showAutomation ? 7 : _showWorld ? 8 :
+        _showPrestige ? 9 : _showRoster ? 10 : 0;
 
     /// <summary>
     /// Which activity each rail tile is, so one table decides both what a tile opens and whether it may.
@@ -3147,7 +3166,7 @@ public class Game1 : Game
     /// </remarks>
     private static readonly Activity[] NavActivity =
     {
-        Activity.Hunt, Activity.Gear, Activity.Stats, Activity.Build,
+        Activity.Hunt, Activity.Gear, Activity.Stats, Activity.Build, Activity.Mastery,
         Activity.Vault, Activity.Forge, Activity.Warren, Activity.Map, Activity.Traits, Activity.Roster,
     };
 
@@ -3171,17 +3190,21 @@ public class Game1 : Game
         }
 
         _showCharacter = _showStats = _showBuild = _showForge = _showAutomation = _showWorld = _showPrestige = _showRoster = _showWeave = _showChests = false;
+        // BUILD and MASTERY are two doors into one screen, so the tile also sets which VIEW it opens on.
+        // Without that line the rail would be lying: pressing MASTERY while the overview was last open
+        // would show the overview, and the tile would look broken rather than the state being stale.
         switch (i)
         {
             case 1: _showCharacter = true; break;
             case 2: _showStats = true; break;
-            case 3: _showBuild = true; break;
-            case 4: _showChests = true; break;
-            case 5: _showForge = true; break;
-            case 6: _showAutomation = true; break;
-            case 7: _showWorld = true; _mapScreen.ActiveRegion = _activeRegion; _mapScreen.SelectActive(); break;
-            case 8: _showPrestige = true; break;
-            case 9: _showRoster = true; break;
+            case 3: _showBuild = true; _buildScreen.ShowTree = false; break;
+            case 4: _showBuild = true; _buildScreen.ShowTree = true; break;
+            case 5: _showChests = true; break;
+            case 6: _showForge = true; break;
+            case 7: _showAutomation = true; break;
+            case 8: _showWorld = true; _mapScreen.ActiveRegion = _activeRegion; _mapScreen.SelectActive(); break;
+            case 9: _showPrestige = true; break;
+            case 10: _showRoster = true; break;
             // case 0 HUNT: everything cleared above → back to the fight.
         }
     }
@@ -3276,10 +3299,15 @@ public class Game1 : Game
 
             // Icon above, label below, both centred in the shorter tile.
             var iconTint = !unlocked ? Color.White * 0.22f : on ? Color.White : Color.White * 0.75f;
+            // THE ICON IS SIZED FROM THE TILE, not from a literal 48. NavTileHeight is 1080/Nav.Length,
+            // so adding the eleventh tile took every tile from 108px to 98 — and at a fixed 48 starting
+            // at Y+24 the icon ran to Y+72 while the label is drawn at Bottom-34, i.e. Y+64. The rail
+            // would have rendered every glyph through its own caption. Pixel-identical at ten tiles.
+            var iconPx = Math.Clamp(NavTileHeight - 60, 30, 48);
             if (_assets.Get(Nav[i].Glyph) is { } g)
-                _batch.Draw(g, new Rectangle(r.Center.X - 24, r.Y + 24, 48, 48), iconTint);
+                _batch.Draw(g, new Rectangle(r.Center.X - iconPx / 2, r.Y + 24, iconPx, iconPx), iconTint);
             else
-                _ui.Diamond(_batch, new Rectangle(r.Center.X - 20, r.Y + 28, 40, 40), on ? NavGold : NavGem * 0.75f);
+                _ui.Diamond(_batch, new Rectangle(r.Center.X - iconPx / 2 + 4, r.Y + 28, iconPx - 8, iconPx - 8), on ? NavGold : NavGem * 0.75f);
             _ui.TextCenterBig(_batch, Nav[i].Label, r.Center.X, r.Bottom - 34,
                               !unlocked ? NavLabel * 0.35f : on ? NavGold : NavLabel * 0.9f, UiTypography.NavigationLabel);
 

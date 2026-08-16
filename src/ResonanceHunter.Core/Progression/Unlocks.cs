@@ -30,6 +30,14 @@ public enum Activity
     /// <summary>Weaving skills, keystones and Vows.</summary>
     Build,
 
+    /// <summary>The mastery tree — how the skills you wove behave.</summary>
+    /// <remarks>
+    /// Deliberately its OWN activity rather than a corner of <see cref="Build"/>. The tree was reachable
+    /// only through a button labelled EDIT BUILD on the Build overview, which is neither what it edits
+    /// nor what a player would go looking for, and it is the second-largest system in the game.
+    /// </remarks>
+    Mastery,
+
     /// <summary>Travelling between regions.</summary>
     Map,
 
@@ -110,6 +118,12 @@ public static class Unlocks
         // choose four skills before they have seen one go off is asking them to guess.
         Activity.Build => f.DeepestWave >= 5,
 
+        // A BEAT AFTER THE BUILD, not with it. Mastery points arrive one per five waves of first-time
+        // depth, so a player at wave 5 has exactly one and no sense yet of what a Form does. Opening the
+        // tree at 8 means it arrives when there is something to spend and a fight to spend it on, and it
+        // arrives SECOND — you choose your skills, then you shape how they behave.
+        Activity.Mastery => f.DeepestWave >= 8,
+
         // There is nowhere to travel to until a region has been taken, so the Map is a map of one place
         // until then. It opens as the reward for the first conquest — which is also when it is exciting.
         Activity.Map => f.RegionsConquered >= 1,
@@ -145,6 +159,7 @@ public static class Unlocks
         Activity.Vault => "Earn a chest from a boss",
         Activity.Forge => "Earn a chest from a boss",
         Activity.Build => "Reach wave 5",
+        Activity.Mastery => "Reach wave 8",
         Activity.Map => "Conquer a region",
         Activity.Warren => "Conquer a region",
         Activity.Traits => "Earn a trait point",
@@ -167,6 +182,7 @@ public static class Unlocks
         Activity.Vault => "THE VAULT — CHESTS YOU HAVE NOT OPENED",
         Activity.Forge => "THE FORGE — WHERE ITEMS ARE MADE",
         Activity.Build => "THE BUILD — THE ACTUAL GAME",
+        Activity.Mastery => "THE MASTERY TREE — HOW YOUR SKILLS BEHAVE",
         Activity.Map => "THE MAP — THE WORLD BEYOND",
         Activity.Warren => "THE WARREN — WORK THAT RUNS WITHOUT YOU",
         Activity.Traits => "TRAITS — WHAT SURVIVES DEATH",
@@ -231,6 +247,14 @@ public static class Unlocks
             + "damage. You also socket KEYSTONES, which bend a rule, and may swear VOWS, which give up "
             + "something real for something bigger. Nothing here is a stat increase — it all changes "
             + "how the fight actually goes.",
+
+        Activity.Mastery =>
+            "A tree of small rules that change how your skills already behave, rather than making them "
+            + "bigger. WEIGHT trades speed for size, TEMPO trades size for speed, SPREAD reaches more "
+            + "creatures at once and ENDURE keeps you alive. Weight opposes Spread and Tempo opposes "
+            + "Endure, so one branch is affordable and two are not — the tree is a choice about what "
+            + "your build is FOR. Points come from reaching depth you have never reached before. "
+            + "Nothing here is permanent: you can take every point back at any time, for free.",
 
         Activity.Map =>
             "The world is a chain of six regions and each is meaningfully harder than the one before "
