@@ -183,9 +183,9 @@ public sealed class WarrenScreen
 
         var entries = new (Color Gem, string Value, string Label)[]
         {
-            (GleamC, $"+{Warren.ResourceBonus(WarrenResource.Gleam) * 100f:0}%", "GOLD"),
+            (GleamC, $"+{Warren.ResourceBonus(WarrenResource.Gleam) * 100f:0}%", "GLEAM"),
             (MasteryC, $"+{Warren.ResourceBonus(WarrenResource.Mastery) * 100f:0}%", "INSIGHT"),
-            (DustC, $"+{Warren.ResourceBonus(WarrenResource.Dust) * 100f:0}%", "NATURE"),
+            (DustC, $"+{Warren.ResourceBonus(WarrenResource.Dust) * 100f:0}%", "DUST"),
             (Met, $"+{Warren.AllProductionBonus * 100f:0}%", "ALL PRODUCTION"),
             (Ember, $"+{Warren.ConquestBonus * 100f:0}%", "CONQUEST"),
             (Gold, $"LV {Warren.Level}", "WARREN"),
@@ -230,9 +230,9 @@ public sealed class WarrenScreen
 
         var cost = f.UpgradeCost();
         var y = DetailPanel.Y + 388;
-        DrawReq(b, y, GleamC, "GOLD", GleamOwned, cost.Gleam);
+        DrawReq(b, y, GleamC, "GLEAM", GleamOwned, cost.Gleam);
         DrawReq(b, y + 42, MasteryC, "INSIGHT", MasteryOwned, cost.Mastery);
-        DrawReq(b, y + 84, DustC, "NATURE", DustOwned, cost.Dust);
+        DrawReq(b, y + 84, DustC, "DUST", DustOwned, cost.Dust);
 
         var afford = GleamOwned >= cost.Gleam && MasteryOwned >= cost.Mastery && DustOwned >= cost.Dust;
 

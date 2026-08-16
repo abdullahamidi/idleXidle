@@ -12,9 +12,9 @@ using ResonanceHunter.Core.Prestige;
 namespace ResonanceHunter.Client;
 
 /// <summary>
-/// The BUILD screen (nav: BUILD): a four-panel overview of the auto-skill loadout — a build summary, the
-/// Source/Form/Vow composition, the four equipped aura cards, and the passives / resonance / notes column.
-/// An EDIT sub-view (the mastery tree + skill sidebar) is one button away, so all editing is preserved.
+/// The BUILD screen: a four-panel overview of the woven loadout — an identity card, the Source/Form/Vow
+/// composition, the skill cards with their two actions docked beneath them, and the passives / resonance
+/// column. The mastery tree is the SAME class in its other view (see ShowTree) and has its own rail tile.
 /// </summary>
 /// <remarks>
 /// Built to the Build production spec (rev 1). All data is REAL: the game has ONE live loadout (not the
@@ -66,7 +66,23 @@ public sealed class BuildScreen
     /// own rail tile now, and a tile that opened "whichever view you happened to leave open" would read
     /// as a broken button rather than as stale state.
     /// </remarks>
-    public bool ShowTree { get => _editMode; set => _editMode = value; }
+    public bool ShowTree
+    {
+        get => _editMode;
+        // Arming survives no navigation. The two-click reset used to stay armed when the player left
+        // BUILD and came back, so a single click on a screen they had just opened wiped the whole tree.
+        set { _editMode = value; _resetArmed = false; }
+    }
+
+    /// <summary>
+    /// Whether <see cref="Activity.Mastery"/> is open yet. Host-set, like every other fact here.
+    /// </summary>
+    /// <remarks>
+    /// The rail refuses the MASTERY tile until wave 8, and OPEN THE MASTERY TREE on this screen walked
+    /// straight past that — so the tree was reachable at wave 5 from a button drawn beside a tile that
+    /// was dimmed and saying "REACH WAVE 8". Two doors into one room have to agree about the lock.
+    /// </remarks>
+    public bool TreeUnlocked { get; set; } = true;
 
     /// <summary>Open straight onto the tree — used by the headless capture so the shot shows the tree.</summary>
     /// <summary>DEV ONLY: open the tree sub-view, optionally framed on the centre at a given zoom.</summary>
@@ -275,6 +291,30 @@ public sealed class BuildScreen
             if (Tapped(Keys.Home)) { _pan = Vector2.Zero; _zoom = 0.30f; }
         }
 
+        // THE RIGHT-CLICK REFUND, ABOVE THE LEFT-CLICK GATE. It was written below `if (!clicked)
+        // return;` — and `clicked` is the LEFT button's edge while `rightClicked` is the right's, two
+        // independent latches — so the refund could only fire on a frame where both buttons were pressed
+        // at once. Shipped dead, in the same commit whose comment celebrated wiring up a dead method.
+        // Everything under the gate assumes a left click, so this runs first rather than widening it.
+        if (rightClicked && _editMode && !_draggedThisPress)
+        {
+            var rhit = Game1.ToOverlay(mouse);
+            foreach (var node in MasteryCatalog.Nodes)
+            {
+                if (node.Kind == MasteryKind.Start) continue;
+                var rp = Screen(NodePos(node));
+                var rr = Math.Max(6, (int)(NodeRadius(node.Kind) * _zoom * 1.9f)) + 6;
+                var rw = node.Kind == MasteryKind.Mastery ? (int)(120 * _zoom * 1.9f) + 6 : rr;
+                if (Math.Abs(rhit.X - rp.X) > rw || Math.Abs(rhit.Y - rp.Y) > rr) continue;
+                _pinnedNodeId = node.Id;
+                if (Mastery.Refund(node.Id)) { _msg = "ONE POINT RETURNED."; Dirty = true; }
+                else _msg = Mastery.IsTaken(node.Id)
+                    ? "ANOTHER NODE DEPENDS ON THIS ONE."
+                    : "NOTHING SPENT HERE.";
+                return;
+            }
+        }
+
         if (!clicked) return;
 
         // A click that ENDED a drag is a pan, not a take. Without this every attempt to move the tree
@@ -285,7 +325,7 @@ public sealed class BuildScreen
 
         if (!_editMode)
         {
-            if (ViewTreeBtn.Contains(hit)) { _editMode = true; return; }
+            if (ViewTreeBtn.Contains(hit)) { if (TreeUnlocked) _editMode = true; return; }
             if (WeaveBtn.Contains(hit)) { WantsWeave = true; return; }
             // AN EMPTY SKILL CARD IS A DOOR. It drew a "+B" hint and did nothing when clicked, which is
             // the one place on this screen a player is most likely to press: the hole where a skill
@@ -324,18 +364,6 @@ public sealed class BuildScreen
             // cannot afford is exactly the one you most want to read.
             _pinnedNodeId = node.Id;
 
-            // RIGHT-CLICK TAKES ONE POINT BACK. MasteryTree.Refund has existed, unit-tested, with the
-            // stranding guard already written — and with ZERO callers anywhere in src. The only way to
-            // undo a misclick was to respec the entire tree, which meant a single wrong node cost every
-            // other decision in it. Right-click, because left-click on a taken node has a job already.
-            if (rightClicked)
-            {
-                if (Mastery.Refund(node.Id)) { _msg = "ONE POINT RETURNED."; Dirty = true; }
-                else _msg = Mastery.IsTaken(node.Id)
-                    ? "ANOTHER NODE DEPENDS ON THIS ONE."
-                    : "NOTHING SPENT HERE.";
-                return;
-            }
 
             if (Mastery.Take(node.Id)) { _msg = ""; Dirty = true; }
             else _msg = Mastery.IsTaken(node.Id) ? "ALREADY TAKEN." :
@@ -378,6 +406,9 @@ public sealed class BuildScreen
         Button(b, WeaveBtn, "CHOOSE YOUR SKILLS", hit, true);
         Button(b, ResetBtn, _resetArmed ? "PRESS AGAIN TO CONFIRM" : "TAKE ALL MASTERY POINTS BACK",
                hit, Mastery.Spent > 0);
+        // The reset writes to _msg, which only the TREE page draws — so its confirmation and its result
+        // were both invisible on the page carrying the button. Drawn under the row that produces it.
+        if (_msg.Length > 0) _ui.TextCenterBig(b, _msg, AuraPanel.Center.X, ResetBtn.Bottom + 8, Gold, UiTypography.Secondary);
         if (DevBuildDebug) DrawDebug(b);
     }
 
@@ -516,7 +547,7 @@ public sealed class BuildScreen
         // MASTERY POINTS and the rail tile that spends them is now labelled MASTERY. Three names for one
         // currency is three currencies as far as a player is concerned.
         _ui.TextBig(b, $"MASTERY POINTS   {Mastery.Spent} SPENT  ·  {Mastery.Available} FREE", x, PassivePanel.Y + 112, Bone, UiTypography.Body);
-        Button(b, ViewTreeBtn, "OPEN THE MASTERY TREE", hit, true);
+        Button(b, ViewTreeBtn, "OPEN THE MASTERY TREE", hit, TreeUnlocked);
 
         // PASSIVES — the real taken mastery nodes (notables + mastery). No invented "trait bonus %" table.
         _ui.TextBig(b, "PASSIVES", x, PassivePanel.Y + 206, Gold, UiTypography.Secondary);

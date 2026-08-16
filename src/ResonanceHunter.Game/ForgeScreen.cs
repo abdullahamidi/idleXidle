@@ -187,6 +187,8 @@ public sealed class ForgeScreen
     /// <summary>The item the focused (UPGRADE / REFORGE) modes act on — resolved by id so a re-forge that
     /// replaces the object keeps the selection. Defaults to the first wearable in the bag.</summary>
     private string? _focusId;
+    /// <summary>Set when the focus was CHOSEN, so the list scrolls to it once and then leaves it alone.</summary>
+    private bool _focusFollow;
 
     /// <summary>F7 layout-debug overlay (UX standard §16 — component bounds).</summary>
     public bool DevForgeDebug { get; set; }
@@ -214,9 +216,10 @@ public sealed class ForgeScreen
     /// button sits at Bottom-92. Row six therefore ran from Y+770 to Y+806 straight underneath a button
     /// drawn at Y+778 — visible, clickable, and reporting another item's name.
     ///
-    /// The panel also grew 64px downward to keep six real rows rather than dropping to five. Six is not
-    /// generous, but the list is sorted rarest-first now and the wheel reaches it, so the top of the list
-    /// is where the interesting items are instead of wherever they happened to drop.
+    /// The panel also grew 32px downward (384 to 416) to keep six real rows rather than dropping to five,
+    /// which is exactly 84 header + 6 rows + 92 footer. Six is not generous, but the list is sorted
+    /// rarest-first now and the wheel reaches it, so the top of the list is where the interesting items
+    /// are instead of wherever they happened to drop.
     /// </remarks>
     private static int BagRows => (BagPanel.Height - 176) / BagRowH;
 
@@ -289,10 +292,11 @@ public sealed class ForgeScreen
         if (wear.Count == 0) { _focusId = null; return; }
         var idx = Math.Max(0, wear.FindIndex(i => i.InstanceId == _focusId));
         _focusId = wear[(idx + dir % wear.Count + wear.Count) % wear.Count].InstanceId;
+        _focusFollow = true;
     }
 
     /// <summary>DEV ONLY: pose the UPGRADE view on a specific bag item, for the screenshot fixture.</summary>
-    public void DevFocus(string instanceId) { _focusId = instanceId; _mode = ForgeMode.Upgrade; }
+    public void DevFocus(string instanceId) { _focusId = instanceId; _focusFollow = true; _mode = ForgeMode.Upgrade; }
 
     /// <summary>
     /// Arrive here from somewhere else already pointed at an item, and say so.
@@ -306,6 +310,7 @@ public sealed class ForgeScreen
     public void FocusFor(string instanceId, ForgeMode mode)
     {
         _focusId = instanceId;
+        _focusFollow = true;
         _mode = mode;
         _bagScroll = 0;
 
@@ -460,7 +465,12 @@ public sealed class ForgeScreen
         // It also tested the raw `mouse` against BagPanel, a 1920-space rect, so the condition was false
         // at every cursor position even in Salvage mode: BagPanel starts at x=24 and the canvas cursor
         // cannot exceed ~479, which lets a narrow band of the panel appear to work by coincidence.
-        if (wheel != 0 && BagPanel.Contains(overlay))
+        // AND ONLY IN THE MODES THAT DRAW THE BAG. DrawRail — which draws it — is called from the
+        // UPGRADE and REFORGE views only; SALVAGE shows the loot grid over the same ground. Hoisting
+        // this above the mode return fixed the bag and broke the grid: the rect still contains the
+        // cursor in SALVAGE, so the bag swallowed the wheel across the bottom-left of a pile it was
+        // not part of.
+        if (wheel != 0 && _mode != ForgeMode.Salvage && BagPanel.Contains(overlay))
         {
             var wearCount = _inv.Count(Gear.IsWearable);
             _bagScroll = Math.Clamp(_bagScroll - wheel, 0, Math.Max(0, wearCount - BagRows));
@@ -1115,11 +1125,25 @@ public sealed class ForgeScreen
         //
         // Adopting the first row also makes the highlight and the ITEM PREVIEW agree on frame one; they
         // were both falling back to "the first item" separately, which is agreement by coincidence.
-        if (_focusId is null || bag.All(i => i.InstanceId != _focusId)) _focusId = bag[0].InstanceId;
+        if (_focusId is null || bag.All(i => i.InstanceId != _focusId))
+        {
+            _focusId = bag[0].InstanceId;
+            _focusFollow = false;   // an adopted default is not a choice, so nothing should scroll to it
+        }
 
-        var focus = Math.Max(0, bag.FindIndex(i => i.InstanceId == _focusId));
-        if (focus < _bagScroll) _bagScroll = focus;
-        if (focus >= _bagScroll + BagRows) _bagScroll = focus - BagRows + 1;
+        // THE CLAMP ONLY RUNS WHEN THE FOCUS WAS JUST CHOSEN, and the first version of this fix missed
+        // that entirely. Adopting row 0 made the focus REAL, which was the point — and then this clamp,
+        // seeing focus 0, went on dragging _bagScroll back to 0 on every frame exactly as before. The
+        // wheel moved the list and the next frame moved it back. Fixing the wheel and fixing the focus
+        // were both necessary and neither was sufficient: what actually blocked scrolling is that a
+        // "keep the selection visible" rule ran on frames where the selection had not moved.
+        if (_focusFollow)
+        {
+            var focus = Math.Max(0, bag.FindIndex(i => i.InstanceId == _focusId));
+            if (focus < _bagScroll) _bagScroll = focus;
+            if (focus >= _bagScroll + BagRows) _bagScroll = focus - BagRows + 1;
+            _focusFollow = false;
+        }
         _bagScroll = Math.Clamp(_bagScroll, 0, Math.Max(0, bag.Count - BagRows));
 
         for (var vis = 0; vis < BagRows; vis++)
@@ -1135,7 +1159,7 @@ public sealed class ForgeScreen
             if (hover) _hovered = it;
             var isWorn = Gear.SlotFor(it.BaseType) is { } sl && hunter.Worn(sl)?.InstanceId == it.InstanceId;
 
-            if (UiKit.ClickedIn(row, hit, clicked)) _focusId = it.InstanceId;
+            if (UiKit.ClickedIn(row, hit, clicked)) { _focusId = it.InstanceId; _focusFollow = true; }
 
             _ui.Fill(b, row, sel ? new Color(0x3A, 0x2E, 0x52)
                            : hover ? new Color(0x22, 0x1C, 0x30)
@@ -1816,9 +1840,9 @@ public sealed class ForgeScreen
         if (act is not null && Gear.IsWearable(act))
         {
             if (_ui.Button(b, new Rectangle(1128, 952, 336, 60), "UPGRADE  >", hit, clicked))
-            { _focusId = act.InstanceId; _mode = ForgeMode.Upgrade; }
+            { _focusId = act.InstanceId; _focusFollow = true; _mode = ForgeMode.Upgrade; }
             if (_ui.Button(b, new Rectangle(1482, 952, 336, 60), "REFORGE  >", hit, clicked))
-            { _focusId = act.InstanceId; _mode = ForgeMode.Reforge; }
+            { _focusId = act.InstanceId; _focusFollow = true; _mode = ForgeMode.Reforge; }
         }
 
         // ── Message + footer ── a panel of its own, under the loot column and level with the tray. The

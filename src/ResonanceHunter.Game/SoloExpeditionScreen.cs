@@ -1607,12 +1607,17 @@ public sealed class SoloExpeditionScreen
         return new Rectangle(r.X + 44, r.Y + 70, r.Width - 88, r.Height - 70 - UiKit.PanelCorner);
     }
 
-    /// <summary>Right context column (reference regions): a stack of four plates — Idle Rewards, Objective,
-    /// Loot, Expedition — all fed from live run data.</summary>
+    /// <summary>Right context column: two plates — the idle rate, and the errands worth doing now.</summary>
+    /// <remarks>
+    /// It was four. OBJECTIVE and EXPEDITION printed the depth, the progress bar and the wave that the
+    /// banner over the arena already prints, so half the rail was a second copy of the header.
+    /// </remarks>
     private void DrawRightColumn(SpriteBatch b, Point hit, bool clicked)
     {
-        // Rev 3 §20: right context rail (1570,110,326,690) — secondary panels, all live data, NO keyboard
-        // hints (§21). Idle-rate → objective → reward activity → expedition.
+        // Rev 3 §20: right context rail (1570,110,326,354) — secondary panels, all live data. The spec's
+        // "no keyboard hints" rule is deliberately broken by the two REWARD ACTIVITY buttons, which name
+        // their key: they are the one place on this screen that asks the player to go somewhere, and a
+        // door worth opening should say how. Idle rate → reward activity.
         const int px = 1570, pw = 326;
 
         // Idle rate (1570,110,326,130). Auto-credited, so no Claim button (§20.2).

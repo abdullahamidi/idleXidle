@@ -174,19 +174,25 @@ public sealed class CharacterScreen
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
         var hit = Game1.ToOverlay(mouse);
         var list = Filtered();
-        // THE SELECTION MUST BE SOMETHING THE GRID IS SHOWING. `??=` only fills a null, so after a tab
-        // change — or after the selected item is equipped, merged or salvaged away — the ITEM DETAIL
-        // panel went on describing an item that is not in the grid beside it, with no cell highlighted
-        // anywhere. Adopting the first visible item keeps the two halves of this screen talking about
-        // the same thing, which is the same rule the Forge bag now follows.
-        if (_selectedId is null || list.All(i => i.InstanceId != _selectedId))
+
+        // THE SELECTION IS ADOPTED ONLY WHEN THE ITEM IS GONE — not merely when it is off-tab.
+        //
+        // The first version tested against the FILTERED list, which made it steal a selection the player
+        // had just made on the paper doll: a worn Charm selected while the WEAPONS tab is up is absent
+        // from `list` and was instantly replaced, so clicking a doll slot on any tab but ALL could not
+        // hold its selection and the click-twice-to-unequip gesture died with it. `Wearable()` is the
+        // real question — is this item still in the bag at all — and a tab change re-selects explicitly
+        // where the tab is switched, because that IS a deliberate act rather than an accident of filter.
+        if (_selectedId is null || Wearable().All(i => i.InstanceId != _selectedId))
             _selectedId = list.FirstOrDefault()?.InstanceId;
 
-        if (wheel != 0 && InventoryPanel.Contains(hit))
-        {
-            var maxScroll = Math.Max(0, (list.Count - 1) / InvCols - (InvRows - 1));
-            _invScroll = Math.Clamp(_invScroll - Math.Sign(wheel), 0, maxScroll);
-        }
+        // CLAMPED EVERY FRAME, not only when the wheel moves. The list shrinks under this screen —
+        // items are equipped, merged and salvaged from the menu it opens — so a scroll that was legal
+        // last frame can point past the end of the grid, and the page then draws twenty empty cells
+        // with no scrollbar while the footer underneath still reports a full bag.
+        var maxScroll = Math.Max(0, (list.Count - 1) / InvCols - (InvRows - 1));
+        if (wheel != 0 && InventoryPanel.Contains(hit)) _invScroll -= Math.Sign(wheel);
+        _invScroll = Math.Clamp(_invScroll, 0, maxScroll);
 
         // ── THE ITEM MENU. Right-click anything wearable — worn or in the bag — and the four verbs the
         //    game has for an item are right there, instead of scattered across two screens. ────────

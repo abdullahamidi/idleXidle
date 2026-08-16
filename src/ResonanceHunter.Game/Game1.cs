@@ -1656,6 +1656,8 @@ public class Game1 : Game
 
         if (_showBuild)
         {
+            // One lock, read by both doors — the rail tile and the button on the page.
+            _buildScreen.TreeUnlocked = Unlocks.IsOpen(Activity.Mastery, GuideUnlockFacts());
             _buildScreen.Loadout = _loadout;
             _buildScreen.Mastery = _mastery;
             _buildScreen.Power = _hunter.PowerRating;   // the Build screen has no Hunter ref of its own
@@ -1665,7 +1667,7 @@ public class Game1 : Game
             if (_buildScreen.Dirty) { _buildScreen.ClearDirty(); Save(); }
             // The BUILD page asks for the weave editor; the host owns which screen is open.
             if (_buildScreen.WantsWeave) { _buildScreen.WantsWeave = false; _showBuild = false; _showWeave = true; }
-            if (_weave.WantsBack) { _weave.WantsBack = false; _showWeave = false; _showBuild = true; _buildScreen.ShowTree = false; }
+
             Latch(gameTime);
             return;
         }
@@ -1684,12 +1686,15 @@ public class Game1 : Game
             {
                 if (request.Action == ItemAction.Equip)
                 {
-                    if (_forge.Inventory.FirstOrDefault(i => i.InstanceId == request.InstanceId) is { } toWear)
-                        _hunter.Equip(toWear);
-                    else if (Enum.GetValues<GearSlot>().Select(_hunter.Worn).OfType<ItemInstance>()
-                                 .FirstOrDefault(i => i.InstanceId == request.InstanceId) is { } toDoff
-                             && Gear.SlotFor(toDoff.BaseType) is { } sl)
+                    // WORN FIRST. Equipping does NOT remove the item from the bag — worn pieces live in
+                    // both — so `Inventory.FirstOrDefault` matches a worn item too, and TAKE OFF re-equipped
+                    // the thing it was asked to remove while the unequip branch below could never run.
+                    if (Enum.GetValues<GearSlot>().Select(_hunter.Worn).OfType<ItemInstance>()
+                            .FirstOrDefault(i => i.InstanceId == request.InstanceId) is { } toDoff
+                        && Gear.SlotFor(toDoff.BaseType) is { } sl)
                         _hunter.Unequip(sl);
+                    else if (_forge.Inventory.FirstOrDefault(i => i.InstanceId == request.InstanceId) is { } toWear)
+                        _hunter.Equip(toWear);
                     Save();
                 }
                 else
@@ -1785,6 +1790,12 @@ public class Game1 : Game
             _weave.RegionName = Regions.Get(_activeRegion).Name;
             _weave.Update(CanvasMouse, MouseClicked, MouseWheel);
             if (_weave.Dirty) { _weave.ClearDirty(); Save(); }
+            // CONSUMED HERE, where the Weave actually runs. It was read inside `if (_showBuild)`, and
+            // _showBuild and _showWeave are mutually exclusive on every path that opens this screen —
+            // so the flag was set and never read, the BACK button did nothing, and the stale flag then
+            // fired on the next visit to BUILD and switched OFF the tree the MASTERY tile had just
+            // switched on. A request consumed in a branch its producer cannot reach is not wiring.
+            if (_weave.WantsBack) { _weave.WantsBack = false; _showWeave = false; _showBuild = true; _buildScreen.ShowTree = false; }
             Latch(gameTime);
             return;
         }

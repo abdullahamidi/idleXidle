@@ -127,12 +127,23 @@ public sealed class ChestScreen
     /// the host opens a chest. A cursor left pointing past the end would index out of range on the very
     /// next frame — the list is not a static thing being browsed, it is being consumed while displayed.
     /// </remarks>
+    /// <summary>Set when the cursor was CHOSEN, so the page follows it once and then leaves it alone.</summary>
+    private bool _cursorFollow;
+
     private void Clamp(int count)
     {
         if (count <= 0) { _cursor = 0; _scroll = 0; return; }
         _cursor = Math.Clamp(_cursor, 0, count - 1);
-        if (_cursor < _scroll) _scroll = _cursor;
-        if (_cursor >= _scroll + PerPage) _scroll = _cursor - PerPage + 1;
+        // THE PAGE FOLLOWS THE CURSOR ONLY WHEN THE CURSOR MOVED. Clamp runs from Update AND from Draw,
+        // so with the cursor sitting on 0 these two lines dragged _scroll back to 0 twice a frame — the
+        // wheel set a new page in Update and Draw undid it before anything was drawn, and every chest
+        // past the first twelve was unreachable. Identical in shape to the Forge bag's dead wheel.
+        if (_cursorFollow)
+        {
+            if (_cursor < _scroll) _scroll = _cursor;
+            if (_cursor >= _scroll + PerPage) _scroll = _cursor - PerPage + 1;
+            _cursorFollow = false;
+        }
         _scroll = Math.Clamp(_scroll, 0, Math.Max(0, count - 1));
     }
 
@@ -156,7 +167,7 @@ public sealed class ChestScreen
         if (!clicked) return;
 
         for (var vis = 0; vis < PerPage && _scroll + vis < sorted.Count; vis++)
-            if (Card(vis).Contains(hit)) { _cursor = _scroll + vis; return; }
+            if (Card(vis).Contains(hit)) { _cursor = _scroll + vis; _cursorFollow = true; return; }
     }
 
     public void Draw(SpriteBatch b, IReadOnlyList<Chest> chests, Point mouse, bool clicked)
@@ -239,7 +250,7 @@ public sealed class ChestScreen
             _ui.TextBig(b, _ui.ShortenBig(d.RegionShort, card.Width - 32, UiTypography.Secondary),
                         card.X + 16, card.Y + 128, Slate, UiTypography.Secondary);
 
-            if (card.Contains(mouse) && clicked) _cursor = idx;
+            if (card.Contains(mouse) && clicked) { _cursor = idx; _cursorFollow = true; }
         }
     }
 

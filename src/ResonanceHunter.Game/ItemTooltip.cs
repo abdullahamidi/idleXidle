@@ -99,7 +99,7 @@ public static class ItemTooltip
         // must not be the thing overlapping itself.
         var slot = Gear.SlotFor(item.BaseType);
         var line = $"{item.Rarity.ToString().ToUpperInvariant()}  ·  "
-                   + $"{(slot?.ToString() ?? item.BaseType.ToString()).ToUpperInvariant()}  ·  iL{item.ItemLevel}";
+                   + $"{(slot?.ToString() ?? item.BaseType.ToString()).ToUpperInvariant()}  ·  LEVEL {item.ItemLevel}";
         if (item.Element is { } el) line += $"  ·  {el.ToString().ToUpperInvariant()}";
         ui.Text(b, line, lx, cy, Dim);
         cy += 32;

@@ -258,7 +258,7 @@ public static class Unlocks
 
         Activity.Map =>
             "The world is a chain of six regions and each is meaningfully harder than the one before "
-            + "it — about half again as tough, every step. Reach the required depth in a region to "
+            + "it, by a fixed step set in RegionLadder. Reach the required depth in a region to "
             + "conquer it, which opens the next. Each region has its own element and its own drops: it "
             + "favours particular slots, and the later ones carry a better rarity floor. Where you hunt "
             + "is a loot decision as much as a difficulty one.",
