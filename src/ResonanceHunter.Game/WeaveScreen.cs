@@ -181,7 +181,7 @@ public sealed class WeaveScreen
         VowDemand.CadenceAtOrBelow => $"SKILL RATE MAX {v.Threshold:0.##}x",
         VowDemand.CadenceAtOrAbove => $"SKILL RATE MIN {v.Threshold:0.##}x",
         VowDemand.NoDefence => "NO DEFENCE AT ALL",
-        VowDemand.NoKeystone => "NO KEYSTONE SOCKETED",
+        VowDemand.NoKeystone => "NO KEYSTONE SLOTTED",
         VowDemand.SlotLeftBare => $"{v.Bare.ToString().ToUpperInvariant()} SLOT LEFT EMPTY",
         _ => "NOTHING — IT SIMPLY COSTS",
     };
@@ -378,7 +378,7 @@ public sealed class WeaveScreen
             _ui.Fill(b, chip, worn ? new Color(0x2A, 0x24, 0x14) : hover ? new Color(0x1E, 0x18, 0x2C) : Quiet);
             if (worn) _ui.Fill(b, new Rectangle(chip.X, chip.Y, 5, chip.Height), Gold);
             _ui.Text(b, k.Name.ToUpperInvariant(), chip.X + 18, chip.Y + 12, worn ? Gold : hover ? Bone : Slate);
-            _ui.TextRight(b, worn ? "SOCKETED" : "", chip.Right - 14, chip.Y + 12, Met);
+            _ui.TextRight(b, worn ? "IN USE" : "", chip.Right - 14, chip.Y + 12, Met);
         }
     }
 

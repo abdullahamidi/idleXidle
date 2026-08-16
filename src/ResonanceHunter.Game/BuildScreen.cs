@@ -315,7 +315,10 @@ public sealed class BuildScreen
 
         _ui.TextCenterBig(b, "BUILD", 960, 24, Gold, UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(700, 74, 520, 3), Gold * 0.5f);
-        _ui.TextCenterBig(b, "SOURCE   ·   FORM   ·   VOW   ·   AURAS", 960, 80, Slate, UiTypography.Secondary);
+        // The screen's PROMISE, not a recital of the panel headings under it. It read
+        // "SOURCE · FORM · VOW · AURAS" — four words already printed larger a few hundred pixels below,
+        // spending the biggest line on the page to say nothing the eye had not already reached.
+        _ui.TextCenterBig(b, "EVERY SKILL IS A SOURCE AND A FORM — YOU CHOOSE BOTH", 960, 80, Slate, UiTypography.Secondary);
 
         DrawSummary(b);
         DrawCore(b);
@@ -357,7 +360,7 @@ public sealed class BuildScreen
         // POINTS, NOT NODES. MasteryTree.Spent is documented as the SUM OF COSTS, so this row printed
         // "24 NODES" for a tree whose own legend, two panels away, said 11 nodes — two numbers for the
         // same thing, one of them wrong, on the same screen.
-        Row(b, SummaryPanel, "MASTERY", $"{Mastery.Spent} PTS", ref y);
+        Row(b, SummaryPanel, "MASTERY", $"{Mastery.Spent} POINTS", ref y);
     }
 
     private void DrawCore(SpriteBatch b)
@@ -376,20 +379,50 @@ public sealed class BuildScreen
         Big(b, "FORMS", forms.Length == 0 ? "—" : forms, Bone, x, ref y);
         Big(b, "VOWS", vows, vows == "NONE" ? Slate : Gold, x, ref y);
 
-        // A real, derived synergy note (no invented copy).
-        _ui.Fill(b, new Rectangle(CorePanel.X + 44, CorePanel.Bottom - 96, CorePanel.Width - 88, 2), Dim);
-        var affinity = Mastery.Affinity() is { } mf ? Short(mf) : "no";
+        // EVERY CLAUSE IS NOW CONDITIONAL ON THE FACT IT ASSERTS, and the panel no longer contradicts
+        // itself. The old line was "{SOURCE}-led auto-skills with {affinity} mastery and layered vow
+        // uptime" — and its last four words were a CONSTANT. A build with no vows at all was told it
+        // had "layered vow uptime" while the row two lines above it read VOWS: NONE. The mastery
+        // clause was wrong in the other direction: Affinity() returns the tree's DOMINANT FORM, so a
+        // tree with 24 points spent but no single leading Form printed "no mastery" beside a row in
+        // the next panel reading MASTERY 24 POINTS.
+        //
+        // A note that LOOKS derived and is partly hardcoded is worse than no note: the player cannot
+        // tell which half to trust, and here both halves were readable as false from the same screen.
+        // The comment above it said "no invented copy" — the invented copy was already there.
+        var vowCount = skills.Count(s => Weaving.ById(s.VowId) is not null);
         var note = focus is null
-            ? "Add skills to compose Source × Form × Vow."
-            : $"{focus.Key.ToString().ToUpperInvariant()}-led auto-skills with {affinity} mastery and layered vow uptime.";
-        _ui.TextBig(b, "SYNERGY", CorePanel.X + 44, CorePanel.Bottom - 76, Slate, UiTypography.Secondary);
-        _ui.TextBig(b, note, CorePanel.X + 44, CorePanel.Bottom - 48, Bone, UiTypography.Body);
+            ? "Add a skill to begin. Every skill is a SOURCE and a FORM."
+            : Sentences(focus.Key.ToString().ToUpperInvariant(), vowCount);
+
+        _ui.Fill(b, new Rectangle(CorePanel.X + 44, CorePanel.Bottom - 140, CorePanel.Width - 88, 2), Dim);
+        _ui.TextBig(b, "IN SHORT", CorePanel.X + 44, CorePanel.Bottom - 124, Slate, UiTypography.Secondary);
+        // WRAPPED, because the sentences are now written to be read rather than to fit. Two lines is
+        // what the space below the rows allows once the divider moves up into the void that was there.
+        var lines = _ui.WrapBig(note, CorePanel.Width - 88, UiTypography.Body);
+        for (var i = 0; i < Math.Min(3, lines.Count); i++)
+            _ui.TextBig(b, lines[i], CorePanel.X + 44, CorePanel.Bottom - 96 + i * 28, Bone, UiTypography.Body);
+    }
+
+    /// <summary>The plain-words reading of a build: what it leads on, what it has bound, where it leans.</summary>
+    private string Sentences(string lead, int vowCount)
+    {
+        var said = new List<string> { $"Most of your skills draw on {lead}." };
+        said.Add(vowCount switch
+        {
+            0 => "None of them carries a vow yet — a vow makes a skill stronger and charges you for it.",
+            1 => "One of them carries a vow.",
+            _ => $"{vowCount} of them carry a vow.",
+        });
+        if (Mastery.Affinity() is { } lean) said.Add($"Your mastery leans {Short(lean)}.");
+        else if (Mastery.Spent > 0) said.Add("Your mastery is spread evenly across forms.");
+        return string.Join(" ", said);
     }
 
     private void DrawAuraCards(SpriteBatch b, Point hit)
     {
         _ui.Panel(b, AuraPanel);
-        _ui.TextCenterBig(b, "AUTO-SKILL LOADOUT", AuraPanel.Center.X, AuraPanel.Y + 14, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "YOUR SKILLS", AuraPanel.Center.X, AuraPanel.Y + 14, Gold, UiTypography.SectionTitle);
         var skills = Loadout.Skills;
         // The slots this player HAS. Against the const, a fifth woven skill was invisible on the one
         // screen whose whole job is to show the build.
@@ -504,7 +537,7 @@ public sealed class BuildScreen
         var floor = PassivePanel.Bottom - UiKit.PanelCorner - keystoneBlockH;
         var keyY = Math.Min(Math.Max(PassivePanel.Y + 596, ry + 16), floor);
         _ui.TextBig(b, "KEYSTONES", x, keyY, Gold, UiTypography.Secondary);
-        if (worn.Count == 0) _ui.TextBig(b, "NONE SOCKETED — WEAVE SKILLS", x, keyY + 34, Slate, UiTypography.Body);
+        if (worn.Count == 0) _ui.TextBig(b, "NONE YET — WEAVE A SKILL TO SLOT ONE", x, keyY + 34, Slate, UiTypography.Body);
         else _ui.TextBig(b, string.Join("  \u00b7  ", worn.Select(k => k.Name.ToUpperInvariant())), x, keyY + 34, Bone, UiTypography.Body);
     }
 
@@ -636,7 +669,7 @@ public sealed class BuildScreen
                 var spent = MasteryCatalog.Nodes.Where(x => x.Branch == br && Mastery.IsTaken(x.Id)).Sum(x => x.Cost);
                 _ui.Fill(b, new Rectangle(NodePanel.X + 74, y0 - 4, 6, 34), BranchColor(br));
                 _ui.TextBig(b, Short(br), NodePanel.X + 94, y0, Bone, UiTypography.Body);
-                _ui.TextRightBig(b, $"{taken} \u00b7 {spent} PTS", NodePanel.Right - 74, y0,
+                _ui.TextRightBig(b, $"{taken} \u00b7 {spent} POINTS", NodePanel.Right - 74, y0,
                                  spent > 0 ? Gold : Dim, UiTypography.Body);
                 y0 += 46;
             }

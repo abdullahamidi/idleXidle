@@ -147,7 +147,7 @@ public sealed record Enchantment(EnchantKind Kind, float Magnitude)
         EnchantKind.Splinter => "ON KILL: RICHER LOOT",
         EnchantKind.Harvest => $"ON KILL: {Magnitude * 100f:0}% CORE",
         EnchantKind.Venom => $"SKILLS POISON +{Magnitude * 100f:0}%",
-        EnchantKind.Desperation => $"NEAR DEATH: HAUL +{Magnitude * 100f:0}%",
+        EnchantKind.Desperation => $"NEAR DEATH: +{Magnitude * 100f:0}% LOOT",
         EnchantKind.Overdraw => "VOLLEY FIRES +1",
         EnchantKind.Linger => "MARK LASTS LONGER",
         EnchantKind.Radiance => "AURA TICKS FASTER",

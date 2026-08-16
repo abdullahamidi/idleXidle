@@ -381,10 +381,10 @@ public sealed class AutomationScreen
             var parts = new List<string>();
             if (_flashYield.Kills > 0) parts.Add($"{_flashYield.Kills} KILL");
             if (_flashYield.CoresProduced > 0) parts.Add($"+{_flashYield.CoresProduced} CORE");
-            if (_flashYield.GleamRealized > 0) parts.Add($"+{_flashYield.GleamRealized}g");
+            if (_flashYield.GleamRealized > 0) parts.Add($"+{_flashYield.GleamRealized} G");
             // Show what the auto-sell cap swallowed, so vanishing gleam reads as a CAP, not a bug — the exact
             // thing AutomationYield.GleamForfeitedToCap was created to surface, and until now it never was.
-            if (_flashYield.GleamForfeitedToCap > 0) parts.Add($"({_flashYield.GleamForfeitedToCap}g CAPPED)");
+            if (_flashYield.GleamForfeitedToCap > 0) parts.Add($"({_flashYield.GleamForfeitedToCap} G CAPPED)");
             if (parts.Count > 0)
                 _ui.TextCenter(b, string.Join("   ", parts), 960, (int)(600 - (1f - _flash / 1.7f) * 48), _flash > 0.5f ? Gold : Slate);
         }

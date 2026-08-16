@@ -121,13 +121,30 @@ public static class GearTraits
             parts.Add($"{(pct > 0 ? "+" : "")}{pct:0}% {label}");
         }
 
-        Channel("DMG", m.Damage);
-        Channel("HP", m.Health);
-        Channel("SKILL", m.SkillRate);
-        Channel("HAUL", m.Haul);
+        Channel(Channels[0], m.Damage);
+        Channel(Channels[1], m.Health);
+        Channel(Channels[2], m.SkillRate);
+        Channel(Channels[3], m.Haul);
 
         return parts.Count == 0 ? "" : string.Join("  ", parts);
     }
+
+    /// <summary>The four channels a trait can move, in the order <see cref="EffectOf"/> prints them.</summary>
+    /// <remarks>
+    /// <para>
+    /// Public because the test that checks a trait line tells the truth has to name these channels to
+    /// find them, and a second hand-typed copy of the labels is a copy that goes stale the day one is
+    /// renamed — silently, since the assertion would then be looking for a word the string no longer
+    /// contains and "does not contain" is exactly what it asserts in the negative case.
+    /// </para>
+    /// <para>
+    /// They read DMG / HP / SKILL / HAUL until a playtester said the items were unreadable. Every one
+    /// was either an abbreviation or a term you only know if you already play this genre in English —
+    /// "haul" especially, which is not a word for loot outside games. The words cost about twenty
+    /// pixels each in a condensed face and the panel wraps.
+    /// </para>
+    /// </remarks>
+    public static readonly string[] Channels = { "DAMAGE", "HEALTH", "SKILL RATE", "LOOT" };
 
     /// <summary>One line, player-facing. States the cost as plainly as the benefit.</summary>
     /// <remarks>The DIRECTION of the trade. <see cref="EffectOf"/> gives the size, per item.</remarks>

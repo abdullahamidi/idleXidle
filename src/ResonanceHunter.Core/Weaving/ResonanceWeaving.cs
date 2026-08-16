@@ -420,7 +420,7 @@ public static class Weaving
         {
             Id = "vow_reckless_offering", Name = "RECKLESS OFFERING", Kind = VowKind.StaticCost,
             StaticCostMagnitude = 0.15f,    // -15% max health == -15% eHP, linearly
-            Short = "ALWAYS: -15% MAX HP",
+            Short = "ALWAYS: -15% MAX HEALTH",
             Description = "ALWAYS ON. IT PERMANENTLY LOSES 15% OF ITS MAXIMUM HEALTH.",
         },
     };

@@ -125,12 +125,12 @@ public static class ItemAffixes
     /// <summary>A one-line, player-facing description of an affix (its sign and unit).</summary>
     public static string Describe(ItemAffix a) => a.Stat switch
     {
-        AffixStat.Damage => $"+{a.Magnitude * 100f:0}% DMG",
-        AffixStat.Health => $"+{a.Magnitude * 100f:0}% HP",
-        AffixStat.SkillRate => $"+{a.Magnitude * 100f:0}% SKILL",
-        AffixStat.Haul => $"+{a.Magnitude * 100f:0}% HAUL",
-        AffixStat.Crit => $"+{a.Magnitude:0.0}% CRIT",
-        _ => $"+{a.Magnitude:0} DEF",
+        AffixStat.Damage => $"+{a.Magnitude * 100f:0}% DAMAGE",
+        AffixStat.Health => $"+{a.Magnitude * 100f:0}% HEALTH",
+        AffixStat.SkillRate => $"+{a.Magnitude * 100f:0}% SKILL RATE",
+        AffixStat.Haul => $"+{a.Magnitude * 100f:0}% LOOT",
+        AffixStat.Crit => $"+{a.Magnitude:0.0}% CRIT CHANCE",
+        _ => $"+{a.Magnitude:0} DEFENCE",
     };
 
     private static uint Fnv1a(string s)

@@ -64,13 +64,13 @@ public static class Keystones
         new()
         {
             Id = "greed", Name = "GREED",
-            Blurb = "DOUBLE HAUL. YOU HIT 30% SOFTER.",
+            Blurb = "DOUBLE LOOT. YOU HIT 30% SOFTER.",
             Mods = new BuildMods(Damage: 0.7f, Health: 1f, SkillRate: 1f, Haul: 2.0f, Rarity: 1f),
         },
         new()
         {
             Id = "discerning_eye", Name = "DISCERNING EYE",
-            Blurb = "FAR RARER FINDS. HALF THE HAUL.",
+            Blurb = "FAR RARER FINDS. HALF THE LOOT.",
             Mods = new BuildMods(Damage: 1f, Health: 1f, SkillRate: 1f, Haul: 0.5f, Rarity: 2.0f),
         },
         new()
@@ -83,7 +83,7 @@ public static class Keystones
         new()
         {
             Id = "undying", Name = "UNDYING",
-            Blurb = "THE FIRST KILLING BLOW EACH RUN LEAVES YOU AT 1 HP. YOU HIT 15% SOFTER.",
+            Blurb = "THE FIRST KILLING BLOW EACH RUN LEAVES YOU ON 1 HEALTH. YOU HIT 15% SOFTER.",
             Mods = new BuildMods(Damage: 0.85f, Health: 1f, SkillRate: 1f, Haul: 1f, Rarity: 1f),
             Grants = new[] { BuildTrigger.Undying },
         },
@@ -128,7 +128,7 @@ public static class Keystones
             // Greed build stacks becomes hit size. It pays for it in RARITY, the loot build's other half,
             // so taking it means choosing between being rich and being dangerous rather than getting both.
             Id = "hoarder", Name = "HOARDER",
-            Blurb = "YOUR HAUL BECOMES FORCE — HITS GROW WITH IT. HALF LOOT RARITY.",
+            Blurb = "MORE LOOT MEANS HARDER HITS. RARE FINDS COME HALF AS OFTEN.",
             Mods = new BuildMods(Damage: 1f, Health: 1f, SkillRate: 1f, Haul: 1f, Rarity: 0.5f),
             Grants = new[] { BuildTrigger.Hoarder },
         },

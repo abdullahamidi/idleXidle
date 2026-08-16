@@ -532,7 +532,7 @@ public sealed class PrestigeScreen
                               (int)p.X, top - 56,
                               lit > 0 ? RoadColor(road) : RoadColor(road) * 0.75f, UiTypography.Body);
             _ui.TextCenterBig(b,
-                _ui.ShortenBig($"{lit}/{nodes.Count}  ·  {nodes.Sum(u => u.Cost)} PTS", column,
+                _ui.ShortenBig($"{lit}/{nodes.Count}  ·  {nodes.Sum(u => u.Cost)} POINTS", column,
                                UiTypography.Secondary),
                 (int)p.X, top - 26, lit > 0 ? Gold : Slate, UiTypography.Secondary);
         }

@@ -208,11 +208,16 @@ public sealed class StatsScreen
         var shape = Loadout.ToBuild(Tree, Mastery, Character).Shape;
         var rows = new (string, HunterStat, string)[]
         {
-            ("CRIT", HunterStat.CriticalChance, $"{100f * SoloBattle.CritChance(hunter, shape):0.0}% CHANCE"),
-            ("FOCUS", HunterStat.Focus, $"{100f * SoloBattle.CritMultiplier(hunter):0}% CRIT DMG"),
-            ("HEALTH", HunterStat.MaxHealth, $"{hunter.MaxHealth:N0} MAX HP"),
-            ("DEFENSE", HunterStat.Defense, $"{100f - 100f * (100f / (100f + hunter.Defense)):0.0}% MITIGATION"),
-            ("GUILE", HunterStat.Guile, $"+{100f * (hunter.HaulMultiplier - 1f):0}% HAUL"),
+            // SAID IN WORDS A PLAYER ALREADY KNOWS. These read "6.5% CHANCE", "160% CRIT DMG",
+            // "9.1% MITIGATION", "+10% HAUL" — four different dialects of shorthand, two of them
+            // (mitigation, haul) terms you only know if you already play games in English, and one
+            // (CHANCE) that never said chance of WHAT. The number is the same; the sentence around it
+            // is now the one a person would say out loud.
+            ("CRIT", HunterStat.CriticalChance, $"{100f * SoloBattle.CritChance(hunter, shape):0.0}% OF HITS CRIT"),
+            ("FOCUS", HunterStat.Focus, $"CRITS DEAL {100f * SoloBattle.CritMultiplier(hunter):0}% DAMAGE"),
+            ("HEALTH", HunterStat.MaxHealth, $"{hunter.MaxHealth:N0} MAX HEALTH"),
+            ("DEFENSE", HunterStat.Defense, $"{100f - 100f * (100f / (100f + hunter.Defense)):0.0}% LESS DAMAGE TAKEN"),
+            ("GUILE", HunterStat.Guile, $"+{100f * (hunter.HaulMultiplier - 1f):0}% LOOT FOUND"),
         };
         var y = CombatPanel.Y + 74;
         foreach (var (label, stat, effect) in rows)

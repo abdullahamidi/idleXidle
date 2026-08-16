@@ -611,10 +611,10 @@ public sealed class ForgeScreen
         var m = GearTraits.ModsOf(item);
         var parts = new List<string>();
         void Add(string label, float v) { if (MathF.Abs(v - 1f) > 0.005f) parts.Add($"{label}{Pct(v)}"); }
-        Add("DMG", m.Damage);
-        Add("HP", m.Health);
-        Add("SKL", m.SkillRate);
-        Add("HAUL", m.Haul);
+        Add("DAMAGE", m.Damage);
+        Add("HEALTH", m.Health);
+        Add("SKILL RATE", m.SkillRate);
+        Add("LOOT", m.Haul);
         return string.Join("  ", parts);
     }
 
@@ -628,10 +628,10 @@ public sealed class ForgeScreen
 
         var parts = new List<string>();
         void Add(string label, float v) { if (MathF.Abs(v - 1f) > 0.005f) parts.Add($"{label}{Pct(v)}"); }
-        Add("DMG", m.Damage);
-        Add("HP", m.Health);
-        Add("SKL", m.SkillRate);
-        Add("HAUL", m.Haul);
+        Add("DAMAGE", m.Damage);
+        Add("HEALTH", m.Health);
+        Add("SKILL RATE", m.SkillRate);
+        Add("LOOT", m.Haul);
 
         // Effects only — the trait's NAME is drawn on the title row, where there is room for it.
         _ = trait;
@@ -774,7 +774,7 @@ public sealed class ForgeScreen
         if (!chart)
         {
             if (hunter.MaterialOf(Material.Scrap) < r.Scrap) { Say($"NEED {r.Scrap} SCRAP TO REFINE.", Ember); return; }
-            if (hunter.Gleam < r.Gold) { Say($"NEED {r.Gold}g TO REFINE.", Ember); return; }
+            if (hunter.Gleam < r.Gold) { Say($"NEED {r.Gold} G TO REFINE.", Ember); return; }
         }
 
         if (chart) hunter.SpendCharter(Charter.Refine);
@@ -782,8 +782,8 @@ public sealed class ForgeScreen
 
         ReplaceItem(item, r.Product);
         Say(chart
-                ? $"REFINED TO iL{r.Product.ItemLevel}  (REFINE CHART — FREE)."
-                : $"REFINED TO iL{r.Product.ItemLevel}  ({r.Scrap} SCRAP + {r.Gold}g).", Gold);
+                ? $"REFINED TO LEVEL {r.Product.ItemLevel}  (REFINE CHART — FREE)."
+                : $"REFINED TO LEVEL {r.Product.ItemLevel}  ({r.Scrap} SCRAP + {r.Gold} G).", Gold);
     }
 
     /// <summary>
@@ -798,12 +798,12 @@ public sealed class ForgeScreen
 
         var r = Forge.GreaterRefine(item, Tuning);
         if (hunter.MaterialOf(Material.Crystal) < r.Crystal) { Say($"NEED {r.Crystal} CRYSTAL TO GREATER-REFINE.", Ember); return; }
-        if (hunter.Gleam < r.Gold) { Say($"NEED {r.Gold}g TO GREATER-REFINE.", Ember); return; }
+        if (hunter.Gleam < r.Gold) { Say($"NEED {r.Gold} G TO GREATER-REFINE.", Ember); return; }
 
         hunter.SpendMaterial(Material.Crystal, r.Crystal);
         hunter.SpendGleam(r.Gold);
         ReplaceItem(item, r.Product);
-        Say($"GREATER-REFINED TO iL{r.Product.ItemLevel}  ({r.Crystal} CRYSTAL + {r.Gold}g).", Gold);
+        Say($"GREATER-REFINED TO LEVEL {r.Product.ItemLevel}  ({r.Crystal} CRYSTAL + {r.Gold} G).", Gold);
     }
 
     private static bool IsWorn(Hunter hunter, ItemInstance item)
@@ -875,7 +875,7 @@ public sealed class ForgeScreen
         var names = items.Count == 0
             ? "SOLD ON SIGHT (FILTER)"
             : string.Join(", ", items.Select(i => $"{RarityNames[(int)i.Rarity]} {ItemNames[i.BaseType]}"));
-        Say($"{names}   +{mat} MAT",
+        Say($"{names}   +{mat} MATERIALS",
             items.Count > 0 ? RarityColors[items.Max(i => (int)i.Rarity)] : Slate);
     }
 
@@ -895,7 +895,7 @@ public sealed class ForgeScreen
         }
         _chests.Clear();
         if (AutoMergeOnOpen && items > 0) AutoMergeAll(hunter);   // TIRELESS FORGE tidies the bulk haul
-        Say($"OPENED {count} CHESTS — +{mat} MAT, {items} ITEMS.", Gold);
+        Say($"OPENED {count} CHESTS — +{mat} MATERIALS, {items} ITEMS.", Gold);
     }
 
     /// <summary>Roll a chest's contents, honour the loot filter, land the items + materials. Returns what landed.</summary>
@@ -1076,7 +1076,7 @@ public sealed class ForgeScreen
             // number the UPGRADE mode exists to move was illegible on every row of every mode.
             //
             // The level is measured FIRST and the name is given exactly what is left.
-            var lvl = isWorn ? "WORN" : $"iL{it.ItemLevel}";
+            var lvl = isWorn ? "WORN" : $"LEVEL {it.ItemLevel}";
             var nameRoom = row.Right - 8 - _ui.Measure(lvl) - 16 - (row.X + 50);
             _ui.Text(b, _ui.Shorten(ItemNaming.FullName(it), nameRoom), row.X + 50, row.Y + 10,
                      sel ? Bone : rc);
@@ -1199,7 +1199,7 @@ public sealed class ForgeScreen
         else if (hasCrystal) _ui.TextCenter(b, "HOLD SHIFT: +5 FOR 1 CRYSTAL", CostPanel.Center.X, CostPanel.Bottom - 152, Slate);
 
         var btn = new Rectangle(CostPanel.X + 40, CostPanel.Bottom - 96, CostPanel.Width - 80, 72);
-        if (_ui.Button(b, btn, doGreat ? "GREATER UPGRADE  +5 iL" : "UPGRADE  +1 iL", hit, clicked, enabled: doGreat ? canGreat : can))
+        if (_ui.Button(b, btn, doGreat ? "GREATER UPGRADE  +5 LEVELS" : "UPGRADE  +1 LEVEL", hit, clicked, enabled: doGreat ? canGreat : can))
         {
             if (doGreat) DoGreaterRefine(hunter, item); else DoRefine(hunter, item);
         }
@@ -1215,7 +1215,7 @@ public sealed class ForgeScreen
         var rc = RarityColors[(int)item.Rarity];
         var el = item.Element is { } e ? e.ToString().ToUpperInvariant() + " " : "";
         _ui.TextBig(b, $"{el}{ItemNames[item.BaseType]}", ResultPanel.X + 40, ResultPanel.Y + 66, rc, UiTypography.PanelTitle);
-        _ui.TextRightBig(b, $"iL{refined.ItemLevel}", ResultPanel.Right - 40, ResultPanel.Y + 66, Met, UiTypography.PanelTitle);
+        _ui.TextRightBig(b, $"LEVEL {refined.ItemLevel}", ResultPanel.Right - 40, ResultPanel.Y + 66, Met, UiTypography.PanelTitle);
 
         _ui.Text(b, "AFFIX PREVIEW", ResultPanel.X + 40, ResultPanel.Y + 114, Slate);
         var nxt = ItemAffixes.Of(refined);
@@ -1373,7 +1373,7 @@ public sealed class ForgeScreen
                               ItemPanel.Center.X, ItemPanel.Y + 408, Slate, UiTypography.Secondary);
         }
 
-        DrawTransition(b, "ITEM LEVEL", $"iL{item.ItemLevel}", refined is null ? null : $"iL{refined.ItemLevel}", ItemPanel.Y + 436);
+        DrawTransition(b, "ITEM LEVEL", $"{item.ItemLevel}", refined is null ? null : $"{refined.ItemLevel}", ItemPanel.Y + 436);
         DrawTransition(b, "ITEM POWER", $"{hunter.PowerContribution(item):N0}", refined is null ? null : $"{hunter.PowerContribution(refined):N0}", ItemPanel.Y + 480);
 
         var cur = ItemAffixes.Of(item);
@@ -1471,7 +1471,7 @@ public sealed class ForgeScreen
     private static string AffixName(AffixStat s) => s switch
     {
         AffixStat.Damage => "DAMAGE", AffixStat.Health => "HEALTH", AffixStat.SkillRate => "SKILL RATE",
-        AffixStat.Haul => "HAUL", AffixStat.Crit => "CRIT CHANCE", _ => "DEFENSE",
+        AffixStat.Haul => "LOOT", AffixStat.Crit => "CRIT CHANCE", _ => "DEFENCE",
     };
 
     private static string AffixVal(ItemAffix a) => a.Stat switch
@@ -1557,7 +1557,7 @@ public sealed class ForgeScreen
 
             // The item icon, big and centred.
             DrawItemIcon(b, item, new Rectangle(card.Center.X - 48, card.Y + 12, 96, 96));
-            _ui.TextCenter(b, $"{item.SellValue}g", card.Center.X, card.Bottom - 34, Gold);
+            _ui.TextCenter(b, $"{item.SellValue} G", card.Center.X, card.Bottom - 34, Gold);
 
             if (queued) _ui.TextCenter(b, "*", card.Right - 24, card.Y + 8, Gold);   // in the merge tray
 
@@ -1654,8 +1654,8 @@ public sealed class ForgeScreen
 
             // A worn item must be taken off before it can be sold or scrapped. (FEED was retired with the
             // creature system — the fates of unwanted loot are now SELL / DISMANTLE / MERGE / EQUIP.)
-            if (_ui.Button(b, sell, $"SELL  +{act.SellValue}g", hit, clicked, enabled: !worn)) Sell(hunter, act);
-            if (_ui.Button(b, dis, $"DISMANTLE +{Forge.Dismantle(act, Tuning)} MAT", hit, clicked, enabled: !worn))
+            if (_ui.Button(b, sell, $"SELL FOR {act.SellValue} G", hit, clicked, enabled: !worn)) Sell(hunter, act);
+            if (_ui.Button(b, dis, $"DISMANTLE FOR {Forge.Dismantle(act, Tuning)} MATERIALS", hit, clicked, enabled: !worn))
                 Dismantle(hunter, act);
 
             var queued = _merge.Contains(act.InstanceId);
@@ -1668,7 +1668,7 @@ public sealed class ForgeScreen
         if (Active is { } sel)
         {
             var affixes = ItemAffixes.Of(sel);
-            _ui.Text(b, $"iL{sel.ItemLevel}   {(affixes.Count > 0 ? "AFFIXES" : "NO AFFIXES")}", 1088, 472, InkFaint);
+            _ui.Text(b, $"LEVEL {sel.ItemLevel}   {(affixes.Count > 0 ? "AFFIXES" : "NO AFFIXES")}", 1088, 472, InkFaint);
             for (var i = 0; i < affixes.Count; i++)
                 _ui.Text(b, ItemAffixes.Describe(affixes[i]), 1088 + i % 2 * 392, 512 + i / 2 * 40, InkGold);
         }

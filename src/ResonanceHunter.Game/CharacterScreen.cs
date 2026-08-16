@@ -445,16 +445,23 @@ public sealed class CharacterScreen
 
         // Real summary rows (no fake armour set / vow-bound rows — those systems don't exist).
         var worn = AllSlots.Select(hunter.Worn).OfType<ItemInstance>().ToList();
-        var gearIl = worn.Count > 0 ? (int)Math.Round(worn.Average(i => i.ItemLevel)) : 0;
         var legend = worn.Count(i => i.Rarity == Rarity.Legendary);
         var src = worn.Where(i => i.Element is not null).GroupBy(i => i.Element!.Value)
             .OrderByDescending(g => g.Count()).FirstOrDefault();
         var srcTxt = src is null ? "—" : src.Key.ToString().ToUpperInvariant();
         var srcPct = src is null || worn.Count == 0 ? 0 : (int)Math.Round(100f * src.Count() / worn.Count);
 
-        var ry = LoadoutPanel.Y + 384;
-        SummaryRow(b, "EQUIPPED", $"{worn.Count} / 8", ref ry);
-        SummaryRow(b, "GEAR iLVL", $"{gearIl}", ref ry);
+        // TWO ROWS, NOT FOUR, AND THEY START 28px LOWER. Both changes fix a collision that was on
+        // screen: the passive's second wrapped line ends at Y+402 and the rows began at Y+384, so
+        // "Every skill hits 8% harder" was drawn straight through "EQUIPPED  8 / 8" — and the fourth
+        // row ran from Y+660 to Y+704, four pixels into EQUIP BEST at Y+700. A panel with no room for
+        // its own contents.
+        //
+        // The room came from deleting, not from shuffling: EQUIPPED and GEAR LEVEL are both already
+        // printed on the strip under the paper doll, which is where you are looking while you equip.
+        // Two panels, same two numbers, eleven inches apart. What is left here is what is NOT said
+        // anywhere else — how much of the loadout is Legendary, and which element it mostly shares.
+        var ry = LoadoutPanel.Y + 412;
         SummaryRow(b, "LEGENDARY", $"{legend}", ref ry);
         // "SOURCE", not "SOURCE FOCUS". The row above will now shorten a value rather than collide with
         // it, but shortening THIS value loses the number, and the number is the whole row. The label is
@@ -463,7 +470,7 @@ public sealed class CharacterScreen
         // reports the element your WORN GEAR mostly shares, which decides nothing in a fight and
         // everything about whether you can merge a matched trio. Calling it SOURCE made it read as the
         // combat matchup and made ITEM POWER look broken for not accounting for it.
-        SummaryRow(b, "FORGE ELEM", $"{srcTxt} {srcPct}%", ref ry);
+        SummaryRow(b, "FORGE ELEMENT", $"{srcTxt} {srcPct}%", ref ry);
 
         // Quick actions (§7.8) — both real. EQUIP BEST fills each slot with the highest-scoring item.
         Button(b, EquipBestBtn, "EQUIP BEST", hit, true);
@@ -545,7 +552,7 @@ public sealed class CharacterScreen
         _ui.Fill(b, new Rectangle(strip.X, strip.Y, 4, strip.Height), Purple);
         _ui.TextBig(b, $"{wornAll.Count} / 8 EQUIPPED", strip.X + 20, strip.Y + 8, Bone, UiTypography.Body);
         var il = wornAll.Count > 0 ? (int)Math.Round(wornAll.Average(i => i.ItemLevel)) : 0;
-        _ui.TextRightBig(b, $"GEAR iLVL {il}", strip.Right - 20, strip.Y + 10, Gold, UiTypography.Secondary);
+        _ui.TextRightBig(b, $"GEAR LEVEL {il}", strip.Right - 20, strip.Y + 10, Gold, UiTypography.Secondary);
     }
 
     private void DrawInventory(SpriteBatch b, Point hit, Hunter hunter)
@@ -647,7 +654,7 @@ public sealed class CharacterScreen
         var ench = Enchantments.Of(item);
         // The enchant NAME moved down to sit with the sentence that explains it; repeating it here
         // spent a line on a word the reader still could not act on.
-        _ui.TextBig(b, $"{(item.Element?.ToString().ToUpperInvariant() ?? "PLAIN")}  ·  iL{item.ItemLevel}",
+        _ui.TextBig(b, $"{(item.Element?.ToString().ToUpperInvariant() ?? "PLAIN")}  ·  LEVEL {item.ItemLevel}",
             DetailPanel.X + 24, hero.Bottom + 54, Purple, UiTypography.Secondary);
 
         // Stat list (§10.7): ITEM POWER + the item's real affixes.
@@ -673,7 +680,7 @@ public sealed class CharacterScreen
             var delta = hunter.PowerContribution(item) - hunter.PowerContribution(worn);
             _ui.TextBig(b, worn is null ? "SLOT EMPTY" : $"EQUIPPED: {(worn.Element?.ToString().ToUpperInvariant() ?? "PLAIN")} {SlotWord(worn.BaseType)}",
                 cmp.X + 16, cmp.Y + 12, Slate, UiTypography.Secondary);
-            _ui.TextRightBig(b, $"{(delta >= 0 ? "+" : "")}{delta} POWER", cmp.Right - 16, cmp.Y + 10,
+            _ui.TextRightBig(b, $"{(delta >= 0 ? "+" : "")}{delta:N0} POWER", cmp.Right - 16, cmp.Y + 10,
                 delta > 0 ? Green : delta < 0 ? Ember : Slate, UiTypography.Body);
         }
 
@@ -799,7 +806,7 @@ public sealed class CharacterScreen
     private static string AffixLabel(AffixStat s) => s switch
     {
         AffixStat.Damage => "DAMAGE", AffixStat.Health => "HEALTH", AffixStat.SkillRate => "SKILL RATE",
-        AffixStat.Haul => "HAUL", AffixStat.Crit => "CRITICAL", _ => "DEFENSE",
+        AffixStat.Haul => "LOOT", AffixStat.Crit => "CRIT CHANCE", _ => "DEFENCE",
     };
     private static string AffixVal(AffixStat s, float m) => s switch
     {

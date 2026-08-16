@@ -117,7 +117,9 @@ public static class MasteryCatalog
         Notable(n, b, "sunder", "SUNDER — A HIT OVER 200 STRIPS 20 ARMOUR FOR THE WAVE",
             S with { SunderThreshold = 200f, SunderAmount = 20f },
             new[] { "heavy_hand", "sharpened", "follow_through", "deliberate" });
-        Notable(n, b, "crush", "CRUSH — HITS 8x A CREATURE'S ARMOUR IGNORE HALF OF IT",
+        // "HITS 8x A CREATURE'S ARMOUR IGNORE HALF OF IT" — a sentence with no verb where the reader
+        // needs one, so it parsed as "hits eight times" rather than "a hit eight times the size of".
+        Notable(n, b, "crush", "CRUSH — A HIT 8x BIGGER THAN THE ARMOUR IGNORES HALF OF IT",
             S with { CrushArmourMultiple = 8f, ArmourIgnoreFraction = 0.5f },
             new[] { "heavy_hand", "sharpened", "follow_through", "deliberate" });
         Notable(n, b, "breaker", "BREAKER — HALF OF ANY OVERKILL CARRIES TO THE NEXT CREATURE",

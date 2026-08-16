@@ -93,7 +93,6 @@ public sealed class MapScreen
         _ => "The deepest reach — relentless and balanced.",
     };
 
-    private static readonly string[] MasteryShort = { "NEWLY", "PARTIAL", "FULLY", "OPTIMIZED" };
 
     public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked)
     {
@@ -253,7 +252,7 @@ public sealed class MapScreen
             // node's frame edge on every region.
             // Vellum, not Slate/Dim: these labels now sit on the parchment chart rather than on black, and
             // Slate (1.6:1 either way) was invisible on both.
-            _ui.TextCenterBig(b, $"PWR {RegionPower(def):N0}", node.Center.X, node.Bottom + 8,
+            _ui.TextCenterBig(b, $"POWER {RegionPower(def):N0}", node.Center.X, node.Bottom + 8,
                 unlocked ? UiKit.Vellum : UiKit.Vellum * 0.55f, UiTypography.Secondary);
 
             // State badge, top-right of the node.
@@ -294,54 +293,78 @@ public sealed class MapScreen
         _ui.TextCenterBig(b, Description(def.Theme), DetailPanel.Center.X, DetailPanel.Y + 56, Slate, UiTypography.Secondary);
 
         // Preview plate — a Source-tinted band with the emblem (no per-region illustration exists).
-        var prev = new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 92, DetailPanel.Width - 56, 150);
+        var prev = new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 92, DetailPanel.Width - 56, 100);
         _ui.Fill(b, prev, sc * 0.28f);
         _ui.Fill(b, new Rectangle(prev.X, prev.Y, prev.Width, 3), sc);
         _ui.Fill(b, new Rectangle(prev.X, prev.Bottom - 3, prev.Width, 3), sc);
         if (_ui.Assets.Get($"source_{def.Theme.ToString().ToLowerInvariant()}") is { } gem)
             b.Draw(gem, new Rectangle(prev.Center.X - 40, prev.Center.Y - 40, 80, 80), unlocked ? Color.White : new Color(0x60, 0x60, 0x68));
 
-        // Recommended power + boss tier.
-        _ui.TextBig(b, "RECOMMENDED POWER", DetailPanel.X + 28, DetailPanel.Y + 262, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, $"{RegionPower(def):N0}", DetailPanel.Right - 28, DetailPanel.Y + 258, Violet, UiTypography.PanelTitle);
-        _ui.TextBig(b, "BOSS POWER TIER", DetailPanel.X + 28, DetailPanel.Y + 300, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, $"T{def.Boss.PowerTierBase}", DetailPanel.Right - 28, DetailPanel.Y + 298, Bone, UiTypography.Body);
+        // BOSS POWER TIER IS GONE and everything below it moved up 38px, which is what makes the DROPS
+        // section physically possible — see the note there. The row printed "T17": a raw index into an
+        // internal scale, against nothing, on the one screen a player uses to pick where to go. It said
+        // less than the RECOMMENDED POWER figure directly above it already does, and cost the panel the
+        // room its last real section needed.
+        _ui.TextBig(b, "RECOMMENDED POWER", DetailPanel.X + 28, DetailPanel.Y + 212, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, $"{RegionPower(def):N0}", DetailPanel.Right - 28, DetailPanel.Y + 208, Violet, UiTypography.PanelTitle);
 
-        _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 338, DetailPanel.Width - 56, 2), Dim);
+        _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 250, DetailPanel.Width - 56, 2), Dim);
 
         // Enemy theme (the region's Source) + combat modifier (its bias).
-        _ui.TextBig(b, "ENEMY THEME", DetailPanel.X + 28, DetailPanel.Y + 352, Gold, UiTypography.Secondary);
+        _ui.TextBig(b, "ENEMY THEME", DetailPanel.X + 28, DetailPanel.Y + 264, Gold, UiTypography.Secondary);
         if (_ui.Assets.Get($"source_{def.Theme.ToString().ToLowerInvariant()}") is { } tg)
-            b.Draw(tg, new Rectangle(DetailPanel.X + 30, DetailPanel.Y + 384, 34, 34), Color.White);
-        _ui.TextBig(b, $"{def.Theme.ToString().ToUpperInvariant()} AFFINITY", DetailPanel.X + 74, DetailPanel.Y + 388, Bone, UiTypography.Body);
+            b.Draw(tg, new Rectangle(DetailPanel.X + 30, DetailPanel.Y + 296, 34, 34), Color.White);
+        _ui.TextBig(b, $"{def.Theme.ToString().ToUpperInvariant()} AFFINITY", DetailPanel.X + 74, DetailPanel.Y + 300, Bone, UiTypography.Body);
         // Region modifier — the themed combat twist (replaces the old flavor-only bias line).
         var mod = RegionModifiers.For(def.Id);
-        _ui.TextBig(b, mod.Name, DetailPanel.X + 30, DetailPanel.Y + 420, Ember, UiTypography.Body);
-        _ui.TextBig(b, mod.Blurb, DetailPanel.X + 30, DetailPanel.Y + 444, Slate, UiTypography.Secondary);
+        _ui.TextBig(b, mod.Name, DetailPanel.X + 30, DetailPanel.Y + 332, Ember, UiTypography.Body);
+        // WRAPPED. The blurb is a sentence now rather than "+25% HP & +10% damage", and a single
+        // TextBig would have run it off the panel and through the frame.
+        var modY = DetailPanel.Y + 356;
+        foreach (var line in _ui.WrapBig(mod.Blurb, DetailPanel.Width - 60, UiTypography.Secondary))
+        {
+            _ui.TextBig(b, line, DetailPanel.X + 30, modY, Slate, UiTypography.Secondary);
+            modY += 22;
+        }
 
-        // Objective + idle-farm status (real).
-        _ui.TextBig(b, "OBJECTIVE", DetailPanel.X + 28, DetailPanel.Y + 470, Gold, UiTypography.Secondary);
-        if (conq) { DrawCheck(b, new Rectangle(DetailPanel.X + 30, DetailPanel.Y + 504, 22, 18), Met); _ui.TextBig(b, "REGION CONQUERED", DetailPanel.X + 64, DetailPanel.Y + 502, Met, UiTypography.Body); }
-        else _ui.TextBig(b, $"HOLD {ConquerWaves} WAVES TO CONQUER", DetailPanel.X + 30, DetailPanel.Y + 502, unlocked ? Bone : Slate, UiTypography.Body);
+        // Objective + what it earns while you are away (real).
+        _ui.TextBig(b, "OBJECTIVE", DetailPanel.X + 28, DetailPanel.Y + 400, Gold, UiTypography.Secondary);
+        if (conq) { DrawCheck(b, new Rectangle(DetailPanel.X + 30, DetailPanel.Y + 434, 22, 18), Met); _ui.TextBig(b, "REGION CONQUERED", DetailPanel.X + 64, DetailPanel.Y + 432, Met, UiTypography.Body); }
+        else _ui.TextBig(b, $"HOLD {ConquerWaves} WAVES TO CONQUER", DetailPanel.X + 30, DetailPanel.Y + 432, unlocked ? Bone : Slate, UiTypography.Body);
         if (unlocked)
-            _ui.TextBig(b, $"IDLE FARM: {MasteryShort[(int)farm.MasteryLevel]} · {farm.IdleEfficiencyPercent():0}%", DetailPanel.X + 30, DetailPanel.Y + 540, Slate, UiTypography.Secondary);
+            // "IDLE FARM: PARTIAL · 50%" was two pieces of jargon and a number with no unit. The percent
+            // is the only part a player can act on, and it needed a sentence to say what it is a percent
+            // OF. The mastery word went with the label: it named a tier nothing on screen explains, and
+            // the number it produces is already right there.
+            _ui.TextBig(b, $"EARNS {farm.IdleEfficiencyPercent():0}% OF ITS RATE WHILE YOU ARE AWAY",
+                        DetailPanel.X + 30, DetailPanel.Y + 470, Slate, UiTypography.Secondary);
 
         // WHAT THIS PLACE DROPS. The map decided a difficulty and an element and said nothing about
         // reward, so "where should I farm" had no answer on the screen built to answer it. Each region
         // now leans toward its own slots, and this is where a player finds that out — before walking in,
         // not after twenty chests.
+        // THIS SECTION HAD NEVER DRAWN A SINGLE LINE. Its body started at Y+606 and its floor was
+        // Bottom-150 = Y+566 — forty pixels ABOVE its own first row — so the very first iteration broke
+        // and every region in the game showed a "DROPS" heading with nothing under it. The heading was
+        // outside the loop, so the failure looked like missing DATA rather than a layout that could not
+        // fit its own content, and the comment below explains a clamp that was doing far more than it
+        // claimed. The floor was right; there was simply no room, and nothing said so.
+        //
+        // The room came from deleting BOSS POWER TIER above. Now the heading is only drawn if a line
+        // will actually follow it, so this can never silently regress to a bare label again.
         var drops = RegionDrops.For(def.Id);
-        if (drops.Favoured.Count > 0)
+        var dropLines = drops.Favoured.Count > 0
+            ? _ui.WrapBig(drops.Blurb, DetailPanel.Width - 60, UiTypography.Secondary)
+            : System.Array.Empty<string>();
+        var dropsTop = DetailPanel.Y + 528;
+        // Clamped to the row above the CTA: on a deepenable world the CORRUPTION line lands in this
+        // band, and a wrap with no floor eventually meets whatever is below it.
+        var dropsFloor = DetailPanel.Bottom - (World.CanDeepenCorruption ? 150 : 108);
+        if (dropLines.Count > 0 && dropsTop + 22 <= dropsFloor)
         {
-            _ui.TextBig(b, "DROPS", DetailPanel.X + 28, DetailPanel.Y + 578, Gold, UiTypography.Secondary);
-            var y = DetailPanel.Y + 606;
-
-            // CLAMPED TO THE ROW ABOVE THE CTA. The blurb wrapped freely and its second line ran under
-            // the button's frame — and on a deepenable world the CORRUPTION line lands in the same band,
-            // so the two printed straight through each other. A wrap with no floor is a wrap that will
-            // eventually meet whatever is below it.
-            var dropsFloor = DetailPanel.Bottom - 150;
-            foreach (var line in _ui.WrapBig(drops.Blurb, DetailPanel.Width - 60, UiTypography.Secondary))
+            _ui.TextBig(b, "DROPS", DetailPanel.X + 28, DetailPanel.Y + 500, Gold, UiTypography.Secondary);
+            var y = dropsTop;
+            foreach (var line in dropLines)
             {
                 if (y + 22 > dropsFloor) break;
                 _ui.TextBig(b, line, DetailPanel.X + 30, y, Bone, UiTypography.Secondary);
@@ -360,7 +383,7 @@ public sealed class MapScreen
                               DetailPanel.Center.X, DetailPanel.Bottom - 124, Violet, UiTypography.Secondary);
             if (_ui.Button(b, cta, "DEEPEN", hit, clicked)) _deepenRequest = true;
         }
-        else if (_ui.Button(b, cta, def.Id == ActiveRegion ? "RE-ENTER" : "ENTER REGION", hit, clicked, enabled: unlocked))
+        else if (_ui.Button(b, cta, def.Id == ActiveRegion ? "RESUME HERE" : "ENTER THIS REGION", hit, clicked, enabled: unlocked))
             _enterRequest = def.Id;
         if (!unlocked) _ui.TextCenter(b, "CONQUER THE PREVIOUS REGION TO UNLOCK", DetailPanel.Center.X, DetailPanel.Bottom - 110, Ember);
     }

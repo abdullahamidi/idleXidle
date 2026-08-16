@@ -120,12 +120,12 @@ public class BuildGlossaryTest
 
             _out.WriteLine($"   {rarity,-10} iL{level,-4} {trait,-8} {text}");
 
-            // Every channel that actually moved must appear, and nothing that did not may.
-            var moved = new (string Label, float Value)[]
-            {
-                ("DMG", mods.Damage), ("HP", mods.Health),
-                ("SKILL", mods.SkillRate), ("HAUL", mods.Haul),
-            };
+            // Every channel that actually moved must appear, and nothing that did not may. The labels
+            // come FROM GearTraits rather than being retyped here: a local copy would still pass the
+            // day someone renames a channel, because the positive case would look for a word that is no
+            // longer in the string and the negative case asserts exactly that absence.
+            var moved = new[] { mods.Damage, mods.Health, mods.SkillRate, mods.Haul }
+                .Select((value, i) => (Label: GearTraits.Channels[i], Value: value));
 
             foreach (var (label, value) in moved)
             {
