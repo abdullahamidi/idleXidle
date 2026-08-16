@@ -249,9 +249,16 @@ public sealed class BuildScreen
             else _dragFrom = null;
 
             // Keyboard, for anyone who would rather not drag.
+            //
+            // LEFT/RIGHT, NOT A/D. A and D are nav-rail hotkeys — A opens the WARREN, D is free but sits
+            // beside it — and the rail's hotkey loop runs on every frame the tree is open, so holding A
+            // to pan west left the tree and opened another screen. The arrows are already the pan keys
+            // everywhere else in this game and collide with nothing here.
             var step = 260f / _zoom * 0.06f;
-            if (keys.IsKeyDown(Keys.A)) { _pan.X -= step; ClampPan(); }
-            if (keys.IsKeyDown(Keys.D)) { _pan.X += step; ClampPan(); }
+            if (keys.IsKeyDown(Keys.Left)) { _pan.X -= step; ClampPan(); }
+            if (keys.IsKeyDown(Keys.Right)) { _pan.X += step; ClampPan(); }
+            if (keys.IsKeyDown(Keys.Up)) { _pan.Y -= step; ClampPan(); }
+            if (keys.IsKeyDown(Keys.Down)) { _pan.Y += step; ClampPan(); }
             bool Tapped(Keys k) => keys.IsKeyDown(k) && prev.IsKeyUp(k);
             if (Tapped(Keys.OemPlus) || Tapped(Keys.Add)) ZoomAt(TreeView.Center, 1.25f);
             if (Tapped(Keys.OemMinus) || Tapped(Keys.Subtract)) ZoomAt(TreeView.Center, 1f / 1.25f);

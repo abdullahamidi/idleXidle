@@ -201,15 +201,29 @@ public sealed class ForgeScreen
     // 366 wide, not 276: a row carries an icon, a name and a level, and at the old width the names ran
     // off the panel and the level column was clipped away entirely. The preview column gives back the 90.
     private static readonly Rectangle Rail = new(24, 140, 366, 330);
-    private static readonly Rectangle BagPanel = new(24, 486, 366, 384);
+    private static readonly Rectangle BagPanel = new(24, 486, 366, 416);
 
     private const int BagRowH = 40;
-    private static int BagRows => (BagPanel.Height - 124) / BagRowH;
+
+    /// <summary>
+    /// How many rows actually fit between the header and the footer.
+    /// </summary>
+    /// <remarks>
+    /// <b>THE RESERVE WAS 124 AND THE FURNITURE NEEDS 176</b>, so the list claimed one row more than it
+    /// had. Header: the title and the scroll counter push the first row to Y+84. Footer: the OPEN CHESTS
+    /// button sits at Bottom-92. Row six therefore ran from Y+770 to Y+806 straight underneath a button
+    /// drawn at Y+778 — visible, clickable, and reporting another item's name.
+    ///
+    /// The panel also grew 64px downward to keep six real rows rather than dropping to five. Six is not
+    /// generous, but the list is sorted rarest-first now and the wheel reaches it, so the top of the list
+    /// is where the interesting items are instead of wherever they happened to drop.
+    /// </remarks>
+    private static int BagRows => (BagPanel.Height - 176) / BagRowH;
 
     // +30 inset: UiKit.Panel's frame art eats the outer edge, and rows drawn flush to it sit ON the
     // ornament rather than inside the panel.
     private static Rectangle BagRow(int vis)
-        => new(BagPanel.X + 30, BagPanel.Y + 84 + vis * BagRowH, BagPanel.Width - 60, BagRowH - 4);
+        => new(BagPanel.X + 30, BagPanel.Y + 84 + vis * BagRowH, BagPanel.Width - 92, BagRowH - 4);
     /// <summary>What an operation costs, written so the two numbers cannot be read the wrong way round.</summary>
     /// <remarks>
     /// The rows printed "{have} / {cost} MATERIAL" — "3,400 / 100 ESSENCE" — which reads as a progress
@@ -242,10 +256,28 @@ public sealed class ForgeScreen
     private static readonly Color[] MatColor =
         { new(0x9A, 0xC0, 0x88), new(0x74, 0xC6, 0xE8), new(0xC0, 0x6E, 0xE0), new(0xF0, 0xC0, 0x48) };
 
+    /// <summary>
+    /// The bag, in one order, for everything that reads it.
+    /// </summary>
+    /// <remarks>
+    /// Three places built this list independently — the drawn rows, <see cref="Target"/> and
+    /// <see cref="CycleTarget"/> — so an ordering change in one silently disagreed with the other two,
+    /// and "the row I clicked" and "the item the preview shows" were only the same thing by luck.
+    ///
+    /// SORTED RAREST FIRST, then by level, which is what the GEAR screen already does with the identical
+    /// item set. In insertion order the bag was DROP order: a Legendary found forty items ago sits below
+    /// forty Commons, and with six visible rows and no filter, finding it is scrolling past everything.
+    /// </remarks>
+    private List<ItemInstance> Bag()
+        => _inv.Where(Gear.IsWearable)
+               .OrderByDescending(i => (int)i.Rarity)
+               .ThenByDescending(i => i.ItemLevel)
+               .ToList();
+
     /// <summary>The wearable the focused modes upgrade — the id-matched item, or the first wearable.</summary>
     private ItemInstance? Target()
     {
-        var wear = _inv.Where(Gear.IsWearable).ToList();
+        var wear = Bag();
         if (wear.Count == 0) return null;
         return (_focusId is not null ? wear.FirstOrDefault(i => i.InstanceId == _focusId) : null) ?? wear[0];
     }
@@ -253,7 +285,7 @@ public sealed class ForgeScreen
     /// <summary>Step the focused selection to the next / previous wearable in the bag.</summary>
     private void CycleTarget(int dir)
     {
-        var wear = _inv.Where(Gear.IsWearable).ToList();
+        var wear = Bag();
         if (wear.Count == 0) { _focusId = null; return; }
         var idx = Math.Max(0, wear.FindIndex(i => i.InstanceId == _focusId));
         _focusId = wear[(idx + dir % wear.Count + wear.Count) % wear.Count].InstanceId;
@@ -411,6 +443,30 @@ public sealed class ForgeScreen
         // The chest-open REVEAL fades on its own clock — the anticipation beat that loot design lives on.
         if (_revealTimer > 0f && !_revealFrozen) _revealTimer -= (float)time.ElapsedGameTime.TotalSeconds;
 
+        // THE CURSOR, IN THE SPACE THE RECTANGLES ARE AUTHORED IN. Every rect on this screen is written
+        // in 1920x1080 and drawn through Game1's overlay inset; the incoming cursor is in 480x270 canvas
+        // space. Draw already converts (see the twin below); Update did not, which is half of why the bag
+        // was unusable — see the note on the wheel.
+        var overlay = Game1.ToOverlay(mouse);
+
+        // THE BAG'S WHEEL, HOISTED ABOVE THE EARLY RETURN THAT USED TO SWALLOW IT.
+        //
+        // Playtest: "FORGE ekranındaki envanter hiç kullanışlı değil." It was not a matter of taste. This
+        // branch sat BELOW the `_mode != Salvage` return, and the bag list is drawn in UPGRADE and REFORGE
+        // — the two modes that return here — so in every mode where the list is on screen the wheel never
+        // reached it. The list shows six rows and has no scrollbar, no tabs and no keyboard path, so
+        // ITEM SEVEN ONWARD WAS UNREACHABLE. A player with forty items could act on the first six.
+        //
+        // It also tested the raw `mouse` against BagPanel, a 1920-space rect, so the condition was false
+        // at every cursor position even in Salvage mode: BagPanel starts at x=24 and the canvas cursor
+        // cannot exceed ~479, which lets a narrow band of the panel appear to work by coincidence.
+        if (wheel != 0 && BagPanel.Contains(overlay))
+        {
+            var wearCount = _inv.Count(Gear.IsWearable);
+            _bagScroll = Math.Clamp(_bagScroll - wheel, 0, Math.Max(0, wearCount - BagRows));
+            wheel = 0;
+        }
+
         // In the focused modes the grid is not shown — arrows cycle which wearable you are upgrading, and
         // the mode-switch and action clicks are handled in Draw. The bag/grid interactions below belong to
         // SALVAGE mode only, so a key never sells the item you are previewing on another screen.
@@ -423,16 +479,6 @@ public sealed class ForgeScreen
         }
 
         var view = View();
-
-        // The wheel serves whichever list the pointer is over — the bag on the left, the loot grid on
-        // the right. Routing it only to the grid would leave the new list keyboard-bound, which is the
-        // problem it exists to replace.
-        if (wheel != 0 && BagPanel.Contains(mouse))
-        {
-            var wearCount = _inv.Count(Gear.IsWearable);
-            _bagScroll = Math.Clamp(_bagScroll - wheel, 0, Math.Max(0, wearCount - BagRows));
-            wheel = 0;
-        }
 
         // Mouse wheel scrolls the loot grid a row at a time.
         if (wheel != 0)
@@ -1036,7 +1082,7 @@ public sealed class ForgeScreen
     {
         _ui.PanelQuiet(b, BagPanel);
 
-        var bag = _inv.Where(Gear.IsWearable).ToList();
+        var bag = Bag();
         _ui.TextCenterBig(b, "YOUR BAG", BagPanel.Center.X, BagPanel.Y + 40, Gold, UiTypography.PanelTitle);
 
         // THE SCROLL COUNTER SITS UNDER THE TITLE, CENTRED — the only clear ground in this header.
@@ -1061,6 +1107,16 @@ public sealed class ForgeScreen
         }
 
         // Keep the focused item on screen without stealing the wheel from the player.
+        // THE FOCUS IS ADOPTED BEFORE IT IS USED, and that is the OTHER half of why this list could not
+        // be scrolled. With no focus set, FindIndex returns -1, Math.Max floors it to 0, and the
+        // keep-the-selection-visible clamp below then reads "row 0 must be on screen" — so it dragged
+        // _bagScroll back to zero on EVERY FRAME. Fixing the wheel alone would have changed nothing:
+        // the scroll was being undone a frame later by a line whose job is to be helpful.
+        //
+        // Adopting the first row also makes the highlight and the ITEM PREVIEW agree on frame one; they
+        // were both falling back to "the first item" separately, which is agreement by coincidence.
+        if (_focusId is null || bag.All(i => i.InstanceId != _focusId)) _focusId = bag[0].InstanceId;
+
         var focus = Math.Max(0, bag.FindIndex(i => i.InstanceId == _focusId));
         if (focus < _bagScroll) _bagScroll = focus;
         if (focus >= _bagScroll + BagRows) _bagScroll = focus - BagRows + 1;
@@ -1111,6 +1167,21 @@ public sealed class ForgeScreen
             _ui.Fill(b, new Rectangle(cr.X, cr.Y, 5, cr.Height), RarityColors[best]);
             if (_ui.Button(b, cr, $"OPEN {_chests.Count} CHEST{(_chests.Count == 1 ? "" : "S")}", hit, clicked))
                 _mode = ForgeMode.Salvage;
+        }
+
+        // A SCROLLBAR, so "there is more below" is something you can SEE rather than something you find
+        // out by spinning the wheel. The list had no visible affordance of any kind: no bar, no arrows,
+        // no cut-off row — six rows and then a frame, which reads as a bag holding six items. The GEAR
+        // screen's inventory has had one all along (CharacterScreen.cs); this is the same geometry,
+        // drawn down the inside edge of the row column.
+        if (bag.Count > BagRows)
+        {
+            var first = BagRow(0);
+            var track = new Rectangle(first.Right + 8, first.Y, 6, BagRows * BagRowH - 4);
+            _ui.Fill(b, track, new Color(0x16, 0x12, 0x20, 0xE0));
+            var th = Math.Max(24, track.Height * BagRows / bag.Count);
+            var ty = track.Y + (track.Height - th) * _bagScroll / Math.Max(1, bag.Count - BagRows);
+            _ui.Fill(b, new Rectangle(track.X, ty, track.Width, th), new Color(0x8A, 0x5A, 0xC8));
         }
 
         // (The scroll counter that used to live here moved into the header — see the note beside it.

@@ -1805,12 +1805,13 @@ public class Game1 : Game
         // so Phase never left Engaging and that condition became PERMANENTLY FALSE: the Forge — every
         // item, merge, and equip in the game — was simply unreachable, while the help screen went right
         // on telling players to press F for it. The Forge is a place now, not a post-fight reward.
-        if (Pressed(Keys.F) && !_showAutomation)
-        {
-            _showForge = !_showForge;
-            _showAutomation = false;
-            _showCharacter = false;
-        }
+        // THE SECOND F HANDLER IS GONE, AND WITH IT THE REASON F DID NOTHING.
+        //
+        // The nav-rail hotkey loop above already owns every rail key including F: it calls OpenNav, which
+        // sets _showForge. This handler then ran in the same frame and toggled it straight back off, so
+        // the two correct handlers cancelled and the Forge could not be opened by its own key at all —
+        // while the help screen went on teaching it. Neither piece of code was wrong alone; the bug was
+        // owning one key in two places.
 
 
         if (_showForge)

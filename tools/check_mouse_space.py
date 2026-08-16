@@ -31,6 +31,40 @@ CONVERSIONS = ("Game1.ToOverlay", "ToOverlay(", "mouse.X * 4", "mouse.X*4")
 # Signs a method actually hit-tests something.
 HIT_TESTS = (".Contains(", "_ui.Button(", "ui.Button(")
 
+# A hit test applied DIRECTLY to the raw cursor parameter, in a method that also converts.
+#
+# THE HOLE THIS CLOSES, and it had a live instance. The check below is "does the reachable body
+# convert anywhere", which passes a method that converts once and then hit-tests the RAW parameter
+# somewhere else. ForgeScreen.Update did exactly that: it converted for the loot-card loop and tested
+# `BagPanel.Contains(mouse)` for the bag's scroll wheel, against a 1920-space rect. The gate reported
+# all 21 entry points green while the Forge's item list could not be scrolled at all.
+#
+# One conversion in a method is not a property of the method; it is a property of one call site.
+RAW_HIT = r"(?:\.Contains|ClickedIn|Hover)\s*\([^;()]*\b%s\b[^;()]*\)|Button\s*\([^;()]*,\s*%s\s*,"
+
+
+def cursor_param(text, name):
+    """The name of the Point parameter a screen entry point receives, or None."""
+    m = re.search(decl_pattern(name, False), text)
+    if not m:
+        return None
+    args = body_args(text, m.end() - 1)
+    p = re.search(r"\bPoint\s+(\w+)", args or "")
+    return p.group(1) if p else None
+
+
+def body_args(text, open_paren):
+    """The text between a declaration's parentheses."""
+    depth = 0
+    for i in range(open_paren, len(text)):
+        if text[i] == "(":
+            depth += 1
+        elif text[i] == ")":
+            depth -= 1
+            if depth == 0:
+                return text[open_paren + 1:i]
+    return None
+
 # Built by concatenation, not str.format: the character class contains literal braces, which
 # format() reads as replacement fields and raises on.
 DECL_HEAD = r"\b(?:public|internal|private|protected)\b[^;{}\n]*\b"
@@ -143,8 +177,29 @@ def main():
 
         if not any(h in body for h in HIT_TESTS):
             continue                                   # draws only; nothing to mis-hit
+
         if any(c in body for c in CONVERSIONS):
-            continue                                   # converts, as required
+            # It converts -- but a conversion is a property of one call site, not of the method.
+            # Any hit test still aimed at the RAW parameter is a dead click hiding behind a live one.
+            # THE ENTRY METHOD'S OWN BODY, NOT THE REACHABLE CLOSURE. Inside the entry point the
+            # parameter name unambiguously means the raw cursor; three helpers down it does not.
+            # StatsScreen.DrawTrain, ChestScreen and BuildScreen all take a parameter ALSO called
+            # `mouse` and are called with the already-converted local, so searching the closure
+            # flagged three correct screens on a name collision. A gate that cries wolf on working
+            # code gets switched off, which costs more than the hole it was closing.
+            raw = cursor_param(text, method)
+            own = method_body(text, method) or ""
+            if raw:
+                stray = re.search(RAW_HIT % (re.escape(raw), re.escape(raw)), own)
+                if stray:
+                    problems.append(
+                        "%s.%s converts the cursor, then hit-tests the RAW one anyway:\n"
+                        "       %s\n"
+                        "     Its rects are authored in 1920x1080; `%s` is the 480x270 canvas cursor.\n"
+                        "     Fix: aim this test at the converted local too."
+                        % (type_name, method, stray.group(0).strip()[:96], raw)
+                    )
+            continue
 
         problems.append(
             "%s.%s hit-tests but never converts the cursor.\n"
