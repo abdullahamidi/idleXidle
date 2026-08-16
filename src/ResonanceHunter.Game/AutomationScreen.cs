@@ -371,7 +371,7 @@ public sealed class AutomationScreen
         // Gleam/Dust/Materials are the shared currency pills top-right (Game1.DrawCurrencyPills).
 
         // Region-mastery progress — a full labelled bar (uiref_warren), not the old thin sliver.
-        _ui.Text(b, "MASTERY", 32, 80, Slate);
+        _ui.Text(b, "INSIGHT", 32, 80, Slate);
         _ui.Bar(b, 264, 84, 1280, 24, region.ProgressToNextLevel() ?? 1f, Gold);
         _ui.TextRight(b, $"IDLE {region.IdleEfficiencyPercent():0}%", 1872, 80, Slate);
 

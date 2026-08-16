@@ -7,6 +7,7 @@ using Microsoft.Xna.Framework.Input;
 using ResonanceHunter.Core.Automation;
 using ResonanceHunter.Core.Combat;
 using ResonanceHunter.Core.Encounters;
+using ResonanceHunter.Core.Loot;
 using ResonanceHunter.Core.Progression;
 
 namespace ResonanceHunter.Client;
@@ -83,6 +84,32 @@ public sealed class MapScreen
     /// <summary>A real, monotonic "recommended power" derived from the region's boss power tier.</summary>
     private static int RegionPower(RegionDefinition def) => def.Boss.PowerTierBase * 350;
 
+
+    /// <summary>The shipped padlock, falling back to the hand-drawn one if the texture is missing.</summary>
+    /// <remarks>
+    /// <see cref="DrawLock"/> builds a padlock out of two rectangles and an arc because no art was known
+    /// to exist; ui_slot_locked ships and is used by the skill dock. Two padlocks in one game is one
+    /// padlock too many, and the drawn one is the poorer of the two at this size.
+    /// </remarks>
+    private void DrawLockArt(SpriteBatch b, Rectangle box)
+    {
+        if (_ui.Assets.Get("ui_slot_locked") is { } art) b.Draw(art, box, new Color(0xB0, 0xA8, 0xC0));
+        else DrawLock(b, box, Slate);
+    }
+
+    /// <summary>The glyph for a gear slot. Literal arms, so check_asset_keys can see every key.</summary>
+    private static string? SlotGlyph(ItemBaseType t) => t switch
+    {
+        ItemBaseType.Weapon => "item_slot_weapon",
+        ItemBaseType.Helm => "item_slot_helm",
+        ItemBaseType.Chest => "item_slot_chest",
+        ItemBaseType.Gloves => "item_slot_gloves",
+        ItemBaseType.Boots => "item_slot_boots",
+        ItemBaseType.Charm => "item_slot_charm",
+        ItemBaseType.AbilityFocus => "item_slot_focus",
+        ItemBaseType.Ring => "item_slot_ring",
+        _ => null,
+    };
 
     /// <summary>The arena texture for a Source. Literal arms, so check_asset_keys can see every key.</summary>
     /// <remarks>
@@ -219,7 +246,7 @@ public sealed class MapScreen
             var (label, col) = conq ? ("CONQUERED", Met) : active ? ("IN PROGRESS", Violet) : !unlocked ? ("LOCKED", Slate) : ("AVAILABLE", Bone);
             _ui.TextBig(b, label, row.X + 50, row.Y + 28, col, UiTypography.Secondary);
             _ui.TextRightBig(b, $"{RegionPower(def):N0}", row.Right - 34, row.Y + 28, Slate, UiTypography.Secondary);
-            if (!unlocked) DrawLock(b, new Rectangle(row.Right - 24, row.Y + 6, 18, 20), Slate);
+            if (!unlocked) DrawLockArt(b, new Rectangle(row.Right - 26, row.Y + 6, 22, 22));
             else if (conq) DrawCheck(b, new Rectangle(row.Right - 26, row.Y + 8, 20, 16), Met);
             else if (active) _ui.Diamond(b, new Rectangle(row.Right - 24, row.Y + 6, 18, 18), Violet);
             y += 56;
@@ -309,7 +336,7 @@ public sealed class MapScreen
                 unlocked ? UiKit.Vellum : UiKit.Vellum * 0.55f, UiTypography.Secondary);
 
             // State badge, top-right of the node.
-            if (!unlocked) DrawLock(b, new Rectangle(node.Right - 30, node.Y + 8, 20, 22), Slate);
+            if (!unlocked) DrawLockArt(b, new Rectangle(node.Right - 32, node.Y + 8, 24, 24));
             else if (conq) DrawCheck(b, new Rectangle(node.Right - 32, node.Y + 10, 22, 18), Met);
             else if (active) _ui.Diamond(b, new Rectangle(node.Right - 30, node.Y + 8, 20, 20), Violet);
 
@@ -420,6 +447,17 @@ public sealed class MapScreen
         if (dropLines.Count > 0 && dropsTop + 22 <= dropsFloor)
         {
             _ui.TextBig(b, "DROPS", DetailPanel.X + 28, DetailPanel.Y + 500, Gold, UiTypography.Secondary);
+
+            // WHAT IT FAVOURS, AS PICTURES, on the heading's own line — which costs no vertical space
+            // at all. The blurb below already says it in words; a player comparing two regions is
+            // comparing slots, and three glyphs are read in one glance where two sentences are not.
+            var gx = DetailPanel.Right - 28;
+            foreach (var slot in drops.Favoured.Take(3).Reverse())
+            {
+                if (SlotGlyph(slot) is not { } key || _ui.Assets.Get(key) is not { } gi) continue;
+                gx -= 30;
+                b.Draw(gi, new Rectangle(gx, DetailPanel.Y + 494, 26, 26), Bone);
+            }
             var y = dropsTop;
             foreach (var line in dropLines)
             {

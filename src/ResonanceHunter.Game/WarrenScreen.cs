@@ -63,7 +63,13 @@ public sealed class WarrenScreen
 
     private static string ResName(WarrenResource r) => r switch
     {
-        WarrenResource.Gleam => "GOLD", WarrenResource.Mastery => "MASTERY", _ => "NATURE",
+        // THE GAME'S OWN NAMES FOR ITS OWN CURRENCIES. Two of these three were simply wrong: the first
+        // pool is Hunter.Gleam, which every other screen calls GLEAM, and the third is
+        // MemoryDust.MemoryDust, which the TRAITS screen spends and calls DUST — this screen called them
+        // GOLD and NATURE. The middle one is renamed rather than corrected: it is a Warren-only pool
+        // (see the note on WarrenResource) and calling it MASTERY now collides with a rail tile, a tree
+        // and a point currency that it has nothing to do with.
+        WarrenResource.Gleam => "GLEAM", WarrenResource.Mastery => "INSIGHT", _ => "DUST",
     };
 
     private static string Ab(long v) => v >= 1_000_000
@@ -178,7 +184,7 @@ public sealed class WarrenScreen
         var entries = new (Color Gem, string Value, string Label)[]
         {
             (GleamC, $"+{Warren.ResourceBonus(WarrenResource.Gleam) * 100f:0}%", "GOLD"),
-            (MasteryC, $"+{Warren.ResourceBonus(WarrenResource.Mastery) * 100f:0}%", "MASTERY"),
+            (MasteryC, $"+{Warren.ResourceBonus(WarrenResource.Mastery) * 100f:0}%", "INSIGHT"),
             (DustC, $"+{Warren.ResourceBonus(WarrenResource.Dust) * 100f:0}%", "NATURE"),
             (Met, $"+{Warren.AllProductionBonus * 100f:0}%", "ALL PRODUCTION"),
             (Ember, $"+{Warren.ConquestBonus * 100f:0}%", "CONQUEST"),
@@ -225,7 +231,7 @@ public sealed class WarrenScreen
         var cost = f.UpgradeCost();
         var y = DetailPanel.Y + 388;
         DrawReq(b, y, GleamC, "GOLD", GleamOwned, cost.Gleam);
-        DrawReq(b, y + 42, MasteryC, "MASTERY", MasteryOwned, cost.Mastery);
+        DrawReq(b, y + 42, MasteryC, "INSIGHT", MasteryOwned, cost.Mastery);
         DrawReq(b, y + 84, DustC, "NATURE", DustOwned, cost.Dust);
 
         var afford = GleamOwned >= cost.Gleam && MasteryOwned >= cost.Mastery && DustOwned >= cost.Dust;

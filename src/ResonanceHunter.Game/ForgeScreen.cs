@@ -1979,11 +1979,36 @@ public sealed class ForgeScreen
         _ui.Fill(b, new Rectangle(r.Right - len, r.Bottom - t, len, t), c); _ui.Fill(b, new Rectangle(r.Right - t, r.Bottom - len, t, len), c);
     }
 
+    /// <summary>
+    /// The tint each rarity's frame is drawn with, so the ring itself carries rarity.
+    /// </summary>
+    /// <remarks>
+    /// <b>THE FIVE RARITY FRAME TEXTURES ARE THE SAME PICTURE.</b> ui_frame_rarity_common through
+    /// _legendary are five files with one warm gold-and-bone ring between them, drawn untinted — so
+    /// "rarity frame" was a name, not a signal, and rarity's only real mark on an item was a few pixels
+    /// of coloured bar beside it. The largest shape in every cell said nothing.
+    ///
+    /// Tinting works here only because the art's brightest pixels are near-white (sampled 239,221,199),
+    /// not saturated gold: a multiply against a near-white ring can reach any hue, while a multiply
+    /// against actual gold could only ever darken toward brown. Legendary keeps White, which is what
+    /// makes it the one that still reads as metal.
+    ///
+    /// Indexed by <c>(int)Rarity</c>, in the same order as FrameKey.
+    /// </remarks>
+    private static readonly Color[] FrameTint =
+    {
+        new(0xD2, 0xCE, 0xC2),   // Common — neutral bone, so it reads as "no claim"
+        new(0x92, 0xDE, 0x9E),   // Uncommon
+        new(0x82, 0xB8, 0xFF),   // Rare
+        new(0xD2, 0x8C, 0xE2),   // Epic
+        Color.White,             // Legendary — the art as authored
+    };
+
     /// <summary>Draw an item's frame+glyph (or a rarity-coloured fallback). Shared with the Character screen.</summary>
     public void DrawItemIcon(SpriteBatch b, ItemInstance item, Rectangle box)
     {
         var frame = _ui.Assets.Get(FrameKey[(int)item.Rarity]);
-        if (frame is not null) b.Draw(frame, box, Color.White);
+        if (frame is not null) b.Draw(frame, box, FrameTint[(int)item.Rarity]);
 
         // The icon: per-trait art if it exists, else a package_05 item thumbnail, drawn INSET so the ornate
         // rarity frame stays visible around it. Then the Source gem (top-left) and enchant glyph (bottom-right)

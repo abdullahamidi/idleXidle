@@ -188,7 +188,19 @@ public class Game1 : Game
     // retired from the UI; _automation is kept only to carry the saved roster/cores forward (dormant).
     private WarrenScreen _warrenScreen = null!;
     private readonly Warren _warren = new();
-    private long _warrenMasteryPool;   // Mastery the facilities have produced — feeds SetEarned, and is the spendable pool
+    /// <summary>What the Warren's INSIGHT facilities have produced. Spendable on Warren upgrades only.</summary>
+    /// <remarks>
+    /// <b>THE COMMENT HERE USED TO SAY "feeds SetEarned", AND IT DOES NOT.</b> Two more comments said the
+    /// same thing. The only <c>MasteryTree.SetEarned</c> calls in the game are DEV fixtures — mastery
+    /// POINTS are derived from deepest-ever depth and nothing else — so this pool is produced by two
+    /// facilities and spent on upgrading facilities: a closed loop, which is exactly what the design note
+    /// on <c>WarrenResource</c> says the Warren was built to avoid.
+    ///
+    /// Renamed to INSIGHT on screen rather than rewired, because wiring it into the build tree would add
+    /// a second source of mastery points and change progression — a balance decision, not a label fix.
+    /// Flagged for the designer; the naming collision with the MASTERY rail tile is fixed either way.
+    /// </remarks>
+    private long _warrenMasteryPool;
 
     // ── Memory Dust prestige (Full Vision). NOTHING RESETS — Dust accrues from mastery. ───────
     private PrestigeScreen _prestige = null!;
@@ -490,7 +502,7 @@ public class Game1 : Game
         var credited = SaveSystem.CreditedOfflineSeconds(result.OfflineSeconds);
 
         // The Warren produced the whole time you were away — credit it into the real balances (Gleam and
-        // Dust are shared accumulators; Mastery banks into the pool that feeds SetEarned).
+        // Dust are shared accumulators; Insight banks into the Warren's own pool -- see _warrenMasteryPool).
         //
         // ConqueredRegions IS SET HERE, and was not before. Its only other assignments live in TickFarms
         // and DrawWarren, both of which run from Update/Draw — while this runs from Initialize, before
@@ -690,7 +702,7 @@ public class Game1 : Game
         }
 
         // The Warren's facilities produce every second too, on every screen — Gleam/Dust into the real
-        // balances, Mastery into the pool that feeds the build tree (see the SetEarned call below).
+        // balances, Insight into the Warren's own upgrade pool (which does NOT feed the build tree).
         //
         // GATED ON THE WARREN BEING OPEN, which it was not. The gradual-unlock pass gated the Warren's
         // nav TILE on the first conquest but nothing gated its PRODUCTION, so a brand-new player was
