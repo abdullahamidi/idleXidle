@@ -1248,8 +1248,16 @@ public sealed class ForgeScreen
         DrawWrapped(b, "Level and affixes rise. Trait, enchant and source stay.",
             ResultPanel.X + 40, ResultPanel.Bottom - 170, ResultPanel.Width - 80, Slate);
 
-        var cbtn = new Rectangle(ResultPanel.X + 40, ResultPanel.Bottom - 96, ResultPanel.Width - 80, 72);
-        if (_ui.Button(b, cbtn, "CONFIRM UPGRADE", hit, clicked, enabled: can && !worn)) DoRefine(hunter, item);
+        // "CONFIRM UPGRADE" USED TO SIT HERE AND IT COST PLAYERS MATERIALS.
+        //
+        // It called DoRefine — the same commit as the UPGRADE +1 iL button 140px away on the same
+        // baseline. Two buttons, two panels, one purchase. Read as a two-step flow ("preview, then
+        // confirm") it is not merely redundant: the first click already refined the item and took the
+        // Scrap and the Gleam, so the confirm bought a SECOND level nobody asked for, silently, at the
+        // higher price the new level costs.
+        //
+        // A panel titled RESULT PREVIEW must never commit. The commit lives with the price, in
+        // REQUIRED MATERIALS, where a player can see what they are spending as they press it.
     }
 
     // ── REFORGE = re-roll the TRAIT (Essence) or the ENCHANT (Core / Crystal). Same item preview at left. ──

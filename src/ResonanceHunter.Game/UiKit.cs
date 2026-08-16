@@ -396,7 +396,7 @@ public sealed class UiKit
     public GraphicsDevice Device { get; }
 
     /// <summary>Logical width of a string in the active font. Use this instead of PixelFont.Measure.</summary>
-    public int Measure(string s) => Text2.Measure(s);
+    public int Measure(string s) => Text2.Measure(s, UiTypography.Label);
 
     // ── Primitives ──────────────────────────────────────────────────────────────────────────────
     public void Fill(SpriteBatch b, Rectangle r, Color c) => b.Draw(_pixel, r, c);
@@ -660,9 +660,12 @@ public sealed class UiKit
     }
 
     // ── Text proxies (route through the active font — smooth TTF or pixel fallback) ────────────────
-    public void Text(SpriteBatch b, string s, int x, int y, Color c) => Text2.Draw(b, s, x, y, c);
-    public void TextRight(SpriteBatch b, string s, int right, int y, Color c) => Text2.DrawRight(b, s, right, y, c);
-    public void TextCenter(SpriteBatch b, string s, int cx, int y, Color c) => Text2.DrawCentered(b, s, cx, y, c);
+    // THE UNSIZED PROXIES NOW HAVE A NAMED SIZE. They used to fall through to the font's raster height
+    // (32px), which outranked every typography token but ScreenTitle — see UiTypography.Label for what
+    // that did to the hierarchy of half the screens in the game.
+    public void Text(SpriteBatch b, string s, int x, int y, Color c) => Text2.Draw(b, s, x, y, c, UiTypography.Label);
+    public void TextRight(SpriteBatch b, string s, int right, int y, Color c) => Text2.DrawRight(b, s, right, y, c, UiTypography.Label);
+    public void TextCenter(SpriteBatch b, string s, int cx, int y, Color c) => Text2.DrawCentered(b, s, cx, y, c, UiTypography.Label);
 
     // Sized text — build a type hierarchy (big titles/numbers, small labels). `px` is the logical height.
     public void TextBig(SpriteBatch b, string s, int x, int y, Color c, int px) => Text2.Draw(b, s, x, y, c, px);
