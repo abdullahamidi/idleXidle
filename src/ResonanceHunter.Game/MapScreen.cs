@@ -60,9 +60,17 @@ public sealed class MapScreen
     private int _selected;
 
     // ── Spec §4 rectangles ──────────────────────────────────────────────────────────────────────
-    private static readonly Rectangle ProgressPanel = new(34, 146, 356, 716);
-    private static readonly Rectangle MapCanvas = new(420, 146, 964, 716);
-    private static readonly Rectangle DetailPanel = new(1412, 146, 474, 716);
+    // THE CAMPAIGN PROGRESS COLUMN IS GONE and the chart takes its width.
+    //
+    // Playtest: "hem solda mapler var hem ekranın ortasında resimli gösterimi var. Soldaki kısım
+    // gereksiz." Correct — it was a second, worse copy of the map: six rows naming the same six regions,
+    // in the same order, with the same states, beside a chart that shows all of it in one look. Its two
+    // unique facts (YOUR POWER, and the conquered count) move to where they are actually compared.
+    //
+    // 34..1376 matches the detail column's 34px right margin, and 880 tall reaches authored 1026 —
+    // aspects 1.525 and 0.539, so both panels stay on the frame art they already wear.
+    private static readonly Rectangle MapCanvas = new(34, 146, 1342, 880);
+    private static readonly Rectangle DetailPanel = new(1412, 146, 474, 880);
 
     // Six region nodes in a serpentine across the canvas: 0-1-2 along the top, 3-4-5 back along the bottom.
     private static readonly (float Fx, float Fy)[] NodeFrac =
@@ -74,7 +82,9 @@ public sealed class MapScreen
     {
         var cx = MapCanvas.X + (int)(MapCanvas.Width * NodeFrac[i].Fx);
         var cy = MapCanvas.Y + (int)(MapCanvas.Height * NodeFrac[i].Fy);
-        return new Rectangle(cx - 78, cy - 58, 156, 116);
+        // 196x146, up from 156x116 — the chart is 39% wider now and a node that did not grow with it
+        // would read as a small tile floating in a large frame.
+        return new Rectangle(cx - 98, cy - 73, 196, 146);
     }
 
     private static int RegionCount => Math.Min(Regions.All.Count, NodeFrac.Length);
@@ -197,72 +207,9 @@ public sealed class MapScreen
         _ui.TextCenterBig(b, $"EACH REGION IS ABOUT {RegionLadder.StepPercent:0}% TOUGHER THAN THE LAST, AND DROPS ITS OWN THINGS",
                           960, 80, Slate, UiTypography.Secondary);
 
-        DrawProgress(b, hit, clicked);
         DrawMap(b, hit, clicked);
         DrawDetail(b, hit, clicked);
         if (DevMapDebug) DrawDebug(b);
-    }
-
-    private void DrawProgress(SpriteBatch b, Point hit, bool clicked)
-    {
-        _ui.PanelQuiet(b, ProgressPanel);
-        _ui.TextCenterBig(b, "CAMPAIGN PROGRESS", ProgressPanel.Center.X, ProgressPanel.Y + 18, Gold, UiTypography.SectionTitle);
-
-        var conquered = Regions.All.Count(r => World.IsConquered(r.Id));
-        var total = Regions.All.Count;
-        var stage = World.CorruptionTier > 0 ? $"CORRUPTION TIER {World.CorruptionTier}" : "THE CONQUEST";
-        _ui.Diamond(b, new Rectangle(ProgressPanel.Center.X - 28, ProgressPanel.Y + 50, 56, 64), Violet);
-        _ui.TextCenterBig(b, stage, ProgressPanel.Center.X, ProgressPanel.Y + 122, Bone, UiTypography.PanelTitle);
-
-        // The count sits UNDER the bar, not on it. A 20px bar is shorter than the line it was carrying,
-        // and at 6/6 the fill is solid violet edge to edge — so the one moment the number says something
-        // worth reading ("the world is yours") was the moment it was least legible.
-        var bar = new Rectangle(ProgressPanel.X + 32, ProgressPanel.Y + 152, ProgressPanel.Width - 64, 20);
-        _ui.Bar(b, bar.X, bar.Y, bar.Width, bar.Height, total > 0 ? conquered / (float)total : 0f, Violet);
-        _ui.TextCenterBig(b, $"{conquered} / {total} REGIONS CONQUERED", bar.Center.X, bar.Bottom + 8,
-                          conquered == total ? Gold : Bone, UiTypography.Secondary);
-
-        _ui.Fill(b, new Rectangle(ProgressPanel.X + 24, ProgressPanel.Y + 192, ProgressPanel.Width - 48, 2), Dim);
-        _ui.TextBig(b, "DISCOVERED REGIONS", ProgressPanel.X + 30, ProgressPanel.Y + 206, Gold, UiTypography.Body);
-
-        var y = ProgressPanel.Y + 240;
-        for (var i = 0; i < RegionCount; i++)
-        {
-            var def = Def(i);
-            var unlocked = World.IsUnlocked(def.Id);
-            var conq = World.IsConquered(def.Id);
-            var active = def.Id == ActiveRegion;
-            var row = new Rectangle(ProgressPanel.X + 24, y, ProgressPanel.Width - 48, 50);
-            if (UiKit.ClickedIn(row, hit, clicked)) _selected = i;
-
-            _ui.Fill(b, row, i == _selected ? new Color(0x3A, 0x2E, 0x52) : new Color(0x16, 0x12, 0x20, 0xC0));
-            _ui.Fill(b, new Rectangle(row.X, row.Y, 4, row.Height), unlocked ? SourceColor[def.Theme] : Dim);
-
-            // THE CREST, so the list is scannable by picture and not only by reading six names that all
-            // begin with "THE". It is the same emblem the node on the chart carries, which is what makes
-            // the two halves of this screen one screen.
-            if (EmblemKey(def.Id) is { } rowEmblem && _ui.Assets.Get(rowEmblem) is { } re)
-                b.Draw(re, new Rectangle(row.X + 10, row.Y + 9, 32, 32), unlocked ? Color.White : new Color(0x4A, 0x4A, 0x54));
-
-            _ui.TextBig(b, $"{i + 1}. {def.Name}", row.X + 50, row.Y + 5, unlocked ? Bone : Slate, UiTypography.Secondary);
-            var (label, col) = conq ? ("CONQUERED", Met) : active ? ("IN PROGRESS", Violet) : !unlocked ? ("LOCKED", Slate) : ("AVAILABLE", Bone);
-            _ui.TextBig(b, label, row.X + 50, row.Y + 28, col, UiTypography.Secondary);
-            _ui.TextRightBig(b, $"{RegionPower(def):N0}", row.Right - 34, row.Y + 28, Slate, UiTypography.Secondary);
-            if (!unlocked) DrawLockArt(b, new Rectangle(row.Right - 26, row.Y + 6, 22, 22));
-            else if (conq) DrawCheck(b, new Rectangle(row.Right - 26, row.Y + 8, 20, 16), Met);
-            else if (active) _ui.Diamond(b, new Rectangle(row.Right - 24, row.Y + 6, 18, 18), Violet);
-            y += 56;
-        }
-
-        // YOUR POWER BESIDE THE ONE IT IS MEANT TO BE COMPARED WITH. HunterPower has been pushed to this
-        // screen every frame and read by nothing, so the panel asked "is 5,950 a lot?" and answered it
-        // nowhere. Green when you are over the bar, ember when you are under it — the whole decision this
-        // screen exists for, in one row.
-        _ui.TextBig(b, "YOUR POWER", ProgressPanel.X + 30, ProgressPanel.Bottom - 100, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, $"{HunterPower:N0}", ProgressPanel.Right - 30, ProgressPanel.Bottom - 104,
-                         HunterPower >= RegionPower(Def(_selected)) ? Met : Ember, UiTypography.PanelTitle);
-        _ui.TextBig(b, "RECOMMENDED POWER", ProgressPanel.X + 30, ProgressPanel.Bottom - 62, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, $"{RegionPower(Def(_selected)):N0}", ProgressPanel.Right - 30, ProgressPanel.Bottom - 66, Violet, UiTypography.PanelTitle);
     }
 
     private void DrawMap(SpriteBatch b, Point hit, bool clicked)
@@ -391,16 +338,21 @@ public sealed class MapScreen
         // internal scale, against nothing, on the one screen a player uses to pick where to go. It said
         // less than the RECOMMENDED POWER figure directly above it already does, and cost the panel the
         // room its last real section needed.
-        _ui.TextBig(b, "RECOMMENDED POWER", DetailPanel.X + 28, DetailPanel.Y + 212, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, $"{RegionPower(def):N0}", DetailPanel.Right - 28, DetailPanel.Y + 208, Violet, UiTypography.PanelTitle);
+        // YOUR POWER SITS ON THE ROW ABOVE THE ONE IT IS MEASURED AGAINST. It used to live at the foot
+        // of the deleted column, a thousand pixels from the number it exists to be compared with.
+        _ui.TextBig(b, "YOUR POWER", DetailPanel.X + 28, DetailPanel.Y + 214, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, $"{HunterPower:N0}", DetailPanel.Right - 28, DetailPanel.Y + 210,
+                         HunterPower >= RegionPower(def) ? Met : Ember, UiTypography.PanelTitle);
+        _ui.TextBig(b, "RECOMMENDED POWER", DetailPanel.X + 28, DetailPanel.Y + 252, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, $"{RegionPower(def):N0}", DetailPanel.Right - 28, DetailPanel.Y + 248, Violet, UiTypography.PanelTitle);
 
-        _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 250, DetailPanel.Width - 56, 2), Dim);
+        _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 292, DetailPanel.Width - 56, 2), Dim);
 
         // Enemy theme (the region's Source) + combat modifier (its bias).
-        _ui.TextBig(b, "ENEMY THEME", DetailPanel.X + 28, DetailPanel.Y + 264, Gold, UiTypography.Secondary);
+        _ui.TextBig(b, "ENEMY THEME", DetailPanel.X + 28, DetailPanel.Y + 308, Gold, UiTypography.Secondary);
         if (_ui.Assets.Get($"source_{def.Theme.ToString().ToLowerInvariant()}") is { } tg)
-            b.Draw(tg, new Rectangle(DetailPanel.X + 30, DetailPanel.Y + 296, 34, 34), Color.White);
-        _ui.TextBig(b, $"{def.Theme.ToString().ToUpperInvariant()} AFFINITY", DetailPanel.X + 74, DetailPanel.Y + 300, Bone, UiTypography.Body);
+            b.Draw(tg, new Rectangle(DetailPanel.X + 30, DetailPanel.Y + 340, 34, 34), Color.White);
+        _ui.TextBig(b, $"{def.Theme.ToString().ToUpperInvariant()} AFFINITY", DetailPanel.X + 74, DetailPanel.Y + 344, Bone, UiTypography.Body);
         // HOW THE PLACE FIGHTS, which the region model has carried since it was written and no screen has
         // ever shown. It decides whether you are hit by a few heavy blows or a fast flurry — a real
         // difference to a build, and the kind of thing you want to know BEFORE walking in.
@@ -414,13 +366,13 @@ public sealed class MapScreen
             AttackBias.Heavy => "IT HITS SLOWLY AND HARD",
             AttackBias.Fast => "IT HITS FAST AND OFTEN",
             _ => "IT HITS AT AN EVEN PACE",
-        }, DetailPanel.Right - 28, DetailPanel.Y + 302, Slate, UiTypography.Secondary);
+        }, DetailPanel.Right - 28, DetailPanel.Y + 346, Slate, UiTypography.Secondary);
         // Region modifier — the themed combat twist (replaces the old flavor-only bias line).
         var mod = RegionModifiers.For(def.Id);
-        _ui.TextBig(b, mod.Name, DetailPanel.X + 30, DetailPanel.Y + 332, Ember, UiTypography.Body);
+        _ui.TextBig(b, mod.Name, DetailPanel.X + 30, DetailPanel.Y + 382, Ember, UiTypography.Body);
         // WRAPPED. The blurb is a sentence now rather than "+25% HP & +10% damage", and a single
         // TextBig would have run it off the panel and through the frame.
-        var modY = DetailPanel.Y + 356;
+        var modY = DetailPanel.Y + 408;
         foreach (var line in _ui.WrapBig(mod.Blurb, DetailPanel.Width - 60, UiTypography.Secondary))
         {
             _ui.TextBig(b, line, DetailPanel.X + 30, modY, Slate, UiTypography.Secondary);
@@ -428,16 +380,16 @@ public sealed class MapScreen
         }
 
         // Objective + what it earns while you are away (real).
-        _ui.TextBig(b, "OBJECTIVE", DetailPanel.X + 28, DetailPanel.Y + 400, Gold, UiTypography.Secondary);
-        if (conq) { DrawCheck(b, new Rectangle(DetailPanel.X + 30, DetailPanel.Y + 434, 22, 18), Met); _ui.TextBig(b, "REGION CONQUERED", DetailPanel.X + 64, DetailPanel.Y + 432, Met, UiTypography.Body); }
-        else _ui.TextBig(b, $"HOLD {ConquerWaves} WAVES TO CONQUER", DetailPanel.X + 30, DetailPanel.Y + 432, unlocked ? Bone : Slate, UiTypography.Body);
+        _ui.TextBig(b, "OBJECTIVE", DetailPanel.X + 28, DetailPanel.Y + 470, Gold, UiTypography.Secondary);
+        if (conq) { DrawCheck(b, new Rectangle(DetailPanel.X + 30, DetailPanel.Y + 506, 22, 18), Met); _ui.TextBig(b, "REGION CONQUERED", DetailPanel.X + 64, DetailPanel.Y + 504, Met, UiTypography.Body); }
+        else _ui.TextBig(b, $"HOLD {ConquerWaves} WAVES TO CONQUER", DetailPanel.X + 30, DetailPanel.Y + 504, unlocked ? Bone : Slate, UiTypography.Body);
         if (unlocked)
             // "IDLE FARM: PARTIAL · 50%" was two pieces of jargon and a number with no unit. The percent
             // is the only part a player can act on, and it needed a sentence to say what it is a percent
             // OF. The mastery word went with the label: it named a tier nothing on screen explains, and
             // the number it produces is already right there.
             _ui.TextBig(b, $"EARNS {farm.IdleEfficiencyPercent():0}% OF ITS RATE WHILE YOU ARE AWAY",
-                        DetailPanel.X + 30, DetailPanel.Y + 470, Slate, UiTypography.Secondary);
+                        DetailPanel.X + 30, DetailPanel.Y + 546, Slate, UiTypography.Secondary);
 
         // WHAT THIS PLACE DROPS. The map decided a difficulty and an element and said nothing about
         // reward, so "where should I farm" had no answer on the screen built to answer it. Each region
@@ -456,13 +408,13 @@ public sealed class MapScreen
         var dropLines = drops.Favoured.Count > 0
             ? _ui.WrapBig(drops.Blurb, DetailPanel.Width - 60, UiTypography.Secondary)
             : System.Array.Empty<string>();
-        var dropsTop = DetailPanel.Y + 528;
+        var dropsTop = DetailPanel.Y + 620;
         // Clamped to the row above the CTA: on a deepenable world the CORRUPTION line lands in this
         // band, and a wrap with no floor eventually meets whatever is below it.
         var dropsFloor = DetailPanel.Bottom - (World.CanDeepenCorruption ? 150 : 108);
         if (dropLines.Count > 0 && dropsTop + 22 <= dropsFloor)
         {
-            _ui.TextBig(b, "DROPS", DetailPanel.X + 28, DetailPanel.Y + 500, Gold, UiTypography.Secondary);
+            _ui.TextBig(b, "DROPS", DetailPanel.X + 28, DetailPanel.Y + 590, Gold, UiTypography.Secondary);
 
             // WHAT IT FAVOURS, AS PICTURES, on the heading's own line — which costs no vertical space
             // at all. The blurb below already says it in words; a player comparing two regions is
@@ -472,7 +424,7 @@ public sealed class MapScreen
             {
                 if (SlotGlyph(slot) is not { } key || _ui.Assets.Get(key) is not { } gi) continue;
                 gx -= 30;
-                b.Draw(gi, new Rectangle(gx, DetailPanel.Y + 494, 26, 26), Bone);
+                b.Draw(gi, new Rectangle(gx, DetailPanel.Y + 584, 26, 26), Bone);
             }
             var y = dropsTop;
             foreach (var line in dropLines)
@@ -531,7 +483,7 @@ public sealed class MapScreen
 
     private void DrawDebug(SpriteBatch b)
     {
-        foreach (var r in new[] { ProgressPanel, MapCanvas, DetailPanel })
+        foreach (var r in new[] { MapCanvas, DetailPanel })
         {
             _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, 2), Ember);
             _ui.Fill(b, new Rectangle(r.X, r.Bottom - 2, r.Width, 2), Ember);
