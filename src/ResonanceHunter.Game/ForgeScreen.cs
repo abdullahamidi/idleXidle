@@ -202,8 +202,15 @@ public sealed class ForgeScreen
     //
     // 366 wide, not 276: a row carries an icon, a name and a level, and at the old width the names ran
     // off the panel and the level column was clipped away entirely. The preview column gives back the 90.
-    private static readonly Rectangle Rail = new(24, 140, 366, 330);
-    private static readonly Rectangle BagPanel = new(24, 486, 366, 416);
+    // THE MODE RAIL IS GONE. Playtest: "o butonları kaldır" — three buttons in their own framed column,
+    // whose selected state was a coloured slab, standing between the player and a screen that never
+    // needed to be three screens. UPGRADE and SALVAGE are actions on the item now, and REFORGE is a
+    // column, so nothing is left to switch between.
+
+    // FROM 486 TO 140, and from six rows to fourteen: the mode rail used to sit on top of it. This is
+    // the same complaint the wheel fix answered from the other side — "FORGE ekranındaki envanter hiç
+    // kullanışlı değil" — and doubling the visible rows is worth more than any control the space held.
+    private static readonly Rectangle BagPanel = new(24, 140, 366, 762);
 
     private const int BagRowH = 40;
 
@@ -221,7 +228,10 @@ public sealed class ForgeScreen
     /// rarest-first now and the wheel reaches it, so the top of the list is where the interesting items
     /// are instead of wherever they happened to drop.
     /// </remarks>
-    private static int BagRows => (BagPanel.Height - 176) / BagRowH;
+    // 240, not 176: the foot now carries the chest row AND the door to the pile, one above the other.
+    // 84 header + 13 rows + 240 footer = 844 of an 762-tall panel's own arithmetic — the reserve is what
+    // keeps the last row off both of them, which is the exact fault the 124 reserve had.
+    private static int BagRows => (BagPanel.Height - 240) / BagRowH;
 
     // +30 inset: UiKit.Panel's frame art eats the outer edge, and rows drawn flush to it sit ON the
     // ornament rather than inside the panel.
@@ -241,10 +251,13 @@ public sealed class ForgeScreen
 
     // 890, not 730 — bottom 1030 (canvas 923). Aspects 0.431 / 0.575 keep ui_panel_vertical, and the
     // three-column UPGRADE view stops ending 300px above the bottom of the picture.
-    private static readonly Rectangle ItemPanel = new(406, 140, 384, 890);   // "ITEM PREVIEW"
-    private static readonly Rectangle CostPanel = new(814, 140, 512, 890);   // "REQUIRED MATERIALS"
-    private static readonly Rectangle ResultPanel = new(1350, 140, 546, 890);// "RESULT PREVIEW"
-    private static readonly Rectangle ReforgePanel = new(814, 140, 1082, 890);// REFORGE action column
+    private static readonly Rectangle ItemPanel = new(406, 140, 384, 890);   // "THE ITEM" + its actions
+    private static readonly Rectangle CostPanel = new(806, 140, 364, 890);   // what UPGRADE costs
+    // RESULT PREVIEW IS DELETED and REFORGE takes its column. Playtest: "reforge ekranı da sağdaki
+    // result preview tablosu yerine gelsin, result preview gereksiz." It previewed one number — the
+    // level after a +1 — which the ITEM column already prints beside the current one.
+    // 710 wide, not the old 1082: aspect 0.798, still inside ui_panel_vertical's bucket.
+    private static readonly Rectangle ReforgePanel = new(1186, 140, 710, 890);// REFORGE, in the old RESULT column
 
     // ── The SALVAGE hub's three panels. Named, because they were open-coded at their use sites and the
     //    three things that sat OUTSIDE them — the chest toolbar, the two mode buttons, the footer hint —
@@ -1032,16 +1045,16 @@ public sealed class ForgeScreen
         _ui.TextCenterBig(b, "THE FORGE", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
         // The subtitle rides under the title in the focused modes; SALVAGE has its own dense toolbar there.
-        if (_mode != ForgeMode.Salvage) _ui.TextCenterBig(b, ModeSubtitle(), 960, 80, Slate, UiTypography.Secondary);
+        if (_mode != ForgeMode.Salvage)
+            _ui.TextCenterBig(b, "EVERYTHING YOU CAN DO TO ONE ITEM, BESIDE THE ITEM", 960, 80, Slate, UiTypography.Secondary);
 
         DrawCharters(b, hunter);
 
-        switch (_mode)
-        {
-            case ForgeMode.Upgrade: DrawUpgradeMode(b, hunter, hit, clicked); break;
-            case ForgeMode.Reforge: DrawReforgeMode(b, hunter, hit, clicked); break;
-            default: DrawSalvageMode(b, hunter, hit, clicked); break;
-        }
+        // ONE WORKBENCH, or the pile. There is no UPGRADE-vs-REFORGE mode any more: both act on the
+        // same focused item and both fit beside it, so switching between them was a click that changed
+        // which half of one workbench you were allowed to see.
+        if (_mode == ForgeMode.Salvage) DrawSalvageMode(b, hunter, hit, clicked);
+        else DrawWorkbench(b, hunter, hit, clicked);
 
         // (The reveal is drawn by the HOST now, as chrome — see Game1 and TickReveal. Drawing it here
         //  too would double-draw it on the one screen that used to be its only home.)
@@ -1063,42 +1076,6 @@ public sealed class ForgeScreen
     };
 
     // ── The mode rail — the reference's left column, listing only the verbs the model actually has. ──
-    private void DrawRail(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
-    {
-        _ui.PanelQuiet(b, Rail);
-        // +40, not +16.
-        //
-        // UiKit.Panel SCALES its frame art to the rectangle, so a short panel gets a proportionally
-        // TALLER ornament band than a tall one — the title that reads cleanly at +18 on the 730px item
-        // panel is drawn underneath the ornament on a 330px rail. Left-aligning it to dodge the centre
-        // medallion only moved it into the corner piece, which was worse: it vanished outright.
-        _ui.TextCenterBig(b, "FORGE", Rail.Center.X, Rail.Y + 40, Gold, UiTypography.PanelTitle);
-
-        var modes = new[] { (ForgeMode.Upgrade, "UPGRADE"), (ForgeMode.Reforge, "REFORGE"), (ForgeMode.Salvage, "SALVAGE") };
-        // TIGHTENED TO FIT THE RAIL. At +86 with a 66px pitch the loop ended at y = 470, which IS
-        // Rail.Bottom — so the divider landed on the frame's bottom ornament and the hint line was drawn
-        // below the panel entirely, floating on the bare dungeon wall with nothing behind it. The frame
-        // art eats ~30px inward, so everything has to finish by Rail.Bottom - 30.
-        var y = Rail.Y + 74;
-        foreach (var (m, label) in modes)
-        {
-            var r = new Rectangle(Rail.X + 30, y, Rail.Width - 60, 58);
-            if (_mode == m)
-            {
-                _ui.Fill(b, r, new Color(0x3A, 0x2E, 0x52));
-                _ui.Fill(b, new Rectangle(r.X, r.Y, 5, r.Height), Gold);
-                _ui.TextCenterBig(b, label, r.Center.X, r.Center.Y - 11, new Color(0xF6, 0xEA, 0xC6), UiTypography.Body);
-            }
-            else if (_ui.Button(b, r, label, hit, clicked)) { _mode = m; }
-            y += 58;
-        }
-
-        _ui.Fill(b, new Rectangle(Rail.X + 30, y + 2, Rail.Width - 60, 2), Dim);
-        _ui.TextCenterBig(b, ModeHint(), Rail.Center.X, y + 14, Slate, UiTypography.Secondary);
-
-        DrawBag(b, hunter, hit, clicked);
-    }
-
     private string ModeHint() => _mode switch
     {
         ForgeMode.Upgrade => "+LEVEL, +AFFIXES",
@@ -1214,11 +1191,18 @@ public sealed class ForgeScreen
         if (_chests.Count > 0)
         {
             var best = _chests.Max(c => (int)c.Rarity);
-            var cr = new Rectangle(BagPanel.X + 30, BagPanel.Bottom - 92, BagPanel.Width - 60, 40);
+            var cr = new Rectangle(BagPanel.X + 30, BagPanel.Bottom - 152, BagPanel.Width - 60, 44);
             _ui.Fill(b, new Rectangle(cr.X, cr.Y, 5, cr.Height), RarityColors[best]);
             if (_ui.Button(b, cr, $"OPEN {_chests.Count} CHEST{(_chests.Count == 1 ? "" : "S")}", hit, clicked))
                 _mode = ForgeMode.Salvage;
         }
+
+        // THE PILE IS STILL A PLACE, and this is its only door now that the mode rail is gone. Merging
+        // three of a kind, bulk-salvaging the junk and the raw material stacks all live there and have
+        // no equivalent on the workbench, so deleting the mode would have deleted them.
+        if (_ui.Button(b, new Rectangle(BagPanel.X + 30, BagPanel.Bottom - 88, BagPanel.Width - 60, 52),
+                       "MERGE AND SALVAGE THE PILE", hit, clicked))
+            _mode = ForgeMode.Salvage;
 
         // A SCROLLBAR, so "there is more below" is something you can SEE rather than something you find
         // out by spinning the wheel. The list had no visible affordance of any kind: no bar, no arrows,
@@ -1281,9 +1265,41 @@ public sealed class ForgeScreen
         }
     }
 
+    private void DrawWorkbench(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
+    {
+        DrawBag(b, hunter, hit, clicked);
+        DrawUpgradeMode(b, hunter, hit, clicked);
+        DrawReforgeColumn(b, hunter, hit, clicked);
+        DrawItemActions(b, hunter, hit, clicked);
+    }
+
+    /// <summary>
+    /// The two destructive verbs, under the item they destroy.
+    /// </summary>
+    /// <remarks>
+    /// Playtest: "upgrade ve salvage itemin altında olsun". UPGRADE already sits under its own cost
+    /// column; these two lived on the SALVAGE mode's loot grid, three clicks and a mode switch from the
+    /// item you were looking at — so deciding "is this worth keeping" meant leaving the screen that was
+    /// answering the question. Disabled while the piece is worn, because the fight reads what is worn.
+    /// </remarks>
+    private void DrawItemActions(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
+    {
+        if (Target() is not { } item) return;
+        var worn = IsWorn(hunter, item);
+
+        var sell = new Rectangle(ItemPanel.X + 40, ItemPanel.Bottom - 172, ItemPanel.Width - 80, 56);
+        var dis = new Rectangle(ItemPanel.X + 40, ItemPanel.Bottom - 108, ItemPanel.Width - 80, 56);
+
+        if (_ui.Button(b, sell, $"SELL FOR {item.SellValue} G", hit, clicked, enabled: !worn)) Sell(hunter, item);
+        if (_ui.Button(b, dis, $"SALVAGE FOR {Forge.Dismantle(item, Tuning)} MATERIALS", hit, clicked, enabled: !worn))
+            Dismantle(hunter, item);
+        if (worn)
+            _ui.TextCenterBig(b, "WORN — TAKE IT OFF ON GEAR FIRST", ItemPanel.Center.X, ItemPanel.Bottom - 200,
+                              Ember, UiTypography.Secondary);
+    }
+
     private void DrawUpgradeMode(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
     {
-        DrawRail(b, hunter, hit, clicked);
         var item = Target();
         var refined = item is null ? null : Forge.Refine(item, Tuning).Product;
         DrawItemPanel(b, item, refined, hunter);
@@ -1294,8 +1310,6 @@ public sealed class ForgeScreen
         if (item is null)
         {
             _ui.TextCenter(b, "NOTHING TO UPGRADE.", CostPanel.Center.X, CostPanel.Y + 320, Slate);
-            _ui.PanelQuiet(b, ResultPanel);
-            _ui.TextCenterBig(b, "RESULT PREVIEW", ResultPanel.Center.X, ResultPanel.Y + 22, Gold, UiTypography.SectionTitle);
             return;
         }
 
@@ -1345,74 +1359,11 @@ public sealed class ForgeScreen
             if (doGreat) DoGreaterRefine(hunter, item); else DoRefine(hunter, item);
         }
 
-        // THE PREVIEW HAS TO PREVIEW THE BUTTON. Holding SHIFT changes the button to GREATER UPGRADE +5
-        // LEVELS and the commit to DoGreaterRefine — and the RESULT panel went on showing the +1 outcome,
-        // because `greater` was computed for its COST and its Product thrown away. The one panel whose
-        // whole job is "here is what you will get" was describing the operation you were not about to do.
-        DrawResultPanel(b, item, doGreat ? greater.Product : refined!, hunter, hit, clicked, worn,
-                        doGreat ? canGreat : can);
     }
 
-    private void DrawResultPanel(SpriteBatch b, ItemInstance item, ItemInstance refined, Hunter hunter, Point hit, bool clicked, bool worn, bool can)
+    private void DrawReforgeColumn(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
     {
-        _ui.PanelQuiet(b, ResultPanel);
-        _ui.TextCenterBig(b, "RESULT PREVIEW", ResultPanel.Center.X, ResultPanel.Y + 22, Gold, UiTypography.SectionTitle);
-
-        var rc = RarityColors[(int)item.Rarity];
-        var el = item.Element is { } e ? e.ToString().ToUpperInvariant() + " " : "";
-        _ui.TextBig(b, $"{el}{ItemNames[item.BaseType]}", ResultPanel.X + 40, ResultPanel.Y + 66, rc, UiTypography.PanelTitle);
-        _ui.TextRightBig(b, $"LEVEL {refined.ItemLevel}", ResultPanel.Right - 40, ResultPanel.Y + 66, Met, UiTypography.PanelTitle);
-
-        _ui.Text(b, "AFFIX PREVIEW", ResultPanel.X + 40, ResultPanel.Y + 114, Slate);
-        var nxt = ItemAffixes.Of(refined);
-        var y = ResultPanel.Y + 148;
-        foreach (var a in nxt)
-        {
-            _ui.Diamond(b, new Rectangle(ResultPanel.X + 42, y + 4, 16, 16), Bloom);
-            _ui.Text(b, AffixName(a.Stat), ResultPanel.X + 58, y, Bone);
-            _ui.TextRight(b, AffixVal(a), ResultPanel.Right - 40, y, Met);
-            y += 34;
-        }
-        if (nxt.Count == 0) _ui.Text(b, "This rarity carries no explicit affixes.", ResultPanel.X + 40, y, Dim);
-
-        // The reference's "ADDED BENEFIT" panel, made honest: an item's standing benefit is its real enchant
-        // (Rare+) or trait — refine does not unlock a new passive, so none is invented.
-        y = ResultPanel.Y + 360;
-        _ui.Fill(b, new Rectangle(ResultPanel.X + 40, y - 14, ResultPanel.Width - 80, 2), Dim);
-        if (Enchantments.Of(item) is { } ench)
-        {
-            _ui.Text(b, "STANDING BENEFIT", ResultPanel.X + 40, y, Slate);
-            _ui.TextBig(b, ench.Name, ResultPanel.X + 40, y + 28, Bloom, UiTypography.Body);
-            DrawWrapped(b, ench.Blurb, ResultPanel.X + 40, y + 60, ResultPanel.Width - 80, Bone);
-        }
-        else if (GearTraits.TraitOf(item) is { } tr)
-        {
-            _ui.Text(b, "ITEM TRAIT", ResultPanel.X + 40, y, Slate);
-            _ui.TextBig(b, GearTraits.NameOf(tr), ResultPanel.X + 40, y + 28, InkGold, UiTypography.Body);
-        }
-
-        _ui.Text(b, "FORGE NOTES", ResultPanel.X + 40, ResultPanel.Bottom - 200, Slate);
-        DrawWrapped(b, "Level and affixes rise. Trait, enchant and source stay.",
-            ResultPanel.X + 40, ResultPanel.Bottom - 170, ResultPanel.Width - 80, Slate);
-
-        // "CONFIRM UPGRADE" USED TO SIT HERE AND IT COST PLAYERS MATERIALS.
-        //
-        // It called DoRefine — the same commit as the UPGRADE +1 iL button 140px away on the same
-        // baseline. Two buttons, two panels, one purchase. Read as a two-step flow ("preview, then
-        // confirm") it is not merely redundant: the first click already refined the item and took the
-        // Scrap and the Gleam, so the confirm bought a SECOND level nobody asked for, silently, at the
-        // higher price the new level costs.
-        //
-        // A panel titled RESULT PREVIEW must never commit. The commit lives with the price, in
-        // REQUIRED MATERIALS, where a player can see what they are spending as they press it.
-    }
-
-    // ── REFORGE = re-roll the TRAIT (Essence) or the ENCHANT (Core / Crystal). Same item preview at left. ──
-    private void DrawReforgeMode(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
-    {
-        DrawRail(b, hunter, hit, clicked);
         var item = Target();
-        DrawItemPanel(b, item, null, hunter);
 
         _ui.PanelQuiet(b, ReforgePanel);
         _ui.TextCenterBig(b, "REFORGE", ReforgePanel.Center.X, ReforgePanel.Y + 22, Gold, UiTypography.SectionTitle);
@@ -1632,9 +1583,8 @@ public sealed class ForgeScreen
     {
         var rects = _mode switch
         {
-            ForgeMode.Upgrade => new[] { Rail, ItemPanel, CostPanel, ResultPanel },
-            ForgeMode.Reforge => new[] { Rail, ItemPanel, ReforgePanel },
-            _ => new[] { new Rectangle(32, 160, 1000, 592), new Rectangle(1056, 88, 832, 552) },
+            ForgeMode.Salvage => new[] { new Rectangle(32, 160, 1000, 592), new Rectangle(1056, 88, 832, 552) },
+            _ => new[] { BagPanel, ItemPanel, CostPanel, ReforgePanel },
         };
         foreach (var r in rects)
         {
