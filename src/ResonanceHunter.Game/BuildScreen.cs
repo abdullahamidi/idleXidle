@@ -339,7 +339,8 @@ public sealed class BuildScreen
         }
 
         // ── Edit sub-view: tree + right column. ──
-        if (BackBtn.Contains(hit)) { _editMode = false; _resetArmed = false; return; }
+        // BACK goes to BUILD — the weave — not to an overview that is no longer reachable.
+        if (BackBtn.Contains(hit)) { _resetArmed = false; WantsWeave = true; return; }
         if (SkillsToggle.Contains(hit)) { WantsWeave = true; return; }
 
         if (ResetBtn.Contains(hit) && Mastery.Spent > 0)

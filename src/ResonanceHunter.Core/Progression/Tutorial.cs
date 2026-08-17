@@ -200,8 +200,8 @@ public static class Tutorial
             + "what is worn.",
 
         TutorialStep.WeaveBuild =>
-            "Press B for BUILD, then WEAVE. Every skill is a SOURCE and a FORM — hover either one to "
-            + "read exactly what it does before you commit.",
+            "Press B for BUILD. Every skill is a SOURCE and a FORM — hover either one to read exactly "
+            + "what it does before you commit.",
 
         TutorialStep.Conquer =>
             "Reach the region's depth objective to conquer it and open the next. Deeper waves drop "

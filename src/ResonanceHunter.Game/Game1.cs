@@ -1671,6 +1671,7 @@ public class Game1 : Game
                                 _mouse.LeftButton == ButtonState.Pressed, MouseWheel, _dust, MouseRightClicked);
             if (_buildScreen.Dirty) { _buildScreen.ClearDirty(); Save(); }
             // The BUILD page asks for the weave editor; the host owns which screen is open.
+            // The tree's BACK and its skills door both land on BUILD, which is the weave now.
             if (_buildScreen.WantsWeave) { _buildScreen.WantsWeave = false; _showBuild = false; _showWeave = true; }
 
             Latch(gameTime);
@@ -1800,7 +1801,6 @@ public class Game1 : Game
             // so the flag was set and never read, the BACK button did nothing, and the stale flag then
             // fired on the next visit to BUILD and switched OFF the tree the MASTERY tile had just
             // switched on. A request consumed in a branch its producer cannot reach is not wiring.
-            if (_weave.WantsBack) { _weave.WantsBack = false; _showWeave = false; _showBuild = true; _buildScreen.ShowTree = false; }
             Latch(gameTime);
             return;
         }
@@ -3001,9 +3001,9 @@ public class Game1 : Game
             ("H", "HUNT — THE FIGHT"),
             ("C", "GEAR — WHAT YOU WEAR"),
             ("V", "STATS — SPEND GLEAM"),
-            ("B", "BUILD — YOUR SKILLS AT A GLANCE"),
+            ("B", "BUILD — CHOOSE YOUR SKILLS"),
             ("E", "MASTERY — HOW YOUR SKILLS BEHAVE"),
-            ("T", "THE WEAVE — CHOOSE YOUR SKILLS"),
+            ("T", "BUILD, THE SAME PLACE AS B"),
             ("K", "VAULT — CHESTS YOU HAVE NOT OPENED"),
             ("F", "FORGE — CRAFT & CHESTS"),
             ("A", "WARREN — WORK WHILE YOU ARE AWAY"),
@@ -3188,8 +3188,8 @@ public class Game1 : Game
     /// </remarks>
     private int NavActive() =>
         _showCharacter ? 1 : _showStats ? 2 :
-        // The tree lights its OWN tile. Both views live on _showBuild, so the mode decides which.
-        _showBuild && _buildScreen.ShowTree ? 4 : _showBuild || _showWeave ? 3 :
+        // BUILD is the weave; MASTERY is the tree. Two tiles, two screens, no shared flag.
+        _showBuild ? 4 : _showWeave ? 3 :
         _showChests ? 5 : _showForge ? 6 : _showAutomation ? 7 : _showWorld ? 8 :
         _showPrestige ? 9 : _showRoster ? 10 : 0;
 
@@ -3234,7 +3234,11 @@ public class Game1 : Game
         {
             case 1: _showCharacter = true; break;
             case 2: _showStats = true; break;
-            case 3: _showBuild = true; _buildScreen.ShowTree = false; break;
+            // BUILD opens the weave itself. The old overview is retired: it listed the same skills
+            // without letting you change one, so it was a page you looked at in front of the page
+            // you used. What was unique to it — the taken mastery nodes — is the MASTERY tile's
+            // diagram, drawn rather than listed.
+            case 3: _showWeave = true; break;
             case 4: _showBuild = true; _buildScreen.ShowTree = true; break;
             case 5: _showChests = true; break;
             case 6: _showForge = true; break;

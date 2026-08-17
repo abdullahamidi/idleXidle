@@ -304,12 +304,14 @@ public sealed class WeaveScreen
     {
         var hit = Game1.ToOverlay(mouse);
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xC8));
-        _ui.TextCenterBig(b, "THE WEAVE", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle, TextFace.Display);
+        // THIS IS THE BUILD SCREEN NOW. Playtest: "'Choose your skills' butonu ile açılan sayfayı bu
+        // sayfaya entegre edelim. Ana mantığı o aslında bu sayfanın." Right — the overview it used to
+        // hang off showed the same skills without letting you change any of them, so BUILD was a page
+        // you looked at and this was the page you used. The rail's BUILD tile opens this directly.
+        _ui.TextCenterBig(b, "BUILD", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
         _ui.TextCenterBig(b, "A SKILL IS A SOURCE, A FORM, AND WHAT YOU SWORE FOR IT",
                           960, 80, Slate, UiTypography.Secondary);
-
-        if (_ui.Button(b, BackBtn, "‹  BACK TO BUILD", hit, clicked)) WantsBack = true;
 
         DrawSlots(b, hit);
         DrawPicker(b, hit);
