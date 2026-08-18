@@ -391,6 +391,9 @@ public class Game1 : Game
         _hasSave = true; // the title screen offers CONTINUE rather than NEW HUNT
 
         SaveSystem.RestoreHunter(save, _hunter);
+        // MERGE CHARTS retired with the manual merge tray (AUTO-MERGE takes no paper). Held ones become
+        // SALVAGE CHARTS — also a breaking-down permission — instead of dead paper in an old save.
+        while (_hunter.SpendCharter(Charter.Merge)) _hunter.AddCharter(Charter.Salvage);
         _dust.Restore(save.MemoryDust, save.MemoryDustUnlocks);
 
         // BEFORE the loadout is restored, because Restore truncates to the capacity. Restoring first and
@@ -986,7 +989,7 @@ public class Game1 : Game
             // screen is gone, so they had nothing to pose.
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
-                or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "hybrid" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig"
+                or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig"
                 or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "traitlit" or "traitterm" or "traitterminal"
                 or "roster" or "rosterlocked" or "weave" or "vault")
             {
@@ -1036,8 +1039,7 @@ public class Game1 : Game
                     });
                     _forge.AddLoot(seed);
                     TellForgeTheBuild(_loadout.ToBuild(_dust, _mastery, _characters.Active));
-                    _forge.DevManage();   // the loot-forge fixture poses the SALVAGE hub (grid, chests, merge)
-                    _forge.DevSelect(_forge.Inventory.Count - 1);   // the SIPHON charm (added last) — poses a new combo
+                    _forge.DevFocus("dev_siphon");   // the SIPHON charm — poses the longest combo line on the bench
                     // Stock every tier so the reforge/refine buttons pose live, not greyed.
                     _hunter.AddMaterials(500);   // SCRAP
                     _hunter.AddMaterial(Material.Essence, 200);
@@ -1306,7 +1308,7 @@ public class Game1 : Game
                     _world.Conquer("cinderworks");
                     SetActiveRegion("umbral_reach");
                 }
-                if (sm is "forge" or "hybrid" or "reforge")
+                if (sm is "forge" or "reforge")
                 {
                     _showForge = true;
                     // Seed a spread of loot so SALVAGE has content, and a hero item the UPGRADE view poses.
@@ -1342,9 +1344,7 @@ public class Game1 : Game
                     _hunter.AddMaterial(Material.Crystal, 400);
                     _dust.AwardFromMastery(77_400);               // the Memory-Dust pill, so it reads like the ref
 
-                    // The HYBRID shot poses the merge recipe row, which lives in the SALVAGE hub.
-                    if (sm == "hybrid") { _forge.DevQueueHybrid(); _forge.DevManage(); }
-                    if (sm == "reforge") _forge.DevReforge();
+                    // ("hybrid" and the DevReforge pose retired with the pile screen — one workbench now.)
                 }
                 if (sm == "warren")
                 {
@@ -1714,12 +1714,10 @@ public class Game1 : Game
                 }
                 else
                 {
-                    _forge.FocusFor(request.InstanceId, request.Action switch
-                    {
-                        ItemAction.Upgrade => ForgeScreen.ForgeMode.Upgrade,
-                        ItemAction.Reforge => ForgeScreen.ForgeMode.Reforge,
-                        _ => ForgeScreen.ForgeMode.Salvage,
-                    });
+                    _forge.FocusFor(request.InstanceId);
+                    // GEAR's SALVAGE arrives with the question already asked — never a silent scrap
+                    // ordered from another screen.
+                    if (request.Action == ItemAction.Salvage) _forge.RequestSalvage(request.InstanceId);
                     _showCharacter = false;
                     _showForge = true;
                     _sound.PlayFirst(1f, "sfx_forge", "sfx_click");

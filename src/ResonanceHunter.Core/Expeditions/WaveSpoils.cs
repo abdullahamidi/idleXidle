@@ -67,6 +67,9 @@ public static class WaveSpoils
     /// </remarks>
     public const int ChartersFromWave = 5;
 
+    /// <summary>The charters a wave can drop. MERGE charts retired with the manual merge tray.</summary>
+    private static readonly Charter[] SpendablePool = { Charter.Refine, Charter.Reforge, Charter.Salvage };
+
     /// <summary>The depth at which each tier starts appearing at all.</summary>
     public const int EssenceFromWave = 8;
     public const int CoreFromWave = 25;
@@ -105,7 +108,7 @@ public static class WaveSpoils
         // only on the Scrap path) would have made charters commoner in the shallows than at depth,
         // which is backwards and would have been invisible until someone measured it.
         var charter = wave >= ChartersFromWave && rng.NextDouble() < CharterChance
-            ? (Charter?)(Charter)rng.Next(Enum.GetValues<Charter>().Length)
+            ? (Charter?)SpendablePool[rng.Next(SpendablePool.Length)]
             : null;
 
         var best = BestTierFor(wave);

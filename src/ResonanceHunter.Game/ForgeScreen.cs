@@ -55,7 +55,7 @@ public sealed class ForgeScreen
 
     /// <summary>Rarity for the item NAME. The panels are dark glass now, so it is just the bright ramp —
     /// the old dark-ink version was there for a parchment panel that no longer exists.</summary>
-    private static readonly Color[] RarityInk = RarityColors;
+
     private static readonly Dictionary<ItemBaseType, string> ItemNames = new()
     {
         [ItemBaseType.CreatureCore] = "CORE", [ItemBaseType.Weapon] = "WEAPON", [ItemBaseType.Charm] = "CHARM",
@@ -97,11 +97,9 @@ public sealed class ForgeScreen
 
     private readonly List<ItemInstance> _inv = new();
     private readonly List<Chest> _chests = new();    // unopened chests, waiting for the click
-    private readonly List<string> _merge = new();   // up to 3 ids queued to merge
     /// <summary>The item under the pointer this frame. Re-established every draw; see CharacterScreen.</summary>
     private ItemInstance? _hovered;
 
-    private int _cursor;                             // the active item (click or arrows)
     private string _msg = "";
     private Color _msgColor = Bone;
 
@@ -128,63 +126,11 @@ public sealed class ForgeScreen
     private const float CardIn = 0.20f;       // how long the card takes to spring open
     private const float ItemStagger = 0.13f;  // one item lands, then the next
     private KeyboardState _prevKeys;
-    private int _scroll;                             // index of the first visible card
     private int _bagScroll;                          // first visible row of the left-column bag list
-
-    private const int Cols = 4;
-    private const int VisRows = 3;                    // 4x3 = 12, matching uiref_forge; the freed strip below holds the footer
-    private const int Visible = Cols * VisRows;      // loot cards shown at once
-
-    /// <summary>Grid rectangle for the visible card at slot <paramref name="vis"/> (0..Visible-1).</summary>
-    // Inside the loot panel (32,160,1000,592), whose ornate border reaches 40px in. The old geometry
-    // (origin 64/224, pitch 232x172) put the left column on the frame and ran the bottom row 16px
-    // through it, so the third row of loot was always sliced off.
-    private static Rectangle Card(int vis) => new(72 + vis % Cols * 230, 216 + vis / Cols * 166, 222, 152);
-
-    // ── Loot FILTER. A bag of ninety across eight slots plus four material tiers is a haystack; the filter
-    //    lets the player narrow it to what they came for. The grid, cursor and scroll all walk the FILTERED
-    //    view; mutations (merge/dismantle/salvage/sell) still act on the item objects, which live in _inv. ──
-    private enum LootFilter { All, Weapons, Armour, Trinkets, Materials, RarePlus }
-    private LootFilter _filter = LootFilter.All;
-
-    private static string FilterName(LootFilter f) => f switch
-    {
-        LootFilter.All => "ALL", LootFilter.Weapons => "WEAPONS", LootFilter.Armour => "ARMOUR",
-        LootFilter.Trinkets => "TRINKETS", LootFilter.Materials => "MATERIALS", _ => "RARE+",
-    };
-
-    private static bool Matches(LootFilter f, ItemInstance i) => f switch
-    {
-        LootFilter.All => true,
-        LootFilter.Weapons => i.BaseType == ItemBaseType.Weapon,
-        LootFilter.Armour => i.BaseType is ItemBaseType.Helm or ItemBaseType.Chest or ItemBaseType.Gloves or ItemBaseType.Boots,
-        LootFilter.Trinkets => i.BaseType is ItemBaseType.Charm or ItemBaseType.AbilityFocus or ItemBaseType.Ring,
-        LootFilter.Materials => i.BaseType is ItemBaseType.Material or ItemBaseType.CreatureCore,
-        _ => i.Rarity >= Rarity.Rare,
-    };
-
-    /// <summary>The inventory the grid actually shows — <see cref="_inv"/> narrowed by the active filter.</summary>
-    private List<ItemInstance> View() => _inv.Where(i => Matches(_filter, i)).ToList();
-
-    private void CycleFilter(int dir)
-    {
-        var n = Enum.GetValues<LootFilter>().Length;
-        _filter = (LootFilter)(((int)_filter + dir % n + n) % n);
-        _cursor = 0;
-        _scroll = 0;
-    }
 
     public ForgeScreen(UiKit ui) => _ui = ui;
 
-    // ── FORGE MODES (Forge production spec rev 1). The reference is a left-rail workshop: UPGRADE, then a
-    //    set of other verbs. The real forge has exactly three that are BACKED BY THE MODEL, so the rail
-    //    lists those and no invented ones (data-honesty §11): UPGRADE = Refine (+item level & affixes),
-    //    REFORGE = re-roll the trait / enchant, SALVAGE = the bag + chests + merge + sell + dismantle hub.
-    //    The reference's IMBUE and SET CRAFT have no backing system, so they are dropped, not faked. ──
-    public enum ForgeMode { Upgrade, Reforge, Salvage }
-    private ForgeMode _mode = ForgeMode.Upgrade;
-
-    /// <summary>The item the focused (UPGRADE / REFORGE) modes act on — resolved by id so a re-forge that
+    /// <summary>The item the workbench acts on — resolved by id so a re-forge that
     /// replaces the object keeps the selection. Defaults to the first wearable in the bag.</summary>
     private string? _focusId;
     /// <summary>Set when the focus was CHOSEN, so the list scrolls to it once and then leaves it alone.</summary>
@@ -263,10 +209,6 @@ public sealed class ForgeScreen
     //    three things that sat OUTSIDE them — the chest toolbar, the two mode buttons, the footer hint —
     //    each looked correct on its own line. A panel you cannot see the bounds of is a panel nothing
     //    gets checked against. Both columns now end level, at y=956. ──
-    private static readonly Rectangle LootPanel = new(32, 72, 1000, 680);
-    private static readonly Rectangle ActionPanel = new(1056, 72, 832, 624);
-    private static readonly Rectangle TrayPanel = new(1056, 712, 832, 344);
-    private static readonly Rectangle FooterPanel = new(32, 768, 1000, 288);
 
     private static readonly Color Met = new(0x6E, 0xC8, 0x7A);
     // Scrap / Essence / Core / Crystal — no dedicated icons exist, so a tinted gem stands in (matches the
@@ -310,34 +252,33 @@ public sealed class ForgeScreen
         _focusFollow = true;
     }
 
-    /// <summary>DEV ONLY: pose the UPGRADE view on a specific bag item, for the screenshot fixture.</summary>
-    public void DevFocus(string instanceId) { _focusId = instanceId; _focusFollow = true; _mode = ForgeMode.Upgrade; }
+    /// <summary>DEV ONLY: point the workbench at a specific bag item, for the screenshot fixture.</summary>
+    public void DevFocus(string instanceId) { _focusId = instanceId; _focusFollow = true; }
 
     /// <summary>
     /// Arrive here from somewhere else already pointed at an item, and say so.
     /// </summary>
     /// <remarks>
-    /// The gear screen's item menu routes through this. It sets the mode AND the focus AND flashes the
-    /// item's name, because a screen that changes under you without saying why is indistinguishable from
-    /// a misclick — the player needs to see that the thing they right-clicked is the thing now in the
-    /// preview.
+    /// The gear screen's item menu routes through this. It sets the focus AND flashes the item's name,
+    /// because a screen that changes under you without saying why is indistinguishable from a misclick —
+    /// the player needs to see that the thing they right-clicked is the thing now in the preview.
     /// </remarks>
-    public void FocusFor(string instanceId, ForgeMode mode)
+    public void FocusFor(string instanceId)
     {
         _focusId = instanceId;
         _focusFollow = true;
-        _mode = mode;
         _bagScroll = 0;
 
         var it = _inv.FirstOrDefault(i => i.InstanceId == instanceId);
         if (it is not null) Say($"{ItemNaming.FullName(it)} — READY.", Met);
     }
 
-    /// <summary>DEV ONLY: pose the SALVAGE hub (chests / merge / grid) for the loot-forge fixture.</summary>
-    public void DevManage() => _mode = ForgeMode.Salvage;
-
-    /// <summary>DEV ONLY: pose the REFORGE view, for auditing that mode.</summary>
-    public void DevReforge() => _mode = ForgeMode.Reforge;
+    /// <summary>The GEAR screen's SALVAGE verb: arrive focused, with the question already open.</summary>
+    public void RequestSalvage(string instanceId)
+    {
+        if (_inv.All(i => i.InstanceId != instanceId)) return;
+        OpenConfirm(ScrapKind.Salvage, instanceId);
+    }
 
     public IReadOnlyList<ItemInstance> Inventory => _inv;
 
@@ -443,39 +384,11 @@ public sealed class ForgeScreen
     /// <summary>TIRELESS FORGE (Memory Dust): auto-merge the bag after OPEN ALL, so a bulk crack tidies itself.</summary>
     public bool AutoMergeOnOpen { get; set; }
 
-    /// <summary>DEV ONLY: put the cursor on a given item, so screenshots can pose a specific one.</summary>
-    public void DevSelect(int index) => _cursor = Math.Clamp(index, 0, Math.Max(0, _inv.Count - 1));
-
     /// <summary>DEV ONLY: open the best chest, so a screenshot can pose the reveal burst.</summary>
     public void DevOpenOneChest(Hunter hunter) => OpenBestChest(hunter);
 
-    /// <summary>
-    /// DEV ONLY: mint and queue a cross-family trio, to pose the hybrid recipe row.
-    /// </summary>
-    /// <remarks>
-    /// It MINTS rather than picking from the dev seed: that seed walks type and rarity on different
-    /// cycles (i%4 and i%5), so across nine items no rarity ever holds three distinct types — the trio
-    /// this needs cannot be found there.
-    /// </remarks>
-    public void DevQueueHybrid()
-    {
-        _merge.Clear();
-        var types = new[] { ItemBaseType.Weapon, ItemBaseType.Charm, ItemBaseType.AbilityFocus };
-        for (var i = 0; i < types.Length; i++)
-        {
-            var item = new ItemInstance
-            {
-                InstanceId = $"hyb{i}", BaseType = types[i], Rarity = Rarity.Rare,
-                SellValue = 34, Element = Source.Shadow,
-            };
-            _inv.Add(item);
-            _merge.Add(item.InstanceId);
-        }
-        _cursor = _inv.Count - 1;
-    }
     public void AddLoot(IEnumerable<ItemInstance> items) => _inv.AddRange(items);
 
-    private ItemInstance? Active { get { var v = View(); return v.Count == 0 ? null : v[Math.Clamp(_cursor, 0, v.Count - 1)]; } }
 
     /// <summary>
     /// Advance the chest-open reveal. Called by the HOST every frame, from every screen.
@@ -516,98 +429,23 @@ public sealed class ForgeScreen
         // behind the question about the first. Draw hit-tests the dialog's own buttons.
         if (_confirm is not null) { _prevKeys = keys; return; }
 
-        // THE BAG'S WHEEL, HOISTED ABOVE THE EARLY RETURN THAT USED TO SWALLOW IT.
-        //
-        // Playtest: "FORGE ekranındaki envanter hiç kullanışlı değil." It was not a matter of taste. This
-        // branch sat BELOW the `_mode != Salvage` return, and the bag list is drawn in UPGRADE and REFORGE
-        // — the two modes that return here — so in every mode where the list is on screen the wheel never
-        // reached it. The list shows six rows and has no scrollbar, no tabs and no keyboard path, so
-        // ITEM SEVEN ONWARD WAS UNREACHABLE. A player with forty items could act on the first six.
-        //
-        // It also tested the raw `mouse` against BagPanel, a 1920-space rect, so the condition was false
-        // at every cursor position even in Salvage mode: BagPanel starts at x=24 and the canvas cursor
-        // cannot exceed ~479, which lets a narrow band of the panel appear to work by coincidence.
-        // AND ONLY IN THE MODES THAT DRAW THE BAG. DrawRail — which draws it — is called from the
-        // UPGRADE and REFORGE views only; SALVAGE shows the loot grid over the same ground. Hoisting
-        // this above the mode return fixed the bag and broke the grid: the rect still contains the
-        // cursor in SALVAGE, so the bag swallowed the wheel across the bottom-left of a pile it was
-        // not part of.
-        if (wheel != 0 && _mode != ForgeMode.Salvage && BagPanel.Contains(overlay))
+        // THE BAG'S WHEEL. It once sat below a mode return and tested the raw cursor against a
+        // 1920-space rect — the full pathology is in 98ca957's message. The rule it settled on stands:
+        // the wheel belongs to the bag, and nothing else on this screen scrolls.
+        if (wheel != 0 && BagPanel.Contains(overlay))
         {
             var wearCount = _inv.Count(Gear.IsWearable);
             _bagScroll = Math.Clamp(_bagScroll - wheel, 0, Math.Max(0, wearCount - BagRows));
-            wheel = 0;
         }
 
-        // In the focused modes the grid is not shown — arrows cycle which wearable you are upgrading, and
-        // the mode-switch and action clicks are handled in Draw. The bag/grid interactions below belong to
-        // SALVAGE mode only, so a key never sells the item you are previewing on another screen.
-        if (_mode != ForgeMode.Salvage)
-        {
-            if (Pressed(keys, Keys.Left)) CycleTarget(-1);
-            if (Pressed(keys, Keys.Right)) CycleTarget(1);
-            _prevKeys = keys;
-            return;
-        }
-
-        var view = View();
-
-        // Mouse wheel scrolls the loot grid a row at a time.
-        if (wheel != 0)
-        {
-            var maxScroll = Math.Max(0, (view.Count - 1) / Cols * Cols - (VisRows - 1) * Cols);
-            _scroll = Math.Clamp(_scroll - wheel * Cols, 0, maxScroll);
-        }
-
-        // Keyboard nav still works — arrows walk the grid.
-        if (Pressed(keys, Keys.Left)) MoveCursor(-1);
-        if (Pressed(keys, Keys.Right)) MoveCursor(1);
-        if (Pressed(keys, Keys.Up)) MoveCursor(-Cols);
-        if (Pressed(keys, Keys.Down)) MoveCursor(Cols);
-        // TAB cycles the filter forward, SHIFT+TAB back — so reaching MATERIALS from ALL isn't four presses.
-        if (Pressed(keys, Keys.Tab))
-            CycleFilter(keys.IsKeyDown(Keys.LeftShift) || keys.IsKeyDown(Keys.RightShift) ? -1 : 1);
-        if (Pressed(keys, Keys.Space)) ToggleMerge(hunter, Active);
-        if (Pressed(keys, Keys.S)) Sell(hunter, Active);
-        if (Pressed(keys, Keys.D)) Dismantle(hunter, Active);
-        if (Pressed(keys, Keys.M)) DoMerge(hunter);
-        if (Pressed(keys, Keys.J)) SalvageJunk(hunter);   // one press clears the Common/Uncommon clutter to Scrap
-
-        // ── Mouse: click a loot card to make it active. ──
-        // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
-        var hit = Game1.ToOverlay(mouse);
-        for (var vis = 0; vis < Visible && _scroll + vis < view.Count; vis++)
-            if (UiKit.ClickedIn(Card(vis), hit, clicked)) { _cursor = _scroll + vis; _msg = ""; }
-
-        // Action-button clicks are handled in Draw (where the SpriteBatch and button rects exist);
-        // a click on a button rect and a click on a card never overlap, so this is unambiguous.
+        // Arrows cycle which wearable the bench is pointed at. S / D / J are the bench's verbs, and
+        // they land in the same confirmation flow as the buttons — a key must never skip a question.
+        if (Pressed(keys, Keys.Left)) CycleTarget(-1);
+        if (Pressed(keys, Keys.Right)) CycleTarget(1);
+        if (Pressed(keys, Keys.S)) Sell(hunter, Target());
+        if (Pressed(keys, Keys.D)) Dismantle(hunter, Target());
+        if (Pressed(keys, Keys.J)) SalvageJunk(hunter);
         _prevKeys = keys;
-    }
-
-    private void MoveCursor(int d)
-    {
-        var count = View().Count;
-        if (count == 0) return;
-        _cursor = Math.Clamp(_cursor + d, 0, count - 1);
-        // Keep the cursor's row on screen (scroll moves a whole row at a time).
-        if (_cursor < _scroll) _scroll = _cursor / Cols * Cols;
-        if (_cursor >= _scroll + Visible) _scroll = (_cursor / Cols - VisRows + 1) * Cols;
-    }
-
-    private void ToggleMerge(Hunter hunter, ItemInstance? item)
-    {
-        if (item is null) return;
-        if (_merge.Remove(item.InstanceId)) return;   // un-queueing is always allowed
-        if (IsWorn(hunter, item)) { Say("TAKE IT OFF BEFORE MERGING IT.", Ember); return; }
-        if (_merge.Count >= 3) { Say("MERGE HOLDS 3 ITEMS. REMOVE ONE FIRST.", Ember); return; }
-        _merge.Add(item.InstanceId);
-    }
-
-    private bool MergeReady()
-    {
-        if (_merge.Count != 3) return false;
-        var items = _inv.Where(i => _merge.Contains(i.InstanceId)).ToList();
-        return items.Count == 3 && items.All(i => i.Rarity == items[0].Rarity) && items[0].Rarity != Rarity.Legendary;
     }
 
     /// <summary>
@@ -640,14 +478,13 @@ public sealed class ForgeScreen
                 var result = Forge.Merge(trio, _rng, Tuning, LootTuning.Default);
                 if (!result.Success) continue;
 
-                foreach (var i in trio) { _inv.Remove(i); _merge.Remove(i.InstanceId); }
+                foreach (var i in trio) _inv.Remove(i);
                 _inv.Add(result.Product!);
                 merged++;
                 again = true;
             }
         }
 
-        _cursor = Math.Clamp(_cursor, 0, Math.Max(0, _inv.Count - 1));
         Say(merged > 0 ? $"AUTO-MERGED {merged}x — BAG IS NOW {_inv.Count} ITEMS." : "NOTHING TO MERGE (NEEDS 3 OF A RARITY).",
             merged > 0 ? Gold : Slate);
     }
@@ -688,57 +525,19 @@ public sealed class ForgeScreen
             hunter.AddMaterial(MaterialTiers.ForRarity(it.Rarity), m);
             gained += m;
             _inv.Remove(it);
-            _merge.Remove(it.InstanceId);
         }
 
-        _cursor = Math.Clamp(_cursor, 0, Math.Max(0, _inv.Count - 1));
         Say($"SALVAGED {junk.Count} JUNK — +{gained} {MaterialTiers.Name(Material.Scrap)}"
             + (chart ? "  (SALVAGE CHART — DOUBLED)." : "."), Gold);
     }
 
-    private void DoMerge(Hunter hunter)
-    {
-        var inputs = _inv.Where(i => _merge.Contains(i.InstanceId)).ToList();
-        // Defence in depth: ToggleMerge already refuses to queue worn gear, but an item can be queued and
-        // THEN equipped. Consuming it would delete equipped gear (and orphan its worn-slot pointer).
-        if (inputs.Any(i => IsWorn(hunter, i))) { Say("TAKE WORN GEAR OFF BEFORE MERGING IT.", Ember); return; }
-        // A MERGE CHART lifts the same-rarity rule. Tried WITHOUT it first, so a perfectly ordinary
-        // matched trio never silently burns a paper the player was saving for a mixed one.
-        var result = Forge.Merge(inputs, _rng, Tuning, LootTuning.Default);
-        var chart = false;
-        if (!result.Success && hunter.CharterCount(Charter.Merge) > 0)
-        {
-            var withChart = Forge.Merge(inputs, _rng, Tuning, LootTuning.Default, ignoreRarity: true);
-            if (withChart.Success) { result = withChart; chart = true; }
-        }
-        if (!result.Success) { Say(result.Rejection!, Ember); return; }
-        if (chart) hunter.SpendCharter(Charter.Merge);
-
-        foreach (var i in inputs) _inv.Remove(i);
-        _merge.Clear();
-        _inv.Add(result.Product!);
-        _cursor = Math.Clamp(_cursor, 0, Math.Max(0, _inv.Count - 1));
-        Say($"MERGED INTO A {RarityNames[(int)result.Product!.Rarity]} {ItemNames[result.Product.BaseType]}"
-            + (chart ? "  (MERGE CHART — MIXED RARITIES)." : "."), Gold);
-    }
-
-    /// <summary>
-    /// One short line saying what wearing this actually buys you — <b>and what it costs</b>.
-    /// </summary>
-    /// <remarks>
-    /// This used to print "+34 DEF  +85 HP" for a charm and "+18 RES" for a focus. Both were lies: the
-    /// pivot to auto-battle left those stats reaching no fight, so the screen was quoting numbers with
-    /// nowhere to land while the player wondered why charms did nothing. It now reads the same
-    /// <see cref="GearMods"/> the squad reads, so the label cannot drift from the effect again — and it
-    /// leads with the cost, because a trade you can't see before you equip it isn't a decision.
-    /// </remarks>
     /// <summary>
     /// What the TRAIT alone does — no weapon multiplier folded in.
     /// </summary>
     /// <remarks>
-    /// <see cref="GearBlurb"/> deliberately folds a weapon's own damage multiplier into its damage figure,
+    /// The retired inventory-card helper folded a weapon's own damage multiplier into its damage figure,
     /// because on an inventory card the question is "what does this item give me". On the REFORGE row the
-    /// question is different: re-rolling changes the TRAIT and nothing else. Sharing the helper printed
+    /// question is different: re-rolling changes the TRAIT and nothing else. Sharing that helper printed
     /// "DMG+1637%" beside the word HEAVY on a Legendary bow — true about the item, and a lie about the
     /// thing the button next to it would change.
     /// </remarks>
@@ -756,47 +555,12 @@ public sealed class ForgeScreen
         return string.Join("  ", parts);
     }
 
-    private static string GearBlurb(ItemInstance item)
-    {
-        if (GearTraits.TraitOf(item) is not { } trait) return "";
-
-        var m = GearTraits.ModsOf(item);
-        if (Gear.SlotFor(item.BaseType) == GearSlot.Weapon)
-            m = m with { Damage = m.Damage * Gear.WeaponDamageMultiplier(item) };
-
-        var parts = new List<string>();
-        void Add(string label, float v) { if (MathF.Abs(v - 1f) > 0.005f) parts.Add($"{label}{Pct(v)}"); }
-        Add("DAMAGE", m.Damage);
-        Add("HEALTH", m.Health);
-        Add("SKILL RATE", m.SkillRate);
-        Add("LOOT", m.Haul);
-
-        // Effects only — the trait's NAME is drawn on the title row, where there is room for it.
-        _ = trait;
-        return string.Join("  ", parts);
-    }
 
     /// <summary>A multiplier as a signed percentage: 1.35 → "+35%", 0.8 → "-20%".</summary>
     private static string Pct(float mult)
     {
         var pct = (int)MathF.Round((mult - 1f) * 100f);
         return pct >= 0 ? $"+{pct}%" : $"{pct}%";
-    }
-
-    /// <summary>Wear it, or take it off. Anything displaced falls back into the bag.</summary>
-    private void ToggleEquip(Hunter hunter, ItemInstance item)
-    {
-        if (Gear.SlotFor(item.BaseType) is not { } slot) return;
-
-        if (hunter.Worn(slot)?.InstanceId == item.InstanceId)
-        {
-            hunter.Unequip(slot);
-            Say($"TOOK OFF THE {ItemNames[item.BaseType]}.", Slate);
-            return;
-        }
-
-        hunter.Equip(item);   // whatever it displaced is still in _inv — nothing is destroyed
-        Say($"EQUIPPED. POWER IS NOW {hunter.PowerRating}.", Gold);
     }
 
     /// <summary>SELL, via the confirmation. Worn gear is allowed now — it comes off first, and it ALWAYS asks.</summary>
@@ -812,9 +576,8 @@ public sealed class ForgeScreen
     private void SellNow(Hunter hunter, ItemInstance item)
     {
         TakeOffFirst(hunter, item);
-        _inv.Remove(item); _merge.Remove(item.InstanceId);
+        _inv.Remove(item);
         hunter.AddGleam(item.SellValue);
-        _cursor = Math.Clamp(_cursor, 0, Math.Max(0, _inv.Count - 1));
         Say($"SOLD FOR {item.SellValue} GLEAM.", Gold);
     }
 
@@ -831,10 +594,9 @@ public sealed class ForgeScreen
     {
         TakeOffFirst(hunter, item);
         var m = Forge.Dismantle(item, Tuning);
-        _inv.Remove(item); _merge.Remove(item.InstanceId);
+        _inv.Remove(item);
         var tier = MaterialTiers.ForRarity(item.Rarity);   // salvage sorts by rarity into the right tier
         hunter.AddMaterial(tier, m);
-        _cursor = Math.Clamp(_cursor, 0, Math.Max(0, _inv.Count - 1));
         Say($"DISMANTLED INTO {m} {MaterialTiers.Name(tier)}.", Slate);
     }
 
@@ -1108,17 +870,15 @@ public sealed class ForgeScreen
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xC0));   // scrim so panels pop
         _ui.TextCenterBig(b, "THE FORGE", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
-        // The subtitle rides under the title in the focused modes; SALVAGE has its own dense toolbar there.
-        if (_mode != ForgeMode.Salvage)
-            _ui.TextCenterBig(b, "EVERYTHING YOU CAN DO TO ONE ITEM, BESIDE THE ITEM", 960, 80, Slate, UiTypography.Secondary);
+        _ui.TextCenterBig(b, "EVERYTHING YOU CAN DO TO ONE ITEM, BESIDE THE ITEM", 960, 80, Slate, UiTypography.Secondary);
 
         DrawCharters(b, hunter);
 
-        // ONE WORKBENCH, or the pile. There is no UPGRADE-vs-REFORGE mode any more: both act on the
-        // same focused item and both fit beside it, so switching between them was a click that changed
-        // which half of one workbench you were allowed to see.
-        if (_mode == ForgeMode.Salvage) DrawSalvageMode(b, hunter, hit, uiClicked);
-        else DrawWorkbench(b, hunter, hit, uiClicked);
+        // ONE WORKBENCH, full stop. The pile screen (grid + merge tray + its own chest bar) is
+        // retired — playtest: "O ekrana gerek yok bence." Its two verbs that were real, auto-merge and
+        // salvage-the-junk, live at the foot of the bag now; chests are opened where they are read, in
+        // the VAULT, whose rail tile wears the pile count.
+        DrawWorkbench(b, hunter, hit, uiClicked);
 
         // (The reveal is drawn by the HOST now, as chrome — see Game1 and TickReveal. Drawing it here
         //  too would double-draw it on the one screen that used to be its only home.)
@@ -1134,30 +894,14 @@ public sealed class ForgeScreen
         if (DevForgeDebug) DrawDebug(b);
     }
 
-    private string ModeSubtitle() => _mode switch
-    {
-        // Says what the mode DOES rather than naming the three panels under it.
-        ForgeMode.Upgrade => "SPEND MATERIALS TO RAISE THIS ITEM'S LEVEL",
-        ForgeMode.Reforge => "RE-ROLL WHAT AN ITEM ROLLED — ITS LEVEL AND SOURCE STAY",
-        _ => "BREAK DOWN WHAT YOU WILL NOT WEAR, OR FUSE THREE INTO ONE",
-    };
-
-    // ── The mode rail — the reference's left column, listing only the verbs the model actually has. ──
-    private string ModeHint() => _mode switch
-    {
-        ForgeMode.Upgrade => "+LEVEL, +AFFIXES",
-        ForgeMode.Reforge => "RE-ROLL ITS TRADE",
-        _ => "BREAK DOWN, MERGE UP",
-    };
-
     /// <summary>
     /// The bag, as a list you can see and click.
     /// </summary>
     /// <remarks>
     /// Every row carries the one thing that decides whether you care about it — its rarity, as a colour
     /// bar and as the name's ink — plus its LEVEL, because level is what UPGRADE moves and a player
-    /// choosing what to refine is choosing between levels. Worn pieces are marked, because the Forge
-    /// refuses to work on them and a greyed button with no reason reads as a bug.
+    /// choosing what to refine is choosing between levels. Worn pieces are marked, because scrapping
+    /// one is a bigger decision — and the confirmation dialog will say so.
     /// </remarks>
     private void DrawBag(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
     {
@@ -1253,23 +997,18 @@ public sealed class ForgeScreen
             _ui.TextRight(b, lvl, row.Right - 8, row.Y + 10, isWorn ? Gold : Slate);
         }
 
-        // The chest beat survives, sitting IN the list where the items are rather than in a header strip
-        // that stole a row from them whether or not a chest existed.
-        if (_chests.Count > 0)
-        {
-            var best = _chests.Max(c => (int)c.Rarity);
-            var cr = new Rectangle(BagPanel.X + 30, BagPanel.Bottom - 152, BagPanel.Width - 60, 44);
-            _ui.Fill(b, new Rectangle(cr.X, cr.Y, 5, cr.Height), RarityColors[best]);
-            if (_ui.Button(b, cr, $"OPEN {_chests.Count} CHEST{(_chests.Count == 1 ? "" : "S")}", hit, clicked))
-                _mode = ForgeMode.Salvage;
-        }
-
-        // THE PILE IS STILL A PLACE, and this is its only door now that the mode rail is gone. Merging
-        // three of a kind, bulk-salvaging the junk and the raw material stacks all live there and have
-        // no equivalent on the workbench, so deleting the mode would have deleted them.
+        // THE PILE SCREEN IS GONE (playtest: "O ekrana gerek yok bence") — these are the two verbs of
+        // it that were real, in the place the player already looks. Chests are opened in the VAULT,
+        // whose rail tile now wears the pile count.
+        var anyTrio = _inv.Where(i => Gear.IsWearable(i) && !IsWorn(hunter, i))
+                          .DistinctBy(i => i.InstanceId)
+                          .GroupBy(i => i.Rarity).Any(g => g.Key != Rarity.Legendary && g.Count() >= 3);
+        if (_ui.Button(b, new Rectangle(BagPanel.X + 30, BagPanel.Bottom - 152, BagPanel.Width - 60, 52),
+                       "MERGE THREES INTO BETTER", hit, clicked, enabled: anyTrio))
+            AutoMergeAll(hunter);
         if (_ui.Button(b, new Rectangle(BagPanel.X + 30, BagPanel.Bottom - 88, BagPanel.Width - 60, 52),
-                       "MERGE AND SALVAGE THE PILE", hit, clicked))
-            _mode = ForgeMode.Salvage;
+                       "SALVAGE ALL THE JUNK", hit, clicked, enabled: JunkOf(hunter).Count > 0))
+            SalvageJunk(hunter);
 
         // A SCROLLBAR, so "there is more below" is something you can SEE rather than something you find
         // out by spinning the wheel. The list had no visible affordance of any kind: no bar, no arrows,
@@ -1580,11 +1319,19 @@ public sealed class ForgeScreen
             DoReforgeEnchant(hunter, item);
 
         _ui.Fill(b, new Rectangle(ReforgePanel.X + 32, eRow + 130, ReforgePanel.Width - 64, 2), Dim);
-        // WRAPPED. As a single _ui.Text line this measured ~1100px against 1018px of interior, so it ran
-        // through the panel's right rail and was chopped at the screen edge mid-word — the sentence
-        // ended on "ke". The enchant blurb six lines above already uses this helper.
+        // THE COMBO VERDICT, kept from the retired pile screen: a combo enchantment is LIVE only if the
+        // build satisfies it, and the row that re-rolls the enchantment is exactly where that verdict
+        // belongs. Gold "COMBOS YOUR BUILD" when it fits; grey "NEEDS ..." when it is dead weight.
+        if (ench?.Needs is { } need)
+        {
+            var live = CombosWithBuild(item);
+            _ui.TextRight(b, live ? "COMBOS YOUR BUILD" : _ui.Shorten($"NEEDS {need.Label} IN YOUR BUILD", 430),
+                          ReforgePanel.Right - 32, eRow + 150, live ? InkGold : InkFaint);
+        }
+        // WRAPPED, and clear of the verdict on its right. As one line this ran through the panel's
+        // right rail and was chopped mid-word; the enchant blurb above already uses this helper.
         DrawWrapped(b, "Re-forging changes only the trait or enchant; level, source and affixes are kept.",
-                    ReforgePanel.X + 32, eRow + 150, ReforgePanel.Width - 64, Slate);
+                    ReforgePanel.X + 32, eRow + 150, ReforgePanel.Width - 64 - 450, Slate);
         if (_msg.Length > 0) _ui.Text(b, _msg, ReforgePanel.X + 32, ReforgePanel.Bottom - 40, _msgColor);
     }
 
@@ -1744,11 +1491,7 @@ public sealed class ForgeScreen
 
     private void DrawDebug(SpriteBatch b)
     {
-        var rects = _mode switch
-        {
-            ForgeMode.Salvage => new[] { new Rectangle(32, 160, 1000, 592), new Rectangle(1056, 88, 832, 552) },
-            _ => new[] { BagPanel, ItemPanel, CostPanel, ReforgePanel },
-        };
+        var rects = new[] { BagPanel, ItemPanel, CostPanel, ReforgePanel };
         foreach (var r in rects)
         {
             _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, 2), Ember);
@@ -1756,250 +1499,7 @@ public sealed class ForgeScreen
             _ui.Fill(b, new Rectangle(r.X, r.Y, 2, r.Height), Ember);
             _ui.Fill(b, new Rectangle(r.Right - 2, r.Y, 2, r.Height), Ember);
         }
-        _ui.TextBig(b, $"nav FORGE  mode {_mode}  focus {_focusId ?? "—"}", 320, 112, Gold, UiTypography.Secondary);
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════════════════════
-    private void DrawSalvageMode(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
-    {
-        // ── Inventory — a loot-card grid, not a text list. The panel starts ABOVE the chest toolbar and
-        //    swallows it: the toolbar, the filter and the grid are one thing (what you have and what you
-        //    can do to the pile of it), and a row of buttons floating on the bare scene above a panel
-        //    read as leftovers from a different screen. ──────────────────────────────────────────────
-        _ui.Panel(b, LootPanel);
-        var view = View();
-
-        // ── CHESTS — the toolbar row inside the panel's head. A boss's drop lands here as an unopened
-        //    chest; OPEN reveals the best (grade coloured), OPEN ALL clears the lot. ──
-        if (_chests.Count > 0)
-        {
-            var best = _chests.Max(c => (int)c.Rarity);
-            _ui.Text(b, $"{_chests.Count} CHEST{(_chests.Count == 1 ? "" : "S")}", 112, 132, RarityColors[best]);
-            if (_ui.Button(b, new Rectangle(284, 112, 156, 56), "OPEN", hit, clicked)) OpenBestChest(hunter);
-            if (_ui.Button(b, new Rectangle(452, 112, 204, 56), "OPEN ALL", hit, clicked)) OpenAllChests(hunter);
-        }
-        else
-            _ui.Text(b, "NO CHESTS", 112, 132, Slate);
-
-        // FILTER cycle — narrows a haystack of ninety to one slot or rarity. TAB cycles too. Rides the
-        // toolbar row, right of the chest controls, and stops short of the panel's side ornament.
-        if (_ui.Button(b, new Rectangle(668, 112, 292, 56), FilterName(_filter), hit, clicked))
-            CycleFilter(1);
-
-        _ui.Text(b, $"LOOT ({view.Count})", 112, 178, InkFaint);
-        if (view.Count > Visible)
-            // ROWS, NOT PAGES — and it now says so. The denominator counted ROWS (ceil(13/4) = 4) while
-            // the grid shows three rows at a time, so a 13-item bag in a 12-slot grid read "1/4" for
-            // what is two screenfuls. Either number is defensible; printing one and meaning the other
-            // is not.
-            _ui.TextRight(b, $"ROW {_scroll / Cols + 1} OF {(view.Count + Cols - 1) / Cols}", 960, 178, InkFaint);
-
-        if (_inv.Count == 0)
-            _ui.Text(b, "EMPTY — GO HUNT SOMETHING.", 64, 264, Dim);
-        else if (view.Count == 0)
-            _ui.Text(b, $"NOTHING MATCHES {FilterName(_filter)} — TAB TO CHANGE.", 64, 264, Dim);
-
-        for (var vis = 0; vis < Visible && _scroll + vis < view.Count; vis++)
-        {
-            var idx = _scroll + vis;
-            var item = view[idx];
-            var card = Card(vis);
-            var active = idx == _cursor;
-            var queued = _merge.Contains(item.InstanceId);
-            var rarity = RarityColors[(int)item.Rarity];
-
-            if (card.Contains(hit)) _hovered = item;
-
-            // Card body: a dark cell edged in the item's rarity colour.
-            _ui.Fill(b, card, active ? new Color(0x2A, 0x24, 0x14) : new Color(0x16, 0x14, 0x1C));
-            _ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, 4), rarity);
-            _ui.Fill(b, new Rectangle(card.X, card.Bottom - 4, card.Width, 4), active ? Gold : rarity * 0.5f);
-
-            // The item icon, big and centred.
-            DrawItemIcon(b, item, new Rectangle(card.Center.X - 48, card.Y + 12, 96, 96));
-            _ui.TextCenter(b, $"{item.SellValue} G", card.Center.X, card.Bottom - 34, Gold);
-
-            if (queued) _ui.TextCenter(b, "*", card.Right - 24, card.Y + 8, Gold);   // in the merge tray
-
-            // The upgrade-at-a-glance signal — the same green UP the Character bag shows, now on the loot
-            // grid where the whole haul actually lives, so you no longer click every card to learn its worth.
-            if (Gear.SlotFor(item.BaseType) is { } sl && !IsWorn(hunter, item)
-                && hunter.PowerContribution(item) > hunter.PowerContribution(hunter.Worn(sl)))
-                _ui.Text(b, "UP", card.X + 12, card.Y + 8, new Color(0x6E, 0xC8, 0x7A));
-
-            // FITS — this item's enchantment combos with the build you are actually running.
-            //
-            // The combo line on the detail panel answers this one item at a time, and a chest drops
-            // fourteen. Reading them meant clicking every card, which is exactly the friction that makes
-            // a player stop reading and sort by rarity instead — and rarity is the one axis the loot
-            // rework exists to stop being the answer. UP already says "bigger"; this says "yours", and
-            // the two are deliberately different words in different colours, because an item is often
-            // one and not the other and that tension IS the decision.
-            if (CombosWithBuild(item))
-                _ui.Text(b, "FITS", card.X + 12, card.Bottom - 34, Gold);
-
-            if (active) Reticle(b, card, Bone);
-        }
-
-        // ── Action panel ───────────────────────────────────────────────────────────────────────
-        _ui.PanelQuiet(b, ActionPanel);
-        var act = Active;
-        if (act is null)
-            _ui.Text(b, "PICK AN ITEM ON THE LEFT.", 1088, 120, InkFaint);
-        else
-        {
-            DrawItemIcon(b, act, new Rectangle(1096, 130, 64, 64));
-
-            // The ELEMENT is part of the item's name, because it is part of what the item IS — and it
-            // is what the Source matchup and the Forge's carry-through rule both read. An element the
-            // player cannot see is an element they cannot plan around.
-            // Full rolled name — "FURIOUS SHADOW BLADE" — rarity carried by the colour, not the words.
-            var title = ItemNaming.FullName(act);
-            _ui.Text(b, title, 1168, 142, RarityInk[(int)act.Rarity]);
-
-            // The trait rides the same row — but only if it FITS. Measured, not estimated: at 480x270
-            // "LEGENDARY MACHINE WEAPON" and "WARDING" want the same pixels, and I have already shipped
-            // two collisions this session by doing this arithmetic in my head. When it doesn't fit the
-            // trait is dropped, not overlapped: the EQUIP button below still names its effects.
-            if (GearTraits.TraitOf(act) is { } tr)
-            {
-                var traitName = GearTraits.NameOf(tr);
-                var titleEnd = 1168 + _ui.Measure(title);
-                var traitStart = 1840 - _ui.Measure(traitName);
-                if (traitStart > titleEnd + 16) _ui.TextRight(b, traitName, 1840, 142, InkGold);
-            }
-
-            // The ENCHANTMENT gets its own line: it is a sentence about WHEN, not a number, and it is
-            // the only thing on this panel that changes what the fight does rather than by how much.
-            // It sits BELOW the affix rows with real clearance — at 564 it landed 12px into the second
-            // affix row, and an item with four affixes rendered "+6% HP" through "TRANSFORM LEECHES 2X".
-            if (Enchantments.Of(act) is { } ench)
-            {
-                // FIXED COLUMNS. Right-aligning the blurb was not enough: with a long name the two ends
-                // met in the middle and rendered as one word ("SPLINTERON A KILL"). A column each means
-                // neither can grow into the other, whatever the name.
-                _ui.Text(b, ench.Name, 1088, 596, Bloom);
-                _ui.Text(b, ench.Blurb, 1376, 596, Ink);
-
-                // The loot philosophy, made visible: a Form-combo enchantment is LIVE only if your build
-                // runs its Form. Gold "COMBOS YOUR BUILD" when it fits; a grey "NEEDS … IN YOUR BUILD"
-                // when it is dead weight for you — so the choice is "does this fit my build", not "bigger".
-                // A combo can now ask about any of the build's three axes — an equipped Form, a socketed
-                // keystone, or a sworn Vow — so the question is asked of whichever one the enchantment
-                // names rather than of Forms alone. A keystone combo shown as live because the player
-                // happened to run the right Form would be the same lie in the other direction.
-                if (ench.Needs is { } need)
-                {
-                    var live = CombosWithBuild(act);
-                    _ui.Text(b, live ? "COMBOS YOUR BUILD" : $"NEEDS {need.Label} IN YOUR BUILD",
-                        1088, 634, live ? InkGold : InkFaint);
-                }
-            }
-
-            var wearable = Gear.IsWearable(act);
-            var worn = wearable && Gear.SlotFor(act.BaseType) is { } s0 && hunter.Worn(s0)?.InstanceId == act.InstanceId;
-
-            // EQUIP is the headline action now — gear is the Hunter's power curve.
-            if (wearable)
-            {
-                var eq = new Rectangle(1088, 200, 768, 72);
-                if (_ui.Button(b, eq, worn ? "TAKE OFF" : $"EQUIP   {GearBlurb(act)}", hit, clicked))
-                    ToggleEquip(hunter, act);
-            }
-
-            var row = wearable ? 288 : 200;
-            var sell = new Rectangle(1088, row, 368, 72);
-            var dis = new Rectangle(1488, row, 368, 72);
-            var merge = new Rectangle(1088, row + 88, 368, 72);
-
-            // A worn item must be taken off before it can be sold or scrapped. (FEED was retired with the
-            // creature system — the fates of unwanted loot are now SELL / DISMANTLE / MERGE / EQUIP.)
-            if (_ui.Button(b, sell, $"SELL FOR {act.SellValue} G", hit, clicked, enabled: !worn)) Sell(hunter, act);
-            if (_ui.Button(b, dis, $"DISMANTLE FOR {Forge.Dismantle(act, Tuning)} MATERIALS", hit, clicked, enabled: !worn))
-                Dismantle(hunter, act);
-
-            var queued = _merge.Contains(act.InstanceId);
-            if (_ui.Button(b, merge, queued ? "UNQUEUE" : "MERGE (3→1)", hit, clicked, enabled: !worn))
-                ToggleMerge(hunter, act);
-        }
-
-        // ── The selected item's rolled AFFIXES and its item LEVEL — the multi-stat bonuses that make
-        //    one drop beat another of the same base. (Full worn gear lives on the CHARACTER screen now.) ──
-        if (Active is { } sel)
-        {
-            var affixes = ItemAffixes.Of(sel);
-            _ui.Text(b, $"LEVEL {sel.ItemLevel}   {(affixes.Count > 0 ? "AFFIXES" : "NO AFFIXES")}", 1088, 472, InkFaint);
-            for (var i = 0; i < affixes.Count; i++)
-                _ui.Text(b, ItemAffixes.Describe(affixes[i]), 1088 + i % 2 * 392, 512 + i / 2 * 40, InkGold);
-        }
-        _ui.TextRight(b, $"POWER {hunter.PowerRating}", 1856, 480, InkGold);
-
-        // ── Merge tray ─────────────────────────────────────────────────────────────────────────
-        _ui.PanelQuiet(b, TrayPanel);
-        _ui.Text(b, "MERGE TRAY", 1128, 756, InkFaint);
-
-        var picked = _inv.Where(i => _merge.Contains(i.InstanceId)).ToList();
-        for (var i = 0; i < 3; i++)
-        {
-            var slot = new Rectangle(1128 + i * 80, 796, 68, 68);
-            _ui.PanelQuiet(b, slot);
-            if (i < picked.Count) DrawItemIcon(b, picked[i], new Rectangle(slot.X + 8, slot.Y + 8, 52, 52));
-        }
-
-        var ready = MergeReady();
-        var mergeBtn = new Rectangle(1388, 800, 430, 60);
-
-        if (picked.Count == 3 && ready)
-        {
-            // THE RECIPE, stated before you commit. The result is decided, not rolled, so the preview
-            // cannot lie — and a preview that could lie would be worse than none. This is what makes
-            // the tray a recipe book rather than a slot machine: you are told what you are making.
-            //
-            // It rides the label row (right-aligned) because every other row in this panel is already
-            // occupied by a button — below the slots it was clipped by AUTO-MERGE ALL. Violet means
-            // HYBRID; colour carries it, as it does for every other state on these screens.
-            var (type, element, isHybrid) = Forge.Preview(picked);
-            var attune = element is { } e ? $"{e.ToString().ToUpperInvariant()} " : "";
-            _ui.TextRight(b, $"-> {attune}{ItemNames[type]}", 1818, 756,
-                isHybrid ? Bloom : RarityInk[(int)(picked[0].Rarity + 1)]);
-        }
-        else if (picked.Count == 3)
-        {
-            _ui.TextRight(b, "SAME RARITY ONLY", 1818, 756, InkFaint);
-        }
-
-        if (_ui.Button(b, mergeBtn, "MERGE", hit, clicked, enabled: ready)) DoMerge(hunter);
-
-        // Fusing three-at-a-time by hand out of a bag of ninety is busywork. One button does the lot.
-        var autoBtn = new Rectangle(1128, 880, 690, 60);
-        // The button is live only when a REAL trio exists: three distinct-id, non-worn wearables of one
-        // sub-Legendary rarity. Counting raw items (materials, duplicate copies) lit it up when nothing
-        // could actually merge — the "it won't merge though there's stuff to merge" the player hit.
-        var anyTrio = _inv.Where(i => Gear.IsWearable(i) && !IsWorn(hunter, i))
-                          .DistinctBy(i => i.InstanceId)
-                          .GroupBy(i => i.Rarity).Any(g => g.Key != Rarity.Legendary && g.Count() >= 3);
-        if (_ui.Button(b, autoBtn, "AUTO-MERGE ALL", hit, clicked, enabled: anyTrio)) AutoMergeAll(hunter);
-
-        // REFINE and REFORGE now live in their own polished modes. From the bag these two buttons carry the
-        // selected item straight there — de-cluttering the hub and linking the modes (the reference's rail).
-        if (act is not null && Gear.IsWearable(act))
-        {
-            if (_ui.Button(b, new Rectangle(1128, 952, 336, 60), "UPGRADE  >", hit, clicked))
-            { _focusId = act.InstanceId; _focusFollow = true; _mode = ForgeMode.Upgrade; }
-            if (_ui.Button(b, new Rectangle(1482, 952, 336, 60), "REFORGE  >", hit, clicked))
-            { _focusId = act.InstanceId; _focusFollow = true; _mode = ForgeMode.Reforge; }
-        }
-
-        // ── Message + footer ── a panel of its own, under the loot column and level with the tray. The
-        //    message is this hub's only feedback channel ("OPENED 4 CHESTS — +80 MAT, 3 ITEMS"), and it
-        //    was being drawn on bare scene where it read as a caption for the floor tiles. The hint is
-        //    two lines because one line of it is wider than the column it belongs to. ──
-        _ui.PanelQuiet(b, FooterPanel);
-        if (_msg.Length > 0) _ui.Text(b, _msg, 112, 820, _msgColor);
-        _ui.Text(b, "CLICK AN ITEM, THEN A BUTTON ON THE RIGHT", 112, 884, Slate);
-        _ui.Text(b, "TAB FILTERS THE PILE   ·   WHEEL SCROLLS IT   ·   J SALVAGES THE JUNK", 112, 928, Slate);
-        _ui.Text(b, "UPGRADE AND REFORGE OPEN IN THEIR OWN VIEWS", 112, 972, Slate);
-        // The chest-open reveal is drawn by the mode dispatcher, so it rides on top of every mode.
+        _ui.TextBig(b, $"nav FORGE  focus {_focusId ?? "—"}", 320, 112, Gold, UiTypography.Secondary);
     }
 
     /// <summary>
@@ -2137,15 +1637,6 @@ public sealed class ForgeScreen
         var w = (int)(r.Width * scale);
         var h = (int)(r.Height * scale);
         return new Rectangle(r.Center.X - w / 2, r.Center.Y - h / 2, w, h);
-    }
-
-    private void Reticle(SpriteBatch b, Rectangle r, Color c)
-    {
-        const int len = 20, t = 4;
-        _ui.Fill(b, new Rectangle(r.X, r.Y, len, t), c); _ui.Fill(b, new Rectangle(r.X, r.Y, t, len), c);
-        _ui.Fill(b, new Rectangle(r.Right - len, r.Y, len, t), c); _ui.Fill(b, new Rectangle(r.Right - t, r.Y, t, len), c);
-        _ui.Fill(b, new Rectangle(r.X, r.Bottom - t, len, t), c); _ui.Fill(b, new Rectangle(r.X, r.Bottom - len, t, len), c);
-        _ui.Fill(b, new Rectangle(r.Right - len, r.Bottom - t, len, t), c); _ui.Fill(b, new Rectangle(r.Right - t, r.Bottom - len, t, len), c);
     }
 
     /// <summary>

@@ -80,17 +80,21 @@ public class ChartersTest
     }
 
     [Fact]
-    public void test_all_four_charters_actually_appear()
+    public void test_every_spendable_charter_drops_and_merge_never_does()
     {
-        // The roll picks uniformly across the enum; a charter that can never drop is a feature with an
-        // explanation, a save field and a Forge branch that no player will ever reach.
+        // A charter that can never drop is a feature no player will ever reach — and a charter that
+        // drops but can never be SPENT is dead paper. The manual merge tray was retired with the pile
+        // screen, so MERGE charts must stop dropping (held ones are converted on load), while the three
+        // charters that still have a spend must all keep appearing.
         var rng = new Random(29);
         var seen = new HashSet<Charter>();
-        for (var i = 0; i < 200_000 && seen.Count < 4; i++)
+        for (var i = 0; i < 200_000; i++)
             if (WaveSpoils.Roll(40, rng).Charter is { } c) seen.Add(c);
 
         _out.WriteLine("charters seen: " + string.Join(", ", seen.OrderBy(c => c.ToString())));
-        Assert.Equal(Enum.GetValues<Charter>().Length, seen.Count);
+        Assert.DoesNotContain(Charter.Merge, seen);
+        Assert.Equal(new[] { Charter.Refine, Charter.Reforge, Charter.Salvage }.OrderBy(c => c),
+                     seen.OrderBy(c => c));
     }
 
     [Fact]
