@@ -409,14 +409,14 @@ public sealed class CharacterScreen
             var (action, label) = MenuEntries[i];
             var row = new Rectangle(box.X + 6, box.Y + MenuHeaderH + 6 + i * MenuRowH, box.Width - 12, MenuRowH - 4);
 
-            // A worn piece cannot be re-forged, refined or broken up — the Forge refuses it, so the menu
-            // says so here rather than letting the player travel to a dead button.
-            var enabled = action == ItemAction.Equip || !worn;
+            // WORN PIECES TAKE EVERY VERB NOW. The Forge upgrades and re-rolls worn gear in place
+            // (ReplaceItem re-points the worn slot), and SALVAGE arrives there with the confirmation
+            // already open — the dialog carries the worn warning, so this menu no longer has to refuse.
             var shown = action == ItemAction.Equip && worn ? "TAKE OFF" : label;
 
-            var hover = enabled && row.Contains(hit);
+            var hover = row.Contains(hit);
             if (hover) _ui.Fill(b, row, new Color(0x36, 0x2A, 0x4E));
-            _ui.Text(b, shown, row.X + 16, row.Y + 12, enabled ? (hover ? Bone : Slate) : Dim);
+            _ui.Text(b, shown, row.X + 16, row.Y + 12, hover ? Bone : Slate);
         }
     }
 
