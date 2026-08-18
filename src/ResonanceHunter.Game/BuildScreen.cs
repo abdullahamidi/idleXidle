@@ -124,9 +124,10 @@ public sealed class BuildScreen
     private static readonly Rectangle WeaveBtn = new(466, 842, 337, 44);
     // ON THE TREE PAGE, NOT THE OVERVIEW. Playtest: "'Take all mastery points back' buranın butonu
     // değil, mastery tree'nin butonu." Right — it un-spends every point in a tree the overview does not
-    // even draw, so pressing it there meant watching nothing happen to anything on screen. Beside BACK,
-    // on the page whose contents it empties.
-    private static readonly Rectangle ResetBtn = new(280, 128, 300, 52);
+    // even draw, so pressing it there meant watching nothing happen to anything on screen. It sits
+    // where BACK used to: MASTERY is a rail destination now, and a BACK button on a page with its own
+    // door reads as "you are somewhere nested" when you are not (playtest asked what it even meant).
+    private static readonly Rectangle ResetBtn = new(48, 128, 320, 52);
     /// <summary>The i-th of <paramref name="n"/> auto-skill cards, sharing the panel's width between them.</summary>
     /// <remarks>
     /// Divided rather than fixed at a pitch of 182, which fitted exactly four and put a fifth at
@@ -224,7 +225,7 @@ public sealed class BuildScreen
         return new Vector2(p.X, p.Y);
     }
 
-    private static readonly Rectangle BackBtn = new(48, 128, 216, 52);
+
     /// <summary>Size states price: a node you can see is expensive before you read it.</summary>
     /// <remarks>
     /// The sizes live in <see cref="MasteryLayout.NodeWorldRadius"/> with the 1.9 already folded in,
@@ -233,7 +234,7 @@ public sealed class BuildScreen
     /// </remarks>
     private static int NodeRadius(MasteryKind k) => (int)(MasteryLayout.NodeWorldRadius(k) / 1.9f);
     private const int SbX = 1200;
-    private static readonly Rectangle SkillsToggle = new(1700, 100, 200, 40);
+
     // A DOCKED CARD, not a column. The tree is the page now; a 700px panel permanently taking a third
     // of the canvas is exactly the "sıkışmış" the layout was accused of.
     private static readonly Rectangle NodePanel = new(1408, 588, 496, 460);
@@ -338,10 +339,9 @@ public sealed class BuildScreen
             return;
         }
 
-        // ── Edit sub-view: tree + right column. ──
-        // BACK goes to BUILD — the weave — not to an overview that is no longer reachable.
-        if (BackBtn.Contains(hit)) { _resetArmed = false; WantsWeave = true; return; }
-        if (SkillsToggle.Contains(hit)) { WantsWeave = true; return; }
+        // ── Edit sub-view: tree + right column. (No BACK and no WEAVE door here any more: MASTERY is
+        //    its own rail tile, and a BACK on a page with its own door claims a nesting that does not
+        //    exist — the rail is how you leave, same as every other screen.) ──
 
         if (ResetBtn.Contains(hit) && Mastery.Spent > 0)
         {
@@ -681,8 +681,6 @@ public sealed class BuildScreen
         _ui.Scrim(b, 0.6f);
         _ui.Title(b, "MASTERY TREE");
         _ui.Text(b, $"POINTS  {Mastery.Available}  ·  {Mastery.Spent} SPENT", 104, 60, Mastery.Available > 0 ? Gold : Slate);
-        _ui.Fill(b, BackBtn, BackBtn.Contains(hit) ? Hi : PanelBg);
-        _ui.TextCenter(b, "‹ BACK", BackBtn.Center.X, BackBtn.Y + 12, BackBtn.Contains(hit) ? Gold : Slate);
         if (Mastery.Spent > 0)
             Button(b, ResetBtn, _resetArmed ? "PRESS AGAIN TO CONFIRM" : "TAKE EVERY POINT BACK", hit, true);
         var aff = Mastery.Affinity();
@@ -731,10 +729,6 @@ public sealed class BuildScreen
         // nothing to do with, so the screen asked the player to hold two unrelated jobs at once and
         // answered neither. The tree's own question ("what does this node do, can I afford it, what does
         // it cost me") had no home at all except a one-line strip at the very bottom of the screen.
-        _ui.Fill(b, SkillsToggle, SkillsToggle.Contains(hit) ? Hi : PanelBg);
-        _ui.TextCenter(b, "WEAVE \u203a", SkillsToggle.Center.X, SkillsToggle.Y + 12,
-                       SkillsToggle.Contains(hit) ? Gold : Slate);
-
         DrawNodeDetail(b, hit);
 
         var info = _hoverInfo.Length > 0 ? _hoverInfo : _msg.Length > 0 ? _msg : "WEIGHT OPPOSES SPREAD.  TEMPO OPPOSES ENDURE.  ONE BRANCH IS AFFORDABLE; TWO ARE NOT.";
