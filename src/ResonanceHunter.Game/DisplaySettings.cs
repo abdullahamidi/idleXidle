@@ -51,34 +51,50 @@ public static class Display
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "ResonanceHunter", "display.txt");
 
-    public static void Save(DisplayMode mode, int windowedScale)
+    /// <summary>Everything the prefs file holds — machine-level, never playthrough-level.</summary>
+    /// <remarks>
+    /// Volumes are 0..10 steps rather than floats: eleven notches give the slider a real middle, and the
+    /// file stays hand-readable. ASK BEFORE SCRAP lives here rather than in the save for the same reason
+    /// the display mode does: it is a preference about how the player wants to be treated, and starting
+    /// a new game must not resurrect a dialog they turned off.
+    /// </remarks>
+    public readonly record struct GamePrefs(
+        DisplayMode Mode, int WindowedScale, int SfxVolume, int MusicVolume, bool AskBeforeScrap);
+
+    public static void Save(GamePrefs p)
     {
         try
         {
             System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(PrefsPath)!);
-            System.IO.File.WriteAllText(PrefsPath, $"{mode}\n{windowedScale}\n");
+            System.IO.File.WriteAllText(PrefsPath,
+                $"{p.Mode}\n{p.WindowedScale}\n{p.SfxVolume}\n{p.MusicVolume}\n{(p.AskBeforeScrap ? 1 : 0)}\n");
         }
         catch (System.IO.IOException) { /* prefs are a convenience; never block the game on them */ }
         catch (UnauthorizedAccessException) { }
     }
 
     /// <summary>
-    /// The out-of-the-box default: Fullscreen, and a windowed fallback of scale 4 (= exactly 1920x1080, the
-    /// canvas's native size). On a 1080p monitor Fullscreen presents at 1920x1080; anything else is one
-    /// click away in Settings. The scale only matters once the player switches to Windowed.
+    /// The out-of-the-box default: Fullscreen, a windowed fallback of scale 4 (= exactly 1920x1080, the
+    /// canvas's native size), effects at 8/10 and music at 5/10 (the volumes the SoundBank always used),
+    /// and the SELL/SALVAGE dialog asking.
     /// </summary>
-    private static readonly (DisplayMode Mode, int Scale) Default = (DisplayMode.Fullscreen, 4);
+    private static readonly GamePrefs Default = new(DisplayMode.Fullscreen, 4, 8, 5, true);
 
-    public static (DisplayMode Mode, int Scale) Load()
+    public static GamePrefs Load()
     {
         try
         {
             if (!System.IO.File.Exists(PrefsPath)) return Default;
             var lines = System.IO.File.ReadAllLines(PrefsPath);
-            var mode = lines.Length > 0 && Enum.TryParse<DisplayMode>(lines[0].Trim(), out var m) ? m : Default.Mode;
-            var scale = lines.Length > 1 && int.TryParse(lines[1].Trim(), out var s) && Array.IndexOf(WindowedScales, s) >= 0
-                ? s : Default.Scale;
-            return (mode, scale);
+            string At(int i) => lines.Length > i ? lines[i].Trim() : "";
+            var mode = Enum.TryParse<DisplayMode>(At(0), out var m) ? m : Default.Mode;
+            var scale = int.TryParse(At(1), out var s) && Array.IndexOf(WindowedScales, s) >= 0
+                ? s : Default.WindowedScale;
+            // Lines 3+ arrived with the sound settings; an older two-line file just gets the defaults.
+            var sfx = int.TryParse(At(2), out var fx) ? Math.Clamp(fx, 0, 10) : Default.SfxVolume;
+            var music = int.TryParse(At(3), out var mu) ? Math.Clamp(mu, 0, 10) : Default.MusicVolume;
+            var ask = At(4) != "0";
+            return new GamePrefs(mode, scale, sfx, music, ask);
         }
         catch (System.IO.IOException) { return Default; }
         catch (UnauthorizedAccessException) { return Default; }

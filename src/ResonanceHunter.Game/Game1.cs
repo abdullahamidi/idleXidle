@@ -76,6 +76,10 @@ public class Game1 : Game
 
     private DisplayMode _displayMode = DisplayMode.Windowed;
     private int _windowedScale = 3;
+    // Sound + dialog prefs ride the same prefs file as the display mode (Display.GamePrefs).
+    private int _sfxVolume = 8;     // 0..10 notches
+    private int _musicVolume = 5;   // 0..10 notches
+    private bool _askBeforeScrap = true;
 
     // art-bible §4.1. Hearth Gold marks EARNED states only — never decoration.
     private static readonly Color VoidInk = new(0x1B, 0x16, 0x20);
@@ -337,7 +341,9 @@ public class Game1 : Game
         // developer's machine happens to be set to.
         if (Environment.GetEnvironmentVariable("RH_SHOT") is null)
         {
-            (_displayMode, _windowedScale) = Display.Load();
+            var prefs = Display.Load();
+            (_displayMode, _windowedScale) = (prefs.Mode, prefs.WindowedScale);
+            (_sfxVolume, _musicVolume, _askBeforeScrap) = (prefs.SfxVolume, prefs.MusicVolume, prefs.AskBeforeScrap);
             ApplyDisplay();
         }
         else
@@ -771,9 +777,12 @@ public class Game1 : Game
         // Audio is disabled during headless screenshot/CI runs (RH_SHOT set) — those machines may have
         // no sound device, and a screenshot never needs sound. Real runs get the full audio bank.
         _sound = new SoundBank(disable: Environment.GetEnvironmentVariable("RH_SHOT") is not null);
+        _sound.SfxVolume = _sfxVolume / 10f;
+        _sound.MusicVolume = _musicVolume / 10f;
         _ui = new UiKit(GraphicsDevice, _font, _assets);
         _automation = new AutomationScreen(_ui);
         _forge = new ForgeScreen(_ui);
+        _forge.AskBeforeScrap = _askBeforeScrap;
         _prestige = new PrestigeScreen(_ui, _dust);
         _roster = new RosterScreen(_ui);
         _chests = new ChestScreen(_ui);
@@ -1851,6 +1860,8 @@ public class Game1 : Game
             // only when arrived at from the fight).
             TellForgeTheBuild(_loadout.ToBuild(_dust, _mastery, _characters.Active));
             _forge.Update(gameTime, _keys, CanvasMouse, MouseClicked, MouseWheel, _hunter);
+            // The dialog's "don't ask me again" writes through to the prefs file the moment it is used.
+            if (_forge.PrefsDirty) { _forge.PrefsDirty = false; _askBeforeScrap = _forge.AskBeforeScrap; SaveDisplay(); }
             Latch(gameTime);
             return;
         }
@@ -2779,7 +2790,8 @@ public class Game1 : Game
         }
     }
 
-    private void SaveDisplay() => Display.Save(_displayMode, _windowedScale);
+    private void SaveDisplay() => Display.Save(new Display.GamePrefs(
+        _displayMode, _windowedScale, _sfxVolume, _musicVolume, _askBeforeScrap));
 
     // ── Display settings ──────────────────────────────────────────────────────────────────────
     // 1920-space (scale-1 chrome): every literal is ×4 of its old 480-space value.

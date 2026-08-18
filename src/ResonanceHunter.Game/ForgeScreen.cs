@@ -412,6 +412,25 @@ public sealed class ForgeScreen
     /// </summary>
     public Rarity? AutoSellFloor { get; set; }
 
+    // ── The SELL / SALVAGE confirmation ──────────────────────────────────────────────────────────
+    // Research pass (Diablo 3/4, Last Epoch, WoW): routine disposal gets ONE dialog with a suppression
+    // checkbox committed by the confirming click; the EQUIPPED case is categorically different and can
+    // never be suppressed — so that variant simply has no checkbox at all, rather than a checkbox the
+    // code secretly ignores (which a future refactor would silently honour).
+
+    /// <summary>Ask before SELL / SALVAGE? Host-set from the prefs file; the dialog can end the asking.</summary>
+    public bool AskBeforeScrap { get; set; } = true;
+
+    /// <summary>Set when the player flipped <see cref="AskBeforeScrap"/> in here — the host persists it.</summary>
+    public bool PrefsDirty { get; set; }
+
+    private enum ScrapKind { Sell, Salvage, JunkAll }
+
+    /// <summary>The destructive action waiting on an answer, or null. A null id means the whole junk pile.</summary>
+    private (ScrapKind Kind, string? ItemId)? _confirm;
+    private bool _confirmSuppress;    // the dialog checkbox — reset on every open
+    private bool _confirmOpenedNow;   // swallows the click that OPENED the dialog so it cannot also answer it
+
     /// <summary>
     /// The build's loot-quality tilt, set by the host each frame. 1 is neutral.
     /// </summary>
@@ -492,6 +511,10 @@ public sealed class ForgeScreen
         // space. Draw already converts (see the twin below); Update did not, which is half of why the bag
         // was unusable — see the note on the wheel.
         var overlay = Game1.ToOverlay(mouse);
+
+        // While the SELL/SALVAGE confirmation is up it owns the input — no key may scrap a second item
+        // behind the question about the first. Draw hit-tests the dialog's own buttons.
+        if (_confirm is not null) { _prevKeys = keys; return; }
 
         // THE BAG'S WHEEL, HOISTED ABOVE THE EARLY RETURN THAT USED TO SWALLOW IT.
         //
@@ -639,11 +662,19 @@ public sealed class ForgeScreen
     /// </remarks>
     public void SalvageJunk(Hunter hunter)
     {
-        bool IsWornItem(ItemInstance i) =>
-            Gear.SlotFor(i.BaseType) is { } s && hunter.Worn(s)?.InstanceId == i.InstanceId;
+        if (JunkOf(hunter).Count == 0) { Say("NO JUNK TO SALVAGE (COMMON / UNCOMMON GEAR).", Slate); return; }
+        if (AskBeforeScrap) { OpenConfirm(ScrapKind.JunkAll, null); return; }
+        SalvageJunkNow(hunter);
+    }
 
-        var junk = _inv.Where(i => Gear.IsWearable(i) && i.Rarity <= Rarity.Uncommon && !IsWornItem(i)).ToList();
-        if (junk.Count == 0) { Say("NO JUNK TO SALVAGE (COMMON / UNCOMMON GEAR).", Slate); return; }
+    /// <summary>Every non-worn Common/Uncommon wearable — exactly what SALVAGE JUNK would take.</summary>
+    private List<ItemInstance> JunkOf(Hunter hunter)
+        => _inv.Where(i => Gear.IsWearable(i) && i.Rarity <= Rarity.Uncommon && !IsWorn(hunter, i)).ToList();
+
+    private void SalvageJunkNow(Hunter hunter)
+    {
+        var junk = JunkOf(hunter);
+        if (junk.Count == 0) return;
 
         // A SALVAGE CHART DOUBLES THE YIELD. Salvage is the one Forge operation that costs nothing, so
         // its charter cannot waive a price — it raises the return instead. Spent here, after the junk
@@ -768,28 +799,37 @@ public sealed class ForgeScreen
         Say($"EQUIPPED. POWER IS NOW {hunter.PowerRating}.", Gold);
     }
 
+    /// <summary>SELL, via the confirmation. Worn gear is allowed now — it comes off first, and it ALWAYS asks.</summary>
     private void Sell(Hunter hunter, ItemInstance? item)
     {
         if (item is null) return;
-        // The mouse SELL button greys out for worn gear, but the S key reaches here directly — so the
-        // guard has to live in the handler, or you could sell what you are wearing (free Gleam, and the
-        // worn slot keeps pointing at the sold item). Same reason Reforge/Refine self-guard below.
-        if (IsWorn(hunter, item)) { Say("TAKE IT OFF BEFORE SELLING IT.", Ember); return; }
         var reason = Forge.CheckEligible(item);
         if (reason != IneligibleReason.Eligible) { Say(Forge.Explain(reason), Ember); return; }
+        if (AskBeforeScrap || IsWorn(hunter, item)) { OpenConfirm(ScrapKind.Sell, item.InstanceId); return; }
+        SellNow(hunter, item);
+    }
+
+    private void SellNow(Hunter hunter, ItemInstance item)
+    {
+        TakeOffFirst(hunter, item);
         _inv.Remove(item); _merge.Remove(item.InstanceId);
         hunter.AddGleam(item.SellValue);
         _cursor = Math.Clamp(_cursor, 0, Math.Max(0, _inv.Count - 1));
         Say($"SOLD FOR {item.SellValue} GLEAM.", Gold);
     }
 
-
     private void Dismantle(Hunter hunter, ItemInstance? item)
     {
         if (item is null) return;
-        if (IsWorn(hunter, item)) { Say("TAKE IT OFF BEFORE DISMANTLING IT.", Ember); return; }
         var reason = Forge.CheckEligible(item);
         if (reason != IneligibleReason.Eligible) { Say(Forge.Explain(reason), Ember); return; }
+        if (AskBeforeScrap || IsWorn(hunter, item)) { OpenConfirm(ScrapKind.Salvage, item.InstanceId); return; }
+        DismantleNow(hunter, item);
+    }
+
+    private void DismantleNow(Hunter hunter, ItemInstance item)
+    {
+        TakeOffFirst(hunter, item);
         var m = Forge.Dismantle(item, Tuning);
         _inv.Remove(item); _merge.Remove(item.InstanceId);
         var tier = MaterialTiers.ForRarity(item.Rarity);   // salvage sorts by rarity into the right tier
@@ -799,18 +839,35 @@ public sealed class ForgeScreen
     }
 
     /// <summary>
+    /// If the piece is on the champion, take it off first — selling or scrapping worn gear is allowed
+    /// now (playtest asked for it), and the worn slot must never point at an item that no longer exists.
+    /// </summary>
+    private void TakeOffFirst(Hunter hunter, ItemInstance item)
+    {
+        if (Gear.SlotFor(item.BaseType) is { } s && hunter.Worn(s)?.InstanceId == item.InstanceId)
+            hunter.Unequip(s);
+    }
+
+    private void OpenConfirm(ScrapKind kind, string? itemId)
+    {
+        _confirm = (kind, itemId);
+        _confirmSuppress = false;
+        _confirmOpenedNow = true;
+    }
+
+    /// <summary>
     /// Re-roll the selected item's TRAIT for materials. The item keeps its id — only what it IS changes.
     /// </summary>
     /// <remarks>
     /// This is the materials sink that makes items customisable. It is a real change every time (the roll
     /// excludes the current trait), so you can churn a weapon toward the trade your build wants. Worn gear
-    /// is off-limits — reforging what you are wearing would mutate a live build mid-fight — so take it off
-    /// first, exactly as SELL/DISMANTLE/MERGE already require.
+    /// is fair game now: the id is kept and ReplaceItem hands the WORN SLOT the new object too, so the
+    /// fight reads the fresh roll on the next frame instead of a stale copy.
     /// </remarks>
     private void DoReforgeTrait(Hunter hunter, ItemInstance? item)
     {
         if (item is null) return;
-        if (IsWorn(hunter, item)) { Say("TAKE IT OFF BEFORE REFORGING.", Ember); return; }
+
 
         var cost = ReforgeTuning.Default.TraitCostFor(item.Rarity);
         var chart = hunter.CharterCount(Charter.Reforge) > 0;
@@ -826,7 +883,7 @@ public sealed class ForgeScreen
         // Spent only now that the re-roll has actually succeeded.
         if (chart) hunter.SpendCharter(Charter.Reforge);
         else hunter.SpendMaterial(Material.Essence, result.Cost);
-        ReplaceItem(item, result.Product!);
+        ReplaceItem(hunter, item, result.Product!);
         var name = GearTraits.NameOf(GearTraits.TraitOf(result.Product!)!.Value);
         Say($"REFORGED — TRAIT IS NOW {name}.", Gold);
     }
@@ -837,7 +894,7 @@ public sealed class ForgeScreen
     private void DoReforgeEnchant(Hunter hunter, ItemInstance? item)
     {
         if (item is null) return;
-        if (IsWorn(hunter, item)) { Say("TAKE IT OFF BEFORE REFORGING.", Ember); return; }
+
         if (item.Rarity < Enchantments.MinimumRarity) { Say("ONLY RARE+ ITEMS CARRY AN ENCHANTMENT.", Ember); return; }
 
         // A Legendary's enchant reforge is the premium roll, so it spends the premium material (CRYSTAL);
@@ -856,7 +913,7 @@ public sealed class ForgeScreen
 
         if (chart) hunter.SpendCharter(Charter.Reforge);
         else hunter.SpendMaterial(tier, result.Cost);
-        ReplaceItem(item, result.Product!);
+        ReplaceItem(hunter, item, result.Product!);
         var ench = Enchantments.Of(result.Product!);
         Say(ench is not null ? $"REFORGED — ENCHANT IS NOW {ench.Name}." : "REFORGED THE ENCHANTMENT.", Gold);
     }
@@ -870,7 +927,7 @@ public sealed class ForgeScreen
     private void DoRefine(Hunter hunter, ItemInstance? item)
     {
         if (item is null || !Gear.IsWearable(item)) { Say("ONLY WEARABLES CAN BE REFINED.", Ember); return; }
-        if (IsWorn(hunter, item)) { Say("TAKE IT OFF BEFORE REFINING.", Ember); return; }
+
 
         var r = Forge.Refine(item, Tuning);
 
@@ -887,7 +944,7 @@ public sealed class ForgeScreen
         if (chart) hunter.SpendCharter(Charter.Refine);
         else { hunter.SpendMaterial(Material.Scrap, r.Scrap); hunter.SpendGleam(r.Gold); }
 
-        ReplaceItem(item, r.Product);
+        ReplaceItem(hunter, item, r.Product);
         Say(chart
                 ? $"REFINED TO LEVEL {r.Product.ItemLevel}  (REFINE CHART — FREE)."
                 : $"REFINED TO LEVEL {r.Product.ItemLevel}  ({r.Scrap} SCRAP + {r.Gold} G).", Gold);
@@ -901,7 +958,7 @@ public sealed class ForgeScreen
     private void DoGreaterRefine(Hunter hunter, ItemInstance? item)
     {
         if (item is null || !Gear.IsWearable(item)) { Say("ONLY WEARABLES CAN BE REFINED.", Ember); return; }
-        if (IsWorn(hunter, item)) { Say("TAKE IT OFF BEFORE REFINING.", Ember); return; }
+
 
         var r = Forge.GreaterRefine(item, Tuning);
         if (hunter.MaterialOf(Material.Crystal) < r.Crystal) { Say($"NEED {r.Crystal} CRYSTAL TO GREATER-REFINE.", Ember); return; }
@@ -909,20 +966,23 @@ public sealed class ForgeScreen
 
         hunter.SpendMaterial(Material.Crystal, r.Crystal);
         hunter.SpendGleam(r.Gold);
-        ReplaceItem(item, r.Product);
+        ReplaceItem(hunter, item, r.Product);
         Say($"GREATER-REFINED TO LEVEL {r.Product.ItemLevel}  ({r.Crystal} CRYSTAL + {r.Gold} G).", Gold);
     }
 
     private static bool IsWorn(Hunter hunter, ItemInstance item)
         => Gear.SlotFor(item.BaseType) is { } s && hunter.Worn(s)?.InstanceId == item.InstanceId;
 
-    /// <summary>Swap an item in the bag for its reforged self. Same id, same grid slot — nothing else moves.</summary>
-    private void ReplaceItem(ItemInstance old, ItemInstance neu)
+    /// <summary>Swap an item in the bag for its reforged self. Same id, same slot — and the worn slot follows.</summary>
+    private void ReplaceItem(Hunter hunter, ItemInstance old, ItemInstance neu)
     {
         var idx = _inv.IndexOf(old);
         if (idx >= 0) _inv[idx] = neu;
-        // The id is unchanged, so the merge tray and worn tracking keep resolving to the new object, and
-        // the cursor sits on the same grid index — which now holds the reforged item. Nothing to re-point.
+        // The id is unchanged, so id-based lookups keep resolving. The WORN slot does not: it stores the
+        // OBJECT, not the id — so upgrading or reforging what you are wearing must hand the fight the new
+        // object too, or the fight keeps reading pre-upgrade numbers while the bag shows the new ones.
+        if (Gear.SlotFor(neu.BaseType) is { } s && hunter.Worn(s)?.InstanceId == neu.InstanceId)
+            hunter.RestoreWorn(s, neu);
     }
 
     // ── CHESTS — the dopamine beat. Boss drops land here; the player cracks them for materials + items. ──
@@ -1041,6 +1101,10 @@ public sealed class ForgeScreen
         var hit = Game1.ToOverlay(mouse);
         _hovered = null;                 // re-established by whichever surface finds the pointer over an item
 
+        // A pending SELL/SALVAGE confirmation owns the frame's clicks: everything beneath it still
+        // draws, but no button under the scrim may fire while the question is on screen.
+        var uiClicked = clicked && _confirm is null;
+
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xC0));   // scrim so panels pop
         _ui.TextCenterBig(b, "THE FORGE", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
@@ -1053,16 +1117,19 @@ public sealed class ForgeScreen
         // ONE WORKBENCH, or the pile. There is no UPGRADE-vs-REFORGE mode any more: both act on the
         // same focused item and both fit beside it, so switching between them was a click that changed
         // which half of one workbench you were allowed to see.
-        if (_mode == ForgeMode.Salvage) DrawSalvageMode(b, hunter, hit, clicked);
-        else DrawWorkbench(b, hunter, hit, clicked);
+        if (_mode == ForgeMode.Salvage) DrawSalvageMode(b, hunter, hit, uiClicked);
+        else DrawWorkbench(b, hunter, hit, uiClicked);
 
         // (The reveal is drawn by the HOST now, as chrome — see Game1 and TickReveal. Drawing it here
         //  too would double-draw it on the one screen that used to be its only home.)
 
         // The hover card, above the surfaces and below nothing but the reveal — which is modal, and
         // whose whole job is to be the only thing you are looking at.
-        if (_hovered is { } hov && _revealTimer <= 0f)
+        if (_hovered is { } hov && _revealTimer <= 0f && _confirm is null)
             ItemTooltip.Draw(_ui, b, hov, hunter, hit, new Rectangle(0, 0, 1920, 1080));
+
+        // The confirmation, over everything on this screen (the reveal is host chrome and still wins).
+        if (_confirm is { } ask) DrawConfirm(b, hunter, ask, hit, clicked);
 
         if (DevForgeDebug) DrawDebug(b);
     }
@@ -1280,22 +1347,122 @@ public sealed class ForgeScreen
     /// Playtest: "upgrade ve salvage itemin altında olsun". UPGRADE already sits under its own cost
     /// column; these two lived on the SALVAGE mode's loot grid, three clicks and a mode switch from the
     /// item you were looking at — so deciding "is this worth keeping" meant leaving the screen that was
-    /// answering the question. Disabled while the piece is worn, because the fight reads what is worn.
+    /// answering the question. Worn pieces are live buttons too now — the confirmation dialog carries
+    /// the warning and takes the piece off first, whatever the "don't ask again" preference says.
     /// </remarks>
     private void DrawItemActions(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
     {
         if (Target() is not { } item) return;
-        var worn = IsWorn(hunter, item);
 
         var sell = new Rectangle(ItemPanel.X + 40, ItemPanel.Bottom - 172, ItemPanel.Width - 80, 56);
         var dis = new Rectangle(ItemPanel.X + 40, ItemPanel.Bottom - 108, ItemPanel.Width - 80, 56);
 
-        if (_ui.Button(b, sell, $"SELL FOR {item.SellValue} G", hit, clicked, enabled: !worn)) Sell(hunter, item);
-        if (_ui.Button(b, dis, $"SALVAGE FOR {Forge.Dismantle(item, Tuning)} MATERIALS", hit, clicked, enabled: !worn))
+        if (_ui.Button(b, sell, $"SELL FOR {item.SellValue} G", hit, clicked)) Sell(hunter, item);
+        if (_ui.Button(b, dis, $"SALVAGE FOR {Forge.Dismantle(item, Tuning)} MATERIALS", hit, clicked))
             Dismantle(hunter, item);
+    }
+
+    /// <summary>
+    /// The SELL / SALVAGE question, asked before the deed.
+    /// </summary>
+    /// <remarks>
+    /// One dialog, two variants (never two stacked modals — stacking trains blind-clicking):
+    /// the ROUTINE variant carries a "don't ask me again" checkbox whose state commits together with
+    /// the confirming click; the WORN variant has no checkbox at all and shows regardless of the
+    /// preference, because destroying what you are wearing is the one mistake that genuinely hurts
+    /// (the accident D4 and Last Epoch forums are still full of). KEEP IT sits first so a reflex click
+    /// lands on the safe answer; the destructive verb is named, never a generic CONFIRM.
+    /// </remarks>
+    private void DrawConfirm(SpriteBatch b, Hunter hunter, (ScrapKind Kind, string? ItemId) ask, Point hit, bool clicked)
+    {
+        // The subject is resolved fresh — the pile mutates under this screen every frame.
+        var item = ask.ItemId is null ? null : _inv.FirstOrDefault(i => i.InstanceId == ask.ItemId);
+        if (ask.Kind != ScrapKind.JunkAll && item is null) { _confirm = null; return; }
+
+        // The click that OPENED the dialog is still latched true this frame; it must not also answer it.
+        if (_confirmOpenedNow) { clicked = false; _confirmOpenedNow = false; }
+
+        _ui.Fill(b, UiKit.OverlayScrim, new Color(0, 0, 0, 0xAA));
+        var panel = new Rectangle(560, 320, 800, 440);
+        _ui.Panel(b, panel);
+
+        var worn = item is not null && IsWorn(hunter, item);
+        var title = ask.Kind switch
+        {
+            ScrapKind.Sell => "SELL THIS ITEM?",
+            ScrapKind.Salvage => "SALVAGE THIS ITEM?",
+            _ => "SALVAGE ALL THE JUNK?",
+        };
+        _ui.TextCenterBig(b, title, panel.Center.X, panel.Y + 52, Gold, UiTypography.SectionTitle);
+
+        var y = panel.Y + 122;
+        if (item is not null)
+        {
+            DrawItemIcon(b, item, new Rectangle(panel.X + 64, y - 8, 56, 56));
+            _ui.TextBig(b, _ui.ShortenBig(ItemNaming.FullName(item), panel.Width - 220, UiTypography.Body),
+                        panel.X + 136, y + 6, RarityColors[(int)item.Rarity], UiTypography.Body);
+            y += 68;
+            var outcome = ask.Kind == ScrapKind.Sell
+                ? $"IT SELLS FOR {item.SellValue} GLEAM. THIS CANNOT BE UNDONE."
+                : $"IT BREAKS DOWN INTO {Forge.Dismantle(item, Tuning)} {MaterialTiers.Name(MaterialTiers.ForRarity(item.Rarity))}. THIS CANNOT BE UNDONE.";
+            _ui.TextBig(b, _ui.ShortenBig(outcome, panel.Width - 128, UiTypography.Secondary),
+                        panel.X + 64, y, Bone, UiTypography.Secondary);
+            y += 44;
+        }
+        else
+        {
+            var junk = JunkOf(hunter);
+            var mats = junk.Sum(i => Forge.Dismantle(i, Tuning));
+            _ui.TextBig(b, $"{junk.Count} COMMON AND UNCOMMON ITEMS BECOME {mats} MATERIALS.",
+                        panel.X + 64, y + 10, Bone, UiTypography.Secondary);
+            _ui.TextBig(b, "WORN GEAR IS NEVER TOUCHED. THIS CANNOT BE UNDONE.",
+                        panel.X + 64, y + 44, Slate, UiTypography.Secondary);
+            y += 112;
+        }
+
         if (worn)
-            _ui.TextCenterBig(b, "WORN — TAKE IT OFF ON GEAR FIRST", ItemPanel.Center.X, ItemPanel.Bottom - 200,
-                              Ember, UiTypography.Secondary);
+        {
+            // The warning that never goes away. No checkbox on this variant — see the class remarks.
+            _ui.Fill(b, new Rectangle(panel.X + 64, y, 6, 54), Ember);
+            _ui.TextBig(b, "THIS IS ON YOUR CHAMPION RIGHT NOW.", panel.X + 84, y, Ember, UiTypography.Body);
+            _ui.TextBig(b, "IT COMES OFF FIRST — THE FIGHT LOSES ITS NUMBERS.", panel.X + 84, y + 30,
+                        Slate, UiTypography.Secondary);
+        }
+        else
+        {
+            // The suppression checkbox — a wide row, so the label is as clickable as the box.
+            var box = new Rectangle(panel.X + 64, y + 2, 26, 26);
+            var row = new Rectangle(panel.X + 64, y, panel.Width - 128, 32);
+            _ui.Fill(b, new Rectangle(box.X - 2, box.Y - 2, box.Width + 4, box.Height + 4), Slate * 0.7f);
+            _ui.Fill(b, box, new Color(0x14, 0x10, 0x1A));
+            if (_confirmSuppress) _ui.Fill(b, new Rectangle(box.X + 5, box.Y + 5, 16, 16), Gold);
+            _ui.TextBig(b, "DON'T ASK ME AGAIN BEFORE SELLING OR SALVAGING", box.Right + 14, y + 4,
+                        row.Contains(hit) ? Bone : Slate, UiTypography.Secondary);
+            if (UiKit.ClickedIn(row, hit, clicked)) _confirmSuppress = !_confirmSuppress;
+        }
+
+        var keep = new Rectangle(panel.X + 64, panel.Bottom - 112, 310, 62);
+        var doIt = new Rectangle(panel.Right - 374, panel.Bottom - 112, 310, 62);
+        if (_ui.Button(b, keep, "KEEP IT", hit, clicked)) { _confirm = null; return; }
+
+        var verb = ask.Kind switch
+        {
+            ScrapKind.Sell => "SELL IT",
+            ScrapKind.Salvage => "SALVAGE IT",
+            _ => "SALVAGE THE JUNK",
+        };
+        if (_ui.Button(b, doIt, verb, hit, clicked))
+        {
+            // The checkbox commits WITH the confirming click — checking it and cancelling changes nothing.
+            if (_confirmSuppress && !worn) { AskBeforeScrap = false; PrefsDirty = true; }
+            _confirm = null;
+            switch (ask.Kind)
+            {
+                case ScrapKind.Sell: SellNow(hunter, item!); break;
+                case ScrapKind.Salvage: DismantleNow(hunter, item!); break;
+                default: SalvageJunkNow(hunter); break;
+            }
+        }
     }
 
     private void DrawUpgradeMode(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
@@ -1332,7 +1499,6 @@ public sealed class ForgeScreen
         }
 
         var r = Forge.Refine(item, Tuning);
-        var worn = IsWorn(hunter, item);
         _ui.Fill(b, new Rectangle(CostPanel.X + 40, CostPanel.Y + 216, CostPanel.Width - 80, 2), Dim);
         _ui.Text(b, "UPGRADE COST", CostPanel.X + 40, CostPanel.Y + 236, Slate);
         DrawCostRow(b, CostPanel.Y + 274, "SCRAP", hunter.MaterialOf(Material.Scrap), r.Scrap, MatColor[0], false);
@@ -1343,15 +1509,15 @@ public sealed class ForgeScreen
         _ui.Text(b, "GUARANTEED  ·  NO DOWNGRADE", CostPanel.X + 40, CostPanel.Y + 412, Met);
         DrawWrapped(b, "No cap — the cost climbs each level.", CostPanel.X + 40, CostPanel.Y + 442, CostPanel.Width - 80, Slate);
 
-        var can = !worn && hunter.MaterialOf(Material.Scrap) >= r.Scrap && hunter.Gleam >= r.Gold;
+        var can = hunter.MaterialOf(Material.Scrap) >= r.Scrap && hunter.Gleam >= r.Gold;
         var greater = Forge.GreaterRefine(item, Tuning);
         var hasCrystal = hunter.MaterialOf(Material.Crystal) >= greater.Crystal;
         var kb = Keyboard.GetState();
         var doGreat = (kb.IsKeyDown(Keys.LeftShift) || kb.IsKeyDown(Keys.RightShift)) && hasCrystal;
-        var canGreat = !worn && hunter.Gleam >= greater.Gold;
+        var canGreat = hunter.Gleam >= greater.Gold;
 
-        if (worn) _ui.TextCenter(b, "EQUIPPED — UNEQUIP ON GEAR TO UPGRADE", CostPanel.Center.X, CostPanel.Bottom - 120, Ember);
-        else if (hasCrystal) _ui.TextCenter(b, "HOLD SHIFT: +5 FOR 1 CRYSTAL", CostPanel.Center.X, CostPanel.Bottom - 152, Slate);
+        // Worn gear upgrades like anything else now — ReplaceItem re-points the worn slot.
+        if (hasCrystal) _ui.TextCenter(b, "HOLD SHIFT: +5 FOR 1 CRYSTAL", CostPanel.Center.X, CostPanel.Bottom - 152, Slate);
 
         var btn = new Rectangle(CostPanel.X + 40, CostPanel.Bottom - 96, CostPanel.Width - 80, 72);
         if (_ui.Button(b, btn, doGreat ? "GREATER UPGRADE  +5 LEVELS" : "UPGRADE  +1 LEVEL", hit, clicked, enabled: doGreat ? canGreat : can))
@@ -1374,12 +1540,10 @@ public sealed class ForgeScreen
             return;
         }
 
-        var worn = IsWorn(hunter, item);
-
-        // TRAIT — the item's trade, re-rolled with ESSENCE.
+        // TRAIT — the item's trade, re-rolled with ESSENCE. (Worn gear re-rolls like anything else now.)
         var tRow = ReforgePanel.Y + 96;
         var tCost = ReforgeTuning.Default.TraitCostFor(item.Rarity);
-        var canTrait = !worn && hunter.MaterialOf(Material.Essence) >= tCost;
+        var canTrait = hunter.MaterialOf(Material.Essence) >= tCost;
         _ui.Text(b, "TRAIT  —  THE ITEM'S TRADE", ReforgePanel.X + 32, tRow, Slate);
         _ui.TextBig(b, GearTraits.TraitOf(item) is { } t ? GearTraits.NameOf(t) : "—", ReforgePanel.X + 32, tRow + 28, InkGold, UiTypography.PanelTitle);
 
@@ -1402,7 +1566,7 @@ public sealed class ForgeScreen
         var hasEnch = item.Rarity >= Enchantments.MinimumRarity;
         var eTier = EnchantReforgeTier(item.Rarity);
         var eCost = ReforgeTuning.Default.EnchantCostFor(item.Rarity);
-        var canEnch = !worn && hasEnch && hunter.MaterialOf(eTier) >= eCost;
+        var canEnch = hasEnch && hunter.MaterialOf(eTier) >= eCost;
         var ench = Enchantments.Of(item);
         // CLAMPED TO THE COLUMN THE BUTTON LEAVES. The heading had no width bound and ran under the
         // RE-ROLL button's ornate left frame at ReforgePanel.Right - 340, eating "RE+)".
@@ -1416,12 +1580,11 @@ public sealed class ForgeScreen
             DoReforgeEnchant(hunter, item);
 
         _ui.Fill(b, new Rectangle(ReforgePanel.X + 32, eRow + 130, ReforgePanel.Width - 64, 2), Dim);
-        if (worn) _ui.Text(b, "EQUIPPED — UNEQUIP ON GEAR TO REFORGE.", ReforgePanel.X + 32, eRow + 150, Ember);
         // WRAPPED. As a single _ui.Text line this measured ~1100px against 1018px of interior, so it ran
         // through the panel's right rail and was chopped at the screen edge mid-word — the sentence
         // ended on "ke". The enchant blurb six lines above already uses this helper.
-        else DrawWrapped(b, "Re-forging changes only the trait or enchant; level, source and affixes are kept.",
-                         ReforgePanel.X + 32, eRow + 150, ReforgePanel.Width - 64, Slate);
+        DrawWrapped(b, "Re-forging changes only the trait or enchant; level, source and affixes are kept.",
+                    ReforgePanel.X + 32, eRow + 150, ReforgePanel.Width - 64, Slate);
         if (_msg.Length > 0) _ui.Text(b, _msg, ReforgePanel.X + 32, ReforgePanel.Bottom - 40, _msgColor);
     }
 

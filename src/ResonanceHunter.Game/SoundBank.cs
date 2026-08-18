@@ -28,6 +28,26 @@ public sealed class SoundBank
 
     private float _masterSfx = 0.8f;
     private float _masterMusic = 0.5f;
+    private float _musicBase = 1f;   // the track's own volume, so the master can be re-applied live
+
+    /// <summary>Effects master volume, 0..1. Applied to every subsequent one-shot.</summary>
+    public float SfxVolume
+    {
+        get => _masterSfx;
+        set => _masterSfx = Clamp01(value);
+    }
+
+    /// <summary>Music master volume, 0..1. Applied to the CURRENTLY PLAYING bed immediately.</summary>
+    public float MusicVolume
+    {
+        get => _masterMusic;
+        set
+        {
+            _masterMusic = Clamp01(value);
+            try { if (_music is not null) _music.Volume = Clamp01(_musicBase * _masterMusic); }
+            catch (Exception) { /* a disposed voice must never break the settings screen */ }
+        }
+    }
 
     /// <param name="disable">
     /// Force-off, used for headless screenshot/CI runs where no audio device exists. When true, nothing
@@ -100,6 +120,7 @@ public sealed class SoundBank
             _music?.Dispose();
             _music = fx.CreateInstance();
             _music.IsLooped = true;
+            _musicBase = Clamp01(volume);
             _music.Volume = Clamp01(volume * _masterMusic);
             _music.Play();
             _musicKey = key;
