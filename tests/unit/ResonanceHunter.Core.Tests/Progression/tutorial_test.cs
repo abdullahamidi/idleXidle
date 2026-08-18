@@ -231,7 +231,7 @@ public class TutorialTest
             ("boss felled",        new TutorialFacts(WavesCleared: 6, DeepestWave: 6, StatsTrained: 1),
                                    new UnlockFacts(WavesCleared: 6, DeepestWave: 6)),
             ("a chest is held",    new TutorialFacts(WavesCleared: 9, DeepestWave: 9, StatsTrained: 1, ChestsHeld: 1),
-                                   new UnlockFacts(WavesCleared: 9, DeepestWave: 9, ChestsHeld: 1)),
+                                   new UnlockFacts(WavesCleared: 9, DeepestWave: 9, ChestsEverHeld: 1)),
             ("opened it",          new TutorialFacts(WavesCleared: 11, DeepestWave: 11, StatsTrained: 1, ItemsOwned: 1),
                                    new UnlockFacts(WavesCleared: 11, DeepestWave: 11, ItemsOwned: 1)),
             ("equipped it",        new TutorialFacts(WavesCleared: 13, DeepestWave: 13, StatsTrained: 1, ItemsOwned: 1, ItemsWorn: 1),

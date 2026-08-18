@@ -2015,7 +2015,9 @@ public class Game1 : Game
         // has built the Forge. A hard dereference here is the exact shape of the boot crash this file
         // has already shipped once.
         ItemsOwned: _forge?.Inventory.Count(Gear.IsWearable) ?? 0,
-        ChestsHeld: _forge?.UnopenedChests.Count ?? 0,
+        // EVER, not "right now": opened + still waiting. Both counters persist, so the sum is monotone
+        // — which is what stops the Vault re-announcing itself every time the pile refills from empty.
+        ChestsEverHeld: (_forge?.ChestsOpened ?? 0) + (_forge?.UnopenedChests.Count ?? 0),
         RegionsConquered: _world.ConqueredIds.Count,
         TraitPointsEarned: _dust.Earned);
 
@@ -3357,6 +3359,19 @@ public class Game1 : Game
             if (!unlocked && hover)
                 _ui.TextCenterBig(_batch, _ui.ShortenBig(Unlocks.Requirement(NavActivity[i]), NavRailWidth - 24, UiTypography.Secondary),
                                   r.Center.X, r.Bottom - 16, NavGem * 0.8f, UiTypography.Secondary);
+
+            // THE PILE COUNT RIDES THE VAULT TILE — a badge, not a banner. A new chest used to
+            // re-announce the whole screen (see the Vault gate in Unlocks.cs); a count on the door says
+            // "something is waiting" without stopping anyone, and it clears itself by being spent.
+            // A diamond WITH a numeral, so the signal is never colour alone.
+            var waiting = NavActivity[i] == Activity.Vault && unlocked ? _forge?.UnopenedChests.Count ?? 0 : 0;
+            if (waiting > 0)
+            {
+                var badge = new Rectangle(r.Right - 46, r.Y + 8, 30, 30);
+                _ui.Diamond(_batch, badge, NavGold);
+                _ui.TextCenterBig(_batch, waiting > 9 ? "9+" : waiting.ToString(),
+                                  badge.Center.X, badge.Y + 4, new Color(0x14, 0x10, 0x1A), UiTypography.Secondary);
+            }
 
             // UNOPENED CHESTS, as a count on the VAULT tile — the page chests actually live on.
             //

@@ -61,7 +61,7 @@ public readonly record struct UnlockFacts(
     int WavesCleared = 0,
     int DeepestWave = 0,
     int ItemsOwned = 0,
-    int ChestsHeld = 0,
+    int ChestsEverHeld = 0,
     int RegionsConquered = 0,
     int TraitPointsEarned = 0);
 
@@ -107,11 +107,19 @@ public static class Unlocks
 
         // The first chest is a moment, and the Vault is where it is read. Opens on that chest alone —
         // never on owning items, because a Vault with nothing in it is a page about nothing.
-        Activity.Vault => f.ChestsHeld >= 1,
+        //
+        // ON THE FIRST CHEST *EVER*, NOT THE PILE RIGHT NOW. This read ChestsHeld — the count of
+        // unopened chests — so opening your last chest re-LOCKED the Vault, and the next drop re-opened
+        // it, and the "NEWLY OPENED" explanation panel fired again on every single chest for the rest
+        // of the game. Playtest: "her chest geldiğinde newly open the vault diye önüme bi yazı parçası
+        // çıkarıyor... zaten biliyorum açıldığını." A gate must be MONOTONE: every fact here only ever
+        // grows, so nothing a player does can close a door they have walked through — or make the game
+        // announce the same door twice.
+        Activity.Vault => f.ChestsEverHeld >= 1,
 
         // Chests are what the Forge is FOR. Also opened by owning items, because salvaging is the other
         // half of it and a player with junk and no chest still has a reason to be here.
-        Activity.Forge => f.ChestsHeld >= 1 || f.ItemsOwned >= 2,
+        Activity.Forge => f.ChestsEverHeld >= 1 || f.ItemsOwned >= 2,
 
         // The build is the deepest system in the game and the least self-explanatory, so it waits until
         // the player has watched enough fights to have seen skills actually fire. Asking someone to
