@@ -119,11 +119,19 @@ public sealed class ChestScreen
     private static Rectangle QChip(Rectangle card) => new(card.Right - 44, card.Y + 12, 30, 30);
     private static Rectangle QHit(Rectangle card) => new(card.Right - 52, card.Y + 4, 46, 46);
 
+    /// <summary>The furthest first-visible index that still fills the page — row-aligned.</summary>
+    /// <remarks>
+    /// Clamping to count-1 stranded the view: open chests until the pile fits one page and a non-zero
+    /// scroll kept the BEST cards (BestFirst sorts them first) hidden with the wheel gate dead. The
+    /// pile is consumed while displayed, so the clamp must pull the window back as it shrinks.
+    /// </remarks>
+    private static int MaxScroll(int count) => Math.Max(0, (count + Cols - 1) / Cols * Cols - PerPage);
+
     private void Clamp(int count)
     {
         if (count <= 0) { _cursor = 0; _scroll = 0; return; }
         _cursor = Math.Clamp(_cursor, 0, count - 1);
-        _scroll = Math.Clamp(_scroll, 0, Math.Max(0, count - 1));
+        _scroll = Math.Clamp(_scroll, 0, MaxScroll(count));
     }
 
     public void Update(float dt, IReadOnlyList<Chest> chests, Point mouse, bool clicked, int wheel)
@@ -137,8 +145,8 @@ public sealed class ChestScreen
         var sorted = ChestDossiers.BestFirst(chests);
         Clamp(sorted.Count);
 
-        if (wheel != 0 && sorted.Count > PerPage)
-            _scroll = Math.Clamp(_scroll - Math.Sign(wheel) * Cols, 0, Math.Max(0, sorted.Count - 1));
+        if (wheel != 0)
+            _scroll = Math.Clamp(_scroll - Math.Sign(wheel) * Cols, 0, MaxScroll(sorted.Count));
 
         // ── Hover, resolved here where dt lives. The "?" wins over the card it sits on, and while the
         //    pointer is on it the card's own OPEN affordance stands down — inspecting and opening must

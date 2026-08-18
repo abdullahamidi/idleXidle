@@ -1517,6 +1517,9 @@ public class Game1 : Game
         {
             if (_showSettings) _showSettings = false;
             else if (_showHelp) _showHelp = false;
+            // A pending SELL/SALVAGE question outranks the settings reflex: Esc on it means "keep it",
+            // not "open another panel over the question". (Adversarial review, pass four.)
+            else if (_showForge && _forge.ConfirmOpen) _forge.CancelConfirm();
             else _showSettings = true;
         }
 
@@ -1586,7 +1589,10 @@ public class Game1 : Game
         //  — an `is not null` here would teach flow analysis it can be null and warn at every later use.)
         if (_forge.RevealActive)
         {
-            if (_clicked || Pressed(Keys.Space) || Pressed(Keys.Enter)) _forge.AdvanceReveal();
+            // NOT raw _clicked: on the frame a click dismisses the unlock panel above this overlay,
+            // _swallowInput is already true and that click is SPENT — feeding it here too skipped the
+            // cascade the player was trying to uncover. (Adversarial review, pass four.)
+            if ((_clicked && !_swallowInput) || Pressed(Keys.Space) || Pressed(Keys.Enter)) _forge.AdvanceReveal();
             _swallowInput = true;
         }
 
@@ -1879,7 +1885,12 @@ public class Game1 : Game
             // Keep the Forge told which Forms the build runs, so it can flag live combos here too (not
             // only when arrived at from the fight).
             TellForgeTheBuild(_loadout.ToBuild(_dust, _mastery, _characters.Active));
-            _forge.Update(gameTime, _keys, CanvasMouse, MouseClicked, MouseWheel, _hunter);
+            // The keyboard is LOCKED while any host modal owns the frame — without this, the S that
+            // dismissed an unlock panel also SOLD the focused (rarest-first!) bag item behind it, and
+            // S/D/J kept working under the settings panel and the reveal. MouseClicked already carries
+            // these gates; the keys did not. (Adversarial review, pass four.)
+            _forge.Update(gameTime, _keys, CanvasMouse, MouseClicked, MouseWheel, _hunter,
+                          inputLocked: _swallowInput || _showSettings || _forge.RevealActive);
             // The dialog's "don't ask me again" writes through to the prefs file the moment it is used.
             if (_forge.PrefsDirty) { _forge.PrefsDirty = false; _askBeforeScrap = _forge.AskBeforeScrap; SaveDisplay(); }
             Latch(gameTime);
@@ -3356,6 +3367,9 @@ public class Game1 : Game
         }
 
         _showCharacter = _showStats = _showBuild = _showForge = _showAutomation = _showWorld = _showPrestige = _showRoster = _showWeave = _showChests = false;
+        // Navigating away abandons a pending SELL/SALVAGE question. Without this it sat armed and
+        // invisible, and the player's first click on returning answered a dialog they had forgotten.
+        _forge.CancelConfirm();
         // BUILD and MASTERY are two doors into one screen, so the tile also sets which VIEW it opens on.
         // Without that line the rail would be lying: pressing MASTERY while the overview was last open
         // would show the overview, and the tile would look broken rather than the state being stale.
@@ -3487,18 +3501,6 @@ public class Game1 : Game
                 _ui.TextCenterBig(_batch, _ui.ShortenBig(Unlocks.Requirement(NavActivity[i]), NavRailWidth - 24, UiTypography.Secondary),
                                   r.Center.X, r.Bottom - 16, NavGem * 0.8f, UiTypography.Secondary);
 
-            // THE PILE COUNT RIDES THE VAULT TILE — a badge, not a banner. A new chest used to
-            // re-announce the whole screen (see the Vault gate in Unlocks.cs); a count on the door says
-            // "something is waiting" without stopping anyone, and it clears itself by being spent.
-            // A diamond WITH a numeral, so the signal is never colour alone.
-            var waiting = NavActivity[i] == Activity.Vault && unlocked ? _forge?.UnopenedChests.Count ?? 0 : 0;
-            if (waiting > 0)
-            {
-                var badge = new Rectangle(r.Right - 46, r.Y + 8, 30, 30);
-                _ui.Diamond(_batch, badge, NavGold);
-                _ui.TextCenterBig(_batch, waiting > 9 ? "9+" : waiting.ToString(),
-                                  badge.Center.X, badge.Y + 4, new Color(0x14, 0x10, 0x1A), UiTypography.Secondary);
-            }
 
             // UNOPENED CHESTS, as a count on the VAULT tile — the page chests actually live on.
             //

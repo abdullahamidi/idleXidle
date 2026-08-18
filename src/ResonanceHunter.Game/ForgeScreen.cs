@@ -138,6 +138,7 @@ public sealed class ForgeScreen
     private bool _revealBrief;         // compressed beats for cascade entries
     private bool _revealSummary;       // the closing card is up, pinned until a click
     private float _revealHold = RevealHold;   // total hold of the CURRENT beat (fade math reads this)
+    private int _revealMergedCount;           // TIRELESS FORGE fusions during this bulk open, for the summary
     private const float BriefHold = 1.05f;    // per-chest hold inside a cascade
     private KeyboardState _prevKeys;
     private int _bagScroll;                          // first visible row of the left-column bag list
@@ -477,8 +478,14 @@ public sealed class ForgeScreen
     /// <summary>The chest-open burst. Drawn by the host as chrome, over whatever screen is open.</summary>
     public void DrawRevealOverlay(SpriteBatch b) => DrawReveal(b);
 
-    public void Update(GameTime time, KeyboardState keys, Point mouse, bool clicked, int wheel, Hunter hunter)
+    public void Update(GameTime time, KeyboardState keys, Point mouse, bool clicked, int wheel, Hunter hunter,
+                       bool inputLocked = false)
     {
+        // The HOST's modals (unlock panel, settings, the reveal) own the frame: no key may reach the
+        // bench's verbs through them. The keys are still LATCHED, or the key that closed the modal
+        // would edge-fire here the moment it lifted.
+        if (inputLocked) { _prevKeys = keys; return; }
+
 
         // THE CURSOR, IN THE SPACE THE RECTANGLES ARE AUTHORED IN. Every rect on this screen is written
         // in 1920x1080 and drawn through Game1's overlay inset; the incoming cursor is in 480x270 canvas
@@ -516,7 +523,7 @@ public sealed class ForgeScreen
     /// Hand-picking three Commons out of a bag of ninety is busywork, not a decision — and busywork is
     /// what an idle game is supposed to delete. Worn gear is never consumed.
     /// </remarks>
-    public void AutoMergeAll(Hunter hunter)
+    public int AutoMergeAll(Hunter hunter)
     {
         var rounds = 0;
         var merged = 0;
@@ -548,6 +555,7 @@ public sealed class ForgeScreen
 
         Say(merged > 0 ? $"AUTO-MERGED {merged}x — BAG IS NOW {_inv.Count} ITEMS." : "NOTHING TO MERGE (NEEDS 3 OF A RARITY).",
             merged > 0 ? Gold : Slate);
+        return merged;
     }
 
     /// <summary>
@@ -670,6 +678,12 @@ public sealed class ForgeScreen
         if (Gear.SlotFor(item.BaseType) is { } s && hunter.Worn(s)?.InstanceId == item.InstanceId)
             hunter.Unequip(s);
     }
+
+    /// <summary>Is the SELL/SALVAGE question on screen? The host reads it to give Esc the right job.</summary>
+    public bool ConfirmOpen => _confirm is not null;
+
+    /// <summary>Withdraw the question — Esc, or navigating away. Withdrawing never scraps anything.</summary>
+    public void CancelConfirm() => _confirm = null;
 
     private void OpenConfirm(ScrapKind kind, string? itemId)
     {
@@ -864,6 +878,7 @@ public sealed class ForgeScreen
         _revealBrief = false;
         _revealSummary = false;
         _revealChestCount = 1;
+        _revealMergedCount = 0;
         _revealQueue.Clear();
 
         // Keep the footer line too (for OPEN ALL and as a fallback once the burst fades).
@@ -896,7 +911,9 @@ public sealed class ForgeScreen
             entries.Add((chest.Rarity, m, landed));
         }
 
-        if (AutoMergeOnOpen && _revealAll.Count > 0) AutoMergeAll(hunter);   // TIRELESS FORGE tidies the bulk haul
+        // TIRELESS FORGE tidies the bulk haul — and the summary must SAY so, because it shows what
+        // DROPPED, some of which the merge has already fused into better pieces.
+        _revealMergedCount = AutoMergeOnOpen && _revealAll.Count > 0 ? AutoMergeAll(hunter) : 0;
         Say($"OPENED {opened.Count} CHESTS — +{_revealAllMats} MATERIALS, {_revealAll.Count} ITEMS.", Gold);
 
         if (entries.Count == 1)
@@ -1241,13 +1258,19 @@ public sealed class ForgeScreen
         }
         else
         {
+            // The dialog quotes the REAL payout: a held SALVAGE CHART doubles the yield and will be
+            // spent — a question that understates the outcome by half is not a question, it is a trap.
             var junk = JunkOf(hunter);
-            var mats = junk.Sum(i => Forge.Dismantle(i, Tuning));
+            var chart = hunter.CharterCount(Charter.Salvage) > 0;
+            var mats = junk.Sum(i => Forge.Dismantle(i, Tuning)) * (chart ? 2 : 1);
             _ui.TextBig(b, $"{junk.Count} COMMON AND UNCOMMON ITEMS BECOME {mats} MATERIALS.",
                         panel.X + 64, y + 10, Bone, UiTypography.Secondary);
+            if (chart)
+                _ui.TextBig(b, "YOUR SALVAGE CHART WILL BE SPENT — IT DOUBLES THE YIELD.",
+                            panel.X + 64, y + 44, Gold, UiTypography.Secondary);
             _ui.TextBig(b, "WORN GEAR IS NEVER TOUCHED. THIS CANNOT BE UNDONE.",
-                        panel.X + 64, y + 44, Slate, UiTypography.Secondary);
-            y += 112;
+                        panel.X + 64, y + (chart ? 78 : 44), Slate, UiTypography.Secondary);
+            y += chart ? 128 : 112;
         }
 
         if (worn)
@@ -1615,7 +1638,10 @@ public sealed class ForgeScreen
         var ringWin = _revealBrief ? 0.30f : 0.5f;
 
         var t = _revealHold - _revealTimer;                     // seconds SINCE the chest cracked
-        var fade = Math.Clamp(_revealTimer / 0.45f, 0f, 1f);    // fade out over the last ~0.45s
+        // The fade window compresses WITH the beats: at 0.45s a brief entry's card was fully readable
+        // for ~0.06s and the materials count-up died mid-number. (Adversarial review, pass four.)
+        var fadeWin = _revealBrief ? 0.22f : 0.45f;
+        var fade = Math.Clamp(_revealTimer / fadeWin, 0f, 1f);
         var grade = RarityColors[(int)_revealGrade];
 
         // Dim the Forge behind, deepening as the chest works itself up. The scrim arriving at full
@@ -1726,7 +1752,7 @@ public sealed class ForgeScreen
 
         // Materials COUNT UP rather than landing finished. The number is the same; watching it arrive is
         // the difference between being told what you got and seeing it paid out.
-        var mp = Math.Clamp((t - burstEnds - cardIn) / 0.5f, 0f, 1f);
+        var mp = Math.Clamp((t - burstEnds - cardIn) / (_revealBrief ? 0.25f : 0.5f), 0f, 1f);
         _ui.TextCenterBig(b, $"+{(int)MathF.Round(_revealMaterials * mp)} MATERIALS", 960, 652,
             Gold * fade, UiTypography.Body);
     }
@@ -1765,11 +1791,12 @@ public sealed class ForgeScreen
             DrawItemIcon(b, order[i], new Rectangle(x0 + i % 6 * 150, panel.Y + 132 + row * 150, 120, 120));
         }
         if (n > shown)
-            _ui.TextCenterBig(b, $"+{n - shown} MORE ITEMS IN YOUR BAG", panel.Center.X,
+            _ui.TextCenterBig(b, $"+{n - shown} MORE ITEMS", panel.Center.X,
                               panel.Y + 122 + rows * 150, Slate * fade, UiTypography.Secondary);
 
-        _ui.TextCenterBig(b, $"+{_revealAllMats} MATERIALS", panel.Center.X, panel.Bottom - 98,
-                          Gold * fade, UiTypography.Body);
+        _ui.TextCenterBig(b, $"+{_revealAllMats} MATERIALS"
+                             + (_revealMergedCount > 0 ? $"   ·   TIRELESS FORGE FUSED {_revealMergedCount}x" : ""),
+                          panel.Center.X, panel.Bottom - 98, Gold * fade, UiTypography.Body);
         _ui.TextCenterBig(b, "CLICK TO CLOSE", panel.Center.X, panel.Bottom - 60, Slate * fade, UiTypography.Secondary);
     }
 
