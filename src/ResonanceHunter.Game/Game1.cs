@@ -1510,11 +1510,14 @@ public class Game1 : Game
         // closing them, which in an idle game is a genuinely expensive misfire.
         // Edge, not held-state: with IsKeyDown, holding Escape closes the panel on one frame and quits
         // on the very next one — the fix would have quietly kept the bug.
+        // ESC OPENS SETTINGS NOW, closing whatever modal is up first. It used to quit the game — the
+        // standard PC reflex "Esc = menu" was wired to the most destructive thing the program can do.
+        // Quitting lives ON the settings panel (SAVE AND QUIT), where it says what it does.
         if (Pressed(Keys.Escape))
         {
             if (_showSettings) _showSettings = false;
             else if (_showHelp) _showHelp = false;
-            else Exit();
+            else _showSettings = true;
         }
 
         if (_bootTimer > 0f) _bootTimer = Math.Max(0f, _bootTimer - dt);
@@ -1584,6 +1587,14 @@ public class Game1 : Game
         if (_forge.RevealActive)
         {
             if (_clicked || Pressed(Keys.Space) || Pressed(Keys.Enter)) _forge.AdvanceReveal();
+            _swallowInput = true;
+        }
+
+        // THE SETTINGS GEAR, top-right of every screen. Handled here, before the nav and the screens,
+        // so its click never falls through to whatever sits underneath it.
+        if (!_showSettings && !_showHelp && !_swallowInput && _clicked && SettingsGear.Contains(ChromeMouse))
+        {
+            _showSettings = true;
             _swallowInput = true;
         }
 
@@ -2741,6 +2752,7 @@ public class Game1 : Game
         // Batch C — the shared overlays (pills, nav, help/settings, boot toast), authored in true 1920 coords.
         BeginCanvas(1);
         DrawCurrencyPills();   // shared Gleam / Dust / Materials row, top-right of every screen
+        DrawSettingsGear();    // the corner gear — settings from any screen, including mid-hunt
         DrawHexNav();   // the shared nav bar, over every screen
 
         // The chest burst, over the rail and over whatever screen is open — it is the one moment the
@@ -2802,12 +2814,17 @@ public class Game1 : Game
     private void SaveDisplay() => Display.Save(new Display.GamePrefs(
         _displayMode, _windowedScale, _sfxVolume, _musicVolume, _askBeforeScrap));
 
-    // ── Display settings ──────────────────────────────────────────────────────────────────────
-    // 1920-space (scale-1 chrome): every literal is ×4 of its old 480-space value.
-    private static readonly Rectangle SettingsPanel = new(480, 256, 960, 528);
-    private static Rectangle ModeBtn(int i) => new(536, 392 + i * 88, 384, 72);
-    private static Rectangle ScaleBtn(int i) => new(1000, 392 + i * 88, 384, 72);
-    private static readonly Rectangle SettingsClose = new(800, 688, 320, 72);
+    // ── Settings ──────────────────────────────────────────────────────────────────────────────
+    // 1920-space (scale-1 chrome). The panel is 960x720 — aspect 1.33, safely above UiKit.Panel's 1.30
+    // frame-selection line, so growing it for the sound section did not swap its frame art.
+    private static readonly Rectangle SettingsPanel = new(480, 140, 960, 720);
+    private static Rectangle ModeBtn(int i) => new(536, 272 + i * 84, 384, 72);
+    private static Rectangle ScaleBtn(int i) => new(1000, 272 + i * 84, 384, 72);
+    private static readonly Rectangle SettingsClose = new(620, 760, 300, 56);
+    private static readonly Rectangle SettingsQuit = new(1000, 760, 300, 56);
+
+    /// <summary>The persistent way back here — a gear in the corner, the convention every game teaches.</summary>
+    private static readonly Rectangle SettingsGear = new(1842, 8, 60, 60);
 
     /// <summary>
     /// Display options, drawn as an overlay over whatever is behind it.
@@ -2824,15 +2841,15 @@ public class Game1 : Game
         _ui.Panel(_batch, SettingsPanel);
         // The panel is DARK glass, so light text on it — gold heading, bone labels. (It used to use dark
         // parchment inks here, which were invisible on the dark panel.)
-        TextCenter("DISPLAY", 960, 288, Gold);
+        TextCenter("SETTINGS", 960, 172, Gold);
 
-        Text("MODE", 536, 344, Bone);
+        Text("MODE", 536, 232, Bone);
 
         // The right column's header doubles as its own explanation. A separate "fit to screen" line
         // had nowhere to live that wasn't already occupied — it landed on the greyed buttons. The
         // header is free space that is already describing exactly this, so it says it instead.
         var windowed = _displayMode == DisplayMode.Windowed;
-        Text(windowed ? "WINDOW SIZE" : $"AUTO FIT — {_scale}x", 1000, 344, Bone);
+        Text(windowed ? "WINDOW SIZE" : $"AUTO FIT — {_scale}x", 1000, 232, Bone);
 
         var modes = new[] { DisplayMode.Windowed, DisplayMode.Borderless, DisplayMode.Fullscreen };
         var modeNames = new[] { "WINDOWED", "BORDERLESS", "FULLSCREEN" };
@@ -2870,8 +2887,96 @@ public class Game1 : Game
             }
         }
 
+        // ── SOUND. Eleven notches per row: a slider with a real middle, persisted machine-level.
+        //    The music row applies to the PLAYING bed instantly; the effects row clicks so the new
+        //    level is heard at the new level. ──
+        _ui.Fill(_batch, new Rectangle(536, 538, 848, 2), new Color(0x3A, 0x3A, 0x44));
+        Text("SOUND", 536, 554, Gold);
+
+        var pickedFx = VolumeRow("EFFECTS VOLUME", 592, _sfxVolume);
+        if (pickedFx >= 0)
+        {
+            _sfxVolume = pickedFx;
+            _sound.SfxVolume = _sfxVolume / 10f;
+            _sound.PlayFirst(1f, "sfx_click", "sfx_forge");
+            SaveDisplay();
+        }
+
+        var pickedMu = VolumeRow("MUSIC VOLUME", 646, _musicVolume);
+        if (pickedMu >= 0)
+        {
+            _musicVolume = pickedMu;
+            _sound.MusicVolume = _musicVolume / 10f;
+            SaveDisplay();
+        }
+
+        // ── FORGE. The way BACK for "don't ask me again" — a preference the player can suppress from
+        //    a dialog must be reversible from settings, or one hasty click is permanent. ──
+        _ui.Fill(_batch, new Rectangle(536, 684, 848, 2), new Color(0x3A, 0x3A, 0x44));
+        Text("ASK BEFORE SELL OR SALVAGE", 536, 706, Bone);
+        var askBtn = new Rectangle(1160, 694, 244, 52);
+        if (_ui.Button(_batch, askBtn, _askBeforeScrap ? "ON — IT ASKS" : "OFF", ChromeMouse, _clicked))
+        {
+            _askBeforeScrap = !_askBeforeScrap;
+            _forge.AskBeforeScrap = _askBeforeScrap;
+            SaveDisplay();
+        }
+
         if (_ui.Button(_batch, SettingsClose, "CLOSE", ChromeMouse, _clicked))
             _showSettings = false;
+
+        // Esc no longer quits (it opens THIS panel), so the game needs a door that says what it does.
+        // Hidden on the title screen, whose own menu already has QUIT — and whose Hunter may not exist
+        // yet to save.
+        if (!_showTitle && _ui.Button(_batch, SettingsQuit, "SAVE AND QUIT", ChromeMouse, _clicked))
+        {
+            Save();
+            Exit();
+        }
+    }
+
+    /// <summary>An eleven-notch volume row. Returns the clicked notch, or -1.</summary>
+    private int VolumeRow(string label, int y, int current)
+    {
+        Text(label, 536, y + 8, Bone);
+        var picked = -1;
+        for (var i = 0; i <= 10; i++)
+        {
+            var cell = new Rectangle(820 + i * 36, y, 30, 34);
+            _ui.Fill(_batch, cell, i <= current ? new Color(0xC8, 0x9A, 0x3C) : new Color(0x2A, 0x24, 0x38));
+            if (UiKit.ClickedIn(cell, ChromeMouse, _clicked)) picked = i;
+        }
+        Text($"{current * 10}%", 1240, y + 8, Slate);
+        return picked;
+    }
+
+    /// <summary>The corner gear — the way back to settings from any screen, including mid-hunt.</summary>
+    private void DrawSettingsGear()
+    {
+        if (_showSettings || _showHelp) return;   // a modal owns the frame
+        var hover = SettingsGear.Contains(ChromeMouse);
+        var c = new Vector2(SettingsGear.Center.X, SettingsGear.Center.Y);
+        var ink = hover ? NavGold : NavLabel * 0.8f;
+
+        // A cog from primitives — eight teeth, a rim, a dark hub. No asset matches the hand-drawn set,
+        // and at 34px a glyph of fills reads perfectly well.
+        for (var k = 0; k < 8; k++)
+        {
+            var a = MathF.PI / 4f * k;
+            var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
+            _ui.LineSeg(_batch, c + dir * 9f, c + dir * 17f, 7f, ink);
+        }
+        const int rim = 24;
+        for (var k = 0; k < rim; k++)
+        {
+            var a = MathF.PI * 2f * k / rim;
+            var p = c + new Vector2(MathF.Cos(a), MathF.Sin(a)) * 12f;
+            _ui.Fill(_batch, new Rectangle((int)p.X - 2, (int)p.Y - 2, 4, 4), ink);
+        }
+        _ui.Fill(_batch, new Rectangle((int)c.X - 3, (int)c.Y - 3, 6, 6), new Color(0x0C, 0x09, 0x16));
+
+        if (hover)
+            _ui.TextRight(_batch, "SETTINGS — ESC", SettingsGear.Right, SettingsGear.Bottom + 8, NavGold);
     }
 
     /// <summary>The reference's top-right currency row — Gleam, Dust, Materials — on every gameplay screen.</summary>
@@ -2895,7 +3000,7 @@ public class Game1 : Game
         // value (e.g. 130.6M GLEAM) balloons past the 686px bar and crosses into the stage header — the icon
         // carries the identity, the number is abbreviated. The check is a crash-SAFE dev warning, never a
         // Debug.Assert (a failed assert aborts the game's Debug build — the "Continue" crash).
-        var right = 1896;   // 1920-space right margin (was 474 in 480-space)
+        var right = 1826;   // right margin, left of the settings gear in the corner
         right = _ui.Pill(_batch, right, 16, "mat_scrap", new Color(0x9A, 0xC0, 0x88), Abbrev(_hunter.MaterialOf(Material.Scrap)), "", new Color(0x9A, 0xC0, 0x88)) - 20;
         right = _ui.Pill(_batch, right, 16, "ui_memory_dust", default, Abbrev(_dust.MemoryDust), "", new Color(0x9E, 0x86, 0xFF)) - 20;
         var leftEdge = _ui.Pill(_batch, right, 16, "ui_gleam_coin", default, Abbrev(_hunter.Gleam), "", new Color(0xF0, 0xB2, 0x4A));
@@ -3034,6 +3139,7 @@ public class Game1 : Game
             ("P", "TRAITS — WHAT SURVIVES DEATH"),
             ("R", "ROSTER — YOUR CHAMPIONS"),
             ("L", "THE EXPEDITION LOG"),
+            ("ESC", "SETTINGS — DISPLAY, SOUND, QUIT"),
             ("F1", "CLOSE"),
         };
 
