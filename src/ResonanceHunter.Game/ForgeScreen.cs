@@ -60,7 +60,7 @@ public sealed class ForgeScreen
     {
         [ItemBaseType.CreatureCore] = "CORE", [ItemBaseType.Weapon] = "WEAPON", [ItemBaseType.Charm] = "CHARM",
         [ItemBaseType.Material] = "MATERIAL", [ItemBaseType.AbilityFocus] = "FOCUS",
-        [ItemBaseType.Helm] = "HELM", [ItemBaseType.Chest] = "CHEST", [ItemBaseType.Gloves] = "GLOVES",
+        [ItemBaseType.Helm] = "HELM", [ItemBaseType.Chest] = "CHESTPLATE", [ItemBaseType.Gloves] = "GLOVES",
         [ItemBaseType.Boots] = "BOOTS", [ItemBaseType.Ring] = "RING",
     };
     // package_05 item thumbnails (128px). Weapons rotate through four families; chest uses the armour sets;
@@ -125,6 +125,20 @@ public sealed class ForgeScreen
     private const float BurstEnds = 0.78f;    // the ring goes out, the chest is gone
     private const float CardIn = 0.20f;       // how long the card takes to spring open
     private const float ItemStagger = 0.13f;  // one item lands, then the next
+
+    // ── Bulk OPEN ALL: a cascade of brief per-chest reveals (worst grade first, best last), then a
+    //    summary that holds until a click. Research pass (Hearthstone mass opening, Genshin 10-pull,
+    //    AFK Arena): a skip must jump to the END, never to the next item, and the summary is mandatory
+    //    — skipping the show must never skip the review of the haul. ──
+    private readonly Queue<(Rarity Grade, int Materials, List<ItemInstance> Items)> _revealQueue = new();
+    private readonly List<ItemInstance> _revealAll = new();   // everything the bulk open landed
+    private int _revealAllMats;
+    private int _revealChestCount;     // chests this reveal covers (1 = the classic single ceremony)
+    private int _revealIndex;          // 1-based position of the cascade's current chest
+    private bool _revealBrief;         // compressed beats for cascade entries
+    private bool _revealSummary;       // the closing card is up, pinned until a click
+    private float _revealHold = RevealHold;   // total hold of the CURRENT beat (fade math reads this)
+    private const float BriefHold = 1.05f;    // per-chest hold inside a cascade
     private KeyboardState _prevKeys;
     private int _bagScroll;                          // first visible row of the left-column bag list
 
@@ -407,7 +421,54 @@ public sealed class ForgeScreen
     /// </remarks>
     public void TickReveal(float dt)
     {
-        if (_revealTimer > 0f && !_revealFrozen) _revealTimer -= dt;
+        if (_revealTimer <= 0f || _revealFrozen) return;
+        _revealTimer -= dt;
+        if (_revealTimer > 0f) return;
+
+        // This beat ended — the cascade decides what plays next.
+        if (_revealQueue.Count > 0) NextRevealEntry();
+        else if (_revealChestCount > 1 && !_revealSummary) EnterRevealSummary();
+    }
+
+    /// <summary>
+    /// A click (or Space/Enter) while the reveal is up. The HOST routes input here, because the reveal
+    /// is modal — skipping the cascade must never also press whatever sits under the cursor.
+    /// </summary>
+    public void AdvanceReveal()
+    {
+        if (_revealTimer <= 0f) return;
+        if (_revealFrozen)
+        {
+            // The summary holds frozen until this click. A POSED capture (DevPoseReveal) stays put.
+            if (_revealSummary) { _revealFrozen = false; _revealTimer = 0.35f; }
+            return;
+        }
+        if (_revealChestCount > 1 && !_revealSummary) { _revealQueue.Clear(); EnterRevealSummary(); return; }
+        _revealTimer = Math.Min(_revealTimer, 0.30f);   // single chest: hurry the fade
+    }
+
+    private void NextRevealEntry()
+    {
+        if (_revealQueue.Count == 0) { EnterRevealSummary(); return; }
+        var (grade, mats, items) = _revealQueue.Dequeue();
+        _revealIndex++;
+        _revealGrade = grade;
+        _revealMaterials = mats;
+        _revealItems.Clear();
+        _revealItems.AddRange(items);
+        _revealBrief = true;
+        // Rarity buys TIME, not just a colour — an Epic or Legendary in the cascade gets a fuller beat.
+        _revealHold = BriefHold + (grade >= Rarity.Epic ? 0.6f : 0f);
+        _revealTimer = _revealHold;
+        _revealSummary = false;
+    }
+
+    private void EnterRevealSummary()
+    {
+        _revealSummary = true;
+        _revealBrief = false;
+        _revealTimer = 1f;      // any positive value — the freeze pins it until the closing click
+        _revealFrozen = true;
     }
 
     /// <summary>Is a reveal on screen right now? The host asks, because the host draws it.</summary>
@@ -799,6 +860,11 @@ public sealed class ForgeScreen
         _revealItems.Clear();
         _revealItems.AddRange(items);
         _revealTimer = RevealHold;
+        _revealHold = RevealHold;
+        _revealBrief = false;
+        _revealSummary = false;
+        _revealChestCount = 1;
+        _revealQueue.Clear();
 
         // Keep the footer line too (for OPEN ALL and as a fallback once the burst fades).
         var names = items.Count == 0
@@ -813,18 +879,43 @@ public sealed class ForgeScreen
     {
         if (_chests.Count == 0) { Say("NO CHESTS YET — CLEAR A BOSS WAVE.", Slate); return; }
 
-        var count = _chests.Count;
-        var mat = 0;
-        var items = 0;
-        foreach (var chest in _chests.ToList())
+        // Worst grade first, best last — a cascade that ends on the chest the player cared about.
+        // Playtest: "Chestlerde open all diyorum ne çıktığını görmüyorum" — the items just appeared
+        // in the bag, and the one screen built around anticipation showed nothing at all.
+        var opened = _chests.OrderBy(c => (int)c.Rarity).ToList();
+        _chests.Clear();
+
+        var entries = new List<(Rarity Grade, int Materials, List<ItemInstance> Items)>();
+        _revealAll.Clear();
+        _revealAllMats = 0;
+        foreach (var chest in opened)
         {
             var (m, landed) = LandChest(chest, hunter);
-            mat += m;
-            items += landed.Count;
+            _revealAllMats += m;
+            _revealAll.AddRange(landed);
+            entries.Add((chest.Rarity, m, landed));
         }
-        _chests.Clear();
-        if (AutoMergeOnOpen && items > 0) AutoMergeAll(hunter);   // TIRELESS FORGE tidies the bulk haul
-        Say($"OPENED {count} CHESTS — +{mat} MATERIALS, {items} ITEMS.", Gold);
+
+        if (AutoMergeOnOpen && _revealAll.Count > 0) AutoMergeAll(hunter);   // TIRELESS FORGE tidies the bulk haul
+        Say($"OPENED {opened.Count} CHESTS — +{_revealAllMats} MATERIALS, {_revealAll.Count} ITEMS.", Gold);
+
+        if (entries.Count == 1)
+        {
+            // One chest gets the full single ceremony, not a one-entry cascade.
+            Reveal(opened[0], (entries[0].Materials, entries[0].Items));
+            return;
+        }
+
+        // The cascade plays at most the BEST eight — at thirty chests a full run outstays its welcome.
+        // Nothing is silently dropped: the summary at the end shows everything that landed.
+        const int CascadeCap = 8;
+        _revealQueue.Clear();
+        foreach (var e in entries.Skip(Math.Max(0, entries.Count - CascadeCap)))
+            _revealQueue.Enqueue(e);
+        _revealChestCount = entries.Count;
+        _revealIndex = entries.Count - Math.Min(entries.Count, CascadeCap);
+        _revealSummary = false;
+        NextRevealEntry();
     }
 
     /// <summary>Roll a chest's contents, honour the loot filter, land the items + materials. Returns what landed.</summary>
@@ -1514,20 +1605,36 @@ public sealed class ForgeScreen
     private void DrawReveal(SpriteBatch b)
     {
         if (_revealTimer <= 0f) return;
+        if (_revealSummary) { DrawRevealSummary(b); return; }
 
-        var t = RevealHold - _revealTimer;                      // seconds SINCE the chest cracked
+        // Cascade entries play the same beats, compressed — rarity already bought its extra hold.
+        var shakeEnds = _revealBrief ? 0.28f : ShakeEnds;
+        var burstEnds = _revealBrief ? 0.46f : BurstEnds;
+        var cardIn = _revealBrief ? 0.14f : CardIn;
+        var stagger = _revealBrief ? 0.08f : ItemStagger;
+        var ringWin = _revealBrief ? 0.30f : 0.5f;
+
+        var t = _revealHold - _revealTimer;                     // seconds SINCE the chest cracked
         var fade = Math.Clamp(_revealTimer / 0.45f, 0f, 1f);    // fade out over the last ~0.45s
         var grade = RarityColors[(int)_revealGrade];
 
         // Dim the Forge behind, deepening as the chest works itself up. The scrim arriving at full
         // strength on frame one is what made the old reveal read as a dialog rather than an event.
-        var dim = Math.Clamp(t / (ShakeEnds * 0.6f), 0f, 1f);
+        var dim = Math.Clamp(t / (shakeEnds * 0.6f), 0f, 1f);
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0, 0, 0, (int)(215 * dim * fade)));
 
-        // ── BEAT 1 · THE CHEST RATTLES ────────────────────────────────────────────────────────────
-        if (t < ShakeEnds)
+        // A cascade says where it is and how to leave — the skip must be visible from the first frame.
+        if (_revealChestCount > 1)
         {
-            var p = Math.Clamp(t / ShakeEnds, 0f, 1f);
+            _ui.TextCenterBig(b, $"CHEST {_revealIndex} OF {_revealChestCount}", 960, 236,
+                              Slate * MathF.Max(fade, 0.6f), UiTypography.Secondary);
+            _ui.TextCenterBig(b, "CLICK TO SKIP TO THE HAUL", 960, 984, Slate * 0.8f, UiTypography.Secondary);
+        }
+
+        // ── BEAT 1 · THE CHEST RATTLES ────────────────────────────────────────────────────────────
+        if (t < shakeEnds)
+        {
+            var p = Math.Clamp(t / shakeEnds, 0f, 1f);
 
             // Shake amplitude climbs with the square of progress, so the first half is a twitch and the
             // last moment is violent — the anticipation curve every loot box in the genre is built on.
@@ -1558,9 +1665,9 @@ public sealed class ForgeScreen
         // A ring, PLOTTED rather than drawn from an asset: a circle of short segments whose radius
         // sweeps out and whose alpha falls away. Nothing to author, nothing to load, and retiming it is
         // editing a number — the same reasoning as the Trait screen's unlock flourish.
-        if (t >= ShakeEnds && t < ShakeEnds + 0.5f)
+        if (t >= shakeEnds && t < shakeEnds + ringWin)
         {
-            var p = (t - ShakeEnds) / 0.5f;
+            var p = (t - shakeEnds) / ringWin;
             // Starts at the chest's own edge, not at 60. A ring that opens INSIDE the sprite it is
             // supposed to be bursting out of is a ring nobody sees.
             var radius = (int)(115 + 405 * p);
@@ -1583,11 +1690,11 @@ public sealed class ForgeScreen
         }
 
         // ── BEAT 3 · THE CARD ─────────────────────────────────────────────────────────────────────
-        if (t < BurstEnds) return;
+        if (t < burstEnds) return;
 
         // Springs open with an overshoot, then settles. A card that simply appears is information; a
         // card that arrives is a reward.
-        var cp = Math.Clamp((t - BurstEnds) / CardIn, 0f, 1f);
+        var cp = Math.Clamp((t - burstEnds) / cardIn, 0f, 1f);
         var scale = cp >= 1f ? 1f : 1f + 0.18f * MathF.Sin(cp * MathF.PI) - 0.35f * (1f - cp);
         var full = new Rectangle(600, 336, 720, 416);
         var card = Grow(full, scale);
@@ -1605,7 +1712,7 @@ public sealed class ForgeScreen
         var n = _revealItems.Count;
         for (var i = 0; i < n; i++)
         {
-            var ip = Math.Clamp((t - BurstEnds - CardIn - i * ItemStagger) / 0.18f, 0f, 1f);
+            var ip = Math.Clamp((t - burstEnds - cardIn - i * stagger) / 0.18f, 0f, 1f);
             if (ip <= 0f) continue;
             var drop = (int)(-40f * (1f - ip) * (1f - ip));
             DrawItemIcon(b, _revealItems[i], new Rectangle(960 - n * 68 + i * 136, 448 + drop, 120, 120));
@@ -1619,9 +1726,51 @@ public sealed class ForgeScreen
 
         // Materials COUNT UP rather than landing finished. The number is the same; watching it arrive is
         // the difference between being told what you got and seeing it paid out.
-        var mp = Math.Clamp((t - BurstEnds - CardIn) / 0.5f, 0f, 1f);
+        var mp = Math.Clamp((t - burstEnds - cardIn) / 0.5f, 0f, 1f);
         _ui.TextCenterBig(b, $"+{(int)MathF.Round(_revealMaterials * mp)} MATERIALS", 960, 652,
             Gold * fade, UiTypography.Body);
+    }
+
+    /// <summary>The haul, all of it, holding until a click — the review the cascade must never skip.</summary>
+    private void DrawRevealSummary(SpriteBatch b)
+    {
+        var fade = _revealFrozen ? 1f : Math.Clamp(_revealTimer / 0.35f, 0f, 1f);
+        _ui.Fill(b, UiKit.OverlayScrim, new Color(0, 0, 0, (int)(215 * fade)));
+
+        var n = _revealAll.Count;
+        var shown = Math.Min(n, 18);
+        var rows = Math.Max(1, (shown + 5) / 6);
+        // Width 1100 keeps every row count above the 1.30 aspect line, so UiKit.Panel never swaps the
+        // frame art as the haul grows (the trap the VAULT and the settings panel both hit before).
+        var panel = new Rectangle(410, 540 - (250 + rows * 150) / 2, 1100, 250 + rows * 150);
+        _ui.PanelQuiet(b, panel);
+
+        var best = n > 0 ? RarityColors[_revealAll.Max(i => (int)i.Rarity)] : Bone;
+        _ui.TextCenterBig(b, $"{_revealChestCount} CHESTS OPENED", panel.Center.X, panel.Y + 40,
+                          best * fade, UiTypography.SectionTitle);
+
+        // The tally, rarest first — countable without reading eighteen icons.
+        var tally = _revealAll.GroupBy(i => i.Rarity).OrderByDescending(g => (int)g.Key)
+                              .Select(g => $"{g.Count()} {RarityNames[(int)g.Key]}");
+        _ui.TextCenterBig(b, n == 0 ? "EVERYTHING WAS SOLD ON SIGHT (YOUR LOOT FILTER)." : string.Join("  ·  ", tally),
+                          panel.Center.X, panel.Y + 88, (n == 0 ? Slate : Bone) * fade, UiTypography.Secondary);
+
+        // Icons, rarest first, six to a row — each in its own rarity frame, never colour alone.
+        var order = _revealAll.OrderByDescending(i => (int)i.Rarity).Take(shown).ToList();
+        for (var i = 0; i < order.Count; i++)
+        {
+            var row = i / 6;
+            var inRow = Math.Min(6, order.Count - row * 6);
+            var x0 = panel.Center.X - (inRow * 150 - 30) / 2;
+            DrawItemIcon(b, order[i], new Rectangle(x0 + i % 6 * 150, panel.Y + 132 + row * 150, 120, 120));
+        }
+        if (n > shown)
+            _ui.TextCenterBig(b, $"+{n - shown} MORE ITEMS IN YOUR BAG", panel.Center.X,
+                              panel.Y + 122 + rows * 150, Slate * fade, UiTypography.Secondary);
+
+        _ui.TextCenterBig(b, $"+{_revealAllMats} MATERIALS", panel.Center.X, panel.Bottom - 98,
+                          Gold * fade, UiTypography.Body);
+        _ui.TextCenterBig(b, "CLICK TO CLOSE", panel.Center.X, panel.Bottom - 60, Slate * fade, UiTypography.Secondary);
     }
 
     /// <summary>Pose the chest reveal at <paramref name="t"/> seconds in, and hold it there.</summary>

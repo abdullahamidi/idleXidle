@@ -76,7 +76,9 @@ public static class ItemNaming
         ItemBaseType.Charm => "CHARM",
         ItemBaseType.AbilityFocus => "FOCUS",
         ItemBaseType.Helm => "HELM",
-        ItemBaseType.Chest => "CHEST",
+        // "CHESTPLATE", not "CHEST": the armour slot shared its one-word name with the treasure
+        // chest, and the chest-open reveal printed "EPIC CHEST" over a picture of a breastplate.
+        ItemBaseType.Chest => "CHESTPLATE",
         ItemBaseType.Gloves => "GLOVES",
         ItemBaseType.Boots => "BOOTS",
         ItemBaseType.Ring => "RING",

@@ -1576,6 +1576,17 @@ public class Game1 : Game
             // _swallowInput deliberately STAYS true: this frame's input was spent closing the panel.
         }
 
+        // A CHEST REVEAL IS MODAL TOO: while it is up, a click (or Space / Enter) advances or skips IT —
+        // never the screen underneath. Without this, skipping the cascade in the VAULT would also press
+        // whatever card happened to sit under the cursor, opening a chest the player never chose.
+        // (_forge is unconditionally built in LoadContent, which MonoGame runs before the first Update
+        //  — an `is not null` here would teach flow analysis it can be null and warn at every later use.)
+        if (_forge.RevealActive)
+        {
+            if (_clicked || Pressed(Keys.Space) || Pressed(Keys.Enter)) _forge.AdvanceReveal();
+            _swallowInput = true;
+        }
+
         HandleNavClick();   // a click on the shared hex nav works from any screen
 
         // EVERY NAV HOTKEY GOES THROUGH OpenNav — the unlock gate, the refusal toast and the
