@@ -3074,17 +3074,23 @@ public class Game1 : Game
         // WHAT AM I LOOKING AT. The pills are icon + "4.2M", which names neither the resource nor the
         // real figure — hover does both, in plain words and exact digits (playtest: "3 kaynağın ne
         // olduğu anlaşılır değil... tam sayısı yazsın üstüne gelince"). Invariant grouping, so the
-        // number reads the same on every machine.
+        // number reads the same on every machine. The SCRAP pill's hover lists ALL FOUR material
+        // tiers — Essence, Core and Crystal have no pill of their own, and "Core sayısını
+        // göremiyorum" is exactly the question this answers.
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var allMats = $"SCRAP {scrapVal.ToString("N0", inv)}  ·  ESSENCE {_hunter.MaterialOf(Material.Essence).ToString("N0", inv)}"
+                      + $"  ·  CORE {_hunter.MaterialOf(Material.Core).ToString("N0", inv)}"
+                      + $"  ·  CRYSTAL {_hunter.MaterialOf(Material.Crystal).ToString("N0", inv)}";
         var pillRows = new (Rectangle R, string Name, long V)[]
         {
-            (new Rectangle(l1, 16, e1 - l1, 60), "SCRAP — MATERIALS FOR THE FORGE", scrapVal),
+            (new Rectangle(l1, 16, e1 - l1, 60), allMats, -1),
             (new Rectangle(l2, 16, e2 - l2, 60), "MEMORY DUST — BUYS PERMANENT TRAITS", dustVal),
             (new Rectangle(leftEdge, 16, e3 - leftEdge, 60), "GLEAM — SPENT ON STATS AND UPGRADES", gleamVal),
         };
         foreach (var (rr, name, v) in pillRows)
         {
             if (!rr.Contains(ChromeMouse)) continue;
-            var text = $"{name}  ·  {v.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)}";
+            var text = v < 0 ? name : $"{name}  ·  {v.ToString("N0", inv)}";
             var w = _ui.Measure(text) + 28;
             var tip = new Rectangle(Math.Min(rr.Right, 1904) - w, 84, w, 42);
             _ui.Fill(_batch, tip, new Color(0x0E, 0x0A, 0x14, 0xF0));
