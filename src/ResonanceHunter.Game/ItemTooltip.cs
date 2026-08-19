@@ -151,11 +151,26 @@ public static class ItemTooltip
         }
         if (affixes.Count > 0) cy += 10;
 
-        // ── TRAIT and ENCHANT — the NAME AND WHAT IT DOES. The half that was missing. ──
+        // ── FAMILY — what the item IS by birth (item-system redesign): the built-in channel every
+        //    copy of this shape carries, in its stat's own unit. ──
+        if (ItemFamilies.BonusOf(item) is { } fam)
+        {
+            ui.Text(b, $"{ItemNaming.TypeWord(item)}  {ItemAffixes.GrantLabel(fam.Stat, fam.Magnitude)}", lx, cy, Gold);
+            ui.TextRight(b, "BUILT IN", rx, cy, Dim);
+            cy += 26;
+            if (item.BaseType == ItemBaseType.Weapon)
+            {
+                ui.Text(b, ItemFamilies.Blurb(item).ToUpperInvariant(), lx, cy, Ink);
+                cy += 26;
+            }
+            cy += 10;
+        }
+
+        // ── PREFIX and ENCHANT — the NAME AND WHAT IT DOES. The half that was missing. ──
         if (GearTraits.TraitOf(item) is { } trait)
         {
             ui.Text(b, GearTraits.NameOf(trait), lx, cy, Gold);
-            ui.TextRight(b, "TRAIT", rx, cy, Dim);
+            ui.TextRight(b, "PREFIX", rx, cy, Dim);
             cy += 26;
             ui.Text(b, GearTraits.BlurbOf(trait).ToUpperInvariant(), lx, cy, Ink);
             cy += 36;

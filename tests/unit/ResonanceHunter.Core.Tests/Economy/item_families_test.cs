@@ -45,6 +45,12 @@ public class ItemFamiliesTest
 
         Assert.Equal(low.Stat, high.Stat);
         Assert.True(high.Magnitude > low.Magnitude);
+
+        // And it SATURATES at the same 4x the affix curve does — an infinite sink must not buy
+        // unbounded power through the one lever that forgot its cap.
+        var far = ItemFamilies.BonusOf(At(ItemBaseType.Weapon, "w_scale", 60))!.Value;
+        var farther = ItemFamilies.BonusOf(At(ItemBaseType.Weapon, "w_scale", 600))!.Value;
+        Assert.Equal(far.Magnitude, farther.Magnitude);
     }
 
     [Fact]

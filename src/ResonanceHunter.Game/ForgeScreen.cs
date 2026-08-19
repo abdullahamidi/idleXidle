@@ -612,30 +612,6 @@ public sealed class ForgeScreen
             + (chart ? "  (SALVAGE CHART — DOUBLED)." : "."), Gold);
     }
 
-    /// <summary>
-    /// What the TRAIT alone does — no weapon multiplier folded in.
-    /// </summary>
-    /// <remarks>
-    /// The retired inventory-card helper folded a weapon's own damage multiplier into its damage figure,
-    /// because on an inventory card the question is "what does this item give me". On the REFORGE row the
-    /// question is different: re-rolling changes the TRAIT and nothing else. Sharing that helper printed
-    /// "DMG+1637%" beside the word HEAVY on a Legendary bow — true about the item, and a lie about the
-    /// thing the button next to it would change.
-    /// </remarks>
-    private static string TraitOnlyBlurb(ItemInstance item)
-    {
-        if (GearTraits.TraitOf(item) is null) return "";
-
-        var m = GearTraits.ModsOf(item);
-        var parts = new List<string>();
-        void Add(string label, float v) { if (MathF.Abs(v - 1f) > 0.005f) parts.Add($"{label}{Pct(v)}"); }
-        Add("DAMAGE", m.Damage);
-        Add("HEALTH", m.Health);
-        Add("SKILL RATE", m.SkillRate);
-        Add("LOOT", m.Haul);
-        return string.Join("  ", parts);
-    }
-
 
     /// <summary>A multiplier as a signed percentage: 1.35 → "+35%", 0.8 → "-20%".</summary>
     private static string Pct(float mult)
@@ -657,10 +633,20 @@ public sealed class ForgeScreen
     private void SellNow(Hunter hunter, ItemInstance item)
     {
         TakeOffFirst(hunter, item);
+        ReleaseGems(item);
         _inv.Remove(item);
         hunter.AddGleam(item.SellValue);
-        Say($"SOLD FOR {item.SellValue} GLEAM.", Gold);
+        Say(item.Gems.Count > 0
+                ? $"SOLD FOR {item.SellValue} GLEAM — ITS {item.Gems.Count} GEMS CAME BACK TO YOU."
+                : $"SOLD FOR {item.SellValue} GLEAM.", Gold);
     }
+
+    /// <summary>
+    /// The gems come OUT before the host dies. AUTO-MERGE already refuses gemmed pieces for exactly
+    /// this reason; sell and salvage were quietly deciding it anyway (adversarial review, pass five).
+    /// Returning them free keeps the Essence spent on SETTING as the only sunk cost.
+    /// </summary>
+    private void ReleaseGems(ItemInstance item) => _inv.AddRange(item.Gems);
 
     private void Dismantle(Hunter hunter, ItemInstance? item)
     {
@@ -674,11 +660,14 @@ public sealed class ForgeScreen
     private void DismantleNow(Hunter hunter, ItemInstance item)
     {
         TakeOffFirst(hunter, item);
-        var m = Forge.Dismantle(item, Tuning);
+        ReleaseGems(item);
         _inv.Remove(item);
+        var m = Forge.Dismantle(item, Tuning);
         var tier = MaterialTiers.ForRarity(item.Rarity);   // salvage sorts by rarity into the right tier
         hunter.AddMaterial(tier, m);
-        Say($"DISMANTLED INTO {m} {MaterialTiers.Name(tier)}.", Slate);
+        Say(item.Gems.Count > 0
+                ? $"DISMANTLED INTO {m} {MaterialTiers.Name(tier)} — ITS {item.Gems.Count} GEMS CAME BACK."
+                : $"DISMANTLED INTO {m} {MaterialTiers.Name(tier)}.", Slate);
     }
 
     /// <summary>
@@ -946,7 +935,7 @@ public sealed class ForgeScreen
     /// The Forge, spec rev 1: a centred title, a mode rail, and one of three mode surfaces. UPGRADE and
     /// REFORGE are the reference's focused item flows; SALVAGE is the full bag/chest hub (unchanged).
     /// </summary>
-    public void Draw(SpriteBatch b, Hunter hunter, Point mouse, bool clicked)
+    public void Draw(SpriteBatch b, Hunter hunter, Point mouse, bool clicked, bool rightClicked = false)
     {
         // Every rect is authored ×4 (1920×1080) and rendered at scale 1, so hit-tests take the mouse ×4.
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
@@ -956,6 +945,7 @@ public sealed class ForgeScreen
         // A pending SELL/SALVAGE confirmation owns the frame's clicks: everything beneath it still
         // draws, but no button under the scrim may fire while the question is on screen.
         var uiClicked = clicked && _confirm is null;
+        var uiRight = rightClicked && _confirm is null;
 
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xC0));   // scrim so panels pop
         _ui.TextCenterBig(b, "THE FORGE", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle, TextFace.Display);
@@ -968,7 +958,7 @@ public sealed class ForgeScreen
         // retired — playtest: "O ekrana gerek yok bence." Its two verbs that were real, auto-merge and
         // salvage-the-junk, live at the foot of the bag now; chests are opened where they are read, in
         // the VAULT, whose rail tile wears the pile count.
-        DrawWorkbench(b, hunter, hit, uiClicked);
+        DrawWorkbench(b, hunter, hit, uiClicked, uiRight);
 
         // (The reveal is drawn by the HOST now, as chrome — see Game1 and TickReveal. Drawing it here
         //  too would double-draw it on the one screen that used to be its only home.)
@@ -1161,11 +1151,11 @@ public sealed class ForgeScreen
         }
     }
 
-    private void DrawWorkbench(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
+    private void DrawWorkbench(SpriteBatch b, Hunter hunter, Point hit, bool clicked, bool rightClicked)
     {
         DrawBag(b, hunter, hit, clicked);
         DrawUpgradeMode(b, hunter, hit, clicked);
-        DrawReforgeColumn(b, hunter, hit, clicked);
+        DrawReforgeColumn(b, hunter, hit, clicked, rightClicked);
         DrawItemActions(b, hunter, hit, clicked);
     }
 
@@ -1215,7 +1205,9 @@ public sealed class ForgeScreen
         var panel = new Rectangle(560, 320, 800, 440);
         _ui.Panel(b, panel);
 
-        var worn = item is not null && IsWorn(hunter, item);
+        // CRUSH never touches the host — the worn warning would be a lie there (the review's words:
+        // "scaring the player away from a safe action").
+        var worn = item is not null && ask.Kind != ScrapKind.CrushGem && IsWorn(hunter, item);
         var title = ask.Kind switch
         {
             ScrapKind.Sell => "SELL THIS ITEM?",
@@ -1232,7 +1224,7 @@ public sealed class ForgeScreen
             if (_confirmGemIndex >= item.Gems.Count) { _confirm = null; return; }
             var gem = item.Gems[_confirmGemIndex];
             DrawItemIcon(b, gem, new Rectangle(panel.X + 64, y - 8, 56, 56));
-            _ui.TextBig(b, $"{GemCraft.NameOf(gem)} {gem.ItemLevel}  —  +{GemCraft.Magnitude(gem) * 100f:0}% {AffixName(GemCraft.StatOf(gem))}",
+            _ui.TextBig(b, $"{GemCraft.NameOf(gem)} {gem.ItemLevel}  —  {ItemAffixes.GrantLabel(GemCraft.StatOf(gem), GemCraft.Magnitude(gem))} {AffixName(GemCraft.StatOf(gem))}",
                         panel.X + 136, y + 6, RarityColors[(int)gem.Rarity], UiTypography.Body);
             y += 68;
             _ui.TextBig(b, "THE GEM IS DESTROYED AND THE SOCKET OPENS. THIS CANNOT BE UNDONE.",
@@ -1250,7 +1242,14 @@ public sealed class ForgeScreen
                 : $"IT BREAKS DOWN INTO {Forge.Dismantle(item, Tuning)} {MaterialTiers.Name(MaterialTiers.ForRarity(item.Rarity))}. THIS CANNOT BE UNDONE.";
             _ui.TextBig(b, _ui.ShortenBig(outcome, panel.Width - 128, UiTypography.Secondary),
                         panel.X + 64, y, Bone, UiTypography.Secondary);
-            y += 44;
+            y += 34;
+            if (item.Gems.Count > 0)
+            {
+                _ui.TextBig(b, $"ITS {item.Gems.Count} GEM{(item.Gems.Count == 1 ? "" : "S")} COME BACK TO YOU FIRST.",
+                            panel.X + 64, y, Met, UiTypography.Secondary);
+                y += 34;
+            }
+            y += 10;
         }
         else
         {
@@ -1277,9 +1276,11 @@ public sealed class ForgeScreen
             _ui.TextBig(b, "IT COMES OFF FIRST — THE FIGHT LOSES ITS NUMBERS.", panel.X + 84, y + 30,
                         Slate, UiTypography.Secondary);
         }
-        else
+        else if (ask.Kind != ScrapKind.CrushGem)
         {
             // The suppression checkbox — a wide row, so the label is as clickable as the box.
+            // Absent on CRUSH too: its label says "selling or salvaging", and crushing must keep
+            // asking whatever that preference says (it gained no other safety net).
             var box = new Rectangle(panel.X + 64, y + 2, 26, 26);
             var row = new Rectangle(panel.X + 64, y, panel.Width - 128, 32);
             _ui.Fill(b, new Rectangle(box.X - 2, box.Y - 2, box.Width + 4, box.Height + 4), Slate * 0.7f);
@@ -1378,19 +1379,18 @@ public sealed class ForgeScreen
 
     }
 
-    /// <summary>The empty socket the player pointed at, so the next gem click knows its target.</summary>
-    private int _socketPick;
-
     /// <summary>
     /// The item's sockets and the player's loose gems, side by side.
     /// </summary>
     /// <remarks>
-    /// Rare 1 / Epic 2 / Legendary 3 sockets. Click an empty socket to aim at it, click a gem in the
-    /// strip to SET it there (costs Essence — the sink the trait re-roll used to be), click a set gem
-    /// to CRUSH it through the same confirmation flow as selling: the gem dies, the slot opens, the
-    /// item is never at risk.
+    /// Rare 1 / Epic 2 / Legendary 3 sockets. Click a gem in the strip to SET it — it fills the first
+    /// open socket (sockets have no positions; an "aim" marker shipped here briefly and was dead
+    /// state the setter never read). Right-click a gem to SELL it — the strip is the only place loose
+    /// gems live, so it must offer the way out too. Click a SET gem to CRUSH it: the gem dies, the
+    /// slot opens, the item is never at risk.
     /// </remarks>
-    private void DrawSockets(SpriteBatch b, Hunter hunter, ItemInstance item, int y, Point hit, bool clicked)
+    private void DrawSockets(SpriteBatch b, Hunter hunter, ItemInstance item, int y, Point hit, bool clicked,
+                             bool rightClicked)
     {
         var slots = GemCraft.SocketCount(item.Rarity);
         _ui.Text(b, "SOCKETS  —  STAT GEMS", ReforgePanel.X + 32, y, Slate);
@@ -1401,14 +1401,12 @@ public sealed class ForgeScreen
         }
         else
         {
-            _socketPick = Math.Clamp(_socketPick, 0, slots - 1);
             for (var i = 0; i < slots; i++)
             {
                 var box = new Rectangle(ReforgePanel.X + 32 + i * 78, y + 28, 68, 68);
                 var filled = i < item.Gems.Count;
-                var aimed = !filled && i == _socketPick;
                 _ui.Fill(b, box, new Color(0x14, 0x10, 0x1A, 0xE0));
-                var edge = aimed ? Gold : filled ? Slate : Dim;
+                var edge = filled ? Slate : Dim;
                 _ui.Fill(b, new Rectangle(box.X, box.Y, box.Width, 2), edge);
                 _ui.Fill(b, new Rectangle(box.X, box.Bottom - 2, box.Width, 2), edge);
                 _ui.Fill(b, new Rectangle(box.X, box.Y, 2, box.Height), edge);
@@ -1419,12 +1417,11 @@ public sealed class ForgeScreen
                     var gem = item.Gems[i];
                     DrawItemIcon(b, gem, new Rectangle(box.X + 6, box.Y + 6, 56, 56));
                     if (box.Contains(hit)) _hovered = gem;
-                    if (UiKit.ClickedIn(box, hit, clicked)) RequestCrush(hunter, item, i);
+                    if (UiKit.ClickedIn(box, hit, clicked)) RequestCrush(item, i);
                 }
                 else
                 {
-                    _ui.TextCenter(b, "+", box.Center.X, box.Y + 22, aimed ? Gold : Dim);
-                    if (UiKit.ClickedIn(box, hit, clicked)) _socketPick = i;
+                    _ui.TextCenter(b, "+", box.Center.X, box.Y + 22, Dim);
                 }
             }
 
@@ -1436,17 +1433,19 @@ public sealed class ForgeScreen
 
         // The loose gems, whatever the item's rarity — a player should SEE the supply either way.
         var gems = _inv.Where(GemCraft.IsGem).OrderByDescending(g => g.ItemLevel).ToList();
-        _ui.Text(b, gems.Count == 0 ? "YOUR GEMS — NONE YET, CHESTS CARRY THEM." : $"YOUR GEMS ({gems.Count})",
+        _ui.Text(b, gems.Count == 0 ? "YOUR GEMS — NONE YET, CHESTS CARRY THEM."
+                                    : $"YOUR GEMS ({gems.Count}) — CLICK SETS · RIGHT-CLICK SELLS",
                  ReforgePanel.X + 32, y + 116, Slate);
-        for (var k = 0; k < Math.Min(gems.Count, 10); k++)
+        for (var k = 0; k < Math.Min(gems.Count, 9); k++)
         {
             var cell = new Rectangle(ReforgePanel.X + 32 + k * 64, y + 148, 56, 56);
             DrawItemIcon(b, gems[k], cell);
             if (cell.Contains(hit)) _hovered = gems[k];
             if (UiKit.ClickedIn(cell, hit, clicked)) TrySocket(hunter, item, gems[k]);
+            if (UiKit.ClickedIn(cell, hit, rightClicked)) Sell(hunter, gems[k]);
         }
-        if (gems.Count > 10)
-            _ui.Text(b, $"+{gems.Count - 10}", ReforgePanel.X + 32 + 10 * 64 + 8, y + 164, Slate);
+        if (gems.Count > 9)
+            _ui.TextRight(b, $"+{gems.Count - 9} MORE", ReforgePanel.Right - 32, y + 116, Slate);
 
         _ui.Fill(b, new Rectangle(ReforgePanel.X + 32, y + 224, ReforgePanel.Width - 64, 2), Dim);
     }
@@ -1466,15 +1465,18 @@ public sealed class ForgeScreen
         hunter.SpendMaterial(Material.Essence, cost);
         _inv.Remove(gem);
         ReplaceItem(hunter, host, product);
-        Say($"{GemCraft.NameOf(gem)} {gem.ItemLevel} SET — +{GemCraft.Magnitude(gem) * 100f:0}% {AffixName(GemCraft.StatOf(gem))}.", Gold);
+        Say($"{GemCraft.NameOf(gem)} {gem.ItemLevel} SET — {ItemAffixes.GrantLabel(GemCraft.StatOf(gem), GemCraft.Magnitude(gem))} {AffixName(GemCraft.StatOf(gem))}.", Gold);
     }
 
-    /// <summary>CRUSH the gem in a socket — through the same confirmation flow as selling.</summary>
-    private void RequestCrush(Hunter hunter, ItemInstance host, int index)
+    /// <summary>
+    /// CRUSH the gem in a socket — through the confirmation flow, and it ALWAYS asks: the "don't ask
+    /// me again" checkbox is labelled for selling and salvaging, and a click on a filled socket is
+    /// one pixel from the hover-to-inspect gesture (adversarial review, pass five).
+    /// </summary>
+    private void RequestCrush(ItemInstance host, int index)
     {
         _confirmGemIndex = index;
-        if (AskBeforeScrap) { OpenConfirm(ScrapKind.CrushGem, host.InstanceId); return; }
-        CrushNow(hunter, host, index);
+        OpenConfirm(ScrapKind.CrushGem, host.InstanceId);
     }
 
     private void CrushNow(Hunter hunter, ItemInstance host, int index)
@@ -1484,7 +1486,7 @@ public sealed class ForgeScreen
         Say($"{GemCraft.NameOf(result.Crushed)} CRUSHED — THE SLOT IS OPEN.", Slate);
     }
 
-    private void DrawReforgeColumn(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
+    private void DrawReforgeColumn(SpriteBatch b, Hunter hunter, Point hit, bool clicked, bool rightClicked = false)
     {
         var item = Target();
 
@@ -1500,7 +1502,7 @@ public sealed class ForgeScreen
         // SOCKETS — the customisation layer the trait re-roll used to be. The prefix is immutable
         // now (playtest: re-rolling it read as the weapon becoming a different weapon), so what you
         // shape on an item is its GEMS: set one for Essence, crush one to free the slot.
-        DrawSockets(b, hunter, item, ReforgePanel.Y + 96, hit, clicked);
+        DrawSockets(b, hunter, item, ReforgePanel.Y + 96, hit, clicked, rightClicked);
 
         // ENCHANT — the build-defining trigger, Rare+ only, re-rolled with CORE (Legendary spends CRYSTAL).
         var eRow = ReforgePanel.Y + 356;
@@ -1617,22 +1619,8 @@ public sealed class ForgeScreen
             _ui.Text(b, Shorten(AffixName(cur[i].Stat), valuesStart - nameX - 16), nameX, ay, Bone);
             ay += 34;
         }
-
-        // ── WHAT THE ITEM IS BY BIRTH, under what it rolled: the family's built-in stat, and the
-        //    prefix's trade. Both immutable — the identity the redesign asked items to keep. ──
-        ay += 8;
-        if (ItemFamilies.BonusOf(item) is { } fam)
-        {
-            _ui.Text(b, $"{ItemNaming.TypeWord(item)} — BUILT IN", nameX, ay, Met);
-            _ui.TextRight(b, $"+{fam.Magnitude * 100f:0}% {AffixName(fam.Stat)}", ItemPanel.Right - 28, ay, Met);
-            ay += 30;
-        }
-        var prefixBlurb = TraitOnlyBlurb(item);
-        if (prefixBlurb.Length > 0)
-        {
-            _ui.Text(b, "PREFIX", nameX, ay, InkGold);
-            _ui.TextRight(b, Shorten(prefixBlurb, ItemPanel.Width - 140), ItemPanel.Right - 28, ay, InkGold);
-        }
+        // (The BUILT IN / PREFIX identity rows moved to the item TOOLTIP: on a four-affix Legendary
+        //  they landed under the SELL button and were painted over — adversarial review, pass five.)
     }
 
     /// <summary>Trim to a pixel width with an ellipsis. A short label beats a label drawn through a number.</summary>

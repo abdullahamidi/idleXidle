@@ -824,6 +824,9 @@ public class Game1 : Game
         }
         if (_pendingChests is not null) _forge.RestoreChests(_pendingChests);
         _forge.RestoreChestsOpened(_pendingChestsOpened);
+        // The vault's keep-filter, seeded ONCE — the screen owns it from here (see the vault branch).
+        _chests.KeepMinTier = _chestKeepMinTier;
+        _chests.KeepSlot = _chestKeepSlot;
         if (_pendingRunLog is not null) _expedition.Log.Restore(_pendingRunLog);
         if (_pendingOfflineYield is not null) _automation.ReportOffline(_pendingOfflineYield);
         _automation.Cores += _pendingCores;
@@ -1781,8 +1784,11 @@ public class Game1 : Game
         // while an invisible one eats their clicks.
         if (_showChests)
         {
-            _chests.KeepMinTier = _chestKeepMinTier;
-            _chests.KeepSlot = _chestKeepSlot;
+            // NO per-frame push. The filter is edited during ChestScreen.DRAW; pushing the stored
+            // value here every Update clobbered the edit one frame later and then copied the clobber
+            // back — the whole TAKE ONLY row was inoperative while its Core tests stayed green.
+            // (Adversarial review, pass five, HIGH.) The screen is authoritative; LoadContent seeds it
+            // once from the save, and this branch only reads the edits back.
             _chests.Update(dt, _forge.UnopenedChests, CanvasMouse, MouseClicked, MouseWheel);
             if (_chests.FilterDirty)
             {
@@ -2773,7 +2779,7 @@ public class Game1 : Game
 
         // Batch B — the active screen. Menu screens draw through the overlay inset (see OverlayScale).
         if (OverlayActive) BeginOverlayCanvas(); else BeginCanvas(ScreenScale());
-        if (_showForge) _forge.Draw(_batch, _hunter, CanvasMouse, MouseClicked);
+        if (_showForge) _forge.Draw(_batch, _hunter, CanvasMouse, MouseClicked, MouseRightClicked);
         else if (_showWorld) DrawWorld();
         else if (_showPrestige) _prestige.Draw(_batch, _dust, CanvasMouse, MouseClicked);
         else if (_showRoster) { _roster.Progress = QuestSnapshot(); _roster.Draw(_batch, _characters, CanvasMouse, MouseClicked); }

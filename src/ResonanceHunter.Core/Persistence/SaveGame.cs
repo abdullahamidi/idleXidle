@@ -14,9 +14,13 @@ namespace ResonanceHunter.Core.Persistence;
 public sealed record SaveGame
 {
     /// <summary>Bumped whenever the shape changes. A save from the future must be refused, not guessed at.</summary>
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
 
     public int Version { get; init; } = CurrentVersion;
+
+    // Version history: 2 = the item-system redesign (BaseType "Gem", nested SavedItem.Gems, and
+    // TraitOverride's "NONE" sentinel). An older build's strict Enum.Parse would crash on "Gem", so
+    // the bump turns that crash into the designed FromNewerVersion refusal.
 
     /// <summary>UTC epoch milliseconds. The basis of offline progression.</summary>
     public long SavedAtMs { get; init; }
@@ -485,7 +489,9 @@ public static class SaveSystem
         SellValue = i.SellValue,
         ItemLevel = i.ItemLevel,
         EquippedToCreatureId = i.EquippedToCreatureId,
-        TraitOverride = i.TraitOverride?.ToString(),
+        // "NONE" for a genuinely plain item, so the loader can tell "rolled plain" from "written by
+        // a pre-redesign build that never had this field" — the latter gets the legacy derivation.
+        TraitOverride = i.TraitOverride?.ToString() ?? "NONE",
         EnchantOverride = i.EnchantOverride?.ToString(),
         Element = i.Element?.ToString(),
         Gems = i.Gems.Select(ToSavedItem).ToList(),
@@ -500,7 +506,9 @@ public static class SaveSystem
         SellValue = s.SellValue,
         ItemLevel = s.ItemLevel,
         EquippedToCreatureId = s.EquippedToCreatureId,
-        TraitOverride = Enum.TryParse<GearTrait>(s.TraitOverride, out var t) ? t : null,
+        TraitOverride = s.TraitOverride is null
+            ? Economy.GearTraits.LegacyDerivedTrait(s.InstanceId, Enum.Parse<ItemBaseType>(s.BaseType))
+            : Enum.TryParse<GearTrait>(s.TraitOverride, out var t) ? t : null,   // "NONE" -> null
         EnchantOverride = Enum.TryParse<EnchantKind>(s.EnchantOverride, out var e) ? e : null,
         Element = Enum.TryParse<Automation.Source>(s.Element, out var el) ? el : null,
         Gems = s.Gems.Select(FromSavedItem).ToList(),

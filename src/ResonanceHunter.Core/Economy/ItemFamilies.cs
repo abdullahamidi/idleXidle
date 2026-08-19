@@ -40,7 +40,10 @@ public static class ItemFamilies
     public static (AffixStat Stat, float Magnitude)? BonusOf(ItemInstance? item)
     {
         if (item is null) return null;
-        var scale = 1.0f + 0.06f * (item.ItemLevel - 1);
+        // CAPPED at 4x (item level ~51), aligned with ItemAffixes.IlvlFactor's own saturation. REFINE
+        // is an infinite sink; an unbounded linear identity would quietly become the one lever that
+        // buys power forever, which is the exact failure those caps exist to close.
+        var scale = MathF.Min(1.0f + 0.06f * (item.ItemLevel - 1), 4f);
 
         if (item.BaseType == ItemBaseType.Weapon)
         {

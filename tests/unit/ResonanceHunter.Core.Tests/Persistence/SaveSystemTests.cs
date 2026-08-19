@@ -314,6 +314,7 @@ public class SaveSystemTests
     public void test_a_save_from_a_newer_version_is_refused()
     {
         var future = SaveSystem.Serialize(new SaveGame { Version = SaveGame.CurrentVersion + 1, SavedAtMs = Now });
+        // (CurrentVersion is 2 as of the item-system redesign; this test floats with the constant.)
 
         Assert.Equal(LoadFailure.FromNewerVersion, SaveSystem.Deserialize(future, Now).Failure);
     }

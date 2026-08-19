@@ -10,6 +10,8 @@ public enum AffixStat { Damage, Health, SkillRate, Haul, Crit, Defense }
 /// <summary>One rolled property on an item: a stat and how much of it.</summary>
 public readonly record struct ItemAffix(AffixStat Stat, float Magnitude);
 
+/// <summary>Formats a raw magnitude for its stat's own unit — see <see cref="ItemAffixes.GrantLabel"/>.</summary>
+
 /// <summary>
 /// An item's EXPLICIT affixes — the rolled bonuses on top of its base type's implicit trait + enchant.
 /// </summary>
@@ -32,6 +34,22 @@ public readonly record struct ItemAffix(AffixStat Stat, float Magnitude);
 /// </remarks>
 public static class ItemAffixes
 {
+    /// <summary>
+    /// A magnitude in its stat's OWN unit: Crit is percentage POINTS, Defense is FLAT, the four
+    /// multiplicative channels are percentages.
+    /// </summary>
+    /// <remarks>
+    /// The Forge's gem and family lines multiplied everything by 100 with a "%" — so a WARD gem
+    /// granting +5.6 flat defense advertised "+560% DEFENCE" (adversarial review, pass five). One
+    /// formatter, beside the magnitudes it formats, so a new display site cannot re-invent the bug.
+    /// </remarks>
+    public static string GrantLabel(AffixStat stat, float magnitude) => stat switch
+    {
+        AffixStat.Crit => $"+{magnitude:0.0}%",
+        AffixStat.Defense => $"+{magnitude:0}",
+        _ => $"+{magnitude * 100f:0}%",
+    };
+
     /// <summary>How many explicit affixes a rarity carries. Common is implicit-only; a Legendary is loaded.</summary>
     public static int CountFor(Rarity rarity) => rarity switch
     {

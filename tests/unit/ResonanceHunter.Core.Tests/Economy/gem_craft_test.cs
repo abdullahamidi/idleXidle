@@ -100,6 +100,9 @@ public class GemCraftTest
         // Assert: level buys magnitude; the stat is the gem's identity and never moves.
         Assert.Equal(GemCraft.StatOf(low), GemCraft.StatOf(high));
         Assert.True(GemCraft.Magnitude(high) > GemCraft.Magnitude(low));
+
+        // And the growth SATURATES — REFINE-adjacent curves are all capped, this one included.
+        Assert.Equal(GemCraft.Magnitude(Gem("gem_same", 60)), GemCraft.Magnitude(Gem("gem_same", 600)));
     }
 
     [Fact]

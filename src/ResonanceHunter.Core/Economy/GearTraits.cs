@@ -79,6 +79,31 @@ public static class GearTraits
         return item.TraitOverride;
     }
 
+    /// <summary>
+    /// The trait a PRE-REDESIGN item had under the old id-derivation. MIGRATION ONLY.
+    /// </summary>
+    /// <remarks>
+    /// Old saves never wrote TraitOverride — the trait was derived from the id at read time. Deleting
+    /// the derivation without this would have silently stripped every legacy item's prefix AND its
+    /// combat mods on load (a 2-5x stealth nerf across a worn loadout — adversarial review, pass five,
+    /// HIGH). The save loader calls this exactly when the field is ABSENT; new saves write "NONE" for
+    /// a genuinely plain item, so plain stays plain.
+    /// </remarks>
+    public static GearTrait? LegacyDerivedTrait(string instanceId, ItemBaseType type)
+    {
+        ArgumentNullException.ThrowIfNull(instanceId);
+        if (Gear.SlotFor(type) is not { } slot) return null;
+        var pool = PoolFor(slot);
+        return pool[(int)(Fnv1a(instanceId) % (uint)pool.Length)];
+    }
+
+    private static uint Fnv1a(string s)
+    {
+        var hash = 2166136261u;
+        foreach (var ch in s) { hash ^= ch; hash *= 16777619u; }
+        return hash;
+    }
+
     /// <summary>The chance a freshly minted wearable carries a prefix at all.</summary>
     public const double PrefixChance = 0.55;
 

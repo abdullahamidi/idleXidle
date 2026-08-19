@@ -45,7 +45,8 @@ public static class GemCraft
     public static float Magnitude(ItemInstance gem)
     {
         ArgumentNullException.ThrowIfNull(gem);
-        return ItemAffixes.BaseMagnitude(StatOf(gem)) * (0.7f + 0.08f * (gem.ItemLevel - 1));
+        // Same 4x saturation the affix and family curves carry — depth buys gem levels indefinitely.
+        return ItemAffixes.BaseMagnitude(StatOf(gem)) * MathF.Min(0.7f + 0.08f * (gem.ItemLevel - 1), 4f);
     }
 
     /// <summary>The gem's plain-words name, from its stat.</summary>
