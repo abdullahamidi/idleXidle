@@ -68,7 +68,15 @@ public sealed record Chest
 }
 
 /// <summary>What a chest paid out when opened: materials, and the items to land in the bag.</summary>
-public sealed record ChestReward(int Materials, IReadOnlyList<ItemInstance> Items);
+/// <summary>
+/// What an opened chest paid. GEMS ride their own channel: the dossier promises "N items", and a gem
+/// inflating that count (or breaking the rarity floor with its level-tracking frame grade) would make
+/// the promise a lie.
+/// </summary>
+public sealed record ChestReward(int Materials, IReadOnlyList<ItemInstance> Items)
+{
+    public IReadOnlyList<ItemInstance> Gems { get; init; } = Array.Empty<ItemInstance>();
+}
 
 /// <summary>Knobs for what chests drop and what they pay. Data-driven so the numbers live in one place.</summary>
 /// <remarks>
@@ -99,6 +107,9 @@ public sealed record ChestTuning
 
     /// <summary>Chance of ONE extra item on top. Keeps it "mostly 1, sometimes 2" — never a pile, any grade.</summary>
     public float ExtraItemChance { get; init; } = 0.35f;
+
+    /// <summary>Chance a chest also carries a STAT GEM (see <c>GemCraft</c>).</summary>
+    public float GemChance { get; init; } = 0.30f;
 
     /// <summary>
     /// The MINIMUM item rarity each grade GUARANTEES (indexed Common..Legendary). A good chest cannot
@@ -306,7 +317,14 @@ public static class Chests
 
         var items = gear.Take(itemCount).Select(i => Elevate(i, floor, loot)).ToList();
 
-        return new ChestReward(materials, items);
+        // STAT GEMS ride in chests — the socket system's supply line. On their OWN channel, outside
+        // Elevate and the item-count promise: a gem's frame grade tracks its LEVEL, and the chest's
+        // rarity floor must not repaint it.
+        var gems = rng.NextDouble() < tuning.GemChance
+            ? new[] { Economy.GemCraft.MintGem(chest.Tier, rng) }
+            : Array.Empty<ItemInstance>();
+
+        return new ChestReward(materials, items) { Gems = gems };
     }
 
     private static readonly ItemBaseType[] GearTypes =
@@ -316,15 +334,20 @@ public static class Chests
     };
 
     /// <summary>Mint one wearable at a set rarity — the guaranteed-gear fallback when a roll was all materials.</summary>
-    private static ItemInstance MintGear(Rarity rarity, Source? element, Random rng, LootTuning loot, int tier) => new()
+    private static ItemInstance MintGear(Rarity rarity, Source? element, Random rng, LootTuning loot, int tier)
     {
-        InstanceId = $"itm_{rng.Next(int.MaxValue):x8}",
-        BaseType = GearTypes[rng.Next(GearTypes.Length)],
-        Rarity = rarity,
-        SellValue = loot.RaritySellValue[(int)rarity],
-        Element = element,
-        ItemLevel = Math.Max(1, tier),
-    };
+        var type = GearTypes[rng.Next(GearTypes.Length)];
+        return new()
+        {
+            InstanceId = $"itm_{rng.Next(int.MaxValue):x8}",
+            BaseType = type,
+            Rarity = rarity,
+            SellValue = loot.RaritySellValue[(int)rarity],
+            Element = element,
+            ItemLevel = Math.Max(1, tier),
+            TraitOverride = Economy.GearTraits.RollPrefix(type, rng),   // the prefix is born here
+        };
+    }
 
     /// <summary>Lift an item to the grade's rarity FLOOR if the roll came in below it — never lower it.</summary>
     /// <remarks>

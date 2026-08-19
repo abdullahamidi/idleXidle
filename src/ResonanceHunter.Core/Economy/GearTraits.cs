@@ -57,35 +57,45 @@ public static class GearTraits
     };
 
     /// <summary>
-    /// The item's trait, derived from its id.
+    /// The item's PREFIX — its rolled character, or null for a plain drop.
     /// </summary>
     /// <remarks>
-    /// FNV-1a rather than <see cref="string.GetHashCode()"/>: .NET randomises string hashing per
-    /// process, so an item's trait would silently change every time the game restarted.
+    /// <para>
+    /// <b>The prefix is DATA now, not a hash, and it is immutable.</b> Playtest, item-system redesign:
+    /// a prefix "itemin karakteristiği" — rolled at mint, carried for life, never re-rolled. The old
+    /// model derived a trait from the id for EVERY wearable and let the Forge re-roll it, which meant
+    /// (a) no item could ever be plain, and (b) re-rolling rewrote the item's NAME and read as the
+    /// weapon turning into a different weapon.
+    /// </para>
+    /// <para>
+    /// It lives in <see cref="ItemInstance.TraitOverride"/> (the field name survives for save
+    /// compatibility), written exactly once by <see cref="RollPrefix"/> at the three mint sites.
+    /// </para>
     /// </remarks>
     public static GearTrait? TraitOf(ItemInstance? item)
     {
         if (item is null) return null;
-        if (Gear.SlotFor(item.BaseType) is not { } slot) return null;
-
-        // A REFORGE won this slot: the player spent materials to overrule the id-derived roll. It takes
-        // precedence over the hash — that overruling IS the feature — but only exists on a wearable item,
-        // so the null-slot guard above still runs first.
-        if (item.TraitOverride is { } forced) return forced;
-
-        var pool = PoolFor(slot);
-        return pool[(int)(Fnv1a(item.InstanceId) % (uint)pool.Length)];
+        if (Gear.SlotFor(item.BaseType) is null) return null;
+        return item.TraitOverride;
     }
 
-    private static uint Fnv1a(string s)
+    /// <summary>The chance a freshly minted wearable carries a prefix at all.</summary>
+    public const double PrefixChance = 0.55;
+
+    /// <summary>
+    /// Roll a fresh item's PREFIX: roughly half carry one, drawn from the slot's own pool.
+    /// </summary>
+    /// <remarks>
+    /// Prefixless drops are the point, not a failure case — "legendary x sword bomboş prefixsiz de
+    /// gelebilir". A prefix on every item is a prefix on no item.
+    /// </remarks>
+    public static GearTrait? RollPrefix(ItemBaseType type, Random rng)
     {
-        var hash = 2166136261u;
-        foreach (var ch in s)
-        {
-            hash ^= ch;
-            hash *= 16777619u;
-        }
-        return hash;
+        ArgumentNullException.ThrowIfNull(rng);
+        if (Gear.SlotFor(type) is not { } slot) return null;
+        if (rng.NextDouble() >= PrefixChance) return null;
+        var pool = PoolFor(slot);
+        return pool[rng.Next(pool.Length)];
     }
 
     public static string NameOf(GearTrait t) => t.ToString().ToUpperInvariant();

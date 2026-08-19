@@ -15,6 +15,13 @@
 - **Animation**: the champion has idle/walk frames; most enemies are static or two-frame. Decide the
   floor (breathing idle for everything?) and generate to it.
 
+- **Weapon family art (added 2026-08-19, item-system redesign)**: every weapon picture on disk is a
+  SWORD variant (`item_weapon_<trait>.png` x10). The name/stat system now has four families — BLADE,
+  BOW, SPEAR, SCYTHE — so a "SHADOW BOW" renders as a sword. When credits return: one icon set per
+  family (the id-stable picker in ForgeScreen.ItemArt is ready to key on family instead of the trait
+  pool the moment the files exist). Same for the other slots if variety is wanted; they at least match
+  their slot today.
+
 ## Constraints
 
 - PixelLab credits were exhausted as of 2026-08-19 (17 generations used earlier; balance $0).

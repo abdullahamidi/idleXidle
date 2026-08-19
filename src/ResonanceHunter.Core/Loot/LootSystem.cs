@@ -8,7 +8,13 @@ namespace ResonanceHunter.Core.Loot;
 
 public enum Rarity { Common = 0, Uncommon = 1, Rare = 2, Epic = 3, Legendary = 4 }
 
-public enum ItemBaseType { CreatureCore, Weapon, Charm, Material, AbilityFocus, Helm, Chest, Gloves, Boots, Ring }
+public enum ItemBaseType
+{
+    CreatureCore, Weapon, Charm, Material, AbilityFocus, Helm, Chest, Gloves, Boots, Ring,
+
+    /// <summary>A socketable STAT GEM — not wearable itself; it lives inside a Rare+ item's socket.</summary>
+    Gem,
+}
 
 /// <summary>
 /// A minted item instance.
@@ -58,6 +64,17 @@ public sealed record ItemInstance
 
     /// <summary>Non-null only for an equipped charm. Makes the item ineligible for EVERY Forge operation.</summary>
     public string? EquippedToCreatureId { get; init; }
+
+    /// <summary>
+    /// The STAT GEMS socketed into this item — themselves items (<see cref="ItemBaseType.Gem"/>).
+    /// </summary>
+    /// <remarks>
+    /// Playtest, item-system redesign: "rare eşyada 1, epicte 2 ve legendary'de 3 slot... stat taşları
+    /// rastgele özellik verecek ve kendi seviyeleri olacak." Wearables only; a gem never nests gems.
+    /// NOTE: a record `with`-copy SHARES this list — <c>GemCraft.Socket/Crush</c> therefore always
+    /// build a NEW list for their product, so an old copy can never see a gem it should not.
+    /// </remarks>
+    public List<ItemInstance> Gems { get; init; } = new();
 
     /// <summary>
     /// A REFORGED trait, overriding the id-derived one. Null (the default) means "derive from the id".
@@ -239,6 +256,8 @@ public static class LootSystem
         Rarity = rarity,
         SellValue = tuning.RaritySellValue[(int)rarity],
         ItemLevel = Math.Max(1, itemLevel),
+        // The PREFIX is rolled once, here at mint, and never changes — see GearTraits.RollPrefix.
+        TraitOverride = Economy.GearTraits.RollPrefix(type, rng),
 
         // Only wearables are attuned. An elemental lump of scrap would be noise — and it would let a
         // trio of materials carry an element into a hybrid, which is the one thing mixing must cost.

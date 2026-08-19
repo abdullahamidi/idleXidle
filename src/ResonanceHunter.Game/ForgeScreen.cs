@@ -61,35 +61,42 @@ public sealed class ForgeScreen
         [ItemBaseType.CreatureCore] = "CORE", [ItemBaseType.Weapon] = "WEAPON", [ItemBaseType.Charm] = "CHARM",
         [ItemBaseType.Material] = "MATERIAL", [ItemBaseType.AbilityFocus] = "FOCUS",
         [ItemBaseType.Helm] = "HELM", [ItemBaseType.Chest] = "CHESTPLATE", [ItemBaseType.Gloves] = "GLOVES",
-        [ItemBaseType.Boots] = "BOOTS", [ItemBaseType.Ring] = "RING",
-    };
-    // package_05 item thumbnails (128px). Weapons rotate through four families; chest uses the armour sets;
-    // the rest use the generic accessory/armour thumbnail runs. A deterministic per-item seed gives variety.
-    private static readonly string[] WeaponFams = ["weapon_blade", "weapon_bow", "weapon_spear", "weapon_scythe"];
-    private static readonly string[] ChestSets = ["iron_sentinel_chest", "shadow_warden_chest", "verdant_guard_chest"];
-    private static readonly Dictionary<ItemBaseType, (string Prefix, int Count)> ThumbFor = new()
-    {
-        [ItemBaseType.Charm] = ("accessory", 7), [ItemBaseType.AbilityFocus] = ("accessory", 7),
-        [ItemBaseType.Ring] = ("accessory", 7), [ItemBaseType.CreatureCore] = ("accessory", 7),
-        [ItemBaseType.Material] = ("accessory", 7),
-        [ItemBaseType.Helm] = ("helmet", 6), [ItemBaseType.Gloves] = ("gloves", 6), [ItemBaseType.Boots] = ("boots", 6),
+        [ItemBaseType.Boots] = "BOOTS", [ItemBaseType.Ring] = "RING", [ItemBaseType.Gem] = "GEM",
     };
     // package_05 rarity frames (also present in package_01 under the same names).
     private static readonly string[] FrameKey =
         ["ui_frame_rarity_common", "ui_frame_rarity_uncommon", "ui_frame_rarity_rare", "ui_frame_rarity_epic", "ui_frame_rarity_legendary"];
 
-    private Texture2D? ItemThumb(ItemInstance item)
+    /// <summary>
+    /// The item's face — an id-stable pick from its slot's art set, independent of everything mutable.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The art files are named <c>item_&lt;slot&gt;_&lt;trait&gt;.png</c> from the era when the trait
+    /// WAS the identity</b> — the true root of the playtest bug "trait'i re-rollüyorum ama silahın tipi
+    /// de değişiyor": re-rolling swapped the whole picture. The picture is picked by an id-derived
+    /// index now — pure LOOK, no meaning — so an item keeps one face for life whatever its prefix (or
+    /// none) says. The scan walks forward from the seed so a slot set missing a file still lands on a
+    /// neighbour deterministically.
+    /// </para>
+    /// <para>
+    /// (The old ItemThumb fallback — weapon_blade_01 / accessory_01 thumbnails — referenced art that
+    /// has never existed on disk: a dormant path from birth. Deleted, not kept. Matching BOW/SPEAR
+    /// family ART does not exist yet either — logged in production/qa/art-consistency-audit.md.)
+    /// </para>
+    /// </remarks>
+    private Texture2D? ItemArt(ItemInstance item)
     {
-        // Weapons use the shared, InstanceId-stable family/variant that also drives the item's NAME, so the
-        // art and the "…BLADE/BOW…" name always agree. Other slots pick a stable thumbnail from the same seed.
-        if (item.BaseType == ItemBaseType.Weapon) return _ui.Assets.Get(ItemNaming.WeaponArtKey(item));
-        var seed = (int)(ItemNaming.ArtSeed(item) % 1000);
-        var key = item.BaseType switch
+        if (Gear.SlotFor(item.BaseType) is not { } slot) return null;
+        var pool = GearTraits.PoolFor(slot);
+        var start = (int)(ItemNaming.ArtSeed(item) % (uint)pool.Length);
+        for (var k = 0; k < pool.Length; k++)
         {
-            ItemBaseType.Chest => ChestSets[seed % ChestSets.Length],
-            _ => ThumbFor.TryGetValue(item.BaseType, out var m) ? $"{m.Prefix}_{seed % m.Count + 1:00}" : "",
-        };
-        return _ui.Assets.Get(key);
+            var pick = pool[(start + k) % pool.Length].ToString().ToLowerInvariant();
+            if (_ui.Assets.Get($"item_{slot.ToString().ToLowerInvariant()}_{pick}") is { } tex)
+                return tex;
+        }
+        return null;
     }
 
     private readonly UiKit _ui;
@@ -380,11 +387,12 @@ public sealed class ForgeScreen
     /// <summary>Set when the player flipped <see cref="AskBeforeScrap"/> in here — the host persists it.</summary>
     public bool PrefsDirty { get; set; }
 
-    private enum ScrapKind { Sell, Salvage, JunkAll }
+    private enum ScrapKind { Sell, Salvage, JunkAll, CrushGem }
 
     /// <summary>The destructive action waiting on an answer, or null. A null id means the whole junk pile.</summary>
     private (ScrapKind Kind, string? ItemId)? _confirm;
     private bool _confirmSuppress;    // the dialog checkbox — reset on every open
+    private int _confirmGemIndex;     // CrushGem only: which socket the question is about
     private bool _confirmOpenedNow;   // swallows the click that OPENED the dialog so it cannot also answer it
 
     /// <summary>
@@ -693,39 +701,6 @@ public sealed class ForgeScreen
     }
 
     /// <summary>
-    /// Re-roll the selected item's TRAIT for materials. The item keeps its id — only what it IS changes.
-    /// </summary>
-    /// <remarks>
-    /// This is the materials sink that makes items customisable. It is a real change every time (the roll
-    /// excludes the current trait), so you can churn a weapon toward the trade your build wants. Worn gear
-    /// is fair game now: the id is kept and ReplaceItem hands the WORN SLOT the new object too, so the
-    /// fight reads the fresh roll on the next frame instead of a stale copy.
-    /// </remarks>
-    private void DoReforgeTrait(Hunter hunter, ItemInstance? item)
-    {
-        if (item is null) return;
-
-
-        var cost = ReforgeTuning.Default.TraitCostFor(item.Rarity);
-        var chart = hunter.CharterCount(Charter.Reforge) > 0;
-        if (!chart && hunter.MaterialOf(Material.Essence) < cost)
-        {
-            Say($"NEED {cost} ESSENCE TO REFORGE THE TRAIT.", Ember);
-            return;
-        }
-
-        var result = Reforge.ReforgeTrait(item, _rng, ReforgeTuning.Default);
-        if (!result.Success) { Say(result.Rejection!, Ember); return; }
-
-        // Spent only now that the re-roll has actually succeeded.
-        if (chart) hunter.SpendCharter(Charter.Reforge);
-        else hunter.SpendMaterial(Material.Essence, result.Cost);
-        ReplaceItem(hunter, item, result.Product!);
-        var name = GearTraits.NameOf(GearTraits.TraitOf(result.Product!)!.Value);
-        Say($"REFORGED — TRAIT IS NOW {name}.", Gold);
-    }
-
-    /// <summary>
     /// Re-roll the selected item's ENCHANTMENT — the Form-combo, the build-defining roll. Rare+ only.
     /// </summary>
     private void DoReforgeEnchant(Hunter hunter, ItemInstance? item)
@@ -942,12 +917,15 @@ public sealed class ForgeScreen
         _chestsOpened++;   // the CRAFTER evolution path's earn — Game1 polls this and credits the warren
         hunter.AddMaterials(reward.Materials);
 
-        var items = reward.Items.ToList();
+        // Gems land beside the gear — same bag, same reveal, their own reward channel in Core.
+        var items = reward.Items.Concat(reward.Gems).ToList();
         // Same loot filter a boss drop honours: filtered items are SOLD for gleam, never dumped in the bag.
         if (AutoSellFloor is { } floor)
         {
-            foreach (var it in items.Where(i => i.Rarity <= floor)) hunter.AddGleam(it.SellValue);
-            items = items.Where(i => i.Rarity > floor).ToList();
+            // WEARABLES ONLY: a gem's frame grade tracks its LEVEL, not its worth — the filter selling
+            // "Common" gems would quietly eat the socket system's whole supply line.
+            foreach (var it in items.Where(i => Gear.IsWearable(i) && i.Rarity <= floor)) hunter.AddGleam(it.SellValue);
+            items = items.Where(i => !Gear.IsWearable(i) || i.Rarity > floor).ToList();
         }
 
         _inv.AddRange(items);
@@ -1238,12 +1216,26 @@ public sealed class ForgeScreen
         {
             ScrapKind.Sell => "SELL THIS ITEM?",
             ScrapKind.Salvage => "SALVAGE THIS ITEM?",
+            ScrapKind.CrushGem => "CRUSH THIS GEM?",
             _ => "SALVAGE ALL THE JUNK?",
         };
         _ui.TextCenterBig(b, title, panel.Center.X, panel.Y + 52, Gold, UiTypography.SectionTitle);
 
         var y = panel.Y + 122;
-        if (item is not null)
+        if (ask.Kind == ScrapKind.CrushGem && item is not null)
+        {
+            // The subject is the GEM, not the host — the host is never at risk here.
+            if (_confirmGemIndex >= item.Gems.Count) { _confirm = null; return; }
+            var gem = item.Gems[_confirmGemIndex];
+            DrawItemIcon(b, gem, new Rectangle(panel.X + 64, y - 8, 56, 56));
+            _ui.TextBig(b, $"{GemCraft.NameOf(gem)} {gem.ItemLevel}  —  +{GemCraft.Magnitude(gem) * 100f:0}% {AffixName(GemCraft.StatOf(gem))}",
+                        panel.X + 136, y + 6, RarityColors[(int)gem.Rarity], UiTypography.Body);
+            y += 68;
+            _ui.TextBig(b, "THE GEM IS DESTROYED AND THE SOCKET OPENS. THIS CANNOT BE UNDONE.",
+                        panel.X + 64, y, Bone, UiTypography.Secondary);
+            y += 44;
+        }
+        else if (item is not null)
         {
             DrawItemIcon(b, item, new Rectangle(panel.X + 64, y - 8, 56, 56));
             _ui.TextBig(b, _ui.ShortenBig(ItemNaming.FullName(item), panel.Width - 220, UiTypography.Body),
@@ -1302,6 +1294,7 @@ public sealed class ForgeScreen
         {
             ScrapKind.Sell => "SELL IT",
             ScrapKind.Salvage => "SALVAGE IT",
+            ScrapKind.CrushGem => "CRUSH IT",
             _ => "SALVAGE THE JUNK",
         };
         if (_ui.Button(b, doIt, verb, hit, clicked))
@@ -1313,6 +1306,7 @@ public sealed class ForgeScreen
             {
                 case ScrapKind.Sell: SellNow(hunter, item!); break;
                 case ScrapKind.Salvage: DismantleNow(hunter, item!); break;
+                case ScrapKind.CrushGem: CrushNow(hunter, item!, _confirmGemIndex); break;
                 default: SalvageJunkNow(hunter); break;
             }
         }
@@ -1380,6 +1374,112 @@ public sealed class ForgeScreen
 
     }
 
+    /// <summary>The empty socket the player pointed at, so the next gem click knows its target.</summary>
+    private int _socketPick;
+
+    /// <summary>
+    /// The item's sockets and the player's loose gems, side by side.
+    /// </summary>
+    /// <remarks>
+    /// Rare 1 / Epic 2 / Legendary 3 sockets. Click an empty socket to aim at it, click a gem in the
+    /// strip to SET it there (costs Essence — the sink the trait re-roll used to be), click a set gem
+    /// to CRUSH it through the same confirmation flow as selling: the gem dies, the slot opens, the
+    /// item is never at risk.
+    /// </remarks>
+    private void DrawSockets(SpriteBatch b, Hunter hunter, ItemInstance item, int y, Point hit, bool clicked)
+    {
+        var slots = GemCraft.SocketCount(item.Rarity);
+        _ui.Text(b, "SOCKETS  —  STAT GEMS", ReforgePanel.X + 32, y, Slate);
+
+        if (slots == 0)
+        {
+            _ui.Text(b, "NONE — RARE AND BETTER GEAR CARRIES SOCKETS.", ReforgePanel.X + 32, y + 34, Dim);
+        }
+        else
+        {
+            _socketPick = Math.Clamp(_socketPick, 0, slots - 1);
+            for (var i = 0; i < slots; i++)
+            {
+                var box = new Rectangle(ReforgePanel.X + 32 + i * 78, y + 28, 68, 68);
+                var filled = i < item.Gems.Count;
+                var aimed = !filled && i == _socketPick;
+                _ui.Fill(b, box, new Color(0x14, 0x10, 0x1A, 0xE0));
+                var edge = aimed ? Gold : filled ? Slate : Dim;
+                _ui.Fill(b, new Rectangle(box.X, box.Y, box.Width, 2), edge);
+                _ui.Fill(b, new Rectangle(box.X, box.Bottom - 2, box.Width, 2), edge);
+                _ui.Fill(b, new Rectangle(box.X, box.Y, 2, box.Height), edge);
+                _ui.Fill(b, new Rectangle(box.Right - 2, box.Y, 2, box.Height), edge);
+
+                if (filled)
+                {
+                    var gem = item.Gems[i];
+                    DrawItemIcon(b, gem, new Rectangle(box.X + 6, box.Y + 6, 56, 56));
+                    if (box.Contains(hit)) _hovered = gem;
+                    if (UiKit.ClickedIn(box, hit, clicked)) RequestCrush(hunter, item, i);
+                }
+                else
+                {
+                    _ui.TextCenter(b, "+", box.Center.X, box.Y + 22, aimed ? Gold : Dim);
+                    if (UiKit.ClickedIn(box, hit, clicked)) _socketPick = i;
+                }
+            }
+
+            var cost = GemCraft.SocketCost(item.Rarity);
+            _ui.TextRight(b, CostLabel(hunter.MaterialOf(Material.Essence), cost, "ESSENCE"),
+                          ReforgePanel.Right - 32, y + 40,
+                          hunter.MaterialOf(Material.Essence) >= cost ? Met : Ember);
+        }
+
+        // The loose gems, whatever the item's rarity — a player should SEE the supply either way.
+        var gems = _inv.Where(GemCraft.IsGem).OrderByDescending(g => g.ItemLevel).ToList();
+        _ui.Text(b, gems.Count == 0 ? "YOUR GEMS — NONE YET, CHESTS CARRY THEM." : $"YOUR GEMS ({gems.Count})",
+                 ReforgePanel.X + 32, y + 116, Slate);
+        for (var k = 0; k < Math.Min(gems.Count, 10); k++)
+        {
+            var cell = new Rectangle(ReforgePanel.X + 32 + k * 64, y + 148, 56, 56);
+            DrawItemIcon(b, gems[k], cell);
+            if (cell.Contains(hit)) _hovered = gems[k];
+            if (UiKit.ClickedIn(cell, hit, clicked)) TrySocket(hunter, item, gems[k]);
+        }
+        if (gems.Count > 10)
+            _ui.Text(b, $"+{gems.Count - 10}", ReforgePanel.X + 32 + 10 * 64 + 8, y + 164, Slate);
+
+        _ui.Fill(b, new Rectangle(ReforgePanel.X + 32, y + 224, ReforgePanel.Width - 64, 2), Dim);
+    }
+
+    /// <summary>SET a gem into the aimed (or first open) socket, spending Essence.</summary>
+    private void TrySocket(Hunter hunter, ItemInstance host, ItemInstance gem)
+    {
+        var slots = GemCraft.SocketCount(host.Rarity);
+        if (slots == 0) { Say("RARE AND BETTER GEAR CARRIES SOCKETS.", Ember); return; }
+
+        var cost = GemCraft.SocketCost(host.Rarity);
+        if (hunter.MaterialOf(Material.Essence) < cost) { Say($"NEED {cost} ESSENCE TO SET A GEM.", Ember); return; }
+
+        var (product, rejection) = GemCraft.Socket(host, gem);
+        if (product is null) { Say(rejection!, Ember); return; }
+
+        hunter.SpendMaterial(Material.Essence, cost);
+        _inv.Remove(gem);
+        ReplaceItem(hunter, host, product);
+        Say($"{GemCraft.NameOf(gem)} {gem.ItemLevel} SET — +{GemCraft.Magnitude(gem) * 100f:0}% {AffixName(GemCraft.StatOf(gem))}.", Gold);
+    }
+
+    /// <summary>CRUSH the gem in a socket — through the same confirmation flow as selling.</summary>
+    private void RequestCrush(Hunter hunter, ItemInstance host, int index)
+    {
+        _confirmGemIndex = index;
+        if (AskBeforeScrap) { OpenConfirm(ScrapKind.CrushGem, host.InstanceId); return; }
+        CrushNow(hunter, host, index);
+    }
+
+    private void CrushNow(Hunter hunter, ItemInstance host, int index)
+    {
+        if (GemCraft.Crush(host, index) is not { } result) return;
+        ReplaceItem(hunter, host, result.Product);
+        Say($"{GemCraft.NameOf(result.Crushed)} CRUSHED — THE SLOT IS OPEN.", Slate);
+    }
+
     private void DrawReforgeColumn(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
     {
         var item = Target();
@@ -1393,29 +1493,13 @@ public sealed class ForgeScreen
             return;
         }
 
-        // TRAIT — the item's trade, re-rolled with ESSENCE. (Worn gear re-rolls like anything else now.)
-        var tRow = ReforgePanel.Y + 96;
-        var tCost = ReforgeTuning.Default.TraitCostFor(item.Rarity);
-        var canTrait = hunter.MaterialOf(Material.Essence) >= tCost;
-        _ui.Text(b, "TRAIT  —  THE ITEM'S TRADE", ReforgePanel.X + 32, tRow, Slate);
-        _ui.TextBig(b, GearTraits.TraitOf(item) is { } t ? GearTraits.NameOf(t) : "—", ReforgePanel.X + 32, tRow + 28, InkGold, UiTypography.PanelTitle);
-
-        // WHAT THE TRAIT DOES. The row calls it "the item's trade" and then printed only its NAME, while
-        // the enchant row beneath it printed a full sentence — so the one thing on this screen that both
-        // gives and takes was the one thing the player could not read. GearBlurb already existed and was
-        // drawn on the inventory card; it simply was not drawn here.
-        var traitBlurb = TraitOnlyBlurb(item);
-        if (traitBlurb.Length > 0)
-            _ui.Text(b, traitBlurb, ReforgePanel.X + 32, tRow + 68, Bone);
-
-        _ui.TextRight(b, CostLabel(hunter.MaterialOf(Material.Essence), tCost, "ESSENCE"), ReforgePanel.Right - 360, tRow + 34, canTrait ? Met : Ember);
-        if (_ui.Button(b, new Rectangle(ReforgePanel.Right - 340, tRow + 12, 300, 60), "RE-ROLL", hit, clicked, enabled: canTrait))
-            DoReforgeTrait(hunter, item);
-
-        _ui.Fill(b, new Rectangle(ReforgePanel.X + 32, tRow + 108, ReforgePanel.Width - 64, 2), Dim);
+        // SOCKETS — the customisation layer the trait re-roll used to be. The prefix is immutable
+        // now (playtest: re-rolling it read as the weapon becoming a different weapon), so what you
+        // shape on an item is its GEMS: set one for Essence, crush one to free the slot.
+        DrawSockets(b, hunter, item, ReforgePanel.Y + 96, hit, clicked);
 
         // ENCHANT — the build-defining trigger, Rare+ only, re-rolled with CORE (Legendary spends CRYSTAL).
-        var eRow = tRow + 140;
+        var eRow = ReforgePanel.Y + 356;
         var hasEnch = item.Rarity >= Enchantments.MinimumRarity;
         var eTier = EnchantReforgeTier(item.Rarity);
         var eCost = ReforgeTuning.Default.EnchantCostFor(item.Rarity);
@@ -1528,6 +1612,22 @@ public sealed class ForgeScreen
 
             _ui.Text(b, Shorten(AffixName(cur[i].Stat), valuesStart - nameX - 16), nameX, ay, Bone);
             ay += 34;
+        }
+
+        // ── WHAT THE ITEM IS BY BIRTH, under what it rolled: the family's built-in stat, and the
+        //    prefix's trade. Both immutable — the identity the redesign asked items to keep. ──
+        ay += 8;
+        if (ItemFamilies.BonusOf(item) is { } fam)
+        {
+            _ui.Text(b, $"{ItemNaming.TypeWord(item)} — BUILT IN", nameX, ay, Met);
+            _ui.TextRight(b, $"+{fam.Magnitude * 100f:0}% {AffixName(fam.Stat)}", ItemPanel.Right - 28, ay, Met);
+            ay += 30;
+        }
+        var prefixBlurb = TraitOnlyBlurb(item);
+        if (prefixBlurb.Length > 0)
+        {
+            _ui.Text(b, "PREFIX", nameX, ay, InkGold);
+            _ui.TextRight(b, Shorten(prefixBlurb, ItemPanel.Width - 140), ItemPanel.Right - 28, ay, InkGold);
         }
     }
 
@@ -1846,10 +1946,20 @@ public sealed class ForgeScreen
         var frame = _ui.Assets.Get(FrameKey[(int)item.Rarity]);
         if (frame is not null) b.Draw(frame, box, FrameTint[(int)item.Rarity]);
 
-        // The icon: per-trait art if it exists, else a package_05 item thumbnail, drawn INSET so the ornate
-        // rarity frame stays visible around it. Then the Source gem (top-left) and enchant glyph (bottom-right)
+        // A STAT GEM is a stone in its stat's colour — no slot art exists for it, and a diamond in the
+        // rarity frame reads exactly as "a thing you set into gear".
+        if (GemCraft.IsGem(item))
+        {
+            var inset = frame is null ? 4 : Math.Max(6, box.Width * 22 / 100);
+            _ui.Diamond(b, new Rectangle(box.X + inset, box.Y + inset, box.Width - 2 * inset, box.Height - 2 * inset),
+                        GemColor(GemCraft.StatOf(item)));
+            return;
+        }
+
+        // The icon: the item's id-stable face (see ItemArt), drawn INSET so the ornate rarity frame
+        // stays visible around it. Then the Source gem (top-left) and enchant glyph (bottom-right)
         // as small modular overlays — the package_05 composition order.
-        var glyph = TraitGlyph(item) ?? ItemThumb(item);
+        var glyph = ItemArt(item);
         if (glyph is not null)
         {
             var pad = frame is null ? 0 : Math.Max(4, box.Width * 15 / 100);
@@ -1868,15 +1978,6 @@ public sealed class ForgeScreen
     }
 
     /// <summary>The item's trait-specific icon, or null if that slot/trait pair hasn't been drawn yet.</summary>
-    private Texture2D? TraitGlyph(ItemInstance item)
-        => Gear.SlotFor(item.BaseType) is { } slot && GearTraits.TraitOf(item) is { } trait
-            // Prefer the WORN art: it is drawn front-on as the piece actually looks on the
-            // character, which reads better in a grid than a display-angle icon, and it means
-            // one asset serves both the inventory and the paperdoll.
-            ? _ui.Assets.Get($"gear_{slot.ToString().ToLowerInvariant()}_{trait.ToString().ToLowerInvariant()}")
-              ?? _ui.Assets.Get($"item_{slot.ToString().ToLowerInvariant()}_{trait.ToString().ToLowerInvariant()}")
-            : null;
-
     /// <summary>The item's Source gem, top-left (package_05 source_&lt;element&gt;). Skipped on tiny boxes.</summary>
     private void DrawSourceGem(SpriteBatch b, ItemInstance item, Rectangle box)
     {
@@ -1894,6 +1995,17 @@ public sealed class ForgeScreen
         var s = box.Width * 2 / 5;
         b.Draw(g, new Rectangle(box.Right - s, box.Bottom - s, s, s), Color.White);
     }
+
+    /// <summary>Each gem stat's stone colour — hue plus the NAME carried elsewhere, never hue alone.</summary>
+    private static Color GemColor(AffixStat s) => s switch
+    {
+        AffixStat.Damage => new Color(0xD6, 0x48, 0x5C),
+        AffixStat.Health => new Color(0x6E, 0xC8, 0x7A),
+        AffixStat.SkillRate => new Color(0x74, 0xC6, 0xE8),
+        AffixStat.Haul => new Color(0xF0, 0xB2, 0x4A),
+        AffixStat.Crit => new Color(0xC8, 0x8A, 0xE0),
+        _ => new Color(0x8A, 0x96, 0xA8),
+    };
 
     /// <summary>The six element palette, for tinting neutral item art. Matches the creatures' Source colours.</summary>
     private static Color SourceTint(Source s) => s switch

@@ -19,15 +19,15 @@ public class GearTraitsTests
     // ── The trait itself ──────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void test_trait_of_the_same_item_is_always_the_same()
+    public void test_the_prefix_is_the_items_own_field_and_nothing_else()
     {
-        // Derived, not stored — so it must be a pure function of the id. FNV-1a, not GetHashCode(),
-        // because .NET randomises string hashing per process: an item's trait would change on restart.
-        var item = Item("weapon_abc123", ItemBaseType.Weapon);
-        var first = GearTraits.TraitOf(item);
+        // The prefix is DATA now — rolled once at mint, immutable. TraitOf must read the field verbatim
+        // and never invent one for an item that rolled plain.
+        var keen = Item("weapon_abc123", ItemBaseType.Weapon) with { TraitOverride = GearTrait.Keen };
+        Assert.Equal(GearTrait.Keen, GearTraits.TraitOf(keen));
 
-        for (var i = 0; i < 50; i++)
-            Assert.Equal(first, GearTraits.TraitOf(Item("weapon_abc123", ItemBaseType.Weapon)));
+        var plain = Item("weapon_abc123", ItemBaseType.Weapon);
+        Assert.Null(GearTraits.TraitOf(plain));
     }
 
     [Fact]
@@ -38,9 +38,9 @@ public class GearTraitsTests
     }
 
     [Fact]
-    public void test_a_trait_always_comes_from_its_slots_pool()
+    public void test_a_rolled_prefix_always_comes_from_its_slots_pool()
     {
-        // A charm must never roll HEAVY: the trait has to mean something for the slot it sits in.
+        // A charm must never roll HEAVY: the prefix has to mean something for the slot it sits in.
         foreach (var (type, slot) in new[]
                  {
                      (ItemBaseType.Weapon, GearSlot.Weapon),
@@ -50,24 +50,26 @@ public class GearTraitsTests
         {
             var pool = GearTraits.PoolFor(slot);
             for (var i = 0; i < 200; i++)
-            {
-                var t = GearTraits.TraitOf(Item($"item_{i}", type));
-                Assert.NotNull(t);
-                Assert.Contains(t!.Value, pool);
-            }
+                if (GearTraits.RollPrefix(type, new Random(i)) is { } t)
+                    Assert.Contains(t, pool);
         }
     }
 
     [Fact]
-    public void test_ids_spread_across_the_whole_pool()
+    public void test_the_prefix_roll_spreads_across_the_pool_and_leaves_items_plain()
     {
-        // A hash that collapsed onto one trait would technically pass every test above while quietly
-        // making every weapon in the game identical.
+        // The roll must reach every prefix in the pool AND leave a real share of items plain — a
+        // prefix on every item is a prefix on no item ("prefixsiz de gelebilir").
         var seen = new HashSet<GearTrait>();
-        for (var i = 0; i < 200; i++)
-            seen.Add(GearTraits.TraitOf(Item($"weapon_{i}", ItemBaseType.Weapon))!.Value);
+        var plain = 0;
+        for (var i = 0; i < 400; i++)
+        {
+            if (GearTraits.RollPrefix(ItemBaseType.Weapon, new Random(i)) is { } t) seen.Add(t);
+            else plain++;
+        }
 
         Assert.Equal(GearTraits.PoolFor(GearSlot.Weapon).Length, seen.Count);
+        Assert.InRange(plain / 400.0, 0.25, 0.65);
     }
 
     // ── The trade. This is the whole point of the layer. ──────────────────────────────────────
@@ -224,9 +226,7 @@ public class GearTraitsTests
     }
 
     private static ItemInstance CharmWith(GearTrait trait, Rarity rarity)
-        => Enumerable.Range(0, 500)
-            .Select(i => Item($"charm_{i}", ItemBaseType.Charm, rarity))
-            .First(it => GearTraits.TraitOf(it) == trait);
+        => Item($"charm_{trait}", ItemBaseType.Charm, rarity) with { TraitOverride = trait };
 
     [Fact]
     public void test_a_worn_traits_drawback_actually_reaches_the_squad()
@@ -258,16 +258,28 @@ public class GearTraitsTests
         // Commons on purpose: they carry a TRAIT but no explicit affixes (ItemAffixes.CountFor is 0), so
         // WornMods is exactly the trait product here. Affixes fold into WornMods too — proven separately in
         // ItemAffixesTests — but they would muddy this test of the trait-stacking alone.
+        var weapon = Item("weapon_1", ItemBaseType.Weapon, Rarity.Common) with { TraitOverride = GearTrait.Heavy };
+        var charm = Item("charm_1", ItemBaseType.Charm, Rarity.Common) with { TraitOverride = GearTrait.Vital };
+        var focus = Item("focus_1", ItemBaseType.AbilityFocus, Rarity.Common) with { TraitOverride = GearTrait.Focused };
+
         var hunter = new Hunter();
-        hunter.Equip(Item("weapon_1", ItemBaseType.Weapon, Rarity.Common));
-        hunter.Equip(Item("charm_1", ItemBaseType.Charm, Rarity.Common));
-        hunter.Equip(Item("focus_1", ItemBaseType.AbilityFocus, Rarity.Common));
+        hunter.Equip(weapon);
+        hunter.Equip(charm);
+        hunter.Equip(focus);
 
-        var expected = GearTraits.ModsOf(Item("weapon_1", ItemBaseType.Weapon, Rarity.Common))
-            .Combine(GearTraits.ModsOf(Item("charm_1", ItemBaseType.Charm, Rarity.Common)))
-            .Combine(GearTraits.ModsOf(Item("focus_1", ItemBaseType.AbilityFocus, Rarity.Common)));
+        // The trait product, with the BUILT-IN family layer folded in on top — every worn piece's
+        // identity (ItemFamilies) rides the same channel the affixes use, so WornMods is traits x
+        // (1 + summed built-ins). Commons still carry no explicit affixes, so those two layers are
+        // exactly what this composition tests.
+        var traitProduct = GearTraits.ModsOf(weapon).Combine(GearTraits.ModsOf(charm)).Combine(GearTraits.ModsOf(focus));
+        float Fam(ItemInstance it, AffixStat s)
+            => ItemFamilies.BonusOf(it) is { } f && f.Stat == s ? f.Magnitude : 0f;
+        float Tot(AffixStat s) => Fam(weapon, s) + Fam(charm, s) + Fam(focus, s);
 
-        Assert.Equal(expected, hunter.WornMods);
+        Assert.Equal(traitProduct.Damage * (1f + Tot(AffixStat.Damage)), hunter.WornMods.Damage, 5);
+        Assert.Equal(traitProduct.Health * (1f + Tot(AffixStat.Health)), hunter.WornMods.Health, 5);
+        Assert.Equal(traitProduct.Haul * (1f + Tot(AffixStat.Haul)), hunter.WornMods.Haul, 5);
+        Assert.Equal(traitProduct.SkillRate * (1f + Tot(AffixStat.SkillRate)), hunter.WornMods.SkillRate, 5);
     }
 
     [Fact]

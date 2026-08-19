@@ -112,6 +112,7 @@ public class BuildGlossaryTest
                 Rarity = rarity,
                 ItemLevel = level,
                 SellValue = 10,
+                TraitOverride = GearTrait.Heavy,   // the prefix is mint data now, so the probe sets one
             };
 
             var trait = GearTraits.TraitOf(item)!.Value;

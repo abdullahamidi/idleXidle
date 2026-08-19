@@ -296,6 +296,9 @@ public sealed record SavedItem
     public string? TraitOverride { get; init; }
     public string? EnchantOverride { get; init; }
 
+    /// <summary>Socketed stat gems, as nested items. Empty for gem-less gear and every pre-gem save.</summary>
+    public List<SavedItem> Gems { get; init; } = new();
+
     /// <summary>
     /// The item's region ELEMENT (a <see cref="Automation.Source"/> name), or null for inert loot.
     /// </summary>
@@ -470,19 +473,38 @@ public static class SaveSystem
                 EvolutionEquippedTrait = c.Evolution?.EquippedTrait,
             }).ToList(),
             AssignedCreatureIds = region.Team.Select(c => c.Id).ToList(),
-            Inventory = inventory.Select(i => new SavedItem
-            {
-                InstanceId = i.InstanceId,
-                BaseType = i.BaseType.ToString(),
-                Rarity = (int)i.Rarity,
-                SellValue = i.SellValue,
-                ItemLevel = i.ItemLevel,
-                EquippedToCreatureId = i.EquippedToCreatureId,
-                TraitOverride = i.TraitOverride?.ToString(),
-                EnchantOverride = i.EnchantOverride?.ToString(),
-                Element = i.Element?.ToString(),
-            }).ToList(),
+            Inventory = inventory.Select(ToSavedItem).ToList(),
         };
+
+    /// <summary>One item to its saved form — recursive, so socketed gems ride inside their host.</summary>
+    private static SavedItem ToSavedItem(ItemInstance i) => new()
+    {
+        InstanceId = i.InstanceId,
+        BaseType = i.BaseType.ToString(),
+        Rarity = (int)i.Rarity,
+        SellValue = i.SellValue,
+        ItemLevel = i.ItemLevel,
+        EquippedToCreatureId = i.EquippedToCreatureId,
+        TraitOverride = i.TraitOverride?.ToString(),
+        EnchantOverride = i.EnchantOverride?.ToString(),
+        Element = i.Element?.ToString(),
+        Gems = i.Gems.Select(ToSavedItem).ToList(),
+    };
+
+    /// <summary>The mirror of <see cref="ToSavedItem"/> — same recursion, same lenient enum parsing.</summary>
+    private static ItemInstance FromSavedItem(SavedItem s) => new()
+    {
+        InstanceId = s.InstanceId,
+        BaseType = Enum.Parse<ItemBaseType>(s.BaseType),
+        Rarity = (Rarity)s.Rarity,
+        SellValue = s.SellValue,
+        ItemLevel = s.ItemLevel,
+        EquippedToCreatureId = s.EquippedToCreatureId,
+        TraitOverride = Enum.TryParse<GearTrait>(s.TraitOverride, out var t) ? t : null,
+        EnchantOverride = Enum.TryParse<EnchantKind>(s.EnchantOverride, out var e) ? e : null,
+        Element = Enum.TryParse<Automation.Source>(s.Element, out var el) ? el : null,
+        Gems = s.Gems.Select(FromSavedItem).ToList(),
+    };
 
     public static List<Creature> RestoreRoster(SaveGame save)
         => save.Roster.Select(s =>
@@ -517,20 +539,7 @@ public static class SaveSystem
         // copies of the same thing. Nothing is lost — same id means an identical, id-derived item.
         => save.Inventory
             .GroupBy(s => s.InstanceId).Select(g => g.First())
-            .Select(s => new ItemInstance
-        {
-            InstanceId = s.InstanceId,
-            BaseType = Enum.Parse<ItemBaseType>(s.BaseType),
-            Rarity = (Rarity)s.Rarity,
-            SellValue = s.SellValue,
-            ItemLevel = s.ItemLevel,
-            EquippedToCreatureId = s.EquippedToCreatureId,
-            // A reforged passive that no longer parses is dropped, not guessed — the item falls back to
-            // its id-derived roll rather than throwing on an unknown enum name from an older/newer build.
-            TraitOverride = Enum.TryParse<GearTrait>(s.TraitOverride, out var t) ? t : null,
-            EnchantOverride = Enum.TryParse<EnchantKind>(s.EnchantOverride, out var e) ? e : null,
-            Element = Enum.TryParse<Automation.Source>(s.Element, out var el) ? el : null,
-        }).ToList();
+            .Select(FromSavedItem).ToList();
 
     public static void RestoreHunter(SaveGame save, Hunter hunter)
     {

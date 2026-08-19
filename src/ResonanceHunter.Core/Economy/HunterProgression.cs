@@ -289,8 +289,20 @@ public sealed class Hunter
     {
         var totals = new Dictionary<AffixStat, float>();
         foreach (var item in _worn.Values)
+        {
             foreach (var a in ItemAffixes.Of(item))
                 totals[a.Stat] = totals.GetValueOrDefault(a.Stat) + a.Magnitude;
+
+            // The weapon FAMILY's built-in identity — a blade hits harder, a bow crits. Summed here so
+            // every downstream number (power, defense, crit, squad multipliers) sees it for free.
+            if (ItemFamilies.BonusOf(item) is { } fam)
+                totals[fam.Stat] = totals.GetValueOrDefault(fam.Stat) + fam.Magnitude;
+
+            // Socketed STAT GEMS — the player-chosen layer on the same ruler.
+            if (item is not null)
+                foreach (var g in item.Gems)
+                    totals[GemCraft.StatOf(g)] = totals.GetValueOrDefault(GemCraft.StatOf(g)) + GemCraft.Magnitude(g);
+        }
         return totals;
     }
 

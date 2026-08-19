@@ -160,6 +160,8 @@ public static class Forge
                 // voiding every Refine spent on the fused items (affix magnitude is ilvl-scaled). SellValue
                 // is rarity-only, so carrying the level up concentrates investment without paying anything.
                 ItemLevel = inputs.Max(i => i.ItemLevel),
+                // A fused item is a NEW item, so its prefix is rolled fresh like any other mint.
+                TraitOverride = Economy.GearTraits.RollPrefix(type, rng),
             },
         };
     }

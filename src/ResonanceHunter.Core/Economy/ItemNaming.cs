@@ -21,44 +21,20 @@ public static class ItemNaming
     /// <summary>The weapon art families (also the weapon "type" words). Art keys are `weapon_&lt;family&gt;_NN`.</summary>
     public static readonly string[] WeaponFamilies = { "blade", "bow", "spear", "scythe" };
 
-    /// <summary>How many art variants exist per weapon family (`weapon_blade_01..05`).</summary>
-    public const int WeaponVariants = 5;
-
-    private static readonly Dictionary<AffixStat, string> Prefixes = new()
-    {
-        [AffixStat.Damage] = "FURIOUS",
-        [AffixStat.Health] = "IMMORTAL",
-        [AffixStat.SkillRate] = "NIMBLE",
-        [AffixStat.Haul] = "GREEDY",
-        [AffixStat.Crit] = "VICIOUS",
-        [AffixStat.Defense] = "WARDED",
-    };
-
-    /// <summary>The item's dominant affix — the stat rolled strongest relative to a typical roll of that stat.</summary>
-    /// <remarks>Normalising by each stat's base magnitude is what lets a "+9% damage" beat a "+8 defense"
-    /// fairly, instead of the raw-magnitude stats (Crit, Defense) always winning.</remarks>
-    public static AffixStat? DominantAffix(ItemInstance? item)
-    {
-        var affixes = ItemAffixes.Of(item);
-        if (affixes.Count == 0) return null;
-        return affixes
-            .OrderByDescending(a => a.Magnitude / MathF.Max(0.0001f, ItemAffixes.BaseMagnitude(a.Stat)))
-            .First().Stat;
-    }
-
-    /// <summary>The item's prefix (from its dominant affix), or null for an affix-less item (a Common).</summary>
+    /// <summary>
+    /// The item's name prefix — its PREFIX trait's name, or null for a plain drop.
+    /// </summary>
+    /// <remarks>
+    /// It used to come from the dominant AFFIX, while the trait was a separate word shown elsewhere —
+    /// two vocabularies for "what this item is like". The prefix trait is the item's character now
+    /// (rolled at mint, immutable), so the NAME carries it: "KEEN SHADOW BOW" is keen forever, and a
+    /// reforge can never rename a weapon into a different-sounding one again.
+    /// </remarks>
     public static string? Prefix(ItemInstance? item)
-        => DominantAffix(item) is { } stat ? Prefixes[stat] : null;
+        => GearTraits.TraitOf(item) is { } t ? GearTraits.NameOf(t) : null;
 
     /// <summary>Which weapon family this item is — stable across its life (InstanceId-derived, ilvl-independent).</summary>
     public static int WeaponFamilyIndex(ItemInstance item) => (int)(Fnv1a(item.InstanceId + "|fam") % (uint)WeaponFamilies.Length);
-
-    /// <summary>Which art variant within the family (0-based) — also stable.</summary>
-    public static int WeaponVariantIndex(ItemInstance item) => (int)(Fnv1a(item.InstanceId + "|var") % WeaponVariants);
-
-    /// <summary>The runtime art key for this item's icon, if it's a weapon (`weapon_&lt;family&gt;_NN`).</summary>
-    public static string WeaponArtKey(ItemInstance item)
-        => $"weapon_{WeaponFamilies[WeaponFamilyIndex(item)]}_{WeaponVariantIndex(item) + 1:00}";
 
     /// <summary>A stable per-item seed for picking non-weapon thumbnail art — InstanceId-derived, so a
     /// refine (which changes the item level) never shuffles which thumbnail an item shows.</summary>
@@ -83,6 +59,7 @@ public static class ItemNaming
         ItemBaseType.Boots => "BOOTS",
         ItemBaseType.Ring => "RING",
         ItemBaseType.CreatureCore => "CORE",
+        ItemBaseType.Gem => "GEM",
         _ => "MATERIAL",
     };
 
@@ -93,6 +70,8 @@ public static class ItemNaming
     public static string FullName(ItemInstance? item)
     {
         if (item is null) return "";
+        // A gem names itself by its stat and level — "TEMPO GEM 4" — never by element or slot word.
+        if (item.BaseType == ItemBaseType.Gem) return $"{GemCraft.NameOf(item)} {item.ItemLevel}";
         var parts = new[]
         {
             Prefix(item),

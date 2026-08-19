@@ -60,7 +60,11 @@ public class EnchantmentsTests
         var pairs = new HashSet<(GearTrait, EnchantKind)>();
         for (var i = 0; i < 400; i++)
         {
-            var it = Item($"w_{i}", ItemBaseType.Weapon);
+            // Minted the way loot mints: prefix from the RNG, enchantment from the id — two dice.
+            var it = Item($"w_{i}", ItemBaseType.Weapon) with
+            {
+                TraitOverride = GearTraits.RollPrefix(ItemBaseType.Weapon, new Random(i)),
+            };
             if (GearTraits.TraitOf(it) is { } t && Enchantments.Of(it) is { } e)
                 pairs.Add((t, e.Kind));
         }

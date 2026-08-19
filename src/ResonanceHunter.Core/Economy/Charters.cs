@@ -57,7 +57,7 @@ public static class Charters
     public static string Blurb(Charter c) => c switch
     {
         Charter.Refine => "One REFINE, free — no Scrap and no Gleam.",
-        Charter.Reforge => "One REFORGE, free — trait or enchantment, whichever you re-roll.",
+        Charter.Reforge => "One REFORGE of the enchantment, free.",
         Charter.Salvage => "One SALVAGE, at double materials.",
         _ => "One MERGE that ignores the same-rarity rule — the lowest of the three sets the grade.",
     };

@@ -25,8 +25,9 @@ namespace ResonanceHunter.Core.Forging;
 /// </remarks>
 public sealed record ReforgeTuning
 {
-    /// <summary>Material cost to re-roll a TRAIT, indexed by <see cref="Rarity"/> (Common..Legendary).</summary>
-    public IReadOnlyList<int> TraitCost { get; init; } = new[] { 8, 12, 20, 45, 100 };
+    // (TraitCost is gone with the trait re-roll: an item's PREFIX is rolled at mint and immutable —
+    //  playtest: re-rolling it read as the weapon turning into a different weapon. The Reforge's one
+    //  remaining verb is the enchantment.)
 
     /// <summary>
     /// Material cost to re-roll an ENCHANTMENT, indexed by rarity. Zero below Rare — those items have no
@@ -36,7 +37,6 @@ public sealed record ReforgeTuning
 
     public static ReforgeTuning Default { get; } = new();
 
-    public int TraitCostFor(Rarity r) => TraitCost[(int)r];
     public int EnchantCostFor(Rarity r) => EnchantCost[(int)r];
 }
 
@@ -81,25 +81,6 @@ public sealed record ReforgeResult
 /// </remarks>
 public static class Reforge
 {
-    public static ReforgeResult ReforgeTrait(ItemInstance item, Random rng, ReforgeTuning tuning)
-    {
-        ArgumentNullException.ThrowIfNull(item);
-        ArgumentNullException.ThrowIfNull(rng);
-        ArgumentNullException.ThrowIfNull(tuning);
-
-        if (Gear.SlotFor(item.BaseType) is not { } slot)
-            return new ReforgeResult { Rejection = "ONLY WEAPONS, CHARMS AND FOCUSES HAVE A TRAIT." };
-
-        var current = GearTraits.TraitOf(item);
-        var picked = Roll(GearTraits.PoolFor(slot), current, rng);
-
-        return new ReforgeResult
-        {
-            Product = item with { TraitOverride = picked },
-            Cost = tuning.TraitCostFor(item.Rarity),
-        };
-    }
-
     public static ReforgeResult ReforgeEnchant(ItemInstance item, Random rng, ReforgeTuning tuning)
     {
         ArgumentNullException.ThrowIfNull(item);

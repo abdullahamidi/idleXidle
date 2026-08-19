@@ -1045,6 +1045,17 @@ public class Game1 : Game
                         InstanceId = "dev_fervour", BaseType = ItemBaseType.Weapon, Rarity = Rarity.Legendary,
                         SellValue = 240, Element = Source.Body, EnchantOverride = EnchantKind.Fervour,
                     });
+                    // Two loose gems, so the SOCKETS strip poses with supply on the bench.
+                    seed.Add(new ItemInstance
+                    {
+                        InstanceId = "dev_gem1", BaseType = ItemBaseType.Gem, Rarity = Rarity.Rare,
+                        SellValue = 50, ItemLevel = 5,
+                    });
+                    seed.Add(new ItemInstance
+                    {
+                        InstanceId = "dev_gem2", BaseType = ItemBaseType.Gem, Rarity = Rarity.Epic,
+                        SellValue = 80, ItemLevel = 8,
+                    });
                     _forge.AddLoot(seed);
                     TellForgeTheBuild(_loadout.ToBuild(_dust, _mastery, _characters.Active));
                     _forge.DevFocus("dev_siphon");   // the SIPHON charm — poses the longest combo line on the bench
