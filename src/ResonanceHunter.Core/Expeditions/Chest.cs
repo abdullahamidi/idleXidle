@@ -158,6 +158,38 @@ public sealed record ChestTuning
 public static class Chests
 {
     /// <summary>
+    /// Does this chest pass the player's keep-filter?
+    /// </summary>
+    /// <remarks>
+    /// Playtest: "Gereksiz chestleri almak istemezsem diye loot filtresi koyabilmem lazım... örneğin
+    /// sadece tier 10 üstü, veya sadece ring atan kutuları al." Two axes: a tier floor, and a slot the
+    /// chest's region must favour. A chest with NO regional lean can drop anything, so it passes every
+    /// slot filter — filtering it away would throw out exactly the chests that might hold the wanted
+    /// slot.
+    /// </remarks>
+    public static bool PassesKeepFilter(Chest chest, int minTier, ItemBaseType? slot)
+    {
+        ArgumentNullException.ThrowIfNull(chest);
+        if (chest.Tier < minTier) return false;
+        if (slot is { } wanted)
+        {
+            var favoured = ChestDossiers.For(chest).Favoured;
+            if (favoured.Count > 0 && !favoured.Contains(wanted)) return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// What a filtered-away chest pays instead of landing — modest Scrap, so the filter is a
+    /// convenience, never a farm that outearns opening.
+    /// </summary>
+    public static int FilterCompensation(Chest chest)
+    {
+        ArgumentNullException.ThrowIfNull(chest);
+        return 8 + chest.Tier;
+    }
+
+    /// <summary>
     /// Roll a chest's GRADE for a drop at a given tier. Deeper tiers push the odds toward the top.
     /// </summary>
     /// <remarks>

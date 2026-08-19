@@ -89,6 +89,30 @@ public sealed class ChestScreen
     /// <summary>Which chest a click chose — the host needs it to open the right one.</summary>
     public int SelectedIndex => _cursor;
 
+    // ── The keep-filter. Host-fed, host-persisted; this screen only edits it. ─────────────────
+    /// <summary>Chests below this tier never land — they arrive as a little Scrap instead. 0 = all.</summary>
+    public int KeepMinTier { get; set; }
+
+    /// <summary>Keep only chests whose region favours this slot (no-lean chests always pass). Null = any.</summary>
+    public ItemBaseType? KeepSlot { get; set; }
+
+    /// <summary>Set when the player edited the filter — the host copies it back and saves.</summary>
+    public bool FilterDirty { get; set; }
+
+    private static readonly ItemBaseType?[] SlotCycle =
+    {
+        null, ItemBaseType.Weapon, ItemBaseType.Helm, ItemBaseType.Chest, ItemBaseType.Gloves,
+        ItemBaseType.Boots, ItemBaseType.Charm, ItemBaseType.AbilityFocus, ItemBaseType.Ring,
+    };
+
+    private static string SlotLabel(ItemBaseType? t) => t switch
+    {
+        null => "ANY SLOT",
+        ItemBaseType.AbilityFocus => "FOCUS",
+        ItemBaseType.Chest => "CHESTPLATE",
+        _ => t.Value.ToString().ToUpperInvariant(),
+    };
+
     // ── Layout ──────────────────────────────────────────────────────────────────────────────────
     /// <summary>Full width now — the detail column is gone. Height decided per-frame; see below.</summary>
     private static readonly Rectangle GridPanel = new(38, 144, 1842, 718);
@@ -105,7 +129,8 @@ public sealed class ChestScreen
     private static Rectangle GridPanelFor(int count)
     {
         var rows = Math.Clamp((count + Cols - 1) / Cols, 1, Rows);
-        return GridPanel with { Height = 358 + (rows - 1) * 230 };
+        // +42 for the filter row under the header. Aspects (1842 wide): 4.6 / 2.9 / 2.1 — all medium.
+        return GridPanel with { Height = 400 + (rows - 1) * 230 };
     }
 
     private const int Cols = 6;
@@ -113,7 +138,7 @@ public sealed class ChestScreen
     private const int PerPage = Cols * Rows;
 
     private static Rectangle Card(int visible) =>
-        new(GridPanel.X + 46 + visible % Cols * 290, GridPanel.Y + 108 + visible / Cols * 230, 270, 210);
+        new(GridPanel.X + 46 + visible % Cols * 290, GridPanel.Y + 150 + visible / Cols * 230, 270, 210);
 
     /// <summary>The "?" corner chip — drawn 30px, hit-tested 46px (Fitts's Law padding, house rule).</summary>
     private static Rectangle QChip(Rectangle card) => new(card.Right - 44, card.Y + 12, 30, 30);
@@ -202,12 +227,14 @@ public sealed class ChestScreen
             : string.Join("   ", tally.Select(t => $"{t.Count} {t.Grade.ToString().ToUpperInvariant()}"));
         _ui.TextBig(b, summary, GridPanel.X + 46, GridPanel.Y + 72, Slate, UiTypography.Secondary);
 
+        DrawFilterRow(b, hit, clicked);
+
         if (sorted.Count == 0)
         {
             _ui.TextBig(b, "No chests. Bosses drop them — about one boss in five.",
-                        GridPanel.X + 46, GridPanel.Y + 150, Dim, UiTypography.Body);
+                        GridPanel.X + 46, GridPanel.Y + 190, Dim, UiTypography.Body);
             _ui.TextBig(b, "When one arrives: click the chest to open it, hover its ? to read what it holds.",
-                        GridPanel.X + 46, GridPanel.Y + 184, Dim, UiTypography.Body);
+                        GridPanel.X + 46, GridPanel.Y + 224, Dim, UiTypography.Body);
             return;
         }
 
@@ -296,6 +323,52 @@ public sealed class ChestScreen
         }
 
         DrawDossierTip(b, sorted);
+    }
+
+    /// <summary>
+    /// The keep-filter row: a tier floor and a slot lean. Chests that fail it never reach the vault —
+    /// they arrive as a little Scrap — so a player who restarts from wave one after death is not
+    /// wading through tier-2 boxes for the rest of the game.
+    /// </summary>
+    private void DrawFilterRow(SpriteBatch b, Point hit, bool clicked)
+    {
+        var y = GridPanel.Y + 104;
+        _ui.Text(b, "TAKE ONLY:", GridPanel.X + 46, y + 6, Slate);
+
+        // TIER floor: [-] TIER >= N [+]. Mini flat controls — the ornate button art collapses at 34px.
+        var minus = new Rectangle(GridPanel.X + 188, y, 34, 34);
+        var plus = new Rectangle(GridPanel.X + 366, y, 34, 34);
+        MiniButton(b, minus, "-", hit);
+        MiniButton(b, plus, "+", hit);
+        _ui.TextCenter(b, KeepMinTier <= 0 ? "ANY TIER" : $"TIER {KeepMinTier}+",
+                       (minus.Right + plus.X) / 2, y + 6, KeepMinTier > 0 ? Gold : Slate);
+        if (UiKit.ClickedIn(minus, hit, clicked) && KeepMinTier > 0) { KeepMinTier -= 1; FilterDirty = true; }
+        if (UiKit.ClickedIn(plus, hit, clicked) && KeepMinTier < 99) { KeepMinTier += 1; FilterDirty = true; }
+
+        // SLOT lean: one button cycling ANY SLOT -> WEAPON -> ... -> RING.
+        var slotBtn = new Rectangle(GridPanel.X + 430, y, 220, 34);
+        MiniButton(b, slotBtn, SlotLabel(KeepSlot), hit, KeepSlot is not null);
+        if (UiKit.ClickedIn(slotBtn, hit, clicked))
+        {
+            var idx = Array.IndexOf(SlotCycle, KeepSlot);
+            KeepSlot = SlotCycle[(idx + 1) % SlotCycle.Length];
+            FilterDirty = true;
+        }
+
+        if (KeepMinTier > 0 || KeepSlot is not null)
+            _ui.Text(b, "THE REST ARRIVE AS A LITTLE SCRAP", slotBtn.Right + 24, y + 6, Dim);
+    }
+
+    private void MiniButton(SpriteBatch b, Rectangle r, string label, Point hit, bool lit = false)
+    {
+        var hot = r.Contains(hit);
+        _ui.Fill(b, r, new Color(0x14, 0x10, 0x1A, 0xE0));
+        var edge = lit ? Gold * 0.8f : hot ? Bone : Dim;
+        _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, 2), edge);
+        _ui.Fill(b, new Rectangle(r.X, r.Bottom - 2, r.Width, 2), edge);
+        _ui.Fill(b, new Rectangle(r.X, r.Y, 2, r.Height), edge);
+        _ui.Fill(b, new Rectangle(r.Right - 2, r.Y, 2, r.Height), edge);
+        _ui.TextCenter(b, label, r.Center.X, r.Y + 6, lit ? Gold : hot ? Bone : Slate);
     }
 
     /// <summary>

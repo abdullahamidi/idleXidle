@@ -154,6 +154,12 @@ public sealed record SaveGame
     /// </remarks>
     public List<SavedChest> UnopenedChests { get; init; } = new();
 
+    /// <summary>The VAULT's keep-filter: chests below this tier arrive as a little Scrap instead. 0 = keep all.</summary>
+    public int ChestKeepMinTier { get; init; }
+
+    /// <summary>The keep-filter's slot lean (an <c>ItemBaseType</c> name), or null for any slot.</summary>
+    public string? ChestKeepSlot { get; init; }
+
     // ── The Warren facility economy ──────────────────────────────────────────────────────────────
     /// <summary>Warren level. Defaults to 1 so pre-Warren saves load a fresh level-1 base — no version bump.</summary>
     public int WarrenLevel { get; init; } = 1;

@@ -175,6 +175,9 @@ public class Game1 : Game
     private double _champGleamAccrued, _champSecondsAccrued;
     private float _champGleamRate;
     private int _chestsCredited;   // chests already credited to CRAFTER evolution (delta vs _forge.ChestsOpened)
+    // The VAULT's keep-filter — playthrough state, saved with the run (see ChestScreen.KeepMinTier).
+    private int _chestKeepMinTier;
+    private ItemBaseType? _chestKeepSlot;
     private float? _pendingRevealPose;   // RH_SHOT_T for the chest reveal, applied once the fixture has opened one
     private BuildScreen _buildScreen = null!;
     private bool _showBuild;
@@ -450,6 +453,9 @@ public class Game1 : Game
         // correct, present, and not enough — which is why the guard for it is now a test rather than a
         // paragraph.
         _pendingChestsOpened = save.ChestsOpened;
+        _chestKeepMinTier = save.ChestKeepMinTier;
+        _chestKeepSlot = Enum.TryParse<ItemBaseType>(save.ChestKeepSlot ?? "", out var keepSlot)
+            ? keepSlot : null;
         _chestsCredited = save.ChestsCredited;
 
         var roster = SaveSystem.RestoreRoster(save);
@@ -670,6 +676,8 @@ public class Game1 : Game
             QuestsDone = _characters.SaveQuests().ToList(),
             RunsWithVowKept = _runsWithVowKept,
             ChestsOpened = _forge.ChestsOpened,
+            ChestKeepMinTier = _chestKeepMinTier,
+            ChestKeepSlot = _chestKeepSlot?.ToString(),
             ChestsCredited = _chestsCredited,
             MasteryEarned = _deepestEver,          // stored as deepest-ever; Earned is re-derived on load
             ChampionGleamRate = _champGleamRate,
@@ -1762,7 +1770,15 @@ public class Game1 : Game
         // while an invisible one eats their clicks.
         if (_showChests)
         {
+            _chests.KeepMinTier = _chestKeepMinTier;
+            _chests.KeepSlot = _chestKeepSlot;
             _chests.Update(dt, _forge.UnopenedChests, CanvasMouse, MouseClicked, MouseWheel);
+            if (_chests.FilterDirty)
+            {
+                _chests.FilterDirty = false;
+                (_chestKeepMinTier, _chestKeepSlot) = (_chests.KeepMinTier, _chests.KeepSlot);
+                Save();
+            }
 
             switch (_chests.ConsumeOpen())
             {
@@ -2507,8 +2523,18 @@ public class Game1 : Game
         // the end of the descent, and the chest that descent earned remembers it. Without this the whole
         // chain terminated in a field nothing read, which made REAPER a keystone you pay for and get
         // nothing from.
-        _forge.AddChest(Chests.RollDrop(lootTier, def.Theme, _rng, runTilt: _expedition.CarriedQuality,
-                                        region: _activeRegion));
+        var rolled = Chests.RollDrop(lootTier, def.Theme, _rng, runTilt: _expedition.CarriedQuality,
+                                     region: _activeRegion);
+
+        // THE KEEP-FILTER. A chest the player said no to never lands — it arrives as a little Scrap,
+        // and the banner must not sing about a chest that is not there (hence false, not true).
+        if (!Chests.PassesKeepFilter(rolled, _chestKeepMinTier, _chestKeepSlot))
+        {
+            _hunter.AddMaterials(Chests.FilterCompensation(rolled));
+            return false;
+        }
+
+        _forge.AddChest(rolled);
         return true;
     }
 
