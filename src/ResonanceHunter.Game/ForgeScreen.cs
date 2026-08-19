@@ -726,13 +726,14 @@ public sealed class ForgeScreen
     private static Material EnchantReforgeTier(Rarity r) => r == Rarity.Legendary ? Material.Crystal : Material.Core;
 
     /// <summary>
-    /// REFINE: spend SCRAP + Gold to raise the item's level by 1, which raises its affixes. The bulk,
-    /// infinite sink — the cost climbs with the item's level, so it never stops draining.
+    /// REFINE: spend SCRAP + Gold for one rung of the ladder — 15 rungs, the first five safe, then a
+    /// rising slip chance. A slip still costs the materials and steps the item back one level and one
+    /// rung; the ladder is climbed, not bought.
     /// </summary>
     private void DoRefine(Hunter hunter, ItemInstance? item)
     {
         if (item is null || !Gear.IsWearable(item)) { Say("ONLY WEARABLES CAN BE REFINED.", Ember); return; }
-
+        if (Forge.AtRefineCap(item, Tuning)) { Say("FULLY REFINED — +15 IS THE TOP OF THE LADDER.", Slate); return; }
 
         var r = Forge.Refine(item, Tuning);
 
@@ -749,10 +750,14 @@ public sealed class ForgeScreen
         if (chart) hunter.SpendCharter(Charter.Refine);
         else { hunter.SpendMaterial(Material.Scrap, r.Scrap); hunter.SpendGleam(r.Gold); }
 
-        ReplaceItem(hunter, item, r.Product);
-        Say(chart
-                ? $"REFINED TO LEVEL {r.Product.ItemLevel}  (REFINE CHART — FREE)."
-                : $"REFINED TO LEVEL {r.Product.ItemLevel}  ({r.Scrap} SCRAP + {r.Gold} G).", Gold);
+        var outcome = Forge.TryRefine(item, Tuning, _rng);
+        ReplaceItem(hunter, item, outcome.Product);
+        if (outcome.Failed)
+            Say($"THE REFINE SLIPPED — BACK TO LEVEL {outcome.Product.ItemLevel} (+{outcome.Product.Upgrades}).", Ember);
+        else
+            Say(chart
+                    ? $"REFINED TO LEVEL {outcome.Product.ItemLevel} (+{outcome.Product.Upgrades})  (REFINE CHART — FREE)."
+                    : $"REFINED TO LEVEL {outcome.Product.ItemLevel} (+{outcome.Product.Upgrades})  ({r.Scrap} SCRAP + {r.Gold} G).", Gold);
     }
 
     /// <summary>
@@ -763,7 +768,7 @@ public sealed class ForgeScreen
     private void DoGreaterRefine(Hunter hunter, ItemInstance? item)
     {
         if (item is null || !Gear.IsWearable(item)) { Say("ONLY WEARABLES CAN BE REFINED.", Ember); return; }
-
+        if (Forge.AtRefineCap(item, Tuning)) { Say("FULLY REFINED — +15 IS THE TOP OF THE LADDER.", Slate); return; }
 
         var r = Forge.GreaterRefine(item, Tuning);
         if (hunter.MaterialOf(Material.Crystal) < r.Crystal) { Say($"NEED {r.Crystal} CRYSTAL TO GREATER-REFINE.", Ember); return; }
@@ -772,7 +777,7 @@ public sealed class ForgeScreen
         hunter.SpendMaterial(Material.Crystal, r.Crystal);
         hunter.SpendGleam(r.Gold);
         ReplaceItem(hunter, item, r.Product);
-        Say($"GREATER-REFINED TO LEVEL {r.Product.ItemLevel}  ({r.Crystal} CRYSTAL + {r.Gold} G).", Gold);
+        Say($"GREATER-REFINED TO LEVEL {r.Product.ItemLevel} (+{r.Product.Upgrades})  ({r.Crystal} CRYSTAL + {r.Gold} G, NEVER SLIPS).", Gold);
     }
 
     private static bool IsWorn(Hunter hunter, ItemInstance item)
@@ -1357,22 +1362,36 @@ public sealed class ForgeScreen
         DrawCostRow(b, CostPanel.Y + 326, "GLEAM", hunter.Gleam, r.Gold, Gold, true);
 
         _ui.Fill(b, new Rectangle(CostPanel.X + 40, CostPanel.Y + 392, CostPanel.Width - 80, 2), Dim);
-        // Shortened: the long form ran 76px past the panel interior.
-        _ui.Text(b, "GUARANTEED  ·  NO DOWNGRADE", CostPanel.X + 40, CostPanel.Y + 412, Met);
-        DrawWrapped(b, "No cap — the cost climbs each level.", CostPanel.X + 40, CostPanel.Y + 442, CostPanel.Width - 80, Slate);
+        // THE LADDER, in plain words: the rung, the safety, and what a slip costs. The old line here
+        // promised "GUARANTEED · NO DOWNGRADE" — the exact opposite of the rework's rule.
+        var atCap = Forge.AtRefineCap(item, Tuning);
+        _ui.Text(b, $"UPGRADE {item.Upgrades} / {Tuning.MaxUpgrades}", CostPanel.X + 40, CostPanel.Y + 412,
+                 atCap ? Gold : Bone);
+        if (atCap)
+            DrawWrapped(b, "The top of the ladder. It climbs no further.", CostPanel.X + 40, CostPanel.Y + 442, CostPanel.Width - 80, Slate);
+        else if (r.FailChance <= 0)
+            DrawWrapped(b, $"Safe — the first {Tuning.RefineSafeUpgrades} never fail.", CostPanel.X + 40, CostPanel.Y + 442, CostPanel.Width - 80, Met);
+        else
+            DrawWrapped(b, $"{(1 - r.FailChance) * 100:0}% success. A slip drops one level and one rung.",
+                        CostPanel.X + 40, CostPanel.Y + 442, CostPanel.Width - 80, Ember);
 
-        var can = hunter.MaterialOf(Material.Scrap) >= r.Scrap && hunter.Gleam >= r.Gold;
+        var can = !atCap && hunter.MaterialOf(Material.Scrap) >= r.Scrap && hunter.Gleam >= r.Gold;
         var greater = Forge.GreaterRefine(item, Tuning);
         var hasCrystal = hunter.MaterialOf(Material.Crystal) >= greater.Crystal;
         var kb = Keyboard.GetState();
-        var doGreat = (kb.IsKeyDown(Keys.LeftShift) || kb.IsKeyDown(Keys.RightShift)) && hasCrystal;
-        var canGreat = hunter.Gleam >= greater.Gold;
+        var doGreat = (kb.IsKeyDown(Keys.LeftShift) || kb.IsKeyDown(Keys.RightShift)) && hasCrystal && !atCap;
+        var canGreat = !atCap && hunter.Gleam >= greater.Gold;
 
         // Worn gear upgrades like anything else now — ReplaceItem re-points the worn slot.
-        if (hasCrystal) _ui.TextCenter(b, "HOLD SHIFT: +5 FOR 1 CRYSTAL", CostPanel.Center.X, CostPanel.Bottom - 152, Slate);
+        if (hasCrystal && !atCap)
+            _ui.TextCenter(b, $"HOLD SHIFT: +{greater.Steps} FOR 1 CRYSTAL — NEVER SLIPS", CostPanel.Center.X, CostPanel.Bottom - 152, Slate);
 
         var btn = new Rectangle(CostPanel.X + 40, CostPanel.Bottom - 96, CostPanel.Width - 80, 72);
-        if (_ui.Button(b, btn, doGreat ? "GREATER UPGRADE  +5 LEVELS" : "UPGRADE  +1 LEVEL", hit, clicked, enabled: doGreat ? canGreat : can))
+        var btnLabel = atCap ? "FULLY REFINED  +15"
+            : doGreat ? $"GREATER UPGRADE  +{greater.Steps}"
+            : r.FailChance <= 0 ? "UPGRADE  +1 LEVEL"
+            : $"UPGRADE  +1  ({(1 - r.FailChance) * 100:0}% SUCCESS)";
+        if (_ui.Button(b, btn, btnLabel, hit, clicked, enabled: doGreat ? canGreat : can))
         {
             if (doGreat) DoGreaterRefine(hunter, item); else DoRefine(hunter, item);
         }

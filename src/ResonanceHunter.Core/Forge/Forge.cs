@@ -41,6 +41,13 @@ public sealed record ForgeTuning
     /// <summary>REFINE's base Scrap cost; the full cost adds the item's current level, so it always climbs.</summary>
     public int RefineScrapBase { get; init; } = 4;
 
+    // ── The refine LADDER (playtest, upgrade rework): 15 rungs, the first 5 safe, then a rising
+    //    slip chance. A slip drops one level and one rung. ──
+    public int MaxUpgrades { get; init; } = 15;
+    public int RefineSafeUpgrades { get; init; } = 5;
+    public float RefineFailStep { get; init; } = 0.06f;
+    public float RefineFailCap { get; init; } = 0.60f;
+
     /// <summary>REFINE's base Gold cost; the full cost adds 8× the item's level.</summary>
     public int RefineGoldBase { get; init; } = 15;
 
@@ -48,7 +55,17 @@ public sealed record ForgeTuning
 }
 
 /// <summary>The outcome of a refine: the leveled-up item and what it costs across the tiers.</summary>
-public sealed record RefineResult(ItemInstance Product, int Scrap, int Gold, int Crystal);
+public sealed record RefineResult(ItemInstance Product, int Scrap, int Gold, int Crystal)
+{
+    /// <summary>Chance this refine SLIPS (see <see cref="Forge.RefineFailChance"/>). Zero on the safe rungs.</summary>
+    public double FailChance { get; init; }
+
+    /// <summary>GreaterRefine only: how many rungs it actually buys (the +15 cap can shrink it).</summary>
+    public int Steps { get; init; } = 1;
+}
+
+/// <summary>What a rolled refine actually did: the product, and whether it slipped a level.</summary>
+public sealed record RefineOutcome(ItemInstance Product, bool Failed);
 
 public sealed record MergeResult
 {
@@ -227,27 +244,79 @@ public static class Forge
     /// one thing an idle economy must have or its late-game currency inflates into meaninglessness. Pure:
     /// it returns the leveled item and the price; the caller checks the stock and spends, like Reforge.
     /// </remarks>
+    /// <summary>
+    /// The chance the NEXT refine of this item slips. Zero through the safe rungs, then climbing.
+    /// </summary>
+    /// <remarks>
+    /// Playtest, upgrade rework: "+15 olarak sınırlayarak... giderek yükselecek şekilde downgrade
+    /// oranı koyarak." Rung 6 risks 6%, each further rung +6%, capped at 60% for rung 15. A slip
+    /// steps the item level AND the rung back by one — the ladder is climbed, not bought, and a slip
+    /// also re-cheapens the next attempt, so a bad streak softens itself.
+    /// </remarks>
+    public static double RefineFailChance(ItemInstance item, ForgeTuning tuning)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(tuning);
+        var attempt = item.Upgrades + 1;
+        if (attempt <= tuning.RefineSafeUpgrades) return 0;
+        return Math.Min(tuning.RefineFailCap, (attempt - tuning.RefineSafeUpgrades) * tuning.RefineFailStep);
+    }
+
+    /// <summary>Has this item climbed the whole ladder?</summary>
+    public static bool AtRefineCap(ItemInstance item, ForgeTuning tuning)
+        => item.Upgrades >= tuning.MaxUpgrades;
+
+    /// <summary>
+    /// The refine PREVIEW: the success product, the price, and the slip chance. Deterministic — the
+    /// screens draw from this; the actual roll is <see cref="TryRefine"/>.
+    /// </summary>
     public static RefineResult Refine(ItemInstance item, ForgeTuning tuning)
     {
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(tuning);
+        // The cost climbs with the item level AND with the rung — the ladder's top must be earned.
+        var costScale = 4 + item.Upgrades;
         return new RefineResult(
-            item with { ItemLevel = item.ItemLevel + 1 },
-            Scrap: tuning.RefineScrapBase + item.ItemLevel,
-            Gold: tuning.RefineGoldBase + item.ItemLevel * 8,
-            Crystal: 0);
+            item with { ItemLevel = item.ItemLevel + 1, Upgrades = item.Upgrades + 1 },
+            Scrap: (tuning.RefineScrapBase + item.ItemLevel) * costScale / 4,
+            Gold: (tuning.RefineGoldBase + item.ItemLevel * 8) * costScale / 4,
+            Crystal: 0)
+        { FailChance = RefineFailChance(item, tuning) };
     }
 
-    /// <summary>GREATER REFINE: +5 item levels for one CRYSTAL (plus Gold) — the premium sink for the rarest tier.</summary>
+    /// <summary>
+    /// Roll the refine: the success product, or the SLIP product (one level and one rung down, never
+    /// below the floor). The caller has already checked the cap and paid — a slip is not a refund.
+    /// </summary>
+    public static RefineOutcome TryRefine(ItemInstance item, ForgeTuning tuning, Random rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        var preview = Refine(item, tuning);
+        if (rng.NextDouble() >= preview.FailChance) return new RefineOutcome(preview.Product, Failed: false);
+        return new RefineOutcome(
+            item with
+            {
+                ItemLevel = Math.Max(1, item.ItemLevel - 1),
+                Upgrades = Math.Max(0, item.Upgrades - 1),
+            },
+            Failed: true);
+    }
+
+    /// <summary>
+    /// GREATER REFINE: up to +5 rungs for one CRYSTAL (plus Gold) — SAFE, never slips. The premium
+    /// currency's promise is certainty; it still cannot pass the +15 cap (Steps says what it bought).
+    /// </summary>
     public static RefineResult GreaterRefine(ItemInstance item, ForgeTuning tuning)
     {
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(tuning);
+        var steps = Math.Clamp(tuning.MaxUpgrades - item.Upgrades, 0, 5);
         return new RefineResult(
-            item with { ItemLevel = item.ItemLevel + 5 },
+            item with { ItemLevel = item.ItemLevel + steps, Upgrades = item.Upgrades + steps },
             Scrap: 0,
             Gold: (tuning.RefineGoldBase + item.ItemLevel * 8) * 3,
-            Crystal: 1);
+            Crystal: 1)
+        { Steps = steps };
     }
 
     /// <summary>

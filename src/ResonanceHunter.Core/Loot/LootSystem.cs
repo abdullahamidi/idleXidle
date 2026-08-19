@@ -53,6 +53,13 @@ public sealed record ItemInstance
     public int ItemLevel { get; init; } = 1;
 
     /// <summary>
+    /// How many REFINES this item has taken, 0..15. The redesign's enhancement ladder: the first five
+    /// never fail, then a rising slip chance, and +15 is the top. A failed refine steps BOTH this and
+    /// the item level back by one, so the ladder is climbed, not bought.
+    /// </summary>
+    public int Upgrades { get; init; }
+
+    /// <summary>
     /// The item's element, or null for the elementally inert (materials, cores).
     /// </summary>
     /// <remarks>

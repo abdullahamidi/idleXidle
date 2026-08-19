@@ -286,6 +286,9 @@ public sealed record SavedItem
     /// <summary>The item's level. Defaulted to 1 so pre-ilvl saves load clean, no version bump needed.</summary>
     public int ItemLevel { get; init; } = 1;
 
+    /// <summary>Refines taken (0..15). Pre-ladder saves default to 0 — a fresh ladder, not a crash.</summary>
+    public int Upgrades { get; init; }
+
     public string? EquippedToCreatureId { get; init; }
 
     /// <summary>
@@ -488,6 +491,7 @@ public static class SaveSystem
         Rarity = (int)i.Rarity,
         SellValue = i.SellValue,
         ItemLevel = i.ItemLevel,
+        Upgrades = i.Upgrades,
         EquippedToCreatureId = i.EquippedToCreatureId,
         // "NONE" for a genuinely plain item, so the loader can tell "rolled plain" from "written by
         // a pre-redesign build that never had this field" — the latter gets the legacy derivation.
@@ -505,6 +509,7 @@ public static class SaveSystem
         Rarity = (Rarity)s.Rarity,
         SellValue = s.SellValue,
         ItemLevel = s.ItemLevel,
+        Upgrades = s.Upgrades,
         EquippedToCreatureId = s.EquippedToCreatureId,
         TraitOverride = s.TraitOverride is null
             ? Economy.GearTraits.LegacyDerivedTrait(s.InstanceId, Enum.Parse<ItemBaseType>(s.BaseType))

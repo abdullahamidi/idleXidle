@@ -216,7 +216,10 @@ public class GleamEconomyTest
         // And the other end, at the slowest: a progression nobody can finish is not a progression.
         var slowest = sink / (WarrenGleamPerMinute(conquered: 1)
                               + ChampionGleamPerMinute(stopAtWave: 40, ranks: 120) * BattleSpeeds[0]) / 60.0;
-        Assert.True(slowest <= 120,
+        // 300, not 120: the designer explicitly chose the long grind ("Idle oyun olduğu için uzun
+        // uzun oynanıp kasılması lazım", playtest 2026-08-20, with the 1.13 growth rate). The guard
+        // now catches absurdity (a progression nobody could ever finish), not length.
+        Assert.True(slowest <= 300,
             $"the full progression needs {slowest:N0} hours at x{BattleSpeeds[0]:0}. That is a grind, not a curve.");
     }
 

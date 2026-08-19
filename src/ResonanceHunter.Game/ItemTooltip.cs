@@ -172,7 +172,10 @@ public static class ItemTooltip
             ui.Text(b, GearTraits.NameOf(trait), lx, cy, Gold);
             ui.TextRight(b, "PREFIX", rx, cy, Dim);
             cy += 26;
-            ui.Text(b, GearTraits.BlurbOf(trait).ToUpperInvariant(), lx, cy, Ink);
+            // The REAL numbers, not the blurb: the prefix already scales with item level
+            // (GearTraits.ModsFor folds ItemLevelFactor in), but a fixed sentence made it read as
+            // flat — playtest: "prefix statları sabit kalmasın." An upgrade now visibly deepens it.
+            ui.Text(b, PrefixNumbers(item), lx, cy, Ink);
             cy += 36;
         }
 
@@ -183,5 +186,23 @@ public static class ItemTooltip
             cy += 26;
             ui.Text(b, ench.Blurb.ToUpperInvariant(), lx, cy, Ink);
         }
+    }
+
+    /// <summary>The prefix's real trade at THIS item's level — "DAMAGE +38% · LOOT -20%".</summary>
+    private static string PrefixNumbers(ItemInstance item)
+    {
+        var m = GearTraits.ModsOf(item);
+        var parts = new System.Collections.Generic.List<string>();
+        void Add(string label, float v)
+        {
+            if (MathF.Abs(v - 1f) <= 0.005f) return;
+            var pct = (int)MathF.Round((v - 1f) * 100f);
+            parts.Add($"{label} {(pct >= 0 ? "+" : "")}{pct}%");
+        }
+        Add("DAMAGE", m.Damage);
+        Add("HEALTH", m.Health);
+        Add("SKILL RATE", m.SkillRate);
+        Add("LOOT", m.Haul);
+        return parts.Count == 0 ? "NO TRADE" : string.Join("  ·  ", parts);
     }
 }
