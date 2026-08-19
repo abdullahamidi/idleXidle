@@ -96,6 +96,15 @@ public sealed record ExpeditionTuning
     public int TickCeilingMs { get; init; } = 120_000;
     public int TickMs { get; init; } = 100;
 
+    /// <summary>
+    /// The flat pause every active skill takes at a wave's start (unless PREPARATION waives openings).
+    /// </summary>
+    /// <remarks>
+    /// Flat, not cooldown-proportional — a proportional breath taxed heavy builds hardest and broke
+    /// the branch balance sweep. See the note at the top of SoloBattle.ResolveWave's skill setup.
+    /// </remarks>
+    public int WaveOpeningMs { get; init; } = 700;
+
     public static ExpeditionTuning Default { get; } = new();
 }
 

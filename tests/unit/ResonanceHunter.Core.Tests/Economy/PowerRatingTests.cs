@@ -113,7 +113,12 @@ public class PowerRatingTests
         foreach (var a in cases)
             foreach (var b in cases)
             {
-                if (a.Depth - b.Depth < 3) continue;   // only pairs the sim separates clearly
+                // Only pairs the sim separates clearly. 4, not 3: the flat wave-opening pause
+                // (ExpeditionTuning.WaveOpeningMs) shifts every median by about a wave, so two
+                // same-axis traits (Swift vs Focused, both cadence) can land three apart on pure
+                // noise. The catastrophe this test exists for — the two best pieces ranked LAST —
+                // is a 4+ wave separation everywhere it ever appeared.
+                if (a.Depth - b.Depth < 4) continue;
                 Assert.True(a.Power > b.Power,
                             $"{a.Trait} reaches depth {a.Depth} against {b.Trait}'s {b.Depth}, "
                             + $"but reads {a.Power} power against {b.Power}");

@@ -353,6 +353,28 @@ public static class SoloBattle
         // little. Sharpening a keystone is the whole promise on the item's card; paying out without the
         // keystone would make it a flat damage roll wearing a combo's name, which is the trap this
         // project already walked into once with VENOMANCER.
+        // ── EVERY WAVE OPENS WITH A BREATH. Cooldowns persist across waves (that is what makes a
+        //    descent one continuous fight), so by each wave's first tick most skills had long
+        //    recovered and the opening was every skill firing inside the first half-second —
+        //    playtest: "skillerin cooldown'ları başlangıçta biraz daha yüksek olması lazım."
+        //    The breath is a FLAT delay, deliberately not cooldown-proportional: a half-cooldown
+        //    opening taxed slow, heavy builds hardest and broke both balance sweeps (Weight fell 1.41x
+        //    behind Endure). A flat pause costs every build the same instant. PREPARATION
+        //    (FreeOpeningCast) waives it — waiving openings is that node's entire identity. ──
+        if (!shape.FreeOpeningCast)
+        {
+            var wave0 = champ.ElapsedMs;
+            for (var i = 0; i < skills.Count; i++)
+            {
+                var f0 = skills[i].Form;
+                if (FormBehaviour.IsPassive(f0) || FormBehaviour.FiresOnBeingHit(f0)) continue;
+                var cd0 = Math.Max(1, (int)(FormBehaviour.BaseCooldownMs(f0)
+                                            / Math.Max(0.1f, mods.SkillRate * shape.SkillRate)));
+                champ.ReadyAt[i] = Math.Max(champ.ReadyAt.GetValueOrDefault(i, wave0 + cd0),
+                                            wave0 + tuning.WaveOpeningMs);
+            }
+        }
+
         var fervour = Economy.Enchantments.MagnitudeOf(hunter.WornEnchantments, Economy.EnchantKind.Fervour);
         var bulwark = Economy.Enchantments.MagnitudeOf(hunter.WornEnchantments, Economy.EnchantKind.Bulwark);
         var reverb = Economy.Enchantments.MagnitudeOf(hunter.WornEnchantments, Economy.EnchantKind.Reverb);

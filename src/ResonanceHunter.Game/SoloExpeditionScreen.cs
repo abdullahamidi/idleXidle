@@ -1777,7 +1777,15 @@ public sealed class SoloExpeditionScreen
                         var span = MathF.Max(1f, next - from);
                         ready = Math.Clamp((_playheadMs - from) / span, 0f, 1f);
                     }
-                    else if (prev >= 0) ready = 1f;   // fired already and will not fire again this wave
+                    else if (prev >= 0)
+                    {
+                        // It fired and will not fire again THIS WAVE — but a bar pinned at full read
+                        // as "this skill never cools down" (playtest: "ilk skill hiç cooldown'a
+                        // girmiyor"). Refill over the form's base cooldown instead, so the rhythm
+                        // stays visible when a short wave outlives the last cast.
+                        var cdMs = MathF.Max(1f, FormBehaviour.BaseCooldownMs(s.Form));
+                        ready = Math.Clamp((_playheadMs - prev) / cdMs, 0f, 1f);
+                    }
                 }
 
                 if (_ui.Assets.Get("ui_slot_skill_hex") is { } sl)
