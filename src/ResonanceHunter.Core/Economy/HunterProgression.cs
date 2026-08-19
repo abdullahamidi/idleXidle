@@ -15,7 +15,15 @@ public enum HunterStat
 public sealed record ProgressionTuning
 {
     public int BaseTrainingCost { get; init; } = 25;
-    public float TrainingGrowthRate { get; init; } = 1.05f;
+    // 1.11, not 1.05. Playtest: "Bütün stat geliştirmelerini yaptım ve çok ucuz oldu... başlangıçta
+    // çok zorlamasın ama belirli bir noktadan sonra dikkatlice istediği stata harcama yapabilmesi
+    // lazım." At 1.05 a full stat cost ~9k Gleam — pocket change, so "which stat" was never a
+    // question. At 1.11 the opening is unchanged (first rank stays the tutorial's 25; rank 10 ≈ 71)
+    // but rank 30 ≈ 570, rank 50 ≈ 4.6k, rank 59 ≈ 12k — ~119k per full stat, ~1.07M for all nine.
+    // 1.18 was tried first and rejected BY THE ECONOMY TEST: a 25.7M sink needs 2,454 hours at the
+    // slowest battle speed, which its own words call a grind, not a curve. 1.11 sits inside both of
+    // that test's bounds (>= 1 hour at x8, <= 120 hours at x1).
+    public float TrainingGrowthRate { get; init; } = 1.11f;
     public int StatRankCap { get; init; } = 60;
 
     /// <summary>Per-rank stat gain. Defense is +2/rank to a cap of 120 — its curve is hyperbolic anyway.</summary>
