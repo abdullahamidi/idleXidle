@@ -2939,7 +2939,10 @@ public class Game1 : Game
         // Esc no longer quits (it opens THIS panel), so the game needs a door that says what it does.
         // Hidden on the title screen, whose own menu already has QUIT — and whose Hunter may not exist
         // yet to save.
-        if (!_showTitle && _ui.Button(_batch, SettingsQuit, "SAVE AND QUIT", ChromeMouse, _clicked))
+        // "QUIT TO DESKTOP", not "SAVE AND QUIT": settings changes save themselves the moment they
+        // are made, so a SAVE-labelled button read as the panel's save switch (playtest asked why it
+        // exists). It is the game's exit — the door Esc used to be — and it still saves on the way out.
+        if (!_showTitle && _ui.Button(_batch, SettingsQuit, "QUIT TO DESKTOP", ChromeMouse, _clicked))
         {
             Save();
             Exit();
@@ -2954,7 +2957,9 @@ public class Game1 : Game
         for (var i = 0; i <= 10; i++)
         {
             var cell = new Rectangle(820 + i * 36, y, 30, 34);
-            _ui.Fill(_batch, cell, i <= current ? new Color(0xC8, 0x9A, 0x3C) : new Color(0x2A, 0x24, 0x38));
+            // Cell 0 is the MUTE notch and never fills — at volume 0 the row must read as zero,
+            // not as one bar (playtest: "Sesi 0 yapıyorum ama 1 bar açık kalıyor").
+            _ui.Fill(_batch, cell, i > 0 && i <= current ? new Color(0xC8, 0x9A, 0x3C) : new Color(0x2A, 0x24, 0x38));
             if (UiKit.ClickedIn(cell, ChromeMouse, _clicked)) picked = i;
         }
         Text($"{current * 10}%", 1240, y + 8, Slate);
@@ -3011,11 +3016,39 @@ public class Game1 : Game
         // value (e.g. 130.6M GLEAM) balloons past the 686px bar and crosses into the stage header — the icon
         // carries the identity, the number is abbreviated. The check is a crash-SAFE dev warning, never a
         // Debug.Assert (a failed assert aborts the game's Debug build — the "Continue" crash).
-        var right = 1826;   // right margin, left of the settings gear in the corner
-        right = _ui.Pill(_batch, right, 16, "mat_scrap", new Color(0x9A, 0xC0, 0x88), Abbrev(_hunter.MaterialOf(Material.Scrap)), "", new Color(0x9A, 0xC0, 0x88)) - 20;
-        right = _ui.Pill(_batch, right, 16, "ui_memory_dust", default, Abbrev(_dust.MemoryDust), "", new Color(0x9E, 0x86, 0xFF)) - 20;
-        var leftEdge = _ui.Pill(_batch, right, 16, "ui_gleam_coin", default, Abbrev(_hunter.Gleam), "", new Color(0xF0, 0xB2, 0x4A));
+        var scrapVal = (long)_hunter.MaterialOf(Material.Scrap);
+        var dustVal = (long)_dust.MemoryDust;
+        var gleamVal = _hunter.Gleam;
+
+        var e1 = 1826;   // right margin, left of the settings gear in the corner
+        var l1 = _ui.Pill(_batch, e1, 16, "mat_scrap", new Color(0x9A, 0xC0, 0x88), Abbrev(scrapVal), "", new Color(0x9A, 0xC0, 0x88));
+        var e2 = l1 - 20;
+        var l2 = _ui.Pill(_batch, e2, 16, "ui_memory_dust", default, Abbrev(dustVal), "", new Color(0x9E, 0x86, 0xFF));
+        var e3 = l2 - 20;
+        var leftEdge = _ui.Pill(_batch, e3, 16, "ui_gleam_coin", default, Abbrev(gleamVal), "", new Color(0xF0, 0xB2, 0x4A));
         if (leftEdge < 1210) System.Diagnostics.Debug.WriteLine($"Currency bar (left {leftEdge}) crowds the stage header.");
+
+        // WHAT AM I LOOKING AT. The pills are icon + "4.2M", which names neither the resource nor the
+        // real figure — hover does both, in plain words and exact digits (playtest: "3 kaynağın ne
+        // olduğu anlaşılır değil... tam sayısı yazsın üstüne gelince"). Invariant grouping, so the
+        // number reads the same on every machine.
+        var pillRows = new (Rectangle R, string Name, long V)[]
+        {
+            (new Rectangle(l1, 16, e1 - l1, 60), "SCRAP — MATERIALS FOR THE FORGE", scrapVal),
+            (new Rectangle(l2, 16, e2 - l2, 60), "MEMORY DUST — BUYS PERMANENT TRAITS", dustVal),
+            (new Rectangle(leftEdge, 16, e3 - leftEdge, 60), "GLEAM — SPENT ON STATS AND UPGRADES", gleamVal),
+        };
+        foreach (var (rr, name, v) in pillRows)
+        {
+            if (!rr.Contains(ChromeMouse)) continue;
+            var text = $"{name}  ·  {v.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)}";
+            var w = _ui.Measure(text) + 28;
+            var tip = new Rectangle(Math.Min(rr.Right, 1904) - w, 84, w, 42);
+            _ui.Fill(_batch, tip, new Color(0x0E, 0x0A, 0x14, 0xF0));
+            _ui.Fill(_batch, new Rectangle(tip.X, tip.Y, tip.Width, 2), NavGold * 0.6f);
+            _ui.TextRight(_batch, text, tip.Right - 14, tip.Y + 10, Bone);
+            break;
+        }
     }
 
     private void DrawTitle()
