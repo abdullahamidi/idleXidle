@@ -25,6 +25,9 @@ public sealed class Champion
 
     /// <summary>Absolute ms until which a MARK is amplifying. 0 = none.</summary>
     public int MarkUntilMs { get; set; }
+
+    /// <summary>Absolute ms before which no OTHER skill may cast — the one-at-a-time stagger.</summary>
+    public int CastLockUntilMs { get; set; }
 }
 
 /// <summary>
@@ -216,6 +219,18 @@ public static class SoloBattle
     //    on a build that doesn't run that Form — the whole point of a combo. See Enchantments.NeedsForm. ──
 
     /// <summary>EXECUTE — a STRIKE against an enemy below this fraction of its max HP hits far harder.</summary>
+    /// <summary>
+    /// Minimum gap between two skill CASTS, whatever their own cooldowns say.
+    /// </summary>
+    /// <remarks>
+    /// Without it every ready skill fired on the same 100ms tick — four flashes in one instant,
+    /// unreadable as anything but noise. Playtest: "Skiller sırasıyla atılmalı, hepsini bir anda
+    /// atıyor." A deferred skill stays READY (its cooldown is not consumed and not restarted), so the
+    /// stagger costs almost no damage — the casts spread in SLOT ORDER across the next few ticks,
+    /// which is also the order the player chose on the BUILD screen.
+    /// </remarks>
+    public const int CastGapMs = 300;
+
     public const float ExecuteThreshold = 0.30f;
 
     /// <summary>How much harder an EXECUTE-boosted STRIKE lands on a weakened enemy.</summary>
@@ -770,6 +785,10 @@ public static class SoloBattle
                 // dropping that to 0 is the whole node, and it is worth most to a slow, heavy build.
                 var opening = shape.FreeOpeningCast ? 0 : cd;
                 if (abs < champ.ReadyAt.GetValueOrDefault(i, opening)) continue;
+                // ONE CAST AT A TIME — see CastGapMs. Deferring BEFORE ReadyAt is written is the whole
+                // trick: the skill stays ready and fires on the next free beat instead of losing a cast.
+                if (abs < champ.CastLockUntilMs) continue;
+                champ.CastLockUntilMs = abs + CastGapMs;
                 champ.ReadyAt[i] = abs + cd;
 
                 if (FormBehaviour.IsAmplifier(form))
