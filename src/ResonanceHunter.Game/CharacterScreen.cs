@@ -135,8 +135,15 @@ public sealed class CharacterScreen
         _ => true,
     };
 
-    private List<ItemInstance> Filtered()
-        => Wearable().Where(i => InTab(i.BaseType, _tab))
+    /// <summary>The grid's list: bag wearables on the active tab — WORN pieces excluded.</summary>
+    /// <remarks>
+    /// Playtest: "giyili eşya envanterden kaybolsun o çok kafa karıştırıyor, direkt üstüme giyilsin,
+    /// çıkarınca envantere geri düşsün." Equip moves the item ONTO the doll visually; unequip drops it
+    /// back into the grid. (The item still lives in the Forge's inventory model either way —
+    /// <see cref="Wearable"/> stays the "do I own it at all" question the selection logic asks.)
+    /// </remarks>
+    private List<ItemInstance> Filtered(Hunter hunter)
+        => Wearable().Where(i => InTab(i.BaseType, _tab) && !IsWorn(hunter, i))
             .OrderByDescending(i => (int)i.Rarity).ThenByDescending(i => i.ItemLevel).ToList();
 
     // ── Update ───────────────────────────────────────────────────────────────────────────────────
@@ -179,7 +186,7 @@ public sealed class CharacterScreen
     {
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
         var hit = Game1.ToOverlay(mouse);
-        var list = Filtered();
+        var list = Filtered(hunter);
 
         // THE SELECTION IS ADOPTED ONLY WHEN THE ITEM IS GONE — not merely when it is off-tab.
         //
@@ -204,7 +211,7 @@ public sealed class CharacterScreen
         //    game has for an item are right there, instead of scattered across two screens. ────────
         if (rightClicked)
         {
-            var list2 = Filtered();
+            var list2 = Filtered(hunter);
             for (var vis = 0; vis < InvCols * InvRows; vis++)
             {
                 var idx = _invScroll * InvCols + vis;
@@ -240,7 +247,7 @@ public sealed class CharacterScreen
         }
 
         for (var i = 0; i < Tabs.Length; i++)
-            if (TabRect(i).Contains(hit)) { _tab = i; _invScroll = 0; _selectedId = Filtered().FirstOrDefault()?.InstanceId; return; }
+            if (TabRect(i).Contains(hit)) { _tab = i; _invScroll = 0; _selectedId = Filtered(hunter).FirstOrDefault()?.InstanceId; return; }
 
         // Click a worn slot → select it (so its detail shows) OR take it off on a second click.
         foreach (var (slot, _, box) in SlotLayout)
@@ -360,7 +367,7 @@ public sealed class CharacterScreen
     /// <summary>Open the item menu on a cell — used by the headless capture to pose it.</summary>
     public void DevOpenItemMenu()
     {
-        var first = Filtered().FirstOrDefault();
+        var first = Wearable().FirstOrDefault();
         if (first is null) return;
         _selectedId = first.InstanceId;
         OpenMenu(first.InstanceId, InvCellRect(0));
@@ -589,7 +596,7 @@ public sealed class CharacterScreen
             _ui.TextCenterBig(b, Tabs[i], r.Center.X, r.Y + 12, on ? Gold : Slate, UiTypography.Secondary);
         }
 
-        var list = Filtered();
+        var list = Filtered(hunter);
         for (var vis = 0; vis < InvCols * InvRows; vis++)
         {
             var idx = _invScroll * InvCols + vis;
@@ -599,7 +606,6 @@ public sealed class CharacterScreen
             var item = list[idx];
             var hot = cell.Contains(hit);
             var sel = item.InstanceId == _selectedId;
-            var worn = IsWorn(hunter, item);
             if (hot) _hovered = item;
             if (hot && !sel) _ui.Fill(b, cell, CellHot);
             _forge.DrawItemIcon(b, item, new Rectangle(cell.X + 6, cell.Y + 6, cell.Width - 12, cell.Height - 12));
@@ -632,13 +638,12 @@ public sealed class CharacterScreen
             // THE THREE MARKS ARE SEPARATED BY TEXTURE, NOT BY HUE, so none of them needs colour to be
             // legible and none can be mistaken for a rarity (which owns the frame tint and the left bar):
             //
-            //   WORN      two crisp concentric lines, inset 5 and 9 — a mounted, framed look. Static.
-            //   BETTER    a soft three-step halo, inset 2/5/8 at falling alpha — a glow, not a border.
-            //   SELECTED  the outermost ring, brightest, plus the faintest wash.
+            //   BETTER    a soft halo — a glow, not a border.
+            //   SELECTED  the outermost ring, brightest.
             //
-            // A worn item that is also selected therefore reads as both at once, which the old mutually
-            // exclusive band could not do at all.
-            var better = !worn && Gear.SlotFor(item.BaseType) is { } bs && hunter.Worn(bs) is not null
+            // (WORN left the grid entirely — playtest: worn gear lives on the doll now, so the grid
+            // never needs a worn mark again.)
+            var better = Gear.SlotFor(item.BaseType) is { } bs && hunter.Worn(bs) is not null
                          && hunter.PowerContribution(item) > hunter.PowerContribution(hunter.Worn(bs));
 
             // WEIGHTED BY RARITY OF THE MARK, NOT BY IMPORTANCE OF THE FACT — which is the opposite of
@@ -646,12 +651,7 @@ public sealed class CharacterScreen
             // of the grid beats what you are wearing, so a three-ring halo there flooded the page and the
             // two marks that are actually rare drowned in it. The most frequent mark has to be the
             // quietest one, or the grid has no figure and no ground.
-            if (worn)
-            {
-                Ring(b, Shrink(cell, 5), new Color(0xE8, 0xDF, 0xC8), 2);
-                Ring(b, Shrink(cell, 9), new Color(0xE8, 0xDF, 0xC8, 0x66), 1);
-            }
-            else if (better)
+            if (better)
             {
                 // One hairline, inside the frame, at the edge of noticeable. It is a hint that this cell
                 // is worth a second look — the ITEM DETAIL panel is where the case gets made.
