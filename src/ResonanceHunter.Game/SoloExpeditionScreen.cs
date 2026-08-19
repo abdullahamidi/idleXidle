@@ -591,7 +591,6 @@ public sealed class SoloExpeditionScreen
         _nextEnemyStrikeMs = _replay.NextEnemyStrikeAfter(0f);
         _nextChampStrikeMs = _replay.NextChampionStrikeAfter(0f);
         _callouts.Clear();
-        if (_run.LastWaveWasBoss) _bossIncomingTimer = 1.6f;   // a BossIncoming announcement opens the boss wave
     }
 
     /// <summary>The host rolled a chest for the boss just felled — upgrade the banner to the reward beat.</summary>
@@ -880,6 +879,14 @@ public sealed class SoloExpeditionScreen
             // Take a breath on the clear, THEN begin the next wave (see the break gate atop UpdateFight). A
             // boss's fall lingers a touch longer — it dropped a chest, and that beat should land.
             _breakTimer = _run.LastWaveWasBoss ? WaveBreakSeconds + 0.5f : WaveBreakSeconds;
+
+            // THE ANNOUNCEMENT COMES BEFORE THE BOSS — in the breath between waves, replacing the
+            // ordinary clear banner (the overlay priority already ranks it higher). It used to fire at
+            // the boss REPLAY's start, where a strong champion kills him inside the announcement's own
+            // 1.6 seconds and INCOMING outlives the corpse. Playtest: "Boss öldükten sonra boss
+            // incoming mesajı geliyor."
+            if (WaveScaling.IsBossWave(_run.Wave + 1, ExpeditionTuning.Default))
+                _bossIncomingTimer = _breakTimer + 0.9f;
         }
         else
         {
