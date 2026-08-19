@@ -547,7 +547,11 @@ public sealed class ForgeScreen
                 // Distinct-by-id WEARABLES only: a trio must be three DIFFERENT items (Merge rejects an
                 // item merged with itself) and gear, not currency — so a duplicate-id copy or a stack of
                 // Scrap can never grab the slots and stall the whole auto-merge.
-                var trio = _inv.Where(i => i.Rarity == rarity && !IsWorn(i) && Gear.IsWearable(i))
+                // GEMMED PIECES ARE NEVER FED TO THE MERGE: the product is a brand-new item, so the
+                // socketed gems — the player's own investment — would silently cease to exist. Crush
+                // or keep; auto-merge must not decide that for them.
+                var trio = _inv.Where(i => i.Rarity == rarity && !IsWorn(i) && Gear.IsWearable(i)
+                                           && i.Gems.Count == 0)
                                .DistinctBy(i => i.InstanceId).Take(3).ToList();
                 if (trio.Count < 3) continue;
 
@@ -1086,7 +1090,7 @@ public sealed class ForgeScreen
         // THE PILE SCREEN IS GONE (playtest: "O ekrana gerek yok bence") — these are the two verbs of
         // it that were real, in the place the player already looks. Chests are opened in the VAULT,
         // whose rail tile now wears the pile count.
-        var anyTrio = _inv.Where(i => Gear.IsWearable(i) && !IsWorn(hunter, i))
+        var anyTrio = _inv.Where(i => Gear.IsWearable(i) && !IsWorn(hunter, i) && i.Gems.Count == 0)
                           .DistinctBy(i => i.InstanceId)
                           .GroupBy(i => i.Rarity).Any(g => g.Key != Rarity.Legendary && g.Count() >= 3);
         if (_ui.Button(b, new Rectangle(BagPanel.X + 30, BagPanel.Bottom - 152, BagPanel.Width - 60, 52),
