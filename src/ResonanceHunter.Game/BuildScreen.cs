@@ -57,6 +57,12 @@ public sealed class BuildScreen
     private string? _pinnedNodeId;         // the last node clicked — what the detail panel shows when nothing is hovered
     private string? _attuneNodeId;         // non-null: THE ATTUNEMENT ceremony is open for this just-taken node
     private Form _attuneForm;
+
+    /// <summary>The host reads this to hold the rail, its hotkeys, L and T while the ceremony is open.</summary>
+    public bool CeremonyOpen => _attuneNodeId is not null;
+
+    /// <summary>The right-hand docked cards — input over them must never reach the tree behind.</summary>
+    private static bool OverDock(Point p) => HexPanel.Contains(p) || NodePanel.Contains(p);
     /// <summary>Set when the player asked for the weave editor. The host opens it and clears this.</summary>
     public bool WantsWeave { get; set; }
     private bool _resetArmed;   // the reset button has been pressed once and is waiting for the second
@@ -270,16 +276,18 @@ public sealed class BuildScreen
         Tree = tree;
 
         // ── THE CAMERA. Only while the tree page is open; the overview has nothing to pan. ────────
+        if (_attuneNodeId is not null) { _dragFrom = null; _draggedThisPress = false; }
+
         if (_editMode && _attuneNodeId is null)
         {
             var over = Game1.ToOverlay(mouse);
 
-            if (wheel != 0 && TreeView.Contains(over))
+            if (wheel != 0 && TreeView.Contains(over) && !OverDock(over))
                 ZoomAt(over, wheel > 0 ? 1.16f : 1f / 1.16f);
 
             // DRAG TO PAN. Held, not clicked: a click is a node take, and a tree you can only move with
             // a scrollbar is a tree nobody moves.
-            if (held && TreeView.Contains(over))
+            if (held && TreeView.Contains(over) && (_dragFrom is not null || !OverDock(over)))
             {
                 if (_dragFrom is null) { _dragFrom = over; _dragPanFrom = _pan; }
                 else
@@ -317,6 +325,7 @@ public sealed class BuildScreen
         if (rightClicked && _editMode && !_draggedThisPress && _attuneNodeId is null)
         {
             var rhit = Game1.ToOverlay(mouse);
+            if (OverDock(rhit)) return;
             foreach (var node in MasteryCatalog.Nodes)
             {
                 if (node.Kind == MasteryKind.Start) continue;
@@ -391,6 +400,10 @@ public sealed class BuildScreen
         }
         // Any other click on the tree disarms it — but must NOT return, or no node could be taken.
         _resetArmed = false;
+
+        // The docked cards are CARDS, not glass: a click on them must not take, pin, or refund the
+        // node that happens to sit underneath (at the default framing, Tempo's rim does).
+        if (OverDock(hit)) return;
 
         foreach (var node in MasteryCatalog.Nodes)
         {
@@ -986,7 +999,8 @@ public sealed class BuildScreen
         var cx = (int)sp.X;
         var cy = (int)sp.Y;
         var box = new Rectangle(cx - rad, cy - rad, rad * 2, rad * 2);
-        var hover = Math.Abs(mouse.X - cx) <= rad + 6 && Math.Abs(mouse.Y - cy) <= rad + 6;
+        var hover = !OverDock(mouse)
+                    && Math.Abs(mouse.X - cx) <= rad + 6 && Math.Abs(mouse.Y - cy) <= rad + 6;
 
         var taken = Mastery.IsTaken(node.Id);
         var canTake = Mastery.CanTake(node.Id);

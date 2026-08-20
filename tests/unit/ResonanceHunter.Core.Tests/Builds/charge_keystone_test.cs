@@ -119,12 +119,48 @@ public class ChargeKeystoneTest
     [Fact]
     public void test_charge_dynamo_winds_the_pool_on_bites()
     {
-        // Arrange + Act
-        var (_, events) = Run(TwoSkills("dynamo"));
+        // Arrange: a TRAP-only build. A Trap never CASTS (it discharges on being bitten), so it
+        // stores no cast-side charge — every Charge event in this run can only be DYNAMO's. The
+        // first draft used a casting build and passed with Dynamo deleted, because the Projectile's
+        // 900ms cooldown collided with the 900ms bite interval and cast-gains landed on bite
+        // timestamps by construction. Mutation-proofed: this arrangement fails if the branch dies.
+        var b = new Build();
+        b.Weave(new EquippedSkill(
+            new WovenAbility { Name = "T", Source = Source.Nature, Form = Form.Trap },
+            FormBehaviour.BaseCooldownMs(Form.Trap)));
+        Assert.True(b.Take(Keystones.ById("dynamo")!));
 
-        // Assert: at least one pool change lands on a bite's own timestamp.
+        // Act
+        var (_, events) = Run(b);
+
+        // Assert: charge exists, every change sits on a bite's own timestamp, and the pool climbs
+        // in DYNAMO's stride of 2 — no other gain source can produce that ladder here.
+        var charges = events.Where(e => e.Kind == BattleEventKind.Charge).ToList();
         var biteTimes = events.Where(e => e.Kind == BattleEventKind.EnemyStrike)
                               .Select(e => e.AtMs).ToHashSet();
-        Assert.Contains(events, e => e.Kind == BattleEventKind.Charge && biteTimes.Contains(e.AtMs));
+        Assert.NotEmpty(charges);
+        Assert.All(charges, e => Assert.Contains(e.AtMs, biteTimes));
+        Assert.Equal(SoloBattle.ChargeDynamoPerBite, charges[0].Amount);
+    }
+
+    [Fact]
+    public void test_charge_lodestone_pays_nothing_when_the_pool_is_not_full_at_the_clear()
+    {
+        // Arrange: LODESTONE + REND — the declared rivalry. The Strike keeps dumping the pool, so
+        // it can never be full at the clear, and the holder's card must pay NOTHING. This is the
+        // condition's own test: an unconditional payout regression ships a +1-core-per-wave
+        // economy leak, and the happy-path test above cannot see it.
+        var champ = new Champion { MaxHealth = 200_000, Health = 200_000 };
+        var bonus = new WaveBonus();
+        var (outcome, _) = SoloBattle.ResolveWave(
+            champ, TwoSkills("lodestone", "rend"), new ResonanceHunter.Core.Economy.Hunter(),
+            new List<WaveCreature> { WaveCreature.Single(3_000f, 1f, 0f, Source.Nature) },
+            enemyIntervalMs: 900,
+            ResonanceHunter.Core.Expeditions.ExpeditionTuning.Default, new Random(9),
+            bonus: bonus);
+
+        // Assert
+        Assert.Equal(WaveOutcome.Cleared, outcome);
+        Assert.Equal(0, bonus.Cores);
     }
 }

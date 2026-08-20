@@ -636,6 +636,30 @@ public static class SoloBattle
             return 0;
         }
 
+        // ── The hit-side signatures, shared by every skill-hit path (main spread, CHAIN/RICOCHET
+        //    extra hit) so the wound bonus really does pay EVERY skill hit, as its comment claims. ──
+        float SignatureAmp(float hit, WaveCreature c, Source? sig)
+        {
+            if (sig is null) return hit;
+            if (wounds.TryGetValue(c, out var w) && w > 0)
+                hit *= 1f + SignatureWoundPerStack * w;
+            if (sig == Source.Shadow && c.Health < c.MaxHealth * SignatureShadowThreshold)
+                hit *= 1f + SignatureShadowBonus;
+            return hit;
+        }
+
+        void SignatureLay(WaveCreature c, Source? sig)
+        {
+            if (sig == Source.Body)
+                wounds[c] = Math.Min(SignatureWoundMaxStacks, wounds.GetValueOrDefault(c) + 1);
+            if (sig == Source.Machine && c.Defense > 0f
+                && armourBent.GetValueOrDefault(c) < SignatureMachineStripCap)
+            {
+                c.Defense = MathF.Max(0f, c.Defense - SignatureMachineStrip);
+                armourBent[c] = armourBent.GetValueOrDefault(c) + 1;
+            }
+        }
+
         void LandOn(WaveCreature? target, float dmg, int atMs, bool fromSkill = false, bool ignoresArmour = false)
         {
             if (target is null || !target.Alive) return;
@@ -760,28 +784,10 @@ public static class SoloBattle
 
                 // ── SIGNATURES, hit-side. The WOUND bonus reads stacks laid by ANY Body skill and
                 //    pays EVERY skill hit — that is what makes it a team primitive rather than a
-                //    self-buff. Building happens after the landing, so a hit never feeds itself. ──
-                if (fromSkill && skillSource is { } sig)
-                {
-                    if (wounds.TryGetValue(c, out var w) && w > 0)
-                        hit *= 1f + SignatureWoundPerStack * w;
-                    if (sig == Source.Shadow && c.Health < c.MaxHealth * SignatureShadowThreshold)
-                        hit *= 1f + SignatureShadowBonus;
-                }
-
+                //    self-buff. Laying happens after the landing, so a hit never feeds itself. ──
+                if (fromSkill) hit = SignatureAmp(hit, c, skillSource);
                 LandOn(c, hit, atMs, fromSkill);
-
-                if (fromSkill && skillSource is { } sig2)
-                {
-                    if (sig2 == Source.Body)
-                        wounds[c] = Math.Min(SignatureWoundMaxStacks, wounds.GetValueOrDefault(c) + 1);
-                    if (sig2 == Source.Machine && c.Defense > 0f
-                        && armourBent.GetValueOrDefault(c) < SignatureMachineStripCap)
-                    {
-                        c.Defense = MathF.Max(0f, c.Defense - SignatureMachineStrip);
-                        armourBent[c] = armourBent.GetValueOrDefault(c) + 1;
-                    }
-                }
+                if (fromSkill) SignatureLay(c, skillSource);
                 dealt += hit;
                 struck++;
                 lastIndex = i;
@@ -802,8 +808,10 @@ public static class SoloBattle
                 {
                     var c = creatures[i];
                     if (!c.Alive) continue;
-                    var hit = raw * extraFraction * Amp(absMs, skillSource, skillForm, c);
+                    var hit = SignatureAmp(raw * extraFraction * Amp(absMs, skillSource, skillForm, c),
+                                           c, skillSource);
                     LandOn(c, hit, atMs, fromSkill: true);
+                    SignatureLay(c, skillSource);
                     dealt += hit;
                     struck++;
                     if (metrics is not null) metrics.TargetsStruck++;
@@ -876,7 +884,12 @@ public static class SoloBattle
                     var aura = FormBehaviour.BaseDamage(form, resonance, wt)
                                * VowFactor(sk, weaveCtx, wt, shape)
                                * (FormBehaviour.AuraTickMs / 1000f);
-                    LandSpread(aura, ms, shape.TargetsFor(form), sk.Source, form, abs);
+                    var auraDealt = LandSpread(aura, ms, shape.TargetsFor(form), sk.Source, form, abs);
+                    // NATURE'S SIGNATURE follows the DAMAGE, not the cast: the card promises 3% of
+                    // what its skills deal, with no cast clause — an Aura that deals must heal.
+                    // (Spirit/Mind speak of CASTS, and an Aura never casts, so they stay silent here.)
+                    if (sk.Source == Source.Nature && auraDealt > 0f)
+                        Heal((int)MathF.Round(auraDealt * SignatureNatureLeech), ms);
                     if (alive == 0) return Kill(ms);
                     continue;
                 }
@@ -909,6 +922,13 @@ public static class SoloBattle
 
                     champ.MarkUntilMs = abs + window;
                     mindExtendBudget = SignatureMindExtendCapMs;   // MIND's signature stretches THIS window
+                    // A MARK is a real CAST — cooldown, cast-lock, its own Skill event — so it stores
+                    // CHARGE like any other cast, and a SPIRIT Mark primes the next other-Source cast
+                    // (the amplifier is the conductor's most natural home). It deals nothing, so the
+                    // damage-following rules (Nature's leech, the prime CONSUME) stay no-ops here.
+                    if (sk.Source == Source.Spirit) spiritPrimed = true;
+                    if (chargeLive && charge < chargeCap)
+                        events.Add(new BattleEvent(BattleEventKind.Charge, 0, ++charge, ms));
                     events.Add(new BattleEvent(BattleEventKind.Skill, 0, (int)Form.Mark, ms));
                     continue;
                 }
@@ -941,8 +961,10 @@ public static class SoloBattle
 
                     // REND — a Strike spends the whole CHARGE pool. The pool is what the PREVIOUS
                     // casts stored; the Strike's own point lands after it resolves, so a dump can
-                    // never feed itself.
-                    if (chargeLive && charge > 0 && form == Form.Strike
+                    // never feed itself. c == 0: one dump per activation SET — without it, Echo's
+                    // second activation drained the point the first had just stored, a permanent
+                    // trivial +5% that broke this very invariant.
+                    if (chargeLive && charge > 0 && form == Form.Strike && c == 0
                         && triggers.Contains(BuildTrigger.Rend))
                     {
                         raw *= 1f + ChargeRendPerPoint * charge;
@@ -1120,7 +1142,12 @@ public static class SoloBattle
                     var trapRaw = FormBehaviour.BaseDamage(Form.Trap, resonance, wt)
                                   * VowFactor(sk, weaveCtx, wt, shape);
                     events.Add(new BattleEvent(BattleEventKind.Skill, 0, (int)Form.Trap, ms));
-                    LandSpread(trapRaw, ms, shape.TargetsFor(Form.Trap), sk.Source, Form.Trap, abs);
+                    var trapDealt = LandSpread(trapRaw, ms, shape.TargetsFor(Form.Trap), sk.Source, Form.Trap, abs);
+                    // NATURE'S SIGNATURE follows the damage here too — a Trap that bites back heals
+                    // its sliver. A Trap never CASTS, so the cast-following rules (CHARGE, Spirit's
+                    // prime, Mind's stretch) are rightly silent on this path.
+                    if (sk.Source == Source.Nature && trapDealt > 0f)
+                        Heal((int)MathF.Round(trapDealt * SignatureNatureLeech), ms);
                     if (alive == 0) return Kill(ms);
                 }
 

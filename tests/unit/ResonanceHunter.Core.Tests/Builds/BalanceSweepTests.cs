@@ -50,7 +50,12 @@ public class BalanceSweepTests
     private const int Seeds = 40;
     private const int DepthCap = 400;
 
-    private static EquippedSkill Sk(Form form, Source src = Source.Nature)
+    // SPIRIT, not Nature: since the SIGNATURE pass every Source DOES something, and a sweep
+    // fixture must be signature-NEUTRAL to measure branches and vows rather than elements.
+    // Mono-Spirit is the one neutral choice: the prime is only consumed by a DIFFERENT Source's
+    // cast, so a single-source build never cashes it. Nature (the old default) now heals 3% of
+    // everything dealt, which compressed the vow-worth medians into ties.
+    private static EquippedSkill Sk(Form form, Source src = Source.Spirit)
         => new(new WovenAbility { Name = form.ToString(), Source = src, Form = form, Vow = null },
                FormBehaviour.BaseCooldownMs(form));
 
@@ -62,7 +67,7 @@ public class BalanceSweepTests
             b.Weave(vow is null
                 ? Sk(f)
                 : new EquippedSkill(
-                    new WovenAbility { Name = f.ToString(), Source = Source.Nature, Form = f, Vow = vow },
+                    new WovenAbility { Name = f.ToString(), Source = Source.Spirit, Form = f, Vow = vow },
                     FormBehaviour.BaseCooldownMs(f)));
         return b;
     }
@@ -236,9 +241,14 @@ public class BalanceSweepTests
         // median cannot see a sub-wave marginal (Weight measured mean 51.3 over baseline 51.0 with
         // medians tied at 51). The median still guards the UNGEARED rows above; here the mean is
         // the honest instrument, and the ratio cap below still catches a branch running away.
+        // +0.15 waves of mean, not just ">": a zero-margin mean passes on one lucky seed in
+        // forty, which cannot distinguish nearly-dormant from alive. Weight, the tightest branch,
+        // measured +0.3 at the time of writing; a branch that cannot buy a sixth of a wave on
+        // average at 18 points is dormant in the sense this project polices.
         foreach (var (b, s) in rows)
-            Assert.True(s.Mean > gearedBase.Mean,
-                        $"{b} at {Budget} points is no better than an untouched tree");
+            Assert.True(s.Mean > gearedBase.Mean + 0.15,
+                        $"{b} at {Budget} points buys no visible depth over an untouched tree "
+                        + $"({s.Mean:0.00} vs {gearedBase.Mean:0.00})");
 
         var best = rows.MaxBy(kv => kv.Value.Median);
         var worst = rows.MinBy(kv => kv.Value.Median);
@@ -327,7 +337,7 @@ public class BalanceSweepTests
         var geared = new BuildMods(3.0f, 1.4f, 1f, 1f, 1f);
         var forms = new[] { Form.Strike, Form.Projectile, Form.Aura, Form.Mark };
 
-        Build Weave(SkillShape shape, IEnumerable<Form> fs, Source source = Source.Nature)
+        Build Weave(SkillShape shape, IEnumerable<Form> fs, Source source = Source.Spirit)
         {
             var b = new Build { PassiveMods = geared, Shape = shape };
             foreach (var f in fs)

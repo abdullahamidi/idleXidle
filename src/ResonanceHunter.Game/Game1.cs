@@ -1640,7 +1640,12 @@ public class Game1 : Game
             _swallowInput = true;
         }
 
-        HandleNavClick();   // a click on the shared hex nav works from any screen
+        // THE ATTUNEMENT holds the door. The modal promises "nothing else clickable until you
+        // decide", and BuildScreen can only keep that promise for its own input — the rail, the
+        // nine hotkeys, L and T are the host's, so the host holds them while the ceremony is open.
+        var attunementHolds = _showBuild && _buildScreen.CeremonyOpen;
+
+        if (!attunementHolds) HandleNavClick();   // a click on the shared hex nav works from any screen
 
         // EVERY NAV HOTKEY GOES THROUGH OpenNav — the unlock gate, the refusal toast and the
         // flag-clearing all live in exactly one place now.
@@ -1656,7 +1661,7 @@ public class Game1 : Game
         // Each handler also cleared its own idiosyncratic subset of the flags, and three of them forgot
         // _showRoster and _showWeave — so the player could see one screen while an invisible one
         // consumed their clicks. OpenNav clears all nine, every time.
-        for (var navKey = 0; navKey < Nav.Length; navKey++)
+        for (var navKey = 0; navKey < Nav.Length && !attunementHolds; navKey++)
         {
             // Keys.A..Keys.Z are the ASCII letter codes, so the table's char IS the key.
             if (!Pressed((Keys)Nav[navKey].Key)) continue;
@@ -1669,7 +1674,7 @@ public class Game1 : Game
         }
         // L — THE EXPEDITION LOG. It closes every other overlay, because it is a full-screen read and
         // the one thing the player opens specifically to think, not to act.
-        if (Pressed(Keys.L))
+        if (Pressed(Keys.L) && !attunementHolds)
         {
             _expedition.ToggleLog();
             if (_expedition.LogOpen)
@@ -1692,7 +1697,7 @@ public class Game1 : Game
         // T — THE WEAVE. The one screen with no rail tile of its own, so it cannot go through OpenNav;
         // it is gated on Activity.Build, which is the screen it is reached from and the thing it is
         // part of. Without this it was the last remaining way to walk past the unlock gate.
-        if (Pressed(Keys.T))
+        if (Pressed(Keys.T) && !attunementHolds)
         {
             if (!Unlocks.IsOpen(Activity.Build, GuideUnlockFacts()))
             {

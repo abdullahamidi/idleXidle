@@ -189,8 +189,10 @@ public sealed class MasteryTree
     /// </summary>
     /// <remarks>
     /// It comes from the Form specialisations rather than from a branch, because a branch is a way of
-    /// fighting and affinity is about which Form you carry. Taking two specialisations is legal and
-    /// affinity then follows the first — a player who wants both is buying breadth, not two affinities.
+    /// fighting and affinity is about which Form you carry. ONE DISCIPLINE PER HUNTER — CanTake
+    /// refuses a second Specialisation outright. First-wins still matters for exactly one path:
+    /// RestoreTaken validates ids only, so an old save holding two specialisations loads both, and
+    /// affinity follows the first.
     /// </remarks>
     public Form? Affinity()
         => _taken.Select(MasteryCatalog.ById)

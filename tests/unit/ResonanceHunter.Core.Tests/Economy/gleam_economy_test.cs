@@ -198,6 +198,11 @@ public class GleamEconomyTest
         _out.WriteLine($"the full stat progression funds itself in {hours:N1} real hours at the default "
                        + $"x{DefaultBattleSpeed:0} ({income:N0} Gleam/min against a {sink:N0} sink)");
 
+        // Asserted, not just printed: the 330-hour relaxation below leans on "the default stays
+        // under 200h", and a justification that is only a comment goes stale the first retune.
+        Assert.True(hours <= 200,
+            $"the DEFAULT-speed grind is {hours:N0} hours — the long-grind design was priced against ~200.");
+
         // THE BOUND IS ON THE FASTEST SPEED, not the default, and that is deliberate. The HUD offers x8
         // one click away and it is free, so the worst case is the one a player can actually reach — and
         // a guard written against the default would pass while the game was over in an hour for anyone

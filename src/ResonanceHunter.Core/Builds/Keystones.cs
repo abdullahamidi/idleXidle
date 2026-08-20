@@ -150,7 +150,7 @@ public static class Keystones
             // inert without REND — the blurb says so — because a cap on a pool nobody spends is
             // the exact dormant shape this game hunts, and here it must be a visible player error.
             Id = "capacitor", Name = "CAPACITOR",
-            Blurb = "YOUR CHARGE POOL HOLDS 20 INSTEAD OF 10. SKILLS RETURN 15% SLOWER. MEANS NOTHING WITHOUT REND.",
+            Blurb = "YOUR CHARGE POOL HOLDS 20 INSTEAD OF 10 — LODESTONE'S FULL-POOL BAR RISES WITH IT. SKILLS RETURN 15% SLOWER. POINTLESS WITHOUT A KEYSTONE THAT READS THE POOL.",
             Mods = new BuildMods(Damage: 1f, Health: 1f, SkillRate: 0.85f, Haul: 1f, Rarity: 1f),
             Grants = new[] { BuildTrigger.Capacitor },
         },

@@ -13,7 +13,12 @@ move 2's capstones = advanced techniques of a discipline; the water-divination m
 FIRST Specialisation pick a ceremony. Move ordering unchanged; the ceremony is a cheap, high-value
 insert before move 1.
 
-**Raised:** playtest 2026-08-20, item 5. **Status:** PROPOSAL — nothing here is implemented.
+**Raised:** playtest 2026-08-20, item 5. **Status:** MOVES 1+2 SHIPPED (2026-08-20) — signatures
+live for all six Sources, matchup shrunk to x1.15, CHARGE + four keystones (REND / DYNAMO /
+CAPACITOR / LODESTONE) one per dust road, THE ATTUNEMENT ceremony and the hexagon diagram on the
+tree page. The capstone REDESIGN half of move 2 was judged unnecessary on inspection: the ring-4
+masteries (OVERWHELM / EVERYWHERE / FIRST STRIKE / ENDLESS) are already rule-changers. Move 3
+(bands over counters on the MAP) remains open.
 
 > "6 adet element 'X, Y'den üstündür, Y kasarken X'e döndür' gibi bir mantık çok basit kalıyor.
 > Bunun yerine oyuncu gerçekten hoşuna giden buildi yapıp bunun min/max'ı için uğraşmalı."

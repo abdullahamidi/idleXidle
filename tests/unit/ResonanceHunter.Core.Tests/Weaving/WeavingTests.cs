@@ -254,15 +254,17 @@ public class WeavingTests
         Assert.True(Weaving.SourceEffectiveness(Source.Machine, target, Tuning) < 1f);
 
         // At EQUAL stats the counter still wins — the nudge is real...
-        var matched = Weaving.AbilityPower(wellMatched, target, 60f, false, Tuning);
-        var evenMismatch = Weaving.AbilityPower(mismatched, target, 60f, false, Tuning);
+        var matched = Weaving.AbilityPower(wellMatched, target, 100f, false, Tuning);
+        var evenMismatch = Weaving.AbilityPower(mismatched, target, 100f, false, Tuning);
         Assert.True(matched > evenMismatch,
             $"At equal stats the matched Source ({matched:0.0}) must still beat the mismatched ({evenMismatch:0.0}).");
 
-        // ...but a DOUBLED stat with the wrong element now beats it. Countering is seasoning.
-        var stacked = Weaving.AbilityPower(mismatched, target, 120f, false, Tuning);
-        Assert.True(stacked > matched,
-            $"Doubled investment ({stacked:0.0}) must out-damage the bare counter ({matched:0.0}) now.");
+        // ...but a DOUBLED stat with the wrong element beats it COMFORTABLY. Evaluated at 100/200,
+        // far past the ~59 crossover, with a stated margin — the first draft sat at 60/120 and
+        // passed by 0.19%, a knife-edge that any retune would trip for the wrong reason.
+        var stacked = Weaving.AbilityPower(mismatched, target, 200f, false, Tuning);
+        Assert.True(stacked > matched * 1.05f,
+            $"Doubled investment ({stacked:0.0}) must out-damage the bare counter ({matched:0.0}) clearly.");
     }
 
     /// <summary>Mark deals no direct damage — it is an amplifier, not a hit.</summary>
