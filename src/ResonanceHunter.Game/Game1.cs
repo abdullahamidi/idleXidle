@@ -1580,6 +1580,9 @@ public class Game1 : Game
             // A pending SELL/SALVAGE question outranks the settings reflex: Esc on it means "keep it",
             // not "open another panel over the question". (Adversarial review, pass four.)
             else if (_showForge && _forge.ConfirmOpen) _forge.CancelConfirm();
+            // The vault's modals outrank the settings reflex too — Esc on the stall means "close
+            // the stall", not "stack the settings panel on top of it".
+            else if (_showChests && _chests.ModalUp) _chests.CloseModals();
             else _showSettings = true;
         }
 
@@ -1664,10 +1667,11 @@ public class Game1 : Game
             _swallowInput = true;
         }
 
-        // THE ATTUNEMENT holds the door. The modal promises "nothing else clickable until you
-        // decide", and BuildScreen can only keep that promise for its own input — the rail, the
-        // nine hotkeys, L and T are the host's, so the host holds them while the ceremony is open.
-        var attunementHolds = _showBuild && _buildScreen.CeremonyOpen;
+        // THE ATTUNEMENT holds the door — and so do the vault's modals (the trader stall and the
+        // code-inspect cards). A modal can only swallow its own screen's input; the rail, the nine
+        // hotkeys, L and T are the host's, so the host holds them while any modal is open.
+        var attunementHolds = (_showBuild && _buildScreen.CeremonyOpen)
+                              || (_showChests && _chests.ModalUp);
 
         if (!attunementHolds) HandleNavClick();   // a click on the shared hex nav works from any screen
 
@@ -1835,11 +1839,17 @@ public class Game1 : Game
             // ── THE WANDERING TRADER. Rollover first: a new ISO week clears the purchases and the
             //    stall re-mints. Zero on old saves lands here too — the migration IS the rollover. ──
             var week = WanderingTrader.WeekStamp(DateTime.UtcNow);
-            if (week != _traderWeek)
+            // FORWARD-ONLY: a clock set backwards must not re-arm the weekly purchases (an offline
+            // game cannot stop a determined self-cheater, but it must not hand out a re-arm loop by
+            // accident). The second clause self-heals a save stamped in the absurd future — a
+            // wrong-then-corrected clock would otherwise freeze the stall until reality caught up.
+            if (week > _traderWeek || _traderWeek > week + 100)
             {
                 _traderWeek = week;
                 _traderBought.Clear();
                 _traderStock = null;
+                // A BUY clicked in the old week's dying frame must not buy the NEW week's slot.
+                _chests.ConsumeTraderBuy();
                 Save();
             }
             var traderLevel = Math.Max(1, _deepestEver);
@@ -1940,6 +1950,7 @@ public class Game1 : Game
             _weave.RegionId = _activeRegion;
             _weave.RegionName = Regions.Get(_activeRegion).Name;
             _weave.Discipline = _mastery.Affinity();
+            _weave.MasteryTaken = _mastery.Taken;
             _weave.Update(CanvasMouse, MouseClicked, MouseWheel);
             if (_weave.Dirty) { _weave.ClearDirty(); Save(); }
             // CONSUMED HERE, where the Weave actually runs. It was read inside `if (_showBuild)`, and

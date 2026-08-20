@@ -80,6 +80,34 @@ public class WanderingTraderTest
     }
 
     [Fact]
+    public void test_trader_week_stamp_is_iso_and_never_walks_backwards_over_new_year()
+    {
+        // Dec 29 2025 is ISO week 1 of 2026 — a refactor to DateTime.Year would stamp it 202501,
+        // 51 weeks BACKWARDS, colliding with the real week 1 and re-arming the stall. Pinned.
+        Assert.Equal(202601, WanderingTrader.WeekStamp(new DateTime(2025, 12, 29, 12, 0, 0, DateTimeKind.Utc)));
+        Assert.True(WanderingTrader.WeekStamp(new DateTime(2026, 1, 4, 12, 0, 0, DateTimeKind.Utc))
+                    >= WanderingTrader.WeekStamp(new DateTime(2025, 12, 28, 12, 0, 0, DateTimeKind.Utc)));
+    }
+
+    [Fact]
+    public void test_trader_goods_are_never_a_material_pump_even_with_a_salvage_charter()
+    {
+        // The review found the original stall was a CRYSTAL MINT: the Legendary cost 60 Core +
+        // 18 Crystal and salvaged for 80 Crystal (160 with a charter). Now every offer's DOUBLED
+        // salvage return is below the its-own-tier line of its price — buying to shred always loses.
+        var forge = ResonanceHunter.Core.Forging.ForgeTuning.Default;
+        foreach (var offer in WanderingTrader.Stock(202634, 30, L).Where(o => o.BaseType != ItemBaseType.Gem))
+        {
+            var salvageTier = MaterialTiers.ForRarity(offer.Rarity);
+            var salvageDoubled = ResonanceHunter.Core.Forging.Forge.Dismantle(offer, forge) * 2;
+            var sameTierCost = WanderingTrader.PriceOf(offer, T)
+                .Where(p => p.Material == salvageTier).Sum(p => p.Amount);
+            Assert.True(salvageDoubled < Math.Max(1, sameTierCost),
+                $"{offer.Rarity}: charter salvage {salvageDoubled} {salvageTier} vs price {sameTierCost} — the pump is back");
+        }
+    }
+
+    [Fact]
     public void test_trader_every_offer_has_a_positive_price()
     {
         var stock = WanderingTrader.Stock(202702, 25, L);

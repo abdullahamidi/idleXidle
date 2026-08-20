@@ -1,4 +1,8 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
+using System.Text;
 using ResonanceHunter.Core.Loot;
 using ResonanceHunter.Core.Persistence;
 using Xunit;
@@ -76,6 +80,65 @@ public class ShareCodesTest
         Assert.Equal(build.Keystones, back.Keystones);
         Assert.Equal(build.Mastery, back.Mastery);
         Assert.True(ShareCodes.LooksLikeBuild(code));
+    }
+
+    /// <summary>An independent encoder for HOSTILE payloads — and a pin on the wire format
+    /// itself: if Encode's format drifts, these crafted codes stop matching and fail loudly.</summary>
+    private static string Craft(string prefix, string json)
+    {
+        using var buffer = new MemoryStream();
+        using (var deflate = new DeflateStream(buffer, CompressionLevel.Optimal, leaveOpen: true))
+            deflate.Write(Encoding.UTF8.GetBytes(json));
+        var payload = Convert.ToBase64String(buffer.ToArray()).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        var h = 2166136261u;
+        foreach (var c in payload) h = (h ^ c) * 16777619u;
+        return $"{prefix}.{payload}.{h:x8}";
+    }
+
+    [Fact]
+    public void test_share_codes_hostile_payloads_return_false_never_throw()
+    {
+        // The checksum is integrity, not authentication — a crafted code passes it, and none of
+        // these may crash (the review measured ArgumentException and NREs escaping the old catch).
+        var hostiles = new[]
+        {
+            // an unknown BaseType — Enum.Parse used to throw ArgumentException through the catch
+            Craft("RHI1", "{\"InstanceId\":\"x\",\"BaseType\":\"Sword\",\"Rarity\":2,\"SellValue\":5,\"ItemLevel\":1}"),
+            // an out-of-range Rarity — used to decode ok and index a colour table out of bounds
+            Craft("RHI1", "{\"InstanceId\":\"x\",\"BaseType\":\"Weapon\",\"Rarity\":77,\"SellValue\":5,\"ItemLevel\":1}"),
+            // an explicit-null Gems list — used to NRE inside FromSavedItem
+            Craft("RHI1", "{\"InstanceId\":\"x\",\"BaseType\":\"Weapon\",\"Rarity\":2,\"SellValue\":5,\"ItemLevel\":1,\"Gems\":null}"),
+            // not JSON at all
+            Craft("RHI1", "))) not json ((("),
+        };
+        foreach (var code in hostiles)
+        {
+            var ok = ShareCodes.TryDecodeItem(code, out var item, out var error);
+            Assert.False(ok, $"hostile code decoded: {code[..32]}...");
+            Assert.Null(item);
+            Assert.NotEmpty(error);
+        }
+
+        // Build payloads: `required` checks presence, not null — all of these must be refused,
+        // because the inspect card prints exactly these fields.
+        var hostileBuilds = new[]
+        {
+            Craft("RHB1", "{\"Skills\":null,\"Keystones\":[],\"Mastery\":[]}"),
+            Craft("RHB1", "{\"Skills\":[{\"Source\":null,\"Form\":\"Strike\"}],\"Keystones\":[],\"Mastery\":[]}"),
+            Craft("RHB1", "{\"Skills\":[],\"Keystones\":[null],\"Mastery\":[]}"),
+            Craft("RHB1", "{\"Skills\":[],\"Keystones\":[],\"Mastery\":[\"" + new string('m', 300) + "\"]}"),
+        };
+        foreach (var code in hostileBuilds)
+        {
+            Assert.False(ShareCodes.TryDecodeBuild(code, out var build, out var err2));
+            Assert.Null(build);
+            Assert.NotEmpty(err2);
+        }
+
+        // The deflate bomb: a large low-entropy payload must be refused by the caps, not inflated.
+        var bomb = Craft("RHI1", "{\"InstanceId\":\"" + new string('a', 2_000_000) + "\"}");
+        Assert.False(ShareCodes.TryDecodeItem(bomb, out _, out var err3));
+        Assert.NotEmpty(err3);
     }
 
     [Fact]

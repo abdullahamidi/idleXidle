@@ -88,8 +88,21 @@ public sealed class ChestScreen
     public int? ConsumeTraderBuy() { var r = _traderBuy; _traderBuy = null; return r; }
 
     private bool _traderOpen;
+    private bool _modalOpenedNow;   // the click that OPENED a modal must not also click inside it
     /// <summary>DEV: pose the stall for a capture.</summary>
     public void DevOpenTrader() => _traderOpen = true;
+
+    /// <summary>The host reads this to hold the rail and its hotkeys while a modal is up.</summary>
+    public bool ModalUp => ModalOpen;
+
+    /// <summary>Esc, and the host's door-holding, both land here.</summary>
+    public void CloseModals()
+    {
+        _traderOpen = false;
+        _inspectItem = null;
+        _inspectBuild = null;
+        _inspectError = "";
+    }
     private ItemInstance? _inspectItem;
     private ShareCodes.SharedBuild? _inspectBuild;
     private string _inspectError = "";
@@ -267,10 +280,20 @@ public sealed class ChestScreen
         // trader must be reachable with nothing waiting in the pile.
         var traderBtn = new Rectangle(GridPanel.Right - 558, GridPanel.Y + 24, 200, 56);
         var pasteBtn = new Rectangle(GridPanel.Right - 770, GridPanel.Y + 24, 200, 56);
+        // _modalOpenedNow: the TRADER button's rect overlaps the stall's CLOSE (measured: a 72x28
+        // region), and the click edge stays latched through the whole Draw — without this flag a
+        // click in the overlap opened the stall and closed it IN THE SAME FRAME, an invisible dead
+        // zone across a fifth of the button.
         if (_ui.Button(b, traderBtn, "TRADER", hit, uiClicked, TraderStock.Count > 0))
+        {
             _traderOpen = true;
+            _modalOpenedNow = true;
+        }
         if (_ui.Button(b, pasteBtn, "PASTE A CODE", hit, uiClicked, true))
+        {
             PasteCode();
+            _modalOpenedNow = true;
+        }
 
         DrawFilterRow(b, hit, uiClicked);
 
@@ -280,8 +303,9 @@ public sealed class ChestScreen
                         GridPanel.X + 46, GridPanel.Y + 190, Dim, UiTypography.Body);
             _ui.TextBig(b, "When one arrives: click the chest to open it, hover its ? to read what it holds.",
                         GridPanel.X + 46, GridPanel.Y + 224, Dim, UiTypography.Body);
-            DrawTrader(b, hit, clicked);
-            DrawInspect(b, hit, clicked);
+            DrawTrader(b, hit, clicked && !_modalOpenedNow);
+            DrawInspect(b, hit, clicked && !_modalOpenedNow);
+            _modalOpenedNow = false;
             return;
         }
 
@@ -372,8 +396,9 @@ public sealed class ChestScreen
 
         DrawDossierTip(b, sorted);
 
-        DrawTrader(b, hit, clicked);
-        DrawInspect(b, hit, clicked);
+        DrawTrader(b, hit, clicked && !_modalOpenedNow);
+        DrawInspect(b, hit, clicked && !_modalOpenedNow);
+        _modalOpenedNow = false;
     }
 
     // ── THE WANDERING TRADER — the weekly stall. Identity from the week, level from the buyer,
@@ -507,7 +532,10 @@ public sealed class ChestScreen
         if (_inspectBuild is { } build)
         {
             _ui.Scrim(b, 0.7f);
-            var panel = new Rectangle(560, 220, 800, 620);
+            // 800x600, not 620: at 620 the ratio was 1.29 and UiKit.Panel's aspect picker handed
+            // this card the SQUARE frame meant for icons — the exact trap the item card above
+            // dodges with Fill+Outline.
+            var panel = new Rectangle(560, 230, 800, 600);
             _ui.Panel(b, panel, gold: true);
             _ui.TextCenterBig(b, "A FRIEND'S BUILD", 960, panel.Y + 30, Gold, UiTypography.PanelTitle);
             _ui.TextCenter(b, "READ IT, STEAL THE IDEA — YOUR OWN BUILD IS UNTOUCHED.", 960, panel.Y + 66, Slate);

@@ -139,8 +139,6 @@ public sealed class BuildScreen
     // Docked in AuraPanel's foot, sharing its interior width. EditBtn is gone: it ran the same line as
     // VIEW TREE, and the tree has its own rail tile now.
     private static readonly Rectangle WeaveBtn = new(466, 842, 337, 44);
-    private static readonly Rectangle CopyBuildBtn = new(820, 842, 337, 44);
-    private int _copyFlash;   // frames left on the "COPIED" toast
     // ON THE TREE PAGE, NOT THE OVERVIEW. Playtest: "'Take all mastery points back' buranın butonu
     // değil, mastery tree'nin butonu." Right — it un-spends every point in a tree the overview does not
     // even draw, so pressing it there meant watching nothing happen to anything on screen. It sits
@@ -380,20 +378,6 @@ public sealed class BuildScreen
             // should be.
             for (var i = Loadout.Skills.Count; i < Loadout.SkillCapacity; i++)
                 if (AuraCard(i, Loadout.SkillCapacity).Contains(hit)) { WantsWeave = true; return; }
-            if (CopyBuildBtn.Contains(hit))
-            {
-                var code = ShareCodes.EncodeBuild(new ShareCodes.SharedBuild
-                {
-                    Skills = Loadout.Skills.Select(s => new SavedSkill
-                    {
-                        Source = s.Source.ToString(), Form = s.Form.ToString(), VowId = s.VowId,
-                    }).ToList(),
-                    Keystones = Loadout.KeystoneIds.ToList(),
-                    Mastery = Mastery.Taken.ToList(),
-                });
-                if (ClipboardInterop.TrySet(code)) _copyFlash = 240;
-                return;
-            }
             _resetArmed = false;
             return;
         }
@@ -485,15 +469,6 @@ public sealed class BuildScreen
         // _editMode — so the screen offered two differently-named doors into one room while the room
         // itself is now a rail tile. What is left names what it opens and what it costs.
         Button(b, WeaveBtn, "CHOOSE YOUR SKILLS", hit, true);
-        // SHARE CODES (2026-08-20): the whole build as one line on the clipboard. The receiver can
-        // read and compare it, never wear it — show, don't trade.
-        Button(b, CopyBuildBtn, "COPY BUILD CODE", hit, true);
-        if (_copyFlash > 0)
-        {
-            _copyFlash--;
-            _ui.Text(b, "COPIED — PASTE IT TO A FRIEND (THEY USE THE VAULT'S PASTE A CODE)",
-                     CopyBuildBtn.Right + 24, CopyBuildBtn.Y + 12, Gold);
-        }
         if (DevBuildDebug) DrawDebug(b);
     }
 

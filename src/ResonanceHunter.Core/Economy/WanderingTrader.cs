@@ -68,7 +68,12 @@ public static class WanderingTrader
                 InstanceId = $"trader_{weekStamp}_{slot}",
                 BaseType = type,
                 Rarity = rarities[slot],
-                SellValue = tuning.RaritySellValue[(int)rarities[slot]],
+                // A TENTH of the drop-loot value: the trader knows what his goods are worth.
+                // At full value the Legendary was a CRYSTAL PUMP — 60 Core + 18 Crystal bought a
+                // salvage of 80 Crystal (160 with a charter), a guaranteed weekly mint of the
+                // premium material that inverted this stall's whole sink design. At /10 the best
+                // charter salvage returns less than the Crystal line of the price alone.
+                SellValue = Math.Max(1, tuning.RaritySellValue[(int)rarities[slot]] / 10),
                 ItemLevel = level,
                 // Same mint SHAPE as LootSystem.Mint (prefix once, immutable; element on every
                 // wearable) — but hash-picked, never rolled: the stall never sells plain.
@@ -85,7 +90,7 @@ public static class WanderingTrader
             InstanceId = $"trader_{weekStamp}_3",
             BaseType = ItemBaseType.Gem,
             Rarity = Rarity.Epic,
-            SellValue = tuning.RaritySellValue[(int)Rarity.Epic],
+            SellValue = Math.Max(1, tuning.RaritySellValue[(int)Rarity.Epic] / 10),   // same rule
             ItemLevel = level,
         });
 

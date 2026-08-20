@@ -41,6 +41,17 @@ public sealed class WeaveScreen
     /// </summary>
     public Form? Discipline { get; set; }
 
+    /// <summary>Host-fed mastery walk, for the build share code. The code is identity, not power.</summary>
+    public System.Collections.Generic.IReadOnlyCollection<string> MasteryTaken { get; set; }
+        = System.Array.Empty<string>();
+
+    // COPY BUILD CODE — moved HERE from the build overview after the adversarial review found the
+    // overview had been retired a commit earlier: the button was drawn on a page no player can
+    // reach. This screen is where builds are woven, which is where sharing them belongs.
+    private static readonly Rectangle CopyCodeBtn = new(1389, 918, 340, 48);
+    private int _copyToastFrames;
+    private string _copyToast = "";
+
     private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
     private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
     private static readonly Color Ember = new(0xD8, 0x48, 0x3A);
@@ -274,6 +285,26 @@ public sealed class WeaveScreen
             return;
         }
 
+        if (CopyCodeBtn.Contains(hit))
+        {
+            var code = ResonanceHunter.Core.Persistence.ShareCodes.EncodeBuild(
+                new ResonanceHunter.Core.Persistence.ShareCodes.SharedBuild
+                {
+                    Skills = Loadout.Skills.Select(s => new ResonanceHunter.Core.Persistence.SavedSkill
+                    {
+                        Source = s.Source.ToString(), Form = s.Form.ToString(), VowId = s.VowId,
+                    }).ToList(),
+                    Keystones = Loadout.KeystoneIds.ToList(),
+                    Mastery = MasteryTaken.ToList(),
+                });
+            // The failure is NOT silent (the review's other note): no clipboard, no lie.
+            _copyToast = ClipboardInterop.TrySet(code)
+                ? "COPIED — A FRIEND PASTES IT IN THE VAULT"
+                : "THE CLIPBOARD REFUSED — TRY AGAIN";
+            _copyToastFrames = 240;
+            return;
+        }
+
         if (_slot >= skills.Count) return;
 
         for (var i = 0; i < Sources.Length; i++)
@@ -331,6 +362,18 @@ public sealed class WeaveScreen
         DrawSlots(b, hit);
         DrawPicker(b, hit);
         DrawVows(b, hit);
+
+        // The build as one line on the clipboard — show, don't trade. Same flat-cell idiom as
+        // VowClear — this screen has no ornate-button helper of its own.
+        _ui.Fill(b, CopyCodeBtn, CopyCodeBtn.Contains(hit) ? new Color(0x2C, 0x25, 0x44) : Quiet);
+        _ui.TextCenter(b, "COPY BUILD CODE", CopyCodeBtn.Center.X, CopyCodeBtn.Y + 16,
+                       CopyCodeBtn.Contains(hit) ? Bone : Slate);
+        if (_copyToastFrames > 0)
+        {
+            _copyToastFrames--;
+            _ui.TextCenter(b, _copyToast, CopyCodeBtn.Center.X, CopyCodeBtn.Y - 26,
+                           _copyToast.StartsWith("COPIED", StringComparison.Ordinal) ? Gold : Ember);
+        }
 
         if (_msg.Length > 0) _ui.TextCenter(b, _msg, 960, 1016, Gold);
     }
