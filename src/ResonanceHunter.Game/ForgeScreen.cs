@@ -1181,6 +1181,14 @@ public sealed class ForgeScreen
         var sell = new Rectangle(ItemPanel.X + 40, ItemPanel.Bottom - 172, ItemPanel.Width - 80, 56);
         var dis = new Rectangle(ItemPanel.X + 40, ItemPanel.Bottom - 108, ItemPanel.Width - 80, 56);
 
+        // SHARE CODES (2026-08-20): the item as one pasteable line. Show, don't trade — the code
+        // is a picture, and the vault's PASTE A CODE is the frame it goes in.
+        var copy = new Rectangle(ItemPanel.X + 40, ItemPanel.Bottom - 216, ItemPanel.Width - 80, 36);
+        if (_ui.Button(b, copy, "COPY ITEM CODE", hit, clicked))
+            _msg = ClipboardInterop.TrySet(Core.Persistence.ShareCodes.EncodeItem(item))
+                ? "CODE COPIED — SEND THE LINE TO A FRIEND."
+                : "THE CLIPBOARD REFUSED — TRY AGAIN.";
+
         if (_ui.Button(b, sell, $"SELL FOR {item.SellValue} G", hit, clicked)) Sell(hunter, item);
         if (_ui.Button(b, dis, $"SALVAGE FOR {Forge.Dismantle(item, Tuning)} MATERIALS", hit, clicked))
             Dismantle(hunter, item);

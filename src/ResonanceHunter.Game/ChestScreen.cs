@@ -3,9 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using ResonanceHunter.Core.Abilities;
 using ResonanceHunter.Core.Automation;
+using ResonanceHunter.Core.Builds;
+using ResonanceHunter.Core.Economy;
 using ResonanceHunter.Core.Expeditions;
 using ResonanceHunter.Core.Loot;
+using ResonanceHunter.Core.Persistence;
 
 namespace ResonanceHunter.Client;
 
@@ -65,6 +69,32 @@ public sealed class ChestScreen
     private float _hoverT;         // eased 0..1 — ~120ms in, ~80ms out
     private int _qIdx = -1;        // card whose "?" is under the pointer, or -1
     private float _qT;             // how long the pointer has rested on that "?" (tooltip delay 0.4s)
+
+    // ── THE WANDERING TRADER + SHARE CODES — the two future-content directions the designer kept
+    //    (2026-08-20). Both live in the vault: the room where things arrive from outside. ─────────
+    private static readonly Color Ember = new(0xD8, 0x48, 0x3A);
+
+    /// <summary>Host-fed. The stall needs a wallet to price against and a bag to tooltip with.</summary>
+    public Hunter? Hunter { get; set; }
+
+    /// <summary>This week's stall, minted by the host (identity from the week, level from the buyer).</summary>
+    public List<ItemInstance> TraderStock { get; set; } = new();
+
+    /// <summary>Stall slots already bought this week. Host-owned; the screen only reads it.</summary>
+    public HashSet<int> TraderBought { get; set; } = new();
+
+    private int? _traderBuy;
+    /// <summary>The house pattern: the screen records intent, the host spends and mints.</summary>
+    public int? ConsumeTraderBuy() { var r = _traderBuy; _traderBuy = null; return r; }
+
+    private bool _traderOpen;
+    /// <summary>DEV: pose the stall for a capture.</summary>
+    public void DevOpenTrader() => _traderOpen = true;
+    private ItemInstance? _inspectItem;
+    private ShareCodes.SharedBuild? _inspectBuild;
+    private string _inspectError = "";
+    private bool ModalOpen => _traderOpen || _inspectItem is not null || _inspectBuild is not null
+                              || _inspectError.Length > 0;
 
     /// <summary>
     /// What the player asked to open, taken by the host exactly once.
@@ -170,6 +200,10 @@ public sealed class ChestScreen
         var sorted = ChestDossiers.BestFirst(chests);
         Clamp(sorted.Count);
 
+        // While the stall or an inspect card is open, the grid underneath is furniture: no hover,
+        // no wheel, and — decisive — no chest-opening click. The modals' own buttons live in Draw.
+        if (ModalOpen) { _hoverIdx = -1; _qIdx = -1; return; }
+
         if (wheel != 0)
             _scroll = Math.Clamp(_scroll - Math.Sign(wheel) * Cols, 0, MaxScroll(sorted.Count));
 
@@ -227,7 +261,18 @@ public sealed class ChestScreen
             : string.Join("   ", tally.Select(t => $"{t.Count} {t.Grade.ToString().ToUpperInvariant()}"));
         _ui.TextBig(b, summary, GridPanel.X + 46, GridPanel.Y + 72, Slate, UiTypography.Secondary);
 
-        DrawFilterRow(b, hit, clicked);
+        var uiClicked = clicked && !ModalOpen;
+
+        // THE STALL AND THE CODES, in the header — and above the empty-vault return, because the
+        // trader must be reachable with nothing waiting in the pile.
+        var traderBtn = new Rectangle(GridPanel.Right - 558, GridPanel.Y + 24, 200, 56);
+        var pasteBtn = new Rectangle(GridPanel.Right - 770, GridPanel.Y + 24, 200, 56);
+        if (_ui.Button(b, traderBtn, "TRADER", hit, uiClicked, TraderStock.Count > 0))
+            _traderOpen = true;
+        if (_ui.Button(b, pasteBtn, "PASTE A CODE", hit, uiClicked, true))
+            PasteCode();
+
+        DrawFilterRow(b, hit, uiClicked);
 
         if (sorted.Count == 0)
         {
@@ -235,17 +280,20 @@ public sealed class ChestScreen
                         GridPanel.X + 46, GridPanel.Y + 190, Dim, UiTypography.Body);
             _ui.TextBig(b, "When one arrives: click the chest to open it, hover its ? to read what it holds.",
                         GridPanel.X + 46, GridPanel.Y + 224, Dim, UiTypography.Body);
+            DrawTrader(b, hit, clicked);
+            DrawInspect(b, hit, clicked);
             return;
         }
 
         // OPEN ALL, in the header — with one chest the card itself is the button, so this needs two.
         var allBtn = new Rectangle(GridPanel.Right - 346, GridPanel.Y + 24, 300, 56);
-        if (_ui.Button(b, allBtn, $"OPEN ALL ({sorted.Count})", hit, clicked, sorted.Count > 1))
+        if (_ui.Button(b, allBtn, $"OPEN ALL ({sorted.Count})", hit, uiClicked, sorted.Count > 1))
             _pending = OpenRequest.All;
 
+        // Right-aligned under the header row now — the TRADER and PASTE buttons live where it sat.
         if (sorted.Count > PerPage)
             _ui.TextRightBig(b, $"ROWS {_scroll / Cols + 1} / {(sorted.Count + Cols - 1) / Cols}  ·  WHEEL SCROLLS",
-                             allBtn.X - 24, GridPanel.Y + 40, Slate, UiTypography.Secondary);
+                             GridPanel.Right - 46, GridPanel.Y + 92, Slate, UiTypography.Secondary);
 
         for (var vis = 0; vis < PerPage && _scroll + vis < sorted.Count; vis++)
         {
@@ -323,6 +371,197 @@ public sealed class ChestScreen
         }
 
         DrawDossierTip(b, sorted);
+
+        DrawTrader(b, hit, clicked);
+        DrawInspect(b, hit, clicked);
+    }
+
+    // ── THE WANDERING TRADER — the weekly stall. Identity from the week, level from the buyer,
+    //    prices in materials. See Core's WanderingTrader for the design reasoning. ────────────────
+
+    private void DrawTrader(SpriteBatch b, Point hit, bool clicked)
+    {
+        if (!_traderOpen) return;
+
+        _ui.Scrim(b, 0.72f);
+        var panel = new Rectangle(300, 170, 1320, 724);
+        _ui.Panel(b, panel, gold: true);
+
+        _ui.TextCenterBig(b, "THE WANDERING TRADER", 960, panel.Y + 34, Gold, UiTypography.SectionTitle);
+        _ui.TextCenter(b, "THE SAME STALL FOR EVERY HUNTER THIS WEEK — NEW GOODS EACH WEEK, PAID IN MATERIALS.",
+                       960, panel.Y + 74, Slate);
+
+        if (_ui.Button(b, new Rectangle(panel.Right - 170, panel.Y + 26, 130, 44), "CLOSE", hit, clicked, true))
+        {
+            _traderOpen = false;
+            return;
+        }
+
+        ItemInstance? hoverOffer = null;
+        for (var i = 0; i < TraderStock.Count && i < 4; i++)
+        {
+            var offer = TraderStock[i];
+            var card = new Rectangle(panel.X + 40 + i * 316, panel.Y + 120, 296, 470);
+            var grade = RarityColors[(int)offer.Rarity];
+            var over = card.Contains(hit);
+            if (over) hoverOffer = offer;
+
+            _ui.Fill(b, card, new Color(0x12, 0x0E, 0x18, 0xF0));
+            _ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, 6), grade);
+            Outline(b, card, over ? Bone : Dim, 2);
+
+            _ui.TextCenterBig(b, offer.Rarity.ToString().ToUpperInvariant(), card.Center.X, card.Y + 22,
+                              grade, UiTypography.Secondary);
+            var name = ItemNaming.FullName(offer);
+            var px = UiTypography.Body;
+            while (px > 13 && _ui.MeasureBig(name, px) > card.Width - 24) px--;
+            _ui.TextCenterBig(b, name, card.Center.X, card.Y + 52, Bone, px);
+            _ui.TextCenter(b, $"LEVEL {offer.ItemLevel} — YOUR OWN MEASURE", card.Center.X, card.Y + 88, Slate);
+
+            // The price, line by line, each in the wallet's verdict colour.
+            var y = card.Y + 140;
+            _ui.TextCenter(b, "PRICE", card.Center.X, y, Slate);
+            y += 28;
+            var affordable = true;
+            foreach (var (m, amount) in WanderingTrader.PriceOf(offer, TraderTuning.Default))
+            {
+                var held = Hunter?.MaterialOf(m) ?? 0;
+                var enough = held >= amount;
+                affordable &= enough;
+                _ui.TextCenter(b, $"{amount} {m.ToString().ToUpperInvariant()}  (YOU HOLD {held})",
+                               card.Center.X, y, enough ? Bone : Ember);
+                y += 26;
+            }
+
+            var buyBtn = new Rectangle(card.X + 40, card.Bottom - 82, card.Width - 80, 54);
+            if (TraderBought.Contains(i))
+                _ui.TextCenter(b, "TAKEN THIS WEEK", buyBtn.Center.X, buyBtn.Y + 16, Dim);
+            else if (_ui.Button(b, buyBtn, "BUY", hit, clicked, affordable && Hunter is not null))
+                _traderBuy = i;
+        }
+
+        // The full tooltip beside the pointer — the same card the forge would show for it.
+        if (hoverOffer is not null)
+            ItemTooltip.Draw(_ui, b, hoverOffer, Hunter, new Point(hit.X + 26, hit.Y + 18),
+                             new Rectangle(0, 0, 1920, 1080));
+    }
+
+    // ── SHARE CODES — paste to LOOK. Nothing here can enter the bag; that is the whole deal. ─────
+
+    private void PasteCode()
+    {
+        var text = ClipboardInterop.Get().Trim();
+        _inspectItem = null;
+        _inspectBuild = null;
+        _inspectError = "";
+
+        if (ShareCodes.LooksLikeItem(text))
+        {
+            if (ShareCodes.TryDecodeItem(text, out var item, out var err)) _inspectItem = item;
+            else _inspectError = err;
+        }
+        else if (ShareCodes.LooksLikeBuild(text))
+        {
+            if (ShareCodes.TryDecodeBuild(text, out var build, out var err)) _inspectBuild = build;
+            else _inspectError = err;
+        }
+        else
+        {
+            _inspectError = text.Length == 0
+                ? "YOUR CLIPBOARD IS EMPTY — COPY A CODE FIRST."
+                : "THIS IS NOT A SHARE CODE.";
+        }
+    }
+
+    private void DrawInspect(SpriteBatch b, Point hit, bool clicked)
+    {
+        if (_inspectError.Length > 0)
+        {
+            _ui.Scrim(b, 0.6f);
+            var panel = new Rectangle(560, 420, 800, 240);
+            _ui.Panel(b, panel);
+            _ui.TextCenterBig(b, "THE CODE DIDN'T OPEN", 960, panel.Y + 32, Ember, UiTypography.PanelTitle);
+            _ui.TextCenter(b, _inspectError, 960, panel.Y + 88, Bone);
+            if (_ui.Button(b, new Rectangle(880, panel.Bottom - 76, 160, 48), "OK", hit, clicked, true))
+                _inspectError = "";
+            return;
+        }
+
+        if (_inspectItem is { } item)
+        {
+            _ui.Scrim(b, 0.7f);
+            var panel = new Rectangle(620, 200, 680, 680);
+            // Fill+Outline, not Panel: this rect is nearly square and the frame picker would grab
+            // the square art meant for icons (UiKit.Panel picks by aspect ratio).
+            _ui.Fill(b, panel, new Color(0x12, 0x0E, 0x18, 0xF4));
+            Outline(b, panel, Gold, 2);
+            _ui.TextCenterBig(b, "A FRIEND'S ITEM", 960, panel.Y + 26, Gold, UiTypography.PanelTitle);
+            _ui.TextCenter(b, "YOURS TO LOOK AT — IT NEVER JOINS YOUR BAG.", 960, panel.Y + 64, Slate);
+            ItemTooltip.Draw(_ui, b, item, Hunter, new Point(960 - ItemTooltip.Width / 2, panel.Y + 104),
+                             new Rectangle(0, 0, 1920, 1080));
+            if (_ui.Button(b, new Rectangle(880, panel.Bottom - 72, 160, 48), "CLOSE", hit, clicked, true))
+                _inspectItem = null;
+            return;
+        }
+
+        if (_inspectBuild is { } build)
+        {
+            _ui.Scrim(b, 0.7f);
+            var panel = new Rectangle(560, 220, 800, 620);
+            _ui.Panel(b, panel, gold: true);
+            _ui.TextCenterBig(b, "A FRIEND'S BUILD", 960, panel.Y + 30, Gold, UiTypography.PanelTitle);
+            _ui.TextCenter(b, "READ IT, STEAL THE IDEA — YOUR OWN BUILD IS UNTOUCHED.", 960, panel.Y + 66, Slate);
+
+            var y = panel.Y + 112;
+
+            // The discipline first — the Nen identity is the headline of any build now.
+            var spec = build.Mastery
+                .Select(MasteryCatalog.ById)
+                .FirstOrDefault(n => n is { Kind: MasteryKind.Specialisation });
+            _ui.TextBig(b, spec?.Form is { } f
+                            ? $"DISCIPLINE: {f.ToString().ToUpperInvariant()}"
+                            : "NO DISCIPLINE CHOSEN",
+                        panel.X + 60, y, spec is null ? Slate : Gold, UiTypography.Body);
+            y += 40;
+
+            _ui.Text(b, "SKILLS", panel.X + 60, y, Slate);
+            y += 26;
+            if (build.Skills.Count == 0) { _ui.TextBig(b, "NONE WOVEN", panel.X + 80, y, Dim, UiTypography.Secondary); y += 26; }
+            foreach (var s in build.Skills.Take(5))
+            {
+                var vowName = s.VowId is null ? null
+                    : Weaving.Catalog.FirstOrDefault(v => v.Id == s.VowId)?.Name ?? s.VowId;
+                var line = $"{s.Source.ToUpperInvariant()} {s.Form.ToUpperInvariant()}"
+                           + (vowName is null ? "" : $"  —  {vowName.ToUpperInvariant()}");
+                _ui.TextBig(b, line, panel.X + 80, y, Bone, UiTypography.Secondary);
+                y += 26;
+            }
+
+            y += 14;
+            _ui.Text(b, "KEYSTONES", panel.X + 60, y, Slate);
+            y += 26;
+            if (build.Keystones.Count == 0) { _ui.TextBig(b, "NONE SOCKETED", panel.X + 80, y, Dim, UiTypography.Secondary); y += 26; }
+            foreach (var k in build.Keystones.Take(3))
+            {
+                _ui.TextBig(b, Keystones.ById(k)?.Name ?? k.ToUpperInvariant(), panel.X + 80, y, Bone,
+                            UiTypography.Secondary);
+                y += 26;
+            }
+
+            y += 14;
+            _ui.Text(b, $"MASTERY: {build.Mastery.Count} NODES TAKEN", panel.X + 60, y, Slate);
+
+            if (_ui.Button(b, new Rectangle(880, panel.Bottom - 72, 160, 48), "CLOSE", hit, clicked, true))
+                _inspectBuild = null;
+        }
+    }
+
+    private void Outline(SpriteBatch b, Rectangle r, Color c, int t)
+    {
+        _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, t), c);
+        _ui.Fill(b, new Rectangle(r.X, r.Bottom - t, r.Width, t), c);
+        _ui.Fill(b, new Rectangle(r.X, r.Y, t, r.Height), c);
+        _ui.Fill(b, new Rectangle(r.Right - t, r.Y, t, r.Height), c);
     }
 
     /// <summary>

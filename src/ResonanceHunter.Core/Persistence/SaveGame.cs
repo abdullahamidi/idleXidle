@@ -164,6 +164,14 @@ public sealed record SaveGame
     /// <summary>The keep-filter's slot lean (an <c>ItemBaseType</c> name), or null for any slot.</summary>
     public string? ChestKeepSlot { get; init; }
 
+    /// <summary>The ISO week (year*100+week) whose trader stall the two fields below describe.</summary>
+    /// <remarks>Zero on old saves — the host treats a mismatch with the CURRENT week as "new week,
+    /// stall resets", so the migration is the rollover itself.</remarks>
+    public int TraderWeekStamp { get; init; }
+
+    /// <summary>Stall slots (0..3) already bought this week. One of each, per week, per hunter.</summary>
+    public List<int> TraderBoughtSlots { get; init; } = new();
+
     // ── The Warren facility economy ──────────────────────────────────────────────────────────────
     /// <summary>Warren level. Defaults to 1 so pre-Warren saves load a fresh level-1 base — no version bump.</summary>
     public int WarrenLevel { get; init; } = 1;
@@ -484,7 +492,9 @@ public static class SaveSystem
         };
 
     /// <summary>One item to its saved form — recursive, so socketed gems ride inside their host.</summary>
-    private static SavedItem ToSavedItem(ItemInstance i) => new()
+    // INTERNAL, not private: ShareCodes reuses the exact same DTO round-trip, so a shared item
+    // passes through the same lenient parsing and legacy migrations as a loaded save.
+    internal static SavedItem ToSavedItem(ItemInstance i) => new()
     {
         InstanceId = i.InstanceId,
         BaseType = i.BaseType.ToString(),
@@ -502,7 +512,7 @@ public static class SaveSystem
     };
 
     /// <summary>The mirror of <see cref="ToSavedItem"/> — same recursion, same lenient enum parsing.</summary>
-    private static ItemInstance FromSavedItem(SavedItem s) => new()
+    internal static ItemInstance FromSavedItem(SavedItem s) => new()
     {
         InstanceId = s.InstanceId,
         BaseType = Enum.Parse<ItemBaseType>(s.BaseType),

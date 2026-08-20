@@ -177,6 +177,13 @@ public class Game1 : Game
     private int _chestsCredited;   // chests already credited to CRAFTER evolution (delta vs _forge.ChestsOpened)
     // The VAULT's keep-filter — playthrough state, saved with the run (see ChestScreen.KeepMinTier).
     private int _chestKeepMinTier;
+
+    // ── THE WANDERING TRADER. Week + purchases persist; the stock is re-minted on demand (identity
+    //    is week-seeded, level follows the deepest wave, so a cache key of (week, level) suffices). ──
+    private int _traderWeek;
+    private readonly HashSet<int> _traderBought = new();
+    private List<ItemInstance>? _traderStock;
+    private int _traderStockLevel;
     private ItemBaseType? _chestKeepSlot;
     private float? _pendingRevealPose;   // RH_SHOT_T for the chest reveal, applied once the fixture has opened one
     private BuildScreen _buildScreen = null!;
@@ -454,6 +461,9 @@ public class Game1 : Game
         // paragraph.
         _pendingChestsOpened = save.ChestsOpened;
         _chestKeepMinTier = save.ChestKeepMinTier;
+        _traderWeek = save.TraderWeekStamp;
+        _traderBought.Clear();
+        foreach (var slot in save.TraderBoughtSlots) _traderBought.Add(slot);
         _chestKeepSlot = Enum.TryParse<ItemBaseType>(save.ChestKeepSlot ?? "", out var keepSlot)
             ? keepSlot : null;
         _chestsCredited = save.ChestsCredited;
@@ -677,6 +687,8 @@ public class Game1 : Game
             RunsWithVowKept = _runsWithVowKept,
             ChestsOpened = _forge.ChestsOpened,
             ChestKeepMinTier = _chestKeepMinTier,
+            TraderWeekStamp = _traderWeek,
+            TraderBoughtSlots = _traderBought.ToList(),
             ChestKeepSlot = _chestKeepSlot?.ToString(),
             ChestsCredited = _chestsCredited,
             MasteryEarned = _deepestEver,          // stored as deepest-ever; Earned is re-derived on load
@@ -1002,7 +1014,7 @@ public class Game1 : Game
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig"
                 or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "traitlit" or "traitterm" or "traitterminal"
-                or "roster" or "rosterlocked" or "weave" or "vault" or "attune" or "attuned")
+                or "roster" or "rosterlocked" or "weave" or "vault" or "attune" or "attuned" or "trader")
             {
                 _showTitle = false;
                 // Muster screen with a real roster to arrange.
@@ -1412,6 +1424,18 @@ public class Game1 : Game
                 // sees and the one where a locked card still has to explain itself.
                 // THE VAULT — a pile of chests of different grades, regions and depths, so the page poses
                 // with the variety it exists to show rather than five copies of one card.
+                if (sm == "trader")
+                {
+                    _showChests = true;
+                    // A wallet that can afford the Rare and the gem but NOT the Legendary, so the
+                    // capture shows both the payable and the refused price colours.
+                    _hunter.AddMaterials(2_000);
+                    _hunter.AddMaterial(Material.Essence, 400);
+                    _hunter.AddMaterial(Material.Core, 20);
+                    _deepestEver = 18;
+                    _chests.DevOpenTrader();
+                }
+
                 if (sm == "vault")
                 {
                     _showChests = true;
@@ -1808,7 +1832,41 @@ public class Game1 : Game
             // back — the whole TAKE ONLY row was inoperative while its Core tests stayed green.
             // (Adversarial review, pass five, HIGH.) The screen is authoritative; LoadContent seeds it
             // once from the save, and this branch only reads the edits back.
+            // ── THE WANDERING TRADER. Rollover first: a new ISO week clears the purchases and the
+            //    stall re-mints. Zero on old saves lands here too — the migration IS the rollover. ──
+            var week = WanderingTrader.WeekStamp(DateTime.UtcNow);
+            if (week != _traderWeek)
+            {
+                _traderWeek = week;
+                _traderBought.Clear();
+                _traderStock = null;
+                Save();
+            }
+            var traderLevel = Math.Max(1, _deepestEver);
+            if (_traderStock is null || _traderStockLevel != traderLevel)
+            {
+                _traderStock = WanderingTrader.Stock(week, traderLevel, new LootTuning());
+                _traderStockLevel = traderLevel;
+            }
+            _chests.Hunter = _hunter;
+            _chests.TraderStock = _traderStock;
+            _chests.TraderBought = _traderBought;
+
             _chests.Update(dt, _forge.UnopenedChests, CanvasMouse, MouseClicked, MouseWheel);
+
+            // A stall purchase: pay in materials, and the good goes to the FORGE bench like any
+            // other loot — the vault shows chests, not items.
+            if (_chests.ConsumeTraderBuy() is { } stallSlot
+                && _traderStock is not null && stallSlot >= 0 && stallSlot < _traderStock.Count
+                && !_traderBought.Contains(stallSlot)
+                && WanderingTrader.TryBuy(_hunter, _traderStock[stallSlot], TraderTuning.Default))
+            {
+                _forge.AddLoot(new List<ItemInstance> { _traderStock[stallSlot] });
+                _traderBought.Add(stallSlot);
+                _sound.Play("sfx_forge", 0.9f);
+                Save();
+            }
+
             if (_chests.FilterDirty)
             {
                 _chests.FilterDirty = false;
