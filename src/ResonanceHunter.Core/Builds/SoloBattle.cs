@@ -196,6 +196,41 @@ public static class SoloBattle
     /// <summary>DEFENSE mitigates a bite on a diminishing curve: taken × K / (K + defense). Never 100%.</summary>
     public const float DefenseMitigationConstant = 100f;
 
+    // ── SIGNATURES. Every Source does one small mechanical thing whenever its skills land — the
+    //    Hatsu layer: your element is an identity you build around, not a colour you swap. They are
+    //    deliberately SMALL (glue, not payload): if a signature alone beat a mastery capstone, the
+    //    capstone axis would die. Public so BuildGlossary formats its text from the same numbers. ──
+
+    /// <summary>BODY — each hit leaves a WOUND on the target. Everyone hits a wounded foe harder.</summary>
+    public const float SignatureWoundPerStack = 0.03f;
+    public const int SignatureWoundMaxStacks = 5;
+
+    /// <summary>SHADOW — the assassin's cut: bonus damage against foes below half health.</summary>
+    public const float SignatureShadowThreshold = 0.5f;
+    public const float SignatureShadowBonus = 0.12f;
+
+    /// <summary>MACHINE — every hit bends the target's armour down for the rest of the wave.</summary>
+    public const float SignatureMachineStrip = 1f;
+    public const int SignatureMachineStripCap = 5;
+
+    /// <summary>MIND — a cast stretches an open MARK window, up to a budget per window.</summary>
+    public const int SignatureMindExtendMs = 250;
+    public const int SignatureMindExtendCapMs = 1000;
+
+    /// <summary>NATURE — its skills heal for a sliver of what they deal.</summary>
+    public const float SignatureNatureLeech = 0.03f;
+
+    /// <summary>SPIRIT — the conductor: after it casts, the next OTHER-Source cast hits harder.</summary>
+    public const float SignatureSpiritBonus = 0.15f;
+
+    // ── CHARGE — the shared stack primitive the keystones bend. Every skill cast stores a point;
+    //    only a reader (REND) makes the pool real, so without one the counter is never tracked. ──
+
+    public const int ChargeCap = 10;
+    public const int ChargeCapExtended = 20;            // CAPACITOR
+    public const float ChargeRendPerPoint = 0.05f;      // REND — bonus per point spent
+    public const int ChargeDynamoPerBite = 2;           // DYNAMO
+
     /// <summary>
     /// The floor under a hit after ENEMY armour. Armour subtracts a flat amount per hit; this stops it
     /// subtracting everything.
@@ -327,8 +362,24 @@ public static class SoloBattle
         var struckOnce = new HashSet<WaveCreature>();   // FOLLOW THROUGH / OPENER / ALPHA
         var cascadeArmed = false;                       // CASCADE
         var assassinated = false;                       // ASSASSINATE — once per wave
+        // SIGNATURE state. Wounds and bent armour are per-CREATURE (they die with the wave); the
+        // Spirit prime and the Mind budget are per-champion moments inside it.
+        var wounds = new Dictionary<WaveCreature, int>();       // BODY
+        var armourBent = new Dictionary<WaveCreature, int>();   // MACHINE
+        var spiritPrimed = false;                               // SPIRIT
+        var mindExtendBudget = 0;                               // MIND — refilled when a MARK opens
+
         var firstBiteTaken = false;                     // FORTIFY
         var triggers = build.Triggers(hunter);
+        // CHARGE. Tracked only when a keystone reads or feeds the pool — an untracked pool cannot
+        // rot into dormant state, and the HUD only shows what the events say.
+        var chargeLive = triggers.Contains(BuildTrigger.Rend)
+                         || triggers.Contains(BuildTrigger.Capacitor)
+                         || triggers.Contains(BuildTrigger.Dynamo)
+                         || triggers.Contains(BuildTrigger.Lodestone);
+        var chargeCap = triggers.Contains(BuildTrigger.Capacitor) ? ChargeCapExtended : ChargeCap;
+        var charge = 0;
+
         var skills = build.Skills;
         var wt = WeavingTuning.Default;
         var resonance = hunter.ValueOf(Economy.HunterStat.ResonanceAffinity);
@@ -443,6 +494,10 @@ public static class SoloBattle
                 Heal((int)MathF.Round(champ.MaxHealth * shape.HealOnClear), atMs);
 
             if (harvestChance > 0f && rng.NextDouble() < harvestChance) bonus?.AddCores(1);
+            // LODESTONE — the holder's reward, deterministic: a FULL pool carried to the clear is a
+            // spare core. The rhythm argument with REND is settled here, at the only moment that counts.
+            if (chargeLive && triggers.Contains(BuildTrigger.Lodestone) && charge >= chargeCap)
+                bonus?.AddCores(1);
             if (triggers.Contains(BuildTrigger.Splinter)) bonus?.AddQuality(0.15f);   // richer loot on a kill (see the blurb)
 
             return Finish(WaveOutcome.Cleared, atMs);
@@ -702,7 +757,31 @@ public static class SoloBattle
                 // Amp is per TARGET: the Source matchup belongs to the creature being hit, so one cast
                 // can be strong against one creature in a wave and weak against another.
                 var hit = raw * Amp(absMs, skillSource, skillForm, c);
+
+                // ── SIGNATURES, hit-side. The WOUND bonus reads stacks laid by ANY Body skill and
+                //    pays EVERY skill hit — that is what makes it a team primitive rather than a
+                //    self-buff. Building happens after the landing, so a hit never feeds itself. ──
+                if (fromSkill && skillSource is { } sig)
+                {
+                    if (wounds.TryGetValue(c, out var w) && w > 0)
+                        hit *= 1f + SignatureWoundPerStack * w;
+                    if (sig == Source.Shadow && c.Health < c.MaxHealth * SignatureShadowThreshold)
+                        hit *= 1f + SignatureShadowBonus;
+                }
+
                 LandOn(c, hit, atMs, fromSkill);
+
+                if (fromSkill && skillSource is { } sig2)
+                {
+                    if (sig2 == Source.Body)
+                        wounds[c] = Math.Min(SignatureWoundMaxStacks, wounds.GetValueOrDefault(c) + 1);
+                    if (sig2 == Source.Machine && c.Defense > 0f
+                        && armourBent.GetValueOrDefault(c) < SignatureMachineStripCap)
+                    {
+                        c.Defense = MathF.Max(0f, c.Defense - SignatureMachineStrip);
+                        armourBent[c] = armourBent.GetValueOrDefault(c) + 1;
+                    }
+                }
                 dealt += hit;
                 struck++;
                 lastIndex = i;
@@ -756,7 +835,10 @@ public static class SoloBattle
             // halving a binary is a design change rather than a repair.
             amount = (int)MathF.Round(amount * sustain);
             if (amount <= 0) return;
-            champ.Health = Math.Min(champ.MaxHealth, champ.Health + amount);
+            // LONG-CLAMPED: an int.MaxValue-health fixture champion plus any heal wrapped negative
+            // and died OF HEALING the moment the NATURE signature made Heal reachable from every
+            // build. Sum in long, clamp, then narrow.
+            champ.Health = (int)Math.Min(champ.MaxHealth, (long)champ.Health + amount);
             events.Add(new BattleEvent(BattleEventKind.Heal, 0, amount, atMs));
         }
 
@@ -826,6 +908,7 @@ public static class SoloBattle
                     // instead; see the Amp() line that consumes MarkUntilMs.)
 
                     champ.MarkUntilMs = abs + window;
+                    mindExtendBudget = SignatureMindExtendCapMs;   // MIND's signature stretches THIS window
                     events.Add(new BattleEvent(BattleEventKind.Skill, 0, (int)Form.Mark, ms));
                     continue;
                 }
@@ -847,6 +930,25 @@ public static class SoloBattle
                     if (build.Affinity is { } affinityForm && sk.Vow is not null)
                         raw *= FormBehaviour.AffinityFactor(affinityForm, form, vowSworn: true)
                                / FormBehaviour.AffinityFactor(affinityForm, form);
+
+                    // SPIRIT'S SIGNATURE, consumed: a Spirit cast primes the NEXT cast of any other
+                    // Source. The conductor raises the orchestra, not itself.
+                    if (spiritPrimed && sk.Source != Source.Spirit)
+                    {
+                        raw *= 1f + SignatureSpiritBonus;
+                        spiritPrimed = false;
+                    }
+
+                    // REND — a Strike spends the whole CHARGE pool. The pool is what the PREVIOUS
+                    // casts stored; the Strike's own point lands after it resolves, so a dump can
+                    // never feed itself.
+                    if (chargeLive && charge > 0 && form == Form.Strike
+                        && triggers.Contains(BuildTrigger.Rend))
+                    {
+                        raw *= 1f + ChargeRendPerPoint * charge;
+                        charge = 0;
+                        events.Add(new BattleEvent(BattleEventKind.Charge, 0, 0, ms));
+                    }
 
                     // EXECUTE — a STRIKE finishes a weakened enemy. Reads the CURRENT target's own health
                     // fraction, so in a multi-creature wave it fires on whichever creature is in front and
@@ -908,6 +1010,28 @@ public static class SoloBattle
                         if (triggers.Contains(BuildTrigger.Siphon)) leech *= SiphonLeechMultiplier;
                         Heal((int)MathF.Round(dealt * leech), ms);
                     }
+
+                    // ── SIGNATURES, cast-side. ────────────────────────────────────────────────
+                    // MIND stretches an open MARK window — a Mind rotation keeps the amplifier lit
+                    // longer than the window's own clock would allow, budgeted so it cannot become
+                    // a permanent mark.
+                    if (sk.Source == Source.Mind && champ.MarkUntilMs > abs && mindExtendBudget > 0)
+                    {
+                        var stretch = Math.Min(SignatureMindExtendMs, mindExtendBudget);
+                        champ.MarkUntilMs += stretch;
+                        mindExtendBudget -= stretch;
+                    }
+                    // NATURE heals a sliver of the total dealt. On a Transformation it stacks with
+                    // the Form's own leech ON PURPOSE — Nature + Transformation IS the lifedrain
+                    // build, and the two reading the same total keeps them honest with each other.
+                    if (sk.Source == Source.Nature && dealt > 0f)
+                        Heal((int)MathF.Round(dealt * SignatureNatureLeech), ms);
+                    // SPIRIT primes the next other-Source cast (consumed at the raw, above).
+                    if (sk.Source == Source.Spirit) spiritPrimed = true;
+                    // CHARGE — the cast itself stores a point. One per ACTIVATION: the Weaver echo
+                    // and Echo's second cast ride their activation rather than stacking the pool.
+                    if (chargeLive && c == 0 && charge < chargeCap)
+                        events.Add(new BattleEvent(BattleEventKind.Charge, 0, ++charge, ms));
 
                     if (alive == 0) return Kill(ms);
                 }
@@ -971,6 +1095,13 @@ public static class SoloBattle
 
                 champ.Health -= (int)MathF.Round(taken);
                 events.Add(new BattleEvent(BattleEventKind.EnemyStrike, 0, (int)MathF.Round(taken), ms));
+
+                // DYNAMO — the bite winds the spring.
+                if (chargeLive && triggers.Contains(BuildTrigger.Dynamo) && charge < chargeCap)
+                {
+                    charge = Math.Min(chargeCap, charge + ChargeDynamoPerBite);
+                    events.Add(new BattleEvent(BattleEventKind.Charge, 0, charge, ms));
+                }
 
                 // TRAP: the only Form that pays for being hit. This is why a build takes it.
                 for (var idx = 0; idx < skills.Count; idx++)

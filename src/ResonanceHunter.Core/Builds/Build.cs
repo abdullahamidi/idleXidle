@@ -82,6 +82,25 @@ public enum BuildTrigger
     /// <summary>Damage scales with how much health is PRESENT — the mirror of <see cref="Bloodlust"/>.</summary>
     Zeal,
 
+    /// <summary>Your STRIKES spend the whole CHARGE pool for bonus force — the CHARGE spender.</summary>
+    /// <remarks>
+    /// CHARGE is the shared stack primitive: every skill cast stores one point, and nothing reads
+    /// the pool unless a keystone does. REND is what turns the pool into a rhythm — pool casts,
+    /// then dump them through a Strike. Dead without a Strike in the build, on purpose: a spender
+    /// with nothing to spend through is a keystone you should not have socketed.
+    /// </remarks>
+    Rend,
+
+    /// <summary>The CHARGE pool holds twice as much. Means nothing without a spender.</summary>
+    Capacitor,
+
+    /// <summary>Every bite you take stores CHARGE — the wall that winds the spring.</summary>
+    Dynamo,
+
+    /// <summary>Clearing a wave with a FULL pool yields a spare core — the holder's reward.</summary>
+    /// <remarks>In direct tension with <see cref="Rend"/>: one wants the pool dumped, one wants it kept.</remarks>
+    Lodestone,
+
     /// <summary>A KILL readies every skill at once — the next shot goes out immediately.</summary>
     /// <remarks>
     /// Written because THE QUIVER's card said it and nothing did it. The character granted

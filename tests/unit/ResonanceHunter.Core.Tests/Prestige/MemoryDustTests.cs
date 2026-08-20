@@ -20,8 +20,13 @@ public class MemoryDustTests
         //
         // The tree is deliberately NOT completable any more (see the test below): the whole point of the
         // four paths is that two terminals cost more than a career earns.
-        Assert.Equal(35, tree.All.Count);
-        Assert.InRange(tree.TotalTreeCost, 140, 170);
+        // 39: the CHARGE spur added one rung to each of the four roads (REND / DYNAMO /
+        // LODESTONE / CAPACITOR), deliberately symmetric so the road-cost law holds.
+        Assert.Equal(39, tree.All.Count);
+        // 166 -> 190 when the CHARGE spur landed (4 rungs x 6). The property this range guards —
+        // the tree is NOT completable, two terminals stay out of reach — only gets STRONGER as the
+        // total grows past what a career earns; the floor guards the other direction.
+        Assert.InRange(tree.TotalTreeCost, 180, 200);
     }
 
     /// <summary>Every node is REACHABLE — no unlock is orphaned by its prerequisites.</summary>

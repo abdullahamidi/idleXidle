@@ -732,7 +732,10 @@ public sealed class WeaveScreen
         y += 8;
         var col = SourceColor.GetValueOrDefault(source, Bone);
         _ui.TextBig(b, SourceName(source), x, y, col, UiTypography.Secondary);
+        // SIGNATURE first — what the element DOES — then the matchup, which is a nudge now.
         _ui.TextBig(b, BuildGlossary.SourceLine(source), x + 92, y, Slate, UiTypography.Secondary);
+        y += 20;
+        _ui.TextBig(b, BuildGlossary.MatchupLine(source), x + 92, y, Slate * 0.85f, UiTypography.Secondary);
     }
 
     private void DrawVows(SpriteBatch b, Point hit)

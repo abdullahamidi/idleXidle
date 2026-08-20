@@ -351,6 +351,15 @@ public sealed class MemoryDustTree
                 Requires = new[] { "ks_blood_magic" }, GrantsKeystone = "reaper",
                 Description = "LEARN REAPER — THE RUIN TERMINAL." },
 
+        // ── THE CHARGE SPUR, one rung per road at the same cost (the roads must stay within two
+        //    points of each other — enforced by test). Ruin spends the pool, Aegis winds it, Artifice
+        //    bends it, Avarice holds it: a build that wants two of these walks two roads, and that
+        //    split IS the min/max texture the playtest asked for. No spur rung sits on a terminal's
+        //    path, so it competes with depth rather than gating it.
+        new() { Id = "ks_rend", Road = TraitRoad.Ruin, Name = "THE STORED BLOW", Cost = 6, Effect = UnlockEffect.Expansion,
+                Requires = new[] { "ks_glass_cannon" }, GrantsKeystone = "rend",
+                Description = "LEARN REND." },
+
         // ── AEGIS — the wall. The only path that makes Bruiser bands routine, and the natural partner
         //    of the skill tree's ENDURE branch. ──────────────────────────────────────────────────
         new() { Id = "ks_ironclad", Road = TraitRoad.Aegis, Name = "THE IRON ROAD", Cost = 4, Effect = UnlockEffect.Expansion,
@@ -365,6 +374,15 @@ public sealed class MemoryDustTree
         new() { Id = "ks_titan", Road = TraitRoad.Aegis, Name = "THE TITAN ROAD", Cost = 12, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_undying" }, GrantsKeystone = "titan",
                 Description = "LEARN TITAN — THE AEGIS TERMINAL." },
+        new() { Id = "ks_dynamo", Road = TraitRoad.Aegis, Name = "THE WOUND SPRING", Cost = 6, Effect = UnlockEffect.Expansion,
+                Requires = new[] { "ks_ironclad" }, GrantsKeystone = "dynamo",
+                Description = "LEARN DYNAMO." },
+        new() { Id = "ks_lodestone", Road = TraitRoad.Avarice, Name = "THE KEPT COIL", Cost = 6, Effect = UnlockEffect.Expansion,
+                Requires = new[] { "ks_greed" }, GrantsKeystone = "lodestone",
+                Description = "LEARN LODESTONE." },
+        new() { Id = "ks_capacitor", Road = TraitRoad.Artifice, Name = "THE DEEP WELL", Cost = 6, Effect = UnlockEffect.Expansion,
+                Requires = new[] { "ks_echo" }, GrantsKeystone = "capacitor",
+                Description = "LEARN CAPACITOR." },
 
         // ── AVARICE — the economy build. It buys no combat power at all, which is what makes it a real
         //    choice: it trades depth for the gear that eventually buys depth. HOARDER is what stops it

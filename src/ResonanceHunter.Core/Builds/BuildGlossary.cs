@@ -88,9 +88,27 @@ public static class BuildGlossary
         tuning ??= WeavingTuning.Default;
 
         var strong = StrongAgainst(source);
-        return $"x{tuning.StrongMultiplier:0.00} against {Name(strong.A)} and {Name(strong.B)}. "
-               + $"Each region has its own element — match it and every skill of this Source hits harder.";
+        return $"{Signature(source)}. "
+               + $"x{tuning.StrongMultiplier:0.00} against {Name(strong.A)} and {Name(strong.B)} — "
+               + $"match the region's element for a nudge; the signature is the identity.";
     }
+
+    /// <summary>
+    /// The Source's SIGNATURE — the one mechanical thing that fires whenever its skills land.
+    /// </summary>
+    /// <remarks>
+    /// Numbers are formatted from the sim's own constants, so a retune can never leave a stale
+    /// promise here. This is the Hatsu layer: what your element DOES, not what it counters.
+    /// </remarks>
+    public static string Signature(Source source) => source switch
+    {
+        Source.Body => $"Hits leave a WOUND — every skill hits a wounded foe +{SoloBattle.SignatureWoundPerStack * 100:0}% per wound ({SoloBattle.SignatureWoundMaxStacks} max)",
+        Source.Shadow => $"+{SoloBattle.SignatureShadowBonus * 100:0}% against foes below half health",
+        Source.Mind => "Each cast stretches an open MARK window a little longer",
+        Source.Nature => $"Its skills heal you for {SoloBattle.SignatureNatureLeech * 100:0}% of the damage they deal",
+        Source.Machine => "Every hit bends the foe's armour down, for the rest of the wave",
+        _ => $"After it casts, your next skill of any OTHER Source hits +{SoloBattle.SignatureSpiritBonus * 100:0}%",
+    };
 
     /// <summary>The matchup as ONE short line, for a panel with a single row to spare.</summary>
     /// <remarks>
@@ -98,10 +116,14 @@ public static class BuildGlossary
     /// WHICH. Both are generated from the same pair, so they can never disagree about the matchup.
     /// </remarks>
     public static string SourceLine(Source source, WeavingTuning? tuning = null)
+        => Signature(source);
+
+    /// <summary>The matchup as ONE short line — the second breath, after the signature.</summary>
+    public static string MatchupLine(Source source, WeavingTuning? tuning = null)
     {
         tuning ??= WeavingTuning.Default;
         var (a, b) = StrongAgainst(source);
-        return $"x{tuning.StrongMultiplier:0.0} vs {Name(a)} and {Name(b)} — match the region's element";
+        return $"x{tuning.StrongMultiplier:0.00} vs {Name(a)} and {Name(b)} — match the region's element";
     }
 
     /// <summary>The two Sources this one is strong against — read from the matchup rule, never listed.</summary>

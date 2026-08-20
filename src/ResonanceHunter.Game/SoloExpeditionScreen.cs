@@ -279,6 +279,12 @@ public sealed class SoloExpeditionScreen
     /// one place the skills are listed, moved at all. So the medallions were a legend, not an instrument.
     /// </remarks>
     private readonly Dictionary<int, float> _skillFlash = new();
+
+    // CHARGE — latched off Charge events at the playhead, never re-derived (a replayed rule can
+    // drift from the sim's). Live only when the build carries a keystone that reads the pool.
+    private int _chargeNow;
+    private bool _chargeLive;
+    private int _chargeCap = SoloBattle.ChargeCap;
     private WaveReplay? _replay;
     private float _champLunge, _enemyLunge, _enemyWindup;
     /// <summary>Where DrawComposition last put the creature row — what its labels anchor to.</summary>
@@ -546,6 +552,14 @@ public sealed class SoloExpeditionScreen
         var build = Loadout.ToBuild(Tree, Mastery, Character);
         _recordToBeat = BestDepthHere;   // before a wave is pushed, or the run competes with itself
 
+        // The CHARGE pill only exists when the pool does.
+        var trig = build.Triggers(hunter);
+        _chargeLive = trig.Contains(BuildTrigger.Rend) || trig.Contains(BuildTrigger.Capacitor)
+                      || trig.Contains(BuildTrigger.Dynamo) || trig.Contains(BuildTrigger.Lodestone);
+        _chargeCap = trig.Contains(BuildTrigger.Capacitor)
+            ? SoloBattle.ChargeCapExtended : SoloBattle.ChargeCap;
+        _chargeNow = 0;
+
         // Charged once here at mint: RECKLESS OFFERING's health price and the build's health multipliers.
         var hp = SoloBattle.ChampionHealth(build, hunter);
         _champ = new Champion { MaxHealth = hp, Health = hp };
@@ -588,6 +602,7 @@ public sealed class SoloExpeditionScreen
         // useful fact in a Swarm band: how many of them you actually got through.
         _replay.SetComposition(_run.LastWaveCreatures.Select(c => c.MaxHealth).ToList());
         _playheadMs = 0f;
+        _chargeNow = 0;   // the sim's pool is per-wave; the pill must not carry one over
         _nextEnemyStrikeMs = _replay.NextEnemyStrikeAfter(0f);
         _nextChampStrikeMs = _replay.NextChampionStrikeAfter(0f);
         _callouts.Clear();
@@ -857,6 +872,9 @@ public sealed class SoloExpeditionScreen
                     break;
                 case BattleEventKind.EnemyDown:
                     _vfx.Play("vfx_death", _rowCentreX, _rowTopY + 110, scale: 2, fps: 9f);
+                    break;
+                case BattleEventKind.Charge:
+                    _chargeNow = e.Amount;   // the pool AFTER the change; 0 is REND's dump
                     break;
             }
         }
@@ -1748,6 +1766,10 @@ public sealed class SoloExpeditionScreen
         var (_, pitch, slot) = SkillRailMetrics();
         const int y0 = RailTop + RailHeadroom;
         _ui.TextBig(b, "SKILLS", RailContentX, RailTop + 26, Gold, 20);
+        // THE POOL, beside the header it feeds. Gold at the brim — the REND moment worth waiting for.
+        if (_chargeLive)
+            _ui.TextRight(b, $"CHARGE {_chargeNow}/{_chargeCap}", RailContentX + RailContentW, RailTop + 30,
+                          _chargeNow >= _chargeCap ? Gold : Slate);
         for (var i = 0; i < n; i++)
         {
             var box = new Rectangle(RailContentX, y0 + i * pitch, slot, slot);

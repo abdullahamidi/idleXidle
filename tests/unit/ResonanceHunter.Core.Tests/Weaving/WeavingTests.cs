@@ -233,14 +233,17 @@ public class WeavingTests
     // ── Composition beats stat-stacking ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// Picking the right Source against a target beats raw affinity investment. Pillar 4.
+    /// The matchup is a NUDGE now: it wins ties, and it no longer beats real investment.
     /// </summary>
     /// <remarks>
-    /// A player who reads the matchup and brings the right element out-damages one who simply piles
-    /// stats into resonance. If that were not true, builds would be stat-stacks, not trade-offs.
+    /// This test used to pin the opposite — a matched Source at modest stats beating a mismatched
+    /// one at DOUBLE stats — and that world is exactly what the playtest called "çok basit": the
+    /// deepest-looking axis reduced to a colour chart. Since the SIGNATURE pass, an element is an
+    /// identity (what it DOES when it lands), and the matchup is seasoning. Both directions are
+    /// pinned so neither a re-inflation nor a total flattening can slip through.
     /// </remarks>
     [Fact]
-    public void test_the_right_source_beats_a_higher_stat_with_the_wrong_source()
+    public void test_the_matchup_wins_ties_but_no_longer_beats_real_investment()
     {
         var target = Source.Mind;
 
@@ -250,12 +253,16 @@ public class WeavingTests
         Assert.True(Weaving.SourceEffectiveness(Source.Body, target, Tuning) > 1f);
         Assert.True(Weaving.SourceEffectiveness(Source.Machine, target, Tuning) < 1f);
 
-        // The matched Source at MODEST affinity beats the mismatched one at DOUBLE the affinity.
+        // At EQUAL stats the counter still wins — the nudge is real...
         var matched = Weaving.AbilityPower(wellMatched, target, 60f, false, Tuning);
-        var stacked = Weaving.AbilityPower(mismatched, target, 120f, false, Tuning);
+        var evenMismatch = Weaving.AbilityPower(mismatched, target, 60f, false, Tuning);
+        Assert.True(matched > evenMismatch,
+            $"At equal stats the matched Source ({matched:0.0}) must still beat the mismatched ({evenMismatch:0.0}).");
 
-        Assert.True(matched > stacked,
-            $"Matched Source ({matched:0.0}) must beat a mismatched stat-stack ({stacked:0.0}).");
+        // ...but a DOUBLED stat with the wrong element now beats it. Countering is seasoning.
+        var stacked = Weaving.AbilityPower(mismatched, target, 120f, false, Tuning);
+        Assert.True(stacked > matched,
+            $"Doubled investment ({stacked:0.0}) must out-damage the bare counter ({matched:0.0}) now.");
     }
 
     /// <summary>Mark deals no direct damage — it is an amplifier, not a hit.</summary>

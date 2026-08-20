@@ -139,6 +139,10 @@ public class TriggerLivenessTests
             BuildTrigger.Hoarder,       // test_hoarder_turns_haul_into_force
             BuildTrigger.Weaver,        // test_weaver_fires_the_next_form_as_well
             BuildTrigger.LooseAgain,    // test_loose_again_actually_looses_again
+            BuildTrigger.Rend,          // ChargeKeystoneTest.test_charge_rend_spends_the_pool_and_the_spend_pays
+            BuildTrigger.Capacitor,     // ChargeKeystoneTest.test_charge_capacitor_raises_the_cap_and_alone_it_only_fills
+            BuildTrigger.Dynamo,        // ChargeKeystoneTest.test_charge_dynamo_winds_the_pool_on_bites
+            BuildTrigger.Lodestone,     // ChargeKeystoneTest.test_charge_lodestone_pays_a_core_for_a_full_pool_at_the_clear
         };
 
         // DESPERATION was parked here for a long time as "dead" — a HAUL effect the squad Expedition read

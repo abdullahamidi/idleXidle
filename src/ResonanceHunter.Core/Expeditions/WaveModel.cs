@@ -119,7 +119,9 @@ public enum WaveOutcome { Cleared, Wiped, Stalled }
 /// <see cref="BattleEventKind.Shield"/> carries the shield's remaining duration as its Amount, and its Slot
 /// says WHO is covered — the sim decides coverage, the screen only draws it, so the rule lives in one place.
 /// </remarks>
-public enum BattleEventKind { Strike, EnemyStrike, Down, Heal, EnemyDown, Skill, Shield }
+// Charge: Value is the pool AFTER the change — the HUD latches the latest one at its playhead
+// rather than re-deriving the sim's rules (a replayed rule is a rule that can drift).
+public enum BattleEventKind { Strike, EnemyStrike, Down, Heal, EnemyDown, Skill, Shield, Charge }
 
 /// <summary>A single beat of the fight, for the presentation layer to replay.</summary>
 /// <param name="Slot">

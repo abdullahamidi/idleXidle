@@ -153,8 +153,12 @@ public sealed record WeavingTuning
     /// <summary>How strongly the Hunter's resonance_affinity feeds ability power.</summary>
     public float SourceScalingCoefficient { get; init; } = 0.008f;
 
-    public float StrongMultiplier { get; init; } = 1.5f;
-    public float WeakMultiplier { get; init; } = 0.667f;
+    // SHRUNK from 1.5/0.667 when Sources gained SIGNATURES: at x1.5 the correct play was always
+    // "swap to the counter", which reduced the deepest-looking axis to a colour chart. At x1.15 the
+    // matchup is a travel nudge (where do I hunt) and the signature is the identity (what does my
+    // element DO) — the playtest asked for builds you love, not counters you obey.
+    public float StrongMultiplier { get; init; } = 1.15f;
+    public float WeakMultiplier { get; init; } = 0.87f;
 
     /// <summary>
     /// What one activation of each Form is worth. These are HIT SIZES, and the spread between them is

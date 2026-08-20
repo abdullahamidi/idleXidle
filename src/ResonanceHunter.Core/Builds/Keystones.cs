@@ -134,6 +134,49 @@ public static class Keystones
         },
         new()
         {
+            // THE CHARGE SPENDER. CHARGE is the game's one shared stack primitive: every cast
+            // stores a point, and only a reader makes the pool real. REND turns a rotation into a
+            // rhythm — pool through the other skills, dump through the Strike — and pays for the
+            // spikes with a flat tax on everything. Wants TEMPO (faster pooling) or DYNAMO (bites
+            // pool too); refuses builds with no Strike at all.
+            Id = "rend", Name = "REND",
+            Blurb = "EVERY CAST STORES 1 CHARGE (10 MAX). YOUR STRIKES SPEND ALL OF IT, +5% PER CHARGE. EVERYTHING HITS 10% SOFTER.",
+            Mods = new BuildMods(Damage: 0.9f, Health: 1f, SkillRate: 1f, Haul: 1f, Rarity: 1f),
+            Grants = new[] { BuildTrigger.Rend },
+        },
+        new()
+        {
+            // The bender: it changes what the pool CAN be, not what anything does. Deliberately
+            // inert without REND — the blurb says so — because a cap on a pool nobody spends is
+            // the exact dormant shape this game hunts, and here it must be a visible player error.
+            Id = "capacitor", Name = "CAPACITOR",
+            Blurb = "YOUR CHARGE POOL HOLDS 20 INSTEAD OF 10. SKILLS RETURN 15% SLOWER. MEANS NOTHING WITHOUT REND.",
+            Mods = new BuildMods(Damage: 1f, Health: 1f, SkillRate: 0.85f, Haul: 1f, Rarity: 1f),
+            Grants = new[] { BuildTrigger.Capacitor },
+        },
+        new()
+        {
+            // The wall that winds the spring: being hit feeds the pool, so an ENDURE chassis can
+            // fuel a REND spike without racing TEMPO for cast count. Pays in the same currency it
+            // farms — you take more of every bite you are milking.
+            Id = "dynamo", Name = "DYNAMO",
+            Blurb = "EVERY BITE YOU TAKE STORES 2 CHARGE. YOU TAKE 15% MORE.",
+            Mods = new BuildMods(Damage: 1f, Health: 0.85f, SkillRate: 1f, Haul: 1f, Rarity: 1f),
+            Grants = new[] { BuildTrigger.Dynamo },
+        },
+        new()
+        {
+            // The HOLDER — the direct rival of REND: one wants the pool dumped through a Strike,
+            // one wants it carried whole to the clear. Socketing both is a rhythm argument the
+            // player has to settle in the rotation, which is exactly the min/max texture CHARGE
+            // exists to create. The AVARICE entry in the set: it pays in loot, and costs rarity.
+            Id = "lodestone", Name = "LODESTONE",
+            Blurb = "CLEAR A WAVE WITH A FULL CHARGE POOL AND IT YIELDS A SPARE CORE. RARE FINDS COME 20% LESS OFTEN.",
+            Mods = new BuildMods(Damage: 1f, Health: 1f, SkillRate: 1f, Haul: 1f, Rarity: 0.8f),
+            Grants = new[] { BuildTrigger.Lodestone },
+        },
+        new()
+        {
             // THE ARTIFICE TERMINAL. Strange rather than large: one slot answers two of the content's
             // four demands, which no other thing in the game can do. The cadence price is what keeps it
             // from being simply "more damage" — a Weaver casts less often and covers more ground.
