@@ -121,22 +121,45 @@ public static class FormBehaviour
     /// </para>
     /// </remarks>
     public static float AffinityFactor(Form affinity, Form skill)
+        => FactorAtDistance(HexDistance(affinity, skill));
+
+    /// <summary>
+    /// The affinity factor WITH the Nen buy-back: a SWORN VOW on the skill pulls it one ring toward
+    /// your discipline.
+    /// </summary>
+    /// <remarks>
+    /// Straight from the system this game was born from — in Nen, a restriction is how you wield what
+    /// your affinity does not give you (the chains were never the conjurer's category). Mechanically:
+    /// an off-discipline skill that carries a sworn Vow is judged at one ring closer, so the opposite
+    /// Form climbs 0.45 → 0.75, an off-Form 0.75 → 1.15. The native Form gains nothing — you already
+    /// own it — and an unsworn skill pays the full distance.
+    /// </remarks>
+    public static float AffinityFactor(Form affinity, Form skill, bool vowSworn)
+    {
+        var dist = HexDistance(affinity, skill);
+        if (vowSworn && dist > 0) dist -= 1;
+        return FactorAtDistance(dist);
+    }
+
+    /// <summary>Cyclic distance on the six-Form hexagon, 0..3.</summary>
+    private static int HexDistance(Form a, Form b)
     {
         var ring = Enum.GetValues<Form>().Length;                 // 6
-        var raw = Math.Abs((int)affinity - (int)skill);
-        var dist = Math.Min(raw, ring - raw);                     // cyclic distance 0..3
-        // A SHARPER class: committing to a specialisation leans in hard (x2.0 on your Form) and the far
-        // Forms fight you more (x0.45 at the opposite). It stays a lean, not a lock — the opposite Form is
-        // still castable, so a specialist keeps room to splash one off-Form skill for coverage. Your class
-        // is WHAT you're best at; the four woven skills and three keystones are HOW you build within it.
-        return dist switch
-        {
-            0 => 2.00f,   // your mastery — you are a specialist now, and it shows
-            1 => 1.15f,   // adjacent — the comfortable neighbours
-            2 => 0.75f,   // off-affinity — a real cost
-            _ => 0.45f,   // the opposite Form — usable for a splash, but it truly fights you
-        };
+        var raw = Math.Abs((int)a - (int)b);
+        return Math.Min(raw, ring - raw);
     }
+
+    // A SHARPER class: committing to a specialisation leans in hard (x2.0 on your Form) and the far
+    // Forms fight you more (x0.45 at the opposite). It stays a lean, not a lock — the opposite Form is
+    // still castable, so a specialist keeps room to splash one off-Form skill for coverage. Your class
+    // is WHAT you're best at; the four woven skills and three keystones are HOW you build within it.
+    private static float FactorAtDistance(int dist) => dist switch
+    {
+        0 => 2.00f,   // your mastery — you are a specialist now, and it shows
+        1 => 1.15f,   // adjacent — the comfortable neighbours
+        2 => 0.75f,   // off-affinity — a real cost
+        _ => 0.45f,   // the opposite Form — usable for a splash, but it truly fights you
+    };
 
     /// <summary>
     /// A Form's damage, before Source matchup, Vow and build multipliers.

@@ -840,6 +840,14 @@ public static class SoloBattle
                     var raw = FormBehaviour.BaseDamage(form, resonance, wt)
                               * VowFactor(sk, weaveCtx, wt, shape);
 
+                    // THE NEN BUY-BACK: a sworn Vow pulls an off-discipline skill one ring toward the
+                    // build's affinity (restriction buys power — the rule the Vows were born from).
+                    // Applied as a RATIO over Amp's base affinity factor, so it composes with every
+                    // later multiplication and can never double-apply.
+                    if (build.Affinity is { } affinityForm && sk.Vow is not null)
+                        raw *= FormBehaviour.AffinityFactor(affinityForm, form, vowSworn: true)
+                               / FormBehaviour.AffinityFactor(affinityForm, form);
+
                     // EXECUTE — a STRIKE finishes a weakened enemy. Reads the CURRENT target's own health
                     // fraction, so in a multi-creature wave it fires on whichever creature is in front and
                     // hurt, not on the wave as a whole. Dead without a Strike, and strongest on bosses —
@@ -880,6 +888,10 @@ public static class SoloBattle
                             var wovenRaw = FormBehaviour.BaseDamage(woven.Form, resonance, wt)
                                            * VowFactor(woven, weaveCtx, wt, shape)
                                            * WeaverEchoFraction;
+                            // The woven echo carries ITS OWN skill's buy-back, same ratio rule as above.
+                            if (build.Affinity is { } wovenAff && woven.Vow is not null)
+                                wovenRaw *= FormBehaviour.AffinityFactor(wovenAff, woven.Form, vowSworn: true)
+                                            / FormBehaviour.AffinityFactor(wovenAff, woven.Form);
                             events.Add(new BattleEvent(BattleEventKind.Skill, 0, (int)woven.Form, ms));
                             dealt += LandSpread(wovenRaw, ms, shape.TargetsFor(woven.Form),
                                                 woven.Source, woven.Form, abs);

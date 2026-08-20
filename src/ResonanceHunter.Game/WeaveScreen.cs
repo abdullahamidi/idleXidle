@@ -35,6 +35,12 @@ namespace ResonanceHunter.Client;
 /// </remarks>
 public sealed class WeaveScreen
 {
+    /// <summary>
+    /// The build's DISCIPLINE — the Form specialisation taken on the mastery tree. Host-fed each
+    /// frame. Null until a Specialisation node is bought, and the screen says where to get one.
+    /// </summary>
+    public Form? Discipline { get; set; }
+
     private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
     private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
     private static readonly Color Ember = new(0xD8, 0x48, 0x3A);
@@ -313,6 +319,15 @@ public sealed class WeaveScreen
         _ui.TextCenterBig(b, "A SKILL IS A SOURCE, A FORM, AND WHAT YOU SWORE FOR IT",
                           960, 80, Slate, UiTypography.Secondary);
 
+        // THE DISCIPLINE LINE — the Nen frame this game was born from, finally said out loud: your
+        // skills are your specialisation's craft, and a sworn Vow buys back what it does not give you.
+        if (Discipline is { } disc)
+            _ui.TextCenterBig(b, $"DISCIPLINE: {FormName(disc)} — YOUR SKILLS ARE ITS CRAFT  ·  A SWORN VOW PULLS AN OFF-DISCIPLINE SKILL ONE RING CLOSER",
+                              960, 108, Gold, UiTypography.Secondary);
+        else
+            _ui.TextCenterBig(b, "NO DISCIPLINE YET — TAKE A SPECIALISATION ON THE MASTERY TREE (E) TO MAKE ONE FORM YOURS",
+                              960, 108, Slate, UiTypography.Secondary);
+
         DrawSlots(b, hit);
         DrawPicker(b, hit);
         DrawVows(b, hit);
@@ -342,7 +357,19 @@ public sealed class WeaveScreen
             if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } gem)
                 b.Draw(gem, new Rectangle(row.X + 16, row.Y + 10, 56, 56), Color.White);
 
-            _ui.TextBig(b, Fit($"{SourceName(s.Source)} {FormName(s.Form)}", 236), row.X + 88, row.Y + 8, Bone, UiTypography.Body);
+            _ui.TextBig(b, Fit($"{SourceName(s.Source)} {FormName(s.Form)}", 196), row.X + 88, row.Y + 8, Bone, UiTypography.Body);
+
+            // The hexagon's verdict on this woven skill — and the Vow buy-back drawn as the LIFT it
+            // is ("x0.45→x0.75"), so swearing a Vow on an off-discipline skill visibly pays.
+            if (Discipline is { } dd)
+            {
+                var baseF = FormBehaviour.AffinityFactor(dd, s.Form);
+                var vowF = FormBehaviour.AffinityFactor(dd, s.Form, vowSworn: s.VowId is not null);
+                var lifted = vowF > baseF + 0.001f;
+                var tag = lifted ? $"x{baseF:0.0#}→x{vowF:0.0#}" : $"x{vowF:0.0#}";
+                var tc = vowF >= 1.99f ? Gold : lifted ? Met : vowF >= 1.14f ? Met : vowF >= 0.74f ? Slate : Ember;
+                _ui.TextRight(b, tag, row.Right - 50, row.Y + 10, tc);
+            }
 
             // The Vow line carries its VERDICT, not just its name. "SWORN" on a Vow that pays nothing
             // is the most misleading thing this screen could say.
@@ -641,6 +668,19 @@ public sealed class WeaveScreen
                           new Rectangle(cell.Center.X - 26, cell.Y + 8, 52, 52), glyphTint))
                 _ui.Diamond(b, new Rectangle(cell.Center.X - 20, cell.Y + 18, 40, 40), glyphTint);
             _ui.TextCenterBig(b, FormName(f), cell.Center.X, cell.Bottom - 24, tint, UiTypography.Secondary);
+
+            // THE HEXAGON'S VERDICT on this Form for YOUR discipline, on the cell itself — the picker
+            // teaches the class while you choose. Gold edge on your own Form.
+            if (Discipline is { } dpick)
+            {
+                var factor = FormBehaviour.AffinityFactor(dpick, f);
+                var (aTag, aCol) = factor >= 1.99f ? ("x2.0", Gold)
+                    : factor >= 1.14f ? ("x1.15", Met)
+                    : factor >= 0.74f ? ("x0.75", Slate)
+                    : ("x0.45", Ember);
+                _ui.Text(b, aTag, cell.X + 8, cell.Y + 8, aCol);
+                if (factor >= 1.99f && !on) Outline(b, cell, Gold, 2);
+            }
 
             // YOUR GEAR IS WAITING FOR THIS ONE. A small mark rather than a line of text: the cell is
             // 130px wide and the point is to draw the eye, not to explain here — the readout panel

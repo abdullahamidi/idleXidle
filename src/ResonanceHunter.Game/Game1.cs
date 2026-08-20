@@ -1862,6 +1862,7 @@ public class Game1 : Game
             _weave.Character = _characters.Active;
             _weave.RegionId = _activeRegion;
             _weave.RegionName = Regions.Get(_activeRegion).Name;
+            _weave.Discipline = _mastery.Affinity();
             _weave.Update(CanvasMouse, MouseClicked, MouseWheel);
             if (_weave.Dirty) { _weave.ClearDirty(); Save(); }
             // CONSUMED HERE, where the Weave actually runs. It was read inside `if (_showBuild)`, and
