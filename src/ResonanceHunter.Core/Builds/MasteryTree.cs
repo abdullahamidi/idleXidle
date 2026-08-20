@@ -133,6 +133,11 @@ public sealed class MasteryTree
         if (Available < node.Cost) return false;
         if (!node.Unlocked(_taken.Contains)) return false;
         if (node.Kind == MasteryKind.Mastery && MasteredBranch() is not null) return false;
+        // ONE DISCIPLINE PER HUNTER. Affinity() reads the FIRST Specialisation taken, so a second
+        // one could only ever add its trigger while its Form silently counted for nothing — the
+        // player would read it as hybridising and the hexagon would ignore it. Attunement is an
+        // identity, not a shopping list; the tree refuses instead of half-honouring.
+        if (node.Kind == MasteryKind.Specialisation && Affinity() is not null) return false;
         return true;
     }
 

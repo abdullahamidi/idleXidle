@@ -1002,7 +1002,7 @@ public class Game1 : Game
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig"
                 or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "traitlit" or "traitterm" or "traitterminal"
-                or "roster" or "rosterlocked" or "weave" or "vault")
+                or "roster" or "rosterlocked" or "weave" or "vault" or "attune" or "attuned")
             {
                 _showTitle = false;
                 // Muster screen with a real roster to arrange.
@@ -1076,7 +1076,7 @@ public class Game1 : Game
                     if (_pendingRevealPose is { } rp) _forge.DevPoseReveal(rp);
                 }
 
-                if (sm is "build" or "buildtree" or "buildzoom")
+                if (sm is "build" or "buildtree" or "buildzoom" or "attune" or "attuned")
                 {
                     _showBuild = true;
 
@@ -1114,6 +1114,20 @@ public class Game1 : Game
                         _mastery.Take(id);
 
                     if (sm == "buildtree") _buildScreen.DevOpenTree();
+
+                    // ATTUNE poses THE ATTUNEMENT ceremony; ATTUNED poses the tree after sealing
+                    // (the hex panel gold, the discipline live). Both walk the REAL path — Weight's
+                    // lower rings then the Specialisation — so the pose can't drift from the rules.
+                    if (sm is "attune" or "attuned")
+                    {
+                        _mastery.SetEarned(80);
+                        foreach (var k in new[] { MasteryKind.Minor, MasteryKind.Notable })
+                            foreach (var wn in MasteryCatalog.Nodes.Where(x => x.Branch == Branch.Weight && x.Kind == k))
+                                _mastery.Take(wn.Id);
+                        _mastery.Take("spec_strike");
+                        _buildScreen.DevOpenTree();
+                        if (sm == "attune") _buildScreen.DevAttune(Form.Strike);
+                    }
                     // The same tree at a working zoom. Node art is thirty pixels across in the
                     // overview, where a capture can only prove that something was drawn. RH_SHOT_ZOOM
                     // picks the scale, so the rim (masteries) and the hub (minors) are both reachable

@@ -55,6 +55,8 @@ public sealed class BuildScreen
     private string _hoverInfo = "";
     private string? _hoverNodeId;          // the node under the pointer this frame
     private string? _pinnedNodeId;         // the last node clicked — what the detail panel shows when nothing is hovered
+    private string? _attuneNodeId;         // non-null: THE ATTUNEMENT ceremony is open for this just-taken node
+    private Form _attuneForm;
     /// <summary>Set when the player asked for the weave editor. The host opens it and clears this.</summary>
     public bool WantsWeave { get; set; }
     private bool _resetArmed;   // the reset button has been pressed once and is waiting for the second
@@ -98,6 +100,14 @@ public sealed class BuildScreen
     }
 
     public BuildScreen(UiKit ui) => _ui = ui;
+
+    /// <summary>DEV: pose THE ATTUNEMENT ceremony for a capture, without touching the tree's state.</summary>
+    public void DevAttune(Form form)
+    {
+        _attuneNodeId = MasteryCatalog.Nodes
+            .First(n => n.Kind == MasteryKind.Specialisation && n.Form == form).Id;
+        _attuneForm = form;
+    }
 
     public PlayerLoadout Loadout { get; set; } = new();
     public MasteryTree Mastery { get; set; } = new();
@@ -238,6 +248,10 @@ public sealed class BuildScreen
     // A DOCKED CARD, not a column. The tree is the page now; a 700px panel permanently taking a third
     // of the canvas is exactly the "sıkışmış" the layout was accused of.
     private static readonly Rectangle NodePanel = new(1408, 588, 496, 460);
+    private static readonly Rectangle HexPanel = new(1408, 96, 496, 476);
+    private static readonly Rectangle AttunePanel = new(480, 180, 960, 720);
+    private static readonly Rectangle AttuneSealBtn = new(560, 816, 360, 52);
+    private static readonly Rectangle AttuneUndoBtn = new(1000, 816, 360, 52);
     // Sized for FIVE skill cards, not four.
     //
     // The trait tree's spine sells a fifth weave, and the old geometry (four cards of 132 at a pitch of
@@ -256,7 +270,7 @@ public sealed class BuildScreen
         Tree = tree;
 
         // ── THE CAMERA. Only while the tree page is open; the overview has nothing to pan. ────────
-        if (_editMode)
+        if (_editMode && _attuneNodeId is null)
         {
             var over = Game1.ToOverlay(mouse);
 
@@ -300,7 +314,7 @@ public sealed class BuildScreen
         // independent latches — so the refund could only fire on a frame where both buttons were pressed
         // at once. Shipped dead, in the same commit whose comment celebrated wiring up a dead method.
         // Everything under the gate assumes a left click, so this runs first rather than widening it.
-        if (rightClicked && _editMode && !_draggedThisPress)
+        if (rightClicked && _editMode && !_draggedThisPress && _attuneNodeId is null)
         {
             var rhit = Game1.ToOverlay(mouse);
             foreach (var node in MasteryCatalog.Nodes)
@@ -326,6 +340,25 @@ public sealed class BuildScreen
         if (_draggedThisPress) { _draggedThisPress = false; return; }
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
         var hit = Game1.ToOverlay(mouse);
+
+        // ── THE ATTUNEMENT swallows the click while it is open. Seal keeps the node; undo is a
+        //    real Refund, so backing out costs nothing — deliberation, not punishment. ──────────
+        if (_attuneNodeId is { } attId)
+        {
+            if (AttuneSealBtn.Contains(hit))
+            {
+                _attuneNodeId = null;
+                _msg = $"ATTUNED. {_attuneForm.ToString().ToUpperInvariant()} IS YOURS — ITS SKILLS STRIKE AT DOUBLE WORTH.";
+            }
+            else if (AttuneUndoBtn.Contains(hit))
+            {
+                Mastery.Refund(attId);
+                _attuneNodeId = null;
+                Dirty = true;
+                _msg = "THE POINTS ARE BACK. ATTUNE WHEN YOU ARE READY.";
+            }
+            return;
+        }
 
         if (!_editMode)
         {
@@ -372,10 +405,21 @@ public sealed class BuildScreen
             _pinnedNodeId = node.Id;
 
 
-            if (Mastery.Take(node.Id)) { _msg = ""; Dirty = true; }
+            var firstSpec = node.Kind == MasteryKind.Specialisation && Mastery.Affinity() is null;
+            if (Mastery.Take(node.Id))
+            {
+                _msg = "";
+                Dirty = true;
+                // THE ATTUNEMENT: your first Specialisation is the moment this game is named for,
+                // so it gets a ceremony instead of a click-sound — the hexagon shown whole, the
+                // choice sealed or taken back, nothing else clickable until you decide.
+                if (firstSpec && node.Form is { } nf) { _attuneNodeId = node.Id; _attuneForm = nf; }
+            }
             else _msg = Mastery.IsTaken(node.Id) ? "ALREADY TAKEN." :
                 Mastery.Available <= 0 ? "NO MASTERY POINTS — GO DEEPER." :
                 node.Kind == MasteryKind.Mastery && Mastery.Affinity() is not null ? "YOU'VE ALREADY MASTERED A FORM." :
+                node.Kind == MasteryKind.Specialisation && Mastery.Affinity() is not null
+                    ? "YOU ARE ALREADY ATTUNED — ONE DISCIPLINE PER HUNTER." :
                 "TAKE A CONNECTED NODE FIRST.";
             return;
         }
@@ -730,6 +774,7 @@ public sealed class BuildScreen
         // answered neither. The tree's own question ("what does this node do, can I afford it, what does
         // it cost me") had no home at all except a one-line strip at the very bottom of the screen.
         DrawNodeDetail(b, hit);
+        DrawHexPanel(b, aff);
 
         var info = _hoverInfo.Length > 0 ? _hoverInfo : _msg.Length > 0 ? _msg : "WEIGHT OPPOSES SPREAD.  TEMPO OPPOSES ENDURE.  ONE BRANCH IS AFFORDABLE; TWO ARE NOT.";
         // SLATE FOR THE IDLE HINT. In Dim this measured ~1.35:1 — the single line that explains the
@@ -737,6 +782,56 @@ public sealed class BuildScreen
         // the screen it governs. Bone and Ember still mark the hover and message states.
         var infoColor = _hoverInfo.Length > 0 ? Bone : _msg.Length > 0 ? Ember : Slate;
         _ui.Text(b, info, 200, 1024, infoColor);
+
+        if (_attuneNodeId is not null) DrawAttunement(b, hit);
+    }
+
+    /// <summary>
+    /// The hexagon column — the tree page's standing answer to "what does my discipline reach".
+    /// </summary>
+    /// <remarks>
+    /// Sits above the node-detail panel so the right side reads as one column: WHO YOU ARE on top,
+    /// WHAT YOU ARE READING below. Unattuned it draws quiet and says where attunement lives.
+    /// </remarks>
+    private void DrawHexPanel(SpriteBatch b, Form? aff)
+    {
+        _ui.Fill(b, HexPanel, Quiet);
+        Outline(b, HexPanel, Path, 2);
+        _ui.TextCenter(b, aff is { } a ? $"YOUR ATTUNEMENT — {a.ToString().ToUpperInvariant()}" : "UNATTUNED",
+                       HexPanel.Center.X, HexPanel.Y + 14, aff is null ? Slate : Gold);
+        if (aff is null)
+            _ui.TextCenter(b, "SEAL A SPECIALISATION TO ATTUNE", HexPanel.Center.X, HexPanel.Y + 38, Slate);
+        FormHexDiagram.Draw(_ui, b, new Point(HexPanel.Center.X, HexPanel.Y + 268), 105, aff,
+                            showFactors: aff is not null);
+    }
+
+    /// <summary>
+    /// THE ATTUNEMENT — the ceremony for the first Specialisation.
+    /// </summary>
+    /// <remarks>
+    /// The game's founding system deserves a moment, not a click-sound. Deliberately NOT the
+    /// inspiration's divination scene: this game's language is the weave, so the ceremony is the
+    /// loom shown whole — six seals, your thread bound in gold — and a choice you may still hand
+    /// back. Sealing changes nothing the Take didn't already do; the ceremony IS the information.
+    /// </remarks>
+    private void DrawAttunement(SpriteBatch b, Point hit)
+    {
+        _ui.Scrim(b, 0.75f);
+        _ui.Panel(b, AttunePanel, gold: true);
+
+        var name = _attuneForm.ToString().ToUpperInvariant();
+        _ui.TextCenterBig(b, "THE ATTUNEMENT", 960, AttunePanel.Y + 36, Gold, UiTypography.SectionTitle);
+        _ui.TextCenter(b, "SIX FORMS ON THE LOOM — ONE ANSWERS YOU.", 960, AttunePanel.Y + 86, Slate);
+
+        FormHexDiagram.Draw(_ui, b, new Point(960, AttunePanel.Y + 340), 150, _attuneForm, showFactors: true);
+
+        _ui.TextCenter(b, $"YOUR {name} SKILLS STRIKE AT DOUBLE WORTH. THE FAR FORMS RESIST —",
+                       960, AttunePanel.Y + 604, Bone);
+        _ui.TextCenter(b, "A SWORN VOW PULLS AN OFF-DISCIPLINE SKILL ONE RING CLOSER.",
+                       960, AttunePanel.Y + 626, Bone);
+
+        Button(b, AttuneSealBtn, $"SEAL IT — {name} IS MINE", hit, true);
+        Button(b, AttuneUndoBtn, "NOT YET — TAKE THE POINTS BACK", hit, true);
     }
 
     /// <summary>
