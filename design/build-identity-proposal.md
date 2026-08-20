@@ -1,4 +1,17 @@
-# Build Identity — Proposal (awaiting the designer's pick)
+# Build Identity — Proposal
+
+**v2 (2026-08-20): the designer named the true north — Hunter x Hunter's Nen system.** "Oyuncunun
+seçtiği uzmanlık alanı, yeteneklerini doğrudan etkilemeli. Yetenekleri aslında bir uzmanlığın ürünü
+olmalı." Discovery: the game already carries the Nen skeleton — six Forms map to the six categories,
+the affinity hexagon EXISTS and is live in the sim (AffinityFactor x2.0/x1.15/x0.75/x0.45, sourced
+from the mastery tree's Specialisation), and Vows are the restriction rule. What was missing was
+VISIBILITY and the buy-back rule; both shipped in 7546c4a (discipline named on BUILD, verdicts on
+every Form cell and woven slot, and A SWORN VOW PULLS AN OFF-DISCIPLINE SKILL ONE RING CLOSER).
+
+Remaining moves below are now read THROUGH the Nen frame: signatures = each Source's Hatsu flavour;
+move 2's capstones = advanced techniques of a discipline; the water-divination moment = making the
+FIRST Specialisation pick a ceremony. Move ordering unchanged; the ceremony is a cheap, high-value
+insert before move 1.
 
 **Raised:** playtest 2026-08-20, item 5. **Status:** PROPOSAL — nothing here is implemented.
 
