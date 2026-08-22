@@ -138,33 +138,20 @@ public sealed class AssetLibrary
         ["crea_body"] = "bonecrawler_idle_01", ["crea_machine"] = "stone_sentinel_idle_01",
         ["crea_mind"] = "soul_leech_idle_01", ["crea_nature"] = "wisp_idle_01",
         ["crea_shadow"] = "shadeling_idle_01", ["crea_spirit"] = "rift_guardian_idle_01",
-        // Region bosses → package_04 boss idle poses (normalized 1024 canvases), matched to region theme.
-        ["boss_verdant_hollow"] = "thorn_regent_idle_1024", ["boss_cinderworks"] = "forge_colossus_idle_1024",
-        ["boss_umbral_reach"] = "void_reaper_idle_1024", ["boss_still_archive"] = "crystal_lich_idle_1024",
-        ["boss_pale_choir"] = "lumen_angel_idle_1024", ["boss_marrow_wastes"] = "spirit_matron_idle_1024",
         // Arena backgrounds now ship under their own bg_arena_<Source> keys, so the old
         // <element>_<region>_clean indirection is gone. Only the legacy fallback key still
         // needs a bridge.
         ["bg_arena_verdant"] = "bg_arena_nature",   // the DrawSceneBackground fallback key
-        // Combat FX (8 square 512 frames each). VfxPlayer resolves these keys through Get().
-        // crit / death / interrupt now have DEDICATED strips. Previously crit shared slash_void with
-        // ability_ruinstrike, death shared smoke_puff with weakhit, and interrupt drew a holy HEAL burst —
-        // so a interrupted cast and a heal looked identical. Each semantic event now reads as itself.
-        // THE TWO IMPACT STRIPS NO LONGER HAVE EIGHT FRAMES, whatever their filenames say: gold was
-        // trimmed to 7 and crit to 6. Both carried frames that were not part of the animation — gold
-        // decayed to 4% coverage and then POPPED BACK to 17% on the last frame, crit went empty on 7
-        // and flashed again on 8 — so in the fight every hit sparked a second time after it had
-        // finished. VfxPlayer derives the frame count from width/height, so nothing reads the "8";
-        // the names are left alone because renaming would mean editing the content pipeline in three
-        // places for a string no code parses.
-        ["vfx_hit"] = "impact_gold_strip8_512", ["vfx_weakhit"] = "smoke_puff_strip8_512",
-        ["vfx_crit"] = "impact_crit_strip8_512", ["vfx_ability_ruinstrike"] = "slash_shadow_strip8_512",
-        ["vfx_death"] = "death_dissolve_strip8_512", ["vfx_interrupt"] = "interrupt_break_strip8_512",
-        ["vfx_levelup"] = "levelup_gold_purple_strip8_512",
-        // Per-Source slash strips, for damage-type-aware hit FX.
-        ["vfx_slash_body"] = "slash_body_strip8_512", ["vfx_slash_mind"] = "slash_mind_strip8_512",
-        ["vfx_slash_machine"] = "slash_machine_strip8_512", ["vfx_slash_nature"] = "slash_nature_strip8_512",
-        ["vfx_slash_shadow"] = "slash_shadow_strip8_512", ["vfx_slash_spirit"] = "slash_spirit_strip8_512",
+        // Combat effects (2026-08-22 art contract, design/art/arena-art-contract.md §5): one white strip per
+        // FORM (tinted by the casting skill's Source at play time) plus the combat beats. VfxPlayer resolves
+        // these short keys through Get(); every strip is 8 square 512 frames, drawn additively.
+        ["fx_strike"] = "fx_strike_strip8_512", ["fx_projectile"] = "fx_projectile_strip8_512",
+        ["fx_aura"] = "fx_aura_strip8_512", ["fx_trap"] = "fx_trap_strip8_512",
+        ["fx_mark"] = "fx_mark_strip8_512", ["fx_transformation"] = "fx_transformation_strip8_512",
+        ["fx_hit"] = "fx_hit_strip8_512", ["fx_weakhit"] = "fx_weakhit_strip8_512",
+        ["fx_crit"] = "fx_crit_strip8_512", ["fx_death"] = "fx_death_strip8_512",
+        ["fx_heal"] = "fx_heal_strip8_512", ["fx_shield"] = "fx_shield_strip8_512",
+        ["fx_levelup"] = "fx_levelup_strip8_512",
     };
 
     private Texture2D? Resolve(string key)

@@ -929,7 +929,7 @@ public static class SoloBattle
                     if (sk.Source == Source.Spirit) spiritPrimed = true;
                     if (chargeLive && charge < chargeCap)
                         events.Add(new BattleEvent(BattleEventKind.Charge, 0, ++charge, ms));
-                    events.Add(new BattleEvent(BattleEventKind.Skill, 0, (int)Form.Mark, ms));
+                    events.Add(new BattleEvent(BattleEventKind.Skill, (int)sk.Source, (int)Form.Mark, ms));
                     continue;
                 }
 
@@ -993,7 +993,7 @@ public static class SoloBattle
                         if (alive == 0) return Kill(ms);
                     }
 
-                    events.Add(new BattleEvent(BattleEventKind.Skill, 0, (int)form, ms));
+                    events.Add(new BattleEvent(BattleEventKind.Skill, (int)sk.Source, (int)form, ms));
                     var dealt = LandSpread(raw, ms, shape.TargetsFor(form), sk.Source, form, abs);
 
                     // WEAVER — the ARTIFICE terminal. The cast ALSO lands as the next Form in the loadout,
@@ -1016,7 +1016,7 @@ public static class SoloBattle
                             if (build.Affinity is { } wovenAff && woven.Vow is not null)
                                 wovenRaw *= FormBehaviour.AffinityFactor(wovenAff, woven.Form, vowSworn: true)
                                             / FormBehaviour.AffinityFactor(wovenAff, woven.Form);
-                            events.Add(new BattleEvent(BattleEventKind.Skill, 0, (int)woven.Form, ms));
+                            events.Add(new BattleEvent(BattleEventKind.Skill, (int)woven.Source, (int)woven.Form, ms));
                             dealt += LandSpread(wovenRaw, ms, shape.TargetsFor(woven.Form),
                                                 woven.Source, woven.Form, abs);
                             if (alive == 0) return Kill(ms);
@@ -1141,7 +1141,7 @@ public static class SoloBattle
 
                     var trapRaw = FormBehaviour.BaseDamage(Form.Trap, resonance, wt)
                                   * VowFactor(sk, weaveCtx, wt, shape);
-                    events.Add(new BattleEvent(BattleEventKind.Skill, 0, (int)Form.Trap, ms));
+                    events.Add(new BattleEvent(BattleEventKind.Skill, (int)sk.Source, (int)Form.Trap, ms));
                     var trapDealt = LandSpread(trapRaw, ms, shape.TargetsFor(Form.Trap), sk.Source, Form.Trap, abs);
                     // NATURE'S SIGNATURE follows the damage here too — a Trap that bites back heals
                     // its sliver. A Trap never CASTS, so the cast-following rules (CHARGE, Spirit's

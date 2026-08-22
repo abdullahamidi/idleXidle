@@ -1,5 +1,10 @@
 # Asset Integration Spec & Gap List — Vector Art Pack v1
 
+> **2026-08-22 — the STAGE art (champion, enemies, bosses, combat effects) is now governed by
+> `design/art/arena-art-contract.md`**: one PixelLab side-view camera, native facing (champion RIGHT,
+> enemies LEFT), one size chart, 8×512 strips, `fx_*` effects per Form. The creature / boss / FX rows
+> of this document are superseded by it; the UI, icon, item and frame rows below still hold.
+
 > **Status**: Authoritative integration contract for the locked vector art direction (Hades × AFK Arena).
 > **Created**: 2026-07-22
 > **Pipeline facts (verified in code)**: assets load from `assets/art/**` keyed by **filename without

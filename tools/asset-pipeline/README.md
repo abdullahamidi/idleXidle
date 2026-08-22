@@ -175,3 +175,23 @@ existing smooth assets:
 - Any 1920×1080 background, overlay, or parallax layer
   (`bg_forge`, `bg_warren`, `bg_regionmap`, `bg_constellation`, `bg_title`)
 - Item icons at the 200px Forge preview or 192px Gear hero size
+
+## v2 — the 2026-08-22 arena consistency pass (`v2/`)
+
+The stage art (ten champions, six enemies, six bosses, thirteen effects) was regenerated as ONE set
+through the PixelLab MCP tools — characters with explicit rotations (`create_character` v3, side
+view; south-east for the champion so it faces RIGHT, south-west for enemies/bosses so they face
+LEFT), `animate_character` v3 clips on that one rotation, `create_image_pixen` + `animate_image`
+for non-humanoid creatures and every effect. Contract: `design/art/arena-art-contract.md`.
+
+| File | Role |
+|---|---|
+| `v2/spec.json` | every figure/effect: look, route, size, clip texts — the prompts that made the set |
+| `v2/rhart.py` | Pillow toolkit: fetch, strip (union-bbox assembly), gate, sheet, static |
+| `v2/clip.py` | one generated clip → 8×512 strip + gate, from a character animation or an animate_image job |
+| `v2/file_assets.py` | staging → `assets/art`, derived statics, retirement of the superseded art |
+
+Generation runs through MCP (no REST token needed); the staging root is
+`tools/asset-pipeline/.staging/v2/<group>/` (gitignored). The `manifest.json` / `animations.json` /
+`build_spec.py` path above is the v1 pipeline and still drives the UI/icon layer; its enemy/boss/roster
+animation entries are superseded by v2 and are kept for history only.

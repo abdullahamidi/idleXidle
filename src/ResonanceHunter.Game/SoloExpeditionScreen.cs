@@ -161,25 +161,22 @@ public sealed class SoloExpeditionScreen
     /// where the direction actually reads.
     /// </para>
     /// </remarks>
-    private const bool ArtFacesLeft = true;
+    // 2026-08-22 ART CONTRACT (design/art/arena-art-contract.md): the champion strips are generated on
+    // the SOUTH-EAST rotation and face RIGHT natively; enemies and bosses are generated SOUTH-WEST and
+    // face LEFT. Nothing is mirrored at draw time any more — the flip below stays derived so that a
+    // future layout change (or a wrong-facing asset) is one constant away from correct.
+    private const bool ArtFacesLeft = false;
 
     private static bool ChampionFacesRight => ArtFacesLeft && ChampBox.Center.X < EnemyBox.Center.X;
-    // Rev 5 boss presentation metadata — measured from the crystal_lich_idle strip's frame 0 (1024²), shared
-    // across frames (Option A). Body = the central figure (torso/head/robe), EXCLUDING the wings, staff, and a
-    // top-of-frame BLEED-STREAK defect (rows 0..~305) that is trimmed via SrcTop and REPORTED as an asset
-    // issue (§19.3) — never hidden by shifting the body. Grounding, scale, centring, and the bar all key off
-    // BodyBounds, so the wings/staff may extend beyond the 540px body and are clipped by the arena.
-    private readonly record struct BossMeta(int SrcTop, int BodyX, int BodyY, int BodyW, int BodyH,
-        int FullX, int FullY, int FullW, int FullH, string Name);
-    private static readonly Dictionary<string, BossMeta> BossMetaFor = new()
+    // 2026-08-22: the boss is an ordinary 8x512 strip on a clean canvas (design/art/arena-art-contract.md),
+    // so the per-boss BODY-bounds table that used to live here (SrcTop / BodyX.. measured off the old
+    // crystal_lich render, with a "bleed streak" to trim) is gone. The name is the only per-boss fact left.
+    private static readonly Dictionary<string, string> BossNameFor = new()
     {
-        // BodyX corrected LEFT of the frame-0 estimate (388): the dense body (robe/torso) sat consistently
-        // left of anchor across frames, so the frame-0 measurement was biased right. Centres the figure.
-        ["crystal_lich"] = new(SrcTop: 305, BodyX: 296, BodyY: 430, BodyW: 214, BodyH: 500,
-            FullX: 240, FullY: 350, FullW: 648, FullH: 580, Name: "CRYSTAL LICH"),
+        ["thorn_regent"] = "THORN REGENT", ["forge_colossus"] = "FORGE COLOSSUS", ["void_reaper"] = "VOID REAPER",
+        ["crystal_lich"] = "CRYSTAL LICH", ["lumen_angel"] = "LUMEN ANGEL", ["spirit_matron"] = "SPIRIT MATRON",
     };
-    private static readonly BossMeta DefaultBossMeta = new(0, 300, 200, 424, 640, 200, 120, 624, 780, "BOSS");
-    private const int BossTargetBodyHeight = 540;   // §6/§25: rendered BODY height (wings extend beyond)
+    private const int BossTargetBodyHeight = 540;   // §6/§25: rendered figure height — the boss box is a 540 square
     // Pulled in from x=1360: the boss is far wider than an ordinary creature, and anchored that far right
     // its wing ran into the arena's scissor edge at 1554 and read as sliced off behind the side panels.
     private static readonly Point BossAnchor = new(1230, GroundY + 10);
@@ -501,6 +498,7 @@ public sealed class SoloExpeditionScreen
         // _champWindup, the same anticipation model the enemy already used. Leaving a decaying timer
         // here that nothing reads is exactly the kind of dead machinery this codebase keeps finding.
         _champLunge = Math.Max(0f, _champLunge - dt * 5f);
+        _castTimer = Math.Max(0f, _castTimer - dt);
         _enemyLunge = Math.Max(0f, _enemyLunge - dt * 5f);
         // 1.25, not 2.5: the slide-in was over in 0.4s, which is too quick to register as creatures
         // ARRIVING rather than simply appearing. Twice as long, and the beat before it is now empty
@@ -844,34 +842,44 @@ public sealed class SoloExpeditionScreen
                     // budgeted against importance, so the loud VFX are reserved for the SKILL casts below.
                     _champLunge = 1f;
                     _nextChampStrikeMs = _replay.NextChampionStrikeAfter(e.AtMs);
-                    if ((_strikeCount++ & 1) == 0) SpawnDamage(HitDamage(1f), false);   // every other auto-hit
+                    if ((_strikeCount++ & 1) == 0)   // every other auto-hit: a number and a small, quiet puff
+                    {
+                        SpawnDamage(HitDamage(1f), false);
+                        _vfx.Play("fx_weakhit", _rowCentreX, _rowTopY + 110, scale: 1, fps: 16f, tint: Steel);
+                    }
                     break;
                 case BattleEventKind.EnemyStrike:
                     _enemyLunge = 1f;
                     _nextEnemyStrikeMs = _replay.NextEnemyStrikeAfter(e.AtMs);
-                    _vfx.Play("vfx_hit", ChampBox.Center.X, ChampBox.Center.Y + 40, scale: 1, fps: 12f, tint: Ember);
+                    _vfx.Play("fx_hit", ChampBox.Center.X, ChampBox.Center.Y + 40, scale: 2, fps: 14f, tint: Ember);
                     break;
                 case BattleEventKind.Skill:
                     var form = (Form)e.Amount;
                     _skillFlash[e.Amount] = 0.42f;
                     var (text, colour) = CalloutFor(form);
                     Say(text, colour);
-                    PlayFormVfx(form);
+                    // Slot carries the casting skill's Source (WaveModel.BattleEvent) — the effect is the
+                    // Form's shape in the Source's colour, which is the whole hexagon in one flash.
+                    PlayFormVfx(form, (Source)e.Slot);
+                    // A TRAP fires on being hit; the champion did not cast anything, so no cast clip.
+                    if (form != Form.Trap) _castTimer = CastSeconds;
                     SpawnDamage(HitDamage(form == Form.Trap ? 3f : 2f), form == Form.Trap);   // skills hit big
                     break;
                 case BattleEventKind.Heal:
                     Say($"+{e.Amount}", Verdant);
-                    _vfx.Play("vfx_levelup", ChampBox.Center.X, ChampBox.Y + 32, scale: 2, fps: 10f, tint: Verdant);
+                    _vfx.Play("fx_heal", ChampBox.Center.X, ChampBox.Center.Y, scale: 3, fps: 10f, tint: Verdant);
                     break;
                 case BattleEventKind.Shield:
                     Say("UNDYING", Gold);
-                    _vfx.Play("vfx_interrupt", ChampBox.Center.X, ChampBox.Center.Y, scale: 2, fps: 12f, tint: Gold);
+                    _vfx.Play("fx_shield", ChampBox.Center.X, ChampBox.Center.Y - 20, scale: 4, fps: 12f, tint: Gold);
                     break;
                 case BattleEventKind.Down:
-                    _vfx.Play("vfx_death", ChampBox.Center.X, ChampBox.Center.Y, scale: 3, fps: 9f);
+                    _vfx.Play("fx_death", ChampBox.Center.X, ChampBox.Center.Y, scale: 4, fps: 9f);
                     break;
                 case BattleEventKind.EnemyDown:
-                    _vfx.Play("vfx_death", _rowCentreX, _rowTopY + 110, scale: 2, fps: 9f);
+                    // A boss falling is the loudest beat in the fight: the starburst AND the plume.
+                    if (_isBossWave) _vfx.Play("fx_crit", _rowCentreX, _rowTopY + 110, scale: 4, fps: 10f, tint: Gold);
+                    _vfx.Play("fx_death", _rowCentreX, _rowTopY + 110, scale: _isBossWave ? 4 : 2, fps: 9f);
                     break;
                 case BattleEventKind.Charge:
                     _chargeNow = e.Amount;   // the pool AFTER the change; 0 is REND's dump
@@ -923,27 +931,54 @@ public sealed class SoloExpeditionScreen
         }
     }
 
-    private void PlayFormVfx(Form form)
+    /// <summary>
+    /// The skill layer of the fight: one effect strip per FORM, tinted by the casting skill's SOURCE.
+    /// </summary>
+    /// <remarks>
+    /// The Form is the SHAPE of what happened (a slash, a bolt, a ring, a burst from the floor, a sigil, a
+    /// surge) and the Source is its colour — so a Shadow Strike and a Nature Strike share a silhouette and
+    /// differ in glow, which is exactly the two-axis reading the art bible asks of creatures (§3.1). The
+    /// strips are authored white so the tint carries the whole hue; they are drawn additively, which is why
+    /// the glow colours below are brighter than the bible's body colours (Umbra Indigo added to black is
+    /// nothing at all).
+    /// </remarks>
+    private void PlayFormVfx(Form form, Source source)
     {
+        var glow = SourceGlow(source);
         switch (form)
         {
             case Form.Strike:
-                _vfx.Play("vfx_ability_ruinstrike", _rowCentreX, _rowTopY + 110, scale: 3, fps: 11f, tint: Ember);
+                _vfx.Play("fx_strike", _rowCentreX, _rowTopY + 110, scale: 3, fps: 12f, tint: glow);
+                break;
+            case Form.Projectile:
+                // The bolt flies left-to-right inside its own frame, so it is centred between the two figures.
+                _vfx.Play("fx_projectile", (ChampBox.Right + _rowCentreX) / 2, _rowTopY + 120, scale: 3, fps: 14f, tint: glow);
+                break;
+            case Form.Aura:
+                _vfx.Play("fx_aura", ChampBox.Center.X, ChampBox.Center.Y + 20, scale: 3, fps: 12f, tint: glow);
                 break;
             case Form.Trap:
-                _vfx.Play("vfx_crit", _rowCentreX, _rowTopY + 110, scale: 3, fps: 9f, tint: Gold);
+                _vfx.Play("fx_trap", _rowCentreX, _rowTopY + 150, scale: 3, fps: 12f, tint: glow);
                 break;
             case Form.Mark:
-                _vfx.Play("vfx_interrupt", _rowCentreX, _rowTopY + 110, scale: 2, fps: 12f, tint: Bone);
+                _vfx.Play("fx_mark", _rowCentreX, _rowTopY + 110, scale: 2, fps: 12f, tint: glow);
                 break;
             case Form.Transformation:
-                _vfx.Play("vfx_levelup", ChampBox.Center.X, ChampBox.Y + 24, scale: 2, fps: 10f, tint: Verdant);
-                break;
-            default:
-                _vfx.Play("vfx_weakhit", _rowCentreX, _rowTopY + 110, scale: 1, fps: 14f, tint: Steel);
+                _vfx.Play("fx_transformation", ChampBox.Center.X, ChampBox.Center.Y, scale: 3, fps: 12f, tint: glow);
                 break;
         }
     }
+
+    /// <summary>The additive glow of each Source — see <see cref="PlayFormVfx"/> for why these are not the bible's body hues.</summary>
+    private static Color SourceGlow(Source s) => s switch
+    {
+        Source.Body => new Color(0xE8, 0x4A, 0x5E),
+        Source.Mind => new Color(0x5A, 0xC8, 0xE8),
+        Source.Nature => new Color(0x7F, 0xCB, 0x4A),
+        Source.Machine => new Color(0xE8, 0x8E, 0x3C),
+        Source.Shadow => new Color(0x9B, 0x7B, 0xFF),
+        _ => new Color(0xE6, 0xE0, 0xFF),   // Spirit
+    };
 
     private static int Jitter(int seed, int spread) => (int)(seed * 2654435761L % (spread * 2 + 1)) - spread;
 
@@ -1144,7 +1179,7 @@ public sealed class SoloExpeditionScreen
         string? stripKey = null, staticKey = null;
         if (EnemySource is { } es && EnemyForSource.TryGetValue(es, out var en))
         {
-            var act = attacking ? en == "stone_sentinel" ? "slam" : "attack" : "idle";
+            var act = attacking ? "attack" : "idle";
             stripKey = $"{en}_{act}_strip8_512";
             staticKey = attacking ? $"{en}_attack_01" : $"{en}_idle_01";
         }
@@ -1161,7 +1196,10 @@ public sealed class SoloExpeditionScreen
 
             _ui.GroundShadow(b, box.Center.X, EnemyBox.Bottom - 10, (int)(w * 0.55f), (int)(38 * scale), 0.55f);
 
-            const float crop = 0.08f;
+            // MEASURED headroom, not a constant. The 2026-08-22 strips fill ~90% of their frame with the
+            // figure sat 3.5% up from the floor, so a fixed 8% crop bit the top of the tallest creatures;
+            // a negative topCrop makes AnimSprite trim exactly the empty rows and never the figure.
+            const float crop = -1f;
             var compFps = attacking ? 16f : 12f;
             if (stripKey is null || !_ui.AnimSprite(b, stripKey, box,
                     EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps,
@@ -1178,8 +1216,9 @@ public sealed class SoloExpeditionScreen
             // minimum padding across the whole strip, and these creatures reach the top of the frame in
             // at least one animation frame, so it returns ~0 and the pip floated 55px above every head.
             // The creature art fills roughly the lower four-fifths of its frame; captured and checked.
-            const float headFraction = 0.22f;
-            var pip = new Rectangle(box.Center.X - 28, box.Y + (int)(h * headFraction) - 10, 56, 6);
+            // With the headroom trimmed by measurement the figure's top IS box.Y, so the pip sits a
+            // fixed 14px above it (the old 0.22 head fraction was measured on the previous art).
+            var pip = new Rectangle(box.Center.X - 28, box.Y - 14, 56, 6);
             _ui.Fill(b, pip, new Color(0x12, 0x0C, 0x10));
             if (frac > 0f) _ui.Fill(b, new Rectangle(pip.X, pip.Y, (int)(pip.Width * frac), pip.Height), Ember);
         }
@@ -1210,7 +1249,7 @@ public sealed class SoloExpeditionScreen
         _ui.GroundShadow(b, ebox.Center.X, ebox.Bottom - 10, (int)(ebox.Width * 0.60f), 42, 0.6f);
 
         var bob = (int)(MathF.Sin(_anim * 2f) * 8f);
-        const float crop = 0.08f;
+        const float crop = -1f;   // measured headroom — see DrawComposition
         var figTop = ebox.Bottom - ebox.Height;
         var ab = new Rectangle(ebox.X, figTop + bob, ebox.Width, ebox.Height);
 
@@ -1221,7 +1260,7 @@ public sealed class SoloExpeditionScreen
         var fps = attacking ? 11f : 9f;
         if (EnemySource is { } es && EnemyForSource.TryGetValue(es, out var en))
         {
-            var act = attacking ? en == "stone_sentinel" ? "slam" : "attack" : "idle";
+            var act = attacking ? "attack" : "idle";
             stripKey = $"{en}_{act}_strip8_512";
             staticKey = attacking ? $"{en}_attack_01" : $"{en}_idle_01";
         }
@@ -1242,9 +1281,8 @@ public sealed class SoloExpeditionScreen
         }
 
         // Quiet 130×12 bar ~18px above the VISIBLE top of the figure (§24.1), via the sprite's alpha bounds.
-        var boundsKey = staticKey ?? stripKey ?? "";
-        var topPad = boundsKey.Length > 0 ? _ui.TopPadFraction(boundsKey) : 0f;
-        var visTop = figTop + (int)(Math.Max(0f, (topPad - crop) / (1f - crop)) * ebox.Height);
+        // The strip is drawn with its measured headroom trimmed, so the visible top is the box top.
+        var visTop = figTop;
         // Framed bar art, matching the Hunter's own HUD bar. A bare 130x12 red rectangle was the one
         // unstyled element left inside the arena, and at full health it read as a floating red streak
         // with nothing tying it to the creature underneath.
@@ -1255,53 +1293,41 @@ public sealed class SoloExpeditionScreen
             _ui.TextCenterBig(b, PrettyName(EnemySource), ebar.Center.X, ebar.Y - 28, UiKit.Vellum, UiTypography.Secondary);
     }
 
-    /// <summary>Rev 5: draw the boss by its BODY bounds — the ground pivot lands at the anchor, the body scales
-    /// to ~540px, and the wings/staff extend beyond (clipped by the arena). NOT box-fit on the full texture.</summary>
+    /// <summary>
+    /// Draw the boss: a 540-px figure standing at <see cref="BossAnchor"/>, facing LEFT, from its own
+    /// <c>&lt;boss&gt;_&lt;clip&gt;_strip8_512</c> clip — the same path every other figure takes.
+    /// </summary>
+    /// <remarks>
+    /// This used to slice a 1024-px strip by a hand-measured body rectangle because the old render carried a
+    /// bleed streak and wings that had to be excluded from the scale. The 2026-08-22 art contract generates
+    /// every boss on a clean canvas at a shared density, so the generic grounded draw is now the correct one,
+    /// and the boss gets the same lunge the ordinary enemies have when it lands a blow.
+    /// </remarks>
     private void DrawBoss(SpriteBatch b, bool attacking)
     {
         var bossKey = DevForceBoss ? "crystal_lich" : BossForRegion.GetValueOrDefault(RegionId);
-        var m = bossKey is not null ? BossMetaFor.GetValueOrDefault(bossKey, DefaultBossMeta) : DefaultBossMeta;
-        _bossName = m.Name;
-        var tex = bossKey is not null ? _ui.Assets.Get($"{bossKey}_{(attacking ? "attack" : "idle")}_strip8_1024") : null;
-        if (tex is null || tex.Height <= 0)
+        _bossName = bossKey is not null ? BossNameFor.GetValueOrDefault(bossKey, "BOSS") : "BOSS";
+
+        var lunge = (int)(_enemyLunge * -40f);
+        var box = new Rectangle(BossAnchor.X - BossTargetBodyHeight / 2 + lunge, BossAnchor.Y - BossTargetBodyHeight,
+                                BossTargetBodyHeight, BossTargetBodyHeight);
+        _ui.GroundShadow(b, box.Center.X, BossAnchor.Y - 8, (int)(box.Width * 0.62f), 44, 0.6f);
+
+        // The swing rides the same windup as everything else (see EnemyClipSeconds): the strike lands on the
+        // frame the blow is credited, instead of the boss cycling its attack strip on the free clock.
+        var fps = attacking ? 10f : 8f;
+        var key = bossKey is null ? null : $"{bossKey}_{(attacking ? "attack" : "idle")}_strip8_512";
+        var seconds = EnemyClipSeconds(attacking, fps);
+        if (key is null || !_ui.AnimSprite(b, key, box, seconds, fps, !attacking, Color.White, -1f))
         {
             _bossBodyRect = new Rectangle(BossAnchor.X - 110, BossAnchor.Y - BossTargetBodyHeight, 220, BossTargetBodyHeight);
             _bossFullRect = _bossBodyRect;
             _ui.Fill(b, _bossBodyRect, Ember);
             return;
         }
-
-        var frameW = tex.Height;                          // square frames
-        var frames = Math.Max(1, tex.Width / frameW);
-        // The boss swing rides the same windup as everything else. It used to loop its attack strip on
-        // the free clock, so a boss "attacking" was really a boss cycling frames at a faster rate — the
-        // swing never lined up with the blow, which reads as flailing rather than striking.
-        _bossFrame = attacking
-            ? Math.Min(frames - 1, (int)(_enemyWindup * frames))
-            : (int)(_anim * 10f) % frames;   // EXACTLY one frame (§8)
-        if (tex.Width % frameW != 0)
-            System.Diagnostics.Debug.WriteLine($"Boss strip width {tex.Width} not a whole multiple of {frameW}.");
-
-        var scale = BossTargetBodyHeight / (float)m.BodyH;
-        // Source excludes the top bleed-streak defect (SrcTop). The ground pivot = body bottom-centre; place it
-        // at the anchor by choosing the destination so (BodyCenterX, BodyBottom) maps to BossAnchor.
-        var src = new Rectangle(_bossFrame * frameW, m.SrcTop, frameW, tex.Height - m.SrcTop);
-        var destLeft = (int)(BossAnchor.X - (m.BodyX + m.BodyW / 2f) * scale);
-        var destTop = (int)(BossAnchor.Y - (m.BodyY + m.BodyH - m.SrcTop) * scale);
-        var dest = new Rectangle(destLeft, destTop, (int)(frameW * scale), (int)(src.Height * scale));
-
-        // Boss ground shadow at the pivot (§13), sized off the rendered BODY width, not the full silhouette.
-        var bodyWpx = (int)(m.BodyW * scale);
-        _ui.Fill(b, new Rectangle(BossAnchor.X - (int)(bodyWpx * 0.34f), BossAnchor.Y - 9, (int)(bodyWpx * 0.68f), 16), GroundShade);
-
-        b.Draw(tex, dest, src, Color.White);
-
-        _bossBodyRect = new Rectangle(destLeft + (int)(m.BodyX * scale), destTop + (int)((m.BodyY - m.SrcTop) * scale),
-            (int)(m.BodyW * scale), (int)(m.BodyH * scale));
-        _bossFullRect = new Rectangle(destLeft + (int)(m.FullX * scale), destTop + (int)((m.FullY - m.SrcTop) * scale),
-            (int)(m.FullW * scale), (int)(m.FullH * scale));
-        if (_bossBodyRect.Height is < 500 or > 580)
-            System.Diagnostics.Debug.WriteLine($"Boss body height {_bossBodyRect.Height}px outside 500..580.");
+        _bossFrame = attacking ? Math.Min(7, (int)(seconds * fps)) : (int)(seconds * fps) % 8;
+        _bossBodyRect = box;
+        _bossFullRect = box;
     }
 
     /// <summary>The dedicated boss health bar — SCREEN-SPACE UI (§10/§12), drawn in the HUD pass, not clipped.</summary>
@@ -1977,6 +2003,11 @@ public sealed class SoloExpeditionScreen
     /// </remarks>
     public float? DevSwingPhase;
 
+    /// <summary>Seconds left on the champion's CAST clip. Armed by a Skill event; the clip plays once.</summary>
+    private float _castTimer;
+    /// <summary>How long a cast clip runs — eight frames at the champion's frame rate, like the strike.</summary>
+    private const float CastSeconds = 8f / ChampionFps;
+
     /// <summary>The character being played. The host sets it; it decides which sprite strip is drawn.</summary>
     public Character Character { get; set; } = CharacterRoster.Get(CharacterRoster.StarterId);
 
@@ -2018,60 +2049,54 @@ public sealed class SoloExpeditionScreen
         var fallen = dead ? 1f - Math.Clamp(_downedTimer / DownedSeconds, 0f, 1f) : 0f;
         var ease = fallen * fallen * (3f - 2f * fallen);   // smoothstep — a body accelerates, then settles
 
-        if (dead)
+        // THE FALL, two ways. The 2026-08-22 art pass gives every character a real DEATH clip — eight frames
+        // from a stagger to lying still — so when it is present the champion falls the way the artist drew it
+        // and holds the last frame for the rest of the downed beat. The older treatment (freeze, sink, shrink,
+        // fade) stays as the fallback for a character whose death strip has not survived the quality gate.
+        var hasDeathClip = dead && _ui.Assets.Has(Character.StripKey("death"));
+        if (dead && !hasDeathClip)
         {
             // The drop and the shrink are the SAME number on purpose. Sprites are bottom-anchored, so
             // moving the box down by d and shortening it by d leaves the feet exactly where they were
-            // and brings the head down — a body folding onto the floor. When the two differed the feet
-            // travelled too, and the figure read as sinking THROUGH the ground rather than falling onto
-            // it, which is a different and much worse animation.
+            // and brings the head down — a body folding onto the floor.
             var fold = (int)(box.Height * 0.42f * ease);
             box = new Rectangle(box.X, box.Y + fold, box.Width, Math.Max(8, box.Height - fold));
         }
 
+        var shadowEase = hasDeathClip ? 0f : ease;
         _ui.GroundShadow(b, box.Center.X, box.Bottom - 10,
-                         (int)(box.Width * (0.62f - 0.18f * ease)), 46, 0.6f - 0.25f * ease);
+                         (int)(box.Width * (0.62f - 0.18f * shadowEase)), 46, 0.6f - 0.25f * shadowEase);
 
-        var tint = dead
+        var tint = dead && !hasDeathClip
             ? Color.Lerp(new Color(0x6A, 0x5A, 0x62), new Color(0x2A, 0x28, 0x34), ease) * (1f - 0.45f * ease)
+            : dead ? Color.Lerp(Color.White, new Color(0x8A, 0x80, 0x88), ease * 0.6f)
             : Color.White;
 
-        // ATTACK does not loop, and is driven by the combat beat rather than its own clock — the same
-        // rule the rig's strike clip followed, for the same reason: a swing that runs free drifts out of
-        // step with the hit it is supposed to be delivering.
-        // ANTICIPATION, not reaction. _strikeTime (armed by the impact and counting DOWN) drove this
-        // before, which put the whole swing after the blow. _champWindup runs 0 to 1 across the clip
-        // length ENDING at the blow, exactly as _enemyWindup does on the other side of the arena, so the
-        // two actors finally read as the same fight.
-        // DevSwingPhase forces the ATTACK clip as well as its phase. Moving the swing onto _champWindup
-        // silently broke the fightswing fixture: the pose set `seconds` but not `clip`, so the capture
-        // that exists to check the blade at full extension was posing an IDLE frame instead — a dev
-        // fixture quietly photographing something other than what it claims.
+        // ATTACK and CAST do not loop, and are driven by the combat beat rather than their own clock — a
+        // swing that runs free drifts out of step with the hit it is delivering. _champWindup runs 0 to 1
+        // across the clip length ENDING at the blow (the enemy's swing follows the same rule on the other
+        // side of the arena); the cast timer counts DOWN from the Skill event.
+        // DevSwingPhase forces the ATTACK clip as well as its phase (the fightswing fixture).
         var swinging = !dead && (_champWindup > 0f || DevSwingPhase is not null);
-        var clip = swinging ? "attack" : "idle";
+        var casting = !dead && !swinging && _castTimer > 0f;
+        var clip = hasDeathClip ? "death" : swinging ? "attack" : casting ? "cast" : "idle";
         var seconds = DevSwingPhase is { } ph && !dead
             ? ph * StrikeSeconds
-            : swinging ? _champWindup * StrikeSeconds : _anim;
+            : swinging ? _champWindup * StrikeSeconds
+            : casting ? CastSeconds - _castTimer
+            : hasDeathClip ? (DownedSeconds - _downedTimer)   // plays through, then CLAMPS on the last frame
+            : _anim;
 
-        // A DEAD CHAMPION HOLDS ITS LAST POSE. Passing the free clock here would keep the idle strip
-        // cycling under the tint and the sink — the figure would sag into the floor while still walking
-        // on the spot, which is worse than either treatment alone.
-        if (dead) seconds = 0f;
+        // A DEAD CHAMPION WITHOUT A DEATH CLIP HOLDS ITS LAST POSE — the fallback freezes the idle.
+        if (dead && !hasDeathClip) seconds = 0f;
 
-        // The generated strip, then the base sprite, then a block.
-        //
-        // The strips were briefly abandoned on a wrong diagnosis worth recording: the first clip came
-        // back as a waist-up bust and the animator was blamed for re-framing its input. It was not.
-        // The BASE SPRITE was a bust at that moment — the hero style had returned one and "full body"
-        // in the prompt had not been enough to stop it — so the clip was a faithful animation of a
-        // cropped design. Padding the source (animate.py:pad_to_fraction) is what keeps the framing,
-        // and it works.
-        //
-        // A missing or rejected clip falls back to the still design, so a character whose strip did
-        // not survive the quality gate stands there as themselves rather than vanishing.
-        if (_ui.AnimSprite(b, Character.StripKey(clip), box, seconds, ChampionFps, loop: !swinging, tint, -1f,
+        // The generated strip, then the idle strip, then the base sprite, then a block. A missing or rejected
+        // clip falls back to the still design, so a character whose strip did not survive the quality gate
+        // stands there as themselves rather than vanishing. No mirroring: the art faces right (ArtFacesLeft).
+        var loop = clip == "idle";
+        if (_ui.AnimSprite(b, Character.StripKey(clip), box, seconds, ChampionFps, loop, tint, -1f,
                            flip: ChampionFacesRight)) return;
-        if (_ui.AnimSprite(b, Character.StripKey("idle"), box, _anim, ChampionFps, loop: true, tint, -1f,
+        if (_ui.AnimSprite(b, Character.StripKey("idle"), box, dead ? 0f : _anim, ChampionFps, loop: true, tint, -1f,
                            flip: ChampionFacesRight)) return;
 
         var breathe = (int)(MathF.Sin(seconds * 2.1f) * 4f);

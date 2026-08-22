@@ -128,7 +128,9 @@ public enum BattleEventKind { Strike, EnemyStrike, Down, Heal, EnemyDown, Skill,
 /// Who the beat is about. For <see cref="BattleEventKind.EnemyStrike"/> and
 /// <see cref="BattleEventKind.Heal"/> this is the champion's slot; for
 /// <see cref="BattleEventKind.Strike"/> and <see cref="BattleEventKind.EnemyDown"/> it is the INDEX OF
-/// THE CREATURE in the wave's composition.
+/// THE CREATURE in the wave's composition. For <see cref="BattleEventKind.Skill"/> it is the casting
+/// skill's <c>(int)Source</c> (2026-08-22: the HUNT screen tints the Form's effect by it) and
+/// <c>Amount</c> is the <c>(int)Form</c>.
 /// </param>
 /// <remarks>
 /// A wave used to hold one enemy, so every Strike carried slot 0 and the replay could keep a single
