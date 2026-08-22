@@ -90,10 +90,22 @@ public sealed class ForgeScreen
         if (Gear.SlotFor(item.BaseType) is not { } slot) return null;
         var pool = GearTraits.PoolFor(slot);
         var start = (int)(ItemNaming.ArtSeed(item) % (uint)pool.Length);
+        var slotWord = slot.ToString().ToLowerInvariant();
+        // A WEAPON'S FACE IS ITS FAMILY (2026-08-23). The name says BLADE / BOW / SPEAR / SCYTHE and the
+        // stat obeys it (ItemFamilies), but every weapon picture on disk was a sword, so a "SHADOW BOW"
+        // rendered as a sword — logged in the art audit since the item-system redesign. The bow, spear
+        // and scythe sets are item_weapon_<family>_<trait>; the blade keeps the original item_weapon_<trait>
+        // files, which is why the family prefix is tried first and the plain key stays as the fallback.
+        var family = item.BaseType == ItemBaseType.Weapon
+            ? ItemNaming.WeaponFamilies[ItemNaming.WeaponFamilyIndex(item)]
+            : null;
         for (var k = 0; k < pool.Length; k++)
         {
             var pick = pool[(start + k) % pool.Length].ToString().ToLowerInvariant();
-            if (_ui.Assets.Get($"item_{slot.ToString().ToLowerInvariant()}_{pick}") is { } tex)
+            if (family is not null && family != "blade"
+                && _ui.Assets.Get($"item_{slotWord}_{family}_{pick}") is { } famTex)
+                return famTex;
+            if (_ui.Assets.Get($"item_{slotWord}_{pick}") is { } tex)
                 return tex;
         }
         return null;

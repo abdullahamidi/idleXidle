@@ -2466,6 +2466,7 @@ public class Game1 : Game
         _rosterBaselined = true;
         _expedition.Character = _characters.Active;
         _character.Character = _characters.Active;
+        _buildScreen.Character = _characters.Active;
 
         // The spine's capacity nodes reach the loadout. Without this the sockets and the fifth weave are
         // bought and never granted — the shape of the failure this codebase keeps repeating.

@@ -1657,7 +1657,7 @@ public sealed class SoloExpeditionScreen
         _ui.PanelQuiet(b, panel);
 
         var por = new Rectangle(214, 39, 104, 104);
-        if (_ui.Assets.Get("hunter_portrait") is { } p) b.Draw(p, por, Color.White);
+        if (_ui.Assets.GetFirst(Character.PortraitKey, "hunter_portrait") is { } p) b.Draw(p, por, Color.White);
         else if (_ui.Assets.Get("ui_medallion_round") is { } mfr) b.Draw(mfr, por, Color.White);
 
         var adept = Mastery.Affinity() is { } mf ? $"{FormShort(mf)} ADEPT" : "SEEKER";

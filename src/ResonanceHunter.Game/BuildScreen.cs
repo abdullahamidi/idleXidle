@@ -7,6 +7,7 @@ using Microsoft.Xna.Framework.Input;
 using ResonanceHunter.Core.Abilities;
 using ResonanceHunter.Core.Automation;
 using ResonanceHunter.Core.Builds;
+using ResonanceHunter.Core.Characters;
 using ResonanceHunter.Core.Prestige;
 using ResonanceHunter.Core.Persistence;
 
@@ -118,6 +119,9 @@ public sealed class BuildScreen
 
     public PlayerLoadout Loadout { get; set; } = new();
     public MasteryTree Mastery { get; set; } = new();
+
+    /// <summary>The character being played — host-fed, for the summary portrait.</summary>
+    public Character? Character { get; set; }
     public MemoryDustTree Tree { get; set; } = new();
     public int Power { get; set; }   // host-set: PowerRating (the Build screen has no Hunter reference)
     public int Level { get; set; }
@@ -478,7 +482,8 @@ public sealed class BuildScreen
         _ui.TextCenterBig(b, "BUILD OVERVIEW", SummaryPanel.Center.X, SummaryPanel.Y + 24, Gold, UiTypography.SectionTitle);
 
         var por = new Rectangle(SummaryPanel.Center.X - 66, SummaryPanel.Y + 72, 132, 132);
-        if (_ui.Assets.Get("hunter_portrait") is { } p) b.Draw(p, por, Color.White);
+        if (_ui.Assets.GetFirst(Character?.PortraitKey ?? "hunter_portrait", "hunter_portrait") is { } p)
+            b.Draw(p, por, Color.White);
 
         var adept = Mastery.Affinity() is { } mf ? $"{Short(mf)} ADEPT" : "SEEKER";
         _ui.TextCenterBig(b, adept, SummaryPanel.Center.X, SummaryPanel.Y + 220, Bone, UiTypography.PanelTitle);

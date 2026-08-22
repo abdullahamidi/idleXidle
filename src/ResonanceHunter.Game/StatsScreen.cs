@@ -137,7 +137,8 @@ public sealed class StatsScreen
         _ui.TextCenterBig(b, "HUNTER", HunterCard.Center.X, HunterCard.Y + 22, Gold, UiTypography.SectionTitle);
 
         var por = new Rectangle(HunterCard.X + 40, HunterCard.Y + 66, 118, 118);
-        if (_ui.Assets.Get("hunter_portrait") is { } p) b.Draw(p, por, Color.White);
+        if (_ui.Assets.GetFirst(Character?.PortraitKey ?? "hunter_portrait", "hunter_portrait") is { } p)
+            b.Draw(p, por, Color.White);
 
         var tx = por.Right + 20;
         var adept = Mastery?.Affinity() is { } mf ? $"{FormShort(mf)} ADEPT" : "SEEKER";

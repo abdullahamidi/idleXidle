@@ -104,6 +104,12 @@ public sealed record Character
     /// <summary>Animation strip key for a clip — <c>char_&lt;id&gt;_&lt;clip&gt;_strip8_512</c>.</summary>
     public string StripKey(string clip) => $"char_{Id}_{clip}_strip8_512";
 
+    /// <summary>
+    /// HUD portrait key — <c>char_&lt;id&gt;_portrait</c>. The screens that used to draw the one generic
+    /// <c>hunter_portrait</c> (HUNT, STATS, CHARACTER, BUILD) ask for this first and fall back to it.
+    /// </summary>
+    public string PortraitKey => $"char_{Id}_portrait";
+
     /// <summary>The aptitude expressed as the shape the sim actually reads.</summary>
     public SkillShape AptitudeShape =>
         Aptitude is { } f

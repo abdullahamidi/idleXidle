@@ -87,6 +87,20 @@ def plan_group(group: str) -> tuple[list[tuple[str, str]], list[str], list[tuple
     elif group == "hunter":
         removes += [os.path.join(ART, "Animations", "Hunter"), os.path.join(ART, "Characters", "Hunter", "poses"),
                     os.path.join(ART, "Characters", "Hunter", "hunter_rig_base.png")]
+    elif group == "icons":
+        # 2026-08-23: the weapon FAMILY icons (bow / spear / scythe × the ten traits). The blade family
+        # keeps the original item_weapon_<trait> files — ForgeScreen.ItemArt tries the family key first.
+        for fam in ("bow", "spear", "scythe"):
+            for tr in ("keen", "heavy", "swift", "savage", "warding", "vital", "greedy", "attuned", "focused", "wild"):
+                name = f"item_weapon_{fam}_{tr}.png"
+                copies.append((os.path.join(STAGING, "icons", name),
+                               os.path.join(ART, "ItemsLoot", "traits", "weapon", name)))
+    elif group == "portraits":
+        # 2026-08-23: per-character HUD portraits (char_<id>_portrait); hunter_portrait stays as the fallback.
+        for cid in ROSTER:
+            name = f"char_{cid}_portrait.png"
+            copies.append((os.path.join(STAGING, "portraits", name),
+                           os.path.join(ART, "Characters", "Roster", "portraits", name)))
     else:
         raise SystemExit(f"unknown group {group}")
     return copies, removes, statics

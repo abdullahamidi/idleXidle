@@ -15,15 +15,13 @@ generation pass). Contract: `design/art/arena-art-contract.md`. Pipeline: `tools
 | **Scale**: sprite heights did not track the role; bosses needed a hand-measured body table | One density (~3.4 screen px per source px): champions 128, enemies 128 (image-route creatures 192–256), bosses 160; every strip is 8 × 512 frames and the renderer's boxes (430 / 440×archetype / 540) are the size chart. The BossMeta table is gone. |
 | **Animation**: roster idle+attack only, some enemies two-frame, no death/cast | Champions: idle, attack, **cast**, **death** (the fall plays the drawn clip; the collapse treatment is the fallback). Enemies and bosses: idle + attack, all eight frames, swing driven by the windup. |
 | **Effects**: generic strips shared across semantics, per-Source slashes never played | Thirteen `fx_*` strips: one per FORM (tinted by the casting skill's SOURCE — the Skill event now carries it) plus hit / weakhit / crit / death / heal / shield / levelup, all authored white and drawn additively. |
-| **Weapon family art** (BOW / SPEAR / SCYTHE icons are swords) | **Still open** — the item-icon layer was out of this pass's scope (see below). |
+| **Weapon family art** (BOW / SPEAR / SCYTHE icons are swords) | **Closed 2026-08-23** — `item_weapon_<family>_<trait>` (30 pixen icons, same framing as the swords); `ForgeScreen.ItemArt` tries the family key first, the blade keeps the original files. |
 
 ## Still owed
 
-- **Weapon family icons** (`item_weapon_<trait>` are all swords; the name system has BLADE / BOW / SPEAR /
-  SCYTHE). One icon set per family; `ForgeScreen.ItemArt` is ready to key on family the moment the files
-  exist. Batch it with any other icon-layer work rather than one at a time.
-- `hunter_portrait` (HUD, four screens) is still the generic Hunter face; a per-character portrait from the
-  new south rotations would close the last seam between the roster and the HUD.
+Nothing from this audit. (2026-08-23: the weapon-family icons and the per-character HUD portraits —
+`char_<id>_portrait`, drawn by HUNT / STATS / CHARACTER / BUILD through `Character.PortraitKey` with
+`hunter_portrait` as the fallback — closed the last two items.)
 
 ## Constraints that still hold
 

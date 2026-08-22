@@ -244,5 +244,10 @@ public class CharactersRosterTest
         Assert.Equal("char_magpie_base", c.SpriteKey);
         Assert.Equal("char_magpie_idle_strip8_512", c.StripKey("idle"));
         Assert.Equal("char_magpie_attack_strip8_512", c.StripKey("attack"));
+        // The 2026-08-22 art pass added cast and death clips and a per-character HUD portrait; the
+        // screens ask for these by name, so the names are part of the contract.
+        Assert.Equal("char_magpie_cast_strip8_512", c.StripKey("cast"));
+        Assert.Equal("char_magpie_death_strip8_512", c.StripKey("death"));
+        Assert.Equal("char_magpie_portrait", c.PortraitKey);
     }
 }
