@@ -498,7 +498,9 @@ public sealed class SoloExpeditionScreen
         // _champWindup, the same anticipation model the enemy already used. Leaving a decaying timer
         // here that nothing reads is exactly the kind of dead machinery this codebase keeps finding.
         _champLunge = Math.Max(0f, _champLunge - dt * 5f);
-        _castTimer = Math.Max(0f, _castTimer - dt);
+        _champSinceHit += dt;
+        _enemySinceHit += dt;
+        _skillSinceCast += dt;
         _enemyLunge = Math.Max(0f, _enemyLunge - dt * 5f);
         // 1.25, not 2.5: the slide-in was over in 0.4s, which is too quick to register as creatures
         // ARRIVING rather than simply appearing. Twice as long, and the beat before it is now empty
@@ -820,10 +822,27 @@ public sealed class SoloExpeditionScreen
         // length, so the arm is fully drawn back one clip-length out and connects on the frame the blow
         // is credited — instead of the blow landing on a figure still standing at rest.
         var champLead = _nextChampStrikeMs - _playheadMs;
-        var champWindowMs = StrikeSeconds * 1000f;
+        // The windup window is the clip UP TO the contact frame (0.625 s of the 1 s clip), so the swing
+        // plays at one speed from first frame to touch; the follow-through after the hit is the rest.
+        var champWindowMs = StrikeSeconds * ContactFraction * 1000f;
         _champWindup = champLead > 0f && champLead < champWindowMs
             ? 1f - champLead / champWindowMs
             : 0f;
+
+        // The SKILL anticipation, same model: the cast clip runs up to the cast. Read straight off the
+        // replay every frame (a few hundred events at most) rather than cached, so a new wave's replay
+        // needs no reset and a dev fixture that rewinds the playhead stays honest.
+        _skillWindup = 0f;
+        if (_replay.NextSkillEventAfter(_playheadMs) is { } nextSkill && (Form)nextSkill.Amount != Form.Trap)
+        {
+            var skillLead = nextSkill.AtMs - _playheadMs;
+            var castWindowMs = CastSeconds * ContactFraction * 1000f;
+            if (skillLead > 0f && skillLead < castWindowMs)
+            {
+                _skillWindup = 1f - skillLead / castWindowMs;
+                _skillForm = (Form)nextSkill.Amount;
+            }
+        }
 
         foreach (var e in _replay.Advance(_playheadMs))
         {
@@ -841,6 +860,7 @@ public sealed class SoloExpeditionScreen
                     // constantly) was the "too many red slashes" the playtest flagged — loudness has to be
                     // budgeted against importance, so the loud VFX are reserved for the SKILL casts below.
                     _champLunge = 1f;
+                    _champSinceHit = 0f;   // the follow-through starts at the touch
                     _nextChampStrikeMs = _replay.NextChampionStrikeAfter(e.AtMs);
                     if ((_strikeCount++ & 1) == 0)   // every other auto-hit: a number and a small, quiet puff
                     {
@@ -850,6 +870,7 @@ public sealed class SoloExpeditionScreen
                     break;
                 case BattleEventKind.EnemyStrike:
                     _enemyLunge = 1f;
+                    _enemySinceHit = 0f;
                     _nextEnemyStrikeMs = _replay.NextEnemyStrikeAfter(e.AtMs);
                     _vfx.Play("fx_hit", ChampBox.Center.X, ChampBox.Center.Y + 40, scale: 2, fps: 14f, tint: Ember);
                     break;
@@ -861,8 +882,7 @@ public sealed class SoloExpeditionScreen
                     // Slot carries the casting skill's Source (WaveModel.BattleEvent) — the effect is the
                     // Form's shape in the Source's colour, which is the whole hexagon in one flash.
                     PlayFormVfx(form, (Source)e.Slot);
-                    // A TRAP fires on being hit; the champion did not cast anything, so no cast clip.
-                    if (form != Form.Trap) _castTimer = CastSeconds;
+                    if (form != Form.Trap) { _skillSinceCast = 0f; _skillFollowForm = form; }   // the release frames
                     SpawnDamage(HitDamage(form == Form.Trap ? 3f : 2f), form == Form.Trap);   // skills hit big
                     break;
                 case BattleEventKind.Heal:
@@ -945,23 +965,26 @@ public sealed class SoloExpeditionScreen
     private void PlayFormVfx(Form form, Source source)
     {
         var glow = SourceGlow(source);
+        // Size is relative to the thing being hit: a boss is ~540 px tall against a normal creature's
+        // ~300, so everything that lands on the enemy side grows one step on a boss wave.
+        var big = _isBossWave ? 1 : 0;
         switch (form)
         {
             case Form.Strike:
-                _vfx.Play("fx_strike", _rowCentreX, _rowTopY + 110, scale: 3, fps: 12f, tint: glow);
+                _vfx.Play("fx_strike", _rowCentreX, _rowTopY + 110, scale: 3 + big, fps: 12f, tint: glow);
                 break;
             case Form.Projectile:
                 // The bolt flies left-to-right inside its own frame, so it is centred between the two figures.
-                _vfx.Play("fx_projectile", (ChampBox.Right + _rowCentreX) / 2, _rowTopY + 120, scale: 3, fps: 14f, tint: glow);
+                _vfx.Play("fx_projectile", (ChampBox.Right + _rowCentreX) / 2, _rowTopY + 120, scale: 3 + big, fps: 14f, tint: glow);
                 break;
             case Form.Aura:
                 _vfx.Play("fx_aura", ChampBox.Center.X, ChampBox.Center.Y + 20, scale: 3, fps: 12f, tint: glow);
                 break;
             case Form.Trap:
-                _vfx.Play("fx_trap", _rowCentreX, _rowTopY + 150, scale: 3, fps: 12f, tint: glow);
+                _vfx.Play("fx_trap", _rowCentreX, _rowTopY + 150, scale: 3 + big, fps: 12f, tint: glow);
                 break;
             case Form.Mark:
-                _vfx.Play("fx_mark", _rowCentreX, _rowTopY + 110, scale: 2, fps: 12f, tint: glow);
+                _vfx.Play("fx_mark", _rowCentreX, _rowTopY + 110, scale: 2 + big, fps: 12f, tint: glow);
                 break;
             case Form.Transformation:
                 _vfx.Play("fx_transformation", ChampBox.Center.X, ChampBox.Center.Y, scale: 3, fps: 12f, tint: glow);
@@ -1032,7 +1055,7 @@ public sealed class SoloExpeditionScreen
     /// <summary>Arena figures + effects, drawn inside the scissor clip so no actor/VFX/bar/number escapes it.</summary>
     private void DrawArena(SpriteBatch b, HuntOverlay overlay)
     {
-        var attacking = _enemyWindup > 0f;
+        var attacking = EnemyAttacking;
         if (_isBossWave) DrawBoss(b, attacking);
         else DrawNormalEnemy(b, attacking);
 
@@ -1082,6 +1105,23 @@ public sealed class SoloExpeditionScreen
     private const float EnemyClipFrames = 8f;
 
     /// <summary>
+    /// Where in an eight-frame clip the blow CONNECTS: frame 5 of 8. The 2026-08-22 clips wind up over
+    /// frames 0-2, commit over 3-4, touch at 5 and recover over 6-7 — so an anticipation clock that ran
+    /// the WHOLE clip up to the hit (the previous model) put the impact on a figure already standing back
+    /// up, and the filmstrip showed it: the slash effect flashing beside an upright champion, the
+    /// creature's lunge finished a third of a second before its bite landed. The windup now runs the clip
+    /// to this frame, the hit itself starts the follow-through, and the follow-through plays the rest.
+    /// </summary>
+    private const float ContactFraction = 5f / 8f;
+
+    /// <summary>Seconds since the champion's last auto-hit / the enemy's last bite / the champion's last
+    /// cast — the follow-through clocks. Large at rest so nothing plays before its first beat.</summary>
+    private float _champSinceHit = 99f, _enemySinceHit = 99f, _skillSinceCast = 99f;
+    private Form _skillFollowForm;
+    /// <summary>How long an enemy's follow-through stays on its attack clip: three frames at ~10 fps.</summary>
+    private const float EnemyFollowSeconds = 0.3f;
+
+    /// <summary>
     /// The clock an enemy's clip runs on — the SWING for an attack, the free clock for an idle.
     /// </summary>
     /// <remarks>
@@ -1098,7 +1138,18 @@ public sealed class SoloExpeditionScreen
     /// already followed, and the reason the champion's swing looked right while the enemy's did not.
     /// </remarks>
     private float EnemyClipSeconds(bool attacking, float fps, float stagger = 0f)
-        => attacking ? _enemyWindup * (EnemyClipFrames / fps) : _anim + stagger;
+    {
+        if (!attacking) return _anim + stagger;
+        var clip = EnemyClipFrames / fps;
+        // The windup runs the clip up to the CONTACT frame; the bite itself starts the follow-through,
+        // which plays the remaining frames and then clamps on the last (see ContactFraction).
+        return _enemyWindup > 0f
+            ? _enemyWindup * clip * ContactFraction
+            : clip * ContactFraction + _enemySinceHit;
+    }
+
+    /// <summary>The enemy is on its attack clip: winding up to a bite, or following one through.</summary>
+    private bool EnemyAttacking => _enemyWindup > 0f || _enemySinceHit < EnemyFollowSeconds;
 
     private void DrawComposition(SpriteBatch b, bool attacking, IReadOnlyList<WaveCreature> comp)
     {
@@ -2003,8 +2054,19 @@ public sealed class SoloExpeditionScreen
     /// </remarks>
     public float? DevSwingPhase;
 
-    /// <summary>Seconds left on the champion's CAST clip. Armed by a Skill event; the clip plays once.</summary>
-    private float _castTimer;
+    /// <summary>
+    /// The champion's SKILL anticipation: 0..1 across the clip length ENDING at the next Skill event, and
+    /// the Form that event carries — so the cast (or, for a Strike, the attack) clip opens its hand on the
+    /// exact frame the effect appears. Zero when no skill is due inside one clip length.
+    /// </summary>
+    /// <remarks>
+    /// This replaced a reactive timer armed BY the Skill event, which played the whole cast after its own
+    /// effect had flashed — the same backwards phase the auto-swing once had (see WaveReplay.
+    /// NextChampionStrikeAfter). A Trap fires on being hit and gets no clip; every other Form is a cast,
+    /// except Strike, which is the heavier swing and uses the attack clip.
+    /// </remarks>
+    private float _skillWindup;
+    private Form _skillForm;
     /// <summary>How long a cast clip runs — eight frames at the champion's frame rate, like the strike.</summary>
     private const float CastSeconds = 8f / ChampionFps;
 
@@ -2077,13 +2139,26 @@ public sealed class SoloExpeditionScreen
         // across the clip length ENDING at the blow (the enemy's swing follows the same rule on the other
         // side of the arena); the cast timer counts DOWN from the Skill event.
         // DevSwingPhase forces the ATTACK clip as well as its phase (the fightswing fixture).
-        var swinging = !dead && (_champWindup > 0f || DevSwingPhase is not null);
-        var casting = !dead && !swinging && _castTimer > 0f;
-        var clip = hasDeathClip ? "death" : swinging ? "attack" : casting ? "cast" : "idle";
+        // Each beat is a windup (0..contact) and then a follow-through (contact..end) started by the hit.
+        // The SKILL beat outranks the auto-swing — a cast is the rarer, louder beat, and the swing's windup
+        // runs most of every 1.2-second cycle, so it would otherwise hide every cast. A follow-through
+        // outranks the NEXT windup so a finished swing is never snapped back to frame 0 mid-recovery.
+        var fixture = DevSwingPhase is not null && !dead;
+        var skilling = !dead && !fixture && _skillWindup > 0f;
+        var skillFollow = !dead && !fixture && !skilling && _skillSinceCast < CastSeconds * (1f - ContactFraction);
+        var strikeFollow = !dead && !fixture && !skilling && !skillFollow
+                           && _champSinceHit < StrikeSeconds * (1f - ContactFraction);
+        var swinging = !dead && !skilling && !skillFollow && !strikeFollow && (_champWindup > 0f || fixture);
+        var skillForm = skilling ? _skillForm : _skillFollowForm;
+        var clip = hasDeathClip ? "death"
+            : skilling || skillFollow ? (skillForm == Form.Strike ? "attack" : "cast")
+            : swinging || strikeFollow ? "attack" : "idle";
         var seconds = DevSwingPhase is { } ph && !dead
             ? ph * StrikeSeconds
-            : swinging ? _champWindup * StrikeSeconds
-            : casting ? CastSeconds - _castTimer
+            : skilling ? _skillWindup * CastSeconds * ContactFraction
+            : skillFollow ? CastSeconds * ContactFraction + _skillSinceCast
+            : strikeFollow ? StrikeSeconds * ContactFraction + _champSinceHit
+            : swinging ? _champWindup * StrikeSeconds * ContactFraction
             : hasDeathClip ? (DownedSeconds - _downedTimer)   // plays through, then CLAMPS on the last frame
             : _anim;
 

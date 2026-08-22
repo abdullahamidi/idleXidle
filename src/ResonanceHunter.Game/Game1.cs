@@ -2918,7 +2918,26 @@ public class Game1 : Game
         // Used to verify rendering headlessly; harmless and inert without the env var.
         _shotFrame++;
         var shotPath = Environment.GetEnvironmentVariable("RH_SHOT");
-        if (shotPath is not null && _shotFrame == 60)
+        // RH_SHOT_SEQ="count,stride" turns the one posed frame into a FILMSTRIP: from frame 60 on, every
+        // `stride` frames a full canvas is saved as <path>_NN.png, `count` times, then exit. A single
+        // capture can prove a layout; it cannot prove a rhythm — whether the swing lands on the hit, how
+        // long a burst lingers, whether the cast opens as the effect appears. Assemble the strip with
+        // tools/asset-pipeline/v2/filmstrip.py and LOOK at it. Fixed-step updates make it deterministic.
+        if (shotPath is not null && Environment.GetEnvironmentVariable("RH_SHOT_SEQ") is { } seqSpec
+            && seqSpec.Split(',') is { Length: 2 } seqParts
+            && int.TryParse(seqParts[0], out var seqCount) && int.TryParse(seqParts[1], out var seqStride)
+            && seqStride > 0)
+        {
+            if (_shotFrame >= 60 && (_shotFrame - 60) % seqStride == 0)
+            {
+                var idx = (_shotFrame - 60) / seqStride;
+                var seqPath = System.IO.Path.ChangeExtension(shotPath, null) + $"_{idx:00}.png";
+                using var fsq = System.IO.File.Create(seqPath);
+                _canvas.SaveAsPng(fsq, CanvasWidth * ArtScale, CanvasHeight * ArtScale);
+                if (idx + 1 >= seqCount) Exit();
+            }
+        }
+        else if (shotPath is not null && _shotFrame == 60)
         {
             using var fs = System.IO.File.Create(shotPath);
             _canvas.SaveAsPng(fs, CanvasWidth * ArtScale, CanvasHeight * ArtScale);

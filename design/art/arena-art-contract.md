@@ -55,6 +55,16 @@ start by the last frame so it loops"; attack = the figure's own verb toward the 
 to the start by the last frame; cast = raise a hand, gather glow, release forward; death = stagger,
 knees, collapse forward, fully fallen by the last frame.
 
+**Timing (the contact frame).** Every eight-frame action clip is authored so the blow CONNECTS at
+frame 5 of 8 (wind-up 0-2, commit 3-4, touch 5, recover 6-7) and the renderer plays it in two halves
+(`SoloExpeditionScreen.ContactFraction`): the anticipation clock runs frames 0-5 up to the moment the
+sim credits the hit, the hit starts the follow-through, and frames 6-7 play after it. This holds for
+the champion's auto-swing (0.625 s wind-up + 0.375 s follow of the 1.2 s cadence), the champion's
+skill beat (cast clip; the attack clip for a Strike — anticipated off `WaveReplay.NextSkillEventAfter`),
+and every enemy / boss bite (900 ms wind-up, ~0.3 s follow). Effects spawn AT the hit, so the slash
+and the blade, the burst and the open hand, land on the same frame. Verified with the filmstrip rig
+(`tools/asset-pipeline/capture_seq.sh`, `v2/filmstrip.py`).
+
 ## 4. Naming (unchanged where the code already asks)
 
 | Asset | Path | Key |

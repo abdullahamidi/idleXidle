@@ -143,6 +143,19 @@ public sealed class WaveReplay
     public int NextChampionStrikeAfter(float ms) => NextAfter(ms, BattleEventKind.Strike);
 
     /// <summary>
+    /// The next SKILL event after <paramref name="ms"/> — any Form — or null when the wave casts nothing
+    /// more. The HUNT screen anticipates it the way it anticipates the swing: the cast (or, for a Strike,
+    /// the heavier attack) clip runs up to the moment the skill lands, so the hand opens exactly as the
+    /// effect appears instead of a second after it.
+    /// </summary>
+    public BattleEvent? NextSkillEventAfter(float ms)
+    {
+        foreach (var e in _events)
+            if (e.Kind == BattleEventKind.Skill && e.AtMs > ms) return e;
+        return null;
+    }
+
+    /// <summary>
     /// When a given FORM next fires after <paramref name="ms"/>, and when it last fired before it.
     /// </summary>
     /// <remarks>
