@@ -60,6 +60,34 @@ public static class GemCraft
         _ => "WARD GEM",
     };
 
+    /// <summary>What the gem GIVES, in the stat's own unit — "+18% DAMAGE", "+3 DEFENCE".</summary>
+    /// <remarks>
+    /// The unit is <see cref="ItemAffixes.GrantLabel"/>'s job and the word is
+    /// <see cref="ItemAffixes.StatWord"/>'s, so a gem line and an affix line can never disagree about
+    /// what a magnitude means. Critical chance reads as a percentage of hits; defence reads flat.
+    /// </remarks>
+    public static string Grant(ItemInstance gem)
+    {
+        ArgumentNullException.ThrowIfNull(gem);
+        var stat = StatOf(gem);
+        return $"{ItemAffixes.GrantLabel(stat, Magnitude(gem))} {ItemAffixes.StatWord(stat)}";
+    }
+
+    /// <summary>
+    /// The whole gem in one plain line — "FURY GEM LEVEL 4 · +18% DAMAGE".
+    /// </summary>
+    /// <remarks>
+    /// Every gem surface prints this, so a gem says what it does in the reveal, in the bag, in the
+    /// tooltip and in the socket boxes with the same words. The Forge shipped gems as coloured diamonds
+    /// with a name and no number anywhere: the player could see they owned six stones and not one of
+    /// them said what it would add.
+    /// </remarks>
+    public static string Describe(ItemInstance gem)
+    {
+        ArgumentNullException.ThrowIfNull(gem);
+        return $"{NameOf(gem)} LEVEL {gem.ItemLevel} · {Grant(gem)}";
+    }
+
     /// <summary>Essence cost to SET a gem, by host rarity. The Essence sink the trait re-roll used to be.</summary>
     public static int SocketCost(Rarity host) => host switch
     {

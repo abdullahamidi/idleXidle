@@ -134,6 +134,13 @@ public sealed class AssetLibrary
         ["item_frame_legendary"] = "ui_frame_rarity_legendary",
         // UiKit.KeyCap asks for ui_keycap; the pack ships the blank square variant under a longer name.
         ["ui_keycap"] = "ui_keycap_square_blank",
+        // STAT GEMS get a FACE. Six medallions (assets/art/ItemsLoot/glyphs/affix) shipped with the
+        // item pack and were referenced by nothing in src/ — dormant art for a feature that was drawing
+        // a flat coloured diamond instead, so every gem on every screen looked like every other gem.
+        // Keyed by the gem's AffixStat, which is what a gem IS; the medallion depicts that stat.
+        ["gem_damage"] = "affix_power", ["gem_health"] = "affix_health",
+        ["gem_skillrate"] = "affix_timer", ["gem_haul"] = "affix_resonance",
+        ["gem_crit"] = "affix_critical", ["gem_defense"] = "affix_defense",
         // Per-source creatures → package_03 enemy idle poses. One representative enemy per element (the
         // Warren's per-role keys fall back here; no Nature enemy shipped, so a wisp stands in).
         ["crea_body"] = "bonecrawler_idle_01", ["crea_machine"] = "stone_sentinel_idle_01",

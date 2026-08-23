@@ -357,7 +357,7 @@ public sealed class WeaveScreen
             _ui.TextCenterBig(b, $"DISCIPLINE: {FormName(disc)} — ITS SKILLS HIT TWICE AS HARD  ·  A VOW ON A FAR-FORM SKILL PULLS IT ONE RING CLOSER",
                               960, 108, Gold, UiTypography.Secondary);
         else
-            _ui.TextCenterBig(b, "NO DISCIPLINE YET — A FORM SPECIALIST NODE ON THE MASTERY TREE (E) GIVES YOU ONE",
+            _ui.TextCenterBig(b, "NO DISCIPLINE YET — A SPECIALISATION NODE ON THE MASTERY TREE (E) GIVES YOU ONE",
                               960, 108, Slate, UiTypography.Secondary);
 
         DrawSlots(b, hit);

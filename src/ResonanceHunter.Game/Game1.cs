@@ -1679,7 +1679,27 @@ public class Game1 : Game
             // NOT raw _clicked: on the frame a click dismisses the unlock panel above this overlay,
             // _swallowInput is already true and that click is SPENT — feeding it here too skipped the
             // cascade the player was trying to uncover. (Adversarial review, pass four.)
-            if ((_clicked && !_swallowInput) || Pressed(Keys.Space) || Pressed(Keys.Enter)) _forge.AdvanceReveal();
+            var revealClick = _clicked && !_swallowInput;
+
+            // THE REVEAL HAS BUTTONS NOW — hover to read an item, SELL or SALVAGE it where it lies,
+            // KEEP ALL to close. So "a click while the reveal is up" is no longer one thing. The screen
+            // is asked first whether the pointer is on something of its own; if it is, the click is
+            // HANDED TO IT (spent in its Draw, which is where every rect on it is authored) and must
+            // NOT also skip — a click that sells an item and dismisses the card that said so is the
+            // worst of both. Everything else still skips, for everyone who does not care.
+            //
+            // ChromeMouse, not CanvasMouse: the reveal is drawn in BeginCanvas(1), true 1920x1080.
+            var onRevealButton = revealClick && _forge.RevealWantsClick(ChromeMouse);
+            _forge.RevealInput(ChromeMouse, onRevealButton);
+            if (!onRevealButton && (revealClick || Pressed(Keys.Space) || Pressed(Keys.Enter)))
+                _forge.AdvanceReveal();
+
+            // The reveal's question carries the same "don't ask me again" box the bench's does, and the
+            // bench's poll lives inside the _showForge branch below — which this reveal never reaches
+            // (it plays on whatever screen the chest was opened from). Without this the box ticked, the
+            // preference flipped for the session, and the next launch asked again.
+            if (_forge.PrefsDirty) { _forge.PrefsDirty = false; _askBeforeScrap = _forge.AskBeforeScrap; SaveDisplay(); }
+
             _swallowInput = true;
         }
 
@@ -2947,7 +2967,7 @@ public class Game1 : Game
 
         // The chest burst, over the rail and over whatever screen is open — it is the one moment the
         // game asks the player to stop and look, so nothing on the page should sit on top of it.
-        if (_forge.RevealActive) _forge.DrawRevealOverlay(_batch);
+        if (_forge.RevealActive) _forge.DrawRevealOverlay(_batch, _hunter);
 
         if (_showHelp) DrawHelp();
         if (_showSettings) DrawSettings();

@@ -52,7 +52,29 @@ public sealed class BuildScreen
         Form.Projectile => "VOLLEY", Form.Transformation => "MORPH", _ => f.ToString().ToUpperInvariant(),
     };
 
+    /// <summary>A node label's NAME — everything before the em dash that introduces what it does.</summary>
+    /// <remarks>
+    /// Catalogue labels are one string doing two jobs: "OVERWHELM — HITS UNDER 60 DO NOTHING". The
+    /// detail card wants the whole sentence; a plaque 114 pixels wide wants the first two words.
+    /// </remarks>
+    private static string Head(string label)
+    {
+        var cut = label.IndexOf('—');
+        return (cut < 0 ? label : label[..cut]).Trim();
+    }
+
     private readonly UiKit _ui;
+
+    /// <summary>
+    /// The one animated thing on this page: the breath under an unchosen Specialisation.
+    /// </summary>
+    /// <remarks>
+    /// A wall clock rather than an accumulated delta because this screen's Update takes no frame time
+    /// and the host's call site is not this file's to change. Nothing reads it but the halo, so a
+    /// dropped frame costs a hair of phase and nothing else.
+    /// </remarks>
+    private static readonly System.Diagnostics.Stopwatch _breath = System.Diagnostics.Stopwatch.StartNew();
+
     private string _msg = "";
     private string _hoverInfo = "";
     private string? _hoverNodeId;          // the node under the pointer this frame
@@ -97,7 +119,7 @@ public sealed class BuildScreen
     /// <summary>Open straight onto the tree — used by the headless capture so the shot shows the tree.</summary>
     /// <summary>DEV ONLY: open the tree sub-view, optionally framed on the centre at a given zoom.</summary>
     /// <remarks>
-    /// The zoom argument exists because node ART cannot be verified from the default 0.30 overview —
+    /// The zoom argument exists because node ART cannot be verified from the default overview —
     /// at that scale a Notable is thirty pixels across and a capture proves only that something was
     /// drawn there. The whole point of a camera is that the same layout has a near view.
     /// </remarks>
@@ -180,18 +202,51 @@ public sealed class BuildScreen
     private const float WorldR = 1500f;
 
     private Vector2 _pan;                 // world point at the centre of the view
-    // 0.30 frames the whole tree: WorldR is 1500 and the view is 900 tall, so anything above
-    // 450/1500 pushes the north and south masteries off the top and bottom edges — which is what 0.42
-    // did, hiding two of the four things the layout exists to show.
-    private float _zoom = 0.30f;          // screen pixels per world unit
+
+    /// <summary>
+    /// The framing HOME returns to, and the one every capture is judged at.
+    /// </summary>
+    /// <remarks>
+    /// It was 0.30, chosen to fit the RIM (WorldR 1500 against a 900-tall view) and nothing else. Two
+    /// things then had to live outside that rim and could not: the four BRANCH HEADERS this screen now
+    /// draws, and the capstone plaques' own captions. At 0.30 the rim lands 450px out, the plaque is
+    /// another 30 tall and 57 wide beyond that, and a header needs ~23 more — which is 530 of the 540
+    /// half-height the canvas has. 0.24 puts the rim at 360 and the header ring at 504, leaving 33
+    /// pixels of air between the widest header line and the plaque beside it, and 13 above the topmost
+    /// header. See <see cref="HeaderRing"/> for the other half of that arithmetic.
+    /// </remarks>
+    private const float DefaultZoom = 0.24f;
+
+    /// <summary>
+    /// Below this, every caption on the tree drops out and only shapes remain.
+    /// </summary>
+    /// <remarks>
+    /// It was 0.28, i.e. BELOW the old default of 0.30 by two hundredths — which was fine until the
+    /// default itself moved to 0.25 and would have silently hidden every label the tree has at the one
+    /// framing the player always starts from. Tied to the default instead of guessed at again.
+    /// </remarks>
+    private const float LabelZoom = DefaultZoom - 0.02f;
+
+    private float _zoom = DefaultZoom;    // screen pixels per world unit
     private Point? _dragFrom;             // where a drag started, in screen space
     private bool _draggedThisPress;       // the drag moved far enough to swallow the click
     private Vector2 _dragPanFrom;
 
     private const float MinZoom = 0.16f, MaxZoom = 1.40f;
 
-    /// <summary>The tree owns the whole canvas. It is the only thing on its page.</summary>
-    private static readonly Rectangle TreeView = new(180, 96, 1740, 900);
+    /// <summary>
+    /// The tree's canvas — and, through its centre, where the world origin is projected.
+    /// </summary>
+    /// <remarks>
+    /// It was (180, 96, 1740, 900), i.e. everything right of the nav rail, so the origin projected to
+    /// x=1050 and the whole EAST arm — the Tempo capstone included — was drawn UNDER the two docked
+    /// cards at x&gt;=1408 and covered by them. One of the four things the layout exists to show was
+    /// invisible at the default framing, which is the same species of bug as a label nobody reads.
+    /// The rectangle is now the space the tree actually HAS: right of the rail, left of the dock, and
+    /// the full height of the canvas rather than an inset band. Its centre (830, 540) is what every
+    /// number in <see cref="DefaultZoom"/> and <see cref="HeaderRing"/> is measured from.
+    /// </remarks>
+    private static readonly Rectangle TreeView = new(180, 40, 1260, 1000);
 
     private Vector2 Screen(Vector2 world)
         => new(TreeView.Center.X + (world.X - _pan.X) * _zoom,
@@ -225,13 +280,47 @@ public sealed class BuildScreen
         _pan = new Vector2(Math.Clamp(_pan.X, -limit, limit), Math.Clamp(_pan.Y, -limit, limit));
     }
 
-    private static Point Centre => new(0, 0);
-
+    /// <summary>The rim point of a branch: where its capstone sits, in world units.</summary>
     private static Vector2 Corner(Branch b)
     {
         var a = MasteryLayout.AngleOf(b);
         return new Vector2(WorldR * MathF.Cos(a), WorldR * MathF.Sin(a));
     }
+
+    /// <summary>
+    /// How far past the rim a branch HEADER is planted, as a multiple of <see cref="WorldR"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// 1.33, not the 1.14 that "just outside the rim" first suggests, and the reason is the capstone
+    /// PLAQUE. A capstone is not a stud: it is drawn 456 world units wide (120 x 1.9 either side), so on
+    /// the EAST and WEST arms — where the header sits on the same horizontal line as the plaque — the
+    /// header has to clear 1500 + 228 = 1728 before its own text starts, which is already 1.152. Add
+    /// half a subtitle (~53px at the default zoom, i.e. ~220 world) and a real gap and the floor is
+    /// 1.40. At 1.14 the words would have been printed straight through OVERWHELM and ENDLESS; 1.33
+    /// was measured on a capture and left "OUTLAST THE ENEMY" eleven pixels short of ENDLESS.
+    /// </para>
+    /// <para>
+    /// Held in WORLD units rather than screen ones so a header is fixed to its arm: pan and the header
+    /// travels with its branch, zoom and it stays exactly as far outside the rim as it was.
+    /// </para>
+    /// </remarks>
+    private const float HeaderRing = 1.40f;
+
+    /// <summary>What a branch IS, in one plain line — the promise its nodes then keep.</summary>
+    /// <remarks>
+    /// Each line is a compression of that branch's own catalogue text, not a new claim: WEIGHT's nodes
+    /// read "BIGGER HITS, SLOWER" and "HALF AS MANY HITS, EACH TWICE AS LARGE"; SPREAD's read "EVERY HIT
+    /// STRIKES ONE MORE CREATURE" and "ALL FORMS +1 TARGET"; TEMPO's read "+35% ON THE FIRST HIT" and
+    /// "COOLDOWNS -40%"; ENDURE's read "+20% MAXIMUM HEALTH" and "REGAIN 20% OF HEALTH BETWEEN WAVES".
+    /// </remarks>
+    private static string BranchPromise(Branch b) => b switch
+    {
+        Branch.Weight => "FEWER, BIGGER HITS",
+        Branch.Spread => "HIT MANY AT ONCE",
+        Branch.Tempo => "HIT FIRST AND OFTEN",
+        _ => "OUTLAST THE ENEMY",
+    };
 
     /// <summary>Where a node lives in WORLD units. Independent of zoom, pan, and the window.</summary>
     /// <remarks>
@@ -319,7 +408,7 @@ public sealed class BuildScreen
             bool Tapped(Keys k) => keys.IsKeyDown(k) && prev.IsKeyUp(k);
             if (Tapped(Keys.OemPlus) || Tapped(Keys.Add)) ZoomAt(TreeView.Center, 1.25f);
             if (Tapped(Keys.OemMinus) || Tapped(Keys.Subtract)) ZoomAt(TreeView.Center, 1f / 1.25f);
-            if (Tapped(Keys.Home)) { _pan = Vector2.Zero; _zoom = 0.30f; }
+            if (Tapped(Keys.Home)) { _pan = Vector2.Zero; _zoom = DefaultZoom; }
         }
 
         // THE RIGHT-CLICK REFUND, ABOVE THE LEFT-CLICK GATE. It was written below `if (!clicked)
@@ -433,9 +522,18 @@ public sealed class BuildScreen
                 // choice sealed or taken back, nothing else clickable until you decide.
                 if (firstSpec && node.Form is { } nf) { _attuneNodeId = node.Id; _attuneForm = nf; }
             }
+            // WHY THE CLICK DID NOTHING, NAMED EXACTLY.
+            //
+            // The capstone line used to read "YOU'VE ALREADY MASTERED A FORM." and it was wrong twice
+            // over. It tested Affinity() — the FORM DISCIPLINE — while the rule CanTake actually
+            // enforces for a ring-4 node is MasteredBranch(): one CAPSTONE per hunter, nothing to do
+            // with Forms. So a player refused a capstone was told about their Form, and a player who
+            // had taken a capstone but no Specialisation was refused with no message at all. It now
+            // reads the same rule the refusal came from and says which branch already holds it.
             else _msg = Mastery.IsTaken(node.Id) ? "ALREADY TAKEN." :
                 Mastery.Available <= 0 ? "NO MASTERY POINTS — GO DEEPER." :
-                node.Kind == MasteryKind.Mastery && Mastery.Affinity() is not null ? "YOU'VE ALREADY MASTERED A FORM." :
+                node.Kind == MasteryKind.Mastery && Mastery.MasteredBranch() is { } heldBranch
+                    ? $"YOU ALREADY TOOK THE {Short(heldBranch)} CAPSTONE — ONE CAPSTONE PER HUNTER." :
                 node.Kind == MasteryKind.Specialisation && Mastery.Affinity() is not null
                     ? "YOU ARE ALREADY ATTUNED — ONE DISCIPLINE PER HUNTER." :
                 "TAKE A CONNECTED NODE FIRST.";
@@ -742,10 +840,6 @@ public sealed class BuildScreen
     private void DrawEditor(SpriteBatch b, Point hit, MemoryDustTree tree)
     {
         _ui.Scrim(b, 0.6f);
-        _ui.Title(b, "MASTERY TREE");
-        _ui.Text(b, $"POINTS  {Mastery.Available}  ·  {Mastery.Spent} SPENT", 104, 60, Mastery.Available > 0 ? Gold : Slate);
-        if (Mastery.Spent > 0)
-            Button(b, ResetBtn, _resetArmed ? "PRESS AGAIN TO CONFIRM" : "TAKE EVERY POINT BACK", hit, true);
         var aff = Mastery.Affinity();
 
         // ONE EDGE PER NODE, to its NEAREST prerequisite.
@@ -784,7 +878,14 @@ public sealed class BuildScreen
             var walked = Mastery.IsTaken(node.Id) && Mastery.IsTaken(nearest.Id);
             _ui.LineSeg(b, a, c, WireThickness, walked ? Gold : Path * 0.55f);
         }
+        // THE FOUR DIRECTIONS, NAMED OUTSIDE THE RIM. Between the wires and the nodes, so a header is
+        // never drawn over a plaque even if the arithmetic in HeaderRing is one day wrong.
+        foreach (var br in new[] { Branch.Weight, Branch.Spread, Branch.Tempo, Branch.Endure })
+            DrawBranchHeader(b, br);
+
         foreach (var node in MasteryCatalog.Nodes) DrawNode(b, node, hit, aff);
+
+        DrawTreeChrome(b, hit);
 
         // The right column answers "what am I looking at", not "what are my skill slots".
         //
@@ -806,6 +907,70 @@ public sealed class BuildScreen
     }
 
     /// <summary>
+    /// The page's own header and its one button — drawn OVER the tree, not under it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// It used to be drawn first, so at any zoom past the overview the tree was painted straight
+    /// through the screen's title: a capture at 0.95 reads "SIX SPECIALIS|TIONS · ONE DISCI|LINE"
+    /// with node art in the gaps. Chrome belongs on top, and the input path already agrees — the reset
+    /// button is hit-tested before any node, so drawing it underneath them was the one place where
+    /// what the player saw and what the click did disagreed.
+    /// </para>
+    /// <para>
+    /// The third line is drawn here rather than passed to <c>UiKit.Title</c>'s <c>sub</c> argument,
+    /// which IS rendered — at (26, 14) in 480-space, i.e. y=56 at this canvas's scale, four pixels
+    /// above the POINTS line and straight through it.
+    /// </para>
+    /// </remarks>
+    private void DrawTreeChrome(SpriteBatch b, Point hit)
+    {
+        _ui.Title(b, "MASTERY TREE");
+        _ui.Text(b, $"POINTS  {Mastery.Available}  ·  {Mastery.Spent} SPENT", 104, 60,
+                 Mastery.Available > 0 ? Gold : Slate);
+        _ui.TextBig(b, "FOUR DIRECTIONS  ·  SIX SPECIALISATIONS  ·  ONE DISCIPLINE", 104, 88,
+                    Slate, UiTypography.Secondary);
+        if (Mastery.Spent > 0)
+            Button(b, ResetBtn, _resetArmed ? "PRESS AGAIN TO CONFIRM" : "TAKE EVERY POINT BACK", hit, true);
+    }
+
+    /// <summary>
+    /// One branch's name and promise, planted outside the rim at the end of its arm.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE FOUR DIRECTIONS HAD NO LABEL OF THEIR OWN. Their names were printed on the ring-4 capstones
+    /// instead — the four biggest objects on the page read WEIGHT / SPREAD / TEMPO / ENDURE while their
+    /// own names (OVERWHELM, EVERYWHERE, FIRST STRIKE, ENDLESS) appeared nowhere — so a player read the
+    /// tree as four masteries called after the directions and could not find the directions at all. A
+    /// playtester said exactly that. A direction is not a node: it is a region of the page, so it is
+    /// labelled the way a region is, outside the thing it contains.
+    /// </para>
+    /// <para>
+    /// Hidden with the node captions below <see cref="LabelZoom"/> for the same reason they are: zoomed
+    /// out far enough, four headings around a thumbnail is furniture, not information.
+    /// </para>
+    /// </remarks>
+    private void DrawBranchHeader(SpriteBatch b, Branch br)
+    {
+        if (_zoom <= LabelZoom) return;
+
+        var p = Screen(Corner(br) * HeaderRing);
+        // Same cull as the nodes, widened for the header's own text box.
+        if (p.X < TreeView.X - 320 || p.X > TreeView.Right + 320
+            || p.Y < TreeView.Y - 320 || p.Y > TreeView.Bottom + 320) return;
+
+        var col = BranchColor(br);
+        // A direction the player has actually walked burns; one they have not is still legible but
+        // quiet. Bridges are excluded: a bridge is filed under one branch but belongs to neither.
+        var walked = MasteryCatalog.Nodes.Any(n => n.Branch == br && n.Kind != MasteryKind.Bridge
+                                                   && Mastery.IsTaken(n.Id));
+        _ui.TextCenterBig(b, Short(br), (int)p.X, (int)p.Y - 23, walked ? col : col * 0.72f,
+                          UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, BranchPromise(br), (int)p.X, (int)p.Y + 7, Slate, UiTypography.Secondary);
+    }
+
+    /// <summary>
     /// The hexagon column — the tree page's standing answer to "what does my discipline reach".
     /// </summary>
     /// <remarks>
@@ -819,7 +984,7 @@ public sealed class BuildScreen
         _ui.TextCenter(b, aff is { } a ? $"YOUR ATTUNEMENT — {a.ToString().ToUpperInvariant()}" : "UNATTUNED",
                        HexPanel.Center.X, HexPanel.Y + 14, aff is null ? Slate : Gold);
         if (aff is null)
-            _ui.TextCenter(b, "TAKE A FORM SPECIALIST NODE", HexPanel.Center.X, HexPanel.Y + 38, Slate);
+            _ui.TextCenter(b, "TAKE A SPECIALISATION NODE", HexPanel.Center.X, HexPanel.Y + 38, Slate);
         FormHexDiagram.Draw(_ui, b, new Point(HexPanel.Center.X, HexPanel.Y + 268), 105, aff,
                             showFactors: aff is not null);
     }
@@ -886,8 +1051,20 @@ public sealed class BuildScreen
                 _ui.TextBig(b, Short(br), NodePanel.X + 94, y0, Bone, UiTypography.Body);
                 _ui.TextRightBig(b, $"{taken} \u00b7 {spent} POINTS", NodePanel.Right - 74, y0,
                                  spent > 0 ? Gold : Dim, UiTypography.Body);
-                y0 += 46;
+                y0 += 42;   // 42, not 46: the four rows now share the card with the cost ladder below them.
             }
+
+            // THE LADDER. Size is this tree's price tag, and until now nothing on the page said what
+            // the sizes MEANT \u2014 a player could see that a Specialisation is bigger than a Notable and
+            // had to click both to learn it costs twice as much. Five kinds, cheapest first, so the
+            // order on the line is the order of the rings on the screen.
+            _ui.Fill(b, new Rectangle(NodePanel.X + 74, y0 + 4, NodePanel.Width - 148, 2), Dim);
+            _ui.TextCenterBig(b, "WHAT EACH KIND COSTS IN POINTS", NodePanel.Center.X, y0 + 16, Slate,
+                              UiTypography.Secondary);
+            _ui.TextCenterBig(b, "MINOR 1  \u00b7  NOTABLE 3  \u00b7  GREATER 5", NodePanel.Center.X, y0 + 40,
+                              Bone, UiTypography.Secondary);
+            _ui.TextCenterBig(b, "SPECIALISATION 6  \u00b7  CAPSTONE 8", NodePanel.Center.X, y0 + 62,
+                              Bone, UiTypography.Secondary);
             return;
         }
 
@@ -899,9 +1076,39 @@ public sealed class BuildScreen
         _ui.TextBig(b, KindWord(n.Kind), NodePanel.X + 68, NodePanel.Y + 56, col, UiTypography.Secondary);
         _ui.TextRightBig(b, Short(n.Branch), NodePanel.Right - 68, NodePanel.Y + 56, Slate, UiTypography.Secondary);
 
-        DrawWrapped(b, n.Label, NodePanel.X + 68, NodePanel.Y + 100, NodePanel.Width - 136, Bone);
+        var afterLabel = DrawWrapped(b, n.Label, NodePanel.X + 68, NodePanel.Y + 100,
+                                     NodePanel.Width - 136, Bone);
 
+        // WHAT A SPECIALISATION ACTUALLY DOES, IN ONE SENTENCE.
+        //
+        // Its own catalogue label says "STRIKE SPECIALIST — EXECUTE WEAKENED FOES", which names the
+        // trigger and not the thing the node is FOR. Every one of the six also sets the hunter's
+        // DISCIPLINE, which is the largest single multiplier in the game and can be chosen exactly
+        // once — and that was written down nowhere the player could reach before committing six
+        // points. The x2 is not a rounded boast: FormBehaviour.FactorAtDistance(0) is 2.00, and with
+        // no discipline at all SoloBattle applies no factor, so taking this really does double the
+        // Form named on it. The far Forms fall to 0.75 and the opposite to 0.45 by the same table.
         var y = NodePanel.Y + 240;
+        if (n.Kind == MasteryKind.Specialisation && n.Form is { } specForm)
+        {
+            var f = Short(specForm);
+            var mine = Mastery.Affinity();
+            // Three states, three sentences. Reading a Specialisation you cannot have and being told
+            // what TAKING it would do is the same lie as a button that does nothing.
+            var says =
+                taken2
+                    ? $"{f} IS YOUR DISCIPLINE. YOUR {f} SKILLS HIT TWICE AS HARD, AND SKILLS FAR "
+                      + "FROM IT HIT SOFTER."
+                : mine is null
+                    ? $"TAKING IT MAKES {f} YOUR DISCIPLINE. YOUR {f} SKILLS THEN HIT TWICE AS HARD, "
+                      + "AND SKILLS FAR FROM IT HIT SOFTER. ONE DISCIPLINE PER HUNTER."
+                    : $"YOUR DISCIPLINE IS ALREADY {Short(mine.Value)}. ONE DISCIPLINE PER HUNTER — "
+                      + "TAKE EVERY POINT BACK IF YOU WANT TO CHOOSE AGAIN.";
+            var after = DrawWrapped(b, says, NodePanel.X + 68, afterLabel + 14,
+                                    NodePanel.Width - 136, taken2 || mine is null ? Gold : Slate);
+            y = Math.Max(y, after + 20);
+        }
+
         _ui.Fill(b, new Rectangle(NodePanel.X + 64, y - 16, NodePanel.Width - 128, 2), Dim);
         _ui.TextBig(b, "COST", NodePanel.X + 68, y, Slate, UiTypography.Body);
         _ui.TextRightBig(b, $"{n.Cost} POINT{(n.Cost == 1 ? "" : "S")}", NodePanel.Right - 68, y,
@@ -913,14 +1120,27 @@ public sealed class BuildScreen
                          Mastery.Available >= n.Cost ? Bone : Ember, UiTypography.PanelTitle);
 
         y += 72;
+        // THE TWO ONCE-PER-HUNTER RULES GET THEIR OWN LINE. Without them a second Specialisation, or a
+        // second capstone, fell through to "LOCKED — WALK TO IT FIRST" — which tells a player to do
+        // something that cannot help, since the path is already walked and the rule is what refused.
         var state = taken2 ? "TAKEN" : can ? "AVAILABLE — CLICK THE NODE"
                     : Mastery.Available < n.Cost ? "NOT ENOUGH POINTS"
+                    : n.Kind == MasteryKind.Specialisation && Mastery.Affinity() is not null
+                        ? "CLOSED — YOU ALREADY HAVE A DISCIPLINE"
+                    : n.Kind == MasteryKind.Mastery && Mastery.MasteredBranch() is not null
+                        ? "CLOSED — YOU ALREADY TOOK A CAPSTONE"
                     : "LOCKED — WALK TO IT FIRST";
         _ui.TextCenter(b, state, NodePanel.Center.X, y, taken2 ? Gold : can ? Verd : Ember);
     }
 
-    /// <summary>Word-wrap a node's label into the panel. Node labels are sentences, not headings.</summary>
-    private void DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c)
+    /// <summary>
+    /// Word-wrap a sentence into the panel, and return the y the NEXT block may start at.
+    /// </summary>
+    /// <remarks>
+    /// It used to return nothing, so every block under it was pinned to a hand-picked constant and the
+    /// panel could only ever hold one paragraph. The Specialisation card holds two.
+    /// </remarks>
+    private int DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c)
     {
         var line = "";
         foreach (var w in text.Split(' '))
@@ -929,19 +1149,38 @@ public sealed class BuildScreen
             if (_ui.Measure(probe) > width && line.Length > 0) { _ui.Text(b, line, x, y, c); y += 30; line = w; }
             else line = probe;
         }
-        if (line.Length > 0) _ui.Text(b, line, x, y, c);
+        if (line.Length > 0) { _ui.Text(b, line, x, y, c); y += 30; }
+        return y;
     }
 
+    /// <summary>
+    /// What a node IS, in the words the rest of the screen uses for the same thing.
+    /// </summary>
+    /// <remarks>
+    /// MASTERY became BRANCH CAPSTONE and FORM SPECIALIST became SPECIALISATION because the tree was
+    /// using two words for each of two things and the player had to guess which was which. "MASTERY"
+    /// was the screen's own name AND the ring-4 kind AND, in a message, the Form discipline; "FORM
+    /// SPECIALIST" appeared here while the hexagon panel, the weave screen and the ceremony all said
+    /// discipline or attunement. One word for one thing: a ring-4 node is the CAPSTONE of its branch,
+    /// and the six Form nodes are SPECIALISATIONS, of which your one is your DISCIPLINE.
+    /// </remarks>
     private static string KindWord(MasteryKind k) => k switch
     {
         MasteryKind.Minor => "MINOR",
         MasteryKind.Notable => "NOTABLE",
         MasteryKind.Greater => "GREATER",
-        MasteryKind.Mastery => "MASTERY",
+        MasteryKind.Mastery => "BRANCH CAPSTONE",
         MasteryKind.Bridge => "BRIDGE",
-        MasteryKind.Specialisation => "FORM SPECIALIST",
+        MasteryKind.Specialisation => "SPECIALISATION — YOUR DISCIPLINE",
         _ => "START",
     };
+
+    /// <summary>The same hue, darker — opaque, so it dims rather than turning translucent.</summary>
+    /// <remarks>
+    /// <c>colour * f</c> scales ALPHA with the channels, which over a dark page reads as "disappearing"
+    /// rather than "quiet". This keeps the node solid and only takes the light out of it.
+    /// </remarks>
+    private static Color Muted(Color c, float f) => new((int)(c.R * f), (int)(c.G * f), (int)(c.B * f));
 
     private static Color BranchColor(Branch b) => b switch
     {
@@ -1040,6 +1279,22 @@ public sealed class BuildScreen
         var frame = _ui.Assets.Get(KindFrame(node.Kind));
         var owned = node.Kind == MasteryKind.Mastery && Mastery.MasteredBranch() == node.Branch;
 
+        // THE SIX UNCHOSEN SPECIALISATIONS BREATHE. While the hunter has no discipline, the one
+        // decision on this page that cannot be undone by a respec is also the one the eye has no
+        // reason to land on — six nodes among fifty-one. A slow gold halo is the cheapest honest way
+        // to say "these are not ordinary nodes"; the moment a discipline exists it stops, because then
+        // the announcement would be nagging about a choice already made.
+        if (node.Kind == MasteryKind.Specialisation && aff is null && !taken)
+        {
+            var pulse = 0.55f + 0.45f * MathF.Sin((float)_breath.Elapsed.TotalSeconds * 2.4f);
+            for (var ring = 3; ring >= 1; ring--)
+            {
+                var g = (int)(box.Width * 0.09f * ring);
+                _ui.Diamond(b, new Rectangle(box.X - g, box.Y - g, box.Width + g * 2, box.Height + g * 2),
+                            Gold * (0.14f * pulse));
+            }
+        }
+
         if (frame is not null)
         {
             // The socket's field, inset well inside the rim so it fits the DIAMOND and the octagon too,
@@ -1056,14 +1311,23 @@ public sealed class BuildScreen
             // START is exempt. It is permanently allocated, so it takes the "taken" branch of `fill` and
             // came out as a bright WEIGHT-red field at the dead centre of the tree — reading as the most
             // emphatic Weight node on the page when it belongs to no branch at all.
+            // A SPECIALISATION IS NEVER A GHOST. Every other node carries a branch GLYPH, which is what
+            // gives a locked one its mass; a Specialisation carries the name of its Form instead. Under
+            // the generic locked treatment — a near-black field behind a Path-tinted frame — the five
+            // a hunter did not choose became captions floating in empty space the moment a discipline
+            // existed. They keep a dim branch-tinted body, so "closed" reads as closed and not as a
+            // rendering fault.
+            var lockedSpec = node.Kind == MasteryKind.Specialisation && !taken && !canTake;
             var pad = (int)(box.Width * 0.30f);
             var field = new Rectangle(box.X + pad, box.Y + pad, box.Width - pad * 2, box.Height - pad * 2);
-            var fieldCol = node.Kind == MasteryKind.Start ? PanelBg : fill;
+            var fieldCol = node.Kind == MasteryKind.Start ? PanelBg
+                           : lockedSpec ? Muted(branchCol, 0.30f) : fill;
             if (node.Kind == MasteryKind.Specialisation) _ui.Diamond(b, field, fieldCol);
             else if (node.Kind == MasteryKind.Notable || node.Kind == MasteryKind.Bridge) _ui.Hex(b, field, fieldCol);
             else if (node.Kind != MasteryKind.Mastery) _ui.Diamond(b, Circleish(field), fieldCol);
 
-            b.Draw(frame, box, hover ? Bone : owned ? Gold : taken ? Gold : canTake ? branchCol : Path);
+            b.Draw(frame, box, hover ? Bone : owned || taken ? Gold : canTake ? branchCol
+                               : lockedSpec ? Muted(branchCol, 0.72f) : Path);
         }
         else
         {
@@ -1078,13 +1342,38 @@ public sealed class BuildScreen
         {
             // >= the default zoom, not >. The threshold was 0.3 and HOME resets to exactly 0.30, so the
             // one label naming the centre of the tree was absent from the default view of it.
-            if (_zoom >= 0.3f) _ui.TextCenter(b, "YOU", cx, cy - 12, Bone);
+            if (_zoom > LabelZoom) _ui.TextCenter(b, "YOU", cx, cy - 12, Bone);
         }
         else if (node.Kind == MasteryKind.Mastery)
         {
-            if (_zoom > 0.28f)
-                _ui.TextCenter(b, Short(node.Branch), box.Center.X, box.Center.Y - 11,
-                               owned || taken ? Bone : branchCol);
+            // A CAPSTONE WEARS ITS OWN NAME. It used to print Short(node.Branch) — so the four biggest
+            // objects on the page read WEIGHT / SPREAD / TEMPO / ENDURE, which are the names of the four
+            // DIRECTIONS and not of these nodes at all. OVERWHELM, EVERYWHERE, FIRST STRIKE and ENDLESS
+            // existed only in a hover tooltip, and a playtester reasonably concluded the four plaques
+            // WERE the directions and went looking for the real masteries elsewhere. The directions are
+            // labelled outside the rim now (DrawBranchHeader); the plaque says what the plaque is.
+            if (_zoom > LabelZoom)
+            {
+                _ui.TextCenterBig(b, Head(node.Label), box.Center.X, box.Center.Y - 14,
+                                  owned || taken ? Bone : branchCol, UiTypography.Body);
+                _ui.TextCenterBig(b, "CAPSTONE", box.Center.X, box.Bottom + 5,
+                                  owned || taken ? Gold : Slate, UiTypography.Secondary);
+            }
+        }
+        else if (node.Kind == MasteryKind.Specialisation && _zoom > LabelZoom)
+        {
+            // THE SECOND-LARGEST NODE, AND THE ONLY OTHER ONE THAT SPEAKS. Its Form goes inside the
+            // diamond because the Form IS the choice; the word underneath names the kind, so a player
+            // can count the six of them without hovering one.
+            // Bright while the discipline is still open, quiet once it is spent. The five a hunter did
+            // NOT take are dead content — a bone-white Form name over an unlit frame read as a bug in
+            // the capture, a caption floating in empty space.
+            _ui.TextCenterBig(b, node.Form is { } sf ? Short(sf) : "FORM", cx, cy - 9,
+                              taken ? new Color(0x14, 0x11, 0x1E) : aff is null ? Bone : Muted(Bone, 0.62f),
+                              UiTypography.Secondary);
+            _ui.TextCenterBig(b, "SPECIALISATION", cx, box.Bottom + 5,
+                              taken ? Gold : aff is null ? Muted(Gold, 0.90f) : Muted(Slate, 0.72f),
+                              UiTypography.Secondary);
         }
         // The branch glyph, over the frame's hollow centre. Below about twenty pixels it is a smudge
         // that only muddies the socket, and the frame alone still carries the kind — so it drops out

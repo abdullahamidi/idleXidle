@@ -232,4 +232,61 @@ public class MasteryLayoutTests
             Assert.Equal(at.Y, again.Y, 3);
         }
     }
+
+    [Fact]
+    public void test_a_specialisation_is_the_second_largest_node_and_a_bridge_is_not()
+    {
+        // SIZE IS THIS TREE'S ONLY PRICE TAG, and it was telling the wrong story. Bridge and
+        // Specialisation shared one line at 42, so the six nodes that decide who the hunter IS drew
+        // the same size as a hybrid convenience, and a playtester read the four ring-4 capstones as
+        // "the real masteries" and the Specialisations as ordinary studs. This is the claim the screen
+        // now rests on: exactly one kind is bigger than a Specialisation, and it is the capstone.
+        // START is left out of the ladder: it is the free root, not a purchase, so it is allowed to be
+        // large without claiming to be expensive. Every PRICED kind is compared.
+        var spec = MasteryLayout.NodeWorldRadius(MasteryKind.Specialisation);
+        var bigger = Enum.GetValues<MasteryKind>()
+                         .Where(k => k != MasteryKind.Start && MasteryLayout.NodeWorldRadius(k) > spec)
+                         .ToList();
+
+        Assert.Equal(new[] { MasteryKind.Mastery }, bigger);
+        Assert.True(spec > MasteryLayout.NodeWorldRadius(MasteryKind.Bridge),
+            "a Specialisation must out-measure a Bridge; they used to share one line.");
+        Assert.True(spec > MasteryLayout.NodeWorldRadius(MasteryKind.Greater),
+            "a Specialisation must out-measure a Greater.");
+
+        // START must still not out-measure the capstone.
+        Assert.True(MasteryLayout.NodeWorldRadius(MasteryKind.Start)
+                    < MasteryLayout.NodeWorldRadius(MasteryKind.Mastery));
+    }
+
+    [Fact]
+    public void test_growing_a_specialisation_kept_its_clearance()
+    {
+        // The size change is only safe because of where the six sit — 0.86 of the radius and 26 degrees
+        // off the spine, which puts their nearest neighbours a long way off. Stated as a margin rather
+        // than as a pass/fail so the next person to move the number can see how much room is left.
+        var specs = MasteryCatalog.Nodes.Where(n => n.Kind == MasteryKind.Specialisation).ToList();
+        Assert.Equal(6, specs.Count);
+
+        var worst = float.MaxValue;
+        (string A, string B) pair = ("", "");
+
+        foreach (var s in specs)
+        foreach (var other in MasteryCatalog.Nodes)
+        {
+            if (ReferenceEquals(s, other)) continue;
+            var gap = Distance(MasteryLayout.PositionOf(s), MasteryLayout.PositionOf(other))
+                      - MasteryLayout.NodeWorldRadius(s.Kind)
+                      - MasteryLayout.NodeWorldRadius(other.Kind);
+            if (gap < worst) { worst = gap; pair = (s.Id, other.Id); }
+        }
+
+        _out.WriteLine($"tightest specialisation clearance: {pair.A} to {pair.B}, {worst:N0} world units.");
+        Assert.True(worst > 0f, $"{pair.A} and {pair.B} overlap by {-worst:N0} world units.");
+        // 100 units is roughly one Minor's diameter of slack — enough that the next size bump is a
+        // decision rather than an accident.
+        Assert.True(worst > 100f,
+            $"{pair.A} and {pair.B} clear by only {worst:N0}; a Specialisation cannot grow further " +
+            "without moving SpecialisationFraction or the offset angle.");
+    }
 }

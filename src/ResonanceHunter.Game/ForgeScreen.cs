@@ -136,8 +136,11 @@ public sealed class ForgeScreen
     private Rarity _revealGrade;
     private int _revealMaterials;
     private readonly List<ItemInstance> _revealItems = new();
-    // 2.9s, and it is a SEQUENCE now rather than a card that appears. See DrawReveal for the beats.
-    private const float RevealHold = 2.9f;
+    // 3.8s, and it is a SEQUENCE now rather than a card that appears. See DrawReveal for the beats.
+    // It was 2.9 until the reveal grew per-item SELL / SALVAGE buttons: those land about a second in
+    // and the fade starts 0.45s before the end, which left barely a second to reach one. The pointer
+    // freeze makes a long hold free -- the card stops the moment you touch it, and a click still skips.
+    private const float RevealHold = 3.8f;
 
     // The beats, in seconds from the moment the chest cracks. Named because the arithmetic below reads
     // as nonsense otherwise, and because a designer retiming this should not have to count decimals.
@@ -274,6 +277,32 @@ public sealed class ForgeScreen
                .ThenByDescending(i => i.ItemLevel)
                .ToList();
 
+    /// <summary>
+    /// The loose gems, best first. A gem IS an inventory item — <see cref="Bag"/> simply filters them out.
+    /// </summary>
+    /// <remarks>
+    /// Playtest: "gems are items too, so they should be in the inventory; pressing the SOCKET tab should
+    /// not reveal something out of nowhere." It was literally true — the loose gems existed only as an
+    /// icon strip inside the SOCKET tab, so until you opened that one tab the game never showed you that
+    /// you owned any. They live in the same list as everything else now; the LEFT PANEL just shows that
+    /// half of it while SOCKET is the open tab.
+    /// </remarks>
+    private List<ItemInstance> Gems()
+        => _inv.Where(GemCraft.IsGem)
+               .OrderByDescending(g => g.ItemLevel)
+               .ThenByDescending(g => (int)g.Rarity)
+               .ToList();
+
+    /// <summary>
+    /// What the left panel lists right now: the GEMS under the SOCKET tab, the wearables everywhere else.
+    /// </summary>
+    /// <remarks>
+    /// <b>Deliberately NOT a change to <see cref="Bag"/>.</b> <see cref="Target"/> and
+    /// <see cref="CycleTarget"/> both mean "the wearable on the bench", and a gem can never be that —
+    /// letting one into that list would point the UPGRADE and BREAK DOWN tabs at a stone.
+    /// </remarks>
+    private List<ItemInstance> BagList() => _tab == Tab.Socket ? Gems() : Bag();
+
     /// <summary>The wearable the focused modes upgrade — the id-matched item, or the first wearable.</summary>
     private ItemInstance? Target()
     {
@@ -300,7 +329,7 @@ public sealed class ForgeScreen
     /// </summary>
     /// <remarks>
     /// Read from the environment the capture script sets — <c>RH_SHOT_TAB</c> (upgrade / reroll /
-    /// socket / breakdown), <c>RH_SHOT_ASK</c> (a comma list of sell / salvage / junk / gems / crush)
+    /// socket / breakdown), <c>RH_SHOT_ASK</c> (sell / salvage / junk / gems / crush / haul, comma-separated)
     /// and <c>RH_SHOT_CHARTS</c> (a count of every chart) — and only while <c>RH_SHOT</c> itself is
     /// set, so a normal run never reads any of it. The tabs and the in-place questions have no other
     /// way to be captured: the host's fixtures pick the screen and the item, not the tab.
@@ -339,6 +368,26 @@ public sealed class ForgeScreen
                     }
                     break;
                 case "crush" when item.Gems.Count > 0: RequestCrush(item, 0); break;
+                case "revealsell" when _revealItems.Count > 0:
+                    // Pose the reveal's OWN sell question. It is two clicks deep behind an animation
+                    // that has to be timed, so a capture cannot reach it by waiting either.
+                    _revealAsk = (_revealItems[0].InstanceId, ScrapKind.Sell);
+                    _revealAskSuppress = false;
+                    break;
+                case "revealsold" when _revealItems.Count > 0:
+                    // Pose the AFTERMATH: one drop already sold from the reveal, so the capture can
+                    // check that its cell dims and stamps instead of offering to sell it twice.
+                    DoRevealScrap(hunter, _revealItems[0], ScrapKind.Sell);
+                    break;
+                case "haul":
+                    // Open the whole pile and jump to the SUMMARY. It is the cascade's review card —
+                    // eight beats and a click away — and a capture renders sixty frames, so waiting for
+                    // it is not an option. Nothing here shortcuts the LOGIC: the chests really open and
+                    // the loot really lands; only the eight beats in front of the review are skipped.
+                    OpenEveryChest(hunter);
+                    _revealQueue.Clear();
+                    EnterRevealSummary();
+                    break;
                 case "say": Say("RE-ROLLED — THE ENCHANT IS NOW FERVOUR  (A REFORGE CHART PAID FOR IT).", Gold); break;
             }
         }
@@ -510,6 +559,10 @@ public sealed class ForgeScreen
     public void TickReveal(float dt)
     {
         if (_revealTimer <= 0f || _revealFrozen) return;
+        // THE CLOCK STOPS UNDER THE POINTER. A card that dissolves while the player is reading it — or
+        // reaching for the SELL button on it — is the exact bug the reveal's new buttons would otherwise
+        // become a trap for. Set by the draw (see DrawReveal); cleared the frame the pointer leaves.
+        if (_revealPointerHold) return;
         _revealTimer -= dt;
         if (_revealTimer > 0f) return;
 
@@ -525,6 +578,7 @@ public sealed class ForgeScreen
     public void AdvanceReveal()
     {
         if (_revealTimer <= 0f) return;
+        _revealClosing = true;   // and the pointer-hold lets go, or the card the player just dismissed would stay
         if (_revealFrozen)
         {
             // The summary holds frozen until this click. A POSED capture (DevPoseReveal) stays put.
@@ -539,6 +593,8 @@ public sealed class ForgeScreen
     {
         if (_revealQueue.Count == 0) { EnterRevealSummary(); return; }
         var (grade, mats, items) = _revealQueue.Dequeue();
+        _revealClosing = false;
+        _revealPointerHold = false;
         _revealIndex++;
         _revealGrade = grade;
         _revealMaterials = mats;
@@ -553,6 +609,8 @@ public sealed class ForgeScreen
 
     private void EnterRevealSummary()
     {
+        _revealClosing = false;
+        _revealPointerHold = false;
         _revealSummary = true;
         _revealBrief = false;
         _revealTimer = 1f;      // any positive value — the freeze pins it until the closing click
@@ -562,8 +620,14 @@ public sealed class ForgeScreen
     /// <summary>Is a reveal on screen right now? The host asks, because the host draws it.</summary>
     public bool RevealActive => _revealTimer > 0f;
 
-    /// <summary>The chest-open burst. Drawn by the host as chrome, over whatever screen is open.</summary>
-    public void DrawRevealOverlay(SpriteBatch b) => DrawReveal(b);
+    /// <summary>
+    /// The chest-open burst. Drawn by the host as chrome, over whatever screen is open.
+    /// </summary>
+    /// <remarks>
+    /// Takes the Hunter because the reveal is a place you can ACT now — the hover card compares against
+    /// what the champion is wearing, and SELL / SALVAGE pay into the same wallet the bench does.
+    /// </remarks>
+    public void DrawRevealOverlay(SpriteBatch b, Hunter hunter) => DrawReveal(b, hunter);
 
     public void Update(GameTime time, KeyboardState keys, Point mouse, bool clicked, int wheel, Hunter hunter,
                        bool inputLocked = false)
@@ -585,8 +649,10 @@ public sealed class ForgeScreen
         // the wheel belongs to the bag, and nothing else on this screen scrolls.
         if (wheel != 0 && BagPanel.Contains(overlay))
         {
-            var wearCount = _inv.Count(Gear.IsWearable);
-            _bagScroll = Math.Clamp(_bagScroll - wheel, 0, Math.Max(0, wearCount - BagRows));
+            // BagList, not the wearables: under the SOCKET tab the panel lists GEMS, and a wheel clamped
+            // to a different list's length is the same dead-scroll bug this line already carries a note about.
+            var rowCount = BagList().Count;
+            _bagScroll = Math.Clamp(_bagScroll - wheel, 0, Math.Max(0, rowCount - BagRows));
         }
 
         // While a SELL / SALVAGE question is up it owns the KEYS — no key may scrap a second item
@@ -943,6 +1009,7 @@ public sealed class ForgeScreen
         _revealChestCount = 1;
         _revealMergedCount = 0;
         _revealQueue.Clear();
+        ResetRevealActions();
 
         // Keep the footer line too (for OPEN ALL and as a fallback once the burst fades).
         var names = items.Count == 0
@@ -966,6 +1033,7 @@ public sealed class ForgeScreen
         var entries = new List<(Rarity Grade, int Materials, List<ItemInstance> Items)>();
         _revealAll.Clear();
         _revealAllMats = 0;
+        ResetRevealActions();
         foreach (var chest in opened)
         {
             var (m, landed) = LandChest(chest, hunter);
@@ -1075,12 +1143,15 @@ public sealed class ForgeScreen
     /// choosing what to refine is choosing between levels. Worn pieces are marked, because scrapping
     /// one is a bigger decision — and the confirmation dialog will say so.
     /// </remarks>
-    private void DrawBag(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
+    private void DrawBag(SpriteBatch b, Hunter hunter, Point hit, bool clicked, bool rightClicked)
     {
         _ui.PanelQuiet(b, BagPanel);
 
-        var bag = Bag();
-        _ui.TextCenterBig(b, "YOUR BAG", BagPanel.Center.X, BagPanel.Y + 40, Gold, UiTypography.PanelTitle);
+        // UNDER THE SOCKET TAB THIS PANEL IS THE GEM DRAWER. Same panel, same rows, same wheel — the
+        // gems were the one kind of item the player owned and could not see anywhere in the bag.
+        var gemMode = _tab == Tab.Socket;
+        var bag = BagList();
+        _ui.TextCenterBig(b, gemMode ? "YOUR GEMS" : "YOUR BAG", BagPanel.Center.X, BagPanel.Y + 40, Gold, UiTypography.PanelTitle);
 
         // THE SCROLL COUNTER SITS UNDER THE TITLE, CENTRED — the only clear ground in this header.
         //
@@ -1099,7 +1170,8 @@ public sealed class ForgeScreen
 
         if (bag.Count == 0)
         {
-            _ui.TextCenter(b, "EMPTY — GO AND HUNT.", BagPanel.Center.X, BagPanel.Y + 150, Dim);
+            _ui.TextCenter(b, gemMode ? "NO GEMS YET — CHESTS CARRY THEM." : "EMPTY — GO AND HUNT.",
+                           BagPanel.Center.X, BagPanel.Y + 150, Dim);
             return;
         }
 
@@ -1112,7 +1184,10 @@ public sealed class ForgeScreen
         //
         // Adopting the first row also makes the highlight and the ITEM PREVIEW agree on frame one; they
         // were both falling back to "the first item" separately, which is agreement by coincidence.
-        if (_focusId is null || bag.All(i => i.InstanceId != _focusId))
+        // NEVER FROM THE GEM LIST. The focus is "the wearable on the bench" — adopting a gem into it
+        // would point UPGRADE, RE-ROLL and BREAK DOWN at a stone, and the SOCKET tab's own host item
+        // would change every time the drawer was opened.
+        if (!gemMode && (_focusId is null || bag.All(i => i.InstanceId != _focusId)))
         {
             _focusId = bag[0].InstanceId;
             _focusFollow = false;   // an adopted default is not a choice, so nothing should scroll to it
@@ -1124,7 +1199,7 @@ public sealed class ForgeScreen
         // wheel moved the list and the next frame moved it back. Fixing the wheel and fixing the focus
         // were both necessary and neither was sufficient: what actually blocked scrolling is that a
         // "keep the selection visible" rule ran on frames where the selection had not moved.
-        if (_focusFollow)
+        if (_focusFollow && !gemMode)
         {
             var focus = Math.Max(0, bag.FindIndex(i => i.InstanceId == _focusId));
             if (focus < _bagScroll) _bagScroll = focus;
@@ -1141,12 +1216,20 @@ public sealed class ForgeScreen
             var it = bag[idx];
             var row = BagRow(vis);
             var rc = RarityColors[(int)it.Rarity];
-            var sel = it.InstanceId == _focusId;
+            var sel = !gemMode && it.InstanceId == _focusId;
             var hover = row.Contains(hit);
             if (hover) _hovered = it;
             var isWorn = Gear.SlotFor(it.BaseType) is { } sl && hunter.Worn(sl)?.InstanceId == it.InstanceId;
 
-            if (UiKit.ClickedIn(row, hit, clicked)) { _focusId = it.InstanceId; _focusFollow = true; }
+            // A gem row SETS the gem into the item on the bench (left) or SELLS it (right). A gear row
+            // picks the item, as it always has.
+            if (UiKit.ClickedIn(row, hit, clicked))
+            {
+                if (!gemMode) { _focusId = it.InstanceId; _focusFollow = true; }
+                else if (Target() is { } host) TrySocket(hunter, host, it);
+                else Say("NO GEAR ON THE BENCH — A GEM GOES INTO AN ITEM.", Slate);
+            }
+            if (gemMode && UiKit.ClickedIn(row, hit, rightClicked)) Sell(hunter, it);
 
             _ui.Fill(b, row, sel ? new Color(0x3A, 0x2E, 0x52)
                            : hover ? new Color(0x22, 0x1C, 0x30)
@@ -1154,6 +1237,19 @@ public sealed class ForgeScreen
             _ui.Fill(b, new Rectangle(row.X, row.Y, 5, row.Height), rc);
 
             DrawItemIcon(b, it, new Rectangle(row.X + 10, row.Y + 3, 30, 30));
+
+            // A GEM ROW SAYS WHAT IT GIVES. Two lines fit in 40px, and the second one is the whole
+            // point of the pass: "FURY GEM / +18% DAMAGE" instead of a coloured diamond and a name.
+            if (gemMode)
+            {
+                var lvl2 = $"LEVEL {it.ItemLevel}";
+                var nameRoom2 = row.Right - 8 - _ui.Measure(lvl2) - 16 - (row.X + 50);
+                _ui.Text(b, _ui.Shorten(GemCraft.NameOf(it), nameRoom2), row.X + 50, row.Y + 1, rc);
+                _ui.TextRight(b, lvl2, row.Right - 8, row.Y + 1, Slate);
+                _ui.TextBig(b, _ui.ShortenBig(GemCraft.Grant(it), row.Width - 58, UiTypography.Secondary),
+                            row.X + 50, row.Y + 20, Met, UiTypography.Secondary);
+                continue;
+            }
 
             // TRUNCATED BY PIXELS, NOT BY CHARACTER COUNT. The old comment said "13 characters,
             // measured" — but a character count cannot be measured against a proportional font, and it
@@ -1175,7 +1271,26 @@ public sealed class ForgeScreen
         var anyTrio = _inv.Where(i => Gear.IsWearable(i) && !IsWorn(hunter, i) && i.Gems.Count == 0)
                           .DistinctBy(i => i.InstanceId)
                           .GroupBy(i => i.Rarity).Any(g => g.Key != Rarity.Legendary && g.Count() >= 3);
-        if (_confirm is { Kind: ScrapKind.JunkAll })
+        if (gemMode)
+        {
+            // MERGE and SALVAGE JUNK act on GEAR — under the gem drawer they would take from a list
+            // the player cannot see. The foot says what a row does instead.
+            var gx = BagPanel.X + 30; var gw = BagPanel.Width - 60;
+            // The last line closes a dead end: with the wearables hidden there is no other way to see
+            // that the item being socketed is chosen on a different tab, and a player who cannot change
+            // it would conclude that gems only ever fit whatever the bench happened to be pointing at.
+            var help = new[]
+            {
+                "CLICK A GEM TO SET IT INTO THE ITEM",
+                "IN THE MIDDLE. RIGHT-CLICK TO SELL.",
+                "TO CHANGE THAT ITEM, OPEN THE",
+                "UPGRADE TAB AND CLICK ONE.",
+            };
+            for (var i = 0; i < help.Length; i++)
+                _ui.TextBig(b, _ui.ShortenBig(help[i], gw, UiTypography.Secondary),
+                            gx, BagPanel.Bottom - 146 + i * 24, i < 2 ? Bone : Slate, UiTypography.Secondary);
+        }
+        else if (_confirm is { Kind: ScrapKind.JunkAll })
         {
             // The junk question is asked HERE, where its button was — not as a modal over the screen.
             DrawJunkQuestion(b, hunter, hit, clicked);
@@ -1236,9 +1351,9 @@ public sealed class ForgeScreen
 
     private void DrawWorkbench(SpriteBatch b, Hunter hunter, Point hit, bool clicked, bool rightClicked)
     {
-        DrawBag(b, hunter, hit, clicked);
+        DrawBag(b, hunter, hit, clicked, rightClicked);
         var item = Target();
-        DrawWorkPanel(b, hunter, item, hit, clicked, rightClicked);
+        DrawWorkPanel(b, hunter, item, hit, clicked);
         DrawWallet(b, hunter, item);
     }
 
@@ -1246,7 +1361,7 @@ public sealed class ForgeScreen
     /// The centre: the item card, then the tab strip and the open tab's body beside it, with the
     /// feedback strip along the action panel's foot — right under the buttons that produce what it says.
     /// </summary>
-    private void DrawWorkPanel(SpriteBatch b, Hunter hunter, ItemInstance? item, Point hit, bool clicked, bool rightClicked)
+    private void DrawWorkPanel(SpriteBatch b, Hunter hunter, ItemInstance? item, Point hit, bool clicked)
     {
         _ui.Panel(b, ItemPanel);
         _ui.PanelQuiet(b, ActionPanel);
@@ -1274,7 +1389,7 @@ public sealed class ForgeScreen
         {
             case Tab.Upgrade: DrawUpgradeTab(b, hunter, item, body, hit, clicked); break;
             case Tab.Reroll: DrawRerollTab(b, hunter, item, body, hit, clicked); break;
-            case Tab.Socket: DrawSocketTab(b, hunter, item, body, hit, clicked, rightClicked); break;
+            case Tab.Socket: DrawSocketTab(b, hunter, item, body, hit, clicked); break;
             default: DrawBreakDownTab(b, hunter, item, body, hit, clicked); break;
         }
         DrawFeedback(b);
@@ -1507,11 +1622,11 @@ public sealed class ForgeScreen
     /// gems live, so it must offer the way out too. Click a SET gem to CRUSH it: the gem dies, the
     /// slot opens, the item is never at risk. Both questions are asked here, in the strip's place.
     /// </remarks>
-    private void DrawSocketTab(SpriteBatch b, Hunter hunter, ItemInstance item, Rectangle body, Point hit, bool clicked, bool rightClicked)
+    private void DrawSocketTab(SpriteBatch b, Hunter hunter, ItemInstance item, Rectangle body, Point hit, bool clicked)
     {
         var x = body.X; var y = body.Y; var w = body.Width;
         _ui.TextBig(b, "SOCKET — SET A GEM TO ADD ITS STAT", x, y, Bone, UiTypography.Body);
-        DrawWrappedBig(b, "Click a gem below to set it into the first open socket. Click a set gem to crush it — the socket opens, the gem is lost. Right-click a loose gem to sell it.",
+        DrawWrappedBig(b, "Your gems are listed in the bag on the left. Click one there to set it into the first open socket. Click a set gem below to crush it — the socket opens, the gem is lost.",
                        x, y + 30, w, Slate, UiTypography.Secondary);
 
         var slots = GemCraft.SocketCount(item.Rarity);
@@ -1565,21 +1680,19 @@ public sealed class ForgeScreen
             }
         }
 
-        // The loose gems, whatever the item's rarity — a player should SEE the supply either way.
-        var gems = _inv.Where(GemCraft.IsGem).OrderByDescending(g => g.ItemLevel).ToList();
-        _ui.Text(b, gems.Count == 0 ? "YOUR GEMS — NONE YET. CHESTS CARRY THEM."
-                                    : $"YOUR GEMS ({gems.Count}) — CLICK SETS · RIGHT-CLICK SELLS", x, gy, Slate);
-        const int PerRow = 7, MaxShown = 14;
-        for (var k = 0; k < Math.Min(gems.Count, MaxShown); k++)
-        {
-            var cell = new Rectangle(x + k % PerRow * 64, gy + 30 + k / PerRow * 64, 56, 56);
-            DrawItemIcon(b, gems[k], cell);
-            if (cell.Contains(hit)) _hovered = gems[k];
-            if (UiKit.ClickedIn(cell, hit, clicked)) TrySocket(hunter, item, gems[k]);
-            if (UiKit.ClickedIn(cell, hit, rightClicked)) Sell(hunter, gems[k]);
-        }
-        if (gems.Count > MaxShown)
-            _ui.TextRight(b, $"+{gems.Count - MaxShown} MORE", x + w, gy, Slate);
+        // THE GEM STRIP IS GONE — the gems are in the BAG on the left now.
+        //
+        // Playtest: "gems are items too, so they should be in the inventory; pressing the SOCKET tab
+        // should not reveal something out of nowhere." A private icon strip inside one tab was the only
+        // place a gem was ever visible, so it read as a second, hidden inventory that this tab conjured.
+        // Fourteen at a time, no names, no numbers, no scroll. The left panel already has rows, a wheel,
+        // a scrollbar and a counter; this points at it rather than owning a worse copy.
+        var gems = Gems();
+        _ui.Text(b, gems.Count == 0 ? "YOU HOLD NO GEMS YET." : $"YOU HOLD {gems.Count} GEM{(gems.Count == 1 ? "" : "S")}.", x, gy, Slate);
+        DrawWrappedBig(b, gems.Count == 0
+                          ? "Gems come out of chests. When you have one it will be listed in YOUR GEMS on the left."
+                          : "Your gems are in the bag on the left — click one to set it into this item.",
+                       x, gy + 28, w, Bone, UiTypography.Secondary);
     }
 
     /// <summary>SET a gem into the first open socket, spending Essence.</summary>
@@ -2065,18 +2178,11 @@ public sealed class ForgeScreen
         if (line.Length > 0) _ui.Text(b, line, x, y, c);
     }
 
-    private static string AffixName(AffixStat s) => s switch
-    {
-        AffixStat.Damage => "DAMAGE", AffixStat.Health => "HEALTH", AffixStat.SkillRate => "SKILL RATE",
-        AffixStat.Haul => "LOOT", AffixStat.Crit => "CRITICAL CHANCE", _ => "DEFENCE",
-    };
+    /// <summary>The stat's word. Core owns it — see <see cref="ItemAffixes.StatWord"/> for why.</summary>
+    private static string AffixName(AffixStat s) => ItemAffixes.StatWord(s);
 
-    private static string AffixVal(ItemAffix a) => a.Stat switch
-    {
-        AffixStat.Crit => $"+{a.Magnitude:0.0}%",
-        AffixStat.Defense => $"+{a.Magnitude:0}",
-        _ => $"+{a.Magnitude * 100f:0}%",
-    };
+    /// <summary>The magnitude in the stat's own unit. Core owns it — see <see cref="ItemAffixes.GrantLabel"/>.</summary>
+    private static string AffixVal(ItemAffix a) => ItemAffixes.GrantLabel(a.Stat, a.Magnitude);
 
     private void DrawDebug(SpriteBatch b)
     {
@@ -2091,19 +2197,129 @@ public sealed class ForgeScreen
         _ui.TextBig(b, $"nav FORGE  focus {_focusId ?? "—"}  tab {_tab}", 320, 112, Gold, UiTypography.Secondary);
     }
 
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+    // THE REVEAL IS A PLACE YOU CAN ACT — not a card you watch go by.
+    //
+    // Playtest: "I need to hover the items that came out of a chest and READ what they are; and I
+    // should be able to sell or salvage them right there." Both halves were true. The card printed one
+    // JOINED line of rarity-plus-type words for the whole haul ("EPIC RING"), which is not a name and
+    // says nothing about what the piece does; and the only way to act on a drop was to sit out the
+    // fade, walk to the Forge, and work out which of the four Rare rings in a rarest-first bag was the
+    // new one.
+    //
+    // What the reveal carries now:
+    //   · THE POINTER, so hovering an item raises the SAME ItemTooltip every other screen shows.
+    //   · EACH ITEM'S NAME under its icon in its rarity colour, so the common case needs no hover.
+    //   · SELL and SALVAGE under each item with the payout printed on the button.
+    //   · The "are you sure?" question asked INSIDE the card — the bench's OpenConfirm answers it by
+    //     switching to the BREAK DOWN tab, which is a screen behind this overlay: a question the
+    //     player cannot see is worse than no question.
+    //   · A real KEEP ALL button. "CLICK TO CLOSE" is an instruction, not a choice.
+    //
+    // AND THE CLOCK STOPS WHILE THE POINTER IS INSIDE THE CARD. Without that every button here is a
+    // trap: you reach for SELL and the card dissolves under the cursor, and the click lands on
+    // whatever screen was behind it. See TickReveal.
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>The reveal's pointer, in TRUE 1920x1080 — the space the host draws the reveal in.</summary>
+    private Point _revealMouse = new(-1, -1);
+
+    /// <summary>A click the host has decided belongs to the reveal's own buttons. Spent by the next draw.</summary>
+    private bool _revealClick;
+
+    /// <summary>Every rect on the reveal that answers to a click — rebuilt each draw, read by the host.</summary>
+    private readonly List<Rectangle> _revealHots = new();
+
+    /// <summary>The pointer is resting on the settled card, so the fade waits. Read by <see cref="TickReveal"/>.</summary>
+    private bool _revealPointerHold;
+
+    /// <summary>The player asked to close — the hold must not keep the card they just dismissed.</summary>
+    private bool _revealClosing;
+
+    /// <summary>What this reveal has already disposed of: instance id to the stamp word (SOLD / SALVAGED).</summary>
+    private readonly Dictionary<string, string> _revealStamp = new(StringComparer.Ordinal);
+
+    /// <summary>The reveal's OWN sell/salvage question — asked in the card, never by switching tab.</summary>
+    private (string ItemId, ScrapKind Kind)? _revealAsk;
+    private bool _revealAskSuppress;
+
+    /// <summary>
+    /// DEV ONLY: <c>RH_SHOT_HOVER=reveal</c> raises the first item's hover card on the reveal.
+    /// </summary>
+    /// <remarks>
+    /// A hover is the one affordance a screenshot cannot pose by itself, and here it cannot be posed by
+    /// coordinates either: WHERE an item sits depends on how many the chest rolled, which is random per
+    /// run. Read once, and only while <c>RH_SHOT</c> is set, so a normal run never looks at it. The card
+    /// is still placed at <c>RH_SHOT_MOUSE</c>, exactly where a real pointer would put it.
+    /// </remarks>
+    private static readonly bool DevRevealHover =
+        Environment.GetEnvironmentVariable("RH_SHOT") is not null
+        && Environment.GetEnvironmentVariable("RH_SHOT_HOVER") == "reveal";
+
+    /// <summary>One item's column on the reveal: icon, name, and the two verbs under it.</summary>
+    private const int RevealCol = 210;
+    private const int RevealIcon = 120;
+    private const int RevealCellH = RevealIcon + 116;
+
+    /// <summary>
+    /// Does the pointer rest on something the reveal itself would answer?
+    /// </summary>
+    /// <remarks>
+    /// The host asks BEFORE it treats a click as "skip the reveal". A click aimed at SELL that also
+    /// skipped the card would be the worst of both: the item is gone and so is the card that said so.
+    /// The rects come from the previous frame's draw, which is exact — the layout only moves while the
+    /// card is springing open, and no button is drawn until it has stopped.
+    /// </remarks>
+    public bool RevealWantsClick(Point mouse1920)
+    {
+        foreach (var r in _revealHots)
+            if (r.Contains(mouse1920)) return true;
+        return false;
+    }
+
+    /// <summary>The host's pointer, and a click it has routed here, in true 1920x1080 space.</summary>
+    public void RevealInput(Point mouse1920, bool clicked)
+    {
+        _revealMouse = mouse1920;
+        if (clicked) _revealClick = true;
+    }
+
+    /// <summary>Forget everything the LAST reveal was in the middle of. Called wherever one begins.</summary>
+    private void ResetRevealActions()
+    {
+        // THE CLICK GOES TOO. The host routes input at Game1:1677 and ticks the clock further down the
+        // same Update, so a click can be handed here on the very frame the reveal's timer runs out —
+        // and then no draw ever spends it. Left latched, it would press whatever button happened to sit
+        // under the cursor on the NEXT chest opened. (The house bug species, in miniature.)
+        _revealClick = false;
+        _revealStamp.Clear();
+        _revealHots.Clear();
+        _revealAsk = null;
+        _revealAskSuppress = false;
+        _revealPointerHold = false;
+        _revealClosing = false;
+    }
+
     /// <summary>
     /// The chest-open reveal: a centred card that dims the screen behind it, shows the grade and the exact
-    /// items that popped out (framed by rarity), then fades.
+    /// items that popped out (framed by rarity, named, and sellable), then fades.
     /// </summary>
     /// <remarks>
     /// Anticipation is the whole engine of a chest (loot-box design 101), and a one-line footer message is
     /// not a payoff. This is the burst — dark card so the rarity colours pop, grade-coloured edges, item
     /// icons big in the middle. It holds for a beat and fades; opening another chest just refreshes it.
     /// </remarks>
-    private void DrawReveal(SpriteBatch b)
+    private void DrawReveal(SpriteBatch b, Hunter hunter)
     {
         if (_revealTimer <= 0f) return;
-        if (_revealSummary) { DrawRevealSummary(b); return; }
+
+        var mouse = _revealMouse;
+        var click = _revealClick;
+        _revealClick = false;               // one click, one answer
+        _revealHots.Clear();
+        _revealPointerHold = false;
+
+        if (_revealSummary) { DrawRevealSummary(b, hunter, mouse, click); return; }
 
         // Cascade entries play the same beats, compressed — rarity already bought its extra hold.
         var shakeEnds = _revealBrief ? 0.28f : ShakeEnds;
@@ -2116,7 +2332,22 @@ public sealed class ForgeScreen
         // The fade window compresses WITH the beats: at 0.45s a brief entry's card was fully readable
         // for ~0.06s and the materials count-up died mid-number. (Adversarial review, pass four.)
         var fadeWin = _revealBrief ? 0.22f : 0.45f;
-        var fade = Math.Clamp(_revealTimer / fadeWin, 0f, 1f);
+
+        // The card's FINAL rectangle, known before a pixel is drawn, because the pointer test needs it
+        // and the fade needs the pointer test. It grows with the haul so three drops never crowd.
+        var n = _revealItems.Count;
+        var cardW = Math.Max(720, n * RevealCol + 140);
+        var full = new Rectangle(960 - cardW / 2, 300, cardW, 470);
+
+        // THE HOLD. Only once the card has actually arrived: freezing the shake because the cursor
+        // happened to be parked mid-screen would stall the ceremony before it started.
+        var arrived = t >= burstEnds + cardIn;
+        var pointerIn = arrived && !_revealClosing && full.Contains(mouse);
+        _revealPointerHold = pointerIn;
+
+        // Held, the card is FULLY OPAQUE — not frozen half-faded at whatever alpha the pointer arrived
+        // at. The clock is stopped, not rewound, so letting go resumes exactly where it stopped.
+        var fade = pointerIn ? 1f : Math.Clamp(_revealTimer / fadeWin, 0f, 1f);
         var grade = RarityColors[(int)_revealGrade];
 
         // Dim the Forge behind, deepening as the chest works itself up. The scrim arriving at full
@@ -2127,7 +2358,7 @@ public sealed class ForgeScreen
         // A cascade says where it is and how to leave — the skip must be visible from the first frame.
         if (_revealChestCount > 1)
         {
-            _ui.TextCenterBig(b, $"CHEST {_revealIndex} OF {_revealChestCount}", 960, 236,
+            _ui.TextCenterBig(b, $"CHEST {_revealIndex} OF {_revealChestCount}", 960, 214,
                               Slate * MathF.Max(fade, 0.6f), UiTypography.Secondary);
             _ui.TextCenterBig(b, "CLICK TO SKIP TO THE HAUL", 960, 984, Slate * 0.8f, UiTypography.Secondary);
         }
@@ -2197,7 +2428,6 @@ public sealed class ForgeScreen
         // card that arrives is a reward.
         var cp = Math.Clamp((t - burstEnds) / cardIn, 0f, 1f);
         var scale = cp >= 1f ? 1f : 1f + 0.18f * MathF.Sin(cp * MathF.PI) - 0.35f * (1f - cp);
-        var full = new Rectangle(600, 336, 720, 416);
         var card = Grow(full, scale);
 
         _ui.PanelQuiet(b, card);
@@ -2205,74 +2435,282 @@ public sealed class ForgeScreen
 
         if (cp < 0.6f) return;      // the contents wait for the frame to stop moving
 
-        _ui.TextCenterBig(b, $"{RarityNames[(int)_revealGrade]} CHEST", card.Center.X, card.Y + 52,
+        _ui.TextCenterBig(b, $"{RarityNames[(int)_revealGrade]} CHEST", card.Center.X, card.Y + 34,
             grade * fade, UiTypography.SectionTitle);
+
+        // A question takes the card's body. Its subject is re-resolved by id every frame: if the item
+        // has left the bag under it, the question simply has nothing left to ask.
+        if (_revealAsk is { } ask && _inv.FirstOrDefault(i => i.InstanceId == ask.ItemId) is { } subject)
+        {
+            DrawRevealQuestion(b, hunter, subject, ask.Kind,
+                               new Rectangle(full.X + 40, full.Y + 78, full.Width - 80, full.Height - 118),
+                               mouse, click);
+            return;
+        }
+        _revealAsk = null;
 
         // The items that popped, big and framed by their own rarity — one at a time, each dropping the
         // last few pixels into place so the eye is led along the row instead of at all of it at once.
-        var n = _revealItems.Count;
+        // A CASCADE ENTRY GETS NO BUTTONS: it is on screen for about a second, and a button that brief
+        // is a misclick waiting to happen. The summary at the end of the cascade carries them instead.
+        var acts = !_revealBrief && cp >= 1f;
+        var cellsTop = full.Y + 78;
+        ItemInstance? hover = null;
         for (var i = 0; i < n; i++)
         {
             var ip = Math.Clamp((t - burstEnds - cardIn - i * stagger) / 0.18f, 0f, 1f);
             if (ip <= 0f) continue;
             var drop = (int)(-40f * (1f - ip) * (1f - ip));
-            DrawItemIcon(b, _revealItems[i], new Rectangle(960 - n * 68 + i * 136, 448 + drop, 120, 120));
+            var cell = new Rectangle(960 - n * RevealCol / 2 + i * RevealCol, cellsTop, RevealCol - 10, RevealCellH);
+            if (DrawRevealCell(b, hunter, _revealItems[i], cell, drop, fade, acts && ip >= 1f, mouse, click) is { } h)
+                hover = h;
         }
 
-        var names = n == 0
-            ? "SOLD ON SIGHT (FILTER)"
-            : string.Join("   ", _revealItems.Select(it => $"{RarityNames[(int)it.Rarity]} {ItemNames[it.BaseType]}"));
-        var nameColor = n > 0 ? RarityColors[_revealItems.Max(it => (int)it.Rarity)] : Slate;
-        _ui.TextCenter(b, names, 960, 604, nameColor * fade);
+        if (DevRevealHover && hover is null && n > 0)
+            hover = _inv.FirstOrDefault(i => i.InstanceId == _revealItems[0].InstanceId);
+
+        if (n == 0)
+            _ui.TextCenter(b, "SOLD ON SIGHT — YOUR LOOT FILTER TOOK IT.", card.Center.X, cellsTop + 90, Slate * fade);
 
         // Materials COUNT UP rather than landing finished. The number is the same; watching it arrive is
         // the difference between being told what you got and seeing it paid out.
         var mp = Math.Clamp((t - burstEnds - cardIn) / (_revealBrief ? 0.25f : 0.5f), 0f, 1f);
-        _ui.TextCenterBig(b, $"+{(int)MathF.Round(_revealMaterials * mp)} MATERIALS", 960, 652,
+        _ui.TextCenterBig(b, $"+{(int)MathF.Round(_revealMaterials * mp)} MATERIALS", card.Center.X, full.Y + 330,
             Gold * fade, UiTypography.Body);
+
+        if (acts && _revealChestCount <= 1)
+        {
+            var keep = new Rectangle(full.Center.X - 180, full.Y + 372, 360, 56);
+            _revealHots.Add(keep);
+            if (_ui.Button(b, keep, "KEEP ALL AND CLOSE", mouse, click)) AdvanceReveal();
+        }
+
+        // LAST, so nothing is drawn over it — and BESIDE THE CARD rather than under the pointer. At the
+        // pointer it lands squarely on the item's own SELL and SALVAGE buttons: you hover a drop to
+        // decide, and the thing helping you decide covers the two things you decided between.
+        if (hover is not null)
+            ItemTooltip.Draw(_ui, b, hover, hunter, new Point(full.Right - 16, mouse.Y - 60),
+                             new Rectangle(0, 0, 1920, 1080));
+    }
+
+    /// <summary>
+    /// One item on the reveal: its picture, its NAME, and the two verbs with their payout on them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Shared by the single-chest card and the OPEN ALL summary deliberately — two grids drawing two
+    /// subsets of "what you can do with this drop" is how one of them ends up without a SELL button.
+    /// </para>
+    /// <para>
+    /// <b>EVERY ITEM IS RE-RESOLVED BY ID against the live bag before anything is drawn.</b> The reveal
+    /// holds a SNAPSHOT of what dropped, and TIRELESS FORGE (AutoMergeAll) may have fused some of it
+    /// into better pieces before the card was ever on screen — so a button here could otherwise sell an
+    /// object that no longer exists. What is gone is dimmed and stamped instead of being actionable.
+    /// </para>
+    /// </remarks>
+    /// <returns>The item under the pointer, so the caller can raise its tooltip above everything else.</returns>
+    private ItemInstance? DrawRevealCell(SpriteBatch b, Hunter hunter, ItemInstance snapshot, Rectangle cell,
+                                         int drop, float fade, bool acts, Point mouse, bool click)
+    {
+        var live = _inv.FirstOrDefault(i => i.InstanceId == snapshot.InstanceId);
+        var shown = live ?? snapshot;
+        var rc = RarityColors[(int)shown.Rarity];
+        var icon = new Rectangle(cell.X + (cell.Width - RevealIcon) / 2, cell.Y + drop, RevealIcon, RevealIcon);
+
+        DrawItemIcon(b, shown, icon);
+        if (live is null) _ui.Fill(b, icon, new Color(0x0A, 0x08, 0x10, 0xB4));   // gone: dim the picture
+
+        // THE NAME, under the picture, in its rarity colour. The card used to join every item into one
+        // "EPIC RING   RARE BLADE" line, which names a rarity and a shape and no item.
+        _ui.TextCenterBig(b, _ui.ShortenBig(ItemNaming.FullName(shown), cell.Width, UiTypography.Secondary),
+                          cell.Center.X, cell.Y + 128, (live is null ? Dim : rc) * fade, UiTypography.Secondary);
+
+        if (live is null)
+        {
+            // SOLD / SALVAGED by the buttons below; MERGED by TIRELESS FORGE before the card opened.
+            var stamp = _revealStamp.TryGetValue(snapshot.InstanceId, out var w) ? w : "MERGED";
+            _ui.TextCenterBig(b, stamp, cell.Center.X, cell.Y + 160, Slate * fade, UiTypography.Body, TextFace.Strong);
+            return null;
+        }
+
+        var hover = icon.Contains(mouse) ? live : null;
+        if (!acts) return hover;
+
+        var sell = new Rectangle(cell.X, cell.Y + 154, cell.Width, 38);
+        _revealHots.Add(sell);
+        if (_ui.Button(b, sell, $"SELL FOR {live.SellValue:N0} GLEAM", mouse, click))
+            AskOrScrap(hunter, live, ScrapKind.Sell);
+
+        if (Gear.IsWearable(live))
+        {
+            var tier = MaterialTiers.ForRarity(live.Rarity);
+            var salvage = new Rectangle(cell.X, cell.Y + 196, cell.Width, 38);
+            _revealHots.Add(salvage);
+            if (_ui.Button(b, salvage, $"SALVAGE FOR {Forge.Dismantle(live, Tuning)} {MaterialTiers.Name(tier)}", mouse, click))
+                AskOrScrap(hunter, live, ScrapKind.Salvage);
+        }
+        else
+        {
+            // A GEM has no salvage — it is set into gear or sold, and saying so is better than a greyed
+            // button whose reason lives in someone's head.
+            _ui.TextCenterBig(b, _ui.ShortenBig("SET IT INTO GEAR AT THE FORGE", cell.Width, UiTypography.Secondary),
+                              cell.Center.X, cell.Y + 202, Slate * fade, UiTypography.Secondary);
+        }
+        return hover;
+    }
+
+    /// <summary>
+    /// SELL or SALVAGE from the reveal — through the question when the preference asks, straight through
+    /// when the player has turned it off.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately NOT <see cref="Sell"/> / <see cref="Dismantle"/>: those raise the question by
+    /// switching the bench to the BREAK DOWN tab, which is a screen behind this overlay — the player
+    /// would be answering a question they cannot see. A revealed item is never worn, so the always-ask
+    /// worn variant cannot apply here and the preference is the only gate.
+    /// </remarks>
+    private void AskOrScrap(Hunter hunter, ItemInstance item, ScrapKind kind)
+    {
+        var reason = Forge.CheckEligible(item);
+        if (reason != IneligibleReason.Eligible) { Say(Forge.Explain(reason), Ember); return; }
+        if (AskBeforeScrap) { _revealAsk = (item.InstanceId, kind); _revealAskSuppress = false; return; }
+        DoRevealScrap(hunter, item, kind);
+    }
+
+    /// <summary>Do it, and remember the word to stamp on the cell it came out of.</summary>
+    private void DoRevealScrap(Hunter hunter, ItemInstance item, ScrapKind kind)
+    {
+        _revealStamp[item.InstanceId] = kind == ScrapKind.Sell ? "SOLD" : "SALVAGED";
+        if (kind == ScrapKind.Sell) SellNow(hunter, item);
+        else DismantleNow(hunter, item);
+    }
+
+    /// <summary>
+    /// The reveal's own "are you sure?", drawn inside the card in the haul's place.
+    /// </summary>
+    /// <remarks>
+    /// The same shape as the bench's <see cref="DrawScrapQuestion"/> — KEEP first so a reflex click is
+    /// safe, the destructive verb named rather than a generic CONFIRM, and a "don't ask me again" box
+    /// that commits WITH the confirming click (ticking it and cancelling changes nothing). The whole
+    /// card counts as a hot rect while it is up, so a click that misses both buttons withdraws the
+    /// question instead of skipping the reveal out from under it.
+    /// </remarks>
+    private void DrawRevealQuestion(SpriteBatch b, Hunter hunter, ItemInstance item, ScrapKind kind,
+                                    Rectangle area, Point mouse, bool click)
+    {
+        _revealHots.Add(area);
+        _ui.Fill(b, area, new Color(0x2A, 0x16, 0x1C, 0xEE));
+
+        var x = area.X + 26; var w = area.Width - 52; var y = area.Y + 18;
+        _ui.TextBig(b, kind == ScrapKind.Sell ? "SELL THIS?" : "SALVAGE THIS?", x, y, Gold, UiTypography.SectionTitle);
+        DrawItemIcon(b, item, new Rectangle(x, y + 42, 56, 56));
+        _ui.TextBig(b, _ui.ShortenBig(ItemNaming.FullName(item), w - 70, UiTypography.Body), x + 70, y + 56,
+                    RarityColors[(int)item.Rarity], UiTypography.Body);
+
+        var outcome = kind == ScrapKind.Sell
+            ? $"IT SELLS FOR {item.SellValue:N0} GLEAM. THIS CANNOT BE UNDONE."
+            : $"IT BREAKS DOWN INTO {Forge.Dismantle(item, Tuning)} {MaterialTiers.Name(MaterialTiers.ForRarity(item.Rarity))}. THIS CANNOT BE UNDONE.";
+        _ui.TextBig(b, _ui.ShortenBig(outcome, w, UiTypography.Secondary), x, y + 112, Bone, UiTypography.Secondary);
+
+        var answered = false;
+        var box = new Rectangle(x, y + 144, 24, 24);
+        var row = new Rectangle(x, y + 140, w, 32);
+        _ui.Fill(b, new Rectangle(box.X - 2, box.Y - 2, box.Width + 4, box.Height + 4), Slate * 0.7f);
+        _ui.Fill(b, box, new Color(0x14, 0x10, 0x1A));
+        if (_revealAskSuppress) _ui.Fill(b, new Rectangle(box.X + 5, box.Y + 5, 14, 14), Gold);
+        _ui.TextBig(b, "DON'T ASK ME AGAIN BEFORE SELLING OR SALVAGING", box.Right + 12, y + 146,
+                    row.Contains(mouse) ? Bone : Slate, UiTypography.Secondary);
+        if (UiKit.ClickedIn(row, mouse, click)) { _revealAskSuppress = !_revealAskSuppress; answered = true; }
+
+        var bw = (w - 20) / 2;
+        var keep = new Rectangle(x, y + 186, bw, 56);
+        var doIt = new Rectangle(x + bw + 20, y + 186, bw, 56);
+        if (_ui.Button(b, keep, "NO — KEEP IT", mouse, click)) { _revealAsk = null; return; }
+        if (_ui.Button(b, doIt, kind == ScrapKind.Sell ? "YES — SELL IT" : "YES — SALVAGE IT", mouse, click))
+        {
+            if (_revealAskSuppress) { AskBeforeScrap = false; PrefsDirty = true; }
+            _revealAsk = null;
+            DoRevealScrap(hunter, item, kind);
+            return;
+        }
+        if (click && !answered && area.Contains(mouse)) _revealAsk = null;   // a miss withdraws, never scraps
     }
 
     /// <summary>The haul, all of it, holding until a click — the review the cascade must never skip.</summary>
-    private void DrawRevealSummary(SpriteBatch b)
+    private void DrawRevealSummary(SpriteBatch b, Hunter hunter, Point mouse, bool click)
     {
         var fade = _revealFrozen ? 1f : Math.Clamp(_revealTimer / 0.35f, 0f, 1f);
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0, 0, 0, (int)(215 * fade)));
 
         var n = _revealAll.Count;
-        var shown = Math.Min(n, 18);
-        var rows = Math.Max(1, (shown + 5) / 6);
-        // Width 1100 keeps every row count above the 1.30 aspect line, so UiKit.Panel never swaps the
+        const int PerRow = 5, MaxShown = 10;
+        var shown = Math.Min(n, MaxShown);
+        var rows = Math.Max(1, (shown + PerRow - 1) / PerRow);
+        // 1180 wide keeps every row count above the 1.30 aspect line, so UiKit.Panel never swaps the
         // frame art as the haul grows (the trap the VAULT and the settings panel both hit before).
-        var panel = new Rectangle(410, 540 - (250 + rows * 150) / 2, 1100, 250 + rows * 150);
+        var height = rows * RevealCellH + 286;
+        var panel = new Rectangle(960 - 590, 540 - height / 2, 1180, height);
         _ui.PanelQuiet(b, panel);
 
         var best = n > 0 ? RarityColors[_revealAll.Max(i => (int)i.Rarity)] : Bone;
-        _ui.TextCenterBig(b, $"{_revealChestCount} CHESTS OPENED", panel.Center.X, panel.Y + 40,
+        _ui.TextCenterBig(b, $"{_revealChestCount} CHESTS OPENED", panel.Center.X, panel.Y + 34,
                           best * fade, UiTypography.SectionTitle);
 
-        // The tally, rarest first — countable without reading eighteen icons.
+        // The tally, rarest first — countable without reading ten icons.
         var tally = _revealAll.GroupBy(i => i.Rarity).OrderByDescending(g => (int)g.Key)
                               .Select(g => $"{g.Count()} {RarityNames[(int)g.Key]}");
         _ui.TextCenterBig(b, n == 0 ? "EVERYTHING WAS SOLD ON SIGHT (YOUR LOOT FILTER)." : string.Join("  ·  ", tally),
-                          panel.Center.X, panel.Y + 88, (n == 0 ? Slate : Bone) * fade, UiTypography.Secondary);
+                          panel.Center.X, panel.Y + 78, (n == 0 ? Slate : Bone) * fade, UiTypography.Secondary);
 
-        // Icons, rarest first, six to a row — each in its own rarity frame, never colour alone.
-        var order = _revealAll.OrderByDescending(i => (int)i.Rarity).Take(shown).ToList();
-        for (var i = 0; i < order.Count; i++)
+        var cellsTop = panel.Y + 116;
+        var cellsBottom = cellsTop + rows * RevealCellH;
+        ItemInstance? hover = null;
+        var hoverCell = Rectangle.Empty;   // anchors the hover card BESIDE the item, never over its buttons
+
+        if (_revealAsk is { } ask && _inv.FirstOrDefault(i => i.InstanceId == ask.ItemId) is { } subject)
         {
-            var row = i / 6;
-            var inRow = Math.Min(6, order.Count - row * 6);
-            var x0 = panel.Center.X - (inRow * 150 - 30) / 2;
-            DrawItemIcon(b, order[i], new Rectangle(x0 + i % 6 * 150, panel.Y + 132 + row * 150, 120, 120));
+            DrawRevealQuestion(b, hunter, subject, ask.Kind,
+                               new Rectangle(panel.Center.X - 340, cellsTop, 680, cellsBottom - cellsTop),
+                               mouse, click);
         }
-        if (n > shown)
-            _ui.TextCenterBig(b, $"+{n - shown} MORE ITEMS", panel.Center.X,
-                              panel.Y + 122 + rows * 150, Slate * fade, UiTypography.Secondary);
+        else
+        {
+            _revealAsk = null;
+            // Rarest first — each in its own rarity frame, named, and sellable where it lies.
+            var order = _revealAll.OrderByDescending(i => (int)i.Rarity).Take(shown).ToList();
+            for (var i = 0; i < order.Count; i++)
+            {
+                var row = i / PerRow;
+                var inRow = Math.Min(PerRow, order.Count - row * PerRow);
+                var x0 = panel.Center.X - inRow * RevealCol / 2;
+                var cell = new Rectangle(x0 + i % PerRow * RevealCol, cellsTop + row * RevealCellH,
+                                         RevealCol - 10, RevealCellH);
+                if (i == 0) hoverCell = cell;
+                if (DrawRevealCell(b, hunter, order[i], cell, 0, fade, _revealFrozen, mouse, click) is { } h)
+                { hover = h; hoverCell = cell; }
+            }
+            if (DevRevealHover && hover is null && order.Count > 0)
+                hover = _inv.FirstOrDefault(i => i.InstanceId == order[0].InstanceId);
+            if (n > shown)
+                _ui.TextCenterBig(b, $"+{n - shown} MORE ITEMS — THEY ARE ALL IN YOUR BAG", panel.Center.X,
+                                  cellsBottom + 4, Slate * fade, UiTypography.Secondary);
+        }
 
         _ui.TextCenterBig(b, $"+{_revealAllMats} MATERIALS"
                              + (_revealMergedCount > 0 ? $"   ·   TIRELESS FORGE FUSED {_revealMergedCount}x" : ""),
-                          panel.Center.X, panel.Bottom - 98, Gold * fade, UiTypography.Body);
-        _ui.TextCenterBig(b, "CLICK TO CLOSE", panel.Center.X, panel.Bottom - 60, Slate * fade, UiTypography.Secondary);
+                          panel.Center.X, cellsBottom + 36, Gold * fade, UiTypography.Body);
+
+        // A REAL BUTTON, replacing "CLICK TO CLOSE". Clicking anywhere else still closes it, for everyone
+        // who does not care — but the way out is now a thing you can see and press.
+        var keepAll = new Rectangle(panel.Center.X - 190, cellsBottom + 72, 380, 56);
+        _revealHots.Add(keepAll);
+        if (_ui.Button(b, keepAll, "KEEP ALL AND CLOSE", mouse, click)) AdvanceReveal();
+
+        // Anchored to the hovered CELL, not to the pointer. At the pointer the card lands on the item's
+        // own SELL and SALVAGE buttons — the two things it is helping you choose between.
+        if (hover is not null)
+            ItemTooltip.Draw(_ui, b, hover, hunter, new Point(hoverCell.Right, hoverCell.Y),
+                             new Rectangle(0, 0, 1920, 1080));
     }
 
     /// <summary>Pose the chest reveal at <paramref name="t"/> seconds in, and hold it there.</summary>
@@ -2321,13 +2759,18 @@ public sealed class ForgeScreen
         var frame = _ui.Assets.Get(FrameKey[(int)item.Rarity]);
         if (frame is not null) b.Draw(frame, box, FrameTint[(int)item.Rarity]);
 
-        // A STAT GEM is a stone in its stat's colour — no slot art exists for it, and a diamond in the
-        // rarity frame reads exactly as "a thing you set into gear".
+        // A STAT GEM wears the MEDALLION OF ITS STAT — a fist for damage, a star for critical chance.
+        // Six of them shipped in assets/art/ItemsLoot/glyphs/affix and nothing in the game ever asked
+        // for one, so every gem everywhere was the same coloured diamond and told the player nothing.
+        // Fixing it HERE fixes it on every gem surface at once — bag row, socket box, reveal card,
+        // question, tooltip — because they all draw their icon through this one method.
         if (GemCraft.IsGem(item))
         {
-            var inset = frame is null ? 4 : Math.Max(6, box.Width * 22 / 100);
-            _ui.Diamond(b, new Rectangle(box.X + inset, box.Y + inset, box.Width - 2 * inset, box.Height - 2 * inset),
-                        GemColor(GemCraft.StatOf(item)));
+            var inset = frame is null ? 4 : Math.Max(6, box.Width * 18 / 100);
+            var inner = new Rectangle(box.X + inset, box.Y + inset, box.Width - 2 * inset, box.Height - 2 * inset);
+            var stat = GemCraft.StatOf(item);
+            if (_ui.Assets.Get(GemIconKey(stat)) is { } medallion) b.Draw(medallion, inner, Color.White);
+            else _ui.Diamond(b, inner, GemColor(stat));   // the pre-art fallback, kept: a missing PNG must not blank the slot
             return;
         }
 
@@ -2370,6 +2813,14 @@ public sealed class ForgeScreen
         var s = box.Width * 2 / 5;
         b.Draw(g, new Rectangle(box.Right - s, box.Bottom - s, s, s), Color.White);
     }
+
+    /// <summary>The medallion asset key for a gem's stat — aliased in <see cref="AssetLibrary"/>.</summary>
+    private static string GemIconKey(AffixStat s) => s switch
+    {
+        AffixStat.Damage => "gem_damage", AffixStat.Health => "gem_health",
+        AffixStat.SkillRate => "gem_skillrate", AffixStat.Haul => "gem_haul",
+        AffixStat.Crit => "gem_crit", _ => "gem_defense",
+    };
 
     /// <summary>Each gem stat's stone colour — hue plus the NAME carried elsewhere, never hue alone.</summary>
     private static Color GemColor(AffixStat s) => s switch

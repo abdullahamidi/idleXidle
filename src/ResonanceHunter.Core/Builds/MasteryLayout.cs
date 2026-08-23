@@ -158,16 +158,35 @@ public static class MasteryLayout
     /// A node's drawn radius in world units. The overlap rule is stated against this.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Size states price: a node a player can see is expensive before they have read it. The 1.9 is the
     /// factor the screen already applied on top of these numbers when drawing and hit-testing, folded
     /// in here so world-space geometry has one honest answer for "how big is this".
+    /// </para>
+    /// <para>
+    /// <b>A SPECIALISATION IS THE SECOND-LARGEST NODE, and it used to share a line with BRIDGE at 42.</b>
+    /// That was the tree's worst lie about itself. A Specialisation is the one node that decides WHO THE
+    /// HUNTER IS — it sets the discipline, it can be taken exactly once, and every skill the player ever
+    /// weaves is judged against it — while a Bridge is a 6-point hybrid convenience. Drawn at the same
+    /// size, the six choices that name the character were indistinguishable from ordinary studs, and a
+    /// playtester reported exactly that: "the Form specialist nodes are small, like any other node — but
+    /// are not THOSE the real masteries?" Size is this tree's only pre-reading channel, so the node that
+    /// matters most now measures 58 against the ring-4 capstone's 64, and Bridge keeps 42 alone.
+    /// </para>
+    /// <para>
+    /// The change is safe by a wide margin, and the margin is checked rather than asserted: a
+    /// Specialisation's nearest neighbours are its branch's ring-3 Greaters at ~442 world units and its
+    /// capstone at ~660, against a combined radius of 198 and 232. See
+    /// <c>MasteryLayoutTests.test_no_two_nodes_in_the_catalogue_overlap</c>, which is what says so.
+    /// </para>
     /// </remarks>
     public static float NodeWorldRadius(MasteryKind k) => 1.9f * k switch
     {
         MasteryKind.Start => 60f,
         MasteryKind.Mastery => 64f,
+        MasteryKind.Specialisation => 58f,
         MasteryKind.Greater => 46f,
-        MasteryKind.Bridge or MasteryKind.Specialisation => 42f,
+        MasteryKind.Bridge => 42f,
         MasteryKind.Notable => 38f,
         _ => 26f,
     };

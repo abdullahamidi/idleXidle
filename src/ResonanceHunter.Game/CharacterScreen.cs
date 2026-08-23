@@ -973,11 +973,9 @@ public sealed class CharacterScreen
         ItemBaseType.Helm => "HELM", ItemBaseType.Chest => "CHEST", ItemBaseType.Gloves => "GLOVES",
         ItemBaseType.Boots => "BOOTS", ItemBaseType.Ring => "RING", _ => "ITEM",
     };
-    private static string AffixLabel(AffixStat s) => s switch
-    {
-        AffixStat.Damage => "DAMAGE", AffixStat.Health => "HEALTH", AffixStat.SkillRate => "SKILL RATE",
-        AffixStat.Haul => "LOOT", AffixStat.Crit => "CRITICAL CHANCE", _ => "DEFENCE",
-    };
+    /// <summary>The stat's word. Core owns the list — see <see cref="ItemAffixes.StatWord"/> for why
+    /// three screens must not each keep their own copy of it.</summary>
+    private static string AffixLabel(AffixStat s) => ItemAffixes.StatWord(s);
     private static string AffixVal(AffixStat s, float m) => s switch
     {
         AffixStat.Crit => $"+{m:0.0}%",

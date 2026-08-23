@@ -431,14 +431,22 @@ public sealed class ChestScreen
 
             _ui.TextCenterBig(b, offer.Rarity.ToString().ToUpperInvariant(), card.Center.X, card.Y + 22,
                               grade, UiTypography.Secondary);
+
+            // THE STALL'S GEM HAD NO PICTURE. Every other offer at least reads as a shape from its
+            // name; a gem is a stone whose whole identity is its stat, so a card with a price, a name
+            // and no face was the one offer you could not recognise. The medallion is the same art the
+            // Forge draws for it (AssetLibrary's gem_<stat> aliases), so the two screens agree.
+            if (GemCraft.IsGem(offer) && _ui.Assets.Get(GemMedallion(offer)) is { } face)
+                b.Draw(face, new Rectangle(card.Center.X - 34, card.Y + 108, 68, 68), Color.White);
             var name = ItemNaming.FullName(offer);
             var px = UiTypography.Body;
             while (px > 13 && _ui.MeasureBig(name, px) > card.Width - 24) px--;
             _ui.TextCenterBig(b, name, card.Center.X, card.Y + 52, Bone, px);
             _ui.TextCenter(b, $"LEVEL {offer.ItemLevel} — SAME AS YOURS", card.Center.X, card.Y + 88, Slate);
 
-            // The price, line by line, each in the wallet's verdict colour.
-            var y = card.Y + 140;
+            // The price, line by line, each in the wallet's verdict colour. A gem card carries its
+            // medallion at 108, so its price starts below the picture rather than through it.
+            var y = card.Y + (GemCraft.IsGem(offer) ? 186 : 140);
             _ui.TextCenter(b, "PRICE", card.Center.X, y, Slate);
             y += 28;
             var affordable = true;
@@ -464,6 +472,14 @@ public sealed class ChestScreen
             ItemTooltip.Draw(_ui, b, hoverOffer, Hunter, new Point(hit.X + 26, hit.Y + 18),
                              new Rectangle(0, 0, 1920, 1080));
     }
+
+    /// <summary>The stat medallion key for a gem — the alias table's gem_&lt;stat&gt; names.</summary>
+    private static string GemMedallion(ItemInstance gem) => GemCraft.StatOf(gem) switch
+    {
+        AffixStat.Damage => "gem_damage", AffixStat.Health => "gem_health",
+        AffixStat.SkillRate => "gem_skillrate", AffixStat.Haul => "gem_haul",
+        AffixStat.Crit => "gem_crit", _ => "gem_defense",
+    };
 
     // ── SHARE CODES — paste to LOOK. Nothing here can enter the bag; that is the whole deal. ─────
 

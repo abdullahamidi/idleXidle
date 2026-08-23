@@ -52,8 +52,17 @@ public static class ItemTooltip
         ArgumentNullException.ThrowIfNull(item);
         var h = 96;                                             // name + the rarity/slot line
         h += 34;                                                // item power
+        if (GemCraft.IsGem(item)) h += 56;                      // what it gives + where it goes
         h += ItemAffixes.Of(item).Count * 28;
         if (ItemAffixes.Of(item).Count > 0) h += 10;
+        // The gems SET INTO this item: a header line plus one line each. They are a real slice of the
+        // item's numbers and the card said nothing about them at all.
+        if (item.Gems.Count > 0) h += 26 + item.Gems.Count * 26 + 10;
+        // THE FAMILY BLOCK WAS NEVER MEASURED. Draw prints it (one line, two on a weapon, plus a gap)
+        // and this did not count it, so every weapon card ran ~62px past its own bottom border and the
+        // ENCHANT blurb — the last and most build-relevant line — was drawn outside the card entirely.
+        if (ItemFamilies.BonusOf(item) is not null)
+            h += 26 + (item.BaseType == ItemBaseType.Weapon ? 26 : 0) + 10;
         if (GearTraits.TraitOf(item) is not null) h += 62;
         if (Enchantments.Of(item) is not null) h += 62;
         if (hunter is not null && Gear.SlotFor(item.BaseType) is not null) h += 46;
@@ -136,6 +145,16 @@ public static class ItemTooltip
                 cy += 46;
             }
         }
+        else if (GemCraft.IsGem(item))
+        {
+            // A GEM IS NOT "MATERIAL". This card printed that literal word for every gem — the one
+            // fact a player needs from a stone (what it adds, and that it goes into gear) was on no
+            // screen in the game. Same formatter as an affix line, so the units cannot drift.
+            ui.Text(b, GemCraft.Grant(item), lx, cy, Good);
+            cy += 30;
+            ui.Text(b, "SET IT INTO RARE OR BETTER GEAR", lx, cy, Dim);
+            cy += 60;
+        }
         else
         {
             ui.Text(b, "MATERIAL", lx, cy, Dim);
@@ -150,6 +169,20 @@ public static class ItemTooltip
             cy += 28;
         }
         if (affixes.Count > 0) cy += 10;
+
+        // ── THE GEMS SET INTO IT — the player's own investment, and the card was blind to it. ──
+        if (item.Gems.Count > 0)
+        {
+            ui.Text(b, $"SET GEMS  {item.Gems.Count} OF {GemCraft.SocketCount(item.Rarity)}", lx, cy, Dim);
+            cy += 26;
+            foreach (var gem in item.Gems)
+            {
+                ui.Text(b, GemCraft.NameOf(gem), lx, cy, Violet);
+                ui.TextRight(b, GemCraft.Grant(gem), rx, cy, Good);
+                cy += 26;
+            }
+            cy += 10;
+        }
 
         // ── FAMILY — what the item IS by birth (item-system redesign): the built-in channel every
         //    copy of this shape carries, in its stat's own unit. ──

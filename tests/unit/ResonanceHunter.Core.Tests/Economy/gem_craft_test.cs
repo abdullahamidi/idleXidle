@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using ResonanceHunter.Core.Economy;
 using ResonanceHunter.Core.Expeditions;
@@ -147,6 +148,78 @@ public class GemCraftTest
         // Assert
         Assert.Contains(opens, o => o.Gems.Count > 0);
         Assert.All(opens, o => Assert.DoesNotContain(o.Items, GemCraft.IsGem!));
+    }
+
+    /// <summary>A gem whose id-derived stat is exactly <paramref name="want"/> — the only way to aim
+    /// <see cref="GemCraft.StatOf"/>, which reads the instance id and nothing else.</summary>
+    private static ItemInstance GemOf(AffixStat want, int level = 4)
+    {
+        for (var n = 0; n < 5000; n++)
+        {
+            var gem = Gem($"gem_pick_{n}", level);
+            if (GemCraft.StatOf(gem) == want) return gem;
+        }
+        throw new InvalidOperationException($"no id hashed to {want} in 5000 tries");
+    }
+
+    [Fact]
+    public void test_gem_craft_describe_carries_each_stats_own_unit()
+    {
+        // A CRITICAL-CHANCE gem is percentage POINTS of hits; DEFENCE is a FLAT number; the four
+        // multiplicative channels are percentages. The Forge once advertised a +5.6 flat defence gem
+        // as "+560% DEFENCE" — one formatter, one word list, so no gem surface can re-invent that.
+        var crit = GemOf(AffixStat.Crit);
+        var defence = GemOf(AffixStat.Defense);
+        var damage = GemOf(AffixStat.Damage);
+
+        Assert.Equal($"+{GemCraft.Magnitude(crit):0.0}% CRITICAL CHANCE", GemCraft.Grant(crit));
+        Assert.Equal($"+{GemCraft.Magnitude(defence):0} DEFENCE", GemCraft.Grant(defence));
+        Assert.Equal($"+{GemCraft.Magnitude(damage) * 100f:0}% DAMAGE", GemCraft.Grant(damage));
+
+        // The percentage sign belongs to critical chance and NOT to defence — the exact inversion.
+        Assert.Contains("%", GemCraft.Grant(crit), StringComparison.Ordinal);
+        Assert.DoesNotContain("%", GemCraft.Grant(defence));
+    }
+
+    [Fact]
+    public void test_gem_craft_describe_names_the_gem_its_level_and_what_it_gives()
+    {
+        var gem = GemOf(AffixStat.Health, level: 7);
+
+        var line = GemCraft.Describe(gem);
+
+        Assert.StartsWith(GemCraft.NameOf(gem), line, StringComparison.Ordinal);
+        Assert.Contains("LEVEL 7", line, StringComparison.Ordinal);
+        Assert.Contains(GemCraft.Grant(gem), line, StringComparison.Ordinal);
+        // The font gate allows ASCII plus a short list of marks; the middle dot is on it, nothing else here is.
+        Assert.All(line, ch => Assert.True(ch < 128 || ch == '·', $"line carries an unsupported glyph: {ch}"));
+    }
+
+    [Fact]
+    public void test_item_affixes_stat_word_covers_every_stat()
+    {
+        // The WORD had three copies before this (two screens and Describe). The count assert is the
+        // point: adding a stat without a word here fails HERE rather than printing "SkillRate" on a card.
+        var expected = new Dictionary<AffixStat, string>
+        {
+            [AffixStat.Damage] = "DAMAGE",
+            [AffixStat.Health] = "HEALTH",
+            [AffixStat.SkillRate] = "SKILL RATE",
+            [AffixStat.Haul] = "LOOT",
+            [AffixStat.Crit] = "CRITICAL CHANCE",
+            [AffixStat.Defense] = "DEFENCE",
+        };
+
+        Assert.Equal(Enum.GetValues<AffixStat>().Length, expected.Count);
+        foreach (var (stat, word) in expected) Assert.Equal(word, ItemAffixes.StatWord(stat));
+
+        // And the shared affix line is the same two halves, so a screen cannot drift from a tooltip.
+        foreach (var stat in Enum.GetValues<AffixStat>())
+        {
+            var affix = new ItemAffix(stat, 0.25f);
+            Assert.Equal($"{ItemAffixes.GrantLabel(stat, 0.25f)} {ItemAffixes.StatWord(stat)}",
+                         ItemAffixes.Describe(affix));
+        }
     }
 
     [Fact]

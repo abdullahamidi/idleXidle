@@ -50,6 +50,27 @@ public static class ItemAffixes
         _ => $"+{magnitude * 100f:0}%",
     };
 
+    /// <summary>
+    /// The stat's player-facing WORD — the other half of <see cref="GrantLabel"/>.
+    /// </summary>
+    /// <remarks>
+    /// The number had one formatter and the word had three copies: <c>ForgeScreen.AffixName</c>,
+    /// <c>CharacterScreen.AffixLabel</c> and the tail of <see cref="Describe(ItemAffix)"/>. Three copies
+    /// of a six-arm switch is how one screen ends up saying DEFENCE while another says Defense — and a
+    /// player reading two screens has no way to know they are the same stat. Kept beside the magnitudes
+    /// it names, so a new stat cannot be added with a number and no word.
+    /// </remarks>
+    public static string StatWord(AffixStat stat) => stat switch
+    {
+        AffixStat.Damage => "DAMAGE",
+        AffixStat.Health => "HEALTH",
+        AffixStat.SkillRate => "SKILL RATE",
+        AffixStat.Haul => "LOOT",
+        AffixStat.Crit => "CRITICAL CHANCE",
+        AffixStat.Defense => "DEFENCE",
+        _ => stat.ToString().ToUpperInvariant(),
+    };
+
     /// <summary>How many explicit affixes a rarity carries. Common is implicit-only; a Legendary is loaded.</summary>
     public static int CountFor(Rarity rarity) => rarity switch
     {
@@ -141,15 +162,7 @@ public static class ItemAffixes
     }
 
     /// <summary>A one-line, player-facing description of an affix (its sign and unit).</summary>
-    public static string Describe(ItemAffix a) => a.Stat switch
-    {
-        AffixStat.Damage => $"+{a.Magnitude * 100f:0}% DAMAGE",
-        AffixStat.Health => $"+{a.Magnitude * 100f:0}% HEALTH",
-        AffixStat.SkillRate => $"+{a.Magnitude * 100f:0}% SKILL RATE",
-        AffixStat.Haul => $"+{a.Magnitude * 100f:0}% LOOT",
-        AffixStat.Crit => $"+{a.Magnitude:0.0}% CRITICAL CHANCE",
-        _ => $"+{a.Magnitude:0} DEFENCE",
-    };
+    public static string Describe(ItemAffix a) => $"{GrantLabel(a.Stat, a.Magnitude)} {StatWord(a.Stat)}";
 
     private static uint Fnv1a(string s)
     {
