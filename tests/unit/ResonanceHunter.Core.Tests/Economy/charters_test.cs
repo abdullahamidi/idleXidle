@@ -34,10 +34,17 @@ public class ChartersTest
             Assert.False(string.IsNullOrWhiteSpace(Charters.Name(c)), $"{c} has no name.");
             Assert.False(string.IsNullOrWhiteSpace(Charters.Blurb(c)), $"{c} has no blurb.");
             Assert.False(string.IsNullOrWhiteSpace(Charters.Short(c)), $"{c} has no short label.");
+            Assert.False(string.IsNullOrWhiteSpace(Charters.Plain(c)), $"{c} has no plain-words line.");
 
             // A blurb that does not say what it PERMITS is a flavour line, not an explanation.
             Assert.Contains("One", Charters.Blurb(c));
         }
+
+        // The plain line speaks the Forge's BUTTON words, so the wallet row and the button it pays for
+        // read as the same thing — a REFINE CHART pays for the button labelled UPGRADE.
+        Assert.Contains("UPGRADE", Charters.Plain(Charter.Refine));
+        Assert.Contains("RE-ROLL", Charters.Plain(Charter.Reforge));
+        Assert.Contains("SALVAGE", Charters.Plain(Charter.Salvage));
     }
 
     [Fact]

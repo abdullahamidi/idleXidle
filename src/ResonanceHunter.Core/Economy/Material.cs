@@ -12,11 +12,16 @@ namespace ResonanceHunter.Core.Economy;
 /// numbers. So salvage yields a tier by what you break — a Legendary yields Crystal, a Common yields
 /// Scrap — and every tier drains through its own verb:
 /// <list type="bullet">
-///   <item><b>Scrap</b> → REFINE: +1 item level (raises its affixes). The bulk, infinite sink.</item>
-///   <item><b>Essence</b> → REFORGE TRAIT: re-roll an item's trade.</item>
-///   <item><b>Core</b> → REFORGE ENCHANT: re-roll an item's build-defining trigger.</item>
-///   <item><b>Crystal</b> → GREATER REFINE: +5 item levels at once. The premium, infinite sink that
-///         stays hungry after content is maxed — the anti-inflation drain the research names.</item>
+///   <item><b>Scrap</b> → UPGRADE (refine): +1 item level (raises its affixes), with Gleam. The bulk,
+///         infinite sink.</item>
+///   <item><b>Essence</b> → SOCKET: set a stat gem into a Rare-or-better item
+///         (<c>GemCraft.SocketCost</c>). The trait re-roll this used to fund is gone — the prefix is
+///         immutable now — and the socket took over its drain.</item>
+///   <item><b>Core</b> → RE-ROLL THE ENCHANT on a Rare or Epic item (<c>Reforge.EnchantMaterial</c>).
+///         A REFORGE CHART pays instead when one is held.</item>
+///   <item><b>Crystal</b> → RE-ROLL THE ENCHANT on a Legendary, and GREATER UPGRADE: +5 item levels at
+///         once, never slips. The premium, infinite sink that stays hungry after content is maxed — the
+///         anti-inflation drain the research names.</item>
 /// </list>
 /// </remarks>
 public enum Material { Scrap, Essence, Core, Crystal }

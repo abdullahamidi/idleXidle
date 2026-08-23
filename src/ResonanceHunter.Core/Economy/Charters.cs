@@ -70,4 +70,21 @@ public static class Charters
         Charter.Salvage => "SALVAGE",
         _ => "MERGE",
     };
+
+    /// <summary>
+    /// What holding one gets you, in the Forge's own words — the verb the BUTTON says, not the enum's.
+    /// </summary>
+    /// <remarks>
+    /// The Forge's buttons say UPGRADE, RE-ROLL and SALVAGE; the charters are named for the rules
+    /// (Refine, Reforge). A wallet row reading "REFINE CHART ×2" beside a button reading UPGRADE asks
+    /// the player to know the two are the same thing, and the playtest showed they do not. This is the
+    /// bridge, kept beside the enum so it cannot drift from the name.
+    /// </remarks>
+    public static string Plain(Charter c) => c switch
+    {
+        Charter.Refine => "one free UPGRADE",
+        Charter.Reforge => "one free RE-ROLL of the enchant",
+        Charter.Salvage => "double materials from one SALVAGE ALL THE JUNK",
+        _ => "one MERGE of mixed rarities",
+    };
 }
