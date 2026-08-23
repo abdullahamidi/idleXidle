@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using ResonanceHunter.Core.Abilities;
 using ResonanceHunter.Core.Loot;
 
 namespace ResonanceHunter.Core.Economy;
@@ -27,6 +29,39 @@ public static class ItemFamilies
     /// <summary>Family index (see <see cref="ItemNaming.WeaponFamilies"/>) → its inherent channel.</summary>
     public static readonly AffixStat[] WeaponChannel =
         { AffixStat.Damage, AffixStat.Crit, AffixStat.SkillRate, AffixStat.Haul };   // blade, bow, spear, scythe
+
+    /// <summary>
+    /// Family index → the two FORMS the weapon favours. A skill of a favoured Form hits
+    /// <see cref="FormAffinity"/> times harder while that weapon is worn.
+    /// </summary>
+    /// <remarks>
+    /// Playtest 2026-08-23: "projectile skillerini seçince bow daha iyi olması gerekmiyor mu?" — it did
+    /// not: a family was a flat stat channel, blind to what the build actually casts, so EQUIP BEST and
+    /// the fight could never prefer a bow for an archer's build. The pairing is the intuitive one and
+    /// covers every Form at least once: a BLADE for the blow and the surge (Strike, Transformation), a
+    /// BOW for the shot and the aim (Projectile, Mark), a SPEAR for the thrust and the planted snare
+    /// (Strike, Trap), a SCYTHE for the reaping field and the surge (Aura, Transformation). The flat
+    /// channel stays, so an off-Form weapon is still worth something; the affinity is the reason to
+    /// match the weapon to the build. It reaches the sim through <c>GearShape</c> (Core.Builds), the
+    /// same <c>SkillShape.FormPower</c> a character's aptitude uses, so the fight, the bench and every
+    /// dmg/s readout agree without a second ruler.
+    /// </remarks>
+    public static readonly Form[][] FavouredForms =
+    {
+        new[] { Form.Strike, Form.Transformation },   // blade
+        new[] { Form.Projectile, Form.Mark },         // bow
+        new[] { Form.Strike, Form.Trap },             // spear
+        new[] { Form.Aura, Form.Transformation },     // scythe
+    };
+
+    /// <summary>How much harder a favoured Form's skill hits while its weapon is worn (x1.25).</summary>
+    public const float FormAffinity = 1.25f;
+
+    /// <summary>The Forms this weapon favours, or none for anything that is not a weapon.</summary>
+    public static IReadOnlyList<Form> FavouredFormsOf(ItemInstance? item)
+        => item is { BaseType: ItemBaseType.Weapon }
+            ? FavouredForms[ItemNaming.WeaponFamilyIndex(item)]
+            : Array.Empty<Form>();
 
     /// <summary>
     /// The built-in bonus this item carries by being what it is, or null for the unwearable.

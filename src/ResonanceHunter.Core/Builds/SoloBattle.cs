@@ -351,7 +351,9 @@ public static class SoloBattle
         // THE SKILL TREE'S SHAPE. Everything below that reads `shape` is a node in MasteryCatalog; if a
         // field of it stops being read here, its nodes must be deleted, because a node that does nothing
         // is the failure that left the whole loot-rarity chain inert for the length of development.
-        var shape = build.Shape;
+        // The build's shape PLUS the worn weapon's favoured Forms (GearShape) — the one seam through
+        // which gear reaches the per-Form multipliers, so a bow really is the archer's weapon.
+        var shape = SkillShape.Combine(build.Shape, GearShape.Of(hunter));
 
         // The Vow context is a property of the BUILD, so it is built once and every skill of every tick
         // is judged against the same one. See DescribeBuild.

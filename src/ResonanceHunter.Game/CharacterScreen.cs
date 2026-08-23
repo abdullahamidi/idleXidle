@@ -318,11 +318,54 @@ public sealed class CharacterScreen
         // Real behaviour: for each slot, equip the highest-scoring available item if it beats what is worn.
         foreach (var slot in AllSlots)
         {
+            if (slot == GearSlot.Weapon)
+            {
+                // THE WEAPON IS RANKED BY THE FIGHT, not by the rating: DamageBench with THIS build, so an
+                // archer's build is handed the bow (ItemFamilies.FavouredForms) and the number here is
+                // the same one the WEAVE screen prints. Playtest 2026-08-23: "build'ime göre silah
+                // önerileri ve DPS verileri uyuşmalı."
+                var bestWeapon = Wearable().Where(i => Gear.SlotFor(i.BaseType) == GearSlot.Weapon)
+                    .OrderByDescending(i => WeaponDps(hunter, i)).FirstOrDefault();
+                if (bestWeapon is not null && WeaponDps(hunter, bestWeapon) > WeaponDps(hunter, hunter.Worn(GearSlot.Weapon)) * 1.001f)
+                    hunter.Equip(bestWeapon);
+                continue;
+            }
             var best = Wearable().Where(i => Gear.SlotFor(i.BaseType) == slot)
                 .OrderByDescending(hunter.PowerContribution).FirstOrDefault();
             if (best is not null && hunter.PowerContribution(best) > hunter.PowerContribution(hunter.Worn(slot))) hunter.Equip(best);
         }
         Dirty = true;
+    }
+
+    // ── The weapon's real number: bench DPS with it worn. ─────────────────────────────────────────
+    private readonly Dictionary<string, float> _dpsCache = new();
+
+    /// <summary>
+    /// Damage per second the current build does with <paramref name="weapon"/> worn (null = an empty
+    /// weapon slot), everything else as it is — the sim's own number (DamageBench), swap-and-restore.
+    /// </summary>
+    /// <remarks>
+    /// Cached by everything that feeds the bench (the candidate, the rest of the worn set, the woven
+    /// skills, the hunter's level) so a hover costs one bench run, not one per frame. Falls back to the
+    /// rating's contribution when the screen has not been handed a build yet.
+    /// </remarks>
+    private float WeaponDps(Hunter hunter, ItemInstance? weapon)
+    {
+        if (Loadout is null || Mastery is null || Tree is null)
+            return weapon is null ? 0f : hunter.PowerContribution(weapon);
+        var others = string.Join(",", AllSlots.Where(sl => sl != GearSlot.Weapon).Select(sl => hunter.Worn(sl)?.InstanceId ?? "-"));
+        var skills = string.Join(",", Loadout.Skills.Select(sk => $"{sk.Source}:{sk.Form}:{sk.VowId}"));
+        var key = $"{weapon?.InstanceId ?? "-"}|{weapon?.ItemLevel}|{others}|{skills}|{hunter.PowerRating}|{Character.Id}";
+        if (_dpsCache.TryGetValue(key, out var hit)) return hit;
+
+        var was = hunter.Worn(GearSlot.Weapon);
+        if (weapon is null) hunter.Unequip(GearSlot.Weapon); else hunter.Equip(weapon);
+        float dps;
+        try { dps = DamageBench.Measure(Loadout.ToBuild(Tree, Mastery, Character), hunter).Dps; }
+        finally { if (was is null) hunter.Unequip(GearSlot.Weapon); else hunter.Equip(was); }
+        if (_dpsCache.Count > 512) _dpsCache.Clear();
+        _dpsCache[key] = dps;
+        return dps;
     }
 
     // ── Draw ─────────────────────────────────────────────────────────────────────────────────────
@@ -773,8 +816,19 @@ public sealed class CharacterScreen
             var delta = hunter.PowerContribution(item) - hunter.PowerContribution(worn);
             _ui.TextBig(b, worn is null ? "SLOT EMPTY" : $"EQUIPPED: {(worn.Element?.ToString().ToUpperInvariant() ?? "PLAIN")} {SlotWord(worn.BaseType)}",
                 cmp.X + 16, cmp.Y + 12, Slate, UiTypography.Secondary);
-            _ui.TextRightBig(b, $"{(delta >= 0 ? "+" : "")}{delta:N0} POWER", cmp.Right - 16, cmp.Y + 10,
-                delta > 0 ? Green : delta < 0 ? Ember : Slate, UiTypography.Body);
+            if (item.BaseType == ItemBaseType.Weapon)
+            {
+                // A weapon answers in the fight's own unit: damage per second with THIS build, against
+                // the weapon worn now — the bow/blade question the rating cannot see.
+                var now = WeaponDps(hunter, worn);
+                var with = WeaponDps(hunter, item);
+                var pct = now > 0f ? with / now - 1f : 0f;
+                _ui.TextRightBig(b, $"{pct:+0%;-0%;0%} DAMAGE PER SECOND", cmp.Right - 16, cmp.Y + 10,
+                    pct > 0.005f ? Green : pct < -0.005f ? Ember : Slate, UiTypography.Body);
+            }
+            else
+                _ui.TextRightBig(b, $"{(delta >= 0 ? "+" : "")}{delta:N0} POWER", cmp.Right - 16, cmp.Y + 10,
+                    delta > 0 ? Green : delta < 0 ? Ember : Slate, UiTypography.Body);
         }
 
         // ── WHAT THEY DO, not what they are called. ───────────────────────────────────────────────
