@@ -1835,12 +1835,23 @@ public class Game1 : Game
                 }
                 else
                 {
-                    _forge.FocusFor(request.InstanceId);
+                    // The VERB picks the tab (review 2026-08-23: the forge opened on whatever tab was last
+                    // used, so GEAR's REFORGE could land on BREAK DOWN with the RE-ROLL button off screen).
                     // GEAR's SALVAGE arrives with the question already asked — never a silent scrap
                     // ordered from another screen.
-                    if (request.Action == ItemAction.Salvage) _forge.RequestSalvage(request.InstanceId);
+                    switch (request.Action)
+                    {
+                        case ItemAction.Reforge: _forge.RequestReroll(request.InstanceId); break;
+                        case ItemAction.Salvage: _forge.FocusFor(request.InstanceId); _forge.RequestSalvage(request.InstanceId); break;
+                        default: _forge.RequestUpgrade(request.InstanceId); break;
+                    }
                     _showCharacter = false;
                     _showForge = true;
+                    // The click that picked the menu row is spent HERE. Without this the forge's first Draw
+                    // ran with MouseClicked still true and pressed whatever button sat under the cursor —
+                    // UPGRADE / GREATER UPGRADE / RE-ROLL / SELL — spending materials or a chart with no
+                    // forge press (review 2026-08-23, high). Same one-frame latch the unlock panel uses.
+                    _swallowInput = true;
                     _sound.PlayFirst(1f, "sfx_forge", "sfx_click");
                 }
             }
@@ -3131,7 +3142,7 @@ public class Game1 : Game
         var changed = false;
         changed |= ToggleRow("DAMAGE NUMBERS", 536, 820, ref _showDamageNumbers);
         changed |= ToggleRow("SKILL NAMES", 1000, 820, ref _showSkillCallouts);
-        changed |= ToggleRow("HIT EFFECTS", 536, 874, ref _showHitEffects);
+        changed |= ToggleRow("FIGHT EFFECTS", 536, 874, ref _showHitEffects);
         changed |= ToggleRow("RED FLASH", 1000, 874, ref _showScreenFlash);
         if (changed) SaveDisplay();
 

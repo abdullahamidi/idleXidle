@@ -191,6 +191,17 @@ public sealed class SoloExpedition
     public void ReplaceBuild(Build build)
     {
         ArgumentNullException.ThrowIfNull(build);
+        // The champion's cooldown table is keyed by SLOT INDEX. A slot that now holds a different skill
+        // must not inherit the old skill's ready-at (a swapped-in Aura would wait out a Strike's long
+        // cooldown, or fire early); unchanged slots keep their legitimate carried cooldowns. Never
+        // Clear() — that would charge every unchanged skill a full cooldown for a swap it was not part of.
+        var old = _build.Skills;
+        var now = build.Skills;
+        for (var i = 0; i < Math.Max(old.Count, now.Count); i++)
+            if (i >= old.Count || i >= now.Count
+                || old[i].Ability.Form != now[i].Ability.Form
+                || old[i].Ability.Source != now[i].Ability.Source)
+                _champion.ReadyAt.Remove(i);
         _build = build;
     }
     public WaveOutcome PushWave()

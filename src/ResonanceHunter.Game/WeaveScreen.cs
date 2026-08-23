@@ -269,9 +269,10 @@ public sealed class WeaveScreen
 
         if (skills.Count < Loadout.SkillCapacity && AddBtn.Contains(hit))
         {
-            var added = Loadout.AddSkill();
-            if (added >= 0) { _slot = added; Dirty = true; _buildRev++; _msg = "SLOT WOVEN."; }
-            else _msg = "NO MORE SLOTS — BUY MORE IN TRAITS (P).";
+            // The guard above is the negation of the only way AddSkill refuses, and the button is only
+            // drawn under the same guard — the old else-branch ("NO MORE SLOTS…") had never rendered.
+            _slot = Loadout.AddSkill();
+            Dirty = true; _buildRev++; _msg = "SLOT WOVEN.";
             return;
         }
 

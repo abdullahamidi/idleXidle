@@ -976,7 +976,7 @@ public sealed class CharacterScreen
     private static string AffixLabel(AffixStat s) => s switch
     {
         AffixStat.Damage => "DAMAGE", AffixStat.Health => "HEALTH", AffixStat.SkillRate => "SKILL RATE",
-        AffixStat.Haul => "LOOT", AffixStat.Crit => "CRIT CHANCE", _ => "DEFENCE",
+        AffixStat.Haul => "LOOT", AffixStat.Crit => "CRITICAL CHANCE", _ => "DEFENCE",
     };
     private static string AffixVal(AffixStat s, float m) => s switch
     {

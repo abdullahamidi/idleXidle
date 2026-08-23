@@ -147,7 +147,7 @@ public static class ItemAffixes
         AffixStat.Health => $"+{a.Magnitude * 100f:0}% HEALTH",
         AffixStat.SkillRate => $"+{a.Magnitude * 100f:0}% SKILL RATE",
         AffixStat.Haul => $"+{a.Magnitude * 100f:0}% LOOT",
-        AffixStat.Crit => $"+{a.Magnitude:0.0}% CRIT CHANCE",
+        AffixStat.Crit => $"+{a.Magnitude:0.0}% CRITICAL CHANCE",
         _ => $"+{a.Magnitude:0} DEFENCE",
     };
 

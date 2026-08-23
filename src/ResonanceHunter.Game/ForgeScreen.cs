@@ -363,6 +363,12 @@ public sealed class ForgeScreen
     }
 
     /// <summary>The GEAR screen's SALVAGE verb: arrive focused, with the question already open.</summary>
+    /// <summary>GEAR's UPGRADE verb: focus the item AND open the UPGRADE tab — the tab is a persistent field.</summary>
+    public void RequestUpgrade(string instanceId) { FocusFor(instanceId); _tab = Tab.Upgrade; _confirm = null; }
+
+    /// <summary>GEAR's REFORGE verb: focus the item AND open the RE-ROLL tab, so its button and price line are on screen.</summary>
+    public void RequestReroll(string instanceId) { FocusFor(instanceId); _tab = Tab.Reroll; _confirm = null; }
+
     public void RequestSalvage(string instanceId)
     {
         if (_inv.All(i => i.InstanceId != instanceId)) return;
@@ -2062,7 +2068,7 @@ public sealed class ForgeScreen
     private static string AffixName(AffixStat s) => s switch
     {
         AffixStat.Damage => "DAMAGE", AffixStat.Health => "HEALTH", AffixStat.SkillRate => "SKILL RATE",
-        AffixStat.Haul => "LOOT", AffixStat.Crit => "CRIT CHANCE", _ => "DEFENCE",
+        AffixStat.Haul => "LOOT", AffixStat.Crit => "CRITICAL CHANCE", _ => "DEFENCE",
     };
 
     private static string AffixVal(ItemAffix a) => a.Stat switch

@@ -227,7 +227,7 @@ public sealed class WarrenScreen
         {
             var (gem, value, label) = entries[i];
             var cx = BonusStrip.X + 24 + slot * i + slot / 2;
-            _ui.Diamond(b, new Rectangle(cx - 74, BonusStrip.Y + 72, 40, 40), gem);
+            ResGlyph(b, new Rectangle(cx - 74, BonusStrip.Y + 72, 40, 40), ResFromLabel(label), gem);   // currencies wear their icons; the rest keep the diamond
             _ui.TextBig(b, value, cx - 24, BonusStrip.Y + 68, Bone, UiTypography.PanelTitle);
             _ui.TextCenterBig(b, label, cx, BonusStrip.Y + 116, Slate, UiTypography.Secondary);
         }

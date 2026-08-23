@@ -735,7 +735,6 @@ public sealed class SoloExpeditionScreen
     /// </remarks>
     private void Say(string text, Color color)
     {
-        if (!ShowSkillCallouts) return;   // settings: SKILL NAMES off
         _callouts.Add(new Callout
         {
             Text = text,
@@ -793,7 +792,7 @@ public sealed class SoloExpeditionScreen
         // if it is one.
         _callouts.Add(new Callout
         {
-            Text = crit ? $"-{amount:N0} CRIT" : $"-{amount:N0}",
+            Text = crit ? $"-{amount:N0} CRITICAL" : $"-{amount:N0}",
             Color = crit ? Gold : Bone,
             X = _rowCentreX,
             Y = EnemyCalloutBase - StackSlot(CalloutLane.Enemy) * CalloutLineHeight,
@@ -916,7 +915,7 @@ public sealed class SoloExpeditionScreen
                     var form = (Form)e.Amount;
                     _skillFlash[e.Amount] = 0.42f;
                     var (text, colour) = CalloutFor(form);
-                    Say(text, colour);
+                    if (ShowSkillCallouts) Say(text, colour);   // settings: SKILL NAMES hides exactly this
                     // Slot carries the casting skill's Source (WaveModel.BattleEvent) — the effect is the
                     // Form's shape in the Source's colour, which is the whole hexagon in one flash.
                     // The creature this cast HITS is the one its own Strike in the same batch names — the
@@ -930,7 +929,7 @@ public sealed class SoloExpeditionScreen
                     SpawnDamage(HitDamage(form == Form.Trap ? 3f : 2f), form == Form.Trap);   // skills hit big
                     break;
                 case BattleEventKind.Heal:
-                    Say($"+{e.Amount}", Verdant);
+                    if (ShowDamageNumbers) Say($"+{e.Amount}", Verdant);   // a number — follows DAMAGE NUMBERS; UNDYING below always shows
                     _vfx.Play("fx_heal", ChampBox.Center.X, ChampBox.Center.Y, scale: 3, fps: 10f, tint: Verdant);
                     break;
                 case BattleEventKind.Shield:
@@ -1088,11 +1087,15 @@ public sealed class SoloExpeditionScreen
         // Effects are NOT scissored (2026-08-23): the clip edge cut bursts flat against an invisible
         // rectangle and gave the arena away ("bir karenin içinde"). The rail panels and the banner are
         // drawn after the arena and cover anything that strays under them.
+        // Effects alone are unclipped; the arena batch gets its scissor BACK after them (RestoreRasterizer),
+        // so callouts, the red flash and the overlay keep the arena's edge whether or not a burst is live.
         _vfx.Rasterizer = null;
+        _vfx.RestoreRasterizer = ArenaRasterizer;
         b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, ArenaRasterizer);
         DrawArena(b, overlay);
         b.End();
         _vfx.Rasterizer = null;
+        _vfx.RestoreRasterizer = null;
 
         // ── HUD — unclipped chrome over the arena. ──
         b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);

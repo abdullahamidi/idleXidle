@@ -86,8 +86,16 @@ public sealed class VfxPlayer
     /// clipped to the arena along with everything else. Null elsewhere = default (unclipped) rasterizer.</summary>
     public RasterizerState? Rasterizer;
 
-    /// <summary>Settings' HIT AND SKILL EFFECTS switch. Off = Play() is a no-op; the creature clips still run.</summary>
+    /// <summary>Settings' FIGHT EFFECTS switch. Off = Play() is a no-op; the creature clips still run.</summary>
     public bool Enabled = true;
+
+    /// <summary>
+    /// The rasterizer the caller's batch is reopened with after the effects pass. Draw() ends the caller's
+    /// batch, draws additively with <see cref="Rasterizer"/>, then reopens — and it used to reopen with the
+    /// same (null) rasterizer, so everything the caller drew AFTER an effect (callouts, the red flash, the
+    /// overlay) silently lost the arena scissor whenever an effect was in flight (review 2026-08-23).
+    /// </summary>
+    public RasterizerState? RestoreRasterizer;
 
     /// <summary>Counter-scale of the canvas batch this player draws into: 4 for 480-logical screens, 1 for
     /// screens authored in true 1920 coords. The Draw transform and the per-effect size derive from it so the
@@ -157,7 +165,7 @@ public sealed class VfxPlayer
             b.Draw(a.Sheet, new Rectangle(a.CenterX - w / 2, a.CenterY - h / 2, w, h), src, a.Tint * a.Fade);
         }
         b.End();
-        b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, null, Rasterizer, null, Matrix.CreateScale(Scale));
+        b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, null, RestoreRasterizer ?? Rasterizer, null, Matrix.CreateScale(Scale));
     }
 
     public void Clear() => _active.Clear();

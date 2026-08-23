@@ -185,7 +185,7 @@ public static class Unlocks
     public static string Headline(Activity activity) => activity switch
     {
         Activity.Hunt => "THE HUNT",
-        Activity.Stats => "COMMAND — TRAIN YOUR CHAMPION",
+        Activity.Stats => "STATS — TRAIN YOUR CHAMPION",
         Activity.Gear => "GEAR — WHAT YOU WEAR",
         Activity.Vault => "THE VAULT — CHESTS YOU HAVE NOT OPENED",
         Activity.Forge => "THE FORGE — WHERE ITEMS ARE MADE",
@@ -239,10 +239,10 @@ public static class Unlocks
             + "it, and that is the whole point of a chest.",
 
         Activity.Forge =>
-            "This is where items change from what they dropped as. REFINE raises "
-            + "an item's level. REFORGE rolls its properties again — the same item, a new set of "
-            + "numbers. A good item is rare because you must roll the properties "
-            + "you actually want. SALVAGE breaks what you will not wear into materials. MERGE fuses "
+            "This is where items change from what they dropped as. UPGRADE raises "
+            + "an item's level — every stat on it grows. RE-ROLL gives a Rare or better item a new "
+            + "random enchant; its level, stats and gems stay. SOCKET sets a gem into it. "
+            + "BREAK DOWN sells it, or salvages what you will not wear into materials. MERGE fuses "
             + "three of a kind into one better piece. Materials come from waves; the deeper you fight, "
             + "the better the material a wave pays. Waves sometimes drop a CHART, a one-use "
             + "paper that pays for one of these jobs in full.",
