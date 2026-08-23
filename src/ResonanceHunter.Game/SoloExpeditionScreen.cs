@@ -1192,7 +1192,7 @@ public sealed class SoloExpeditionScreen
         var fade = t <= life ? 1f : 1f - (t - life) / DeathFadeSeconds;
         if (fade <= 0f) return;
         _ui.GroundShadow(b, box.Center.X, EnemyBox.Bottom - 10, (int)(box.Width * 0.55f), 30, 0.5f * fade);
-        _ui.AnimSprite(b, $"{enemyKey}_death_strip8_512", box, t, DeathFps, loop: false, Color.White * fade, -1f);
+        _ui.AnimSprite(b, $"{enemyKey}_death_strip8_512", box, t, DeathFps, loop: false, EnemyTint * fade, -1f);
     }
 
     /// <summary>
@@ -1332,8 +1332,8 @@ public sealed class SoloExpeditionScreen
             var compFps = attacking ? 16f : 12f;
             if (stripKey is null || !_ui.AnimSprite(b, stripKey, box,
                     EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps,
-                    !attacking, Color.White, crop))
-                if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, box, Color.White, crop))
+                    !attacking, EnemyTint, crop))
+                if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, box, EnemyTint, crop))
                     _ui.Fill(b, new Rectangle(box.X + 20, box.Y + 20, box.Width - 40, box.Height - 40), Ember);
 
             // A pip per creature rather than a framed bar — at five across, ornate frames become noise.
@@ -1402,11 +1402,11 @@ public sealed class SoloExpeditionScreen
         }
 
         if (stripKey is null || !_ui.AnimSprite(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps,
-                                                !attacking, Color.White, crop))
+                                                !attacking, EnemyTint, crop))
         {
             // Grounded so the static fallback stands where the animated strip does — otherwise the enemy
             // visibly hopped whenever the strip was missing and this path took over.
-            if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, ab, Color.White, crop))
+            if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, ab, EnemyTint, crop))
                 _ui.Fill(b, new Rectangle(ebox.X + 40, ebox.Y + 40, ebox.Width - 80, ebox.Height - 80), Ember);
         }
 
@@ -1443,6 +1443,10 @@ public sealed class SoloExpeditionScreen
     {
         var bossKey = DevForceBoss ? "crystal_lich" : BossForRegion.GetValueOrDefault(RegionId);
         _bossName = bossKey is not null ? BossNameFor.GetValueOrDefault(bossKey, "BOSS") : "BOSS";
+        // The corruption's epithet on the boss — "FEVERED CRYSTAL LICH" — so the tier is a thing with a
+        // name that looks back at you, not a number on another screen.
+        var epithet = CorruptionLook.For(CorruptionTier).Epithet;
+        if (epithet.Length > 0) _bossName = epithet + " " + _bossName;
 
         var lunge = (int)(_enemyLunge * -40f);
         var box = new Rectangle(BossAnchor.X - BossTargetBodyHeight / 2 + lunge, BossAnchor.Y - BossTargetBodyHeight,
@@ -1456,14 +1460,14 @@ public sealed class SoloExpeditionScreen
             && _ui.Assets.Has($"{bossKey}_death_strip8_512"))
         {
             // The boss falls and lies there for the whole break — no fade; the next wave clears it.
-            _ui.AnimSprite(b, $"{bossKey}_death_strip8_512", box, _anim - bossDiedAt, DeathFps, loop: false, Color.White, -1f);
+            _ui.AnimSprite(b, $"{bossKey}_death_strip8_512", box, _anim - bossDiedAt, DeathFps, loop: false, EnemyTint, -1f);
             _bossBodyRect = box; _bossFullRect = box;
             return;
         }
         var fps = attacking ? 10f : 8f;
         var key = bossKey is null ? null : $"{bossKey}_{(attacking ? "attack" : "idle")}_strip8_512";
         var seconds = EnemyClipSeconds(attacking, fps);
-        if (key is null || !_ui.AnimSprite(b, key, box, seconds, fps, !attacking, Color.White, -1f))
+        if (key is null || !_ui.AnimSprite(b, key, box, seconds, fps, !attacking, EnemyTint, -1f))
         {
             _bossBodyRect = new Rectangle(BossAnchor.X - 110, BossAnchor.Y - BossTargetBodyHeight, 220, BossTargetBodyHeight);
             _bossFullRect = _bossBodyRect;
@@ -1797,7 +1801,9 @@ public sealed class SoloExpeditionScreen
         var titlePx = UiTypography.RegionTitle;
         while (titlePx > 28 && _ui.MeasureBig(title, titlePx) > 490) titlePx--;
         _ui.TextCenterBig(b, title, cx, 32 + (UiTypography.RegionTitle - titlePx) / 2, Gold, titlePx, TextFace.Display);
-        _ui.TextCenterBig(b, Deepest >= ConquerAt ? "CONQUERED" : $"DEPTH {Deepest} / {ConquerAt}",
+        // CONQUEST, not DEPTH: "depth" was three different things across the UI (this count of waves
+        // toward the conquest, a region's best depth, and the corruption tier). This is the conquest.
+        _ui.TextCenterBig(b, Deepest >= ConquerAt ? "CONQUERED" : $"CONQUEST {Deepest} / {ConquerAt}",
             cx, 73, Deepest >= ConquerAt ? Gold : Bone, UiTypography.StageLabel);
         _ui.BarArt(b, new Rectangle(710, 102, 400, 18),
             ConquerAt > 0 ? Math.Clamp(Deepest / (float)ConquerAt, 0f, 1f) : 0f, "progress");
@@ -1805,6 +1811,7 @@ public sealed class SoloExpeditionScreen
         // Nothing is appended while the run is simply running: "ACTIVE" was true of every frame this
         // screen has ever drawn, so it distinguished nothing and only made the line longer.
         var wave = $"WAVE {_run!.Wave + 1}";
+        if (CorruptionTier > 0) wave += $"  ·  {CorruptionLook.For(CorruptionTier).Name}";
         if (RunState() is { } st)
         {
             var gap = _ui.MeasureBig("  —  ", UiTypography.OverlayTitle);
@@ -2232,6 +2239,14 @@ public sealed class SoloExpeditionScreen
     private Form _skillForm;
     /// <summary>How long a cast clip runs — eight frames at the champion's frame rate, like the strike.</summary>
     private const float CastSeconds = 8f / ChampionFps;
+
+    /// <summary>The world's corruption tier (0..CorruptionScaling.MaxTier), host-fed. It tints every
+    /// creature and boss (CorruptionLook.Enemy), names the boss by its epithet and prints on the header.</summary>
+    public int CorruptionTier { get; set; }
+    private Color EnemyTint
+    {
+        get { var e = CorruptionLook.For(CorruptionTier).Enemy; return new Color(e.R, e.G, e.B); }
+    }
 
     /// <summary>The character being played. The host sets it; it decides which sprite strip is drawn.</summary>
     public Character Character { get; set; } = CharacterRoster.Get(CharacterRoster.StarterId);

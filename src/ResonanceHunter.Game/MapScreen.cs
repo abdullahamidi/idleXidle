@@ -54,8 +54,10 @@ public sealed class MapScreen
     // ── Host-consumed requests ──────────────────────────────────────────────────────────────────
     private string? _enterRequest;
     private bool _deepenRequest;
+    private bool _easeRequest;
     public string? ConsumeEnter() { var r = _enterRequest; _enterRequest = null; return r; }
     public bool ConsumeDeepen() { var r = _deepenRequest; _deepenRequest = false; return r; }
+    public bool ConsumeEase() { var r = _easeRequest; _easeRequest = false; return r; }
 
     private int _selected;
 
@@ -177,6 +179,7 @@ public sealed class MapScreen
         if (P(Keys.Right)) _selected = (_selected + 1) % RegionCount;
         if (P(Keys.Enter)) _enterRequest = Def(_selected).Id;
         if (P(Keys.D) && World.CanDeepenCorruption) _deepenRequest = true;
+        if (P(Keys.S) && World.CanEaseCorruption) _easeRequest = true;
     }
 
     /// <summary>Point the selection at the active region when the screen opens (host calls once on entry).</summary>
@@ -255,7 +258,14 @@ public sealed class MapScreen
             var conq = World.IsConquered(def.Id);
             var active = def.Id == ActiveRegion;
             var sel = i == _selected;
-            if (UiKit.ClickedIn(node, hit, clicked)) _selected = i;
+            // First click selects, a second click on the selected region TRAVELS — "haritayı
+            // değiştiremiyorum": a tile that only ever selected, with the travel verb parked in a
+            // button that disappeared at endgame, read as a map you could not use.
+            if (UiKit.ClickedIn(node, hit, clicked))
+            {
+                if (sel && unlocked) _enterRequest = def.Id;
+                _selected = i;
+            }
 
             var sc = SourceColor[def.Theme];
             // THE REGION'S OWN GROUND, not a flat swatch. The arena art the fight already draws for this
@@ -435,20 +445,30 @@ public sealed class MapScreen
             }
         }
 
-        // CTA. ENTER for an unlocked region; a locked one disables honestly. DEEPEN once the world is yours.
+        // CTA. ENTER / RESUME for an unlocked region, ALWAYS — it used to give way to DEEPEN once the
+        // world was conquered, which took travel away from a mouse player for the rest of the game.
+        // A locked region disables honestly.
         var cta = new Rectangle(DetailPanel.X + 40, DetailPanel.Bottom - 92, DetailPanel.Width - 80, 68);
-        if (World.CanDeepenCorruption)
-        {
-            // SIZED LIKE THE REST OF THE PANEL. At the unsized 32px face this was the biggest text in the
-            // detail column and it sat in the band the DROPS blurb wraps into, so the two overprinted.
-            // The blurb now has a floor above this line; this now fits between that floor and the CTA.
-            _ui.TextCenterBig(b, $"CORRUPTION {World.CorruptionTier} → {World.CorruptionTier + 1}",
-                              DetailPanel.Center.X, DetailPanel.Bottom - 124, Violet, UiTypography.Secondary);
-            if (_ui.Button(b, cta, "DEEPEN", hit, clicked)) _deepenRequest = true;
-        }
-        else if (_ui.Button(b, cta, def.Id == ActiveRegion ? "RESUME HERE" : "ENTER THIS REGION", hit, clicked, enabled: unlocked))
+        if (_ui.Button(b, cta, def.Id == ActiveRegion ? "RESUME HERE" : "ENTER THIS REGION", hit, clicked, enabled: unlocked))
             _enterRequest = def.Id;
         if (!unlocked) _ui.TextCenter(b, "CONQUER THE PREVIOUS REGION TO UNLOCK", DetailPanel.Center.X, DetailPanel.Bottom - 110, Ember);
+
+        // THE CORRUPTION LADDER, its own row above the CTA once the world is yours: the tier by name
+        // (CorruptionLook), SHALLOWER / DEEPER either side, both honest about their ends. Five tiers,
+        // not a counter — and the hunt answers each one (tinted creatures, an epithet on the boss, a
+        // darker arena), which is the difference between raising a number and raising the stakes.
+        if (World.AllConquered)
+        {
+            var look = CorruptionLook.For(World.CorruptionTier);
+            _ui.TextCenterBig(b, CorruptionLook.Label(World.CorruptionTier), DetailPanel.Center.X, DetailPanel.Bottom - 196,
+                              World.CorruptionTier > 0 ? Violet : Slate, UiTypography.Secondary);
+            _ui.TextCenter(b, look.Blurb, DetailPanel.Center.X, DetailPanel.Bottom - 170, Slate);
+            var half = (DetailPanel.Width - 80 - 12) / 2;
+            var easeBtn = new Rectangle(DetailPanel.X + 40, DetailPanel.Bottom - 148, half, 44);
+            var deepBtn = new Rectangle(easeBtn.Right + 12, DetailPanel.Bottom - 148, half, 44);
+            if (_ui.Button(b, easeBtn, "SHALLOWER", hit, clicked, enabled: World.CanEaseCorruption)) _easeRequest = true;
+            if (_ui.Button(b, deepBtn, "DEEPER", hit, clicked, enabled: World.CanDeepenCorruption)) _deepenRequest = true;
+        }
     }
 
     // ── Small drawn glyphs (no dedicated lock/check assets) ────────────────────────────────────

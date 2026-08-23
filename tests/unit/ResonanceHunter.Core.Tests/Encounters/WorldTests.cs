@@ -220,4 +220,23 @@ public class WorldTests
         Assert.Equal(3, Regions.Get("cinderworks").Templates.Count(t => !t.IsBoss));
         Assert.Contains(Regions.Get("umbral_reach").Templates, t => t.IsBoss);
     }
+
+    [Fact]
+    public void test_corruption_stops_at_the_top_and_can_be_eased_back()
+    {
+        var world = new World();
+        foreach (var r in Regions.All) world.Conquer(r.Id);
+        Assert.False(world.CanEaseCorruption);
+        for (var i = 0; i < CorruptionScaling.MaxTier + 3; i++) world.DeepenCorruption();
+        Assert.Equal(CorruptionScaling.MaxTier, world.CorruptionTier);
+        Assert.False(world.CanDeepenCorruption);
+        Assert.True(world.CanEaseCorruption);
+        Assert.Equal(CorruptionScaling.MaxTier - 1, world.EaseCorruption());
+        Assert.True(world.CanDeepenCorruption);
+        while (world.CanEaseCorruption) world.EaseCorruption();
+        Assert.Equal(0, world.CorruptionTier);
+        Assert.Equal(0, world.EaseCorruption());   // the floor holds
+        world.RestoreCorruption(99);                 // an old save past the top lands ON the top
+        Assert.Equal(CorruptionScaling.MaxTier, world.CorruptionTier);
+    }
 }

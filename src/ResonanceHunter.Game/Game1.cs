@@ -270,7 +270,10 @@ public class Game1 : Game
         // the moment its background is added, with no code change.
         var theme = Regions.Get(_activeRegion).Theme.ToString().ToLowerInvariant();
         var arena = _assets.Get($"bg_arena_{theme}") is not null ? $"bg_arena_{theme}" : "bg_arena_verdant";
-        _ui.Background(_batch, arena, ArenaDim);
+        // The arena darkens and cools with the corruption tier (CorruptionLook) — the world the player
+        // chose to deepen should look deeper; ArenaDim is tier 0.
+        var look = CorruptionLook.For(_world.CorruptionTier).Arena;
+        _ui.Background(_batch, arena, new Color(look.R, look.G, look.B));
     }
 
     /// <summary>
@@ -1013,7 +1016,7 @@ public class Game1 : Game
             // screen is gone, so they had nothing to pose.
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
-                or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig"
+                or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
                 or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "traitlit" or "traitterm" or "traitterminal"
                 or "roster" or "rosterlocked" or "weave" or "vault" or "attune" or "attuned" or "trader")
             {
@@ -1298,7 +1301,7 @@ public class Game1 : Game
                     }
                     else _expedition.DevStart(_hunter, 1400f, 9f);
                 }
-                if (sm is "boss" or "bossdebug")
+                if (sm is "boss" or "bossdebug" or "corruptedboss")
                 {
                     // Rev 4 §12 / Rev 5 boss fixture: force the current wave to render as the Crystal Lich boss
                     // (crystal_lich_idle), no ordinary enemies, no welcome/wave overlay. `bossdebug` also shows
@@ -1317,6 +1320,15 @@ public class Game1 : Game
                     foreach (var r in Regions.All) _world.Conquer(r.Id);
                     _conquerMsg = "THE WORLD IS YOURS.  DEEPEN THE CORRUPTION FOR MORE.";
                     _showWorld = true;
+                }
+                if (sm is "corrupted" or "corruptedboss")
+                {
+                    // The corruption ladder at tier 3 (FEVERED): the map's SHALLOWER / DEEPER row, and the
+                    // hunt's tinted creatures + the boss's epithet. Verification fixtures for 2026-08-23.
+                    foreach (var r in Regions.All) _world.Conquer(r.Id);
+                    _world.RestoreCorruption(3);
+                    if (sm == "corrupted") _showWorld = true;
+                    else { _expedition.DevForceBoss = true; _expedition.CorruptionTier = 3; }
                 }
                 if (sm == "help") _showHelp = true;
                 if (sm == "settings") _showSettings = true;
@@ -2392,6 +2404,7 @@ public class Game1 : Game
         _expedition.EnemySource = def.Theme;          // region element → the Source matchup
         _expedition.RegionId = def.Id;                // region id → the boss creature (boss_<region>) on boss waves
         _expedition.EnemyBias = def.CombatBias;       // region character → the enemy's bite tempo (feel + TRAP synergy)
+        _expedition.CorruptionTier = _world.CorruptionTier;   // → creature tint, the boss's epithet, the header line
         _expedition.Loadout = _loadout;               // the player's build, handed over live…
         _expedition.Tree = _dust;                     // …powered by the Dust tree's passive nodes
         _expedition.Mastery = _mastery;               // …and the mastery tree (affinity + node bonuses)
@@ -3281,6 +3294,17 @@ public class Game1 : Game
             else _conquerMsg = $"{Regions.Get(id).Name} IS LOCKED — CONQUER THE PREVIOUS REGION.";
         }
         if (_mapScreen.ConsumeDeepen()) DeepenCorruption();
+        if (_mapScreen.ConsumeEase()) EaseCorruption();
+    }
+
+    /// <summary>Pull the corruption one tier back — the choice DEEPEN never offered (playtest 2026-08-23).</summary>
+    private void EaseCorruption()
+    {
+        if (!_world.CanEaseCorruption) return;
+        var tier = _world.EaseCorruption();
+        _sound.PlayFirst(0.8f, "sfx_click");
+        _conquerMsg = $"THE CORRUPTION EASES — {CorruptionLook.Label(tier)}.";
+        Save();
     }
 
     /// <summary>Push the fully-conquered world one corruption tier deeper: harder, richer, permanent.</summary>
@@ -3290,7 +3314,7 @@ public class Game1 : Game
         var tier = _world.DeepenCorruption();
         _sound.PlayFirst(1f, "sfx_deepen", "sfx_conquer", "sfx_levelup");
         _dust.AwardFromMastery(CorruptionScaling.DeepeningDustAward(tier));
-        _conquerMsg = $"THE CORRUPTION DEEPENS — TIER {tier}. STRONGER FOES, RICHER DUST.";
+        _conquerMsg = $"THE CORRUPTION DEEPENS — {CorruptionLook.Label(tier)}. STRONGER FOES, RICHER DUST.";
         Save();
     }
 

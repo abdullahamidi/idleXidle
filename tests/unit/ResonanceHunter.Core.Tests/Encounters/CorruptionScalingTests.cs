@@ -46,4 +46,35 @@ public class CorruptionScalingTests
         Assert.Equal(0, CorruptionScaling.TierBonus(-3));
         Assert.Equal(1f, CorruptionScaling.RewardMultiplier(-3));
     }
+
+    [Fact]
+    public void test_the_ladder_has_a_top_and_every_function_respects_it()
+    {
+        // 2026-08-23: DEEPEN is bounded. Past MaxTier nothing grows — the world has a floor.
+        var top = CorruptionScaling.MaxTier;
+        Assert.Equal(CorruptionScaling.HealthMultiplier(top), CorruptionScaling.HealthMultiplier(top + 7), 4);
+        Assert.Equal(CorruptionScaling.RewardMultiplier(top), CorruptionScaling.RewardMultiplier(top + 7), 4);
+        Assert.Equal(CorruptionScaling.TierBonus(top), CorruptionScaling.TierBonus(top + 7));
+        Assert.Equal(CorruptionScaling.DeepeningDustAward(top), CorruptionScaling.DeepeningDustAward(top + 7));
+        Assert.True(CorruptionScaling.HealthMultiplier(top) > CorruptionScaling.HealthMultiplier(top - 1));
+    }
+
+    [Fact]
+    public void test_every_tier_has_a_name_a_look_and_a_label()
+    {
+        for (var t = 0; t <= CorruptionScaling.MaxTier; t++)
+        {
+            var look = CorruptionLook.For(t);
+            Assert.False(string.IsNullOrWhiteSpace(look.Name));
+            Assert.False(string.IsNullOrWhiteSpace(look.Blurb));
+            Assert.Contains($"{t} / {CorruptionScaling.MaxTier}", CorruptionLook.Label(t));
+            Assert.Contains(look.Name, CorruptionLook.Label(t));
+            if (t > 0) Assert.False(string.IsNullOrWhiteSpace(look.Epithet), "a corrupted tier names the boss");
+        }
+        Assert.Equal(string.Empty, CorruptionLook.For(0).Epithet);
+        // Deeper is darker: the arena tint only ever loses light down the ladder.
+        for (var t = 1; t <= CorruptionScaling.MaxTier; t++)
+            Assert.True(CorruptionLook.For(t).Arena.G < CorruptionLook.For(t - 1).Arena.G);
+        Assert.Equal(CorruptionLook.For(CorruptionScaling.MaxTier), CorruptionLook.For(CorruptionScaling.MaxTier + 3));
+    }
 }

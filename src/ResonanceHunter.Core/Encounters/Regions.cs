@@ -200,12 +200,16 @@ public sealed class World
     /// <summary>True once every region has been conquered — the precondition for deepening.</summary>
     public bool AllConquered => Regions.All.All(r => _conquered.Contains(r.Id));
 
-    /// <summary>You may only deepen the corruption once the whole world is yours.</summary>
-    public bool CanDeepenCorruption => AllConquered;
+    /// <summary>You may only deepen the corruption once the whole world is yours — and only to the top of the ladder.</summary>
+    public bool CanDeepenCorruption => AllConquered && CorruptionTier < CorruptionScaling.MaxTier;
+
+    /// <summary>The corruption can always be eased back toward the base world.</summary>
+    public bool CanEaseCorruption => CorruptionTier > 0;
 
     /// <summary>
     /// Push the world one corruption tier deeper. Nothing resets — this is a pure difficulty/reward
-    /// ratchet. Returns the new tier, or the unchanged tier if the world isn't fully conquered yet.
+    /// ratchet with a top (<see cref="CorruptionScaling.MaxTier"/>). Returns the new tier, or the
+    /// unchanged tier if the world isn't fully conquered yet or is already at the floor of the world.
     /// </summary>
     public int DeepenCorruption()
     {
@@ -213,6 +217,16 @@ public sealed class World
         return CorruptionTier;
     }
 
-    /// <summary>Restore the corruption tier from a save (floored at 0).</summary>
-    public void RestoreCorruption(int tier) => CorruptionTier = Math.Max(0, tier);
+    /// <summary>
+    /// Pull the world one corruption tier back. Playtest 2026-08-23: "Deepen butonu var, bunu
+    /// azaltamıyorum" — a difficulty you can only raise is a trap, not a choice.
+    /// </summary>
+    public int EaseCorruption()
+    {
+        if (CanEaseCorruption) CorruptionTier--;
+        return CorruptionTier;
+    }
+
+    /// <summary>Restore the corruption tier from a save, clamped into the ladder (old saves could be past the top).</summary>
+    public void RestoreCorruption(int tier) => CorruptionTier = CorruptionScaling.Clamp(tier);
 }
