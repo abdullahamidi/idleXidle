@@ -10,6 +10,7 @@ using ResonanceHunter.Core.Automation;
 using ResonanceHunter.Core.Builds;
 using ResonanceHunter.Core.Characters;
 using ResonanceHunter.Core.Combat;
+using ResonanceHunter.Core.Loot;
 using ResonanceHunter.Core.Economy;
 using ResonanceHunter.Core.Encounters;
 using ResonanceHunter.Core.Expeditions;
@@ -190,6 +191,14 @@ public sealed class SoloExpeditionScreen
         [Source.Body] = "bonecrawler", [Source.Mind] = "soul_leech", [Source.Nature] = "wisp",
         [Source.Machine] = "stone_sentinel", [Source.Shadow] = "shadeling", [Source.Spirit] = "rift_guardian",
     };
+
+    /// <summary>The enemy key back out of its strip key ("shadeling_idle_strip8_512" → "shadeling").</summary>
+    private static string EnemyKeyOf(string stripKey)
+    {
+        var cut = stripKey.IndexOf("_idle_", StringComparison.Ordinal);
+        if (cut < 0) cut = stripKey.IndexOf("_attack_", StringComparison.Ordinal);
+        return cut < 0 ? stripKey : stripKey[..cut];
+    }
 
     /// <summary>Display name for the wave's creature ("STONE SENTINEL"), from its art key.</summary>
     private static string PrettyName(Source? src)
@@ -597,6 +606,8 @@ public sealed class SoloExpeditionScreen
         var enemyHp = _run.LastWaveCreatures.Sum(c => c.MaxHealth);
 
         _replay = new WaveReplay(_run.LastWaveEvents, startHealth, maxHealth, enemyHp);
+        _diedAt.Clear();          // the previous wave's fallen are gone with its replay
+        _creatureRect.Clear();
         // Hand the replay the composition so each creature drains its own bar and vanishes on its own
         // beat. Without this a wave of five reads as one bar going down, which hides the single most
         // useful fact in a Swarm band: how many of them you actually got through.
@@ -865,7 +876,8 @@ public sealed class SoloExpeditionScreen
                     if ((_strikeCount++ & 1) == 0)   // every other auto-hit: a number and a small, quiet puff
                     {
                         SpawnDamage(HitDamage(1f), false);
-                        _vfx.Play("fx_weakhit", _rowCentreX, _rowTopY + 110, scale: 1, fps: 16f, tint: Steel);
+                        var (hx, hy) = EnemyPoint(e.Slot, 0.45f);
+                        _vfx.Play("fx_weakhit", hx, hy, scale: EnemyScale(e.Slot, 0.6f), fps: 16f, tint: Steel);
                     }
                     break;
                 case BattleEventKind.EnemyStrike:
@@ -897,10 +909,17 @@ public sealed class SoloExpeditionScreen
                     _vfx.Play("fx_death", ChampBox.Center.X, ChampBox.Center.Y, scale: 4, fps: 9f);
                     break;
                 case BattleEventKind.EnemyDown:
+                {
+                    // The creature FALLS (its death clip, from this moment), and the plume rises over the
+                    // body half a second later — after the fall, not instead of it. Playtest: "düşman
+                    // ölüyor ama önünde bir duman animasyonu çıkıyor, herkesin ölme animasyonu olması lazım."
+                    _diedAt[e.Slot] = _anim;
+                    var (dx, dy) = EnemyPoint(e.Slot, 0.55f);
                     // A boss falling is the loudest beat in the fight: the starburst AND the plume.
-                    if (_isBossWave) _vfx.Play("fx_crit", _rowCentreX, _rowTopY + 110, scale: 4, fps: 10f, tint: Gold);
-                    _vfx.Play("fx_death", _rowCentreX, _rowTopY + 110, scale: _isBossWave ? 4 : 2, fps: 9f);
+                    if (_isBossWave) _vfx.Play("fx_crit", dx, dy - 40, scale: EnemyScale(e.Slot, 1.2f), fps: 10f, tint: Gold);
+                    _vfx.Play("fx_death", dx, dy, scale: EnemyScale(e.Slot, 0.9f), fps: 9f, delay: 0.45f);
                     break;
+                }
                 case BattleEventKind.Charge:
                     _chargeNow = e.Amount;   // the pool AFTER the change; 0 is REND's dump
                     break;
@@ -965,26 +984,29 @@ public sealed class SoloExpeditionScreen
     private void PlayFormVfx(Form form, Source source)
     {
         var glow = SourceGlow(source);
-        // Size is relative to the thing being hit: a boss is ~540 px tall against a normal creature's
-        // ~300, so everything that lands on the enemy side grows one step on a boss wave.
-        var big = _isBossWave ? 1 : 0;
+        // ON the creature being hit, sized to it: the sim lands single-target Forms on the first living
+        // creature, so that is where the flash goes — a swarm creature gets a small one, a bruiser a big
+        // one, a boss the biggest (EnemyScale). A Trap bursts under the whole row; the champion's own
+        // Forms stay on the champion.
+        var target = TargetSlot();
+        var (tx, ty) = EnemyPoint(target, 0.45f);
         switch (form)
         {
             case Form.Strike:
-                _vfx.Play("fx_strike", _rowCentreX, _rowTopY + 110, scale: 3 + big, fps: 12f, tint: glow);
+                _vfx.Play("fx_strike", tx, ty, scale: EnemyScale(target, 1.25f), fps: 12f, tint: glow);
                 break;
             case Form.Projectile:
                 // The bolt flies left-to-right inside its own frame, so it is centred between the two figures.
-                _vfx.Play("fx_projectile", (ChampBox.Right + _rowCentreX) / 2, _rowTopY + 120, scale: 3 + big, fps: 14f, tint: glow);
+                _vfx.Play("fx_projectile", (ChampBox.Right + tx) / 2, ty, scale: EnemyScale(target, 1.2f), fps: 14f, tint: glow);
                 break;
             case Form.Aura:
                 _vfx.Play("fx_aura", ChampBox.Center.X, ChampBox.Center.Y + 20, scale: 3, fps: 12f, tint: glow);
                 break;
             case Form.Trap:
-                _vfx.Play("fx_trap", _rowCentreX, _rowTopY + 150, scale: 3 + big, fps: 12f, tint: glow);
+                _vfx.Play("fx_trap", _rowCentreX, EnemyPoint(target, 0.7f).Y, scale: EnemyScale(target, 1.3f), fps: 12f, tint: glow);
                 break;
             case Form.Mark:
-                _vfx.Play("fx_mark", _rowCentreX, _rowTopY + 110, scale: 2 + big, fps: 12f, tint: glow);
+                _vfx.Play("fx_mark", tx, ty, scale: EnemyScale(target, 0.9f), fps: 12f, tint: glow);
                 break;
             case Form.Transformation:
                 _vfx.Play("fx_transformation", ChampBox.Center.X, ChampBox.Center.Y, scale: 3, fps: 12f, tint: glow);
@@ -1121,6 +1143,58 @@ public sealed class SoloExpeditionScreen
     /// <summary>How long an enemy's follow-through stays on its attack clip: three frames at ~10 fps.</summary>
     private const float EnemyFollowSeconds = 0.3f;
 
+    // ── WHERE EACH CREATURE IS, published by the draw for the update (2026-08-23). ─────────────────
+    //    Every enemy-side effect used to spawn at the ROW's centre — right for one creature, 150 px off
+    //    for a swarm of five, and the death plume rose beside the wrong body. The draw now records each
+    //    creature's on-screen rectangle (slot → centre x, top, height) and the effects ask for a point on
+    //    the creature the event names (EnemyDown and Strike carry the slot) or the one the sim is hitting.
+    private readonly Dictionary<int, (int X, int Top, int H)> _creatureRect = new();
+    /// <summary>Screen time at which each creature died — the death clip plays from it.</summary>
+    private readonly Dictionary<int, float> _diedAt = new();
+    private const float DeathFps = 10f;              // 8 frames in 0.8 s
+    private const float DeathHoldSeconds = 0.6f;     // the body lies there
+    private const float DeathFadeSeconds = 0.45f;    // then fades out
+
+    private void PublishCreature(int slot, Rectangle box) => _creatureRect[slot] = (box.Center.X, box.Y, box.Height);
+
+    /// <summary>A point on creature <paramref name="slot"/>, <paramref name="yFrac"/> of the way down its body;
+    /// the row's old centre point if the slot has not been drawn yet.</summary>
+    private (int X, int Y) EnemyPoint(int slot, float yFrac)
+        => _creatureRect.TryGetValue(slot, out var r) ? (r.X, r.Top + (int)(r.H * yFrac)) : (_rowCentreX, _rowTopY + 110);
+
+    /// <summary>An effect scale sized to the creature it lands on (1..5 of 104 px) — a swarm creature gets a
+    /// small flash, a bruiser a big one, a boss the biggest — instead of one size for every body.</summary>
+    private int EnemyScale(int slot, float mult = 1f)
+        => Math.Clamp((int)MathF.Round((_creatureRect.TryGetValue(slot, out var r) ? r.H : 300f) / 140f * mult), 1, 5);
+
+    /// <summary>The creature the sim is hitting: the first alive one, else the one that died last.</summary>
+    private int TargetSlot()
+    {
+        if (_replay is not null)
+        {
+            var n = _run?.LastWaveCreatures.Count ?? 1;
+            for (var i = 0; i < Math.Max(1, n); i++) if (_replay.CreatureAlive(i)) return i;
+        }
+        var last = 0; var lastAt = float.MinValue;
+        foreach (var (slot, at) in _diedAt) if (at > lastAt) { lastAt = at; last = slot; }
+        return last;
+    }
+
+    /// <summary>
+    /// Draw a dead creature's fall: its <c>&lt;key&gt;_death_strip8_512</c> clip from the moment it died,
+    /// held on the last frame, then faded out. Without a death clip the creature vanishes as before.
+    /// </summary>
+    private void DrawCreatureDeath(SpriteBatch b, int slot, Rectangle box, string? enemyKey)
+    {
+        if (enemyKey is null || !_diedAt.TryGetValue(slot, out var at)) return;
+        var t = _anim - at;
+        var life = 8f / DeathFps + DeathHoldSeconds;
+        var fade = t <= life ? 1f : 1f - (t - life) / DeathFadeSeconds;
+        if (fade <= 0f) return;
+        _ui.GroundShadow(b, box.Center.X, EnemyBox.Bottom - 10, (int)(box.Width * 0.55f), 30, 0.5f * fade);
+        _ui.AnimSprite(b, $"{enemyKey}_death_strip8_512", box, t, DeathFps, loop: false, Color.White * fade, -1f);
+    }
+
     /// <summary>
     /// The clock an enemy's clip runs on — the SWING for an attack, the free clock for an idle.
     /// </summary>
@@ -1237,13 +1311,17 @@ public sealed class SoloExpeditionScreen
 
         for (var i = 0; i < comp.Count; i++)
         {
-            if (_replay is not null && !_replay.CreatureAlive(i)) continue;
-
             // Back-to-front by index so the row overlaps consistently, and each creature bobs on its own
             // phase — five sprites bobbing in unison read as one animated object, not as five creatures.
             var cx = left + spacing * i;
             var bob = (int)(MathF.Sin(_anim * 2f + i * 1.7f) * 7f);
             var box = new Rectangle(cx - w / 2, EnemyBox.Bottom - h + bob, w, h);
+            PublishCreature(i, box);
+            if (_replay is not null && !_replay.CreatureAlive(i))
+            {
+                DrawCreatureDeath(b, i, new Rectangle(box.X, EnemyBox.Bottom - h, w, h), stripKey is null ? null : EnemyKeyOf(stripKey));
+                continue;
+            }
 
             _ui.GroundShadow(b, box.Center.X, EnemyBox.Bottom - 10, (int)(w * 0.55f), (int)(38 * scale), 0.55f);
 
@@ -1303,6 +1381,13 @@ public sealed class SoloExpeditionScreen
         const float crop = -1f;   // measured headroom — see DrawComposition
         var figTop = ebox.Bottom - ebox.Height;
         var ab = new Rectangle(ebox.X, figTop + bob, ebox.Width, ebox.Height);
+        PublishCreature(0, ab);
+        if (_replay is not null && !_replay.CreatureAlive(0))
+        {
+            var deadKey = EnemySource is { } ds && EnemyForSource.TryGetValue(ds, out var dk) ? dk : null;
+            DrawCreatureDeath(b, 0, new Rectangle(ebox.X, figTop, ebox.Width, ebox.Height), deadKey);
+            return;
+        }
 
         string? stripKey = null, staticKey = null;
         // 11/9, was 16/12. The whole complaint is legibility: an 8-frame swing at 16fps is over in half
@@ -1366,6 +1451,15 @@ public sealed class SoloExpeditionScreen
 
         // The swing rides the same windup as everything else (see EnemyClipSeconds): the strike lands on the
         // frame the blow is credited, instead of the boss cycling its attack strip on the free clock.
+        PublishCreature(0, box);
+        if (bossKey is not null && _replay is not null && !_replay.CreatureAlive(0) && _diedAt.TryGetValue(0, out var bossDiedAt)
+            && _ui.Assets.Has($"{bossKey}_death_strip8_512"))
+        {
+            // The boss falls and lies there for the whole break — no fade; the next wave clears it.
+            _ui.AnimSprite(b, $"{bossKey}_death_strip8_512", box, _anim - bossDiedAt, DeathFps, loop: false, Color.White, -1f);
+            _bossBodyRect = box; _bossFullRect = box;
+            return;
+        }
         var fps = attacking ? 10f : 8f;
         var key = bossKey is null ? null : $"{bossKey}_{(attacking ? "attack" : "idle")}_strip8_512";
         var seconds = EnemyClipSeconds(attacking, fps);
@@ -1802,6 +1896,75 @@ public sealed class SoloExpeditionScreen
         }
         if (Deepest > 0) _ui.TextBig(b, $"DEEPEST WAVE REACHED  {Deepest}", inner.X, ry, Slate, 16);
         else if (!anyReward) _ui.TextBig(b, "NOTHING TO CLAIM YET", inner.X, inner.Y, Slate, 18);
+
+        DrawKeepFilter(b, new Rectangle(px, 480, pw, 196), hit, clicked);
+    }
+
+    // ── TAKE ONLY — the chest keep-filter, on the screen whose drops it decides (2026-08-23). ─────
+    //    It was a row on the VAULT; the playtest put it here: "drop filtresi hunt ekranını
+    //    ilgilendiriyor oraya taşınsın." Host-fed and host-persisted; this screen only edits it and
+    //    raises FilterDirty. NOTE for the host: the edit happens in DRAW, so read it back on the dirty
+    //    flag and never push the saved value every frame — that exact push clobbered the vault's edit
+    //    a frame later in playtest five.
+    /// <summary>Chests below this tier never land — they arrive as a little Scrap instead. 0 = all.</summary>
+    public int KeepMinTier { get; set; }
+    /// <summary>Keep only chests whose region favours this slot (no-lean chests always pass). Null = any.</summary>
+    public ItemBaseType? KeepSlot { get; set; }
+    /// <summary>Set when the player edited the filter — the host copies it back and saves.</summary>
+    public bool FilterDirty { get; set; }
+
+    private static readonly ItemBaseType?[] SlotCycle =
+    {
+        null, ItemBaseType.Weapon, ItemBaseType.Helm, ItemBaseType.Chest, ItemBaseType.Gloves,
+        ItemBaseType.Boots, ItemBaseType.Charm, ItemBaseType.AbilityFocus, ItemBaseType.Ring,
+    };
+
+    private static string SlotLabel(ItemBaseType? t) => t switch
+    {
+        null => "ANY SLOT",
+        ItemBaseType.AbilityFocus => "FOCUS",
+        ItemBaseType.Chest => "CHESTPLATE",
+        _ => t.Value.ToString().ToUpperInvariant(),
+    };
+
+    private void DrawKeepFilter(SpriteBatch b, Rectangle plate, Point hit, bool clicked)
+    {
+        var inner = CleanPanel(b, plate, "TAKE ONLY");
+        // Line 1: [-]  TIER N+  [+]
+        var y = inner.Y;
+        var minus = new Rectangle(inner.X, y, 34, 34);
+        var plus = new Rectangle(inner.Right - 34, y, 34, 34);
+        MiniButton(b, minus, "-", hit);
+        MiniButton(b, plus, "+", hit);
+        _ui.TextCenter(b, KeepMinTier <= 0 ? "ANY TIER" : $"TIER {KeepMinTier}+", inner.Center.X, y + 6, KeepMinTier > 0 ? Gold : Slate);
+        if (UiKit.ClickedIn(minus, hit, clicked) && KeepMinTier > 0) { KeepMinTier -= 1; FilterDirty = true; }
+        if (UiKit.ClickedIn(plus, hit, clicked) && KeepMinTier < 99) { KeepMinTier += 1; FilterDirty = true; }
+        // Line 2: the slot lean, cycling ANY SLOT -> WEAPON -> ... -> RING.
+        y += 44;
+        var slotBtn = new Rectangle(inner.X, y, inner.Width, 34);
+        MiniButton(b, slotBtn, SlotLabel(KeepSlot), hit, KeepSlot is not null);
+        if (UiKit.ClickedIn(slotBtn, hit, clicked))
+        {
+            var idx = Array.IndexOf(SlotCycle, KeepSlot);
+            KeepSlot = SlotCycle[(idx + 1) % SlotCycle.Length];
+            FilterDirty = true;
+        }
+        // Line 3: what happens to the rest, only while a filter is set.
+        y += 44;
+        _ui.TextBig(b, KeepMinTier > 0 || KeepSlot is not null ? "THE REST ARRIVE AS A LITTLE SCRAP" : "EVERY CHEST IS KEPT",
+                    inner.X, y, Dim, 16);
+    }
+
+    private void MiniButton(SpriteBatch b, Rectangle r, string label, Point hit, bool lit = false)
+    {
+        var hot = r.Contains(hit);
+        _ui.Fill(b, r, new Color(0x14, 0x10, 0x1A, 0xE0));
+        var edge = lit ? Gold * 0.8f : hot ? Bone : Dim;
+        _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, 2), edge);
+        _ui.Fill(b, new Rectangle(r.X, r.Bottom - 2, r.Width, 2), edge);
+        _ui.Fill(b, new Rectangle(r.X, r.Y, 2, r.Height), edge);
+        _ui.Fill(b, new Rectangle(r.Right - 2, r.Y, 2, r.Height), edge);
+        _ui.TextCenter(b, label, r.Center.X, r.Y + 6, lit ? Gold : hot ? Bone : Slate);
     }
 
     /// <summary>The run's state, or null when it is simply running and there is nothing to say.</summary>

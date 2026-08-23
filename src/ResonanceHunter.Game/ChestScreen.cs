@@ -129,32 +129,18 @@ public sealed class ChestScreen
         return r;
     }
 
-    /// <summary>Which chest a click chose — the host needs it to open the right one.</summary>
+    /// <summary>Which STACK a click chose (an index into the stacked, best-first pile).</summary>
     public int SelectedIndex => _cursor;
 
-    // ── The keep-filter. Host-fed, host-persisted; this screen only edits it. ─────────────────
-    /// <summary>Chests below this tier never land — they arrive as a little Scrap instead. 0 = all.</summary>
-    public int KeepMinTier { get; set; }
+    /// <summary>
+    /// The chest a click chose — a real member of the clicked stack, so the host opens exactly one
+    /// chest equal to it (identical chests stack on the vault since 2026-08-23; contents are rolled at
+    /// open, so any member is the right one).
+    /// </summary>
+    public Chest? SelectedChest { get; private set; }
 
-    /// <summary>Keep only chests whose region favours this slot (no-lean chests always pass). Null = any.</summary>
-    public ItemBaseType? KeepSlot { get; set; }
-
-    /// <summary>Set when the player edited the filter — the host copies it back and saves.</summary>
-    public bool FilterDirty { get; set; }
-
-    private static readonly ItemBaseType?[] SlotCycle =
-    {
-        null, ItemBaseType.Weapon, ItemBaseType.Helm, ItemBaseType.Chest, ItemBaseType.Gloves,
-        ItemBaseType.Boots, ItemBaseType.Charm, ItemBaseType.AbilityFocus, ItemBaseType.Ring,
-    };
-
-    private static string SlotLabel(ItemBaseType? t) => t switch
-    {
-        null => "ANY SLOT",
-        ItemBaseType.AbilityFocus => "FOCUS",
-        ItemBaseType.Chest => "CHESTPLATE",
-        _ => t.Value.ToString().ToUpperInvariant(),
-    };
+    // The TAKE ONLY keep-filter used to be edited here. It concerns what the HUNT lets through, so it
+    // lives on the HUNT screen now (SoloExpeditionScreen.DrawKeepFilter); the host still persists it.
 
     // ── Layout ──────────────────────────────────────────────────────────────────────────────────
     /// <summary>Full width now — the detail column is gone. Height decided per-frame; see below.</summary>
@@ -172,8 +158,9 @@ public sealed class ChestScreen
     private static Rectangle GridPanelFor(int count)
     {
         var rows = Math.Clamp((count + Cols - 1) / Cols, 1, Rows);
-        // +42 for the filter row under the header. Aspects (1842 wide): 4.6 / 2.9 / 2.1 — all medium.
-        return GridPanel with { Height = 400 + (rows - 1) * 230 };
+        // The filter row that sat under the header moved to HUNT (2026-08-23), so the cards climbed 34px
+        // and the panel shed the same. Aspects (1842 wide): 5.0 / 3.1 / 2.2 — all medium.
+        return GridPanel with { Height = 366 + (rows - 1) * 230 };
     }
 
     private const int Cols = 6;
@@ -181,7 +168,7 @@ public sealed class ChestScreen
     private const int PerPage = Cols * Rows;
 
     private static Rectangle Card(int visible) =>
-        new(GridPanel.X + 46 + visible % Cols * 290, GridPanel.Y + 150 + visible / Cols * 230, 270, 210);
+        new(GridPanel.X + 46 + visible % Cols * 290, GridPanel.Y + 116 + visible / Cols * 230, 270, 210);
 
     /// <summary>The "?" corner chip — drawn 30px, hit-tested 46px (Fitts's Law padding, house rule).</summary>
     private static Rectangle QChip(Rectangle card) => new(card.Right - 44, card.Y + 12, 30, 30);
@@ -210,7 +197,10 @@ public sealed class ChestScreen
         // Authored 1920, cursor arrives 480 — the same one line every inset screen carries.
         var hit = Game1.ToOverlay(mouse);
 
-        var sorted = ChestDossiers.BestFirst(chests);
+        // One card per STACK of identical chests (ChestDossiers.Stacked); the grid, the hover and the
+        // cursor all count stacks. `sorted` is the stacks' samples in best-first order.
+        var stacks = ChestDossiers.Stacked(chests);
+        var sorted = stacks.Select(st => st.Sample).ToList();
         Clamp(sorted.Count);
 
         // While the stall or an inspect card is open, the grid underneath is furniture: no hover,
@@ -250,6 +240,7 @@ public sealed class ChestScreen
         if (overCard >= 0)
         {
             _cursor = overCard;
+            SelectedChest = sorted[overCard];
             _pending = OpenRequest.Selected;
         }
     }
@@ -261,14 +252,15 @@ public sealed class ChestScreen
 
         var hit = Game1.ToOverlay(mouse);
 
-        var sorted = ChestDossiers.BestFirst(chests);
+        var stacks = ChestDossiers.Stacked(chests);
+        var sorted = stacks.Select(st => st.Sample).ToList();
         Clamp(sorted.Count);
 
         _ui.Panel(b, GridPanelFor(sorted.Count));
         _ui.TextBig(b, "THE VAULT", GridPanel.X + 46, GridPanel.Y + 26, Gold, UiTypography.ScreenTitle, TextFace.Display);
 
         // The tally, so the pile reads at a glance without counting cards.
-        var tally = ChestDossiers.Tally(sorted);
+        var tally = ChestDossiers.Tally(chests);   // every chest, not every stack
         var summary = tally.Count == 0
             ? "nothing waiting"
             : string.Join("   ", tally.Select(t => $"{t.Count} {t.Grade.ToString().ToUpperInvariant()}"));
@@ -295,14 +287,12 @@ public sealed class ChestScreen
             _modalOpenedNow = true;
         }
 
-        DrawFilterRow(b, hit, uiClicked);
-
         if (sorted.Count == 0)
         {
             _ui.TextBig(b, "No chests. Bosses drop them — about one boss in five.",
-                        GridPanel.X + 46, GridPanel.Y + 190, Dim, UiTypography.Body);
+                        GridPanel.X + 46, GridPanel.Y + 156, Dim, UiTypography.Body);
             _ui.TextBig(b, "When one arrives: click the chest to open it, hover its ? to read what it holds.",
-                        GridPanel.X + 46, GridPanel.Y + 224, Dim, UiTypography.Body);
+                        GridPanel.X + 46, GridPanel.Y + 190, Dim, UiTypography.Body);
             DrawTrader(b, hit, clicked && !_modalOpenedNow);
             DrawInspect(b, hit, clicked && !_modalOpenedNow);
             _modalOpenedNow = false;
@@ -311,7 +301,7 @@ public sealed class ChestScreen
 
         // OPEN ALL, in the header — with one chest the card itself is the button, so this needs two.
         var allBtn = new Rectangle(GridPanel.Right - 346, GridPanel.Y + 24, 300, 56);
-        if (_ui.Button(b, allBtn, $"OPEN ALL ({sorted.Count})", hit, uiClicked, sorted.Count > 1))
+        if (_ui.Button(b, allBtn, $"OPEN ALL ({chests.Count})", hit, uiClicked, chests.Count > 1))
             _pending = OpenRequest.All;
 
         // Right-aligned under the header row now — the TRADER and PASTE buttons live where it sat.
@@ -359,6 +349,10 @@ public sealed class ChestScreen
             }
 
             _ui.TextBig(b, $"TIER {chest.Tier}", card.X + 140, card.Y + 30, Bone, UiTypography.PanelTitle);
+            // The stack count. Four identical Rare tier-6 chests are one card that says ×4 — a click
+            // opens one of them, OPEN ALL still opens every chest. Playtest: "aynı chestler stacklensin."
+            if (stacks[idx].Count > 1)
+                _ui.TextRightBig(b, $"×{stacks[idx].Count}", card.Right - 16, card.Y + 30, Gold, UiTypography.PanelTitle);
 
             // The element as a coloured chip — an identity, not a word competing with the grade.
             if (chest.Element is { } e)
@@ -592,51 +586,6 @@ public sealed class ChestScreen
         _ui.Fill(b, new Rectangle(r.Right - t, r.Y, t, r.Height), c);
     }
 
-    /// <summary>
-    /// The keep-filter row: a tier floor and a slot lean. Chests that fail it never reach the vault —
-    /// they arrive as a little Scrap — so a player who restarts from wave one after death is not
-    /// wading through tier-2 boxes for the rest of the game.
-    /// </summary>
-    private void DrawFilterRow(SpriteBatch b, Point hit, bool clicked)
-    {
-        var y = GridPanel.Y + 104;
-        _ui.Text(b, "TAKE ONLY:", GridPanel.X + 46, y + 6, Slate);
-
-        // TIER floor: [-] TIER >= N [+]. Mini flat controls — the ornate button art collapses at 34px.
-        var minus = new Rectangle(GridPanel.X + 188, y, 34, 34);
-        var plus = new Rectangle(GridPanel.X + 366, y, 34, 34);
-        MiniButton(b, minus, "-", hit);
-        MiniButton(b, plus, "+", hit);
-        _ui.TextCenter(b, KeepMinTier <= 0 ? "ANY TIER" : $"TIER {KeepMinTier}+",
-                       (minus.Right + plus.X) / 2, y + 6, KeepMinTier > 0 ? Gold : Slate);
-        if (UiKit.ClickedIn(minus, hit, clicked) && KeepMinTier > 0) { KeepMinTier -= 1; FilterDirty = true; }
-        if (UiKit.ClickedIn(plus, hit, clicked) && KeepMinTier < 99) { KeepMinTier += 1; FilterDirty = true; }
-
-        // SLOT lean: one button cycling ANY SLOT -> WEAPON -> ... -> RING.
-        var slotBtn = new Rectangle(GridPanel.X + 430, y, 220, 34);
-        MiniButton(b, slotBtn, SlotLabel(KeepSlot), hit, KeepSlot is not null);
-        if (UiKit.ClickedIn(slotBtn, hit, clicked))
-        {
-            var idx = Array.IndexOf(SlotCycle, KeepSlot);
-            KeepSlot = SlotCycle[(idx + 1) % SlotCycle.Length];
-            FilterDirty = true;
-        }
-
-        if (KeepMinTier > 0 || KeepSlot is not null)
-            _ui.Text(b, "THE REST ARRIVE AS A LITTLE SCRAP", slotBtn.Right + 24, y + 6, Dim);
-    }
-
-    private void MiniButton(SpriteBatch b, Rectangle r, string label, Point hit, bool lit = false)
-    {
-        var hot = r.Contains(hit);
-        _ui.Fill(b, r, new Color(0x14, 0x10, 0x1A, 0xE0));
-        var edge = lit ? Gold * 0.8f : hot ? Bone : Dim;
-        _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, 2), edge);
-        _ui.Fill(b, new Rectangle(r.X, r.Bottom - 2, r.Width, 2), edge);
-        _ui.Fill(b, new Rectangle(r.X, r.Y, 2, r.Height), edge);
-        _ui.Fill(b, new Rectangle(r.Right - 2, r.Y, 2, r.Height), edge);
-        _ui.TextCenter(b, label, r.Center.X, r.Y + 6, lit ? Gold : hot ? Bone : Slate);
-    }
 
     /// <summary>
     /// The "?" tooltip: the retired detail column's dossier, beside the card that asked for it.

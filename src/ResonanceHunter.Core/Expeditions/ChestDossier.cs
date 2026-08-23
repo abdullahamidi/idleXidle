@@ -202,6 +202,26 @@ public static class ChestDossiers
                      .ToList();
     }
 
+    /// <summary>
+    /// The pile grouped into STACKS of identical chests, best first — the vault draws one card per stack
+    /// with a ×N. Identity is what the dossier prints: grade, tier, element, the region's lean, and the
+    /// run tilt at the two-decimal resolution <see cref="ChestDossier.RunLine"/> already treats as the
+    /// truth boundary, so two chests that stack are two chests whose card would read the same.
+    /// </summary>
+    /// <remarks>
+    /// Display-only grouping: contents are rolled at OPEN (<see cref="Chests.Open"/>), so a stack needs
+    /// no per-chest state and opening one from it is just opening any member. The sample is a real
+    /// member, so the host can find it in storage by record equality.
+    /// </remarks>
+    public static IReadOnlyList<(Chest Sample, int Count)> Stacked(IEnumerable<Chest> chests)
+    {
+        ArgumentNullException.ThrowIfNull(chests);
+        return BestFirst(chests)
+            .GroupBy(c => (c.Rarity, c.Tier, c.Element, c.Region, Tilt: MathF.Round(c.RunTilt, 2)))
+            .Select(g => (g.First(), g.Count()))
+            .ToList();
+    }
+
     /// <summary>How many of each grade are waiting — the one-line summary above the list.</summary>
     public static IReadOnlyList<(Rarity Grade, int Count)> Tally(IEnumerable<Chest> chests)
     {

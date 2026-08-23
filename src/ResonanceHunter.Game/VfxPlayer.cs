@@ -97,7 +97,8 @@ public sealed class VfxPlayer
     /// Spawn a strip animation centered at (x, y). Frame width is inferred from the sheet height
     /// (frames are square) unless <paramref name="frameW"/> is given for non-square strips.
     /// </summary>
-    public void Play(string key, int x, int y, int scale = 2, float fps = 18f, Color? tint = null, int frameW = 0)
+    public void Play(string key, int x, int y, int scale = 2, float fps = 18f, Color? tint = null, int frameW = 0,
+                     float delay = 0f)
     {
         if (_assets.Get(key) is not { } sheet) return;
 
@@ -115,6 +116,9 @@ public sealed class VfxPlayer
             Scale = Math.Max(1, scale),
             SecondsPerFrame = 1f / MathF.Max(1f, fps),
             Tint = tint ?? Color.White,
+            // A negative start is a DELAY: the effect exists but is not drawn until its clock crosses
+            // zero. The death plume uses it to rise after the creature's own fall, not over it.
+            Elapsed = -MathF.Max(0f, delay),
         });
     }
 
@@ -138,6 +142,7 @@ public sealed class VfxPlayer
         b.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp, null, Rasterizer, null, Matrix.CreateScale(Scale));
         foreach (var a in _active)
         {
+            if (a.Elapsed < 0f) continue;   // still in its delay
             var src = new Rectangle(a.CurrentFrame * a.FrameW, 0, a.FrameW, a.FrameH);
             // `Scale` (the effect's) is a display multiplier of a base logical unit, NOT a factor on the raw
             // frame: package_06 frames are 512 px, so multiplying them directly would fill the screen. The

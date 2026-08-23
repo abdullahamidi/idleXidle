@@ -166,4 +166,29 @@ public class ChestDossierTest
         Assert.DoesNotContain("No regional lean", d.RegionLine);
         Assert.False(string.IsNullOrWhiteSpace(d.RegionBlurb));
     }
+
+    [Fact]
+    public void test_stacking_keeps_every_chest_and_stacks_only_identical_ones()
+    {
+        // Playtest 2026-08-23: "aynı chestler stacklensin." Identical chests (grade, tier, element,
+        // region lean, run tilt at the dossier's own two-decimal resolution) become ONE stack with a
+        // count; anything that would print a different card stays its own stack; best first still.
+        var pile = new List<Chest>
+        {
+            new() { Rarity = Rarity.Rare, Tier = 6, Element = Source.Body, Region = "verdant_hollow", RunTilt = 1f },
+            new() { Rarity = Rarity.Rare, Tier = 6, Element = Source.Body, Region = "verdant_hollow", RunTilt = 1.004f },   // same card
+            new() { Rarity = Rarity.Rare, Tier = 6, Element = Source.Body, Region = "verdant_hollow", RunTilt = 1.20f },    // a tilted run: its own
+            new() { Rarity = Rarity.Epic, Tier = 3, Element = null, Region = null, RunTilt = 1f },
+            new() { Rarity = Rarity.Rare, Tier = 7, Element = Source.Body, Region = "verdant_hollow", RunTilt = 1f },       // deeper: its own
+        };
+        var stacks = ChestDossiers.Stacked(pile);
+        Assert.Equal(pile.Count, stacks.Sum(s => s.Count));
+        Assert.Equal(4, stacks.Count);
+        Assert.Equal(Rarity.Epic, stacks[0].Sample.Rarity);                       // best first
+        Assert.Equal(7, stacks[1].Sample.Tier);                                   // then deepest
+        var twin = stacks.Single(s => s.Count == 2);
+        Assert.Equal(6, twin.Sample.Tier);
+        Assert.Contains(twin.Sample, pile);                                       // the sample is a real member
+        Assert.Empty(ChestDossiers.Stacked(Array.Empty<Chest>()));
+    }
 }

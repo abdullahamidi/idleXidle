@@ -836,9 +836,10 @@ public class Game1 : Game
         }
         if (_pendingChests is not null) _forge.RestoreChests(_pendingChests);
         _forge.RestoreChestsOpened(_pendingChestsOpened);
-        // The vault's keep-filter, seeded ONCE — the screen owns it from here (see the vault branch).
-        _chests.KeepMinTier = _chestKeepMinTier;
-        _chests.KeepSlot = _chestKeepSlot;
+        // The keep-filter (TAKE ONLY, on the HUNT screen since 2026-08-23), seeded ONCE — the screen
+        // owns it from here; the host reads it back on FilterDirty (UpdateExpedition).
+        _expedition.KeepMinTier = _chestKeepMinTier;
+        _expedition.KeepSlot = _chestKeepSlot;
         if (_pendingRunLog is not null) _expedition.Log.Restore(_pendingRunLog);
         if (_pendingOfflineYield is not null) _automation.ReportOffline(_pendingOfflineYield);
         _automation.Cores += _pendingCores;
@@ -1877,23 +1878,21 @@ public class Game1 : Game
                 Save();
             }
 
-            if (_chests.FilterDirty)
-            {
-                _chests.FilterDirty = false;
-                (_chestKeepMinTier, _chestKeepSlot) = (_chests.KeepMinTier, _chests.KeepSlot);
-                Save();
-            }
-
             switch (_chests.ConsumeOpen())
             {
                 case ChestScreen.OpenRequest.Selected:
                 {
-                    // The screen sorts for display, so its index is into the SORTED pile, not the
-                    // Forge's storage order. Resolve it here rather than exposing storage order to a view.
+                    // The vault shows STACKS of identical chests; the click names a real member of the
+                    // stack (SelectedChest) and record equality finds it in storage — any member of the
+                    // stack is the right one, contents are rolled at open. The sorted index is the
+                    // fallback for a stale click.
                     var sorted = ChestDossiers.BestFirst(_forge.UnopenedChests);
                     if (sorted.Count > 0)
                     {
-                        _forge.OpenOneChest(sorted[Math.Clamp(_chests.SelectedIndex, 0, sorted.Count - 1)], _hunter);
+                        var pick = _chests.SelectedChest is { } sample && _forge.UnopenedChests.Contains(sample)
+                            ? sample
+                            : sorted[Math.Clamp(_chests.SelectedIndex, 0, sorted.Count - 1)];
+                        _forge.OpenOneChest(pick, _hunter);
                         _sound.Play("sfx_forge", 0.9f);
                         Save();
                     }
@@ -2404,6 +2403,14 @@ public class Game1 : Game
         // Forge, and the errand belongs to the screen that owns the verb.
         // Indices, not names — they moved when MASTERY was inserted at 4. VAULT is 5 now.
         if (_expedition.WantsVault) { _expedition.WantsVault = false; OpenNav(5); }
+        // TAKE ONLY edits (made in the HUNT screen's Draw) come back on the dirty flag only — never a
+        // per-frame push of the saved value, which clobbered the vault's edit in playtest five.
+        if (_expedition.FilterDirty)
+        {
+            _expedition.FilterDirty = false;
+            (_chestKeepMinTier, _chestKeepSlot) = (_expedition.KeepMinTier, _expedition.KeepSlot);
+            Save();
+        }
         if (_expedition.WantsBuild) { _expedition.WantsBuild = false; OpenNav(3); }
 
         // The first-run guide, or null once outgrown. Held on the HOST, not on the fight screen: it is
