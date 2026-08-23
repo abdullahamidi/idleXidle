@@ -35,6 +35,22 @@ public sealed record RegionDefinition
 /// </remarks>
 public static class Regions
 {
+    /// <summary>
+    /// The power rating a region asks of the champion — the map's RECOMMENDED POWER, on the same ruler
+    /// as <c>Hunter.PowerRating</c>.
+    /// </summary>
+    /// <remarks>
+    /// Re-anchored 2026-08-23 with the rating itself (PowerScaleTests): a bare hunter reads ~170, a full
+    /// Legendary set ~2,200. The old <c>PowerTierBase × 350</c> (1,400 … 7,000) was the linear rating's
+    /// scale and would now sit above anything wearable. A flat floor near bare plus 60 per boss tier
+    /// lands the first region a little above a fresh champion and the last below a full Legendary set.
+    /// </remarks>
+    public static int RecommendedPower(RegionDefinition region)
+    {
+        ArgumentNullException.ThrowIfNull(region);
+        return 170 + region.Boss.PowerTierBase * 60;
+    }
+
     public static IReadOnlyList<RegionDefinition> All { get; } = new List<RegionDefinition>
     {
         new()

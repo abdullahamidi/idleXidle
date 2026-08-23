@@ -93,7 +93,7 @@ public sealed class MapScreen
     private static RegionDefinition Def(int i) => Regions.All[i];
 
     /// <summary>A real, monotonic "recommended power" derived from the region's boss power tier.</summary>
-    private static int RegionPower(RegionDefinition def) => def.Boss.PowerTierBase * 350;
+    private static int RegionPower(RegionDefinition def) => Regions.RecommendedPower(def);
 
 
     /// <summary>The shipped padlock, falling back to the hand-drawn one if the texture is missing.</summary>

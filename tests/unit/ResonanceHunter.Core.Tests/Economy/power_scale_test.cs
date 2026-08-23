@@ -87,4 +87,25 @@ public class PowerScaleTests
         Assert.True(Rating(Rarity.Epic, 10) < Rating(Rarity.Legendary, 10));
         Assert.True(Rating(Rarity.Legendary, 1) < Rating(Rarity.Legendary, 30));
     }
+
+    [Fact]
+    public void test_the_maps_recommended_power_sits_on_the_same_ruler()
+    {
+        // The first region asks a little more than a fresh champion; the last asks less than a full
+        // Legendary set and more than a set of Rares — so the map's numbers are reachable and honest.
+        var first = ResonanceHunter.Core.Encounters.Regions.RecommendedPower(ResonanceHunter.Core.Encounters.Regions.All[0]);
+        var last = ResonanceHunter.Core.Encounters.Regions.RecommendedPower(ResonanceHunter.Core.Encounters.Regions.All[^1]);
+        var bare = new Hunter().PowerRating;
+        var rares = new Hunter();
+        rares.Equip(Item("w", ItemBaseType.Weapon, Rarity.Rare, 10, GearTrait.Heavy));
+        rares.Equip(Item("c", ItemBaseType.Charm, Rarity.Rare, 10, GearTrait.Vital));
+        rares.Equip(Item("f", ItemBaseType.AbilityFocus, Rarity.Rare, 10, GearTrait.Focused));
+        Assert.True(first > bare, $"first region {first} should ask more than bare {bare}");
+        Assert.True(first < rares.PowerRating * 1.5f, $"first region {first} should be within reach of a few Rares ({rares.PowerRating})");
+        Assert.True(last > rares.PowerRating, $"last region {last} should ask more than three Rares ({rares.PowerRating})");
+        Assert.True(last < EndgameSet().PowerRating, $"last region {last} should be below a full Legendary set ({EndgameSet().PowerRating})");
+        for (var i = 1; i < ResonanceHunter.Core.Encounters.Regions.All.Count; i++)
+            Assert.True(ResonanceHunter.Core.Encounters.Regions.RecommendedPower(ResonanceHunter.Core.Encounters.Regions.All[i])
+                        >= ResonanceHunter.Core.Encounters.Regions.RecommendedPower(ResonanceHunter.Core.Encounters.Regions.All[i - 1]));
+    }
 }
