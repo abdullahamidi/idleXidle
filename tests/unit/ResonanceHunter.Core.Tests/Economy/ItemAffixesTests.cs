@@ -59,8 +59,12 @@ public class ItemAffixesTests
 
         var trait = GearTraits.ModsOf(item);
         var affixDmg = ItemAffixes.Of(item).Where(a => a.Stat == AffixStat.Damage).Sum(a => a.Magnitude);
-        Assert.True(MathF.Abs(hunter.WornMods.Damage - trait.Damage * (1f + affixDmg)) < 0.001f,
+        // The affix joins the trait in the one per-channel stack (GearMods.Stack, 2026-08-23) rather than
+        // multiplying on top of it — same ceiling for every bonus source.
+        var expected = GearMods.Stack(new[] { trait, new GearMods(1f + affixDmg, 1f, 1f, 1f) }).Damage;
+        Assert.True(MathF.Abs(hunter.WornMods.Damage - expected) < 0.001f,
             "a DAMAGE affix did not fold into WornMods.Damage");
+        Assert.True(hunter.WornMods.Damage > trait.Damage, "a DAMAGE affix must still raise the channel");
     }
 
     [Fact]

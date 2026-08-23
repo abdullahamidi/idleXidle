@@ -271,14 +271,17 @@ public sealed class Hunter
     {
         get
         {
-            var traits = _worn.Values.Aggregate(GearMods.None, (acc, item) => acc.Combine(GearTraits.ModsOf(item)));
+            // Additive across slots with a ceiling (GearMods.Stack) — the fold of Combine that used to
+            // stand here compounded eight slots into the "1.5m item power" weapon.
             var aff = AffixTotals();
-            // Explicit affixes are additive percentages within their channel, applied on top of the trait.
-            return new GearMods(
-                traits.Damage * (1f + aff.GetValueOrDefault(AffixStat.Damage)),
-                traits.Health * (1f + aff.GetValueOrDefault(AffixStat.Health)),
-                traits.Haul * (1f + aff.GetValueOrDefault(AffixStat.Haul)),
-                traits.SkillRate * (1f + aff.GetValueOrDefault(AffixStat.SkillRate)));
+            // Explicit affixes (and the family built-ins and gems that ride their channel) are additive
+            // percentages; they join the trait stack as one more entry so EVERY bonus source in a channel
+            // shares the one ceiling — otherwise the affix sum multiplied the capped trait stack and the
+            // skill clock ran away again through the side door.
+            var affixMods = new GearMods(
+                1f + aff.GetValueOrDefault(AffixStat.Damage), 1f + aff.GetValueOrDefault(AffixStat.Health),
+                1f + aff.GetValueOrDefault(AffixStat.Haul), 1f + aff.GetValueOrDefault(AffixStat.SkillRate));
+            return GearMods.Stack(_worn.Values.Select(GearTraits.ModsOf).Append(affixMods));
         }
     }
 

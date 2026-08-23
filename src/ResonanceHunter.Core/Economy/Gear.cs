@@ -189,10 +189,21 @@ public static class Gear
     /// </remarks>
     public static int PowerRating(float damageMultiplier, float skillRate, float healthMultiplier,
                                   int defense, int maxHealth, float critFactor = 1f)
-        => (int)MathF.Round(damageMultiplier * MathF.Max(0.05f, skillRate)
-                                             * MathF.Max(1f, critFactor) * 120f
-                            + defense * 2f
-                            + healthMultiplier * maxHealth * 0.5f);
+        // 100 x SQRT of the DPS multiplier, was 120 x the multiplier itself. The damage-and-cadence half
+        // of the rating is a DPS multiplier against a bare champion, which at the top of the item system
+        // runs into the thousands; linear, that printed a six- or seven-digit ITEM POWER beside a
+        // four-digit hit (playtest: "1.5m item power veren silah var"). The rating is only ever compared
+        // and differenced (EQUIP BEST, the tooltips' +N POWER), so its SHAPE is free as long as it stays
+        // monotonic — and a root keeps the order, keeps small gains visible at the bottom (a dozen crit
+        // trainings still move it), and lands a bare hunter near 150 and the endgame in four digits.
+        // Two halves on the SAME root scale — offence (the DPS multiplier) and toughness (effective
+        // health: the pool, its multiplier and defence as a soak) — so neither term can quietly become
+        // linear-dominant: before this the rooted offence sat beside a linear `defense x 2`, and a charm
+        // outranked the Legendary weapon on the strength of its defence affixes alone.
+        => (int)MathF.Round(100f * MathF.Sqrt(damageMultiplier * MathF.Max(0.05f, skillRate)
+                                                               * MathF.Max(1f, critFactor))
+                            + 100f * MathF.Sqrt(MathF.Max(0.05f, healthMultiplier) * MathF.Max(1, maxHealth) / 100f
+                                                * (1f + MathF.Max(0, defense) / 100f)));
 
     /// <summary>
     /// A rough "how good is this piece" score, for the inventory's "is this an upgrade?" badge.

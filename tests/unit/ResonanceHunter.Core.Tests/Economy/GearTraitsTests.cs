@@ -176,6 +176,25 @@ public class GearTraitsTests
     }
 
     [Fact]
+    public void test_slots_stack_additively_and_saturate()
+    {
+        // The 2026-08-23 rule: across slots the bonuses ADD (1.5 + 2.0 → +150%, not x3) and the sum
+        // saturates toward the channel ceiling; drawbacks subtract linearly. This is the pin against the
+        // "1.5m item power" weapon — eight compounding slots can never happen again by accident.
+        var two = GearMods.Stack(new[] { new GearMods(1.5f, 1f, 1f, 1f), new GearMods(2f, 1f, 1f, 1f) });
+        Assert.True(two.Damage < 3f, $"two slots must not multiply (got {two.Damage})");
+        Assert.True(two.Damage > 1.9f, $"two slots must still add up to a real bonus (got {two.Damage})");
+
+        var eight = GearMods.Stack(Enumerable.Repeat(new GearMods(1f, 1f, 1f, 2.6f), 8));
+        Assert.True(eight.SkillRate < 1f + GearMods.SkillRateCeiling, $"eight slots must stay under the ceiling (got {eight.SkillRate})");
+        Assert.True(eight.SkillRate > 1.9f, "eight FOCUSED slots must still be a big deal");
+
+        var drawback = GearMods.Stack(new[] { new GearMods(0.8f, 1f, 1f, 1f), new GearMods(0.8f, 1f, 1f, 1f) });
+        Assert.Equal(0.6f, drawback.Damage, 3);   // drawbacks are honest and linear
+        Assert.Equal(GearMods.None, GearMods.Stack(Array.Empty<GearMods>()));
+    }
+
+    [Fact]
     public void test_none_is_the_identity()
     {
         var m = new GearMods(1.5f, 0.8f, 1.1f, 1.2f);
@@ -267,19 +286,21 @@ public class GearTraitsTests
         hunter.Equip(charm);
         hunter.Equip(focus);
 
-        // The trait product, with the BUILT-IN family layer folded in on top — every worn piece's
-        // identity (ItemFamilies) rides the same channel the affixes use, so WornMods is traits x
+        // The trait STACK (additive across slots, GearMods.Stack — the 2026-08-23 fix for the
+        // multiplicative runaway), with the BUILT-IN family layer folded in on top — every worn piece's
+        // identity (ItemFamilies) rides the same channel the affixes use, so WornMods is stacked traits x
         // (1 + summed built-ins). Commons still carry no explicit affixes, so those two layers are
         // exactly what this composition tests.
-        var traitProduct = GearTraits.ModsOf(weapon).Combine(GearTraits.ModsOf(charm)).Combine(GearTraits.ModsOf(focus));
         float Fam(ItemInstance it, AffixStat s)
             => ItemFamilies.BonusOf(it) is { } f && f.Stat == s ? f.Magnitude : 0f;
         float Tot(AffixStat s) => Fam(weapon, s) + Fam(charm, s) + Fam(focus, s);
+        var builtIns = new GearMods(1f + Tot(AffixStat.Damage), 1f + Tot(AffixStat.Health), 1f + Tot(AffixStat.Haul), 1f + Tot(AffixStat.SkillRate));
+        var stacked = GearMods.Stack(new[] { GearTraits.ModsOf(weapon), GearTraits.ModsOf(charm), GearTraits.ModsOf(focus), builtIns });
 
-        Assert.Equal(traitProduct.Damage * (1f + Tot(AffixStat.Damage)), hunter.WornMods.Damage, 5);
-        Assert.Equal(traitProduct.Health * (1f + Tot(AffixStat.Health)), hunter.WornMods.Health, 5);
-        Assert.Equal(traitProduct.Haul * (1f + Tot(AffixStat.Haul)), hunter.WornMods.Haul, 5);
-        Assert.Equal(traitProduct.SkillRate * (1f + Tot(AffixStat.SkillRate)), hunter.WornMods.SkillRate, 5);
+        Assert.Equal(stacked.Damage, hunter.WornMods.Damage, 5);
+        Assert.Equal(stacked.Health, hunter.WornMods.Health, 5);
+        Assert.Equal(stacked.Haul, hunter.WornMods.Haul, 5);
+        Assert.Equal(stacked.SkillRate, hunter.WornMods.SkillRate, 5);
     }
 
     [Fact]

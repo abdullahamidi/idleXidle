@@ -14,9 +14,52 @@ public readonly record struct GearMods(float Damage, float Health, float Haul, f
 {
     public static readonly GearMods None = new(1f, 1f, 1f, 1f);
 
-    /// <summary>Gear stacks multiplicatively — three slots must never add up to a flat runaway.</summary>
+    /// <summary>Two layers of ONE item multiply (a trait on top of a base). Not for stacking slots — see <see cref="Stack"/>.</summary>
     public GearMods Combine(GearMods o)
         => new(Damage * o.Damage, Health * o.Health, Haul * o.Haul, SkillRate * o.SkillRate);
+
+    /// <summary>
+    /// How the EIGHT WORN SLOTS stack: each slot's bonus (its multiplier minus one) is ADDED, the sum
+    /// saturates toward a per-channel ceiling, and drawbacks subtract linearly. 1.0 everywhere = bare.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Slots used to multiply (<see cref="Combine"/> folded over the worn set), and the comment beside it
+    /// said that was the safe choice. It was the runaway: eight slots, six of them drawing from one trait
+    /// pool, compounded to 2.5^6 on a single channel, and then <c>PowerRating</c> multiplied the damage
+    /// channel by the skill-rate channel — a degree-fourteen polynomial in per-slot factors that no
+    /// per-item cap could hold down. Playtest, 2026-08-23: "1.5m item power veren silah var."
+    /// </para>
+    /// <para>
+    /// Additive with a ceiling is the shape every other layer here already has (<c>ItemLevelFactor</c>,
+    /// <c>IlvlFactor</c>, the family scale, gems all saturate): a second FOCUSED piece still helps, a
+    /// sixth helps a little, and no set of eight can exceed the ceiling. Ceilings: damage +300%, health
+    /// +200%, haul +200%, skill rate +150% (the skill clock is the channel that hurt most).
+    /// </para>
+    /// </remarks>
+    public static GearMods Stack(IEnumerable<GearMods> slots)
+    {
+        float dUp = 0f, hUp = 0f, lUp = 0f, rUp = 0f, dDown = 0f, hDown = 0f, lDown = 0f, rDown = 0f;
+        foreach (var m in slots)
+        {
+            Split(m.Damage, ref dUp, ref dDown); Split(m.Health, ref hUp, ref hDown);
+            Split(m.Haul, ref lUp, ref lDown); Split(m.SkillRate, ref rUp, ref rDown);
+        }
+        return new GearMods(
+            Channel(dUp, dDown, DamageCeiling), Channel(hUp, hDown, HealthCeiling),
+            Channel(lUp, lDown, HaulCeiling), Channel(rUp, rDown, SkillRateCeiling));
+
+        static void Split(float mult, ref float up, ref float down)
+        {
+            if (mult >= 1f) up += mult - 1f; else down += 1f - mult;
+        }
+        // Bonuses saturate (S / (1 + S/ceiling) never reaches the ceiling); drawbacks are honest and
+        // linear, floored so a set of all-drawback traits cannot zero a channel.
+        static float Channel(float up, float down, float ceiling)
+            => MathF.Max(0.25f, 1f + up / (1f + up / ceiling) - down);
+    }
+
+    public const float DamageCeiling = 3.0f, HealthCeiling = 2.0f, HaulCeiling = 2.0f, SkillRateCeiling = 1.5f;
 }
 
 /// <summary>
@@ -221,24 +264,29 @@ public static class GearTraits
     {
         // 0.20 (Common) → 7.00 (Legendary), damped so a Legendary is a big deal and not a 700% one,
         // then deepened by however much the player has poured into this particular piece.
-        var up = 1f + 0.10f * Gear.RarityPower(rarity) * Gear.ItemLevelFactor(itemLevel);
+        // 0.05, was 0.10 — and the trait's own edge is no longer a flat x1.15-x1.20 MULTIPLIER on top of
+        // this (which made a Common HEAVY +17% and a Legendary one +150% on its own, before stacking):
+        // every drawback trait now pays a small flat identity plus a rarity/level term, so a Common
+        // still reads as its trait and a Legendary is strong without being a second multiplier.
+        var up = 1f + 0.05f * Gear.RarityPower(rarity) * Gear.ItemLevelFactor(itemLevel);
+        var t = up - 1f;
 
         return trait switch
         {
             // No-drawback traits are deliberately the WEAK ones. "Safe" should cost you the ceiling.
-            GearTrait.Keen => new(1f + 0.5f * (up - 1f), 1f, 1f, 1f),
-            GearTrait.Vital => new(1f, 1f + 0.5f * (up - 1f), 1f, 1f),
-            GearTrait.Attuned => new(1f, 1f, 1f, 1f + 0.5f * (up - 1f)),
+            GearTrait.Keen => new(1f + 0.5f * t, 1f, 1f, 1f),
+            GearTrait.Vital => new(1f, 1f + 0.5f * t, 1f, 1f),
+            GearTrait.Attuned => new(1f, 1f, 1f, 1f + 0.5f * t),
 
-            GearTrait.Heavy => new(up * 1.15f, 1f, 1f, 0.80f),
-            GearTrait.Swift => new(0.90f, 1f, 1f, up * 1.10f),
-            GearTrait.Savage => new(up * 1.10f, 0.85f, 1f, 1f),
-            GearTrait.Warding => new(0.90f, up * 1.15f, 1f, 1f),
-            GearTrait.Greedy => new(1f, 0.85f, up * 1.20f, 1f),
-            GearTrait.Focused => new(0.85f, 1f, 1f, up * 1.20f),
+            GearTrait.Heavy => new(1.12f + 1.15f * t, 1f, 1f, 0.80f),
+            GearTrait.Swift => new(0.90f, 1f, 1f, 1.10f + 1.10f * t),
+            GearTrait.Savage => new(1.10f + 1.10f * t, 0.85f, 1f, 1f),
+            GearTrait.Warding => new(0.90f, 1.12f + 1.15f * t, 1f, 1f),
+            GearTrait.Greedy => new(1f, 0.85f, 1.15f + 1.20f * t, 1f),
+            GearTrait.Focused => new(0.85f, 1f, 1f, 1.15f + 1.20f * t),
 
             // WILD: everything up, health hard down. A real glass cannon, and a real gamble.
-            _ => new(up * 1.10f, 0.70f, 1f, up * 1.10f),
+            _ => new(1.08f + 1.10f * t, 0.70f, 1f, 1.08f + 1.10f * t),
         };
     }
 
