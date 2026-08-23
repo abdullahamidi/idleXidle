@@ -65,16 +65,17 @@ def plan_group(group: str) -> tuple[list[tuple[str, str]], list[str], list[tuple
     elif group == "enemies":
         removes += [os.path.join(ART, "Animations", "Enemies")]
         for key in ENEMIES:
-            for clip in ("idle", "attack"):
+            for clip in ("idle", "attack", "death"):
                 src = os.path.join(STAGING, "enemies", f"{key}_{clip}_strip8_512.png")
                 dst = os.path.join(ART, "Animations", "Enemies", f"{key}_{clip}", f"{key}_{clip}_strip8_512.png")
                 copies.append((src, dst))
-                statics.append((dst, os.path.join(ART, "Enemies", "enemies", key, f"{key}_{clip}_01.png")))
+                if clip != "death":
+                    statics.append((dst, os.path.join(ART, "Enemies", "enemies", key, f"{key}_{clip}_01.png")))
             removes += [os.path.join(ART, "Enemies", "enemies", key)]
     elif group == "bosses":
         removes += [os.path.join(ART, "Animations", "Bosses"), os.path.join(ART, "Bosses")]
         for key in BOSSES:
-            for clip in ("idle", "attack"):
+            for clip in ("idle", "attack", "death"):
                 src = os.path.join(STAGING, "bosses", f"{key}_{clip}_strip8_512.png")
                 dst = os.path.join(ART, "Animations", "Bosses", f"{key}_{clip}", f"{key}_{clip}_strip8_512.png")
                 copies.append((src, dst))

@@ -46,8 +46,8 @@ frame count from `width / height`. Bosses moved from `_strip8_1024` to the same 
 | Owner | Clips | Notes |
 |---|---|---|
 | Champion (each of the ten) | `idle`, `attack`, `cast`, `death` | idle loops, the others play once on the combat beat; `cast` plays on a Skill event, `death` on the fall |
-| Enemy | `idle`, `attack` | the stone sentinel's `slam` is gone — every enemy's clip is `attack` |
-| Boss | `idle`, `attack` | |
+| Enemy | `idle`, `attack`, `death` | the stone sentinel's `slam` is gone — every enemy's clip is `attack`; `death` (2026-08-23) plays from the kill, holds, fades — the plume rises over the body half a second later |
+| Boss | `idle`, `attack`, `death` | the boss's fall holds for the whole wave break |
 | Effect | one 8-frame strip | authored white / pale so the Source tint at play time carries the colour |
 
 Clip prompts: idle = "standing idle, feet planted and never moving, only breathing … returns to the
