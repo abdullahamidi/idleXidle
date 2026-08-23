@@ -80,7 +80,11 @@ public static class CharacterRoster
             Blurb = "Keeps time. The fight is what happens between the beats.",
             Lean = Branch.Tempo, Aptitude = Form.Projectile,
             PassiveName = "FIRST BEAT",
-            PassiveText = "Your first cast each wave is free and hits twice as hard.",
+            // 2026-08-23: this said "free", which reads as a resource cost — the game has no mana and
+            // never had one. FreeOpeningCast waives the WAIT (the 700ms wave-opening pause, and the
+            // one-cooldown wait before a skill's opener), and FirstHitMultiplier doubles the first hit
+            // landed on EACH enemy, not the first cast. Both halves now say what they really do.
+            PassiveText = "The wave's first cast has no wait. Your first hit on each enemy is doubled.",
             Shape = new SkillShape { FreeOpeningCast = true, FirstHitMultiplier = 2f },
             Unlock = CharacterUnlock.Conquest("marrow_wastes"),
         },

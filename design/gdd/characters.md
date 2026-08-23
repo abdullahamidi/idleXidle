@@ -39,7 +39,7 @@ Laid out on the mastery tree, so a player who has read the tree already knows ha
 | THE SEEKER | — | — | **EVEN HAND** — every skill hits 8% harder | Start |
 | THE ANVIL | Weight | Strike | **DEADWEIGHT** — a third of overkill carries onward | Conquer Cinderworks |
 | THE CHORUS | Spread | Aura | **MANY MOUTHS** — +5% damage per living creature | Conquer Umbral Reach |
-| THE METRONOME | Tempo | Projectile | **FIRST BEAT** — opening cast free, at double force | Conquer Marrow Wastes |
+| THE METRONOME | Tempo | Projectile | **FIRST BEAT** — the wave's opening cast waits for nothing; the first hit on each enemy is doubled | Conquer Marrow Wastes |
 | THE UNBROKEN | Endure | Transformation | **SECOND WIND** — first killing blow leaves you at 1 | Conquer The Still Archive |
 | THE FALLING TOWER | Weight→Tempo | Strike | **MOMENTUM** — first hit weaker, every later hit stronger | Conquer The Pale Choir |
 | THE QUIVER | Tempo→Spread | Projectile | **LOOSE AGAIN** — a kill fires the next shot immediately | Quest: THE HOLLOW HUNT |

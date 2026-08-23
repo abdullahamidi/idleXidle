@@ -1273,7 +1273,7 @@ public sealed class SoloExpeditionScreen
         // A shorter slide that FADES in: the old 280-px entry began past the scissor edge, so a wave
         // appeared as a hard-cut slice growing out of nothing — the box the playtest could see.
         var enter = (int)(_enemyEnter * 150f);
-        var enterTint = EnemyTint * (1f - _enemyEnter * _enemyEnter);
+        var enterTint = Color.Lerp(EnemyTint * (1f - _enemyEnter * _enemyEnter), Ember, _enemyWindup * 0.38f);   // fade-in, then the ember wind-up flush
         var lunge = (int)(_enemyLunge * -40f);
 
         var w = (int)(EnemyBox.Width * scale);
@@ -1419,7 +1419,7 @@ public sealed class SoloExpeditionScreen
 
         var elunge = (int)(_enemyLunge * -40f);
         var enter = (int)(_enemyEnter * 150f);   // shorter + faded, see DrawComposition
-        var enterTint = EnemyTint * (1f - _enemyEnter * _enemyEnter);
+        var enterTint = Color.Lerp(EnemyTint * (1f - _enemyEnter * _enemyEnter), Ember, _enemyWindup * 0.38f);   // fade-in, then the ember wind-up flush
         var ebox = new Rectangle(EnemyBox.X + elunge + enter, EnemyBox.Y, EnemyBox.Width, EnemyBox.Height);
         _ui.GroundShadow(b, ebox.Center.X, ebox.Bottom - 10, (int)(ebox.Width * 0.60f), 42, 0.6f);
 
@@ -1458,11 +1458,9 @@ public sealed class SoloExpeditionScreen
                 _ui.Fill(b, new Rectangle(ebox.X + 40, ebox.Y + 40, ebox.Width - 80, ebox.Height - 80), Ember);
         }
 
-        if (_enemyWindup > 0f)
-        {
-            var r = (int)(16 + _enemyWindup * 32);
-            Outline(b, new Rectangle(ab.X - r, figTop - r, ab.Width + r * 2, ebox.Height + r * 2), Ember, 4);
-        }
+        // The wind-up telegraph is the attack CLIP itself plus the ember tint blended into the sprite above
+        // (playtest 2026-08-23: the old growing red rectangle around the enemy read as "a red box — what is
+        // it?" and looked like debug chrome; a pixel frame has no place in a hand-drawn arena).
 
         // Quiet 130×12 bar ~18px above the VISIBLE top of the figure (§24.1), via the sprite's alpha bounds.
         // The strip is drawn with its measured headroom trimmed, so the visible top is the box top.

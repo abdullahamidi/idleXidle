@@ -190,7 +190,7 @@ public static class MasteryCatalog
             S with { FirstHitMultiplier = 1.35f });
         Minor(n, b, "hasten", "HASTEN — +20% SKILL RATE",
             S with { SkillRate = 1.20f });
-        Minor(n, b, "preparation", "PREPARATION — EVERY SKILL'S FIRST CAST IS FREE",
+        Minor(n, b, "preparation", "PREPARATION — YOUR FIRST CAST OF A WAVE COMES WITH NO WAIT",
             S with { FreeOpeningCast = true });
         Minor(n, b, "focus", "FOCUS — +10% CRITICAL CHANCE",
             S with { BonusCritPercent = 10f });

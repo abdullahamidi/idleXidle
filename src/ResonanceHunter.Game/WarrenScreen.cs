@@ -211,25 +211,35 @@ public sealed class WarrenScreen
     private void DrawBonuses(SpriteBatch b)
     {
         _ui.PanelQuiet(b, BonusStrip);
-        _ui.TextCenterBig(b, "WARREN BONUSES", BonusStrip.Center.X, BonusStrip.Y + 16, Gold, UiTypography.PanelTitle);
+        _ui.TextCenterBig(b, "WARREN BONUSES", BonusStrip.Center.X, BonusStrip.Y + 12, Gold, UiTypography.PanelTitle);
+        // Playtest 2026-08-23: "ALL PRODUCTION, CONQUEST and WARREN have no icons, and I could not
+        // understand what they do. CONQUEST what, +40%?" Each chip now carries its own icon and the
+        // one line that says where its number comes from, and the strip opens by saying what the
+        // numbers DO. The old sixth chip (WARREN LV n) was not a bonus at all and repeated the
+        // overview panel two hand-widths to the left — it is gone.
+        _ui.TextCenterBig(b, "ADD THEM UP — THAT IS THE MULTIPLIER ON EVERYTHING THE WARREN MAKES",
+                          BonusStrip.Center.X, BonusStrip.Y + 46, Slate, UiTypography.Secondary);
 
-        var entries = new (Color Gem, string Value, string Label)[]
+        var regions = Warren.ConqueredRegions;
+        var entries = new (string Key, Color Gem, string Value, string Label, string Why)[]
         {
-            (GleamC, $"+{Warren.ResourceBonus(WarrenResource.Gleam) * 100f:0}%", "GLEAM"),
-            (MasteryC, $"+{Warren.ResourceBonus(WarrenResource.Mastery) * 100f:0}%", "INSIGHT"),
-            (DustC, $"+{Warren.ResourceBonus(WarrenResource.Dust) * 100f:0}%", "DUST"),
-            (Met, $"+{Warren.AllProductionBonus * 100f:0}%", "ALL PRODUCTION"),
-            (Ember, $"+{Warren.ConquestBonus * 100f:0}%", "CONQUEST"),
-            (Gold, $"LV {Warren.Level}", "WARREN"),
+            ("ui_gleam_coin", GleamC, $"+{Warren.ResourceBonus(WarrenResource.Gleam) * 100f:0}%", "GLEAM", "2% A LEVEL"),
+            ("ui_insight", MasteryC, $"+{Warren.ResourceBonus(WarrenResource.Mastery) * 100f:0}%", "INSIGHT", "1.3% A LEVEL"),
+            ("ui_memory_dust", DustC, $"+{Warren.ResourceBonus(WarrenResource.Dust) * 100f:0}%", "DUST", "0.9% A LEVEL"),
+            ("icon_blessing_amplifier", Met, $"+{Warren.AllProductionBonus * 100f:0}%", "ALL THREE", "3% A LEVEL"),
+            ("icon_blessing_expansion", Ember, $"+{Warren.ConquestBonus * 100f:0}%", "CONQUEST",
+                regions == 1 ? "1 REGION TAKEN" : $"{regions} REGIONS TAKEN"),
         };
         var slot = (BonusStrip.Width - 48) / entries.Length;
         for (var i = 0; i < entries.Length; i++)
         {
-            var (gem, value, label) = entries[i];
+            var (key, gem, value, label, why) = entries[i];
             var cx = BonusStrip.X + 24 + slot * i + slot / 2;
-            ResGlyph(b, new Rectangle(cx - 74, BonusStrip.Y + 72, 40, 40), ResFromLabel(label), gem);   // currencies wear their icons; the rest keep the diamond
-            _ui.TextBig(b, value, cx - 24, BonusStrip.Y + 68, Bone, UiTypography.PanelTitle);
-            _ui.TextCenterBig(b, label, cx, BonusStrip.Y + 116, Slate, UiTypography.Secondary);
+            if (_ui.Assets.Get(key) is { } ic) b.Draw(ic, new Rectangle(cx - 76, BonusStrip.Y + 78, 40, 40), Color.White);
+            else _ui.Diamond(b, new Rectangle(cx - 74, BonusStrip.Y + 80, 36, 36), gem);
+            _ui.TextBig(b, value, cx - 26, BonusStrip.Y + 76, Bone, UiTypography.PanelTitle);
+            _ui.TextCenterBig(b, label, cx, BonusStrip.Y + 124, Bone, UiTypography.Secondary);
+            _ui.TextCenterBig(b, why, cx, BonusStrip.Y + 150, Slate, UiTypography.Secondary);
         }
     }
 
