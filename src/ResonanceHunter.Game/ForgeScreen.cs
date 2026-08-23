@@ -1271,7 +1271,16 @@ public sealed class ForgeScreen
         var anyTrio = _inv.Where(i => Gear.IsWearable(i) && !IsWorn(hunter, i) && i.Gems.Count == 0)
                           .DistinctBy(i => i.InstanceId)
                           .GroupBy(i => i.Rarity).Any(g => g.Key != Rarity.Legendary && g.Count() >= 3);
-        if (gemMode)
+        // The JUNK question comes FIRST, whatever the tab. J is not gated on the tab (nor should it be),
+        // and OpenConfirm does not move the tab for JunkAll — so under the gem drawer the question used
+        // to be armed with no drawing surface: the forge's keys died and the next Escape was spent
+        // cancelling something invisible (review 2026-08-23).
+        if (_confirm is { Kind: ScrapKind.JunkAll })
+        {
+            // The junk question is asked HERE, where its button was — not as a modal over the screen.
+            DrawJunkQuestion(b, hunter, hit, clicked);
+        }
+        else if (gemMode)
         {
             // MERGE and SALVAGE JUNK act on GEAR — under the gem drawer they would take from a list
             // the player cannot see. The foot says what a row does instead.
@@ -1289,11 +1298,6 @@ public sealed class ForgeScreen
             for (var i = 0; i < help.Length; i++)
                 _ui.TextBig(b, _ui.ShortenBig(help[i], gw, UiTypography.Secondary),
                             gx, BagPanel.Bottom - 146 + i * 24, i < 2 ? Bone : Slate, UiTypography.Secondary);
-        }
-        else if (_confirm is { Kind: ScrapKind.JunkAll })
-        {
-            // The junk question is asked HERE, where its button was — not as a modal over the screen.
-            DrawJunkQuestion(b, hunter, hit, clicked);
         }
         else
         {
@@ -2339,9 +2343,16 @@ public sealed class ForgeScreen
         var cardW = Math.Max(720, n * RevealCol + 140);
         var full = new Rectangle(960 - cardW / 2, 300, cardW, 470);
 
-        // THE HOLD. Only once the card has actually arrived: freezing the shake because the cursor
-        // happened to be parked mid-screen would stall the ceremony before it started.
-        var arrived = t >= burstEnds + cardIn;
+        // THE HOLD. Only once the card has FINISHED arriving — the plate landing is not enough. The
+        // first cut latched at burstEnds + cardIn, which is the moment the plate lands and the moment
+        // the drops START falling in: park the cursor there and the clock stopped on a card with no
+        // items, no material count and no buttons, forever (review 2026-08-23, high). The latch now
+        // waits for the last drop to settle and for the material count-up to finish, and a CASCADE
+        // entry never latches at all — it carries no buttons (`acts` is false while _revealBrief), so
+        // a pointer parked mid-screen would stall the whole OPEN ALL for nothing.
+        var settled = burstEnds + cardIn
+                      + MathF.Max(Math.Max(0, n - 1) * stagger + 0.18f, _revealBrief ? 0.25f : 0.5f);
+        var arrived = !_revealBrief && t >= settled;
         var pointerIn = arrived && !_revealClosing && full.Contains(mouse);
         _revealPointerHold = pointerIn;
 
@@ -2625,6 +2636,9 @@ public sealed class ForgeScreen
         var bw = (w - 20) / 2;
         var keep = new Rectangle(x, y + 186, bw, 56);
         var doIt = new Rectangle(x + bw + 20, y + 186, bw, 56);
+        // Registered as their own hot rects rather than trusting the panel to contain them — the host
+        // routes a click to the reveal only when it lands on a registered rect.
+        _revealHots.Add(keep); _revealHots.Add(doIt);
         if (_ui.Button(b, keep, "NO — KEEP IT", mouse, click)) { _revealAsk = null; return; }
         if (_ui.Button(b, doIt, kind == ScrapKind.Sell ? "YES — SELL IT" : "YES — SALVAGE IT", mouse, click))
         {
@@ -2669,8 +2683,14 @@ public sealed class ForgeScreen
 
         if (_revealAsk is { } ask && _inv.FirstOrDefault(i => i.InstanceId == ask.ItemId) is { } subject)
         {
+            // The question's own layout needs 260 px (18 + 186 + 56). With one row of drops the cells
+            // are only 236 px tall, so the two answer buttons hung BELOW the rect — and the rect is
+            // what RevealWantsClick tests, so the lower half of YES/NO dismissed the summary instead
+            // of answering it (review 2026-08-23, high). RevealCellH + 64 = 300 covers the layout and
+            // still stops short of KEEP ALL at cellsTop + 308.
             DrawRevealQuestion(b, hunter, subject, ask.Kind,
-                               new Rectangle(panel.Center.X - 340, cellsTop, 680, cellsBottom - cellsTop),
+                               new Rectangle(panel.Center.X - 340, cellsTop, 680,
+                                             Math.Max(RevealCellH + 64, cellsBottom - cellsTop)),
                                mouse, click);
         }
         else

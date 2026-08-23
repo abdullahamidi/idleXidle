@@ -217,8 +217,16 @@ public sealed class WarrenScreen
         // one line that says where its number comes from, and the strip opens by saying what the
         // numbers DO. The old sixth chip (WARREN LV n) was not a bonus at all and repeated the
         // overview panel two hand-widths to the left — it is gone.
-        _ui.TextCenterBig(b, "ADD THEM UP — THAT IS THE MULTIPLIER ON EVERYTHING THE WARREN MAKES",
-                          BonusStrip.Center.X, BonusStrip.Y + 46, Slate, UiTypography.Secondary);
+        // The first cut said "add them up", which is wrong: only ONE of the three currency chips ever
+        // applies to a given currency (Warren.Multiplier = 1 + all three + conquest + that currency's
+        // own chip). So the line gives the three answers instead, straight from Multiplier — the screen
+        // must never re-derive the sum.
+        _ui.TextCenterBig(b,
+            $"GLEAM x{Warren.Multiplier(WarrenResource.Gleam):0.00}   ·   "
+            + $"INSIGHT x{Warren.Multiplier(WarrenResource.Mastery):0.00}   ·   "
+            + $"DUST x{Warren.Multiplier(WarrenResource.Dust):0.00}"
+            + "   —   EACH IS 1 PLUS ALL THREE PLUS CONQUEST PLUS ITS OWN CHIP",
+            BonusStrip.Center.X, BonusStrip.Y + 46, Slate, UiTypography.Secondary);
 
         var regions = Warren.ConqueredRegions;
         var entries = new (string Key, Color Gem, string Value, string Label, string Why)[]
@@ -226,7 +234,7 @@ public sealed class WarrenScreen
             ("ui_gleam_coin", GleamC, $"+{Warren.ResourceBonus(WarrenResource.Gleam) * 100f:0}%", "GLEAM", "2% A LEVEL"),
             ("ui_insight", MasteryC, $"+{Warren.ResourceBonus(WarrenResource.Mastery) * 100f:0}%", "INSIGHT", "1.3% A LEVEL"),
             ("ui_memory_dust", DustC, $"+{Warren.ResourceBonus(WarrenResource.Dust) * 100f:0}%", "DUST", "0.9% A LEVEL"),
-            ("icon_blessing_amplifier", Met, $"+{Warren.AllProductionBonus * 100f:0}%", "ALL THREE", "3% A LEVEL"),
+            ("icon_blessing_amplifier", Met, $"+{Warren.AllProductionBonus * 100f:0}%", "ALL THREE", "3% A LEVEL AFTER 1"),
             ("icon_blessing_expansion", Ember, $"+{Warren.ConquestBonus * 100f:0}%", "CONQUEST",
                 regions == 1 ? "1 REGION TAKEN" : $"{regions} REGIONS TAKEN"),
         };

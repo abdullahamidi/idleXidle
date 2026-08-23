@@ -531,7 +531,8 @@ public sealed class BuildScreen
             // had taken a capstone but no Specialisation was refused with no message at all. It now
             // reads the same rule the refusal came from and says which branch already holds it.
             else _msg = Mastery.IsTaken(node.Id) ? "ALREADY TAKEN." :
-                Mastery.Available <= 0 ? "NO MASTERY POINTS — GO DEEPER." :
+                Mastery.Available < node.Cost
+                    ? $"NEEDS {node.Cost} POINTS — YOU HAVE {Mastery.Available}. GO DEEPER." :
                 node.Kind == MasteryKind.Mastery && Mastery.MasteredBranch() is { } heldBranch
                     ? $"YOU ALREADY TOOK THE {Short(heldBranch)} CAPSTONE — ONE CAPSTONE PER HUNTER." :
                 node.Kind == MasteryKind.Specialisation && Mastery.Affinity() is not null
@@ -963,8 +964,10 @@ public sealed class BuildScreen
         var col = BranchColor(br);
         // A direction the player has actually walked burns; one they have not is still legible but
         // quiet. Bridges are excluded: a bridge is filed under one branch but belongs to neither.
+        // START is filed under Weight (it has to be filed somewhere) and is always taken, so without
+        // the Start test WEIGHT burned as "walked" on a brand-new hunter who has spent nothing.
         var walked = MasteryCatalog.Nodes.Any(n => n.Branch == br && n.Kind != MasteryKind.Bridge
-                                                   && Mastery.IsTaken(n.Id));
+                                                   && n.Kind != MasteryKind.Start && Mastery.IsTaken(n.Id));
         _ui.TextCenterBig(b, Short(br), (int)p.X, (int)p.Y - 23, walked ? col : col * 0.72f,
                           UiTypography.SectionTitle);
         _ui.TextCenterBig(b, BranchPromise(br), (int)p.X, (int)p.Y + 7, Slate, UiTypography.Secondary);
