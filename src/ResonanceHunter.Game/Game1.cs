@@ -80,6 +80,8 @@ public class Game1 : Game
     private int _sfxVolume = 8;     // 0..10 notches
     private int _musicVolume = 5;   // 0..10 notches
     private bool _askBeforeScrap = true;
+    // The fight's text and effects — quality-of-life switches (playtest 2026-08-23), same prefs file.
+    private bool _showDamageNumbers = true, _showSkillCallouts = true, _showHitEffects = true, _showScreenFlash = true;
 
     // art-bible §4.1. Hearth Gold marks EARNED states only — never decoration.
     private static readonly Color VoidInk = new(0x1B, 0x16, 0x20);
@@ -184,7 +186,8 @@ public class Game1 : Game
     private readonly HashSet<int> _traderBought = new();
     private List<ItemInstance>? _traderStock;
     private int _traderStockLevel;
-    private ItemBaseType? _chestKeepSlot;
+    /// <summary>The keep-filter's wanted slots — several at once since 2026-08-23 (empty = any).</summary>
+    private readonly HashSet<ItemBaseType> _chestKeepSlots = new();
     private float? _pendingRevealPose;   // RH_SHOT_T for the chest reveal, applied once the fixture has opened one
     private BuildScreen _buildScreen = null!;
     private bool _showBuild;
@@ -357,6 +360,8 @@ public class Game1 : Game
             var prefs = Display.Load();
             (_displayMode, _windowedScale) = (prefs.Mode, prefs.WindowedScale);
             (_sfxVolume, _musicVolume, _askBeforeScrap) = (prefs.SfxVolume, prefs.MusicVolume, prefs.AskBeforeScrap);
+            (_showDamageNumbers, _showSkillCallouts, _showHitEffects, _showScreenFlash)
+                = (prefs.ShowDamageNumbers, prefs.ShowSkillCallouts, prefs.ShowHitEffects, prefs.ShowScreenFlash);
             ApplyDisplay();
         }
         else
@@ -467,8 +472,13 @@ public class Game1 : Game
         _traderWeek = save.TraderWeekStamp;
         _traderBought.Clear();
         foreach (var slot in save.TraderBoughtSlots) _traderBought.Add(slot);
-        _chestKeepSlot = Enum.TryParse<ItemBaseType>(save.ChestKeepSlot ?? "", out var keepSlot)
-            ? keepSlot : null;
+        _chestKeepSlots.Clear();
+        foreach (var name in save.ChestKeepSlots)
+            if (Enum.TryParse<ItemBaseType>(name, out var slotWanted)) _chestKeepSlots.Add(slotWanted);
+        // An older save carried one slot; it becomes the one wanted slot.
+        if (_chestKeepSlots.Count == 0 && Enum.TryParse<ItemBaseType>(save.ChestKeepSlot ?? "", out var legacySlot))
+            _chestKeepSlots.Add(legacySlot);
+        _ = Enum.TryParse<ItemBaseType>(save.ChestKeepSlot ?? "", out _);   // (legacy field read above)
         _chestsCredited = save.ChestsCredited;
 
         var roster = SaveSystem.RestoreRoster(save);
@@ -692,7 +702,8 @@ public class Game1 : Game
             ChestKeepMinTier = _chestKeepMinTier,
             TraderWeekStamp = _traderWeek,
             TraderBoughtSlots = _traderBought.ToList(),
-            ChestKeepSlot = _chestKeepSlot?.ToString(),
+            ChestKeepSlot = _chestKeepSlots.Count == 1 ? _chestKeepSlots.First().ToString() : null,   // legacy mirror
+            ChestKeepSlots = _chestKeepSlots.Select(sl => sl.ToString()).ToList(),
             ChestsCredited = _chestsCredited,
             MasteryEarned = _deepestEver,          // stored as deepest-ever; Earned is re-derived on load
             ChampionGleamRate = _champGleamRate,
@@ -842,7 +853,7 @@ public class Game1 : Game
         // The keep-filter (TAKE ONLY, on the HUNT screen since 2026-08-23), seeded ONCE — the screen
         // owns it from here; the host reads it back on FilterDirty (UpdateExpedition).
         _expedition.KeepMinTier = _chestKeepMinTier;
-        _expedition.KeepSlot = _chestKeepSlot;
+        _expedition.KeepSlots.Clear(); foreach (var sl in _chestKeepSlots) _expedition.KeepSlots.Add(sl);
         if (_pendingRunLog is not null) _expedition.Log.Restore(_pendingRunLog);
         if (_pendingOfflineYield is not null) _automation.ReportOffline(_pendingOfflineYield);
         _automation.Cores += _pendingCores;
@@ -2405,6 +2416,10 @@ public class Game1 : Game
         _expedition.RegionId = def.Id;                // region id → the boss creature (boss_<region>) on boss waves
         _expedition.EnemyBias = def.CombatBias;       // region character → the enemy's bite tempo (feel + TRAP synergy)
         _expedition.CorruptionTier = _world.CorruptionTier;   // → creature tint, the boss's epithet, the header line
+        _expedition.ShowDamageNumbers = _showDamageNumbers;   // the settings' quality-of-life switches
+        _expedition.ShowSkillCallouts = _showSkillCallouts;
+        _expedition.ShowHitEffects = _showHitEffects;
+        _expedition.ShowScreenFlash = _showScreenFlash;
         _expedition.Loadout = _loadout;               // the player's build, handed over live…
         _expedition.Tree = _dust;                     // …powered by the Dust tree's passive nodes
         _expedition.Mastery = _mastery;               // …and the mastery tree (affinity + node bonuses)
@@ -2421,7 +2436,8 @@ public class Game1 : Game
         if (_expedition.FilterDirty)
         {
             _expedition.FilterDirty = false;
-            (_chestKeepMinTier, _chestKeepSlot) = (_expedition.KeepMinTier, _expedition.KeepSlot);
+            _chestKeepMinTier = _expedition.KeepMinTier;
+            _chestKeepSlots.Clear(); foreach (var sl in _expedition.KeepSlots) _chestKeepSlots.Add(sl);
             Save();
         }
         if (_expedition.WantsBuild) { _expedition.WantsBuild = false; OpenNav(3); }
@@ -2655,7 +2671,7 @@ public class Game1 : Game
 
         // THE KEEP-FILTER. A chest the player said no to never lands — it arrives as a little Scrap,
         // and the banner must not sing about a chest that is not there (hence false, not true).
-        if (!Chests.PassesKeepFilter(rolled, _chestKeepMinTier, _chestKeepSlot))
+        if (!Chests.PassesKeepFilter(rolled, _chestKeepMinTier, _chestKeepSlots))
         {
             _hunter.AddMaterials(Chests.FilterCompensation(rolled));
             return false;
@@ -2697,8 +2713,7 @@ public class Game1 : Game
         // against the stage banner above it and read as a seam in the chrome; a panel with its own border
         // sits clearly ON TOP of the scene, which is what a transient toast should do.
         var r = new Rectangle(660, 176, 600, 96);
-        if (_assets.Get("ui_panel_modal_wide") is { } bg) _batch.Draw(bg, r, Color.White * fade);
-        else _ui.Panel(_batch, r);
+        _ui.PanelNine(_batch, r, "ui_panel_modal_wide", tint: Color.White * fade);
         _ui.TextCenterBig(_batch, parts[0], r.Center.X, r.Y + 22, _bootColor * fade, UiTypography.OverlayTitle);
         if (parts.Length > 1) _ui.TextCenterBig(_batch, parts[1], r.Center.X, r.Y + 56, Bone * fade, UiTypography.OverlayBody);
     }
@@ -2995,16 +3010,19 @@ public class Game1 : Game
     }
 
     private void SaveDisplay() => Display.Save(new Display.GamePrefs(
-        _displayMode, _windowedScale, _sfxVolume, _musicVolume, _askBeforeScrap));
+        _displayMode, _windowedScale, _sfxVolume, _musicVolume, _askBeforeScrap,
+        _showDamageNumbers, _showSkillCallouts, _showHitEffects, _showScreenFlash));
 
     // ── Settings ──────────────────────────────────────────────────────────────────────────────
     // 1920-space (scale-1 chrome). The panel is 960x720 — aspect 1.33, safely above UiKit.Panel's 1.30
     // frame-selection line, so growing it for the sound section did not swap its frame art.
-    private static readonly Rectangle SettingsPanel = new(480, 140, 960, 720);
+    // 2026-08-23: grown to 1250x960 (aspect 1.30 — still on the medium side of the 1.30 line, so the
+    // frame art is unchanged) for the FIGHT TEXT AND EFFECTS block. The content column stays at x 536..1404.
+    private static readonly Rectangle SettingsPanel = new(335, 60, 1250, 960);
     private static Rectangle ModeBtn(int i) => new(536, 272 + i * 84, 384, 72);
     private static Rectangle ScaleBtn(int i) => new(1000, 272 + i * 84, 384, 72);
-    private static readonly Rectangle SettingsClose = new(620, 760, 300, 56);
-    private static readonly Rectangle SettingsQuit = new(1000, 760, 300, 56);
+    private static readonly Rectangle SettingsClose = new(620, 940, 300, 56);
+    private static readonly Rectangle SettingsQuit = new(1000, 940, 300, 56);
 
     /// <summary>The persistent way back here — a gear in the corner, the convention every game teaches.</summary>
     private static readonly Rectangle SettingsGear = new(1842, 8, 60, 60);
@@ -3024,7 +3042,7 @@ public class Game1 : Game
         _ui.Panel(_batch, SettingsPanel);
         // The panel is DARK glass, so light text on it — gold heading, bone labels. (It used to use dark
         // parchment inks here, which were invisible on the dark panel.)
-        TextCenter("SETTINGS", 960, 172, Gold);
+        TextCenter("SETTINGS", 960, 118, Gold);
 
         Text("MODE", 536, 232, Bone);
 
@@ -3105,6 +3123,18 @@ public class Game1 : Game
             SaveDisplay();
         }
 
+        // ── FIGHT TEXT AND EFFECTS. Quality-of-life switches (playtest 2026-08-23: "hasar textlerini
+        //    kapatma, skill yazılarını kapatma, gibi detaylı QoL ayarları"). Each is a plain ON/OFF;
+        //    the hunt reads them on its next frame (fed in Update with the other hosted flags). ──
+        _ui.Fill(_batch, new Rectangle(536, 766, 848, 2), new Color(0x3A, 0x3A, 0x44));
+        Text("FIGHT TEXT AND EFFECTS", 536, 782, Gold);
+        var changed = false;
+        changed |= ToggleRow("DAMAGE NUMBERS", 536, 820, ref _showDamageNumbers);
+        changed |= ToggleRow("SKILL NAMES", 1000, 820, ref _showSkillCallouts);
+        changed |= ToggleRow("HIT EFFECTS", 536, 874, ref _showHitEffects);
+        changed |= ToggleRow("RED FLASH", 1000, 874, ref _showScreenFlash);
+        if (changed) SaveDisplay();
+
         if (_ui.Button(_batch, SettingsClose, "CLOSE", ChromeMouse, _clicked))
             _showSettings = false;
 
@@ -3119,6 +3149,16 @@ public class Game1 : Game
             Save();
             Exit();
         }
+    }
+
+    /// <summary>A label and an ON/OFF button. Returns true when the click flipped it.</summary>
+    private bool ToggleRow(string label, int x, int y, ref bool value)
+    {
+        Text(label, x, y + 10, Bone);
+        var btn = new Rectangle(x + 276, y, 108, 44);
+        if (!_ui.Button(_batch, btn, value ? "ON" : "OFF", ChromeMouse, _clicked)) return false;
+        value = !value;
+        return true;
     }
 
     /// <summary>An eleven-notch volume row. Returns the clicked notch, or -1.</summary>

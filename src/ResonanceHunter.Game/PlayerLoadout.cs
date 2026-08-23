@@ -34,6 +34,15 @@ public sealed class PlayerLoadout
     private readonly List<string> _keystoneIds = new();
 
     public IReadOnlyList<SkillChoice> Skills => _skills;
+
+    /// <summary>
+    /// A fingerprint of every choice that feeds <see cref="ToBuild"/>: the woven skills, the socketed
+    /// keystones, the capacities. The hunt compares it at each wave boundary and re-composes the fight's
+    /// build when it changed — no revision counter to forget in a mutator.
+    /// </summary>
+    public string Signature =>
+        string.Join(";", _skills.Select(s => $"{s.Source}:{s.Form}:{s.VowId}")) + "|" + string.Join(",", _keystoneIds)
+        + $"|{SkillCapacity}|{KeystoneCapacity}";
     public IReadOnlyList<string> KeystoneIds => _keystoneIds;
 
     /// <summary>The skill slots every character starts with. The FLOOR, not the rule — see <see cref="SkillCapacity"/>.</summary>

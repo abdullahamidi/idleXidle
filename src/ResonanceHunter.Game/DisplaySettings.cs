@@ -59,7 +59,8 @@ public static class Display
     /// a new game must not resurrect a dialog they turned off.
     /// </remarks>
     public readonly record struct GamePrefs(
-        DisplayMode Mode, int WindowedScale, int SfxVolume, int MusicVolume, bool AskBeforeScrap);
+        DisplayMode Mode, int WindowedScale, int SfxVolume, int MusicVolume, bool AskBeforeScrap,
+        bool ShowDamageNumbers = true, bool ShowSkillCallouts = true, bool ShowHitEffects = true, bool ShowScreenFlash = true);
 
     public static void Save(GamePrefs p)
     {
@@ -67,7 +68,8 @@ public static class Display
         {
             System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(PrefsPath)!);
             System.IO.File.WriteAllText(PrefsPath,
-                $"{p.Mode}\n{p.WindowedScale}\n{p.SfxVolume}\n{p.MusicVolume}\n{(p.AskBeforeScrap ? 1 : 0)}\n");
+                $"{p.Mode}\n{p.WindowedScale}\n{p.SfxVolume}\n{p.MusicVolume}\n{(p.AskBeforeScrap ? 1 : 0)}\n"
+                + $"{(p.ShowDamageNumbers ? 1 : 0)}\n{(p.ShowSkillCallouts ? 1 : 0)}\n{(p.ShowHitEffects ? 1 : 0)}\n{(p.ShowScreenFlash ? 1 : 0)}\n");
         }
         catch (System.IO.IOException) { /* prefs are a convenience; never block the game on them */ }
         catch (UnauthorizedAccessException) { }
@@ -94,7 +96,10 @@ public static class Display
             var sfx = int.TryParse(At(2), out var fx) ? Math.Clamp(fx, 0, 10) : Default.SfxVolume;
             var music = int.TryParse(At(3), out var mu) ? Math.Clamp(mu, 0, 10) : Default.MusicVolume;
             var ask = At(4) != "0";
-            return new GamePrefs(mode, scale, sfx, music, ask);
+            // Lines 6-9 (2026-08-23): the fight's text and effects. Absent in an older file = on.
+            return new GamePrefs(mode, scale, sfx, music, ask,
+                ShowDamageNumbers: At(5) != "0", ShowSkillCallouts: At(6) != "0",
+                ShowHitEffects: At(7) != "0", ShowScreenFlash: At(8) != "0");
         }
         catch (System.IO.IOException) { return Default; }
         catch (UnauthorizedAccessException) { return Default; }

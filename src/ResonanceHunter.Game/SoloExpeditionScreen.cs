@@ -556,17 +556,29 @@ public sealed class SoloExpeditionScreen
     /// <summary>Counts descents, so each one seeds its own compositions. See SoloExpedition.RunIndex.</summary>
     private int _runIndex;
 
-    private void StartRun(Hunter hunter)
+    /// <summary>What the run's build was composed from — compared at every wave boundary (see BeginWave).</summary>
+    private string _buildStamp = "";
+    private string BuildStamp()
+        => $"{Loadout.Signature}|{Tree.OwnedIds.Count}:{string.Join(",", Tree.OwnedIds)}|{Mastery.Taken.Count}:{string.Join(",", Mastery.Taken)}|{Character.Id}";
+
+    /// <summary>Compose the build and refresh what the screen caches off it (the CHARGE pill).</summary>
+    private Build ComposeBuild(Hunter hunter)
     {
         var build = Loadout.ToBuild(Tree, Mastery, Character);
-        _recordToBeat = BestDepthHere;   // before a wave is pushed, or the run competes with itself
-
+        _buildStamp = BuildStamp();
         // The CHARGE pill only exists when the pool does.
         var trig = build.Triggers(hunter);
         _chargeLive = trig.Contains(BuildTrigger.Rend) || trig.Contains(BuildTrigger.Capacitor)
                       || trig.Contains(BuildTrigger.Dynamo) || trig.Contains(BuildTrigger.Lodestone);
         _chargeCap = trig.Contains(BuildTrigger.Capacitor)
             ? SoloBattle.ChargeCapExtended : SoloBattle.ChargeCap;
+        return build;
+    }
+
+    private void StartRun(Hunter hunter)
+    {
+        var build = ComposeBuild(hunter);
+        _recordToBeat = BestDepthHere;   // before a wave is pushed, or the run competes with itself
         _chargeNow = 0;
 
         // Charged once here at mint: RECKLESS OFFERING's health price and the build's health multipliers.
@@ -597,6 +609,11 @@ public sealed class SoloExpeditionScreen
         // it — so after it `_run.Wave` is already the replayed wave, and `_run.Wave + 1` (which the boss
         // flag and the header used) named the NEXT wave. The boss drew one wave early and the boss wave
         // itself drew ordinary creatures; the header said WAVE 2 over the WAVE 1 CLEARED banner.
+        // THE BUILD YOU HAVE NOW. A weave, a socket, a mastery or dust buy, a character switch — any of
+        // them re-composes the build for the wave about to be fought (SoloExpedition.ReplaceBuild keeps
+        // the run itself). The UI drew the live loadout all along; the sim fought the wave-one snapshot.
+        if (_hunter is { } h && BuildStamp() != _buildStamp)
+            _run.ReplaceBuild(ComposeBuild(h));
         _replayWave = _run.Wave + 1;
         _outcome = _run.PushWave();
 
@@ -718,6 +735,7 @@ public sealed class SoloExpeditionScreen
     /// </remarks>
     private void Say(string text, Color color)
     {
+        if (!ShowSkillCallouts) return;   // settings: SKILL NAMES off
         _callouts.Add(new Callout
         {
             Text = text,
@@ -758,6 +776,7 @@ public sealed class SoloExpeditionScreen
     /// the hunter's real PowerRating, jittered so numbers don't stack; crits are gold and linger.</summary>
     private void SpawnDamage(int amount, bool crit)
     {
+        if (!ShowDamageNumbers) return;   // settings: DAMAGE NUMBERS off
         // ABOVE the creature's health bar, and STACKED. Numbers used to spawn at EnemyBox.Y + 8..40,
         // which is exactly where the wave's health bar is drawn — so a hit printed "-203" through the
         // bar and the next one printed "-344" through the first. Two unreadable numbers and an
@@ -1066,7 +1085,10 @@ public sealed class SoloExpeditionScreen
         // the HUD (which the host closes). The VFX sub-pass inherits the same scissor via _vfx.Rasterizer. ──
         b.End();
         _ui.Device.ScissorRectangle = ArenaRect;
-        _vfx.Rasterizer = ArenaRasterizer;
+        // Effects are NOT scissored (2026-08-23): the clip edge cut bursts flat against an invisible
+        // rectangle and gave the arena away ("bir karenin içinde"). The rail panels and the banner are
+        // drawn after the arena and cover anything that strays under them.
+        _vfx.Rasterizer = null;
         b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, ArenaRasterizer);
         DrawArena(b, overlay);
         b.End();
@@ -1105,7 +1127,7 @@ public sealed class SoloExpeditionScreen
         DrawCallouts(b);
         // The HUNT screen is NOT drawn through the overlay inset (see Game1.OverlayActive), so its own
         // full-page effects are authored 1:1 against the canvas and must NOT use the oversized scrim.
-        if (_deathFlash > 0f) _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), Ember * (_deathFlash * 0.35f));
+        if (_deathFlash > 0f && ShowScreenFlash) _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), Ember * (_deathFlash * 0.35f));
 
 
         DrawArenaOverlay(b, overlay);
@@ -1245,7 +1267,10 @@ public sealed class SoloExpeditionScreen
     private void DrawComposition(SpriteBatch b, bool attacking, IReadOnlyList<WaveCreature> comp)
     {
         var scale = ArchetypeScale(_run?.LastWaveArchetype ?? Archetype.Bruiser);
-        var enter = (int)(_enemyEnter * 280f);
+        // A shorter slide that FADES in: the old 280-px entry began past the scissor edge, so a wave
+        // appeared as a hard-cut slice growing out of nothing — the box the playtest could see.
+        var enter = (int)(_enemyEnter * 150f);
+        var enterTint = EnemyTint * (1f - _enemyEnter * _enemyEnter);
         var lunge = (int)(_enemyLunge * -40f);
 
         var w = (int)(EnemyBox.Width * scale);
@@ -1349,8 +1374,8 @@ public sealed class SoloExpeditionScreen
             var compFps = attacking ? 16f : 12f;
             if (stripKey is null || !_ui.AnimSprite(b, stripKey, box,
                     EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps,
-                    !attacking, EnemyTint, crop))
-                if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, box, EnemyTint, crop))
+                    !attacking, enterTint, crop))
+                if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, box, enterTint, crop))
                     _ui.Fill(b, new Rectangle(box.X + 20, box.Y + 20, box.Width - 40, box.Height - 40), Ember);
 
             // A pip per creature rather than a framed bar — at five across, ornate frames become noise.
@@ -1390,7 +1415,8 @@ public sealed class SoloExpeditionScreen
         }
 
         var elunge = (int)(_enemyLunge * -40f);
-        var enter = (int)(_enemyEnter * 280f);
+        var enter = (int)(_enemyEnter * 150f);   // shorter + faded, see DrawComposition
+        var enterTint = EnemyTint * (1f - _enemyEnter * _enemyEnter);
         var ebox = new Rectangle(EnemyBox.X + elunge + enter, EnemyBox.Y, EnemyBox.Width, EnemyBox.Height);
         _ui.GroundShadow(b, ebox.Center.X, ebox.Bottom - 10, (int)(ebox.Width * 0.60f), 42, 0.6f);
 
@@ -1421,11 +1447,11 @@ public sealed class SoloExpeditionScreen
         }
 
         if (stripKey is null || !_ui.AnimSprite(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps,
-                                                !attacking, EnemyTint, crop))
+                                                !attacking, enterTint, crop))
         {
             // Grounded so the static fallback stands where the animated strip does — otherwise the enemy
             // visibly hopped whenever the strip was missing and this path took over.
-            if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, ab, EnemyTint, crop))
+            if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, ab, enterTint, crop))
                 _ui.Fill(b, new Rectangle(ebox.X + 40, ebox.Y + 40, ebox.Width - 80, ebox.Height - 80), Ember);
         }
 
@@ -1813,8 +1839,7 @@ public sealed class SoloExpeditionScreen
         // Rev 3 §12: stage header (630,18,560,135) — narrower, so it clears the currency bar (≥20px gap). One
         // clean hierarchy region → depth → progress → wave, all centred at x=910 (the banner centre).
         var bar = new Rectangle(630, 18, 560, 135);
-        if (_ui.Assets.Get("ui_panel_modal_wide") is { } bg) b.Draw(bg, bar, Color.White);
-        else _ui.Panel(b, bar);
+        _ui.PanelNine(b, bar, "ui_panel_modal_wide");   // sliced: the corners keep their native size
         const int cx = 910;
         // §19.2: render the region title at 36, shrinking to a floor of 28 to fit 490px — never ellipsize the
         // ACTIVE region title. (Two-line fallback below 28 is a noted follow-up; region names fit at 28.)
@@ -1880,8 +1905,11 @@ public sealed class SoloExpeditionScreen
 
         // Idle rate (1570,110,326,130). Auto-credited, so no Claim button (§20.2).
         var inner = CleanPanel(b, new Rectangle(px, 110, pw, 130), "IDLE RATE");
-        if (_ui.Assets.Get("currency_gleam") is { } gi) b.Draw(gi, new Rectangle(inner.X, inner.Y + 2, 38, 38), Color.White);
-        _ui.TextBig(b, $"+{Game1.Abbrev((long)(IdleGleamRate * 60f))}/min", inner.X + 48, inner.Y + 8, Gold, 24);
+        // Centred between the title and the plate's bottom — it used to sit on the inner rect's top,
+        // which on a 130-px plate is the lower half (playtest: "ortalanmamış, aşağıya daha yakın").
+        var rowY = inner.Y - 12;
+        if (_ui.Assets.Get("currency_gleam") is { } gi) b.Draw(gi, new Rectangle(inner.X, rowY, 40, 40), Color.White);
+        _ui.TextBig(b, $"+{Game1.Abbrev((long)(IdleGleamRate * 60f))}/min", inner.X + 52, rowY + 6, Gold, 26);
 
         // OBJECTIVE AND EXPEDITION ARE GONE. Between them they held four facts, and the banner over the
         // arena was already printing all four: "DEPTH 0 / 7", the same progress bar, and "WAVE 2". Two
@@ -1925,7 +1953,7 @@ public sealed class SoloExpeditionScreen
         if (Deepest > 0) _ui.TextBig(b, $"DEEPEST WAVE REACHED  {Deepest}", inner.X, ry, Slate, 16);
         else if (!anyReward) _ui.TextBig(b, "NOTHING TO CLAIM YET", inner.X, inner.Y, Slate, 18);
 
-        DrawKeepFilter(b, new Rectangle(px, 480, pw, 196), hit, clicked);
+        DrawKeepFilter(b, new Rectangle(px, 480, pw, 286), hit, clicked);
     }
 
     // ── TAKE ONLY — the chest keep-filter, on the screen whose drops it decides (2026-08-23). ─────
@@ -1936,23 +1964,22 @@ public sealed class SoloExpeditionScreen
     //    a frame later in playtest five.
     /// <summary>Chests below this tier never land — they arrive as a little Scrap instead. 0 = all.</summary>
     public int KeepMinTier { get; set; }
-    /// <summary>Keep only chests whose region favours this slot (no-lean chests always pass). Null = any.</summary>
-    public ItemBaseType? KeepSlot { get; set; }
+    /// <summary>Keep only chests whose region favours ANY of these slots (no-lean chests always pass). Empty = any.</summary>
+    public HashSet<ItemBaseType> KeepSlots { get; } = new();
     /// <summary>Set when the player edited the filter — the host copies it back and saves.</summary>
     public bool FilterDirty { get; set; }
 
-    private static readonly ItemBaseType?[] SlotCycle =
+    private static readonly ItemBaseType[] SlotChips =
     {
-        null, ItemBaseType.Weapon, ItemBaseType.Helm, ItemBaseType.Chest, ItemBaseType.Gloves,
+        ItemBaseType.Weapon, ItemBaseType.Helm, ItemBaseType.Chest, ItemBaseType.Gloves,
         ItemBaseType.Boots, ItemBaseType.Charm, ItemBaseType.AbilityFocus, ItemBaseType.Ring,
     };
 
-    private static string SlotLabel(ItemBaseType? t) => t switch
+    private static string SlotLabel(ItemBaseType t) => t switch
     {
-        null => "ANY SLOT",
         ItemBaseType.AbilityFocus => "FOCUS",
-        ItemBaseType.Chest => "CHESTPLATE",
-        _ => t.Value.ToString().ToUpperInvariant(),
+        ItemBaseType.Chest => "ARMOUR",
+        _ => t.ToString().ToUpperInvariant(),
     };
 
     private void DrawKeepFilter(SpriteBatch b, Rectangle plate, Point hit, bool clicked)
@@ -1967,19 +1994,30 @@ public sealed class SoloExpeditionScreen
         _ui.TextCenter(b, KeepMinTier <= 0 ? "ANY TIER" : $"TIER {KeepMinTier}+", inner.Center.X, y + 6, KeepMinTier > 0 ? Gold : Slate);
         if (UiKit.ClickedIn(minus, hit, clicked) && KeepMinTier > 0) { KeepMinTier -= 1; FilterDirty = true; }
         if (UiKit.ClickedIn(plus, hit, clicked) && KeepMinTier < 99) { KeepMinTier += 1; FilterDirty = true; }
-        // Line 2: the slot lean, cycling ANY SLOT -> WEAPON -> ... -> RING.
+        // Lines 2-4: the slots, as TOGGLES — several at once ("hem bot hem kolye"). Three rows of three:
+        // eight slots and ALL, which clears them.
         y += 44;
-        var slotBtn = new Rectangle(inner.X, y, inner.Width, 34);
-        MiniButton(b, slotBtn, SlotLabel(KeepSlot), hit, KeepSlot is not null);
-        if (UiKit.ClickedIn(slotBtn, hit, clicked))
+        var chipW = (inner.Width - 8) / 3;
+        for (var i = 0; i < SlotChips.Length + 1; i++)
         {
-            var idx = Array.IndexOf(SlotCycle, KeepSlot);
-            KeepSlot = SlotCycle[(idx + 1) % SlotCycle.Length];
-            FilterDirty = true;
+            var chip = new Rectangle(inner.X + (i % 3) * (chipW + 4), y + (i / 3) * 34, chipW, 30);
+            if (i == SlotChips.Length)
+            {
+                MiniButton(b, chip, "ALL", hit, KeepSlots.Count == 0);
+                if (UiKit.ClickedIn(chip, hit, clicked) && KeepSlots.Count > 0) { KeepSlots.Clear(); FilterDirty = true; }
+                continue;
+            }
+            var slot = SlotChips[i];
+            MiniButton(b, chip, SlotLabel(slot), hit, KeepSlots.Contains(slot));
+            if (UiKit.ClickedIn(chip, hit, clicked))
+            {
+                if (!KeepSlots.Remove(slot)) KeepSlots.Add(slot);
+                FilterDirty = true;
+            }
         }
-        // Line 3: what happens to the rest, only while a filter is set.
-        y += 44;
-        _ui.TextBig(b, KeepMinTier > 0 || KeepSlot is not null ? "THE REST ARRIVE AS A LITTLE SCRAP" : "EVERY CHEST IS KEPT",
+        // The last line: what happens to the rest, only while a filter is set.
+        y += 3 * 34 + 6;
+        _ui.TextBig(b, KeepMinTier > 0 || KeepSlots.Count > 0 ? "THE REST ARRIVE AS A LITTLE SCRAP" : "EVERY CHEST IS KEPT",
                     inner.X, y, Dim, 16);
     }
 
@@ -1992,7 +2030,7 @@ public sealed class SoloExpeditionScreen
         _ui.Fill(b, new Rectangle(r.X, r.Bottom - 2, r.Width, 2), edge);
         _ui.Fill(b, new Rectangle(r.X, r.Y, 2, r.Height), edge);
         _ui.Fill(b, new Rectangle(r.Right - 2, r.Y, 2, r.Height), edge);
-        _ui.TextCenter(b, label, r.Center.X, r.Y + 6, lit ? Gold : hot ? Bone : Slate);
+        _ui.TextCenterBig(b, label, r.Center.X, r.Y + (r.Height - 16) / 2 - 1, lit ? Gold : hot ? Bone : Slate, 16);
     }
 
     /// <summary>The run's state, or null when it is simply running and there is nothing to say.</summary>
@@ -2264,6 +2302,12 @@ public sealed class SoloExpeditionScreen
     /// <summary>The world's corruption tier (0..CorruptionScaling.MaxTier), host-fed. It tints every
     /// creature and boss (CorruptionLook.Enemy), names the boss by its epithet and prints on the header.</summary>
     public int CorruptionTier { get; set; }
+
+    /// <summary>Settings' quality-of-life switches (playtest 2026-08-23): the fight's text and effects.</summary>
+    public bool ShowDamageNumbers { get; set; } = true;
+    public bool ShowSkillCallouts { get; set; } = true;
+    public bool ShowHitEffects { get => _vfx.Enabled; set => _vfx.Enabled = value; }
+    public bool ShowScreenFlash { get; set; } = true;
     private Color EnemyTint
     {
         get { var e = CorruptionLook.For(CorruptionTier).Enemy; return new Color(e.R, e.G, e.B); }

@@ -86,6 +86,9 @@ public sealed class VfxPlayer
     /// clipped to the arena along with everything else. Null elsewhere = default (unclipped) rasterizer.</summary>
     public RasterizerState? Rasterizer;
 
+    /// <summary>Settings' HIT AND SKILL EFFECTS switch. Off = Play() is a no-op; the creature clips still run.</summary>
+    public bool Enabled = true;
+
     /// <summary>Counter-scale of the canvas batch this player draws into: 4 for 480-logical screens, 1 for
     /// screens authored in true 1920 coords. The Draw transform and the per-effect size derive from it so the
     /// on-screen (physical) size stays constant regardless of which scale the caller is drawing at.</summary>
@@ -100,6 +103,7 @@ public sealed class VfxPlayer
     public void Play(string key, int x, int y, int scale = 2, float fps = 18f, Color? tint = null, int frameW = 0,
                      float delay = 0f)
     {
+        if (!Enabled) return;
         if (_assets.Get(key) is not { } sheet) return;
 
         var fw = frameW > 0 ? frameW : sheet.Height; // default: square frames

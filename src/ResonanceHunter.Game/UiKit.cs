@@ -579,6 +579,22 @@ public sealed class UiKit
     /// 4×-scaled canvas (crisp corners, no upscale blur). Edges and the center stretch. <paramref name="srcCornerMax"/>
     /// is the corner slice in ASSET px — set it to cover the decorative corner (gem cluster).
     /// </summary>
+    /// <summary>
+    /// Draw a frame texture by key as a 9-slice — corners at native scale, edges and centre stretched.
+    /// </summary>
+    /// <remarks>
+    /// The stage banner, the welcome toast and the currency pill each stretched a whole frame texture
+    /// into a rect of a wildly different aspect (a 384x224 modal frame into 560x135 — 2.4x anisotropic,
+    /// and a DOWNscale on the vertical), which is exactly the "çerçeve scaleden dolayı sırıtıyor" of the
+    /// 2026-08-23 playtest. The slicer existed but was private; this is its public door. Falls back to
+    /// the flat panel when the key is missing.
+    /// </remarks>
+    public void PanelNine(SpriteBatch b, Rectangle r, string key, int cornerPx = PanelCorner, Color? tint = null)
+    {
+        if (Assets.Get(key) is { } tex) NineSlice(b, tex, r, cornerPx, tint ?? Color.White);
+        else Panel(b, r);
+    }
+
     private void NineSlice(SpriteBatch b, Texture2D tex, Rectangle r, int srcCornerMax, Color tint)
     {
         var scale = Scale;
@@ -643,6 +659,9 @@ public sealed class UiKit
         var r = new Rectangle(right - w, y, w, h);
 
         // Ornate capsule from package_01 (guide), not a flat fill.
+        // Whole-texture stretch ON PURPOSE: the 256-px square frame's corner ornaments are ~50 px, so a
+        // 9-slice into a 60-px capsule cuts them into the edge bands and smears them across the text
+        // (tried 2026-08-23; reverted). The uniform squash reads as a capsule; the slice did not.
         if (Assets.Get("ui_panel_small") is { } cap) b.Draw(cap, r, Color.White);
         else
         {

@@ -88,4 +88,20 @@ public class ChestFilterTest
         Assert.Equal(14, back.ChestKeepMinTier);
         Assert.Equal("Ring", back.ChestKeepSlot);
     }
+
+    [Fact]
+    public void test_chest_filter_several_wanted_slots_pass_when_any_is_favoured()
+    {
+        // Arrange: a leaning chest; the wanted set holds an unfavoured slot AND a favoured one.
+        var leaning = At(12, VerdantHollow.RegionId);
+        var favoured = ChestDossiers.For(leaning).Favoured;
+        var unfavoured = Enum.GetValues<ItemBaseType>().Where(t => Gear.SlotFor(t) is not null).First(t => !favoured.Contains(t));
+
+        // Act + Assert: any favoured slot in the set keeps the chest; none does not; an empty set is "any".
+        Assert.True(Chests.PassesKeepFilter(leaning, 0, new[] { unfavoured, favoured[0] }));
+        Assert.False(Chests.PassesKeepFilter(leaning, 0, new[] { unfavoured }));
+        Assert.True(Chests.PassesKeepFilter(leaning, 0, Array.Empty<ItemBaseType>()));
+        Assert.True(Chests.PassesKeepFilter(At(12), 0, new[] { unfavoured }));   // no lean: anything goes
+        Assert.False(Chests.PassesKeepFilter(leaning, 99, new[] { favoured[0] }));   // the tier floor still applies
+    }
 }

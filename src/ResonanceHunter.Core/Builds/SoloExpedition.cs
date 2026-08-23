@@ -34,7 +34,7 @@ namespace ResonanceHunter.Core.Builds;
 /// </remarks>
 public sealed class SoloExpedition
 {
-    private readonly Build _build;
+    private Build _build;
     private readonly Champion _champion;
     private readonly Hunter _hunter;
     private readonly ExpeditionTuning _tuning;
@@ -175,6 +175,24 @@ public sealed class SoloExpedition
     /// <summary>The outcome of the most recent wave — what the report calls the run's ending.</summary>
     public WaveOutcome LastOutcome { get; private set; } = WaveOutcome.Cleared;
 
+
+    /// <summary>
+    /// Swap the build the NEXT waves are resolved with, keeping everything else about the run — the
+    /// wave count, the carried haul, the recorder, the band cycle, the RNG stream.
+    /// </summary>
+    /// <remarks>
+    /// Playtest 2026-08-23: "skillerimi değiştiriyorum, UI'de değişmiş görünüyor ama aktif HUNT'ta
+    /// değişmiyor." The run composed its build once at StartRun and never looked again, so a weave,
+    /// a socket, a mastery or dust buy reached the fight only after a death or a region change. The
+    /// hunt screen now re-composes at each wave boundary when any of those changed and hands it here.
+    /// The champion's health POOL is minted at run start and stays (MaxHealth is init-only): the new
+    /// build's health multipliers apply from the next descent, its damage and skills from the next wave.
+    /// </remarks>
+    public void ReplaceBuild(Build build)
+    {
+        ArgumentNullException.ThrowIfNull(build);
+        _build = build;
+    }
     public WaveOutcome PushWave()
     {
         LastWaveHaul = default;

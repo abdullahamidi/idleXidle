@@ -168,6 +168,10 @@ public sealed record SaveGame
     /// <summary>The keep-filter's slot lean (an <c>ItemBaseType</c> name), or null for any slot.</summary>
     public string? ChestKeepSlot { get; init; }
 
+    /// <summary>The keep-filter's wanted slots (2026-08-23, several at once). When absent, the older single
+    /// <see cref="ChestKeepSlot"/> is the one wanted slot.</summary>
+    public List<string> ChestKeepSlots { get; init; } = new();
+
     /// <summary>The ISO week (year*100+week) whose trader stall the two fields below describe.</summary>
     /// <remarks>Zero on old saves — the host treats a mismatch with the CURRENT week as "new week,
     /// stall resets", so the migration is the rollover itself.</remarks>

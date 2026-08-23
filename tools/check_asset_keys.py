@@ -32,7 +32,7 @@ AUDIO = os.path.join(ROOT, "assets", "audio")
 # The call sites that take a key. Anything else that grows one should be added here.
 CALLS = re.compile(
     r'\b(?:Assets\.Get|Assets\.GetFirst|Assets\.Has|Get|GetFirst|Has|SpriteFit|Sprite|'
-    r'SpriteGrounded|AnimSprite|Background|BarArt|Panel|_vfx\.Play)\s*\(\s*([^)]*)')
+    r'SpriteGrounded|AnimSprite|Background|BarArt|Panel|PanelNine|_vfx\.Play)\s*\(\s*([^)]*)')
 # `_vfx.Play` is VfxPlayer.Play — the 2026-08-22 art pass keys every combat effect by name (fx_strike,
 # fx_hit ...) through the alias table, and an effect nothing can find is the house failure mode: it fails
 # soft and the fight simply has no flash where one was promised. Qualified on purpose: a bare `Play`

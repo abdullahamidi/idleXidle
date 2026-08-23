@@ -61,6 +61,31 @@ public sealed class WarrenScreen
         WarrenResource.Gleam => GleamC, WarrenResource.Mastery => MasteryC, _ => DustC,
     };
 
+    /// <summary>
+    /// The currency's real icon (Gleam coin, Memory Dust, Insight medallion), the tinted diamond only
+    /// when the art is missing. Playtest 2026-08-23: "Gleam, Dust ve Insight kaynaklarının ikonları yok."
+    /// </summary>
+    private void ResGlyph(SpriteBatch b, Rectangle box, WarrenResource? r, Color? fallback = null)
+    {
+        var key = r switch
+        {
+            WarrenResource.Gleam => "ui_gleam_coin",
+            WarrenResource.Dust => "ui_memory_dust",
+            WarrenResource.Mastery => "ui_insight",
+            _ => "",
+        };
+        if (key.Length > 0 && _ui.Assets.Get(key) is { } tex) { b.Draw(tex, box, Color.White); return; }
+        _ui.Diamond(b, box, fallback ?? (r is { } rr ? ResColor(rr) : Dim));
+    }
+
+    private static WarrenResource? ResFromLabel(string label) => label.ToUpperInvariant() switch
+    {
+        "GLEAM" => WarrenResource.Gleam,
+        "INSIGHT" => WarrenResource.Mastery,
+        "DUST" or "MEMORY DUST" => WarrenResource.Dust,
+        _ => null,
+    };
+
     private static string ResName(WarrenResource r) => r switch
     {
         // THE GAME'S OWN NAMES FOR ITS OWN CURRENCIES. Two of these three were simply wrong: the first
@@ -132,7 +157,7 @@ public sealed class WarrenScreen
         var y = OverviewPanel.Y + 320;
         foreach (var r in new[] { WarrenResource.Gleam, WarrenResource.Mastery, WarrenResource.Dust })
         {
-            _ui.Diamond(b, new Rectangle(OverviewPanel.X + 36, y, 34, 34), ResColor(r));
+            ResGlyph(b, new Rectangle(OverviewPanel.X + 34, y - 2, 38, 38), r);
             _ui.TextBig(b, $"+{Ab(Warren.ProductionPerMinute(r))} /min", OverviewPanel.X + 88, y + 2, Bone, UiTypography.PanelTitle);
             y += 52;
         }
@@ -178,7 +203,7 @@ public sealed class WarrenScreen
             if (!_ui.Icon(b, icon, new Rectangle(plate.X + 2, plate.Y - 4, plate.Width - 4, plate.Height + 8)))
                 _ui.Hex(b, plate, rc);
             _ui.TextCenterBig(b, $"LEVEL {f.Level}", card.Center.X, card.Bottom - 70, Gold, UiTypography.Body);
-            _ui.Diamond(b, new Rectangle(card.Center.X - 62, card.Bottom - 38, 18, 18), rc);
+            ResGlyph(b, new Rectangle(card.Center.X - 68, card.Bottom - 42, 26, 26), f.Info.Produces, rc);
             _ui.TextCenterBig(b, $"+{Ab(f.BaseOutputPerMin)} /min", card.Center.X + 8, card.Bottom - 38, Bone, UiTypography.Secondary);
         }
     }
@@ -222,7 +247,7 @@ public sealed class WarrenScreen
 
         // Output: current -> next (the NEXT figure includes any milestone jump the upgrade crosses).
         _ui.TextBig(b, "OUTPUT", DetailPanel.X + 28, DetailPanel.Y + 190, Slate, UiTypography.Body);
-        _ui.Diamond(b, new Rectangle(DetailPanel.X + 30, DetailPanel.Y + 226, 30, 30), rc);
+        ResGlyph(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 224, 34, 34), f.Info.Produces);
         _ui.TextBig(b, $"+{Ab(f.BaseOutputPerMin)} /min", DetailPanel.X + 72, DetailPanel.Y + 226, Bone, UiTypography.PanelTitle);
         _ui.TextRightBig(b, $"NEXT  +{Ab(f.NextLevelOutput)} /min", DetailPanel.Right - 28, DetailPanel.Y + 230, Met, UiTypography.Secondary);
 
@@ -266,7 +291,7 @@ public sealed class WarrenScreen
     private void DrawReq(SpriteBatch b, int y, Color gem, string label, long owned, int required)
     {
         var ok = owned >= required;
-        _ui.Diamond(b, new Rectangle(DetailPanel.X + 30, y + 2, 26, 26), gem);
+        ResGlyph(b, new Rectangle(DetailPanel.X + 28, y, 30, 30), ResFromLabel(label), gem);
         _ui.TextBig(b, label, DetailPanel.X + 68, y, Bone, UiTypography.Body);
         // The verdict is a fixed 46px column; the ratio ends where that column starts. Previously both were
         // right-aligned 28px apart, so "131.9M / 7.8M" ran straight through the "OK" beside it.

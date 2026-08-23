@@ -179,15 +179,24 @@ public static class Chests
     /// slot.
     /// </remarks>
     public static bool PassesKeepFilter(Chest chest, int minTier, ItemBaseType? slot)
+        => PassesKeepFilter(chest, minTier, slot is { } one ? new[] { one } : Array.Empty<ItemBaseType>());
+
+    /// <summary>
+    /// The keep-filter with SEVERAL wanted slots (2026-08-23: "hem bot hem kolye arıyor olabilirim"):
+    /// a chest passes the slot half when nothing is wanted, when its region has no lean, or when its
+    /// lean favours ANY of the wanted slots. The tier floor applies as before.
+    /// </summary>
+    public static bool PassesKeepFilter(Chest chest, int minTier, IReadOnlyCollection<ItemBaseType> slots)
     {
         ArgumentNullException.ThrowIfNull(chest);
+        ArgumentNullException.ThrowIfNull(slots);
         if (chest.Tier < minTier) return false;
-        if (slot is { } wanted)
-        {
-            var favoured = ChestDossiers.For(chest).Favoured;
-            if (favoured.Count > 0 && !favoured.Contains(wanted)) return false;
-        }
-        return true;
+        if (slots.Count == 0) return true;
+        var favoured = ChestDossiers.For(chest).Favoured;
+        if (favoured.Count == 0) return true;
+        foreach (var wanted in slots)
+            if (favoured.Contains(wanted)) return true;
+        return false;
     }
 
     /// <summary>
