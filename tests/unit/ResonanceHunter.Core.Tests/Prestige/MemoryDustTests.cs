@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
+using ResonanceHunter.Core.Encounters;
 using ResonanceHunter.Core.Prestige;
+using ResonanceHunter.Core.Progression;
 using Xunit;
 
 namespace ResonanceHunter.Core.Tests.Prestige;
@@ -230,7 +232,10 @@ public class MemoryDustTests
     [Fact]
     public void test_two_terminals_are_out_of_reach()
     {
-        const int budgetAtFullContent = 34;   // 6 conquests + ~10 corruption tiers + 18 mastery goals
+        // DERIVED from the same rules Game1.TraitPointsEarned applies: one per conquest, two per corruption
+        // tier reached (the ladder is capped — CorruptionScaling.MaxTier), three mastery goals per region.
+        var budgetAtFullContent = Regions.All.Count + 2 * CorruptionScaling.MaxTier
+                                  + Regions.All.Count * (int)MasteryLevel.OptimizedTeam;   // 6 + 10 + 18 = 34
 
         var terminals = new[] { "ks_reaper", "ks_titan", "ks_hoarder", "ks_weaver" };
         var tree = new MemoryDustTree();

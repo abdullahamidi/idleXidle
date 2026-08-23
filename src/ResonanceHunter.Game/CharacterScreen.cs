@@ -355,7 +355,12 @@ public sealed class CharacterScreen
             return weapon is null ? 0f : hunter.PowerContribution(weapon);
         var others = string.Join(",", AllSlots.Where(sl => sl != GearSlot.Weapon).Select(sl => hunter.Worn(sl)?.InstanceId ?? "-"));
         var skills = string.Join(",", Loadout.Skills.Select(sk => $"{sk.Source}:{sk.Form}:{sk.VowId}"));
-        var key = $"{weapon?.InstanceId ?? "-"}|{weapon?.ItemLevel}|{others}|{skills}|{hunter.PowerRating}|{Character.Id}";
+        // Everything ToBuild and the bench read: the candidate, the rest of the worn set, the woven
+        // skills, the socketed keystones, the two trees, the hunter's stats and the character. A key
+        // that missed the trees served a stale number after a Dust or mastery buy (review, 2026-08-23).
+        var keystones = string.Join(",", Loadout.KeystoneIds);
+        var trees = $"{Tree.OwnedIds.Count}:{string.Join(",", Tree.OwnedIds)}|{Mastery.Taken.Count}:{string.Join(",", Mastery.Taken)}";
+        var key = $"{weapon?.InstanceId ?? "-"}|{weapon?.ItemLevel}|{others}|{skills}|{keystones}|{trees}|{hunter.PowerRating}|{Character.Id}";
         if (_dpsCache.TryGetValue(key, out var hit)) return hit;
 
         var was = hunter.Worn(GearSlot.Weapon);

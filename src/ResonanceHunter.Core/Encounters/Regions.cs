@@ -213,6 +213,13 @@ public sealed class World
     /// <summary>How deep into the corruption the world has been pushed. 0 = the base world.</summary>
     public int CorruptionTier { get; private set; }
 
+    /// <summary>
+    /// The deepest tier the world has EVER been pushed to. The deepening award and the trait points a
+    /// career earns key off this, not the live tier — otherwise SHALLOWER then DEEPER would mint the
+    /// award again every cycle, and easing would quietly take a trait point away.
+    /// </summary>
+    public int PeakCorruptionTier { get; private set; }
+
     /// <summary>True once every region has been conquered — the precondition for deepening.</summary>
     public bool AllConquered => Regions.All.All(r => _conquered.Contains(r.Id));
 
@@ -230,8 +237,12 @@ public sealed class World
     public int DeepenCorruption()
     {
         if (CanDeepenCorruption) CorruptionTier++;
+        PeakCorruptionTier = Math.Max(PeakCorruptionTier, CorruptionTier);
         return CorruptionTier;
     }
+
+    /// <summary>True when the last <see cref="DeepenCorruption"/> reached a tier never reached before.</summary>
+    public bool IsNewPeak => CorruptionTier == PeakCorruptionTier;
 
     /// <summary>
     /// Pull the world one corruption tier back. Playtest 2026-08-23: "Deepen butonu var, bunu
@@ -243,6 +254,11 @@ public sealed class World
         return CorruptionTier;
     }
 
-    /// <summary>Restore the corruption tier from a save, clamped into the ladder (old saves could be past the top).</summary>
-    public void RestoreCorruption(int tier) => CorruptionTier = CorruptionScaling.Clamp(tier);
+    /// <summary>Restore the corruption tier (and the peak it has reached) from a save, clamped into the
+    /// ladder — old saves could be past the top, and older ones carry no peak (then the tier is the peak).</summary>
+    public void RestoreCorruption(int tier, int peak = -1)
+    {
+        CorruptionTier = CorruptionScaling.Clamp(tier);
+        PeakCorruptionTier = Math.Max(CorruptionTier, CorruptionScaling.Clamp(peak));
+    }
 }

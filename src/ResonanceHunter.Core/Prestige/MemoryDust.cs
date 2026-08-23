@@ -433,8 +433,8 @@ public sealed class MemoryDustTree
                 Description = "The end of the Avarice road. Twelve points, and the other three roads can never be walked to their end." },
 
         // ── ARTIFICE — behaviour over numbers. The path for players who want their build to do
-        //    something strange rather than something large. Its third rung is THE BOUND HAND (carry
-        //    every vow at once) rather than a keystone: the Form-combo triggers it used to hold now belong to the skill
+        //    something strange rather than something large. Its third rung is THE BOUND HAND (every vow
+        //    pays 25% more — DustEffects.VowPowerMultiplier) rather than a keystone: the Form-combo triggers it used to hold now belong to the skill
         //    tree, and vows are the purest "behaviour, not numbers" thing the game has. ───────────
         new() { Id = "ks_echo", Road = TraitRoad.Artifice, Name = "THE TWICE-SPOKEN", Cost = 4, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "vow_study_1" }, GrantsKeystone = "echo",

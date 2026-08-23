@@ -39,8 +39,9 @@ namespace ResonanceHunter.Client;
 ///   keystone strand by short horizontal wires. A road reads as a ladder, and a walked road reads
 ///   as a gold ladder.</item>
 /// <item>Every TERMINAL is at the top of its road, all four at the same height, with the road's name
-///   and price above it. Four things at the same altitude, thirty points each, against a career that
-///   earns about thirty-four: the picture itself is the argument that you get one.</item>
+///   and price above it. Four things at the same altitude, each costing most of what a career can
+///   earn (MemoryDustTests pins one reachable, two never): the picture itself is the argument that
+///   you get one.</item>
 /// </list>
 /// <para>
 /// Lanes are wider than rows on purpose: every node prints its NAME under itself, in two short lines,

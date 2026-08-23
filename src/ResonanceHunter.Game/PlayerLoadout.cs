@@ -192,40 +192,11 @@ public sealed class PlayerLoadout
         // "no skill slot empty", and against the type's floor a player who owned the fifth weave met
         // that demand while looking at an empty fifth slot.
 
-        // The build's passive numbers are the Dust tree, the Mastery tree AND the character, multiplied
-        // together. Its affinity and its extra triggers come from the Mastery tree — the corner you took
-        // and the notables you walked past to reach it — plus whatever the character grants outright.
-        //
-        // This is the ONE place a character reaches the simulation. Everything a character is — its
-        // passive, its aptitude, its granted behaviours — arrives as the same three things the two trees
-        // already contribute, so the sim never learns that characters exist and there is exactly one
-        // seam to get wrong instead of one per effect.
-        var build = new Build
-        {
-            PassiveMods = DustEffects.TreeMods(tree).Combine(mastery.Mods())
-                                     .Combine(character?.Mods ?? BuildMods.None),
-            Affinity = mastery.Affinity(),
-            ExtraTriggers = new HashSet<BuildTrigger>(
-                mastery.Triggers().Concat(character?.Grants ?? Array.Empty<BuildTrigger>())),
-            // The Dust tree's shape rides the same seam (THE BOUND HAND's vow power) — one place, as ever.
-            Shape = SkillShape.Combine(SkillShape.Combine(mastery.Shape(), character?.TotalShape ?? SkillShape.None),
-                                       DustEffects.TreeShape(tree)),
-            SlotCapacity = SkillCapacity,
-        };
-
-        var learned = DustEffects.LearnedKeystones(tree);
-        foreach (var id in _keystoneIds)
-            if (learned.FirstOrDefault(k => k.Id == id) is { } k)
-                build.Take(k);
-
-        foreach (var s in _skills)
-        {
-            var vow = Weaving.ById(s.VowId);
-            var ability = new WovenAbility { Name = NameOf(s), Source = s.Source, Form = s.Form, Vow = vow };
-            build.Weave(new EquippedSkill(ability, FormBehaviour.BaseCooldownMs(s.Form)));
-        }
-
-        return build;
+        // The assembly itself lives in Core (BuildComposer) so what reaches the sim can be tested; this
+        // only gathers the loadout's lists.
+        return BuildComposer.Compose(tree, mastery, character,
+            _skills.Select(s => new BuildComposer.SkillPick(s.Source, s.Form, s.VowId, NameOf(s))),
+            _keystoneIds, SkillCapacity);
     }
 
     /// <summary>A human name for a woven skill — "BODY STRIKE", "SHADOW TRAP".</summary>

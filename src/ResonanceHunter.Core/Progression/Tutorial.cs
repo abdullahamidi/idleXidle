@@ -171,7 +171,7 @@ public static class Tutorial
         TutorialStep.OpenChest => "CHESTS ARE WHERE ITEMS COME FROM",
         TutorialStep.EquipItem => "SOMETHING DROPPED",
         TutorialStep.WeaveBuild => "THE BUILD IS THE GAME",
-        TutorialStep.Conquer => "DEPTH CONQUERS A REGION",
+        TutorialStep.Conquer => "SEVEN WAVES CONQUER A REGION",
         _ => "",
     };
 
@@ -204,8 +204,8 @@ public static class Tutorial
             + "what it does before you commit.",
 
         TutorialStep.Conquer =>
-            "Reach the region's depth objective to conquer it and open the next. Deeper waves drop "
-            + "rarer loot, never more of it.",
+            "Reach CONQUEST 7 / 7 in the banner over the arena to conquer the region and open the next. "
+            + "Deeper waves drop rarer loot, never more of it.",
 
         _ => "",
     };

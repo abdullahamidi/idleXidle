@@ -313,8 +313,12 @@ to go.
 
 **Corruption tiers — the world deepens.** Once every region is conquered, the world
 ratchets: enemy scaling rises, the loot tier rises, and each band gains a second
-affix stacked on its first. Every tier pays trait points. This axis is infinite and
-slow, and it is the one that keeps a finished player playing.
+affix stacked on its first. The ladder has FIVE named tiers (STIRRING, RESTLESS, FEVERED,
+RAVENOUS, ABYSSAL — `CorruptionScaling.MaxTier`); from the map it can be climbed DEEPER
+and stepped back SHALLOWER, the world wears each tier (tinted creatures, an epithet on
+the boss, a darker arena), and each tier pays its trait points and its dust ONCE, the
+first time it is reached. Bounded, so that the climb reads as a climb and not a counter
+(playtest 2026-08-23).
 
 **Content unlocks — new shapes, not bigger numbers.** New regions, new creature
 families, and above all new **Forms and Sources**. A new Form is a new build shape
@@ -447,7 +451,7 @@ health — but the justification is consistency, not a dramatic change in run sh
 | A fast-forwarded wave would kill the Hunter | Fast-forward stops at that wave and plays it live. The player is watching the exact wave where their build got *worse*, which is the most useful thing that can be shown. |
 | Player tries to change build mid-expedition | Not possible. The build is locked at descend; the gear and tree screens are readable but not editable until the run ends. |
 | Respec while an expedition is running | Same as above — blocked, not queued. |
-| All regions conquered, corruption tier 0 | The DEEPEN action becomes available on the map. |
+| All regions conquered, corruption tier 0 | The corruption ladder (SHALLOWER / DEEPER) becomes available on the map. |
 | Warren facility at its depth cap | The upgrade button states the reason — "capped at level 9 by depth 47" — rather than greying out silently. |
 | Points exceed total node cost | A content bug, not a player state. Assert in dev builds; the budget invariant (§4.4) is violated. |
 | All creatures in a wave die to the same hit | The wave clears normally; overkill is discarded. |

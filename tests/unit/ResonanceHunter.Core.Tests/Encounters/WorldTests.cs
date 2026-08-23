@@ -239,4 +239,32 @@ public class WorldTests
         world.RestoreCorruption(99);                 // an old save past the top lands ON the top
         Assert.Equal(CorruptionScaling.MaxTier, world.CorruptionTier);
     }
+
+    [Fact]
+    public void test_the_peak_tier_is_remembered_across_easing_and_restores()
+    {
+        // The deepening award and the trait points key off the PEAK, so SHALLOWER then DEEPER pays nothing
+        // twice and easing takes nothing away (review, 2026-08-23).
+        var world = new World();
+        foreach (var r in Regions.All) world.Conquer(r.Id);
+        world.DeepenCorruption(); world.DeepenCorruption(); world.DeepenCorruption();
+        Assert.Equal(3, world.PeakCorruptionTier);
+        Assert.True(world.IsNewPeak);
+        world.EaseCorruption(); world.EaseCorruption();
+        Assert.Equal(1, world.CorruptionTier);
+        Assert.Equal(3, world.PeakCorruptionTier);
+        world.DeepenCorruption();
+        Assert.False(world.IsNewPeak);          // tier 2 again — reached before
+        world.DeepenCorruption(); world.DeepenCorruption();
+        Assert.True(world.IsNewPeak);           // tier 4 — new
+        Assert.Equal(4, world.PeakCorruptionTier);
+
+        var restored = new World();
+        foreach (var r in Regions.All) restored.Conquer(r.Id);
+        restored.RestoreCorruption(tier: 1, peak: 4);
+        Assert.Equal(4, restored.PeakCorruptionTier);
+        var legacy = new World();
+        legacy.RestoreCorruption(2);             // an older save carries no peak: the tier is the peak
+        Assert.Equal(2, legacy.PeakCorruptionTier);
+    }
 }

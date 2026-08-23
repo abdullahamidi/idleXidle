@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using ResonanceHunter.Core.Builds;
 using ResonanceHunter.Core.Loot;
@@ -362,5 +363,14 @@ public class DustEffectsTests
         Assert.True(tree.Owns("artifice_vows"), "the walk must reach THE BOUND HAND");
         Assert.Equal(1.25f, DustEffects.VowPowerMultiplier(tree));
         Assert.Equal(1.25f, DustEffects.TreeShape(tree).VowPowerMultiplier);
+
+        // …and through the composer — the seam the game actually uses (BuildComposer, moved to Core so
+        // this can be pinned): the composed build's shape carries the vow power.
+        var composed = BuildComposer.Compose(tree, new MasteryTree(), null, Array.Empty<BuildComposer.SkillPick>(),
+                                             Array.Empty<string>(), 4);
+        Assert.Equal(1.25f, composed.Shape.VowPowerMultiplier, 3);
+        var plain = BuildComposer.Compose(new MemoryDustTree(), new MasteryTree(), null, Array.Empty<BuildComposer.SkillPick>(),
+                                          Array.Empty<string>(), 4);
+        Assert.Equal(1f, plain.Shape.VowPowerMultiplier, 3);
     }
 }

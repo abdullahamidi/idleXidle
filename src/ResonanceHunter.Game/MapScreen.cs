@@ -421,7 +421,8 @@ public sealed class MapScreen
         var dropsTop = DetailPanel.Y + 620;
         // Clamped to the row above the CTA: on a deepenable world the CORRUPTION line lands in this
         // band, and a wrap with no floor eventually meets whatever is below it.
-        var dropsFloor = DetailPanel.Bottom - (World.CanDeepenCorruption ? 150 : 108);
+        // Once the world is conquered the corruption ladder row starts at Bottom-196; the blurb stops above it.
+        var dropsFloor = DetailPanel.Bottom - (World.AllConquered ? 204 : 108);
         if (dropLines.Count > 0 && dropsTop + 22 <= dropsFloor)
         {
             _ui.TextBig(b, "DROPS", DetailPanel.X + 28, DetailPanel.Y + 590, Gold, UiTypography.Secondary);

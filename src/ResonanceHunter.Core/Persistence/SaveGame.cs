@@ -90,6 +90,10 @@ public sealed record SaveGame
     /// <summary>The endgame corruption ratchet — how deep the fully-conquered world has been pushed.</summary>
     public int CorruptionTier { get; init; }
 
+    /// <summary>The deepest tier ever reached (2026-08-23) — the award and the trait points key off it. Absent
+    /// in older saves: then the tier is the peak.</summary>
+    public int CorruptionPeak { get; init; }
+
     /// <summary>
     /// Which character is being played. Empty or unknown falls back to the starter.
     /// </summary>
@@ -453,6 +457,7 @@ public static class SaveSystem
             ConqueredRegions = world?.ConqueredIds.ToList() ?? new List<string>(),
             ActiveRegion = activeRegion,
             CorruptionTier = world?.CorruptionTier ?? 0,
+            CorruptionPeak = world?.PeakCorruptionTier ?? 0,
             RegionFarms = world is null ? new List<RegionFarmSave>() : Encounters.Regions.All.Select(def =>
             {
                 var f = world.RegionFarm(def.Id);

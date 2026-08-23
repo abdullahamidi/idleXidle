@@ -242,4 +242,19 @@ public class PassiveTreeTests
             Assert.NotNull(Keystones.ById(node.GrantsKeystone));
         }
     }
+
+    [Fact]
+    public void test_a_minor_strand_node_reaches_the_tree_mods_and_the_fight()
+    {
+        // The twelve MINOR STRANDS (2026-08-23) are BuildMods-only nodes: TreeMods must carry them, and a
+        // build wearing one must hit harder than the same build without it — otherwise the node is a
+        // label. (The old "the tree contributes no bare multipliers" pin would have stayed green with
+        // every strand dead.)
+        var walked = Bought("socket_2", "ks_glass_cannon", "ks_bloodlust");
+        var sharpened = Bought("socket_2", "ks_glass_cannon", "ks_bloodlust", "ruin_edge_1");
+        Assert.True(sharpened.Owns("ruin_edge_1"), "the fixture must actually own SHARP EDGE");
+        Assert.Equal(1.05f, DustEffects.TreeMods(sharpened).Damage, 3);
+        Assert.True(DamageDealt(BuildFrom(sharpened)) > DamageDealt(BuildFrom(walked)) * 1.02f,
+            "SHARP EDGE must reach the fight");
+    }
 }

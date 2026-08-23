@@ -53,13 +53,17 @@ public readonly record struct GearMods(float Damage, float Health, float Haul, f
         {
             if (mult >= 1f) up += mult - 1f; else down += 1f - mult;
         }
-        // Bonuses saturate (S / (1 + S/ceiling) never reaches the ceiling); drawbacks are honest and
-        // linear, floored so a set of all-drawback traits cannot zero a channel.
+        // Bonuses saturate (S / (1 + S/ceiling) never reaches the ceiling) and so do drawbacks — toward
+        // DrawbackCeiling — so the n-th trade piece shrinks on BOTH sides. With linear drawbacks a third
+        // FOCUSED piece was net-negative: its +skill-rate had saturated while its -15% damage had not,
+        // which made "more of the same" a trap (review, 2026-08-23). Floored so nothing zeros a channel.
         static float Channel(float up, float down, float ceiling)
-            => MathF.Max(0.25f, 1f + up / (1f + up / ceiling) - down);
+            => MathF.Max(0.25f, 1f + up / (1f + up / ceiling) - down / (1f + down / DrawbackCeiling));
     }
 
     public const float DamageCeiling = 3.0f, HealthCeiling = 2.0f, HaulCeiling = 2.0f, SkillRateCeiling = 1.5f;
+    /// <summary>The most a channel can lose to stacked drawbacks (-75%), approached, never reached.</summary>
+    public const float DrawbackCeiling = 0.75f;
 }
 
 /// <summary>

@@ -72,9 +72,14 @@ public class CorruptionScalingTests
             if (t > 0) Assert.False(string.IsNullOrWhiteSpace(look.Epithet), "a corrupted tier names the boss");
         }
         Assert.Equal(string.Empty, CorruptionLook.For(0).Epithet);
-        // Deeper is darker: the arena tint only ever loses light down the ladder.
+        // Deeper is darker: the arena AND the creatures only ever lose light down the ladder; the base
+        // world draws everything as authored (white).
+        Assert.Equal(((byte)255, (byte)255, (byte)255), CorruptionLook.For(0).Enemy);
         for (var t = 1; t <= CorruptionScaling.MaxTier; t++)
+        {
             Assert.True(CorruptionLook.For(t).Arena.G < CorruptionLook.For(t - 1).Arena.G);
+            Assert.True(CorruptionLook.For(t).Enemy.G < CorruptionLook.For(t - 1).Enemy.G, "creatures lose light down the ladder too");
+        }
         Assert.Equal(CorruptionLook.For(CorruptionScaling.MaxTier), CorruptionLook.For(CorruptionScaling.MaxTier + 3));
     }
 }

@@ -22,8 +22,8 @@ public static class CorruptionLook
         new("STIRRING",           "STIRRING",  "The foes are tougher, the dust a little richer.",       (242, 232, 248), (206, 202, 222)),
         new("RESTLESS",           "RESTLESS",  "The light thins. Every creature hits and takes more.",  (230, 212, 244), (196, 188, 220)),
         new("FEVERED",            "FEVERED",   "The world runs hot. Bosses wear the fever's name.",     (220, 192, 238), (184, 172, 214)),
-        new("RAVENOUS",           "RAVENOUS",  "Deep corruption. The dust here is the richest.",        (214, 172, 232), (170, 154, 206)),
-        new("ABYSSAL",            "ABYSSAL",   "The floor of the world. Nothing is deeper.",            (208, 150, 226), (156, 136, 198)),
+        new("RAVENOUS",           "RAVENOUS",  "Deep corruption. The dust here is richer still.",        (214, 172, 232), (170, 154, 206)),
+        new("ABYSSAL",            "ABYSSAL",   "The floor of the world. Nothing is deeper, and nothing pays more.",            (208, 150, 226), (156, 136, 198)),
     };
 
     /// <summary>The look of a tier (clamped into the ladder).</summary>

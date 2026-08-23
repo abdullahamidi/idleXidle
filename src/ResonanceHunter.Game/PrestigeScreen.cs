@@ -246,7 +246,7 @@ public sealed class PrestigeScreen
     {
         if (tree.Owns(u.Id)) _msg = "ALREADY LEARNED — A TRAIT IS PERMANENT.";
         else if (tree.Purchase(u.Id)) { _msg = $"LEARNED: {u.Name}."; BeginLit(u); }
-        else if (tree.Available < u.Cost) _msg = "NOT ENOUGH TRAIT POINTS — CONQUER REGIONS TO EARN MORE.";
+        else if (tree.Available < u.Cost) _msg = "NOT ENOUGH TRAIT POINTS — CONQUER A REGION, GO DEEPER INTO THE CORRUPTION ON THE MAP, OR RAISE A REGION'S MASTERY TO EARN MORE.";
         else _msg = "LOCKED — LEARN WHAT IT NEEDS FIRST.";
     }
 
@@ -657,7 +657,11 @@ public sealed class PrestigeScreen
         // The name plate is part of the node for the pointer: a player aims at the word as readily as
         // at the square, and a hit box that stops at the square makes the plate feel broken.
         var lines = NameLines(u.Name);
-        var hitBox = new Rectangle(box.X - 4, box.Y, box.Width + 8, box.Height + 3 + lines.Count * NameLineH + 2);
+        // …so the hit box is the UNION of the square and the plate, the plate measured the way DrawName draws it.
+        var plateW = lines.Count == 0 ? 0 : lines.Max(l => _ui.MeasureBig(l, NamePx)) + 8;
+        var left = Math.Min(box.X - 4, (int)p.X - plateW / 2);
+        var right = Math.Max(box.Right + 4, (int)p.X - plateW / 2 + plateW);
+        var hitBox = new Rectangle(left, box.Y, right - left, box.Height + 3 + lines.Count * NameLineH + 2);
         var hover = hitBox.Contains(hit);
 
         var isOwned = tree.Owns(u.Id);

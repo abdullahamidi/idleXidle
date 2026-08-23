@@ -593,6 +593,11 @@ public sealed class SoloExpeditionScreen
         var startHealth = new Dictionary<int, int> { [0] = _champ.Health };
         var maxHealth = new Dictionary<int, int> { [0] = _champ.MaxHealth };
 
+        // THE WAVE BEING SHOWN, captured BEFORE the push: PushWave resolves wave+1 and, on a clear, counts
+        // it — so after it `_run.Wave` is already the replayed wave, and `_run.Wave + 1` (which the boss
+        // flag and the header used) named the NEXT wave. The boss drew one wave early and the boss wave
+        // itself drew ordinary creatures; the header said WAVE 2 over the WAVE 1 CLEARED banner.
+        _replayWave = _run.Wave + 1;
         _outcome = _run.PushWave();
 
         // THE WAVE'S ACTUAL TOTAL, summed from the creatures the sim just built — not
@@ -855,8 +860,10 @@ public sealed class SoloExpeditionScreen
             }
         }
 
-        foreach (var e in _replay.Advance(_playheadMs))
+        var batch = _replay.Advance(_playheadMs);
+        for (var bi = 0; bi < batch.Count; bi++)
         {
+            var e = batch[bi];
             // EVERY EFFECT USED THE SAME DEFAULT SIZE, so a glancing blow, a critical and a death all
             // burst at 208px — on a 430px champion and on swarm creatures barely 100px across. Playtest:
             // "HUNT ekranında efektlerin boyutları düzgün değil." Size is the loudest channel an effect
@@ -893,7 +900,13 @@ public sealed class SoloExpeditionScreen
                     Say(text, colour);
                     // Slot carries the casting skill's Source (WaveModel.BattleEvent) — the effect is the
                     // Form's shape in the Source's colour, which is the whole hexagon in one flash.
-                    PlayFormVfx(form, (Source)e.Slot);
+                    // The creature this cast HITS is the one its own Strike in the same batch names — the
+                    // batch has already applied the kill, so "first alive" would point past a creature the
+                    // cast just killed and the flash would land on its neighbour.
+                    int? castTarget = null;
+                    for (var k = bi + 1; k < batch.Count && batch[k].AtMs <= e.AtMs + 1; k++)
+                        if (batch[k].Kind == BattleEventKind.Strike) { castTarget = batch[k].Slot; break; }
+                    PlayFormVfx(form, (Source)e.Slot, castTarget);
                     if (form != Form.Trap) { _skillSinceCast = 0f; _skillFollowForm = form; }   // the release frames
                     SpawnDamage(HitDamage(form == Form.Trap ? 3f : 2f), form == Form.Trap);   // skills hit big
                     break;
@@ -981,14 +994,14 @@ public sealed class SoloExpeditionScreen
     /// the glow colours below are brighter than the bible's body colours (Umbra Indigo added to black is
     /// nothing at all).
     /// </remarks>
-    private void PlayFormVfx(Form form, Source source)
+    private void PlayFormVfx(Form form, Source source, int? hitSlot = null)
     {
         var glow = SourceGlow(source);
         // ON the creature being hit, sized to it: the sim lands single-target Forms on the first living
         // creature, so that is where the flash goes — a swarm creature gets a small one, a bruiser a big
         // one, a boss the biggest (EnemyScale). A Trap bursts under the whole row; the champion's own
         // Forms stay on the champion.
-        var target = TargetSlot();
+        var target = hitSlot ?? TargetSlot();
         var (tx, ty) = EnemyPoint(target, 0.45f);
         switch (form)
         {
@@ -1041,7 +1054,7 @@ public sealed class SoloExpeditionScreen
         // callouts, flash, wave banner) so only the boss and its bar read.
         if (DevForceBoss) { _vfx.Clear(); _callouts.Clear(); _deathFlash = 0f; _bannerTimer = 0f; }
 
-        _isBossWave = DevForceBoss || WaveScaling.IsBossWave(_run.Wave + 1, ExpeditionTuning.Default);
+        _isBossWave = DevForceBoss || WaveScaling.IsBossWave(Math.Max(1, _replayWave), ExpeditionTuning.Default);
         var overlay = ResolveOverlay(suppressBanner);
         // Rev 4 §18.3: exactly one major overlay. The host draws WelcomeBack; when it does, the screen draws
         // none. Dev warning only — never a Debug.Assert (a failed assert aborts the game's Debug build).
@@ -1063,11 +1076,12 @@ public sealed class SoloExpeditionScreen
         b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
         DrawHunterHud(b);
         DrawStageHeader(b, regionName, _isBossWave);
-        DrawRightColumn(b, hit, clicked);
+        // Under the EXPEDITION LOG's full-screen scrim the rail is furniture — no TAKE ONLY edits, no errands.
+        DrawRightColumn(b, hit, clicked && !_logOpen);
         // Rail frame first, then its contents. The old order relied on the rail being TRANSLUCENT — the
         // skill dock was drawn under it and read through as a washed-out ghost. With a real opaque panel
         // that hid the dock outright.
-        DrawBattleControls(b, hit, clicked);
+        DrawBattleControls(b, hit, clicked && !_logOpen);
         DrawSkillDock(b);
         if (_isBossWave) DrawBossBar(b);                          // §10/§12: screen-space, NOT arena-clipped
         if (_isBossWave && DevBossDebug) DrawBossDebugOverlay(b); // §17: fixture-only bounds visualization (F7)
@@ -1142,6 +1156,9 @@ public sealed class SoloExpeditionScreen
     private Form _skillFollowForm;
     /// <summary>How long an enemy's follow-through stays on its attack clip: three frames at ~10 fps.</summary>
     private const float EnemyFollowSeconds = 0.3f;
+
+    /// <summary>The wave whose replay is on screen (1-based) — see BeginWave; the header and the boss flag read it.</summary>
+    private int _replayWave;
 
     // ── WHERE EACH CREATURE IS, published by the draw for the update (2026-08-23). ─────────────────
     //    Every enemy-side effect used to spawn at the ROW's centre — right for one creature, 150 px off
@@ -1382,6 +1399,8 @@ public sealed class SoloExpeditionScreen
         var figTop = ebox.Bottom - ebox.Height;
         var ab = new Rectangle(ebox.X, figTop + bob, ebox.Width, ebox.Height);
         PublishCreature(0, ab);
+        _rowCentreX = EnemyBox.Center.X;   // the row anchor the effects fall back to — resting, like the composition's
+        _rowTopY = figTop;
         if (_replay is not null && !_replay.CreatureAlive(0))
         {
             var deadKey = EnemySource is { } ds && EnemyForSource.TryGetValue(ds, out var dk) ? dk : null;
@@ -1456,6 +1475,8 @@ public sealed class SoloExpeditionScreen
         // The swing rides the same windup as everything else (see EnemyClipSeconds): the strike lands on the
         // frame the blow is credited, instead of the boss cycling its attack strip on the free clock.
         PublishCreature(0, box);
+        _rowCentreX = BossAnchor.X;
+        _rowTopY = box.Y;
         if (bossKey is not null && _replay is not null && !_replay.CreatureAlive(0) && _diedAt.TryGetValue(0, out var bossDiedAt)
             && _ui.Assets.Has($"{bossKey}_death_strip8_512"))
         {
@@ -1810,7 +1831,7 @@ public sealed class SoloExpeditionScreen
         // THE WAVE LINE CARRIES THE RUN'S STATE NOW, which is what the deleted EXPEDITION plate was for.
         // Nothing is appended while the run is simply running: "ACTIVE" was true of every frame this
         // screen has ever drawn, so it distinguished nothing and only made the line longer.
-        var wave = $"WAVE {_run!.Wave + 1}";
+        var wave = $"WAVE {Math.Max(1, _replayWave)}";
         if (CorruptionTier > 0) wave += $"  ·  {CorruptionLook.For(CorruptionTier).Name}";
         if (RunState() is { } st)
         {

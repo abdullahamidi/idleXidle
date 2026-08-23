@@ -497,7 +497,7 @@ public class Game1 : Game
         // whole conquered world and endgame corruption instead of being silently reset to the home region.
         // Ordered before the IsUnlocked check so the active region resolves against the restored conquest.
         _world.RestoreConquered(save.ConqueredRegions);
-        _world.RestoreCorruption(save.CorruptionTier);
+        _world.RestoreCorruption(save.CorruptionTier, save.CorruptionPeak);
         if (!string.IsNullOrEmpty(save.ActiveRegion) && _world.IsUnlocked(save.ActiveRegion))
             _activeRegion = save.ActiveRegion;
 
@@ -1318,7 +1318,7 @@ public class Game1 : Game
                 {
                     // Whole world conquered — show the map with the DEEPEN THE CORRUPTION button live.
                     foreach (var r in Regions.All) _world.Conquer(r.Id);
-                    _conquerMsg = "THE WORLD IS YOURS.  DEEPEN THE CORRUPTION FOR MORE.";
+                    _conquerMsg = "THE WORLD IS YOURS.  GO DEEPER INTO THE CORRUPTION ON THE MAP FOR MORE.";
                     _showWorld = true;
                 }
                 if (sm is "corrupted" or "corruptedboss")
@@ -1774,7 +1774,7 @@ public class Game1 : Game
         // A modal eats the frame's INPUT, but not the frame, and not the fight. The autosave and the
         // farms tick above; the champion ticks on the line above this one. What must not happen is the
         // hotkeys and buttons underneath the panel continuing to respond.
-        if (_showSettings) { Latch(gameTime); return; }
+        if (_showSettings || _showHelp) { Latch(gameTime); return; }   // the help (F1) is a modal too
 
         if (_showWorld) { UpdateWorld(); Latch(gameTime); return; }
 
@@ -2622,7 +2622,7 @@ public class Game1 : Game
             _sound.PlayFirst(1f, "sfx_conquer", "sfx_levelup");
             _conquerMsg = unlocked is not null
                 ? $"{Regions.Get(_activeRegion).Name} CONQUERED!  {unlocked.Name} UNLOCKED — MAP (W)."
-                : "THE WORLD IS YOURS.  DEEPEN THE CORRUPTION ON THE MAP (W).";
+                : "THE WORLD IS YOURS.  GO DEEPER INTO THE CORRUPTION ON THE MAP (W).";
             Save();
         }
     }
@@ -2802,7 +2802,7 @@ public class Game1 : Game
     /// <summary>True while a modal explanation is up — every input path below reads it.</summary>
     private bool _swallowInput;
 
-    private bool MouseClicked => _clicked && !_showSettings && !_swallowInput;
+    private bool MouseClicked => _clicked && !_showSettings && !_showHelp && !_swallowInput;
     private bool MouseRightClicked => _rightClicked && !_showSettings;
 
 
@@ -3311,10 +3311,16 @@ public class Game1 : Game
     private void DeepenCorruption()
     {
         if (!_world.CanDeepenCorruption) return;
+        var peakBefore = _world.PeakCorruptionTier;
         var tier = _world.DeepenCorruption();
         _sound.PlayFirst(1f, "sfx_deepen", "sfx_conquer", "sfx_levelup");
-        _dust.AwardFromMastery(CorruptionScaling.DeepeningDustAward(tier));
-        _conquerMsg = $"THE CORRUPTION DEEPENS — {CorruptionLook.Label(tier)}. STRONGER FOES, RICHER DUST.";
+        // The award is for REACHING a tier, paid once: SHALLOWER then DEEPER used to mint it again on every
+        // cycle (review, 2026-08-23). The trait point for the tier keys off the peak too (TraitPointsEarned).
+        var firstTime = tier > peakBefore;
+        if (firstTime) _dust.AwardFromMastery(CorruptionScaling.DeepeningDustAward(tier));
+        _conquerMsg = firstTime
+            ? $"THE CORRUPTION DEEPENS — {CorruptionLook.Label(tier)}. STRONGER FOES, RICHER DUST."
+            : $"THE CORRUPTION DEEPENS AGAIN — {CorruptionLook.Label(tier)}. (THE DUST FOR THIS TIER WAS PAID THE FIRST TIME.)";
         Save();
     }
 
@@ -3527,7 +3533,11 @@ public class Game1 : Game
 
     private int TraitPointsEarned()
     {
-        var total = _world.ConqueredIds.Count + _world.CorruptionTier;
+        // Two per corruption tier REACHED (the peak, so SHALLOWER never costs a point): with the ladder
+        // capped at five, one point a tier left every road's end unaffordable — 6 + 5 + 18 = 29 against a
+        // cheapest terminal path of 31. 6 + 10 + 18 = 34 is the budget the tree was built around
+        // (MemoryDustTests: one terminal reachable, two never).
+        var total = _world.ConqueredIds.Count + 2 * _world.PeakCorruptionTier;
         foreach (var def in Regions.All) total += (int)_world.RegionFarm(def.Id).MasteryLevel;
         return total;
     }

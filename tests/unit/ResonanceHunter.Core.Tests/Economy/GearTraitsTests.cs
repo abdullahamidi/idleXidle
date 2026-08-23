@@ -189,8 +189,12 @@ public class GearTraitsTests
         Assert.True(eight.SkillRate < 1f + GearMods.SkillRateCeiling, $"eight slots must stay under the ceiling (got {eight.SkillRate})");
         Assert.True(eight.SkillRate > 1.9f, "eight FOCUSED slots must still be a big deal");
 
-        var drawback = GearMods.Stack(new[] { new GearMods(0.8f, 1f, 1f, 1f), new GearMods(0.8f, 1f, 1f, 1f) });
-        Assert.Equal(0.6f, drawback.Damage, 3);   // drawbacks are honest and linear
+        var oneDown = GearMods.Stack(new[] { new GearMods(0.8f, 1f, 1f, 1f) });
+        var twoDown = GearMods.Stack(new[] { new GearMods(0.8f, 1f, 1f, 1f), new GearMods(0.8f, 1f, 1f, 1f) });
+        Assert.True(twoDown.Damage < oneDown.Damage, "a second drawback must still cost something");
+        Assert.True(twoDown.Damage > 0.6f, $"but drawbacks soften as they stack, like the bonuses (got {twoDown.Damage})");
+        var many = GearMods.Stack(Enumerable.Repeat(new GearMods(0.7f, 1f, 1f, 1f), 8));
+        Assert.True(many.Damage > 1f - GearMods.DrawbackCeiling, "eight drawbacks cannot pass the drawback ceiling");
         Assert.Equal(GearMods.None, GearMods.Stack(Array.Empty<GearMods>()));
     }
 
