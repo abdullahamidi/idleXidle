@@ -330,14 +330,14 @@ public static class Weaving
             Id = "vow_singular", Name = "VOW OF THE SINGULAR", Kind = VowKind.Demand,
             Demand = VowDemand.SingleForm, Severity = 0.75f,
             Short = "ONE FORM ONLY",
-            Description = "EVERY SKILL YOU CARRY MUST BE THE SAME FORM. DEPTH INSTEAD OF BREADTH.",
+            Description = "EVERY SKILL YOU CARRY MUST BE THE SAME FORM. GO DEEP, NOT WIDE.",
         },
         new()
         {
             Id = "vow_pure", Name = "VOW OF THE PURE", Kind = VowKind.Demand,
             Demand = VowDemand.SingleSource, Severity = 0.6f,
             Short = "ONE SOURCE ONLY",
-            Description = "EVERY SKILL MUST DRAW ONE SOURCE. THE MATCHUP WHEEL STOPS BEING YOURS.",
+            Description = "EVERY SKILL MUST USE ONE SOURCE. NO PICKING WHAT THE ENEMY IS WEAK TO.",
         },
         new()
         {
@@ -345,7 +345,7 @@ public static class Weaving
             // catalogue has an entry a new player can take without giving anything up yet.
             Id = "vow_complete", Name = "VOW OF COMPLETION", Kind = VowKind.Demand,
             Demand = VowDemand.EveryWeaveFilled, Severity = 0.2f,
-            Short = "NO EMPTY WEAVE",
+            Short = "NO EMPTY SLOT",
             Description = "EVERY SKILL SLOT YOU OWN MUST BE FILLED. NOTHING HELD BACK.",
         },
 
@@ -355,36 +355,36 @@ public static class Weaving
         {
             Id = "vow_bluntedge", Name = "VOW OF THE BLUNT EDGE", Kind = VowKind.Demand,
             Demand = VowDemand.NoCritInvestment, Severity = 0.55f,
-            Short = "NO CRIT TRAINING",
-            Description = "YOUR CRITICAL CHANCE MUST BE UNTOUCHED. NO LUCKY BLOWS, ONLY CERTAIN ONES.",
+            Short = "NO CRITICAL BONUS",
+            Description = "YOUR CRITICAL CHANCE MUST BE UNTOUCHED. NO LUCKY HITS, ONLY SURE ONES.",
         },
         new()
         {
             Id = "vow_deliberate", Name = "VOW OF THE DELIBERATE", Kind = VowKind.Demand,
             Demand = VowDemand.CadenceAtOrBelow, Threshold = 1.0f, Severity = 0.5f,
-            Short = "CADENCE AT OR BELOW 1.00x",
-            Description = "YOUR SKILLS MUST NOT RETURN FASTER THAN BASE. SLOW HANDS, HEAVY BLOWS.",
+            Short = "SKILL RATE MAX 1.00x",
+            Description = "YOUR SKILLS MAY NOT BE SPED UP AT ALL. SLOW HANDS, HEAVY BLOWS.",
         },
         new()
         {
             Id = "vow_frantic", Name = "VOW OF THE FRANTIC", Kind = VowKind.Demand,
             Demand = VowDemand.CadenceAtOrAbove, Threshold = 1.4f, Severity = 0.5f,
-            Short = "CADENCE AT OR ABOVE 1.40x",
-            Description = "YOUR SKILLS MUST RETURN AT LEAST 40% FASTER THAN BASE. NEVER STILL.",
+            Short = "SKILL RATE MIN 1.40x",
+            Description = "YOUR SKILLS MUST BE SPED UP BY 40% OR MORE. NEVER STILL.",
         },
         new()
         {
             Id = "vow_unguarded", Name = "VOW OF THE UNGUARDED", Kind = VowKind.Demand,
             Demand = VowDemand.NoDefence, Severity = 0.7f,
             Short = "NO DEFENCE AT ALL",
-            Description = "NO DEFENCE FROM TRAINING, CHARM OR AFFIX. NOTHING BETWEEN YOU AND THE WAVE.",
+            Description = "NO DEFENCE FROM TRAINING OR GEAR. NOTHING BETWEEN YOU AND THE WAVE.",
         },
         new()
         {
             Id = "vow_unbound", Name = "VOW OF THE UNBOUND", Kind = VowKind.Demand,
             Demand = VowDemand.NoKeystone, Severity = 0.8f,
-            Short = "NO KEYSTONE SOCKETED",
-            Description = "YOU MAY SOCKET NO KEYSTONE. THE PERMANENT TREE'S PAYOFF, REFUSED.",
+            Short = "NO KEYSTONE IN USE",
+            Description = "YOU MAY WEAR NO KEYSTONE. YOU GIVE UP THE TRAIT TREE'S PRIZE.",
         },
 
         // ── SACRIFICE. A bare slot costs its stats AND its enchantment AND its affixes, all of which
@@ -418,14 +418,14 @@ public static class Weaving
             StaticCostMagnitude = 0.111f,   // eHP fraction — invariant across every build
             DamageTakenIncrease = 0.125f,   // +12.5% damage taken, applied AFTER mitigation
             Short = "ALWAYS: TAKES +12.5%",
-            Description = "ALWAYS ON. IT TAKES 12.5% MORE DAMAGE.",
+            Description = "ALWAYS ON. YOU TAKE 12.5% MORE DAMAGE.",
         },
         new()
         {
             Id = "vow_reckless_offering", Name = "RECKLESS OFFERING", Kind = VowKind.StaticCost,
             StaticCostMagnitude = 0.15f,    // -15% max health == -15% eHP, linearly
             Short = "ALWAYS: -15% MAX HEALTH",
-            Description = "ALWAYS ON. IT PERMANENTLY LOSES 15% OF ITS MAXIMUM HEALTH.",
+            Description = "ALWAYS ON. YOU LOSE 15% OF YOUR MAXIMUM HEALTH.",
         },
     };
 

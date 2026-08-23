@@ -45,14 +45,14 @@ public static class Facilities
 {
     public static readonly IReadOnlyList<FacilityInfo> All = new List<FacilityInfo>
     {
-        new(FacilityKind.Nursery,        "NURSERY",         "Hatch and nurture young. Increases gold production.",        WarrenResource.Gleam,   17f),
-        new(FacilityKind.Tunnels,        "TUNNELS",         "Dig deeper veins. Steady gold from the warren's diggings.", WarrenResource.Gleam,   16f),
-        new(FacilityKind.ForagingPits,   "FORAGING PITS",   "Forage the deep loam for memory-rich spores.",              WarrenResource.Dust,    450f),
-        new(FacilityKind.ScavengerRuns,  "SCAVENGER RUNS",  "Send runners abroad to bring back gold.",                   WarrenResource.Gleam,   14f),
-        new(FacilityKind.BreedingChamber,"BREEDING CHAMBER","Breed keener minds. Yields mastery insight.",               WarrenResource.Mastery, 122f),
-        new(FacilityKind.RitualNest,     "RITUAL NEST",     "Commune with the resonance. Slow, deep mastery.",           WarrenResource.Mastery, 118f),
-        new(FacilityKind.HoardVaults,    "HOARD VAULTS",    "Store and compound the warren's gold.",                     WarrenResource.Gleam,   12f),
-        new(FacilityKind.SentryBurrows,  "SENTRY BURROWS",  "Guard the forage lines, protecting dust yield.",            WarrenResource.Dust,    108f),
+        new(FacilityKind.Nursery,        "NURSERY",         "Hatch and raise young. Makes more Gleam.",        WarrenResource.Gleam,   17f),
+        new(FacilityKind.Tunnels,        "TUNNELS",         "Dig deeper veins. Steady Gleam from the digging.", WarrenResource.Gleam,   16f),
+        new(FacilityKind.ForagingPits,   "FORAGING PITS",   "Search the deep soil for Memory Dust.",              WarrenResource.Dust,    450f),
+        new(FacilityKind.ScavengerRuns,  "SCAVENGER RUNS",  "Send runners out to bring back Gleam.",                   WarrenResource.Gleam,   14f),
+        new(FacilityKind.BreedingChamber,"BREEDING CHAMBER","Breed sharper minds. Makes Insight.",               WarrenResource.Mastery, 122f),
+        new(FacilityKind.RitualNest,     "RITUAL NEST",     "Listen to the resonance. Slow, deep Insight.",           WarrenResource.Mastery, 118f),
+        new(FacilityKind.HoardVaults,    "HOARD VAULTS",    "Store the warren's Gleam so it grows.",                     WarrenResource.Gleam,   12f),
+        new(FacilityKind.SentryBurrows,  "SENTRY BURROWS",  "Guard the forage trails. Keeps the Dust safe.",            WarrenResource.Dust,    108f),
     };
 
     public static FacilityInfo Info(FacilityKind kind) => All.First(f => f.Kind == kind);

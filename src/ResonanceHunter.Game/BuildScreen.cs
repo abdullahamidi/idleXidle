@@ -362,7 +362,7 @@ public sealed class BuildScreen
             if (AttuneSealBtn.Contains(hit))
             {
                 _attuneNodeId = null;
-                _msg = $"ATTUNED. {_attuneForm.ToString().ToUpperInvariant()} IS YOURS — ITS SKILLS STRIKE AT DOUBLE WORTH.";
+                _msg = $"ATTUNED. {_attuneForm.ToString().ToUpperInvariant()} IS YOURS — ITS SKILLS HIT TWICE AS HARD.";
             }
             else if (AttuneUndoBtn.Contains(hit))
             {
@@ -566,10 +566,10 @@ public sealed class BuildScreen
     /// <summary>The plain-words reading of a build: what it leads on, what it has bound, where it leans.</summary>
     private string Sentences(string lead, int vowCount)
     {
-        var said = new List<string> { $"Most of your skills draw on {lead}." };
+        var said = new List<string> { $"Most of your skills use {lead}." };
         said.Add(vowCount switch
         {
-            0 => "None of them carries a vow yet — a vow makes a skill stronger and charges you for it.",
+            0 => "None of them has a vow yet. A vow makes a skill stronger, but it costs you something.",
             1 => "One of them carries a vow.",
             _ => $"{vowCount} of them carry a vow.",
         });
@@ -702,7 +702,7 @@ public sealed class BuildScreen
         var floor = PassivePanel.Bottom - UiKit.PanelCorner - keystoneBlockH;
         var keyY = Math.Min(Math.Max(PassivePanel.Y + 596, ry + 16), floor);
         _ui.TextBig(b, "KEYSTONES", x, keyY, Gold, UiTypography.Secondary);
-        if (worn.Count == 0) _ui.TextBig(b, "NONE YET — WEAVE A SKILL TO SLOT ONE", x, keyY + 34, Slate, UiTypography.Body);
+        if (worn.Count == 0) _ui.TextBig(b, "NONE YET — PICK ONE IN YOUR SKILLS", x, keyY + 34, Slate, UiTypography.Body);
         else _ui.TextBig(b, string.Join("  \u00b7  ", worn.Select(k => k.Name.ToUpperInvariant())), x, keyY + 34, Bone, UiTypography.Body);
     }
 
@@ -795,7 +795,7 @@ public sealed class BuildScreen
         DrawNodeDetail(b, hit);
         DrawHexPanel(b, aff);
 
-        var info = _hoverInfo.Length > 0 ? _hoverInfo : _msg.Length > 0 ? _msg : "WEIGHT OPPOSES SPREAD.  TEMPO OPPOSES ENDURE.  ONE BRANCH IS AFFORDABLE; TWO ARE NOT.";
+        var info = _hoverInfo.Length > 0 ? _hoverInfo : _msg.Length > 0 ? _msg : "WEIGHT OR SPREAD.  TEMPO OR ENDURE.  YOU HAVE POINTS FOR ONE BRANCH, NOT TWO.";
         // SLATE FOR THE IDLE HINT. In Dim this measured ~1.35:1 — the single line that explains the
         // tree's central rule ("one branch is affordable; two are not") was the least readable text on
         // the screen it governs. Bone and Ember still mark the hover and message states.
@@ -819,7 +819,7 @@ public sealed class BuildScreen
         _ui.TextCenter(b, aff is { } a ? $"YOUR ATTUNEMENT — {a.ToString().ToUpperInvariant()}" : "UNATTUNED",
                        HexPanel.Center.X, HexPanel.Y + 14, aff is null ? Slate : Gold);
         if (aff is null)
-            _ui.TextCenter(b, "SEAL A SPECIALISATION TO ATTUNE", HexPanel.Center.X, HexPanel.Y + 38, Slate);
+            _ui.TextCenter(b, "TAKE A FORM SPECIALIST NODE", HexPanel.Center.X, HexPanel.Y + 38, Slate);
         FormHexDiagram.Draw(_ui, b, new Point(HexPanel.Center.X, HexPanel.Y + 268), 105, aff,
                             showFactors: aff is not null);
     }
@@ -840,13 +840,13 @@ public sealed class BuildScreen
 
         var name = _attuneForm.ToString().ToUpperInvariant();
         _ui.TextCenterBig(b, "THE ATTUNEMENT", 960, AttunePanel.Y + 36, Gold, UiTypography.SectionTitle);
-        _ui.TextCenter(b, "SIX FORMS ON THE LOOM — ONE ANSWERS YOU.", 960, AttunePanel.Y + 86, Slate);
+        _ui.TextCenter(b, "SIX FORMS ON THE LOOM — ONE IS YOURS.", 960, AttunePanel.Y + 86, Slate);
 
         FormHexDiagram.Draw(_ui, b, new Point(960, AttunePanel.Y + 340), 150, _attuneForm, showFactors: true);
 
-        _ui.TextCenter(b, $"YOUR {name} SKILLS STRIKE AT DOUBLE WORTH. THE FAR FORMS RESIST —",
+        _ui.TextCenter(b, $"YOUR {name} SKILLS HIT TWICE AS HARD. THE FAR FORMS HIT SOFTER —",
                        960, AttunePanel.Y + 604, Bone);
-        _ui.TextCenter(b, "A SWORN VOW PULLS AN OFF-DISCIPLINE SKILL ONE RING CLOSER.",
+        _ui.TextCenter(b, "A VOW ON A FAR-FORM SKILL PULLS IT ONE RING CLOSER.",
                        960, AttunePanel.Y + 626, Bone);
 
         Button(b, AttuneSealBtn, $"SEAL IT — {name} IS MINE", hit, true);
@@ -904,7 +904,7 @@ public sealed class BuildScreen
         var y = NodePanel.Y + 240;
         _ui.Fill(b, new Rectangle(NodePanel.X + 64, y - 16, NodePanel.Width - 128, 2), Dim);
         _ui.TextBig(b, "COST", NodePanel.X + 68, y, Slate, UiTypography.Body);
-        _ui.TextRightBig(b, $"{n.Cost} PT{(n.Cost == 1 ? "" : "S")}", NodePanel.Right - 68, y,
+        _ui.TextRightBig(b, $"{n.Cost} POINT{(n.Cost == 1 ? "" : "S")}", NodePanel.Right - 68, y,
                          taken2 ? Gold : can ? Bone : Ember, UiTypography.PanelTitle);
 
         y += 56;
@@ -1110,7 +1110,7 @@ public sealed class BuildScreen
 
         if (hover && node.Kind != MasteryKind.Start)
         {
-            _hoverInfo = $"{node.Label}   ({node.Cost} PT{(node.Cost == 1 ? "" : "S")})";
+            _hoverInfo = $"{node.Label}   ({node.Cost} POINT{(node.Cost == 1 ? "" : "S")})";
             _hoverNodeId = node.Id;
         }
     }

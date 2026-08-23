@@ -62,7 +62,7 @@ public sealed class AutomationScreen
         [Source.Mind] = new(0x74, 0xC6, 0xE8),     // lapis     L=183
         [Source.Spirit] = new(0xDC, 0xD4, 0xEC),   // bone ash  L=215
     };
-    private static readonly string[] MasteryNames = ["NEWLY CONQUERED", "PARTIALLY MASTERED", "FULLY MASTERED", "OPTIMIZED"];
+    private static readonly string[] MasteryNames = ["NEWLY CONQUERED", "PARTLY MASTERED", "FULLY MASTERED", "AT ITS BEST"];
 
     private static readonly Dictionary<(Source, Role), string> CreatureArt = new()
     {
@@ -111,8 +111,8 @@ public sealed class AutomationScreen
     /// <summary>The four stations of the composition chain. A Generator is an Attacker OR a Producer.</summary>
     private static readonly (string Label, Role[] Roles, Role Icon, string Sub)[] Stations =
     {
-        ("GENERATOR", new[] { Role.Attacker, Role.Producer }, Role.Attacker, "PASSIVE GLEAM"),
-        ("CRAFTER",   new[] { Role.Crafter },                 Role.Crafter,  "PASSIVE MATERIALS"),
+        ("GENERATOR", new[] { Role.Attacker, Role.Producer }, Role.Attacker, "MAKES GLEAM"),
+        ("CRAFTER",   new[] { Role.Crafter },                 Role.Crafter,  "MAKES MATERIALS"),
         ("DEFENDER",  new[] { Role.Defender },                Role.Defender, "SOFTENS DEATH"),
         ("SUPPORT",   new[] { Role.Support },                 Role.Support,  "RAISES IDLE RATE"),
     };
@@ -271,7 +271,7 @@ public sealed class AutomationScreen
 
         if (!hunter.SpendMaterials(FeedPortion))
         {
-            _msg = $"NOT ENOUGH MATERIALS — DISMANTLE SOME LOOT IN THE FORGE [F].";
+            _msg = $"NOT ENOUGH MATERIALS — BREAK DOWN LOOT IN THE FORGE [F].";
             return;
         }
 
@@ -381,10 +381,10 @@ public sealed class AutomationScreen
             var parts = new List<string>();
             if (_flashYield.Kills > 0) parts.Add($"{_flashYield.Kills} KILL");
             if (_flashYield.CoresProduced > 0) parts.Add($"+{_flashYield.CoresProduced} CORE");
-            if (_flashYield.GleamRealized > 0) parts.Add($"+{_flashYield.GleamRealized} G");
+            if (_flashYield.GleamRealized > 0) parts.Add($"+{_flashYield.GleamRealized} GLEAM");
             // Show what the auto-sell cap swallowed, so vanishing gleam reads as a CAP, not a bug — the exact
             // thing AutomationYield.GleamForfeitedToCap was created to surface, and until now it never was.
-            if (_flashYield.GleamForfeitedToCap > 0) parts.Add($"({_flashYield.GleamForfeitedToCap} G CAPPED)");
+            if (_flashYield.GleamForfeitedToCap > 0) parts.Add($"({_flashYield.GleamForfeitedToCap} GLEAM OVER CAP)");
             if (parts.Count > 0)
                 _ui.TextCenter(b, string.Join("   ", parts), 960, (int)(600 - (1f - _flash / 1.7f) * 48), _flash > 0.5f ? Gold : Slate);
         }
@@ -411,7 +411,7 @@ public sealed class AutomationScreen
             if (occ is not null)
             {
                 DrawCreature(b, spriteBox, occ, working: true);
-                _ui.Text(b, $"{occ.Source.ToString().ToUpperInvariant()}  T{occ.PowerTier}", st.X + 32, st.Bottom - 48, isFilled ? Bone : Ember);
+                _ui.Text(b, $"{occ.Source.ToString().ToUpperInvariant()}  TIER {occ.PowerTier}", st.X + 32, st.Bottom - 48, isFilled ? Bone : Ember);
                 if (occ.Id == _selectedId) Reticle(b, new Rectangle(st.X + 4, st.Y + 4, st.Width - 8, st.Height - 8), Bone);
             }
             else
@@ -424,7 +424,7 @@ public sealed class AutomationScreen
 
         // A refusal takes this line over — it is transient and the chain status is not urgent.
         if (_msg.Length > 0) _ui.TextCenter(b, _msg, 960, 608, Ember);
-        else _ui.TextCenter(b, filled == 4 ? "CHAIN COMPLETE — FARM OPTIMIZED" : $"{filled} / 4 ROLES WORKING",
+        else _ui.TextCenter(b, filled == 4 ? "ALL ROLES WORKING — FULL POWER" : $"{filled} / 4 ROLES WORKING",
             960, 608, filled == 4 ? Gold : Slate);
 
         // ═══ THE PEN — idle creatures + the hatchery ═══════════════════════════════════════════════
@@ -462,7 +462,7 @@ public sealed class AutomationScreen
             var next = evolvable ? tree.Options(sel.EvolutionNodeId, sel.Evolution!).FirstOrDefault() : default;
             var detail = next.Edge is not null
                 ? next.Edge.Hint
-                : $"{sel.Source.ToString().ToUpperInvariant()} {sel.Role.ToString().ToUpperInvariant()}  ·  T{sel.PowerTier}";
+                : $"{sel.Source.ToString().ToUpperInvariant()} {sel.Role.ToString().ToUpperInvariant()}  ·  TIER {sel.PowerTier}";
             _ui.Text(b, detail, 48, 852, Bone);
 
             _ui.Button(b, WorkBtn, assigned ? "SEND TO PEN" : "PUT TO WORK", hit, clicked);
@@ -529,7 +529,7 @@ public sealed class AutomationScreen
         if (tag)
         {
             _ui.Icon(b, RoleIcon[c.Role], new Rectangle(box.X + 8, box.Bottom - 40, 36, 36));
-            _ui.Text(b, $"T{c.PowerTier}", box.X + 52, box.Bottom - 36, Slate);
+            _ui.Text(b, $"TIER {c.PowerTier}", box.X + 52, box.Bottom - 36, Slate);
         }
     }
 

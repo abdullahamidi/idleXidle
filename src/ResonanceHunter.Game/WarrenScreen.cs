@@ -116,7 +116,7 @@ public sealed class WarrenScreen
         // It used to recite the headers directly beneath it, which spends the largest 100px on the page
         // to tell the player something they can already read, and teaches them that big text in this
         // band is not worth reading. Same slot, same cost, real content.
-        _ui.TextCenterBig(b, "THESE PRODUCE WHILE YOU ARE AWAY — CHECK IN, SPEND, LEAVE",
+        _ui.TextCenterBig(b, "THE WARREN EARNS WHILE YOU ARE AWAY — COME BACK AND SPEND",
                           960, 80, Slate, UiTypography.Secondary);
 
         DrawOverview(b, hit, clicked);
@@ -170,8 +170,8 @@ public sealed class WarrenScreen
         // legitimate design (it paces the base's own growth) but the player has no way to learn it from
         // a row of three coloured diamonds, and its old name made it look like the mastery points it
         // has nothing to do with.
-        DrawWrapped(b, "Facilities earn while you are away. GLEAM and DUST are spent all over the game; "
-                     + "INSIGHT is only ever spent here, on the facilities that make it.",
+        DrawWrapped(b, "The warren earns while you are away. GLEAM and DUST are used all over the game. "
+                     + "INSIGHT is used only here, on upgrades.",
             OverviewPanel.X + 30, OverviewPanel.Bottom - 104, OverviewPanel.Width - 60, Slate);
     }
 
@@ -255,10 +255,10 @@ public sealed class WarrenScreen
         var mile = new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 274, DetailPanel.Width - 56, 44);
         _ui.Fill(b, mile, new Color(0x16, 0x12, 0x20, 0xC0));
         _ui.TextBig(b, f.MilestoneTier > 0 ? $"MILESTONES  ×{f.MilestoneMultiplier:0.00} OUTPUT" : "MILESTONES  —", mile.X + 12, mile.Y + 12, Gold, UiTypography.Secondary);
-        _ui.TextRightBig(b, $"NEXT AT Lv{f.NextMilestoneLevel}", mile.Right - 12, mile.Y + 12, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, $"→ LEVEL {f.NextMilestoneLevel}", mile.Right - 12, mile.Y + 12, Slate, UiTypography.Secondary);
 
         _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 336, DetailPanel.Width - 56, 2), Dim);
-        _ui.TextBig(b, "UPGRADE REQUIREMENTS", DetailPanel.X + 28, DetailPanel.Y + 352, Slate, UiTypography.Body);
+        _ui.TextBig(b, "COST TO UPGRADE", DetailPanel.X + 28, DetailPanel.Y + 352, Slate, UiTypography.Body);
 
         var cost = f.UpgradeCost();
         var y = DetailPanel.Y + 388;
@@ -279,7 +279,7 @@ public sealed class WarrenScreen
         _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 502, DetailPanel.Width - 56, 2), Dim);
         _ui.TextBig(b,
             capped
-                ? $"NEEDS DEPTH {Warren.DepthForNextLevel(_selected)}  ·  DESCEND THAT DEEP TO RAISE IT"
+                ? $"REACH DEPTH {Warren.DepthForNextLevel(_selected)} ON AN EXPEDITION TO UPGRADE"
                 : "INSTANT UPGRADE  ·  NO WAIT",
             DetailPanel.X + 28, DetailPanel.Y + 518, capped ? GleamC : Met, UiTypography.Secondary);
 

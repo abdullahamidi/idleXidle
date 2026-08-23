@@ -122,7 +122,7 @@ public sealed class StatsScreen
         // It used to recite the headers directly beneath it, which spends the largest 100px on the page
         // to tell the player something they can already read, and teaches them that big text in this
         // band is not worth reading. Same slot, same cost, real content.
-        _ui.TextCenterBig(b, $"SPEND GLEAM TO RAISE A STAT — YOU HAVE {Ab(hunter.Gleam)}", 960, 80, Slate, UiTypography.Secondary);
+        _ui.TextCenterBig(b, $"SPEND GLEAM TO GET STRONGER — YOU HAVE {Ab(hunter.Gleam)}", 960, 80, Slate, UiTypography.Secondary);
 
         DrawHunterCard(b, hunter);
         DrawPrimary(b, hunter, hit, clicked);
@@ -165,7 +165,7 @@ public sealed class StatsScreen
     private void DrawPrimary(SpriteBatch b, Hunter hunter, Point mouse, bool clicked)
     {
         _ui.Panel(b, PrimaryPanel);
-        _ui.TextCenterBig(b, "PRIMARY ATTRIBUTES", PrimaryPanel.Center.X, PrimaryPanel.Y + 22, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "MAIN TRAINING", PrimaryPanel.Center.X, PrimaryPanel.Y + 22, Gold, UiTypography.SectionTitle);
         var rows = new (string, HunterStat, Color)[]
         {
             ("MIGHT", HunterStat.AttackPower, new(0xD6, 0x48, 0x5C)),
@@ -198,7 +198,7 @@ public sealed class StatsScreen
         // Spec §9.1 is RESISTANCES, but the game has no elemental resistance model (§12 fallback). This is the
         // honest substitute: the remaining real commander attributes with their one-line effect.
         _ui.Panel(b, CombatPanel);
-        _ui.TextCenterBig(b, "COMBAT ATTRIBUTES", CombatPanel.Center.X, CombatPanel.Y + 22, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "COMBAT TRAINING", CombatPanel.Center.X, CombatPanel.Y + 22, Gold, UiTypography.SectionTitle);
         // EACH ROW STATES WHAT IT PRODUCES, not just what it is called.
         //
         // This panel used to print the effect's NAME ("CRIT CHANCE") while a separate DERIVED STATS
@@ -214,8 +214,8 @@ public sealed class StatsScreen
             // (mitigation, haul) terms you only know if you already play games in English, and one
             // (CHANCE) that never said chance of WHAT. The number is the same; the sentence around it
             // is now the one a person would say out loud.
-            ("CRIT", HunterStat.CriticalChance, $"{100f * SoloBattle.CritChance(hunter, shape):0.0}% OF HITS CRIT"),
-            ("FOCUS", HunterStat.Focus, $"CRITS DEAL {100f * SoloBattle.CritMultiplier(hunter):0}% DAMAGE"),
+            ("CRITICAL", HunterStat.CriticalChance, $"{100f * SoloBattle.CritChance(hunter, shape):0.0}% OF HITS ARE CRITICAL"),
+            ("FOCUS", HunterStat.Focus, $"CRITICAL HITS DEAL {100f * SoloBattle.CritMultiplier(hunter):0}%"),
             ("HEALTH", HunterStat.MaxHealth, $"{hunter.MaxHealth:N0} MAX HEALTH"),
             ("DEFENSE", HunterStat.Defense, $"{100f - 100f * (100f / (100f + hunter.Defense)):0.0}% LESS DAMAGE TAKEN"),
             ("GUILE", HunterStat.Guile, $"+{100f * (hunter.HaulMultiplier - 1f):0}% LOOT FOUND"),
@@ -259,7 +259,7 @@ public sealed class StatsScreen
         // first, so the cost IS the decision), but it is now the object of a verb rather than a bare
         // number: "TRAIN 45 G" cannot be misread as "this adds 45", which "45 G" beside a stat of 34
         // could.
-        var label = maxed ? "MAXED" : afford ? $"TRAIN  {cost:N0} G" : $"NEED  {cost:N0} G";
+        var label = maxed ? "MAXED" : afford ? $"TRAIN  {cost:N0} GLEAM" : $"NEED  {cost:N0} GLEAM";
 
         if (_ui.Button(b, rect, label, mouse, clicked, enabled: afford))
             _trainRequest = stat;
@@ -268,7 +268,7 @@ public sealed class StatsScreen
     private void DrawProgression(SpriteBatch b, Hunter hunter)
     {
         _ui.PanelQuiet(b, ProgressPanel);
-        _ui.TextCenterBig(b, "PROGRESSION", ProgressPanel.Center.X, ProgressPanel.Y + 22, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "PROGRESS", ProgressPanel.Center.X, ProgressPanel.Y + 22, Gold, UiTypography.SectionTitle);
         // Only the counters the game actually tracks (§12) — monsters/bosses/play-time/deaths aren't recorded.
         var rows = new (string, string)[]
         {

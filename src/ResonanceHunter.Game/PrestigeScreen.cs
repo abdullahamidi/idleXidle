@@ -246,7 +246,7 @@ public sealed class PrestigeScreen
     {
         if (tree.Owns(u.Id)) _msg = "ALREADY LEARNED — A TRAIT IS PERMANENT.";
         else if (tree.Purchase(u.Id)) { _msg = $"LEARNED: {u.Name}."; BeginLit(u); }
-        else if (tree.Available < u.Cost) _msg = "NOT ENOUGH TRAIT POINTS — CONQUER A REGION, GO DEEPER INTO THE CORRUPTION ON THE MAP, OR RAISE A REGION'S MASTERY TO EARN MORE.";
+        else if (tree.Available < u.Cost) _msg = "NOT ENOUGH TRAIT POINTS. EARN MORE: CONQUER A REGION, GO DEEPER INTO THE CORRUPTION, OR RAISE A REGION'S MASTERY.";
         else _msg = "LOCKED — LEARN WHAT IT NEEDS FIRST.";
     }
 

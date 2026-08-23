@@ -305,7 +305,7 @@ public sealed class MemoryDustTree
 
         // Vows — ability OPTIONS rather than bigger numbers, which is the spine's whole character.
         new() { Id = "vow_study_1", Name = "FIRST VOW", Cost = 1, Effect = UnlockEffect.Expansion,
-                Description = "Learn two vows: COMPLETION and THE DELIBERATE. A vow is a restriction you accept on your build in exchange for power — it pays only while your build keeps it." },
+                Description = "Learn two vows: COMPLETION and THE DELIBERATE. A vow is a rule you accept for extra power. It pays only while your build keeps the rule." },
         new() { Id = "vow_study_2", Name = "SECOND VOW", Cost = 2, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "vow_study_1" },
                 Description = "Learn two more vows: THE PURE and THE FRANTIC." },
@@ -314,7 +314,7 @@ public sealed class MemoryDustTree
                 Description = "Learn two more vows: THE SINGULAR and THE BLUNT EDGE." },
         new() { Id = "vow_binding", Name = "BINDING VOWS", Cost = 3, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "vow_study_3" },
-                Description = "Learn the three vows that each leave one gear slot empty: THE BAREFOOT, THE OPEN HAND and THE BARE SKULL. The harshest promise, and the best paid." },
+                Description = "Learn the three vows that each leave one gear slot empty: THE BAREFOOT, THE OPEN HAND and THE BARE SKULL. The hardest rule, the biggest reward." },
         // "VOWS OF SACRIFICE", not "SACRIFICIAL VOWS": the diagram prints every name under its node in
         // two short lines, and SACRIFICIAL is the one word in the catalogue too long for a line.
         new() { Id = "vow_sacrifice", Name = "VOWS OF SACRIFICE", Cost = 3, Effect = UnlockEffect.Expansion,
@@ -324,7 +324,7 @@ public sealed class MemoryDustTree
         // Attention, not power. An idle game's real currency is ATTENTION, and a bag of ninety Commons
         // spends it on nothing.
         new() { Id = "ledger", Name = "HUNTER'S LEDGER", Cost = 1, Effect = UnlockEffect.Convenience,
-                Description = "Groundwork. Opens the way to auto-selling, to the forge upgrades, and to the Avarice road." },
+                Description = "A first step. Opens the way to auto-selling, the forge upgrades, and the Avarice road." },
         new() { Id = "filter_common", Name = "SORTER'S EYE", Cost = 2, Effect = UnlockEffect.Convenience,
                 Requires = new[] { "ledger" },
                 Description = "Common items are sold the moment they drop, so your bag holds only what matters." },
@@ -333,7 +333,7 @@ public sealed class MemoryDustTree
                 Description = "Uncommon items are sold on sight too. Rare and better are always kept." },
         new() { Id = "forge_insight", Name = "FORGE INSIGHT", Cost = 2, Effect = UnlockEffect.Convenience,
                 Requires = new[] { "ledger" },
-                Description = "Opens the forge's two upgrades: a better dismantle return, and merging that runs by itself." },
+                Description = "Opens two forge upgrades: dismantling gives more material, and merging runs by itself." },
         new() { Id = "efficient_forge", Name = "EFFICIENT FORGE", Cost = 3, Effect = UnlockEffect.Amplifier,
                 Requires = new[] { "forge_insight" },
                 Description = "Dismantling an item returns 15% more material than before. Still less than selling it." },
@@ -381,7 +381,7 @@ public sealed class MemoryDustTree
                 Description = "The third step down the Ruin road. No way back from here." },
         new() { Id = "ks_reaper", Road = TraitRoad.Ruin, Name = "THE HARVEST", Cost = 12, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_blood_magic" }, GrantsKeystone = "reaper",
-                Description = "The end of the Ruin road. Twelve points, and the other three roads can never be walked to their end." },
+                Description = "The end of the Ruin road. Twelve points. Take it, and you can never finish another road." },
 
         // ── THE CHARGE SPUR, one rung per road at the same cost (the roads must stay within two
         //    points of each other — enforced by test). Ruin spends the pool, Aegis winds it, Artifice
@@ -405,7 +405,7 @@ public sealed class MemoryDustTree
                 Description = "The third step up the wall." },
         new() { Id = "ks_titan", Road = TraitRoad.Aegis, Name = "THE TITAN ROAD", Cost = 12, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_undying" }, GrantsKeystone = "titan",
-                Description = "The end of the Aegis road. Twelve points, and the other three roads can never be walked to their end." },
+                Description = "The end of the Aegis road. Twelve points. Take it, and you can never finish another road." },
         new() { Id = "ks_dynamo", Road = TraitRoad.Aegis, Name = "THE WOUND SPRING", Cost = 6, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_ironclad" }, GrantsKeystone = "dynamo",
                 Description = "A side step off the Aegis road. The keystone that stores CHARGE when you are hit." },
@@ -430,7 +430,7 @@ public sealed class MemoryDustTree
                 Description = "The third step along the Avarice road." },
         new() { Id = "ks_hoarder", Road = TraitRoad.Avarice, Name = "THE FULL VAULT", Cost = 12, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_fortune" }, GrantsKeystone = "hoarder",
-                Description = "The end of the Avarice road. Twelve points, and the other three roads can never be walked to their end." },
+                Description = "The end of the Avarice road. Twelve points. Take it, and you can never finish another road." },
 
         // ── ARTIFICE — behaviour over numbers. The path for players who want their build to do
         //    something strange rather than something large. Its third rung is THE BOUND HAND (every vow
@@ -450,7 +450,7 @@ public sealed class MemoryDustTree
                 Description = "The third step along the Artifice road. Every vow you swear pays 25% more." },
         new() { Id = "ks_weaver", Road = TraitRoad.Artifice, Name = "THE DOUBLE THREAD", Cost = 12, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "artifice_vows" }, GrantsKeystone = "weaver",
-                Description = "The end of the Artifice road. Twelve points, and the other three roads can never be walked to their end." },
+                Description = "The end of the Artifice road. Twelve points. Take it, and you can never finish another road." },
 
         // ══ THE MINOR STRANDS — three small nodes beside every road ════════════════════════════
         //
@@ -476,7 +476,7 @@ public sealed class MemoryDustTree
                 Description = "The first sharpening of the blade." },
         new() { Id = "ruin_edge_2", Road = TraitRoad.Ruin, Name = "RAZOR EDGE", Cost = 3, Effect = UnlockEffect.Amplifier,
                 Requires = new[] { "ks_blood_magic" }, Mods = new BuildMods(1.06f, 1f, 1f, 1f, 1f),
-                Description = "Honed until it sings." },
+                Description = "Sharper still." },
         new() { Id = "ruin_edge_3", Road = TraitRoad.Ruin, Name = "THE RED HARVEST", Cost = 4, Effect = UnlockEffect.Amplifier,
                 Requires = new[] { "ks_reaper" }, Mods = new BuildMods(1.12f, 1f, 1f, 1f, 1f),
                 Description = "The reward for walking Ruin to its end." },
@@ -484,7 +484,7 @@ public sealed class MemoryDustTree
         // Aegis: the hide.
         new() { Id = "aegis_skin_1", Road = TraitRoad.Aegis, Name = "THICK SKIN", Cost = 2, Effect = UnlockEffect.Amplifier,
                 Requires = new[] { "ks_juggernaut" }, Mods = new BuildMods(1f, 1.05f, 1f, 1f, 1f),
-                Description = "A hide that turns the first blow." },
+                Description = "A thick hide that softens a blow." },
         new() { Id = "aegis_skin_2", Road = TraitRoad.Aegis, Name = "IRON SKIN", Cost = 3, Effect = UnlockEffect.Amplifier,
                 Requires = new[] { "ks_undying" }, Mods = new BuildMods(1f, 1.06f, 1f, 1f, 1f),
                 Description = "Hammered flat and hard." },

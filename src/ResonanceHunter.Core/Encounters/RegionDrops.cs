@@ -57,32 +57,32 @@ public static class RegionDrops
         ["verdant_hollow"] = new()
         {
             Favoured = Armour, RarityTilt = 0f,
-            Blurb = "Living growth. Armour, mostly — the hollow covers what it keeps.",
+            Blurb = "A living, growing place. More armour drops here.",
         },
         ["cinderworks"] = new()
         {
             Favoured = Weapons, RarityTilt = 4f,
-            Blurb = "A forge still burning. Weapons and focuses come out of it.",
+            Blurb = "A burning forge. More weapons and focuses drop here.",
         },
         ["umbral_reach"] = new()
         {
             Favoured = Trinkets, RarityTilt = 8f,
-            Blurb = "Nothing here is solid. Charms and rings, and little else worth carrying.",
+            Blurb = "Nothing here is solid. More charms and rings drop here.",
         },
         ["marrow_wastes"] = new()
         {
             Favoured = Armour, RarityTilt = 12f,
-            Blurb = "A slaughterhouse. What survives it is what was worn.",
+            Blurb = "A place of bones. More armour drops here.",
         },
         ["still_archive"] = new()
         {
             Favoured = Hands, RarityTilt = 16f,
-            Blurb = "Everything is catalogued. Gloves and focuses — the tools of a careful hand.",
+            Blurb = "A silent library. More gloves and focuses drop here.",
         },
         ["pale_choir"] = new()
         {
             Favoured = Trinkets, RarityTilt = 20f,
-            Blurb = "Voices without bodies. They leave charms and rings behind them.",
+            Blurb = "Voices without bodies. More charms and rings drop here.",
         },
     };
 

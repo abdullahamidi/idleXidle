@@ -1706,9 +1706,9 @@ public sealed class SoloExpeditionScreen
 
         Row("ARMOUR ABSORBED", $"{r.AbsorbedFraction:P0}", "hit size");
         Row("AVERAGE HIT", $"{r.AverageHitSize:F0}", "hit size");
-        Row("REACH", $"{r.TargetsPerActivation:F1} of {r.CreaturesPerWave:F1} per cast", "action economy");
-        Row("HEALTH LOST / WAVE", $"{r.HealthLostPerWaveFraction:P0}", "sustain");
-        Row("SECONDS / WAVE", $"{r.SecondsPerWave:F1}s", "throughput");
+        Row("REACH", $"{r.TargetsPerActivation:F1} of {r.CreaturesPerWave:F1} per cast", "hits per cast");
+        Row("HEALTH LOST / WAVE", $"{r.HealthLostPerWaveFraction:P0}", "staying alive");
+        Row("SECONDS / WAVE", $"{r.SecondsPerWave:F1}s", "speed");
 
         _ui.TextBig(b, $"MEASURED OVER THE LAST {r.SampledWaves} WAVE{(r.SampledWaves == 1 ? "" : "S")}", x, y + 4, Slate, UiTypography.Secondary);
 
@@ -1767,7 +1767,7 @@ public sealed class SoloExpeditionScreen
                 var fade = Math.Clamp(_bossIncomingTimer * 1.4f, 0f, 1f);
                 _ui.Fill(b, new Rectangle(610, 200, 700, 110), PanelBg * fade);
                 _ui.TextCenterBig(b, "BOSS INCOMING", 960, 224, Gold * fade, UiTypography.RegionTitle, TextFace.Display);
-                _ui.TextCenterBig(b, "STEEL YOURSELF", 960, 274, Bone * fade, UiTypography.OverlayBody);
+                _ui.TextCenterBig(b, "GET READY", 960, 274, Bone * fade, UiTypography.OverlayBody);
                 break;
             }
             case HuntOverlay.WaveCleared:
@@ -2017,7 +2017,7 @@ public sealed class SoloExpeditionScreen
         }
         // The last line: what happens to the rest, only while a filter is set.
         y += 3 * 34 + 6;
-        _ui.TextBig(b, KeepMinTier > 0 || KeepSlots.Count > 0 ? "THE REST ARRIVE AS A LITTLE SCRAP" : "EVERY CHEST IS KEPT",
+        _ui.TextBig(b, KeepMinTier > 0 || KeepSlots.Count > 0 ? "THE REST BECOME A LITTLE SCRAP" : "EVERY CHEST IS KEPT",
                     inner.X, y, Dim, 16);
     }
 

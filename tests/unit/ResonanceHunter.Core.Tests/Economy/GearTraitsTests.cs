@@ -320,9 +320,9 @@ public class GearTraitsTests
 
             // The player must be able to read the trade off the tooltip, not discover it by dying.
             if (hasDrawback)
-                Assert.DoesNotContain("No drawback", blurb);
+                Assert.DoesNotContain("No downside", blurb);
             else
-                Assert.Contains("No drawback", blurb);
+                Assert.Contains("No downside", blurb);
         }
     }
 

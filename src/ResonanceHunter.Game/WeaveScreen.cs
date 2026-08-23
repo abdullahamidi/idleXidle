@@ -209,7 +209,7 @@ public sealed class WeaveScreen
         VowDemand.SingleForm => "EVERY SKILL THE SAME FORM",
         VowDemand.SingleSource => "EVERY SKILL THE SAME SOURCE",
         VowDemand.EveryWeaveFilled => "NO EMPTY SKILL SLOT",
-        VowDemand.NoCritInvestment => "NO CRIT INVESTED",
+        VowDemand.NoCritInvestment => "NO CRITICAL BONUS",
         // SHORTENED SO THE NUMBER SURVIVES. "SKILL RATE AT OR BELOW 1.20x" is wider than the 338px the
         // row leaves, and Fit() cut it at "SKILL RATE AT OR BE..." — deleting the threshold, which is
         // the entire content of the demand.
@@ -221,9 +221,9 @@ public sealed class WeaveScreen
         VowDemand.CadenceAtOrBelow => $"SKILL RATE MAX {v.Threshold:0.##}x",
         VowDemand.CadenceAtOrAbove => $"SKILL RATE MIN {v.Threshold:0.##}x",
         VowDemand.NoDefence => "NO DEFENCE AT ALL",
-        VowDemand.NoKeystone => "NO KEYSTONE SLOTTED",
+        VowDemand.NoKeystone => "NO KEYSTONE IN USE",
         VowDemand.SlotLeftBare => $"{v.Bare.ToString().ToUpperInvariant()} SLOT LEFT EMPTY",
-        _ => "NOTHING — IT SIMPLY COSTS",
+        _ => "NO DEMAND — ALWAYS ON",
     };
 
     private IReadOnlyList<Vow> Known => DustEffects.KnownVows(Tree);
@@ -271,7 +271,7 @@ public sealed class WeaveScreen
         {
             var added = Loadout.AddSkill();
             if (added >= 0) { _slot = added; Dirty = true; _buildRev++; _msg = "SLOT WOVEN."; }
-            else _msg = "NO MORE SLOTS — THE SPINE SELLS THEM IN TRAITS (P).";
+            else _msg = "NO MORE SLOTS — BUY MORE IN TRAITS (P).";
             return;
         }
 
@@ -281,7 +281,7 @@ public sealed class WeaveScreen
         {
             if (!KeystoneChip(i).Contains(hit)) continue;
             if (Loadout.ToggleKeystone(learned[_keystoneScroll + i].Id, learned)) { Dirty = true; _buildRev++; _msg = ""; }
-            else _msg = $"ONLY {Loadout.KeystoneCapacity} SOCKET(S) — THE SPINE SELLS MORE.";
+            else _msg = $"ONLY {Loadout.KeystoneCapacity} SOCKET(S) — MORE IN TRAITS (P).";
             return;
         }
 
@@ -300,7 +300,7 @@ public sealed class WeaveScreen
             // The failure is NOT silent (the review's other note): no clipboard, no lie.
             _copyToast = ClipboardInterop.TrySet(code)
                 ? "COPIED — A FRIEND PASTES IT IN THE VAULT"
-                : "THE CLIPBOARD REFUSED — TRY AGAIN";
+                : "COPY FAILED — TRY AGAIN";
             _copyToastFrames = 240;
             return;
         }
@@ -347,16 +347,16 @@ public sealed class WeaveScreen
         // you looked at and this was the page you used. The rail's BUILD tile opens this directly.
         _ui.TextCenterBig(b, "BUILD", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
-        _ui.TextCenterBig(b, "A SKILL IS A SOURCE, A FORM, AND WHAT YOU SWORE FOR IT",
+        _ui.TextCenterBig(b, "A SKILL IS A SOURCE, A FORM, AND THE VOW YOU PUT ON IT",
                           960, 80, Slate, UiTypography.Secondary);
 
         // THE DISCIPLINE LINE — the Nen frame this game was born from, finally said out loud: your
         // skills are your specialisation's craft, and a sworn Vow buys back what it does not give you.
         if (Discipline is { } disc)
-            _ui.TextCenterBig(b, $"DISCIPLINE: {FormName(disc)} — YOUR SKILLS ARE ITS CRAFT  ·  A SWORN VOW PULLS AN OFF-DISCIPLINE SKILL ONE RING CLOSER",
+            _ui.TextCenterBig(b, $"DISCIPLINE: {FormName(disc)} — ITS SKILLS HIT TWICE AS HARD  ·  A VOW ON A FAR-FORM SKILL PULLS IT ONE RING CLOSER",
                               960, 108, Gold, UiTypography.Secondary);
         else
-            _ui.TextCenterBig(b, "NO DISCIPLINE YET — TAKE A SPECIALISATION ON THE MASTERY TREE (E) TO MAKE ONE FORM YOURS",
+            _ui.TextCenterBig(b, "NO DISCIPLINE YET — A FORM SPECIALIST NODE ON THE MASTERY TREE (E) GIVES YOU ONE",
                               960, 108, Slate, UiTypography.Secondary);
 
         DrawSlots(b, hit);
@@ -441,7 +441,7 @@ public sealed class WeaveScreen
         {
             var r = AddBtn;
             _ui.Fill(b, r, r.Contains(hit) ? new Color(0x2C, 0x25, 0x44) : Quiet);
-            _ui.TextCenter(b, "+ WEAVE ANOTHER", r.Center.X, r.Y + 14, r.Contains(hit) ? Gold : Slate);
+            _ui.TextCenter(b, "+ ADD A SKILL", r.Center.X, r.Y + 14, r.Contains(hit) ? Gold : Slate);
         }
 
         // ── KEYSTONE SOCKETS ──
@@ -534,7 +534,7 @@ public sealed class WeaveScreen
         }
 
         _ui.TextBig(b, "NOW", x, y, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, $"{_currentDps:N0} dmg/s", x + width, y, Bone, UiTypography.Body);
+        _ui.TextRightBig(b, $"{_currentDps:N0} damage each second", x + width, y, Bone, UiTypography.Body);
         y += 30;
         if (y + 30 > floor) return;
 
@@ -568,7 +568,7 @@ public sealed class WeaveScreen
             var tint = MathF.Abs(pct) < 0.5f ? Slate : pct > 0f ? Met : Ember;
 
             _ui.TextBig(b, "WITH THIS", x, y, Slate, UiTypography.Secondary);
-            _ui.TextRightBig(b, $"{_previewDps:N0} dmg/s", x + width, y, tint, UiTypography.Body);
+            _ui.TextRightBig(b, $"{_previewDps:N0} damage each second", x + width, y, tint, UiTypography.Body);
             y += 24;
             _ui.TextRightBig(b, MathF.Abs(pct) < 0.5f ? "no change" : $"{(pct > 0 ? "+" : "")}{pct:0}%",
                              x + width, y, tint, UiTypography.Secondary);
@@ -691,7 +691,7 @@ public sealed class WeaveScreen
         }
 
         _ui.TextCenterBig(b, "FORM", PickPanel.Center.X, PickPanel.Y + 384, Gold, UiTypography.SectionTitle);
-        _ui.TextCenter(b, "HOW IT REACHES", PickPanel.Center.X, PickPanel.Y + 420, Slate);
+        _ui.TextCenter(b, "WHAT IT DOES", PickPanel.Center.X, PickPanel.Y + 420, Slate);
 
         var wanted = GearWants();
 
@@ -793,12 +793,12 @@ public sealed class WeaveScreen
 
         if (known.Count == 0)
         {
-            _ui.TextCenter(b, "YOU HAVE STUDIED NO VOWS.", VowPanel.Center.X, VowPanel.Y + 140, Slate);
-            _ui.TextCenter(b, "THE SPINE TEACHES THEM — TRAITS (P).", VowPanel.Center.X, VowPanel.Y + 176, Dim);
+            _ui.TextCenter(b, "YOU KNOW NO VOWS YET.", VowPanel.Center.X, VowPanel.Y + 140, Slate);
+            _ui.TextCenter(b, "LEARN THEM IN TRAITS (P).", VowPanel.Center.X, VowPanel.Y + 176, Dim);
             return;
         }
 
-        _ui.TextCenter(b, "PAID ONLY WHILE YOUR BUILD MEETS IT", VowPanel.Center.X, VowPanel.Y + 104, Slate);
+        _ui.TextCenter(b, "WORKS ONLY IF YOU MEET ITS DEMAND", VowPanel.Center.X, VowPanel.Y + 104, Slate);
 
         _vowScroll = Math.Clamp(_vowScroll, 0, Math.Max(0, known.Count - VowRows));
         for (var r = 0; r < VowRows; r++)

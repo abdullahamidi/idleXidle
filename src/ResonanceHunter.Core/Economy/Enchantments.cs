@@ -150,15 +150,15 @@ public sealed record Enchantment(EnchantKind Kind, float Magnitude)
         EnchantKind.Desperation => $"NEAR DEATH: +{Magnitude * 100f:0}% LOOT",
         EnchantKind.Overdraw => "VOLLEY FIRES +1",
         EnchantKind.Linger => "MARK LASTS LONGER",
-        EnchantKind.Radiance => "AURA TICKS FASTER",
-        EnchantKind.Execute => "STRIKE EXECUTES LOW",
-        EnchantKind.Coiled => "TRAP RE-ARMS FAST",
-        EnchantKind.Siphon => "TRANSFORM LEECHES 2X",
+        EnchantKind.Radiance => "AURA HITS FASTER",
+        EnchantKind.Execute => "STRIKE CRUSHES WEAK",
+        EnchantKind.Coiled => "TRAP READY SOONER",
+        EnchantKind.Siphon => "TRANSFORM HEALS 2X",
         EnchantKind.Fervour => $"BLOODLUST +{Magnitude * 100f:0}%",
         EnchantKind.Reverb => $"ECHO HITS +{Magnitude * 100f:0}%",
         EnchantKind.Bulwark => $"ZEAL +{Magnitude * 100f:0}%",
         EnchantKind.Tithe => $"PER VOW: +{Magnitude * 100f:0}%",
-        _ => "SURVIVES A FATAL BLOW",
+        _ => "SURVIVE DEATH ONCE",
     };
 
     /// <summary>

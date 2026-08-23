@@ -110,7 +110,7 @@ public static class ItemFamilies
             0 => "A BLADE hits harder.",
             1 => "A BOW lands critical hits more often.",
             2 => "A SPEAR brings skills back faster.",
-            _ => "A SCYTHE reaps richer loot.",
+            _ => "A SCYTHE finds more loot.",
         };
     }
 }

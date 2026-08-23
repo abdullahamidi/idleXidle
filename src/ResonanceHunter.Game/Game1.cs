@@ -645,7 +645,7 @@ public class Game1 : Game
         _pendingCores = 2;
         // The starter creatures staff the WARREN now (the idle farm), not a combat squad. Combat is your
         // one champion and its build — so the first nudge points at the build, not at a front line.
-        _bootMessage = "PRESS B TO WEAVE YOUR BUILD, THEN SEND YOUR CHAMPION IN.";
+        _bootMessage = "PRESS B TO PICK SKILLS. YOUR CHAMPION FIGHTS FOR YOU.";
         _bootColor = Gold;
     }
 
@@ -3254,7 +3254,7 @@ public class Game1 : Game
         {
             (new Rectangle(l1, 16, e1 - l1, 60), allMats, -1),
             (new Rectangle(l2, 16, e2 - l2, 60), "MEMORY DUST — BUYS PERMANENT TRAITS", dustVal),
-            (new Rectangle(leftEdge, 16, e3 - leftEdge, 60), "GLEAM — SPENT ON STATS AND UPGRADES", gleamVal),
+            (new Rectangle(leftEdge, 16, e3 - leftEdge, 60), "GLEAM — BUYS UPGRADES ON STATS (V)", gleamVal),
         };
         foreach (var (rr, name, v) in pillRows)
         {
@@ -3359,8 +3359,8 @@ public class Game1 : Game
         var firstTime = tier > peakBefore;
         if (firstTime) _dust.AwardFromMastery(CorruptionScaling.DeepeningDustAward(tier));
         _conquerMsg = firstTime
-            ? $"THE CORRUPTION DEEPENS — {CorruptionLook.Label(tier)}. STRONGER FOES, RICHER DUST."
-            : $"THE CORRUPTION DEEPENS AGAIN — {CorruptionLook.Label(tier)}. (THE DUST FOR THIS TIER WAS PAID THE FIRST TIME.)";
+            ? $"THE CORRUPTION DEEPENS — {CorruptionLook.Label(tier)}. HARDER ENEMIES, MORE DUST."
+            : $"THE CORRUPTION DEEPENS AGAIN — {CorruptionLook.Label(tier)}. (YOU ALREADY GOT THE DUST FOR THIS TIER.)";
         Save();
     }
 
@@ -3392,9 +3392,9 @@ public class Game1 : Game
             ($"{_loadout.SkillCapacity}", "WOVEN SKILLS"),
             ("", "SOURCE x FORM x VOW"),
             ($"{_loadout.KeystoneCapacity}", "KEYSTONE SOCKETS"),
-            ("", "EACH ONE A TRADE"),
-            ("", "THE SPINE SELLS MORE OF BOTH"),
-            ("", "FORM IS YOUR PLAYSTYLE"),
+            ("", "EACH HAS A COST"),
+            ("", "TRAITS (P) SELL MORE OF BOTH"),
+            ("", "FORM IS HOW YOU FIGHT"),
             ("", "SOURCE VS REGION"),
         };
         // Every tile on the nav rail, plus the two keys that open nothing on it. HUNT and ROSTER were
@@ -3409,13 +3409,13 @@ public class Game1 : Game
             ("C", "GEAR — WHAT YOU WEAR"),
             ("V", "STATS — SPEND GLEAM"),
             ("B", "BUILD — CHOOSE YOUR SKILLS"),
-            ("E", "MASTERY — HOW YOUR SKILLS BEHAVE"),
+            ("E", "MASTERY — HOW YOUR SKILLS WORK"),
             ("T", "BUILD, THE SAME PLACE AS B"),
             ("K", "VAULT — CHESTS YOU HAVE NOT OPENED"),
             ("F", "FORGE — CRAFT & CHESTS"),
             ("A", "WARREN — WORK WHILE YOU ARE AWAY"),
             ("W", "MAP — WHERE TO HUNT"),
-            ("P", "TRAITS — WHAT SURVIVES DEATH"),
+            ("P", "TRAITS — PERMANENT BONUSES"),
             ("R", "ROSTER — YOUR CHAMPIONS"),
             ("L", "THE EXPEDITION LOG"),
             ("ESC", "SETTINGS — DISPLAY, SOUND, QUIT"),
@@ -3443,12 +3443,12 @@ public class Game1 : Game
 
         Text("THE IDEA:", 176, 620, Gold);
         WrapText(
-            "ONE CHAMPION, YOUR BUILD — IT FIGHTS ON ITS OWN, ON EVERY SCREEN, EVEN WHILE THE GAME IS " +
-            "CLOSED. EACH WAVE IT CLEARS PAYS GLEAM AT ONCE. EVERY 5TH IS A BOSS, WITH A CHANCE AT A CHEST. " +
-            "WHEN IT FALLS IT RECOVERS AND PUSHES ON — NOTHING IS BANKED, NOTHING IS LOST.",
+            "ONE CHAMPION, YOUR BUILD. IT FIGHTS ON ITS OWN, ON EVERY SCREEN, EVEN WHILE THE GAME IS " +
+            "CLOSED. EACH WAVE IT CLEARS PAYS GLEAM AT ONCE. EVERY 5TH WAVE IS A BOSS. IT MAY DROP A CHEST. " +
+            "WHEN IT FALLS, IT GETS UP AND GOES AGAIN. YOU LOSE NOTHING.",
             176, 664, 900, Bone);
         WrapText(
-            $"SPEND GLEAM ON COMMAND TO STRENGTHEN YOUR CHAMPION. REACH WAVE {ConquerWaveDepth} TO CONQUER A REGION AND UNLOCK THE NEXT.",
+            $"SPEND GLEAM ON STATS (V) TO GROW STRONGER. REACH WAVE {ConquerWaveDepth} TO CONQUER A REGION AND UNLOCK THE NEXT.",
             176, 788, 900, Bone * 0.7f);
     }
 

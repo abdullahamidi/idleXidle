@@ -185,7 +185,7 @@ public static class Unlocks
     public static string Headline(Activity activity) => activity switch
     {
         Activity.Hunt => "THE HUNT",
-        Activity.Stats => "COMMAND — YOUR CHAMPION'S STATS",
+        Activity.Stats => "COMMAND — TRAIN YOUR CHAMPION",
         Activity.Gear => "GEAR — WHAT YOU WEAR",
         Activity.Vault => "THE VAULT — CHESTS YOU HAVE NOT OPENED",
         Activity.Forge => "THE FORGE — WHERE ITEMS ARE MADE",
@@ -214,80 +214,80 @@ public static class Unlocks
     {
         Activity.Hunt =>
             "Your champion fights on its own, forever, without you. Waves come one after another and "
-            + "every fifth is a boss. You never click an attack — what you change is WHO the champion "
-            + "is, on the other screens, and then you watch that decision play out here.",
+            + "every fifth is a boss. You never click an attack. You change WHO the champion is on "
+            + "the other screens, then you watch it play out here.",
 
         Activity.Stats =>
-            "Every wave you clear pays Gleam, and Gleam is spent here on the champion's own body: "
-            + "attack, health, defence, critical chance. Each rank costs a little more than the last, so "
-            + "early ranks are cheap and the choice of WHAT to raise matters more than how much. "
-            + "This is the fastest way to get stronger, and it is also the one with a ceiling — the "
-            + "deepest regions cannot be taken on stats alone.",
+            "Every wave you clear pays Gleam. You spend Gleam here on the champion's own body: "
+            + "attack, health, defence, critical chance. Each rank costs a little more than the last. "
+            + "Early ranks are cheap, so WHAT you raise matters more than how much. "
+            + "This is the fastest way to get stronger. But it has a limit — the "
+            + "deepest regions cannot be won with these numbers alone.",
 
         Activity.Gear =>
-            "Items are worn, not collected. Everything you find has a slot, a rarity, and rolled "
-            + "properties that are different on every copy — two swords of the same name are not the "
-            + "same sword. A higher item level is not automatically an upgrade: read what it rolled. "
+            "Items are worn, not collected. Every item has a slot, a rarity, and random "
+            + "properties that differ on every copy. Two swords of the same name are not the "
+            + "same sword. A higher item level is not always better: read its properties. "
             + "Anything you are not wearing is material for the Forge.",
 
         Activity.Vault =>
-            "Every chest you are holding, and what each one already promises before you crack it. A "
-            + "chest's GRADE is rolled when it drops and decides the rarity floor of what is inside — a "
+            "Every chest you hold, and what each one promises before you open it. A "
+            + "chest's GRADE is set when it drops. It sets the lowest rarity inside — a "
             + "Legendary chest cannot pay you less than an Epic, and the page says so. Its TIER is the "
-            + "depth you were at, and the region it came from tilts the contents toward what that place "
-            + "is known for. What it does not tell you is the actual roll: that happens when you open "
-            + "it, which is the whole point of a chest.",
+            + "depth you were at. The region it came from tilts what is inside toward that place's "
+            + "own drops. It does not show the exact items: you see those when you open "
+            + "it, and that is the whole point of a chest.",
 
         Activity.Forge =>
-            "This is where items stop being what they dropped as. REFINE raises "
-            + "an item's level. REFORGE rerolls its rolled properties — the same item, a new set of "
-            + "numbers, and the reason a good item is rare is that you have to roll into the properties "
+            "This is where items change from what they dropped as. REFINE raises "
+            + "an item's level. REFORGE rolls its properties again — the same item, a new set of "
+            + "numbers. A good item is rare because you must roll the properties "
             + "you actually want. SALVAGE breaks what you will not wear into materials. MERGE fuses "
             + "three of a kind into one better piece. Materials come from waves; the deeper you fight, "
-            + "the better the material a wave pays — and waves occasionally drop a CHART, a single-use "
-            + "paper that pays for one of these operations outright.",
+            + "the better the material a wave pays. Waves sometimes drop a CHART, a one-use "
+            + "paper that pays for one of these jobs in full.",
 
         Activity.Build =>
-            "This is the game. You weave SKILLS — each one a SOURCE (what element it is) and a FORM "
-            + "(how it behaves). A Strike is heavy and single-target. A Projectile is fast and hits "
-            + "many. A Transformation sustains you. A Mark amplifies everything else you are running. "
-            + "Sources decide the matchup against a region's element; Forms decide the shape of your "
+            "This is the game. You weave SKILLS — each one has a SOURCE (its element) and a FORM "
+            + "(how it acts). A Strike is heavy and hits one enemy. A Projectile is fast and hits "
+            + "many. A Transformation helps you survive. A Mark makes your other skills stronger. "
+            + "Sources decide how you match a region's element; Forms decide the shape of your "
             + "damage. You also socket KEYSTONES, which bend a rule, and may swear VOWS, which give up "
-            + "something real for something bigger. Nothing here is a stat increase — it all changes "
-            + "how the fight actually goes.",
+            + "something real for something bigger. Nothing here is a plain number boost — it all "
+            + "changes how the fight really goes.",
 
         Activity.Mastery =>
-            "A tree of small rules that change how your skills already behave, rather than making them "
-            + "bigger. WEIGHT trades speed for size, TEMPO trades size for speed, SPREAD reaches more "
-            + "creatures at once and ENDURE keeps you alive. Weight opposes Spread and Tempo opposes "
-            + "Endure, so one branch is affordable and two are not — the tree is a choice about what "
-            + "your build is FOR. Points come from reaching depth you have never reached before. "
+            "A tree of small rules that change how your skills behave, not how big they are. "
+            + "WEIGHT trades speed for size, TEMPO trades size for speed, SPREAD reaches more "
+            + "creatures at once and ENDURE keeps you alive. Weight works against Spread, and Tempo "
+            + "against Endure. You can afford one branch, not two — so the tree asks what "
+            + "your build is FOR. Points come from reaching a depth you have never reached before. "
             + "Nothing here is permanent: you can take every point back at any time, for free.",
 
         Activity.Map =>
-            "The world is a chain of six regions and each is meaningfully harder than the one before "
-            + "it, by a fixed step set in RegionLadder. Reach the required depth in a region to "
+            "The world is a chain of six regions. Each one is clearly harder than the one before "
+            + "it, by a fixed step. Reach the needed depth in a region to "
             + "conquer it, which opens the next. Each region has its own element and its own drops: it "
-            + "favours particular slots, and the later ones carry a better rarity floor. Where you hunt "
-            + "is a loot decision as much as a difficulty one.",
+            + "favours certain gear slots, and the later ones drop rarer items. Where you hunt "
+            + "is a loot choice as much as a difficulty choice.",
 
         Activity.Warren =>
-            "Facilities that produce while you are away, and the reason closing the game is not the same "
-            + "as stopping. They level up, they pay out on their own schedule, and conquering regions "
-            + "raises what they produce. Check in, spend, leave — that is the whole loop, and it is "
-            + "meant to be checked rather than watched.",
+            "Facilities that produce while you are away. This is why closing the game is not the same "
+            + "as stopping. They level up and pay out on their own schedule. Conquering regions "
+            + "raises what they produce. Check in, spend, leave — that is the whole loop. It is "
+            + "meant to be checked, not watched.",
 
         Activity.Traits =>
-            "Points earned by pushing into depth you have never reached before — farming a depth you "
-            + "have already cleared pays loot but no points, so the only way to earn one is to go "
+            "You earn points by going deeper than you ever have before. Replaying a depth you "
+            + "have already cleared pays loot but no points. The only way to earn one is to go "
             + "somewhere new. What you spend them on is permanent and survives every death. Some nodes "
-            + "give you a fifth skill slot or another keystone socket, which are the largest single "
+            + "give you a fifth skill slot or another keystone socket — the biggest single "
             + "upgrades in the game.",
 
         Activity.Roster =>
-            "Other champions, unlocked by conquering regions. Each has a passive of its own that changes "
-            + "how a build wants to be put together. Switching champion is not a small change — it is a "
-            + "different set of assumptions about what your skills are for.",
+            "Other champions, unlocked by conquering regions. Each has a built-in power of its own that "
+            + "shapes how you build. Switching champion is not a small change — it changes "
+            + "what your skills are for.",
 
         _ => throw new ArgumentOutOfRangeException(nameof(activity), activity, null),
     };
@@ -326,9 +326,9 @@ public static class Unlocks
     /// </remarks>
     public static string SkillSlotNote(int slot) => slot switch
     {
-        2 => "A SECOND SKILL. Two skills fire on their own cooldowns, so what you pair matters — a slow "
-             + "heavy hit alongside a fast one covers the gap the heavy one leaves.",
-        3 => "A THIRD SKILL. Enough room for a shape now: something to sustain you, or a Mark to make "
+        2 => "A SECOND SKILL. Each skill fires on its own timer, so what you pair matters — a slow "
+             + "heavy hit beside a fast one fills the gap the heavy one leaves.",
+        3 => "A THIRD SKILL. Room for a plan now: something to keep you alive, or a Mark to make "
              + "the other two hit harder.",
         4 => "A FOURTH SKILL. The full weave. Every Source and every Form is available to you — the "
              + "build is now the main thing you are playing with.",

@@ -78,8 +78,8 @@ public sealed record ChestDossier
     /// guarantee, which is worse than saying nothing.
     /// </remarks>
     public string FloorLine => GuaranteedFloor <= Rarity.Common
-        ? "No rarity floor — this one is a gamble."
-        : $"Guaranteed {GuaranteedFloor.ToString().ToUpperInvariant()} or better.";
+        ? "Any rarity can come out — a gamble."
+        : $"Always {GuaranteedFloor.ToString().ToUpperInvariant()} or better.";
 
     /// <summary>What comes out, in count and level.</summary>
     public string ContentsLine => MinItems == MaxItems
@@ -91,8 +91,8 @@ public sealed record ChestDossier
 
     /// <summary>The attunement, or that there is none.</summary>
     public string ElementLine => Element is { } e
-        ? $"Attuned to {e.ToString().ToUpperInvariant()}."
-        : "Unattuned.";
+        ? $"Element: {e.ToString().ToUpperInvariant()}."
+        : "Plain — no element.";
 
     /// <summary>The player-facing name of a gear slot. <c>AbilityFocus</c> is called a FOCUS everywhere.</summary>
     /// <remarks>
@@ -112,7 +112,7 @@ public sealed record ChestDossier
     {
         get
         {
-            if (Favoured.Count == 0) return "No regional lean.";
+            if (Favoured.Count == 0) return "No favoured gear.";
             return $"Favours {string.Join(" and ", Favoured.Select(SlotName))}.";
         }
     }
@@ -128,7 +128,7 @@ public sealed record ChestDossier
 
     /// <summary>The floor promise at card width.</summary>
     public string FloorShort => GuaranteedFloor <= Rarity.Common
-        ? "no floor — a gamble"
+        ? "any rarity"
         : $"{GuaranteedFloor.ToString().ToUpperInvariant()} or better";
 
     /// <summary>The run's own tilt, mentioned only when it actually did something.</summary>
@@ -139,8 +139,8 @@ public sealed record ChestDossier
     public string? RunLine => MathF.Abs(RunTilt - 1f) < 0.02f
         ? null
         : RunTilt > 1f
-            ? $"Won on a strong descent — {(RunTilt - 1f) * 100f:0}% better odds."
-            : $"Won on a poor descent — {(1f - RunTilt) * 100f:0}% worse odds.";
+            ? $"Won on a good hunt — {(RunTilt - 1f) * 100f:0}% better odds."
+            : $"Won on a bad hunt — {(1f - RunTilt) * 100f:0}% worse odds.";
 
     /// <summary>Every line worth drawing, in reading order, with the empty ones dropped.</summary>
     public IReadOnlyList<string> Lines

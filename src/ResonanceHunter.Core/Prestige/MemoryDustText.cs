@@ -84,7 +84,7 @@ public static class MemoryDustText
     /// build WEARS. See <see cref="Build.KeystoneSlots"/>.
     /// </summary>
     public const string KeystoneReminder =
-        "Learning a keystone does not put it on: you choose which of your learned keystones to wear on the Build screen, one per socket.";
+        "Learning a keystone does not put it on. You pick which learned keystones to wear on the Build screen, one per socket.";
 
     /// <summary>
     /// The numbers a node moves, as sentences with the real percentages. Empty for <see cref="BuildMods.None"/>.

@@ -163,12 +163,12 @@ public sealed class MapScreen
 
     private static string Description(Source theme) => theme switch
     {
-        Source.Nature => "A verdant hollow of primal, creeping growth.",
+        Source.Nature => "A wild green hollow of creeping growth.",
         Source.Machine => "Grinding industry and slow, heavy iron.",
-        Source.Shadow => "Realm of the forsaken — fast, creeping dark.",
+        Source.Shadow => "Home of the forgotten — fast, creeping dark.",
         Source.Body => "A slaughterhouse of brutal, heavy blows.",
-        Source.Mind => "A still archive of precise psychic lances.",
-        _ => "The deepest reach — relentless and balanced.",
+        Source.Mind => "A still archive of precise mind-strikes.",
+        _ => "The deepest reach — steady, never resting.",
     };
 
 
@@ -362,7 +362,7 @@ public sealed class MapScreen
         _ui.TextBig(b, "ENEMY THEME", DetailPanel.X + 28, DetailPanel.Y + 308, Gold, UiTypography.Secondary);
         if (_ui.Assets.Get($"source_{def.Theme.ToString().ToLowerInvariant()}") is { } tg)
             b.Draw(tg, new Rectangle(DetailPanel.X + 30, DetailPanel.Y + 340, 34, 34), Color.White);
-        _ui.TextBig(b, $"{def.Theme.ToString().ToUpperInvariant()} AFFINITY", DetailPanel.X + 74, DetailPanel.Y + 344, Bone, UiTypography.Body);
+        _ui.TextBig(b, $"{def.Theme.ToString().ToUpperInvariant()} ENEMIES", DetailPanel.X + 74, DetailPanel.Y + 344, Bone, UiTypography.Body);
         // HOW THE PLACE FIGHTS, which the region model has carried since it was written and no screen has
         // ever shown. It decides whether you are hit by a few heavy blows or a fast flurry — a real
         // difference to a build, and the kind of thing you want to know BEFORE walking in.
@@ -390,7 +390,7 @@ public sealed class MapScreen
         }
 
         // Objective + what it earns while you are away (real).
-        _ui.TextBig(b, "OBJECTIVE", DetailPanel.X + 28, DetailPanel.Y + 470, Gold, UiTypography.Secondary);
+        _ui.TextBig(b, "GOAL", DetailPanel.X + 28, DetailPanel.Y + 470, Gold, UiTypography.Secondary);
         if (conq) { DrawCheck(b, new Rectangle(DetailPanel.X + 30, DetailPanel.Y + 506, 22, 18), Met); _ui.TextBig(b, "REGION CONQUERED", DetailPanel.X + 64, DetailPanel.Y + 504, Met, UiTypography.Body); }
         else _ui.TextBig(b, $"HOLD {ConquerWaves} WAVES TO CONQUER", DetailPanel.X + 30, DetailPanel.Y + 504, unlocked ? Bone : Slate, UiTypography.Body);
         if (unlocked)
@@ -398,7 +398,7 @@ public sealed class MapScreen
             // is the only part a player can act on, and it needed a sentence to say what it is a percent
             // OF. The mastery word went with the label: it named a tier nothing on screen explains, and
             // the number it produces is already right there.
-            _ui.TextBig(b, $"EARNS {farm.IdleEfficiencyPercent():0}% OF ITS RATE WHILE YOU ARE AWAY",
+            _ui.TextBig(b, $"EARNS {farm.IdleEfficiencyPercent():0}% OF NORMAL WHILE YOU ARE AWAY",
                         DetailPanel.X + 30, DetailPanel.Y + 546, Slate, UiTypography.Secondary);
 
         // WHAT THIS PLACE DROPS. The map decided a difficulty and an element and said nothing about

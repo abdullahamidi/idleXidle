@@ -72,7 +72,7 @@ public static class EvolutionTrees
                         TargetNodeId = $"{slug}_atk", BranchPriority = 0,
                         MaterialThreshold = 30,
                         CombatTag = CombatTags.BossFelled, CombatThreshold = 4,
-                        Hint = $"FEED 30, FELL 4 BOSSES -> {n[1]} (ATTACKER)",
+                        Hint = $"FEED 30, KILL 4 BOSSES -> {n[1]} (ATTACKER)",
                     },
                     // DEFENDER — the labourer that endures: it must WORK the farm, tick after tick.
                     // The old requirement also demanded a WARDING charm equipped ON THE CREATURE — but the
@@ -85,7 +85,7 @@ public static class EvolutionTrees
                         TargetNodeId = $"{slug}_def", BranchPriority = 1,
                         MaterialThreshold = 20,
                         JobTicksThreshold = 40,
-                        Hint = $"FEED 20, WORK 40 TICKS -> {n[2]} (DEFENDER)",
+                        Hint = $"FEED 20, DO 40 JOBS -> {n[2]} (DEFENDER)",
                     },
                     // SUPPORT — endurance. Survive a great many waves, whatever the outcome.
                     new EvolutionEdge

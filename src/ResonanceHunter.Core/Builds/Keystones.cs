@@ -76,7 +76,7 @@ public static class Keystones
         new()
         {
             Id = "reaper", Name = "REAPER",
-            Blurb = "EVERY KILL YIELDS RICHER LOOT. YOUR SKILLS COME BACK 25% SLOWER.",
+            Blurb = "EVERY KILL GIVES RICHER LOOT. YOUR SKILLS COME BACK 25% SLOWER.",
             Mods = new BuildMods(Damage: 1f, Health: 1f, SkillRate: 0.75f, Haul: 1f, Rarity: 1f),
             Grants = new[] { BuildTrigger.Splinter },
         },
@@ -90,7 +90,7 @@ public static class Keystones
         new()
         {
             Id = "venomancer", Name = "VENOMANCER",
-            Blurb = "YOUR SKILLS POISON. THEY LAND 20% SOFTER.",
+            Blurb = "YOUR SKILLS POISON. THEY HIT 20% SOFTER.",
             Mods = new BuildMods(Damage: 0.8f, Health: 1f, SkillRate: 1f, Haul: 1f, Rarity: 1f),
             Grants = new[] { BuildTrigger.Venom },
         },
@@ -140,7 +140,7 @@ public static class Keystones
             // spikes with a flat tax on everything. Wants TEMPO (faster pooling) or DYNAMO (bites
             // pool too); refuses builds with no Strike at all.
             Id = "rend", Name = "REND",
-            Blurb = "EVERY CAST STORES 1 CHARGE (10 MAX). YOUR STRIKES SPEND ALL OF IT, +5% PER CHARGE. EVERYTHING HITS 10% SOFTER.",
+            Blurb = "EVERY SKILL USE STORES 1 CHARGE, UP TO 10. YOUR STRIKES SPEND IT ALL, +5% PER CHARGE. ALL HITS 10% SOFTER.",
             Mods = new BuildMods(Damage: 0.9f, Health: 1f, SkillRate: 1f, Haul: 1f, Rarity: 1f),
             Grants = new[] { BuildTrigger.Rend },
         },
@@ -150,7 +150,7 @@ public static class Keystones
             // inert without REND — the blurb says so — because a cap on a pool nobody spends is
             // the exact dormant shape this game hunts, and here it must be a visible player error.
             Id = "capacitor", Name = "CAPACITOR",
-            Blurb = "YOUR CHARGE POOL HOLDS 20 INSTEAD OF 10 — LODESTONE'S FULL-POOL BAR RISES WITH IT. SKILLS RETURN 15% SLOWER. POINTLESS WITHOUT A KEYSTONE THAT READS THE POOL.",
+            Blurb = "YOUR CHARGE POOL HOLDS 20, NOT 10. LODESTONE THEN NEEDS ALL 20. SKILLS COME BACK 15% SLOWER. USELESS UNLESS A KEYSTONE USES THE POOL.",
             Mods = new BuildMods(Damage: 1f, Health: 1f, SkillRate: 0.85f, Haul: 1f, Rarity: 1f),
             Grants = new[] { BuildTrigger.Capacitor },
         },
@@ -160,7 +160,7 @@ public static class Keystones
             // fuel a REND spike without racing TEMPO for cast count. Pays in the same currency it
             // farms — you take more of every bite you are milking.
             Id = "dynamo", Name = "DYNAMO",
-            Blurb = "EVERY BITE YOU TAKE STORES 2 CHARGE. YOU TAKE 15% MORE.",
+            Blurb = "EVERY HIT YOU TAKE STORES 2 CHARGE. YOU TAKE 15% MORE.",
             Mods = new BuildMods(Damage: 1f, Health: 0.85f, SkillRate: 1f, Haul: 1f, Rarity: 1f),
             Grants = new[] { BuildTrigger.Dynamo },
         },
@@ -171,7 +171,7 @@ public static class Keystones
             // player has to settle in the rotation, which is exactly the min/max texture CHARGE
             // exists to create. The AVARICE entry in the set: it pays in loot, and costs rarity.
             Id = "lodestone", Name = "LODESTONE",
-            Blurb = "CLEAR A WAVE WITH A FULL CHARGE POOL AND IT YIELDS A SPARE CORE. RARE FINDS COME 20% LESS OFTEN.",
+            Blurb = "CLEAR A WAVE WITH A FULL CHARGE POOL TO GET A SPARE CORE. RARE FINDS COME 20% LESS OFTEN.",
             Mods = new BuildMods(Damage: 1f, Health: 1f, SkillRate: 1f, Haul: 1f, Rarity: 0.8f),
             Grants = new[] { BuildTrigger.Lodestone },
         },

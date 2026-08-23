@@ -163,7 +163,7 @@ public class ChestDossierTest
         _out.WriteLine($"   cinderworks chest: {d.RegionLine}  ({d.RegionBlurb})");
 
         Assert.NotEmpty(d.Favoured);
-        Assert.DoesNotContain("No regional lean", d.RegionLine);
+        Assert.DoesNotContain("No favoured gear", d.RegionLine);
         Assert.False(string.IsNullOrWhiteSpace(d.RegionBlurb));
     }
 

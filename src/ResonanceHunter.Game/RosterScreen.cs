@@ -129,7 +129,7 @@ public sealed class RosterScreen
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
         // The line that makes the screen safe to use. Everything else on it is a comparison a player
         // will not make until they believe switching cannot cost them anything.
-        _ui.TextCenterBig(b, "SWITCH FREELY — SKILLS, TRAITS, GEAR AND THE WARREN ARE SHARED",
+        _ui.TextCenterBig(b, "SWITCH FREELY — YOU KEEP SKILLS, TRAITS, GEAR AND THE WARREN",
                           960, 80, Slate, UiTypography.Secondary);
 
         DrawGrid(b, state, hit);
@@ -231,10 +231,10 @@ public sealed class RosterScreen
         _ui.Fill(b, new Rectangle(left, y, width, 2), Dim);
         y += 14;
         _ui.TextBig(b, "ROAD", left, y, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, c.Lean is { } br ? BranchName(br) : "NONE — WALKS ANY",
+        _ui.TextRightBig(b, c.Lean is { } br ? BranchName(br) : "NONE — ANY WORKS",
                          DetailPanel.Right - 74, y - 2, lean, UiTypography.Body);
         y += 32;
-        _ui.TextBig(b, "APTITUDE", left, y, Slate, UiTypography.Secondary);
+        _ui.TextBig(b, "BEST AT", left, y, Slate, UiTypography.Secondary);
         _ui.TextRightBig(b, c.Aptitude is { } f
                             ? $"{f.ToString().ToUpperInvariant()}  +{(int)Math.Round((c.AptitudePower - 1f) * 100)}%"
                             : "NONE",
@@ -243,7 +243,7 @@ public sealed class RosterScreen
 
         _ui.Fill(b, new Rectangle(left, y, width, 2), Dim);
         y += 14;
-        _ui.TextBig(b, "PASSIVE", left, y, Slate, UiTypography.Secondary);
+        _ui.TextBig(b, "ALWAYS ON", left, y, Slate, UiTypography.Secondary);
         y += 30;
         _ui.TextBig(b, c.PassiveName, left, y, Gold, UiTypography.Body);
         y += 32;

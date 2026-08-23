@@ -291,7 +291,7 @@ public sealed class ChestScreen
         {
             _ui.TextBig(b, "No chests. Bosses drop them — about one boss in five.",
                         GridPanel.X + 46, GridPanel.Y + 156, Dim, UiTypography.Body);
-            _ui.TextBig(b, "When one arrives: click the chest to open it, hover its ? to read what it holds.",
+            _ui.TextBig(b, "When one arrives: click the chest to open it. Hover the ? to see what is inside.",
                         GridPanel.X + 46, GridPanel.Y + 190, Dim, UiTypography.Body);
             DrawTrader(b, hit, clicked && !_modalOpenedNow);
             DrawInspect(b, hit, clicked && !_modalOpenedNow);
@@ -407,7 +407,7 @@ public sealed class ChestScreen
         _ui.Panel(b, panel, gold: true);
 
         _ui.TextCenterBig(b, "THE WANDERING TRADER", 960, panel.Y + 34, Gold, UiTypography.SectionTitle);
-        _ui.TextCenter(b, "THE SAME STALL FOR EVERY HUNTER THIS WEEK — NEW GOODS EACH WEEK, PAID IN MATERIALS.",
+        _ui.TextCenter(b, "NEW GOODS EVERY WEEK, THE SAME FOR EVERY HUNTER. YOU PAY IN MATERIALS.",
                        960, panel.Y + 74, Slate);
 
         if (_ui.Button(b, new Rectangle(panel.Right - 170, panel.Y + 26, 130, 44), "CLOSE", hit, clicked, true))
@@ -435,7 +435,7 @@ public sealed class ChestScreen
             var px = UiTypography.Body;
             while (px > 13 && _ui.MeasureBig(name, px) > card.Width - 24) px--;
             _ui.TextCenterBig(b, name, card.Center.X, card.Y + 52, Bone, px);
-            _ui.TextCenter(b, $"LEVEL {offer.ItemLevel} — YOUR OWN MEASURE", card.Center.X, card.Y + 88, Slate);
+            _ui.TextCenter(b, $"LEVEL {offer.ItemLevel} — SAME AS YOURS", card.Center.X, card.Y + 88, Slate);
 
             // The price, line by line, each in the wallet's verdict colour.
             var y = card.Y + 140;
@@ -454,7 +454,7 @@ public sealed class ChestScreen
 
             var buyBtn = new Rectangle(card.X + 40, card.Bottom - 82, card.Width - 80, 54);
             if (TraderBought.Contains(i))
-                _ui.TextCenter(b, "TAKEN THIS WEEK", buyBtn.Center.X, buyBtn.Y + 16, Dim);
+                _ui.TextCenter(b, "ALREADY BOUGHT", buyBtn.Center.X, buyBtn.Y + 16, Dim);
             else if (_ui.Button(b, buyBtn, "BUY", hit, clicked, affordable && Hunter is not null))
                 _traderBuy = i;
         }
@@ -515,7 +515,7 @@ public sealed class ChestScreen
             _ui.Fill(b, panel, new Color(0x12, 0x0E, 0x18, 0xF4));
             Outline(b, panel, Gold, 2);
             _ui.TextCenterBig(b, "A FRIEND'S ITEM", 960, panel.Y + 26, Gold, UiTypography.PanelTitle);
-            _ui.TextCenter(b, "YOURS TO LOOK AT — IT NEVER JOINS YOUR BAG.", 960, panel.Y + 64, Slate);
+            _ui.TextCenter(b, "YOU CAN ONLY LOOK. IT NEVER JOINS YOUR BAG.", 960, panel.Y + 64, Slate);
             ItemTooltip.Draw(_ui, b, item, Hunter, new Point(960 - ItemTooltip.Width / 2, panel.Y + 104),
                              new Rectangle(0, 0, 1920, 1080));
             if (_ui.Button(b, new Rectangle(880, panel.Bottom - 72, 160, 48), "CLOSE", hit, clicked, true))
@@ -532,7 +532,7 @@ public sealed class ChestScreen
             var panel = new Rectangle(560, 230, 800, 600);
             _ui.Panel(b, panel, gold: true);
             _ui.TextCenterBig(b, "A FRIEND'S BUILD", 960, panel.Y + 30, Gold, UiTypography.PanelTitle);
-            _ui.TextCenter(b, "READ IT, STEAL THE IDEA — YOUR OWN BUILD IS UNTOUCHED.", 960, panel.Y + 66, Slate);
+            _ui.TextCenter(b, "READ IT, COPY THE IDEA. YOUR OWN BUILD STAYS THE SAME.", 960, panel.Y + 66, Slate);
 
             var y = panel.Y + 112;
 
@@ -562,7 +562,7 @@ public sealed class ChestScreen
             y += 14;
             _ui.Text(b, "KEYSTONES", panel.X + 60, y, Slate);
             y += 26;
-            if (build.Keystones.Count == 0) { _ui.TextBig(b, "NONE SOCKETED", panel.X + 80, y, Dim, UiTypography.Secondary); y += 26; }
+            if (build.Keystones.Count == 0) { _ui.TextBig(b, "NONE CHOSEN", panel.X + 80, y, Dim, UiTypography.Secondary); y += 26; }
             foreach (var k in build.Keystones.Take(3))
             {
                 _ui.TextBig(b, Keystones.ById(k)?.Name ?? k.ToUpperInvariant(), panel.X + 80, y, Bone,

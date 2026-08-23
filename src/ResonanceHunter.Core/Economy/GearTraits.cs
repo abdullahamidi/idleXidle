@@ -232,16 +232,16 @@ public static class GearTraits
     /// <remarks>The DIRECTION of the trade. <see cref="EffectOf"/> gives the size, per item.</remarks>
     public static string BlurbOf(GearTrait t) => t switch
     {
-        GearTrait.Keen => "Cleaner hits. No drawback.",
+        GearTrait.Keen => "Harder hits. No downside.",
         GearTrait.Heavy => "Far harder hits — skills come slower.",
         GearTrait.Swift => "Skills come faster — hits land softer.",
-        GearTrait.Savage => "Brutal hits — the squad is frailer.",
-        GearTrait.Warding => "The squad is tougher — and hits softer.",
-        GearTrait.Vital => "The squad is tougher. No drawback.",
-        GearTrait.Greedy => "A richer haul — the squad is frailer.",
-        GearTrait.Attuned => "Skills come faster. No drawback.",
+        GearTrait.Savage => "Brutal hits — you have less health.",
+        GearTrait.Warding => "More health — but hits land softer.",
+        GearTrait.Vital => "More health. No downside.",
+        GearTrait.Greedy => "More loot — you have less health.",
+        GearTrait.Attuned => "Skills come faster. No downside.",
         GearTrait.Focused => "Skills far faster — hits land softer.",
-        _ => "Harder hits, faster skills — a frail squad.",
+        _ => "Harder hits, faster skills — less health.",
     };
 
     /// <summary>

@@ -393,7 +393,7 @@ public sealed class CharacterScreen
         // It used to recite the headers directly beneath it, which spends the largest 100px on the page
         // to tell the player something they can already read, and teaches them that big text in this
         // band is not worth reading. Same slot, same cost, real content.
-        _ui.TextCenterBig(b, "THE FIGHT ONLY READS WHAT IS WORN — RIGHT-CLICK AN ITEM TO ACT ON IT",
+        _ui.TextCenterBig(b, "ONLY WORN GEAR COUNTS IN A FIGHT — RIGHT-CLICK AN ITEM FOR OPTIONS",
                           960, 80, Slate, UiTypography.Secondary);
 
         DrawLoadout(b, hit, hunter);

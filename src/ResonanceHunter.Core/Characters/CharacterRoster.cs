@@ -40,7 +40,7 @@ public static class CharacterRoster
             Blurb = "Walked every road far enough to know none of them is home.",
             Lean = null, Aptitude = null,
             PassiveName = "EVEN HAND",
-            PassiveText = "No road favours you and none refuses you. Every skill hits 8% harder.",
+            PassiveText = "Any road fits you. Every skill hits 8% harder.",
             // Deliberately the dullest passive in the roster, and deliberately the one that is never
             // wrong. A starter has to be playable before the player understands anything, which means
             // it cannot be a build — it has to be a floor.
@@ -55,7 +55,7 @@ public static class CharacterRoster
             Blurb = "Hits things until they are a different shape.",
             Lean = Branch.Weight, Aptitude = Form.Strike,
             PassiveName = "DEADWEIGHT",
-            PassiveText = "A third of a hit's overkill carries to the next living creature.",
+            PassiveText = "A third of the damage left over from a kill hits the next enemy.",
             // Weight's structural weakness is a swarm: an enormous hit on a small creature throws most
             // of itself away. This does not fix that — it refunds a third of it, which is the most a
             // character passive should do to a branch's actual price.
@@ -68,7 +68,7 @@ public static class CharacterRoster
             Blurb = "Never speaks. The charms do it.",
             Lean = Branch.Spread, Aptitude = Form.Aura,
             PassiveName = "MANY MOUTHS",
-            PassiveText = "+5% damage for every living creature in the wave.",
+            PassiveText = "+5% damage for each enemy alive in the wave.",
             // Scales with the thing Spread is for and evaporates in a boss room, which is the honest
             // shape of the branch rather than a flat bonus wearing its colours.
             Shape = new SkillShape { PerCreatureBonus = 0.05f },
@@ -80,7 +80,7 @@ public static class CharacterRoster
             Blurb = "Keeps time. The fight is what happens between the beats.",
             Lean = Branch.Tempo, Aptitude = Form.Projectile,
             PassiveName = "FIRST BEAT",
-            PassiveText = "The opening cast of every wave is free, and lands at double force.",
+            PassiveText = "Your first cast each wave is free and hits twice as hard.",
             Shape = new SkillShape { FreeOpeningCast = true, FirstHitMultiplier = 2f },
             Unlock = CharacterUnlock.Conquest("marrow_wastes"),
         },
@@ -90,7 +90,7 @@ public static class CharacterRoster
             Blurb = "Has been killed. Declined.",
             Lean = Branch.Endure, Aptitude = Form.Transformation,
             PassiveName = "SECOND WIND",
-            PassiveText = "The first killing blow of an expedition leaves you standing at 1 health.",
+            PassiveText = "Once per expedition, a hit that would kill you leaves you at 1 health.",
             Grants = new[] { BuildTrigger.Undying },
             Unlock = CharacterUnlock.Conquest("still_archive"),
         },
@@ -102,8 +102,7 @@ public static class CharacterRoster
             Blurb = "Slow. Arrives anyway.",
             Lean = Branch.Weight, Aptitude = Form.Strike, AptitudePower = 1.15f,
             PassiveName = "MOMENTUM",
-            PassiveText = "Hits grow as a fight goes on: every blow after the first on a creature is "
-                          + "stronger, and the first is weaker.",
+            PassiveText = "Your first hit on each enemy is weaker. Every hit after it is stronger.",
             // A Weight+Tempo bridge stated as a trade rather than a bonus. It is the exact inverse of
             // ALPHA in the mastery tree, so the two cancel — which is the point: this character is for
             // players who did not walk that node.
@@ -130,7 +129,7 @@ public static class CharacterRoster
             Blurb = "Stands where the road narrows, and lets it narrow further.",
             Lean = Branch.Endure, Aptitude = Form.Trap, AptitudePower = 1.35f,
             PassiveName = "REPRISAL",
-            PassiveText = "Every bite you take is worth less, and every trap you set is worth more.",
+            PassiveText = "Every hit you take does less. Every trap you set does more.",
             Shape = new SkillShape { FlatDamageReduction = 6f, DamageTaken = 0.90f },
             Unlock = CharacterUnlock.Conquest("verdant_hollow"),
         },
@@ -142,7 +141,7 @@ public static class CharacterRoster
             Blurb = "Gave up their eyes for a better bargain.",
             Lean = null, Aptitude = Form.Mark, AptitudePower = 1.30f,
             PassiveName = "TWICE SWORN",
-            PassiveText = "Vows pay far more, and the Mark window they buy lasts longer.",
+            PassiveText = "Vows pay far more. Your Marks last longer and hit harder.",
             // The only character built around a SYSTEM rather than a branch. A player with no Vows
             // sworn gets the Mark aptitude and nothing else, which is the correct price for a passive
             // that doubles down on a choice they have not made.
@@ -162,7 +161,7 @@ public static class CharacterRoster
             Blurb = "Fights for the pockets, not the glory.",
             Lean = null, Aptitude = Form.Trap,
             PassiveName = "FULL POCKETS",
-            PassiveText = "Everything you drag home is worth more, and the good things come up more often.",
+            PassiveText = "All the loot you bring home is worth more. Rare finds show up more often.",
             // Haul and Rarity, which the AVARICE road also buys — so this character is the cheap
             // version of a thirty-point path, and the road stays worth walking because it goes further.
             Mods = new BuildMods(1f, 1f, 1f, 1.35f, 1.20f),
