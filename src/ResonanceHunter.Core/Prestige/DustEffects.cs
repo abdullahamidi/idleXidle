@@ -221,11 +221,26 @@ public static class DustEffects
         return 4 + (tree.Owns("weave_5") ? 1 : 0);
     }
 
-    /// <summary>THE BOUND HAND — every Vow known may be carried at once, rather than one at a time.</summary>
-    public static bool UnboundVows(MemoryDustTree tree)
+    /// <summary>THE BOUND HAND — every Vow sworn pays 25% more. Reaches the fight through <see cref="TreeShape"/>.</summary>
+    /// <remarks>
+    /// This wire used to be <c>UnboundVows</c> — "every Vow known may be carried at once" — and nothing
+    /// read it: there was never a one-vow limit to lift, so the node promised a freedom the game already
+    /// had and delivered nothing. The house failure mode, caught in the 2026-08-23 traits pass. A vow
+    /// power multiplier is the one thing this node can honestly sell: SoloBattle already scales every
+    /// vow's bonus by <see cref="SkillShape.VowPowerMultiplier"/> (the Oathbound's passive rides it).
+    /// </remarks>
+    public static float VowPowerMultiplier(MemoryDustTree tree)
     {
         ArgumentNullException.ThrowIfNull(tree);
-        return tree.Owns("artifice_vows");
+        return tree.Owns("artifice_vows") ? 1.25f : 1f;
+    }
+
+    /// <summary>What the Dust tree adds to the build's shape — folded in at <c>PlayerLoadout.ToBuild</c>.</summary>
+    public static SkillShape TreeShape(MemoryDustTree tree)
+    {
+        ArgumentNullException.ThrowIfNull(tree);
+        var vow = VowPowerMultiplier(tree);
+        return vow == 1f ? SkillShape.None : new SkillShape { VowPowerMultiplier = vow };
     }
 
     public static IReadOnlySet<string> WiredIds { get; } = NamedWires

@@ -230,7 +230,8 @@ public sealed class MemoryDustTree
 
 
     /// <summary>
-    /// The finite catalog: 36 nodes totalling 1,430 Memory Dust — the character's passive tree.
+    /// The finite catalog — the character's passive tree. The exact count and total are computed live
+    /// (<see cref="TotalTreeCost"/>) and pinned by test, so this line never has to lie about them.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -251,9 +252,12 @@ public sealed class MemoryDustTree
     /// of the three things an expedition loots, and this is what it buys:
     /// </para>
     /// <list type="bullet">
-    /// <item><b>Attribute nodes</b> — small, honest multipliers. Nobody agonises over them, and they are
-    ///   not meant to be agonised over: they are the PATH, and the path is what makes reaching a
-    ///   keystone cost something other than Dust.</item>
+    /// <item><b>Attribute nodes</b> — small, honest multipliers, each hung off a RUNG OF A ROAD rather
+    ///   than sold from the root. They came back in the traits overhaul of 2026-08-23 (the playtest asked
+    ///   for more traits, said in plainer words) in a shape that keeps them from being the shopping list
+    ///   the earlier rewrite cut: you cannot buy RAZOR EDGE without having walked to BLOOD MAGIC, so the
+    ///   minors REWARD a road instead of competing with it, none sits on a terminal's path (the
+    ///   two-terminals invariant is untouched), and a test caps how much the whole set can multiply.</item>
     /// <item><b>Keystone gates</b> — these LEARN a keystone; they do not wear it. See
     ///   <see cref="Builds.Build.KeystoneSlots"/> for why that distinction is load-bearing rather than
     ///   fussy. Each sits at the end of a themed branch, so the branch you walked is a decision even
@@ -277,52 +281,77 @@ public sealed class MemoryDustTree
         // afford to be anything".
         //
         // The old tree's attribute rungs (+8% DAMAGE three times over, and the same for health, tempo,
-        // haul and rarity) are GONE. Those were the bare multipliers the design forbids, they made this
-        // tree read as the same screen as the skill tree in a different colour, and numbers are now the
-        // skill tree's job. What is left here is what only a permanent tree can sell.
+        // haul and rarity) are GONE FROM THE SPINE. Those were bare multipliers sold from the root, they
+        // made this tree read as the same screen as the skill tree in a different colour, and numbers
+        // are mostly the skill tree's job. The spine sells only what a permanent tree can sell. (The
+        // roads carry small multipliers again — see THE MINOR STRANDS below — but only as the reward for
+        // walking a road, never as a thing you buy instead of walking one.)
+        //
+        // DESCRIPTIONS ARE SENTENCES, and they say what actually happens. The playtest of 2026-08-23
+        // asked for traits that explain themselves, and the reader plays in English as a second
+        // language: so no abbreviations, no genre words a dictionary would not have, the real number
+        // where there is one, and nothing promised that no screen reads. MemoryDustText composes the
+        // final text (this description, plus the keystone's own blurb, plus a generated line for the
+        // numbers) — the catalogue holds only the part a sentence generator cannot write.
 
         new() { Id = "socket_2", Name = "SECOND SOCKET", Cost = 2, Effect = UnlockEffect.Expansion,
-                Description = "A SECOND KEYSTONE SOCKET." },
+                Description = "A second keystone socket. You can wear two keystones at once instead of one." },
         new() { Id = "weave_5", Name = "FIFTH WEAVE", Cost = 3, Effect = UnlockEffect.Expansion,
-                Requires = new[] { "socket_2" }, Description = "A FIFTH SKILL SLOT." },
+                Requires = new[] { "socket_2" },
+                Description = "A fifth skill slot. Your build carries five skills instead of four." },
         new() { Id = "socket_3", Name = "THIRD SOCKET", Cost = 5, Effect = UnlockEffect.Expansion,
-                Requires = new[] { "weave_5" }, Description = "A THIRD KEYSTONE SOCKET." },
+                Requires = new[] { "weave_5" },
+                Description = "A third keystone socket. You can wear three keystones at once." },
 
         // Vows — ability OPTIONS rather than bigger numbers, which is the spine's whole character.
         new() { Id = "vow_study_1", Name = "FIRST VOW", Cost = 1, Effect = UnlockEffect.Expansion,
-                Description = "LEARN COMPLETION AND THE DELIBERATE." },
+                Description = "Learn two vows: COMPLETION and THE DELIBERATE. A vow is a restriction you accept on your build in exchange for power — it pays only while your build keeps it." },
         new() { Id = "vow_study_2", Name = "SECOND VOW", Cost = 2, Effect = UnlockEffect.Expansion,
-                Requires = new[] { "vow_study_1" }, Description = "LEARN THE PURE AND THE FRANTIC." },
+                Requires = new[] { "vow_study_1" },
+                Description = "Learn two more vows: THE PURE and THE FRANTIC." },
         new() { Id = "vow_study_3", Name = "THIRD VOW", Cost = 2, Effect = UnlockEffect.Expansion,
-                Requires = new[] { "vow_study_2" }, Description = "LEARN THE SINGULAR AND THE BLUNT EDGE." },
+                Requires = new[] { "vow_study_2" },
+                Description = "Learn two more vows: THE SINGULAR and THE BLUNT EDGE." },
         new() { Id = "vow_binding", Name = "BINDING VOWS", Cost = 3, Effect = UnlockEffect.Expansion,
-                Requires = new[] { "vow_study_3" }, Description = "LEARN THE THREE VOWS THAT COST A GEAR SLOT." },
-        new() { Id = "vow_sacrifice", Name = "SACRIFICIAL VOWS", Cost = 3, Effect = UnlockEffect.Expansion,
-                Requires = new[] { "vow_study_3" }, Description = "LEARN FRAGILITY, RECKLESS OFFERING, THE UNGUARDED AND THE UNBOUND." },
+                Requires = new[] { "vow_study_3" },
+                Description = "Learn the three vows that each leave one gear slot empty: THE BAREFOOT, THE OPEN HAND and THE BARE SKULL. The harshest promise, and the best paid." },
+        // "VOWS OF SACRIFICE", not "SACRIFICIAL VOWS": the diagram prints every name under its node in
+        // two short lines, and SACRIFICIAL is the one word in the catalogue too long for a line.
+        new() { Id = "vow_sacrifice", Name = "VOWS OF SACRIFICE", Cost = 3, Effect = UnlockEffect.Expansion,
+                Requires = new[] { "vow_study_3" },
+                Description = "Learn four vows that always cost you something: FRAGILITY, RECKLESS OFFERING, THE UNGUARDED and THE UNBOUND." },
 
         // Attention, not power. An idle game's real currency is ATTENTION, and a bag of ninety Commons
         // spends it on nothing.
         new() { Id = "ledger", Name = "HUNTER'S LEDGER", Cost = 1, Effect = UnlockEffect.Convenience,
-                Description = "GROUNDWORK — OPENS THE FORGE & AUTO-SELL PATH." },
+                Description = "Groundwork. Opens the way to auto-selling, to the forge upgrades, and to the Avarice road." },
         new() { Id = "filter_common", Name = "SORTER'S EYE", Cost = 2, Effect = UnlockEffect.Convenience,
-                Requires = new[] { "ledger" }, Description = "AUTO-SELL COMMONS AS THEY DROP." },
+                Requires = new[] { "ledger" },
+                Description = "Common items are sold the moment they drop, so your bag holds only what matters." },
         new() { Id = "filter_uncommon", Name = "SORTER'S DISCIPLINE", Cost = 3, Effect = UnlockEffect.Convenience,
-                Requires = new[] { "filter_common" }, Description = "AUTO-SELL UNCOMMONS TOO." },
+                Requires = new[] { "filter_common" },
+                Description = "Uncommon items are sold on sight too. Rare and better are always kept." },
         new() { Id = "forge_insight", Name = "FORGE INSIGHT", Cost = 2, Effect = UnlockEffect.Convenience,
-                Requires = new[] { "ledger" }, Description = "OPENS THE FORGE'S EFFICIENCY & AUTO-MERGE UPGRADES." },
+                Requires = new[] { "ledger" },
+                Description = "Opens the forge's two upgrades: a better dismantle return, and merging that runs by itself." },
         new() { Id = "efficient_forge", Name = "EFFICIENT FORGE", Cost = 3, Effect = UnlockEffect.Amplifier,
-                Requires = new[] { "forge_insight" }, Description = "DISMANTLE RETURNS 15% MORE (STILL A LOSS)." },
+                Requires = new[] { "forge_insight" },
+                Description = "Dismantling an item returns 15% more material than before. Still less than selling it." },
         new() { Id = "auto_merge", Name = "TIRELESS FORGE", Cost = 2, Effect = UnlockEffect.Convenience,
-                Requires = new[] { "forge_insight" }, Description = "AUTO-MERGE RUNS AFTER EVERY EXPEDITION." },
+                Requires = new[] { "forge_insight" },
+                Description = "The forge merges your spare items by itself after every expedition." },
 
         new() { Id = "recall_1", Name = "SHARPENED RECALL I", Cost = 1, Effect = UnlockEffect.Amplifier,
-                Description = "REGION MASTERY ACCRUES 5% FASTER." },
+                Description = "Region mastery grows 5% faster." },
         new() { Id = "recall_2", Name = "SHARPENED RECALL II", Cost = 2, Effect = UnlockEffect.Amplifier,
-                Requires = new[] { "recall_1" }, Description = "REGION MASTERY ACCRUES A FURTHER 5% FASTER." },
+                Requires = new[] { "recall_1" },
+                Description = "Region mastery grows another 5% faster — 10% in all." },
         new() { Id = "recall_3", Name = "SHARPENED RECALL III", Cost = 2, Effect = UnlockEffect.Amplifier,
-                Requires = new[] { "recall_2" }, Description = "REGION MASTERY ACCRUES A FURTHER 5% FASTER." },
+                Requires = new[] { "recall_2" },
+                Description = "Region mastery grows another 5% faster — 15% in all." },
         new() { Id = "recall_4", Name = "PERFECT RECALL", Cost = 3, Effect = UnlockEffect.Amplifier,
-                Requires = new[] { "recall_3" }, Description = "REGION MASTERY ACCRUES A FINAL 5% FASTER." },
+                Requires = new[] { "recall_3" },
+                Description = "Region mastery grows a final 5% faster — 20% in all." },
 
         // ══ THE FOUR PATHS ══════════════════════════════════════════════════════════════════════
         //
@@ -334,22 +363,25 @@ public sealed class MemoryDustTree
         //
         // Each path hangs off the SPINE rather than off the tree's root, so a player has already bought
         // the sockets they will need to wear what the path teaches.
+        //
+        // A keystone gate's Description says WHERE ON THE ROAD it stands; what the keystone DOES is the
+        // keystone's own Blurb, which MemoryDustText reads off the catalogue — one sentence, one owner.
 
         // ── RUIN — power bought with safety. A Ruin hunter lives at low health on purpose, which makes
         //    the skill tree's ENDURE branch nearly worthless to them: the two trees interact rather
         //    than stack, and that is what stops "take everything good" being a strategy. ────────────
         new() { Id = "ks_glass_cannon", Road = TraitRoad.Ruin, Name = "THE GLASS ROAD", Cost = 4, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "socket_2" }, GrantsKeystone = "glass_cannon",
-                Description = "LEARN GLASS CANNON." },
+                Description = "Where the Ruin road begins." },
         new() { Id = "ks_bloodlust", Road = TraitRoad.Ruin, Name = "THE EDGE", Cost = 6, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_glass_cannon" }, GrantsKeystone = "bloodlust",
-                Description = "LEARN BLOODLUST." },
+                Description = "The second step down the Ruin road." },
         new() { Id = "ks_blood_magic", Road = TraitRoad.Ruin, Name = "THE RED ROAD", Cost = 8, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_bloodlust" }, GrantsKeystone = "blood_magic",
-                Description = "LEARN BLOOD MAGIC." },
+                Description = "The third step down the Ruin road. No way back from here." },
         new() { Id = "ks_reaper", Road = TraitRoad.Ruin, Name = "THE HARVEST", Cost = 12, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_blood_magic" }, GrantsKeystone = "reaper",
-                Description = "LEARN REAPER — THE RUIN TERMINAL." },
+                Description = "The end of the Ruin road. Twelve points, and the other three roads can never be walked to their end." },
 
         // ── THE CHARGE SPUR, one rung per road at the same cost (the roads must stay within two
         //    points of each other — enforced by test). Ruin spends the pool, Aegis winds it, Artifice
@@ -358,72 +390,135 @@ public sealed class MemoryDustTree
         //    path, so it competes with depth rather than gating it.
         new() { Id = "ks_rend", Road = TraitRoad.Ruin, Name = "THE STORED BLOW", Cost = 6, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_glass_cannon" }, GrantsKeystone = "rend",
-                Description = "LEARN REND." },
+                Description = "A side step off the Ruin road. The keystone that spends stored CHARGE." },
 
         // ── AEGIS — the wall. The only path that makes Bruiser bands routine, and the natural partner
         //    of the skill tree's ENDURE branch. ──────────────────────────────────────────────────
         new() { Id = "ks_ironclad", Road = TraitRoad.Aegis, Name = "THE IRON ROAD", Cost = 4, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "socket_2" }, GrantsKeystone = "ironclad",
-                Description = "LEARN IRONCLAD." },
+                Description = "Where the Aegis road begins." },
         new() { Id = "ks_juggernaut", Road = TraitRoad.Aegis, Name = "THE UNMOVED", Cost = 6, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_ironclad" }, GrantsKeystone = "juggernaut",
-                Description = "LEARN JUGGERNAUT." },
+                Description = "The second step up the wall." },
         new() { Id = "ks_undying", Road = TraitRoad.Aegis, Name = "THE LAST BREATH", Cost = 8, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_juggernaut" }, GrantsKeystone = "undying",
-                Description = "LEARN UNDYING." },
+                Description = "The third step up the wall." },
         new() { Id = "ks_titan", Road = TraitRoad.Aegis, Name = "THE TITAN ROAD", Cost = 12, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_undying" }, GrantsKeystone = "titan",
-                Description = "LEARN TITAN — THE AEGIS TERMINAL." },
+                Description = "The end of the Aegis road. Twelve points, and the other three roads can never be walked to their end." },
         new() { Id = "ks_dynamo", Road = TraitRoad.Aegis, Name = "THE WOUND SPRING", Cost = 6, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_ironclad" }, GrantsKeystone = "dynamo",
-                Description = "LEARN DYNAMO." },
+                Description = "A side step off the Aegis road. The keystone that stores CHARGE when you are hit." },
         new() { Id = "ks_lodestone", Road = TraitRoad.Avarice, Name = "THE KEPT COIL", Cost = 6, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_greed" }, GrantsKeystone = "lodestone",
-                Description = "LEARN LODESTONE." },
+                Description = "A side step off the Avarice road. The keystone that pays you for holding CHARGE." },
         new() { Id = "ks_capacitor", Road = TraitRoad.Artifice, Name = "THE DEEP WELL", Cost = 6, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_echo" }, GrantsKeystone = "capacitor",
-                Description = "LEARN CAPACITOR." },
+                Description = "A side step off the Artifice road. The keystone that makes the CHARGE pool deeper." },
 
         // ── AVARICE — the economy build. It buys no combat power at all, which is what makes it a real
         //    choice: it trades depth for the gear that eventually buys depth. HOARDER is what stops it
         //    being a dead end — the haul becomes force. ───────────────────────────────────────────
         new() { Id = "ks_greed", Road = TraitRoad.Avarice, Name = "THE GOLDEN ROAD", Cost = 4, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ledger" }, GrantsKeystone = "greed",
-                Description = "LEARN GREED." },
+                Description = "Where the Avarice road begins." },
         new() { Id = "ks_discerning_eye", Road = TraitRoad.Avarice, Name = "THE NARROW EYE", Cost = 6, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_greed" }, GrantsKeystone = "discerning_eye",
-                Description = "LEARN DISCERNING EYE." },
+                Description = "The second step along the Avarice road." },
         new() { Id = "ks_fortune", Road = TraitRoad.Avarice, Name = "THE GILDED ROAD", Cost = 8, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_discerning_eye" }, GrantsKeystone = "fortune",
-                Description = "LEARN FORTUNE." },
+                Description = "The third step along the Avarice road." },
         new() { Id = "ks_hoarder", Road = TraitRoad.Avarice, Name = "THE FULL VAULT", Cost = 12, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_fortune" }, GrantsKeystone = "hoarder",
-                Description = "LEARN HOARDER — THE AVARICE TERMINAL." },
+                Description = "The end of the Avarice road. Twelve points, and the other three roads can never be walked to their end." },
 
         // ── ARTIFICE — behaviour over numbers. The path for players who want their build to do
-        //    something strange rather than something large. Its third rung is the SACRIFICIAL VOWS
-        //    rather than a keystone: the Form-combo triggers it used to hold now belong to the skill
+        //    something strange rather than something large. Its third rung is THE BOUND HAND (carry
+        //    every vow at once) rather than a keystone: the Form-combo triggers it used to hold now belong to the skill
         //    tree, and vows are the purest "behaviour, not numbers" thing the game has. ───────────
         new() { Id = "ks_echo", Road = TraitRoad.Artifice, Name = "THE TWICE-SPOKEN", Cost = 4, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "vow_study_1" }, GrantsKeystone = "echo",
-                Description = "LEARN ECHO." },
+                Description = "Where the Artifice road begins." },
         new() { Id = "ks_venomancer", Road = TraitRoad.Artifice, Name = "THE SLOW ROAD", Cost = 6, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_echo" }, GrantsKeystone = "venomancer",
-                Description = "LEARN VENOMANCER." },
+                Description = "The second step along the Artifice road." },
         // Requires only its own path, NOT the whole vow chain. Hanging it off vow_sacrifice made ARTIFICE
         // cost 38 against the other paths' 31-32 and put its terminal out of reach on its own — measured,
         // not guessed. A path that is more expensive than the others is not "flavourful", it is dead.
         new() { Id = "artifice_vows", Road = TraitRoad.Artifice, Name = "THE BOUND HAND", Cost = 8, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "ks_venomancer" },
-                Description = "EVERY VOW YOU KNOW MAY BE CARRIED AT ONCE." },
+                Description = "The third step along the Artifice road. Every vow you swear pays 25% more." },
         new() { Id = "ks_weaver", Road = TraitRoad.Artifice, Name = "THE DOUBLE THREAD", Cost = 12, Effect = UnlockEffect.Expansion,
                 Requires = new[] { "artifice_vows" }, GrantsKeystone = "weaver",
-                Description = "LEARN WEAVER — THE ARTIFICE TERMINAL." },
+                Description = "The end of the Artifice road. Twelve points, and the other three roads can never be walked to their end." },
+
+        // ══ THE MINOR STRANDS — three small nodes beside every road ════════════════════════════
+        //
+        // Added 2026-08-23, when the playtest asked for MORE traits in PLAINER words. Each road carries
+        // a side strand: the CHARGE spur beside its first rung (above), and beside the other three rungs
+        // an attribute node — two minors and, beside the TERMINAL, a notable that is the reward for
+        // walking a road to its end. Every one hangs off a rung of its OWN road, which is what keeps them
+        // from being the shopping list an earlier rewrite cut:
+        //   - none sits on a terminal's PATH, so what one terminal costs, and that two are out of reach,
+        //     is exactly what it was (test_two_terminals_are_out_of_reach);
+        //   - every road gains the same nine points, so the road-cost law holds without a thumb on it;
+        //   - the numbers are small (+5 / +6 / +12 percent) and a test caps what the whole set can
+        //     multiply, because multiplicative stacking is how an idle game arrives at 400,000%.
+        // Each strand moves the number that IS its road: Ruin hits harder, Aegis has more health, Avarice
+        // brings back more, Artifice casts sooner. The NUMBER lives in the Mods and nowhere else —
+        // MemoryDustText writes the sentence from it, so the catalogue cannot disagree with the sim.
+        // Ids deliberately do not start with "ks_": the path-walking test uses that prefix to find a
+        // road's keystone chain, and these are beside the chain, not on it.
+
+        // Ruin: the blade.
+        new() { Id = "ruin_edge_1", Road = TraitRoad.Ruin, Name = "SHARP EDGE", Cost = 2, Effect = UnlockEffect.Amplifier,
+                Requires = new[] { "ks_bloodlust" }, Mods = new BuildMods(1.05f, 1f, 1f, 1f, 1f),
+                Description = "The first sharpening of the blade." },
+        new() { Id = "ruin_edge_2", Road = TraitRoad.Ruin, Name = "RAZOR EDGE", Cost = 3, Effect = UnlockEffect.Amplifier,
+                Requires = new[] { "ks_blood_magic" }, Mods = new BuildMods(1.06f, 1f, 1f, 1f, 1f),
+                Description = "Honed until it sings." },
+        new() { Id = "ruin_edge_3", Road = TraitRoad.Ruin, Name = "THE RED HARVEST", Cost = 4, Effect = UnlockEffect.Amplifier,
+                Requires = new[] { "ks_reaper" }, Mods = new BuildMods(1.12f, 1f, 1f, 1f, 1f),
+                Description = "The reward for walking Ruin to its end." },
+
+        // Aegis: the hide.
+        new() { Id = "aegis_skin_1", Road = TraitRoad.Aegis, Name = "THICK SKIN", Cost = 2, Effect = UnlockEffect.Amplifier,
+                Requires = new[] { "ks_juggernaut" }, Mods = new BuildMods(1f, 1.05f, 1f, 1f, 1f),
+                Description = "A hide that turns the first blow." },
+        new() { Id = "aegis_skin_2", Road = TraitRoad.Aegis, Name = "IRON SKIN", Cost = 3, Effect = UnlockEffect.Amplifier,
+                Requires = new[] { "ks_undying" }, Mods = new BuildMods(1f, 1.06f, 1f, 1f, 1f),
+                Description = "Hammered flat and hard." },
+        new() { Id = "aegis_skin_3", Road = TraitRoad.Aegis, Name = "TITAN'S BULK", Cost = 4, Effect = UnlockEffect.Amplifier,
+                Requires = new[] { "ks_titan" }, Mods = new BuildMods(1f, 1.12f, 1f, 1f, 1f),
+                Description = "The reward for walking Aegis to its end." },
+
+        // Avarice: the purse. Haul is how much comes back; Rarity is how good it is. The notable moves
+        // both a little, because a road about loot should end on loot of both kinds.
+        new() { Id = "avarice_purse_1", Road = TraitRoad.Avarice, Name = "A DEEPER PURSE", Cost = 2, Effect = UnlockEffect.Amplifier,
+                Requires = new[] { "ks_discerning_eye" }, Mods = new BuildMods(1f, 1f, 1f, 1.05f, 1f),
+                Description = "Room for what the road drops." },
+        new() { Id = "avarice_purse_2", Road = TraitRoad.Avarice, Name = "A KEENER EYE", Cost = 3, Effect = UnlockEffect.Amplifier,
+                Requires = new[] { "ks_fortune" }, Mods = new BuildMods(1f, 1f, 1f, 1f, 1.06f),
+                Description = "You spot what others step over." },
+        new() { Id = "avarice_purse_3", Road = TraitRoad.Avarice, Name = "HOARDER'S SHARE", Cost = 4, Effect = UnlockEffect.Amplifier,
+                Requires = new[] { "ks_hoarder" }, Mods = new BuildMods(1f, 1f, 1f, 1.08f, 1.05f),
+                Description = "The reward for walking Avarice to its end." },
+
+        // Artifice: the hands.
+        new() { Id = "artifice_hands_1", Road = TraitRoad.Artifice, Name = "QUICK HANDS", Cost = 2, Effect = UnlockEffect.Amplifier,
+                Requires = new[] { "ks_venomancer" }, Mods = new BuildMods(1f, 1f, 1.05f, 1f, 1f),
+                Description = "The weave comes easier." },
+        new() { Id = "artifice_hands_2", Road = TraitRoad.Artifice, Name = "DEFT HANDS", Cost = 3, Effect = UnlockEffect.Amplifier,
+                Requires = new[] { "artifice_vows" }, Mods = new BuildMods(1f, 1f, 1.06f, 1f, 1f),
+                Description = "Your hands know the pattern." },
+        new() { Id = "artifice_hands_3", Road = TraitRoad.Artifice, Name = "WEAVER'S PACE", Cost = 4, Effect = UnlockEffect.Amplifier,
+                Requires = new[] { "ks_weaver" }, Mods = new BuildMods(1f, 1f, 1.12f, 1f, 1f),
+                Description = "The reward for walking Artifice to its end." },
 
         // ── The quiet mark. Requires one node from each path's FIRST rung, so it says "you have seen
         //    all four roads", not "you bought the tree" — which is impossible and meant to be. ─────
         new() { Id = "attunement", Name = "COMPLETE ATTUNEMENT", Cost = 4, Effect = UnlockEffect.Convenience,
                 Requires = new[] { "ks_glass_cannon", "ks_ironclad", "ks_greed", "ks_echo", "socket_3" },
-                Description = "YOU HAVE STOOD AT THE HEAD OF ALL FOUR ROADS." },
+                Description = "You have stood at the head of all four roads. A quiet mark, and nothing more." },
     };
 }

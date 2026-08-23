@@ -194,3 +194,6 @@ shot_*.png
 # Verification captures written by audit agents — never source.
 v_*.png
 audit_*.png
+
+# Filmstrip captures (tools/asset-pipeline/capture_seq.sh) — regenerable, not source.
+seq_*.png

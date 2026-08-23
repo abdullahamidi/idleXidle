@@ -13,11 +13,12 @@ namespace ResonanceHunter.Client;
 /// browser — a Dust overview, a filterable blessing grid, and a selected-blessing detail/upgrade panel.
 /// </summary>
 /// <remarks>
-/// Built to the Dust production spec (rev 1). Every value is real, from <see cref="MemoryDustTree"/>: the
-/// 36 unlocks with their names, costs, descriptions, prerequisites, and their <see cref="UnlockEffect"/>
-/// category. The real tree is a graph of BINARY unlocks (owned / available / locked), not tiered ranks, so
-/// the reference's "Tier 4/10" becomes an honest LIT / AVAILABLE / LOCKED state (UX standard §10/§11). The
-/// class keeps its name and Draw/Update signatures so the host wiring is unchanged.
+/// Built to the Dust production spec (rev 1). Every value is real, from <see cref="MemoryDustTree"/>: every
+/// unlock with its name, cost, description, prerequisites, and its <see cref="UnlockEffect"/> category,
+/// explained in plain sentences by <see cref="MemoryDustText"/>. The real tree is a graph of BINARY unlocks
+/// (owned / available / locked), not tiered ranks, so the reference's "Tier 4/10" becomes an honest
+/// LEARNED / AVAILABLE / LOCKED state (UX standard §10/§11). The class keeps its name and Draw/Update
+/// signatures so the host wiring is unchanged.
 /// </remarks>
 public sealed class PrestigeScreen
 {
@@ -25,7 +26,15 @@ public sealed class PrestigeScreen
     private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
     private static readonly Color Ember = new(0xD8, 0x48, 0x3A);
     private static readonly Color Slate = new(0x8A, 0x96, 0xA8);
-    private static readonly Color Dim = new(0x3A, 0x3A, 0x44);
+    // 0x5E5A6E, up from 0x3A3A44. Dim is the LOCKED outline and the divider rule, and at the old value a
+    // locked node on the 0xC0-alpha scrim was a square of near-black on near-black — the playtest said
+    // the tree was hard to read, and forty of its fifty-one nodes are locked at any given career. A
+    // locked trait should look unbought, not absent.
+    private static readonly Color Dim = new(0x5E, 0x5A, 0x6E);
+    /// <summary>The tint of a locked node's icon — lighter than Dim, so the glyph still reads as a glyph.</summary>
+    private static readonly Color LockedInk = new(0x84, 0x7E, 0x96);
+    /// <summary>The dark plate a name sits on, so a wire running behind it never runs through it.</summary>
+    private static readonly Color Plate = new(0x0A, 0x08, 0x10);
     private static readonly Color Met = new(0x6E, 0xC8, 0x7A);
     private static readonly Color Violet = new(0xC0, 0x6E, 0xE0);
     private static readonly Color Teal = new(0x5F, 0xE0, 0xC8);
@@ -86,6 +95,11 @@ public sealed class PrestigeScreen
     {
         _ui = ui;
         _selectedId = tree.All.OrderBy(u => u.Cost).First().Id;
+        // Every node this tree holds must have a home in the diagram. The layout covers the catalogue by
+        // construction; this is the loud version for a debug build, so a tree the layout has never seen
+        // is noticed at the desk rather than in a capture — and Pos() still draws it either way.
+        System.Diagnostics.Debug.Assert(TraitTreeLayout.Covers(tree.All.Select(u => u.Id)),
+            "TraitTreeLayout does not cover every node of this tree — see TraitTreeLayout.Unauthored / PrestigeScreen.Pos");
     }
 
     /// <summary>DEV ONLY: pose the detail panel on a specific blessing for the screenshot fixture.</summary>
@@ -122,14 +136,6 @@ public sealed class PrestigeScreen
     private static readonly Rectangle TreePanel = new(38, 144, 1246, 790);
     private static readonly Rectangle DetailPanel = new(1320, 144, 560, 790);
 
-    /// <summary>Node radius in pixels. A terminal draws at 1.5x this.</summary>
-    private const int NodeR = 26;
-
-    private static string CatName(UnlockEffect e) => e switch
-    {
-        UnlockEffect.Amplifier => "AMPLIFIER", UnlockEffect.Expansion => "EXPANSION", _ => "CONVENIENCE",
-    };
-
     /// <summary>
     /// The tree is grouped by ROAD, not by effect category.
     /// </summary>
@@ -148,13 +154,14 @@ public sealed class PrestigeScreen
         _ => "ARTIFICE",
     };
 
+    /// <summary>What walking a road means, in a few plain words — not its slogan.</summary>
     private static string RoadBlurb(TraitRoad r) => r switch
     {
-        TraitRoad.Spine => "CAPACITY — SOCKETS, WEAVES, VOWS",
-        TraitRoad.Ruin => "POWER BOUGHT WITH SAFETY",
-        TraitRoad.Aegis => "THE WALL",
-        TraitRoad.Avarice => "THE ECONOMY BUILD",
-        _ => "BEHAVIOUR, NOT NUMBERS",
+        TraitRoad.Spine => "Room to grow: sockets, slots, vows, filters, the forge",
+        TraitRoad.Ruin => "Hit harder; live closer to death",
+        TraitRoad.Aegis => "Take more hits; strike less often",
+        TraitRoad.Avarice => "Bring back more loot; hit softer",
+        _ => "Do strange things, not big ones",
     };
 
     private static Color RoadColor(TraitRoad r) => r switch
@@ -237,10 +244,10 @@ public sealed class PrestigeScreen
 
     private void Buy(MemoryDustTree tree, MemoryDustUnlock u)
     {
-        if (tree.Owns(u.Id)) _msg = "ALREADY TAKEN — TRAITS ARE PERMANENT.";
-        else if (tree.Purchase(u.Id)) { _msg = $"TAKEN: {u.Name}."; BeginLit(u); }
-        else if (tree.Available < u.Cost) _msg = "NOT ENOUGH TRAIT POINTS — CONQUER, CORRUPT, MASTER.";
-        else _msg = "LOCKED — LIGHT ITS PREREQUISITES FIRST.";
+        if (tree.Owns(u.Id)) _msg = "ALREADY LEARNED — A TRAIT IS PERMANENT.";
+        else if (tree.Purchase(u.Id)) { _msg = $"LEARNED: {u.Name}."; BeginLit(u); }
+        else if (tree.Available < u.Cost) _msg = "NOT ENOUGH TRAIT POINTS — CONQUER REGIONS TO EARN MORE.";
+        else _msg = "LOCKED — LEARN WHAT IT NEEDS FIRST.";
     }
 
     /// <summary>Arm the flourish for a trait that was just bought.</summary>
@@ -297,15 +304,19 @@ public sealed class PrestigeScreen
         // material, and it still sits in the top bar.
         _ui.TextCenterBig(b, "TRAITS", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
-        _ui.TextCenterBig(b, "THE SPINE  ·  FOUR ROADS  ·  NO RESPEC", 960, 80, Slate, UiTypography.Secondary);
+        // "NO TAKING BACK", not "NO RESPEC" — the reader plays in English as a second language, and
+        // "respec" is a word only the genre knows.
+        _ui.TextCenterBig(b, "ONE SPINE  ·  FOUR ROADS  ·  NO TAKING BACK", 960, 80, Slate, UiTypography.Secondary);
 
-        // The two numbers the deleted overview panel existed to carry. They belong in a header rather
-        // than a panel: a player checks "can I afford this" constantly and "what does the whole tree
-        // cost" once, and neither is worth a third of the page.
+        // The numbers the deleted overview panel existed to carry, said in words: how many points you
+        // have to spend, how much of the tree you have learned, and what all of it would cost. A header
+        // rather than a panel: a player checks "can I afford this" constantly and "what does the whole
+        // tree cost" once, and neither is worth a third of the page.
         var spent = tree.All.Where(u => tree.Owns(u.Id)).Sum(u => u.Cost);
-        _ui.TextBig(b, "TRAIT POINTS", 60, 108, Slate, UiTypography.Secondary);
-        _ui.TextBig(b, $"{tree.Available}", 210, 104, tree.Available > 0 ? Gold : Slate, UiTypography.PanelTitle);
-        _ui.TextRightBig(b, $"{spent} SPENT  ·  {tree.TotalTreeCost} FOR EVERYTHING",
+        var learned = tree.All.Count(u => tree.Owns(u.Id));
+        _ui.TextBig(b, "TRAIT POINTS TO SPEND", 60, 108, Slate, UiTypography.Secondary);
+        _ui.TextBig(b, $"{tree.Available}", 282, 104, tree.Available > 0 ? Gold : Slate, UiTypography.PanelTitle);
+        _ui.TextRightBig(b, $"{learned} OF {tree.All.Count} TRAITS LEARNED  ·  {spent} POINTS SPENT  ·  {tree.TotalTreeCost} FOR EVERYTHING",
                          1284, 108, Slate, UiTypography.Secondary);
 
         _hoverId = null;
@@ -419,7 +430,7 @@ public sealed class PrestigeScreen
         _ui.Fill(b, new Rectangle(plate.X, plate.Y, plate.Width, 3), accent * alpha);
         _ui.Fill(b, new Rectangle(plate.X, plate.Bottom - 3, plate.Width, 3), accent * alpha);
 
-        _ui.TextCenterBig(b, _litTerminal ? "A ROAD ENDS HERE" : "TRAIT LIT — AND IT IS PERMANENT",
+        _ui.TextCenterBig(b, _litTerminal ? "A ROAD ENDS HERE" : "TRAIT LEARNED — AND IT IS PERMANENT",
                           centre.X, plate.Y + 16, accent * alpha, UiTypography.Secondary);
         _ui.TextCenterBig(b, _litName, centre.X, plate.Y + 48, Bone * alpha, UiTypography.ScreenTitle, TextFace.Display);
         if (_litTerminal)
@@ -465,15 +476,16 @@ public sealed class PrestigeScreen
     /// one continuous line. The spine hangs downward and the roads climb upward from the exact node
     /// that gates them, which is how the diagram shows that the spine is not optional.
     /// </para>
+    /// <para>
+    /// EVERY NODE PRINTS ITS NAME. The first diagram drew an icon and a cost digit and nothing else, so
+    /// a player had to hover thirty-nine squares to learn what any of them was called — the playtest's
+    /// "make it more readable" was mostly this. Names sit under their node on a dark plate, in two
+    /// short lines, and the layout's lanes are sized for them.
+    /// </para>
     /// </remarks>
     private void DrawTree(SpriteBatch b, MemoryDustTree tree, Point hit, bool clicked)
     {
         _ui.Panel(b, TreePanel);
-        var owned = tree.All.Count(u => tree.Owns(u.Id));
-        // No panel title. The screen is already called TRAITS, and a second centred heading sat exactly
-        // where the four road labels want to be — which is the top of the diagram, over the terminals.
-        _ui.TextRightBig(b, $"{owned} / {tree.All.Count} LIT", TreePanel.Right - 56, TreePanel.Y + 30,
-                         Slate, UiTypography.Secondary);
 
         // ONE EDGE PER NODE, to its NEAREST prerequisite — the rule the mastery tree arrived at, and
         // for the identical reason. COMPLETE ATTUNEMENT requires one node from the head of all four
@@ -485,14 +497,14 @@ public sealed class PrestigeScreen
         // than five. A taken prerequisite wins ties, so a walked road reads as one continuous gold run.
         foreach (var u in tree.All)
         {
-            if (u.Requires.Count == 0 || !TraitTreeLayout.Positions.TryGetValue(u.Id, out var to)) continue;
+            if (u.Requires.Count == 0) continue;
+            var to = Pos(u.Id);
 
             string? nearest = null;
             var best = float.MaxValue;
             foreach (var reqId in u.Requires)
             {
-                if (!TraitTreeLayout.Positions.TryGetValue(reqId, out var f)) continue;
-                var d = Vector2.DistanceSquared(f, to) - (tree.Owns(reqId) ? 10_000f : 0f);
+                var d = Vector2.DistanceSquared(Pos(reqId), to) - (tree.Owns(reqId) ? 10_000f : 0f);
                 if (d >= best) continue;
                 best = d;
                 nearest = reqId;
@@ -500,19 +512,19 @@ public sealed class PrestigeScreen
             if (nearest is null) continue;
 
             var lit = tree.Owns(u.Id) && tree.Owns(nearest);
-            Line(b, ToScreen(TraitTreeLayout.Positions[nearest]), ToScreen(to),
-                 lit ? Gold : RoadColor(u.Road) * 0.30f, lit ? 4 : 3);
+            Line(b, ToScreen(Pos(nearest)), ToScreen(to),
+                 lit ? Gold : RoadColor(u.Road) * 0.34f, lit ? 4 : 3);
         }
 
-        // The four road labels, above their terminals — the diagram's only text, and the one line that
-        // names what the player is choosing between.
+        // The four road labels, above their terminals — the one line that names what the player is
+        // choosing between, and what each road costs against the points a career earns.
         var heads = new[]
             {
                 (TraitRoad.Ruin, "ks_reaper"), (TraitRoad.Aegis, "ks_titan"),
                 (TraitRoad.Artifice, "ks_weaver"), (TraitRoad.Avarice, "ks_hoarder"),
             }
-            .Where(h => TraitTreeLayout.Positions.ContainsKey(h.Item2))
-            .Select(h => (h.Item1, At: ToScreen(TraitTreeLayout.Positions[h.Item2])))
+            .Where(h => tree.All.Any(u => u.Id == h.Item2))
+            .Select(h => (h.Item1, At: ToScreen(Pos(h.Item2))))
             .OrderBy(h => h.At.X)
             .ToList();
 
@@ -520,42 +532,133 @@ public sealed class PrestigeScreen
         // and each was drawn at whatever width its text happened to be — so ARTIFICE's "30 PTS" ran
         // straight into AVARICE's "0/4" and the row read "…30 PTS0/4 · 30 PTS". Deriving the width from
         // the actual gap between neighbouring roads means the label shortens instead of colliding, and
-        // it keeps holding when a road's cost grows a digit. A road's whole price beside the points a
-        // career earns IS the decision this screen exists to present, so it has to stay readable.
+        // it keeps holding when a road's cost grows a digit.
         var column = heads.Count < 2
             ? 400
             : (int)Enumerable.Range(1, heads.Count - 1)
-                             .Min(i => heads[i].At.X - heads[i - 1].At.X) - 24;
+                             .Min(i => heads[i].At.X - heads[i - 1].At.X) - 20;
 
         foreach (var (road, p) in heads)
         {
             var nodes = tree.All.Where(u => u.Road == road).ToList();
             var lit = nodes.Count(u => tree.Owns(u.Id));
-            var top = (int)p.Y - (int)(NodeR * 1.5f);
+            var top = (int)p.Y - TerminalR;
             _ui.TextCenterBig(b, _ui.ShortenBig(RoadName(road), column, UiTypography.Body),
-                              (int)p.X, top - 56,
-                              lit > 0 ? RoadColor(road) : RoadColor(road) * 0.75f, UiTypography.Body);
+                              (int)p.X, top - 58,
+                              lit > 0 ? RoadColor(road) : RoadColor(road) * 0.8f, UiTypography.Body);
             _ui.TextCenterBig(b,
-                _ui.ShortenBig($"{lit}/{nodes.Count}  ·  {nodes.Sum(u => u.Cost)} POINTS", column,
+                _ui.ShortenBig($"{lit} OF {nodes.Count}  ·  {nodes.Sum(u => u.Cost)} POINTS", column,
                                UiTypography.Secondary),
-                (int)p.X, top - 26, lit > 0 ? Gold : Slate, UiTypography.Secondary);
+                (int)p.X, top - 30, lit > 0 ? Gold : Slate, UiTypography.Secondary);
         }
 
+        // Names first, then nodes, then their cost tags: a plate never covers a node, and a tag sits
+        // over whatever wire runs under it.
+        foreach (var u in tree.All) DrawName(b, tree, u);
         foreach (var u in tree.All) DrawNode(b, tree, u, hit, clicked);
     }
 
-    /// <summary>One node: a socket whose SHAPE is its road and whose brightness is its state.</summary>
+    /// <summary>Node radius in pixels for everything but a terminal.</summary>
+    private const int NodeR = 19;
+
+    /// <summary>A terminal draws larger — it costs twelve where its neighbours cost four, and size is the channel.</summary>
+    private const int TerminalR = 27;
+
+    /// <summary>The size the names under the nodes are drawn at. The smallest face on the screen, and still a face.</summary>
+    private const int NamePx = 15;
+    private const int NameLineH = 16;
+
+    /// <summary>The name under a node: two short lines on a dark plate, sized to the lane.</summary>
+    private void DrawName(SpriteBatch b, MemoryDustTree tree, MemoryDustUnlock u)
+    {
+        var p = ToScreen(Pos(u.Id));
+        var r = TerminalArt(u) is not null ? TerminalR : NodeR;
+        var lines = NameLines(u.Name);
+        if (lines.Count == 0) return;
+
+        var isOwned = tree.Owns(u.Id);
+        var buyable = tree.CanUnlock(u.Id);
+        var hot = u.Id == _selectedId || u.Id == _hoverId;
+        var ink = isOwned ? Gold : buyable || hot ? Bone : Slate;
+
+        var w = lines.Max(l => _ui.MeasureBig(l, NamePx));
+        var top = (int)p.Y + r + 3;
+        _ui.Fill(b, new Rectangle((int)p.X - w / 2 - 4, top - 1, w + 8, lines.Count * NameLineH + 2),
+                 Plate * (hot ? 0.95f : 0.82f));
+        for (var i = 0; i < lines.Count; i++)
+            _ui.TextCenterBig(b, lines[i], (int)p.X, top + i * NameLineH, ink, NamePx);
+    }
+
+    /// <summary>
+    /// A name as at most two lines that fit a lane.
+    /// </summary>
+    /// <remarks>
+    /// Balanced, not greedy: "THE HOARDER'S SHARE" greedy-packed is "THE" over "HOARDER'S SHARE", and
+    /// the second line then has to be cut. Of the splits where both lines fit, the one whose longer line
+    /// is shortest wins; if no split fits, the least-bad one is taken and each line is shortened with an
+    /// ellipsis — the detail panel always carries the full name. Breaks after a hyphen as well as at a
+    /// space, for THE TWICE-SPOKEN.
+    /// </remarks>
+    private IReadOnlyList<string> NameLines(string name)
+    {
+        var width = LanePixels() - 8;
+        if (_nameLines.TryGetValue((name, width), out var cached)) return cached;
+
+        var tokens = new List<string>();
+        foreach (var word in name.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var cut = word.IndexOf('-');
+            if (cut > 0 && cut < word.Length - 1) { tokens.Add(word[..(cut + 1)]); tokens.Add(word[(cut + 1)..]); }
+            else tokens.Add(word);
+        }
+
+        string Join(IEnumerable<string> ts)
+        {
+            var s = "";
+            foreach (var t in ts) s = s.Length == 0 || s.EndsWith('-') ? s + t : s + " " + t;
+            return s;
+        }
+
+        List<string> result;
+        var whole = Join(tokens);
+        if (tokens.Count <= 1 || _ui.MeasureBig(whole, NamePx) <= width) result = new() { whole };
+        else
+        {
+            (string A, string B, int Over, int Max)? best = null;
+            for (var i = 1; i < tokens.Count; i++)
+            {
+                var a = Join(tokens.Take(i));
+                var c = Join(tokens.Skip(i));
+                var wa = _ui.MeasureBig(a, NamePx);
+                var wc = _ui.MeasureBig(c, NamePx);
+                var over = Math.Max(0, wa - width) + Math.Max(0, wc - width);
+                var max = Math.Max(wa, wc);
+                if (best is null || over < best.Value.Over || (over == best.Value.Over && max < best.Value.Max))
+                    best = (a, c, over, max);
+            }
+            var (l1, l2, _, _) = best!.Value;
+            result = new() { _ui.ShortenBig(l1, width, NamePx), _ui.ShortenBig(l2, width, NamePx) };
+        }
+
+        _nameLines[(name, width)] = result;
+        return result;
+    }
+
+    private readonly Dictionary<(string, int), IReadOnlyList<string>> _nameLines = new();
+
+    /// <summary>One node: a socket whose colour is its road and whose brightness is its state.</summary>
     private void DrawNode(SpriteBatch b, MemoryDustTree tree, MemoryDustUnlock u, Point hit, bool clicked)
     {
-        if (!TraitTreeLayout.Positions.TryGetValue(u.Id, out var w)) return;
-        var p = ToScreen(w);
+        var p = ToScreen(Pos(u.Id));
 
         var terminal = TerminalArt(u);
-        // A terminal is drawn half again as large. It costs twelve where its neighbours cost four, and
-        // size is the only channel that says "this one is the end" without a word.
-        var r = terminal is not null ? (int)(NodeR * 1.5f) : NodeR;
+        var r = terminal is not null ? TerminalR : NodeR;
         var box = new Rectangle((int)p.X - r, (int)p.Y - r, r * 2, r * 2);
-        var hover = box.Contains(hit);
+        // The name plate is part of the node for the pointer: a player aims at the word as readily as
+        // at the square, and a hit box that stops at the square makes the plate feel broken.
+        var lines = NameLines(u.Name);
+        var hitBox = new Rectangle(box.X - 4, box.Y, box.Width + 8, box.Height + 3 + lines.Count * NameLineH + 2);
+        var hover = hitBox.Contains(hit);
 
         var isOwned = tree.Owns(u.Id);
         var buyable = tree.CanUnlock(u.Id);
@@ -565,55 +668,88 @@ public sealed class PrestigeScreen
         if (clicked && hover) { _selectedId = u.Id; _msg = ""; }
         if (hover) _hoverId = u.Id;
 
-        _ui.Fill(b, box, isOwned ? road * 0.85f : buyable ? road * 0.30f : new Color(0x14, 0x11, 0x1E, 0xE8));
+        _ui.Fill(b, box, isOwned ? road * 0.85f : buyable ? road * 0.30f : new Color(0x1A, 0x16, 0x26, 0xF0));
         Outline(b, box, sel ? Bone : isOwned ? Gold : buyable ? road : Dim, sel || isOwned ? 3 : 2);
 
         if (terminal is not null)
             _ui.Icon(b, terminal, new Rectangle(box.X + 4, box.Y + 4, box.Width - 8, box.Height - 8),
-                     isOwned || buyable ? Color.White : new Color(0x6A, 0x64, 0x60));
+                     isOwned || buyable ? Color.White : new Color(0x8A, 0x84, 0x80));
         else if (!_ui.Icon(b, CatIcon(u.Effect),
-                           new Rectangle(box.X + 6, box.Y + 6, box.Width - 12, box.Height - 12),
-                           isOwned ? new Color(0x14, 0x11, 0x1E) : buyable ? road : new Color(0x4A, 0x46, 0x58))
+                           new Rectangle(box.X + 5, box.Y + 5, box.Width - 10, box.Height - 10),
+                           isOwned ? new Color(0x14, 0x11, 0x1E) : buyable ? road : LockedInk)
                  && _ui.Assets.Get("ui_memory_dust") is { } ic)
-            b.Draw(ic, new Rectangle(box.X + 6, box.Y + 6, box.Width - 12, box.Height - 12), road);
+            b.Draw(ic, new Rectangle(box.X + 5, box.Y + 5, box.Width - 10, box.Height - 10), road);
 
-        // The cost, under the node. Small, because it is the answer to a question the player asks
-        // second — the first is "what road is this on", which the position already answered.
-        // DRAWN INSIDE THE NODE, not under it. At the unsized 32px face this needed ~24px of clearance
-        // below the box, and one rung of the tree is only ~16px taller than a node — so every cost digit
-        // in the diagram was printed on top of the node beneath it. Inside its own node it cannot
-        // collide with anything at any zoom.
+        // The cost, as a small tag on the node's right edge. It used to be printed inside the square,
+        // over the icon; now the square is smaller and the name is under it, so the tag hangs off the
+        // side where nothing else is. Unlit only — a bought trait's price is history.
         if (!isOwned)
-            _ui.TextCenterBig(b, $"{u.Cost}", box.Center.X, box.Bottom - 20,
-                              buyable ? Bone : Slate, UiTypography.Secondary);
+        {
+            var tag = new Rectangle(box.Right - 3, box.Center.Y - 9, 20, 18);
+            _ui.Fill(b, tag, Plate * 0.92f);
+            Outline(b, tag, buyable ? road : Dim, 1);
+            _ui.TextCenterBig(b, $"{u.Cost}", tag.Center.X, tag.Y + 1, buyable ? Bone : Slate, NamePx);
+        }
+    }
+
+    /// <summary>
+    /// Where a node is, in world units — for EVERY id, including one the layout never heard of.
+    /// </summary>
+    /// <remarks>
+    /// The layout covers the whole catalogue by construction (see <see cref="TraitTreeLayout"/>), so
+    /// this is the fallback for a custom tree — a fixture, a future catalogue the layout predates. It
+    /// parks the stranger along the bottom row, visibly, instead of returning early: the CHARGE spur's
+    /// four keystones were invisible for as long as they existed because the old DrawNode did exactly
+    /// that, and the header counted them all the while.
+    /// </remarks>
+    private Vector2 Pos(string id)
+    {
+        if (TraitTreeLayout.Positions.TryGetValue(id, out var v)) return v;
+        if (_strays.TryGetValue(id, out var s)) return s;
+        var (min, max) = TraitTreeLayout.Bounds();
+        var stray = new Vector2(max.X + TraitTreeLayout.LaneStep * (_strays.Count + 1), max.Y);
+        _strays[id] = stray;
+        return stray;
+    }
+
+    private readonly Dictionary<string, Vector2> _strays = new();
+
+    /// <summary>The part of the tree panel the diagram is fitted into.</summary>
+    /// <remarks>
+    /// Top inset: room for the two road-label lines above the terminals, which are part of the diagram.
+    /// Bottom inset: room for the two name lines under the lowest row. Sides: half a lane, so the
+    /// outermost names and the outermost road label are inside the frame.
+    /// </remarks>
+    private static readonly Rectangle View = new(TreePanel.X + 62, TreePanel.Y + 112,
+                                                 TreePanel.Width - 124, TreePanel.Height - 112 - 84);
+
+    /// <summary>Screen pixels per world unit — the uniform scale that fits the diagram into <see cref="View"/>.</summary>
+    private static float Scale()
+    {
+        var (min, max) = TraitTreeLayout.Bounds();
+        var span = Vector2.Max(max - min, new Vector2(0.001f));
+        return MathF.Min(View.Width / span.X, View.Height / span.Y);
     }
 
     /// <summary>How many screen pixels one rung of the diagram is worth. Shared with <see cref="Line"/>.</summary>
-    private float RungPixels()
-    {
-        var (min, max) = TraitTreeLayout.Bounds();
-        var view = new Rectangle(TreePanel.X + 84, TreePanel.Y + 168,
-                                 TreePanel.Width - 168, TreePanel.Height - 244);
-        var span = Vector2.Max(max - min, new Vector2(0.001f));
-        return MathF.Min(view.Width / span.X, view.Height / span.Y) * TraitTreeLayout.ChainStep;
-    }
+    private static float RungPixels() => Scale() * TraitTreeLayout.ChainStep;
+
+    /// <summary>How many screen pixels one lane is worth — the width a name has to fit.</summary>
+    private static int LanePixels() => (int)(Scale() * TraitTreeLayout.LaneStep);
 
     /// <summary>World units to screen pixels, fitted to the panel once.</summary>
     private Vector2 ToScreen(Vector2 world)
     {
         var (min, max) = TraitTreeLayout.Bounds();
-        // The top inset reserves room for the four ROAD LABELS, which are drawn above the terminals and
-        // are part of the diagram rather than decoration on it — at +108 both lines of RUIN and AEGIS
-        // were sliced by the panel's own frame.
-        var view = new Rectangle(TreePanel.X + 84, TreePanel.Y + 168,
-                                 TreePanel.Width - 168, TreePanel.Height - 244);
+        // Strays (see Pos) can sit past the authored bounds; they are fitted as best they can be.
+        foreach (var s in _strays.Values) max = Vector2.Max(max, s);
         var span = Vector2.Max(max - min, new Vector2(0.001f));
         // Uniform scale, so the diagram is never stretched — a squashed tree reads as a different shape
         // from the one the layout authored.
-        var scale = MathF.Min(view.Width / span.X, view.Height / span.Y);
+        var scale = MathF.Min(View.Width / span.X, View.Height / span.Y);
         var drawn = span * scale;
-        return new Vector2(view.X + (view.Width - drawn.X) / 2f + (world.X - min.X) * scale,
-                           view.Y + (view.Height - drawn.Y) / 2f + (world.Y - min.Y) * scale);
+        return new Vector2(View.X + (View.Width - drawn.X) / 2f + (world.X - min.X) * scale,
+                           View.Y + (View.Height - drawn.Y) / 2f + (world.Y - min.Y) * scale);
     }
 
     /// <summary>A wire between two nodes. Long ones are DASHED — see remarks.</summary>
@@ -650,6 +786,17 @@ public sealed class PrestigeScreen
         _ui.Fill(b, new Rectangle(r.Right - t, r.Y, t, r.Height), c);
     }
 
+    /// <summary>
+    /// The detail panel: one trait, read properly — its road, its picture, its name, what it does in
+    /// plain sentences, what it needs first, and what it costs.
+    /// </summary>
+    /// <remarks>
+    /// The text comes from <see cref="MemoryDustText.Describe"/>, which composes the hand-written
+    /// description with the keystone's own blurb and a generated line for the numbers. Before that the
+    /// panel printed the description alone, and twenty of thirty-nine descriptions said "LEARN
+    /// &lt;KEYSTONE&gt;." without a word about what the keystone did — on the one screen where the player
+    /// decides whether to spend permanent points on it.
+    /// </remarks>
     private void DrawDetail(SpriteBatch b, MemoryDustTree tree, Point hit, bool clicked)
     {
         _ui.PanelQuiet(b, DetailPanel);
@@ -676,60 +823,71 @@ public sealed class PrestigeScreen
         // to catch.
         var y = DetailPanel.Y + 56;
 
-        // THE ROAD, named and drawn. The detail panel — the one place a trait is read properly — did not
-        // mention which of the five roads it belonged to at all.
+        // THE ROAD, named and drawn, with what walking it means in a few plain words.
         var badge = new Rectangle(left, y, 28, 28);
         var hasGlyph = _ui.Icon(b, RoadGlyph(u.Road), badge, roadCol);
         _ui.TextBig(b, RoadName(u.Road), hasGlyph ? badge.Right + 10 : left, y + 5, roadCol, UiTypography.Body);
-        _ui.TextRightBig(b, RoadBlurb(u.Road), DetailPanel.Right - 28, y + 7, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, _ui.ShortenBig(RoadBlurb(u.Road), width - 170, UiTypography.Secondary),
+                         DetailPanel.Right - 28, y + 7, Slate, UiTypography.Secondary);
         y += 40;
 
         // A TERMINAL gets its own face, larger and untinted. This is the panel where a player decides
         // whether thirty points go here or somewhere they can then never also reach, and until now it
         // showed them the same up-arrow that a one-point convenience node shows.
-        var size = terminal is not null ? 132 : 100;
+        var size = terminal is not null ? 120 : 88;
         var icon = new Rectangle(DetailPanel.Center.X - size / 2, y, size, size);
         if (terminal is not null)
             _ui.Icon(b, terminal, icon, isOwned || buyable ? Color.White : new Color(0x8A, 0x82, 0x7A));
         else if (!_ui.Icon(b, CatIcon(u.Effect), icon, isOwned ? Gold : cat)
                  && _ui.Assets.Get("ui_memory_dust") is { } ic) b.Draw(ic, icon, isOwned ? Gold : cat);
-        y += size + 10;
+        y += size + 8;
 
         _ui.TextCenterBig(b, u.Name, DetailPanel.Center.X, y, isOwned ? Gold : buyable ? Bone : Slate, UiTypography.PanelTitle);
         y += 34;
-        var state = isOwned ? "LIT" : buyable ? "AVAILABLE" : "LOCKED";
-        _ui.TextCenterBig(b, terminal is not null ? $"TERMINAL — THE END OF A ROAD  ·  {state}"
-                                                  : $"{CatName(u.Effect)}  ·  {state}",
+        // The state in a word, beside what kind of thing this is — in the player's words, not the
+        // engine's. AMPLIFIER / EXPANSION / CONVENIENCE described what a node did to the code.
+        var state = isOwned ? "LEARNED" : buyable ? "AVAILABLE NOW" : "LOCKED";
+        var kind = terminal is not null ? "The end of a road" : MemoryDustText.EffectInPlainWords(u.Effect);
+        _ui.TextCenterBig(b, $"{kind}  ·  {state}",
                           DetailPanel.Center.X, y, isOwned ? Gold : buyable ? Met : Slate, UiTypography.Secondary);
         y += 30;
 
-        _ui.Fill(b, new Rectangle(left, y, width, 2), Dim);
+        // WHAT IT DOES — the full plain-English text, at Body size, wrapped to the measured width, and
+        // never allowed to run into the prerequisite list: the two blocks share the panel's middle, so
+        // the text gets as many lines as leave the prerequisites their room and ends with an ellipsis
+        // past that (a longer keystone blurb is the only thing that could get there).
+        _ui.Fill(b, new Rectangle(left, y, width, 2), Dim * 0.7f);
         y += 14;
-        _ui.TextBig(b, "EFFECT", left, y, Slate, UiTypography.Secondary);
+        _ui.TextBig(b, "WHAT IT DOES", left, y, Slate, UiTypography.Secondary);
         y += 30;
-        y = DrawWrapped(b, Cap(u.Description), left, y, width, Bone) + 30;
-        if (u.GrantsKeystone is not null)
+        const int lineH = 24;
+        var floor = DetailPanel.Bottom - 172;
+        var reserve = 62 + 34 * Math.Max(1, Math.Min(u.Requires.Count, 3));   // the prerequisite block's minimum
+        var lines = _ui.WrapBig(MemoryDustText.Describe(u), width, UiTypography.Body);
+        var room = Math.Max(1, (floor - reserve - y) / lineH);
+        for (var i = 0; i < Math.Min(lines.Count, room); i++)
         {
-            _ui.TextBig(b, "GRANTS A KEYSTONE — A BUILD-DEFINING CHOICE.", left, y, Violet, UiTypography.Secondary);
-            y += 30;
+            var text = i == room - 1 && lines.Count > room ? _ui.ShortenBig(lines[i] + " …", width, UiTypography.Body) : lines[i];
+            _ui.TextBig(b, text, left, y, Bone, UiTypography.Body);
+            y += lineH;
         }
+        y += 16;
 
-        // Prerequisites (real Requires), each with an owned check.
-        _ui.Fill(b, new Rectangle(left, y, width, 2), Dim);
+        // What it needs first (the real Requires), each with a tick once you have it.
+        _ui.Fill(b, new Rectangle(left, y, width, 2), Dim * 0.7f);
         y += 14;
-        _ui.TextBig(b, "PREREQUISITES", left, y, Gold, UiTypography.Secondary);
+        _ui.TextBig(b, "YOU NEED FIRST", left, y, Gold, UiTypography.Secondary);
         y += 32;
         // The cost block below is anchored to the panel's bottom, so the list has a hard floor. Say what
         // was dropped rather than drawing a row through the divider — a silently truncated list reads as
         // "these are all the prerequisites", which is the one thing it must never say.
-        var floor = DetailPanel.Bottom - 172;
-        if (u.Requires.Count == 0) _ui.TextBig(b, "NONE — START HERE.", left + 2, y, Slate, UiTypography.Body);
+        if (u.Requires.Count == 0) _ui.TextBig(b, "Nothing — you can start here.", left + 2, y, Slate, UiTypography.Body);
         else
             for (var i = 0; i < u.Requires.Count; i++)
             {
                 if (y > floor)
                 {
-                    _ui.TextBig(b, $"+{u.Requires.Count - i} MORE", left + 2, y, Slate, UiTypography.Secondary);
+                    _ui.TextBig(b, $"and {u.Requires.Count - i} more — hover them on the tree", left + 2, y, Slate, UiTypography.Secondary);
                     break;
                 }
                 var reqId = u.Requires[i];
@@ -737,58 +895,40 @@ public sealed class PrestigeScreen
                 var got = tree.Owns(reqId);
                 DrawTick(b, new Rectangle(left + 2, y + 2, 20, 18), got);
                 _ui.TextBig(b, req?.Name ?? reqId, left + 32, y, got ? Bone : Slate, UiTypography.Body);
+                _ui.TextRightBig(b, got ? "learned" : "not yet", DetailPanel.Right - 28, y + 3, got ? Met : Slate, UiTypography.Secondary);
                 y += 34;
             }
 
-        // Cost + UPGRADE.
-        _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Bottom - 156, DetailPanel.Width - 56, 2), Dim);
+        // Cost + LEARN.
+        _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Bottom - 156, DetailPanel.Width - 56, 2), Dim * 0.7f);
         _ui.TextBig(b, "COST", DetailPanel.X + 28, DetailPanel.Bottom - 138, Slate, UiTypography.Body);
         if (!isOwned)
-            // On the COST line, not under it: at Bottom-112 this ran into the UPGRADE button's own top
+            // On the COST line, not under it: at Bottom-112 this ran into the button's own top
             // ornament, and the panel has no spare row between the two.
-            _ui.TextBig(b, $"YOU HAVE {tree.Available}", DetailPanel.X + 96, DetailPanel.Bottom - 136,
-                        tree.Available >= u.Cost ? Dim : Ember, UiTypography.Secondary);
-        if (isOwned) _ui.TextRightBig(b, "OWNED", DetailPanel.Right - 28, DetailPanel.Bottom - 140, Gold, UiTypography.PanelTitle);
+            _ui.TextBig(b, $"you have {tree.Available}", DetailPanel.X + 96, DetailPanel.Bottom - 136,
+                        tree.Available >= u.Cost ? Slate : Ember, UiTypography.Secondary);
+        if (isOwned) _ui.TextRightBig(b, "LEARNED", DetailPanel.Right - 28, DetailPanel.Bottom - 140, Gold, UiTypography.PanelTitle);
         else
-        {
-            // Priced in TRAIT POINTS and it says so, next to how many you have. The Dust mote that used
-            // to sit here named the wrong currency entirely — see the card's cost line.
-            _ui.TextRightBig(b, $"{u.Cost:N0} PT{(u.Cost == 1 ? "" : "S")}", DetailPanel.Right - 28,
+            // Priced in TRAIT POINTS and it says so, next to how many you have — the whole word, not "PTS".
+            _ui.TextRightBig(b, $"{u.Cost} {(u.Cost == 1 ? "POINT" : "POINTS")}", DetailPanel.Right - 28,
                              DetailPanel.Bottom - 140, buyable ? Bone : Ember, UiTypography.PanelTitle);
-        }
 
         // _msg IS WRITTEN FOUR TIMES AND WAS DRAWN NOWHERE. Every refusal this screen has — already
         // taken, not enough points, prerequisites unlit — was assigned to a field no draw call read, so
         // clicking a node you cannot afford did nothing at all and said nothing at all. On the page that
         // produced it, above the button that produced it.
         if (_msg.Length > 0)
-            _ui.TextCenterBig(b, _msg, DetailPanel.Center.X, DetailPanel.Bottom - 120, Ember, UiTypography.Secondary);
+            _ui.TextCenterBig(b, _ui.ShortenBig(_msg, width, UiTypography.Secondary), DetailPanel.Center.X, DetailPanel.Bottom - 120, Ember, UiTypography.Secondary);
 
-        var label = isOwned ? "LIT" : "UPGRADE";
+        var label = isOwned ? "LEARNED" : "LEARN THIS TRAIT";
         if (_ui.Button(b, new Rectangle(DetailPanel.X + 40, DetailPanel.Bottom - 92, DetailPanel.Width - 80, 68), label, hit, clicked, enabled: buyable))
             Buy(tree, u);
         if (!isOwned && !buyable)
             // Above the COST divider, not on top of the cost row it was overlapping — and it names TRAIT
             // POINTS, because this screen has not charged Memory Dust since the tree stopped being
             // buyable by idling.
-            _ui.TextCenter(b, tree.Available < u.Cost ? "NOT ENOUGH TRAIT POINTS" : "WALK ITS PREREQUISITES FIRST",
+            _ui.TextCenter(b, tree.Available < u.Cost ? "NOT ENOUGH TRAIT POINTS" : "LEARN WHAT IT NEEDS FIRST",
                            DetailPanel.Center.X, DetailPanel.Bottom - 186, Ember);
-    }
-
-    private static string Cap(string s) => s.Length > 0 ? char.ToUpperInvariant(s[0]) + s[1..].ToLowerInvariant() : s;
-
-    /// <summary>Word-wrap into a width. Returns the y of the LAST line, so a cursor can carry on from it.</summary>
-    private int DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c)
-    {
-        var line = "";
-        foreach (var w in text.Split(' '))
-        {
-            var probe = line.Length == 0 ? w : line + " " + w;
-            if (_ui.Measure(probe) > width && line.Length > 0) { _ui.Text(b, line, x, y, c); y += 26; line = w; }
-            else line = probe;
-        }
-        if (line.Length > 0) _ui.Text(b, line, x, y, c);
-        return y;
     }
 
     private void DrawTick(SpriteBatch b, Rectangle r, bool on)
@@ -807,5 +947,9 @@ public sealed class PrestigeScreen
             _ui.Fill(b, new Rectangle(r.Right - 2, r.Y, 2, r.Height), Ember);
         }
         _ui.TextBig(b, $"nav TRAITS  sel {_selectedId}", 434, 112, Gold, UiTypography.Secondary);
+        // Which nodes the layout had to place by itself — a to-do list, drawn where a developer looks.
+        if (TraitTreeLayout.Unauthored.Count > 0 || _strays.Count > 0)
+            _ui.TextBig(b, $"auto-placed: {string.Join(", ", TraitTreeLayout.Unauthored.Concat(_strays.Keys))}",
+                        TreePanel.X + 20, TreePanel.Bottom - 24, Ember, UiTypography.Secondary);
     }
 }

@@ -93,24 +93,58 @@ public class DustEffectsTests
     }
 
     /// <summary>
-    /// This tree contributes NO numbers, and that is deliberate.
+    /// The tree's numbers are SMALL, and every one of them is earned by walking a road.
     /// </summary>
     /// <remarks>
-    /// It used to compound attribute rungs (1.08 x 1.08 across three tiers, five times over), which is
-    /// exactly what made three separate trees feel like one screen in different colours. Numbers belong
-    /// to the skill tree; this one sells capacity, keystones and behaviour. A regression that quietly
-    /// re-adds a Mods value to a node here would be that failure creeping back.
+    /// <para>
+    /// This test used to assert the opposite — that the whole tree multiplied nothing — because the
+    /// flat attribute rungs (1.08 x 1.08 across three tiers, five times over, sold from the root) had
+    /// made three separate trees feel like one screen in different colours. The traits overhaul of
+    /// 2026-08-23 brought small multipliers back on purpose, in the one shape that does not recreate
+    /// that failure: THE MINOR STRANDS hang off a road's own keystone rungs, so a number is the reward
+    /// for a road walked rather than a thing bought instead of walking one.
+    /// </para>
+    /// <para>
+    /// So what this guards now is the shape. No attribute node at the root; every attribute node hangs
+    /// off a node of its own road; no single node moves a number by more than a notable's worth; and
+    /// the ENTIRE tree — which no career can afford — stays well short of the compounding that made
+    /// the old rungs a problem. A regression that quietly sold +8% from the root, or stacked five of
+    /// them, fails here.
+    /// </para>
     /// </remarks>
     [Fact]
-    public void test_the_trait_tree_contributes_no_bare_multipliers()
+    public void test_the_trait_trees_multipliers_are_small_and_earned_by_walking_a_road()
     {
+        // Arrange: every attribute node in the catalogue, and the whole tree bought.
+        var attribute = MemoryDustTree.Catalog.Where(u => u.Mods != BuildMods.None).ToList();
+        var byId = MemoryDustTree.Catalog.ToDictionary(u => u.Id);
         var everything = new MemoryDustTree();
         everything.SetEarned(everything.TotalTreeCost);
-        for (var i = 0; i < 100 && !everything.IsComplete; i++)
+        for (var i = 0; i < 200 && !everything.IsComplete; i++)
             if (everything.All.FirstOrDefault(u => everything.CanUnlock(u.Id)) is { } next)
                 everything.Purchase(next.Id);
 
-        Assert.Equal(BuildMods.None, DustEffects.TreeMods(everything));
+        // Act
+        var all = DustEffects.TreeMods(everything);
+
+        // Assert: shape first.
+        Assert.NotEmpty(attribute);
+        foreach (var u in attribute)
+        {
+            Assert.NotEqual(TraitRoad.Spine, u.Road);
+            Assert.True(u.Requires.Count > 0, $"{u.Id} is an attribute node at the root — a shopping-list rung");
+            Assert.All(u.Requires, r => Assert.Equal(u.Road, byId[r].Road));
+            Assert.All(u.Requires, r => Assert.True(byId[r].GrantsKeystone is not null || r == "artifice_vows",
+                $"{u.Id} hangs off {r}, which is not a rung of its road"));
+
+            foreach (var m in new[] { u.Mods.Damage, u.Mods.Health, u.Mods.SkillRate, u.Mods.Haul, u.Mods.Rarity })
+                Assert.InRange(m, 1f, 1.15f);   // minors +4..+8, notables +10..+15 — never more
+        }
+
+        // Then magnitude: the whole tree, bought, is far from the 400,000% idle-game failure.
+        Assert.True(everything.IsComplete);
+        foreach (var m in new[] { all.Damage, all.Health, all.SkillRate, all.Haul, all.Rarity })
+            Assert.InRange(m, 1f, 1.35f);
     }
 
     [Fact]
@@ -309,5 +343,24 @@ public class DustEffectsTests
         foreach (var u in MemoryDustTree.Catalog) tree.Purchase(u.Id);
 
         Assert.True(DustEffects.TreeComplete(tree), "the capstone is unreachable — the tree cannot be finished");
+    }
+
+    [Fact]
+    public void test_the_bound_hand_makes_vows_pay_more_and_reaches_the_shape()
+    {
+        // 2026-08-23: the node used to promise "every vow at once" through a wire nothing read. It sells
+        // vow power now, through the one seam the build's shape takes (PlayerLoadout.ToBuild).
+        var bare = new MemoryDustTree();
+        Assert.Equal(1f, DustEffects.VowPowerMultiplier(bare));
+        Assert.Equal(SkillShape.None.VowPowerMultiplier, DustEffects.TreeShape(bare).VowPowerMultiplier);
+
+        var tree = new MemoryDustTree();
+        tree.SetEarned(5000);
+        // Walk the tree best-first until THE BOUND HAND is owned — the same shape the complete-tree test uses.
+        for (var i = 0; i < 200 && !tree.Owns("artifice_vows"); i++)
+            if (tree.All.FirstOrDefault(u => tree.CanUnlock(u.Id)) is { } next) tree.Purchase(next.Id);
+        Assert.True(tree.Owns("artifice_vows"), "the walk must reach THE BOUND HAND");
+        Assert.Equal(1.25f, DustEffects.VowPowerMultiplier(tree));
+        Assert.Equal(1.25f, DustEffects.TreeShape(tree).VowPowerMultiplier);
     }
 }

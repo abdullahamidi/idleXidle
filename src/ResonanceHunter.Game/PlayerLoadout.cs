@@ -207,7 +207,9 @@ public sealed class PlayerLoadout
             Affinity = mastery.Affinity(),
             ExtraTriggers = new HashSet<BuildTrigger>(
                 mastery.Triggers().Concat(character?.Grants ?? Array.Empty<BuildTrigger>())),
-            Shape = SkillShape.Combine(mastery.Shape(), character?.TotalShape ?? SkillShape.None),
+            // The Dust tree's shape rides the same seam (THE BOUND HAND's vow power) — one place, as ever.
+            Shape = SkillShape.Combine(SkillShape.Combine(mastery.Shape(), character?.TotalShape ?? SkillShape.None),
+                                       DustEffects.TreeShape(tree)),
             SlotCapacity = SkillCapacity,
         };
 

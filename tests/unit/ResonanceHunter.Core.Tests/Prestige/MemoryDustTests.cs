@@ -22,11 +22,14 @@ public class MemoryDustTests
         // four paths is that two terminals cost more than a career earns.
         // 39: the CHARGE spur added one rung to each of the four roads (REND / DYNAMO /
         // LODESTONE / CAPACITOR), deliberately symmetric so the road-cost law holds.
-        Assert.Equal(39, tree.All.Count);
-        // 166 -> 190 when the CHARGE spur landed (4 rungs x 6). The property this range guards —
-        // the tree is NOT completable, two terminals stay out of reach — only gets STRONGER as the
-        // total grows past what a career earns; the floor guards the other direction.
-        Assert.InRange(tree.TotalTreeCost, 180, 200);
+        // 51: the traits overhaul of 2026-08-23 added THE MINOR STRANDS — three small attribute nodes
+        // beside every road (two minors and a notable off the terminal), again symmetric.
+        Assert.Equal(51, tree.All.Count);
+        // 166 -> 190 when the CHARGE spur landed (4 rungs x 6); 190 -> 226 with the minor strands
+        // (4 roads x 2+3+4). The property this range guards — the tree is NOT completable, two
+        // terminals stay out of reach — only gets STRONGER as the total grows past what a career
+        // earns; the floor guards the other direction.
+        Assert.InRange(tree.TotalTreeCost, 215, 240);
     }
 
     /// <summary>Every node is REACHABLE — no unlock is orphaned by its prerequisites.</summary>
