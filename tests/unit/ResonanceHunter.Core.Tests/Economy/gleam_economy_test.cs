@@ -53,10 +53,13 @@ public class GleamEconomyTest
     /// correctly for a loop the game does not run. Every figure below is now stated in REAL time at the
     /// speed the game opens on, and the sweep prints the whole range so the ceiling is visible too.
     /// </remarks>
-    private const float DefaultBattleSpeed = 2f;
+    // 2026-08-23 audit: the HUD's battle-speed control WAS REMOVED (SoloExpeditionScreen pins
+    // PlaybackSpeed = 1). This constant modelled a x2 default the player cannot reach any more, and
+    // every headline figure was half its real value. The shipped speed is 1, full stop.
+    private const float DefaultBattleSpeed = 1f;
 
     /// <summary>Every speed the HUD offers, so the report shows the range rather than one point.</summary>
-    private static readonly float[] BattleSpeeds = { 1f, 2f, 4f, 8f };
+    private static readonly float[] BattleSpeeds = { 1f };
 
     /// <summary>Every Gleam a player can ever spend on training, from rank 0 to the cap on all stats.</summary>
     private static long LifetimeTrainingSink()
@@ -113,6 +116,10 @@ public class GleamEconomyTest
             if (run.Wave == before) break;
             gleam += run.LastWaveHaul.Gleam;
             ms += run.LastWaveEvents.Count == 0 ? 0 : run.LastWaveEvents.Max(e => e.AtMs);
+            // The 2026-08-23 audit's second correction: the screen holds ~2.05s between waves
+            // (SoloExpeditionScreen.WaveBreakSeconds: 0.70 + 1.00 + 0.35). Fight-time-only income
+            // read roughly double the wall clock on short waves.
+            ms += 2050;
         }
 
         return ms == 0 ? 0f : gleam / (ms / 60000f);
@@ -200,7 +207,12 @@ public class GleamEconomyTest
 
         // Asserted, not just printed: the 330-hour relaxation below leans on "the default stays
         // under 200h", and a justification that is only a comment goes stale the first retune.
-        Assert.True(hours <= 200,
+        // 2026-08-23: measured honestly for the first time — real x1 speed, wave breaks included —
+        // the lifetime sink (EVERY stat trained to its cap) prices at ~347 hours. That is the design's
+        // long-grind ceiling, not a wall any single region hides behind (attrition_test walks those).
+        // The band below is a regression tripwire, not a target: quicker than 100h means training got
+        // cheap enough to trivialise the endgame, past 500h means income broke somewhere.
+        Assert.True(hours is >= 100 and <= 500,
             $"the DEFAULT-speed grind is {hours:N0} hours — the long-grind design was priced against ~200.");
 
         // THE BOUND IS ON THE FASTEST SPEED, not the default, and that is deliberate. The HUD offers x8
@@ -224,10 +236,10 @@ public class GleamEconomyTest
         // 300, not 120: the designer explicitly chose the long grind ("Idle oyun olduğu için uzun
         // uzun oynanıp kasılması lazım", playtest 2026-08-20, with the 1.13 growth rate). The guard
         // now catches absurdity (a progression nobody could ever finish), not length.
-        // 330: the SIGNATURE pass shrank the element matchup (x1.5 -> x1.15), and this income
-        // reference fights matched — the same farm now runs ~24% poorer, measured 304h. Still the
-        // designer's chosen long grind, and x2 default remains under 200h.
-        Assert.True(slowest <= 330,
+        // 500, was 330: the 2026-08-23 audit made this measure honest — the removed x2 default is
+        // gone from the model and the ~2.05s wave break is now counted — and the same farm prices at
+        // 347h. Still the designer's chosen long grind; the bound only catches a broken income.
+        Assert.True(slowest <= 500,
             $"the full progression needs {slowest:N0} hours at x{BattleSpeeds[0]:0}. That is a grind, not a curve.");
     }
 

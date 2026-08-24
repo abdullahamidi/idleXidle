@@ -48,7 +48,16 @@ public static class Regions
     public static int RecommendedPower(RegionDefinition region)
     {
         ArgumentNullException.ThrowIfNull(region);
-        return 170 + region.Boss.PowerTierBase * 60;
+        // Anchored to the world's own ladder (2026-08-23 audit): enemies grow by HealthStep per region,
+        // and the rating is square-root-shaped (PowerRating = 100·sqrt(offence) + 100·sqrt(toughness)),
+        // so the rating NEEDED grows by sqrt(HealthStep) ≈ 1.27 per region — a uniform step. The old
+        // flat 170 + tier×60 flattened exactly where the world does not (+59%, +55%, then +18/+10/+5%).
+        // The base keeps the old endpoints: region 0 still reads 410, the last still ~1,370.
+        var index = -1;
+        for (var i = 0; i < All.Count; i++)
+            if (All[i].Id == region.Id) { index = i; break; }
+        if (index < 0) return 170 + region.Boss.PowerTierBase * 60;   // an off-catalogue region keeps the old floor
+        return (int)MathF.Round(410f * MathF.Pow(MathF.Sqrt(RegionLadder.HealthStep), index));
     }
 
     public static IReadOnlyList<RegionDefinition> All { get; } = new List<RegionDefinition>
