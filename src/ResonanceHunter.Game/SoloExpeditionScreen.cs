@@ -558,6 +558,11 @@ public sealed class SoloExpeditionScreen
             _lastSource = EnemySource;
             _run = null;
             Deepest = 0;
+            // The fall's presentation belongs to the region it happened in — carried across travel,
+            // the old "YOUR CHAMPION FELL" banner outranked the new region's own banners for six
+            // seconds (review 2026-08-24). The flash clear is defensive; it decays in under a second.
+            _fellTimer = 0f;
+            _deathFlash = 0f;
         }
 
         // Keep the region's difficulty current; it is read the next time a run (re)starts.

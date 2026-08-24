@@ -1454,6 +1454,7 @@ public class Game1 : Game
                     }
                     _forge.AddChest(new Chest { Rarity = Rarity.Epic, Tier = 8, Element = Source.Nature });
                     _mastery.SetEarned(3);
+                    _deepestEver = 8;   // MasteryOpen gate (Unlocks: DeepestWave >= 8) — without it the SPEND POINTS row this fixture poses never renders
                     // A DELIBERATELY beefy enemy: a real wave-1 fight is over in ~1.5s, so a shot taken a
                     // second in only ever caught the aftermath — useless for verifying the fight itself.
                     // This one stays standing long enough to capture skills firing.
@@ -2487,7 +2488,14 @@ public class Game1 : Game
             // below is correct and necessary; Hunt just needs to be announced outside it, once, to
             // someone who has never played.
             if (!_hasSave)
+            {
                 _unlockQueue.Enqueue((Unlocks.Headline(Activity.Hunt), Unlocks.Explain(Activity.Hunt)));
+                // MAP and ROSTER opened from birth (playtest: "let the player window-shop"), which
+                // means NewlyOpened can never yield them — announced here instead, once, like Hunt.
+                // The drip (one panel, then a gap) keeps the three from stacking.
+                _unlockQueue.Enqueue((Unlocks.Headline(Activity.Map), Unlocks.Explain(Activity.Map)));
+                _unlockQueue.Enqueue((Unlocks.Headline(Activity.Roster), Unlocks.Explain(Activity.Roster)));
+            }
 
             _lastUnlockFacts = now;
             _lastSkillSlots = slots;
@@ -3432,7 +3440,9 @@ public class Game1 : Game
         // ── FEEDBACK + RESET, side by side above the exit row. One click copies a code carrying the
         //    build stamp and progress; two deliberate clicks delete the save (see StartNewGame). ──
         _ui.Fill(_batch, new Rectangle(536, 786, 848, 2), new Color(0x3A, 0x3A, 0x44));
-        if (_ui.Button(_batch, SettingsCopyFeedback, "COPY FEEDBACK CODE", mouse, uiClick))
+        // Hidden while the red SURE? bar covers this exact area — the confirm click must not also
+        // copy a code over the player's clipboard (review 2026-08-24).
+        if (_resetArmTimer <= 0f && _ui.Button(_batch, SettingsCopyFeedback, "COPY FEEDBACK CODE", mouse, uiClick))
         {
             // The failure is NOT silent (same rule as the weave's copy button): no clipboard, no lie.
             _feedbackToast = ClipboardInterop.TrySet(FeedbackCode())
@@ -4142,6 +4152,7 @@ public class Game1 : Game
         // Navigating away abandons a pending SELL/SALVAGE question. Without this it sat armed and
         // invisible, and the player's first click on returning answered a dialog they had forgotten.
         _forge.CancelConfirm();
+        _stats.CancelConfirm();   // an armed RESET ALL TRAINING must not survive leaving the screen
         // BUILD and MASTERY are two doors into one screen, so the tile also sets which VIEW it opens on.
         // Without that line the rail would be lying: pressing MASTERY while the overview was last open
         // would show the overview, and the tile would look broken rather than the state being stale.

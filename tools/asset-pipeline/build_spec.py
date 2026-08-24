@@ -797,8 +797,6 @@ def stills() -> list[dict]:
     add("hunter_portrait", "assets/art/Characters/Hunter/portraits", "medallion",
         "the face of a stern bearded man looking forward from under a dark green hood, "
         "brown leather collar")
-    add("logo_horizontal_full", "assets/art/BrandingSymbols/branding", "chrome",
-        "an ornate gold heraldic crest emblem with radiating filigree wings", width=384, height=192)
     return a
 
 

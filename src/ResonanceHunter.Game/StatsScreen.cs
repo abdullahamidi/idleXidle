@@ -114,6 +114,13 @@ public sealed class StatsScreen
 
     private bool _resetRequest;
     private bool _resetArmed;   // first click landed; the next click confirms or disarms
+    private long _resetArmedAtMs;   // when it landed — the arm expires after ArmSeconds like settings' reset
+
+    /// <summary>How long the armed red state waits for the confirming click before standing down.</summary>
+    private const float ArmSeconds = 4f;
+
+    /// <summary>Withdraw the armed reset — navigating away must never leave a live one-click wipe.</summary>
+    public void CancelConfirm() => _resetArmed = false;
 
     /// <summary>
     /// DEV ONLY: <c>RH_SHOT_ARM=reset</c> poses the armed red are-you-sure state for a capture.
@@ -265,7 +272,7 @@ public sealed class StatsScreen
                 return ($"YOUR HITS DEAL {mods.Damage:0.00}× DAMAGE", new[]
                 {
                     "MIGHT is your attack. Every point of MIGHT adds 1% to the damage of every hit.",
-                    $"One rank of training adds {hunter.GainPerRank(stat):0} MIGHT. You have {v:0} MIGHT, so training alone gives +{v:0}% damage.",
+                    $"One rank of training adds {hunter.GainPerRank(stat):0} MIGHT. You have {v:0} MIGHT, so your MIGHT alone gives +{v:0}% damage.",
                     $"With your weapon, keystones and tree counted in, your hits now deal {mods.Damage:0.00}× damage. This is the number the fight uses.",
                 });
             }
@@ -279,7 +286,7 @@ public sealed class StatsScreen
                 {
                     $"RESONANCE makes every skill start from a bigger base. Every point adds {per:0.0}% to a skill's base power, before anything else multiplies it.",
                     $"One rank of training adds {hunter.GainPerRank(stat):0} RESONANCE. You have {v:0} RESONANCE.",
-                    $"Your skills now start +{per * v:0}% stronger than an untrained hunter's.",
+                    $"Your skills now start +{per * v:0}% above their base power.",
                 });
             }
             case HunterStat.Engineering:
@@ -300,12 +307,20 @@ public sealed class StatsScreen
                 // SoloBattle: damage taken = bite ÷ mods.Health (then DEFENSE cuts it further).
                 // Hunter.SquadHealthMultiplier = (1 + 0.012 × VITALITY) × worn charm × worn mods.
                 var v = hunter.ValueOf(stat);
-                var less = mods.Health > 0f ? 100f * (1f - 1f / mods.Health) : 0f;
-                return ($"YOU TAKE {less:0.0}% LESS DAMAGE", new[]
+                // Toughness under 1 is a designed state (GLASS CANNON and friends): the double
+                // negative "-78.6% less damage" read as a bug, so the words flip with the sign.
+                var tough = MathF.Max(0.01f, mods.Health);
+                var less = 100f * (1f - 1f / tough);
+                var headline = tough >= 1f ? $"YOU TAKE {less:0.0}% LESS DAMAGE"
+                                           : $"YOU TAKE {-less:0.0}% MORE DAMAGE";
+                var tail = tough >= 1f
+                    ? $"With gear and keystones counted in, your toughness is {tough:0.00}× — so you take {less:0.0}% less damage."
+                    : $"With gear and keystones counted in, your toughness is {tough:0.00}× — so you take {-less:0.0}% MORE damage. A keystone or vow is trading your skin for power.";
+                return (headline, new[]
                 {
                     "VITALITY is toughness. Every bite an enemy lands is divided by your toughness number before it touches your life.",
                     $"One rank of training adds {hunter.GainPerRank(stat):0} VITALITY. You have {v:0} VITALITY, and every point adds 1.2% toughness.",
-                    $"With gear and keystones counted in, your toughness is {mods.Health:0.00}× — so you take {less:0.0}% less damage.",
+                    tail,
                 });
             }
             case HunterStat.MaxHealth:
@@ -316,7 +331,7 @@ public sealed class StatsScreen
                 return ($"{pool:N0} LIFE IN A FIGHT", new[]
                 {
                     $"HEALTH is the life your champion enters every fight with. One rank of training adds {hunter.GainPerRank(stat):0} health.",
-                    $"Your trained health is {hunter.MaxHealth:N0}. After your build's promises and passives, your champion starts a fight with {pool:N0} life.",
+                    $"With your charm counted in, your health is {hunter.MaxHealth:N0}. After your build's promises and passives, your champion starts a fight with {pool:N0} life.",
                     "When it reaches zero, the descent ends.",
                 });
             }
@@ -405,7 +420,7 @@ public sealed class StatsScreen
     /// </remarks>
     private void DrawReset(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
     {
-        if (_devArmPending) { _resetArmed = true; _devArmPending = false; }
+        if (_devArmPending) { _resetArmed = true; _resetArmedAtMs = Environment.TickCount64; _devArmPending = false; }
 
         _ui.Fill(b, ResetBar, RowBg);
         _ui.Fill(b, new Rectangle(ResetBar.X, ResetBar.Y, ResetBar.Width, 2), Dim);
@@ -419,6 +434,8 @@ public sealed class StatsScreen
 
         var button = new Rectangle(ResetBar.Right - 40 - 960, ResetBar.Y + 25, 960, 56);
 
+        if (_resetArmed && Environment.TickCount64 - _resetArmedAtMs > (long)(ArmSeconds * 1000))
+            _resetArmed = false;   // the settings pattern this mirrors auto-disarms; so does this now
         if (_resetArmed)
         {
             // The settings panel's armed pattern, exactly: red ground, warning stripe, white text.
@@ -452,6 +469,7 @@ public sealed class StatsScreen
                             hit, clicked))
         {
             _resetArmed = true;
+            _resetArmedAtMs = Environment.TickCount64;
         }
     }
 
