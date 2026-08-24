@@ -118,16 +118,55 @@ public static class SaveStore
     /// the same unreadable file and locking every session forever.
     /// </remarks>
     public static string? QuarantineCorrupt(string dir, DateTimeOffset utcNow)
+        => MoveAside(SavePath(dir), Path.Combine(dir, $"save.corrupt-{utcNow:yyyyMMdd-HHmmss}"));
+
+    /// <summary>
+    /// Move a save from a NEWER build aside as <c>save.newer-&lt;time&gt;.json</c>.
+    /// </summary>
+    /// <remarks>
+    /// The file is perfectly good — the newer build it belongs to can read it — so START A NEW GAME
+    /// must not delete it (review 2026-08-23, high: the title screen promises "your old file is kept
+    /// on disk, untouched", and the reset then File.Delete'd it). Renaming keeps the promise and
+    /// still leaves the live path clear for the fresh game.
+    /// </remarks>
+    public static string? QuarantineNewer(string dir, DateTimeOffset utcNow)
+        => MoveAside(SavePath(dir), Path.Combine(dir, $"save.newer-{utcNow:yyyyMMdd-HHmmss}"));
+
+    /// <summary>
+    /// Read the PREVIOUS good generation — <c>save.bak</c>. The recovery half of the backup TryWrite
+    /// keeps (review 2026-08-23, high: the backup was written on every save and read by nothing).
+    /// </summary>
+    public static LoadResult ReadBackup(string dir, long nowMs)
     {
         try
         {
-            var path = SavePath(dir);
+            var path = BackupPath(dir);
+            if (!File.Exists(path)) return new LoadResult { Failure = LoadFailure.Missing };
+            return SaveSystem.Deserialize(File.ReadAllText(path), nowMs);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new LoadResult { Failure = LoadFailure.Corrupt };
+        }
+    }
+
+    /// <summary>
+    /// Set the backup aside as <c>save.bak-pre-reset-&lt;time&gt;</c> before a deliberate reset, so the
+    /// fresh game's autosaves cannot rotate the last real generation away twenty seconds later.
+    /// </summary>
+    public static string? PreserveBackupAside(string dir, DateTimeOffset utcNow)
+        => MoveAside(BackupPath(dir), Path.Combine(dir, $"save.bak-pre-reset-{utcNow:yyyyMMdd-HHmmss}"));
+
+    /// <summary>Rename a file out of every later write's reach. Null if absent or the move failed.</summary>
+    private static string? MoveAside(string path, string stem)
+    {
+        try
+        {
             if (!File.Exists(path)) return null;
 
-            var stem = Path.Combine(dir, $"save.corrupt-{utcNow:yyyyMMdd-HHmmss}");
             var target = stem + ".json";
-            // Two quarantines inside one second must not collide — the second would throw and leave
-            // the corpse in place, exactly where the next write could reach it.
+            // Two moves inside one second must not collide — the second would throw and leave the
+            // file in place, exactly where the next write could reach it.
             for (var n = 2; File.Exists(target); n++) target = $"{stem}-{n}.json";
 
             File.Move(path, target);

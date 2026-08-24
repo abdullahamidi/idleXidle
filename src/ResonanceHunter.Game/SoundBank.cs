@@ -107,9 +107,18 @@ public sealed class SoundBank
     /// quieter (see the throttle note above). Volume always rides <see cref="SfxVolume"/>, so the
     /// settings slider governs every effect in the game.
     /// </remarks>
-    public void Play(string key, float volume = 1f, float pitch = 0f, float pan = 0f)
+    public void Play(string key, float volume = 1f, float pitch = 0f, float pan = 0f, bool throttle = true)
     {
         if (!_enabled || !_sounds.TryGetValue(key, out var fx)) return;
+
+        if (!throttle)
+        {
+            // A caller that paces itself (the reveal's landing ticks run on the reveal's own clock,
+            // faster than the 90 ms gate) opts out of the repeat throttle entirely.
+            try { fx.Play(Clamp01(volume * _masterSfx), Clamp(pitch, -1f, 1f), Clamp(pan, -1f, 1f)); }
+            catch (Exception) { /* an exhausted voice pool must never break a frame */ }
+            return;
+        }
 
         var now = Environment.TickCount64;
         if (_recent.TryGetValue(key, out var t))

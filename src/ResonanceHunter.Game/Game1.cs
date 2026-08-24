@@ -367,6 +367,7 @@ public class Game1 : Game
     /// </remarks>
     private bool _saveLocked;
     private string _saveLockReason = "";
+    private LoadFailure _saveLockFailure;   // WHY it locked — START A NEW GAME treats corrupt and newer differently
 
     /// <summary>Developer hotkeys (F6 force boss, F7 layout overlays) are live only under RH_DEV=1.</summary>
     private static readonly bool DevKeysEnabled = Environment.GetEnvironmentVariable("RH_DEV") == "1";
@@ -433,12 +434,30 @@ public class Game1 : Game
 
         var result = SaveFile.Read();
 
+        // A damaged live file gets ONE chance at self-repair before the session locks: quarantine the
+        // corpse, then read the PREVIOUS good generation (save.bak — written by every save, and until
+        // the 2026-08-23 review read by nothing). If it parses, promote it back to the live path and
+        // carry on as a normal load — the player loses one save interval, not their file.
+        if (!result.Ok && result.Failure == LoadFailure.Corrupt)
+        {
+            SaveFile.QuarantineCorrupt();
+            var backup = SaveFile.ReadBackup();
+            if (backup.Ok)
+            {
+                SaveFile.TryWrite(backup.Save!, out _);
+                result = backup;
+                _bootMessage = "THE SAVE FILE WAS DAMAGED — RESTORED FROM THE BACKUP. A LITTLE PROGRESS MAY BE MISSING.";
+                _bootColor = Gold;
+            }
+        }
+
         if (!result.Ok)
         {
             // A corrupt save is NEVER silently replaced with a new game — that looks exactly like the
             // game deleted your progress on purpose. Say so, and leave the old file alone.
             _bootMessage = SaveSystem.Explain(result.Failure);
             _bootColor = result.Failure == LoadFailure.Missing ? Dim : Ember;
+
 
             // THE PROMISE ABOVE USED TO BE BROKEN WITHIN TEN SECONDS: the message said "your old file
             // has not been overwritten" while the autosave — running on the blank game this session
@@ -451,10 +470,12 @@ public class Game1 : Game
             if (SaveFile.LocksSaving(result.Failure))
             {
                 _saveLocked = true;
+                _saveLockFailure = result.Failure;
                 _saveLockReason = result.Failure == LoadFailure.FromNewerVersion
                     ? "THIS SAVE WAS MADE BY A NEWER VERSION OF THE GAME"
                     : "THE OLD SAVE FILE IS DAMAGED";
-                if (result.Failure == LoadFailure.Corrupt) SaveFile.QuarantineCorrupt();
+                // A corrupt file was already quarantined above (before the backup attempt); a
+                // newer-version file stays exactly where it is — the build it belongs to reads it.
             }
 
             if (result.Failure == LoadFailure.Missing) SeedNewGame();
@@ -826,9 +847,16 @@ public class Game1 : Game
     /// </remarks>
     private void StartNewGame()
     {
+        // What this reset removes may be the only copy of something good (review 2026-08-23): a save
+        // from a NEWER build is perfectly readable by the build it belongs to, and the backup is the
+        // last real generation. Neither is deleted — both are set aside — and only then does the live
+        // path clear for the fresh game.
+        if (_saveLockFailure == LoadFailure.FromNewerVersion) SaveFile.QuarantineNewer();
+        SaveFile.PreserveBackupAside();
         SaveFile.TryDelete(out _);   // the Persistence API owns the disk — no raw File calls in a screen
         _saveLocked = false;
         _saveLockReason = "";
+        _saveLockFailure = LoadFailure.None;
 
         // Fresh core state. These fields are deliberately not readonly so this method can exist.
         _hunter = new Hunter();
@@ -874,6 +902,10 @@ public class Game1 : Game
         _unlockShowing = "";
         _unlockHeadline = "";
         _unlockCooldown = 0f;
+        // The click that confirmed the reset may have dismissed a panel in the same frame, which
+        // leaves _swallowInput latched TRUE — and the title screen's keys all read through it. The
+        // recompute lives below the title branch, so it never runs there (review 2026-08-23).
+        _swallowInput = false;
         _guideStep = null;
         _conquerMsg = "";
         _lockedMsg = "";
@@ -2063,7 +2095,11 @@ public class Game1 : Game
                     if (Enum.GetValues<GearSlot>().Select(_hunter.Worn).OfType<ItemInstance>()
                             .FirstOrDefault(i => i.InstanceId == request.InstanceId) is { } toDoff
                         && Gear.SlotFor(toDoff.BaseType) is { } sl)
+                    {
                         _hunter.Unequip(sl);
+                        // The same cue as equipping, pitched down — the taking-not-giving convention.
+                        _sound.Play("sfx_equip", 0.7f, pitch: -0.25f);
+                    }
                     else if (_forge.Inventory.FirstOrDefault(i => i.InstanceId == request.InstanceId) is { } toWear)
                     {
                         _hunter.Equip(toWear);
@@ -3057,8 +3093,7 @@ public class Game1 : Game
         }
         else
         {
-            _scale = Display.LargestIntegerScale(vw, vh);   // still shown nowhere; kept for the label below
-            _present = Display.PresentFit(vw, vh);
+            _present = Display.PresentFit(vw, vh);   // the settings header reads _present directly
         }
     }
 

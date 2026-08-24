@@ -140,4 +140,57 @@ public class SaveStoreTest : IDisposable
         // Arrange / Act / Assert — the very first launch on a machine.
         Assert.Equal(LoadFailure.Missing, SaveStore.Read(_dir, Now).Failure);
     }
+    [Fact]
+    public void test_save_store_a_newer_version_save_is_set_aside_not_deleted()
+    {
+        // Arrange — a perfectly good file from a newer build.
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(SaveStore.SavePath(_dir), "{\"Version\": 999}");
+
+        // Act — START A NEW GAME sets it aside instead of deleting it.
+        var kept = SaveStore.QuarantineNewer(_dir, new DateTimeOffset(2026, 8, 24, 12, 0, 0, TimeSpan.Zero));
+
+        // Assert — the newer build's file survives under the aside name, and the live path is clear.
+        Assert.NotNull(kept);
+        Assert.StartsWith("save.newer-", Path.GetFileName(kept!));
+        Assert.Equal("{\"Version\": 999}", File.ReadAllText(kept!));
+        Assert.False(File.Exists(SaveStore.SavePath(_dir)));
+    }
+
+    [Fact]
+    public void test_save_store_the_backup_restores_the_previous_generation()
+    {
+        // Arrange — two saves: the second write rotates the first into save.bak.
+        Assert.True(SaveStore.TryWrite(_dir, new SaveGame { SavedAtMs = Now, Gleam = 111 }, out _));
+        Assert.True(SaveStore.TryWrite(_dir, new SaveGame { SavedAtMs = Now + 1, Gleam = 222 }, out _));
+        // The live file is then damaged.
+        File.WriteAllText(SaveStore.SavePath(_dir), "{ torn mid-write");
+
+        // Act — the corrupt-load recovery path: quarantine, then read the backup.
+        Assert.Equal(LoadFailure.Corrupt, SaveStore.Read(_dir, Now + 2).Failure);
+        SaveStore.QuarantineCorrupt(_dir, new DateTimeOffset(2026, 8, 24, 12, 0, 0, TimeSpan.Zero));
+        var backup = SaveStore.ReadBackup(_dir, Now + 2);
+
+        // Assert — the previous generation comes back whole.
+        Assert.True(backup.Ok);
+        Assert.Equal(111, backup.Save!.Gleam);
+    }
+
+    [Fact]
+    public void test_save_store_a_reset_preserves_the_backup_generation()
+    {
+        // Arrange — a real backup exists (two writes), then the player resets.
+        Assert.True(SaveStore.TryWrite(_dir, new SaveGame { SavedAtMs = Now, Gleam = 111 }, out _));
+        Assert.True(SaveStore.TryWrite(_dir, new SaveGame { SavedAtMs = Now + 1, Gleam = 222 }, out _));
+
+        // Act — the reset path: preserve the backup aside, delete the live file.
+        var kept = SaveStore.PreserveBackupAside(_dir, new DateTimeOffset(2026, 8, 24, 12, 0, 0, TimeSpan.Zero));
+        Assert.True(SaveStore.TryDelete(_dir, out _));
+
+        // Assert — the last real generation survives where no fresh autosave can rotate it away.
+        Assert.NotNull(kept);
+        Assert.StartsWith("save.bak-pre-reset-", Path.GetFileName(kept!));
+        Assert.False(File.Exists(SaveStore.SavePath(_dir)));
+        Assert.False(File.Exists(SaveStore.BackupPath(_dir)));
+    }
 }

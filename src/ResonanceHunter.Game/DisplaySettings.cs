@@ -96,8 +96,11 @@ public static class Display
             var lines = System.IO.File.ReadAllLines(PrefsPath);
             string At(int i) => lines.Length > i ? lines[i].Trim() : "";
             var mode = Enum.TryParse<DisplayMode>(At(0), out var m) ? m : Default.Mode;
-            var scale = int.TryParse(At(1), out var s) && Array.IndexOf(WindowedScales, s) >= 0
-                ? s : Default.WindowedScale;
+            // A retired scale (the old 2x = 960x540) migrates to the SMALLEST surviving size — its
+            // owner chose small on purpose, and the largest window on that screen may not even fit.
+            var scale = int.TryParse(At(1), out var s)
+                ? (Array.IndexOf(WindowedScales, s) >= 0 ? s : WindowedScales[0])
+                : Default.WindowedScale;
             // Lines 3+ arrived with the sound settings; an older two-line file just gets the defaults.
             var sfx = int.TryParse(At(2), out var fx) ? Math.Clamp(fx, 0, 10) : Default.SfxVolume;
             var music = int.TryParse(At(3), out var mu) ? Math.Clamp(mu, 0, 10) : Default.MusicVolume;

@@ -49,6 +49,15 @@ public static class SaveFile
     /// <summary>Move a damaged save aside as save.corrupt-&lt;time&gt;.json, out of every later write's reach.</summary>
     public static string? QuarantineCorrupt() => SaveStore.QuarantineCorrupt(Dir, DateTimeOffset.UtcNow);
 
+    /// <summary>Move a newer build's save aside as save.newer-&lt;time&gt;.json — kept, never deleted.</summary>
+    public static string? QuarantineNewer() => SaveStore.QuarantineNewer(Dir, DateTimeOffset.UtcNow);
+
+    /// <summary>Read the previous good generation (save.bak) — the corrupt-load recovery path.</summary>
+    public static LoadResult ReadBackup() => SaveStore.ReadBackup(Dir, NowMs);
+
+    /// <summary>Set the backup aside before a deliberate reset, so fresh autosaves cannot rotate it away.</summary>
+    public static string? PreserveBackupAside() => SaveStore.PreserveBackupAside(Dir, DateTimeOffset.UtcNow);
+
     /// <summary>Delete the live save — the deliberate START A NEW GAME path. Backups and quarantines stay.</summary>
     public static bool TryDelete(out string error) => SaveStore.TryDelete(Dir, out error);
 

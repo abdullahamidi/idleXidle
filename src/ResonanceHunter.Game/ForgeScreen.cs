@@ -612,12 +612,17 @@ public sealed class ForgeScreen
         if (_revealSummary || _revealItems.Count == 0) return;
         var landBase = (_revealBrief ? 0.46f : BurstEnds) + (_revealBrief ? 0.14f : CardIn);
         var stagger = _revealBrief ? 0.08f : ItemStagger;
+        // Only the LAST instant crossed this frame plays — a skip that jumps the clock is one tick,
+        // not a burst — and the tick bypasses the throttle: the cascade's 80 ms stagger sat under the
+        // 90 ms repeat gate, which silently dropped every second landing (review 2026-08-23).
+        var lastCrossed = -1;
         for (var i = 0; i < _revealItems.Count; i++)
         {
             var lands = landBase + i * stagger;
-            if (tBefore < lands && tAfter >= lands)
-                Sound?.Play("sfx_reveal_tick", 0.6f, pitch: Math.Min(0.5f, i * 0.07f));
+            if (tBefore < lands && tAfter >= lands) lastCrossed = i;
         }
+        if (lastCrossed >= 0)
+            Sound?.Play("sfx_reveal_tick", 0.6f, pitch: Math.Min(0.5f, lastCrossed * 0.07f), throttle: false);
     }
 
     private void NextRevealEntry()
@@ -689,7 +694,7 @@ public sealed class ForgeScreen
         // While a SELL / SALVAGE question is up it owns the KEYS — no key may scrap a second item
         // behind the question about the first. (The question is drawn in place now, and a click
         // anywhere else simply withdraws it — see NormaliseConfirm — so only the keys need the gate.)
-        if (_confirm is not null) { _prevKeys = keys; return; }
+        if (_confirm is not null || _socketAsk is not null) { _prevKeys = keys; return; }
 
         // Arrows cycle which wearable the bench is pointed at. S / D / J are the bench's verbs, and
         // they land in the same confirmation flow as the buttons — a key must never skip a question.
@@ -870,6 +875,7 @@ public sealed class ForgeScreen
     private void OpenConfirm(ScrapKind kind, string? itemId)
     {
         _confirm = (kind, itemId);
+        _socketAsk = null;   // one question at a time — a stacked hidden question resurfaces uninvited
         _confirmSuppress = false;
         _confirmOpenedNow = true;
         // The question is drawn in the tab that owns the verb; open that tab so it is on screen.
@@ -1264,17 +1270,30 @@ public sealed class ForgeScreen
             if (UiKit.ClickedIn(row, hit, clicked))
             {
                 if (!gemMode) { _focusId = it.InstanceId; _focusFollow = true; }
+                else if (ConfirmOpen) { /* a question already owns the clicks */ }
                 else if (Target() is { } host)
                 {
                     // ASK FIRST (playtest 2026-08-23): a set gem can never come back out — crushing it
                     // later destroys it — and this click also spends Essence. One click committing all
-                    // of that silently was the bug.
-                    _socketAsk = (host.InstanceId, it.InstanceId);
-                    _confirmOpenedNow = true;
+                    // of that silently was the bug. And ask only what YES can actually do (review
+                    // 2026-08-23): the refusals TrySocket would give come BEFORE the question, not after.
+                    var slots = GemCraft.SocketCount(host.Rarity);
+                    var cost = GemCraft.SocketCost(host.Rarity);
+                    if (slots == 0) Say("ONLY RARE AND BETTER GEAR HAS SOCKETS.", Ember);
+                    else if (host.Gems.Count >= slots) Say("EVERY SOCKET IS FULL — CRUSH A GEM TO FREE ONE.", Ember);
+                    else if (hunter.MaterialOf(Material.Essence) < cost)
+                        Say($"NEED {cost} ESSENCE TO SET A GEM — YOU HOLD {hunter.MaterialOf(Material.Essence):N0}.", Ember);
+                    else
+                    {
+                        _confirm = null;   // one question at a time, in both directions
+                        _confirmSuppress = false;
+                        _socketAsk = (host.InstanceId, it.InstanceId);
+                        _confirmOpenedNow = true;
+                    }
                 }
                 else Say("NO GEAR ON THE BENCH — A GEM GOES INTO AN ITEM.", Slate);
             }
-            if (gemMode && UiKit.ClickedIn(row, hit, rightClicked)) Sell(hunter, it);
+            if (gemMode && !ConfirmOpen && UiKit.ClickedIn(row, hit, rightClicked)) Sell(hunter, it);
 
             _ui.Fill(b, row, sel ? new Color(0x3A, 0x2E, 0x52)
                            : hover ? new Color(0x22, 0x1C, 0x30)
@@ -1702,7 +1721,9 @@ public sealed class ForgeScreen
                     var gem = item.Gems[i];
                     DrawItemIcon(b, gem, new Rectangle(box.X + 6, box.Y + 6, 56, 56));
                     if (box.Contains(hit)) _hovered = gem;
-                    if (UiKit.ClickedIn(box, hit, clicked)) RequestCrush(item, i);
+                    // Inert while any question is up — a click here must never arm a SECOND question
+                    // behind the first (the two YES buttons overlap by 20 px; review 2026-08-23).
+                    if (!ConfirmOpen && UiKit.ClickedIn(box, hit, clicked)) RequestCrush(item, i);
                 }
                 else
                 {
