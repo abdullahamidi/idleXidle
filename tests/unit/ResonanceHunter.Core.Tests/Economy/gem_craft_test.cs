@@ -229,7 +229,7 @@ public class GemCraftTest
         var host = GemCraft.Socket(Host(Rarity.Epic, "host_save"), Gem("gem_save", 6)).Product!;
         var save = SaveSystem.Capture(
             new Hunter(), new ResonanceHunter.Core.Automation.Region("verdant_hollow", 15),
-            Array.Empty<ResonanceHunter.Core.Automation.Creature>(), new[] { host }, 0, nowMs: 0);
+            new[] { host }, nowMs: 0);
 
         // Act
         var back = SaveSystem.RestoreInventory(

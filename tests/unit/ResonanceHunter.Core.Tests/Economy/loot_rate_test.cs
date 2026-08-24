@@ -26,7 +26,7 @@ namespace ResonanceHunter.Core.Tests.Economy;
 /// <para>
 /// <b>And it must count the path the GAME takes.</b> The first version of this file rolled
 /// <c>ExpeditionLoot.RollBoss</c> as a separate per-boss source and reported 65 items per hundred
-/// waves. The live loop does not do that: Game1's reward drain pays Gleam, Cores and a material
+/// waves. The live loop does not do that: Game1's reward drain pays Gleam and a material
 /// trickle per wave, and a boss drops a CHEST or nothing — <c>RollBoss</c> is reached only from inside
 /// <c>Chests.Open</c>. The real figure was about 13. A probe that measures a path the game does not
 /// take gives a precise answer about an imaginary game, and this one over-stated the problem four
@@ -61,7 +61,7 @@ public class LootRateTest
 
             // NO DIRECT BOSS ITEM. The first version of this probe rolled ExpeditionLoot.RollBoss here
             // as a separate source and reported 65 items per hundred waves — but the live loop
-            // (Game1's reward drain) pays only Gleam, Cores and a material trickle per wave, and a boss
+            // (Game1's reward drain) pays only Gleam and a material trickle per wave, and a boss
             // drops a CHEST or nothing. RollBoss is reached ONLY from inside Chests.Open. A probe that
             // measures a path the game does not take produces a real number for an imaginary game, and
             // it over-stated this one by four times.

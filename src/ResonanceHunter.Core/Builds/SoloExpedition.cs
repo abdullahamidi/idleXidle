@@ -354,15 +354,11 @@ public sealed class SoloExpedition
             haul *= 1f + (despMag > 0f ? despMag : DesperationHaulBonus);
         }
 
-        // Cores (which become hatchlings) drop only on BOSS waves — playtest: "eggs pour in constantly".
-        // Paying a core every single wave, with wave count compounding the scale, buried the Warren in
-        // creatures the player had no use for. A boss every fifth wave is a trickle, not a flood; the
-        // idle GLEAM faucet (below) stays per-wave, because gleam feeds COMMAND and never piles up unused.
-        var boss = WaveScaling.IsBossWave(wave, _tuning);
-        var cores = boss ? (int)MathF.Round(2f * haul) : 0;
-
+        // BOSS-WAVE CORES ARE GONE (2026-08-24). They fed the hatchery of the retired creature
+        // subsystem — "2 per boss" into a currency that could never be spent. Only the skill payouts
+        // (HARVEST/LODESTONE) still write the channel, and nothing consumes it; see WaveBonus.Cores.
         return new Haul(
-            Cores: cores + bonus.Cores,                                   // HARVEST adds cores
+            Cores: bonus.Cores,
             // THE COEFFICIENT WAS 8 AND IS MEASURED, NOT GUESSED. At 8 a trained champion earned 287
             // Gleam per minute of fight time, which funds the whole 79,578 lifetime training sink in
             // 4.6 hours — and that was the SMALL faucet, next to the Warren's 1,994/min. Playtest:

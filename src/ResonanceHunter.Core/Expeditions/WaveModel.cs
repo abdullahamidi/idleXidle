@@ -140,18 +140,35 @@ public enum BattleEventKind { Strike, EnemyStrike, Down, Heal, EnemyDown, Skill,
 /// </remarks>
 public readonly record struct BattleEvent(BattleEventKind Kind, int Slot, int Amount, int AtMs);
 
-/// <summary>Skill payouts earned mid-wave (SALVAGE quality, BLOOM/HARVEST cores), collected at wave end.</summary>
+/// <summary>Skill payouts earned mid-wave (SALVAGE quality, HARVEST/LODESTONE cores), collected at wave end.</summary>
 public sealed class WaveBonus
 {
     public float Quality { get; private set; }
+
+    /// <summary>
+    /// Spare cores paid by the HARVEST enchant and the LODESTONE keystone.
+    /// </summary>
+    /// <remarks>
+    /// THE CORES CURRENCY WAS RETIRED 2026-08-24 with the creature subsystem, so nothing in the game
+    /// consumes this channel any more — the host stopped reading <see cref="Haul.Cores"/>. The channel
+    /// is kept (rather than deleted) because two live build pieces still pay into it and re-pointing
+    /// their reward is real again since 2026-08-24: the host pays it out as the forge material CORE
+    /// (the re-roll currency), which is the word both effects already used. This is also the
+    /// measurable proof their triggers still fire (TriggerLivenessTests reads it).
+    /// </remarks>
     public int Cores { get; private set; }
+
     public void AddQuality(float q) => Quality += q;
     public void AddCores(int c) => Cores += c;
 }
 
-/// <summary>What a wave earned: cores, gleam, and the quality that tilts its loot.</summary>
+/// <summary>What a wave earned: gleam, the quality that tilts its loot — and the skill-paid cores.</summary>
 public readonly record struct Haul(int Cores, int Gleam, float Quality)
 {
+    // NOTE on Cores: the hatchery currency this fed retired 2026-08-24. Only the HARVEST/LODESTONE
+    // skill payouts write it now, and the host pays it out as the forge material CORE (see
+    // WaveBonus.Cores) — so the two effects' own words ("core") stay true.
+
     /// <summary>Fold in another wave's haul; quality is the best of the two, not the sum.</summary>
     public Haul Plus(Haul o) => new(Cores + o.Cores, Gleam + o.Gleam, MathF.Max(Quality, o.Quality));
 }

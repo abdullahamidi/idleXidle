@@ -13,7 +13,7 @@ public class SaveSystemTests
 {
     private const long Now = 1_700_000_000_000L;
 
-    private static (Hunter, Region, List<Creature>, List<ItemInstance>) BuildGame()
+    private static (Hunter, Region, List<ItemInstance>) BuildGame()
     {
         var hunter = new Hunter();
         hunter.AddGleam(5_000);
@@ -21,35 +21,25 @@ public class SaveSystemTests
         for (var i = 0; i < 5; i++) hunter.Train(HunterStat.Defense);
 
         var region = new Region("verdant_hollow", 15);
-        region.AutomationStage = 2;
-
-        var roster = new List<Creature>
-        {
-            Creature.Hatch("c1", Source.Nature, Role.Attacker, 7),
-            Creature.Hatch("c2", Source.Shadow, Role.Crafter, 4),
-            Creature.Hatch("c3", Source.Machine, Role.Defender, 9),
-        };
-        foreach (var c in roster) region.Assign(c);
-        region.Tick(3600f, 10);
+        for (var i = 0; i < 30; i++) region.RecordActiveKill();
+        region.RecordDepth(9);
 
         var inventory = new List<ItemInstance>
         {
             new() { InstanceId = "i1", BaseType = ItemBaseType.Weapon, Rarity = Rarity.Rare, SellValue = 34 },
-            new() { InstanceId = "i2", BaseType = ItemBaseType.Charm, Rarity = Rarity.Epic, SellValue = 82,
-                    EquippedToCreatureId = "c1" },
+            new() { InstanceId = "i2", BaseType = ItemBaseType.Charm, Rarity = Rarity.Epic, SellValue = 82 },
         };
 
-        return (hunter, region, roster, inventory);
+        return (hunter, region, inventory);
     }
 
     /// <summary>A full round trip must lose nothing. Everything the player earned comes back.</summary>
     [Fact]
     public void test_a_save_round_trip_preserves_everything_the_player_earned()
     {
-        var (hunter, region, roster, inventory) = BuildGame();
+        var (hunter, region, inventory) = BuildGame();
 
-        var json = SaveSystem.Serialize(
-            SaveSystem.Capture(hunter, region, roster, inventory, unhatchedCores: 4, Now));
+        var json = SaveSystem.Serialize(SaveSystem.Capture(hunter, region, inventory, Now));
 
         var loaded = SaveSystem.Deserialize(json, Now);
         Assert.True(loaded.Ok);
@@ -60,11 +50,118 @@ public class SaveSystemTests
         Assert.Equal(12, save.TrainingRanks[nameof(HunterStat.AttackPower)]);
         Assert.Equal(5, save.TrainingRanks[nameof(HunterStat.Defense)]);
         Assert.Equal(region.RegionMasteryPoints, save.RegionMasteryPoints, precision: 1);
-        Assert.Equal(2, save.AutomationStage);
-        Assert.Equal(4, save.UnhatchedCores);
-        Assert.Equal(3, save.Roster.Count);
-        Assert.Equal(3, save.AssignedCreatureIds.Count);
         Assert.Equal(2, save.Inventory.Count);
+    }
+
+    /// <summary>
+    /// A save written by a build that still had the creature subsystem must load clean.
+    /// </summary>
+    /// <remarks>
+    /// The creature/evolution/automation subsystem was retired 2026-08-24. Every save written before
+    /// that carries UnhatchedCores, a Roster of SavedCreatures (with full evolution state),
+    /// AssignedCreatureIds, AutomationStage, ChestsCredited, and per-farm Stage/AssignedIds — all
+    /// gone from the format. System.Text.Json's default is to SKIP unknown members
+    /// (JsonUnmappedMemberHandling.Skip; nothing in SaveSystem.Options overrides it), so the load
+    /// must succeed and every SURVIVING field must round-trip untouched. This test writes the
+    /// legacy JSON by hand so no current code has to be able to produce it.
+    /// </remarks>
+    [Fact]
+    public void test_a_save_carrying_retired_creature_fields_still_loads_and_keeps_what_survives()
+    {
+        // Arrange — a hand-written pre-retirement save, retired members included, version current.
+        var legacyJson = """
+        {
+          "Version": 2,
+          "SavedAtMs": 1700000000000,
+          "Gleam": 777,
+          "Materials": 55,
+          "TrainingRanks": { "AttackPower": 3 },
+          "RegionMasteryPoints": 1500,
+          "AutomationStage": 2,
+          "UnhatchedCores": 9,
+          "Roster": [
+            {
+              "Id": "start_atk",
+              "Source": "Nature",
+              "Role": "Attacker",
+              "PowerTier": 3,
+              "IsHealthy": true,
+              "VowId": "vow_bloodied",
+              "EvolutionNodeId": "nature_whelp",
+              "EvolutionMaterials": 25,
+              "EvolutionWorkTicks": { "Attacker": 12 },
+              "EvolutionCombatTally": { "boss_felled": 3 },
+              "EvolutionEquippedTrait": "Warding"
+            }
+          ],
+          "AssignedCreatureIds": [ "start_atk" ],
+          "ChestsOpened": 412,
+          "ChestsCredited": 400,
+          "WornWeaponId": "i1",
+          "ConqueredRegions": [ "verdant_hollow" ],
+          "ActiveRegion": "cinderworks",
+          "RegionFarms": [
+            {
+              "Id": "verdant_hollow",
+              "MasteryPoints": 650,
+              "BestDepth": 14,
+              "Stage": 3,
+              "AssignedIds": [ "start_atk" ]
+            }
+          ],
+          "WarrenLevel": 7,
+          "WarrenXp": 120,
+          "Inventory": [
+            {
+              "InstanceId": "i1",
+              "BaseType": "Weapon",
+              "Rarity": 3,
+              "SellValue": 34,
+              "ItemLevel": 5,
+              "Element": "Shadow",
+              "EquippedToCreatureId": "start_atk"
+            }
+          ]
+        }
+        """;
+
+        // Act
+        var loaded = SaveSystem.Deserialize(legacyJson, Now);
+
+        // Assert — the load succeeds, and every surviving field is intact.
+        Assert.True(loaded.Ok, "a pre-retirement save must load, not fail");
+        var save = loaded.Save!;
+        Assert.Equal(777, save.Gleam);
+        Assert.Equal(55, save.Materials);
+        Assert.Equal(3, save.TrainingRanks["AttackPower"]);
+        Assert.Equal(1500f, save.RegionMasteryPoints);
+        Assert.Equal(412, save.ChestsOpened);
+        Assert.Equal("i1", save.WornWeaponId);
+        Assert.Equal("cinderworks", save.ActiveRegion);
+        Assert.Contains("verdant_hollow", save.ConqueredRegions);
+        Assert.Equal(7, save.WarrenLevel);
+        Assert.Equal(120, save.WarrenXp);
+
+        var farm = save.RegionFarms.Single();
+        Assert.Equal("verdant_hollow", farm.Id);
+        Assert.Equal(650f, farm.MasteryPoints);
+        Assert.Equal(14, farm.BestDepth);
+
+        var item = SaveSystem.RestoreInventory(save).Single();
+        Assert.Equal("i1", item.InstanceId);
+        Assert.Equal(Source.Shadow, item.Element);
+
+        // ...and re-saving it writes the retired members out of existence, losing nothing that survives.
+        var rewritten = SaveSystem.Serialize(save);
+        Assert.DoesNotContain("\"Roster\"", rewritten);
+        Assert.DoesNotContain("UnhatchedCores", rewritten);
+        Assert.DoesNotContain("AssignedCreatureIds", rewritten);
+        Assert.DoesNotContain("AutomationStage", rewritten);
+
+        var again = SaveSystem.Deserialize(rewritten, Now).Save!;
+        Assert.Equal(777, again.Gleam);
+        Assert.Equal(1500f, again.RegionMasteryPoints);
+        Assert.Equal(14, again.RegionFarms.Single().BestDepth);
     }
 
     /// <summary>
@@ -80,7 +177,7 @@ public class SaveSystemTests
     [Fact]
     public void test_duplicate_item_ids_are_deduped_on_restore()
     {
-        var (hunter, region, roster, _) = BuildGame();
+        var (hunter, region, _) = BuildGame();
         var dupe = new ItemInstance { InstanceId = "dupe", BaseType = ItemBaseType.Weapon, Rarity = Rarity.Rare, SellValue = 10 };
         var inventory = new List<ItemInstance>
         {
@@ -88,7 +185,7 @@ public class SaveSystemTests
             new() { InstanceId = "unique", BaseType = ItemBaseType.Charm, Rarity = Rarity.Common, SellValue = 5 },
         };
 
-        var restored = SaveSystem.RestoreInventory(SaveSystem.Capture(hunter, region, roster, inventory, 0, Now));
+        var restored = SaveSystem.RestoreInventory(SaveSystem.Capture(hunter, region, inventory, Now));
 
         Assert.Equal(2, restored.Count);
         Assert.Single(restored.Where(i => i.InstanceId == "dupe"));
@@ -106,14 +203,14 @@ public class SaveSystemTests
     [Fact]
     public void test_an_items_element_survives_a_reload()
     {
-        var (hunter, region, roster, _) = BuildGame();
+        var (hunter, region, _) = BuildGame();
         var inv = new List<ItemInstance>
         {
             new() { InstanceId = "e1", BaseType = ItemBaseType.Weapon, Rarity = Rarity.Rare, SellValue = 10, Element = Source.Shadow },
             new() { InstanceId = "e2", BaseType = ItemBaseType.Charm, Rarity = Rarity.Common, SellValue = 5 },
         };
 
-        var json = SaveSystem.Serialize(SaveSystem.Capture(hunter, region, roster, inv, 0, Now));
+        var json = SaveSystem.Serialize(SaveSystem.Capture(hunter, region, inv, Now));
         var back = SaveSystem.RestoreInventory(SaveSystem.Deserialize(json, Now).Save!);
 
         Assert.Equal(Source.Shadow, back.Single(i => i.InstanceId == "e1").Element);
@@ -132,7 +229,7 @@ public class SaveSystemTests
     [Fact]
     public void test_a_reforged_items_passives_survive_a_reload()
     {
-        var (hunter, region, roster, _) = BuildGame();
+        var (hunter, region, _) = BuildGame();
 
         var baseItem = new ItemInstance
         {
@@ -142,7 +239,7 @@ public class SaveSystemTests
         var reforged = baseItem with { TraitOverride = GearTrait.Focused, EnchantOverride = EnchantKind.Radiance };
         var inventory = new List<ItemInstance> { reforged };
 
-        var json = SaveSystem.Serialize(SaveSystem.Capture(hunter, region, roster, inventory, 0, Now));
+        var json = SaveSystem.Serialize(SaveSystem.Capture(hunter, region, inventory, Now));
         var loaded = SaveSystem.Deserialize(json, Now);
         Assert.True(loaded.Ok);
 
@@ -157,8 +254,8 @@ public class SaveSystemTests
     [Fact]
     public void test_unopened_chests_survive_a_reload()
     {
-        var (hunter, region, roster, inventory) = BuildGame();
-        var save = SaveSystem.Capture(hunter, region, roster, inventory, 0, Now) with
+        var (hunter, region, inventory) = BuildGame();
+        var save = SaveSystem.Capture(hunter, region, inventory, Now) with
         {
             UnopenedChests = new List<SavedChest>
             {
@@ -182,14 +279,14 @@ public class SaveSystemTests
     [Fact]
     public void test_an_un_reforged_item_restores_with_no_override()
     {
-        var (hunter, region, roster, _) = BuildGame();
+        var (hunter, region, _) = BuildGame();
         var plain = new ItemInstance
         {
             InstanceId = "plain_1", BaseType = ItemBaseType.Weapon, Rarity = Rarity.Rare, SellValue = 34,
         };
 
         var json = SaveSystem.Serialize(
-            SaveSystem.Capture(hunter, region, roster, new List<ItemInstance> { plain }, 0, Now));
+            SaveSystem.Capture(hunter, region, new List<ItemInstance> { plain }, Now));
         var back = SaveSystem.RestoreInventory(SaveSystem.Deserialize(json, Now).Save!).Single();
 
         Assert.Null(back.TraitOverride);
@@ -207,8 +304,8 @@ public class SaveSystemTests
     [Fact]
     public void test_a_saved_build_survives_a_reload()
     {
-        var (hunter, region, roster, inventory) = BuildGame();
-        var save = SaveSystem.Capture(hunter, region, roster, inventory, unhatchedCores: 0, Now) with
+        var (hunter, region, inventory) = BuildGame();
+        var save = SaveSystem.Capture(hunter, region, inventory, Now) with
         {
             WovenSkills = new List<SavedSkill>
             {
@@ -239,8 +336,8 @@ public class SaveSystemTests
     [Fact]
     public void test_a_restored_hunter_has_identical_stats()
     {
-        var (hunter, region, roster, inventory) = BuildGame();
-        var save = SaveSystem.Capture(hunter, region, roster, inventory, 0, Now);
+        var (hunter, region, inventory) = BuildGame();
+        var save = SaveSystem.Capture(hunter, region, inventory, Now);
 
         var restored = new Hunter();
         SaveSystem.RestoreHunter(save, restored);
@@ -250,36 +347,6 @@ public class SaveSystemTests
         Assert.Equal(hunter.Defense, restored.Defense);
         Assert.Equal(hunter.MaxHealth, restored.MaxHealth);
         Assert.Equal(hunter.RankOf(HunterStat.AttackPower), restored.RankOf(HunterStat.AttackPower));
-    }
-
-    /// <summary>An equipped charm must still be equipped after a reload — or it becomes sellable again.</summary>
-    [Fact]
-    public void test_equipped_state_survives_a_reload()
-    {
-        var (hunter, region, roster, inventory) = BuildGame();
-        var save = SaveSystem.Capture(hunter, region, roster, inventory, 0, Now);
-
-        var restored = SaveSystem.RestoreInventory(save);
-        var charm = restored.Single(i => i.InstanceId == "i2");
-
-        Assert.Equal("c1", charm.EquippedToCreatureId);
-    }
-
-    [Fact]
-    public void test_the_roster_and_its_assignments_survive_a_reload()
-    {
-        var (hunter, region, roster, inventory) = BuildGame();
-        var save = SaveSystem.Capture(hunter, region, roster, inventory, 0, Now);
-
-        var restoredRoster = SaveSystem.RestoreRoster(save);
-        var newRegion = new Region("verdant_hollow", 15);
-
-        foreach (var c in restoredRoster.Where(c => save.AssignedCreatureIds.Contains(c.Id)))
-            newRegion.Assign(c);
-
-        Assert.Equal(3, newRegion.Team.Count);
-        Assert.Contains(newRegion.Team, c => c.Role == Role.Attacker && c.PowerTier == 7);
-        Assert.Contains(newRegion.Team, c => c.Source == Source.Machine);
     }
 
     // ── Failure handling. A save is a player's hours. Never guess. ─────────────────────────────
@@ -346,7 +413,7 @@ public class SaveSystemTests
         Assert.Equal(0.0, SaveSystem.Deserialize(save, earlier).OfflineSeconds);
     }
 
-    /// <summary>Offline credit is capped — six months away must not hand over six months of farm.</summary>
+    /// <summary>Offline credit is capped — six months away must not hand over six months of income.</summary>
     [Fact]
     public void test_offline_credit_is_capped()
     {
@@ -354,72 +421,6 @@ public class SaveSystemTests
 
         Assert.Equal(SaveSystem.MaxOfflineSeconds, SaveSystem.CreditedOfflineSeconds(sixMonths));
         Assert.Equal(3600.0, SaveSystem.CreditedOfflineSeconds(3600.0)); // a normal absence is untouched
-    }
-
-    /// <summary>
-    /// Offline catch-up must produce the SAME result as having left the game running.
-    /// </summary>
-    /// <remarks>
-    /// If it did not, the player would be punished (or rewarded) for closing the window, and the idle
-    /// half of the game would quietly become a lie.
-    /// </remarks>
-    [Fact]
-    public void test_offline_catch_up_equals_leaving_the_game_running()
-    {
-        var live = new Region("r", 15);
-        var offline = new Region("r", 15);
-
-        foreach (var region in new[] { live, offline })
-        {
-            region.AutomationStage = 3;
-            region.Assign(Creature.Hatch("a", Source.Nature, Role.Attacker, 10));
-            region.Assign(Creature.Hatch("c", Source.Nature, Role.Crafter, 10));
-            region.Assign(Creature.Hatch("d", Source.Nature, Role.Defender, 10));
-            region.Assign(Creature.Hatch("s", Source.Nature, Role.Support, 10));
-        }
-
-        var liveGleam = 0;
-        for (var i = 0; i < 7200; i++) liveGleam += live.Tick(1f, 10).GleamRealized;
-
-        var offlineGleam = offline.Tick(7200f, 10).GleamRealized;
-
-        Assert.Equal(live.RegionMasteryPoints, offline.RegionMasteryPoints, precision: 0);
-        Assert.Equal(live.MasteryLevel, offline.MasteryLevel);
-
-        // The hourly Gleam cap must bite identically either way — offline must not dodge it.
-        Assert.InRange(offlineGleam, liveGleam - 2, liveGleam + 2);
-    }
-
-    /// <summary>Evolution progress must survive a reload in FULL — node, materials, and every tally.</summary>
-    [Fact]
-    public void test_evolution_progress_survives_a_reload()
-    {
-        var tree = ResonanceHunter.Core.Evolution.EvolutionTrees.For(ResonanceHunter.Core.Automation.Source.Nature);
-
-        var whelp = Creature.Hatch("evo1", Source.Nature, Role.Attacker, 3);
-        whelp.BeginEvolution(tree, new ResonanceHunter.Core.Evolution.EvolutionProgress());
-        for (var i = 0; i < 25; i++) whelp.Evolution!.FeedMaterial(1);
-        for (var i = 0; i < 3; i++) whelp.Evolution!.RecordCombat(ResonanceHunter.Core.Evolution.CombatTags.BossFelled);
-        for (var i = 0; i < 12; i++) whelp.Evolution!.RecordWorkTick(Role.Attacker, healthy: true);
-        whelp.Evolution!.EquippedTrait = ResonanceHunter.Core.Evolution.CombatTags.WardingTrait;
-
-        var region = new Region("r", 15);
-        var save = SaveSystem.Capture(new Hunter(), region, new[] { whelp },
-            Array.Empty<ItemInstance>(), 0, Now);
-
-        var json = SaveSystem.Serialize(save);
-        var restored = SaveSystem.RestoreRoster(SaveSystem.Deserialize(json, Now).Save!).Single();
-
-        Assert.Equal(ResonanceHunter.Core.Evolution.EvolutionTrees.RootIdFor(ResonanceHunter.Core.Automation.Source.Nature), restored.EvolutionNodeId);
-        Assert.Equal(25, restored.Evolution!.Materials);
-        Assert.Equal(3, restored.Evolution.CombatTally.GetValueOrDefault(ResonanceHunter.Core.Evolution.CombatTags.BossFelled));
-        Assert.Equal(12, restored.Evolution.HealthyWorkTicks.GetValueOrDefault(Role.Attacker));
-        Assert.Equal(ResonanceHunter.Core.Evolution.CombatTags.WardingTrait, restored.Evolution.EquippedTrait);
-
-        // ...and it can still evolve from exactly where it left off, once the last condition is met.
-        restored.Evolution.RecordCombat(ResonanceHunter.Core.Evolution.CombatTags.BossFelled); // now 4
-        for (var i = 0; i < 5; i++) restored.Evolution.FeedMaterial(1);            // now 30
-        Assert.Equal("nature_atk", restored.TryEvolve(tree));
     }
 
     /// <summary>Memory Dust and its owned unlocks survive a reload — nothing prestige is ever lost.</summary>
@@ -433,8 +434,8 @@ public class SaveSystemTests
         tree.Purchase("socket_2");
 
         var region = new Region("r", 15);
-        var save = SaveSystem.Capture(new Hunter(), region, Array.Empty<Creature>(),
-            Array.Empty<ItemInstance>(), 0, Now, tree, highestMasteryAwarded: 2);
+        var save = SaveSystem.Capture(new Hunter(), region,
+            Array.Empty<ItemInstance>(), Now, tree, highestMasteryAwarded: 2);
 
         var loaded = SaveSystem.Deserialize(SaveSystem.Serialize(save), Now).Save!;
 
@@ -452,8 +453,8 @@ public class SaveSystemTests
     [Fact]
     public void test_serialization_is_stable_and_round_trips_byte_for_byte()
     {
-        var (hunter, region, roster, inventory) = BuildGame();
-        var save = SaveSystem.Capture(hunter, region, roster, inventory, 2, Now);
+        var (hunter, region, inventory) = BuildGame();
+        var save = SaveSystem.Capture(hunter, region, inventory, Now);
 
         var once = SaveSystem.Serialize(save);
         var twice = SaveSystem.Serialize(SaveSystem.Deserialize(once, Now).Save!);
@@ -474,21 +475,11 @@ public class WorldSaveTests
         world.Conquer(ResonanceHunter.Core.Encounters.VerdantHollow.RegionId); // unlocks cinderworks
 
         var home = world.RegionFarm(ResonanceHunter.Core.Encounters.VerdantHollow.RegionId);
-        home.Assign(Creature.Hatch("a", Source.Nature, Role.Attacker, 5));
-        home.Tick(3600f, 10);
-        home.AutomationStage = 3;
+        for (var i = 0; i < 40; i++) home.RecordActiveKill();
+        home.RecordDepth(17);
 
-        var cinder = world.RegionFarm("cinderworks");
-        cinder.Assign(Creature.Hatch("b", Source.Machine, Role.Crafter, 6));
-
-        var roster = new[]
-        {
-            Creature.Hatch("a", Source.Nature, Role.Attacker, 5),
-            Creature.Hatch("b", Source.Machine, Role.Crafter, 6),
-        };
-
-        var save = SaveSystem.Capture(new Hunter(), home, roster, System.Array.Empty<ItemInstance>(),
-            0, Now, world: world, activeRegion: "cinderworks");
+        var save = SaveSystem.Capture(new Hunter(), home, System.Array.Empty<ItemInstance>(),
+            Now, world: world, activeRegion: "cinderworks");
 
         var loaded = SaveSystem.Deserialize(SaveSystem.Serialize(save), Now).Save!;
 
@@ -504,11 +495,7 @@ public class WorldSaveTests
 
         var homeFarm = loaded.RegionFarms.First(f => f.Id == ResonanceHunter.Core.Encounters.VerdantHollow.RegionId);
         Xunit.Assert.True(homeFarm.MasteryPoints > 0);
-        Xunit.Assert.Equal(3, homeFarm.Stage);
-        Xunit.Assert.Contains("a", homeFarm.AssignedIds);
-
-        var cinderFarm = loaded.RegionFarms.First(f => f.Id == "cinderworks");
-        Xunit.Assert.Contains("b", cinderFarm.AssignedIds);
+        Xunit.Assert.Equal(17, homeFarm.BestDepth);
     }
 
     /// <summary>An old single-region save (no RegionFarms) still loads — the fields are simply absent.</summary>
@@ -517,8 +504,7 @@ public class WorldSaveTests
     {
         var legacy = SaveSystem.Serialize(new SaveGame
         {
-            SavedAtMs = Now, RegionMasteryPoints = 1500, AutomationStage = 2,
-            AssignedCreatureIds = new System.Collections.Generic.List<string> { "x" },
+            SavedAtMs = Now, RegionMasteryPoints = 1500,
         });
 
         var loaded = SaveSystem.Deserialize(legacy, Now);
@@ -533,33 +519,26 @@ public class WorldSaveTests
     /// <remarks>
     /// CHESTS OPENED sat on the STATS page between HIGHEST WAVE and MASTERY POINTS, both of which
     /// survive a reload, and it did not — it lived in a field on the Forge screen that nothing saved,
-    /// so a career of hundreds read zero after every launch. It also feeds the CRAFTER evolution path
-    /// and <c>QuestGoal.ChestsOpened</c>, so the loss was not only cosmetic.
-    ///
-    /// The CREDITED counter round-trips with it, and has to: CRAFTER is paid on the delta between the
-    /// two, so restoring the total alone would hand a whole restored career to the evolution path again
-    /// on the first frame after every load.
+    /// so a career of hundreds read zero after every launch. It also feeds
+    /// <c>QuestGoal.ChestsOpened</c>, so the loss was not only cosmetic.
     /// </remarks>
     [Fact]
-    public void test_the_career_chest_count_and_its_credited_half_survive_a_reload()
+    public void test_the_career_chest_count_survives_a_reload()
     {
-        var save = new SaveGame { ChestsOpened = 412, ChestsCredited = 400 };
+        var save = new SaveGame { ChestsOpened = 412 };
 
         var loaded = SaveSystem.Deserialize(SaveSystem.Serialize(save), Now);
         Assert.True(loaded.Ok);
 
         Assert.Equal(412, loaded.Save!.ChestsOpened);
-        Assert.Equal(400, loaded.Save!.ChestsCredited);
     }
 
     [Fact]
     public void test_a_save_written_before_chests_were_counted_restores_to_zero_not_to_garbage()
     {
-        // The migration case. An older save has neither field; both must come back as 0 so the delta
-        // the host credits is 0 - 0 rather than "everything you ever opened".
+        // The migration case. An older save has no such field; it must come back as 0.
         var loaded = SaveSystem.Deserialize(SaveSystem.Serialize(new SaveGame()), Now);
         Assert.True(loaded.Ok);
         Assert.Equal(0, loaded.Save!.ChestsOpened);
-        Assert.Equal(0, loaded.Save!.ChestsCredited);
     }
 }

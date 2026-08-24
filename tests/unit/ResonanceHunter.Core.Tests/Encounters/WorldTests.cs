@@ -1,5 +1,4 @@
 using System.Linq;
-using ResonanceHunter.Core.Automation;
 using ResonanceHunter.Core.Combat;
 using ResonanceHunter.Core.Encounters;
 using Xunit;
@@ -73,53 +72,25 @@ public class WorldTests
         Assert.Null(unlocked);
     }
 
-    /// <summary>Each region has its own farm — you can master and staff them independently.</summary>
+    /// <summary>Each region has its own progress record — mastery and depth are earned independently.</summary>
     [Fact]
     public void test_each_region_has_its_own_independent_farm()
     {
+        // Arrange
         var world = new World();
         var home = world.RegionFarm(VerdantHollow.RegionId);
         var cinder = world.RegionFarm("cinderworks");
-
         Assert.NotSame(home, cinder);
-        home.Assign(Creature.Hatch("a", Source.Nature, Role.Attacker, 5));
-        Assert.Single(home.Team);
-        Assert.Empty(cinder.Team); // assigning to one does not touch the other
-    }
 
-    /// <summary>
-    /// Two staffed region farms both produce when ticked — the payoff of conquest is that every
-    /// region you own farms at once, not just the one you are standing in.
-    /// </summary>
-    [Fact]
-    public void test_two_staffed_regions_both_produce_when_ticked()
-    {
-        var world = new World();
-        var home = world.RegionFarm(VerdantHollow.RegionId);
-        var cinder = world.RegionFarm("cinderworks");
+        // Act — fight in the home region only.
+        for (var i = 0; i < 10; i++) home.RecordActiveKill();
+        home.RecordDepth(12);
 
-        // Stage 3 = fully automated (kills, collects cores, and auto-sells for Gleam).
-        home.AutomationStage = 3;
-        cinder.AutomationStage = 3;
-        home.Assign(Creature.Hatch("a", Source.Nature, Role.Attacker, 10));
-        cinder.Assign(Creature.Hatch("b", Source.Machine, Role.Attacker, 10));
-
-        var homeYield = home.Tick(3600f, gleamPerKill: 8);
-        var cinderYield = cinder.Tick(3600f, gleamPerKill: 8);
-
-        Assert.True(homeYield.Kills > 0 && homeYield.GleamRealized > 0);
-        Assert.True(cinderYield.Kills > 0 && cinderYield.GleamRealized > 0);
-    }
-
-    /// <summary>An unstaffed region farm yields nothing — the caller can safely skip it.</summary>
-    [Fact]
-    public void test_an_unstaffed_region_produces_nothing()
-    {
-        var world = new World();
-        var yield = world.RegionFarm("cinderworks").Tick(3600f, gleamPerKill: 8);
-
-        Assert.Equal(0, yield.GleamRealized);
-        Assert.Equal(0, yield.Kills);
+        // Assert — the other region's record is untouched.
+        Assert.True(home.RegionMasteryPoints > 0);
+        Assert.Equal(12, home.BestDepth);
+        Assert.Equal(0f, cinder.RegionMasteryPoints);
+        Assert.Equal(0, cinder.BestDepth);
     }
 
     /// <summary>Conquered state restores from a save.</summary>

@@ -47,12 +47,14 @@ public sealed record SaveGame
 
     public Dictionary<string, int> TrainingRanks { get; init; } = new();
 
+    /// <summary>Legacy single-region mastery (pre-multi-region saves). Newer saves carry RegionFarms.</summary>
     public float RegionMasteryPoints { get; init; }
-    public int AutomationStage { get; init; } = 1;
 
-    public int UnhatchedCores { get; init; }
-    public List<SavedCreature> Roster { get; init; } = new();
-    public List<string> AssignedCreatureIds { get; init; } = new();
+    // RETIRED FIELDS (2026-08-24): AutomationStage, UnhatchedCores, Roster and AssignedCreatureIds
+    // belonged to the creature/evolution/automation subsystem, which was removed. Old saves still
+    // carry them as JSON members; System.Text.Json skips unknown members by default, so they load
+    // clean (see the save-compat test in SaveSystemTests).
+
     public List<SavedItem> Inventory { get; init; } = new();
 
     public int MemoryDust { get; init; }
@@ -117,23 +119,15 @@ public sealed record SaveGame
     /// </remarks>
     public int RunsWithVowKept { get; init; }
 
-    /// <summary>Chests opened over the whole career. Shown on STATS, feeds CRAFTER and a quest goal.</summary>
+    /// <summary>Chests opened over the whole career. Shown on STATS and feeds a quest goal.</summary>
     /// <remarks>
     /// The remark above claimed "the chests you opened are counted", and they were — in a field on the
     /// Forge screen that nothing saved. STATS printed it beside HIGHEST WAVE and MASTERY POINTS, both
     /// persisted, so a career counter read zero after every reload while its neighbours read true.
+    /// (ChestsCredited, which paid this counter's delta to the CRAFTER evolution path, was retired
+    /// with the creature subsystem on 2026-08-24; old saves carrying it load clean.)
     /// </remarks>
     public int ChestsOpened { get; init; }
-
-    /// <summary>
-    /// How much of <see cref="ChestsOpened"/> the CRAFTER evolution path has already been paid for.
-    /// </summary>
-    /// <remarks>
-    /// Persisted TOGETHER with the counter above, and it has to be: the host credits CRAFTER on the
-    /// delta between the two. Saving the total alone would hand a restored career's entire chest count
-    /// to the evolution path again on the next frame after every single load.
-    /// </remarks>
-    public int ChestsCredited { get; init; }
 
     /// <summary>The player's woven build — four skills. Empty on a pre-solo-model save (keeps the starter).</summary>
     public List<SavedSkill> WovenSkills { get; init; } = new();
@@ -227,7 +221,6 @@ public sealed record SavedSkill
     public string? VowId { get; init; }
 }
 
-/// <summary>A single region's farm: its mastery, automation stage, and which creatures are assigned to it.</summary>
 /// <summary>One post-run report, flattened for the save file.</summary>
 /// <remarks>
 /// A separate shape rather than serialising <c>RunReport</c> directly: the live record carries an
@@ -253,6 +246,12 @@ public sealed record RunReportSave
     public int SampledWaves { get; init; }
 }
 
+/// <summary>A single region's progress record: mastery earned there, and its depth record.</summary>
+/// <remarks>
+/// The Stage and AssignedIds members retired with the creature subsystem (2026-08-24); old saves
+/// carrying them load clean because unknown JSON members are skipped. (SavedCreature, the roster's
+/// DTO, retired with them.)
+/// </remarks>
 public sealed record RegionFarmSave
 {
     public required string Id { get; init; }
@@ -260,36 +259,6 @@ public sealed record RegionFarmSave
 
     /// <summary>Deepest wave ever held here — the source of skill points. See Region.BestDepth.</summary>
     public int BestDepth { get; init; }
-
-    public int Stage { get; init; } = 1;
-    public List<string> AssignedIds { get; init; } = new();
-}
-
-public sealed record SavedCreature
-{
-    public required string Id { get; init; }
-    public required string Source { get; init; }
-    public required string Role { get; init; }
-    public required int PowerTier { get; init; }
-    public bool IsHealthy { get; init; } = true;
-
-    /// <summary>
-    /// The Vow this creature swore, or null. Nullable and defaulted, so pre-Weaving saves load clean.
-    /// </summary>
-    /// <remarks>
-    /// Stored as the Vow's id rather than its index or its stats: a catalog that gets re-ordered must
-    /// not silently re-swear everyone's creatures, and an id that no longer exists resolves to null via
-    /// Weaving.ById rather than throwing.
-    /// </remarks>
-    public string? VowId { get; init; }
-
-    // Evolution state. Persisted in FULL — half-saving it would silently discard a player's accrued
-    // part-break and job progress on reload, which reads as the game forgetting what they did.
-    public string EvolutionNodeId { get; init; } = "";
-    public int EvolutionMaterials { get; init; }
-    public Dictionary<string, int> EvolutionWorkTicks { get; init; } = new();
-    public Dictionary<string, int> EvolutionCombatTally { get; init; } = new();
-    public string? EvolutionEquippedTrait { get; init; }
 }
 
 public sealed record SavedItem
@@ -312,7 +281,7 @@ public sealed record SavedItem
     /// </summary>
     /// <remarks>
     /// Stored by name, not index, and ignored at load if it no longer parses — the same rule the whole
-    /// save uses for Vow ids and creature Roles: a catalog that gets re-ordered must never silently
+    /// save uses for Vow ids: a catalog that gets re-ordered must never silently
     /// re-roll every player's crafted gear. Null-default means every pre-Reforge save loads clean, so
     /// no version bump is needed (the trait/enchant simply fall back to the id-derived roll).
     /// </remarks>
@@ -427,8 +396,8 @@ public static class SaveSystem
     // ── Capture / restore ─────────────────────────────────────────────────────────────────────
 
     public static SaveGame Capture(
-        Hunter hunter, Region region, IReadOnlyList<Creature> roster,
-        IReadOnlyList<ItemInstance> inventory, int unhatchedCores, long nowMs,
+        Hunter hunter, Region region,
+        IReadOnlyList<ItemInstance> inventory, long nowMs,
         Prestige.MemoryDustTree? prestige = null, int highestMasteryAwarded = 0,
         Encounters.World? world = null, string activeRegion = "",
         Warren? warren = null, long warrenMasteryPool = 0)
@@ -470,33 +439,11 @@ public static class SaveSystem
                     Id = def.Id,
                     MasteryPoints = f.RegionMasteryPoints,
                     BestDepth = f.BestDepth,
-                    Stage = f.AutomationStage,
-                    AssignedIds = f.Team.Select(c => c.Id).ToList(),
                 };
             }).ToList(),
             TrainingRanks = Enum.GetValues<HunterStat>()
                 .ToDictionary(s => s.ToString(), hunter.RankOf),
             RegionMasteryPoints = region.RegionMasteryPoints,
-            AutomationStage = region.AutomationStage,
-            UnhatchedCores = unhatchedCores,
-            Roster = roster.Select(c => new SavedCreature
-            {
-                Id = c.Id,
-                Source = c.Source.ToString(),
-                Role = c.Role.ToString(),
-                PowerTier = c.PowerTier,
-                IsHealthy = c.IsHealthy,
-                VowId = c.VowId,
-                EvolutionNodeId = c.EvolutionNodeId,
-                EvolutionMaterials = c.Evolution?.Materials ?? 0,
-                EvolutionWorkTicks = c.Evolution?.HealthyWorkTicks.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value)
-                                     ?? new Dictionary<string, int>(),
-                EvolutionCombatTally = c.Evolution is null
-                    ? new Dictionary<string, int>()
-                    : new Dictionary<string, int>(c.Evolution.CombatTally),
-                EvolutionEquippedTrait = c.Evolution?.EquippedTrait,
-            }).ToList(),
-            AssignedCreatureIds = region.Team.Select(c => c.Id).ToList(),
             Inventory = inventory.Select(ToSavedItem).ToList(),
         };
 
@@ -537,33 +484,6 @@ public static class SaveSystem
         Element = Enum.TryParse<Automation.Source>(s.Element, out var el) ? el : null,
         Gems = s.Gems.Select(FromSavedItem).ToList(),
     };
-
-    public static List<Creature> RestoreRoster(SaveGame save)
-        => save.Roster.Select(s =>
-        {
-            var creature = new Creature
-            {
-                Id = s.Id,
-                Source = Enum.Parse<Source>(s.Source),
-                RoleSeed = Enum.Parse<Role>(s.Role),
-                PowerTierSeed = s.PowerTier,
-                IsHealthy = s.IsHealthy,
-                VowId = s.VowId,
-            };
-
-            if (s.EvolutionNodeId.Length > 0)
-            {
-                var progress = Evolution.EvolutionProgress.Restore(
-                    s.EvolutionMaterials,
-                    s.EvolutionWorkTicks.ToDictionary(kv => Enum.Parse<Role>(kv.Key), kv => kv.Value),
-                    s.EvolutionCombatTally,
-                    s.EvolutionEquippedTrait);
-
-                creature.RestoreEvolution(s.EvolutionNodeId, progress);
-            }
-
-            return creature;
-        }).ToList();
 
     public static List<ItemInstance> RestoreInventory(SaveGame save)
         // Dedup by InstanceId: a save polluted with duplicate ids (see the regression test) collapses to one

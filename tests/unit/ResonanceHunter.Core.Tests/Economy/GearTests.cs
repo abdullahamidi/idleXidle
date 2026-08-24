@@ -134,8 +134,7 @@ public class GearTests
 
         var save = ResonanceHunter.Core.Persistence.SaveSystem.Capture(
             hunter, new ResonanceHunter.Core.Automation.Region("verdant_hollow", 15),
-            System.Array.Empty<ResonanceHunter.Core.Automation.Creature>(),
-            new[] { weapon, charm }, 0, 1_700_000_000_000L);
+            new[] { weapon, charm }, 1_700_000_000_000L);
 
         var json = ResonanceHunter.Core.Persistence.SaveSystem.Serialize(save);
         var loaded = ResonanceHunter.Core.Persistence.SaveSystem.Deserialize(json, 1_700_000_000_000L).Save!;

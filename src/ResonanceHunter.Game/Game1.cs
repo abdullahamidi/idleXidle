@@ -10,7 +10,6 @@ using ResonanceHunter.Core.Builds;
 using ResonanceHunter.Core.Characters;
 using ResonanceHunter.Core.Economy;
 using ResonanceHunter.Core.Encounters;
-using ResonanceHunter.Core.Evolution;
 using ResonanceHunter.Core.Expeditions;
 using ResonanceHunter.Core.Forging;
 using ResonanceHunter.Core.Loot;
@@ -191,7 +190,6 @@ public class Game1 : Game
     // actually managing — not a guessed number. Saved, and applied on the next load as time-away gleam.
     private double _champGleamAccrued, _champSecondsAccrued;
     private float _champGleamRate;
-    private int _chestsCredited;   // chests already credited to CRAFTER evolution (delta vs _forge.ChestsOpened)
     // The VAULT's keep-filter — playthrough state, saved with the run (see ChestScreen.KeepMinTier).
     private int _chestKeepMinTier;
 
@@ -213,11 +211,11 @@ public class Game1 : Game
     private StatsScreen _stats = null!;
     private bool _showStats;
 
-    private AutomationScreen _automation = null!;
-    private bool _showAutomation;
+    private bool _showWarren;
 
-    // The Warren is a facility-production dashboard (spec rev 1). The old creature den (_automation) is
-    // retired from the UI; _automation is kept only to carry the saved roster/cores forward (dormant).
+    // The Warren is a facility-production dashboard (spec rev 1). The old creature den
+    // (AutomationScreen, its roster, and the CORES currency) was fully retired 2026-08-24 — it was
+    // built but unreachable, so no player ever had a creature or spent a core.
     private WarrenScreen _warrenScreen = null!;
     private Warren _warren = new();
     /// <summary>What the Warren's INSIGHT facilities have produced. Spendable on Warren upgrades only.</summary>
@@ -279,7 +277,7 @@ public class Game1 : Game
         if (_showForge) { _ui.Background(_batch, "bg_forge"); return; }
         if (_showWorld) { _ui.Background(_batch, "bg_regionmap"); return; }
         if (_showPrestige) { _ui.Background(_batch, "bg_constellation"); return; }
-        if (_showAutomation) { _ui.Background(_batch, "bg_warren"); return; }
+        if (_showWarren) { _ui.Background(_batch, "bg_warren"); return; }
         if (_showBuild) { _ui.Background(_batch, "bg_warren"); return; }   // the workshop, reused as the build bench
 
         // Combat and results share the arena; results dims it so the panels read. Prefer a
@@ -556,11 +554,6 @@ public class Game1 : Game
         if (_chestKeepSlots.Count == 0 && Enum.TryParse<ItemBaseType>(save.ChestKeepSlot ?? "", out var legacySlot))
             _chestKeepSlots.Add(legacySlot);
         _ = Enum.TryParse<ItemBaseType>(save.ChestKeepSlot ?? "", out _);   // (legacy field read above)
-        _chestsCredited = save.ChestsCredited;
-
-        var roster = SaveSystem.RestoreRoster(save);
-        _automationRoster = roster;
-        _pendingCores = save.UnhatchedCores;
         _pendingInventory = SaveSystem.RestoreInventory(save);
         _pendingChests = save.UnopenedChests
             .Select(s => new Chest
@@ -588,8 +581,9 @@ public class Game1 : Game
         if (!string.IsNullOrEmpty(save.ActiveRegion) && _world.IsUnlocked(save.ActiveRegion))
             _activeRegion = save.ActiveRegion;
 
-        // Per-region farms + team assignments — multi-region saves carry one farm each; older single-region
-        // saves fold everything into the home region.
+        // Per-region progress — multi-region saves carry one record each; older single-region
+        // saves fold everything into the home region. (Creature assignments and the automation
+        // stage retired with the creature subsystem, 2026-08-24.)
         if (save.RegionFarms.Count > 0)
         {
             foreach (var rf in save.RegionFarms)
@@ -597,29 +591,24 @@ public class Game1 : Game
                 var farm = _world.RegionFarm(rf.Id);
                 farm.RestoreMasteryPoints(rf.MasteryPoints);
                 farm.RestoreBestDepth(rf.BestDepth);
-                farm.AutomationStage = rf.Stage;
-                foreach (var c in roster.Where(c => rf.AssignedIds.Contains(c.Id))) farm.Assign(c);
             }
         }
         else
         {
-            var home = _world.RegionFarm(VerdantHollow.RegionId);
-            home.RestoreMasteryPoints(save.RegionMasteryPoints);
-            home.AutomationStage = save.AutomationStage;
-            foreach (var c in roster.Where(c => save.AssignedCreatureIds.Contains(c.Id))) home.Assign(c);
+            _world.RegionFarm(VerdantHollow.RegionId).RestoreMasteryPoints(save.RegionMasteryPoints);
         }
 
         _region = _world.RegionFarm(_activeRegion);
 
-        // ── Offline progression: the farm ran while you were away. ────────────────────────────
+        // ── Offline progression: the Warren and the champion earned while you were away. ──────
         // Always apply the elapsed time (even a few seconds), but only greet the player when the trip
-        // actually produced something — a "0.0 HOURS, 0 kills" banner is noise, not a welcome.
+        // actually produced something — a "0.0 HOURS, 0 GLEAM" banner is noise, not a welcome.
         var credited = SaveSystem.CreditedOfflineSeconds(result.OfflineSeconds);
 
         // The Warren produced the whole time you were away — credit it into the real balances (Gleam and
         // Dust are shared accumulators; Insight banks into the Warren's own pool -- see _warrenMasteryPool).
         //
-        // ConqueredRegions IS SET HERE, and was not before. Its only other assignments live in TickFarms
+        // ConqueredRegions IS SET HERE, and was not before. Its only other assignments live in TickWarren
         // and DrawWarren, both of which run from Update/Draw — while this runs from Initialize, before
         // either has executed. So every offline credit in the game was computed with the conquest bonus
         // at zero: the one payout that most needed it, silently missing it.
@@ -644,45 +633,22 @@ public class Game1 : Game
         // autosave that 0 straight back, wiping offline champion income until the next sustained fight.
         _champGleamRate = save.ChampionGleamRate;
 
-        if (credited > 1.0)
+        // (The creature-farm offline catch-up loop lived here until 2026-08-24. Its screen was never
+        // reachable, so no farm was ever staffed and the loop always summed zero — the "0 KILLS ·
+        // 0 CORES" every welcome-back toast showed. Retired with the subsystem.)
+        if (credited > 1.0 && (champOffline > 0 || credited >= 60))
         {
-            // Every staffed region farmed while you were away — sum them into one welcome-back tally.
-            int kills = 0, cores = 0, gleam = 0;
-            AutomationYield? activeYield = null;
-            foreach (var def in Regions.All)
-            {
-                var farm = _world.RegionFarm(def.Id);
-                if (farm.Team.Count == 0) continue;
-
-                // Offline must apply the SAME Memory-Dust mastery-rate boost the live tick does, or a
-                // purchased SHARPENED RECALL does nothing across the offline span — which is where an idle
-                // game banks most of its mastery.
-                var y = farm.Tick((float)credited, gleamPerKill: 8, masteryRate: DustEffects.MasteryRate(_dust));
-                kills += y.Kills;
-                cores += y.CoresProduced;
-                gleam += y.GleamRealized;
-                if (def.Id == _activeRegion) activeYield = y;
-            }
-
-            _hunter.AddGleam(gleam);
-            _pendingCores += cores;
-            _pendingOfflineYield = activeYield;
-
-            if (kills > 0 || gleam > 0 || champOffline > 0 || credited >= 60)
-            {
-                var hours = credited / 3600.0;
-                var span = hours >= 1.0 ? $"{hours:0.0} HOURS" : $"{credited / 60.0:0} MIN";
-                // wOffline.Gleam WAS MISSING FROM THIS SUM. It is credited to the balance forty lines
-                // above and was then left out of the only report of it, so the largest single payment
-                // in the game was invisible to the player receiving it. Attribution matters more than
-                // the total: it is the difference between "the game gave me money" and knowing WHICH of
-                // your two economies is paying you.
-                _bootMessage = $"WELCOME BACK — {span} AWAY\n"
-                               + $"+{Abbrev((long)champOffline + gleam + wOffline.Gleam)} GLEAM "
-                               + $"({Abbrev(wOffline.Gleam)} WARREN · {Abbrev((long)champOffline + gleam)} HUNT)"
-                               + $" · {kills} KILLS · {cores} CORES";
-                _bootColor = Gold;
-            }
+            var hours = credited / 3600.0;
+            var span = hours >= 1.0 ? $"{hours:0.0} HOURS" : $"{credited / 60.0:0} MIN";
+            // wOffline.Gleam WAS MISSING FROM THIS SUM. It is credited to the balance forty lines
+            // above and was then left out of the only report of it, so the largest single payment
+            // in the game was invisible to the player receiving it. Attribution matters more than
+            // the total: it is the difference between "the game gave me money" and knowing WHICH of
+            // your two economies is paying you.
+            _bootMessage = $"WELCOME BACK — {span} AWAY\n"
+                           + $"+{Abbrev((long)champOffline + wOffline.Gleam)} GLEAM "
+                           + $"({Abbrev(wOffline.Gleam)} WARREN · {Abbrev(champOffline)} HUNT)";
+            _bootColor = Gold;
         }
         else if (champOffline > 0)
         {
@@ -693,33 +659,14 @@ public class Game1 : Game
     }
 
     /// <summary>
-    /// A new hunter starts with a squad, because otherwise the game is a HARD SOFTLOCK.
+    /// Seed a brand-new game. There is nothing to park but the first-boot message.
     /// </summary>
     /// <remarks>
-    /// Once the roster became the thing that fights, an empty roster meant: no squad → no expedition →
-    /// no cores → no creatures → no squad. A fresh player could do literally nothing. These three also
-    /// teach the composition in one glance: an Attacker to kill, a Defender to hold the front, and a
-    /// Support to heal between waves.
+    /// This used to seed three starter creatures and two unhatched cores for the squad auto-battler.
+    /// The creature subsystem retired 2026-08-24: the CHAMPION is what fights, and it needs no seed.
     /// </remarks>
     private void SeedNewGame()
     {
-        // Every other creation path calls BeginEvolution; the starters didn't, so their Evolution stayed null
-        // and they were frozen out of the whole loop — no wave/work credit, unable to evolve — until the
-        // player hatched replacements. Seed them the same way so a new roster is live from wave one.
-        Creature Starter(string id, Source src, Role role, int tier)
-        {
-            var c = Creature.Hatch(id, src, role, tier);
-            c.BeginEvolution(EvolutionTrees.For(src), new EvolutionProgress());
-            return c;
-        }
-
-        _automationRoster = new List<Creature>
-        {
-            Starter("start_atk", Source.Nature, Role.Attacker, 3),
-            Starter("start_def", Source.Nature, Role.Defender, 3),
-            Starter("start_sup", Source.Nature, Role.Support, 2),
-        };
-        _pendingCores = 2;
         // NAME WHAT IS OPEN, not what is locked. This said "PRESS B TO PICK SKILLS" while the BUILD
         // screen stays locked until wave 5 (Unlocks) — so the very first thing the game told a new
         // player was an instruction the game itself then refused. The one thing that IS open from
@@ -728,14 +675,11 @@ public class Game1 : Game
         _bootColor = Gold;
     }
 
-    private List<Creature>? _automationRoster;
     private List<ItemInstance>? _pendingInventory;
     private List<Chest>? _pendingChests;
     private List<RunReport>? _pendingRunLog;
     private Dictionary<GearSlot, string?> _pendingWorn = new();
-    private int _pendingCores;
     private int _pendingChestsOpened;
-    private AutomationYield? _pendingOfflineYield;
 
     private void Save()
     {
@@ -766,7 +710,7 @@ public class Game1 : Game
             && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("RH_SAVE_DIR"))) return;
 
         var save = SaveSystem.Capture(
-            _hunter, _region, _automation.Roster, _forge.Inventory, _automation.Cores, SaveFile.NowMs,
+            _hunter, _region, _forge.Inventory, SaveFile.NowMs,
             _dust, _highestMasteryAwarded, _world, _activeRegion, _warren, _warrenMasteryPool) with
         {
             // The build rides along via `with`, so Core's Capture stays unaware of the Game-layer loadout.
@@ -789,7 +733,6 @@ public class Game1 : Game
             TraderBoughtSlots = _traderBought.ToList(),
             ChestKeepSlot = _chestKeepSlots.Count == 1 ? _chestKeepSlots.First().ToString() : null,   // legacy mirror
             ChestKeepSlots = _chestKeepSlots.Select(sl => sl.ToString()).ToList(),
-            ChestsCredited = _chestsCredited,
             MasteryEarned = _deepestEver,          // stored as deepest-ever; Earned is re-derived on load
             ChampionGleamRate = _champGleamRate,
             // Unopened chests ride along too — a boss's drop must survive a reload, opened or not.
@@ -873,7 +816,6 @@ public class Game1 : Game
         _champGleamAccrued = 0;
         _champSecondsAccrued = 0;
         _champGleamRate = 0f;
-        _chestsCredited = 0;
         _chestKeepMinTier = 0;
         _chestKeepSlots.Clear();
         _traderWeek = 0;
@@ -884,15 +826,12 @@ public class Game1 : Game
         _highestMasteryAwarded = 0;
         _hasSave = false;
 
-        // Nothing pending: the only seed is the starter crew SeedNewGame parks below.
-        _automationRoster = null;
+        // Nothing pending: SeedNewGame below parks only the first-boot message.
         _pendingInventory = null;
         _pendingChests = null;
         _pendingRunLog = null;
         _pendingWorn = new Dictionary<GearSlot, string?>();
-        _pendingCores = 0;
         _pendingChestsOpened = 0;
-        _pendingOfflineYield = null;
 
         // The teaching layer starts over with the game.
         _rosterBaselined = false;
@@ -911,46 +850,40 @@ public class Game1 : Game
         _lockedMsg = "";
         _lockedTimer = 0f;
 
-        SeedNewGame();               // the starter crew, and the first-boot message
+        SeedNewGame();               // the first-boot message
         _region = _world.RegionFarm(_activeRegion);
         BuildScreens();              // every screen re-made around the fresh state
-        ApplyRestoredState();        // hands the starter crew and cores to the new screens
+        ApplyRestoredState();        // hands the (empty) pending state to the new screens
         _bootTimer = 7f;
 
         _showSettings = _showHelp = false;
-        _showCharacter = _showStats = _showBuild = _showForge = _showAutomation = false;
+        _showCharacter = _showStats = _showBuild = _showForge = _showWarren = false;
         _showWorld = _showPrestige = _showRoster = _showWeave = _showChests = false;
         _showTitle = true;           // back to the title, which now offers BEGIN THE HUNT
         _titleCursor = 0;
         _sinceAutosave = 0f;
-        _farmAccum = 0f;
+        _warrenAccum = 0f;
     }
 
-    private float _farmAccum;
+    private float _warrenAccum;
 
     /// <summary>
-    /// Advance every staffed region farm in real time. Runs on every screen, every frame — a farm you
-    /// conquered keeps producing while you fight elsewhere, which is what "idle" means.
+    /// Advance the Warren's idle production in real time. Runs on every screen, every frame — the
+    /// facilities keep producing while you fight elsewhere, which is what "idle" means.
     /// </summary>
-    private void TickFarms(float dt)
+    /// <remarks>
+    /// This method also ticked the creature region-farms until 2026-08-24. Their screen was never
+    /// reachable, so no farm was ever staffed and that loop skipped every region on every frame —
+    /// retired with the creature subsystem. The Warren below is the whole live idle economy.
+    /// </remarks>
+    private void TickWarren(float dt)
     {
-        _farmAccum += dt;
-        if (_farmAccum < 1f) return; // the farm resolves in whole-second ticks
-        var span = _farmAccum;
-        _farmAccum = 0f;
+        _warrenAccum += dt;
+        if (_warrenAccum < 1f) return; // production resolves in whole-second ticks
+        var span = _warrenAccum;
+        _warrenAccum = 0f;
 
-        foreach (var def in Regions.All)
-        {
-            var farm = _world.RegionFarm(def.Id);
-            if (farm.Team.Count == 0) continue; // an unstaffed region produces nothing
-
-            var y = farm.Tick(span, gleamPerKill: 8, masteryRate: DustEffects.MasteryRate(_dust));
-            _hunter.AddGleam(y.GleamRealized);
-            _automation.Cores += y.CoresProduced;              // cores feed the one shared hatchery
-            if (def.Id == _activeRegion) _automation.ReportOffline(y); // the farm screen shows the active region
-        }
-
-        // The Warren's facilities produce every second too, on every screen — Gleam/Dust into the real
+        // The Warren's facilities produce every second, on every screen — Gleam/Dust into the real
         // balances, Insight into the Warren's own upgrade pool (which does NOT feed the build tree).
         //
         // GATED ON THE WARREN BEING OPEN, which it was not. The gradual-unlock pass gated the Warren's
@@ -1038,7 +971,6 @@ public class Game1 : Game
     /// </remarks>
     private void BuildScreens()
     {
-        _automation = new AutomationScreen(_ui);
         _forge = new ForgeScreen(_ui);
         _forge.Sound = _sound;   // the reveal's landing ticks, the gem set, the successful upgrade
         _forge.AskBeforeScrap = _askBeforeScrap;
@@ -1058,12 +990,10 @@ public class Game1 : Game
     /// <summary>Apply whatever the load parked in _pending* fields — see <see cref="LoadOrStartFresh"/>.</summary>
     /// <remarks>
     /// Screens are constructed after Initialize(), so the loaded state waits in the _pending* fields
-    /// until here. Also called by START A NEW GAME, whose only "restored" state is the starter crew
-    /// SeedNewGame just parked.
+    /// until here. Also called by START A NEW GAME, whose pending state is simply empty.
     /// </remarks>
     private void ApplyRestoredState()
     {
-        if (_automationRoster is not null) _automation.RestoreRoster(_automationRoster);
         if (_pendingInventory is not null)
         {
             _forge.AddLoot(_pendingInventory);
@@ -1083,8 +1013,6 @@ public class Game1 : Game
         _expedition.KeepMinTier = _chestKeepMinTier;
         _expedition.KeepSlots.Clear(); foreach (var sl in _chestKeepSlots) _expedition.KeepSlots.Add(sl);
         if (_pendingRunLog is not null) _expedition.Log.Restore(_pendingRunLog);
-        if (_pendingOfflineYield is not null) _automation.ReportOffline(_pendingOfflineYield);
-        _automation.Cores += _pendingCores;
     }
 
     /// <summary>Frames survived under RH_BOOTCHECK. See <see cref="BootCheck"/>.</summary>
@@ -1128,8 +1056,8 @@ public class Game1 : Game
         ("build", () => { _showStats = false; _showBuild = true; }),
         ("weave", () => { _showBuild = false; _showWeave = true; }),
         ("forge", () => { _showWeave = false; _showForge = true; }),
-        ("warren", () => { _showForge = false; _showAutomation = true; }),
-        ("map", () => { _showAutomation = false; _showWorld = true; }),
+        ("warren", () => { _showForge = false; _showWarren = true; }),
+        ("map", () => { _showWarren = false; _showWorld = true; }),
         ("traits", () => { _showWorld = false; _showPrestige = true; }),
         ("roster", () => { _showPrestige = false; _showRoster = true; }),
         ("help", () => { _showRoster = false; _showHelp = true; }),
@@ -1270,14 +1198,8 @@ public class Game1 : Game
                 or "roster" or "rosterlocked" or "weave" or "vault" or "attune" or "attuned" or "trader")
             {
                 _showTitle = false;
-                // Muster screen with a real roster to arrange.
-                if (sm == "expedition") _automation.DevPopulate(_region);
-                if (sm == "vow")
-                {
-                    _automation.DevPopulate(_region);
-                    // Swear a Vow on the first creature so the populated row can be screenshotted.
-                    if (_automation.Roster.FirstOrDefault() is { } first) first.VowId = "vow_bloodied";
-                }
+                // (`expedition` and `vow` used to seed the retired creature den here; since its removal
+                // they pose nothing beyond skipping the title.)
                 // lootforge: seed the Forge with a spread of loot so it can be screenshotted with content
                 // (the idle loop drops items only on boss waves, which a 1-second shot won't reach).
                 // RH_SHOT_T poses the chest reveal at a chosen instant — the shake, the burst, the card.
@@ -1510,7 +1432,7 @@ public class Game1 : Game
                     // arena's priority list, so it would hide the very screen that capture exists to show.
                     if (sm is not ("fightreport" or "fightfall" or "runlog"))
                     {
-                        _bootMessage = "WELCOME BACK — 18 MIN AWAY\n+140 GLEAM · 12 KILLS · 0 CORES";
+                        _bootMessage = "WELCOME BACK — 18 MIN AWAY\n+140 GLEAM (90 WARREN · 50 HUNT)";
                         _bootColor = Gold; _bootTimer = 7f;
                     }
                     _forge.AddChest(new Chest { Rarity = Rarity.Epic, Tier = 8, Element = Source.Nature });
@@ -1584,9 +1506,8 @@ public class Game1 : Game
                 if (sm == "settingsfull") { _showSettings = true; _displayMode = DisplayMode.Fullscreen; }
                 if (sm == "world")
                 {
-                    // Show a mid-progression map: home conquered, Cinderworks unlocked and staffed.
+                    // Show a mid-progression map: home conquered, Cinderworks unlocked.
                     _world.Conquer(VerdantHollow.RegionId);
-                    _world.RegionFarm("cinderworks").AutomationStage = 2;
                     _conquerMsg = "VERDANT HOLLOW CONQUERED!  CINDERWORKS UNLOCKED — OPEN THE MAP (W).";
                     _showWorld = true;
                 }
@@ -1658,7 +1579,7 @@ public class Game1 : Game
                 }
                 if (sm == "warren")
                 {
-                    _showAutomation = true;
+                    _showWarren = true;
                     _activeRegion = "pale_choir";   // so the Warren name reads "THE PALE CHOIR", per the reference
                     foreach (var id in new[] { "verdant_hollow", "cinderworks", "umbral_reach", "marrow_wastes" })
                         _world.Conquer(id);   // 4 conquered → the CONQUEST production bonus reads +40%
@@ -1676,7 +1597,7 @@ public class Game1 : Game
                 }
                 if (sm == "farm")
                 {
-                    _showAutomation = true;   // deprecated: the creature den was removed; shows the Warren dashboard
+                    _showWarren = true;   // deprecated: the creature den was removed; shows the Warren dashboard
                 }
                 // TRAITLIT / TRAITTERM pose the unlock flourish mid-animation. A celebration is over in
                 // a second and the capture rig renders a fixed frame count then exits, so without a
@@ -1864,7 +1785,7 @@ public class Game1 : Game
 
         // Every staffed farm runs, every frame, on every screen — including mid-combat. This is the
         // whole point of an idle game, and once you have conquered regions, all of them farm at once.
-        TickFarms(dt);
+        TickWarren(dt);
 
         // The dev rig-spike tech demo moved OFF Tab (F9) — Tab is the Forge's loot filter, and the global
         // binding here ran first every frame, hijacking the filter into a blank dev screen.
@@ -2003,7 +1924,7 @@ public class Game1 : Game
                 // drawn in the same batch, OverlayActive stayed true and the batch kept the OVERLAY
                 // inset transform instead of the plain canvas one. DrawLog's own hit-tests assume the
                 // plain one, so its page buttons landed in a third coordinate space.
-                _showPrestige = _showAutomation = _showForge = _showWorld = false;
+                _showPrestige = _showWarren = _showForge = _showWorld = false;
                 _showBuild = _showCharacter = _showStats = _showRoster = _showWeave = _showChests = false;
             }
         }
@@ -2326,9 +2247,9 @@ public class Game1 : Game
             return;
         }
 
-        if (_showAutomation)
+        if (_showWarren)
         {
-            // WARREN is the facility-production dashboard. Production runs every frame in TickFarms; the
+            // WARREN is the facility-production dashboard. Production runs every frame in TickWarren; the
             // dashboard handles its clicks in Draw (like Forge/Stats), so it needs no Update here.
             Latch(gameTime);
             return;
@@ -2426,7 +2347,7 @@ public class Game1 : Game
         string track;
         if (_showTitle) track = "music_title";
         else if (_showForge) track = "music_forge";
-        else if (_showAutomation) track = "music_warren";
+        else if (_showWarren) track = "music_warren";
         else if (_showPrestige) track = "music_constellation";
         else if (_showWorld) track = "music_map";
         else
@@ -2836,15 +2757,19 @@ public class Game1 : Game
             var r = _expedition.TakeReward();
             _hunter.AddGleam(r.Haul.Gleam);
             _champGleamAccrued += r.Haul.Gleam;
-            _automation.Cores += r.Haul.Cores;
+            // HAUL CORES ARE THE FORGE MATERIAL NOW. The hatchery currency they used to feed retired
+            // 2026-08-24 with the creature subsystem, which left HARVEST ("ON KILL: n% CORE") and
+            // LODESTONE ("a spare core") paying into a channel nobody read — an enchant whose stat
+            // was a lie. But both texts already say CORE, and the forge's re-roll material IS called
+            // CORE — the words become true by pointing the payout there. Only those two produce into
+            // this channel (the boss's flat 2-per-wave went with the hatchery), so a build without
+            // them sees no change.
+            if (r.Haul.Cores > 0)
+            {
+                _hunter.AddMaterial(Material.Core, r.Haul.Cores);
+                _expedition.FlashSpoil(Material.Core);
+            }
             _region.RecordActiveKill();
-
-            // The champion's victories feed the WARREN's evolution. Every cleared wave is a WaveCleared
-            // for each creature, a boss also a BossFelled — the exact inputs EvolutionTrees hints ("FELL
-            // 4 BOSSES", "CLEAR 40 WAVES") and nothing produced after the squad was retired, leaving the
-            // ATTACKER and SUPPORT branches unreachable for everyone. See EvolutionCredit. (CRAFTER still
-            // asks for a "banked run", a mechanic the idle loop deleted — a re-theme left for design.)
-            EvolutionCredit.CreditWave(_automation.Roster, r.IsBoss);
 
             // MATERIALS FROM MONSTERS — a small trickle every wave, and deeper waves pay in BETTER STUFF
             // rather than more of the same. The steady drip; chests and dismantling are still the bulk.
@@ -2874,14 +2799,6 @@ public class Game1 : Game
             if (r.IsBoss && DropBossChest(r, def)) _expedition.FlashChest();   // a chest is a LOW-rate drop now, not a given
         }
         if (_champSecondsAccrued > 10) _champGleamRate = (float)(_champGleamAccrued / _champSecondsAccrued);
-
-        // CRAFTER evolution: credit the warren for every boss chest cracked at the Forge since last frame.
-        var chestsOpenedNow = _forge.ChestsOpened - _chestsCredited;
-        if (chestsOpenedNow > 0)
-        {
-            _chestsCredited = _forge.ChestsOpened;
-            for (var i = 0; i < chestsOpenedNow; i++) EvolutionCredit.CreditChestOpened(_automation.Roster);
-        }
 
         _deepestEver = Math.Max(_deepestEver, _expedition.Deepest);
 
@@ -3147,7 +3064,7 @@ public class Game1 : Game
 
     /// <summary>True when a menu screen owns the frame — those draw inset; the fight screen does not.</summary>
     private bool OverlayActive =>
-        _showForge || _showWorld || _showPrestige || _showAutomation || _showBuild || _showCharacter
+        _showForge || _showWorld || _showPrestige || _showWarren || _showBuild || _showCharacter
         || _showStats || _showRoster || _showWeave || _showChests;
 
     /// <summary>The counter-scale the active screen draws at. Converted 1920-coord screens return 1; the
@@ -3205,7 +3122,7 @@ public class Game1 : Game
         else if (_showRoster) { _roster.Progress = QuestSnapshot(); _roster.Draw(_batch, _characters, CanvasMouse, MouseClicked); }
         else if (_showChests) _chests.Draw(_batch, _forge.UnopenedChests, CanvasMouse, MouseClicked);
         else if (_showWeave) _weave.Draw(_batch, CanvasMouse, MouseClicked);
-        else if (_showAutomation) DrawWarren();
+        else if (_showWarren) DrawWarren();
         else if (_showBuild) _buildScreen.Draw(_batch, CanvasMouse, _dust);
         else if (_showCharacter) _character.Draw(_batch, CanvasMouse, _hunter);
         else if (_showStats)
@@ -3965,7 +3882,7 @@ public class Game1 : Game
         _showCharacter ? 1 : _showStats ? 2 :
         // BUILD is the weave; MASTERY is the tree. Two tiles, two screens, no shared flag.
         _showBuild ? 4 : _showWeave ? 3 :
-        _showChests ? 5 : _showForge ? 6 : _showAutomation ? 7 : _showWorld ? 8 :
+        _showChests ? 5 : _showForge ? 6 : _showWarren ? 7 : _showWorld ? 8 :
         _showPrestige ? 9 : _showRoster ? 10 : 0;
 
     /// <summary>
@@ -4001,7 +3918,7 @@ public class Game1 : Game
             return;
         }
 
-        _showCharacter = _showStats = _showBuild = _showForge = _showAutomation = _showWorld = _showPrestige = _showRoster = _showWeave = _showChests = false;
+        _showCharacter = _showStats = _showBuild = _showForge = _showWarren = _showWorld = _showPrestige = _showRoster = _showWeave = _showChests = false;
         // Navigating away abandons a pending SELL/SALVAGE question. Without this it sat armed and
         // invisible, and the player's first click on returning answered a dialog they had forgotten.
         _forge.CancelConfirm();
@@ -4020,7 +3937,7 @@ public class Game1 : Game
             case 4: _showBuild = true; _buildScreen.ShowTree = true; break;
             case 5: _showChests = true; break;
             case 6: _showForge = true; break;
-            case 7: _showAutomation = true; break;
+            case 7: _showWarren = true; break;
             case 8: _showWorld = true; _mapScreen.ActiveRegion = _activeRegion; _mapScreen.SelectActive(); break;
             case 9: _showPrestige = true; break;
             case 10: _showRoster = true; break;

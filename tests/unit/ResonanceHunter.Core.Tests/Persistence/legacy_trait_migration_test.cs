@@ -53,7 +53,7 @@ public class LegacyTraitMigrationTest
         };
         var save = SaveSystem.Capture(
             new Hunter(), new ResonanceHunter.Core.Automation.Region("verdant_hollow", 15),
-            Array.Empty<ResonanceHunter.Core.Automation.Creature>(), new[] { plain }, 0, nowMs: 0);
+            new[] { plain }, nowMs: 0);
 
         // Act
         var back = SaveSystem.RestoreInventory(
