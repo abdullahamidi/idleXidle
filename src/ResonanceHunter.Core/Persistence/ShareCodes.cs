@@ -33,6 +33,7 @@ public static class ShareCodes
 {
     private const string ItemPrefix = "RHI";
     private const string BuildPrefix = "RHB";
+    private const string FeedbackPrefix = "RHF";
     private const int Version = 1;
 
     // A legitimate code is a few hundred bytes; deflate expands up to ~1000:1. Without these caps a
@@ -49,10 +50,99 @@ public static class ShareCodes
         public List<string> Mastery { get; init; } = new();
     }
 
+    /// <summary>One worn piece, summarised for a feedback report: where it sits, how rare, how deep.</summary>
+    public sealed record WornItemSummary
+    {
+        public string Slot { get; init; } = "";
+        public int Rarity { get; init; }
+        public int Level { get; init; }
+    }
+
+    /// <summary>
+    /// Everything a bug report needs, as one pasteable line: which build produced it, how far the
+    /// player is, what they are running, and the last few run reports.
+    /// </summary>
+    /// <remarks>
+    /// Made for the COPY FEEDBACK CODE button in settings — the player pastes it to the developer
+    /// beside their words, and the developer decodes the exact state the complaint happened in,
+    /// instead of asking six follow-up questions over chat. Playtime is not in here because the game
+    /// does not track it. Format: <c>RHF1.&lt;payload&gt;.&lt;check&gt;</c>, the same machinery as
+    /// the item and build codes.
+    /// </remarks>
+    public sealed record SharedFeedback
+    {
+        /// <summary>The assembly build stamp — see <see cref="BuildStamp"/>.</summary>
+        public string Build { get; init; } = "";
+
+        /// <summary>The save format this build writes (<see cref="SaveGame.CurrentVersion"/>).</summary>
+        public int SaveVersion { get; init; }
+
+        public int DeepestWave { get; init; }
+        public int RegionsConquered { get; init; }
+        public int CorruptionTier { get; init; }
+        public long Gleam { get; init; }
+
+        /// <summary>Total training ranks bought across every stat.</summary>
+        public int TrainingRanks { get; init; }
+
+        /// <summary>The woven build — skills, keystones and the mastery walk.</summary>
+        public SharedBuild Loadout { get; init; } = new();
+
+        /// <summary>What is worn right now, one line per filled slot.</summary>
+        public List<WornItemSummary> Worn { get; init; } = new();
+
+        /// <summary>The persisted run log — the last few descents, exactly as the save keeps them.</summary>
+        public List<RunReportSave> RunLog { get; init; } = new();
+    }
+
     public static string EncodeItem(ItemInstance item)
     {
         ArgumentNullException.ThrowIfNull(item);
         return Encode(ItemPrefix, JsonSerializer.Serialize(SaveSystem.ToSavedItem(item)));
+    }
+
+    /// <summary>A feedback report as one pasteable line — see <see cref="SharedFeedback"/>.</summary>
+    public static string EncodeFeedback(SharedFeedback feedback)
+    {
+        ArgumentNullException.ThrowIfNull(feedback);
+        return Encode(FeedbackPrefix, JsonSerializer.Serialize(feedback));
+    }
+
+    /// <summary>Is this a feedback code? The developer-side dispatcher.</summary>
+    public static bool LooksLikeFeedback(string? code)
+        => code?.TrimStart().StartsWith(FeedbackPrefix, StringComparison.Ordinal) == true;
+
+    /// <summary>Decode a pasted feedback code. Fails loudly on damage; never throws.</summary>
+    public static bool TryDecodeFeedback(string? code, out SharedFeedback? feedback, out string error)
+    {
+        feedback = null;
+        if (!TryDecode(FeedbackPrefix, code, out var json, out error)) return false;
+        try
+        {
+            feedback = JsonSerializer.Deserialize<SharedFeedback>(json);
+        }
+        catch (JsonException)
+        {
+            error = DamagedError;
+            return false;
+        }
+
+        // Same discipline as the build decoder: `required` and defaults check PRESENCE, not non-null,
+        // and everything a report reader prints is checked here — lengths and counts included.
+        if (feedback is null
+            || feedback.Build is null || feedback.Build.Length > 128
+            || feedback.Loadout is null || feedback.Loadout.Skills is null
+            || feedback.Loadout.Keystones is null || feedback.Loadout.Mastery is null
+            || feedback.Worn is null || feedback.Worn.Count > 16
+            || feedback.Worn.Any(w => w is null || w.Slot is null || w.Slot.Length > 32)
+            || feedback.RunLog is null || feedback.RunLog.Count > 64
+            || feedback.RunLog.Any(r => r is null || r.RegionId is null || r.RegionId.Length > 64))
+        {
+            feedback = null;
+            error = DamagedError;
+            return false;
+        }
+        return true;
     }
 
     public static string EncodeBuild(SharedBuild build)

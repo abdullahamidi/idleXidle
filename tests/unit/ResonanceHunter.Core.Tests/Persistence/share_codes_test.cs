@@ -142,6 +142,82 @@ public class ShareCodesTest
     }
 
     [Fact]
+    public void test_share_codes_feedback_round_trips_progress_build_and_run_log()
+    {
+        // Arrange — a report with every field carrying a distinctive value.
+        var feedback = new ShareCodes.SharedFeedback
+        {
+            Build = "1.0.0+c8049643",
+            SaveVersion = 2,
+            DeepestWave = 23,
+            RegionsConquered = 3,
+            CorruptionTier = 4,
+            Gleam = 131_900_000,
+            TrainingRanks = 29,
+            Loadout = new ShareCodes.SharedBuild
+            {
+                Skills = new List<SavedSkill> { new() { Source = "Shadow", Form = "Strike", VowId = "vow_bloodied" } },
+                Keystones = new List<string> { "glass_cannon" },
+                Mastery = new List<string> { "heavy_hand" },
+            },
+            Worn = new List<ShareCodes.WornItemSummary>
+            {
+                new() { Slot = "Weapon", Rarity = 4, Level = 62 },
+                new() { Slot = "Charm", Rarity = 2, Level = 12 },
+            },
+            RunLog = new List<RunReportSave>
+            {
+                new() { RegionId = "cinderworks", Depth = 18, Outcome = 1, WallWave = 18 },
+            },
+        };
+
+        // Act
+        var code = ShareCodes.EncodeFeedback(feedback);
+        var ok = ShareCodes.TryDecodeFeedback(code, out var back, out var error);
+
+        // Assert — every field survives, and the dispatchers agree about what kind of code it is.
+        Assert.True(ok, error);
+        Assert.True(ShareCodes.LooksLikeFeedback(code));
+        Assert.False(ShareCodes.LooksLikeItem(code));
+        Assert.False(ShareCodes.LooksLikeBuild(code));
+        Assert.Equal("1.0.0+c8049643", back!.Build);
+        Assert.Equal(2, back.SaveVersion);
+        Assert.Equal(23, back.DeepestWave);
+        Assert.Equal(3, back.RegionsConquered);
+        Assert.Equal(4, back.CorruptionTier);
+        Assert.Equal(131_900_000, back.Gleam);
+        Assert.Equal(29, back.TrainingRanks);
+        Assert.Equal("vow_bloodied", back.Loadout.Skills[0].VowId);
+        Assert.Equal(new List<string> { "glass_cannon" }, back.Loadout.Keystones);
+        Assert.Equal(2, back.Worn.Count);
+        Assert.Equal("Weapon", back.Worn[0].Slot);
+        Assert.Equal(62, back.Worn[0].Level);
+        var run = Assert.Single(back.RunLog);
+        Assert.Equal("cinderworks", run.RegionId);
+        Assert.Equal(18, run.Depth);
+    }
+
+    [Fact]
+    public void test_share_codes_feedback_checksum_rejects_tampering()
+    {
+        // Arrange — flip one payload character; the checksum must catch it, or a mangled paste would
+        // half-decode into a report describing a game state that never existed.
+        var code = ShareCodes.EncodeFeedback(new ShareCodes.SharedFeedback { Build = "1.0.0" });
+        var parts = code.Split('.');
+        var payload = parts[1].ToCharArray();
+        payload[payload.Length / 2] = payload[payload.Length / 2] == 'A' ? 'B' : 'A';
+        var tampered = $"{parts[0]}.{new string(payload)}.{parts[2]}";
+
+        // Act / Assert — the flipped character is refused, and so is a truncated paste.
+        Assert.False(ShareCodes.TryDecodeFeedback(tampered, out var back, out var error));
+        Assert.Null(back);
+        Assert.NotEmpty(error);
+
+        Assert.False(ShareCodes.TryDecodeFeedback(code[..^5], out _, out var err2));
+        Assert.NotEmpty(err2);
+    }
+
+    [Fact]
     public void test_share_codes_fail_loudly_never_half_decode()
     {
         // A truncated paste — the checksum catches it.

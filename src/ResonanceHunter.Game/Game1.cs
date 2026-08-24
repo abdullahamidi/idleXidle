@@ -108,11 +108,14 @@ public class Game1 : Game
     private int _wheel;    // mouse-wheel notches this frame, latched alongside the click
 
     // ── Game state ────────────────────────────────────────────────────────────────────────────
-    private readonly Hunter _hunter = new();
+    // The core-state fields (_hunter, _world, _loadout, _mastery, _dust, _characters, _warren) are
+    // deliberately NOT readonly: START A NEW GAME replaces them all with fresh instances and rebuilds
+    // the screens around them — see StartNewGame.
+    private Hunter _hunter = new();
     private readonly Random _rng = new();
 
     // The world of regions to conquer. The "active" region is what you hunt in and farm right now.
-    private readonly World _world = new();
+    private World _world = new();
     private string _activeRegion = VerdantHollow.RegionId;
     private Region _region = null!;   // == _world.RegionFarm(_activeRegion); reassigned on region change
     private bool _showWorld;
@@ -143,6 +146,18 @@ public class Game1 : Game
     private string _unlockHeadline = "";
 
     /// <summary>
+    /// Seconds of play between one explanation panel closing and the next appearing.
+    /// </summary>
+    /// <remarks>
+    /// The first minute of a new game opens screens fast enough to queue eight or nine panels, and
+    /// shown back to back they read as a wall — the player click-click-clicks through the lot without
+    /// reading any. They drip instead: dismissed, breathe, next. Delayed, never dropped — the queue
+    /// keeps every one.
+    /// </remarks>
+    private const float UnlockPanelGapSeconds = 8f;
+    private float _unlockCooldown;
+
+    /// <summary>
     /// False until the first roster Refresh has been absorbed silently.
     /// </summary>
     /// <remarks>
@@ -168,8 +183,8 @@ public class Game1 : Game
     private bool _showForge;
 
     // The player's build (four woven skills + three keystones), the mastery tree it walks, and the editor.
-    private readonly PlayerLoadout _loadout = PlayerLoadout.Starter();
-    private readonly MasteryTree _mastery = new();
+    private PlayerLoadout _loadout = PlayerLoadout.Starter();
+    private MasteryTree _mastery = new();
     private int _deepestEver;   // the deepest wave ever reached — drives mastery points, so it must persist
 
     // The champion's recent gleam/second, measured live so it keeps earning OFFLINE at the rate it was
@@ -204,7 +219,7 @@ public class Game1 : Game
     // The Warren is a facility-production dashboard (spec rev 1). The old creature den (_automation) is
     // retired from the UI; _automation is kept only to carry the saved roster/cores forward (dormant).
     private WarrenScreen _warrenScreen = null!;
-    private readonly Warren _warren = new();
+    private Warren _warren = new();
     /// <summary>What the Warren's INSIGHT facilities have produced. Spendable on Warren upgrades only.</summary>
     /// <remarks>
     /// <b>THE COMMENT HERE USED TO SAY "feeds SetEarned", AND IT DOES NOT.</b> Two more comments said the
@@ -223,7 +238,7 @@ public class Game1 : Game
     private PrestigeScreen _prestige = null!;
 
     /// <summary>Which characters are yours, and which one you are. Unlocks derive from conquest.</summary>
-    private readonly CharacterState _characters = new();
+    private CharacterState _characters = new();
 
     /// <summary>
     /// Descents finished with a Vow's demand still met — the one quest counter that cannot be derived.
@@ -242,7 +257,7 @@ public class Game1 : Game
     private ChestScreen _chests = null!;
     private bool _showChests;
     private bool _showPrestige;
-    private readonly MemoryDustTree _dust = new();
+    private MemoryDustTree _dust = new();
     private int _highestMasteryAwarded;
 
 
@@ -339,6 +354,29 @@ public class Game1 : Game
     private string _bootMessage = "";
     private Color _bootColor = Bone;
     private float _bootTimer;   // the "welcome back" toast — a few seconds after boot, then it fades
+
+    /// <summary>
+    /// True when this session must never write the save file.
+    /// </summary>
+    /// <remarks>
+    /// Latched when the load failed on a DAMAGED file or one from a NEWER build. The boot message
+    /// promises the old file is safe — and before this latch existed, the ten-second autosave broke
+    /// that promise on its first interval by writing a blank game over the file it could not read.
+    /// START A NEW GAME (settings) is the one door out: deleting the file is the player's explicit
+    /// choice, and the latch lifts with it.
+    /// </remarks>
+    private bool _saveLocked;
+    private string _saveLockReason = "";
+
+    /// <summary>Developer hotkeys (F6 force boss, F7 layout overlays) are live only under RH_DEV=1.</summary>
+    private static readonly bool DevKeysEnabled = Environment.GetEnvironmentVariable("RH_DEV") == "1";
+
+    // ── START A NEW GAME (settings): the armed-confirm state — and the feedback-code toast. ────
+    private float _resetArmTimer;      // >0 while the red are-you-sure state is armed
+    private bool _wantsNewGame;        // set by the settings panel, acted on between frames in Update
+    private string _feedbackToast = "";
+    private float _feedbackToastTimer;
+
     /// <summary>
     /// Autosave cadence. Short on purpose.
     /// </summary>
@@ -401,6 +439,24 @@ public class Game1 : Game
             // game deleted your progress on purpose. Say so, and leave the old file alone.
             _bootMessage = SaveSystem.Explain(result.Failure);
             _bootColor = result.Failure == LoadFailure.Missing ? Dim : Ember;
+
+            // THE PROMISE ABOVE USED TO BE BROKEN WITHIN TEN SECONDS: the message said "your old file
+            // has not been overwritten" while the autosave — running on the blank game this session
+            // now holds — overwrote it on its first interval. Two guards close it for good: saving is
+            // LATCHED OFF for the whole session (Save() refuses at its top), and a damaged file is
+            // renamed aside (save.corrupt-<time>.json) so even a rogue later write cannot reach it.
+            // The rename also means the NEXT boot finds no file and starts a fresh, saveable game
+            // instead of hitting the same unreadable corpse forever. A newer-version file is locked
+            // but NOT renamed — it is perfectly good, and the newer build it belongs to can read it.
+            if (SaveFile.LocksSaving(result.Failure))
+            {
+                _saveLocked = true;
+                _saveLockReason = result.Failure == LoadFailure.FromNewerVersion
+                    ? "THIS SAVE WAS MADE BY A NEWER VERSION OF THE GAME"
+                    : "THE OLD SAVE FILE IS DAMAGED";
+                if (result.Failure == LoadFailure.Corrupt) SaveFile.QuarantineCorrupt();
+            }
+
             if (result.Failure == LoadFailure.Missing) SeedNewGame();
             return;
         }
@@ -643,9 +699,11 @@ public class Game1 : Game
             Starter("start_sup", Source.Nature, Role.Support, 2),
         };
         _pendingCores = 2;
-        // The starter creatures staff the WARREN now (the idle farm), not a combat squad. Combat is your
-        // one champion and its build — so the first nudge points at the build, not at a front line.
-        _bootMessage = "PRESS B TO PICK SKILLS. YOUR CHAMPION FIGHTS FOR YOU.";
+        // NAME WHAT IS OPEN, not what is locked. This said "PRESS B TO PICK SKILLS" while the BUILD
+        // screen stays locked until wave 5 (Unlocks) — so the very first thing the game told a new
+        // player was an instruction the game itself then refused. The one thing that IS open from
+        // frame one is the fight, and watching it is genuinely the job.
+        _bootMessage = "YOUR CHAMPION IS ALREADY FIGHTING\nWATCH THE FIRST WAVES — SCREENS OPEN AS YOU PLAY";
         _bootColor = Gold;
     }
 
@@ -660,6 +718,12 @@ public class Game1 : Game
 
     private void Save()
     {
+        // THE LOAD FAILED AND SAID SO. A session that could not read the player's file holds nothing
+        // but a blank game, and the boot message just promised the old file was safe — this latch is
+        // what keeps the ten-second autosave from breaking that promise on its first interval.
+        // START A NEW GAME (StartNewGame) is the one way out: it deletes the file deliberately.
+        if (_saveLocked) return;
+
         // A screenshot run seeds throwaway fixed-id items; it must NEVER write them into the player's real
         // save. Autosave and conquest both call this, so the guard lives here, at the one write site.
         //
@@ -718,6 +782,116 @@ public class Game1 : Game
         };
 
         SaveFile.TryWrite(save, out _);
+    }
+
+    /// <summary>
+    /// Everything a bug report needs, as one pasteable line — see <see cref="ShareCodes.SharedFeedback"/>.
+    /// </summary>
+    private string FeedbackCode() => ShareCodes.EncodeFeedback(new ShareCodes.SharedFeedback
+    {
+        Build = BuildStamp.Full,
+        SaveVersion = SaveGame.CurrentVersion,
+        DeepestWave = _deepestEver,
+        RegionsConquered = _world.ConqueredIds.Count,
+        CorruptionTier = _world.CorruptionTier,
+        Gleam = _hunter.Gleam,
+        TrainingRanks = Enum.GetValues<HunterStat>().Sum(_hunter.RankOf),
+        Loadout = new ShareCodes.SharedBuild
+        {
+            Skills = _loadout.SaveSkills()
+                .Select(s => new SavedSkill { Source = s.Source, Form = s.Form, VowId = s.VowId }).ToList(),
+            Keystones = _loadout.KeystoneIds.ToList(),
+            Mastery = _mastery.Taken.ToList(),
+        },
+        Worn = Enum.GetValues<GearSlot>()
+            .Select(sl => (Slot: sl, Item: _hunter.Worn(sl)))
+            .Where(x => x.Item is not null)
+            .Select(x => new ShareCodes.WornItemSummary
+            {
+                Slot = x.Slot.ToString(), Rarity = (int)x.Item!.Rarity, Level = x.Item.ItemLevel,
+            })
+            .ToList(),
+        RunLog = _expedition.Log.Entries.Select(RunLog.ToSave).ToList(),
+    });
+
+    /// <summary>
+    /// Delete the save and begin again — START A NEW GAME, after its armed second click.
+    /// </summary>
+    /// <remarks>
+    /// Runs between frames (see the flag in Update): it replaces the core state AND rebuilds every
+    /// screen, because several screens capture references at construction and would otherwise keep
+    /// serving the abandoned game. It is also the recovery path for a locked session (a damaged file,
+    /// or one from a newer build): deleting the file is the player's explicit choice, so the write
+    /// latch lifts here and nowhere else.
+    /// </remarks>
+    private void StartNewGame()
+    {
+        SaveFile.TryDelete(out _);   // the Persistence API owns the disk — no raw File calls in a screen
+        _saveLocked = false;
+        _saveLockReason = "";
+
+        // Fresh core state. These fields are deliberately not readonly so this method can exist.
+        _hunter = new Hunter();
+        _world = new World();
+        _loadout = PlayerLoadout.Starter();
+        _mastery = new MasteryTree();
+        _dust = new MemoryDustTree();
+        _characters = new CharacterState();
+        _warren = new Warren();
+        _warrenMasteryPool = 0;
+        _activeRegion = VerdantHollow.RegionId;
+
+        _deepestEver = 0;
+        _champGleamAccrued = 0;
+        _champSecondsAccrued = 0;
+        _champGleamRate = 0f;
+        _chestsCredited = 0;
+        _chestKeepMinTier = 0;
+        _chestKeepSlots.Clear();
+        _traderWeek = 0;
+        _traderBought.Clear();
+        _traderStock = null;
+        _traderStockLevel = 0;
+        _runsWithVowKept = 0;
+        _highestMasteryAwarded = 0;
+        _hasSave = false;
+
+        // Nothing pending: the only seed is the starter crew SeedNewGame parks below.
+        _automationRoster = null;
+        _pendingInventory = null;
+        _pendingChests = null;
+        _pendingRunLog = null;
+        _pendingWorn = new Dictionary<GearSlot, string?>();
+        _pendingCores = 0;
+        _pendingChestsOpened = 0;
+        _pendingOfflineYield = null;
+
+        // The teaching layer starts over with the game.
+        _rosterBaselined = false;
+        _lastUnlockFacts = default;
+        _lastSkillSlots = -1;
+        _unlockQueue.Clear();
+        _unlockShowing = "";
+        _unlockHeadline = "";
+        _unlockCooldown = 0f;
+        _guideStep = null;
+        _conquerMsg = "";
+        _lockedMsg = "";
+        _lockedTimer = 0f;
+
+        SeedNewGame();               // the starter crew, and the first-boot message
+        _region = _world.RegionFarm(_activeRegion);
+        BuildScreens();              // every screen re-made around the fresh state
+        ApplyRestoredState();        // hands the starter crew and cores to the new screens
+        _bootTimer = 7f;
+
+        _showSettings = _showHelp = false;
+        _showCharacter = _showStats = _showBuild = _showForge = _showAutomation = false;
+        _showWorld = _showPrestige = _showRoster = _showWeave = _showChests = false;
+        _showTitle = true;           // back to the title, which now offers BEGIN THE HUNT
+        _titleCursor = 0;
+        _sinceAutosave = 0f;
+        _farmAccum = 0f;
     }
 
     private float _farmAccum;
@@ -817,24 +991,46 @@ public class Game1 : Game
         _sound.SfxVolume = _sfxVolume / 10f;
         _sound.MusicVolume = _musicVolume / 10f;
         _ui = new UiKit(GraphicsDevice, _font, _assets);
+        BuildScreens();
+        // The canvas is now 1920x1080; screens still draw in 480x270 logical units (see ArtScale).
+        _canvas = new RenderTarget2D(GraphicsDevice, CanvasWidth * ArtScale, CanvasHeight * ArtScale);
+        ApplyRestoredState();
+    }
+
+    /// <summary>Construct every screen against the CURRENT core state.</summary>
+    /// <remarks>
+    /// Split out of <see cref="LoadContent"/> so START A NEW GAME can rebuild the whole screen layer
+    /// around a fresh world: several screens capture references at construction (the character sheet
+    /// holds the Forge; the trait screen holds the Dust tree), so replacing the core objects without
+    /// replacing the screens would leave half the game serving the abandoned state.
+    /// </remarks>
+    private void BuildScreens()
+    {
         _automation = new AutomationScreen(_ui);
         _forge = new ForgeScreen(_ui);
+        _forge.Sound = _sound;   // the reveal's landing ticks, the gem set, the successful upgrade
         _forge.AskBeforeScrap = _askBeforeScrap;
         _prestige = new PrestigeScreen(_ui, _dust);
         _roster = new RosterScreen(_ui);
         _chests = new ChestScreen(_ui);
         _weave = new WeaveScreen(_ui);
         _expedition = new SoloExpeditionScreen(_ui);
+        _expedition.Sound = _sound;   // the fight's hits, casts, deaths and the boss horn
         _buildScreen = new BuildScreen(_ui);
         _character = new CharacterScreen(_ui, _forge);
         _stats = new StatsScreen(_ui);
         _warrenScreen = new WarrenScreen(_ui);
         _mapScreen = new MapScreen(_ui);
-        // The canvas is now 1920x1080; screens still draw in 480x270 logical units (see ArtScale).
-        _canvas = new RenderTarget2D(GraphicsDevice, CanvasWidth * ArtScale, CanvasHeight * ArtScale);
+    }
 
-        // Apply anything the save restored. Screens are constructed after Initialize(), so the loaded
-        // state is parked in _pending* fields until here.
+    /// <summary>Apply whatever the load parked in _pending* fields — see <see cref="LoadOrStartFresh"/>.</summary>
+    /// <remarks>
+    /// Screens are constructed after Initialize(), so the loaded state waits in the _pending* fields
+    /// until here. Also called by START A NEW GAME, whose only "restored" state is the starter crew
+    /// SeedNewGame just parked.
+    /// </remarks>
+    private void ApplyRestoredState()
+    {
         if (_automationRoster is not null) _automation.RestoreRoster(_automationRoster);
         if (_pendingInventory is not null)
         {
@@ -1017,6 +1213,16 @@ public class Game1 : Game
 
         var dtMs = (int)gameTime.ElapsedGameTime.TotalMilliseconds;
         var dt = (float)gameTime.ElapsedGameTime.TotalSeconds;
+
+        // Settings-chrome timers, ticked on every screen INCLUDING the title (the panel opens there
+        // too): the armed state of START A NEW GAME, and the COPIED confirmation line.
+        if (_resetArmTimer > 0f) _resetArmTimer = Math.Max(0f, _resetArmTimer - dt);
+        if (_feedbackToastTimer > 0f) _feedbackToastTimer = Math.Max(0f, _feedbackToastTimer - dt);
+
+        // START A NEW GAME, confirmed on the settings panel last frame. Acted on HERE, between
+        // frames, because it replaces every screen object the frame that requested it was still
+        // drawing with.
+        if (_wantsNewGame) { _wantsNewGame = false; StartNewGame(); }
 
         // ── Title screen — a real front-end instead of dropping straight into a fight. ──────────
         if (_showTitle)
@@ -1612,6 +1818,9 @@ public class Game1 : Game
 
         if (_bootTimer > 0f) _bootTimer = Math.Max(0f, _bootTimer - dt);
         if (_lockedTimer > 0f) _lockedTimer = Math.Max(0f, _lockedTimer - dt);
+        // The explanation-panel drip — see UnlockPanelGapSeconds. Ticks here, past the title return,
+        // so only seconds of actual play count toward the gap.
+        if (_unlockCooldown > 0f) _unlockCooldown = Math.Max(0f, _unlockCooldown - dt);
 
         // Autosave. An idle game that loses your farm to a crash has taken your hours, not your time.
         _sinceAutosave += dt;
@@ -1627,8 +1836,11 @@ public class Game1 : Game
 
         // The dev rig-spike tech demo moved OFF Tab (F9) — Tab is the Forge's loot filter, and the global
         // binding here ran first every frame, hijacking the filter into a blank dev screen.
-        if (Pressed(Keys.F6)) _expedition.DevForceBoss = !_expedition.DevForceBoss;   // dev: force the Crystal Lich boss render (Rev 4 §12)
-        if (Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _character.DevGearDebug = !_character.DevGearDebug; _stats.DevStatsDebug = !_stats.DevStatsDebug; _buildScreen.DevBuildDebug = !_buildScreen.DevBuildDebug; _forge.DevForgeDebug = !_forge.DevForgeDebug; _warrenScreen.DevWarrenDebug = !_warrenScreen.DevWarrenDebug; _mapScreen.DevMapDebug = !_mapScreen.DevMapDebug; _prestige.DevDustDebug = !_prestige.DevDustDebug; }   // dev layout overlays
+        // BEHIND RH_DEV=1, both of them. F6 forced a boss and F7 covered every screen with layout
+        // overlays, and they sat one key away from F1 (help) and F10 (settings), live in normal play —
+        // a playtester could trip either and reasonably conclude the game was broken.
+        if (DevKeysEnabled && Pressed(Keys.F6)) _expedition.DevForceBoss = !_expedition.DevForceBoss;   // dev: force the Crystal Lich boss render (Rev 4 §12)
+        if (DevKeysEnabled && Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _character.DevGearDebug = !_character.DevGearDebug; _stats.DevStatsDebug = !_stats.DevStatsDebug; _buildScreen.DevBuildDebug = !_buildScreen.DevBuildDebug; _forge.DevForgeDebug = !_forge.DevForgeDebug; _warrenScreen.DevWarrenDebug = !_warrenScreen.DevWarrenDebug; _mapScreen.DevMapDebug = !_mapScreen.DevMapDebug; _prestige.DevDustDebug = !_prestige.DevDustDebug; }   // dev layout overlays
         if (Pressed(Keys.F1)) _showHelp = !_showHelp;
         if (Pressed(Keys.F10)) _showSettings = !_showSettings;
 
@@ -1665,6 +1877,9 @@ public class Game1 : Game
         {
             _unlockShowing = "";
             _unlockHeadline = "";
+            // The NEXT panel waits its turn — see UnlockPanelGapSeconds. Without this the first
+            // minute of a new game stacked eight or nine of them back to back.
+            _unlockCooldown = UnlockPanelGapSeconds;
             _sound.Play("sfx_click", 0.7f);
             // _swallowInput deliberately STAYS true: this frame's input was spent closing the panel.
         }
@@ -1850,7 +2065,10 @@ public class Game1 : Game
                         && Gear.SlotFor(toDoff.BaseType) is { } sl)
                         _hunter.Unequip(sl);
                     else if (_forge.Inventory.FirstOrDefault(i => i.InstanceId == request.InstanceId) is { } toWear)
+                    {
                         _hunter.Equip(toWear);
+                        _sound.Play("sfx_equip", 0.7f);
+                    }
                     Save();
                 }
                 else
@@ -2291,8 +2509,10 @@ public class Game1 : Game
         _lastUnlockFacts = now;
         _lastSkillSlots = slots;
 
-        // One at a time, and only while the player is not already reading one.
-        if (_unlockShowing.Length == 0 && _unlockQueue.Count > 0)
+        // One at a time, only while the player is not already reading one, and never sooner than the
+        // gap after the last one was dismissed (UnlockPanelGapSeconds) — panels drip, they do not
+        // stack. Delayed, never lost: everything stays queued until its turn.
+        if (_unlockShowing.Length == 0 && _unlockCooldown <= 0f && _unlockQueue.Count > 0)
         {
             (_unlockHeadline, _unlockShowing) = _unlockQueue.Dequeue();
             _sound.PlayFirst(0.9f, "sfx_levelup", "sfx_click");
@@ -3050,10 +3270,23 @@ public class Game1 : Game
     // 2026-08-23: grown to 1250x960 (aspect 1.30 — still on the medium side of the 1.30 line, so the
     // frame art is unchanged) for the FIGHT TEXT AND EFFECTS block. The content column stays at x 536..1404.
     private static readonly Rectangle SettingsPanel = new(335, 60, 1250, 960);
-    private static Rectangle ModeBtn(int i) => new(536, 272 + i * 84, 384, 72);
-    private static Rectangle ScaleBtn(int i) => new(1000, 272 + i * 84, 384, 72);
-    private static readonly Rectangle SettingsClose = new(620, 940, 300, 56);
-    private static readonly Rectangle SettingsQuit = new(1000, 940, 300, 56);
+    // 2026-08-24: the whole column tightened (mode rows 84→74 pitch, every block lifted) to make room
+    // for two new rows — COPY FEEDBACK CODE and START A NEW GAME — without growing the panel past the
+    // 1.30 aspect line that would swap its frame art.
+    private static Rectangle ModeBtn(int i) => new(536, 200 + i * 74, 384, 64);
+    private static Rectangle ScaleBtn(int i) => new(1000, 200 + i * 74, 384, 64);
+    private static readonly Rectangle SettingsClose = new(620, 956, 300, 52);
+    private static readonly Rectangle SettingsQuit = new(1000, 956, 300, 52);
+
+    /// <summary>Copies the feedback code (build stamp + progress + run log) to the clipboard.</summary>
+    private static readonly Rectangle SettingsCopyFeedback = new(536, 830, 400, 52);
+
+    /// <summary>START A NEW GAME at rest, and its wider red armed state. Its own row, above QUIT.</summary>
+    private static readonly Rectangle SettingsNewGame = new(536, 896, 400, 52);
+    private static readonly Rectangle SettingsNewGameArmed = new(536, 896, 868, 52);
+
+    /// <summary>How long the armed are-you-sure state stays live before disarming itself.</summary>
+    private const float ResetArmSeconds = 4f;
 
     /// <summary>The persistent way back here — a gear in the corner, the convention every game teaches.</summary>
     private static readonly Rectangle SettingsGear = new(1842, 8, 60, 60);
@@ -3073,15 +3306,15 @@ public class Game1 : Game
         _ui.Panel(_batch, SettingsPanel);
         // The panel is DARK glass, so light text on it — gold heading, bone labels. (It used to use dark
         // parchment inks here, which were invisible on the dark panel.)
-        TextCenter("SETTINGS", 960, 118, Gold);
+        TextCenter("SETTINGS", 960, 108, Gold);
 
-        Text("MODE", 536, 232, Bone);
+        Text("MODE", 536, 168, Bone);
 
         // The right column's header doubles as its own explanation. A separate "fit to screen" line
         // had nowhere to live that wasn't already occupied — it landed on the greyed buttons. The
         // header is free space that is already describing exactly this, so it says it instead.
         var windowed = _displayMode == DisplayMode.Windowed;
-        Text(windowed ? "WINDOW SIZE" : $"AUTO FIT — {_scale}x", 1000, 232, Bone);
+        Text(windowed ? "WINDOW SIZE" : $"AUTO FIT — {_scale}x", 1000, 168, Bone);
 
         var modes = new[] { DisplayMode.Windowed, DisplayMode.Borderless, DisplayMode.Fullscreen };
         var modeNames = new[] { "WINDOWED", "BORDERLESS", "FULLSCREEN" };
@@ -3122,10 +3355,10 @@ public class Game1 : Game
         // ── SOUND. Eleven notches per row: a slider with a real middle, persisted machine-level.
         //    The music row applies to the PLAYING bed instantly; the effects row clicks so the new
         //    level is heard at the new level. ──
-        _ui.Fill(_batch, new Rectangle(536, 538, 848, 2), new Color(0x3A, 0x3A, 0x44));
-        Text("SOUND", 536, 554, Gold);
+        _ui.Fill(_batch, new Rectangle(536, 428, 848, 2), new Color(0x3A, 0x3A, 0x44));
+        Text("SOUND", 536, 442, Gold);
 
-        var pickedFx = VolumeRow("EFFECTS VOLUME", 592, _sfxVolume);
+        var pickedFx = VolumeRow("EFFECTS VOLUME", 478, _sfxVolume);
         if (pickedFx >= 0)
         {
             _sfxVolume = pickedFx;
@@ -3134,7 +3367,7 @@ public class Game1 : Game
             SaveDisplay();
         }
 
-        var pickedMu = VolumeRow("MUSIC VOLUME", 646, _musicVolume);
+        var pickedMu = VolumeRow("MUSIC VOLUME", 528, _musicVolume);
         if (pickedMu >= 0)
         {
             _musicVolume = pickedMu;
@@ -3144,9 +3377,9 @@ public class Game1 : Game
 
         // ── FORGE. The way BACK for "don't ask me again" — a preference the player can suppress from
         //    a dialog must be reversible from settings, or one hasty click is permanent. ──
-        _ui.Fill(_batch, new Rectangle(536, 684, 848, 2), new Color(0x3A, 0x3A, 0x44));
-        Text("ASK BEFORE SELL OR SALVAGE", 536, 706, Bone);
-        var askBtn = new Rectangle(1160, 694, 244, 52);
+        _ui.Fill(_batch, new Rectangle(536, 578, 848, 2), new Color(0x3A, 0x3A, 0x44));
+        Text("ASK BEFORE SELL OR SALVAGE", 536, 598, Bone);
+        var askBtn = new Rectangle(1160, 586, 244, 52);
         if (_ui.Button(_batch, askBtn, _askBeforeScrap ? "ON — IT ASKS" : "OFF", ChromeMouse, _clicked))
         {
             _askBeforeScrap = !_askBeforeScrap;
@@ -3157,14 +3390,54 @@ public class Game1 : Game
         // ── FIGHT TEXT AND EFFECTS. Quality-of-life switches (playtest 2026-08-23: "hasar textlerini
         //    kapatma, skill yazılarını kapatma, gibi detaylı QoL ayarları"). Each is a plain ON/OFF;
         //    the hunt reads them on its next frame (fed in Update with the other hosted flags). ──
-        _ui.Fill(_batch, new Rectangle(536, 766, 848, 2), new Color(0x3A, 0x3A, 0x44));
-        Text("FIGHT TEXT AND EFFECTS", 536, 782, Gold);
+        _ui.Fill(_batch, new Rectangle(536, 654, 848, 2), new Color(0x3A, 0x3A, 0x44));
+        Text("FIGHT TEXT AND EFFECTS", 536, 668, Gold);
         var changed = false;
-        changed |= ToggleRow("DAMAGE NUMBERS", 536, 820, ref _showDamageNumbers);
-        changed |= ToggleRow("SKILL NAMES", 1000, 820, ref _showSkillCallouts);
-        changed |= ToggleRow("FIGHT EFFECTS", 536, 874, ref _showHitEffects);
-        changed |= ToggleRow("RED FLASH", 1000, 874, ref _showScreenFlash);
+        changed |= ToggleRow("DAMAGE NUMBERS", 536, 700, ref _showDamageNumbers);
+        changed |= ToggleRow("SKILL NAMES", 1000, 700, ref _showSkillCallouts);
+        changed |= ToggleRow("FIGHT EFFECTS", 536, 752, ref _showHitEffects);
+        changed |= ToggleRow("RED FLASH", 1000, 752, ref _showScreenFlash);
         if (changed) SaveDisplay();
+
+        // ── FEEDBACK. One click copies a code carrying the build stamp, the player's progress, the
+        //    worn build and the recent run reports — pasted to the developer beside their words, it
+        //    answers the follow-up questions a bug report usually needs. ──
+        _ui.Fill(_batch, new Rectangle(536, 812, 848, 2), new Color(0x3A, 0x3A, 0x44));
+        if (_ui.Button(_batch, SettingsCopyFeedback, "COPY FEEDBACK CODE", ChromeMouse, _clicked))
+        {
+            // The failure is NOT silent (same rule as the weave's copy button): no clipboard, no lie.
+            _feedbackToast = ClipboardInterop.TrySet(FeedbackCode())
+                ? "COPIED — PASTE IT TO THE DEVELOPER"
+                : "COPY FAILED — TRY AGAIN";
+            _feedbackToastTimer = 4f;
+        }
+        if (_feedbackToastTimer > 0f) Text(_feedbackToast, 956, 846, Gold);
+
+        // ── START A NEW GAME. Two clicks on purpose: the first arms a red are-you-sure state, the
+        //    second (within ResetArmSeconds) deletes the save. Any other click, or the timeout,
+        //    disarms. Its own row above QUIT TO DESKTOP, so a stray click cannot reach an armed
+        //    button that was not armed deliberately. The delete itself runs in Update, between
+        //    frames — see StartNewGame. ──
+        if (_resetArmTimer > 0f)
+        {
+            _ui.Fill(_batch, SettingsNewGameArmed, new Color(0x8C, 0x1E, 0x1E));
+            _ui.Fill(_batch, new Rectangle(SettingsNewGameArmed.X, SettingsNewGameArmed.Y, SettingsNewGameArmed.Width, 3), Ember);
+            _ui.TextCenter(_batch, "SURE? THIS DELETES YOUR SAVE — CLICK AGAIN",
+                           SettingsNewGameArmed.Center.X, SettingsNewGameArmed.Center.Y - 12, Color.White);
+            if (UiKit.ClickedIn(SettingsNewGameArmed, ChromeMouse, _clicked))
+            {
+                _resetArmTimer = 0f;
+                _wantsNewGame = true;
+            }
+            else if (_clicked)
+            {
+                _resetArmTimer = 0f;   // any click that is not the confirmation disarms
+            }
+        }
+        else if (_ui.Button(_batch, SettingsNewGame, "START A NEW GAME", ChromeMouse, _clicked))
+        {
+            _resetArmTimer = ResetArmSeconds;
+        }
 
         if (_ui.Button(_batch, SettingsClose, "CLOSE", ChromeMouse, _clicked))
             _showSettings = false;
@@ -3180,6 +3453,10 @@ public class Game1 : Game
             Save();
             Exit();
         }
+
+        // Which build this is — the same stamp the feedback code carries, so "which version are you
+        // on" is answerable from a screenshot.
+        Text($"BUILD {BuildStamp.Short}", 380, 980, Slate);
     }
 
     /// <summary>A label and an ON/OFF button. Returns true when the click flipped it.</summary>
@@ -3332,6 +3609,17 @@ public class Game1 : Game
         }
 
         TextCenter("UP / DOWN     ENTER", 960, 984, Slate);
+
+        // Which build this is — the same stamp the feedback code carries.
+        TextRight($"BUILD {BuildStamp.Short}", 1908, 1044, Slate);
+
+        // A locked session says so HERE, where the player decides whether to continue — not only in
+        // a toast that fades. Saving being off changes what playing is worth.
+        if (_saveLocked)
+        {
+            TextCenter("SAVING IS OFF — " + _saveLockReason + ".", 960, 24, Ember);
+            TextCenter("YOUR OLD FILE IS KEPT ON DISK, UNTOUCHED. START A NEW GAME IN SETTINGS TO PLAY FRESH.", 960, 60, Bone);
+        }
     }
 
     // ── World map ─────────────────────────────────────────────────────────────────────────────

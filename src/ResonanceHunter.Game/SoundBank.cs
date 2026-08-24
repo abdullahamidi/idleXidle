@@ -91,10 +91,38 @@ public sealed class SoundBank
     public bool Enabled => _enabled;
     public bool Has(string key) => _sounds.ContainsKey(key);
 
+    // ── The combat throttle. The fight fires the same cue in bursts — a swarm wave lands five hits
+    // inside a frame, and BATTLE SPEED multiplies the playback clock — and five simultaneous copies
+    // of one sample are one sample five times as loud. Two rules, applied to EVERY one-shot:
+    //   1. the same cue never STARTS twice inside ~90 ms;
+    //   2. a cue re-fired while its recent copies still ring plays QUIETER (divided by the square
+    //      root of a decaying repeat count), so a swarm reads as a swarm, not as a wall.
+    // Centralised here rather than at each call site so no caller can forget it.
+    private const long MinRepeatMs = 90;
+    private readonly Dictionary<string, (long LastMs, float Recent)> _recent = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Play a one-shot cue. No-op if audio is off or the cue is missing.</summary>
+    /// <remarks>
+    /// Rate-limited per cue: a repeat inside ~90 ms is dropped, and rapid repeats play progressively
+    /// quieter (see the throttle note above). Volume always rides <see cref="SfxVolume"/>, so the
+    /// settings slider governs every effect in the game.
+    /// </remarks>
     public void Play(string key, float volume = 1f, float pitch = 0f, float pan = 0f)
     {
         if (!_enabled || !_sounds.TryGetValue(key, out var fx)) return;
+
+        var now = Environment.TickCount64;
+        if (_recent.TryGetValue(key, out var t))
+        {
+            var since = now - t.LastMs;
+            if (since < MinRepeatMs) return;
+            // Half-life 250 ms: a cue that last fired long ago is back to full volume.
+            var recent = t.Recent * MathF.Pow(0.5f, since / 250f) + 1f;
+            _recent[key] = (now, recent);
+            volume /= MathF.Sqrt(recent);
+        }
+        else _recent[key] = (now, 1f);
+
         try { fx.Play(Clamp01(volume * _masterSfx), Clamp(pitch, -1f, 1f), Clamp(pan, -1f, 1f)); }
         catch (Exception) { /* an exhausted voice pool must never break a frame */ }
     }

@@ -168,6 +168,10 @@ public sealed class ForgeScreen
 
     public ForgeScreen(UiKit ui) => _ui = ui;
 
+    /// <summary>The shared audio bank — set by the host, like AskBeforeScrap. Null runs silent.</summary>
+    /// <remarks>Every cue rides the bank's master effects volume; nothing here touches a raw SoundEffect.</remarks>
+    public SoundBank? Sound { get; set; }
+
     /// <summary>The item the workbench acts on — resolved by id so a re-forge that
     /// replaces the object keeps the selection. Defaults to the first wearable in the bag.</summary>
     private string? _focusId;
@@ -567,7 +571,9 @@ public sealed class ForgeScreen
         // reaching for the SELL button on it — is the exact bug the reveal's new buttons would otherwise
         // become a trap for. Set by the draw (see DrawReveal); cleared the frame the pointer leaves.
         if (_revealPointerHold) return;
+        var tBefore = _revealHold - _revealTimer;
         _revealTimer -= dt;
+        PlayRevealTicks(tBefore, _revealHold - _revealTimer);
         if (_revealTimer > 0f) return;
 
         // This beat ended — the cascade decides what plays next.
@@ -591,6 +597,27 @@ public sealed class ForgeScreen
         }
         if (_revealChestCount > 1 && !_revealSummary) { _revealQueue.Clear(); EnterRevealSummary(); return; }
         _revealTimer = Math.Min(_revealTimer, 0.30f);   // single chest: hurry the fade
+    }
+
+    /// <summary>
+    /// One bright tick per item as it lands on the reveal card — the sound of the stagger DrawReveal
+    /// draws. Computed HERE because this is where the reveal's clock advances: item i starts its drop
+    /// at burst + card-in + i·stagger (the same arithmetic DrawReveal uses, brief-aware), and a tick
+    /// fires on the frame that instant is crossed. Each tick steps slightly up in pitch, so a
+    /// three-drop chest reads as a little rising run. A skip that jumps the clock crosses several
+    /// instants at once; the SoundBank's per-cue rate limit collapses those to one tick.
+    /// </summary>
+    private void PlayRevealTicks(float tBefore, float tAfter)
+    {
+        if (_revealSummary || _revealItems.Count == 0) return;
+        var landBase = (_revealBrief ? 0.46f : BurstEnds) + (_revealBrief ? 0.14f : CardIn);
+        var stagger = _revealBrief ? 0.08f : ItemStagger;
+        for (var i = 0; i < _revealItems.Count; i++)
+        {
+            var lands = landBase + i * stagger;
+            if (tBefore < lands && tAfter >= lands)
+                Sound?.Play("sfx_reveal_tick", 0.6f, pitch: Math.Min(0.5f, i * 0.07f));
+        }
     }
 
     private void NextRevealEntry()
@@ -715,6 +742,7 @@ public sealed class ForgeScreen
             }
         }
 
+        if (merged > 0) Sound?.Play("sfx_forge", 0.7f);
         Say(merged > 0 ? $"AUTO-MERGED {merged}x — BAG IS NOW {_inv.Count} ITEMS." : "NOTHING TO MERGE (NEEDS 3 OF A RARITY).",
             merged > 0 ? Gold : Slate);
         return merged;
@@ -758,6 +786,7 @@ public sealed class ForgeScreen
             _inv.Remove(it);
         }
 
+        Sound?.Play("sfx_forge", 0.7f);
         Say($"SALVAGED {junk.Count} JUNK ITEMS — +{gained} {MaterialTiers.Name(Material.Scrap)}"
             + (chart ? "  (YOUR SALVAGE CHART DOUBLED IT)." : "."), Gold);
     }
@@ -786,6 +815,7 @@ public sealed class ForgeScreen
         ReleaseGems(item);
         _inv.Remove(item);
         hunter.AddGleam(item.SellValue);
+        Sound?.Play("sfx_forge", 0.55f);
         Say(item.Gems.Count > 0
                 ? $"SOLD FOR {item.SellValue} GLEAM — ITS {item.Gems.Count} GEMS CAME BACK TO YOU."
                 : $"SOLD FOR {item.SellValue} GLEAM.", Gold);
@@ -815,6 +845,7 @@ public sealed class ForgeScreen
         var m = Forge.Dismantle(item, Tuning);
         var tier = MaterialTiers.ForRarity(item.Rarity);   // salvage sorts by rarity into the right tier
         hunter.AddMaterial(tier, m);
+        Sound?.Play("sfx_forge", 0.55f);
         Say(item.Gems.Count > 0
                 ? $"SALVAGED INTO {m} {MaterialTiers.Name(tier)} — ITS {item.Gems.Count} GEMS CAME BACK TO YOU."
                 : $"SALVAGED INTO {m} {MaterialTiers.Name(tier)}.", Slate);
@@ -881,6 +912,7 @@ public sealed class ForgeScreen
         var paid = Reforge.PayWith(hunter, tier, result.Cost);
         if (!paid.Paid) { Say($"NEED {cost} {MaterialTiers.Name(tier)} TO RE-ROLL.", Ember); return; }
         ReplaceItem(hunter, item, result.Product!);
+        Sound?.Play("sfx_forge", 0.7f);   // RE-ROLL is an anvil verb — the house forge cue
         var ench = Enchantments.Of(result.Product!);
         var how = paid.UsedChart ? "A REFORGE CHART PAID FOR IT" : $"{paid.MaterialSpent} {MaterialTiers.Name(tier)} SPENT";
         Say(ench is not null ? $"RE-ROLLED — THE ENCHANT IS NOW {ench.Name}  ({how})." : $"RE-ROLLED THE ENCHANT  ({how}).", Gold);
@@ -913,6 +945,7 @@ public sealed class ForgeScreen
 
         var outcome = Forge.TryRefine(item, Tuning, _rng);
         ReplaceItem(hunter, item, outcome.Product);
+        if (!outcome.Failed) Sound?.Play("sfx_upgrade", 0.85f);   // the rung takes; a slip stays silent on purpose
         var how = chart ? "A REFINE CHART PAID FOR IT" : $"{r.Scrap} SCRAP + {r.Gold} GLEAM SPENT";
         if (outcome.Failed)
             Say($"THE UPGRADE SLIPPED — BACK TO LEVEL {outcome.Product.ItemLevel}, UPGRADE {outcome.Product.Upgrades} OF {Tuning.MaxUpgrades}  ({how}).", Ember);
@@ -937,6 +970,7 @@ public sealed class ForgeScreen
         hunter.SpendMaterial(Material.Crystal, r.Crystal);
         hunter.SpendGleam(r.Gold);
         ReplaceItem(hunter, item, r.Product);
+        Sound?.Play("sfx_upgrade", 0.9f);
         Say($"GREATER UPGRADE — LEVEL {r.Product.ItemLevel}, UPGRADE {r.Product.Upgrades} OF {Tuning.MaxUpgrades}  ({r.Crystal} CRYSTAL + {r.Gold} GLEAM SPENT — IT NEVER SLIPS).", Gold);
     }
 
@@ -1743,6 +1777,7 @@ public sealed class ForgeScreen
         hunter.SpendMaterial(Material.Essence, cost);
         _inv.Remove(gem);
         ReplaceItem(hunter, host, product);
+        Sound?.Play("sfx_gem", 0.8f);   // the crystalline ping — a gem set for good
         Say($"{GemCraft.NameOf(gem)} {gem.ItemLevel} SET — {ItemAffixes.GrantLabel(GemCraft.StatOf(gem), GemCraft.Magnitude(gem))} {AffixName(GemCraft.StatOf(gem))}  ({cost} ESSENCE SPENT).", Gold);
     }
 

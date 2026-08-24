@@ -58,19 +58,23 @@ public class TutorialTest
             facts = next;
         }
 
-        // A career, in the order it actually happens.
+        // A career, in the order the SHIPPING GAME actually produces it: conquest needs depth 7, which
+        // lands about half a minute in — long before the first chest (a 20% roll per boss) and long
+        // before anyone touches the build. The old walk put conquest LAST, an order the tuning no
+        // longer produces, and it hid the audit's bug: the conquest-only Done guard ended the guide at
+        // ~31 seconds with the chest, gear and build lessons never once shown.
         Step("fresh save", facts with { WavesCleared = 1, DeepestWave = 1, Gleam = 30 });
         Step("first wave cleared, 30 Gleam", facts with { StatsTrained = 1, Gleam = 5, DeepestWave = 3 });
         Step("trained a stat, wave 3", facts with { DeepestWave = 4, WavesCleared = 4 });
         Step("wave 4 — boss approaching", facts with { DeepestWave = 5, WavesCleared = 5 });
-        Step("felled the first boss", facts with { DeepestWave = 9, WavesCleared = 9 });
+        Step("felled the first boss", facts with { DeepestWave = 6, WavesCleared = 6 });
+        Step("wave 6 — conquest in reach", facts with { DeepestWave = 7, RegionsConquered = 1 });
+        Step("conquered the region", facts with { DeepestWave = 9, WavesCleared = 9 });
         Step("wave 9, still no chest", facts with { ChestsHeld = 1, DeepestWave = 10 });
         Step("a chest dropped", facts with { ItemsOwned = 1, ChestsHeld = 0, DeepestWave = 11 });
         Step("opened it — an item", facts with { ItemsWorn = 1, DeepestWave = 12 });
         Step("equipped it", facts with { SkillsWoven = 1, DeepestWave = 14 });
-        Step("wove a skill", facts with { DeepestWave = 20 });
-        Step("pushing for the objective", facts with { RegionsConquered = 1 });
-        Step("conquered the region", facts);
+        Step("wove a skill — the loop is lived", facts);
 
         _out.WriteLine("");
         _out.WriteLine("shown: " + string.Join(", ", seen));
@@ -152,14 +156,30 @@ public class TutorialTest
     }
 
     [Fact]
-    public void test_a_finished_player_is_never_dragged_back_by_undoing_something()
+    public void test_a_conqueror_who_never_touched_the_loop_is_still_guided()
     {
-        // ItemsWorn drops when a player unequips; SkillsWoven can drop on a respec. Without the
-        // conquest guard, selling a sword sent a veteran back to "SOMETHING DROPPED" — the guide
-        // re-teaching a lesson lived hours ago, which reads as the game losing track of you.
+        // THE AUDIT'S BUG. Region one falls at depth 7 — about thirty seconds in — and the old Done
+        // guard read conquest alone, so the guide ended with the chest, gear and build lessons never
+        // once shown to a real player. Conquest proves depth, not understanding: Done also requires
+        // that something is worn and the build has been touched.
+        var earlyConqueror = new TutorialFacts(
+            WavesCleared: 8, DeepestWave: 8, Gleam: 200, StatsTrained: 2, RegionsConquered: 1);
+
+        Assert.NotEqual(TutorialStep.Done, Tutorial.StepFor(earlyConqueror));
+        Assert.Equal(TutorialStep.OpenChest, Tutorial.StepFor(earlyConqueror));
+    }
+
+    [Fact]
+    public void test_a_finished_player_is_not_dragged_back_by_ordinary_undoing()
+    {
+        // ItemsOwned and ChestsHeld genuinely fall (selling, opening chests); the guard must not
+        // resurrect the guide over those. Only emptying EVERY worn slot, or reverting the weave to
+        // the exact starter, re-shows the matching lesson — accepted deliberately, because a veteran
+        // wearing nothing at all is truly in the state the lesson describes, and the alternative
+        // (the conquest-only guard) deleted four lessons from every playthrough.
         var veteran = new TutorialFacts(
             WavesCleared: 400, DeepestWave: 60, Gleam: 90_000, StatsTrained: 40,
-            ItemsOwned: 0, ItemsWorn: 0, SkillsWoven: 0, RegionsConquered: 2);
+            ItemsOwned: 0, ChestsHeld: 0, ItemsWorn: 3, SkillsWoven: 2, RegionsConquered: 2);
 
         Assert.Equal(TutorialStep.Done, Tutorial.StepFor(veteran));
         Assert.Null(Tutorial.Showing(veteran));
@@ -230,12 +250,15 @@ public class TutorialTest
                                    new UnlockFacts(WavesCleared: 4, DeepestWave: 4)),
             ("boss felled",        new TutorialFacts(WavesCleared: 6, DeepestWave: 6, StatsTrained: 1),
                                    new UnlockFacts(WavesCleared: 6, DeepestWave: 6)),
-            ("a chest is held",    new TutorialFacts(WavesCleared: 9, DeepestWave: 9, StatsTrained: 1, ChestsHeld: 1),
-                                   new UnlockFacts(WavesCleared: 9, DeepestWave: 9, ChestsEverHeld: 1)),
-            ("opened it",          new TutorialFacts(WavesCleared: 11, DeepestWave: 11, StatsTrained: 1, ItemsOwned: 1),
-                                   new UnlockFacts(WavesCleared: 11, DeepestWave: 11, ItemsOwned: 1)),
-            ("equipped it",        new TutorialFacts(WavesCleared: 13, DeepestWave: 13, StatsTrained: 1, ItemsOwned: 1, ItemsWorn: 1),
-                                   new UnlockFacts(WavesCleared: 13, DeepestWave: 13, ItemsOwned: 1)),
+            // Conquest lands at depth 7, before the first chest — the career order the guide now follows.
+            ("region conquered",   new TutorialFacts(WavesCleared: 8, DeepestWave: 8, StatsTrained: 1, RegionsConquered: 1),
+                                   new UnlockFacts(WavesCleared: 8, DeepestWave: 8, RegionsConquered: 1)),
+            ("a chest is held",    new TutorialFacts(WavesCleared: 9, DeepestWave: 9, StatsTrained: 1, ChestsHeld: 1, RegionsConquered: 1),
+                                   new UnlockFacts(WavesCleared: 9, DeepestWave: 9, ChestsEverHeld: 1, RegionsConquered: 1)),
+            ("opened it",          new TutorialFacts(WavesCleared: 11, DeepestWave: 11, StatsTrained: 1, ItemsOwned: 1, RegionsConquered: 1),
+                                   new UnlockFacts(WavesCleared: 11, DeepestWave: 11, ItemsOwned: 1, RegionsConquered: 1)),
+            ("equipped it",        new TutorialFacts(WavesCleared: 13, DeepestWave: 13, StatsTrained: 1, ItemsOwned: 1, ItemsWorn: 1, RegionsConquered: 1),
+                                   new UnlockFacts(WavesCleared: 13, DeepestWave: 13, ItemsOwned: 1, RegionsConquered: 1)),
         };
 
         foreach (var (moment, t, u) in journey)

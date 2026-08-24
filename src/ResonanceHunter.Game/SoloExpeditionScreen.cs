@@ -461,6 +461,14 @@ public sealed class SoloExpeditionScreen
     public int ChestCount { get; set; }
     /// <summary>Gleam per second the idle champion earns — shown in the HUNT idle-rewards panel. Set by the host.</summary>
     public float IdleGleamRate { get; set; }
+    /// <summary>The shared audio bank — set by the host like every other service here. Null runs silent.</summary>
+    /// <remarks>
+    /// Every cue goes THROUGH the bank (never a raw SoundEffect), so the settings EFFECTS slider
+    /// governs all of it and the bank's per-cue rate limit keeps a swarm wave from stacking five
+    /// copies of one sample. Deliberately independent of the fight's text/effects toggles: those
+    /// govern what is DRAWN; only the volume sliders govern what is heard.
+    /// </remarks>
+    public SoundBank? Sound { get; set; }
     private Source? _lastSource;
     private Hunter? _hunter;
 
@@ -616,6 +624,11 @@ public sealed class SoloExpeditionScreen
             _run.ReplaceBuild(ComposeBuild(h));
         _replayWave = _run.Wave + 1;
         _outcome = _run.PushWave();
+
+        // The boss's arrival horn. Played when the boss wave actually BEGINS rather than at the
+        // INCOMING banner, so it lands as the creature walks in — and so a reload straight into a
+        // boss wave still announces it.
+        if (WaveScaling.IsBossWave(_replayWave, ExpeditionTuning.Default)) Sound?.Play("sfx_boss", 0.7f);
 
         // THE WAVE'S ACTUAL TOTAL, summed from the creatures the sim just built — not
         // `_enemyBaseHealth * EnemyScale(wave + 1)`, which is what this used to be. That was a
@@ -898,6 +911,7 @@ public sealed class SoloExpeditionScreen
                     _champLunge = 1f;
                     _champSinceHit = 0f;   // the follow-through starts at the touch
                     _nextChampStrikeMs = _replay.NextChampionStrikeAfter(e.AtMs);
+                    Sound?.Play("sfx_hit", 0.55f);   // the blow lands — soft, it fires constantly
                     if ((_strikeCount++ & 1) == 0)   // every other auto-hit: a number and a small, quiet puff
                     {
                         SpawnDamage(HitDamage(1f), false);
@@ -909,6 +923,7 @@ public sealed class SoloExpeditionScreen
                     _enemyLunge = 1f;
                     _enemySinceHit = 0f;
                     _nextEnemyStrikeMs = _replay.NextEnemyStrikeAfter(e.AtMs);
+                    Sound?.Play("sfx_hit", 0.45f, pitch: -0.25f);   // same thud pitched down: taking, not giving
                     _vfx.Play("fx_hit", ChampBox.Center.X, ChampBox.Center.Y + 40, scale: 2, fps: 14f, tint: Ember);
                     break;
                 case BattleEventKind.Skill:
@@ -926,6 +941,8 @@ public sealed class SoloExpeditionScreen
                         if (batch[k].Kind == BattleEventKind.Strike) { castTarget = batch[k].Slot; break; }
                     PlayFormVfx(form, (Source)e.Slot, castTarget);
                     if (form != Form.Trap) { _skillSinceCast = 0f; _skillFollowForm = form; }   // the release frames
+                    Sound?.Play("sfx_cast", 0.6f);
+                    if (form == Form.Trap) Sound?.Play("sfx_crit", 0.65f);   // the crit-graded blow (SpawnDamage's crit flag below)
                     SpawnDamage(HitDamage(form == Form.Trap ? 3f : 2f), form == Form.Trap);   // skills hit big
                     break;
                 case BattleEventKind.Heal:
@@ -937,6 +954,7 @@ public sealed class SoloExpeditionScreen
                     _vfx.Play("fx_shield", ChampBox.Center.X, ChampBox.Center.Y - 20, scale: 4, fps: 12f, tint: Gold);
                     break;
                 case BattleEventKind.Down:
+                    Sound?.Play("sfx_champ_down", 0.75f);
                     _vfx.Play("fx_death", ChampBox.Center.X, ChampBox.Center.Y, scale: 4, fps: 9f);
                     break;
                 case BattleEventKind.EnemyDown:
@@ -945,6 +963,7 @@ public sealed class SoloExpeditionScreen
                     // body half a second later — after the fall, not instead of it. Playtest: "düşman
                     // ölüyor ama önünde bir duman animasyonu çıkıyor, herkesin ölme animasyonu olması lazım."
                     _diedAt[e.Slot] = _anim;
+                    Sound?.Play("sfx_enemy_down", 0.5f, pitch: _isBossWave ? -0.35f : 0f);   // a boss falls deeper
                     var (dx, dy) = EnemyPoint(e.Slot, 0.55f);
                     // A boss falling is the loudest beat in the fight: the starburst AND the plume.
                     if (_isBossWave) _vfx.Play("fx_crit", dx, dy - 40, scale: EnemyScale(e.Slot, 1.2f), fps: 10f, tint: Gold);

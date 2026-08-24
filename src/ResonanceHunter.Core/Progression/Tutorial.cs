@@ -17,6 +17,15 @@ public enum TutorialStep
     /// <summary>Every fifth wave is a boss, and a boss is the only thing that drops a chest.</summary>
     MeetABoss,
 
+    /// <summary>Depth conquers a region, which opens the next one.</summary>
+    /// <remarks>
+    /// BETWEEN the boss and the chest, because that is where the career puts it: conquest needs
+    /// depth 7, the first boss is wave 5, and the first chest is a 20% roll per boss that usually
+    /// lands far later. Sat at the end of the enum, this rung was already satisfied by the time it
+    /// became current on every real playthrough — a lesson positioned where nobody could meet it.
+    /// </remarks>
+    Conquer,
+
     /// <summary>A chest is where items come from. The VAULT reads one; the Forge cracks it.</summary>
     OpenChest,
 
@@ -25,9 +34,6 @@ public enum TutorialStep
 
     /// <summary>The build is the game. Skills, and what they are made of.</summary>
     WeaveBuild,
-
-    /// <summary>Depth conquers a region, which opens the next one.</summary>
-    Conquer,
 
     /// <summary>Nothing left to say.</summary>
     Done,
@@ -116,23 +122,36 @@ public static class Tutorial
     /// </remarks>
     public static TutorialStep StepFor(TutorialFacts f)
     {
-        // A CONQUEROR IS DONE, whatever else is true. This guard is what keeps the guide from
-        // resurrecting: two of the facts below can genuinely decrease (unequipping an item, respeccing
-        // the tree), and without this a finished player who unequipped a sword would be dragged back to
-        // "SOMETHING DROPPED". Conquest is monotone and means every lesson here has been lived.
-        if (f.RegionsConquered >= 1) return TutorialStep.Done;
+        // DONE MEANS THE LOOP WAS LIVED, NOT MERELY THAT A REGION FELL. This guard used to read
+        // conquest alone — and conquest arrives at depth 7, roughly half a minute in, so the whole
+        // guide ended before MeetABoss, OpenChest, EquipItem or WeaveBuild had ever been shown to a
+        // real player. Done now asks for the facts that prove the loop was actually touched: the
+        // conquest (monotone), something worn, and a build that is no longer the one the game handed
+        // over.
+        //
+        // Two of those CAN decrease — stripping every slot bare, or reverting the weave to the exact
+        // starter — and then the matching lesson returns. Accepted deliberately: a player wearing
+        // nothing at all is truly in the state the lesson describes, and the alternative (the
+        // conquest-only guard) silently deleted four lessons from every playthrough that ever
+        // happened.
+        if (f.RegionsConquered >= 1 && f.ItemsWorn >= 1 && f.SkillsWoven >= 1) return TutorialStep.Done;
 
         // THE FIRST UNSATISFIED STEP, IN ORDER — never "the first one whose conditions happen to hold".
         //
-        // The order is load-bearing. Each rung's satisfaction is exactly the thing that makes the next
-        // rung current, so no rung can wait on a resource a later rung explains how to obtain.
+        // The order is load-bearing, and it is the CAREER's order. Each rung's satisfaction is exactly
+        // the thing that makes the next rung current, so no rung can wait on a resource a later rung
+        // explains how to obtain — and no rung can be already satisfied before it has ever been shown.
+        // Conquer sits between the boss and the chest because that is where the tuning puts it.
         if (f.WavesCleared < 1) return TutorialStep.Watch;
         if (f.StatsTrained < 1) return TutorialStep.SpendGleam;
         if (f.DeepestWave < BossEvery) return TutorialStep.MeetABoss;
+        if (f.RegionsConquered < 1) return TutorialStep.Conquer;
         if (f.ItemsOwned < 1) return TutorialStep.OpenChest;
         if (f.ItemsWorn < 1) return TutorialStep.EquipItem;
         if (f.SkillsWoven < 1) return TutorialStep.WeaveBuild;
-        return TutorialStep.Conquer;
+
+        // Unreachable: every rung satisfied is exactly the Done guard at the top.
+        return TutorialStep.Done;
     }
 
     /// <summary>
