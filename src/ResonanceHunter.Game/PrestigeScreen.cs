@@ -46,6 +46,9 @@ public sealed class PrestigeScreen
     private string _msg = "";
     private KeyboardState _prevKeys;
 
+    /// <summary>Running seconds, fed by Update's dt — drives the affordable nodes' slow pulse.</summary>
+    private float _time;
+
     // ── The unlock flourish ──────────────────────────────────────────────────────────────────────
     //
     // A trait is PERMANENT and there is no respec. That is the most consequential button in the game,
@@ -173,11 +176,6 @@ public sealed class PrestigeScreen
         _ => Violet,
     };
 
-    private static Color CatColor(UnlockEffect e) => e switch
-    {
-        UnlockEffect.Amplifier => Gold, UnlockEffect.Expansion => Violet, _ => Teal,
-    };
-
     /// <summary>The road's emblem. Tinted at the draw site, so one asset serves every state.</summary>
     private static string RoadGlyph(TraitRoad r) => r switch
     {
@@ -206,12 +204,73 @@ public sealed class PrestigeScreen
         _ => null,
     };
 
-    private static string CatIcon(UnlockEffect e) => e switch
+    // ── The node's dress: the mastery tree's three-channel language, worn by this tree ──────────
+    // The FRAME's shape says what KIND of thing a node is, the GLYPH inside says which ROAD it
+    // serves, and the tint on both says its state. Before this every node was a bare square with a
+    // sixteen-pixel category icon — three facts crammed into one channel, none of them readable.
+
+    /// <summary>What kind of thing a node is — decides its frame and its size, and nothing else.</summary>
+    private enum SocketKind
     {
-        UnlockEffect.Amplifier => "icon_blessing_amplifier",
-        UnlockEffect.Expansion => "icon_blessing_expansion",
-        _ => "icon_blessing_convenience",
+        /// <summary>A road's crown: its terminal, wearing its own emblem in the largest frame.</summary>
+        Terminal,
+
+        /// <summary>A rung of a road's keystone strand — the steps a road is walked in.</summary>
+        Rung,
+
+        /// <summary>A CHARGE spur: a keystone beside the road, not on it. A side step.</summary>
+        Spur,
+
+        /// <summary>A structural spine node: sockets, slots, vows, filters, the forge.</summary>
+        Gate,
+
+        /// <summary>A small attribute node — a modest number, hung off a walked rung.</summary>
+        Minor,
+
+        /// <summary>COMPLETE ATTUNEMENT — the quiet mark for standing at the head of all four roads.</summary>
+        Mark,
+    }
+
+    /// <summary>
+    /// Classify a node from its DATA, not from an id list: what grants a keystone and what requires
+    /// it, which road it serves and what effect it has are all facts the catalogue already states,
+    /// so a new node arrives correctly dressed without this file hearing about it.
+    /// </summary>
+    private static SocketKind KindOf(MemoryDustTree tree, MemoryDustUnlock u)
+    {
+        if (TerminalArt(u) is not null) return SocketKind.Terminal;
+        if (u.Requires.Count >= 4) return SocketKind.Mark;   // the one five-way node in the tree
+        if (u.GrantsKeystone is not null)
+            // A spur is a keystone gate nothing builds on; every on-road gate has a next step.
+            return tree.All.Any(o => o.Requires.Contains(u.Id)) ? SocketKind.Rung : SocketKind.Spur;
+        if (u.Effect == UnlockEffect.Amplifier) return SocketKind.Minor;
+        return u.Road == TraitRoad.Spine ? SocketKind.Gate : SocketKind.Rung;
+    }
+
+    /// <summary>The frame a kind is set in — the mastery tree's socket art, worn by rank.</summary>
+    private static string FrameKey(SocketKind k) => k switch
+    {
+        SocketKind.Terminal => "ui_node_greater",
+        SocketKind.Rung => "ui_node_notable",
+        SocketKind.Spur => "ui_node_spec",
+        SocketKind.Gate => "ui_node_bridge",
+        SocketKind.Mark => "ui_node_start",
+        _ => "ui_node_minor",
     };
+
+    /// <summary>Node radius in pixels, by kind. Size is the hierarchy: crowns largest, minors smallest.</summary>
+    private static int RadiusOf(SocketKind k) => k switch
+    {
+        SocketKind.Terminal => 32,
+        SocketKind.Rung => 25,
+        SocketKind.Spur => 25,
+        SocketKind.Gate => 22,
+        SocketKind.Mark => 23,
+        _ => 19,
+    };
+
+    /// <summary>The same hue, darker — opaque, so a locked node dims instead of turning translucent.</summary>
+    private static Color Muted(Color c, float f) => new((int)(c.R * f), (int)(c.G * f), (int)(c.B * f));
 
     // Spine first (everyone walks it), then the four roads in enum order. WITHIN a road, by cost —
     // which is the order it is walked, so a road reads left to right as the chain it actually is.
@@ -229,6 +288,7 @@ public sealed class PrestigeScreen
     public void Update(KeyboardState keys, Point mouse, bool clicked, int wheel, MemoryDustTree tree, float dt)
     {
         TickFlourish(dt);
+        _time += dt;
         var list = Ordered(tree);
 
         // Arrows walk the tree in road order and Enter buys. The grid's row/column arithmetic is gone
@@ -487,6 +547,11 @@ public sealed class PrestigeScreen
     {
         _ui.Panel(b, TreePanel);
 
+        // THE GROUND LINE. The diagram is drawn as the tree it is named for: four boughs above this
+        // line, roots below it. Drawn first, so every wire and node sits on top — soil, not structure.
+        var groundY = (int)ToScreen(new Vector2(0, -0.5f)).Y;
+        _ui.Fill(b, new Rectangle(View.X - 40, groundY - 1, View.Width + 80, 2), Teal * 0.30f);
+
         // ONE EDGE PER NODE, to its NEAREST prerequisite — the rule the mastery tree arrived at, and
         // for the identical reason. COMPLETE ATTUNEMENT requires one node from the head of all four
         // roads plus a socket; drawing all five made it a spider whose legs crossed every other chain
@@ -504,7 +569,12 @@ public sealed class PrestigeScreen
             var best = float.MaxValue;
             foreach (var reqId in u.Requires)
             {
-                var d = Vector2.DistanceSquared(Pos(reqId), to) - (tree.Owns(reqId) ? 10_000f : 0f);
+                // The owned-prerequisite bias exists so a WALKED road picks its gold continuation.
+                // It only applies once this node is owned too: on an unowned node the wire can never
+                // be gold, and the bias just dragged the wire across the diagram to whichever distant
+                // node happened to be lit — the dashed diagonal the playtest read as clutter.
+                var d = Vector2.DistanceSquared(Pos(reqId), to)
+                        - (tree.Owns(u.Id) && tree.Owns(reqId) ? 10_000f : 0f);
                 if (d >= best) continue;
                 best = d;
                 nearest = reqId;
@@ -513,11 +583,12 @@ public sealed class PrestigeScreen
 
             var lit = tree.Owns(u.Id) && tree.Owns(nearest);
             Line(b, ToScreen(Pos(nearest)), ToScreen(to),
-                 lit ? Gold : RoadColor(u.Road) * 0.34f, lit ? 4 : 3);
+                 lit ? Gold : RoadColor(u.Road) * 0.42f, lit ? 4 : 3);
         }
 
-        // The four road labels, above their terminals — the one line that names what the player is
-        // choosing between, and what each road costs against the points a career earns.
+        // The four road HEADERS, above their crowns — glyph, name and tally, the way the mastery
+        // tree names its branches outside the rim. This is the one line that says what the player
+        // is choosing between, and what each road costs against the points a career earns.
         var heads = new[]
             {
                 (TraitRoad.Ruin, "ks_reaper"), (TraitRoad.Aegis, "ks_titan"),
@@ -542,27 +613,35 @@ public sealed class PrestigeScreen
         {
             var nodes = tree.All.Where(u => u.Road == road).ToList();
             var lit = nodes.Count(u => tree.Owns(u.Id));
-            var top = (int)p.Y - TerminalR;
-            _ui.TextCenterBig(b, _ui.ShortenBig(RoadName(road), column, UiTypography.Body),
-                              (int)p.X, top - 58,
-                              lit > 0 ? RoadColor(road) : RoadColor(road) * 0.8f, UiTypography.Body);
+            var col = lit > 0 ? RoadColor(road) : Muted(RoadColor(road), 0.72f);
+            var top = (int)p.Y - RadiusOf(SocketKind.Terminal);
+
+            var name = _ui.ShortenBig(RoadName(road), column - 34, UiTypography.SectionTitle);
+            var nameW = _ui.MeasureBig(name, UiTypography.SectionTitle);
+            var x0 = (int)p.X - (nameW + 34) / 2;
+            _ui.Icon(b, RoadGlyph(road), new Rectangle(x0, top - 66, 26, 26), col);
+            _ui.TextBig(b, name, x0 + 34, top - 64, col, UiTypography.SectionTitle);
             _ui.TextCenterBig(b,
                 _ui.ShortenBig($"{lit} OF {nodes.Count}  ·  {nodes.Sum(u => u.Cost)} POINTS", column,
                                UiTypography.Secondary),
-                (int)p.X, top - 30, lit > 0 ? Gold : Slate, UiTypography.Secondary);
+                (int)p.X, top - 32, lit > 0 ? Gold : Slate, UiTypography.Secondary);
         }
+
+        // THE ROOTS' CAPTION, along the panel's foot — the spine named the way the roads are named
+        // above, so the lower half of the picture is labelled too.
+        var spine = tree.All.Where(u => u.Road == TraitRoad.Spine).ToList();
+        var spineLit = spine.Count(u => tree.Owns(u.Id));
+        _ui.TextCenterBig(b,
+            _ui.ShortenBig($"THE SPINE — THE ROOTS EVERY HUNTER GROWS  ·  {spineLit} OF {spine.Count} LEARNED",
+                           TreePanel.Width - 120, UiTypography.Secondary),
+            TreePanel.Center.X, TreePanel.Bottom - 30, spineLit > 0 ? Teal : Muted(Teal, 0.72f),
+            UiTypography.Secondary);
 
         // Names first, then nodes, then their cost tags: a plate never covers a node, and a tag sits
         // over whatever wire runs under it.
         foreach (var u in tree.All) DrawName(b, tree, u);
         foreach (var u in tree.All) DrawNode(b, tree, u, hit, clicked);
     }
-
-    /// <summary>Node radius in pixels for everything but a terminal.</summary>
-    private const int NodeR = 19;
-
-    /// <summary>A terminal draws larger — it costs twelve where its neighbours cost four, and size is the channel.</summary>
-    private const int TerminalR = 27;
 
     /// <summary>The size the names under the nodes are drawn at. The smallest face on the screen, and still a face.</summary>
     private const int NamePx = 15;
@@ -572,7 +651,7 @@ public sealed class PrestigeScreen
     private void DrawName(SpriteBatch b, MemoryDustTree tree, MemoryDustUnlock u)
     {
         var p = ToScreen(Pos(u.Id));
-        var r = TerminalArt(u) is not null ? TerminalR : NodeR;
+        var r = RadiusOf(KindOf(tree, u));
         var lines = NameLines(u.Name);
         if (lines.Count == 0) return;
 
@@ -646,54 +725,128 @@ public sealed class PrestigeScreen
 
     private readonly Dictionary<(string, int), IReadOnlyList<string>> _nameLines = new();
 
-    /// <summary>One node: a socket whose colour is its road and whose brightness is its state.</summary>
+    /// <summary>One node: a framed socket whose glyph is its road and whose brightness is its state.</summary>
+    /// <remarks>
+    /// The mastery tree's three channels, one fact each: the FRAME's shape is the kind (crown, rung,
+    /// spur, gate, minor, mark), the GLYPH inside is the road it serves, and the tint on both is the
+    /// state. Taken burns gold over a lit field; affordable wears its road's colour and breathes a
+    /// slow halo; locked is dimmed with <see cref="Muted"/> — darker, never translucent, because a
+    /// locked trait should look unbought, not absent.
+    /// </remarks>
     private void DrawNode(SpriteBatch b, MemoryDustTree tree, MemoryDustUnlock u, Point hit, bool clicked)
     {
         var p = ToScreen(Pos(u.Id));
-
-        var terminal = TerminalArt(u);
-        var r = terminal is not null ? TerminalR : NodeR;
+        var kind = KindOf(tree, u);
+        var r = RadiusOf(kind);
         var box = new Rectangle((int)p.X - r, (int)p.Y - r, r * 2, r * 2);
+
         // The name plate is part of the node for the pointer: a player aims at the word as readily as
-        // at the square, and a hit box that stops at the square makes the plate feel broken.
+        // at the frame, and a hit box that stops at the frame makes the plate feel broken — so the
+        // hit box is the UNION of the frame and the plate, the plate measured the way DrawName draws it.
         var lines = NameLines(u.Name);
-        // …so the hit box is the UNION of the square and the plate, the plate measured the way DrawName draws it.
         var plateW = lines.Count == 0 ? 0 : lines.Max(l => _ui.MeasureBig(l, NamePx)) + 8;
         var left = Math.Min(box.X - 4, (int)p.X - plateW / 2);
         var right = Math.Max(box.Right + 4, (int)p.X - plateW / 2 + plateW);
         var hitBox = new Rectangle(left, box.Y, right - left, box.Height + 3 + lines.Count * NameLineH + 2);
         var hover = hitBox.Contains(hit);
 
-        var isOwned = tree.Owns(u.Id);
-        var buyable = tree.CanUnlock(u.Id);
-        var sel = u.Id == _selectedId;
-        var road = RoadColor(u.Road);
-
         if (clicked && hover) { _selectedId = u.Id; _msg = ""; }
         if (hover) _hoverId = u.Id;
 
-        _ui.Fill(b, box, isOwned ? road * 0.85f : buyable ? road * 0.30f : new Color(0x1A, 0x16, 0x26, 0xF0));
-        Outline(b, box, sel ? Bone : isOwned ? Gold : buyable ? road : Dim, sel || isOwned ? 3 : 2);
+        var isOwned = tree.Owns(u.Id);
+        var buyable = tree.CanUnlock(u.Id);
+        var road = RoadColor(u.Road);
 
-        if (terminal is not null)
-            _ui.Icon(b, terminal, new Rectangle(box.X + 4, box.Y + 4, box.Width - 8, box.Height - 8),
-                     isOwned || buyable ? Color.White : new Color(0x8A, 0x84, 0x80));
-        else if (!_ui.Icon(b, CatIcon(u.Effect),
-                           new Rectangle(box.X + 5, box.Y + 5, box.Width - 10, box.Height - 10),
-                           isOwned ? new Color(0x14, 0x11, 0x1E) : buyable ? road : LockedInk)
-                 && _ui.Assets.Get("ui_memory_dust") is { } ic)
-            b.Draw(ic, new Rectangle(box.X + 5, box.Y + 5, box.Width - 10, box.Height - 10), road);
+        // AFFORDABLE INVITES: a slow breathing halo, the same gesture the mastery tree uses for its
+        // unchosen specialisations. Quiet on purpose — an invitation, not an alarm.
+        if (buyable && !isOwned)
+        {
+            var pulse = 0.5f + 0.5f * MathF.Sin(_time * 2.6f);
+            for (var ring = 2; ring >= 1; ring--)
+            {
+                var g = (int)(box.Width * 0.10f * ring + pulse * 4f);
+                _ui.Diamond(b, new Rectangle(box.X - g, box.Y - g, box.Width + g * 2, box.Height + g * 2),
+                            road * (0.05f + 0.09f * pulse));
+            }
+        }
 
-        // The cost, as a small tag on the node's right edge. It used to be printed inside the square,
-        // over the icon; now the square is smaller and the name is under it, so the tag hangs off the
-        // side where nothing else is. Unlit only — a bought trait's price is history.
+        DrawFace(b, tree, u, box, hover || u.Id == _selectedId);
+
+        // The cost, as a small tag on the node's right edge — over whatever wire runs under it.
+        // Unlit only: a bought trait's price is history.
         if (!isOwned)
         {
-            var tag = new Rectangle(box.Right - 3, box.Center.Y - 9, 20, 18);
+            var tag = new Rectangle(box.Right - 5, box.Center.Y - 9, 20, 18);
             _ui.Fill(b, tag, Plate * 0.92f);
             Outline(b, tag, buyable ? road : Dim, 1);
             _ui.TextCenterBig(b, $"{u.Cost}", tag.Center.X, tag.Y + 1, buyable ? Bone : Slate, NamePx);
         }
+    }
+
+    /// <summary>
+    /// The face a node shows anywhere it is drawn — field, frame and glyph, in the mastery tree's
+    /// dress. Shared by the diagram and the detail panel, so a trait looks like ITSELF in both.
+    /// </summary>
+    private void DrawFace(SpriteBatch b, MemoryDustTree tree, MemoryDustUnlock u, Rectangle box, bool hot)
+    {
+        var kind = KindOf(tree, u);
+        var road = RoadColor(u.Road);
+        var isOwned = tree.Owns(u.Id);
+        var buyable = tree.CanUnlock(u.Id);
+
+        var frame = _ui.Assets.Get(FrameKey(kind));
+        var frameTint = hot ? Bone : isOwned ? Gold : buyable ? road : Muted(road, 0.55f);
+        var fieldCol = isOwned ? Muted(road, 0.92f)
+                       : buyable ? Muted(road, 0.36f)
+                       : new Color(0x16, 0x12, 0x20);
+
+        if (frame is null)
+        {
+            // No art on disk: the flat shapes this screen shipped with. The game must run with an
+            // empty assets/art, so the greybox path stays alive rather than borrowing other art.
+            _ui.Fill(b, box, fieldCol);
+            Outline(b, box, frameTint, hot || isOwned ? 3 : 2);
+        }
+        else
+        {
+            // THE FIELD FOLLOWS THE FRAME'S SHAPE — the lesson the mastery tree learned: a square
+            // patch inside a ring reads as a square wearing a ring. Hex behind the octagon, diamond
+            // behind the diamond, a plain fill behind the chain-square, and a grown diamond whose
+            // points reach the rim behind every ring.
+            var pad = (int)(box.Width * 0.24f);
+            var field = new Rectangle(box.X + pad, box.Y + pad, box.Width - pad * 2, box.Height - pad * 2);
+            if (kind == SocketKind.Rung) _ui.Hex(b, field, fieldCol);
+            else if (kind == SocketKind.Spur) _ui.Diamond(b, field, fieldCol);
+            else if (kind == SocketKind.Gate) _ui.Fill(b, field, fieldCol);
+            else _ui.Diamond(b, Circleish(field), fieldCol);
+            b.Draw(frame, box, frameTint);
+        }
+
+        if (TerminalArt(u) is { } art)
+        {
+            // A crown wears its own emblem, inside the ornate ring, untinted while it can matter.
+            var inset = (int)(box.Width * 0.15f);
+            _ui.Icon(b, art, new Rectangle(box.X + inset, box.Y + inset,
+                                           box.Width - inset * 2, box.Height - inset * 2),
+                     isOwned || buyable ? Color.White : Muted(Color.White, 0.5f));
+        }
+        else
+        {
+            // Every other node wears its ROAD's glyph: dark on a lit field once taken, road-coloured
+            // while affordable, and legible grey — not faded — while locked.
+            var g = (int)(box.Width * (kind == SocketKind.Spur ? 0.40f
+                                       : kind == SocketKind.Minor ? 0.56f : 0.50f));
+            _ui.Icon(b, RoadGlyph(u.Road),
+                     new Rectangle(box.Center.X - g / 2, box.Center.Y - g / 2, g, g),
+                     isOwned ? new Color(0x14, 0x11, 0x1E) : buyable ? road : LockedInk);
+        }
+    }
+
+    /// <summary>A circle-filling diamond: grown past its box so its four points reach the ring.</summary>
+    private static Rectangle Circleish(Rectangle r)
+    {
+        var grow = (int)MathF.Round(r.Width * 0.14f);
+        return new Rectangle(r.X - grow, r.Y - grow, r.Width + grow * 2, r.Height + grow * 2);
     }
 
     /// <summary>
@@ -720,12 +873,12 @@ public sealed class PrestigeScreen
 
     /// <summary>The part of the tree panel the diagram is fitted into.</summary>
     /// <remarks>
-    /// Top inset: room for the two road-label lines above the terminals, which are part of the diagram.
-    /// Bottom inset: room for the two name lines under the lowest row. Sides: half a lane, so the
-    /// outermost names and the outermost road label are inside the frame.
+    /// Top inset: room for the road headers (glyph, name and tally) above the crowns. Bottom inset:
+    /// room for the two name lines under the deepest roots plus the roots' own caption. Sides: half
+    /// a lane, so the outermost names and headers stay inside the frame.
     /// </remarks>
-    private static readonly Rectangle View = new(TreePanel.X + 62, TreePanel.Y + 112,
-                                                 TreePanel.Width - 124, TreePanel.Height - 112 - 84);
+    private static readonly Rectangle View = new(TreePanel.X + 62, TreePanel.Y + 118,
+                                                 TreePanel.Width - 124, TreePanel.Height - 118 - 100);
 
     /// <summary>Screen pixels per world unit — the uniform scale that fits the diagram into <see cref="View"/>.</summary>
     private static float Scale()
@@ -810,7 +963,6 @@ public sealed class PrestigeScreen
                 ?? Selected(tree);
         var isOwned = tree.Owns(u.Id);
         var buyable = tree.CanUnlock(u.Id);
-        var cat = CatColor(u.Effect);
 
         var terminal = TerminalArt(u);
         var roadCol = RoadColor(u.Road);
@@ -835,15 +987,12 @@ public sealed class PrestigeScreen
                          DetailPanel.Right - 28, y + 7, Slate, UiTypography.Secondary);
         y += 40;
 
-        // A TERMINAL gets its own face, larger and untinted. This is the panel where a player decides
-        // whether thirty points go here or somewhere they can then never also reach, and until now it
-        // showed them the same up-arrow that a one-point convenience node shows.
-        var size = terminal is not null ? 120 : 88;
+        // The node's own face — the same frame, field and glyph it wears on the diagram, drawn
+        // large. This is the panel where a player decides whether thirty points go here or somewhere
+        // they can then never also reach; it should show the thing itself, not a stand-in.
+        var size = terminal is not null ? 124 : 96;
         var icon = new Rectangle(DetailPanel.Center.X - size / 2, y, size, size);
-        if (terminal is not null)
-            _ui.Icon(b, terminal, icon, isOwned || buyable ? Color.White : new Color(0x8A, 0x82, 0x7A));
-        else if (!_ui.Icon(b, CatIcon(u.Effect), icon, isOwned ? Gold : cat)
-                 && _ui.Assets.Get("ui_memory_dust") is { } ic) b.Draw(ic, icon, isOwned ? Gold : cat);
+        DrawFace(b, tree, u, icon, hot: false);
         y += size + 8;
 
         _ui.TextCenterBig(b, u.Name, DetailPanel.Center.X, y, isOwned ? Gold : buyable ? Bone : Slate, UiTypography.PanelTitle);

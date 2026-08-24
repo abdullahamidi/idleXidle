@@ -28,20 +28,25 @@ namespace ResonanceHunter.Client;
 /// fallback so a debug overlay — and a reader — can see which still want a hand-chosen home.
 /// </para>
 /// <para>
-/// The shape says the design out loud:
+/// The shape is A TREE, drawn as one: four boughs above a ground line, roots below it. The playtest
+/// called the previous arrangement ragged — five chains at five unrelated lanes, road strands at
+/// uneven gaps — so this table is now built on ONE rule the eye can verify: the four keystone
+/// strands stand at lanes 1, 4, 7 and 10, every gap equal, and each road's side strand mirrors its
+/// partner's (RUIN|AEGIS outward around the shared trunk at 2.5; ARTIFICE|AVARICE around 8.5).
 /// </para>
 /// <list type="bullet">
-/// <item>The SPINE runs left to right along row 0 — five chains, each hanging DOWNWARD. It is cheap,
-///   structural, and everyone walks most of it, so it is the ground the diagram stands on.</item>
-/// <item>The four ROADS climb UPWARD from the spine node that gates each one. Each road is TWO strands:
-///   the keystone strand, straight up from its anchor, and beside it the side strand — the CHARGE
-///   spur on the first rung and the three small attribute nodes on the other three — joined to the
-///   keystone strand by short horizontal wires. A road reads as a ladder, and a walked road reads
-///   as a gold ladder.</item>
-/// <item>Every TERMINAL is at the top of its road, all four at the same height, with the road's name
-///   and price above it. Four things at the same altitude, each costing most of what a career can
-///   earn (MemoryDustTests pins one reachable, two never): the picture itself is the argument that
-///   you get one.</item>
+/// <item>THE ROOTS: every spine chain hangs below row 0 — the capacity trunk under the RUIN/AEGIS
+///   fork, the recall taproot at dead centre, the vow and ledger trunks directly under the road
+///   each one feeds. Cheap, structural, everyone grows them: they are drawn under the ground line
+///   because that is what they are.</item>
+/// <item>The four BOUGHS climb UPWARD from the root that gates each one. Each is TWO strands: the
+///   keystone strand straight up from its anchor, and beside it the side strand — the CHARGE spur
+///   on the first rung, the three small attribute nodes above — joined by short horizontal wires.
+///   RUIN and AEGIS share one trunk and fork from it; ARTIFICE and AVARICE rise straight.</item>
+/// <item>Every TERMINAL is the crown of its bough, all four at the same height, evenly spaced, with
+///   the road's name and price above it. Four crowns at one altitude, each costing most of what a
+///   career can earn (MemoryDustTests pins one reachable, two never): the picture itself is the
+///   argument that you get one.</item>
 /// </list>
 /// <para>
 /// Lanes are wider than rows on purpose: every node prints its NAME under itself, in two short lines,
@@ -80,57 +85,55 @@ public static class TraitTreeLayout
     {
         var p = new Dictionary<string, Vector2>();
 
-        // ── THE SPINE, along row 0, chain by chain ────────────────────────────────────────────────
-        // Capacity, at lane 2: the one chain that gates two roads, which climb away from it to either
-        // side. Its own rungs hang straight down.
-        p["socket_2"] = At(2, 0);
-        p["weave_5"] = At(2, 1);
-        p["socket_3"] = At(2, 2);
+        // ── THE ROOTS, below the ground line (rows 0..3) ──────────────────────────────────────────
+        // The capacity trunk, at lane 2.5 — dead centre under the RUIN/AEGIS fork it feeds. The quiet
+        // mark hangs at its foot: attunement wants one node from the head of every road plus the third
+        // socket, so it has long wires wherever it stands; directly under socket_3, the one wire the
+        // drawing shows is a short vertical, which is what keeps a five-way node from being a spider.
+        p["socket_2"] = At(2.5f, 0);
+        p["weave_5"] = At(2.5f, 1);
+        p["socket_3"] = At(2.5f, 2);
+        p["attunement"] = At(2.5f, 3);
 
-        // Vows, at lane 5.5. Gates ARTIFICE (straight up), and forks at the end — two ways to spend the
-        // third study: BINDING straight down, SACRIFICE a step to the side.
-        p["vow_study_1"] = At(5.5f, 0);
-        p["vow_study_2"] = At(5.5f, 1);
-        p["vow_study_3"] = At(5.5f, 2);
-        p["vow_binding"] = At(5.5f, 3);
-        p["vow_sacrifice"] = At(6.5f, 3);
+        // Recall — the taproot. It gates nothing and everything else is symmetric around it, so it
+        // takes the exact centre (the canopy's middle gap is above it) and runs straight down.
+        p["recall_1"] = At(5.5f, 0);
+        p["recall_2"] = At(5.5f, 1);
+        p["recall_3"] = At(5.5f, 2);
+        p["recall_4"] = At(5.5f, 3);
 
-        // The ledger, at lane 8.5. Gates AVARICE (straight up), and forks immediately: the filters a
-        // lane to the left, the forge straight down, and the forge forks again.
-        p["ledger"] = At(8.5f, 0);
-        p["filter_common"] = At(7.5f, 1);
-        p["filter_uncommon"] = At(7.5f, 2);
-        p["forge_insight"] = At(8.5f, 1);
-        p["efficient_forge"] = At(8.5f, 2);
-        p["auto_merge"] = At(9.5f, 2);
+        // Vows, at lane 7 — directly under the ARTIFICE strand they gate, so the anchor wire is a
+        // plain vertical. The chain forks at its end: BINDING straight down, SACRIFICE a step aside.
+        p["vow_study_1"] = At(7, 0);
+        p["vow_study_2"] = At(7, 1);
+        p["vow_study_3"] = At(7, 2);
+        p["vow_binding"] = At(7, 3);
+        p["vow_sacrifice"] = At(8, 3);
 
-        // Recall — a straight rung ladder at the far right, gating nothing. It looks like what it is.
-        p["recall_1"] = At(11.5f, 0);
-        p["recall_2"] = At(11.5f, 1);
-        p["recall_3"] = At(11.5f, 2);
-        p["recall_4"] = At(11.5f, 3);
+        // The ledger, at lane 10 — directly under AVARICE, and spreading like the root it is: the
+        // filters branch a lane inward, the forge runs straight down and forks outward.
+        p["ledger"] = At(10, 0);
+        p["filter_common"] = At(9, 1);
+        p["filter_uncommon"] = At(9, 2);
+        p["forge_insight"] = At(10, 1);
+        p["efficient_forge"] = At(10, 2);
+        p["auto_merge"] = At(11, 2);
 
-        // The quiet mark: it wants one node from the head of every road plus the third socket, so it
-        // has long wires wherever it stands. Parked under the socket chain, which is its nearest
-        // prerequisite — the drawing shows only that one wire, which is what keeps a five-way node
-        // from becoming a spider.
-        p["attunement"] = At(3, 3);
-
-        // ── THE FOUR ROADS, climbing ──────────────────────────────────────────────────────────────
-        // Each road: the keystone strand straight up at `lane`, the side strand at `side` — the CHARGE
-        // spur on the first rung, then the three attribute nodes, one per rung, each beside the rung
-        // it hangs off. RUIN and AEGIS share socket_2 and climb to either side of it; their side
-        // strands face outward, so the two roads never touch.
+        // ── THE FOUR BOUGHS, climbing (rows -1..-4) ───────────────────────────────────────────────
+        // Keystone strands at lanes 1, 4, 7, 10 — every gap equal, all four crowns level. Each side
+        // strand carries the CHARGE spur on the first rung and the three attribute nodes above it,
+        // each beside the rung it hangs off. The strands mirror in pairs: RUIN|AEGIS face outward
+        // around their shared trunk, ARTIFICE|AVARICE around the plaza between them.
         Road(p, lane: 1, side: 0,
              new[] { "ks_glass_cannon", "ks_bloodlust", "ks_blood_magic", "ks_reaper" },
              new[] { "ks_rend", "ruin_edge_1", "ruin_edge_2", "ruin_edge_3" });
-        Road(p, lane: 3, side: 4,
+        Road(p, lane: 4, side: 5,
              new[] { "ks_ironclad", "ks_juggernaut", "ks_undying", "ks_titan" },
              new[] { "ks_dynamo", "aegis_skin_1", "aegis_skin_2", "aegis_skin_3" });
-        Road(p, lane: 5.5f, side: 6.5f,
+        Road(p, lane: 7, side: 6,
              new[] { "ks_echo", "ks_venomancer", "artifice_vows", "ks_weaver" },
              new[] { "ks_capacitor", "artifice_hands_1", "artifice_hands_2", "artifice_hands_3" });
-        Road(p, lane: 8.5f, side: 9.5f,
+        Road(p, lane: 10, side: 11,
              new[] { "ks_greed", "ks_discerning_eye", "ks_fortune", "ks_hoarder" },
              new[] { "ks_lodestone", "avarice_purse_1", "avarice_purse_2", "avarice_purse_3" });
 
