@@ -103,7 +103,7 @@ public sealed class StatsScreen
     /// <summary>True once, after the armed RESET ALL TRAINING button's confirming second click.</summary>
     /// <remarks>
     /// The host answers it with <c>Hunter.ResetTraining()</c> — which validates again (Core is the
-    /// gate), spends the Crystal, refunds the Gleam and zeroes the ranks — then saves.
+    /// gate), spends the Crystal and zeroes the ranks — no Gleam comes back — then saves.
     /// </remarks>
     public bool ConsumeReset()
     {
@@ -412,7 +412,7 @@ public sealed class StatsScreen
     /// RESET ALL TRAINING — the respec bar. Refunds 100% of the Gleam the ranks cost; costs 1 Crystal.
     /// </summary>
     /// <remarks>
-    /// The refund figure is on the button because it IS the decision, and it comes from
+    /// The no-refund warning is on the armed bar because it IS the decision, and it comes from
     /// <see cref="Hunter.TrainingRefund"/> — the sum of the real geometric rank costs — never from a
     /// tracked total. Two clicks like START A NEW GAME: first arms red, second confirms, any other
     /// click disarms. When the Crystal is missing, or nothing is trained, the button says so plainly
@@ -425,7 +425,7 @@ public sealed class StatsScreen
         _ui.Fill(b, ResetBar, RowBg);
         _ui.Fill(b, new Rectangle(ResetBar.X, ResetBar.Y, ResetBar.Width, 2), Dim);
 
-        var refund = hunter.TrainingRefund();
+        var ranks = hunter.TotalTrainedRanks;
         var crystals = hunter.MaterialOf(Material.Crystal);
         var price = hunter.TrainingResetCrystalCost;
 
@@ -441,7 +441,7 @@ public sealed class StatsScreen
             // The settings panel's armed pattern, exactly: red ground, warning stripe, white text.
             _ui.Fill(b, button, ArmedRed);
             _ui.Fill(b, new Rectangle(button.X, button.Y, button.Width, 3), Ember);
-            _ui.TextCenterBig(b, $"SURE? ALL RANKS GO BACK TO ZERO AND {refund:N0} GLEAM COMES BACK — CLICK AGAIN",
+            _ui.TextCenterBig(b, "SURE? ALL RANKS GO TO ZERO — THE GLEAM YOU SPENT DOES NOT COME BACK. CLICK AGAIN",
                               button.Center.X, button.Center.Y - 10, Color.White, UiTypography.Body, TextFace.Strong);
             if (UiKit.ClickedIn(button, hit, clicked))
             {
@@ -456,7 +456,7 @@ public sealed class StatsScreen
         }
 
         // The three honest states: nothing to reset, missing the Crystal, or ready.
-        if (refund <= 0)
+        if (ranks <= 0)
         {
             _ui.Button(b, button, "NOTHING TO RESET — NO TRAINING BOUGHT YET", hit, clicked, enabled: false);
         }
@@ -465,7 +465,7 @@ public sealed class StatsScreen
             _ui.Button(b, button, $"RESET NEEDS {price:N0} CRYSTAL — YOU HAVE {crystals:N0}", hit, clicked, enabled: false);
         }
         else if (_ui.Button(b, button,
-                            $"RESET ALL TRAINING — RETURNS {refund:N0} GLEAM · COSTS {price:N0} CRYSTAL",
+                            $"RESET ALL TRAINING — NO GLEAM BACK · COSTS {price:N0} CRYSTAL",
                             hit, clicked))
         {
             _resetArmed = true;

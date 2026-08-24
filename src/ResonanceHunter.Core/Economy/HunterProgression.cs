@@ -409,36 +409,36 @@ public sealed class Hunter
     /// <c>Σ CostOfRank(0..n−1)</c> — the same formula <see cref="Train"/> charges, read from the same
     /// tuning, which is why this can promise a 100% refund without bookkeeping.
     /// </remarks>
-    public int TrainingRefund()
-        => _ranks.Values.Sum(rank => Enumerable.Range(0, rank).Sum(r => CostOfRank(r, _tuning)));
+    /// <summary>Every rank trained across all nine stats — what a reset would erase.</summary>
+    public int TotalTrainedRanks => _ranks.Values.Sum();
 
     /// <summary>How many Crystal a reset takes. Public so the screen can print the real price.</summary>
     public int TrainingResetCrystalCost => _tuning.TrainingResetCrystalCost;
 
     /// <summary>
-    /// Whether RESET ALL TRAINING would do anything: there are ranks to refund AND the Crystal to pay.
+    /// Whether RESET ALL TRAINING would do anything: there are ranks to erase AND the Crystal to pay.
     /// </summary>
     public bool CanResetTraining
-        => TrainingRefund() > 0 && MaterialOf(Material.Crystal) >= _tuning.TrainingResetCrystalCost;
+        => TotalTrainedRanks > 0 && MaterialOf(Material.Crystal) >= _tuning.TrainingResetCrystalCost;
 
     /// <summary>
-    /// Undo every trained rank: pay the Crystal price, return 100% of the Gleam the ranks cost, and
-    /// set all nine stats back to rank zero. Returns the Gleam refunded — 0 means nothing happened.
+    /// Undo every trained rank: pay the Crystal price and set all nine stats back to rank zero.
+    /// NO GLEAM COMES BACK — the designer's call (2026-08-24): a full refund made the reset a free
+    /// re-deal, and re-dealing is meant to cost the career it undoes. The screen warns in the armed
+    /// confirm. Returns true when the reset actually happened.
     /// </summary>
     /// <remarks>
     /// Validate-then-spend, like every charter call site: the Crystal leaves the stock only when the
     /// reset actually happens. With no ranks trained it refuses even when a Crystal is held — a reset
-    /// that takes the rarest material and gives nothing back would be a paid refusal.
+    /// that takes the rarest material and erases nothing would be a paid refusal.
     /// </remarks>
-    public int ResetTraining()
+    public bool ResetTraining()
     {
-        var refund = TrainingRefund();
-        if (refund <= 0) return 0;
-        if (!SpendMaterial(Material.Crystal, _tuning.TrainingResetCrystalCost)) return 0;
+        if (TotalTrainedRanks <= 0) return false;
+        if (!SpendMaterial(Material.Crystal, _tuning.TrainingResetCrystalCost)) return false;
 
         foreach (var stat in Enum.GetValues<HunterStat>()) _ranks[stat] = 0;
-        AddGleam(refund);
-        return refund;
+        return true;
     }
 
     public void AddGleam(int amount) => Gleam += Math.Max(0, amount);

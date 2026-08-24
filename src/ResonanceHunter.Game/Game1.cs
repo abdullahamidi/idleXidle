@@ -3195,7 +3195,7 @@ public class Game1 : Game
             // Gleam is one of the three payouts a descent makes, and this is the layer it buys. The model
             // (geometric cost, rank cap) has always been here; until now nothing in the game called it.
             if (_stats.ConsumeTrain() is { } stat && _hunter.Train(stat)) { _sound.Play("sfx_click", 0.8f); Save(); }
-            if (_stats.ConsumeReset() && _hunter.ResetTraining() > 0) { _sound.Play("sfx_forge", 0.8f); Save(); }
+            if (_stats.ConsumeReset() && _hunter.ResetTraining()) { _sound.Play("sfx_forge", 0.8f); Save(); }
         }
         else _expedition.Draw(_batch, CanvasMouse, MouseClicked, Regions.Get(_activeRegion).Name, EnemyArtFor(_activeRegion), _bootTimer > 0f);
 
