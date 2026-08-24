@@ -24,6 +24,12 @@ public static class Display
         => CanvasFit.LargestIntegerScale(viewportWidth, viewportHeight);
 
     /// <summary>Where the canvas is drawn inside the viewport: integer-scaled, centred, letterboxed.</summary>
+    public static Rectangle PresentFit(int viewportWidth, int viewportHeight)
+    {
+        var r = CanvasFit.PresentFit(viewportWidth, viewportHeight);
+        return new Rectangle(r.X, r.Y, r.Width, r.Height);
+    }
+
     public static Rectangle Present(int viewportWidth, int viewportHeight, int scale)
     {
         var r = CanvasFit.Present(viewportWidth, viewportHeight, scale);

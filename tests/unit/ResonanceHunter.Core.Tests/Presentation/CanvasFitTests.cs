@@ -113,4 +113,30 @@ public class CanvasFitTests
             Assert.True(CanvasFit.CanvasHeight * s <= 1080, $"{s}x is taller than 1080p");
         }
     }
+    [Fact]
+    public void test_present_fit_fills_a_small_laptop_edge_to_edge()
+    {
+        // Arrange + Act — the two panels the integer rule served worst.
+        var hd = CanvasFit.PresentFit(1280, 720);
+        var laptop = CanvasFit.PresentFit(1366, 768);
+
+        // Assert — 1280x720 is exactly 16:9, so the fit IS the screen; 1366x768 fills the height.
+        Assert.Equal((0, 0, 1280, 720), (hd.X, hd.Y, hd.Width, hd.Height));
+        Assert.Equal(768, laptop.Height);
+        Assert.True(laptop.Width >= 1364, $"width {laptop.Width} should fill nearly all of 1366");
+    }
+
+    [Fact]
+    public void test_to_canvas_maps_a_fractional_fit_exactly()
+    {
+        // Arrange — a 1280x720 fit is scale 8/3: no integer maps it.
+        var present = CanvasFit.PresentFit(1280, 720);
+
+        // Act + Assert — corners land on the canvas corners, the centre on the centre,
+        // and a point one pixel left of the canvas still maps OFF it.
+        Assert.Equal((0, 0), CanvasFit.ToCanvas(0, 0, present));
+        Assert.Equal((479, 269), CanvasFit.ToCanvas(1279, 719, present));
+        Assert.Equal((240, 135), CanvasFit.ToCanvas(640, 360, present));
+        Assert.True(CanvasFit.ToCanvas(-1, 0, present).X < 0);
+    }
 }

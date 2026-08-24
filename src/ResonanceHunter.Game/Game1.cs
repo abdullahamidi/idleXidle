@@ -3047,10 +3047,19 @@ public class Game1 : Game
     {
         var vw = _graphics.PreferredBackBufferWidth;
         var vh = _graphics.PreferredBackBufferHeight;
-        _scale = _displayMode == DisplayMode.Windowed
-            ? _windowedScale
-            : Display.LargestIntegerScale(vw, vh);
-        _present = Display.Present(vw, vh, _scale);
+        // Windowed keeps the exact integer sizes the buttons advertise; fullscreen and borderless
+        // ASPECT-FIT at any scale — on a 1366x768 laptop the old integer rule showed a 960x540 canvas
+        // in a frame of letterbox with seven-pixel body text (2026-08-23 audit).
+        if (_displayMode == DisplayMode.Windowed)
+        {
+            _scale = _windowedScale;
+            _present = Display.Present(vw, vh, _scale);
+        }
+        else
+        {
+            _scale = Display.LargestIntegerScale(vw, vh);   // still shown nowhere; kept for the label below
+            _present = Display.PresentFit(vw, vh);
+        }
     }
 
     /// <summary>Wheel notches this frame: + = scroll up/away, - = down/toward. Latched in Update.</summary>
@@ -3314,7 +3323,7 @@ public class Game1 : Game
         // had nowhere to live that wasn't already occupied — it landed on the greyed buttons. The
         // header is free space that is already describing exactly this, so it says it instead.
         var windowed = _displayMode == DisplayMode.Windowed;
-        Text(windowed ? "WINDOW SIZE" : $"AUTO FIT — {_scale}x", 1000, 168, Bone);
+        Text(windowed ? "WINDOW SIZE" : $"AUTO FIT — {_present.Width}x{_present.Height}", 1000, 168, Bone);
 
         var modes = new[] { DisplayMode.Windowed, DisplayMode.Borderless, DisplayMode.Fullscreen };
         var modeNames = new[] { "WINDOWED", "BORDERLESS", "FULLSCREEN" };
