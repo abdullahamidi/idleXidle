@@ -51,6 +51,18 @@ public static class ItemAffixes
     };
 
     /// <summary>
+    /// <see cref="GrantLabel"/> at one extra decimal, for before → after comparisons. A single upgrade
+    /// rung moves an affix by ~2% of itself, which the round figure swallows whole — both sides of the
+    /// arrow printed the same number and the growth looked fake (playtest 2026-08-23).
+    /// </summary>
+    public static string GrantLabelPrecise(AffixStat stat, float magnitude) => stat switch
+    {
+        AffixStat.Crit => $"+{magnitude:0.00}%",
+        AffixStat.Defense => $"+{magnitude:0.0}",
+        _ => $"+{magnitude * 100f:0.0}%",
+    };
+
+    /// <summary>
     /// The stat's player-facing WORD — the other half of <see cref="GrantLabel"/>.
     /// </summary>
     /// <remarks>

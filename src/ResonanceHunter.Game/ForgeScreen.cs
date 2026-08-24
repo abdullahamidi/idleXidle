@@ -519,6 +519,10 @@ public sealed class ForgeScreen
 
     /// <summary>The destructive action waiting on an answer, or null. A null id means the whole junk pile.</summary>
     private (ScrapKind Kind, string? ItemId)? _confirm;
+
+    /// <summary>The SET-A-GEM question waiting on an answer, or null. Socketing is one-way (crushing
+    /// destroys the gem) and costs Essence, so it always asks — this is not gated on AskBeforeScrap.</summary>
+    private (string HostId, string GemId)? _socketAsk;
     private bool _confirmSuppress;    // the dialog checkbox — reset on every open
     private int _confirmGemIndex;     // CrushGem only: which socket the question is about
     private bool _confirmOpenedNow;   // swallows the click that OPENED the dialog so it cannot also answer it
@@ -827,10 +831,10 @@ public sealed class ForgeScreen
     }
 
     /// <summary>Is the SELL/SALVAGE question on screen? The host reads it to give Esc the right job.</summary>
-    public bool ConfirmOpen => _confirm is not null;
+    public bool ConfirmOpen => _confirm is not null || _socketAsk is not null;
 
     /// <summary>Withdraw the question — Esc, or navigating away. Withdrawing never scraps anything.</summary>
-    public void CancelConfirm() => _confirm = null;
+    public void CancelConfirm() { _confirm = null; _socketAsk = null; }
 
     private void OpenConfirm(ScrapKind kind, string? itemId)
     {
@@ -1226,7 +1230,14 @@ public sealed class ForgeScreen
             if (UiKit.ClickedIn(row, hit, clicked))
             {
                 if (!gemMode) { _focusId = it.InstanceId; _focusFollow = true; }
-                else if (Target() is { } host) TrySocket(hunter, host, it);
+                else if (Target() is { } host)
+                {
+                    // ASK FIRST (playtest 2026-08-23): a set gem can never come back out — crushing it
+                    // later destroys it — and this click also spends Essence. One click committing all
+                    // of that silently was the bug.
+                    _socketAsk = (host.InstanceId, it.InstanceId);
+                    _confirmOpenedNow = true;
+                }
                 else Say("NO GEAR ON THE BENCH — A GEM GOES INTO AN ITEM.", Slate);
             }
             if (gemMode && UiKit.ClickedIn(row, hit, rightClicked)) Sell(hunter, it);
@@ -1290,8 +1301,8 @@ public sealed class ForgeScreen
             // it would conclude that gems only ever fit whatever the bench happened to be pointing at.
             var help = new[]
             {
-                "CLICK A GEM TO SET IT INTO THE ITEM",
-                "IN THE MIDDLE. RIGHT-CLICK TO SELL.",
+                "CLICK A GEM — THE FORGE ASKS BEFORE",
+                "SETTING IT. RIGHT-CLICK TO SELL.",
                 "TO CHANGE THAT ITEM, OPEN THE",
                 "UPGRADE TAB AND CLICK ONE.",
             };
@@ -1413,7 +1424,7 @@ public sealed class ForgeScreen
             _ui.TextCenterBig(b, TabNames[i], r.Center.X, r.Y + 13, on ? Gold : hover ? Bone : Slate,
                               UiTypography.Body, TextFace.Strong);
             // Switching tabs withdraws any question the old tab was asking — see NormaliseConfirm.
-            if (UiKit.ClickedIn(r, hit, clicked) && !on) { _tab = (Tab)i; _confirm = null; }
+            if (UiKit.ClickedIn(r, hit, clicked) && !on) { _tab = (Tab)i; _confirm = null; _socketAsk = null; }
         }
     }
 
@@ -1468,12 +1479,12 @@ public sealed class ForgeScreen
             int valuesStart;
             if (nxt is not null && i < nxt.Count)
             {
-                _ui.TextRight(b, AffixVal(nxt[i]), Card.Right, ay, Met);
-                var aw = _ui.Measure(AffixVal(nxt[i]));
+                _ui.TextRight(b, AffixValPrecise(nxt[i]), Card.Right, ay, Met);
+                var aw = _ui.Measure(AffixValPrecise(nxt[i]));
                 Arrow(b, Card.Right - aw - 26, ay + 3, Bloom);
                 var beforeRight = Card.Right - aw - 52;
-                _ui.TextRight(b, AffixVal(cur[i]), beforeRight, ay, Slate);
-                valuesStart = beforeRight - _ui.Measure(AffixVal(cur[i]));
+                _ui.TextRight(b, AffixValPrecise(cur[i]), beforeRight, ay, Slate);
+                valuesStart = beforeRight - _ui.Measure(AffixValPrecise(cur[i]));
             }
             else
             {
@@ -1668,8 +1679,22 @@ public sealed class ForgeScreen
                       [MatPrice(hunter, Material.Essence, GemCraft.SocketCost(item.Rarity))], null, 0);
         }
 
-        // A question about a gem — crush a set one, sell a loose one — takes the strip's place.
+        // A question about a gem — set a loose one, crush a set one, sell a loose one — takes the
+        // strip's place.
         var gy = sy + 184;
+        if (_socketAsk is { } sa)
+        {
+            // Re-resolved every frame: the bench item may have changed, the gem may have been sold.
+            var saHost = Target();
+            var saGem = _inv.FirstOrDefault(i => i.InstanceId == sa.GemId);
+            if (saHost is null || saHost.InstanceId != sa.HostId || saGem is null || !GemCraft.IsGem(saGem))
+                _socketAsk = null;
+            else
+            {
+                DrawSocketQuestion(b, hunter, saHost, saGem, new Rectangle(x, gy, w, body.Bottom - gy), hit, clicked);
+                return;
+            }
+        }
         if (_confirm is { } ask && ask.ItemId is { } qid && (ask.Kind == ScrapKind.CrushGem || ask.Kind == ScrapKind.Sell))
         {
             if (ask.Kind == ScrapKind.CrushGem && qid == item.InstanceId && _confirmGemIndex < item.Gems.Count)
@@ -1737,6 +1762,36 @@ public sealed class ForgeScreen
         if (GemCraft.Crush(host, index) is not { } result) return;
         ReplaceItem(hunter, host, result.Product);
         Say($"{GemCraft.NameOf(result.Crushed)} CRUSHED — THE SOCKET IS OPEN.", Slate);
+    }
+
+    /// <summary>The SET question — socketing is one-way, so the forge asks before it commits.</summary>
+    private void DrawSocketQuestion(SpriteBatch b, Hunter hunter, ItemInstance host, ItemInstance gem,
+                                    Rectangle area, Point hit, bool clicked)
+    {
+        // The click that OPENED the question is still latched this frame; it must not also answer it.
+        if (_confirmOpenedNow) { clicked = false; _confirmOpenedNow = false; }
+
+        var x = area.X; var y = area.Y; var w = area.Width;
+        _ui.Fill(b, new Rectangle(x - 12, y - 10, w + 24, 262), new Color(0x1C, 0x1A, 0x2A, 0xC0));
+        _ui.TextBig(b, "SET THIS GEM?", x, y, Gold, UiTypography.SectionTitle);
+        DrawItemIcon(b, gem, new Rectangle(x, y + 44, 56, 56));
+        _ui.TextBig(b, _ui.ShortenBig($"{GemCraft.NameOf(gem)} {gem.ItemLevel}  —  {ItemAffixes.GrantLabel(GemCraft.StatOf(gem), GemCraft.Magnitude(gem))} {AffixName(GemCraft.StatOf(gem))}", w - 70, UiTypography.Body),
+                    x + 70, y + 58, RarityColors[(int)gem.Rarity], UiTypography.Body);
+        _ui.TextBig(b, _ui.ShortenBig($"INTO {ItemNaming.FullName(host)} — COSTS {GemCraft.SocketCost(host.Rarity)} ESSENCE.", w, UiTypography.Secondary),
+                    x, y + 116, Bone, UiTypography.Secondary);
+        _ui.TextBig(b, "A SET GEM CANNOT COME BACK OUT — CRUSHING IT LATER DESTROYS IT.",
+                    x, y + 144, Slate, UiTypography.Secondary);
+
+        var bw = (w - 16) / 2;
+        var keep = new Rectangle(x, y + 186, bw, 56);
+        var doIt = new Rectangle(x + bw + 16, y + 186, bw, 56);
+        // KEEP sits first, so a reflex click lands on the safe answer.
+        if (_ui.Button(b, keep, "NO — KEEP IT", hit, clicked)) { _socketAsk = null; return; }
+        if (_ui.Button(b, doIt, "YES — SET IT", hit, clicked))
+        {
+            _socketAsk = null;
+            TrySocket(hunter, host, gem);
+        }
     }
 
     /// <summary>The CRUSH question, in the socket tab, in the gem strip's place.</summary>
@@ -2188,6 +2243,13 @@ public sealed class ForgeScreen
     /// <summary>The magnitude in the stat's own unit. Core owns it — see <see cref="ItemAffixes.GrantLabel"/>.</summary>
     private static string AffixVal(ItemAffix a) => ItemAffixes.GrantLabel(a.Stat, a.Magnitude);
 
+    /// <summary>One decimal, for the before → after rows only. Playtest 2026-08-23: "why does UPGRADE
+    /// not raise the stats?" — it does, ~2% relative a rung, but "+11.2% → +11.4%" both rounded to
+    /// "+11%", so the card showed the same number on both sides of the arrow and the growth looked
+    /// like a lie. Everywhere else keeps the round figure; the comparison is where precision earns
+    /// its clutter.</summary>
+    private static string AffixValPrecise(ItemAffix a) => ItemAffixes.GrantLabelPrecise(a.Stat, a.Magnitude);
+
     private void DrawDebug(SpriteBatch b)
     {
         var rects = new[] { BagPanel, ItemPanel, ActionPanel, WalletPanel, Card, Action };
@@ -2493,7 +2555,7 @@ public sealed class ForgeScreen
         {
             var keep = new Rectangle(full.Center.X - 180, full.Y + 372, 360, 56);
             _revealHots.Add(keep);
-            if (_ui.Button(b, keep, "KEEP ALL AND CLOSE", mouse, click)) AdvanceReveal();
+            if (_ui.Button(b, keep, "CLOSE", mouse, click)) AdvanceReveal();
         }
 
         // LAST, so nothing is drawn over it — and BESIDE THE CARD rather than under the pointer. At the
@@ -2724,7 +2786,7 @@ public sealed class ForgeScreen
         // who does not care — but the way out is now a thing you can see and press.
         var keepAll = new Rectangle(panel.Center.X - 190, cellsBottom + 72, 380, 56);
         _revealHots.Add(keepAll);
-        if (_ui.Button(b, keepAll, "KEEP ALL AND CLOSE", mouse, click)) AdvanceReveal();
+        if (_ui.Button(b, keepAll, "CLOSE", mouse, click)) AdvanceReveal();
 
         // Anchored to the hovered CELL, not to the pointer. At the pointer the card lands on the item's
         // own SELL and SALVAGE buttons — the two things it is helping you choose between.

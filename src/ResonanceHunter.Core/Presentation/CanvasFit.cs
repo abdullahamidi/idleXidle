@@ -31,8 +31,13 @@ public static class CanvasFit
     public const int CanvasWidth = 480;
     public const int CanvasHeight = 270;
 
-    /// <summary>Scales offered in windowed mode. Beyond 4x exceeds most laptop panels.</summary>
-    public static readonly int[] WindowedScales = { 2, 3, 4 };
+    /// <summary>
+    /// Scales offered in windowed mode. Beyond 4x exceeds most laptop panels. 2x (960x540) was cut
+    /// after the 2026-08-23 playtest — "I cannot read any of the text, everything is tiny": the 1920
+    /// chrome's body type lands at ~11 physical pixels there, below what the hand-drawn face can hold.
+    /// 3x (1440x810) is the floor that stays readable.
+    /// </summary>
+    public static readonly int[] WindowedScales = { 3, 4 };
 
     /// <summary>
     /// The biggest whole multiple of the canvas that fits in a viewport.

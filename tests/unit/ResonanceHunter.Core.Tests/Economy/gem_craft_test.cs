@@ -241,5 +241,22 @@ public class GemCraftTest
         Assert.Equal(6, gem.ItemLevel);
         Assert.Equal(GemCraft.StatOf(Gem("gem_save", 6)), GemCraft.StatOf(gem));
     }
-}
+    [Fact]
+    public void test_item_affixes_grant_label_precise_shows_one_rung_of_growth()
+    {
+        // Arrange — one upgrade rung moves an affix by ~2% of itself; the round label swallowed it.
+        var before = 0.112f;   // +11.2% damage
+        var after = 0.114f;    // +11.4% damage
 
+        // Act
+        var round = (ItemAffixes.GrantLabel(AffixStat.Damage, before), ItemAffixes.GrantLabel(AffixStat.Damage, after));
+        var precise = (ItemAffixes.GrantLabelPrecise(AffixStat.Damage, before), ItemAffixes.GrantLabelPrecise(AffixStat.Damage, after));
+
+        // Assert — the round pair collapses to the same text; the precise pair must not.
+        Assert.Equal(round.Item1, round.Item2);
+        Assert.NotEqual(precise.Item1, precise.Item2);
+        // And the units survive: defence stays flat, critical chance stays a percentage.
+        Assert.DoesNotContain("%", ItemAffixes.GrantLabelPrecise(AffixStat.Defense, 14.3f));
+        Assert.Contains("%", ItemAffixes.GrantLabelPrecise(AffixStat.Crit, 1.53f));
+    }
+}
