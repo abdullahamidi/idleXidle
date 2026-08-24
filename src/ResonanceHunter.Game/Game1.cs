@@ -76,8 +76,8 @@ public class Game1 : Game
     private DisplayMode _displayMode = DisplayMode.Windowed;
     private int _windowedScale = 3;
     // Sound + dialog prefs ride the same prefs file as the display mode (Display.GamePrefs).
-    private int _sfxVolume = 8;     // 0..10 notches
-    private int _musicVolume = 5;   // 0..10 notches
+    private int _sfxVolume = 80;     // 0..100 percent (the settings sliders)
+    private int _musicVolume = 50;   // 0..100 percent
     private bool _askBeforeScrap = true;
     // The fight's text and effects — quality-of-life switches (playtest 2026-08-23), same prefs file.
     private bool _showDamageNumbers = true, _showSkillCallouts = true, _showHitEffects = true, _showScreenFlash = true;
@@ -344,7 +344,7 @@ public class Game1 : Game
         };
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
-        Window.Title = "Resonance Hunter — prototype";
+        Window.Title = "IDLExIDLE — pre-alpha";
     }
 
     // ── Persistence. For an idle game this is not plumbing — it IS the game. ──────────────────
@@ -532,6 +532,10 @@ public class Game1 : Game
         // not a screen built in LoadContent. That distinction is exactly what crashed the game once.
         _characters.Restore(save.ActiveCharacterId, save.QuestsDone);
         _runsWithVowKept = save.RunsWithVowKept;
+        // The guide rungs the player closed by hand — names, so a reordered enum can never
+        // dismiss a different lesson. A plain field, so restoring here (Initialize) is safe.
+        _dismissedGuide.Clear();
+        foreach (var rung in save.DismissedGuideRungs) _dismissedGuide.Add(rung);
         // PARKED, exactly like the run log above and for exactly the reason the comment above gives.
         // This line was `_forge.RestoreChestsOpened(...)`, and _forge is a ForgeScreen built in
         // LoadContent — which has not run yet. It threw a NullReferenceException and took the game down
@@ -735,6 +739,7 @@ public class Game1 : Game
             ChestKeepSlots = _chestKeepSlots.Select(sl => sl.ToString()).ToList(),
             MasteryEarned = _deepestEver,          // stored as deepest-ever; Earned is re-derived on load
             ChampionGleamRate = _champGleamRate,
+            DismissedGuideRungs = _dismissedGuide.OrderBy(s => s).ToList(),
             // Unopened chests ride along too — a boss's drop must survive a reload, opened or not.
             UnopenedChests = _forge.UnopenedChests
                 .Select(c => new SavedChest
@@ -846,6 +851,7 @@ public class Game1 : Game
         // recompute lives below the title branch, so it never runs there (review 2026-08-23).
         _swallowInput = false;
         _guideStep = null;
+        _dismissedGuide.Clear();
         _conquerMsg = "";
         _lockedMsg = "";
         _lockedTimer = 0f;
@@ -953,8 +959,8 @@ public class Game1 : Game
         // Audio is disabled during headless screenshot/CI runs (RH_SHOT set) — those machines may have
         // no sound device, and a screenshot never needs sound. Real runs get the full audio bank.
         _sound = new SoundBank(disable: Environment.GetEnvironmentVariable("RH_SHOT") is not null);
-        _sound.SfxVolume = _sfxVolume / 10f;
-        _sound.MusicVolume = _musicVolume / 10f;
+        _sound.SfxVolume = _sfxVolume / 100f;
+        _sound.MusicVolume = _musicVolume / 100f;
         _ui = new UiKit(GraphicsDevice, _font, _assets);
         BuildScreens();
         // The canvas is now 1920x1080; screens still draw in 480x270 logical units (see ArtScale).
@@ -1178,6 +1184,17 @@ public class Game1 : Game
         // too): the armed state of START A NEW GAME, and the COPIED confirmation line.
         if (_resetArmTimer > 0f) _resetArmTimer = Math.Max(0f, _resetArmTimer - dt);
         if (_feedbackToastTimer > 0f) _feedbackToastTimer = Math.Max(0f, _feedbackToastTimer - dt);
+        // The hover-tip clock only ever counts UP here; DrawSettings resets it whenever the
+        // hovered row changes, so the delay is measured on whichever screen the panel is over.
+        _tipTimer = Math.Min(_tipTimer + dt, 10f);   // capped: an uncapped float stalls after days
+        // A closed panel holds no dropdown open and no slider mid-drag. The drag latch is the
+        // quiet failure: Esc mid-drag must still write the prefs the drag was setting.
+        if (!_showSettings)
+        {
+            _settingsDropdown = 0;
+            _tipKey = "";
+            if (_dragSlider != 0) { _dragSlider = 0; SaveDisplay(); }
+        }
 
         // START A NEW GAME, confirmed on the settings panel last frame. Acted on HERE, between
         // frames, because it replaces every screen object the frame that requested it was still
@@ -1193,7 +1210,7 @@ public class Game1 : Game
             // screen is gone, so they had nothing to pose.
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
-                or "banked" or "lootforge" or "settings" or "settingsfull" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
+                or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
                 or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "traitlit" or "traitterm" or "traitterminal"
                 or "roster" or "rosterlocked" or "weave" or "vault" or "attune" or "attuned" or "trader")
             {
@@ -1504,6 +1521,10 @@ public class Game1 : Game
                 if (sm == "help") _showHelp = true;
                 if (sm == "settings") _showSettings = true;
                 if (sm == "settingsfull") { _showSettings = true; _displayMode = DisplayMode.Fullscreen; }
+                // Poses the MODE dropdown OPEN, so the option list's z-order over the rows under
+                // it is photographable (pair with RH_SHOT_MOUSE to park the cursor on a row and
+                // pose its hover explanation in the same shot).
+                if (sm == "settingsopen") { _showSettings = true; _settingsDropdown = 1; }
                 if (sm == "world")
                 {
                     // Show a mid-progression map: home conquered, Cinderworks unlocked.
@@ -1876,6 +1897,23 @@ public class Game1 : Game
         if (!_showSettings && !_showHelp && !_swallowInput && _clicked && SettingsGear.Contains(ChromeMouse))
         {
             _showSettings = true;
+            _swallowInput = true;
+        }
+
+        // THE GUIDE STRIP CAN BE CLOSED (playtest: "messages stay forever until I do the thing").
+        // Its small x dismisses THAT rung for good — remembered in the save — and the guide shows
+        // the next lesson as if this one were completed. Display only: no underlying fact is
+        // faked, so unlocks and gates are untouched. Handled here rather than in Draw so the
+        // click is swallowed before any screen hit-tests it.
+        if (!_showSettings && !_showHelp && !_swallowInput && _clicked
+            && _unlockShowing.Length == 0
+            && _guideStep is { } closable && Tutorial.HasGuidance(closable)
+            && GuideCloseRect(GuideBannerRect(closable)).Contains(ChromeMouse))
+        {
+            _dismissedGuide.Add(closable.ToString());
+            _guideStep = Tutorial.Showing(GuideFacts(), _dismissedGuide);
+            _sound.Play("sfx_click", 0.6f);
+            Save();
             _swallowInput = true;
         }
 
@@ -2512,23 +2550,38 @@ public class Game1 : Game
         if (_unlockShowing.Length > 0) return;
         if (_guideStep is not { } step || !Tutorial.HasGuidance(step)) return;
 
-        const int width = 980;
-        var x = (1920 - width) / 2;
-        var body = _ui.WrapBig(Tutorial.Body(step), width - 44, UiTypography.Secondary);
-        var height = 58 + body.Count * 22;
-        var y = 1080 - height - 26;
+        var r = GuideBannerRect(step);
+        var body = _ui.WrapBig(Tutorial.Body(step), r.Width - 44, UiTypography.Secondary);
 
-        _ui.Fill(_batch, new Rectangle(x, y, width, height), new Color(0x10, 0x0D, 0x18, 0xEE));
-        _ui.Fill(_batch, new Rectangle(x, y, 5, height), NavGold);
+        _ui.Fill(_batch, r, new Color(0x10, 0x0D, 0x18, 0xEE));
+        _ui.Fill(_batch, new Rectangle(r.X, r.Y, 5, r.Height), NavGold);
 
-        _ui.TextBig(_batch, Tutorial.Title(step), x + 22, y + 14, NavGold, UiTypography.Body);
-        var ty = y + 44;
+        _ui.TextBig(_batch, Tutorial.Title(step), r.X + 22, r.Y + 14, NavGold, UiTypography.Body);
+        var ty = r.Y + 44;
         foreach (var line in body)
         {
-            _ui.TextBig(_batch, line, x + 22, ty, UiKit.Vellum, UiTypography.Secondary);
+            _ui.TextBig(_batch, line, r.X + 22, ty, UiKit.Vellum, UiTypography.Secondary);
             ty += 22;
         }
+
+        // The x that closes THIS lesson for good — see the dismissal handler in Update.
+        var close = GuideCloseRect(r);
+        var hover = close.Contains(ChromeMouse);
+        _ui.Fill(_batch, close, hover ? new Color(0x4A, 0x28, 0x30) : new Color(0x22, 0x1A, 0x30));
+        _ui.TextCenterBig(_batch, "×", close.Center.X, close.Y + 4, hover ? Color.White : UiKit.Vellum, 20);
     }
+
+    /// <summary>Where the guide strip sits this frame — its height follows the wrapped body.</summary>
+    private Rectangle GuideBannerRect(TutorialStep step)
+    {
+        const int width = 980;
+        var body = _ui.WrapBig(Tutorial.Body(step), width - 44, UiTypography.Secondary);
+        var height = 58 + body.Count * 22;
+        return new Rectangle((1920 - width) / 2, 1080 - height - 26, width, height);
+    }
+
+    /// <summary>The guide strip's small close button, top-right of the banner.</summary>
+    private static Rectangle GuideCloseRect(Rectangle banner) => new(banner.Right - 42, banner.Y + 10, 32, 32);
 
     /// <summary>The toast for clicking a locked rail tile. Says the price, then fades.</summary>
     private void DrawLockedToast()
@@ -2633,6 +2686,8 @@ public class Game1 : Game
         _expedition.Mastery = _mastery;               // …and the mastery tree (affinity + node bonuses)
         _expedition.BestDepthHere = _world.RegionFarm(def.Id).BestDepth;   // so NEW RECORD means it
         _expedition.ChestCount = _forge.UnopenedChests.Count;   // drives the fight screen's "go open a chest" nudge
+        _expedition.VaultOpen = Unlocks.IsOpen(Activity.Vault, GuideUnlockFacts());       // the rail hides a reward whose screen is locked
+        _expedition.MasteryOpen = Unlocks.IsOpen(Activity.Mastery, GuideUnlockFacts());   // SPEND POINTS only shows once the tree is open
         _expedition.IdleGleamRate = _champGleamRate;            // gleam/sec the champion earns idle → HUNT idle panel
         // THE FIGHT RAIL'S REWARD BUTTONS NAVIGATE, and the host is what navigates. The screen only
         // records that they were pressed — a fight screen that opened chests itself would be a second
@@ -2648,12 +2703,12 @@ public class Game1 : Game
             _chestKeepSlots.Clear(); foreach (var sl in _expedition.KeepSlots) _chestKeepSlots.Add(sl);
             Save();
         }
-        if (_expedition.WantsBuild) { _expedition.WantsBuild = false; OpenNav(3); }
+        if (_expedition.WantsMastery) { _expedition.WantsMastery = false; OpenNav(4); }   // MASTERY (E) — the tree where the points are spent
 
         // The first-run guide, or null once outgrown. Held on the HOST, not on the fight screen: it is
         // drawn as chrome over every screen now (DrawGuideBanner), because a guide that vanishes the
         // moment you obey it reads as a guide that has stopped working.
-        _guideStep = Tutorial.Showing(GuideFacts());
+        _guideStep = Tutorial.Showing(GuideFacts(), _dismissedGuide);
 
         _forge.Tuning = ForgeTuning.Default with
         {
@@ -3132,6 +3187,7 @@ public class Game1 : Game
             // Gleam is one of the three payouts a descent makes, and this is the layer it buys. The model
             // (geometric cost, rank cap) has always been here; until now nothing in the game called it.
             if (_stats.ConsumeTrain() is { } stat && _hunter.Train(stat)) { _sound.Play("sfx_click", 0.8f); Save(); }
+            if (_stats.ConsumeReset() && _hunter.ResetTraining() > 0) { _sound.Play("sfx_forge", 0.8f); Save(); }
         }
         else _expedition.Draw(_batch, CanvasMouse, MouseClicked, Regions.Get(_activeRegion).Name, EnemyArtFor(_activeRegion), _bootTimer > 0f);
 
@@ -3226,25 +3282,54 @@ public class Game1 : Game
         _showDamageNumbers, _showSkillCallouts, _showHitEffects, _showScreenFlash));
 
     // ── Settings ──────────────────────────────────────────────────────────────────────────────
-    // 1920-space (scale-1 chrome). The panel is 960x720 — aspect 1.33, safely above UiKit.Panel's 1.30
-    // frame-selection line, so growing it for the sound section did not swap its frame art.
-    // 2026-08-23: grown to 1250x960 (aspect 1.30 — still on the medium side of the 1.30 line, so the
-    // frame art is unchanged) for the FIGHT TEXT AND EFFECTS block. The content column stays at x 536..1404.
-    private static readonly Rectangle SettingsPanel = new(335, 60, 1250, 960);
-    // 2026-08-24: the whole column tightened (mode rows 84→74 pitch, every block lifted) to make room
-    // for two new rows — COPY FEEDBACK CODE and START A NEW GAME — without growing the panel past the
-    // 1.30 aspect line that would swap its frame art.
-    private static Rectangle ModeBtn(int i) => new(536, 200 + i * 74, 384, 64);
-    private static Rectangle ScaleBtn(int i) => new(1000, 200 + i * 74, 384, 64);
-    private static readonly Rectangle SettingsClose = new(620, 956, 300, 52);
-    private static readonly Rectangle SettingsQuit = new(1000, 956, 300, 52);
+    // 1920-space (scale-1 chrome). 2026-08-24, playtest nine: MODE and WINDOW SIZE became dropdowns
+    // and the volume rows became draggable sliders, which freed two button rows of height — the panel
+    // shrank from 1250x960 to 1250x880 and moved down under the title. Aspect 1250/880 = 1.42, still
+    // comfortably above UiKit.Panel's 1.30 medium-frame line, so the frame art is unchanged. The
+    // content column stays at x 536..1384, and CLOSE / QUIT now end 44px above the panel's bottom
+    // edge instead of sitting on its frame.
+    private static readonly Rectangle SettingsPanel = new(335, 100, 1250, 880);
+
+    /// <summary>The closed MODE dropdown row — shows the current mode, opens the list on click.</summary>
+    private static readonly Rectangle SettingsModeRow = new(860, 202, 524, 58);
+
+    /// <summary>The closed WINDOW SIZE dropdown row. Dim and inert outside WINDOWED mode.</summary>
+    private static readonly Rectangle SettingsSizeRow = new(860, 278, 524, 58);
+
+    /// <summary>The effects-volume slider track (the grab area is padded around it).</summary>
+    private static readonly Rectangle SettingsFxTrack = new(900, 416, 400, 30);
+
+    /// <summary>The music-volume slider track.</summary>
+    private static readonly Rectangle SettingsMusicTrack = new(900, 472, 400, 30);
+
+    private static readonly Rectangle SettingsClose = new(620, 880, 300, 56);
+    private static readonly Rectangle SettingsQuit = new(1000, 880, 300, 56);
 
     /// <summary>Copies the feedback code (build stamp + progress + run log) to the clipboard.</summary>
-    private static readonly Rectangle SettingsCopyFeedback = new(536, 830, 400, 52);
+    private static readonly Rectangle SettingsCopyFeedback = new(536, 800, 400, 52);
 
-    /// <summary>START A NEW GAME at rest, and its wider red armed state. Its own row, above QUIT.</summary>
-    private static readonly Rectangle SettingsNewGame = new(536, 896, 400, 52);
-    private static readonly Rectangle SettingsNewGameArmed = new(536, 896, 868, 52);
+    /// <summary>START A NEW GAME at rest, and its wider red armed state spanning the whole row.</summary>
+    private static readonly Rectangle SettingsNewGame = new(984, 800, 400, 52);
+    private static readonly Rectangle SettingsNewGameArmed = new(536, 800, 848, 52);
+
+    /// <summary>Which settings dropdown is open: 0 none, 1 MODE, 2 WINDOW SIZE. One at a time.</summary>
+    private int _settingsDropdown;
+
+    /// <summary>Which volume slider is mid-drag: 0 none, 1 effects, 2 music.</summary>
+    private int _dragSlider;
+
+    /// <summary>The settings row the cursor is resting on — the hover-tip target and its clock.</summary>
+    private string _tipKey = "";
+    private float _tipTimer;
+
+    /// <summary>Seconds a row must be hovered before its explanation appears.</summary>
+    private const float TipDelaySeconds = 0.35f;
+
+    /// <summary>Height of one option row in an open settings dropdown.</summary>
+    private const int DropRowHeight = 54;
+
+    /// <summary>Guide rungs the player closed by hand (TutorialStep names). Persisted in the save.</summary>
+    private readonly HashSet<string> _dismissedGuide = new();
 
     /// <summary>How long the armed are-you-sure state stays live before disarming itself.</summary>
     private const float ResetArmSeconds = 4f;
@@ -3257,114 +3342,97 @@ public class Game1 : Game
     /// </summary>
     /// <remarks>
     /// Drawn (not updated) because <see cref="UiKit.Button"/> hit-tests as it renders — the click edge
-    /// is latched in Update precisely so Draw can read it. WINDOW SIZE is offered only in windowed mode:
-    /// in borderless/fullscreen the scale is the monitor's to decide, and the buttons grey out rather
-    /// than vanish so the panel doesn't reflow under the cursor.
+    /// is latched in Update precisely so Draw can read it. MODE and WINDOW SIZE are dropdowns: the
+    /// closed row shows the current value, the open option list is drawn LAST in this method so it
+    /// wins the z-order, and while it is open every other row's click is disabled (see uiClick), so a
+    /// click meant for the list can never press what sits underneath it. WINDOW SIZE is offered only
+    /// in windowed mode: in borderless/fullscreen the scale is the monitor's to decide, and the row
+    /// dims rather than vanishing so the panel doesn't reflow under the cursor. Every row grows a
+    /// hover explanation after a short delay — see <see cref="DrawSettingsTips"/>.
     /// </remarks>
     private void DrawSettings()
     {
         _ui.Scrim(_batch, 0.75f);
         _ui.Panel(_batch, SettingsPanel);
-        // The panel is DARK glass, so light text on it — gold heading, bone labels. (It used to use dark
-        // parchment inks here, which were invisible on the dark panel.)
-        TextCenter("SETTINGS", 960, 108, Gold);
+        // The panel is DARK glass, so light text on it — gold heading, bone labels.
+        TextCenter("SETTINGS", 960, 138, Gold);
 
-        Text("MODE", 536, 168, Bone);
+        // A click reaches the ordinary rows only while no dropdown list is open. The open list is
+        // drawn over them, so its clicks — and the click that closes it — must be swallowed here.
+        var uiClick = _clicked && _settingsDropdown == 0;
+        var mouse = ChromeMouse;
 
-        // The right column's header doubles as its own explanation. A separate "fit to screen" line
-        // had nowhere to live that wasn't already occupied — it landed on the greyed buttons. The
-        // header is free space that is already describing exactly this, so it says it instead.
-        var windowed = _displayMode == DisplayMode.Windowed;
-        Text(windowed ? "WINDOW SIZE" : $"AUTO FIT — {_present.Width}x{_present.Height}", 1000, 168, Bone);
+        // The COPIED confirmation, up under the title where no row lives.
+        if (_feedbackToastTimer > 0f) TextCenter(_feedbackToast, 960, 172, Gold);
 
-        var modes = new[] { DisplayMode.Windowed, DisplayMode.Borderless, DisplayMode.Fullscreen };
+        // ── DISPLAY: two dropdowns. Closed rows draw here in layout order; the open list waits for
+        //    the end of the method. ──
+        Text("MODE", 536, 216, Bone);
         var modeNames = new[] { "WINDOWED", "BORDERLESS", "FULLSCREEN" };
-        for (var i = 0; i < modes.Length; i++)
+        var modeIdx = _displayMode == DisplayMode.Windowed ? 0 : _displayMode == DisplayMode.Borderless ? 1 : 2;
+        DropdownClosed(SettingsModeRow, modeNames[modeIdx], enabled: true, open: _settingsDropdown == 1);
+
+        var windowed = _displayMode == DisplayMode.Windowed;
+        Text("WINDOW SIZE", 536, 292, windowed ? Bone : Slate);
+        var sizeValue = windowed
+            ? $"{Display.CanvasWidth * _windowedScale}x{Display.CanvasHeight * _windowedScale}"
+            : $"AUTO — {_present.Width}x{_present.Height}";
+        DropdownClosed(SettingsSizeRow, sizeValue, enabled: windowed, open: _settingsDropdown == 2);
+
+        // ── SOUND. Draggable 0-100 sliders: a click jumps there, holding drags, releasing saves —
+        //    and the effects row clicks once on release so the new level is heard at the new level. ──
+        _ui.Fill(_batch, new Rectangle(536, 366, 848, 2), new Color(0x3A, 0x3A, 0x44));
+        Text("SOUND", 536, 380, Gold);
+
+        var fx = SliderRow("EFFECTS VOLUME", SettingsFxTrack, _sfxVolume, 1, uiClick);
+        if (fx >= 0 && fx != _sfxVolume)
         {
-            var on = _displayMode == modes[i];
-            var r = ModeBtn(i);
-            // The SELECTED row has to be the most readable one, not the least. `gold: true` only TINTS the
-            // frame art — the interior of a row this short is still near-black — so the dark ink chosen for
-            // "a gold surface" was drawn black on black, and the live display mode was the one thing on the
-            // panel you could not read. Gold ink on the dark interior, which is the pairing that works here.
-            if (on) _ui.Panel(_batch, r, gold: true); else _ui.PanelQuiet(_batch, r);
-            _ui.TextCenter(_batch, modeNames[i], r.Center.X, r.Center.Y - 12, on ? Gold : Bone);
-            if (UiKit.ClickedIn(r, ChromeMouse, _clicked) && !on)
-            {
-                _displayMode = modes[i];
-                ApplyDisplay();
-                SaveDisplay();
-            }
+            _sfxVolume = fx;
+            _sound.SfxVolume = _sfxVolume / 100f;   // live, so the release click previews the new level
         }
 
-        for (var i = 0; i < Display.WindowedScales.Length; i++)
+        var mu = SliderRow("MUSIC VOLUME", SettingsMusicTrack, _musicVolume, 2, uiClick);
+        if (mu >= 0 && mu != _musicVolume)
         {
-            var s = Display.WindowedScales[i];
-            var on = windowed && _windowedScale == s;
-            var r = ScaleBtn(i);
-            if (on) _ui.Panel(_batch, r, gold: true); else _ui.PanelQuiet(_batch, r);
-            var label = $"{Display.CanvasWidth * s}x{Display.CanvasHeight * s}";
-            _ui.TextCenter(_batch, label, r.Center.X, r.Center.Y - 12, on ? Gold : windowed ? Bone : Slate);
-            if (windowed && UiKit.ClickedIn(r, ChromeMouse, _clicked) && !on)
-            {
-                _windowedScale = s;
-                ApplyDisplay();
-                SaveDisplay();
-            }
+            _musicVolume = mu;
+            _sound.MusicVolume = _musicVolume / 100f;   // the playing bed follows the drag instantly
         }
 
-        // ── SOUND. Eleven notches per row: a slider with a real middle, persisted machine-level.
-        //    The music row applies to the PLAYING bed instantly; the effects row clicks so the new
-        //    level is heard at the new level. ──
-        _ui.Fill(_batch, new Rectangle(536, 428, 848, 2), new Color(0x3A, 0x3A, 0x44));
-        Text("SOUND", 536, 442, Gold);
-
-        var pickedFx = VolumeRow("EFFECTS VOLUME", 478, _sfxVolume);
-        if (pickedFx >= 0)
+        // The drag ends when the button does. Persist ONCE here, not on every dragged frame.
+        if (_dragSlider != 0 && _mouse.LeftButton == ButtonState.Released)
         {
-            _sfxVolume = pickedFx;
-            _sound.SfxVolume = _sfxVolume / 10f;
-            _sound.PlayFirst(1f, "sfx_click", "sfx_forge");
-            SaveDisplay();
-        }
-
-        var pickedMu = VolumeRow("MUSIC VOLUME", 528, _musicVolume);
-        if (pickedMu >= 0)
-        {
-            _musicVolume = pickedMu;
-            _sound.MusicVolume = _musicVolume / 10f;
+            if (_dragSlider == 1) _sound.PlayFirst(1f, "sfx_click", "sfx_forge");
+            _dragSlider = 0;
             SaveDisplay();
         }
 
         // ── FORGE. The way BACK for "don't ask me again" — a preference the player can suppress from
         //    a dialog must be reversible from settings, or one hasty click is permanent. ──
-        _ui.Fill(_batch, new Rectangle(536, 578, 848, 2), new Color(0x3A, 0x3A, 0x44));
-        Text("ASK BEFORE SELL OR SALVAGE", 536, 598, Bone);
-        var askBtn = new Rectangle(1160, 586, 244, 52);
-        if (_ui.Button(_batch, askBtn, _askBeforeScrap ? "ON — IT ASKS" : "OFF", ChromeMouse, _clicked))
+        _ui.Fill(_batch, new Rectangle(536, 542, 848, 2), new Color(0x3A, 0x3A, 0x44));
+        Text("ASK BEFORE SELL OR SALVAGE", 536, 566, Bone);
+        var askBtn = new Rectangle(1160, 554, 224, 52);
+        if (_ui.Button(_batch, askBtn, _askBeforeScrap ? "ON — IT ASKS" : "OFF", mouse, uiClick))
         {
             _askBeforeScrap = !_askBeforeScrap;
             _forge.AskBeforeScrap = _askBeforeScrap;
             SaveDisplay();
         }
 
-        // ── FIGHT TEXT AND EFFECTS. Quality-of-life switches (playtest 2026-08-23: "hasar textlerini
-        //    kapatma, skill yazılarını kapatma, gibi detaylı QoL ayarları"). Each is a plain ON/OFF;
-        //    the hunt reads them on its next frame (fed in Update with the other hosted flags). ──
-        _ui.Fill(_batch, new Rectangle(536, 654, 848, 2), new Color(0x3A, 0x3A, 0x44));
-        Text("FIGHT TEXT AND EFFECTS", 536, 668, Gold);
+        // ── FIGHT TEXT AND EFFECTS. Quality-of-life switches (playtest 2026-08-23). Each is a plain
+        //    ON/OFF; the hunt reads them on its next frame (fed in Update with the other flags). ──
+        _ui.Fill(_batch, new Rectangle(536, 632, 848, 2), new Color(0x3A, 0x3A, 0x44));
+        Text("FIGHT TEXT AND EFFECTS", 536, 646, Gold);
         var changed = false;
-        changed |= ToggleRow("DAMAGE NUMBERS", 536, 700, ref _showDamageNumbers);
-        changed |= ToggleRow("SKILL NAMES", 1000, 700, ref _showSkillCallouts);
-        changed |= ToggleRow("FIGHT EFFECTS", 536, 752, ref _showHitEffects);
-        changed |= ToggleRow("RED FLASH", 1000, 752, ref _showScreenFlash);
+        changed |= ToggleRow("DAMAGE NUMBERS", 536, 684, ref _showDamageNumbers, uiClick);
+        changed |= ToggleRow("SKILL NAMES", 1000, 684, ref _showSkillCallouts, uiClick);
+        changed |= ToggleRow("FIGHT EFFECTS", 536, 732, ref _showHitEffects, uiClick);
+        changed |= ToggleRow("RED FLASH", 1000, 732, ref _showScreenFlash, uiClick);
         if (changed) SaveDisplay();
 
-        // ── FEEDBACK. One click copies a code carrying the build stamp, the player's progress, the
-        //    worn build and the recent run reports — pasted to the developer beside their words, it
-        //    answers the follow-up questions a bug report usually needs. ──
-        _ui.Fill(_batch, new Rectangle(536, 812, 848, 2), new Color(0x3A, 0x3A, 0x44));
-        if (_ui.Button(_batch, SettingsCopyFeedback, "COPY FEEDBACK CODE", ChromeMouse, _clicked))
+        // ── FEEDBACK + RESET, side by side above the exit row. One click copies a code carrying the
+        //    build stamp and progress; two deliberate clicks delete the save (see StartNewGame). ──
+        _ui.Fill(_batch, new Rectangle(536, 786, 848, 2), new Color(0x3A, 0x3A, 0x44));
+        if (_ui.Button(_batch, SettingsCopyFeedback, "COPY FEEDBACK CODE", mouse, uiClick))
         {
             // The failure is NOT silent (same rule as the weave's copy button): no clipboard, no lie.
             _feedbackToast = ClipboardInterop.TrySet(FeedbackCode())
@@ -3372,20 +3440,14 @@ public class Game1 : Game
                 : "COPY FAILED — TRY AGAIN";
             _feedbackToastTimer = 4f;
         }
-        if (_feedbackToastTimer > 0f) Text(_feedbackToast, 956, 846, Gold);
 
-        // ── START A NEW GAME. Two clicks on purpose: the first arms a red are-you-sure state, the
-        //    second (within ResetArmSeconds) deletes the save. Any other click, or the timeout,
-        //    disarms. Its own row above QUIT TO DESKTOP, so a stray click cannot reach an armed
-        //    button that was not armed deliberately. The delete itself runs in Update, between
-        //    frames — see StartNewGame. ──
         if (_resetArmTimer > 0f)
         {
             _ui.Fill(_batch, SettingsNewGameArmed, new Color(0x8C, 0x1E, 0x1E));
             _ui.Fill(_batch, new Rectangle(SettingsNewGameArmed.X, SettingsNewGameArmed.Y, SettingsNewGameArmed.Width, 3), Ember);
             _ui.TextCenter(_batch, "SURE? THIS DELETES YOUR SAVE — CLICK AGAIN",
                            SettingsNewGameArmed.Center.X, SettingsNewGameArmed.Center.Y - 12, Color.White);
-            if (UiKit.ClickedIn(SettingsNewGameArmed, ChromeMouse, _clicked))
+            if (UiKit.ClickedIn(SettingsNewGameArmed, mouse, uiClick))
             {
                 _resetArmTimer = 0f;
                 _wantsNewGame = true;
@@ -3395,21 +3457,21 @@ public class Game1 : Game
                 _resetArmTimer = 0f;   // any click that is not the confirmation disarms
             }
         }
-        else if (_ui.Button(_batch, SettingsNewGame, "START A NEW GAME", ChromeMouse, _clicked))
+        else if (_ui.Button(_batch, SettingsNewGame, "START A NEW GAME", mouse, uiClick))
         {
             _resetArmTimer = ResetArmSeconds;
         }
 
-        if (_ui.Button(_batch, SettingsClose, "CLOSE", ChromeMouse, _clicked))
+        if (_ui.Button(_batch, SettingsClose, "CLOSE", mouse, uiClick))
+        {
             _showSettings = false;
+            _settingsDropdown = 0;
+        }
 
         // Esc no longer quits (it opens THIS panel), so the game needs a door that says what it does.
         // Hidden on the title screen, whose own menu already has QUIT — and whose Hunter may not exist
-        // yet to save.
-        // "QUIT TO DESKTOP", not "SAVE AND QUIT": settings changes save themselves the moment they
-        // are made, so a SAVE-labelled button read as the panel's save switch (playtest asked why it
-        // exists). It is the game's exit — the door Esc used to be — and it still saves on the way out.
-        if (!_showTitle && _ui.Button(_batch, SettingsQuit, "QUIT TO DESKTOP", ChromeMouse, _clicked))
+        // yet to save. It is the game's exit — the door Esc used to be — and it still saves on the way out.
+        if (!_showTitle && _ui.Button(_batch, SettingsQuit, "QUIT TO DESKTOP", mouse, uiClick))
         {
             Save();
             Exit();
@@ -3417,34 +3479,189 @@ public class Game1 : Game
 
         // Which build this is — the same stamp the feedback code carries, so "which version are you
         // on" is answerable from a screenshot.
-        Text($"BUILD {BuildStamp.Short}", 380, 980, Slate);
+        Text($"BUILD {BuildStamp.Short}", 380, 1000, Slate);
+
+        // ── The OPEN dropdown list, drawn last so it sits over every row below it. A click on an
+        //    option applies and closes; any other click just closes — and either way the rows under
+        //    the list never see it (uiClick above). ──
+        var openList = Rectangle.Empty;
+        if (_settingsDropdown == 1)
+        {
+            openList = DropdownList(SettingsModeRow, modeNames, modeIdx, pick =>
+            {
+                var modes = new[] { DisplayMode.Windowed, DisplayMode.Borderless, DisplayMode.Fullscreen };
+                if (_displayMode == modes[pick]) return;
+                _displayMode = modes[pick];
+                ApplyDisplay();
+                SaveDisplay();
+            });
+        }
+        else if (_settingsDropdown == 2)
+        {
+            var labels = new string[Display.WindowedScales.Length];
+            for (var i = 0; i < labels.Length; i++)
+                labels[i] = $"{Display.CanvasWidth * Display.WindowedScales[i]}x{Display.CanvasHeight * Display.WindowedScales[i]}";
+            openList = DropdownList(SettingsSizeRow, labels, Array.IndexOf(Display.WindowedScales, _windowedScale), pick =>
+            {
+                var s = Display.WindowedScales[pick];
+                if (_windowedScale == s) return;
+                _windowedScale = s;
+                ApplyDisplay();
+                SaveDisplay();
+            });
+        }
+        else if (_clicked)
+        {
+            // No list open: a click on a closed row opens its list.
+            if (SettingsModeRow.Contains(mouse)) _settingsDropdown = 1;
+            else if (windowed && SettingsSizeRow.Contains(mouse)) _settingsDropdown = 2;
+        }
+
+        // ── HOVER EXPLANATIONS — one plain sentence per row, near the cursor, after a short rest. ──
+        DrawSettingsTips(mouse, windowed, openList);
+    }
+
+    /// <summary>A closed dropdown row: the current value and a small down arrow.</summary>
+    /// <remarks>The arrow is stacked fills, not a glyph — the font gate carries no triangle.</remarks>
+    private void DropdownClosed(Rectangle r, string value, bool enabled, bool open)
+    {
+        if (open) _ui.Panel(_batch, r, gold: true); else _ui.PanelQuiet(_batch, r);
+        var hover = enabled && r.Contains(ChromeMouse);
+        _ui.TextCenter(_batch, value, r.Center.X - 14, r.Center.Y - 12,
+                       !enabled ? Slate : open ? Gold : hover ? Color.White : Bone);
+        var cx = r.Right - 40;
+        var cy = r.Center.Y - 3;
+        for (var i = 0; i < 7; i++)
+            _ui.Fill(_batch, new Rectangle(cx - (7 - i), cy + i, (7 - i) * 2, 1), enabled ? Bone : Slate);
+    }
+
+    /// <summary>
+    /// Draw the OPEN option list under a closed dropdown row, handle its click, return its rect.
+    /// </summary>
+    /// <remarks>
+    /// Called from the END of DrawSettings so the list wins the z-order over the rows beneath it; those
+    /// rows' clicks are already disabled while it is open, so the frame's click belongs to the list
+    /// alone. A click on an option applies it through <paramref name="pick"/>; any other click closes
+    /// the list and does nothing else — swallowed, exactly as a modal should.
+    /// </remarks>
+    private Rectangle DropdownList(Rectangle row, string[] options, int currentIndex, Action<int> pick)
+    {
+        var list = new Rectangle(row.X, row.Bottom + 2, row.Width, 4 + options.Length * DropRowHeight);
+        _ui.Fill(_batch, new Rectangle(list.X + 4, list.Y + 5, list.Width, list.Height), new Color(0, 0, 0) * 0.45f);
+        _ui.Fill(_batch, list, new Color(0x16, 0x10, 0x22));
+        _ui.Fill(_batch, new Rectangle(list.X, list.Y, list.Width, 2), new Color(0xC8, 0x9A, 0x3C));
+
+        var mouse = ChromeMouse;
+        for (var i = 0; i < options.Length; i++)
+        {
+            var r = new Rectangle(list.X, list.Y + 2 + i * DropRowHeight, list.Width, DropRowHeight);
+            var hover = r.Contains(mouse);
+            if (hover) _ui.Fill(_batch, r, new Color(0x8A, 0x5A, 0xC8) * 0.22f);
+            _ui.TextCenter(_batch, options[i], r.Center.X, r.Center.Y - 12,
+                           i == currentIndex ? Gold : hover ? Color.White : Bone);
+            if (_clicked && hover)
+            {
+                pick(i);
+                _settingsDropdown = 0;
+                return list;
+            }
+        }
+
+        // A click anywhere else — the closed row included — just closes the list.
+        if (_clicked) _settingsDropdown = 0;
+        return list;
     }
 
     /// <summary>A label and an ON/OFF button. Returns true when the click flipped it.</summary>
-    private bool ToggleRow(string label, int x, int y, ref bool value)
+    private bool ToggleRow(string label, int x, int y, ref bool value, bool clicked)
     {
         Text(label, x, y + 10, Bone);
         var btn = new Rectangle(x + 276, y, 108, 44);
-        if (!_ui.Button(_batch, btn, value ? "ON" : "OFF", ChromeMouse, _clicked)) return false;
+        if (!_ui.Button(_batch, btn, value ? "ON" : "OFF", ChromeMouse, clicked)) return false;
         value = !value;
         return true;
     }
 
-    /// <summary>An eleven-notch volume row. Returns the clicked notch, or -1.</summary>
-    private int VolumeRow(string label, int y, int current)
+    /// <summary>
+    /// A draggable 0..100 volume slider row. Returns the value being set this frame, or -1.
+    /// </summary>
+    /// <remarks>
+    /// Clicking anywhere on the track jumps the handle there; while the button stays held the handle
+    /// follows the mouse — the raw held state, which the settings panel may read because it IS the
+    /// modal. Persisting happens on RELEASE, back in DrawSettings, so a drag is one write, not sixty.
+    /// The percent label updates live as the handle moves.
+    /// </remarks>
+    private int SliderRow(string label, Rectangle track, int current, int dragId, bool clickable)
     {
-        Text(label, 536, y + 8, Bone);
-        var picked = -1;
-        for (var i = 0; i <= 10; i++)
+        Text(label, 536, track.Y + 8, Bone);
+
+        var bed = new Rectangle(track.X, track.Center.Y - 4, track.Width, 8);
+        _ui.Fill(_batch, bed, new Color(0x2A, 0x24, 0x38));
+        var fillW = (int)(track.Width * (current / 100f));
+        if (fillW > 0) _ui.Fill(_batch, new Rectangle(bed.X, bed.Y, fillW, 8), new Color(0xC8, 0x9A, 0x3C));
+        _ui.Fill(_batch, new Rectangle(track.X + fillW - 7, track.Y, 14, track.Height), Bone);
+        Text($"{current}%", 1322, track.Y + 8, Slate);
+
+        var mouse = ChromeMouse;
+        var grab = new Rectangle(track.X - 10, track.Y - 6, track.Width + 20, track.Height + 12);
+        if (clickable && _clicked && grab.Contains(mouse)) _dragSlider = dragId;
+        if (_dragSlider == dragId && _mouse.LeftButton == ButtonState.Pressed)
+            return Math.Clamp((int)MathF.Round((mouse.X - track.X) * 100f / track.Width), 0, 100);
+        return -1;
+    }
+
+    /// <summary>Hover explanations for every settings row — one plain sentence each.</summary>
+    /// <remarks>
+    /// The zones cover the whole row (label and control), because a player hovers the words as often
+    /// as the widget. Suppressed while a slider is mid-drag, while the cursor is inside an open
+    /// dropdown list, and while START A NEW GAME is armed — an are-you-sure moment is not the moment
+    /// for furniture. The tip appears after <see cref="TipDelaySeconds"/> of rest on one row; the
+    /// clock ticks in Update and resets here whenever the hovered row changes.
+    /// </remarks>
+    private void DrawSettingsTips(Point mouse, bool windowed, Rectangle openList)
+    {
+        var zones = new (Rectangle Zone, string Key, string Tip)[]
         {
-            var cell = new Rectangle(820 + i * 36, y, 30, 34);
-            // Cell 0 is the MUTE notch and never fills — at volume 0 the row must read as zero,
-            // not as one bar (playtest: "Sesi 0 yapıyorum ama 1 bar açık kalıyor").
-            _ui.Fill(_batch, cell, i > 0 && i <= current ? new Color(0xC8, 0x9A, 0x3C) : new Color(0x2A, 0x24, 0x38));
-            if (UiKit.ClickedIn(cell, ChromeMouse, _clicked)) picked = i;
+            (new Rectangle(536, 198, 848, 64), "mode",
+                "How the game sits on your screen: in a window you can move, or filling the whole screen."),
+            (new Rectangle(536, 274, 848, 64), "size",
+                windowed ? "How big the game window is."
+                         : "How big the game window is. You can change this only when MODE is WINDOWED."),
+            (new Rectangle(536, 408, 848, 46), "fx",
+                "How loud the hits, clicks and other short sounds are. Drag the handle, or click a spot on the line."),
+            (new Rectangle(536, 464, 848, 46), "music",
+                "How loud the background music is. Drag the handle, or click a spot on the line."),
+            (new Rectangle(536, 552, 848, 56), "ask",
+                "When this is on, the game asks you to confirm before an item is sold or broken down."),
+            (new Rectangle(536, 680, 420, 50), "dmg",
+                "Shows the damage of every hit as a small number in the fight."),
+            (new Rectangle(1000, 680, 420, 50), "skills",
+                "Shows the name of each skill as your champion uses it."),
+            (new Rectangle(536, 728, 420, 50), "hitfx",
+                "Shows the flashes and sparks when hits land in the fight."),
+            (new Rectangle(1000, 728, 420, 50), "flash",
+                "When your champion falls, the screen glows red for a moment. Turn this off if you do not want it."),
+            (SettingsCopyFeedback, "feedback",
+                "Copies a short code that describes your game. Paste it to the developer with your feedback."),
+            (SettingsNewGame, "newgame",
+                "Deletes your save and starts over from the beginning. It asks you to confirm first."),
+        };
+
+        var key = "";
+        var tip = "";
+        var suppressed = _dragSlider != 0 || _resetArmTimer > 0f
+                         || (openList != Rectangle.Empty && openList.Contains(mouse));
+        if (!suppressed)
+            foreach (var z in zones)
+                if (z.Zone.Contains(mouse)) { key = z.Key; tip = z.Tip; break; }
+
+        if (key != _tipKey)
+        {
+            _tipKey = key;
+            _tipTimer = 0f;
+            return;
         }
-        Text($"{current * 10}%", 1240, y + 8, Slate);
-        return picked;
+        if (key.Length > 0 && _tipTimer >= TipDelaySeconds) _ui.HoverTip(_batch, tip, mouse);
     }
 
     /// <summary>The corner gear — the way back to settings from any screen, including mid-hunt.</summary>
@@ -3544,14 +3761,17 @@ public class Game1 : Game
 
         // Logo, centred near the top. Drawn at a LAYOUT size with the asset's own aspect preserved — NOT
         // its native 1200×400, which the 4× canvas transform would blow up to 4800px (only "SONAN" showed).
-        if (_assets.Get("logo_horizontal_full") is { } logo)   // package_08 branding (2048×512)
+        // The IDLExIDLE lockup (2026-08-24 rename): IDLE x IDLE, the X a winged pair of crossed
+        // hourglasses — composed from the generated emblem + the shipped Cinzel face by
+        // tools' make_logo pass. The old package_08 wordmark said the retired name.
+        if (_assets.Get("logo_idlexidle_full") is { } logo)
         {
-            const int lw = 1280;   // 1920-space logo width (was 320 in 480-space)
+            const int lw = 1180;   // 1920-space logo width; the lockup is ~4.3:1
             var lh = lw * logo.Height / logo.Width;   // aspect-preserved
-            _batch.Draw(logo, new Rectangle((CanvasWidth * ArtScale - lw) / 2, 112, lw, lh), Color.White);
+            _batch.Draw(logo, new Rectangle((CanvasWidth * ArtScale - lw) / 2, 150, lw, lh), Color.White);
         }
         else
-            TextCenter("RESONANCE HUNTER", 960, 240, Gold);
+            TextCenter("IDLExIDLE", 960, 240, Gold);
 
         var items = new[] { _hasSave ? "CONTINUE" : "BEGIN THE HUNT", "SETTINGS", "QUIT" };
         for (var i = 0; i < items.Length; i++)
@@ -3659,7 +3879,7 @@ public class Game1 : Game
         var panel = new Rectangle(112, 92, 1696, 840);
         _ui.Panel(_batch, panel);
 
-        _ui.TextCenterBig(_batch, "RESONANCE HUNTER — CONTROLS", panel.Center.X, panel.Y + 46, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(_batch, "IDLExIDLE — CONTROLS", panel.Center.X, panel.Y + 46, Gold, UiTypography.SectionTitle);
 
         // Two columns: the build on the left, the screens on the right.
         // DERIVED where it can be, and honest where it cannot. This panel is the only place a new player

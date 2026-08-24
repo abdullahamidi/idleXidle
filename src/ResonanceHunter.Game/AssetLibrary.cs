@@ -141,6 +141,16 @@ public sealed class AssetLibrary
         ["gem_damage"] = "affix_power", ["gem_health"] = "affix_health",
         ["gem_skillrate"] = "affix_timer", ["gem_haul"] = "affix_resonance",
         ["gem_crit"] = "affix_critical", ["gem_defense"] = "affix_defense",
+        // TRAINING ROWS get a FACE (playtest: "MAIN TRAINING has dummy icons, COMBAT TRAINING has no
+        // icons"). Keyed by the stat the row trains; each points at the ONE shipped icon that depicts
+        // that stat's effect — the icon_status_* set covers seven, and the two without a status glyph
+        // borrow the tree art that means the same thing: WEIGHT (heavier hits) for the crit-damage
+        // stat, AVARICE (the loot road) for the loot stat. No new art.
+        ["stat_might"] = "icon_status_power", ["stat_resonance"] = "icon_status_resonance",
+        ["stat_tempo"] = "icon_status_timer", ["stat_vitality"] = "icon_status_healing",
+        ["stat_health"] = "icon_status_health", ["stat_defense"] = "icon_status_defense",
+        ["stat_critical"] = "icon_status_critical", ["stat_focus"] = "icon_branch_weight",
+        ["stat_guile"] = "icon_road_avarice",
         // Per-source creatures → package_03 enemy idle poses. One representative enemy per element (the
         // Warren's per-role keys fall back here; no Nature enemy shipped, so a wisp stands in).
         ["crea_body"] = "bonecrawler_idle_01", ["crea_machine"] = "stone_sentinel_idle_01",

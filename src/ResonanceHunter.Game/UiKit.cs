@@ -825,6 +825,32 @@ public sealed class UiKit
         return lines;
     }
 
+    /// <summary>
+    /// A small explanation panel beside the cursor — the hover tooltip the settings rows use.
+    /// </summary>
+    /// <remarks>
+    /// Callers draw it LAST so it sits over the row it explains. Near the right or bottom edge of the
+    /// 1920×1080 chrome space it flips to the other side of the anchor, so a tip on the last row is
+    /// never clipped off screen. Deliberately a flat plate rather than an ornate panel: a tooltip is
+    /// furniture, and the ornate frame is a claim of importance this text should not make.
+    /// </remarks>
+    public void HoverTip(SpriteBatch b, string text, Point anchor)
+    {
+        const int width = 430, pad = 14, lineH = 22;
+        var lines = WrapBig(text, width - pad * 2, UiTypography.Secondary);
+        if (lines.Count == 0) return;
+        var h = pad * 2 + lines.Count * lineH;
+        var x = anchor.X + 26;
+        if (x + width > 1912) x = anchor.X - width - 12;
+        var y = anchor.Y + 30;
+        if (y + h > 1072) y = anchor.Y - h - 14;
+        Fill(b, new Rectangle(x + 4, y + 5, width, h), new Color(0, 0, 0) * 0.45f);   // soft drop shadow
+        Fill(b, new Rectangle(x, y, width, h), new Color(0x14, 0x0E, 0x20));
+        Fill(b, new Rectangle(x, y, width, 2), new Color(0xC8, 0x9A, 0x3C));
+        var ty = y + pad;
+        foreach (var l in lines) { TextBig(b, l, x + pad, ty, Vellum, UiTypography.Secondary); ty += lineH; }
+    }
+
     /// <summary>The sized-text twin of <see cref="Shorten"/>, for anything drawn with TextBig.</summary>
     public string ShortenBig(string text, int width, int px)
     {

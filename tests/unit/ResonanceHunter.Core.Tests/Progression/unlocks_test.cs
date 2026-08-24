@@ -20,15 +20,18 @@ public class UnlocksTest
     private static readonly UnlockFacts Fresh = new();
 
     [Fact]
-    public void test_a_brand_new_player_sees_only_the_hunt()
+    public void test_a_brand_new_player_can_look_around_but_has_one_place_to_act()
     {
-        // THE HEADLINE. Nine destinations on the rail from the first frame is what produced "thrown
-        // straight in and confused". A new player should have exactly one place to be.
+        // THE HEADLINE, revised (playtest nine, item 11: "let the player look around"). The DOING
+        // screens still open one at a time — that is what cured "thrown straight in and confused" —
+        // but the WINDOW-SHOPPING screens, the Map and the Roster, are open from the first frame:
+        // both carry their own internal locks (locked regions, locked champions), so to a new player
+        // they read as a promise of what is coming, not as a wall of things to learn.
         var open = Unlocks.Open(Fresh);
 
         _out.WriteLine("a fresh save opens with: " + string.Join(", ", open));
 
-        Assert.Equal(new[] { Activity.Hunt }, open);
+        Assert.Equal(new[] { Activity.Hunt, Activity.Map, Activity.Roster }, open);
     }
 
     [Fact]
@@ -118,7 +121,13 @@ public class UnlocksTest
             Assert.False(string.IsNullOrWhiteSpace(Unlocks.Explain(activity)),
                 $"{activity} opens with no explanation.");
 
-            if (activity != Activity.Hunt)
+            // A price is owed by exactly the doors that can be found shut. A screen open from the
+            // first frame (the Hunt, the Map, the Roster) has nothing to require — a price line on an
+            // open door would read as a lock that opened early, i.e. as a bug.
+            if (Unlocks.IsOpen(activity, Fresh))
+                Assert.True(string.IsNullOrWhiteSpace(Unlocks.Requirement(activity)),
+                    $"{activity} is open from the start but still states a price.");
+            else
                 Assert.False(string.IsNullOrWhiteSpace(Unlocks.Requirement(activity)),
                     $"{activity} is locked but does not say what opens it.");
         }

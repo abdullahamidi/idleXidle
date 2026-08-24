@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace ResonanceHunter.Core.Progression;
 
 /// <summary>One rung of the first-run guide, in the order a player meets them.</summary>
@@ -115,12 +117,51 @@ public static class Tutorial
     /// </remarks>
     public const int FirstRankCost = 25;
 
+    /// <summary>The rungs a player can be shown, in the ladder's (the career's) order.</summary>
+    private static readonly TutorialStep[] Ladder =
+    {
+        TutorialStep.Watch, TutorialStep.SpendGleam, TutorialStep.MeetABoss, TutorialStep.Conquer,
+        TutorialStep.OpenChest, TutorialStep.EquipItem, TutorialStep.WeaveBuild,
+    };
+
+    /// <summary>Has this rung's lesson already been performed, whether or not it was read?</summary>
+    /// <remarks>
+    /// The order of <see cref="Ladder"/> is load-bearing, and it is the CAREER's order. Each rung's
+    /// satisfaction is exactly the thing that makes the next rung current, so no rung can wait on a
+    /// resource a later rung explains how to obtain — and no rung can be already satisfied before it
+    /// has ever been shown. Conquer sits between the boss and the chest because that is where the
+    /// tuning puts it.
+    /// </remarks>
+    private static bool Satisfied(TutorialStep step, TutorialFacts f) => step switch
+    {
+        TutorialStep.Watch => f.WavesCleared >= 1,
+        TutorialStep.SpendGleam => f.StatsTrained >= 1,
+        TutorialStep.MeetABoss => f.DeepestWave >= BossEvery,
+        TutorialStep.Conquer => f.RegionsConquered >= 1,
+        TutorialStep.OpenChest => f.ItemsOwned >= 1,
+        TutorialStep.EquipItem => f.ItemsWorn >= 1,
+        TutorialStep.WeaveBuild => f.SkillsWoven >= 1,
+        _ => true,
+    };
+
     /// <summary>The step a player is on, given everything they have done.</summary>
     /// <remarks>
     /// Derived rather than stored: it cannot desync from the save, it needs no migration, and a player
     /// who skips ahead is never shown a lesson they have already outgrown.
     /// </remarks>
-    public static TutorialStep StepFor(TutorialFacts f)
+    public static TutorialStep StepFor(TutorialFacts f) => StepFor(f, null);
+
+    /// <summary>
+    /// The step a player is on, skipping any rung they closed by hand.
+    /// </summary>
+    /// <param name="f">What the player has done so far.</param>
+    /// <param name="dismissedRungs">
+    /// Rung NAMES (<c>TutorialStep.ToString()</c>) the player dismissed with the guide strip's close
+    /// button, or null for none. A dismissed rung is skipped exactly as if it were completed — but only
+    /// for DISPLAY: nothing here fakes the underlying facts, so the gates and unlocks that read those
+    /// facts are untouched. A dismissed rung never returns.
+    /// </param>
+    public static TutorialStep StepFor(TutorialFacts f, IReadOnlyCollection<string>? dismissedRungs)
     {
         // DONE MEANS THE LOOP WAS LIVED, NOT MERELY THAT A REGION FELL. This guard used to read
         // conquest alone — and conquest arrives at depth 7, roughly half a minute in, so the whole
@@ -136,21 +177,16 @@ public static class Tutorial
         // happened.
         if (f.RegionsConquered >= 1 && f.ItemsWorn >= 1 && f.SkillsWoven >= 1) return TutorialStep.Done;
 
-        // THE FIRST UNSATISFIED STEP, IN ORDER — never "the first one whose conditions happen to hold".
-        //
-        // The order is load-bearing, and it is the CAREER's order. Each rung's satisfaction is exactly
-        // the thing that makes the next rung current, so no rung can wait on a resource a later rung
-        // explains how to obtain — and no rung can be already satisfied before it has ever been shown.
-        // Conquer sits between the boss and the chest because that is where the tuning puts it.
-        if (f.WavesCleared < 1) return TutorialStep.Watch;
-        if (f.StatsTrained < 1) return TutorialStep.SpendGleam;
-        if (f.DeepestWave < BossEvery) return TutorialStep.MeetABoss;
-        if (f.RegionsConquered < 1) return TutorialStep.Conquer;
-        if (f.ItemsOwned < 1) return TutorialStep.OpenChest;
-        if (f.ItemsWorn < 1) return TutorialStep.EquipItem;
-        if (f.SkillsWoven < 1) return TutorialStep.WeaveBuild;
+        // THE FIRST UNSATISFIED, UNDISMISSED STEP, IN ORDER — never "the first one whose conditions
+        // happen to hold". See the remarks on Satisfied for why the order matters.
+        foreach (var step in Ladder)
+        {
+            if (Satisfied(step, f)) continue;
+            if (dismissedRungs is not null && dismissedRungs.Contains(step.ToString())) continue;
+            return step;
+        }
 
-        // Unreachable: every rung satisfied is exactly the Done guard at the top.
+        // Every rung satisfied or dismissed: nothing left to say.
         return TutorialStep.Done;
     }
 
@@ -175,9 +211,19 @@ public static class Tutorial
     };
 
     /// <summary>The step to actually display, or null while the next lesson is not yet actionable.</summary>
-    public static TutorialStep? Showing(TutorialFacts f)
+    public static TutorialStep? Showing(TutorialFacts f) => Showing(f, null);
+
+    /// <summary>
+    /// The step to display given the rungs the player closed by hand, or null for silence.
+    /// </summary>
+    /// <remarks>
+    /// A dismissed rung is skipped for display exactly as if it were completed. If the rung after it
+    /// is not yet actionable the guide waits silently — the same rule the ladder always had — rather
+    /// than skipping further ahead to a lesson out of order.
+    /// </remarks>
+    public static TutorialStep? Showing(TutorialFacts f, IReadOnlyCollection<string>? dismissedRungs)
     {
-        var step = StepFor(f);
+        var step = StepFor(f, dismissedRungs);
         return HasGuidance(step) && IsReady(step, f) ? step : null;
     }
 

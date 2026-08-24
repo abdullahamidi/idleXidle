@@ -24,6 +24,17 @@ public sealed record ProgressionTuning
     public float TrainingGrowthRate { get; init; } = 1.13f;
     public int StatRankCap { get; init; } = 60;
 
+    /// <summary>
+    /// What RESET ALL TRAINING costs, in Crystal — the rarest forge material.
+    /// </summary>
+    /// <remarks>
+    /// The refund side is deliberately 100%: the reset exists so a player can change their mind about
+    /// where ~2.65M lifetime Gleam went, not to tax them for it. The price is therefore paid in the
+    /// OTHER currency — one Crystal, which only Legendary salvage and deep waves mint — so a respec is
+    /// a real decision without ever destroying training Gleam.
+    /// </remarks>
+    public int TrainingResetCrystalCost { get; init; } = 1;
+
     /// <summary>Per-rank stat gain. Defense is +2/rank to a cap of 120 — its curve is hyperbolic anyway.</summary>
     public IReadOnlyDictionary<HunterStat, float> GainPerRank { get; init; } =
         new Dictionary<HunterStat, float>
@@ -157,6 +168,9 @@ public sealed class Hunter
 
     public float ValueOf(HunterStat stat)
         => _tuning.BaseValue[stat] + _tuning.GainPerRank[stat] * _ranks[stat];
+
+    /// <summary>What one rank of training adds to a stat. Public so a screen can say it without copying the tuning.</summary>
+    public float GainPerRank(HunterStat stat) => _tuning.GainPerRank[stat];
 
     // ── Worn gear — the Hunter's power axis. See Gear.cs for why this exists. Eight slots now. ────
     private readonly Dictionary<GearSlot, ItemInstance?> _worn =
@@ -381,6 +395,50 @@ public sealed class Hunter
         Gleam -= NextRankCost(stat);
         _ranks[stat]++;
         return true;
+    }
+
+    // ── RESET ALL TRAINING — the respec. Playtest: "There should be a stat reset for a certain
+    //    resource." The refund is COMPUTED from the cost curve, never tracked: a tracked total is a
+    //    second copy of the geometric formula, and this codebase keeps finding that the copy drifts. ──
+
+    /// <summary>
+    /// Every Gleam ever paid for the current ranks — the exact sum of each rank's geometric cost.
+    /// </summary>
+    /// <remarks>
+    /// Rank r of a stat cost <c>CostOfRank(r)</c> when it was bought, so a stat at rank n was paid
+    /// <c>Σ CostOfRank(0..n−1)</c> — the same formula <see cref="Train"/> charges, read from the same
+    /// tuning, which is why this can promise a 100% refund without bookkeeping.
+    /// </remarks>
+    public int TrainingRefund()
+        => _ranks.Values.Sum(rank => Enumerable.Range(0, rank).Sum(r => CostOfRank(r, _tuning)));
+
+    /// <summary>How many Crystal a reset takes. Public so the screen can print the real price.</summary>
+    public int TrainingResetCrystalCost => _tuning.TrainingResetCrystalCost;
+
+    /// <summary>
+    /// Whether RESET ALL TRAINING would do anything: there are ranks to refund AND the Crystal to pay.
+    /// </summary>
+    public bool CanResetTraining
+        => TrainingRefund() > 0 && MaterialOf(Material.Crystal) >= _tuning.TrainingResetCrystalCost;
+
+    /// <summary>
+    /// Undo every trained rank: pay the Crystal price, return 100% of the Gleam the ranks cost, and
+    /// set all nine stats back to rank zero. Returns the Gleam refunded — 0 means nothing happened.
+    /// </summary>
+    /// <remarks>
+    /// Validate-then-spend, like every charter call site: the Crystal leaves the stock only when the
+    /// reset actually happens. With no ranks trained it refuses even when a Crystal is held — a reset
+    /// that takes the rarest material and gives nothing back would be a paid refusal.
+    /// </remarks>
+    public int ResetTraining()
+    {
+        var refund = TrainingRefund();
+        if (refund <= 0) return 0;
+        if (!SpendMaterial(Material.Crystal, _tuning.TrainingResetCrystalCost)) return 0;
+
+        foreach (var stat in Enum.GetValues<HunterStat>()) _ranks[stat] = 0;
+        AddGleam(refund);
+        return refund;
     }
 
     public void AddGleam(int amount) => Gleam += Math.Max(0, amount);

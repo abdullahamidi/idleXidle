@@ -132,22 +132,30 @@ public static class Unlocks
         // arrives SECOND — you choose your skills, then you shape how they behave.
         Activity.Mastery => f.DeepestWave >= 8,
 
-        // There is nowhere to travel to until a region has been taken, so the Map is a map of one place
-        // until then. It opens as the reward for the first conquest — which is also when it is exciting.
-        Activity.Map => f.RegionsConquered >= 1,
+        // OPEN FROM THE START (playtest nine, item 11: "let the player look around"). It used to open
+        // on the first conquest, but the Map already locks its regions individually INSIDE — so a new
+        // player sees the whole six-region chain with exactly one door open, which teaches the shape
+        // of the game better than a dimmed tile ever did. Window-shopping is the point: the internal
+        // locks stay, and travelling anywhere still requires conquering the way there.
+        Activity.Map => true,
 
-        // The idle economy. Opens with the Map: both are "the world beyond this fight", and splitting
-        // them across two milestones makes the first conquest pay out twice for no reason.
+        // The idle economy. STILL GATED on the first conquest while the Map and the Roster opened for
+        // window-shopping, and deliberately so: the Warren's PRODUCTION is gated on this very rule
+        // (Game1.TickWarren and the offline credit both ask it), so an always-open Warren would either
+        // pay a brand-new player from minute zero — the exact 87%-of-all-income bug that gate exists
+        // to close — or show a dashboard whose production numbers it refuses to pay, which is a lying
+        // screen. It stays what it reads as: the reward for taking a region.
         Activity.Warren => f.RegionsConquered >= 1,
 
         // The permanent tree only means anything once there are points in it.
         Activity.Traits => f.TraitPointsEarned >= 1,
 
-        // WAS `>= 2`, WHICH WAS OFF BY ONE AGAINST THE THING IT GATES. Champions are earned by
-        // conquering, and THE THORNWALL arrives on the FIRST conquest — so the player's second champion
-        // turned up while the only screen that could show it was still a dimmed tile. The gate and the
-        // reward were tuned independently and never checked against each other.
-        Activity.Roster => f.RegionsConquered >= 1,
+        // OPEN FROM THE START (playtest nine, item 11 — same reasoning as the Map). A fresh save
+        // renders the starter champion plus the locked cast, and every locked card already explains
+        // its own price, so the screen is a promise rather than a wall. (Its history is instructive:
+        // the gate was `>= 2` while the first earned champion arrived on conquest ONE, then `>= 1` —
+        // always one tuning pass behind the reward it gated. An always-open gallery cannot lag.)
+        Activity.Roster => true,
 
         // An out-of-range cast. Throwing rather than defaulting to true, because a gate that silently
         // opens is the failure this whole file exists to prevent.
@@ -168,13 +176,14 @@ public static class Unlocks
         Activity.Forge => "Earn a chest from a boss",
         Activity.Build => "Reach wave 5",
         Activity.Mastery => "Reach wave 8",
-        Activity.Map => "Conquer a region",
+        // Open from the start, like the Hunt — nothing to require, so nothing to say. A price line on
+        // a door that is never shut would read as a lock that opened early, i.e. as a bug.
+        Activity.Map => "",
         Activity.Warren => "Conquer a region",
         Activity.Traits => "Earn a trait point",
-        // WAS "Conquer two regions" AFTER THE GATE MOVED TO ONE. A caption that drifted from the rule it
-        // describes, which is the same failure this file's own remarks warn about — and it would have
-        // read to a player as a lock that opened early, i.e. as a bug in the opposite direction.
-        Activity.Roster => "Conquer a region",
+        // Open from the start too (it was "Conquer a region" when the gate was; the caption follows
+        // the rule — this file has already shipped one caption that drifted from its gate).
+        Activity.Roster => "",
 
         // A cast that is not a declared Activity is a programming error, and a blank string here would
         // reach the player as an empty panel instead of as the bug it is.

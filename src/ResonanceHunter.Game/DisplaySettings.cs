@@ -59,14 +59,23 @@ public static class Display
 
     /// <summary>Everything the prefs file holds — machine-level, never playthrough-level.</summary>
     /// <remarks>
-    /// Volumes are 0..10 steps rather than floats: eleven notches give the slider a real middle, and the
-    /// file stays hand-readable. ASK BEFORE SCRAP lives here rather than in the save for the same reason
-    /// the display mode does: it is a preference about how the player wants to be treated, and starting
-    /// a new game must not resurrect a dialog they turned off.
+    /// Volumes are 0..100 percent (2026-08-24, for the draggable settings sliders — the old 0..10
+    /// notches could not express "a little quieter"). ASK BEFORE SCRAP lives here rather than in the
+    /// save for the same reason the display mode does: it is a preference about how the player wants to
+    /// be treated, and starting a new game must not resurrect a dialog they turned off.
     /// </remarks>
     public readonly record struct GamePrefs(
         DisplayMode Mode, int WindowedScale, int SfxVolume, int MusicVolume, bool AskBeforeScrap,
         bool ShowDamageNumbers = true, bool ShowSkillCallouts = true, bool ShowHitEffects = true, bool ShowScreenFlash = true);
+
+    // ── FILE FORMAT ────────────────────────────────────────────────────────────────────────────
+    // One value per line: Mode, WindowedScale, SfxVolume, MusicVolume, AskBeforeScrap, then the four
+    // fight-effect switches (1/0 each). Lines 3-4 are the volumes, and their SCALE changed on
+    // 2026-08-24: files written since carry a trailing marker line, "volume=percent", and store 0..100;
+    // files without the marker are the old 0..10 notches and are migrated on load by multiplying by 10.
+    // A new-scale file read by an old build clamps its volumes into 0..10, which is safely loud rather
+    // than silent. Nothing here versions the whole file — every other line kept its meaning.
+    private const string PercentMarker = "volume=percent";
 
     public static void Save(GamePrefs p)
     {
@@ -75,7 +84,8 @@ public static class Display
             System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(PrefsPath)!);
             System.IO.File.WriteAllText(PrefsPath,
                 $"{p.Mode}\n{p.WindowedScale}\n{p.SfxVolume}\n{p.MusicVolume}\n{(p.AskBeforeScrap ? 1 : 0)}\n"
-                + $"{(p.ShowDamageNumbers ? 1 : 0)}\n{(p.ShowSkillCallouts ? 1 : 0)}\n{(p.ShowHitEffects ? 1 : 0)}\n{(p.ShowScreenFlash ? 1 : 0)}\n");
+                + $"{(p.ShowDamageNumbers ? 1 : 0)}\n{(p.ShowSkillCallouts ? 1 : 0)}\n{(p.ShowHitEffects ? 1 : 0)}\n{(p.ShowScreenFlash ? 1 : 0)}\n"
+                + PercentMarker + "\n");
         }
         catch (System.IO.IOException) { /* prefs are a convenience; never block the game on them */ }
         catch (UnauthorizedAccessException) { }
@@ -83,10 +93,10 @@ public static class Display
 
     /// <summary>
     /// The out-of-the-box default: Fullscreen, a windowed fallback of scale 4 (= exactly 1920x1080, the
-    /// canvas's native size), effects at 8/10 and music at 5/10 (the volumes the SoundBank always used),
+    /// canvas's native size), effects at 80% and music at 50% (the volumes the SoundBank always used),
     /// and the SELL/SALVAGE dialog asking.
     /// </summary>
-    private static readonly GamePrefs Default = new(DisplayMode.Fullscreen, 4, 8, 5, true);
+    private static readonly GamePrefs Default = new(DisplayMode.Fullscreen, 4, 80, 50, true);
 
     public static GamePrefs Load()
     {
@@ -102,8 +112,15 @@ public static class Display
                 ? (Array.IndexOf(WindowedScales, s) >= 0 ? s : WindowedScales[0])
                 : Default.WindowedScale;
             // Lines 3+ arrived with the sound settings; an older two-line file just gets the defaults.
-            var sfx = int.TryParse(At(2), out var fx) ? Math.Clamp(fx, 0, 10) : Default.SfxVolume;
-            var music = int.TryParse(At(3), out var mu) ? Math.Clamp(mu, 0, 10) : Default.MusicVolume;
+            // The volume SCALE is decided by the marker line — see FILE FORMAT above: with it the
+            // values are already 0..100; without it they are the old 0..10 notches, migrated by ×10.
+            var percent = Array.Exists(lines, l => l.Trim() == PercentMarker);
+            var sfx = int.TryParse(At(2), out var fx)
+                ? (percent ? Math.Clamp(fx, 0, 100) : Math.Clamp(fx, 0, 10) * 10)
+                : Default.SfxVolume;
+            var music = int.TryParse(At(3), out var mu)
+                ? (percent ? Math.Clamp(mu, 0, 100) : Math.Clamp(mu, 0, 10) * 10)
+                : Default.MusicVolume;
             var ask = At(4) != "0";
             // Lines 6-9 (2026-08-23): the fight's text and effects. Absent in an older file = on.
             return new GamePrefs(mode, scale, sfx, music, ask,

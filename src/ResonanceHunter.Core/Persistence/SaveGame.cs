@@ -144,6 +144,17 @@ public sealed record SaveGame
     /// <summary>Total mastery points earned over the whole game.</summary>
     public int MasteryEarned { get; init; }
 
+    /// <summary>
+    /// First-run guide rungs the player closed by hand, as <c>TutorialStep</c> NAMES.
+    /// </summary>
+    /// <remarks>
+    /// Names rather than ordinals, so reordering the enum can never silently dismiss a different
+    /// lesson. Default-empty means every older save loads clean — no version bump. A dismissed rung is
+    /// a DISPLAY choice only: the facts the guide derives its ladder from are untouched, the closed
+    /// rung just never shows again.
+    /// </remarks>
+    public List<string> DismissedGuideRungs { get; init; } = new();
+
     /// <summary>The champion's recent GLEAM-per-second, so it keeps earning while the game is closed.</summary>
     public float ChampionGleamRate { get; init; }
 
