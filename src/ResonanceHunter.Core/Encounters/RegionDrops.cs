@@ -28,7 +28,12 @@ public sealed record RegionDropProfile
     /// <summary>The slots this place is known for. Twice as likely here; never exclusive.</summary>
     public required IReadOnlyList<ItemBaseType> Favoured { get; init; }
 
-    /// <summary>One line the map can show: what a player comes here FOR.</summary>
+    /// <summary>One line about the place and what it drops, as the chest dossier reads it.</summary>
+    /// <remarks>
+    /// The MAP no longer prints this — it lists <see cref="FavouredNames"/> one per line instead,
+    /// which is what a player comparing two regions actually reads. The chest screen still wants a
+    /// sentence under a chest's region, so the sentence lives on.
+    /// </remarks>
     public required string Blurb { get; init; }
 
     /// <summary>
@@ -41,6 +46,17 @@ public sealed record RegionDropProfile
     /// going deeper in a region you can survive should still beat visiting one you cannot.
     /// </remarks>
     public required float RarityTilt { get; init; }
+
+    /// <summary>
+    /// The favoured slots as the map lists them, one plain name per slot, in the profile's order.
+    /// </summary>
+    /// <remarks>
+    /// The map used to print <see cref="Blurb"/> here and the owner asked for the drops listed
+    /// instead — a player comparing two regions is comparing slots, and a column is read in one glance
+    /// where a sentence is not. The names live in Core so a test can hold them plain and inside the
+    /// font gate.
+    /// </remarks>
+    public IReadOnlyList<string> FavouredNames => Favoured.Select(RegionDrops.PlainName).ToList();
 }
 
 /// <summary>Each region's drop profile, keyed by id.</summary>
@@ -99,4 +115,21 @@ public static class RegionDrops
 
     /// <summary>Every region id this table covers — for the test that keeps it in step with the world.</summary>
     public static IReadOnlyCollection<string> CoveredIds => Profiles.Keys;
+
+    /// <summary>
+    /// A gear slot as the map's DROPS list names it: the plural, in capitals, in the word the rest of
+    /// the game uses for that slot.
+    /// </summary>
+    public static string PlainName(ItemBaseType slot) => slot switch
+    {
+        ItemBaseType.Weapon => "WEAPONS",
+        ItemBaseType.AbilityFocus => "FOCUSES",
+        ItemBaseType.Helm => "HELMS",
+        ItemBaseType.Chest => "CHEST ARMOUR",
+        ItemBaseType.Gloves => "GLOVES",
+        ItemBaseType.Boots => "BOOTS",
+        ItemBaseType.Charm => "CHARMS",
+        ItemBaseType.Ring => "RINGS",
+        _ => slot.ToString().ToUpperInvariant(),
+    };
 }

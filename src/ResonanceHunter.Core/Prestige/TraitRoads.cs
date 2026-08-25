@@ -36,7 +36,7 @@ public static class TraitRoads
     public static IReadOnlyList<TraitRoadIdentity> All { get; } = new[]
     {
         new TraitRoadIdentity(TraitRoad.Spine, "THE SPINE",
-            "Keystone sockets, skill slots, vows, auto-selling and the forge. Everyone grows these."),
+            "Keystone sockets, skill slots, vows, auto-selling and the forge. Everyone learns these."),
         new TraitRoadIdentity(TraitRoad.Ruin, "RUIN",
             "Hit harder. Live closer to death."),
         new TraitRoadIdentity(TraitRoad.Aegis, "AEGIS",

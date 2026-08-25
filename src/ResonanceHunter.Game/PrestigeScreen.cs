@@ -1112,14 +1112,16 @@ public sealed class PrestigeScreen
 
     /// <summary>
     /// The detail panel: one trait, read properly — its road and what that road is for, its picture,
-    /// its name, what it does in plain sentences with the real numbers, that it is permanent, what it
-    /// needs first, and what it costs.
+    /// its name, and then the sheet in the order a player decides in: what it does (with the real
+    /// numbers), what it costs, what it needs first, and that it is permanent.
     /// </summary>
     /// <remarks>
     /// The text comes from <see cref="MemoryDustText.Describe"/>, which composes the hand-written
-    /// description with the keystone's own blurb and a generated line for the numbers; the permanence
-    /// line is <see cref="MemoryDustText.Permanence"/>, so the sheet a test holds and the one the player
-    /// reads are the same words.
+    /// description with the keystone's own blurb; the cost, prerequisite and permanence lines are the
+    /// same facts <see cref="MemoryDustText.Sheet"/> prints, in the same order, so the sheet a test
+    /// holds and the one the player reads are the same words. Nothing is printed that the player
+    /// cannot act on: the old "kind" line ("A small permanent boost", "Opens more of the game") is
+    /// gone, and the reminder that learning is not wearing became the description's own words.
     /// </remarks>
     private void DrawDetail(SpriteBatch b, MemoryDustTree tree, Point hit, bool clicked)
     {
@@ -1134,6 +1136,7 @@ public sealed class PrestigeScreen
         var terminal = TerminalArt(u);
         var roadCol = RoadColor(u.Road);
         var left = DetailPanel.X + 28;
+        var right = DetailPanel.Right - 28;
         var width = DetailPanel.Width - 56;
 
         _ui.TextCenterBig(b, "TRAIT DETAIL", DetailPanel.Center.X, DetailPanel.Y + 18, Gold, UiTypography.SectionTitle);
@@ -1161,27 +1164,24 @@ public sealed class PrestigeScreen
         _ui.TextCenterBig(b, _ui.ShortenBig(u.Name, width, UiTypography.PanelTitle), DetailPanel.Center.X, y,
                           isOwned ? Gold : buyable ? Bone : Slate, UiTypography.PanelTitle);
         y += 32;
-        // The state in a word, beside what kind of thing this is — in the player's words, not the
-        // engine's. AMPLIFIER / EXPANSION / CONVENIENCE described what a node did to the code.
+        // The state in a word — and only the state. The "kind" that used to sit beside it was a label
+        // about the engine's categories, not a fact a player could do anything with.
         var state = isOwned ? "LEARNED" : buyable ? "AVAILABLE NOW" : "LOCKED";
-        var kind = terminal is not null ? "The end of a road" : MemoryDustText.EffectInPlainWords(u.Effect);
-        _ui.TextCenterBig(b, $"{kind}  ·  {state}",
-                          DetailPanel.Center.X, y, isOwned ? Gold : buyable ? Met : Slate, UiTypography.Secondary);
+        _ui.TextCenterBig(b, state, DetailPanel.Center.X, y, isOwned ? Gold : buyable ? Met : Slate, UiTypography.Secondary);
         y += 28;
 
-        // WHAT IT DOES — the full plain-English text, at Body size, wrapped to the measured width, and
-        // never allowed to run into the prerequisite list: the two blocks share the panel's middle, so
-        // the text gets as many lines as leave the prerequisites their room and ends with an ellipsis
-        // past that (a longer keystone blurb is the only thing that could get there).
+        // ── 1. WHAT IT DOES — at Body size, wrapped to the measured width, and never allowed to run
+        //    into the blocks under it: the text gets as many lines as leave the cost and the
+        //    prerequisites their room, and ends with an ellipsis past that (a long keystone blurb is
+        //    the only thing that could get there).
+        const int lineH = 23;
+        var floor = DetailPanel.Bottom - 176;   // the permanence line and the button own the panel below this
         _ui.Fill(b, new Rectangle(left, y, width, 2), Dim * 0.7f);
         y += 12;
         _ui.TextBig(b, "WHAT IT DOES", left, y, Slate, UiTypography.Secondary);
         y += 26;
-        const int lineH = 23;
-        var floor = DetailPanel.Bottom - 172;
-        var permanence = _ui.WrapBig(MemoryDustText.Permanence, width, UiTypography.Secondary);
-        var reserve = 60 + 32 * Math.Max(1, Math.Min(u.Requires.Count, 3))   // the prerequisite block's minimum
-                      + permanence.Count * 20 + 6;                           // and the permanence line's
+        var reserve = (isOwned ? 44 : 66)                                    // the cost block
+                      + 40 + 32 * Math.Max(1, Math.Min(u.Requires.Count, 3));  // and the prerequisite block's minimum
         var lines = _ui.WrapBig(MemoryDustText.Describe(u), width, UiTypography.Body);
         var room = Math.Max(1, (floor - reserve - y) / lineH);
         for (var i = 0; i < Math.Min(lines.Count, room); i++)
@@ -1190,21 +1190,36 @@ public sealed class PrestigeScreen
             _ui.TextBig(b, text, left, y, Bone, UiTypography.Body);
             y += lineH;
         }
-        // PERMANENT — NEVER RESETS, on every node, in the panel's quiet voice. The one fact the whole
-        // tree rests on, and the one a new player most needs to read before the button.
-        y += 4;
-        foreach (var l in permanence) { _ui.TextBig(b, l, left, y, Gold * 0.85f, UiTypography.Secondary); y += 20; }
-        y += 10;
+        y += 6;
 
-        // What it needs first (the real Requires), each with a tick once you have it.
+        // ── 2. WHAT IT COSTS — priced in TRAIT POINTS and it says so, beside how many you have. The
+        //    whole word, not "PTS"; and here, under what it does, rather than parked at the foot of
+        //    the panel a screen away from the decision it belongs to.
+        _ui.Fill(b, new Rectangle(left, y, width, 2), Dim * 0.7f);
+        y += 12;
+        _ui.TextBig(b, "WHAT IT COSTS", left, y, Slate, UiTypography.Secondary);
+        if (isOwned) _ui.TextRightBig(b, "LEARNED", right, y - 4, Gold, UiTypography.PanelTitle);
+        else
+            _ui.TextRightBig(b, $"{u.Cost} TRAIT {(u.Cost == 1 ? "POINT" : "POINTS")}", right, y - 4,
+                             buyable ? Bone : Ember, UiTypography.PanelTitle);
+        y += 26;
+        if (!isOwned)
+        {
+            _ui.TextBig(b, $"You have {tree.Available} trait {(tree.Available == 1 ? "point" : "points")}.", left, y,
+                        tree.Available >= u.Cost ? Slate : Ember, UiTypography.Secondary);
+            y += 22;
+        }
+        y += 6;
+
+        // ── 3. YOU NEED FIRST — the real Requires, each with a tick once you have it.
         _ui.Fill(b, new Rectangle(left, y, width, 2), Dim * 0.7f);
         y += 12;
         _ui.TextBig(b, "YOU NEED FIRST", left, y, Gold, UiTypography.Secondary);
         y += 28;
-        // The cost block below is anchored to the panel's bottom, so the list has a hard floor. Say what
-        // was dropped rather than drawing a row through the divider — a silently truncated list reads as
-        // "these are all the prerequisites", which is the one thing it must never say.
-        if (u.Requires.Count == 0) _ui.TextBig(b, "Nothing — you can start here.", left + 2, y, Slate, UiTypography.Body);
+        // The permanence line below is anchored to the panel's bottom, so the list has a hard floor.
+        // Say what was dropped rather than drawing a row through the divider — a silently truncated
+        // list reads as "these are all the prerequisites", which is the one thing it must never say.
+        if (u.Requires.Count == 0) _ui.TextBig(b, "Nothing. You can start here.", left + 2, y, Slate, UiTypography.Body);
         else
             for (var i = 0; i < u.Requires.Count; i++)
             {
@@ -1218,36 +1233,27 @@ public sealed class PrestigeScreen
                 var got = tree.Owns(reqId);
                 DrawTick(b, new Rectangle(left + 2, y + 2, 20, 18), got);
                 _ui.TextBig(b, _ui.ShortenBig(req?.Name ?? reqId, width - 110, UiTypography.Body), left + 32, y, got ? Bone : Slate, UiTypography.Body);
-                _ui.TextRightBig(b, got ? "learned" : "not yet", DetailPanel.Right - 28, y + 3, got ? Met : Slate, UiTypography.Secondary);
+                _ui.TextRightBig(b, got ? "learned" : "not yet", right, y + 3, got ? Met : Slate, UiTypography.Secondary);
                 y += 32;
             }
 
-        // Cost + LEARN.
-        _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Bottom - 156, DetailPanel.Width - 56, 2), Dim * 0.7f);
-        _ui.TextBig(b, "COST", DetailPanel.X + 28, DetailPanel.Bottom - 138, Slate, UiTypography.Body);
-        if (!isOwned)
-            // On the COST line, not under it: the panel has no spare row between the cost and the button.
-            _ui.TextBig(b, $"you have {tree.Available}", DetailPanel.X + 96, DetailPanel.Bottom - 136,
-                        tree.Available >= u.Cost ? Slate : Ember, UiTypography.Secondary);
-        if (isOwned) _ui.TextRightBig(b, "LEARNED", DetailPanel.Right - 28, DetailPanel.Bottom - 140, Gold, UiTypography.PanelTitle);
-        else
-            // Priced in TRAIT POINTS and it says so, next to how many you have — the whole word, not "PTS".
-            _ui.TextRightBig(b, $"{u.Cost} TRAIT {(u.Cost == 1 ? "POINT" : "POINTS")}", DetailPanel.Right - 28,
-                             DetailPanel.Bottom - 140, buyable ? Bone : Ember, UiTypography.PanelTitle);
+        // ── 4. PERMANENT. NEVER RESETS. — on every node, in gold, the last thing read before the
+        //    button. The one fact the whole tree rests on, and the one a new player most needs.
+        _ui.Fill(b, new Rectangle(left, DetailPanel.Bottom - 166, width, 2), Dim * 0.7f);
+        _ui.TextCenterBig(b, MemoryDustText.Permanence, DetailPanel.Center.X, DetailPanel.Bottom - 152, Gold * 0.85f, UiTypography.Body);
 
         // Every refusal this screen has — already taken, not enough points, prerequisites unlit — is
-        // said on the page that produced it, above the button that produced it.
-        if (_msg.Length > 0)
-            _ui.TextCenterBig(b, _ui.ShortenBig(_msg, width, UiTypography.Secondary), DetailPanel.Center.X, DetailPanel.Bottom - 120, Ember, UiTypography.Secondary);
+        // said on the page that produced it, above the button that produced it. A fresh refusal from
+        // the button takes the line; otherwise the standing reason the node cannot be bought.
+        var reason = _msg.Length > 0 ? _msg
+                   : isOwned || buyable ? ""
+                   : tree.Available < u.Cost ? "NOT ENOUGH TRAIT POINTS" : "LEARN WHAT IT NEEDS FIRST";
+        if (reason.Length > 0)
+            _ui.TextCenterBig(b, _ui.ShortenBig(reason, width, UiTypography.Secondary), DetailPanel.Center.X, DetailPanel.Bottom - 120, Ember, UiTypography.Secondary);
 
         var label = isOwned ? "LEARNED" : "LEARN THIS TRAIT";
         if (_ui.Button(b, new Rectangle(DetailPanel.X + 40, DetailPanel.Bottom - 92, DetailPanel.Width - 80, 68), label, hit, clicked, enabled: buyable))
             Buy(tree, u);
-        if (!isOwned && !buyable)
-            // Above the COST divider, and it names TRAIT POINTS, because this screen has not charged
-            // Memory Dust since the tree stopped being buyable by idling.
-            _ui.TextCenter(b, tree.Available < u.Cost ? "NOT ENOUGH TRAIT POINTS" : "LEARN WHAT IT NEEDS FIRST",
-                           DetailPanel.Center.X, DetailPanel.Bottom - 186, Ember);
     }
 
     private void DrawTick(SpriteBatch b, Rectangle r, bool on)
