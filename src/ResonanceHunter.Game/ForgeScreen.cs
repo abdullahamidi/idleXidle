@@ -740,10 +740,19 @@ public sealed class ForgeScreen
                 // GEMMED PIECES ARE NEVER FED TO THE MERGE: the product is a brand-new item, so the
                 // socketed gems — the player's own investment — would silently cease to exist. Crush
                 // or keep; auto-merge must not decide that for them.
+                // ONE CLASS PER TRIO. The product inherits its inputs' class, so a trio drawn in bag
+                // order across classes fused two of the champion's pieces into one it cannot wear
+                // (review 2026-08-25). Candidates group by class — the champion's own class and
+                // legacy pieces first, then the biggest pile — and only a full trio of one group fuses.
                 var trio = _inv.Where(i => i.Rarity == rarity && !IsWorn(i) && Gear.IsWearable(i)
                                            && i.Gems.Count == 0)
-                               .DistinctBy(i => i.InstanceId).Take(3).ToList();
-                if (trio.Count < 3) continue;
+                               .DistinctBy(i => i.InstanceId)
+                               .GroupBy(i => i.Class)
+                               .OrderByDescending(g => g.Key is null || g.Key == FavouredClass)
+                               .ThenByDescending(g => g.Count())
+                               .Select(g => g.Take(3).ToList())
+                               .FirstOrDefault(g => g.Count == 3);
+                if (trio is null) continue;
 
                 var result = Forge.Merge(trio, _rng, Tuning, LootTuning.Default);
                 if (!result.Success) continue;
@@ -756,7 +765,7 @@ public sealed class ForgeScreen
         }
 
         if (merged > 0) Sound?.Play("sfx_forge", 0.7f);
-        Say(merged > 0 ? $"AUTO-MERGED {merged}x — BAG IS NOW {_inv.Count} ITEMS." : "NOTHING TO MERGE (NEEDS 3 OF A RARITY).",
+        Say(merged > 0 ? $"AUTO-MERGED {merged}x — BAG IS NOW {_inv.Count} ITEMS." : "NOTHING TO MERGE (NEEDS 3 OF ONE RARITY AND ONE CLASS).",
             merged > 0 ? Gold : Slate);
         return merged;
     }

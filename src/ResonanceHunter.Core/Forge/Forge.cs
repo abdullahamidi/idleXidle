@@ -128,6 +128,18 @@ public static class Forge
     /// is built from the lowest input, so mixing still costs you the difference and you can see exactly
     /// what you are giving up before you spend the paper.
     /// </remarks>
+    /// <summary>The class most of the inputs of <paramref name="type"/> carry (then most of any classed input); ties to the earliest.</summary>
+    private static ItemClass? MajorityClass(IReadOnlyList<ItemInstance> inputs, ItemBaseType type)
+    {
+        var own = inputs.Where(i => i.BaseType == type && i.Class is not null).ToList();
+        var pool = own.Count > 0 ? own : inputs.Where(i => i.Class is not null).ToList();
+        if (pool.Count == 0) return null;
+        return pool.GroupBy(i => i.Class!.Value)
+                   .OrderByDescending(g => g.Count())
+                   .ThenBy(g => pool.FindIndex(i => i.Class == g.Key))
+                   .First().Key;
+    }
+
     public static MergeResult Merge(IReadOnlyList<ItemInstance> inputs, Random rng, ForgeTuning tuning, LootTuning loot,
                                     bool ignoreRarity = false)
     {
@@ -166,14 +178,13 @@ public static class Forge
         var element = MergeRecipe.ElementOf(inputs);
 
         // THE CLASS IS INHERITED, NEVER ROLLED, in the same spirit as the type and the element: the
-        // first input of the product's own type that has a class decides, then the first input with
-        // any class at all. Three legacy pieces (no class) fuse into a legacy piece — anyone's — so a
-        // pre-class bag keeps its promise all the way through the forge. A universal product (charm,
-        // ring, focus) never carries a class.
-        var cls = ItemClasses.IsClassLocked(type)
-            ? inputs.FirstOrDefault(i => i.BaseType == type && i.Class is not null)?.Class
-              ?? inputs.FirstOrDefault(i => i.Class is not null)?.Class
-            : null;
+        // MAJORITY class among the inputs of the product's own type decides, then the majority among
+        // any classed input; a tie goes to the earliest input so a seeded merge stays deterministic.
+        // (Review 2026-08-25: "first classed input" let [WARDEN, RANGER, RANGER] fuse into a WARDEN
+        // helm — two wearable pieces consumed for one the champion cannot wear.) Three legacy pieces
+        // (no class) fuse into a legacy piece — anyone's — so a pre-class bag keeps its promise all
+        // the way through the forge. A universal product (charm, ring, focus) never carries a class.
+        var cls = ItemClasses.IsClassLocked(type) ? MajorityClass(inputs, type) : null;
         // A weapon's family follows the same rule: the first weapon input whose family the class can
         // carry keeps its shape; otherwise the class picks one of its own. A legacy product keeps
         // null and derives its family from the id, exactly like a legacy drop.

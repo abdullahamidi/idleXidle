@@ -225,6 +225,31 @@ public class ItemClassesTest
     }
 
     [Fact]
+    public void test_a_merge_product_takes_the_majority_class_not_the_first()
+    {
+        // Review 2026-08-25: [WARDEN, RANGER, RANGER] fused into a WARDEN helm — two wearable pieces
+        // spent on one the champion could not wear. Majority wins; a tie goes to the earliest input.
+        var rng = new Random(9);
+        var trio = new[]
+        {
+            Piece(ItemBaseType.Helm, ItemClass.Warden, id: "a"),
+            Piece(ItemBaseType.Helm, ItemClass.Ranger, id: "b"),
+            Piece(ItemBaseType.Helm, ItemClass.Ranger, id: "c"),
+        };
+        var product = Forge.Merge(trio, rng, ForgeTuning.Default, LootTuning.Default).Product;
+        Assert.NotNull(product);
+        Assert.Equal(ItemClass.Ranger, product!.Class);
+
+        var tie = new[]
+        {
+            Piece(ItemBaseType.Helm, ItemClass.Mystic, id: "t1"),
+            Piece(ItemBaseType.Helm, ItemClass.Bulwark, id: "t2"),
+            Piece(ItemBaseType.Ring, id: "t3"),
+        };
+        Assert.Equal(ItemClass.Mystic, Forge.Merge(tie, rng, ForgeTuning.Default, LootTuning.Default).Product!.Class);
+    }
+
+    [Fact]
     public void test_a_merge_product_inherits_the_class_of_its_own_type_and_a_legacy_trio_stays_legacy()
     {
         var rng = new Random(5);

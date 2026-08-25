@@ -638,8 +638,10 @@ public sealed class SoloExpeditionScreen
     {
         if (_run is null || _champ is null) return;
 
-        var startHealth = new Dictionary<int, int> { [0] = _champ.Health };
-        var maxHealth = new Dictionary<int, int> { [0] = _champ.MaxHealth };
+        // A committed clip belongs to the wave it was swung in. StartRun (a death, a region change)
+        // reaches here with the playhead back at zero, and a clip left standing from the last wave
+        // held the figure on its first frame for the whole opening wave (review 2026-08-25).
+        _clipName = null;
 
         // THE WAVE BEING SHOWN, captured BEFORE the push: PushWave resolves wave+1 and, on a clear, counts
         // it — so after it `_run.Wave` is already the replayed wave, and `_run.Wave + 1` (which the boss
@@ -654,6 +656,10 @@ public sealed class SoloExpeditionScreen
         // wave regardless: a ring put on mid-descent changes the health number at the next wave, not at
         // the next death (playtest 2026-08-25).
         _run.RefreshPool();
+        // The replay's health table is read AFTER the pool refresh, or the HUD prints last wave's pool
+        // over this wave's bar for a whole wave (review 2026-08-25: "300/360 with a full bar").
+        var startHealth = new Dictionary<int, int> { [0] = _champ.Health };
+        var maxHealth = new Dictionary<int, int> { [0] = _champ.MaxHealth };
         _replayWave = _run.Wave + 1;
         _outcome = _run.PushWave();
 
@@ -2422,7 +2428,9 @@ public sealed class SoloExpeditionScreen
     /// </remarks>
     private void UpdateChampionClip()
     {
-        if (_clipName is not null && _playheadMs >= _clipStartMs + ClipMs / _clipSpeed)
+        // Expired — or the playhead is BEHIND the clip's start (a rewound fixture), which would run it
+        // backwards; either way the commitment is over.
+        if (_clipName is not null && (_playheadMs >= _clipStartMs + ClipMs / _clipSpeed || _playheadMs < _clipStartMs))
             _clipName = null;
         if (_clipName is not null) return;   // committed — plays through
         if (_replay is null) return;

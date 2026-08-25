@@ -1141,7 +1141,9 @@ public static class SoloBattle
                 // than it looks. Landed the way poison lands: not a skill hit (no crit, no hit-size
                 // rule, no Venom feeding itself) and through armour, because a Bruiser is often plated
                 // and a thorn that plate could erase would be dormant in the one band it answers.
-                if (shape.ReflectFraction > 0f)
+                // A dead champion has no thorns: the bite that finished the champion must not also
+                // credit kills and MOMENTUM refunds to a corpse (review 2026-08-25).
+                if (shape.ReflectFraction > 0f && champ.Alive)
                 {
                     for (var ci = 0; ci < creatures.Count; ci++)
                     {
