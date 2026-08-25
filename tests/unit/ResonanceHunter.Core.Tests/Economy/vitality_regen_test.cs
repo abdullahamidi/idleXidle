@@ -39,6 +39,27 @@ public class vitality_regen_test
     }
 
     [Fact]
+    public void test_regen_events_keep_the_wave_clock_across_waves()
+    {
+        // Review 2026-08-26: the regen heal was stamped with the run-cumulative clock while every other
+        // event is wave-relative, so from wave two on the replay froze at the first regen event.
+        var hunter = new Hunter();
+        for (var i = 0; i < 5; i++) { hunter.AddGleam(1_000_000); hunter.Train(HunterStat.Vitality); }
+        var champ = new Champion { MaxHealth = 100_000, Health = 40_000 };
+        var run = new SoloExpedition(new Build(), champ, hunter, enemyBaseHealth: 1f, enemyBaseDamage: 0f, rng: new Random(4));
+        for (var wave = 0; wave < 3; wave++)
+        {
+            run.PushWave();
+            var events = run.LastWaveEvents;
+            Assert.Contains(events, e => e.Kind == BattleEventKind.Heal);
+            for (var i = 1; i < events.Count; i++)
+                Assert.True(events[i].AtMs >= events[i - 1].AtMs,
+                    $"wave {wave + 1}: event {i} at {events[i].AtMs} ms follows {events[i - 1].AtMs} ms");
+            Assert.True(events[^1].AtMs <= ExpeditionTuning.Default.TickCeilingMs + 1000, "an event past the wave's own clock");
+        }
+    }
+
+    [Fact]
     public void test_regeneration_never_passes_full()
     {
         var hunter = new Hunter();

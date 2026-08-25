@@ -146,6 +146,7 @@ public class SaveSystemTests
         Assert.Equal("verdant_hollow", farm.Id);
         Assert.Equal(650f, farm.MasteryPoints);
         Assert.Equal(14, farm.BestDepth);
+        Assert.Equal(0, farm.StartWave);   // a save from before checkpoints starts from the top
 
         var item = SaveSystem.RestoreInventory(save).Single();
         Assert.Equal("i1", item.InstanceId);
@@ -162,6 +163,17 @@ public class SaveSystemTests
         Assert.Equal(777, again.Gleam);
         Assert.Equal(1500f, again.RegionMasteryPoints);
         Assert.Equal(14, again.RegionFarms.Single().BestDepth);
+    }
+
+    [Fact]
+    public void test_a_chosen_checkpoint_survives_the_save()
+    {
+        var save = new SaveGame
+        {
+            RegionFarms = new List<RegionFarmSave> { new() { Id = "verdant_hollow", MasteryPoints = 1f, BestDepth = 44, StartWave = 30 } },
+        };
+        var again = SaveSystem.Deserialize(SaveSystem.Serialize(save), Now).Save!;
+        Assert.Equal(30, again.RegionFarms.Single().StartWave);
     }
 
     /// <summary>

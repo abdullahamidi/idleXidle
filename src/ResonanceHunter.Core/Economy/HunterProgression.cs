@@ -363,6 +363,9 @@ public sealed class Hunter
     /// <summary>Life regained every second of a fight, as a fraction of the pool — VITALITY's whole job.</summary>
     public float RegenPerSecond => ValueOf(HunterStat.Vitality) * _tuning.RegenPerVitalityPoint;
 
+    /// <summary>The per-point rate, for a screen that wants to print the rule rather than a literal.</summary>
+    public float RegenPerVitalityPoint => _tuning.RegenPerVitalityPoint;
+
     /// <summary>
     /// The charm's own contribution to squad toughness, from the rarity curve.
     /// </summary>

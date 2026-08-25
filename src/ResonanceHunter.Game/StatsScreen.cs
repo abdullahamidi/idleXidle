@@ -343,13 +343,19 @@ public sealed class StatsScreen
                 // second multiplier on the pool.
                 var v = hunter.ValueOf(stat);
                 var pool = SoloBattle.ChampionHealth(build, hunter);
-                var perSecond = Math.Max(1, (int)MathF.Round(pool * hunter.RegenPerSecond));
+                // Zero stays zero: the sim heals nothing at 0 VITALITY, and a card that promised "1 life
+                // every second" to a fresh hunter lied (review 2026-08-26). Max(1, …) is the sim's own
+                // floor once the rate is above zero.
+                var perSecond = hunter.RegenPerSecond > 0f ? Math.Max(1, (int)MathF.Round(pool * hunter.RegenPerSecond)) : 0;
                 var pct = 100f * hunter.RegenPerSecond;
-                return ($"REGAINS {perSecond:N0} LIFE EVERY SECOND", new[]
+                var perPoint = 100f * hunter.RegenPerVitalityPoint;
+                return (perSecond > 0 ? $"REGAINS {perSecond:N0} LIFE EVERY SECOND" : "NOTHING YET — TRAIN IT TO REGAIN LIFE", new[]
                 {
                     "VITALITY heals your champion a little every second of a fight, even while it is being hit.",
-                    $"One rank of training adds {hunter.GainPerRank(stat):0} VITALITY. You have {v:0} VITALITY, and every point regains 0.03% of your life each second — {pct:0.00}% in total.",
-                    $"With {pool:N0} life, that is {perSecond:N0} life back every second. It cannot take you past full.",
+                    $"One rank of training adds {hunter.GainPerRank(stat):0} VITALITY. You have {v:0} VITALITY, and every point regains {perPoint:0.00}% of your life each second — {pct:0.00}% in total.",
+                    perSecond > 0
+                        ? $"With {pool:N0} life, that is {perSecond:N0} life back every second. It cannot take you past full."
+                        : "With no VITALITY trained, nothing comes back on its own.",
                 });
             }
             case HunterStat.MaxHealth:
@@ -360,7 +366,7 @@ public sealed class StatsScreen
                 return ($"{pool:N0} LIFE IN A FIGHT", new[]
                 {
                     $"HEALTH is the base of your champion's life. One rank of training adds {hunter.GainPerRank(stat):0} health.",
-                    $"With your charm counted in, your base health is {hunter.MaxHealth:N0}. After VITALITY, your gear, your promises and your passives, your champion starts a fight with {pool:N0} life — the same number the fight screen shows.",
+                    $"With your charm counted in, your base health is {hunter.MaxHealth:N0}. After your gear, your promises and your passives, your champion starts a fight with {pool:N0} life — the same number the fight screen shows.",
                     "When it reaches zero, the descent ends.",
                 });
             }

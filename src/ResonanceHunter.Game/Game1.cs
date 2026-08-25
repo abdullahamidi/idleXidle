@@ -101,6 +101,14 @@ public class Game1 : Game
     private RenderTarget2D _canvas = null!;
 
     private KeyboardState _keys, _prevKeys;
+
+    /// <summary>
+    /// The keyboard as the SCREENS see it: empty while a tour is up. The tour swallowed clicks from the
+    /// first day, but the screens read raw <see cref="_keys"/>, so "any key advances the card" also
+    /// bought a trait (Enter on TRAITS), sold the bench item (S on the FORGE) or walked into a region
+    /// (Enter on the MAP) underneath the scrim (review 2026-08-26).
+    /// </summary>
+    private KeyboardState ScreenKeys => _tourActive ? default : _keys;
     private MouseState _mouse, _prevMouse;
     private bool _clicked; // the left-click EDGE for this frame, latched in Update so Draw can read it
     private bool _rightClicked; // the right-click EDGE, latched the same way — the item context menu
@@ -2266,7 +2274,7 @@ public class Game1 : Game
             _buildScreen.Mastery = _mastery;
             _buildScreen.Power = _hunter.PowerRating;   // the Build screen has no Hunter ref of its own
             _buildScreen.Level = _hunter.HunterLevel;
-            _buildScreen.Update(_keys, _prevKeys, CanvasMouse, MouseClicked,
+            _buildScreen.Update(ScreenKeys, _prevKeys, CanvasMouse, MouseClicked,
                                 _mouse.LeftButton == ButtonState.Pressed, MouseWheel, _dust, MouseRightClicked);
             if (_buildScreen.Dirty) { _buildScreen.ClearDirty(); Save(); }
             // The BUILD page asks for the weave editor; the host owns which screen is open.
@@ -2282,7 +2290,7 @@ public class Game1 : Game
             _character.Loadout = _loadout;
             _character.Mastery = _mastery;
             _character.Tree = _dust;
-            _character.Update(_keys, _prevKeys, CanvasMouse, MouseClicked, MouseRightClicked, MouseWheel, _hunter);
+            _character.Update(ScreenKeys, _prevKeys, CanvasMouse, MouseClicked, MouseRightClicked, MouseWheel, _hunter);
 
             // ── THE ITEM MENU'S VERBS. Three of the four live in the Forge, so the gear screen names
             //    what it wants and the host carries the player there, already pointed at the item.
@@ -2443,7 +2451,7 @@ public class Game1 : Game
             _stats.HighestWave = _deepestEver;          // real career counters (Stats spec §9.2)
             _stats.ChestsOpened = _forge.ChestsOpened;
             _stats.MasteryPoints = _mastery.Earned;
-            _stats.Update(_keys, _prevKeys, CanvasMouse, MouseClicked, MouseWheel, _hunter);
+            _stats.Update(ScreenKeys, _prevKeys, CanvasMouse, MouseClicked, MouseWheel, _hunter);
             if (_stats.Dirty) { _stats.ClearDirty(); Save(); }
             Latch(gameTime);
             return;
@@ -2497,7 +2505,7 @@ public class Game1 : Game
         if (_showPrestige)
         {
             // HELD, as well as clicked: the tree is a free canvas now, and a held button drags it.
-            _prestige.Update(_keys, CanvasMouse, MouseClicked, _mouse.LeftButton == ButtonState.Pressed,
+            _prestige.Update(ScreenKeys, CanvasMouse, MouseClicked, _mouse.LeftButton == ButtonState.Pressed,
                              MouseWheel, _dust, dt);
             // Taking a trait is permanent and there is no respec, so it is worth a sound and worth
             // writing to disk immediately. The screen owns neither: it hands back a cue the same way
@@ -2537,7 +2545,7 @@ public class Game1 : Game
             // dismissed an unlock panel also SOLD the focused (rarest-first!) bag item behind it, and
             // S/D/J kept working under the settings panel and the reveal. MouseClicked already carries
             // these gates; the keys did not. (Adversarial review, pass four.)
-            _forge.Update(gameTime, _keys, CanvasMouse, MouseClicked, MouseWheel, _hunter,
+            _forge.Update(gameTime, ScreenKeys, CanvasMouse, MouseClicked, MouseWheel, _hunter,
                           inputLocked: _swallowInput || _showSettings || _forge.RevealActive);
             // The dialog's "don't ask me again" writes through to the prefs file the moment it is used.
             if (_forge.PrefsDirty) { _forge.PrefsDirty = false; _askBeforeScrap = _forge.AskBeforeScrap; SaveDisplay(); }
@@ -3179,16 +3187,19 @@ public class Game1 : Game
         _expedition.BestDepthHere = _world.RegionFarm(def.Id).BestDepth;   // so NEW RECORD means it
         // THE CHECKPOINT, if it is still valid and the Dust is there. Validated every frame rather
         // than at the click, because the record, the conquest and the Dust all move without the map.
-        var farmHere = _world.RegionFarm(def.Id);
-        var wish = Checkpoints.Clamp(farmHere.StartWave, farmHere.BestDepth, _world.IsConquered(def.Id));
-        _expedition.StartWave = _dust.MemoryDust >= Checkpoints.DustCost(wish) ? wish : 0;
         if (_expedition.CheckpointCharge > 0)
         {
-            // The descent already began at the checkpoint; the Dust it cost comes out now. Spend()
-            // refusing (a race with the Warren tick, one frame wide) simply makes that descent free.
+            // The descent already began at the checkpoint; the Dust it cost comes out now — BEFORE the
+            // next affordability read below, so the next start is judged against the Dust that is
+            // actually left (review 2026-08-26). Spend() refusing (a race with the Warren tick, one
+            // frame wide) simply makes that descent free.
             _dust.Spend(_expedition.CheckpointCharge);
             _expedition.CheckpointCharge = 0;
         }
+        var farmHere = _world.RegionFarm(def.Id);
+        var wish = Checkpoints.Clamp(farmHere.StartWave, farmHere.BestDepth, _world.IsConquered(def.Id));
+        _expedition.StartWave = _dust.MemoryDust >= Checkpoints.DustCost(wish) ? wish : 0;
+        _expedition.RegionConquered = _world.IsConquered(def.Id);
         _expedition.ChestCount = _forge.UnopenedChests.Count;   // drives the fight screen's "go open a chest" nudge
         _expedition.VaultOpen = Unlocks.IsOpen(Activity.Vault, GuideUnlockFacts());       // the rail hides a reward whose screen is locked
         _expedition.MasteryOpen = Unlocks.IsOpen(Activity.Mastery, GuideUnlockFacts());   // SPEND POINTS only shows once the tree is open
@@ -4357,7 +4368,7 @@ public class Game1 : Game
     private void UpdateWorld()
     {
         PushMapState();
-        _mapScreen.Update(_keys, _prevKeys, CanvasMouse, MouseClicked);
+        _mapScreen.Update(ScreenKeys, _prevKeys, CanvasMouse, MouseClicked);
         ConsumeMapRequests();
     }
 

@@ -129,7 +129,11 @@ public sealed class MapScreen
     /// </summary>
     private void DrawCheckpoints(SpriteBatch b, RegionDefinition def, Region farm, Point hit, bool clicked)
     {
-        var options = Checkpoints.Options(farm.BestDepth, conquered: true);
+        var options = new List<int>(Checkpoints.Options(farm.BestDepth, conquered: true));
+        // The row holds ~ten chips. Past that the SHALLOW middle goes (TOP and the deepest ones stay —
+        // a player at wave 110 wants 100 and 110, not 10), never the deepest (review 2026-08-26).
+        int RowWidth() { var w = 0; foreach (var o in options) w += Math.Max(36, _ui.MeasureBig(o == 0 ? "TOP" : o.ToString(), 15) + 16) + 4; return w; }
+        while (options.Count > 2 && RowWidth() > DetailPanel.Width - 56) options.RemoveAt(1);
         var y = DetailPanel.Y + 526;   // the chips must clear the DROPS heading at Y+590
         _ui.TextBig(b, "START AT WAVE", DetailPanel.X + 28, y, Gold, UiTypography.Secondary);
         var chosen = Checkpoints.Clamp(farm.StartWave, farm.BestDepth, true);
@@ -141,8 +145,7 @@ public sealed class MapScreen
         foreach (var w in options)
         {
             var label = w == 0 ? "TOP" : w.ToString();
-            var cw = Math.Max(44, _ui.MeasureBig(label, 15) + 22);
-            if (x + cw > DetailPanel.Right - 28) break;   // more than fits: the deepest ones wait for a wider panel
+            var cw = Math.Max(36, _ui.MeasureBig(label, 15) + 16);
             var chip = new Rectangle(x, cy, cw, 26);
             var afford = DustOwned >= Checkpoints.DustCost(w);
             var lit = w == chosen;
@@ -154,7 +157,7 @@ public sealed class MapScreen
             _ui.Fill(b, new Rectangle(chip.Right - 2, chip.Y, 2, chip.Height), edge);
             _ui.TextCenterBig(b, label, chip.Center.X, chip.Y + 5, lit ? Gold : afford ? Bone : Dim, 15);
             if (UiKit.ClickedIn(chip, hit, clicked)) _startRequest = (def.Id, w);
-            x += cw + 6;
+            x += cw + 4;
         }
     }
 

@@ -254,6 +254,9 @@ public sealed class SoloExpeditionScreen
     /// <summary>Set by StartRun when a descent began at a checkpoint: the Dust the host must now take.</summary>
     public int CheckpointCharge { get; set; }
 
+    /// <summary>Host-fed: the region is already conquered, so the banner says CONQUERED from wave one (review 2026-08-26).</summary>
+    public bool RegionConquered { get; set; }
+
     /// <summary>The quality this descent accumulated — the tilt a chest it drops should remember.</summary>
     /// <remarks>
     /// Neutral 1.0 when there is no run, so a chest dropped outside one (a fixture, a test) rolls exactly
@@ -2008,12 +2011,13 @@ public sealed class SoloExpeditionScreen
         // Past the conquest bar the banner counts OVERWAVE — how far beyond the bar this descent has gone
         // (playtest 2026-08-26: "after the map is conquered, mark it with something like Overwave").
         var over = Math.Max(0, _replayWave - ConquerAt);
-        var conquestLine = Deepest >= ConquerAt
+        var conquered = RegionConquered || Deepest >= ConquerAt;
+        var conquestLine = conquered
             ? (over > 0 ? $"CONQUERED · OVERWAVE +{over}" : "CONQUERED")
             : $"CONQUEST {Deepest} / {ConquerAt}";
-        _ui.TextCenterBig(b, conquestLine, cx, 73, Deepest >= ConquerAt ? Gold : Bone, UiTypography.StageLabel);
+        _ui.TextCenterBig(b, conquestLine, cx, 73, conquered ? Gold : Bone, UiTypography.StageLabel);
         _ui.BarArt(b, new Rectangle(710, 102, 400, 18),
-            ConquerAt > 0 ? Math.Clamp(Deepest / (float)ConquerAt, 0f, 1f) : 0f, "progress");
+            conquered ? 1f : ConquerAt > 0 ? Math.Clamp(Deepest / (float)ConquerAt, 0f, 1f) : 0f, "progress");
         // THE WAVE LINE CARRIES THE RUN'S STATE NOW, which is what the deleted EXPEDITION plate was for.
         // Nothing is appended while the run is simply running: "ACTIVE" was true of every frame this
         // screen has ever drawn, so it distinguished nothing and only made the line longer.

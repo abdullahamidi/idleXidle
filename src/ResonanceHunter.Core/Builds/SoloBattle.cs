@@ -919,7 +919,9 @@ public static class SoloBattle
             //    but OUTSIDE the per-wave heal ceiling, which is a budget on a build's skills. Never on
             //    a corpse. ──
             if (ms % RegenTickMs == 0 && champ.Alive && hunter.RegenPerSecond > 0f && champ.Health < champ.MaxHealth)
-                Heal(Math.Max(1, (int)MathF.Round(champ.MaxHealth * hunter.RegenPerSecond)), abs, underCeiling: false);
+                // `ms`, NOT `abs`: events are stamped wave-relative, and the replay walks them in order —
+                // a run-cumulative stamp here froze the replay from wave two on (review 2026-08-26).
+                Heal(Math.Max(1, (int)MathF.Round(champ.MaxHealth * hunter.RegenPerSecond)), ms, underCeiling: false);
 
             // ── VENOM bleeds first, so poison from earlier ticks can finish an enemy before it swings. ──
             if (poison > 0.5f && ms % 500 == 0)
