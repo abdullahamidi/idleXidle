@@ -1459,7 +1459,9 @@ public class Game1 : Game
                         _bootColor = Gold; _bootTimer = 7f;
                     }
                     _forge.AddChest(new Chest { Rarity = Rarity.Epic, Tier = 8, Element = Source.Nature });
-                    _mastery.SetEarned(3);
+                    // Points are DERIVED from depth every frame (SkillPointsEarned → MasteryPoints), so a
+                    // SetEarned here lasted one frame; a real best depth of 40 pays five points.
+                    _world.RegionFarm(_activeRegion).RestoreBestDepth(40);
                     _deepestEver = 25;   // MasteryOpen gate (Unlocks: DeepestWave >= 25) — without it the SPEND POINTS row this fixture poses never renders
                     // A DELIBERATELY beefy enemy: a real wave-1 fight is over in ~1.5s, so a shot taken a
                     // second in only ever caught the aftermath — useless for verifying the fight itself.
