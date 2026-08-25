@@ -8,6 +8,7 @@ using ResonanceHunter.Core.Characters;
 using ResonanceHunter.Core.Economy;
 using ResonanceHunter.Core.Prestige;
 
+using ResonanceHunter.Core.Progression;
 namespace ResonanceHunter.Client;
 
 /// <summary>
@@ -83,6 +84,18 @@ public sealed class StatsScreen
     private static readonly Rectangle ProgressPanel = new(56, 670, 372, 290);
     private static readonly Rectangle TrainPanel = new(472, 150, 1318, 700);
     private static readonly Rectangle ResetBar = new(472, 874, 1318, 106);
+
+    /// <summary>
+    /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
+    /// first is the one the caption card is placed beside; a target that is not this screen's gets none.
+    /// </summary>
+    internal static Rectangle[] Spotlights(TourTarget target) => target switch
+    {
+        TourTarget.TrainingRows => new[] { TrainPanel },
+        TourTarget.HunterCard => new[] { HunterCard },
+        TourTarget.ResetBar => new[] { ResetBar },
+        _ => Array.Empty<Rectangle>(),
+    };
 
     // The screen only draws and hit-tests inside Draw; nothing to advance per-frame.
     public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, int wheel, Hunter hunter) { }

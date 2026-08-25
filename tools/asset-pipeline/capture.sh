@@ -22,15 +22,28 @@
 # the HUNT screen, and the only way to know the light frames the right thing is to
 # look.
 #
+# `tour` poses any screen's first-visit tour — the same spotlight walkthrough as the
+# intro, one per screen. Third argument: the screen (an Activity name — Stats, Gear,
+# Build, Mastery, Vault, Forge, Warren, Map, Traits, Roster; Hunt is the intro).
+# Fourth: the card, counted from 1 (default 1). The screen is dressed by the same
+# fixture its plain capture uses, so the light falls on real content:
+#
+#   bash tools/asset-pipeline/capture.sh tour shot_tour_stats_1.png Stats 1
+#
 # RH_SHOT_EXPLAIN=Stats,Map (any Activity names, or SkillSlot2..4) leaves those
-# screens' first-open banners OWED under the rig, which otherwise treats everything
-# as already explained so no banner sits over the thing a fixture is photographing.
+# screens' tours (or slot notes) OWED under the rig, which otherwise treats everything
+# as already explained so no tour sits over the thing a fixture is photographing.
+# `tour` sets this for its own screen by itself.
 #
 # `dust` takes the same third argument for the TRAIT tree's camera (its home zoom
 # is about 0.55, fitting the whole tree; 1.2 frames one road with its art readable).
 MODE="${1:-fight}"
 OUT="${2:-shot_$MODE.png}"
 ZOOM="${3:-}"
+# `tour`'s third argument is a screen, not a dial — it must not reach RH_SHOT_ZOOM /
+# RH_SHOT_T, which the screen's own fixture may read as a zoom or a pose time.
+TOUR_TAB=""; TOUR_STEP=""
+if [ "$MODE" = "tour" ]; then TOUR_TAB="${3:-Stats}"; TOUR_STEP="${4:-1}"; ZOOM=""; fi
 . "$(dirname "${BASH_SOURCE[0]}")/../shellenv.sh" || exit 1
 cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1
 WINDIR="$(winpath "$PWD")"
@@ -46,5 +59,7 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 # The third argument means "zoom" to buildzoom and "seconds into the flourish" to
 # traitlit/traitterm — both are the one dial that mode's capture needs.
 [ -n "$ZOOM" ] && RH_ENV+=(RH_SHOT_ZOOM="$ZOOM" RH_SHOT_T="$ZOOM")
+# `tour`: the screen and the card. The game resolves the mode to that screen's own fixture.
+[ -n "$TOUR_TAB" ] && RH_ENV+=(RH_SHOT_TAB="$TOUR_TAB" RH_SHOT_STEP="$TOUR_STEP")
 dn run --project src/ResonanceHunter.Game --no-build >/dev/null 2>&1
 [ -f "$OUT" ] && echo "captured $OUT ($(stat -c%s "$OUT") bytes)" || { echo "capture failed" >&2; exit 1; }

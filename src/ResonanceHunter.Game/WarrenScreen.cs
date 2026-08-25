@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using ResonanceHunter.Core.Warrens;
 
+using ResonanceHunter.Core.Progression;
 namespace ResonanceHunter.Client;
 
 /// <summary>
@@ -48,6 +49,18 @@ public sealed class WarrenScreen
     private static readonly Rectangle GridPanel = new(446, 154, 920, 500);
     private static readonly Rectangle BonusStrip = new(446, 676, 920, 186);
     private static readonly Rectangle DetailPanel = new(1400, 154, 480, 708);
+
+    /// <summary>
+    /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
+    /// first is the one the caption card is placed beside; a target that is not this screen's gets none.
+    /// </summary>
+    internal static Rectangle[] Spotlights(TourTarget target) => target switch
+    {
+        TourTarget.Facilities => new[] { GridPanel },
+        TourTarget.FacilityDetail => new[] { DetailPanel },
+        TourTarget.WarrenOverview => new[] { OverviewPanel },
+        _ => Array.Empty<Rectangle>(),
+    };
 
     private static Rectangle Card(int i)
     {

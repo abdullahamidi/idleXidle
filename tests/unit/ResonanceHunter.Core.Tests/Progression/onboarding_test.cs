@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using ResonanceHunter.Core.Progression;
 using Xunit;
@@ -7,18 +8,27 @@ using Xunit.Abstractions;
 namespace ResonanceHunter.Core.Tests.Progression;
 
 /// <summary>
-/// The intro runs once, for a new player only, and every later explanation waits to be asked for.
+/// The intro runs once, for a new player only; every other screen gives its tour once, the first time
+/// it is opened; and every card of every tour is short, plain, and drawable.
 /// </summary>
 /// <remarks>
-/// The two playtest complaints this guards: the game "throws the player straight in" (so the intro must
-/// be DUE on a fresh save) and the notifications "wore the testers out" (so nothing here may fire for a
-/// returning player, and a screen's explanation may only ever be owed once).
+/// Three playtest complaints this guards: the game "throws the player straight in" (so the intro must
+/// be DUE on a fresh save), the notifications "wore the testers out" (so nothing here may fire for a
+/// returning player, and a screen's tour may only ever be owed once), and the other screens' first
+/// explanations were "too crowded and too small" (so every screen gets cards in the Hunt's style, and
+/// no card may grow back into a paragraph).
 /// </remarks>
 public class OnboardingTest
 {
     private readonly ITestOutputHelper _out;
 
     public OnboardingTest(ITestOutputHelper output) => _out = output;
+
+    /// <summary>ASCII plus the marks the font gate has seen render (tools/check_font_coverage.py).</summary>
+    private const string AllowedMarks = "·×—–→←‹›…";
+
+    /// <summary>The caption card wraps at 560px; past this a body grows a fourth line and turns back into a banner.</summary>
+    private const int MaxBodyChars = 160;
 
     // ── The intro ─────────────────────────────────────────────────────────────────────────────
 
@@ -44,34 +54,132 @@ public class OnboardingTest
     }
 
     [Fact]
-    public void test_the_intro_has_eight_cards_each_pointing_somewhere_different()
+    public void test_the_intro_is_the_tour_of_the_hunt_and_has_its_eight_cards()
     {
-        Assert.Equal(8, Onboarding.Intro.Count);
-        Assert.Equal(8, Onboarding.Intro.Select(s => s.Target).Distinct().Count());
-        foreach (var step in Onboarding.Intro)
+        // The intro was the first tour, and the other screens' tours were built in its image. It is
+        // pinned card by card so generalising the machinery could not quietly reword the one the
+        // playtest called "much clearer".
+        var expected = new (TourTarget Target, string Title, string Body)[]
         {
-            _out.WriteLine($"{step.Target}: {step.Title} — {step.Body}");
-            Assert.False(string.IsNullOrWhiteSpace(step.Title));
-            Assert.False(string.IsNullOrWhiteSpace(step.Body));
+            (TourTarget.Champion, "YOUR CHAMPION",
+                "This is your champion. It fights on its own. You never press attack."),
+            (TourTarget.Enemies, "THE ENEMIES",
+                "Enemies come in waves. Every fifth wave is a boss. The banner at the top counts the waves and the conquest."),
+            (TourTarget.HunterHud, "YOUR CHAMPION'S LIFE",
+                "This is your champion's life. When it reaches zero the descent ends — then it gets back up and starts again. Nothing is lost."),
+            (TourTarget.CurrencyPills, "GLEAM",
+                "Every cleared wave pays Gleam. Spend Gleam on the STATS screen to train your champion."),
+            (TourTarget.Skills, "YOUR SKILLS",
+                "Your skills. They fire on their own timers. You choose them on the BUILD screen later."),
+            (TourTarget.RightColumn, "REWARDS AND ERRANDS",
+                "Rewards and errands. When a boss drops a chest, or you earn mastery points, the buttons here take you there."),
+            (TourTarget.NavRail, "THE OTHER SCREENS",
+                "The other screens. Most are closed for now. They open as you play — a gold NEW mark shows what just opened."),
+            (TourTarget.GuideStrip, "LESSONS",
+                "When there is something new to do, a short lesson appears down here. Close it with the ×. That is all — go and watch the first wave."),
+        };
+
+        var intro = Onboarding.Intro;
+        Assert.Same(Onboarding.TourFor(Activity.Hunt).GetType(), intro.GetType());
+        Assert.Equal(expected.Select(e => new TourStep(e.Target, e.Title, e.Body)), Onboarding.TourFor(Activity.Hunt));
+        Assert.Equal(Onboarding.TourFor(Activity.Hunt), intro);
+    }
+
+    // ── Every tour ────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void test_every_screen_has_a_tour_of_two_to_four_cards_each_pointing_somewhere_different()
+    {
+        // The Hunt's eight is the exception the intro earned; every other screen teaches what it is
+        // for and what to do first, and stops. Two cards is a screen with one idea; five is a manual.
+        foreach (var screen in Enum.GetValues<Activity>())
+        {
+            var tour = Onboarding.TourFor(screen);
+            _out.WriteLine($"{screen}: {tour.Count} cards");
+            foreach (var step in tour) _out.WriteLine($"   {step.Target,-16} {step.Title} — {step.Body}");
+
+            var (lo, hi) = screen == Activity.Hunt ? (8, 8) : (2, 4);
+            Assert.InRange(tour.Count, lo, hi);
+            Assert.Equal(tour.Count, tour.Select(s => s.Target).Distinct().Count());
+            foreach (var step in tour)
+            {
+                Assert.False(string.IsNullOrWhiteSpace(step.Title), $"{screen} has a card with no title");
+                Assert.False(string.IsNullOrWhiteSpace(step.Body), $"{screen} has a card with no body");
+            }
         }
     }
 
     [Fact]
-    public void test_the_intro_copy_is_plain_and_short()
+    public void test_no_two_screens_share_a_target()
     {
-        // The house rules for player-facing copy: short sentences, no abbreviations, and only the
-        // characters the font gate allows (ASCII plus a handful of marks seen rendering).
-        const string allowedMarks = "·×—–→←‹›…";
-        foreach (var step in Onboarding.Intro)
-        {
-            foreach (var ch in step.Title + step.Body)
-                Assert.True(ch < 128 || allowedMarks.Contains(ch), $"'{ch}' in card {step.Target} is outside the font gate");
+        // A target is resolved to a rectangle by the screen it belongs to. One shared between two
+        // screens would light the right region on one of them and nothing on the other.
+        var owners = new Dictionary<TourTarget, Activity>();
+        foreach (var screen in Enum.GetValues<Activity>())
+            foreach (var step in Onboarding.TourFor(screen))
+            {
+                Assert.False(owners.TryGetValue(step.Target, out var other),
+                    $"{step.Target} is pointed at by both {other} and {screen}");
+                owners[step.Target] = screen;
+            }
+    }
 
-            // Three short sentences at most, and none of them long.
-            var sentences = step.Body.Split(new[] { ". ", "! " }, StringSplitOptions.RemoveEmptyEntries);
-            Assert.InRange(sentences.Length, 1, 4);
-            Assert.True(step.Body.Length <= 170, $"card {step.Target} runs long: {step.Body.Length} chars");
-        }
+    [Fact]
+    public void test_every_card_is_plain_and_short()
+    {
+        // The house rules for player-facing copy: short sentences, no abbreviations, only the
+        // characters the font gate allows — and never a fourth line, which is where "too crowded" began.
+        foreach (var screen in Enum.GetValues<Activity>())
+            foreach (var step in Onboarding.TourFor(screen))
+            {
+                foreach (var ch in step.Title + step.Body)
+                    Assert.True(ch < 128 || AllowedMarks.Contains(ch),
+                        $"'{ch}' in {screen}/{step.Target} is outside the font gate");
+
+                var sentences = step.Body.Split(new[] { ". ", "! ", ": " }, StringSplitOptions.RemoveEmptyEntries);
+                Assert.InRange(sentences.Length, 1, 4);
+                Assert.True(step.Body.Length <= MaxBodyChars,
+                    $"{screen}/{step.Target} runs long: {step.Body.Length} chars — \"{step.Body}\"");
+                Assert.DoesNotContain("respec", step.Body, StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain("DPS", step.Body);
+                Assert.DoesNotContain("PTS", step.Body);
+            }
+    }
+
+    [Fact]
+    public void test_the_traits_tour_states_purpose_sources_roads_and_permanence()
+    {
+        // Playtest, 2026-08-25: the first explanation of traits must say what they are FOR. Three
+        // things a new player has to leave with — what a trait is, where the points come from, and
+        // that nothing resets — and the sources must be the TRUE ones (Game1.TraitPointsEarned:
+        // conquests, corruption tiers, region mastery levels). Memory Dust no longer buys traits, so
+        // the word may not appear. The paragraph that used to hold this is now three cards, read together.
+        var text = string.Join(" ", Onboarding.TourFor(Activity.Traits).Select(s => s.Body));
+        var headline = Unlocks.Headline(Activity.Traits);
+
+        Assert.Contains("permanent", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("TRAIT POINTS", text);
+        Assert.Contains("conquer", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("corruption", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("mastery", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("four roads", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("capstone", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("never resets", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("dust", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("dust", headline, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PERMANENT", headline);
+        // The old text named the wrong faucet — "going deeper than you ever have" is the mastery
+        // tree's income, not this one's.
+        Assert.DoesNotContain("deeper than you ever have", text);
+    }
+
+    [Fact]
+    public void test_the_build_tour_reads_the_mastery_gate_from_the_rules()
+    {
+        // The card that points at the MASTERY tile says when it opens. That number lives in the unlock
+        // gate; the card reads it from there, so retuning the gate cannot leave the card lying.
+        var card = Onboarding.TourFor(Activity.Build).Single(s => s.Target == TourTarget.MasteryTile);
+        Assert.Contains(Unlocks.Requirement(Activity.Mastery).ToLowerInvariant(), card.Body);
     }
 
     // ── The explained list ────────────────────────────────────────────────────────────────────
@@ -108,7 +216,7 @@ public class OnboardingTest
     public void test_a_player_who_saw_the_intro_keeps_exactly_what_the_save_says()
     {
         // The Map and Roster are open from the first frame; a player who finished the intro and never
-        // visited them still has both explanations waiting — the list is honoured as saved.
+        // visited them still has both tours waiting — the list is honoured as saved.
         var facts = new UnlockFacts(WavesCleared: 3, DeepestWave: 3);
         var seeded = Onboarding.SeedExplained(facts, introSeen: true, explained: new[] { "Stats" });
 
@@ -116,14 +224,17 @@ public class OnboardingTest
         Assert.True(Onboarding.IsNew(Activity.Map, facts, seeded));
         Assert.True(Onboarding.IsNew(Activity.Roster, facts, seeded));
         Assert.False(Onboarding.IsNew(Activity.Stats, facts, seeded));
+        Assert.NotNull(Onboarding.TourDue(Activity.Map, seeded));
+        Assert.Null(Onboarding.TourDue(Activity.Stats, seeded));
     }
 
     [Fact]
-    public void test_the_hunt_is_never_new_and_never_owes_a_banner()
+    public void test_the_hunt_is_never_new_and_never_owes_a_tour_or_a_banner()
     {
-        // The intro IS the Hunt's explanation.
+        // The intro IS the Hunt's tour, and it is decided by IntroDue, not by the list.
         var none = Array.Empty<string>();
         Assert.False(Onboarding.IsNew(Activity.Hunt, new UnlockFacts(), none));
+        Assert.Null(Onboarding.TourDue(Activity.Hunt, none));
         Assert.Null(Onboarding.BannerFor(Activity.Hunt, new UnlockFacts(), none));
     }
 
@@ -134,24 +245,37 @@ public class OnboardingTest
     }
 
     [Fact]
-    public void test_the_build_screen_explains_itself_first_and_then_the_new_slot()
+    public void test_every_screen_but_the_hunt_owes_its_tour_exactly_once()
+    {
+        foreach (var screen in Enum.GetValues<Activity>().Where(a => a != Activity.Hunt))
+        {
+            var explained = new HashSet<string>();
+            var key = Onboarding.TourDue(screen, explained);
+            Assert.Equal(Onboarding.ScreenKey(screen), key);
+            explained.Add(key!);
+            Assert.Null(Onboarding.TourDue(screen, explained));
+        }
+    }
+
+    [Fact]
+    public void test_the_build_screen_gives_its_tour_first_and_then_the_new_slot()
     {
         // Wave 5 opens the Build screen AND the second skill slot on the same frame. Two things are
-        // owed; they arrive one at a time, the screen before the change on it.
+        // owed; they arrive one at a time, the screen before the change on it — and the slot note is
+        // a banner, which is the one place a banner is still used.
         var facts = new UnlockFacts(WavesCleared: 5, DeepestWave: 5);
-        var explained = new System.Collections.Generic.HashSet<string>();
+        var explained = new HashSet<string>();
 
-        var first = Onboarding.BannerFor(Activity.Build, facts, explained);
-        Assert.NotNull(first);
-        Assert.Equal(Onboarding.ScreenKey(Activity.Build), first!.Value.Key);
-        Assert.Equal(Unlocks.Explain(Activity.Build), first.Value.Body);
-        explained.Add(first.Value.Key);
+        var tour = Onboarding.TourDue(Activity.Build, explained);
+        Assert.Equal(Onboarding.ScreenKey(Activity.Build), tour);
+        Assert.Null(Onboarding.BannerFor(Activity.Build, facts, explained));   // not while the tour is owed
+        explained.Add(tour!);
 
-        var second = Onboarding.BannerFor(Activity.Build, facts, explained);
-        Assert.NotNull(second);
-        Assert.Equal(Onboarding.SlotKey(2), second!.Value.Key);
-        Assert.Equal(Unlocks.SkillSlotNote(2), second.Value.Body);
-        explained.Add(second.Value.Key);
+        var note = Onboarding.BannerFor(Activity.Build, facts, explained);
+        Assert.NotNull(note);
+        Assert.Equal(Onboarding.SlotKey(2), note!.Value.Key);
+        Assert.Equal(Unlocks.SkillSlotNote(2), note.Value.Body);
+        explained.Add(note.Value.Key);
 
         Assert.Null(Onboarding.BannerFor(Activity.Build, facts, explained));
         Assert.False(Onboarding.IsNew(Activity.Build, facts, explained));
@@ -168,5 +292,16 @@ public class OnboardingTest
         Assert.True(Onboarding.IsNew(Activity.Build, facts, explained));
         var owed = Onboarding.BannerFor(Activity.Build, facts, explained);
         Assert.Equal(Onboarding.SlotKey(3), owed!.Value.Key);
+    }
+
+    [Fact]
+    public void test_only_the_build_screen_ever_owes_a_banner()
+    {
+        // Every other screen's whole first explanation is its tour. A banner elsewhere would be the
+        // "too crowded and too small" paragraph coming back.
+        var everything = new UnlockFacts(WavesCleared: 9999, DeepestWave: 9999, ItemsOwned: 999,
+                                         ChestsEverHeld: 99, RegionsConquered: 6, TraitPointsEarned: 99);
+        foreach (var screen in Enum.GetValues<Activity>().Where(a => a != Activity.Build))
+            Assert.Null(Onboarding.BannerFor(screen, everything, Array.Empty<string>()));
     }
 }

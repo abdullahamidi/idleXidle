@@ -6,6 +6,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using ResonanceHunter.Core.Prestige;
 
+using ResonanceHunter.Core.Progression;
 namespace ResonanceHunter.Client;
 
 /// <summary>
@@ -168,6 +169,22 @@ public sealed class PrestigeScreen
 
     /// <summary>The docked reading panel, at 1368..1868.</summary>
     private static readonly Rectangle DetailPanel = new(1368, 144, 500, 790);
+
+    /// <summary>
+    /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
+    /// first is the one the caption card is placed beside; a target that is not this screen's gets none.
+    /// </summary>
+    /// <remarks>
+    /// The points readout is the header line at (60,108) and its number at (282,104), boxed together —
+    /// and no taller, or the light also catches the first road's name sitting just under them.
+    /// </remarks>
+    internal static Rectangle[] Spotlights(TourTarget target) => target switch
+    {
+        TourTarget.TraitTree => new[] { View },
+        TourTarget.TraitPoints => new[] { new Rectangle(48, 98, 400, 34) },
+        TourTarget.TraitDetail => new[] { DetailPanel },
+        _ => Array.Empty<Rectangle>(),
+    };
 
     // ── The camera ──────────────────────────────────────────────────────────────────────────────
     private Vector2 _pan;                  // world point at the centre of the view

@@ -141,18 +141,28 @@ public class Game1 : Game
     // wore the testers out." The queue, the panel, its cooldown and everything that fed them are gone —
     // not disabled, gone — and replaced by three quiet channels:
     //
-    //   * THE INTRO (Onboarding.Intro): once, on the first BEGIN THE HUNT, a click-through spotlight
-    //     tour of the HUNT screen while the fight runs behind it. The only full-screen modal left.
-    //   * FIRST-OPEN BANNERS: a screen that opens gets a gold NEW mark on its rail tile, and its
-    //     explanation waits at the top of THAT screen until the player goes there and closes it.
+    //   * THE TOURS (Onboarding.TourFor): a click-through spotlight walk of a screen, one region lit
+    //     at a time, while the screen keeps working underneath. The HUNT's runs once, on the first
+    //     BEGIN THE HUNT (the intro); every other screen's runs the first time it is on top. A screen
+    //     that opens gets a gold NEW mark on its rail tile, and its tour waits there until the player
+    //     goes. (The other screens used to get a dense banner instead — playtest: "too crowded and
+    //     too small. The Hunt screen's walkthrough was much clearer.")
+    //   * THE SLOT NOTE: the one banner left — a new skill slot's line at the top of the BUILD
+    //     screen, after its tour, closed with one click.
     //   * NOTICE TOASTS: a quest finishing or a champion joining is a line at the top that fades on its
     //     own. It never takes input.
 
-    /// <summary>Is the intro on screen? While true, input belongs to it and nothing else teaches.</summary>
-    private bool _introActive;
+    /// <summary>Is a tour on screen? While true, input belongs to it and nothing else teaches.</summary>
+    private bool _tourActive;
 
-    /// <summary>Which card of <see cref="Onboarding.Intro"/> is showing.</summary>
-    private int _introStep;
+    /// <summary>The screen the running tour is about. The Hunt's tour is the intro.</summary>
+    private Activity _tourScreen;
+
+    /// <summary>The running tour's cards — <see cref="Onboarding.TourFor"/> of <see cref="_tourScreen"/>.</summary>
+    private IReadOnlyList<TourStep> _tour = Array.Empty<TourStep>();
+
+    /// <summary>Which card of <see cref="_tour"/> is showing.</summary>
+    private int _tourStep;
 
     /// <summary>
     /// Has this session decided whether to run the intro? Asked once, the frame the title closes.
@@ -170,7 +180,8 @@ public class Game1 : Game
     private List<string>? _pendingExplained;
 
     /// <summary>
-    /// Screens (Activity names) and skill-slot notes (SkillSlotN) whose banner the player has closed.
+    /// Screens (Activity names) whose tour the player has finished or skipped, and skill-slot notes
+    /// (SkillSlotN) whose banner the player has closed.
     /// </summary>
     /// <remarks>
     /// Persisted. Whether a tile is NEW is derived from this and the unlock gates every frame
@@ -179,7 +190,7 @@ public class Game1 : Game
     /// </remarks>
     private readonly HashSet<string> _explained = new();
 
-    /// <summary>Screens opened this session. A visited tile drops its NEW mark even if its banner is still open.</summary>
+    /// <summary>Screens opened this session. A visited tile drops its NEW mark even while its tour is still running.</summary>
     private readonly HashSet<Activity> _visited = new();
 
     /// <summary>A champion joined and the roster has not been looked at since. Session-only.</summary>
@@ -419,6 +430,39 @@ public class Game1 : Game
 
     /// <summary>True under the screenshot rig (RH_SHOT). The rig poses; it does not play.</summary>
     private static readonly bool CaptureRig = Environment.GetEnvironmentVariable("RH_SHOT") is not null;
+
+    /// <summary>The screen a `tour` capture is about — RH_SHOT_TAB, an Activity name.</summary>
+    private static Activity? ShotTab
+        => Enum.TryParse<Activity>(Environment.GetEnvironmentVariable("RH_SHOT_TAB"), true, out var a) ? a : null;
+
+    /// <summary>
+    /// The capture mode, with `tour` resolved to the fixture that dresses the screen it tours.
+    /// </summary>
+    /// <remarks>
+    /// A tour photographed over an empty screen proves only that a scrim was drawn; the light has to
+    /// fall on the real furniture the card names. So `tour` borrows each screen's own fixture — the one
+    /// its plain capture uses — and owes that screen's tour (see <see cref="SeedExplained"/>). The
+    /// Hunt's fixture is `intro`, whose card is posed the same way.
+    /// </remarks>
+    private static string? ShotMode => Environment.GetEnvironmentVariable("RH_SHOT_MODE") switch
+    {
+        "tour" => ShotTab switch
+        {
+            Activity.Hunt => "intro",
+            Activity.Stats => "stats",
+            Activity.Gear => "character",
+            Activity.Build => "weave",
+            Activity.Mastery => "buildtree",
+            Activity.Vault => "vault",
+            Activity.Forge => "forge",
+            Activity.Warren => "warren",
+            Activity.Map => "map",
+            Activity.Traits => "dust",
+            Activity.Roster => "roster",
+            _ => "fight",
+        },
+        var other => other,
+    };
 
     // ── START A NEW GAME (settings): the armed-confirm state — and the feedback-code toast. ────
     private float _resetArmTimer;      // >0 while the red are-you-sure state is armed
@@ -898,8 +942,8 @@ public class Game1 : Game
         // The teaching layer starts over with the game: the intro is due again, nothing is explained,
         // no tile has been visited, and no notice is waiting.
         _rosterBaselined = false;
-        _introActive = false;
-        _introStep = 0;
+        _tourActive = false;
+        _tourStep = 0;
         _introDecided = false;
         _introSeen = false;
         _pendingExplained = null;
@@ -1104,7 +1148,8 @@ public class Game1 : Game
     /// UNDER THE CAPTURE RIG everything is explained unless a fixture says otherwise: every fixture
     /// grants the facts that open its screen, and a banner over the thing being photographed is the
     /// old modal panel's mistake in a new coat. <c>RH_SHOT_EXPLAIN=Stats,Map</c> leaves those two owed,
-    /// which is how the first-open banner is itself captured.
+    /// which is how a tour is captured over a screen a fixture has dressed; the <c>tour</c> fixture
+    /// owes its own screen without being asked.
     /// </para>
     /// </remarks>
     private void SeedExplained()
@@ -1113,7 +1158,10 @@ public class Game1 : Game
         if (Environment.GetEnvironmentVariable("RH_SHOT") is not null)
         {
             var owed = (Environment.GetEnvironmentVariable("RH_SHOT_EXPLAIN") ?? "")
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToList();
+            if (Environment.GetEnvironmentVariable("RH_SHOT_MODE") == "tour" && ShotTab is { } tab)
+                owed.Add(Onboarding.ScreenKey(tab));
             foreach (var a in Enum.GetValues<Activity>())
                 if (!owed.Contains(Onboarding.ScreenKey(a))) _explained.Add(Onboarding.ScreenKey(a));
             for (var slot = 2; slot <= Build.SkillSlots; slot++)
@@ -1315,7 +1363,8 @@ public class Game1 : Game
         if (_showTitle)
         {
             // DEV: when capturing a gameplay screenshot, skip straight past the title (and open a screen).
-            var sm = Environment.GetEnvironmentVariable("RH_SHOT_MODE");
+            // ShotMode, not the raw variable: `tour` arrives here as the fixture of the screen it tours.
+            var sm = ShotMode;
             // `telegraph`, `combat` and `boss2` posed the manual-combat screen for screenshots. That
             // screen is gone, so they had nothing to pose.
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
@@ -1907,22 +1956,18 @@ public class Game1 : Game
         if (!_introDecided)
         {
             _introDecided = true;
-            var shot = Environment.GetEnvironmentVariable("RH_SHOT") is not null;
-            var wanted = shot
-                ? Environment.GetEnvironmentVariable("RH_SHOT_MODE") == "intro"
-                : Onboarding.IntroDue(GuideFacts(), _introSeen);
-            if (wanted)
-            {
-                _introActive = true;
-                _introStep = 0;
-                // RH_SHOT_STEP=n (or capture.sh's third argument, which arrives as RH_SHOT_T) poses
-                // card n of the intro, counted from 1.
-                var posed = Environment.GetEnvironmentVariable("RH_SHOT_STEP")
-                            ?? Environment.GetEnvironmentVariable("RH_SHOT_T");
-                if (shot && int.TryParse(posed, out var stepNo))
-                    _introStep = Math.Clamp(stepNo - 1, 0, Onboarding.Intro.Count - 1);
-            }
+            var wanted = CaptureRig ? ShotMode == "intro" : Onboarding.IntroDue(GuideFacts(), _introSeen);
+            if (wanted) BeginTour(Activity.Hunt);
         }
+
+        // EVERY OTHER SCREEN'S TOUR starts the first time that screen is on top while its tour is still
+        // owed — asked of the explained list every frame, so no navigation path can forget to ask, and a
+        // screen opened by a hotkey, the rail or an errand button is toured all the same. Never over the
+        // help, the settings, a chest reveal or the expedition log: a tour is about the screen the player
+        // is looking at, and none of those is a screen.
+        if (!_tourActive && !_showHelp && !_showSettings && !_forge.RevealActive && !_expedition.LogOpen
+            && Onboarding.TourDue(ScreenActivity(), _explained) is not null)
+            BeginTour(ScreenActivity());
 
         // Escape backs out of an open panel before it quits the game. Escape is the reflex for "get me
         // out of this menu" — and in fullscreen it is the reflex for "give me my desktop back". Wiring
@@ -2009,21 +2054,21 @@ public class Game1 : Game
         // HandleNavClick, all nine hotkeys and every button hit-tested during Draw. The swallow is set
         // BEFORE the branch and never cleared by it.
         //
-        // THE INTRO IS THE ONLY THING THAT SETS THIS TRUE FOR A WHOLE FRAME. The notice toasts and the
-        // first-open banners are deliberately not modal: a toast never touches this flag, and a banner
+        // A TOUR IS THE ONLY THING THAT SETS THIS TRUE FOR A WHOLE FRAME. The notice toasts and the
+        // slot-note banner are deliberately not modal: a toast never touches this flag, and the banner
         // only spends the one click that lands on it (below, beside the guide strip's close).
-        _swallowInput = _introActive;
+        _swallowInput = _tourActive;
         // NOT UNDER THE CAPTURE RIG. The game window takes focus while a shot renders, so a key the
         // developer happens to press in the sixty frames advances the card — a capture asked for card
         // five came back as card six. The rig poses a card by number; it never plays.
-        if (_introActive && !CaptureRig && (_clicked || AnyKeyPressed()))
+        if (_tourActive && !CaptureRig && (_clicked || AnyKeyPressed()))
         {
             // Raw edge, not Pressed(): Pressed reads !_swallowInput, which is already true.
             var escape = _keys.IsKeyDown(Keys.Escape) && _prevKeys.IsKeyUp(Keys.Escape);
-            if (escape || _introStep + 1 >= Onboarding.Intro.Count) EndIntro();
-            else _introStep++;
+            if (escape || _tourStep + 1 >= _tour.Count) EndTour();
+            else _tourStep++;
             _sound.Play("sfx_click", 0.7f);
-            // _swallowInput deliberately STAYS true: this frame's input was spent on the intro.
+            // _swallowInput deliberately STAYS true: this frame's input was spent on the tour.
         }
 
         // A CHEST REVEAL IS MODAL TOO: while it is up, a click (or Space / Enter) advances or skips IT —
@@ -2084,8 +2129,8 @@ public class Game1 : Game
             _swallowInput = true;
         }
 
-        // THE FIRST-OPEN BANNER at the top of a screen closes the same way, and remembers itself in the
-        // save. A click anywhere else on the banner is spent too — it sits over the screen's own
+        // THE SLOT-NOTE BANNER at the top of the BUILD screen closes the same way, and remembers itself
+        // in the save. A click anywhere else on the banner is spent too — it sits over the screen's own
         // controls, and a click that closed nothing must not press a TRAIN button underneath.
         if (!_showSettings && !_showHelp && !_swallowInput && _clicked
             && ScreenBannerShowing() is { } banner)
@@ -2668,30 +2713,48 @@ public class Game1 : Game
     /// </remarks>
     private void PostNotice(string head, string detail) => _noticeQueue.Enqueue(head + "\n" + detail);
 
-    /// <summary>The activity the screen on top belongs to — what a first-open banner would be about.</summary>
+    /// <summary>The activity the screen on top belongs to — what a tour or a slot note would be about.</summary>
     private Activity ScreenActivity() => NavActivity[NavActive()];
 
-    /// <summary>The banner owed at the top of the current screen, or null. Never during the intro.</summary>
+    /// <summary>The slot note owed at the top of the current screen, or null. Never during a tour.</summary>
     private ScreenBanner? ScreenBannerShowing()
     {
-        if (_showTitle || _introActive || _showHelp || _showSettings) return null;
+        if (_showTitle || _tourActive || _showHelp || _showSettings) return null;
         // The expedition LOG is a full-screen read over the hunt; a banner over it would be about a
         // screen the player is not looking at.
         if (_expedition.LogOpen) return null;
         return Onboarding.BannerFor(ScreenActivity(), GuideUnlockFacts(), _explained);
     }
 
-    /// <summary>End the intro — finished or skipped — and remember that in the save.</summary>
+    /// <summary>Start the tour of a screen. The Hunt's is the intro. Under the rig, posed at the asked-for card.</summary>
     /// <remarks>
-    /// The Hunt's explanation is the intro, so the Hunt is marked explained here; nothing else is,
-    /// because the intro only said the other screens EXIST. Their own banners still wait on them.
+    /// RH_SHOT_STEP=n (capture.sh's card argument; RH_SHOT_T is read too, for the `intro` mode's third
+    /// argument) poses card n, counted from 1. The rig poses a card by number; it never plays.
     /// </remarks>
-    private void EndIntro()
+    private void BeginTour(Activity screen)
     {
-        _introActive = false;
-        _introSeen = true;
-        _explained.Add(Onboarding.ScreenKey(Activity.Hunt));
-        _visited.Add(Activity.Hunt);
+        _tourActive = true;
+        _tourScreen = screen;
+        _tour = Onboarding.TourFor(screen);
+        _tourStep = 0;
+        var posed = Environment.GetEnvironmentVariable("RH_SHOT_STEP")
+                    ?? Environment.GetEnvironmentVariable("RH_SHOT_T");
+        if (CaptureRig && int.TryParse(posed, out var stepNo))
+            _tourStep = Math.Clamp(stepNo - 1, 0, _tour.Count - 1);
+    }
+
+    /// <summary>End the running tour — finished or skipped — and remember that in the save.</summary>
+    /// <remarks>
+    /// That screen is marked explained, and only that one: the Hunt's intro says the other screens
+    /// EXIST, and each one's own tour still waits on it. The Hunt's tour also sets the intro flag,
+    /// which is what <see cref="Onboarding.IntroDue"/> reads on the next launch.
+    /// </remarks>
+    private void EndTour()
+    {
+        _tourActive = false;
+        _explained.Add(Onboarding.ScreenKey(_tourScreen));
+        _visited.Add(_tourScreen);
+        if (_tourScreen == Activity.Hunt) _introSeen = true;
         Save();
     }
 
@@ -2715,14 +2778,14 @@ public class Game1 : Game
     /// of progress the guide was missing.
     /// </para>
     /// <para>
-    /// Suppressed while the intro is up, so two pieces of teaching never compete for the same
+    /// Suppressed while a tour is up, so two pieces of teaching never compete for the same
     /// attention — the intro's last card points at the place this strip will appear.
     /// </para>
     /// </remarks>
     private void DrawGuideBanner()
     {
         if (_showTitle || _showHelp || _showSettings) return;
-        if (_introActive) return;
+        if (_tourActive) return;
         if (_guideStep is not { } step || !Tutorial.HasGuidance(step)) return;
         DrawGuideStrip(step);
     }
@@ -2807,9 +2870,14 @@ public class Game1 : Game
                           Color.White * fade, UiTypography.OverlayBody);
     }
 
-    // ── First-open banners ─────────────────────────────────────────────────────────────────────
+    // ── The slot-note banner ───────────────────────────────────────────────────────────────────
+    //
+    // The one banner left. Every screen's first explanation used to be one of these — a paragraph in
+    // small type under the title — and the playtest found it "too crowded and too small" next to the
+    // Hunt's spotlight tour. The screens have tours now (DrawTour); this is kept for the thing that is
+    // genuinely a one-line note: a skill slot that opened after the BUILD screen did.
 
-    /// <summary>A first-open banner's width — a readable line, not the whole content width.</summary>
+    /// <summary>The banner's width — a readable line, not the whole content width.</summary>
     /// <remarks>
     /// The first cut spanned the content (1700px) and the Stats explanation came out as two lines of
     /// a hundred and sixty characters each, which nobody reads to the end. 1200 keeps a line near
@@ -2817,11 +2885,11 @@ public class Game1 : Game
     /// </remarks>
     private const int ScreenBannerWidth = 1200;
 
-    /// <summary>The width a first-open banner wraps its body to — inside the left rule and clear of the ×.</summary>
+    /// <summary>The width the banner wraps its body to — inside the left rule and clear of the ×.</summary>
     private const int ScreenBannerWrap = ScreenBannerWidth - 44 - 40;
 
     /// <summary>
-    /// Where a first-open banner sits: under the screen's title band, centred over the content.
+    /// Where the banner sits: under the screen's title band, centred over the content.
     /// </summary>
     /// <remarks>
     /// y = 86 is just under the currency capsules, so the banner covers neither them nor the settings
@@ -2837,8 +2905,8 @@ public class Game1 : Game
     }
 
     /// <summary>
-    /// The explanation of the screen on top, the first time it is opened — same visual language as the
-    /// guide strip, and closed the same way.
+    /// The note owed at the top of the screen on top — the BUILD screen's new-slot line — in the guide
+    /// strip's visual language, and closed the same way.
     /// </summary>
     /// <remarks>
     /// Not a timed toast, for the reason the old panel was not one: these are paragraphs, and a
@@ -2884,7 +2952,7 @@ public class Game1 : Game
 
         var fade = Math.Clamp(_noticeTimer / 1.0f, 0f, 1f);
         var parts = _notice.Split('\n');
-        var y = _bootTimer > 0f && _bootMessage.Length > 0 && !_introActive ? 284 : 176;
+        var y = _bootTimer > 0f && _bootMessage.Length > 0 && !_tourActive ? 284 : 176;
         var r = new Rectangle(560, y, 800, 96);
         _ui.PanelNine(_batch, r, "ui_panel_modal_wide", tint: Color.White * fade);
         _ui.TextCenterBig(_batch, _ui.ShortenBig(parts[0], r.Width - 90, UiTypography.OverlayTitle),
@@ -2894,31 +2962,51 @@ public class Game1 : Game
                               r.Center.X, r.Y + 56, Bone * fade, UiTypography.OverlayBody);
     }
 
-    // ── The intro ──────────────────────────────────────────────────────────────────────────────
+    // ── The tours ──────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The spotlight cut-outs for an intro card, in 1920×1080 chrome space. The first is the one the
+    /// The spotlight cut-outs for a tour card, in 1920×1080 chrome space. The first is the one the
     /// caption card is placed beside.
     /// </summary>
     /// <remarks>
-    /// Hand-measured against the fight screen's real layout (SoloExpeditionScreen: the hunter panel at
-    /// (196,20,420,205), the stage header at (630,18,560,135), the SKILLS rail at (190,236,286,350) for
-    /// one skill, the right column from x 1570, the champion in ChampBox, the pack right of it) with a
-    /// margin of about ten pixels so the frame art is inside the light, not cut by it. A fresh save is
-    /// the only state this ever draws over, so the one-skill rail height is the right one.
+    /// Each screen measures its own regions in its own coordinates (<c>Spotlights</c> on every screen
+    /// class, next to the rectangles it draws with), and this is the one place they are brought into
+    /// the chrome's: the menu screens draw inset through <see cref="OverlayTransform"/>, so their
+    /// rectangles go through the same matrix and then grow by ten pixels, so the frame art is inside
+    /// the light rather than cut by it. The fight screen is not inset and measures its own margin. The
+    /// MASTERY tile is the rail's, so it is answered here. A target no screen claims lights the whole
+    /// canvas — visibly wrong, which is the point: a missing rectangle must never pass as a card whose
+    /// light happens to be off.
     /// </remarks>
-    private static Rectangle[] IntroSpotlights(IntroTarget target) => target switch
+    private Rectangle[] TourSpotlights(Activity screen, TourTarget target)
     {
-        IntroTarget.Champion => new[] { new Rectangle(530, 560, 460, 450) },
-        IntroTarget.Enemies => new[] { new Rectangle(880, 560, 680, 450), new Rectangle(620, 8, 580, 152) },
-        IntroTarget.HunterHud => new[] { new Rectangle(186, 10, 440, 225) },
-        IntroTarget.CurrencyPills => new[] { new Rectangle(1440, 4, 400, 84) },
-        IntroTarget.Skills => new[] { new Rectangle(180, 226, 306, 370) },
-        IntroTarget.RightColumn => new[] { new Rectangle(1560, 100, 350, 690) },
-        IntroTarget.NavRail => new[] { new Rectangle(0, 0, 184, 1080) },
-        IntroTarget.GuideStrip => new[] { new Rectangle(456, 936, 1008, 130) },
-        _ => new[] { new Rectangle(0, 0, 1920, 1080) },
-    };
+        if (target == TourTarget.MasteryTile)
+            return new[] { NavHexRect(Array.IndexOf(NavActivity, Activity.Mastery)) };
+
+        var own = screen switch
+        {
+            Activity.Hunt => SoloExpeditionScreen.Spotlights(target),
+            Activity.Stats => StatsScreen.Spotlights(target),
+            Activity.Gear => CharacterScreen.Spotlights(target),
+            Activity.Build => _weave.Spotlights(target),
+            Activity.Mastery => BuildScreen.Spotlights(target),
+            Activity.Vault => ChestScreen.Spotlights(target),
+            Activity.Forge => ForgeScreen.Spotlights(target),
+            Activity.Warren => WarrenScreen.Spotlights(target),
+            Activity.Map => MapScreen.Spotlights(target),
+            Activity.Traits => PrestigeScreen.Spotlights(target),
+            Activity.Roster => RosterScreen.Spotlights(target),
+            _ => Array.Empty<Rectangle>(),
+        };
+        if (own.Length == 0) return new[] { new Rectangle(0, 0, 1920, 1080) };
+        if (screen == Activity.Hunt) return own;
+        return own.Select(r =>
+        {
+            var lit = OverlayToCanvas(r, Vector2.Zero);
+            lit.Inflate(10, 10);
+            return lit;
+        }).ToArray();
+    }
 
     /// <summary>Darken the whole canvas except the given holes.</summary>
     /// <remarks>
@@ -2949,7 +3037,7 @@ public class Game1 : Game
     }
 
     /// <summary>A thin frame just outside a rectangle.</summary>
-    private void IntroOutline(Rectangle r, int t, Color c)
+    private void TourOutline(Rectangle r, int t, Color c)
     {
         _ui.Fill(_batch, new Rectangle(r.X - t, r.Y - t, r.Width + 2 * t, t), c);
         _ui.Fill(_batch, new Rectangle(r.X - t, r.Bottom, r.Width + 2 * t, t), c);
@@ -2966,7 +3054,7 @@ public class Game1 : Game
     /// vertically is rejected outright; one that runs off the sides is pulled in (clear of the nav rail)
     /// and then checked against every hole, so the card can never sit on the thing it is pointing at.
     /// </remarks>
-    private static Rectangle IntroCardRect(IReadOnlyList<Rectangle> holes, int width, int height)
+    private static Rectangle TourCardRect(IReadOnlyList<Rectangle> holes, int width, int height)
     {
         const int gap = 28;
         var a = holes[0];
@@ -2988,40 +3076,41 @@ public class Game1 : Game
     }
 
     /// <summary>
-    /// The click-through intro: the fight runs on underneath, one region at a time is lit, and a card
-    /// beside it says what that region is. A click or any key advances; Escape skips the rest.
+    /// The click-through tour: the screen keeps working underneath, one region at a time is lit, and a
+    /// card beside it says what that region is. A click or any key advances; Escape skips the rest.
     /// </summary>
     /// <remarks>
-    /// The only full-screen modal left in the game, and it runs exactly once. Drawn last of the chrome
-    /// so the scrim covers the rail too — one of its cards is about the rail.
+    /// The only full-screen modal left in the game, and it runs once per screen. Drawn last of the
+    /// chrome so the scrim covers the rail too — the intro has a card about the rail, and the BUILD
+    /// tour points at the MASTERY tile on it.
     /// </remarks>
-    private void DrawIntro()
+    private void DrawTour()
     {
-        if (!_introActive) return;
+        if (!_tourActive || _tour.Count == 0) return;
 
-        var stepNo = Math.Clamp(_introStep, 0, Onboarding.Intro.Count - 1);
-        var step = Onboarding.Intro[stepNo];
-        var holes = IntroSpotlights(step.Target);
+        var stepNo = Math.Clamp(_tourStep, 0, _tour.Count - 1);
+        var step = _tour[stepNo];
+        var holes = TourSpotlights(_tourScreen, step.Target);
 
         // The last card points at where lessons appear — so a lesson appears there. It is the first
         // rung, the very strip that will be standing in that light when the intro ends: the light
         // lifts and nothing has moved. (The live strip itself is suppressed while the intro is up.)
-        if (step.Target == IntroTarget.GuideStrip) DrawGuideStrip(TutorialStep.Watch);
+        if (step.Target == TourTarget.GuideStrip) DrawGuideStrip(TutorialStep.Watch);
 
         DrawScrimAround(holes, new Color(0x05, 0x03, 0x0A) * 0.74f);
-        foreach (var h in holes) IntroOutline(h, 3, NavGold);
+        foreach (var h in holes) TourOutline(h, 3, NavGold);
 
         const int width = 560, pad = 24;
         var lines = _ui.WrapBig(step.Body, width - pad * 2, UiTypography.Body);
         var height = pad + 32 + 8 + lines.Count * 28 + 14 + 24 + pad;
-        var card = IntroCardRect(holes, width, height);
+        var card = TourCardRect(holes, width, height);
 
         _ui.Fill(_batch, card, new Color(0x15, 0x0E, 0x24, 0xF6));
         _ui.Fill(_batch, new Rectangle(card.X, card.Y, card.Width, 4), NavGold);
         _ui.Fill(_batch, new Rectangle(card.X, card.Bottom - 2, card.Width, 2), NavGem * 0.5f);
 
         _ui.TextBig(_batch, step.Title, card.X + pad, card.Y + pad, NavGold, UiTypography.PanelTitle);
-        _ui.TextRightBig(_batch, $"{stepNo + 1} / {Onboarding.Intro.Count}", card.Right - pad, card.Y + pad + 5,
+        _ui.TextRightBig(_batch, $"{stepNo + 1} / {_tour.Count}", card.Right - pad, card.Y + pad + 5,
                          NavLabel, UiTypography.Secondary);
 
         var y = card.Y + pad + 32 + 8;
@@ -3031,9 +3120,12 @@ public class Game1 : Game
             y += 28;
         }
 
-        var last = stepNo + 1 >= Onboarding.Intro.Count;
-        _ui.TextBig(_batch, last ? "CLICK TO BEGIN" : "CLICK TO CONTINUE  ·  ESC SKIPS",
-                    card.X + pad, card.Bottom - pad - 20, NavGem, UiTypography.Secondary);
+        // The last card's footer says what the click does next: the intro's hands over to the first
+        // wave; every other tour's hands the screen back.
+        var last = stepNo + 1 >= _tour.Count;
+        var footer = !last ? "CLICK TO CONTINUE  ·  ESC SKIPS"
+                   : _tourScreen == Activity.Hunt ? "CLICK TO BEGIN" : "CLICK TO FINISH";
+        _ui.TextBig(_batch, footer, card.X + pad, card.Bottom - pad - 20, NavGem, UiTypography.Secondary);
     }
 
     /// <summary>Where a region sits on the world chain. The curve itself lives in Core/RegionLadder.</summary>
@@ -3367,7 +3459,7 @@ public class Game1 : Game
         if (_bootTimer <= 0f || _bootMessage.Length == 0) return;
         // The first-session nudge ("your champion is already fighting") is what the intro now says in
         // eight cards; under the intro's scrim it would be a dim duplicate. Its clock still runs.
-        if (_introActive) return;
+        if (_tourActive) return;
         var fade = Math.Clamp(_bootTimer / 1.2f, 0f, 1f);   // fade over the last ~1.2s
         // Rev 4 §18.4: a FIXED two-line welcome-back toast at (590,165,740,82) — never a full-width band,
         // never ellipsized. Line 1 (duration) at OverlayTitle, line 2 (haul) at OverlayBody. The message is
@@ -3636,9 +3728,9 @@ public class Game1 : Game
         DrawScreenBanner();
         DrawLockedToast();
         DrawNoticeToast();
-        // LAST of the chrome, so the intro's scrim and spotlight sit over everything — including the
-        // nav rail one of its cards is about.
-        DrawIntro();
+        // LAST of the chrome, so a tour's scrim and spotlight sit over everything — including the
+        // nav rail the intro has a card about.
+        DrawTour();
 
         _batch.End();
 
