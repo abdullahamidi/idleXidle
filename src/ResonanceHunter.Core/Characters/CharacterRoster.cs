@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using ResonanceHunter.Core.Abilities;
 using ResonanceHunter.Core.Builds;
+using ResonanceHunter.Core.Economy;
 
 namespace ResonanceHunter.Core.Characters;
 
@@ -37,6 +38,7 @@ public static class CharacterRoster
         new()
         {
             Id = "seeker", Name = "THE SEEKER",
+            Class = ItemClass.Wanderer,
             Blurb = "Walked every road far enough to know none of them is home.",
             Lean = null, Aptitude = null,
             PassiveName = "EVEN HAND",
@@ -52,6 +54,7 @@ public static class CharacterRoster
         new()
         {
             Id = "anvil", Name = "THE ANVIL",
+            Class = ItemClass.Warden,
             Blurb = "Hits things until they are a different shape.",
             Lean = Branch.Weight, Aptitude = Form.Strike,
             PassiveName = "DEADWEIGHT",
@@ -65,6 +68,7 @@ public static class CharacterRoster
         new()
         {
             Id = "chorus", Name = "THE CHORUS",
+            Class = ItemClass.Ranger,
             Blurb = "Never speaks. The charms do it.",
             Lean = Branch.Spread, Aptitude = Form.Aura,
             PassiveName = "MANY MOUTHS",
@@ -77,6 +81,7 @@ public static class CharacterRoster
         new()
         {
             Id = "metronome", Name = "THE METRONOME",
+            Class = ItemClass.Mystic,
             Blurb = "Keeps time. The fight is what happens between the beats.",
             Lean = Branch.Tempo, Aptitude = Form.Projectile,
             PassiveName = "FIRST BEAT",
@@ -91,6 +96,7 @@ public static class CharacterRoster
         new()
         {
             Id = "unbroken", Name = "THE UNBROKEN",
+            Class = ItemClass.Bulwark,
             Blurb = "Has been killed. Declined.",
             Lean = Branch.Endure, Aptitude = Form.Transformation,
             PassiveName = "SECOND WIND",
@@ -103,6 +109,7 @@ public static class CharacterRoster
         new()
         {
             Id = "tower", Name = "THE FALLING TOWER",
+            Class = ItemClass.Warden,
             Blurb = "Slow. Arrives anyway.",
             Lean = Branch.Weight, Aptitude = Form.Strike, AptitudePower = 1.15f,
             PassiveName = "MOMENTUM",
@@ -116,6 +123,7 @@ public static class CharacterRoster
         new()
         {
             Id = "quiver", Name = "THE QUIVER",
+            Class = ItemClass.Mystic,
             Blurb = "Counts arrows the way other people count breaths.",
             Lean = Branch.Tempo, Aptitude = Form.Projectile, AptitudePower = 1.35f,
             PassiveName = "LOOSE AGAIN",
@@ -130,6 +138,7 @@ public static class CharacterRoster
         new()
         {
             Id = "thornwall", Name = "THE THORNWALL",
+            Class = ItemClass.Bulwark,
             Blurb = "Stands where the road narrows, and lets it narrow further.",
             Lean = Branch.Endure, Aptitude = Form.Trap, AptitudePower = 1.35f,
             PassiveName = "REPRISAL",
@@ -142,6 +151,7 @@ public static class CharacterRoster
         new()
         {
             Id = "oathbound", Name = "THE OATHBOUND",
+            Class = ItemClass.Ranger,
             Blurb = "Gave up their eyes for a better bargain.",
             Lean = null, Aptitude = Form.Mark, AptitudePower = 1.30f,
             PassiveName = "TWICE SWORN",
@@ -162,6 +172,7 @@ public static class CharacterRoster
         new()
         {
             Id = "magpie", Name = "THE MAGPIE",
+            Class = ItemClass.Wanderer,
             Blurb = "Fights for the pockets, not the glory.",
             Lean = null, Aptitude = Form.Trap,
             PassiveName = "FULL POCKETS",

@@ -6,6 +6,7 @@ using Microsoft.Xna.Framework.Graphics;
 using ResonanceHunter.Core.Abilities;
 using ResonanceHunter.Core.Builds;
 using ResonanceHunter.Core.Characters;
+using ResonanceHunter.Core.Economy;
 using ResonanceHunter.Core.Encounters;
 using ResonanceHunter.Core.Quests;
 
@@ -171,14 +172,20 @@ public sealed class RosterScreen
             // Each breathes on its own phase, so ten cards do not pulse in unison — and the sprite is
             // the approved full-body design rather than a generated clip, for the reason set out in
             // SoloExpeditionScreen.DrawChampion.
-            var portrait = new Rectangle(card.X + 16, card.Y + 12, card.Width - 32, 168);
+            // 146 tall, not 168: the card took on a fourth line of text (the gear class) and the
+            // portrait is the only thing on it with height to spare.
+            var portrait = new Rectangle(card.X + 16, card.Y + 12, card.Width - 32, 146);
             var tint = unlocked ? Color.White : new Color(0x2A, 0x28, 0x30);
             // Each on its own phase, so ten cards do not breathe in unison.
             if (!_ui.AnimSprite(b, c.StripKey("idle"), portrait, _anim + i * 0.37f, 10f, loop: true, tint, -1f))
                 _ui.SpriteGrounded(b, c.SpriteKey, portrait, tint, 0.02f);
 
-            _ui.TextCenterBig(b, c.Name, card.Center.X, card.Bottom - 92,
+            _ui.TextCenterBig(b, c.Name, card.Center.X, card.Bottom - 116,
                               unlocked ? Bone : Slate, UiTypography.Secondary);
+            // WHAT THEY WEAR, in the class's own colour — the one fact about a champion that decides
+            // whether the bag you already have fits them.
+            _ui.TextCenter(b, $"WEARS {ItemClasses.NameOf(c.Class)} GEAR", card.Center.X, card.Bottom - 90,
+                           unlocked ? UiKit.ClassColor(c.Class) : Dim);
             if (c.Lean is { } br)
                 _ui.TextCenter(b, BranchName(br), card.Center.X, card.Bottom - 62, unlocked ? lean : Dim);
             else
@@ -239,7 +246,15 @@ public sealed class RosterScreen
                             ? $"{f.ToString().ToUpperInvariant()}  +{(int)Math.Round((c.AptitudePower - 1f) * 100)}%"
                             : "NONE",
                          DetailPanel.Right - 74, y - 2, c.Aptitude is null ? Dim : Bone, UiTypography.Body);
-        y += 40;
+        y += 32;
+        // THE GEAR CLASS, and its one sentence. Two champions share each class, so the sentence
+        // names the road the class was built for rather than the champion — that is the roster's
+        // whole answer to "which of these two should I be".
+        var cls = ItemClasses.Get(c.Class);
+        _ui.TextBig(b, "WEARS", left, y, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, $"{cls.Name} GEAR", DetailPanel.Right - 74, y - 2, UiKit.ClassColor(c.Class), UiTypography.Body);
+        y += 30;
+        y = DrawWrapped(b, cls.Description, left, y, width, Slate) + 34;
 
         _ui.Fill(b, new Rectangle(left, y, width, 2), Dim);
         y += 14;

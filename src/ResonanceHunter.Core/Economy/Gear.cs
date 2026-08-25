@@ -62,6 +62,20 @@ public static class Gear
         return SlotFor(item.BaseType) is not null;
     }
 
+    /// <summary>The item's class, or null for "any class" — a universal slot, or a piece from before classes.</summary>
+    public static ItemClass? ClassOf(ItemInstance item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        return item.Class;
+    }
+
+    /// <summary>
+    /// Can this champion wear this item? Universal slots always; class-locked slots when the item is
+    /// their class or has none. The rule itself lives in <see cref="ItemClasses.CanWear(ItemClass, ItemInstance)"/>.
+    /// </summary>
+    public static bool CanWear(Characters.Character character, ItemInstance item)
+        => ItemClasses.CanWear(character, item);
+
     /// <summary>
     /// A rarity's power contribution. <b>This curve IS the power fantasy</b> — it is intentionally
     /// steep, so that finding a Legendary is an event rather than a rounding error.

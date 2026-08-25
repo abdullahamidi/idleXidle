@@ -540,6 +540,12 @@ public sealed class ForgeScreen
     /// </remarks>
     public float RarityBonus { get; set; } = 1f;
 
+    /// <summary>
+    /// The active champion's ITEM CLASS, so four in five class-locked pieces a chest pays are theirs.
+    /// Host-set every frame like <see cref="RarityBonus"/>: the screen has no roster of its own.
+    /// </summary>
+    public ItemClass? FavouredClass { get; set; }
+
     /// <summary>TIRELESS FORGE (Memory Dust): auto-merge the bag after OPEN ALL, so a bulk crack tidies itself.</summary>
     public bool AutoMergeOnOpen { get; set; }
 
@@ -1113,7 +1119,7 @@ public sealed class ForgeScreen
     /// <summary>Roll a chest's contents, honour the loot filter, land the items + materials. Returns what landed.</summary>
     private (int Materials, List<ItemInstance> Items) LandChest(Chest chest, Hunter hunter)
     {
-        var reward = Chests.Open(chest, _rng, LootTuning.Default, rarityBonus: RarityBonus);
+        var reward = Chests.Open(chest, _rng, LootTuning.Default, rarityBonus: RarityBonus, favouredClass: FavouredClass);
         _chestsOpened++;   // the CRAFTER evolution path's earn — Game1 polls this and credits the warren
         hunter.AddMaterials(reward.Materials);
 

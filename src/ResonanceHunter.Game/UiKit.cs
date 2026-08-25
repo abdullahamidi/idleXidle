@@ -83,6 +83,25 @@ public sealed class UiKit
     /// </remarks>
     public static readonly Color Bronze = new(0x3D, 0x26, 0x04);
 
+    /// <summary>
+    /// The five ITEM CLASS colours, one per class, shared by every screen that names a class.
+    /// </summary>
+    /// <remarks>
+    /// The four road classes borrow the MASTERY TREE's own branch colours (the roster's card edges
+    /// already use them), so a WARDEN's gear is the same red as the WEIGHT road it was built for. The
+    /// WANDERER, which has no road, gets an olive that no rarity uses: it must never read as Uncommon
+    /// green (6EC87A), Rare blue, Epic violet or Legendary gold, because those own the frame tint and
+    /// the left bar of every item cell.
+    /// </remarks>
+    public static Color ClassColor(ResonanceHunter.Core.Economy.ItemClass cls) => cls switch
+    {
+        ResonanceHunter.Core.Economy.ItemClass.Warden => new Color(0xD6, 0x48, 0x5C),
+        ResonanceHunter.Core.Economy.ItemClass.Ranger => new Color(0x48, 0xB8, 0x88),
+        ResonanceHunter.Core.Economy.ItemClass.Mystic => new Color(0x74, 0xC6, 0xE8),
+        ResonanceHunter.Core.Economy.ItemClass.Bulwark => new Color(0xC0, 0x6E, 0xE0),
+        _ => new Color(0xB4, 0xB8, 0x62),
+    };
+
     private readonly Texture2D _pixel;
     private readonly Texture2D _hex;
     private readonly Texture2D _diamond;
