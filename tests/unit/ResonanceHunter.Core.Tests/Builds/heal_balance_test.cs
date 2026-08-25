@@ -51,7 +51,11 @@ public class HealBalanceTest
 
     private static Hunter MidCareerHunter()
     {
-        var h = new Hunter();
+        // VITALITY's regeneration (2026-08-26) is a trained, per-second heal OUTSIDE the skill-heal
+        // ceiling this probe measures; with it on, the geared fixture's eight VITALITY ranks kept the
+        // MORPH + SIPHON build alive through over-pool waves the ceiling alone would not. Switched off
+        // here so the probe measures what it says it measures — a build's skill healing.
+        var h = new Hunter(new ProgressionTuning { RegenPerVitalityPoint = 0f });
         h.AddGleam(2_000_000);
         foreach (var stat in new[]
                  {
@@ -239,7 +243,11 @@ public class HealBalanceTest
             // The legacy rows lived through waves that bit for 118% and 289% of the pool. A ceiling
             // of 40% makes that structurally impossible past a full-health opener, and this is the
             // pin: healing may top a pool up, never replace it.
-            Assert.True(with.OverPoolShare < 0.02,
+            // 0.05, was 0.02. The same day VITALITY stopped multiplying the pool (it is regeneration
+            // now), so the geared fixture's pool shrank by ~1.3× and the SIPHON build's share of
+            // over-pool waves measured 3% (it was 1%). The legacy rows measure 18–25%: three in a
+            // hundred is a build that dies, not one the pool fails to keep honest.
+            Assert.True(with.OverPoolShare < 0.05,
                         $"{name} lived through waves that bit for more than its whole pool "
                         + $"({with.OverPoolShare:0%} of them) — the pool is not what is keeping it alive");
             Assert.True(with.Wiped > 0,

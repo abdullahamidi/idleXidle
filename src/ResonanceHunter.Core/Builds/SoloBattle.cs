@@ -874,7 +874,10 @@ public static class SoloBattle
             return dealt;
         }
 
-        void Heal(int amount, int atMs)
+        // `underCeiling: false` is VITALITY's regeneration — a trained stat, not a build's heal, so the
+        // per-wave ceiling on skill healing (HealTuning) does not spend on it; BLOOD MAGIC, the band's
+        // sustain and the pool's edge still apply. Everything else counts.
+        void Heal(int amount, int atMs, bool underCeiling = true)
         {
             // BLOOD MAGIC. The cost is total: it does not reduce healing, it removes it.
             if (triggers.Contains(BuildTrigger.NoHealing)) return;
@@ -898,9 +901,10 @@ public static class SoloBattle
             // and died OF HEALING the moment the NATURE signature made Heal reachable from every
             // build. Sum in long, clamp, then narrow.
             var room = Math.Max(0L, (long)champ.MaxHealth - champ.Health);
-            var landed = Math.Min(Math.Min((long)amount, room), healBudget - healedThisWave);
+            var landed = Math.Min((long)amount, room);
+            if (underCeiling) landed = Math.Min(landed, healBudget - healedThisWave);
             if (landed <= 0) return;
-            healedThisWave += landed;
+            if (underCeiling) healedThisWave += landed;
             champ.Health = (int)(champ.Health + landed);
             events.Add(new BattleEvent(BattleEventKind.Heal, 0, (int)landed, atMs));
         }
@@ -911,10 +915,11 @@ public static class SoloBattle
 
             // ── VITALITY: life regained every second, a fraction of the pool (Hunter.RegenPerSecond).
             //    Through Heal() like every other heal, so BLOOD MAGIC's "no healing" and the band's
-            //    sustain multiplier apply to it — a trained stat is not a way around a keystone's price.
-            //    Never on a corpse. ──
+            //    sustain multiplier apply to it — a trained stat is not a way around a keystone's price —
+            //    but OUTSIDE the per-wave heal ceiling, which is a budget on a build's skills. Never on
+            //    a corpse. ──
             if (ms % RegenTickMs == 0 && champ.Alive && hunter.RegenPerSecond > 0f && champ.Health < champ.MaxHealth)
-                Heal(Math.Max(1, (int)MathF.Round(champ.MaxHealth * hunter.RegenPerSecond)), abs);
+                Heal(Math.Max(1, (int)MathF.Round(champ.MaxHealth * hunter.RegenPerSecond)), abs, underCeiling: false);
 
             // ── VENOM bleeds first, so poison from earlier ticks can finish an enemy before it swings. ──
             if (poison > 0.5f && ms % 500 == 0)
