@@ -24,8 +24,11 @@ namespace ResonanceHunter.Core.Characters;
 /// by nothing at all for the whole of development.
 /// </para>
 /// <para>
-/// Unlocks follow conquest, which already exists, with quest gates declared for two characters so the
-/// second mechanism does not have to be bolted on later. See <see cref="UnlockKind"/>.
+/// Unlocks come in two tiers per class — see <see cref="ClassTier"/>. The FIRST of each class follows
+/// conquest (or is the starter); the SECOND waits on a quest with a real demand behind it, because a
+/// roster that arrives whole in the first hours (playtest 2026-08-26: "all the characters unlock far
+/// too easily") is a roster with nothing left to go and get. Every quest here asks for something
+/// conquest does not: waves well past the conquest line, chests, kept Vows, the whole map.
 /// </para>
 /// </remarks>
 public static class CharacterRoster
@@ -38,7 +41,7 @@ public static class CharacterRoster
         new()
         {
             Id = "seeker", Name = "THE SEEKER",
-            Class = ItemClass.Wanderer,
+            Class = ItemClass.Wanderer, Tier = ClassTier.First,
             Blurb = "Walked every road far enough to know none of them is home.",
             Lean = null, Aptitude = null,
             PassiveName = "EVEN HAND",
@@ -54,7 +57,7 @@ public static class CharacterRoster
         new()
         {
             Id = "anvil", Name = "THE ANVIL",
-            Class = ItemClass.Warden,
+            Class = ItemClass.Warden, Tier = ClassTier.First,
             Blurb = "Hits things until they are a different shape.",
             Lean = Branch.Weight, Aptitude = Form.Strike,
             PassiveName = "DEADWEIGHT",
@@ -68,7 +71,7 @@ public static class CharacterRoster
         new()
         {
             Id = "chorus", Name = "THE CHORUS",
-            Class = ItemClass.Ranger,
+            Class = ItemClass.Ranger, Tier = ClassTier.First,
             Blurb = "Never speaks. The charms do it.",
             Lean = Branch.Spread, Aptitude = Form.Aura,
             PassiveName = "MANY MOUTHS",
@@ -81,7 +84,7 @@ public static class CharacterRoster
         new()
         {
             Id = "metronome", Name = "THE METRONOME",
-            Class = ItemClass.Mystic,
+            Class = ItemClass.Mystic, Tier = ClassTier.First,
             Blurb = "Keeps time. The fight is what happens between the beats.",
             Lean = Branch.Tempo, Aptitude = Form.Projectile,
             PassiveName = "FIRST BEAT",
@@ -96,7 +99,7 @@ public static class CharacterRoster
         new()
         {
             Id = "unbroken", Name = "THE UNBROKEN",
-            Class = ItemClass.Bulwark,
+            Class = ItemClass.Bulwark, Tier = ClassTier.First,
             Blurb = "Has been killed. Declined.",
             Lean = Branch.Endure, Aptitude = Form.Transformation,
             PassiveName = "SECOND WIND",
@@ -109,7 +112,7 @@ public static class CharacterRoster
         new()
         {
             Id = "tower", Name = "THE FALLING TOWER",
-            Class = ItemClass.Warden,
+            Class = ItemClass.Warden, Tier = ClassTier.Second,
             Blurb = "Slow. Arrives anyway.",
             Lean = Branch.Weight, Aptitude = Form.Strike, AptitudePower = 1.15f,
             PassiveName = "MOMENTUM",
@@ -118,12 +121,14 @@ public static class CharacterRoster
             // ALPHA in the mastery tree, so the two cancel — which is the point: this character is for
             // players who did not walk that node.
             Shape = new SkillShape { FirstHitMultiplier = 0.85f, LaterHitMultiplier = 1.35f },
-            Unlock = CharacterUnlock.Conquest("pale_choir"),
+            // SECOND WARDEN. Was the last region's conquest; now the depth quest in the first Warden's
+            // own region, so the road to the second Warden runs through the place the first one came from.
+            Unlock = CharacterUnlock.Quest("q_cinder_deep", "Reach wave 50 in Cinderworks"),
         },
         new()
         {
             Id = "quiver", Name = "THE QUIVER",
-            Class = ItemClass.Mystic,
+            Class = ItemClass.Mystic, Tier = ClassTier.Second,
             Blurb = "Counts arrows the way other people count breaths.",
             Lean = Branch.Tempo, Aptitude = Form.Projectile, AptitudePower = 1.35f,
             PassiveName = "LOOSE AGAIN",
@@ -133,25 +138,30 @@ public static class CharacterRoster
             // paid out as a loot bonus, on the passive a player unlocks by finishing a quest for it.
             Grants = new[] { BuildTrigger.LooseAgain },
             Shape = new SkillShape { SkillRate = 1.10f },
-            Unlock = CharacterUnlock.Quest("q_hollow_hunt", "Finish the hunt in the Verdant Hollow"),
+            // SECOND MYSTIC. The old gate was depth 20 in the Verdant Hollow, which conquest-at-20 made
+            // free. Chests are the Forge's currency and the thing an idle player collects most.
+            Unlock = CharacterUnlock.Quest("q_thirty_chests", "Open 30 chests"),
         },
         new()
         {
             Id = "thornwall", Name = "THE THORNWALL",
-            Class = ItemClass.Bulwark,
+            Class = ItemClass.Bulwark, Tier = ClassTier.Second,
             Blurb = "Stands where the road narrows, and lets it narrow further.",
             Lean = Branch.Endure, Aptitude = Form.Trap, AptitudePower = 1.35f,
             PassiveName = "REPRISAL",
             PassiveText = "Every hit you take does less. Every trap you set does more.",
             Shape = new SkillShape { FlatDamageReduction = 6f, DamageTaken = 0.90f },
-            Unlock = CharacterUnlock.Conquest("verdant_hollow"),
+            // SECOND BULWARK. Was the FIRST region's conquest — the earliest unlock in the game. The
+            // brief asked for "conquer five regions", but the fifth region IS the first Bulwark's gate,
+            // so both would have arrived on the same frame; the whole map is the demand instead.
+            Unlock = CharacterUnlock.Quest("q_every_region", "Conquer every region"),
         },
 
         // ── Off the tree ──────────────────────────────────────────────────────────────────────────
         new()
         {
             Id = "oathbound", Name = "THE OATHBOUND",
-            Class = ItemClass.Ranger,
+            Class = ItemClass.Ranger, Tier = ClassTier.Second,
             Blurb = "Gave up their eyes for a better bargain.",
             Lean = null, Aptitude = Form.Mark, AptitudePower = 1.30f,
             PassiveName = "TWICE SWORN",
@@ -167,12 +177,13 @@ public static class CharacterRoster
             {
                 VowPowerMultiplier = 1.5f, MarkWindowMultiplier = 1.5f, MarkPowerBonus = 0.25f,
             },
-            Unlock = CharacterUnlock.Quest("q_first_vow", "Swear and keep a Vow through a full descent"),
+            // SECOND RANGER. One kept Vow was the old gate; three is a habit rather than an accident.
+            Unlock = CharacterUnlock.Quest("q_three_vows", "Finish three descents with a Vow's demand still met"),
         },
         new()
         {
             Id = "magpie", Name = "THE MAGPIE",
-            Class = ItemClass.Wanderer,
+            Class = ItemClass.Wanderer, Tier = ClassTier.Second,
             Blurb = "Fights for the pockets, not the glory.",
             Lean = null, Aptitude = Form.Trap,
             PassiveName = "FULL POCKETS",
@@ -180,7 +191,9 @@ public static class CharacterRoster
             // Haul and Rarity, which the AVARICE road also buys — so this character is the cheap
             // version of a thirty-point path, and the road stays worth walking because it goes further.
             Mods = new BuildMods(1f, 1f, 1f, 1.35f, 1.20f),
-            Unlock = CharacterUnlock.Conquest("cinderworks"),
+            // SECOND WANDERER. Was Cinderworks' conquest, the same frame as THE ANVIL. Now the deepest
+            // demand in the roster, in the region every player knows best.
+            Unlock = CharacterUnlock.Quest("q_hollow_deep", "Reach wave 60 in the Verdant Hollow"),
         },
     };
 

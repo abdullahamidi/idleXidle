@@ -181,8 +181,22 @@ public sealed class StatsScreen
             b.Draw(p, por, Color.White);
 
         var tx = por.Right + 20;
-        var adept = Mastery?.Affinity() is { } mf ? $"{FormShort(mf)} ADEPT" : "SEEKER";
-        _ui.TextBig(b, adept, tx, HunterCard.Y + 74, Bone, UiTypography.PanelTitle);
+        // WHO, AND WHAT CLASS — the same line the HUNT HUD prints, so the two cards agree on who you
+        // are. The mastery title ("STRIKE ADEPT") used to stand here as the name; it is a title, not a
+        // name, and it moves down beside the tempo line.
+        var who = Character ?? CharacterRoster.Get(CharacterRoster.StarterId);
+        var cls = ItemClasses.NameOf(who.Class);
+        const string sep = " · ";
+        var column = HunterCard.Right - 24 - tx;
+        var px = UiTypography.PanelTitle;
+        while (px > 14 && _ui.MeasureBig(who.ShortName, px) + _ui.MeasureBig(sep, px) + _ui.MeasureBig(cls, px) > column) px--;
+        var nx = tx;
+        var ny = HunterCard.Y + 74 + (UiTypography.PanelTitle - px) / 2;
+        _ui.TextBig(b, who.ShortName, nx, ny, Bone, px);
+        nx += _ui.MeasureBig(who.ShortName, px);
+        _ui.TextBig(b, sep, nx, ny, Slate, px);
+        nx += _ui.MeasureBig(sep, px);
+        _ui.TextBig(b, cls, nx, ny, UiKit.ClassColor(who.Class), px);
         _ui.TextBig(b, $"LEVEL {hunter.HunterLevel}", tx, HunterCard.Y + 106, Gold, UiTypography.Body);
         // The card's LEVEL line answers "what does level mean" on hover — same card as PROGRESS's row.
         if (new Rectangle(tx, HunterCard.Y + 102, 180, 30).Contains(hit))
@@ -196,6 +210,8 @@ public sealed class StatsScreen
         var life = SoloBattle.ChampionHealth(build, hunter);
         _ui.TextCenterBig(b, $"{life:N0} / {life:N0}", hpBar.Center.X, hpBar.Y + 4, Bone, UiTypography.Secondary);
         _ui.TextBig(b, $"TEMPO {hunter.SquadSkillRate:0.00}x SKILL RATE", tx, HunterCard.Y + 176, Slate, UiTypography.Secondary);
+        if (Mastery?.Affinity() is { } mf)
+            _ui.TextBig(b, $"{FormShort(mf)} ADEPT", tx, HunterCard.Y + 198, Slate, UiTypography.Secondary);
 
         _ui.Fill(b, new Rectangle(HunterCard.X + 24, HunterCard.Y + 224, HunterCard.Width - 48, 2), Dim);
 

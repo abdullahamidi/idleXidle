@@ -135,6 +135,12 @@ public static class ItemClasses
     /// <summary>The class's card word — "WARDEN".</summary>
     public static string NameOf(ItemClass cls) => Get(cls).Name;
 
+    /// <summary>The class's people — "WARDENS", for "FIRST OF THE WARDENS".</summary>
+    public static string PluralOf(ItemClass cls) => Get(cls).Name + "S";
+
+    /// <summary>The asset key of the class's icon — <c>icon_class_warden</c>. Drawn with a coloured diamond behind it when the art is absent.</summary>
+    public static string IconKey(ItemClass cls) => $"icon_class_{cls.ToString().ToLowerInvariant()}";
+
     /// <summary>
     /// Is this slot locked to a class? Weapon and the four armour pieces are; charm, ring and focus
     /// are worn by anyone.

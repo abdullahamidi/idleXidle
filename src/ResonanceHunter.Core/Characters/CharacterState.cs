@@ -15,9 +15,13 @@ namespace ResonanceHunter.Core.Characters;
 /// promise, which is that nothing is ever taken back.
 /// </para>
 /// <para>
-/// Unlocks are DERIVED, not banked. <see cref="Refresh"/> is handed the world's conquered set every
-/// frame, the same way both trees derive their points, so there is nothing to double-count across a
-/// reload and nothing to migrate when a region's id changes. The save carries only the active id.
+/// Unlocks are DERIVED every frame AND banked. <see cref="Refresh"/> is handed the world's conquered
+/// set each frame, the same way both trees derive their points, so a conquest made while logged out
+/// still counts. But the set it grows is also saved (<see cref="SaveUnlocked"/>) and restored, because
+/// a gate can tighten — the tiered roster moved THE THORNWALL from the first region's conquest to the
+/// whole map — and a set that was only ever derived would take a champion back the day it did. Nothing
+/// is ever taken back; that is the promise the bank keeps. Saves from before the bank existed are
+/// seeded by <see cref="LegacyUnlocks"/>.
 /// </para>
 /// </remarks>
 public sealed class CharacterState
@@ -38,7 +42,7 @@ public sealed class CharacterState
 
     public bool IsUnlocked(string id) => _unlocked.Contains(id);
 
-    /// <summary>True when the quest gating a character has been finished. Nothing sets these yet.</summary>
+    /// <summary>True when the quest gating a character has been finished.</summary>
     public bool QuestDone(string questId) => _questsDone.Contains(questId);
 
     /// <summary>Mark a quest finished — the hook the quest system will call.</summary>
@@ -90,13 +94,28 @@ public sealed class CharacterState
 
     // ── Persistence ───────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Restore from a save. An unknown or locked id falls back to the starter rather than throwing.</summary>
-    public void Restore(string? activeId, IEnumerable<string>? questsDone)
+    /// <summary>
+    /// Restore from a save. An unknown or locked id falls back to the starter rather than throwing.
+    /// </summary>
+    /// <param name="activeId">The champion being played.</param>
+    /// <param name="questsDone">Finished quest ids.</param>
+    /// <param name="unlockedIds">
+    /// The banked unlocked set. Ids the roster no longer has are dropped; the starter is always kept.
+    /// Null or empty means "nothing banked" — the caller is expected to have seeded from
+    /// <see cref="LegacyUnlocks"/> first, and <see cref="Refresh"/> re-derives the rest either way.
+    /// </param>
+    public void Restore(string? activeId, IEnumerable<string>? questsDone, IEnumerable<string>? unlockedIds = null)
     {
         _questsDone.Clear();
         if (questsDone is not null)
             foreach (var q in questsDone)
                 if (!string.IsNullOrWhiteSpace(q)) _questsDone.Add(q);
+
+        _unlocked.Clear();
+        _unlocked.Add(CharacterRoster.StarterId);
+        if (unlockedIds is not null)
+            foreach (var id in unlockedIds)
+                if (CharacterRoster.Find(id) is not null) _unlocked.Add(id);
 
         _activeId = activeId is not null && CharacterRoster.Find(activeId) is not null
             ? activeId
@@ -105,4 +124,8 @@ public sealed class CharacterState
     }
 
     public IReadOnlyList<string> SaveQuests() => _questsDone.ToList();
+
+    /// <summary>The banked unlocked set, roster order. Always contains the starter, so it is never empty.</summary>
+    public IReadOnlyList<string> SaveUnlocked() =>
+        CharacterRoster.All.Where(c => _unlocked.Contains(c.Id)).Select(c => c.Id).ToList();
 }

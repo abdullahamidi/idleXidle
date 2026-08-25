@@ -99,12 +99,21 @@ public sealed record SaveGame
     /// <summary>
     /// Which character is being played. Empty or unknown falls back to the starter.
     /// </summary>
-    /// <remarks>
-    /// The ONLY roster field worth saving. Which characters are unlocked is derived from conquest every
-    /// frame — the same rule both skill trees follow — so there is nothing here to fall out of step with
-    /// the world, and a region id that changes migrates itself.
-    /// </remarks>
     public string ActiveCharacterId { get; init; } = "";
+
+    /// <summary>
+    /// The champions the player has earned, by id. Absent on every save written before the tiered
+    /// roster (2026-08-26), which loads as empty and is seeded from <see cref="Characters.LegacyUnlocks"/>.
+    /// </summary>
+    /// <remarks>
+    /// This used to be derived from conquest every frame and never saved, on the argument that a
+    /// derived set cannot fall out of step with the world. It cannot — but it CAN fall out of step
+    /// with the rules, and the tiered roster tightened them. A champion earned under the old gate has
+    /// to survive the new one, so the set is banked. A new save always writes at least the starter, so
+    /// "empty" is unambiguous: it means "written before the field existed", never "nothing earned".
+    /// The field is additive, so an older build reading this save simply ignores it — no version bump.
+    /// </remarks>
+    public List<string> UnlockedCharacters { get; init; } = new();
 
     /// <summary>Quest ids finished.</summary>
     public List<string> QuestsDone { get; init; } = new();
@@ -578,6 +587,28 @@ public static class SaveSystem
     }
 
     /// <summary>Restore the Warren's level, XP, and facility levels from a save (crash-safe on unknown keys).</summary>
+    /// <summary>
+    /// Restore the roster: which champion is active, which quests are done, and which champions are
+    /// earned — seeding the earned set from the pre-tier rules when the save predates the field.
+    /// </summary>
+    /// <remarks>
+    /// The seeding decision lives here, in Core, so a test can hand it an old save and watch a champion
+    /// survive. The host's Refresh still re-derives every unlock the current rules grant on top.
+    /// </remarks>
+    public static void RestoreCharacters(SaveGame save, Characters.CharacterState state)
+    {
+        ArgumentNullException.ThrowIfNull(save);
+        ArgumentNullException.ThrowIfNull(state);
+        var banked = save.UnlockedCharacters.Count > 0
+            ? save.UnlockedCharacters
+            : Characters.LegacyUnlocks.Seed(
+                save.ConqueredRegions,
+                save.QuestsDone,
+                save.RegionFarms.GroupBy(f => f.Id).ToDictionary(g => g.Key, g => g.Max(f => f.BestDepth)),
+                save.RunsWithVowKept);
+        state.Restore(save.ActiveCharacterId, save.QuestsDone, banked);
+    }
+
     public static void RestoreWarren(SaveGame save, Warren warren)
     {
         ArgumentNullException.ThrowIfNull(warren);

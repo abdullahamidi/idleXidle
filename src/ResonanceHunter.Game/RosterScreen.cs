@@ -168,13 +168,26 @@ public sealed class RosterScreen
             _ui.Fill(b, new Rectangle(card.X, card.Y, t, card.Height), edge);
             _ui.Fill(b, new Rectangle(card.Right - t, card.Y, t, card.Height), edge);
 
+            // THE CLASS BADGE. Playtest (2026-08-26): "I cannot see the characters' classes." The class
+            // was one line of small text among four; now it is a strip across the top of the card in
+            // the class's own colour, with the class icon and the class word in capitals — the first
+            // thing on the card, and the same colour the bag paints that class's gear.
+            var classColor = UiKit.ClassColor(c.Class);
+            var badge = new Rectangle(card.X + t, card.Y + t, card.Width - 2 * t, 28);
+            _ui.Fill(b, badge, unlocked ? classColor : classColor * 0.45f);
+            var ink = new Color(0x14, 0x10, 0x1A);
+            var badgeIcon = new Rectangle(badge.X + 8, badge.Y + 3, 22, 22);
+            _ui.ClassIcon(b, c.Class, badgeIcon, fallback: ink);
+            _ui.TextCenterBig(b, ItemClasses.NameOf(c.Class), badge.Center.X + 10, badge.Y + 5,
+                              unlocked ? ink : Bone * 0.8f, UiTypography.Secondary);
+
             // The character themselves. A roster of names is a menu; a roster of people is a roster.
             // Each breathes on its own phase, so ten cards do not pulse in unison — and the sprite is
             // the approved full-body design rather than a generated clip, for the reason set out in
             // SoloExpeditionScreen.DrawChampion.
-            // 146 tall, not 168: the card took on a fourth line of text (the gear class) and the
+            // 118 tall: the card took on a fourth line of text (the tier) and a badge strip, and the
             // portrait is the only thing on it with height to spare.
-            var portrait = new Rectangle(card.X + 16, card.Y + 12, card.Width - 32, 146);
+            var portrait = new Rectangle(card.X + 16, badge.Bottom + 8, card.Width - 32, 118);
             var tint = unlocked ? Color.White : new Color(0x2A, 0x28, 0x30);
             // Each on its own phase, so ten cards do not breathe in unison.
             if (!_ui.AnimSprite(b, c.StripKey("idle"), portrait, _anim + i * 0.37f, 10f, loop: true, tint, -1f))
@@ -182,10 +195,10 @@ public sealed class RosterScreen
 
             _ui.TextCenterBig(b, c.Name, card.Center.X, card.Bottom - 116,
                               unlocked ? Bone : Slate, UiTypography.Secondary);
-            // WHAT THEY WEAR, in the class's own colour — the one fact about a champion that decides
-            // whether the bag you already have fits them.
-            _ui.TextCenter(b, $"WEARS {ItemClasses.NameOf(c.Class)} GEAR", card.Center.X, card.Bottom - 90,
-                           unlocked ? UiKit.ClassColor(c.Class) : Dim);
+            // FIRST OF THE WARDENS / SECOND OF THE WARDENS — which of the class's two this is, and so
+            // whether it is the one a conquest hands over or the one a quest makes you earn.
+            _ui.TextCenterBig(b, c.TierLine, card.Center.X, card.Bottom - 90,
+                              unlocked ? classColor : classColor * 0.6f, 14);
             if (c.Lean is { } br)
                 _ui.TextCenter(b, BranchName(br), card.Center.X, card.Bottom - 62, unlocked ? lean : Dim);
             else
@@ -194,10 +207,11 @@ public sealed class RosterScreen
                 // explaining.
                 _ui.TextCenter(b, "NO ROAD", card.Center.X, card.Bottom - 62, Slate);
 
-            // `state` is the CharacterState parameter; this is the word on the card.
+            // `state` is the CharacterState parameter; this is the word on the card. A quest-gated
+            // card counts instead — "12 / 30 CHESTS" — so the player can see how far off it is.
             var stateText = active ? "PLAYING" : unlocked ? "READY" : "LOCKED";
             if (!unlocked && QuestCatalogue.Find(c.Unlock.QuestId) is { } cq)
-                stateText = cq.ProgressText(Progress);
+                stateText = cq.ProgressLine(Progress);
             _ui.TextCenter(b, stateText, card.Center.X, card.Bottom - 30,
                            active ? Gold : unlocked ? Met : Slate);
         }
@@ -247,14 +261,17 @@ public sealed class RosterScreen
                             : "NONE",
                          DetailPanel.Right - 74, y - 2, c.Aptitude is null ? Dim : Bone, UiTypography.Body);
         y += 32;
-        // THE GEAR CLASS, and its one sentence. Two champions share each class, so the sentence
-        // names the road the class was built for rather than the champion — that is the roster's
-        // whole answer to "which of these two should I be".
+        // THE CLASS, on its own line in its own colour with its icon, then its one sentence. Two
+        // champions share each class, so the sentence names the road the class was built for rather
+        // than the champion — that is the roster's whole answer to "which of these two should I be" —
+        // and the tier on the right says which of the two this one is.
         var cls = ItemClasses.Get(c.Class);
-        _ui.TextBig(b, "WEARS", left, y, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, $"{cls.Name} GEAR", DetailPanel.Right - 74, y - 2, UiKit.ClassColor(c.Class), UiTypography.Body);
-        y += 30;
-        y = DrawWrapped(b, cls.Description, left, y, width, Slate) + 34;
+        var classColor = UiKit.ClassColor(c.Class);
+        _ui.ClassIcon(b, c.Class, new Rectangle(left, y - 4, 30, 30));
+        _ui.TextBig(b, cls.Name, left + 40, y - 4, classColor, UiTypography.PanelTitle);
+        _ui.TextRightBig(b, c.TierLine, DetailPanel.Right - 74, y + 2, Slate, UiTypography.Secondary);
+        y += 34;
+        y = DrawWrapped(b, $"{cls.Description} Wears {cls.Name} gear.", left, y, width, Slate) + 34;
 
         _ui.Fill(b, new Rectangle(left, y, width, 2), Dim);
         y += 14;
@@ -270,7 +287,7 @@ public sealed class RosterScreen
         // HOW CLOSE, not just what. A gate that names a demand and nothing else is a gate a player
         // cannot tell they are one descent away from.
         if (!unlocked && QuestCatalogue.Find(c.Unlock.QuestId) is { } q)
-            _ui.TextRightBig(b, q.ProgressText(Progress), DetailPanel.Right - 74, y,
+            _ui.TextRightBig(b, q.ProgressLine(Progress), DetailPanel.Right - 74, y,
                              q.IsDone(Progress) ? Met : Gold, UiTypography.Body);
         y += 30;
         DrawWrapped(b, UnlockText(c), left, y, width, unlocked ? Slate : Bone);
