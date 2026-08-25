@@ -235,27 +235,45 @@ enchantments already define, plus a shape change:
 
 ### 3.4 Trait Tree — shape and budget
 
-**Income.** Six region conquests, one per corruption tier, and one per mastery goal.
-At the current content that is roughly **36 points**, arriving in lumps rather than
-a stream.
+**Income** (`Game1.TraitPointsEarned`). One point per region conquered, **two** per
+corruption tier reached (the peak — going shallower never costs a point), and one per
+region-mastery level held in each region. At the current content that is roughly
+**34 points**, arriving in lumps rather than a stream.
 
-**The spine (cheap, structural).** A short chain from the centre that every player
-walks, granting capacity rather than power:
+**Names say what a node does, effect first** (traits pass, 2026-08-25). The playtest
+could not connect "SHARP EDGE" or "THE GLASS ROAD" to the fight, so every node is now
+named after its effect ("HARDER HITS I", "AUTO-SELL COMMON DROPS") and every keystone
+gate after the keystone it teaches ("KEYSTONE — GLASS CANNON"). Ids never change —
+saves store them — and `TraitNamesTests` pins the ids, forbids the old metaphors, and
+holds each road's identity sentence (`TraitRoads`) against what its nodes do.
 
-| Node | Cost | Grants |
+**The spine (cheap, structural).** The roots below the ground line, which every
+player grows. It grants capacity and never a number:
+
+| Node (id) | Cost | Grants |
 |---|---|---|
-| Second Socket | 2 | A second keystone socket |
-| Fifth Weave | 3 | A fifth skill slot |
-| Third Socket | 5 | A third keystone socket |
-| Vow Discipline | 3 | A second Vow may be active |
-| Warren Charter I–III | 2 each | One extra Warren facility slot each |
+| KEYSTONE SOCKET II (`socket_2`) | 2 | A second keystone socket |
+| FIFTH SKILL SLOT (`weave_5`) | 3 | A fifth skill slot |
+| KEYSTONE SOCKET III (`socket_3`) | 5 | A third keystone socket |
+| LEARN VOWS I / II / III (`vow_study_1..3`) | 1 / 2 / 2 | Two vows each, gentlest first |
+| GEAR-SLOT VOWS (`vow_binding`) | 3 | The three vows that each leave one gear slot empty |
+| SACRIFICE VOWS (`vow_sacrifice`) | 3 | Four vows that always cost something |
+| OPENS AUTO-SELL AND FORGE (`ledger`) | 1 | A gate: auto-selling, the forge upgrades, the Avarice road |
+| AUTO-SELL COMMON DROPS / UNCOMMON DROPS (`filter_common` / `filter_uncommon`) | 2 / 3 | Drops at or below that rarity are sold on sight |
+| OPENS THE FORGE UPGRADES (`forge_insight`) | 2 | A gate to the two forge nodes |
+| SALVAGE PAYS 15% MORE (`efficient_forge`) | 3 | Salvaging returns 15% more material |
+| AUTO-MERGE SPARE ITEMS (`auto_merge`) | 2 | The forge merges spares by itself after every expedition |
+| FASTER REGION MASTERY I–IV (`recall_1..4`) | 1 / 2 / 2 / 3 | Region mastery grows 5% faster each, 20% in all (`RegionAutomation.RecordActiveKill`) |
+| A MARK — NO EFFECT (`attunement`) | 4 | Needs the head of all four roads plus the third socket; changes nothing |
 
-**Four paths.** Each is three keystones deep, ending in a terminal that costs
-**12**. A path costs 4 + 6 + 8 + 12 = **30**.
+**Four roads.** Each is three keystones and a terminal, at 4 + 6 + 8 + 12 = **30**,
+plus a side strand of a CHARGE-spur keystone (6) and three small attribute nodes
+(2 + 3 + 4) that hang off rungs of the road and never sit on the terminal's path —
+**45** a road.
 
 ```
-spine (17) + 4 paths x 30 (120) = 137 total cost
-36 points available            = 26%
+spine (46) + 4 roads x 45 (180) = 226 total cost
+~34 points available            = 15%
 ```
 
 Two full paths cost 60 — more than the whole budget. **Two terminals is not
@@ -264,36 +282,48 @@ terminal you did not take is the permanent shape of your character.
 
 ### 3.5 Trait Tree — the four paths
 
-Each path is built from the keystones that already exist in `Keystones.cs`. They
-were written to the right rule — every one gives something and takes something — so
-the design here is arrangement, not replacement.
+Each road is built from the keystones in `Keystones.cs`. They were written to the
+right rule — every one gives something and takes something — so the design here is
+arrangement, not replacement. Every keystone gate is named `KEYSTONE — <name>`,
+because teaching that keystone is the node's whole effect. Each road prints a
+one-line identity under its header on the screen and in the detail panel; the four
+sentences live in `TraitRoads` and a test holds them against the nodes.
 
-**RUIN — power bought with safety.**
-`GLASS CANNON` (4) → `BLOODLUST` (6) → `BLOOD MAGIC` (8) → **`REAPER`** (12)
-Damage scales as health falls; healing is traded away; the terminal makes kills feed
-kills. A Ruin hunter lives at low health on purpose, which makes the Endure branch of
-the Skill Tree nearly worthless to them — the two trees interact rather than stack.
+**RUIN — "Hit harder. Live closer to death."**
+`KEYSTONE — GLASS CANNON` (4) → `KEYSTONE — BLOODLUST` (6) → `KEYSTONE — BLOOD MAGIC`
+(8) → **`KEYSTONE — REAPER`** (12). Beside the road: `KEYSTONE — REND` (6, the CHARGE
+spur) and `HARDER HITS I / II / III` (+5% / +6% / +12% damage; 2 / 3 / 4).
+Damage doubles or scales as health falls; healing is traded away; the terminal makes
+kills feed kills. A Ruin hunter lives at low health on purpose, which makes the Endure
+branch of the Skill Tree nearly worthless to them — the two trees interact rather
+than stack.
 
-**AEGIS — the wall.**
-`IRONCLAD` (4) → `JUGGERNAUT` (6) → `UNDYING` (8) → **`TITAN`** (12)
-Mitigation, immovability, and a terminal that trades speed for mass. Aegis pairs
-naturally with Endure and is the only path that makes Bruiser bands routine.
+**AEGIS — "Live longer. Strike less often."**
+`KEYSTONE — IRONCLAD` (4) → `KEYSTONE — JUGGERNAUT` (6) → `KEYSTONE — UNDYING` (8) →
+**`KEYSTONE — TITAN`** (12). Beside the road: `KEYSTONE — DYNAMO` (6) and
+`MORE HEALTH I / II / III` (+5% / +6% / +12% health; 2 / 3 / 4).
+Double or triple health, paid for in skill speed. Aegis pairs naturally with Endure
+and is the only road that makes Bruiser bands routine.
 
-**AVARICE — the economy build.**
-`GREED` (4) → `DISCERNING EYE` (6) → `FORTUNE` (8) → **`HOARDER`** (12, new)
-Haul, rarity and drop quality. This path buys no combat power at all, which is what
-makes it a real choice: it trades depth for the gear that eventually buys depth.
-`HOARDER` is the missing terminal — it should convert surplus haul into a
-build-relevant resource so the path pays off in something other than money.
+**AVARICE — "More loot and rarer loot. Softer hits."**
+`KEYSTONE — GREED` (4) → `KEYSTONE — DISCERNING EYE` (6) → `KEYSTONE — FORTUNE` (8) →
+**`KEYSTONE — HOARDER`** (12). Beside the road: `KEYSTONE — LODESTONE` (6),
+`MORE LOOT I` (+5% loot; 2), `RARER FINDS I` (+6% rarity; 3) and `MORE AND RARER LOOT`
+(+8% loot, +5% rarity; 4).
+This road buys almost no combat power, which is what makes it a real choice: it trades
+depth for the gear that eventually buys depth. `HOARDER` stops it being a dead end —
+the haul becomes hit size.
 
-**ARTIFICE — behaviour over numbers.**
-`ECHO` (4) → `VENOMANCER` (6) → *Form-combo mastery* (8) → **`WEAVER`** (12, new)
-The trigger path: every skill fires twice, skills poison, and the terminal should
-let a build run **two Forms in one slot**. Artifice is the path for players who want
-their build to do something strange rather than something large.
+**ARTIFICE — "Skills act differently. Vows pay more."**
+`KEYSTONE — ECHO` (4) → `KEYSTONE — VENOMANCER` (6) → `VOWS PAY 25% MORE` (8) →
+**`KEYSTONE — WEAVER`** (12). Beside the road: `KEYSTONE — CAPACITOR` (6) and
+`FASTER SKILLS I / II / III` (+5% / +6% / +12% skill speed; 2 / 3 / 4).
+Every skill fires twice, skills poison, vows pay more, and the terminal fires every
+skill as the next Form it carries. Artifice is the road for players who want their
+build to do something strange rather than something large.
 
-Two terminals are missing and must be authored (`HOARDER`, `WEAVER`); the other
-eleven keystones already exist.
+Note that "more skills, more vows, a cheaper forge" is the **spine**, not Artifice:
+skill slots, vow studies and the forge nodes are roots every hunter grows.
 
 ### 3.6 Rules both trees obey
 

@@ -65,7 +65,7 @@ public static class DustEffects
 
     // ── Earn rates ────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Region mastery rate: +5% per SHARPENED RECALL, to +20%.</summary>
+    /// <summary>Region mastery rate: +5% per FASTER REGION MASTERY node, to +20%. Read by <c>RegionAutomation.RecordActiveKill</c>.</summary>
     public static float MasteryRate(MemoryDustTree tree)
     {
         ArgumentNullException.ThrowIfNull(tree);
@@ -221,7 +221,7 @@ public static class DustEffects
         return 4 + (tree.Owns("weave_5") ? 1 : 0);
     }
 
-    /// <summary>THE BOUND HAND — every Vow sworn pays 25% more. Reaches the fight through <see cref="TreeShape"/>.</summary>
+    /// <summary>VOWS PAY 25% MORE (artifice_vows) — every Vow sworn pays 25% more. Reaches the fight through <see cref="TreeShape"/>.</summary>
     /// <remarks>
     /// This wire used to be <c>UnboundVows</c> — "every Vow known may be carried at once" — and nothing
     /// read it: there was never a one-vow limit to lift, so the node promised a freedom the game already

@@ -64,6 +64,55 @@ public static class MemoryDustText
     }
 
     /// <summary>
+    /// The whole sheet for a node, as the detail panel reads it: what it does (with the real numbers),
+    /// what it costs, what it needs first, and that it is permanent.
+    /// </summary>
+    /// <remarks>
+    /// Playtest, 2026-08-25: the detail text must state the number, the cost, the prerequisite and
+    /// "permanent — never resets". <see cref="Describe"/> carries the first; this adds the other three
+    /// from the same catalogue facts, so a screen, a tooltip or a share code can print one paragraph
+    /// that a test can hold complete.
+    /// </remarks>
+    /// <param name="unlock">The node.</param>
+    /// <param name="nameOf">Resolves a prerequisite id to its printed name; null falls back to the id.</param>
+    public static string Sheet(MemoryDustUnlock unlock, Func<string, string?>? nameOf = null)
+    {
+        ArgumentNullException.ThrowIfNull(unlock);
+        return string.Join(" ", new[]
+        {
+            Describe(unlock), CostSentence(unlock), RequiresSentence(unlock, nameOf), Permanence,
+        }.Where(s => s.Length > 0));
+    }
+
+    /// <summary>The one fact every node shares, said once: it never resets.</summary>
+    public const string Permanence =
+        "Permanent — once learned it never resets, not on death and not on a new region.";
+
+    /// <summary>"Costs 6 trait points." — the whole words, never an abbreviation.</summary>
+    public static string CostSentence(MemoryDustUnlock unlock)
+    {
+        ArgumentNullException.ThrowIfNull(unlock);
+        return $"Costs {unlock.Cost} trait {(unlock.Cost == 1 ? "point" : "points")}.";
+    }
+
+    /// <summary>
+    /// "You need HARDER HITS I first." — every prerequisite by name; or the fact that there is none.
+    /// </summary>
+    public static string RequiresSentence(MemoryDustUnlock unlock, Func<string, string?>? nameOf = null)
+    {
+        ArgumentNullException.ThrowIfNull(unlock);
+        if (unlock.Requires.Count == 0) return "You need nothing first — you can start here.";
+
+        var names = unlock.Requires.Select(id => nameOf?.Invoke(id) ?? CatalogueName(id) ?? id).ToList();
+        var list = names.Count == 1 ? names[0]
+                 : string.Join(", ", names.Take(names.Count - 1)) + " and " + names[^1];
+        return $"You need {list} first.";
+    }
+
+    private static string? CatalogueName(string id)
+        => MemoryDustTree.Catalog.FirstOrDefault(u => u.Id == id)?.Name;
+
+    /// <summary>
     /// The one line a keystone gate needs: the keystone's name and its own blurb, as a sentence.
     /// </summary>
     /// <example>"Learn the keystone GLASS CANNON: double damage. Half health."</example>

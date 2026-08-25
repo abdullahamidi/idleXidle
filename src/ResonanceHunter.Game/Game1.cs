@@ -1729,9 +1729,18 @@ public class Game1 : Game
                     foreach (var id in new[] { "socket_2", "ledger", "vow_study_1", "forge_insight",
                                                "filter_common", "recall_1", "ks_glass_cannon" })
                         _dust.Purchase(id);
-                    _prestige.DevSelect("ks_bloodlust");   // AVAILABLE: its prerequisite (THE GLASS ROAD) is lit
+                    _prestige.DevSelect("ks_bloodlust");   // AVAILABLE: its prerequisite (KEYSTONE — GLASS CANNON) is lit
                     _hunter.AddGleam(131_900_000);     // the top currency pills read like the reference
                     _hunter.AddMaterials(12_600);
+
+                    // The tree is a free camera now. `capture.sh dust out.png 1.2` zooms it to 1.2 on
+                    // the posed node, so "zooming in reveals detail" is a captured fact rather than a
+                    // claim. Only the plain dust mode reads it — traitlit's third argument is a time.
+                    if (sm == "dust"
+                        && float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_ZOOM"),
+                                          System.Globalization.NumberStyles.Float,
+                                          System.Globalization.CultureInfo.InvariantCulture, out var devZoom))
+                        _prestige.DevCamera(devZoom, "ks_bloodlust");
 
                     // Frozen at 0.30s: past the flash, into the shockwaves, with the name plate risen
                     // and readable. RH_SHOT_T moves the freeze so the other beats can be checked too.
@@ -2239,7 +2248,9 @@ public class Game1 : Game
 
         if (_showPrestige)
         {
-            _prestige.Update(_keys, CanvasMouse, MouseClicked, MouseWheel, _dust, dt);
+            // HELD, as well as clicked: the tree is a free canvas now, and a held button drags it.
+            _prestige.Update(_keys, CanvasMouse, MouseClicked, _mouse.LeftButton == ButtonState.Pressed,
+                             MouseWheel, _dust, dt);
             // Taking a trait is permanent and there is no respec, so it is worth a sound and worth
             // writing to disk immediately. The screen owns neither: it hands back a cue the same way
             // StatsScreen hands back a trained stat.
@@ -2832,7 +2843,8 @@ public class Game1 : Game
                 _hunter.AddMaterial(Material.Core, r.Haul.Cores);
                 _expedition.FlashSpoil(Material.Core);
             }
-            _region.RecordActiveKill();
+            // The tree's FASTER REGION MASTERY nodes ride in here — the one place mastery grows.
+            _region.RecordActiveKill(DustEffects.MasteryRate(_dust));
 
             // MATERIALS FROM MONSTERS — a small trickle every wave, and deeper waves pay in BETTER STUFF
             // rather than more of the same. The steady drip; chests and dismantling are still the bulk.
@@ -3120,10 +3132,27 @@ public class Game1 : Game
         // something is actually asking for it.
         var kick = _showPrestige ? _prestige.Shake : Vector2.Zero;
         _batch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
-            null, null, null,
-            Matrix.CreateScale(OverlayScale)
-                * Matrix.CreateTranslation(OverlayLeft + kick.X, kick.Y, 0f));
+            null, null, null, OverlayTransform(kick));
     }
+
+    /// <summary>
+    /// The one transform every inset menu screen is drawn through: scaled to the free width and pushed
+    /// right of the rail, plus the screen's own camera kick.
+    /// </summary>
+    /// <remarks>
+    /// Shared with the screens themselves, because the TRAITS screen clips its free tree canvas with a
+    /// scissor and has to reopen the batch with the SAME matrix the host opened it with. Two copies of
+    /// this arithmetic would drift the next time the rail changed width; one method cannot.
+    /// </remarks>
+    internal static Matrix OverlayTransform(Vector2 kick)
+        => Matrix.CreateScale(OverlayScale) * Matrix.CreateTranslation(OverlayLeft + kick.X, kick.Y, 0f);
+
+    /// <summary>An overlay-space rectangle in canvas pixels — what a scissor rectangle has to be given.</summary>
+    internal static Rectangle OverlayToCanvas(Rectangle r, Vector2 kick)
+        => new((int)MathF.Round(r.X * OverlayScale + OverlayLeft + kick.X),
+               (int)MathF.Round(r.Y * OverlayScale + kick.Y),
+               (int)MathF.Round(r.Width * OverlayScale),
+               (int)MathF.Round(r.Height * OverlayScale));
 
     /// <summary>True when a menu screen owns the frame — those draw inset; the fight screen does not.</summary>
     private bool OverlayActive =>

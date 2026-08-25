@@ -252,9 +252,9 @@ public class PassiveTreeTests
         // every strand dead.)
         var walked = Bought("socket_2", "ks_glass_cannon", "ks_bloodlust");
         var sharpened = Bought("socket_2", "ks_glass_cannon", "ks_bloodlust", "ruin_edge_1");
-        Assert.True(sharpened.Owns("ruin_edge_1"), "the fixture must actually own SHARP EDGE");
+        Assert.True(sharpened.Owns("ruin_edge_1"), "the fixture must actually own HARDER HITS I");
         Assert.Equal(1.05f, DustEffects.TreeMods(sharpened).Damage, 3);
         Assert.True(DamageDealt(BuildFrom(sharpened)) > DamageDealt(BuildFrom(walked)) * 1.02f,
-            "SHARP EDGE must reach the fight");
+            "HARDER HITS I must reach the fight");
     }
 }

@@ -2835,7 +2835,7 @@ public sealed class ForgeScreen
         }
 
         _ui.TextCenterBig(b, $"+{_revealAllMats} MATERIALS"
-                             + (_revealMergedCount > 0 ? $"   ·   TIRELESS FORGE FUSED {_revealMergedCount}x" : ""),
+                             + (_revealMergedCount > 0 ? $"   ·   AUTO-MERGE FUSED {_revealMergedCount}x" : ""),
                           panel.Center.X, cellsBottom + 36, Gold * fade, UiTypography.Body);
 
         // A REAL BUTTON, replacing "CLICK TO CLOSE". Clicking anywhere else still closes it, for everyone

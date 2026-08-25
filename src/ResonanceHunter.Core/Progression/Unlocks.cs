@@ -202,7 +202,7 @@ public static class Unlocks
         Activity.Mastery => "THE MASTERY TREE — HOW YOUR SKILLS BEHAVE",
         Activity.Map => "THE MAP — THE WORLD BEYOND",
         Activity.Warren => "THE WARREN — WORK THAT RUNS WITHOUT YOU",
-        Activity.Traits => "TRAITS — WHAT SURVIVES DEATH",
+        Activity.Traits => "TRAITS — PERMANENT BONUSES THAT NEVER RESET",
         Activity.Roster => "THE ROSTER — OTHER CHAMPIONS",
 
         // A cast that is not a declared Activity is a programming error, and a blank string here would
@@ -286,12 +286,19 @@ public static class Unlocks
             + "raises what they produce. Check in, spend, leave — that is the whole loop. It is "
             + "meant to be checked, not watched.",
 
+        // THREE SENTENCES, EACH ONE A FACT THE PLAYER CAN CHECK. Playtest, 2026-08-25: the first
+        // explanation of traits did not say what they were FOR. The old text also named the wrong
+        // faucet ("going deeper than you ever have" is the MASTERY tree's income); the sources here are
+        // the three terms of Game1.TraitPointsEarned, and a test holds this text to them.
         Activity.Traits =>
-            "You earn points by going deeper than you ever have before. Replaying a depth you "
-            + "have already cleared pays loot but no points. The only way to earn one is to go "
-            + "somewhere new. What you spend them on is permanent and survives every death. Some nodes "
-            + "give you a fifth skill slot or another keystone socket — the biggest single "
-            + "upgrades in the game.",
+            "Traits are permanent bonuses for your champion, bought with TRAIT POINTS — you earn one "
+            + "for every region you conquer, one every time a region's mastery rises a level, and two "
+            + "every time you push the corruption to a tier you have never reached. "
+            + "The tree has one spine everyone grows and four roads to choose between — RUIN hits "
+            + "harder, AEGIS lives longer, ARTIFICE makes skills act differently, AVARICE brings back "
+            + "more loot — and every road ends in a capstone so costly that taking it means you can "
+            + "never finish the other three. "
+            + "Nothing here is ever taken back: a trait never resets, not on death, not on a new region, not ever.",
 
         Activity.Roster =>
             "Other champions, unlocked by conquering regions. Each has a built-in power of its own that "

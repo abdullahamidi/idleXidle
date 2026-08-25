@@ -16,6 +16,8 @@
 # node art is thirty pixels across in the 0.30 overview, where a capture can only
 # prove that something was drawn there — 0.55 frames the mastery plaques, 0.95 the
 # minors around the hub.
+# `dust` takes the same third argument for the TRAIT tree's camera (its home zoom
+# is about 0.55, fitting the whole tree; 1.2 frames one road with its art readable).
 MODE="${1:-fight}"
 OUT="${2:-shot_$MODE.png}"
 ZOOM="${3:-}"

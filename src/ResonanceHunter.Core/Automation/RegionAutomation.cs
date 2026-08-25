@@ -111,5 +111,15 @@ public sealed class Region
         => EfficiencyContract.IdleEfficiencyPercent(MasteryLevel, 0f);
 
     /// <summary>RMP for an active kill the player fought here — playing is what builds mastery.</summary>
-    public void RecordActiveKill() => RegionMasteryPoints += _tuning.RmpPerActiveKillBonus;
+    /// <param name="rate">
+    /// The trait tree's mastery-rate multiplier (<c>DustEffects.MasteryRate</c>). 1 means no trait.
+    /// </param>
+    /// <remarks>
+    /// The rate parameter is how FASTER REGION MASTERY I–IV reach the game. Before it existed the four
+    /// nodes were wired in DustEffects and read by nothing: the only live source of mastery points was
+    /// this method, and it added the flat tuning value whatever the tree said. Four nodes, eight trait
+    /// points, no effect — the house failure mode, caught in the traits pass of 2026-08-25.
+    /// </remarks>
+    public void RecordActiveKill(float rate = 1f)
+        => RegionMasteryPoints += _tuning.RmpPerActiveKillBonus * MathF.Max(0f, rate);
 }

@@ -1,13 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.Xna.Framework;
-using ResonanceHunter.Core.Prestige;
+using System.Numerics;
 
-namespace ResonanceHunter.Client;
+namespace ResonanceHunter.Core.Prestige;
 
 /// <summary>
-/// Where every trait node sits in the diagram, in world units.
+/// Where every trait node sits in the diagram, in WORLD units — pixels at a camera zoom of 1.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -15,24 +14,23 @@ namespace ResonanceHunter.Client;
 /// because it is a regular shape; the trait tree is not regular — one spine of five unequal chains with
 /// four roads climbing off three different anchors — so its shape is authored, node by node, in LANES
 /// (columns) and ROWS (rungs). A table like that has one failure mode, and the tree shipped with it:
-/// the CHARGE spur added four keystones to the catalogue and nobody added four rows here, so
-/// <c>DrawNode</c> early-returned on a missing position and ks_rend, ks_dynamo, ks_lodestone and
-/// ks_capacitor were invisible for as long as they existed — while the header counted them in its
-/// "0/39". Four nodes a player could not buy because they could not see them.
+/// the CHARGE spur added four keystones to the catalogue and nobody added four rows here, so the
+/// screen early-returned on a missing position and ks_rend, ks_dynamo, ks_lodestone and ks_capacitor
+/// were invisible for as long as they existed — while the header counted them in its "0/39". Four
+/// nodes a player could not buy because they could not see them.
 /// </para>
 /// <para>
-/// So authoring is no longer the only source. <see cref="Build"/> ends by walking the catalogue, and any
+/// So authoring is no longer the only source. The constructor ends by walking the catalogue, and any
 /// node without an authored position is PLACED: beside its nearest positioned prerequisite if it has
 /// one, in the first free cell, or along the bottom row if it is a root. Every catalogue node therefore
 /// has a position by construction, and <see cref="Unauthored"/> names the ones that were placed by the
 /// fallback so a debug overlay — and a reader — can see which still want a hand-chosen home.
 /// </para>
 /// <para>
-/// The shape is A TREE, drawn as one: four boughs above a ground line, roots below it. The playtest
-/// called the previous arrangement ragged — five chains at five unrelated lanes, road strands at
-/// uneven gaps — so this table is now built on ONE rule the eye can verify: the four keystone
-/// strands stand at lanes 1, 4, 7 and 10, every gap equal, and each road's side strand mirrors its
-/// partner's (RUIN|AEGIS outward around the shared trunk at 2.5; ARTIFICE|AVARICE around 8.5).
+/// The shape is A TREE, drawn as one: four boughs above a ground line, roots below it. The four
+/// keystone strands stand at lanes 1, 4, 7 and 10, every gap equal, and each road's side strand
+/// mirrors its partner's (RUIN|AEGIS outward around the shared trunk at 2.5; ARTIFICE|AVARICE around
+/// 8.5).
 /// </para>
 /// <list type="bullet">
 /// <item>THE ROOTS: every spine chain hangs below row 0 — the capacity trunk under the RUIN/AEGIS
@@ -44,25 +42,40 @@ namespace ResonanceHunter.Client;
 ///   on the first rung, the three small attribute nodes above — joined by short horizontal wires.
 ///   RUIN and AEGIS share one trunk and fork from it; ARTIFICE and AVARICE rise straight.</item>
 /// <item>Every TERMINAL is the crown of its bough, all four at the same height, evenly spaced, with
-///   the road's name and price above it. Four crowns at one altitude, each costing most of what a
-///   career can earn (MemoryDustTests pins one reachable, two never): the picture itself is the
-///   argument that you get one.</item>
+///   the road's name, its one-line identity and its price above it.</item>
 /// </list>
 /// <para>
-/// Lanes are wider than rows on purpose: every node prints its NAME under itself, in two short lines,
-/// and the name needs about a lane of width while a node and its name need about a row of height.
-/// The screen fits the diagram with a uniform scale, so the ratio below is what a lane and a row
-/// come out to on screen.
+/// WORLD UNITS, NOT A FITTED SCALE. This table used to be in abstract lane/row units that the screen
+/// squeezed into a fixed panel. The playtest of 2026-08-25 asked for the tree to be a free screen like
+/// the mastery tree, so the units are now pixels at zoom 1 — a node is drawn at a fixed world size and
+/// the camera decides how much of the world is on screen. Lanes are wider than rows because every node
+/// prints its NAME under itself in short lines: <see cref="NodeWidth"/> and <see cref="NodeHeight"/> are
+/// the room a node and its name are allowed, and a test holds every pair of nodes at least that far
+/// apart, which is what "no two nodes overlap" means at any zoom. Lives in Core, with no engine types,
+/// precisely so that test can exist.
 /// </para>
 /// </remarks>
 public static class TraitTreeLayout
 {
-    /// <summary>One rung — the diagram's unit of height. Public so a wire can ask how long it is.</summary>
-    public const float ChainStep = 1.0f;
+    /// <summary>One rung — the diagram's unit of height, in world units.</summary>
+    public const float ChainStep = 190f;
 
-    /// <summary>One lane — the diagram's unit of width. Wider than a rung, for the names.</summary>
-    public const float LaneStep = 1.14f;
+    /// <summary>One lane — the diagram's unit of width, in world units. Wider than a rung, for the names.</summary>
+    public const float LaneStep = 190f;
 
+    /// <summary>
+    /// The widest a node and its name plate may be drawn, in world units. Held under <see cref="LaneStep"/>
+    /// so two nodes in neighbouring lanes never touch.
+    /// </summary>
+    public const float NodeWidth = 176f;
+
+    /// <summary>
+    /// The tallest a node and its name lines may be drawn, in world units — the largest frame plus three
+    /// short lines of name. Held under <see cref="ChainStep"/> so a name never runs into the rung below.
+    /// </summary>
+    public const float NodeHeight = 184f;
+
+    /// <summary>Every catalogue node's position, by id.</summary>
     public static IReadOnlyDictionary<string, Vector2> Positions { get; }
 
     /// <summary>
@@ -87,9 +100,9 @@ public static class TraitTreeLayout
 
         // ── THE ROOTS, below the ground line (rows 0..3) ──────────────────────────────────────────
         // The capacity trunk, at lane 2.5 — dead centre under the RUIN/AEGIS fork it feeds. The quiet
-        // mark hangs at its foot: attunement wants one node from the head of every road plus the third
-        // socket, so it has long wires wherever it stands; directly under socket_3, the one wire the
-        // drawing shows is a short vertical, which is what keeps a five-way node from being a spider.
+        // mark hangs at its foot: it wants one node from the head of every road plus the third socket,
+        // so it has long wires wherever it stands; directly under socket_3, the one wire the drawing
+        // shows is a short vertical, which is what keeps a five-way node from being a spider.
         p["socket_2"] = At(2.5f, 0);
         p["weave_5"] = At(2.5f, 1);
         p["socket_3"] = At(2.5f, 2);
@@ -103,7 +116,7 @@ public static class TraitTreeLayout
         p["recall_4"] = At(5.5f, 3);
 
         // Vows, at lane 7 — directly under the ARTIFICE strand they gate, so the anchor wire is a
-        // plain vertical. The chain forks at its end: BINDING straight down, SACRIFICE a step aside.
+        // plain vertical. The chain forks at its end: GEAR-SLOT straight down, SACRIFICE a step aside.
         p["vow_study_1"] = At(7, 0);
         p["vow_study_2"] = At(7, 1);
         p["vow_study_3"] = At(7, 2);
@@ -173,7 +186,7 @@ public static class TraitTreeLayout
                 var anchor = u.Requires.Where(p.ContainsKey).Select(id => p[id]).Cast<Vector2?>().FirstOrDefault();
                 if (anchor is null && u.Requires.Count > 0 && pass < 7) continue;   // wait for its prerequisite
 
-                var spot = anchor is { } a ? FirstFreeAround(a, taken) : NextAlongTheBottom(p, taken);
+                var spot = anchor is { } a ? FirstFreeAround(a, taken) : NextAlongTheBottom(taken);
                 p[u.Id] = spot;
                 taken.Add(Cell(spot));
                 placed.Add(u.Id);
@@ -199,10 +212,10 @@ public static class TraitTreeLayout
             if (!taken.Contains(Cell(v))) return v;
         }
         // A neighbourhood this crowded does not exist in the catalogue; fall to the bottom row.
-        return NextAlongTheBottom(new Dictionary<string, Vector2> { ["_"] = a }, taken);
+        return NextAlongTheBottom(taken);
     }
 
-    private static Vector2 NextAlongTheBottom(Dictionary<string, Vector2> p, HashSet<(int, int)> taken)
+    private static Vector2 NextAlongTheBottom(HashSet<(int, int)> taken)
     {
         var bottom = taken.Count == 0 ? 0 : taken.Max(c => c.Item2) / 2;
         var lane = (taken.Count == 0 ? 0 : taken.Max(c => c.Item1) / 2) + 1;
@@ -221,7 +234,7 @@ public static class TraitTreeLayout
         return ids.All(Positions.ContainsKey);
     }
 
-    /// <summary>The diagram's extent, so a view can fit it without hard-coding one.</summary>
+    /// <summary>The diagram's extent — node CENTRES, not their frames — so a view can fit it without hard-coding one.</summary>
     public static (Vector2 Min, Vector2 Max) Bounds()
     {
         var min = new Vector2(float.MaxValue);
@@ -233,4 +246,12 @@ public static class TraitTreeLayout
         }
         return (min, max);
     }
+
+    /// <summary>
+    /// Do these two nodes keep clear of each other? True when they are at least a node's room apart on
+    /// one axis — which, since every node is drawn inside <see cref="NodeWidth"/> by <see cref="NodeHeight"/>,
+    /// is exactly what "they do not overlap" means at any zoom.
+    /// </summary>
+    public static bool KeepClear(Vector2 a, Vector2 b)
+        => MathF.Abs(a.X - b.X) >= NodeWidth - 0.01f || MathF.Abs(a.Y - b.Y) >= NodeHeight - 0.01f;
 }
