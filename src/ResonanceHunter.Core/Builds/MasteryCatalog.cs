@@ -376,7 +376,10 @@ public static class MasteryCatalog
             BuildTrigger.Radiance, S);
         Spec(n, Branch.Tempo, Form.Mark, "spec_mark", "MARK SPECIALIST — THE WINDOW STRETCHES",
             BuildTrigger.Linger, S with { MarkWindowMultiplier = 1.3f });
-        Spec(n, Branch.Endure, Form.Transformation, "spec_transformation", "MORPH SPECIALIST — LEECH DOUBLED",
+        // Grants SIPHON, whose two halves are read from HealTuning: the leech doubling, and the raised
+        // per-wave healing limit that makes the doubling measurable under the heal ceiling.
+        Spec(n, Branch.Endure, Form.Transformation, "spec_transformation",
+            $"MORPH SPECIALIST — LEECH DOUBLED, HEAL LIMIT {HealTuning.Default.CeilingText(siphon: true)} A WAVE",
             BuildTrigger.Siphon, S);
     }
 

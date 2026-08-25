@@ -153,7 +153,12 @@ public sealed record Enchantment(EnchantKind Kind, float Magnitude)
         EnchantKind.Radiance => "AURA HITS FASTER",
         EnchantKind.Execute => "STRIKE CRUSHES WEAK",
         EnchantKind.Coiled => "TRAP READY SOONER",
-        EnchantKind.Siphon => "TRANSFORM HEALS 2X",
+        // Both halves from HealTuning, so the card cannot drift from the sim: the leech doubling and
+        // the raised per-wave healing limit (the half that is measurable under the ceiling). The
+        // Form it needs ("TRANSFORMATION") is printed by the row from Need, so the 21 characters
+        // here are spent on what it does.
+        EnchantKind.Siphon => $"HEALS {Builds.HealTuning.Default.SiphonMultiplier:0}X, "
+                              + $"UP TO {Builds.HealTuning.Default.CeilingText(siphon: true)}",
         EnchantKind.Fervour => $"BLOODLUST +{Magnitude * 100f:0}%",
         EnchantKind.Reverb => $"ECHO HITS +{Magnitude * 100f:0}%",
         EnchantKind.Bulwark => $"ZEAL +{Magnitude * 100f:0}%",

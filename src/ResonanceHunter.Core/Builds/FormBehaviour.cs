@@ -98,7 +98,13 @@ public static class FormBehaviour
     public const float MarkMultiplier = 1.6f;
 
     /// <summary>TRANSFORMATION returns this fraction of its damage as health.</summary>
-    public const float TransformationLeech = 0.5f;
+    /// <remarks>
+    /// The number lives in <see cref="HealTuning"/> now (it was a 0.5 constant here, and 0.5 is what
+    /// the playtest called broken). This reads the live default so the glossary and every screen
+    /// that quotes the Form keep one source; the SIM reads the injected
+    /// <c>ExpeditionTuning.Heal</c>, which is the same object unless a test swaps it.
+    /// </remarks>
+    public static float TransformationLeech => HealTuning.Default.TransformationLeech;
 
     /// <summary>
     /// The cast clip's authored length in ms at skill rate 1 — eight frames the hunt screen plays across
