@@ -132,29 +132,66 @@ public class Game1 : Game
     private string _lockedMsg = "";
     private float _lockedTimer;
 
-    /// <summary>Activities whose explanation has not been shown yet, oldest first.</summary>
-    /// <remarks>
-    /// A QUEUE rather than a single slot, because two gates can open on the same frame (conquering the
-    /// first region opens both the Map and the Warren). Showing one and dropping the other would leave a
-    /// screen permanently unexplained — the silent kind of gap this codebase keeps finding.
-    /// </remarks>
-    private readonly Queue<(string Head, string Body)> _unlockQueue = new();
+    // ── The intro, and the on-demand explanations that replaced the modal panels ─────────────
+    //
+    // THERE USED TO BE A QUEUE OF MODAL PANELS HERE. Every screen that opened, every skill slot, every
+    // finished quest and every champion that joined was pushed onto it, and the panels dripped out one
+    // every eight seconds, each one swallowing input until clicked. Playtest: "while a player is focused
+    // on solving something, the screen keeps throwing 'this opened, that arrived' notifications, and it
+    // wore the testers out." The queue, the panel, its cooldown and everything that fed them are gone —
+    // not disabled, gone — and replaced by three quiet channels:
+    //
+    //   * THE INTRO (Onboarding.Intro): once, on the first BEGIN THE HUNT, a click-through spotlight
+    //     tour of the HUNT screen while the fight runs behind it. The only full-screen modal left.
+    //   * FIRST-OPEN BANNERS: a screen that opens gets a gold NEW mark on its rail tile, and its
+    //     explanation waits at the top of THAT screen until the player goes there and closes it.
+    //   * NOTICE TOASTS: a quest finishing or a champion joining is a line at the top that fades on its
+    //     own. It never takes input.
 
-    /// <summary>The explanation currently on screen, or empty. Dismissed by any click or key.</summary>
-    private string _unlockShowing = "";
-    private string _unlockHeadline = "";
+    /// <summary>Is the intro on screen? While true, input belongs to it and nothing else teaches.</summary>
+    private bool _introActive;
+
+    /// <summary>Which card of <see cref="Onboarding.Intro"/> is showing.</summary>
+    private int _introStep;
 
     /// <summary>
-    /// Seconds of play between one explanation panel closing and the next appearing.
+    /// Has this session decided whether to run the intro? Asked once, the frame the title closes.
     /// </summary>
     /// <remarks>
-    /// The first minute of a new game opens screens fast enough to queue eight or nine panels, and
-    /// shown back to back they read as a wall — the player click-click-clicks through the lot without
-    /// reading any. They drip instead: dismissed, breathe, next. Delayed, never dropped — the queue
-    /// keeps every one.
+    /// Once, deliberately: the decision reads "has a wave been cleared", and the first wave clears
+    /// roughly fifteen seconds in — asking every frame would end the intro under the player mid-card.
     /// </remarks>
-    private const float UnlockPanelGapSeconds = 8f;
-    private float _unlockCooldown;
+    private bool _introDecided;
+
+    /// <summary>The save's record of the intro having been finished or skipped.</summary>
+    private bool _introSeen;
+
+    /// <summary>The save's explained list, parked from load until the screens exist to seed it against.</summary>
+    private List<string>? _pendingExplained;
+
+    /// <summary>
+    /// Screens (Activity names) and skill-slot notes (SkillSlotN) whose banner the player has closed.
+    /// </summary>
+    /// <remarks>
+    /// Persisted. Whether a tile is NEW is derived from this and the unlock gates every frame
+    /// (<see cref="Onboarding.IsNew"/>), never set at the moment of opening — so nothing can forget to
+    /// mark it, and a screen that opened while the game was closed is marked too.
+    /// </remarks>
+    private readonly HashSet<string> _explained = new();
+
+    /// <summary>Screens opened this session. A visited tile drops its NEW mark even if its banner is still open.</summary>
+    private readonly HashSet<Activity> _visited = new();
+
+    /// <summary>A champion joined and the roster has not been looked at since. Session-only.</summary>
+    private bool _rosterNews;
+
+    /// <summary>Notices waiting their turn — "QUEST COMPLETE", "X JOINS YOU" — shown one at a time.</summary>
+    private readonly Queue<string> _noticeQueue = new();
+    private string _notice = "";
+    private float _noticeTimer;
+
+    /// <summary>How long a notice toast stays. Long enough to read twice; it fades over the last second.</summary>
+    private const float NoticeSeconds = 6f;
 
     /// <summary>
     /// False until the first roster Refresh has been absorbed silently.
@@ -163,13 +200,9 @@ public class Game1 : Game
     /// The unlocked set is derived from conquest and held in memory only — the save carries just the
     /// active champion's id — so the first Refresh after every load reports EVERY champion the player
     /// already owns as newly gained. Without this the game would open with a stack of "X JOINS YOU"
-    /// panels for champions earned hours ago.
+    /// toasts for champions earned hours ago.
     /// </remarks>
     private bool _rosterBaselined;
-
-    /// <summary>Last frame's facts, so an unlock can be noticed exactly once, when it happens.</summary>
-    private UnlockFacts _lastUnlockFacts;
-    private int _lastSkillSlots = -1;
 
     private int _regionProgression;
 
@@ -370,6 +403,9 @@ public class Game1 : Game
     /// <summary>Developer hotkeys (F6 force boss, F7 layout overlays) are live only under RH_DEV=1.</summary>
     private static readonly bool DevKeysEnabled = Environment.GetEnvironmentVariable("RH_DEV") == "1";
 
+    /// <summary>True under the screenshot rig (RH_SHOT). The rig poses; it does not play.</summary>
+    private static readonly bool CaptureRig = Environment.GetEnvironmentVariable("RH_SHOT") is not null;
+
     // ── START A NEW GAME (settings): the armed-confirm state — and the feedback-code toast. ────
     private float _resetArmTimer;      // >0 while the red are-you-sure state is armed
     private bool _wantsNewGame;        // set by the settings panel, acted on between frames in Update
@@ -536,6 +572,11 @@ public class Game1 : Game
         // dismiss a different lesson. A plain field, so restoring here (Initialize) is safe.
         _dismissedGuide.Clear();
         foreach (var rung in save.DismissedGuideRungs) _dismissedGuide.Add(rung);
+        // The intro flag is a plain field; the explained list is PARKED, because seeding it asks the
+        // unlock gates, and those read the Forge's inventory — a screen LoadContent has not built yet.
+        // Seeded in SeedExplained, from ApplyRestoredState, once the bag is real.
+        _introSeen = save.IntroSeen;
+        _pendingExplained = save.ExplainedScreens.ToList();
         // PARKED, exactly like the run log above and for exactly the reason the comment above gives.
         // This line was `_forge.RestoreChestsOpened(...)`, and _forge is a ForgeScreen built in
         // LoadContent — which has not run yet. It threw a NullReferenceException and took the game down
@@ -740,6 +781,8 @@ public class Game1 : Game
             MasteryEarned = _deepestEver,          // stored as deepest-ever; Earned is re-derived on load
             ChampionGleamRate = _champGleamRate,
             DismissedGuideRungs = _dismissedGuide.OrderBy(s => s).ToList(),
+            IntroSeen = _introSeen,
+            ExplainedScreens = _explained.OrderBy(s => s).ToList(),
             // Unopened chests ride along too — a boss's drop must survive a reload, opened or not.
             UnopenedChests = _forge.UnopenedChests
                 .Select(c => new SavedChest
@@ -838,15 +881,21 @@ public class Game1 : Game
         _pendingWorn = new Dictionary<GearSlot, string?>();
         _pendingChestsOpened = 0;
 
-        // The teaching layer starts over with the game.
+        // The teaching layer starts over with the game: the intro is due again, nothing is explained,
+        // no tile has been visited, and no notice is waiting.
         _rosterBaselined = false;
-        _lastUnlockFacts = default;
-        _lastSkillSlots = -1;
-        _unlockQueue.Clear();
-        _unlockShowing = "";
-        _unlockHeadline = "";
-        _unlockCooldown = 0f;
-        // The click that confirmed the reset may have dismissed a panel in the same frame, which
+        _introActive = false;
+        _introStep = 0;
+        _introDecided = false;
+        _introSeen = false;
+        _pendingExplained = null;
+        _explained.Clear();
+        _visited.Clear();
+        _rosterNews = false;
+        _noticeQueue.Clear();
+        _notice = "";
+        _noticeTimer = 0f;
+        // The click that confirmed the reset may have closed a banner in the same frame, which
         // leaves _swallowInput latched TRUE — and the title screen's keys all read through it. The
         // recompute lives below the title branch, so it never runs there (review 2026-08-23).
         _swallowInput = false;
@@ -1019,6 +1068,53 @@ public class Game1 : Game
         _expedition.KeepMinTier = _chestKeepMinTier;
         _expedition.KeepSlots.Clear(); foreach (var sl in _chestKeepSlots) _expedition.KeepSlots.Add(sl);
         if (_pendingRunLog is not null) _expedition.Log.Restore(_pendingRunLog);
+        SeedExplained();
+    }
+
+    /// <summary>
+    /// Decide what this player already knows, now that the screens exist to ask.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Runs from <see cref="ApplyRestoredState"/>, AFTER the bag is restored, because the unlock facts
+    /// count wearable items and chests — read here at Initialize time, GEAR, VAULT and FORGE would look
+    /// shut on a save that has all three open, and a returning player would find NEW marks on screens
+    /// they have used for hours. The rule itself is <see cref="Onboarding.SeedExplained"/>.
+    /// </para>
+    /// <para>
+    /// A save from before the intro existed is recognised there (intro neither seen nor due) and every
+    /// open screen is marked read. That save then carries IntroSeen forward as TRUE — the migration
+    /// happens once, not on every load.
+    /// </para>
+    /// <para>
+    /// UNDER THE CAPTURE RIG everything is explained unless a fixture says otherwise: every fixture
+    /// grants the facts that open its screen, and a banner over the thing being photographed is the
+    /// old modal panel's mistake in a new coat. <c>RH_SHOT_EXPLAIN=Stats,Map</c> leaves those two owed,
+    /// which is how the first-open banner is itself captured.
+    /// </para>
+    /// </remarks>
+    private void SeedExplained()
+    {
+        _explained.Clear();
+        if (Environment.GetEnvironmentVariable("RH_SHOT") is not null)
+        {
+            var owed = (Environment.GetEnvironmentVariable("RH_SHOT_EXPLAIN") ?? "")
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            foreach (var a in Enum.GetValues<Activity>())
+                if (!owed.Contains(Onboarding.ScreenKey(a))) _explained.Add(Onboarding.ScreenKey(a));
+            for (var slot = 2; slot <= Build.SkillSlots; slot++)
+                if (!owed.Contains(Onboarding.SlotKey(slot))) _explained.Add(Onboarding.SlotKey(slot));
+            return;
+        }
+
+        var facts = GuideUnlockFacts();
+        foreach (var key in Onboarding.SeedExplained(facts, _introSeen, _pendingExplained ?? new List<string>()))
+            _explained.Add(key);
+        _pendingExplained = null;
+
+        // The one-time migration: a player from before the intro is past it. Marked so the seeding
+        // above does not repeat on every launch, quietly marking screens they opened but never read.
+        if (!_introSeen && !Onboarding.IntroDue(GuideFacts(), false)) _introSeen = true;
     }
 
     /// <summary>Frames survived under RH_BOOTCHECK. See <see cref="BootCheck"/>.</summary>
@@ -1212,7 +1308,8 @@ public class Game1 : Game
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
                 or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "traitlit" or "traitterm" or "traitterminal"
-                or "roster" or "rosterlocked" or "weave" or "vault" or "attune" or "attuned" or "trader")
+                or "roster" or "rosterlocked" or "weave" or "vault" or "attune" or "attuned" or "trader"
+                or "intro")
             {
                 _showTitle = false;
                 // (`expedition` and `vow` used to seed the retired creature den here; since its removal
@@ -1769,6 +1866,28 @@ public class Game1 : Game
             }
         }
 
+        // THE INTRO DECISION, once, on the first gameplay frame after the title closes — whichever way it
+        // closed (BEGIN THE HUNT, a fixture, the boot check). The fixture `intro` poses a card by number.
+        if (!_introDecided)
+        {
+            _introDecided = true;
+            var shot = Environment.GetEnvironmentVariable("RH_SHOT") is not null;
+            var wanted = shot
+                ? Environment.GetEnvironmentVariable("RH_SHOT_MODE") == "intro"
+                : Onboarding.IntroDue(GuideFacts(), _introSeen);
+            if (wanted)
+            {
+                _introActive = true;
+                _introStep = 0;
+                // RH_SHOT_STEP=n (or capture.sh's third argument, which arrives as RH_SHOT_T) poses
+                // card n of the intro, counted from 1.
+                var posed = Environment.GetEnvironmentVariable("RH_SHOT_STEP")
+                            ?? Environment.GetEnvironmentVariable("RH_SHOT_T");
+                if (shot && int.TryParse(posed, out var stepNo))
+                    _introStep = Math.Clamp(stepNo - 1, 0, Onboarding.Intro.Count - 1);
+            }
+        }
+
         // Escape backs out of an open panel before it quits the game. Escape is the reflex for "get me
         // out of this menu" — and in fullscreen it is the reflex for "give me my desktop back". Wiring
         // it straight to Exit() meant a player poking at the display options quit to desktop instead of
@@ -1793,9 +1912,15 @@ public class Game1 : Game
 
         if (_bootTimer > 0f) _bootTimer = Math.Max(0f, _bootTimer - dt);
         if (_lockedTimer > 0f) _lockedTimer = Math.Max(0f, _lockedTimer - dt);
-        // The explanation-panel drip — see UnlockPanelGapSeconds. Ticks here, past the title return,
-        // so only seconds of actual play count toward the gap.
-        if (_unlockCooldown > 0f) _unlockCooldown = Math.Max(0f, _unlockCooldown - dt);
+        // Notice toasts: one at a time, each for NoticeSeconds, the next one only once the last has
+        // gone. Ticks here, past the title return, so only seconds of actual play count.
+        if (_noticeTimer > 0f) _noticeTimer = Math.Max(0f, _noticeTimer - dt);
+        if (_noticeTimer <= 0f && _noticeQueue.Count > 0)
+        {
+            _notice = _noticeQueue.Dequeue();
+            _noticeTimer = NoticeSeconds;
+            _sound.PlayFirst(0.9f, "sfx_levelup", "sfx_click");
+        }
 
         // Autosave. An idle game that loses your farm to a crash has taken your hours, not your time.
         _sinceAutosave += dt;
@@ -1829,34 +1954,40 @@ public class Game1 : Game
         // sides of it. Its INPUT gating is unaffected, because `watchingFight` already carries a
         // !_showSettings term.
 
-        // AN UNLOCK EXPLANATION SWALLOWS INPUT while it is up: it is drawn over the nav rail, so a click
-        // meant to dismiss it would otherwise also land on whatever tile is underneath and throw the
-        // player onto a screen they did not ask for.
+        // THE INTRO SWALLOWS INPUT while it is up: it is drawn over the nav rail, so a click meant to
+        // advance it would otherwise also land on whatever tile is underneath and throw the player onto
+        // a screen they did not ask for.
         //
         // IT DOES NOT RETURN EARLY, and that is not a style choice. The settings panel can, because it
-        // is impossible to have open on the first frame. This one is not: a brand-new save queues an
-        // explanation immediately, so an early return here skipped the per-frame block that feeds every
-        // screen its dependencies, and the first Draw hit a null Loadout in StatsScreen. check_boot.sh
-        // caught it, which is the second time this exact shape — a return placed ahead of the feeds —
-        // has taken the game down. Swallow the input; never skip the frame.
+        // is impossible to have open on the first frame. This one is not: a brand-new save starts the
+        // intro on its first gameplay frame, so an early return here would skip the per-frame block
+        // that feeds every screen its dependencies, and the first Draw would hit a null Loadout in
+        // StatsScreen. check_boot.sh caught exactly that shape twice before, under the modal panel this
+        // replaced. Swallow the input; never skip the frame.
         //
         // The champion keeps fighting behind it. An idle game does not pause to talk to you.
-        // THE ORDER HERE IS THE WHOLE FIX. The first version cleared a local flag inside the dismissal
-        // branch and then assigned _swallowInput from it — so on the very frame the dismissing click was
-        // consumed, _swallowInput came out FALSE while _clicked was still latched true for the rest of
-        // the frame. The click closed the panel AND went on to hit HandleNavClick, all nine hotkeys and
-        // every button hit-tested during Draw. The guard was written and then defeated by its own
-        // sequencing, which is why the swallow is now set BEFORE the branch and never cleared by it.
-        _swallowInput = _unlockShowing.Length > 0;
-        if (_swallowInput && (_clicked || AnyKeyPressed()))
+        // THE ORDER HERE IS THE WHOLE FIX. The first version of the panel this replaced cleared a local
+        // flag inside the dismissal branch and then assigned _swallowInput from it — so on the very
+        // frame the dismissing click was consumed, _swallowInput came out FALSE while _clicked was
+        // still latched true for the rest of the frame. The click closed the panel AND went on to hit
+        // HandleNavClick, all nine hotkeys and every button hit-tested during Draw. The swallow is set
+        // BEFORE the branch and never cleared by it.
+        //
+        // THE INTRO IS THE ONLY THING THAT SETS THIS TRUE FOR A WHOLE FRAME. The notice toasts and the
+        // first-open banners are deliberately not modal: a toast never touches this flag, and a banner
+        // only spends the one click that lands on it (below, beside the guide strip's close).
+        _swallowInput = _introActive;
+        // NOT UNDER THE CAPTURE RIG. The game window takes focus while a shot renders, so a key the
+        // developer happens to press in the sixty frames advances the card — a capture asked for card
+        // five came back as card six. The rig poses a card by number; it never plays.
+        if (_introActive && !CaptureRig && (_clicked || AnyKeyPressed()))
         {
-            _unlockShowing = "";
-            _unlockHeadline = "";
-            // The NEXT panel waits its turn — see UnlockPanelGapSeconds. Without this the first
-            // minute of a new game stacked eight or nine of them back to back.
-            _unlockCooldown = UnlockPanelGapSeconds;
+            // Raw edge, not Pressed(): Pressed reads !_swallowInput, which is already true.
+            var escape = _keys.IsKeyDown(Keys.Escape) && _prevKeys.IsKeyUp(Keys.Escape);
+            if (escape || _introStep + 1 >= Onboarding.Intro.Count) EndIntro();
+            else _introStep++;
             _sound.Play("sfx_click", 0.7f);
-            // _swallowInput deliberately STAYS true: this frame's input was spent closing the panel.
+            // _swallowInput deliberately STAYS true: this frame's input was spent on the intro.
         }
 
         // A CHEST REVEAL IS MODAL TOO: while it is up, a click (or Space / Enter) advances or skips IT —
@@ -1907,7 +2038,6 @@ public class Game1 : Game
         // faked, so unlocks and gates are untouched. Handled here rather than in Draw so the
         // click is swallowed before any screen hit-tests it.
         if (!_showSettings && !_showHelp && !_swallowInput && _clicked
-            && _unlockShowing.Length == 0
             && _guideStep is { } closable && Tutorial.HasGuidance(closable)
             && GuideCloseRect(GuideBannerRect(closable)).Contains(ChromeMouse))
         {
@@ -1916,6 +2046,23 @@ public class Game1 : Game
             _sound.Play("sfx_click", 0.6f);
             Save();
             _swallowInput = true;
+        }
+
+        // THE FIRST-OPEN BANNER at the top of a screen closes the same way, and remembers itself in the
+        // save. A click anywhere else on the banner is spent too — it sits over the screen's own
+        // controls, and a click that closed nothing must not press a TRAIN button underneath.
+        if (!_showSettings && !_showHelp && !_swallowInput && _clicked
+            && ScreenBannerShowing() is { } banner)
+        {
+            var rect = ScreenBannerRect(banner);
+            if (GuideCloseRect(rect).Contains(ChromeMouse))
+            {
+                _explained.Add(banner.Key);
+                _sound.Play("sfx_click", 0.6f);
+                Save();
+                _swallowInput = true;
+            }
+            else if (rect.Contains(ChromeMouse)) _swallowInput = true;
         }
 
         // THE ATTUNEMENT holds the door — and so do the vault's modals (the trader stall and the
@@ -2454,78 +2601,42 @@ public class Game1 : Game
 
 
     /// <summary>
-    /// Notice anything that just opened, and queue its explanation.
+    /// Queue a notice toast: two lines, "HEAD\nDETAIL", shown at the top for a few seconds, never modal.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// Called every frame from Update, and cheap: it is two struct comparisons and an enum walk. The
-    /// alternative — firing the announcement from each of the places that CAUSE an unlock (the conquest
-    /// branch, the chest drop, the item pickup) — is how a gate ends up with three call sites and one of
-    /// them missing, which is precisely the bug species this project keeps shipping.
-    /// </para>
-    /// <para>
-    /// The FIRST frame seeds the baseline instead of announcing. Without that, every existing player
-    /// would be handed nine explanation panels in a row on the launch after this shipped.
-    /// </para>
+    /// Quest completions and champion joins used to be modal panels in the same queue as the unlock
+    /// explanations, and they were the worst of it: a panel about a champion, over the Forge, while the
+    /// player was deciding what to salvage. They are a line at the top now. Queued rather than
+    /// replaced, so two events on one frame (a quest finishing is what frees a quest-gated champion)
+    /// are both read.
     /// </remarks>
-    private void NoticeUnlocks()
+    private void PostNotice(string head, string detail) => _noticeQueue.Enqueue(head + "\n" + detail);
+
+    /// <summary>The activity the screen on top belongs to — what a first-open banner would be about.</summary>
+    private Activity ScreenActivity() => NavActivity[NavActive()];
+
+    /// <summary>The banner owed at the top of the current screen, or null. Never during the intro.</summary>
+    private ScreenBanner? ScreenBannerShowing()
     {
-        // NOT UNDER THE CAPTURE RIG. RH_SHOT deliberately never reads the save, so every shot looks like
-        // a first launch — and since the fixtures also grant mastery, items and conquests to pose their
-        // screens, the panel fires over the exact thing each fixture exists to photograph. The rig is
-        // not a player. A fixture that wants to pose the panel can still enqueue one itself.
-        if (Environment.GetEnvironmentVariable("RH_SHOT") is not null) return;
+        if (_showTitle || _introActive || _showHelp || _showSettings) return null;
+        // The expedition LOG is a full-screen read over the hunt; a banner over it would be about a
+        // screen the player is not looking at.
+        if (_expedition.LogOpen) return null;
+        return Onboarding.BannerFor(ScreenActivity(), GuideUnlockFacts(), _explained);
+    }
 
-        var now = GuideUnlockFacts();
-        var slots = Unlocks.SkillSlots(now);
-
-        if (_lastSkillSlots < 0)
-        {
-            // THE HUNT'S OWN EXPLANATION HAD NO WAY TO BE SHOWN. Activity.Hunt is open unconditionally,
-            // so it is open in both `before` and `now` on every frame and NewlyOpened never yields it —
-            // meaning the single best onboarding paragraph in the codebase ("your champion fights on its
-            // own, forever, without you… you never click an attack") ran for nobody. The seeding guard
-            // below is correct and necessary; Hunt just needs to be announced outside it, once, to
-            // someone who has never played.
-            if (!_hasSave)
-            {
-                _unlockQueue.Enqueue((Unlocks.Headline(Activity.Hunt), Unlocks.Explain(Activity.Hunt)));
-                // MAP and ROSTER opened from birth (playtest: "let the player window-shop"), which
-                // means NewlyOpened can never yield them — announced here instead, once, like Hunt.
-                // The drip (one panel, then a gap) keeps the three from stacking.
-                _unlockQueue.Enqueue((Unlocks.Headline(Activity.Map), Unlocks.Explain(Activity.Map)));
-                _unlockQueue.Enqueue((Unlocks.Headline(Activity.Roster), Unlocks.Explain(Activity.Roster)));
-            }
-
-            _lastUnlockFacts = now;
-            _lastSkillSlots = slots;
-            return;
-        }
-
-        foreach (var opened in Unlocks.NewlyOpened(_lastUnlockFacts, now))
-            _unlockQueue.Enqueue((Unlocks.Headline(opened), Unlocks.Explain(opened)));
-
-        for (var slot = _lastSkillSlots + 1; slot <= slots; slot++)
-            if (Unlocks.SkillSlotNote(slot) is { Length: > 0 } note)
-                _unlockQueue.Enqueue(("A NEW SKILL SLOT", note));
-
-        _lastUnlockFacts = now;
-        _lastSkillSlots = slots;
-
-        // One at a time, only while the player is not already reading one, and never sooner than the
-        // gap after the last one was dismissed (UnlockPanelGapSeconds) — panels drip, they do not
-        // stack. Delayed, never lost: everything stays queued until its turn.
-        if (_unlockShowing.Length == 0 && _unlockCooldown <= 0f && _unlockQueue.Count > 0)
-        {
-            (_unlockHeadline, _unlockShowing) = _unlockQueue.Dequeue();
-            _sound.PlayFirst(0.9f, "sfx_levelup", "sfx_click");
-
-            // SWALLOW THIS FRAME TOO. _swallowInput is computed near the top of Update, ~40 lines before
-            // this method runs, so on the frame a panel first appears the flag was still false and the
-            // panel drew over live, clickable chrome. Whatever the player happened to be clicking when
-            // the unlock fired went through underneath it.
-            _swallowInput = true;
-        }
+    /// <summary>End the intro — finished or skipped — and remember that in the save.</summary>
+    /// <remarks>
+    /// The Hunt's explanation is the intro, so the Hunt is marked explained here; nothing else is,
+    /// because the intro only said the other screens EXIST. Their own banners still wait on them.
+    /// </remarks>
+    private void EndIntro()
+    {
+        _introActive = false;
+        _introSeen = true;
+        _explained.Add(Onboarding.ScreenKey(Activity.Hunt));
+        _visited.Add(Activity.Hunt);
+        Save();
     }
 
 
@@ -2548,16 +2659,21 @@ public class Game1 : Game
     /// of progress the guide was missing.
     /// </para>
     /// <para>
-    /// Drawn beneath the unlock panel and above everything else, and suppressed while that panel is up
-    /// so two pieces of teaching never compete for the same attention.
+    /// Suppressed while the intro is up, so two pieces of teaching never compete for the same
+    /// attention — the intro's last card points at the place this strip will appear.
     /// </para>
     /// </remarks>
     private void DrawGuideBanner()
     {
         if (_showTitle || _showHelp || _showSettings) return;
-        if (_unlockShowing.Length > 0) return;
+        if (_introActive) return;
         if (_guideStep is not { } step || !Tutorial.HasGuidance(step)) return;
+        DrawGuideStrip(step);
+    }
 
+    /// <summary>One guide rung as a strip — the live one, or the intro's preview of what a lesson looks like.</summary>
+    private void DrawGuideStrip(TutorialStep step)
+    {
         var r = GuideBannerRect(step);
         var body = _ui.WrapBig(Tutorial.Body(step), r.Width - 44, UiTypography.Secondary);
 
@@ -2605,52 +2721,233 @@ public class Game1 : Game
                           Color.White * fade, UiTypography.OverlayBody);
     }
 
+    // ── First-open banners ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>A first-open banner's width — a readable line, not the whole content width.</summary>
+    /// <remarks>
+    /// The first cut spanned the content (1700px) and the Stats explanation came out as two lines of
+    /// a hundred and sixty characters each, which nobody reads to the end. 1200 keeps a line near
+    /// the length of the guide strip's and centres the banner under the screen's title.
+    /// </remarks>
+    private const int ScreenBannerWidth = 1200;
+
+    /// <summary>The width a first-open banner wraps its body to — inside the left rule and clear of the ×.</summary>
+    private const int ScreenBannerWrap = ScreenBannerWidth - 44 - 40;
+
     /// <summary>
-    /// The explanation panel for something that just opened. Modal, and dismissed by the player.
+    /// Where a first-open banner sits: under the screen's title band, centred over the content.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// Deliberately NOT a timed toast. The brief was that every activity be explained in detail, and a
-    /// paragraph that slides away on a timer is a paragraph nobody finishes — the player is watching a
-    /// fight, the text is competing with it, and the one thing they needed to read is the thing that
-    /// left. It waits to be dismissed.
-    /// </para>
-    /// <para>
-    /// Sized from the WRAPPED line count rather than a fixed height, because these strings differ by a
-    /// factor of two in length and a fixed box would either clip the Build explanation or leave the
-    /// Roster one floating in a mostly-empty panel. Wrapping is what makes it possible to write these
-    /// as prose at all.
-    /// </para>
+    /// y = 86 is just under the currency capsules, so the banner covers neither them nor the settings
+    /// gear — both are live chrome, and a banner over a button is a button the player cannot press.
+    /// It does cover the top of the screen's own content, which is the point: it is that screen's
+    /// explanation, and it is closed with one click.
     /// </remarks>
-    private void DrawUnlockPanel()
+    private Rectangle ScreenBannerRect(ScreenBanner banner)
     {
-        if (_unlockShowing.Length == 0) return;
+        var body = _ui.WrapBig(banner.Body, ScreenBannerWrap, UiTypography.Secondary);
+        var x = NavRailWidth + (1920 - NavRailWidth - ScreenBannerWidth) / 2;
+        return new Rectangle(x, 86, ScreenBannerWidth, 58 + body.Count * 22);
+    }
 
-        const int pad = 44;
-        const int wrapWidth = 900;
-        var lines = _ui.WrapBig(_unlockShowing, wrapWidth, UiTypography.Body);
-        var height = pad * 2 + 58 + lines.Count * 30 + 44;
-        var box = new Rectangle((1920 - (wrapWidth + pad * 2)) / 2, Math.Max(80, (1080 - height) / 2),
-                                wrapWidth + pad * 2, height);
+    /// <summary>
+    /// The explanation of the screen on top, the first time it is opened — same visual language as the
+    /// guide strip, and closed the same way.
+    /// </summary>
+    /// <remarks>
+    /// Not a timed toast, for the reason the old panel was not one: these are paragraphs, and a
+    /// paragraph on a timer is a paragraph nobody finishes. Not modal either, for the reason the old
+    /// panel was removed: it is on the screen it is about, and the player came here on purpose.
+    /// </remarks>
+    private void DrawScreenBanner()
+    {
+        if (ScreenBannerShowing() is not { } banner) return;
 
-        _ui.Fill(_batch, new Rectangle(0, 0, 1920, 1080), new Color(0x05, 0x03, 0x0A) * 0.72f);
-        _ui.Fill(_batch, box, new Color(0x15, 0x0E, 0x24));
-        _ui.Fill(_batch, new Rectangle(box.X, box.Y, box.Width, 4), NavGold);
-        _ui.Fill(_batch, new Rectangle(box.X, box.Bottom - 2, box.Width, 2), NavGem * 0.5f);
+        var r = ScreenBannerRect(banner);
+        var body = _ui.WrapBig(banner.Body, ScreenBannerWrap, UiTypography.Secondary);
 
-        _ui.TextBig(_batch, "NEWLY OPEN", box.X + pad, box.Y + 20, NavGem, UiTypography.Secondary);
-        _ui.TextBig(_batch, _ui.ShortenBig(_unlockHeadline, wrapWidth, UiTypography.PanelTitle),
-                    box.X + pad, box.Y + 46, NavGold, UiTypography.PanelTitle);
+        _ui.Fill(_batch, r, new Color(0x10, 0x0D, 0x18, 0xEE));
+        _ui.Fill(_batch, new Rectangle(r.X, r.Y, 5, r.Height), NavGold);
 
-        var y = box.Y + pad + 58;
-        foreach (var line in lines)
+        _ui.TextBig(_batch, banner.Title, r.X + 22, r.Y + 14, NavGold, UiTypography.Body);
+        var ty = r.Y + 44;
+        foreach (var line in body)
         {
-            _ui.TextBig(_batch, line, box.X + pad, y, new Color(0xD8, 0xD2, 0xE4), UiTypography.Body);
-            y += 30;
+            _ui.TextBig(_batch, line, r.X + 22, ty, UiKit.Vellum, UiTypography.Secondary);
+            ty += 22;
         }
 
-        _ui.TextCenterBig(_batch, "CLICK OR PRESS ANY KEY TO CONTINUE", box.Center.X, box.Bottom - 34,
-                          NavLabel, UiTypography.Secondary);
+        var close = GuideCloseRect(r);
+        var hover = close.Contains(ChromeMouse);
+        _ui.Fill(_batch, close, hover ? new Color(0x4A, 0x28, 0x30) : new Color(0x22, 0x1A, 0x30));
+        _ui.TextCenterBig(_batch, "×", close.Center.X, close.Y + 4, hover ? Color.White : UiKit.Vellum, 20);
+    }
+
+    // ── Notice toasts ──────────────────────────────────────────────────────────────────────────
+
+    /// <summary>A quest finished, a champion joined: two lines at the top, fading on their own clock.</summary>
+    /// <remarks>
+    /// The boot toast's shape and place, because it IS the same kind of thing — news, not a lesson.
+    /// It steps down under the boot toast on the one occasion both are up (a quest that was already
+    /// satisfied when the save loaded). Never modal, never reads input.
+    /// </remarks>
+    private void DrawNoticeToast()
+    {
+        if (_noticeTimer <= 0f || _notice.Length == 0) return;
+        if (_showTitle || _showHelp || _showSettings) return;
+
+        var fade = Math.Clamp(_noticeTimer / 1.0f, 0f, 1f);
+        var parts = _notice.Split('\n');
+        var y = _bootTimer > 0f && _bootMessage.Length > 0 && !_introActive ? 284 : 176;
+        var r = new Rectangle(560, y, 800, 96);
+        _ui.PanelNine(_batch, r, "ui_panel_modal_wide", tint: Color.White * fade);
+        _ui.TextCenterBig(_batch, _ui.ShortenBig(parts[0], r.Width - 90, UiTypography.OverlayTitle),
+                          r.Center.X, r.Y + 22, NavGold * fade, UiTypography.OverlayTitle);
+        if (parts.Length > 1)
+            _ui.TextCenterBig(_batch, _ui.ShortenBig(parts[1], r.Width - 90, UiTypography.OverlayBody),
+                              r.Center.X, r.Y + 56, Bone * fade, UiTypography.OverlayBody);
+    }
+
+    // ── The intro ──────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The spotlight cut-outs for an intro card, in 1920×1080 chrome space. The first is the one the
+    /// caption card is placed beside.
+    /// </summary>
+    /// <remarks>
+    /// Hand-measured against the fight screen's real layout (SoloExpeditionScreen: the hunter panel at
+    /// (196,20,420,205), the stage header at (630,18,560,135), the SKILLS rail at (190,236,286,350) for
+    /// one skill, the right column from x 1570, the champion in ChampBox, the pack right of it) with a
+    /// margin of about ten pixels so the frame art is inside the light, not cut by it. A fresh save is
+    /// the only state this ever draws over, so the one-skill rail height is the right one.
+    /// </remarks>
+    private static Rectangle[] IntroSpotlights(IntroTarget target) => target switch
+    {
+        IntroTarget.Champion => new[] { new Rectangle(530, 560, 460, 450) },
+        IntroTarget.Enemies => new[] { new Rectangle(880, 560, 680, 450), new Rectangle(620, 8, 580, 152) },
+        IntroTarget.HunterHud => new[] { new Rectangle(186, 10, 440, 225) },
+        IntroTarget.CurrencyPills => new[] { new Rectangle(1440, 4, 400, 84) },
+        IntroTarget.Skills => new[] { new Rectangle(180, 226, 306, 370) },
+        IntroTarget.RightColumn => new[] { new Rectangle(1560, 100, 350, 690) },
+        IntroTarget.NavRail => new[] { new Rectangle(0, 0, 184, 1080) },
+        IntroTarget.GuideStrip => new[] { new Rectangle(456, 936, 1008, 130) },
+        _ => new[] { new Rectangle(0, 0, 1920, 1080) },
+    };
+
+    /// <summary>Darken the whole canvas except the given holes.</summary>
+    /// <remarks>
+    /// Cut into horizontal bands at every hole edge; inside each band, fill the x-runs no hole covers.
+    /// One hole gives the four rectangles around it; two holes give a few more. Nothing is drawn twice,
+    /// so the scrim's alpha is uniform — a second layer over a corner would read as a darker patch.
+    /// </remarks>
+    private void DrawScrimAround(IReadOnlyList<Rectangle> holes, Color scrim)
+    {
+        var edges = new SortedSet<int> { 0, 1080 };
+        foreach (var h in holes)
+        {
+            edges.Add(Math.Clamp(h.Top, 0, 1080));
+            edges.Add(Math.Clamp(h.Bottom, 0, 1080));
+        }
+        var ys = edges.ToList();
+        for (var i = 0; i + 1 < ys.Count; i++)
+        {
+            int y0 = ys[i], y1 = ys[i + 1];
+            var x = 0;
+            foreach (var h in holes.Where(h => h.Top <= y0 && h.Bottom >= y1).OrderBy(h => h.Left))
+            {
+                if (h.Left > x) _ui.Fill(_batch, new Rectangle(x, y0, h.Left - x, y1 - y0), scrim);
+                x = Math.Max(x, h.Right);
+            }
+            if (x < 1920) _ui.Fill(_batch, new Rectangle(x, y0, 1920 - x, y1 - y0), scrim);
+        }
+    }
+
+    /// <summary>A thin frame just outside a rectangle.</summary>
+    private void IntroOutline(Rectangle r, int t, Color c)
+    {
+        _ui.Fill(_batch, new Rectangle(r.X - t, r.Y - t, r.Width + 2 * t, t), c);
+        _ui.Fill(_batch, new Rectangle(r.X - t, r.Bottom, r.Width + 2 * t, t), c);
+        _ui.Fill(_batch, new Rectangle(r.X - t, r.Y, t, r.Height), c);
+        _ui.Fill(_batch, new Rectangle(r.Right, r.Y, t, r.Height), c);
+    }
+
+    /// <summary>
+    /// Where the caption card goes: beside the spotlight, on the first side it fits without covering it.
+    /// </summary>
+    /// <remarks>
+    /// Below, then right, then left, then above. Below first because a card under the thing it names
+    /// reads as a label; the others are for holes at an edge. A candidate that would leave the canvas
+    /// vertically is rejected outright; one that runs off the sides is pulled in (clear of the nav rail)
+    /// and then checked against every hole, so the card can never sit on the thing it is pointing at.
+    /// </remarks>
+    private static Rectangle IntroCardRect(IReadOnlyList<Rectangle> holes, int width, int height)
+    {
+        const int gap = 28;
+        var a = holes[0];
+        var candidates = new[]
+        {
+            new Point(a.Center.X - width / 2, a.Bottom + gap),
+            new Point(a.Right + gap, a.Center.Y - height / 2),
+            new Point(a.Left - gap - width, a.Center.Y - height / 2),
+            new Point(a.Center.X - width / 2, a.Top - gap - height),
+        };
+        foreach (var p in candidates)
+        {
+            if (p.Y < 8 || p.Y + height > 1072) continue;
+            var r = new Rectangle(Math.Clamp(p.X, NavRailWidth + 20, 1900 - width), p.Y, width, height);
+            if (holes.Any(h => h.Intersects(r))) continue;
+            return r;
+        }
+        return new Rectangle(1900 - width, 1072 - height, width, height);
+    }
+
+    /// <summary>
+    /// The click-through intro: the fight runs on underneath, one region at a time is lit, and a card
+    /// beside it says what that region is. A click or any key advances; Escape skips the rest.
+    /// </summary>
+    /// <remarks>
+    /// The only full-screen modal left in the game, and it runs exactly once. Drawn last of the chrome
+    /// so the scrim covers the rail too — one of its cards is about the rail.
+    /// </remarks>
+    private void DrawIntro()
+    {
+        if (!_introActive) return;
+
+        var stepNo = Math.Clamp(_introStep, 0, Onboarding.Intro.Count - 1);
+        var step = Onboarding.Intro[stepNo];
+        var holes = IntroSpotlights(step.Target);
+
+        // The last card points at where lessons appear — so a lesson appears there. It is the first
+        // rung, the very strip that will be standing in that light when the intro ends: the light
+        // lifts and nothing has moved. (The live strip itself is suppressed while the intro is up.)
+        if (step.Target == IntroTarget.GuideStrip) DrawGuideStrip(TutorialStep.Watch);
+
+        DrawScrimAround(holes, new Color(0x05, 0x03, 0x0A) * 0.74f);
+        foreach (var h in holes) IntroOutline(h, 3, NavGold);
+
+        const int width = 560, pad = 24;
+        var lines = _ui.WrapBig(step.Body, width - pad * 2, UiTypography.Body);
+        var height = pad + 32 + 8 + lines.Count * 28 + 14 + 24 + pad;
+        var card = IntroCardRect(holes, width, height);
+
+        _ui.Fill(_batch, card, new Color(0x15, 0x0E, 0x24, 0xF6));
+        _ui.Fill(_batch, new Rectangle(card.X, card.Y, card.Width, 4), NavGold);
+        _ui.Fill(_batch, new Rectangle(card.X, card.Bottom - 2, card.Width, 2), NavGem * 0.5f);
+
+        _ui.TextBig(_batch, step.Title, card.X + pad, card.Y + pad, NavGold, UiTypography.PanelTitle);
+        _ui.TextRightBig(_batch, $"{stepNo + 1} / {Onboarding.Intro.Count}", card.Right - pad, card.Y + pad + 5,
+                         NavLabel, UiTypography.Secondary);
+
+        var y = card.Y + pad + 32 + 8;
+        foreach (var line in lines)
+        {
+            _ui.TextBig(_batch, line, card.X + pad, y, new Color(0xD8, 0xD2, 0xE4), UiTypography.Body);
+            y += 28;
+        }
+
+        var last = stepNo + 1 >= Onboarding.Intro.Count;
+        _ui.TextBig(_batch, last ? "CLICK TO BEGIN" : "CLICK TO CONTINUE  ·  ESC SKIPS",
+                    card.X + pad, card.Bottom - pad - 20, NavGem, UiTypography.Secondary);
     }
 
     /// <summary>Where a region sits on the world chain. The curve itself lives in Core/RegionLadder.</summary>
@@ -2743,7 +3040,7 @@ public class Game1 : Game
             {
                 _characters.CompleteQuest(done.Id);
                 // WAS _bootMessage, WHICH IS A BOOT-ONLY CHANNEL. See the champion block below.
-                _unlockQueue.Enqueue(("QUEST COMPLETE", $"{done.Name} — {done.Demand}"));
+                PostNotice("QUEST COMPLETE", $"{done.Name} — {done.Demand}");
                 Save();
             }
 
@@ -2761,14 +3058,15 @@ public class Game1 : Game
         // only — the save carries just the active id — so on the FIRST gameplay frame of every launch
         // Refresh re-reports every champion the player already owns, and the last one clobbered the
         // WELCOME BACK offline summary with a false "X JOINS YOU". _rosterBaselined absorbs that first
-        // pass silently, the same way NoticeUnlocks seeds its own baseline.
+        // pass silently, the same way SeedExplained settles what a returning player already knows.
         foreach (var got in _characters.Refresh(_world.ConqueredIds))
         {
             if (!_rosterBaselined) continue;
-            _unlockQueue.Enqueue(($"{got.Name} JOINS YOU",
-                                  $"{got.PassiveName} — {got.PassiveText}\n\n"
-                                  + "Switch champion on the ROSTER (R). Nothing resets when you do: both "
-                                  + "trees, your gear, your Gleam and the Warren are shared."));
+            // A toast, and a NEW mark on the ROSTER tile that stays until the roster is opened. The
+            // champion's power and the "nothing resets" reassurance live on the roster card itself,
+            // which is where a player who follows the mark will read them.
+            PostNotice($"{got.Name.ToUpperInvariant()} JOINS YOU", "SWITCH CHAMPION ON THE ROSTER SCREEN");
+            _rosterNews = true;
         }
         _rosterBaselined = true;
         _expedition.Character = _characters.Active;
@@ -2779,9 +3077,8 @@ public class Game1 : Game
         // bought and never granted — the shape of the failure this codebase keeps repeating.
         _loadout.KeystoneCapacity = DustEffects.KeystoneSockets(_dust);
         ApplySkillCapacity();
-        // Sits immediately after the capacity is applied, so a slot the player just earned is announced
-        // on the same frame it becomes usable rather than the frame after.
-        NoticeUnlocks();
+        // (A slot the player just earned is not announced here, or anywhere: the BUILD tile derives its
+        // NEW mark from the slot count and the explained list every frame — see Onboarding.IsNew.)
         _forge.AutoMergeOnOpen = DustEffects.AutoMergeAfterRuns(_dust);
         var scale = CorruptionScaling.HealthMultiplier(_world.CorruptionTier);
         var mod = RegionModifiers.For(_activeRegion);   // the region's themed combat twist (Map variety)
@@ -2971,6 +3268,9 @@ public class Game1 : Game
     private void DrawBootToast()
     {
         if (_bootTimer <= 0f || _bootMessage.Length == 0) return;
+        // The first-session nudge ("your champion is already fighting") is what the intro now says in
+        // eight cards; under the intro's scrim it would be a dim duplicate. Its clock still runs.
+        if (_introActive) return;
         var fade = Math.Clamp(_bootTimer / 1.2f, 0f, 1f);   // fade over the last ~1.2s
         // Rev 4 §18.4: a FIXED two-line welcome-back toast at (590,165,740,82) — never a full-width band,
         // never ellipsized. Line 1 (duration) at OverlayTitle, line 2 (haul) at OverlayBody. The message is
@@ -3219,10 +3519,12 @@ public class Game1 : Game
 
         DrawBootToast();
         DrawGuideBanner();
+        DrawScreenBanner();
         DrawLockedToast();
-        // LAST of the chrome, so the explanation of a thing that just opened sits over everything —
-        // including the nav rail it is usually talking about.
-        DrawUnlockPanel();
+        DrawNoticeToast();
+        // LAST of the chrome, so the intro's scrim and spotlight sit over everything — including the
+        // nav rail one of its cards is about.
+        DrawIntro();
 
         _batch.End();
 
@@ -4153,6 +4455,10 @@ public class Game1 : Game
         // invisible, and the player's first click on returning answered a dialog they had forgotten.
         _forge.CancelConfirm();
         _stats.CancelConfirm();   // an armed RESET ALL TRAINING must not survive leaving the screen
+        // Looked at: the tile's NEW mark goes (its banner, if any, waits on the screen until closed),
+        // and the roster's "someone joined" mark is satisfied by a visit.
+        _visited.Add(NavActivity[i]);
+        if (NavActivity[i] == Activity.Roster) _rosterNews = false;
         // BUILD and MASTERY are two doors into one screen, so the tile also sets which VIEW it opens on.
         // Without that line the rail would be lying: pressing MASTERY while the overview was last open
         // would show the overview, and the tile would look broken rather than the state being stale.
@@ -4240,6 +4546,7 @@ public class Game1 : Game
         _ui.Fill(_batch, new Rectangle(NavRailWidth - 3, 0, 3, 1080), NavGem * 0.4f);
 
         var active = NavActive();
+        var navFacts = GuideUnlockFacts();   // once per frame, not once per tile
         for (var i = 0; i < Nav.Length; i++)
         {
             var r = NavHexRect(i);
@@ -4284,6 +4591,25 @@ public class Game1 : Game
                 _ui.TextCenterBig(_batch, _ui.ShortenBig(Unlocks.Requirement(NavActivity[i]), NavRailWidth - 24, UiTypography.Secondary),
                                   r.Center.X, r.Bottom - 16, NavGem * 0.8f, UiTypography.Secondary);
 
+
+            // A GOLD "NEW" MARK on a tile that is open with something unread on it — the quiet
+            // replacement for the modal panel that used to announce every opening. On the LEFT of
+            // the tile, because the VAULT's red chest count owns the right, and both can be true of
+            // the VAULT on the frame it opens. Never on the lit tile: the player is already there, and
+            // the banner at the top of that screen is the mark's payload. A tile visited this session
+            // drops its mark even with the banner still open — the mark means "you have not looked".
+            var activity = NavActivity[i];
+            var isNew = !on && unlocked
+                        && ((Onboarding.IsNew(activity, navFacts, _explained) && !_visited.Contains(activity))
+                            || (activity == Activity.Roster && _rosterNews));
+            if (isNew)
+            {
+                var mark = new Rectangle(r.X + 10, r.Y + 14, 50, 26);
+                _ui.Fill(_batch, mark, NavGold);
+                _ui.Fill(_batch, new Rectangle(mark.X, mark.Y, mark.Width, 3), new Color(0xFF, 0xE0, 0xA0));
+                _ui.TextCenterBig(_batch, "NEW", mark.Center.X, mark.Y + 4, new Color(0x2A, 0x1C, 0x08),
+                                  UiTypography.Secondary);
+            }
 
             // UNOPENED CHESTS, as a count on the VAULT tile — the page chests actually live on.
             //

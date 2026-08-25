@@ -155,6 +155,24 @@ public sealed record SaveGame
     /// </remarks>
     public List<string> DismissedGuideRungs { get; init; } = new();
 
+    /// <summary>Has the click-through intro been finished or skipped? False on every older save.</summary>
+    /// <remarks>
+    /// False alone does not mean "show it": a save from before the intro existed is false too, and
+    /// <c>Onboarding.IntroDue</c> reads a cleared wave as having seen it. Default-false, no version bump.
+    /// </remarks>
+    public bool IntroSeen { get; init; }
+
+    /// <summary>
+    /// Screens whose first-open explanation the player has closed, as <c>Activity</c> NAMES — plus
+    /// <c>SkillSlotN</c> entries for the skill-slot notes shown on the BUILD screen.
+    /// </summary>
+    /// <remarks>
+    /// Names, not ordinals, for the same reason as <see cref="DismissedGuideRungs"/>. Default-empty
+    /// means an older save loads clean; <c>Onboarding.SeedExplained</c> then treats every screen that
+    /// was already open as read, so a returning player is not re-taught the game they have been playing.
+    /// </remarks>
+    public List<string> ExplainedScreens { get; init; } = new();
+
     /// <summary>The champion's recent GLEAM-per-second, so it keeps earning while the game is closed.</summary>
     public float ChampionGleamRate { get; init; }
 
