@@ -749,6 +749,15 @@ public static class SoloBattle
                 // skill that is depends on what the rotation reaches first.
                 if (triggers.Contains(BuildTrigger.LooseAgain)) champ.ReadyAt.Clear();
 
+                // MOMENTUM — every kill takes time off every cooldown. It edits the entries that EXIST
+                // and adds none: a skill with no ReadyAt entry is already ready, and writing one would
+                // turn a refund into a delay. Any kill counts — skill, poison bleed, carried overkill —
+                // because the card says EVERY KILL, and this is read here rather than in the skill loop
+                // so a kill by the auto-swing or a BREAKER spill pays the same as a kill by a cast.
+                if (shape.CooldownRefundOnKillMs > 0)
+                    foreach (var key in champ.ReadyAt.Keys.ToList())
+                        champ.ReadyAt[key] -= shape.CooldownRefundOnKillMs;
+
                 // BREAKER — half of the overkill carries on. The design named a part-break bonus here;
                 // the sim has no part-break model, and this answers the same complaint from inside the
                 // model that exists, because discarded overkill IS the tax a large-hit build pays in a
@@ -1119,6 +1128,25 @@ public static class SoloBattle
 
                 champ.Health -= (int)MathF.Round(taken);
                 events.Add(new BattleEvent(BattleEventKind.EnemyStrike, 0, (int)MathF.Round(taken), ms));
+
+                // THORNS — every biter takes a fraction of its own RAW bite back. Read against the
+                // creature's bite before the champion's mitigation, so PADDING and BULWARK do not
+                // quietly shrink this node — an Endure road whose nodes cancel each other is shorter
+                // than it looks. Landed the way poison lands: not a skill hit (no crit, no hit-size
+                // rule, no Venom feeding itself) and through armour, because a Bruiser is often plated
+                // and a thorn that plate could erase would be dormant in the one band it answers.
+                if (shape.ReflectFraction > 0f)
+                {
+                    for (var ci = 0; ci < creatures.Count; ci++)
+                    {
+                        var biter = creatures[ci];
+                        if (!biter.Alive) continue;
+                        LandOn(biter, biter.Damage * shape.ReflectFraction, ms, fromSkill: false, ignoresArmour: true);
+                    }
+                    // A wave the thorns finished is a clear — unless this same bite finished the
+                    // champion too, in which case the death handling below still has to run.
+                    if (alive == 0 && champ.Alive) return Kill(ms);
+                }
 
                 // DYNAMO — the bite winds the spring.
                 if (chargeLive && triggers.Contains(BuildTrigger.Dynamo) && charge < chargeCap)

@@ -79,6 +79,30 @@ public static class MasteryLayout
 
     private const float SpecialisationOffsetDegrees = 26f;
 
+    /// <summary>
+    /// How far a SPUR reaches out from ring 1, as a fraction of the gap to ring 2.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A spur is a fifth minor that hangs off one of the four, and it must NOT join the ring-1 fan:
+    /// the fan re-spaces when its count changes, which would move the four minors a player has
+    /// memorised, and a spur is a twig off a node, not a fifth petal. So it sits between rings 1 and 2,
+    /// off its parent's outer shoulder, where its wire visibly leaves the parent rather than START.
+    /// </para>
+    /// <para>
+    /// The numbers are placed by clearance, not taste. At 0.52 of the way out and 30° off the spine the
+    /// spur clears the bridge on the diagonal (0.46 of the radius at 45°) by ~64 world units, the
+    /// outermost ring-2 notable by ~70, and its own parent by ~100 — every neighbour by more than a
+    /// Minor's radius. Push the reach past ~0.65 and it hits the notable; pull the angle past ~36° and
+    /// it hits the bridge. <c>MasteryLayoutTests.test_no_two_nodes_in_the_catalogue_overlap</c> is what
+    /// says so.
+    /// </para>
+    /// </remarks>
+    public const float SpurReach = 0.52f;
+
+    /// <summary>A spur's angle off its branch's spine, in degrees, on the side its parent sits.</summary>
+    public const float SpurOffsetDegrees = 30f;
+
     /// <summary>The four branches are a CROSS: Weight up, Spread down, Tempo right, Endure left.</summary>
     /// <remarks>
     /// The geometry states the design. Weight sits opposite Spread and Tempo opposite Endure because
@@ -201,14 +225,15 @@ public static class MasteryLayout
     /// MOVED the existing ones. A layout key that is right by coincidence is a layout key that breaks
     /// on the first content change.
     ///
-    /// Bridges and specialisations are excluded because neither sits on the spine — each has its own
-    /// placement rule below and its own sibling list.
+    /// Bridges, specialisations and spurs are excluded because none of them sits on the spine — each
+    /// has its own placement rule below and its own sibling list. A spur is ring 1 by price and would
+    /// otherwise re-space the four minors it hangs off.
     /// </remarks>
     private static (int Index, int Count) SpineSibling(MasteryNode n)
     {
         var peers = MasteryCatalog.Nodes
             .Where(x => x.Branch == n.Branch && x.Ring == n.Ring
-                        && x.Link is null && x.Kind != MasteryKind.Specialisation)
+                        && x.Link is null && x.Kind != MasteryKind.Specialisation && !x.Spur)
             .ToList();
         return (Math.Max(0, peers.FindIndex(x => x.Id == n.Id)), Math.Max(1, peers.Count));
     }
@@ -251,6 +276,25 @@ public static class MasteryLayout
             var spread = SpecialisationOffsetDegrees * MathF.PI / 180f;
             var sOffset = sCount <= 1 ? -spread : (sIdx - (sCount - 1) / 2f) * 2f * spread;
             return Polar(WorldRadius * SpecialisationFraction, baseAngle + sOffset);
+        }
+
+        if (node.Spur)
+        {
+            // Off the parent's OUTER shoulder: the side of the spine the parent already sits on, so
+            // the wire reads as leaving that minor and not as crossing the fan. The side is read from
+            // the parent's actual position rather than its index, so it stays right if the fan is
+            // ever re-ordered.
+            var parent = node.Prereqs.Select(MasteryCatalog.ById).FirstOrDefault(p => p is not null);
+            var parentAt = parent is null
+                ? Polar(RingRadius(1, maxRing), baseAngle)
+                : PositionOf(parent, maxRing);
+            var parentAngle = MathF.Atan2(parentAt.Y, parentAt.X);
+            var side = MathF.IEEERemainder(parentAngle - baseAngle, 2f * MathF.PI) < 0f ? -1f : 1f;
+
+            var r1 = RingRadius(1, maxRing);
+            var r2 = RingRadius(2, maxRing);
+            return Polar(r1 + SpurReach * (r2 - r1),
+                         baseAngle + side * SpurOffsetDegrees * MathF.PI / 180f);
         }
 
         var (idx, count) = SpineSibling(node);

@@ -127,6 +127,18 @@ public sealed record SkillShape
     /// <summary>CASCADE — after a kill, the next activation strikes every living creature.</summary>
     public bool CascadeOnKill { get; init; }
 
+    /// <summary>
+    /// MOMENTUM — every kill takes this many milliseconds off every skill's remaining cooldown.
+    /// </summary>
+    /// <remarks>
+    /// Action economy that is FED BY KILLS, which is what makes it a Spread node and not a rate node: a
+    /// Swarm of eight is eight refunds and a single Bruiser is one, so the same node is a torrent in the
+    /// band the branch answers and a trickle in the band it does not. The sim reads it in LandOn at the
+    /// moment a creature falls — any kill, skill or poison or carried overkill, because the card says
+    /// EVERY KILL and a rule with an unstated exception is the kind this project keeps finding dormant.
+    /// </remarks>
+    public int CooldownRefundOnKillMs { get; init; }
+
     // ── CONDITIONAL DAMAGE. Each one is a shape: it asks a question about the target or the clock. ──
 
     /// <summary>Multiplier on the first hit each creature takes (FOLLOW THROUGH, OPENER, ALPHA).</summary>
@@ -208,6 +220,19 @@ public sealed record SkillShape
     /// <summary>FORTIFY — the first bite of each wave deals nothing.</summary>
     public bool FirstBiteFree { get; init; }
 
+    /// <summary>
+    /// THORNS — every creature that bites the champion takes this fraction of its own bite back.
+    /// </summary>
+    /// <remarks>
+    /// The Endure answer that SCALES WITH THE THREAT: a Bruiser's whole identity is the size of its
+    /// bite, so the harder it bites the more it pays, while a Swarm of nibblers pays almost nothing per
+    /// head. Read against the creature's RAW bite, before the champion's own mitigation — otherwise every
+    /// other Endure node would quietly shrink this one, and a branch whose nodes cancel each other is a
+    /// branch with fewer nodes than it says. The return lands as a non-skill hit that ignores armour,
+    /// the way poison does, so it can never feed the tree's own hit-size rules or be eaten by plate.
+    /// </remarks>
+    public float ReflectFraction { get; init; }
+
     /// <summary>SECOND WIND — fraction of maximum health healed on clearing a wave.</summary>
     public float HealOnClear { get; init; }
 
@@ -280,6 +305,7 @@ public sealed record SkillShape
             RicochetChance = Math.Max(a.RicochetChance, b.RicochetChance),
             RicochetFraction = Math.Max(a.RicochetFraction, b.RicochetFraction),
             CascadeOnKill = a.CascadeOnKill || b.CascadeOnKill,
+            CooldownRefundOnKillMs = a.CooldownRefundOnKillMs + b.CooldownRefundOnKillMs,
 
             FirstHitMultiplier = a.FirstHitMultiplier * b.FirstHitMultiplier,
             LaterHitMultiplier = a.LaterHitMultiplier * b.LaterHitMultiplier,
@@ -309,6 +335,7 @@ public sealed record SkillShape
             DamageTaken = a.DamageTaken * b.DamageTaken,
             AbsorbAtLowHealth = Math.Max(a.AbsorbAtLowHealth, b.AbsorbAtLowHealth),
             FirstBiteFree = a.FirstBiteFree || b.FirstBiteFree,
+            ReflectFraction = a.ReflectFraction + b.ReflectFraction,
             HealOnClear = a.HealOnClear + b.HealOnClear,
             BetweenWaveRegen = a.BetweenWaveRegen + b.BetweenWaveRegen,
             FullHealBetweenWaves = a.FullHealBetweenWaves || b.FullHealBetweenWaves,

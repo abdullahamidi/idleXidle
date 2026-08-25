@@ -234,6 +234,46 @@ public class MasteryLayoutTests
     }
 
     [Fact]
+    public void test_a_spur_hangs_off_its_parent_between_ring_one_and_ring_two()
+    {
+        // THE SIDEWAYS GROWTH THE FAN COULD NOT TAKE. A fifth minor placed in the ring-1 fan would
+        // re-space the four a player has memorised (test_a_second_ring... guards the KEY, not the
+        // count). So a spur is placed off its parent's outer shoulder instead: further out than ring
+        // 1, short of ring 2, on the side of the spine its parent already sits — and nowhere near the
+        // bridge on the diagonal. Stated as margins so the next person to move SpurReach can see how
+        // much room there is.
+        var spurs = MasteryCatalog.Nodes.Where(n => n.Spur).ToList();
+        Assert.Equal(4, spurs.Count);
+
+        var r1 = MasteryLayout.RingRadius(1, MasteryLayout.MaxRing);
+        var r2 = MasteryLayout.RingRadius(2, MasteryLayout.MaxRing);
+
+        foreach (var spur in spurs)
+        {
+            var at = MasteryLayout.PositionOf(spur);
+            var radius = MathF.Sqrt(at.X * at.X + at.Y * at.Y);
+            Assert.True(radius > r1 + 100f && radius < r2 - 100f,
+                $"{spur.Id} sits at radius {radius:N0}; ring 1 is {r1:N0} and ring 2 is {r2:N0}.");
+
+            // Same side of the spine as its parent.
+            var parent = MasteryCatalog.ById(spur.Prereqs.Single())!;
+            var parentAt = MasteryLayout.PositionOf(parent);
+            var axis = MasteryLayout.AngleOf(spur.Branch);
+            float Side(TreePoint p) => MathF.Sign(MathF.IEEERemainder(MathF.Atan2(p.Y, p.X) - axis, 2f * MathF.PI));
+            Assert.Equal(Side(parentAt), Side(at));
+
+            // The four minors did not move: they are placed from their own ring's population, spur excluded.
+            var fan = MasteryCatalog.Nodes.Where(n => n.Branch == spur.Branch && n.Kind == MasteryKind.Minor && !n.Spur).ToList();
+            Assert.Equal(4, fan.Count);
+
+            // And the wire to the parent is short enough to read as a twig, not a jump across rings.
+            var wire = Distance(at, parentAt);
+            _out.WriteLine($"{spur.Id}: radius {radius:N0}, {wire:N0} from {parent.Id}.");
+            Assert.True(wire < r2 - r1, $"{spur.Id} is {wire:N0} from its parent — further than a whole ring.");
+        }
+    }
+
+    [Fact]
     public void test_a_specialisation_is_the_second_largest_node_and_a_bridge_is_not()
     {
         // SIZE IS THIS TREE'S ONLY PRICE TAG, and it was telling the wrong story. Bridge and
