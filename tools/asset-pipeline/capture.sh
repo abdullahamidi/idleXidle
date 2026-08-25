@@ -10,12 +10,21 @@
 #
 # Modes: fight boss expedition forge build character stats warren map dust world
 #        region2 region3 conquered lootforge reforge vow hybrid rig vfx help
-#        buildtree buildzoom itemmenu runlog fightgear traitlit
+#        buildtree buildzoom itemmenu runlog fightgear traitlit intro
 #
 # `buildzoom` takes a third argument: the tree camera's zoom (default 0.95). The
 # node art is thirty pixels across in the 0.30 overview, where a capture can only
 # prove that something was drawn there — 0.55 frames the mastery plaques, 0.95 the
 # minors around the hub.
+#
+# `intro` takes a third argument too: which card of the first-run intro to pose,
+# counted from 1 (default 1). The eight cards each spotlight a different region of
+# the HUNT screen, and the only way to know the light frames the right thing is to
+# look.
+#
+# RH_SHOT_EXPLAIN=Stats,Map (any Activity names, or SkillSlot2..4) leaves those
+# screens' first-open banners OWED under the rig, which otherwise treats everything
+# as already explained so no banner sits over the thing a fixture is photographing.
 MODE="${1:-fight}"
 OUT="${2:-shot_$MODE.png}"
 ZOOM="${3:-}"
