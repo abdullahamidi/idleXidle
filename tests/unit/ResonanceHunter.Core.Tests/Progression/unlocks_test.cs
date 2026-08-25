@@ -134,6 +134,33 @@ public class UnlocksTest
     }
 
     [Fact]
+    public void test_the_traits_explanation_states_purpose_sources_roads_and_permanence()
+    {
+        // Playtest, 2026-08-25: the first explanation of traits must say what they are FOR. Three
+        // things a new player has to leave with — what a trait is, where the points come from, and
+        // that nothing resets — and the sources must be the TRUE ones (Game1.TraitPointsEarned:
+        // conquests, corruption tiers, region mastery levels). Memory Dust no longer buys traits, so
+        // the word may not appear.
+        var text = Unlocks.Explain(Activity.Traits);
+        var headline = Unlocks.Headline(Activity.Traits);
+
+        Assert.Contains("permanent", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("TRAIT POINTS", text);
+        Assert.Contains("conquer", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("corruption", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("mastery", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("four roads", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("capstone", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("never resets", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("dust", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("dust", headline, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PERMANENT", headline);
+        // The old text named the wrong faucet — "going deeper than you ever have" is the mastery
+        // tree's income, not this one's.
+        Assert.DoesNotContain("deeper than you ever have", text);
+    }
+
+    [Fact]
     public void test_the_explanations_are_actually_detailed()
     {
         // The brief was "hepsi detaylı şekilde anlatılmalı" — explained in detail. A one-line tooltip

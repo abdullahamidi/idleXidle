@@ -25,6 +25,9 @@
 # RH_SHOT_EXPLAIN=Stats,Map (any Activity names, or SkillSlot2..4) leaves those
 # screens' first-open banners OWED under the rig, which otherwise treats everything
 # as already explained so no banner sits over the thing a fixture is photographing.
+#
+# `dust` takes the same third argument for the TRAIT tree's camera (its home zoom
+# is about 0.55, fitting the whole tree; 1.2 frames one road with its art readable).
 MODE="${1:-fight}"
 OUT="${2:-shot_$MODE.png}"
 ZOOM="${3:-}"

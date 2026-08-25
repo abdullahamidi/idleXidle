@@ -19,7 +19,7 @@ public class MemoryDustTextTests
     [Fact]
     public void test_memory_dust_text_a_keystone_gate_quotes_the_keystones_own_blurb()
     {
-        // Arrange: THE GLASS ROAD teaches GLASS CANNON, whose blurb is "DOUBLE DAMAGE. HALF HEALTH."
+        // Arrange: KEYSTONE — GLASS CANNON teaches GLASS CANNON, whose blurb is "DOUBLE DAMAGE. HALF HEALTH."
         var gate = Node("ks_glass_cannon");
         var keystone = Keystones.ById(gate.GrantsKeystone)!;
 
@@ -97,6 +97,40 @@ public class MemoryDustTextTests
             Assert.NotEmpty(moved);
             foreach (var m in moved)
                 Assert.Contains($"{MemoryDustText.Percent(m)}%", text);
+        }
+    }
+
+    // ── The sheet: number, cost, prerequisite, permanence ─────────────────────────────────────
+
+    [Fact]
+    public void test_memory_dust_text_sheet_states_the_number_the_cost_the_prerequisite_and_permanence()
+    {
+        // Playtest, 2026-08-25: the detail text must say the number, the cost, what comes first, and
+        // that nothing here ever resets. HARDER HITS II: +6% damage, 3 points, needs BLOOD MAGIC.
+        var node = Node("ruin_edge_2");
+        var sheet = MemoryDustText.Sheet(node);
+
+        Assert.Contains("6% harder", sheet);
+        Assert.Contains("Costs 3 trait points.", sheet);
+        Assert.Contains("You need KEYSTONE — BLOOD MAGIC first.", sheet);
+        Assert.Contains("never resets", sheet);
+        Assert.Contains(MemoryDustText.Permanence, sheet);
+
+        // A root says so; a single point is singular; several prerequisites are listed with "and".
+        Assert.Contains("You need nothing first", MemoryDustText.Sheet(Node("socket_2")));
+        Assert.Equal("Costs 1 trait point.", MemoryDustText.CostSentence(Node("recall_1")));
+        var mark = MemoryDustText.RequiresSentence(Node("attunement"));
+        Assert.StartsWith("You need ", mark);
+        Assert.Contains(" and KEYSTONE SOCKET III first.", mark);
+        foreach (var reqId in Node("attunement").Requires) Assert.Contains(Node(reqId).Name, mark);
+
+        // Every node's sheet carries all four facts, and the permanence line is one plain sentence.
+        foreach (var u in MemoryDustTree.Catalog)
+        {
+            var s = MemoryDustText.Sheet(u);
+            Assert.Contains("Costs ", s);
+            Assert.Contains("You need ", s);
+            Assert.EndsWith(MemoryDustText.Permanence, s);
         }
     }
 

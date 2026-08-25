@@ -357,10 +357,10 @@ public class DustEffectsTests
 
         var tree = new MemoryDustTree();
         tree.SetEarned(5000);
-        // Walk the tree best-first until THE BOUND HAND is owned — the same shape the complete-tree test uses.
+        // Walk the tree best-first until VOWS PAY 25% MORE (artifice_vows) is owned — the same shape the complete-tree test uses.
         for (var i = 0; i < 200 && !tree.Owns("artifice_vows"); i++)
             if (tree.All.FirstOrDefault(u => tree.CanUnlock(u.Id)) is { } next) tree.Purchase(next.Id);
-        Assert.True(tree.Owns("artifice_vows"), "the walk must reach THE BOUND HAND");
+        Assert.True(tree.Owns("artifice_vows"), "the walk must reach VOWS PAY 25% MORE");
         Assert.Equal(1.25f, DustEffects.VowPowerMultiplier(tree));
         Assert.Equal(1.25f, DustEffects.TreeShape(tree).VowPowerMultiplier);
 
