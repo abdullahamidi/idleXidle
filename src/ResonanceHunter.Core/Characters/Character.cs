@@ -78,6 +78,16 @@ public sealed record Character
     /// <summary>The road they were built for, or null for a character who favours none.</summary>
     public Branch? Lean { get; init; }
 
+    /// <summary>
+    /// The ITEM CLASS this champion wears — see <see cref="Economy.ItemClasses"/>. Weapon, helm, chest,
+    /// gloves and boots of another class cannot be worn; charm, ring and focus can always be.
+    /// </summary>
+    /// <remarks>
+    /// Required, not defaulted: a champion whose class was silently WANDERER would wear every weapon
+    /// shape and read as the starter, which is the quiet kind of wrong this codebase is built to avoid.
+    /// </remarks>
+    public required Economy.ItemClass Class { get; init; }
+
     /// <summary>The Form they are better at than you are.</summary>
     public Form? Aptitude { get; init; }
 

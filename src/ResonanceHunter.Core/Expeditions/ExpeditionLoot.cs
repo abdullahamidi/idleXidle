@@ -75,10 +75,14 @@ public static class ExpeditionLoot
     /// Where this boss fell. Decides which slots the drop leans toward and adds the region's own rarity
     /// tilt — the difference between a map that is a difficulty ladder and one that is a set of places.
     /// </param>
+    /// <param name="favouredClass">
+    /// The active champion's item class — four in five class-locked drops are theirs. Null rolls
+    /// uniformly across the five classes.
+    /// </param>
     public static IReadOnlyList<ItemInstance> RollBoss(
         int powerTier, float quality, Random rng, LootTuning? lootTuning = null,
         ExpeditionLootTuning? tuning = null, Automation.Source? element = null, float buildTilt = 1f,
-        string? region = null)
+        string? region = null, Economy.ItemClass? favouredClass = null)
     {
         ArgumentNullException.ThrowIfNull(rng);
         lootTuning ??= LootTuning.Default;
@@ -95,6 +99,7 @@ public static class ExpeditionLoot
                 + profile.RarityTilt,
             Element = element,
             FavouredTypes = profile.Favoured,
+            FavouredClass = favouredClass,
         };
 
         // ONE ROLL, THEN TAKE. This used to run the loop `count` times and add EVERY item each roll

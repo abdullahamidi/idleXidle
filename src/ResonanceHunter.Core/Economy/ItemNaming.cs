@@ -33,8 +33,15 @@ public static class ItemNaming
     public static string? Prefix(ItemInstance? item)
         => GearTraits.TraitOf(item) is { } t ? GearTraits.NameOf(t) : null;
 
-    /// <summary>Which weapon family this item is — stable across its life (InstanceId-derived, ilvl-independent).</summary>
-    public static int WeaponFamilyIndex(ItemInstance item) => (int)(Fnv1a(item.InstanceId + "|fam") % (uint)WeaponFamilies.Length);
+    /// <summary>
+    /// Which weapon family this item is — stable across its life. A weapon minted inside a class
+    /// carries its family on the item (<see cref="ItemInstance.Family"/>); anything older derives it
+    /// from the id, exactly as it always did, so an old bow stays a bow.
+    /// </summary>
+    public static int WeaponFamilyIndex(ItemInstance item)
+        => item.Family is { } f && f >= 0 && f < WeaponFamilies.Length
+            ? f
+            : (int)(Fnv1a(item.InstanceId + "|fam") % (uint)WeaponFamilies.Length);
 
     /// <summary>A stable per-item seed for picking non-weapon thumbnail art — InstanceId-derived, so a
     /// refine (which changes the item level) never shuffles which thumbnail an item shows.</summary>

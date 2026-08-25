@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using ResonanceHunter.Core.Automation;
+using ResonanceHunter.Core.Economy;
 using ResonanceHunter.Core.Loot;
 
 namespace ResonanceHunter.Core.Forging;
@@ -164,11 +165,35 @@ public static class Forge
         var type = MergeRecipe.TypeOf(inputs);
         var element = MergeRecipe.ElementOf(inputs);
 
+        // THE CLASS IS INHERITED, NEVER ROLLED, in the same spirit as the type and the element: the
+        // first input of the product's own type that has a class decides, then the first input with
+        // any class at all. Three legacy pieces (no class) fuse into a legacy piece — anyone's — so a
+        // pre-class bag keeps its promise all the way through the forge. A universal product (charm,
+        // ring, focus) never carries a class.
+        var cls = ItemClasses.IsClassLocked(type)
+            ? inputs.FirstOrDefault(i => i.BaseType == type && i.Class is not null)?.Class
+              ?? inputs.FirstOrDefault(i => i.Class is not null)?.Class
+            : null;
+        // A weapon's family follows the same rule: the first weapon input whose family the class can
+        // carry keeps its shape; otherwise the class picks one of its own. A legacy product keeps
+        // null and derives its family from the id, exactly like a legacy drop.
+        // Drawn AFTER the id and the prefix, so a seeded merge still mints the id it always did.
+        var id = $"itm_{rng.Next(int.MaxValue):x8}";
+        // A fused item is a NEW item, so its prefix is rolled fresh like any other mint.
+        var prefix = Economy.GearTraits.RollPrefix(type, rng);
+        int? family = null;
+        if (type == ItemBaseType.Weapon && cls is { } c)
+        {
+            var kept = inputs.FirstOrDefault(i => i.BaseType == ItemBaseType.Weapon
+                                                  && ItemClasses.FamilyAllowed(c, ItemNaming.WeaponFamilyIndex(i)));
+            family = kept is not null ? ItemNaming.WeaponFamilyIndex(kept) : ItemClasses.RollFamily(c, rng);
+        }
+
         return new MergeResult
         {
             Product = new ItemInstance
             {
-                InstanceId = $"itm_{rng.Next(int.MaxValue):x8}",
+                InstanceId = id,
                 BaseType = type,
                 Rarity = upgraded,
                 Element = element,
@@ -177,8 +202,9 @@ public static class Forge
                 // voiding every Refine spent on the fused items (affix magnitude is ilvl-scaled). SellValue
                 // is rarity-only, so carrying the level up concentrates investment without paying anything.
                 ItemLevel = inputs.Max(i => i.ItemLevel),
-                // A fused item is a NEW item, so its prefix is rolled fresh like any other mint.
-                TraitOverride = Economy.GearTraits.RollPrefix(type, rng),
+                TraitOverride = prefix,
+                Class = cls,
+                Family = family,
             },
         };
     }

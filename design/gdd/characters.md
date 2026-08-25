@@ -101,3 +101,54 @@ of that corner.
 - [ ] Every passive is read by the sim — no field exists only as screen text.
 - [ ] The arena and the roster screen always show the same character.
 - [ ] A character whose strips are missing still draws as themselves, standing still.
+
+## 9. Item Classes (added 2026-08-25)
+
+Playtest request: *"Items must have classes. Not every character should be able to wear every item."*
+Every champion has an **item class**; each class has exactly **two** champions with different
+passives, so a class-locked drop always has two builds it can serve and switching between them costs
+nothing. Weapon, helm, chest, gloves and boots are **class-locked**; charm, ring and focus are
+**universal** and fit everyone. The catalogue is `Economy.ItemClasses`; the rule is
+`ItemClasses.CanWear`.
+
+| Class | Road (mastery) | Champions | Weapon shapes | Sentence |
+|---|---|---|---|---|
+| WARDEN | WEIGHT | THE ANVIL, THE FALLING TOWER | blade, spear | Heavy blows. Built for the WEIGHT road. |
+| RANGER | SPREAD | THE CHORUS, THE OATHBOUND | bow, spear | Many targets. Built for the SPREAD road. |
+| MYSTIC | TEMPO | THE METRONOME, THE QUIVER | scythe, bow | Front-loaded skills. Built for the TEMPO road. |
+| BULWARK | ENDURE | THE UNBROKEN, THE THORNWALL | blade, scythe | Lasting. Built for the ENDURE road. |
+| WANDERER | none | THE SEEKER (starter), THE MAGPIE | all four | Any road. Wears every weapon shape. |
+
+The brief placed THE QUIVER in RANGER and THE OATHBOUND in MYSTIC. THE QUIVER's lean is TEMPO, so it
+sits in MYSTIC — a champion's lean and its class must point down the same road — and THE OATHBOUND,
+who has no lean, takes the RANGER seat. `item_classes_test.cs` pins that no champion leans a road its
+class is not built for.
+
+Rules:
+
+- **Rolling.** Every class-locked mint (chest contents, boss loot, the trader's stall, the forge's
+  merge product) decides a class. Drops and stock are the active champion's class with probability
+  `ClassRollTuning.OwnClassChance` (0.80), otherwise one of the other four uniformly. A merge product
+  inherits the class of the first input of its own type, so a legacy trio fuses into a legacy piece.
+- **Weapon family.** A weapon minted in a class stores a family from that class's list
+  (`ItemInstance.Family`); an older weapon has none and derives its family from its id exactly as
+  before, so no old bow becomes a blade. `CanWear` never rejects by family.
+- **Legacy.** `ItemInstance.Class == null` on a class-locked slot means "made before classes" and is
+  wearable by everyone ("ANY CLASS · OLD MAKE" on the card). The save and the share code carry both
+  fields, null-default.
+- **Wearing.** The GEAR screen lists other-class pieces dimmed with a lock, refuses EQUIP with the
+  reason ("A WARDEN'S HELM — THE ANVIL OR THE FALLING TOWER CAN WEAR IT"), and EQUIP BEST skips
+  them. Switching champion takes off anything the new champion cannot wear, returns it to the bag,
+  says so in a toast, and saves.
+
+Tuning knobs: `ClassRollTuning.OwnClassChance`; each class's `WeaponFamilies` and `ChampionIds`;
+`ItemClasses.IsClassLocked` (which slots lock).
+
+Acceptance:
+
+- [ ] Every class has exactly two champions; every champion has exactly one class.
+- [ ] A universal piece, a legacy piece, and an own-class piece are wearable; another class's is not.
+- [ ] Over a seeded run, four in five class-locked chest drops are the opener's class.
+- [ ] A minted weapon's family is one its class carries.
+- [ ] A pre-class save loads with `Class == null` and the same id-derived family it always had.
+- [ ] A share code round-trips class and family.

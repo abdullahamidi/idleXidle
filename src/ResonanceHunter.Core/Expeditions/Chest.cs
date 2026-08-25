@@ -285,9 +285,13 @@ public static class Chests
     /// FORTUNE road, and every "+RARITY" affix, was inert. The tilt multiplies the chest grade's own
     /// quality so a rarity build makes GOOD chests better rather than making bad ones adequate.
     /// </remarks>
+    /// <param name="favouredClass">
+    /// The class of the champion opening it — four in five class-locked pieces inside are theirs.
+    /// Null rolls uniformly across the five classes.
+    /// </param>
     public static ChestReward Open(
         Chest chest, Random rng, LootTuning? loot = null, ChestTuning? tuning = null,
-        float rarityBonus = 1f)
+        float rarityBonus = 1f, ItemClass? favouredClass = null)
     {
         ArgumentNullException.ThrowIfNull(chest);
         ArgumentNullException.ThrowIfNull(rng);
@@ -318,11 +322,11 @@ public static class Chests
         var gear = ExpeditionLoot.RollBoss(
                 chest.Tier, quality, rng, loot, element: chest.Element,
                 buildTilt: MathF.Max(0.05f, rarityBonus * MathF.Max(0.05f, chest.RunTilt)),
-                region: chest.Region)
+                region: chest.Region, favouredClass: favouredClass)
             .Where(i => i.BaseType is not ItemBaseType.Material)
             .ToList();
         if (gear.Count == 0)
-            gear.Add(MintGear(floor, chest.Element, rng, loot, chest.Tier));
+            gear.Add(MintGear(floor, chest.Element, rng, loot, chest.Tier, favouredClass));
 
         var items = gear.Take(itemCount).Select(i => Elevate(i, floor, loot)).ToList();
 
@@ -343,18 +347,26 @@ public static class Chests
     };
 
     /// <summary>Mint one wearable at a set rarity — the guaranteed-gear fallback when a roll was all materials.</summary>
-    private static ItemInstance MintGear(Rarity rarity, Source? element, Random rng, LootTuning loot, int tier)
+    private static ItemInstance MintGear(Rarity rarity, Source? element, Random rng, LootTuning loot, int tier,
+                                         ItemClass? favouredClass)
     {
         var type = GearTypes[rng.Next(GearTypes.Length)];
+        var id = $"itm_{rng.Next(int.MaxValue):x8}";
+        var prefix = Economy.GearTraits.RollPrefix(type, rng);   // the prefix is born here
+        // Same class shape as LootSystem.Mint: class-locked slots roll one, the rest stay null, and a
+        // weapon's family comes from its class's own shapes. Drawn after the id and prefix.
+        var cls = ItemClasses.IsClassLocked(type) ? ItemClasses.Roll(favouredClass, rng, loot.ClassRoll) : (ItemClass?)null;
         return new()
         {
-            InstanceId = $"itm_{rng.Next(int.MaxValue):x8}",
+            InstanceId = id,
             BaseType = type,
             Rarity = rarity,
             SellValue = loot.RaritySellValue[(int)rarity],
             Element = element,
             ItemLevel = Math.Max(1, tier),
-            TraitOverride = Economy.GearTraits.RollPrefix(type, rng),   // the prefix is born here
+            TraitOverride = prefix,
+            Class = cls,
+            Family = type == ItemBaseType.Weapon && cls is { } c ? ItemClasses.RollFamily(c, rng) : null,
         };
     }
 

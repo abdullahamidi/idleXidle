@@ -50,7 +50,12 @@ public static class WanderingTrader
     /// This week's stall: three wearables climbing Rare → Epic → Legendary, and one Epic stat gem.
     /// Identity comes from the week; <paramref name="itemLevel"/> comes from the buyer.
     /// </summary>
-    public static List<ItemInstance> Stock(int weekStamp, int itemLevel, LootTuning tuning)
+    /// <param name="favouredClass">
+    /// The buyer's champion class. Four in five class-locked offers are theirs, by the same odds a
+    /// drop uses — but picked by hash, not rolled, so the stall is still the same for everyone who
+    /// plays the same class. Null spreads the stall uniformly across the five.
+    /// </param>
+    public static List<ItemInstance> Stock(int weekStamp, int itemLevel, LootTuning tuning, ItemClass? favouredClass = null)
     {
         ArgumentNullException.ThrowIfNull(tuning);
         var level = Math.Max(1, itemLevel);
@@ -61,6 +66,9 @@ public static class WanderingTrader
         {
             var type = Wearables[(int)(Hash(weekStamp, slot, "type") % (uint)Wearables.Length)];
             var pool = Gear.SlotFor(type) is { } gearSlot ? GearTraits.PoolFor(gearSlot) : null;
+            var cls = ItemClasses.IsClassLocked(type)
+                ? ItemClasses.Pick(favouredClass, Hash(weekStamp, slot, "class"), tuning.ClassRoll)
+                : (ItemClass?)null;
             stock.Add(new ItemInstance
             {
                 // Deterministic id: the same stall for everyone, and buying is idempotent — a
@@ -80,6 +88,10 @@ public static class WanderingTrader
                 TraitOverride = pool is null ? null
                     : pool[(int)(Hash(weekStamp, slot, "prefix") % (uint)pool.Length)],
                 Element = (Source)(Hash(weekStamp, slot, "element") % 6),
+                Class = cls,
+                Family = type == ItemBaseType.Weapon && cls is { } c
+                    ? ItemClasses.PickFamily(c, Hash(weekStamp, slot, "family"))
+                    : null,
             });
         }
 

@@ -124,8 +124,17 @@ public sealed class CharacterScreen
     private int _invScroll;
     private string? _selectedId;
 
+    /// <summary>Everything in the bag that fits a slot — whether or not THIS champion may wear it.</summary>
+    /// <remarks>
+    /// Still the "do I own it at all" question. A piece of another class stays in this list and in the
+    /// grid, dimmed and locked, because a bag that hides what you cannot wear teaches the player their
+    /// drops vanished; a bag that shows it teaches them the roster.
+    /// </remarks>
     private List<ItemInstance> Wearable()
         => _forge.Inventory.Where(i => Gear.SlotFor(i.BaseType) is not null).ToList();
+
+    /// <summary>Can the champion on the doll wear this? The class rule, asked of the active character.</summary>
+    private bool CanWearNow(ItemInstance item) => Gear.CanWear(Character, item);
 
     private static bool InTab(ItemBaseType t, int tab) => tab switch
     {
@@ -266,8 +275,9 @@ public sealed class CharacterScreen
             if (InvCellRect(vis).Contains(hit)) { _selectedId = list[idx].InstanceId; return; }
         }
 
-        // Detail actions.
-        if (EquipBtn.Contains(hit) && Selected(hunter) is { } sel && !IsWorn(hunter, sel))
+        // Detail actions. A piece of another class cannot be put on from here — the button is drawn
+        // disabled and the detail panel says who can wear it — so the click does nothing.
+        if (EquipBtn.Contains(hit) && Selected(hunter) is { } sel && !IsWorn(hunter, sel) && CanWearNow(sel))
         {
             hunter.Equip(sel); Dirty = true; return;
         }
@@ -297,6 +307,11 @@ public sealed class CharacterScreen
         {
             var row = new Rectangle(MenuRect.X + 6, MenuRect.Y + MenuHeaderH + 6 + i * MenuRowH, MenuW - 12, MenuRowH - 4);
             if (!row.Contains(hit)) continue;
+            // A dimmed CANNOT WEAR row is not a verb: the click closes the menu and raises nothing.
+            if (MenuEntries[i].Action == ItemAction.Equip
+                && Wearable().FirstOrDefault(it => it.InstanceId == _menuItemId) is { } bagItem
+                && !CanWearNow(bagItem))
+                return null;
             _itemAction = (_menuItemId, MenuEntries[i].Action);
             return MenuEntries[i].Action;
         }
@@ -324,13 +339,14 @@ public sealed class CharacterScreen
                 // archer's build is handed the bow (ItemFamilies.FavouredForms) and the number here is
                 // the same one the WEAVE screen prints. Playtest 2026-08-23: "build'ime göre silah
                 // önerileri ve DPS verileri uyuşmalı."
-                var bestWeapon = Wearable().Where(i => Gear.SlotFor(i.BaseType) == GearSlot.Weapon)
+                // Only what THIS champion can wear — a WARDEN's best bow is not a candidate.
+                var bestWeapon = Wearable().Where(i => Gear.SlotFor(i.BaseType) == GearSlot.Weapon && CanWearNow(i))
                     .OrderByDescending(i => WeaponDps(hunter, i)).FirstOrDefault();
                 if (bestWeapon is not null && WeaponDps(hunter, bestWeapon) > WeaponDps(hunter, hunter.Worn(GearSlot.Weapon)) * 1.001f)
                     hunter.Equip(bestWeapon);
                 continue;
             }
-            var best = Wearable().Where(i => Gear.SlotFor(i.BaseType) == slot)
+            var best = Wearable().Where(i => Gear.SlotFor(i.BaseType) == slot && CanWearNow(i))
                 .OrderByDescending(hunter.PowerContribution).FirstOrDefault();
             if (best is not null && hunter.PowerContribution(best) > hunter.PowerContribution(hunter.Worn(slot))) hunter.Equip(best);
         }
@@ -393,8 +409,13 @@ public sealed class CharacterScreen
         // It used to recite the headers directly beneath it, which spends the largest 100px on the page
         // to tell the player something they can already read, and teaches them that big text in this
         // band is not worth reading. Same slot, same cost, real content.
-        _ui.TextCenterBig(b, "ONLY WORN GEAR COUNTS IN A FIGHT — RIGHT-CLICK AN ITEM FOR OPTIONS",
-                          960, 80, Slate, UiTypography.Secondary);
+        // WHO IS WEARING IT, AND WHAT THEY MAY WEAR, on the left; the screen's one instruction on the
+        // right. "THE ANVIL · WARDEN — WEARS WARDEN GEAR AND ANY CHARM, RING OR FOCUS" is the sentence
+        // that explains every dimmed cell in the grid below, so it sits where the eye starts.
+        _ui.TextBig(b, $"{Character.Name}  ·  {ItemClasses.NameOf(Character.Class)} — {ItemClasses.WearsLine(Character.Class)}",
+                    40, 80, UiKit.ClassColor(Character.Class), UiTypography.Secondary);
+        _ui.TextRightBig(b, "ONLY WORN GEAR COUNTS IN A FIGHT — RIGHT-CLICK AN ITEM FOR OPTIONS",
+                         1880, 80, Slate, UiTypography.Secondary);
 
         DrawLoadout(b, hit, hunter);
         _hovered = null;                // re-established by whichever draw finds the pointer over an item
@@ -408,7 +429,7 @@ public sealed class CharacterScreen
         // ask one at a time. Suppressed while the right-click menu is open: two floating things fighting
         // over the same pointer is worse than either alone.
         if (_hovered is { } hov && _menuItemId is null)
-            ItemTooltip.Draw(_ui, b, hov, hunter, hit, new Rectangle(0, 0, 1920, 1080));
+            ItemTooltip.Draw(_ui, b, hov, hunter, hit, new Rectangle(0, 0, 1920, 1080), Character);
         if (DevGearDebug) DrawDebug(b, hunter);
     }
 
@@ -467,11 +488,14 @@ public sealed class CharacterScreen
             // WORN PIECES TAKE EVERY VERB NOW. The Forge upgrades and re-rolls worn gear in place
             // (ReplaceItem re-points the worn slot), and SALVAGE arrives there with the confirmation
             // already open — the dialog carries the worn warning, so this menu no longer has to refuse.
-            var shown = action == ItemAction.Equip && worn ? "TAKE OFF" : label;
+            // EQUIP on another class's piece reads CANNOT WEAR and stays dim: the verb is not offered,
+            // and MenuHit refuses it, so the hover card's "who can wear it" line is the answer.
+            var locked = action == ItemAction.Equip && !worn && !CanWearNow(item);
+            var shown = action == ItemAction.Equip && worn ? "TAKE OFF" : locked ? "CANNOT WEAR" : label;
 
-            var hover = row.Contains(hit);
+            var hover = row.Contains(hit) && !locked;
             if (hover) _ui.Fill(b, row, new Color(0x36, 0x2A, 0x4E));
-            _ui.Text(b, shown, row.X + 16, row.Y + 12, hover ? Bone : Slate);
+            _ui.Text(b, shown, row.X + 16, row.Y + 12, locked ? Dim : hover ? Bone : Slate);
         }
     }
 
@@ -691,7 +715,17 @@ public sealed class CharacterScreen
             //
             // (WORN left the grid entirely — playtest: worn gear lives on the doll now, so the grid
             // never needs a worn mark again.)
-            var better = Gear.SlotFor(item.BaseType) is { } bs && hunter.Worn(bs) is not null
+            // ANOTHER CLASS'S PIECE IS DIMMED AND LOCKED, not hidden. The icon stays so the player can
+            // see what they found; the scrim says it is not for this champion; the lock says why, and
+            // the hover card names who can wear it. It is never an upgrade candidate, so no halo.
+            var wearable = CanWearNow(item);
+            if (!wearable)
+            {
+                _ui.Fill(b, Shrink(cell, 5), new Color(0x0A, 0x08, 0x10, 0xB4));
+                Lock(b, new Rectangle(cell.Right - 26, cell.Bottom - 28, 18, 20), UiKit.ClassColor(item.Class ?? Character.Class));
+            }
+
+            var better = wearable && Gear.SlotFor(item.BaseType) is { } bs && hunter.Worn(bs) is not null
                          && hunter.PowerContribution(item) > hunter.PowerContribution(hunter.Worn(bs));
 
             // WEIGHTED BY RARITY OF THE MARK, NOT BY IMPORTANCE OF THE FACT — which is the opposite of
@@ -797,6 +831,11 @@ public sealed class CharacterScreen
         // spent a line on a word the reader still could not act on.
         _ui.TextBig(b, $"{(item.Element?.ToString().ToUpperInvariant() ?? "PLAIN")}  ·  LEVEL {item.ItemLevel}",
             DetailPanel.X + 24, hero.Bottom + 54, Purple, UiTypography.Secondary);
+        // The class, right-aligned on the same line, in its own colour — the third fact about an item
+        // after its element and its level, and the one that decides whether EQUIP is even offered.
+        _ui.TextRightBig(b, ItemClasses.ClassLine(item), DetailPanel.Right - 24, hero.Bottom + 54,
+            item.Class is { } dc && ItemClasses.IsClassLocked(item.BaseType) ? UiKit.ClassColor(dc) : Slate,
+            UiTypography.Secondary);
 
         // Stat list (§10.7): ITEM POWER + the item's real affixes.
         var sy = hero.Bottom + 90;
@@ -814,8 +853,14 @@ public sealed class CharacterScreen
         var cmpY = sy + 8;
         var cmp = new Rectangle(DetailPanel.X + 44, cmpY, DetailPanel.Width - 88, 44);
         _ui.Fill(b, cmp, Quiet);
+        var whyNot = ItemClasses.WhyNot(Character, item);
         if (IsWorn(hunter, item))
             _ui.TextBig(b, "EQUIPPED", cmp.X + 16, cmp.Y + 12, Gold, UiTypography.Secondary);
+        else if (whyNot is not null)
+            // Another class's piece. The strip says so instead of a power delta the player cannot act
+            // on; the sentence under it names the two champions who can — which is a reason to open
+            // the roster, not a dead end.
+            _ui.TextBig(b, $"{Character.Name} CANNOT WEAR THIS", cmp.X + 16, cmp.Y + 12, Ember, UiTypography.Secondary);
         else
         {
             var delta = hunter.PowerContribution(item) - hunter.PowerContribution(worn);
@@ -843,6 +888,8 @@ public sealed class CharacterScreen
         // the player meant by "I struggle to read what my items do". They were not reading badly; there
         // was nothing there to read.
         sy = cmp.Bottom + 14;
+        if (whyNot is not null)
+            sy = Wrapped(b, whyNot, DetailPanel.X + 44, sy, DetailPanel.Width - 88, Ember) + 10;
         if (GearTraits.TraitOf(item) is { } tr)
         {
             _ui.TextBig(b, GearTraits.NameOf(tr), DetailPanel.X + 44, sy, Gold, UiTypography.Body);
@@ -875,7 +922,8 @@ public sealed class CharacterScreen
         }
 
         // Actions (§10.9): EQUIP (real). LOCK disabled — no lock system in the model.
-        Button(b, EquipBtn, IsWorn(hunter, item) ? "EQUIPPED" : "EQUIP", hit, !IsWorn(hunter, item));
+        Button(b, EquipBtn, IsWorn(hunter, item) ? "EQUIPPED" : whyNot is null ? "EQUIP" : "CANNOT WEAR", hit,
+               !IsWorn(hunter, item) && whyNot is null);
         Button(b, LockBtn, "LOCK", hit, false);
     }
 
@@ -952,6 +1000,26 @@ public sealed class CharacterScreen
         _ui.Fill(b, new Rectangle(r.X, r.Bottom - t, r.Width, t), c);
         _ui.Fill(b, new Rectangle(r.X, r.Y, t, r.Height), c);
         _ui.Fill(b, new Rectangle(r.Right - t, r.Y, t, r.Height), c);
+    }
+
+    /// <summary>
+    /// A small padlock from rectangles — a shackle over a body — so the mark needs no glyph the
+    /// font gate would have to allow. Drawn in the locking class's colour.
+    /// </summary>
+    private void Lock(SpriteBatch b, Rectangle r, Color c)
+    {
+        var bodyH = r.Height * 11 / 20;
+        var body = new Rectangle(r.X, r.Bottom - bodyH, r.Width, bodyH);
+        _ui.Fill(b, new Rectangle(body.X - 1, body.Y - 1, body.Width + 2, body.Height + 2), Shadow);
+        _ui.Fill(b, body, c);
+        // The shackle: a ring of two uprights and a bar, one pixel narrower each side than the body.
+        var sw = Math.Max(2, r.Width / 5);
+        var top = new Rectangle(r.X + 2, r.Y, r.Width - 4, sw);
+        _ui.Fill(b, top, c);
+        _ui.Fill(b, new Rectangle(top.X, r.Y, sw, body.Y - r.Y + 1), c);
+        _ui.Fill(b, new Rectangle(top.Right - sw, r.Y, sw, body.Y - r.Y + 1), c);
+        // The keyhole, so it reads as a lock at 18 pixels and not as a bucket.
+        _ui.Fill(b, new Rectangle(body.Center.X - 1, body.Y + 3, 3, body.Height - 6), Shadow);
     }
 
     private void Reticle(SpriteBatch b, Rectangle r, Color c)

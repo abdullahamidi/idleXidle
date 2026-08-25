@@ -240,7 +240,9 @@ public static class Unlocks
             "Items are worn, not collected. Every item has a slot, a rarity, and random "
             + "properties that differ on every copy. Two swords of the same name are not the "
             + "same sword. A higher item level is not always better: read its properties. "
-            + "Anything you are not wearing is material for the Forge.",
+            + "Anything you are not wearing is material for the Forge. "
+            + "Weapons and armour also belong to a CLASS, and only the two champions of that class can "
+            + "wear them; charms, rings and focuses fit everyone.",
 
         Activity.Vault =>
             "Every chest you hold, and what each one promises before you open it. A "
@@ -299,7 +301,8 @@ public static class Unlocks
         Activity.Roster =>
             "Other champions, unlocked by conquering regions. Each has a built-in power of its own that "
             + "shapes how you build. Switching champion is not a small change — it changes "
-            + "what your skills are for.",
+            + "what your skills are for. Every champion also has a gear CLASS: two champions share "
+            + "each class, and a weapon or armour piece of another class cannot be worn.",
 
         _ => throw new ArgumentOutOfRangeException(nameof(activity), activity, null),
     };

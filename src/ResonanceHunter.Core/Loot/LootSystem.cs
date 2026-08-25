@@ -113,10 +113,36 @@ public sealed record ItemInstance
     /// Reforge never sets it there, and <c>Enchantments.Of</c> still returns null for a sub-Rare item.
     /// </remarks>
     public EnchantKind? EnchantOverride { get; init; }
+
+    /// <summary>
+    /// The item's CLASS — who can wear it — or null for an item minted before classes existed.
+    /// </summary>
+    /// <remarks>
+    /// Nullable for the same reason <see cref="Element"/> is: a `?? Warden` would silently hand every
+    /// pre-class save's helms to two champions and take them off the other eight. Null reads as
+    /// "anyone" — see <c>ItemClasses.CanWear</c> — so an update never strips a worn piece. Meaningless
+    /// on a universal slot (charm, ring, focus) and on anything unwearable; every mint path sets it on
+    /// the five class-locked slots and leaves it null elsewhere.
+    /// </remarks>
+    public ItemClass? Class { get; init; }
+
+    /// <summary>
+    /// A weapon's FAMILY (an index into <c>ItemNaming.WeaponFamilies</c>), or null to derive it from the id.
+    /// </summary>
+    /// <remarks>
+    /// The family used to be a pure function of the id, which was fine while any weapon could be any
+    /// shape. A class carries only two shapes, so a fresh weapon's family is chosen from its class's
+    /// list and stored here; an old weapon keeps null and therefore keeps the exact family — the art,
+    /// the name and the stat channel — it has always had. See <c>ItemNaming.WeaponFamilyIndex</c>.
+    /// </remarks>
+    public int? Family { get; init; }
 }
 
 public sealed record LootTuning
 {
+    /// <summary>How a class-locked drop picks its class. See <see cref="ClassRollTuning"/>.</summary>
+    public ClassRollTuning ClassRoll { get; init; } = ClassRollTuning.Default;
+
     public float BonusDropChancePercent { get; init; } = 35f;
     public int BonusRollAttempts { get; init; } = 3;
     public int DropCountBaseStandard { get; init; } = 1;
@@ -184,6 +210,12 @@ public sealed record KillContext
     /// </remarks>
     public IReadOnlyList<ItemBaseType> FavouredTypes { get; init; } = Array.Empty<ItemBaseType>();
 
+    /// <summary>
+    /// The active champion's item class, so four in five class-locked drops are theirs. Null rolls
+    /// uniformly across the five — a kill with no champion behind it, which only the tests make.
+    /// </summary>
+    public ItemClass? FavouredClass { get; init; }
+
     /// <summary>Null for an active kill. Set for an automated one.</summary>
     public int? AutomationStage { get; init; }
 
@@ -233,7 +265,7 @@ public static class LootSystem
                 : ctx.FavouredTypes.Count > 0 && rng.NextDouble() < RegionFavourShare
                     ? ctx.FavouredTypes[rng.Next(ctx.FavouredTypes.Count)]
                     : Wearables[rng.Next(Wearables.Length)];
-            items.Add(Mint(baseType, RollRarity(ctx, rng, tuning), rng, tuning, ctx.Element, ctx.PowerTier));
+            items.Add(Mint(baseType, RollRarity(ctx, rng, tuning), rng, tuning, ctx.Element, ctx.PowerTier, ctx.FavouredClass));
         }
 
         return items;
@@ -256,21 +288,35 @@ public static class LootSystem
     /// element is possible at all — a random element per drop would make a matched trio pure luck.
     /// </para>
     /// </remarks>
-    private static ItemInstance Mint(ItemBaseType type, Rarity rarity, Random rng, LootTuning tuning, Source? element, int itemLevel) => new()
+    private static ItemInstance Mint(ItemBaseType type, Rarity rarity, Random rng, LootTuning tuning, Source? element, int itemLevel,
+                                     ItemClass? favouredClass = null)
     {
-        InstanceId = $"itm_{rng.Next(int.MaxValue):x8}",
-        BaseType = type,
-        Rarity = rarity,
-        SellValue = tuning.RaritySellValue[(int)rarity],
-        ItemLevel = Math.Max(1, itemLevel),
+        // Draw order is id, prefix, class, family — the two new draws come LAST so every seeded
+        // fixture that pinned an id or a prefix before classes existed still gets the same one.
+        var id = $"itm_{rng.Next(int.MaxValue):x8}";
         // The PREFIX is rolled once, here at mint, and never changes — see GearTraits.RollPrefix.
-        TraitOverride = Economy.GearTraits.RollPrefix(type, rng),
+        var prefix = Economy.GearTraits.RollPrefix(type, rng);
+        // THE CLASS IS ROLLED HERE, ONCE, for the five class-locked slots and never for the rest — a
+        // charm with a class would be a field the wear rule ignores, which is a lie waiting to be read.
+        // A weapon's family comes from its class's own two shapes, so a WARDEN's bow cannot exist.
+        var cls = ItemClasses.IsClassLocked(type) ? ItemClasses.Roll(favouredClass, rng, tuning.ClassRoll) : (ItemClass?)null;
+        return new()
+        {
+            InstanceId = id,
+            BaseType = type,
+            Rarity = rarity,
+            SellValue = tuning.RaritySellValue[(int)rarity],
+            ItemLevel = Math.Max(1, itemLevel),
+            TraitOverride = prefix,
 
-        // Only wearables are attuned. An elemental lump of scrap would be noise — and it would let a
-        // trio of materials carry an element into a hybrid, which is the one thing mixing must cost.
-        // Materials and cores are the only inert types; every wearable slot attunes.
-        Element = type is ItemBaseType.Material or ItemBaseType.CreatureCore ? null : element,
-    };
+            // Only wearables are attuned. An elemental lump of scrap would be noise — and it would let a
+            // trio of materials carry an element into a hybrid, which is the one thing mixing must cost.
+            // Materials and cores are the only inert types; every wearable slot attunes.
+            Element = type is ItemBaseType.Material or ItemBaseType.CreatureCore ? null : element,
+            Class = cls,
+            Family = type == ItemBaseType.Weapon && cls is { } c ? ItemClasses.RollFamily(c, rng) : null,
+        };
+    }
 
     /// <summary>Formula 1 — Drop Count. Hard-bounded; the clamp is what makes it un-exploitable.</summary>
     public static int DropCount(KillContext ctx, Random rng, LootTuning tuning)

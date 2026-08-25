@@ -199,6 +199,14 @@ public class Game1 : Game
     private readonly HashSet<int> _traderBought = new();
     private List<ItemInstance>? _traderStock;
     private int _traderStockLevel;
+    /// <summary>The class the stall was last stocked for — a champion switch restocks it for the new one.</summary>
+    private ItemClass? _traderStockClass;
+
+    /// <summary>
+    /// Who was active last frame, so a champion SWITCH is seen the frame it happens. Null until the
+    /// first sync, so a loaded save is never treated as a switch away from nobody.
+    /// </summary>
+    private string? _lastActiveCharacterId;
     /// <summary>The keep-filter's wanted slots — several at once since 2026-08-23 (empty = any).</summary>
     private readonly HashSet<ItemBaseType> _chestKeepSlots = new();
     private float? _pendingRevealPose;   // RH_SHOT_T for the chest reveal, applied once the fixture has opened one
@@ -1367,31 +1375,39 @@ public class Game1 : Game
                         ItemBaseType.Chest, ItemBaseType.Gloves, ItemBaseType.Boots, ItemBaseType.Ring,
                     };
                     var seed = new List<ItemInstance>();
+                    // The worn set is the starter's own class (WANDERER), so all eight sit on the doll.
                     for (var i = 0; i < types.Length; i++)
                         seed.Add(new ItemInstance
                         {
                             InstanceId = $"cd{i}", BaseType = types[i],
                             Rarity = rar[i % rar.Length], SellValue = 20 + i * 9, Element = Source.Nature,
                             ItemLevel = 8 + i * 6,
+                            Class = ItemClasses.IsClassLocked(types[i]) ? ItemClass.Wanderer : null,
                         });
                     // Two superior UNEQUIPPED drops, added first so they sit at the top of the bag — they
                     // pose the green UP badge and the hover tooltip's "UPGRADE +N PWR" verdict (with
                     // RH_SHOT_MOUSE parked over the first card).
                     _forge.AddLoot(new List<ItemInstance>
                     {
-                        new() { InstanceId = "up_wpn", BaseType = ItemBaseType.Weapon, Rarity = Rarity.Legendary, SellValue = 220, Element = Source.Machine, ItemLevel = 62 },
-                        new() { InstanceId = "up_cht", BaseType = ItemBaseType.Chest, Rarity = Rarity.Epic, SellValue = 150, Element = Source.Nature, ItemLevel = 55 },
+                        // The weapon is the starter's class, so the UPGRADE verdict still poses on the
+                        // first card; the chestplate is a WARDEN's, so the second card poses the dimmed
+                        // lock and, under RH_SHOT_MOUSE, the "who can wear it" lines of the hover card.
+                        new() { InstanceId = "up_wpn", BaseType = ItemBaseType.Weapon, Rarity = Rarity.Legendary, SellValue = 220, Element = Source.Machine, ItemLevel = 62, Class = ItemClass.Wanderer, Family = 1 },
+                        new() { InstanceId = "up_cht", BaseType = ItemBaseType.Chest, Rarity = Rarity.Epic, SellValue = 150, Element = Source.Nature, ItemLevel = 55, Class = ItemClass.Warden },
                     });
                     _forge.AddLoot(seed);
                     // Extra unequipped drops so the inventory grid fills and overflows into a scroll (fixture §17).
                     var srcs = new[] { Source.Shadow, Source.Body, Source.Mind, Source.Spirit, Source.Machine, Source.Nature };
                     var extra = new List<ItemInstance>();
+                    // Class-locked drops rotate through all five classes, so the grid poses both the
+                    // wearable and the dimmed-and-locked cell states; jewellery stays classless.
                     for (var i = 0; i < 14; i++)
                         extra.Add(new ItemInstance
                         {
                             InstanceId = $"cx{i}", BaseType = types[i % types.Length],
                             Rarity = rar[i % rar.Length], SellValue = 15 + i * 5, Element = srcs[i % srcs.Length],
                             ItemLevel = 20 + i * 3,
+                            Class = ItemClasses.IsClassLocked(types[i % types.Length]) ? (ItemClass)(i % 5) : null,
                         });
                     _forge.AddLoot(extra);
                     foreach (var it in seed) _hunter.Equip(it);   // one item per slot — all eight filled
@@ -2076,8 +2092,19 @@ public class Game1 : Game
                     }
                     else if (_forge.Inventory.FirstOrDefault(i => i.InstanceId == request.InstanceId) is { } toWear)
                     {
-                        _hunter.Equip(toWear);
-                        _sound.Play("sfx_equip", 0.7f);
+                        // THE CLASS RULE HOLDS HERE TOO. The menu greys its EQUIP row for another
+                        // class's piece, but this is the one route that actually puts gear on, so it
+                        // asks for itself and answers with the reason rather than a silent no.
+                        if (ItemClasses.WhyNot(_characters.Active, toWear) is { } whyNot)
+                        {
+                            _lockedMsg = whyNot;
+                            _lockedTimer = 3.2f;
+                        }
+                        else
+                        {
+                            _hunter.Equip(toWear);
+                            _sound.Play("sfx_equip", 0.7f);
+                        }
                     }
                     Save();
                 }
@@ -2136,10 +2163,14 @@ public class Game1 : Game
                 Save();
             }
             var traderLevel = Math.Max(1, _deepestEver);
-            if (_traderStock is null || _traderStockLevel != traderLevel)
+            // Restocked for the CLASS as well as the level: the stall leans four in five toward the
+            // champion you are playing, so a switch on the roster re-leans it.
+            var traderClass = _characters.Active.Class;
+            if (_traderStock is null || _traderStockLevel != traderLevel || _traderStockClass != traderClass)
             {
-                _traderStock = WanderingTrader.Stock(week, traderLevel, new LootTuning());
+                _traderStock = WanderingTrader.Stock(week, traderLevel, new LootTuning(), traderClass);
                 _traderStockLevel = traderLevel;
+                _traderStockClass = traderClass;
             }
             _chests.Hunter = _hunter;
             _chests.TraderStock = _traderStock;
@@ -2605,6 +2636,36 @@ public class Game1 : Game
     /// <summary>The guide strip's small close button, top-right of the banner.</summary>
     private static Rectangle GuideCloseRect(Rectangle banner) => new(banner.Right - 42, banner.Y + 10, 32, 32);
 
+    /// <summary>
+    /// Take off every worn piece the new champion's class cannot wear, tell the player where it went,
+    /// and save — the switch and the shed must land in the same file.
+    /// </summary>
+    /// <remarks>
+    /// The pieces are never removed from the bag: a worn item is a bag item the doll points at, so
+    /// <c>Unequip</c> alone puts it back in the grid, dimmed and locked, where the hover card names
+    /// who can wear it. The toast rides the same channel as a locked rail tile — one line, top of the
+    /// screen, gone in a few seconds — because it is a notice, not a lesson.
+    /// </remarks>
+    private void ShedUnwearable()
+    {
+        var who = _characters.Active;
+        var shed = new List<string>();
+        foreach (var slot in Enum.GetValues<GearSlot>())
+        {
+            if (_hunter.Worn(slot) is not { } worn || Gear.CanWear(who, worn)) continue;
+            _hunter.Unequip(slot);
+            shed.Add(ItemNaming.TypeWord(worn));
+        }
+        if (shed.Count == 0) return;
+
+        var words = shed.Count == 1 ? shed[0] : string.Join(", ", shed.Take(shed.Count - 1)) + " AND " + shed[^1];
+        _lockedMsg = shed.Count == 1
+            ? $"{who.Name} CANNOT WEAR YOUR {words} — IT IS BACK IN YOUR BAG"
+            : $"{who.Name} CANNOT WEAR YOUR {words} — THEY ARE BACK IN YOUR BAG";
+        _lockedTimer = 4.5f;
+        Save();
+    }
+
     /// <summary>The toast for clicking a locked rail tile. Says the price, then fades.</summary>
     private void DrawLockedToast()
     {
@@ -2785,6 +2846,16 @@ public class Game1 : Game
                                   + "trees, your gear, your Gleam and the Warren are shared."));
         }
         _rosterBaselined = true;
+
+        // A CHAMPION SWITCH SHEDS WHAT THE NEW ONE CANNOT WEAR. The roster's promise is that switching
+        // costs nothing, and it still costs nothing — the pieces go back to the bag, not away — but a
+        // WARDEN's helm on a RANGER would be a class rule the fight quietly ignored, and the wear
+        // rule has to hold on the doll as well as at the bag.
+        if (_lastActiveCharacterId is { } wasId && wasId != _characters.ActiveId) ShedUnwearable();
+        _lastActiveCharacterId = _characters.ActiveId;
+        // Four in five class-locked pieces a chest pays are the active champion's.
+        _forge.FavouredClass = _characters.Active.Class;
+
         _expedition.Character = _characters.Active;
         _character.Character = _characters.Active;
         _buildScreen.Character = _characters.Active;

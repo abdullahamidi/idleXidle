@@ -312,6 +312,20 @@ public sealed record SavedItem
     /// element; items simply missed the same treatment. Null-default so pre-fix saves load clean.
     /// </remarks>
     public string? Element { get; init; }
+
+    /// <summary>
+    /// The item's CLASS (an <see cref="Economy.ItemClass"/> name), or null for a piece minted before
+    /// classes existed or on a universal slot.
+    /// </summary>
+    /// <remarks>
+    /// Null-default, stored by name and ignored if it no longer parses — the same three rules the
+    /// trait, enchant and element fields follow, for the same reason: a pre-class save must load
+    /// clean, with every item wearable by everyone, and never take a worn helm off a player.
+    /// </remarks>
+    public string? Class { get; init; }
+
+    /// <summary>A weapon's family index, or null to derive it from the id as every older weapon does.</summary>
+    public int? Family { get; init; }
 }
 
 /// <summary>Why a load failed. A corrupt save must never silently become a fresh game.</summary>
@@ -475,6 +489,8 @@ public static class SaveSystem
         TraitOverride = i.TraitOverride?.ToString() ?? "NONE",
         EnchantOverride = i.EnchantOverride?.ToString(),
         Element = i.Element?.ToString(),
+        Class = i.Class?.ToString(),
+        Family = i.Family,
         Gems = i.Gems.Select(ToSavedItem).ToList(),
     };
 
@@ -493,6 +509,9 @@ public static class SaveSystem
             : Enum.TryParse<GearTrait>(s.TraitOverride, out var t) ? t : null,   // "NONE" -> null
         EnchantOverride = Enum.TryParse<EnchantKind>(s.EnchantOverride, out var e) ? e : null,
         Element = Enum.TryParse<Automation.Source>(s.Element, out var el) ? el : null,
+        // Lenient, like every enum here: an unparseable class is a null class, which is "anyone".
+        Class = Enum.TryParse<Economy.ItemClass>(s.Class, out var cl) ? cl : null,
+        Family = s.Family is { } fam && fam >= 0 && fam < Economy.ItemNaming.WeaponFamilies.Length ? fam : null,
         Gems = s.Gems.Select(FromSavedItem).ToList(),
     };
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using ResonanceHunter.Core.Characters;
 using ResonanceHunter.Core.Economy;
 using ResonanceHunter.Core.Loot;
 
@@ -47,10 +48,15 @@ public static class ItemTooltip
         [new(0xC8, 0xC2, 0xB4), new(0x6E, 0xC8, 0x7A), new(0x4A, 0x90, 0xD9), new(0xB0, 0x6A, 0xC8), new(0xE8, 0xC8, 0x7A)];
 
     /// <summary>How tall the card will be for this item — so a caller can place it before drawing.</summary>
-    public static int HeightFor(ItemInstance item, Hunter? hunter)
+    /// <param name="wearer">The champion reading the card; when they cannot wear it, the card says why (two lines).</param>
+    public static int HeightFor(ItemInstance item, Hunter? hunter, Character? wearer = null)
     {
         ArgumentNullException.ThrowIfNull(item);
         var h = 96;                                             // name + the rarity/slot line
+        // THE CLASS LINE, measured. Every line the card draws is counted here — the family block once
+        // was not, and every weapon card ran past its own border for it.
+        if (Gear.SlotFor(item.BaseType) is not null) h += 26;   // "WARDEN GEAR" / "ANY CLASS"
+        if (wearer is not null && Gear.IsWearable(item) && !Gear.CanWear(wearer, item)) h += 52;   // the reason, two lines
         h += 34;                                                // item power
         if (GemCraft.IsGem(item)) h += 56;                      // what it gives + where it goes
         h += ItemAffixes.Of(item).Count * 28;
@@ -73,12 +79,16 @@ public static class ItemTooltip
     /// Draw the card with its top-left at <paramref name="at"/>, nudged to stay on the canvas.
     /// </summary>
     /// <param name="canvas">The drawable area, so a card raised near the right edge flips to the left.</param>
-    public static void Draw(UiKit ui, SpriteBatch b, ItemInstance item, Hunter? hunter, Point at, Rectangle canvas)
+    /// <param name="wearer">
+    /// The champion reading the card. When set and they cannot wear the item, the card names who can.
+    /// </param>
+    public static void Draw(UiKit ui, SpriteBatch b, ItemInstance item, Hunter? hunter, Point at, Rectangle canvas,
+                            Character? wearer = null)
     {
         ArgumentNullException.ThrowIfNull(ui);
         ArgumentNullException.ThrowIfNull(item);
 
-        var h = HeightFor(item, hunter);
+        var h = HeightFor(item, hunter, wearer);
 
         // FLIP, don't clamp. A card pinned to the edge sits ON the thing the pointer is over, which is
         // the one thing it must never cover — you are hovering an item to see it, not to have it hidden.
@@ -103,10 +113,28 @@ public static class ItemTooltip
         ui.TextBig(b, ItemNaming.FullName(item), lx, cy, edge, UiTypography.PanelTitle);
         cy += 34;
 
+        // ── WHO CAN WEAR IT — the class, under the name, before anything else. ──
+        // "WARDEN GEAR" in the class's colour; "ANY CLASS" for a charm, ring or focus; "ANY CLASS ·
+        // OLD MAKE" for a helm from before classes existed, which anyone may still wear.
+        var slot = Gear.SlotFor(item.BaseType);
+        if (slot is not null)
+        {
+            ui.Text(b, ItemClasses.ClassLine(item), lx, cy,
+                    item.Class is { } ic && ItemClasses.IsClassLocked(item.BaseType) ? UiKit.ClassColor(ic) : Dim);
+            cy += 26;
+            if (wearer is not null && !Gear.CanWear(wearer, item) && item.Class is { } locked)
+            {
+                // Two lines, both measured in HeightFor: the slot, then the two champions who can.
+                ui.Text(b, $"A {ItemClasses.NameOf(locked)}'S {ItemNaming.TypeWord(item)} —", lx, cy, Bad);
+                cy += 26;
+                ui.Text(b, ui.Shorten($"{ItemClasses.ChampionNames(locked)} CAN WEAR IT", card.Width - 40), lx, cy, Bad);
+                cy += 26;
+            }
+        }
+
         // ONE LINE, not a left run and a right-aligned element. Right-aligning the source put "NATURE"
         // on top of "iL2" the moment a name was long enough — a card that exists to make things readable
         // must not be the thing overlapping itself.
-        var slot = Gear.SlotFor(item.BaseType);
         var line = $"{item.Rarity.ToString().ToUpperInvariant()}  ·  "
                    + $"{(slot?.ToString() ?? item.BaseType.ToString()).ToUpperInvariant()}  ·  LEVEL {item.ItemLevel}";
         if (item.Element is { } el) line += $"  ·  {el.ToString().ToUpperInvariant()}";
@@ -125,7 +153,14 @@ public static class ItemTooltip
             cy += 34;
 
             var worn = hunter.Worn(s);
-            if (worn is not null && worn.InstanceId != item.InstanceId)
+            if (wearer is not null && !Gear.CanWear(wearer, item))
+            {
+                // No UPGRADE verdict on a piece this champion cannot put on — a "+21" they cannot
+                // collect is a promise the EQUIP button then breaks. Same 46px slot, so the height holds.
+                ui.Text(b, $"NOT FOR {wearer.Name} — SWITCH CHAMPION ON THE ROSTER", lx, cy, Bad);
+                cy += 46;
+            }
+            else if (worn is not null && worn.InstanceId != item.InstanceId)
             {
                 var delta = mine - hunter.PowerContribution(worn);
                 var word = delta > 0 ? "UPGRADE" : delta < 0 ? "DOWNGRADE" : "SIDEGRADE";

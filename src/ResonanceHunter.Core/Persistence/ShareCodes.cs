@@ -197,6 +197,8 @@ public static class ShareCodes
            && i.ItemLevel is >= 1 and <= 9_999
            && i.Upgrades is >= 0 and <= 99
            && i.SellValue is >= 0 and <= 1_000_000
+           && (i.Class is not { } cl || Enum.IsDefined(cl))
+           && (i.Family is not { } fam || (fam >= 0 && fam < Economy.ItemNaming.WeaponFamilies.Length))
            && i.Gems is not null && i.Gems.Count <= 8 && i.Gems.All(ValidItem);
 
     public static bool TryDecodeBuild(string? code, out SharedBuild? build, out string error)
