@@ -32,7 +32,7 @@ AUDIO = os.path.join(ROOT, "assets", "audio")
 # The call sites that take a key. Anything else that grows one should be added here.
 CALLS = re.compile(
     r'\b(?:Assets\.Get|Assets\.GetFirst|Assets\.Has|Get|GetFirst|Has|SpriteFit|Sprite|'
-    r'SpriteGrounded|AnimSprite|Background|BarArt|Panel|PanelNine|_vfx\.Play)\s*\(\s*([^)]*)')
+    r'SpriteGrounded|AnimSprite|Background|BarArt|Panel|PanelNine|Icon|_vfx\.Play)\s*\(\s*([^)]*)')
 # `_vfx.Play` is VfxPlayer.Play — the 2026-08-22 art pass keys every combat effect by name (fx_strike,
 # fx_hit ...) through the alias table, and an effect nothing can find is the house failure mode: it fails
 # soft and the fight simply has no flash where one was promised. Qualified on purpose: a bare `Play`
@@ -122,6 +122,28 @@ def main() -> int:
             key = f"music_arena_{theme.lower()}"
             if key not in wavs:
                 missing.setdefault(key, []).append("Game1.cs (UpdateMusic, per-theme arena bed)")
+
+    # AND THE GEAR CLASS ICONS, the second interpolated family. ItemClasses.IconKey builds
+    # icon_class_<class> for the five ItemClass values, and UiKit.ClassIcon draws a diamond in the
+    # class colour when the file is absent — so, like the arena beds, a missing one does not fail, it
+    # succeeds quietly into the fallback. The art is owed (2026-08-26) and may land after the code:
+    # while NONE of the five exists the gate says so and passes, because the fallback is the design
+    # until the art ships; the moment ANY of them exists all five must, because four badges with
+    # painted icons and one with a diamond is the "unfinished" look the stat rows had.
+    classes_cs = os.path.join(ROOT, "src", "ResonanceHunter.Core", "Economy", "ItemClasses.cs")
+    if os.path.exists(classes_cs):
+        names = re.findall(r"^\s+(\w+),\s*$", re.search(r"public enum ItemClass\s*\{(.*?)\}",
+                           open(classes_cs, encoding="utf-8").read(), re.S).group(1), re.M)
+        wanted = [f"icon_class_{n.lower()}" for n in names]
+        shipped = [k for k in wanted if k in have]
+        if not shipped:
+            print(f"note: no gear class icon has shipped yet ({', '.join(wanted)}); "
+                  "UiKit.ClassIcon draws the class-colour diamond until they do.")
+        else:
+            for key in wanted:
+                if key not in have:
+                    missing.setdefault(key, []).append(
+                        f"ItemClasses.IconKey (class icons: {len(shipped)}/{len(wanted)} shipped)")
 
     # AND THE ALIAS TABLE ITSELF. A migration alias whose TARGET has been deleted is the same
     # silent hole one indirection further along, and it is likelier than a typo — the alias

@@ -51,6 +51,12 @@ public sealed record Quest
 
     public int Threshold { get; init; } = 1;
 
+    /// <summary>
+    /// The word after the count on a progress line — "CHESTS" in "12 / 30 CHESTS". Empty for a
+    /// quest whose count needs no noun.
+    /// </summary>
+    public string Unit { get; init; } = "";
+
     /// <summary>How far along this quest is, given the world as it stands.</summary>
     public int Current(QuestProgress p) => Goal switch
     {
@@ -63,8 +69,12 @@ public sealed record Quest
 
     public bool IsDone(QuestProgress p) => Current(p) >= Threshold;
 
-    /// <summary>"14 / 20" — the line a gate should show instead of only its demand.</summary>
+    /// <summary>"14 / 20" — the count a gate should show instead of only its demand.</summary>
     public string ProgressText(QuestProgress p) => $"{Math.Min(Current(p), Threshold)} / {Threshold}";
+
+    /// <summary>"14 / 20 WAVES" — the count with its noun, for a card that has room for the noun.</summary>
+    public string ProgressLine(QuestProgress p) =>
+        Unit.Length == 0 ? ProgressText(p) : $"{ProgressText(p)} {Unit}";
 }
 
 /// <summary>
@@ -89,18 +99,26 @@ public readonly record struct QuestProgress(
 
 /// <summary>The quests that exist.</summary>
 /// <remarks>
-/// Two of them, because two characters are gated behind quests and a quest that gates nothing is a
-/// to-do list entry rather than a feature. They are deliberately not "conquer region X": conquest
-/// already unlocks four characters on its own, and a quest that duplicated it would teach the player
-/// nothing new about the game.
-///
-/// THE HOLLOW HUNT asks you to go deeper in the first region than conquering it requires, which is how
-/// a player finds out that a conquered region is still worth descending.
-///
-/// THE FIRST VOW asks you to finish a run with a Vow's demand still met — which cannot be done by
-/// accident, because a Vow pays nothing unless the BUILD satisfies it and the weave editor is the only
-/// place you can check. It is the quest that teaches the system the game is built around, and it gates
-/// THE OATHBOUND, whose whole passive is about Vows.
+/// <para>
+/// Five of them, one per class, because the SECOND champion of every class is gated behind a quest
+/// (see <see cref="Characters.ClassTier"/>) and a quest that gates nothing is a to-do list entry
+/// rather than a feature. None of them is "conquer region X": conquest already unlocks the FIRST of
+/// each class on its own, and a quest that duplicated it would teach the player nothing new. Each one
+/// asks for something a conquest does not — waves well past the conquest line, chests, kept Vows, the
+/// whole map — so the second half of the roster is earned rather than arriving in the first hours.
+/// </para>
+/// <para>
+/// The two original quests (<c>q_hollow_hunt</c> at depth 20, <c>q_first_vow</c> at one kept Vow)
+/// are gone from here and live only in <see cref="Characters.LegacyUnlocks"/>, which reads an old
+/// save's record of them so nobody loses a champion they had already earned. Their ids were retired
+/// rather than reused on purpose: a save that had "q_hollow_hunt" done had reached depth 20, and if the
+/// same id now meant depth 60 that save would hand out THE MAGPIE for free.
+/// </para>
+/// <para>
+/// "Conquer every region" is <see cref="Encounters.Regions.All"/>'s count, not a literal. The brief
+/// said five, but the fifth region's conquest is what unlocks the first Bulwark, so both Bulwarks
+/// would have arrived on the same frame — the opposite of what the tier is for.
+/// </para>
 /// </remarks>
 public static class QuestCatalogue
 {
@@ -108,15 +126,33 @@ public static class QuestCatalogue
     {
         new()
         {
-            Id = "q_hollow_hunt", Name = "THE HOLLOW HUNT",
-            Demand = "Reach depth 20 in the Verdant Hollow",
-            Goal = QuestGoal.DepthInRegion, RegionId = "verdant_hollow", Threshold = 20,
+            Id = "q_cinder_deep", Name = "THE LONG FURNACE",
+            Demand = "Reach wave 50 in Cinderworks",
+            Goal = QuestGoal.DepthInRegion, RegionId = "cinderworks", Threshold = 50, Unit = "WAVES",
         },
         new()
         {
-            Id = "q_first_vow", Name = "THE FIRST VOW",
-            Demand = "Finish a descent with a Vow's demand still met",
-            Goal = QuestGoal.RunsWithVowKept, Threshold = 1,
+            Id = "q_three_vows", Name = "THE THIRD OATH",
+            Demand = "Finish three descents with a Vow's demand still met",
+            Goal = QuestGoal.RunsWithVowKept, Threshold = 3, Unit = "DESCENTS",
+        },
+        new()
+        {
+            Id = "q_thirty_chests", Name = "THE FULL HOLD",
+            Demand = "Open 30 chests",
+            Goal = QuestGoal.ChestsOpened, Threshold = 30, Unit = "CHESTS",
+        },
+        new()
+        {
+            Id = "q_every_region", Name = "THE WHOLE MAP",
+            Demand = "Conquer every region",
+            Goal = QuestGoal.RegionsConquered, Threshold = Encounters.Regions.All.Count, Unit = "REGIONS",
+        },
+        new()
+        {
+            Id = "q_hollow_deep", Name = "THE DEEP HOLLOW",
+            Demand = "Reach wave 60 in the Verdant Hollow",
+            Goal = QuestGoal.DepthInRegion, RegionId = "verdant_hollow", Threshold = 60, Unit = "WAVES",
         },
     };
 

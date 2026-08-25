@@ -7,11 +7,10 @@ namespace ResonanceHunter.Core.Characters;
 
 /// <summary>How a character is earned.</summary>
 /// <remarks>
-/// Quests do not exist yet. The kind is declared anyway because the alternative — bolting a second
-/// unlock mechanism on later — is how a system ends up with two of everything, and this codebase has
-/// been bitten by parallel systems more than once. A quest-gated character reads as LOCKED and names
-/// its quest; the day quests land, <see cref="CharacterState.QuestDone"/> starts returning true and
-/// nothing else has to change.
+/// The kind was declared before quests existed because the alternative — bolting a second unlock
+/// mechanism on later — is how a system ends up with two of everything, and this codebase has been
+/// bitten by parallel systems more than once. Quests exist now (<see cref="Quests.QuestCatalogue"/>);
+/// the host evaluates them each frame and calls <see cref="CharacterState.CompleteQuest"/>.
 /// </remarks>
 public enum UnlockKind
 {
@@ -21,8 +20,25 @@ public enum UnlockKind
     /// <summary>Earned by conquering a region — see <see cref="CharacterUnlock.RegionId"/>.</summary>
     Conquest,
 
-    /// <summary>Earned by finishing a quest. The hook; nothing drives it yet.</summary>
+    /// <summary>Earned by finishing a quest — see <see cref="CharacterUnlock.QuestId"/>.</summary>
     Quest,
+}
+
+/// <summary>Which of a class's two champions this is — the one you earn early, or the one you work for.</summary>
+/// <remarks>
+/// Playtest (2026-08-26): "All the characters unlock far too easily. The first character of each class
+/// may unlock somewhat easily, but the second one should take effort." So every class has exactly one
+/// FIRST, earned by conquest (or given at the start), and exactly one SECOND, earned by a quest with a
+/// real demand behind it. The tier is data on the roster rather than a rule in a screen, so a test can
+/// hold the roster to it and the card can say which one it is looking at.
+/// </remarks>
+public enum ClassTier
+{
+    /// <summary>The champion a class hands you early — a conquest gate, or the starter.</summary>
+    First,
+
+    /// <summary>The champion a class makes you earn — always a quest gate.</summary>
+    Second,
 }
 
 /// <summary>What a character costs to have.</summary>
@@ -40,7 +56,10 @@ public sealed record CharacterUnlock
     public string? RegionId { get; init; }
     public string? QuestId { get; init; }
 
-    /// <summary>Player-facing text for a quest gate, since there is no quest catalogue to read yet.</summary>
+    /// <summary>
+    /// Player-facing text for a quest gate. The screens prefer the quest's own <c>Demand</c>; this is
+    /// the fallback for a quest id the catalogue no longer knows.
+    /// </summary>
     public string? QuestText { get; init; }
 }
 
@@ -88,6 +107,13 @@ public sealed record Character
     /// </remarks>
     public required Economy.ItemClass Class { get; init; }
 
+    /// <summary>
+    /// FIRST or SECOND of the class — see <see cref="ClassTier"/>. Required, so a champion added to
+    /// the roster has to say which of its class's two it is, and the tests can hold it to the gate that
+    /// tier implies.
+    /// </summary>
+    public required ClassTier Tier { get; init; }
+
     /// <summary>The Form they are better at than you are.</summary>
     public Form? Aptitude { get; init; }
 
@@ -107,6 +133,14 @@ public sealed record Character
     public IReadOnlyList<BuildTrigger> Grants { get; init; } = Array.Empty<BuildTrigger>();
 
     public CharacterUnlock Unlock { get; init; } = CharacterUnlock.Start;
+
+    /// <summary>The name without its article — "SEEKER" for "THE SEEKER". For the HUD, where width is scarce.</summary>
+    public string ShortName =>
+        Name.StartsWith("THE ", System.StringComparison.OrdinalIgnoreCase) ? Name[4..] : Name;
+
+    /// <summary>"FIRST OF THE WARDENS" — the line under the name that says which of the class's two this is.</summary>
+    public string TierLine =>
+        $"{(Tier == ClassTier.First ? "FIRST" : "SECOND")} OF THE {Economy.ItemClasses.PluralOf(Class)}";
 
     /// <summary>Base sprite key — <c>char_&lt;id&gt;_base</c>.</summary>
     public string SpriteKey => $"char_{Id}_base";

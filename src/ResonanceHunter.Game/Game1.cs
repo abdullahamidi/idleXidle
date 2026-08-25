@@ -580,7 +580,9 @@ public class Game1 : Game
         _pendingRunLog = save.RunLog.Select(RunLog.FromSave).ToList();
         // Safe here, unlike the run log: CharacterState is a plain field constructed with this class,
         // not a screen built in LoadContent. That distinction is exactly what crashed the game once.
-        _characters.Restore(save.ActiveCharacterId, save.QuestsDone);
+        // The banked unlocked set rides in too; a save from before it was banked is seeded from the
+        // gates that were true when it was written (LegacyUnlocks), so no champion is taken back.
+        SaveSystem.RestoreCharacters(save, _characters);
         _runsWithVowKept = save.RunsWithVowKept;
         // The guide rungs the player closed by hand — names, so a reordered enum can never
         // dismiss a different lesson. A plain field, so restoring here (Initialize) is safe.
@@ -781,9 +783,12 @@ public class Game1 : Game
             // being closed.
             RunLog = _expedition.Log.Entries.Select(RunLog.ToSave).ToList(),
             MasteryTaken = _mastery.Taken.ToList(),
-            // Only WHICH character, never which are unlocked — that is derived from conquest every
-            // frame, so there is nothing here to fall out of step with the world.
+            // WHICH character, and WHICH ARE EARNED. The earned set used to be derived every frame
+            // and never written, on the argument that it could not fall out of step with the world.
+            // It can fall out of step with the RULES: the tiered roster tightened every second
+            // champion's gate, and a derived set would have taken those champions back.
             ActiveCharacterId = _characters.ActiveId,
+            UnlockedCharacters = _characters.SaveUnlocked().ToList(),
             QuestsDone = _characters.SaveQuests().ToList(),
             RunsWithVowKept = _runsWithVowKept,
             ChestsOpened = _forge.ChestsOpened,
@@ -1820,9 +1825,14 @@ public class Game1 : Game
                     }
                     else
                     {
-                        // A fresh save posed part-way into one quest and nowhere on the other, so the
-                        // capture shows a live count rather than two identical LOCKED cards.
-                        _world.RegionFarm(VerdantHollow.RegionId).RestoreBestDepth(14);
+                        // A save posed part-way into every second champion's quest, so the capture
+                        // shows five live counts rather than five identical LOCKED cards — and two
+                        // conquests, so the first Warden is READY beside the second Warden's count.
+                        _world.RestoreConquered(new[] { VerdantHollow.RegionId, "cinderworks" });
+                        _world.RegionFarm(VerdantHollow.RegionId).RestoreBestDepth(34);
+                        _world.RegionFarm("cinderworks").RestoreBestDepth(23);
+                        _forge.RestoreChestsOpened(12);
+                        _runsWithVowKept = 1;
                         _roster.DevSelect("quiver");
                     }
                 }

@@ -776,6 +776,23 @@ public sealed class UiKit
         return true;
     }
 
+    /// <summary>
+    /// A gear class's icon in a box — <c>icon_class_warden</c> and its four siblings — or a diamond
+    /// in the class colour (or <paramref name="fallback"/>) while that art has not shipped.
+    /// </summary>
+    /// <remarks>
+    /// The same shape as the STATS screen's stat rows: try the key, draw the flat shape when it is
+    /// absent. The five keys are built from <see cref="ResonanceHunter.Core.Economy.ItemClasses.IconKey"/>,
+    /// so tools/check_asset_keys.py cannot see them as literals; it checks the family by name instead.
+    /// </remarks>
+    public void ClassIcon(SpriteBatch b, ResonanceHunter.Core.Economy.ItemClass cls, Rectangle box, Color? fallback = null)
+    {
+        if (Icon(b, ResonanceHunter.Core.Economy.ItemClasses.IconKey(cls), box, Color.White)) return;
+        var inset = box.Width / 6;
+        Diamond(b, new Rectangle(box.X + inset, box.Y + inset, box.Width - 2 * inset, box.Height - 2 * inset),
+                fallback ?? ClassColor(cls));
+    }
+
     // ── Text proxies (route through the active font — smooth TTF or pixel fallback) ────────────────
     // THE UNSIZED PROXIES NOW HAVE A NAMED SIZE. They used to fall through to the font's raster height
     // (32px), which outranked every typography token but ScreenTitle — see UiTypography.Label for what

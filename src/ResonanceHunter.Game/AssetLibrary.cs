@@ -154,6 +154,12 @@ public sealed class AssetLibrary
         // package: crossed blades for the critical's bite, a chest of coin for the loot.
         ["stat_focus"] = "icon_role_attacker",
         ["stat_guile"] = "icon_facility_hoardvaults",
+        // GEAR CLASS ICONS are NOT aliased. ItemClasses.IconKey builds icon_class_<warden|ranger|
+        // mystic|bulwark|wanderer>, and the loader keys every PNG by its basename, so the files the
+        // art pass drops under assets/art/Characters/Hunter/icons/class/ resolve the moment they land.
+        // An alias from a key to a file of the same name would be a no-op that the asset gate would
+        // flag as a dead target until the art exists. Until it does, UiKit.ClassIcon draws a diamond
+        // in the class colour, and tools/check_asset_keys.py reports the family by name.
         // Per-source creatures → package_03 enemy idle poses. One representative enemy per element (the
         // Warren's per-role keys fall back here; no Nature enemy shipped, so a wisp stands in).
         ["crea_body"] = "bonecrawler_idle_01", ["crea_machine"] = "stone_sentinel_idle_01",

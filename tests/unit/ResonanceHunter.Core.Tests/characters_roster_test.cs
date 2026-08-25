@@ -45,11 +45,11 @@ public class CharactersRosterTest
         var state = new CharacterState();
         var first = state.Refresh(new[] { "cinderworks" });
 
-        // Cinderworks gates TWO characters, and both have to be announced — a roster that reports one
-        // of them leaves the other silently in the list.
-        Assert.Equal(2, first.Count);
-        Assert.Contains(first, c => c.Id == "anvil");
-        Assert.Contains(first, c => c.Id == "magpie");
+        // Cinderworks gates exactly ONE character now — THE MAGPIE used to arrive on the same frame,
+        // which is the "everything unlocks at once" the tiered roster exists to end.
+        Assert.Single(first);
+        Assert.Equal("anvil", first[0].Id);
+        Assert.False(state.IsUnlocked("magpie"));
 
         // Idempotent: the same conquest a second time is not a second unlock.
         Assert.Empty(state.Refresh(new[] { "cinderworks" }));
@@ -68,7 +68,7 @@ public class CharactersRosterTest
         Assert.False(state.IsUnlocked("quiver"));
         Assert.False(state.IsUnlocked("oathbound"));
 
-        state.CompleteQuest("q_first_vow");
+        state.CompleteQuest("q_three_vows");
         var fresh = state.Refresh(everyRegion);
         Assert.Single(fresh);
         Assert.Equal("oathbound", fresh[0].Id);
@@ -110,13 +110,13 @@ public class CharactersRosterTest
     public void test_quests_done_survive_a_save_round_trip()
     {
         var state = new CharacterState();
-        state.CompleteQuest("q_first_vow");
+        state.CompleteQuest("q_three_vows");
         var saved = state.SaveQuests();
 
         var loaded = new CharacterState();
         loaded.Restore("seeker", saved);
-        Assert.True(loaded.QuestDone("q_first_vow"));
-        Assert.False(loaded.QuestDone("q_hollow_hunt"));
+        Assert.True(loaded.QuestDone("q_three_vows"));
+        Assert.False(loaded.QuestDone("q_thirty_chests"));
     }
 
     [Fact]

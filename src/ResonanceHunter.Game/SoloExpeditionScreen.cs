@@ -1849,12 +1849,30 @@ public sealed class SoloExpeditionScreen
         if (_ui.Assets.GetFirst(Character.PortraitKey, "hunter_portrait") is { } p) b.Draw(p, por, Color.White);
         else if (_ui.Assets.Get("ui_medallion_round") is { } mfr) b.Draw(mfr, por, Color.White);
 
-        var adept = Mastery.Affinity() is { } mf ? $"{FormShort(mf)} ADEPT" : "SEEKER";
-        _ui.TextBig(b, adept, 334, 43, Bone, 26);                                   // name
-        _ui.TextBig(b, $"LV {_hunter?.HunterLevel ?? 1}", 334, 80, Gold, 20);        // level
+        // WHO, AND WHAT CLASS: "SEEKER · WANDERER", the class in its own colour. Playtest
+        // (2026-08-26): "I cannot see the characters' classes." The name used to be the mastery
+        // title ("STRIKE ADEPT"), which is not who you are; that moves to a small line beneath.
+        // The three pieces shrink together until they fit the column, so THE FALLING TOWER's
+        // long name and WARDEN sit on one line rather than running under the power figure.
+        var name = Character.ShortName;
+        var cls = ItemClasses.NameOf(Character.Class);
+        const string sep = " · ";
+        const int nameColumn = 270;   // 334 to the panel's inner edge
+        var px = 26;
+        while (px > 16 && _ui.MeasureBig(name, px) + _ui.MeasureBig(sep, px) + _ui.MeasureBig(cls, px) > nameColumn) px--;
+        var nx = 334;
+        var ny = 40 + (26 - px) / 2;
+        _ui.TextBig(b, name, nx, ny, Bone, px);
+        nx += _ui.MeasureBig(name, px);
+        _ui.TextBig(b, sep, nx, ny, Slate, px);
+        nx += _ui.MeasureBig(sep, px);
+        _ui.TextBig(b, cls, nx, ny, UiKit.ClassColor(Character.Class), px);
+        if (Mastery.Affinity() is { } mf)
+            _ui.TextBig(b, $"{FormShort(mf)} ADEPT", 334, 67, Slate, 14);           // mastery title
+        _ui.TextBig(b, $"LV {_hunter?.HunterLevel ?? 1}", 334, 86, Gold, 20);        // level
         // Combat power — an icon + value (spec: an icon, not a "PWR" label).
-        if (_ui.Assets.Get("state_resonance_128") is { } pi) b.Draw(pi, new Rectangle(440, 74, 30, 30), Ember);
-        _ui.TextBig(b, Game1.Abbrev(_hunter?.PowerRating ?? 0), 476, 76, Ember, 24);
+        if (_ui.Assets.Get("state_resonance_128") is { } pi) b.Draw(pi, new Rectangle(440, 81, 30, 30), Ember);
+        _ui.TextBig(b, Game1.Abbrev(_hunter?.PowerRating ?? 0), 476, 83, Ember, 24);
         // HP bar (162,112,220,24), value centred on it.
         var hp = Math.Max(0, _replay?.HealthOf(0) ?? 0);
         var hpBar = new Rectangle(334, 112, 220, 24);
