@@ -335,7 +335,14 @@ public sealed class SoloExpeditionScreen
     private int _nextChampStrikeMs;
 
     /// <summary>0 to 1 across the champion's swing, completing exactly as the blow lands.</summary>
-    private float _champWindup;
+    // ── The champion's committed clip (2026-08-25). See UpdateChampionClip. ──
+    private string? _clipName;        // "attack" / "cast" while a clip is committed; null = idle
+    private float _clipStartMs;       // replay-clock ms the clip began
+    private float _clipSpeed = 1f;    // >1 when the beat came sooner than one clip can play
+    /// <summary>The authored clip length in replay ms at speed 1 — eight frames at the champion's rate.</summary>
+    private const float ClipMs = 1000f * 8f / ChampionFps;
+    /// <summary>The fastest a clip may be run to catch a beat. Past this the swing lands a beat late rather than blurring.</summary>
+    private const float MaxClipSpeed = 2.5f;
     private float _enemyBaseHealth = 120f, _enemyBaseDamage = 9f;
     private WaveOutcome _outcome = WaveOutcome.Cleared;
 
@@ -530,9 +537,7 @@ public sealed class SoloExpeditionScreen
         // _champWindup, the same anticipation model the enemy already used. Leaving a decaying timer
         // here that nothing reads is exactly the kind of dead machinery this codebase keeps finding.
         _champLunge = Math.Max(0f, _champLunge - dt * 5f);
-        _champSinceHit += dt;
         _enemySinceHit += dt;
-        _skillSinceCast += dt;
         _enemyLunge = Math.Max(0f, _enemyLunge - dt * 5f);
         // 1.25, not 2.5: the slide-in was over in 0.4s, which is too quick to register as creatures
         // ARRIVING rather than simply appearing. Twice as long, and the beat before it is now empty
@@ -645,13 +650,17 @@ public sealed class SoloExpeditionScreen
         // the run itself). The UI drew the live loadout all along; the sim fought the wave-one snapshot.
         if (_hunter is { } h && BuildStamp() != _buildStamp)
             _run.ReplaceBuild(ComposeBuild(h));
+        // Gear is not in the build stamp (the sim reads worn mods live), so the pool is refreshed every
+        // wave regardless: a ring put on mid-descent changes the health number at the next wave, not at
+        // the next death (playtest 2026-08-25).
+        _run.RefreshPool();
         _replayWave = _run.Wave + 1;
         _outcome = _run.PushWave();
 
         // The boss's arrival horn. Played when the boss wave actually BEGINS rather than at the
         // INCOMING banner, so it lands as the creature walks in — and so a reload straight into a
         // boss wave still announces it.
-        if (WaveScaling.IsBossWave(_replayWave, ExpeditionTuning.Default)) Sound?.Play("sfx_boss", 0.7f);
+        if (WaveScaling.IsBossWave(_replayWave, ExpeditionTuning.Default)) Sound?.Play("sfx_boss", 0.58f);
 
         // THE WAVE'S ACTUAL TOTAL, summed from the creatures the sim just built — not
         // `_enemyBaseHealth * EnemyScale(wave + 1)`, which is what this used to be. That was a
@@ -860,7 +869,8 @@ public sealed class SoloExpeditionScreen
         // was not making. The champion's clock has the same shape and the same hazard.
         if (_breakTimer > 0f)
         {
-            _enemyWindup = _champWindup = 0f;
+            _enemyWindup = 0f;
+            _clipName = null;   // a clip never survives the wave it was swung in
             _breakTimer -= dt;
             if (_breakTimer <= 0f) { BeginWave(); _enemyEnter = 1f; }
             return;
@@ -868,7 +878,7 @@ public sealed class SoloExpeditionScreen
 
         // Hold the fight until the new enemy has finished sliding in — otherwise the champion swings at empty
         // air while the enemy is still off to the right ("hunter hits before the enemy arrives").
-        if (_enemyEnter > 0f) { _enemyWindup = _champWindup = 0f; return; }
+        if (_enemyEnter > 0f) { _enemyWindup = 0f; _clipName = null; return; }
 
         _playheadMs += dt * 1000f * _speedMul;
         if (_skillFlash.Count > 0)
@@ -888,31 +898,8 @@ public sealed class SoloExpeditionScreen
         var lead = _nextEnemyStrikeMs - _playheadMs;
         _enemyWindup = lead > 0f && lead < windupMs ? 1f - lead / windupMs : 0f;
 
-        // The champion's swing, on the same anticipation model. StrikeSeconds is the authored clip
-        // length, so the arm is fully drawn back one clip-length out and connects on the frame the blow
-        // is credited — instead of the blow landing on a figure still standing at rest.
-        var champLead = _nextChampStrikeMs - _playheadMs;
-        // The windup window is the clip UP TO the contact frame (0.625 s of the 1 s clip), so the swing
-        // plays at one speed from first frame to touch; the follow-through after the hit is the rest.
-        var champWindowMs = StrikeSeconds * ContactFraction * 1000f;
-        _champWindup = champLead > 0f && champLead < champWindowMs
-            ? 1f - champLead / champWindowMs
-            : 0f;
-
-        // The SKILL anticipation, same model: the cast clip runs up to the cast. Read straight off the
-        // replay every frame (a few hundred events at most) rather than cached, so a new wave's replay
-        // needs no reset and a dev fixture that rewinds the playhead stays honest.
-        _skillWindup = 0f;
-        if (_replay.NextSkillEventAfter(_playheadMs) is { } nextSkill && (Form)nextSkill.Amount != Form.Trap)
-        {
-            var skillLead = nextSkill.AtMs - _playheadMs;
-            var castWindowMs = CastSeconds * ContactFraction * 1000f;
-            if (skillLead > 0f && skillLead < castWindowMs)
-            {
-                _skillWindup = 1f - skillLead / castWindowMs;
-                _skillForm = (Form)nextSkill.Amount;
-            }
-        }
+        // The champion's clip: one committed swing at a time, aimed at the next beat.
+        UpdateChampionClip();
 
         var batch = _replay.Advance(_playheadMs);
         for (var bi = 0; bi < batch.Count; bi++)
@@ -932,9 +919,8 @@ public sealed class SoloExpeditionScreen
                     // constantly) was the "too many red slashes" the playtest flagged — loudness has to be
                     // budgeted against importance, so the loud VFX are reserved for the SKILL casts below.
                     _champLunge = 1f;
-                    _champSinceHit = 0f;   // the follow-through starts at the touch
                     _nextChampStrikeMs = _replay.NextChampionStrikeAfter(e.AtMs);
-                    Sound?.Play("sfx_hit", 0.55f);   // the blow lands — soft, it fires constantly
+                    Sound?.Play("sfx_hit", 0.38f);   // the blow lands — soft, it fires constantly (0.55 wore testers out)
                     if ((_strikeCount++ & 1) == 0)   // every other auto-hit: a number and a small, quiet puff
                     {
                         SpawnDamage(HitDamage(1f), false);
@@ -946,7 +932,7 @@ public sealed class SoloExpeditionScreen
                     _enemyLunge = 1f;
                     _enemySinceHit = 0f;
                     _nextEnemyStrikeMs = _replay.NextEnemyStrikeAfter(e.AtMs);
-                    Sound?.Play("sfx_hit", 0.45f, pitch: -0.25f);   // same thud pitched down: taking, not giving
+                    Sound?.Play("sfx_hit", 0.30f, pitch: -0.25f);   // same thud pitched down: taking, not giving
                     _vfx.Play("fx_hit", ChampBox.Center.X, ChampBox.Center.Y + 40, scale: 2, fps: 14f, tint: Ember);
                     break;
                 case BattleEventKind.Skill:
@@ -963,9 +949,8 @@ public sealed class SoloExpeditionScreen
                     for (var k = bi + 1; k < batch.Count && batch[k].AtMs <= e.AtMs + 1; k++)
                         if (batch[k].Kind == BattleEventKind.Strike) { castTarget = batch[k].Slot; break; }
                     PlayFormVfx(form, (Source)e.Slot, castTarget);
-                    if (form != Form.Trap) { _skillSinceCast = 0f; _skillFollowForm = form; }   // the release frames
-                    Sound?.Play("sfx_cast", 0.6f);
-                    if (form == Form.Trap) Sound?.Play("sfx_crit", 0.65f);   // the crit-graded blow (SpawnDamage's crit flag below)
+                    Sound?.Play("sfx_cast", 0.42f);
+                    if (form == Form.Trap) Sound?.Play("sfx_crit", 0.46f);   // the crit-graded blow (SpawnDamage's crit flag below)
                     SpawnDamage(HitDamage(form == Form.Trap ? 3f : 2f), form == Form.Trap);   // skills hit big
                     break;
                 case BattleEventKind.Heal:
@@ -977,7 +962,7 @@ public sealed class SoloExpeditionScreen
                     _vfx.Play("fx_shield", ChampBox.Center.X, ChampBox.Center.Y - 20, scale: 4, fps: 12f, tint: Gold);
                     break;
                 case BattleEventKind.Down:
-                    Sound?.Play("sfx_champ_down", 0.75f);
+                    Sound?.Play("sfx_champ_down", 0.62f);
                     _vfx.Play("fx_death", ChampBox.Center.X, ChampBox.Center.Y, scale: 4, fps: 9f);
                     break;
                 case BattleEventKind.EnemyDown:
@@ -986,7 +971,7 @@ public sealed class SoloExpeditionScreen
                     // body half a second later — after the fall, not instead of it. Playtest: "düşman
                     // ölüyor ama önünde bir duman animasyonu çıkıyor, herkesin ölme animasyonu olması lazım."
                     _diedAt[e.Slot] = _anim;
-                    Sound?.Play("sfx_enemy_down", 0.5f, pitch: _isBossWave ? -0.35f : 0f);   // a boss falls deeper
+                    Sound?.Play("sfx_enemy_down", 0.36f, pitch: _isBossWave ? -0.35f : 0f);   // a boss falls deeper
                     var (dx, dy) = EnemyPoint(e.Slot, 0.55f);
                     // A boss falling is the loudest beat in the fight: the starburst AND the plume.
                     if (_isBossWave) _vfx.Play("fx_crit", dx, dy - 40, scale: EnemyScale(e.Slot, 1.2f), fps: 10f, tint: Gold);
@@ -1145,6 +1130,7 @@ public sealed class SoloExpeditionScreen
         b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
         DrawHunterHud(b);
         DrawStageHeader(b, regionName, _isBossWave);
+        DrawLogButton(b, hit, clicked && !_logOpen);
         // Under the EXPEDITION LOG's full-screen scrim the rail is furniture — no TAKE ONLY edits, no errands.
         DrawRightColumn(b, hit, clicked && !_logOpen);
         // Rail frame first, then its contents. The old order relied on the rail being TRANSLUCENT — the
@@ -1225,8 +1211,7 @@ public sealed class SoloExpeditionScreen
 
     /// <summary>Seconds since the champion's last auto-hit / the enemy's last bite / the champion's last
     /// cast — the follow-through clocks. Large at rest so nothing plays before its first beat.</summary>
-    private float _champSinceHit = 99f, _enemySinceHit = 99f, _skillSinceCast = 99f;
-    private Form _skillFollowForm;
+    private float _enemySinceHit = 99f;
     /// <summary>How long an enemy's follow-through stays on its attack clip: three frames at ~10 fps.</summary>
     private const float EnemyFollowSeconds = 0.3f;
 
@@ -1452,7 +1437,9 @@ public sealed class SoloExpeditionScreen
         // the bar while the rest of the wave stood — it read as a bar that resets — and it answered no
         // question the per-creature pips above each head do not answer honestly. The label keeps the
         // bar's exact anchor so the callout stack above it does not drift.
-        var label = $"{_run?.LastWaveArchetype.ToString().ToUpperInvariant()}  x{comp.Count}";
+        // No "x4" after it (playtest 2026-08-25): the creatures are counted by being drawn, and each
+        // wears its own life pip — the number said what the eye already had.
+        var label = $"{_run?.LastWaveArchetype.ToString().ToUpperInvariant()}";
         var affixes = _run?.LastWaveAffixes ?? Array.Empty<Affix>();
         if (affixes.Count > 0)
             label += "   ·   " + string.Join(" + ", affixes.Select(a => a.ToString().ToUpperInvariant()));
@@ -1885,6 +1872,48 @@ public sealed class SoloExpeditionScreen
     }
 
     /// <summary>Top-center stage header (region B): region name, current wave, and the conquest progress bar.</summary>
+    /// <summary>Where the EXPEDITION LOG button sits: just right of the stage header, clear of the pills.</summary>
+    private static readonly Rectangle LogButtonRect = new(1206, 40, 64, 64);
+
+    /// <summary>
+    /// The EXPEDITION LOG's own button — the log was reachable only by the L key, which a player who has
+    /// not read the help screen does not know exists (playtest 2026-08-25: "put an icon button for it").
+    /// </summary>
+    /// <remarks>
+    /// A small sheet-of-paper glyph drawn from fills (no scroll icon ships), the key it also answers to,
+    /// and a hover tip that names the screen. It calls the same <see cref="ToggleLog"/> the key does; the
+    /// host's L handler closes the other overlays first, so the button is offered only while none of them
+    /// is up — which the host guarantees by not routing clicks here under a modal.
+    /// </remarks>
+    private void DrawLogButton(SpriteBatch b, Point hit, bool clicked)
+    {
+        var r = LogButtonRect;
+        var hot = r.Contains(hit);
+        // The chip style of the filter's buttons, not a panel frame: a 64 px ornate frame squashes its
+        // corner scrollwork into a smear, and the chip reads as a button at this size.
+        _ui.Fill(b, r, new Color(0x14, 0x10, 0x1A, 0xE0));
+        var edge = _logOpen ? Gold * 0.8f : hot ? Bone : Dim;
+        _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, 2), edge);
+        _ui.Fill(b, new Rectangle(r.X, r.Bottom - 2, r.Width, 2), edge);
+        _ui.Fill(b, new Rectangle(r.X, r.Y, 2, r.Height), edge);
+        _ui.Fill(b, new Rectangle(r.Right - 2, r.Y, 2, r.Height), edge);
+        // The sheet: a pale page with three text lines and a folded corner.
+        var page = new Rectangle(r.X + 20, r.Y + 14, 24, 30);
+        var ink = _logOpen ? Gold : hot ? Color.White : Bone * 0.85f;   // legible at rest, not a ghost
+        _ui.Fill(b, page, ink);
+        _ui.Fill(b, new Rectangle(page.X + 2, page.Y + 2, page.Width - 4, page.Height - 4), new Color(0x14, 0x10, 0x1A));
+        for (var i = 0; i < 3; i++)
+            _ui.Fill(b, new Rectangle(page.X + 5, page.Y + 7 + i * 6, page.Width - 10 - (i == 2 ? 6 : 0), 2), ink);
+        _ui.Fill(b, new Rectangle(page.Right - 8, page.Y, 8, 8), new Color(0x14, 0x10, 0x1A));
+        _ui.Fill(b, new Rectangle(page.Right - 8, page.Y + 6, 6, 2), ink);
+        _ui.TextCenterBig(b, "LOG", r.Center.X, r.Bottom - 21, ink, 14);
+        if (hot) _ui.HoverTip(b, "EXPEDITION LOG — every descent's report. The L key opens it too.", hit);
+        if (UiKit.ClickedIn(r, hit, clicked)) WantsLog = true;
+    }
+
+    /// <summary>Set by the log button; the host routes it through its own L handling and clears it.</summary>
+    public bool WantsLog { get; set; }
+
     private void DrawStageHeader(SpriteBatch b, string regionName, bool isBossWave)
     {
         // Rev 3 §12: stage header (630,18,560,135) — narrower, so it clears the currency bar (≥20px gap). One
@@ -2018,7 +2047,7 @@ public sealed class SoloExpeditionScreen
         if (Deepest > 0) _ui.TextBig(b, $"DEEPEST WAVE REACHED  {Deepest}", inner.X, ry, Slate, 16);
         else if (!anyReward) _ui.TextBig(b, "NOTHING TO CLAIM YET", inner.X, inner.Y, Slate, 18);
 
-        DrawKeepFilter(b, new Rectangle(px, reward.Bottom + 16, pw, 286), hit, clicked);
+        DrawKeepFilter(b, new Rectangle(px, reward.Bottom + 16, pw, 372), hit, clicked);
     }
 
     // ── TAKE ONLY — the chest keep-filter, on the screen whose drops it decides (2026-08-23). ─────
@@ -2049,19 +2078,34 @@ public sealed class SoloExpeditionScreen
 
     private void DrawKeepFilter(SpriteBatch b, Rectangle plate, Point hit, bool clicked)
     {
-        var inner = CleanPanel(b, plate, "TAKE ONLY");
-        // Line 1: [-]  TIER N+  [+]
+        // SLICED, NOT STRETCHED. This plate is taller than it is wide, so UiKit.Panel dressed it in the
+        // square frame — whose corner flourishes reach 45 px in from the top — and the title sat on the
+        // ornament while the footer line ran under the bottom rail (playtest 2026-08-25: "TAKE ONLY is
+        // on top of the frame"). The modal frame nine-slices with native corners, like the stage header.
+        _ui.PanelNine(b, plate, "ui_panel_modal_wide");
+        // THE PLATE SAYS WHAT IT IS. "TAKE ONLY" alone did not read as a filter (playtest: "it is not
+        // clear that the item filter is an item filter") — so: a name, a plain sentence, and a label on
+        // each control.
+        _ui.TextBig(b, "CHEST FILTER", plate.X + 40, plate.Y + 30, Gold, 20);
+        _ui.TextBig(b, "WHICH CHESTS TO KEEP", plate.X + 40, plate.Y + 56, Slate, 15);
+        var inner = new Rectangle(plate.X + 40, plate.Y + 90, plate.Width - 80, plate.Height - 90 - UiKit.PanelCorner);
+
+        // Line 1: LOWEST TIER   [-]  ANY / TIER N+  [+]
         var y = inner.Y;
+        _ui.TextBig(b, "LOWEST TIER", inner.X, y, Bone, 15);
+        y += 22;
         var minus = new Rectangle(inner.X, y, 34, 34);
         var plus = new Rectangle(inner.Right - 34, y, 34, 34);
         MiniButton(b, minus, "-", hit);
         MiniButton(b, plus, "+", hit);
-        _ui.TextCenter(b, KeepMinTier <= 0 ? "ANY TIER" : $"TIER {KeepMinTier}+", inner.Center.X, y + 6, KeepMinTier > 0 ? Gold : Slate);
+        _ui.TextCenter(b, KeepMinTier <= 0 ? "ANY TIER" : $"TIER {KeepMinTier} AND UP", inner.Center.X, y + 6, KeepMinTier > 0 ? Gold : Slate);
         if (UiKit.ClickedIn(minus, hit, clicked) && KeepMinTier > 0) { KeepMinTier -= 1; FilterDirty = true; }
         if (UiKit.ClickedIn(plus, hit, clicked) && KeepMinTier < 99) { KeepMinTier += 1; FilterDirty = true; }
         // Lines 2-4: the slots, as TOGGLES — several at once ("hem bot hem kolye"). Three rows of three:
         // eight slots and ALL, which clears them.
-        y += 44;
+        y += 46;
+        _ui.TextBig(b, "GEAR SLOTS THE CHEST IS FOR", inner.X, y, Bone, 15);
+        y += 22;
         var chipW = (inner.Width - 8) / 3;
         for (var i = 0; i < SlotChips.Length + 1; i++)
         {
@@ -2082,8 +2126,8 @@ public sealed class SoloExpeditionScreen
         }
         // The last line: what happens to the rest, only while a filter is set.
         y += 3 * 34 + 6;
-        _ui.TextBig(b, KeepMinTier > 0 || KeepSlots.Count > 0 ? "THE REST BECOME A LITTLE SCRAP" : "EVERY CHEST IS KEPT",
-                    inner.X, y, Dim, 16);
+        _ui.TextBig(b, KeepMinTier > 0 || KeepSlots.Count > 0 ? "OTHER CHESTS TURN INTO A LITTLE SCRAP" : "EVERY CHEST IS KEPT",
+                    inner.X, y, Dim, 15);
     }
 
     private void MiniButton(SpriteBatch b, Rectangle r, string label, Point hit, bool lit = false)
@@ -2349,20 +2393,67 @@ public sealed class SoloExpeditionScreen
     public float? DevSwingPhase;
 
     /// <summary>
-    /// The champion's SKILL anticipation: 0..1 across the clip length ENDING at the next Skill event, and
-    /// the Form that event carries — so the cast (or, for a Strike, the attack) clip opens its hand on the
-    /// exact frame the effect appears. Zero when no skill is due inside one clip length.
+    /// Pick, start and finish the champion's clip. ONE clip at a time, played through to its last frame.
     /// </summary>
     /// <remarks>
-    /// This replaced a reactive timer armed BY the Skill event, which played the whole cast after its own
-    /// effect had flashed — the same backwards phase the auto-swing once had (see WaveReplay.
-    /// NextChampionStrikeAfter). A Trap fires on being hit and gets no clip; every other Form is a cast,
-    /// except Strike, which is the heavier swing and uses the attack clip.
+    /// <para>
+    /// <b>THE OLD MODEL CHOSE THE CLIP EVERY FRAME from four overlapping timers</b> — a skill windup, a
+    /// skill follow-through, a strike follow-through and a strike windup — with a priority order between
+    /// them. It looked right at one cast per second. At a real build's tempo (skills at 1.06× and rising,
+    /// four slots, the auto-swing every 1.2 s) the next cast's windup began before the last cast's release
+    /// had finished, outranked it, and snapped the figure from frame 7 back to frame 0; a strike windup
+    /// already half-run when a follow-through ended made the arm APPEAR mid-swing. Playtest 2026-08-25:
+    /// "the animations cannot keep up with the skill speed; it goes into strange animations."
+    /// </para>
+    /// <para>
+    /// Now a clip is a COMMITMENT. When the champion is free, the next beat — the earlier of the next
+    /// Skill event and the next auto-strike — is read off the replay, and its clip starts exactly one
+    /// contact-length ahead of it so the blow connects on the beat (ContactFraction). If the champion
+    /// only became free INSIDE that window, the clip runs faster (up to MaxClipSpeed) so the contact still
+    /// lands on time rather than starting late; beyond that it lands a little late, which reads as a
+    /// heavy swing, not a broken one. While a clip runs, later beats do not touch it — their damage
+    /// numbers and effects still fire, because those are the fight, and the figure catches the next beat
+    /// it can. Nothing snaps to frame 0 mid-recovery any more.
+    /// </para>
+    /// <para>
+    /// The clock is the REPLAY clock (<c>_playheadMs</c>), so a raised battle speed plays the clips faster
+    /// in step with the beats they are aimed at, and a paused wave holds the pose.
+    /// </para>
     /// </remarks>
-    private float _skillWindup;
-    private Form _skillForm;
-    /// <summary>How long a cast clip runs — eight frames at the champion's frame rate, like the strike.</summary>
-    private const float CastSeconds = 8f / ChampionFps;
+    private void UpdateChampionClip()
+    {
+        if (_clipName is not null && _playheadMs >= _clipStartMs + ClipMs / _clipSpeed)
+            _clipName = null;
+        if (_clipName is not null) return;   // committed — plays through
+        if (_replay is null) return;
+
+        float? beatMs = null;
+        string? clip = null;
+        // A Trap fires on being hit and gets no clip; every other Form is a cast, except Strike, which
+        // is the heavier swing and uses the attack clip.
+        if (_replay.NextSkillEventAfter(_playheadMs) is { } nextSkill && (Form)nextSkill.Amount != Form.Trap)
+        {
+            beatMs = nextSkill.AtMs;
+            clip = (Form)nextSkill.Amount == Form.Strike ? "attack" : "cast";
+        }
+        if (_nextChampStrikeMs > _playheadMs && (beatMs is null || _nextChampStrikeMs < beatMs.Value))
+        {
+            beatMs = _nextChampStrikeMs;
+            clip = "attack";
+        }
+        if (beatMs is null) return;
+
+        var contactMs = ClipMs * ContactFraction;
+        var lead = beatMs.Value - _playheadMs;
+        if (lead > contactMs) return;   // not yet: the clip starts one contact-length before the beat
+
+        _clipSpeed = Math.Clamp(contactMs / Math.Max(1f, lead), 1f, MaxClipSpeed);
+        _clipStartMs = _playheadMs;
+        _clipName = clip;
+    }
+
+    /// <summary>Seconds into the committed clip, at its speed — what the strip is drawn at.</summary>
+    private float ClipSeconds => (_playheadMs - _clipStartMs) / 1000f * _clipSpeed;
 
     /// <summary>The world's corruption tier (0..CorruptionScaling.MaxTier), host-fed. It tints every
     /// creature and boss (CorruptionLook.Enemy), names the boss by its epithet and prints on the header.</summary>
@@ -2442,32 +2533,19 @@ public sealed class SoloExpeditionScreen
             : dead ? Color.Lerp(Color.White, new Color(0x8A, 0x80, 0x88), ease * 0.6f)
             : Color.White;
 
-        // ATTACK and CAST do not loop, and are driven by the combat beat rather than their own clock — a
-        // swing that runs free drifts out of step with the hit it is delivering. _champWindup runs 0 to 1
-        // across the clip length ENDING at the blow (the enemy's swing follows the same rule on the other
-        // side of the arena); the cast timer counts DOWN from the Skill event.
-        // DevSwingPhase forces the ATTACK clip as well as its phase (the fightswing fixture).
-        // Each beat is a windup (0..contact) and then a follow-through (contact..end) started by the hit.
-        // The SKILL beat outranks the auto-swing — a cast is the rarer, louder beat, and the swing's windup
-        // runs most of every 1.2-second cycle, so it would otherwise hide every cast. A follow-through
-        // outranks the NEXT windup so a finished swing is never snapped back to frame 0 mid-recovery.
+        // ATTACK and CAST do not loop. They are the ONE committed clip UpdateChampionClip aimed at the
+        // next beat, drawn at its own clock — never chosen here, never re-chosen mid-swing (see that
+        // method for the snapping this replaced). DevSwingPhase forces the ATTACK clip and its phase
+        // (the fightswing fixture).
         var fixture = DevSwingPhase is not null && !dead;
-        var skilling = !dead && !fixture && _skillWindup > 0f;
-        var skillFollow = !dead && !fixture && !skilling && _skillSinceCast < CastSeconds * (1f - ContactFraction);
-        var strikeFollow = !dead && !fixture && !skilling && !skillFollow
-                           && _champSinceHit < StrikeSeconds * (1f - ContactFraction);
-        var swinging = !dead && !skilling && !skillFollow && !strikeFollow && (_champWindup > 0f || fixture);
-        var skillForm = skilling ? _skillForm : _skillFollowForm;
         var clip = hasDeathClip ? "death"
-            : skilling || skillFollow ? (skillForm == Form.Strike ? "attack" : "cast")
-            : swinging || strikeFollow ? "attack" : "idle";
+            : fixture ? "attack"
+            : !dead && _clipName is not null ? _clipName
+            : "idle";
         var seconds = DevSwingPhase is { } ph && !dead
             ? ph * StrikeSeconds
-            : skilling ? _skillWindup * CastSeconds * ContactFraction
-            : skillFollow ? CastSeconds * ContactFraction + _skillSinceCast
-            : strikeFollow ? StrikeSeconds * ContactFraction + _champSinceHit
-            : swinging ? _champWindup * StrikeSeconds * ContactFraction
             : hasDeathClip ? (DownedSeconds - _downedTimer)   // plays through, then CLAMPS on the last frame
+            : !dead && _clipName is not null ? ClipSeconds
             : _anim;
 
         // A DEAD CHAMPION WITHOUT A DEATH CLIP HOLDS ITS LAST POSE — the fallback freezes the idle.

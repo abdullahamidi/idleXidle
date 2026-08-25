@@ -152,10 +152,27 @@ def write(path: str, buf: list[float], target_peak: float = 0.40) -> tuple[float
 REPORT: list[tuple[str, float, float, float]] = []   # (name, dur, peak, max allowed dur)
 
 
+def soften(buf: list[float], attack_ms: float, lp: float) -> None:
+    """Round the cue off: a short linear attack (no click on the first sample) and a
+    one-pole low-pass over the whole thing (the fizz above ~3 kHz is what wears an
+    ear out over a thousand hits). Playtest 2026-08-25: "make the hunt sounds a bit
+    softer — after a while they get annoying." lp is the smoothing coefficient,
+    lower = darker (0.35 ≈ 3 kHz at 44.1 kHz)."""
+    n = int(attack_ms / 1000.0 * RATE)
+    for i in range(min(n, len(buf))):
+        buf[i] *= i / n
+    acc = 0.0
+    for i in range(len(buf)):
+        acc += (buf[i] - acc) * lp
+        buf[i] = acc
+
+
 def make(name: str, out_dir: str, seconds: float, build, target_peak: float = 0.40,
-         max_ms: float = 250.0) -> None:
+         max_ms: float = 250.0, soft: tuple[float, float] | None = None) -> None:
     buf = [0.0] * int(seconds * RATE)
     build(buf)
+    if soft is not None:
+        soften(buf, *soft)
     dur, peak = write(os.path.join(out_dir, name + ".wav"), buf, target_peak)
     REPORT.append((name, dur, peak, max_ms))
 
@@ -180,8 +197,11 @@ def crit(buf):
 
 
 def enemy_down(buf):
-    """Short down-chirp — a creature falls. The classic chiptune defeat shape."""
-    sweep(buf, 0.0, 0.16, 660.0, 190.0, 0.9, shape="square", curve=1.3)
+    """Short down-chirp — a creature falls. Was a square-wave chip chirp; a sine body
+    with a touch of square underneath now, so it still reads as a fall without the
+    buzz (softening pass, 2026-08-25)."""
+    sweep(buf, 0.0, 0.16, 560.0, 170.0, 0.8, shape="sine", curve=1.3)
+    sweep(buf, 0.0, 0.10, 560.0, 170.0, 0.25, shape="square", curve=1.3)
     rng = Noise(0xED04)
     air(buf, 0.06, 0.10, 0.30, rng, lp=0.2)
 
@@ -258,12 +278,14 @@ def upgrade(buf):
 
 
 if __name__ == "__main__":
-    make("sfx_hit", COMBAT_DIR, 0.10, hit, target_peak=0.34)
-    make("sfx_crit", COMBAT_DIR, 0.14, crit, target_peak=0.40)
-    make("sfx_enemy_down", COMBAT_DIR, 0.19, enemy_down, target_peak=0.36)
-    make("sfx_champ_down", COMBAT_DIR, 0.48, champ_down, target_peak=0.40, max_ms=500)
-    make("sfx_boss", COMBAT_DIR, 0.56, boss, target_peak=0.40, max_ms=600)
-    make("sfx_cast", COMBAT_DIR, 0.21, cast, target_peak=0.30)
+    # The fight set is SOFT (2026-08-25): a rounded attack and a low-pass on every cue, and lower
+    # peaks than the forge set — these fire a thousand times an hour and must never bite.
+    make("sfx_hit", COMBAT_DIR, 0.10, hit, target_peak=0.26, soft=(4.0, 0.30))
+    make("sfx_crit", COMBAT_DIR, 0.14, crit, target_peak=0.32, soft=(3.0, 0.40))
+    make("sfx_enemy_down", COMBAT_DIR, 0.19, enemy_down, target_peak=0.28, soft=(5.0, 0.35))
+    make("sfx_champ_down", COMBAT_DIR, 0.48, champ_down, target_peak=0.34, max_ms=500, soft=(8.0, 0.30))
+    make("sfx_boss", COMBAT_DIR, 0.56, boss, target_peak=0.36, max_ms=600, soft=(20.0, 0.25))
+    make("sfx_cast", COMBAT_DIR, 0.21, cast, target_peak=0.24, soft=(6.0, 0.45))
     make("sfx_reveal_tick", UI_DIR, 0.08, reveal_tick, target_peak=0.32)
     make("sfx_equip", UI_DIR, 0.13, equip, target_peak=0.36)
     make("sfx_gem", UI_DIR, 0.25, gem, target_peak=0.36)

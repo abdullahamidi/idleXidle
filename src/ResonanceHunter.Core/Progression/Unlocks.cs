@@ -130,7 +130,10 @@ public static class Unlocks
         // depth, so a player at wave 5 has exactly one and no sense yet of what a Form does. Opening the
         // tree at 8 means it arrives when there is something to spend and a fight to spend it on, and it
         // arrives SECOND — you choose your skills, then you shape how they behave.
-        Activity.Mastery => f.DeepestWave >= 8,
+        // Wave 25 — the fifth boss. It was wave 8; the tree is a mid-game workbench, not a first
+        // errand (playtest 2026-08-25: "mastery is not a starting thing"), and MasteryPoints pays
+        // four points by then, enough to walk in and buy something.
+        Activity.Mastery => f.DeepestWave >= 25,
 
         // OPEN FROM THE START (playtest nine, item 11: "let the player look around"). It used to open
         // on the first conquest, but the Map already locks its regions individually INSIDE — so a new
@@ -175,7 +178,7 @@ public static class Unlocks
         Activity.Vault => "Earn a chest from a boss",
         Activity.Forge => "Earn a chest from a boss",
         Activity.Build => "Reach wave 5",
-        Activity.Mastery => "Reach wave 8",
+        Activity.Mastery => "Reach wave 25",
         // Open from the start, like the Hunt — nothing to require, so nothing to say. A price line on
         // a door that is never shut would read as a lock that opened early, i.e. as a bug.
         Activity.Map => "",
@@ -251,7 +254,7 @@ public static class Unlocks
             "This is where items change from what they dropped as. UPGRADE raises "
             + "an item's level — every stat on it grows. RE-ROLL gives a Rare or better item a new "
             + "random enchant; its level, stats and gems stay. SOCKET sets a gem into it. "
-            + "BREAK DOWN sells it, or salvages what you will not wear into materials. MERGE fuses "
+            + "SALVAGE sells it, or breaks what you will not wear into materials. MERGE fuses "
             + "three of a kind into one better piece. Materials come from waves; the deeper you fight, "
             + "the better the material a wave pays. Waves sometimes drop a CHART, a one-use "
             + "paper that pays for one of these jobs in full.",

@@ -10,7 +10,12 @@ namespace ResonanceHunter.Core.Builds;
 /// <summary>Live state for ONE character across a whole expedition. Health and cooldowns persist.</summary>
 public sealed class Champion
 {
-    public required int MaxHealth { get; init; }
+    /// <summary>
+    /// The pool. Settable, not init-only, since the 2026-08-25 health model: a worn ring or a trained
+    /// rank changes the pool the champion is standing in, and <see cref="SoloExpedition.RefreshPool"/>
+    /// rescales it at the next wave boundary instead of waiting for a death.
+    /// </summary>
+    public required int MaxHealth { get; set; }
     public int Health { get; set; }
     public bool Alive => Health > 0;
 
@@ -1095,7 +1100,8 @@ public static class SoloBattle
                 for (var ci = 0; ci < creatures.Count; ci++)
                     if (creatures[ci].Alive) incoming += creatures[ci].Damage;
 
-                var taken = incoming / Math.Max(0.05f, mods.Health) * defenseFactor * fragilityMult;
+                // mods.Health no longer divides the bite — it multiplies the pool (see ChampionHealth).
+                var taken = incoming * defenseFactor * fragilityMult;
 
                 // ── ENDURE. Applied in this order on purpose: multipliers first, then the flat cut, so
                 //    PADDING is worth MORE to a build that already mitigates — small bites are what a
@@ -1233,7 +1239,18 @@ public static class SoloBattle
         ArgumentNullException.ThrowIfNull(build);
         ArgumentNullException.ThrowIfNull(hunter);
         // VowHealthMultiplier already folds in the build's own MaxHealth term; do not apply it twice.
-        var pool = Math.Max(MinimumChampionHealth, hunter.MaxHealth) * VowHealthMultiplier(build);
+        //
+        // THE HEALTH CHANNEL IS HEALTH NOW (playtest 2026-08-25: "we wore a ring that says -X% health
+        // and the champion's health did not change"). Until this change every HEALTH multiplier in the
+        // game — trained VITALITY, the worn charm, a HEALTH affix, a LIFE gem, a keystone's health term,
+        // the trait tree's "more health" nodes — was a DIVISOR on incoming damage that the sim applied
+        // silently, while the tooltips, the affix names and the stats screen all said "health". The
+        // survivability was real; the number the player was shown never moved, and a stat the player
+        // cannot see move is a stat the player believes is broken. So the whole channel now multiplies
+        // the POOL, here, and the bite is just the bite. Same hits-to-die, honest number.
+        var pool = Math.Max(MinimumChampionHealth, hunter.MaxHealth)
+                   * VowHealthMultiplier(build)
+                   * MathF.Max(0.05f, build.Resolve(hunter).Health);
         return Math.Max(1, (int)MathF.Round(pool));
     }
 

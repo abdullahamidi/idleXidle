@@ -112,9 +112,10 @@ rather than the axis generally.
 total tree cost         184
 ```
 
-Against roughly **60 points** at full current content (six regions, depth 50 each,
-one point per five depth) that is **33%** — the invariant from flow doc §4.4. One
-branch outright plus most of a second, or two branches to ring 3 and nothing else.
+Against roughly **60 points** at full current content (six regions, depth 150
+each, on the square-root curve of §4.1) that is about **a third** — the invariant
+from flow doc §4.4. One branch outright plus most of a second, or two branches to
+ring 3 and nothing else.
 
 ### 3.3 Skill Tree — node catalogue
 
@@ -319,9 +320,15 @@ eleven keystones already exist.
 
 ### 4.1 Skill point income
 
-    skillPoints = Σ over regions of floor(bestDepth_region / 5)
+    skillPoints = Σ over regions of floor(0.8 × sqrt(bestDepth_region))
 
-Six regions at depth 50 → 60 points. Tree cost 184 → 32.6% reachable.
+Per region: wave 25 → 4, wave 40 → 5, wave 100 → 8, wave 150 → 9, wave 225 → 12.
+Six regions at depth 150 → 54 points; at depth 225 → 72. Tree cost 184 → roughly
+a third reachable. (Was `floor(depth / 5) + 3`, linear with three free points —
+playtest 2026-08-25 reached a specialisation inside fifteen minutes on it. The
+square root pays fast early and slows for ever after, which is the shape a wall
+should have. The Mastery screen itself opens at wave 25, the fifth boss, not wave
+8: the tree is a mid-game workbench, not a first errand. Code: `MasteryPoints`.)
 
 ### 4.2 Trait point income
 

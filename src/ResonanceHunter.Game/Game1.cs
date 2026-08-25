@@ -341,6 +341,12 @@ public class Game1 : Game
         {
             PreferredBackBufferWidth = CanvasWidth * 3,
             PreferredBackBufferHeight = CanvasHeight * 3,
+            // FULLSCREEN IS A BORDERLESS WINDOW THE SIZE OF THE MONITOR, not an exclusive mode switch.
+            // Playtest 2026-08-25: "Fullscreen yayın yapılmıyor" — an exclusive-mode surface is invisible
+            // to Discord screen share, OBS window capture and the Windows Game Bar, and it flickers the
+            // desktop on every Alt-Tab. MonoGame's soft fullscreen keeps the desktop resolution, so the
+            // aspect-fit letterbox (CanvasFit.PresentFit) is exactly what the player sees on stream.
+            HardwareModeSwitch = false,
         };
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
@@ -1454,7 +1460,7 @@ public class Game1 : Game
                     }
                     _forge.AddChest(new Chest { Rarity = Rarity.Epic, Tier = 8, Element = Source.Nature });
                     _mastery.SetEarned(3);
-                    _deepestEver = 8;   // MasteryOpen gate (Unlocks: DeepestWave >= 8) — without it the SPEND POINTS row this fixture poses never renders
+                    _deepestEver = 25;   // MasteryOpen gate (Unlocks: DeepestWave >= 25) — without it the SPEND POINTS row this fixture poses never renders
                     // A DELIBERATELY beefy enemy: a real wave-1 fight is over in ~1.5s, so a shot taken a
                     // second in only ever caught the aftermath — useless for verifying the fight itself.
                     // This one stays standing long enough to capture skills firing.
@@ -1649,14 +1655,17 @@ public class Game1 : Game
                     var regions = new[] { "cinderworks", "umbral_reach", VerdantHollow.RegionId,
                                           "pale_choir", "marrow_wastes", "still_archive" };
                     for (var i = 0; i < grades.Length; i++)
-                        _forge.AddChest(new Chest
-                        {
-                            Rarity = grades[i],
-                            Tier = 6 + i * 7,
-                            Element = (Source)(i % 6),
-                            Region = regions[i],
-                            RunTilt = i == 0 ? 1.35f : 1f,
-                        });
+                        // The Epic card is posed as a STACK of three (identical chests stack; the pile
+                        // and the ×3 badge are what the capture proves) — a loop of `copies` per grade.
+                        for (var copy = 0; copy < (i == 1 ? 3 : 1); copy++)
+                            _forge.AddChest(new Chest
+                            {
+                                Rarity = grades[i],
+                                Tier = 6 + i * 7,
+                                Element = (Source)(i % 6),
+                                Region = regions[i],
+                                RunTilt = i == 0 ? 1.35f : 1f,
+                            });
                 }
 
                 if (sm == "weave")
@@ -1953,7 +1962,10 @@ public class Game1 : Game
         }
         // L — THE EXPEDITION LOG. It closes every other overlay, because it is a full-screen read and
         // the one thing the player opens specifically to think, not to act.
-        if (Pressed(Keys.L) && !attunementHolds)
+        // The hunt screen's LOG button raises WantsLog (drawn last frame); it is the same door as L.
+        var wantsLog = _expedition.WantsLog;
+        _expedition.WantsLog = false;
+        if ((Pressed(Keys.L) || wantsLog) && !attunementHolds)
         {
             _expedition.ToggleLog();
             if (_expedition.LogOpen)
@@ -2070,7 +2082,7 @@ public class Game1 : Game
                 else
                 {
                     // The VERB picks the tab (review 2026-08-23: the forge opened on whatever tab was last
-                    // used, so GEAR's REFORGE could land on BREAK DOWN with the RE-ROLL button off screen).
+                    // used, so GEAR's REFORGE could land on SALVAGE with the RE-ROLL button off screen).
                     // GEAR's SALVAGE arrives with the question already asked — never a silent scrap
                     // ordered from another screen.
                     switch (request.Action)
@@ -3310,8 +3322,12 @@ public class Game1 : Game
     /// <summary>The music-volume slider track.</summary>
     private static readonly Rectangle SettingsMusicTrack = new(900, 472, 400, 30);
 
-    private static readonly Rectangle SettingsClose = new(620, 880, 300, 56);
-    private static readonly Rectangle SettingsQuit = new(1000, 880, 300, 56);
+    // CLOSE sits on the RIGHT, where every other panel in the game puts its way out (playtest
+    // 2026-08-25: "close is left behind on the left"); the exit to the desktop sits left of it.
+    private static readonly Rectangle SettingsClose = new(1000, 880, 300, 56);
+    private static readonly Rectangle SettingsQuit = new(620, 880, 300, 56);
+    /// <summary>The panel's corner ×: the same small close the guide strip and the explanation banners wear.</summary>
+    private static readonly Rectangle SettingsCornerClose = new(SettingsPanel.Right - 60, SettingsPanel.Y + 18, 36, 36);
 
     /// <summary>Copies the feedback code (build stamp + progress + run log) to the clipboard.</summary>
     private static readonly Rectangle SettingsCopyFeedback = new(536, 800, 400, 52);
@@ -3472,7 +3488,10 @@ public class Game1 : Game
             _resetArmTimer = ResetArmSeconds;
         }
 
-        if (_ui.Button(_batch, SettingsClose, "CLOSE", mouse, uiClick))
+        var cornerHot = SettingsCornerClose.Contains(mouse);
+        _ui.Fill(_batch, SettingsCornerClose, cornerHot ? new Color(0x4A, 0x28, 0x30) : new Color(0x22, 0x1A, 0x30));
+        _ui.TextCenterBig(_batch, "×", SettingsCornerClose.Center.X, SettingsCornerClose.Y + 5, cornerHot ? Color.White : UiKit.Vellum, 22);
+        if (_ui.Button(_batch, SettingsClose, "CLOSE", mouse, uiClick) || UiKit.ClickedIn(SettingsCornerClose, mouse, uiClick))
         {
             _showSettings = false;
             _settingsDropdown = 0;
@@ -4035,9 +4054,10 @@ public class Game1 : Game
     /// </remarks>
     private int SkillPointsEarned()
     {
-        var total = 3;
-        foreach (var def in Regions.All) total += _world.RegionFarm(def.Id).BestDepth / 5;
-        return total;
+        // The curve lives in Core (MasteryPoints) so a test can pin it; this only feeds it the depths.
+        var depths = new List<int>(Regions.All.Count);
+        foreach (var def in Regions.All) depths.Add(_world.RegionFarm(def.Id).BestDepth);
+        return MasteryPoints.Total(depths);
     }
 
     /// <summary>

@@ -15,7 +15,7 @@ using ResonanceHunter.Core.Loot;
 namespace ResonanceHunter.Client;
 
 /// <summary>
-/// The Forge — click an item in the bag, then pick a tab: UPGRADE, RE-ROLL, SOCKET or BREAK DOWN.
+/// The Forge — click an item in the bag, then pick a tab: UPGRADE, RE-ROLL, SOCKET or SALVAGE.
 /// </summary>
 /// <remarks>
 /// Point-and-click and panel-driven: an item is picked by clicking it, each tab carries ONE big
@@ -253,7 +253,9 @@ public sealed class ForgeScreen
 
     /// <summary>The four things you can do to an item — one tab each, one big button each.</summary>
     private enum Tab { Upgrade, Reroll, Socket, BreakDown }
-    private static readonly string[] TabNames = ["UPGRADE", "RE-ROLL", "SOCKET", "BREAK DOWN"];
+    // The fourth tab was BREAK DOWN while the chest reveal's per-item button said SALVAGE for the same
+    // act (playtest 2026-08-25: "it creates an inconsistency") — one word now, the reveal's.
+    private static readonly string[] TabNames = ["UPGRADE", "RE-ROLL", "SOCKET", "SALVAGE"];
     private Tab _tab = Tab.Upgrade;
 
     private static readonly Color Met = new(0x6E, 0xC8, 0x7A);
@@ -303,7 +305,7 @@ public sealed class ForgeScreen
     /// <remarks>
     /// <b>Deliberately NOT a change to <see cref="Bag"/>.</b> <see cref="Target"/> and
     /// <see cref="CycleTarget"/> both mean "the wearable on the bench", and a gem can never be that —
-    /// letting one into that list would point the UPGRADE and BREAK DOWN tabs at a stone.
+    /// letting one into that list would point the UPGRADE and SALVAGE tabs at a stone.
     /// </remarks>
     private List<ItemInstance> BagList() => _tab == Tab.Socket ? Gems() : Bag();
 
@@ -425,7 +427,7 @@ public sealed class ForgeScreen
     public void RequestSalvage(string instanceId)
     {
         if (_inv.All(i => i.InstanceId != instanceId)) return;
-        // The question is asked IN the BREAK DOWN tab of the focused item, so the item must be the
+        // The question is asked IN the SALVAGE tab of the focused item, so the item must be the
         // focus and the tab must be open — arriving with the question open anywhere else would be
         // a question the player cannot see.
         _focusId = instanceId;
@@ -1159,7 +1161,7 @@ public sealed class ForgeScreen
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xC0));   // scrim so panels pop
         _ui.TextCenterBig(b, "THE FORGE", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
-        _ui.TextCenterBig(b, "PICK AN ITEM IN YOUR BAG, THEN CHOOSE A TAB — UPGRADE, RE-ROLL, SOCKET OR BREAK DOWN", 960, 80, Slate, UiTypography.Secondary);
+        _ui.TextCenterBig(b, "PICK AN ITEM IN YOUR BAG, THEN CHOOSE A TAB — UPGRADE, RE-ROLL, SOCKET OR SALVAGE", 960, 80, Slate, UiTypography.Secondary);
 
         // ONE WORKBENCH, full stop. The pile screen (grid + merge tray + its own chest bar) is
         // retired — playtest: "O ekrana gerek yok bence." Its two verbs that were real, auto-merge and
@@ -1229,7 +1231,7 @@ public sealed class ForgeScreen
         // Adopting the first row also makes the highlight and the ITEM PREVIEW agree on frame one; they
         // were both falling back to "the first item" separately, which is agreement by coincidence.
         // NEVER FROM THE GEM LIST. The focus is "the wearable on the bench" — adopting a gem into it
-        // would point UPGRADE, RE-ROLL and BREAK DOWN at a stone, and the SOCKET tab's own host item
+        // would point UPGRADE, RE-ROLL and SALVAGE at a stone, and the SOCKET tab's own host item
         // would change every time the drawer was opened.
         if (!gemMode && (_focusId is null || bag.All(i => i.InstanceId != _focusId)))
         {
@@ -1404,7 +1406,7 @@ public sealed class ForgeScreen
     //
     // What changed, and why it is one change rather than three:
     //   - Three side-by-side panels of equal-weight buttons (eleven of them) became ONE card with a
-    //     tab strip. A tab is an intent — UPGRADE, RE-ROLL, SOCKET, BREAK DOWN — and carries ONE big
+    //     tab strip. A tab is an intent — UPGRADE, RE-ROLL, SOCKET, SALVAGE — and carries ONE big
     //     button with its price printed directly under it. Nothing is hidden behind a modifier key.
     //   - The materials moved to a WALLET with the real icons (mat_scrap / mat_essence / mat_core /
     //     mat_crystal — they were on disk all along; the "no dedicated icons exist" comment was wrong),
@@ -1877,14 +1879,14 @@ public sealed class ForgeScreen
         }
     }
 
-    // ── BREAK DOWN ───────────────────────────────────────────────────────────────────────────────
+    // ── SALVAGE ───────────────────────────────────────────────────────────────────────────────
     /// <summary>
     /// SELL and SALVAGE, and the question they raise, all in one place under the item they destroy.
     /// </summary>
     private void DrawBreakDownTab(SpriteBatch b, Hunter hunter, ItemInstance item, Rectangle body, Point hit, bool clicked)
     {
         var x = body.X; var y = body.Y; var w = body.Width;
-        _ui.TextBig(b, "BREAK DOWN — SELL OR SALVAGE", x, y, Bone, UiTypography.Body);
+        _ui.TextBig(b, "SALVAGE — SELL IT, OR BREAK IT INTO MATERIALS", x, y, Bone, UiTypography.Body);
         DrawWrappedBig(b, "Either way the item is gone. Selling gives Gleam; salvaging gives Forge materials. Gems set in it come back to your bag first.",
                        x, y + 30, w, Slate, UiTypography.Secondary);
 
@@ -1917,7 +1919,7 @@ public sealed class ForgeScreen
             DrawWrappedBig(b, "You turned off the \"are you sure?\" question. Worn gear still asks.", x, ny, w, Dim, UiTypography.Secondary);
     }
 
-    /// <summary>One line under a BREAK DOWN button: what you get, with its icon, and what that is for.</summary>
+    /// <summary>One line under a SALVAGE button: what you get, with its icon, and what that is for.</summary>
     private void DrawGain(SpriteBatch b, int x, int y, int width, string icon, Color tint, string text)
     {
         DrawMatIcon(b, icon, tint, new Rectangle(x, y - 4, 26, 26));
@@ -2024,7 +2026,7 @@ public sealed class ForgeScreen
     /// click meant for something else, and never lingers invisibly behind another tab.
     /// </summary>
     /// <remarks>
-    /// The questions are drawn IN PLACE: SELL / SALVAGE in the BREAK DOWN tab of the focused item,
+    /// The questions are drawn IN PLACE: SELL / SALVAGE in the SALVAGE tab of the focused item,
     /// CRUSH (and a gem's SELL) in the SOCKET tab, the junk question in the bag's foot. A question whose
     /// place is no longer on screen is simply dropped. Withdrawing never scraps anything.
     /// </remarks>
@@ -2160,7 +2162,7 @@ public sealed class ForgeScreen
                      "UPGRADE — raise the item's level.",
                      "RE-ROLL — a new random enchant.",
                      "SOCKET — set a gem to add a stat.",
-                     "BREAK DOWN — sell it or salvage it.",
+                     "SALVAGE — sell it, or break it into materials.",
                  })
         {
             _ui.TextBig(b, line, x, ty, Slate, UiTypography.Secondary);
@@ -2334,7 +2336,7 @@ public sealed class ForgeScreen
     //   · EACH ITEM'S NAME under its icon in its rarity colour, so the common case needs no hover.
     //   · SELL and SALVAGE under each item with the payout printed on the button.
     //   · The "are you sure?" question asked INSIDE the card — the bench's OpenConfirm answers it by
-    //     switching to the BREAK DOWN tab, which is a screen behind this overlay: a question the
+    //     switching to the SALVAGE tab, which is a screen behind this overlay: a question the
     //     player cannot see is worse than no question.
     //   · A real KEEP ALL button. "CLICK TO CLOSE" is an instruction, not a choice.
     //
@@ -2694,7 +2696,7 @@ public sealed class ForgeScreen
     /// </summary>
     /// <remarks>
     /// Deliberately NOT <see cref="Sell"/> / <see cref="Dismantle"/>: those raise the question by
-    /// switching the bench to the BREAK DOWN tab, which is a screen behind this overlay — the player
+    /// switching the bench to the SALVAGE tab, which is a screen behind this overlay — the player
     /// would be answering a question they cannot see. A revealed item is never worn, so the always-ask
     /// worn variant cannot apply here and the preference is the only gate.
     /// </remarks>

@@ -105,30 +105,31 @@ public class PassiveTreeTests
     [Fact]
     public void test_a_grit_node_reaches_the_fight()
     {
-        // Health is wired through a different path than damage — mods.Health DIVIDES incoming rather
-        // than multiplying outgoing — so it needs its own wire check, not a corollary of the last one.
+        // Health is wired through a different path than damage: since 2026-08-25 mods.Health multiplies
+        // the POOL the champion is minted with (SoloBattle.ChampionHealth) and nothing divides the bite —
+        // so it needs its own wire check, not a corollary of the last one. The check has two halves:
+        // the pool grows, and the damage taken per wave does NOT change (a keystone's health is not
+        // secretly armour any more).
         var hunter = new Hunter();
 
-        // Deep enough to still be standing at the 120-second ceiling — that is 120 swings at 10 apiece,
-        // so anything under 1,200 HP measures nothing. The first cut of this gave the champion 100 HP and
-        // asserted on the survivor's health: both runs died, both reported 0, and "two HEALTH nodes
-        // changed nothing" was the TEST failing to measure, dressed up as the wire failing to carry. The
-        // Assert.Alive below is there so it can never lie that way again.
-        int Survive(Build build)
+        int Taken(Build build)
         {
+            // Deep enough to still be standing at the 120-second ceiling — 120 swings at 10 apiece.
             var champ = new Champion { MaxHealth = 3_000, Health = 3_000 };
             SoloBattle.ResolveWave(champ, build, hunter,
                 enemyHealth: 1_000_000f, enemyDamage: 10f, enemyIntervalMs: 1_000,
                 ExpeditionTuning.Default, new Random(7));
 
             Assert.True(champ.Alive, "the champion died — this test measures damage TAKEN, not who won");
-            return champ.Health;
+            return 3_000 - champ.Health;
         }
 
-        var naked = Survive(BuildFrom(new MemoryDustTree()));
-        var tough = Survive(BuildFrom(Bought("socket_2", "ks_ironclad"), "ironclad"));
+        var naked = BuildFrom(new MemoryDustTree());
+        var tough = BuildFrom(Bought("socket_2", "ks_ironclad"), "ironclad");
 
-        Assert.True(tough > naked, $"a socketed IRONCLAD changed nothing ({naked} -> {tough})");
+        Assert.True(SoloBattle.ChampionHealth(tough, hunter) > SoloBattle.ChampionHealth(naked, hunter),
+            $"a socketed IRONCLAD did not grow the pool ({SoloBattle.ChampionHealth(naked, hunter)} -> {SoloBattle.ChampionHealth(tough, hunter)})");
+        Assert.Equal(Taken(naked), Taken(tough));   // the bite is the bite: health is the pool, not a divisor
     }
 
     [Fact]

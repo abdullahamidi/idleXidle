@@ -149,8 +149,11 @@ public sealed class AssetLibrary
         ["stat_might"] = "icon_status_power", ["stat_resonance"] = "icon_status_resonance",
         ["stat_tempo"] = "icon_status_timer", ["stat_vitality"] = "icon_status_healing",
         ["stat_health"] = "icon_status_health", ["stat_defense"] = "icon_status_defense",
-        ["stat_critical"] = "icon_status_critical", ["stat_focus"] = "icon_branch_weight",
-        ["stat_guile"] = "icon_road_avarice",
+        ["stat_critical"] = "icon_status_critical", // FOCUS and GUILE pointed at glyph art (a white hammer, a cream purse) beside seven painted
+        // medallions and read as unfinished (playtest 2026-08-25). Painted stand-ins from the same
+        // package: crossed blades for the critical's bite, a chest of coin for the loot.
+        ["stat_focus"] = "icon_role_attacker",
+        ["stat_guile"] = "icon_facility_hoardvaults",
         // Per-source creatures → package_03 enemy idle poses. One representative enemy per element (the
         // Warren's per-role keys fall back here; no Nature enemy shipped, so a wisp stands in).
         ["crea_body"] = "bonecrawler_idle_01", ["crea_machine"] = "stone_sentinel_idle_01",

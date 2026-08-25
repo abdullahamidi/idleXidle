@@ -340,7 +340,11 @@ public sealed class Hunter
     public float SquadDamageMultiplier => GearDamageMultiplier * (1f + 0.010f * AttackPower) * WornMods.Damage;
 
 
-    /// <summary>Squad toughness: Vitality, the worn charm, and whatever the charm's trait costs you.</summary>
+    /// <summary>
+    /// The champion's HEALTH multiplier: Vitality, the worn charm's rarity, and every HEALTH affix, gem
+    /// and trait on worn gear. Multiplies the pool the champion enters a fight with
+    /// (<c>SoloBattle.ChampionHealth</c>); nothing divides incoming damage any more.
+    /// </summary>
     public float SquadHealthMultiplier =>
         (1f + 0.012f * ValueOf(HunterStat.Vitality)) * CharmToughness * WornMods.Health;
 

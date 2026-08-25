@@ -319,6 +319,19 @@ public sealed class ChestScreen
             var hovered = idx == _hoverIdx;
             var ease = hovered ? _hoverT * _hoverT * (3f - 2f * _hoverT) : 0f;   // smoothstep
 
+            // A STACK LOOKS LIKE A STACK. Two identical chests were one card with a small "×2" in the
+            // corner, and testers did not see it (playtest 2026-08-25). Now the card sits on two offset
+            // card backs, the way a pile of cards does, before anything else on it is drawn.
+            var stackCount = stacks[idx].Count;
+            for (var back = Math.Min(2, stackCount - 1); back >= 1; back--)
+            {
+                var off = new Rectangle(card.X + back * 7, card.Y + back * 7, card.Width, card.Height);
+                _ui.Fill(b, off, new Color(0x0E, 0x0C, 0x14));
+                _ui.Fill(b, new Rectangle(off.X, off.Y, off.Width, 5), grade * 0.45f);
+                _ui.Fill(b, new Rectangle(off.Right - 2, off.Y, 2, off.Height), grade * 0.25f);
+                _ui.Fill(b, new Rectangle(off.X, off.Bottom - 2, off.Width, 2), grade * 0.25f);
+            }
+
             // Card body: a dark cell, its grade on the top strip. Hover brightens the EDGE one value
             // step and lifts the chest — never a new hue (art bible chrome rules).
             _ui.Fill(b, card, hovered ? new Color(0x20, 0x1C, 0x2A) : new Color(0x16, 0x14, 0x1C));
@@ -351,8 +364,18 @@ public sealed class ChestScreen
             _ui.TextBig(b, $"TIER {chest.Tier}", card.X + 140, card.Y + 30, Bone, UiTypography.PanelTitle);
             // The stack count. Four identical Rare tier-6 chests are one card that says ×4 — a click
             // opens one of them, OPEN ALL still opens every chest. Playtest: "aynı chestler stacklensin."
-            if (stacks[idx].Count > 1)
-                _ui.TextRightBig(b, $"×{stacks[idx].Count}", card.Right - 16, card.Y + 30, Gold, UiTypography.PanelTitle);
+            // The count is a gold BADGE on the chest itself now, and a line under the tier says it in
+            // words, because the corner number alone went unread.
+            if (stackCount > 1)
+            {
+                var badge = new Rectangle(card.X + 10, card.Y + 12, 54, 30);
+                _ui.Fill(b, badge, Gold);
+                _ui.Fill(b, new Rectangle(badge.X + 2, badge.Y + 2, badge.Width - 4, badge.Height - 4), new Color(0x3A, 0x2A, 0x10));
+                _ui.TextCenterBig(b, $"×{stackCount}", badge.Center.X, badge.Y + 4, Gold, UiTypography.PanelTitle);
+                // Under the element chip's row, in the 84 px column right of the chest art — a longer
+                // line ran under the chip.
+                _ui.TextBig(b, $"{stackCount} THE SAME", card.X + 140, card.Y + 84, Gold, UiTypography.Secondary);
+            }
 
             // The element as a coloured chip — an identity, not a word competing with the grade.
             if (chest.Element is { } e)

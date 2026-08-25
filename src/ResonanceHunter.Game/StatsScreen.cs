@@ -162,7 +162,7 @@ public sealed class StatsScreen
         var mods = build.Resolve(hunter);
         var shape = build.Shape;
 
-        DrawHunterCard(b, hunter, hit);
+        DrawHunterCard(b, hunter, build, hit);
         DrawTraining(b, hunter, build, mods, shape, hit, clicked);
         DrawReset(b, hunter, hit, clicked);
         DrawProgression(b, hunter, hit);
@@ -171,7 +171,7 @@ public sealed class StatsScreen
         DrawHoverCard(b);
     }
 
-    private void DrawHunterCard(SpriteBatch b, Hunter hunter, Point hit)
+    private void DrawHunterCard(SpriteBatch b, Hunter hunter, Build build, Point hit)
     {
         _ui.PanelQuiet(b, HunterCard);
         _ui.TextCenterBig(b, "HUNTER", HunterCard.Center.X, HunterCard.Y + 22, Gold, UiTypography.SectionTitle);
@@ -189,7 +189,12 @@ public sealed class StatsScreen
             SetHover(hit, "LEVEL", LevelCard(hunter));
         var hpBar = new Rectangle(tx, HunterCard.Y + 138, HunterCard.Right - tx - 24, 26);
         _ui.BarArt(b, hpBar, 1f, "health");
-        _ui.TextCenterBig(b, $"{hunter.MaxHealth:N0} / {hunter.MaxHealth:N0}", hpBar.Center.X, hpBar.Y + 4, Bone, UiTypography.Secondary);
+        // THE SAME NUMBER THE FIGHT SHOWS. This bar printed the base HEALTH stat while the hunt's bar
+        // printed the pool after vows and gear, and the two disagreed on every save with a charm
+        // (playtest 2026-08-25: "health looks different on the stats screen, the left panel and the
+        // fight"). One formula, three screens.
+        var life = SoloBattle.ChampionHealth(build, hunter);
+        _ui.TextCenterBig(b, $"{life:N0} / {life:N0}", hpBar.Center.X, hpBar.Y + 4, Bone, UiTypography.Secondary);
         _ui.TextBig(b, $"TEMPO {hunter.SquadSkillRate:0.00}x SKILL RATE", tx, HunterCard.Y + 176, Slate, UiTypography.Secondary);
 
         _ui.Fill(b, new Rectangle(HunterCard.X + 24, HunterCard.Y + 224, HunterCard.Width - 48, 2), Dim);
@@ -304,34 +309,32 @@ public sealed class StatsScreen
             }
             case HunterStat.Vitality:
             {
-                // SoloBattle: damage taken = bite ÷ mods.Health (then DEFENSE cuts it further).
+                // SoloBattle.ChampionHealth: pool = max(60, HEALTH) × vows × mods.Health, and
                 // Hunter.SquadHealthMultiplier = (1 + 0.012 × VITALITY) × worn charm × worn mods.
+                // Since 2026-08-25 the whole channel multiplies the POOL — the number on the bar.
                 var v = hunter.ValueOf(stat);
-                // Toughness under 1 is a designed state (GLASS CANNON and friends): the double
-                // negative "-78.6% less damage" read as a bug, so the words flip with the sign.
-                var tough = MathF.Max(0.01f, mods.Health);
-                var less = 100f * (1f - 1f / tough);
-                var headline = tough >= 1f ? $"YOU TAKE {less:0.0}% LESS DAMAGE"
-                                           : $"YOU TAKE {-less:0.0}% MORE DAMAGE";
-                var tail = tough >= 1f
-                    ? $"With gear and keystones counted in, your toughness is {tough:0.00}× — so you take {less:0.0}% less damage."
-                    : $"With gear and keystones counted in, your toughness is {tough:0.00}× — so you take {-less:0.0}% MORE damage. A keystone or vow is trading your skin for power.";
+                var mult = MathF.Max(0.01f, mods.Health);
+                var pct = 100f * (mult - 1f);
+                var headline = mult >= 1f ? $"{pct:0.0}% MORE LIFE" : $"{-pct:0.0}% LESS LIFE";
+                var tail = mult >= 1f
+                    ? $"With gear and keystones counted in, your life multiplier is {mult:0.00}× — every fight starts with {pct:0.0}% more life."
+                    : $"With gear and keystones counted in, your life multiplier is {mult:0.00}× — every fight starts with {-pct:0.0}% LESS life. A keystone, vow or item is trading your skin for power.";
                 return (headline, new[]
                 {
-                    "VITALITY is toughness. Every bite an enemy lands is divided by your toughness number before it touches your life.",
-                    $"One rank of training adds {hunter.GainPerRank(stat):0} VITALITY. You have {v:0} VITALITY, and every point adds 1.2% toughness.",
+                    "VITALITY makes your champion's life pool bigger. It multiplies the HEALTH number below, and so does every item, gem, keystone and trait that says health.",
+                    $"One rank of training adds {hunter.GainPerRank(stat):0} VITALITY. You have {v:0} VITALITY, and every point adds 1.2% life.",
                     tail,
                 });
             }
             case HunterStat.MaxHealth:
             {
                 // SoloBattle.ChampionHealth: the pool a fight starts with = max(60, Hunter.MaxHealth)
-                // × the build's health multiplier (vows and passives).
+                // × the build's health multiplier (vows and passives) × mods.Health (vitality, gear).
                 var pool = SoloBattle.ChampionHealth(build, hunter);
                 return ($"{pool:N0} LIFE IN A FIGHT", new[]
                 {
-                    $"HEALTH is the life your champion enters every fight with. One rank of training adds {hunter.GainPerRank(stat):0} health.",
-                    $"With your charm counted in, your health is {hunter.MaxHealth:N0}. After your build's promises and passives, your champion starts a fight with {pool:N0} life.",
+                    $"HEALTH is the base of your champion's life. One rank of training adds {hunter.GainPerRank(stat):0} health.",
+                    $"With your charm counted in, your base health is {hunter.MaxHealth:N0}. After VITALITY, your gear, your promises and your passives, your champion starts a fight with {pool:N0} life — the same number the fight screen shows.",
                     "When it reaches zero, the descent ends.",
                 });
             }
@@ -429,20 +432,23 @@ public sealed class StatsScreen
         var crystals = hunter.MaterialOf(Material.Crystal);
         var price = hunter.TrainingResetCrystalCost;
 
-        _ui.TextBig(b, "RESET", ResetBar.X + 40, ResetBar.Y + 24, Bone, UiTypography.Body);
-        _ui.TextBig(b, $"YOU HAVE {crystals:N0} CRYSTAL", ResetBar.X + 40, ResetBar.Y + 54, Slate, UiTypography.Secondary);
-
-        var button = new Rectangle(ResetBar.Right - 40 - 960, ResetBar.Y + 25, 960, 56);
+        // THE BUTTON IS BUTTON-SIZED. It was 960 px wide, and the ornate button art is a whole-image
+        // stretch (UiKit.Button — deliberately, for short buttons), so its corner scrollwork smeared into
+        // a long streak (playtest 2026-08-25: "the reset button frame is stretched, low quality"). The
+        // explanation now lives in plain text on the bar's left, and the button says only its verb.
+        var button = new Rectangle(ResetBar.Right - 40 - 420, ResetBar.Y + 25, 420, 56);
+        var tx = ResetBar.X + 40;
 
         if (_resetArmed && Environment.TickCount64 - _resetArmedAtMs > (long)(ArmSeconds * 1000))
             _resetArmed = false;   // the settings pattern this mirrors auto-disarms; so does this now
         if (_resetArmed)
         {
+            _ui.TextBig(b, "SURE? ALL RANKS GO TO ZERO.", tx, ResetBar.Y + 24, Color.White, UiTypography.Body);
+            _ui.TextBig(b, "THE GLEAM YOU SPENT DOES NOT COME BACK. CLICK THE RED BUTTON AGAIN TO DO IT.", tx, ResetBar.Y + 54, Ember, UiTypography.Secondary);
             // The settings panel's armed pattern, exactly: red ground, warning stripe, white text.
             _ui.Fill(b, button, ArmedRed);
             _ui.Fill(b, new Rectangle(button.X, button.Y, button.Width, 3), Ember);
-            _ui.TextCenterBig(b, "SURE? ALL RANKS GO TO ZERO — THE GLEAM YOU SPENT DOES NOT COME BACK. CLICK AGAIN",
-                              button.Center.X, button.Center.Y - 10, Color.White, UiTypography.Body, TextFace.Strong);
+            _ui.TextCenterBig(b, "YES, RESET — NO GLEAM BACK", button.Center.X, button.Center.Y - 10, Color.White, UiTypography.Body, TextFace.Strong);
             if (UiKit.ClickedIn(button, hit, clicked))
             {
                 _resetArmed = false;
@@ -455,21 +461,26 @@ public sealed class StatsScreen
             return;
         }
 
+        _ui.TextBig(b, "RESET ALL TRAINING", tx, ResetBar.Y + 24, Bone, UiTypography.Body);
         // The three honest states: nothing to reset, missing the Crystal, or ready.
         if (ranks <= 0)
         {
-            _ui.Button(b, button, "NOTHING TO RESET — NO TRAINING BOUGHT YET", hit, clicked, enabled: false);
+            _ui.TextBig(b, "NOTHING TO RESET — NO TRAINING BOUGHT YET.", tx, ResetBar.Y + 54, Slate, UiTypography.Secondary);
+            _ui.Button(b, button, "RESET", hit, clicked, enabled: false);
         }
         else if (crystals < price)
         {
-            _ui.Button(b, button, $"RESET NEEDS {price:N0} CRYSTAL — YOU HAVE {crystals:N0}", hit, clicked, enabled: false);
+            _ui.TextBig(b, $"COSTS {price:N0} CRYSTAL — YOU HAVE {crystals:N0}. THE GLEAM YOU SPENT DOES NOT COME BACK.", tx, ResetBar.Y + 54, Slate, UiTypography.Secondary);
+            _ui.Button(b, button, $"NEEDS {price:N0} CRYSTAL", hit, clicked, enabled: false);
         }
-        else if (_ui.Button(b, button,
-                            $"RESET ALL TRAINING — NO GLEAM BACK · COSTS {price:N0} CRYSTAL",
-                            hit, clicked))
+        else
         {
-            _resetArmed = true;
-            _resetArmedAtMs = Environment.TickCount64;
+            _ui.TextBig(b, $"COSTS {price:N0} CRYSTAL — YOU HAVE {crystals:N0}. THE GLEAM YOU SPENT DOES NOT COME BACK.", tx, ResetBar.Y + 54, Slate, UiTypography.Secondary);
+            if (_ui.Button(b, button, $"RESET — {price:N0} CRYSTAL", hit, clicked))
+            {
+                _resetArmed = true;
+                _resetArmedAtMs = Environment.TickCount64;
+            }
         }
     }
 
@@ -485,16 +496,21 @@ public sealed class StatsScreen
             ("CHESTS OPENED", $"{ChestsOpened:N0}"),
             ("MASTERY POINTS", $"{MasteryPoints:N0}"),
         };
-        var y = ProgressPanel.Y + 74;
+        // INSIDE THE FRAME. The panel is nearly square, so it wears the square frame, whose side rails
+        // and corner flourishes reach ~48 px in; rows inset 40 sat on the ornament and the last row ran
+        // under the bottom rail (playtest 2026-08-25: "the text in the progress table is not aligned").
+        // Inset 60, tighter rows, and every value on the same baseline as its label.
+        const int inset = 60;
+        var y = ProgressPanel.Y + 66;
         foreach (var (label, value) in rows)
         {
-            var row = new Rectangle(ProgressPanel.X + 40, y - 6, ProgressPanel.Width - 80, 40);
+            var row = new Rectangle(ProgressPanel.X + inset, y - 6, ProgressPanel.Width - inset * 2, 38);
             if (label == "HUNTER LEVEL" && row.Contains(hit))
                 SetHover(hit, "LEVEL", LevelCard(hunter));
-            _ui.TextBig(b, label, ProgressPanel.X + 40, y, Slate, UiTypography.Body);
-            _ui.TextRightBig(b, value, ProgressPanel.Right - 40, y, Bone, UiTypography.Body);
-            _ui.Fill(b, new Rectangle(ProgressPanel.X + 40, y + 36, ProgressPanel.Width - 80, 2), Dim * 0.5f);
-            y += 48;
+            _ui.TextBig(b, label, row.X, y, Slate, UiTypography.Secondary);
+            _ui.TextRightBig(b, value, row.Right, y, Bone, UiTypography.Secondary);
+            _ui.Fill(b, new Rectangle(row.X, y + 30, row.Width, 2), Dim * 0.5f);
+            y += 42;
         }
     }
 

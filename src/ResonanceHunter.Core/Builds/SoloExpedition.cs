@@ -204,6 +204,27 @@ public sealed class SoloExpedition
                 _champion.ReadyAt.Remove(i);
         _build = build;
     }
+    /// <summary>
+    /// Re-mint the champion's pool from the hunter and build as they are NOW, keeping the same fraction
+    /// of it filled. Called by the host at each wave boundary.
+    /// </summary>
+    /// <remarks>
+    /// The pool used to be minted once at run start and held until a death, so a ring equipped
+    /// mid-descent (or a rank trained, or a vow sworn) reached the fight's damage from the next wave
+    /// but its health only from the next LIFE — and the three health numbers on screen disagreed for
+    /// as long as the run lasted. Scaling by fraction rather than adding the difference means a
+    /// half-dead champion stays half-dead: gear is never a heal. Not called from PushWave itself so
+    /// benches and tests that mint a bespoke pool keep it.
+    /// </remarks>
+    public void RefreshPool()
+    {
+        var pool = SoloBattle.ChampionHealth(_build, _hunter);
+        if (pool == _champion.MaxHealth || _champion.MaxHealth <= 0) return;
+        var fraction = _champion.Health / (float)_champion.MaxHealth;
+        _champion.MaxHealth = pool;
+        _champion.Health = _champion.Alive ? Math.Clamp((int)MathF.Round(pool * fraction), 1, pool) : 0;
+    }
+
     public WaveOutcome PushWave()
     {
         LastWaveHaul = default;
