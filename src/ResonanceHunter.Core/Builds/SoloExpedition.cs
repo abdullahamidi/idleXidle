@@ -326,8 +326,17 @@ public sealed class SoloExpedition
         {
             _champion.Health = _champion.MaxHealth;
         }
-        else if (shape.BetweenWaveRegen > 0f)
+        else if (shape.BetweenWaveRegen > 0f && !_build.Triggers(_hunter).Contains(BuildTrigger.NoHealing))
         {
+            // BLOOD MAGIC and JUGGERNAUT say "YOU CANNOT BE HEALED", and until the heal rework this
+            // one regain ignored them — the in-wave funnel refused every heal and the between-wave
+            // one paid out regardless, so a Blood Magic build that walked to RECOVERY was healed by
+            // the node its keystone forbids. The heal balance probe caught it: the "no heals" twin
+            // of the ENDURE walk was still regaining 3.4% of its pool per wave.
+            //
+            // NOT under HealTuning.MaxHealFractionPerWave, on purpose — see that record's remarks:
+            // this regain is bounded by its own fraction, halved by the ENDLESS band, and priced as
+            // the one structural exception to "no regeneration between waves".
             // The band's ENDLESS affix reaches here too — RECOVERY is regeneration by name, and an affix
             // that halves regeneration but spares the one node called REGAIN HEALTH BETWEEN WAVES would
             // be pressuring ENDURE everywhere except its own answer. (Note the name collision: the

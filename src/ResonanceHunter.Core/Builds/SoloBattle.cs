@@ -223,7 +223,11 @@ public static class SoloBattle
     public const int SignatureMindExtendCapMs = 1000;
 
     /// <summary>NATURE — its skills heal for a sliver of what they deal.</summary>
-    public const float SignatureNatureLeech = 0.03f;
+    /// <remarks>
+    /// Reads the live <see cref="HealTuning"/> default so the glossary stays one source. The sim itself
+    /// reads the injected <c>tuning.Heal</c> — same object unless a test swaps it.
+    /// </remarks>
+    public static float SignatureNatureLeech => HealTuning.Default.NatureSignatureLeech;
 
     /// <summary>SPIRIT — the conductor: after it casts, the next OTHER-Source cast hits harder.</summary>
     public const float SignatureSpiritBonus = 0.15f;
@@ -279,8 +283,8 @@ public static class SoloBattle
     /// <summary>COILED shortens the TRAP's cooldown by this factor, so it answers far more bites.</summary>
     public const float CoiledCooldownFactor = 0.5f;
 
-    /// <summary>SIPHON multiplies TRANSFORMATION's on-hit leech.</summary>
-    public const float SiphonLeechMultiplier = 2.0f;
+    /// <summary>SIPHON multiplies TRANSFORMATION's on-hit leech. Lives in <see cref="HealTuning"/>.</summary>
+    public static float SiphonLeechMultiplier => HealTuning.Default.SiphonMultiplier;
 
     /// <summary>HOARDER — how much of the haul multiplier above 1 becomes hit size.</summary>
     public const float HoarderHaulToForce = 0.20f;
@@ -476,6 +480,17 @@ public static class SoloBattle
         var alive = creatures.Count;
         var since = champ.ElapsedMs;
         var healthAtStart = champ.Health;
+
+        // THE HEAL BUDGET. Every in-wave heal — leech, FEEDBACK, the Transformation's own leech,
+        // SIPHON, the Nature signature, SECOND WIND — passes through Heal() below, and Heal() spends
+        // from this one budget. Wave-scoped on purpose: it is a ceiling per wave, and a champion
+        // that carries a spent budget into the next wave would be a build punished for surviving.
+        // The numbers are the INJECTED tuning's, so the balance probe can measure old against new.
+        // SIPHON raises the ceiling as well as the leech — measured, the leech half alone was
+        // dormant under any ceiling (see HealTuning).
+        var heal = tuning.Heal;
+        var healBudget = heal.BudgetFor(champ.MaxHealth, siphon: triggers.Contains(BuildTrigger.Siphon));
+        long healedThisWave = 0;
         if (metrics is not null) metrics.CreaturesPresent = creatures.Count;
         var nextAuto = AutoAttackIntervalMs;
         var nextBite = enemyIntervalMs;
@@ -859,11 +874,22 @@ public static class SoloBattle
             // halving a binary is a design change rather than a repair.
             amount = (int)MathF.Round(amount * sustain);
             if (amount <= 0) return;
+
+            // THE CEILING (HealTuning.MaxHealFractionPerWave). Charged against what actually LANDS:
+            // the heal is first trimmed to the room left in the pool, then to the room left in the
+            // budget, and only the part that reaches the champion is spent. Overhealing at full
+            // health costs nothing, so a build is not taxed for being healthy; and a heal that
+            // arrives after the budget is gone is a Heal event of 0 — i.e. no event at all — which
+            // is what the HUD should show, because nothing happened.
             // LONG-CLAMPED: an int.MaxValue-health fixture champion plus any heal wrapped negative
             // and died OF HEALING the moment the NATURE signature made Heal reachable from every
             // build. Sum in long, clamp, then narrow.
-            champ.Health = (int)Math.Min(champ.MaxHealth, (long)champ.Health + amount);
-            events.Add(new BattleEvent(BattleEventKind.Heal, 0, amount, atMs));
+            var room = Math.Max(0L, (long)champ.MaxHealth - champ.Health);
+            var landed = Math.Min(Math.Min((long)amount, room), healBudget - healedThisWave);
+            if (landed <= 0) return;
+            healedThisWave += landed;
+            champ.Health = (int)(champ.Health + landed);
+            events.Add(new BattleEvent(BattleEventKind.Heal, 0, (int)landed, atMs));
         }
 
         for (var ms = tuning.TickMs; ms <= tuning.TickCeilingMs; ms += tuning.TickMs)
@@ -905,7 +931,7 @@ public static class SoloBattle
                     // what its skills deal, with no cast clause — an Aura that deals must heal.
                     // (Spirit/Mind speak of CASTS, and an Aura never casts, so they stay silent here.)
                     if (sk.Source == Source.Nature && auraDealt > 0f)
-                        Heal((int)MathF.Round(auraDealt * SignatureNatureLeech), ms);
+                        Heal((int)MathF.Round(auraDealt * heal.NatureSignatureLeech), ms);
                     if (alive == 0) return Kill(ms);
                     continue;
                 }
@@ -1044,8 +1070,11 @@ public static class SoloBattle
                         // SIPHON deepens TRANSFORMATION's leech. Dead without Transformation — nothing else
                         // heals on hit, so the enchant is inert on any other build. Leeches from the TOTAL
                         // dealt, so a multi-target Transformation heals from every creature it touches.
-                        var leech = FormBehaviour.TransformationLeech;
-                        if (triggers.Contains(BuildTrigger.Siphon)) leech *= SiphonLeechMultiplier;
+                        // The fraction is the injected tuning's (0.12 since the heal rework — it was
+                        // 0.50, and 0.50 out-healed the curve; see HealTuning), and the per-wave
+                        // ceiling inside Heal() is what stops a stacked build from climbing back.
+                        var leech = heal.TransformationLeech;
+                        if (triggers.Contains(BuildTrigger.Siphon)) leech *= heal.SiphonMultiplier;
                         Heal((int)MathF.Round(dealt * leech), ms);
                     }
 
@@ -1063,7 +1092,7 @@ public static class SoloBattle
                     // the Form's own leech ON PURPOSE — Nature + Transformation IS the lifedrain
                     // build, and the two reading the same total keeps them honest with each other.
                     if (sk.Source == Source.Nature && dealt > 0f)
-                        Heal((int)MathF.Round(dealt * SignatureNatureLeech), ms);
+                        Heal((int)MathF.Round(dealt * heal.NatureSignatureLeech), ms);
                     // SPIRIT primes the next other-Source cast (consumed at the raw, above).
                     if (sk.Source == Source.Spirit) spiritPrimed = true;
                     // CHARGE — the cast itself stores a point. One per ACTIVATION: the Weaver echo
@@ -1185,7 +1214,7 @@ public static class SoloBattle
                     // its sliver. A Trap never CASTS, so the cast-following rules (CHARGE, Spirit's
                     // prime, Mind's stretch) are rightly silent on this path.
                     if (sk.Source == Source.Nature && trapDealt > 0f)
-                        Heal((int)MathF.Round(trapDealt * SignatureNatureLeech), ms);
+                        Heal((int)MathF.Round(trapDealt * heal.NatureSignatureLeech), ms);
                     if (alive == 0) return Kill(ms);
                 }
 

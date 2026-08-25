@@ -69,7 +69,8 @@ public static class BuildGlossary
 
             Form.Transformation =>
                 $"Every {cd:0.#}s, and returns {FormBehaviour.TransformationLeech * 100f:0}% of the "
-                + "damage it deals as health. The only Form that keeps you alive.",
+                + "damage it deals as health. The only Form that keeps you alive. "
+                + HealCeilingRule(),
 
             _ =>
                 $"Every {cd:0.#}s, one creature, the largest single hit of any Form. "
@@ -109,6 +110,22 @@ public static class BuildGlossary
         Source.Machine => "Every hit bends the foe's armour down, for the rest of the wave",
         _ => $"After it casts, your next skill of any OTHER Source hits +{SoloBattle.SignatureSpiritBonus * 100:0}%",
     };
+
+    /// <summary>
+    /// The one rule every heal in the game obeys, in the player's words — read from
+    /// <see cref="HealTuning.Default"/> so a retune retunes the sentence.
+    /// </summary>
+    /// <remarks>
+    /// Shown on the Transformation card because that is where a player first meets healing, but the
+    /// rule is about the BUILD: leech nodes, the Nature signature and SECOND WIND all draw from the
+    /// same per-wave allowance. It is stated once rather than on every node so the nodes stay short.
+    /// </remarks>
+    public static string HealCeilingRule(HealTuning? tuning = null)
+    {
+        tuning ??= HealTuning.Default;
+        return $"Skills can restore at most {tuning.CeilingText()} of your health in one wave"
+               + $" ({tuning.CeilingText(siphon: true)} with SIPHON).";
+    }
 
     /// <summary>The matchup as ONE short line, for a panel with a single row to spare.</summary>
     /// <remarks>

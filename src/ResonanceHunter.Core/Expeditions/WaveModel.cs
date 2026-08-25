@@ -105,6 +105,17 @@ public sealed record ExpeditionTuning
     /// </remarks>
     public int WaveOpeningMs { get; init; } = 700;
 
+    /// <summary>
+    /// The skill-healing knobs — leech fractions and the per-wave heal ceiling. See
+    /// <see cref="ResonanceHunter.Core.Builds.HealTuning"/> for the numbers and the playtest behind them.
+    /// </summary>
+    /// <remarks>
+    /// Carried on the expedition tuning rather than as bare constants so the per-wave sim reads the
+    /// INJECTED numbers: a balance probe can run the old and the new healing against the same curve in
+    /// one test, which is how the rework was measured rather than argued.
+    /// </remarks>
+    public ResonanceHunter.Core.Builds.HealTuning Heal { get; init; } = ResonanceHunter.Core.Builds.HealTuning.Default;
+
     public static ExpeditionTuning Default { get; } = new();
 }
 

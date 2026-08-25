@@ -79,7 +79,7 @@ scheme fits the code rather than replacing it:
 | Weight | Strike, Trap | Single target, largest per-hit damage (45 / 55 base) |
 | Spread | Aura, Projectile | Aura ticks everything; Projectile is fast and multi-hit |
 | Tempo | Mark | An amplify window is pure front-loading |
-| Endure | Transformation | Leeches 50% — it is the sustain Form |
+| Endure | Transformation | Leeches 12% — it is the sustain Form (was 50%; see the heal ceiling below) |
 
 ### 3.2 Skill Tree — shape and budget
 
@@ -219,6 +219,28 @@ become the wall.*
 *The only branch that raises the ceiling of all four bands, which is why its nodes
 are priced honestly rather than generously.*
 
+**The heal ceiling (2026-08-26).** Playtest: "the health-recovery skills are far too
+strong (broken)." Measured, a four-Transformation build was bitten for 117% of its pool
+per wave and healed 118% of it back — the pool had stopped being what kept it alive —
+and a fresh champion walked to wave 38 on Transformations where the first region is
+tuned to end a run between waves 4 and 20. Two rules now govern every skill heal
+(`HealTuning` in Core, read by `SoloBattle`):
+
+- **Transformation leeches 12%** of the damage it deals (was 50%).
+- **Skills can restore at most 40% of maximum health in one wave.** Leech, Feedback,
+  the Transformation's leech, Siphon, the Nature signature and Second Wind all draw
+  from this one allowance; healing at full health does not spend it. Recovery's
+  between-wave regain is *not* under it — it is bounded by its own 20%, halved by the
+  Endless band, and is the structural exception game-flow.md §3.3 already prices.
+  Blood Magic and Juggernaut ("you cannot be healed") now refuse Recovery too.
+- **Siphon** doubles the leech *and* raises the wearer's ceiling to 60% — measured,
+  the doubling alone bought nothing under any ceiling.
+
+Measured after (geared mid-career fixture, 16 seeds): a four-Transformation build
+reaches a median depth 1.68× its no-heal twin and dies in every run; a four-Nature-Aura
+build 1.68×; a fresh Transformation champion reaches wave 10 against its twin's 4.
+`heal_balance_test` prints the before/after table on every run and pins the bands.
+
 **Minors (1)** · Toughness: +20% health · Leech: heal 2% of damage dealt · Padding:
 −6 flat damage from every hit taken · Second Wind: heal 8% of max health on wave
 clear · **Thick Skin** *(spur, off Second Wind)*: −5 flat damage from every hit taken
@@ -263,7 +285,7 @@ enchantments already define, plus a shape change:
 | Projectile | Spread | `Overdraw` | +1 target |
 | Aura | Spread | `Radiance` | Ticks 30% faster |
 | Mark | Tempo | `Linger` | Window applies to every creature in the wave |
-| Transformation | Endure | `Siphon` | Leech doubled |
+| Transformation | Endure | `Siphon` | Leech doubled, and the per-wave heal limit rises 40% → 60% |
 
 > This is also how the tree stops giving away what the Trait Tree sells. Today the
 > mastery tree hands out triggers for free while the Dust tree charges a permanent
