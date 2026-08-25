@@ -26,10 +26,9 @@ public class MemoryDustTextTests
         // Act
         var text = MemoryDustText.Describe(gate);
 
-        // Assert: the name, the blurb in sentence case, and the learn-is-not-wear reminder.
-        Assert.Contains($"Learn the keystone {keystone.Name}:", text);
-        Assert.Contains("double damage. Half health.", text);
-        Assert.Contains(MemoryDustText.KeystoneReminder, text);
+        // Assert: the gate says what it does and where, then the keystone's own blurb in sentence case.
+        Assert.StartsWith("Lets you wear the keystone GLASS CANNON on the Build screen.", text);
+        Assert.Contains($"{keystone.Name}: double damage. Half health.", text);
         Assert.DoesNotContain("DOUBLE DAMAGE", text);   // no shouting at paragraph length
     }
 
@@ -63,11 +62,11 @@ public class MemoryDustTextTests
         var softer = MemoryDustText.ModsSentence(new BuildMods(0.75f, 1f, 1f, 1f, 1f));
 
         // Assert: plain English, the number said outright, one sentence per field that moved.
-        Assert.Equal("Every skill hits 6% harder.", harder);
-        Assert.Equal("Your champion has 8% more health.", tougher);
+        Assert.Equal("Your hits do 6% more damage.", harder);
+        Assert.Equal("You have 8% more health.", tougher);
         Assert.Equal("Your skills come back 12% faster.", faster);
-        Assert.Equal("You bring back 8% more loot. Rare finds come 5% more often.", richer);
-        Assert.Equal("Every skill hits 25% softer.", softer);
+        Assert.Equal("You bring back 8% more loot. Rare items drop 5% more often.", richer);
+        Assert.Equal("Your hits do 25% less damage.", softer);
     }
 
     [Fact]
@@ -75,16 +74,15 @@ public class MemoryDustTextTests
     {
         Assert.Equal("", MemoryDustText.ModsSentence(BuildMods.None));
         // A pure gate's text is its description alone — nothing invented.
-        Assert.Equal("A second keystone socket. You can wear two keystones at once instead of one.",
+        Assert.Equal("You can wear two keystones at once instead of one.",
                      MemoryDustText.Describe(Node("socket_2")));
     }
 
     [Fact]
     public void test_memory_dust_text_every_attribute_node_in_the_catalogue_prints_its_number()
     {
-        // The sentence is generated FROM the Mods, so the catalogue cannot hand-type a number that
-        // disagrees with the sim. Check that every node carrying Mods gets a percentage in its text,
-        // and that the percentage is the one the multiplier implies.
+        // The description must OPEN with the sentence generated FROM the Mods, so the catalogue cannot
+        // hand-type a number that disagrees with the sim — and the number is printed once, not twice.
         var attribute = MemoryDustTree.Catalog.Where(u => u.Mods != BuildMods.None).ToList();
         Assert.NotEmpty(attribute);
 
@@ -97,6 +95,7 @@ public class MemoryDustTextTests
             Assert.NotEmpty(moved);
             foreach (var m in moved)
                 Assert.Contains($"{MemoryDustText.Percent(m)}%", text);
+            Assert.StartsWith(MemoryDustText.ModsSentence(u.Mods), u.Description);
         }
     }
 
@@ -110,11 +109,9 @@ public class MemoryDustTextTests
         var node = Node("ruin_edge_2");
         var sheet = MemoryDustText.Sheet(node);
 
-        Assert.Contains("6% harder", sheet);
-        Assert.Contains("Costs 3 trait points.", sheet);
-        Assert.Contains("You need KEYSTONE — BLOOD MAGIC first.", sheet);
-        Assert.Contains("never resets", sheet);
-        Assert.Contains(MemoryDustText.Permanence, sheet);
+        Assert.StartsWith("Your hits do 6% more damage. Costs 3 trait points. You need KEYSTONE — BLOOD MAGIC first.", sheet);
+        Assert.EndsWith("Permanent. Never resets.", sheet);
+        Assert.Equal("Permanent. Never resets.", MemoryDustText.Permanence);
 
         // A root says so; a single point is singular; several prerequisites are listed with "and".
         Assert.Contains("You need nothing first", MemoryDustText.Sheet(Node("socket_2")));
@@ -171,16 +168,5 @@ public class MemoryDustTextTests
         // Assert
         Assert.Equal("Your CHARGE pool holds 20 instead of 10 — LODESTONE's full-pool bar rises with it. Skills return 15% slower.", cased);
         Assert.Equal("double damage. Half health.", continued);
-    }
-
-    [Fact]
-    public void test_memory_dust_text_effect_words_are_plain_not_the_enum()
-    {
-        foreach (var e in Enum.GetValues<UnlockEffect>())
-        {
-            var words = MemoryDustText.EffectInPlainWords(e);
-            Assert.DoesNotContain(e.ToString().ToUpperInvariant(), words.ToUpperInvariant());
-            Assert.True(words.Split(' ').Length >= 3, $"{e}: '{words}' is a label, not an explanation");
-        }
     }
 }

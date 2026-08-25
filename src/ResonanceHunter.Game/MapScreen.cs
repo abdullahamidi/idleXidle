@@ -138,6 +138,17 @@ public sealed class MapScreen
         _ => "bg_arena_spirit",
     };
 
+    /// <summary>The Source gem for an element. Literal arms, so check_asset_keys can see every key.</summary>
+    private static string SourceGemKey(Source theme) => theme switch
+    {
+        Source.Body => "source_body",
+        Source.Machine => "source_machine",
+        Source.Mind => "source_mind",
+        Source.Nature => "source_nature",
+        Source.Shadow => "source_shadow",
+        _ => "source_spirit",
+    };
+
     /// <summary>One crest per region, in one place — the node, the detail panel and the progress list share it.</summary>
     private static string? EmblemKey(string regionId) => regionId switch
     {
@@ -275,18 +286,40 @@ public sealed class MapScreen
             if (_ui.Assets.Get(ArenaKey(def.Theme)) is { } ground)
                 b.Draw(ground, node, CentreCrop(ground, node), Color.White);
             _ui.Fill(b, node, unlocked ? new Color(0x0A, 0x08, 0x14, 0xB4) : new Color(0x10, 0x10, 0x16, 0xE4));
-            var edge = sel ? Gold : conq ? Met : active ? Violet : unlocked ? sc : Dim;
-            foreach (var e in new[] { new Rectangle(node.X, node.Y, node.Width, 3), new Rectangle(node.X, node.Bottom - 3, node.Width, 3),
-                                      new Rectangle(node.X, node.Y, 3, node.Height), new Rectangle(node.Right - 3, node.Y, 3, node.Height) })
+            // THE FRAME SAYS WHERE YOU ARE. Gold, and a pixel thicker, on the region you are in; a pale
+            // frame on the one you have selected; the conquest green and the Source colour otherwise.
+            // The active region used to wear an unexplained purple diamond in its corner ("Verdant
+            // Hollow has a purple icon") — the frame and the band below now say it in words.
+            var edge = active ? Gold : sel ? Bone : conq ? Met : unlocked ? sc : Dim;
+            var thick = active ? 4 : 3;
+            foreach (var e in new[] { new Rectangle(node.X, node.Y, node.Width, thick), new Rectangle(node.X, node.Bottom - thick, node.Width, thick),
+                                      new Rectangle(node.X, node.Y, thick, node.Height), new Rectangle(node.Right - thick, node.Y, thick, node.Height) })
                 _ui.Fill(b, e, edge);
+            if (active)
+                foreach (var e in new[] { new Rectangle(node.X - 3, node.Y - 3, node.Width + 6, 2), new Rectangle(node.X - 3, node.Bottom + 1, node.Width + 6, 2),
+                                          new Rectangle(node.X - 3, node.Y - 3, 2, node.Height + 6), new Rectangle(node.Right + 1, node.Y - 3, 2, node.Height + 6) })
+                    _ui.Fill(b, e, Gold * 0.45f);
 
             // Emblem — one crest per region; unknown ids still fall back to a Source gem.
             var emblem = EmblemKey(def.Id);
-            var eb = new Rectangle(node.Center.X - 26, node.Y + 12, 52, 52);
+            var eb = new Rectangle(node.Center.X - 24, node.Y + 10, 48, 48);
             if (emblem is not null && _ui.Assets.Get(emblem) is { } em) b.Draw(em, eb, unlocked ? Color.White : new Color(0x55, 0x55, 0x60));
             else _ui.Diamond(b, eb, unlocked ? sc : Dim);
 
-            _ui.TextCenterBig(b, def.Name, node.Center.X, node.Y + 70, unlocked ? Bone : Slate, UiTypography.Secondary);
+            _ui.TextCenterBig(b, def.Name, node.Center.X, node.Y + 62, unlocked ? Bone : Slate, UiTypography.Secondary);
+
+            // THE ELEMENT, READABLE: the Source gem at 30px with the element's name beside it, in the
+            // Source's colour, centred as one group. The map is where a player picks a place to fight,
+            // and what the creatures there are made of is the first thing a build cares about — it was
+            // only ever implied by the card's ground art, which nobody could name from a thumbnail.
+            var element = def.Theme.ToString().ToUpperInvariant();
+            var ew = _ui.MeasureBig(element, UiTypography.Secondary);
+            var ex = node.Center.X - (30 + 8 + ew) / 2;
+            var gemBox = new Rectangle(ex, node.Y + 86, 30, 30);
+            if (_ui.Assets.Get(SourceGemKey(def.Theme)) is { } gem) b.Draw(gem, gemBox, unlocked ? Color.White : new Color(0x60, 0x60, 0x68));
+            else _ui.Diamond(b, gemBox, unlocked ? sc : Dim);
+            _ui.TextBig(b, element, gemBox.Right + 8, node.Y + 93, unlocked ? sc : Slate, UiTypography.Secondary);
+
             // BELOW the card, not across its bottom border — the power was printed straight through the
             // node's frame edge on every region.
             // Vellum, not Slate/Dim: these labels now sit on the parchment chart rather than on black, and
@@ -294,10 +327,34 @@ public sealed class MapScreen
             _ui.TextCenterBig(b, $"POWER {RegionPower(def):N0}", node.Center.X, node.Bottom + 8,
                 unlocked ? UiKit.Vellum : UiKit.Vellum * 0.55f, UiTypography.Secondary);
 
-            // State badge, top-right of the node.
-            if (!unlocked) DrawLockArt(b, new Rectangle(node.Right - 32, node.Y + 8, 24, 24));
-            else if (conq) DrawCheck(b, new Rectangle(node.Right - 32, node.Y + 10, 22, 18), Met);
-            else if (active) _ui.Diamond(b, new Rectangle(node.Right - 30, node.Y + 8, 20, 20), Violet);
+            // THE STATE, IN WORDS, on a band along the card's foot: YOU ARE HERE in gold, CONQUERED with
+            // its tick, LOCKED with its padlock. The old corner badge was a 20px glyph with no label —
+            // "far too small and unclear" — and the three states had to be told apart by colour alone.
+            // A region you are in AND have conquered keeps its tick in the corner, so the band's words
+            // never hide the conquest.
+            var band = new Rectangle(node.X + thick, node.Bottom - 24 - thick, node.Width - thick * 2, 24);
+            if (active)
+            {
+                _ui.Fill(b, band, new Color(0x2A, 0x1E, 0x08, 0xE6));
+                _ui.TextCenterBig(b, "YOU ARE HERE", node.Center.X, band.Y + 4, Gold, UiTypography.Secondary);
+                if (conq) DrawCheck(b, new Rectangle(node.Right - 30, node.Y + 10, 22, 18), Met);
+            }
+            else if (conq)
+            {
+                _ui.Fill(b, band, new Color(0x08, 0x14, 0x0C, 0xE6));
+                var cw = _ui.MeasureBig("CONQUERED", UiTypography.Secondary);
+                var cx = node.Center.X - (22 + 8 + cw) / 2;
+                DrawCheck(b, new Rectangle(cx, band.Y + 3, 22, 18), Met);
+                _ui.TextBig(b, "CONQUERED", cx + 30, band.Y + 4, Met, UiTypography.Secondary);
+            }
+            else if (!unlocked)
+            {
+                _ui.Fill(b, band, new Color(0x10, 0x10, 0x16, 0xE6));
+                var lw = _ui.MeasureBig("LOCKED", UiTypography.Secondary);
+                var lx = node.Center.X - (18 + 8 + lw) / 2;
+                DrawLockArt(b, new Rectangle(lx, band.Y + 3, 18, 18));
+                _ui.TextBig(b, "LOCKED", lx + 26, band.Y + 4, Slate, UiTypography.Secondary);
+            }
 
             if (sel) _ui.Fill(b, new Rectangle(node.X - 4, node.Y - 4, node.Width + 8, 4), Gold);
         }
@@ -340,7 +397,7 @@ public sealed class MapScreen
         _ui.Fill(b, prev, sc * 0.16f);
         _ui.Fill(b, new Rectangle(prev.X, prev.Y, prev.Width, 3), sc);
         _ui.Fill(b, new Rectangle(prev.X, prev.Bottom - 3, prev.Width, 3), sc);
-        if (_ui.Assets.Get($"source_{def.Theme.ToString().ToLowerInvariant()}") is { } gem)
+        if (_ui.Assets.Get(SourceGemKey(def.Theme)) is { } gem)
             b.Draw(gem, new Rectangle(prev.Center.X - 40, prev.Center.Y - 40, 80, 80), unlocked ? Color.White : new Color(0x60, 0x60, 0x68));
 
         // BOSS POWER TIER IS GONE and everything below it moved up 38px, which is what makes the DROPS
@@ -360,7 +417,7 @@ public sealed class MapScreen
 
         // Enemy theme (the region's Source) + combat modifier (its bias).
         _ui.TextBig(b, "ENEMY THEME", DetailPanel.X + 28, DetailPanel.Y + 308, Gold, UiTypography.Secondary);
-        if (_ui.Assets.Get($"source_{def.Theme.ToString().ToLowerInvariant()}") is { } tg)
+        if (_ui.Assets.Get(SourceGemKey(def.Theme)) is { } tg)
             b.Draw(tg, new Rectangle(DetailPanel.X + 30, DetailPanel.Y + 340, 34, 34), Color.White);
         _ui.TextBig(b, $"{def.Theme.ToString().ToUpperInvariant()} ENEMIES", DetailPanel.X + 74, DetailPanel.Y + 344, Bone, UiTypography.Body);
         // HOW THE PLACE FIGHTS, which the region model has carried since it was written and no screen has
@@ -401,48 +458,44 @@ public sealed class MapScreen
             _ui.TextBig(b, $"EARNS {farm.IdleEfficiencyPercent():0}% OF NORMAL WHILE YOU ARE AWAY",
                         DetailPanel.X + 30, DetailPanel.Y + 546, Slate, UiTypography.Secondary);
 
-        // WHAT THIS PLACE DROPS. The map decided a difficulty and an element and said nothing about
-        // reward, so "where should I farm" had no answer on the screen built to answer it. Each region
-        // now leans toward its own slots, and this is where a player finds that out — before walking in,
-        // not after twenty chests.
-        // THIS SECTION HAD NEVER DRAWN A SINGLE LINE. Its body started at Y+606 and its floor was
-        // Bottom-150 = Y+566 — forty pixels ABOVE its own first row — so the very first iteration broke
-        // and every region in the game showed a "DROPS" heading with nothing under it. The heading was
-        // outside the loop, so the failure looked like missing DATA rather than a layout that could not
-        // fit its own content, and the comment below explains a clamp that was doing far more than it
-        // claimed. The floor was right; there was simply no room, and nothing said so.
+        // WHAT THIS PLACE DROPS — LISTED, not described. The map decided a difficulty and an element
+        // and said nothing about reward, so "where should I farm" had no answer on the screen built to
+        // answer it. Each region leans toward its own slots, and this is where a player finds that out
+        // — before walking in, not after twenty chests.
         //
-        // The room came from deleting BOSS POWER TIER above. Now the heading is only drawn if a line
-        // will actually follow it, so this can never silently regress to a bare label again.
+        // It used to be a wrapped sentence ("A burning forge. More weapons and focuses drop here.") and
+        // the owner asked for the drops listed instead: one favoured slot per line with its glyph, and
+        // the element of everything that drops here on the heading's own line, where it costs no row.
+        // A player comparing two regions is comparing slots, and a column is read in one glance.
+        //
+        // THIS SECTION ONCE NEVER DREW A LINE: its body started below its own floor, and every region
+        // showed a "DROPS" heading with nothing under it. So the heading is only drawn when at least
+        // one row will follow it, and the row count is worked out from the floor BEFORE anything is
+        // drawn — the conquered world's corruption ladder takes the band below Bottom-204, which
+        // leaves exactly three rows of 21px from Y+612, the most any profile favours.
         var drops = RegionDrops.For(def.Id);
-        var dropLines = drops.Favoured.Count > 0
-            ? _ui.WrapBig(drops.Blurb, DetailPanel.Width - 60, UiTypography.Secondary)
-            : System.Array.Empty<string>();
-        var dropsTop = DetailPanel.Y + 620;
-        // Clamped to the row above the CTA: on a deepenable world the CORRUPTION line lands in this
-        // band, and a wrap with no floor eventually meets whatever is below it.
-        // Once the world is conquered the corruption ladder row starts at Bottom-196; the blurb stops above it.
+        const int dropRow = 21;
+        var dropsTop = DetailPanel.Y + 612;
         var dropsFloor = DetailPanel.Bottom - (World.AllConquered ? 204 : 108);
-        if (dropLines.Count > 0 && dropsTop + 22 <= dropsFloor)
+        var dropRows = Math.Min(drops.Favoured.Count, Math.Max(0, (dropsFloor - dropsTop) / dropRow));
+        if (dropRows > 0)
         {
             _ui.TextBig(b, "DROPS", DetailPanel.X + 28, DetailPanel.Y + 590, Gold, UiTypography.Secondary);
 
-            // WHAT IT FAVOURS, AS PICTURES, on the heading's own line — which costs no vertical space
-            // at all. The blurb below already says it in words; a player comparing two regions is
-            // comparing slots, and three glyphs are read in one glance where two sentences are not.
-            var gx = DetailPanel.Right - 28;
-            foreach (var slot in drops.Favoured.Take(3).Reverse())
-            {
-                if (SlotGlyph(slot) is not { } key || _ui.Assets.Get(key) is not { } gi) continue;
-                gx -= 30;
-                b.Draw(gi, new Rectangle(gx, DetailPanel.Y + 584, 26, 26), Bone);
-            }
+            var element = $"{def.Theme.ToString().ToUpperInvariant()} ITEMS";
+            _ui.TextRightBig(b, element, DetailPanel.Right - 28, DetailPanel.Y + 590, sc, UiTypography.Secondary);
+            var ew = _ui.MeasureBig(element, UiTypography.Secondary);
+            if (_ui.Assets.Get(SourceGemKey(def.Theme)) is { } dropGem)
+                b.Draw(dropGem, new Rectangle(DetailPanel.Right - 28 - ew - 30, DetailPanel.Y + 587, 22, 22), Color.White);
+
             var y = dropsTop;
-            foreach (var line in dropLines)
+            for (var i = 0; i < dropRows; i++)
             {
-                if (y + 22 > dropsFloor) break;
-                _ui.TextBig(b, line, DetailPanel.X + 30, y, Bone, UiTypography.Secondary);
-                y += 22;
+                var slot = drops.Favoured[i];
+                if (SlotGlyph(slot) is { } key && _ui.Assets.Get(key) is { } gi)
+                    b.Draw(gi, new Rectangle(DetailPanel.X + 30, y + 1, 19, 19), Bone);
+                _ui.TextBig(b, RegionDrops.PlainName(slot), DetailPanel.X + 58, y, Bone, UiTypography.Secondary);
+                y += dropRow;
             }
         }
 
