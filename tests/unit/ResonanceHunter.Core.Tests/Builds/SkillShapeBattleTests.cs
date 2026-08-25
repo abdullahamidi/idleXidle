@@ -331,4 +331,92 @@ public class SkillShapeBattleTests
             $"Against a swarm, Spread took {spreadVsSwarm}ms and Weight took {weightVsSwarm}ms. " +
             "A Weight build is supposed to STALL here — that stall is the game.");
     }
+
+    // ── THE SIDE ROADS' TWO NEW FIELDS. Each one is a new read in the sim, so each gets the "does the
+    //    fight actually read it" test that the rest of this file exists for. ──────────────────────
+
+    /// <summary>
+    /// MOMENTUM — a kill takes time off every cooldown, so a Strike clears a field of weaklings faster.
+    /// </summary>
+    /// <remarks>
+    /// Measured on duration, not activations: both builds make the same six kills, so the count is the
+    /// same; what the refund buys is the six kills arriving sooner. A Strike recovers in 2,000ms and a
+    /// kill hands back 1,000, so with one kill per swing the second half of the wave should run at
+    /// roughly double pace.
+    /// </remarks>
+    [Fact]
+    public void test_momentum_refunds_cooldowns_on_every_kill()
+    {
+        // Six creatures a single Strike finishes each — one kill per swing, no overkill to muddy it.
+        var field = () => Wave(6, 30f, 5f);
+
+        var plain = Fight(SkillShape.None, field(), Form.Strike);
+        var momentum = Fight(SkillShape.None with { CooldownRefundOnKillMs = 1_000 }, field(), Form.Strike);
+
+        Assert.Equal(6, plain.CreaturesKilled);
+        Assert.Equal(6, momentum.CreaturesKilled);
+        Assert.True(momentum.DurationMs < plain.DurationMs * 0.8f,
+            $"With MOMENTUM the wave took {momentum.DurationMs}ms against {plain.DurationMs}ms without it. " +
+            "The refund is not reaching the cooldown table — the node is dormant.");
+    }
+
+    /// <summary>
+    /// MOMENTUM is worth more the more there is to kill — a torrent in a Swarm, a trickle against one.
+    /// </summary>
+    [Fact]
+    public void test_momentum_pays_by_the_kill_not_by_the_wave()
+    {
+        var shape = SkillShape.None with { CooldownRefundOnKillMs = 1_000 };
+
+        // One creature with the health of six: one kill, one refund, and nothing left to spend it on.
+        var one = Fight(shape, Wave(1, 180f, 5f), Form.Strike);
+        var onePlain = Fight(SkillShape.None, Wave(1, 180f, 5f), Form.Strike);
+        Assert.Equal(onePlain.DurationMs, one.DurationMs);
+    }
+
+    /// <summary>
+    /// THORNS — a creature that bites takes a share of its own bite back, so a big biter dies sooner.
+    /// </summary>
+    /// <remarks>
+    /// The champion's own damage is identical in both runs (same skills, same seed), so any change in
+    /// how long the creature lasts is the thorns and nothing else. 3,000 health, not more: a bare
+    /// Strike lands roughly 28 a second, so a pool a lone Strike cannot empty inside the 120-second
+    /// ceiling makes BOTH runs stall at the ceiling and the metric saturates — the same fixture trap
+    /// the class remarks describe for health.
+    /// </remarks>
+    [Fact]
+    public void test_thorns_return_a_share_of_every_bite()
+    {
+        var bruiser = () => Wave(1, 3_000f, 300f, archetype: Archetype.Bruiser);
+
+        var plain = Fight(SkillShape.None, bruiser(), Form.Strike);
+        var thorns = Fight(SkillShape.None with { ReflectFraction = 0.20f }, bruiser(), Form.Strike);
+
+        Assert.True(thorns.DurationMs < plain.DurationMs,
+            $"With THORNS the bruiser lasted {thorns.DurationMs}ms against {plain.DurationMs}ms without. " +
+            "Nothing is being turned back — the node is dormant.");
+    }
+
+    /// <summary>THORNS scale with the bite: the same node punishes a heavy biter more than a light one.</summary>
+    /// <remarks>
+    /// This is what makes it an Endure node that ANSWERS Bruiser rather than a flat damage aura: the
+    /// champion's pool is far too large for either bite to matter, so the only thing the bigger bite
+    /// changes is how much comes back.
+    /// </remarks>
+    [Fact]
+    public void test_thorns_scale_with_the_size_of_the_bite()
+    {
+        var shape = SkillShape.None with { ReflectFraction = 0.20f };
+
+        var light = Fight(shape, Wave(1, 3_000f, 100f), Form.Strike);
+        var heavy = Fight(shape, Wave(1, 3_000f, 600f), Form.Strike);
+
+        Assert.True(light.DurationMs < ExpeditionTuning.Default.TickCeilingMs
+                    && heavy.DurationMs < ExpeditionTuning.Default.TickCeilingMs,
+            "A fixture that stalls at the ceiling measures the ceiling, not the node.");
+
+        Assert.True(heavy.DurationMs < light.DurationMs,
+            $"A 600-damage biter lasted {heavy.DurationMs}ms and a 100-damage biter {light.DurationMs}ms " +
+            "under the same THORNS. The return is not reading the bite.");
+    }
 }

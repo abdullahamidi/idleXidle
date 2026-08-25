@@ -51,6 +51,20 @@ public sealed record MasteryNode(
     public Form? Form { get; init; }
 
     /// <summary>
+    /// A SPUR: a ring-1 Minor that hangs off another Minor instead of off START.
+    /// </summary>
+    /// <remarks>
+    /// The one place the tree grows SIDEWAYS rather than outward. A spur costs what its ring costs and
+    /// counts as a Minor everywhere a Minor is counted — but it needs its parent taken first, so the
+    /// side road it opens (parent, spur, the side notable, the side greater) is one node longer than
+    /// the spine, which is the whole point of it: a branch that took fifteen minutes to walk to a
+    /// specialisation now has a longer way round. The layout draws a spur off its parent's outer
+    /// shoulder rather than inside the ring-1 fan, so the four minors a player has memorised do not
+    /// move when the fifth arrives.
+    /// </remarks>
+    public bool Spur { get; init; }
+
+    /// <summary>
     /// A SECOND prerequisite group. Any one of <see cref="Prereqs"/> AND any one of these.
     /// </summary>
     /// <remarks>

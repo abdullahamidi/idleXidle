@@ -1284,7 +1284,7 @@ public sealed class BuildScreen
 
         // THE SIX UNCHOSEN SPECIALISATIONS BREATHE. While the hunter has no discipline, the one
         // decision on this page that cannot be undone by a respec is also the one the eye has no
-        // reason to land on — six nodes among fifty-one. A slow gold halo is the cheapest honest way
+        // reason to land on — six nodes among sixty-three. A slow gold halo is the cheapest honest way
         // to say "these are not ordinary nodes"; the moment a discipline exists it stops, because then
         // the announcement would be nagging about a choice already made.
         if (node.Kind == MasteryKind.Specialisation && aff is null && !taken)

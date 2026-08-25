@@ -44,10 +44,21 @@ public enum Branch
 /// game.
 /// </para>
 /// <para>
-/// <b>Rings and prices.</b> 4 minors at 1, 3 notables at 3, 2 greaters at 5, 1 mastery at 8 — a full
-/// branch is 31. Four bridges at 6 and six Form specialisations at 6 bring the tree to 184 against
-/// roughly 60 points at full current content, which is the design's one-third reachable invariant. Two
-/// complete branches cost 62 and are therefore exactly, deliberately out of reach.
+/// <b>Rings and prices.</b> 5 minors at 1, 4 notables at 3, 3 greaters at 5, 1 mastery at 8 — a full
+/// branch is 40. Four bridges at 6 and six Form specialisations at 6 bring the tree to 220 against
+/// roughly 60 points at full current content, which keeps the design's about-a-third reachable
+/// invariant (27%; the points curve is being retuned alongside). Two complete branches cost 80 and are
+/// therefore exactly, deliberately out of reach.
+/// </para>
+/// <para>
+/// <b>The side road.</b> Each branch was 4 → 3 → 2 → 1 and a playtester was at a specialisation inside
+/// fifteen minutes. The fifth minor, fourth notable and third greater on every branch are not spread
+/// across the fans — they form ONE SIDE ROAD: a spur minor that hangs off the outermost ring-1 minor
+/// (so it needs that minor first), a notable that needs the spur, a greater that needs that notable,
+/// and the capstone accepts the greater like any other. It is a longer way to the same rim, and it
+/// carries the branch's identity end to end — Weight's road dents, hammers and shatters plate; Spread's
+/// sweeps wider and feeds cooldowns from kills; Tempo's front-loads the wave's opening seconds and pays
+/// in bites taken; Endure's thickens skin, turns bites back and pays in cooldowns.
 /// </para>
 /// <para>
 /// <b>No node is a bare multiplier.</b> Every entry below changes a shape — hit size, target count,
@@ -110,6 +121,11 @@ public static class MasteryCatalog
             S with { FirstHitMultiplier = 1.30f });
         Minor(n, b, "deliberate", "DELIBERATE — MUCH BIGGER HITS, MUCH SLOWER",
             S with { HitSize = 1.30f, SkillRate = 0.80f });
+        // THE SIDE ROAD'S SPUR. A small SUNDER that a minor can afford: with SUNDER itself the threshold
+        // takes the kinder 150 and the strips ADD, so the spur keeps paying after the notable — a
+        // 1-point node that goes dead the moment its 3-point neighbour arrives is dormant content.
+        Spur(n, b, "dent", "deliberate", "DENT — A HIT OVER 150 STRIPS 8 ARMOUR FOR THE WAVE",
+            S with { SunderThreshold = 150f, SunderAmount = 8f });
 
         // SUNDER strips armour permanently for the rest of the wave, so a Weight build gets STRONGER as an
         // Armoured wave goes on — the opposite of how flat mitigation normally works, and the reason the
@@ -125,6 +141,12 @@ public static class MasteryCatalog
         Notable(n, b, "breaker", "BREAKER — HALF OF ANY OVERKILL CARRIES TO THE NEXT CREATURE",
             S with { OverkillCarry = 0.5f },
             new[] { "heavy_hand", "sharpened", "follow_through", "deliberate" });
+        // The side road's notable: the mirror of Tempo's ALPHA. Weight keeps hitting the SAME creature,
+        // and every hit after the first is the bigger one — a single-target commitment stated as a
+        // shape, which is why it is worth nothing to a build that touches each creature once.
+        Notable(n, b, "second_blow", "SECOND BLOW — EVERY HIT AFTER THE FIRST ON A CREATURE +20%",
+            S with { LaterHitMultiplier = 1.20f },
+            new[] { "dent" });
 
         Greater(n, b, "monolith", "MONOLITH — HALF AS MANY HITS, EACH TWICE AS LARGE",
             S with { HitSize = 2f, SkillRate = 0.5f },
@@ -132,13 +154,18 @@ public static class MasteryCatalog
         Greater(n, b, "siege", "SIEGE — +45% TO ARMOURED, -25% TO EVERYTHING ELSE",
             S with { VsArmouredBonus = 0.45f, VsOtherPenalty = 0.25f },
             new[] { "sunder", "crush", "breaker" });
+        // The side road's greater. With DENT and SUNDER the threshold drops to 120 and the strips sum to
+        // 58 — a plated wave is bare after one swing — and the price is Weight's own currency: slower.
+        Greater(n, b, "shatter", "SHATTER — A HIT OVER 120 STRIPS 30 ARMOUR FOR THE WAVE, COOLDOWNS +25%",
+            S with { SunderThreshold = 120f, SunderAmount = 30f, SkillRate = 0.80f },
+            new[] { "second_blow" });
 
         // THE BRANCH IN ONE NODE. Armour stops existing — and so does any build that delivers its damage
         // in small pieces, which is every Spread build in the game. It is the clearest statement in the
         // tree that the two axes are opposed.
         Mastery(n, b, "overwhelm", "OVERWHELM — HITS UNDER 60 DO NOTHING; HITS OVER 60 IGNORE ARMOUR",
             S with { OverwhelmFloor = 60f },
-            new[] { "monolith", "siege" });
+            new[] { "monolith", "siege", "shatter" });
     }
 
     // ── SPREAD — answers Swarm. Target count and action economy. ──────────────────────────────────
@@ -155,6 +182,9 @@ public static class MasteryCatalog
             S with { SkillRate = 1.18f });
         Minor(n, b, "ricochet", "RICOCHET — 30% OF HITS STRIKE A SECOND CREATURE FOR HALF",
             S with { RicochetChance = 0.30f, RicochetFraction = 0.5f });
+        // The side road's spur pulls Weight's own Form onto the Spread axis: a Strike that reaches two.
+        Spur(n, b, "sweep", "ricochet", "SWEEP — STRIKE REACHES ONE MORE CREATURE",
+            S with { FormTargets = new Dictionary<Form, int> { [Form.Strike] = 1 } });
 
         Notable(n, b, "chain", "CHAIN — EVERY HIT STRIKES ONE MORE CREATURE AT 50%",
             S with { ChainFraction = 0.5f },
@@ -165,6 +195,12 @@ public static class MasteryCatalog
         Notable(n, b, "swarmbane", "SWARMBANE — +8% DAMAGE PER LIVING CREATURE",
             S with { PerCreatureBonus = 0.08f },
             new[] { "wide", "diffuse", "quick_hands", "ricochet" });
+        // The side road's notable: action economy FED BY KILLS. Eight refunds in a Swarm, one against a
+        // Bruiser — the same node is a torrent in the band Spread answers and a trickle in the one it
+        // does not, which is what makes it a Spread node rather than a rate node.
+        Notable(n, b, "momentum", "MOMENTUM — EVERY KILL TAKES ONE SECOND OFF ALL COOLDOWNS",
+            S with { CooldownRefundOnKillMs = 1_000 },
+            new[] { "sweep" });
 
         Greater(n, b, "cascade", "CASCADE — AFTER A KILL, THE NEXT SKILL STRIKES EVERYTHING",
             S with { CascadeOnKill = true },
@@ -172,12 +208,18 @@ public static class MasteryCatalog
         Greater(n, b, "dispersal", "DISPERSAL — ALL FORMS +1 TARGET, HITS -25%",
             S with { ExtraTargets = 1, HitSize = 0.75f },
             new[] { "chain", "cull", "swarmbane" });
+        // The side road's greater. Worse than nothing against one creature (x1.12 x 0.8), better past
+        // two, far better at six — the Swarm/Bruiser trade stated in one line, and the price is paid
+        // exactly where Endure would have been the answer.
+        Greater(n, b, "outnumbered", "OUTNUMBERED — +12% DAMAGE PER LIVING CREATURE, ALL HITS -20%",
+            S with { PerCreatureBonus = 0.12f, DamageDealt = 0.80f },
+            new[] { "momentum" });
 
         // Swarms evaporate. Anything with armour becomes nearly immune, because 40% of a small hit lands
         // under the flat mitigation floor — the exact mirror of what OVERWHELM does to Spread builds.
         Mastery(n, b, "everywhere", "EVERYWHERE — EVERY SKILL STRIKES EVERY CREATURE AT 40%",
             S with { StrikesEveryCreature = true, HitSize = 0.40f },
-            new[] { "cascade", "dispersal" });
+            new[] { "cascade", "dispersal", "outnumbered" });
     }
 
     // ── TEMPO — answers Caster. Kill it before it acts. ───────────────────────────────────────────
@@ -194,6 +236,12 @@ public static class MasteryCatalog
             S with { FreeOpeningCast = true });
         Minor(n, b, "focus", "FOCUS — +10% CRITICAL CHANCE",
             S with { BonusCritPercent = 10f });
+        // The side road's spur: the mastery's shape at a minor's size, with no price. The window fields
+        // take the kinder value and the bonuses ADD, so it keeps paying under SURGE and FIRST STRIKE.
+        // Two seconds, not one: the wave opens with a 700ms breath, so a one-second window would have
+        // held the auto-swing and nothing else.
+        Spur(n, b, "flash", "focus", "FLASH — +30% FOR THE FIRST TWO SECONDS OF EACH WAVE",
+            S with { OpeningSeconds = 2f, OpeningBonus = 0.30f });
 
         Notable(n, b, "alpha", "ALPHA — FIRST HIT x2.2, EVERY LATER HIT x0.75",
             S with { FirstHitMultiplier = 2.2f, LaterHitMultiplier = 0.75f },
@@ -204,6 +252,12 @@ public static class MasteryCatalog
         Notable(n, b, "interrupt", "INTERRUPT — DAMAGE IN THE RUN-UP TO AN ENEMY SWING +60%",
             S with { InterruptBonus = 0.60f },
             new[] { "opener", "hasten", "preparation", "focus" });
+        // The side road's notable. Three seconds on purpose — the same window as FIRST STRIKE, so the
+        // notable deepens the capstone's opening rather than stretching it, and the mastery's "-45%
+        // after three seconds" stays true with SURGE taken.
+        Notable(n, b, "surge", "SURGE — +50% FOR THE FIRST THREE SECONDS OF EACH WAVE",
+            S with { OpeningSeconds = 3f, OpeningBonus = 0.50f },
+            new[] { "flash" });
 
         Greater(n, b, "blitz", "BLITZ — COOLDOWNS -40%, HITS -25%",
             S with { SkillRate = 1.67f, HitSize = 0.75f },
@@ -211,12 +265,17 @@ public static class MasteryCatalog
         Greater(n, b, "assassinate", "ASSASSINATE — ONCE A WAVE, A CREATURE UNDER 40% DIES OUTRIGHT",
             S with { AssassinateThreshold = 0.40f },
             new[] { "alpha", "mark_mastery", "interrupt" });
+        // The side road's greater pays in the OPPOSED branch's currency: speed bought with bites taken.
+        // A Caster that dies in the opening never bites; a Bruiser that does not now bites harder.
+        Greater(n, b, "rush", "RUSH — COOLDOWNS -25%, EVERY BITE DEALS +20%",
+            S with { SkillRate = 1.33f, DamageTaken = 1.20f },
+            new[] { "surge" });
 
         // Every wave becomes an opener. Bruisers, which cannot be killed in three seconds, become the wall
         // — which is what makes this the mastery that Endure exists to be the answer to.
         Mastery(n, b, "first_strike", "FIRST STRIKE — +180% FOR THREE SECONDS, -45% AFTER",
             S with { OpeningSeconds = 3f, OpeningBonus = 1.80f, AfterOpeningPenalty = 0.45f },
-            new[] { "blitz", "assassinate" });
+            new[] { "blitz", "assassinate", "rush" });
     }
 
     // ── ENDURE — answers Bruiser, and extends every other band. ───────────────────────────────────
@@ -233,6 +292,10 @@ public static class MasteryCatalog
             S with { FlatDamageReduction = 6f });
         Minor(n, b, "second_wind", "SECOND WIND — HEAL 8% ON CLEARING A WAVE",
             S with { HealOnClear = 0.08f });
+        // The side road's spur: more of PADDING's flat cut, which ADDS — eleven off every bite with both,
+        // and the flat cut is the one Endure number that erases a Swarm's nibbles outright.
+        Spur(n, b, "thick_skin", "second_wind", "THICK SKIN — EVERY BITE DEALS 5 LESS",
+            S with { FlatDamageReduction = 5f });
 
         // The one node in the game that buys an exception to "health does not regenerate between waves".
         Notable(n, b, "recovery", "RECOVERY — REGAIN 20% OF HEALTH BETWEEN WAVES",
@@ -244,6 +307,12 @@ public static class MasteryCatalog
         Notable(n, b, "fortify", "FORTIFY — THE FIRST BITE OF EACH WAVE DEALS NOTHING",
             S with { FirstBiteFree = true },
             new[] { "toughness", "leech", "padding", "second_wind" });
+        // The side road's notable: the Endure answer that SCALES WITH THE THREAT. A Bruiser's identity is
+        // the size of its bite, so the harder it bites the more it pays back; a Swarm of nibblers pays
+        // almost nothing per head. Read against the raw bite, so the rest of the branch cannot shrink it.
+        Notable(n, b, "thorns", "THORNS — EVERY CREATURE THAT BITES YOU TAKES 20% OF ITS BITE BACK",
+            S with { ReflectFraction = 0.20f },
+            new[] { "thick_skin" });
 
         Greater(n, b, "bulwark", "BULWARK — DAMAGE TAKEN -35%, DAMAGE DEALT -20%",
             S with { DamageTaken = 0.65f, DamageDealt = 0.80f },
@@ -251,12 +320,18 @@ public static class MasteryCatalog
         Greater(n, b, "bastion", "BASTION — +1% DAMAGE PER 200 MAXIMUM HEALTH",
             S with { DamagePerMaxHealth = 0.01f / 200f },
             new[] { "recovery", "absorb", "fortify" });
+        // The side road's greater pays in the OPPOSED branch's currency: mitigation bought with time.
+        // BULWARK pays in hit size; this pays in rate, so the two Endure greaters are different prices
+        // for the same wall rather than one price twice.
+        Greater(n, b, "brace", "BRACE — DAMAGE TAKEN -25%, COOLDOWNS +25%",
+            S with { DamageTaken = 0.75f, SkillRate = 0.80f },
+            new[] { "thorns" });
 
         // The depth-pusher's node: it converts a health POOL into a per-wave ALLOWANCE, which is strictly
         // better the deeper you go and strictly worse in any single hard wave.
         Mastery(n, b, "endless", "ENDLESS — FULL HEALTH EVERY WAVE; MAXIMUM HEALTH HALVED",
             S with { FullHealBetweenWaves = true, MaxHealth = 0.5f },
-            new[] { "bulwark", "bastion" });
+            new[] { "bulwark", "bastion", "brace" });
     }
 
     // ── BRIDGES — hybridising, at a price that costs a mastery. ───────────────────────────────────
@@ -309,6 +384,17 @@ public static class MasteryCatalog
 
     private static void Minor(List<MasteryNode> n, Branch b, string id, string label, SkillShape shape)
         => n.Add(new(id, MasteryKind.Minor, b, 1, RingCost[1], label, shape, null, new[] { StartId }));
+
+    /// <summary>
+    /// A SPUR minor: ring 1 by price, but it hangs off <paramref name="parent"/> rather than off START,
+    /// and the layout draws it off that parent's shoulder. See <see cref="MasteryNode.Spur"/>.
+    /// </summary>
+    private static void Spur(List<MasteryNode> n, Branch b, string id, string parent, string label,
+                             SkillShape shape)
+        => n.Add(new(id, MasteryKind.Minor, b, 1, RingCost[1], label, shape, null, new[] { parent })
+        {
+            Spur = true,
+        });
 
     private static void Notable(List<MasteryNode> n, Branch b, string id, string label, SkillShape shape,
                                 string[] prereqs)

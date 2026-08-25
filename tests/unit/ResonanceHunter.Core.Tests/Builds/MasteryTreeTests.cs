@@ -41,12 +41,135 @@ public class MasteryTreeTests
 
     // ── The budget. These four are the design's arithmetic, and they are load-bearing. ────────────
 
-    /// <summary>A full branch costs 31 — the unit everything else is priced against.</summary>
+    /// <summary>A full branch costs 40 — the unit everything else is priced against.</summary>
+    /// <remarks>
+    /// Was 31 (4 + 9 + 10 + 8). The post-pre-alpha playtest reached a specialisation inside fifteen
+    /// minutes, so every branch grew a side road — one more minor, notable and greater (1 + 3 + 5 = 9)
+    /// — and the number the rest of the arithmetic hangs off moved with it.
+    /// </remarks>
     [Fact]
-    public void test_a_full_branch_costs_thirty_one()
+    public void test_a_full_branch_costs_forty()
     {
         foreach (var b in Branches)
-            Assert.Equal(31, MasteryCatalog.BranchCost(b));
+            Assert.Equal(40, MasteryCatalog.BranchCost(b));
+    }
+
+    /// <summary>Every branch is exactly 5 minors, 4 notables, 3 greaters and 1 mastery.</summary>
+    /// <remarks>
+    /// The shape the design doc states and the layout is tuned for. A branch that quietly gained a
+    /// sixth minor or lost a greater would still "work", and the ring fans would silently re-space to
+    /// absorb it — which is precisely the kind of drift a count pins.
+    /// </remarks>
+    [Fact]
+    public void test_every_branch_has_five_four_three_one()
+    {
+        foreach (var b in Branches)
+        {
+            Assert.Equal(5, Of(b, MasteryKind.Minor).Count());
+            Assert.Equal(4, Of(b, MasteryKind.Notable).Count());
+            Assert.Equal(3, Of(b, MasteryKind.Greater).Count());
+            Assert.Single(Of(b, MasteryKind.Mastery));
+            Assert.Single(Of(b, MasteryKind.Minor).Where(n => n.Spur));
+        }
+    }
+
+    /// <summary>The whole tree is 220: four branches at 40, four bridges at 6, six specialisations at 6.</summary>
+    [Fact]
+    public void test_the_whole_tree_costs_two_hundred_and_twenty()
+    {
+        Assert.Equal(4 * 40 + 4 * 6 + 6 * 6, MasteryCatalog.TotalCost);
+        Assert.Equal(220, MasteryCatalog.TotalCost);
+    }
+
+    /// <summary>No two nodes share an id — a duplicate would make ById, Take and the save ambiguous.</summary>
+    [Fact]
+    public void test_every_node_id_is_unique()
+    {
+        var dupes = MasteryCatalog.Nodes.GroupBy(n => n.Id).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
+        Assert.True(dupes.Count == 0, $"duplicate ids: {string.Join(", ", dupes)}");
+    }
+
+    /// <summary>
+    /// Every node can be reached from START by walking prerequisites — nothing is an island.
+    /// </summary>
+    /// <remarks>
+    /// A node whose prerequisite is misspelled is unreachable and, because prerequisites are any-of
+    /// lists resolved by id at CanTake time, nothing at construction would complain. It would sit on
+    /// the screen forever locked, which a player reads as "I have not found the way yet".
+    /// </remarks>
+    [Fact]
+    public void test_every_node_is_reachable_from_start()
+    {
+        var t = TreeWith(10_000);
+        bool progress;
+        do
+        {
+            progress = false;
+            foreach (var node in MasteryCatalog.Nodes)
+            {
+                // The two one-per-hunter rules are not reachability; lift them by taking only what
+                // CanTake allows and treating the refused capstones/specialisations as reached when
+                // their prerequisites are.
+                if (t.IsTaken(node.Id)) continue;
+                if (node.Kind is MasteryKind.Mastery or MasteryKind.Specialisation)
+                {
+                    if (node.Unlocked(t.IsTaken)) continue;
+                    Assert.True(node.Prereqs.All(p => MasteryCatalog.ById(p) is not null),
+                        $"{node.Id} names a prerequisite that does not exist.");
+                    continue;
+                }
+                if (t.Take(node.Id)) progress = true;
+            }
+        } while (progress);
+
+        var unreached = MasteryCatalog.Nodes
+            .Where(n => !t.IsTaken(n.Id) && !n.Unlocked(t.IsTaken))
+            .Select(n => n.Id).ToList();
+        Assert.True(unreached.Count == 0, $"unreachable from START: {string.Join(", ", unreached)}");
+    }
+
+    /// <summary>
+    /// The side road is a ROAD: spur needs its parent, the side notable needs the spur, the side greater
+    /// needs the side notable, and the capstone accepts the side greater.
+    /// </summary>
+    /// <remarks>
+    /// This is the whole answer to "almost at a specialisation in the first fifteen minutes". Nine more
+    /// points per branch only slow a player down if they are strung end to end; nine points spread
+    /// across the existing any-of fans would be nine more ways to skip ahead.
+    /// </remarks>
+    [Fact]
+    public void test_each_branch_has_one_side_road_from_spur_to_capstone()
+    {
+        foreach (var b in Branches)
+        {
+            var spur = Of(b, MasteryKind.Minor).Single(n => n.Spur);
+            var parent = MasteryCatalog.ById(spur.Prereqs.Single())!;
+            Assert.Equal(MasteryKind.Minor, parent.Kind);
+            Assert.Equal(b, parent.Branch);
+            Assert.False(parent.Spur, $"{spur.Id} hangs off another spur.");
+
+            var notable = Of(b, MasteryKind.Notable).Single(n => n.Prereqs.Contains(spur.Id));
+            Assert.Equal(new[] { spur.Id }, notable.Prereqs);
+
+            var greater = Of(b, MasteryKind.Greater).Single(n => n.Prereqs.Contains(notable.Id));
+            Assert.Equal(new[] { notable.Id }, greater.Prereqs);
+
+            var mastery = Of(b, MasteryKind.Mastery).Single();
+            Assert.Contains(greater.Id, mastery.Prereqs);
+
+            // Walked as a road it costs 1 + 1 + 3 + 5 + 8 = 18 and needs every step in order.
+            var t = TreeWith(18);
+            Assert.False(t.CanTake(spur.Id), $"{spur.Id} is takeable before {parent.Id}.");
+            Assert.True(t.Take(parent.Id));
+            Assert.False(t.CanTake(notable.Id), $"{notable.Id} is takeable before {spur.Id}.");
+            Assert.True(t.Take(spur.Id));
+            Assert.False(t.CanTake(greater.Id), $"{greater.Id} is takeable before {notable.Id}.");
+            Assert.True(t.Take(notable.Id));
+            Assert.False(t.CanTake(mastery.Id), $"{mastery.Id} is takeable before any greater.");
+            Assert.True(t.Take(greater.Id));
+            Assert.True(t.Take(mastery.Id));
+            Assert.Equal(0, t.Available);
+        }
     }
 
     /// <summary>
@@ -68,13 +191,20 @@ public class MasteryTreeTests
             "pair are affordable, so the tree no longer asks anything.");
     }
 
-    /// <summary>The whole tree is roughly three times what a career earns.</summary>
+    /// <summary>The whole tree is roughly three to four times what a career earns.</summary>
+    /// <remarks>
+    /// 60 / 184 was 33%; the side roads took the tree to 220 and the same 60 points to 27%. The floor
+    /// moved from 0.28 to 0.25 on purpose: the enrichment exists to make the tree take LONGER to walk,
+    /// and the points curve is being retuned in parallel against the new total — what this test guards
+    /// is that the tree never becomes mostly affordable (the ceiling), and never so large that a
+    /// career buys less than a branch and a half (the floor: 0.25 × 220 = 55 > 40).
+    /// </remarks>
     [Fact]
     public void test_about_a_third_of_the_tree_is_reachable()
     {
         var fraction = 60f / MasteryCatalog.TotalCost;
 
-        Assert.InRange(fraction, 0.28f, 0.38f);
+        Assert.InRange(fraction, 0.25f, 0.38f);
     }
 
     /// <summary>Points are spent by COST, not by node count.</summary>
@@ -213,7 +343,9 @@ public class MasteryTreeTests
     /// <remarks>
     /// Ring 3 is where a branch stops being free. BASTION and CASCADE are the two exceptions: both are
     /// conditional rather than costed — they pay only when a condition the player must build for holds,
-    /// which is a price of a different kind.
+    /// which is a price of a different kind. Damage TAKEN above 1 joined the list of recognised prices
+    /// with RUSH: Tempo's side-road greater pays in the opposed branch's currency, which is the most
+    /// honest price a Tempo node can carry.
     /// </remarks>
     [Fact]
     public void test_greaters_are_costed_or_conditional()
@@ -225,9 +357,20 @@ public class MasteryTreeTests
             if (conditional.Contains(node.Id)) continue;
             var s = node.Shape;
             Assert.True(
-                s.HitSize < 1f || s.SkillRate < 1f || s.DamageDealt < 1f || s.VsOtherPenalty > 0f,
+                s.HitSize < 1f || s.SkillRate < 1f || s.DamageDealt < 1f || s.VsOtherPenalty > 0f
+                || s.DamageTaken > 1f,
                 $"{node.Id} is an unconditional upgrade at ring 3. Greaters cost something.");
         }
+    }
+
+    /// <summary>The three side-road greaters each carry a visible price, and each pays differently.</summary>
+    [Fact]
+    public void test_the_side_road_greaters_each_pay_a_different_price()
+    {
+        Assert.True(MasteryCatalog.ById("shatter")!.Shape.SkillRate < 1f, "SHATTER must pay in rate.");
+        Assert.True(MasteryCatalog.ById("outnumbered")!.Shape.DamageDealt < 1f, "OUTNUMBERED must pay in hits.");
+        Assert.True(MasteryCatalog.ById("rush")!.Shape.DamageTaken > 1f, "RUSH must pay in bites taken.");
+        Assert.True(MasteryCatalog.ById("brace")!.Shape.SkillRate < 1f, "BRACE must pay in rate.");
     }
 
     /// <summary>
@@ -308,18 +451,44 @@ public class MasteryTreeTests
     public void test_a_refund_never_strands_a_node()
     {
         var t = TreeWith(100);
-        var minors = Of(Branch.Tempo, MasteryKind.Minor).ToList();
         var notable = Of(Branch.Tempo, MasteryKind.Notable).First();
+        // The SPINE minors — the ones the notable lists. The spur is a different case, below.
+        var minors = Of(Branch.Tempo, MasteryKind.Minor).Where(m => notable.Prereqs.Contains(m.Id)).ToList();
+        Assert.Equal(4, minors.Count);
 
         foreach (var m in minors) t.Take(m.Id);
         t.Take(notable.Id);
 
-        // Every minor is a valid prerequisite for the notable, so all but the last may go back.
+        // Every spine minor is a valid prerequisite for the notable, so all but the last may go back.
         var refunded = minors.Count(m => t.Refund(m.Id));
         Assert.Equal(minors.Count - 1, refunded);
         Assert.True(t.IsTaken(notable.Id));
 
         Assert.True(t.Refund(notable.Id));
+    }
+
+    /// <summary>A spur's parent cannot be refunded while the spur stands on it.</summary>
+    /// <remarks>
+    /// The spur is the one minor with a SINGLE prerequisite, so it is the one place a minor-for-minor
+    /// refund can strand something. Refusing is the same rule as everywhere else; this just proves the
+    /// rule reaches the new shape.
+    /// </remarks>
+    [Fact]
+    public void test_a_spur_holds_its_parent_until_it_is_refunded()
+    {
+        var t = TreeWith(100);
+        var spur = Of(Branch.Tempo, MasteryKind.Minor).Single(n => n.Spur);
+        var parent = spur.Prereqs.Single();
+
+        Assert.True(t.Take(parent));
+        Assert.True(t.Take(spur.Id));
+
+        Assert.False(t.Refund(parent), $"{parent} was refunded out from under {spur.Id}.");
+        Assert.True(t.IsTaken(parent));
+
+        Assert.True(t.Refund(spur.Id));
+        Assert.True(t.Refund(parent));
+        Assert.Equal(0, t.Spent);
     }
 
     /// <summary>Restoring a save re-derives points rather than trusting them.</summary>
