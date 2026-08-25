@@ -237,14 +237,15 @@ public class GearTraitsTests
     {
         // `_worn[slot]?.Rarity ?? 0` would be Rarity.Common, whose RarityPower is 0.20 — an empty slot
         // would quietly pay like a Common item. Note SquadHealthMultiplier is NOT 1.0 while bare: the
-        // Vitality stat has a non-zero base value, so it starts at 1.12. Nothing to do with gear.
+        // VITALITY left the health multiplier on 2026-08-26 (it is regeneration now), so a bare hunter's
+        // health multiplier is exactly 1. Nothing to do with gear.
         var bare = new Hunter();
         Assert.Equal(GearMods.None, bare.WornMods);
 
         // Neither multiplier is 1.0 while bare: Vitality and Engineering both have non-zero base stat
         // values, so they start at 1.12 and 1.06. Nothing to do with gear — what must hold is that an
         // EMPTY slot adds nothing on top of the stat baseline.
-        Assert.Equal(1f + 0.012f * bare.ValueOf(HunterStat.Vitality), bare.SquadHealthMultiplier, 4);
+        Assert.Equal(1f, bare.SquadHealthMultiplier, 4);
         Assert.Equal(1f + 0.006f * bare.ValueOf(HunterStat.Engineering), bare.SquadSkillRate, 4);
     }
 

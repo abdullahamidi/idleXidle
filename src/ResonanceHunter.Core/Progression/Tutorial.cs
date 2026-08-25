@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using ResonanceHunter.Core.Encounters;
 
 namespace ResonanceHunter.Core.Progression;
 
@@ -120,8 +121,11 @@ public static class Tutorial
     /// <summary>The rungs a player can be shown, in the ladder's (the career's) order.</summary>
     private static readonly TutorialStep[] Ladder =
     {
-        TutorialStep.Watch, TutorialStep.SpendGleam, TutorialStep.MeetABoss, TutorialStep.Conquer,
-        TutorialStep.OpenChest, TutorialStep.EquipItem, TutorialStep.WeaveBuild,
+        // Conquer is LAST since conquest moved to wave 20 (2026-08-26): a chest, a worn item and a
+        // woven build all arrive well before the twentieth wave, so any earlier seat would let the
+        // rungs after it be satisfied before they were ever shown.
+        TutorialStep.Watch, TutorialStep.SpendGleam, TutorialStep.MeetABoss,
+        TutorialStep.OpenChest, TutorialStep.EquipItem, TutorialStep.WeaveBuild, TutorialStep.Conquer,
     };
 
     /// <summary>Has this rung's lesson already been performed, whether or not it was read?</summary>
@@ -236,7 +240,7 @@ public static class Tutorial
         TutorialStep.OpenChest => "CHESTS ARE WHERE ITEMS COME FROM",
         TutorialStep.EquipItem => "SOMETHING DROPPED",
         TutorialStep.WeaveBuild => "THE BUILD IS THE GAME",
-        TutorialStep.Conquer => "SEVEN WAVES CONQUER A REGION",
+        TutorialStep.Conquer => $"{Checkpoints.ConquestWave} WAVES CONQUER A REGION",
         _ => "",
     };
 
@@ -269,7 +273,7 @@ public static class Tutorial
             + "what it does before you commit.",
 
         TutorialStep.Conquer =>
-            "Reach CONQUEST 7 / 7 in the banner over the arena to conquer the region and open the next. "
+            $"Reach CONQUEST {Checkpoints.ConquestWave} / {Checkpoints.ConquestWave} in the banner over the arena to conquer the region and open the next. "
             + "Deeper waves drop rarer loot, never more of it.",
 
         _ => "",

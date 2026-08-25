@@ -171,12 +171,13 @@ public class SourceSignatureTest
             b.Weave(new EquippedSkill(
                 new WovenAbility { Name = "D", Source = caster, Form = Form.Strike },
                 FormBehaviour.BaseCooldownMs(Form.Strike)));
-            // DESYNC. At the natural cadence the Strikes land inside the 2500ms window by
-            // arithmetic accident (2000 into 4000) and the stretch has nothing to convert. A slow
-            // SkillRate stretches the COOLDOWNS but not the window (MarkWindowMs is a constant),
-            // opening a dark gap the signature can win back. (Set via Shape — the sim recomputes
-            // cooldowns from the Form and SkillRate; EquippedSkill.CooldownMs is not its input.)
-            b.Shape = SkillShape.None with { SkillRate = 0.77f };
+            // DESYNC. The Strikes must land at a cadence where the window's edge matters, so the
+            // stretch has something to convert. (Set via Shape — the sim recomputes cooldowns from
+            // the Form and SkillRate; EquippedSkill.CooldownMs is not its input.) 0.95, was 0.77:
+            // the cast lock became the cast clip's length ÷ rate (2026-08-26, CastGapFor), which moved
+            // every cadence; a rate sweep under the new lock showed the signature paying ~11% at
+            // 0.95–1.3 and nothing at 0.77 (probed, not guessed).
+            b.Shape = SkillShape.None with { SkillRate = 0.95f };
             return b;
         }
 

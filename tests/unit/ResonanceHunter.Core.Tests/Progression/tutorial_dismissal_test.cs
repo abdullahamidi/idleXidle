@@ -25,7 +25,7 @@ public class TutorialDismissalTest
         Assert.Equal(TutorialStep.MeetABoss, Tutorial.Showing(facts));
 
         var dismissed = new[] { nameof(TutorialStep.MeetABoss) };
-        Assert.Equal(TutorialStep.Conquer, Tutorial.Showing(facts, dismissed));
+        Assert.Equal(TutorialStep.OpenChest, Tutorial.Showing(facts, dismissed));   // conquest is the LAST rung since it moved to wave 20
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public class TutorialDismissalTest
         var facts = new TutorialFacts(WavesCleared: 3, DeepestWave: 3, StatsTrained: 1, Gleam: 100);
         var dismissed = new[] { nameof(TutorialStep.MeetABoss) };
 
-        Assert.Equal(TutorialStep.Conquer, Tutorial.StepFor(facts, dismissed));
+        Assert.Equal(TutorialStep.OpenChest, Tutorial.StepFor(facts, dismissed));
         Assert.Equal(TutorialStep.MeetABoss, Tutorial.StepFor(facts));
     }
 

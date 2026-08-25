@@ -100,6 +100,13 @@ public static class FormBehaviour
     /// <summary>TRANSFORMATION returns this fraction of its damage as health.</summary>
     public const float TransformationLeech = 0.5f;
 
+    /// <summary>
+    /// The cast clip's authored length in ms at skill rate 1 — eight frames the hunt screen plays across
+    /// this window, faster at a higher rate. The sim's one-cast-at-a-time gap is this same number
+    /// (SoloBattle.CastGapFor), so the animation and the cast lock are one rule.
+    /// </summary>
+    public const int CastClipMs = 700;
+
     /// <summary>Is this Form the one BLOOD MAGIC switches off?</summary>
     public static bool Heals(Form form) => form == Form.Transformation;
 

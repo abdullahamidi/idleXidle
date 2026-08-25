@@ -82,6 +82,15 @@ public sealed class Region
     /// <summary>Restore from a save. Like mastery, never called during play.</summary>
     public void RestoreBestDepth(int depth) => BestDepth = Math.Max(0, depth);
 
+    /// <summary>The checkpoint the player chose here — the wave the next descent starts after (0 = the top).</summary>
+    public int StartWave { get; private set; }
+
+    /// <summary>Choose a checkpoint. The host validates it against Checkpoints.Options first.</summary>
+    public void SetStartWave(int wave) => StartWave = Math.Max(0, wave);
+
+    /// <summary>Restore from a save.</summary>
+    public void RestoreStartWave(int wave) => StartWave = Math.Max(0, wave);
+
     /// <summary>
     /// Formula 2 — Mastery Level, from accrued points.
     /// </summary>

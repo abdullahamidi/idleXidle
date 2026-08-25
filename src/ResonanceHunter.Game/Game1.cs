@@ -650,6 +650,7 @@ public class Game1 : Game
                 var farm = _world.RegionFarm(rf.Id);
                 farm.RestoreMasteryPoints(rf.MasteryPoints);
                 farm.RestoreBestDepth(rf.BestDepth);
+                farm.RestoreStartWave(rf.StartWave);
             }
         }
         else
@@ -2747,8 +2748,7 @@ public class Game1 : Game
         // The x that closes THIS lesson for good — see the dismissal handler in Update.
         var close = GuideCloseRect(r);
         var hover = close.Contains(ChromeMouse);
-        _ui.Fill(_batch, close, hover ? new Color(0x4A, 0x28, 0x30) : new Color(0x22, 0x1A, 0x30));
-        _ui.TextCenterBig(_batch, "×", close.Center.X, close.Y + 4, hover ? Color.White : UiKit.Vellum, 20);
+        _ui.CloseButton(_batch, close, ChromeMouse, false);   // drawn here; the click is handled in Update
     }
 
     /// <summary>Where the guide strip sits this frame — its height follows the wrapped body.</summary>
@@ -2865,8 +2865,7 @@ public class Game1 : Game
 
         var close = GuideCloseRect(r);
         var hover = close.Contains(ChromeMouse);
-        _ui.Fill(_batch, close, hover ? new Color(0x4A, 0x28, 0x30) : new Color(0x22, 0x1A, 0x30));
-        _ui.TextCenterBig(_batch, "×", close.Center.X, close.Y + 4, hover ? Color.White : UiKit.Vellum, 20);
+        _ui.CloseButton(_batch, close, ChromeMouse, false);   // drawn here; the click is handled in Update
     }
 
     // ── Notice toasts ──────────────────────────────────────────────────────────────────────────
@@ -3076,6 +3075,18 @@ public class Game1 : Game
         _expedition.Tree = _dust;                     // …powered by the Dust tree's passive nodes
         _expedition.Mastery = _mastery;               // …and the mastery tree (affinity + node bonuses)
         _expedition.BestDepthHere = _world.RegionFarm(def.Id).BestDepth;   // so NEW RECORD means it
+        // THE CHECKPOINT, if it is still valid and the Dust is there. Validated every frame rather
+        // than at the click, because the record, the conquest and the Dust all move without the map.
+        var farmHere = _world.RegionFarm(def.Id);
+        var wish = Checkpoints.Clamp(farmHere.StartWave, farmHere.BestDepth, _world.IsConquered(def.Id));
+        _expedition.StartWave = _dust.MemoryDust >= Checkpoints.DustCost(wish) ? wish : 0;
+        if (_expedition.CheckpointCharge > 0)
+        {
+            // The descent already began at the checkpoint; the Dust it cost comes out now. Spend()
+            // refusing (a race with the Warren tick, one frame wide) simply makes that descent free.
+            _dust.Spend(_expedition.CheckpointCharge);
+            _expedition.CheckpointCharge = 0;
+        }
         _expedition.ChestCount = _forge.UnopenedChests.Count;   // drives the fight screen's "go open a chest" nudge
         _expedition.VaultOpen = Unlocks.IsOpen(Activity.Vault, GuideUnlockFacts());       // the rail hides a reward whose screen is locked
         _expedition.MasteryOpen = Unlocks.IsOpen(Activity.Mastery, GuideUnlockFacts());   // SPEND POINTS only shows once the tree is open
@@ -3350,7 +3361,12 @@ public class Game1 : Game
     /// and more often, rather than grinding one region deep. Conquest only UNLOCKS the next region; you can
     /// still farm a conquered one as deep as you like for loot.
     /// </remarks>
-    private const int ConquerWaveDepth = 7;
+    /// <summary>
+    /// Waves held to conquer a region. 20, was 7 (playtest 2026-08-26: "seven waves is far too short to
+    /// clear a map"): the fourth boss, past the mastery door. Mirrored by SoloExpeditionScreen.ConquerAt
+    /// and Checkpoints.ConquestWave — the pinned test keeps the three in step.
+    /// </summary>
+    private const int ConquerWaveDepth = Checkpoints.ConquestWave;
 
 
 
@@ -3728,10 +3744,11 @@ public class Game1 : Game
 
     // CLOSE sits on the RIGHT, where every other panel in the game puts its way out (playtest
     // 2026-08-25: "close is left behind on the left"); the exit to the desktop sits left of it.
-    private static readonly Rectangle SettingsClose = new(1000, 880, 300, 56);
-    private static readonly Rectangle SettingsQuit = new(620, 880, 300, 56);
-    /// <summary>The panel's corner ×: the same small close the guide strip and the explanation banners wear.</summary>
-    private static readonly Rectangle SettingsCornerClose = new(SettingsPanel.Right - 60, SettingsPanel.Y + 18, 36, 36);
+    // The CLOSE button is gone (playtest 2026-08-26: "remove the CLOSE text; the corner icon closes");
+    // QUIT TO DESKTOP sits centred in the row it had shared.
+    private static readonly Rectangle SettingsQuit = new(810, 880, 300, 56);
+    /// <summary>The panel's corner close icon — UiKit.CloseButton, the one close every panel wears.</summary>
+    private static readonly Rectangle SettingsCornerClose = new(SettingsPanel.Right - 66, SettingsPanel.Y + 14, 48, 48);
 
     /// <summary>Copies the feedback code (build stamp + progress + run log) to the clipboard.</summary>
     private static readonly Rectangle SettingsCopyFeedback = new(536, 800, 400, 52);
@@ -3892,10 +3909,7 @@ public class Game1 : Game
             _resetArmTimer = ResetArmSeconds;
         }
 
-        var cornerHot = SettingsCornerClose.Contains(mouse);
-        _ui.Fill(_batch, SettingsCornerClose, cornerHot ? new Color(0x4A, 0x28, 0x30) : new Color(0x22, 0x1A, 0x30));
-        _ui.TextCenterBig(_batch, "×", SettingsCornerClose.Center.X, SettingsCornerClose.Y + 5, cornerHot ? Color.White : UiKit.Vellum, 22);
-        if (_ui.Button(_batch, SettingsClose, "CLOSE", mouse, uiClick) || UiKit.ClickedIn(SettingsCornerClose, mouse, uiClick))
+        if (_ui.CloseButton(_batch, SettingsCornerClose, mouse, uiClick))
         {
             _showSettings = false;
             _settingsDropdown = 0;
@@ -4172,7 +4186,7 @@ public class Game1 : Game
         var pillRows = new (Rectangle R, string Name, long V)[]
         {
             (new Rectangle(l1, 16, e1 - l1, 60), allMats, -1),
-            (new Rectangle(l2, 16, e2 - l2, 60), "MEMORY DUST — BUYS PERMANENT TRAITS", dustVal),
+            (new Rectangle(l2, 16, e2 - l2, 60), "MEMORY DUST — STARTS A DESCENT FROM A WAVE YOU HAVE CLEARED (MAP) · BUILDS THE WARREN", dustVal),
             (new Rectangle(leftEdge, 16, e3 - leftEdge, 60), "GLEAM — BUYS UPGRADES ON STATS (V)", gleamVal),
         };
         foreach (var (rr, name, v) in pillRows)
@@ -4255,12 +4269,20 @@ public class Game1 : Game
         //  the screen already shows per-region power and YOUR POWER, which is what it needed it for.)
         _mapScreen.HunterPower = _hunter.PowerRating;
         _mapScreen.ConquerWaves = ConquerWaveDepth;
+        _mapScreen.DustOwned = _dust.MemoryDust;
         _mapScreen.Message = _conquerMsg;
     }
 
     /// <summary>Act on the Map screen's ENTER / DEEPEN requests (set by keyboard in Update or buttons in Draw).</summary>
     private void ConsumeMapRequests()
     {
+        if (_mapScreen.ConsumeStart() is { } start)
+        {
+            var farm = _world.RegionFarm(start.RegionId);
+            farm.SetStartWave(Checkpoints.Clamp(start.Wave, farm.BestDepth, _world.IsConquered(start.RegionId)));
+            _sound.Play("sfx_click", 0.6f);
+            Save();
+        }
         if (_mapScreen.ConsumeEnter() is { } id)
         {
             if (_world.IsUnlocked(id)) { SetActiveRegion(id); _showWorld = false; }

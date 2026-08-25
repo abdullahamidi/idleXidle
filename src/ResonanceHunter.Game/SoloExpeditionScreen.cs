@@ -245,6 +245,15 @@ public sealed class SoloExpeditionScreen
     /// </remarks>
     public int BestDepthHere { get; set; }
 
+    /// <summary>
+    /// The wave the next descent starts AFTER (0 = from the top). Host-fed each frame from the region's
+    /// chosen checkpoint, already reduced to 0 when the Memory Dust it costs is not there.
+    /// </summary>
+    public int StartWave { get; set; }
+
+    /// <summary>Set by StartRun when a descent began at a checkpoint: the Dust the host must now take.</summary>
+    public int CheckpointCharge { get; set; }
+
     /// <summary>The quality this descent accumulated — the tilt a chest it drops should remember.</summary>
     /// <remarks>
     /// Neutral 1.0 when there is no run, so a chest dropped outside one (a fixture, a test) rolls exactly
@@ -630,6 +639,15 @@ public sealed class SoloExpeditionScreen
             RegionId = RegionId,
             RunIndex = ++_runIndex,
         };
+        // A CHECKPOINT START. The region's chosen start wave (Map screen) skips the waves already
+        // cleared, and the Memory Dust it costs is charged through the host (CheckpointCharge) — the
+        // host fed StartWave = 0 when the Dust was not there, so a start here is always affordable.
+        if (StartWave > 0)
+        {
+            _run.StartAtWave(StartWave);
+            Deepest = Math.Max(Deepest, StartWave);
+            CheckpointCharge += Checkpoints.DustCost(StartWave);
+        }
         _mode = Mode.Fighting;
         BeginWave();
     }
@@ -656,6 +674,11 @@ public sealed class SoloExpeditionScreen
         // wave regardless: a ring put on mid-descent changes the health number at the next wave, not at
         // the next death (playtest 2026-08-25).
         _run.RefreshPool();
+        if (_hunter is { } rh)
+        {
+            var cb = ComposeBuild(rh);
+            _castRate = cb.Resolve(rh).SkillRate * cb.Shape.SkillRate;
+        }
         // The replay's health table is read AFTER the pool refresh, or the HUD prints last wave's pool
         // over this wave's bar for a whole wave (review 2026-08-25: "300/360 with a full bar").
         var startHealth = new Dictionary<int, int> { [0] = _champ.Health };
@@ -1690,6 +1713,10 @@ public sealed class SoloExpeditionScreen
         // Docked inside the report, in the band it already leaves empty at its foot, and labelled with
         // a verb \u2014 a bare chevron tells a new player nothing about what it steps through.
         var reportPanel = new Rectangle(ArenaRect.X + 40, 250, ArenaRect.Width - 80, 690);
+        // A close icon, because "L CLOSES" in the hint line is not a door a mouse player can see
+        // (playtest 2026-08-26). It walks the same host path the L key does.
+        if (_ui.CloseButton(b, new Rectangle(reportPanel.Right - 62, reportPanel.Y + 14, 44, 44), hit, clicked))
+            WantsLog = true;
         var prev = new Rectangle(reportPanel.X + 44, reportPanel.Bottom - 104, 200, 64);
         var next = new Rectangle(reportPanel.Right - 244, reportPanel.Bottom - 104, 200, 64);
         if (_ui.Button(b, prev, "\u2039  OLDER", hit, clicked, enabled: _logIndex < Log.Count - 1)
@@ -1823,7 +1850,7 @@ public sealed class SoloExpeditionScreen
         }
     }
 
-    private const int ConquerAt = 7;   // mirrors Game1.ConquerWaveDepth — shown so the goal is visible
+    private const int ConquerAt = Checkpoints.ConquestWave;   // mirrors Game1.ConquerWaveDepth — shown so the goal is visible
 
     private static readonly Dictionary<Source, Color> SourceColor = new()
     {
@@ -1935,8 +1962,13 @@ public sealed class SoloExpeditionScreen
         _ui.TextCenterBig(b, title, cx, 32 + (UiTypography.RegionTitle - titlePx) / 2, Gold, titlePx, TextFace.Display);
         // CONQUEST, not DEPTH: "depth" was three different things across the UI (this count of waves
         // toward the conquest, a region's best depth, and the corruption tier). This is the conquest.
-        _ui.TextCenterBig(b, Deepest >= ConquerAt ? "CONQUERED" : $"CONQUEST {Deepest} / {ConquerAt}",
-            cx, 73, Deepest >= ConquerAt ? Gold : Bone, UiTypography.StageLabel);
+        // Past the conquest bar the banner counts OVERWAVE — how far beyond the bar this descent has gone
+        // (playtest 2026-08-26: "after the map is conquered, mark it with something like Overwave").
+        var over = Math.Max(0, _replayWave - ConquerAt);
+        var conquestLine = Deepest >= ConquerAt
+            ? (over > 0 ? $"CONQUERED · OVERWAVE +{over}" : "CONQUERED")
+            : $"CONQUEST {Deepest} / {ConquerAt}";
+        _ui.TextCenterBig(b, conquestLine, cx, 73, Deepest >= ConquerAt ? Gold : Bone, UiTypography.StageLabel);
         _ui.BarArt(b, new Rectangle(710, 102, 400, 18),
             ConquerAt > 0 ? Math.Clamp(Deepest / (float)ConquerAt, 0f, 1f) : 0f, "progress");
         // THE WAVE LINE CARRIES THE RUN'S STATE NOW, which is what the deleted EXPEDITION plate was for.
@@ -1971,9 +2003,11 @@ public sealed class SoloExpeditionScreen
     /// </remarks>
     private Rectangle CleanPanel(SpriteBatch b, Rectangle r, string title)
     {
-        _ui.PanelQuiet(b, r);
-        _ui.TextBig(b, title, r.X + 44, r.Y + 26, Gold, 20);
-        return new Rectangle(r.X + 44, r.Y + 70, r.Width - 88, r.Height - 70 - UiKit.PanelCorner);
+        // The nine-sliced modal frame, like the CHEST FILTER plate below and the stage header above —
+        // the rail wore two different frames and the playtest called it an inconsistency (2026-08-26).
+        _ui.PanelNine(b, r, "ui_panel_modal_wide");
+        _ui.TextBig(b, title, r.X + 40, r.Y + 30, Gold, 20);
+        return new Rectangle(r.X + 40, r.Y + 70, r.Width - 80, r.Height - 70 - UiKit.PanelCorner);
     }
 
     /// <summary>Right context column: two plates — the idle rate, and the errands worth doing now.</summary>
@@ -2451,14 +2485,21 @@ public sealed class SoloExpeditionScreen
         }
         if (beatMs is null) return;
 
-        var contactMs = ClipMs * ContactFraction;
+        // A CAST plays at the build's skill rate: the sim's cast lock is CastClipMs ÷ rate (one rule for
+        // the fight and the picture), so the clip always ends before the next cast may begin, and a
+        // fast build visibly casts fast. The auto-swing keeps the authored pace.
+        var baseSpeed = clip == "cast" ? Math.Max(1f, ClipMs / (FormBehaviour.CastClipMs / Math.Max(0.1f, _castRate))) : 1f;
+        var contactMs = ClipMs * ContactFraction / baseSpeed;
         var lead = beatMs.Value - _playheadMs;
         if (lead > contactMs) return;   // not yet: the clip starts one contact-length before the beat
 
-        _clipSpeed = Math.Clamp(contactMs / Math.Max(1f, lead), 1f, MaxClipSpeed);
+        _clipSpeed = Math.Clamp(baseSpeed * contactMs / Math.Max(1f, lead), baseSpeed, Math.Max(baseSpeed, MaxClipSpeed));
         _clipStartMs = _playheadMs;
         _clipName = clip;
     }
+
+    /// <summary>The build's skill-rate multiplier for the wave being shown — the cast clip's pace.</summary>
+    private float _castRate = 1f;
 
     /// <summary>Seconds into the committed clip, at its speed — what the strip is drawn at.</summary>
     private float ClipSeconds => (_playheadMs - _clipStartMs) / 1000f * _clipSpeed;

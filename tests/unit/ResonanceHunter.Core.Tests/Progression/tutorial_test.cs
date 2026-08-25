@@ -58,23 +58,23 @@ public class TutorialTest
             facts = next;
         }
 
-        // A career, in the order the SHIPPING GAME actually produces it: conquest needs depth 7, which
-        // lands about half a minute in — long before the first chest (a 20% roll per boss) and long
-        // before anyone touches the build. The old walk put conquest LAST, an order the tuning no
-        // longer produces, and it hid the audit's bug: the conquest-only Done guard ended the guide at
-        // ~31 seconds with the chest, gear and build lessons never once shown.
+        // A career, in the order the SHIPPING GAME actually produces it. Conquest is wave 20 since
+        // 2026-08-26 (it was 7), so a chest, a worn item and a woven build all arrive before it — the
+        // conquest lesson is the last rung again, and this walk says so. (The earlier order, conquest
+        // at half a minute, hid the audit's bug where the guide ended before the chest, gear and build
+        // lessons were ever shown; the guard that caused it is gone and the walk below still proves it.)
         Step("fresh save", facts with { WavesCleared = 1, DeepestWave = 1, Gleam = 30 });
         Step("first wave cleared, 30 Gleam", facts with { StatsTrained = 1, Gleam = 5, DeepestWave = 3 });
         Step("trained a stat, wave 3", facts with { DeepestWave = 4, WavesCleared = 4 });
         Step("wave 4 — boss approaching", facts with { DeepestWave = 5, WavesCleared = 5 });
-        Step("felled the first boss", facts with { DeepestWave = 6, WavesCleared = 6 });
-        Step("wave 6 — conquest in reach", facts with { DeepestWave = 7, RegionsConquered = 1 });
-        Step("conquered the region", facts with { DeepestWave = 9, WavesCleared = 9 });
+        Step("felled the first boss", facts with { DeepestWave = 9, WavesCleared = 9 });
         Step("wave 9, still no chest", facts with { ChestsHeld = 1, DeepestWave = 10 });
         Step("a chest dropped", facts with { ItemsOwned = 1, ChestsHeld = 0, DeepestWave = 11 });
         Step("opened it — an item", facts with { ItemsWorn = 1, DeepestWave = 12 });
         Step("equipped it", facts with { SkillsWoven = 1, DeepestWave = 14 });
-        Step("wove a skill — the loop is lived", facts);
+        Step("wove a skill", facts with { DeepestWave = 19, WavesCleared = 19 });
+        Step("wave 19 — conquest in reach", facts with { DeepestWave = 20, RegionsConquered = 1 });
+        Step("conquered the region — the loop is lived", facts);
 
         _out.WriteLine("");
         _out.WriteLine("shown: " + string.Join(", ", seen));

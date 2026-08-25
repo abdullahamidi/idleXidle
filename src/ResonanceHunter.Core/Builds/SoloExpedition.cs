@@ -205,6 +205,16 @@ public sealed class SoloExpedition
         _build = build;
     }
     /// <summary>
+    /// Begin this descent after <paramref name="wave"/> — the next push resolves wave + 1. Only before
+    /// the first push; a checkpoint start (Checkpoints) skips the waves below it and pays no haul for them.
+    /// </summary>
+    public void StartAtWave(int wave)
+    {
+        if (Wave != 0 || Over) throw new InvalidOperationException("A descent can only start at a checkpoint before its first wave.");
+        Wave = Math.Max(0, wave);
+    }
+
+    /// <summary>
     /// Re-mint the champion's pool from the hunter and build as they are NOW, keeping the same fraction
     /// of it filled. Called by the host at each wave boundary.
     /// </summary>

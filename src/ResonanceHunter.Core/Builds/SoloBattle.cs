@@ -269,7 +269,20 @@ public static class SoloBattle
     /// stagger costs almost no damage — the casts spread in SLOT ORDER across the next few ticks,
     /// which is also the order the player chose on the BUILD screen.
     /// </remarks>
-    public const int CastGapMs = 300;
+    /// <summary>The one-cast-at-a-time gap for a build's skill rate: the clip length, played that much faster.</summary>
+    public static int CastGapFor(float skillRate) => Math.Max(100, (int)MathF.Round(CastGapMs / MathF.Max(0.1f, skillRate)));
+
+    /// <summary>How often VITALITY's regeneration ticks, in ms.</summary>
+    public const int RegenTickMs = 1000;
+
+    /// <summary>
+    /// The gap between two casts at skill rate 1: the cast clip's authored length. The real gap is this
+    /// divided by the build's skill rate (see the cast loop), so a faster build casts — and animates —
+    /// faster, and no cast ever begins before the last one's clip has finished. Playtest 2026-08-26:
+    /// "no skill may be thrown until the previous skill's animation ends; skill rate should speed the
+    /// animation up." Was a flat 300 ms that let three casts land inside one swing.
+    /// </summary>
+    public const int CastGapMs = FormBehaviour.CastClipMs;
 
     public const float ExecuteThreshold = 0.30f;
 
@@ -870,6 +883,13 @@ public static class SoloBattle
         {
             var abs = since + ms;
 
+            // ── VITALITY: life regained every second, a fraction of the pool (Hunter.RegenPerSecond).
+            //    Through Heal() like every other heal, so BLOOD MAGIC's "no healing" and the band's
+            //    sustain multiplier apply to it — a trained stat is not a way around a keystone's price.
+            //    Never on a corpse. ──
+            if (ms % RegenTickMs == 0 && champ.Alive && hunter.RegenPerSecond > 0f && champ.Health < champ.MaxHealth)
+                Heal(Math.Max(1, (int)MathF.Round(champ.MaxHealth * hunter.RegenPerSecond)), abs);
+
             // ── VENOM bleeds first, so poison from earlier ticks can finish an enemy before it swings. ──
             if (poison > 0.5f && ms % 500 == 0)
             {
@@ -921,7 +941,7 @@ public static class SoloBattle
                 // ONE CAST AT A TIME — see CastGapMs. Deferring BEFORE ReadyAt is written is the whole
                 // trick: the skill stays ready and fires on the next free beat instead of losing a cast.
                 if (abs < champ.CastLockUntilMs) continue;
-                champ.CastLockUntilMs = abs + CastGapMs;
+                champ.CastLockUntilMs = abs + CastGapFor(mods.SkillRate * shape.SkillRate);
                 champ.ReadyAt[i] = abs + cd;
 
                 if (FormBehaviour.IsAmplifier(form))

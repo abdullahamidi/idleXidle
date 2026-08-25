@@ -534,3 +534,31 @@ listed doc needs a matching back-reference.
 13. Boss waves multiply enemy health but not enemy damage.
 14. Warren mastery and build-tree points are separate variables; spending one does
     not change the other.
+
+---
+
+## Addendum 2026-08-26 — conquest at 20, checkpoints, Memory Dust, VITALITY
+
+**Conquest is wave 20** (was 7 — "seven waves is far too short to clear a map"). Past the bar the hunt's
+banner reads `CONQUERED · OVERWAVE +N`, N being how far beyond 20 the current descent has gone.
+
+**Checkpoints.** A conquered region offers a START AT WAVE choice on the Map: the top, and every ten
+waves the champion has ever held there (`Checkpoints.Options`). A descent started after wave *w* skips
+the waves below it and pays no haul for them. The chosen start is remembered per region in the save.
+
+**Memory Dust's job.** A checkpoint start costs `Checkpoints.DustPerWave` (25) × *w* Dust **per
+descent** (wave 30 → 750 Dust). Dust is minted by the Warren while the player is away and is now spent
+buying back walked waves — a repeatable, scaling sink that grows with the content it serves. Its other
+sink is Warren facility upgrades. It buys nothing permanent; trait points do that. If the Dust for the
+chosen start is not there, the descent starts from the top and the map's chip says so in ember.
+
+**VITALITY is regeneration.** It no longer multiplies the health pool (that is HEALTH's job, plus gear).
+Every second of a fight the champion regains `MaxHealth × VITALITY × 0.0003` (0.03% per point per
+second; base value 0, so a fresh hunter regenerates nothing until trained). It flows through the same
+`Heal()` funnel as every other heal, so BLOOD MAGIC's "no healing" and the ENDLESS band's halving apply.
+
+**The cast lock is the cast clip.** One cast at a time: the sim's gap between casts is
+`FormBehaviour.CastClipMs` (700 ms) ÷ the build's skill rate, and the hunt screen plays the cast clip
+across exactly that window — a faster build casts and animates faster, and no cast begins before the
+last clip ends.
+

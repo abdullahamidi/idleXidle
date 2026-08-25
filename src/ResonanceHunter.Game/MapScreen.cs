@@ -47,7 +47,9 @@ public sealed class MapScreen
     public World World { get; set; } = null!;
     public string ActiveRegion { get; set; } = "";
     public int HunterPower { get; set; }
-    public int ConquerWaves { get; set; } = 7;
+    public int ConquerWaves { get; set; } = Checkpoints.ConquestWave;
+    /// <summary>The player's Memory Dust, for the checkpoint chips' affordability.</summary>
+    public int DustOwned { get; set; }
     public string Message { get; set; } = "";
     public bool DevMapDebug { get; set; }
 
@@ -56,6 +58,9 @@ public sealed class MapScreen
     private bool _deepenRequest;
     private bool _easeRequest;
     public string? ConsumeEnter() { var r = _enterRequest; _enterRequest = null; return r; }
+    private (string RegionId, int Wave)? _startRequest;
+    /// <summary>A checkpoint chip was clicked: the region and the wave to start after.</summary>
+    public (string RegionId, int Wave)? ConsumeStart() { var r = _startRequest; _startRequest = null; return r; }
     public bool ConsumeDeepen() { var r = _deepenRequest; _deepenRequest = false; return r; }
     public bool ConsumeEase() { var r = _easeRequest; _easeRequest = false; return r; }
 
@@ -93,6 +98,42 @@ public sealed class MapScreen
     private static RegionDefinition Def(int i) => Regions.All[i];
 
     /// <summary>A real, monotonic "recommended power" derived from the region's boss power tier.</summary>
+    /// <summary>
+    /// START AT WAVE — the checkpoint chips of a conquered region (Checkpoints): 0 and every ten waves
+    /// the champion has held here. A chip is the wave the descent starts AFTER, priced in Memory Dust
+    /// per descent; the chosen one is gold, an unaffordable one is dim and says so.
+    /// </summary>
+    private void DrawCheckpoints(SpriteBatch b, RegionDefinition def, Region farm, Point hit, bool clicked)
+    {
+        var options = Checkpoints.Options(farm.BestDepth, conquered: true);
+        var y = DetailPanel.Y + 526;   // the chips must clear the DROPS heading at Y+590
+        _ui.TextBig(b, "START AT WAVE", DetailPanel.X + 28, y, Gold, UiTypography.Secondary);
+        var chosen = Checkpoints.Clamp(farm.StartWave, farm.BestDepth, true);
+        var cost = Checkpoints.DustCost(chosen);
+        _ui.TextRightBig(b, chosen == 0 ? "FREE" : $"{cost:N0} DUST PER DESCENT",
+                         DetailPanel.Right - 28, y, DustOwned >= cost ? Slate : Ember, UiTypography.Secondary);
+        var x = DetailPanel.X + 28;
+        var cy = y + 24;
+        foreach (var w in options)
+        {
+            var label = w == 0 ? "TOP" : w.ToString();
+            var cw = Math.Max(44, _ui.MeasureBig(label, 15) + 22);
+            if (x + cw > DetailPanel.Right - 28) break;   // more than fits: the deepest ones wait for a wider panel
+            var chip = new Rectangle(x, cy, cw, 26);
+            var afford = DustOwned >= Checkpoints.DustCost(w);
+            var lit = w == chosen;
+            _ui.Fill(b, chip, lit ? new Color(0x3A, 0x2C, 0x14, 0xE0) : new Color(0x14, 0x10, 0x1A, 0xE0));
+            var edge = lit ? Gold : chip.Contains(hit) ? Bone : Dim;
+            _ui.Fill(b, new Rectangle(chip.X, chip.Y, chip.Width, 2), edge);
+            _ui.Fill(b, new Rectangle(chip.X, chip.Bottom - 2, chip.Width, 2), edge);
+            _ui.Fill(b, new Rectangle(chip.X, chip.Y, 2, chip.Height), edge);
+            _ui.Fill(b, new Rectangle(chip.Right - 2, chip.Y, 2, chip.Height), edge);
+            _ui.TextCenterBig(b, label, chip.Center.X, chip.Y + 5, lit ? Gold : afford ? Bone : Dim, 15);
+            if (UiKit.ClickedIn(chip, hit, clicked)) _startRequest = (def.Id, w);
+            x += cw + 6;
+        }
+    }
+
     private static int RegionPower(RegionDefinition def) => Regions.RecommendedPower(def);
 
 
@@ -397,9 +438,11 @@ public sealed class MapScreen
             // "IDLE FARM: PARTIAL · 50%" was two pieces of jargon and a number with no unit. The percent
             // is the only part a player can act on, and it needed a sentence to say what it is a percent
             // OF. The mastery word went with the label: it named a tier nothing on screen explains, and
-            // the number it produces is already right there.
-            _ui.TextBig(b, $"EARNS {farm.IdleEfficiencyPercent():0}% OF NORMAL WHILE YOU ARE AWAY",
-                        DetailPanel.X + 30, DetailPanel.Y + 546, Slate, UiTypography.Secondary);
+            // the number it produces is already right there. On the GOAL line now, right-aligned, so
+            // the row it used to hold can carry the checkpoints.
+            _ui.TextRightBig(b, $"EARNS {farm.IdleEfficiencyPercent():0}% WHILE YOU ARE AWAY",
+                             DetailPanel.Right - 28, DetailPanel.Y + 472, Slate, UiTypography.Secondary);
+        if (conq) DrawCheckpoints(b, def, farm, hit, clicked);
 
         // WHAT THIS PLACE DROPS. The map decided a difficulty and an element and said nothing about
         // reward, so "where should I farm" had no answer on the screen built to answer it. Each region

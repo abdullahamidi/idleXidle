@@ -724,9 +724,15 @@ public sealed class UiKit
         // package_01 ornate buttons: DARK (secondary) at rest, GREEN (primary) on hover, GREY when disabled.
         var key = !enabled ? "ui_button_disabled" : hover ? "ui_button_primary" : "ui_button_secondary";
         var tex = Assets.Get(key);
-        // Whole-image stretch (not 9-slice): the game's buttons are short, and a fixed-size ornate corner
-        // would dominate them and bury the label. Stretching keeps the border proportionally thin.
-        if (tex is not null) b.Draw(tex, r, Color.White);
+        // Whole-image stretch for a button near the art's own aspect; a WIDE button is 3-sliced so its
+        // ornamented ends keep their shape and only the plain middle stretches (playtest 2026-08-26:
+        // "the button frame is stretched and looks cheap" — the 420 px reset button, the 400 px settings
+        // pair). The end caps are the art's ornament, scaled with the button's height.
+        if (tex is not null)
+        {
+            if (r.Width > r.Height * tex.Width / tex.Height * 1.15f) HSliceScaled(b, tex, r, ButtonCapSrcPx, Color.White);
+            else b.Draw(tex, r, Color.White);
+        }
         else { Fill(b, r, hover ? Slate : PanelBg); Fill(b, new Rectangle(r.X + 1, r.Y + 1, r.Width - 2, r.Height - 2), enabled ? PanelEdge : Dim); }
 
         // Every button surface is dark or deep-green, so the label is always LIGHT — bright cream on hover
@@ -742,6 +748,47 @@ public sealed class UiKit
         while (px > 12 && Text2.Measure(label, px, TextFace.Strong) > r.Width - 24) px--;
         TextCenterBig(b, label, r.Center.X, r.Center.Y - px * 27 / 40, label3, px, TextFace.Strong);
         return enabled && hover && clicked;
+    }
+
+    /// <summary>The ornamented end of the 256×96 button art, in source pixels — everything past it is plain border.</summary>
+    private const int ButtonCapSrcPx = 44;
+
+    /// <summary>
+    /// Horizontal 3-slice with the caps SCALED to the destination height: <paramref name="srcCap"/> source
+    /// pixels at each end become srcCap × (r.Height ÷ t.Height) destination pixels, so the ornament keeps
+    /// its own proportions at any button height; only the middle stretches.
+    /// </summary>
+    private static void HSliceScaled(SpriteBatch b, Texture2D t, Rectangle r, int srcCap, Color tint)
+    {
+        var dstCap = Math.Max(2, (int)MathF.Round(srcCap * r.Height / (float)t.Height));
+        dstCap = Math.Min(dstCap, r.Width / 2);
+        var midSrc = t.Width - 2 * srcCap;
+        var midDst = r.Width - 2 * dstCap;
+        b.Draw(t, new Rectangle(r.X, r.Y, dstCap, r.Height), new Rectangle(0, 0, srcCap, t.Height), tint);
+        if (midDst > 0) b.Draw(t, new Rectangle(r.X + dstCap, r.Y, midDst, r.Height), new Rectangle(srcCap, 0, midSrc, t.Height), tint);
+        b.Draw(t, new Rectangle(r.Right - dstCap, r.Y, dstCap, r.Height), new Rectangle(t.Width - srcCap, 0, srcCap, t.Height), tint);
+    }
+
+    /// <summary>
+    /// THE close button — one icon (icon_close, a gold × in a round medallion) for every panel, strip
+    /// and overlay that can be shut. Draws it fitted in <paramref name="r"/>, brighter under the mouse,
+    /// and returns true on the click. Playtest 2026-08-26: "replace the drawn × with a proper icon and
+    /// use it everywhere." Falls back to the old dark square with a × if the art is missing.
+    /// </summary>
+    public bool CloseButton(SpriteBatch b, Rectangle r, Point mouse, bool clicked)
+    {
+        var hot = r.Contains(mouse);
+        if (Assets.Get("icon_close") is { } t)
+        {
+            var box = hot ? new Rectangle(r.X - 2, r.Y - 2, r.Width + 4, r.Height + 4) : r;
+            SpriteFit(b, t, box, hot ? Color.White : new Color(0xE0, 0xD8, 0xC8));
+        }
+        else
+        {
+            Fill(b, r, hot ? new Color(0x4A, 0x28, 0x30) : new Color(0x22, 0x1A, 0x30));
+            TextCenterBig(b, "×", r.Center.X, r.Y + r.Height / 2 - 12, hot ? Color.White : Vellum, 22);
+        }
+        return clicked && hot;
     }
 
     /// <summary>Horizontal 3-slice: fixed <paramref name="cap"/>-wide ends, stretched middle.</summary>

@@ -309,21 +309,18 @@ public sealed class StatsScreen
             }
             case HunterStat.Vitality:
             {
-                // SoloBattle.ChampionHealth: pool = max(60, HEALTH) × vows × mods.Health, and
-                // Hunter.SquadHealthMultiplier = (1 + 0.012 × VITALITY) × worn charm × worn mods.
-                // Since 2026-08-25 the whole channel multiplies the POOL — the number on the bar.
+                // SoloBattle: every second of a fight the champion regains MaxHealth × Hunter.RegenPerSecond
+                // (= VITALITY × RegenPerVitalityPoint). Since 2026-08-26 VITALITY is regeneration, not a
+                // second multiplier on the pool.
                 var v = hunter.ValueOf(stat);
-                var mult = MathF.Max(0.01f, mods.Health);
-                var pct = 100f * (mult - 1f);
-                var headline = mult >= 1f ? $"{pct:0.0}% MORE LIFE" : $"{-pct:0.0}% LESS LIFE";
-                var tail = mult >= 1f
-                    ? $"With gear and keystones counted in, your life multiplier is {mult:0.00}× — every fight starts with {pct:0.0}% more life."
-                    : $"With gear and keystones counted in, your life multiplier is {mult:0.00}× — every fight starts with {-pct:0.0}% LESS life. A keystone, vow or item is trading your skin for power.";
-                return (headline, new[]
+                var pool = SoloBattle.ChampionHealth(build, hunter);
+                var perSecond = Math.Max(1, (int)MathF.Round(pool * hunter.RegenPerSecond));
+                var pct = 100f * hunter.RegenPerSecond;
+                return ($"REGAINS {perSecond:N0} LIFE EVERY SECOND", new[]
                 {
-                    "VITALITY makes your champion's life pool bigger. It multiplies the HEALTH number below, and so does every item, gem, keystone and trait that says health.",
-                    $"One rank of training adds {hunter.GainPerRank(stat):0} VITALITY. You have {v:0} VITALITY, and every point adds 1.2% life.",
-                    tail,
+                    "VITALITY heals your champion a little every second of a fight, even while it is being hit.",
+                    $"One rank of training adds {hunter.GainPerRank(stat):0} VITALITY. You have {v:0} VITALITY, and every point regains 0.03% of your life each second — {pct:0.00}% in total.",
+                    $"With {pool:N0} life, that is {perSecond:N0} life back every second. It cannot take you past full.",
                 });
             }
             case HunterStat.MaxHealth:
@@ -487,7 +484,9 @@ public sealed class StatsScreen
     private void DrawProgression(SpriteBatch b, Hunter hunter, Point hit)
     {
         _ui.PanelQuiet(b, ProgressPanel);
-        _ui.TextCenterBig(b, "PROGRESS", ProgressPanel.Center.X, ProgressPanel.Y + 22, Gold, UiTypography.SectionTitle);
+        // Y+40, not Y+22: this panel is nearly square, so it wears the square frame, whose top ornament
+        // reaches ~36 px in — the title sat on it while every other title sat inside its frame.
+        _ui.TextCenterBig(b, "PROGRESS", ProgressPanel.Center.X, ProgressPanel.Y + 40, Gold, UiTypography.SectionTitle);
         // Only the counters the game actually tracks — monsters/bosses/play-time/deaths aren't recorded.
         var rows = new (string, string)[]
         {
@@ -501,7 +500,7 @@ public sealed class StatsScreen
         // under the bottom rail (playtest 2026-08-25: "the text in the progress table is not aligned").
         // Inset 60, tighter rows, and every value on the same baseline as its label.
         const int inset = 60;
-        var y = ProgressPanel.Y + 66;
+        var y = ProgressPanel.Y + 84;
         foreach (var (label, value) in rows)
         {
             var row = new Rectangle(ProgressPanel.X + inset, y - 6, ProgressPanel.Width - inset * 2, 38);
@@ -510,7 +509,7 @@ public sealed class StatsScreen
             _ui.TextBig(b, label, row.X, y, Slate, UiTypography.Secondary);
             _ui.TextRightBig(b, value, row.Right, y, Bone, UiTypography.Secondary);
             _ui.Fill(b, new Rectangle(row.X, y + 30, row.Width, 2), Dim * 0.5f);
-            y += 42;
+            y += 40;
         }
     }
 

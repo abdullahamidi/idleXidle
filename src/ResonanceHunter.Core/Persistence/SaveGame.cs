@@ -288,6 +288,9 @@ public sealed record RegionFarmSave
 
     /// <summary>Deepest wave ever held here — the source of skill points. See Region.BestDepth.</summary>
     public int BestDepth { get; init; }
+
+    /// <summary>The checkpoint chosen here (Checkpoints). 0 = start from the top; absent in older saves.</summary>
+    public int StartWave { get; init; }
 }
 
 public sealed record SavedItem
@@ -482,6 +485,7 @@ public static class SaveSystem
                     Id = def.Id,
                     MasteryPoints = f.RegionMasteryPoints,
                     BestDepth = f.BestDepth,
+                    StartWave = f.StartWave,
                 };
             }).ToList(),
             TrainingRanks = Enum.GetValues<HunterStat>()

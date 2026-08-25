@@ -35,6 +35,14 @@ public sealed record ProgressionTuning
     /// </remarks>
     public int TrainingResetCrystalCost { get; init; } = 1;
 
+    /// <summary>
+    /// Life regained every second of a fight, as a fraction of the pool, per point of VITALITY.
+    /// 0.0003 = 0.03%/s per point: a fresh hunter (10 VITALITY) regains 0.3% a second, a maxed one
+    /// (130) 3.9% — a real answer to a slow grind, never a wall against a burst. Playtest 2026-08-26:
+    /// "VITALITY and HEALTH did almost the same thing; make VITALITY passive life regeneration."
+    /// </summary>
+    public float RegenPerVitalityPoint { get; init; } = 0.0003f;
+
     /// <summary>Per-rank stat gain. Defense is +2/rank to a cap of 120 — its curve is hyperbolic anyway.</summary>
     public IReadOnlyDictionary<HunterStat, float> GainPerRank { get; init; } =
         new Dictionary<HunterStat, float>
@@ -55,7 +63,10 @@ public sealed record ProgressionTuning
         {
             [HunterStat.AttackPower] = 10f,
             [HunterStat.Focus] = 10f,
-            [HunterStat.Vitality] = 10f,
+            // VITALITY starts at ZERO: it is regeneration now, and regeneration is something you train
+            // into, not something a fresh hunter has (2026-08-26). A base of 10 gave every hunter 0.3%/s
+            // for free, which also put a slow drift under every health-based balance test.
+            [HunterStat.Vitality] = 0f,
             [HunterStat.Engineering] = 10f,
             [HunterStat.Guile] = 10f,
             [HunterStat.ResonanceAffinity] = 10f,
@@ -341,12 +352,16 @@ public sealed class Hunter
 
 
     /// <summary>
-    /// The champion's HEALTH multiplier: Vitality, the worn charm's rarity, and every HEALTH affix, gem
-    /// and trait on worn gear. Multiplies the pool the champion enters a fight with
-    /// (<c>SoloBattle.ChampionHealth</c>); nothing divides incoming damage any more.
+    /// The champion's HEALTH multiplier: the worn charm's rarity, and every HEALTH affix, gem and trait
+    /// on worn gear. Multiplies the pool the champion enters a fight with (<c>SoloBattle.ChampionHealth</c>);
+    /// nothing divides incoming damage any more. VITALITY left this product on 2026-08-26 — it is
+    /// regeneration now (<see cref="RegenPerSecond"/>), because a second multiplier on the same pool as
+    /// HEALTH was two names for one thing.
     /// </summary>
-    public float SquadHealthMultiplier =>
-        (1f + 0.012f * ValueOf(HunterStat.Vitality)) * CharmToughness * WornMods.Health;
+    public float SquadHealthMultiplier => CharmToughness * WornMods.Health;
+
+    /// <summary>Life regained every second of a fight, as a fraction of the pool — VITALITY's whole job.</summary>
+    public float RegenPerSecond => ValueOf(HunterStat.Vitality) * _tuning.RegenPerVitalityPoint;
 
     /// <summary>
     /// The charm's own contribution to squad toughness, from the rarity curve.
