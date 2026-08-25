@@ -12,6 +12,7 @@ using ResonanceHunter.Core.Expeditions;
 using ResonanceHunter.Core.Forging;
 using ResonanceHunter.Core.Loot;
 
+using ResonanceHunter.Core.Progression;
 namespace ResonanceHunter.Client;
 
 /// <summary>
@@ -257,6 +258,19 @@ public sealed class ForgeScreen
     // act (playtest 2026-08-25: "it creates an inconsistency") — one word now, the reveal's.
     private static readonly string[] TabNames = ["UPGRADE", "RE-ROLL", "SOCKET", "SALVAGE"];
     private Tab _tab = Tab.Upgrade;
+
+    /// <summary>
+    /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
+    /// first is the one the caption card is placed beside; a target that is not this screen's gets none.
+    /// </summary>
+    internal static Rectangle[] Spotlights(TourTarget target) => target switch
+    {
+        TourTarget.Bag => new[] { BagPanel },
+        TourTarget.ForgeItem => new[] { ItemPanel },
+        TourTarget.ForgeTabs => new[] { new Rectangle(Action.X - 6, Action.Y - 6, Action.Width + 12, TabStripH + 12) },
+        TourTarget.Materials => new[] { WalletPanel },
+        _ => Array.Empty<Rectangle>(),
+    };
 
     private static readonly Color Met = new(0x6E, 0xC8, 0x7A);
     // Scrap / Essence / Core / Crystal. The REAL icons — assets/art/ItemsLoot/loot/materials — indexed

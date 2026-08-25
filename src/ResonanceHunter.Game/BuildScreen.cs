@@ -11,6 +11,7 @@ using ResonanceHunter.Core.Characters;
 using ResonanceHunter.Core.Prestige;
 using ResonanceHunter.Core.Persistence;
 
+using ResonanceHunter.Core.Progression;
 namespace ResonanceHunter.Client;
 
 /// <summary>
@@ -359,6 +360,19 @@ public sealed class BuildScreen
     // chips, and the keystone header already sat on top of slot four's Vow row in a capture. Everything
     // below is derived from fitting five cards plus a header plus three chips inside 1080.
     private static readonly Rectangle Sidebar = new(SbX, 200, 1920 - SbX - 16, 860);
+
+    /// <summary>
+    /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
+    /// first is the one the caption card is placed beside; a target that is not this screen's gets none.
+    /// </summary>
+    /// <remarks>These are the TREE view's regions; the tour of MASTERY is the only tour this screen gets.</remarks>
+    internal static Rectangle[] Spotlights(TourTarget target) => target switch
+    {
+        TourTarget.MasteryTree => new[] { TreeView },
+        TourTarget.Specialisations => new[] { HexPanel },
+        TourTarget.NodeCard => new[] { NodePanel, ResetBtn },
+        _ => Array.Empty<Rectangle>(),
+    };
 
     // ── Update ───────────────────────────────────────────────────────────────────────────────────
     public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, MemoryDustTree tree)

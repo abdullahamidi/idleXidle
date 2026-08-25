@@ -429,6 +429,31 @@ public sealed class SoloExpeditionScreen
     // Widened and shifted right: left edge clears the control rail (ends x=280), right edge stops
     // short of the existing right rail (starts x=1570), bottom stops short of the nav rail (y=934).
     private static readonly Rectangle ArenaRect = new(492, 100, 1062, 940);
+
+    /// <summary>
+    /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
+    /// first is the one the caption card is placed beside; a target that is not this screen's gets none.
+    /// </summary>
+    /// <remarks>
+    /// Hand-measured against this screen's real layout (the hunter panel at (196,20,420,205), the stage
+    /// header at (630,18,560,135), the SKILLS rail at (190,236,286,350) for one skill, the right column
+    /// from x 1570, the champion in ChampBox, the pack right of it) with a margin of about ten pixels so
+    /// the frame art is inside the light, not cut by it. A fresh save is the only state this ever draws
+    /// over, so the one-skill rail height is the right one. The fight screen is not inset, so these are
+    /// already chrome coordinates and the host adds no margin of its own.
+    /// </remarks>
+    internal static Rectangle[] Spotlights(TourTarget target) => target switch
+    {
+        TourTarget.Champion => new[] { new Rectangle(530, 560, 460, 450) },
+        TourTarget.Enemies => new[] { new Rectangle(880, 560, 680, 450), new Rectangle(620, 8, 580, 152) },
+        TourTarget.HunterHud => new[] { new Rectangle(186, 10, 440, 225) },
+        TourTarget.CurrencyPills => new[] { new Rectangle(1440, 4, 400, 84) },
+        TourTarget.Skills => new[] { new Rectangle(180, 226, 306, 370) },
+        TourTarget.RightColumn => new[] { new Rectangle(1560, 100, 350, 690) },
+        TourTarget.NavRail => new[] { new Rectangle(0, 0, 184, 1080) },
+        TourTarget.GuideStrip => new[] { new Rectangle(456, 936, 1008, 130) },
+        _ => Array.Empty<Rectangle>(),
+    };
     private RasterizerState? _arenaRasterizer;
     private RasterizerState ArenaRasterizer => _arenaRasterizer ??= new RasterizerState { ScissorTestEnable = true };
     private float _bossIncomingTimer;

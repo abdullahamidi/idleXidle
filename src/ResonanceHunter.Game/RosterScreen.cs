@@ -10,6 +10,7 @@ using ResonanceHunter.Core.Economy;
 using ResonanceHunter.Core.Encounters;
 using ResonanceHunter.Core.Quests;
 
+using ResonanceHunter.Core.Progression;
 namespace ResonanceHunter.Client;
 
 /// <summary>
@@ -52,6 +53,18 @@ public sealed class RosterScreen
     // Two panels: the grid of everyone, and the one you are reading.
     private static readonly Rectangle GridPanel = new(38, 144, 1180, 718);
     private static readonly Rectangle DetailPanel = new(1250, 144, 630, 718);
+
+    /// <summary>
+    /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
+    /// first is the one the caption card is placed beside; a target that is not this screen's gets none.
+    /// </summary>
+    internal static Rectangle[] Spotlights(TourTarget target) => target switch
+    {
+        TourTarget.ChampionCards => new[] { GridPanel },
+        TourTarget.ChampionDetail => new[] { DetailPanel },
+        TourTarget.BecomeThem => new[] { new Rectangle(DetailPanel.X + 40, DetailPanel.Bottom - 96, DetailPanel.Width - 80, 68) },
+        _ => Array.Empty<Rectangle>(),
+    };
 
     private const int Cols = 5;
 

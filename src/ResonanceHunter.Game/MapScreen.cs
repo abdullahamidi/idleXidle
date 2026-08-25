@@ -95,6 +95,30 @@ public sealed class MapScreen
     }
 
     private static int RegionCount => Math.Min(Regions.All.Count, NodeFrac.Length);
+
+    /// <summary>
+    /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
+    /// first is the one the caption card is placed beside; a target that is not this screen's gets none.
+    /// </summary>
+    /// <remarks>The chain's light is the union of every region node, so the serpentine reads as one thing.</remarks>
+    internal static Rectangle[] Spotlights(TourTarget target)
+    {
+        switch (target)
+        {
+            case TourTarget.RegionChain:
+                var chain = Node(0);
+                for (var i = 1; i < RegionCount; i++) chain = Rectangle.Union(chain, Node(i));
+                chain.Inflate(12, 12);
+                chain.Height += 24;   // the POWER label under each node is part of the node
+                return new[] { chain };
+            case TourTarget.RegionDetail:
+                return new[] { DetailPanel };
+            case TourTarget.EnterRegion:
+                return new[] { new Rectangle(DetailPanel.X + 40, DetailPanel.Bottom - 92, DetailPanel.Width - 80, 68) };
+            default:
+                return Array.Empty<Rectangle>();
+        }
+    }
     private static RegionDefinition Def(int i) => Regions.All[i];
 
     /// <summary>A real, monotonic "recommended power" derived from the region's boss power tier.</summary>

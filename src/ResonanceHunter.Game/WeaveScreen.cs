@@ -11,6 +11,7 @@ using ResonanceHunter.Core.Economy;
 using ResonanceHunter.Core.Encounters;
 using ResonanceHunter.Core.Prestige;
 
+using ResonanceHunter.Core.Progression;
 namespace ResonanceHunter.Client;
 
 /// <summary>
@@ -173,6 +174,31 @@ public sealed class WeaveScreen
     // 670, so a 102/48/44 row ends at 912 against a panel interior that closes at 904. Eight pixels, and
     // the third chip is drawn on the frame.
     private Rectangle KeystoneChip(int i) => new(SlotsPanel.X + 74, SlotsEnd + 94 + i * 46, 372, 42);
+
+    /// <summary>
+    /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
+    /// first is the one the caption card is placed beside; a target that is not this screen's gets none.
+    /// </summary>
+    /// <remarks>
+    /// An instance method, unlike the other screens': the slot rows and the keystone sockets under them
+    /// sit where the loadout's capacity puts them, so the light has to be measured against the live one.
+    /// </remarks>
+    internal Rectangle[] Spotlights(TourTarget target)
+    {
+        switch (target)
+        {
+            case TourTarget.SkillSlots:
+                return new[] { new Rectangle(SlotsPanel.X, SlotsPanel.Y, SlotsPanel.Width, SlotsEnd + 60 - SlotsPanel.Y) };
+            case TourTarget.SkillPicker:
+                return new[] { PickPanel };
+            case TourTarget.Vows:
+                var top = KeystoneChip(0).Y - 54;
+                var sockets = new Rectangle(SlotsPanel.X, top, SlotsPanel.Width, KeystoneChip(KeystoneRows - 1).Bottom + 16 - top);
+                return new[] { VowPanel, sockets };
+            default:
+                return Array.Empty<Rectangle>();
+        }
+    }
 
     private static readonly Source[] Sources = Enum.GetValues<Source>();
     private static readonly Form[] Forms = Enum.GetValues<Form>();

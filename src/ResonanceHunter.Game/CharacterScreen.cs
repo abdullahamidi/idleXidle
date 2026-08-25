@@ -11,6 +11,7 @@ using ResonanceHunter.Core.Economy;
 using ResonanceHunter.Core.Loot;
 using ResonanceHunter.Core.Prestige;
 
+using ResonanceHunter.Core.Progression;
 namespace ResonanceHunter.Client;
 
 /// <summary>The four verbs the game has for a single item, as one menu.</summary>
@@ -71,6 +72,18 @@ public sealed class CharacterScreen
     private static readonly Rectangle EquippedPanel = new(340, 120, 630, 890);
     private static readonly Rectangle InventoryPanel = new(986, 120, 440, 890);
     private static readonly Rectangle DetailPanel = new(1442, 120, 454, 890);
+
+    /// <summary>
+    /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
+    /// first is the one the caption card is placed beside; a target that is not this screen's gets none.
+    /// </summary>
+    internal static Rectangle[] Spotlights(TourTarget target) => target switch
+    {
+        TourTarget.PaperDoll => new[] { EquippedPanel },
+        TourTarget.Inventory => new[] { InventoryPanel },
+        TourTarget.ItemDetail => new[] { DetailPanel },
+        _ => Array.Empty<Rectangle>(),
+    };
 
     // Real eight slots placed in the spec's slot rectangles (§8.7): armour left, weapon+jewellery right.
     private static readonly (GearSlot Slot, string Label, Rectangle Box)[] SlotLayout =

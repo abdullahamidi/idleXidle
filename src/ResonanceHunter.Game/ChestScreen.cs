@@ -11,6 +11,7 @@ using ResonanceHunter.Core.Expeditions;
 using ResonanceHunter.Core.Loot;
 using ResonanceHunter.Core.Persistence;
 
+using ResonanceHunter.Core.Progression;
 namespace ResonanceHunter.Client;
 
 /// <summary>
@@ -173,6 +174,31 @@ public sealed class ChestScreen
     /// <summary>The "?" corner chip — drawn 30px, hit-tested 46px (Fitts's Law padding, house rule).</summary>
     private static Rectangle QChip(Rectangle card) => new(card.Right - 44, card.Y + 12, 30, 30);
     private static Rectangle QHit(Rectangle card) => new(card.Right - 52, card.Y + 4, 46, 46);
+
+    /// <summary>
+    /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
+    /// first is the one the caption card is placed beside; a target that is not this screen's gets none.
+    /// </summary>
+    /// <remarks>
+    /// The cards' light is the first row, which is the only row a first visit can have — the Vault opens
+    /// on the first chest held. The ? is the first card's chip, grown a little so the ring reads.
+    /// </remarks>
+    internal static Rectangle[] Spotlights(TourTarget target)
+    {
+        switch (target)
+        {
+            case TourTarget.ChestCards:
+                return new[] { new Rectangle(GridPanel.X + 30, GridPanel.Y + 100, GridPanel.Width - 60, 242) };
+            case TourTarget.ChestQuestion:
+                var q = QHit(Card(0));
+                q.Inflate(6, 6);
+                return new[] { q };
+            case TourTarget.VaultButtons:
+                return new[] { new Rectangle(GridPanel.Right - 780, GridPanel.Y + 14, 744, 76) };
+            default:
+                return Array.Empty<Rectangle>();
+        }
+    }
 
     /// <summary>The furthest first-visible index that still fills the page — row-aligned.</summary>
     /// <remarks>
