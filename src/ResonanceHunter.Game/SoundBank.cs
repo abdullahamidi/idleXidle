@@ -94,22 +94,49 @@ public sealed class SoundBank
     // ── The combat throttle. The fight fires the same cue in bursts — a swarm wave lands five hits
     // inside a frame, and BATTLE SPEED multiplies the playback clock — and five simultaneous copies
     // of one sample are one sample five times as loud. Two rules, applied to EVERY one-shot:
-    //   1. the same cue never STARTS twice inside ~90 ms;
+    //   1. the same cue never STARTS twice inside its minimum gap (~90 ms unless MinGapMs says otherwise);
     //   2. a cue re-fired while its recent copies still ring plays QUIETER (divided by the square
     //      root of a decaying repeat count), so a swarm reads as a swarm, not as a wall.
     // Centralised here rather than at each call site so no caller can forget it.
     private const long MinRepeatMs = 90;
+
+    /// <summary>Per-cue minimum gap between two starts, in milliseconds, where the 90 ms default is wrong.</summary>
+    /// <remarks>
+    /// Playtest 2026-08-26 ("the sounds lower the weight of the game"): the fight cues were rebuilt with
+    /// real tails — a hit rings for ~300 ms, a death for 700–900 ms. A hit may start again after 60 ms
+    /// (a swarm should sound busy, and the repeat-ducking above keeps the pile quiet), but a death that
+    /// restarts while its own crumble is still falling turns three deaths into one wash, so the deaths are
+    /// held further apart. FMOD calls this an event "cooldown"; it exists so simultaneous copies of one
+    /// sample never stack into a rattle.
+    /// </remarks>
+    private static readonly Dictionary<string, long> MinGapMs = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["sfx_hit"] = 60,
+        ["sfx_enemy_down"] = 140,
+        ["sfx_boss_down"] = 220,
+        ["sfx_champ_down"] = 300,
+    };
+
+    // Per-play pitch variation. A one-shot heard a thousand times identically "draws attention to itself
+    // through its artificial precision" (Mushel); a small random offset per play is the standard cure,
+    // and small is the rule — ±0.06 octave is under a semitone, enough to stop the ear locking on.
+    private readonly Random _vary = new(0x5EED);
     private readonly Dictionary<string, (long LastMs, float Recent)> _recent = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Play a one-shot cue. No-op if audio is off or the cue is missing.</summary>
     /// <remarks>
-    /// Rate-limited per cue: a repeat inside ~90 ms is dropped, and rapid repeats play progressively
-    /// quieter (see the throttle note above). Volume always rides <see cref="SfxVolume"/>, so the
-    /// settings slider governs every effect in the game.
+    /// Rate-limited per cue: a repeat inside the cue's minimum gap (~90 ms; see <see cref="MinGapMs"/>)
+    /// is dropped, and rapid repeats play progressively quieter (see the throttle note above). Volume
+    /// always rides <see cref="SfxVolume"/>, so the settings slider governs every effect in the game.
+    /// <paramref name="pitch"/> is in octaves (-1 = one octave down, +1 = one octave up, MonoGame's
+    /// convention); <paramref name="vary"/> adds a random offset in ±<paramref name="vary"/> octaves
+    /// on every play, so a cue that fires constantly never repeats itself exactly.
     /// </remarks>
-    public void Play(string key, float volume = 1f, float pitch = 0f, float pan = 0f, bool throttle = true)
+    public void Play(string key, float volume = 1f, float pitch = 0f, float pan = 0f, bool throttle = true,
+                     float vary = 0f)
     {
         if (!_enabled || !_sounds.TryGetValue(key, out var fx)) return;
+        if (vary > 0f) pitch += ((float)_vary.NextDouble() * 2f - 1f) * vary;
 
         if (!throttle)
         {
@@ -124,7 +151,7 @@ public sealed class SoundBank
         if (_recent.TryGetValue(key, out var t))
         {
             var since = now - t.LastMs;
-            if (since < MinRepeatMs) return;
+            if (since < (MinGapMs.TryGetValue(key, out var gap) ? gap : MinRepeatMs)) return;
             // Half-life 250 ms: a cue that last fired long ago is back to full volume.
             var recent = t.Recent * MathF.Pow(0.5f, since / 250f) + 1f;
             _recent[key] = (now, recent);
