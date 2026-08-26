@@ -294,6 +294,9 @@ public sealed class SoloExpeditionScreen
     /// </remarks>
     private readonly Dictionary<int, float> _skillFlash = new();
 
+    /// <summary>One key per skill for the rail's flash and readout: the Source (a Skill event's Slot) and the Form.</summary>
+    private static int SkillKey(int source, int form) => source * 16 + form;
+
     // CHARGE — latched off Charge events at the playhead, never re-derived (a replayed rule can
     // drift from the sim's). Live only when the build carries a keystone that reads the pool.
     private int _chargeNow;
@@ -712,6 +715,7 @@ public sealed class SoloExpeditionScreen
         {
             var cb = ComposeBuild(rh);
             _castRate = cb.Resolve(rh).SkillRate * cb.Shape.SkillRate;
+            _hasCastSkills = Loadout.Skills.Any(k => k.Form != Form.Trap);
         }
         // The replay's health table is read AFTER the pool refresh, or the HUD prints last wave's pool
         // over this wave's bar for a whole wave (review 2026-08-25: "300/360 with a full bar").
@@ -1009,7 +1013,10 @@ public sealed class SoloExpeditionScreen
                     // budgeted against importance, so the loud VFX are reserved for the SKILL casts below.
                     _champLunge = 1f;
                     _nextChampStrikeMs = _replay.NextChampionStrikeAfter(e.AtMs);
-                    Sound?.Play("sfx_hit", 0.38f, vary: 0.06f);   // the blow lands — it fires constantly, so it is never quite the same twice
+                    // The swing's thud at full weight; a skill's landing blows quieter — the cast's breath
+                    // already announced them, and four projectile impacts on top of it were "two sounds at
+                    // once" (playtest 2026-08-26).
+                    Sound?.Play("sfx_hit", e.FromSkill ? 0.22f : 0.38f, vary: 0.06f);
                     // The number is the blow: the event's amount, over the creature that took it.
                     // Graded by PROVENANCE (the event says whether a skill dealt it) and only then by beat:
                     // an auto-swing on a cast's own millisecond stays plain.
@@ -1029,7 +1036,7 @@ public sealed class SoloExpeditionScreen
                     break;
                 case BattleEventKind.Skill:
                     var form = (Form)e.Amount;
-                    _skillFlash[e.Amount] = 0.42f;
+                    _skillFlash[SkillKey(e.Slot, e.Amount)] = 0.42f;
                     var (text, colour) = CalloutFor(form);
                     if (ShowSkillCallouts) Say(text, colour);   // settings: SKILL NAMES hides exactly this
                     // Slot carries the casting skill's Source (WaveModel.BattleEvent) — the effect is the
@@ -1234,6 +1241,7 @@ public sealed class SoloExpeditionScreen
         DrawBattleControls(b, hit, clicked && !_logOpen);
         DrawSkillDock(b);
         if (_isBossWave) DrawBossBar(b);                          // §10/§12: screen-space, NOT arena-clipped
+        DrawEnemyLine(b);                                          // the wave's live line under the header
         // The red flash on a fall covers the whole 1920x1080 canvas, so it draws in this UNCLIPPED
         // pass, over the rails and panels too — inside the arena batch the scissor cut it down to the
         // arena rectangle. The settings' SCREEN FLASH switch still governs it.
@@ -1534,13 +1542,34 @@ public sealed class SoloExpeditionScreen
         // bar's exact anchor so the callout stack above it does not drift.
         // No "x4" after it (playtest 2026-08-25): the creatures are counted by being drawn, and each
         // wears its own life pip — the number said what the eye already had.
-        var label = $"{_run?.LastWaveArchetype.ToString().ToUpperInvariant()}";
-        var affixes = _run?.LastWaveAffixes ?? Array.Empty<Affix>();
-        if (affixes.Count > 0)
-            label += "   ·   " + string.Join(" + ", affixes.Select(a => a.ToString().ToUpperInvariant()));
-
-        _ui.TextCenterBig(b, label, _rowCentreX, _rowTopY + NameplateOffset - 28, UiKit.Vellum, UiTypography.Secondary);
+        // NOTHING IS WRITTEN OVER THE CREATURES ANY MORE (playtest 2026-08-26: "no text over the
+        // creatures; give the live enemy information under the top panel"). The wave's label moved to
+        // DrawEnemyLine, under the stage header, and reads live: what they are, how many still stand,
+        // how much life the wave has left.
     }
+
+    /// <summary>
+    /// The live enemy line under the stage header: the wave's kind and affixes, how many creatures still
+    /// stand, and the wave's remaining life. Skipped on a boss wave — the boss bar and its name are that
+    /// wave's line.
+    /// </summary>
+    private void DrawEnemyLine(SpriteBatch b)
+    {
+        if (_replay is null || _run is null || _isBossWave) return;
+        var label = _run.LastWaveArchetype.ToString().ToUpperInvariant();
+        var affixes = _run.LastWaveAffixes ?? Array.Empty<Affix>();
+        if (affixes.Count > 0) label += " · " + string.Join(" + ", affixes.Select(a => a.ToString().ToUpperInvariant()));
+        var total = _replay.CreatureCount;
+        var alive = 0;
+        for (var i = 0; i < total; i++) if (_replay.CreatureAlive(i)) alive++;
+        var life = (int)MathF.Round(_replay.EnemyHealthFraction * 100f);
+        var line = total > 0 ? $"{label}   ·   {alive} OF {total} STANDING   ·   {life}% LIFE LEFT" : label;
+        _ui.TextCenterBig(b, line, StageHeaderCentreX, StageHeaderBottomY + 6, UiKit.Vellum, UiTypography.Secondary);
+    }
+
+    /// <summary>The stage header's centre and bottom edge — the enemy line hangs from it.</summary>
+    private const int StageHeaderCentreX = 910;
+    private const int StageHeaderBottomY = 153;
 
     private void DrawNormalEnemy(SpriteBatch b, bool attacking)
     {
@@ -2075,9 +2104,9 @@ public sealed class SoloExpeditionScreen
     //    measured against that frame, not the 40 px the gold modal frame needed.
     private const int ColumnX = 1570, ColumnW = 326;
     private const int RailInset = 24;        // content clears the quiet frame's ornament
-    private const int RailTitleBand = 40;    // title row, from the plate's top to its content
+    private const int RailTitleBand = 50;    // title row, from the plate's top to its content (the frame's top ornament is ~20 px)
     private const int RailGap = 12;          // between plates
-    private const int IdlePlateHeight = 86;  // was 130 — the coin and the rate on one line
+    private const int IdlePlateHeight = 96;  // was 130 — the coin and the rate on one line
     private const int RewardButtonHeight = 44;
     private const int RewardRowPitch = 48;
     private const int RewardFootLine = 18;   // the DEEPEST WAVE line under the errands
@@ -2095,7 +2124,9 @@ public sealed class SoloExpeditionScreen
     private Rectangle CleanPanel(SpriteBatch b, Rectangle r, string title)
     {
         _ui.PanelQuiet(b, r);
-        _ui.TextBig(b, title, r.X + RailInset, r.Y + 15, Gold, 17);
+        // Y+24, not Y+15: the quiet frame's top rail is ~20 px deep and the title sat on it
+        // (playtest 2026-08-26: "the REWARD ACTIVITY and IDLE RATE titles spill over the frame").
+        _ui.TextBig(b, title, r.X + RailInset, r.Y + 24, Gold, 17);
         return new Rectangle(r.X + RailInset, r.Y + RailTitleBand, r.Width - RailInset * 2, r.Height - RailTitleBand - RailInset);
     }
 
@@ -2389,13 +2420,16 @@ public sealed class SoloExpeditionScreen
                 // and a bar built on them is the fight's real cadence, not a decorative tick at a rate
                 // nobody chose. Before this the rail listed the skills and then never moved again, so a
                 // player could see WHAT their champion carries and never WHEN any of it happens.
+                // Keyed by SOURCE and FORM — one readout per skill. Keyed by Form alone, two Projectiles
+                // shared a bar and "fired at once" (playtest 2026-08-26).
                 var formKey = (int)s.Form;
-                var flash = _skillFlash.TryGetValue(formKey, out var fl) ? Math.Clamp(fl / 0.42f, 0f, 1f) : 0f;
+                var skillKey = SkillKey((int)s.Source, formKey);
+                var flash = _skillFlash.TryGetValue(skillKey, out var fl) ? Math.Clamp(fl / 0.42f, 0f, 1f) : 0f;
                 var ready = 0f;
                 if (_replay is not null)
                 {
-                    var next = _replay.NextSkillAfter(_playheadMs, formKey);
-                    var prev = _replay.LastSkillBefore(_playheadMs, formKey);
+                    var next = _replay.NextSkillAfter(_playheadMs, (int)s.Source, formKey);
+                    var prev = _replay.LastSkillBefore(_playheadMs, (int)s.Source, formKey);
                     if (next != int.MaxValue)
                     {
                         // From the previous cast, or from the top of the wave for the very first one.
@@ -2627,7 +2661,11 @@ public sealed class SoloExpeditionScreen
             beatMs = nextSkill.AtMs;
             clip = (Form)nextSkill.Amount == Form.Strike ? "attack" : "cast";
         }
-        if (_nextChampStrikeMs > _playheadMs && (beatMs is null || _nextChampStrikeMs < beatMs.Value))
+        // The auto-attack's swing clip only when the build casts nothing: between two Projectile casts
+        // the sword-draw read as a third, unexplained skill (playtest 2026-08-26). With cast skills
+        // slotted the auto-attack keeps its lunge and its thud, and the champion's clips are the casts,
+        // one after another — cast, cooldown, the next.
+        if (!_hasCastSkills && _nextChampStrikeMs > _playheadMs && (beatMs is null || _nextChampStrikeMs < beatMs.Value))
         {
             beatMs = _nextChampStrikeMs;
             clip = "attack";
@@ -2649,6 +2687,9 @@ public sealed class SoloExpeditionScreen
 
     /// <summary>The build's skill-rate multiplier for the wave being shown — the cast clip's pace.</summary>
     private float _castRate = 1f;
+
+    /// <summary>Whether the loadout carries a skill that CASTS (anything but a Trap) — then the auto-swing gets no clip.</summary>
+    private bool _hasCastSkills;
 
     /// <summary>Seconds into the committed clip, at its speed — what the strip is drawn at.</summary>
     private float ClipSeconds => (_playheadMs - _clipStartMs) / 1000f * _clipSpeed;

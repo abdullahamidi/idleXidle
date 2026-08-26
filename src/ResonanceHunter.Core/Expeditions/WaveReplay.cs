@@ -177,6 +177,32 @@ public sealed class WaveReplay
         return int.MaxValue;
     }
 
+    /// <summary>
+    /// <see cref="NextSkillAfter(float, int)"/> for ONE skill: its Source (the event's Slot) and its
+    /// Form. Two skills of the same Form — two Projectiles — used to share one readout, so their bars
+    /// filled and emptied in lockstep and read as "both skills fire at once" (playtest 2026-08-26).
+    /// </summary>
+    public int NextSkillAfter(float ms, int source, int form)
+    {
+        foreach (var e in _events)
+            if (e.Kind == BattleEventKind.Skill && e.Slot == source && e.Amount == form && e.AtMs > ms)
+                return e.AtMs;
+        return int.MaxValue;
+    }
+
+    /// <inheritdoc cref="NextSkillAfter(float, int, int)"/>
+    public int LastSkillBefore(float ms, int source, int form)
+    {
+        var last = -1;
+        foreach (var e in _events)
+        {
+            if (e.Kind != BattleEventKind.Skill || e.Slot != source || e.Amount != form) continue;
+            if (e.AtMs > ms) break;
+            last = e.AtMs;
+        }
+        return last;
+    }
+
     /// <inheritdoc cref="NextSkillAfter"/>
     public int LastSkillBefore(float ms, int form)
     {

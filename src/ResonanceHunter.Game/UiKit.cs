@@ -760,6 +760,35 @@ public sealed class UiKit
     /// <summary>The ornamented end of the 256×96 button art, in source pixels — everything past it is plain border.</summary>
     private const int ButtonCapSrcPx = 44;
 
+    // The 256×64 bar frames: corner ornaments in the first/last 32 source px, the centre ornament between
+    // x 94 and 162, plain stone border between; the window starts 14 px in. Measured on ui_bar_boss_frame.
+    private const int BarCapSrcPx = 32;
+    private const int BarOrnamentSrcX0 = 94;
+    private const int BarOrnamentSrcX1 = 162;
+    private const int BarWindowInsetSrcPx = 14;
+
+    /// <summary>
+    /// Five-piece horizontal slice for art with ornaments at BOTH ends AND in the middle: the caps and the
+    /// centre piece are scaled with the height and keep their proportions; the two plain runs between them
+    /// stretch to fill. For the bar frames, whose centre scroll a 3-slice would still smear.
+    /// </summary>
+    private static void HSliceOrnament(SpriteBatch b, Texture2D t, Rectangle r, int srcCap, int ornX0, int ornX1, Color tint)
+    {
+        var scale = r.Height / (float)t.Height;
+        var dstCap = Math.Max(2, (int)MathF.Round(srcCap * scale));
+        var ornW = Math.Max(2, (int)MathF.Round((ornX1 - ornX0) * scale));
+        if (dstCap * 2 + ornW >= r.Width) { b.Draw(t, r, tint); return; }   // too narrow to slice: stretch
+        var ornX = r.X + (r.Width - ornW) / 2;
+        // caps
+        b.Draw(t, new Rectangle(r.X, r.Y, dstCap, r.Height), new Rectangle(0, 0, srcCap, t.Height), tint);
+        b.Draw(t, new Rectangle(r.Right - dstCap, r.Y, dstCap, r.Height), new Rectangle(t.Width - srcCap, 0, srcCap, t.Height), tint);
+        // plain runs
+        b.Draw(t, new Rectangle(r.X + dstCap, r.Y, ornX - (r.X + dstCap), r.Height), new Rectangle(srcCap, 0, ornX0 - srcCap, t.Height), tint);
+        b.Draw(t, new Rectangle(ornX + ornW, r.Y, r.Right - dstCap - (ornX + ornW), r.Height), new Rectangle(ornX1, 0, t.Width - srcCap - ornX1, t.Height), tint);
+        // the centre ornament, true to scale
+        b.Draw(t, new Rectangle(ornX, r.Y, ornW, r.Height), new Rectangle(ornX0, 0, ornX1 - ornX0, t.Height), tint);
+    }
+
     /// <summary>
     /// Horizontal 3-slice with the caps SCALED to the destination height: <paramref name="srcCap"/> source
     /// pixels at each end become srcCap × (r.Height ÷ t.Height) destination pixels, so the ornament keeps
@@ -980,10 +1009,18 @@ public sealed class UiKit
         // An opaque TRACK first. The frame art's window is not opaque everywhere, and on the enemy
         // nameplate — the one bar that floats over the scene rather than sitting on a panel — the
         // forest showed through the depleted section, so a half-dead enemy read as a bar with a hole.
-        var win = new Rectangle(r.X + Math.Max(2, r.Width * 7 / 100), r.Y + Math.Max(2, r.Height * 30 / 100),
-                                r.Width - Math.Max(4, r.Width * 14 / 100), Math.Max(1, r.Height * 42 / 100));
+        // A WIDE bar (the boss's, 600 px from 256 px of art) is drawn in five pieces so its corner and
+        // centre ornaments keep their shape and only the plain stone between them stretches — whole-image
+        // stretching smeared the scrollwork 2.3x (playtest 2026-08-26: "the boss bar's frame is stretched
+        // and looks cheap"). The window's inset then follows the scaled art, not a percentage of the width.
+        var scale = r.Height / (float)frame.Height;
+        var wide = r.Width > r.Height * frame.Width / frame.Height * 1.15f;
+        var insetX = wide ? Math.Max(2, (int)MathF.Round(BarWindowInsetSrcPx * scale)) : Math.Max(2, r.Width * 7 / 100);
+        var win = new Rectangle(r.X + insetX, r.Y + Math.Max(2, r.Height * 30 / 100),
+                                r.Width - insetX * 2, Math.Max(1, r.Height * 42 / 100));
         Fill(b, win, new Color(0x12, 0x0C, 0x10));
-        b.Draw(frame, r, Color.White);   // ornate frame + its (opaque) dark window
+        if (wide) HSliceOrnament(b, frame, r, BarCapSrcPx, BarOrnamentSrcX0, BarOrnamentSrcX1, Color.White);
+        else b.Draw(frame, r, Color.White);   // ornate frame + its (opaque) dark window
         if (pct > 0f && Assets.Get($"ui_bar_{type}_fill") is { } fill && fill.Width > 0)
         {
             var fw = Math.Max(1, (int)(win.Width * pct));

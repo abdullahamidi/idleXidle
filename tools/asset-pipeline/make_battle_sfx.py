@@ -500,11 +500,14 @@ def boss(buf):
 
 
 def cast(buf):
-    """Airy whoosh — a skill leaves the hand. Mostly breath, a faint rising tone
-    inside it so it reads as INTENT, not wind."""
+    """Breath, not a bell — a skill leaves the hand. The old cue carried a rising sine
+    (480 -> 950 Hz) inside the air, and at two casts a second that sine was the
+    "boink boink boink" the playtest heard under the hit's thud (2026-08-26). Now a
+    darker, longer breath with a low FALLING push under it and no tone at all: the
+    cast is felt as a release, and the strike that follows carries the weight."""
     rng = Noise(0xCA57)
-    air(buf, 0.0, 0.19, 0.9, rng, rise=True, lp=0.45)
-    sweep(buf, 0.02, 0.16, 480.0, 950.0, 0.35, shape="sine")
+    air(buf, 0.0, 0.26, 0.9, rng, rise=True, lp=0.10)
+    sweep(buf, 0.02, 0.12, 220.0, 120.0, 0.22, shape="sine")
 
 
 # ── The forge ────────────────────────────────────────────────────────────────────────────────
@@ -643,6 +646,7 @@ WEIGHT = {
     "sfx_enemy_down": (550.0, 250.0),
     "sfx_boss_down":  (400.0, 350.0),
     "sfx_champ_down": (400.0, 350.0),
+    "sfx_cast":       (2600.0, 90.0),   # a breath may be brighter than a blow, but never a tone
 }
 
 
@@ -672,7 +676,7 @@ if __name__ == "__main__":
     make("sfx_boss_down", COMBAT_DIR, 0.92, boss_down, target_peak=0.42, max_ms=950, darken=2400.0)
     make("sfx_champ_down", COMBAT_DIR, 0.92, champ_down, target_peak=0.42, max_ms=950, darken=2200.0)
     make("sfx_boss", COMBAT_DIR, 0.56, boss, target_peak=0.36, max_ms=600, soft=(20.0, 0.25))
-    make("sfx_cast", COMBAT_DIR, 0.21, cast, target_peak=0.24, soft=(6.0, 0.45))
+    make("sfx_cast", COMBAT_DIR, 0.28, cast, target_peak=0.22, max_ms=300.0, darken=2400.0)
     make("sfx_reveal_tick", UI_DIR, 0.08, reveal_tick, target_peak=0.32)
     make("sfx_equip", UI_DIR, 0.13, equip, target_peak=0.36)
     make("sfx_gem", UI_DIR, 0.25, gem, target_peak=0.36)
