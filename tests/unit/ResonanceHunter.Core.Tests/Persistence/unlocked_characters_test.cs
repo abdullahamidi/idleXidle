@@ -106,9 +106,9 @@ public class UnlockedCharactersTest
     {
         var state = new CharacterState();
         state.Refresh(new[] { "cinderworks", "umbral_reach" });
-        state.CompleteQuest("q_thirty_chests");
+        state.CompleteQuest("q_thirty_chests");   // THE MAGPIE's — the loot champion has the chest quest
         state.Refresh(new[] { "cinderworks", "umbral_reach" });
-        Assert.Equal(new[] { "seeker", "anvil", "chorus", "quiver" }, state.SaveUnlocked());
+        Assert.Equal(new[] { "seeker", "anvil", "chorus", "magpie" }, state.SaveUnlocked());
 
         var save = new SaveGame
         {
@@ -123,10 +123,10 @@ public class UnlockedCharactersTest
         var back = new CharacterState();
         SaveSystem.RestoreCharacters(loaded.Save!, back);
         Assert.Equal("chorus", back.ActiveId);
-        Assert.Equal(new[] { "seeker", "anvil", "chorus", "quiver" }, back.SaveUnlocked());
+        Assert.Equal(new[] { "seeker", "anvil", "chorus", "magpie" }, back.SaveUnlocked());
         // Restored with NO conquests handed to Refresh: nothing is reported fresh, nothing is lost.
         Assert.Empty(back.Refresh(System.Array.Empty<string>()));
-        Assert.True(back.IsUnlocked("quiver"));
+        Assert.True(back.IsUnlocked("magpie"));
     }
 
     [Fact]

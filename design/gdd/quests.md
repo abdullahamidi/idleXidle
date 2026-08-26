@@ -33,11 +33,18 @@ QUIVER, who is built for long runs.
 
 | Quest | Goal | Threshold | Unlocks |
 |---|---|---|---|
-| **THE HOLLOW HUNT** | depth in the Verdant Hollow | 20 | THE QUIVER |
-| **THE FIRST VOW** | descents finished with a Vow's demand met | 1 | THE OATHBOUND |
+| **THE LONG FURNACE** | wave held in Cinderworks | 50 | THE FALLING TOWER (second Warden) |
+| **THE THIRD OATH** | descents finished with a Vow's demand met | 3 | THE OATHBOUND (second Ranger) |
+| **THE DEEP HOLLOW** | wave held in the Verdant Hollow | 60 | THE QUIVER (second Mystic) |
+| **THE LONG STAND** | wave held in Marrow Wastes | 80 (`Checkpoints.ConquestWave × 4`) | THE THORNWALL (second Bulwark) |
+| **THE FULL HOLD** | chests opened | 30 | THE MAGPIE (second Wanderer) |
 
-Neither duplicates conquest, which already unlocks four characters on its own. THE HOLLOW HUNT asks
-for depth 20 against the 7 a conquest needs.
+None duplicates conquest, which already unlocks the FIRST of every class on its own, and none can be
+finished by a conquest of any shape (`ChampionTiersTest.test_no_conquest_anywhere_finishes_a_second_champions_quest`).
+Every depth quest asks for at least twice the conquest line (20). The retired ids — THE HOLLOW HUNT
+(`q_hollow_hunt`, depth 20), THE FIRST VOW (`q_first_vow`, one kept Vow) and THE WHOLE MAP
+(`q_every_region`, all six regions, which arrived one conquest after the first Bulwark) — are never
+reused; old saves keep what they earned through `LegacyUnlocks` and the banked unlocked set.
 
 ## 4. Formulas
 

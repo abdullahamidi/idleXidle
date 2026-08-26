@@ -102,10 +102,10 @@ public readonly record struct QuestProgress(
 /// <para>
 /// Five of them, one per class, because the SECOND champion of every class is gated behind a quest
 /// (see <see cref="Characters.ClassTier"/>) and a quest that gates nothing is a to-do list entry
-/// rather than a feature. None of them is "conquer region X": conquest already unlocks the FIRST of
-/// each class on its own, and a quest that duplicated it would teach the player nothing new. Each one
-/// asks for something a conquest does not — waves well past the conquest line, chests, kept Vows, the
-/// whole map — so the second half of the roster is earned rather than arriving in the first hours.
+/// rather than a feature. None of them is a conquest of any shape: conquest already unlocks the FIRST
+/// of each class on its own, and a quest that duplicated it would teach the player nothing new. Each
+/// one asks for something no conquest gives — waves well past the conquest line, chests, kept Vows —
+/// so the second half of the roster is earned rather than arriving in the first hours.
 /// </para>
 /// <para>
 /// The two original quests (<c>q_hollow_hunt</c> at depth 20, <c>q_first_vow</c> at one kept Vow)
@@ -115,9 +115,13 @@ public readonly record struct QuestProgress(
 /// same id now meant depth 60 that save would hand out THE MAGPIE for free.
 /// </para>
 /// <para>
-/// "Conquer every region" is <see cref="Encounters.Regions.All"/>'s count, not a literal. The brief
-/// said five, but the fifth region's conquest is what unlocks the first Bulwark, so both Bulwarks
-/// would have arrived on the same frame — the opposite of what the tier is for.
+/// A third id is retired the same way: <c>q_every_region</c>, "conquer every region", gated THE
+/// THORNWALL for one day. It was written to keep the two Bulwarks off the same frame — the fifth
+/// region's conquest opens THE UNBROKEN — but the sixth conquest is the very next thing a player does
+/// after the fifth, so the pair still arrived together (playtest 2026-08-26: "both Bulwarks unlock at
+/// the same time — silly. Bulwark stands for endurance, so the second one should unlock by clearing
+/// a certain wave at deeper levels"). The Bulwark quest is now a HOLD in the Body region, far past
+/// the conquest line; a save that had the old id done already has THE THORNWALL banked.
 /// </para>
 /// </remarks>
 public static class QuestCatalogue
@@ -144,9 +148,13 @@ public static class QuestCatalogue
         },
         new()
         {
-            Id = "q_every_region", Name = "THE WHOLE MAP",
-            Demand = "Conquer every region",
-            Goal = QuestGoal.RegionsConquered, Threshold = Encounters.Regions.All.Count, Unit = "REGIONS",
+            // The Bulwark's quest is ENDURANCE: not reaching a wave but holding one, in the Body region,
+            // at four times the conquest line. "Hold", because that is the word the hunt's banner
+            // uses for staying past the bar, and the one the class is named for.
+            Id = "q_marrow_hold", Name = "THE LONG STAND",
+            Demand = "Hold wave 80 in Marrow Wastes",
+            Goal = QuestGoal.DepthInRegion, RegionId = "marrow_wastes",
+            Threshold = Encounters.Checkpoints.ConquestWave * 4, Unit = "WAVES",
         },
         new()
         {

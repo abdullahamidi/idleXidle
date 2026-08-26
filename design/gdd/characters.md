@@ -41,11 +41,18 @@ Laid out on the mastery tree, so a player who has read the tree already knows ha
 | THE CHORUS | Spread | Aura | **MANY MOUTHS** — +5% damage per living creature | Conquer Umbral Reach |
 | THE METRONOME | Tempo | Projectile | **FIRST BEAT** — the wave's opening cast waits for nothing; the first hit on each enemy is doubled | Conquer Marrow Wastes |
 | THE UNBROKEN | Endure | Transformation | **SECOND WIND** — first killing blow leaves you at 1 | Conquer The Still Archive |
-| THE FALLING TOWER | Weight→Tempo | Strike | **MOMENTUM** — first hit weaker, every later hit stronger | Conquer The Pale Choir |
-| THE QUIVER | Tempo→Spread | Projectile | **LOOSE AGAIN** — a kill fires the next shot immediately | Quest: THE HOLLOW HUNT |
-| THE THORNWALL | Spread→Endure | Trap | **REPRISAL** — every bite worth less, every trap worth more | Conquer Verdant Hollow |
-| THE OATHBOUND | — | Mark | **TWICE SWORN** — a Vow's bonus is worth +50%, Mark windows last longer | Quest: THE FIRST VOW |
-| THE MAGPIE | — | Trap | **FULL POCKETS** — richer haul, better rarity | Conquer Cinderworks |
+| THE FALLING TOWER | Weight→Tempo | Strike | **MOMENTUM** — first hit weaker, every later hit stronger | Quest: THE LONG FURNACE (reach wave 50 in Cinderworks) |
+| THE QUIVER | Tempo→Spread | Projectile | **LOOSE AGAIN** — a kill fires the next shot immediately | Quest: THE DEEP HOLLOW (reach wave 60 in the Verdant Hollow) |
+| THE THORNWALL | Spread→Endure | Trap | **REPRISAL** — every bite worth less, every trap worth more | Quest: THE LONG STAND (hold wave 80 in Marrow Wastes) |
+| THE OATHBOUND | — | Mark | **TWICE SWORN** — a Vow's bonus is worth +50%, Mark windows last longer | Quest: THE THIRD OATH (three descents with a Vow kept) |
+| THE MAGPIE | — | Trap | **FULL POCKETS** — richer haul, better rarity | Quest: THE FULL HOLD (open 30 chests) |
+
+Updated 2026-08-26 (tiered roster, round four): the FIRST of every class opens by conquest or at the
+start; the SECOND waits on a quest no conquest can finish. The two Bulwarks used to arrive one
+conquest apart (THE UNBROKEN on the fifth region, "conquer every region" on the sixth), so the
+Bulwark's quest became an endurance hold; THE MAGPIE took the chest quest because its passive is
+about loot, and THE QUIVER took the Hollow depth. On the ROSTER screen the ten stand in five class
+columns, first above second.
 
 The Endure+Weight bridge deliberately has no character: ANVIL and UNBROKEN already stand either side
 of that corner.

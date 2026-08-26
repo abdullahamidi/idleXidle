@@ -361,8 +361,8 @@ public static class Onboarding
         Activity.Roster => new[]
         {
             new TourStep(TourTarget.ChampionCards, "THE CHAMPIONS",
-                "Every champion, one card each. A card shows the gear class it wears, the road it "
-                + "favours, and what unlocks it. Click one to read it."),
+                "One card per champion, one column per gear class, the first of the class above the "
+                + "second. A card shows its road and what unlocks it. Click one to read it."),
 
             new TourStep(TourTarget.ChampionDetail, "WHO THEY ARE",
                 "The champion's always-on power, what it is best at, and its gear class. "

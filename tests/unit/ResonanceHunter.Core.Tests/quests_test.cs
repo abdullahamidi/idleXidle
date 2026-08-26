@@ -97,17 +97,18 @@ public class QuestsTest
             .Select(c => c.Unlock.RegionId!)
             .ToList();
         state.Refresh(everyRegion);
-        Assert.False(state.IsUnlocked("quiver"));
+        Assert.False(state.IsUnlocked("magpie"));
 
+        // Thirty chests is THE MAGPIE's quest — the loot champion is earned by collecting loot.
         foreach (var done in QuestCatalogue.Satisfied(Progress(chests: 30)))
             state.CompleteQuest(done.Id);
 
         var fresh = state.Refresh(everyRegion);
-        Assert.Contains(fresh, c => c.Id == "quiver");
-        Assert.True(state.IsUnlocked("quiver"));
+        Assert.Contains(fresh, c => c.Id == "magpie");
+        Assert.True(state.IsUnlocked("magpie"));
         // The other quest characters stay locked — one quest finishing must not unlock the rest.
         Assert.False(state.IsUnlocked("oathbound"));
-        Assert.False(state.IsUnlocked("magpie"));
+        Assert.False(state.IsUnlocked("quiver"));
         Assert.False(state.IsUnlocked("tower"));
         Assert.False(state.IsUnlocked("thornwall"));
     }
@@ -134,10 +135,10 @@ public class QuestsTest
     public void test_every_depth_quest_asks_for_more_than_conquering_the_region()
     {
         // A quest that duplicated conquest would gate a character behind something the player has
-        // already done by the time they can read the gate. Conquest is moving from wave 7 to wave
-        // 20 (Game1.ConquerWaveDepth, which Core cannot see); every depth quest has to clear the
-        // higher of the two by a margin, or it is a conquest wearing a quest's name.
-        const int conquestLine = 20;
+        // already done by the time they can read the gate. Conquest is wave 20 (Checkpoints.ConquestWave,
+        // which the host mirrors); every depth quest has to clear it by a margin, or it is a conquest
+        // wearing a quest's name.
+        const int conquestLine = ResonanceHunter.Core.Encounters.Checkpoints.ConquestWave;
         foreach (var q in QuestCatalogue.All.Where(q => q.Goal == QuestGoal.DepthInRegion))
             Assert.True(q.Threshold >= conquestLine * 2,
                         $"{q.Name} asks for depth {q.Threshold}, which conquest at {conquestLine} nearly gives away");
@@ -152,12 +153,37 @@ public class QuestsTest
     }
 
     [Fact]
-    public void test_the_whole_map_quest_asks_for_every_region_there_is()
+    public void test_the_bulwark_quest_is_an_endurance_hold_far_past_the_conquest_line()
     {
-        // Not a literal five: the brief said five, but the fifth conquest is the first Bulwark's
-        // gate, and a second champion arriving on the same frame as the first is what the tier ends.
-        var q = QuestCatalogue.Find("q_every_region")!;
-        Assert.Equal(ResonanceHunter.Core.Encounters.Regions.All.Count, q.Threshold);
-        Assert.True(q.Threshold > 5);
+        // Playtest 2026-08-26: "both Bulwarks unlock at the same time — silly. Bulwark stands for
+        // endurance, so the second one should unlock by clearing a certain wave at deeper levels."
+        // THE WHOLE MAP (conquer all six) was retired: the fifth conquest opens THE UNBROKEN and the
+        // sixth is the very next thing a player does. The gate is a hold in the Body region now.
+        var thornwall = CharacterRoster.Get("thornwall");
+        var q = QuestCatalogue.Find(thornwall.Unlock.QuestId)!;
+
+        Assert.Equal("q_marrow_hold", q.Id);
+        Assert.Equal(QuestGoal.DepthInRegion, q.Goal);
+        Assert.Equal("marrow_wastes", q.RegionId);
+        Assert.Equal(80, q.Threshold);
+        Assert.True(q.Threshold >= ResonanceHunter.Core.Encounters.Checkpoints.ConquestWave * 4);
+        Assert.Null(QuestCatalogue.Find("q_every_region"));
+        Assert.DoesNotContain(QuestCatalogue.All, x => x.Goal == QuestGoal.RegionsConquered);
+
+        // What the card and the EARNED line say, in the player's words.
+        Assert.Equal("HOLD WAVE 80 IN MARROW WASTES", q.Demand.ToUpperInvariant());
+        Assert.Equal("34 / 80 WAVES", q.ProgressLine(new QuestProgress(
+            new Dictionary<string, int> { ["marrow_wastes"] = 34 }, 6, 0, 0)));
+    }
+
+    [Fact]
+    public void test_the_chest_quest_is_the_magpies_and_the_hollow_depth_is_the_quivers()
+    {
+        // Playtest 2026-08-26: "THE MAGPIE should have the chest quest (it is loot-focused) — swap it
+        // with THE QUIVER." The ids stayed; the champions swapped.
+        Assert.Equal("q_thirty_chests", CharacterRoster.Get("magpie").Unlock.QuestId);
+        Assert.Equal(QuestGoal.ChestsOpened, QuestCatalogue.Find("q_thirty_chests")!.Goal);
+        Assert.Equal("q_hollow_deep", CharacterRoster.Get("quiver").Unlock.QuestId);
+        Assert.Equal("verdant_hollow", QuestCatalogue.Find("q_hollow_deep")!.RegionId);
     }
 }

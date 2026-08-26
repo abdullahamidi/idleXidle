@@ -89,14 +89,45 @@ public class ChampionTiersTest
             var upTo = first.Unlock.Kind == UnlockKind.Conquest
                 ? regions.Take(regions.IndexOf(first.Unlock.RegionId!) + 1).ToList()
                 : new List<string>();
-            var snapshot = new QuestProgress(
-                upTo.ToDictionary(id => id, _ => 20),
-                upTo.Count, ChestsOpened: 0, RunsWithVowKept: 0);
+            var snapshot = ConquestOf(upTo);
 
             Assert.False(quest.IsDone(snapshot),
                          $"{second.Name} would unlock on the same frame as {first.Name}");
         }
     }
+
+    [Fact]
+    public void test_no_conquest_anywhere_finishes_a_second_champions_quest()
+    {
+        // THE STRONGER RULE, and the one the test above could not state. It passed with THE
+        // THORNWALL on "conquer every region": the fifth conquest opens THE UNBROKEN and the sixth
+        // finishes the quest, so the frames differed — but the sixth conquest is the very next thing
+        // a player does after the fifth, and it is the same kind of effort. Playtest 2026-08-26:
+        // "both Bulwarks unlock at the same time — silly." So: walk the whole chain, one conquest at
+        // a time, and no second champion's quest may be finished by ANY of those moments, including
+        // the last. A quest a conquest can finish is a conquest wearing a quest's name.
+        var regions = ResonanceHunter.Core.Encounters.Regions.All.Select(r => r.Id).ToList();
+        var seconds = CharacterRoster.All.Where(c => c.Tier == ClassTier.Second).ToList();
+
+        for (var n = 1; n <= regions.Count; n++)
+        {
+            var snapshot = ConquestOf(regions.Take(n).ToList());
+            var finished = QuestCatalogue.Satisfied(snapshot);
+            Assert.True(finished.Count == 0,
+                        $"conquering {regions[n - 1]} (the {n}th region) finishes {string.Join(", ", finished.Select(q => q.Name))}");
+            foreach (var second in seconds)
+                Assert.False(QuestCatalogue.Find(second.Unlock.QuestId)!.IsDone(snapshot),
+                             $"{second.Name} opens on the conquest of {regions[n - 1]}");
+        }
+    }
+
+    /// <summary>
+    /// The snapshot the moment these regions have been conquered, in chain order, and nothing else has
+    /// happened: each at exactly the conquest line, that many regions counted, no chests, no Vows.
+    /// </summary>
+    private static QuestProgress ConquestOf(IReadOnlyList<string> conqueredInOrder) =>
+        new(conqueredInOrder.ToDictionary(id => id, _ => ResonanceHunter.Core.Encounters.Checkpoints.ConquestWave),
+            conqueredInOrder.Count, ChestsOpened: 0, RunsWithVowKept: 0);
 
     [Fact]
     public void test_the_class_catalogue_lists_the_first_champion_before_the_second()

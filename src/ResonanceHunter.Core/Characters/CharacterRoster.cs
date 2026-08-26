@@ -27,8 +27,17 @@ namespace ResonanceHunter.Core.Characters;
 /// Unlocks come in two tiers per class — see <see cref="ClassTier"/>. The FIRST of each class follows
 /// conquest (or is the starter); the SECOND waits on a quest with a real demand behind it, because a
 /// roster that arrives whole in the first hours (playtest 2026-08-26: "all the characters unlock far
-/// too easily") is a roster with nothing left to go and get. Every quest here asks for something
-/// conquest does not: waves well past the conquest line, chests, kept Vows, the whole map.
+/// too easily") is a roster with nothing left to go and get. Every quest here asks for something NO
+/// conquest gives — waves well past the conquest line, chests, kept Vows — and never "conquer N
+/// regions": the whole-map quest was a conquest wearing a quest's name, and it handed the second
+/// Bulwark over one region after the first (playtest 2026-08-26: "both Bulwarks unlock at the same
+/// time — silly"). <c>ChampionTiersTest</c> holds every quest to that.
+/// </para>
+/// <para>
+/// The ROSTER screen lays the ten out by CLASS, not by catalogue order — see <see cref="Grid"/>: one
+/// column per class, the FIRST above the SECOND (playtest 2026-08-26: "characters of the same class
+/// should sit one under the other"). The screen only walks the cells; the arrangement is data here so
+/// a test can hold it.
 /// </para>
 /// </remarks>
 public static class CharacterRoster
@@ -139,8 +148,10 @@ public static class CharacterRoster
             Grants = new[] { BuildTrigger.LooseAgain },
             Shape = new SkillShape { SkillRate = 1.10f },
             // SECOND MYSTIC. The old gate was depth 20 in the Verdant Hollow, which conquest-at-20 made
-            // free. Chests are the Forge's currency and the thing an idle player collects most.
-            Unlock = CharacterUnlock.Quest("q_thirty_chests", "Open 30 chests"),
+            // free; then it was thirty chests, which belonged on the loot champion (playtest 2026-08-26:
+            // "THE MAGPIE should have the chest quest — swap it with THE QUIVER"). So: the deepest
+            // demand in the roster, in the region every player knows best.
+            Unlock = CharacterUnlock.Quest("q_hollow_deep", "Reach wave 60 in the Verdant Hollow"),
         },
         new()
         {
@@ -151,10 +162,13 @@ public static class CharacterRoster
             PassiveName = "REPRISAL",
             PassiveText = "Every hit you take does less. Every trap you set does more.",
             Shape = new SkillShape { FlatDamageReduction = 6f, DamageTaken = 0.90f },
-            // SECOND BULWARK. Was the FIRST region's conquest — the earliest unlock in the game. The
-            // brief asked for "conquer five regions", but the fifth region IS the first Bulwark's gate,
-            // so both would have arrived on the same frame; the whole map is the demand instead.
-            Unlock = CharacterUnlock.Quest("q_every_region", "Conquer every region"),
+            // SECOND BULWARK. Was the FIRST region's conquest — the earliest unlock in the game — then
+            // "conquer every region". That was still a conquest: THE UNBROKEN opens on the fifth
+            // region's conquest and the whole map is the sixth, one region later, the same effort again
+            // (playtest 2026-08-26: "both Bulwarks unlock at the same time — silly. Bulwark stands for
+            // endurance"). So the gate is endurance: HOLD wave 80 in the Body region, four times the
+            // conquest line, which no conquest anywhere can hand over.
+            Unlock = CharacterUnlock.Quest("q_marrow_hold", "Hold wave 80 in Marrow Wastes"),
         },
 
         // ── Off the tree ──────────────────────────────────────────────────────────────────────────
@@ -191,13 +205,69 @@ public static class CharacterRoster
             // Haul and Rarity, which the AVARICE road also buys — so this character is the cheap
             // version of a thirty-point path, and the road stays worth walking because it goes further.
             Mods = new BuildMods(1f, 1f, 1f, 1.35f, 1.20f),
-            // SECOND WANDERER. Was Cinderworks' conquest, the same frame as THE ANVIL. Now the deepest
-            // demand in the roster, in the region every player knows best.
-            Unlock = CharacterUnlock.Quest("q_hollow_deep", "Reach wave 60 in the Verdant Hollow"),
+            // SECOND WANDERER. Was Cinderworks' conquest, the same frame as THE ANVIL; then wave 60 in
+            // the Hollow. Now the chest quest, because a champion whose whole passive is FULL POCKETS
+            // should be earned by filling them — chests are the Forge's currency and the thing an idle
+            // player collects most.
+            Unlock = CharacterUnlock.Quest("q_thirty_chests", "Open 30 chests"),
         },
     };
 
     public static Character Get(string id) => Find(id) ?? All.First(c => c.Id == StarterId);
 
     public static Character? Find(string id) => All.FirstOrDefault(c => c.Id == id);
+
+    // ── The roster as a grid ──────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The five classes in the order the ROSTER screen lays out its columns, left to right: the
+    /// starter's class first, then the four roads in the order the first-tier champions stand on them.
+    /// </summary>
+    /// <remarks>
+    /// This is the order the top row already had when the grid was catalogue order (SEEKER, ANVIL,
+    /// CHORUS, METRONOME, UNBROKEN); pinning it here means the class columns did not move under a
+    /// player who had learned where each card stood.
+    /// </remarks>
+    public static IReadOnlyList<ItemClass> ClassColumns { get; } = new[]
+    {
+        ItemClass.Wanderer, ItemClass.Warden, ItemClass.Ranger, ItemClass.Mystic, ItemClass.Bulwark,
+    };
+
+    /// <summary>
+    /// The roster laid out the way the ROSTER screen draws it: one column per class in
+    /// <see cref="ClassColumns"/> order, the FIRST of the class on row 0 and the SECOND directly
+    /// beneath on row 1. Walked row by row, left to right.
+    /// </summary>
+    /// <remarks>
+    /// Playtest (2026-08-26): "characters of the same class should sit one under the other." Before
+    /// this the screen drew the catalogue five to a row, so the second row was WARDEN, MYSTIC, BULWARK,
+    /// RANGER, WANDERER under a first row of WANDERER, WARDEN, RANGER, MYSTIC, BULWARK — the pairs were
+    /// on the screen and nowhere near each other.
+    /// </remarks>
+    public static IReadOnlyList<RosterCell> Grid { get; } = BuildGrid();
+
+    /// <summary>A class's two champions, the FIRST before the SECOND.</summary>
+    public static IReadOnlyList<Character> ByClass(ItemClass cls) =>
+        All.Where(c => c.Class == cls).OrderBy(c => c.Tier).ToList();
+
+    private static IReadOnlyList<RosterCell> BuildGrid()
+    {
+        var cells = new List<RosterCell>();
+        foreach (var tier in new[] { ClassTier.First, ClassTier.Second })
+            for (var column = 0; column < ClassColumns.Count; column++)
+            {
+                var cls = ClassColumns[column];
+                // Single, not First: a class with two FIRSTs or none is a roster bug, and the grid is
+                // the one place every class is looked at by tier, so it is the right place to fail.
+                var champion = All.Single(c => c.Class == cls && c.Tier == tier);
+                cells.Add(new RosterCell(champion, column, (int)tier));
+            }
+        return cells;
+    }
 }
+
+/// <summary>One champion's place on the ROSTER grid: which class column, and which tier row.</summary>
+/// <param name="Character">The champion on the card.</param>
+/// <param name="Column">The class column, an index into <see cref="CharacterRoster.ClassColumns"/>.</param>
+/// <param name="Row">0 for the FIRST of the class, 1 for the SECOND beneath it.</param>
+public readonly record struct RosterCell(Character Character, int Column, int Row);

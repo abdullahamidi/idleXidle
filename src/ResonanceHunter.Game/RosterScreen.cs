@@ -66,10 +66,17 @@ public sealed class RosterScreen
         _ => Array.Empty<Rectangle>(),
     };
 
-    private const int Cols = 5;
+    // BY CLASS COLUMN, not catalogue order. Playtest (2026-08-26): "characters of the same class
+    // should sit one under the other." The arrangement is CharacterRoster.Grid — one column per class
+    // in ClassColumns order, the FIRST of the class on the top row, the SECOND directly beneath — and
+    // this screen only walks the cells. A column header names the class above each pair.
+    private const int ColumnPitch = 218, RowPitch = 300, CardWidth = 200, CardHeight = 280;
+    private const int HeaderY = 78, RuleY = 100, CardsY = 108;
 
-    private static Rectangle Card(int i) =>
-        new(GridPanel.X + 52 + i % Cols * 218, GridPanel.Y + 96 + i / Cols * 300, 200, 280);
+    private static Rectangle Card(RosterCell cell) => Card(cell.Column, cell.Row);
+
+    private static Rectangle Card(int column, int row) =>
+        new(GridPanel.X + 52 + column * ColumnPitch, GridPanel.Y + CardsY + row * RowPitch, CardWidth, CardHeight);
 
     private static string BranchName(Branch b) => b switch
     {
@@ -112,10 +119,10 @@ public sealed class RosterScreen
         ArgumentNullException.ThrowIfNull(state);
         var hit = Game1.ToOverlay(mouse);
 
-        for (var i = 0; i < CharacterRoster.All.Count; i++)
-            if (UiKit.ClickedIn(Card(i), hit, clicked))
+        foreach (var cell in CharacterRoster.Grid)
+            if (UiKit.ClickedIn(Card(cell), hit, clicked))
             {
-                _selectedId = CharacterRoster.All[i].Id;
+                _selectedId = cell.Character.Id;
                 _msg = "";
             }
     }
@@ -164,10 +171,24 @@ public sealed class RosterScreen
         _ui.TextRightBig(b, $"{have} / {CharacterRoster.All.Count}", GridPanel.Right - 56, GridPanel.Y + 30,
                          Slate, UiTypography.Secondary);
 
-        for (var i = 0; i < CharacterRoster.All.Count; i++)
+        // THE COLUMN HEADERS: the class, plural, in the class's colour, over a rule the width of the
+        // column — so the two cards beneath read as one class's pair before either card is read.
+        for (var column = 0; column < CharacterRoster.ClassColumns.Count; column++)
         {
-            var c = CharacterRoster.All[i];
-            var card = Card(i);
+            var cls = CharacterRoster.ClassColumns[column];
+            var top = Card(column, 0);
+            var color = UiKit.ClassColor(cls);
+            _ui.TextCenterBig(b, $"THE {ItemClasses.PluralOf(cls)}", top.Center.X, GridPanel.Y + HeaderY,
+                              color, UiTypography.Secondary);
+            _ui.Fill(b, new Rectangle(top.X, GridPanel.Y + RuleY, top.Width, 2), color * 0.6f);
+        }
+
+        var i = -1;
+        foreach (var cell in CharacterRoster.Grid)
+        {
+            i++;
+            var c = cell.Character;
+            var card = Card(cell);
             var unlocked = state.IsUnlocked(c.Id);
             var active = state.ActiveId == c.Id;
             var sel = _selectedId == c.Id;
