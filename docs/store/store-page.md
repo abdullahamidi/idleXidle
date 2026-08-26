@@ -24,6 +24,12 @@ Assets live beside this file:
 
 ## 2. Long description (the page body)
 
+> **itch.io uses `docs/store/itch/` instead (2026-08-26).** That folder holds the styled page: the
+> banner, the page background, twelve baked strips (the loop, section headers, the six forms, the
+> five classes with their ten champions, the six regions), the paste-ready `description.html`, the
+> theme colours and a `custom.css`. Its copy is the current one (conquest at wave twenty, checkpoints
+> paid in Memory Dust, trait points, five classes). The text below is the older Steam draft.
+
 > **The fight runs itself. The choices are yours.**
 >
 > Your champion stands in the arena and fights wave after wave — on every screen, and while the game is closed. Every wave it clears pays out at once. Every fifth is a boss. When it falls, it gets back up and pushes on. Nothing is banked, nothing is lost.
