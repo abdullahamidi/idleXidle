@@ -498,8 +498,15 @@ public sealed class UiKit
     /// so a screen converts by changing the call and nothing else — no content moves, and no hand-placed
     /// literal can collide with a border that was already there.
     /// </para>
+    /// <para>
+    /// <b>THE FRAME RULE (playtest 2026-08-26):</b> the gold nine-slice (<see cref="PanelNine"/> with
+    /// <c>ui_panel_modal_wide</c>) is for MODALS only — a panel that takes the screen and asks something.
+    /// Every panel that lives IN a screen wears this quiet brown, both columns alike; a screen with one
+    /// gold column and one brown column reads as two screens.
+    /// </para>
     /// </remarks>
-    public void PanelQuiet(SpriteBatch b, Rectangle r) => PanelAt(b, r, QuietFrame, false);
+    /// <param name="alpha">A fade for transient panels (a toast on its way out); 1 draws it solid.</param>
+    public void PanelQuiet(SpriteBatch b, Rectangle r, float alpha = 1f) => PanelAt(b, r, QuietFrame * alpha, false);
 
     /// <summary>The tint that turns the gold frame to dark bronze. Multiplied, so the interior stays black.</summary>
     private static readonly Color QuietFrame = new(0x58, 0x52, 0x62);

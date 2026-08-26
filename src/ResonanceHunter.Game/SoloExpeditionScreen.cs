@@ -402,6 +402,7 @@ public sealed class SoloExpeditionScreen
     private const int CalloutLanesDeep = 5;
 
     private const int DamagePx = 34;
+    private const int SkillHitPx = 40;
     private const int CritPx = 46;
 
     /// <summary>Where the enemy wave label sits, relative to the row anchor.</summary>
@@ -426,7 +427,7 @@ public sealed class SoloExpeditionScreen
     /// bar moves the numbers with it.
     /// </remarks>
     private int EnemyCalloutBase => _rowTopY + NameplateOffset - CritPx - 6;
-    private int _strikeCount;   // throttles per-strike damage numbers so they don't flood
+    private int _strikeCount;   // every other Strike gets a hit-puff; the NUMBER prints on every one (it is the sim's)
 
     // ── Arena clipping + overlay state (Rev 4 §1/§2/§11). ──
     // Widened and shifted right: left edge clears the control rail (ends x=280), right edge stops
@@ -440,7 +441,8 @@ public sealed class SoloExpeditionScreen
     /// <remarks>
     /// Hand-measured against this screen's real layout (the hunter panel at (196,20,420,205), the stage
     /// header at (630,18,560,135), the SKILLS rail at (190,236,286,350) for one skill, the right column
-    /// from x 1570, the champion in ChampBox, the pack right of it) with a margin of about ten pixels so
+    /// from x 1570 down to the CHEST FILTER row — closed, as a fresh save shows it — the champion in
+    /// ChampBox, the pack right of it) with a margin of about ten pixels so
     /// the frame art is inside the light, not cut by it. A fresh save is the only state this ever draws
     /// over, so the one-skill rail height is the right one. The fight screen is not inset, so these are
     /// already chrome coordinates and the host adds no margin of its own.
@@ -452,7 +454,7 @@ public sealed class SoloExpeditionScreen
         TourTarget.HunterHud => new[] { new Rectangle(186, 10, 440, 225) },
         TourTarget.CurrencyPills => new[] { new Rectangle(1440, 4, 400, 84) },
         TourTarget.Skills => new[] { new Rectangle(180, 226, 306, 370) },
-        TourTarget.RightColumn => new[] { new Rectangle(1560, 100, 350, 690) },
+        TourTarget.RightColumn => new[] { new Rectangle(1560, 100, 350, 268) },   // idle rate, errands, the filter row (closed)
         TourTarget.NavRail => new[] { new Rectangle(0, 0, 184, 1080) },
         TourTarget.GuideStrip => new[] { new Rectangle(456, 936, 1008, 130) },
         _ => Array.Empty<Rectangle>(),
@@ -873,9 +875,25 @@ public sealed class SoloExpeditionScreen
     private int StackSlot(CalloutLane lane)
         => _callouts.Count(c => c.Lane == lane && c.Life > 0f) % CalloutLanesDeep;
 
-    /// <summary>A floating combat number over the enemy — the fight's "action" read (package_10). Scaled off
-    /// the hunter's real PowerRating, jittered so numbers don't stack; crits are gold and linger.</summary>
-    private void SpawnDamage(int amount, bool crit)
+    /// <summary>
+    /// A floating combat number over the creature a Strike event hit — THE EVENT'S OWN AMOUNT, which is
+    /// what its bar just lost.
+    /// </summary>
+    /// <remarks>
+    /// <b>THE NUMBER WAS INVENTED.</b> Until 2026-08-26 this was fed by <c>HitDamage()</c>: the hunter's
+    /// PowerRating times a multiplier (1 for a swing, 2 for a cast, 3 for a Trap) times a jitter — a
+    /// figure that no part of the simulation ever produced. The bars, meanwhile, follow the replay, which
+    /// follows the sim to the point (WaveReplayTests: each creature replays to exactly where the sim left
+    /// it). So a wave-one auto-attack of 6 printed "-185" over four full pips, and the playtest read it
+    /// as "the enemy bars don't drop correctly — maybe a bug in how damage is applied". There was no bug in
+    /// the damage; the number was lying about it. It now prints <see cref="BattleEvent.Amount"/>, and it
+    /// prints it over the creature in <see cref="BattleEvent.Slot"/>, so a number and the bar under it
+    /// always describe the same blow.
+    /// </remarks>
+    /// <param name="slot">The creature struck — the column the number rises from.</param>
+    /// <param name="crit">A Trap's bite: gold, larger, and it lingers.</param>
+    /// <param name="skill">A cast's hit, drawn a size up from the auto-swing's.</param>
+    private void SpawnDamage(int amount, int slot, bool crit, bool skill)
     {
         if (!ShowDamageNumbers) return;   // settings: DAMAGE NUMBERS off
         // ABOVE the creature's health bar, and STACKED. Numbers used to spawn at EnemyBox.Y + 8..40,
@@ -895,22 +913,17 @@ public sealed class SoloExpeditionScreen
         _callouts.Add(new Callout
         {
             Text = crit ? $"-{amount:N0} CRITICAL" : $"-{amount:N0}",
-            Color = crit ? Gold : Bone,
-            X = _rowCentreX,
+            Color = crit ? Gold : skill ? UiKit.Vellum : Bone,
+            // Over the creature it struck, not the row's centre: in a swarm the row centre is the gap
+            // between two creatures, and a number there names neither of them.
+            X = EnemyPoint(slot, 0f).X,
             Y = EnemyCalloutBase - StackSlot(CalloutLane.Enemy) * CalloutLineHeight,
             Life = crit ? 1.3f : 1f,
             // Was 52 and 72. The fight "reads loud" was the standing playtest note, and a damage number
             // two-thirds the height of the creature it is describing is most of why.
-            Px = crit ? CritPx : DamagePx,
+            Px = crit ? CritPx : skill ? SkillHitPx : DamagePx,
             Lane = CalloutLane.Enemy,
         });
-    }
-
-    private int HitDamage(float mult)
-    {
-        var pwr = Math.Max(1, _hunter?.PowerRating ?? 100);
-        var j = 0.85f + (Jitter((int)_playheadMs, 30) + 30) / 200f;   // ~0.85..1.15 spread
-        return Math.Max(1, (int)(pwr * mult * j));
     }
 
     private void UpdateFight(float dt)
@@ -937,6 +950,16 @@ public sealed class SoloExpeditionScreen
         // air while the enemy is still off to the right ("hunter hits before the enemy arrives").
         if (_enemyEnter > 0f) { _enemyWindup = 0f; _clipName = null; return; }
 
+        // DEV: the fixture's seek (DevSeek) — the beats before it land silently, health only.
+        if (_devSeekMs is { } seek)
+        {
+            _devSeekMs = null;
+            _playheadMs = seek;
+            _replay.Advance(seek);
+            _nextEnemyStrikeMs = _replay.NextEnemyStrikeAfter(seek);
+            _nextChampStrikeMs = _replay.NextChampionStrikeAfter(seek);
+        }
+
         _playheadMs += dt * 1000f * _speedMul;
         if (_skillFlash.Count > 0)
             foreach (var key in _skillFlash.Keys.ToList())
@@ -959,6 +982,11 @@ public sealed class SoloExpeditionScreen
         UpdateChampionClip();
 
         var batch = _replay.Advance(_playheadMs);
+        // The beat a cast lands on. A Skill event precedes the Strike events its hit produces, at the
+        // same timestamp, so a Strike stamped with the cast's beat is that cast's blow — graded a size
+        // up, and gold when the cast was a Trap. Anything else at another beat is the auto-swing.
+        var skillAtMs = -1;
+        var trapAtMs = -1;
         for (var bi = 0; bi < batch.Count; bi++)
         {
             var e = batch[bi];
@@ -978,9 +1006,10 @@ public sealed class SoloExpeditionScreen
                     _champLunge = 1f;
                     _nextChampStrikeMs = _replay.NextChampionStrikeAfter(e.AtMs);
                     Sound?.Play("sfx_hit", 0.38f);   // the blow lands — soft, it fires constantly (0.55 wore testers out)
-                    if ((_strikeCount++ & 1) == 0)   // every other auto-hit: a number and a small, quiet puff
+                    // The number is the blow: the event's amount, over the creature that took it.
+                    if (e.Amount > 0) SpawnDamage(e.Amount, e.Slot, crit: e.AtMs == trapAtMs, skill: e.AtMs == skillAtMs);
+                    if ((_strikeCount++ & 1) == 0)   // every other hit: a small, quiet puff
                     {
-                        SpawnDamage(HitDamage(1f), false);
                         var (hx, hy) = EnemyPoint(e.Slot, 0.45f);
                         _vfx.Play("fx_weakhit", hx, hy, scale: EnemyScale(e.Slot, 0.6f), fps: 16f, tint: Steel);
                     }
@@ -1008,7 +1037,8 @@ public sealed class SoloExpeditionScreen
                     PlayFormVfx(form, (Source)e.Slot, castTarget);
                     Sound?.Play("sfx_cast", 0.42f);
                     if (form == Form.Trap) Sound?.Play("sfx_crit", 0.46f);   // the crit-graded blow (SpawnDamage's crit flag below)
-                    SpawnDamage(HitDamage(form == Form.Trap ? 3f : 2f), form == Form.Trap);   // skills hit big
+                    skillAtMs = e.AtMs;                          // the Strikes at this beat are this cast's
+                    if (form == Form.Trap) trapAtMs = e.AtMs;    // ...and a Trap's are the crit-graded ones
                     break;
                 case BattleEventKind.Heal:
                     if (ShowDamageNumbers) Say($"+{e.Amount}", Verdant);   // a number — follows DAMAGE NUMBERS; UNDYING below always shows
@@ -1142,7 +1172,6 @@ public sealed class SoloExpeditionScreen
         _ => new Color(0xE6, 0xE0, 0xFF),   // Spirit
     };
 
-    private static int Jitter(int seed, int spread) => (int)(seed * 2654435761L % (spread * 2 + 1)) - spread;
 
     // ══════════════════════════════════════════════════════════════════════════════════════════
     public void Draw(SpriteBatch b, Point mouse, bool clicked, string regionName, string enemyArt = "", bool suppressBanner = false)
@@ -1959,33 +1988,27 @@ public sealed class SoloExpeditionScreen
     /// not read the help screen does not know exists (playtest 2026-08-25: "put an icon button for it").
     /// </summary>
     /// <remarks>
-    /// A small sheet-of-paper glyph drawn from fills (no scroll icon ships), the key it also answers to,
-    /// and a hover tip that names the screen. It calls the same <see cref="ToggleLog"/> the key does; the
-    /// host's L handler closes the other overlays first, so the button is offered only while none of them
-    /// is up — which the host guarantees by not routing clicks here under a modal.
+    /// The <c>icon_log</c> medallion — a sealed scroll in the same round frame the settings gear and the
+    /// nav tiles wear — brighter under the mouse and gold while the log is open, with a hover tip that
+    /// names the screen and the key. It replaced a page glyph drawn from fills ("the LOG icon looks bad",
+    /// playtest 2026-08-26); the medallion reads on its own, so it carries no caption. It calls the same
+    /// <see cref="ToggleLog"/> the key does; the host's L handler closes the other overlays first, so the
+    /// button is offered only while none of them is up — which the host guarantees by not routing clicks
+    /// here under a modal.
     /// </remarks>
     private void DrawLogButton(SpriteBatch b, Point hit, bool clicked)
     {
         var r = LogButtonRect;
         var hot = r.Contains(hit);
-        // The chip style of the filter's buttons, not a panel frame: a 64 px ornate frame squashes its
-        // corner scrollwork into a smear, and the chip reads as a button at this size.
-        _ui.Fill(b, r, new Color(0x14, 0x10, 0x1A, 0xE0));
-        var edge = _logOpen ? Gold * 0.8f : hot ? Bone : Dim;
-        _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, 2), edge);
-        _ui.Fill(b, new Rectangle(r.X, r.Bottom - 2, r.Width, 2), edge);
-        _ui.Fill(b, new Rectangle(r.X, r.Y, 2, r.Height), edge);
-        _ui.Fill(b, new Rectangle(r.Right - 2, r.Y, 2, r.Height), edge);
-        // The sheet: a pale page with three text lines and a folded corner.
-        var page = new Rectangle(r.X + 20, r.Y + 14, 24, 30);
-        var ink = _logOpen ? Gold : hot ? Color.White : Bone * 0.85f;   // legible at rest, not a ghost
-        _ui.Fill(b, page, ink);
-        _ui.Fill(b, new Rectangle(page.X + 2, page.Y + 2, page.Width - 4, page.Height - 4), new Color(0x14, 0x10, 0x1A));
-        for (var i = 0; i < 3; i++)
-            _ui.Fill(b, new Rectangle(page.X + 5, page.Y + 7 + i * 6, page.Width - 10 - (i == 2 ? 6 : 0), 2), ink);
-        _ui.Fill(b, new Rectangle(page.Right - 8, page.Y, 8, 8), new Color(0x14, 0x10, 0x1A));
-        _ui.Fill(b, new Rectangle(page.Right - 8, page.Y + 6, 6, 2), ink);
-        _ui.TextCenterBig(b, "LOG", r.Center.X, r.Bottom - 21, ink, 14);
+        // 52 px at rest, 56 under the mouse — the same lift the close icons use — inside the 64 px hit box.
+        var box = hot ? new Rectangle(r.X + 4, r.Y + 4, 56, 56) : new Rectangle(r.X + 6, r.Y + 6, 52, 52);
+        var tint = _logOpen ? Gold : hot ? Color.White : new Color(0xE0, 0xD8, 0xC8);
+        if (!_ui.Icon(b, "icon_log", box, tint))
+        {
+            // No medallion on disk: a plain page so the door still shows.
+            _ui.Fill(b, box, new Color(0x14, 0x10, 0x1A, 0xE0));
+            _ui.TextCenterBig(b, "LOG", box.Center.X, box.Center.Y - 8, tint, 14);
+        }
         if (hot) _ui.HoverTip(b, "EXPEDITION LOG — every descent's report. The L key opens it too.", hit);
         if (UiKit.ClickedIn(r, hit, clicked)) WantsLog = true;
     }
@@ -1998,7 +2021,8 @@ public sealed class SoloExpeditionScreen
         // Rev 3 §12: stage header (630,18,560,135) — narrower, so it clears the currency bar (≥20px gap). One
         // clean hierarchy region → depth → progress → wave, all centred at x=910 (the banner centre).
         var bar = new Rectangle(630, 18, 560, 135);
-        _ui.PanelNine(b, bar, "ui_panel_modal_wide");   // sliced: the corners keep their native size
+        // The quiet frame, like every other panel on this screen (UiKit.PanelQuiet: gold is for modals).
+        _ui.PanelQuiet(b, bar);
         const int cx = 910;
         // §19.2: render the region title at 36, shrinking to a floor of 28 to fit 490px — never ellipsize the
         // ACTIVE region title. (Two-line fallback below 28 is a noted follow-up; region names fit at 28.)
@@ -2037,107 +2061,98 @@ public sealed class SoloExpeditionScreen
 
     private static readonly Color PlateEdge = new(0x74, 0x62, 0x3E);
 
-    /// <summary>A titled panel using the ORNATE ui_panel_* frame art (package_01) — the reference's look.
-    /// The title is left-aligned just inside the top edge so it clears the frame's top-centre gem. Returns
-    /// the inner content rect (inset past the ornate corners).</summary>
-    /// <summary>A plate in the right rail, returning the space its content may actually use.</summary>
+    // ── The right rail's measure. ─────────────────────────────────────────────────────────────────
+    //    Every plate is a UiKit.PanelQuiet, whose ornament reaches about 18 px in; the insets below are
+    //    measured against that frame, not the 40 px the gold modal frame needed.
+    private const int ColumnX = 1570, ColumnW = 326;
+    private const int RailInset = 24;        // content clears the quiet frame's ornament
+    private const int RailTitleBand = 40;    // title row, from the plate's top to its content
+    private const int RailGap = 12;          // between plates
+    private const int IdlePlateHeight = 86;  // was 130 — the coin and the rate on one line
+    private const int RewardButtonHeight = 44;
+    private const int RewardRowPitch = 48;
+    private const int RewardFootLine = 18;   // the DEEPEST WAVE line under the errands
+    private const int FilterRowHeight = 54;  // the CHEST FILTER button row
+    private const int FilterPopoverHeight = 420;   // measured: the footer line cleared the frame at 386 by nothing
+
+    /// <summary>A plate in the right rail, in the house frame, returning the space its content may use.</summary>
     /// <remarks>
-    /// THE BOTTOM INSET WAS 22px WHERE THE FRAME NEEDS 40. `Height - 92` reserved 70 at the top and only
-    /// 22 at the bottom, so EVERY plate in this rail overhung its own border by 18px — the OBJECTIVE
-    /// progress bar was drawn on the frame's bottom band, its ends colliding with the corner filigree so
-    /// the two pieces of art merged, and REWARD ACTIVITY's third row clips the same way the moment
-    /// Deepest rises above zero. UiKit.PanelCorner is the number the art actually uses.
+    /// THE QUIET FRAME, the one the hero card and the SKILLS rail already wear across the arena. The rail
+    /// spent one round (2026-08-26) in the gold modal frame to match the CHEST FILTER plate, and the
+    /// playtest chose the other way: "the right frames are gold while the left ones are brown — pick one;
+    /// I prefer the brown". One screen, one frame; the gold nine-slice is for modals (see
+    /// <see cref="UiKit.PanelQuiet"/>).
     /// </remarks>
     private Rectangle CleanPanel(SpriteBatch b, Rectangle r, string title)
     {
-        // The nine-sliced modal frame, like the CHEST FILTER plate below and the stage header above —
-        // the rail wore two different frames and the playtest called it an inconsistency (2026-08-26).
-        _ui.PanelNine(b, r, "ui_panel_modal_wide");
-        _ui.TextBig(b, title, r.X + 40, r.Y + 30, Gold, 20);
-        return new Rectangle(r.X + 40, r.Y + 70, r.Width - 80, r.Height - 70 - UiKit.PanelCorner);
+        _ui.PanelQuiet(b, r);
+        _ui.TextBig(b, title, r.X + RailInset, r.Y + 15, Gold, 17);
+        return new Rectangle(r.X + RailInset, r.Y + RailTitleBand, r.Width - RailInset * 2, r.Height - RailTitleBand - RailInset);
     }
 
-    /// <summary>Right context column: two plates — the idle rate, and the errands worth doing now.</summary>
+    /// <summary>Right context column: the idle rate, the errands worth doing now, and the chest filter's door.</summary>
     /// <remarks>
-    /// It was four. OBJECTIVE and EXPEDITION printed the depth, the progress bar and the wave that the
-    /// banner over the arena already prints, so half the rail was a second copy of the header.
+    /// It was four plates. OBJECTIVE and EXPEDITION printed the depth, the progress bar and the wave that
+    /// the banner over the arena already prints, so half the rail was a second copy of the header. Then
+    /// the two that remained were "too big" (playtest 2026-08-26): each is now about two-thirds its old
+    /// height, and the filter — which stood open at full height under them — is a row that opens a
+    /// popover on demand.
     /// </remarks>
     private void DrawRightColumn(SpriteBatch b, Point hit, bool clicked)
     {
-        // Rev 3 §20: right context rail (1570,110,326,354) — secondary panels, all live data. The spec's
+        // Rev 3 §20: right context rail from (1570,110) — secondary panels, all live data. The spec's
         // "no keyboard hints" rule is deliberately broken by the two REWARD ACTIVITY buttons, which name
         // their key: they are the one place on this screen that asks the player to go somewhere, and a
-        // door worth opening should say how. Idle rate → reward activity.
-        const int px = 1570, pw = 326;
+        // door worth opening should say how. Idle rate → reward activity → chest filter.
 
-        // Idle rate (1570,110,326,130). Auto-credited, so no Claim button (§20.2).
-        var inner = CleanPanel(b, new Rectangle(px, 110, pw, 130), "IDLE RATE");
-        // Centred between the title and the plate's bottom — it used to sit on the inner rect's top,
-        // which on a 130-px plate is the lower half (playtest: "ortalanmamış, aşağıya daha yakın").
-        var rowY = inner.Y - 12;
-        if (_ui.Assets.Get("currency_gleam") is { } gi) b.Draw(gi, new Rectangle(inner.X, rowY, 40, 40), Color.White);
-        _ui.TextBig(b, $"+{Game1.Abbrev((long)(IdleGleamRate * 60f))}/min", inner.X + 52, rowY + 6, Gold, 26);
+        // Idle rate: the coin and the rate on one line. Auto-credited, so no Claim button (§20.2).
+        var idle = new Rectangle(ColumnX, 110, ColumnW, IdlePlateHeight);
+        var inner = CleanPanel(b, idle, "IDLE RATE");
+        var rowY = inner.Y - 2;
+        if (_ui.Assets.Get("currency_gleam") is { } gi) b.Draw(gi, new Rectangle(inner.X, rowY, 30, 30), Color.White);
+        _ui.TextBig(b, $"+{Game1.Abbrev((long)(IdleGleamRate * 60f))}/min", inner.X + 40, rowY + 2, Gold, 24);
 
-        // OBJECTIVE AND EXPEDITION ARE GONE. Between them they held four facts, and the banner over the
-        // arena was already printing all four: "DEPTH 0 / 7", the same progress bar, and "WAVE 2". Two
-        // ornate frames and a second copy of the same bar three hundred pixels from the first — and a
-        // player scanning the rail for what to do next had to read past both to reach the one panel that
-        // answers it. That is the "iç içe geçmiş" the playtest reported, and the cause was not density:
-        // it was that most of the density said nothing new.
-        //
-        // The one thing they carried that the banner did NOT is the run's state — BOSS WAVE, or
-        // RECOVERING after a fall — so that moved onto the banner's wave line, beside the wave it
-        // describes. See RunState and DrawStageHeader.
-
-        // Reward activity — real summary, no fake loot grid, no keyboard hints (§20.4/§21). It takes the
-        // slot OBJECTIVE had, because it is now the first plate under the idle rate and the rail reads
-        // downward.
-        // Sized to what it actually holds — two errands, one, or just the career line. An ornate
-        // frame around a void reads as content the eye has somehow failed to find, and the TAKE ONLY
-        // plate below packs up against whatever height this one needs.
+        // Reward activity — real summary, no fake loot grid (§20.4/§21). Sized to what it actually holds —
+        // two errands, one, or just the career line. An ornate frame around a void reads as content the
+        // eye has somehow failed to find.
         var chestRow = ChestCount > 0 && VaultOpen;
         var pointsRow = Mastery.Available > 0 && MasteryOpen;
         var rows = (chestRow ? 1 : 0) + (pointsRow ? 1 : 0);
-        var reward = new Rectangle(px, 254, pw, 70 + rows * 54 + 26 + UiKit.PanelCorner);
+        var reward = new Rectangle(ColumnX, idle.Bottom + RailGap, ColumnW,
+                                   RailTitleBand + rows * RewardRowPitch + RewardFootLine + RailInset);
         inner = CleanPanel(b, reward, "REWARD ACTIVITY");
         // THE TWO THINGS A PLAYER SHOULD DO NOW WERE INERT GREY TEXT, drawn in exactly the same style as
         // the dead career stat below them — so "1 chest available" read as trivia rather than as an
-        // errand, and the most valuable thing the game had given them sat unclaimed. They are buttons
-        // with verbs now, naming their own key, so the rail tells you what to press as well as what you
-        // have.
-        //
-        // They only navigate: the actual work still happens on the screen that owns it. A rail that
-        // opened chests would be a second Forge.
-        // A REWARD WHOSE SCREEN IS LOCKED IS HIDDEN — not greyed, not clickable-into-a-refusal.
-        // The button said "SPEND 3 POINTS (B)", the player pressed it, and a toast said the screen is
-        // not open yet. A door this rail advertises must open; until the host says the screen is
-        // unlocked, the errand simply is not offered.
+        // errand. They are buttons with verbs now, naming their own key. They only navigate: the actual
+        // work still happens on the screen that owns it. A rail that opened chests would be a second Forge.
+        // A REWARD WHOSE SCREEN IS LOCKED IS HIDDEN — not greyed, not clickable-into-a-refusal. A door
+        // this rail advertises must open; until the host says the screen is unlocked, the errand simply
+        // is not offered.
         var ry = inner.Y;
         var anyReward = false;
         if (chestRow)
         {
-            if (_ui.Button(b, new Rectangle(inner.X, ry, inner.Width, 46),
+            if (_ui.Button(b, new Rectangle(inner.X, ry, inner.Width, RewardButtonHeight),
                            $"OPEN {ChestCount} CHEST{(ChestCount == 1 ? "" : "S")}  (K)", hit, clicked))
                 WantsVault = true;
-            ry += 54; anyReward = true;
+            ry += RewardRowPitch; anyReward = true;
         }
         // Mastery points are spent on the MASTERY tree — the E screen — so that is where this button
-        // goes and the key it names. It used to say (B) and send the player to the BUILD screen,
-        // where points cannot be spent at all.
+        // goes and the key it names.
         if (pointsRow)
         {
-            if (_ui.Button(b, new Rectangle(inner.X, ry, inner.Width, 46),
+            if (_ui.Button(b, new Rectangle(inner.X, ry, inner.Width, RewardButtonHeight),
                            $"SPEND {Mastery.Available} POINT{(Mastery.Available == 1 ? "" : "S")}  (E)", hit, clicked))
                 WantsMastery = true;
-            ry += 54; anyReward = true;
+            ry += RewardRowPitch; anyReward = true;
         }
-        if (Deepest > 0) _ui.TextBig(b, $"DEEPEST WAVE REACHED  {Deepest}", inner.X, ry, Slate, 16);
-        else if (!anyReward) _ui.TextBig(b, "NOTHING TO CLAIM YET", inner.X, inner.Y, Slate, 18);
+        if (Deepest > 0) _ui.TextBig(b, $"DEEPEST WAVE REACHED  {Deepest}", inner.X, ry + 1, Slate, 15);
+        else if (!anyReward) _ui.TextBig(b, "NOTHING TO CLAIM YET", inner.X, ry + 1, Slate, 16);
 
-        DrawKeepFilter(b, new Rectangle(px, reward.Bottom + 16, pw, 372), hit, clicked);
+        DrawKeepFilter(b, new Rectangle(ColumnX, reward.Bottom + RailGap, ColumnW, FilterRowHeight), hit, clicked);
     }
 
-    // ── TAKE ONLY — the chest keep-filter, on the screen whose drops it decides (2026-08-23). ─────
+    // ── CHEST FILTER — on the screen whose drops it decides (2026-08-23). ─────────────────────────
     //    It was a row on the VAULT; the playtest put it here: "drop filtresi hunt ekranını
     //    ilgilendiriyor oraya taşınsın." Host-fed and host-persisted; this screen only edits it and
     //    raises FilterDirty. NOTE for the host: the edit happens in DRAW, so read it back on the dirty
@@ -2149,6 +2164,16 @@ public sealed class SoloExpeditionScreen
     public HashSet<ItemBaseType> KeepSlots { get; } = new();
     /// <summary>Set when the player edited the filter — the host copies it back and saves.</summary>
     public bool FilterDirty { get; set; }
+
+    /// <summary>
+    /// The filter's popover is up. The row toggles it; its close icon, a click anywhere outside it, and
+    /// Escape (routed by the host) close it. The row keeps the setting readable while it is closed.
+    /// </summary>
+    /// <remarks>
+    /// It used to stand open at full height, permanently — the tallest thing in the rail, for a setting
+    /// most players touch once. Playtest 2026-08-26: "a button that opens it, I set it, it closes."
+    /// </remarks>
+    public bool FilterOpen { get; set; }
 
     private static readonly ItemBaseType[] SlotChips =
     {
@@ -2163,23 +2188,75 @@ public sealed class SoloExpeditionScreen
         _ => t.ToString().ToUpperInvariant(),
     };
 
-    private void DrawKeepFilter(SpriteBatch b, Rectangle plate, Point hit, bool clicked)
+    /// <summary>The slot's medallion, <c>item_slot_&lt;slot&gt;</c> — the same art the GEAR screen's paper doll wears.</summary>
+    private static string SlotIconKey(ItemBaseType t) => t switch
     {
-        // SLICED, NOT STRETCHED. This plate is taller than it is wide, so UiKit.Panel dressed it in the
-        // square frame — whose corner flourishes reach 45 px in from the top — and the title sat on the
-        // ornament while the footer line ran under the bottom rail (playtest 2026-08-25: "TAKE ONLY is
-        // on top of the frame"). The modal frame nine-slices with native corners, like the stage header.
-        _ui.PanelNine(b, plate, "ui_panel_modal_wide");
-        // THE PLATE SAYS WHAT IT IS. "TAKE ONLY" alone did not read as a filter (playtest: "it is not
-        // clear that the item filter is an item filter") — so: a name, a plain sentence, and a label on
-        // each control.
-        _ui.TextBig(b, "CHEST FILTER", plate.X + 40, plate.Y + 30, Gold, 20);
-        _ui.TextBig(b, "WHICH CHESTS TO KEEP", plate.X + 40, plate.Y + 56, Slate, 15);
-        var inner = new Rectangle(plate.X + 40, plate.Y + 90, plate.Width - 80, plate.Height - 90 - UiKit.PanelCorner);
+        ItemBaseType.AbilityFocus => "item_slot_focus",
+        _ => "item_slot_" + t.ToString().ToLowerInvariant(),
+    };
 
-        // Line 1: LOWEST TIER   [-]  ANY / TIER N+  [+]
-        var y = inner.Y;
-        _ui.TextBig(b, "LOWEST TIER", inner.X, y, Bone, 15);
+    /// <summary>What the medallion is, in plain words, for the hover tip (playtest 2026-08-26: icons, with the name on hover).</summary>
+    private static string SlotTip(ItemBaseType t) => t switch
+    {
+        ItemBaseType.Weapon => "WEAPON — what your champion strikes with.",
+        ItemBaseType.Helm => "HELM — head armour.",
+        ItemBaseType.Chest => "ARMOUR — body armour, worn on the chest.",
+        ItemBaseType.Gloves => "GLOVES — hand armour.",
+        ItemBaseType.Boots => "BOOTS — foot armour.",
+        ItemBaseType.Charm => "CHARM — a trinket worn for its power.",
+        ItemBaseType.AbilityFocus => "FOCUS — the piece that channels your skills.",
+        ItemBaseType.Ring => "RING — a ring worn for its power.",
+        _ => SlotLabel(t),
+    };
+
+    /// <summary>The filter's setting in words: "ANY TIER · ALL SLOTS", "TIER 3 AND UP · HELM, BOOTS".</summary>
+    private string FilterSummary()
+    {
+        var tier = KeepMinTier <= 0 ? "ANY TIER" : $"TIER {KeepMinTier} AND UP";
+        var slots = KeepSlots.Count == 0 ? "ALL SLOTS" : string.Join(", ", SlotChips.Where(KeepSlots.Contains).Select(SlotLabel));
+        return $"{tier} · {slots}";
+    }
+
+    /// <summary>The CHEST FILTER row — its name, its current setting in words, and the door to change it.</summary>
+    private void DrawKeepFilter(SpriteBatch b, Rectangle row, Point hit, bool clicked)
+    {
+        var pop = new Rectangle(row.X, row.Bottom + 8, row.Width, FilterPopoverHeight);
+        var wasOpen = FilterOpen;
+        var hot = row.Contains(hit);
+        if (UiKit.ClickedIn(row, hit, clicked)) FilterOpen = !wasOpen;
+        else if (wasOpen && clicked && !pop.Contains(hit)) FilterOpen = false;   // a click anywhere else closes it
+
+        // The row: the chip style of the filter's own buttons, lit gold while the popover is up.
+        _ui.Fill(b, row, new Color(0x14, 0x10, 0x1A, 0xE0));
+        Outline(b, row, wasOpen ? Gold * 0.8f : hot ? Bone : PlateEdge, 2);   // bronze at rest: a button, in the rail's own brown
+        _ui.TextBig(b, "CHEST FILTER", row.X + 14, row.Y + 8, wasOpen || hot ? Gold : Gold * 0.85f, 15);
+        var door = wasOpen ? "CLOSE  ×" : "CHANGE  ›";
+        _ui.TextBig(b, door, row.Right - 14 - _ui.MeasureBig(door, 14), row.Y + 9, hot ? Bone : Slate, 14);
+        _ui.TextBig(b, _ui.ShortenBig(FilterSummary(), row.Width - 28, 14), row.X + 14, row.Y + 30, Bone, 14);
+
+        if (wasOpen) DrawFilterPopover(b, pop, hit, clicked && pop.Contains(hit));
+        else if (hot) _ui.HoverTip(b, "CHEST FILTER — which chests to keep. The rest turn into a little Scrap. Click to change it.", hit);
+    }
+
+    /// <summary>The filter's controls: the lowest tier to keep, and the gear slots — as medallions.</summary>
+    /// <remarks>
+    /// Drawn after the rail, so it sits over whatever is under it. Only clicks INSIDE it reach here (the
+    /// row handles the outside click); the tip for the hovered medallion is drawn last, over everything.
+    /// </remarks>
+    private void DrawFilterPopover(SpriteBatch b, Rectangle pop, Point hit, bool clicked)
+    {
+        _ui.PanelQuiet(b, pop);
+        var inner = new Rectangle(pop.X + RailInset, pop.Y + RailInset, pop.Width - RailInset * 2, pop.Height - RailInset * 2);
+        // The title sits on the close icon's row, so the two read as one header.
+        var close = UiKit.CloseRect(pop, 36);
+        _ui.TextBig(b, "CHEST FILTER", inner.X, close.Y + 6, Gold, 17);
+        if (_ui.CloseButton(b, close, hit, clicked)) FilterOpen = false;
+        var y = close.Bottom + 8;
+        _ui.TextBig(b, "WHICH CHESTS TO KEEP", inner.X, y, Slate, 14);
+        y += 30;
+
+        // LOWEST TIER   [-]  ANY TIER / TIER N AND UP  [+]
+        _ui.TextBig(b, "LOWEST TIER", inner.X, y, Bone, 14);
         y += 22;
         var minus = new Rectangle(inner.X, y, 34, 34);
         var plus = new Rectangle(inner.Right - 34, y, 34, 34);
@@ -2188,33 +2265,45 @@ public sealed class SoloExpeditionScreen
         _ui.TextCenter(b, KeepMinTier <= 0 ? "ANY TIER" : $"TIER {KeepMinTier} AND UP", inner.Center.X, y + 6, KeepMinTier > 0 ? Gold : Slate);
         if (UiKit.ClickedIn(minus, hit, clicked) && KeepMinTier > 0) { KeepMinTier -= 1; FilterDirty = true; }
         if (UiKit.ClickedIn(plus, hit, clicked) && KeepMinTier < 99) { KeepMinTier += 1; FilterDirty = true; }
-        // Lines 2-4: the slots, as TOGGLES — several at once ("hem bot hem kolye"). Three rows of three:
-        // eight slots and ALL, which clears them.
-        y += 46;
-        _ui.TextBig(b, "GEAR SLOTS THE CHEST IS FOR", inner.X, y, Bone, 15);
-        y += 22;
-        var chipW = (inner.Width - 8) / 3;
-        for (var i = 0; i < SlotChips.Length + 1; i++)
+
+        // The slots, as TOGGLES — several at once ("hem bot hem kolye"). Two rows of four medallions, the
+        // slot art the GEAR screen wears, lit when kept; ALL SLOTS under them clears the lot.
+        y += 48;
+        _ui.TextBig(b, "GEAR SLOTS THE CHEST IS FOR", inner.X, y, Bone, 14);
+        y += 24;
+        string? tip = null;
+        const int cellH = 60;
+        var cellW = inner.Width / 4;
+        for (var i = 0; i < SlotChips.Length; i++)
         {
-            var chip = new Rectangle(inner.X + (i % 3) * (chipW + 4), y + (i / 3) * 34, chipW, 30);
-            if (i == SlotChips.Length)
-            {
-                MiniButton(b, chip, "ALL", hit, KeepSlots.Count == 0);
-                if (UiKit.ClickedIn(chip, hit, clicked) && KeepSlots.Count > 0) { KeepSlots.Clear(); FilterDirty = true; }
-                continue;
-            }
             var slot = SlotChips[i];
-            MiniButton(b, chip, SlotLabel(slot), hit, KeepSlots.Contains(slot));
-            if (UiKit.ClickedIn(chip, hit, clicked))
+            var cell = new Rectangle(inner.X + (i % 4) * cellW, y + (i / 4) * (cellH + 4), cellW, cellH);
+            var lit = KeepSlots.Contains(slot);
+            var hot = cell.Contains(hit);
+            if (lit) _ui.Fill(b, cell, Gold * 0.16f);
+            var box = hot ? new Rectangle(cell.Center.X - 27, cell.Center.Y - 27, 54, 54)
+                          : new Rectangle(cell.Center.X - 25, cell.Center.Y - 25, 50, 50);
+            var tint = lit || hot ? Color.White : new Color(0x8C, 0x86, 0x80);
+            if (!_ui.Icon(b, SlotIconKey(slot), box, tint))
+                _ui.TextCenterBig(b, SlotLabel(slot), cell.Center.X, cell.Center.Y - 8, tint, 13);
+            if (lit) Outline(b, cell, Gold * 0.8f, 2);
+            if (hot) tip = SlotTip(slot) + (lit ? " Click to stop keeping its chests." : " Click to keep the chests made for it.");
+            if (UiKit.ClickedIn(cell, hit, clicked))
             {
                 if (!KeepSlots.Remove(slot)) KeepSlots.Add(slot);
                 FilterDirty = true;
             }
         }
+        y += 2 * (cellH + 4) + 6;
+        var all = new Rectangle(inner.X, y, inner.Width, 30);
+        MiniButton(b, all, "ALL SLOTS", hit, KeepSlots.Count == 0);
+        if (UiKit.ClickedIn(all, hit, clicked) && KeepSlots.Count > 0) { KeepSlots.Clear(); FilterDirty = true; }
         // The last line: what happens to the rest, only while a filter is set.
-        y += 3 * 34 + 6;
+        y += 40;
+        // Slate, not Dim: Dim on the quiet frame's black interior was a line the capture could not read.
         _ui.TextBig(b, KeepMinTier > 0 || KeepSlots.Count > 0 ? "OTHER CHESTS TURN INTO A LITTLE SCRAP" : "EVERY CHEST IS KEPT",
-                    inner.X, y, Dim, 15);
+                    inner.X, y, Slate, 14);
+        if (tip is not null) _ui.HoverTip(b, tip, hit);
     }
 
     private void MiniButton(SpriteBatch b, Rectangle r, string label, Point hit, bool lit = false)
@@ -2792,4 +2881,24 @@ public sealed class SoloExpeditionScreen
         StartRun(hunter);
         _playheadMs = 900f;
     }
+
+    /// <summary>
+    /// DEV: jump the replay <paramref name="seconds"/> into the wave — every beat before that lands
+    /// SILENTLY (health only: no numbers, no effects), so the frame shows the bars where the fight has
+    /// taken them and then the beats that follow, at their real size, over them.
+    /// </summary>
+    /// <remarks>
+    /// A capture lands at frame 60, about a second into the wave, and the `fight` fixture's creatures are
+    /// deliberately thick — so a second in, every bar is still full and a damage number has nothing
+    /// visible to agree with. Seeking a few seconds ahead is the only way to photograph a number beside
+    /// a bar it has already moved (playtest 2026-08-26: "the enemy bars don't drop correctly").
+    /// </remarks>
+    /// <remarks>
+    /// PENDING, not applied here: the host pushes the region's Source down after the fixture runs, and
+    /// <see cref="Update"/> restarts the run on that change — a seek applied at fixture time was thrown
+    /// away with the run on the first frame (three captures at 1, 6 and 14 seconds came back pixel
+    /// identical). UpdateFight applies it on the first live frame of whichever run survives.
+    /// </remarks>
+    public void DevSeek(float seconds) => _devSeekMs = Math.Max(0f, seconds * 1000f);
+    private float? _devSeekMs;
 }
