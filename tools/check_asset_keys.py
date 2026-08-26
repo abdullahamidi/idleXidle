@@ -123,6 +123,16 @@ def main() -> int:
             if key not in wavs:
                 missing.setdefault(key, []).append("Game1.cs (UpdateMusic, per-theme arena bed)")
 
+    # AND THE SOURCE GLYPHS on the vault's chest cards. ChestScreen.SourceGlyphKey builds
+    # source_<element> for the six Source values and falls back to a coloured diamond when the file
+    # is absent — the same quiet success as the class icons below. All six shipped with the item
+    # pack, so any one going missing is a regression, not a pending delivery: every Source named in
+    # Regions.cs must have its glyph.
+    for theme in sorted(themes) if os.path.exists(regions_cs) else []:
+        key = f"source_{theme.lower()}"
+        if key not in have:
+            missing.setdefault(key, []).append("ChestScreen.cs (SourceGlyphKey, per-element chest glyph)")
+
     # AND THE GEAR CLASS ICONS, the second interpolated family. ItemClasses.IconKey builds
     # icon_class_<class> for the five ItemClass values, and UiKit.ClassIcon draws a diamond in the
     # class colour when the file is absent — so, like the arena beds, a missing one does not fail, it

@@ -30,7 +30,14 @@
 #
 #   bash tools/asset-pipeline/capture.sh tour shot_tour_stats_1.png Stats 1
 #
-# RH_SHOT_EXPLAIN=Stats,Map (any Activity names, or SkillSlot2..4) leaves those
+# `vaultfirst` poses a NEW GAME's vault — the one welcome gift SeedNewGame parks —
+# which is the state the Vault's tour describes. `gemtour` poses the first-gem lesson:
+# the forge fixture plus loose gems, with the lesson owed; its fourth argument is
+# unused, so pass the card through RH_SHOT_STEP:
+#
+#   RH_SHOT_STEP=2 bash tools/asset-pipeline/capture.sh gemtour build/shots/gemtour_2.png
+#
+# RH_SHOT_EXPLAIN=Stats,Map (any Activity names, SkillSlot2..4, or FirstGem) leaves those
 # screens' tours (or slot notes) OWED under the rig, which otherwise treats everything
 # as already explained so no tour sits over the thing a fixture is photographing.
 # `tour` sets this for its own screen by itself.

@@ -69,7 +69,16 @@ public sealed record ChestDossier
     /// <summary>What the place is, in the map's own words. Empty when the chest predates region profiles.</summary>
     public required string RegionBlurb { get; init; }
 
+    /// <summary>The gift this chest is, or null for a chest that rolls. See <see cref="GiftChests"/>.</summary>
+    public GiftChestDef? Gift { get; init; }
+
+    /// <summary>Is this a gift — contents decided, nothing to gamble on?</summary>
+    public bool IsGift => Gift is not null;
+
     // ── The player-facing lines. Each states one fact and nothing else. ──────────────────────────
+
+    /// <summary>The headline over the dossier — "RARE CHEST", or a gift's own title.</summary>
+    public string Title => Gift?.Title ?? $"{Grade.ToString().ToUpperInvariant()} CHEST";
 
     /// <summary>The promise: what this chest cannot fail to give.</summary>
     /// <remarks>
@@ -123,13 +132,14 @@ public sealed record ChestDossier
     /// costs the reader the one word that mattered. Two vocabularies for one fact would be worse, so
     /// both forms are derived from the same list.
     /// </remarks>
-    public string RegionShort =>
-        Favoured.Count == 0 ? "no lean" : string.Join(" · ", Favoured.Select(SlotName));
+    public string RegionShort => Gift is { } g ? g.CardContents
+        : Favoured.Count == 0 ? "no lean" : string.Join(" · ", Favoured.Select(SlotName));
 
-    /// <summary>The floor promise at card width.</summary>
-    public string FloorShort => GuaranteedFloor <= Rarity.Common
-        ? "any rarity"
-        : $"{GuaranteedFloor.ToString().ToUpperInvariant()} or better";
+    /// <summary>The floor promise at card width — or, on a gift, the word that it is one.</summary>
+    public string FloorShort => Gift is { } g ? g.CardPromise
+        : GuaranteedFloor <= Rarity.Common
+            ? "any rarity"
+            : $"{GuaranteedFloor.ToString().ToUpperInvariant()} or better";
 
     /// <summary>The run's own tilt, mentioned only when it actually did something.</summary>
     /// <remarks>
@@ -143,10 +153,12 @@ public sealed record ChestDossier
             : $"Won on a bad hunt — {(1f - RunTilt) * 100f:0}% worse odds.";
 
     /// <summary>Every line worth drawing, in reading order, with the empty ones dropped.</summary>
+    /// <remarks>A gift's lines are its own: it has no floor, no range and no lean — it has contents.</remarks>
     public IReadOnlyList<string> Lines
     {
         get
         {
+            if (Gift is { } g) return g.Lines;
             var lines = new List<string> { FloorLine, ContentsLine, MaterialsLine, ElementLine, RegionLine };
             if (RunLine is { } r) lines.Add(r);
             return lines;
@@ -164,6 +176,7 @@ public static class ChestDossiers
         tuning ??= ChestTuning.Default;
 
         var profile = RegionDrops.For(chest.Region);
+        var gift = GiftChests.Get(chest.Gift);
 
         // Mirrors Chests.Open exactly. Every term is read from the same tuning the roll reads, so the
         // two cannot disagree — the alternative (writing "12-18 materials" into a string) is a copy of
@@ -183,7 +196,10 @@ public static class ChestDossiers
             MinMaterials = tuning.BaseMaterials + tierMaterials,
             MaxMaterials = tuning.BaseMaterials + tuning.MaterialsVariance + tierMaterials,
             Favoured = profile.Favoured,
-            RegionBlurb = profile.Blurb,
+            // A gift was not WON anywhere, so it carries no "where it was won" — the region only
+            // lends it an element. A rolled chest keeps its place.
+            RegionBlurb = gift is null ? profile.Blurb : "",
+            Gift = gift,
         };
     }
 
@@ -216,8 +232,10 @@ public static class ChestDossiers
     public static IReadOnlyList<(Chest Sample, int Count)> Stacked(IEnumerable<Chest> chests)
     {
         ArgumentNullException.ThrowIfNull(chests);
+        // The gift key is part of the identity: a welcome gift must never stack under a Common tier-1
+        // chest from the same region, because the two cards would not read the same.
         return BestFirst(chests)
-            .GroupBy(c => (c.Rarity, c.Tier, c.Element, c.Region, Tilt: MathF.Round(c.RunTilt, 2)))
+            .GroupBy(c => (c.Rarity, c.Tier, c.Element, c.Region, Tilt: MathF.Round(c.RunTilt, 2), c.Gift))
             .Select(g => (g.First(), g.Count()))
             .ToList();
     }

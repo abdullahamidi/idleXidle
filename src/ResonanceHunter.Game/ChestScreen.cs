@@ -171,9 +171,28 @@ public sealed class ChestScreen
     private static Rectangle Card(int visible) =>
         new(GridPanel.X + 46 + visible % Cols * 290, GridPanel.Y + 116 + visible / Cols * 230, 270, 210);
 
-    /// <summary>The "?" corner chip — drawn 30px, hit-tested 46px (Fitts's Law padding, house rule).</summary>
-    private static Rectangle QChip(Rectangle card) => new(card.Right - 44, card.Y + 12, 30, 30);
-    private static Rectangle QHit(Rectangle card) => new(card.Right - 52, card.Y + 4, 46, 46);
+    /// <summary>
+    /// The PEEK icon in the card's corner — a glass over a chest (icon_peek), the button that reads the
+    /// dossier. Drawn 32px at rest, a touch larger under the mouse; hit-tested 46px (Fitts's Law padding,
+    /// house rule). Inset 16px from the card's right edge and 14px from its top, so it sits IN the corner
+    /// rather than on it (playtest 2026-08-26: the old "?" hugged the edge and had no icon).
+    /// </summary>
+    private const int PeekSize = 32;
+    private static Rectangle PeekIcon(Rectangle card) => new(card.Right - 16 - PeekSize, card.Y + 14, PeekSize, PeekSize);
+    private static Rectangle QHit(Rectangle card)
+    {
+        var p = PeekIcon(card);
+        return new Rectangle(p.Center.X - 23, p.Center.Y - 23, 46, 46);
+    }
+
+    /// <summary>
+    /// The chest's ELEMENT, as the source glyph (source_body … source_spirit) under the peek icon. The
+    /// name appears beside it while the pointer rests on it — the card carries no element label.
+    /// </summary>
+    private static Rectangle ElementGlyph(Rectangle card) => new(card.Right - 16 - 32, card.Y + 52, 32, 32);
+
+    /// <summary>The asset key of an element's glyph — <c>source_nature</c>. Files under ItemsLoot/glyphs/source.</summary>
+    private static string SourceGlyphKey(Source e) => $"source_{e.ToString().ToLowerInvariant()}";
 
     /// <summary>
     /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
@@ -181,7 +200,8 @@ public sealed class ChestScreen
     /// </summary>
     /// <remarks>
     /// The cards' light is the first row, which is the only row a first visit can have — the Vault opens
-    /// on the first chest held. The ? is the first card's chip, grown a little so the ring reads.
+    /// on the first chest held, and a new game holds the welcome gift from its first frame. The second
+    /// card lights the first card's peek icon, grown a little so the ring reads.
     /// </remarks>
     internal static Rectangle[] Spotlights(TourTarget target)
     {
@@ -190,8 +210,10 @@ public sealed class ChestScreen
             case TourTarget.ChestCards:
                 return new[] { new Rectangle(GridPanel.X + 30, GridPanel.Y + 100, GridPanel.Width - 60, 242) };
             case TourTarget.ChestQuestion:
-                var q = QHit(Card(0));
-                q.Inflate(6, 6);
+                // The icon itself, not its padded hit box: the hit box reaches down over the element
+                // glyph, and a ring around both would point the card at two things.
+                var q = PeekIcon(Card(0));
+                q.Inflate(8, 8);
                 return new[] { q };
             case TourTarget.VaultButtons:
                 return new[] { new Rectangle(GridPanel.Right - 780, GridPanel.Y + 14, 744, 76) };
@@ -317,7 +339,7 @@ public sealed class ChestScreen
         {
             _ui.TextBig(b, "No chests. Bosses drop them — about one boss in five.",
                         GridPanel.X + 46, GridPanel.Y + 156, Dim, UiTypography.Body);
-            _ui.TextBig(b, "When one arrives: click the chest to open it. Hover the ? to see what is inside.",
+            _ui.TextBig(b, "When one arrives: click the chest to open it. Rest the pointer on the small glass to see what is inside.",
                         GridPanel.X + 46, GridPanel.Y + 190, Dim, UiTypography.Body);
             DrawTrader(b, hit, clicked && !_modalOpenedNow);
             DrawInspect(b, hit, clicked && !_modalOpenedNow);
@@ -403,10 +425,21 @@ public sealed class ChestScreen
                 _ui.TextBig(b, $"{stackCount} THE SAME", card.X + 140, card.Y + 84, Gold, UiTypography.Secondary);
             }
 
-            // The element as a coloured chip — an identity, not a word competing with the grade.
+            // The element as its SOURCE GLYPH — the same art the skills and the map use for it, so the
+            // card says "Nature" the way the rest of the game does (playtest 2026-08-26: "the chests have
+            // colour icons on them; they should be element icons"). The coloured diamond stays only as
+            // the fallback for a glyph that is not on disk. The word appears on hover, since the card
+            // has no element label of its own.
             if (chest.Element is { } e)
-                _ui.Diamond(b, new Rectangle(card.Right - 44, card.Y + 52, 24, 24),
-                            SourceColor.GetValueOrDefault(e, Slate));
+            {
+                var glyph = ElementGlyph(card);
+                if (!_ui.Icon(b, SourceGlyphKey(e), glyph, Color.White))
+                    _ui.Diamond(b, new Rectangle(glyph.X + 4, glyph.Y + 4, glyph.Width - 8, glyph.Height - 8),
+                                SourceColor.GetValueOrDefault(e, Slate));
+                if (glyph.Contains(hit) && !ModalOpen)
+                    _ui.TextRightBig(b, e.ToString().ToUpperInvariant(), glyph.X - 8, glyph.Y + 7,
+                                     SourceColor.GetValueOrDefault(e, Bone), UiTypography.Secondary);
+            }
 
             // THE PROMISE, on the card. Slate for the gamble case, not Dim — "there isn't one" is the
             // fact a player most needs before spending the click.
@@ -416,15 +449,25 @@ public sealed class ChestScreen
             _ui.TextBig(b, _ui.ShortenBig(d.RegionShort, card.Width - 32, UiTypography.Secondary),
                         card.X + 16, card.Y + 182, Slate, UiTypography.Secondary);
 
-            // The "?" corner chip — the whole dossier lives behind it, on a hover delay.
-            var q = QChip(card);
+            // The PEEK icon in the corner — the whole dossier lives behind it, on a hover delay. The same
+            // hover pattern as UiKit.CloseButton: the medallion grows two pixels a side and goes to full
+            // white under the mouse. The old bordered "?" square is the fallback if the art is missing.
+            var q = PeekIcon(card);
             var qHot = idx == _qIdx;
-            _ui.Fill(b, q, new Color(0x14, 0x10, 0x1A, 0xE0));
-            _ui.Fill(b, new Rectangle(q.X, q.Y, q.Width, 2), qHot ? Bone : Dim);
-            _ui.Fill(b, new Rectangle(q.X, q.Bottom - 2, q.Width, 2), qHot ? Bone : Dim);
-            _ui.Fill(b, new Rectangle(q.X, q.Y, 2, q.Height), qHot ? Bone : Dim);
-            _ui.Fill(b, new Rectangle(q.Right - 2, q.Y, 2, q.Height), qHot ? Bone : Dim);
-            _ui.TextCenter(b, "?", q.Center.X, q.Y + 4, qHot ? Bone : Slate);
+            if (_ui.Assets.Get("icon_peek") is { } peek)
+            {
+                var box = qHot ? new Rectangle(q.X - 2, q.Y - 2, q.Width + 4, q.Height + 4) : q;
+                _ui.SpriteFit(b, peek, box, qHot ? Color.White : new Color(0xE0, 0xD8, 0xC8));
+            }
+            else
+            {
+                _ui.Fill(b, q, new Color(0x14, 0x10, 0x1A, 0xE0));
+                _ui.Fill(b, new Rectangle(q.X, q.Y, q.Width, 2), qHot ? Bone : Dim);
+                _ui.Fill(b, new Rectangle(q.X, q.Bottom - 2, q.Width, 2), qHot ? Bone : Dim);
+                _ui.Fill(b, new Rectangle(q.X, q.Y, 2, q.Height), qHot ? Bone : Dim);
+                _ui.Fill(b, new Rectangle(q.Right - 2, q.Y, 2, q.Height), qHot ? Bone : Dim);
+                _ui.TextCenter(b, "?", q.Center.X, q.Y + 5, qHot ? Bone : Slate);
+            }
 
             // OPEN, fading in over the lid while hovered — the label the click fulfils. Gold is the
             // reserved commit colour and this card IS the commit trigger, the one place it belongs.
@@ -689,8 +732,9 @@ public sealed class ChestScreen
         _ui.Fill(b, new Rectangle(panel.X, panel.Y, panel.Width, 3), grade);
         _ui.Fill(b, new Rectangle(panel.X, panel.Bottom - 2, panel.Width, 2), grade * 0.5f);
 
-        _ui.TextBig(b, $"{chest.Rarity.ToString().ToUpperInvariant()} CHEST — WHAT MIGHT BE INSIDE",
-                    panel.X + 28, panel.Y + 22, grade, UiTypography.Body);
+        // Just the grade and the word — "RARE CHEST" — or a gift's own title. The old " — WHAT MIGHT
+        // BE INSIDE" tail said what the panel under it already shows (playtest 2026-08-26).
+        _ui.TextBig(b, d.Title, panel.X + 28, panel.Y + 22, grade, UiTypography.Body);
 
         var ty = panel.Y + 64;
         foreach (var (line, bullet) in blocks)

@@ -4,6 +4,15 @@ using ResonanceHunter.Core.Loot;
 
 namespace ResonanceHunter.Core.Economy;
 
+/// <summary>The socket rules' knobs. Data-driven per the coding standard.</summary>
+public sealed record SocketTuning
+{
+    public static readonly SocketTuning Default = new();
+
+    /// <summary>Is the player's very first gem set for nothing? See <see cref="GemCraft.SocketCost(Rarity, bool, SocketTuning?)"/>.</summary>
+    public bool FirstGemFree { get; init; } = true;
+}
+
 /// <summary>
 /// STAT GEMS: socketable stones with a random stat and their own level.
 /// </summary>
@@ -95,6 +104,25 @@ public static class GemCraft
         Rarity.Epic => 120,
         _ => 240,
     };
+
+    /// <summary>
+    /// What THIS player pays to set a gem: nothing for their first gem ever, the full price after.
+    /// </summary>
+    /// <param name="freeSocketUsed">Has the player set a gem before? Persisted as <c>SaveGame.FreeSocketUsed</c>.</param>
+    /// <param name="tuning">The rule's knob; the default gives the first gem free.</param>
+    /// <remarks>
+    /// Playtest 2026-08-26: "When a gem drops, take the player to the socket screen and show setting
+    /// the gem. Make it free." A first gem arrives long before the wallet holds sixty Essence, so the
+    /// lesson it is meant to teach — a gem goes INTO an item — was a lesson the price refused. The
+    /// first one is free so the lesson can be performed the moment it is taught; every later socket
+    /// is the Essence sink it always was.
+    /// </remarks>
+    public static int SocketCost(Rarity host, bool freeSocketUsed, SocketTuning? tuning = null)
+        => IsFirstGemFree(freeSocketUsed, tuning) ? 0 : SocketCost(host);
+
+    /// <summary>Is the player's next gem their free first one?</summary>
+    public static bool IsFirstGemFree(bool freeSocketUsed, SocketTuning? tuning = null)
+        => (tuning ?? SocketTuning.Default).FirstGemFree && !freeSocketUsed;
 
     /// <summary>Mint a fresh gem at a loot tier. Level follows depth; the frame grade follows the level.</summary>
     public static ItemInstance MintGem(int tier, Random rng)
