@@ -977,7 +977,7 @@ public sealed class SoloExpeditionScreen
                     // budgeted against importance, so the loud VFX are reserved for the SKILL casts below.
                     _champLunge = 1f;
                     _nextChampStrikeMs = _replay.NextChampionStrikeAfter(e.AtMs);
-                    Sound?.Play("sfx_hit", 0.38f);   // the blow lands — soft, it fires constantly (0.55 wore testers out)
+                    Sound?.Play("sfx_hit", 0.38f, vary: 0.06f);   // the blow lands — it fires constantly, so it is never quite the same twice
                     if ((_strikeCount++ & 1) == 0)   // every other auto-hit: a number and a small, quiet puff
                     {
                         SpawnDamage(HitDamage(1f), false);
@@ -989,7 +989,7 @@ public sealed class SoloExpeditionScreen
                     _enemyLunge = 1f;
                     _enemySinceHit = 0f;
                     _nextEnemyStrikeMs = _replay.NextEnemyStrikeAfter(e.AtMs);
-                    Sound?.Play("sfx_hit", 0.30f, pitch: -0.25f);   // same thud pitched down: taking, not giving
+                    Sound?.Play("sfx_hit", 0.30f, pitch: -0.25f, vary: 0.06f);   // same thud pitched down: taking, not giving
                     _vfx.Play("fx_hit", ChampBox.Center.X, ChampBox.Center.Y + 40, scale: 2, fps: 14f, tint: Ember);
                     break;
                 case BattleEventKind.Skill:
@@ -1006,8 +1006,8 @@ public sealed class SoloExpeditionScreen
                     for (var k = bi + 1; k < batch.Count && batch[k].AtMs <= e.AtMs + 1; k++)
                         if (batch[k].Kind == BattleEventKind.Strike) { castTarget = batch[k].Slot; break; }
                     PlayFormVfx(form, (Source)e.Slot, castTarget);
-                    Sound?.Play("sfx_cast", 0.42f);
-                    if (form == Form.Trap) Sound?.Play("sfx_crit", 0.46f);   // the crit-graded blow (SpawnDamage's crit flag below)
+                    Sound?.Play("sfx_cast", 0.42f, vary: 0.06f);
+                    if (form == Form.Trap) Sound?.Play("sfx_crit", 0.46f, vary: 0.06f);   // the crit-graded blow (SpawnDamage's crit flag below)
                     SpawnDamage(HitDamage(form == Form.Trap ? 3f : 2f), form == Form.Trap);   // skills hit big
                     break;
                 case BattleEventKind.Heal:
@@ -1019,7 +1019,7 @@ public sealed class SoloExpeditionScreen
                     _vfx.Play("fx_shield", ChampBox.Center.X, ChampBox.Center.Y - 20, scale: 4, fps: 12f, tint: Gold);
                     break;
                 case BattleEventKind.Down:
-                    Sound?.Play("sfx_champ_down", 0.62f);
+                    Sound?.Play("sfx_champ_down", 0.62f, vary: 0.03f);
                     _vfx.Play("fx_death", ChampBox.Center.X, ChampBox.Center.Y, scale: 4, fps: 9f);
                     break;
                 case BattleEventKind.EnemyDown:
@@ -1028,7 +1028,10 @@ public sealed class SoloExpeditionScreen
                     // body half a second later — after the fall, not instead of it. Playtest: "düşman
                     // ölüyor ama önünde bir duman animasyonu çıkıyor, herkesin ölme animasyonu olması lazım."
                     _diedAt[e.Slot] = _anim;
-                    Sound?.Play("sfx_enemy_down", 0.36f, pitch: _isBossWave ? -0.35f : 0f);   // a boss falls deeper
+                    // A boss has its own fall (sfx_boss_down: deeper, longer, a second thump when the mass lands)
+                    // rather than the creature's death pitched down — a pitched-down crumble is a slower crumble.
+                    if (_isBossWave) Sound?.Play("sfx_boss_down", 0.46f, vary: 0.03f);
+                    else Sound?.Play("sfx_enemy_down", 0.36f, vary: 0.06f);
                     var (dx, dy) = EnemyPoint(e.Slot, 0.55f);
                     // A boss falling is the loudest beat in the fight: the starburst AND the plume.
                     if (_isBossWave) _vfx.Play("fx_crit", dx, dy - 40, scale: EnemyScale(e.Slot, 1.2f), fps: 10f, tint: Gold);
