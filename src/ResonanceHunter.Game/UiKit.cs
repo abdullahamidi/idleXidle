@@ -556,6 +556,31 @@ public sealed class UiKit
     /// One quad is one draw, its thickness is perpendicular so a diagonal is no fatter than a
     /// horizontal, and the width can be fractional — which is what lets it scale with the camera.
     /// </remarks>
+    /// <summary>
+    /// A cooldown sweep over a round icon: the part of the circle still WAITING is shaded, from the
+    /// moving edge clockwise round to twelve o'clock, and the shade unwinds clockwise as
+    /// <paramref name="ready"/> grows from 0 to 1 — the clock-face wipe every action game uses.
+    /// Drawn as a fan of thin radial strokes from one pixel texture, so it batches with everything else.
+    /// Nothing is drawn at ready ≥ 1 (the icon is lit) and the whole disc is shaded at ready ≤ 0.
+    /// </summary>
+    public void CooldownSweep(SpriteBatch b, Vector2 centre, float radius, float ready, Color shade, Color edge)
+    {
+        ready = Math.Clamp(ready, 0f, 1f);
+        if (ready >= 1f) return;
+        const float step = MathF.PI / 72f;                     // 2.5° strokes
+        var from = -MathF.PI / 2f + ready * MathF.Tau;          // the moving edge (twelve o'clock + the elapsed share)
+        var to = -MathF.PI / 2f + MathF.Tau;                     // round to twelve o'clock again
+        var thick = MathF.Max(2f, radius * step * 1.6f);
+        for (var a = from; a < to; a += step)
+        {
+            var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
+            LineSeg(b, centre, centre + dir * radius, thick, shade);
+        }
+        // the edge that moves, so the eye can read the sweep even when it is slow
+        var e = new Vector2(MathF.Cos(from), MathF.Sin(from));
+        LineSeg(b, centre, centre + e * radius, 2f, edge);
+    }
+
     public void LineSeg(SpriteBatch b, Vector2 a, Vector2 c, float thickness, Color col)
     {
         var d = c - a;

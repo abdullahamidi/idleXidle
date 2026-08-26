@@ -2477,14 +2477,13 @@ public sealed class SoloExpeditionScreen
                 // Removing the speed control gave this rail its height back, and the sensible use of it
                 // is to let the one line that says what the skill DOES actually be read. Wrapped rather
                 // than shortened: "ONE HEAVY BL…" is a fragment, and a fragment teaches nothing.
-                // A four-pixel line under the medallion, filling toward the next cast. It sits in the gap
-                // the label already leaves, so it costs no height — and a full bar plus a lit medallion
-                // is the moment the callout in the arena fires, which is what ties the two together.
-                var track = new Rectangle(box.X, box.Bottom + 2, RailContentW, 4);
-                _ui.Fill(b, track, new Color(0x22, 0x1C, 0x30));
-                if (ready > 0f)
-                    _ui.Fill(b, new Rectangle(track.X, track.Y, (int)(track.Width * ready), track.Height),
-                             flash > 0f ? Gold : sc * 0.85f);
+                // THE COOLDOWN IS ON THE ICON, not under it (playtest 2026-08-26: "the bars confused me —
+                // remove the progress bar; while a skill waits, wind a cooldown clockwise over its icon").
+                // The waiting share of the medallion is shaded and the shade unwinds clockwise as the
+                // skill comes ready; a lit medallion is a ready skill; the gold halo is the cast itself.
+                if (flash <= 0f)
+                    _ui.CooldownSweep(b, new Vector2(box.Center.X, box.Center.Y), box.Width * 0.36f, ready,
+                                      new Color(0x0C, 0x09, 0x16, 0xB4), Bone * 0.8f);
                 if (flash > 0f)
                 {
                     var halo = new Rectangle(box.X - 3, box.Y - 3, box.Width + 6, box.Height + 6);
