@@ -562,3 +562,27 @@ second; base value 0, so a fresh hunter regenerates nothing until trained). It f
 across exactly that window — a faster build casts and animates faster, and no cast begins before the
 last clip ends.
 
+
+## Addendum 2026-08-26 (round four) — the welcome chest, the first free gem, honest damage numbers, one frame
+
+- **The welcome chest.** A new game starts with one gift chest in the VAULT (`GiftChests`, `Chest.Gift`):
+  a Common, item level 1 weapon of the starting champion's class — for THE SEEKER, a plain NATURE
+  BLADE from the Verdant Hollow. It opens the same on every seed and takes nothing from the random
+  source. Old saves receive nothing. The VAULT's first-visit tour and the "open a chest" tutorial rung
+  are therefore true from minute one.
+- **The first gem is free.** `GemCraft.SocketCost` returns 0 until `SaveGame.FreeSocketUsed`; a save
+  from before the field that already holds a socketed gem counts as used. The first gem drop raises a
+  toast, a NEW mark on FORGE and a two-card tour that opens the SOCKET tab (`Onboarding.GemTour`).
+- **The damage number is the simulation's.** The hunt printed an invented figure (power × a multiplier
+  × jitter, e.g. "-185" on wave one) at the row's centre; it now prints the event's amount over the
+  creature that took it. The bars were always right.
+- **Second champions.** THE THORNWALL (Bulwark) is earned by holding wave 80 in Marrow Wastes — an
+  endurance hold no conquest can satisfy (its old "conquer every region" fired one region after the
+  first Bulwark's own conquest). THE MAGPIE takes the thirty-chest quest; THE QUIVER takes wave 60 in
+  the Verdant Hollow.
+- **One frame standard.** In-screen panels wear the muted brown frame (`PanelQuiet`); the gold
+  nine-slice is for modals only. The hunt's chest filter folds into a row that opens a popover.
+- **Battle cues.** Hit and death sounds are layered impacts (sub thump with a pitch drop, band-passed
+  body, transient, short tail) with per-play pitch variation and a per-cue cooldown; the boss has its
+  own death cue. Measured: the hit's spectral centroid fell from 764 to 333 Hz, its decay grew from
+  54 to 194 ms (`make_battle_sfx.py --measure`).
