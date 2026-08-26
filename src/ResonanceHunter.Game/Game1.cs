@@ -656,6 +656,8 @@ public class Game1 : Game
         // correct, present, and not enough — which is why the guard for it is now a test rather than a
         // paragraph.
         _pendingChestsOpened = save.ChestsOpened;
+        // Parked for the same reason: the Forge owns the flag. Core decides what an old save means.
+        _pendingFreeSocketUsed = SaveSystem.RestoreFreeSocketUsed(save);
         _chestKeepMinTier = save.ChestKeepMinTier;
         _traderWeek = save.TraderWeekStamp;
         _traderBought.Clear();
@@ -676,6 +678,7 @@ public class Game1 : Game
                 Element = Enum.TryParse<Source>(s.Element, out var e) ? e : null,   // unknown element → inert, never a throw
                 Region = s.Region,                            // null on a pre-profile save → uniform loot, as before
                 RunTilt = s.RunTilt <= 0f ? 1f : s.RunTilt,   // a pre-tilt save reads 0; neutral is 1
+                Gift = s.Gift,                                // null on every save from before gifts
             })
             .ToList();
         _pendingWorn = new Dictionary<GearSlot, string?>
@@ -787,6 +790,14 @@ public class Game1 : Game
         // frame one is the fight, and watching it is genuinely the job.
         _bootMessage = "YOUR CHAMPION IS ALREADY FIGHTING\nWATCH THE FIRST WAVES — SCREENS OPEN AS YOU PLAY";
         _bootColor = Gold;
+
+        // THE WELCOME GIFT: one chest in the vault from the first frame (playtest 2026-08-26: "the
+        // VAULT tutorial talks about chests but there are none"). Its contents are catalogue data, not
+        // a roll — the starter's plainest weapon — so the vault's first visit, its tour and the guide's
+        // "open a chest" rung are all true in the first minute. PARKED like every restored thing: the
+        // Forge that holds the pile is built in LoadContent, and this runs from Initialize. Only here,
+        // on a NEW game — an existing save's vault is whatever it saved, never a retroactive gift.
+        _pendingChests = GiftChests.NewGameChests().ToList();
     }
 
     private List<ItemInstance>? _pendingInventory;
@@ -794,6 +805,14 @@ public class Game1 : Game
     private List<RunReport>? _pendingRunLog;
     private Dictionary<GearSlot, string?> _pendingWorn = new();
     private int _pendingChestsOpened;
+    private bool _pendingFreeSocketUsed;
+
+    /// <summary>Gems held at the last frame — the edge that announces the FIRST one. Seeded at load, so a
+    /// returning player's gems are not "news".</summary>
+    private int _gemsHeldLast;
+
+    /// <summary>Every gem the player holds: loose in the bag, or set into an item.</summary>
+    private int GemsHeld() => _forge?.Inventory.Sum(i => GemCraft.IsGem(i) ? 1 : i.Gems.Count) ?? 0;
 
     private void Save()
     {
@@ -845,6 +864,7 @@ public class Game1 : Game
             QuestsDone = _characters.SaveQuests().ToList(),
             RunsWithVowKept = _runsWithVowKept,
             ChestsOpened = _forge.ChestsOpened,
+            FreeSocketUsed = _forge.FreeSocketUsed,
             ChestKeepMinTier = _chestKeepMinTier,
             TraderWeekStamp = _traderWeek,
             TraderBoughtSlots = _traderBought.ToList(),
@@ -860,7 +880,7 @@ public class Game1 : Game
                 .Select(c => new SavedChest
                 {
                     Rarity = (int)c.Rarity, Tier = c.Tier, Element = c.Element?.ToString(),
-                    Region = c.Region, RunTilt = c.RunTilt,
+                    Region = c.Region, RunTilt = c.RunTilt, Gift = c.Gift,
                 })
                 .ToList(),
         };
@@ -952,6 +972,7 @@ public class Game1 : Game
         _pendingRunLog = null;
         _pendingWorn = new Dictionary<GearSlot, string?>();
         _pendingChestsOpened = 0;
+        _pendingFreeSocketUsed = false;   // a fresh game's first gem is free again
 
         // The teaching layer starts over with the game: the intro is due again, nothing is explained,
         // no tile has been visited, and no notice is waiting.
@@ -1135,6 +1156,9 @@ public class Game1 : Game
         }
         if (_pendingChests is not null) _forge.RestoreChests(_pendingChests);
         _forge.RestoreChestsOpened(_pendingChestsOpened);
+        _forge.FreeSocketUsed = _pendingFreeSocketUsed;
+        // The gems a returning player already holds are not news; only the NEXT one is announced.
+        _gemsHeldLast = GemsHeld();
         // The keep-filter (TAKE ONLY, on the HUNT screen since 2026-08-23), seeded ONCE — the screen
         // owns it from here; the host reads it back on FilterDirty (UpdateExpedition).
         _expedition.KeepMinTier = _chestKeepMinTier;
@@ -1176,10 +1200,14 @@ public class Game1 : Game
                 .ToList();
             if (Environment.GetEnvironmentVariable("RH_SHOT_MODE") == "tour" && ShotTab is { } tab)
                 owed.Add(Onboarding.ScreenKey(tab));
+            // `gemtour` dresses the Forge with gems and owes the first-gem lesson, the way `tour` owes
+            // a screen's own.
+            if (Environment.GetEnvironmentVariable("RH_SHOT_MODE") == "gemtour") owed.Add(Onboarding.GemTourKey);
             foreach (var a in Enum.GetValues<Activity>())
                 if (!owed.Contains(Onboarding.ScreenKey(a))) _explained.Add(Onboarding.ScreenKey(a));
             for (var slot = 2; slot <= Build.SkillSlots; slot++)
                 if (!owed.Contains(Onboarding.SlotKey(slot))) _explained.Add(Onboarding.SlotKey(slot));
+            if (!owed.Contains(Onboarding.GemTourKey)) _explained.Add(Onboarding.GemTourKey);
             return;
         }
 
@@ -1385,8 +1413,8 @@ public class Game1 : Game
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
                 or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightfilter" or "traitlit" or "traitterm" or "traitterminal"
-                or "roster" or "rosterlocked" or "weave" or "vault" or "attune" or "attuned" or "trader"
-                or "intro")
+                or "roster" or "rosterlocked" or "weave" or "vault" or "vaultfirst" or "attune" or "attuned" or "trader"
+                or "gemtour" or "intro")
             {
                 _showTitle = false;
                 // (`expedition` and `vow` used to seed the retired creature den here; since its removal
@@ -1395,7 +1423,7 @@ public class Game1 : Game
                 // (the idle loop drops items only on boss waves, which a 1-second shot won't reach).
                 // RH_SHOT_T poses the chest reveal at a chosen instant — the shake, the burst, the card.
                 // Read BEFORE the fixture runs; applied after it opens a chest, or the open overwrites it.
-                if (sm == "lootforge" && Environment.GetEnvironmentVariable("RH_SHOT_T") is { } rt
+                if (sm is "lootforge" or "vaultfirst" && Environment.GetEnvironmentVariable("RH_SHOT_T") is { } rt
                     && float.TryParse(rt, System.Globalization.CultureInfo.InvariantCulture, out var revealT))
                     _pendingRevealPose = revealT;
 
@@ -1759,9 +1787,16 @@ public class Game1 : Game
                     _world.Conquer("cinderworks");
                     SetActiveRegion("umbral_reach");
                 }
-                if (sm is "forge" or "reforge")
+                // GEMTOUR is the forge fixture plus loose gems, with the first-gem lesson owed (see
+                // SeedExplained) — so the lesson's two cards can be posed over the furniture they name.
+                if (sm is "forge" or "reforge" or "gemtour")
                 {
                     _showForge = true;
+                    if (sm == "gemtour")
+                    {
+                        var gemRng = new Random(11);
+                        _forge.AddLoot(new[] { GemCraft.MintGem(4, gemRng), GemCraft.MintGem(7, gemRng) });
+                    }
                     // Seed a spread of loot so SALVAGE has content, and a hero item the UPGRADE view poses.
                     var rar = new[] { Rarity.Common, Rarity.Uncommon, Rarity.Rare, Rarity.Epic, Rarity.Legendary };
                     var types = new[] { ItemBaseType.Weapon, ItemBaseType.Charm, ItemBaseType.Material, ItemBaseType.AbilityFocus };
@@ -1837,6 +1872,21 @@ public class Game1 : Game
                     _hunter.AddMaterial(Material.Core, 20);
                     _deepestEver = 18;
                     _chests.DevOpenTrader();
+                }
+
+                // VAULTFIRST is a NEW GAME's vault: exactly what SeedNewGame parks — the one welcome
+                // gift — so the first visit the Vault's tour describes can be looked at, not assumed.
+                if (sm == "vaultfirst")
+                {
+                    _showChests = true;
+                    foreach (var gift in GiftChests.NewGameChests()) _forge.AddChest(gift);
+                    // RH_SHOT_OPEN poses the gift's REVEAL — the one reveal whose contents are known
+                    // in advance, so the card can be checked against the catalogue.
+                    if (Environment.GetEnvironmentVariable("RH_SHOT_OPEN") is not null)
+                    {
+                        _forge.DevOpenOneChest(_hunter);
+                        if (_pendingRevealPose is { } gp) _forge.DevPoseReveal(gp);
+                    }
                 }
 
                 if (sm == "vault")
@@ -2001,6 +2051,31 @@ public class Game1 : Game
         if (!_tourActive && !_showHelp && !_showSettings && !_forge.RevealActive && !_expedition.LogOpen
             && Onboarding.TourDue(ScreenActivity(), _explained) is not null)
             BeginTour(ScreenActivity());
+
+        // THE FIRST GEM. Its lesson is a second, smaller tour of the FORGE, owed from the moment a gem
+        // is held (derived — Onboarding.GemTourDue) and given the first time the Forge is on top after
+        // that, once its own tour is done. It arrives with the SOCKET tab open, so the light falls on
+        // the tab the card names and the bag beside it lists the gem.
+        var gemsHeld = GemsHeld();
+        if (!_tourActive && !_showHelp && !_showSettings && !_forge.RevealActive && !_expedition.LogOpen
+            && ScreenActivity() == Activity.Forge && _showForge
+            && Onboarding.GemTourDue(gemsHeld, _explained) is { } gemKey)
+        {
+            _forge.RequestSocketTab();
+            BeginTour(Activity.Forge, Onboarding.GemTour, gemKey);
+        }
+
+        // And the moment the first one DROPS, a line at the top says where it goes — never a panel —
+        // and the FORGE tile earns its NEW mark back even if the Forge was visited earlier this session.
+        if (gemsHeld > _gemsHeldLast && Onboarding.GemTourDue(gemsHeld, _explained) is not null)
+        {
+            PostNotice("A GEM DROPPED",
+                       GemCraft.IsFirstGemFree(_forge.FreeSocketUsed)
+                           ? "THE FORGE'S SOCKET TAB SETS IT INTO AN ITEM — YOUR FIRST GEM IS FREE"
+                           : "THE FORGE'S SOCKET TAB SETS IT INTO AN ITEM");
+            _visited.Remove(Activity.Forge);
+        }
+        _gemsHeldLast = gemsHeld;
 
         // Escape backs out of an open panel before it quits the game. Escape is the reflex for "get me
         // out of this menu" — and in fullscreen it is the reflex for "give me my desktop back". Wiring
@@ -2766,11 +2841,18 @@ public class Game1 : Game
     /// RH_SHOT_STEP=n (capture.sh's card argument; RH_SHOT_T is read too, for the `intro` mode's third
     /// argument) poses card n, counted from 1. The rig poses a card by number; it never plays.
     /// </remarks>
-    private void BeginTour(Activity screen)
+    private void BeginTour(Activity screen) => BeginTour(screen, Onboarding.TourFor(screen), Onboarding.ScreenKey(screen));
+
+    /// <summary>The explained-list key the running tour writes when it ends — the screen's, or a lesson's own.</summary>
+    private string _tourKey = "";
+
+    /// <summary>Start any tour over a screen: its own cards, or a lesson's (the first-gem tour) under its own key.</summary>
+    private void BeginTour(Activity screen, IReadOnlyList<TourStep> cards, string key)
     {
         _tourActive = true;
         _tourScreen = screen;
-        _tour = Onboarding.TourFor(screen);
+        _tour = cards;
+        _tourKey = key;
         _tourStep = 0;
         var posed = Environment.GetEnvironmentVariable("RH_SHOT_STEP")
                     ?? Environment.GetEnvironmentVariable("RH_SHOT_T");
@@ -2787,7 +2869,7 @@ public class Game1 : Game
     private void EndTour()
     {
         _tourActive = false;
-        _explained.Add(Onboarding.ScreenKey(_tourScreen));
+        _explained.Add(_tourKey.Length > 0 ? _tourKey : Onboarding.ScreenKey(_tourScreen));
         _visited.Add(_tourScreen);
         if (_tourScreen == Activity.Hunt) _introSeen = true;
         Save();
@@ -2829,7 +2911,8 @@ public class Game1 : Game
     private void DrawGuideStrip(TutorialStep step)
     {
         var r = GuideBannerRect(step);
-        var body = _ui.WrapBig(Tutorial.Body(step), r.Width - 44, UiTypography.Secondary);
+        // The facts-aware body: the chest rung reads differently while a chest is actually waiting.
+        var body = _ui.WrapBig(Tutorial.Body(step, GuideFacts()), r.Width - 44, UiTypography.Secondary);
 
         _ui.Fill(_batch, r, new Color(0x10, 0x0D, 0x18, 0xEE));
         _ui.Fill(_batch, new Rectangle(r.X, r.Y, 5, r.Height), NavGold);
@@ -2852,7 +2935,7 @@ public class Game1 : Game
     private Rectangle GuideBannerRect(TutorialStep step)
     {
         const int width = 980;
-        var body = _ui.WrapBig(Tutorial.Body(step), width - 44, UiTypography.Secondary);
+        var body = _ui.WrapBig(Tutorial.Body(step, GuideFacts()), width - 44, UiTypography.Secondary);
         var height = 58 + body.Count * 22;
         return new Rectangle((1920 - width) / 2, 1080 - height - 26, width, height);
     }
@@ -2982,6 +3065,9 @@ public class Game1 : Game
     {
         if (_noticeTimer <= 0f || _notice.Length == 0) return;
         if (_showTitle || _showHelp || _showSettings) return;
+        // Never over a tour: the first-gem notice sits exactly where the Forge's tab strip is, and a
+        // toast across a spotlight is two lessons at once. The tour IS the notice's payload.
+        if (_tourActive) return;
 
         var fade = Math.Clamp(_noticeTimer / 1.0f, 0f, 1f);
         var parts = _notice.Split('\n');
@@ -4833,6 +4919,7 @@ public class Game1 : Game
 
         var active = NavActive();
         var navFacts = GuideUnlockFacts();   // once per frame, not once per tile
+        var navGems = GemsHeld();            // the first-gem lesson marks the FORGE tile the same way
         for (var i = 0; i < Nav.Length; i++)
         {
             var r = NavHexRect(i);
@@ -4886,7 +4973,9 @@ public class Game1 : Game
             // drops its mark even with the banner still open — the mark means "you have not looked".
             var activity = NavActivity[i];
             var isNew = !on && unlocked
-                        && ((Onboarding.IsNew(activity, navFacts, _explained) && !_visited.Contains(activity))
+                        && (((Onboarding.IsNew(activity, navFacts, _explained)
+                              || (activity == Activity.Forge && Onboarding.GemTourDue(navGems, _explained) is not null))
+                             && !_visited.Contains(activity))
                             || (activity == Activity.Roster && _rosterNews));
             if (isNew)
             {

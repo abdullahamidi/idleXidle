@@ -136,6 +136,8 @@ public sealed class ForgeScreen
     private bool _revealFrozen;
     private Rarity _revealGrade;
     private int _revealMaterials;
+    /// <summary>The headline over the reveal — "RARE CHEST", or a gift's own title (ChestDossier.Title).</summary>
+    private string _revealTitle = "";
     private readonly List<ItemInstance> _revealItems = new();
     // 3.8s, and it is a SEQUENCE now rather than a card that appears. See DrawReveal for the beats.
     // It was 2.9 until the reveal grew per-item SELL / SALVAGE buttons: those land about a second in
@@ -269,8 +271,31 @@ public sealed class ForgeScreen
         TourTarget.ForgeItem => new[] { ItemPanel },
         TourTarget.ForgeTabs => new[] { new Rectangle(Action.X - 6, Action.Y - 6, Action.Width + 12, TabStripH + 12) },
         TourTarget.Materials => new[] { WalletPanel },
+        // The first-gem lesson's last card: the SOCKET tab alone, grown so the ring clears its text.
+        TourTarget.SocketTab => new[] { Grow(TabRect((int)Tab.Socket), 6) },
         _ => Array.Empty<Rectangle>(),
     };
+
+    /// <summary>One tab of the strip — the same rectangle the strip draws and hit-tests.</summary>
+    private static Rectangle TabRect(int i)
+    {
+        var w = Action.Width / TabNames.Length;
+        return new Rectangle(Action.X + i * w, Action.Y, w - 4, TabStripH);
+    }
+
+    private static Rectangle Grow(Rectangle r, int by) => new(r.X - by, r.Y - by, r.Width + 2 * by, r.Height + 2 * by);
+
+    /// <summary>
+    /// Has this player set a gem before? Their FIRST is free (<see cref="GemCraft.SocketCost(Rarity, bool, SocketTuning?)"/>);
+    /// this is the memory of having spent it. Host-restored from the save, host-saved from here.
+    /// </summary>
+    public bool FreeSocketUsed { get; set; }
+
+    /// <summary>What THIS player pays to set a gem into a host of this grade — nothing for their first.</summary>
+    private int SocketPrice(Rarity host) => GemCraft.SocketCost(host, FreeSocketUsed);
+
+    /// <summary>Open the SOCKET tab — the first-gem lesson arrives with it open, so the bag lists the gems.</summary>
+    public void RequestSocketTab() { _tab = Tab.Socket; _confirm = null; _socketAsk = null; }
 
     private static readonly Color Met = new(0x6E, 0xC8, 0x7A);
     // Scrap / Essence / Core / Crystal. The REAL icons — assets/art/ItemsLoot/loot/materials — indexed
@@ -655,6 +680,7 @@ public sealed class ForgeScreen
         _revealPointerHold = false;
         _revealIndex++;
         _revealGrade = grade;
+        _revealTitle = $"{RarityNames[(int)grade]} CHEST";
         _revealMaterials = mats;
         _revealItems.Clear();
         _revealItems.AddRange(items);
@@ -1074,6 +1100,7 @@ public sealed class ForgeScreen
 
         // The REVEAL: a centred burst you can't miss — the anticipation payoff loot design is built on.
         _revealGrade = chest.Rarity;
+        _revealTitle = ChestDossiers.For(chest).Title;   // a gift is announced as the gift it is
         _revealMaterials = mat;
         _revealItems.Clear();
         _revealItems.AddRange(items);
@@ -1309,7 +1336,7 @@ public sealed class ForgeScreen
                     // of that silently was the bug. And ask only what YES can actually do (review
                     // 2026-08-23): the refusals TrySocket would give come BEFORE the question, not after.
                     var slots = GemCraft.SocketCount(host.Rarity);
-                    var cost = GemCraft.SocketCost(host.Rarity);
+                    var cost = SocketPrice(host.Rarity);
                     if (slots == 0) Say("ONLY RARE AND BETTER GEAR HAS SOCKETS.", Ember);
                     else if (host.Gems.Count >= slots) Say("EVERY SOCKET IS FULL — CRUSH A GEM TO FREE ONE.", Ember);
                     else if (hunter.MaterialOf(Material.Essence) < cost)
@@ -1497,10 +1524,9 @@ public sealed class ForgeScreen
     /// <summary>The four intents, as flat tabs — so the ONE ornate button inside the open tab is the only button-shaped thing there.</summary>
     private void DrawTabStrip(SpriteBatch b, Point hit, bool clicked)
     {
-        var w = Action.Width / TabNames.Length;
         for (var i = 0; i < TabNames.Length; i++)
         {
-            var r = new Rectangle(Action.X + i * w, Action.Y, w - 4, TabStripH);
+            var r = TabRect(i);
             var on = (int)_tab == i;
             var hover = r.Contains(hit);
             _ui.Fill(b, r, on ? new Color(0x3A, 0x2E, 0x52) : hover ? new Color(0x22, 0x1C, 0x30) : new Color(0x14, 0x11, 0x1C, 0xC0));
@@ -1761,8 +1787,18 @@ public sealed class ForgeScreen
                     _ui.TextCenter(b, "+", box.Center.X, box.Y + 22, Dim);
                 }
             }
-            DrawPrice(b, x, sy + 112, w, "SETTING A GEM COSTS",
-                      [MatPrice(hunter, Material.Essence, GemCraft.SocketCost(item.Rarity))], null, 0);
+            // THE FIRST GEM IS FREE (Core's rule, GemCraft.SocketCost): the price line says so in the
+            // words the confirmation uses, and names what later ones cost so the gift is not mistaken
+            // for the price.
+            if (SocketPrice(item.Rarity) == 0)
+            {
+                _ui.TextBig(b, "YOUR FIRST GEM IS FREE", x, sy + 112, Gold, UiTypography.Body);
+                _ui.TextBig(b, _ui.ShortenBig($"LATER ONES COST {GemCraft.SocketCost(item.Rarity)} ESSENCE FOR AN ITEM OF THIS GRADE.", w, UiTypography.Secondary),
+                            x, sy + 140, Slate, UiTypography.Secondary);
+            }
+            else
+                DrawPrice(b, x, sy + 112, w, "SETTING A GEM COSTS",
+                          [MatPrice(hunter, Material.Essence, SocketPrice(item.Rarity))], null, 0);
         }
 
         // A question about a gem — set a loose one, crush a set one, sell a loose one — takes the
@@ -1810,13 +1846,13 @@ public sealed class ForgeScreen
                        x, gy + 28, w, Bone, UiTypography.Secondary);
     }
 
-    /// <summary>SET a gem into the first open socket, spending Essence.</summary>
+    /// <summary>SET a gem into the first open socket, spending Essence — none for the player's first gem.</summary>
     private void TrySocket(Hunter hunter, ItemInstance host, ItemInstance gem)
     {
         var slots = GemCraft.SocketCount(host.Rarity);
         if (slots == 0) { Say("ONLY RARE AND BETTER GEAR HAS SOCKETS.", Ember); return; }
 
-        var cost = GemCraft.SocketCost(host.Rarity);
+        var cost = SocketPrice(host.Rarity);
         if (hunter.MaterialOf(Material.Essence) < cost)
         {
             Say($"NEED {cost} ESSENCE TO SET A GEM — YOU HOLD {hunter.MaterialOf(Material.Essence):N0}.", Ember);
@@ -1826,11 +1862,16 @@ public sealed class ForgeScreen
         var (product, rejection) = GemCraft.Socket(host, gem);
         if (product is null) { Say(rejection!, Ember); return; }
 
-        hunter.SpendMaterial(Material.Essence, cost);
+        // A free first gem spends nothing (SpendMaterial refuses a zero anyway); either way the free
+        // one is now USED, and every later socket is the Essence sink it always was.
+        if (cost > 0) hunter.SpendMaterial(Material.Essence, cost);
+        var wasFree = cost == 0;
+        FreeSocketUsed = true;
         _inv.Remove(gem);
         ReplaceItem(hunter, host, product);
         Sound?.Play("sfx_gem", 0.8f);   // the crystalline ping — a gem set for good
-        Say($"{GemCraft.NameOf(gem)} {gem.ItemLevel} SET — {ItemAffixes.GrantLabel(GemCraft.StatOf(gem), GemCraft.Magnitude(gem))} {AffixName(GemCraft.StatOf(gem))}  ({cost} ESSENCE SPENT).", Gold);
+        var paid = wasFree ? "YOUR FIRST GEM WAS FREE" : $"{cost} ESSENCE SPENT";
+        Say($"{GemCraft.NameOf(gem)} {gem.ItemLevel} SET — {ItemAffixes.GrantLabel(GemCraft.StatOf(gem), GemCraft.Magnitude(gem))} {AffixName(GemCraft.StatOf(gem))}  ({paid}).", Gold);
     }
 
     /// <summary>
@@ -1864,8 +1905,9 @@ public sealed class ForgeScreen
         DrawItemIcon(b, gem, new Rectangle(x, y + 44, 56, 56));
         _ui.TextBig(b, _ui.ShortenBig($"{GemCraft.NameOf(gem)} {gem.ItemLevel}  —  {ItemAffixes.GrantLabel(GemCraft.StatOf(gem), GemCraft.Magnitude(gem))} {AffixName(GemCraft.StatOf(gem))}", w - 70, UiTypography.Body),
                     x + 70, y + 58, RarityColors[(int)gem.Rarity], UiTypography.Body);
-        _ui.TextBig(b, _ui.ShortenBig($"INTO {ItemNaming.FullName(host)} — COSTS {GemCraft.SocketCost(host.Rarity)} ESSENCE.", w, UiTypography.Secondary),
-                    x, y + 116, Bone, UiTypography.Secondary);
+        var price = SocketPrice(host.Rarity) == 0 ? "YOUR FIRST GEM IS FREE" : $"COSTS {SocketPrice(host.Rarity)} ESSENCE";
+        _ui.TextBig(b, _ui.ShortenBig($"INTO {ItemNaming.FullName(host)} — {price}.", w, UiTypography.Secondary),
+                    x, y + 116, SocketPrice(host.Rarity) == 0 ? Gold : Bone, UiTypography.Secondary);
         _ui.TextBig(b, "A SET GEM CANNOT COME BACK OUT — CRUSHING IT LATER DESTROYS IT.",
                     x, y + 144, Slate, UiTypography.Secondary);
 
@@ -2120,7 +2162,8 @@ public sealed class ForgeScreen
                     }
                     break;
                 case Tab.Socket when GemCraft.SocketCount(item.Rarity) > 0:
-                    Need("essence", "A GEM", GemCraft.SocketCost(item.Rarity), hunter.MaterialOf(Material.Essence));
+                    if (SocketPrice(item.Rarity) == 0) marks["essence"] = ("YOUR FIRST GEM IS FREE", Met);
+                    else Need("essence", "A GEM", SocketPrice(item.Rarity), hunter.MaterialOf(Material.Essence));
                     break;
                 case Tab.BreakDown:
                     Gives("gleam", "SELL", item.SellValue);
@@ -2549,7 +2592,7 @@ public sealed class ForgeScreen
             else { _ui.Fill(b, box, grade * 0.8f); }
 
             // ABOVE the chest. At 700 it sat behind the loot panel's lower half and read as a smudge.
-            _ui.TextCenterBig(b, $"{RarityNames[(int)_revealGrade]} CHEST", 960, 340,
+            _ui.TextCenterBig(b, _revealTitle, 960, 340,
                 grade * (0.4f + 0.6f * p), UiTypography.SectionTitle);
         }
 
@@ -2595,7 +2638,7 @@ public sealed class ForgeScreen
 
         if (cp < 0.6f) return;      // the contents wait for the frame to stop moving
 
-        _ui.TextCenterBig(b, $"{RarityNames[(int)_revealGrade]} CHEST", card.Center.X, card.Y + 34,
+        _ui.TextCenterBig(b, _revealTitle, card.Center.X, card.Y + 34,
             grade * fade, UiTypography.SectionTitle);
 
         // A question takes the card's body. Its subject is re-resolved by id every frame: if the item
@@ -2635,8 +2678,11 @@ public sealed class ForgeScreen
         // Materials COUNT UP rather than landing finished. The number is the same; watching it arrive is
         // the difference between being told what you got and seeing it paid out.
         var mp = Math.Clamp((t - burstEnds - cardIn) / (_revealBrief ? 0.25f : 0.5f), 0f, 1f);
-        _ui.TextCenterBig(b, $"+{(int)MathF.Round(_revealMaterials * mp)} MATERIALS", card.Center.X, full.Y + 330,
-            Gold * fade, UiTypography.Body);
+        // A gift pays no materials; "+0 MATERIALS" under a gift reads as a shortfall, so the line is
+        // simply absent when there is nothing to count up to.
+        if (_revealMaterials > 0)
+            _ui.TextCenterBig(b, $"+{(int)MathF.Round(_revealMaterials * mp)} MATERIALS", card.Center.X, full.Y + 330,
+                Gold * fade, UiTypography.Body);
 
         if (acts && _revealChestCount <= 1)
         {

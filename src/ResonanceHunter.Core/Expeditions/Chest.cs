@@ -65,6 +65,18 @@ public sealed record Chest
     /// </para>
     /// </remarks>
     public float RunTilt { get; init; } = 1f;
+
+    /// <summary>
+    /// A GIFT's catalogue key (<see cref="GiftChests"/>), or null for the ordinary chest that rolls its
+    /// contents at open.
+    /// </summary>
+    /// <remarks>
+    /// The one exception to "contents are rolled at open": a gift is handed over, not gambled, so its
+    /// contents are fixed data and its dossier says exactly what it holds. Null-default, name-keyed and
+    /// ignored when unknown — a save from before gifts existed, or from a build with a gift this one
+    /// lacks, opens as the plain chest its grade and tier describe.
+    /// </remarks>
+    public string? Gift { get; init; }
 }
 
 /// <summary>What a chest paid out when opened: materials, and the items to land in the bag.</summary>
@@ -297,6 +309,12 @@ public static class Chests
         ArgumentNullException.ThrowIfNull(rng);
         tuning ??= ChestTuning.Default;
         loot ??= LootTuning.Default;
+
+        // A GIFT IS NOT A ROLL. Its contents are catalogue data, minted the same on every open, and it
+        // takes nothing from the random source — so a gift can never move what the next boss's chest
+        // holds. Everything below is the ordinary chest.
+        if (GiftChests.Get(chest.Gift) is { } gift)
+            return GiftChests.Open(chest, gift, loot);
 
         // Materials: a tight band, nudged only by depth. GRADE is deliberately absent — it must not pay
         // MORE, only rarer items below.

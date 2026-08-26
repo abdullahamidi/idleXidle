@@ -280,6 +280,24 @@ public static class Tutorial
     };
 
     /// <summary>
+    /// The body, given what the player has — the one rung whose truth depends on the moment.
+    /// </summary>
+    /// <remarks>
+    /// OpenChest speaks during a wait and after it, and since a new game is seeded with a welcome
+    /// gift (<c>GiftChests</c>) the wait is usually already over: a chest is in the vault from the
+    /// first minute. Telling that player "this takes a few tries" while their VAULT tile wears a NEW
+    /// mark and a chest count is the guide contradicting the rail. With a chest held, the rung says
+    /// so and points at it; with none, it explains the wait exactly as before.
+    /// </remarks>
+    public static string Body(TutorialStep step, TutorialFacts f) => step switch
+    {
+        TutorialStep.OpenChest when f.ChestsHeld >= 1 =>
+            "A chest is waiting in the VAULT — press K and click it to open it. Bosses drop more, "
+            + "about one boss in five, and the vault reads each one before you decide to crack it.",
+        _ => Body(step),
+    };
+
+    /// <summary>
     /// The screen a step sends the player to, or null if it asks nothing of the rail.
     /// </summary>
     /// <remarks>

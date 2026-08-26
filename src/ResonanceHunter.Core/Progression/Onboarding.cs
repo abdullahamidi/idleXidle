@@ -83,6 +83,8 @@ public enum TourTarget
     ForgeTabs,
     /// <summary>The materials wallet.</summary>
     Materials,
+    /// <summary>The SOCKET tab alone — the first-gem lesson's target.</summary>
+    SocketTab,
 
     // ── WARREN ──
     /// <summary>The facility cards.</summary>
@@ -279,15 +281,17 @@ public static class Onboarding
                 + "have never reached. TAKE EVERY POINT BACK is free, any time."),
         },
 
+        // The first visit's chest is the WELCOME GIFT a new game is seeded with (GiftChests), so both
+        // cards speak of a chest that is really there — and say which kind it is.
         Activity.Vault => new[]
         {
             new TourStep(TourTarget.ChestCards, "YOUR CHESTS",
-                "Every chest you hold, one card per kind. A card shows the grade, the tier it dropped "
-                + "at, and how many are stacked. Click a card to open one."),
+                "Every chest you hold, one card per kind. Your first is a welcome gift. A card shows "
+                + "the grade, the tier and the element. Click a card to open one."),
 
             new TourStep(TourTarget.ChestQuestion, "WHAT IS INSIDE",
-                "Rest the pointer on the ? to read what the chest promises. The grade sets the lowest "
-                + "rarity inside. The exact items you see only when you open it."),
+                "Rest the pointer on the small glass to read what a chest promises. A boss's chest "
+                + "only promises a lowest rarity. The gift says exactly what it holds."),
 
             new TourStep(TourTarget.VaultButtons, "THE HEADER BUTTONS",
                 "OPEN ALL opens every chest at once. TRADER opens a stall that changes every week. "
@@ -395,6 +399,50 @@ public static class Onboarding
     /// <summary>The explained-list key for a screen.</summary>
     public static string ScreenKey(Activity screen) => screen.ToString();
 
+    /// <summary>The explained-list key of the first-gem lesson — the Forge's second, smaller tour.</summary>
+    /// <remarks>
+    /// Lives in the same list as the screens and the slot notes, under its own name, and follows the
+    /// same rule: shown once, remembered in the save.
+    /// </remarks>
+    public const string GemTourKey = "FirstGem";
+
+    /// <summary>
+    /// The first-gem lesson: two cards over the FORGE, the first time the player holds a gem.
+    /// </summary>
+    /// <remarks>
+    /// Playtest 2026-08-26: "When a gem drops, take the player to the socket screen and show setting
+    /// the gem." A gem is the one drop that does nothing on its own — it is worn INSIDE an item — and
+    /// the Forge's tour names the SOCKET tab in one clause among four. So the gem gets a tour of its
+    /// own, on the Forge, with the SOCKET tab open: what the stone is, and what to click. The price
+    /// line is read from the rule (<c>GemCraft.IsFirstGemFree</c>), so the card cannot promise a
+    /// discount the Forge then refuses.
+    /// </remarks>
+    public static IReadOnlyList<TourStep> GemTour => new[]
+    {
+        new TourStep(TourTarget.Bag, "YOUR FIRST GEM",
+            "A gem is a stone you set into an item, and it adds its stat to that item. With the SOCKET "
+            + "tab open, your gems are listed here in the bag."),
+
+        new TourStep(TourTarget.SocketTab, "SETTING IT",
+            "Put a RARE or better item on the bench, keep SOCKET open, then click the gem in the bag. "
+            + (Economy.GemCraft.IsFirstGemFree(freeSocketUsed: false)
+                ? "Your first gem is free to set. Later ones cost Essence."
+                : "Setting a gem costs Essence.")),
+    };
+
+    /// <summary>
+    /// The explained-list key of the gem lesson while it is owed, or null: owed once a gem is held,
+    /// until it has been given.
+    /// </summary>
+    /// <param name="gemsHeld">Gems the player holds — loose in the bag or set into an item.</param>
+    /// <remarks>
+    /// Derived, like the screen tours: it needs no "a gem dropped" flag, so a gem that dropped while
+    /// the game was closed, or came out of OPEN ALL, still earns the lesson. And it needs a gem to
+    /// point at — a player who sold their only gem before visiting is owed nothing until the next.
+    /// </remarks>
+    public static string? GemTourDue(int gemsHeld, IReadOnlyCollection<string> explained)
+        => gemsHeld >= 1 && !explained.Contains(GemTourKey) ? GemTourKey : null;
+
     /// <summary>The explained-list key for a skill slot's note (slot 2, 3, 4).</summary>
     /// <remarks>
     /// The slot notes live in the same list as the screens, under their own prefix, so they need no
@@ -425,6 +473,8 @@ public static class Onboarding
 
         foreach (var screen in Unlocks.Open(f)) set.Add(ScreenKey(screen));
         for (var slot = 2; slot <= Unlocks.SkillSlots(f); slot++) set.Add(SlotKey(slot));
+        // A player from before the intro has had the Forge for hours; the gem lesson is not owed.
+        set.Add(GemTourKey);
         return set;
     }
 

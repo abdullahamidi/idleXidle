@@ -194,6 +194,17 @@ public sealed record SaveGame
     /// </remarks>
     public List<SavedChest> UnopenedChests { get; init; } = new();
 
+    /// <summary>
+    /// Has the player set a gem into a socket yet? The FIRST setting is free (see
+    /// <c>GemCraft.SocketCost</c>); this remembers that the free one has been spent.
+    /// </summary>
+    /// <remarks>
+    /// Default-false, so every older save loads clean with no version bump. An old save that has
+    /// already socketed gems but predates this field is caught by <see cref="SaveSystem.RestoreFreeSocketUsed"/>,
+    /// which reads the gems sitting in its items — the gift is for a first gem, not a fifth.
+    /// </remarks>
+    public bool FreeSocketUsed { get; init; }
+
     /// <summary>The VAULT's keep-filter: chests below this tier arrive as a little Scrap instead. 0 = keep all.</summary>
     public int ChestKeepMinTier { get; init; }
 
@@ -249,6 +260,9 @@ public sealed record SavedChest
     /// of migration bug nobody reports because it looks like bad luck.
     /// </remarks>
     public float RunTilt { get; init; } = 1f;
+
+    /// <summary>A gift chest's catalogue key (<c>GiftChests</c>), or null for a chest that rolls. Null on every older save.</summary>
+    public string? Gift { get; init; }
 }
 
 /// <summary>One woven skill in the saved build — Source x Form x Vow, all by name/id so it survives.</summary>
@@ -607,6 +621,17 @@ public static class SaveSystem
                 save.RegionFarms.GroupBy(f => f.Id).ToDictionary(g => g.Key, g => g.Max(f => f.BestDepth)),
                 save.RunsWithVowKept);
         state.Restore(save.ActiveCharacterId, save.QuestsDone, banked);
+    }
+
+    /// <summary>
+    /// Has this save spent its free first gem? True if it says so — or, for a save written before the
+    /// field existed, if any item in it already carries a gem: a player who has socketed before is not
+    /// on their first gem, whatever an absent flag reads.
+    /// </summary>
+    public static bool RestoreFreeSocketUsed(SaveGame save)
+    {
+        ArgumentNullException.ThrowIfNull(save);
+        return save.FreeSocketUsed || save.Inventory.Any(i => i.Gems.Count > 0);
     }
 
     public static void RestoreWarren(SaveGame save, Warren warren)
