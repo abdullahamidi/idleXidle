@@ -1743,7 +1743,7 @@ public sealed class SoloExpeditionScreen
         var reportPanel = new Rectangle(ArenaRect.X + 40, 250, ArenaRect.Width - 80, 690);
         // A close icon, because "L CLOSES" in the hint line is not a door a mouse player can see
         // (playtest 2026-08-26). It walks the same host path the L key does.
-        if (_ui.CloseButton(b, new Rectangle(reportPanel.Right - 62, reportPanel.Y + 14, 44, 44), hit, clicked))
+        if (_ui.CloseButton(b, UiKit.CloseRect(reportPanel), hit, clicked))
             WantsLog = true;
         var prev = new Rectangle(reportPanel.X + 44, reportPanel.Bottom - 104, 200, 64);
         var next = new Rectangle(reportPanel.Right - 244, reportPanel.Bottom - 104, 200, 64);

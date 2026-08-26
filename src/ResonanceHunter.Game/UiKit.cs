@@ -775,6 +775,19 @@ public sealed class UiKit
     /// and returns true on the click. Playtest 2026-08-26: "replace the drawn × with a proper icon and
     /// use it everywhere." Falls back to the old dark square with a × if the art is missing.
     /// </summary>
+    /// <summary>The close icon's edge, in pixels — one size everywhere so the corners of the game match.</summary>
+    public const int CloseSize = 44;
+
+    /// <summary>
+    /// WHERE a close icon sits on an ornate panel: inside the frame's corner ornament, not on it. The
+    /// nine-sliced frames keep <see cref="PanelCorner"/> px of scrollwork on every edge; the icon starts
+    /// 8 px past that on the right and 4 px short of it on top, so it clears the ornament with a
+    /// visible margin and lines up with the panel's title row (playtest 2026-08-26: "the close buttons
+    /// have no margin, they run into the frame").
+    /// </summary>
+    public static Rectangle CloseRect(Rectangle panel, int size = CloseSize) =>
+        new(panel.Right - PanelCorner - 8 - size, panel.Y + PanelCorner - 4, size, size);
+
     public bool CloseButton(SpriteBatch b, Rectangle r, Point mouse, bool clicked)
     {
         var hot = r.Contains(mouse);

@@ -3860,8 +3860,8 @@ public class Game1 : Game
     // The CLOSE button is gone (playtest 2026-08-26: "remove the CLOSE text; the corner icon closes");
     // QUIT TO DESKTOP sits centred in the row it had shared.
     private static readonly Rectangle SettingsQuit = new(810, 880, 300, 56);
-    /// <summary>The panel's corner close icon — UiKit.CloseButton, the one close every panel wears.</summary>
-    private static readonly Rectangle SettingsCornerClose = new(SettingsPanel.Right - 66, SettingsPanel.Y + 14, 48, 48);
+    /// <summary>The panel's corner close icon — UiKit.CloseButton at UiKit.CloseRect, inside the ornament.</summary>
+    private static readonly Rectangle SettingsCornerClose = UiKit.CloseRect(SettingsPanel);
 
     /// <summary>Copies the feedback code (build stamp + progress + run log) to the clipboard.</summary>
     private static readonly Rectangle SettingsCopyFeedback = new(536, 800, 400, 52);
@@ -3893,7 +3893,10 @@ public class Game1 : Game
     private const float ResetArmSeconds = 4f;
 
     /// <summary>The persistent way back here — a gear in the corner, the convention every game teaches.</summary>
-    private static readonly Rectangle SettingsGear = new(1842, 8, 60, 60);
+    // Level with the currency pills (their capsules run y 22..70, centre 46): the gear used to sit at
+    // y 8..68, centre 38 — eight pixels above the row it belongs to (playtest 2026-08-26: "it sits a
+    // little higher and catches the eye").
+    private static readonly Rectangle SettingsGear = new(1842, 16, 60, 60);
 
     /// <summary>
     /// Display options, drawn as an overlay over whatever is behind it.
@@ -4232,8 +4235,17 @@ public class Game1 : Game
         var c = new Vector2(SettingsGear.Center.X, SettingsGear.Center.Y);
         var ink = hover ? NavGold : NavLabel * 0.8f;
 
-        // A cog from primitives — eight teeth, a rim, a dark hub. No asset matches the hand-drawn set,
-        // and at 34px a glyph of fills reads perfectly well.
+        if (_ui.Assets.Get("icon_settings") is { } gearArt)
+        {
+            // The drawn medallion (PixelLab, the close icon's sibling): 52 px at rest, 56 under the mouse.
+            var side = hover ? 56 : 52;
+            var box = new Rectangle((int)c.X - side / 2, (int)c.Y - side / 2, side, side);
+            _ui.SpriteFit(_batch, gearArt, box, hover ? Color.White : new Color(0xE0, 0xD8, 0xC8));
+            if (hover) _ui.TextRight(_batch, "SETTINGS — ESC", SettingsGear.Right, SettingsGear.Bottom + 8, NavGold);
+            return;
+        }
+
+        // Fallback when the art is missing: a cog from primitives — eight teeth, a rim, a dark hub.
         for (var k = 0; k < 8; k++)
         {
             var a = MathF.PI / 4f * k;
