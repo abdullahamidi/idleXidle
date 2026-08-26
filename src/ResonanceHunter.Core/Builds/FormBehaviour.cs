@@ -42,14 +42,18 @@ public static class FormBehaviour
     /// 5-10s cooldowns and its skills could never fire at all — REND first landed at wave 15 and two
     /// skills never fired in an entire game. If wave length is ever retuned, THESE MOVE WITH IT.
     /// </remarks>
+    // RAISED 2026-08-26 (Strike 2000 → 3000, Projectile 900 → 1500, Trap 3000 → 4000, Transformation
+    // 2500 → 3500; Mark stays at 4000, the wave-length ceiling): the champion now has a real basic attack
+    // between casts, and one action plays at a time, so skills back to back left the swing no room —
+    // "raise the cooldowns so the plain hits are part of the fight, and attack speed means more".
     public static int BaseCooldownMs(Form form) => form switch
     {
-        Form.Strike => 2_000,
-        Form.Projectile => 900,          // volume: fires roughly twice per Strike
+        Form.Strike => 3_000,
+        Form.Projectile => 1_500,        // volume: fires roughly twice per Strike
         Form.Aura => 0,                  // always on — see IsPassive
-        Form.Trap => 3_000,              // rare, and only pays when bitten
+        Form.Trap => 4_000,              // rare, and only pays when bitten
         Form.Mark => 4_000,              // a window, not a rhythm
-        _ => 2_500,                      // Transformation
+        _ => 3_500,                      // Transformation
     };
 
     /// <summary>

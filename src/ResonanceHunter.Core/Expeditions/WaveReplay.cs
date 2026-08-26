@@ -140,7 +140,15 @@ public sealed class WaveReplay
     /// "animasyon geçişleri garip görünüyor" — the same fight running forwards on one side of the arena
     /// and backwards on the other.
     /// </remarks>
-    public int NextChampionStrikeAfter(float ms) => NextAfter(ms, BattleEventKind.Strike);
+    public int NextChampionStrikeAfter(float ms)
+    {
+        // BASIC strikes only: a skill's landing blows already have their cast clip, and a swing clip
+        // aimed at one of them would start a second animation inside the first.
+        foreach (var e in _events)
+            if (e.Kind == BattleEventKind.Strike && !e.FromSkill && e.AtMs > ms)
+                return e.AtMs;
+        return int.MaxValue;
+    }
 
     /// <summary>
     /// The next SKILL event after <paramref name="ms"/> — any Form — or null when the wave casts nothing

@@ -64,11 +64,20 @@ public class SkillShapeBattleTests
 
     /// <summary>Run one wave and return what it measured.</summary>
     private static WaveMetrics Fight(SkillShape shape, List<WaveCreature> creatures, params Form[] forms)
+        => Fight(shape, creatures, ExpeditionTuning.Default, forms);
+
+    /// <summary>
+    /// The basic attack switched off — for a probe that must isolate ONE node's effect on the skills.
+    /// Since 2026-08-26 the swing is a third of a build's damage and can carry or muddy a kill on its own.
+    /// </summary>
+    private static readonly ExpeditionTuning NoSwing = ExpeditionTuning.Default with { AutoAttackDamage = 0f };
+
+    private static WaveMetrics Fight(SkillShape shape, List<WaveCreature> creatures, ExpeditionTuning tuning, params Form[] forms)
     {
         var metrics = new WaveMetrics();
         SoloBattle.ResolveWave(
             Champ(), BuildWith(shape, forms.Length == 0 ? new[] { Form.Strike } : forms), new Hunter(),
-            creatures, enemyIntervalMs: 900, ExpeditionTuning.Default, new Random(11),
+            creatures, enemyIntervalMs: 900, tuning, new Random(11),
             metrics: metrics);
         return metrics;
     }
@@ -130,8 +139,8 @@ public class SkillShapeBattleTests
         // build WITHOUT the mastery rather than against zero, because the background auto-attack is not a
         // skill and correctly ignores the floor; asserting a flat zero measured the auto-attack instead.
         var tiny = () => Wave(3, 900f, 20f);
-        var unhindered = Fight(SkillShape.None, tiny(), Form.Aura);
-        var floored = Fight(shape, tiny(), Form.Aura);
+        var unhindered = Fight(SkillShape.None, tiny(), NoSwing, Form.Aura);
+        var floored = Fight(shape, tiny(), NoSwing, Form.Aura);
 
         Assert.True(floored.DeliveredDamage < unhindered.DeliveredDamage * 0.25f,
             $"Small hits delivered {floored.DeliveredDamage:F0} against {unhindered.DeliveredDamage:F0} " +
@@ -237,7 +246,8 @@ public class SkillShapeBattleTests
         var m = Fight(SkillShape.None with { AssassinateThreshold = 0.40f }, weakened, Form.Strike);
 
         Assert.Equal(1, m.CreaturesKilled);
-        Assert.True(m.DurationMs < 3000,
+        // The opening cast waits one cooldown (3000 ms since 2026-08-26); the kill must be THAT cast.
+        Assert.True(m.DurationMs <= FormBehaviour.BaseCooldownMs(Form.Strike) + 200,
             "A creature under the threshold survived long enough that ordinary damage killed it — the " +
             "node is not firing, it is being overtaken.");
     }
@@ -350,8 +360,9 @@ public class SkillShapeBattleTests
         // Six creatures a single Strike finishes each — one kill per swing, no overkill to muddy it.
         var field = () => Wave(6, 30f, 5f);
 
-        var plain = Fight(SkillShape.None, field(), Form.Strike);
-        var momentum = Fight(SkillShape.None with { CooldownRefundOnKillMs = 1_000 }, field(), Form.Strike);
+        // No swing: the basic attack finishing half the field on its own hid the refund behind timing noise.
+        var plain = Fight(SkillShape.None, field(), NoSwing, Form.Strike);
+        var momentum = Fight(SkillShape.None with { CooldownRefundOnKillMs = 1_000 }, field(), NoSwing, Form.Strike);
 
         Assert.Equal(6, plain.CreaturesKilled);
         Assert.Equal(6, momentum.CreaturesKilled);

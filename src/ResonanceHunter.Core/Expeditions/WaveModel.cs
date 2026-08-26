@@ -13,6 +13,15 @@ namespace ResonanceHunter.Core.Expeditions;
 /// </remarks>
 public sealed record ExpeditionTuning
 {
+    /// <summary>
+    /// The basic attack's raw damage at zero MIGHT (default <see cref="Builds.SoloBattle.AutoAttackDamage"/>).
+    /// A probe that must isolate one node sets it to 0 — then the champion never swings at all.
+    /// </summary>
+    public float AutoAttackDamage { get; init; } = Builds.SoloBattle.AutoAttackDamage;
+
+    /// <summary>The basic attack's cadence at action speed 1.0 (default <see cref="Builds.SoloBattle.AutoAttackIntervalMs"/>).</summary>
+    public int AutoAttackIntervalMs { get; init; } = Builds.SoloBattle.AutoAttackIntervalMs;
+
     /// <summary>Threat COMPOUNDS per wave...</summary>
     /// <summary>How enemy HEALTH compounds per wave.</summary>
     /// <remarks>

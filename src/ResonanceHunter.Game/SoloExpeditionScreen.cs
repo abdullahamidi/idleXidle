@@ -715,7 +715,6 @@ public sealed class SoloExpeditionScreen
         {
             var cb = ComposeBuild(rh);
             _castRate = cb.Resolve(rh).SkillRate * cb.Shape.SkillRate;
-            _hasCastSkills = Loadout.Skills.Any(k => k.Form != Form.Trap);
         }
         // The replay's health table is read AFTER the pool refresh, or the HUD prints last wave's pool
         // over this wave's bar for a whole wave (review 2026-08-25: "300/360 with a full bar").
@@ -2001,7 +2000,7 @@ public sealed class SoloExpeditionScreen
         _ui.BarArt(b, hpBar, _replay?.HealthFractionOf(0) ?? 1f, "health");
         _ui.TextCenterBig(b, $"{hp}/{_champ?.MaxHealth ?? 0}", hpBar.Center.X, hpBar.Y + 3, Bone, 16);
         // Secondary stat line — TEMPO × skill rate (spec §8.6: no fake mana bar; real SquadSkillRate).
-        _ui.TextBig(b, $"TEMPO {(_hunter?.SquadSkillRate ?? 1f):0.00}x SKILL RATE", 334, 145, Slate, 15);
+        _ui.TextBig(b, $"TEMPO {(_hunter?.SquadSkillRate ?? 1f):0.00}x ACTION SPEED", 334, 145, Slate, 15);
 
         // Source icons — the build's real elements. These sat at x=42, coordinates from the layout where
         // the HUD panel started near the left edge. Once the panel moved to x=196 to clear the vertical nav
@@ -2660,21 +2659,20 @@ public sealed class SoloExpeditionScreen
             beatMs = nextSkill.AtMs;
             clip = (Form)nextSkill.Amount == Form.Strike ? "attack" : "cast";
         }
-        // The auto-attack's swing clip only when the build casts nothing: between two Projectile casts
-        // the sword-draw read as a third, unexplained skill (playtest 2026-08-26). With cast skills
-        // slotted the auto-attack keeps its lunge and its thud, and the champion's clips are the casts,
-        // one after another — cast, cooldown, the next.
-        if (!_hasCastSkills && _nextChampStrikeMs > _playheadMs && (beatMs is null || _nextChampStrikeMs < beatMs.Value))
+        // The basic attack's swing. It is a real action now (MIGHT's hit, at TEMPO's cadence) and the
+        // sim holds one lock for swings and casts alike, so this clip can never start inside a cast nor
+        // a cast inside it — the sword-draw between two Projectiles is a swing the fight actually made.
+        if (_nextChampStrikeMs > _playheadMs && (beatMs is null || _nextChampStrikeMs < beatMs.Value))
         {
             beatMs = _nextChampStrikeMs;
             clip = "attack";
         }
         if (beatMs is null) return;
 
-        // A CAST plays at the build's skill rate: the sim's cast lock is CastClipMs ÷ rate (one rule for
-        // the fight and the picture), so the clip always ends before the next cast may begin, and a
-        // fast build visibly casts fast. The auto-swing keeps the authored pace.
-        var baseSpeed = clip == "cast" ? Math.Max(1f, ClipMs / (FormBehaviour.CastClipMs / Math.Max(0.1f, _castRate))) : 1f;
+        // EVERY action plays at the build's action speed: the sim holds the champion for CastClipMs ÷ rate
+        // after a swing or a cast (one rule for the fight and the picture), so the clip always ends
+        // before the next action may begin, and a fast build visibly fights fast.
+        var baseSpeed = Math.Max(1f, ClipMs / (FormBehaviour.CastClipMs / Math.Max(0.1f, _castRate)));
         var contactMs = ClipMs * ContactFraction / baseSpeed;
         var lead = beatMs.Value - _playheadMs;
         if (lead > contactMs) return;   // not yet: the clip starts one contact-length before the beat
@@ -2686,9 +2684,6 @@ public sealed class SoloExpeditionScreen
 
     /// <summary>The build's skill-rate multiplier for the wave being shown — the cast clip's pace.</summary>
     private float _castRate = 1f;
-
-    /// <summary>Whether the loadout carries a skill that CASTS (anything but a Trap) — then the auto-swing gets no clip.</summary>
-    private bool _hasCastSkills;
 
     /// <summary>Seconds into the committed clip, at its speed — what the strip is drawn at.</summary>
     private float ClipSeconds => (_playheadMs - _clipStartMs) / 1000f * _clipSpeed;

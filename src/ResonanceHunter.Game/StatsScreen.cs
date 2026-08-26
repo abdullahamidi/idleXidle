@@ -222,7 +222,7 @@ public sealed class StatsScreen
         // fight"). One formula, three screens.
         var life = SoloBattle.ChampionHealth(build, hunter);
         _ui.TextCenterBig(b, $"{life:N0} / {life:N0}", hpBar.Center.X, hpBar.Y + 4, Bone, UiTypography.Secondary);
-        _ui.TextBig(b, $"TEMPO {hunter.SquadSkillRate:0.00}x SKILL RATE", tx, HunterCard.Y + 176, Slate, UiTypography.Secondary);
+        _ui.TextBig(b, $"TEMPO {hunter.SquadSkillRate:0.00}x ACTION SPEED", tx, HunterCard.Y + 176, Slate, UiTypography.Secondary);
         if (Mastery?.Affinity() is { } mf)
             _ui.TextBig(b, $"{FormShort(mf)} ADEPT", tx, HunterCard.Y + 198, Slate, UiTypography.Secondary);
 
@@ -300,14 +300,16 @@ public sealed class StatsScreen
         {
             case HunterStat.AttackPower:
             {
-                // Hunter.SquadDamageMultiplier = gear × (1 + 0.010 × MIGHT) × worn mods; the fight
-                // multiplies every hit by mods.Damage (Build.Resolve → SoloBattle.Amp).
+                // Hunter.AutoDamageMultiplier = weapon × (1 + 0.010 × MIGHT); the basic attack's raw damage
+                // is AutoAttackDamage × that, then the fight's shared multiplier (mods.Damage: worn mods,
+                // keystones, tree) like every hit. Skills never read MIGHT (2026-08-26).
                 var v = hunter.ValueOf(stat);
-                return ($"YOUR HITS DEAL {mods.Damage:0.00}× DAMAGE", new[]
+                var swing = SoloBattle.AutoAttackDamage * hunter.AutoDamageMultiplier * mods.Damage;
+                return ($"YOUR BASIC ATTACK HITS FOR {swing:0}", new[]
                 {
-                    "MIGHT is your attack. Every point of MIGHT adds 1% to the damage of every hit.",
-                    $"One rank of training adds {hunter.GainPerRank(stat):0} MIGHT. You have {v:0} MIGHT, so your MIGHT alone gives +{v:0}% damage.",
-                    $"With your weapon, keystones and tree counted in, your hits now deal {mods.Damage:0.00}× damage. This is the number the fight uses.",
+                    "MIGHT is your basic attack — the plain swing between skills. Every point of MIGHT adds 1% to it. Skills do not read MIGHT; they read RESONANCE.",
+                    $"One rank of training adds {hunter.GainPerRank(stat):0} MIGHT. You have {v:0} MIGHT, so your MIGHT alone gives the swing +{v:0}%.",
+                    $"With your weapon, keystones and tree counted in, one basic attack hits for {swing:0}. This is the number the fight uses.",
                 });
             }
             case HunterStat.ResonanceAffinity:
@@ -318,7 +320,7 @@ public sealed class StatsScreen
                 var per = 100f * WeavingTuning.Default.SourceScalingCoefficient;
                 return ($"SKILLS START +{per * v:0}% STRONGER", new[]
                 {
-                    $"RESONANCE makes every skill start from a bigger base. Every point adds {per:0.0}% to a skill's base power, before anything else multiplies it.",
+                    $"RESONANCE is your skills' damage. Every point adds {per:0.0}% to a skill's base power, before anything else multiplies it. The basic attack does not read it; it reads MIGHT.",
                     $"One rank of training adds {hunter.GainPerRank(stat):0} RESONANCE. You have {v:0} RESONANCE.",
                     $"Your skills now start +{per * v:0}% above their base power.",
                 });
@@ -326,14 +328,15 @@ public sealed class StatsScreen
             case HunterStat.Engineering:
             {
                 // Hunter.SquadSkillRate = worn focus × worn mods × (1 + 0.006 × TEMPO); the fight divides
-                // every skill's waiting time by mods.SkillRate × shape.SkillRate (SoloBattle cooldowns).
+                // every skill's waiting time, the basic attack's cadence AND every action's animation
+                // by mods.SkillRate × shape.SkillRate (SoloBattle cooldowns, nextAuto, CastGapFor).
                 var rate = mods.SkillRate * shape.SkillRate;
                 var v = hunter.ValueOf(stat);
-                return ($"SKILLS COME BACK {rate:0.00}× AS FAST", new[]
+                return ($"YOU ACT {rate:0.00}× AS FAST", new[]
                 {
-                    "TEMPO makes your skills come back sooner after they fire. Every point makes the wait 0.6% shorter.",
+                    "TEMPO is your speed: the basic attack swings sooner, skills come back sooner, and every animation plays faster. Every point makes it 0.6% quicker.",
                     $"One rank of training adds {hunter.GainPerRank(stat):0} TEMPO. You have {v:0} TEMPO.",
-                    $"With your gear and your build counted in, skills now come back {rate:0.00}× as fast. This is the number the fight uses.",
+                    $"With your gear and your build counted in, you act {rate:0.00}× as fast. This is the number the fight uses.",
                 });
             }
             case HunterStat.Vitality:

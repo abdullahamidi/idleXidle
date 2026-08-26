@@ -31,8 +31,13 @@ public sealed class Champion
     /// <summary>Absolute ms until which a MARK is amplifying. 0 = none.</summary>
     public int MarkUntilMs { get; set; }
 
-    /// <summary>Absolute ms before which no OTHER skill may cast — the one-at-a-time stagger.</summary>
-    public int CastLockUntilMs { get; set; }
+    /// <summary>
+    /// Absolute ms before which the champion may take no action — not a cast, not a basic attack. Every
+    /// action holds it for its clip's length at the build's action speed, so the picture never has to
+    /// cut one animation short to start the next (playtest 2026-08-26: "the character must not move to
+    /// the next action before finishing the animation it is in").
+    /// </summary>
+    public int BusyUntilMs { get; set; }
 }
 
 /// <summary>
@@ -156,7 +161,18 @@ public static class SoloBattle
     /// The auto-attack exists so a fight cannot stall to zero, not so it can carry a build. If it ever
     /// out-damages the woven skills, the skill tree stops mattering and the game is idle-clicker mush.
     /// </remarks>
-    public const float AutoAttackDamage = 6f;
+    /// <summary>
+    /// The basic attack's raw damage at zero MIGHT — MIGHT multiplies it (Hunter.AutoDamageMultiplier), then
+    /// the shared multiplier (weapon, worn mods, build) like every hit.
+    /// </summary>
+    /// <remarks>
+    /// 18, from 6 (2026-08-26). Measured with the old 6: the swing was 9–15% of a one-skill build's damage
+    /// and, against any armoured wave, landed for the minimum fraction — twelve swings dealt 12 in a
+    /// 17-second wave. A basic attack that armour eats whole is a stat the player trains for nothing.
+    /// At 18 the swing is about a third of a one-skill build's damage and survives armour.
+    /// </remarks>
+    public const float AutoAttackDamage = 18f;
+    /// <summary>The basic attack's cadence at action speed 1.0; TEMPO divides it.</summary>
     public const int AutoAttackIntervalMs = 1_200;
 
     /// <summary>
@@ -273,7 +289,10 @@ public static class SoloBattle
     /// stagger costs almost no damage — the casts spread in SLOT ORDER across the next few ticks,
     /// which is also the order the player chose on the BUILD screen.
     /// </remarks>
-    /// <summary>The one-cast-at-a-time gap for a build's skill rate: the clip length, played that much faster.</summary>
+    /// <summary>
+    /// The one-ACTION-at-a-time hold for a build's action speed: the clip length, played that much faster.
+    /// A cast and a basic attack hold it alike (both clips are authored to the same length).
+    /// </summary>
     public static int CastGapFor(float skillRate) => Math.Max(100, (int)MathF.Round(CastGapMs / MathF.Max(0.1f, skillRate)));
 
     /// <summary>How often VITALITY's regeneration ticks, in ms.</summary>
@@ -505,8 +524,26 @@ public static class SoloBattle
         var healBudget = heal.BudgetFor(champ.MaxHealth, siphon: triggers.Contains(BuildTrigger.Siphon));
         long healedThisWave = 0;
         if (metrics is not null) metrics.CreaturesPresent = creatures.Count;
-        var nextAuto = AutoAttackIntervalMs;
+        var nextAuto = tuning.AutoAttackIntervalMs;
         var nextBite = enemyIntervalMs;
+
+        // THE SWING IS FILLER. A basic attack that fires when a skill is about to come ready holds the
+        // one-action lock for the whole swing and pushes that skill back — measured on the mastery
+        // sweep (2026-08-26): four-skill builds lost a third of their casts to swings and every
+        // branch's depth moved with it. So a swing only starts when no casting skill will be ready
+        // before the swing would end; otherwise the champion waits the beat for the skill.
+        bool SkillDueWithin(int absNow, int gapMs)
+        {
+            for (var i = 0; i < skills.Count; i++)
+            {
+                var f = skills[i].Form;
+                if (FormBehaviour.IsPassive(f) || FormBehaviour.FiresOnBeingHit(f)) continue;
+                var cdI = Math.Max(1, (int)(FormBehaviour.BaseCooldownMs(f) / Math.Max(0.1f, mods.SkillRate * shape.SkillRate)));
+                var openingI = shape.FreeOpeningCast ? 0 : cdI;
+                if (champ.ReadyAt.GetValueOrDefault(i, openingI) <= absNow + gapMs) return true;
+            }
+            return false;
+        }
 
         (WaveOutcome, List<BattleEvent>) Finish(WaveOutcome o, int atMs)
         {
@@ -973,8 +1010,8 @@ public static class SoloBattle
                 if (abs < champ.ReadyAt.GetValueOrDefault(i, opening)) continue;
                 // ONE CAST AT A TIME — see CastGapMs. Deferring BEFORE ReadyAt is written is the whole
                 // trick: the skill stays ready and fires on the next free beat instead of losing a cast.
-                if (abs < champ.CastLockUntilMs) continue;
-                champ.CastLockUntilMs = abs + CastGapFor(mods.SkillRate * shape.SkillRate);
+                if (abs < champ.BusyUntilMs) continue;
+                champ.BusyUntilMs = abs + CastGapFor(mods.SkillRate * shape.SkillRate);
                 champ.ReadyAt[i] = abs + cd;
 
                 if (FormBehaviour.IsAmplifier(form))
@@ -1131,11 +1168,16 @@ public static class SoloBattle
                 }
             }
 
-            // ── AUTO-ATTACK. Small on purpose — see AutoAttackDamage. ─────────────────────────
-            if (ms >= nextAuto)
+            // ── THE BASIC ATTACK. MIGHT's and the weapon's hit, at TEMPO's cadence, and an ACTION like a
+            //    cast: it waits for the champion to be free and holds the lock for its own swing, so a
+            //    swing and a cast never overlap and a ready skill goes next, not on top. ────────────
+            var actionRate = mods.SkillRate * shape.SkillRate;
+            if (tuning.AutoAttackDamage > 0f && ms >= nextAuto && abs >= champ.BusyUntilMs
+                && !SkillDueWithin(abs, CastGapFor(actionRate)))
             {
-                nextAuto += AutoAttackIntervalMs;
-                LandSpread(AutoAttackDamage, ms, 1, null, null, abs, fromSkill: false);
+                nextAuto = ms + Math.Max(100, (int)MathF.Round(tuning.AutoAttackIntervalMs / MathF.Max(0.1f, actionRate)));
+                champ.BusyUntilMs = abs + CastGapFor(actionRate);
+                LandSpread(tuning.AutoAttackDamage * hunter.AutoDamageMultiplier, ms, 1, null, null, abs, fromSkill: false);
                 if (alive == 0) return Kill(ms);
             }
 

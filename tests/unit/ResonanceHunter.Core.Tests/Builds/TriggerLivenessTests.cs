@@ -241,7 +241,8 @@ public class TriggerLivenessTests
             ExpeditionTuning.Default, new Random(99));
 
         var mods = noSkills.Resolve(new Hunter());
-        var expectedAuto = (int)MathF.Round(SoloBattle.AutoAttackDamage * mods.Damage);
+        // MIGHT's and the weapon's multiplier is the basic attack's own (2026-08-26); the shared mods still apply.
+        var expectedAuto = (int)MathF.Round(SoloBattle.AutoAttackDamage * new Hunter().AutoDamageMultiplier * mods.Damage);
 
         Assert.All(events.Where(e => e.Kind == BattleEventKind.Strike),
             e => Assert.Equal(expectedAuto, e.Amount));

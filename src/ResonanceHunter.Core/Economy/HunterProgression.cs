@@ -218,7 +218,7 @@ public sealed class Hunter
     public int MaxHealth => (int)ValueOf(HunterStat.MaxHealth) + Gear.CharmHealthBonus(_worn[GearSlot.Charm]);
 
     /// <summary>One glanceable number for "am I getting stronger". Shown in the HUD.</summary>
-    public int PowerRating => Gear.PowerRating(SquadDamageMultiplier, SquadSkillRate, SquadHealthMultiplier,
+    public int PowerRating => Gear.PowerRating(AutoDamageMultiplier * SquadDamageMultiplier, SquadSkillRate, SquadHealthMultiplier,
                                               Defense, MaxHealth, CritFactor);
 
     /// <summary>
@@ -348,7 +348,26 @@ public sealed class Hunter
         Enchantments.Worn(_worn.Values.ToArray());   // all eight slots now carry a live trigger, not just three
 
     /// <summary>What the squad hits for: worn gear × command training.</summary>
-    public float SquadDamageMultiplier => GearDamageMultiplier * (1f + 0.010f * AttackPower) * WornMods.Damage;
+    /// <summary>
+    /// The multiplier on EVERY hit — the weapon's damage and the worn items' damage mods (affixes, the
+    /// charm). MIGHT is no longer in it: since 2026-08-26 it is the BASIC ATTACK's own
+    /// (<see cref="AutoDamageMultiplier"/>), and RESONANCE is the skills' (through a skill's base power),
+    /// so the two damage stats answer two different questions instead of one stat feeding both.
+    /// </summary>
+    public float SquadDamageMultiplier => GearDamageMultiplier * WornMods.Damage;
+
+    /// <summary>
+    /// The BASIC ATTACK's own multiplier: MIGHT, +1% per point. The auto-attack's raw damage is
+    /// <c>SoloBattle.AutoAttackDamage × this</c>, then the shared multiplier (weapon, worn mods, build)
+    /// like every hit; skills never read it.
+    /// </summary>
+    /// <remarks>
+    /// Playtest 2026-08-26: "the champion should have plain hits too, because there is a stat for them
+    /// and a stat for skill damage — the two must be kept apart." MIGHT used to multiply every hit
+    /// (skills included) while the auto-attack was a flat 6, so MIGHT was a second RESONANCE and the
+    /// basic attack was nobody's.
+    /// </remarks>
+    public float AutoDamageMultiplier => 1f + 0.010f * AttackPower;
 
 
     /// <summary>
@@ -389,6 +408,11 @@ public sealed class Hunter
     /// often", so it now drives the skill clock. It is the slot that talks to the skills layer.
     /// </remarks>
     /// <remarks>TEMPO (Engineering) is the trainable half; the worn Focus is the rolled half.</remarks>
+    /// <summary>
+    /// TEMPO's rate — since 2026-08-26 the ACTION speed: the basic attack swings this much faster AND
+    /// skills come back this much sooner (one rate, both halves of the fight; "attack speed" and
+    /// "skill rate" were one stat wearing two names).
+    /// </summary>
     public float SquadSkillRate => FocusAttunement * WornMods.SkillRate * (1f + 0.006f * ValueOf(HunterStat.Engineering));
 
     private float FocusAttunement =>

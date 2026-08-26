@@ -586,3 +586,20 @@ last clip ends.
   body, transient, short tail) with per-play pitch variation and a per-cue cooldown; the boss has its
   own death cue. Measured: the hit's spectral centroid fell from 764 to 333 Hz, its decay grew from
   54 to 194 ms (`make_battle_sfx.py --measure`).
+
+## Addendum 2026-08-26 (evening) — one action at a time; MIGHT swings, RESONANCE casts, TEMPO paces both
+
+- **One action at a time.** The champion holds a single lock (`Champion.BusyUntilMs`) for every basic
+  attack and every cast: the clip's length (700 ms) divided by the action rate. No animation is cut
+  short; a ready skill goes next, never on top. The basic attack is filler — it yields when a casting
+  skill will be ready before the swing would end.
+- **Two damage stats, two jobs.** MIGHT multiplies the basic attack only (`AutoDamageMultiplier`, +1% per
+  point on a base of 18). RESONANCE multiplies skills only (`SourceScalingCoefficient` 0.018, raised
+  from 0.008 to carry alone what MIGHT and RESONANCE carried together). The weapon and worn item mods
+  multiply every hit. TEMPO is ACTION SPEED: the swing's cadence, every cooldown and every animation.
+- **Fewer, heavier casts.** Cooldowns rose (Strike 3000, Projectile 1500, Transformation 3500, Trap
+  4000; Mark stays 4000) and each Form's base hit rose by the same factor (Strike 105, Projectile 33,
+  Transformation 56, Trap 145), so damage per cooldown is unchanged and the swing is added on top.
+- **Measured.** Mastery sweep: branch spread 1.38 (band 1.40; was 1.28). Heal probe: MORPH ×4 outlives
+  its no-heal twin 2.53× (band widened to 2.6 — the twin, not the heal, moved; a MORPH follow-up).
+  Basic attack share of a one-skill build's damage: ~a third (was 9–15%, and armour ate it whole).

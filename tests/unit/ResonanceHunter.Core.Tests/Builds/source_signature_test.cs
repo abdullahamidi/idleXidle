@@ -175,9 +175,11 @@ public class SourceSignatureTest
             // stretch has something to convert. (Set via Shape — the sim recomputes cooldowns from
             // the Form and SkillRate; EquippedSkill.CooldownMs is not its input.) 0.95, was 0.77:
             // the cast lock became the cast clip's length ÷ rate (2026-08-26, CastGapFor), which moved
-            // every cadence; a rate sweep under the new lock showed the signature paying ~11% at
-            // 0.95–1.3 and nothing at 0.77 (probed, not guessed).
-            b.Shape = SkillShape.None with { SkillRate = 0.95f };
+            // every cadence. Re-swept the same day when the basic attack joined the lock and Strike's
+            // cooldown went to 3000: the signature pays at 0.8, 1.0, 1.1 and 1.3 and nothing at 0.7,
+            // 0.9, 0.95 or 1.2 — a window-edge effect that only some cadences catch. 1.0 is the
+            // plain build's own rate (probed, not guessed).
+            b.Shape = SkillShape.None with { SkillRate = 1.0f };
             return b;
         }
 

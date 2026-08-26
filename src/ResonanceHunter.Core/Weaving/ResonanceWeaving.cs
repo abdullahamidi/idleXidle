@@ -151,7 +151,14 @@ public sealed record WeavingTuning
     public float StaticCostConversionRate { get; init; } = 3.0f;
 
     /// <summary>How strongly the Hunter's resonance_affinity feeds ability power.</summary>
-    public float SourceScalingCoefficient { get; init; } = 0.008f;
+    /// <remarks>
+    /// 0.018, from 0.008 (2026-08-26). Until then a skill hit was scaled by BOTH stats — RESONANCE here
+    /// and MIGHT through the shared damage multiplier (1 + 0.010 × MIGHT). MIGHT is the basic attack's
+    /// alone now, so RESONANCE carries what two stats carried: (1 + 0.010x)(1 + 0.008x) ≈ 1 + 0.018x for
+    /// the stat totals a trained hunter has. Measured on the mastery sweep: with 0.008 the damage
+    /// branches lost ~30% depth against ENDURE when MIGHT left; 0.018 puts them back.
+    /// </remarks>
+    public float SourceScalingCoefficient { get; init; } = 0.018f;
 
     // SHRUNK from 1.5/0.667 when Sources gained SIGNATURES: at x1.5 the correct play was always
     // "swap to the counter", which reduced the deepest-looking axis to a colour chart. At x1.15 the
@@ -183,12 +190,16 @@ public sealed record WeavingTuning
     /// their value is meant to be how many things they touch, not how hard.
     /// </para>
     /// </remarks>
+    // RAISED WITH THE COOLDOWNS (2026-08-26): every casting Form's cooldown grew (Strike ×1.5,
+    // Projectile ×1.67, Transformation ×1.4, Trap ×1.33) so the basic attack has room between casts,
+    // and each Form's hit grew by the same factor — damage PER COOLDOWN is what it was, in fewer,
+    // heavier blows, and the swing is added on top. (Aura ticks and Mark are untouched: no cooldown.)
     public IReadOnlyDictionary<Form, float> FormBaseValue { get; init; } = new Dictionary<Form, float>
     {
-        [Form.Trap] = 110f,        // the largest hit in the game, and the rarest
-        [Form.Strike] = 70f,       // the large-hit workhorse
-        [Form.Transformation] = 40f,
-        [Form.Projectile] = 20f,   // small and fast — pays in targets, not in size
+        [Form.Trap] = 145f,        // the largest hit in the game, and the rarest (was 110)
+        [Form.Strike] = 105f,      // the large-hit workhorse (was 70)
+        [Form.Transformation] = 56f,   // (was 40)
+        [Form.Projectile] = 33f,   // small and fast — pays in targets, not in size (was 20)
         [Form.Aura] = 12f,         // smallest of all; it is a field, not a blow
         [Form.Mark] = 0f,          // Mark deals no direct damage — it amplifies other sources.
     };

@@ -260,16 +260,16 @@ public class HunterProgressionTests
     [Fact]
     public void test_maxing_offence_does_not_out_scale_the_difficulty_curve()
     {
-        // Measured on the LIVE damage lever (SquadDamageMultiplier, which SoloBattle multiplies every hit by),
-        // not the retired manual-combat DamagePipeline. Attack training must matter but not brute-force the tier.
+        // Measured on the LIVE lever MIGHT feeds — AutoDamageMultiplier, the BASIC ATTACK's own since
+        // 2026-08-26 (skills read RESONANCE). Attack training must matter but not brute-force the tier.
         var hunter = new Hunter();
         hunter.AddGleam(10_000_000);
 
-        var untrained = hunter.SquadDamageMultiplier;
+        var untrained = hunter.AutoDamageMultiplier;
 
         for (var i = 0; i < Tuning.StatRankCap; i++) hunter.Train(HunterStat.AttackPower);
 
-        var maxed = hunter.SquadDamageMultiplier;
+        var maxed = hunter.AutoDamageMultiplier;
         var damageGrowth = maxed / untrained;
 
         // Training must MATTER...
@@ -288,9 +288,9 @@ public class HunterProgressionTests
         var hunter = new Hunter();
         hunter.AddGleam(100_000);
 
-        var before = hunter.SquadDamageMultiplier;
+        var before = hunter.AutoDamageMultiplier;   // MIGHT is the basic attack's stat (2026-08-26)
         for (var i = 0; i < 20; i++) hunter.Train(HunterStat.AttackPower);
-        var after = hunter.SquadDamageMultiplier;
+        var after = hunter.AutoDamageMultiplier;
 
         Assert.True(after > before);
     }
