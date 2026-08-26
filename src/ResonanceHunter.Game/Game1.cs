@@ -1384,7 +1384,7 @@ public class Game1 : Game
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
-                or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "traitlit" or "traitterm" or "traitterminal"
+                or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightfilter" or "traitlit" or "traitterm" or "traitterminal"
                 or "roster" or "rosterlocked" or "weave" or "vault" or "attune" or "attuned" or "trader"
                 or "intro")
             {
@@ -1595,7 +1595,7 @@ public class Game1 : Game
                     _deepestEver = 23; _mastery.SetEarned(77400);   // fixture career values (Stats §13)
                 }
 
-                if (sm is "fight" or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "runlog")
+                if (sm is "fight" or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightfilter" or "runlog")
                 {
                     // fightswing holds the strike clip at its apex, so the one pose a timed capture can
                     // never catch — the blade at full extension — is checkable.
@@ -1673,6 +1673,20 @@ public class Game1 : Game
                         _expedition.ToggleLog();
                     }
                     else _expedition.DevStart(_hunter, 1400f, 9f);
+                    // `fight` with RH_SHOT_T: seconds into the wave to pose (capture.sh's third argument),
+                    // so the bars can be photographed after the fight has moved them.
+                    if (sm == "fight" && float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_T"),
+                            System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out var seekS))
+                        _expedition.DevSeek(seekS);
+                    // fightfilter: the CHEST FILTER popover open, with a setting in it — so the row's
+                    // summary, the lit medallions and the tier line can all be checked in one frame.
+                    if (sm == "fightfilter")
+                    {
+                        _chestKeepMinTier = 3; _chestKeepSlots.Add(ItemBaseType.Helm); _chestKeepSlots.Add(ItemBaseType.Boots);
+                        _expedition.KeepMinTier = 3; _expedition.KeepSlots.Add(ItemBaseType.Helm); _expedition.KeepSlots.Add(ItemBaseType.Boots);
+                        _expedition.FilterOpen = true;
+                    }
                 }
                 if (sm is "boss" or "bossdebug" or "corruptedboss")
                 {
@@ -2007,6 +2021,8 @@ public class Game1 : Game
             // The vault's modals outrank the settings reflex too — Esc on the stall means "close
             // the stall", not "stack the settings panel on top of it".
             else if (_showChests && _chests.ModalUp) _chests.CloseModals();
+            // The hunt's CHEST FILTER popover is the same kind of thing: Esc on it means "close it".
+            else if (!OverlayActive && !_expedition.LogOpen && _expedition.FilterOpen) _expedition.FilterOpen = false;
             else _showSettings = true;
         }
 
@@ -2971,7 +2987,7 @@ public class Game1 : Game
         var parts = _notice.Split('\n');
         var y = _bootTimer > 0f && _bootMessage.Length > 0 && !_tourActive ? 284 : 176;
         var r = new Rectangle(560, y, 800, 96);
-        _ui.PanelNine(_batch, r, "ui_panel_modal_wide", tint: Color.White * fade);
+        _ui.PanelQuiet(_batch, r, fade);   // a toast is not a modal — the quiet frame (UiKit.PanelQuiet)
         _ui.TextCenterBig(_batch, _ui.ShortenBig(parts[0], r.Width - 90, UiTypography.OverlayTitle),
                           r.Center.X, r.Y + 22, NavGold * fade, UiTypography.OverlayTitle);
         if (parts.Length > 1)
@@ -3506,7 +3522,8 @@ public class Game1 : Game
         // against the stage banner above it and read as a seam in the chrome; a panel with its own border
         // sits clearly ON TOP of the scene, which is what a transient toast should do.
         var r = new Rectangle(660, 176, 600, 96);
-        _ui.PanelNine(_batch, r, "ui_panel_modal_wide", tint: Color.White * fade);
+        // The quiet frame, like the stage header it sits under — gold is for modals (UiKit.PanelQuiet).
+        _ui.PanelQuiet(_batch, r, fade);
         _ui.TextCenterBig(_batch, parts[0], r.Center.X, r.Y + 22, _bootColor * fade, UiTypography.OverlayTitle);
         if (parts.Length > 1) _ui.TextCenterBig(_batch, parts[1], r.Center.X, r.Y + 56, Bone * fade, UiTypography.OverlayBody);
     }
