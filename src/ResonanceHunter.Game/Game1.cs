@@ -1212,7 +1212,7 @@ public class Game1 : Game
         }
 
         var facts = GuideUnlockFacts();
-        foreach (var key in Onboarding.SeedExplained(facts, _introSeen, _pendingExplained ?? new List<string>()))
+        foreach (var key in Onboarding.SeedExplained(facts, _introSeen, _pendingExplained ?? new List<string>(), _forge.FreeSocketUsed))
             _explained.Add(key);
         _pendingExplained = null;
 
@@ -2062,7 +2062,7 @@ public class Game1 : Game
             && Onboarding.GemTourDue(gemsHeld, _explained) is { } gemKey)
         {
             _forge.RequestSocketTab();
-            BeginTour(Activity.Forge, Onboarding.GemTour, gemKey);
+            BeginTour(Activity.Forge, Onboarding.GemTourFor(_forge.FreeSocketUsed), gemKey);
         }
 
         // And the moment the first one DROPS, a line at the top says where it goes — never a panel —
@@ -4827,6 +4827,7 @@ public class Game1 : Game
         // invisible, and the player's first click on returning answered a dialog they had forgotten.
         _forge.CancelConfirm();
         _stats.CancelConfirm();   // an armed RESET ALL TRAINING must not survive leaving the screen
+        _expedition.FilterOpen = false;   // the hunt's CHEST FILTER popover folds when the player walks away
         // Looked at: the tile's NEW mark goes (its banner, if any, waits on the screen until closed),
         // and the roster's "someone joined" mark is satisfied by a visit.
         _visited.Add(NavActivity[i]);

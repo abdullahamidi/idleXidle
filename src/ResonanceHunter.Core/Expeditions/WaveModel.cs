@@ -149,7 +149,12 @@ public enum BattleEventKind { Strike, EnemyStrike, Down, Heal, EnemyDown, Skill,
 /// creatures dying one at a time instead of one bar draining — which is the difference between a player
 /// being able to see "I killed two of five" and not.
 /// </remarks>
-public readonly record struct BattleEvent(BattleEventKind Kind, int Slot, int Amount, int AtMs);
+/// <param name="FromSkill">
+/// A Strike dealt by a skill (cast, aura tick, trap bite) rather than the auto-attack. The hunt grades
+/// its damage numbers by it — an auto-swing landing on the same millisecond as a cast used to print
+/// a size up (review 2026-08-26); a timestamp is not a provenance.
+/// </param>
+public readonly record struct BattleEvent(BattleEventKind Kind, int Slot, int Amount, int AtMs, bool FromSkill = false);
 
 /// <summary>Skill payouts earned mid-wave (SALVAGE quality, HARVEST/LODESTONE cores), collected at wave end.</summary>
 public sealed class WaveBonus

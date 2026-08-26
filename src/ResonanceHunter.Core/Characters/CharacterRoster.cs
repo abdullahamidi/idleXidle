@@ -151,7 +151,7 @@ public static class CharacterRoster
             // free; then it was thirty chests, which belonged on the loot champion (playtest 2026-08-26:
             // "THE MAGPIE should have the chest quest — swap it with THE QUIVER"). So: the deepest
             // demand in the roster, in the region every player knows best.
-            Unlock = CharacterUnlock.Quest("q_hollow_deep", "Reach wave 60 in the Verdant Hollow"),
+            Unlock = CharacterUnlock.Quest("q_quiver_hollow", "Reach wave 60 in the Verdant Hollow"),
         },
         new()
         {
@@ -209,7 +209,7 @@ public static class CharacterRoster
             // the Hollow. Now the chest quest, because a champion whose whole passive is FULL POCKETS
             // should be earned by filling them — chests are the Forge's currency and the thing an idle
             // player collects most.
-            Unlock = CharacterUnlock.Quest("q_thirty_chests", "Open 30 chests"),
+            Unlock = CharacterUnlock.Quest("q_magpie_chests", "Open 30 chests"),
         },
     };
 

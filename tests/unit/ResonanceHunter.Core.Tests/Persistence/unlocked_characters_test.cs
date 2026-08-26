@@ -106,7 +106,7 @@ public class UnlockedCharactersTest
     {
         var state = new CharacterState();
         state.Refresh(new[] { "cinderworks", "umbral_reach" });
-        state.CompleteQuest("q_thirty_chests");   // THE MAGPIE's — the loot champion has the chest quest
+        state.CompleteQuest("q_magpie_chests");   // THE MAGPIE's — the loot champion has the chest quest
         state.Refresh(new[] { "cinderworks", "umbral_reach" });
         Assert.Equal(new[] { "seeker", "anvil", "chorus", "magpie" }, state.SaveUnlocked());
 

@@ -123,6 +123,14 @@ public readonly record struct QuestProgress(
 /// a certain wave at deeper levels"). The Bulwark quest is now a HOLD in the Body region, far past
 /// the conquest line; a save that had the old id done already has THE THORNWALL banked.
 /// </para>
+/// <para>
+/// Two more retired the same day: <c>q_thirty_chests</c> (was THE QUIVER's) and <c>q_hollow_deep</c>
+/// (was THE MAGPIE's). The playtest swapped the champions — the loot champion gets the chest quest —
+/// and swapping only the champions under the old ids would have handed a save with "q_thirty_chests"
+/// done THE MAGPIE on its first frame while it kept THE QUIVER. The new ids are <c>q_magpie_chests</c>
+/// and <c>q_quiver_hollow</c>; progress is derived from chests opened and depth, so nobody mid-way
+/// loses a step, and the bank keeps what was earned under the old names.
+/// </para>
 /// </remarks>
 public static class QuestCatalogue
 {
@@ -142,7 +150,7 @@ public static class QuestCatalogue
         },
         new()
         {
-            Id = "q_thirty_chests", Name = "THE FULL HOLD",
+            Id = "q_magpie_chests", Name = "THE FULL HOLD",
             Demand = "Open 30 chests",
             Goal = QuestGoal.ChestsOpened, Threshold = 30, Unit = "CHESTS",
         },
@@ -158,7 +166,7 @@ public static class QuestCatalogue
         },
         new()
         {
-            Id = "q_hollow_deep", Name = "THE DEEP HOLLOW",
+            Id = "q_quiver_hollow", Name = "THE DEEP HOLLOW",
             Demand = "Reach wave 60 in the Verdant Hollow",
             Goal = QuestGoal.DepthInRegion, RegionId = "verdant_hollow", Threshold = 60, Unit = "WAVES",
         },

@@ -30,7 +30,7 @@ public class GemTourTest
     [Fact]
     public void test_the_gem_lesson_has_two_cards_ending_on_the_socket_tab_and_says_the_first_is_free()
     {
-        var tour = Onboarding.GemTour;
+        var tour = Onboarding.GemTourFor(freeSocketUsed: false);
 
         Assert.Equal(2, tour.Count);
         Assert.Equal(tour.Count, tour.Select(s => s.Target).Distinct().Count());
@@ -51,7 +51,7 @@ public class GemTourTest
     [Fact]
     public void test_the_gem_lessons_cards_are_plain_and_short()
     {
-        foreach (var step in Onboarding.GemTour)
+        foreach (var step in Onboarding.GemTourFor(freeSocketUsed: false))
         {
             foreach (var ch in step.Title + step.Body)
                 Assert.True(ch < 128 || AllowedMarks.Contains(ch), $"'{ch}' in {step.Target} is outside the font gate");
@@ -104,5 +104,25 @@ public class GemTourTest
         // Every other rung reads the same whichever way it is asked.
         foreach (var step in Enum.GetValues<TutorialStep>().Where(s => s != TutorialStep.OpenChest))
             Assert.Equal(Tutorial.Body(step), Tutorial.Body(step, new TutorialFacts(ChestsHeld: 1)));
+    }
+
+    [Fact]
+    public void test_a_player_who_already_set_a_gem_is_not_owed_the_lesson_even_after_the_intro()
+    {
+        // Review 2026-08-26: every save launched since the intro build carries introSeen = true, so the
+        // "from before the intro" seed never protected real players; a save that has already socketed
+        // a gem got the YOUR FIRST GEM cards promising a free socket the Forge then refused.
+        var seeded = Onboarding.SeedExplained(new UnlockFacts(WavesCleared: 30), introSeen: true,
+                                              explained: Array.Empty<string>(), freeSocketUsed: true);
+        Assert.Contains(Onboarding.GemTourKey, seeded);
+        Assert.Null(Onboarding.GemTourDue(gemsHeld: 2, explained: seeded));
+    }
+
+    [Fact]
+    public void test_the_gem_tours_price_line_reads_the_real_rule()
+    {
+        Assert.Contains("free", Onboarding.GemTourFor(freeSocketUsed: false)[1].Body);
+        Assert.DoesNotContain("free", Onboarding.GemTourFor(freeSocketUsed: true)[1].Body);
+        Assert.Contains("Essence", Onboarding.GemTourFor(freeSocketUsed: true)[1].Body);
     }
 }

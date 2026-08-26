@@ -454,7 +454,11 @@ public sealed class SoloExpeditionScreen
         TourTarget.HunterHud => new[] { new Rectangle(186, 10, 440, 225) },
         TourTarget.CurrencyPills => new[] { new Rectangle(1440, 4, 400, 84) },
         TourTarget.Skills => new[] { new Rectangle(180, 226, 306, 370) },
-        TourTarget.RightColumn => new[] { new Rectangle(1560, 100, 350, 268) },   // idle rate, errands, the filter row (closed)
+        // Idle rate, errands, the filter row (closed) — down to wherever the filter row LAST drew. The
+        // rail's height depends on how many errands are up, and a new game now holds the welcome chest,
+        // so the fixed 268 px measured for an empty rail sliced the filter row in half on every first
+        // intro (review 2026-08-26). The screen draws before the tour asks, so the measure is fresh.
+        TourTarget.RightColumn => new[] { new Rectangle(1560, 100, 350, Math.Max(268, s_railBottom - 100)) },
         TourTarget.NavRail => new[] { new Rectangle(0, 0, 184, 1080) },
         TourTarget.GuideStrip => new[] { new Rectangle(456, 936, 1008, 130) },
         _ => Array.Empty<Rectangle>(),
@@ -1007,7 +1011,9 @@ public sealed class SoloExpeditionScreen
                     _nextChampStrikeMs = _replay.NextChampionStrikeAfter(e.AtMs);
                     Sound?.Play("sfx_hit", 0.38f, vary: 0.06f);   // the blow lands — it fires constantly, so it is never quite the same twice
                     // The number is the blow: the event's amount, over the creature that took it.
-                    if (e.Amount > 0) SpawnDamage(e.Amount, e.Slot, crit: e.AtMs == trapAtMs, skill: e.AtMs == skillAtMs);
+                    // Graded by PROVENANCE (the event says whether a skill dealt it) and only then by beat:
+                    // an auto-swing on a cast's own millisecond stays plain.
+                    if (e.Amount > 0) SpawnDamage(e.Amount, e.Slot, crit: e.FromSkill && e.AtMs == trapAtMs, skill: e.FromSkill && e.AtMs == skillAtMs);
                     if ((_strikeCount++ & 1) == 0)   // every other hit: a small, quiet puff
                     {
                         var (hx, hy) = EnemyPoint(e.Slot, 0.45f);
@@ -2178,6 +2184,9 @@ public sealed class SoloExpeditionScreen
     /// </remarks>
     public bool FilterOpen { get; set; }
 
+    /// <summary>The bottom edge of the CHEST FILTER row as last drawn (+ margin) — the right column's true extent.</summary>
+    private static int s_railBottom = 368;
+
     private static readonly ItemBaseType[] SlotChips =
     {
         ItemBaseType.Weapon, ItemBaseType.Helm, ItemBaseType.Chest, ItemBaseType.Gloves,
@@ -2224,6 +2233,7 @@ public sealed class SoloExpeditionScreen
     private void DrawKeepFilter(SpriteBatch b, Rectangle row, Point hit, bool clicked)
     {
         var pop = new Rectangle(row.X, row.Bottom + 8, row.Width, FilterPopoverHeight);
+        s_railBottom = row.Bottom + 10;
         var wasOpen = FilterOpen;
         var hot = row.Contains(hit);
         if (UiKit.ClickedIn(row, hit, clicked)) FilterOpen = !wasOpen;

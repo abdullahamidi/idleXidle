@@ -116,7 +116,7 @@ public class CharactersRosterTest
         var loaded = new CharacterState();
         loaded.Restore("seeker", saved);
         Assert.True(loaded.QuestDone("q_three_vows"));
-        Assert.False(loaded.QuestDone("q_thirty_chests"));
+        Assert.False(loaded.QuestDone("q_magpie_chests"));
     }
 
     [Fact]

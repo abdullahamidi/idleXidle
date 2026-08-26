@@ -205,8 +205,8 @@ public static class Onboarding
                 "Your skills. They fire on their own timers. You choose them on the BUILD screen later."),
 
             new TourStep(TourTarget.RightColumn, "REWARDS AND ERRANDS",
-                "Rewards and errands. When a boss drops a chest, or you earn mastery points, "
-                + "the buttons here take you there."),
+                "Rewards and errands. A chest waits in the VAULT already; when a boss drops another, "
+                + "or you earn mastery points, the buttons here take you there."),
 
             new TourStep(TourTarget.NavRail, "THE OTHER SCREENS",
                 "The other screens. Most are closed for now. They open as you play — "
@@ -417,7 +417,7 @@ public static class Onboarding
     /// line is read from the rule (<c>GemCraft.IsFirstGemFree</c>), so the card cannot promise a
     /// discount the Forge then refuses.
     /// </remarks>
-    public static IReadOnlyList<TourStep> GemTour => new[]
+    public static IReadOnlyList<TourStep> GemTourFor(bool freeSocketUsed) => new[]
     {
         new TourStep(TourTarget.Bag, "YOUR FIRST GEM",
             "A gem is a stone you set into an item, and it adds its stat to that item. With the SOCKET "
@@ -425,7 +425,7 @@ public static class Onboarding
 
         new TourStep(TourTarget.SocketTab, "SETTING IT",
             "Put a RARE or better item on the bench, keep SOCKET open, then click the gem in the bag. "
-            + (Economy.GemCraft.IsFirstGemFree(freeSocketUsed: false)
+            + (Economy.GemCraft.IsFirstGemFree(freeSocketUsed)
                 ? "Your first gem is free to set. Later ones cost Essence."
                 : "Setting a gem costs Essence.")),
     };
@@ -464,9 +464,13 @@ public static class Onboarding
     /// intro gets the list exactly as saved: whatever they have not yet read is still waiting for them.
     /// </remarks>
     public static IReadOnlyCollection<string> SeedExplained(
-        UnlockFacts f, bool introSeen, IEnumerable<string> explained)
+        UnlockFacts f, bool introSeen, IEnumerable<string> explained, bool freeSocketUsed = false)
     {
         var set = new HashSet<string>(explained);
+        // A player who has already set a gem needs no lesson in setting one — and the lesson's last
+        // card would promise a free socket the Forge then refuses (review 2026-08-26). This holds for
+        // every save, not only the ones from before the intro.
+        if (freeSocketUsed) set.Add(GemTourKey);
         var returningFromBefore = !introSeen
             && !IntroDue(new TutorialFacts(WavesCleared: f.WavesCleared), false);
         if (!returningFromBefore) return set;

@@ -25,7 +25,7 @@ public class QuestsTest
     [Fact]
     public void test_depth_quest_completes_only_at_its_threshold()
     {
-        var q = QuestCatalogue.Find("q_hollow_deep")!;
+        var q = QuestCatalogue.Find("q_quiver_hollow")!;
         Assert.Equal(60, q.Threshold);
         Assert.False(q.IsDone(Progress(hollowDepth: 59)));
         Assert.True(q.IsDone(Progress(hollowDepth: 60)));
@@ -35,7 +35,7 @@ public class QuestsTest
     [Fact]
     public void test_depth_in_one_region_does_not_satisfy_a_quest_about_another()
     {
-        var q = QuestCatalogue.Find("q_hollow_deep")!;
+        var q = QuestCatalogue.Find("q_quiver_hollow")!;
         var elsewhere = new QuestProgress(
             new Dictionary<string, int> { ["cinderworks"] = 99 }, 1, 0, 0);
         Assert.False(q.IsDone(elsewhere));
@@ -180,10 +180,14 @@ public class QuestsTest
     public void test_the_chest_quest_is_the_magpies_and_the_hollow_depth_is_the_quivers()
     {
         // Playtest 2026-08-26: "THE MAGPIE should have the chest quest (it is loot-focused) — swap it
-        // with THE QUIVER." The ids stayed; the champions swapped.
-        Assert.Equal("q_thirty_chests", CharacterRoster.Get("magpie").Unlock.QuestId);
-        Assert.Equal(QuestGoal.ChestsOpened, QuestCatalogue.Find("q_thirty_chests")!.Goal);
-        Assert.Equal("q_hollow_deep", CharacterRoster.Get("quiver").Unlock.QuestId);
-        Assert.Equal("verdant_hollow", QuestCatalogue.Find("q_hollow_deep")!.RegionId);
+        // with THE QUIVER." The champions swapped AND the ids were retired: a save with the old
+        // "q_thirty_chests" done had earned THE QUIVER, and the same id on THE MAGPIE would have handed
+        // that save a second champion for one quest (review 2026-08-26).
+        Assert.Null(QuestCatalogue.Find("q_thirty_chests"));
+        Assert.Null(QuestCatalogue.Find("q_hollow_deep"));
+        Assert.Equal("q_magpie_chests", CharacterRoster.Get("magpie").Unlock.QuestId);
+        Assert.Equal(QuestGoal.ChestsOpened, QuestCatalogue.Find("q_magpie_chests")!.Goal);
+        Assert.Equal("q_quiver_hollow", CharacterRoster.Get("quiver").Unlock.QuestId);
+        Assert.Equal("verdant_hollow", QuestCatalogue.Find("q_quiver_hollow")!.RegionId);
     }
 }

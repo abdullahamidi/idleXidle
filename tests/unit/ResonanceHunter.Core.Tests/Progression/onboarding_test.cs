@@ -72,7 +72,7 @@ public class OnboardingTest
             (TourTarget.Skills, "YOUR SKILLS",
                 "Your skills. They fire on their own timers. You choose them on the BUILD screen later."),
             (TourTarget.RightColumn, "REWARDS AND ERRANDS",
-                "Rewards and errands. When a boss drops a chest, or you earn mastery points, the buttons here take you there."),
+                "Rewards and errands. A chest waits in the VAULT already; when a boss drops another, or you earn mastery points, the buttons here take you there."),
             (TourTarget.NavRail, "THE OTHER SCREENS",
                 "The other screens. Most are closed for now. They open as you play — a gold NEW mark shows what just opened."),
             (TourTarget.GuideStrip, "LESSONS",
