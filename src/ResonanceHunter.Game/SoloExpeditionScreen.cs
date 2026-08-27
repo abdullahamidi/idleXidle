@@ -1055,9 +1055,11 @@ public sealed class SoloExpeditionScreen
                         _auraTotal += e.Amount;
                     }
                     else if (e.Amount > 0) SpawnDamage(e.Amount, e.Slot, crit: e.FromSkill && e.AtMs == trapAtMs, skill: e.FromSkill && e.AtMs == skillAtMs);
-                    // The creature that took it FLASHES — drawn additive over its sprite (a tint can only
-                    // darken); an aura tick washes the whole pack faintly.
-                    _hitFlash[e.Slot] = auraTick ? 0.55f : 1f;
+                    // The creature that took it FLASHES — but ONLY for a real blow, and only once its last
+                    // flash has finished. An aura ticks twice a second and the swing lands every beat, and
+                    // together they strobed the pack ("the enemy blinks like a disco ball", playtest
+                    // 2026-08-30); an always-on field has its own picture (the pulse) and needs no flash.
+                    if (!auraTick && _hitFlash.GetValueOrDefault(e.Slot) <= 0f) _hitFlash[e.Slot] = 1f;
                     if (!auraTick && (_strikeCount++ & 1) == 0)   // every other blow: a small, quiet puff
                     {
                         var (hx, hy) = EnemyPoint(e.Slot, 0.45f);
@@ -1714,6 +1716,9 @@ public sealed class SoloExpeditionScreen
             _ui.Fill(b, _bossBodyRect, Ember);
             return;
         }
+        // The boss flashes white for a blow like every other creature (playtest 2026-08-30: "the bosses
+        // do not flash"). Same silhouette pass, same shaped life — the boss is always slot 0.
+        FlashOver(b, key, box, seconds, fps, !attacking, FlashAt(0), -1f);
         _bossFrame = attacking ? Math.Min(7, (int)(seconds * fps)) : (int)(seconds * fps) % 8;
         _bossBodyRect = box;
         _bossFullRect = box;
@@ -2637,7 +2642,7 @@ public sealed class SoloExpeditionScreen
         // pitch has to clear the medallion PLUS that text, and the medallion shrinks to pay for it.
         var (_, pitch, slot) = SkillRailMetrics();
         const int y0 = RailTop + RailHeadroom;
-        _ui.TextBig(b, "SKILLS", RailContentX, RailTop + UiTypography.PanelTitleTop, Gold, UiTypography.PanelTitle);
+        _ui.TextCenterBig(b, "SKILLS", RailContentX + RailContentW / 2, RailTop + UiTypography.PanelTitleTop, Gold, UiTypography.PanelTitle);
         // THE POOL, beside the header it feeds. Gold at the brim — the REND moment worth waiting for.
         if (_chargeLive)
             _ui.TextRightBig(b, $"CHARGE {_chargeNow}/{_chargeCap}", RailContentX + RailContentW,
@@ -2737,21 +2742,17 @@ public sealed class SoloExpeditionScreen
                 // row of pips under the medallion, one lit per action taken since its last cast, all lit
                 // when it is next. A clock on a skill that counts actions read as "still timed" (playtest
                 // 2026-08-28). Time-counted skills keep the clockwise sweep.
+                // ONE READOUT FOR BOTH KINDS: the clockwise sweep over the medallion. A beat-counted skill
+                // STEPS it — a sixth of the circle unwinds per action for a six-action skill — so the
+                // player reads "two more swings" at a glance instead of a smooth clock that lies about
+                // being timed (playtest 2026-08-30: "no need for a bar; the radial gauge again, and each
+                // action takes 360/X off it"). A timed skill sweeps continuously, as before.
                 var beats = FormBehaviour.CooldownBeats(s.Form);
-                if (beats > 0)
-                {
-                    var litPips = flash > 0f ? beats : Math.Clamp((int)MathF.Floor(ready * beats + 0.001f), 0, beats);
-                    const int pip = 10, gap = 6;
-                    var px0 = box.Center.X - (beats * pip + (beats - 1) * gap) / 2;
-                    for (var k = 0; k < beats; k++)
-                    {
-                        var r = new Rectangle(px0 + k * (pip + gap), box.Bottom + 4, pip, pip);
-                        _ui.Fill(b, r, k < litPips ? sc : new Color(0x22, 0x1C, 0x30));
-                        if (k >= litPips) Outline(b, r, Dim, 1);
-                    }
-                }
-                else if (flash <= 0f)
-                    _ui.CooldownSweep(b, new Vector2(box.Center.X, box.Center.Y), box.Width * 0.36f, ready,
+                var swept = beats > 0
+                    ? Math.Clamp((int)MathF.Floor(ready * beats + 0.001f), 0, beats) / (float)beats
+                    : ready;
+                if (flash <= 0f)
+                    _ui.CooldownSweep(b, new Vector2(box.Center.X, box.Center.Y), box.Width * 0.36f, swept,
                                       new Color(0x0C, 0x09, 0x16, 0xB4), Bone * 0.8f);
                 if (flash > 0f)
                 {
@@ -2765,7 +2766,7 @@ public sealed class SoloExpeditionScreen
                 var head = BuildGlossary.FormHeadline(s.Form);
                 // CLEAR OF THE PIPS. The beat row sits at box.Bottom + 4 and is 10 px tall, so a
                 // headline at +12 printed through it — visible in every capture of a beat-counted skill.
-                var hy = box.Bottom + (beats > 0 ? 22 : 12);
+                var hy = box.Bottom + 12;
                 foreach (var line in _ui.WrapBig(head, RailContentW, UiTypography.Caption).Take(2))
                 {
                     _ui.TextBig(b, line, RailContentX, hy, Gold, UiTypography.Caption);

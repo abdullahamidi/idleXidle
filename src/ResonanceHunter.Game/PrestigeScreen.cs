@@ -190,10 +190,15 @@ public sealed class PrestigeScreen
     /// number goes from one digit to two; the number is right-aligned into its own column instead.
     /// </para>
     /// </remarks>
-    private static readonly Rectangle PointPlate = new(View.X, 80, 360, 52);
+    // Just the glyph and the number. The caption beside them ("TRAIT POINTS TO SPEND") made the plate a
+    // 360-px ribbon around a one- or two-digit number (playtest 2026-08-30: "the frame is far too long
+    // and thin — delete the text, dress the frame around the points and the icon only"). The size comes
+    // from the house grid: the frame's own corner plus the standard padding on each side, and a height
+    // that clears PrimaryValue with PanelBodyTop above it and PanelPadBottom below.
+    private static readonly Rectangle PointPlate = new(View.X, 76, 156, 84);
 
-    /// <summary>The plate's glyph box and the column its number ends in — shared by the draw and the tour.</summary>
-    private const int PointGlyph = 32;
+    /// <summary>The plate's glyph box — shared by the draw and the tour.</summary>
+    private const int PointGlyph = 40;
 
     /// <summary>
     /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
@@ -565,34 +570,25 @@ public sealed class PrestigeScreen
     /// </remarks>
     private void DrawPointPlate(SpriteBatch b, MemoryDustTree tree)
     {
-        const string caption = "TRAIT POINTS TO SPEND";
-        // The frame's corner ornament reaches this far in on a plate only 52 px tall (UiKit.NineSlice
-        // clamps its corner to half the shorter side), so content starts past it rather than on it.
-        var pad = Math.Min(UiKit.PanelCorner, PointPlate.Height / 2);
         _ui.PanelQuiet(b, PointPlate);
 
         var has = tree.Available > 0;
         var ink = has ? Gold : Slate;
+        // THE HOUSE GRID, not a hand-measured centre: the glyph starts at ContentLeft, the number ends at
+        // ContentRight, and both sit on the plate's vertical middle — the same rule every other panel uses.
+        // The glyph and the number are ONE group, centred in the frame's interior: the plate is a fixed
+        // width so the tour's spotlight and this drawing cannot disagree, and a one-digit number pinned
+        // to ContentRight left the group hanging off the frame's right ornament.
         var num = $"{tree.Available}";
         var numW = _ui.MeasureBig(num, UiTypography.PrimaryValue);
-        var capW = _ui.MeasureBig(caption, UiTypography.Secondary);
-        // CENTRED IN THE INTERIOR rather than packed against the left ornament: the plate is a fixed
-        // width (so the tour's spotlight and this drawing cannot disagree) and the number is one or two
-        // digits for most of a run, so left-packing leaves a third of the plate visibly empty.
-        var room = PointPlate.Width - pad * 2;
-        var group = PointGlyph + 14 + numW + 16 + capW;
-        var x = PointPlate.X + pad + Math.Max(0, (room - group) / 2);
-
+        const int gap = 14;
+        var group = PointGlyph + gap + numW;
+        var x = PointPlate.X + (PointPlate.Width - group) / 2;
         var glyph = new Rectangle(x, PointPlate.Y + (PointPlate.Height - PointGlyph) / 2, PointGlyph, PointGlyph);
         if (!_ui.Icon(b, "nav_prestige", glyph, has ? Color.White : Slate)) _ui.Diamond(b, glyph, ink);
-        x = glyph.Right + 14;
-
-        _ui.TextBig(b, num, x, PointPlate.Y + (PointPlate.Height - UiTypography.PrimaryValue) / 2 - 2,
+        _ui.TextBig(b, num, glyph.Right + gap,
+                    PointPlate.Y + (PointPlate.Height - UiTypography.PrimaryValue) / 2 - 2,
                     ink, UiTypography.PrimaryValue);
-        x += numW + 16;
-        _ui.TextBig(b, _ui.ShortenBig(caption, PointPlate.Right - pad - x, UiTypography.Secondary),
-                    x, PointPlate.Y + (PointPlate.Height - UiTypography.Secondary) / 2,
-                    Slate, UiTypography.Secondary);
     }
 
     /// <summary>

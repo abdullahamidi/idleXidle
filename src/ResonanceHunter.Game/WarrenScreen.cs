@@ -165,14 +165,35 @@ public sealed class WarrenScreen
     /// and a badge that breaks at level 100 is a bug with a date on it.
     /// </para>
     /// </remarks>
-    private void LevelBadge(SpriteBatch b, Rectangle box, int level)
+    /// <summary>
+    /// THE WARREN'S CREST: its own drawn icon (a lit burrow mouth) with a GOLD PROGRESS ARC around it —
+    /// the arc closes as the warren fills its level, so the badge shows how far along the place is
+    /// before a number is read.
+    /// </summary>
+    /// <remarks>
+    /// The level's numeral used to be struck inside a medallion. That is not what a crest is for
+    /// (playtest 2026-08-30: "I did not say write the level on the icon — make a warren icon that
+    /// conveys its progress, think of it as a medallion"), and the number is already beside it in words.
+    /// The arc starts at twelve o'clock and runs clockwise, the same direction as the hunt's cooldowns.
+    /// </remarks>
+    private void LevelBadge(SpriteBatch b, Rectangle box, float progress)
     {
-        if (!_ui.Icon(b, "ui_medallion_hex", box, Gold)) _ui.Diamond(b, box, MasteryC);
-        var num = level.ToString();
-        var px = UiTypography.PrimaryValue;
-        var hollow = box.Width * 56 / 100;
-        while (px > UiTypography.Caption && _ui.MeasureBig(num, px) > hollow) px--;
-        _ui.TextCenterBig(b, num, box.Center.X, box.Center.Y - px * 27 / 40, Bone, px);
+        if (!_ui.Icon(b, "icon_warren_crest", box, Color.White)) _ui.Diamond(b, box, MasteryC);
+
+        var centre = new Vector2(box.Center.X, box.Center.Y);
+        var radius = box.Width * 0.54f;
+        const int segments = 96;
+        var filled = Math.Clamp(progress, 0f, 1f);
+        for (var k = 0; k < segments; k++)
+        {
+            var t0 = k / (float)segments;
+            var a0 = -MathF.PI / 2f + MathF.Tau * t0;
+            var a1 = -MathF.PI / 2f + MathF.Tau * (k + 1) / segments;
+            var lit = t0 < filled;
+            var p0 = centre + new Vector2(MathF.Cos(a0), MathF.Sin(a0)) * radius;
+            var p1 = centre + new Vector2(MathF.Cos(a1), MathF.Sin(a1)) * radius;
+            _ui.LineSeg(b, p0, p1, lit ? 5f : 3f, lit ? Gold : Dim);
+        }
     }
 
     private void DrawOverview(SpriteBatch b, Point hit, bool clicked)
@@ -191,8 +212,8 @@ public sealed class WarrenScreen
 
         // ── THE LEVEL, ON ITS BADGE, WITH WHAT THE LEVEL BUYS BESIDE IT ──
         var crest = new Rectangle(left, UiKit.BodyTop(OverviewPanel), 84, 84);
-        LevelBadge(b, crest, Warren.Level);
-        _ui.TextBig(b, "WARREN LEVEL", crest.Right + 20, crest.Y + 12, Slate, UiTypography.Secondary);
+        LevelBadge(b, crest, Warren.XpToNext > 0 ? Warren.Xp / (float)Warren.XpToNext : 1f);
+        _ui.TextBig(b, $"WARREN LEVEL {Warren.Level}", crest.Right + 20, crest.Y + 12, Bone, UiTypography.Body);
         _ui.TextBig(b, $"+{Warren.AllProductionBonus * 100f:0}% ALL PRODUCTION", crest.Right + 20, crest.Y + 48, Met, UiTypography.Body);
 
         // XP BAR TO THE NEXT WARREN LEVEL — the ART's bar, at a height the art can hold.
