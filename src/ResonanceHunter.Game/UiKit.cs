@@ -785,6 +785,51 @@ public sealed class UiKit
     /// <summary>The ornamented end of the 256×96 button art, in source pixels — everything past it is plain border.</summary>
     private const int ButtonCapSrcPx = 44;
 
+    /// <summary>
+    /// How wide the button art's end ornament lands at a given control height — the inset a caller
+    /// laying out its OWN content (see <see cref="Field"/>) must clear on both sides.
+    /// </summary>
+    public static int FieldCapWidth(int height)
+        => Math.Max(2, (int)MathF.Round(ButtonCapSrcPx * height / 96f));
+
+    /// <summary>
+    /// A FIELD: the button's frame with no label of its own, for a control whose content the caller
+    /// lays out — a dropdown showing a left-aligned value and a chevron, rather than a centred verb.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The same three arts as <see cref="Button"/>, so a field and a button on one panel read as the
+    /// same family: dark frame at rest, bright gold when <paramref name="lit"/> (hovered, or holding an
+    /// open list), grey when disabled. Always 3-sliced — a field is wide by nature, and stretching the
+    /// whole 256×96 art across 524 px is the "the frame looks cheap" of the 2026-08-26 playtest.
+    /// </para>
+    /// <para>
+    /// The WELL IS PAINTED FIRST, and it has to be: <c>ui_button_primary</c>'s interior is fully
+    /// transparent, so the lit state without it is a gold frame around whatever happens to be behind.
+    /// </para>
+    /// <para>
+    /// DISABLED IS THE RESTING ART, DIMMED — not <c>ui_button_disabled</c>, which a <see cref="Button"/>
+    /// wears. That asset has a light grey OPAQUE interior: it reads as an off switch, which is right for
+    /// a verb and wrong for a field, where it makes the one control you cannot use the brightest thing
+    /// on a near-black panel. Tinting the resting art keeps the same silhouette and only takes the gold
+    /// out of it, which is what "you cannot change this right now" should look like.
+    /// </para>
+    /// </remarks>
+    public void Field(SpriteBatch b, Rectangle r, bool enabled, bool lit, Color? well = null)
+    {
+        Fill(b, new Rectangle(r.X + 6, r.Y + 5, r.Width - 12, r.Height - 10), well ?? Ink);
+        var key = enabled && lit ? "ui_button_primary" : "ui_button_secondary";
+        if (Assets.Get(key) is { } tex) HSliceScaled(b, tex, r, ButtonCapSrcPx, enabled ? Color.White : FieldOff);
+        else
+        {
+            Fill(b, r, PanelBg);
+            Fill(b, new Rectangle(r.X + 1, r.Y + 1, r.Width - 2, r.Height - 2), enabled ? PanelEdge : Dim);
+        }
+    }
+
+    /// <summary>The multiply tint that takes the gold out of a field's frame when it is inert.</summary>
+    private static readonly Color FieldOff = new(0x5C, 0x56, 0x62);
+
     // The 256×64 bar frames: corner ornaments in the first/last 32 source px, the centre ornament between
     // x 94 and 162, plain stone border between; the window starts 14 px in. Measured on ui_bar_boss_frame.
     private const int BarCapSrcPx = 32;

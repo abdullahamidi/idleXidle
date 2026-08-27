@@ -64,17 +64,21 @@ public class Game1 : Game
     /// </para>
     /// </remarks>
     private const int ArtScale = 4;
-    /// <summary>
-    /// Current integer scale. No longer a const: display settings change it at runtime, and in
-    /// borderless/fullscreen it is derived from the monitor rather than chosen.
-    /// </summary>
-    private int _scale = 3;
 
     /// <summary>Where the canvas lands on screen (scaled + centred; the rest is letterbox).</summary>
-    private Rectangle _present = Display.Present(Display.CanvasWidth * 3, Display.CanvasHeight * 3, 3);
+    private Rectangle _present = Display.PresentFit(1280, 720);
 
     private DisplayMode _displayMode = DisplayMode.Windowed;
-    private int _windowedScale = 3;
+
+    /// <summary>
+    /// The window size the player chose. Only WINDOWED reads it; the other two modes take the desktop.
+    /// </summary>
+    /// <remarks>
+    /// A REQUEST, not a fact: <see cref="Display.NearestOffered"/> clamps it to something this desktop
+    /// can actually hold every time the mode is applied, so a prefs file carried between machines never
+    /// opens a window bigger than the screen it is on.
+    /// </remarks>
+    private WindowSize _windowSize = new(1280, 720);
     // Sound + dialog prefs ride the same prefs file as the display mode (Display.GamePrefs).
     private int _sfxVolume = 80;     // 0..100 percent (the settings sliders)
     private int _musicVolume = 50;   // 0..100 percent
@@ -84,6 +88,15 @@ public class Game1 : Game
 
     // art-bible §4.1. Hearth Gold marks EARNED states only — never decoration.
     private static readonly Color VoidInk = new(0x1B, 0x16, 0x20);
+
+    /// <summary>The letterbox bars — the backbuffer outside the canvas.</summary>
+    /// <remarks>
+    /// One step darker than <see cref="VoidInk"/> (art-bible §4.1's #1B1620) on purpose. Void Ink is a
+    /// SURFACE colour: it is what the canvas itself clears to, so bars painted in it read as more game
+    /// — a panel the content failed to fill. The bar is not game at all, and the darkest tone in the
+    /// palette is the one that says so and stops the eye at the canvas edge.
+    /// </remarks>
+    private static readonly Color LetterboxInk = new(0x14, 0x10, 0x1A);
     private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
     private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
     private static readonly Color Ember = new(0xD8, 0x48, 0x3A);
@@ -497,7 +510,7 @@ public class Game1 : Game
         if (Environment.GetEnvironmentVariable("RH_SHOT") is null)
         {
             var prefs = Display.Load();
-            (_displayMode, _windowedScale) = (prefs.Mode, prefs.WindowedScale);
+            (_displayMode, _windowSize) = (prefs.Mode, prefs.Window);
             (_sfxVolume, _musicVolume, _askBeforeScrap) = (prefs.SfxVolume, prefs.MusicVolume, prefs.AskBeforeScrap);
             (_showDamageNumbers, _showSkillCallouts, _showHitEffects, _showScreenFlash)
                 = (prefs.ShowDamageNumbers, prefs.ShowSkillCallouts, prefs.ShowHitEffects, prefs.ShowScreenFlash);
@@ -1399,13 +1412,32 @@ public class Game1 : Game
         // The hover-tip clock only ever counts UP here; DrawSettings resets it whenever the
         // hovered row changes, so the delay is measured on whichever screen the panel is over.
         _tipTimer = Math.Min(_tipTimer + dt, 10f);   // capped: an uncapped float stalls after days
+        // Escape is claimed per frame, not per handler — see _settingsEscSpent.
+        _settingsEscSpent = false;
         // A closed panel holds no dropdown open and no slider mid-drag. The drag latch is the
         // quiet failure: Esc mid-drag must still write the prefs the drag was setting.
         if (!_showSettings)
         {
-            _settingsDropdown = 0;
+            CloseDropdown();
             _tipKey = "";
             if (_dragSlider != 0) { _dragSlider = 0; SaveDisplay(); }
+        }
+        else if (_settingsDropdown != 0)
+        {
+            // ── AN OPEN LIST OWNS THE KEYBOARD. Up/Down walk it, Enter takes the row under the
+            //    cursor, Escape shuts the LIST — one layer, not the whole panel (see _settingsEscSpent).
+            //    Raw edges rather than Pressed(): this runs before _swallowInput is recomputed for the
+            //    frame, and the arrow keys must not also reach the title menu's own cursor below.
+            bool Edge(Keys k) => _keys.IsKeyDown(k) && _prevKeys.IsKeyUp(k);
+            if (Edge(Keys.Up)) _dropMove--;
+            if (Edge(Keys.Down)) _dropMove++;
+            if (Edge(Keys.Enter)) _dropCommit = true;
+            if (Edge(Keys.Escape))
+            {
+                CloseDropdown();
+                _settingsEscSpent = true;
+                _sound.Play("sfx_click", 0.6f);
+            }
         }
 
         // START A NEW GAME, confirmed on the settings panel last frame. Acted on HERE, between
@@ -1782,7 +1814,12 @@ public class Game1 : Game
                 // Poses the MODE dropdown OPEN, so the option list's z-order over the rows under
                 // it is photographable (pair with RH_SHOT_MOUSE to park the cursor on a row and
                 // pose its hover explanation in the same shot).
-                if (sm == "settingsopen") { _showSettings = true; _settingsDropdown = 1; }
+                // RH_SHOT_DROPDOWN picks WHICH list is posed: "mode" (the default) or "size".
+                if (sm == "settingsopen")
+                {
+                    _showSettings = true;
+                    OpenDropdown(Environment.GetEnvironmentVariable("RH_SHOT_DROPDOWN") == "size" ? 2 : 1);
+                }
                 if (sm == "world")
                 {
                     // Show a mid-progression map: home conquered, Cinderworks unlocked.
@@ -2050,7 +2087,9 @@ public class Game1 : Game
 
             if (_showSettings)
             {
-                if (Pressed(Keys.Escape)) _showSettings = false;
+                // Escape peels one layer: an open dropdown list first (spent in the block above),
+                // then the panel.
+                if (!_settingsEscSpent && Pressed(Keys.Escape)) _showSettings = false;
                 Latch(gameTime);
                 return;
             }
@@ -2117,7 +2156,7 @@ public class Game1 : Game
         // ESC OPENS SETTINGS NOW, closing whatever modal is up first. It used to quit the game — the
         // standard PC reflex "Esc = menu" was wired to the most destructive thing the program can do.
         // Quitting lives ON the settings panel (SAVE AND QUIT), where it says what it does.
-        if (Pressed(Keys.Escape))
+        if (!_settingsEscSpent && Pressed(Keys.Escape))
         {
             if (_showSettings) _showSettings = false;
             else if (_showHelp) _showHelp = false;
@@ -3681,21 +3720,48 @@ public class Game1 : Game
             : Display.ToCanvas(new Point(_mouse.X, _mouse.Y), _present);
 
     /// <summary>
-    /// The mouse in TRUE 1920×1080 space — <see cref="CanvasMouse"/> scaled ×4.
+    /// The mouse in TRUE 1920×1080 space — the chrome's own coordinates.
     /// </summary>
     /// <remarks>
-    /// The shared chrome (currency pills, hex nav, title, settings modal) now authors in 1920 coords at
-    /// scale 1, so its hit-tests must compare against a 1920-space cursor. <see cref="CanvasMouse"/> stays
-    /// 480-space for the unconverted screens (batch B, scale 4); this is its ×4 counterpart for chrome.
+    /// <para>
+    /// The shared chrome (currency pills, hex nav, title, settings modal) authors in 1920 coords at
+    /// scale 1, so its hit-tests must compare against a 1920-space cursor. <see cref="CanvasMouse"/>
+    /// stays 480-space for the screens that still author there.
+    /// </para>
+    /// <para>
+    /// MAPPED AT FULL RESOLUTION rather than as <c>CanvasMouse × 4</c>, which is what it was: floor to
+    /// 480-space and multiply back and the chrome cursor can only ever land on a multiple of 4, so
+    /// every hit-test in the chrome was quantised to a 4-px grid it never asked for. Same letterbox
+    /// arithmetic as Core's ToCanvas, at the scale this space actually uses — and the floor is toward
+    /// negative infinity for the same reason it is there: a point one pixel LEFT of the canvas must map
+    /// outside it, not onto its leftmost column.
+    /// </para>
+    /// <para>
+    /// NO CLAMP ON THE SCALE. Core clamps at 1 because a 480-wide canvas is never presented smaller
+    /// than 480; a 1920-wide one is routinely presented smaller — a 1280×720 window shows it at 0.667.
+    /// </para>
     /// </remarks>
-    private Point ChromeMouse => new(CanvasMouse.X * 4, CanvasMouse.Y * 4);
+    private Point ChromeMouse
+    {
+        get
+        {
+            // The posed cursor is authored in canvas coords, so it keeps the ×4 route it was written for.
+            if (Environment.GetEnvironmentVariable("RH_SHOT_MOUSE") is not null)
+                return new Point(CanvasMouse.X * 4, CanvasMouse.Y * 4);
+            var scale = _present.Width / (float)(CanvasWidth * ArtScale);
+            if (scale <= 0f) return new Point(CanvasMouse.X * 4, CanvasMouse.Y * 4);
+            return new Point((int)MathF.Floor((_mouse.X - _present.X) / scale),
+                             (int)MathF.Floor((_mouse.Y - _present.Y) / scale));
+        }
+    }
 
     /// <summary>
     /// Push the chosen display mode to the device and recompute the letterbox.
     /// </summary>
     /// <remarks>
-    /// Windowed picks its own integer scale; borderless and fullscreen take the monitor's size and
-    /// derive the LARGEST WHOLE scale that fits, centring the rest. Pixel art is never stretched.
+    /// Windowed takes the size the player chose, clamped to something this desktop can hold; borderless
+    /// and fullscreen take the monitor's own size. All three then fit the canvas uniformly and letterbox
+    /// the remainder — see <see cref="RecomputePresent"/>.
     /// </remarks>
     private void ApplyDisplay()
     {
@@ -3704,10 +3770,14 @@ public class Game1 : Game
         switch (_displayMode)
         {
             case DisplayMode.Windowed:
+                // CLAMPED HERE, on the way to the device, so there is exactly one place a size can be
+                // wrong. A prefs file written on a 4K desktop must not open a 3840-wide window on a
+                // laptop — the title bar would be off the screen and the window unmovable.
+                _windowSize = Display.NearestOffered(_windowSize, display.Width, display.Height);
                 Window.IsBorderless = false;
                 _graphics.IsFullScreen = false;
-                _graphics.PreferredBackBufferWidth = CanvasWidth * _windowedScale;
-                _graphics.PreferredBackBufferHeight = CanvasHeight * _windowedScale;
+                _graphics.PreferredBackBufferWidth = _windowSize.Width;
+                _graphics.PreferredBackBufferHeight = _windowSize.Height;
                 break;
             case DisplayMode.Borderless:
                 Window.IsBorderless = true;
@@ -3727,23 +3797,18 @@ public class Game1 : Game
         RecomputePresent();
     }
 
+    /// <summary>
+    /// Where the 1920×1080 canvas lands in the backbuffer: one uniform scale, centred, rest letterbox.
+    /// </summary>
+    /// <remarks>
+    /// ONE RULE FOR ALL THREE MODES since 2026-08-27. Windowed used to have its own branch, because its
+    /// sizes were whole multiples of the canvas and could be presented exactly; now that a window is a
+    /// real resolution (2560×1440 is 1.333× the canvas) it fits the same way everything else does. The
+    /// layout never changes — the canvas is 1920×1080 whatever the window is — so this is the only code
+    /// a resolution touches.
+    /// </remarks>
     private void RecomputePresent()
-    {
-        var vw = _graphics.PreferredBackBufferWidth;
-        var vh = _graphics.PreferredBackBufferHeight;
-        // Windowed keeps the exact integer sizes the buttons advertise; fullscreen and borderless
-        // ASPECT-FIT at any scale — on a 1366x768 laptop the old integer rule showed a 960x540 canvas
-        // in a frame of letterbox with seven-pixel body text (2026-08-23 audit).
-        if (_displayMode == DisplayMode.Windowed)
-        {
-            _scale = _windowedScale;
-            _present = Display.Present(vw, vh, _scale);
-        }
-        else
-        {
-            _present = Display.PresentFit(vw, vh);   // the settings header reads _present directly
-        }
-    }
+        => _present = Display.PresentFit(_graphics.PreferredBackBufferWidth, _graphics.PreferredBackBufferHeight);
 
     /// <summary>Wheel notches this frame: + = scroll up/away, - = down/toward. Latched in Update.</summary>
     private int MouseWheel => _wheel;
@@ -3824,7 +3889,7 @@ public class Game1 : Game
     // ══════════════════════════════════════════════════════════════════════════════════════════
     protected override void Draw(GameTime gameTime)
     {
-        // Render the 480x270 virtual canvas, then integer-upscale it (ADR-003).
+        // Render the 1920x1080 virtual canvas, then fit it to the backbuffer (see RecomputePresent).
         GraphicsDevice.SetRenderTarget(_canvas);
         GraphicsDevice.Clear(VoidInk);
         // LinearClamp, not PointClamp: this is hand-drawn art now, and the rule forbidding filtering
@@ -3845,7 +3910,7 @@ public class Game1 : Game
                 Exit();
             }
             GraphicsDevice.SetRenderTarget(null);
-            GraphicsDevice.Clear(VoidInk);
+            GraphicsDevice.Clear(LetterboxInk);
             // The present blit. LinearClamp and a NON-integer scale are both fine now — the rule against
             // them protected pixel art, and there is none left to protect.
             _batch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp);
@@ -3944,7 +4009,10 @@ public class Game1 : Game
         }
 
         GraphicsDevice.SetRenderTarget(null);
-        GraphicsDevice.Clear(VoidInk);
+        // THE LETTERBOX. This clear IS the bars — everything the canvas does not cover on this
+        // backbuffer. A window whose aspect is not 16:9 (and every fullscreen on a 16:10 or ultrawide
+        // panel) shows them, so they get the palette's darkest ink rather than the canvas's own.
+        GraphicsDevice.Clear(LetterboxInk);
 
         // The present blit. LinearClamp and a NON-integer window scale are both fine now — that rule
         // existed to protect pixel art, and there is none left to protect.
@@ -3973,7 +4041,7 @@ public class Game1 : Game
     }
 
     private void SaveDisplay() => Display.Save(new Display.GamePrefs(
-        _displayMode, _windowedScale, _sfxVolume, _musicVolume, _askBeforeScrap,
+        _displayMode, _windowSize, _sfxVolume, _musicVolume, _askBeforeScrap,
         _showDamageNumbers, _showSkillCallouts, _showHitEffects, _showScreenFlash));
 
     // ── Settings ──────────────────────────────────────────────────────────────────────────────
@@ -4015,6 +4083,37 @@ public class Game1 : Game
     /// <summary>Which settings dropdown is open: 0 none, 1 MODE, 2 WINDOW SIZE. One at a time.</summary>
     private int _settingsDropdown;
 
+    /// <summary>The highlighted option in the open list — the keyboard's cursor and the mouse's hover.</summary>
+    /// <remarks>
+    /// One field for both, deliberately: a hovered row SETS it, so a player who reaches for the arrow
+    /// keys after moving the mouse carries on from where they were looking rather than from somewhere
+    /// else. -1 means "not placed yet"; the list places it on the current value the first frame it draws.
+    /// </remarks>
+    private int _dropCursor = -1;
+
+    /// <summary>Arrow-key movement banked in Update for the list to apply in Draw.</summary>
+    /// <remarks>
+    /// Keys are edge-detected against the previous frame, and <c>_prevKeys</c> is latched at the END of
+    /// Update — so a key read in Draw is never down. The list's OPTIONS, on the other hand, only exist
+    /// in Draw. So Update banks a delta and Draw, which knows how many rows there are, wraps it.
+    /// </remarks>
+    private int _dropMove;
+
+    /// <summary>Enter, pressed on an open list: take whatever the cursor is on.</summary>
+    private bool _dropCommit;
+
+    /// <summary>First visible row when a list is taller than the room under it.</summary>
+    private int _dropScroll;
+
+    /// <summary>
+    /// True on a frame where Escape already closed a dropdown list, so it must not ALSO close the panel.
+    /// </summary>
+    /// <remarks>
+    /// Escape peels one layer at a time — the list, then the panel — which is the reflex every player
+    /// has. Without this flag the single edge fires at both handlers and one press does both.
+    /// </remarks>
+    private bool _settingsEscSpent;
+
     /// <summary>Which volume slider is mid-drag: 0 none, 1 effects, 2 music.</summary>
     private int _dragSlider;
 
@@ -4025,8 +4124,51 @@ public class Game1 : Game
     /// <summary>Seconds a row must be hovered before its explanation appears.</summary>
     private const float TipDelaySeconds = 0.35f;
 
+    // ── DROPDOWN GEOMETRY ─────────────────────────────────────────────────────────────────────
+    // One set of numbers, so MODE and WINDOW SIZE are the same control and a third dropdown added
+    // later is too. The 2026-08-28 note — "the dropdown menus look very low quality" — was about the
+    // OPEN list: a flat #161022 rectangle with a gold line on top, rows of centred text, no frame, no
+    // separators, no mark on the value you already had. It read as a debug box on a hand-drawn panel.
+
     /// <summary>Height of one option row in an open settings dropdown.</summary>
-    private const int DropRowHeight = 54;
+    private const int DropRowHeight = 44;
+
+    /// <summary>The gap between the closed field and the list that drops under it.</summary>
+    private const int DropGap = 4;
+
+    /// <summary>How far the list's ornate frame reaches in. Rows live inside this margin on every side.</summary>
+    private const int DropListInset = UiKit.PanelCorner;
+
+    /// <summary>Text inset from the edge of a row, and from the closed field's end ornament.</summary>
+    private const int DropPadX = 16;
+
+    /// <summary>The size an option row and a closed field's value are set at.</summary>
+    private const int DropTextPx = 20;
+
+    /// <summary>The cursor row's fill. Warm and QUIET — the gold text on it is the signal, not this.</summary>
+    /// <remarks>
+    /// The panel behind is nearly black, so a mid-tone here reads far hotter on screen than it does as
+    /// a hex triple: the first pass used #4A3318 and it was the loudest thing on the settings panel —
+    /// a highlight shouting over the value it was meant to point at.
+    /// </remarks>
+    private static readonly Color DropRowHover = new(0x2E, 0x22, 0x12);
+
+    /// <summary>The gold edge down the left of the cursor row — the unambiguous "you are here".</summary>
+    private static readonly Color DropRowEdge = new(0xC8, 0x9A, 0x3C);
+
+    /// <summary>The hairline between rows. One pixel, warm, just above the frame's inner shadow.</summary>
+    private static readonly Color DropRowRule = new(0x46, 0x3C, 0x30);
+
+    /// <summary>
+    /// The well painted inside a field before its frame art.
+    /// </summary>
+    /// <remarks>
+    /// Near-black ON PURPOSE, matching the interior of <c>ui_button_secondary</c>. The well exists only
+    /// because the lit art (<c>ui_button_primary</c>) is transparent inside; any tone brighter than the
+    /// resting art makes the field visibly change colour the moment it opens, which reads as two
+    /// different controls rather than one control in two states.
+    /// </remarks>
+    private static readonly Color DropFieldWell = new(0x0B, 0x09, 0x0E);
 
     /// <summary>Guide rungs the player closed by hand (TutorialStep names). Persisted in the save.</summary>
     private readonly HashSet<string> _dismissedGuide = new();
@@ -4076,10 +4218,14 @@ public class Game1 : Game
         DropdownClosed(SettingsModeRow, modeNames[modeIdx], enabled: true, open: _settingsDropdown == 1);
 
         var windowed = _displayMode == DisplayMode.Windowed;
+        var desktop = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode;
+        var sizes = Display.OfferedWindowSizes(desktop.Width, desktop.Height);
         Text("WINDOW SIZE", 536, 292, windowed ? Bone : Slate);
+        // Outside WINDOWED the size is the monitor's to decide, so the row says which one rather than
+        // going blank — "AUTO" was a word about the setting; this is the answer the player wanted.
         var sizeValue = windowed
-            ? $"{Display.CanvasWidth * _windowedScale}x{Display.CanvasHeight * _windowedScale}"
-            : $"AUTO — {_present.Width}x{_present.Height}";
+            ? Display.WindowSizeLabel(_windowSize, desktop.Width, desktop.Height)
+            : $"YOUR SCREEN — {desktop.Width} × {desktop.Height}";
         DropdownClosed(SettingsSizeRow, sizeValue, enabled: windowed, open: _settingsDropdown == 2);
 
         // ── SOUND. Draggable 0-100 sliders: a click jumps there, holding drags, releasing saves —
@@ -4203,77 +4349,192 @@ public class Game1 : Game
         }
         else if (_settingsDropdown == 2)
         {
-            var labels = new string[Display.WindowedScales.Length];
+            var labels = new string[sizes.Length];
             for (var i = 0; i < labels.Length; i++)
-                labels[i] = $"{Display.CanvasWidth * Display.WindowedScales[i]}x{Display.CanvasHeight * Display.WindowedScales[i]}";
-            openList = DropdownList(SettingsSizeRow, labels, Array.IndexOf(Display.WindowedScales, _windowedScale), pick =>
+                labels[i] = Display.WindowSizeLabel(sizes[i], desktop.Width, desktop.Height);
+            openList = DropdownList(SettingsSizeRow, labels, Array.IndexOf(sizes, _windowSize), pick =>
             {
-                var s = Display.WindowedScales[pick];
-                if (_windowedScale == s) return;
-                _windowedScale = s;
+                if (_windowSize == sizes[pick]) return;
+                _windowSize = sizes[pick];
                 ApplyDisplay();
                 SaveDisplay();
             });
         }
         else if (_clicked)
         {
-            // No list open: a click on a closed row opens its list.
-            if (SettingsModeRow.Contains(mouse)) _settingsDropdown = 1;
-            else if (windowed && SettingsSizeRow.Contains(mouse)) _settingsDropdown = 2;
+            // No list open: a click on a closed row opens its list, with the cursor unplaced so the
+            // list puts it on the value the player already has.
+            if (SettingsModeRow.Contains(mouse)) OpenDropdown(1);
+            else if (windowed && SettingsSizeRow.Contains(mouse)) OpenDropdown(2);
         }
 
         // ── HOVER EXPLANATIONS — one plain sentence per row, near the cursor, after a short rest. ──
         DrawSettingsTips(mouse, windowed, openList);
     }
 
-    /// <summary>A closed dropdown row: the current value and a small down arrow.</summary>
-    /// <remarks>The arrow is stacked fills, not a glyph — the font gate carries no triangle.</remarks>
-    private void DropdownClosed(Rectangle r, string value, bool enabled, bool open)
+    /// <summary>Open one of the settings dropdowns, with its cursor unplaced and its list at the top.</summary>
+    private void OpenDropdown(int which)
     {
-        if (open) _ui.Panel(_batch, r, gold: true); else _ui.PanelQuiet(_batch, r);
-        var hover = enabled && r.Contains(ChromeMouse);
-        _ui.TextCenter(_batch, value, r.Center.X - 14, r.Center.Y - 12,
-                       !enabled ? Slate : open ? Gold : hover ? Color.White : Bone);
-        var cx = r.Right - 40;
-        var cy = r.Center.Y - 3;
-        for (var i = 0; i < 7; i++)
-            _ui.Fill(_batch, new Rectangle(cx - (7 - i), cy + i, (7 - i) * 2, 1), enabled ? Bone : Slate);
+        _settingsDropdown = which;
+        _dropCursor = -1;
+        _dropScroll = 0;
+        _dropMove = 0;
+        _dropCommit = false;
+    }
+
+    /// <summary>Close whatever settings dropdown is open, and forget everything about it.</summary>
+    private void CloseDropdown()
+    {
+        _settingsDropdown = 0;
+        _dropCursor = -1;
+        _dropScroll = 0;
+        _dropMove = 0;
+        _dropCommit = false;
     }
 
     /// <summary>
-    /// Draw the OPEN option list under a closed dropdown row, handle its click, return its rect.
+    /// The CLOSED dropdown box: a framed field with its value on the left and a chevron on the right.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// It used to be an ornate PANEL frame with the value centred in it, which is the wrong two signals:
+    /// a panel is a surface you read, and centred text is a title. A dropdown is a CONTROL holding a
+    /// value, so it wears the button family's frame (<see cref="UiKit.Field"/>) and reads left to right
+    /// like the field it is — value where the eye starts, the affordance parked on the right.
+    /// </para>
+    /// <para>
+    /// The chevron is two drawn strokes, not a glyph: the font gate carries no caret, and a stack of
+    /// 1-px fills — the old arrow — is a staircase at this size. It points DOWN when the list is shut
+    /// and UP when it is open, so the box says what a click will do.
+    /// </para>
+    /// </remarks>
+    private void DropdownClosed(Rectangle r, string value, bool enabled, bool open)
+    {
+        var hover = enabled && r.Contains(ChromeMouse);
+        _ui.Field(_batch, r, enabled, hover || open, DropFieldWell);
+
+        // The art's end ornaments are off limits to content — clear them, then pad inside that.
+        var cap = UiKit.FieldCapWidth(r.Height);
+        var textX = r.X + cap + DropPadX;
+        var chevronRight = r.Right - cap - DropPadX;
+
+        var ink = !enabled ? Slate : open ? Gold : hover ? Color.White : Bone;
+        var room = chevronRight - 22 - textX;
+        _ui.TextBig(_batch, _ui.ShortenBig(value, room, DropTextPx), textX,
+                    r.Center.Y - DropTextPx * 27 / 40, ink, DropTextPx);
+
+        // A chevron: two strokes meeting at a point, 16 wide and 6 deep. A solid stroke reads heavier
+        // than type of the same colour, so an inert one is dimmed past the label it sits beside.
+        var caret = !enabled ? new Color(0x5C, 0x64, 0x70) : ink;
+        var cx = chevronRight - 8f;
+        var cy = r.Center.Y + (open ? 3f : -3f);
+        var dy = open ? -6f : 6f;
+        _ui.LineSeg(_batch, new Vector2(cx - 8f, cy), new Vector2(cx, cy + dy), 3f, caret);
+        _ui.LineSeg(_batch, new Vector2(cx, cy + dy), new Vector2(cx + 8f, cy), 3f, caret);
+    }
+
+    /// <summary>
+    /// Draw the OPEN option list under a closed dropdown field, handle its input, return its rect.
+    /// </summary>
+    /// <remarks>
+    /// <para>
     /// Called from the END of DrawSettings so the list wins the z-order over the rows beneath it; those
     /// rows' clicks are already disabled while it is open, so the frame's click belongs to the list
     /// alone. A click on an option applies it through <paramref name="pick"/>; any other click closes
     /// the list and does nothing else — swallowed, exactly as a modal should.
+    /// </para>
+    /// <para>
+    /// THE SHAPE: a framed panel from the quiet family, dropped <see cref="DropGap"/> px below the
+    /// field and aligned to its left edge; rows a flat <see cref="DropRowHeight"/> px tall inside the
+    /// frame's margin, text <see cref="DropPadX"/> px in from the row, a 1-px hairline between rows,
+    /// the row under the cursor on a warm fill with gold text, and a gold diamond on the left of the
+    /// value you already have. The diamond is drawn rather than typed for the same reason the chevron
+    /// is: the font gate is a whitelist, and a mark that carries meaning must not depend on the
+    /// player's system font having a glyph for it.
+    /// </para>
+    /// <para>
+    /// IT SCROLLS rather than overflowing. Nothing offered today comes close — the tallest list is six
+    /// window sizes on a 4K desktop, and eleven rows fit under WINDOW SIZE — but a list that runs off
+    /// the bottom of the panel would put options where they cannot be clicked, and that is a silent
+    /// failure. The window is capped to the room under the field; the wheel and the arrow keys move it.
+    /// </para>
     /// </remarks>
-    private Rectangle DropdownList(Rectangle row, string[] options, int currentIndex, Action<int> pick)
+    private Rectangle DropdownList(Rectangle field, string[] options, int currentIndex, Action<int> pick)
     {
-        var list = new Rectangle(row.X, row.Bottom + 2, row.Width, 4 + options.Length * DropRowHeight);
-        _ui.Fill(_batch, new Rectangle(list.X + 4, list.Y + 5, list.Width, list.Height), new Color(0, 0, 0) * 0.45f);
-        _ui.Fill(_batch, list, new Color(0x16, 0x10, 0x22));
-        _ui.Fill(_batch, new Rectangle(list.X, list.Y, list.Width, 2), new Color(0xC8, 0x9A, 0x3C));
+        if (options.Length == 0) { CloseDropdown(); return Rectangle.Empty; }
 
-        var mouse = ChromeMouse;
-        for (var i = 0; i < options.Length; i++)
+        // The cursor lands on the current value the first frame the list is up.
+        if (_dropCursor < 0 || _dropCursor >= options.Length) _dropCursor = Math.Max(0, currentIndex);
+        if (_dropMove != 0)
         {
-            var r = new Rectangle(list.X, list.Y + 2 + i * DropRowHeight, list.Width, DropRowHeight);
-            var hover = r.Contains(mouse);
-            if (hover) _ui.Fill(_batch, r, new Color(0x8A, 0x5A, 0xC8) * 0.22f);
-            _ui.TextCenter(_batch, options[i], r.Center.X, r.Center.Y - 12,
-                           i == currentIndex ? Gold : hover ? Color.White : Bone);
-            if (_clicked && hover)
-            {
-                pick(i);
-                _settingsDropdown = 0;
-                return list;
-            }
+            _dropCursor = ((_dropCursor + _dropMove) % options.Length + options.Length) % options.Length;
+            _dropMove = 0;
         }
 
-        // A click anywhere else — the closed row included — just closes the list.
-        if (_clicked) _settingsDropdown = 0;
+        // How many rows fit between the field and the bottom of the settings panel.
+        var top = field.Bottom + DropGap;
+        var room = SettingsPanel.Bottom - UiKit.PanelCorner - top - DropListInset * 2;
+        var rows = Math.Clamp(room / DropRowHeight, 1, options.Length);
+
+        if (rows < options.Length && MouseWheel != 0) _dropScroll -= MouseWheel;
+        _dropScroll = Math.Clamp(_dropScroll, 0, options.Length - rows);
+        if (_dropCursor < _dropScroll) _dropScroll = _dropCursor;
+        else if (_dropCursor >= _dropScroll + rows) _dropScroll = _dropCursor - rows + 1;
+
+        var list = new Rectangle(field.X, top, field.Width, rows * DropRowHeight + DropListInset * 2);
+        // The frame's own centre is opaque, so it IS the list's surface — no flat rectangle underneath,
+        // which would square off the corners the ornament is shaped around.
+        _ui.PanelQuiet(_batch, list);
+
+        var mouse = ChromeMouse;
+        var inner = new Rectangle(list.X + DropListInset, list.Y + DropListInset,
+                                  list.Width - DropListInset * 2, rows * DropRowHeight);
+
+        if (_dropCommit)
+        {
+            _dropCommit = false;
+            var chosen = _dropCursor;
+            CloseDropdown();
+            pick(chosen);
+            return list;
+        }
+
+        for (var k = 0; k < rows; k++)
+        {
+            var i = _dropScroll + k;
+            var r = new Rectangle(inner.X, inner.Y + k * DropRowHeight, inner.Width, DropRowHeight);
+            if (r.Contains(mouse)) _dropCursor = i;   // the mouse and the arrow keys share one cursor
+            var lit = i == _dropCursor;
+
+            if (lit)
+            {
+                _ui.Fill(_batch, r, DropRowHover);
+                _ui.Fill(_batch, new Rectangle(r.X, r.Y, 3, r.Height), DropRowEdge);
+            }
+            if (k > 0) _ui.Fill(_batch, new Rectangle(r.X, r.Y, r.Width, 1), DropRowRule);
+            if (i == currentIndex)
+                _ui.Diamond(_batch, new Rectangle(r.X + DropPadX, r.Center.Y - 5, 10, 10), Gold);
+            _ui.TextBig(_batch, options[i], r.X + DropPadX + 22, r.Center.Y - DropTextPx * 27 / 40,
+                        lit ? Gold : Bone, DropTextPx);
+
+            if (!_clicked || !r.Contains(mouse)) continue;
+            CloseDropdown();
+            pick(i);
+            return list;
+        }
+
+        // The scroll thumb, only when there is something to scroll — a bar that is always full is noise.
+        if (rows < options.Length)
+        {
+            var track = new Rectangle(inner.Right - 6, inner.Y + 2, 3, inner.Height - 4);
+            _ui.Fill(_batch, track, DropRowRule);
+            var h = Math.Max(18, track.Height * rows / options.Length);
+            var y = track.Y + (track.Height - h) * _dropScroll / Math.Max(1, options.Length - rows);
+            _ui.Fill(_batch, new Rectangle(track.X, y, track.Width, h), Gold);
+        }
+
+        // A click anywhere else — the closed field included — just closes the list.
+        if (_clicked) CloseDropdown();
         return list;
     }
 
@@ -4330,8 +4591,8 @@ public class Game1 : Game
             (new Rectangle(536, 198, 848, 64), "mode",
                 "How the game sits on your screen: in a window you can move, or filling the whole screen."),
             (new Rectangle(536, 274, 848, 64), "size",
-                windowed ? "How big the game window is."
-                         : "How big the game window is. You can change this only when MODE is WINDOWED."),
+                windowed ? "How big the game window is. The picture is the same at every size — a bigger window just draws it bigger. Nothing larger than your screen is offered; (native) is your screen's own size."
+                         : "How big the game window is. You can change this only when MODE is WINDOWED — the other two modes always fill your screen."),
             (new Rectangle(536, 408, 848, 46), "fx",
                 "How loud the hits, clicks and other short sounds are. Drag the handle, or click a spot on the line."),
             (new Rectangle(536, 464, 848, 46), "music",

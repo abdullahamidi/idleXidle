@@ -44,6 +44,13 @@
 #
 #   RH_SHOT_STEP=2 bash tools/asset-pipeline/capture.sh gemtour build/shots/gemtour_2.png
 #
+# `settingsopen` poses the SETTINGS panel with a dropdown list OPEN, so the list's own
+# chrome -- its frame, its rows, its mark on the current value -- is photographable rather
+# than described. RH_SHOT_DROPDOWN picks WHICH list: `mode` (the default) or `size`, the
+# WINDOW SIZE list, whose entries depend on the desktop the capture runs on:
+#
+#   RH_SHOT_DROPDOWN=size bash tools/asset-pipeline/capture.sh settingsopen build/shots/sizes.png
+#
 # RH_SHOT_EXPLAIN=Stats,Map (any Activity names, SkillSlot2..4, or FirstGem) leaves those
 # screens' tours (or slot notes) OWED under the rig, which otherwise treats everything
 # as already explained so no tour sits over the thing a fixture is photographing.
@@ -70,6 +77,8 @@ dn build src/ResonanceHunter.Game -v q --nologo >/dev/null 2>&1 \
 # is using /c or /mnt/c. OUT stays repo-relative — an absolute one fails with a bare
 # "capture failed", because the check at the bottom looks for it relative to the repo.
 RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
+# `settingsopen`: which dropdown list to pose. Exported by the caller, forwarded here.
+[ -n "$RH_SHOT_DROPDOWN" ] && RH_ENV+=(RH_SHOT_DROPDOWN="$RH_SHOT_DROPDOWN")
 # The third argument means "zoom" to buildzoom and "seconds into the flourish" to
 # traitlit/traitterm — both are the one dial that mode's capture needs.
 [ -n "$ZOOM" ] && RH_ENV+=(RH_SHOT_ZOOM="$ZOOM" RH_SHOT_T="$ZOOM")
