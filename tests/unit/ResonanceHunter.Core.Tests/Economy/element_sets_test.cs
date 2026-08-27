@@ -122,11 +122,14 @@ public class element_sets_test
                 foreach (var word in banned)
                     Assert.DoesNotContain(word, t.Line, StringComparison.OrdinalIgnoreCase);
             }
-        var card = ElementSets.Card(Wearing(Source.Nature, 3), Source.Nature);
-        Assert.Equal("THE NATURE SET — 3 PIECES WORN", card[0]);
-        Assert.StartsWith("ON", card[1]);
-        Assert.StartsWith("ON", card[2]);
-        Assert.StartsWith("-", card[3]);
+        // The title the GEAR screen and the hover card compose: "NATURE SET — 3 OF 5 WORN". Past the
+        // last rung it counts what is worn and says the set is complete — a fixture wearing eight
+        // Nature pieces once read "8 OF 5".
+        Assert.Equal("NATURE SET", ElementSets.Name(Source.Nature));
+        Assert.Equal("0 OF 5 WORN", ElementSets.Progress(0));
+        Assert.Equal("3 OF 5 WORN", ElementSets.Progress(3));
+        Assert.Equal("5 OF 5 WORN", ElementSets.Progress(5));
+        Assert.Equal("8 WORN · COMPLETE", ElementSets.Progress(8));
     }
 
     // ── every rung reaches the fight ──────────────────────────────────────────────────────────

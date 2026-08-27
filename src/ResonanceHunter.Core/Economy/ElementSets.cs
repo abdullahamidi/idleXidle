@@ -37,8 +37,18 @@ public static class ElementSets
     /// <summary>How much the element's own skills gain at the 2- and 4-piece rungs, each.</summary>
     public const float OwnSkillBonusPerRung = 0.08f;
 
-    /// <summary>The set's name on a card: "THE SPIRIT SET".</summary>
-    public static string Name(Source element) => $"THE {element.ToString().ToUpperInvariant()} SET";
+    /// <summary>The set's name as a title: "SPIRIT SET".</summary>
+    public static string Name(Source element) => $"{element.ToString().ToUpperInvariant()} SET";
+
+    /// <summary>
+    /// How far along the set a worn count is, for a title: "3 OF 5 WORN" up to the last rung, and
+    /// "8 WORN · COMPLETE" past it — eight slots can all carry one element, and "8 OF 5" is not a fact.
+    /// </summary>
+    public static string Progress(int worn)
+    {
+        var last = Rungs[^1];
+        return worn <= last ? $"{worn} OF {last} WORN" : $"{worn} WORN · COMPLETE";
+    }
 
     /// <summary>The four rungs of one element's set, in order.</summary>
     public static IReadOnlyList<SetTier> TiersOf(Source element) => Catalogue[element];
@@ -123,25 +133,5 @@ public static class ElementSets
         var shape = SkillShape.None;
         foreach (var (_, tier) in Active(hunter)) shape = SkillShape.Combine(shape, tier.Shape);
         return shape;
-    }
-
-    /// <summary>
-    /// The element the worn gear leans to most (ties broken by element order), or null with nothing
-    /// elemental worn — the set a card should talk about first.
-    /// </summary>
-    public static Source? Leading(Hunter hunter) =>
-        WornCounts(hunter).OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key).Select(kv => (Source?)kv.Key).FirstOrDefault();
-
-    /// <summary>
-    /// The set card for one element, ready to draw: a title line, then one line per rung, each starting
-    /// with "ON" when reached and "-" when not — plain words, no ornament.
-    /// </summary>
-    public static IReadOnlyList<string> Card(Hunter hunter, Source element)
-    {
-        var worn = WornCount(hunter, element);
-        var lines = new List<string> { $"{Name(element)} — {worn} {(worn == 1 ? "PIECE" : "PIECES")} WORN" };
-        foreach (var tier in TiersOf(element))
-            lines.Add($"{(worn >= tier.Pieces ? "ON" : "-"),-2}  {tier.Pieces} pieces: {tier.Line}");
-        return lines;
     }
 }
