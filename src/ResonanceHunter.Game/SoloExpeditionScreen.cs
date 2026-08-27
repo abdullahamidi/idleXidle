@@ -723,7 +723,9 @@ public sealed class SoloExpeditionScreen
             _auraColour = aura is null ? null : SourceColor.GetValueOrDefault(aura.Source, Bone);
             _auraTotal = 0; _auraTotalMs = -1;
             _auraSincePulse = 999f;
-            _vfx.Clear();   // no effect may survive a wave boundary
+            // NOT _vfx.Clear(). Every effect fades out inside a second on its own, and clearing them at
+            // the boundary erased the aura's ring mid-flight twice a cycle (review 2026-08-30). The
+            // frozen ring that made me add this was the drawn-ring bug, which is gone.
         }
         // The replay's health table is read AFTER the pool refresh, or the HUD prints last wave's pool
         // over this wave's bar for a whole wave (review 2026-08-25: "300/360 with a full bar").
@@ -953,6 +955,11 @@ public sealed class SoloExpeditionScreen
         // wave that ended mid-swing left _enemyWindup frozen at whatever it held — and the NEXT wave then
         // slid in holding that pose, a creature entering the arena already halfway through an attack it
         // was not making. The champion's clock has the same shape and the same hazard.
+        // THE FIELD DOES NOT STOP BETWEEN WAVES. The pulse used to be raised only inside the fighting
+        // window, and with a 2.2-second wave and a 2.05-second transition (measured 2026-08-30) that left
+        // the aura off screen for nearly half the cycle — which is why it read as absent.
+        PulseAuraOnClock(dt);
+
         if (_breakTimer > 0f)
         {
             _enemyWindup = 0f;
@@ -982,9 +989,7 @@ public sealed class SoloExpeditionScreen
         // nothing — and in a real four-skill build that happened often enough that the field looked
         // absent (playtest 2026-08-30: "there is no aura effect on screen"). An always-on field is
         // always on: while a wave is running and the build carries an Aura, it pulses on its own beat.
-        _auraSincePulse += dt;
-        if (_auraColour is not null && _mode == Mode.Fighting && _auraSincePulse >= AuraPulseSeconds)
-            PulseAura();
+
         if (_hitFlash.Count > 0)
             foreach (var key in _hitFlash.Keys.ToList())
             {
@@ -1017,6 +1022,7 @@ public sealed class SoloExpeditionScreen
         // up, and gold when the cast was a Trap. Anything else at another beat is the auto-swing.
         var skillAtMs = -1;
         var trapAtMs = -1;
+        var auraAtMs = -1;
         for (var bi = 0; bi < batch.Count; bi++)
         {
             var e = batch[bi];
@@ -1029,6 +1035,10 @@ public sealed class SoloExpeditionScreen
             // the torso, because centred on ChampBox it burst over the head.
             switch (e.Kind)
             {
+                case BattleEventKind.Aura:
+                    auraAtMs = e.AtMs;   // the blows at this instant are the field's, not a cast's
+                    break;
+
                 case BattleEventKind.Strike:
                 {
                     // AN AURA TICK is a skill's blow with no cast behind it (Aura is passive — it emits no
@@ -1039,7 +1049,12 @@ public sealed class SoloExpeditionScreen
                     // The PICTURE is on its own clock (see PulseAura, driven from Update): a field that is
                     // always on must not depend on an event surviving a classification. This flag only
                     // decides whether the blow lunges, sounds, sparks and flashes.
-                    var auraTick = e.FromSkill && e.AtMs != skillAtMs && e.AtMs != trapAtMs && _auraColour is not null;
+                    // AN AURA TICK SAYS SO. The sim emits a BattleEventKind.Aura before the tick's blows
+                    // (2026-08-30); before that the screen had to guess from the timestamp, and at some
+                    // action speeds a fifth of the ticks shared a cast's millisecond and were reported as
+                    // that cast's — the whole pack flashed, four damage numbers printed as skill hits and
+                    // four hit sounds fired at once.
+                    var auraTick = e.FromSkill && e.AtMs == auraAtMs;
                     // The swing lunges; a cast already has its clip (UpdateChampionClip aims it at the beat).
                     if (!e.FromSkill) _champLunge = 1f;
                     _nextChampStrikeMs = _replay.NextChampionStrikeAfter(e.AtMs);
@@ -3020,7 +3035,7 @@ public sealed class SoloExpeditionScreen
     private float _auraSincePulse = 999f;
 
     /// <summary>Seconds between aura pulses — two sim ticks, so the ring is always in the room without stacking.</summary>
-    private const float AuraPulseSeconds = FormBehaviour.AuraTickMs * 2 / 1000f;
+    private const float AuraPulseSeconds = FormBehaviour.AuraTickMs / 1000f;
 
     /// <summary>
     /// The aura's pulse: the authored fx_aura ring at the champion, in the Aura's Source colour, GROWING
@@ -3036,6 +3051,14 @@ public sealed class SoloExpeditionScreen
     /// is cleared at every wave start, so nothing can be left standing. GrowTo 5.2 takes the ring from
     /// 312 px across to about 1620, so its last frames wash over the pack.
     /// </remarks>
+    /// <summary>The field's own metronome — see the note at its call site in UpdateFight.</summary>
+    private void PulseAuraOnClock(float dt)
+    {
+        _auraSincePulse += dt;
+        if (_auraColour is not null && _mode == Mode.Fighting && _auraSincePulse >= AuraPulseSeconds)
+            PulseAura();
+    }
+
     private void PulseAura()
     {
         if (_auraColour is not { } colour) return;

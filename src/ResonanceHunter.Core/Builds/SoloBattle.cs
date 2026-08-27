@@ -297,6 +297,9 @@ public static class SoloBattle
     /// <summary>How often VITALITY's regeneration ticks, in ms.</summary>
     public const int RegenTickMs = 1000;
 
+    /// <summary>How long UNDYING's shield reads as lit on the champion, in ms — the event's Amount.</summary>
+    public const int UndyingShieldMs = 1_500;
+
     /// <summary>
     /// The gap between two casts at skill rate 1: the cast clip's authored length. The real gap is this
     /// divided by the build's skill rate (see the cast loop), so a faster build casts — and animates —
@@ -737,7 +740,14 @@ public static class SoloBattle
             }
         }
 
-        void LandOn(WaveCreature? target, float dmg, int atMs, bool fromSkill = false, bool ignoresArmour = false)
+        // `swing` is PROVENANCE — was this the champion's basic attack — and it is what the event carries.
+        // `fromSkill` stays what it always was: does this hit obey the SKILL rules (crit, venom, the
+        // hit-size nodes). The two are not the same, and conflating them told the screen that VENOM's
+        // poison bleed, THORNS' reflect, BREAKER's overkill spill and ASSASSINATE's execution were all
+        // basic attacks — so the champion's swing clip committed to a poison tick every 500 ms and the
+        // cooldown dial ran four times fast (review 2026-08-30).
+        void LandOn(WaveCreature? target, float dmg, int atMs, bool fromSkill = false, bool ignoresArmour = false,
+                    bool swing = false)
         {
             if (target is null || !target.Alive) return;
 
@@ -817,7 +827,7 @@ public static class SoloBattle
 
             if (metrics is not null && target.Health <= 0f) metrics.CreaturesKilled++;
             var idx = IndexOf(target);
-            events.Add(new BattleEvent(BattleEventKind.Strike, idx, (int)MathF.Round(dmg), atMs, FromSkill: fromSkill));
+            events.Add(new BattleEvent(BattleEventKind.Strike, idx, (int)MathF.Round(dmg), atMs, FromSkill: !swing));
             if (!target.Alive)
             {
                 alive--;
@@ -832,7 +842,12 @@ public static class SoloBattle
                 // LOOSE AGAIN — every skill is ready the instant something dies. Clearing the whole
                 // table rather than one entry is deliberate: the card says "the NEXT shot", and which
                 // skill that is depends on what the rotation reaches first.
-                if (triggers.Contains(BuildTrigger.LooseAgain)) { champ.ReadyAt.Clear(); champ.ReadyAtBeat.Clear(); }
+                if (triggers.Contains(BuildTrigger.LooseAgain))
+                    // READY, not FORGOTTEN. Clearing the tables left every slot with no entry — which is
+                    // "ready forever" on the time side and "ready on the wave's first beat" on the beat
+                    // side, and it also wiped the wave-opening breath. Zero means ready NOW and is a real
+                    // entry, so the next cast writes an honest cooldown over it.
+                    for (var k = 0; k < skills.Count; k++) { champ.ReadyAt[k] = 0; champ.ReadyAtBeat[k] = 0; }
 
                 // MOMENTUM — every kill takes time off every cooldown. It edits the entries that EXIST
                 // and adds none: a skill with no ReadyAt entry is already ready, and writing one would
@@ -864,10 +879,12 @@ public static class SoloBattle
         /// total dealt, which is what leech reads.
         /// </summary>
         float LandSpread(float raw, int atMs, int targets, Source? skillSource, Form? skillForm, int absMs,
-                         bool fromSkill = true)
+                         bool fromSkill = true, bool swing = false, bool countsAsActivation = true)
         {
             if (targets <= 0) return 0f;
-            if (fromSkill && metrics is not null) metrics.Activations++;
+            // An AURA tick is not an activation: counting one every 500 ms made the run report's REACH
+            // read 4.6 creatures per cast for a build whose casts reach 1.6 (review 2026-08-30).
+            if (fromSkill && countsAsActivation && metrics is not null) metrics.Activations++;
 
             // CASCADE — one activation after a kill reaches everything. Armed in LandOn, spent here, so
             // the reward lands on the NEXT cast and a player can see the ripple rather than guess at it.
@@ -894,12 +911,12 @@ public static class SoloBattle
                 //    pays EVERY skill hit — that is what makes it a team primitive rather than a
                 //    self-buff. Laying happens after the landing, so a hit never feeds itself. ──
                 if (fromSkill) hit = SignatureAmp(hit, c, skillSource);
-                LandOn(c, hit, atMs, fromSkill);
+                LandOn(c, hit, atMs, fromSkill, swing: swing);
                 if (fromSkill) SignatureLay(c, skillSource);
                 dealt += hit;
                 struck++;
                 lastIndex = i;
-                if (fromSkill && metrics is not null) metrics.TargetsStruck++;
+                if (fromSkill && countsAsActivation && metrics is not null) metrics.TargetsStruck++;
             }
 
             if (!fromSkill) return dealt;
@@ -1022,10 +1039,12 @@ public static class SoloBattle
                     // that item is worth nothing to a build that isn't running Aura.
                     var auraTick = triggers.Contains(BuildTrigger.Radiance) ? FormBehaviour.AuraTickMs * 3 / 5 : FormBehaviour.AuraTickMs;
                     if (ms % auraTick != 0) continue;
+                    // The tick announces itself, so the screen never has to infer one from a timestamp.
+                    events.Add(new BattleEvent(BattleEventKind.Aura, (int)sk.Source, (int)form, ms));
                     var aura = FormBehaviour.BaseDamage(form, resonance, wt)
                                * VowFactor(sk, weaveCtx, wt, shape)
                                * (FormBehaviour.AuraTickMs / 1000f);
-                    var auraDealt = LandSpread(aura, ms, shape.TargetsFor(form), sk.Source, form, abs);
+                    var auraDealt = LandSpread(aura, ms, shape.TargetsFor(form), sk.Source, form, abs, countsAsActivation: false);
                     // NATURE'S SIGNATURE follows the DAMAGE, not the cast: the card promises 3% of
                     // what its skills deal, with no cast clause — an Aura that deals must heal.
                     // (Spirit/Mind speak of CASTS, and an Aura never casts, so they stay silent here.)
@@ -1056,9 +1075,13 @@ public static class SoloBattle
                     var cd = Math.Max(1, (int)(FormBehaviour.BaseCooldownMs(form)
                                                / Math.Max(0.1f, RateNow())));   // TIDE and RHYTHM move it live
                     // PREPARATION — every skill's FIRST cast of a wave is free of its cooldown. The
-                    // default ReadyAt of `cd` is what normally makes a skill wait one cooldown before its
-                    // opener; dropping that to 0 is the whole node, worth most to a slow, heavy build.
-                    var opening = shape.FreeOpeningCast ? 0 : cd;
+                    // default is SINCE + cd, not a bare `cd`: `abs` is expedition-cumulative, so a bare
+                    // duration is in the past forever once a run is older than one cooldown, and a slot
+                    // with no entry then fired on EVERY beat (review 2026-08-30 — LOOSE AGAIN produced
+                    // exactly that state on every kill, and THE QUIVER, whose passive is LOOSE AGAIN,
+                    // cast one skill eighteen times in twenty-five seconds while a third of its loadout
+                    // never fired).
+                    var opening = shape.FreeOpeningCast ? since : since + cd;
                     if (abs < champ.ReadyAt.GetValueOrDefault(i, opening)) continue;
                     champ.ReadyAt[i] = abs + cd;
                 }
@@ -1099,6 +1122,13 @@ public static class SoloBattle
                 // unless this skill is a Projectile.
                 var casts = triggers.Contains(BuildTrigger.Echo) ? 2 : 1;
                 if (form == Form.Projectile && triggers.Contains(BuildTrigger.Overdraw)) casts += 1;
+                // ONE EVENT PER ACTIVATION, and it comes first. ECHO doubles the loop and OVERDRAW adds a
+                // third pass for a Projectile, and each pass used to announce itself — so the screen
+                // started fx_projectile, sfx_cast and the callout two or three times on the same frame,
+                // which is what "the projectile effect does not play properly" was (review 2026-08-30).
+                // Emitting it above the loop also puts it ahead of ASSASSINATE's execution strike, which
+                // used to land BEFORE its own cast's event and read as a basic attack.
+                events.Add(new BattleEvent(BattleEventKind.Skill, (int)sk.Source, (int)form, ms));
                 for (var c = 0; c < casts; c++)
                 {
                     var raw = FormBehaviour.BaseDamage(form, resonance, wt)
@@ -1157,7 +1187,6 @@ public static class SoloBattle
                         if (alive == 0) return Kill(ms);
                     }
 
-                    events.Add(new BattleEvent(BattleEventKind.Skill, (int)sk.Source, (int)form, ms));
                     var dealt = LandSpread(raw, ms, shape.TargetsFor(form), sk.Source, form, abs);
 
                     // WEAVER — the ARTIFICE terminal. The cast ALSO lands as the next Form in the loadout,
@@ -1229,7 +1258,7 @@ public static class SoloBattle
             // ── THE BASIC ATTACK: the beat's action when no skill took it. MIGHT's hit. ─────────────
             if (onBeat && !acted && tuning.AutoAttackDamage > 0f)
             {
-                LandSpread(tuning.AutoAttackDamage * hunter.AutoDamageMultiplier * shape.AutoAttackDamage, ms, 1, null, null, abs, fromSkill: false);
+                LandSpread(tuning.AutoAttackDamage * hunter.AutoDamageMultiplier * shape.AutoAttackDamage, ms, 1, null, null, abs, fromSkill: false, swing: true);
                 if (alive == 0) return Kill(ms);
             }
             if (onBeat)
@@ -1363,7 +1392,11 @@ public static class SoloBattle
                     {
                         champ.UndyingSpent = true;
                         champ.Health = 1;
-                        events.Add(new BattleEvent(BattleEventKind.Shield, 0, 0, ms));
+                        // THE EVENT CARRIES ITS DURATION. It was stamped 0, and the replay opens the
+                        // window as AtMs + Amount — so the shield closed the instant it opened and the
+                        // screen's steel outline never drew once (review 2026-08-30: a dormant feature
+                        // whose unit test passed because the test built its own event).
+                        events.Add(new BattleEvent(BattleEventKind.Shield, 0, UndyingShieldMs, ms));
                     }
                     else
                     {

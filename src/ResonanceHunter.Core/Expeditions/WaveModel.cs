@@ -144,8 +144,16 @@ public enum WaveOutcome { Cleared, Wiped, Stalled }
 /// </remarks>
 // Charge: Value is the pool AFTER the change — the HUD latches the latest one at its playhead
 // rather than re-deriving the sim's rules (a replayed rule is a rule that can drift).
-public enum BattleEventKind { Strike, EnemyStrike, Down, Heal, EnemyDown, Skill, Shield, Charge }
+public enum BattleEventKind { Strike, EnemyStrike, Down, Heal, EnemyDown, Skill, Shield, Charge, Aura }
 
+/// <summary>
+/// AURA: one per tick of a passive Form, carrying the Source in <c>Slot</c> and the Form in
+/// <c>Amount</c> exactly as <see cref="BattleEventKind.Skill"/> does — but it is NOT an action and
+/// raises no cast. Until 2026-08-30 an Aura emitted nothing but its damage, so the screen had to tell
+/// its blows from a cast's by their timestamp; at some action speeds a fifth of the ticks collided with
+/// a cast and were reported as that cast's, and the skill rail could never answer "when did the Aura
+/// last fire" because there was nothing to answer with.
+/// </summary>
 /// <summary>A single beat of the fight, for the presentation layer to replay.</summary>
 /// <param name="Slot">
 /// Who the beat is about. For <see cref="BattleEventKind.EnemyStrike"/> and

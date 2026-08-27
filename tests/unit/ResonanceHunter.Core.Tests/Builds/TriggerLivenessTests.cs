@@ -259,19 +259,33 @@ public class TriggerLivenessTests
     [Fact]
     public void test_echo_fires_twice()
     {
-        // ECHO is x0.6 damage for two casts — a 1.2x net, and the point is the cast COUNT, so count them.
+        // ECHO is x0.6 damage for two casts — a 1.2x net. Counted in BLOWS, not in Skill events: since
+        // 2026-08-30 an activation announces itself exactly once however many passes it makes, because
+        // the screen starts an effect, a sound and a callout per announcement and ECHO fired all three
+        // twice on the same frame.
         var plain = new Build(); plain.Weave(Strike());
         var echo = new Build(); echo.Weave(Strike()); echo.Take(Keystones.ById("echo")!);
 
-        int Casts(Build b)
+        (int Blows, int Damage) Landed(Build b)
         {
             var champ = new Champion { MaxHealth = 10_000, Health = 10_000 };
             var (_, events) = SoloBattle.ResolveWave(champ, b, new Hunter(),
                 10_000_000f, 0f, 1_000, ExpeditionTuning.Default, new Random(3));
-            return events.Count(e => e.Kind == BattleEventKind.Skill);
+            var blows = events.Where(e => e.Kind == BattleEventKind.Strike && e.FromSkill).ToList();
+            return (blows.Count, blows.Sum(e => e.Amount));
         }
 
-        Assert.Equal(Casts(plain) * 2, Casts(echo));
+        var one = Landed(plain);
+        var twice = Landed(echo);
+        Assert.Equal(one.Blows * 2, twice.Blows);
+        // ...and the pair lands about 1.2x what one cast does, which is the keystone's whole bargain.
+        Assert.InRange(twice.Damage / (float)one.Damage, 1.1f, 1.3f);
+        // One announcement per activation, whatever ECHO does behind it.
+        var champCheck = new Champion { MaxHealth = 10_000, Health = 10_000 };
+        var (_, echoEvents) = SoloBattle.ResolveWave(champCheck, echo, new Hunter(),
+            10_000_000f, 0f, 1_000, ExpeditionTuning.Default, new Random(3));
+        var announceMs = echoEvents.Where(e => e.Kind == BattleEventKind.Skill).Select(e => e.AtMs).ToList();
+        Assert.Equal(announceMs.Distinct().Count(), announceMs.Count);
     }
 
     [Fact]

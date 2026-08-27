@@ -441,10 +441,15 @@ public class SoloBattleTests
             => SoloBattle.ResolveWave(Champ(4000), b, new Hunter(), float.MaxValue, 0f, 1_000_000, T,
                 new Random(7), new WaveBonus());
 
-        var plain = SkillCasts(Run(With(Form.Projectile)).Item2, Form.Projectile);
-        var overdrawn = SkillCasts(Run(WithTrigger(BuildTrigger.Overdraw, Form.Projectile)).Item2, Form.Projectile);
+        // Counted in BLOWS: an activation announces itself once since 2026-08-30, so a third pass shows
+        // in what it lands, not in a third Skill event (which the screen would have played as a third
+        // projectile effect on the same frame).
+        int Blows(System.Collections.Generic.List<BattleEvent> e) =>
+            e.Count(x => x.Kind == BattleEventKind.Strike && x.FromSkill);
+        var plain = Blows(Run(With(Form.Projectile)).Item2);
+        var overdrawn = Blows(Run(WithTrigger(BuildTrigger.Overdraw, Form.Projectile)).Item2);
 
-        Assert.True(overdrawn > plain, $"OVERDRAW must add Volley casts: plain={plain} overdrawn={overdrawn}");
+        Assert.True(overdrawn > plain, $"OVERDRAW must add Volley blows: plain={plain} overdrawn={overdrawn}");
     }
 
     /// <summary>OVERDRAW is DEAD on a build with no Projectile — the whole point of a combo item.</summary>

@@ -193,10 +193,19 @@ public sealed class WaveReplay
     public int NextSkillAfter(float ms, int source, int form)
     {
         foreach (var e in _events)
-            if (e.Kind == BattleEventKind.Skill && e.Slot == source && e.Amount == form && e.AtMs > ms)
+            if (IsCastOf(e, source, form) && e.AtMs > ms)
                 return e.AtMs;
         return int.MaxValue;
     }
+
+    /// <summary>
+    /// A cast of one skill: its Skill event, or — for a passive Form — its Aura tick, which is the
+    /// closest thing an always-on field has to a cast. Without this the rail could never answer "when
+    /// did the Aura last fire" and pinned that row's readout at empty forever (review 2026-08-30).
+    /// </summary>
+    private static bool IsCastOf(BattleEvent e, int source, int form) =>
+        (e.Kind == BattleEventKind.Skill || e.Kind == BattleEventKind.Aura)
+        && e.Slot == source && e.Amount == form;
 
     /// <inheritdoc cref="NextSkillAfter(float, int, int)"/>
     public int LastSkillBefore(float ms, int source, int form)
@@ -204,7 +213,7 @@ public sealed class WaveReplay
         var last = -1;
         foreach (var e in _events)
         {
-            if (e.Kind != BattleEventKind.Skill || e.Slot != source || e.Amount != form) continue;
+            if (!IsCastOf(e, source, form)) continue;
             if (e.AtMs > ms) break;
             last = e.AtMs;
         }
