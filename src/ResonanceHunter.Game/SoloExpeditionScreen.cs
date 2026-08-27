@@ -720,6 +720,7 @@ public sealed class SoloExpeditionScreen
             _auraColour = aura is null ? null : SourceColor.GetValueOrDefault(aura.Source, Bone);
             _lastAuraPulseMs = -1;
             _auraTotal = 0; _auraTotalMs = -1;
+            _auraRings.Clear();
         }
         // The replay's health table is read AFTER the pool refresh, or the HUD prints last wave's pool
         // over this wave's bar for a whole wave (review 2026-08-25: "300/360 with a full bar").
@@ -1028,7 +1029,7 @@ public sealed class SoloExpeditionScreen
                     if (auraTick && e.AtMs != _lastAuraPulseMs)
                     {
                         _lastAuraPulseMs = e.AtMs;
-                        _vfx.Play("fx_aura", ChampBox.Center.X, ChampBox.Center.Y + 40, scale: 4, fps: 14f, tint: _auraColour!.Value);
+                        _auraRings.Add(_playheadMs);   // a ring is born at the champion's centre (DrawAuraRings)
                     }
                     // The swing lunges; a cast already has its clip (UpdateChampionClip aims it at the beat).
                     if (!e.FromSkill) _champLunge = 1f;
@@ -1087,7 +1088,10 @@ public sealed class SoloExpeditionScreen
                     break;
                 case BattleEventKind.Heal:
                     if (ShowDamageNumbers) Say($"+{e.Amount}", Verdant);   // a number — follows DAMAGE NUMBERS; UNDYING below always shows
-                    _vfx.Play("fx_heal", ChampBox.Center.X, ChampBox.Center.Y, scale: 3, fps: 10f, tint: Verdant);
+                    // Centred so the effect's FOOT (its ground ring) sits on the ground line: at scale 3 the
+                    // effect is 312 px tall, and centred on the champion's box its ring floated at the waist
+                    // (playtest 2026-08-28: "the heal effect's ground part appears at the character's middle").
+                    _vfx.Play("fx_heal", ChampBox.Center.X, ChampBox.Bottom - 156, scale: 3, fps: 10f, tint: Verdant);
                     break;
                 case BattleEventKind.Shield:
                     Say("UNDYING", Gold);
@@ -1295,6 +1299,7 @@ public sealed class SoloExpeditionScreen
         var cbox = new Rectangle(ChampBox.X + push, ChampBox.Y, ChampBox.Width, ChampBox.Height);
         if (_replay!.IsShielded(0)) Outline(b, new Rectangle(cbox.X - 4, cbox.Y - 4, cbox.Width + 8, cbox.Height + 8), Steel, 4);
         DrawChampion(b, cbox, dead: _mode == Mode.Downed);
+        DrawAuraRings(b);   // over the champion: the field is in front of the figure as much as behind
 
         _vfx.Draw(b);
         DrawCallouts(b);
@@ -1535,7 +1540,7 @@ public sealed class SoloExpeditionScreen
             // ADDITIVE and white, over itself — a SpriteBatch tint can only darken a sprite, so the warm
             // tint of the first attempt was invisible on a dark creature (playtest 2026-08-28: "the enemy
             // flash does not work"). No knock-back: the user asked for the flash alone.
-            var hitFl = _hitFlash.GetValueOrDefault(i);
+            var hitFl = DevHoldFlash ? 1f : _hitFlash.GetValueOrDefault(i);
             var creatureTint = enterTint;
             if (_replay is not null && !_replay.CreatureAlive(i))
             {
@@ -1555,16 +1560,13 @@ public sealed class SoloExpeditionScreen
                     !attacking, creatureTint, crop))
                 if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, box, creatureTint, crop))
                     _ui.Fill(b, new Rectangle(box.X + 20, box.Y + 20, box.Width - 40, box.Height - 40), Ember);
-            if (hitFl > 0f && stripKey is not null)
+            if (hitFl > 0f && stripKey is not null && _ui.Assets.WhiteMask(stripKey) is not null)
             {
-                // The flash pass: the same frame, additive, so the creature goes WHITE for the blow and
-                // fades back. Two batch boundaries, only while a flash is live.
-                b.End();
-                b.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp, DepthStencilState.None, ArenaRasterizer);
-                _ui.AnimSprite(b, stripKey, box, EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps,
-                               !attacking, Color.White * (0.85f * hitFl), crop);
-                b.End();
-                b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, ArenaRasterizer);
+                // The flash: the creature's WHITE SILHOUETTE (AssetLibrary.WhiteMask) drawn over it at the
+                // same frame, fading with the flash — the only way a dark sprite turns white in a
+                // SpriteBatch. (An additive pass only added the sprite's own dark colours: invisible.)
+                _ui.AnimSprite(b, AssetLibrary.MaskKey(stripKey), box, EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps,
+                               !attacking, Color.White * (0.9f * hitFl), crop);
             }
 
             // A pip per creature rather than a framed bar — at five across, ornate frames become noise.
@@ -2195,13 +2197,12 @@ public sealed class SoloExpeditionScreen
         _ui.TextBig(b, kind, x, strip.Y + 12, UiKit.Vellum, UiTypography.Body);
         x += _ui.MeasureBig(kind, UiTypography.Body) + 10;
 
-        // RIGHT: the pack's life as a thin bar, and how many still stand before it.
-        var life = new Rectangle(strip.Right - 12 - 150, strip.Y + 10, 150, 24);
-        _ui.BarArt(b, life, _replay.EnemyHealthFraction, "health");
+        // RIGHT: how many still stand. (The pack's life bar that stood here was "unnecessary" — every
+        // creature wears its own pip, playtest 2026-08-28.)
         var total = _replay.CreatureCount;
         var alive = 0;
         for (var i = 0; i < total; i++) if (_replay.CreatureAlive(i)) alive++;
-        var countLeft = life.X - 14;
+        var countLeft = strip.Right - 16;
         if (total > 0)
             countLeft = RunsRight(b, countLeft, strip.Y + 13, UiTypography.Secondary, ($"{alive} OF {total}", Bone), ("  STANDING", Slate));
 
@@ -2697,6 +2698,15 @@ public sealed class SoloExpeditionScreen
                 while (lpx > 12 && _ui.MeasureBig(label, lpx) > RailContentW - box.Width - 20) lpx--;
                 // Beside the slot: the name is short and pairs with the medallion.
                 _ui.TextBig(b, label, box.Right + 12, box.Y + 10, Bone, lpx);
+                // The rhythm, in words, under the name: what the pips count.
+                var rhythm = FormBehaviour.CooldownBeats(s.Form) switch
+                {
+                    2 => "EVERY OTHER ACTION",
+                    3 => "EVERY THIRD ACTION",
+                    > 3 => $"EVERY {FormBehaviour.CooldownBeats(s.Form)} ACTIONS",
+                    _ => s.Form == Form.Aura ? "ALWAYS ON" : s.Form == Form.Trap ? "WHEN BITTEN" : "TIMED",
+                };
+                _ui.TextBig(b, rhythm, box.Right + 12, box.Y + 32, Slate, 12);
 
                 // WHAT THE SKILL ACTUALLY DOES, on the screen where the player first meets it.
                 // This line used to read "AUTO" on every row — true of every skill in the game, so it
@@ -2713,7 +2723,24 @@ public sealed class SoloExpeditionScreen
                 // remove the progress bar; while a skill waits, wind a cooldown clockwise over its icon").
                 // The waiting share of the medallion is shaded and the shade unwinds clockwise as the
                 // skill comes ready; a lit medallion is a ready skill; the gold halo is the cast itself.
-                if (flash <= 0f)
+                // A BEAT-COUNTED skill (Strike every third action, Projectile every other) shows BEATS: a
+                // row of pips under the medallion, one lit per action taken since its last cast, all lit
+                // when it is next. A clock on a skill that counts actions read as "still timed" (playtest
+                // 2026-08-28). Time-counted skills keep the clockwise sweep.
+                var beats = FormBehaviour.CooldownBeats(s.Form);
+                if (beats > 0)
+                {
+                    var litPips = flash > 0f ? beats : Math.Clamp((int)MathF.Floor(ready * beats + 0.001f), 0, beats);
+                    const int pip = 10, gap = 6;
+                    var px0 = box.Center.X - (beats * pip + (beats - 1) * gap) / 2;
+                    for (var k = 0; k < beats; k++)
+                    {
+                        var r = new Rectangle(px0 + k * (pip + gap), box.Bottom + 4, pip, pip);
+                        _ui.Fill(b, r, k < litPips ? sc : new Color(0x22, 0x1C, 0x30));
+                        if (k >= litPips) Outline(b, r, Dim, 1);
+                    }
+                }
+                else if (flash <= 0f)
                     _ui.CooldownSweep(b, new Vector2(box.Center.X, box.Center.Y), box.Width * 0.36f, ready,
                                       new Color(0x0C, 0x09, 0x16, 0xB4), Bone * 0.8f);
                 if (flash > 0f)
@@ -2929,9 +2956,45 @@ public sealed class SoloExpeditionScreen
     /// <summary>Per creature slot: a hit flash, 1 → 0 over ~120 ms — the blow lands ON something.</summary>
     private readonly Dictionary<int, float> _hitFlash = new();
 
+    /// <summary>Rig only (`fightflash`): pins every creature's flash so a still capture can prove it draws.</summary>
+    public bool DevHoldFlash { get; set; }
+
     /// <summary>The slotted Aura's Source colour for the wave being shown, or null when the build carries no Aura.</summary>
     private Color? _auraColour;
     private int _lastAuraPulseMs = -1;
+
+    /// <summary>Birth times (playhead ms) of the aura's rings; each grows from the champion's centre and fades.</summary>
+    private readonly List<float> _auraRings = new();
+    private const float AuraRingMs = 850f;
+
+    /// <summary>
+    /// The aura's picture: a ring per tick, born at the champion's centre, scaling outward and fading
+    /// out in the Aura's Source colour — an always-on field that never touches the champion's own
+    /// animation (playtest 2026-08-28: "starting from the character's centre, scale growing, fade out").
+    /// </summary>
+    private void DrawAuraRings(SpriteBatch b)
+    {
+        if (_auraColour is not { } colour) return;
+        _auraRings.RemoveAll(t0 => _playheadMs - t0 > AuraRingMs || _playheadMs < t0);
+        var centre = new Vector2(ChampBox.Center.X, ChampBox.Center.Y + 30);
+        foreach (var t0 in _auraRings)
+        {
+            var t = Math.Clamp((_playheadMs - t0) / AuraRingMs, 0f, 1f);
+            var ease = 1f - (1f - t) * (1f - t);                 // fast out of the centre, slowing as it fades
+            var radius = 18f + 230f * ease;
+            var alpha = (1f - t) * (1f - t) * 0.95f;
+            var thick = 7f - 5f * t;
+            const int segments = 72;
+            var prev = centre + new Vector2(radius, 0f);
+            for (var k = 1; k <= segments; k++)
+            {
+                var a = MathF.Tau * k / segments;
+                var next = centre + new Vector2(MathF.Cos(a) * radius, MathF.Sin(a) * radius * 0.55f);   // an ellipse: the ring lies in the room
+                _ui.LineSeg(b, prev, next, thick, colour * alpha);
+                prev = next;
+            }
+        }
+    }
     private int _auraTotal, _auraTotalMs = -1;
 
     /// <summary>The pending aura tick's total as one plain number over the pack's centre (see the Strike case).</summary>

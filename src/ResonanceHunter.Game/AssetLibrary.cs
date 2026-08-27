@@ -24,12 +24,14 @@ namespace ResonanceHunter.Client;
 public sealed class AssetLibrary
 {
     private readonly Dictionary<string, Texture2D> _textures = new(StringComparer.OrdinalIgnoreCase);
+    private readonly GraphicsDevice _device;
 
     /// <summary>Winning source path per key, so collision tie-breaks stay deterministic.</summary>
     private readonly Dictionary<string, string> _sources = new(StringComparer.OrdinalIgnoreCase);
 
     public AssetLibrary(GraphicsDevice device)
     {
+        _device = device;
         var root = Path.Combine(AppContext.BaseDirectory, "assets", "art");
         if (!Directory.Exists(root)) return;
 
@@ -189,6 +191,35 @@ public sealed class AssetLibrary
     public Texture2D? Get(string key) => Resolve(key);
 
     public bool Has(string key) => Resolve(key) is not null;
+
+    /// <summary>The key a texture's white silhouette is registered under (see <see cref="WhiteMask"/>).</summary>
+    public static string MaskKey(string key) => key + "|mask";
+
+    /// <summary>
+    /// A WHITE SILHOUETTE of a texture — every pixel's colour replaced by its alpha (premultiplied, so
+    /// white at the alpha) — built once and registered under <see cref="MaskKey"/>, so it can be drawn
+    /// through the same strip/sprite helpers as the original. The hit flash draws a creature's mask over
+    /// the creature: a tint can only darken a sprite and an additive pass only adds the sprite's own
+    /// dark colours, so "flash white" needs a white shape (playtest 2026-08-28: "the white flash is
+    /// definitely not showing").
+    /// </summary>
+    public Texture2D? WhiteMask(string key)
+    {
+        var maskKey = MaskKey(key);
+        if (_textures.TryGetValue(maskKey, out var have)) return have;
+        if (Resolve(key) is not { } src) return null;
+        var data = new Color[src.Width * src.Height];
+        src.GetData(data);
+        for (var i = 0; i < data.Length; i++)
+        {
+            var a = data[i].A;
+            data[i] = new Color(a, a, a, a);
+        }
+        var mask = new Texture2D(_device, src.Width, src.Height);
+        mask.SetData(data);
+        _textures[maskKey] = mask;
+        return mask;
+    }
 
     /// <summary>First present texture among candidates, or null. Lets callers try a specific-then-generic key.</summary>
     public Texture2D? GetFirst(params string[] keys) => keys.Select(Get).FirstOrDefault(t => t is not null);
