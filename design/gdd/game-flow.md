@@ -624,3 +624,25 @@ last clip ends.
   sweep spread 1.44 (band widened 1.40 → 1.45); heal probe MORPH ×4 2.63 / + SIPHON 2.75 (band 2.8);
   Singular vow +2 waves once its fixture stopped one-shotting (overkill is discarded on the beat).
   Owed: a WEIGHT branch look and a MORPH look under the beat.
+
+## Addendum 2026-08-27 (later) — ELEMENT SETS: worn pieces of one element unlock its rungs
+
+- **The rule.** Every worn item carries an element (the Source of the region it dropped in). Wearing
+  2 / 3 / 4 / 5 pieces of one element unlocks that element's set rungs (`ElementSets`, Core Economy).
+  Eight slots are worn; a full five leaves three for anything; two elements can each reach two.
+- **The same shape for every set,** so it is learned once: rung 2 and rung 4 make the element's OWN
+  skills hit 8% harder each (16% at four; `SkillShape.SourceBonus`, read in `SoloBattle.Amp`); rung 3 is
+  a plain stat in the element's character; rung 5 is the element's one special rule.
+  - BODY: +10% maximum health · the basic attack hits 25% harder (`SkillShape.AutoAttackDamage`).
+  - MACHINE: every bite deals 4 less · the first bite of every wave deals nothing.
+  - MIND: +6% critical chance · a MARK's window lasts 50% longer.
+  - NATURE: regain 0.3% of maximum health every second · heal 2% of the damage you deal.
+  - SHADOW: +12% against creatures under 30% health · every kill takes a beat off your cooldowns.
+  - SPIRIT: you act 6% faster · each skill's first cast of a wave hits 25% harder.
+- **Where it reaches the fight.** `GearShape.Of(hunter)` folds the active rungs into the shape the sim
+  combines with the build's; `SoloBattle.ChampionHealth` reads the gear shape's MaxHealth for the pool.
+- **Where the player reads it.** The GEAR screen's loadout panel: a SETS row ("SPIRIT 3 OF 5"), and
+  the set's card on hover — one plain line per rung, ON where reached. The Forge's element line is
+  "SET PIECE · SHADOW". Every line ends in a full stop and names a number; no ornament (house rule).
+- **Why sets.** The user chose them over attunement or resistances (2026-08-27): "set bonuses will add
+  a nice depth" — a collection goal the vault's element glyphs already point at.

@@ -1568,7 +1568,7 @@ public sealed class ForgeScreen
         {
             if (_ui.Assets.Get($"source_{src.ToString().ToLowerInvariant()}") is { } sg)
                 b.Draw(sg, new Rectangle(Card.X, ey - 6, 32, 32), Color.White);
-            _ui.TextBig(b, $"FORGE ELEMENT  ·  {src.ToString().ToUpperInvariant()}", Card.X + 42, ey, Bloom, UiTypography.Secondary);
+            _ui.TextBig(b, $"SET PIECE  ·  {src.ToString().ToUpperInvariant()}", Card.X + 42, ey, Bloom, UiTypography.Secondary);
             _ui.TextBig(b, "for merging — not the fight's Source", Card.X + 42, ey + 20, Slate, UiTypography.Secondary);
         }
 

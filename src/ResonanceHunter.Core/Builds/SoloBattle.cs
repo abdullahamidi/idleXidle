@@ -583,6 +583,11 @@ public static class SoloBattle
             if (against?.Source is { } target && skillSource is { } s)
                 m *= Weaving.SourceEffectiveness(s, target, wt);
 
+            // THE ELEMENT SETS' own-skill rungs: a skill of the set's Source hits harder. The swing
+            // passes no Source and gets nothing here (the BODY set's fifth piece is its own rule).
+            if (skillSource is { } own && shape.SourceBonus.TryGetValue(own, out var setBonus) && setBonus > 0f)
+                m *= 1f + setBonus;
+
             // BLOODLUST — damage scales with health MISSING. The keystone that rewards the edge.
             if (triggers.Contains(BuildTrigger.Bloodlust))
             {
@@ -1224,7 +1229,7 @@ public static class SoloBattle
             // ── THE BASIC ATTACK: the beat's action when no skill took it. MIGHT's hit. ─────────────
             if (onBeat && !acted && tuning.AutoAttackDamage > 0f)
             {
-                LandSpread(tuning.AutoAttackDamage * hunter.AutoDamageMultiplier, ms, 1, null, null, abs, fromSkill: false);
+                LandSpread(tuning.AutoAttackDamage * hunter.AutoDamageMultiplier * shape.AutoAttackDamage, ms, 1, null, null, abs, fromSkill: false);
                 if (alive == 0) return Kill(ms);
             }
             if (onBeat)
@@ -1441,8 +1446,11 @@ public static class SoloBattle
         // survivability was real; the number the player was shown never moved, and a stat the player
         // cannot see move is a stat the player believes is broken. So the whole channel now multiplies
         // the POOL, here, and the bite is just the bite. Same hits-to-die, honest number.
+        // The worn gear's SHAPE reaches the pool too — the BODY set's third piece (+10% maximum health)
+        // is a MaxHealth term like TOUGHNESS's, and lives on the hunter, not the build (2026-08-27).
         var pool = Math.Max(MinimumChampionHealth, hunter.MaxHealth)
                    * VowHealthMultiplier(build)
+                   * GearShape.Of(hunter).MaxHealth
                    * MathF.Max(0.05f, build.Resolve(hunter).Health);
         return Math.Max(1, (int)MathF.Round(pool));
     }

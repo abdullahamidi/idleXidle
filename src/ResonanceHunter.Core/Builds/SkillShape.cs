@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using ResonanceHunter.Core.Abilities;
+using ResonanceHunter.Core.Automation;
 
 namespace ResonanceHunter.Core.Builds;
 
@@ -247,6 +248,15 @@ public sealed record SkillShape
     /// </remarks>
     public float AutoAttackRate { get; init; } = 1f;
 
+    /// <summary>The basic attack's hit, multiplied — the BODY set's fifth piece. Skills never read it.</summary>
+    public float AutoAttackDamage { get; init; } = 1f;
+
+    /// <summary>
+    /// Extra damage for skills of a given SOURCE, additive per source (0.08 = +8%) — the element sets'
+    /// 2- and 4-piece rungs. Read in SoloBattle.Amp for the skill's own Source; the swing has none.
+    /// </summary>
+    public IReadOnlyDictionary<Source, float> SourceBonus { get; init; } = new Dictionary<Source, float>();
+
     /// <summary>
     /// RHYTHM — every cast since the last bite raises skill rate by this fraction, up to
     /// <see cref="CastRampMax"/> casts. A bite resets the count.
@@ -381,6 +391,10 @@ public sealed record SkillShape
         foreach (var (form, f) in b.FormPower)
             power[form] = power.TryGetValue(form, out var had) ? had * f : f;
 
+        var sourceBonus = new Dictionary<Source, float>(a.SourceBonus);
+        foreach (var (src, bonus) in b.SourceBonus)
+            sourceBonus[src] = sourceBonus.GetValueOrDefault(src) + bonus;
+
         return new SkillShape
         {
             HitSize = a.HitSize * b.HitSize,
@@ -431,6 +445,8 @@ public sealed record SkillShape
             MarkPowerBonus = a.MarkPowerBonus + b.MarkPowerBonus,
             AssassinateThreshold = Math.Max(a.AssassinateThreshold, b.AssassinateThreshold),
             AutoAttackRate = a.AutoAttackRate * b.AutoAttackRate,
+            AutoAttackDamage = a.AutoAttackDamage * b.AutoAttackDamage,
+            SourceBonus = sourceBonus,
             CastRampPerCast = a.CastRampPerCast + b.CastRampPerCast,
             CastRampMax = Math.Max(a.CastRampMax, b.CastRampMax),
             FirstCastMultiplier = a.FirstCastMultiplier * b.FirstCastMultiplier,

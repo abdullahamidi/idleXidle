@@ -580,7 +580,16 @@ public sealed class CharacterScreen
         // reports the element your WORN GEAR mostly shares, which decides nothing in a fight and
         // everything about whether you can merge a matched trio. Calling it SOURCE made it read as the
         // combat matchup and made ITEM POWER look broken for not accounting for it.
-        SummaryRow(b, "FORGE ELEMENT", $"{srcTxt} {srcPct}%", ref ry);
+        // "SETS", not "FORGE ELEMENT" (2026-08-27): the element decides something in the fight now.
+        // The row names the set the worn gear leans to and how many pieces it has; resting the pointer
+        // on it opens that set's card — every rung in one plain line, ON where reached.
+        var leading = ElementSets.Leading(hunter);
+        var setRow = new Rectangle(LoadoutPanel.X + 24, ry, LoadoutPanel.Width - 48, 44);
+        SummaryRow(b, "SETS",
+                   leading is { } lead ? $"{lead.ToString().ToUpperInvariant()} {ElementSets.WornCount(hunter, lead)} OF 5" : "NONE WORN",
+                   ref ry);
+        if (leading is { } tipFor && setRow.Contains(hit))
+            _ui.HoverTip(b, string.Join("\n", ElementSets.Card(hunter, tipFor)), hit);
 
         // Quick actions (§7.8) — both real. EQUIP BEST fills each slot with the highest-scoring item.
         Button(b, EquipBestBtn, "EQUIP BEST", hit, true);
