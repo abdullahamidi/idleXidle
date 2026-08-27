@@ -224,7 +224,11 @@ public sealed class BuildScreen
     /// which would push every row 28 px down a plate that has none to spare.
     /// </para>
     /// </remarks>
-    private static readonly Rectangle PointsPanel = new(40, 112, 480, 368);
+    // JUST THE GLYPH AND THE NUMBER, like the TRAITS screen's plate (playtest 2026-08-30: "the panel at
+    // the top left should be only the symbol and the number, as on the traits screen — the four tree
+    // rows there are unnecessary"). The branch tally and the SPENT cell are gone; TAKE EVERY POINT BACK
+    // is its own button under the plate, because it is an action and not a readout.
+    private static readonly Rectangle PointsPanel = new(40, 112, 200, 96);
 
     // ON THE TREE PAGE, NOT THE OVERVIEW. Playtest: "'Take all mastery points back' buranın butonu
     // değil, mastery tree'nin butonu." Right — it un-spends every point in a tree the overview does not
@@ -234,8 +238,7 @@ public sealed class BuildScreen
     //
     // INSIDE THE POINTS PLATE now, on its content width, rather than floating on the tree beneath it.
     private static readonly Rectangle ResetBtn =
-        new(UiKit.ContentLeft(PointsPanel), PointsPanel.Y + ResetRowTop,
-            UiKit.ContentRight(PointsPanel) - UiKit.ContentLeft(PointsPanel), 52);
+        new(PointsPanel.X, PointsPanel.Bottom + 12, 300, 52);
     /// <summary>The i-th of <paramref name="n"/> auto-skill cards, sharing the panel's width between them.</summary>
     /// <remarks>
     /// Divided rather than fixed at a pitch of 182, which fitted exactly four and put a fifth at
@@ -1130,26 +1133,21 @@ public sealed class BuildScreen
         var say = _msg.Length > 0 ? _msg : "FOUR DIRECTIONS  ·  SIX SPECIALISATIONS  ·  ONE DISCIPLINE";
         _ui.TextCenterBig(b, say, 960, 80, _msg.Length > 0 ? Ember : Slate, UiTypography.Secondary);
 
-        // ── THE CORNER PLATE ──
+        // ── THE CORNER PLATE: the mastery glyph and the points you can spend, and nothing else. ──
         _ui.PanelQuiet(b, PointsPanel);
-        var left = UiKit.ContentLeft(PointsPanel);
-        var width = UiKit.ContentRight(PointsPanel) - left;
 
-        // THE MEDALLION. The same round frame the arena hangs a portrait in, with the branding glyph
-        // the STATS card already uses for MASTERY POINTS inside it — so the two screens name the same
-        // currency with the same face.
-        var medal = new Rectangle(left, PointsPanel.Y + MedallionTop, 56, 56);
+        var num = $"{Mastery.Available}";
+        var numW = _ui.MeasureBig(num, UiTypography.PrimaryValue);
+        const int glyphBox = 56, gap = 14;
+        var group = glyphBox + gap + numW;
+        var gx = PointsPanel.X + (PointsPanel.Width - group) / 2;
+        var medal = new Rectangle(gx, PointsPanel.Y + (PointsPanel.Height - glyphBox) / 2, glyphBox, glyphBox);
         if (_ui.Assets.Get("ui_medallion_round") is { } ring) b.Draw(ring, medal, Color.White);
         if (_ui.Assets.Get("state_mastery_128") is { } glyph)
             b.Draw(glyph, new Rectangle(medal.X + 13, medal.Y + 13, 30, 30), Gold);
-
-        // +6: the title is optically centred on the MEDALLION beside it, not hung off the same grid
-        // line. A 26 px cap-height line and a 56 px disc share a row only if one of them yields.
-        _ui.TextBig(b, "YOUR POINTS", medal.Right + 16, UiKit.TitleTop(PointsPanel) + 6, Gold,
-                    UiTypography.PanelTitle);
-
-        DrawPointsStrip(b, new Rectangle(left, PointsPanel.Y + PointsRowTop, width, 62));
-        DrawBranchTable(b, new Rectangle(left, PointsPanel.Y + BranchRowTop, width, BranchRowH * 4));
+        _ui.TextBig(b, num, medal.Right + gap,
+                    PointsPanel.Y + (PointsPanel.Height - UiTypography.PrimaryValue) / 2 - 2,
+                    Mastery.Available > 0 ? Gold : Slate, UiTypography.PrimaryValue);
 
         if (Mastery.Spent > 0)
             Button(b, ResetBtn, _resetArmed ? "PRESS AGAIN TO CONFIRM" : "TAKE EVERY POINT BACK", hit, true);

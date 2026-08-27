@@ -224,6 +224,33 @@ public sealed class WaveReplay
         return last;
     }
 
+    /// <summary>
+    /// How many ACTIONS the champion took in (<paramref name="fromMs"/>, <paramref name="toMs"/>] — one
+    /// per beat: a cast (a Skill event) or a basic attack (a Strike the sim did not mark FromSkill).
+    /// </summary>
+    /// <remarks>
+    /// Counted by DISTINCT timestamp, because one cast lands one Strike per creature it reaches and an
+    /// Aura ticks Strikes of its own between beats — counting events would count a four-target cast as
+    /// four actions. The hunt's cooldown dial reads this: a beat-counted skill steps exactly once per
+    /// action, where deriving the step from elapsed TIME between two casts made it jump two at once or
+    /// stall (playtest 2026-08-30: "sometimes it counts 2 while the swing plays, sometimes not at all").
+    /// </remarks>
+    public int ActionsBetween(float fromMs, float toMs)
+    {
+        var count = 0;
+        var lastAt = int.MinValue;
+        foreach (var e in _events)
+        {
+            if (e.AtMs <= fromMs) continue;
+            if (e.AtMs > toMs) break;
+            var isAction = e.Kind == BattleEventKind.Skill || (e.Kind == BattleEventKind.Strike && !e.FromSkill);
+            if (!isAction || e.AtMs == lastAt) continue;
+            lastAt = e.AtMs;
+            count++;
+        }
+        return count;
+    }
+
     private int NextAfter(float ms, BattleEventKind kind)
     {
         foreach (var e in _events)

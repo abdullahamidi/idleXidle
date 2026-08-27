@@ -721,7 +721,6 @@ public sealed class SoloExpeditionScreen
             _beatMs = SoloBattle.BeatFor(_castRate);
             var aura = Loadout.Skills.FirstOrDefault(k => k.Form == Form.Aura);
             _auraColour = aura is null ? null : SourceColor.GetValueOrDefault(aura.Source, Bone);
-            _lastAuraPulseMs = -1;
             _auraTotal = 0; _auraTotalMs = -1;
             _auraSincePulse = 999f;
             _vfx.Clear();   // no effect may survive a wave boundary
@@ -978,7 +977,14 @@ public sealed class SoloExpeditionScreen
         }
 
         _playheadMs += dt * 1000f * _speedMul;
+        // THE AURA'S PULSE, ON THE WALL CLOCK. It used to be raised by an aura's damage event, which
+        // meant a tick landing on a cast's own millisecond was read as that cast's blow and raised
+        // nothing — and in a real four-skill build that happened often enough that the field looked
+        // absent (playtest 2026-08-30: "there is no aura effect on screen"). An always-on field is
+        // always on: while a wave is running and the build carries an Aura, it pulses on its own beat.
         _auraSincePulse += dt;
+        if (_auraColour is not null && _mode == Mode.Fighting && _auraSincePulse >= AuraPulseSeconds)
+            PulseAura();
         if (_hitFlash.Count > 0)
             foreach (var key in _hitFlash.Keys.ToList())
             {
@@ -1030,12 +1036,10 @@ public sealed class SoloExpeditionScreen
                     // Source's colour from the champion, once per tick, and NO lunge, sound or puff —
                     // the champion "kept trying to start an animation" every half second (playtest
                     // 2026-08-28: "an always-on effect that never touches the character's animation").
+                    // The PICTURE is on its own clock (see PulseAura, driven from Update): a field that is
+                    // always on must not depend on an event surviving a classification. This flag only
+                    // decides whether the blow lunges, sounds, sparks and flashes.
                     var auraTick = e.FromSkill && e.AtMs != skillAtMs && e.AtMs != trapAtMs && _auraColour is not null;
-                    if (auraTick && e.AtMs != _lastAuraPulseMs)
-                    {
-                        _lastAuraPulseMs = e.AtMs;
-                        PulseAura();
-                    }
                     // The swing lunges; a cast already has its clip (UpdateChampionClip aims it at the beat).
                     if (!e.FromSkill) _champLunge = 1f;
                     _nextChampStrikeMs = _replay.NextChampionStrikeAfter(e.AtMs);
@@ -2675,7 +2679,16 @@ public sealed class SoloExpeditionScreen
                     var next = _replay.NextSkillAfter(_playheadMs, (int)s.Source, formKey);
                     var prev = _replay.LastSkillBefore(_playheadMs, (int)s.Source, formKey);
                     if (next != int.MaxValue && next - _playheadMs is > 0f and <= 300f) telegraph = 1f - (next - _playheadMs) / 300f;
-                    if (next != int.MaxValue)
+                    if (FormBehaviour.CooldownBeats(s.Form) is var bts and > 0)
+                    {
+                        // COUNTED, not timed: the actions taken since this skill's last cast (or since the
+                        // wave opened), against the actions it waits. Deriving the step from the TIME
+                        // between two casts made the dial jump two at once or stall, because a deferred
+                        // cast stretches that span (playtest 2026-08-30).
+                        var since = _replay!.ActionsBetween(prev >= 0 ? prev : -1, _playheadMs);
+                        ready = Math.Clamp(since / (float)bts, 0f, 1f);
+                    }
+                    else if (next != int.MaxValue)
                     {
                         // From the previous cast, or from the top of the wave for the very first one.
                         var from = prev >= 0 ? prev : 0;
@@ -3002,10 +3015,12 @@ public sealed class SoloExpeditionScreen
 
     /// <summary>The slotted Aura's Source colour for the wave being shown, or null when the build carries no Aura.</summary>
     private Color? _auraColour;
-    private int _lastAuraPulseMs = -1;
 
     /// <summary>Real seconds since the last aura pulse — the pulse runs on the wall clock, not the replay's.</summary>
     private float _auraSincePulse = 999f;
+
+    /// <summary>Seconds between aura pulses — two sim ticks, so the ring is always in the room without stacking.</summary>
+    private const float AuraPulseSeconds = FormBehaviour.AuraTickMs * 2 / 1000f;
 
     /// <summary>
     /// The aura's pulse: the authored fx_aura ring at the champion, in the Aura's Source colour, GROWING
