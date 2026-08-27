@@ -189,8 +189,10 @@ public class SkillShapeBattleTests
     [Fact]
     public void test_everywhere_strikes_the_whole_wave()
     {
+        // 40 000 health each: nothing dies during the fight, so every cast finds all five (a creature
+        // that fell to the beat's heavier hits made the average read 4.4 of 5).
         var m = Fight(SkillShape.None with { StrikesEveryCreature = true, HitSize = 0.4f },
-                      Wave(5, 4000f, 10f), Form.Strike);
+                      Wave(5, 40_000f, 10f), Form.Strike);
 
         Assert.True(m.TargetsPerActivation >= 4.5f,
             $"One cast reached {m.TargetsPerActivation:F1} creatures of five. EVERYWHERE reaches all of them.");

@@ -173,7 +173,7 @@ public static class SoloBattle
     /// 17-second wave. A basic attack that armour eats whole is a stat the player trains for nothing.
     /// At 18 the swing is about a third of a one-skill build's damage and survives armour.
     /// </remarks>
-    public const float AutoAttackDamage = 32f;   // 18 → 32 under the beat (2026-08-27): one swing per 1.5 s, not per 1.2, and the beat's ceiling
+    public const float AutoAttackDamage = 48f;   // 18 → 48 under the beat (2026-08-27): one swing per 1.5 s, not per 1.2, and the beat's ceiling (see FormBaseValue)
     /// <summary>
     /// THE BEAT at action speed 1.0. The champion acts on a metronome — one cast or one swing per beat,
     /// never two actions inside one — so every animation plays whole, with a settle before the next
@@ -411,6 +411,11 @@ public static class SoloBattle
         var mindExtendBudget = 0;                               // MIND — refilled when a MARK opens
 
         var firstBiteTaken = false;                     // FORTIFY
+        var killFuelArmed = false;                      // RALLY — the next skill after a kill
+        var biteFuel = 0;                               // PAYBACK — bites banked for the next skill
+        var castRamp = 0;                               // RHYTHM — casts since the last bite
+        var staggeredThisBite = false;                  // STAGGER — one push-back per bite
+        var castOnce = new HashSet<int>();              // OPENING VOLLEY — skills that have cast this wave
         var triggers = build.Triggers(hunter);
         // CHARGE. Tracked only when a keystone reads or feeds the pool — an untracked pool cannot
         // rot into dormant state, and the HUD only shows what the events say.
@@ -527,6 +532,13 @@ public static class SoloBattle
         var beatLen = BeatFor(mods.SkillRate * shape.SkillRate, tuning.BeatMs);
         var nextBeat = Math.Min(beatLen, tuning.WaveOpeningMs);   // the wave's breath, then the metronome
         var nextBite = enemyIntervalMs;
+
+        // THE LIVE SKILL RATE. The build's rate, then the two nodes that move it DURING a wave: TIDE
+        // (faster per living creature) and RHYTHM (faster per cast since the last bite). Read at every
+        // cast and swing, so a kill or a bite changes the NEXT cooldown rather than the wave's.
+        float RateNow() => mods.SkillRate * shape.SkillRate
+                           * (1f + shape.RatePerCreature * alive)
+                           * (1f + shape.CastRampPerCast * castRamp);
 
         (WaveOutcome, List<BattleEvent>) Finish(WaveOutcome o, int atMs)
         {
@@ -648,6 +660,11 @@ public static class SoloBattle
                 // fires on whichever is hurt rather than on the wave as a whole.
                 if (shape.CullBonus > 0f && against.Health < against.MaxHealth * shape.CullThreshold)
                     m *= 1f + shape.CullBonus;
+
+                // HEADLONG — CULL's mirror: the bonus is for a creature still mostly whole, which is
+                // where a few big hits count and a stream of small ones does not.
+                if (shape.FreshBonus > 0f && against.Health > against.MaxHealth * shape.FreshThreshold)
+                    m *= 1f + shape.FreshBonus;
 
                 // SIEGE — the branch's one explicitly narrow node.
                 if (shape.VsArmouredBonus > 0f || shape.VsOtherPenalty > 0f)
@@ -785,6 +802,14 @@ public static class SoloBattle
             if (fromSkill && shape.SunderThreshold > 0f && raw >= shape.SunderThreshold)
                 target.Defense = MathF.Max(0f, target.Defense - shape.SunderAmount);
 
+            // STAGGER — a swing that big pushes the whole wave's next bite back. Once per bite: the flag
+            // is cleared when the bite lands, so a heavy build cannot chain pushes into immunity.
+            if (fromSkill && shape.StaggerMs > 0 && raw >= shape.StaggerThreshold && !staggeredThisBite)
+            {
+                nextBite += shape.StaggerMs;
+                staggeredThisBite = true;
+            }
+
             if (metrics is not null && target.Health <= 0f) metrics.CreaturesKilled++;
             var idx = IndexOf(target);
             events.Add(new BattleEvent(BattleEventKind.Strike, idx, (int)MathF.Round(dmg), atMs, FromSkill: fromSkill));
@@ -792,6 +817,8 @@ public static class SoloBattle
             {
                 alive--;
                 if (shape.CascadeOnKill) cascadeArmed = true;
+                // RALLY — the next skill activation hits harder. Any kill, like MOMENTUM.
+                if (shape.NextSkillAfterKillBonus > 0f) killFuelArmed = true;
 
                 // One EnemyDown per CREATURE, not per wave. The screen needs to know which sprite to
                 // remove; the wave-cleared signal is the outcome, not this event.
@@ -840,6 +867,12 @@ public static class SoloBattle
             // CASCADE — one activation after a kill reaches everything. Armed in LandOn, spent here, so
             // the reward lands on the NEXT cast and a player can see the ripple rather than guess at it.
             if (fromSkill && cascadeArmed) { targets = int.MaxValue; cascadeArmed = false; }
+
+            // RALLY and PAYBACK — bonuses banked by a kill and by bites, spent whole on the next skill
+            // activation, every hit of it. Raw is scaled before the per-target loop so CHAIN and
+            // RICOCHET's extra hit carry the same rally.
+            if (fromSkill && killFuelArmed) { raw *= 1f + shape.NextSkillAfterKillBonus; killFuelArmed = false; }
+            if (fromSkill && biteFuel > 0) { raw *= 1f + shape.BiteFuelBonus * biteFuel; biteFuel = 0; }
 
             var dealt = 0f;
             var struck = 0;
@@ -941,7 +974,6 @@ public static class SoloBattle
             // ON THE BEAT the champion takes ONE action: the first ready skill in slot order, else a swing.
             var onBeat = champ.Alive && ms >= nextBeat;
             var acted = false;
-            if (onBeat) nextBeat += beatLen;
 
             // ── VITALITY: life regained every second, a fraction of the pool (Hunter.RegenPerSecond).
             //    Through Heal() like every other heal, so BLOOD MAGIC's "no healing" and the band's
@@ -952,6 +984,11 @@ public static class SoloBattle
                 // `ms`, NOT `abs`: events are stamped wave-relative, and the replay walks them in order —
                 // a run-cumulative stamp here froze the replay from wave two on (review 2026-08-26).
                 Heal(Math.Max(1, (int)MathF.Round(champ.MaxHealth * hunter.RegenPerSecond)), ms, underCeiling: false);
+
+            // ── MENDING: the tree's own trickle, a fraction of the pool a second. A BUILD's heal, so it
+            //    spends the per-wave ceiling like LEECH — the trained stat above is the one exception. ──
+            if (ms % RegenTickMs == 0 && champ.Alive && shape.RegenFraction > 0f && champ.Health < champ.MaxHealth)
+                Heal(Math.Max(1, (int)MathF.Round(champ.MaxHealth * shape.RegenFraction)), ms);
 
             // ── VENOM bleeds first, so poison from earlier ticks can finish an enemy before it swings. ──
             if (poison > 0.5f && ms % 500 == 0)
@@ -1012,7 +1049,7 @@ public static class SoloBattle
                 else
                 {
                     var cd = Math.Max(1, (int)(FormBehaviour.BaseCooldownMs(form)
-                                               / Math.Max(0.1f, mods.SkillRate * shape.SkillRate)));
+                                               / Math.Max(0.1f, RateNow())));   // TIDE and RHYTHM move it live
                     // PREPARATION — every skill's FIRST cast of a wave is free of its cooldown. The
                     // default ReadyAt of `cd` is what normally makes a skill wait one cooldown before its
                     // opener; dropping that to 0 is the whole node, worth most to a slow, heavy build.
@@ -1021,6 +1058,11 @@ public static class SoloBattle
                     champ.ReadyAt[i] = abs + cd;
                 }
                 acted = true;
+
+                // RHYTHM counts every cast, a MARK included; OPENING VOLLEY remembers which skills have
+                // cast this wave. Both decided here, before the Form branches, so no path forgets them.
+                if (castRamp < shape.CastRampMax) castRamp++;
+                var firstCast = castOnce.Add(i);
 
                 if (FormBehaviour.IsAmplifier(form))
                 {
@@ -1056,6 +1098,9 @@ public static class SoloBattle
                 {
                     var raw = FormBehaviour.BaseDamage(form, resonance, wt)
                               * VowFactor(sk, weaveCtx, wt, shape);
+
+                    // OPENING VOLLEY — this skill's first activation of the wave, or one of the later ones.
+                    raw *= firstCast ? shape.FirstCastMultiplier : shape.LaterCastMultiplier;
 
                     // THE NEN BUY-BACK: a sworn Vow pulls an off-discipline skill one ring toward the
                     // build's affinity (restriction buys power — the rule the Vows were born from).
@@ -1182,7 +1227,14 @@ public static class SoloBattle
                 LandSpread(tuning.AutoAttackDamage * hunter.AutoDamageMultiplier, ms, 1, null, null, abs, fromSkill: false);
                 if (alive == 0) return Kill(ms);
             }
-            if (onBeat) champ.BeatCount++;
+            if (onBeat)
+            {
+                // THE NEXT BEAT at the LIVE rate (TIDE, RHYTHM move it mid-wave) — and BRISK shortens a
+                // beat the champion spent on the swing, so a brisk build swings sooner but casts no faster.
+                var swung = !acted && tuning.AutoAttackDamage > 0f;
+                nextBeat = ms + BeatFor(RateNow() * (swung ? shape.AutoAttackRate : 1f), tuning.BeatMs);
+                champ.BeatCount++;
+            }
 
             // ── THE ENEMY BITES BACK ──────────────────────────────────────────────────────────
             //
@@ -1202,6 +1254,8 @@ public static class SoloBattle
             if (ms >= nextBite)
             {
                 nextBite += enemyIntervalMs;
+                staggeredThisBite = false;   // STAGGER may push the next one
+                castRamp = 0;                // RHYTHM — a bite resets the run of casts
                 // EVERY LIVING CREATURE BITES. This is what makes action economy real: a Swarm's combined
                 // damage is its threat, and every creature killed is incoming damage removed. A build that
                 // cannot clear a Swarm quickly does not merely kill slowly, it takes the full wave's
@@ -1235,6 +1289,12 @@ public static class SoloBattle
 
                 champ.Health -= (int)MathF.Round(taken);
                 events.Add(new BattleEvent(BattleEventKind.EnemyStrike, 0, (int)MathF.Round(taken), ms));
+
+                // PAYBACK banks the bite for the next skill; REBOUND turns a share of what LANDED back
+                // into health — after the rest of the branch has had its say, so it reads the real bite.
+                if (shape.BiteFuelBonus > 0f && biteFuel < shape.BiteFuelMax) biteFuel++;
+                if (shape.HealOnBiteFraction > 0f && champ.Alive && taken > 0f)
+                    Heal((int)MathF.Round(taken * shape.HealOnBiteFraction), ms);
 
                 // THORNS — every biter takes a fraction of its own RAW bite back. Read against the
                 // creature's bite before the champion's mitigation, so PADDING and BULWARK do not
@@ -1274,12 +1334,14 @@ public static class SoloBattle
                     // a woven Trap, so the enchant is naturally dead on any build without one.
                     var trapBase = FormBehaviour.BaseCooldownMs(Form.Trap);
                     if (triggers.Contains(BuildTrigger.Coiled)) trapBase = (int)(trapBase * CoiledCooldownFactor);
-                    var cd = Math.Max(1, (int)(trapBase / Math.Max(0.1f, mods.SkillRate * shape.SkillRate)));
+                    var cd = Math.Max(1, (int)(trapBase / Math.Max(0.1f, RateNow())));
                     if (abs < champ.ReadyAt.GetValueOrDefault(idx, 0)) continue;
                     champ.ReadyAt[idx] = abs + cd;
 
                     var trapRaw = FormBehaviour.BaseDamage(Form.Trap, resonance, wt)
-                                  * VowFactor(sk, weaveCtx, wt, shape);
+                                  * VowFactor(sk, weaveCtx, wt, shape)
+                                  // OPENING VOLLEY — the Trap's first spring of the wave counts as its first cast.
+                                  * (castOnce.Add(idx) ? shape.FirstCastMultiplier : shape.LaterCastMultiplier);
                     events.Add(new BattleEvent(BattleEventKind.Skill, (int)sk.Source, (int)Form.Trap, ms));
                     var trapDealt = LandSpread(trapRaw, ms, shape.TargetsFor(Form.Trap), sk.Source, Form.Trap, abs);
                     // NATURE'S SIGNATURE follows the damage here too — a Trap that bites back heals

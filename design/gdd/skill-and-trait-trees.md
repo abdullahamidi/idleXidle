@@ -88,16 +88,25 @@ and more consequential as they go out:
 
 | Ring | Count | Cost each | What it is |
 |---|---|---|---|
-| 1 — minors | 5 | 1 | Small shape changes. Connective tissue, but each one still moves a shape, not just a number. Four hang off START; the fifth is a **spur** that hangs off the outermost of the four. |
-| 2 — notables | 4 | 3 | A real behaviour. This is where a branch starts to have an opinion. Three accept any spine minor; the fourth needs the spur. |
-| 3 — greaters | 3 | 5 | A behaviour with a visible cost attached. Two accept any spine notable; the third needs the side notable. |
-| 4 — mastery | 1 | 8 | The branch's identity, and always a trade that makes some builds impossible. Accepts any of the three greaters. |
+| 1 — minors | 6 | 1 | Small shape changes. Connective tissue, but each one still moves a shape, not just a number. Five hang off START; the sixth is a **spur** that hangs off the outermost of the five. |
+| 2 — notables | 5 | 3 | A real behaviour. This is where a branch starts to have an opinion. Four accept any spine minor; the fifth needs the spur. |
+| 3 — greaters | 4 | 5 | A behaviour with a visible cost attached. Three accept any fan notable; the fourth needs the side notable. |
+| 4 — mastery | 1 | 8 | The branch's identity, and always a trade that makes some builds impossible. Accepts any of the four greaters. |
 
-A full branch costs **40 points**.
+A full branch costs **49 points**.
+
+**The 2026-08-27 pass.** *(Playtest: "add new nodes and lower the numbers on the
+current nodes a little.")* Every ring gained one node — a sixth minor, a fifth notable
+and a fourth greater per branch, twelve in all, each a new shape the sim reads — and
+every existing bonus came down by roughly a fifth to a third, so a full walk lands
+about where it did with three more decisions in it. The new node of each ring sits in
+the fan (any spine node of the ring below unlocks it); the side road is unchanged.
+The branch sweep was re-measured at the same 18-point budget: best/worst depth ratio
+1.38 → 1.38, inside the 1.40 band.
 
 **The side road.** *(Added 2026-08-25, after the post-pre-alpha playtest: "almost at a
 specialisation in the first 15 minutes.")* Each branch was 4 → 3 → 2 → 1 and cost 31.
-The fifth minor, fourth notable and third greater are not spread across the existing
+One minor, one notable and one greater per branch are not spread across the existing
 any-of fans — they are strung end to end as one **side road**: outermost minor → spur
 minor → side notable → side greater → capstone. Walked as a road it costs
 1 + 1 + 3 + 5 + 8 = 18 and needs every step in order, so nine more points per branch
@@ -116,18 +125,18 @@ rather than the axis generally.
 **Totals.**
 
 ```
-4 branches x 40        = 160
+4 branches x 49        = 196
 4 bridges x 6          =  24
 6 Form specialisations =  36
                         ----
-total tree cost         220
+total tree cost         256
 ```
 
-Against roughly **55–70 points** at full current content (six regions walked to
-depth 150–225 each, on the square-root curve of §4.1) that is **25–33%** — the
+Against roughly **66–78 points** at full current content (six regions walked to
+depth 150–225 each, on the square-root curve of §4.1) that is **26–30%** — the
 "about a third" invariant from flow doc §4.4, at the low end on purpose: the tree
-grew to slow the walk and the points curve slowed with it. One branch outright plus
-half of a second, or two branches to ring 3 and nothing else.
+grew to slow the walk and the points curve grew with it, but less. One branch
+outright plus half of a second, or two branches to ring 3 and nothing else.
 
 ### 3.3 Skill Tree — node catalogue
 
@@ -137,24 +146,30 @@ Names are working names. What matters is the effect and the trade.
 
 *Fewer, larger hits. Flat mitigation is the enemy this branch exists to beat.*
 
-**Minors (1)** · Heavy Hand: +25% hit size, −15% skill rate · Sharpened: hits
-subtract 8 from enemy Defense before mitigation · Follow Through: first hit on each
-creature +30% size · Deliberate: −20% skill rate, +30% hit size · **Dent** *(spur, off
-Deliberate)*: a hit over 150 strips 8 Defense for the rest of the wave — with Sunder
-the threshold takes the kinder 150 and the strips add
+**Minors (1)** · **Heft** *(new)*: Strike and Trap hit 20% harder — Weight's two Forms
+· Heavy Hand: +18% hit size, −12% skill rate · Sharpened: hits subtract 6 from enemy
+Defense before mitigation · Follow Through: first hit on each creature +20% size ·
+Deliberate: −15% skill rate, +22% hit size · **Dent** *(spur, off Deliberate)*: a hit
+over 150 strips 6 Defense for the rest of the wave — with Sunder the threshold takes
+the kinder 150 and the strips add
 
-**Notables (3)** · **Sunder**: a hit above 200 permanently reduces that creature's
-Defense by 20 for the rest of the wave · **Crush**: hits above the wave's average
-enemy Defense × 8 ignore half of it · **Breaker**: part-break damage doubled, and
-part-breaks now also pay a chest-grade step (flow §3.5) · **Second Blow** *(side road,
-needs Dent)*: every hit after the first on a creature +20% — the mirror of Tempo's
-Alpha, a single-target commitment stated as a shape
+**Notables (3)** · **Headlong** *(new)*: +30% against creatures above half health —
+Cull's mirror; Weight puts its few big hits into a full pool (sim field
+`FreshThreshold` / `FreshBonus`) · **Sunder**: a hit above 200 permanently reduces that
+creature's Defense by 15 for the rest of the wave · **Crush**: a hit 8× bigger than the
+armour ignores 40% of it · **Breaker**: 40% of any overkill carries to the next
+creature · **Second Blow** *(side road, needs Dent)*: every hit after the first on a
+creature +15% — the mirror of Tempo's Alpha, a single-target commitment stated as a
+shape
 
-**Greaters (5)** · **Monolith**: all damage is delivered in half as many hits, each
-twice as large · **Siege**: +45% damage to Armoured, −25% to everything else ·
-**Shatter** *(side road, needs Second Blow)*: a hit over 120 strips 30 Defense for the
-wave; cooldowns +25% — with Dent and Sunder the strips sum to 58, so a plated wave is
-bare after one swing, and the price is Weight's own currency
+**Greaters (5)** · **Stagger** *(new)*: a hit over 200 pushes the wave's next bite
+back half a second, once per bite; cooldowns +15% (sim field `StaggerThreshold` /
+`StaggerMs`, read in `LandOn` against the raw swing) · **Monolith**: all damage is
+delivered in half as many hits, each twice as large · **Siege**: +35% damage to
+Armoured, −20% to everything else · **Shatter** *(side road, needs Second Blow)*: a hit
+over 120 strips 22 Defense for the wave; cooldowns +18% — with Dent and Sunder the
+strips sum to 43, so a plated wave is bare after two swings, and the price is Weight's
+own currency
 
 **Mastery (8)** · **OVERWHELM**: hits below 60 damage deal nothing at all; hits
 above 60 ignore enemy Defense entirely.
@@ -166,22 +181,28 @@ delivers its damage in small pieces.*
 *Target count and action economy. Losing to five creatures at once is this branch's
 enemy.*
 
-**Minors (1)** · Wide: Projectile +1 target · Diffuse: Aura +1 target · Quick Hands:
-−15% cooldowns · Ricochet: 30% chance each hit strikes a second creature for half ·
-**Sweep** *(spur, off Ricochet)*: Strike reaches one more creature — Weight's own Form
-pulled onto the Spread axis
+**Minors (1)** · **Fan** *(new)*: Trap reaches one more creature — Weight's other Form
+pulled onto the Spread axis · Wide: Projectile +1 target · Diffuse: cooldowns −8%,
+hits −4% *(the card used to claim "Aura ticks faster" over a shape that never touched
+the Aura; it says what it does now)* · Quick Hands: −10% cooldowns · Ricochet: 25%
+chance each hit strikes a second creature for half · **Sweep** *(spur, off Ricochet)*:
+Strike reaches one more creature
 
-**Notables (3)** · **Chain**: every hit strikes one extra creature at 50% ·
-**Cull**: +80% damage to creatures below 25% health · **Swarmbane**: +8% damage per
-living creature in the wave · **Momentum** *(side road, needs Sweep)*: every kill takes
-one second off every cooldown — action economy fed by kills, a torrent in a Swarm and
-a trickle against a Bruiser (new sim field `CooldownRefundOnKillMs`, read in `LandOn`
-on any kill)
+**Notables (3)** · **Rally** *(new)*: after a kill, the next skill activation hits 40%
+harder, every hit of it — fed by kills like Momentum (sim field
+`NextSkillAfterKillBonus`, armed in `LandOn`, spent in `LandSpread`) · **Chain**: every
+hit strikes one extra creature at 40% · **Cull**: +60% damage to creatures below 25%
+health · **Swarmbane**: +6% damage per living creature in the wave · **Momentum**
+*(side road, needs Sweep)*: every kill takes three-quarters of a second off every
+cooldown — action economy fed by kills, a torrent in a Swarm and a trickle against a
+Bruiser (sim field `CooldownRefundOnKillMs`, read in `LandOn` on any kill)
 
-**Greaters (5)** · **Cascade**: a kill makes the next hit strike every creature ·
-**Dispersal**: all Forms +1 target, −25% hit size · **Outnumbered** *(side road, needs
-Momentum)*: +12% damage per living creature, all hits −20% — worse than nothing
-against one creature (×1.12 × 0.8), far better at six
+**Greaters (5)** · **Tide** *(new)*: cooldowns 4% shorter per living creature, hits
+−15% — Swarmbane's cousin in the other currency (sim field `RatePerCreature`, read
+through the sim's live rate at every cast) · **Cascade**: a kill makes the next hit
+strike every creature · **Dispersal**: all Forms +1 target, −25% hit size ·
+**Outnumbered** *(side road, needs Momentum)*: +9% damage per living creature, all
+hits −15% — worse than nothing against one creature (×1.09 × 0.85), far better at six
 
 **Mastery (8)** · **EVERYWHERE**: every skill strikes every creature, at 40% hit
 size.
@@ -192,25 +213,32 @@ small hit is below the flat mitigation floor.*
 
 *Kill it before it acts. Every extra second against a Caster is a full hit taken.*
 
-**Minors (1)** · Opener: +35% damage on the first hit against each creature ·
-Hasten: +20% skill rate · Preparation: the first skill of each wave has no cooldown
-· Focus: +10% critical chance · **Flash** *(spur, off Focus)*: +30% for the first two
-seconds of each wave — the capstone's shape at a minor's size, no price; two seconds
-because the wave opens with a 700 ms breath
+**Minors (1)** · **Brisk** *(new)*: the basic swing comes 20% sooner; skills keep
+their own pace (sim field `AutoAttackRate`, read only where the swing's interval is
+set) · Opener: +25% damage on the first hit against each creature · Hasten: +15%
+skill rate · Preparation: the first skill of each wave has no cooldown · Focus: +8%
+critical chance · **Flash** *(spur, off Focus)*: +20% for the first two seconds of each
+wave — the capstone's shape at a minor's size, no price; two seconds because the wave
+opens with a 700 ms breath
 
-**Notables (3)** · **Alpha**: first hit on a creature ×2.2, every later hit ×0.75 ·
-**Mark Mastery**: Mark's window is twice as long and 40% stronger · **Interrupt**:
-damage dealt during an enemy windup is amplified 60% · **Surge** *(side road, needs
-Flash)*: +50% for the first three seconds of each wave — the same window as First
-Strike, so it deepens the capstone's opening rather than stretching it
+**Notables (3)** · **Rhythm** *(new)*: each cast makes the next come 8% sooner, up to
+five times; a bite resets it — front-loading as a clock, fast in the Caster band and
+nothing in the Bruiser band (sim field `CastRampPerCast` / `CastRampMax`, read through
+the live rate; reset in the bite block) · **Alpha**: first hit on a creature ×1.9,
+every later hit ×0.8 · **Mark Mastery**: Mark's window lasts 60% longer and hits 30%
+harder · **Interrupt**: damage dealt in the run-up to an enemy swing +45% · **Surge**
+*(side road, needs Flash)*: +40% for the first three seconds of each wave — the same
+window as First Strike, so it deepens the capstone's opening rather than stretching it
 
-**Greaters (5)** · **Blitz**: −40% all cooldowns, −25% hit size · **Assassinate**:
-once per wave, a creature below 40% health dies to the next hit · **Rush** *(side road,
-needs Surge)*: cooldowns −25%, every bite deals +20% — speed bought in the opposed
-branch's currency
+**Greaters (5)** · **Opening Volley** *(new)*: each skill's first cast of a wave hits
++50%, every later cast −10% — per skill, which is neither Opener (per creature) nor
+Flash (per second) (sim field `FirstCastMultiplier` / `LaterCastMultiplier`) ·
+**Blitz**: −30% all cooldowns, −20% hit size · **Assassinate**: once per wave, a
+creature below 30% health dies to the next hit · **Rush** *(side road, needs Surge)*:
+cooldowns −20%, every bite deals +15% — speed bought in the opposed branch's currency
 
-**Mastery (8)** · **FIRST STRIKE**: +180% damage for the first three seconds of each
-wave, −45% after.
+**Mastery (8)** · **FIRST STRIKE**: +150% damage for the first three seconds of each
+wave, −40% after.
 *Turns every wave into an opener. Bruisers, which cannot be killed in three seconds,
 become the wall.*
 
@@ -241,24 +269,32 @@ reaches a median depth 1.68× its no-heal twin and dies in every run; a four-Nat
 build 1.68×; a fresh Transformation champion reaches wave 10 against its twin's 4.
 `heal_balance_test` prints the before/after table on every run and pins the bands.
 
-**Minors (1)** · Toughness: +20% health · Leech: heal 2% of damage dealt · Padding:
-−6 flat damage from every hit taken · Second Wind: heal 8% of max health on wave
-clear · **Thick Skin** *(spur, off Second Wind)*: −5 flat damage from every hit taken
-— adds to Padding, eleven off every bite with both
+**Minors (1)** · **Mending** *(new)*: regain 0.3% of maximum health every second,
+inside the fight and under the heal ceiling — the third kind of heal beside Leech (per
+hit) and Second Wind (per clear) (sim field `RegenFraction`, read on the regeneration
+tick) · Toughness: +15% health · Leech: heal 1.5% of damage dealt · Padding: −5 flat
+damage from every hit taken · Second Wind: heal 6% of max health on wave clear ·
+**Thick Skin** *(spur, off Second Wind)*: −4 flat damage from every hit taken — adds to
+Padding, nine off every bite with both
 
-**Notables (3)** · **Recovery**: regenerate 20% of max health between waves — the
-flow doc's default is no regeneration at all, so this node is a structural exception
-· **Absorb**: mitigation scales with missing health, up to −40% at 10% · **Fortify**:
-the first hit taken each wave deals nothing · **Thorns** *(side road, needs Thick
-Skin)*: every creature that bites you takes 20% of its own bite back — read against
-the raw bite so the rest of the branch cannot shrink it; lands like poison, through
-armour, never a skill hit (new sim field `ReflectFraction`, read in the enemy-bite
-block)
+**Notables (3)** · **Payback** *(new)*: every bite makes your next skill hit 15%
+harder, up to four times — Rhythm's mirror across the axis; Endure builds up *from*
+being bitten (sim field `BiteFuelBonus` / `BiteFuelMax`, banked in the bite block,
+spent in `LandSpread`) · **Recovery**: regenerate 15% of max health between waves —
+the flow doc's default is no regeneration at all, so this node is a structural
+exception · **Absorb**: mitigation scales with missing health, up to −30% at 10% ·
+**Fortify**: the first hit taken each wave deals nothing · **Thorns** *(side road,
+needs Thick Skin)*: every creature that bites you takes 15% of its own bite back —
+read against the raw bite so the rest of the branch cannot shrink it; lands like
+poison, through armour, never a skill hit (sim field `ReflectFraction`, read in the
+enemy-bite block)
 
-**Greaters (5)** · **Bulwark**: −35% damage taken, −20% damage dealt · **Bastion**:
-+1% damage per 200 max health · **Brace** *(side road, needs Thorns)*: damage taken
-−25%, cooldowns +25% — the same wall as Bulwark at a different price, so the two are
-not one price twice
+**Greaters (5)** · **Rebound** *(new)*: a fifth of every bite that lands comes back as
+health; damage dealt −15% — read against the bite after the branch's cuts, under the
+heal ceiling (sim field `HealOnBiteFraction`) · **Bulwark**: −30% damage taken, −15%
+damage dealt · **Bastion**: +1% damage per 250 max health · **Brace** *(side road,
+needs Thorns)*: damage taken −20%, cooldowns +20% — the same wall as Bulwark at a
+different price, so the two are not one price twice
 
 **Mastery (8)** · **ENDLESS**: full health restored between every wave; maximum
 health halved.
@@ -267,11 +303,11 @@ is strictly better the deeper you go and strictly worse in a single hard wave.*
 
 #### Bridges (6 each)
 
-- **Executioner** (Weight ↔ Tempo): the first hit on each creature is also a Weight
-  hit — it gets Weight's size bonuses even from a Tempo build.
-- **Volley** (Tempo ↔ Spread): +1 target and −25% cooldown, −30% hit size.
-- **Feedback** (Spread ↔ Endure): heal 1.5% of max health per creature struck.
-- **Anchor** (Endure ↔ Weight): +1% hit size per 150 max health.
+- **Executioner** (Weight ↔ Tempo): the first hit on each creature +10%, and it cuts
+  9 armour.
+- **Volley** (Tempo ↔ Spread): +1 target and −20% cooldown, −25% hit size.
+- **Feedback** (Spread ↔ Endure): heal 1.2% of max health per creature struck.
+- **Anchor** (Endure ↔ Weight): +1% hit size per 200 max health.
 
 #### Form specialisations (6 each)
 
@@ -411,15 +447,17 @@ skill slots, vow studies and the forge nodes are roots every hunter grows.
 
 ### 4.1 Skill point income
 
-    skillPoints = Σ over regions of floor(0.8 × sqrt(bestDepth_region))
+    skillPoints = Σ over regions of floor(0.9 × sqrt(bestDepth_region))
 
-Per region: wave 25 → 4, wave 40 → 5, wave 100 → 8, wave 150 → 9, wave 225 → 12.
-Six regions at depth 150 → 54 points; at depth 225 → 72. Tree cost 220 → 25–33%
-reachable (the code's guard is 25–38%). (Was `floor(depth / 5) + 3`, linear with
-three free points — playtest 2026-08-25 reached a specialisation inside fifteen
-minutes on it. The square root pays fast early and slows for ever after, which is
-the shape a wall should have. The Mastery screen itself opens at wave 25, the
-fifth boss, not wave 8: the tree is a mid-game workbench, not a first errand.
+Per region: wave 25 → 4, wave 40 → 5, wave 64 → 7, wave 100 → 9, wave 150 → 11,
+wave 225 → 13. Six regions at depth 150 → 66 points; at depth 225 → 78. Tree cost
+256 → 26–30% reachable (the code's guard is 25–38%). (Was `floor(depth / 5) + 3`,
+linear with three free points — playtest 2026-08-25 reached a specialisation inside
+fifteen minutes on it. The square root pays fast early and slows for ever after,
+which is the shape a wall should have. The scale went 0.8 → 0.9 on 2026-08-27 when
+the tree grew from 220 to 256; wave 40 still pays 5, short of the 10 a
+specialisation's shortest path costs. The Mastery screen itself opens at wave 25,
+the fifth boss, not wave 8: the tree is a mid-game workbench, not a first errand.
 Code: `MasteryPoints`.)
 
 ### 4.2 Trait point income
@@ -430,12 +468,12 @@ At current content: 6 + ~10 + ~20 = 36. Tree cost 137 → 26.3% reachable.
 
 ### 4.3 Branch affordability
 
-    fullBranch      = 5x1 + 4x3 + 3x5 + 1x8 = 40
+    fullBranch      = 6x1 + 5x3 + 4x5 + 1x8 = 49
     sideRoad        = 1 + 1 + 3 + 5 + 8    = 18   (outer minor, spur, notable, greater, capstone)
-    twoFullBranches = 80 > 60 available
+    twoFullBranches = 98 > 66–78 available
 
 Two complete branches are exactly, deliberately out of reach. A player may own one
-branch and 20 points of anything else.
+branch and 17–29 points of anything else.
 
 ### 4.4 The trade test (enforced in code)
 
@@ -479,7 +517,7 @@ A node failing this is an attribute node wearing a hat.
 | Knob | Default | Safe range | Affects |
 |---|---|---|---|
 | Ring costs (1/3/5/8) | — | ±2 each | How sharply specialisation is forced. Flattening these makes breadth affordable and dissolves the branch identity. |
-| `fullBranch` vs available points | 40 vs 60 | keep 1.4–1.8× | Whether two branches are reachable. Below 1.4 a player owns two and the opposed pairs stop opposing; above 1.8 a career does not buy one branch and a real second start. |
+| `fullBranch` vs available points | 49 vs 66–78 | keep 1.4–1.8× | Whether two branches are reachable. Below 1.4 a player owns two and the opposed pairs stop opposing; above 1.8 a career does not buy one branch and a real second start. |
 | Side-road length | 4 nodes (spur → notable → greater → capstone) | 3–4 | How long the "other way round" is. Shorter than 3 and the spur is a fifth petal in the fan; the walk to a specialisation speeds back up. |
 | Bridge cost | 6 | 4–10 | The price of hybridising. Cheap bridges are the fastest way to make every build the same. |
 | Terminal cost | 12 | 10–16 | How many permanent identities a player accumulates over the game's life. |

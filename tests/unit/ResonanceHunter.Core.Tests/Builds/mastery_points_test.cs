@@ -12,8 +12,10 @@ public class mastery_points_test
     [InlineData(4, 1)]
     [InlineData(25, 4)]
     [InlineData(40, 5)]
-    [InlineData(100, 8)]
-    [InlineData(225, 12)]
+    [InlineData(64, 7)]
+    [InlineData(100, 9)]
+    [InlineData(150, 11)]
+    [InlineData(225, 13)]
     public void test_depth_pays_on_a_square_root(int depth, int points)
         => Assert.Equal(points, MasteryPoints.FromDepth(depth));
 

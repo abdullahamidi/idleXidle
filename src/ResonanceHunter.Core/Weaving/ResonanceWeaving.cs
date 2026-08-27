@@ -198,13 +198,16 @@ public sealed record WeavingTuning
     {
         // THE BEAT (2026-08-27): Strike every 3 beats (4.5 s), Projectile every 2 (3 s), Transformation
         // 4 s — and each hit scaled once more so damage per cooldown stays where the 2026-08-26 pass put it.
-        // ...and once more ×1.35 for the beat's ceiling: one action per 1.5 s is 0.67 actions/s where the
-        // old lock allowed 1.43, so a full rotation lost a third of its output; scaled back to the pace
-        // the economy, the pacing band and the balance sweeps were tuned against.
+        // ...and ×2 for the beat's ceiling (measured, not estimated): one action per 1.5 s is 0.67
+        // actions/s where the old lock allowed 1.43, so a saturated rotation lost HALF its output — the
+        // mastery sweep's geared build died on the wave-30 boss whatever its branch (every Spread node
+        // measured 29 deep, hits ×2 measured 39). Scaled so a full rotation lands where the economy, the
+        // pacing band and the balance sweeps were tuned. A one-skill build is cadence-bound, not
+        // beat-bound, so it gains more than parity from this — the beat's own reward for going deep.
         [Form.Trap] = 145f,        // the largest hit in the game, and the rarest (was 110) — a bite answers, not a beat
-        [Form.Strike] = 210f,      // the large-hit workhorse (70 → 105 → 157 → 210)
-        [Form.Transformation] = 86f,   // (40 → 56 → 64 → 86)
-        [Form.Projectile] = 90f,   // pays in targets, not in size (20 → 33 → 66 → 90)
+        [Form.Strike] = 315f,      // the large-hit workhorse (70 → 105 → 157 → 315)
+        [Form.Transformation] = 130f,  // (40 → 56 → 64 → 130)
+        [Form.Projectile] = 135f,  // pays in targets, not in size (20 → 33 → 66 → 135)
         [Form.Aura] = 12f,         // smallest of all; it is a field, not a blow
         [Form.Mark] = 0f,          // Mark deals no direct damage — it amplifies other sources.
     };

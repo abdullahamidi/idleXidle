@@ -65,8 +65,10 @@ public class RunReportTests
     [Fact]
     public void test_a_single_target_build_is_told_that_reach_is_the_problem()
     {
-        var single = RunIn("umbral_reach", BuildOf(Form.Trap, Form.Strike));
-        var multi = RunIn("umbral_reach", BuildOf(Form.Aura, Form.Projectile));
+        // The Hollow's opening band, where the waves are swarms: reach is creatures struck per cast, and
+        // a band of lone Bruisers (where both runs died under the beat model) caps it at 1.00 for anyone.
+        var single = RunIn("verdant_hollow", BuildOf(Form.Trap, Form.Strike), cap: 8);
+        var multi = RunIn("verdant_hollow", BuildOf(Form.Aura, Form.Projectile), cap: 8);
 
         Assert.True(
             multi.TargetsPerActivation > single.TargetsPerActivation,

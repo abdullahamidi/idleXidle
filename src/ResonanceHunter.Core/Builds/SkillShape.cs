@@ -88,6 +88,30 @@ public sealed record SkillShape
     /// </remarks>
     public float OverkillCarry { get; init; }
 
+    /// <summary>
+    /// HEADLONG — bonus against a creature still above <see cref="FreshThreshold"/> of its health.
+    /// </summary>
+    /// <remarks>
+    /// The mirror of CULL. Weight wants to put its few big hits into a FULL pool — a Bruiser at the top
+    /// of its health is exactly where a small-hit build has the least to say — so this pays while the
+    /// creature is mostly whole and stops the moment the finishing nodes start. Threshold and bonus,
+    /// like CULL: a threshold is a condition, and conditions do not add.
+    /// </remarks>
+    public float FreshThreshold { get; init; }
+    public float FreshBonus { get; init; }
+
+    /// <summary>
+    /// STAGGER — a skill hit whose raw force is at least <see cref="StaggerThreshold"/> pushes the wave's
+    /// next bite back by <see cref="StaggerMs"/>. Once per bite.
+    /// </summary>
+    /// <remarks>
+    /// Read in <c>LandOn</c> against the RAW swing, like SUNDER: a plated creature that soaked most of the
+    /// hit was still hit that hard. Capped at one push per bite, or a heavy build swinging every second
+    /// would hold the whole wave off for ever — the cap is what keeps it a delay rather than immunity.
+    /// </remarks>
+    public float StaggerThreshold { get; init; }
+    public int StaggerMs { get; init; }
+
     // ── TARGET COUNT — the SPREAD axis. What action economy reads. ────────────────────────────────
 
     /// <summary>Extra creatures every Form reaches per activation.</summary>
@@ -138,6 +162,22 @@ public sealed record SkillShape
     /// EVERY KILL and a rule with an unstated exception is the kind this project keeps finding dormant.
     /// </remarks>
     public int CooldownRefundOnKillMs { get; init; }
+
+    /// <summary>RALLY — after any kill, the next skill activation's hits are amplified by this much.</summary>
+    /// <remarks>
+    /// Armed in <c>LandOn</c> on the kill, spent in <c>LandSpread</c> on the next skill activation — every
+    /// hit of it, so a wide build spends the rally across the whole wave. Fed by kills like MOMENTUM,
+    /// which is what makes it a Spread node: eight rallies in a Swarm, one against a Bruiser.
+    /// </remarks>
+    public float NextSkillAfterKillBonus { get; init; }
+
+    /// <summary>TIDE — skill rate rises by this fraction per living creature in the wave.</summary>
+    /// <remarks>
+    /// Read at every cast through the sim's live rate, so a kill slows the next cooldown rather than the
+    /// wave's. SWARMBANE is damage per creature; this is TEMPO per creature, and the two are different
+    /// answers to the same crowd.
+    /// </remarks>
+    public float RatePerCreature { get; init; }
 
     // ── CONDITIONAL DAMAGE. Each one is a shape: it asks a question about the target or the clock. ──
 
@@ -200,6 +240,37 @@ public sealed record SkillShape
     /// <summary>ASSASSINATE — once per wave, a creature below this health fraction dies to the next hit.</summary>
     public float AssassinateThreshold { get; init; }
 
+    /// <summary>BRISK — multiplies the BASIC SWING's cadence only; skills keep their own rate.</summary>
+    /// <remarks>
+    /// The swing is a third of a build's damage since 2026-08-26 and had no node of its own. Read at the
+    /// one place the swing's interval is set, and nowhere else, so it cannot leak into cooldowns.
+    /// </remarks>
+    public float AutoAttackRate { get; init; } = 1f;
+
+    /// <summary>
+    /// RHYTHM — every cast since the last bite raises skill rate by this fraction, up to
+    /// <see cref="CastRampMax"/> casts. A bite resets the count.
+    /// </summary>
+    /// <remarks>
+    /// Front-loading stated as a shape: a build gets faster the longer it goes unbitten, which is exactly
+    /// the Caster band, and loses it all in the Bruiser band where bites are constant. The reset is what
+    /// makes it a Tempo node and not a rate node.
+    /// </remarks>
+    public float CastRampPerCast { get; init; }
+    public int CastRampMax { get; init; }
+
+    /// <summary>
+    /// OPENING VOLLEY — each skill's FIRST activation of a wave is multiplied by
+    /// <see cref="FirstCastMultiplier"/>, every later one by <see cref="LaterCastMultiplier"/>.
+    /// </summary>
+    /// <remarks>
+    /// Per SKILL per wave, which is neither OPENER (per creature) nor FLASH (per second): four skills is
+    /// four big opening casts and then a wave of slightly smaller ones. The later-cast price is what a
+    /// Greater has to carry.
+    /// </remarks>
+    public float FirstCastMultiplier { get; init; } = 1f;
+    public float LaterCastMultiplier { get; init; } = 1f;
+
     // ── ENDURE. ───────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>Fraction of damage dealt returned as health.</summary>
@@ -235,6 +306,31 @@ public sealed record SkillShape
 
     /// <summary>SECOND WIND — fraction of maximum health healed on clearing a wave.</summary>
     public float HealOnClear { get; init; }
+
+    /// <summary>MENDING — a fraction of maximum health regained every second, inside the fight.</summary>
+    /// <remarks>
+    /// Distinct from RECOVERY (between waves) and from VITALITY's regeneration (a trained stat, outside
+    /// the heal ceiling). This is a build's heal, so it spends the per-wave ceiling like LEECH does.
+    /// </remarks>
+    public float RegenFraction { get; init; }
+
+    /// <summary>
+    /// PAYBACK — every bite taken banks a bonus for the next skill activation, up to
+    /// <see cref="BiteFuelMax"/> bites.
+    /// </summary>
+    /// <remarks>
+    /// The mirror of RHYTHM across the Tempo/Endure axis: Tempo builds up until it is bitten, Endure
+    /// builds up FROM being bitten. Spent whole on the next skill activation, every hit of it.
+    /// </remarks>
+    public float BiteFuelBonus { get; init; }
+    public int BiteFuelMax { get; init; }
+
+    /// <summary>REBOUND — this fraction of every bite that lands comes back as health.</summary>
+    /// <remarks>
+    /// Read against the damage that actually LANDED, after the rest of the branch, so it is worth most
+    /// where bites are big — a Bruiser band — and under the per-wave heal ceiling like every other heal.
+    /// </remarks>
+    public float HealOnBiteFraction { get; init; }
 
     /// <summary>RECOVERY — fraction of maximum health regained between waves.</summary>
     /// <remarks>
@@ -296,6 +392,10 @@ public sealed record SkillShape
             SunderThreshold = Pick(a.SunderThreshold, b.SunderThreshold, lower: true),
             SunderAmount = a.SunderAmount + b.SunderAmount,
             OverkillCarry = Math.Max(a.OverkillCarry, b.OverkillCarry),
+            FreshThreshold = Pick(a.FreshThreshold, b.FreshThreshold, lower: true),
+            FreshBonus = a.FreshBonus + b.FreshBonus,
+            StaggerThreshold = Pick(a.StaggerThreshold, b.StaggerThreshold, lower: true),
+            StaggerMs = a.StaggerMs + b.StaggerMs,
 
             ExtraTargets = a.ExtraTargets + b.ExtraTargets,
             FormTargets = targets,
@@ -306,6 +406,8 @@ public sealed record SkillShape
             RicochetFraction = Math.Max(a.RicochetFraction, b.RicochetFraction),
             CascadeOnKill = a.CascadeOnKill || b.CascadeOnKill,
             CooldownRefundOnKillMs = a.CooldownRefundOnKillMs + b.CooldownRefundOnKillMs,
+            NextSkillAfterKillBonus = a.NextSkillAfterKillBonus + b.NextSkillAfterKillBonus,
+            RatePerCreature = a.RatePerCreature + b.RatePerCreature,
 
             FirstHitMultiplier = a.FirstHitMultiplier * b.FirstHitMultiplier,
             LaterHitMultiplier = a.LaterHitMultiplier * b.LaterHitMultiplier,
@@ -328,6 +430,11 @@ public sealed record SkillShape
             MarkWindowMultiplier = a.MarkWindowMultiplier * b.MarkWindowMultiplier,
             MarkPowerBonus = a.MarkPowerBonus + b.MarkPowerBonus,
             AssassinateThreshold = Math.Max(a.AssassinateThreshold, b.AssassinateThreshold),
+            AutoAttackRate = a.AutoAttackRate * b.AutoAttackRate,
+            CastRampPerCast = a.CastRampPerCast + b.CastRampPerCast,
+            CastRampMax = Math.Max(a.CastRampMax, b.CastRampMax),
+            FirstCastMultiplier = a.FirstCastMultiplier * b.FirstCastMultiplier,
+            LaterCastMultiplier = a.LaterCastMultiplier * b.LaterCastMultiplier,
 
             Leech = a.Leech + b.Leech,
             HealPerTargetStruck = a.HealPerTargetStruck + b.HealPerTargetStruck,
@@ -337,6 +444,10 @@ public sealed record SkillShape
             FirstBiteFree = a.FirstBiteFree || b.FirstBiteFree,
             ReflectFraction = a.ReflectFraction + b.ReflectFraction,
             HealOnClear = a.HealOnClear + b.HealOnClear,
+            RegenFraction = a.RegenFraction + b.RegenFraction,
+            BiteFuelBonus = a.BiteFuelBonus + b.BiteFuelBonus,
+            BiteFuelMax = Math.Max(a.BiteFuelMax, b.BiteFuelMax),
+            HealOnBiteFraction = a.HealOnBiteFraction + b.HealOnBiteFraction,
             BetweenWaveRegen = a.BetweenWaveRegen + b.BetweenWaveRegen,
             FullHealBetweenWaves = a.FullHealBetweenWaves || b.FullHealBetweenWaves,
             MaxHealth = a.MaxHealth * b.MaxHealth,
