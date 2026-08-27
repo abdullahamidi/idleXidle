@@ -114,7 +114,8 @@ public sealed class MapScreen
             case TourTarget.RegionDetail:
                 return new[] { DetailPanel };
             case TourTarget.EnterRegion:
-                return new[] { new Rectangle(DetailPanel.X + 40, DetailPanel.Bottom - 92, DetailPanel.Width - 80, 68) };
+                return new[] { new Rectangle(UiKit.ContentLeft(DetailPanel), DetailPanel.Bottom - 92,
+                                 DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, 68) };
             default:
                 return Array.Empty<Rectangle>();
         }
@@ -132,20 +133,20 @@ public sealed class MapScreen
         var options = new List<int>(Checkpoints.Options(farm.BestDepth, conquered: true));
         // The row holds ~ten chips. Past that the SHALLOW middle goes (TOP and the deepest ones stay —
         // a player at wave 110 wants 100 and 110, not 10), never the deepest (review 2026-08-26).
-        int RowWidth() { var w = 0; foreach (var o in options) w += Math.Max(36, _ui.MeasureBig(o == 0 ? "TOP" : o.ToString(), 15) + 16) + 4; return w; }
-        while (options.Count > 2 && RowWidth() > DetailPanel.Width - 56) options.RemoveAt(1);
+        int RowWidth() { var w = 0; foreach (var o in options) w += Math.Max(36, _ui.MeasureBig(o == 0 ? "TOP" : o.ToString(), UiTypography.Caption) + UiTypography.ChipPadX * 2) + 4; return w; }
+        while (options.Count > 2 && RowWidth() > DetailPanel.Width - UiKit.PadX(DetailPanel) * 2) options.RemoveAt(1);
         var y = DetailPanel.Y + 526;   // the chips must clear the DROPS heading at Y+590
-        _ui.TextBig(b, "START AT WAVE", DetailPanel.X + 28, y, Gold, UiTypography.Secondary);
+        _ui.TextBig(b, "START AT WAVE", UiKit.ContentLeft(DetailPanel), y, Gold, UiTypography.Secondary);
         var chosen = Checkpoints.Clamp(farm.StartWave, farm.BestDepth, true);
         var cost = Checkpoints.DustCost(chosen);
         _ui.TextRightBig(b, chosen == 0 ? "FREE" : $"{cost:N0} DUST PER DESCENT",
-                         DetailPanel.Right - 28, y, DustOwned >= cost ? Slate : Ember, UiTypography.Secondary);
-        var x = DetailPanel.X + 28;
+                         UiKit.ContentRight(DetailPanel), y, DustOwned >= cost ? Slate : Ember, UiTypography.Secondary);
+        var x = UiKit.ContentLeft(DetailPanel);
         var cy = y + 24;
         foreach (var w in options)
         {
             var label = w == 0 ? "TOP" : w.ToString();
-            var cw = Math.Max(36, _ui.MeasureBig(label, 15) + 16);
+            var cw = Math.Max(36, _ui.MeasureBig(label, UiTypography.Caption) + UiTypography.ChipPadX * 2);
             var chip = new Rectangle(x, cy, cw, 26);
             var afford = DustOwned >= Checkpoints.DustCost(w);
             var lit = w == chosen;
@@ -155,7 +156,7 @@ public sealed class MapScreen
             _ui.Fill(b, new Rectangle(chip.X, chip.Bottom - 2, chip.Width, 2), edge);
             _ui.Fill(b, new Rectangle(chip.X, chip.Y, 2, chip.Height), edge);
             _ui.Fill(b, new Rectangle(chip.Right - 2, chip.Y, 2, chip.Height), edge);
-            _ui.TextCenterBig(b, label, chip.Center.X, chip.Y + 5, lit ? Gold : afford ? Bone : Dim, 15);
+            _ui.TextCenterBig(b, label, chip.Center.X, chip.Y + 5, lit ? Gold : afford ? Bone : Dim, UiTypography.Caption);
             if (UiKit.ClickedIn(chip, hit, clicked)) _startRequest = (def.Id, w);
             x += cw + 4;
         }
@@ -453,11 +454,12 @@ public sealed class MapScreen
         var farm = World.RegionFarm(def.Id);
         var sc = SourceColor[def.Theme];
 
-        _ui.TextCenterBig(b, def.Name, DetailPanel.Center.X, DetailPanel.Y + 20, sc, UiTypography.SectionTitle);
-        _ui.TextCenterBig(b, Description(def.Theme), DetailPanel.Center.X, DetailPanel.Y + 56, Slate, UiTypography.Secondary);
+        _ui.TextCenterBig(b, def.Name, DetailPanel.Center.X, UiKit.TitleTop(DetailPanel), sc, UiTypography.PanelTitle);
+        _ui.TextCenterBig(b, Description(def.Theme), DetailPanel.Center.X, UiKit.CaptionTop(DetailPanel), Slate, UiTypography.Secondary);
 
         // Preview plate — a Source-tinted band with the emblem (no per-region illustration exists).
-        var prev = new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 92, DetailPanel.Width - 56, 100);
+        var prev = new Rectangle(UiKit.ContentLeft(DetailPanel), UiKit.BodyTop(DetailPanel),
+                                 DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, 100);
         // The same ground as the node, so the panel and the map agree about where you are looking.
         if (_ui.Assets.Get(ArenaKey(def.Theme)) is { } plate)
             b.Draw(plate, prev, CentreCrop(plate, prev), Color.White);
@@ -475,19 +477,19 @@ public sealed class MapScreen
         // room its last real section needed.
         // YOUR POWER SITS ON THE ROW ABOVE THE ONE IT IS MEASURED AGAINST. It used to live at the foot
         // of the deleted column, a thousand pixels from the number it exists to be compared with.
-        _ui.TextBig(b, "YOUR POWER", DetailPanel.X + 28, DetailPanel.Y + 214, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, $"{HunterPower:N0}", DetailPanel.Right - 28, DetailPanel.Y + 210,
-                         HunterPower >= RegionPower(def) ? Met : Ember, UiTypography.PanelTitle);
-        _ui.TextBig(b, "RECOMMENDED POWER", DetailPanel.X + 28, DetailPanel.Y + 252, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, $"{RegionPower(def):N0}", DetailPanel.Right - 28, DetailPanel.Y + 248, Violet, UiTypography.PanelTitle);
+        _ui.TextBig(b, "YOUR POWER", UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 214, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, $"{HunterPower:N0}", UiKit.ContentRight(DetailPanel), DetailPanel.Y + 210,
+                         HunterPower >= RegionPower(def) ? Met : Ember, UiTypography.Headline);
+        _ui.TextBig(b, "RECOMMENDED POWER", UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 252, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, $"{RegionPower(def):N0}", UiKit.ContentRight(DetailPanel), DetailPanel.Y + 248, Violet, UiTypography.Headline);
 
-        _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 292, DetailPanel.Width - 56, 2), Dim);
+        _ui.Fill(b, new Rectangle(UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 292, DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, 2), Dim);
 
         // Enemy theme (the region's Source) + combat modifier (its bias).
-        _ui.TextBig(b, "ENEMY THEME", DetailPanel.X + 28, DetailPanel.Y + 308, Gold, UiTypography.Secondary);
+        _ui.TextBig(b, "ENEMY THEME", UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 308, Gold, UiTypography.Secondary);
         if (_ui.Assets.Get(SourceGemKey(def.Theme)) is { } tg)
-            b.Draw(tg, new Rectangle(DetailPanel.X + 30, DetailPanel.Y + 340, 34, 34), Color.White);
-        _ui.TextBig(b, $"{def.Theme.ToString().ToUpperInvariant()} ENEMIES", DetailPanel.X + 74, DetailPanel.Y + 344, Bone, UiTypography.Body);
+            b.Draw(tg, new Rectangle(UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 340, 34, 34), Color.White);
+        _ui.TextBig(b, $"{def.Theme.ToString().ToUpperInvariant()} ENEMIES", UiKit.ContentLeft(DetailPanel) + 46, DetailPanel.Y + 344, Bone, UiTypography.Body);
         // HOW THE PLACE FIGHTS, which the region model has carried since it was written and no screen has
         // ever shown. It decides whether you are hit by a few heavy blows or a fast flurry — a real
         // difference to a build, and the kind of thing you want to know BEFORE walking in.
@@ -501,23 +503,23 @@ public sealed class MapScreen
             AttackBias.Heavy => "IT HITS SLOWLY AND HARD",
             AttackBias.Fast => "IT HITS FAST AND OFTEN",
             _ => "IT HITS AT AN EVEN PACE",
-        }, DetailPanel.Right - 28, DetailPanel.Y + 346, Slate, UiTypography.Secondary);
+        }, UiKit.ContentRight(DetailPanel), DetailPanel.Y + 346, Slate, UiTypography.Secondary);
         // Region modifier — the themed combat twist (replaces the old flavor-only bias line).
         var mod = RegionModifiers.For(def.Id);
-        _ui.TextBig(b, mod.Name, DetailPanel.X + 30, DetailPanel.Y + 382, Ember, UiTypography.Body);
+        _ui.TextBig(b, mod.Name, UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 382, Ember, UiTypography.Body);
         // WRAPPED. The blurb is a sentence now rather than "+25% HP & +10% damage", and a single
         // TextBig would have run it off the panel and through the frame.
         var modY = DetailPanel.Y + 408;
-        foreach (var line in _ui.WrapBig(mod.Blurb, DetailPanel.Width - 60, UiTypography.Secondary))
+        foreach (var line in _ui.WrapBig(mod.Blurb, DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, UiTypography.Secondary))
         {
-            _ui.TextBig(b, line, DetailPanel.X + 30, modY, Slate, UiTypography.Secondary);
+            _ui.TextBig(b, line, UiKit.ContentLeft(DetailPanel), modY, Slate, UiTypography.Secondary);
             modY += 22;
         }
 
         // Objective + what it earns while you are away (real).
-        _ui.TextBig(b, "GOAL", DetailPanel.X + 28, DetailPanel.Y + 470, Gold, UiTypography.Secondary);
-        if (conq) { DrawCheck(b, new Rectangle(DetailPanel.X + 30, DetailPanel.Y + 506, 22, 18), Met); _ui.TextBig(b, "REGION CONQUERED", DetailPanel.X + 64, DetailPanel.Y + 504, Met, UiTypography.Body); }
-        else _ui.TextBig(b, $"HOLD {ConquerWaves} WAVES TO CONQUER", DetailPanel.X + 30, DetailPanel.Y + 504, unlocked ? Bone : Slate, UiTypography.Body);
+        _ui.TextBig(b, "GOAL", UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 470, Gold, UiTypography.Secondary);
+        if (conq) { DrawCheck(b, new Rectangle(UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 506, 22, 18), Met); _ui.TextBig(b, "REGION CONQUERED", UiKit.ContentLeft(DetailPanel) + 36, DetailPanel.Y + 504, Met, UiTypography.Body); }
+        else _ui.TextBig(b, $"HOLD {ConquerWaves} WAVES TO CONQUER", UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 504, unlocked ? Bone : Slate, UiTypography.Body);
         if (unlocked)
             // "IDLE FARM: PARTIAL · 50%" was two pieces of jargon and a number with no unit. The percent
             // is the only part a player can act on, and it needed a sentence to say what it is a percent
@@ -525,7 +527,7 @@ public sealed class MapScreen
             // the number it produces is already right there. On the GOAL line now, right-aligned, so
             // the row it used to hold can carry the checkpoints.
             _ui.TextRightBig(b, $"EARNS {farm.IdleEfficiencyPercent():0}% WHILE YOU ARE AWAY",
-                             DetailPanel.Right - 28, DetailPanel.Y + 472, Slate, UiTypography.Secondary);
+                             UiKit.ContentRight(DetailPanel), DetailPanel.Y + 472, Slate, UiTypography.Secondary);
         if (conq) DrawCheckpoints(b, def, farm, hit, clicked);
 
         // WHAT THIS PLACE DROPS — LISTED, not described. The map decided a difficulty and an element
@@ -550,21 +552,21 @@ public sealed class MapScreen
         var dropRows = Math.Min(drops.Favoured.Count, Math.Max(0, (dropsFloor - dropsTop) / dropRow));
         if (dropRows > 0)
         {
-            _ui.TextBig(b, "DROPS", DetailPanel.X + 28, DetailPanel.Y + 590, Gold, UiTypography.Secondary);
+            _ui.TextBig(b, "DROPS", UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 590, Gold, UiTypography.Secondary);
 
             var element = $"{def.Theme.ToString().ToUpperInvariant()} ITEMS";
-            _ui.TextRightBig(b, element, DetailPanel.Right - 28, DetailPanel.Y + 590, sc, UiTypography.Secondary);
+            _ui.TextRightBig(b, element, UiKit.ContentRight(DetailPanel), DetailPanel.Y + 590, sc, UiTypography.Secondary);
             var ew = _ui.MeasureBig(element, UiTypography.Secondary);
             if (_ui.Assets.Get(SourceGemKey(def.Theme)) is { } dropGem)
-                b.Draw(dropGem, new Rectangle(DetailPanel.Right - 28 - ew - 30, DetailPanel.Y + 587, 22, 22), Color.White);
+                b.Draw(dropGem, new Rectangle(UiKit.ContentRight(DetailPanel) - ew - 30, DetailPanel.Y + 587, 22, 22), Color.White);
 
             var y = dropsTop;
             for (var i = 0; i < dropRows; i++)
             {
                 var slot = drops.Favoured[i];
                 if (SlotGlyph(slot) is { } key && _ui.Assets.Get(key) is { } gi)
-                    b.Draw(gi, new Rectangle(DetailPanel.X + 30, y + 1, 19, 19), Bone);
-                _ui.TextBig(b, RegionDrops.PlainName(slot), DetailPanel.X + 58, y, Bone, UiTypography.Secondary);
+                    b.Draw(gi, new Rectangle(UiKit.ContentLeft(DetailPanel), y + 1, 19, 19), Bone);
+                _ui.TextBig(b, RegionDrops.PlainName(slot), UiKit.ContentLeft(DetailPanel) + 30, y, Bone, UiTypography.Secondary);
                 y += dropRow;
             }
         }
@@ -572,7 +574,8 @@ public sealed class MapScreen
         // CTA. ENTER / RESUME for an unlocked region, ALWAYS — it used to give way to DEEPEN once the
         // world was conquered, which took travel away from a mouse player for the rest of the game.
         // A locked region disables honestly.
-        var cta = new Rectangle(DetailPanel.X + 40, DetailPanel.Bottom - 92, DetailPanel.Width - 80, 68);
+        var cta = new Rectangle(UiKit.ContentLeft(DetailPanel), DetailPanel.Bottom - 92,
+                                 DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, 68);
         if (_ui.Button(b, cta, def.Id == ActiveRegion ? "RESUME HERE" : "ENTER THIS REGION", hit, clicked, enabled: unlocked))
             _enterRequest = def.Id;
         if (!unlocked) _ui.TextCenter(b, "CONQUER THE PREVIOUS REGION TO UNLOCK", DetailPanel.Center.X, DetailPanel.Bottom - 110, Ember);
@@ -587,8 +590,8 @@ public sealed class MapScreen
             _ui.TextCenterBig(b, CorruptionLook.Label(World.CorruptionTier), DetailPanel.Center.X, DetailPanel.Bottom - 196,
                               World.CorruptionTier > 0 ? Violet : Slate, UiTypography.Secondary);
             _ui.TextCenter(b, look.Blurb, DetailPanel.Center.X, DetailPanel.Bottom - 170, Slate);
-            var half = (DetailPanel.Width - 80 - 12) / 2;
-            var easeBtn = new Rectangle(DetailPanel.X + 40, DetailPanel.Bottom - 148, half, 44);
+            var half = (DetailPanel.Width - UiKit.PadX(DetailPanel) * 2 - 12) / 2;
+            var easeBtn = new Rectangle(UiKit.ContentLeft(DetailPanel), DetailPanel.Bottom - 148, half, 44);
             var deepBtn = new Rectangle(easeBtn.Right + 12, DetailPanel.Bottom - 148, half, 44);
             if (_ui.Button(b, easeBtn, "SHALLOWER", hit, clicked, enabled: World.CanEaseCorruption)) _easeRequest = true;
             if (_ui.Button(b, deepBtn, "DEEPER", hit, clicked, enabled: World.CanDeepenCorruption)) _deepenRequest = true;

@@ -161,15 +161,28 @@ public sealed class ChestScreen
         var rows = Math.Clamp((count + Cols - 1) / Cols, 1, Rows);
         // The filter row that sat under the header moved to HUNT (2026-08-23), so the cards climbed 34px
         // and the panel shed the same. Aspects (1842 wide): 5.0 / 3.1 / 2.2 — all medium.
-        return GridPanel with { Height = 366 + (rows - 1) * 230 };
+        return GridPanel with { Height = CardTop + CardH + UiKit.PanelCorner + (rows - 1) * CardPitchY };
     }
+
+    /// <summary>The header strip's buttons — PASTE A CODE, TRADER, OPEN ALL — all one height.</summary>
+    private const int HeaderButtonH = 56;
 
     private const int Cols = 6;
     private const int Rows = 3;
     private const int PerPage = Cols * Rows;
 
+    private const int CardW = 270, CardH = 210, CardPitchY = 230;
+
+    /// <summary>The card grid's first row — under the header's button strip, not merely under its title.</summary>
+    private static int CardTop => UiTypography.PanelTitleTop + HeaderButtonH + 16;
+
+    /// <summary>Six columns spanning the panel's content width: the pitch follows the margin.</summary>
+    private static int CardPitchX =>
+        (GridPanel.Width - UiKit.PadX(GridPanel) * 2 - CardW) / (Cols - 1);
+
     private static Rectangle Card(int visible) =>
-        new(GridPanel.X + 46 + visible % Cols * 290, GridPanel.Y + 116 + visible / Cols * 230, 270, 210);
+        new(UiKit.ContentLeft(GridPanel) + visible % Cols * CardPitchX,
+            GridPanel.Y + CardTop + visible / Cols * CardPitchY, CardW, CardH);
 
     /// <summary>
     /// The PEEK icon in the card's corner — a glass over a chest (icon_peek), the button that reads the
@@ -305,21 +318,22 @@ public sealed class ChestScreen
         Clamp(sorted.Count);
 
         _ui.Panel(b, GridPanelFor(sorted.Count));
-        _ui.TextBig(b, "THE VAULT", GridPanel.X + 46, GridPanel.Y + 26, Gold, UiTypography.ScreenTitle, TextFace.Display);
+        _ui.TextBig(b, "THE VAULT", UiKit.ContentLeft(GridPanel), UiKit.TitleTop(GridPanel), Gold,
+                    UiTypography.ScreenTitle, TextFace.Display);
 
         // The tally, so the pile reads at a glance without counting cards.
         var tally = ChestDossiers.Tally(chests);   // every chest, not every stack
         var summary = tally.Count == 0
             ? "nothing waiting"
             : string.Join("   ", tally.Select(t => $"{t.Count} {t.Grade.ToString().ToUpperInvariant()}"));
-        _ui.TextBig(b, summary, GridPanel.X + 46, GridPanel.Y + 72, Slate, UiTypography.Secondary);
+        _ui.TextBig(b, summary, UiKit.ContentLeft(GridPanel), UiKit.CaptionTop(GridPanel), Slate, UiTypography.Secondary);
 
         var uiClicked = clicked && !ModalOpen;
 
         // THE STALL AND THE CODES, in the header — and above the empty-vault return, because the
         // trader must be reachable with nothing waiting in the pile.
-        var traderBtn = new Rectangle(GridPanel.Right - 558, GridPanel.Y + 24, 200, 56);
-        var pasteBtn = new Rectangle(GridPanel.Right - 770, GridPanel.Y + 24, 200, 56);
+        var traderBtn = new Rectangle(GridPanel.Right - 558, UiKit.TitleTop(GridPanel), 200, HeaderButtonH);
+        var pasteBtn = new Rectangle(GridPanel.Right - 770, UiKit.TitleTop(GridPanel), 200, HeaderButtonH);
         // _modalOpenedNow: the TRADER button's rect overlaps the stall's CLOSE (measured: a 72x28
         // region), and the click edge stays latched through the whole Draw — without this flag a
         // click in the overlap opened the stall and closed it IN THE SAME FRAME, an invisible dead
@@ -348,7 +362,7 @@ public sealed class ChestScreen
         }
 
         // OPEN ALL, in the header — with one chest the card itself is the button, so this needs two.
-        var allBtn = new Rectangle(GridPanel.Right - 346, GridPanel.Y + 24, 300, 56);
+        var allBtn = new Rectangle(GridPanel.Right - 346, UiKit.TitleTop(GridPanel), 300, HeaderButtonH);
         if (_ui.Button(b, allBtn, $"OPEN ALL ({chests.Count})", hit, uiClicked, chests.Count > 1))
             _pending = OpenRequest.All;
 
@@ -409,7 +423,7 @@ public sealed class ChestScreen
                 else _ui.Diamond(b, dot, new Color(0x2A, 0x26, 0x34));
             }
 
-            _ui.TextBig(b, $"TIER {chest.Tier}", card.X + 140, card.Y + 30, Bone, UiTypography.PanelTitle);
+            _ui.TextBig(b, $"TIER {chest.Tier}", card.X + 140, card.Y + 30, Bone, UiTypography.Headline);
             // The stack count. Four identical Rare tier-6 chests are one card that says ×4 — a click
             // opens one of them, OPEN ALL still opens every chest. Playtest: "aynı chestler stacklensin."
             // The count is a gold BADGE on the chest itself now, and a line under the tier says it in
@@ -419,7 +433,7 @@ public sealed class ChestScreen
                 var badge = new Rectangle(card.X + 10, card.Y + 12, 54, 30);
                 _ui.Fill(b, badge, Gold);
                 _ui.Fill(b, new Rectangle(badge.X + 2, badge.Y + 2, badge.Width - 4, badge.Height - 4), new Color(0x3A, 0x2A, 0x10));
-                _ui.TextCenterBig(b, $"×{stackCount}", badge.Center.X, badge.Y + 4, Gold, UiTypography.PanelTitle);
+                _ui.TextCenterBig(b, $"×{stackCount}", badge.Center.X, badge.Y + 4, Gold, UiTypography.Headline);
                 // Under the element chip's row, in the 84 px column right of the chest art — a longer
                 // line ran under the chip.
                 _ui.TextBig(b, $"{stackCount} THE SAME", card.X + 140, card.Y + 84, Gold, UiTypography.Secondary);
@@ -498,11 +512,11 @@ public sealed class ChestScreen
         var panel = new Rectangle(300, 170, 1320, 724);
         _ui.Panel(b, panel, gold: true);
 
-        _ui.TextCenterBig(b, "THE WANDERING TRADER", 960, panel.Y + 34, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "THE WANDERING TRADER", 960, UiKit.TitleTop(panel), Gold, UiTypography.PanelTitle);
         _ui.TextCenter(b, "NEW GOODS EVERY WEEK, THE SAME FOR EVERY HUNTER. YOU PAY IN MATERIALS.",
-                       960, panel.Y + 74, Slate);
+                       960, UiKit.CaptionTop(panel), Slate);
 
-        if (_ui.Button(b, new Rectangle(panel.Right - 170, panel.Y + 26, 130, 44), "CLOSE", hit, clicked, true))
+        if (_ui.Button(b, new Rectangle(panel.Right - 170, UiKit.TitleTop(panel), 130, 44), "CLOSE", hit, clicked, true))
         {
             _traderOpen = false;
             return;
@@ -607,8 +621,8 @@ public sealed class ChestScreen
             _ui.Scrim(b, 0.6f);
             var panel = new Rectangle(560, 420, 800, 240);
             _ui.Panel(b, panel);
-            _ui.TextCenterBig(b, "THE CODE DIDN'T OPEN", 960, panel.Y + 32, Ember, UiTypography.PanelTitle);
-            _ui.TextCenter(b, _inspectError, 960, panel.Y + 88, Bone);
+            _ui.TextCenterBig(b, "THE CODE DIDN'T OPEN", 960, UiKit.TitleTop(panel), Ember, UiTypography.PanelTitle);
+            _ui.TextCenter(b, _inspectError, 960, UiKit.BodyTop(panel), Bone);
             if (_ui.Button(b, new Rectangle(880, panel.Bottom - 76, 160, 48), "OK", hit, clicked, true))
                 _inspectError = "";
             return;
@@ -622,8 +636,9 @@ public sealed class ChestScreen
             // the square art meant for icons (UiKit.Panel picks by aspect ratio).
             _ui.Fill(b, panel, new Color(0x12, 0x0E, 0x18, 0xF4));
             Outline(b, panel, Gold, 2);
-            _ui.TextCenterBig(b, "A FRIEND'S ITEM", 960, panel.Y + 26, Gold, UiTypography.PanelTitle);
-            _ui.TextCenter(b, "YOU CAN ONLY LOOK. IT NEVER JOINS YOUR BAG.", 960, panel.Y + 64, Slate);
+            _ui.TextCenterBig(b, "A FRIEND'S ITEM", 960, panel.Y + UiTypography.PanelTitleTop, Gold, UiTypography.PanelTitle);
+            _ui.TextCenter(b, "YOU CAN ONLY LOOK. IT NEVER JOINS YOUR BAG.", 960,
+                           panel.Y + UiTypography.PanelCaptionTop, Slate);
             ItemTooltip.Draw(_ui, b, item, Hunter, new Point(960 - ItemTooltip.Width / 2, panel.Y + 104),
                              new Rectangle(0, 0, 1920, 1080));
             if (_ui.Button(b, new Rectangle(880, panel.Bottom - 72, 160, 48), "CLOSE", hit, clicked, true))
@@ -639,8 +654,9 @@ public sealed class ChestScreen
             // dodges with Fill+Outline.
             var panel = new Rectangle(560, 230, 800, 600);
             _ui.Panel(b, panel, gold: true);
-            _ui.TextCenterBig(b, "A FRIEND'S BUILD", 960, panel.Y + 30, Gold, UiTypography.PanelTitle);
-            _ui.TextCenter(b, "READ IT, COPY THE IDEA. YOUR OWN BUILD STAYS THE SAME.", 960, panel.Y + 66, Slate);
+            _ui.TextCenterBig(b, "A FRIEND'S BUILD", 960, UiKit.TitleTop(panel), Gold, UiTypography.PanelTitle);
+            _ui.TextCenter(b, "READ IT, COPY THE IDEA. YOUR OWN BUILD STAYS THE SAME.", 960,
+                           UiKit.CaptionTop(panel), Slate);
 
             var y = panel.Y + 112;
 

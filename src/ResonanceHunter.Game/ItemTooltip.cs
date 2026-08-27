@@ -112,7 +112,7 @@ public static class ItemTooltip
         var rx = card.Right - 20;
         var cy = card.Y + 18;
 
-        ui.TextBig(b, ItemNaming.FullName(item), lx, cy, edge, UiTypography.PanelTitle);
+        ui.TextBig(b, ItemNaming.FullName(item), lx, cy, edge, UiTypography.Headline);
         cy += 34;
 
         // ── WHO CAN WEAR IT — the class, under the name, before anything else. ──

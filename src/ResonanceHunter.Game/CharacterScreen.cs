@@ -123,20 +123,37 @@ public sealed class CharacterScreen
     /// </remarks>
     private ItemInstance? _hovered;
 
-    private const int InvCols = 4, InvRows = 5, InvCell = 82, InvGap = 8;
-    private static readonly Point InvOrigin = new(1026, 260);
+    // THE GRID, THE TABS AND THE FOOTER NOW SHARE ONE LEFT EDGE — the panel's margin. They used to
+    // sit at 1026, 1010 and 1026 respectively: three columns, three edges, on a panel 440 px wide.
+    // The cell grew from 82 to 90 so four columns plus their gaps span the content width exactly, which
+    // is what makes the right margin equal the left one instead of eight pixels wider.
+    private const int InvCols = 4, InvRows = 5, InvGap = 8;
+    private static readonly int InvCell =
+        (InventoryPanel.Width - UiKit.PadX(InventoryPanel) * 2 - InvGap * (InvCols - 1)) / InvCols;
+    private static readonly Point InvOrigin = new(UiKit.ContentLeft(InventoryPanel), 260);
     private static Rectangle InvCellRect(int i)
         => new(InvOrigin.X + i % InvCols * (InvCell + InvGap), InvOrigin.Y + i / InvCols * (InvCell + InvGap), InvCell, InvCell);
 
     private static readonly string[] Tabs = { "ALL", "WEAPONS", "ARMOR", "ACCESSORY" };
-    private static Rectangle TabRect(int i) => new(1010 + i * 100, 190, 94, 44);
+    private static Rectangle TabRect(int i)
+        => new(InvOrigin.X + i * (InvCell + InvGap), 190, InvCell, 44);
     // DERIVED FROM THEIR PANELS, not written as absolutes. At fixed y they would have floated a hundred
     // pixels above the foot of a panel that grew underneath them — which is how a control stops looking
     // like it belongs to the thing it acts on.
-    private static readonly Rectangle EquipBtn = new(DetailPanel.X + 20, DetailPanel.Bottom - 100, 200, 48);
-    private static readonly Rectangle LockBtn = new(DetailPanel.Right - 220, DetailPanel.Bottom - 100, 200, 48);
-    private static readonly Rectangle EquipBestBtn = new(LoadoutPanel.X + 20, LoadoutPanel.Bottom - 162, 260, 52);
-    private static readonly Rectangle UnequipAllBtn = new(LoadoutPanel.X + 20, LoadoutPanel.Bottom - 100, 260, 52);
+    // Both ends of a button row sit on the panel's own margin — a pair written as X+20 / Right-220
+    // was symmetric only for as long as nobody changed the margin, and the margin changed.
+    private const int ButtonGap = 12;
+    private static readonly int DetailButtonW =
+        (DetailPanel.Width - UiKit.PadX(DetailPanel) * 2 - ButtonGap) / 2;
+    private static readonly Rectangle EquipBtn =
+        new(UiKit.ContentLeft(DetailPanel), DetailPanel.Bottom - 100, DetailButtonW, 48);
+    private static readonly Rectangle LockBtn =
+        new(UiKit.ContentRight(DetailPanel) - DetailButtonW, DetailPanel.Bottom - 100, DetailButtonW, 48);
+    private static readonly int LoadoutButtonW = LoadoutPanel.Width - UiKit.PadX(LoadoutPanel) * 2;
+    private static readonly Rectangle EquipBestBtn =
+        new(UiKit.ContentLeft(LoadoutPanel), LoadoutPanel.Bottom - 162, LoadoutButtonW, 52);
+    private static readonly Rectangle UnequipAllBtn =
+        new(UiKit.ContentLeft(LoadoutPanel), LoadoutPanel.Bottom - 100, LoadoutButtonW, 52);
 
     private int _tab;
     private int _invScroll;
@@ -520,15 +537,15 @@ public sealed class CharacterScreen
     private void DrawLoadout(SpriteBatch b, Point hit, Hunter hunter)
     {
         _ui.PanelQuiet(b, LoadoutPanel);
-        var x = LoadoutPanel.X + 24;
+        var x = UiKit.ContentLeft(LoadoutPanel);
         // Centred like EQUIPPED. Left-aligned at +24 the title sat on the frame's corner filigree.
-        _ui.TextCenterBig(b, "LOADOUT", LoadoutPanel.Center.X, LoadoutPanel.Y + 26, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "LOADOUT", LoadoutPanel.Center.X, UiKit.TitleTop(LoadoutPanel), Gold, UiTypography.PanelTitle);
 
         var por = new Rectangle(LoadoutPanel.X + 98, LoadoutPanel.Y + 82, 105, 105);   // §7.6
         if (_ui.Assets.GetFirst(Character.PortraitKey, "hunter_portrait") is { } p) b.Draw(p, por, Color.White);
 
         var adept = Mastery?.Affinity() is { } mf ? $"{FormShort(mf)} ADEPT" : "SEEKER";
-        _ui.TextCenterBig(b, adept, LoadoutPanel.Center.X, LoadoutPanel.Y + 200, Bone, UiTypography.PanelTitle);
+        _ui.TextCenterBig(b, adept, LoadoutPanel.Center.X, LoadoutPanel.Y + 200, Bone, UiTypography.Headline);
         _ui.TextCenterBig(b, $"LEVEL {hunter.HunterLevel}", LoadoutPanel.Center.X, LoadoutPanel.Y + 234, Gold, UiTypography.Body);
 
         _ui.TextCenterBig(b, "GEAR POWER", LoadoutPanel.Center.X, LoadoutPanel.Y + 284, Slate, UiTypography.Secondary);
@@ -618,7 +635,7 @@ public sealed class CharacterScreen
         var active = ElementSets.Active(hunter).ToList();
         if (active.Count == 0) return;
 
-        var x = LoadoutPanel.X + 38;
+        var x = UiKit.ContentLeft(LoadoutPanel);
         var width = LoadoutPanel.Width - 76;
         _ui.TextBig(b, "SET BONUSES", x, y, Slate, UiTypography.Secondary);
         _ui.Fill(b, new Rectangle(x, y + 22, width, 1), Dim);
@@ -672,11 +689,11 @@ public sealed class CharacterScreen
     /// </remarks>
     private void SummaryRow(SpriteBatch b, string label, string value, ref int y)
     {
-        _ui.Fill(b, new Rectangle(LoadoutPanel.X + 24, y, LoadoutPanel.Width - 48, 44), Quiet);
-        _ui.TextBig(b, label, LoadoutPanel.X + 38, y + 12, Slate, UiTypography.Secondary);
+        _ui.Fill(b, new Rectangle(UiKit.ContentLeft(LoadoutPanel), y, LoadoutPanel.Width - UiKit.PadX(LoadoutPanel) * 2, 44), Quiet);
+        _ui.TextBig(b, label, UiKit.ContentLeft(LoadoutPanel), y + 12, Slate, UiTypography.Secondary);
 
-        var labelEnd = LoadoutPanel.X + 38 + _ui.MeasureBig(label, UiTypography.Secondary);
-        var valueRight = LoadoutPanel.Right - 38;
+        var labelEnd = UiKit.ContentLeft(LoadoutPanel) + _ui.MeasureBig(label, UiTypography.Secondary);
+        var valueRight = UiKit.ContentRight(LoadoutPanel);
         _ui.TextRightBig(b, _ui.ShortenBig(value, valueRight - labelEnd - 16, UiTypography.Body),
             valueRight, y + 10, Bone, UiTypography.Body);
         y += 52;
@@ -685,7 +702,7 @@ public sealed class CharacterScreen
     private void DrawEquipped(SpriteBatch b, Point hit, Hunter hunter)
     {
         _ui.Panel(b, EquippedPanel);
-        _ui.TextCenterBig(b, "EQUIPPED", EquippedPanel.Center.X, EquippedPanel.Y + 26, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "EQUIPPED", EquippedPanel.Center.X, UiKit.TitleTop(EquippedPanel), Gold, UiTypography.PanelTitle);
 
         // The champion, dressed (base body + one overlay per worn slot), NativeScale (fit, not stretched).
         _ui.GroundShadow(b, HunterBox.Center.X, HunterBox.Bottom - 8, (int)(HunterBox.Width * 0.7f), 40, 0.55f);
@@ -721,7 +738,7 @@ public sealed class CharacterScreen
         var wornAll = AllSlots.Select(hunter.Worn).OfType<ItemInstance>().ToList();
         // Inside the panel, clear of its bottom border (EquippedPanel is 340..970, y..910). At
         // (452,838,406,56) the strip ran through the frame's bottom ornament and out its right edge.
-        var strip = new Rectangle(EquippedPanel.X + 44, EquippedPanel.Bottom - 106, EquippedPanel.Width - 88, 52);
+        var strip = new Rectangle(UiKit.ContentLeft(EquippedPanel), EquippedPanel.Bottom - 106, EquippedPanel.Width - UiKit.PadX(EquippedPanel) * 2, 52);
         _ui.Fill(b, strip, Quiet);
         _ui.Fill(b, new Rectangle(strip.X, strip.Y, 4, strip.Height), Purple);
         _ui.TextBig(b, $"{wornAll.Count} / 8 EQUIPPED", strip.X + 20, strip.Y + 8, Bone, UiTypography.Body);
@@ -732,7 +749,7 @@ public sealed class CharacterScreen
     private void DrawInventory(SpriteBatch b, Point hit, Hunter hunter)
     {
         _ui.PanelQuiet(b, InventoryPanel);
-        _ui.TextCenterBig(b, "INVENTORY", InventoryPanel.Center.X, InventoryPanel.Y + 26, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "INVENTORY", InventoryPanel.Center.X, UiKit.TitleTop(InventoryPanel), Gold, UiTypography.PanelTitle);
 
         for (var i = 0; i < Tabs.Length; i++)
         {
@@ -859,7 +876,7 @@ public sealed class CharacterScreen
         // "/ 64 SLOTS" WAS FICTION. There is no bag cap anywhere in this game — _inv is an unbounded
         // List and no tuning names a limit — so the footer invented a ceiling, and a player watching it
         // approach 64 would have been hoarding against a wall that does not exist.
-        _ui.TextBig(b, $"{total} ITEM{(total == 1 ? "" : "S")}", InventoryPanel.X + 44, InventoryPanel.Bottom - 56, Slate, UiTypography.Secondary);
+        _ui.TextBig(b, $"{total} ITEM{(total == 1 ? "" : "S")}", UiKit.ContentLeft(InventoryPanel), InventoryPanel.Bottom - 56, Slate, UiTypography.Secondary);
 
         // The menu is worth nothing if nobody finds it. Right-click is not a convention this game has
         // used anywhere else, so it has to be said out loud once.
@@ -868,15 +885,15 @@ public sealed class CharacterScreen
         // SLATE, NOT DIM. This is the only place the game teaches that items have a context menu, and in
         // Dim it measured under 2:1 against the panel — an instruction nobody can read is not an
         // instruction. It matches the SORT hint beside it now, which was already legible.
-        _ui.TextBig(b, "RIGHT-CLICK AN ITEM", InventoryPanel.X + 44, InventoryPanel.Bottom - 84,
+        _ui.TextBig(b, "RIGHT-CLICK AN ITEM", UiKit.ContentLeft(InventoryPanel), InventoryPanel.Bottom - 84,
                     Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, "SORT: RARITY", InventoryPanel.Right - 44, InventoryPanel.Bottom - 56, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, "SORT: RARITY", UiKit.ContentRight(InventoryPanel), InventoryPanel.Bottom - 56, Slate, UiTypography.Secondary);
     }
 
     private void DrawDetail(SpriteBatch b, Point hit, Hunter hunter)
     {
         _ui.PanelQuiet(b, DetailPanel);
-        _ui.TextCenterBig(b, "ITEM DETAIL", DetailPanel.Center.X, DetailPanel.Y + 26, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "ITEM DETAIL", DetailPanel.Center.X, UiKit.TitleTop(DetailPanel), Gold, UiTypography.PanelTitle);
 
         var item = Selected(hunter);
         if (item is null)
@@ -902,15 +919,15 @@ public sealed class CharacterScreen
         _ui.TextCenterBig(b, RarityShort(item.Rarity) + " " + SlotWord(item.BaseType), hero.Center.X, hero.Bottom - 40, RarityColor(item.Rarity), UiTypography.Body);
 
         // Identity (§10.6) — the rolled name: PREFIX (dominant affix) + ELEMENT + TYPE, e.g. "FURIOUS SHADOW BLADE".
-        _ui.TextBig(b, ItemNaming.FullName(item), DetailPanel.X + 24, hero.Bottom + 20, Bone, UiTypography.PanelTitle);
+        _ui.TextBig(b, ItemNaming.FullName(item), UiKit.ContentLeft(DetailPanel), hero.Bottom + 20, Bone, UiTypography.Headline);
         var ench = Enchantments.Of(item);
         // The enchant NAME moved down to sit with the sentence that explains it; repeating it here
         // spent a line on a word the reader still could not act on.
         _ui.TextBig(b, $"{(item.Element?.ToString().ToUpperInvariant() ?? "PLAIN")}  ·  LEVEL {item.ItemLevel}",
-            DetailPanel.X + 24, hero.Bottom + 54, Purple, UiTypography.Secondary);
+            UiKit.ContentLeft(DetailPanel), hero.Bottom + 54, Purple, UiTypography.Secondary);
         // The class, right-aligned on the same line, in its own colour — the third fact about an item
         // after its element and its level, and the one that decides whether EQUIP is even offered.
-        _ui.TextRightBig(b, ItemClasses.ClassLine(item), DetailPanel.Right - 24, hero.Bottom + 54,
+        _ui.TextRightBig(b, ItemClasses.ClassLine(item), UiKit.ContentRight(DetailPanel), hero.Bottom + 54,
             item.Class is { } dc && ItemClasses.IsClassLocked(item.BaseType) ? UiKit.ClassColor(dc) : Slate,
             UiTypography.Secondary);
 
@@ -928,7 +945,7 @@ public sealed class CharacterScreen
         // list whose length is DATA. With four affixes and two blurbs it landed at y=855, past the
         // buttons at 848, and rendered underneath them.
         var cmpY = sy + 8;
-        var cmp = new Rectangle(DetailPanel.X + 44, cmpY, DetailPanel.Width - 88, 44);
+        var cmp = new Rectangle(UiKit.ContentLeft(DetailPanel), cmpY, DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, 44);
         _ui.Fill(b, cmp, Quiet);
         var whyNot = ItemClasses.WhyNot(Character, item);
         if (IsWorn(hunter, item))
@@ -966,11 +983,11 @@ public sealed class CharacterScreen
         // was nothing there to read.
         sy = cmp.Bottom + 14;
         if (whyNot is not null)
-            sy = Wrapped(b, whyNot, DetailPanel.X + 44, sy, DetailPanel.Width - 88, Ember) + 10;
+            sy = Wrapped(b, whyNot, UiKit.ContentLeft(DetailPanel), sy, DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, Ember) + 10;
         if (GearTraits.TraitOf(item) is { } tr)
         {
-            _ui.TextBig(b, GearTraits.NameOf(tr), DetailPanel.X + 44, sy, Gold, UiTypography.Body);
-            _ui.TextRightBig(b, "TRAIT", DetailPanel.Right - 44, sy, Slate, UiTypography.Secondary);
+            _ui.TextBig(b, GearTraits.NameOf(tr), UiKit.ContentLeft(DetailPanel), sy, Gold, UiTypography.Body);
+            _ui.TextRightBig(b, "TRAIT", UiKit.ContentRight(DetailPanel), sy, Slate, UiTypography.Secondary);
             sy += 26;
 
             // THE NUMBERS, NOT THE ADJECTIVE. The blurb gives a direction — "far harder hits, skills come
@@ -985,17 +1002,17 @@ public sealed class CharacterScreen
             // measurable channel.
             var effect = GearTraits.EffectOf(item);
             sy = effect.Length > 0
-                ? Wrapped(b, effect, DetailPanel.X + 44, sy, DetailPanel.Width - 88, Gold) + 10
-                : Wrapped(b, GearTraits.BlurbOf(tr).ToUpperInvariant(), DetailPanel.X + 44, sy,
-                          DetailPanel.Width - 88, Bone) + 10;
+                ? Wrapped(b, effect, UiKit.ContentLeft(DetailPanel), sy, DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, Gold) + 10
+                : Wrapped(b, GearTraits.BlurbOf(tr).ToUpperInvariant(), UiKit.ContentLeft(DetailPanel), sy,
+                          DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, Bone) + 10;
         }
         if (ench is not null)
         {
-            _ui.TextBig(b, ench.Name, DetailPanel.X + 44, sy, Purple, UiTypography.Body);
-            _ui.TextRightBig(b, "ENCHANT", DetailPanel.Right - 44, sy, Slate, UiTypography.Secondary);
+            _ui.TextBig(b, ench.Name, UiKit.ContentLeft(DetailPanel), sy, Purple, UiTypography.Body);
+            _ui.TextRightBig(b, "ENCHANT", UiKit.ContentRight(DetailPanel), sy, Slate, UiTypography.Secondary);
             sy += 26;
-            sy = Wrapped(b, ench.Blurb.ToUpperInvariant(), DetailPanel.X + 44, sy,
-                         DetailPanel.Width - 88, Bone) + 10;
+            sy = Wrapped(b, ench.Blurb.ToUpperInvariant(), UiKit.ContentLeft(DetailPanel), sy,
+                         DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, Bone) + 10;
         }
 
         // ── THE SET, under the item. "NATURE SET — 3 OF 5 WORN", then the four rungs: the ones the
@@ -1021,14 +1038,14 @@ public sealed class CharacterScreen
             var limit = EquipBtn.Y - 8;
             var pitch = sy + 4 + 26 + tiers.Count * 22 <= limit ? 22 : 20;
             if (pitch == 22) sy += 4;
-            _ui.TextBig(b, $"{ElementSets.Name(setElement)} — {ElementSets.Progress(wornOf)}", DetailPanel.X + 44, sy, Bone, UiTypography.Body);
-            _ui.TextRightBig(b, "SET", DetailPanel.Right - 44, sy, Slate, UiTypography.Secondary);
+            _ui.TextBig(b, $"{ElementSets.Name(setElement)} — {ElementSets.Progress(wornOf)}", UiKit.ContentLeft(DetailPanel), sy, Bone, UiTypography.Body);
+            _ui.TextRightBig(b, "SET", UiKit.ContentRight(DetailPanel), sy, Slate, UiTypography.Secondary);
             sy += 26;
             const int gutter = 28;
             var entries = tiers.Select(t => ((string?)t.Pieces.ToString(),
-                    _ui.WrapBig(t.Line, DetailPanel.Width - 88 - gutter, UiTypography.Secondary),
+                    _ui.WrapBig(t.Line, DetailPanel.Width - UiKit.PadX(DetailPanel) * 2 - gutter, UiTypography.Secondary),
                     wornOf >= t.Pieces ? UiKit.Vellum : Faint)).ToList();
-            DrawEntries(b, entries, DetailPanel.X + 44, gutter, sy, limit, pitch, gap: 0);
+            DrawEntries(b, entries, UiKit.ContentLeft(DetailPanel), gutter, sy, limit, pitch, gap: 0);
         }
 
         // Actions (§10.9): EQUIP (real). LOCK disabled — no lock system in the model.
@@ -1061,9 +1078,9 @@ public sealed class CharacterScreen
     {
         // +44 inset and a 34px pitch. At +24 the labels sat on the frame's filigree; the pitch came down
         // from 38 when the panel took on two explanatory sentences it had never carried.
-        _ui.TextBig(b, label, DetailPanel.X + 44, y, Slate, UiTypography.Body);
-        _ui.TextRightBig(b, value, DetailPanel.Right - 44, y, valColor, UiTypography.Body);
-        _ui.Fill(b, new Rectangle(DetailPanel.X + 44, y + 28, DetailPanel.Width - 88, 2), Dim * 0.6f);
+        _ui.TextBig(b, label, UiKit.ContentLeft(DetailPanel), y, Slate, UiTypography.Body);
+        _ui.TextRightBig(b, value, UiKit.ContentRight(DetailPanel), y, valColor, UiTypography.Body);
+        _ui.Fill(b, new Rectangle(UiKit.ContentLeft(DetailPanel), y + 28, DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, 2), Dim * 0.6f);
         y += 34;
     }
 

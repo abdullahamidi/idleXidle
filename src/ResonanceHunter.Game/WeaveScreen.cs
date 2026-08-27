@@ -147,13 +147,15 @@ public sealed class WeaveScreen
     private static readonly Rectangle PickPanel = new(578, 144, 640, 850);
     private static readonly Rectangle VowPanel = new(1238, 144, 642, 850);
 
-    private static Rectangle SlotRow(int i) => new(SlotsPanel.X + 74, SlotsPanel.Y + 96 + i * 86, 372, 76);
+    private static int SlotColX => UiKit.ContentLeft(SlotsPanel);
+    private static int SlotColW => SlotsPanel.Width - UiKit.PadX(SlotsPanel) * 2;
+    private static Rectangle SlotRow(int i) => new(SlotColX, UiKit.BodyTopBare(SlotsPanel) + i * 86, SlotColW, 76);
     private static Rectangle DropX(int i) { var r = SlotRow(i); return new(r.Right - 34, r.Y + 4, 30, 30); }
 
     /// <summary>Everything below the slot list hangs off the CAPACITY, not off the type's floor.</summary>
-    private int SlotsEnd => SlotsPanel.Y + 96 + Loadout.SkillCapacity * 86;
+    private int SlotsEnd => UiKit.BodyTopBare(SlotsPanel) + Loadout.SkillCapacity * 86;
 
-    private Rectangle AddBtn => new(SlotsPanel.X + 74, SlotsEnd, 372, 48);
+    private Rectangle AddBtn => new(SlotColX, SlotsEnd, SlotColW, 48);
 
     // KEYSTONE SOCKETS live here too. They were chips at the bottom of the deleted sidebar, and a
     // keystone is a loadout decision exactly like a Vow is — the trait tree TEACHES them, this screen
@@ -173,7 +175,7 @@ public sealed class WeaveScreen
     // 94/46/42, measured against the WORST case rather than the current one: at five slots SlotsEnd is
     // 670, so a 102/48/44 row ends at 912 against a panel interior that closes at 904. Eight pixels, and
     // the third chip is drawn on the frame.
-    private Rectangle KeystoneChip(int i) => new(SlotsPanel.X + 74, SlotsEnd + 94 + i * 46, 372, 42);
+    private Rectangle KeystoneChip(int i) => new(SlotColX, SlotsEnd + 94 + i * 46, SlotColW, 42);
 
     /// <summary>
     /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
@@ -206,15 +208,30 @@ public sealed class WeaveScreen
     // Every vertical offset here was measured off a capture, not guessed. The first pass put the FORM
     // heading at +356 while the source grid's second row ran to +364, so the heading printed straight
     // through the bottom of the gems.
-    private const int PickPad = 74;                       // the panel art's side ornaments eat ~70px
+    // THE GRID SPANS THE PANEL'S OWN MARGIN. It used to inset 74 a side with a comment claiming the
+    // frame ate 70 — this panel wears the VERTICAL frame, whose side rail is 24, so 34 px of each
+    // margin was nothing but a narrower column. Three cells and their two gaps now fill the content
+    // width exactly, which is also what makes the right margin equal the left.
+    private static int PickPad => UiKit.PadX(PickPanel);
     private static int PickInner => PickPanel.Width - PickPad * 2;
-    private const int CellPitch = 164, CellW = 148, CellH = 104;
+    private const int CellGap = 16, CellH = 104, CellRow = 116;
+    private static int CellW => (PickInner - CellGap * 2) / 3;
+    private static int CellPitch => CellW + CellGap;
+
+    /// <summary>The SOURCE grid's first row — the panel's standard body line.</summary>
+    private static int SourceTop => UiKit.BodyTop(PickPanel);
+
+    /// <summary>FORM's heading, a clear gap under the last SOURCE cell.</summary>
+    private static int FormTitleTop => SourceTop + CellRow + CellH + 40;
+
+    /// <summary>FORM's first cell row — its heading and caption, on the same rhythm the panel's own use.</summary>
+    private static int FormTop => FormTitleTop + (UiTypography.PanelBodyTop - UiTypography.PanelTitleTop);
 
     private static Rectangle SourceCell(int i) =>
-        new(PickPanel.X + PickPad + i % 3 * CellPitch, PickPanel.Y + 130 + i / 3 * 116, CellW, CellH);
+        new(PickPanel.X + PickPad + i % 3 * CellPitch, SourceTop + i / 3 * CellRow, CellW, CellH);
 
     private static Rectangle FormCell(int i) =>
-        new(PickPanel.X + PickPad + i % 3 * CellPitch, PickPanel.Y + 446 + i / 3 * 116, CellW, CellH);
+        new(PickPanel.X + PickPad + i % 3 * CellPitch, FormTop + i / 3 * CellRow, CellW, CellH);
 
     // Five rows, not six. Six fitted only by squeezing each to 54px, where a Vow's name and its
     // verdict printed over one another.
@@ -223,8 +240,10 @@ public sealed class WeaveScreen
     // next long Vow ellipsises instead of escaping.
     private const int VowRows = 5;
     private const int VowRowH = 70;
-    private static Rectangle VowRow(int i) => new(VowPanel.X + 74, VowPanel.Y + 136 + i * (VowRowH + 8), 494, VowRowH);
-    private static Rectangle VowClear => new(VowPanel.X + 74, VowPanel.Y + 136 + VowRows * (VowRowH + 8) + 4, 494, 44);
+    private static int VowColX => UiKit.ContentLeft(VowPanel);
+    private static int VowColW => VowPanel.Width - UiKit.PadX(VowPanel) * 2;
+    private static Rectangle VowRow(int i) => new(VowColX, UiKit.BodyTop(VowPanel) + i * (VowRowH + 8), VowColW, VowRowH);
+    private static Rectangle VowClear => new(VowColX, UiKit.BodyTop(VowPanel) + VowRows * (VowRowH + 8) + 4, VowColW, 44);
 
     private static string FormName(Form f) => f.ToString().ToUpperInvariant();
     private static string SourceName(Source s) => s.ToString().ToUpperInvariant();
@@ -408,7 +427,7 @@ public sealed class WeaveScreen
     private void DrawSlots(SpriteBatch b, Point hit)
     {
         _ui.Panel(b, SlotsPanel);
-        _ui.TextCenterBig(b, "YOUR SKILLS", SlotsPanel.Center.X, SlotsPanel.Y + 44, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "YOUR SKILLS", SlotsPanel.Center.X, UiKit.TitleTop(SlotsPanel), Gold, UiTypography.PanelTitle);
 
         var skills = Loadout.Skills;
         var ctx = Context;
@@ -474,7 +493,7 @@ public sealed class WeaveScreen
         // ── KEYSTONE SOCKETS ──
         var learned = DustEffects.LearnedKeystones(Tree);
         _keystoneScroll = Math.Clamp(_keystoneScroll, 0, Math.Max(0, learned.Count - KeystoneRows));
-        var head = new Rectangle(SlotsPanel.X + 74, KeystoneChip(0).Y - 44, 372, 30);
+        var head = new Rectangle(SlotColX, KeystoneChip(0).Y - 44, SlotColW, 30);
         _ui.TextBig(b, "KEYSTONES", head.X, head.Y, Gold, UiTypography.Body);
         // Sockets used, then the window into the list — a player with six learned needs to know both
         // that they may wear two and that there are three more below the fold.
@@ -533,8 +552,8 @@ public sealed class WeaveScreen
         if (Hunter is not { } hunter) return;
 
         var top = KeystoneChip(KeystoneRows - 1).Bottom + 26;
-        var x = SlotsPanel.X + 40;
-        var width = SlotsPanel.Width - 80;
+        var x = SlotColX;
+        var width = SlotColW;
 
         // A FLOOR, NOT A BAIL — this readout was DEAD for most of the game.
         //
@@ -693,8 +712,8 @@ public sealed class WeaveScreen
         }
         var cur = skills[_slot];
 
-        _ui.TextCenterBig(b, "SOURCE", PickPanel.Center.X, PickPanel.Y + 66, Gold, UiTypography.SectionTitle);
-        _ui.TextCenter(b, "WHAT IT IS MADE OF", PickPanel.Center.X, PickPanel.Y + 102, Slate);
+        _ui.TextCenterBig(b, "SOURCE", PickPanel.Center.X, UiKit.TitleTop(PickPanel), Gold, UiTypography.PanelTitle);
+        _ui.TextCenter(b, "WHAT IT IS MADE OF", PickPanel.Center.X, UiKit.CaptionTop(PickPanel), Slate);
 
         // What the player is ASKING about — whatever the cursor is over, falling back to what they
         // already picked. Hovering is the question "what is this?", and until now the screen had no
@@ -717,8 +736,8 @@ public sealed class WeaveScreen
             _ui.TextCenterBig(b, SourceName(s), cell.Center.X, cell.Bottom - 24, on ? Bone : col, UiTypography.Secondary);
         }
 
-        _ui.TextCenterBig(b, "FORM", PickPanel.Center.X, PickPanel.Y + 384, Gold, UiTypography.SectionTitle);
-        _ui.TextCenter(b, "WHAT IT DOES", PickPanel.Center.X, PickPanel.Y + 420, Slate);
+        _ui.TextCenterBig(b, "FORM", PickPanel.Center.X, FormTitleTop, Gold, UiTypography.PanelTitle);
+        _ui.TextCenter(b, "WHAT IT DOES", PickPanel.Center.X, FormTitleTop + (UiTypography.PanelCaptionTop - UiTypography.PanelTitleTop), Slate);
 
         var wanted = GearWants();
 
@@ -842,8 +861,8 @@ public sealed class WeaveScreen
     /// </remarks>
     private void DrawExplainer(SpriteBatch b, Explanation what)
     {
-        var x = PickPanel.X + 34;
-        var width = PickPanel.Width - 68;
+        var x = UiKit.ContentLeft(PickPanel);
+        var width = PickPanel.Width - UiKit.PadX(PickPanel) * 2;
 
         // ANCHORED TO THE LAST CELL, not to a measured-once offset. The first version used
         // PickPanel.Y + 626 and drew straight over the second row of Form cells — the panel's contents
@@ -895,7 +914,7 @@ public sealed class WeaveScreen
     private void DrawVows(SpriteBatch b, Point hit)
     {
         _ui.PanelQuiet(b, VowPanel);
-        _ui.TextCenterBig(b, "VOWS", VowPanel.Center.X, VowPanel.Y + 66, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "VOWS", VowPanel.Center.X, UiKit.TitleTop(VowPanel), Gold, UiTypography.PanelTitle);
 
         var known = Known;
         var skills = Loadout.Skills;
@@ -909,7 +928,7 @@ public sealed class WeaveScreen
             return;
         }
 
-        _ui.TextCenter(b, "WORKS ONLY IF YOU MEET ITS DEMAND", VowPanel.Center.X, VowPanel.Y + 104, Slate);
+        _ui.TextCenter(b, "WORKS ONLY IF YOU MEET ITS DEMAND", VowPanel.Center.X, UiKit.CaptionTop(VowPanel), Slate);
 
         _vowScroll = Math.Clamp(_vowScroll, 0, Math.Max(0, known.Count - VowRows));
         for (var r = 0; r < VowRows; r++)
@@ -943,7 +962,7 @@ public sealed class WeaveScreen
 
         if (known.Count > VowRows)
             _ui.TextRight(b, $"{_vowScroll + 1}-{Math.Min(known.Count, _vowScroll + VowRows)} / {known.Count}",
-                          VowPanel.Right - 74, VowPanel.Y + 104, Slate);
+                          UiKit.ContentRight(VowPanel), UiKit.CaptionTop(VowPanel), Slate);
 
         var clear = VowClear;
         _ui.Fill(b, clear, clear.Contains(hit) ? new Color(0x2C, 0x25, 0x44) : Quiet);
@@ -954,13 +973,13 @@ public sealed class WeaveScreen
         // carry its demand and a Vow's cost is the half that decides whether to take it.
         var reading = Weaving.ById(_readingVowId) ?? Weaving.ById(sworn) ?? known[_vowScroll];
         var y = VowClear.Bottom + 18;
-        _ui.Fill(b, new Rectangle(VowPanel.X + 74, y, 494, 2), Dim);
+        _ui.Fill(b, new Rectangle(VowColX, y, VowColW, 2), Dim);
         y += 16;
-        _ui.TextBig(b, reading.Name.ToUpperInvariant(), VowPanel.X + 74, y, Gold, UiTypography.Body);
+        _ui.TextBig(b, reading.Name.ToUpperInvariant(), VowColX, y, Gold, UiTypography.Body);
         y += 32;
         // Bounded, so a longer Vow than any in the catalogue today cannot reintroduce the overflow: the
         // panel's frame art reaches 40px in, and text drawn past that is text on the ornament.
-        DrawWrapped(b, reading.Description, VowPanel.X + 74, y, 494, Bone, VowPanel.Bottom - 40);
+        DrawWrapped(b, reading.Description, VowColX, y, VowColW, Bone, VowPanel.Bottom - 40);
     }
 
     /// <summary>Truncate to a pixel width, with an ellipsis, so a long line cannot invade its neighbour.</summary>

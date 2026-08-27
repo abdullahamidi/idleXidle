@@ -187,7 +187,7 @@ public sealed class StatsScreen
     private void DrawHunterCard(SpriteBatch b, Hunter hunter, Build build, Point hit)
     {
         _ui.PanelQuiet(b, HunterCard);
-        _ui.TextCenterBig(b, "HUNTER", HunterCard.Center.X, HunterCard.Y + 22, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "HUNTER", HunterCard.Center.X, UiKit.TitleTop(HunterCard), Gold, UiTypography.PanelTitle);
 
         var por = new Rectangle(HunterCard.X + 40, HunterCard.Y + 66, 118, 118);
         if (_ui.Assets.GetFirst(Character?.PortraitKey ?? "hunter_portrait", "hunter_portrait") is { } p)
@@ -201,10 +201,10 @@ public sealed class StatsScreen
         var cls = ItemClasses.NameOf(who.Class);
         const string sep = " · ";
         var column = HunterCard.Right - 24 - tx;
-        var px = UiTypography.PanelTitle;
+        var px = UiTypography.Headline;
         while (px > 14 && _ui.MeasureBig(who.ShortName, px) + _ui.MeasureBig(sep, px) + _ui.MeasureBig(cls, px) > column) px--;
         var nx = tx;
-        var ny = HunterCard.Y + 74 + (UiTypography.PanelTitle - px) / 2;
+        var ny = HunterCard.Y + 74 + (UiTypography.Headline - px) / 2;
         _ui.TextBig(b, who.ShortName, nx, ny, Bone, px);
         nx += _ui.MeasureBig(who.ShortName, px);
         _ui.TextBig(b, sep, nx, ny, Slate, px);
@@ -242,9 +242,9 @@ public sealed class StatsScreen
                               Point hit, bool clicked)
     {
         _ui.Panel(b, TrainPanel);
-        _ui.TextCenterBig(b, "TRAINING", TrainPanel.Center.X, TrainPanel.Y + 22, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "TRAINING", TrainPanel.Center.X, UiKit.TitleTop(TrainPanel), Gold, UiTypography.PanelTitle);
         _ui.TextCenterBig(b, "EVERY ROW SHOWS THE REAL NUMBER THE FIGHT USES · REST THE POINTER ON A ROW TO SEE ITS RULE",
-                          TrainPanel.Center.X, TrainPanel.Y + 56, Slate, UiTypography.Secondary);
+                          TrainPanel.Center.X, UiKit.CaptionTop(TrainPanel), Slate, UiTypography.Secondary);
 
         // Icon keys are AssetLibrary aliases (stat_*) onto shipped art; the colour is the flat-diamond
         // fallback if a file ever goes missing (the house rule: fail soft, never blank).
@@ -261,10 +261,10 @@ public sealed class StatsScreen
             ("GUILE", HunterStat.Guile, "stat_guile", new(0xF0, 0xB2, 0x4A)),
         };
 
-        var y = TrainPanel.Y + 92;
+        var y = UiKit.BodyTop(TrainPanel);
         foreach (var (label, stat, iconKey, gem) in rows)
         {
-            var row = new Rectangle(TrainPanel.X + 40, y - 8, TrainPanel.Width - 80, 54);
+            var row = new Rectangle(UiKit.ContentLeft(TrainPanel), y - 8, TrainPanel.Width - UiKit.PadX(TrainPanel) * 2, 54);
             var hovered = row.Contains(hit);
             _ui.Fill(b, row, hovered ? new Color(0x2A, 0x24, 0x38, 0xD0) : RowBg);
 
@@ -471,8 +471,8 @@ public sealed class StatsScreen
         // stretch (UiKit.Button — deliberately, for short buttons), so its corner scrollwork smeared into
         // a long streak (playtest 2026-08-25: "the reset button frame is stretched, low quality"). The
         // explanation now lives in plain text on the bar's left, and the button says only its verb.
-        var button = new Rectangle(ResetBar.Right - 40 - 420, ResetBar.Y + 25, 420, 56);
-        var tx = ResetBar.X + 40;
+        var button = new Rectangle(UiKit.ContentRight(ResetBar) - 420, ResetBar.Y + 25, 420, 56);
+        var tx = UiKit.ContentLeft(ResetBar);
 
         if (_resetArmed && Environment.TickCount64 - _resetArmedAtMs > (long)(ArmSeconds * 1000))
             _resetArmed = false;   // the settings pattern this mirrors auto-disarms; so does this now
@@ -522,9 +522,12 @@ public sealed class StatsScreen
     private void DrawProgression(SpriteBatch b, Hunter hunter, Point hit)
     {
         _ui.PanelQuiet(b, ProgressPanel);
-        // Y+40, not Y+22: this panel is nearly square, so it wears the square frame, whose top ornament
-        // reaches ~36 px in — the title sat on it while every other title sat inside its frame.
-        _ui.TextCenterBig(b, "PROGRESS", ProgressPanel.Center.X, ProgressPanel.Y + 40, Gold, UiTypography.SectionTitle);
+        // The title, the margins and the first row all come from UiKit's frame-aware helpers — this
+        // panel is nearly square, so it wears the SQUARE frame, whose crest and side rails reach about
+        // twice as far in as the other two. That fact used to live here as three hand-measured numbers
+        // (+40, inset 60, first row +84); it lives in UiKit.FrameDrop now, so every square panel in the
+        // game gets it instead of only the one whose author noticed.
+        _ui.TextCenterBig(b, "PROGRESS", ProgressPanel.Center.X, UiKit.TitleTop(ProgressPanel), Gold, UiTypography.PanelTitle);
         // Only the counters the game actually tracks — monsters/bosses/play-time/deaths aren't recorded.
         var rows = new (string, string)[]
         {
@@ -533,12 +536,10 @@ public sealed class StatsScreen
             ("CHESTS OPENED", $"{ChestsOpened:N0}"),
             ("MASTERY POINTS", $"{MasteryPoints:N0}"),
         };
-        // INSIDE THE FRAME. The panel is nearly square, so it wears the square frame, whose side rails
-        // and corner flourishes reach ~48 px in; rows inset 40 sat on the ornament and the last row ran
-        // under the bottom rail (playtest 2026-08-25: "the text in the progress table is not aligned").
-        // Inset 60, tighter rows, and every value on the same baseline as its label.
-        const int inset = 60;
-        var y = ProgressPanel.Y + 84;
+        // Rows inset 40 sat on the ornament and the last row ran under the bottom rail (playtest
+        // 2026-08-25: "the text in the progress table is not aligned").
+        var inset = UiKit.PadX(ProgressPanel);
+        var y = UiKit.BodyTopBare(ProgressPanel);
         foreach (var (label, value) in rows)
         {
             var row = new Rectangle(ProgressPanel.X + inset, y - 6, ProgressPanel.Width - inset * 2, 38);
@@ -608,7 +609,7 @@ public sealed class StatsScreen
         _ui.Fill(b, new Rectangle(card.X, card.Y, 3, card.Height), Gold * 0.4f);
         _ui.Fill(b, new Rectangle(card.Right - 3, card.Y, 3, card.Height), Gold * 0.4f);
 
-        _ui.TextBig(b, _hoverTitle, card.X + 24, card.Y + 18, Gold, UiTypography.PanelTitle);
+        _ui.TextBig(b, _hoverTitle, card.X + 24, card.Y + 18, Gold, UiTypography.Headline);
 
         var ty = card.Y + 56;
         for (var i = 0; i < wrapped.Count; i++)

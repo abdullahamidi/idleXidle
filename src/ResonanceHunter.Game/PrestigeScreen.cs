@@ -509,7 +509,7 @@ public sealed class PrestigeScreen
         var spent = tree.All.Where(u => tree.Owns(u.Id)).Sum(u => u.Cost);
         var learned = tree.All.Count(u => tree.Owns(u.Id));
         _ui.TextBig(b, "TRAIT POINTS TO SPEND", 60, 108, Slate, UiTypography.Secondary);
-        _ui.TextBig(b, $"{tree.Available}", 282, 104, tree.Available > 0 ? Gold : Slate, UiTypography.PanelTitle);
+        _ui.TextBig(b, $"{tree.Available}", 282, 104, tree.Available > 0 ? Gold : Slate, UiTypography.Headline);
         _ui.TextRightBig(b, $"{learned} OF {tree.All.Count} TRAITS LEARNED  ·  {spent} POINTS SPENT  ·  {tree.TotalTreeCost} FOR EVERYTHING",
                          View.Right, 108, Slate, UiTypography.Secondary);
 
@@ -782,8 +782,8 @@ public sealed class PrestigeScreen
             ? Px(3 * TraitTreeLayout.LaneStep)
             : (int)Enumerable.Range(1, heads.Count - 1).Min(i => heads[i].At.X - heads[i - 1].At.X) - Px(24);
 
-        var namePx = Px(32);
-        var linePx = Px(24);
+        var namePx = Px(RoadNameWorldPx);
+        var linePx = Px(RoadLineWorldPx);
         var glyphPx = Px(32);
         foreach (var (road, p) in heads)
         {
@@ -827,8 +827,25 @@ public sealed class PrestigeScreen
             (int)at.X, (int)at.Y, spineLit > 0 ? Teal : Muted(Teal, 0.72f), px);
     }
 
+    // ── TYPE INSIDE THE TREE CANVAS ───────────────────────────────────────────────────────────────
+    //
+    // These are WORLD sizes: everything on the tree is multiplied by the camera zoom before it is
+    // drawn, so a rung from UiTypography — which is measured in final screen pixels — would be the
+    // wrong unit here and would change size as the player scrolls. They are named all the same, so a
+    // change to the tree's type is a decision somebody made rather than a literal somebody typed, and
+    // so tools/check_ui_type.py can tell the two apart.
+
     /// <summary>The size the names under the nodes are drawn at, in world units.</summary>
-    private const int NamePx = 28;
+    private const int NamePx = 28;   // ui-size-ok: tree WORLD units, multiplied by the camera zoom
+
+    /// <summary>A road's own name at the head of its branch, in world units.</summary>
+    private const int RoadNameWorldPx = 32;   // ui-size-ok: tree WORLD units, multiplied by the zoom
+
+    /// <summary>A road's sentence and tally under its name, in world units.</summary>
+    private const int RoadLineWorldPx = 24;   // ui-size-ok: tree WORLD units, multiplied by the zoom
+
+    /// <summary>The cost tag on an unlit node, in world units.</summary>
+    private const int NodeCostWorldPx = 19;   // ui-size-ok: tree WORLD units, multiplied by the zoom
     private const int NameLineH = 30;
     private const int NameGap = 4;
 
@@ -993,7 +1010,7 @@ public sealed class PrestigeScreen
             var tag = new Rectangle(box.Right - tagW / 4, box.Center.Y - tagH / 2, tagW, tagH);
             _ui.Fill(b, tag, Plate * 0.92f);
             Outline(b, tag, buyable ? road : Dim, 1);
-            _ui.TextCenterBig(b, $"{u.Cost}", tag.Center.X, tag.Y + 1, buyable ? Bone : Slate, Px(19));
+            _ui.TextCenterBig(b, $"{u.Cost}", tag.Center.X, tag.Y + 1, buyable ? Bone : Slate, Px(NodeCostWorldPx));
         }
     }
 
@@ -1152,15 +1169,15 @@ public sealed class PrestigeScreen
 
         var terminal = TerminalArt(u);
         var roadCol = RoadColor(u.Road);
-        var left = DetailPanel.X + 28;
-        var right = DetailPanel.Right - 28;
-        var width = DetailPanel.Width - 56;
+        var left = UiKit.ContentLeft(DetailPanel);
+        var right = UiKit.ContentRight(DetailPanel);
+        var width = DetailPanel.Width - UiKit.PadX(DetailPanel) * 2;
 
-        _ui.TextCenterBig(b, "TRAIT DETAIL", DetailPanel.Center.X, DetailPanel.Y + 18, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "TRAIT DETAIL", DetailPanel.Center.X, UiKit.TitleTop(DetailPanel), Gold, UiTypography.PanelTitle);
 
         // Everything below runs off ONE CURSOR, so adding a row moves the rows under it rather than
         // running one through the next.
-        var y = DetailPanel.Y + 54;
+        var y = UiKit.CaptionTop(DetailPanel);
 
         // THE ROAD, named and drawn, and under it what walking it means — the same sentence the header
         // on the diagram prints, so the panel and the picture agree.
@@ -1178,8 +1195,8 @@ public sealed class PrestigeScreen
         DrawFace(b, tree, u, icon, hot: false);
         y += size + 4;
 
-        _ui.TextCenterBig(b, _ui.ShortenBig(u.Name, width, UiTypography.PanelTitle), DetailPanel.Center.X, y,
-                          isOwned ? Gold : buyable ? Bone : Slate, UiTypography.PanelTitle);
+        _ui.TextCenterBig(b, _ui.ShortenBig(u.Name, width, UiTypography.Headline), DetailPanel.Center.X, y,
+                          isOwned ? Gold : buyable ? Bone : Slate, UiTypography.Headline);
         y += 32;
         // The state in a word — and only the state. The "kind" that used to sit beside it was a label
         // about the engine's categories, not a fact a player could do anything with.
@@ -1215,10 +1232,10 @@ public sealed class PrestigeScreen
         _ui.Fill(b, new Rectangle(left, y, width, 2), Dim * 0.7f);
         y += 12;
         _ui.TextBig(b, "WHAT IT COSTS", left, y, Slate, UiTypography.Secondary);
-        if (isOwned) _ui.TextRightBig(b, "LEARNED", right, y - 4, Gold, UiTypography.PanelTitle);
+        if (isOwned) _ui.TextRightBig(b, "LEARNED", right, y - 4, Gold, UiTypography.Headline);
         else
             _ui.TextRightBig(b, $"{u.Cost} TRAIT {(u.Cost == 1 ? "POINT" : "POINTS")}", right, y - 4,
-                             buyable ? Bone : Ember, UiTypography.PanelTitle);
+                             buyable ? Bone : Ember, UiTypography.Headline);
         y += 26;
         if (!isOwned)
         {
@@ -1269,7 +1286,7 @@ public sealed class PrestigeScreen
             _ui.TextCenterBig(b, _ui.ShortenBig(reason, width, UiTypography.Secondary), DetailPanel.Center.X, DetailPanel.Bottom - 120, Ember, UiTypography.Secondary);
 
         var label = isOwned ? "LEARNED" : "LEARN THIS TRAIT";
-        if (_ui.Button(b, new Rectangle(DetailPanel.X + 40, DetailPanel.Bottom - 92, DetailPanel.Width - 80, 68), label, hit, clicked, enabled: buyable))
+        if (_ui.Button(b, new Rectangle(left, DetailPanel.Bottom - 92, width, 68), label, hit, clicked, enabled: buyable))
             Buy(tree, u);
     }
 

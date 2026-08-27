@@ -574,6 +574,11 @@ until somebody looks at the pixels. These scripts are the "somebody looks" step,
 
 - `check_font_coverage.py` — every drawn character against a conservative proven set. See
   the section below for the ↔ that shipped.
+- `check_ui_type.py` — every drawn text size against `UiTypography`. A bare numeral passed to
+  `TextBig` / `MeasureBig` / `WrapBig`, or a private `*Px` constant holding one, fails the gate; a
+  genuine local unit names itself out with `// ui-size-ok: <why>` and the gate prints the list of
+  exceptions on every run. It exists because the game had drifted to fourteen distinct drawn sizes
+  and four different panel-title offsets, none of which any single diff could show.
 - `check_asset_keys.py` — every hand-typed asset key against the 460 images on disk, plus
   the 43-entry migration alias table against its own targets, plus every `sfx_*` cue. An
   alias whose target was deleted is the same hole one indirection further along, and it is

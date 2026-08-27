@@ -47,7 +47,11 @@ public sealed class WarrenScreen
     // ── Spec §4 rectangles ──────────────────────────────────────────────────────────────────────
     private static readonly Rectangle OverviewPanel = new(28, 154, 388, 708);
     private static readonly Rectangle GridPanel = new(446, 154, 920, 500);
-    private static readonly Rectangle BonusStrip = new(446, 676, 920, 186);
+    // TEN PIXELS TALLER, upward. Its title was at +12, which is INSIDE the medium frame's 20 px top
+    // rail — the one panel on this screen whose header was printed on its own ornament. Nothing here
+    // could move down (the strip already ends level with the two columns beside it), so the strip took
+    // the room from the gap above it, which had 22 to spare.
+    private static readonly Rectangle BonusStrip = new(446, 666, 920, 196);
     private static readonly Rectangle DetailPanel = new(1400, 154, 480, 708);
 
     /// <summary>
@@ -66,7 +70,10 @@ public sealed class WarrenScreen
     {
         var col = i % 4;
         var row = i / 4;
-        return new Rectangle(GridPanel.X + 24 + col * 222, GridPanel.Y + 58 + row * 212, 206, 200);
+        // Centred, not inset by a hand-picked 24: this panel's whole content is the grid, so the slack
+        // is split rather than assigned. Written as +24 it was symmetric by coincidence.
+        var left = (GridPanel.Width - (3 * 222 + 206)) / 2;
+        return new Rectangle(GridPanel.X + left + col * 222, GridPanel.Y + 58 + row * 212, 206, 200);
     }
 
     private Color ResColor(WarrenResource r) => r switch
@@ -142,16 +149,16 @@ public sealed class WarrenScreen
     private void DrawOverview(SpriteBatch b, Point hit, bool clicked)
     {
         _ui.PanelQuiet(b, OverviewPanel);
-        _ui.TextCenterBig(b, "WARREN OVERVIEW", OverviewPanel.Center.X, OverviewPanel.Y + 22, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "WARREN OVERVIEW", OverviewPanel.Center.X, UiKit.TitleTop(OverviewPanel), Gold, UiTypography.PanelTitle);
 
         // Crest + level + name.
-        var crest = new Rectangle(OverviewPanel.X + 40, OverviewPanel.Y + 68, 72, 84);
+        var crest = new Rectangle(UiKit.ContentLeft(OverviewPanel), OverviewPanel.Y + 68, 72, 84);
         _ui.Diamond(b, crest, MasteryC);
-        _ui.TextBig(b, $"LEVEL {Warren.Level}", crest.Right + 20, OverviewPanel.Y + 78, Bone, UiTypography.PanelTitle);
+        _ui.TextBig(b, $"LEVEL {Warren.Level}", crest.Right + 20, OverviewPanel.Y + 78, Bone, UiTypography.Headline);
         _ui.TextBig(b, Warren.Name, crest.Right + 20, OverviewPanel.Y + 112, MasteryC, UiTypography.Body);
 
         // XP bar to the next Warren level.
-        var bar = new Rectangle(OverviewPanel.X + 32, OverviewPanel.Y + 176, OverviewPanel.Width - 64, 26);
+        var bar = new Rectangle(UiKit.ContentLeft(OverviewPanel), OverviewPanel.Y + 176, OverviewPanel.Width - UiKit.PadX(OverviewPanel) * 2, 26);
         var pct = Warren.XpToNext > 0 ? Warren.Xp / (float)Warren.XpToNext : 1f;
         _ui.Bar(b, bar.X, bar.Y, bar.Width, bar.Height, pct, Gold);
         // Ink on the gold fill, Bone off it. Cream on gold measures ~1.6:1 — the same gold-on-gold
@@ -159,24 +166,24 @@ public sealed class WarrenScreen
         var xpFrac = Warren.XpToNext > 0 ? Warren.Xp / (float)Warren.XpToNext : 0f;
         _ui.TextCenterBig(b, $"{Warren.Xp:N0} / {Warren.XpToNext:N0}", bar.Center.X, bar.Y + 4,
             xpFrac > 0.55f ? UiKit.Ink : Bone, UiTypography.Secondary);
-        _ui.TextBig(b, $"NEXT LEVEL {Warren.Level + 1}", OverviewPanel.X + 32, OverviewPanel.Y + 214, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, $"+{Warren.AllProductionBonus * 100f:0}% ALL PRODUCTION", OverviewPanel.Right - 32, OverviewPanel.Y + 214, Met, UiTypography.Secondary);
+        _ui.TextBig(b, $"NEXT LEVEL {Warren.Level + 1}", UiKit.ContentLeft(OverviewPanel), OverviewPanel.Y + 214, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, $"+{Warren.AllProductionBonus * 100f:0}% ALL PRODUCTION", UiKit.ContentRight(OverviewPanel), OverviewPanel.Y + 214, Met, UiTypography.Secondary);
 
-        _ui.Fill(b, new Rectangle(OverviewPanel.X + 24, OverviewPanel.Y + 254, OverviewPanel.Width - 48, 2), Dim);
+        _ui.Fill(b, new Rectangle(UiKit.ContentLeft(OverviewPanel), OverviewPanel.Y + 254, OverviewPanel.Width - UiKit.PadX(OverviewPanel) * 2, 2), Dim);
 
         // Total production, per real currency (bonuses applied).
-        _ui.TextBig(b, "TOTAL PRODUCTION", OverviewPanel.X + 32, OverviewPanel.Y + 272, Gold, UiTypography.Body);
-        _ui.TextRightBig(b, "(IDLE RATE)", OverviewPanel.Right - 32, OverviewPanel.Y + 276, Slate, UiTypography.Secondary);
+        _ui.TextBig(b, "TOTAL PRODUCTION", UiKit.ContentLeft(OverviewPanel), OverviewPanel.Y + 272, Gold, UiTypography.Body);
+        _ui.TextRightBig(b, "(IDLE RATE)", UiKit.ContentRight(OverviewPanel), OverviewPanel.Y + 276, Slate, UiTypography.Secondary);
         var y = OverviewPanel.Y + 320;
         foreach (var r in new[] { WarrenResource.Gleam, WarrenResource.Mastery, WarrenResource.Dust })
         {
-            ResGlyph(b, new Rectangle(OverviewPanel.X + 34, y - 2, 38, 38), r);
-            _ui.TextBig(b, $"+{Ab(Warren.ProductionPerMinute(r))} /min", OverviewPanel.X + 88, y + 2, Bone, UiTypography.PanelTitle);
+            ResGlyph(b, new Rectangle(UiKit.ContentLeft(OverviewPanel), y - 2, 38, 38), r);
+            _ui.TextBig(b, $"+{Ab(Warren.ProductionPerMinute(r))} /min", UiKit.ContentLeft(OverviewPanel) + 60, y + 2, Bone, UiTypography.Headline);
             y += 52;
         }
 
         // Production runs on every screen (see Game1.TickFarms) — a quiet reminder that the base earns idle.
-        _ui.Fill(b, new Rectangle(OverviewPanel.X + 24, OverviewPanel.Bottom - 124, OverviewPanel.Width - 48, 2), Dim);
+        _ui.Fill(b, new Rectangle(UiKit.ContentLeft(OverviewPanel), OverviewPanel.Bottom - 124, OverviewPanel.Width - UiKit.PadX(OverviewPanel) * 2, 2), Dim);
         // WHAT EACH OF THE THREE IS FOR, because the screen was silent about it and one of them is
         // unlike the other two. GLEAM and DUST are the game's shared currencies — spent on stats and on
         // the trait tree — while INSIGHT is produced here and spent here, on nothing else. That is a
@@ -185,7 +192,7 @@ public sealed class WarrenScreen
         // has nothing to do with.
         DrawWrapped(b, "The warren earns while you are away. GLEAM and DUST are used all over the game. "
                      + "INSIGHT is used only here, on upgrades.",
-            OverviewPanel.X + 30, OverviewPanel.Bottom - 104, OverviewPanel.Width - 60, Slate);
+            UiKit.ContentLeft(OverviewPanel), OverviewPanel.Bottom - 104, OverviewPanel.Width - UiKit.PadX(OverviewPanel) * 2, Slate);
     }
 
     private void DrawGrid(SpriteBatch b, Point hit, bool clicked)
@@ -224,7 +231,7 @@ public sealed class WarrenScreen
     private void DrawBonuses(SpriteBatch b)
     {
         _ui.PanelQuiet(b, BonusStrip);
-        _ui.TextCenterBig(b, "WARREN BONUSES", BonusStrip.Center.X, BonusStrip.Y + 12, Gold, UiTypography.PanelTitle);
+        _ui.TextCenterBig(b, "WARREN BONUSES", BonusStrip.Center.X, UiKit.TitleTop(BonusStrip), Gold, UiTypography.PanelTitle);
         // Playtest 2026-08-23: "ALL PRODUCTION, CONQUEST and WARREN have no icons, and I could not
         // understand what they do. CONQUEST what, +40%?" Each chip now carries its own icon and the
         // one line that says where its number comes from, and the strip opens by saying what the
@@ -239,7 +246,7 @@ public sealed class WarrenScreen
             + $"INSIGHT x{Warren.Multiplier(WarrenResource.Mastery):0.00}   ·   "
             + $"DUST x{Warren.Multiplier(WarrenResource.Dust):0.00}"
             + "   —   EACH IS 1 PLUS ALL THREE PLUS CONQUEST PLUS ITS OWN CHIP",
-            BonusStrip.Center.X, BonusStrip.Y + 46, Slate, UiTypography.Secondary);
+            BonusStrip.Center.X, UiKit.CaptionTop(BonusStrip), Slate, UiTypography.Secondary);
 
         var regions = Warren.ConqueredRegions;
         var entries = new (string Key, Color Gem, string Value, string Label, string Why)[]
@@ -251,16 +258,16 @@ public sealed class WarrenScreen
             ("icon_blessing_expansion", Ember, $"+{Warren.ConquestBonus * 100f:0}%", "CONQUEST",
                 regions == 1 ? "1 REGION TAKEN" : $"{regions} REGIONS TAKEN"),
         };
-        var slot = (BonusStrip.Width - 48) / entries.Length;
+        var slot = (BonusStrip.Width - UiKit.PadX(BonusStrip) * 2) / entries.Length;
         for (var i = 0; i < entries.Length; i++)
         {
             var (key, gem, value, label, why) = entries[i];
-            var cx = BonusStrip.X + 24 + slot * i + slot / 2;
-            if (_ui.Assets.Get(key) is { } ic) b.Draw(ic, new Rectangle(cx - 76, BonusStrip.Y + 78, 40, 40), Color.White);
-            else _ui.Diamond(b, new Rectangle(cx - 74, BonusStrip.Y + 80, 36, 36), gem);
-            _ui.TextBig(b, value, cx - 26, BonusStrip.Y + 76, Bone, UiTypography.PanelTitle);
-            _ui.TextCenterBig(b, label, cx, BonusStrip.Y + 124, Bone, UiTypography.Secondary);
-            _ui.TextCenterBig(b, why, cx, BonusStrip.Y + 150, Slate, UiTypography.Secondary);
+            var cx = UiKit.ContentLeft(BonusStrip) + slot * i + slot / 2;
+            if (_ui.Assets.Get(key) is { } ic) b.Draw(ic, new Rectangle(cx - 76, BonusStrip.Y + 88, 40, 40), Color.White);
+            else _ui.Diamond(b, new Rectangle(cx - 74, BonusStrip.Y + 90, 36, 36), gem);
+            _ui.TextBig(b, value, cx - 26, BonusStrip.Y + 86, Bone, UiTypography.Headline);
+            _ui.TextCenterBig(b, label, cx, BonusStrip.Y + 134, Bone, UiTypography.Secondary);
+            _ui.TextCenterBig(b, why, cx, BonusStrip.Y + 160, Slate, UiTypography.Secondary);
         }
     }
 
@@ -270,26 +277,26 @@ public sealed class WarrenScreen
         var f = Warren.Facility(_selected);
         var rc = ResColor(f.Info.Produces);
 
-        _ui.TextCenterBig(b, f.Info.Name, DetailPanel.Center.X, DetailPanel.Y + 22, Gold, UiTypography.SectionTitle);
-        _ui.TextCenterBig(b, $"LEVEL {f.Level}", DetailPanel.Center.X, DetailPanel.Y + 58, Slate, UiTypography.Body);
-        _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 96, DetailPanel.Width - 56, 2), Dim);
+        _ui.TextCenterBig(b, f.Info.Name, DetailPanel.Center.X, UiKit.TitleTop(DetailPanel), Gold, UiTypography.PanelTitle);
+        _ui.TextCenterBig(b, $"LEVEL {f.Level}", DetailPanel.Center.X, UiKit.CaptionTop(DetailPanel), Slate, UiTypography.Body);
+        _ui.Fill(b, new Rectangle(UiKit.ContentLeft(DetailPanel), UiKit.BodyTop(DetailPanel), DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, 2), Dim);
 
-        DrawWrapped(b, f.Info.Description, DetailPanel.X + 28, DetailPanel.Y + 112, DetailPanel.Width - 56, Bone);
+        DrawWrapped(b, f.Info.Description, UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 112, DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, Bone);
 
         // Output: current -> next (the NEXT figure includes any milestone jump the upgrade crosses).
-        _ui.TextBig(b, "OUTPUT", DetailPanel.X + 28, DetailPanel.Y + 190, Slate, UiTypography.Body);
-        ResGlyph(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 224, 34, 34), f.Info.Produces);
-        _ui.TextBig(b, $"+{Ab(f.BaseOutputPerMin)} /min", DetailPanel.X + 72, DetailPanel.Y + 226, Bone, UiTypography.PanelTitle);
-        _ui.TextRightBig(b, $"NEXT  +{Ab(f.NextLevelOutput)} /min", DetailPanel.Right - 28, DetailPanel.Y + 230, Met, UiTypography.Secondary);
+        _ui.TextBig(b, "OUTPUT", UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 190, Slate, UiTypography.Body);
+        ResGlyph(b, new Rectangle(UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 224, 34, 34), f.Info.Produces);
+        _ui.TextBig(b, $"+{Ab(f.BaseOutputPerMin)} /min", UiKit.ContentLeft(DetailPanel) + 44, DetailPanel.Y + 226, Bone, UiTypography.Headline);
+        _ui.TextRightBig(b, $"NEXT  +{Ab(f.NextLevelOutput)} /min", UiKit.ContentRight(DetailPanel), DetailPanel.Y + 230, Met, UiTypography.Secondary);
 
         // Milestones — the long-term goal. Show the crossed multiplier and where the next one lands.
-        var mile = new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 274, DetailPanel.Width - 56, 44);
+        var mile = new Rectangle(UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 274, DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, 44);
         _ui.Fill(b, mile, new Color(0x16, 0x12, 0x20, 0xC0));
         _ui.TextBig(b, f.MilestoneTier > 0 ? $"MILESTONES  ×{f.MilestoneMultiplier:0.00} OUTPUT" : "MILESTONES  —", mile.X + 12, mile.Y + 12, Gold, UiTypography.Secondary);
         _ui.TextRightBig(b, $"→ LEVEL {f.NextMilestoneLevel}", mile.Right - 12, mile.Y + 12, Slate, UiTypography.Secondary);
 
-        _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 336, DetailPanel.Width - 56, 2), Dim);
-        _ui.TextBig(b, "COST TO UPGRADE", DetailPanel.X + 28, DetailPanel.Y + 352, Slate, UiTypography.Body);
+        _ui.Fill(b, new Rectangle(UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 336, DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, 2), Dim);
+        _ui.TextBig(b, "COST TO UPGRADE", UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 352, Slate, UiTypography.Body);
 
         var cost = f.UpgradeCost();
         var y = DetailPanel.Y + 388;
@@ -307,14 +314,15 @@ public sealed class WarrenScreen
         // directly above it — the ceiling comes from the deepest run anywhere, so if that figure ever
         // falls the screen announces "CAPPED AT LEVEL 1" beneath a facility reading LEVEL 18.
         var capped = Warren!.IsAtLevelCap(_selected);
-        _ui.Fill(b, new Rectangle(DetailPanel.X + 28, DetailPanel.Y + 502, DetailPanel.Width - 56, 2), Dim);
+        _ui.Fill(b, new Rectangle(UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 502, DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, 2), Dim);
         _ui.TextBig(b,
             capped
                 ? $"REACH DEPTH {Warren.DepthForNextLevel(_selected)} ON AN EXPEDITION TO UPGRADE"
                 : "INSTANT UPGRADE  ·  NO WAIT",
-            DetailPanel.X + 28, DetailPanel.Y + 518, capped ? GleamC : Met, UiTypography.Secondary);
+            UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 518, capped ? GleamC : Met, UiTypography.Secondary);
 
-        if (_ui.Button(b, new Rectangle(DetailPanel.X + 40, DetailPanel.Bottom - 96, DetailPanel.Width - 80, 72),
+        if (_ui.Button(b, new Rectangle(UiKit.ContentLeft(DetailPanel), DetailPanel.Bottom - 96,
+                                      DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, 72),
                 capped ? "DEPTH LOCKED" : "UPGRADE", hit, clicked, enabled: afford && !capped))
             _upgradeRequest = _selected;
     }
@@ -322,12 +330,12 @@ public sealed class WarrenScreen
     private void DrawReq(SpriteBatch b, int y, Color gem, string label, long owned, int required)
     {
         var ok = owned >= required;
-        ResGlyph(b, new Rectangle(DetailPanel.X + 28, y, 30, 30), ResFromLabel(label), gem);
-        _ui.TextBig(b, label, DetailPanel.X + 68, y, Bone, UiTypography.Body);
+        ResGlyph(b, new Rectangle(UiKit.ContentLeft(DetailPanel), y, 30, 30), ResFromLabel(label), gem);
+        _ui.TextBig(b, label, UiKit.ContentLeft(DetailPanel) + 40, y, Bone, UiTypography.Body);
         // The verdict is a fixed 46px column; the ratio ends where that column starts. Previously both were
         // right-aligned 28px apart, so "131.9M / 7.8M" ran straight through the "OK" beside it.
-        _ui.TextRightBig(b, $"{Ab(owned)} / {Ab(required)}", DetailPanel.Right - 90, y, ok ? Met : Ember, UiTypography.Secondary);
-        _ui.TextRightBig(b, ok ? "OK" : "X", DetailPanel.Right - 44, y, ok ? Met : Ember, UiTypography.Secondary);
+        _ui.TextRightBig(b, $"{Ab(owned)} / {Ab(required)}", UiKit.ContentRight(DetailPanel) - 46, y, ok ? Met : Ember, UiTypography.Secondary);
+        _ui.TextRightBig(b, ok ? "OK" : "X", UiKit.ContentRight(DetailPanel), y, ok ? Met : Ember, UiTypography.Secondary);
     }
 
     /// <summary>

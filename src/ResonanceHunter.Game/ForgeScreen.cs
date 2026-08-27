@@ -219,15 +219,21 @@ public sealed class ForgeScreen
     /// rarest-first now and the wheel reaches it, so the top of the list is where the interesting items
     /// are instead of wherever they happened to drop.
     /// </remarks>
-    // 240, not 176: the foot now carries the chest row AND the door to the pile, one above the other.
-    // 84 header + 13 rows + 240 footer = 844 of an 762-tall panel's own arithmetic — the reserve is what
-    // keeps the last row off both of them, which is the exact fault the 124 reserve had.
-    private static int BagRows => (BagPanel.Height - 240) / BagRowH;
+    /// <summary>What the foot of the bag holds under the list: the merge door and the salvage door.</summary>
+    private const int BagFooterReserve = 152;
 
-    // +30 inset: UiKit.Panel's frame art eats the outer edge, and rows drawn flush to it sit ON the
-    // ornament rather than inside the panel.
+    // THE HEADER IS SUBTRACTED NOW. It was not: the count was (Height - 240) / 40 = 13 rows starting at
+    // +84, so the last row ran to +604 and the first footer button starts at +610 — six pixels, which is
+    // why the old comment had to add "84 header + 13 rows + 240 footer = 844 of a 762-tall panel". Twelve
+    // rows off the standard header is the arithmetic actually closing.
+    private static int BagRows =>
+        (BagPanel.Height - BagFooterReserve - UiTypography.PanelBodyTop) / BagRowH;
+
+    // The panel's own margin: rows drawn flush to the rectangle sit ON the frame art's ornament.
+    // The extra 34 on the right is the scroll track's lane, not a margin.
     private static Rectangle BagRow(int vis)
-        => new(BagPanel.X + 30, BagPanel.Y + 84 + vis * BagRowH, BagPanel.Width - 92, BagRowH - 4);
+        => new(UiKit.ContentLeft(BagPanel), UiKit.BodyTop(BagPanel) + vis * BagRowH,
+               BagPanel.Width - UiKit.PadX(BagPanel) * 2 - 34, BagRowH - 4);
     // ── THE WORKBENCH LAYOUT (2026-08-23 UX pass) ─────────────────────────────────────────────
     // The old ITEM / REQUIRED MATERIALS / REFORGE trio put eleven equal-weight buttons on screen and
     // the materials in the middle column with no icons; the playtest read it as "complex and
@@ -249,9 +255,11 @@ public sealed class ForgeScreen
     private static readonly Rectangle WalletPanel = new(1382, 140, 514, 890);
 
     /// <summary>The item card inside the ItemPanel: name, picture, element, numbers, the copy-code button.</summary>
-    private static readonly Rectangle Card = new(ItemPanel.X + 30, ItemPanel.Y + 20, ItemPanel.Width - 60, 790);
+    private static readonly Rectangle Card = new(UiKit.ContentLeft(ItemPanel), UiKit.TitleTop(ItemPanel) - 6,
+                                                 ItemPanel.Width - UiKit.PadX(ItemPanel) * 2, 790);
     /// <summary>The action column inside the ActionPanel: the tab strip on top, the open tab's body under it.</summary>
-    private static readonly Rectangle Action = new(ActionPanel.X + 36, ActionPanel.Y + 58, ActionPanel.Width - 72, 732);
+    private static readonly Rectangle Action = new(UiKit.ContentLeft(ActionPanel), UiKit.BodyTopBare(ActionPanel),
+                                                   ActionPanel.Width - UiKit.PadX(ActionPanel) * 2, 732);
     private const int TabStripH = 46;
 
     /// <summary>The four things you can do to an item — one tab each, one big button each.</summary>
@@ -1253,7 +1261,7 @@ public sealed class ForgeScreen
         // gems were the one kind of item the player owned and could not see anywhere in the bag.
         var gemMode = _tab == Tab.Socket;
         var bag = BagList();
-        _ui.TextCenterBig(b, gemMode ? "YOUR GEMS" : "YOUR BAG", BagPanel.Center.X, BagPanel.Y + 40, Gold, UiTypography.PanelTitle);
+        _ui.TextCenterBig(b, gemMode ? "YOUR GEMS" : "YOUR BAG", BagPanel.Center.X, UiKit.TitleTop(BagPanel), Gold, UiTypography.PanelTitle);
 
         // THE SCROLL COUNTER SITS UNDER THE TITLE, CENTRED — the only clear ground in this header.
         //
@@ -1268,7 +1276,7 @@ public sealed class ForgeScreen
         // there is no arrangement that puts two things on this line. Under it, there is room.
         if (bag.Count > BagRows)
             _ui.TextCenterBig(b, $"{_bagScroll + 1}-{Math.Min(bag.Count, _bagScroll + BagRows)} / {bag.Count}",
-                              BagPanel.Center.X, BagPanel.Y + 62, Slate, UiTypography.Secondary);
+                              BagPanel.Center.X, UiKit.CaptionTop(BagPanel), Slate, UiTypography.Secondary);
 
         if (bag.Count == 0)
         {
@@ -1406,7 +1414,7 @@ public sealed class ForgeScreen
         {
             // MERGE and SALVAGE JUNK act on GEAR — under the gem drawer they would take from a list
             // the player cannot see. The foot says what a row does instead.
-            var gx = BagPanel.X + 30; var gw = BagPanel.Width - 60;
+            var gx = UiKit.ContentLeft(BagPanel); var gw = BagPanel.Width - UiKit.PadX(BagPanel) * 2;
             // The last line closes a dead end: with the wearables hidden there is no other way to see
             // that the item being socketed is chosen on a different tab, and a player who cannot change
             // it would conclude that gems only ever fit whatever the bench happened to be pointing at.
@@ -1423,10 +1431,10 @@ public sealed class ForgeScreen
         }
         else
         {
-            if (_ui.Button(b, new Rectangle(BagPanel.X + 30, BagPanel.Bottom - 152, BagPanel.Width - 60, 52),
+            if (_ui.Button(b, new Rectangle(UiKit.ContentLeft(BagPanel), BagPanel.Bottom - 152, BagPanel.Width - UiKit.PadX(BagPanel) * 2, 52),
                            "MERGE THREES INTO BETTER", hit, clicked, enabled: anyTrio))
                 AutoMergeAll(hunter);
-            if (_ui.Button(b, new Rectangle(BagPanel.X + 30, BagPanel.Bottom - 88, BagPanel.Width - 60, 52),
+            if (_ui.Button(b, new Rectangle(UiKit.ContentLeft(BagPanel), BagPanel.Bottom - 88, BagPanel.Width - UiKit.PadX(BagPanel) * 2, 52),
                            "SALVAGE ALL THE JUNK", hit, clicked, enabled: JunkOf(hunter).Count > 0))
                 SalvageJunk(hunter);
         }
@@ -1491,10 +1499,10 @@ public sealed class ForgeScreen
     {
         _ui.Panel(b, ItemPanel);
         _ui.PanelQuiet(b, ActionPanel);
-        _ui.TextCenterBig(b, "WHAT TO DO WITH IT", ActionPanel.Center.X, ActionPanel.Y + 22, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "WHAT TO DO WITH IT", ActionPanel.Center.X, UiKit.TitleTop(ActionPanel), Gold, UiTypography.PanelTitle);
         if (item is null)
         {
-            _ui.TextCenterBig(b, "NO GEAR IN THE BAG.", ItemPanel.Center.X, ItemPanel.Y + 380, Slate, UiTypography.SectionTitle);
+            _ui.TextCenterBig(b, "NO GEAR IN THE BAG.", ItemPanel.Center.X, ItemPanel.Y + 380, Slate, UiTypography.PanelTitle);
             _ui.TextCenter(b, "GO AND HUNT — BOSSES DROP CHESTS,", ItemPanel.Center.X, ItemPanel.Y + 430, Dim);
             _ui.TextCenter(b, "CHESTS DROP GEAR.", ItemPanel.Center.X, ItemPanel.Y + 456, Dim);
             _ui.TextCenter(b, "PICK AN ITEM FIRST.", ActionPanel.Center.X, ActionPanel.Y + 430, Dim);
@@ -1550,8 +1558,8 @@ public sealed class ForgeScreen
     {
         var rc = RarityColors[(int)item.Rarity];
         var worn = IsWorn(hunter, item);
-        _ui.TextCenterBig(b, _ui.ShortenBig(ItemNaming.FullName(item), Card.Width, UiTypography.PanelTitle),
-                          Card.Center.X, Card.Y + 6, rc, UiTypography.PanelTitle);
+        _ui.TextCenterBig(b, _ui.ShortenBig(ItemNaming.FullName(item), Card.Width, UiTypography.Headline),
+                          Card.Center.X, Card.Y + 6, rc, UiTypography.Headline);
         var kind = ItemNames.TryGetValue(item.BaseType, out var kn) ? kn : item.BaseType.ToString().ToUpperInvariant();
         _ui.TextCenterBig(b, $"{RarityNames[(int)item.Rarity]}  ·  {kind}" + (worn ? "  ·  WORN BY YOUR CHAMPION" : ""),
                           Card.Center.X, Card.Y + 40, worn ? Gold : Slate, UiTypography.Secondary);
@@ -1624,7 +1632,8 @@ public sealed class ForgeScreen
     private void DrawFeedback(SpriteBatch b)
     {
         if (_msg.Length == 0) return;
-        var strip = new Rectangle(ActionPanel.X + 36, ActionPanel.Bottom - 100, ActionPanel.Width - 72, 60);
+        var strip = new Rectangle(UiKit.ContentLeft(ActionPanel), ActionPanel.Bottom - 100,
+                                  ActionPanel.Width - UiKit.PadX(ActionPanel) * 2, 60);
         _ui.Fill(b, strip, new Color(0x14, 0x11, 0x1C, 0xD0));
         _ui.Fill(b, new Rectangle(strip.X, strip.Y, 5, strip.Height), _msgColor);
         // One line at Body size when it fits; otherwise two lines at Secondary, never a chopped one —
@@ -1708,11 +1717,11 @@ public sealed class ForgeScreen
         _ui.Text(b, "THIS ITEM'S ENCHANT", x, ey, Slate);
         if (!hasEnch || ench is null)
         {
-            _ui.TextBig(b, "NONE — THIS ITEM IS BELOW RARE", x, ey + 30, Dim, UiTypography.PanelTitle);
+            _ui.TextBig(b, "NONE — THIS ITEM IS BELOW RARE", x, ey + 30, Dim, UiTypography.Headline);
         }
         else
         {
-            _ui.TextBig(b, ench.Name, x, ey + 30, Bloom, UiTypography.PanelTitle);
+            _ui.TextBig(b, ench.Name, x, ey + 30, Bloom, UiTypography.Headline);
             DrawWrappedBig(b, ench.Blurb, x, ey + 64, w, Bone, UiTypography.Secondary);
             // THE COMBO VERDICT: a combo enchant is live only if the build satisfies it, and the tab that
             // re-rolls the enchant is exactly where that verdict belongs.
@@ -1901,7 +1910,7 @@ public sealed class ForgeScreen
 
         var x = area.X; var y = area.Y; var w = area.Width;
         _ui.Fill(b, new Rectangle(x - 12, y - 10, w + 24, 262), new Color(0x1C, 0x1A, 0x2A, 0xC0));
-        _ui.TextBig(b, "SET THIS GEM?", x, y, Gold, UiTypography.SectionTitle);
+        _ui.TextBig(b, "SET THIS GEM?", x, y, Gold, UiTypography.PanelTitle);
         DrawItemIcon(b, gem, new Rectangle(x, y + 44, 56, 56));
         _ui.TextBig(b, _ui.ShortenBig($"{GemCraft.NameOf(gem)} {gem.ItemLevel}  —  {ItemAffixes.GrantLabel(GemCraft.StatOf(gem), GemCraft.Magnitude(gem))} {AffixName(GemCraft.StatOf(gem))}", w - 70, UiTypography.Body),
                     x + 70, y + 58, RarityColors[(int)gem.Rarity], UiTypography.Body);
@@ -1932,7 +1941,7 @@ public sealed class ForgeScreen
         var gem = host.Gems[_confirmGemIndex];
         var x = area.X; var y = area.Y; var w = area.Width;
         _ui.Fill(b, new Rectangle(x - 12, y - 10, w + 24, 226), new Color(0x2A, 0x16, 0x1C, 0xC0));
-        _ui.TextBig(b, "CRUSH THIS GEM?", x, y, Gold, UiTypography.SectionTitle);
+        _ui.TextBig(b, "CRUSH THIS GEM?", x, y, Gold, UiTypography.PanelTitle);
         DrawItemIcon(b, gem, new Rectangle(x, y + 44, 56, 56));
         _ui.TextBig(b, _ui.ShortenBig($"{GemCraft.NameOf(gem)} {gem.ItemLevel}  —  {ItemAffixes.GrantLabel(GemCraft.StatOf(gem), GemCraft.Magnitude(gem))} {AffixName(GemCraft.StatOf(gem))}", w - 70, UiTypography.Body),
                     x + 70, y + 58, RarityColors[(int)gem.Rarity], UiTypography.Body);
@@ -2018,7 +2027,7 @@ public sealed class ForgeScreen
         _ui.Fill(b, new Rectangle(x - 12, y - 10, w + 24, 300), new Color(0x2A, 0x16, 0x1C, 0xC0));
 
         _ui.TextBig(b, kind == ScrapKind.Sell ? (gem ? "SELL THIS GEM?" : "SELL THIS ITEM?") : "SALVAGE THIS ITEM?",
-                    x, y, Gold, UiTypography.SectionTitle);
+                    x, y, Gold, UiTypography.PanelTitle);
         DrawItemIcon(b, item, new Rectangle(x, y + 44, 56, 56));
         var name = gem ? $"{GemCraft.NameOf(item)} {item.ItemLevel}" : ItemNaming.FullName(item);
         _ui.TextBig(b, _ui.ShortenBig(name, w - 70, UiTypography.Body), x + 70, y + 58, RarityColors[(int)item.Rarity], UiTypography.Body);
@@ -2078,7 +2087,7 @@ public sealed class ForgeScreen
         var junk = JunkOf(hunter);
         var chart = hunter.CharterCount(Charter.Salvage) > 0;
         var mats = junk.Sum(i => Forge.Dismantle(i, Tuning)) * (chart ? 2 : 1);
-        var x = BagPanel.X + 30; var w = BagPanel.Width - 60;
+        var x = UiKit.ContentLeft(BagPanel); var w = BagPanel.Width - UiKit.PadX(BagPanel) * 2;
         _ui.TextBig(b, _ui.ShortenBig($"SALVAGE {junk.Count} JUNK ITEMS FOR {mats} SCRAP?", w, UiTypography.Body),
                     x, BagPanel.Bottom - 152, Gold, UiTypography.Body);
         _ui.TextBig(b, _ui.ShortenBig(chart ? "YOUR SALVAGE CHART DOUBLES IT AND IS USED UP." : "WORN GEAR IS NEVER TOUCHED. NO UNDO.", w, UiTypography.Secondary),
@@ -2130,8 +2139,8 @@ public sealed class ForgeScreen
     private void DrawWallet(SpriteBatch b, Hunter hunter, ItemInstance? item)
     {
         _ui.PanelQuiet(b, WalletPanel);
-        var x = WalletPanel.X + 40; var right = WalletPanel.Right - 40; var w = right - x;
-        _ui.TextCenterBig(b, "YOUR MATERIALS", WalletPanel.Center.X, WalletPanel.Y + 22, Gold, UiTypography.SectionTitle);
+        var x = UiKit.ContentLeft(WalletPanel); var right = UiKit.ContentRight(WalletPanel); var w = right - x;
+        _ui.TextCenterBig(b, "YOUR MATERIALS", WalletPanel.Center.X, UiKit.TitleTop(WalletPanel), Gold, UiTypography.PanelTitle);
 
         // What the OPEN tab's next press takes — or gives — per row. Verb first, so the marker reads as a
         // sentence ("UPGRADE NEEDS 12") and not as a second, mysterious number beside the balance.
@@ -2180,12 +2189,12 @@ public sealed class ForgeScreen
             ("core", MatIcon[2], MatColor[2], "CORE", MatUse(Material.Core), $"{hunter.MaterialOf(Material.Core):N0}"),
             ("crystal", MatIcon[3], MatColor[3], "CRYSTAL", MatUse(Material.Crystal), $"{hunter.MaterialOf(Material.Crystal):N0}"),
         };
-        var ry = WalletPanel.Y + 72;
+        var ry = UiKit.BodyTopBare(WalletPanel);
         foreach (var row in rows)
         {
             DrawMatIcon(b, row.Icon, row.Tint, new Rectangle(x, ry, 48, 48));
             _ui.TextBig(b, row.Name, x + 62, ry, Bone, UiTypography.Body);
-            _ui.TextRightBig(b, row.Have, right, ry - 2, Bone, UiTypography.PanelTitle);
+            _ui.TextRightBig(b, row.Have, right, ry - 2, Bone, UiTypography.Headline);
             var useRoom = w - 62;
             if (marks.TryGetValue(row.Key, out var m))
             {
@@ -2199,7 +2208,7 @@ public sealed class ForgeScreen
         // ── CHARTS: a permission you do not know you hold is not a permission. ──
         var cy = ry + 6;
         _ui.Fill(b, new Rectangle(x, cy, w, 2), Dim);
-        _ui.TextCenterBig(b, "YOUR CHARTS", WalletPanel.Center.X, cy + 16, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "YOUR CHARTS", WalletPanel.Center.X, cy + 16, Gold, UiTypography.PanelTitle);
         var ey = DrawWrappedBig(b, "A chart pays for one action instead of materials. It is used up by itself when you press the button it pays for.",
                                 x, cy + 50, w, Slate, UiTypography.Secondary) + 8;
         var held = Enum.GetValues<Charter>().Where(c => hunter.CharterCount(c) > 0).ToList();
@@ -2593,7 +2602,7 @@ public sealed class ForgeScreen
 
             // ABOVE the chest. At 700 it sat behind the loot panel's lower half and read as a smudge.
             _ui.TextCenterBig(b, _revealTitle, 960, 340,
-                grade * (0.4f + 0.6f * p), UiTypography.SectionTitle);
+                grade * (0.4f + 0.6f * p), UiTypography.PanelTitle);
         }
 
         // ── BEAT 2 · THE BURST ────────────────────────────────────────────────────────────────────
@@ -2639,7 +2648,7 @@ public sealed class ForgeScreen
         if (cp < 0.6f) return;      // the contents wait for the frame to stop moving
 
         _ui.TextCenterBig(b, _revealTitle, card.Center.X, card.Y + 34,
-            grade * fade, UiTypography.SectionTitle);
+            grade * fade, UiTypography.PanelTitle);
 
         // A question takes the card's body. Its subject is re-resolved by id every frame: if the item
         // has left the bag under it, the question simply has nothing left to ask.
@@ -2808,7 +2817,7 @@ public sealed class ForgeScreen
         _ui.Fill(b, area, new Color(0x2A, 0x16, 0x1C, 0xEE));
 
         var x = area.X + 26; var w = area.Width - 52; var y = area.Y + 18;
-        _ui.TextBig(b, kind == ScrapKind.Sell ? "SELL THIS?" : "SALVAGE THIS?", x, y, Gold, UiTypography.SectionTitle);
+        _ui.TextBig(b, kind == ScrapKind.Sell ? "SELL THIS?" : "SALVAGE THIS?", x, y, Gold, UiTypography.PanelTitle);
         DrawItemIcon(b, item, new Rectangle(x, y + 42, 56, 56));
         _ui.TextBig(b, _ui.ShortenBig(ItemNaming.FullName(item), w - 70, UiTypography.Body), x + 70, y + 56,
                     RarityColors[(int)item.Rarity], UiTypography.Body);
@@ -2863,7 +2872,7 @@ public sealed class ForgeScreen
 
         var best = n > 0 ? RarityColors[_revealAll.Max(i => (int)i.Rarity)] : Bone;
         _ui.TextCenterBig(b, $"{_revealChestCount} CHESTS OPENED", panel.Center.X, panel.Y + 34,
-                          best * fade, UiTypography.SectionTitle);
+                          best * fade, UiTypography.PanelTitle);
 
         // The tally, rarest first — countable without reading ten icons.
         var tally = _revealAll.GroupBy(i => i.Rarity).OrderByDescending(g => (int)g.Key)

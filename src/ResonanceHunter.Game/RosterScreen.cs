@@ -71,12 +71,22 @@ public sealed class RosterScreen
     // in ClassColumns order, the FIRST of the class on the top row, the SECOND directly beneath — and
     // this screen only walks the cells. A column header names the class above each pair.
     private const int ColumnPitch = 218, RowPitch = 300, CardWidth = 200, CardHeight = 280;
-    private const int HeaderY = 78, RuleY = 100, CardsY = 108;
+    // The class headers sit on the panel's own caption line, the rule under them, the cards under
+    // that — one rhythm rather than three offsets measured off a title that was 22 px too low.
+    private const int HeaderY = UiTypography.PanelCaptionTop, RuleY = HeaderY + 22, CardsY = RuleY + 8;
 
     private static Rectangle Card(RosterCell cell) => Card(cell.Column, cell.Row);
 
+    /// <summary>The card grid is CENTRED in its panel — five fixed-width cards, the slack split evenly.</summary>
+    /// <remarks>
+    /// A panel whose whole content is one grid centres the grid; the house margin governs its TEXT, and
+    /// this panel has none beside the title. Written as +52 it was symmetric only by luck (52 left, 56
+    /// right) and would have stopped being so the first time a column was added.
+    /// </remarks>
+    private static int GridLeft => (GridPanel.Width - (ColumnPitch * 4 + CardWidth)) / 2;
+
     private static Rectangle Card(int column, int row) =>
-        new(GridPanel.X + 52 + column * ColumnPitch, GridPanel.Y + CardsY + row * RowPitch, CardWidth, CardHeight);
+        new(GridPanel.X + GridLeft + column * ColumnPitch, GridPanel.Y + CardsY + row * RowPitch, CardWidth, CardHeight);
 
     private static string BranchName(Branch b) => b switch
     {
@@ -167,8 +177,11 @@ public sealed class RosterScreen
     {
         _ui.Panel(b, GridPanel);
         var have = CharacterRoster.All.Count(c => state.IsUnlocked(c.Id));
-        _ui.TextCenterBig(b, "THE ROSTER", GridPanel.Center.X, GridPanel.Y + 44, Gold, UiTypography.SectionTitle);
-        _ui.TextRightBig(b, $"{have} / {CharacterRoster.All.Count}", GridPanel.Right - 56, GridPanel.Y + 30,
+        _ui.TextCenterBig(b, "THE ROSTER", GridPanel.Center.X, UiKit.TitleTop(GridPanel), Gold, UiTypography.PanelTitle);
+        // Right-aligned on the title's own row: the title's top plus half the difference in their heights,
+        // so the two sit on one optical line rather than on two guessed ones.
+        _ui.TextRightBig(b, $"{have} / {CharacterRoster.All.Count}", UiKit.ContentRight(GridPanel),
+                         UiKit.TitleTop(GridPanel) + (UiTypography.PanelTitle - UiTypography.Secondary) / 2,
                          Slate, UiTypography.Secondary);
 
         // THE COLUMN HEADERS: the class, plural, in the class's colour, over a rule the width of the
@@ -232,7 +245,7 @@ public sealed class RosterScreen
             // FIRST OF THE WARDENS / SECOND OF THE WARDENS — which of the class's two this is, and so
             // whether it is the one a conquest hands over or the one a quest makes you earn.
             _ui.TextCenterBig(b, c.TierLine, card.Center.X, card.Bottom - 90,
-                              unlocked ? classColor : classColor * 0.6f, 14);
+                              unlocked ? classColor : classColor * 0.6f, UiTypography.Caption);
             if (c.Lean is { } br)
                 _ui.TextCenter(b, BranchName(br), card.Center.X, card.Bottom - 62, unlocked ? lean : Dim);
             else
@@ -258,25 +271,25 @@ public sealed class RosterScreen
         var unlocked = state.IsUnlocked(c.Id);
         var active = state.ActiveId == c.Id;
         var lean = LeanColor(c);
-        // +74, not +46. The recorded layout fact for this panel art: the SIDE ornaments eat about
-        // seventy pixels, so content at +40 runs underneath them — which is exactly what the passive
-        // text did, starting on top of the left flourish.
-        var left = DetailPanel.X + 74;
-        var width = DetailPanel.Width - 148;
+        // The panel's own margin. This column wears the SQUARE frame, whose side diamonds reach 64 px
+        // in — the fact that used to live here as a hand-measured +74 now lives in UiKit.FrameDrop, so
+        // every square panel in the game gets it rather than only this one.
+        var left = UiKit.ContentLeft(DetailPanel);
+        var width = DetailPanel.Width - UiKit.PadX(DetailPanel) * 2;
 
-        // DERIVED FROM THE PANEL'S INTERIOR, not a hand-picked +44. UiKit.Panel picks its plate art by
-        // ASPECT: the wide grid panel gets a slim top flourish, this near-square one gets a tall hanging
-        // finial. The same +44 that clears the first buries this title in the second — "WHO THEY ARE"
-        // was drawn in gold ON gold filigree, the least readable text on the screen, while the identical
-        // offset on the panel beside it looked perfect. Two panels on one screen disagreeing is the tell.
-        _ui.TextCenterBig(b, "WHO THEY ARE", DetailPanel.Center.X, UiKit.PanelInner(DetailPanel).Y + 34,
-                          Gold, UiTypography.SectionTitle);
+        // FRAME-AWARE, not hand-picked. UiKit.Panel picks its plate art by ASPECT: the wide grid panel
+        // gets a slim top flourish, this near-square one gets a tall hanging finial. The same offset that
+        // clears the first buries the title in the second — "WHO THEY ARE" was once drawn in gold ON
+        // gold filigree, the least readable text on the screen, while the identical offset on the panel
+        // beside it looked perfect. Two panels on one screen disagreeing is the tell.
+        _ui.TextCenterBig(b, "WHO THEY ARE", DetailPanel.Center.X, UiKit.TitleTop(DetailPanel),
+                          Gold, UiTypography.PanelTitle);
 
         // A cursor, not twelve literal offsets — the same lesson the trait panel learned when one extra
         // row silently pushed its prerequisite list through the divider below it.
-        var y = DetailPanel.Y + 126;
+        var y = UiKit.BodyTop(DetailPanel);
 
-        _ui.TextCenterBig(b, c.Name, DetailPanel.Center.X, y, unlocked ? Bone : Slate, UiTypography.PanelTitle);
+        _ui.TextCenterBig(b, c.Name, DetailPanel.Center.X, y, unlocked ? Bone : Slate, UiTypography.Headline);
         y += 34;
         _ui.TextCenterBig(b, c.Blurb, DetailPanel.Center.X, y, Slate, UiTypography.Secondary);
         y += 34;
@@ -287,13 +300,13 @@ public sealed class RosterScreen
         y += 14;
         _ui.TextBig(b, "ROAD", left, y, Slate, UiTypography.Secondary);
         _ui.TextRightBig(b, c.Lean is { } br ? BranchName(br) : "NONE — ANY WORKS",
-                         DetailPanel.Right - 74, y - 2, lean, UiTypography.Body);
+                         UiKit.ContentRight(DetailPanel), y - 2, lean, UiTypography.Body);
         y += 32;
         _ui.TextBig(b, "BEST AT", left, y, Slate, UiTypography.Secondary);
         _ui.TextRightBig(b, c.Aptitude is { } f
                             ? $"{f.ToString().ToUpperInvariant()}  +{(int)Math.Round((c.AptitudePower - 1f) * 100)}%"
                             : "NONE",
-                         DetailPanel.Right - 74, y - 2, c.Aptitude is null ? Dim : Bone, UiTypography.Body);
+                         UiKit.ContentRight(DetailPanel), y - 2, c.Aptitude is null ? Dim : Bone, UiTypography.Body);
         y += 32;
         // THE CLASS, on its own line in its own colour with its icon, then its one sentence. Two
         // champions share each class, so the sentence names the road the class was built for rather
@@ -302,8 +315,8 @@ public sealed class RosterScreen
         var cls = ItemClasses.Get(c.Class);
         var classColor = UiKit.ClassColor(c.Class);
         _ui.ClassIcon(b, c.Class, new Rectangle(left, y - 4, 30, 30));
-        _ui.TextBig(b, cls.Name, left + 40, y - 4, classColor, UiTypography.PanelTitle);
-        _ui.TextRightBig(b, c.TierLine, DetailPanel.Right - 74, y + 2, Slate, UiTypography.Secondary);
+        _ui.TextBig(b, cls.Name, left + 40, y - 4, classColor, UiTypography.Headline);
+        _ui.TextRightBig(b, c.TierLine, UiKit.ContentRight(DetailPanel), y + 2, Slate, UiTypography.Secondary);
         y += 34;
         y = DrawWrapped(b, $"{cls.Description} Wears {cls.Name} gear.", left, y, width, Slate) + 34;
 
@@ -321,12 +334,12 @@ public sealed class RosterScreen
         // HOW CLOSE, not just what. A gate that names a demand and nothing else is a gate a player
         // cannot tell they are one descent away from.
         if (!unlocked && QuestCatalogue.Find(c.Unlock.QuestId) is { } q)
-            _ui.TextRightBig(b, q.ProgressLine(Progress), DetailPanel.Right - 74, y,
+            _ui.TextRightBig(b, q.ProgressLine(Progress), UiKit.ContentRight(DetailPanel), y,
                              q.IsDone(Progress) ? Met : Gold, UiTypography.Body);
         y += 30;
         DrawWrapped(b, UnlockText(c), left, y, width, unlocked ? Slate : Bone);
 
-        var btn = new Rectangle(DetailPanel.X + 40, DetailPanel.Bottom - 96, DetailPanel.Width - 80, 68);
+        var btn = new Rectangle(left, DetailPanel.Bottom - 96, width, 68);
         var label = active ? "PLAYING" : unlocked ? "BECOME THEM" : "LOCKED";
         if (_ui.Button(b, btn, label, hit, clicked, enabled: unlocked && !active))
             Confirm(state);

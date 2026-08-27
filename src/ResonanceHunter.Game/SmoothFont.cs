@@ -73,7 +73,7 @@ public enum TextFace
 /// </remarks>
 public sealed class SmoothFont
 {
-    private const int RasterPx = 32;                 // actual glyph height in px
+    private const int RasterPx = 32;   // ui-size-ok: the glyph ATLAS's raster height, not a drawn size
     private const float VOffset = -0.5f;             // small nudge so it sits like the pixel font's top-left
 
     /// <summary>At and above this logical height, text is set SemiBold rather than Regular.</summary>

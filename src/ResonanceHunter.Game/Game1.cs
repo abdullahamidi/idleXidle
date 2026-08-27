@@ -3298,7 +3298,7 @@ public class Game1 : Game
         _ui.Fill(_batch, new Rectangle(card.X, card.Y, card.Width, 4), NavGold);
         _ui.Fill(_batch, new Rectangle(card.X, card.Bottom - 2, card.Width, 2), NavGem * 0.5f);
 
-        _ui.TextBig(_batch, step.Title, card.X + pad, card.Y + pad, NavGold, UiTypography.PanelTitle);
+        _ui.TextBig(_batch, step.Title, card.X + pad, card.Y + pad, NavGold, UiTypography.Headline);
         _ui.TextRightBig(_batch, $"{stepNo + 1} / {_tour.Count}", card.Right - pad, card.Y + pad + 5,
                          NavLabel, UiTypography.Secondary);
 
@@ -4140,10 +4140,10 @@ public class Game1 : Game
     private const int DropListInset = UiKit.PanelCorner;
 
     /// <summary>Text inset from the edge of a row, and from the closed field's end ornament.</summary>
-    private const int DropPadX = 16;
+    private const int DropPadX = UiTypography.ButtonPadX;
 
-    /// <summary>The size an option row and a closed field's value are set at.</summary>
-    private const int DropTextPx = 20;
+    /// <summary>The size an option row and a closed field's value are set at — a control's own rung.</summary>
+    private const int DropTextPx = UiTypography.ButtonText;
 
     /// <summary>The cursor row's fill. Warm and QUIET — the gold text on it is the signal, not this.</summary>
     /// <remarks>
@@ -4199,8 +4199,12 @@ public class Game1 : Game
     {
         _ui.Scrim(_batch, 0.75f);
         _ui.Panel(_batch, SettingsPanel);
-        // The panel is DARK glass, so light text on it — gold heading, bone labels.
-        TextCenter("SETTINGS", 960, 138, Gold);
+        // The panel is DARK glass, so light text on it — gold heading, bone labels. THE HEADING IS A
+        // PANEL TITLE: it used to be an unsized call, so the one word naming the modal was drawn at the
+        // body size — smaller than the MODE and WINDOW SIZE labels underneath it. It sits on the close
+        // icon's row, which is what UiTypography.ModalTitleTop is.
+        _ui.TextCenterBig(_batch, "SETTINGS", 960, SettingsPanel.Y + UiTypography.ModalTitleTop,
+                          Gold, UiTypography.PanelTitle);
 
         // A click reaches the ordinary rows only while no dropdown list is open. The open list is
         // drawn over them, so its clicks — and the click that closes it — must be swallowed here.
@@ -4208,7 +4212,7 @@ public class Game1 : Game
         var mouse = ChromeMouse;
 
         // The COPIED confirmation, up under the title where no row lives.
-        if (_feedbackToastTimer > 0f) TextCenter(_feedbackToast, 960, 172, Gold);
+        if (_feedbackToastTimer > 0f) TextCenter(_feedbackToast, 960, SettingsPanel.Y + 82, Gold);
 
         // ── DISPLAY: two dropdowns. Closed rows draw here in layout order; the open list waits for
         //    the end of the method. ──
@@ -4746,7 +4750,7 @@ public class Game1 : Game
             _batch.Draw(logo, new Rectangle((CanvasWidth * ArtScale - lw) / 2, 150, lw, lh), Color.White);
         }
         else
-            TextCenter("IDLExIDLE", 960, 240, Gold);
+            _ui.TextCenterBig(_batch, "IDLExIDLE", 960, 240, Gold, UiTypography.ScreenTitle, TextFace.Display);
 
         var items = new[] { _hasSave ? "CONTINUE" : "BEGIN THE HUNT", "SETTINGS", "QUIT" };
         for (var i = 0; i < items.Length; i++)
@@ -4756,8 +4760,10 @@ public class Game1 : Game
             if (selected) _ui.Panel(_batch, box, gold: true); else _ui.PanelQuiet(_batch, box);
             // The ornate menu plates are DARK (even the gold/selected one), so both states take LIGHT text —
             // warm gold when selected, bone otherwise.
-            _ui.TextCenter(_batch, items[i], box.Center.X, box.Center.Y - 12,
-                selected ? new Color(0xF6, 0xD8, 0x88) : new Color(0xEC, 0xE6, 0xF2));
+            // A 96 px menu plate carrying body-sized text read as a caption on a slab; these are the
+            // three loudest choices in the game and they take the in-panel headline rung.
+            _ui.TextCenterBig(_batch, items[i], box.Center.X, box.Center.Y - 16,
+                selected ? new Color(0xF6, 0xD8, 0x88) : new Color(0xEC, 0xE6, 0xF2), UiTypography.Headline);
 
             // Clickable as well as keyed — every other menu in the game is.
             if (!_showSettings && UiKit.ClickedIn(box, ChromeMouse, _clicked)) ChooseTitleItem(i);
@@ -4862,7 +4868,7 @@ public class Game1 : Game
         var panel = new Rectangle(112, 92, 1696, 840);
         _ui.Panel(_batch, panel);
 
-        _ui.TextCenterBig(_batch, "IDLExIDLE — CONTROLS", panel.Center.X, panel.Y + 46, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(_batch, "IDLExIDLE — CONTROLS", panel.Center.X, panel.Y + UiTypography.ModalTitleTop, Gold, UiTypography.PanelTitle);
 
         // Two columns: the build on the left, the screens on the right.
         // DERIVED where it can be, and honest where it cannot. This panel is the only place a new player

@@ -314,26 +314,52 @@ Use centralized tokens rather than inline arbitrary sizes.
 ```csharp
 public static class UiTypography
 {
-    public const int ScreenTitle = 36;
-    public const int SectionTitle = 26;
-    public const int PanelTitle = 24;
-    public const int PrimaryValue = 30;
-    public const int Body = 19;
-    public const int Secondary = 16;
-    public const int NavigationLabel = 21;
-    public const int OverlayTitle = 22;
-    public const int OverlayBody = 18;
+    public const int ScreenTitle     = 36;   // the screen's name, ceremony face
+    public const int PrimaryValue    = 30;   // a headline number
+    public const int PanelTitle      = 26;   // the title of a panel
+    public const int Headline        = 24;   // the biggest thing INSIDE a panel
+    public const int NavigationLabel = 21;   // a thing you click: nav tile, button label
+    public const int Body            = 19;   // prose, list rows, the unsized default
+    public const int Secondary       = 16;   // captions, column heads, gold sub-headings
+    public const int Caption         = 14;   // chips and badges only -- never a sentence
 }
 ```
 
+> **Revised 2026-08-28.** The two title names were swapped against their roles: `SectionTitle` (26)
+> was what every panel's title actually used, while `PanelTitle` (24) was the headline INSIDE a panel.
+> They are `PanelTitle` and `Headline` now; the values did not change. `Label`, `OverlayBody` and
+> `OverlayTitle` were three more names for sizes the ladder already had and are aliases now, and
+> `Caption` was added at 14 to name the floor the arena had already drifted below (12 and 13).
+> The arena's three combat callouts (34 / 40 / 46) are a family beside the ladder, not rungs on it.
+> The live source is `src/ResonanceHunter.Game/UiTypography.cs`; `tools/check_ui_type.py` enforces it.
+
 Rules:
 
-- body text at least 18 px,
+- body text at least 18 px (`Body` is 19; `Secondary` and `Caption` are for captions and tags, never prose),
 - navigation labels at least 20 px,
 - active screen title must not be ellipsized,
 - use tabular numerals for values,
 - long content wraps or uses a defined short format,
 - never shrink below the minimum to force content into a panel.
+
+## 9.1 Panel Grid
+
+Every panel is the same nine-sliced frame, so every panel lays its header out the same way. The
+numbers below are `UiTypography`'s, applied through `UiKit.TitleTop / CaptionTop / BodyTop /
+ContentLeft / ContentRight`, which add what the SQUARE frame's deeper crest and side diamonds need
+(`SquareFrameDrop`, 28 px) without the screen having to know which frame its rectangle selected.
+
+```text
+panel.Y  +22   PanelTitleTop      the panel's title
+         +56   PanelCaptionTop    its one-line caption
+         +92   PanelBodyTop       the first content row (title + caption)
+         +62   PanelBodyTopBare   the first content row (title only)
+         +44   ModalTitleTop      a modal's title -- it shares the close icon's row
+
+left/right   40   PanelPadX        panels 512 px wide and up
+             28   PanelPadNarrow   narrower plates and detail columns
+bottom       32   PanelPadBottom
+```
 
 ---
 

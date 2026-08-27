@@ -651,14 +651,14 @@ public sealed class BuildScreen
     private void DrawSummary(SpriteBatch b)
     {
         _ui.PanelQuiet(b, SummaryPanel);
-        _ui.TextCenterBig(b, "BUILD OVERVIEW", SummaryPanel.Center.X, SummaryPanel.Y + 24, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "BUILD OVERVIEW", SummaryPanel.Center.X, UiKit.TitleTop(SummaryPanel), Gold, UiTypography.PanelTitle);
 
         var por = new Rectangle(SummaryPanel.Center.X - 66, SummaryPanel.Y + 72, 132, 132);
         if (_ui.Assets.GetFirst(Character?.PortraitKey ?? "hunter_portrait", "hunter_portrait") is { } p)
             b.Draw(p, por, Color.White);
 
         var adept = Mastery.Affinity() is { } mf ? $"{Short(mf)} ADEPT" : "SEEKER";
-        _ui.TextCenterBig(b, adept, SummaryPanel.Center.X, SummaryPanel.Y + 220, Bone, UiTypography.PanelTitle);
+        _ui.TextCenterBig(b, adept, SummaryPanel.Center.X, SummaryPanel.Y + 220, Bone, UiTypography.Headline);
         _ui.TextCenterBig(b, $"LEVEL {Level}", SummaryPanel.Center.X, SummaryPanel.Y + 254, Gold, UiTypography.Body);
         // "BUILD POWER" IS DELETED, AND THE REASON IS THAT IT WAS NOT A BUILD NUMBER.
         //
@@ -697,7 +697,7 @@ public sealed class BuildScreen
     private void DrawCore(SpriteBatch b)
     {
         _ui.PanelQuiet(b, CorePanel);
-        _ui.TextCenterBig(b, "CORE COMPOSITION", CorePanel.Center.X, CorePanel.Y + 24, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "CORE COMPOSITION", CorePanel.Center.X, UiKit.TitleTop(CorePanel), Gold, UiTypography.PanelTitle);
         var skills = Loadout.Skills;
         var focus = skills.GroupBy(s => s.Source).OrderByDescending(g => g.Count()).FirstOrDefault();
         var forms = string.Join("  ·  ", skills.Select(s => Short(s.Form)).Distinct());
@@ -753,7 +753,7 @@ public sealed class BuildScreen
     private void DrawAuraCards(SpriteBatch b, Point hit)
     {
         _ui.Panel(b, AuraPanel);
-        _ui.TextCenterBig(b, "YOUR SKILLS", AuraPanel.Center.X, AuraPanel.Y + 14, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "YOUR SKILLS", AuraPanel.Center.X, UiKit.TitleTop(AuraPanel), Gold, UiTypography.PanelTitle);
         var skills = Loadout.Skills;
         // The slots this player HAS. Against the const, a fifth woven skill was invisible on the one
         // screen whose whole job is to show the build.
@@ -787,7 +787,7 @@ public sealed class BuildScreen
     {
         _ui.PanelQuiet(b, PassivePanel);
         // +44 clears the panel art's centred top crest, which a centred title at +24 ran into.
-        _ui.TextCenterBig(b, "PASSIVES & RESONANCE", PassivePanel.Center.X, PassivePanel.Y + 62, Gold, UiTypography.SectionTitle);
+        _ui.TextCenterBig(b, "PASSIVES & RESONANCE", PassivePanel.Center.X, UiKit.TitleTop(PassivePanel), Gold, UiTypography.PanelTitle);
 
         // 52px, the width of the ornate border. At 32 the left column sat ON the frame and the
         // right-aligned resonance percentages were clipped by the opposite edge.
@@ -881,7 +881,7 @@ public sealed class BuildScreen
     private void Big(SpriteBatch b, string label, string value, Color color, int x, ref int y)
     {
         _ui.TextBig(b, label, x, y, Slate, UiTypography.Secondary);
-        _ui.TextBig(b, value, x + 200, y - 4, color, UiTypography.PanelTitle);
+        _ui.TextBig(b, value, x + 200, y - 4, color, UiTypography.Headline);
         y += 74;
     }
 
@@ -975,7 +975,10 @@ public sealed class BuildScreen
         // tree's central rule ("one branch is affordable; two are not") was the least readable text on
         // the screen it governs. Bone and Ember still mark the hover and message states.
         var infoColor = _hoverInfo.Length > 0 ? Bone : _msg.Length > 0 ? Ember : Slate;
-        _ui.Text(b, info, 200, 1024, infoColor);
+        // A HINT, at the hint rung. At Body it ran into the SPREAD branch's promise at the foot of
+        // the tree; every other screen-foot hint in the game (the TRAITS tree's DRAG TO MOVE, the
+        // arena's rail lines) is Secondary, and this is the same kind of line.
+        _ui.TextBig(b, info, 200, 1024, infoColor, UiTypography.Secondary);
 
         if (_attuneNodeId is not null) DrawAttunement(b, hit);
     }
@@ -1042,7 +1045,7 @@ public sealed class BuildScreen
         var walked = MasteryCatalog.Nodes.Any(n => n.Branch == br && n.Kind != MasteryKind.Bridge
                                                    && n.Kind != MasteryKind.Start && Mastery.IsTaken(n.Id));
         _ui.TextCenterBig(b, Short(br), (int)p.X, (int)p.Y - 23, walked ? col : col * 0.72f,
-                          UiTypography.SectionTitle);
+                          UiTypography.PanelTitle);
         _ui.TextCenterBig(b, BranchPromise(br), (int)p.X, (int)p.Y + 7, Slate, UiTypography.Secondary);
     }
 
@@ -1058,9 +1061,9 @@ public sealed class BuildScreen
         _ui.Fill(b, HexPanel, Quiet);
         Outline(b, HexPanel, Path, 2);
         _ui.TextCenter(b, aff is { } a ? $"YOUR ATTUNEMENT — {a.ToString().ToUpperInvariant()}" : "UNATTUNED",
-                       HexPanel.Center.X, HexPanel.Y + 14, aff is null ? Slate : Gold);
+                       HexPanel.Center.X, HexPanel.Y + UiTypography.PanelTitleTop, aff is null ? Slate : Gold);
         if (aff is null)
-            _ui.TextCenter(b, "TAKE A SPECIALISATION NODE", HexPanel.Center.X, HexPanel.Y + 38, Slate);
+            _ui.TextCenter(b, "TAKE A SPECIALISATION NODE", HexPanel.Center.X, HexPanel.Y + UiTypography.PanelCaptionTop, Slate);
         FormHexDiagram.Draw(_ui, b, new Point(HexPanel.Center.X, HexPanel.Y + 268), 105, aff,
                             showFactors: aff is not null);
     }
@@ -1080,8 +1083,8 @@ public sealed class BuildScreen
         _ui.Panel(b, AttunePanel, gold: true);
 
         var name = _attuneForm.ToString().ToUpperInvariant();
-        _ui.TextCenterBig(b, "THE ATTUNEMENT", 960, AttunePanel.Y + 36, Gold, UiTypography.SectionTitle);
-        _ui.TextCenter(b, "SIX FORMS ON THE LOOM — ONE IS YOURS.", 960, AttunePanel.Y + 86, Slate);
+        _ui.TextCenterBig(b, "THE ATTUNEMENT", 960, UiKit.TitleTop(AttunePanel), Gold, UiTypography.PanelTitle);
+        _ui.TextCenter(b, "SIX FORMS ON THE LOOM — ONE IS YOURS.", 960, UiKit.CaptionTop(AttunePanel), Slate);
 
         FormHexDiagram.Draw(_ui, b, new Point(960, AttunePanel.Y + 340), 150, _attuneForm, showFactors: true);
 
@@ -1123,9 +1126,9 @@ public sealed class BuildScreen
             {
                 var taken = MasteryCatalog.Nodes.Count(x => x.Branch == br && Mastery.IsTaken(x.Id));
                 var spent = MasteryCatalog.Nodes.Where(x => x.Branch == br && Mastery.IsTaken(x.Id)).Sum(x => x.Cost);
-                _ui.Fill(b, new Rectangle(NodePanel.X + 74, y0 - 4, 6, 34), BranchColor(br));
-                _ui.TextBig(b, Short(br), NodePanel.X + 94, y0, Bone, UiTypography.Body);
-                _ui.TextRightBig(b, $"{taken} \u00b7 {spent} POINTS", NodePanel.Right - 74, y0,
+                _ui.Fill(b, new Rectangle(UiKit.ContentLeft(NodePanel) + 6, y0 - 4, 6, 34), BranchColor(br));
+                _ui.TextBig(b, Short(br), UiKit.ContentLeft(NodePanel) + 26, y0, Bone, UiTypography.Body);
+                _ui.TextRightBig(b, $"{taken} \u00b7 {spent} POINTS", UiKit.ContentRight(NodePanel) - 6, y0,
                                  spent > 0 ? Gold : Dim, UiTypography.Body);
                 y0 += 42;   // 42, not 46: the four rows now share the card with the cost ladder below them.
             }
@@ -1134,7 +1137,7 @@ public sealed class BuildScreen
             // the sizes MEANT \u2014 a player could see that a Specialisation is bigger than a Notable and
             // had to click both to learn it costs twice as much. Five kinds, cheapest first, so the
             // order on the line is the order of the rings on the screen.
-            _ui.Fill(b, new Rectangle(NodePanel.X + 74, y0 + 4, NodePanel.Width - 148, 2), Dim);
+            _ui.Fill(b, new Rectangle(UiKit.ContentLeft(NodePanel) + 6, y0 + 4, NodePanel.Width - UiKit.PadX(NodePanel) * 2 - 12, 2), Dim);
             _ui.TextCenterBig(b, "WHAT EACH KIND COSTS IN POINTS", NodePanel.Center.X, y0 + 16, Slate,
                               UiTypography.Secondary);
             _ui.TextCenterBig(b, "MINOR 1  \u00b7  NOTABLE 3  \u00b7  GREATER 5", NodePanel.Center.X, y0 + 40,
@@ -1148,12 +1151,12 @@ public sealed class BuildScreen
         var taken2 = Mastery.IsTaken(n.Id);
         var can = Mastery.CanTake(n.Id);
 
-        _ui.Fill(b, new Rectangle(NodePanel.X + 64, NodePanel.Y + 40, NodePanel.Width - 128, 4), col);
-        _ui.TextBig(b, KindWord(n.Kind), NodePanel.X + 68, NodePanel.Y + 56, col, UiTypography.Secondary);
-        _ui.TextRightBig(b, Short(n.Branch), NodePanel.Right - 68, NodePanel.Y + 56, Slate, UiTypography.Secondary);
+        _ui.Fill(b, new Rectangle(UiKit.ContentLeft(NodePanel) - 4, NodePanel.Y + 40, NodePanel.Width - UiKit.PadX(NodePanel) * 2 - 8, 4), col);
+        _ui.TextBig(b, KindWord(n.Kind), UiKit.ContentLeft(NodePanel), NodePanel.Y + 56, col, UiTypography.Secondary);
+        _ui.TextRightBig(b, Short(n.Branch), UiKit.ContentRight(NodePanel), NodePanel.Y + 56, Slate, UiTypography.Secondary);
 
-        var afterLabel = DrawWrapped(b, n.Label, NodePanel.X + 68, NodePanel.Y + 100,
-                                     NodePanel.Width - 136, Bone);
+        var afterLabel = DrawWrapped(b, n.Label, UiKit.ContentLeft(NodePanel), NodePanel.Y + 100,
+                                     NodePanel.Width - UiKit.PadX(NodePanel) * 2, Bone);
 
         // WHAT A SPECIALISATION ACTUALLY DOES, IN ONE SENTENCE.
         //
@@ -1180,20 +1183,20 @@ public sealed class BuildScreen
                       + "AND SKILLS FAR FROM IT HIT SOFTER. ONE DISCIPLINE PER HUNTER."
                     : $"YOUR DISCIPLINE IS ALREADY {Short(mine.Value)}. ONE DISCIPLINE PER HUNTER — "
                       + "TAKE EVERY POINT BACK IF YOU WANT TO CHOOSE AGAIN.";
-            var after = DrawWrapped(b, says, NodePanel.X + 68, afterLabel + 14,
-                                    NodePanel.Width - 136, taken2 || mine is null ? Gold : Slate);
+            var after = DrawWrapped(b, says, UiKit.ContentLeft(NodePanel), afterLabel + 14,
+                                    NodePanel.Width - UiKit.PadX(NodePanel) * 2, taken2 || mine is null ? Gold : Slate);
             y = Math.Max(y, after + 20);
         }
 
-        _ui.Fill(b, new Rectangle(NodePanel.X + 64, y - 16, NodePanel.Width - 128, 2), Dim);
-        _ui.TextBig(b, "COST", NodePanel.X + 68, y, Slate, UiTypography.Body);
-        _ui.TextRightBig(b, $"{n.Cost} POINT{(n.Cost == 1 ? "" : "S")}", NodePanel.Right - 68, y,
-                         taken2 ? Gold : can ? Bone : Ember, UiTypography.PanelTitle);
+        _ui.Fill(b, new Rectangle(UiKit.ContentLeft(NodePanel) - 4, y - 16, NodePanel.Width - UiKit.PadX(NodePanel) * 2 - 8, 2), Dim);
+        _ui.TextBig(b, "COST", UiKit.ContentLeft(NodePanel), y, Slate, UiTypography.Body);
+        _ui.TextRightBig(b, $"{n.Cost} POINT{(n.Cost == 1 ? "" : "S")}", UiKit.ContentRight(NodePanel), y,
+                         taken2 ? Gold : can ? Bone : Ember, UiTypography.Headline);
 
         y += 56;
-        _ui.TextBig(b, "YOU HAVE", NodePanel.X + 68, y, Slate, UiTypography.Body);
-        _ui.TextRightBig(b, $"{Mastery.Available}", NodePanel.Right - 68, y,
-                         Mastery.Available >= n.Cost ? Bone : Ember, UiTypography.PanelTitle);
+        _ui.TextBig(b, "YOU HAVE", UiKit.ContentLeft(NodePanel), y, Slate, UiTypography.Body);
+        _ui.TextRightBig(b, $"{Mastery.Available}", UiKit.ContentRight(NodePanel), y,
+                         Mastery.Available >= n.Cost ? Bone : Ember, UiTypography.Headline);
 
         y += 72;
         // THE TWO ONCE-PER-HUNTER RULES GET THEIR OWN LINE. Without them a second Specialisation, or a

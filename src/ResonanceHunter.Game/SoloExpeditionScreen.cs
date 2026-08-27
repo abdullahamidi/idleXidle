@@ -404,9 +404,12 @@ public sealed class SoloExpeditionScreen
     /// </remarks>
     private const int CalloutLanesDeep = 5;
 
-    private const int DamagePx = 34;
-    private const int SkillHitPx = 40;
-    private const int CritPx = 46;
+    // The three combat-callout sizes, from the one place the game keeps its type. They were three
+    // private constants here while UiTypography carried a DamageNormal and a DamageCritical that
+    // nothing drew with — the same three sizes, written down twice, disagreeing.
+    private const int DamagePx = UiTypography.DamageNormal;
+    private const int SkillHitPx = UiTypography.DamageSkill;
+    private const int CritPx = UiTypography.DamageCritical;
 
     /// <summary>Where the enemy wave label sits, relative to the row anchor.</summary>
     /// <remarks>
@@ -1732,7 +1735,7 @@ public sealed class SoloExpeditionScreen
         // one label that has to land, was the least readable thing on screen. Same rule as the parchment
         // panels: when the surface is already gold, the word moves off it.
         _ui.BarArt(b, bar, frac, "boss");
-        _ui.TextCenterBig(b, _bossName, bar.Center.X, bar.Y - 34, UiKit.Vellum, UiTypography.PanelTitle);
+        _ui.TextCenterBig(b, _bossName, bar.Center.X, bar.Y - 34, UiKit.Vellum, UiTypography.Headline);
         _ui.TextCenterBig(b, $"{(int)(frac * 100)}%", bar.Center.X, bar.Y + 17, UiKit.Ink, UiTypography.OverlayBody);
     }
 
@@ -1835,8 +1838,8 @@ public sealed class SoloExpeditionScreen
         // literals that landed on the battle-control rail and the REWARD ACTIVITY rows; now they sit in
         // the band the report leaves empty at its foot, with the entry count between them and the keys
         // under it, and labelled with a verb \u2014 a bare chevron tells a new player nothing.
-        var prev = new Rectangle(panel.X + 44, panel.Bottom - 104, 200, 64);
-        var next = new Rectangle(panel.Right - 244, panel.Bottom - 104, 200, 64);
+        var prev = new Rectangle(UiKit.ContentLeft(panel), panel.Bottom - 104, 200, 64);
+        var next = new Rectangle(UiKit.ContentRight(panel) - 200, panel.Bottom - 104, 200, 64);
         _ui.TextCenterBig(b, $"ENTRY {_logIndex + 1} OF {Log.Count}", panel.Center.X, panel.Bottom - 96, Bone, UiTypography.Body);
         _ui.TextCenterBig(b, "\u2039 \u203a  STEP THROUGH THE LOG   \u00b7   L  CLOSES IT", panel.Center.X, panel.Bottom - 68, Slate, UiTypography.Secondary);
         if (_ui.Button(b, prev, "\u2039  OLDER", hit, clicked, enabled: _logIndex < Log.Count - 1)
@@ -1894,15 +1897,16 @@ public sealed class SoloExpeditionScreen
     private void DrawReportPanel(SpriteBatch b, Rectangle panel, RunReport r, RunReport? previous)
     {
         _ui.Panel(b, panel);   // the gold nine-slice: this IS a modal
-        // 72 in from the frame, not 44: the medium frame's side ornaments reach about 60 px in at
-        // mid-height, and a right-aligned column any nearer sits under them.
-        var x0 = panel.X + 72;
-        var x1 = panel.Right - 72;
+        // The house margin. It was a hand-measured 72, which is 32 px past what this frame needs — the
+        // capture shows its side band ending 22 px in, so a column at 40 clears it with room.
+        var x0 = UiKit.ContentLeft(panel);
+        var x1 = UiKit.ContentRight(panel);
         var w = x1 - x0;
         var top = panel.Y;
 
         // THE CAPTION, level with the close icon: what this screen is.
-        _ui.TextBig(b, "EXPEDITION LOG", x0, top + 44, Gold, UiTypography.SectionTitle, TextFace.Display);
+        _ui.TextBig(b, "EXPEDITION LOG", x0, top + UiTypography.ModalTitleTop, Gold, UiTypography.PanelTitle,
+                    TextFace.Display);
 
         // THE TITLE BAND. FELL, in the title: every entry in this log is the end of a run, and it must
         // say so plainly — "DEPTH 12" once read as a score, not as an ending. Ember for a fall, gold
@@ -1920,8 +1924,8 @@ public sealed class SoloExpeditionScreen
         _ui.TextRightBig(b, cleared, clearedRight, band.Y + 18, Bone, UiTypography.Body);
         if (r.IsRecord)
         {
-            var chipX = clearedRight - _ui.MeasureBig(cleared, UiTypography.Body) - 16 - ChipWidth("NEW RECORD", 14);
-            Chip(b, chipX, band.Y + 17, "NEW RECORD", Gold, Gold * 0.7f, 14);
+            var chipX = clearedRight - _ui.MeasureBig(cleared, UiTypography.Body) - 16 - ChipWidth("NEW RECORD", UiTypography.Caption);
+            Chip(b, chipX, band.Y + 17, "NEW RECORD", Gold, Gold * 0.7f, UiTypography.Caption);
         }
 
         // THE WALL — named plainly, because the player has to be able to go and look at it.
@@ -1938,9 +1942,9 @@ public sealed class SoloExpeditionScreen
         // THE VERDICT: the one sentence. Large, wrapped, at most two lines. Everything under it flows
         // from where it ends, so a two-line verdict pushes the table down rather than into it.
         y += 28;
-        foreach (var line in _ui.WrapBig(r.Verdict(), w, UiTypography.PanelTitle).Take(2))
+        foreach (var line in _ui.WrapBig(r.Verdict(), w, UiTypography.Headline).Take(2))
         {
-            _ui.TextBig(b, line, x0, y, UiKit.Vellum, UiTypography.PanelTitle);
+            _ui.TextBig(b, line, x0, y, UiKit.Vellum, UiTypography.Headline);
             y += 30;
         }
 
@@ -2093,28 +2097,28 @@ public sealed class SoloExpeditionScreen
         var cls = ItemClasses.NameOf(Character.Class);
         const string sep = " · ";
         const int nameColumn = 270;   // 334 to the panel's inner edge
-        var px = 26;
-        while (px > 16 && _ui.MeasureBig(name, px) + _ui.MeasureBig(sep, px) + _ui.MeasureBig(cls, px) > nameColumn) px--;
+        var px = UiTypography.PanelTitle;
+        while (px > UiTypography.Secondary && _ui.MeasureBig(name, px) + _ui.MeasureBig(sep, px) + _ui.MeasureBig(cls, px) > nameColumn) px--;
         var nx = 334;
-        var ny = 40 + (26 - px) / 2;
+        var ny = 40 + (UiTypography.PanelTitle - px) / 2;
         _ui.TextBig(b, name, nx, ny, Bone, px);
         nx += _ui.MeasureBig(name, px);
         _ui.TextBig(b, sep, nx, ny, Slate, px);
         nx += _ui.MeasureBig(sep, px);
         _ui.TextBig(b, cls, nx, ny, UiKit.ClassColor(Character.Class), px);
         if (Mastery.Affinity() is { } mf)
-            _ui.TextBig(b, $"{FormShort(mf)} ADEPT", 334, 67, Slate, 14);           // mastery title
-        _ui.TextBig(b, $"LV {_hunter?.HunterLevel ?? 1}", 334, 86, Gold, 20);        // level
+            _ui.TextBig(b, $"{FormShort(mf)} ADEPT", 334, 67, Slate, UiTypography.Caption);           // mastery title
+        _ui.TextBig(b, $"LV {_hunter?.HunterLevel ?? 1}", 334, 86, Gold, UiTypography.Body);        // level
         // Combat power — an icon + value (spec: an icon, not a "PWR" label).
         if (_ui.Assets.Get("state_resonance_128") is { } pi) b.Draw(pi, new Rectangle(440, 81, 30, 30), Ember);
-        _ui.TextBig(b, Game1.Abbrev(_hunter?.PowerRating ?? 0), 476, 83, Ember, 24);
+        _ui.TextBig(b, Game1.Abbrev(_hunter?.PowerRating ?? 0), 476, 83, Ember, UiTypography.Headline);
         // HP bar (162,112,220,24), value centred on it.
         var hp = Math.Max(0, _replay?.HealthOf(0) ?? 0);
         var hpBar = new Rectangle(334, 112, 220, 24);
         _ui.BarArt(b, hpBar, _replay?.HealthFractionOf(0) ?? 1f, "health");
-        _ui.TextCenterBig(b, $"{hp}/{_champ?.MaxHealth ?? 0}", hpBar.Center.X, hpBar.Y + 3, Bone, 16);
+        _ui.TextCenterBig(b, $"{hp}/{_champ?.MaxHealth ?? 0}", hpBar.Center.X, hpBar.Y + 3, Bone, UiTypography.Secondary);
         // Secondary stat line — TEMPO × skill rate (spec §8.6: no fake mana bar; real SquadSkillRate).
-        _ui.TextBig(b, $"TEMPO {(_hunter?.SquadSkillRate ?? 1f):0.00}x ACTION SPEED", 334, 145, Slate, 15);
+        _ui.TextBig(b, $"TEMPO {(_hunter?.SquadSkillRate ?? 1f):0.00}x ACTION SPEED", 334, 145, Slate, UiTypography.Secondary);
 
         // Source icons — the build's real elements. These sat at x=42, coordinates from the layout where
         // the HUD panel started near the left edge. Once the panel moved to x=196 to clear the vertical nav
@@ -2158,7 +2162,7 @@ public sealed class SoloExpeditionScreen
         {
             // No medallion on disk: a plain page so the door still shows.
             _ui.Fill(b, box, new Color(0x14, 0x10, 0x1A, 0xE0));
-            _ui.TextCenterBig(b, "LOG", box.Center.X, box.Center.Y - 8, tint, 14);
+            _ui.TextCenterBig(b, "LOG", box.Center.X, box.Center.Y - 8, tint, UiTypography.Caption);
         }
         if (hot) _ui.HoverTip(b, "EXPEDITION LOG — every descent's report. The L key opens it too.", hit);
         if (UiKit.ClickedIn(r, hit, clicked)) WantsLog = true;
@@ -2311,17 +2315,19 @@ public sealed class SoloExpeditionScreen
     }
 
     /// <summary>A small labelled chip — a dark plate, a one-pixel edge, the word inside. Returns its width.</summary>
-    private int Chip(SpriteBatch b, int x, int y, string text, Color ink, Color edge, int px = 13)
+    private int Chip(SpriteBatch b, int x, int y, string text, Color ink, Color edge,
+                     int px = UiTypography.Caption)
     {
         var w = ChipWidth(text, px);
         var r = new Rectangle(x, y, w, 22);
         _ui.Fill(b, r, new Color(0x14, 0x10, 0x1A, 0xE0));
         Outline(b, r, edge, 1);
-        _ui.TextBig(b, text, x + 8, y + 4, ink, px);
+        _ui.TextBig(b, text, x + UiTypography.ChipPadX, y + UiTypography.ChipPadY, ink, px);
         return w;
     }
 
-    private int ChipWidth(string text, int px = 13) => _ui.MeasureBig(text, px) + 16;
+    private int ChipWidth(string text, int px = UiTypography.Caption)
+        => _ui.MeasureBig(text, px) + UiTypography.ChipPadX * 2;
 
     private void Hairline(SpriteBatch b, int x, int y, int w, Color c) => _ui.Fill(b, new Rectangle(x, y, w, 1), c);
 
@@ -2331,10 +2337,13 @@ public sealed class SoloExpeditionScreen
     //    Every plate is a UiKit.PanelQuiet, whose ornament reaches about 18 px in; the insets below are
     //    measured against that frame, not the 40 px the gold modal frame needed.
     private const int ColumnX = 1570, ColumnW = 326;
-    private const int RailInset = 24;        // content clears the quiet frame's ornament
-    private const int RailTitleBand = 50;    // title row, from the plate's top to its content (the frame's top ornament is ~20 px)
+    private const int RailInset = UiTypography.PanelPadNarrow;   // the house margin for a narrow plate
+    // THE PLATE TITLES ARE PANEL TITLES NOW. They were 17 px at +24 — every menu screen in the game
+    // sets a panel's title at 26 px on the standard line, and these three plates were the last ones
+    // speaking in their own voice. The band grows with them.
+    private const int RailTitleBand = UiTypography.PanelBodyTopBare;
     private const int RailGap = 12;          // between plates
-    private const int IdlePlateHeight = 96;  // was 130 — the coin and the rate on one line
+    private const int IdlePlateHeight = RailTitleBand + 46;   // the coin and the rate on one line
     private const int RewardButtonHeight = 44;
     private const int RewardRowPitch = 48;
     private const int RewardFootLine = 18;   // the DEEPEST WAVE line under the errands
@@ -2352,9 +2361,9 @@ public sealed class SoloExpeditionScreen
     private Rectangle CleanPanel(SpriteBatch b, Rectangle r, string title)
     {
         _ui.PanelQuiet(b, r);
-        // Y+24, not Y+15: the quiet frame's top rail is ~20 px deep and the title sat on it
-        // (playtest 2026-08-26: "the REWARD ACTIVITY and IDLE RATE titles spill over the frame").
-        _ui.TextBig(b, title, r.X + RailInset, r.Y + 24, Gold, 17);
+        // The standard title line — the quiet frame's top rail is ~20 px deep and the title used to
+        // sit on it (playtest 2026-08-26: "the REWARD ACTIVITY and IDLE RATE titles spill over the frame").
+        _ui.TextBig(b, title, r.X + RailInset, UiKit.TitleTop(r), Gold, UiTypography.PanelTitle);
         return new Rectangle(r.X + RailInset, r.Y + RailTitleBand, r.Width - RailInset * 2, r.Height - RailTitleBand - RailInset);
     }
 
@@ -2378,7 +2387,7 @@ public sealed class SoloExpeditionScreen
         var inner = CleanPanel(b, idle, "IDLE RATE");
         var rowY = inner.Y - 2;
         if (_ui.Assets.Get("currency_gleam") is { } gi) b.Draw(gi, new Rectangle(inner.X, rowY, 30, 30), Color.White);
-        _ui.TextBig(b, $"+{Game1.Abbrev((long)(IdleGleamRate * 60f))}/min", inner.X + 40, rowY + 2, Gold, 24);
+        _ui.TextBig(b, $"+{Game1.Abbrev((long)(IdleGleamRate * 60f))}/min", inner.X + 40, rowY + 2, Gold, UiTypography.Headline);
 
         // Reward activity — real summary, no fake loot grid (§20.4/§21). Sized to what it actually holds —
         // two errands, one, or just the career line. An ornate frame around a void reads as content the
@@ -2414,8 +2423,8 @@ public sealed class SoloExpeditionScreen
                 WantsMastery = true;
             ry += RewardRowPitch; anyReward = true;
         }
-        if (Deepest > 0) _ui.TextBig(b, $"DEEPEST WAVE REACHED  {Deepest}", inner.X, ry + 1, Slate, 15);
-        else if (!anyReward) _ui.TextBig(b, "NOTHING TO CLAIM YET", inner.X, ry + 1, Slate, 16);
+        if (Deepest > 0) _ui.TextBig(b, $"DEEPEST WAVE REACHED  {Deepest}", inner.X, ry + 1, Slate, UiTypography.Secondary);
+        else if (!anyReward) _ui.TextBig(b, "NOTHING TO CLAIM YET", inner.X, ry + 1, Slate, UiTypography.Secondary);
 
         DrawKeepFilter(b, new Rectangle(ColumnX, reward.Bottom + RailGap, ColumnW, FilterRowHeight), hit, clicked);
     }
@@ -2501,10 +2510,11 @@ public sealed class SoloExpeditionScreen
         // The row: the chip style of the filter's own buttons, lit gold while the popover is up.
         _ui.Fill(b, row, new Color(0x14, 0x10, 0x1A, 0xE0));
         Outline(b, row, wasOpen ? Gold * 0.8f : hot ? Bone : PlateEdge, 2);   // bronze at rest: a button, in the rail's own brown
-        _ui.TextBig(b, "CHEST FILTER", row.X + 14, row.Y + 8, wasOpen || hot ? Gold : Gold * 0.85f, 15);
+        _ui.TextBig(b, "CHEST FILTER", row.X + 14, row.Y + 6, wasOpen || hot ? Gold : Gold * 0.85f, UiTypography.Secondary);
         var door = wasOpen ? "CLOSE  ×" : "CHANGE  ›";
-        _ui.TextBig(b, door, row.Right - 14 - _ui.MeasureBig(door, 14), row.Y + 9, hot ? Bone : Slate, 14);
-        _ui.TextBig(b, _ui.ShortenBig(FilterSummary(), row.Width - 28, 14), row.X + 14, row.Y + 30, Bone, 14);
+        _ui.TextRightBig(b, door, row.Right - 14, row.Y + 8, hot ? Bone : Slate, UiTypography.Caption);
+        _ui.TextBig(b, _ui.ShortenBig(FilterSummary(), row.Width - 28, UiTypography.Caption), row.X + 14, row.Y + 30,
+                    Bone, UiTypography.Caption);
 
         if (wasOpen) DrawFilterPopover(b, pop, hit, clicked && pop.Contains(hit));
         else if (hot) _ui.HoverTip(b, "CHEST FILTER — which chests to keep. The rest turn into a little Scrap. Click to change it.", hit);
@@ -2521,14 +2531,14 @@ public sealed class SoloExpeditionScreen
         var inner = new Rectangle(pop.X + RailInset, pop.Y + RailInset, pop.Width - RailInset * 2, pop.Height - RailInset * 2);
         // The title sits on the close icon's row, so the two read as one header.
         var close = UiKit.CloseRect(pop, 36);
-        _ui.TextBig(b, "CHEST FILTER", inner.X, close.Y + 6, Gold, 17);
+        _ui.TextBig(b, "CHEST FILTER", inner.X, close.Y + 4, Gold, UiTypography.PanelTitle);
         if (_ui.CloseButton(b, close, hit, clicked)) FilterOpen = false;
         var y = close.Bottom + 8;
-        _ui.TextBig(b, "WHICH CHESTS TO KEEP", inner.X, y, Slate, 14);
+        _ui.TextBig(b, "WHICH CHESTS TO KEEP", inner.X, y, Slate, UiTypography.Secondary);
         y += 30;
 
         // LOWEST TIER   [-]  ANY TIER / TIER N AND UP  [+]
-        _ui.TextBig(b, "LOWEST TIER", inner.X, y, Bone, 14);
+        _ui.TextBig(b, "LOWEST TIER", inner.X, y, Bone, UiTypography.Secondary);
         y += 22;
         var minus = new Rectangle(inner.X, y, 34, 34);
         var plus = new Rectangle(inner.Right - 34, y, 34, 34);
@@ -2541,7 +2551,7 @@ public sealed class SoloExpeditionScreen
         // The slots, as TOGGLES — several at once ("hem bot hem kolye"). Two rows of four medallions, the
         // slot art the GEAR screen wears, lit when kept; ALL SLOTS under them clears the lot.
         y += 48;
-        _ui.TextBig(b, "GEAR SLOTS THE CHEST IS FOR", inner.X, y, Bone, 14);
+        _ui.TextBig(b, "GEAR SLOTS THE CHEST IS FOR", inner.X, y, Bone, UiTypography.Secondary);
         y += 24;
         string? tip = null;
         const int cellH = 60;
@@ -2557,7 +2567,7 @@ public sealed class SoloExpeditionScreen
                           : new Rectangle(cell.Center.X - 25, cell.Center.Y - 25, 50, 50);
             var tint = lit || hot ? Color.White : new Color(0x8C, 0x86, 0x80);
             if (!_ui.Icon(b, SlotIconKey(slot), box, tint))
-                _ui.TextCenterBig(b, SlotLabel(slot), cell.Center.X, cell.Center.Y - 8, tint, 13);
+                _ui.TextCenterBig(b, SlotLabel(slot), cell.Center.X, cell.Center.Y - 8, tint, UiTypography.Caption);
             if (lit) Outline(b, cell, Gold * 0.8f, 2);
             if (hot) tip = SlotTip(slot) + (lit ? " Click to stop keeping its chests." : " Click to keep the chests made for it.");
             if (UiKit.ClickedIn(cell, hit, clicked))
@@ -2574,7 +2584,7 @@ public sealed class SoloExpeditionScreen
         y += 40;
         // Slate, not Dim: Dim on the quiet frame's black interior was a line the capture could not read.
         _ui.TextBig(b, KeepMinTier > 0 || KeepSlots.Count > 0 ? "OTHER CHESTS TURN INTO A LITTLE SCRAP" : "EVERY CHEST IS KEPT",
-                    inner.X, y, Slate, 14);
+                    inner.X, y, Slate, UiTypography.Caption);
         if (tip is not null) _ui.HoverTip(b, tip, hit);
     }
 
@@ -2587,7 +2597,8 @@ public sealed class SoloExpeditionScreen
         _ui.Fill(b, new Rectangle(r.X, r.Bottom - 2, r.Width, 2), edge);
         _ui.Fill(b, new Rectangle(r.X, r.Y, 2, r.Height), edge);
         _ui.Fill(b, new Rectangle(r.Right - 2, r.Y, 2, r.Height), edge);
-        _ui.TextCenterBig(b, label, r.Center.X, r.Y + (r.Height - 16) / 2 - 1, lit ? Gold : hot ? Bone : Slate, 16);
+        _ui.TextCenterBig(b, label, r.Center.X, r.Y + (r.Height - UiTypography.Secondary) / 2 - 1,
+                          lit ? Gold : hot ? Bone : Slate, UiTypography.Secondary);
     }
 
     /// <summary>The run's state, or null when it is simply running and there is nothing to say.</summary>
@@ -2628,11 +2639,12 @@ public sealed class SoloExpeditionScreen
         // pitch has to clear the medallion PLUS that text, and the medallion shrinks to pay for it.
         var (_, pitch, slot) = SkillRailMetrics();
         const int y0 = RailTop + RailHeadroom;
-        _ui.TextBig(b, "SKILLS", RailContentX, RailTop + 26, Gold, 20);
+        _ui.TextBig(b, "SKILLS", RailContentX, RailTop + UiTypography.PanelTitleTop, Gold, UiTypography.PanelTitle);
         // THE POOL, beside the header it feeds. Gold at the brim — the REND moment worth waiting for.
         if (_chargeLive)
-            _ui.TextRight(b, $"CHARGE {_chargeNow}/{_chargeCap}", RailContentX + RailContentW, RailTop + 30,
-                          _chargeNow >= _chargeCap ? Gold : Slate);
+            _ui.TextRightBig(b, $"CHARGE {_chargeNow}/{_chargeCap}", RailContentX + RailContentW,
+                             RailTop + UiTypography.PanelTitleTop + (UiTypography.PanelTitle - UiTypography.Secondary) / 2,
+                             _chargeNow >= _chargeCap ? Gold : Slate, UiTypography.Secondary);
         for (var i = 0; i < n; i++)
         {
             var box = new Rectangle(RailContentX, y0 + i * pitch, slot, slot);
@@ -2695,7 +2707,7 @@ public sealed class SoloExpeditionScreen
                 // fit the slot pitch rather than clipped.
                 var label = $"{s.Source.ToString().ToUpperInvariant()} {FormShort(s.Form)}";
                 var lpx = UiTypography.Secondary;
-                while (lpx > 12 && _ui.MeasureBig(label, lpx) > RailContentW - box.Width - 20) lpx--;
+                while (lpx > UiTypography.Caption && _ui.MeasureBig(label, lpx) > RailContentW - box.Width - 20) lpx--;
                 // Beside the slot: the name is short and pairs with the medallion.
                 _ui.TextBig(b, label, box.Right + 12, box.Y + 10, Bone, lpx);
                 // The rhythm, in words, under the name: what the pips count.
@@ -2706,7 +2718,7 @@ public sealed class SoloExpeditionScreen
                     > 3 => $"EVERY {FormBehaviour.CooldownBeats(s.Form)} ACTIONS",
                     _ => s.Form == Form.Aura ? "ALWAYS ON" : s.Form == Form.Trap ? "WHEN BITTEN" : "TIMED",
                 };
-                _ui.TextBig(b, rhythm, box.Right + 12, box.Y + 32, Slate, 12);
+                _ui.TextBig(b, rhythm, box.Right + 12, box.Y + 32, Slate, UiTypography.Caption);
 
                 // WHAT THE SKILL ACTUALLY DOES, on the screen where the player first meets it.
                 // This line used to read "AUTO" on every row — true of every skill in the game, so it
@@ -2753,17 +2765,19 @@ public sealed class SoloExpeditionScreen
                 }
 
                 var head = BuildGlossary.FormHeadline(s.Form);
-                var hy = box.Bottom + 12;
-                foreach (var line in _ui.WrapBig(head, RailContentW, 13).Take(2))
+                // CLEAR OF THE PIPS. The beat row sits at box.Bottom + 4 and is 10 px tall, so a
+                // headline at +12 printed through it — visible in every capture of a beat-counted skill.
+                var hy = box.Bottom + (beats > 0 ? 22 : 12);
+                foreach (var line in _ui.WrapBig(head, RailContentW, UiTypography.Caption).Take(2))
                 {
-                    _ui.TextBig(b, line, RailContentX, hy, Gold, 13);
-                    hy += 16;
+                    _ui.TextBig(b, line, RailContentX, hy, Gold, UiTypography.Caption);
+                    hy += 18;
                 }
             }
             else
             {
                 if (_ui.Assets.Get("ui_slot_skill_hex") is { } sl) b.Draw(sl, box, Color.White * 0.5f);
-                _ui.TextCenterBig(b, i == skills.Count ? "+B" : "-", box.Center.X, box.Center.Y - 10, Dim, 16);
+                _ui.TextCenterBig(b, i == skills.Count ? "+B" : "-", box.Center.X, box.Center.Y - 10, Dim, UiTypography.Secondary);
             }
         }
     }
@@ -2816,7 +2830,7 @@ public sealed class SoloExpeditionScreen
     // Sits just right of the vertical nav rail (width 180).
     // Below the hunter HUD (bottom 225) and right of the nav rail (width 180).
     private const int RailX = 190, RailTop = 236, RailW = 286, RailMaxH = 700;
-    private const int RailHeadroom = 64;      // rail top to the first medallion
+    private const int RailHeadroom = UiTypography.PanelBodyTopBare + 8;   // rail top to the first medallion
     private const int RailFootroom = 34;      // the ornate frame's bottom band
     private const int SkillSlotMax = 64;
     private const int SkillTextBlock = 40;    // two wrapped lines under each medallion
@@ -2859,9 +2873,11 @@ public sealed class SoloExpeditionScreen
     /// It costs a little empty space at one skill and buys a frame that does not change under the player.
     /// </remarks>
     private const int RailMinH = 350;
-    // Inset by the ornate frame's border (UiKit.Panel reserves 44px), not by the 20px a flat slab needed.
-    private const int RailContentX = 234;
-    private const int RailContentW = 198;
+    // The house margin for a narrow plate. It was 44 a side on a 286-wide rail — a third of the column
+    // spent on a vertical frame whose side rail is 24 — which is why the skill lines had to drop to 12
+    // and 13 px to fit. At 28 they fit at the Caption rung with room to spare.
+    private const int RailContentX = RailX + UiTypography.PanelPadNarrow;
+    private const int RailContentW = RailW - UiTypography.PanelPadNarrow * 2;
 
 
     /// <summary>

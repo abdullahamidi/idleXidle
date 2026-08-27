@@ -511,16 +511,73 @@ public sealed class UiKit
     /// <summary>The tint that turns the gold frame to dark bronze. Multiplied, so the interior stays black.</summary>
     private static readonly Color QuietFrame = new(0x58, 0x52, 0x62);
 
+    /// <summary>
+    /// WHICH FRAME ART a panel of this shape will wear. Chosen by aspect ratio, so resizing a panel
+    /// silently changes its texture — and the three have visibly different ornaments.
+    /// </summary>
+    /// <remarks>
+    /// It bit twice in one session (the HUNT skills rail, the Forge bag's counter), so the switch lives
+    /// in one public method rather than inline: the layout helpers below have to ask the same question
+    /// the renderer does, and two copies of this arithmetic would drift.
+    /// </remarks>
+    public static string PanelArtKey(Rectangle r)
+    {
+        var aspect = r.Width / MathF.Max(1f, r.Height);
+        return aspect >= 1.30f ? "ui_panel_medium"
+             : aspect >= 0.82f ? "ui_panel_square"
+             : "ui_panel_vertical";
+    }
+
+    /// <summary>
+    /// How much deeper this panel's frame reaches than the house standard assumes.
+    /// </summary>
+    /// <remarks>
+    /// Measured off the art, not guessed: at the panel's own centre the top ornament of
+    /// <c>ui_panel_medium</c> is 20 source px deep and <c>ui_panel_vertical</c>'s is 21, but the SQUARE
+    /// frame carries a crest that runs to 51 — two and a half times as far. That single fact is why
+    /// StatsScreen's PROGRESS panel had to write its title at +40 while every other panel on the same
+    /// screen wrote +22, and why ROSTER's detail column sat 27 px lower than the grid beside it. The
+    /// screens had each rediscovered it by eye and written a different number; this returns it.
+    /// </remarks>
+    public static int FrameDrop(Rectangle r) => PanelArtKey(r) == "ui_panel_square" ? UiTypography.SquareFrameDrop : 0;
+
+    /// <summary>Where this panel's TITLE sits, as an absolute y. See <see cref="UiTypography.PanelTitleTop"/>.</summary>
+    public static int TitleTop(Rectangle r) => r.Y + UiTypography.PanelTitleTop + FrameDrop(r);
+
+    /// <summary>Where this panel's one-line CAPTION sits, under its title.</summary>
+    public static int CaptionTop(Rectangle r) => r.Y + UiTypography.PanelCaptionTop + FrameDrop(r);
+
+    /// <summary>Where this panel's first content row starts, under a title AND a caption.</summary>
+    public static int BodyTop(Rectangle r) => r.Y + UiTypography.PanelBodyTop + FrameDrop(r);
+
+    /// <summary>Where this panel's first content row starts under a title with NO caption.</summary>
+    public static int BodyTopBare(Rectangle r) => r.Y + UiTypography.PanelBodyTopBare + FrameDrop(r);
+
+    /// <summary>
+    /// This panel's left/right content inset: the house margin, widened for a narrow plate's sake and for
+    /// the square frame's deeper side rails. See <see cref="UiTypography.PanelPadX"/>.
+    /// </summary>
+    public static int PadX(Rectangle r)
+        // A SQUARE-FRAMED PANEL NEVER TAKES THE NARROW MARGIN, however narrow it is: its side rails are
+        // 49 source px deep, so the narrow 24 would put the first column ON the flourish. StatsScreen's
+        // PROGRESS panel is 372 px wide and had already been pushed to 60 by hand for exactly this.
+        => (PanelArtKey(r) == "ui_panel_square" || r.Width >= UiTypography.WidePanelFrom
+                ? UiTypography.PanelPadX
+                : UiTypography.PanelPadNarrow)
+           + FrameDrop(r);
+
+    /// <summary>This panel's left content edge, as an absolute x.</summary>
+    public static int ContentLeft(Rectangle r) => r.X + PadX(r);
+
+    /// <summary>This panel's right content edge, as an absolute x — where a right-aligned value ends.</summary>
+    public static int ContentRight(Rectangle r) => r.Right - PadX(r);
+
+    /// <summary>This panel's bottom content edge — the last row must end above it.</summary>
+    public static int ContentBottom(Rectangle r) => r.Bottom - UiTypography.PanelPadBottom - FrameDrop(r);
+
     private void PanelAt(SpriteBatch b, Rectangle r, Color tint, bool gold)
     {
-        // THE FRAME ART IS CHOSEN BY ASPECT RATIO, which means resizing a panel silently changes which
-        // texture it wears — and the three have visibly different corner ornaments. It bit twice in one
-        // session (the HUNT skills rail, the Forge bag's counter), so it is called out here rather than
-        // left to be rediscovered.
-        var aspect = r.Width / MathF.Max(1f, r.Height);
-        var key = aspect >= 1.30f ? "ui_panel_medium"
-                : aspect >= 0.82f ? "ui_panel_square"
-                : "ui_panel_vertical";
+        var key = PanelArtKey(r);
         var tex = Assets.Get(key);
         if (tex is null)
         {
@@ -776,14 +833,23 @@ public sealed class UiKit
         // ALWAYS the structural weight, never the size-derived one. A button label is an action, and a
         // short button that shrank its text to fit would otherwise drop below the weight threshold and
         // come out lighter than the button beside it — the same control, two different voices.
-        var px = Math.Clamp(r.Height / 2, 14, 22);
-        while (px > 12 && Text2.Measure(label, px, TextFace.Strong) > r.Width - 24) px--;
+        //
+        // ONE SIZE FOR EVERY BUTTON. It used to be Clamp(height / 2, 14, 22), so a 44px button spoke at
+        // 22 and a 36px one beside it at 18 — the same control, two sizes, decided by a dimension the
+        // player cannot see. It is UiTypography.ButtonText now, shrinking only when the label genuinely
+        // does not fit, and never past Caption. A very short button still gets a size that fits it.
+        var px = Math.Min(UiTypography.ButtonText, Math.Max(UiTypography.Caption, r.Height - 14));
+        // THE LABEL MUST CLEAR THE ART'S END ORNAMENT, not a flat 12px. The button art draws its
+        // scrollwork over FieldCapWidth(height) at each end, which is 20px on a 44px button and 24 on a
+        // 52 — so "MERGE THREES INTO BETTER" and "SALVAGE ALL THE JUNK" were printing straight onto it.
+        var pad = Math.Max(UiTypography.ButtonPadX, FieldCapWidth(r.Height));
+        while (px > UiTypography.Caption && Text2.Measure(label, px, TextFace.Strong) > r.Width - pad * 2) px--;
         TextCenterBig(b, label, r.Center.X, r.Center.Y - px * 27 / 40, label3, px, TextFace.Strong);
         return enabled && hover && clicked;
     }
 
     /// <summary>The ornamented end of the 256×96 button art, in source pixels — everything past it is plain border.</summary>
-    private const int ButtonCapSrcPx = 44;
+    private const int ButtonCapSrcPx = 44;   // ui-size-ok: source pixels in the button art, not type
 
     /// <summary>
     /// How wide the button art's end ornament lands at a given control height — the inset a caller
@@ -832,10 +898,10 @@ public sealed class UiKit
 
     // The 256×64 bar frames: corner ornaments in the first/last 32 source px, the centre ornament between
     // x 94 and 162, plain stone border between; the window starts 14 px in. Measured on ui_bar_boss_frame.
-    private const int BarCapSrcPx = 32;
+    private const int BarCapSrcPx = 32;   // ui-size-ok: source pixels in the bar frame art, not type
     private const int BarOrnamentSrcX0 = 94;
     private const int BarOrnamentSrcX1 = 162;
-    private const int BarWindowInsetSrcPx = 14;
+    private const int BarWindowInsetSrcPx = 14;   // ui-size-ok: source pixels in the bar frame art
 
     /// <summary>
     /// Five-piece horizontal slice for art with ornaments at BOTH ends AND in the middle: the caps and the
@@ -905,7 +971,7 @@ public sealed class UiKit
         else
         {
             Fill(b, r, hot ? new Color(0x4A, 0x28, 0x30) : new Color(0x22, 0x1A, 0x30));
-            TextCenterBig(b, "×", r.Center.X, r.Y + r.Height / 2 - 12, hot ? Color.White : Vellum, 22);
+            TextCenterBig(b, "×", r.Center.X, r.Y + r.Height / 2 - 12, hot ? Color.White : Vellum, UiTypography.Headline);
         }
         return clicked && hot;
     }
