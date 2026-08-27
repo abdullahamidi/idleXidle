@@ -586,7 +586,7 @@ public sealed class CharacterScreen
         var leading = ElementSets.Leading(hunter);
         var setRow = new Rectangle(LoadoutPanel.X + 24, ry, LoadoutPanel.Width - 48, 44);
         SummaryRow(b, "SETS",
-                   leading is { } lead ? $"{lead.ToString().ToUpperInvariant()} {ElementSets.WornCount(hunter, lead)} OF 5" : "NONE WORN",
+                   leading is { } lead ? $"{lead.ToString().ToUpperInvariant()} {ElementSets.WornCount(hunter, lead)} WORN" : "NONE WORN",
                    ref ry);
         if (leading is { } tipFor && setRow.Contains(hit))
             _ui.HoverTip(b, string.Join("\n", ElementSets.Card(hunter, tipFor)), hit);

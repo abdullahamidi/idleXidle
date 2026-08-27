@@ -123,7 +123,7 @@ public class element_sets_test
                     Assert.DoesNotContain(word, t.Line, StringComparison.OrdinalIgnoreCase);
             }
         var card = ElementSets.Card(Wearing(Source.Nature, 3), Source.Nature);
-        Assert.Equal("THE NATURE SET — 3 OF 5 PIECES WORN", card[0]);
+        Assert.Equal("THE NATURE SET — 3 PIECES WORN", card[0]);
         Assert.StartsWith("ON", card[1]);
         Assert.StartsWith("ON", card[2]);
         Assert.StartsWith("-", card[3]);
