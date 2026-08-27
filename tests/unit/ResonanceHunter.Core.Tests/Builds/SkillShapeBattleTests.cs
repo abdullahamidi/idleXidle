@@ -113,7 +113,9 @@ public class SkillShapeBattleTests
     [Fact]
     public void test_armour_penetration_reaches_the_hit()
     {
-        var plated = () => Wave(1, 5000f, 30f, defense: 50f);
+        // A creature that outlives the fight, so the two builds are compared on what they DELIVER in
+        // the same time — against 5000 health both simply killed it and delivered 5000.
+        var plated = () => Wave(1, 5_000_000f, 30f, defense: 50f);
 
         var bare = Fight(SkillShape.None, plated());
         var cut = Fight(SkillShape.None with { ArmourPenetration = 30f }, plated());
@@ -227,10 +229,13 @@ public class SkillShapeBattleTests
     public void test_preparation_frees_the_opening_cast()
     {
         // NOT Trap: Trap fires only when bitten, so it never walks the cooldown path this node changes.
-        var wave = () => Wave(1, 300f, 5f);
+        // 200 health: one Strike kills it, so the kill IS the opening cast — with PREPARATION on the
+        // wave's first beat, without it on the second (the beat model, 2026-08-27). At 300 both builds
+        // needed the same number of beats and the swing masked the opener.
+        var wave = () => Wave(1, 200f, 5f);
 
-        var waited = Fight(SkillShape.None, wave(), Form.Strike);
-        var ready = Fight(SkillShape.None with { FreeOpeningCast = true }, wave(), Form.Strike);
+        var waited = Fight(SkillShape.None, wave(), NoSwing, Form.Strike);
+        var ready = Fight(SkillShape.None with { FreeOpeningCast = true }, wave(), NoSwing, Form.Strike);
 
         Assert.True(ready.DurationMs < waited.DurationMs,
             "The opening cast still waited a full cooldown — PREPARATION does nothing.");

@@ -46,7 +46,9 @@ public class vitality_regen_test
         var hunter = new Hunter();
         for (var i = 0; i < 5; i++) { hunter.AddGleam(1_000_000); hunter.Train(HunterStat.Vitality); }
         var champ = new Champion { MaxHealth = 100_000, Health = 40_000 };
-        var run = new SoloExpedition(new Build(), champ, hunter, enemyBaseHealth: 1f, enemyBaseDamage: 0f, rng: new Random(4));
+        // 60 health, not 1: under the beat model the first swing lands at 700 ms and a 1-health wave was
+        // over before the first regen tick (1000 ms) — three swings keep every wave past three ticks.
+        var run = new SoloExpedition(new Build(), champ, hunter, enemyBaseHealth: 60f, enemyBaseDamage: 0f, rng: new Random(4));
         for (var wave = 0; wave < 3; wave++)
         {
             run.PushWave();

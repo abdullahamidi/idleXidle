@@ -201,7 +201,10 @@ public sealed class SoloExpedition
             if (i >= old.Count || i >= now.Count
                 || old[i].Ability.Form != now[i].Ability.Form
                 || old[i].Ability.Source != now[i].Ability.Source)
+            {
                 _champion.ReadyAt.Remove(i);
+                _champion.ReadyAtBeat.Remove(i);   // the beat-counted table is keyed the same way
+            }
         _build = build;
     }
     /// <summary>

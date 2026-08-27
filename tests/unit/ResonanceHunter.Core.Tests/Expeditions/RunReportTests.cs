@@ -51,8 +51,11 @@ public class RunReportTests
         var spread = RunIn("cinderworks", BuildOf(Form.Aura, Form.Projectile));
         var weight = RunIn("cinderworks", BuildOf(Form.Trap, Form.Strike));
 
+        // 1.25, from 1.4 (2026-08-27): under the beat model the basic attack — a small hit — is a third
+        // of BOTH builds' blows, and the Projectile is "every other beat" at 66, so the two shares sit
+        // closer (measured 39% against 29%). The ordering is the claim; the margin is one of noise.
         Assert.True(
-            spread.AbsorbedFraction > weight.AbsorbedFraction * 1.4f,
+            spread.AbsorbedFraction > weight.AbsorbedFraction * 1.25f,
             $"Armour ate {spread.AbsorbedFraction:P0} of the small-hit build and " +
             $"{weight.AbsorbedFraction:P0} of the large-hit one. The report cannot distinguish shape " +
             "from size, which is the one thing it exists to do.");

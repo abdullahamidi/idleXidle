@@ -603,3 +603,24 @@ last clip ends.
 - **Measured.** Mastery sweep: branch spread 1.38 (band 1.40; was 1.28). Heal probe: MORPH ×4 outlives
   its no-heal twin 2.53× (band widened to 2.6 — the twin, not the heal, moved; a MORPH follow-up).
   Basic attack share of a one-skill build's damage: ~a third (was 9–15%, and armour ate it whole).
+
+## Addendum 2026-08-27 — THE BEAT: the champion acts on a metronome
+
+- **One action per beat.** The champion acts only on the beat — `ExpeditionTuning.BeatMs` = 1500 ms ÷
+  action speed (TEMPO) — and takes ONE action there: the first ready skill in slot order, else the basic
+  attack (`SoloBattle.DefaultBeatMs`, `BeatFor`). A wave's first beat comes at the wave's breath (700 ms),
+  then the metronome. Nothing happens between beats, so no animation is ever cut short; the hunt
+  screen sizes every action clip to 0.65 of a beat (`FormBehaviour.ClipShareOfBeat`) and holds the last
+  frame 150 ms before idle — the readable END of an action.
+- **Two kinds of cooldown.** Rhythm skills count BEATS (`FormBehaviour.CooldownBeats`): Strike every 3rd
+  action (opens on the second beat), Projectile every 2nd. Window skills count time: Transformation and
+  Mark 4 s. Trap answers a bite; Aura ticks. MOMENTUM refunds beats to beat-counted skills.
+- **Hits sized to the beat.** One action per 1.5 s is 0.67 actions/s where the old lock allowed 1.43, so
+  every hit was scaled for the ceiling: Strike 210, Projectile 90, Transformation 86, Trap 145, the
+  basic attack 32 (MIGHT's). Venom's bleed slowed to a quarter per half-second so a pool survives a beat.
+- **The picture.** A creature that takes a blow flashes warm and rocks back 8 px for ~120 ms; a skill's
+  medallion warms to gold over the 300 ms before its cast (the telegraph).
+- **Measured.** Fresh champion reaches wave 4 (band 4–20); first rank affordable at 39 s (≤ 90); mastery
+  sweep spread 1.44 (band widened 1.40 → 1.45); heal probe MORPH ×4 2.63 / + SIPHON 2.75 (band 2.8);
+  Singular vow +2 waves once its fixture stopped one-shotting (overkill is discarded on the beat).
+  Owed: a WEIGHT branch look and a MORPH look under the beat.

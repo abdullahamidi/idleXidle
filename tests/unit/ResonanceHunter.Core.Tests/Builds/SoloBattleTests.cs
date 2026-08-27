@@ -384,11 +384,12 @@ public class SoloBattleTests
     public void test_cooldowns_are_sized_to_a_wave_not_to_each_other()
     {
         // The lesson the old skills layer learned the hard way: cooldowns longer than a wave can never
-        // fire. Waves run 2-4s. Every non-passive Form must fire at least once inside 4 seconds.
+        // fire. Under the beat model (2026-08-27) waves run 6–15 s and the longest rhythm skill is
+        // three beats (4.5 s at speed 1.0); every non-passive Form must fire inside three beats.
         foreach (var f in Enum.GetValues<Form>())
         {
             if (FormBehaviour.IsPassive(f)) continue;
-            Assert.True(FormBehaviour.BaseCooldownMs(f) <= 4_000,
+            Assert.True(FormBehaviour.BaseCooldownMs(f) <= 3 * SoloBattle.DefaultBeatMs,
                 $"{f} has a {FormBehaviour.BaseCooldownMs(f)}ms cooldown — longer than a wave, so it can never fire");
         }
     }
@@ -545,9 +546,17 @@ public class SoloBattleTests
     [Fact]
     public void test_execute_speeds_the_kill_of_a_weakened_enemy()
     {
-        Assert.True(KillMs(WithTrigger(BuildTrigger.Execute, Form.Strike), 1500f)
-                    < KillMs(With(Form.Strike), 1500f),
-            "EXECUTE did not finish the weakened enemy any faster");
+        // Measured as DAMAGE against a creature held under the threshold for the whole fight, not as a
+        // kill time: under the beat model (2026-08-27) kills land on beats, and a 1.6x Strike finished the
+        // 1500-health enemy on the same beat as a plain one.
+        float DealtWeakened(Build b)
+        {
+            var weakened = new List<WaveCreature> { new() { MaxHealth = 100_000_000f, Health = 20_000_000f, Damage = 0.01f } };
+            var (_, e) = SoloBattle.ResolveWave(Champ(400_000), b, new Hunter(), weakened, enemyIntervalMs: 1_000_000, T, new Random(7), metrics: new WaveMetrics());
+            return DamageDealt(e);
+        }
+        Assert.True(DealtWeakened(WithTrigger(BuildTrigger.Execute, Form.Strike)) > DealtWeakened(With(Form.Strike)) * 1.2f,
+            "EXECUTE did not hit the weakened enemy any harder");
     }
 
     /// <summary>COILED re-arms the TRAP faster, so it answers more of a biting enemy's swings.</summary>

@@ -32,12 +32,14 @@ public sealed class Champion
     public int MarkUntilMs { get; set; }
 
     /// <summary>
-    /// Absolute ms before which the champion may take no action — not a cast, not a basic attack. Every
-    /// action holds it for its clip's length at the build's action speed, so the picture never has to
-    /// cut one animation short to start the next (playtest 2026-08-26: "the character must not move to
-    /// the next action before finishing the animation it is in").
+    /// Beats the champion has taken across the whole expedition. Beat-counted cooldowns
+    /// (<see cref="ReadyAtBeat"/>) are measured against it, so they persist across waves like the
+    /// time-counted ones.
     /// </summary>
-    public int BusyUntilMs { get; set; }
+    public int BeatCount { get; set; }
+
+    /// <summary>Per skill slot: the beat at which a beat-counted skill is ready again (see FormBehaviour.CooldownBeats).</summary>
+    public Dictionary<int, int> ReadyAtBeat { get; } = new();
 }
 
 /// <summary>
@@ -171,9 +173,16 @@ public static class SoloBattle
     /// 17-second wave. A basic attack that armour eats whole is a stat the player trains for nothing.
     /// At 18 the swing is about a third of a one-skill build's damage and survives armour.
     /// </remarks>
-    public const float AutoAttackDamage = 18f;
-    /// <summary>The basic attack's cadence at action speed 1.0; TEMPO divides it.</summary>
-    public const int AutoAttackIntervalMs = 1_200;
+    public const float AutoAttackDamage = 32f;   // 18 → 32 under the beat (2026-08-27): one swing per 1.5 s, not per 1.2, and the beat's ceiling
+    /// <summary>
+    /// THE BEAT at action speed 1.0. The champion acts on a metronome — one cast or one swing per beat,
+    /// never two actions inside one — so every animation plays whole, with a settle before the next
+    /// (playtest 2026-08-27: "one action must finish before the next; let's try 1.5 s"). TEMPO divides it.
+    /// </summary>
+    public const int DefaultBeatMs = 1_500;
+
+    /// <summary>The beat's length for a build's action speed: DefaultBeatMs ÷ rate, never under 200 ms.</summary>
+    public static int BeatFor(float rate, int beatMs = DefaultBeatMs) => Math.Max(200, (int)MathF.Round(beatMs / MathF.Max(0.1f, rate)));
 
     /// <summary>
     /// VENOM's poison, as a fraction of the skill hit that inflicts it, for a source that carries no
@@ -199,7 +208,13 @@ public static class SoloBattle
     public const float VenomBasePoison = 0.50f;
 
     /// <summary>How much of the standing poison bleeds every half-second. The rest carries to later ticks.</summary>
-    public const float VenomBleedPerHalfSecond = 0.5f;
+    /// <remarks>
+    /// 0.25, from 0.5 (2026-08-27, the beat model): skills land once per beat (1.5 s), and a pool that
+    /// halved every half-second was spent before the next hit — venom "arrived whole" instead of
+    /// ramping, which is its whole identity. At a quarter per half-second a pool keeps ~42% across a
+    /// beat, so successive hits stack.
+    /// </remarks>
+    public const float VenomBleedPerHalfSecond = 0.25f;
 
     // ── Commander-stat tuning. CRIT (chance), FOCUS (crit damage) and DEFENSE (mitigation) were three
     //    trained stats that reached NO formula after the pivot to the solo model — the Character screen's
@@ -279,22 +294,6 @@ public static class SoloBattle
     //    on a build that doesn't run that Form — the whole point of a combo. See Enchantments.NeedsForm. ──
 
     /// <summary>EXECUTE — a STRIKE against an enemy below this fraction of its max HP hits far harder.</summary>
-    /// <summary>
-    /// Minimum gap between two skill CASTS, whatever their own cooldowns say.
-    /// </summary>
-    /// <remarks>
-    /// Without it every ready skill fired on the same 100ms tick — four flashes in one instant,
-    /// unreadable as anything but noise. Playtest: "Skiller sırasıyla atılmalı, hepsini bir anda
-    /// atıyor." A deferred skill stays READY (its cooldown is not consumed and not restarted), so the
-    /// stagger costs almost no damage — the casts spread in SLOT ORDER across the next few ticks,
-    /// which is also the order the player chose on the BUILD screen.
-    /// </remarks>
-    /// <summary>
-    /// The one-ACTION-at-a-time hold for a build's action speed: the clip length, played that much faster.
-    /// A cast and a basic attack hold it alike (both clips are authored to the same length).
-    /// </summary>
-    public static int CastGapFor(float skillRate) => Math.Max(100, (int)MathF.Round(CastGapMs / MathF.Max(0.1f, skillRate)));
-
     /// <summary>How often VITALITY's regeneration ticks, in ms.</summary>
     public const int RegenTickMs = 1000;
 
@@ -305,7 +304,6 @@ public static class SoloBattle
     /// "no skill may be thrown until the previous skill's animation ends; skill rate should speed the
     /// animation up." Was a flat 300 ms that let three casts land inside one swing.
     /// </summary>
-    public const int CastGapMs = FormBehaviour.CastClipMs;
 
     public const float ExecuteThreshold = 0.30f;
 
@@ -462,6 +460,7 @@ public static class SoloBattle
             {
                 var f0 = skills[i].Form;
                 if (FormBehaviour.IsPassive(f0) || FormBehaviour.FiresOnBeingHit(f0)) continue;
+                if (FormBehaviour.CooldownBeats(f0) > 0) continue;   // beat-counted: the first beat is its breath
                 var cd0 = Math.Max(1, (int)(FormBehaviour.BaseCooldownMs(f0)
                                             / Math.Max(0.1f, mods.SkillRate * shape.SkillRate)));
                 champ.ReadyAt[i] = Math.Max(champ.ReadyAt.GetValueOrDefault(i, wave0 + cd0),
@@ -524,26 +523,10 @@ public static class SoloBattle
         var healBudget = heal.BudgetFor(champ.MaxHealth, siphon: triggers.Contains(BuildTrigger.Siphon));
         long healedThisWave = 0;
         if (metrics is not null) metrics.CreaturesPresent = creatures.Count;
-        var nextAuto = tuning.AutoAttackIntervalMs;
+        // THE BEAT. Actions happen on it and only on it; the first beat of a wave is its breath.
+        var beatLen = BeatFor(mods.SkillRate * shape.SkillRate, tuning.BeatMs);
+        var nextBeat = Math.Min(beatLen, tuning.WaveOpeningMs);   // the wave's breath, then the metronome
         var nextBite = enemyIntervalMs;
-
-        // THE SWING IS FILLER. A basic attack that fires when a skill is about to come ready holds the
-        // one-action lock for the whole swing and pushes that skill back — measured on the mastery
-        // sweep (2026-08-26): four-skill builds lost a third of their casts to swings and every
-        // branch's depth moved with it. So a swing only starts when no casting skill will be ready
-        // before the swing would end; otherwise the champion waits the beat for the skill.
-        bool SkillDueWithin(int absNow, int gapMs)
-        {
-            for (var i = 0; i < skills.Count; i++)
-            {
-                var f = skills[i].Form;
-                if (FormBehaviour.IsPassive(f) || FormBehaviour.FiresOnBeingHit(f)) continue;
-                var cdI = Math.Max(1, (int)(FormBehaviour.BaseCooldownMs(f) / Math.Max(0.1f, mods.SkillRate * shape.SkillRate)));
-                var openingI = shape.FreeOpeningCast ? 0 : cdI;
-                if (champ.ReadyAt.GetValueOrDefault(i, openingI) <= absNow + gapMs) return true;
-            }
-            return false;
-        }
 
         (WaveOutcome, List<BattleEvent>) Finish(WaveOutcome o, int atMs)
         {
@@ -817,7 +800,7 @@ public static class SoloBattle
                 // LOOSE AGAIN — every skill is ready the instant something dies. Clearing the whole
                 // table rather than one entry is deliberate: the card says "the NEXT shot", and which
                 // skill that is depends on what the rotation reaches first.
-                if (triggers.Contains(BuildTrigger.LooseAgain)) champ.ReadyAt.Clear();
+                if (triggers.Contains(BuildTrigger.LooseAgain)) { champ.ReadyAt.Clear(); champ.ReadyAtBeat.Clear(); }
 
                 // MOMENTUM — every kill takes time off every cooldown. It edits the entries that EXIST
                 // and adds none: a skill with no ReadyAt entry is already ready, and writing one would
@@ -825,8 +808,14 @@ public static class SoloBattle
                 // because the card says EVERY KILL, and this is read here rather than in the skill loop
                 // so a kill by the auto-swing or a BREAKER spill pays the same as a kill by a cast.
                 if (shape.CooldownRefundOnKillMs > 0)
+                {
                     foreach (var key in champ.ReadyAt.Keys.ToList())
                         champ.ReadyAt[key] -= shape.CooldownRefundOnKillMs;
+                    // A beat-counted skill is refunded in beats — the refund's worth in beats, one at least.
+                    var refundBeats = Math.Max(1, (int)MathF.Round(shape.CooldownRefundOnKillMs / (float)tuning.BeatMs));
+                    foreach (var key in champ.ReadyAtBeat.Keys.ToList())
+                        champ.ReadyAtBeat[key] -= refundBeats;
+                }
 
                 // BREAKER — half of the overkill carries on. The design named a part-break bonus here;
                 // the sim has no part-break model, and this answers the same complaint from inside the
@@ -949,6 +938,10 @@ public static class SoloBattle
         for (var ms = tuning.TickMs; ms <= tuning.TickCeilingMs; ms += tuning.TickMs)
         {
             var abs = since + ms;
+            // ON THE BEAT the champion takes ONE action: the first ready skill in slot order, else a swing.
+            var onBeat = champ.Alive && ms >= nextBeat;
+            var acted = false;
+            if (onBeat) nextBeat += beatLen;
 
             // ── VITALITY: life regained every second, a fraction of the pool (Hunter.RegenPerSecond).
             //    Through Heal() like every other heal, so BLOOD MAGIC's "no healing" and the band's
@@ -1000,19 +993,34 @@ public static class SoloBattle
                     continue;
                 }
 
-                var cd = Math.Max(1, (int)(FormBehaviour.BaseCooldownMs(form)
-                                           / Math.Max(0.1f, mods.SkillRate * shape.SkillRate)));
-
-                // PREPARATION — every skill's FIRST cast of a wave is free of its cooldown. The default
-                // ReadyAt of `cd` is what normally makes a skill wait one cooldown before its opener;
-                // dropping that to 0 is the whole node, and it is worth most to a slow, heavy build.
-                var opening = shape.FreeOpeningCast ? 0 : cd;
-                if (abs < champ.ReadyAt.GetValueOrDefault(i, opening)) continue;
-                // ONE CAST AT A TIME — see CastGapMs. Deferring BEFORE ReadyAt is written is the whole
-                // trick: the skill stays ready and fires on the next free beat instead of losing a cast.
-                if (abs < champ.BusyUntilMs) continue;
-                champ.BusyUntilMs = abs + CastGapFor(mods.SkillRate * shape.SkillRate);
-                champ.ReadyAt[i] = abs + cd;
+                // A CAST IS A BEAT'S ACTION — never between beats, never two in one. A ready skill that
+                // loses the beat to an earlier slot stays ready (nothing is written) and takes the next.
+                if (!onBeat || acted) continue;
+                var beats = FormBehaviour.CooldownBeats(form);
+                if (beats > 0)
+                {
+                    // COUNTED IN BEATS: "every third action". PREPARATION waives the opening wait.
+                    // THE OPENER: the wave's first beat is always the swing — a wind-up the eye can
+                    // read — and a rhythm skill may take the second (measured: opening on the Nth beat
+                    // instead left a fresh champion swinging for 3.7 s under the bites and dead by wave
+                    // 3). PREPARATION lets it take the first. Persistence across waves is untouched:
+                    // ReadyAtBeat is written on every cast and BeatCount never resets.
+                    var openingBeat = shape.FreeOpeningCast ? 0 : Math.Min(1, beats - 1);
+                    if (champ.BeatCount < champ.ReadyAtBeat.GetValueOrDefault(i, openingBeat)) continue;
+                    champ.ReadyAtBeat[i] = champ.BeatCount + beats;
+                }
+                else
+                {
+                    var cd = Math.Max(1, (int)(FormBehaviour.BaseCooldownMs(form)
+                                               / Math.Max(0.1f, mods.SkillRate * shape.SkillRate)));
+                    // PREPARATION — every skill's FIRST cast of a wave is free of its cooldown. The
+                    // default ReadyAt of `cd` is what normally makes a skill wait one cooldown before its
+                    // opener; dropping that to 0 is the whole node, worth most to a slow, heavy build.
+                    var opening = shape.FreeOpeningCast ? 0 : cd;
+                    if (abs < champ.ReadyAt.GetValueOrDefault(i, opening)) continue;
+                    champ.ReadyAt[i] = abs + cd;
+                }
+                acted = true;
 
                 if (FormBehaviour.IsAmplifier(form))
                 {
@@ -1168,18 +1176,13 @@ public static class SoloBattle
                 }
             }
 
-            // ── THE BASIC ATTACK. MIGHT's and the weapon's hit, at TEMPO's cadence, and an ACTION like a
-            //    cast: it waits for the champion to be free and holds the lock for its own swing, so a
-            //    swing and a cast never overlap and a ready skill goes next, not on top. ────────────
-            var actionRate = mods.SkillRate * shape.SkillRate;
-            if (tuning.AutoAttackDamage > 0f && ms >= nextAuto && abs >= champ.BusyUntilMs
-                && !SkillDueWithin(abs, CastGapFor(actionRate)))
+            // ── THE BASIC ATTACK: the beat's action when no skill took it. MIGHT's hit. ─────────────
+            if (onBeat && !acted && tuning.AutoAttackDamage > 0f)
             {
-                nextAuto = ms + Math.Max(100, (int)MathF.Round(tuning.AutoAttackIntervalMs / MathF.Max(0.1f, actionRate)));
-                champ.BusyUntilMs = abs + CastGapFor(actionRate);
                 LandSpread(tuning.AutoAttackDamage * hunter.AutoDamageMultiplier, ms, 1, null, null, abs, fromSkill: false);
                 if (alive == 0) return Kill(ms);
             }
+            if (onBeat) champ.BeatCount++;
 
             // ── THE ENEMY BITES BACK ──────────────────────────────────────────────────────────
             //

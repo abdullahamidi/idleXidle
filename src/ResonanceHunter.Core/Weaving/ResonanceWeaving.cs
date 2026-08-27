@@ -196,10 +196,15 @@ public sealed record WeavingTuning
     // heavier blows, and the swing is added on top. (Aura ticks and Mark are untouched: no cooldown.)
     public IReadOnlyDictionary<Form, float> FormBaseValue { get; init; } = new Dictionary<Form, float>
     {
-        [Form.Trap] = 145f,        // the largest hit in the game, and the rarest (was 110)
-        [Form.Strike] = 105f,      // the large-hit workhorse (was 70)
-        [Form.Transformation] = 56f,   // (was 40)
-        [Form.Projectile] = 33f,   // small and fast — pays in targets, not in size (was 20)
+        // THE BEAT (2026-08-27): Strike every 3 beats (4.5 s), Projectile every 2 (3 s), Transformation
+        // 4 s — and each hit scaled once more so damage per cooldown stays where the 2026-08-26 pass put it.
+        // ...and once more ×1.35 for the beat's ceiling: one action per 1.5 s is 0.67 actions/s where the
+        // old lock allowed 1.43, so a full rotation lost a third of its output; scaled back to the pace
+        // the economy, the pacing band and the balance sweeps were tuned against.
+        [Form.Trap] = 145f,        // the largest hit in the game, and the rarest (was 110) — a bite answers, not a beat
+        [Form.Strike] = 210f,      // the large-hit workhorse (70 → 105 → 157 → 210)
+        [Form.Transformation] = 86f,   // (40 → 56 → 64 → 86)
+        [Form.Projectile] = 90f,   // pays in targets, not in size (20 → 33 → 66 → 90)
         [Form.Aura] = 12f,         // smallest of all; it is a field, not a blow
         [Form.Mark] = 0f,          // Mark deals no direct damage — it amplifies other sources.
     };

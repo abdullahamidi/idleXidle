@@ -264,8 +264,11 @@ public class HealBalanceTest
             // the build has nothing else — while the healed build itself stayed at 42–43. The ratio
             // moved on the twin's side, not the heal's; the leech and the ceiling were both probed and
             // do not move it (43 at leech 0.09, 42 at ceiling 0.30). Left as a MORPH follow-up.
+            // ...and 2.8 under the BEAT model (2026-08-27, measured MORPH x4 2.63, + SIPHON 2.75): the
+            // no-heal twin fell one more wave — one action per beat caps a four-Transformation build's
+            // output hardest of all (it has nothing but casts), while its healed self holds at 42–44.
             var survival = with.Median / (double)Math.Max(1, without.Median);
-            Assert.True(survival <= 2.6,
+            Assert.True(survival <= 2.8,
                         $"{name} lives {survival:0.00}x longer with heals — healing is still the whole build");
             if (!name.StartsWith("ENDURE", StringComparison.Ordinal))
                 Assert.True(survival >= 1.2,

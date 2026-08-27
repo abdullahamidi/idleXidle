@@ -19,8 +19,11 @@ public sealed record ExpeditionTuning
     /// </summary>
     public float AutoAttackDamage { get; init; } = Builds.SoloBattle.AutoAttackDamage;
 
-    /// <summary>The basic attack's cadence at action speed 1.0 (default <see cref="Builds.SoloBattle.AutoAttackIntervalMs"/>).</summary>
-    public int AutoAttackIntervalMs { get; init; } = Builds.SoloBattle.AutoAttackIntervalMs;
+    /// <summary>
+    /// THE BEAT, in ms at action speed 1.0 (default <see cref="Builds.SoloBattle.DefaultBeatMs"/>). The champion
+    /// acts on the beat and only on the beat — one cast or one swing per beat — and TEMPO shortens it.
+    /// </summary>
+    public int BeatMs { get; init; } = Builds.SoloBattle.DefaultBeatMs;
 
     /// <summary>Threat COMPOUNDS per wave...</summary>
     /// <summary>How enemy HEALTH compounds per wave.</summary>

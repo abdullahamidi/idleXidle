@@ -42,18 +42,32 @@ public static class FormBehaviour
     /// 5-10s cooldowns and its skills could never fire at all — REND first landed at wave 15 and two
     /// skills never fired in an entire game. If wave length is ever retuned, THESE MOVE WITH IT.
     /// </remarks>
-    // RAISED 2026-08-26 (Strike 2000 → 3000, Projectile 900 → 1500, Trap 3000 → 4000, Transformation
-    // 2500 → 3500; Mark stays at 4000, the wave-length ceiling): the champion now has a real basic attack
-    // between casts, and one action plays at a time, so skills back to back left the swing no room —
-    // "raise the cooldowns so the plain hits are part of the fight, and attack speed means more".
+    /// <summary>
+    /// A Form's cooldown COUNTED IN BEATS — "every third action" — or 0 when it counts in time
+    /// (<see cref="BaseCooldownMs"/>). THE BEAT MODEL (2026-08-27): the champion acts on a metronome
+    /// (SoloBattle.DefaultBeatMs ÷ action speed), one cast or one swing per beat. Strike and Projectile
+    /// are rhythm skills and count beats, so a fast build casts them sooner in seconds but not in
+    /// actions; Transformation and Mark are windows and count seconds; Trap answers a bite; Aura ticks.
+    /// </summary>
+    public static int CooldownBeats(Form form) => form switch
+    {
+        Form.Strike => 3,                // the heavy blow: every third action
+        Form.Projectile => 2,            // every other action
+        _ => 0,
+    };
+
+    /// <summary>
+    /// The time-counted cooldown; for a beat-counted Form this is its beats at action speed 1.0, for
+    /// readouts and the wave-length rule (a cooldown must fit a wave).
+    /// </summary>
     public static int BaseCooldownMs(Form form) => form switch
     {
-        Form.Strike => 3_000,
-        Form.Projectile => 1_500,        // volume: fires roughly twice per Strike
+        Form.Strike => 3 * SoloBattle.DefaultBeatMs,       // 4500 at speed 1.0
+        Form.Projectile => 2 * SoloBattle.DefaultBeatMs,   // 3000
         Form.Aura => 0,                  // always on — see IsPassive
         Form.Trap => 4_000,              // rare, and only pays when bitten
         Form.Mark => 4_000,              // a window, not a rhythm
-        _ => 3_500,                      // Transformation
+        _ => 4_000,                      // Transformation — a window, counted in time
     };
 
     /// <summary>
@@ -116,6 +130,12 @@ public static class FormBehaviour
     /// (SoloBattle.CastGapFor), so the animation and the cast lock are one rule.
     /// </summary>
     public const int CastClipMs = 700;
+
+    /// <summary>
+    /// How much of a beat an action's clip fills (windup → contact → recovery); the rest is the settle
+    /// back to idle that makes the action's END readable. 0.65 of 1500 ms ≈ the authored 1 s clip.
+    /// </summary>
+    public const float ClipShareOfBeat = 0.65f;
 
     /// <summary>Is this Form the one BLOOD MAGIC switches off?</summary>
     public static bool Heals(Form form) => form == Form.Transformation;

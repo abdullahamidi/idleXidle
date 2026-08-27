@@ -174,12 +174,11 @@ public class SourceSignatureTest
             // DESYNC. The Strikes must land at a cadence where the window's edge matters, so the
             // stretch has something to convert. (Set via Shape — the sim recomputes cooldowns from
             // the Form and SkillRate; EquippedSkill.CooldownMs is not its input.) 0.95, was 0.77:
-            // the cast lock became the cast clip's length ÷ rate (2026-08-26, CastGapFor), which moved
-            // every cadence. Re-swept the same day when the basic attack joined the lock and Strike's
-            // cooldown went to 3000: the signature pays at 0.8, 1.0, 1.1 and 1.3 and nothing at 0.7,
-            // 0.9, 0.95 or 1.2 — a window-edge effect that only some cadences catch. 1.0 is the
-            // plain build's own rate (probed, not guessed).
-            b.Shape = SkillShape.None with { SkillRate = 1.0f };
+            // the cast lock became the cast clip's length ÷ rate (2026-08-26), then the BEAT model
+            // (2026-08-27: Strike every third beat of 1500 ms ÷ rate). Re-swept under the beat: the
+            // signature pays at 1.1 and at no other rate between 0.8 and 1.3 — a window-edge effect
+            // only some cadences catch (probed, not guessed).
+            b.Shape = SkillShape.None with { SkillRate = 1.1f };
             return b;
         }
 

@@ -329,7 +329,7 @@ public sealed class StatsScreen
             {
                 // Hunter.SquadSkillRate = worn focus × worn mods × (1 + 0.006 × TEMPO); the fight divides
                 // every skill's waiting time, the basic attack's cadence AND every action's animation
-                // by mods.SkillRate × shape.SkillRate (SoloBattle cooldowns, nextAuto, CastGapFor).
+                // by mods.SkillRate × shape.SkillRate (SoloBattle cooldowns and the beat, SoloBattle.BeatFor).
                 var rate = mods.SkillRate * shape.SkillRate;
                 var v = hunter.ValueOf(stat);
                 return ($"YOU ACT {rate:0.00}× AS FAST", new[]

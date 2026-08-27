@@ -715,6 +715,7 @@ public sealed class SoloExpeditionScreen
         {
             var cb = ComposeBuild(rh);
             _castRate = cb.Resolve(rh).SkillRate * cb.Shape.SkillRate;
+            _beatMs = SoloBattle.BeatFor(_castRate);
         }
         // The replay's health table is read AFTER the pool refresh, or the HUD prints last wave's pool
         // over this wave's bar for a whole wave (review 2026-08-25: "300/360 with a full bar").
@@ -968,6 +969,12 @@ public sealed class SoloExpeditionScreen
         }
 
         _playheadMs += dt * 1000f * _speedMul;
+        if (_hitFlash.Count > 0)
+            foreach (var key in _hitFlash.Keys.ToList())
+            {
+                var left = _hitFlash[key] - dt * 8f;   // ~120 ms
+                if (left <= 0f) _hitFlash.Remove(key); else _hitFlash[key] = left;
+            }
         if (_skillFlash.Count > 0)
             foreach (var key in _skillFlash.Keys.ToList())
             {
@@ -1020,6 +1027,7 @@ public sealed class SoloExpeditionScreen
                     // Graded by PROVENANCE (the event says whether a skill dealt it) and only then by beat:
                     // an auto-swing on a cast's own millisecond stays plain.
                     if (e.Amount > 0) SpawnDamage(e.Amount, e.Slot, crit: e.FromSkill && e.AtMs == trapAtMs, skill: e.FromSkill && e.AtMs == skillAtMs);
+                    _hitFlash[e.Slot] = 1f;   // the creature that took it flashes and rocks back (playtest 2026-08-27)
                     if ((_strikeCount++ & 1) == 0)   // every other hit: a small, quiet puff
                     {
                         var (hx, hy) = EnemyPoint(e.Slot, 0.45f);
@@ -1497,6 +1505,11 @@ public sealed class SoloExpeditionScreen
             var bob = (int)(MathF.Sin(_anim * 2f + i * 1.7f) * 7f);
             var box = new Rectangle(cx - w / 2, EnemyBox.Bottom - h + bob, w, h);
             PublishCreature(i, box);
+            // THE HIT LANDS ON SOMEONE: a warm flash and an 8 px rock backwards for ~120 ms after a blow —
+            // the reaction that makes a strike read as a strike (playtest 2026-08-27: "add the enemy flash").
+            var hitFl = _hitFlash.GetValueOrDefault(i);
+            var creatureTint = hitFl > 0f ? Color.Lerp(enterTint, HitFlash, hitFl) : enterTint;
+            if (hitFl > 0f) box = new Rectangle(box.X + (int)(8f * hitFl), box.Y, box.Width, box.Height);
             if (_replay is not null && !_replay.CreatureAlive(i))
             {
                 DrawCreatureDeath(b, i, new Rectangle(box.X, EnemyBox.Bottom - h, w, h), stripKey is null ? null : EnemyKeyOf(stripKey));
@@ -1512,8 +1525,8 @@ public sealed class SoloExpeditionScreen
             var compFps = attacking ? 16f : 12f;
             if (stripKey is null || !_ui.AnimSprite(b, stripKey, box,
                     EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps,
-                    !attacking, enterTint, crop))
-                if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, box, enterTint, crop))
+                    !attacking, creatureTint, crop))
+                if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, box, creatureTint, crop))
                     _ui.Fill(b, new Rectangle(box.X + 20, box.Y + 20, box.Width - 40, box.Height - 40), Ember);
 
             // A pip per creature rather than a framed bar — at five across, ornate frames become noise.
@@ -2425,10 +2438,12 @@ public sealed class SoloExpeditionScreen
                 var skillKey = SkillKey((int)s.Source, formKey);
                 var flash = _skillFlash.TryGetValue(skillKey, out var fl) ? Math.Clamp(fl / 0.42f, 0f, 1f) : 0f;
                 var ready = 0f;
+                var telegraph = 0f;
                 if (_replay is not null)
                 {
                     var next = _replay.NextSkillAfter(_playheadMs, (int)s.Source, formKey);
                     var prev = _replay.LastSkillBefore(_playheadMs, (int)s.Source, formKey);
+                    if (next != int.MaxValue && next - _playheadMs is > 0f and <= 300f) telegraph = 1f - (next - _playheadMs) / 300f;
                     if (next != int.MaxValue)
                     {
                         // From the previous cast, or from the top of the wave for the very first one.
@@ -2447,8 +2462,11 @@ public sealed class SoloExpeditionScreen
                     }
                 }
 
+                // TELEGRAPH: the medallion warms to gold over the 300 ms before its cast, so the effect
+                // in the arena has a cause the eye already saw (playtest 2026-08-27).
+                var lit = Math.Max(flash, telegraph);
                 if (_ui.Assets.Get("ui_slot_skill_hex") is { } sl)
-                    b.Draw(sl, box, flash > 0f ? Color.Lerp(Color.White, Gold, flash) : Color.White);
+                    b.Draw(sl, box, lit > 0f ? Color.Lerp(Color.White, Gold, lit) : Color.White);
                 // §18.3 Layer 1: source-coloured inner glow (no Form-glyph asset ships, so the Source glyph is
                 // the central identity and the Form name labels it — a quieter composition per §36).
                 _ui.Diamond(b, new Rectangle(box.Center.X - 22, box.Center.Y - 22, 44, 44), sc * 0.28f);
@@ -2643,9 +2661,11 @@ public sealed class SoloExpeditionScreen
     /// </remarks>
     private void UpdateChampionClip()
     {
-        // Expired — or the playhead is BEHIND the clip's start (a rewound fixture), which would run it
-        // backwards; either way the commitment is over.
-        if (_clipName is not null && (_playheadMs >= _clipStartMs + ClipMs / _clipSpeed || _playheadMs < _clipStartMs))
+        // Expired — after its own length PLUS a settle on the last frame (the clip does not loop, so the
+        // held frame is the pose the action ends in; without it the cut to idle was the "did it finish?"
+        // the playtest could not read) — or the playhead is BEHIND the clip's start (a rewound fixture),
+        // which would run it backwards; either way the commitment is over.
+        if (_clipName is not null && (_playheadMs >= _clipStartMs + ClipMs / _clipSpeed + ClipSettleMs || _playheadMs < _clipStartMs))
             _clipName = null;
         if (_clipName is not null) return;   // committed — plays through
         if (_replay is null) return;
@@ -2669,10 +2689,10 @@ public sealed class SoloExpeditionScreen
         }
         if (beatMs is null) return;
 
-        // EVERY action plays at the build's action speed: the sim holds the champion for CastClipMs ÷ rate
-        // after a swing or a cast (one rule for the fight and the picture), so the clip always ends
-        // before the next action may begin, and a fast build visibly fights fast.
-        var baseSpeed = Math.Max(1f, ClipMs / (FormBehaviour.CastClipMs / Math.Max(0.1f, _castRate)));
+        // EVERY action fills its share of the BEAT (FormBehaviour.ClipShareOfBeat): the sim acts on the
+        // beat and only on it, so a clip sized to 0.65 of a beat — plus its settle — is always over
+        // before the next action's clip may start, and a fast build visibly fights fast.
+        var baseSpeed = Math.Max(0.6f, ClipMs / (_beatMs * FormBehaviour.ClipShareOfBeat));
         var contactMs = ClipMs * ContactFraction / baseSpeed;
         var lead = beatMs.Value - _playheadMs;
         if (lead > contactMs) return;   // not yet: the clip starts one contact-length before the beat
@@ -2682,8 +2702,18 @@ public sealed class SoloExpeditionScreen
         _clipName = clip;
     }
 
-    /// <summary>The build's skill-rate multiplier for the wave being shown — the cast clip's pace.</summary>
+    /// <summary>The build's action-speed multiplier for the wave being shown.</summary>
     private float _castRate = 1f;
+
+    /// <summary>The beat's length for the wave being shown (SoloBattle.BeatFor) — every action clip is sized to it.</summary>
+    private float _beatMs = SoloBattle.DefaultBeatMs;
+
+    /// <summary>The settle on an action clip's last frame before idle, ms — the readable END of an action.</summary>
+    private const float ClipSettleMs = 150f;
+
+    /// <summary>Per creature slot: a hit flash, 1 → 0 over ~120 ms — the blow lands ON something.</summary>
+    private readonly Dictionary<int, float> _hitFlash = new();
+    private static readonly Color HitFlash = new(0xFF, 0xB0, 0x70);
 
     /// <summary>Seconds into the committed clip, at its speed — what the strip is drawn at.</summary>
     private float ClipSeconds => (_playheadMs - _clipStartMs) / 1000f * _clipSpeed;
