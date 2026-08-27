@@ -144,8 +144,16 @@ public sealed class ChestScreen
     // lives on the HUNT screen now (SoloExpeditionScreen.DrawKeepFilter); the host still persists it.
 
     // ── Layout ──────────────────────────────────────────────────────────────────────────────────
-    /// <summary>Full width now — the detail column is gone. Height decided per-frame; see below.</summary>
-    private static readonly Rectangle GridPanel = new(38, 144, 1842, 718);
+    /// <summary>
+    /// Full width now — the detail column is gone. Height decided per-frame; see below.
+    /// </summary>
+    /// <remarks>
+    /// Y=150, which is where STATS, GEAR, FORGE and MAP all start their first panel. It was 144, six
+    /// pixels adrift for no reason anybody could name, and it had to move anyway: the screen's name is
+    /// stated ABOVE the panel now, in the strip every other screen in the game keeps for it, rather
+    /// than printed inside the panel's own top-left corner.
+    /// </remarks>
+    private static readonly Rectangle GridPanel = new(38, 150, 1842, 712);
 
     /// <summary>
     /// The grid panel, sized to the pile in it.
@@ -167,14 +175,35 @@ public sealed class ChestScreen
     /// <summary>The header strip's buttons — PASTE A CODE, TRADER, OPEN ALL — all one height.</summary>
     private const int HeaderButtonH = 56;
 
+    /// <summary>The gap between the three header buttons.</summary>
+    private const int HeaderButtonGap = 16;
+
+    // ── THE ACTION STRIP. Three rectangles, derived once, so the empty vault and the full one put the
+    //    same button in the same place. They used to be hand-placed off GridPanel.Right at −770, −558
+    //    and −346 — three magic numbers that had to be kept in step by hand and that ignored the
+    //    panel's own content margin, so the strip sat 8 px outside it. ──────────────────────────────
+    private static Rectangle HeaderButton(int slotFromRight, int width)
+    {
+        var x = UiKit.ContentRight(GridPanel);
+        for (var i = 0; i < slotFromRight; i++) x -= HeaderWidths[i] + HeaderButtonGap;
+        return new Rectangle(x - width, UiKit.TitleTop(GridPanel), width, HeaderButtonH);
+    }
+
+    /// <summary>Right to left: OPEN ALL, TRADER, PASTE A CODE. Widths sized to their own labels.</summary>
+    private static readonly int[] HeaderWidths = { 300, 200, 240 };
+
+    private static Rectangle OpenAllBtn => HeaderButton(0, HeaderWidths[0]);
+    private static Rectangle TraderBtn => HeaderButton(1, HeaderWidths[1]);
+    private static Rectangle PasteBtn => HeaderButton(2, HeaderWidths[2]);
+
     private const int Cols = 6;
     private const int Rows = 3;
     private const int PerPage = Cols * Rows;
 
     private const int CardW = 270, CardH = 210, CardPitchY = 230;
 
-    /// <summary>The card grid's first row — under the header's button strip, not merely under its title.</summary>
-    private static int CardTop => UiTypography.PanelTitleTop + HeaderButtonH + 16;
+    /// <summary>The card grid's first row — under the header's button strip and the rule beneath it.</summary>
+    private static int CardTop => UiTypography.PanelTitleTop + HeaderButtonH + 28;
 
     /// <summary>Six columns spanning the panel's content width: the pitch follows the margin.</summary>
     private static int CardPitchX =>
@@ -221,7 +250,11 @@ public sealed class ChestScreen
         switch (target)
         {
             case TourTarget.ChestCards:
-                return new[] { new Rectangle(GridPanel.X + 30, GridPanel.Y + 100, GridPanel.Width - 60, 242) };
+                // DERIVED FROM THE ROW IT LIGHTS, not from a remembered offset: the header gained a
+                // rule under its buttons and the first row moved down with it, and a hand-written +100
+                // would have gone on lighting where the cards used to be.
+                var row = Card(0);
+                return new[] { new Rectangle(GridPanel.X + 30, row.Y - 12, GridPanel.Width - 60, row.Height + 24) };
             case TourTarget.ChestQuestion:
                 // The icon itself, not its padded hit box: the hit box reaches down over the element
                 // glyph, and a ring around both would point the card at two things.
@@ -229,7 +262,9 @@ public sealed class ChestScreen
                 q.Inflate(8, 8);
                 return new[] { q };
             case TourTarget.VaultButtons:
-                return new[] { new Rectangle(GridPanel.Right - 780, GridPanel.Y + 14, 744, 76) };
+                var strip = PasteBtn;
+                strip.Inflate(10, 10);
+                return new[] { new Rectangle(strip.X, strip.Y, OpenAllBtn.Right + 10 - strip.X, strip.Height) };
             default:
                 return Array.Empty<Rectangle>();
         }
@@ -317,44 +352,65 @@ public sealed class ChestScreen
         var sorted = stacks.Select(st => st.Sample).ToList();
         Clamp(sorted.Count);
 
-        _ui.Panel(b, GridPanelFor(sorted.Count));
-        _ui.TextBig(b, "THE VAULT", UiKit.ContentLeft(GridPanel), UiKit.TitleTop(GridPanel), Gold,
-                    UiTypography.ScreenTitle, TextFace.Display);
+        // ── THE SCREEN'S OWN FURNITURE. ──────────────────────────────────────────────────────────
+        //
+        // Playtest 2026-08-29: "the VAULT screen is of a different design from the other screens."
+        // It was, in three ways at once, and all three are in these four lines. It drew NO SCRIM, so
+        // the swamp backdrop ran the full height of a screen that is a room indoors. It printed its
+        // name INSIDE the panel's top-left corner at the screen-title size, where every other screen
+        // in the game states its name centred above the panels, under a gold rule. And the tally that
+        // says what is waiting was a caption hanging off that corner rather than the screen's own
+        // subtitle. The words are unchanged; only where they stand is.
+        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xD8));
+        _ui.TextCenterBig(b, "THE VAULT", 960, 24, Gold, UiTypography.ScreenTitle, TextFace.Display);
+        _ui.Fill(b, new Rectangle(700, 74, 520, 3), Gold * 0.5f);
 
         // The tally, so the pile reads at a glance without counting cards.
         var tally = ChestDossiers.Tally(chests);   // every chest, not every stack
         var summary = tally.Count == 0
             ? "nothing waiting"
             : string.Join("   ", tally.Select(t => $"{t.Count} {t.Grade.ToString().ToUpperInvariant()}"));
-        _ui.TextBig(b, summary, UiKit.ContentLeft(GridPanel), UiKit.CaptionTop(GridPanel), Slate, UiTypography.Secondary);
+        _ui.TextCenterBig(b, summary.ToUpperInvariant(), 960, 80, Slate, UiTypography.Secondary);
+
+        // QUIET, NOT GOLD. The house frame rule (UiKit.PanelQuiet): the gold filigree is for MODALS —
+        // the stall and the two share-code cards below still wear it — and every panel that lives IN a
+        // screen wears the brown. This was the last in-screen panel in the game still shouting.
+        var frame = GridPanelFor(sorted.Count);
+        _ui.PanelQuiet(b, frame);
 
         var uiClicked = clicked && !ModalOpen;
 
         // THE STALL AND THE CODES, in the header — and above the empty-vault return, because the
         // trader must be reachable with nothing waiting in the pile.
-        var traderBtn = new Rectangle(GridPanel.Right - 558, UiKit.TitleTop(GridPanel), 200, HeaderButtonH);
-        var pasteBtn = new Rectangle(GridPanel.Right - 770, UiKit.TitleTop(GridPanel), 200, HeaderButtonH);
+        //
         // _modalOpenedNow: the TRADER button's rect overlaps the stall's CLOSE (measured: a 72x28
         // region), and the click edge stays latched through the whole Draw — without this flag a
         // click in the overlap opened the stall and closed it IN THE SAME FRAME, an invisible dead
         // zone across a fifth of the button.
-        if (_ui.Button(b, traderBtn, "TRADER", hit, uiClicked, TraderStock.Count > 0))
+        if (_ui.Button(b, TraderBtn, "TRADER", hit, uiClicked, TraderStock.Count > 0))
         {
             _traderOpen = true;
             _modalOpenedNow = true;
         }
-        if (_ui.Button(b, pasteBtn, "PASTE A CODE", hit, uiClicked, true))
+        if (_ui.Button(b, PasteBtn, "PASTE A CODE", hit, uiClicked, true))
         {
             PasteCode();
             _modalOpenedNow = true;
         }
 
+        // The hairline the action strip stands on, so the buttons read as a header and the cards below
+        // as the panel's contents — one rule instead of a gap the eye has to guess at.
+        var strip = new Rectangle(UiKit.ContentLeft(GridPanel), TraderBtn.Bottom + 14,
+                                  UiKit.ContentRight(GridPanel) - UiKit.ContentLeft(GridPanel), 2);
+        _ui.Fill(b, strip, Dim);
+
         if (sorted.Count == 0)
         {
+            var y = GridPanel.Y + CardTop + 8;
             _ui.TextBig(b, "No chests. Bosses drop them — about one boss in five.",
-                        GridPanel.X + 46, GridPanel.Y + 156, Dim, UiTypography.Body);
+                        UiKit.ContentLeft(GridPanel), y, Dim, UiTypography.Body);
             _ui.TextBig(b, "When one arrives: click the chest to open it. Rest the pointer on the small glass to see what is inside.",
-                        GridPanel.X + 46, GridPanel.Y + 190, Dim, UiTypography.Body);
+                        UiKit.ContentLeft(GridPanel), y + 34, Dim, UiTypography.Body);
             DrawTrader(b, hit, clicked && !_modalOpenedNow);
             DrawInspect(b, hit, clicked && !_modalOpenedNow);
             _modalOpenedNow = false;
@@ -362,14 +418,13 @@ public sealed class ChestScreen
         }
 
         // OPEN ALL, in the header — with one chest the card itself is the button, so this needs two.
-        var allBtn = new Rectangle(GridPanel.Right - 346, UiKit.TitleTop(GridPanel), 300, HeaderButtonH);
-        if (_ui.Button(b, allBtn, $"OPEN ALL ({chests.Count})", hit, uiClicked, chests.Count > 1))
+        if (_ui.Button(b, OpenAllBtn, $"OPEN ALL ({chests.Count})", hit, uiClicked, chests.Count > 1))
             _pending = OpenRequest.All;
 
-        // Right-aligned under the header row now — the TRADER and PASTE buttons live where it sat.
+        // On the strip's own line, at its left end — the buttons hold its right.
         if (sorted.Count > PerPage)
-            _ui.TextRightBig(b, $"ROWS {_scroll / Cols + 1} / {(sorted.Count + Cols - 1) / Cols}  ·  WHEEL SCROLLS",
-                             GridPanel.Right - 46, GridPanel.Y + 92, Slate, UiTypography.Secondary);
+            _ui.TextBig(b, $"ROWS {_scroll / Cols + 1} / {(sorted.Count + Cols - 1) / Cols}  ·  WHEEL SCROLLS",
+                        UiKit.ContentLeft(GridPanel), TraderBtn.Y + 18, Slate, UiTypography.Secondary);
 
         for (var vis = 0; vis < PerPage && _scroll + vis < sorted.Count; vis++)
         {
@@ -457,10 +512,17 @@ public sealed class ChestScreen
 
             // THE PROMISE, on the card. Slate for the gamble case, not Dim — "there isn't one" is the
             // fact a player most needs before spending the click.
-            _ui.TextBig(b, _ui.ShortenBig(d.FloorShort, card.Width - 32, UiTypography.Secondary),
+            //
+            // SET IN THE HOUSE VOICE. ChestDossier writes these for prose ("EPIC or better", "any
+            // rarity", "a welcome gift", "one plain blade") and the rest of the game — this card's own
+            // TIER line eighty pixels above them included — is uniformly capitals. Two casings on one
+            // card is most of what made the VAULT read as a screen from another game. The words are
+            // untouched; Core still owns them, and the tooltip behind the "?" still prints them as
+            // written, because a sentence in a paragraph is not a label on a card.
+            _ui.TextBig(b, _ui.ShortenBig(d.FloorShort.ToUpperInvariant(), card.Width - 32, UiTypography.Secondary),
                         card.X + 16, card.Y + 158,
                         d.GuaranteedFloor > Rarity.Common ? Gem : Slate, UiTypography.Secondary);
-            _ui.TextBig(b, _ui.ShortenBig(d.RegionShort, card.Width - 32, UiTypography.Secondary),
+            _ui.TextBig(b, _ui.ShortenBig(d.RegionShort.ToUpperInvariant(), card.Width - 32, UiTypography.Secondary),
                         card.X + 16, card.Y + 182, Slate, UiTypography.Secondary);
 
             // The PEEK icon in the corner — the whole dossier lives behind it, on a hover delay. The same
@@ -480,7 +542,7 @@ public sealed class ChestScreen
                 _ui.Fill(b, new Rectangle(q.X, q.Bottom - 2, q.Width, 2), qHot ? Bone : Dim);
                 _ui.Fill(b, new Rectangle(q.X, q.Y, 2, q.Height), qHot ? Bone : Dim);
                 _ui.Fill(b, new Rectangle(q.Right - 2, q.Y, 2, q.Height), qHot ? Bone : Dim);
-                _ui.TextCenter(b, "?", q.Center.X, q.Y + 5, qHot ? Bone : Slate);
+                _ui.TextCenterBig(b, "?", q.Center.X, q.Y + 5, qHot ? Bone : Slate, UiTypography.Body);
             }
 
             // OPEN, fading in over the lid while hovered — the label the click fulfils. Gold is the
@@ -490,7 +552,10 @@ public sealed class ChestScreen
                 var pulse = 0.85f + 0.15f * MathF.Sin(_anim * 4f);
                 var chip = new Rectangle(icon.Center.X - 52, icon.Center.Y - 18, 104, 36);
                 _ui.Fill(b, chip, new Color(0x0E, 0x0A, 0x14) * (0.85f * ease));
-                _ui.TextCenter(b, "OPEN", chip.Center.X, chip.Y + 8, Gold * (ease * pulse));
+                // A THING YOU CLICK, at the rung things you click are set in — the same size the three
+                // buttons above it wear, rather than the paragraph size it had.
+                _ui.TextCenterBig(b, "OPEN", chip.Center.X, chip.Y + 6, Gold * (ease * pulse),
+                                  UiTypography.NavigationLabel);
             }
         }
 
@@ -513,8 +578,8 @@ public sealed class ChestScreen
         _ui.Panel(b, panel, gold: true);
 
         _ui.TextCenterBig(b, "THE WANDERING TRADER", 960, UiKit.TitleTop(panel), Gold, UiTypography.PanelTitle);
-        _ui.TextCenter(b, "NEW GOODS EVERY WEEK, THE SAME FOR EVERY HUNTER. YOU PAY IN MATERIALS.",
-                       960, UiKit.CaptionTop(panel), Slate);
+        _ui.TextCenterBig(b, "NEW GOODS EVERY WEEK, THE SAME FOR EVERY HUNTER. YOU PAY IN MATERIALS.",
+                          960, UiKit.CaptionTop(panel), Slate, UiTypography.Secondary);
 
         if (_ui.Button(b, new Rectangle(panel.Right - 170, UiKit.TitleTop(panel), 130, 44), "CLOSE", hit, clicked, true))
         {
@@ -548,12 +613,13 @@ public sealed class ChestScreen
             var px = UiTypography.Body;
             while (px > 13 && _ui.MeasureBig(name, px) > card.Width - 24) px--;
             _ui.TextCenterBig(b, name, card.Center.X, card.Y + 52, Bone, px);
-            _ui.TextCenter(b, $"LEVEL {offer.ItemLevel} — SAME AS YOURS", card.Center.X, card.Y + 88, Slate);
+            _ui.TextCenterBig(b, $"LEVEL {offer.ItemLevel} — SAME AS YOURS", card.Center.X, card.Y + 88, Slate,
+                              UiTypography.Secondary);
 
             // The price, line by line, each in the wallet's verdict colour. A gem card carries its
             // medallion at 108, so its price starts below the picture rather than through it.
             var y = card.Y + (GemCraft.IsGem(offer) ? 186 : 140);
-            _ui.TextCenter(b, "PRICE", card.Center.X, y, Slate);
+            _ui.TextCenterBig(b, "PRICE", card.Center.X, y, Slate, UiTypography.SectionLabel);
             y += 28;
             var affordable = true;
             foreach (var (m, amount) in WanderingTrader.PriceOf(offer, TraderTuning.Default))
@@ -561,14 +627,15 @@ public sealed class ChestScreen
                 var held = Hunter?.MaterialOf(m) ?? 0;
                 var enough = held >= amount;
                 affordable &= enough;
-                _ui.TextCenter(b, $"{amount} {m.ToString().ToUpperInvariant()}  (YOU HOLD {held})",
-                               card.Center.X, y, enough ? Bone : Ember);
+                _ui.TextCenterBig(b, $"{amount} {m.ToString().ToUpperInvariant()}  (YOU HOLD {held})",
+                                  card.Center.X, y, enough ? Bone : Ember, UiTypography.Body);
                 y += 26;
             }
 
             var buyBtn = new Rectangle(card.X + 40, card.Bottom - 82, card.Width - 80, 54);
             if (TraderBought.Contains(i))
-                _ui.TextCenter(b, "ALREADY BOUGHT", buyBtn.Center.X, buyBtn.Y + 16, Dim);
+                _ui.TextCenterBig(b, "ALREADY BOUGHT", buyBtn.Center.X, buyBtn.Y + 16, Dim,
+                                  UiTypography.ButtonText);
             else if (_ui.Button(b, buyBtn, "BUY", hit, clicked, affordable && Hunter is not null))
                 _traderBuy = i;
         }
@@ -622,7 +689,7 @@ public sealed class ChestScreen
             var panel = new Rectangle(560, 420, 800, 240);
             _ui.Panel(b, panel);
             _ui.TextCenterBig(b, "THE CODE DIDN'T OPEN", 960, UiKit.TitleTop(panel), Ember, UiTypography.PanelTitle);
-            _ui.TextCenter(b, _inspectError, 960, UiKit.BodyTop(panel), Bone);
+            _ui.TextCenterBig(b, _inspectError, 960, UiKit.BodyTop(panel), Bone, UiTypography.Body);
             if (_ui.Button(b, new Rectangle(880, panel.Bottom - 76, 160, 48), "OK", hit, clicked, true))
                 _inspectError = "";
             return;
@@ -637,8 +704,8 @@ public sealed class ChestScreen
             _ui.Fill(b, panel, new Color(0x12, 0x0E, 0x18, 0xF4));
             Outline(b, panel, Gold, 2);
             _ui.TextCenterBig(b, "A FRIEND'S ITEM", 960, panel.Y + UiTypography.PanelTitleTop, Gold, UiTypography.PanelTitle);
-            _ui.TextCenter(b, "YOU CAN ONLY LOOK. IT NEVER JOINS YOUR BAG.", 960,
-                           panel.Y + UiTypography.PanelCaptionTop, Slate);
+            _ui.TextCenterBig(b, "YOU CAN ONLY LOOK. IT NEVER JOINS YOUR BAG.", 960,
+                              panel.Y + UiTypography.PanelCaptionTop, Slate, UiTypography.Secondary);
             ItemTooltip.Draw(_ui, b, item, Hunter, new Point(960 - ItemTooltip.Width / 2, panel.Y + 104),
                              new Rectangle(0, 0, 1920, 1080));
             if (_ui.Button(b, new Rectangle(880, panel.Bottom - 72, 160, 48), "CLOSE", hit, clicked, true))
@@ -655,8 +722,8 @@ public sealed class ChestScreen
             var panel = new Rectangle(560, 230, 800, 600);
             _ui.Panel(b, panel, gold: true);
             _ui.TextCenterBig(b, "A FRIEND'S BUILD", 960, UiKit.TitleTop(panel), Gold, UiTypography.PanelTitle);
-            _ui.TextCenter(b, "READ IT, COPY THE IDEA. YOUR OWN BUILD STAYS THE SAME.", 960,
-                           UiKit.CaptionTop(panel), Slate);
+            _ui.TextCenterBig(b, "READ IT, COPY THE IDEA. YOUR OWN BUILD STAYS THE SAME.", 960,
+                              UiKit.CaptionTop(panel), Slate, UiTypography.Secondary);
 
             var y = panel.Y + 112;
 
@@ -670,7 +737,7 @@ public sealed class ChestScreen
                         panel.X + 60, y, spec is null ? Slate : Gold, UiTypography.Body);
             y += 40;
 
-            _ui.Text(b, "SKILLS", panel.X + 60, y, Slate);
+            _ui.TextBig(b, "SKILLS", panel.X + 60, y, Slate, UiTypography.SectionLabel);
             y += 26;
             if (build.Skills.Count == 0) { _ui.TextBig(b, "NONE WOVEN", panel.X + 80, y, Dim, UiTypography.Secondary); y += 26; }
             foreach (var s in build.Skills.Take(5))
@@ -684,7 +751,7 @@ public sealed class ChestScreen
             }
 
             y += 14;
-            _ui.Text(b, "KEYSTONES", panel.X + 60, y, Slate);
+            _ui.TextBig(b, "KEYSTONES", panel.X + 60, y, Slate, UiTypography.SectionLabel);
             y += 26;
             if (build.Keystones.Count == 0) { _ui.TextBig(b, "NONE CHOSEN", panel.X + 80, y, Dim, UiTypography.Secondary); y += 26; }
             foreach (var k in build.Keystones.Take(3))
@@ -695,7 +762,8 @@ public sealed class ChestScreen
             }
 
             y += 14;
-            _ui.Text(b, $"MASTERY: {build.Mastery.Count} NODES TAKEN", panel.X + 60, y, Slate);
+            _ui.TextBig(b, $"MASTERY: {build.Mastery.Count} NODES TAKEN", panel.X + 60, y, Slate,
+                        UiTypography.SectionLabel);
 
             if (_ui.Button(b, new Rectangle(880, panel.Bottom - 72, 160, 48), "CLOSE", hit, clicked, true))
                 _inspectBuild = null;
