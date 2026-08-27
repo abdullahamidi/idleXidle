@@ -158,8 +158,10 @@ public sealed class WaveReplay
     /// </summary>
     public BattleEvent? NextSkillEventAfter(float ms)
     {
+        // TRAPS ARE SKIPPED, not stopped at. A Trap fires on a bite and gets no clip; returning it made
+        // the screen's clip picker give up and miss the real cast behind it (review 2026-08-30).
         foreach (var e in _events)
-            if (e.Kind == BattleEventKind.Skill && e.AtMs > ms) return e;
+            if (e.Kind == BattleEventKind.Skill && (Abilities.Form)e.Amount != Abilities.Form.Trap && e.AtMs > ms) return e;
         return null;
     }
 
@@ -252,7 +254,10 @@ public sealed class WaveReplay
         {
             if (e.AtMs <= fromMs) continue;
             if (e.AtMs > toMs) break;
-            var isAction = e.Kind == BattleEventKind.Skill || (e.Kind == BattleEventKind.Strike && !e.FromSkill);
+            // A TRAP IS NOT AN ACTION: it fires on being bitten, off the beat, so counting its Skill
+            // event added a spurious step to every other skill's dial (review 2026-08-30).
+            var isAction = (e.Kind == BattleEventKind.Skill && (Abilities.Form)e.Amount != Abilities.Form.Trap)
+                           || (e.Kind == BattleEventKind.Strike && !e.FromSkill);
             if (!isAction || e.AtMs == lastAt) continue;
             lastAt = e.AtMs;
             count++;

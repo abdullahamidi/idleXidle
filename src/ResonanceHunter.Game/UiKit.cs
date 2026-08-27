@@ -627,15 +627,20 @@ public sealed class UiKit
         const float step = MathF.PI / 72f;                     // 2.5° strokes
         var from = -MathF.PI / 2f + ready * MathF.Tau;          // the moving edge (twelve o'clock + the elapsed share)
         var to = -MathF.PI / 2f + MathF.Tau;                     // round to twelve o'clock again
-        var thick = MathF.Max(2f, radius * step * 1.6f);
+        var thick = MathF.Max(2f, radius * step * 1.9f);
+        // A RING, not a pie. Filled wedges from the centre covered the medallion's own glyph, so for most
+        // of every second the player could not see WHICH skill a slot held — and a skill that is never on
+        // cooldown (an Aura) was painted out entirely (review 2026-08-30). The waiting share is a band
+        // around the rim; the art inside stays readable.
+        var inner = radius * 0.66f;
         for (var a = from; a < to; a += step)
         {
             var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
-            LineSeg(b, centre, centre + dir * radius, thick, shade);
+            LineSeg(b, centre + dir * inner, centre + dir * radius, thick, shade);
         }
         // the edge that moves, so the eye can read the sweep even when it is slow
         var e = new Vector2(MathF.Cos(from), MathF.Sin(from));
-        LineSeg(b, centre, centre + e * radius, 2f, edge);
+        LineSeg(b, centre + e * inner, centre + e * radius, 2f, edge);
     }
 
     public void LineSeg(SpriteBatch b, Vector2 a, Vector2 c, float thickness, Color col)

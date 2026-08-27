@@ -721,6 +721,7 @@ public sealed class SoloExpeditionScreen
             _beatMs = SoloBattle.BeatFor(_castRate);
             var aura = Loadout.Skills.FirstOrDefault(k => k.Form == Form.Aura);
             _auraColour = aura is null ? null : SourceColor.GetValueOrDefault(aura.Source, Bone);
+            FlushAuraTotal();   // the wave's last tick still owes its number
             _auraTotal = 0; _auraTotalMs = -1;
             _auraSincePulse = 999f;
             // NOT _vfx.Clear(). Every effect fades out inside a second on its own, and clearing them at
@@ -990,6 +991,9 @@ public sealed class SoloExpeditionScreen
         // absent (playtest 2026-08-30: "there is no aura effect on screen"). An always-on field is
         // always on: while a wave is running and the build carries an Aura, it pulses on its own beat.
 
+        // The aura's tick prints ONE number, and it prints on time: it used to wait for the NEXT tick's
+        // events to arrive, which put it 500 ms late over whatever creature was alive by then.
+        if (_auraTotal > 0 && _playheadMs > _auraTotalMs + FormBehaviour.AuraTickMs * 0.5f) FlushAuraTotal();
         if (_hitFlash.Count > 0)
             foreach (var key in _hitFlash.Keys.ToList())
             {
@@ -1222,7 +1226,12 @@ public sealed class SoloExpeditionScreen
                 break;
             case Form.Projectile:
                 // The bolt flies left-to-right inside its own frame, so it is centred between the two figures.
-                _vfx.Play("fx_projectile", (ChampBox.Right + tx) / 2, ty, scale: EnemyScale(target, 1.2f), fps: 14f, tint: glow);
+                // SCALED TO THE GAP IT CROSSES, not to the creature it hits: a Swarm creature used to
+                // get a 208 px bolt and a boss a 520 px one for the same flight. And 8 fps, not 14 —
+                // only the strip's first three frames carry the streak (measured coverage 5/11/9% then
+                // under 2%), so at 14 fps the bolt was over in 214 ms (review 2026-08-30).
+                _vfx.Play("fx_projectile", (ChampBox.Right + tx) / 2, ty,
+                          scale: Math.Clamp((tx - ChampBox.Right) / 104, 2, 5), fps: 8f, tint: glow);
                 break;
             case Form.Aura:
                 _vfx.Play("fx_aura", ChampBox.Center.X, ChampBox.Center.Y + 20, scale: 3, fps: 12f, tint: glow);
@@ -1458,7 +1467,13 @@ public sealed class SoloExpeditionScreen
         var clip = EnemyClipFrames / fps;
         // The windup runs the clip up to the CONTACT frame; the bite itself starts the follow-through,
         // which plays the remaining frames and then clamps on the last (see ContactFraction).
-        return _enemyWindup > 0f
+        // THE FOLLOW-THROUGH FINISHES FIRST. The wind-up is recomputed every frame from the NEXT bite,
+        // and in a fast region the next bite is inside the 900 ms wind-up window before the last one has
+        // recovered — so the clip snapped back to frame 0 about 100 ms after every impact and frame 7
+        // was never drawn at all (review 2026-08-30, measured on a 1000 ms bite interval). This is the
+        // "an action is constantly interrupted by another action" the playtest reported, on every
+        // creature, twice a second.
+        return _enemyWindup > 0f && _enemySinceHit >= EnemyFollowSeconds
             ? _enemyWindup * clip * ContactFraction
             : clip * ContactFraction + _enemySinceHit;
     }
@@ -2687,7 +2702,10 @@ public sealed class SoloExpeditionScreen
                 var formKey = (int)s.Form;
                 var skillKey = SkillKey((int)s.Source, formKey);
                 var flash = _skillFlash.TryGetValue(skillKey, out var fl) ? Math.Clamp(fl / 0.42f, 0f, 1f) : 0f;
-                var ready = 0f;
+                // A PASSIVE IS ALWAYS READY. Every branch below asks the replay when this skill last
+                // cast, and an Aura never "casts" — so ready stayed 0 and the dial shaded the whole
+                // medallion for the entire run, under a label reading ALWAYS ON (review 2026-08-30).
+                var ready = FormBehaviour.IsPassive(s.Form) ? 1f : 0f;
                 var telegraph = 0f;
                 if (_replay is not null)
                 {
@@ -2951,7 +2969,10 @@ public sealed class SoloExpeditionScreen
         // the playtest could not read) — or the playhead is BEHIND the clip's start (a rewound fixture),
         // which would run it backwards; either way the commitment is over.
         if (_clipName is not null && (_playheadMs >= _clipStartMs + ClipMs / _clipSpeed + ClipSettleMs || _playheadMs < _clipStartMs))
+        {
             _clipName = null;
+            _idleFrom = _anim;   // the idle picks up from ITS first frame, not from a random loop phase
+        }
         if (_clipName is not null) return;   // committed — plays through
         if (_replay is null) return;
 
@@ -2995,6 +3016,9 @@ public sealed class SoloExpeditionScreen
 
     /// <summary>The settle on an action clip's last frame before idle, ms — the readable END of an action.</summary>
     private const float ClipSettleMs = 150f;
+
+    /// <summary>Wall-clock stamp of the last clip's end — the idle loop restarts from here, not mid-breath.</summary>
+    private float _idleFrom;
 
     /// <summary>Per creature slot: a hit flash, 1 → 0 over ~120 ms — the blow lands ON something.</summary>
     private readonly Dictionary<int, float> _hitFlash = new();
@@ -3181,7 +3205,7 @@ public sealed class SoloExpeditionScreen
         var loop = clip == "idle";
         if (_ui.AnimSprite(b, Character.StripKey(clip), box, seconds, ChampionFps, loop, tint, -1f,
                            flip: ChampionFacesRight)) return;
-        if (_ui.AnimSprite(b, Character.StripKey("idle"), box, dead ? 0f : _anim, ChampionFps, loop: true, tint, -1f,
+        if (_ui.AnimSprite(b, Character.StripKey("idle"), box, dead ? 0f : _anim - _idleFrom, ChampionFps, loop: true, tint, -1f,
                            flip: ChampionFacesRight)) return;
 
         var breathe = (int)(MathF.Sin(seconds * 2.1f) * 4f);
