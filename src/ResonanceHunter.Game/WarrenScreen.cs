@@ -146,44 +146,92 @@ public sealed class WarrenScreen
         if (DevWarrenDebug) DrawDebug(b);
     }
 
+    /// <summary>
+    /// THE WARREN'S RANK, STRUCK ON ITS OWN MEDALLION — the shipping gold octagon with the number in it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Playtest 2026-08-29: "in the warren overview panel, there is no LEVEL icon". There WAS a crest,
+    /// and that was the problem: it was <see cref="UiKit.Diamond"/> in the Insight purple, which is the
+    /// shape this kit draws when a key is MISSING. So the one badge on the screen that names the base's
+    /// own rank wore the placeholder for art that had not shipped — except it had.
+    /// <c>ui_medallion_hex</c> is a hollow gold medallion frame drawn for exactly this, and a medallion
+    /// with a numeral inside it is the one badge every player already reads as a level without being
+    /// told. The words WARREN LEVEL stay beside it, spelled out, for the reader who does not.
+    /// </para>
+    /// <para>
+    /// The numeral SHRINKS rather than spilling over the rim. The medallion's hollow is about 56% of its
+    /// width; a three-figure warren is a long game away, but it is a game away rather than impossible,
+    /// and a badge that breaks at level 100 is a bug with a date on it.
+    /// </para>
+    /// </remarks>
+    private void LevelBadge(SpriteBatch b, Rectangle box, int level)
+    {
+        if (!_ui.Icon(b, "ui_medallion_hex", box, Gold)) _ui.Diamond(b, box, MasteryC);
+        var num = level.ToString();
+        var px = UiTypography.PrimaryValue;
+        var hollow = box.Width * 56 / 100;
+        while (px > UiTypography.Caption && _ui.MeasureBig(num, px) > hollow) px--;
+        _ui.TextCenterBig(b, num, box.Center.X, box.Center.Y - px * 27 / 40, Bone, px);
+    }
+
     private void DrawOverview(SpriteBatch b, Point hit, bool clicked)
     {
         _ui.PanelQuiet(b, OverviewPanel);
+        var left = UiKit.ContentLeft(OverviewPanel);
+        var right = UiKit.ContentRight(OverviewPanel);
+        var width = right - left;
+
         _ui.TextCenterBig(b, "WARREN OVERVIEW", OverviewPanel.Center.X, UiKit.TitleTop(OverviewPanel), Gold, UiTypography.PanelTitle);
+        // THE CAPTION SLOT CARRIES THE PLACE'S OWN NAME. It used to be the third line of a hand-placed
+        // stack beside the crest; the house grid keeps the line that says WHICH one of these you are
+        // looking at directly under the title, which is where every other panel in the game puts it.
+        _ui.TextCenterBig(b, _ui.ShortenBig(Warren.Name, width, UiTypography.Secondary),
+                          OverviewPanel.Center.X, UiKit.CaptionTop(OverviewPanel), MasteryC, UiTypography.Secondary);
 
-        // Crest + level + name.
-        var crest = new Rectangle(UiKit.ContentLeft(OverviewPanel), OverviewPanel.Y + 68, 72, 84);
-        _ui.Diamond(b, crest, MasteryC);
-        _ui.TextBig(b, $"LEVEL {Warren.Level}", crest.Right + 20, OverviewPanel.Y + 78, Bone, UiTypography.Headline);
-        _ui.TextBig(b, Warren.Name, crest.Right + 20, OverviewPanel.Y + 112, MasteryC, UiTypography.Body);
+        // ── THE LEVEL, ON ITS BADGE, WITH WHAT THE LEVEL BUYS BESIDE IT ──
+        var crest = new Rectangle(left, UiKit.BodyTop(OverviewPanel), 84, 84);
+        LevelBadge(b, crest, Warren.Level);
+        _ui.TextBig(b, "WARREN LEVEL", crest.Right + 20, crest.Y + 12, Slate, UiTypography.Secondary);
+        _ui.TextBig(b, $"+{Warren.AllProductionBonus * 100f:0}% ALL PRODUCTION", crest.Right + 20, crest.Y + 48, Met, UiTypography.Body);
 
-        // XP bar to the next Warren level.
-        var bar = new Rectangle(UiKit.ContentLeft(OverviewPanel), OverviewPanel.Y + 176, OverviewPanel.Width - UiKit.PadX(OverviewPanel) * 2, 26);
+        // XP BAR TO THE NEXT WARREN LEVEL — the ART's bar, at a height the art can hold.
+        //
+        // It was UiKit.Bar, which stretches the whole 256×64 ui_bar_frame into whatever rectangle it is
+        // handed: 332 × 26 here, so the end scrollwork was squashed to two fifths of its height and
+        // smeared across five times its width (playtest 2026-08-29: "the level bar's frame is stretched
+        // — its quality has dropped"). BarArt five-slices a WIDE bar, so the two cap ornaments and the
+        // centre scroll keep their proportions and only the plain stone between them stretches; 34 px of
+        // height then gives those caps 17 px to be drawn in rather than 13.
+        var bar = new Rectangle(left, crest.Bottom + 26, width, 34);
         var pct = Warren.XpToNext > 0 ? Warren.Xp / (float)Warren.XpToNext : 1f;
-        _ui.Bar(b, bar.X, bar.Y, bar.Width, bar.Height, pct, Gold);
-        // Ink on the gold fill, Bone off it. Cream on gold measures ~1.6:1 — the same gold-on-gold
-        // failure the boss bar had, and the reason this readout was invisible for most of the bar.
-        var xpFrac = Warren.XpToNext > 0 ? Warren.Xp / (float)Warren.XpToNext : 0f;
-        _ui.TextCenterBig(b, $"{Warren.Xp:N0} / {Warren.XpToNext:N0}", bar.Center.X, bar.Y + 4,
-            xpFrac > 0.55f ? UiKit.Ink : Bone, UiTypography.Secondary);
-        _ui.TextBig(b, $"NEXT LEVEL {Warren.Level + 1}", UiKit.ContentLeft(OverviewPanel), OverviewPanel.Y + 214, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, $"+{Warren.AllProductionBonus * 100f:0}% ALL PRODUCTION", UiKit.ContentRight(OverviewPanel), OverviewPanel.Y + 214, Met, UiTypography.Secondary);
+        _ui.BarArt(b, bar, pct, "xp");
+        // ONE INK, not two. The old readout switched to near-black past 55% because cream on the GOLD
+        // fill measures about 1.6:1; the xp art's fill is deep violet, which cream clears at both ends
+        // of the bar, so the conditional goes with the gold it was compensating for.
+        _ui.TextCenterBig(b, $"{Warren.Xp:N0} / {Warren.XpToNext:N0}", bar.Center.X,
+                          bar.Y + (bar.Height - UiTypography.Secondary) / 2, Bone, UiTypography.Secondary);
+        _ui.TextBig(b, $"NEXT LEVEL {Warren.Level + 1}", left, bar.Bottom + 12, Slate, UiTypography.Secondary);
 
-        _ui.Fill(b, new Rectangle(UiKit.ContentLeft(OverviewPanel), OverviewPanel.Y + 254, OverviewPanel.Width - UiKit.PadX(OverviewPanel) * 2, 2), Dim);
+        var rule = bar.Bottom + 44;
+        _ui.Fill(b, new Rectangle(left, rule, width, 2), Dim);
 
         // Total production, per real currency (bonuses applied).
-        _ui.TextBig(b, "TOTAL PRODUCTION", UiKit.ContentLeft(OverviewPanel), OverviewPanel.Y + 272, Gold, UiTypography.Body);
-        _ui.TextRightBig(b, "(IDLE RATE)", UiKit.ContentRight(OverviewPanel), OverviewPanel.Y + 276, Slate, UiTypography.Secondary);
-        var y = OverviewPanel.Y + 320;
+        _ui.TextBig(b, "TOTAL PRODUCTION", left, rule + 18, Gold, UiTypography.Body);
+        _ui.TextRightBig(b, "(IDLE RATE)", right, rule + 22, Slate, UiTypography.Secondary);
+        var y = rule + 66;
         foreach (var r in new[] { WarrenResource.Gleam, WarrenResource.Mastery, WarrenResource.Dust })
         {
-            ResGlyph(b, new Rectangle(UiKit.ContentLeft(OverviewPanel), y - 2, 38, 38), r);
-            _ui.TextBig(b, $"+{Ab(Warren.ProductionPerMinute(r))} /min", UiKit.ContentLeft(OverviewPanel) + 60, y + 2, Bone, UiTypography.Headline);
-            y += 52;
+            ResGlyph(b, new Rectangle(left, y - 2, 38, 38), r);
+            _ui.TextBig(b, $"+{Ab(Warren.ProductionPerMinute(r))} /min", left + 60, y + 2, Bone, UiTypography.Headline);
+            // The three rows are spaced to REACH the rule above the closing paragraph rather than to a
+            // tight 52: the panel is 708 px tall and its content used to stop 110 px short of that rule,
+            // which reads as a panel that ran out of things to say rather than as breathing room.
+            y += 72;
         }
 
         // Production runs on every screen (see Game1.TickFarms) — a quiet reminder that the base earns idle.
-        _ui.Fill(b, new Rectangle(UiKit.ContentLeft(OverviewPanel), OverviewPanel.Bottom - 124, OverviewPanel.Width - UiKit.PadX(OverviewPanel) * 2, 2), Dim);
+        _ui.Fill(b, new Rectangle(left, OverviewPanel.Bottom - 124, width, 2), Dim);
         // WHAT EACH OF THE THREE IS FOR, because the screen was silent about it and one of them is
         // unlike the other two. GLEAM and DUST are the game's shared currencies — spent on stats and on
         // the trait tree — while INSIGHT is produced here and spent here, on nothing else. That is a
@@ -192,7 +240,7 @@ public sealed class WarrenScreen
         // has nothing to do with.
         DrawWrapped(b, "The warren earns while you are away. GLEAM and DUST are used all over the game. "
                      + "INSIGHT is used only here, on upgrades.",
-            UiKit.ContentLeft(OverviewPanel), OverviewPanel.Bottom - 104, OverviewPanel.Width - UiKit.PadX(OverviewPanel) * 2, Slate);
+            left, OverviewPanel.Bottom - 104, width, Slate);
     }
 
     private void DrawGrid(SpriteBatch b, Point hit, bool clicked)

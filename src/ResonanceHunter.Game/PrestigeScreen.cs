@@ -171,17 +171,42 @@ public sealed class PrestigeScreen
     private static readonly Rectangle DetailPanel = new(1368, 144, 500, 790);
 
     /// <summary>
+    /// THE POINT COUNTER'S PLATE — a framed readout in the band between the subtitle and the canvas.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Playtest 2026-08-29: "the indicator at the top left that shows my points is left as undecorated
+    /// plain text. Let's polish this." It was exactly that — two bare strings laid straight over the
+    /// tree's starfield, in the one corner of the screen a player checks before every single purchase,
+    /// and the number that decides whether they can buy anything was the same size as a road's tally.
+    /// It now wears the house's quiet frame with its own glyph, and the number is at the headline rung
+    /// the GEAR POWER and MASTERY POINTS readouts use for the same job.
+    /// </para>
+    /// <para>
+    /// <b>52 px tall, ending 4 px above <see cref="View"/>.</b> The tree is drawn FIRST and clipped to
+    /// its canvas, so anything drawn after it covers it; the plate therefore lives entirely in the header
+    /// band — under the title rule, left of the centred subtitle, above the canvas — and never eats a
+    /// road. Its width is FIXED rather than measured so the caption does not shuffle sideways as the
+    /// number goes from one digit to two; the number is right-aligned into its own column instead.
+    /// </para>
+    /// </remarks>
+    private static readonly Rectangle PointPlate = new(View.X, 80, 360, 52);
+
+    /// <summary>The plate's glyph box and the column its number ends in — shared by the draw and the tour.</summary>
+    private const int PointGlyph = 32;
+
+    /// <summary>
     /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
     /// first is the one the caption card is placed beside; a target that is not this screen's gets none.
     /// </summary>
     /// <remarks>
-    /// The points readout is the header line at (60,108) and its number at (282,104), boxed together —
-    /// and no taller, or the light also catches the first road's name sitting just under them.
+    /// The points readout is <see cref="PointPlate"/> itself — the light now has a frame to trace rather
+    /// than a hand-boxed guess at where two bare strings happened to sit.
     /// </remarks>
     internal static Rectangle[] Spotlights(TourTarget target) => target switch
     {
         TourTarget.TraitTree => new[] { View },
-        TourTarget.TraitPoints => new[] { new Rectangle(48, 98, 400, 34) },
+        TourTarget.TraitPoints => new[] { PointPlate },
         TourTarget.TraitDetail => new[] { DetailPanel },
         _ => Array.Empty<Rectangle>(),
     };
@@ -508,14 +533,66 @@ public sealed class PrestigeScreen
         // "what does the whole tree cost" once, and neither is worth a third of the page.
         var spent = tree.All.Where(u => tree.Owns(u.Id)).Sum(u => u.Cost);
         var learned = tree.All.Count(u => tree.Owns(u.Id));
-        _ui.TextBig(b, "TRAIT POINTS TO SPEND", 60, 108, Slate, UiTypography.Secondary);
-        _ui.TextBig(b, $"{tree.Available}", 282, 104, tree.Available > 0 ? Gold : Slate, UiTypography.Headline);
+        DrawPointPlate(b, tree);
+        // The long tally is the OTHER half of the same line and stays a quiet caption — it is read once
+        // a session, not before every purchase — but it now sits on the plate's own optical centre
+        // instead of ten pixels below it.
         _ui.TextRightBig(b, $"{learned} OF {tree.All.Count} TRAITS LEARNED  ·  {spent} POINTS SPENT  ·  {tree.TotalTreeCost} FOR EVERYTHING",
-                         View.Right, 108, Slate, UiTypography.Secondary);
+                         View.Right, PointPlate.Y + (PointPlate.Height - UiTypography.Secondary) / 2, Slate, UiTypography.Secondary);
 
         DrawDetail(b, tree, hit, clicked);
         DrawFlourish(b);
         if (DevDustDebug) DrawDebug(b);
+    }
+
+    /// <summary>
+    /// THE POINT COUNTER: the spine's glyph, the number you can spend, and what the number is — on a
+    /// frame, in the house's quiet brown. See <see cref="PointPlate"/> for why it is this shape.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The GLYPH is the screen's own — <c>nav_prestige</c>, the star the TRAITS tile in the rail wears —
+    /// so the readout is visibly part of this screen rather than a stray badge. The four road emblems
+    /// were the obvious first pick and are all wrong: a point buys on ANY road, so wearing one road's
+    /// mark takes a side. The spine's was tried and is wrong for a different reason — it is a tall thin
+    /// vertebra, which at 32 px is a gold splinter nobody can name. It greys out with the number when
+    /// there is nothing to spend, so the plate answers "can I buy anything" before a word of it is read.
+    /// </para>
+    /// <para>
+    /// The caption is the line the screen already carried, unchanged: TRAIT POINTS TO SPEND. It says
+    /// what the number is and what to do with it in five plain words, which is the whole job.
+    /// </para>
+    /// </remarks>
+    private void DrawPointPlate(SpriteBatch b, MemoryDustTree tree)
+    {
+        const string caption = "TRAIT POINTS TO SPEND";
+        // The frame's corner ornament reaches this far in on a plate only 52 px tall (UiKit.NineSlice
+        // clamps its corner to half the shorter side), so content starts past it rather than on it.
+        var pad = Math.Min(UiKit.PanelCorner, PointPlate.Height / 2);
+        _ui.PanelQuiet(b, PointPlate);
+
+        var has = tree.Available > 0;
+        var ink = has ? Gold : Slate;
+        var num = $"{tree.Available}";
+        var numW = _ui.MeasureBig(num, UiTypography.PrimaryValue);
+        var capW = _ui.MeasureBig(caption, UiTypography.Secondary);
+        // CENTRED IN THE INTERIOR rather than packed against the left ornament: the plate is a fixed
+        // width (so the tour's spotlight and this drawing cannot disagree) and the number is one or two
+        // digits for most of a run, so left-packing leaves a third of the plate visibly empty.
+        var room = PointPlate.Width - pad * 2;
+        var group = PointGlyph + 14 + numW + 16 + capW;
+        var x = PointPlate.X + pad + Math.Max(0, (room - group) / 2);
+
+        var glyph = new Rectangle(x, PointPlate.Y + (PointPlate.Height - PointGlyph) / 2, PointGlyph, PointGlyph);
+        if (!_ui.Icon(b, "nav_prestige", glyph, has ? Color.White : Slate)) _ui.Diamond(b, glyph, ink);
+        x = glyph.Right + 14;
+
+        _ui.TextBig(b, num, x, PointPlate.Y + (PointPlate.Height - UiTypography.PrimaryValue) / 2 - 2,
+                    ink, UiTypography.PrimaryValue);
+        x += numW + 16;
+        _ui.TextBig(b, _ui.ShortenBig(caption, PointPlate.Right - pad - x, UiTypography.Secondary),
+                    x, PointPlate.Y + (PointPlate.Height - UiTypography.Secondary) / 2,
+                    Slate, UiTypography.Secondary);
     }
 
     /// <summary>
