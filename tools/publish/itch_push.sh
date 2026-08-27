@@ -37,7 +37,7 @@ dn publish src/ResonanceHunter.Game -c Release -r win-x64 --self-contained -o "$
 
 echo "== smoke boot of the published exe"
 SHOT="$(winpath "$PWD")\\build\\release\\smoke_${SHA}.png"
-( cd "$OUT" && RH_SHOT="$SHOT" RH_SHOT_MODE=title ./ResonanceHunter.Game.exe >/dev/null 2>&1 ) || true
+( cd "$OUT" && RH_SHOT="$SHOT" RH_SHOT_MODE=title ./IDLExIDLE.exe >/dev/null 2>&1 ) || true
 [ -f "build/release/smoke_${SHA}.png" ] || { echo "the published build did not draw its title — not uploading" >&2; exit 1; }
 rm -f "build/release/smoke_${SHA}.png"
 

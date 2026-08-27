@@ -1424,7 +1424,7 @@ public class Game1 : Game
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
-                or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightfilter" or "traitlit" or "traitterm" or "traitterminal"
+                or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightfilter" or "fightaura" or "traitlit" or "traitterm" or "traitterminal"
                 or "roster" or "rosterlocked" or "weave" or "vault" or "vaultfirst" or "attune" or "attuned" or "trader"
                 or "gemtour" or "intro")
             {
@@ -1645,8 +1645,15 @@ public class Game1 : Game
                     _deepestEver = 23; _mastery.SetEarned(77400);   // fixture career values (Stats §13)
                 }
 
-                if (sm is "fight" or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightfilter" or "runlog")
+                if (sm is "fight" or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightfilter" or "fightaura" or "runlog")
                 {
+                    // `fightaura` slots a NATURE AURA beside the starter Strike, so the always-on pulse
+                    // (and the champion NOT flinching to it) is checkable in a capture.
+                    if (sm == "fightaura")
+                    {
+                        var auraSlot = _loadout.AddSkill();
+                        if (auraSlot >= 0) { _loadout.SetSource(auraSlot, Source.Nature); _loadout.SetForm(auraSlot, Form.Aura); }
+                    }
                     // fightswing holds the strike clip at its apex, so the one pose a timed capture can
                     // never catch — the blade at full extension — is checkable.
                     if (sm == "fightswing")

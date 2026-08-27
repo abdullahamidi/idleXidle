@@ -3,6 +3,9 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>ResonanceHunter.Client</RootNamespace>
+    <!-- The game is IDLExIDLE (renamed 2026-08-24); the project folder keeps its old name so every path
+         in the tools and the docs stays true, but the file the player runs says the game's name. -->
+    <AssemblyName>IDLExIDLE</AssemblyName>
     <Nullable>enable</Nullable>
     <RollForward>Major</RollForward>
     <PublishReadyToRun>false</PublishReadyToRun>

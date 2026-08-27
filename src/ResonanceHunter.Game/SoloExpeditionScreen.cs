@@ -135,10 +135,10 @@ public sealed class SoloExpeditionScreen
     // strip has no such slack — the generated frames are trimmed to their content, so the character
     // renders at exactly the box height and the champion suddenly stood a head taller than before,
     // dominating a stage it shares with enemies less than half that size.
-    private static readonly Rectangle ChampBox = new(760 - 200, GroundY - 430, 400, 430);
+    private static readonly Rectangle ChampBox = new(700 - 200, GroundY - 430, 400, 430);   // 760 → 700 (2026-08-28: "the champion a little left")
     // Rev 3 §16.1: one normal enemy bottom-centred at (1160,735), visible ~320px (range 280–360). A boss is
     // drawn far larger from its own anchor (see the draw), so this box is the NORMAL-enemy size only.
-    private static readonly Rectangle EnemyBox = new(1320 - 218, GroundY - 440, 436, 440);
+    private static readonly Rectangle EnemyBox = new(1380 - 218, GroundY - 440, 436, 440);   // 1320 → 1380 ("the enemies a little right")
 
     /// <summary>
     /// Does the champion need mirroring to face the enemies?
@@ -180,7 +180,7 @@ public sealed class SoloExpeditionScreen
     private const int BossTargetBodyHeight = 540;   // §6/§25: rendered figure height — the boss box is a 540 square
     // Pulled in from x=1360: the boss is far wider than an ordinary creature, and anchored that far right
     // its wing ran into the arena's scissor edge at 1554 and read as sliced off behind the side panels.
-    private static readonly Point BossAnchor = new(1230, GroundY + 10);
+    private static readonly Point BossAnchor = new(1290, GroundY + 10);   // with the pack, 60 px right
     private Rectangle _bossBodyRect, _bossFullRect;   // rendered screen rects, set by DrawBoss for the bar/overlay
     private int _bossFrame;
     private string _bossName = "BOSS";
@@ -452,8 +452,8 @@ public sealed class SoloExpeditionScreen
     /// </remarks>
     internal static Rectangle[] Spotlights(TourTarget target) => target switch
     {
-        TourTarget.Champion => new[] { new Rectangle(530, 560, 460, 450) },
-        TourTarget.Enemies => new[] { new Rectangle(880, 560, 680, 450), new Rectangle(620, 8, 580, 152) },
+        TourTarget.Champion => new[] { new Rectangle(470, 560, 460, 450) },
+        TourTarget.Enemies => new[] { new Rectangle(940, 560, 680, 450), new Rectangle(620, 8, 580, 152) },
         TourTarget.HunterHud => new[] { new Rectangle(186, 10, 440, 225) },
         TourTarget.CurrencyPills => new[] { new Rectangle(1440, 4, 400, 84) },
         TourTarget.Skills => new[] { new Rectangle(180, 226, 306, 370) },
@@ -716,6 +716,10 @@ public sealed class SoloExpeditionScreen
             var cb = ComposeBuild(rh);
             _castRate = cb.Resolve(rh).SkillRate * cb.Shape.SkillRate;
             _beatMs = SoloBattle.BeatFor(_castRate);
+            var aura = Loadout.Skills.FirstOrDefault(k => k.Form == Form.Aura);
+            _auraColour = aura is null ? null : SourceColor.GetValueOrDefault(aura.Source, Bone);
+            _lastAuraPulseMs = -1;
+            _auraTotal = 0; _auraTotalMs = -1;
         }
         // The replay's health table is read AFTER the pool refresh, or the HUD prints last wave's pool
         // over this wave's bar for a whole wave (review 2026-08-25: "300/360 with a full bar").
@@ -1014,26 +1018,47 @@ public sealed class SoloExpeditionScreen
             switch (e.Kind)
             {
                 case BattleEventKind.Strike:
-                    // Just the lunge. A hit-spark on EVERY strike (skills AND auto-attacks fire these
-                    // constantly) was the "too many red slashes" the playtest flagged — loudness has to be
-                    // budgeted against importance, so the loud VFX are reserved for the SKILL casts below.
-                    _champLunge = 1f;
+                {
+                    // AN AURA TICK is a skill's blow with no cast behind it (Aura is passive — it emits no
+                    // Skill event) and no Trap bite either. It gets its own picture: a pulse of the
+                    // Source's colour from the champion, once per tick, and NO lunge, sound or puff —
+                    // the champion "kept trying to start an animation" every half second (playtest
+                    // 2026-08-28: "an always-on effect that never touches the character's animation").
+                    var auraTick = e.FromSkill && e.AtMs != skillAtMs && e.AtMs != trapAtMs && _auraColour is not null;
+                    if (auraTick && e.AtMs != _lastAuraPulseMs)
+                    {
+                        _lastAuraPulseMs = e.AtMs;
+                        _vfx.Play("fx_aura", ChampBox.Center.X, ChampBox.Center.Y + 40, scale: 4, fps: 14f, tint: _auraColour!.Value);
+                    }
+                    // The swing lunges; a cast already has its clip (UpdateChampionClip aims it at the beat).
+                    if (!e.FromSkill) _champLunge = 1f;
                     _nextChampStrikeMs = _replay.NextChampionStrikeAfter(e.AtMs);
                     // The swing's thud at full weight; a skill's landing blows quieter — the cast's breath
                     // already announced them, and four projectile impacts on top of it were "two sounds at
-                    // once" (playtest 2026-08-26).
-                    Sound?.Play("sfx_hit", e.FromSkill ? 0.22f : 0.38f, vary: 0.06f);
+                    // once" (playtest 2026-08-26). An aura tick is silent: it hums, it does not strike.
+                    if (!auraTick) Sound?.Play("sfx_hit", e.FromSkill ? 0.22f : 0.38f, vary: 0.06f);
                     // The number is the blow: the event's amount, over the creature that took it.
                     // Graded by PROVENANCE (the event says whether a skill dealt it) and only then by beat:
                     // an auto-swing on a cast's own millisecond stays plain.
-                    if (e.Amount > 0) SpawnDamage(e.Amount, e.Slot, crit: e.FromSkill && e.AtMs == trapAtMs, skill: e.FromSkill && e.AtMs == skillAtMs);
-                    _hitFlash[e.Slot] = 1f;   // the creature that took it flashes and rocks back (playtest 2026-08-27)
-                    if ((_strikeCount++ & 1) == 0)   // every other hit: a small, quiet puff
+                    // An aura tick's blows are ONE number — the tick's total over the pack — not four
+                    // "-9"s drifting up every half second; the previous tick's total is flushed when the
+                    // next tick starts (or at wave end, in BeginWave).
+                    if (auraTick)
+                    {
+                        if (e.AtMs != _auraTotalMs) { FlushAuraTotal(); _auraTotalMs = e.AtMs; }
+                        _auraTotal += e.Amount;
+                    }
+                    else if (e.Amount > 0) SpawnDamage(e.Amount, e.Slot, crit: e.FromSkill && e.AtMs == trapAtMs, skill: e.FromSkill && e.AtMs == skillAtMs);
+                    // The creature that took it FLASHES — drawn additive over its sprite (a tint can only
+                    // darken); an aura tick washes the whole pack faintly.
+                    _hitFlash[e.Slot] = auraTick ? 0.45f : 1f;
+                    if (!auraTick && (_strikeCount++ & 1) == 0)   // every other blow: a small, quiet puff
                     {
                         var (hx, hy) = EnemyPoint(e.Slot, 0.45f);
                         _vfx.Play("fx_weakhit", hx, hy, scale: EnemyScale(e.Slot, 0.6f), fps: 16f, tint: Steel);
                     }
                     break;
+                }
                 case BattleEventKind.EnemyStrike:
                     _enemyLunge = 1f;
                     _enemySinceHit = 0f;
@@ -1505,11 +1530,12 @@ public sealed class SoloExpeditionScreen
             var bob = (int)(MathF.Sin(_anim * 2f + i * 1.7f) * 7f);
             var box = new Rectangle(cx - w / 2, EnemyBox.Bottom - h + bob, w, h);
             PublishCreature(i, box);
-            // THE HIT LANDS ON SOMEONE: a warm flash and an 8 px rock backwards for ~120 ms after a blow —
-            // the reaction that makes a strike read as a strike (playtest 2026-08-27: "add the enemy flash").
+            // THE HIT LANDS ON SOMEONE: for ~120 ms after a blow the creature is drawn a second time,
+            // ADDITIVE and white, over itself — a SpriteBatch tint can only darken a sprite, so the warm
+            // tint of the first attempt was invisible on a dark creature (playtest 2026-08-28: "the enemy
+            // flash does not work"). No knock-back: the user asked for the flash alone.
             var hitFl = _hitFlash.GetValueOrDefault(i);
-            var creatureTint = hitFl > 0f ? Color.Lerp(enterTint, HitFlash, hitFl) : enterTint;
-            if (hitFl > 0f) box = new Rectangle(box.X + (int)(8f * hitFl), box.Y, box.Width, box.Height);
+            var creatureTint = enterTint;
             if (_replay is not null && !_replay.CreatureAlive(i))
             {
                 DrawCreatureDeath(b, i, new Rectangle(box.X, EnemyBox.Bottom - h, w, h), stripKey is null ? null : EnemyKeyOf(stripKey));
@@ -1528,6 +1554,17 @@ public sealed class SoloExpeditionScreen
                     !attacking, creatureTint, crop))
                 if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, box, creatureTint, crop))
                     _ui.Fill(b, new Rectangle(box.X + 20, box.Y + 20, box.Width - 40, box.Height - 40), Ember);
+            if (hitFl > 0f && stripKey is not null)
+            {
+                // The flash pass: the same frame, additive, so the creature goes WHITE for the blow and
+                // fades back. Two batch boundaries, only while a flash is live.
+                b.End();
+                b.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp, DepthStencilState.None, ArenaRasterizer);
+                _ui.AnimSprite(b, stripKey, box, EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps,
+                               !attacking, Color.White * (0.85f * hitFl), crop);
+                b.End();
+                b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, ArenaRasterizer);
+            }
 
             // A pip per creature rather than a framed bar — at five across, ornate frames become noise.
             if (_replay is null) continue;
@@ -2713,7 +2750,19 @@ public sealed class SoloExpeditionScreen
 
     /// <summary>Per creature slot: a hit flash, 1 → 0 over ~120 ms — the blow lands ON something.</summary>
     private readonly Dictionary<int, float> _hitFlash = new();
-    private static readonly Color HitFlash = new(0xFF, 0xB0, 0x70);
+
+    /// <summary>The slotted Aura's Source colour for the wave being shown, or null when the build carries no Aura.</summary>
+    private Color? _auraColour;
+    private int _lastAuraPulseMs = -1;
+    private int _auraTotal, _auraTotalMs = -1;
+
+    /// <summary>The pending aura tick's total as one plain number over the pack's centre (see the Strike case).</summary>
+    private void FlushAuraTotal()
+    {
+        if (_auraTotal > 0) SpawnDamage(_auraTotal, TargetSlot(), crit: false, skill: false);
+        _auraTotal = 0;
+        _auraTotalMs = -1;
+    }
 
     /// <summary>Seconds into the committed clip, at its speed — what the strip is drawn at.</summary>
     private float ClipSeconds => (_playheadMs - _clipStartMs) / 1000f * _clipSpeed;

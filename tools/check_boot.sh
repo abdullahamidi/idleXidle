@@ -62,7 +62,7 @@ if [ $rc -eq 124 ]; then
   echo "BOOT TIMED OUT after 120s — the game never finished starting." >&2
   # Do not leave it holding the exe; the next build would fail on a file lock instead.
   powershell.exe -NoProfile -Command \
-    "Get-Process ResonanceHunter.Game -ErrorAction SilentlyContinue | Stop-Process -Force" >/dev/null 2>&1
+    "Get-Process IDLExIDLE -ErrorAction SilentlyContinue | Stop-Process -Force" >/dev/null 2>&1
   exit 1
 fi
 
