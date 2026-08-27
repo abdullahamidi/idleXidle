@@ -762,21 +762,85 @@ public sealed class WeaveScreen
             }
         }
 
-        DrawExplainer(b, hoverForm ?? cur.Form, hoverSource ?? cur.Source, hoverForm is null && hoverSource is null);
+        DrawExplainer(b, ReadingFor(hit, cur, hoverSource, hoverForm));
         DrawReadout(b, hoverSource, hoverForm);
     }
 
+    /// <summary>One title line and one paragraph — everything the strip under the picker ever says.</summary>
+    private readonly record struct Explanation(string Title, string Body, bool IsSelection);
+
     /// <summary>
-    /// What the Form and Source under the cursor actually DO.
+    /// WHAT THE STRIP IS TALKING ABOUT: the one thing under the cursor, or — when the cursor rests on
+    /// nothing this screen explains — the skill in the chosen slot, its Source and its Form together.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Playtest, 2026-08-28: <i>"Aura is selected but I am hovering over a source — the Aura
+    /// description takes more room. It is not readable."</i> Exactly right, and the strip was doing it
+    /// on purpose: it printed the SELECTED Form's rule and the HOVERED Source's lines at once, so the
+    /// answer to "what is this gem?" arrived underneath three lines about a Form the player had not
+    /// asked about. Two answers in a space sized for one is the same as no answer.
+    /// </para>
+    /// <para>
+    /// The rule is now ONE SUBJECT AT A TIME, and the cursor picks it. Every hoverable thing the
+    /// composer offers answers here — a Source gem, a Form glyph, a Vow row, a keystone chip — which
+    /// makes the strip one predictable place to look rather than a panel with moods of its own. The
+    /// last two live in the neighbouring columns; their rows already light up under the cursor, and
+    /// this is where the sentence behind the light goes.
+    /// </para>
+    /// <para>
+    /// There is no keyboard focus to follow: this composer is pointer-driven (<see cref="Update"/>
+    /// takes a mouse position and a wheel and no keys at all), so hover IS the focus. If a focused
+    /// cell is ever added, it belongs in this one method and nowhere else.
+    /// </para>
+    /// </remarks>
+    private Explanation ReadingFor(Point hit, PlayerLoadout.SkillChoice cur, Source? hoverSource, Form? hoverForm)
+    {
+        if (hoverSource is { } hs)
+            return new Explanation($"SOURCE: {SourceName(hs)}",
+                                   $"{BuildGlossary.SourceLine(hs)}. {BuildGlossary.MatchupLine(hs)}.", false);
+
+        if (hoverForm is { } hf)
+            return new Explanation($"FORM: {FormName(hf)} — {BuildGlossary.FormHeadline(hf)}",
+                                   BuildGlossary.FormRule(hf), false);
+
+        var known = Known;
+        for (var r = 0; r < VowRows; r++)
+        {
+            var idx = _vowScroll + r;
+            // _vowScroll is clamped in DrawVows, which runs AFTER this — so the bound is checked here
+            // rather than assumed. Same for the keystone window below.
+            if (idx < known.Count && VowRow(r).Contains(hit))
+                return new Explanation(Titled("VOW", known[idx].Name), known[idx].Description, false);
+        }
+
+        var learned = DustEffects.LearnedKeystones(Tree);
+        for (var i = 0; i < KeystoneRows; i++)
+        {
+            var idx = _keystoneScroll + i;
+            if (idx < learned.Count && KeystoneChip(i).Contains(hit))
+                return new Explanation(Titled("KEYSTONE", learned[idx].Name), learned[idx].Blurb, false);
+        }
+
+        // NOTHING UNDER THE CURSOR — the skill being edited. Both halves, because a skill IS both, and
+        // this is the only reading where the player has not pointed at one of them.
+        return new Explanation(
+            $"YOUR SKILL: {SourceName(cur.Source)} {FormName(cur.Form)} — {BuildGlossary.FormHeadline(cur.Form)}",
+            $"{BuildGlossary.FormRule(cur.Form)} {BuildGlossary.SourceLine(cur.Source)}.", true);
+    }
+
+    /// <summary>
+    /// The description strip: a title line, a paragraph, and never a second of either.
     /// </summary>
     /// <remarks>
     /// The playtest's flattest sentence was "I do not know what the skills do, or what difference the
     /// ones I picked make", and it was a fair description of this screen: it asked for four picks out
     /// of thirty-six combinations and printed only their names. The text is <see cref="BuildGlossary"/>,
     /// in Core, derived from the same constants the fight reads — so a retuned cooldown cannot leave a
-    /// lie behind on this panel.
+    /// lie behind on this panel. WHICH of those strings the strip shows is decided in one place, and
+    /// this is not it: see <see cref="ReadingFor"/>.
     /// </remarks>
-    private void DrawExplainer(SpriteBatch b, Form form, Source source, bool showingSelection)
+    private void DrawExplainer(SpriteBatch b, Explanation what)
     {
         var x = PickPanel.X + 34;
         var width = PickPanel.Width - 68;
@@ -786,26 +850,46 @@ public sealed class WeaveScreen
         // move when a row is added or a cell is resized, and a magic number does not move with them.
         var top = FormCell(Forms.Length - 1).Bottom + 16;
         var y = top;
+        var floor = PickPanel.Bottom - 26;
 
         _ui.Fill(b, new Rectangle(x - 10, top - 10, width + 20, PickPanel.Bottom - top - 16), Quiet);
 
-        _ui.TextBig(b, $"{FormName(form)} — {BuildGlossary.FormHeadline(form)}", x, y,
-                    showingSelection ? Gold : Bone, UiTypography.Body);
+        // ONE LINE, ALWAYS. A title allowed to wrap would push the paragraph down out of the strip,
+        // which is the overflow this whole reading exists to stop.
+        _ui.TextBig(b, FitBig(what.Title, width, UiTypography.Body), x, y,
+                    what.IsSelection ? Gold : Bone, UiTypography.Body);
         y += 26;
 
-        foreach (var line in _ui.WrapBig(BuildGlossary.FormRule(form), width, UiTypography.Secondary))
+        foreach (var line in _ui.WrapBig(what.Body, width, UiTypography.Secondary))
         {
+            // BOUNDED, so a longer entry than any in the catalogue today cannot draw on the frame art.
+            if (y + 20 > floor) { _ui.TextBig(b, "…", x, y, Bone, UiTypography.Secondary); break; }
             _ui.TextBig(b, line, x, y, Bone, UiTypography.Secondary);
             y += 20;
         }
+    }
 
-        y += 8;
-        var col = SourceColor.GetValueOrDefault(source, Bone);
-        _ui.TextBig(b, SourceName(source), x, y, col, UiTypography.Secondary);
-        // SIGNATURE first — what the element DOES — then the matchup, which is a nudge now.
-        _ui.TextBig(b, BuildGlossary.SourceLine(source), x + 92, y, Slate, UiTypography.Secondary);
-        y += 20;
-        _ui.TextBig(b, BuildGlossary.MatchupLine(source), x + 92, y, Slate * 0.85f, UiTypography.Secondary);
+    /// <summary>
+    /// A title line: what kind of thing it is, then its name — unless the name already says the kind.
+    /// </summary>
+    /// <remarks>
+    /// Twelve of the thirteen Vows are called "VOW OF something", so a flat prefix reads
+    /// "VOW: VOW OF THE DELIBERATE". The thirteenth (RECKLESS OFFERING) needs the word, which is why
+    /// the prefix is conditional rather than simply dropped.
+    /// </remarks>
+    private static string Titled(string kind, string name)
+    {
+        var n = name.ToUpperInvariant();
+        return n.StartsWith(kind, StringComparison.Ordinal) ? n : $"{kind}: {n}";
+    }
+
+    /// <summary>Truncate to a pixel width at a given size — <see cref="Fit"/> measures at the default.</summary>
+    private string FitBig(string text, int width, int px)
+    {
+        if (_ui.MeasureBig(text, px) <= width) return text;
+        var s = text;
+        while (s.Length > 1 && _ui.MeasureBig(s + "…", px) > width) s = s[..^1];
+        return s.TrimEnd() + "…";
     }
 
     private void DrawVows(SpriteBatch b, Point hit)
