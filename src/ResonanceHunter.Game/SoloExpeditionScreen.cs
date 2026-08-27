@@ -1272,8 +1272,9 @@ public sealed class SoloExpeditionScreen
         // that hid the dock outright.
         DrawBattleControls(b, hit, clicked && !_logOpen);
         DrawSkillDock(b);
+        HeaderStackBottom = StageHeaderBottomY;                   // the strip or the boss bar lowers it
         if (_isBossWave) DrawBossBar(b);                          // §10/§12: screen-space, NOT arena-clipped
-        DrawEnemyLine(b);                                          // the wave's live line under the header
+        DrawEnemyLine(b);                                          // the wave's live strip under the header
         // The red flash on a fall covers the whole 1920x1080 canvas, so it draws in this UNCLIPPED
         // pass, over the rails and panels too — inside the arena batch the scissor cut it down to the
         // arena rectangle. The settings' SCREEN FLASH switch still governs it.
@@ -1597,29 +1598,6 @@ public sealed class SoloExpeditionScreen
         // how much life the wave has left.
     }
 
-    /// <summary>
-    /// The live enemy line under the stage header: the wave's kind and affixes, how many creatures still
-    /// stand, and the wave's remaining life. Skipped on a boss wave — the boss bar and its name are that
-    /// wave's line.
-    /// </summary>
-    private void DrawEnemyLine(SpriteBatch b)
-    {
-        if (_replay is null || _run is null || _isBossWave) return;
-        var label = _run.LastWaveArchetype.ToString().ToUpperInvariant();
-        var affixes = _run.LastWaveAffixes ?? Array.Empty<Affix>();
-        if (affixes.Count > 0) label += " · " + string.Join(" + ", affixes.Select(a => a.ToString().ToUpperInvariant()));
-        var total = _replay.CreatureCount;
-        var alive = 0;
-        for (var i = 0; i < total; i++) if (_replay.CreatureAlive(i)) alive++;
-        var life = (int)MathF.Round(_replay.EnemyHealthFraction * 100f);
-        var line = total > 0 ? $"{label}   ·   {alive} OF {total} STANDING   ·   {life}% LIFE LEFT" : label;
-        _ui.TextCenterBig(b, line, StageHeaderCentreX, StageHeaderBottomY + 6, UiKit.Vellum, UiTypography.Secondary);
-    }
-
-    /// <summary>The stage header's centre and bottom edge — the enemy line hangs from it.</summary>
-    private const int StageHeaderCentreX = 910;
-    private const int StageHeaderBottomY = 153;
-
     private void DrawNormalEnemy(SpriteBatch b, bool attacking)
     {
         var comp = _run?.LastWaveCreatures ?? Array.Empty<WaveCreature>();
@@ -1745,6 +1723,7 @@ public sealed class SoloExpeditionScreen
         // Below the stage header (which ends at y=153) and right of the Hunter HUD (which ends at x=596).
         // At (510,145,900,46) it drove straight through both of them.
         var bar = new Rectangle(660, 200, 600, 54);
+        HeaderStackBottom = bar.Bottom;   // the host's toasts hang under the boss bar, not across it
         // The dev fixture's underlying wave-2 enemy is already dead (0%), so pose a representative fill.
         var frac = DevForceBoss ? 0.78f : Math.Clamp(_replay!.EnemyHealthFraction, 0f, 1f);
         // Name ABOVE the bar, not on it. Gold on the molten fill was gold-on-gold — the boss's name, the
@@ -1842,27 +1821,22 @@ public sealed class SoloExpeditionScreen
         var shown = Log.Entries[_logIndex];
         var older = Log.OlderThan(_logIndex);
 
-        _ui.TextCenterBig(b, "EXPEDITION LOG", 960, 120, Gold, UiTypography.ScreenTitle, TextFace.Display);
-        _ui.TextCenter(b, $"{_logIndex + 1} OF {Log.Count}   \u00b7   \u2039 \u203a TO STEP   \u00b7   L CLOSES", 960, 172, Slate);
+        var panel = LogPanel;
+        DrawReportPanel(b, panel, shown, older);
 
-        DrawReportPanel(b, shown, older);
-
-        // THE PAGE BUTTONS BELONG TO THE PANEL THEY PAGE, and they were placed by absolute literals
-        // that landed on top of other things entirely: "back" at x=300 sat in the middle of the
-        // battle-control rail and covered the AUTO HUNT label, while "forward" at x=1500 overlapped the
-        // report panel's own right ornament and then ate the leading characters of the REWARD ACTIVITY
-        // rows behind it. The only two interactive things on this screen were drawn over two panels
-        // that had nothing to do with them.
-        //
-        // Docked inside the report, in the band it already leaves empty at its foot, and labelled with
-        // a verb \u2014 a bare chevron tells a new player nothing about what it steps through.
-        var reportPanel = new Rectangle(ArenaRect.X + 40, 250, ArenaRect.Width - 80, 690);
-        // A close icon, because "L CLOSES" in the hint line is not a door a mouse player can see
+        // A close icon, because "L CLOSES" in the footer is not a door a mouse player can see
         // (playtest 2026-08-26). It walks the same host path the L key does.
-        if (_ui.CloseButton(b, UiKit.CloseRect(reportPanel), hit, clicked))
+        if (_ui.CloseButton(b, UiKit.CloseRect(panel), hit, clicked))
             WantsLog = true;
-        var prev = new Rectangle(reportPanel.X + 44, reportPanel.Bottom - 104, 200, 64);
-        var next = new Rectangle(reportPanel.Right - 244, reportPanel.Bottom - 104, 200, 64);
+
+        // THE FOOTER: the page buttons belong to the panel they page. They were once placed by absolute
+        // literals that landed on the battle-control rail and the REWARD ACTIVITY rows; now they sit in
+        // the band the report leaves empty at its foot, with the entry count between them and the keys
+        // under it, and labelled with a verb \u2014 a bare chevron tells a new player nothing.
+        var prev = new Rectangle(panel.X + 44, panel.Bottom - 104, 200, 64);
+        var next = new Rectangle(panel.Right - 244, panel.Bottom - 104, 200, 64);
+        _ui.TextCenterBig(b, $"ENTRY {_logIndex + 1} OF {Log.Count}", panel.Center.X, panel.Bottom - 96, Bone, UiTypography.Body);
+        _ui.TextCenterBig(b, "\u2039 \u203a  STEP THROUGH THE LOG   \u00b7   L  CLOSES IT", panel.Center.X, panel.Bottom - 68, Slate, UiTypography.Secondary);
         if (_ui.Button(b, prev, "\u2039  OLDER", hit, clicked, enabled: _logIndex < Log.Count - 1)
             && _logIndex < Log.Count - 1) _logIndex++;
         if (_ui.Button(b, next, "NEWER  \u203a", hit, clicked, enabled: _logIndex > 0)
@@ -1870,74 +1844,162 @@ public sealed class SoloExpeditionScreen
     }
 
     /// <summary>
+    /// The log's panel: the arena's width less a margin, from under the currency pills to above the dock.
+    /// </summary>
+    /// <remarks>
+    /// Its aspect is held at or above 1.30 on purpose: <see cref="UiKit.Panel"/> picks its frame art by
+    /// aspect, and the squarer frame wears diamonds at every edge's midpoint that reach thirty pixels
+    /// into the panel — they crossed the table's right column and the footer's key hint the first time
+    /// this was drawn taller than wide-ish. The medium frame's ornaments are small.
+    /// </remarks>
+    private static readonly Rectangle LogPanel = new(ArenaRect.X + 10, 130, ArenaRect.Width - 20, 800);
+
+    /// <summary>What a diff row is called on screen \u2014 the table's own names, so the two blocks agree.</summary>
+    private static string DiffLabel(string coreLabel) => coreLabel switch
+    {
+        "DEPTH" => "WAVES CLEARED",
+        "HIT SIZE" => "AVERAGE HIT",
+        "ABSORBED" => "ARMOUR ABSORBED",
+        "WALL" => "THE WALL",
+        _ => coreLabel,
+    };
+
+    /// <summary>A diff value in plain words: no slash abbreviations, and a count of waves is a whole number.</summary>
+    private static string DiffValue(string label, float v, string unit) => unit.Trim() switch
+    {
+        "%" => $"{v:F1}%",
+        "targets/cast" => $"{v:F1} per cast",
+        _ when label == "DEPTH" => $"{v:F0}",
+        _ => $"{v:F1}",
+    };
+
+    private static readonly Color Better = new(0x8C, 0xC8, 0x5A);
+
+    /// <summary>
     /// The report itself, as the log shows it. The death popup that shared this layout is gone — on a
     /// fall the arena shows only the short fallen banner, and this panel waits in the log.
     /// </summary>
-    private void DrawReportPanel(SpriteBatch b, RunReport r, RunReport? previous)
+    /// <remarks>
+    /// Laid out as a report to be read, top to bottom (playtest 2026-08-28: "the Expedition Log's
+    /// content, its texts and its UX look quite bad"): a caption naming the screen; a title band coloured
+    /// by the outcome, with the wave it ended at on the left and what was cleared on the right; the
+    /// wave that ended it; the verdict, large enough to read as the one sentence that matters; the five
+    /// measures as a table — names left, figures right-aligned to one edge with their units dimmer,
+    /// what each points at on the far right, a hairline between rows; then what changed since the last
+    /// run here as before → after pairs with the change in a coloured chip. The footer with the page
+    /// buttons is the caller's. Nothing here is measured; every number is <see cref="RunReport"/>'s.
+    /// </remarks>
+    private void DrawReportPanel(SpriteBatch b, Rectangle panel, RunReport r, RunReport? previous)
     {
-        // 690, not 620. The diff block below draws five lines and only three of them cleared the
-        // bottom frame — the last two were painted over the panel's own ornament. The clipped lines
-        // are the WALL and the ABSORBED delta: the two that answer "what stopped me" and "did my
-        // change help", which is the entire reason the report exists.
-        var panel = new Rectangle(ArenaRect.X + 40, 250, ArenaRect.Width - 80, 690);
-        _ui.Panel(b, panel);
-        var x = panel.X + 44;
-        var right = panel.Right - 44;
+        _ui.Panel(b, panel);   // the gold nine-slice: this IS a modal
+        // 72 in from the frame, not 44: the medium frame's side ornaments reach about 60 px in at
+        // mid-height, and a right-aligned column any nearer sits under them.
+        var x0 = panel.X + 72;
+        var x1 = panel.Right - 72;
+        var w = x1 - x0;
+        var top = panel.Y;
 
-        // FELL, in the title. Every entry in this log is a death report, and it must say so plainly —
-        // "DEPTH 12" read as a score, not as an ending.
-        _ui.TextCenterBig(b, r.IsRecord ? $"NEW RECORD — FELL AT WAVE {r.WallWave}" : $"FELL AT WAVE {r.WallWave}",
-            panel.Center.X, panel.Y + 34, r.IsRecord ? Gold : Ember, UiTypography.RegionTitle);
+        // THE CAPTION, level with the close icon: what this screen is.
+        _ui.TextBig(b, "EXPEDITION LOG", x0, top + 44, Gold, UiTypography.SectionTitle, TextFace.Display);
+
+        // THE TITLE BAND. FELL, in the title: every entry in this log is the end of a run, and it must
+        // say so plainly — "DEPTH 12" once read as a score, not as an ending. Ember for a fall, gold
+        // for a stall (the clock ran out, the champion stood); a record is a chip, not a second title.
+        var stalled = r.Outcome == WaveOutcome.Stalled;
+        var tint = stalled ? Gold : Ember;
+        var band = new Rectangle(x0, top + 92, w, 56);
+        _ui.Fill(b, band, tint * 0.16f);
+        _ui.Fill(b, new Rectangle(band.X, band.Y, 5, band.Height), tint);
+        Hairline(b, band.X, band.Bottom - 1, band.Width, tint * 0.5f);
+        _ui.TextBig(b, stalled ? $"STALLED AT WAVE {r.WallWave}" : $"FELL AT WAVE {r.WallWave}",
+            band.X + 24, band.Y + 8, tint, UiTypography.RegionTitle, TextFace.Display);
+        var cleared = $"{r.Depth} WAVE{(r.Depth == 1 ? "" : "S")} CLEARED";
+        var clearedRight = band.Right - 24;
+        _ui.TextRightBig(b, cleared, clearedRight, band.Y + 18, Bone, UiTypography.Body);
+        if (r.IsRecord)
+        {
+            var chipX = clearedRight - _ui.MeasureBig(cleared, UiTypography.Body) - 16 - ChipWidth("NEW RECORD", 14);
+            Chip(b, chipX, band.Y + 17, "NEW RECORD", Gold, Gold * 0.7f, 14);
+        }
 
         // THE WALL — named plainly, because the player has to be able to go and look at it.
         var affixes = r.WallAffixes.Count > 0
             ? string.Join(" + ", r.WallAffixes.Select(a => a.ToString().ToUpperInvariant()))
             : "NO AFFIX";
-        _ui.TextCenterBig(b, $"CLEARED {r.Depth} WAVE{(r.Depth == 1 ? "" : "S")}  ·  {r.WallArchetype.ToString().ToUpperInvariant()} x{r.WallCreatures}  ·  {affixes}",
-            panel.Center.X, panel.Y + 88, UiKit.Vellum, UiTypography.OverlayBody);
+        var y = band.Bottom + 16;
+        Runs(b, x0, y, UiTypography.Secondary,
+            ("THE WAVE THAT ENDED IT   ", Slate),
+            ($"{r.WallArchetype.ToString().ToUpperInvariant()} × {r.WallCreatures}", UiKit.Vellum),
+            ("   ·   ", Slate),
+            (affixes, Bone));
 
-        _ui.TextCenterBig(b, r.Verdict(), panel.Center.X, panel.Y + 126, Gold, UiTypography.Body);
-        _ui.Fill(b, new Rectangle(x, panel.Y + 166, panel.Width - 88, 2), Slate * 0.4f);
-
-        // THE MEASUREMENTS. Each line is a lever.
-        var y = panel.Y + 186;
-        void Row(string label, string value, string points)
+        // THE VERDICT: the one sentence. Large, wrapped, at most two lines. Everything under it flows
+        // from where it ends, so a two-line verdict pushes the table down rather than into it.
+        y += 28;
+        foreach (var line in _ui.WrapBig(r.Verdict(), w, UiTypography.PanelTitle).Take(2))
         {
-            _ui.TextBig(b, label, x, y, Slate, UiTypography.Secondary);
-            _ui.TextBig(b, value, x + 300, y, UiKit.Vellum, UiTypography.Body);
-            _ui.TextRightBig(b, points, right, y + 2, Slate, UiTypography.Secondary);
-            y += 44;
+            _ui.TextBig(b, line, x0, y, UiKit.Vellum, UiTypography.PanelTitle);
+            y += 30;
         }
 
-        Row("ARMOUR ABSORBED", $"{r.AbsorbedFraction:P0}", "hit size");
-        Row("AVERAGE HIT", $"{r.AverageHitSize:F0}", "hit size");
-        Row("REACH", $"{r.TargetsPerActivation:F1} of {r.CreaturesPerWave:F1} per cast", "hits per cast");
-        Row("HEALTH LOST / WAVE", $"{r.HealthLostPerWaveFraction:P0}", "staying alive");
-        Row("SECONDS / WAVE", $"{r.SecondsPerWave:F1}s", "speed");
-
-        _ui.TextBig(b, $"MEASURED OVER THE LAST {r.SampledWaves} WAVE{(r.SampledWaves == 1 ? "" : "S")}", x, y + 4, Slate, UiTypography.Secondary);
-
-        // THE DIFF — what changed since the last attempt here. This is what makes iteration legible.
-        var diff = r.DiffAgainst(previous).ToList();
-        if (diff.Count > 0)
+        // THE MEASUREMENTS. Each line is a lever. Figures right-aligned to one edge, units dimmer
+        // beside them, and what the measure points at on the far right. The column head says which
+        // waves the figures cover — the last band, where the run actually failed.
+        var ty = y + 14;
+        Hairline(b, x0, ty, w, Slate * 0.45f);
+        ty += 12;
+        var xv = x0 + 440;   // the figures' right edge
+        _ui.TextBig(b, "MEASURE", x0, ty, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, $"OVER THE LAST {r.SampledWaves} WAVE{(r.SampledWaves == 1 ? "" : "S")}", xv, ty, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, "POINTS AT", x1, ty, Slate, UiTypography.Secondary);
+        ty += 28;
+        void Row(string label, string figure, string unit, string points)
         {
-            var dy = y + 44;
-            _ui.TextBig(b, "SINCE YOUR LAST RUN HERE", x, dy, Gold, UiTypography.Secondary);
-            dy += 32;
+            _ui.TextBig(b, label, x0, ty, Bone, UiTypography.Body);
+            _ui.TextRightBig(b, figure, xv, ty, UiKit.Vellum, UiTypography.Body);
+            if (unit.Length > 0) _ui.TextBig(b, unit, xv + 8, ty + 3, Slate, UiTypography.Secondary);
+            _ui.TextRightBig(b, points, x1, ty + 3, Slate, UiTypography.Secondary);
+            ty += 36;
+            Hairline(b, x0, ty - 7, w, Slate * 0.18f);
+        }
 
-            // AND CLAMPED TO THE ROOM THERE ACTUALLY IS. Growing the panel fixes today's five lines;
-            // this is what stops the next line added to RunReport.DiffAgainst from silently going
-            // under the frame again. A report that quietly drops its last row is better than one that
-            // draws it where it cannot be read — and the count is derived, so neither happens.
-            const int lineHeight = 28;
-            var lastBaseline = panel.Bottom - UiKit.PanelCorner - 22;
-            var room = Math.Max(0, (lastBaseline - dy) / lineHeight + 1);
+        Row("ARMOUR ABSORBED", $"{r.AbsorbedFraction * 100f:F0}", "% of your damage", "HIT SIZE");
+        Row("AVERAGE HIT", $"{r.AverageHitSize:F0}", "", "HIT SIZE");
+        Row("REACH", $"{r.TargetsPerActivation:F1}", $"of {r.CreaturesPerWave:F1} creatures per cast", "HITS PER CAST");
+        Row("HEALTH LOST PER WAVE", $"{r.HealthLostPerWaveFraction * 100f:F0}", "% of your health", "STAYING ALIVE");
+        Row("TIME PER WAVE", $"{r.SecondsPerWave:F1}", "seconds", "SPEED");
 
-            foreach (var line in diff.Take(Math.Min(5, room)))
+        // THE DIFF — what changed since the last attempt here. This is what makes iteration legible:
+        // before → after, and the change in a chip coloured by whether it went the good way.
+        var dy = ty + 18;
+        _ui.TextBig(b, "SINCE YOUR LAST RUN HERE", x0, dy, Gold, UiTypography.Secondary);
+        Hairline(b, x0, dy + 24, w, Slate * 0.45f);
+        dy += 34;
+        var entries = r.DiffEntries(previous).ToList();
+        if (entries.Count == 0)
+            _ui.TextBig(b, "NO EARLIER RUN IN THIS REGION TO COMPARE WITH.", x0, dy, Slate, UiTypography.Secondary);
+
+        // CLAMPED TO THE ROOM THERE ACTUALLY IS, above the footer's buttons: the next row added to
+        // RunReport's diff must never go under the frame. A report that quietly drops its last row is
+        // better than one that draws it where it cannot be read — and the count is derived.
+        const int pitch = 26;
+        var room = Math.Max(0, (panel.Bottom - 112 - dy) / pitch);
+        var xa = x0 + 330;   // the "before" figures' right edge
+        foreach (var e in entries.Take(room))
+        {
+            _ui.TextBig(b, DiffLabel(e.Label), x0, dy, Slate, UiTypography.Secondary);
+            var was = e.Numeric ? DiffValue(e.Label, e.Was, e.Unit) : e.WasText.ToUpperInvariant();
+            var now = e.Numeric ? DiffValue(e.Label, e.Now, e.Unit) : e.NowText.ToUpperInvariant();
+            _ui.TextRightBig(b, was, xa, dy, Bone, UiTypography.Secondary);
+            _ui.TextBig(b, "→", xa + 12, dy, Slate, UiTypography.Secondary);
+            _ui.TextBig(b, now, xa + 36, dy, UiKit.Vellum, UiTypography.Secondary);
+            if (e.Numeric)
             {
-                _ui.TextBig(b, line, x, dy, UiKit.Vellum, UiTypography.Secondary);
-                dy += lineHeight;
+                var sign = e.Delta >= 0f ? "+" : "";
+                var change = e.Improved switch { true => Better, false => Ember, null => Slate };
+                Chip(b, x0 + 520, dy - 4, $"{sign}{DiffValue(e.Label, e.Delta, e.Unit)}", change, change * 0.6f);
             }
+            dy += pitch;
         }
     }
 
@@ -2103,48 +2165,164 @@ public sealed class SoloExpeditionScreen
     /// <summary>Set by the log button; the host routes it through its own L handling and clears it.</summary>
     public bool WantsLog { get; set; }
 
+    /// <summary>
+    /// The live enemy strip under the stage header: the wave's Source glyph, its kind, its affixes as
+    /// chips, how many creatures still stand, and the pack's remaining life as a thin bar. Skipped on a
+    /// boss wave — the boss bar and its name are that wave's line.
+    /// </summary>
+    /// <remarks>
+    /// It was one small-caps sentence floating under the header ("SWARM · 4 OF 4 STANDING · 86% LIFE
+    /// LEFT"), and it read as a caption that had lost its picture. Now it is a plate of the header's own
+    /// width in the rail's brown row style (the CHEST FILTER row's), so the header and the strip read as
+    /// one stack: where, when, how far — and, underneath, what. The life is a bar, not a percentage in
+    /// words; the count keeps its words because "4 OF 4" alone does not say what is being counted.
+    /// </remarks>
+    private void DrawEnemyLine(SpriteBatch b)
+    {
+        if (_replay is null || _run is null || _isBossWave) return;
+        var strip = EnemyStrip;
+        _ui.Fill(b, strip, new Color(0x14, 0x10, 0x1A, 0xE0));
+        Outline(b, strip, PlateEdge, 2);
+        HeaderStackBottom = strip.Bottom;
+
+        // LEFT: the wave's Source glyph, then its kind.
+        var glyph = new Rectangle(strip.X + 12, strip.Y + 7, 30, 30);
+        if (EnemySource is { } es && _ui.Assets.Get($"source_{es.ToString().ToLowerInvariant()}") is { } g)
+            b.Draw(g, glyph, Color.White);
+        else _ui.Diamond(b, new Rectangle(glyph.X + 6, glyph.Y + 6, 18, 18), EnemySource is { } s2 ? SourceGlow(s2) : Slate);
+        var x = glyph.Right + 10;
+        var kind = _run.LastWaveArchetype.ToString().ToUpperInvariant();
+        _ui.TextBig(b, kind, x, strip.Y + 12, UiKit.Vellum, UiTypography.Body);
+        x += _ui.MeasureBig(kind, UiTypography.Body) + 10;
+
+        // RIGHT: the pack's life as a thin bar, and how many still stand before it.
+        var life = new Rectangle(strip.Right - 12 - 150, strip.Y + 10, 150, 24);
+        _ui.BarArt(b, life, _replay.EnemyHealthFraction, "health");
+        var total = _replay.CreatureCount;
+        var alive = 0;
+        for (var i = 0; i < total; i++) if (_replay.CreatureAlive(i)) alive++;
+        var countLeft = life.X - 14;
+        if (total > 0)
+            countLeft = RunsRight(b, countLeft, strip.Y + 13, UiTypography.Secondary, ($"{alive} OF {total}", Bone), ("  STANDING", Slate));
+
+        // BETWEEN: the affixes as chips, as many as fit; the rest fold into a "+N" chip.
+        var affixes = _run.LastWaveAffixes ?? Array.Empty<Affix>();
+        var limit = countLeft - 16;
+        for (var i = 0; i < affixes.Count; i++)
+        {
+            var text = affixes[i].ToString().ToUpperInvariant();
+            var rest = affixes.Count - i;
+            var more = rest > 1 ? ChipWidth($"+{rest - 1}") + 6 : 0;
+            if (x + ChipWidth(text) + more > limit)
+            {
+                if (x + ChipWidth($"+{rest}") <= limit) Chip(b, x, strip.Y + 11, $"+{rest}", Bone, PlateEdge);
+                break;
+            }
+            x += Chip(b, x, strip.Y + 11, text, Bone, PlateEdge) + 6;
+        }
+    }
+
+    /// <summary>The stage header's centre and bottom edge — the enemy strip hangs from it.</summary>
+    private const int StageHeaderCentreX = 910;
+    private const int StageHeaderBottomY = 153;
+
+    /// <summary>The enemy strip: the header's width, six pixels under its frame.</summary>
+    private static readonly Rectangle EnemyStrip = new(630, StageHeaderBottomY + 7, 560, 44);
+
+    /// <summary>
+    /// Where the header stack ends this frame — the enemy strip's foot, the boss bar's, or the header's
+    /// own — so the host can hang its transient toasts under it rather than across it.
+    /// </summary>
+    public int HeaderStackBottom { get; private set; } = StageHeaderBottomY;
+
     private void DrawStageHeader(SpriteBatch b, string regionName, bool isBossWave)
     {
-        // Rev 3 §12: stage header (630,18,560,135) — narrower, so it clears the currency bar (≥20px gap). One
-        // clean hierarchy region → depth → progress → wave, all centred at x=910 (the banner centre).
+        // Rev 3 §12: stage header (630,18,560,135) — narrower, so it clears the currency bar (≥20px gap),
+        // and inside the tour's header spotlight (620,8,580,152). ONE HIERARCHY, top to bottom: WHERE (the
+        // region, in the display face), WHEN (the wave, and the run's state beside it), HOW FAR (the
+        // conquest, a small label and a thin bar on one line). WHAT is being fought hangs under the panel
+        // in DrawEnemyLine at the same width, so the two read as one stack (playtest 2026-08-28: "the wave
+        // information texts look quite bad" — three lines of three sizes with a bar between two of them).
         var bar = new Rectangle(630, 18, 560, 135);
         // The quiet frame, like every other panel on this screen (UiKit.PanelQuiet: gold is for modals).
         _ui.PanelQuiet(b, bar);
-        const int cx = 910;
+        const int cx = StageHeaderCentreX;
         // §19.2: render the region title at 36, shrinking to a floor of 28 to fit 490px — never ellipsize the
         // ACTIVE region title. (Two-line fallback below 28 is a noted follow-up; region names fit at 28.)
         var title = regionName.ToUpperInvariant();
         var titlePx = UiTypography.RegionTitle;
         while (titlePx > 28 && _ui.MeasureBig(title, titlePx) > 490) titlePx--;
-        _ui.TextCenterBig(b, title, cx, 32 + (UiTypography.RegionTitle - titlePx) / 2, Gold, titlePx, TextFace.Display);
-        // CONQUEST, not DEPTH: "depth" was three different things across the UI (this count of waves
-        // toward the conquest, a region's best depth, and the corruption tier). This is the conquest.
-        // Past the conquest bar the banner counts OVERWAVE — how far beyond the bar this descent has gone
-        // (playtest 2026-08-26: "after the map is conquered, mark it with something like Overwave").
-        var over = Math.Max(0, _replayWave - ConquerAt);
-        var conquered = RegionConquered || Deepest >= ConquerAt;
-        var conquestLine = conquered
-            ? (over > 0 ? $"CONQUERED · OVERWAVE +{over}" : "CONQUERED")
-            : $"CONQUEST {Deepest} / {ConquerAt}";
-        _ui.TextCenterBig(b, conquestLine, cx, 73, conquered ? Gold : Bone, UiTypography.StageLabel);
-        _ui.BarArt(b, new Rectangle(710, 102, 400, 18),
-            conquered ? 1f : ConquerAt > 0 ? Math.Clamp(Deepest / (float)ConquerAt, 0f, 1f) : 0f, "progress");
-        // THE WAVE LINE CARRIES THE RUN'S STATE NOW, which is what the deleted EXPEDITION plate was for.
+        _ui.TextCenterBig(b, title, cx, 28 + (UiTypography.RegionTitle - titlePx) / 2, Gold, titlePx, TextFace.Display);
+
+        // THE WAVE LINE CARRIES THE RUN'S STATE, which is what the deleted EXPEDITION plate was for.
         // Nothing is appended while the run is simply running: "ACTIVE" was true of every frame this
         // screen has ever drawn, so it distinguished nothing and only made the line longer.
         var wave = $"WAVE {Math.Max(1, _replayWave)}";
         if (CorruptionTier > 0) wave += $"  ·  {CorruptionLook.For(CorruptionTier).Name}";
+        var waveTint = isBossWave ? Gold : Bone;
+        const int waveY = 70;
         if (RunState() is { } st)
-        {
-            var gap = _ui.MeasureBig("  —  ", UiTypography.OverlayTitle);
-            var full = _ui.MeasureBig(wave, UiTypography.OverlayTitle) + gap + _ui.MeasureBig(st.Text, UiTypography.OverlayTitle);
-            var wx = cx - full / 2;
-            _ui.TextBig(b, wave, wx, 124, isBossWave ? Gold : Bone, UiTypography.OverlayTitle);
-            _ui.TextBig(b, "  —  ", wx + _ui.MeasureBig(wave, UiTypography.OverlayTitle), 124, Slate, UiTypography.OverlayTitle);
-            _ui.TextBig(b, st.Text, wx + _ui.MeasureBig(wave, UiTypography.OverlayTitle) + gap, 124, st.Tint, UiTypography.OverlayTitle);
-        }
-        else _ui.TextCenterBig(b, wave, cx, 124, isBossWave ? Gold : Bone, UiTypography.OverlayTitle);
+            RunsCenter(b, cx, waveY, UiTypography.StageLabel, (wave, waveTint), ("  —  ", Slate), (st.Text, st.Tint));
+        else _ui.TextCenterBig(b, wave, cx, waveY, waveTint, UiTypography.StageLabel);
+
+        // CONQUEST, not DEPTH: "depth" was three different things across the UI (this count of waves
+        // toward the conquest, a region's best depth, and the corruption tier). This is the conquest.
+        // Past the conquest bar the banner counts OVERWAVE — how far beyond the bar this descent has gone
+        // (playtest 2026-08-26: "after the map is conquered, mark it with something like Overwave").
+        // The label and the bar share one line, centred as a group: the goal is the quietest fact here.
+        var over = Math.Max(0, _replayWave - ConquerAt);
+        var conquered = RegionConquered || Deepest >= ConquerAt;
+        var label = conquered
+            ? new[] { (over > 0 ? $"CONQUERED  ·  OVERWAVE +{over}" : "CONQUERED", Gold) }
+            : new[] { ("CONQUEST  ", Slate), ($"{Deepest} / {ConquerAt}", Bone) };
+        const int barW = 240, barH = 16, gap = 16, barY = 106;
+        var labelW = RunsWidth(UiTypography.Secondary, label);
+        var groupX = cx - (labelW + gap + barW) / 2;
+        Runs(b, groupX, barY - 1, UiTypography.Secondary, label);
+        _ui.BarArt(b, new Rectangle(groupX + labelW + gap, barY, barW, barH),
+            conquered ? 1f : ConquerAt > 0 ? Math.Clamp(Deepest / (float)ConquerAt, 0f, 1f) : 0f, "progress");
     }
+
+    // ── Small typographic helpers for the header stack and the log. ─────────────────────────────
+
+    /// <summary>Draws runs of text in different colours on one line; returns the x after the last one.</summary>
+    private int Runs(SpriteBatch b, int x, int y, int px, params (string Text, Color Tint)[] runs)
+    {
+        foreach (var (t, c) in runs)
+        {
+            _ui.TextBig(b, t, x, y, c, px);
+            x += _ui.MeasureBig(t, px);
+        }
+        return x;
+    }
+
+    private int RunsWidth(int px, params (string Text, Color Tint)[] runs) => runs.Sum(r => _ui.MeasureBig(r.Text, px));
+
+    private void RunsCenter(SpriteBatch b, int cx, int y, int px, params (string Text, Color Tint)[] runs)
+        => Runs(b, cx - RunsWidth(px, runs) / 2, y, px, runs);
+
+    /// <summary>Runs ending at a right edge; returns the x they start at.</summary>
+    private int RunsRight(SpriteBatch b, int right, int y, int px, params (string Text, Color Tint)[] runs)
+    {
+        var x = right - RunsWidth(px, runs);
+        Runs(b, x, y, px, runs);
+        return x;
+    }
+
+    /// <summary>A small labelled chip — a dark plate, a one-pixel edge, the word inside. Returns its width.</summary>
+    private int Chip(SpriteBatch b, int x, int y, string text, Color ink, Color edge, int px = 13)
+    {
+        var w = ChipWidth(text, px);
+        var r = new Rectangle(x, y, w, 22);
+        _ui.Fill(b, r, new Color(0x14, 0x10, 0x1A, 0xE0));
+        Outline(b, r, edge, 1);
+        _ui.TextBig(b, text, x + 8, y + 4, ink, px);
+        return w;
+    }
+
+    private int ChipWidth(string text, int px = 13) => _ui.MeasureBig(text, px) + 16;
+
+    private void Hairline(SpriteBatch b, int x, int y, int w, Color c) => _ui.Fill(b, new Rectangle(x, y, w, 1), c);
 
     private static readonly Color PlateEdge = new(0x74, 0x62, 0x3E);
 

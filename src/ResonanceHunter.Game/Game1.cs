@@ -3100,7 +3100,7 @@ public class Game1 : Game
 
         var fade = Math.Clamp(_noticeTimer / 1.0f, 0f, 1f);
         var parts = _notice.Split('\n');
-        var y = _bootTimer > 0f && _bootMessage.Length > 0 && !_tourActive ? 284 : 176;
+        var y = _bootTimer > 0f && _bootMessage.Length > 0 && !_tourActive ? ToastTop + ToastHeight + 8 : ToastTop;
         var r = new Rectangle(560, y, 800, 96);
         _ui.PanelQuiet(_batch, r, fade);   // a toast is not a modal — the quiet frame (UiKit.PanelQuiet)
         _ui.TextCenterBig(_batch, _ui.ShortenBig(parts[0], r.Width - 90, UiTypography.OverlayTitle),
@@ -3636,12 +3636,20 @@ public class Game1 : Game
         // Framed panel art rather than a flat band with two gold rules. The flat version butted straight
         // against the stage banner above it and read as a seam in the chrome; a panel with its own border
         // sits clearly ON TOP of the scene, which is what a transient toast should do.
-        var r = new Rectangle(660, 176, 600, 96);
+        // The stage header's own width (630..1190), hung under whatever the header stack ends with — the
+        // enemy strip, or the boss bar — so the three read as one column rather than a toast across a
+        // bar. On a menu screen there is no stack; it takes the old place under the title.
+        var r = new Rectangle(630, ToastTop, 560, ToastHeight);
         // The quiet frame, like the stage header it sits under — gold is for modals (UiKit.PanelQuiet).
         _ui.PanelQuiet(_batch, r, fade);
-        _ui.TextCenterBig(_batch, parts[0], r.Center.X, r.Y + 22, _bootColor * fade, UiTypography.OverlayTitle);
-        if (parts.Length > 1) _ui.TextCenterBig(_batch, parts[1], r.Center.X, r.Y + 56, Bone * fade, UiTypography.OverlayBody);
+        _ui.TextCenterBig(_batch, parts[0], r.Center.X, r.Y + 18, _bootColor * fade, UiTypography.OverlayTitle);
+        if (parts.Length > 1) _ui.TextCenterBig(_batch, parts[1], r.Center.X, r.Y + 50, Bone * fade, UiTypography.OverlayBody);
     }
+
+    private const int ToastHeight = 88;
+
+    /// <summary>Where a toast hangs: under the hunt's header stack, or under a menu screen's title.</summary>
+    private int ToastTop => OverlayActive ? 176 : _expedition.HeaderStackBottom + 8;
 
     private bool Pressed(Keys k) => !_swallowInput && _keys.IsKeyDown(k) && _prevKeys.IsKeyUp(k);
 

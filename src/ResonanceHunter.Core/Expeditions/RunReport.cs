@@ -90,15 +90,30 @@ public sealed record RunReport
     /// </remarks>
     public IEnumerable<string> DiffAgainst(RunReport? previous)
     {
+        foreach (var e in DiffEntries(previous))
+            yield return e.Numeric ? Line(e.Label, e.Was, e.Now, e.Unit) : $"{e.Label}   {e.WasText} -> {e.NowText}";
+    }
+
+    /// <summary>
+    /// The same diff as <see cref="DiffAgainst"/>, as structured rows — for a screen that wants to lay
+    /// the before, the after and the change out in columns rather than print one string per line.
+    /// </summary>
+    /// <remarks>
+    /// Nothing new is measured here; every row is one <see cref="DiffAgainst"/> line taken apart. The
+    /// screen colours a change by <see cref="DiffEntry.Improved"/>, which is why each row says which
+    /// direction is the good one: more depth, bigger hits and more reach are better, less absorbed is.
+    /// </remarks>
+    public IEnumerable<DiffEntry> DiffEntries(RunReport? previous)
+    {
         if (previous is null || previous.RegionId != RegionId) yield break;
 
-        yield return Line("DEPTH", previous.Depth, Depth, "");
-        yield return Line("HIT SIZE", previous.AverageHitSize, AverageHitSize, "");
-        yield return Line("REACH", previous.TargetsPerActivation, TargetsPerActivation, " targets/cast");
-        yield return Line("ABSORBED", previous.AbsorbedFraction * 100f, AbsorbedFraction * 100f, "%");
+        yield return DiffEntry.Of("DEPTH", previous.Depth, Depth, "", higherIsBetter: true);
+        yield return DiffEntry.Of("HIT SIZE", previous.AverageHitSize, AverageHitSize, "", higherIsBetter: true);
+        yield return DiffEntry.Of("REACH", previous.TargetsPerActivation, TargetsPerActivation, " targets/cast", higherIsBetter: true);
+        yield return DiffEntry.Of("ABSORBED", previous.AbsorbedFraction * 100f, AbsorbedFraction * 100f, "%", higherIsBetter: false);
 
         if (previous.WallArchetype != WallArchetype)
-            yield return $"WALL   {previous.WallArchetype} -> {WallArchetype}";
+            yield return DiffEntry.Named("WALL", previous.WallArchetype.ToString(), WallArchetype.ToString());
     }
 
     private static string Line(string label, float was, float now, string unit)
@@ -107,6 +122,33 @@ public sealed record RunReport
         var sign = delta >= 0 ? "+" : "";
         return $"{label,-10} {was:F1}{unit} -> {now:F1}{unit}   ({sign}{delta:F1})";
     }
+}
+
+/// <summary>One row of a run-to-run diff: what it is called, what it was, what it is now.</summary>
+/// <param name="Label">The measure's name, as the report prints it.</param>
+/// <param name="Numeric">True for a measured value; false for a named one (the wall's archetype).</param>
+/// <param name="Was">The previous run's value (numeric rows only).</param>
+/// <param name="Now">This run's value (numeric rows only).</param>
+/// <param name="Unit">The unit the value is printed in, leading space included ("" for none).</param>
+/// <param name="HigherIsBetter">Which direction of change is the good one (numeric rows only).</param>
+/// <param name="WasText">The previous run's value as a word (named rows only).</param>
+/// <param name="NowText">This run's value as a word (named rows only).</param>
+public readonly record struct DiffEntry(
+    string Label, bool Numeric, float Was, float Now, string Unit, bool HigherIsBetter, string WasText, string NowText)
+{
+    /// <summary>A measured row.</summary>
+    public static DiffEntry Of(string label, float was, float now, string unit, bool higherIsBetter)
+        => new(label, true, was, now, unit, higherIsBetter, "", "");
+
+    /// <summary>A named row — no delta, only a change of word.</summary>
+    public static DiffEntry Named(string label, string was, string now)
+        => new(label, false, 0f, 0f, "", true, was, now);
+
+    /// <summary>How much the value moved (numeric rows only).</summary>
+    public float Delta => Now - Was;
+
+    /// <summary>Whether the change is in the good direction; null when nothing moved or the row is named.</summary>
+    public bool? Improved => !Numeric || MathF.Abs(Delta) < 0.05f ? null : (Delta > 0f) == HigherIsBetter;
 }
 
 /// <summary>Accumulates per-wave metrics into the band-scoped summary the report needs.</summary>
