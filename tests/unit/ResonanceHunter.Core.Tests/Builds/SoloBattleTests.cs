@@ -384,12 +384,13 @@ public class SoloBattleTests
     public void test_cooldowns_are_sized_to_a_wave_not_to_each_other()
     {
         // The lesson the old skills layer learned the hard way: cooldowns longer than a wave can never
-        // fire. Under the beat model (2026-08-27) waves run 6–15 s and the longest rhythm skill is
-        // three beats (4.5 s at speed 1.0); every non-passive Form must fire inside three beats.
+        // fire. Under the beat model waves run 6-15 s and, since the cooldowns doubled (2026-08-29),
+        // the longest rhythm skill is six beats (9 s at speed 1.0); every non-passive Form must fire
+        // inside six beats — a wave that ends sooner is a wave the swing cleared, which is the point.
         foreach (var f in Enum.GetValues<Form>())
         {
             if (FormBehaviour.IsPassive(f)) continue;
-            Assert.True(FormBehaviour.BaseCooldownMs(f) <= 3 * SoloBattle.DefaultBeatMs,
+            Assert.True(FormBehaviour.BaseCooldownMs(f) <= 6 * SoloBattle.DefaultBeatMs,
                 $"{f} has a {FormBehaviour.BaseCooldownMs(f)}ms cooldown — longer than a wave, so it can never fire");
         }
     }

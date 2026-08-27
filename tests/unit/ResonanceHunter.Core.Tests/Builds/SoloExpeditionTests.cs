@@ -103,8 +103,10 @@ public class SoloExpeditionTests
     [Fact]
     public void test_a_stronger_build_pushes_deeper()
     {
+        // 2.5x, was 1.6x — depth moves in whole waves and the beat's longer waits widened a wave's step;
+        // the claim is that damage REACHES the run, not what a particular multiplier buys.
         var naked = DepthOf(BuildOf(BuildMods.None, Form.Strike));
-        var mighty = DepthOf(BuildOf(new BuildMods(1.6f, 1f, 1f, 1f, 1f), Form.Strike));
+        var mighty = DepthOf(BuildOf(new BuildMods(2.5f, 1f, 1f, 1f, 1f), Form.Strike));
 
         Assert.True(mighty > naked, $"more damage must reach the run: naked={naked} mighty={mighty}");
     }
@@ -116,8 +118,11 @@ public class SoloExpeditionTests
     [Fact]
     public void test_the_passive_mods_reach_the_run()
     {
+        // 2.5x, was 1.5x: depth moves in whole waves, and with the beat's longer waits a one-and-a-half
+        // multiplier no longer crosses a wave boundary on this fixture. The claim is that the passive
+        // mods REACH the run at all, not how much a particular multiplier is worth.
         var naked = DepthOf(BuildOf(BuildMods.None, Form.Strike));
-        var trained = DepthOf(BuildOf(new BuildMods(1.5f, 1.5f, 1f, 1f, 1f), Form.Strike));
+        var trained = DepthOf(BuildOf(new BuildMods(2.5f, 2.5f, 1f, 1f, 1f), Form.Strike));
 
         Assert.True(trained > naked, $"passive nodes must reach the run: naked={naked} trained={trained}");
     }

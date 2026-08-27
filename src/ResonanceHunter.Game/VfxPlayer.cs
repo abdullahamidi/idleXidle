@@ -32,6 +32,12 @@ public sealed class VfxPlayer
         public required int CenterX { get; init; }
         public required int CenterY { get; init; }
         public required int Scale { get; init; }
+
+        /// <summary>How much the effect swells over its life: 1 = the authored size, 4 = four times it by the last frame.</summary>
+        public float GrowTo { get; init; } = 1f;
+
+        /// <summary>0 at the first frame, 1 at the last — the growth's clock.</summary>
+        public float Life => Math.Clamp(Elapsed / MathF.Max(0.0001f, SecondsPerFrame * Frames), 0f, 1f);
         public required float SecondsPerFrame { get; init; }
         public required Color Tint { get; init; }
         public float Elapsed;
@@ -109,7 +115,7 @@ public sealed class VfxPlayer
     /// (frames are square) unless <paramref name="frameW"/> is given for non-square strips.
     /// </summary>
     public void Play(string key, int x, int y, int scale = 2, float fps = 18f, Color? tint = null, int frameW = 0,
-                     float delay = 0f)
+                     float delay = 0f, float growTo = 1f)
     {
         if (!Enabled) return;
         if (_assets.Get(key) is not { } sheet) return;
@@ -126,6 +132,7 @@ public sealed class VfxPlayer
             CenterX = x,
             CenterY = y,
             Scale = Math.Max(1, scale),
+            GrowTo = MathF.Max(1f, growTo),
             SecondsPerFrame = 1f / MathF.Max(1f, fps),
             Tint = tint ?? Color.White,
             // A negative start is a DELAY: the effect exists but is not drawn until its clock crosses
@@ -160,7 +167,10 @@ public sealed class VfxPlayer
             // frame: package_06 frames are 512 px, so multiplying them directly would fill the screen. The
             // base unit is 104 physical px (26 at the old ×4 canvas); dividing by the canvas Scale keeps the
             // on-screen size constant (×4 canvas → 26, ×1 canvas → 104). Aspect kept.
-            var h = a.Scale * 104 / Scale;
+            // GROWTH (2026-08-29): an effect may swell across its life — the aura's pulse leaves the
+            // champion and reaches the enemy row, which is what makes it read as a blow rather than a
+            // decoration ("the circle should widen as far as the enemies so there is a hit feeling").
+            var h = (int)MathF.Round(a.Scale * 104 * (a.GrowTo <= 1f ? 1f : 1f + (a.GrowTo - 1f) * a.Life) / Scale);
             var w = h * a.FrameW / a.FrameH;
             b.Draw(a.Sheet, new Rectangle(a.CenterX - w / 2, a.CenterY - h / 2, w, h), src, a.Tint * a.Fade);
         }

@@ -51,8 +51,8 @@ public static class FormBehaviour
     /// </summary>
     public static int CooldownBeats(Form form) => form switch
     {
-        Form.Strike => 3,                // the heavy blow: every third action
-        Form.Projectile => 2,            // every other action
+        Form.Strike => 6,                // the heavy blow: every sixth action
+        Form.Projectile => 4,            // every fourth action
         _ => 0,
     };
 
@@ -60,14 +60,18 @@ public static class FormBehaviour
     /// The time-counted cooldown; for a beat-counted Form this is its beats at action speed 1.0, for
     /// readouts and the wave-length rule (a cooldown must fit a wave).
     /// </summary>
+    // DOUBLED 2026-08-29 ("raise the skills' waiting times so the plain hit matters — we can even double
+    // them"): a rhythm skill costs twice as many actions, so the basic attack fills most of the beats and
+    // TEMPO is felt on the swing rather than only between casts. The hits did NOT double with them — that
+    // is the point; the balance was re-measured instead (see WeavingTuning.FormBaseValue).
     public static int BaseCooldownMs(Form form) => form switch
     {
-        Form.Strike => 3 * SoloBattle.DefaultBeatMs,       // 4500 at speed 1.0
-        Form.Projectile => 2 * SoloBattle.DefaultBeatMs,   // 3000
+        Form.Strike => 6 * SoloBattle.DefaultBeatMs,       // 9000 at speed 1.0
+        Form.Projectile => 4 * SoloBattle.DefaultBeatMs,   // 6000
         Form.Aura => 0,                  // always on — see IsPassive
-        Form.Trap => 4_000,              // rare, and only pays when bitten
-        Form.Mark => 4_000,              // a window, not a rhythm
-        _ => 4_000,                      // Transformation — a window, counted in time
+        Form.Trap => 8_000,              // rare, and only pays when bitten
+        Form.Mark => 8_000,              // a window, not a rhythm
+        _ => 8_000,                      // Transformation — a window, counted in time
     };
 
     /// <summary>
@@ -105,7 +109,11 @@ public static class FormBehaviour
     public static bool IsAmplifier(Form form) => form == Form.Mark;
 
     /// <summary>How long a MARK's window lasts.</summary>
-    public const int MarkWindowMs = 2_500;
+    // FOUR BEATS (6000 ms at speed 1.0), was a flat 2500. A MARK opens a window for the casts that
+    // follow, and when the cooldowns doubled (2026-08-29) the next cast came 6 or 4 beats later — the
+    // window closed before anything could land in it, and the MARK SPECIALIST measured as a node that
+    // made a Mark build WEAKER. A window is measured in actions, like the skills it amplifies.
+    public const int MarkWindowMs = 4 * SoloBattle.DefaultBeatMs;
 
     /// <summary>What a MARK multiplies every other source by while it holds.</summary>
     /// <remarks>

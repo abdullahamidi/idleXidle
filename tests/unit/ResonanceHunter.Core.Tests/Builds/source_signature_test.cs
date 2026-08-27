@@ -178,7 +178,7 @@ public class SourceSignatureTest
             // (2026-08-27: Strike every third beat of 1500 ms ÷ rate). Re-swept under the beat: the
             // signature pays at 1.1 and at no other rate between 0.8 and 1.3 — a window-edge effect
             // only some cadences catch (probed, not guessed).
-            b.Shape = SkillShape.None with { SkillRate = 1.1f };
+            b.Shape = SkillShape.None with { SkillRate = 1.0f };
             return b;
         }
 

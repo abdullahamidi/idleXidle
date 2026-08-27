@@ -186,9 +186,12 @@ public class TriggerLivenessTests
             enemyHealth: 10_000_000f, enemyDamage: 0f, enemyIntervalMs: 1_000,
             ExpeditionTuning.Default, new Random(99));
 
+        // TWO CAST CYCLES PER WINDOW, not five seconds each: since the cooldowns doubled (2026-08-29) a
+        // rhythm skill fires every four to six beats, so a five-second window holds one cast or none and
+        // the comparison measured which window a cast happened to land in.
         var poison = events.Where(e => e.Kind == BattleEventKind.Strike).ToList();
-        var early = poison.Where(e => e.AtMs <= 5_000).Sum(e => e.Amount);
-        var late = poison.Where(e => e.AtMs > 5_000 && e.AtMs <= 10_000).Sum(e => e.Amount);
+        var early = poison.Where(e => e.AtMs <= 15_000).Sum(e => e.Amount);
+        var late = poison.Where(e => e.AtMs > 15_000 && e.AtMs <= 30_000).Sum(e => e.Amount);
 
         Assert.True(late > early, $"venom did not ramp ({early} in the first 5s, {late} in the next)");
     }
@@ -222,7 +225,10 @@ public class TriggerLivenessTests
         var mid = Window(30_000, 60_000);
         var late = Window(90_000, 120_000);
 
-        Assert.True(late <= mid * 1.10f,
+        // 1.25, was 1.10: a STRIKE leaves WOUNDS (+3% per wound, five deep) and with six beats between
+        // casts the wound stack is still filling through the mid window — the late window's extra is the
+        // wound ramp, not the poison pool, which converges within a few casts either way.
+        Assert.True(late <= mid * 1.25f,
             $"venom is still climbing late in the fight ({mid} over 30-60s, {late} over 90-120s) — the pool has no equilibrium");
     }
 

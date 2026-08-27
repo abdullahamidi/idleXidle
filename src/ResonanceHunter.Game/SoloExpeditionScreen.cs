@@ -723,7 +723,8 @@ public sealed class SoloExpeditionScreen
             _auraColour = aura is null ? null : SourceColor.GetValueOrDefault(aura.Source, Bone);
             _lastAuraPulseMs = -1;
             _auraTotal = 0; _auraTotalMs = -1;
-            _auraRings.Clear();
+            _auraSincePulse = 999f;
+            _vfx.Clear();   // no effect may survive a wave boundary
         }
         // The replay's health table is read AFTER the pool refresh, or the HUD prints last wave's pool
         // over this wave's bar for a whole wave (review 2026-08-25: "300/360 with a full bar").
@@ -977,10 +978,11 @@ public sealed class SoloExpeditionScreen
         }
 
         _playheadMs += dt * 1000f * _speedMul;
+        _auraSincePulse += dt;
         if (_hitFlash.Count > 0)
             foreach (var key in _hitFlash.Keys.ToList())
             {
-                var left = _hitFlash[key] - dt * 8f;   // ~120 ms
+                var left = _hitFlash[key] - dt * 5f;   // ~200 ms of life; FlashAt shapes it
                 if (left <= 0f) _hitFlash.Remove(key); else _hitFlash[key] = left;
             }
         if (_skillFlash.Count > 0)
@@ -1032,7 +1034,7 @@ public sealed class SoloExpeditionScreen
                     if (auraTick && e.AtMs != _lastAuraPulseMs)
                     {
                         _lastAuraPulseMs = e.AtMs;
-                        _auraRings.Add(_playheadMs);   // a ring is born at the champion's centre (DrawAuraRings)
+                        PulseAura();
                     }
                     // The swing lunges; a cast already has its clip (UpdateChampionClip aims it at the beat).
                     if (!e.FromSkill) _champLunge = 1f;
@@ -1055,7 +1057,7 @@ public sealed class SoloExpeditionScreen
                     else if (e.Amount > 0) SpawnDamage(e.Amount, e.Slot, crit: e.FromSkill && e.AtMs == trapAtMs, skill: e.FromSkill && e.AtMs == skillAtMs);
                     // The creature that took it FLASHES — drawn additive over its sprite (a tint can only
                     // darken); an aura tick washes the whole pack faintly.
-                    _hitFlash[e.Slot] = auraTick ? 0.45f : 1f;
+                    _hitFlash[e.Slot] = auraTick ? 0.55f : 1f;
                     if (!auraTick && (_strikeCount++ & 1) == 0)   // every other blow: a small, quiet puff
                     {
                         var (hx, hy) = EnemyPoint(e.Slot, 0.45f);
@@ -1302,7 +1304,6 @@ public sealed class SoloExpeditionScreen
         var cbox = new Rectangle(ChampBox.X + push, ChampBox.Y, ChampBox.Width, ChampBox.Height);
         if (_replay!.IsShielded(0)) Outline(b, new Rectangle(cbox.X - 4, cbox.Y - 4, cbox.Width + 8, cbox.Height + 8), Steel, 4);
         DrawChampion(b, cbox, dead: _mode == Mode.Downed);
-        DrawAuraRings(b);   // over the champion: the field is in front of the figure as much as behind
 
         _vfx.Draw(b);
         DrawCallouts(b);
@@ -1543,7 +1544,7 @@ public sealed class SoloExpeditionScreen
             // ADDITIVE and white, over itself — a SpriteBatch tint can only darken a sprite, so the warm
             // tint of the first attempt was invisible on a dark creature (playtest 2026-08-28: "the enemy
             // flash does not work"). No knock-back: the user asked for the flash alone.
-            var hitFl = DevHoldFlash ? 1f : _hitFlash.GetValueOrDefault(i);
+            var hitFl = FlashAt(i);
             var creatureTint = enterTint;
             if (_replay is not null && !_replay.CreatureAlive(i))
             {
@@ -1563,14 +1564,9 @@ public sealed class SoloExpeditionScreen
                     !attacking, creatureTint, crop))
                 if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, box, creatureTint, crop))
                     _ui.Fill(b, new Rectangle(box.X + 20, box.Y + 20, box.Width - 40, box.Height - 40), Ember);
-            if (hitFl > 0f && stripKey is not null && _ui.Assets.WhiteMask(stripKey) is not null)
-            {
-                // The flash: the creature's WHITE SILHOUETTE (AssetLibrary.WhiteMask) drawn over it at the
-                // same frame, fading with the flash — the only way a dark sprite turns white in a
-                // SpriteBatch. (An additive pass only added the sprite's own dark colours: invisible.)
-                _ui.AnimSprite(b, AssetLibrary.MaskKey(stripKey), box, EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps,
-                               !attacking, Color.White * (0.9f * hitFl), crop);
-            }
+            // The flash: the creature's WHITE SILHOUETTE (AssetLibrary.WhiteMask) over it at the same
+            // frame — the only way a dark sprite turns white in a SpriteBatch.
+            FlashOver(b, stripKey, box, EnemyClipSeconds(attacking, compFps, i * 0.31f), compFps, !attacking, hitFl, crop);
 
             // A pip per creature rather than a framed bar — at five across, ornate frames become noise.
             if (_replay is null) continue;
@@ -1652,6 +1648,7 @@ public sealed class SoloExpeditionScreen
             if (staticKey is null || !_ui.SpriteGrounded(b, staticKey, ab, enterTint, crop))
                 _ui.Fill(b, new Rectangle(ebox.X + 40, ebox.Y + 40, ebox.Width - 80, ebox.Height - 80), Ember);
         }
+        FlashOver(b, stripKey, ab, EnemyClipSeconds(attacking, fps), fps, !attacking, FlashAt(0), crop);
 
         // The wind-up telegraph is the attack CLIP itself plus the ember tint blended into the sprite above
         // (playtest 2026-08-23: the old growing red rectangle around the enemy read as "a red box — what is
@@ -2361,9 +2358,10 @@ public sealed class SoloExpeditionScreen
     private Rectangle CleanPanel(SpriteBatch b, Rectangle r, string title)
     {
         _ui.PanelQuiet(b, r);
-        // The standard title line — the quiet frame's top rail is ~20 px deep and the title used to
-        // sit on it (playtest 2026-08-26: "the REWARD ACTIVITY and IDLE RATE titles spill over the frame").
-        _ui.TextBig(b, title, r.X + RailInset, UiKit.TitleTop(r), Gold, UiTypography.PanelTitle);
+        // CENTRED, like every other panel title in the game (playtest 2026-08-29: "the hunt panels'
+        // titles are left-aligned; make them centred"). The quiet frame's top rail is ~20 px deep, so the
+        // baseline comes from UiKit.TitleTop rather than a literal.
+        _ui.TextCenterBig(b, title, r.Center.X, UiKit.TitleTop(r), Gold, UiTypography.PanelTitle);
         return new Rectangle(r.X + RailInset, r.Y + RailTitleBand, r.Width - RailInset * 2, r.Height - RailTitleBand - RailInset);
     }
 
@@ -2975,41 +2973,59 @@ public sealed class SoloExpeditionScreen
     /// <summary>Rig only (`fightflash`): pins every creature's flash so a still capture can prove it draws.</summary>
     public bool DevHoldFlash { get; set; }
 
+    /// <summary>
+    /// How white a creature is RIGHT NOW: the stored 1 -> 0 life shaped into a swell — up over its first
+    /// fifth, down over the rest — so the white arrives INSIDE the blow's animation instead of snapping
+    /// on at its first frame (playtest 2026-08-29).
+    /// </summary>
+    private float FlashAt(int slot)
+    {
+        if (DevHoldFlash) return 0.9f;
+        var life = _hitFlash.GetValueOrDefault(slot);
+        if (life <= 0f) return 0f;
+        var t = 1f - life;                       // 0 at the blow, 1 at the end
+        return t < 0.2f ? t / 0.2f : 1f - (t - 0.2f) / 0.8f;
+    }
+
+    /// <summary>
+    /// Draw a creature's white silhouette over itself at <paramref name="strength"/>. EVERY enemy path
+    /// calls it — the composition, the single creature and the boss — because a flash only the
+    /// composition drew is a flash the player sees on swarms and nowhere else (playtest 2026-08-29:
+    /// "it only works on the small multi-creatures").
+    /// </summary>
+    private void FlashOver(SpriteBatch b, string? stripKey, Rectangle box, float seconds, float fps, bool loop, float strength, float crop)
+    {
+        if (strength <= 0f || stripKey is null || _ui.Assets.WhiteMask(stripKey) is null) return;
+        _ui.AnimSprite(b, AssetLibrary.MaskKey(stripKey), box, seconds, fps, loop, Color.White * (0.9f * strength), crop);
+    }
+
     /// <summary>The slotted Aura's Source colour for the wave being shown, or null when the build carries no Aura.</summary>
     private Color? _auraColour;
     private int _lastAuraPulseMs = -1;
 
-    /// <summary>Birth times (playhead ms) of the aura's rings; each grows from the champion's centre and fades.</summary>
-    private readonly List<float> _auraRings = new();
-    private const float AuraRingMs = 850f;
+    /// <summary>Real seconds since the last aura pulse — the pulse runs on the wall clock, not the replay's.</summary>
+    private float _auraSincePulse = 999f;
 
     /// <summary>
-    /// The aura's picture: a ring per tick, born at the champion's centre, scaling outward and fading
-    /// out in the Aura's Source colour — an always-on field that never touches the champion's own
-    /// animation (playtest 2026-08-28: "starting from the character's centre, scale growing, fade out").
+    /// The aura's pulse: the authored fx_aura ring at the champion, in the Aura's Source colour, GROWING
+    /// across its life until it washes over the enemy row — an always-on field that never touches the
+    /// champion's own animation.
     /// </summary>
-    private void DrawAuraRings(SpriteBatch b)
+    /// <remarks>
+    /// Three tries. A fixed strip at the champion read as a decoration; a ring drawn from line segments
+    /// read as thin and, because it was clocked on the REPLAY's playhead, it froze on screen the moment
+    /// a wave ended and the playhead stopped (playtest 2026-08-29: "the aura effect freezes on screen
+    /// when the wave ends... the first effect was good, if you can give it the expansion it would be very
+    /// good"). So: the first effect, with growth, on the wall clock — VfxPlayer updates with real dt and
+    /// is cleared at every wave start, so nothing can be left standing. GrowTo 5.2 takes the ring from
+    /// 312 px across to about 1620, so its last frames wash over the pack.
+    /// </remarks>
+    private void PulseAura()
     {
         if (_auraColour is not { } colour) return;
-        _auraRings.RemoveAll(t0 => _playheadMs - t0 > AuraRingMs || _playheadMs < t0);
-        var centre = new Vector2(ChampBox.Center.X, ChampBox.Center.Y + 30);
-        foreach (var t0 in _auraRings)
-        {
-            var t = Math.Clamp((_playheadMs - t0) / AuraRingMs, 0f, 1f);
-            var ease = 1f - (1f - t) * (1f - t);                 // fast out of the centre, slowing as it fades
-            var radius = 18f + 230f * ease;
-            var alpha = (1f - t) * (1f - t) * 0.95f;
-            var thick = 7f - 5f * t;
-            const int segments = 72;
-            var prev = centre + new Vector2(radius, 0f);
-            for (var k = 1; k <= segments; k++)
-            {
-                var a = MathF.Tau * k / segments;
-                var next = centre + new Vector2(MathF.Cos(a) * radius, MathF.Sin(a) * radius * 0.55f);   // an ellipse: the ring lies in the room
-                _ui.LineSeg(b, prev, next, thick, colour * alpha);
-                prev = next;
-            }
-        }
+        _auraSincePulse = 0f;
+        _vfx.Play("fx_aura", ChampBox.Center.X, ChampBox.Center.Y + 30, scale: 3, fps: 11f,
+                  tint: colour, growTo: 5.2f);
     }
     private int _auraTotal, _auraTotalMs = -1;
 

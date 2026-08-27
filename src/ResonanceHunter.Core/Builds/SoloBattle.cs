@@ -173,7 +173,7 @@ public static class SoloBattle
     /// 17-second wave. A basic attack that armour eats whole is a stat the player trains for nothing.
     /// At 18 the swing is about a third of a one-skill build's damage and survives armour.
     /// </remarks>
-    public const float AutoAttackDamage = 48f;   // 18 → 48 under the beat (2026-08-27): one swing per 1.5 s, not per 1.2, and the beat's ceiling (see FormBaseValue)
+    public const float AutoAttackDamage = 72f;   // 18 → 48 under the beat (2026-08-27): one swing per 1.5 s, not per 1.2, and the beat's ceiling (see FormBaseValue)
     /// <summary>
     /// THE BEAT at action speed 1.0. The champion acts on a metronome — one cast or one swing per beat,
     /// never two actions inside one — so every animation plays whole, with a settle before the next
@@ -209,12 +209,12 @@ public static class SoloBattle
 
     /// <summary>How much of the standing poison bleeds every half-second. The rest carries to later ticks.</summary>
     /// <remarks>
-    /// 0.25, from 0.5 (2026-08-27, the beat model): skills land once per beat (1.5 s), and a pool that
-    /// halved every half-second was spent before the next hit — venom "arrived whole" instead of
-    /// ramping, which is its whole identity. At a quarter per half-second a pool keeps ~42% across a
-    /// beat, so successive hits stack.
+    /// 0.12, from 0.25 (2026-08-29) and 0.5 before that. Skills land on beats, and since the cooldowns
+    /// doubled a rhythm skill poisons every 4-6 beats (6-9 s); a pool that shed a quarter every half
+    /// second was gone long before the next hit, so venom "arrived whole" instead of ramping — its whole
+    /// identity. At 0.12 a pool keeps about a fifth across six beats, so successive hits stack.
     /// </remarks>
-    public const float VenomBleedPerHalfSecond = 0.25f;
+    public const float VenomBleedPerHalfSecond = 0.12f;
 
     // ── Commander-stat tuning. CRIT (chance), FOCUS (crit damage) and DEFENSE (mitigation) were three
     //    trained stats that reached NO formula after the pivot to the solo model — the Character screen's

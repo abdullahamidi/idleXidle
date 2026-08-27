@@ -99,7 +99,10 @@ public class ChargeKeystoneTest
             var bonus = new WaveBonus();
             var (outcome, _) = SoloBattle.ResolveWave(
                 champ, TwoSkills(keystones), new ResonanceHunter.Core.Economy.Hunter(),
-                new List<WaveCreature> { WaveCreature.Single(3_000f, 1f, 0f, Source.Nature) },
+                // 12 000, was 3 000: the pool fills a charge per cast, and since the cooldowns doubled a
+                // 3 000-health creature died in two casts — before the pool could reach its cap. (30 000
+                // was too far the other way: the wave stalled at the tick ceiling instead of clearing.)
+                new List<WaveCreature> { WaveCreature.Single(12_000f, 1f, 0f, Source.Nature) },
                 enemyIntervalMs: 900,
                 ResonanceHunter.Core.Expeditions.ExpeditionTuning.Default, new Random(9),
                 bonus: bonus);

@@ -117,8 +117,10 @@ public class SkillShapeBattleTests
         // the same time — against 5000 health both simply killed it and delivered 5000.
         var plated = () => Wave(1, 5_000_000f, 30f, defense: 50f);
 
-        var bare = Fight(SkillShape.None, plated());
-        var cut = Fight(SkillShape.None with { ArmourPenetration = 30f }, plated());
+        // No swing: the basic attack ignores armour penetration (it is not a skill hit) and, since it
+        // took five beats in six, it diluted the two builds' difference below the margin.
+        var bare = Fight(SkillShape.None, plated(), NoSwing);
+        var cut = Fight(SkillShape.None with { ArmourPenetration = 30f }, plated(), NoSwing);
 
         Assert.True(cut.DeliveredDamage > bare.DeliveredDamage * 1.05f,
             "Armour penetration changed nothing — SHARPENED and EXECUTIONER are both decoration.");
@@ -368,8 +370,11 @@ public class SkillShapeBattleTests
         var field = () => Wave(6, 30f, 5f);
 
         // No swing: the basic attack finishing half the field on its own hid the refund behind timing noise.
+        // 3000 ms, was 1000: a Strike waits six beats (9 s) since 2026-08-29, so a one-second refund is
+        // 11% of the wait and the measurement is noise. The node's liveness is what is under test, not its
+        // size — the catalogue's own MOMENTUM is a beat, which this proves reaches the beat table.
         var plain = Fight(SkillShape.None, field(), NoSwing, Form.Strike);
-        var momentum = Fight(SkillShape.None with { CooldownRefundOnKillMs = 1_000 }, field(), NoSwing, Form.Strike);
+        var momentum = Fight(SkillShape.None with { CooldownRefundOnKillMs = 3_000 }, field(), NoSwing, Form.Strike);
 
         Assert.Equal(6, plain.CreaturesKilled);
         Assert.Equal(6, momentum.CreaturesKilled);

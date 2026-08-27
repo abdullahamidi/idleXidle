@@ -204,10 +204,14 @@ public sealed record WeavingTuning
         // measured 29 deep, hits ×2 measured 39). Scaled so a full rotation lands where the economy, the
         // pacing band and the balance sweeps were tuned. A one-skill build is cadence-bound, not
         // beat-bound, so it gains more than parity from this — the beat's own reward for going deep.
-        [Form.Trap] = 145f,        // the largest hit in the game, and the rarest (was 110) — a bite answers, not a beat
-        [Form.Strike] = 315f,      // the large-hit workhorse (70 → 105 → 157 → 315)
-        [Form.Transformation] = 130f,  // (40 → 56 → 64 → 130)
-        [Form.Projectile] = 135f,  // pays in targets, not in size (20 → 33 → 66 → 135)
+        // ...and again when the cooldowns DOUBLED (2026-08-29). A rhythm skill fires half as often, so a
+        // hit grew by about 1.6 — not by 2: the rest is the basic attack's, which now takes five beats in
+        // six and grew from 48 to 72. Measured against the rule that a single skill must still beat bare
+        // hands decisively (test_the_auto_attack_cannot_carry_a_build) and the pacing band.
+        [Form.Trap] = 290f,        // the largest hit in the game, and the rarest — a bite answers, not a beat
+        [Form.Strike] = 500f,      // the large-hit workhorse (70 → 105 → 157 → 315 → 500)
+        [Form.Transformation] = 260f,  // (40 → 56 → 64 → 130 → 260)
+        [Form.Projectile] = 215f,  // pays in targets, not in size (20 → 33 → 66 → 135 → 215)
         [Form.Aura] = 12f,         // smallest of all; it is a field, not a blow
         [Form.Mark] = 0f,          // Mark deals no direct damage — it amplifies other sources.
     };
