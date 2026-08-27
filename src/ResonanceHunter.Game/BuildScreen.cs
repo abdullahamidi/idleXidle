@@ -87,12 +87,13 @@ public sealed class BuildScreen
 
     /// <summary>The docked plates — input over them must never reach the tree behind.</summary>
     /// <remarks>
-    /// The header joined the two right-hand cards when it became a solid plate (2026-08-29). While it
-    /// was loose text on the wallpaper there was nothing for a click to land on; a frame you can see is
-    /// a frame the pointer must respect, or dragging the tree by its own title pans the canvas under it.
-    /// The reset button is hit-tested BEFORE this gate in <see cref="Update"/>, so it still works.
+    /// The corner plate joined the two right-hand cards when it became a solid plate (2026-08-29).
+    /// While it was loose text on the wallpaper there was nothing for a click to land on; a frame you
+    /// can see is a frame the pointer must respect, or dragging the tree by its own furniture pans the
+    /// canvas under it. The reset button is hit-tested BEFORE this gate in <see cref="Update"/>, so it
+    /// still works. (The top strip needs no entry: the canvas starts below it.)
     /// </remarks>
-    private static bool OverDock(Point p) => HexPanel.Contains(p) || NodePanel.Contains(p) || HeaderPanel.Contains(p);
+    private static bool OverDock(Point p) => HexPanel.Contains(p) || NodePanel.Contains(p) || PointsPanel.Contains(p);
     /// <summary>Set when the player asked for the weave editor. The host opens it and clears this.</summary>
     public bool WantsWeave { get; set; }
     private bool _resetArmed;   // the reset button has been pressed once and is waiting for the second
@@ -203,26 +204,27 @@ public sealed class BuildScreen
     // VIEW TREE, and the tree has its own rail tile now.
     private static readonly Rectangle WeaveBtn = new(466, 842, 337, 44);
     /// <summary>
-    /// THE TREE PAGE'S HEADER — the screen's name, its medallion, what it has cost you, and its one
-    /// button, on one framed plate.
+    /// YOUR POINTS — the mastery glyph, what the tree has cost you, where it went, and the one button
+    /// that undoes it. A compact plate in the corner, the way the TRAITS screen carries its own counter.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Playtest 2026-08-29: <i>"On the MASTERY screen the MASTERY TREE title, its icon, the descriptions
-    /// under it — all of it is undecorated."</i> It was: a turquoise diamond and three left-aligned
-    /// lines printed straight onto the tree, with a button floating under them belonging to no panel at
-    /// all. Every other screen in the game states itself on a frame; this one alone wrote its title on
-    /// the wallpaper.
+    /// Playtest 2026-08-29 asked for the tree page's furniture to be on a frame instead of printed on
+    /// the wallpaper, and it was — but the fix put the SCREEN'S TITLE on that frame too, in the top-left
+    /// corner, which is a shape no other screen in the game has. Playtest 2026-08-30: <i>"do you think
+    /// the game's other screens look like this? Look at the MASTERY screen again."</i> Right. The title
+    /// is at the top with its rule and its caption now (<see cref="DrawTreeChrome"/>); what stayed
+    /// behind is this plate, which is furniture and belongs in a corner.
     /// </para>
     /// <para>
     /// It is a DOCK, the same as the two cards on the right — chrome that sits over the canvas rather
     /// than beside it — so it is in <see cref="OverDock"/> and a drag started on it moves nothing. The
-    /// aspect (1.31) is deliberately just over <see cref="UiKit.PanelArtKey"/>'s 1.30 threshold: it
-    /// takes the MEDIUM frame, whose top rail is 20 source px deep, rather than the square frame's
-    /// 51 px crest, which would push every row 28 px down a plate that has none to spare.
+    /// aspect (1.30) is deliberately exactly <see cref="UiKit.PanelArtKey"/>'s threshold: it takes the
+    /// MEDIUM frame, whose top rail is 20 source px deep, rather than the square frame's 51 px crest,
+    /// which would push every row 28 px down a plate that has none to spare.
     /// </para>
     /// </remarks>
-    private static readonly Rectangle HeaderPanel = new(40, 24, 560, 428);
+    private static readonly Rectangle PointsPanel = new(40, 112, 480, 368);
 
     // ON THE TREE PAGE, NOT THE OVERVIEW. Playtest: "'Take all mastery points back' buranın butonu
     // değil, mastery tree'nin butonu." Right — it un-spends every point in a tree the overview does not
@@ -230,9 +232,10 @@ public sealed class BuildScreen
     // where BACK used to: MASTERY is a rail destination now, and a BACK button on a page with its own
     // door reads as "you are somewhere nested" when you are not (playtest asked what it even meant).
     //
-    // INSIDE THE HEADER PLATE now, on its content width, rather than floating on the tree beneath it.
+    // INSIDE THE POINTS PLATE now, on its content width, rather than floating on the tree beneath it.
     private static readonly Rectangle ResetBtn =
-        new(UiKit.ContentLeft(HeaderPanel), 364, UiKit.ContentRight(HeaderPanel) - UiKit.ContentLeft(HeaderPanel), 52);
+        new(UiKit.ContentLeft(PointsPanel), PointsPanel.Y + ResetRowTop,
+            UiKit.ContentRight(PointsPanel) - UiKit.ContentLeft(PointsPanel), 52);
     /// <summary>The i-th of <paramref name="n"/> auto-skill cards, sharing the panel's width between them.</summary>
     /// <remarks>
     /// Divided rather than fixed at a pitch of 182, which fitted exactly four and put a fifth at
@@ -329,15 +332,32 @@ public sealed class BuildScreen
     /// The tree's canvas — and, through its centre, where the world origin is projected.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// It was (180, 96, 1740, 900), i.e. everything right of the nav rail, so the origin projected to
     /// x=1050 and the whole EAST arm — the Tempo capstone included — was drawn UNDER the two docked
     /// cards at x&gt;=1408 and covered by them. One of the four things the layout exists to show was
     /// invisible at the default framing, which is the same species of bug as a label nobody reads.
     /// The rectangle is now the space the tree actually HAS: right of the rail, left of the dock, and
-    /// the full height of the canvas rather than an inset band. Its centre (810, 540) is what every
+    /// the full height of the canvas rather than an inset band. Its centre (810, 588) is what every
     /// number in <see cref="WholeTreeZoom"/> and <see cref="HeaderRing"/> is measured from.
+    /// </para>
+    /// <para>
+    /// <b>IT STARTS UNDER THE SCREEN'S HEADER NOW (y=112, was 40).</b> Playtest 2026-08-30: <i>"on the
+    /// other screens the title is at the top, a rule under it, and then the screen's content begins."</i>
+    /// The tree page's title is at the top like the rest of the game now (see
+    /// <see cref="DrawTreeChrome"/>) — and at the whole-tree framing this canvas plants the WEIGHT
+    /// branch header 24 px inside its own top edge, i.e. straight through that title, the rule and the
+    /// caption. A canvas that begins where the header ends is what every other screen does and what the
+    /// TRAITS tree next door already did (its view starts at 136).
+    /// </para>
+    /// <para>
+    /// Nothing about the CAMERA changed: <see cref="WholeTreeZoom"/>, <see cref="FirstOpenZoom"/> and
+    /// <see cref="LabelZoom"/> are the same three formulas, the saved zoom and pan still load as
+    /// written, and no node moved. The framings are 5% tighter because the view is 5% shorter, which is
+    /// the arithmetic doing its job rather than a retune.
+    /// </para>
     /// </remarks>
-    private static readonly Rectangle TreeView = new(180, 40, 1260, 1000);
+    private static readonly Rectangle TreeView = new(180, 112, 1260, 952);
 
     private Vector2 Screen(Vector2 world)
         => new(TreeView.Center.X + (world.X - _pan.X) * _zoom,
@@ -439,7 +459,9 @@ public sealed class BuildScreen
     // A DOCKED CARD, not a column. The tree is the page now; a 700px panel permanently taking a third
     // of the canvas is exactly the "sıkışmış" the layout was accused of.
     private static readonly Rectangle NodePanel = new(1408, 588, 496, 460);
-    private static readonly Rectangle HexPanel = new(1408, 96, 496, 476);
+    // Level with the corner plate opposite it (both start at 112, where the header strip ends), so the
+    // three plates on this page read as one row hung under one header rather than as three arrivals.
+    private static readonly Rectangle HexPanel = new(1408, 112, 496, 460);
     private static readonly Rectangle AttunePanel = new(480, 180, 960, 720);
     private static readonly Rectangle AttuneSealBtn = new(560, 816, 360, 52);
     private static readonly Rectangle AttuneUndoBtn = new(1000, 816, 360, 52);
@@ -951,6 +973,79 @@ public sealed class BuildScreen
         _ui.Scrim(b, 0.6f);
         var aff = Mastery.Affinity();
 
+        DrawTreeWorld(b, hit, aff);
+        DrawTreeChrome(b, hit);
+
+        // The right column answers "what am I looking at", not "what are my skill slots".
+        //
+        // It used to be the SKILL EDITOR — four slots and a keystone strip — sitting beside a tree it has
+        // nothing to do with, so the screen asked the player to hold two unrelated jobs at once and
+        // answered neither. The tree's own question ("what does this node do, can I afford it, what does
+        // it cost me") had no home at all except a one-line strip at the very bottom of the screen.
+        DrawNodeDetail(b, hit);
+        DrawHexPanel(b, aff);
+
+        // THE BOTTOM-LEFT STRIP IS GONE (playtest 2026-08-29, item 4: "the explanation written on the
+        // right of the MASTERY screen is also written at the bottom left — remove the undecorated text
+        // at the bottom left"). It printed three different things in one place at the foot of the
+        // canvas, and it was right about all three:
+        //
+        //   the hovered node's label + cost  — WORD FOR WORD what DrawNodeDetail was already showing,
+        //                                      in a card four times the size, on the same frame.
+        //   the last message                 — a refusal raised by a click at the OTHER end of the
+        //                                      screen; it speaks in the screen's own caption row now,
+        //                                      under the title, where a screen speaks.
+        //   the one-branch rule              — the only line that was not printed anywhere else; it
+        //                                      moved into the node card, under the cost ladder.
+        //
+        // Nothing was deleted except the copy, and no line lost a home.
+        if (_attuneNodeId is not null) DrawAttunement(b, hit);
+    }
+
+    /// <summary>The scissor state the tree's batch runs under. One instance; the device keeps it.</summary>
+    private RasterizerState? _clip;
+    private RasterizerState Clip => _clip ??= new RasterizerState { ScissorTestEnable = true };
+
+    /// <summary>
+    /// THE TREE ITSELF — wires, branch headers and nodes — clipped to <see cref="TreeView"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>THE CANVAS HAS AN EDGE NOW.</b> Nodes are culled at a generous margin so a node half over the
+    /// boundary still draws, which is right — but nothing then stopped it, so at any zoom past the
+    /// overview the tree painted straight through the screen's own header: the first capture of the new
+    /// top strip has a lit wire running through the middle of the caption and a node sitting on the
+    /// title. The TRAITS tree next door hit exactly this and answered it exactly this way, for the
+    /// reason written on its own <c>DrawTree</c>: a panel drawn later covers a node's right half and
+    /// leaves its left half showing, "which reads as a bug rather than as an edge".
+    /// </para>
+    /// <para>
+    /// The host opened the overlay batch for us; we close it, run the tree under a scissor rectangle in
+    /// the SAME transform, and reopen an unclipped batch for the chrome. <see cref="Game1.OverlayTransform"/>
+    /// is shared rather than copied so the two cannot drift.
+    /// </para>
+    /// </remarks>
+    private void DrawTreeWorld(SpriteBatch b, Point hit, Form? aff)
+    {
+        b.End();
+        _ui.Device.ScissorRectangle =
+            Rectangle.Intersect(Game1.OverlayToCanvas(TreeView, Vector2.Zero), new Rectangle(0, 0, 1920, 1080));
+        b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
+                DepthStencilState.None, Clip, null, Game1.OverlayTransform(Vector2.Zero));
+        try
+        {
+            DrawTreeNodes(b, hit, aff);
+        }
+        finally
+        {
+            b.End();
+            b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
+                    null, null, null, Game1.OverlayTransform(Vector2.Zero));
+        }
+    }
+
+    private void DrawTreeNodes(SpriteBatch b, Point hit, Form? aff)
+    {
         // ONE EDGE PER NODE, to its NEAREST prerequisite.
         //
         // Drawing every prerequisite drew a spider's web: each notable lists all four of its branch's
@@ -993,37 +1088,10 @@ public sealed class BuildScreen
             DrawBranchHeader(b, br);
 
         foreach (var node in MasteryCatalog.Nodes) DrawNode(b, node, hit, aff);
-
-        DrawTreeChrome(b, hit);
-
-        // The right column answers "what am I looking at", not "what are my skill slots".
-        //
-        // It used to be the SKILL EDITOR — four slots and a keystone strip — sitting beside a tree it has
-        // nothing to do with, so the screen asked the player to hold two unrelated jobs at once and
-        // answered neither. The tree's own question ("what does this node do, can I afford it, what does
-        // it cost me") had no home at all except a one-line strip at the very bottom of the screen.
-        DrawNodeDetail(b, hit);
-        DrawHexPanel(b, aff);
-
-        // THE BOTTOM-LEFT STRIP IS GONE (playtest 2026-08-29, item 4: "the explanation written on the
-        // right of the MASTERY screen is also written at the bottom left — remove the undecorated text
-        // at the bottom left"). It printed three different things in one place at the foot of the
-        // canvas, and it was right about all three:
-        //
-        //   the hovered node's label + cost  — WORD FOR WORD what DrawNodeDetail was already showing,
-        //                                      in a card four times the size, on the same frame.
-        //   the last message                 — a refusal raised by a click at the OTHER end of the
-        //                                      screen; it lives in the header now, beside the button
-        //                                      and the point counts that caused it.
-        //   the one-branch rule              — the only line that was not printed anywhere else; it
-        //                                      moved into the node card, under the cost ladder.
-        //
-        // Nothing was deleted except the copy, and no line lost a home.
-        if (_attuneNodeId is not null) DrawAttunement(b, hit);
     }
 
     /// <summary>
-    /// The page's own header and its one button — drawn OVER the tree, not under it.
+    /// The page's own top strip and its corner plate — drawn OVER the tree, not under it.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -1034,64 +1102,67 @@ public sealed class BuildScreen
     /// what the player saw and what the click did disagreed.
     /// </para>
     /// <para>
-    /// <b>IT WEARS THE HOUSE FURNITURE NOW.</b> The old header was <c>UiKit.Title</c> — a turquoise
-    /// diamond and a 32 px line that belongs to no rung of the ladder — over two loose left-aligned
-    /// rows. Every other screen in the game states its name on a frame, at
-    /// <see cref="UiTypography.ScreenTitle"/>, with one caption under it; this one wrote on the
-    /// wallpaper. It is a <see cref="UiKit.PanelQuiet"/> plate now, with the mastery glyph in a
-    /// medallion beside the title, and it carries the two readouts that used to be scattered: what the
-    /// tree has cost you, and where you spent it.
+    /// <b>THE TITLE IS AT THE TOP, LIKE EVERY OTHER SCREEN.</b> Playtest 2026-08-30: <i>"do you think
+    /// the game's other screens look like this? On the other screens the title is at the top, a rule
+    /// under it, and then the screen's content begins."</i> STATS, THE FORGE, THE VAULT, WARREN, MAP,
+    /// TRAITS, ROSTER and BUILD all draw exactly three things at exactly three coordinates — the name
+    /// centred at (960, 24) in <see cref="UiTypography.ScreenTitle"/> and the ceremony face, a gold
+    /// rule at y=74, one caption at (960, 80) — and this screen instead grew a title PLATE in its
+    /// top-left corner. Those three lines are now copied here to the pixel.
+    /// </para>
+    /// <para>
+    /// What the plate carried that is not a title — the mastery glyph, POINTS / SPENT, the four branch
+    /// rows and TAKE EVERY POINT BACK — stayed on a frame, in the corner, as
+    /// <see cref="PointsPanel"/>: the same arrangement TRAITS uses, where the screen names itself at
+    /// the top and its point counter sits on a small plate at the left.
     /// </para>
     /// </remarks>
     private void DrawTreeChrome(SpriteBatch b, Point hit)
     {
-        _ui.PanelQuiet(b, HeaderPanel);
-        var left = UiKit.ContentLeft(HeaderPanel);
-        var right = UiKit.ContentRight(HeaderPanel);
-        var width = right - left;
-
-        // THE MEDALLION. The same round frame the arena hangs a portrait in, with the branding glyph
-        // the STATS card already uses for MASTERY POINTS inside it — so the two screens name the same
-        // currency with the same face.
-        var medal = new Rectangle(left, UiKit.TitleTop(HeaderPanel) - 4, 68, 68);
-        if (_ui.Assets.Get("ui_medallion_round") is { } ring) b.Draw(ring, medal, Color.White);
-        if (_ui.Assets.Get("state_mastery_128") is { } glyph)
-            b.Draw(glyph, new Rectangle(medal.X + 15, medal.Y + 15, 38, 38), Gold);
-
-        // +8: the title is optically centred on the MEDALLION beside it, not hung off the same grid
-        // line. A 36 px cap-height line and a 68 px disc share a row only if one of them yields.
-        _ui.TextBig(b, "MASTERY TREE", medal.Right + 18, UiKit.TitleTop(HeaderPanel) + 8, Gold,
-                    UiTypography.ScreenTitle, TextFace.Display);
+        // ── THE TOP STRIP — the house pattern, to the pixel. ──
+        _ui.TextCenterBig(b, "MASTERY TREE", 960, 24, Gold, UiTypography.ScreenTitle, TextFace.Display);
+        _ui.Fill(b, new Rectangle(700, 74, 520, 3), Gold * 0.5f);
 
         // ONE ROW, TWO JOBS. It is the screen's caption — what the tree IS — until the tree has
         // something to say back, and then it is the message. The refusals ("NEEDS 3 POINTS — YOU HAVE
         // 0") used to print at the bottom-left corner of the screen, as far from the click that raised
-        // them as the canvas allows; a message belongs beside the thing it is about.
+        // them as the canvas allows; the screen's own voice row is where a screen speaks.
         var say = _msg.Length > 0 ? _msg : "FOUR DIRECTIONS  ·  SIX SPECIALISATIONS  ·  ONE DISCIPLINE";
-        var sayY = HeaderPanel.Y + CaptionRowTop;
-        // TWO LINES, HARD. The row has exactly 48 px before the points strip; the longest refusal the
-        // tree can raise ("YOU ALREADY TOOK THE WEIGHT CAPSTONE — ONE CAPSTONE PER HUNTER") wraps to
-        // two, and a third would print through the strip rather than be clipped by it.
-        foreach (var line in _ui.WrapBig(say, width, UiTypography.Secondary).Take(2))
-        {
-            _ui.TextBig(b, line, left, sayY, _msg.Length > 0 ? Ember : Slate, UiTypography.Secondary);
-            sayY += 22;
-        }
+        _ui.TextCenterBig(b, say, 960, 80, _msg.Length > 0 ? Ember : Slate, UiTypography.Secondary);
 
-        DrawPointsStrip(b, new Rectangle(left, HeaderPanel.Y + PointsRowTop, width, 62));
-        DrawBranchTable(b, new Rectangle(left, HeaderPanel.Y + BranchRowTop, width, BranchRowH * 4));
+        // ── THE CORNER PLATE ──
+        _ui.PanelQuiet(b, PointsPanel);
+        var left = UiKit.ContentLeft(PointsPanel);
+        var width = UiKit.ContentRight(PointsPanel) - left;
+
+        // THE MEDALLION. The same round frame the arena hangs a portrait in, with the branding glyph
+        // the STATS card already uses for MASTERY POINTS inside it — so the two screens name the same
+        // currency with the same face.
+        var medal = new Rectangle(left, PointsPanel.Y + MedallionTop, 56, 56);
+        if (_ui.Assets.Get("ui_medallion_round") is { } ring) b.Draw(ring, medal, Color.White);
+        if (_ui.Assets.Get("state_mastery_128") is { } glyph)
+            b.Draw(glyph, new Rectangle(medal.X + 13, medal.Y + 13, 30, 30), Gold);
+
+        // +6: the title is optically centred on the MEDALLION beside it, not hung off the same grid
+        // line. A 26 px cap-height line and a 56 px disc share a row only if one of them yields.
+        _ui.TextBig(b, "YOUR POINTS", medal.Right + 16, UiKit.TitleTop(PointsPanel) + 6, Gold,
+                    UiTypography.PanelTitle);
+
+        DrawPointsStrip(b, new Rectangle(left, PointsPanel.Y + PointsRowTop, width, 62));
+        DrawBranchTable(b, new Rectangle(left, PointsPanel.Y + BranchRowTop, width, BranchRowH * 4));
 
         if (Mastery.Spent > 0)
             Button(b, ResetBtn, _resetArmed ? "PRESS AGAIN TO CONFIRM" : "TAKE EVERY POINT BACK", hit, true);
     }
 
-    // The header's rows, as offsets from its own top. Named rather than inlined because four of them
+    // The plate's rows, as offsets from its own top. Named rather than inlined because four of them
     // have to agree with each other and with ResetBtn, which is a static field and cannot read them
-    // from a draw call. The last row must end above UiKit.ContentBottom(HeaderPanel), which is 420.
-    private const int CaptionRowTop = 92;    // under the medallion, which is 68 deep from TitleTop-4
-    private const int PointsRowTop = 140;    // 164 .. 226
-    private const int BranchRowTop = 216;    // 240 .. 352
+    // from a draw call. The last row must end above UiKit.ContentBottom(PointsPanel), which is 448.
+    private const int MedallionTop = 14;     // 126 .. 182, straddling the title line at TitleTop (134)
+    private const int PointsRowTop = 78;     // 190 .. 252
+    private const int BranchRowTop = 152;    // 264 .. 376
     private const int BranchRowH = 28;
+    private const int ResetRowTop = 276;     // 388 .. 440
 
     /// <summary>
     /// WHAT THE TREE HAS COST YOU — the two numbers, as a two-celled framed strip.
@@ -1209,11 +1280,16 @@ public sealed class BuildScreen
     /// <para>
     /// The three pieces are laid out to the house grid rather than by eye: the title at
     /// <see cref="UiKit.TitleTop"/>, the STATE as a centred plate under it — the attuned Form's name,
-    /// or the two lines that say how to get one — and the diagram in a bordered FIELD, so the hexagon
-    /// reads as a chart on a surface rather than as six icons floating in a box. The field is what
-    /// lets the six Form names sit close to their own points: it is the edge they are measured
-    /// against, so the label gap can drop from the ceremony's 58 px to 26 without any of them looking
-    /// unmoored.
+    /// or the two lines that say how to get one — and the diagram in a FIELD, so the hexagon reads as
+    /// a chart on a surface rather than as six icons floating in a box. The field is what lets the six
+    /// Form names sit close to their own points: it is the edge they are measured against, so the
+    /// label gap can drop from the ceremony's 58 px to 8 without any of them looking unmoored.
+    /// </para>
+    /// <para>
+    /// <b>THE FIELD IS THE CHART'S OWN NOW</b> (<see cref="FormHexDiagram.Field"/>) rather than a flat
+    /// fill with a two-pixel outline — playtest 2026-08-30: <i>"the chart picture is still careless."</i>
+    /// The same inlaid well is drawn under the ceremony's hexagon, which had none at all, so the two
+    /// sizes of one drawing stand on one surface.
     /// </para>
     /// </remarks>
     private void DrawHexPanel(SpriteBatch b, Form? aff)
@@ -1230,12 +1306,12 @@ public sealed class BuildScreen
         _ui.Fill(b, plate, aff is null ? Quiet : Hi);
         Outline(b, plate, aff is null ? Path : Gold * 0.55f, 2);
         if (aff is { } a)
-            _ui.TextCenterBig(b, a.ToString().ToUpperInvariant(), plate.Center.X, plate.Y + 9, Gold,
+            _ui.TextCenterBig(b, a.ToString().ToUpperInvariant(), plate.Center.X, plate.Y + 7, Gold,
                               UiTypography.Headline);
         else
         {
-            _ui.TextCenterBig(b, "UNATTUNED", plate.Center.X, plate.Y + 2, Slate, UiTypography.Body);
-            _ui.TextCenterBig(b, "TAKE A SPECIALISATION NODE", plate.Center.X, plate.Y + 24, Slate,
+            _ui.TextCenterBig(b, "UNATTUNED", plate.Center.X, plate.Y + 1, Slate, UiTypography.Body);
+            _ui.TextCenterBig(b, "TAKE A SPECIALISATION NODE", plate.Center.X, plate.Y + 22, Slate,
                               UiTypography.Secondary);
         }
 
@@ -1244,8 +1320,7 @@ public sealed class BuildScreen
         // has to hold them.
         var inner = UiKit.PanelInner(HexPanel);
         var field = inner with { Y = plate.Bottom + 10, Height = UiKit.ContentBottom(HexPanel) - plate.Bottom - 10 };
-        _ui.Fill(b, field, PanelBg);
-        Outline(b, field, Path, 2);
+        FormHexDiagram.Field(_ui, b, field);
 
         FormHexDiagram.Draw(_ui, b, field.Center, HexRadius, aff, showFactors: aff is not null,
                             labelGap: HexLabelGap, labelPx: UiTypography.Secondary,
@@ -1253,34 +1328,48 @@ public sealed class BuildScreen
     }
 
     /// <summary>Where the state plate sits below the chart's own top edge — one title line down.</summary>
-    private const int StatePlateTop = 82;
+    /// <remarks>The panel wears the SQUARE frame, so <see cref="UiKit.FrameDrop"/>'s 28 is in this.</remarks>
+    private const int StatePlateTop = 84;
 
     /// <summary>The state plate's depth: two short lines, or one name set at the in-panel headline.</summary>
-    private const int StatePlateH = 44;
+    private const int StatePlateH = 40;
 
     /// <summary>
     /// The docked chart's hexagon, sized to its field rather than to the ceremony's.
     /// </summary>
     /// <remarks>
-    /// The field is 262 px deep, and a labelled hexagon occupies <c>2 × (radius + gap + a line)</c>:
-    /// 80 + 26 + a Secondary name and a Caption factor under it lands at 254, which clears the border
-    /// at both ends. It was 105 with the ceremony's 58 px gap — 326 px of diagram in a box that never
-    /// framed it, so the top label ran into the caption above and the bottom one had nothing under it.
+    /// The field is 266 px deep, so each half has 133 px for <c>radius + the seal's rim (0.62 of its
+    /// edge) + the gap + one Secondary line</c>: 78 + 21 + 8 + 16 = 123, leaving 10 px of air at both
+    /// ends. (The pole labels carry their factor beside the name rather than under it — see
+    /// FormHexDiagram — which is what buys the last twenty pixels of radius.) It was 105 with the
+    /// ceremony's 58 px gap: 326 px of diagram in a box that never framed it, so the top label ran into
+    /// the caption above and the bottom one had nothing under it.
     /// </remarks>
-    private const int HexRadius = 72;
+    private const int HexRadius = 78;
 
     /// <inheritdoc cref="HexRadius"/>
-    private const int HexLabelGap = 10;
+    private const int HexLabelGap = 8;
 
-    /// <summary>The Form seals, scaled to this hexagon rather than to the ceremony's.</summary>
-    private const int HexSealPx = 28;   // ui-size-ok: the seal icon's edge in pixels, not a text size
+    /// <summary>The Form seals — the MEDALLION's edge, scaled to this hexagon rather than to the ceremony's.</summary>
+    private const int HexSealPx = 34;   // ui-size-ok: the seal medallion's edge in pixels, not a text size
 
     /// <summary>
     /// The ceremony's own label clearance. Its hexagon is twice the docked one's, on a modal with room
     /// to spare, so its names stand further off their seals — but off the SEAL, like the chart's, so
     /// the two drawings of the same object are the same drawing.
     /// </summary>
-    private const int CeremonyLabelGap = 26;
+    private const int CeremonyLabelGap = 20;
+
+    /// <summary>The ceremony's hexagon and seals — the same drawing, at the size a modal can afford.</summary>
+    /// <remarks>
+    /// Derived the same way as <see cref="HexRadius"/>, against the ceremony's own field: 246 px per
+    /// half, less an 18 px margin, less the seal's rim (38) + the gap (20) + one Body line (19) —
+    /// which lands back on the 150 the ceremony has always drawn at.
+    /// </remarks>
+    private const int CeremonyRadius = 150;
+
+    /// <inheritdoc cref="CeremonyRadius"/>
+    private const int CeremonySealPx = 62;   // ui-size-ok: the seal medallion's edge in pixels, not a text size
 
     /// <summary>
     /// THE ATTUNEMENT — the ceremony for the first Specialisation.
@@ -1300,8 +1389,14 @@ public sealed class BuildScreen
         _ui.TextCenterBig(b, "THE ATTUNEMENT", 960, UiKit.TitleTop(AttunePanel), Gold, UiTypography.PanelTitle);
         _ui.TextCenter(b, "SIX FORMS ON THE LOOM — ONE IS YOURS.", 960, UiKit.CaptionTop(AttunePanel), Slate);
 
-        FormHexDiagram.Draw(_ui, b, new Point(960, AttunePanel.Y + 340), 150, _attuneForm, showFactors: true,
-                            labelGap: CeremonyLabelGap);
+        // THE CEREMONY STANDS ON THE SAME FIELD THE DOCKED CHART DOES. It used to have none — the
+        // hexagon floated on the modal's black interior — so the game's founding moment was the one
+        // place the chart was drawn without the surface that makes it a chart.
+        var field = new Rectangle(630, AttunePanel.Y + 86, 660, 492);
+        FormHexDiagram.Field(_ui, b, field);
+        FormHexDiagram.Draw(_ui, b, field.Center, CeremonyRadius, _attuneForm, showFactors: true,
+                            labelGap: CeremonyLabelGap, labelPx: UiTypography.Body,
+                            factorPx: UiTypography.Secondary, sealPx: CeremonySealPx);
 
         _ui.TextCenter(b, $"YOUR {name} SKILLS HIT TWICE AS HARD. THE FAR FORMS HIT SOFTER —",
                        960, AttunePanel.Y + 604, Bone);
