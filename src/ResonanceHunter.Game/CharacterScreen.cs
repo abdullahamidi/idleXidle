@@ -42,6 +42,11 @@ public sealed class CharacterScreen
     private static readonly Color Ember = new(0xD8, 0x48, 0x3A);
     private static readonly Color Slate = new(0x8A, 0x96, 0xA8);
     private static readonly Color Dim = new(0x3A, 0x3A, 0x44);
+    /// <summary>
+    /// A rung not yet reached. Between Slate and Dim: Dim measured under 2:1 on this panel and an
+    /// unreached rung is still something to read — it is the reason to wear one more piece.
+    /// </summary>
+    private static readonly Color Faint = new(0x6A, 0x72, 0x82);
     private static readonly Color Bg = new(0x0E, 0x0C, 0x12);
     private static readonly Color Quiet = new(0x16, 0x12, 0x20, 0xE0);
     private static readonly Color CellBg = new(0x1C, 0x18, 0x28);
@@ -556,10 +561,6 @@ public sealed class CharacterScreen
         // Real summary rows (no fake armour set / vow-bound rows — those systems don't exist).
         var worn = AllSlots.Select(hunter.Worn).OfType<ItemInstance>().ToList();
         var legend = worn.Count(i => i.Rarity == Rarity.Legendary);
-        var src = worn.Where(i => i.Element is not null).GroupBy(i => i.Element!.Value)
-            .OrderByDescending(g => g.Count()).FirstOrDefault();
-        var srcTxt = src is null ? "—" : src.Key.ToString().ToUpperInvariant();
-        var srcPct = src is null || worn.Count == 0 ? 0 : (int)Math.Round(100f * src.Count() / worn.Count);
 
         // TWO ROWS, NOT FOUR, AND THEY START 28px LOWER. Both changes fix a collision that was on
         // screen: the passive's second wrapped line ends at Y+402 and the rows began at Y+384, so
@@ -580,16 +581,14 @@ public sealed class CharacterScreen
         // reports the element your WORN GEAR mostly shares, which decides nothing in a fight and
         // everything about whether you can merge a matched trio. Calling it SOURCE made it read as the
         // combat matchup and made ITEM POWER look broken for not accounting for it.
-        // "SETS", not "FORGE ELEMENT" (2026-08-27): the element decides something in the fight now.
-        // The row names the set the worn gear leans to and how many pieces it has; resting the pointer
-        // on it opens that set's card — every rung in one plain line, ON where reached.
-        var leading = ElementSets.Leading(hunter);
-        var setRow = new Rectangle(LoadoutPanel.X + 24, ry, LoadoutPanel.Width - 48, 44);
-        SummaryRow(b, "SETS",
-                   leading is { } lead ? $"{lead.ToString().ToUpperInvariant()} {ElementSets.WornCount(hunter, lead)} WORN" : "NONE WORN",
-                   ref ry);
-        if (leading is { } tipFor && setRow.Contains(hit))
-            _ui.HoverTip(b, string.Join("\n", ElementSets.Card(hunter, tipFor)), hit);
+        // THE SET BONUSES THAT ARE ON, and nothing about the ones that are not. There was a SETS row
+        // here — "NATURE 8 WORN" with the rungs behind a hover tip — and the player's verdict was that
+        // the bonus was written in a bad place: a count is not a bonus, and a tip is not a place. So the
+        // row is gone. What this panel says now is what the worn gear is actually doing for the fight,
+        // one plain sentence per active rung, and it says nothing at all when no rung is on — the set
+        // information proper (every rung, reached or not) lives under the item on the ITEM DETAIL
+        // panel, which is where you decide what to wear.
+        DrawActiveSets(b, hunter, ry + 8, EquipBestBtn.Y - 14);
 
         // Quick actions (§7.8) — both real. EQUIP BEST fills each slot with the highest-scoring item.
         Button(b, EquipBestBtn, "EQUIP BEST", hit, true);
@@ -601,6 +600,62 @@ public sealed class CharacterScreen
         // where builds are assembled. It is one line and a sentence; it belongs beside the loadout it
         // modifies.
 
+    }
+
+    /// <summary>
+    /// The ACTIVE SET BONUSES block of the loadout panel: a small header and one bright line per rung
+    /// the worn gear has reached — "NATURE 3 — Regain 0.3% of maximum health every second." Draws
+    /// nothing when no rung is on.
+    /// </summary>
+    /// <remarks>
+    /// Between the LEGENDARY row and EQUIP BEST there are about 240 pixels. A full set is four rungs
+    /// of one or two wrapped lines each, which fits; two half-sets (four and four) are six rungs and
+    /// do not — so the lines are laid out against <paramref name="limit"/> by <see cref="DrawEntries"/>,
+    /// which counts the rest ("AND 2 MORE") rather than running under the button.
+    /// </remarks>
+    private void DrawActiveSets(SpriteBatch b, Hunter hunter, int y, int limit)
+    {
+        var active = ElementSets.Active(hunter).ToList();
+        if (active.Count == 0) return;
+
+        var x = LoadoutPanel.X + 38;
+        var width = LoadoutPanel.Width - 76;
+        _ui.TextBig(b, "SET BONUSES", x, y, Slate, UiTypography.Secondary);
+        _ui.Fill(b, new Rectangle(x, y + 22, width, 1), Dim);
+        y += 30;
+
+        var entries = active.Select(a => ((string?)null,
+                _ui.WrapBig($"{a.Element.ToString().ToUpperInvariant()} {a.Tier.Pieces} — {a.Tier.Line}", width, UiTypography.Secondary),
+                UiKit.Vellum)).ToList();
+        DrawEntries(b, entries, x, 0, y, limit, pitch: 20, gap: 6);
+    }
+
+    /// <summary>
+    /// Wrapped entries drawn top-down and never past <paramref name="limit"/>: when they cannot all
+    /// fit, the ones that do are drawn and one Slate line counts the rest — "AND 2 MORE" — so a line is
+    /// never clipped and never drawn under a button. Each entry may lead with a short mark (a rung
+    /// number) in its own column. Returns the y after the last line.
+    /// </summary>
+    private int DrawEntries(SpriteBatch b, IReadOnlyList<(string? Lead, IReadOnlyList<string> Lines, Color Colour)> entries,
+                            int x, int leadWidth, int y, int limit, int pitch, int gap)
+    {
+        var total = entries.Sum(e => e.Lines.Count * pitch) + gap * (entries.Count - 1);
+        var fitsAll = y + total <= limit;
+        for (var i = 0; i < entries.Count; i++)
+        {
+            var (lead, lines, colour) = entries[i];
+            var h = lines.Count * pitch;
+            // Reserve the counting line before drawing an entry that would leave no room for it.
+            if (!fitsAll && y + h + gap + pitch > limit)
+            {
+                _ui.TextBig(b, $"AND {entries.Count - i} MORE", x, y, Slate, UiTypography.Secondary);
+                return y + pitch;
+            }
+            if (lead is not null) _ui.TextBig(b, lead, x, y, colour, UiTypography.Secondary);
+            foreach (var line in lines) { _ui.TextBig(b, line, x + leadWidth, y, colour, UiTypography.Secondary); y += pitch; }
+            y += gap;
+        }
+        return y - gap;
     }
 
     /// <summary>
@@ -941,6 +996,39 @@ public sealed class CharacterScreen
             sy += 26;
             sy = Wrapped(b, ench.Blurb.ToUpperInvariant(), DetailPanel.X + 44, sy,
                          DetailPanel.Width - 88, Bone) + 10;
+        }
+
+        // ── THE SET, under the item. "NATURE SET — 3 OF 5 WORN", then the four rungs: the ones the
+        //    worn gear has reached in Vellum, the rest in Faint. Playtest 2026-08-28: "set bonus
+        //    information must be written under the item". This is the whole set, reached or not,
+        //    because the question here is what one more piece would buy — the LOADOUT panel carries
+        //    only what is already on.
+        //
+        //    NO SHIFT MODE, BY MEASUREMENT. The plan was a compact block that expands to the full lines
+        //    while Shift is held. Measured at the Secondary size, the longest rung line in the catalogue
+        //    is 273 pixels ("Your MACHINE skills hit 8% harder again — 16% in all.") and this column is
+        //    338 wide beside the rung-number gutter, so every line already fits whole; a key that
+        //    changes nothing would be a lie in a hint. WrapBig stays on the path so a longer line some
+        //    day wraps rather than clips.
+        //
+        //    THE ROOM IS DATA. A Legendary with four affixes, a prefix and an enchant ends its text
+        //    around y=805 and the buttons start at 910, so the rows tighten from a 22 to a 20 pitch
+        //    when the block would not fit, and DrawEntries counts any rung that still would not. ──
+        if (item.Element is { } setElement)
+        {
+            var tiers = ElementSets.TiersOf(setElement);
+            var wornOf = ElementSets.WornCount(hunter, setElement);
+            var limit = EquipBtn.Y - 8;
+            var pitch = sy + 4 + 26 + tiers.Count * 22 <= limit ? 22 : 20;
+            if (pitch == 22) sy += 4;
+            _ui.TextBig(b, $"{ElementSets.Name(setElement)} — {ElementSets.Progress(wornOf)}", DetailPanel.X + 44, sy, Bone, UiTypography.Body);
+            _ui.TextRightBig(b, "SET", DetailPanel.Right - 44, sy, Slate, UiTypography.Secondary);
+            sy += 26;
+            const int gutter = 28;
+            var entries = tiers.Select(t => ((string?)t.Pieces.ToString(),
+                    _ui.WrapBig(t.Line, DetailPanel.Width - 88 - gutter, UiTypography.Secondary),
+                    wornOf >= t.Pieces ? UiKit.Vellum : Faint)).ToList();
+            DrawEntries(b, entries, DetailPanel.X + 44, gutter, sy, limit, pitch, gap: 0);
         }
 
         // Actions (§10.9): EQUIP (real). LOCK disabled — no lock system in the model.

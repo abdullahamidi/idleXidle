@@ -72,6 +72,8 @@ public static class ItemTooltip
         if (GearTraits.TraitOf(item) is not null) h += 62;
         if (Enchantments.Of(item) is not null) h += 62;
         if (hunter is not null && Gear.SlotFor(item.BaseType) is not null) h += 46;
+        // The set line: which element set this piece counts toward, and how far along it the hunter is.
+        if (hunter is not null && item.Element is not null) h += 36;
         return h + 28;
     }
 
@@ -253,6 +255,19 @@ public static class ItemTooltip
             ui.TextRight(b, "ENCHANT", rx, cy, Dim);
             cy += 26;
             ui.Text(b, ench.Blurb.ToUpperInvariant(), lx, cy, Ink);
+            cy += 36;
+        }
+
+        // ── THE SET — one line. "NATURE SET  ·  3 OF 5 WORN": the element decides something in a fight
+        //    now, and this is the fact that says whether wearing the piece moves a rung. The rungs
+        //    themselves are on the ITEM DETAIL panel, which has the room to list them. ──
+        if (hunter is not null && item.Element is { } setElement)
+        {
+            var worn = ElementSets.WornCount(hunter, setElement);
+            cy += 10;
+            ui.Text(b, $"{ElementSets.Name(setElement)}  ·  {ElementSets.Progress(worn)}", lx, cy,
+                    worn >= ElementSets.Rungs[0] ? Ink : Dim);
+            ui.TextRight(b, "SET", rx, cy, Dim);
         }
     }
 
