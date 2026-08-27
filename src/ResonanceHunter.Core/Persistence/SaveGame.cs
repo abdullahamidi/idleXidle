@@ -154,6 +154,20 @@ public sealed record SaveGame
     public int MasteryEarned { get; init; }
 
     /// <summary>
+    /// The mastery tree's camera: zoom in screen pixels per world unit, and the world point at the centre
+    /// of the view. Zoom 0 means the tree has never been opened, and the screen answers with its
+    /// first-open framing (the centre node and ring 1).
+    /// </summary>
+    /// <remarks>
+    /// "On later visits the player's zoom should be saved" (2026-08-27). Default 0 on purpose: an older
+    /// save loads clean with no version bump and gets the first-open framing exactly once, like a new
+    /// game does.
+    /// </remarks>
+    public float MasteryZoom { get; init; }
+    public float MasteryPanX { get; init; }
+    public float MasteryPanY { get; init; }
+
+    /// <summary>
     /// First-run guide rungs the player closed by hand, as <c>TutorialStep</c> NAMES.
     /// </summary>
     /// <remarks>

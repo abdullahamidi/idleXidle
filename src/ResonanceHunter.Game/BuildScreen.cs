@@ -127,7 +127,38 @@ public sealed class BuildScreen
     public void DevOpenTree(float zoom = 0f)
     {
         _editMode = true;
-        if (zoom > 0f) _zoom = zoom;
+        _pan = Vector2.Zero;
+        _zoom = zoom > 0f ? zoom : WholeTreeZoom;
+    }
+
+    /// <summary>DEV ONLY: open the tree the way a player's FIRST visit opens it — centre and ring 1.</summary>
+    public void DevOpenTreeFirstVisit()
+    {
+        _editMode = true;
+        FrameFirstOpen();
+    }
+
+    // ── THE CAMERA THE SAVE CARRIES. "On later visits the player's zoom should be saved." ────────
+
+    /// <summary>The tree camera's zoom, for the save. 0 is never written: a zoom is always framed.</summary>
+    public float CameraZoom => _zoom;
+    public float CameraPanX => _pan.X;
+    public float CameraPanY => _pan.Y;
+
+    /// <summary>
+    /// Put the camera where the save left it — or, for a save that never opened the tree (zoom 0,
+    /// which is what every older save carries), on the FIRST-OPEN framing.
+    /// </summary>
+    public void RestoreCamera(float zoom, float panX, float panY)
+    {
+        if (zoom <= 0f || float.IsNaN(zoom) || float.IsNaN(panX) || float.IsNaN(panY))
+        {
+            FrameFirstOpen();
+            return;
+        }
+        _zoom = Math.Clamp(zoom, MinZoom, MaxZoom);
+        _pan = new Vector2(panX, panY);
+        ClampPan();
     }
 
     public BuildScreen(UiKit ui) => _ui = ui;
@@ -199,41 +230,70 @@ public sealed class BuildScreen
     // meant the LAYOUT was the size of the window, so every node added made the tree tighter and there
     // was no way to add a second cross, a deeper ring, or a whole new branch without the thing becoming
     // unreadable. A world plus a camera has no such ceiling: growing the tree moves the far edge, not
-    // the spacing.
-    private const float WorldR = 1500f;
+    // the spacing. The rim itself is MasteryLayout.WorldRadius — it was a second copy of the number
+    // here, which is one copy more than a rim can have.
 
     private Vector2 _pan;                 // world point at the centre of the view
 
     /// <summary>
-    /// The framing HOME returns to, and the one every capture is judged at.
+    /// The framing HOME returns to, and the one the whole-tree capture is judged at: every capstone,
+    /// its name, and the four branch headers inside the view.
     /// </summary>
     /// <remarks>
-    /// It was 0.30, chosen to fit the RIM (WorldR 1500 against a 900-tall view) and nothing else. Two
-    /// things then had to live outside that rim and could not: the four BRANCH HEADERS this screen now
-    /// draws, and the capstone plaques' own captions. At 0.30 the rim lands 450px out, the plaque is
-    /// another 30 tall and 57 wide beyond that, and a header needs ~23 more — which is 530 of the 540
-    /// half-height the canvas has. 0.24 puts the rim at 360 and the header ring at 504, leaving 33
-    /// pixels of air between the widest header line and the plaque beside it, and 13 above the topmost
-    /// header. See <see cref="HeaderRing"/> for the other half of that arithmetic.
+    /// DERIVED, not pinned. It was 0.30, then 0.24, each chosen by hand against the rim of the day and
+    /// each wrong the day the rim moved. The rule it always encoded is "the header ring fits the view's
+    /// half-height with room for the header's own two lines", so that is what is written: the view's
+    /// half-height less a header's half-height, over the header ring's world radius. Move the rim, the
+    /// ring or the view and this follows.
     /// </remarks>
-    private const float DefaultZoom = 0.24f;
+    // PROPERTIES, NOT STATIC READONLY FIELDS: a static field initialiser runs in textual order, and
+    // TreeView is declared below — so a field here read a zero-height rectangle and framed the whole
+    // tree at a negative zoom (the first capture after this change was a single dot). A property reads
+    // the rectangle when it is asked, which is always after the type is initialised.
+    private static float WholeTreeZoom
+        => (TreeView.Height / 2f - HeaderHalfHeightPx) / (MasteryLayout.WorldRadius * HeaderRing);
+
+    /// <summary>
+    /// The framing the tree opens with the FIRST time: the centre node and the ring of minors around it.
+    /// </summary>
+    /// <remarks>
+    /// "When the tree first opens it should come zoomed in on the centre node and the nodes one step
+    /// around it." <see cref="MasteryLayout.FirstOpenRadius"/> is the world radius that encloses exactly
+    /// that; the zoom is the view's smaller half-extent over it, less a margin so the outermost minor
+    /// sits inside the frame rather than on its edge. The spurs beyond ring 1 show at the corners on
+    /// purpose — half a node at the edge is the invitation to pan.
+    /// </remarks>
+    private static float FirstOpenZoom
+        => (Math.Min(TreeView.Width, TreeView.Height) / 2f - FirstOpenMarginPx) / MasteryLayout.FirstOpenRadius;
+
+    private const float FirstOpenMarginPx = 48f;
+
+    /// <summary>Half the height a branch header occupies on screen: its title line above, promise below.</summary>
+    private const float HeaderHalfHeightPx = 24f;
 
     /// <summary>
     /// Below this, every caption on the tree drops out and only shapes remain.
     /// </summary>
     /// <remarks>
-    /// It was 0.28, i.e. BELOW the old default of 0.30 by two hundredths — which was fine until the
-    /// default itself moved to 0.25 and would have silently hidden every label the tree has at the one
-    /// framing the player always starts from. Tied to the default instead of guessed at again.
+    /// Two hundredths under the whole-tree framing, so the one framing HOME returns to keeps its
+    /// labels. It was once pinned at 0.28 against a default of 0.30 and silently hid every label when
+    /// the default moved; tied to the framing instead of guessed at again.
     /// </remarks>
-    private const float LabelZoom = DefaultZoom - 0.02f;
+    private static float LabelZoom => WholeTreeZoom - 0.02f;
 
-    private float _zoom = DefaultZoom;    // screen pixels per world unit
+    private float _zoom = FirstOpenZoom;  // screen pixels per world unit — a fresh game opens on ring 1
     private Point? _dragFrom;             // where a drag started, in screen space
     private bool _draggedThisPress;       // the drag moved far enough to swallow the click
     private Vector2 _dragPanFrom;
 
     private const float MinZoom = 0.16f, MaxZoom = 1.40f;
+
+    /// <summary>Centre node and ring 1, dead centre.</summary>
+    private void FrameFirstOpen()
+    {
+        _pan = Vector2.Zero;
+        _zoom = Math.Clamp(FirstOpenZoom, MinZoom, MaxZoom);
+    }
 
     /// <summary>
     /// The tree's canvas — and, through its centre, where the world origin is projected.
@@ -244,8 +304,8 @@ public sealed class BuildScreen
     /// cards at x&gt;=1408 and covered by them. One of the four things the layout exists to show was
     /// invisible at the default framing, which is the same species of bug as a label nobody reads.
     /// The rectangle is now the space the tree actually HAS: right of the rail, left of the dock, and
-    /// the full height of the canvas rather than an inset band. Its centre (830, 540) is what every
-    /// number in <see cref="DefaultZoom"/> and <see cref="HeaderRing"/> is measured from.
+    /// the full height of the canvas rather than an inset band. Its centre (810, 540) is what every
+    /// number in <see cref="WholeTreeZoom"/> and <see cref="HeaderRing"/> is measured from.
     /// </remarks>
     private static readonly Rectangle TreeView = new(180, 40, 1260, 1000);
 
@@ -277,7 +337,7 @@ public sealed class BuildScreen
     /// <summary>Keep the tree reachable: the centre may leave the view, but never by more than a screen.</summary>
     private void ClampPan()
     {
-        var limit = WorldR * 1.25f;
+        var limit = MasteryLayout.WorldRadius * 1.25f;
         _pan = new Vector2(Math.Clamp(_pan.X, -limit, limit), Math.Clamp(_pan.Y, -limit, limit));
     }
 
@@ -285,28 +345,28 @@ public sealed class BuildScreen
     private static Vector2 Corner(Branch b)
     {
         var a = MasteryLayout.AngleOf(b);
-        return new Vector2(WorldR * MathF.Cos(a), WorldR * MathF.Sin(a));
+        return new Vector2(MasteryLayout.WorldRadius * MathF.Cos(a), MasteryLayout.WorldRadius * MathF.Sin(a));
     }
 
     /// <summary>
-    /// How far past the rim a branch HEADER is planted, as a multiple of <see cref="WorldR"/>.
+    /// How far past the rim a branch HEADER is planted, as a multiple of <see cref="MasteryLayout.WorldRadius"/>.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// 1.33, not the 1.14 that "just outside the rim" first suggests, and the reason is the capstone
-    /// PLAQUE. A capstone is not a stud: it is drawn 456 world units wide (120 x 1.9 either side), so on
-    /// the EAST and WEST arms — where the header sits on the same horizontal line as the plaque — the
-    /// header has to clear 1500 + 228 = 1728 before its own text starts, which is already 1.152. Add
-    /// half a subtitle (~53px at the default zoom, i.e. ~220 world) and a real gap and the floor is
-    /// 1.40. At 1.14 the words would have been printed straight through OVERWHELM and ENDLESS; 1.33
-    /// was measured on a capture and left "OUTLAST THE ENEMY" eleven pixels short of ENDLESS.
+    /// 1.30. The capstone is a round medallion now (it was a plaque 456 world units wide, which pushed
+    /// the ring out to 1.40 on the east and west arms), so the header only has to clear the capstone's
+    /// radius plus the two caption lines stacked OUTWARD from it — its NAME and the word CAPSTONE — on
+    /// the two arms where those lines point at the header, north and south. At the whole-tree framing
+    /// the medallion's outer edge is 2144 world units out, the two lines are ~44px, and the header's
+    /// promise line ends 7px past its own ring: 1.26 left the north CAPSTONE one pixel into "FEWER,
+    /// BIGGER HITS"; 1.30 leaves about twenty. The buildtree capture is what says so.
     /// </para>
     /// <para>
     /// Held in WORLD units rather than screen ones so a header is fixed to its arm: pan and the header
     /// travels with its branch, zoom and it stays exactly as far outside the rim as it was.
     /// </para>
     /// </remarks>
-    private const float HeaderRing = 1.40f;
+    private const float HeaderRing = 1.30f;
 
     /// <summary>What a branch IS, in one plain line — the promise its nodes then keep.</summary>
     /// <remarks>
@@ -422,7 +482,7 @@ public sealed class BuildScreen
             bool Tapped(Keys k) => keys.IsKeyDown(k) && prev.IsKeyUp(k);
             if (Tapped(Keys.OemPlus) || Tapped(Keys.Add)) ZoomAt(TreeView.Center, 1.25f);
             if (Tapped(Keys.OemMinus) || Tapped(Keys.Subtract)) ZoomAt(TreeView.Center, 1f / 1.25f);
-            if (Tapped(Keys.Home)) { _pan = Vector2.Zero; _zoom = DefaultZoom; }
+            if (Tapped(Keys.Home)) { _pan = Vector2.Zero; _zoom = WholeTreeZoom; }
         }
 
         // THE RIGHT-CLICK REFUND, ABOVE THE LEFT-CLICK GATE. It was written below `if (!clicked)
@@ -439,8 +499,7 @@ public sealed class BuildScreen
                 if (node.Kind == MasteryKind.Start) continue;
                 var rp = Screen(NodePos(node));
                 var rr = Math.Max(6, (int)(NodeRadius(node.Kind) * _zoom * 1.9f)) + 6;
-                var rw = node.Kind == MasteryKind.Mastery ? (int)(120 * _zoom * 1.9f) + 6 : rr;
-                if (Math.Abs(rhit.X - rp.X) > rw || Math.Abs(rhit.Y - rp.Y) > rr) continue;
+                if (Math.Abs(rhit.X - rp.X) > rr || Math.Abs(rhit.Y - rp.Y) > rr) continue;
                 _pinnedNodeId = node.Id;
                 if (Mastery.Refund(node.Id)) { _msg = "ONE POINT RETURNED."; Dirty = true; }
                 else _msg = Mastery.IsTaken(node.Id)
@@ -519,7 +578,7 @@ public sealed class BuildScreen
             // The SAME transform the drawing uses, or the click lands where the node used to be.
             var sp = Screen(NodePos(node));
             var rad = Math.Max(6, (int)(NodeRadius(node.Kind) * _zoom * 1.9f)) + 6;
-            var halfW = node.Kind == MasteryKind.Mastery ? (int)(120 * _zoom * 1.9f) + 6 : rad;
+            var halfW = rad;
             if (Math.Abs(hit.X - sp.X) > halfW || Math.Abs(hit.Y - sp.Y) > rad) continue;
             // Clicking a node PINS it in the detail panel whether or not it could be taken — a node you
             // cannot afford is exactly the one you most want to read.
@@ -1208,14 +1267,24 @@ public sealed class BuildScreen
     };
 
     /// <summary>The socket a node is set in. Shape says KIND — how big a commitment this is.</summary>
+    /// <remarks>
+    /// THE CAPSTONE WEARS THE GREATER'S MEDALLION, LARGER. It wore a wide plaque (ui_node_mastery), and
+    /// a playtester read the four plaques as "the masteries in general" — a different KIND of thing
+    /// from the round studs, rather than the biggest of them. Playtest 2026-08-27: "if those nodes are
+    /// big power-ups, we can convey that with SIZE." So it is the same spiked ring as a Greater, drawn
+    /// a size up with a thicker halo in the branch colour and a larger glyph, and nothing on the tree
+    /// is a rectangle any more — the BRIDGE's chain-link square went the same way and wears the plain
+    /// ring around its hexagonal field, a shape no other kind has. The plaque and chain art stay on
+    /// disk, unused.
+    /// </remarks>
     private static string KindFrame(MasteryKind k) => k switch
     {
         MasteryKind.Start => "ui_node_start",
         MasteryKind.Minor => "ui_node_minor",
         MasteryKind.Notable => "ui_node_notable",
         MasteryKind.Greater => "ui_node_greater",
-        MasteryKind.Mastery => "ui_node_mastery",
-        MasteryKind.Bridge => "ui_node_bridge",
+        MasteryKind.Mastery => "ui_node_greater",
+        MasteryKind.Bridge => "ui_node_minor",
         _ => "ui_node_spec",
     };
 
@@ -1275,15 +1344,6 @@ public sealed class BuildScreen
         var edge = taken ? Gold : canTake ? branchCol : Path;
         var thick = Math.Max(2, (int)(4 * _zoom * 1.6f));
 
-        // A Mastery is drawn as a wide plaque, not a stud: it is the branch's whole identity and its
-        // name is printed inside it. Everything below shares one path, so the box is decided first.
-        if (node.Kind == MasteryKind.Mastery)
-        {
-            var half = (int)(120 * _zoom * 1.9f);
-            box = new Rectangle(cx - half, cy - rad, half * 2, rad * 2);
-            hover = box.Contains(mouse);
-        }
-
         // THE ART. Three channels, one fact each: the FRAME's shape is the kind, the GLYPH inside it is
         // the branch, and the tint on both is the state. Before this the three facts shared one channel
         // — a coloured square, sized by kind, with a smaller square in the middle of the expensive ones
@@ -1291,10 +1351,21 @@ public sealed class BuildScreen
         // the two things a player reads last.
         //
         // Stretched, not fitted: these are frames, and a frame that letterboxes stops framing what is
-        // inside it. The square art goes into a square box, so only the Mastery plaque scales unevenly,
-        // and it is authored at almost exactly the plaque's aspect.
+        // inside it. Every frame is square art in a square box now that the capstone is round too.
         var frame = _ui.Assets.Get(KindFrame(node.Kind));
         var owned = node.Kind == MasteryKind.Mastery && Mastery.MasteredBranch() == node.Branch;
+
+        // THE CAPSTONE'S HALO. Size is what says "the big one", and a halo in the branch colour a step
+        // outside the medallion is how the size is made legible at the whole-tree framing, where the
+        // medallion itself is under thirty pixels across. Drawn before the frame so the frame's spikes
+        // sit on top of it. Gold once the branch is mastered, like the frame.
+        if (node.Kind == MasteryKind.Mastery)
+        {
+            var haloR = rad * 1.16f;
+            var haloT = Math.Max(2f, rad * 0.11f);
+            DrawRing(b, new Vector2(cx, cy), haloR, haloT,
+                     owned || taken ? Gold : canTake ? branchCol : Muted(branchCol, 0.55f));
+        }
 
         // THE SIX UNCHOSEN SPECIALISATIONS BREATHE. While the hunter has no discipline, the one
         // decision on this page that cannot be undone by a respec is also the one the eye has no
@@ -1341,7 +1412,7 @@ public sealed class BuildScreen
                            : lockedSpec ? Muted(branchCol, 0.30f) : fill;
             if (node.Kind == MasteryKind.Specialisation) _ui.Diamond(b, field, fieldCol);
             else if (node.Kind == MasteryKind.Notable || node.Kind == MasteryKind.Bridge) _ui.Hex(b, field, fieldCol);
-            else if (node.Kind != MasteryKind.Mastery) _ui.Diamond(b, Circleish(field), fieldCol);
+            else _ui.Diamond(b, Circleish(field), fieldCol);
 
             b.Draw(frame, box, hover ? Bone : owned || taken ? Gold : canTake ? branchCol
                                : lockedSpec ? Muted(branchCol, 0.72f) : Path);
@@ -1360,22 +1431,6 @@ public sealed class BuildScreen
             // >= the default zoom, not >. The threshold was 0.3 and HOME resets to exactly 0.30, so the
             // one label naming the centre of the tree was absent from the default view of it.
             if (_zoom > LabelZoom) _ui.TextCenter(b, "YOU", cx, cy - 12, Bone);
-        }
-        else if (node.Kind == MasteryKind.Mastery)
-        {
-            // A CAPSTONE WEARS ITS OWN NAME. It used to print Short(node.Branch) — so the four biggest
-            // objects on the page read WEIGHT / SPREAD / TEMPO / ENDURE, which are the names of the four
-            // DIRECTIONS and not of these nodes at all. OVERWHELM, EVERYWHERE, FIRST STRIKE and ENDLESS
-            // existed only in a hover tooltip, and a playtester reasonably concluded the four plaques
-            // WERE the directions and went looking for the real masteries elsewhere. The directions are
-            // labelled outside the rim now (DrawBranchHeader); the plaque says what the plaque is.
-            if (_zoom > LabelZoom)
-            {
-                _ui.TextCenterBig(b, Head(node.Label), box.Center.X, box.Center.Y - 14,
-                                  owned || taken ? Bone : branchCol, UiTypography.Body);
-                _ui.TextCenterBig(b, "CAPSTONE", box.Center.X, box.Bottom + 5,
-                                  owned || taken ? Gold : Slate, UiTypography.Secondary);
-            }
         }
         else if (node.Kind == MasteryKind.Specialisation && _zoom > LabelZoom)
         {
@@ -1398,7 +1453,9 @@ public sealed class BuildScreen
         else if (box.Width >= 20
                  && _ui.Assets.Get(BranchGlyph(node.Branch)) is { } glyph)
         {
-            var g = (int)(box.Width * 0.46f);
+            // A capstone's glyph fills more of its medallion: the third size cue after the frame and the
+            // halo, and the one that survives the whole-tree framing best.
+            var g = (int)(box.Width * (node.Kind == MasteryKind.Mastery ? 0.54f : 0.46f));
             // Dark on a lit field once taken, lit on a dark field before: whichever way round, the
             // glyph is the thing with contrast against what is behind it.
             var tint = taken ? new Color(0x14, 0x11, 0x1E) : canTake ? branchCol : new Color(0x4A, 0x46, 0x58);
@@ -1414,10 +1471,59 @@ public sealed class BuildScreen
                      taken ? new Color(0x14, 0x11, 0x1E) : branchCol);
         }
 
+        // A CAPSTONE WEARS ITS OWN NAME, under the medallion. It used to print Short(node.Branch) inside
+        // a plaque — so the four biggest objects on the page read WEIGHT / SPREAD / TEMPO / ENDURE, the
+        // names of the four DIRECTIONS and not of these nodes at all, and a playtester concluded the
+        // plaques WERE the directions. The directions are labelled outside the rim now
+        // (DrawBranchHeader); the medallion carries the branch glyph like every other node and says
+        // what it is underneath. HeaderRing is measured against these two lines.
+        //
+        // OUTWARD, not below. The north capstone's captions drawn under it were printed straight
+        // through the ring-3 greaters inside it (the first capture said so); on the north arm the
+        // room is ABOVE the medallion, between it and the WEIGHT header, so the two lines stack away
+        // from the centre there and below the node everywhere else. The name is always the line
+        // nearer the medallion.
+        if (node.Kind == MasteryKind.Mastery && _zoom > LabelZoom)
+        {
+            var nameCol = owned || taken ? Bone : branchCol;
+            var kindCol = owned || taken ? Gold : Slate;
+            if (w.Y < -1f)
+            {
+                _ui.TextCenterBig(b, Head(node.Label), cx, box.Top - 24, nameCol, UiTypography.Body);
+                _ui.TextCenterBig(b, "CAPSTONE", cx, box.Top - 44, kindCol, UiTypography.Secondary);
+            }
+            else
+            {
+                _ui.TextCenterBig(b, Head(node.Label), cx, box.Bottom + 4, nameCol, UiTypography.Body);
+                _ui.TextCenterBig(b, "CAPSTONE", cx, box.Bottom + 26, kindCol, UiTypography.Secondary);
+            }
+        }
+
         if (hover && node.Kind != MasteryKind.Start)
         {
             _hoverInfo = $"{node.Label}   ({node.Cost} POINT{(node.Cost == 1 ? "" : "S")})";
             _hoverNodeId = node.Id;
+        }
+    }
+
+    /// <summary>
+    /// A ring of the given radius and stroke, as a polygon of short segments.
+    /// </summary>
+    /// <remarks>
+    /// UiKit has no disc or ring primitive and this file must not add art. Forty-eight segments of
+    /// LineSeg from the one pixel texture read as a circle at every zoom the tree reaches, and batch
+    /// with everything else on the page.
+    /// </remarks>
+    private void DrawRing(SpriteBatch b, Vector2 centre, float radius, float thickness, Color col)
+    {
+        const int segments = 48;
+        var prev = centre + new Vector2(radius, 0f);
+        for (var i = 1; i <= segments; i++)
+        {
+            var a = MathF.Tau * i / segments;
+            var next = centre + new Vector2(MathF.Cos(a) * radius, MathF.Sin(a) * radius);
+            _ui.LineSeg(b, prev, next, thickness, col);
+            prev = next;
         }
     }
 

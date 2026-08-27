@@ -24,7 +24,13 @@ public readonly record struct TreePoint(float X, float Y);
 public static class MasteryLayout
 {
     /// <summary>The rim. The outermost ring sits here, whatever ring number that turns out to be.</summary>
-    public const float WorldRadius = 1500f;
+    /// <remarks>
+    /// 2000, from 1500 (2026-08-27): "open up the distance between the nodes". Every ring fraction below
+    /// is unchanged, so the whole tree simply grew a third while the nodes grew a sixth
+    /// (<see cref="NodeWorldRadius"/>) — neighbours breathe, and every clearance the overlap test
+    /// measures got wider rather than narrower.
+    /// </remarks>
+    public const float WorldRadius = 2000f;
 
     /// <summary>
     /// How far out ring 1 sits, as a fraction of <see cref="WorldRadius"/>.
@@ -50,11 +56,13 @@ public static class MasteryLayout
     /// </para>
     /// <para>
     /// 252 is where the old table already was at rings 1 and 2 (555 × 26° and 915 × 16° are both ≈252),
-    /// so the shape the design settled on is preserved. It is comfortably more than twice the widest
-    /// node that can HAVE a sibling — a Greater at 87 world units — so two neighbours cannot touch.
+    /// so the shape the design settled on was preserved through the refactor. It is 330 now — the
+    /// 2026-08-27 pass grew the rim by a third and the arc with it, so siblings sit as far apart in
+    /// proportion as they did. Comfortably more than twice the widest node that can HAVE a sibling — a
+    /// Greater at 103 world units — so two neighbours cannot touch.
     /// </para>
     /// </remarks>
-    public const float SiblingArc = 252f;
+    public const float SiblingArc = 330f;
 
     /// <summary>
     /// Bends the ring spacing so the gaps narrow going outward, matching the funnel the branches read as.
@@ -77,7 +85,12 @@ public static class MasteryLayout
     /// <summary>A SPECIALISATION hangs off the side of its branch rather than on the spine.</summary>
     public const float SpecialisationFraction = 0.86f;
 
-    private const float SpecialisationOffsetDegrees = 26f;
+    /// <remarks>
+    /// 30°, from 26°. Ring 3 holds four greaters since the 2026-08-27 pass and its fan reaches ±17°; at
+    /// 26° the outer greater and the specialisation beside it cleared by 36 world units, which the
+    /// clearance test rightly refuses. Four degrees buys 147.
+    /// </remarks>
+    private const float SpecialisationOffsetDegrees = 30f;
 
     /// <summary>
     /// How far a SPUR reaches out from ring 1, as a fraction of the gap to ring 2.
@@ -91,9 +104,9 @@ public static class MasteryLayout
     /// </para>
     /// <para>
     /// The numbers are placed by clearance, not taste. At 0.52 of the way out and 30° off the spine the
-    /// spur clears the bridge on the diagonal (0.46 of the radius at 45°) by ~64 world units, the
-    /// outermost ring-2 notable by ~70, and its own parent by ~100 — every neighbour by more than a
-    /// Minor's radius. Push the reach past ~0.65 and it hits the notable; pull the angle past ~36° and
+    /// spur clears the bridge on the diagonal (0.46 of the radius at 45°) by ~105 world units, the
+    /// outermost ring-2 notable by ~85, and its own parent by ~140 — every neighbour by more than a
+    /// Minor's diameter. Push the reach past ~0.65 and it hits the notable; pull the angle past ~36° and
     /// it hits the bridge. <c>MasteryLayoutTests.test_no_two_nodes_in_the_catalogue_overlap</c> is what
     /// says so.
     /// </para>
@@ -188,6 +201,13 @@ public static class MasteryLayout
     /// in here so world-space geometry has one honest answer for "how big is this".
     /// </para>
     /// <para>
+    /// <b>Every kind grew a sixth on 2026-08-27</b> ("make the nodes a little bigger") — 26 → 31 for a
+    /// Minor up to 64 → 76 for a capstone — while the rim grew a third, so the tree reads looser, not
+    /// tighter. The capstone is the largest by a clear step: it is drawn as a round medallion of the
+    /// same family as a Greater now, not a plaque, and SIZE is the only thing that says "this is the
+    /// big one" — which is why it is the one kind that out-measures a Specialisation.
+    /// </para>
+    /// <para>
     /// <b>A SPECIALISATION IS THE SECOND-LARGEST NODE, and it used to share a line with BRIDGE at 42.</b>
     /// That was the tree's worst lie about itself. A Specialisation is the one node that decides WHO THE
     /// HUNTER IS — it sets the discipline, it can be taken exactly once, and every skill the player ever
@@ -195,25 +215,38 @@ public static class MasteryLayout
     /// size, the six choices that name the character were indistinguishable from ordinary studs, and a
     /// playtester reported exactly that: "the Form specialist nodes are small, like any other node — but
     /// are not THOSE the real masteries?" Size is this tree's only pre-reading channel, so the node that
-    /// matters most now measures 58 against the ring-4 capstone's 64, and Bridge keeps 42 alone.
+    /// matters most now measures 68 against the ring-4 capstone's 76, and Bridge keeps 49 alone.
     /// </para>
     /// <para>
     /// The change is safe by a wide margin, and the margin is checked rather than asserted: a
-    /// Specialisation's nearest neighbours are its branch's ring-3 Greaters at ~442 world units and its
-    /// capstone at ~660, against a combined radius of 198 and 232. See
+    /// Specialisation's nearest neighbours are its branch's outer ring-3 Greaters at ~380 world units
+    /// and its capstone at ~1000, against a combined radius of 232 and 274. See
     /// <c>MasteryLayoutTests.test_no_two_nodes_in_the_catalogue_overlap</c>, which is what says so.
     /// </para>
     /// </remarks>
     public static float NodeWorldRadius(MasteryKind k) => 1.9f * k switch
     {
-        MasteryKind.Start => 60f,
-        MasteryKind.Mastery => 64f,
-        MasteryKind.Specialisation => 58f,
-        MasteryKind.Greater => 46f,
-        MasteryKind.Bridge => 42f,
-        MasteryKind.Notable => 38f,
-        _ => 26f,
+        MasteryKind.Start => 70f,
+        MasteryKind.Mastery => 76f,
+        MasteryKind.Specialisation => 68f,
+        MasteryKind.Greater => 54f,
+        MasteryKind.Bridge => 49f,
+        MasteryKind.Notable => 45f,
+        _ => 31f,
     };
+
+    /// <summary>
+    /// The world radius that encloses START and the whole of ring 1 — what the tree's FIRST OPEN frames.
+    /// </summary>
+    /// <remarks>
+    /// "When the tree first opens it should come zoomed in on the centre node and the nodes one step
+    /// around it." The screen turns this into a zoom by dividing the viewport's half-extent by it, so
+    /// the framing is derived from the layout rather than pinned to a number that would be wrong the
+    /// day a ring moved. Ring 1 plus a Minor's own radius: the outermost pixel of the outermost minor.
+    /// The spurs sit past it on purpose — half a node at the edge of the view is the invitation to pan.
+    /// </remarks>
+    public static float FirstOpenRadius
+        => RingRadius(1, MaxRing) + NodeWorldRadius(MasteryKind.Minor);
 
     /// <summary>
     /// Which of its ring's siblings this node is, and how many there are — what drives the fan.

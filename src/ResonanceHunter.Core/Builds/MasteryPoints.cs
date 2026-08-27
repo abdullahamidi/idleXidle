@@ -17,17 +17,23 @@ namespace ResonanceHunter.Core.Builds;
 /// </para>
 /// <para>
 /// A square root pays quickly at first and slows for ever after, which is the shape a WALL should have:
-/// the next point is always visible and always further than the last. With <see cref="Scale"/> = 0.8:
-/// wave 25 → 4, wave 40 → 5, wave 64 → 6, wave 100 → 8, wave 150 → 9, wave 225 → 12 — per region.
+/// the next point is always visible and always further than the last. With <see cref="Scale"/> = 0.9:
+/// wave 25 → 4, wave 40 → 5, wave 64 → 7, wave 100 → 9, wave 150 → 11, wave 225 → 13 — per region.
 /// The free three are gone: the tree opens later now (Unlocks: wave 25), and a player who has walked
 /// twenty-five waves arrives with four points, which buys a minor and a notable and leaves the
 /// specialisation as the first thing to want.
+/// </para>
+/// <para>
+/// 0.9, from 0.8 (2026-08-27): the tree grew from 220 to 256 points when every ring gained a node, and
+/// the curve grew with it so six regions at depth 150 still buy about a quarter of it (66 of 256) and
+/// two complete branches (98) stay out of reach. Wave 40 still pays 5, short of the 10 a
+/// specialisation's shortest path costs.
 /// </para>
 /// </remarks>
 public static class MasteryPoints
 {
     /// <summary>The multiplier on the square root of depth. Tuning knob; pinned by mastery_points_test.</summary>
-    public const float Scale = 0.8f;
+    public const float Scale = 0.9f;
 
     /// <summary>Points one region's best depth is worth.</summary>
     public static int FromDepth(int bestDepth)

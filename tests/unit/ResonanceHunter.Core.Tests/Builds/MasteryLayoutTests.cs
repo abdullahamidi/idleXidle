@@ -262,15 +262,47 @@ public class MasteryLayoutTests
             float Side(TreePoint p) => MathF.Sign(MathF.IEEERemainder(MathF.Atan2(p.Y, p.X) - axis, 2f * MathF.PI));
             Assert.Equal(Side(parentAt), Side(at));
 
-            // The four minors did not move: they are placed from their own ring's population, spur excluded.
+            // The five fan minors are placed from their own ring's population, spur excluded.
             var fan = MasteryCatalog.Nodes.Where(n => n.Branch == spur.Branch && n.Kind == MasteryKind.Minor && !n.Spur).ToList();
-            Assert.Equal(4, fan.Count);
+            Assert.Equal(5, fan.Count);
 
             // And the wire to the parent is short enough to read as a twig, not a jump across rings.
             var wire = Distance(at, parentAt);
             _out.WriteLine($"{spur.Id}: radius {radius:N0}, {wire:N0} from {parent.Id}.");
             Assert.True(wire < r2 - r1, $"{spur.Id} is {wire:N0} from its parent — further than a whole ring.");
         }
+    }
+
+    /// <summary>
+    /// The FIRST-OPEN framing encloses START and every ring-1 fan node whole, and nothing of ring 2.
+    /// </summary>
+    /// <remarks>
+    /// "When the tree first opens it should come zoomed in on the centre node and the nodes one step
+    /// around it." The screen divides its viewport by this radius to get the zoom, so if the radius
+    /// ever admitted ring 2 the first thing a player saw would be the whole crowded tree again — and
+    /// if it cut a minor in half, the invitation to pan would read as a rendering fault.
+    /// </remarks>
+    [Fact]
+    public void test_the_first_open_radius_holds_ring_one_and_nothing_further()
+    {
+        var r = MasteryLayout.FirstOpenRadius;
+        Assert.True(r > MasteryLayout.NodeWorldRadius(MasteryKind.Start), "START must fit inside it.");
+
+        foreach (var n in MasteryCatalog.Nodes.Where(n => n.Ring == 1 && !n.Spur && n.Kind == MasteryKind.Minor))
+        {
+            var at = MasteryLayout.PositionOf(n);
+            var reach = MathF.Sqrt(at.X * at.X + at.Y * at.Y) + MasteryLayout.NodeWorldRadius(n.Kind);
+            Assert.True(reach <= r + 0.5f, $"{n.Id} reaches {reach:N0}, past the first-open radius {r:N0}.");
+        }
+
+        foreach (var n in MasteryCatalog.Nodes.Where(n => n.Ring >= 2 && n.Link is null))
+        {
+            var at = MasteryLayout.PositionOf(n);
+            var inner = MathF.Sqrt(at.X * at.X + at.Y * at.Y) - MasteryLayout.NodeWorldRadius(n.Kind);
+            Assert.True(inner > r, $"{n.Id} at ring {n.Ring} intrudes on the first-open framing.");
+        }
+
+        _out.WriteLine($"first-open radius {r:N0} of a {MasteryLayout.WorldRadius:N0} rim.");
     }
 
     [Fact]

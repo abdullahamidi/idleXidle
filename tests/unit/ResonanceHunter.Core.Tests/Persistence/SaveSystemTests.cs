@@ -327,6 +327,9 @@ public class SaveSystemTests
             SocketedKeystoneIds = new List<string> { "glass_cannon", "reaper" },
             MasteryTaken = new List<string> { "strike_1", "strike_2" },
             MasteryEarned = 42,
+            MasteryZoom = 0.57f,
+            MasteryPanX = -120.5f,
+            MasteryPanY = 88f,
             ChampionGleamRate = 3.5f,
         };
 
@@ -341,7 +344,26 @@ public class SaveSystemTests
         Assert.Equal(new[] { "glass_cannon", "reaper" }, back.SocketedKeystoneIds);
         Assert.Equal(new[] { "strike_1", "strike_2" }, back.MasteryTaken);
         Assert.Equal(42, back.MasteryEarned);
+        Assert.Equal(0.57f, back.MasteryZoom);
+        Assert.Equal(-120.5f, back.MasteryPanX);
+        Assert.Equal(88f, back.MasteryPanY);
         Assert.Equal(3.5f, back.ChampionGleamRate);
+    }
+
+    /// <summary>
+    /// A save written before the tree camera existed loads with a zoom of 0 — which the screen reads as
+    /// "never opened" and answers with the first-open framing. No version bump, no migration.
+    /// </summary>
+    [Fact]
+    public void test_a_save_without_a_tree_camera_asks_for_the_first_open_framing()
+    {
+        var (hunter, region, inventory) = BuildGame();
+        var json = SaveSystem.Serialize(SaveSystem.Capture(hunter, region, inventory, Now));
+        var loaded = SaveSystem.Deserialize(json, Now);
+        Assert.True(loaded.Ok);
+        Assert.Equal(0f, loaded.Save!.MasteryZoom);
+        Assert.Equal(0f, loaded.Save!.MasteryPanX);
+        Assert.Equal(0f, loaded.Save!.MasteryPanY);
     }
 
     /// <summary>Restoring a Hunter must reproduce their exact stats — not an approximation.</summary>

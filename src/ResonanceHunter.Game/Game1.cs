@@ -616,6 +616,10 @@ public class Game1 : Game
 
         _deepestEver = save.MasteryEarned;         // stored the deepest-ever; Earned re-derives from it
         _mastery.RestoreTaken(save.MasteryTaken);
+        // The tree's camera. PARKED like the run log below: _buildScreen is built in LoadContent. A
+        // save from before the camera existed carries zoom 0, which the screen answers with its
+        // first-open framing — the same first sight of the tree a new game gets.
+        _pendingTreeCamera = (save.MasteryZoom, save.MasteryPanX, save.MasteryPanY);
 
         // The Warren facility economy — levels/XP restored before the offline tick below so its production
         // is computed against the real facility levels, not a fresh level-1 base.
@@ -803,6 +807,7 @@ public class Game1 : Game
     private List<ItemInstance>? _pendingInventory;
     private List<Chest>? _pendingChests;
     private List<RunReport>? _pendingRunLog;
+    private (float Zoom, float PanX, float PanY)? _pendingTreeCamera;
     private Dictionary<GearSlot, string?> _pendingWorn = new();
     private int _pendingChestsOpened;
     private bool _pendingFreeSocketUsed;
@@ -855,6 +860,11 @@ public class Game1 : Game
             // being closed.
             RunLog = _expedition.Log.Entries.Select(RunLog.ToSave).ToList(),
             MasteryTaken = _mastery.Taken.ToList(),
+            // The tree's camera, so the zoom a player settled on is the zoom they come back to. The
+            // ten-second autosave carries it; nothing marks the screen dirty per wheel-tick.
+            MasteryZoom = _buildScreen.CameraZoom,
+            MasteryPanX = _buildScreen.CameraPanX,
+            MasteryPanY = _buildScreen.CameraPanY,
             // WHICH character, and WHICH ARE EARNED. The earned set used to be derived every frame
             // and never written, on the argument that it could not fall out of step with the world.
             // It can fall out of step with the RULES: the tiered roster tightened every second
@@ -970,6 +980,7 @@ public class Game1 : Game
         _pendingInventory = null;
         _pendingChests = null;
         _pendingRunLog = null;
+        _pendingTreeCamera = null;   // a fresh game opens the tree on its first-open framing
         _pendingWorn = new Dictionary<GearSlot, string?>();
         _pendingChestsOpened = 0;
         _pendingFreeSocketUsed = false;   // a fresh game's first gem is free again
@@ -1164,6 +1175,7 @@ public class Game1 : Game
         _expedition.KeepMinTier = _chestKeepMinTier;
         _expedition.KeepSlots.Clear(); foreach (var sl in _chestKeepSlots) _expedition.KeepSlots.Add(sl);
         if (_pendingRunLog is not null) _expedition.Log.Restore(_pendingRunLog);
+        if (_pendingTreeCamera is { } cam) _buildScreen.RestoreCamera(cam.Zoom, cam.PanX, cam.PanY);
         SeedExplained();
     }
 
@@ -1519,7 +1531,14 @@ public class Game1 : Game
                                                "interrupt" })
                         _mastery.Take(id);
 
-                    if (sm == "buildtree") _buildScreen.DevOpenTree();
+                    // BUILDTREE frames the whole tree. The TOUR of this screen is, by definition, a first
+                    // visit, so it is posed on the first-open framing a real first visit gets — the
+                    // card's light has to fall on what the player actually sees.
+                    if (sm == "buildtree")
+                    {
+                        if (Environment.GetEnvironmentVariable("RH_SHOT_MODE") == "tour") _buildScreen.DevOpenTreeFirstVisit();
+                        else _buildScreen.DevOpenTree();
+                    }
 
                     // ATTUNE poses THE ATTUNEMENT ceremony; ATTUNED poses the tree after sealing
                     // (the hex panel gold, the discipline live). Both walk the REAL path — Weight's
@@ -1536,13 +1555,16 @@ public class Game1 : Game
                     }
                     // The same tree at a working zoom. Node art is thirty pixels across in the
                     // overview, where a capture can only prove that something was drawn. RH_SHOT_ZOOM
-                    // picks the scale, so the rim (masteries) and the hub (minors) are both reachable
-                    // from the capture script without editing this file again.
+                    // picks the scale, so the rim (capstones) and the hub (minors) are both reachable
+                    // from the capture script without editing this file again. With NO dial it poses
+                    // the FIRST-OPEN framing — the centre and ring 1 — which is the one a player sees.
                     if (sm == "buildzoom")
-                        _buildScreen.DevOpenTree(
-                            float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_ZOOM"),
-                                           System.Globalization.CultureInfo.InvariantCulture, out var dz)
-                                ? dz : 0.95f);
+                    {
+                        if (float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_ZOOM"),
+                                           System.Globalization.CultureInfo.InvariantCulture, out var dz))
+                            _buildScreen.DevOpenTree(dz);
+                        else _buildScreen.DevOpenTreeFirstVisit();
+                    }
 
                 }
 

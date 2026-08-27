@@ -41,44 +41,45 @@ public class MasteryTreeTests
 
     // ── The budget. These four are the design's arithmetic, and they are load-bearing. ────────────
 
-    /// <summary>A full branch costs 40 — the unit everything else is priced against.</summary>
+    /// <summary>A full branch costs 49 — the unit everything else is priced against.</summary>
     /// <remarks>
-    /// Was 31 (4 + 9 + 10 + 8). The post-pre-alpha playtest reached a specialisation inside fifteen
-    /// minutes, so every branch grew a side road — one more minor, notable and greater (1 + 3 + 5 = 9)
-    /// — and the number the rest of the arithmetic hangs off moved with it.
+    /// Was 31 (4 + 9 + 10 + 8), then 40 when every branch grew a side road after the post-pre-alpha
+    /// playtest reached a specialisation inside fifteen minutes. 49 since 2026-08-27, when every ring
+    /// gained one more node (1 + 3 + 5 = 9 again) — and the number the rest of the arithmetic hangs off
+    /// moved with it.
     /// </remarks>
     [Fact]
-    public void test_a_full_branch_costs_forty()
+    public void test_a_full_branch_costs_forty_nine()
     {
         foreach (var b in Branches)
-            Assert.Equal(40, MasteryCatalog.BranchCost(b));
+            Assert.Equal(49, MasteryCatalog.BranchCost(b));
     }
 
-    /// <summary>Every branch is exactly 5 minors, 4 notables, 3 greaters and 1 mastery.</summary>
+    /// <summary>Every branch is exactly 6 minors, 5 notables, 4 greaters and 1 mastery.</summary>
     /// <remarks>
     /// The shape the design doc states and the layout is tuned for. A branch that quietly gained a
-    /// sixth minor or lost a greater would still "work", and the ring fans would silently re-space to
+    /// seventh minor or lost a greater would still "work", and the ring fans would silently re-space to
     /// absorb it — which is precisely the kind of drift a count pins.
     /// </remarks>
     [Fact]
-    public void test_every_branch_has_five_four_three_one()
+    public void test_every_branch_has_six_five_four_one()
     {
         foreach (var b in Branches)
         {
-            Assert.Equal(5, Of(b, MasteryKind.Minor).Count());
-            Assert.Equal(4, Of(b, MasteryKind.Notable).Count());
-            Assert.Equal(3, Of(b, MasteryKind.Greater).Count());
+            Assert.Equal(6, Of(b, MasteryKind.Minor).Count());
+            Assert.Equal(5, Of(b, MasteryKind.Notable).Count());
+            Assert.Equal(4, Of(b, MasteryKind.Greater).Count());
             Assert.Single(Of(b, MasteryKind.Mastery));
             Assert.Single(Of(b, MasteryKind.Minor).Where(n => n.Spur));
         }
     }
 
-    /// <summary>The whole tree is 220: four branches at 40, four bridges at 6, six specialisations at 6.</summary>
+    /// <summary>The whole tree is 256: four branches at 49, four bridges at 6, six specialisations at 6.</summary>
     [Fact]
-    public void test_the_whole_tree_costs_two_hundred_and_twenty()
+    public void test_the_whole_tree_costs_two_hundred_and_fifty_six()
     {
-        Assert.Equal(4 * 40 + 4 * 6 + 6 * 6, MasteryCatalog.TotalCost);
-        Assert.Equal(220, MasteryCatalog.TotalCost);
+        Assert.Equal(4 * 49 + 4 * 6 + 6 * 6, MasteryCatalog.TotalCost);
+        Assert.Equal(256, MasteryCatalog.TotalCost);
     }
 
     /// <summary>No two nodes share an id — a duplicate would make ById, Take and the save ambiguous.</summary>
@@ -172,18 +173,27 @@ public class MasteryTreeTests
         }
     }
 
+    /// <summary>A full career at today's content, on the real curve: six regions walked to depth 225.</summary>
+    /// <remarks>
+    /// The budget the two tests below used to hard-code as 60 ("6 regions × depth 50 / 5") was the old
+    /// linear faucet's number. Read from <see cref="MasteryPoints"/> instead, so the invariants are
+    /// measured against the curve the game actually pays — and a curve change that broke them would
+    /// break them here rather than in a playtest.
+    /// </remarks>
+    private static int FullCareerPoints => MasteryPoints.Total(new[] { 225, 225, 225, 225, 225, 225 });
+
     /// <summary>
     /// Two complete branches cost more than a full career earns.
     /// </summary>
     /// <remarks>
-    /// THE INVARIANT THE WHOLE TREE RESTS ON. Six regions at depth 50, one point per five depth, is 60
-    /// points; two branches are 62. If this ever inverts, the opposed pairs stop being opposed — a player
-    /// simply buys both Weight and Spread and the tree's central decision evaporates.
+    /// THE INVARIANT THE WHOLE TREE RESTS ON. Six regions at depth 225 pay 78 points; two branches are
+    /// 98. If this ever inverts, the opposed pairs stop being opposed — a player simply buys both Weight
+    /// and Spread and the tree's central decision evaporates.
     /// </remarks>
     [Fact]
     public void test_two_complete_branches_are_out_of_reach()
     {
-        const int budgetAtFullContent = 60;   // 6 regions x depth 50 / 5
+        var budgetAtFullContent = FullCareerPoints;
         var two = MasteryCatalog.BranchCost(Branch.Weight) + MasteryCatalog.BranchCost(Branch.Spread);
 
         Assert.True(two > budgetAtFullContent,
@@ -193,18 +203,22 @@ public class MasteryTreeTests
 
     /// <summary>The whole tree is roughly three to four times what a career earns.</summary>
     /// <remarks>
-    /// 60 / 184 was 33%; the side roads took the tree to 220 and the same 60 points to 27%. The floor
-    /// moved from 0.28 to 0.25 on purpose: the enrichment exists to make the tree take LONGER to walk,
-    /// and the points curve is being retuned in parallel against the new total — what this test guards
-    /// is that the tree never becomes mostly affordable (the ceiling), and never so large that a
-    /// career buys less than a branch and a half (the floor: 0.25 × 220 = 55 > 40).
+    /// 60 / 184 was 33%; the side roads took the tree to 220 and 60 points to 27%; the 2026-08-27 pass
+    /// took it to 256 and the curve to 0.9, so six regions at depth 150 buy 66 (26%) and at depth 225
+    /// buy 78 (30%). What this test guards is that the tree never becomes mostly affordable (the
+    /// ceiling), and never so large that a career buys less than a branch and a half (the floor:
+    /// 0.25 × 256 = 64 > 49).
     /// </remarks>
     [Fact]
     public void test_about_a_third_of_the_tree_is_reachable()
     {
-        var fraction = 60f / MasteryCatalog.TotalCost;
+        var midCareer = MasteryPoints.Total(new[] { 150, 150, 150, 150, 150, 150 }) / (float)MasteryCatalog.TotalCost;
+        var fullCareer = FullCareerPoints / (float)MasteryCatalog.TotalCost;
 
-        Assert.InRange(fraction, 0.25f, 0.38f);
+        Assert.InRange(midCareer, 0.25f, 0.38f);
+        Assert.InRange(fullCareer, 0.25f, 0.38f);
+        Assert.True(FullCareerPoints > MasteryCatalog.BranchCost(Branch.Weight) * 1.5f,
+            "a full career must buy a branch and a half, or the second start is fiction.");
     }
 
     /// <summary>Points are spent by COST, not by node count.</summary>
@@ -345,7 +359,8 @@ public class MasteryTreeTests
     /// conditional rather than costed — they pay only when a condition the player must build for holds,
     /// which is a price of a different kind. Damage TAKEN above 1 joined the list of recognised prices
     /// with RUSH: Tempo's side-road greater pays in the opposed branch's currency, which is the most
-    /// honest price a Tempo node can carry.
+    /// honest price a Tempo node can carry. A LATER-CAST multiplier under 1 joined it with OPENING
+    /// VOLLEY, whose price is every cast after each skill's first.
     /// </remarks>
     [Fact]
     public void test_greaters_are_costed_or_conditional()
@@ -358,8 +373,46 @@ public class MasteryTreeTests
             var s = node.Shape;
             Assert.True(
                 s.HitSize < 1f || s.SkillRate < 1f || s.DamageDealt < 1f || s.VsOtherPenalty > 0f
-                || s.DamageTaken > 1f,
+                || s.DamageTaken > 1f || s.LaterCastMultiplier < 1f,
                 $"{node.Id} is an unconditional upgrade at ring 3. Greaters cost something.");
+        }
+    }
+
+    /// <summary>The four new greaters each carry a visible price, and no two pay in the same coin.</summary>
+    [Fact]
+    public void test_the_new_greaters_each_pay_a_different_price()
+    {
+        Assert.True(MasteryCatalog.ById("stagger")!.Shape.SkillRate < 1f, "STAGGER must pay in rate.");
+        Assert.True(MasteryCatalog.ById("tide")!.Shape.HitSize < 1f, "TIDE must pay in hit size.");
+        Assert.True(MasteryCatalog.ById("opening_volley")!.Shape.LaterCastMultiplier < 1f,
+            "OPENING VOLLEY must pay on every later cast.");
+        Assert.True(MasteryCatalog.ById("rebound")!.Shape.DamageDealt < 1f, "REBOUND must pay in damage dealt.");
+    }
+
+    /// <summary>
+    /// The new node of each ring sits in the FAN: any spine node of the ring below unlocks it, and it
+    /// in turn unlocks the fan above — a player who walks through it is never stranded short of the rim.
+    /// </summary>
+    [Fact]
+    public void test_the_new_nodes_are_wired_into_their_fans()
+    {
+        var road = new (string Minor, string Notable, string Greater)[]
+        {
+            ("heft", "headlong", "stagger"),
+            ("fan", "rally", "tide"),
+            ("brisk", "rhythm", "opening_volley"),
+            ("mending", "payback", "rebound"),
+        };
+
+        foreach (var (minor, notable, greater) in road)
+        {
+            var t = TreeWith(100);
+            Assert.True(t.Take(minor), $"{minor} should hang off START.");
+            Assert.True(t.Take(notable), $"{notable} should accept {minor}.");
+            Assert.True(t.Take(greater), $"{greater} should accept {notable}.");
+            var capstone = Of(MasteryCatalog.ById(greater)!.Branch, MasteryKind.Mastery).Single();
+            Assert.True(t.Take(capstone.Id), $"{capstone.Id} should accept {greater}.");
+            Assert.Equal(1 + 3 + 5 + 8, t.Spent);
         }
     }
 
@@ -454,7 +507,7 @@ public class MasteryTreeTests
         var notable = Of(Branch.Tempo, MasteryKind.Notable).First();
         // The SPINE minors — the ones the notable lists. The spur is a different case, below.
         var minors = Of(Branch.Tempo, MasteryKind.Minor).Where(m => notable.Prereqs.Contains(m.Id)).ToList();
-        Assert.Equal(4, minors.Count);
+        Assert.Equal(5, minors.Count);
 
         foreach (var m in minors) t.Take(m.Id);
         t.Take(notable.Id);

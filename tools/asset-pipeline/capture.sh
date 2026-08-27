@@ -17,10 +17,12 @@
 # seconds in — pass 6 to photograph a damage number beside a bar it has drained.
 # `fightfilter` is the fight with the CHEST FILTER popover open and a setting in it.
 #
-# `buildzoom` takes a third argument: the tree camera's zoom (default 0.95). The
-# node art is thirty pixels across in the 0.30 overview, where a capture can only
-# prove that something was drawn there — 0.55 frames the mastery plaques, 0.95 the
-# minors around the hub.
+# `buildzoom` takes a third argument: the tree camera's zoom. With none it poses the
+# FIRST-OPEN framing — the centre node and ring 1, which is what a player sees the
+# first time — so `buildzoom` alone photographs the first visit. The node art is
+# under thirty pixels across in the whole-tree overview, where a capture can only
+# prove that something was drawn there — 0.40 frames a capstone medallion with its
+# name, 0.95 the minors around the hub.
 #
 # `intro` takes a third argument too: which card of the first-run intro to pose,
 # counted from 1 (default 1). The eight cards each spotlight a different region of
