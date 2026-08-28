@@ -1321,7 +1321,7 @@ public sealed class SoloExpeditionScreen
         switch (form)
         {
             case Form.Strike:
-                _vfx.Play("fx_strike", tx, ty, scale: EnemyScale(target, 1.25f), fps: 12f, tint: glow);
+                _vfx.Play(FxFor(Form.Strike), tx, ty, scale: EnemyScale(target, 1.25f), fps: 12f, tint: glow);
                 break;
             case Form.Projectile:
                 // The bolt flies left-to-right inside its own frame, so it is centred between the two figures.
@@ -1329,20 +1329,20 @@ public sealed class SoloExpeditionScreen
                 // get a 208 px bolt and a boss a 520 px one for the same flight. And 8 fps, not 14 —
                 // only the strip's first three frames carry the streak (measured coverage 5/11/9% then
                 // under 2%), so at 14 fps the bolt was over in 214 ms (review 2026-08-30).
-                _vfx.Play("fx_projectile", (ChampBox.Right + tx) / 2, ty,
+                _vfx.Play(FxFor(Form.Projectile), (ChampBox.Right + tx) / 2, ty,
                           scale: Math.Clamp((tx - ChampBox.Right) / 104, 2, 5), fps: 8f, tint: glow);
                 break;
             case Form.Aura:
-                _vfx.Play("fx_aura", ChampBox.Center.X, ChampBox.Center.Y + 20, scale: 3, fps: 12f, tint: glow);
+                _vfx.Play(FxFor(Form.Aura), ChampBox.Center.X, ChampBox.Center.Y + 20, scale: 3, fps: 12f, tint: glow);
                 break;
             case Form.Trap:
-                _vfx.Play("fx_trap", _rowCentreX, EnemyPoint(target, 0.7f).Y, scale: EnemyScale(target, 1.3f), fps: 12f, tint: glow);
+                _vfx.Play(FxFor(Form.Trap), _rowCentreX, EnemyPoint(target, 0.7f).Y, scale: EnemyScale(target, 1.3f), fps: 12f, tint: glow);
                 break;
             case Form.Mark:
-                _vfx.Play("fx_mark", tx, ty, scale: EnemyScale(target, 0.9f), fps: 12f, tint: glow);
+                _vfx.Play(FxFor(Form.Mark), tx, ty, scale: EnemyScale(target, 0.9f), fps: 12f, tint: glow);
                 break;
             case Form.Transformation:
-                _vfx.Play("fx_transformation", ChampBox.Center.X, ChampBox.Center.Y, scale: 3, fps: 12f, tint: glow);
+                _vfx.Play(FxFor(Form.Transformation), ChampBox.Center.X, ChampBox.Center.Y, scale: 3, fps: 12f, tint: glow);
                 break;
         }
     }
@@ -3206,6 +3206,36 @@ public sealed class SoloExpeditionScreen
         _clipSpeed = Math.Clamp(baseSpeed * contactMs / Math.Max(1f, lead), baseSpeed, Math.Max(baseSpeed, MaxClipSpeed));
         _clipStartMs = _playheadMs;
         _clipName = clip;
+    }
+
+    /// <summary>
+    /// The effect key for a Form — this champion's own, if it has one, else the Form's shared effect.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE SAME FALLBACK SHAPE AS THE CLIPS (Character.StripKeys), and for the same reason: fifty
+    /// effects arrive a character at a time, and a character whose own effect has not been generated
+    /// yet must play the shared one rather than nothing. <see cref="VfxPlayer.Play"/> returns silently
+    /// on a missing key, so without this the skill would simply have no effect at all — the quietest
+    /// possible failure and the hardest to notice.
+    /// </para>
+    /// <para>
+    /// WHY PER CHARACTER AT ALL. The effect used to be one strip per Form, tinted by the casting
+    /// skill's Source — so a Strike was the same crescent whoever swung it. Now that each character
+    /// throws its OWN shape (the Anvil's two-handed smash is not the Seeker's knife stab), a shared
+    /// effect lands on a motion it was not drawn for. The designer's call, 2026-08-28: "hepsinin
+    /// efektinin farklı olması daha özel hissettirir."
+    /// </para>
+    /// <para>
+    /// The Source TINT still applies on top, so a character's effect still reads as Body or Shadow —
+    /// the shape says who cast it and the colour says what it is made of.
+    /// </para>
+    /// </remarks>
+    private string FxFor(Form form)
+    {
+        var f = form.ToString().ToLowerInvariant();
+        var own = $"fx_{Character.Id}_{f}_strip8_512";
+        return _ui.Assets.Has(own) ? own : $"fx_{f}";
     }
 
     /// <summary>The build's action-speed multiplier for the wave being shown.</summary>

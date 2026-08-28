@@ -83,6 +83,23 @@ Both were learned by looking at the sheet, which is what the sheet is for.
 * **Bend, do not kneel.** A full kneel changes silhouette height by more than the gate's 30 % loose
   ceiling and is rejected — the Seeker's first `trap` failed at 33 %. "Bends forward at the waist and
   reaches one hand to the ground" reads as the same act and passes.
+* **Never ask an effect to end at nothing.** "Fades away to almost nothing by the last frame" and
+  "gone off the right side by the last frame" both produced a literally EMPTY final frame, which the
+  gate rejects outright ("an input frame is empty"). The renderer fades an effect itself; the strip
+  only has to carry the motion. Say instead: "keep a clear visible remnant in every frame including
+  the last one, never empty."
+
+### 3.3 One effect per Form PER CHARACTER (2026-08-28)
+
+The effect used to be one strip per Form, tinted by the casting skill's Source — so a Strike was the
+same crescent whoever swung it. Now that each character throws its own shape, a shared effect lands on
+a motion it was not drawn for (designer, 2026-08-28: *"hepsinin efektinin farklı olması daha özel
+hissettirir"*). Key: `fx_<char>_<form>_strip8_512`, resolved by `SoloExpeditionScreen.FxFor` with the
+shared `fx_<form>` as the fallback — the same shape as the clip fallback, and for the same reason.
+
+The Source TINT still applies on top, so the shape says WHO cast it and the colour says what it is made
+of. Effects are therefore still authored white/pale; a coloured effect multiplies badly against the
+tint, which is why the Seeker's first `trap` (generated in gold) was re-rolled.
 
 **Timing (the contact frame).** Every eight-frame action clip is authored so the blow CONNECTS at
 frame 5 of 8 (wind-up 0-2, commit 3-4, touch 5, recover 6-7) and the renderer plays it in two halves
