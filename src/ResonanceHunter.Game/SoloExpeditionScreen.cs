@@ -2797,9 +2797,14 @@ public sealed class SoloExpeditionScreen
                 var swept = beats > 0
                     ? Math.Clamp((int)MathF.Floor(ready * beats + 0.001f), 0, beats) / (float)beats
                     : ready;
+
+                // DRAWN LAST, AND AROUND THE RIM. The dial used to be painted before the medallion's
+                // own art, so the frame and the Source glyph covered it — the readout the player is
+                // watching sat behind the icon it belongs to (playtest 2026-08-28). It is a ring at the
+                // medallion's edge now, over everything, and it never hides the glyph.
                 if (flash <= 0f)
-                    _ui.CooldownSweep(b, new Vector2(box.Center.X, box.Center.Y), box.Width * 0.36f, swept,
-                                      new Color(0x0C, 0x09, 0x16, 0xB4), Bone * 0.8f);
+                    _ui.CooldownSweep(b, new Vector2(box.Center.X, box.Center.Y), box.Width * 0.50f, swept,
+                                      new Color(0x0C, 0x09, 0x16, 0xE0), Gold * 0.95f);
                 if (flash > 0f)
                 {
                     var halo = new Rectangle(box.X - 3, box.Y - 3, box.Width + 6, box.Height + 6);

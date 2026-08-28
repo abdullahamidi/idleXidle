@@ -632,7 +632,7 @@ public sealed class UiKit
         // of every second the player could not see WHICH skill a slot held — and a skill that is never on
         // cooldown (an Aura) was painted out entirely (review 2026-08-30). The waiting share is a band
         // around the rim; the art inside stays readable.
-        var inner = radius * 0.66f;
+        var inner = radius * 0.84f;   // a thin band ON the medallion's rim — see the note above
         for (var a = from; a < to; a += step)
         {
             var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
