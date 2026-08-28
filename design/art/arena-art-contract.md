@@ -147,6 +147,32 @@ lands on ("the impact landing at the fifth frame") so the contact frame matches 
 STILL VISIBLE in the last frame, which is the same rule as "never end at nothing" applied to a prop
 rather than an effect.
 
+### 3.6 An effect strip does not travel — the renderer moves it (2026-08-28)
+
+An attempt to pin effect motion by handing `animate_image` a derived LAST frame (interpolation
+instead of an open-ended prompt) was built, tested and **abandoned**. Two things killed it, and both
+are worth writing down so nobody rebuilds it:
+
+* **The endpoint frame cannot get there.** `animate_image` takes the frame as base64 or a URL, and a
+  derived frame is a local file, so base64 is the only route. Every derived PNG was refused with
+  "broken data stream when reading image file" — at 1.6 KB and at 2.2 KB, with the byte count in the
+  error EXACTLY matching the file on disk, and with the same bytes round-tripping through base64 and
+  Pillow locally without complaint. The receiver, not the size, is the problem.
+* **It was solving a problem the renderer does not have.** `SoloExpeditionScreen` already plays the
+  projectile effect at the MIDPOINT between the champion and the target, and every other Form's
+  effect on the body it belongs to. The strip never has to cross the gap — the draw site places it.
+
+So every effect is authored as an **in-place** motion: spin, pulse, bloom outward, snap shut, rise.
+Those are exactly the motions an open-ended `animate_image` prompt is good at, which is why the
+Seeker's five read well. The recipe is one `create_image_pixen` shape (1 generation) plus one
+`animate_image` pass (5 generations at 192x192x8), filed by `fxclips.py`.
+
+**Prompting the shape.** pixen takes similes literally and fills dark discs when asked for a glow:
+"like a beetle carapace" returned a beetle, and "a white glowing rune brand" returned a dark disc
+with a rune on it. Describe the SHAPE and nothing else, say "solid white", and end with "on empty
+transparent space with nothing behind it". Roughly two in five come back usable on the first try, and
+a re-roll is 1 generation.
+
 ## 4. Naming (unchanged where the code already asks)
 
 | Asset | Path | Key |
