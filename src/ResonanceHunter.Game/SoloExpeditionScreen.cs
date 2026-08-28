@@ -430,6 +430,13 @@ public sealed class SoloExpeditionScreen
     private int _nextChampStrikeMs;
 
     /// <summary>0 to 1 across the champion's swing, completing exactly as the blow lands.</summary>
+    /// <summary>How late a Trap's clip may still start after the trap bit, in replay ms.</summary>
+    /// <remarks>
+    /// A quarter of a beat. The trap fires on the enemy's swing, which the replay reaches on its own
+    /// clock, and a clip allowed to start a whole beat late would play over the NEXT action.
+    /// </remarks>
+    private const float TrapClipGraceMs = 380f;
+
     // ── The champion's committed clip (2026-08-25). See UpdateChampionClip. ──
     private string? _clipName;        // "attack" / "cast" while a clip is committed; null = idle
     private float _clipStartMs;       // replay-clock ms the clip began
@@ -3151,12 +3158,16 @@ public sealed class SoloExpeditionScreen
 
         float? beatMs = null;
         string? clip = null;
-        // A Trap fires on being hit and gets no clip; every other Form is a cast, except Strike, which
-        // is the heavier swing and uses the attack clip.
+        // EACH FORM THROWS ITS OWN SHAPE. The clip is named after the Form, and Character.StripKeys
+        // falls back to the old attack/cast pair for any character whose strip is not generated yet —
+        // so a Strike is still a swing and a Mark is still a cast until the art lands.
+        //
+        // A Trap is still excluded HERE because it fires on being bitten rather than on the beat, so it
+        // has no beat to be aimed at. It gets its own commitment below.
         if (_replay.NextSkillEventAfter(_playheadMs) is { } nextSkill && (Form)nextSkill.Amount != Form.Trap)
         {
             beatMs = nextSkill.AtMs;
-            clip = (Form)nextSkill.Amount == Form.Strike ? "attack" : "cast";
+            clip = ((Form)nextSkill.Amount).ToString().ToLowerInvariant();
         }
         // The basic attack's swing. It is a real action now (MIGHT's hit, at TEMPO's cadence) and the
         // sim holds one lock for swings and casts alike, so this clip can never start inside a cast nor
@@ -3166,6 +3177,22 @@ public sealed class SoloExpeditionScreen
             beatMs = _nextChampStrikeMs;
             clip = "attack";
         }
+        // THE TRAP, WHICH IS NOT AN ACTION. It answers the enemy's bite, off the beat, so it can never
+        // be aimed at one — and for the whole life of the fight it therefore had no champion animation
+        // at all: the trap bit, the enemy took damage, and the figure stood still through it.
+        //
+        // Committed opportunistically, and only when nothing else is due: a Trap consumes no beat, so
+        // it must never take the clip a real action was about to use. That it fires on the enemy's
+        // swing — off the champion's own metronome — is what makes the opening usually there.
+        if (beatMs is null && _replay.LastTrapBefore(_playheadMs) is { } trapMs
+            && _playheadMs - trapMs < TrapClipGraceMs)
+        {
+            _clipSpeed = Math.Max(0.6f, ClipMs / (_beatMs * FormBehaviour.ClipShareOfBeat));
+            _clipStartMs = trapMs;
+            _clipName = "trap";
+            return;
+        }
+
         if (beatMs is null) return;
 
         // EVERY action fills its share of the BEAT (FormBehaviour.ClipShareOfBeat): the sim acts on the
@@ -3376,8 +3403,12 @@ public sealed class SoloExpeditionScreen
         // clip falls back to the still design, so a character whose strip did not survive the quality gate
         // stands there as themselves rather than vanishing. No mirroring: the art faces right (ArtFacesLeft).
         var loop = clip == "idle";
-        if (_ui.AnimSprite(b, Character.StripKey(clip), box, seconds, ChampionFps, loop, tint, -1f,
-                           flip: ChampionFacesRight)) return;
+        // MOST SPECIFIC FIRST: the character's own clip for this Form, then the generic attack/cast it
+        // stands in for. See Character.StripKeys — the art arrives a character at a time and nothing
+        // may blank out while it does.
+        foreach (var key in Character.StripKeys(clip))
+            if (_ui.AnimSprite(b, key, box, seconds, ChampionFps, loop, tint, -1f,
+                               flip: ChampionFacesRight)) return;
         if (_ui.AnimSprite(b, Character.StripKey("idle"), box, dead ? 0f : _anim - _idleFrom, ChampionFps, loop: true, tint, -1f,
                            flip: ChampionFacesRight)) return;
 

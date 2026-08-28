@@ -45,7 +45,7 @@ frame count from `width / height`. Bosses moved from `_strip8_1024` to the same 
 
 | Owner | Clips | Notes |
 |---|---|---|
-| Champion (each of the ten) | `idle`, `attack`, `cast`, `death` | idle loops, the others play once on the combat beat; `cast` plays on a Skill event, `death` on the fall |
+| Champion (each of the ten) | `idle`, `attack`, `death`, and one clip PER FORM: `strike`, `projectile`, `mark`, `trap`, `transformation` | idle loops, the rest play once; a Form's clip plays on that Form's Skill event, `attack` on the basic swing, `death` on the fall |
 | Enemy | `idle`, `attack`, `death` | the stone sentinel's `slam` is gone — every enemy's clip is `attack`; `death` (2026-08-23) plays from the kill, holds, fades — the plume rises over the body half a second later |
 | Boss | `idle`, `attack`, `death` | the boss's fall holds for the whole wave break |
 | Effect | one 8-frame strip | authored white / pale so the Source tint at play time carries the colour |
@@ -54,6 +54,35 @@ Clip prompts: idle = "standing idle, feet planted and never moving, only breathi
 start by the last frame so it loops"; attack = the figure's own verb toward the front, returning
 to the start by the last frame; cast = raise a hand, gather glow, release forward; death = stagger,
 knees, collapse forward, fully fallen by the last frame.
+
+### 3.1 One clip per Form (2026-08-28)
+
+Every Form used to share two clips — `attack` for a Strike and `cast` for everything else — so ten
+characters threw the same two shapes for five different verbs, and the Quiver's Projectile was the
+Anvil's Transformation with a different name. Each character now owns a clip per Form, and the verb is
+*theirs*: the Seeker throws a knife where the Anvil slings an iron weight; the Seeker bends to set a
+snare where the Anvil drives a fist into the ground.
+
+`Character.StripKeys(clip)` falls back — a Form's own clip, then the generic it stands in for
+(`strike`→`attack`, the rest→`cast`), then the idle at the draw site. **So the code ships ahead of the
+art and nothing ever blanks.** Fifty strips do not arrive at once; a character with three of five
+filed plays three of its own and two of the old pair, and looks deliberate either way.
+
+`trap` has no generic, and that is the point: a Trap answers the enemy's bite rather than the beat, so
+it never had a champion animation at all. The screen commits it opportunistically
+(`WaveReplay.LastTrapBefore`) and only when no beat action is due — a Trap consumes no beat and must
+never steal the clip a real action was about to use.
+
+### 3.2 Two prompt rules the first batch paid for
+
+Both were learned by looking at the sheet, which is what the sheet is for.
+
+* **"the same figure throughout, never changing outfit or shape"** — the Seeker's first
+  `transformation` read the word literally and morphed the character into a featureless robe by frame
+  six. Every action prompt now opens with that clause.
+* **Bend, do not kneel.** A full kneel changes silhouette height by more than the gate's 30 % loose
+  ceiling and is rejected — the Seeker's first `trap` failed at 33 %. "Bends forward at the waist and
+  reaches one hand to the ground" reads as the same act and passes.
 
 **Timing (the contact frame).** Every eight-frame action clip is authored so the blow CONNECTS at
 frame 5 of 8 (wind-up 0-2, commit 3-4, touch 5, recover 6-7) and the renderer plays it in two halves
@@ -94,6 +123,11 @@ Per Form, played on the enemy row unless noted, tinted by the casting skill's **
 | `fx_mark` | a sigil that flashes and locks | enemy |
 | `fx_transformation` | an upward surge of light | champion |
 
+UI flourishes generated the same way: `fx_bind_chain` — a ring of heavy gold links with inward
+spikes, drawn wide and contracting — plays over a skill's Source medallion on the BUILD screen when a
+Vow is bound to it. It is an asset rather than drawn primitives on purpose (playtest 2026-08-28:
+"kendin bir kutucuk veya buton oluşturup görsel olarak onu kullanıyorsun").
+
 Combat beats: `fx_hit` (spark), `fx_weakhit` (puff), `fx_crit` (starburst), `fx_death` (ash plume),
 `fx_heal` (rising motes), `fx_shield` (dome flash), `fx_levelup` (column of light).
 
@@ -106,6 +140,10 @@ Combat beats: `fx_hit` (spark), `fx_weakhit` (puff), `fx_crit` (starburst), `fx_
 * Non-humanoid creatures and every effect — `create_image_pixen(no_background=true, view="side",
   direction="west")` for frame 0, then `animate_image(first_frame_url=…, frame_count=8)`; frames
   `download?index=1..8` (index 0 is the input).
+* Per-Form champion clips — `tools/asset-pipeline/v2/skillclips.py <char> <clip>=<animId> …`, which
+  wraps clip.py so a batch of five is one command with one report, and files each strip under the key
+  `Character.StripKey(clip)` asks for. The character UUIDs live in that script so a re-run months from
+  now does not have to find them again.
 * Assembly — `tools/asset-pipeline/v2/clip.py` (fetch → union-bbox strip → gate → sheet). The
   union bounding box across frames keeps the motion AND keeps the feet on one row, which is what
   `UiKit.AnimSprite` assumes when it measures a single bottom pad for the whole clip.

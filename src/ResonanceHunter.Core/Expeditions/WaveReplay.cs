@@ -278,6 +278,27 @@ public sealed class WaveReplay
     /// <summary>The beat number this wave ended on, or -1 if it held no action at all.</summary>
     public int LastBeat => BeatAt(float.MaxValue);
 
+    /// <summary>
+    /// When a TRAP last bit at or before <paramref name="ms"/>, or null.
+    /// </summary>
+    /// <remarks>
+    /// A Trap is the one skill that is not an action: it answers the enemy's swing rather than the
+    /// champion's beat, so it can never be aimed at one and had no champion animation for the whole
+    /// life of the fight. The screen commits its clip opportunistically off this, which is why the
+    /// question is "when did one last fire" rather than "when is the next".
+    /// </remarks>
+    public float? LastTrapBefore(float ms)
+    {
+        float? last = null;
+        foreach (var e in _events)
+        {
+            if (e.Kind != BattleEventKind.Skill || (Abilities.Form)e.Amount != Abilities.Form.Trap) continue;
+            if (e.AtMs > ms) break;
+            last = e.AtMs;
+        }
+        return last;
+    }
+
     /// <summary>The beat the wave opened on, or -1. Used to measure a wave that a skill sat out.</summary>
     public int FirstBeat
     {

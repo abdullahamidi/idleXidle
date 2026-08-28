@@ -149,6 +149,42 @@ public sealed record Character
     public string StripKey(string clip) => $"char_{Id}_{clip}_strip8_512";
 
     /// <summary>
+    /// The strip keys to try for a clip, most specific first — a character's OWN clip for a Form, then
+    /// the generic one it falls back to.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every Form used to share two clips: <c>attack</c> for a Strike and <c>cast</c> for everything
+    /// else. Ten characters therefore threw the same two shapes for five very different verbs — the
+    /// Quiver's Projectile and the Anvil's Transformation were one raised hand apiece. The contract's
+    /// clip table (design/art/arena-art-contract.md §3) now carries a clip per Form per character.
+    /// </para>
+    /// <para>
+    /// THE FALLBACK IS THE POINT. Fifty strips do not arrive at once, and a character whose Projectile
+    /// clip has not been generated yet must keep casting rather than freeze: an asset that is missing
+    /// resolves to the generic clip, and a clip that is missing resolves to the idle at the draw site.
+    /// So the code can ship ahead of the art without a single blank frame.
+    /// </para>
+    /// </remarks>
+    public IEnumerable<string> StripKeys(string clip)
+    {
+        yield return StripKey(clip);
+        var generic = GenericClipFor(clip);
+        if (generic is not null) yield return StripKey(generic);
+    }
+
+    /// <summary>Which of the two original clips a per-Form clip stands in for, or null if it IS one.</summary>
+    public static string? GenericClipFor(string clip) => clip switch
+    {
+        // A Strike is the heavy swing; the rest are casts. Trap has no generic — it is a new clip and a
+        // character without one simply does not act when its trap bites, which is what happens today.
+        "strike" => "attack",
+        "projectile" or "mark" or "transformation" or "aura" => "cast",
+        "trap" => null,
+        _ => null,
+    };
+
+    /// <summary>
     /// HUD portrait key — <c>char_&lt;id&gt;_portrait</c>. The screens that used to draw the one generic
     /// <c>hunter_portrait</c> (HUNT, STATS, CHARACTER, BUILD) ask for this first and fall back to it.
     /// </summary>

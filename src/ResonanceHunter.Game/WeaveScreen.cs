@@ -143,70 +143,54 @@ public sealed class WeaveScreen
     /// <remarks>
     /// <para>
     /// Designer's brief (2026-08-28): <i>"bind edilince de skill üzerinde bir zincirleme efekt ve
-    /// animasyonu (genişleyip sıkışan zincir animasyonu olabilir) oynasın"</i>. So the links arrive
-    /// WIDE and draw in, ending fractionally inside the row's own edge — a chain pulled tight rather
-    /// than a light switched on. That reading matters: a Vow is a restriction accepted for power, and
-    /// the flourish should look like something closing, not something being awarded.
+    /// animasyonu (genişleyip sıkışan zincir animasyonu olabilir) oynasın"</i>.
     /// </para>
     /// <para>
-    /// DRAWN, NOT AUTHORED. A chain sprite would be a new art asset, and new pieces here go through
-    /// tools/asset-pipeline/v2 and the arena contract rather than being generated one at a time; a
-    /// link is also a shape this UI already speaks, since the diamond is the screen's own motif (the
-    /// Source gems, the Vow seals). Links ride the row's perimeter so the chain wraps the SKILL, which
-    /// is the thing being bound.
+    /// A REAL ASSET, not a ring of drawn diamonds. The first pass composed the chain out of UiKit
+    /// primitives and the designer's note on it was the whole point of this round: <i>"kendin bir
+    /// kutucuk veya buton oluşturup görsel olarak onu kullanıyorsun"</i>. <c>fx_bind_chain</c> is an
+    /// eight-frame strip generated through the same route as every arena effect (arena-art-contract.md
+    /// §5-6) — heavy interlocking gold links with inward spikes, drawn wide and closing.
+    /// </para>
+    /// <para>
+    /// It plays over the SOURCE MEDALLION rather than the row's outline, which is what the asset's own
+    /// shape asks for: a ring wraps a disc, not a 440x76 rectangle. It also puts the flourish on the
+    /// half of the row that identifies the skill — the thing the Vow is being bound to.
     /// </para>
     /// <param name="t">1 at the instant of binding, falling to 0 as the flourish ends.</param>
     /// </remarks>
     private void DrawBindChain(SpriteBatch b, Rectangle row, float t)
     {
         t = Math.Clamp(t, 0f, 1f);
-        var ease = t * t;                      // fast at first, then it settles
+        var played = 1f - t;                   // 0 at the bind, 1 when the flourish ends
 
-        // The plate lights under the chain, fading faster than the links so the chain is what is left
-        // to look at rather than a gold rectangle.
-        _ui.Fill(b, row, Gold * (0.22f * ease));
+        // The plate lights under the chain and fades faster, so the chain is what is left to look at.
+        _ui.Fill(b, row, Gold * (0.22f * t * t));
 
-        // OUT, THEN IN, THEN A BITE. The offset starts 26px clear of the row and ends 3px INSIDE it,
-        // which is the "sıkışan" half — a chain that stopped exactly on the edge would read as a
-        // border being drawn.
-        var offset = 26f * ease - 3f * (1f - ease);
-        var alpha = Math.Clamp(t * 1.7f, 0f, 1f);
-        var link = (int)MathF.Round(9f + 3f * ease);
+        // Centred on the gem, and it OVERSHOOTS it: the strip's own art contracts across its frames,
+        // so the box only has to start clear of the medallion and end tight on it for the two motions
+        // to read as one. Alpha holds through the close and lets go at the end.
+        var gem = new Rectangle(row.X + 28, row.Y + 12, 52, 52);
+        var wide = 46f * t * t;
+        var box = new Rectangle((int)(gem.X - wide), (int)(gem.Y - wide),
+                                (int)(gem.Width + wide * 2), (int)(gem.Height + wide * 2));
+        var alpha = Math.Clamp(t * 1.9f, 0f, 1f);
 
-        // THE SIDES BARELY MOVE, and that is a constraint rather than a choice: a slot row already
-        // spans the panel's content width, so a link 26px out to the side lands on the frame's own
-        // ornament. The vertical travel carries the animation; the sides only need to be part of the
-        // loop for it to read as a chain that goes all the way round.
-        var ox = (int)MathF.Round(Math.Min(offset, 11f));
-        var oy = (int)MathF.Round(offset);
-
-        const int Across = 9, Down = 3;        // links along each edge; the corners are shared
-        var box = new Rectangle(row.X - ox, row.Y - oy, row.Width + ox * 2, row.Height + oy * 2);
-
-        // A row of identical diamonds reads as a dotted line. Real links alternate face-on and
-        // edge-on, so every other one is drawn smaller and dimmer — the eye takes the alternation as
-        // depth and the shape becomes a chain.
-        void Link(int cx, int cy, bool face)
+        // ChainClipSeconds, not the flourish's own length: the strip is authored to close over its
+        // eight frames and is played once, held on the last. Driving it off `played` means the art's
+        // contraction and the box's contraction finish together.
+        if (!_ui.AnimSprite(b, "fx_bind_chain_strip8_512", box, played * ChainClipSeconds, 8f,
+                            loop: false, Color.White * alpha))
         {
-            var d = face ? link : (int)MathF.Round(link * 0.62f);
-            _ui.Diamond(b, new Rectangle(cx - d / 2, cy - d / 2, d, d),
-                        (face ? Gold : Gold * 0.5f) * alpha);
-        }
-
-        var n = 0;
-        for (var k = 0; k <= Across; k++, n++)
-        {
-            var x = box.X + box.Width * k / Across;
-            Link(x, box.Y, n % 2 == 0);
-            Link(x, box.Bottom, n % 2 == 1);
-        }
-        for (var k = 1; k < Down; k++, n++)
-        {
-            var y = box.Y + box.Height * k / Down;
-            Link(box.X, y, n % 2 == 0);
-            Link(box.Right, y, n % 2 == 0);
+            // The asset is missing: say so with the row's own gold rather than drawing nothing, so a
+            // stripped build still shows that something was bound.
+            Outline(b, row, Gold * alpha, 3);
         }
     }
+
+    /// <summary>How long the chain strip takes to play its eight frames, in seconds.</summary>
+    /// <remarks>Shorter than the flourish it rides, so the links are CLOSED for the last of it.</remarks>
+    private const float ChainClipSeconds = 0.55f;
 
     /// <summary>Which woven slot the cursor is over, or -1. The drop target for both carries.</summary>
     /// <remarks>
