@@ -230,6 +230,31 @@ def gate(path: str, effect: bool = False, loose: bool = False, thrown: bool = Fa
     return problems
 
 
+def whiten(path: str, floor: int = 96) -> str:
+    """Strip an effect strip's colour, keeping its shape and its alpha.
+
+    The contract authors effects WHITE/PALE because the casting skill's Source tint multiplies over
+    them at play time: the shape says who cast it, the colour says what it is made of
+    (arena-art-contract.md §3.3). A generated effect does not reliably come back colourless -- the
+    Seeker's first trap arrived in gold and the Metronome's tick bars in blue -- and re-rolling until
+    the generator happens to behave costs a generation each time and never actually guarantees it.
+
+    So the rule is enforced here instead of hoped for: luminance, lifted so the darkest surviving
+    pixel is `floor`, written back over the same alpha. Applied to every effect strip as it is filed,
+    which makes "authored white/pale" a property of the pipeline rather than of the prompt.
+    """
+    im = load_rgba(path)
+    lum = im.convert("L")
+    lo, hi = lum.getextrema()
+    if hi > lo:
+        # Lift the ramp into [floor, 255] so a dark-ish generated effect still reads as pale.
+        scale = (255 - floor) / (hi - lo)
+        lum = lum.point(lambda v: min(255, int(floor + (v - lo) * scale)))
+    out = Image.merge("RGBA", (lum, lum, lum, im.getchannel("A")))
+    out.save(path)
+    return path
+
+
 # ── review sheet ────────────────────────────────────────────────────────────────────────────────
 
 def sheet(out: str, paths: list[str], cell: int = 160, label: bool = True) -> str:
@@ -292,6 +317,8 @@ def main(argv: list[str]) -> int:
     sh.add_argument("--cell", type=int, default=160)
     st = sub.add_parser("static"); st.add_argument("strip"); st.add_argument("out"); st.add_argument("--index", type=int, default=0)
     inf = sub.add_parser("info"); inf.add_argument("paths", nargs="+")
+    wh = sub.add_parser("whiten"); wh.add_argument("paths", nargs="+")
+    wh.add_argument("--floor", type=int, default=96)
 
     a = ap.parse_args(argv)
     if a.cmd == "fetch":
@@ -311,6 +338,10 @@ def main(argv: list[str]) -> int:
         print(sheet(a.out, a.paths, a.cell)); return 0
     if a.cmd == "static":
         print(static_from(a.strip, a.out, a.index)); return 0
+    if a.cmd == "whiten":
+        for p in a.paths:
+            print(whiten(p, a.floor))
+        return 0
     if a.cmd == "info":
         for p in a.paths:
             im = load_rgba(p); b = bbox(im)

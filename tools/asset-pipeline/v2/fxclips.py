@@ -37,7 +37,13 @@ def run(char: str, form: str, job: str) -> tuple[str, bool, str]:
          "--job", job, "--out", out, "--effect"],
         capture_output=True, text=True)
     tail = (p.stdout or p.stderr).strip().splitlines()
-    return form, p.returncode == 0, tail[-1] if tail else "(no output)"
+    ok = p.returncode == 0
+    if ok:
+        # Enforce the white/pale rule mechanically rather than hoping the generator obeys it — see
+        # rhart.whiten. Doing it here means every filed effect is tint-ready by construction.
+        subprocess.run([sys.executable, os.path.join(HERE, "rhart.py"), "whiten", out],
+                       capture_output=True, text=True)
+    return form, ok, tail[-1] if tail else "(no output)"
 
 
 def main(argv: list[str]) -> int:
