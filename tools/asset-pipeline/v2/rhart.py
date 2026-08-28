@@ -181,10 +181,16 @@ MIN_FILL = 0.08            # of the frame area; below this the frame is "empty"
 STRAY_FRACTION = 0.015     # a second blob above this share of the main one is a floating part
 
 
-def gate(path: str, effect: bool = False, loose: bool = False) -> list[str]:
+def gate(path: str, effect: bool = False, loose: bool = False, thrown: bool = False) -> list[str]:
     """`loose` is for attack / cast / death clips: a pounce or a collapse changes the silhouette's
     height and baseline on purpose, so the drift bars widen (30 % / 10 %) instead of failing every
-    honest lunge. Idle clips keep the tight bars — an idle that drifts is a zoom, not a breath."""
+    honest lunge. Idle clips keep the tight bars — an idle that drifts is a zoom, not a breath.
+
+    `thrown` is for a PROJECTILE clip, and it turns off the stray-blob check. That check exists to
+    catch a limb the generator detached by accident, and it cannot tell one from a thrown object: the
+    Magpie's projectile was rejected for "frame 7 has a disconnected blob (66 vs main 4013)" — the
+    gem, in flight, which is the one thing the clip is FOR. A projectile whose object never leaves
+    the hand is the failure; the gate was failing the success."""
     max_scale = 0.30 if loose else MAX_SCALE_DRIFT
     max_base = 0.10 if loose else MAX_BASELINE_DRIFT
     strip = load_rgba(path)
@@ -205,7 +211,7 @@ def gate(path: str, effect: bool = False, loose: bool = False) -> list[str]:
         bottoms.append(b[3])
         opaque = f.getchannel("A").point(lambda v: 255 if v > ALPHA else 0).histogram()[255]
         fills.append(opaque / (fw * fw))
-        if not effect:
+        if not effect and not thrown:
             comps = components(f)
             if len(comps) > 1 and comps[1] > comps[0] * STRAY_FRACTION:
                 problems.append(f"frame {i} has a disconnected blob ({comps[1]} vs main {comps[0]})")
@@ -280,7 +286,8 @@ def main(argv: list[str]) -> int:
     s.add_argument("frames", nargs="+")
 
     g = sub.add_parser("gate"); g.add_argument("--effect", action="store_true")
-    g.add_argument("--loose", action="store_true"); g.add_argument("paths", nargs="+")
+    g.add_argument("--loose", action="store_true"); g.add_argument("--thrown", action="store_true")
+    g.add_argument("paths", nargs="+")
     sh = sub.add_parser("sheet"); sh.add_argument("out"); sh.add_argument("paths", nargs="+")
     sh.add_argument("--cell", type=int, default=160)
     st = sub.add_parser("static"); st.add_argument("strip"); st.add_argument("out"); st.add_argument("--index", type=int, default=0)
@@ -294,7 +301,7 @@ def main(argv: list[str]) -> int:
     if a.cmd == "gate":
         rc = 0
         for p in a.paths:
-            probs = gate(p, a.effect, a.loose)
+            probs = gate(p, a.effect, a.loose, getattr(a, 'thrown', False))
             print(("PASS " if not probs else "FAIL ") + p)
             for pr in probs:
                 print("   - " + pr)

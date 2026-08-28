@@ -111,6 +111,42 @@ and every enemy / boss bite (900 ms wind-up, ~0.3 s follow). Effects spawn AT th
 and the blade, the burst and the open hand, land on the same frame. Verified with the filmstrip rig
 (`tools/asset-pipeline/capture_seq.sh`, `v2/filmstrip.py`).
 
+### 3.4 The gate cannot see whether a clip reads (2026-08-28)
+
+`rhart.gate` measures geometry: frame count, square frames, a shared baseline, silhouette drift,
+emptiness, stray blobs. **It has no opinion about whether anything happened.** The Quiver's first five
+and the Thornwall's first five all returned PASS and all five of each were unusable — the figure stood
+still and the prop rocked. A clip is not done when the gate passes it; it is done when it has been
+looked at on `rhart.py sheet`.
+
+A motion floor was measured and rejected rather than added: across the 67 strips filed so far, the
+worst frame-0-to-frame-N silhouette difference put `quiver_strike` (which does nothing legible) at 0.46
+and `chorus_projectile` (which reads perfectly) at 0.25. The bad clips are not the still ones — they
+are the ones whose motion does not spell the verb, and no pixel metric separates those. The review
+sheet is the gate for that, and a human (or the model) has to run their eye down it.
+
+### 3.5 Write the verb through the prop the character already holds
+
+Both failed batches failed the same way and for the same reason. The Quiver holds a longbow in both
+hands; the Thornwall carries a kite shield that covers half its body. Asked for a generic action —
+"swings the right fist", "points two fingers", "bends and sets a snare" — v3 preserved the reference
+pose, rotated the prop a few degrees, and called it an animation. It is not being lazy: the prop is the
+strongest signal in the start frame, and a prompt that ignores the prop is a prompt fighting it.
+
+So the verb has to be performed BY the object:
+
+| Character | Wrong (first pass) | Right (second pass) |
+|---|---|---|
+| Quiver (longbow) | "swings the right fist forward" | "swings the upper limb of the bow forward like a club" |
+| Quiver (longbow) | "throws a dart at the front-right" | "nocks, hauls the string past the cheek, looses — the arrow flies clear of the bow" |
+| Thornwall (kite shield) | "strikes forward with the arm" | "rams the whole shield forward, the barbed face leading" |
+| Thornwall (kite shield) | "bends and sets a snare" | "drives the bottom point of the shield into the ground so it stands planted" |
+
+Two further clauses earn their place in every action prompt, both learned here: name the frame the blow
+lands on ("the impact landing at the fifth frame") so the contact frame matches §3.3, and say what is
+STILL VISIBLE in the last frame, which is the same rule as "never end at nothing" applied to a prop
+rather than an effect.
+
 ## 4. Naming (unchanged where the code already asks)
 
 | Asset | Path | Key |

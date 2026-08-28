@@ -29,8 +29,23 @@ CHAR_BASE = "https://backblaze.pixellab.ai/file/pixellab-characters/a5e233f5-b48
 IMG_BASE = "https://api.pixellab.ai/mcp/images"
 
 
-def fetch_all(urls: list[str], cache_dir: str) -> list[str]:
+def fetch_all(urls: list[str], cache_dir: str, key: str = "") -> list[str]:
+    """Download `urls` into `cache_dir` as f0..fN, reusing whatever is already there.
+
+    The cache is keyed by OUTPUT PATH, which is right for a retry after a network stall and wrong for
+    a re-roll: a second take of the same clip files to the same path, so the stale frames of the take
+    being replaced would be reused and the re-roll would change nothing. `key` (the animation id)
+    is stamped in the directory; a different one empties it first.
+    """
     os.makedirs(cache_dir, exist_ok=True)
+    if key:
+        stamp = os.path.join(cache_dir, "SOURCE")
+        was = open(stamp).read().strip() if os.path.exists(stamp) else ""
+        if was != key:
+            for f in os.listdir(cache_dir):
+                os.remove(os.path.join(cache_dir, f))
+            with open(stamp, "w") as fh:
+                fh.write(key)
     paths = []
     for i, u in enumerate(urls):
         p = os.path.join(cache_dir, f"f{i}.png")
@@ -38,6 +53,34 @@ def fetch_all(urls: list[str], cache_dir: str) -> list[str]:
             rhart.fetch(u, p)
         paths.append(p)
     return paths
+
+
+
+def exists(url: str) -> bool:
+    """True if the URL serves a PNG. One try, short timeout — this is a probe, not a fetch."""
+    import urllib.error
+    import urllib.request
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "rh-art-pipeline/2"}, method="HEAD")
+        return urllib.request.urlopen(req, timeout=15).status < 400
+    except Exception:  # noqa: BLE001 — 404, 403 and a stalled socket all mean "not there"
+        return False
+
+
+def char_range(a) -> range:
+    """Which frame indices to pull for a character animation.
+
+    animate_character stores 8 frames when it was called with `keep_first_frame=false` and NINE when
+    it was not: index 0 is then the character's own rotation image, reused as the starting pose, and
+    1..8 are the generated ones. Hard-coding range(8) silently mixed the two — for a nine-frame group
+    it kept the static reference and threw away the LAST generated frame, which is the frame every
+    action prompt spends its final clause describing ("holds that point steady", "the arrow still
+    visible"). So probe for index 8 and take 1..8 when it is there.
+    """
+    if getattr(a, "keep_ref", False):
+        return range(8)
+    ninth = f"{CHAR_BASE}/{a.char}/animations/{a.anim}/{a.dir}/8.png"
+    return range(1, 9) if exists(ninth) else range(8)
 
 
 def main(argv: list[str]) -> int:
@@ -49,6 +92,10 @@ def main(argv: list[str]) -> int:
     c.add_argument("--dir", required=True); c.add_argument("--out", required=True)
     c.add_argument("--fit", type=float, default=0.90); c.add_argument("--frame", type=int, default=512)
     c.add_argument("--loose", action="store_true"); c.add_argument("--flip", action="store_true")
+    c.add_argument("--keep-ref", dest="keep_ref", action="store_true",
+                   help="take frames 0..7 even for a nine-frame group (keeps the rotation reference)")
+    c.add_argument("--thrown", action="store_true",
+                   help="a projectile clip: allow the thrown object to be a separate blob")
 
     j = sub.add_parser("job")
     j.add_argument("--job", required=True); j.add_argument("--out", required=True)
@@ -65,12 +112,12 @@ def main(argv: list[str]) -> int:
     cache = a.out + ".frames"
 
     if a.cmd == "char":
-        urls = [f"{CHAR_BASE}/{a.char}/animations/{a.anim}/{a.dir}/{i}.png" for i in range(8)]
-        frames = fetch_all(urls, cache)
+        urls = [f"{CHAR_BASE}/{a.char}/animations/{a.anim}/{a.dir}/{i}.png" for i in char_range(a)]
+        frames = fetch_all(urls, cache, a.anim)
         rhart.build_strip(frames, a.out, a.frame, a.fit, 0.035, a.flip, 8, False, False)
     elif a.cmd == "job":
         urls = [f"{IMG_BASE}/{a.job}/download?index={i}" for i in range(1, 9)]
-        frames = fetch_all(urls, cache)
+        frames = fetch_all(urls, cache, a.job)
         rhart.build_strip(frames, a.out, a.frame, a.fit, 0.035, a.flip, 8, False, a.effect)
     else:
         frames = fetch_all([a.url], cache)
@@ -78,7 +125,8 @@ def main(argv: list[str]) -> int:
         print(f"WROTE {a.out}")
         return 0
 
-    probs = rhart.gate(a.out, effect=getattr(a, "effect", False), loose=a.loose)
+    probs = rhart.gate(a.out, effect=getattr(a, "effect", False), loose=a.loose,
+                       thrown=getattr(a, "thrown", False))
     print(("PASS " if not probs else "FAIL ") + a.out)
     for pr in probs:
         print("   - " + pr)

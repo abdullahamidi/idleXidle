@@ -46,6 +46,9 @@ def run(char: str, clip: str, anim: str) -> tuple[str, bool, str]:
     ]
     if LOOSE:
         cmd.append("--loose")
+    if clip == "projectile":
+        # The thrown object is a second blob by design — see rhart.gate's `thrown`.
+        cmd.append("--thrown")
     p = subprocess.run(cmd, capture_output=True, text=True)
     tail = (p.stdout or p.stderr).strip().splitlines()
     return clip, p.returncode == 0, tail[-1] if tail else "(no output)"
