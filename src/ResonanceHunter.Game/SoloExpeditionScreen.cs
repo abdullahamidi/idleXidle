@@ -146,23 +146,18 @@ public sealed class SoloExpeditionScreen
     // strip has no such slack — the generated frames are trimmed to their content, so the character
     // renders at exactly the box height and the champion suddenly stood a head taller than before,
     // dominating a stage it shares with enemies less than half that size.
-    // THE LEFT LIMIT IS MEASURED, NOT CHOSEN — 755, and it may not go lower without cutting the figure.
-    // The champion is drawn from a SQUARE frame scaled to the box's HEIGHT, so the widest pose in the
-    // roster covers 518 px at a 430-tall box (UiKit.SidePadFraction already trims the empty margin off
-    // that; before it, the same pose claimed 557). The arena's scissor starts at x=492, so a centre below
-    // 492 + 259 = 751 puts the cloak outside the clip and it comes off against a straight vertical edge.
-    //
-    // That is exactly what had happened: 760 was right, an earlier pass moved it to 700 for "the champion
-    // a little left", and the designer then reported the symptom without the cause — "kutucuğun sağ kenarı
-    // ... spriteyi kesiyor" and "karakteri de biraz sola al" in the same message. The two asks are the same
-    // pixel: moving left IS the cutting. So the champion goes back inside the limit and the SEPARATION the
-    // designer wanted comes from the pack instead, which has room to move right and does.
-    private static readonly Rectangle ChampBox = new(755 - 200, GroundY - 430, 400, 430);
+    // 620. The limit that used to stop this was the arena SCISSOR, not the stage: the champion is drawn
+    // from a square frame scaled to the box's HEIGHT, so the roster's widest pose covers 518 px, and with
+    // the clip starting at x=492 any centre below 751 had its cloak sliced by a vertical edge. The
+    // designer's answer was the right one — "gerekirse rectangle ile birlikte" — so ArenaClip moved
+    // instead and the figure is free to stand where the composition wants it. The floor is now
+    // ArenaClip.X + 259 = 445.
+    private static readonly Rectangle ChampBox = new(620 - 200, GroundY - 430, 400, 430);
     // Rev 3 §16.1: one normal enemy bottom-centred at (1160,735), visible ~320px (range 280–360). A boss is
     // drawn far larger from its own anchor (see the draw), so this box is the NORMAL-enemy size only.
     // 1320 -> 1380 -> 1430. The pack carries the separation the designer asked for, because the champion
     // could not: see the measured left limit above.
-    private static readonly Rectangle EnemyBox = new(1430 - 218, GroundY - 440, 436, 440);
+    private static readonly Rectangle EnemyBox = new(1500 - 218, GroundY - 440, 436, 440);
 
     /// <summary>
     /// Does the champion need mirroring to face the enemies?
@@ -204,7 +199,7 @@ public sealed class SoloExpeditionScreen
     private const int BossTargetBodyHeight = 540;   // §6/§25: rendered figure height — the boss box is a 540 square
     // Pulled in from x=1360: the boss is far wider than an ordinary creature, and anchored that far right
     // its wing ran into the arena's scissor edge at 1554 and read as sliced off behind the side panels.
-    private static readonly Point BossAnchor = new(1290, GroundY + 10);   // with the pack, 60 px right
+    private static readonly Point BossAnchor = new(1330, GroundY + 10);   // travels with the pack
     private Rectangle _bossBodyRect, _bossFullRect;   // rendered screen rects, set by DrawBoss for the bar/overlay
     private int _bossFrame;
     private string _bossName = "BOSS";
@@ -542,7 +537,31 @@ public sealed class SoloExpeditionScreen
     // ── Arena clipping + overlay state (Rev 4 §1/§2/§11). ──
     // Widened and shifted right: left edge clears the control rail (ends x=280), right edge stops
     // short of the existing right rail (starts x=1570), bottom stops short of the nav rail (y=934).
-    private static readonly Rectangle ArenaRect = new(492, 100, 1062, 940);
+    // THE STAGE THE ACTORS ARE LAID OUT ON. Widened right (1554 -> 1722) so the pack can actually stand
+    // further right: the row's resting x is clamped to this rect, and a swarm of four already clamped to
+    // ~1160 against a centre of 1320, so moving EnemyBox alone moved nothing at all.
+    private static readonly Rectangle ArenaRect = new(492, 100, 1230, 940);
+
+    /// <summary>
+    /// Where arena pixels may LAND — wider than the stage the actors are placed on.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// These were one rectangle and should never have been: "where an actor may stand" and "where a
+    /// pixel may land" are different questions. Sharing an answer meant a figure standing legally at the
+    /// stage's edge had its overhang sliced by a straight vertical line — the champion's cloak on the
+    /// left, and every creature SLIDING IN from the right, which the row code even documents as expected
+    /// ("Overhang is handled by the arena scissor... transient overshoot"). The designer saw the slice,
+    /// twice: "spriteyi kesiyor", then "hala düşman spritesi kesiliyor".
+    /// </para>
+    /// <para>
+    /// It runs from the nav rail's edge to the screen's. That is safe because the region art covers the
+    /// FULL screen width — sampled at y=900 and y=1020, x=200 and x=1850 are the same floor as x=1000 —
+    /// so an overhanging figure stands on stage rather than on background, and the side panels are drawn
+    /// after the arena and cover whatever strays under them.
+    /// </para>
+    /// </remarks>
+    private static readonly Rectangle ArenaClip = new(186, 100, 1734, 940);
 
     /// <summary>
     /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
@@ -1076,6 +1095,7 @@ public sealed class SoloExpeditionScreen
         // window, and with a 2.2-second wave and a 2.05-second transition (measured 2026-08-30) that left
         // the aura off screen for nearly half the cycle — which is why it read as absent.
         PulseAuraOnClock(dt);
+        HoldAura();   // re-asked every frame; VfxPlayer drops it the moment we stop
 
         if (_breakTimer > 0f)
         {
@@ -1407,7 +1427,7 @@ public sealed class SoloExpeditionScreen
         // began a canvas batch for us; end it, run the clipped arena pass, then reopen an UNCLIPPED batch for
         // the HUD (which the host closes). The VFX sub-pass inherits the same scissor via _vfx.Rasterizer. ──
         b.End();
-        _ui.Device.ScissorRectangle = ArenaRect;
+        _ui.Device.ScissorRectangle = ArenaClip;
         // Effects are NOT scissored (2026-08-23): the clip edge cut bursts flat against an invisible
         // rectangle and gave the arena away ("bir karenin içinde"). The rail panels and the banner are
         // drawn after the arena and cover anything that strays under them.
@@ -1900,7 +1920,8 @@ public sealed class SoloExpeditionScreen
     /// <summary>Rev 5 §17: fixture-only bounds visualization (ground pivot, body, full silhouette, arena).</summary>
     private void DrawBossDebugOverlay(SpriteBatch b)
     {
-        DebugRect(b, ArenaRect, Ember, 3);                                         // arena — red
+        DebugRect(b, ArenaRect, Ember, 3);                                         // arena stage — red
+        DebugRect(b, ArenaClip, Steel, 2);                                         // arena clip — steel
         DebugRect(b, _bossFullRect, new Color(0x40, 0xE0, 0xE0), 2);               // full visible — cyan
         DebugRect(b, _bossBodyRect, new Color(0x48, 0xD0, 0x48), 3);               // body — green
         _ui.Fill(b, new Rectangle(BossAnchor.X - 22, BossAnchor.Y - 2, 44, 4), Gold);   // ground pivot — yellow cross
@@ -2015,7 +2036,9 @@ public sealed class SoloExpeditionScreen
     /// into the panel — they crossed the table's right column and the footer's key hint the first time
     /// this was drawn taller than wide-ish. The medium frame's ornaments are small.
     /// </remarks>
-    private static readonly Rectangle LogPanel = new(ArenaRect.X + 10, 130, ArenaRect.Width - 20, 800);
+    // Literal, no longer derived from ArenaRect: the stage grew to the right for the pack's sake and the
+    // run log has no reason to grow with it. These are the numbers the derivation produced before that.
+    private static readonly Rectangle LogPanel = new(502, 130, 1042, 800);
 
     /// <summary>What a diff row is called on screen \u2014 the table's own names, so the two blocks agree.</summary>
     private static string DiffLabel(string coreLabel) => coreLabel switch
@@ -3367,21 +3390,52 @@ public sealed class SoloExpeditionScreen
     {
         _auraSincePulse += dt;
         if (_auraColour is not null && _mode == Mode.Fighting && _auraSincePulse >= AuraPulseSeconds)
-            PulseAura();
+            _auraSincePulse = 0f;   // the tick is the BRIGHTNESS peak now, not a spawn — see HoldAura
     }
 
-    private void PulseAura()
+    /// <summary>
+    /// The aura, held around the champion for as long as the build carries one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// IT IS A STATE, NOT AN EVENT. Every earlier version fired a one-shot on each tick, so however the
+    /// strip was drawn the thing on screen was something that appeared and died — and the designer kept
+    /// asking for the opposite until they spelled it out: "karakterin etrafında olacak ve sürekli açık
+    /// olacak, asla sönmeyecek. Sadece hasar anında en parlak halinde olacak" (2026-08-28). So the effect
+    /// is HELD (VfxPlayer.Hold): it loops, it never fades, and this method sets its brightness every frame.
+    /// </para>
+    /// <para>
+    /// The brightness is a floor plus a spike. <see cref="AuraRest"/> is what the field looks like doing
+    /// nothing — always visible, never bright enough to compete with a blow; the tick adds
+    /// <see cref="AuraPeak"/> and it decays over <see cref="AuraSpikeSeconds"/>, cubed so the fall reads
+    /// as a flare rather than a dimmer switch (additive alpha looks brighter than its number).
+    /// </para>
+    /// <para>
+    /// Sized to STAND THE CHAMPION UP: scale 4.8 is about 500 px against a 430 px champion box, so the
+    /// flames close over the head and the feet rather than ringing the waist. The strip's dark middle
+    /// costs nothing — rhart.py glow made alpha follow luminance, so the interior adds 8/255 and the
+    /// flames add all of it (the "ortasında küçük yanan alev" the designer was seeing was that interior,
+    /// opaque at 107 grey, hazing the champion it was meant to wrap).
+    /// </para>
+    /// </remarks>
+    private void HoldAura()
     {
-        if (_auraColour is not { } colour) return;
-        _auraSincePulse = 0f;
-        // FxFor, not the literal key it used to be: PlayFormVfx's Form.Aura arm already resolved the
-        // per-character effect and this one did not, so the two ways the game can draw an aura could
-        // silently disagree. (That arm is unreachable today — Aura is passive and emits no cast event —
-        // but the slot rework the designer wants will decide what a passive slot emits, and a key that
-        // is right in one place and hard-coded in the other is how these come apart.)
-        _vfx.Play(FxFor(Form.Aura), ChampBox.Center.X, ChampBox.Center.Y + 10, scale: 4.4f, fps: 11f,
-                  tint: colour, growTo: 1.22f);
+        // NOT gated on Mode.Fighting. The pulse learned this the hard way: waves run ~2 s and the
+        // transition ~2 s, so a field raised only while fighting is off screen for half the cycle and
+        // reads as absent. It stops only when the champion is down.
+        if (_auraColour is not { } colour || _mode == Mode.Downed) return;
+        var spike = 1f - Math.Clamp(_auraSincePulse / AuraSpikeSeconds, 0f, 1f);
+        var level = AuraRest + (AuraPeak - AuraRest) * spike * spike * spike;
+        _vfx.Hold(FxFor(Form.Aura), ChampBox.Center.X, ChampBox.Center.Y - 6, 4.8f, 10f, colour * level);
     }
+
+    /// <summary>What the field looks like when it is only existing.</summary>
+    private const float AuraRest = 0.38f;
+    /// <summary>...and at the instant it bites.</summary>
+    private const float AuraPeak = 1f;
+    /// <summary>How long the flare takes to fall back to rest.</summary>
+    private const float AuraSpikeSeconds = 0.42f;
+
     private int _auraTotal, _auraTotalMs = -1;
 
     /// <summary>The pending aura tick's total as one plain number over the pack's centre (see the Strike case).</summary>

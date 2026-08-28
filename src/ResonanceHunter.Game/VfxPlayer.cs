@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
@@ -29,8 +30,8 @@ public sealed class VfxPlayer
         public required int FrameW { get; init; }
         public required int FrameH { get; init; }
         public required int Frames { get; init; }
-        public required int CenterX { get; init; }
-        public required int CenterY { get; init; }
+        public required int CenterX { get; set; }
+        public required int CenterY { get; set; }
 
         /// <summary>Where the effect ENDS. Equal to the centre for everything that stays put.</summary>
         /// <remarks>
@@ -53,7 +54,11 @@ public sealed class VfxPlayer
         {
             get
             {
-                if (ToX == CenterX && ToY == CenterY) return (CenterX, CenterY);
+                // A HELD effect never travels: it is re-placed by its owner every frame, and it has no
+                // end point to ease toward. Without this it eased toward the DEFAULT ToX/ToY of 0 and the
+                // aura spent the fight drawn at (-249,-249) — off the top-left corner, which is why it
+                // looked like it had simply stopped existing.
+                if (Loop || (ToX == CenterX && ToY == CenterY)) return (CenterX, CenterY);
                 var t = Life;
                 t = 1f - (1f - t) * (1f - t);
                 return (CenterX + (int)((ToX - CenterX) * t), CenterY + (int)((ToY - CenterY) * t));
@@ -68,11 +73,16 @@ public sealed class VfxPlayer
         /// <summary>0 at the first frame, 1 at the last — the growth's clock.</summary>
         public float Life => Math.Clamp(Elapsed / MathF.Max(0.0001f, SecondsPerFrame * Frames), 0f, 1f);
         public required float SecondsPerFrame { get; init; }
-        public required Color Tint { get; init; }
+        public required Color Tint { get; set; }
         public float Elapsed;
 
-        public int CurrentFrame => Math.Min(Frames - 1, (int)(Elapsed / SecondsPerFrame));
-        public bool Done => Elapsed >= SecondsPerFrame * Frames;
+        /// <summary>A HELD effect loops and never ends; a fired one clamps on its last frame and dies.</summary>
+        public bool Loop { get; init; }
+
+        public int CurrentFrame => Loop
+            ? (int)(Elapsed / SecondsPerFrame) % Math.Max(1, Frames)
+            : Math.Min(Frames - 1, (int)(Elapsed / SecondsPerFrame));
+        public bool Done => !Loop && Elapsed >= SecondsPerFrame * Frames;
 
         /// <summary>
         /// 1 for most of the clip, easing to 0 across its final third — so every effect ENDS.
@@ -103,6 +113,7 @@ public sealed class VfxPlayer
         {
             get
             {
+                if (Loop) return 1f;   // a held effect never fades — the caller owns its brightness
                 var total = SecondsPerFrame * Frames;
                 if (total <= 0f) return 1f;
                 const float tail = 0.35f;
@@ -116,6 +127,19 @@ public sealed class VfxPlayer
 
     private readonly AssetLibrary _assets;
     private readonly List<Anim> _active = new();
+
+    /// <summary>
+    /// Effects that are HELD rather than fired: refreshed every frame by their owner, looping, never fading.
+    /// </summary>
+    /// <remarks>
+    /// The aura is not an event, it is a STATE — "sürekli açık olacak, asla sönmeyecek" (designer,
+    /// 2026-08-28). Spawning a one-shot on every tick could only ever look like a thing that flashes and
+    /// dies, however the strip was drawn, because a fired effect is defined by ending. A held effect is
+    /// owned by its caller: it exists exactly as long as the caller keeps asking for it, at whatever
+    /// brightness the caller passes THIS frame, which is what lets the fight peak it on a hit.
+    /// </remarks>
+    private readonly Dictionary<string, Anim> _held = new();
+    private readonly HashSet<string> _heldThisFrame = new();
 
     /// <summary>When set (the Hunt arena pass), the additive + restore batches use it so the glow is scissor-
     /// clipped to the arena along with everything else. Null elsewhere = default (unclipped) rasterizer.</summary>
@@ -172,6 +196,35 @@ public sealed class VfxPlayer
         });
     }
 
+    /// <summary>
+    /// Keep a looping effect alive for this frame at this position and brightness.
+    /// </summary>
+    /// <remarks>
+    /// Call it every frame the effect should exist; stop calling it and it is gone on the next Update.
+    /// There is no Stop() on purpose — a held effect that outlives its reason is exactly the kind of
+    /// thing that gets left on screen when a wave ends, which this codebase has shipped before.
+    /// </remarks>
+    public void Hold(string key, int x, int y, float scale, float fps, Color tint)
+    {
+        if (!Enabled) return;
+        if (_assets.Get(key) is not { } sheet) return;
+        _heldThisFrame.Add(key);
+        if (!_held.TryGetValue(key, out var a) || !ReferenceEquals(a.Sheet, sheet))
+        {
+            _held[key] = a = new Anim
+            {
+                Sheet = sheet, FrameW = sheet.Height, FrameH = sheet.Height,
+                Frames = Math.Max(1, sheet.Width / sheet.Height),
+                CenterX = x, CenterY = y, Scale = MathF.Max(1f, scale),
+                SecondsPerFrame = 1f / MathF.Max(1f, fps), Tint = tint, Loop = true,
+                ToX = x, ToY = y,
+            };
+        }
+        a.CenterX = x;
+        a.CenterY = y;
+        a.Tint = tint;      // live: the fight brightens it on a hit and dims it back between
+    }
+
     public void Update(float dt)
     {
         for (var i = _active.Count - 1; i >= 0; i--)
@@ -179,18 +232,25 @@ public sealed class VfxPlayer
             _active[i].Elapsed += dt;
             if (_active[i].Done) _active.RemoveAt(i);
         }
+        // A held effect lives only as long as someone asked for it THIS frame.
+        foreach (var key in _held.Keys.ToList())
+        {
+            if (!_heldThisFrame.Contains(key)) { _held.Remove(key); continue; }
+            _held[key].Elapsed += dt;
+        }
+        _heldThisFrame.Clear();
     }
 
     public void Draw(SpriteBatch b)
     {
-        if (_active.Count == 0) return;
+        if (_active.Count == 0 && _held.Count == 0) return;
         // Additive sub-pass. These are radial GLOW effects; in the caller's AlphaBlend batch their soft edges
         // read as hard ring OUTLINES (the "reticles" bug). Drawn additively they glow and layer as intended.
         // End the caller's batch, run additive, then restore AlphaBlend for the HUD that draws after us. The
         // transform mirrors the caller's canvas scale (Scale) so effects land where the fight authored them.
         b.End();
         b.Begin(SpriteSortMode.Deferred, BlendState.Additive, SamplerState.LinearClamp, null, Rasterizer, null, Matrix.CreateScale(Scale));
-        foreach (var a in _active)
+        foreach (var a in _held.Values.Concat(_active))   // held first: the aura sits UNDER the blows
         {
             if (a.Elapsed < 0f) continue;   // still in its delay
             var src = new Rectangle(a.CurrentFrame * a.FrameW, 0, a.FrameW, a.FrameH);
@@ -210,5 +270,11 @@ public sealed class VfxPlayer
         b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, null, RestoreRasterizer ?? Rasterizer, null, Matrix.CreateScale(Scale));
     }
 
-    public void Clear() => _active.Clear();
+    /// <summary>Drop everything, fired and held alike — a wave boundary must leave nothing standing.</summary>
+    public void Clear()
+    {
+        _active.Clear();
+        _held.Clear();
+        _heldThisFrame.Clear();
+    }
 }

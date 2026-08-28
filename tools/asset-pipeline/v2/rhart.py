@@ -255,6 +255,36 @@ def whiten(path: str, floor: int = 96) -> str:
     return path
 
 
+def glow(path: str) -> str:
+    """Make an effect's ALPHA follow its own brightness, so black is nothing at all.
+
+    Effects are composited ADDITIVELY (VfxPlayer.Draw), and additive blending already treats black as
+    invisible — but only if the pixel is actually black. `whiten` lifts every strip to a floor of 96 so
+    mid-grey shapes read, which is right for a small burst and wrong for anything that covers a figure:
+    the aura came back with an OPAQUE 107-grey interior and laid a haze over the champion it is supposed
+    to wrap (designer, 2026-08-28: "ortasında kucuk yanan alev cikmayacak").
+
+    alpha = alpha x luminance is the standard additive-VFX contract: white stays fully present, black
+    disappears, and everything between contributes exactly its own brightness. Applied AFTER whiten,
+    which is what makes the flames bright and the middle empty at the same time.
+    """
+    im = load_rgba(path)
+    lum = im.convert("L")
+    a = im.getchannel("A")
+    out = Image.merge("RGBA", (im.getchannel("R"), im.getchannel("G"), im.getchannel("B"),
+                               Image.eval(Image.merge("L", (a,)), lambda v: v)))
+    # alpha *= luminance, per pixel
+    ap, lp = out.getchannel("A").load(), lum.load()
+    na = Image.new("L", im.size)
+    np_ = na.load()
+    for y in range(im.height):
+        for x in range(im.width):
+            np_[x, y] = ap[x, y] * lp[x, y] // 255
+    out.putalpha(na)
+    out.save(path)
+    return path
+
+
 # ── review sheet ────────────────────────────────────────────────────────────────────────────────
 
 def sheet(out: str, paths: list[str], cell: int = 160, label: bool = True) -> str:
@@ -319,6 +349,7 @@ def main(argv: list[str]) -> int:
     inf = sub.add_parser("info"); inf.add_argument("paths", nargs="+")
     wh = sub.add_parser("whiten"); wh.add_argument("paths", nargs="+")
     wh.add_argument("--floor", type=int, default=96)
+    gl = sub.add_parser("glow"); gl.add_argument("paths", nargs="+")
 
     a = ap.parse_args(argv)
     if a.cmd == "fetch":
@@ -341,6 +372,10 @@ def main(argv: list[str]) -> int:
     if a.cmd == "whiten":
         for p in a.paths:
             print(whiten(p, a.floor))
+        return 0
+    if a.cmd == "glow":
+        for p in a.paths:
+            print(glow(p))
         return 0
     if a.cmd == "info":
         for p in a.paths:
