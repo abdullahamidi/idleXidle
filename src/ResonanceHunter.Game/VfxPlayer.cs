@@ -125,6 +125,17 @@ public sealed class VfxPlayer
         }
     }
 
+    /// <summary>
+    /// The physical pixels one unit of an effect's <c>scale</c> buys — a scale of 3 draws 312 px tall.
+    /// </summary>
+    /// <remarks>
+    /// Named because a caller that must PLACE an effect has to know how big it will be: the aura is
+    /// anchored by its bottom edge (see SoloExpeditionScreen.HoldAura) and cannot work that out from a
+    /// multiplier alone. It is not a factor on the raw frame — the strips are 512 px and multiplying
+    /// those directly would fill the screen.
+    /// </remarks>
+    public const int BaseUnitPx = 104;   // ui-size-ok: an effect's base size in world pixels, not type
+
     private readonly AssetLibrary _assets;
     private readonly List<Anim> _active = new();
 
@@ -261,7 +272,7 @@ public sealed class VfxPlayer
             // GROWTH (2026-08-29): an effect may swell across its life — the aura's pulse leaves the
             // champion and reaches the enemy row, which is what makes it read as a blow rather than a
             // decoration ("the circle should widen as far as the enemies so there is a hit feeling").
-            var h = (int)MathF.Round(a.Scale * 104 * (a.GrowTo <= 1f ? 1f : 1f + (a.GrowTo - 1f) * a.Life) / Scale);
+            var h = (int)MathF.Round(a.Scale * BaseUnitPx * (a.GrowTo <= 1f ? 1f : 1f + (a.GrowTo - 1f) * a.Life) / Scale);
             var w = h * a.FrameW / a.FrameH;
             var (ax, ay) = a.At;
             b.Draw(a.Sheet, new Rectangle(ax - w / 2, ay - h / 2, w, h), src, a.Tint * a.Fade);

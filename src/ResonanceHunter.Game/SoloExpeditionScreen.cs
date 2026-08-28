@@ -3426,8 +3426,24 @@ public sealed class SoloExpeditionScreen
         if (_auraColour is not { } colour || _mode == Mode.Downed) return;
         var spike = 1f - Math.Clamp(_auraSincePulse / AuraSpikeSeconds, 0f, 1f);
         var level = AuraRest + (AuraPeak - AuraRest) * spike * spike * spike;
-        _vfx.Hold(FxFor(Form.Aura), ChampBox.Center.X, ChampBox.Center.Y - 6, 4.8f, 10f, colour * level);
+        // ANCHORED TO THE FEET, not to the box's middle. The scale is the dial the designer turns
+        // ("biraz daha büyüyecek, karakterin çevresine çıkacak") and a centred aura grows equally in
+        // both directions, so every step up buried more of it under the floor. Placing its BOTTOM just
+        // under the soles means the growth goes where it is wanted — up and out around the figure.
+        var h = AuraScale * VfxPlayer.BaseUnitPx;
+        _vfx.Hold(FxFor(Form.Aura), ChampBox.Center.X, (int)(ChampBox.Bottom + 18 - h / 2f),
+                  AuraScale, 10f, colour * level);
     }
+
+    /// <summary>
+    /// How big the field is, as a multiple of the effect layer's 104 px base unit.
+    /// </summary>
+    /// <remarks>
+    /// 6.4 is about 666 px against a 430 px champion box — so it stands well clear of the head and
+    /// shoulders instead of hugging the outline. 4.8 (499 px) only just cleared him and read as a rim
+    /// rather than a field: "biraz daha büyüyecek, karakterin çevresine çıkacak" (2026-08-28).
+    /// </remarks>
+    private const float AuraScale = 6.4f;
 
     /// <summary>What the field looks like when it is only existing.</summary>
     private const float AuraRest = 0.38f;
