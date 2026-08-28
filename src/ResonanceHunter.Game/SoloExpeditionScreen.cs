@@ -306,7 +306,7 @@ public sealed class SoloExpeditionScreen
     private readonly Dictionary<int, float> _skillFlash = new();
 
     /// <summary>
-    /// Where each skill stood in its cycle when the LAST wave ended — actions taken since its last cast,
+    /// Where each skill stood in its cycle when the LAST wave ended — BEATS taken since its last cast,
     /// and milliseconds since it, carried into the wave now being replayed.
     /// </summary>
     /// <remarks>
@@ -316,7 +316,7 @@ public sealed class SoloExpeditionScreen
     /// — <c>Champion.BeatCount</c> never resets and <c>ReadyAtBeat</c> persists, which is what makes a
     /// descent one continuous fight — but <see cref="WaveReplay"/> is built per wave and knows only the
     /// events of the wave it holds. So <c>LastSkillBefore</c> answered "never" at every wave's opening and
-    /// the ring wound back to empty on a skill that was four actions into a six-action cycle.
+    /// the ring wound back to empty on a skill that was four beats into a six-beat cycle.
     /// </para>
     /// <para>
     /// The lie was visible and expensive: a four-action Projectile that had cast late in one wave could
@@ -330,7 +330,7 @@ public sealed class SoloExpeditionScreen
     /// new descent is a new champion, and its cooldowns really do start empty.
     /// </para>
     /// </remarks>
-    private readonly Dictionary<int, int> _carryActions = new();
+    private readonly Dictionary<int, int> _carryBeats = new();
     private readonly Dictionary<int, float> _carryMs = new();
 
     /// <summary>The last event's timestamp in the wave currently replayed — the fold's "end of wave".</summary>
@@ -340,7 +340,7 @@ public sealed class SoloExpeditionScreen
     private static int SkillKey(int source, int form) => source * 16 + form;
 
     /// <summary>
-    /// Roll the outgoing wave into <see cref="_carryActions"/> / <see cref="_carryMs"/>, so the next
+    /// Roll the outgoing wave into <see cref="_carryBeats"/> / <see cref="_carryMs"/>, so the next
     /// wave's rail opens where this one left off instead of at zero.
     /// </summary>
     /// <remarks>
@@ -355,18 +355,23 @@ public sealed class SoloExpeditionScreen
         if (_replay is null) return;
         // Past the last event, so a cast landing exactly on it is still counted as having happened.
         var end = _replayEndMs + 1f;
+        var lastBeat = _replay.LastBeat;
+        if (lastBeat < 0) return;               // a wave with no action at all changes nothing
         foreach (var s in Loadout.Skills)
         {
             var key = SkillKey((int)s.Source, (int)s.Form);
             var last = _replay.LastSkillBefore(end, (int)s.Source, (int)s.Form);
             if (last >= 0)
             {
-                _carryActions[key] = _replay.ActionsBetween(last, end);
+                _carryBeats[key] = lastBeat - _replay.BeatAt(last);
                 _carryMs[key] = _replayEndMs - last;
             }
             else
             {
-                _carryActions[key] = _carryActions.GetValueOrDefault(key) + _replay.ActionsBetween(-1f, end);
+                // The skill sat this wave out: ADD the beats it passed. The first beat is counted too,
+                // hence FirstBeat - 1 rather than FirstBeat — the wave's opening action is one the
+                // skill waited through like any other.
+                _carryBeats[key] = _carryBeats.GetValueOrDefault(key) + (lastBeat - _replay.FirstBeat + 1);
                 _carryMs[key] = _carryMs.GetValueOrDefault(key) + _replayEndMs;
             }
         }
@@ -742,9 +747,9 @@ public sealed class SoloExpeditionScreen
         _chargeNow = 0;
 
         // A NEW DESCENT IS A NEW CHAMPION. The rail carries a skill's place in its cycle across wave
-        // boundaries (see _carryActions), and carrying it across a DEATH would open the next run with
+        // boundaries (see _carryBeats), and carrying it across a DEATH would open the next run with
         // rings inherited from the corpse — the sim mints a fresh Champion here, cooldowns and all.
-        _carryActions.Clear();
+        _carryBeats.Clear();
         _carryMs.Clear();
         _replayEndMs = 0f;
 
@@ -2817,39 +2822,31 @@ public sealed class SoloExpeditionScreen
                     var prev = _replay.LastSkillBefore(_playheadMs, (int)s.Source, formKey);
                     // WHAT THE PREVIOUS WAVES ALREADY SPENT. Used only when THIS wave holds no cast to
                     // measure from — once the skill has fired inside this replay, that cast is the
-                    // truth and the carry is stale. See _carryActions.
-                    var carryActions = prev >= 0 ? 0 : _carryActions.GetValueOrDefault(skillKey);
+                    // truth and the carry is stale. See _carryBeats.
+                    var carryBeats = prev >= 0 ? 0 : _carryBeats.GetValueOrDefault(skillKey);
                     var carryMs = prev >= 0 ? 0f : _carryMs.GetValueOrDefault(skillKey);
                     if (next != int.MaxValue && next - _playheadMs is > 0f and <= 300f) telegraph = 1f - (next - _playheadMs) / 300f;
                     if (FormBehaviour.CooldownBeats(s.Form) is var bts and > 0)
                     {
-                        // COUNTED, not timed: the actions taken since this skill's last cast (or since the
-                        // wave opened), against the actions it waits. Deriving the step from the TIME
-                        // between two casts made the dial jump two at once or stall, because a deferred
-                        // cast stretches that span (playtest 2026-08-30).
+                        // COUNTED IN BEATS, AND THE SIM'S OWN BEATS. The rail used to rebuild a count
+                        // by walking the damage stream — see WaveReplay.BeatAt for why that was a
+                        // guess. Champion.BeatCount is what the cooldown is actually measured against,
+                        // and it is in the event stream now, so this is the same number the fight used.
                         //
-                        // THE DENOMINATOR IS THE PLAIN ACTIONS IN THE CYCLE — one FEWER than the actions
-                        // between two casts, because the second cast is itself an action.
+                        // THE DENOMINATOR IS THE CYCLE'S PLAIN ACTIONS — one fewer than the cooldown,
+                        // because the next cast is itself an action. A four-action skill's cycle is
+                        // cast, hit, hit, hit, cast: three hits to fill across (playtest 2026-08-28,
+                        // "skill henüz cooldowndayken atıyor" — dividing by four could only ever reach
+                        // three quarters, so the ring was never once seen full).
                         //
-                        // Dividing by the nominal `bts` is an off-by-one that the player found and named
-                        // (2026-08-28: "bazen 3 vuruştan, bazen 4 vuruştan sonra skill atıyor... skill
-                        // henüz cooldowndayken atıyor"). The cycle for a four-action skill is cast, hit,
-                        // hit, hit, cast — three plain hits — so counting them against four could only
-                        // ever reach 3/4, and the ring emptied at the cast because `prev` had already
-                        // flipped to it. The ring was never once seen full, and the skill therefore
-                        // always appeared to fire while still winding up.
-                        //
-                        // The SAME off-by-one explains the case they called correct. When a ready skill
-                        // loses its beat to an earlier slot (one action per beat, so it takes the next),
-                        // the gap is five actions and the old arithmetic did reach 4/4 — full, then a
-                        // whole action of standing ready before firing. Reading the gap the sim actually
-                        // left fixes both: the ring fills on the last hit and the next action is the cast.
-                        var from = prev >= 0 ? prev : -1;
-                        var since = _replay!.ActionsBetween(from, _playheadMs) + carryActions;
-                        var span = next != int.MaxValue
-                            ? _replay.ActionsBetween(from, next) + carryActions - 1
-                            : bts - 1;
-                        ringSteps = Math.Max(1, span);
+                        // It CAN sit full for an action, and that is now the truth rather than a bug:
+                        // only one action happens per beat, so a ready skill that loses the beat to an
+                        // earlier slot is ready and waiting its turn. The ring saying so is right.
+                        var beatNow = _replay!.BeatAt(_playheadMs);
+                        var since = prev >= 0
+                            ? Math.Max(0, beatNow - _replay.BeatAt(prev))
+                            : Math.Max(0, beatNow - _replay.FirstBeat + 1) + carryBeats;
+                        ringSteps = Math.Max(1, bts - 1);
                         ready = Math.Clamp(since / (float)ringSteps, 0f, 1f);
                     }
                     else if (next != int.MaxValue)

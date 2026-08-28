@@ -246,23 +246,47 @@ public sealed class WaveReplay
     /// action, where deriving the step from elapsed TIME between two casts made it jump two at once or
     /// stall (playtest 2026-08-30: "sometimes it counts 2 while the swing plays, sometimes not at all").
     /// </remarks>
-    public int ActionsBetween(float fromMs, float toMs)
+    /// <summary>
+    /// The champion's beat number at <paramref name="ms"/> — the sim's own count, or -1 before the
+    /// wave's first action.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THIS REPLACES A HEURISTIC. The rail used to count "actions" by walking the damage stream and
+    /// treating every <c>Strike</c> that was not a skill's own hit as one — which is a guess about
+    /// DAMAGE standing in for a fact about RHYTHM, and it was wrong for the poison bleed, THORNS,
+    /// BREAKER's overkill spill and a MARK detonation, all of which land with the same flag.
+    /// </para>
+    /// <para>
+    /// <see cref="BattleEventKind.Beat"/> carries the run-cumulative count, so this is comparable
+    /// ACROSS waves: a skill that cast late in one wave can be measured against a beat in the next
+    /// without the caller carrying an offset of its own.
+    /// </para>
+    /// </remarks>
+    public int BeatAt(float ms)
     {
-        var count = 0;
-        var lastAt = int.MinValue;
+        var beat = -1;
         foreach (var e in _events)
         {
-            if (e.AtMs <= fromMs) continue;
-            if (e.AtMs > toMs) break;
-            // A TRAP IS NOT AN ACTION: it fires on being bitten, off the beat, so counting its Skill
-            // event added a spurious step to every other skill's dial (review 2026-08-30).
-            var isAction = (e.Kind == BattleEventKind.Skill && (Abilities.Form)e.Amount != Abilities.Form.Trap)
-                           || (e.Kind == BattleEventKind.Strike && !e.FromSkill);
-            if (!isAction || e.AtMs == lastAt) continue;
-            lastAt = e.AtMs;
-            count++;
+            if (e.Kind != BattleEventKind.Beat) continue;
+            if (e.AtMs > ms) break;
+            beat = e.Amount;
         }
-        return count;
+        return beat;
+    }
+
+    /// <summary>The beat number this wave ended on, or -1 if it held no action at all.</summary>
+    public int LastBeat => BeatAt(float.MaxValue);
+
+    /// <summary>The beat the wave opened on, or -1. Used to measure a wave that a skill sat out.</summary>
+    public int FirstBeat
+    {
+        get
+        {
+            foreach (var e in _events)
+                if (e.Kind == BattleEventKind.Beat) return e.Amount;
+            return -1;
+        }
     }
 
     private int NextAfter(float ms, BattleEventKind kind)

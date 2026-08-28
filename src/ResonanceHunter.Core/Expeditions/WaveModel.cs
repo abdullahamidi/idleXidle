@@ -238,8 +238,28 @@ public enum WaveOutcome { Cleared, Wiped, Stalled }
 /// </remarks>
 // Charge: Value is the pool AFTER the change — the HUD latches the latest one at its playhead
 // rather than re-deriving the sim's rules (a replayed rule is a rule that can drift).
-public enum BattleEventKind { Strike, EnemyStrike, Down, Heal, EnemyDown, Skill, Shield, Charge, Aura }
+public enum BattleEventKind { Strike, EnemyStrike, Down, Heal, EnemyDown, Skill, Shield, Charge, Aura, Beat }
 
+/// <summary>
+/// BEAT: one per action the champion takes, carrying <see cref="Builds.Champion.BeatCount"/> in
+/// <c>Amount</c> — the run-cumulative count, not a wave-local one.
+/// </summary>
+/// <remarks>
+/// <para>
+/// THE RHYTHM IS PUBLISHED NOW RATHER THAN INFERRED. Every rhythm cooldown in the sim is counted in
+/// beats (<c>ReadyAtBeat[i] = BeatCount + beats</c>), and the rail that reports those cooldowns had no
+/// access to that number — so it reconstructed one, by treating every <see cref="BattleEventKind.Strike"/>
+/// that was not a skill's own damage as "an action". That is a heuristic over DAMAGE, and it was wrong
+/// for four sources that share the same flag: the poison bleed, THORNS' reflect, BREAKER's overkill
+/// spill and a MARK detonation all land with <c>fromSkill: false</c> and would each have turned the
+/// dial a notch the champion never earned.
+/// </para>
+/// <para>
+/// Two counters for one rule is the shape this project keeps paying for. This is the rule's own
+/// counter, emitted where it is incremented, so a readout can agree with the fight by reading it
+/// instead of by guessing well.
+/// </para>
+/// </remarks>
 /// <summary>
 /// AURA: one per tick of a passive Form, carrying the Source in <c>Slot</c> and the Form in
 /// <c>Amount</c> exactly as <see cref="BattleEventKind.Skill"/> does — but it is NOT an action and

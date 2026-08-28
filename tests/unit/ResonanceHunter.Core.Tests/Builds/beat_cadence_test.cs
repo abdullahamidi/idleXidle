@@ -23,11 +23,12 @@ namespace ResonanceHunter.Core.Tests.Builds;
 /// was already "EVERY OTHER ACTION" / "EVERY THIRD ACTION"); the rule was deliberately left alone.
 /// </para>
 /// <para>
-/// <b>The point of this file is that the rule and the readout are pinned TOGETHER.</b> They were two
-/// independent pieces of arithmetic — <c>SoloBattle</c>'s beat counter and <c>WaveReplay</c>'s
-/// <see cref="WaveReplay.ActionsBetween"/> — agreeing by hand, and a disagreement between them is
-/// invisible in a test that only checks one of them. It shows up as a player counting swings and getting
-/// a different answer from the ring on the medallion.
+/// <b>The point of this file is that the rule and the readout are pinned TOGETHER.</b> They used to be
+/// two independent pieces of arithmetic — <c>SoloBattle</c>'s beat counter, and a readout that rebuilt
+/// its own count by walking the damage stream — agreeing by hand. A disagreement between them is
+/// invisible in a test that checks only one, and it showed up as a player counting swings and getting a
+/// different answer from the ring. The sim publishes its beat now
+/// (<see cref="BattleEventKind.Beat"/>); what is pinned here is that the readout reads it.
 /// </para>
 /// </remarks>
 public class BeatCadenceTest
@@ -151,18 +152,20 @@ public class BeatCadenceTest
     /// The rail's own arithmetic, re-implemented here because the Game assembly has no test project.
     /// </summary>
     /// <remarks>
-    /// SoloExpeditionScreen fills a skill's ring with <c>ActionsBetween(last cast, now) / beats</c>, and
-    /// since 2026-08-28 it adds a CARRY when the wave being replayed holds no cast of its own — the
-    /// actions that passed in earlier waves. What is pinned here is that carry's arithmetic, which is
-    /// the part that can drift; the screen's wiring of it cannot be reached from here.
+    /// SoloExpeditionScreen fills a skill's ring with the BEATS since its last cast over the cycle's
+    /// plain actions, and adds a CARRY when the wave being replayed holds no cast of its own — the beats
+    /// that passed in earlier waves. What is pinned here is that arithmetic, which is the part that can
+    /// drift; the screen's wiring of it cannot be reached from here.
     /// </remarks>
     private static (int Carry, float Ms) Fold(WaveReplay replay, int endMs, int carry, float carryMs,
                                               Source src, Form form)
     {
         var last = replay.LastSkillBefore(endMs + 1, (int)src, (int)form);
+        var lastBeat = replay.LastBeat;
+        if (lastBeat < 0) return (carry, carryMs);
         return last >= 0
-            ? (replay.ActionsBetween(last, endMs + 1), endMs - last)
-            : (carry + replay.ActionsBetween(-1, endMs + 1), carryMs + endMs);
+            ? (lastBeat - replay.BeatAt(last), endMs - last)
+            : (carry + (lastBeat - replay.FirstBeat + 1), carryMs + endMs);
     }
 
     [Fact]
@@ -197,9 +200,10 @@ public class BeatCadenceTest
             var replay = new WaveReplay(events, new Dictionary<int, int> { [0] = 100 },
                                         new Dictionary<int, int> { [0] = 100 }, 400_000f);
 
-            // THE RING AT THIS WAVE'S OPENING, read the way the rail reads it: no cast yet in this
-            // replay, so the whole value is the carry.
-            var opening = Math.Clamp(carry / (float)beats, 0f, 1f);
+            // THE RING AT THIS WAVE'S OPENING, read through the same helper the rail's arithmetic is
+            // mirrored in, on the wave's first action.
+            var firstAction = ActionTimes(events).FirstOrDefault(-1);
+            var opening = firstAction < 0 ? 0f : Ring(replay, firstAction, carry, Source.Body, Form.Projectile);
             openings.Add(opening);
 
             var cast = replay.LastSkillBefore(endMs + 1, (int)Source.Body, (int)Form.Projectile);
@@ -212,14 +216,15 @@ public class BeatCadenceTest
             (carry, carryMs) = Fold(replay, endMs, carry, carryMs, Source.Body, Form.Projectile);
         }
 
-        // THE CLAIM. Some wave must open mid-cycle — otherwise this fixture never exercises the carry
-        // and the assertion below is vacuous.
+        // THE CLAIM. Some wave must open MID-CYCLE — a ring part-filled by beats that happened in an
+        // earlier wave. Before the carry existed every wave opened at zero, so this is the whole of it.
         Assert.Contains(openings.Skip(1), o => o > 0f);
 
-        // And the carry must survive a wave the skill sat out entirely: that is the case that used to
-        // re-zero the ring, and the case a short wave produces most often.
-        Assert.True(wavesWithoutACast > 0,
-            "no wave passed without a cast, so the fixture never reached the case the carry exists for");
+        // The "sat a whole wave out" branch of the fold is pinned by its own test below. It used to be
+        // asserted here as well, on the theory that this fixture reached it — and it did, only because
+        // the cadence was drifting a beat per wave. With the drift fixed every wave holds a cast, so
+        // demanding one that does not would be demanding the bug back.
+        _out.WriteLine($"waves the skill sat out entirely: {wavesWithoutACast}");
     }
 
     [Fact]
@@ -263,16 +268,16 @@ public class BeatCadenceTest
     private static float Ring(WaveReplay replay, float playhead, int carry, Source src, Form form)
     {
         var prev = replay.LastSkillBefore(playhead, (int)src, (int)form);
-        var next = replay.NextSkillAfter(playhead, (int)src, (int)form);
         var from = prev >= 0 ? prev : -1;
         var carried = prev >= 0 ? 0 : carry;
-        var since = replay.ActionsBetween(from, playhead) + carried;
-        // THE PLAIN ACTIONS IN THIS CYCLE, which is one fewer than the actions between two casts
-        // because the second cast IS an action. See the test below.
-        var span = next != int.MaxValue
-            ? replay.ActionsBetween(from, next) + carried - 1
-            : FormBehaviour.CooldownBeats(form) - 1;
-        return Math.Clamp(since / (float)Math.Max(1, span), 0f, 1f);
+        var beatNow = replay.BeatAt(playhead);
+        var since = prev >= 0
+            ? Math.Max(0, beatNow - replay.BeatAt(prev))
+            : Math.Max(0, beatNow - replay.FirstBeat + 1) + carried;
+        // THE PLAIN ACTIONS IN THIS CYCLE, one fewer than the cooldown because the next cast is itself
+        // an action. See the test below.
+        var span = Math.Max(1, FormBehaviour.CooldownBeats(form) - 1);
+        return Math.Clamp(since / (float)span, 0f, 1f);
     }
 
     [Fact]
@@ -357,17 +362,106 @@ public class BeatCadenceTest
     }
 
     [Fact]
-    public void test_the_two_counters_agree_about_what_an_action_is()
+    public void test_every_action_the_champion_takes_advances_the_beat_counter()
     {
-        // The dial's counter lives in WaveReplay and the cadence lives in SoloBattle. They agree only by
-        // hand, and a Trap is the case that proves it matters: it fires on being BITTEN, off the beat,
-        // so it is not an action and must not turn the ring (review 2026-08-30). Anything new that
-        // raises a Skill event has to make the same decision in both places.
-        var events = LongWave(Form.Strike);
-        var replay = new WaveReplay(events, new Dictionary<int, int> { [0] = 100 }, new Dictionary<int, int> { [0] = 100 }, 400_000f);
-        var mine = ActionTimes(events);
+        // THE DEFECT, and it is the one the playtest kept running into: "bazen 3 vuruştan, bazen 4
+        // vuruştan sonra skill atıyor."
+        //
+        // Champion.BeatCount is what every rhythm cooldown is measured against — ReadyAtBeat[i] =
+        // BeatCount + beats — so it has to mean "actions the champion has taken". It did not. The beat's
+        // bookkeeping sits at the FOOT of the tick, after six `return Kill(ms)` sites, and every wave
+        // ends on one of them: the blow that kills the last creature returns before the counter moves.
+        //
+        // One lost beat per wave, cumulative and invisible. A skill that cast just before a boundary
+        // then needed FIVE real actions to come round instead of four, because one of them never
+        // reached the counter. Inside a single wave the cadence was always exactly right, which is why
+        // it reads as random rather than as broken.
+        var build = OneRhythmSkill(Form.Projectile);
+        var hunter = new Hunter();
+        var pool = SoloBattle.ChampionHealth(build, hunter) * 50;   // survives; the count is the subject
+        var champ = new Champion { MaxHealth = pool, Health = pool };
+        var run = new SoloExpedition(build, champ, hunter, 110f, 1f,
+                                     ExpeditionTuning.Default, Source.Nature, new Random(17));
 
-        var last = mine[^1];
-        Assert.Equal(mine.Count, replay.ActionsBetween(-1, last));
+        var lastBeat = 0;
+        for (var w = 0; w < 5; w++)
+        {
+            run.RefreshPool();
+            run.PushWave();
+            if (run.LastWaveEvents.Count == 0) break;
+
+            var actions = ActionTimes(run.LastWaveEvents).Count;
+            var beats = champ.BeatCount - lastBeat;
+            lastBeat = champ.BeatCount;
+
+            _out.WriteLine($"wave {run.Wave}: {actions} actions, {beats} beats");
+            Assert.True(actions == beats,
+                $"wave {run.Wave} held {actions} champion actions but advanced BeatCount by {beats}. "
+                + "Every rhythm cooldown is counted against that number, so it has to be the same number "
+                + "the player is watching.");
+        }
+    }
+
+    [Theory]
+    [InlineData(Form.Strike)]
+    [InlineData(Form.Projectile)]
+    public void test_a_new_run_waits_the_full_cooldown_before_its_first_cast(Form form)
+    {
+        // THE SECOND REPORT: "öldükten sonra 2. vuruşta skill'i attı." A death starts a new run, which
+        // mints a new Champion — so ReadyAtBeat is empty, and the opening default decided instead of
+        // the cooldown: `min(1, beats - 1)` let a rhythm skill fire from the wave's SECOND beat.
+        //
+        // The rail says EVERY FOURTH ACTION. A rule with an unnamed exception on the one wave every
+        // player sees most often — the first one after dying — is not a rule, and the exception was
+        // measured against a wave a third of the length waves are now.
+        var beats = FormBehaviour.CooldownBeats(form);
+        var build = OneRhythmSkill(form);
+        var hunter = new Hunter();
+        var pool = SoloBattle.ChampionHealth(build, hunter) * 50;
+        var champ = new Champion { MaxHealth = pool, Health = pool };
+        var run = new SoloExpedition(build, champ, hunter, 110f, 1f,
+                                     ExpeditionTuning.Default, Source.Nature, new Random(17));
+        run.PushWave();
+
+        var actions = ActionTimes(run.LastWaveEvents);
+        var first = run.LastWaveEvents.First(e => e.Kind == BattleEventKind.Skill).AtMs;
+        var index = actions.IndexOf(first);
+
+        _out.WriteLine($"{form} (waits {beats}) first cast of a new run on action #{index}");
+
+        // Zero-based, so the Nth action is index N-1: a four-action skill casts ON the fourth action.
+        Assert.Equal(beats - 1, index);
+    }
+
+    [Fact]
+    public void test_there_is_one_counter_and_the_readout_reads_it()
+    {
+        // THERE USED TO BE TWO. The cadence lived in SoloBattle's BeatCount and the dial rebuilt its own
+        // count by walking the damage stream — "every Strike that is not a skill's own hit is an action"
+        // — which is a guess about DAMAGE standing in for a fact about RHYTHM. They agreed only by hand,
+        // and four damage sources share the flag it guessed on (the poison bleed, THORNS, BREAKER's
+        // overkill spill, a MARK detonation), each of which would have turned the ring a notch the
+        // champion never earned.
+        //
+        // The sim publishes its own counter now (BattleEventKind.Beat), so this asserts the thing that
+        // actually matters: one Beat per action the champion took, carrying the number the cooldowns
+        // are measured against. A Trap raises a Skill event and is NOT an action — it fires on being
+        // bitten, off the beat — so it must not appear here either.
+        var events = LongWave(Form.Strike);
+        var replay = new WaveReplay(events, new Dictionary<int, int> { [0] = 100 },
+                                    new Dictionary<int, int> { [0] = 100 }, 400_000f);
+        var actions = ActionTimes(events);
+        var beats = events.Where(e => e.Kind == BattleEventKind.Beat).ToList();
+
+        _out.WriteLine($"{actions.Count} champion actions, {beats.Count} beats published");
+
+        Assert.Equal(actions.Count, beats.Count);
+        // One per action, in step, and each carrying the running count rather than a wave-local index.
+        for (var i = 0; i < actions.Count; i++)
+        {
+            Assert.Equal(actions[i], beats[i].AtMs);
+            Assert.Equal(beats[0].Amount + i, beats[i].Amount);
+            Assert.Equal(beats[i].Amount, replay.BeatAt(actions[i]));
+        }
     }
 }

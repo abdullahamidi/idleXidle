@@ -584,6 +584,20 @@ public static class SoloBattle
         // THE BEAT. Actions happen on it and only on it; the first beat of a wave is its breath.
         var beatLen = BeatFor(mods.SkillRate * shape.SkillRate, tuning.BeatMs);
         var nextBeat = Math.Min(beatLen, tuning.WaveOpeningMs);   // the wave's breath, then the metronome
+
+        // THIS BEAT HAS NOT BEEN COUNTED YET.
+        //
+        // Champion.BeatCount is what every rhythm cooldown is measured against, so it has to mean
+        // "actions the champion has taken" — and it did not. The counter was advanced at the FOOT of
+        // the tick, below six `return Kill(ms)` sites, and every wave ends on one of them: the blow
+        // that kills the last creature returned before the counter moved. One action per wave, every
+        // wave, never counted.
+        //
+        // The cost was cumulative and invisible. A skill that cast just before a boundary needed FIVE
+        // real actions to come round instead of four, because one of them never reached the counter —
+        // which is exactly the "bazen 3 vuruştan, bazen 4 vuruştan sonra" the playtest reported, and
+        // why it read as random: INSIDE a wave the cadence was always exactly right.
+        var beatOwed = false;
         var nextBite = enemyIntervalMs;
 
         // THE LIVE SKILL RATE. The build's rate, then the two nodes that move it DURING a wave: TIDE
@@ -606,6 +620,10 @@ public static class SoloBattle
 
         (WaveOutcome, List<BattleEvent>) Kill(int atMs)
         {
+            // THE KILLING BLOW WAS AN ACTION. Settle the beat before leaving, or the champion's own
+            // counter forgets the swing that ended the wave — see beatOwed.
+            if (beatOwed) { champ.BeatCount++; beatOwed = false; events.Add(new BattleEvent(BattleEventKind.Beat, 0, champ.BeatCount, atMs)); }
+
             // No EnemyDown here — LandOn emits one per creature as it falls, so this would double the
             // last one and the screen would remove a sprite that was already gone.
 
@@ -1045,6 +1063,7 @@ public static class SoloBattle
             var abs = since + ms;
             // ON THE BEAT the champion takes ONE action: the first ready skill in slot order, else a swing.
             var onBeat = champ.Alive && ms >= nextBeat;
+            if (onBeat) beatOwed = true;
             var acted = false;
 
             // ── VITALITY: life regained every second, a fraction of the pool (Hunter.RegenPerSecond).
@@ -1118,13 +1137,22 @@ public static class SoloBattle
                 var beats = FormBehaviour.CooldownBeats(form);
                 if (beats > 0)
                 {
-                    // COUNTED IN BEATS: "every third action". PREPARATION waives the opening wait.
-                    // THE OPENER: the wave's first beat is always the swing — a wind-up the eye can
-                    // read — and a rhythm skill may take the second (measured: opening on the Nth beat
-                    // instead left a fresh champion swinging for 3.7 s under the bites and dead by wave
-                    // 3). PREPARATION lets it take the first. Persistence across waves is untouched:
-                    // ReadyAtBeat is written on every cast and BeatCount never resets.
-                    var openingBeat = shape.FreeOpeningCast ? 0 : Math.Min(1, beats - 1);
+                    // COUNTED IN BEATS: "every fourth action". PREPARATION waives the opening wait.
+                    //
+                    // THE OPENING IS THE RULE, NOT AN EXCEPTION TO IT. This used to be
+                    // `Math.Min(1, beats - 1)` — a skill with no entry yet could fire from the run's
+                    // SECOND action, whatever its cooldown said. It is only reachable on the first wave
+                    // of a run, which is the wave every player sees most often, and it is what the
+                    // playtest hit: "öldükten sonra 2. vuruşta skill'i attı." A rail that promises EVERY
+                    // FOURTH ACTION and then opens on the second is not describing a rule.
+                    //
+                    // `beats - 1` places the first cast ON the Nth action, which is where every later
+                    // cast lands too: the cycle is cast, hit, hit, hit, cast — three plain hits — so a
+                    // run that opens with three hits and then casts is the same cycle, joined at the
+                    // start. The old note (a fresh champion "dead by wave 3" under a full opening) was
+                    // measured against a wave a third of today's length; re-measured, the pacing band
+                    // does not move. PREPARATION still takes the very first beat.
+                    var openingBeat = shape.FreeOpeningCast ? 0 : beats - 1;
                     if (champ.BeatCount < champ.ReadyAtBeat.GetValueOrDefault(i, openingBeat)) continue;
                     champ.ReadyAtBeat[i] = champ.BeatCount + beats;
                 }
@@ -1325,7 +1353,7 @@ public static class SoloBattle
                 // beat the champion spent on the swing, so a brisk build swings sooner but casts no faster.
                 var swung = !acted && tuning.AutoAttackDamage > 0f;
                 nextBeat = ms + BeatFor(RateNow() * (swung ? shape.AutoAttackRate : 1f), tuning.BeatMs);
-                champ.BeatCount++;
+                if (beatOwed) { champ.BeatCount++; beatOwed = false; events.Add(new BattleEvent(BattleEventKind.Beat, 0, champ.BeatCount, ms)); }
             }
 
             // ── THE ENEMY BITES BACK ──────────────────────────────────────────────────────────
