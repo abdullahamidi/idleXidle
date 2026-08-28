@@ -1150,6 +1150,7 @@ public class Game1 : Game
         _roster = new RosterScreen(_ui);
         _chests = new ChestScreen(_ui);
         _weave = new WeaveScreen(_ui);
+        _weave.Sound = _sound;   // the weave's pick, and the seal a bound Vow presses
         _expedition = new SoloExpeditionScreen(_ui);
         _expedition.Sound = _sound;   // the fight's hits, casts, deaths and the boss horn
         _buildScreen = new BuildScreen(_ui);
@@ -2644,7 +2645,7 @@ public class Game1 : Game
             _weave.RegionName = Regions.Get(_activeRegion).Name;
             _weave.Discipline = _mastery.Affinity();
             _weave.MasteryTaken = _mastery.Taken;
-            _weave.Update(CanvasMouse, MouseClicked, MouseWheel);
+            _weave.Update(CanvasMouse, MouseClicked, _mouse.LeftButton == ButtonState.Pressed, MouseWheel);
             if (_weave.Dirty) { _weave.ClearDirty(); Save(); }
             // CONSUMED HERE, where the Weave actually runs. It was read inside `if (_showBuild)`, and
             // _showBuild and _showWeave are mutually exclusive on every path that opens this screen —

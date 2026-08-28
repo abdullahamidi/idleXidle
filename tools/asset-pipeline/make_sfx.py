@@ -202,6 +202,37 @@ def deepen() -> None:
     write(os.path.join(OUT_DIR, "sfx_deepen.wav"), buf)
 
 
+def weave() -> None:
+    """A Source or a Form set on a slot. Deliberately SMALLER than sfx_click's cousins: this
+    fires on every pick while a player is trying combinations, so it has to read as a soft
+    'took' rather than an achievement. A short breath and one clean note, no low body — the
+    weight in this screen is reserved for binding a Vow."""
+    rng = Noise(0x3EA4)
+    buf = [0.0] * int(0.34 * RATE)
+    air(buf, 0.0, 0.04, 0.16, rng)
+    bell(buf, 0.0, 880.00, 0.30, 0.13, partials=(1.0, 2.0, 3.0))   # A5, thin and quick
+    bell(buf, 0.035, 1318.51, 0.16, 0.10, partials=(1.0, 2.0))     # E6 just behind it
+    sweep(buf, 0.0, 0.07, 420.0, 900.0, 0.12)                      # a small lift, not a swell
+    write(os.path.join(OUT_DIR, "sfx_weave.wav"), buf)
+
+
+def bind() -> None:
+    """A Vow bound to a skill. This is the screen's one COMMITMENT, so it is the one cue with
+    weight: an intake, a low seal pressed down, and a fifth that hangs after it. A Vow is a
+    restriction you accept for power, so the shape is a promise being closed rather than a
+    prize being won — the chord is open (root and fifth, no third), which reads as solemn
+    instead of happy."""
+    rng = Noise(0xB17D)
+    buf = [0.0] * int(1.35 * RATE)
+    air(buf, 0.0, 0.16, 0.24, rng, rise=True)                      # the breath before it lands
+    sweep(buf, 0.14, 0.26, 150.0, 62.0, 0.62)                      # the seal pressed into wax
+    air(buf, 0.15, 0.10, 0.22, rng)
+    bell(buf, 0.15, 293.66, 0.44, 0.62, partials=(1.0, 2.0, 3.0, 4.2))   # D4
+    bell(buf, 0.15, 440.00, 0.32, 0.58, partials=(1.0, 2.0, 3.0))        # A4 — the open fifth
+    bell(buf, 0.40, 880.00, 0.14, 0.55)                            # the ring that hangs after
+    write(os.path.join(OUT_DIR, "sfx_bind.wav"), buf)
+
+
 if __name__ == "__main__":
     trait_lit()
     trait_terminal()
@@ -210,3 +241,5 @@ if __name__ == "__main__":
     levelup()
     conquer()
     deepen()
+    weave()
+    bind()

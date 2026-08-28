@@ -98,6 +98,94 @@ public sealed class WeaveScreen
     private int _currentRev = -1;
     private int _buildRev;
 
+    // ── DRAGGING ────────────────────────────────────────────────────────────────────────────────
+    //
+    // Playtest 2026-08-28: <i>"skill seçimlerinin tıkladım oldu gibi basit bir aksiyondan ziyade,
+    // sürükleme bırakma ... ile pekiştirilmesi"</i> and, for the Vow column, <i>"skille sürükleme
+    // bırakma ve 'bind' hissiyatı için efekt ve seslerle desteklenmesi"</i>.
+    //
+    // A Vow is BOUND TO A SKILL, not to the screen — the data model has always said so (SkillChoice
+    // carries VowId) and the flat list said the opposite, that you were ticking an option in a
+    // settings page. Carrying the seal to the slot is the same act the model already describes.
+    //
+    // CLICKING STILL WORKS, and that is not a courtesy. The project forbids hover-only interaction and
+    // targets gamepad through cycle-and-confirm (technical-preferences.md), so drag is the SECOND way
+    // to do everything here and never the only way: a press that never moves far enough resolves as
+    // the click it always was.
+    private enum Carry { None, Vow, Slot }
+
+    private Carry _carrying;
+    private string? _carryVowId;      // Carry.Vow — which seal is in hand
+    private int _carrySlot = -1;      // Carry.Slot — which woven skill is being reordered
+    private Point _carryFrom;         // where the press began, to tell a drag from a click
+    private Point _carryAt;           // the cursor now, for the ghost
+    private bool _carryMoved;         // past the slop radius: this is a drag, not a click
+    private bool _wasHeld;
+
+    /// <summary>How far the cursor must travel before a press becomes a drag.</summary>
+    /// <remarks>
+    /// Generous on purpose. A player aiming at a 70px row with a mouse moves a pixel or two while
+    /// clicking, and a drag that arms at 2px turns every click into a cancelled drag.
+    /// </remarks>
+    private const int DragSlop = 7;
+
+    /// <summary>How long a pick's flourish and a bind's seal last, in seconds.</summary>
+    /// <remarks>
+    /// The bind runs longer than the pick because it is the heavier act and because sfx_bind's own
+    /// ring hangs for about that long — a flourish that ends before its sound does reads as two
+    /// unrelated events.
+    /// </remarks>
+    private const float SetFlashSeconds = 0.34f;
+    private const float BindFlashSeconds = 0.85f;
+
+    /// <summary>Which woven slot the cursor is over, or -1. The drop target for both carries.</summary>
+    /// <remarks>
+    /// PADDED by half a row gap, per technical-preferences.md's Fitts's-Law note: a drop that must
+    /// land inside 76 exact pixels is a drop that misses. The pad closes the dead gap BETWEEN rows
+    /// rather than growing the list, so every point inside the slot column belongs to some row.
+    /// </remarks>
+    private int SlotUnder(Point p)
+    {
+        for (var i = 0; i < Loadout.Skills.Count; i++)
+        {
+            var r = SlotRow(i);
+            if (new Rectangle(r.X - 8, r.Y - 5, r.Width + 16, r.Height + 10).Contains(p)) return i;
+        }
+        return -1;
+    }
+
+    /// <summary>Age the flourishes. Called once per frame from Draw, off this screen's own clock.</summary>
+    private void TickEffects()
+    {
+        var now = _clock.Elapsed.TotalSeconds;
+        var dt = (float)Math.Clamp(now - _lastTick, 0.0, 0.10);   // clamped: a load hitch must not skip a flash
+        _lastTick = now;
+        Decay(_slotFlash, dt);
+        Decay(_bindFlash, dt);
+
+        static void Decay(Dictionary<int, float> d, float dt)
+        {
+            if (d.Count == 0) return;
+            foreach (var k in d.Keys.ToList())
+            {
+                var left = d[k] - dt;
+                if (left <= 0f) d.Remove(k); else d[k] = left;
+            }
+        }
+    }
+
+    // ── EFFECTS ─────────────────────────────────────────────────────────────────────────────────
+    // Seconds remaining on each flourish. Decayed in Draw off a stopwatch, because this screen's
+    // Update takes no GameTime and threading one through for two timers is a worse trade than the
+    // four lines below.
+    private readonly Dictionary<int, float> _slotFlash = new();   // slot -> a Source/Form was set
+    private readonly Dictionary<int, float> _bindFlash = new();   // slot -> a Vow was bound
+    private static readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
+    private double _lastTick;
+
+    /// <summary>Cues, host-fed like every other screen's.</summary>
+    public SoundBank? Sound { get; set; }
+
     public WeaveScreen(UiKit ui) => _ui = ui;
 
     public PlayerLoadout Loadout { get; set; } = PlayerLoadout.Starter();
@@ -214,7 +302,17 @@ public sealed class WeaveScreen
     // width exactly, which is also what makes the right margin equal the left.
     private static int PickPad => UiKit.PadX(PickPanel);
     private static int PickInner => PickPanel.Width - PickPad * 2;
-    private const int CellGap = 16, CellH = 104, CellRow = 116;
+    // 122, from 104. The strip of description that used to close this panel is gone — it is a hover
+    // card beside the cursor now (playtest 2026-08-28: "açıklamaların altta bir bölümde değil de
+    // seçeneğe hover yapılınca hover paneliyle çıkması") — and most of the height it was eating goes
+    // to the twelve cells that are the actual content of the panel.
+    //
+    // NOT ALL OF IT, and the arithmetic is written down because a first pass took 140 and silently
+    // lost the footer. The panel gives 728px between its body line (236) and its floor (964); the two
+    // grids cost 4*CellH plus two 16px gaps plus the 104px FORM heading block, and DrawSlotBanner
+    // needs ~80 under them. 4*122 + 154 + 80 = 722, which fits with six to spare. At 140 the grids
+    // alone reached 950 and the banner's own guard dropped it — dead space where the footer should be.
+    private const int CellGap = 16, CellH = 122, CellRow = CellH + CellGap;
     private static int CellW => (PickInner - CellGap * 2) / 3;
     private static int CellPitch => CellW + CellGap;
 
@@ -222,7 +320,7 @@ public sealed class WeaveScreen
     private static int SourceTop => UiKit.BodyTop(PickPanel);
 
     /// <summary>FORM's heading, a clear gap under the last SOURCE cell.</summary>
-    private static int FormTitleTop => SourceTop + CellRow + CellH + 40;
+    private static int FormTitleTop => SourceTop + CellRow + CellH + 34;
 
     /// <summary>FORM's first cell row — its heading and caption, on the same rhythm the panel's own use.</summary>
     private static int FormTop => FormTitleTop + (UiTypography.PanelBodyTop - UiTypography.PanelTitleTop);
@@ -284,11 +382,87 @@ public sealed class WeaveScreen
     private WeaveContext Context =>
         Hunter is { } h ? SoloBattle.DescribeBuild(Loadout.ToBuild(Tree, Mastery, Character), h) : WeaveContext.Empty;
 
-    public void Update(Point mouse, bool clicked, int wheel)
+    public void Update(Point mouse, bool clicked, bool held, int wheel)
     {
         var hit = Game1.ToOverlay(mouse);
         var skills = Loadout.Skills;
         var known = Known;
+
+        _carryAt = hit;
+        var released = _wasHeld && !held;
+        _wasHeld = held;
+
+        // A CARRY CANNOT OUTLIVE THE PRESS THAT STARTED IT. Update stops being called when the player
+        // navigates away, so a button released on another screen never reaches the release path below —
+        // and the carry would still be armed on the way back, resolving against wherever the cursor
+        // happened to land. Any frame with the button up and no release to handle clears it.
+        if (!held && !released && _carrying != Carry.None)
+        {
+            _carrying = Carry.None; _carryVowId = null; _carrySlot = -1; _carryMoved = false;
+        }
+        if (_carrying != Carry.None && held
+            && (Math.Abs(hit.X - _carryFrom.X) > DragSlop || Math.Abs(hit.Y - _carryFrom.Y) > DragSlop))
+            _carryMoved = true;
+
+        // ── A DRAG ENDS ─────────────────────────────────────────────────────────────────────────
+        //
+        // On RELEASE, and only a drag that actually moved is treated as one. A press that never left
+        // its slop radius already did its work through the click path below, so resolving it again
+        // here would bind twice — and, on the slot carry, would reorder on every ordinary click.
+        if (released && _carrying != Carry.None)
+        {
+            var carry = _carrying;
+            var vowId = _carryVowId;
+            var from = _carrySlot;
+            var moved = _carryMoved;
+            _carrying = Carry.None; _carryVowId = null; _carrySlot = -1; _carryMoved = false;
+
+            if (moved)
+            {
+                var onto = SlotUnder(hit);
+                if (carry == Carry.Vow && vowId is not null && onto >= 0)
+                {
+                    _slot = onto;
+                    _readingVowId = vowId;
+                    var already = skills[onto].VowId == vowId;
+                    if (!already && Loadout.SetVow(onto, vowId, known))
+                    {
+                        Dirty = true; _buildRev++;
+                        _bindFlash[onto] = BindFlashSeconds;
+                        Sound?.Play("sfx_bind", 0.55f);
+                        _msg = $"{(Weaving.ById(vowId)?.Name ?? "VOW").ToUpperInvariant()} BOUND TO SLOT {onto + 1}.";
+                    }
+                    else if (already) _msg = "ALREADY SWORN ON THAT SLOT.";
+                }
+                else if (carry == Carry.Slot && from >= 0 && onto >= 0 && Loadout.MoveSkill(from, onto))
+                {
+                    _slot = onto;
+                    Dirty = true; _buildRev++;
+                    _slotFlash[onto] = SetFlashSeconds;
+                    Sound?.Play("sfx_weave", 0.5f);
+                    // SLOT ORDER IS CAST PRIORITY, so the message names the consequence rather than
+                    // the gesture — "moved" would describe the mouse, not the build.
+                    _msg = onto == 0 ? "FIRST IN LINE — IT WINS EVERY TIED BEAT." : $"NOW SLOT {onto + 1}.";
+                }
+                return;
+            }
+
+            // A PRESS THAT NEVER MOVED IS THE CLICK IT ALWAYS WAS. Clicking the sworn Vow again
+            // breaks it: a Vow is a restriction, and the way out of a restriction should be the same
+            // control that put you in it.
+            if (carry == Carry.Vow && vowId is not null && _slot < skills.Count)
+            {
+                var v = Weaving.ById(vowId);
+                var already = skills[_slot].VowId == vowId;
+                if (v is not null && Loadout.SetVow(_slot, already ? null : vowId, known))
+                {
+                    Dirty = true; _buildRev++;
+                    _msg = already ? $"{v.Name.ToUpperInvariant()} BROKEN." : $"{v.Name.ToUpperInvariant()} SWORN.";
+                    if (!already) { _bindFlash[_slot] = BindFlashSeconds; Sound?.Play("sfx_bind", 0.55f); }
+                }
+                return;
+            }
+        }
 
         if (wheel != 0 && VowPanel.Contains(hit))
             _vowScroll = Math.Clamp(_vowScroll - wheel, 0, Math.Max(0, known.Count - VowRows));
@@ -309,7 +483,14 @@ public sealed class WeaveScreen
                 _msg = "SLOT UNWOVEN.";
                 return;
             }
-            if (SlotRow(i).Contains(hit)) { _slot = i; _msg = ""; return; }
+            if (SlotRow(i).Contains(hit))
+            {
+                _slot = i; _msg = "";
+                // ARMED, not acted on: if the cursor leaves the row while held this becomes a reorder,
+                // and if it does not, selecting the slot (already done) was the whole click.
+                _carrying = Carry.Slot; _carrySlot = i; _carryFrom = hit; _carryMoved = false;
+                return;
+            }
         }
 
         if (skills.Count < Loadout.SkillCapacity && AddBtn.Contains(hit))
@@ -354,10 +535,24 @@ public sealed class WeaveScreen
         if (_slot >= skills.Count) return;
 
         for (var i = 0; i < Sources.Length; i++)
-            if (SourceCell(i).Contains(hit)) { Loadout.SetSource(_slot, Sources[i]); Dirty = true; _buildRev++; return; }
+            if (SourceCell(i).Contains(hit))
+            {
+                var changed = skills[_slot].Source != Sources[i];
+                Loadout.SetSource(_slot, Sources[i]); Dirty = true; _buildRev++;
+                // ONLY WHEN IT CHANGED. Re-picking what is already picked is a no-op, and a flourish
+                // on a no-op teaches the player that the flourish means nothing.
+                if (changed) { _slotFlash[_slot] = SetFlashSeconds; Sound?.Play("sfx_weave", 0.45f); }
+                return;
+            }
 
         for (var i = 0; i < Forms.Length; i++)
-            if (FormCell(i).Contains(hit)) { Loadout.SetForm(_slot, Forms[i]); Dirty = true; _buildRev++; return; }
+            if (FormCell(i).Contains(hit))
+            {
+                var changed = skills[_slot].Form != Forms[i];
+                Loadout.SetForm(_slot, Forms[i]); Dirty = true; _buildRev++;
+                if (changed) { _slotFlash[_slot] = SetFlashSeconds; Sound?.Play("sfx_weave", 0.45f); }
+                return;
+            }
 
         for (var r = 0; r < VowRows; r++)
         {
@@ -365,14 +560,11 @@ public sealed class WeaveScreen
             if (idx >= known.Count || !VowRow(r).Contains(hit)) continue;
             var v = known[idx];
             _readingVowId = v.Id;
-            // Clicking the sworn Vow again breaks it. A Vow is a restriction, and the way out of a
-            // restriction should be the same control that put you in it.
-            var already = skills[_slot].VowId == v.Id;
-            if (Loadout.SetVow(_slot, already ? null : v.Id, known))
-            {
-                Dirty = true; _buildRev++;
-                _msg = already ? $"{v.Name.ToUpperInvariant()} BROKEN." : $"{v.Name.ToUpperInvariant()} SWORN.";
-            }
+            // THE SEAL IS PICKED UP, NOT PRESSED. Binding here as well as on release would bind twice
+            // on every drag: once to whichever slot happened to be selected when the press landed, and
+            // again to the slot the player actually dropped it on. A press that never moves is
+            // resolved by the release path below, which is where BOTH gestures now end.
+            _carrying = Carry.Vow; _carryVowId = v.Id; _carryFrom = hit; _carryMoved = false;
             return;
         }
 
@@ -405,6 +597,9 @@ public sealed class WeaveScreen
             _ui.TextCenterBig(b, "NO DISCIPLINE YET — A SPECIALISATION NODE ON THE MASTERY TREE (E) GIVES YOU ONE",
                               960, 108, Slate, UiTypography.Secondary);
 
+        TickEffects();
+        _card = null;
+
         DrawSlots(b, hit);
         DrawPicker(b, hit);
         DrawVows(b, hit);
@@ -422,6 +617,48 @@ public sealed class WeaveScreen
         }
 
         if (_msg.Length > 0) _ui.TextCenter(b, _msg, 960, 1016, Gold);
+
+        // LAST, AND IN THIS ORDER. The card explains a cell in the middle panel and must sit over the
+        // column beside it; the carried seal must sit over everything including the card, because it
+        // is attached to the cursor and anything drawn on top of it would look like the drop failed.
+        if (_carrying == Carry.None && _card is { } card) DrawCard(b, card.What, card.Cell);
+        DrawCarried(b);
+    }
+
+    /// <summary>What is in hand, under the cursor, while a drag is live.</summary>
+    /// <remarks>
+    /// Drawn only once the press has passed the slop radius: a ghost that appears on every click makes
+    /// the screen feel twitchy and tells the player they started something they did not.
+    /// </remarks>
+    private void DrawCarried(SpriteBatch b)
+    {
+        if (_carrying == Carry.None || !_carryMoved) return;
+        var p = _carryAt;
+
+        if (_carrying == Carry.Vow && Weaving.ById(_carryVowId) is { } v)
+        {
+            // A SEAL IN HAND. Round, waxy, and carrying its multiplier — the thing being pressed into
+            // the slot rather than a row torn out of a list.
+            var r = new Rectangle(p.X - 46, p.Y - 26, 92, 52);
+            _ui.Fill(b, new Rectangle(r.X + 4, r.Y + 5, r.Width, r.Height), new Color(0, 0, 0) * 0.45f);
+            _ui.Fill(b, r, new Color(0x2E, 0x1A, 0x22));
+            Outline(b, r, Gold, 2);
+            _ui.TextCenter(b, $"x{Weaving.VowMultiplier(v, WeavingTuning.Default):0.00}", r.Center.X, r.Y + 6, Gold);
+            _ui.TextCenter(b, _ui.ShortenBig("SEAL", r.Width - 10, UiTypography.Caption), r.Center.X, r.Y + 30, Bone);
+        }
+        else if (_carrying == Carry.Slot && _carrySlot >= 0 && _carrySlot < Loadout.Skills.Count)
+        {
+            var s = Loadout.Skills[_carrySlot];
+            var col = SourceColor.GetValueOrDefault(s.Source, Bone);
+            var r = new Rectangle(p.X - 90, p.Y - 22, 180, 44);
+            _ui.Fill(b, new Rectangle(r.X + 4, r.Y + 5, r.Width, r.Height), new Color(0, 0, 0) * 0.45f);
+            _ui.Fill(b, r, new Color(0x2C, 0x25, 0x44));
+            _ui.Fill(b, new Rectangle(r.X, r.Y, 5, r.Height), col);
+            Outline(b, r, Bone, 2);
+            if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } gem)
+                b.Draw(gem, new Rectangle(r.X + 10, r.Y + 6, 32, 32), Color.White);
+            _ui.Text(b, Fit($"{SourceName(s.Source)} {FormName(s.Form)}", 118), r.X + 50, r.Y + 14, Bone);
+        }
     }
 
     private void DrawSlots(SpriteBatch b, Point hit)
@@ -439,14 +676,67 @@ public sealed class WeaveScreen
             var on = i == _slot;
             var col = SourceColor.GetValueOrDefault(s.Source, Bone);
 
-            _ui.Fill(b, row, on ? new Color(0x2C, 0x25, 0x44) : Quiet);
-            _ui.Fill(b, new Rectangle(row.X, row.Y, 5, row.Height), col);
-            if (on) Outline(b, row, Bone, 2);
+            // ── THE ROW'S STATE, in the order it is painted: ground, drop light, edge. ──────────
+            var dropping = _carrying != Carry.None && _carryMoved && SlotUnder(_carryAt) == i
+                           && !(_carrying == Carry.Slot && _carrySlot == i);
+            var hovering = row.Contains(hit) && _carrying == Carry.None;
+            var inHand = _carrying == Carry.Slot && _carryMoved && _carrySlot == i;
 
+            _ui.Fill(b, row, on ? new Color(0x2C, 0x25, 0x44) : hovering ? new Color(0x1E, 0x18, 0x2C) : Quiet);
+
+            // A ROW THE SEAL IS OVER LIGHTS UP. Without it a drag is a ghost floating over an inert
+            // list and the player has to guess where it would land — which is the whole reason a
+            // list-and-click was not worth replacing with a drag in the first place.
+            if (dropping)
+            {
+                _ui.Fill(b, row, (_carrying == Carry.Vow ? Gold : col) * 0.16f);
+                Outline(b, row, _carrying == Carry.Vow ? Gold : Bone, 3);
+            }
+            // The row being carried stays in place but goes hollow, so the list still shows its length
+            // and the gap says where the thing came from.
+            if (inHand) _ui.Fill(b, row, new Color(0x0C, 0x09, 0x14) * 0.6f);
+
+            // THE NUMBERED SPINE. The order of this list IS the cast priority — SoloBattle takes the
+            // first READY skill in slot order, so slot 1 wins every tied beat — and the screen never
+            // said so. A 5px colour bar became a 22px spine carrying the number, which is also what
+            // makes dragging a row read as changing something rather than tidying a list.
+            var spine = new Rectangle(row.X, row.Y, 22, row.Height);
+            _ui.Fill(b, spine, col * (on ? 0.55f : 0.34f));
+            _ui.TextCenter(b, $"{i + 1}", spine.Center.X, row.Y + 26, on ? Bone : Bone * 0.75f);
+            if (on && !dropping) Outline(b, row, Bone, 2);
+
+            // ── THE FLOURISHES. A pick pulses the row's own colour; a bind presses a gold seal. ──
+            if (_slotFlash.TryGetValue(i, out var sf))
+            {
+                var t = Math.Clamp(sf / SetFlashSeconds, 0f, 1f);
+                _ui.Fill(b, row, col * (0.30f * t));
+                _ui.Fill(b, new Rectangle(row.X, row.Y, row.Width, 3), col * t);
+            }
+            if (_bindFlash.TryGetValue(i, out var bf))
+            {
+                var t = Math.Clamp(bf / BindFlashSeconds, 0f, 1f);
+                // Two moves in one: the plate flashes gold and a ring closes inward on the medallion,
+                // which is the seal being pressed rather than a light being switched on.
+                _ui.Fill(b, row, Gold * (0.26f * t));
+                Outline(b, row, Gold * t, 3);
+                var grow = (int)(30f * t);
+                var c = new Point(row.X + 44, row.Y + 38);
+                Outline(b, new Rectangle(c.X - 24 - grow, c.Y - 24 - grow, 48 + grow * 2, 48 + grow * 2),
+                        Gold * (t * t), 2);
+            }
+
+            // THE PAIR, AS TWO GLYPHS. The Form used to live only in the name, so a list of four skills
+            // was four gems and a wall of words — and the Form is the half that says what the skill DOES.
             if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } gem)
-                b.Draw(gem, new Rectangle(row.X + 16, row.Y + 10, 56, 56), Color.White);
+                b.Draw(gem, new Rectangle(row.X + 28, row.Y + 12, 52, 52), Color.White);
+            // BESIDE THE GEM, NOT ON IT. A 26px badge tucked into the gem's corner drew the Strike
+            // sword as a two-pixel sliver against the gem's own ornament — unreadable, and worse than
+            // nothing because it looked like an artefact. It gets its own square and its own ground.
+            var fbox = new Rectangle(row.X + 88, row.Y + 20, 38, 38);
+            _ui.Fill(b, fbox, new Color(0x0C, 0x09, 0x14) * 0.55f);
+            _ui.Icon(b, $"icon_form_{s.Form.ToString().ToLowerInvariant()}", fbox, col);
 
-            _ui.TextBig(b, Fit($"{SourceName(s.Source)} {FormName(s.Form)}", 196), row.X + 88, row.Y + 8, Bone, UiTypography.Body);
+            _ui.TextBig(b, Fit($"{SourceName(s.Source)} {FormName(s.Form)}", 158), row.X + 134, row.Y + 8, Bone, UiTypography.Body);
 
             // The hexagon's verdict on this woven skill — and the Vow buy-back drawn as the LIFT it
             // is ("x0.45→x0.75"), so swearing a Vow on an off-discipline skill visibly pays.
@@ -455,9 +745,10 @@ public sealed class WeaveScreen
                 var baseF = FormBehaviour.AffinityFactor(dd, s.Form);
                 var vowF = FormBehaviour.AffinityFactor(dd, s.Form, vowSworn: s.VowId is not null);
                 var lifted = vowF > baseF + 0.001f;
-                var tag = lifted ? $"x{baseF:0.0#}→x{vowF:0.0#}" : $"x{vowF:0.0#}";
-                var tc = vowF >= 1.99f ? Gold : lifted ? Met : vowF >= 1.14f ? Met : vowF >= 0.74f ? Slate : Ember;
-                _ui.TextRight(b, tag, row.Right - 50, row.Y + 10, tc);
+                var boughtUp = vowF > baseF + 0.001f;
+                var tag = boughtUp ? $"x{baseF:0.0#}→x{vowF:0.0#}" : $"x{vowF:0.0#}";
+                var tc = vowF >= 1.99f ? Gold : boughtUp ? Met : vowF >= 1.14f ? Met : vowF >= 0.74f ? Slate : Ember;
+                _ui.TextRight(b, tag, row.Right - 50, row.Y + 32, tc);
             }
 
             // The Vow line carries its VERDICT, not just its name. "SWORN" on a Vow that pays nothing
@@ -472,14 +763,26 @@ public sealed class WeaveScreen
                 _ui.TextCenter(b, "\u00d7", x.Center.X, x.Y + 6, x.Contains(hit) ? Ember : Slate);
             }
 
+            // THE VOW LINE IS A SOCKET NOW. Empty, it says what to do with it rather than merely
+            // reporting an absence — "NO VOW" named the state and left the player to discover that a
+            // seal from the right-hand column can be dropped here.
             var vow = Weaving.ById(s.VowId);
+            var seal = new Rectangle(row.X + 134, row.Y + 44, row.Width - 134 - 14, 24);
             if (vow is null)
-                _ui.Text(b, "NO VOW", row.X + 88, row.Y + 42, Slate);
+            {
+                _ui.Fill(b, seal, new Color(0x0E, 0x0B, 0x16) * 0.7f);
+                Outline(b, seal, dropping && _carrying == Carry.Vow ? Gold : Dim, 1);
+                _ui.Text(b, dropping && _carrying == Carry.Vow ? "BIND IT HERE" : "EMPTY VOW SOCKET",
+                         seal.X + 8, seal.Y + 4, dropping && _carrying == Carry.Vow ? Gold : Dim);
+            }
             else
             {
                 var live = Weaving.IsActive(vow, ctx);
-                _ui.Text(b, Fit(vow.Short.ToUpperInvariant(), 190), row.X + 88, row.Y + 42, live ? Gold : Slate);
-                _ui.TextRight(b, live ? "MET" : "UNMET", row.Right - 14, row.Y + 42, live ? Met : Ember);
+                _ui.Fill(b, seal, (live ? Gold : Slate) * 0.13f);
+                _ui.Fill(b, new Rectangle(seal.X, seal.Y, 3, seal.Height), live ? Gold : Ember);
+                _ui.Text(b, Fit(vow.Short.ToUpperInvariant(), seal.Width - 66), seal.X + 10, seal.Y + 4,
+                         live ? Gold : Slate);
+                _ui.TextRight(b, live ? "MET" : "UNMET", seal.Right - 6, seal.Y + 4, live ? Met : Ember);
             }
         }
 
@@ -725,15 +1028,22 @@ public sealed class WeaveScreen
         {
             var cell = SourceCell(i);
             var s = Sources[i];
-            if (cell.Contains(hit)) hoverSource = s;
+            var over = cell.Contains(hit);
+            if (over) hoverSource = s;
             var on = cur.Source == s;
             var col = SourceColor.GetValueOrDefault(s, Bone);
-            _ui.Fill(b, cell, on ? new Color(0x2C, 0x25, 0x44) : Quiet);
-            Outline(b, cell, on ? Bone : cell.Contains(hit) ? col : Dim, on ? 3 : 2);
+            PickCell(b, cell, on, over, col);
+            // THE GEM SITS IN ITS OWN LIGHT. A source-tinted halo behind the art gives the six cells
+            // their identity at a glance — the icons are close in silhouette and were reading as one
+            // grey grid until the colour was doing something other than labelling the caption.
+            var art = new Rectangle(cell.Center.X - 36, cell.Y + 16, 72, 72);
+            _ui.Diamond(b, new Rectangle(art.X - 6, art.Y - 6, art.Width + 12, art.Height + 12),
+                        col * (on ? 0.34f : over ? 0.22f : 0.10f));
             if (_ui.Assets.Get($"source_{s.ToString().ToLowerInvariant()}") is { } gem)
-                b.Draw(gem, new Rectangle(cell.Center.X - 28, cell.Y + 8, 56, 56), Color.White);
-            else _ui.Diamond(b, new Rectangle(cell.Center.X - 24, cell.Y + 16, 48, 48), col);
-            _ui.TextCenterBig(b, SourceName(s), cell.Center.X, cell.Bottom - 24, on ? Bone : col, UiTypography.Secondary);
+                b.Draw(gem, art, on || over ? Color.White : Color.White * 0.72f);
+            else _ui.Diamond(b, art, col);
+            _ui.TextCenterBig(b, SourceName(s), cell.Center.X, cell.Bottom - 34,
+                              on ? Bone : over ? col : col * 0.85f, UiTypography.Body);
         }
 
         _ui.TextCenterBig(b, "FORM", PickPanel.Center.X, FormTitleTop, Gold, UiTypography.PanelTitle);
@@ -741,25 +1051,30 @@ public sealed class WeaveScreen
 
         var wanted = GearWants();
 
+        var slotCol = SourceColor.GetValueOrDefault(cur.Source, Bone);
+
         for (var i = 0; i < Forms.Length; i++)
         {
             var cell = FormCell(i);
             var f = Forms[i];
-            if (cell.Contains(hit)) hoverForm = f;
+            var over = cell.Contains(hit);
+            if (over) hoverForm = f;
             var on = cur.Form == f;
-            var tint = on ? Bone : Slate;
-            _ui.Fill(b, cell, on ? new Color(0x2C, 0x25, 0x44) : Quiet);
-            Outline(b, cell, on ? Bone : cell.Contains(hit) ? Gold : Dim, on ? 3 : 2);
+            PickCell(b, cell, on, over, slotCol);
+
             // Tinted by the slot's SOURCE, so the picker previews the pairing rather than showing six
             // grey shapes — the skill you are building is a Source AND a Form, never either alone.
-            var glyphTint = on ? SourceColor.GetValueOrDefault(cur.Source, Bone) : Slate;
-            if (!_ui.Icon(b, $"icon_form_{f.ToString().ToLowerInvariant()}",
-                          new Rectangle(cell.Center.X - 26, cell.Y + 8, 52, 52), glyphTint))
-                _ui.Diamond(b, new Rectangle(cell.Center.X - 20, cell.Y + 18, 40, 40), glyphTint);
-            _ui.TextCenterBig(b, FormName(f), cell.Center.X, cell.Bottom - 24, tint, UiTypography.Secondary);
+            var glyphTint = on ? slotCol : over ? Bone : Slate;
+            var art = new Rectangle(cell.Center.X - 34, cell.Y + 18, 68, 68);
+            if (on) _ui.Diamond(b, new Rectangle(art.X - 6, art.Y - 6, art.Width + 12, art.Height + 12), slotCol * 0.28f);
+            if (!_ui.Icon(b, $"icon_form_{f.ToString().ToLowerInvariant()}", art, glyphTint))
+                _ui.Diamond(b, new Rectangle(cell.Center.X - 24, cell.Y + 26, 48, 48), glyphTint);
+            _ui.TextCenterBig(b, FormName(f), cell.Center.X, cell.Bottom - 34,
+                              on ? Bone : over ? Bone : Slate, UiTypography.Body);
 
             // THE HEXAGON'S VERDICT on this Form for YOUR discipline, on the cell itself — the picker
-            // teaches the class while you choose. Gold edge on your own Form.
+            // teaches the class while you choose. A CHIP now rather than loose text: at 140px tall the
+            // cell has room for the number to be readable instead of tucked into a corner.
             if (Discipline is { } dpick)
             {
                 var factor = FormBehaviour.AffinityFactor(dpick, f);
@@ -767,22 +1082,83 @@ public sealed class WeaveScreen
                     : factor >= 1.14f ? ("x1.15", Met)
                     : factor >= 0.74f ? ("x0.75", Slate)
                     : ("x0.45", Ember);
-                _ui.Text(b, aTag, cell.X + 8, cell.Y + 8, aCol);
+                var chip = new Rectangle(cell.X + 8, cell.Y + 8, 54, 22);
+                _ui.Fill(b, chip, new Color(0x0C, 0x09, 0x14) * 0.85f);
+                _ui.Fill(b, new Rectangle(chip.X, chip.Bottom - 2, chip.Width, 2), aCol * 0.9f);
+                _ui.TextCenter(b, aTag, chip.Center.X, chip.Y + 4, aCol);
                 if (factor >= 1.99f && !on) Outline(b, cell, Gold, 2);
             }
 
-            // YOUR GEAR IS WAITING FOR THIS ONE. A small mark rather than a line of text: the cell is
-            // 130px wide and the point is to draw the eye, not to explain here — the readout panel
-            // spells out which item and which enchantment.
+            // YOUR GEAR IS WAITING FOR THIS ONE. A small mark rather than a line of text: the point is
+            // to draw the eye, not to explain here — the hover card spells out which item wants it.
             if (wanted.Any(w => w.Form == f))
-            {
-                var dot = new Rectangle(cell.Right - 22, cell.Y + 10, 12, 12);
-                _ui.Fill(b, dot, Met);
-            }
+                _ui.Fill(b, new Rectangle(cell.Right - 24, cell.Y + 12, 12, 12), Met);
         }
 
-        DrawExplainer(b, ReadingFor(hit, cur, hoverSource, hoverForm));
+        DrawSlotBanner(b, cur);
         DrawReadout(b, hoverSource, hoverForm);
+
+        // THE CARD IS NOT DRAWN HERE. It has to sit over the panels beside it, and this method runs
+        // before them — Draw renders it last. Recorded, not rendered.
+        if (hoverSource is not null || hoverForm is not null)
+        {
+            // ANCHORED TO THE CELL, not to the cursor. A card at cursor+28 lands ON the option it is
+            // explaining — the capture showed it covering PROJECTILE's own label while describing it.
+            var cell = hoverForm is { } hf
+                ? FormCell(Array.IndexOf(Forms, hf))
+                : SourceCell(Array.IndexOf(Sources, hoverSource!.Value));
+            _card = (ReadingFor(hit, cur, hoverSource, hoverForm), cell);
+        }
+    }
+
+    /// <summary>
+    /// One pick cell's plate: its ground, its edge, and the lift a hovered cell gets.
+    /// </summary>
+    /// <remarks>
+    /// Shared by both grids so SOURCE and FORM cannot drift apart, which they had: the Source grid
+    /// outlined its hover in the source's own colour and the Form grid in gold, so the same gesture
+    /// looked like two different affordances on one panel.
+    /// </remarks>
+    private void PickCell(SpriteBatch b, Rectangle cell, bool on, bool over, Color accent)
+    {
+        _ui.Fill(b, cell, on ? new Color(0x2C, 0x25, 0x44) : over ? new Color(0x1E, 0x18, 0x2C) : Quiet);
+        // A SELECTED CELL IS LIT FROM ITS TOP EDGE — the same language the slot rows and the vow seals
+        // use for "this is the one", so the three panels read as one screen.
+        if (on) _ui.Fill(b, new Rectangle(cell.X, cell.Y, cell.Width, 3), accent);
+        Outline(b, cell, on ? Bone : over ? accent : Dim, on ? 3 : 2);
+    }
+
+    /// <summary>
+    /// What you are editing, across the foot of the picker: the pair as one thing.
+    /// </summary>
+    /// <remarks>
+    /// The description strip that used to close this panel became a hover card, and leaving the space
+    /// empty would have been the wrong trade — a panel of twelve options needs to say which slot the
+    /// next click lands on. This says it in the game's own terms (the Source gem, the Form glyph, the
+    /// composed name), so the answer is a picture rather than a sentence.
+    /// </remarks>
+    private void DrawSlotBanner(SpriteBatch b, PlayerLoadout.SkillChoice cur)
+    {
+        var x = UiKit.ContentLeft(PickPanel);
+        var w = PickPanel.Width - UiKit.PadX(PickPanel) * 2;
+        var top = FormCell(Forms.Length - 1).Bottom + 18;
+        var r = new Rectangle(x, top, w, Math.Max(0, PickPanel.Bottom - 30 - top));
+        if (r.Height < 40) return;
+
+        var col = SourceColor.GetValueOrDefault(cur.Source, Bone);
+        _ui.Fill(b, r, new Color(0x11, 0x0D, 0x1A, 0xE0));
+        _ui.Fill(b, new Rectangle(r.X, r.Y, 4, r.Height), col);
+
+        var mid = r.Y + r.Height / 2;
+        if (_ui.Assets.Get($"source_{cur.Source.ToString().ToLowerInvariant()}") is { } gem)
+            b.Draw(gem, new Rectangle(r.X + 16, mid - 24, 48, 48), Color.White);
+        _ui.Icon(b, $"icon_form_{cur.Form.ToString().ToLowerInvariant()}",
+                 new Rectangle(r.X + 72, mid - 22, 44, 44), col);
+
+        _ui.TextBig(b, $"SLOT {_slot + 1}", r.X + 130, mid - 26, Slate, UiTypography.Caption);
+        _ui.TextBig(b, $"{SourceName(cur.Source)} {FormName(cur.Form)}", r.X + 130, mid - 6, Bone, UiTypography.Body);
+        _ui.TextRight(b, cur.VowId is null ? "NO VOW" : (Weaving.ById(cur.VowId)?.Name ?? "").ToUpperInvariant(),
+                      r.Right - 16, mid - 6, cur.VowId is null ? Dim : Gold);
     }
 
     /// <summary>One title line and one paragraph — everything the strip under the picker ever says.</summary>
@@ -859,33 +1235,55 @@ public sealed class WeaveScreen
     /// lie behind on this panel. WHICH of those strings the strip shows is decided in one place, and
     /// this is not it: see <see cref="ReadingFor"/>.
     /// </remarks>
-    private void DrawExplainer(SpriteBatch b, Explanation what)
+    /// <summary>The explanation card and where the cursor was, recorded by the picker for Draw.</summary>
+    private (Explanation What, Rectangle Cell)? _card;
+
+    /// <summary>
+    /// The hovered option's explanation, on a card beside the cursor.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This replaces a strip across the foot of the picker (playtest 2026-08-28: "açıklamaların altta
+    /// bir bölümde değil de seçeneğe hover yapılınca hover paneliyle çıkması"). The strip had the
+    /// reader looking 400px away from the thing they were asking about, and it cost the panel the
+    /// height that now belongs to the cells.
+    /// </para>
+    /// <para>
+    /// Its own drawing rather than <see cref="UiKit.HoverTip"/>: this card carries a TITLE as well as a
+    /// paragraph, and the title is the half that says which of twelve options is being explained.
+    /// Flipped away from the screen edges the same way, so a card on the last column is never clipped.
+    /// </para>
+    /// <para>
+    /// NOTHING IS HOVER-ONLY HERE, which the project forbids. Every cell still carries its name, its
+    /// affinity chip and its gear mark, the foot of the panel names the slot being edited, and the
+    /// left column's readout answers "is this better than what I have" without a cursor. The card is
+    /// the long form, not the only form.
+    /// </para>
+    /// </remarks>
+    private void DrawCard(SpriteBatch b, Explanation what, Rectangle cell)
     {
-        var x = UiKit.ContentLeft(PickPanel);
-        var width = PickPanel.Width - UiKit.PadX(PickPanel) * 2;
+        const int width = 460, pad = 16;
+        var lines = _ui.WrapBig(what.Body, width - pad * 2, UiTypography.Secondary);
+        var h = pad * 2 + 30 + lines.Count * 21;
 
-        // ANCHORED TO THE LAST CELL, not to a measured-once offset. The first version used
-        // PickPanel.Y + 626 and drew straight over the second row of Form cells — the panel's contents
-        // move when a row is added or a cell is resized, and a magic number does not move with them.
-        var top = FormCell(Forms.Length - 1).Bottom + 16;
-        var y = top;
-        var floor = PickPanel.Bottom - 26;
+        // BESIDE THE PANEL, level with the row being asked about. Anchoring to the cell's own right
+        // edge would still overlap the two cells beside it, and the grid is what the player is
+        // reading — so the card clears the whole picker and lines up with the cell instead.
+        var x = PickPanel.Right + 12;
+        if (x + width > 1908) x = PickPanel.X - width - 12;
+        var y = Math.Clamp(cell.Center.Y - h / 2, 12, 1068 - h);
 
-        _ui.Fill(b, new Rectangle(x - 10, top - 10, width + 20, PickPanel.Bottom - top - 16), Quiet);
+        _ui.Fill(b, new Rectangle(x + 5, y + 6, width, h), new Color(0, 0, 0) * 0.5f);
+        _ui.Fill(b, new Rectangle(x, y, width, h), new Color(0x15, 0x10, 0x22));
+        Outline(b, new Rectangle(x, y, width, h), new Color(0x3A, 0x30, 0x50), 2);
+        // The accent bar carries the same colour language as the cell it came from: gold for the thing
+        // you have chosen, bone for one you are only asking about.
+        _ui.Fill(b, new Rectangle(x, y, width, 3), what.IsSelection ? Gold : Bone * 0.7f);
 
-        // ONE LINE, ALWAYS. A title allowed to wrap would push the paragraph down out of the strip,
-        // which is the overflow this whole reading exists to stop.
-        _ui.TextBig(b, FitBig(what.Title, width, UiTypography.Body), x, y,
+        _ui.TextBig(b, FitBig(what.Title, width - pad * 2, UiTypography.Body), x + pad, y + pad,
                     what.IsSelection ? Gold : Bone, UiTypography.Body);
-        y += 26;
-
-        foreach (var line in _ui.WrapBig(what.Body, width, UiTypography.Secondary))
-        {
-            // BOUNDED, so a longer entry than any in the catalogue today cannot draw on the frame art.
-            if (y + 20 > floor) { _ui.TextBig(b, "…", x, y, Bone, UiTypography.Secondary); break; }
-            _ui.TextBig(b, line, x, y, Bone, UiTypography.Secondary);
-            y += 20;
-        }
+        var ty = y + pad + 30;
+        foreach (var line in lines) { _ui.TextBig(b, line, x + pad, ty, Bone, UiTypography.Secondary); ty += 21; }
     }
 
     /// <summary>
@@ -941,23 +1339,46 @@ public sealed class WeaveScreen
             var live = Weaving.IsActive(v, ctx);
             var hover = row.Contains(hit);
 
-            _ui.Fill(b, row, on ? new Color(0x2C, 0x25, 0x44) : hover ? new Color(0x1E, 0x18, 0x2C) : Quiet);
-            _ui.Fill(b, new Rectangle(row.X, row.Y, 5, row.Height), live ? Met : Ember);
-            if (on) Outline(b, row, Gold, 2);
+            // ── A SEAL, NOT A LIST ROW ──────────────────────────────────────────────────────────
+            //
+            // Playtest 2026-08-28: the column read as "düz sıralı, tıkladım eklendi" — a settings list.
+            // A Vow is bound TO A SKILL (SkillChoice carries the id), so it is drawn as something you
+            // could pick up and press into a slot: a wax medallion carrying the price, the name beside
+            // it, and the demand underneath as the condition written on the seal.
+            var carried = _carrying == Carry.Vow && _carryMoved && _carryVowId == v.Id;
 
-            // The right-hand 120px belongs to the verdict and the multiplier. The demand is truncated
-            // to what is left rather than allowed to run under them — a demand line that reads
-            // "EVERY SKILL THE SAME SOURCUNMET" is worse than one that is short.
-            const int verdict = 124;
-            _ui.TextBig(b, v.Name.ToUpperInvariant(), row.X + 18, row.Y + 8, on ? Gold : Bone, UiTypography.Body);
-            _ui.Text(b, Fit(DemandText(v), row.Width - 32 - verdict), row.X + 18, row.Y + 40, live ? Met : Slate);
-            // SLATE, NOT DIM, WHEN UNMET. Dim on this row plate measures ~1.6:1, so the payoff — the
-            // number the whole Vow is offering you — was the hardest thing on the row to read, and it is
-            // hardest exactly when the player is deciding whether to chase it. Gold-when-live against
-            // slate-when-not is still an unmistakable two-state.
-            _ui.TextRight(b, $"x{Weaving.VowMultiplier(v, WeavingTuning.Default):0.00}",
-                          row.Right - 16, row.Y + 8, live ? Gold : Slate);
-            _ui.TextRight(b, live ? "MET" : "UNMET", row.Right - 16, row.Y + 40, live ? Met : Ember);
+            _ui.Fill(b, row, on ? new Color(0x2C, 0x25, 0x44) : hover ? new Color(0x1E, 0x18, 0x2C) : Quiet);
+            if (carried) _ui.Fill(b, row, new Color(0x0C, 0x09, 0x14) * 0.55f);   // it is in your hand
+            if (on) Outline(b, row, Gold, 2);
+            else if (hover) Outline(b, row, Bone * 0.55f, 1);
+
+            // THE MEDALLION carries the multiplier, because the price is what a player is shopping for
+            // and it was the smallest thing on the row. Its ring is the verdict: gold while the demand
+            // holds, ember while it does not.
+            // A RING OF WAX, not a boxed icon. A rectangle outline around a diamond reads as a frame
+            // holding a shape — two silhouettes arguing. Two diamonds, the outer one the verdict's
+            // colour and the inner one the panel's own dark, give the medallion a single edge.
+            var med = new Rectangle(row.X + 10, row.Y + 11, 48, 48);
+            _ui.Diamond(b, med, (live ? Gold : Ember) * (on ? 0.85f : 0.55f));
+            _ui.Diamond(b, new Rectangle(med.X + 5, med.Y + 5, med.Width - 10, med.Height - 10),
+                        new Color(0x16, 0x11, 0x22));
+            _ui.TextCenter(b, $"x{Weaving.VowMultiplier(v, WeavingTuning.Default):0.00}",
+                           med.Center.X, med.Y + 16, live ? Gold : Slate);
+
+            const int verdict = 74;
+            var tx = row.X + 70;
+            _ui.TextBig(b, Fit(v.Name.ToUpperInvariant(), row.Width - 70 - verdict - 18), tx, row.Y + 10,
+                        on ? Gold : Bone, UiTypography.Body);
+            // SLATE, NOT DIM, WHEN UNMET. Dim on this row plate measures ~1.6:1, so the demand — the
+            // thing the player is deciding whether to chase — was hardest to read exactly when it
+            // mattered most. Gold-when-live against slate-when-not is still an unmistakable two-state.
+            _ui.Text(b, Fit(DemandText(v), row.Width - 70 - verdict - 18), tx, row.Y + 42, live ? Met : Slate);
+            _ui.TextRight(b, live ? "MET" : "UNMET", row.Right - 14, row.Y + 42, live ? Met : Ember);
+
+            // WHAT TO DO WITH IT, on the row the cursor is on. The gesture is new, so it is taught
+            // where it is used rather than in a legend nobody reads.
+            if (on) _ui.TextRight(b, "SWORN", row.Right - 14, row.Y + 12, Gold);
+            else if (hover) _ui.TextRight(b, "DRAG TO A SLOT", row.Right - 14, row.Y + 12, Slate);
         }
 
         if (known.Count > VowRows)

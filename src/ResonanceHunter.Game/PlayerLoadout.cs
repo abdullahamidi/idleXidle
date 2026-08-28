@@ -85,6 +85,28 @@ public sealed class PlayerLoadout
         if (slot >= 0 && slot < _skills.Count) _skills.RemoveAt(slot);
     }
 
+    /// <summary>
+    /// Move a woven skill to another position in the list. Returns false when nothing moved.
+    /// </summary>
+    /// <remarks>
+    /// SLOT ORDER IS A REAL DECISION, not presentation, which is why this exists at all. The champion
+    /// takes ONE action per beat and picks the first READY skill in slot order
+    /// (<c>SoloBattle.ResolveWave</c>: "a ready skill that loses the beat to an earlier slot stays ready
+    /// and takes the next"), so the top of this list is the skill that wins ties. Until 2026-08-28 the
+    /// only way to reorder was to unweave and re-weave everything below, which is why the priority read
+    /// as something the game did to you rather than something you set.
+    /// </remarks>
+    public bool MoveSkill(int from, int to)
+    {
+        if (!InRange(from)) return false;
+        to = Math.Clamp(to, 0, _skills.Count - 1);
+        if (from == to) return false;
+        var s = _skills[from];
+        _skills.RemoveAt(from);
+        _skills.Insert(to, s);
+        return true;
+    }
+
     public void CycleSource(int slot, int dir)
     {
         if (!InRange(slot)) return;
