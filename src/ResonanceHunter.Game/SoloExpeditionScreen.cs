@@ -146,10 +146,23 @@ public sealed class SoloExpeditionScreen
     // strip has no such slack — the generated frames are trimmed to their content, so the character
     // renders at exactly the box height and the champion suddenly stood a head taller than before,
     // dominating a stage it shares with enemies less than half that size.
-    private static readonly Rectangle ChampBox = new(700 - 200, GroundY - 430, 400, 430);   // 760 → 700 (2026-08-28: "the champion a little left")
+    // THE LEFT LIMIT IS MEASURED, NOT CHOSEN — 755, and it may not go lower without cutting the figure.
+    // The champion is drawn from a SQUARE frame scaled to the box's HEIGHT, so the widest pose in the
+    // roster covers 518 px at a 430-tall box (UiKit.SidePadFraction already trims the empty margin off
+    // that; before it, the same pose claimed 557). The arena's scissor starts at x=492, so a centre below
+    // 492 + 259 = 751 puts the cloak outside the clip and it comes off against a straight vertical edge.
+    //
+    // That is exactly what had happened: 760 was right, an earlier pass moved it to 700 for "the champion
+    // a little left", and the designer then reported the symptom without the cause — "kutucuğun sağ kenarı
+    // ... spriteyi kesiyor" and "karakteri de biraz sola al" in the same message. The two asks are the same
+    // pixel: moving left IS the cutting. So the champion goes back inside the limit and the SEPARATION the
+    // designer wanted comes from the pack instead, which has room to move right and does.
+    private static readonly Rectangle ChampBox = new(755 - 200, GroundY - 430, 400, 430);
     // Rev 3 §16.1: one normal enemy bottom-centred at (1160,735), visible ~320px (range 280–360). A boss is
     // drawn far larger from its own anchor (see the draw), so this box is the NORMAL-enemy size only.
-    private static readonly Rectangle EnemyBox = new(1380 - 218, GroundY - 440, 436, 440);   // 1320 → 1380 ("the enemies a little right")
+    // 1320 -> 1380 -> 1430. The pack carries the separation the designer asked for, because the champion
+    // could not: see the measured left limit above.
+    private static readonly Rectangle EnemyBox = new(1430 - 218, GroundY - 440, 436, 440);
 
     /// <summary>
     /// Does the champion need mirroring to face the enemies?
@@ -444,7 +457,11 @@ public sealed class SoloExpeditionScreen
     /// <summary>The authored clip length in replay ms at speed 1 — eight frames at the champion's rate.</summary>
     private const float ClipMs = 1000f * 8f / ChampionFps;
     /// <summary>The fastest a clip may be run to catch a beat. Past this the swing lands a beat late rather than blurring.</summary>
-    private const float MaxClipSpeed = 2.5f;
+    // 1.5, from 2.5. This is the ceiling on catching up when the champion came free INSIDE the window
+    // before a beat: at 2.5 the eight frames of a clip played in under half a second and the designer read
+    // it as dropped frames rather than as haste. Past this the contact lands a little late instead, which
+    // reads as a heavy blow — the trade the comment on UpdateChampionClip always intended.
+    private const float MaxClipSpeed = 1.5f;
     private float _enemyBaseHealth = 120f, _enemyBaseDamage = 9f;
     private WaveOutcome _outcome = WaveOutcome.Cleared;
 
@@ -1324,13 +1341,19 @@ public sealed class SoloExpeditionScreen
                 _vfx.Play(FxFor(Form.Strike), tx, ty, scale: EnemyScale(target, 1.25f), fps: 12f, tint: glow);
                 break;
             case Form.Projectile:
-                // The bolt flies left-to-right inside its own frame, so it is centred between the two figures.
-                // SCALED TO THE GAP IT CROSSES, not to the creature it hits: a Swarm creature used to
-                // get a 208 px bolt and a boss a 520 px one for the same flight. And 8 fps, not 14 —
-                // only the strip's first three frames carry the streak (measured coverage 5/11/9% then
-                // under 2%), so at 14 fps the bolt was over in 214 ms (review 2026-08-30).
-                _vfx.Play(FxFor(Form.Projectile), (ChampBox.Right + tx) / 2, ty,
-                          scale: Math.Clamp((tx - ChampBox.Right) / 104, 2, 5), fps: 8f, tint: glow);
+                // IT CROSSES THE GAP. It used to be played at the midpoint between the two figures and
+                // simply appear there — "projectile efektlerinin gitme animasyonu yok, direkt düşmanın
+                // üstünde çıkıyor" (2026-08-28). The strip itself is authored as an in-place spin, which
+                // is right and stays: only the renderer knows where the champion's hand and the target
+                // are this frame, so the renderer flies it (VfxPlayer's ToX/ToY, eased out).
+                //
+                // From the champion's near shoulder to the creature, and SCALED TO THE GAP it crosses
+                // rather than to the creature it hits — a Swarm creature used to get a 208 px bolt and a
+                // boss a 520 px one for the same flight. 8 fps, not 14: only the strip's first frames
+                // carry the streak, so at 14 fps the bolt was over in 214 ms.
+                _vfx.Play(FxFor(Form.Projectile), ChampBox.Right - 40, ChampBox.Center.Y + 30,
+                          scale: Math.Clamp((tx - ChampBox.Right) / 104, 2, 5), fps: 8f, tint: glow,
+                          toX: tx, toY: ty);
                 break;
             case Form.Aura:
                 _vfx.Play(FxFor(Form.Aura), ChampBox.Center.X, ChampBox.Center.Y + 20, scale: 3, fps: 12f, tint: glow);
@@ -3148,7 +3171,7 @@ public sealed class SoloExpeditionScreen
         // held frame is the pose the action ends in; without it the cut to idle was the "did it finish?"
         // the playtest could not read) — or the playhead is BEHIND the clip's start (a rewound fixture),
         // which would run it backwards; either way the commitment is over.
-        if (_clipName is not null && (_playheadMs >= _clipStartMs + ClipMs / _clipSpeed + ClipSettleMs || _playheadMs < _clipStartMs))
+        if (_clipName is not null && (_playheadMs >= _clipStartMs + ClipMs / _clipSpeed + SettleMs || _playheadMs < _clipStartMs))
         {
             _clipName = null;
             _idleFrom = _anim;   // the idle picks up from ITS first frame, not from a random loop phase
@@ -3187,7 +3210,7 @@ public sealed class SoloExpeditionScreen
         if (beatMs is null && _replay.LastTrapBefore(_playheadMs) is { } trapMs
             && _playheadMs - trapMs < TrapClipGraceMs)
         {
-            _clipSpeed = Math.Max(0.6f, ClipMs / (_beatMs * FormBehaviour.ClipShareOfBeat));
+            _clipSpeed = Math.Max(0.6f, ClipMs / (_beatMs * FormBehaviour.SkillClipShareOfBeat));
             _clipStartMs = trapMs;
             _clipName = "trap";
             return;
@@ -3198,7 +3221,13 @@ public sealed class SoloExpeditionScreen
         // EVERY action fills its share of the BEAT (FormBehaviour.ClipShareOfBeat): the sim acts on the
         // beat and only on it, so a clip sized to 0.65 of a beat — plus its settle — is always over
         // before the next action's clip may start, and a fast build visibly fights fast.
-        var baseSpeed = Math.Max(0.6f, ClipMs / (_beatMs * FormBehaviour.ClipShareOfBeat));
+        // A CAST IS NOT A SWING. Both used to take the same share of the beat, so TEMPO hurried them
+        // equally and a fast build ran eight frames of a Transformation past the eye — "frame atlıyormuş
+        // gibi". The swing keeps the beat-scaled share (so Tempo is felt ON THE SWING, which is what the
+        // designer asked for) and now takes LESS of it, leaving more beat standing after it; a cast takes
+        // more, so it plays close to its authored second.
+        var share = clip == "attack" ? FormBehaviour.ClipShareOfBeat : FormBehaviour.SkillClipShareOfBeat;
+        var baseSpeed = Math.Max(0.6f, ClipMs / (_beatMs * share));
         var contactMs = ClipMs * ContactFraction / baseSpeed;
         var lead = beatMs.Value - _playheadMs;
         if (lead > contactMs) return;   // not yet: the clip starts one contact-length before the beat
@@ -3245,7 +3274,24 @@ public sealed class SoloExpeditionScreen
     private float _beatMs = SoloBattle.DefaultBeatMs;
 
     /// <summary>The settle on an action clip's last frame before idle, ms — the readable END of an action.</summary>
-    private const float ClipSettleMs = 150f;
+    /// <remarks>
+    /// 300, from 150 (designer, 2026-08-28: "karakter idle'ye alıp bekliyor sonraki animasyondan önce.
+    /// Bu süreyi biraz daha arttırabiliriz"). This is a CEILING, not a duration — see <see cref="SettleMs"/>.
+    /// </remarks>
+    private const float ClipSettleMs = 300f;
+
+    /// <summary>
+    /// The settle actually taken: the ceiling, or whatever is left of the beat after the clip, whichever
+    /// is smaller.
+    /// </summary>
+    /// <remarks>
+    /// A flat settle added to a clip already sized as a SHARE OF THE BEAT can push the pair past the beat,
+    /// and a clip is a commitment — so the overrun would not shorten the pose, it would swallow the NEXT
+    /// action's clip and the champion would stand still through a swing it really made. Clamping keeps
+    /// the pause as long as the fight can afford and never longer. On a slow build that is the full 300 ms;
+    /// on a fast one it shrinks, which is correct — a fast build should look busy.
+    /// </remarks>
+    private float SettleMs => Math.Min(ClipSettleMs, Math.Max(0f, _beatMs - ClipMs / Math.Max(0.01f, _clipSpeed)));
 
     /// <summary>Wall-clock stamp of the last clip's end — the idle loop restarts from here, not mid-breath.</summary>
     private float _idleFrom;
@@ -3292,18 +3338,29 @@ public sealed class SoloExpeditionScreen
     private const float AuraPulseSeconds = FormBehaviour.AuraTickMs / 1000f;
 
     /// <summary>
-    /// The aura's pulse: the authored fx_aura ring at the champion, in the Aura's Source colour, GROWING
-    /// across its life until it washes over the enemy row — an always-on field that never touches the
-    /// champion's own animation.
+    /// The aura's pulse: the authored fx_aura in the Aura's Source colour, WRAPPED AROUND THE CHAMPION —
+    /// an always-on field that never touches the champion's own animation.
     /// </summary>
     /// <remarks>
     /// Three tries. A fixed strip at the champion read as a decoration; a ring drawn from line segments
     /// read as thin and, because it was clocked on the REPLAY's playhead, it froze on screen the moment
     /// a wave ended and the playhead stopped (playtest 2026-08-29: "the aura effect freezes on screen
     /// when the wave ends... the first effect was good, if you can give it the expansion it would be very
-    /// good"). So: the first effect, with growth, on the wall clock — VfxPlayer updates with real dt and
-    /// is cleared at every wave start, so nothing can be left standing. GrowTo 5.2 takes the ring from
-    /// 312 px across to about 1620, so its last frames wash over the pack.
+    /// good"). So: the first effect, on the wall clock — VfxPlayer updates with real dt and is cleared at
+    /// every wave start, so nothing can be left standing.
+    ///
+    /// FOURTH SHAPE, 2026-08-28, and it deliberately UNDOES the third. The growth that washed over the
+    /// pack (GrowTo 5.2, 312 px out to ~1620) came from "the circle should widen as far as the enemies";
+    /// the same designer has now asked for the opposite and been specific about it: "karakteri saran bir
+    /// aura (gerçekten HxH'daki aura gibi), hareketli ve tetiklenme anında en parlak anına çıkıp,
+    /// tetiklenmeden sonra tamamen olmayacak şekilde sönüp tekrar parlama". A field that reaches the pack
+    /// and a field that clings to the body are different pictures and only one of them can be on screen,
+    /// so the later instruction wins and the earlier one is recorded here rather than quietly dropped.
+    ///
+    /// The shape that makes it read: scale 4.4 (about 458 px, so it stands the champion's full height),
+    /// a small GrowTo 1.22 for the breath outward, and the strip's own upward flow for the movement. The
+    /// dying is free — VfxPlayer.Fade eases every effect to nothing across its final third, so a pulse is
+    /// brightest at the tick that spawned it and gone before the next one, which IS "sönüp tekrar parlama".
     /// </remarks>
     /// <summary>The field's own metronome — see the note at its call site in UpdateFight.</summary>
     private void PulseAuraOnClock(float dt)
@@ -3317,8 +3374,13 @@ public sealed class SoloExpeditionScreen
     {
         if (_auraColour is not { } colour) return;
         _auraSincePulse = 0f;
-        _vfx.Play("fx_aura", ChampBox.Center.X, ChampBox.Center.Y + 30, scale: 3, fps: 11f,
-                  tint: colour, growTo: 5.2f);
+        // FxFor, not the literal key it used to be: PlayFormVfx's Form.Aura arm already resolved the
+        // per-character effect and this one did not, so the two ways the game can draw an aura could
+        // silently disagree. (That arm is unreachable today — Aura is passive and emits no cast event —
+        // but the slot rework the designer wants will decide what a passive slot emits, and a key that
+        // is right in one place and hard-coded in the other is how these come apart.)
+        _vfx.Play(FxFor(Form.Aura), ChampBox.Center.X, ChampBox.Center.Y + 10, scale: 4.4f, fps: 11f,
+                  tint: colour, growTo: 1.22f);
     }
     private int _auraTotal, _auraTotalMs = -1;
 

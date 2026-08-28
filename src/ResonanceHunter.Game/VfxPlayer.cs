@@ -31,7 +31,36 @@ public sealed class VfxPlayer
         public required int Frames { get; init; }
         public required int CenterX { get; init; }
         public required int CenterY { get; init; }
-        public required int Scale { get; init; }
+
+        /// <summary>Where the effect ENDS. Equal to the centre for everything that stays put.</summary>
+        /// <remarks>
+        /// A projectile used to be played at the MIDPOINT between the champion and its target and simply
+        /// appeared there — the designer's words, 2026-08-28: "projectile efektlerinin gitme animasyonu
+        /// yok, direkt düşmanın üstünde çıkıyor". The strips are authored as IN-PLACE motion (a spin, a
+        /// tumble) and that stays right: crossing the gap is the RENDERER's job, because only the renderer
+        /// knows where the champion and the target actually are this frame.
+        /// </remarks>
+        public int ToX { get; init; }
+        public int ToY { get; init; }
+
+        /// <summary>The effect's position now — its start, eased toward its end across its life.</summary>
+        /// <remarks>
+        /// Eased out, not linear: a thrown thing leaves fast and arrives slowing, and a linear crossing
+        /// read as a sliding decal. The clock is <see cref="Life"/>, so the travel finishes exactly as the
+        /// last frame does however fast the strip is played.
+        /// </remarks>
+        public (int X, int Y) At
+        {
+            get
+            {
+                if (ToX == CenterX && ToY == CenterY) return (CenterX, CenterY);
+                var t = Life;
+                t = 1f - (1f - t) * (1f - t);
+                return (CenterX + (int)((ToX - CenterX) * t), CenterY + (int)((ToY - CenterY) * t));
+            }
+        }
+        /// <summary>Display multiplier of the 104 px base unit. FLOAT — the aura needs 4.4, not 4 or 5.</summary>
+        public required float Scale { get; init; }
 
         /// <summary>How much the effect swells over its life: 1 = the authored size, 4 = four times it by the last frame.</summary>
         public float GrowTo { get; init; } = 1f;
@@ -114,8 +143,8 @@ public sealed class VfxPlayer
     /// Spawn a strip animation centered at (x, y). Frame width is inferred from the sheet height
     /// (frames are square) unless <paramref name="frameW"/> is given for non-square strips.
     /// </summary>
-    public void Play(string key, int x, int y, int scale = 2, float fps = 18f, Color? tint = null, int frameW = 0,
-                     float delay = 0f, float growTo = 1f)
+    public void Play(string key, int x, int y, float scale = 2f, float fps = 18f, Color? tint = null, int frameW = 0,
+                     float delay = 0f, float growTo = 1f, int? toX = null, int? toY = null)
     {
         if (!Enabled) return;
         if (_assets.Get(key) is not { } sheet) return;
@@ -131,7 +160,9 @@ public sealed class VfxPlayer
             Frames = frames,
             CenterX = x,
             CenterY = y,
-            Scale = Math.Max(1, scale),
+            ToX = toX ?? x,
+            ToY = toY ?? y,
+            Scale = MathF.Max(1f, scale),
             GrowTo = MathF.Max(1f, growTo),
             SecondsPerFrame = 1f / MathF.Max(1f, fps),
             Tint = tint ?? Color.White,
@@ -172,7 +203,8 @@ public sealed class VfxPlayer
             // decoration ("the circle should widen as far as the enemies so there is a hit feeling").
             var h = (int)MathF.Round(a.Scale * 104 * (a.GrowTo <= 1f ? 1f : 1f + (a.GrowTo - 1f) * a.Life) / Scale);
             var w = h * a.FrameW / a.FrameH;
-            b.Draw(a.Sheet, new Rectangle(a.CenterX - w / 2, a.CenterY - h / 2, w, h), src, a.Tint * a.Fade);
+            var (ax, ay) = a.At;
+            b.Draw(a.Sheet, new Rectangle(ax - w / 2, ay - h / 2, w, h), src, a.Tint * a.Fade);
         }
         b.End();
         b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, null, RestoreRasterizer ?? Rasterizer, null, Matrix.CreateScale(Scale));

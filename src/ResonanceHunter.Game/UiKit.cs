@@ -108,6 +108,7 @@ public sealed class UiKit
     private readonly Texture2D _blob;
     private readonly System.Collections.Generic.Dictionary<string, float> _topPadCache = new();
     private readonly System.Collections.Generic.Dictionary<string, float> _bottomPadCache = new();
+    private readonly System.Collections.Generic.Dictionary<string, float> _sidePadCache = new();
 
     public UiKit(GraphicsDevice device, PixelFont font, AssetLibrary assets)
     {
@@ -188,6 +189,55 @@ public sealed class UiKit
     /// Callers that must stand something on the floor use <see cref="SpriteGrounded"/>, which pushes the
     /// draw down by this fraction so the opaque sole meets <c>box.Bottom</c>.
     /// </remarks>
+    /// <summary>
+    /// Empty columns on BOTH sides of an animation strip, as a fraction of FRAME width — the least any
+    /// frame has, so trimming by it can never cut the one frame that reaches furthest.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The twin of <see cref="TopPadFraction"/>, and it fixes a CLIPPED figure rather than a small one.
+    /// <see cref="AnimSprite"/> scales a SQUARE frame by the destination's HEIGHT, so the width it draws
+    /// is the frame's full width at that scale whatever the art actually fills. The generated champion
+    /// strips are letterboxed on every side, so a 430-tall champion box drew 573 pixels wide; centred at
+    /// x=700 that reaches x=413, and the arena's scissor starts at 492. The cloak came off against a
+    /// straight vertical edge (playtest 2026-08-28: "spriteyi kesiyor").
+    /// </para>
+    /// <para>
+    /// SYMMETRIC, and measured across the WHOLE strip — both deliberately. Cropping each side to its own
+    /// content would re-centre a figure the artist placed off-centre and make it jump between frames;
+    /// taking the least pad of any frame keeps every pose intact. What is removed is margin transparent
+    /// in all eight frames, so the visible figure is pixel-identical and only its rectangle shrinks.
+    /// </para>
+    /// </remarks>
+    public float SidePadFraction(string key)
+    {
+        if (_sidePadCache.TryGetValue(key, out var cached)) return cached;
+        var frac = 0f;
+        if (Assets.Get(key) is { } t && t is { Width: > 0, Height: > 0 })
+        {
+            var fw = t.Height;                       // square frames
+            var frames = Math.Max(1, t.Width / fw);
+            var data = new Color[t.Width * t.Height];
+            t.GetData(data);
+            var least = fw / 2;                      // the tightest pad found on any frame, either side
+            for (var f = 0; f < frames; f++)
+            {
+                int left = fw, right = fw;
+                for (var x = 0; x < fw && left == fw; x++)
+                    for (var y = 0; y < t.Height; y++)
+                        if (data[y * t.Width + f * fw + x].A > 8) { left = x; break; }
+                for (var x = fw - 1; x >= 0 && right == fw; x--)
+                    for (var y = 0; y < t.Height; y++)
+                        if (data[y * t.Width + f * fw + x].A > 8) { right = fw - 1 - x; break; }
+                if (left == fw) continue;            // an empty frame says nothing about the margin
+                least = Math.Min(least, Math.Min(left, right));
+            }
+            frac = Math.Max(0, least - 1) / (float)fw;   // a pixel of slack, so no soft edge is shaved
+        }
+        _sidePadCache[key] = frac;
+        return frac;
+    }
+
     public float BottomPadFraction(string key)
     {
         if (_bottomPadCache.TryGetValue(key, out var cached)) return cached;
@@ -270,9 +320,17 @@ public sealed class UiKit
         // Fitting the whole square frame instead left the figure tiny and "boxed" inside the panel.
         var cropY = (int)(fw * Math.Clamp(topCrop, 0f, 0.6f));
         var srcH = tex.Height - cropY;
-        var src = new Rectangle(i * fw, cropY, fw, srcH);
+        // ...and the same for the SIDES, symmetrically. The frame is SQUARE and the scale comes from the
+        // HEIGHT, so a 430-tall box drew a 573-wide sprite — 170px of it empty margin — and on the
+        // champion (centred at x=700, in an arena whose scissor starts at 492) that margin plus the cloak
+        // fell outside the clip and the figure was sliced by a straight vertical edge. Trimming the
+        // margin that is empty in EVERY frame changes no pixel of the figure — same height, same centre,
+        // same scale — it only stops the draw claiming space the art never used.
+        var cropX = (int)(fw * Math.Clamp(SidePadFraction(stripKey), 0f, 0.4f));
+        var srcW = fw - 2 * cropX;
+        var src = new Rectangle(i * fw + cropX, cropY, srcW, srcH);
         var sc = box.Height / (float)srcH;
-        var w = Math.Max(1, (int)(fw * sc));
+        var w = Math.Max(1, (int)(srcW * sc));
         // Same grounding as SpriteGrounded. The pad is measured once for the whole strip rather than
         // per frame on purpose: a per-frame sole would make the figure slide up and down as the
         // animation played. One offset for the clip keeps the feet planted while it animates.

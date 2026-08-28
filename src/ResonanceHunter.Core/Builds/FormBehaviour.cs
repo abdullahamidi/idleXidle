@@ -60,10 +60,32 @@ public static class FormBehaviour
     /// The time-counted cooldown; for a beat-counted Form this is its beats at action speed 1.0, for
     /// readouts and the wave-length rule (a cooldown must fit a wave).
     /// </summary>
-    // DOUBLED 2026-08-29 ("raise the skills' waiting times so the plain hit matters — we can even double
+    // DOUBLED 2026-08-27 ("raise the skills' waiting times so the plain hit matters — we can even double
     // them"): a rhythm skill costs twice as many actions, so the basic attack fills most of the beats and
     // TEMPO is felt on the swing rather than only between casts. The hits did NOT double with them — that
     // is the point; the balance was re-measured instead (see WeavingTuning.FormBaseValue).
+    //
+    // NOT RAISED AGAIN, 2026-08-28, and the attempt is recorded because the next person will have the
+    // same idea. The designer asked for longer waits — with four slots filled every beat was somebody's
+    // cast and they watched waves with no plain swing in them at all ("düz vuruş imkanı olmadığı senaryo
+    // bile yaşanıyor") — and this knob turned out to have no room left in it. THREE invariants, each
+    // found by running the suite rather than by reasoning:
+    //
+    //   * test_cooldowns_are_sized_to_a_wave_not_to_each_other — a cooldown longer than a WAVE can never
+    //     fire. Waves run 6-15 s, so the ceiling is 6 beats (9 s). STRIKE ALREADY SITS ON IT.
+    //   * test_projectile_trades_weight_for_volume — PROJECTILE is the light Form and must fire more
+    //     often than STRIKE. With Strike pinned at the ceiling, Projectile has one step (4->5) and no more.
+    //   * ...and that one step made WEAVER (SkillRate 0.70 for a second Form at 45%) a NET LOSS: 17306 ->
+    //     16516 damage, i.e. strictly worse than not taking it, because its price was set when casts were
+    //     four beats apart. Raising the three windows 8s->9s instead moved gleam/minute to x1.34 against
+    //     a 0.80-1.25 band, because ExpeditionTuning.WaveHaulScale is calibrated against clear time.
+    //
+    // So every available step buys a slower fight by breaking something the fight already promised. The
+    // problem is not the size of these numbers: it is that FOUR SKILLS DRAW ON ONE METRONOME, and the only
+    // way to give the swing its beats back is for some skills to stop taking one. That is the slot rework
+    // the designer wants to design in its own session (2 active + 2 passive; a passive costs no beat, the
+    // way Aura does today). Until then the FEEL was improved where it costs no balance — the swing takes a
+    // smaller share of the beat and a cast a larger one (see ClipShareOfBeat / SkillClipShareOfBeat).
     public static int BaseCooldownMs(Form form) => form switch
     {
         Form.Strike => 6 * SoloBattle.DefaultBeatMs,       // 9000 at speed 1.0
@@ -157,7 +179,30 @@ public static class FormBehaviour
     /// How much of a beat an action's clip fills (windup → contact → recovery); the rest is the settle
     /// back to idle that makes the action's END readable. 0.65 of 1500 ms ≈ the authored 1 s clip.
     /// </summary>
-    public const float ClipShareOfBeat = 0.65f;
+    public const float ClipShareOfBeat = 0.55f;
+
+    /// <summary>
+    /// The share of a beat a SKILL's clip fills. Larger than the swing's on purpose: a cast plays SLOWER.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Both clips used to take the same 0.65 of a beat, so TEMPO hurried a cast exactly as hard as it
+    /// hurried a swing and at a real build's action speed the eight frames of a Transformation went by in
+    /// two thirds of a second — read as skipped frames rather than as speed (playtest 2026-08-28: "bazı
+    /// noktalarda karakter animasyonunu tam oynatmıyor, sanki frame atlıyormuş gibi").
+    /// </para>
+    /// <para>
+    /// Splitting them says what the designer asked for in one number each: "skill animasyon hızını biraz
+    /// daha yavaşlat, Tempo statı düz vuruşun animasyonunu hızlandırsın". The SWING got a smaller share
+    /// (0.65 -> 0.55), so it is quicker and leaves more of the beat standing — which is where the pause
+    /// between actions comes from; the CAST got a larger one, so it plays close to its authored second.
+    /// </para>
+    /// <para>
+    /// Both are fractions OF THE BEAT, so neither can ever overrun the action after it however fast the
+    /// build gets. That is the whole reason the number is a share and not a duration.
+    /// </para>
+    /// </remarks>
+    public const float SkillClipShareOfBeat = 0.90f;
 
     /// <summary>Is this Form the one BLOOD MAGIC switches off?</summary>
     public static bool Heals(Form form) => form == Form.Transformation;

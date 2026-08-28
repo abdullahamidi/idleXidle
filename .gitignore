@@ -202,3 +202,4 @@ seq_*.png
 # network stall does not pay for the downloads again (tools/asset-pipeline/v2/clip.py). They are
 # inputs, not assets: the strip beside them is what ships.
 *.png.frames/
+build/
