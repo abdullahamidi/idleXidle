@@ -2807,6 +2807,9 @@ public sealed class SoloExpeditionScreen
                 // cast, and an Aura never "casts" — so ready stayed 0 and the dial shaded the whole
                 // medallion for the entire run, under a label reading ALWAYS ON (review 2026-08-30).
                 var ready = FormBehaviour.IsPassive(s.Form) ? 1f : 0f;
+                // How many notches the ring has. Set by the beat-counted branch to the plain actions in
+                // THIS cycle, so one action is always exactly one notch; 0 leaves the ring continuous.
+                var ringSteps = 0;
                 var telegraph = 0f;
                 if (_replay is not null)
                 {
@@ -2824,8 +2827,30 @@ public sealed class SoloExpeditionScreen
                         // wave opened), against the actions it waits. Deriving the step from the TIME
                         // between two casts made the dial jump two at once or stall, because a deferred
                         // cast stretches that span (playtest 2026-08-30).
-                        var since = _replay!.ActionsBetween(prev >= 0 ? prev : -1, _playheadMs) + carryActions;
-                        ready = Math.Clamp(since / (float)bts, 0f, 1f);
+                        //
+                        // THE DENOMINATOR IS THE PLAIN ACTIONS IN THE CYCLE — one FEWER than the actions
+                        // between two casts, because the second cast is itself an action.
+                        //
+                        // Dividing by the nominal `bts` is an off-by-one that the player found and named
+                        // (2026-08-28: "bazen 3 vuruştan, bazen 4 vuruştan sonra skill atıyor... skill
+                        // henüz cooldowndayken atıyor"). The cycle for a four-action skill is cast, hit,
+                        // hit, hit, cast — three plain hits — so counting them against four could only
+                        // ever reach 3/4, and the ring emptied at the cast because `prev` had already
+                        // flipped to it. The ring was never once seen full, and the skill therefore
+                        // always appeared to fire while still winding up.
+                        //
+                        // The SAME off-by-one explains the case they called correct. When a ready skill
+                        // loses its beat to an earlier slot (one action per beat, so it takes the next),
+                        // the gap is five actions and the old arithmetic did reach 4/4 — full, then a
+                        // whole action of standing ready before firing. Reading the gap the sim actually
+                        // left fixes both: the ring fills on the last hit and the next action is the cast.
+                        var from = prev >= 0 ? prev : -1;
+                        var since = _replay!.ActionsBetween(from, _playheadMs) + carryActions;
+                        var span = next != int.MaxValue
+                            ? _replay.ActionsBetween(from, next) + carryActions - 1
+                            : bts - 1;
+                        ringSteps = Math.Max(1, span);
+                        ready = Math.Clamp(since / (float)ringSteps, 0f, 1f);
                     }
                     else if (next != int.MaxValue)
                     {
@@ -2861,9 +2886,8 @@ public sealed class SoloExpeditionScreen
                 // instead of a smooth clock that lies about being timed (playtest 2026-08-30: "no need
                 // for a bar; the radial gauge again, and each action takes 360/X off it"). A timed skill
                 // sweeps continuously.
-                var beats = FormBehaviour.CooldownBeats(s.Form);
-                var swept = beats > 0
-                    ? Math.Clamp((int)MathF.Floor(ready * beats + 0.001f), 0, beats) / (float)beats
+                var swept = ringSteps > 0
+                    ? Math.Clamp((int)MathF.Floor(ready * ringSteps + 0.001f), 0, ringSteps) / (float)ringSteps
                     : ready;
 
                 // READY OR NOT, IN THE ICON'S OWN BRIGHTNESS (playtest 2026-08-28: "kullanılmaya hazır

@@ -114,35 +114,37 @@ public class BeatCadenceTest
     [InlineData(Form.Projectile)]
     public void test_the_dial_reads_full_on_the_action_the_skill_casts_on(Form form)
     {
-        // THE READOUT, against the same wave the rule was read from. The rail fills the ring with
-        // ActionsBetween(previous cast, now) / beats, so "full" must land on the casting action and on
-        // no action before it — the readout and the rule are one claim, checked in one place.
-        var beats = FormBehaviour.CooldownBeats(form);
+        // THE READOUT, against the same wave the rule was read from, and read through the SAME helper
+        // the rail's own arithmetic is mirrored in.
+        //
+        // THIS TEST USED TO MEASURE SOMETHING THE SCREEN NEVER DRAWS. It pinned `from` to the previous
+        // cast by hand and asserted the fill was full AT the next one — but the rail gets `from` from
+        // LastSkillBefore, which at that instant has already returned the new cast, so the value it
+        // asserted on was never on screen for a single frame. It passed while the ring the player
+        // actually watched was one notch short at every cast (playtest 2026-08-28). A test that
+        // computes its own expression instead of the one under test proves only that arithmetic works.
         var events = LongWave(form);
-        var replay = new WaveReplay(events, new Dictionary<int, int> { [0] = 100 }, new Dictionary<int, int> { [0] = 100 }, 400_000f);
+        var replay = new WaveReplay(events, new Dictionary<int, int> { [0] = 100 },
+                                    new Dictionary<int, int> { [0] = 100 }, 400_000f);
         var actions = ActionTimes(events);
         var castMs = events.Where(e => e.Kind == BattleEventKind.Skill).Select(e => e.AtMs).Distinct().ToList();
 
-        // Between one cast and the next, walk every action and read the dial the way the rail does.
-        for (var c = 0; c + 1 < Math.Min(castMs.Count, 5); c++)
+        foreach (var cast in castMs.Skip(1).Take(4))
         {
-            var from = castMs[c];
-            var next = castMs[c + 1];
-            foreach (var at in actions.Where(a => a > from && a <= next))
-            {
-                var fill = Math.Clamp(replay.ActionsBetween(from, at) / (float)beats, 0f, 1f);
-                if (at == next)
-                    Assert.True(fill >= 1f,
-                        $"{form}'s dial read {fill:P0} on the action it cast on — the ring is not full "
-                        + "when the skill fires, so the player is told to expect one more action.");
-                else
-                    Assert.True(fill < 1f,
-                        $"{form}'s dial was already full {(next - at)}ms before the cast — it reads "
-                        + "ready while the skill still has an action to wait.");
-            }
+            var before = actions.Where(a => a < cast).ToList();
+            var last = before[^1];
+
+            Assert.True(Ring(replay, last, 0, Source.Body, form) >= 1f,
+                $"{form}'s ring was short of full on the action before it cast — the player is shown a "
+                + "skill still winding up and then watches it fire.");
+            if (before.Count >= 2)
+                Assert.True(Ring(replay, before[^2], 0, Source.Body, form) < 1f,
+                    $"{form}'s ring was already full two actions before the cast — it reads as ready "
+                    + "and refusing to fire.");
         }
 
-        _out.WriteLine($"{form}: the ring fills across {beats} actions and is full exactly on the cast.");
+        _out.WriteLine($"{form}: the ring fills across the cycle's plain actions and is full on the last "
+                       + "one, with the cast as the action after.");
     }
 
     /// <summary>
@@ -240,6 +242,118 @@ public class BeatCadenceTest
 
         Assert.Equal(3 + actions, carry);
         Assert.Equal(900f + end, ms);
+    }
+
+    /// <summary>A real loadout: four skills competing for one action per beat.</summary>
+    private static Build FourSkillLoadout()
+    {
+        var b = new Build();
+        var plan = new (Source S, Form F)[]
+        {
+            (Source.Body, Form.Strike), (Source.Mind, Form.Projectile),
+            (Source.Nature, Form.Aura), (Source.Spirit, Form.Mark),
+        };
+        foreach (var (s, f) in plan)
+            b.Weave(new EquippedSkill(new WovenAbility { Name = f.ToString(), Source = s, Form = f },
+                                      FormBehaviour.BaseCooldownMs(f)));
+        return b;
+    }
+
+    /// <summary>The ring, read exactly the way SoloExpeditionScreen reads it.</summary>
+    private static float Ring(WaveReplay replay, float playhead, int carry, Source src, Form form)
+    {
+        var prev = replay.LastSkillBefore(playhead, (int)src, (int)form);
+        var next = replay.NextSkillAfter(playhead, (int)src, (int)form);
+        var from = prev >= 0 ? prev : -1;
+        var carried = prev >= 0 ? 0 : carry;
+        var since = replay.ActionsBetween(from, playhead) + carried;
+        // THE PLAIN ACTIONS IN THIS CYCLE, which is one fewer than the actions between two casts
+        // because the second cast IS an action. See the test below.
+        var span = next != int.MaxValue
+            ? replay.ActionsBetween(from, next) + carried - 1
+            : FormBehaviour.CooldownBeats(form) - 1;
+        return Math.Clamp(since / (float)Math.Max(1, span), 0f, 1f);
+    }
+
+    [Fact]
+    public void test_the_ring_is_never_short_of_full_on_the_action_a_skill_casts_on()
+    {
+        // THE BUG (playtest 2026-08-28): "Projectile kullanıyorum, bazen 3 vuruştan, bazen 4 vuruştan
+        // sonra skill atıyor. Skill henüz cooldowndayken (3. tik) atıyor."
+        //
+        // The nominal rule is "every fourth action", and the rail divided by exactly that. The SIM
+        // leaves a different gap in two real cases, and neither is a defect in the fight:
+        //
+        //   THE OPENING — on a run's first wave a slot has no ReadyAtBeat entry, so the default is
+        //   min(1, beats-1) = 1: the skill may cast from the wave's SECOND beat. Traced on a four-skill
+        //   loadout, the first Projectile lands on the third action, with a ring reading 3/4.
+        //
+        //   CONTENTION — one action per beat, so a ready skill that loses the beat to an earlier slot
+        //   takes the next one. Measured gap: five actions, so the ring sat full for an action doing
+        //   nothing, which reads as a skill that is ready and refuses to fire.
+        //
+        // A readout that reports a nominal rule instead of the fight is a readout that lies twice.
+        var build = FourSkillLoadout();
+        var hunter = new Hunter();
+        var pool = SoloBattle.ChampionHealth(build, hunter);
+        var champ = new Champion { MaxHealth = pool, Health = pool };
+        var run = new SoloExpedition(build, champ, hunter, 110f, 9f,
+                                     ExpeditionTuning.Default, Source.Nature, new Random(17));
+
+        var carry = 0;
+        var checkedCasts = 0;
+
+        for (var w = 0; w < 5; w++)
+        {
+            run.RefreshPool();
+            run.PushWave();
+            var events = run.LastWaveEvents;
+            if (events.Count == 0) break;
+            var endMs = events.Max(e => e.AtMs);
+            var replay = new WaveReplay(events, new Dictionary<int, int> { [0] = 100 },
+                                        new Dictionary<int, int> { [0] = 100 }, 400_000f);
+
+            var actions = ActionTimes(events);
+            var casts = events.Where(e => e.Kind == BattleEventKind.Skill
+                                          && e.Slot == (int)Source.Mind
+                                          && (Form)e.Amount == Form.Projectile)
+                              .Select(e => e.AtMs).Distinct().ToList();
+
+            foreach (var cast in casts)
+            {
+                // THE ACTION IMMEDIATELY BEFORE THE CAST is where the ring has to be full: that is the
+                // last frame the player sees before the skill goes off, and "the skill becomes active,
+                // THEN it throws" is exactly what they said they expect. Reading the ring AT the cast
+                // measures nothing — LastSkillBefore has already flipped to that cast and the ring is
+                // correctly starting the next cycle, which is what the gold flash covers.
+                var before = actions.Where(a => a < cast).ToList();
+                if (before.Count == 0) continue;      // the wave opened on this cast; nothing to show yet
+                checkedCasts++;
+
+                var ring = Ring(replay, before[^1], carry, Source.Mind, Form.Projectile);
+                _out.WriteLine($"wave {run.Wave}: cast at {cast}ms — the ring on the action before it "
+                               + $"({before[^1]}ms) reads {ring:P0}");
+                Assert.True(ring >= 1f,
+                    $"wave {run.Wave}: the Projectile fired at {cast}ms while its ring still read "
+                    + $"{ring:P0} on the action before. The player is told the skill is waiting and "
+                    + "then watches it fire anyway.");
+
+                // And it must not have been full any EARLIER than that, or the skill reads as ready
+                // and refusing to fire — the other half of the same complaint.
+                foreach (var earlier in before.Take(before.Count - 1))
+                {
+                    var prevCast = casts.LastOrDefault(c => c < earlier, -1);
+                    if (prevCast < 0 && carry == 0 && before.IndexOf(earlier) == 0) continue;
+                    Assert.True(Ring(replay, earlier, carry, Source.Mind, Form.Projectile) < 1f,
+                        $"wave {run.Wave}: the ring was already full at {earlier}ms but the skill did "
+                        + $"not fire until {cast}ms — it reads as ready and refusing.");
+                }
+            }
+
+            (carry, _) = Fold(replay, endMs, carry, 0f, Source.Mind, Form.Projectile);
+        }
+
+        Assert.True(checkedCasts >= 3, $"only {checkedCasts} casts seen — too few to prove anything");
     }
 
     [Fact]
