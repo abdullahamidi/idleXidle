@@ -1999,7 +1999,18 @@ public class Game1 : Game
                         _dust.Purchase(id);
                     ApplySkillCapacity();
                     _loadout.AddSkill();
-                    _weave.DevPose(1, null);
+                    // RH_SHOT_POSE=<vowId>[,<0..1>] opens a seal's BIND row and, with the second
+                    // number, holds the bind chain part-played so the flourish can be photographed.
+                    var wp = Environment.GetEnvironmentVariable("RH_SHOT_POSE");
+                    if (!string.IsNullOrEmpty(wp))
+                    {
+                        var parts = wp.Split(',');
+                        var chain = parts.Length > 1 && float.TryParse(parts[1],
+                            System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out var ct) ? ct : 0f;
+                        _weave.DevPose(1, parts[0], chain);
+                    }
+                    else _weave.DevPose(1, null);
                 }
 
                 if (sm is "roster" or "rosterlocked")

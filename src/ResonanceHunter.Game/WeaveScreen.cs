@@ -104,18 +104,17 @@ public sealed class WeaveScreen
     // sürükleme bırakma ... ile pekiştirilmesi"</i> and, for the Vow column, <i>"skille sürükleme
     // bırakma ve 'bind' hissiyatı için efekt ve seslerle desteklenmesi"</i>.
     //
-    // A Vow is BOUND TO A SKILL, not to the screen — the data model has always said so (SkillChoice
-    // carries VowId) and the flat list said the opposite, that you were ticking an option in a
-    // settings page. Carrying the seal to the slot is the same act the model already describes.
+    // A Vow BINDS BY BUTTON, not by carrying it (designer's call, 2026-08-28): clicking a seal opens
+    // a BIND row directly beneath it, and that row is what commits. Dragging a seal was tried first
+    // and dropped — the gesture was fine and the reachability was not, since drag needs a pointer and
+    // this project targets gamepad through cycle-and-confirm (technical-preferences.md). A button is
+    // one target, states its consequence, and every input can press it.
     //
-    // CLICKING STILL WORKS, and that is not a courtesy. The project forbids hover-only interaction and
-    // targets gamepad through cycle-and-confirm (technical-preferences.md), so drag is the SECOND way
-    // to do everything here and never the only way: a press that never moves far enough resolves as
-    // the click it always was.
-    private enum Carry { None, Vow, Slot }
+    // The SLOT carry stays: reordering is the one decision here with no other control, and the order
+    // is cast priority.
+    private enum Carry { None, Slot }
 
     private Carry _carrying;
-    private string? _carryVowId;      // Carry.Vow — which seal is in hand
     private int _carrySlot = -1;      // Carry.Slot — which woven skill is being reordered
     private Point _carryFrom;         // where the press began, to tell a drag from a click
     private Point _carryAt;           // the cursor now, for the ghost
@@ -137,6 +136,77 @@ public sealed class WeaveScreen
     /// </remarks>
     private const float SetFlashSeconds = 0.34f;
     private const float BindFlashSeconds = 0.85f;
+
+    /// <summary>
+    /// A CHAIN CLOSING ON A SKILL — the flourish a bound Vow plays over its row.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Designer's brief (2026-08-28): <i>"bind edilince de skill üzerinde bir zincirleme efekt ve
+    /// animasyonu (genişleyip sıkışan zincir animasyonu olabilir) oynasın"</i>. So the links arrive
+    /// WIDE and draw in, ending fractionally inside the row's own edge — a chain pulled tight rather
+    /// than a light switched on. That reading matters: a Vow is a restriction accepted for power, and
+    /// the flourish should look like something closing, not something being awarded.
+    /// </para>
+    /// <para>
+    /// DRAWN, NOT AUTHORED. A chain sprite would be a new art asset, and new pieces here go through
+    /// tools/asset-pipeline/v2 and the arena contract rather than being generated one at a time; a
+    /// link is also a shape this UI already speaks, since the diamond is the screen's own motif (the
+    /// Source gems, the Vow seals). Links ride the row's perimeter so the chain wraps the SKILL, which
+    /// is the thing being bound.
+    /// </para>
+    /// <param name="t">1 at the instant of binding, falling to 0 as the flourish ends.</param>
+    /// </remarks>
+    private void DrawBindChain(SpriteBatch b, Rectangle row, float t)
+    {
+        t = Math.Clamp(t, 0f, 1f);
+        var ease = t * t;                      // fast at first, then it settles
+
+        // The plate lights under the chain, fading faster than the links so the chain is what is left
+        // to look at rather than a gold rectangle.
+        _ui.Fill(b, row, Gold * (0.22f * ease));
+
+        // OUT, THEN IN, THEN A BITE. The offset starts 26px clear of the row and ends 3px INSIDE it,
+        // which is the "sıkışan" half — a chain that stopped exactly on the edge would read as a
+        // border being drawn.
+        var offset = 26f * ease - 3f * (1f - ease);
+        var alpha = Math.Clamp(t * 1.7f, 0f, 1f);
+        var link = (int)MathF.Round(9f + 3f * ease);
+
+        // THE SIDES BARELY MOVE, and that is a constraint rather than a choice: a slot row already
+        // spans the panel's content width, so a link 26px out to the side lands on the frame's own
+        // ornament. The vertical travel carries the animation; the sides only need to be part of the
+        // loop for it to read as a chain that goes all the way round.
+        var ox = (int)MathF.Round(Math.Min(offset, 11f));
+        var oy = (int)MathF.Round(offset);
+
+        const int Across = 9, Down = 3;        // links along each edge; the corners are shared
+        var box = new Rectangle(row.X - ox, row.Y - oy, row.Width + ox * 2, row.Height + oy * 2);
+
+        // A row of identical diamonds reads as a dotted line. Real links alternate face-on and
+        // edge-on, so every other one is drawn smaller and dimmer — the eye takes the alternation as
+        // depth and the shape becomes a chain.
+        void Link(int cx, int cy, bool face)
+        {
+            var d = face ? link : (int)MathF.Round(link * 0.62f);
+            _ui.Diamond(b, new Rectangle(cx - d / 2, cy - d / 2, d, d),
+                        (face ? Gold : Gold * 0.5f) * alpha);
+        }
+
+        var n = 0;
+        for (var k = 0; k <= Across; k++, n++)
+        {
+            var x = box.X + box.Width * k / Across;
+            Link(x, box.Y, n % 2 == 0);
+            Link(x, box.Bottom, n % 2 == 1);
+        }
+        for (var k = 1; k < Down; k++, n++)
+        {
+            var y = box.Y + box.Height * k / Down;
+            Link(box.X, y, n % 2 == 0);
+            Link(box.Right, y, n % 2 == 0);
+        }
+    }
 
     /// <summary>Which woven slot the cursor is over, or -1. The drop target for both carries.</summary>
     /// <remarks>
@@ -161,7 +231,7 @@ public sealed class WeaveScreen
         var dt = (float)Math.Clamp(now - _lastTick, 0.0, 0.10);   // clamped: a load hitch must not skip a flash
         _lastTick = now;
         Decay(_slotFlash, dt);
-        Decay(_bindFlash, dt);
+        if (!_devHoldChain) Decay(_bindFlash, dt);
 
         static void Decay(Dictionary<int, float> d, float dt)
         {
@@ -180,6 +250,9 @@ public sealed class WeaveScreen
     // four lines below.
     private readonly Dictionary<int, float> _slotFlash = new();   // slot -> a Source/Form was set
     private readonly Dictionary<int, float> _bindFlash = new();   // slot -> a Vow was bound
+
+    /// <summary>DEV: freeze the bind chain where <see cref="DevPose"/> put it, for a capture.</summary>
+    private bool _devHoldChain;
     private static readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
     private double _lastTick;
 
@@ -208,7 +281,23 @@ public sealed class WeaveScreen
     public void ClearDirty() => Dirty = false;
 
     /// <summary>DEV: pose a slot and a vow for the capture fixture.</summary>
-    public void DevPose(int slot, string? vowId) { _slot = slot; _readingVowId = vowId; }
+    /// <param name="chainAt">
+    /// DEV: hold the bind chain part-played over this slot, so the flourish is photographable. It runs
+    /// for under a second in play, which is exactly long enough to be impossible to capture by hand.
+    /// </param>
+    public void DevPose(int slot, string? vowId, float chainAt = 0f)
+    {
+        _slot = slot;
+        _readingVowId = vowId;
+        if (chainAt > 0f)
+        {
+            // HELD, not merely started. The flourish is over inside a second, and a capture run draws
+            // several frames before it writes the file — so a posed chain that decays like a live one
+            // is a chain nobody can photograph. Same idea as the hunt screen's DevShowFall.
+            _bindFlash[slot] = BindFlashSeconds * Math.Clamp(chainAt, 0f, 1f);
+            _devHoldChain = true;
+        }
+    }
 
     // ── Layout ────────────────────────────────────────────────────────────────────────────────────
     // 800, not 718. The left column's height is DATA — one row per skill slot, then the add button,
@@ -340,8 +429,44 @@ public sealed class WeaveScreen
     private const int VowRowH = 70;
     private static int VowColX => UiKit.ContentLeft(VowPanel);
     private static int VowColW => VowPanel.Width - UiKit.PadX(VowPanel) * 2;
-    private static Rectangle VowRow(int i) => new(VowColX, UiKit.BodyTop(VowPanel) + i * (VowRowH + 8), VowColW, VowRowH);
-    private static Rectangle VowClear => new(VowColX, UiKit.BodyTop(VowPanel) + VowRows * (VowRowH + 8) + 4, VowColW, 44);
+
+    /// <summary>The BIND row's height, plus the gap that separates it from the seal above it.</summary>
+    private const int VowBindH = 42, VowBindGap = 6;
+
+    /// <summary>
+    /// The visible row whose BIND control is open — the seal the player last clicked, or -1.
+    /// </summary>
+    /// <remarks>
+    /// Derived from <see cref="_readingVowId"/> every time it is asked rather than stored as an index:
+    /// the list scrolls, and an index into a scrolling window is a stale number waiting to happen.
+    /// </remarks>
+    private int OpenBindRow(IReadOnlyList<Vow> known)
+    {
+        if (_readingVowId is null) return -1;
+        for (var r = 0; r < VowRows; r++)
+        {
+            var idx = _vowScroll + r;
+            if (idx < known.Count && known[idx].Id == _readingVowId) return r;
+        }
+        return -1;
+    }
+
+    /// <summary>How far rows below the open seal are pushed down.</summary>
+    private int VowShift(int row, int openRow) => openRow >= 0 && row > openRow ? VowBindH + VowBindGap : 0;
+
+    private Rectangle VowRow(int i, int openRow)
+        => new(VowColX, UiKit.BodyTop(VowPanel) + i * (VowRowH + 8) + VowShift(i, openRow), VowColW, VowRowH);
+
+    /// <summary>The BIND control, directly under the seal it belongs to.</summary>
+    private Rectangle VowBindBtn(int openRow)
+    {
+        var above = VowRow(openRow, openRow);
+        return new Rectangle(VowColX + 16, above.Bottom + VowBindGap, VowColW - 32, VowBindH);
+    }
+
+    private Rectangle VowClearAt(int openRow)
+        => new(VowColX, UiKit.BodyTop(VowPanel) + VowRows * (VowRowH + 8) + 4
+                        + (openRow >= 0 ? VowBindH + VowBindGap : 0), VowColW, 44);
 
     private static string FormName(Form f) => f.ToString().ToUpperInvariant();
     private static string SourceName(Source s) => s.ToString().ToUpperInvariant();
@@ -398,7 +523,7 @@ public sealed class WeaveScreen
         // happened to land. Any frame with the button up and no release to handle clears it.
         if (!held && !released && _carrying != Carry.None)
         {
-            _carrying = Carry.None; _carryVowId = null; _carrySlot = -1; _carryMoved = false;
+            _carrying = Carry.None; _carrySlot = -1; _carryMoved = false;
         }
         if (_carrying != Carry.None && held
             && (Math.Abs(hit.X - _carryFrom.X) > DragSlop || Math.Abs(hit.Y - _carryFrom.Y) > DragSlop))
@@ -411,30 +536,14 @@ public sealed class WeaveScreen
         // here would bind twice — and, on the slot carry, would reorder on every ordinary click.
         if (released && _carrying != Carry.None)
         {
-            var carry = _carrying;
-            var vowId = _carryVowId;
             var from = _carrySlot;
             var moved = _carryMoved;
-            _carrying = Carry.None; _carryVowId = null; _carrySlot = -1; _carryMoved = false;
+            _carrying = Carry.None; _carrySlot = -1; _carryMoved = false;
 
             if (moved)
             {
                 var onto = SlotUnder(hit);
-                if (carry == Carry.Vow && vowId is not null && onto >= 0)
-                {
-                    _slot = onto;
-                    _readingVowId = vowId;
-                    var already = skills[onto].VowId == vowId;
-                    if (!already && Loadout.SetVow(onto, vowId, known))
-                    {
-                        Dirty = true; _buildRev++;
-                        _bindFlash[onto] = BindFlashSeconds;
-                        Sound?.Play("sfx_bind", 0.55f);
-                        _msg = $"{(Weaving.ById(vowId)?.Name ?? "VOW").ToUpperInvariant()} BOUND TO SLOT {onto + 1}.";
-                    }
-                    else if (already) _msg = "ALREADY SWORN ON THAT SLOT.";
-                }
-                else if (carry == Carry.Slot && from >= 0 && onto >= 0 && Loadout.MoveSkill(from, onto))
+                if (from >= 0 && onto >= 0 && Loadout.MoveSkill(from, onto))
                 {
                     _slot = onto;
                     Dirty = true; _buildRev++;
@@ -443,22 +552,6 @@ public sealed class WeaveScreen
                     // SLOT ORDER IS CAST PRIORITY, so the message names the consequence rather than
                     // the gesture — "moved" would describe the mouse, not the build.
                     _msg = onto == 0 ? "FIRST IN LINE — IT WINS EVERY TIED BEAT." : $"NOW SLOT {onto + 1}.";
-                }
-                return;
-            }
-
-            // A PRESS THAT NEVER MOVED IS THE CLICK IT ALWAYS WAS. Clicking the sworn Vow again
-            // breaks it: a Vow is a restriction, and the way out of a restriction should be the same
-            // control that put you in it.
-            if (carry == Carry.Vow && vowId is not null && _slot < skills.Count)
-            {
-                var v = Weaving.ById(vowId);
-                var already = skills[_slot].VowId == vowId;
-                if (v is not null && Loadout.SetVow(_slot, already ? null : vowId, known))
-                {
-                    Dirty = true; _buildRev++;
-                    _msg = already ? $"{v.Name.ToUpperInvariant()} BROKEN." : $"{v.Name.ToUpperInvariant()} SWORN.";
-                    if (!already) { _bindFlash[_slot] = BindFlashSeconds; Sound?.Play("sfx_bind", 0.55f); }
                 }
                 return;
             }
@@ -554,21 +647,41 @@ public sealed class WeaveScreen
                 return;
             }
 
-        for (var r = 0; r < VowRows; r++)
+        var openRow = OpenBindRow(known);
+
+        // THE BIND CONTROL, tested BEFORE the seals: it sits between two of them, and whichever is
+        // checked first owns the overlap.
+        if (openRow >= 0 && VowBindBtn(openRow).Contains(hit) && _slot < skills.Count)
         {
-            var idx = _vowScroll + r;
-            if (idx >= known.Count || !VowRow(r).Contains(hit)) continue;
-            var v = known[idx];
-            _readingVowId = v.Id;
-            // THE SEAL IS PICKED UP, NOT PRESSED. Binding here as well as on release would bind twice
-            // on every drag: once to whichever slot happened to be selected when the press landed, and
-            // again to the slot the player actually dropped it on. A press that never moves is
-            // resolved by the release path below, which is where BOTH gestures now end.
-            _carrying = Carry.Vow; _carryVowId = v.Id; _carryFrom = hit; _carryMoved = false;
+            var v = known[_vowScroll + openRow];
+            var already = skills[_slot].VowId == v.Id;
+            if (Loadout.SetVow(_slot, already ? null : v.Id, known))
+            {
+                Dirty = true; _buildRev++;
+                if (already) _msg = $"{v.Name.ToUpperInvariant()} BROKEN.";
+                else
+                {
+                    _msg = $"{v.Name.ToUpperInvariant()} BOUND TO SLOT {_slot + 1}.";
+                    _bindFlash[_slot] = BindFlashSeconds;
+                    Sound?.Play("sfx_bind", 0.55f);
+                }
+            }
+            else _msg = "THIS SLOT CANNOT TAKE THAT VOW.";
             return;
         }
 
-        if (VowClear.Contains(hit) && Loadout.SetVow(_slot, null, known))
+        for (var r = 0; r < VowRows; r++)
+        {
+            var idx = _vowScroll + r;
+            if (idx >= known.Count || !VowRow(r, openRow).Contains(hit)) continue;
+            var v = known[idx];
+            // CLICKING AN OPEN SEAL CLOSES IT. Otherwise the only way to put the BIND row away is to
+            // open a different one, and a control that cannot be dismissed reads as modal.
+            _readingVowId = _readingVowId == v.Id ? null : v.Id;
+            return;
+        }
+
+        if (VowClearAt(openRow).Contains(hit) && Loadout.SetVow(_slot, null, known))
         {
             Dirty = true; _buildRev++;
             _msg = "NO VOW ON THIS SLOT.";
@@ -635,18 +748,7 @@ public sealed class WeaveScreen
         if (_carrying == Carry.None || !_carryMoved) return;
         var p = _carryAt;
 
-        if (_carrying == Carry.Vow && Weaving.ById(_carryVowId) is { } v)
-        {
-            // A SEAL IN HAND. Round, waxy, and carrying its multiplier — the thing being pressed into
-            // the slot rather than a row torn out of a list.
-            var r = new Rectangle(p.X - 46, p.Y - 26, 92, 52);
-            _ui.Fill(b, new Rectangle(r.X + 4, r.Y + 5, r.Width, r.Height), new Color(0, 0, 0) * 0.45f);
-            _ui.Fill(b, r, new Color(0x2E, 0x1A, 0x22));
-            Outline(b, r, Gold, 2);
-            _ui.TextCenter(b, $"x{Weaving.VowMultiplier(v, WeavingTuning.Default):0.00}", r.Center.X, r.Y + 6, Gold);
-            _ui.TextCenter(b, _ui.ShortenBig("SEAL", r.Width - 10, UiTypography.Caption), r.Center.X, r.Y + 30, Bone);
-        }
-        else if (_carrying == Carry.Slot && _carrySlot >= 0 && _carrySlot < Loadout.Skills.Count)
+        if (_carrying == Carry.Slot && _carrySlot >= 0 && _carrySlot < Loadout.Skills.Count)
         {
             var s = Loadout.Skills[_carrySlot];
             var col = SourceColor.GetValueOrDefault(s.Source, Bone);
@@ -677,8 +779,8 @@ public sealed class WeaveScreen
             var col = SourceColor.GetValueOrDefault(s.Source, Bone);
 
             // ── THE ROW'S STATE, in the order it is painted: ground, drop light, edge. ──────────
-            var dropping = _carrying != Carry.None && _carryMoved && SlotUnder(_carryAt) == i
-                           && !(_carrying == Carry.Slot && _carrySlot == i);
+            var dropping = _carrying == Carry.Slot && _carryMoved && SlotUnder(_carryAt) == i
+                           && _carrySlot != i;
             var hovering = row.Contains(hit) && _carrying == Carry.None;
             var inHand = _carrying == Carry.Slot && _carryMoved && _carrySlot == i;
 
@@ -689,8 +791,8 @@ public sealed class WeaveScreen
             // list-and-click was not worth replacing with a drag in the first place.
             if (dropping)
             {
-                _ui.Fill(b, row, (_carrying == Carry.Vow ? Gold : col) * 0.16f);
-                Outline(b, row, _carrying == Carry.Vow ? Gold : Bone, 3);
+                _ui.Fill(b, row, col * 0.16f);
+                Outline(b, row, Bone, 3);
             }
             // The row being carried stays in place but goes hollow, so the list still shows its length
             // and the gap says where the thing came from.
@@ -712,18 +814,7 @@ public sealed class WeaveScreen
                 _ui.Fill(b, row, col * (0.30f * t));
                 _ui.Fill(b, new Rectangle(row.X, row.Y, row.Width, 3), col * t);
             }
-            if (_bindFlash.TryGetValue(i, out var bf))
-            {
-                var t = Math.Clamp(bf / BindFlashSeconds, 0f, 1f);
-                // Two moves in one: the plate flashes gold and a ring closes inward on the medallion,
-                // which is the seal being pressed rather than a light being switched on.
-                _ui.Fill(b, row, Gold * (0.26f * t));
-                Outline(b, row, Gold * t, 3);
-                var grow = (int)(30f * t);
-                var c = new Point(row.X + 44, row.Y + 38);
-                Outline(b, new Rectangle(c.X - 24 - grow, c.Y - 24 - grow, 48 + grow * 2, 48 + grow * 2),
-                        Gold * (t * t), 2);
-            }
+            if (_bindFlash.TryGetValue(i, out var bf)) DrawBindChain(b, row, bf / BindFlashSeconds);
 
             // THE PAIR, AS TWO GLYPHS. The Form used to live only in the name, so a list of four skills
             // was four gems and a wall of words — and the Form is the half that says what the skill DOES.
@@ -771,9 +862,8 @@ public sealed class WeaveScreen
             if (vow is null)
             {
                 _ui.Fill(b, seal, new Color(0x0E, 0x0B, 0x16) * 0.7f);
-                Outline(b, seal, dropping && _carrying == Carry.Vow ? Gold : Dim, 1);
-                _ui.Text(b, dropping && _carrying == Carry.Vow ? "BIND IT HERE" : "EMPTY VOW SOCKET",
-                         seal.X + 8, seal.Y + 4, dropping && _carrying == Carry.Vow ? Gold : Dim);
+                Outline(b, seal, Dim, 1);
+                _ui.Text(b, "EMPTY VOW SOCKET", seal.X + 8, seal.Y + 4, Dim);
             }
             else
             {
@@ -1205,7 +1295,7 @@ public sealed class WeaveScreen
             var idx = _vowScroll + r;
             // _vowScroll is clamped in DrawVows, which runs AFTER this — so the bound is checked here
             // rather than assumed. Same for the keystone window below.
-            if (idx < known.Count && VowRow(r).Contains(hit))
+            if (idx < known.Count && VowRow(r, OpenBindRow(known)).Contains(hit))
                 return new Explanation(Titled("VOW", known[idx].Name), known[idx].Description, false);
         }
 
@@ -1329,27 +1419,27 @@ public sealed class WeaveScreen
         _ui.TextCenter(b, "WORKS ONLY IF YOU MEET ITS DEMAND", VowPanel.Center.X, UiKit.CaptionTop(VowPanel), Slate);
 
         _vowScroll = Math.Clamp(_vowScroll, 0, Math.Max(0, known.Count - VowRows));
+        var openRow = OpenBindRow(known);
         for (var r = 0; r < VowRows; r++)
         {
             var idx = _vowScroll + r;
             if (idx >= known.Count) break;
             var v = known[idx];
-            var row = VowRow(r);
+            var row = VowRow(r, openRow);
             var on = v.Id == sworn;
+            var picked = v.Id == _readingVowId;
             var live = Weaving.IsActive(v, ctx);
             var hover = row.Contains(hit);
 
             // ── A SEAL, NOT A LIST ROW ──────────────────────────────────────────────────────────
             //
             // Playtest 2026-08-28: the column read as "düz sıralı, tıkladım eklendi" — a settings list.
-            // A Vow is bound TO A SKILL (SkillChoice carries the id), so it is drawn as something you
-            // could pick up and press into a slot: a wax medallion carrying the price, the name beside
-            // it, and the demand underneath as the condition written on the seal.
-            var carried = _carrying == Carry.Vow && _carryMoved && _carryVowId == v.Id;
-
-            _ui.Fill(b, row, on ? new Color(0x2C, 0x25, 0x44) : hover ? new Color(0x1E, 0x18, 0x2C) : Quiet);
-            if (carried) _ui.Fill(b, row, new Color(0x0C, 0x09, 0x14) * 0.55f);   // it is in your hand
+            // A Vow is bound TO A SKILL (SkillChoice carries the id), so it is drawn as the thing that
+            // gets pressed into one: a wax medallion carrying the price, the name beside it, and the
+            // demand underneath as the condition written on the seal. Clicking it opens the BIND row.
+            _ui.Fill(b, row, on || picked ? new Color(0x2C, 0x25, 0x44) : hover ? new Color(0x1E, 0x18, 0x2C) : Quiet);
             if (on) Outline(b, row, Gold, 2);
+            else if (picked) Outline(b, row, Bone, 2);
             else if (hover) Outline(b, row, Bone * 0.55f, 1);
 
             // THE MEDALLION carries the multiplier, because the price is what a player is shopping for
@@ -1378,14 +1468,40 @@ public sealed class WeaveScreen
             // WHAT TO DO WITH IT, on the row the cursor is on. The gesture is new, so it is taught
             // where it is used rather than in a legend nobody reads.
             if (on) _ui.TextRight(b, "SWORN", row.Right - 14, row.Y + 12, Gold);
-            else if (hover) _ui.TextRight(b, "DRAG TO A SLOT", row.Right - 14, row.Y + 12, Slate);
+        }
+
+        // ── THE BIND CONTROL, under the seal that opened it ─────────────────────────────────────
+        //
+        // Designer's call (2026-08-28), replacing a drag: a seal is CHOSEN by clicking it and BOUND by
+        // pressing this. One target, one consequence, and reachable by any input — a drag needs a
+        // pointer, and combat targeting here is cycle-and-confirm for exactly that reason.
+        if (openRow >= 0 && _vowScroll + openRow < known.Count)
+        {
+            var v = known[_vowScroll + openRow];
+            var btn = VowBindBtn(openRow);
+            var canBind = _slot < skills.Count;
+            var already = canBind && skills[_slot].VowId == v.Id;
+            var over = btn.Contains(hit);
+
+            _ui.Fill(b, btn, !canBind ? Quiet
+                             : already ? new Color(0x30, 0x18, 0x18)
+                             : over ? new Color(0x3A, 0x2E, 0x18) : new Color(0x24, 0x1D, 0x2E));
+            Outline(b, btn, !canBind ? Dim : already ? Ember : over ? Gold : Gold * 0.55f, 2);
+
+            // NAMES THE SLOT, not "the current skill": the player is looking at four of them on the
+            // left and the button has to say which one it means.
+            var label = !canBind ? "PICK A SLOT ON THE LEFT"
+                : already ? $"BREAK THIS VOW ON SLOT {_slot + 1}"
+                : $"BIND TO SLOT {_slot + 1}  ·  {SourceName(skills[_slot].Source)} {FormName(skills[_slot].Form)}";
+            _ui.TextCenter(b, Fit(label, btn.Width - 20), btn.Center.X, btn.Y + 13,
+                           !canBind ? Dim : already ? Ember : over ? Gold : Bone);
         }
 
         if (known.Count > VowRows)
             _ui.TextRight(b, $"{_vowScroll + 1}-{Math.Min(known.Count, _vowScroll + VowRows)} / {known.Count}",
                           UiKit.ContentRight(VowPanel), UiKit.CaptionTop(VowPanel), Slate);
 
-        var clear = VowClear;
+        var clear = VowClearAt(openRow);
         _ui.Fill(b, clear, clear.Contains(hit) ? new Color(0x2C, 0x25, 0x44) : Quiet);
         _ui.TextCenter(b, sworn is null ? "NO VOW SWORN" : "BREAK THE VOW",
                        clear.Center.X, clear.Y + 14, sworn is null ? Dim : Ember);
@@ -1393,7 +1509,7 @@ public sealed class WeaveScreen
         // The reading panel: the full text of whichever Vow was last touched, because the row can only
         // carry its demand and a Vow's cost is the half that decides whether to take it.
         var reading = Weaving.ById(_readingVowId) ?? Weaving.ById(sworn) ?? known[_vowScroll];
-        var y = VowClear.Bottom + 18;
+        var y = clear.Bottom + 18;
         _ui.Fill(b, new Rectangle(VowColX, y, VowColW, 2), Dim);
         y += 16;
         _ui.TextBig(b, reading.Name.ToUpperInvariant(), VowColX, y, Gold, UiTypography.Body);
