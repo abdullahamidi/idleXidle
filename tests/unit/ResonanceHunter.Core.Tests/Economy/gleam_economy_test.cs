@@ -103,8 +103,13 @@ public class GleamEconomyTest
                             HunterStat.CriticalChance, HunterStat.Defense };
         for (var i = 0; i < ranks; i++) hunter.Train(order[i % order.Length]);
 
-        var champ = new Champion { MaxHealth = hunter.MaxHealth, Health = hunter.MaxHealth };
-        var run = new SoloExpedition(StarterBuild(), champ, hunter, 110f, 9f, T, Source.Nature,
+        // Through the shared mint — the pool carries the wave-length transform (see
+        // ExpeditionTuning.WaveLengthScale), and income measured against a hand-minted pool is income
+        // measured in a game nobody plays.
+        var build = StarterBuild();
+        var pool = SoloBattle.ChampionHealth(build, hunter);
+        var champ = new Champion { MaxHealth = pool, Health = pool };
+        var run = new SoloExpedition(build, champ, hunter, 110f, 9f, T, Source.Nature,
                                      new Random(17));
 
         long gleam = 0;
@@ -116,10 +121,11 @@ public class GleamEconomyTest
             if (run.Wave == before) break;
             gleam += run.LastWaveHaul.Gleam;
             ms += run.LastWaveEvents.Count == 0 ? 0 : run.LastWaveEvents.Max(e => e.AtMs);
-            // The 2026-08-23 audit's second correction: the screen holds ~2.05s between waves
-            // (SoloExpeditionScreen.WaveBreakSeconds: 0.70 + 1.00 + 0.35). Fight-time-only income
-            // read roughly double the wall clock on short waves.
-            ms += 2050;
+            // The screen holds ~1.10s between waves (SoloExpeditionScreen.WaveBreakSeconds:
+            // 0.45 + 0.45 + 0.20). Fight-time-only income read roughly double the wall clock on short
+            // waves, so the break is counted. It was 2.05s until 2026-08-28, when the transition was
+            // shortened alongside the wave-length change — the two were one decision.
+            ms += 1100;
         }
 
         return ms == 0 ? 0f : gleam / (ms / 60000f);

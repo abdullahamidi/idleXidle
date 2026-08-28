@@ -81,11 +81,26 @@ public class AttritionTest
         return b;
     }
 
+    /// <summary>
+    /// The champion a run actually starts with — minted the way the game mints it.
+    /// </summary>
+    /// <remarks>
+    /// <c>hunter.MaxHealth</c> is not the pool. It is the first term of one, and since 2026-08-28 the
+    /// pool also carries the wave-length transform (<see cref="ExpeditionTuning.WaveLengthScale"/>), so
+    /// a hand-minted champion fights a wave from a different game — deeper or shallower than anything a
+    /// player lives. Every ladder figure in this file is measured off that pool.
+    /// </remarks>
+    private static Champion FreshChampion(Hunter hunter)
+    {
+        var pool = SoloBattle.ChampionHealth(StarterBuild(), hunter);
+        return new Champion { MaxHealth = pool, Health = pool };
+    }
+
     /// <summary>One run, from full health to death or the cap. Returns the deepest wave it held.</summary>
     private static int OneRun(Random rng, int regionIndex, int ranks = 0)
     {
         var hunter = TrainedHunter(ranks);
-        var champ = new Champion { MaxHealth = hunter.MaxHealth, Health = hunter.MaxHealth };
+        var champ = FreshChampion(hunter);
         var run = new SoloExpedition(StarterBuild(), champ, hunter,
                                      LadderHealth(regionIndex), LadderDamage(regionIndex),
                                      T, Source.Nature, rng);
@@ -230,7 +245,7 @@ public class AttritionTest
             for (var attempt = 1; attempt <= 200 && best < ConquerWaveDepth; attempt++)
             {
                 var hunter = TrainedHunter(needed[region]);
-                var champ = new Champion { MaxHealth = hunter.MaxHealth, Health = hunter.MaxHealth };
+                var champ = FreshChampion(hunter);
                 var run = new SoloExpedition(StarterBuild(), champ, hunter,
                                              LadderHealth(region), LadderDamage(region),
                                              T, Source.Nature, rng);
@@ -278,7 +293,7 @@ public class AttritionTest
                                      rng, LootTuning.Default))
                             hunter.Equip(item);
 
-                    var champ = new Champion { MaxHealth = hunter.MaxHealth, Health = hunter.MaxHealth };
+                    var champ = FreshChampion(hunter);
                     var run = new SoloExpedition(StarterBuild(), champ, hunter,
                                                  LadderHealth(region), LadderDamage(region),
                                                  T, Source.Nature, rng);

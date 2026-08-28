@@ -98,6 +98,100 @@ public sealed record ExpeditionTuning
     /// <summary>...while reward only grows LINEARLY. The gap is the whole design.</summary>
     public float HaulScaleSlope { get; init; } = 0.35f;
 
+    /// <summary>
+    /// HOW LONG A WAVE LASTS. Multiplies every creature's HEALTH, the CHAMPION'S POOL
+    /// (<see cref="Builds.SoloBattle.ChampionHealth"/>) and the wave's GLEAM by the same number —
+    /// nothing else. The fight takes this many times longer and costs and pays exactly what it did.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE COMPLAINT THIS ANSWERS (playtest 2026-08-28): the fight was over before the player could see
+    /// it. Measured at 1.0, a four-skill build cleared a wave in 2.6-3.4 seconds — <b>1.9 to 2.4 champion
+    /// actions</b> — against a 2.05 s transition, so more than half the loop was the pause between fights.
+    /// A Strike costs six actions, so it fired every second or third wave: a player watching their own
+    /// build saw a swing, a swing, and a banner.
+    /// </para>
+    /// <para>
+    /// <b>THIS IS A SIMILARITY TRANSFORM, and it took two wrong ones to find it.</b> Wave length is
+    /// <c>enemy health / champion damage</c>, so health is the only lever on it — but health alone makes
+    /// the champion eat that many more bites and die far shallower, which
+    /// <see cref="Economy.PacingTest"/> had already measured and written down: across a health sweep a
+    /// fresh champion's depth fell from wave 8 to wave 4, under the note <i>"raising enemy health does
+    /// not lengthen the run — it kills the champion sooner"</i>.
+    /// </para>
+    /// <para>
+    /// The obvious repair — thin the bite by the same factor, holding damage-taken-per-wave fixed — was
+    /// measured too, and it is WRONG in a way worth recording, because the arithmetic looks airtight.
+    /// Damage DEALT per wave is the wave's health, so it rose 2.5x while damage TAKEN per wave stayed
+    /// flat; every heal in the game that pays out of damage dealt (NATURE'S SIGNATURE's leech,
+    /// Transformation's, REBOUND) therefore got 2.5x stronger against an unchanged threat. The fight
+    /// started healing more than it cost: <c>SoloExpeditionTests</c>' attrition fixture recorded the
+    /// champion ENDING wave two with more health than it started (494 -> 496), depth ran from 12 to 23 at
+    /// 120 ranks, and the vow sweep stopped discriminating because every branch walked to the cap.
+    /// </para>
+    /// <para>
+    /// So the invariant is not "damage taken per wave" — it is <b>every per-wave quantity against the
+    /// pool</b>. Scale the health on both sides and leave all damage alone, and each one lands on 2.5x
+    /// together: damage taken (same enemy damage-per-second, 2.5x the seconds), leech (2.5x the damage
+    /// dealt), regeneration (2.5x the seconds), the per-wave heal ceiling and between-wave regain (2.5x
+    /// the pool they are fractions of), PADDING's flat cut and FORTIFY's free bite (2.5x the bites).
+    /// Beat-counted skills and time-counted ones both fire 2.5x per wave, because the beat and the clock
+    /// stretch together. Depth, the branch spread and gleam per second all come out where they were.
+    /// </para>
+    /// <para>
+    /// The bite INTERVAL deliberately does not move either. At 1500 ms it is the champion's own beat, so
+    /// the wave is now four or five real exchanges — blow for blow on one clock — instead of two.
+    /// </para>
+    /// <para>
+    /// 1.0 is the old game exactly, which is what makes this testable rather than argued. Pass it to
+    /// <see cref="Builds.SoloBattle.ChampionHealth"/> as well: the pool is half the transform.
+    /// </para>
+    /// </remarks>
+    public float WaveLengthScale { get; init; } = Builds.SoloBattle.WaveLengthScale;
+
+    /// <summary>
+    /// The champion pool's share of <see cref="WaveLengthScale"/> — see
+    /// <see cref="Builds.SoloBattle.ChampionPoolScale"/> for why it is smaller and how it was measured.
+    /// Carried here so <see cref="Builds.SoloExpedition.RefreshPool"/> re-mints through the SAME number
+    /// the run was minted with; a sweep that moves one and not the other measures a game nobody plays.
+    /// </summary>
+    public float ChampionPoolScale { get; init; } = Builds.SoloBattle.ChampionPoolScale;
+
+    /// <summary>
+    /// What one wave pays, as a multiple of what it paid before the wave-length change. Measured
+    /// against income per REAL minute, which is the one thing the change must not move.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// NOT <see cref="WaveLengthScale"/>, and the difference is the whole reason this is its own number.
+    /// The health multiplier is 2.5, but a wave does not become 2.5x longer in wall-clock terms: the
+    /// fight itself stretches by about 2.1x (the wave's flat opening pause amortises over more beats —
+    /// see <see cref="Builds.SoloBattle.ChampionPoolScale"/>), and the transition it is followed by got
+    /// SHORTER on the same day, from 2.05 s to 1.10 s. Paying 2.5 against a loop that grew 1.7 was a
+    /// 49% pay rise nobody asked for: the champion went from 192 to 286 Gleam a minute and the lifetime
+    /// training grind from 230 hours to 154.
+    /// </para>
+    /// <para>
+    /// Income is linear in this number — the haul never touches the fight — so it was solved for rather
+    /// than guessed, against the champion's own faucet with the Warren's fixed 66/minute taken out of
+    /// both sides (leaving it in is what made a first attempt at 1.68 land 11% high):
+    /// </para>
+    /// <code>
+    ///   haul x   champion gleam/min   whole economy   lifetime grind   first rank
+    ///   before             126             192/min          230.0 h         26 s
+    ///     2.50             220             286/min          154.4 h         16 s
+    ///     1.68             147             213/min          207.4 h         24 s
+    ///     1.44             126             192/min          229.4 h         27 s   &lt;- here
+    /// </code>
+    /// <para>
+    /// Shortening the transition therefore buys a snappier loop and NOT a richer one, which is the
+    /// conservative reading of the brief: the economy was already tuned, and this change was about how
+    /// long a wave takes.
+    /// </para>
+    /// </remarks>
+    public float WaveHaulScale { get; init; } = 1.44f;
+
+
     /// <summary>Every Nth wave is a boss — a spike you can see coming. See <see cref="WaveScaling.IsBossWave"/>.</summary>
     public int BossEvery { get; init; } = 5;
 

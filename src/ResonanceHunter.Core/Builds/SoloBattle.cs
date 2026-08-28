@@ -181,6 +181,56 @@ public static class SoloBattle
     /// </summary>
     public const int DefaultBeatMs = 1_500;
 
+    /// <summary>
+    /// HOW LONG A WAVE LASTS: the multiplier on every creature's health, and so on the number of beats
+    /// a wave takes. See <see cref="Expeditions.ExpeditionTuning.WaveLengthScale"/> for the whole
+    /// measurement and for why nothing but health may move with it.
+    /// </summary>
+    public const float WaveLengthScale = 2.5f;
+
+    /// <summary>
+    /// THE CHAMPION'S SHARE OF THAT STRETCH — what <see cref="ChampionHealth"/> multiplies the pool by.
+    /// Deliberately BELOW <see cref="WaveLengthScale"/>, and the gap is measured, not chosen.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The arithmetic says these two should be equal: scale both sides' health and every per-wave
+    /// quantity lands on the same factor, so depth is untouched and only time stretches. Measured, they
+    /// are not — at 2.5 and 2.5 a run goes DEEPER, because two things quietly favour the longer fight:
+    /// </para>
+    /// <list type="bullet">
+    /// <item><description>the wave's flat opening pause
+    /// (<see cref="Expeditions.ExpeditionTuning.WaveOpeningMs"/>) is paid once per wave and now amortises
+    /// over 2.5x the beats, so the champion's average damage rises and the wave comes out ~1.6-2.2x
+    /// longer rather than 2.5x;</description></item>
+    /// <item><description>healing interleaves with damage more finely. In a two-exchange wave a leech
+    /// lands while the champion is still near full and is thrown away as overheal; in a five-exchange
+    /// wave it lands on a real wound. Measured on a four-skill build, healing rose from 13.0% to 16.4%
+    /// of the pool per wave while damage taken held at 15-17%, which at depth is the difference between
+    /// losing 2% of the pool a wave and losing 0.5%.</description></item>
+    /// </list>
+    /// <para>
+    /// Both push the same way and neither is a defect — a longer fight SHOULD let sustain work. So the
+    /// pool's share is measured against the one thing that must not move, depth. Median depth for the
+    /// vow sweep's plain four-skill build on its mid-career hunter, wave held at 2.5:
+    /// </para>
+    /// <code>
+    ///   pool x   median depth        (the pre-stretch baseline is 16)
+    ///     2.5         20
+    ///     2.2         18
+    ///     2.0         17
+    ///     1.8         16   &lt;- here
+    ///     1.6         15
+    ///     1.4         13
+    /// </code>
+    /// <para>
+    /// It does NOT touch wave length, which is the whole reason it can be tuned separately: length is
+    /// the wave's health over the champion's damage, and the pool is in neither. Swept from 1.4 to 2.5
+    /// a fresh champion's wave stayed at 6.70 s to the centisecond.
+    /// </para>
+    /// </remarks>
+    public const float ChampionPoolScale = 1.8f;
+
     /// <summary>The beat's length for a build's action speed: DefaultBeatMs ÷ rate, never under 200 ms.</summary>
     public static int BeatFor(float rate, int beatMs = DefaultBeatMs) => Math.Max(200, (int)MathF.Round(beatMs / MathF.Max(0.1f, rate)));
 
@@ -1465,7 +1515,12 @@ public static class SoloBattle
     /// drift, and the copy that drifts is never the one you are looking at.
     /// </para>
     /// </remarks>
-    public static int ChampionHealth(Build build, Economy.Hunter hunter)
+    /// <param name="poolScale">
+    /// The pool's share of the wave-length stretch — see <see cref="ChampionPoolScale"/>. Pass 1 to mint
+    /// the pre-2026-08-28 pool, which is the only way a probe can measure the change rather than assume it.
+    /// </param>
+    public static int ChampionHealth(Build build, Economy.Hunter hunter,
+                                     float poolScale = ChampionPoolScale)
     {
         ArgumentNullException.ThrowIfNull(build);
         ArgumentNullException.ThrowIfNull(hunter);
@@ -1484,7 +1539,11 @@ public static class SoloBattle
         var pool = Math.Max(MinimumChampionHealth, hunter.MaxHealth)
                    * VowHealthMultiplier(build)
                    * GearShape.Of(hunter).MaxHealth
-                   * MathF.Max(0.05f, build.Resolve(hunter).Health);
+                   * MathF.Max(0.05f, build.Resolve(hunter).Health)
+                   // ...and the champion's share of the wave-length stretch. NOT the wave's own factor:
+                   // see ChampionPoolScale for the two effects that make a longer fight favour the
+                   // champion, and for the sweep that priced the difference.
+                   * MathF.Max(0.1f, poolScale);
         return Math.Max(1, (int)MathF.Round(pool));
     }
 

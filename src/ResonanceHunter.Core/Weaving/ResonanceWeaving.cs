@@ -148,7 +148,36 @@ public sealed record WeavingTuning
     public float CurveExponent { get; init; } = 1.0f;
 
     /// <summary>Static Vows: power granted per 1.0 of effective HP sacrificed.</summary>
-    public float StaticCostConversionRate { get; init; } = 3.0f;
+    /// <remarks>
+    /// <para>
+    /// 6.0, from 3.0 (2026-08-28). At 3.0 the two static-cost Vows were the only ones in the catalogue a
+    /// player was WRONG to swear: measured on the vow sweep's mid-career fixture, FRAGILITY and RECKLESS
+    /// OFFERING each cost a wave of depth (31 against a bare 32) while every demand Vow paid between 2
+    /// and 7. They had been marginal for a while — +1 and +4 before the wave-length change of the same
+    /// day — and the longer wave tipped them over.
+    /// </para>
+    /// <para>
+    /// The reason is structural, not a mispriced fraction: a static Vow charges the WHOLE CHAMPION
+    /// (health, or damage taken) and pays only the SKILLS, and under the beat model the basic attack is
+    /// about a third of a build's damage. Demand Vows carry the same asymmetry and survive it only
+    /// because they are priced at x1.75-x2.20. So the static rate was swept until they were worth
+    /// swearing, which is also where their multipliers join that band:
+    /// </para>
+    /// <code>
+    ///   rate   FRAGILITY          RECKLESS OFFERING
+    ///    3.0   x1.33  gain -1     x1.45  gain -1
+    ///    4.0   x1.44  gain  0     x1.60  gain -1
+    ///    5.0   x1.56  gain  0     x1.75  gain  0
+    ///    6.0   x1.67  gain +2     x1.90  gain +1   &lt;- here
+    ///    8.0   x1.89  gain +3     x2.20  gain +3
+    /// </code>
+    /// <para>
+    /// 6.0 is the first rate at which both pay, and it leaves them mid-pack rather than dominant — the
+    /// demand Vows still gain up to 7. 8.0 was measured too and is deliberately not taken: it buys the
+    /// same standing for a price that no longer reads as a sacrifice.
+    /// </para>
+    /// </remarks>
+    public float StaticCostConversionRate { get; init; } = 6.0f;
 
     /// <summary>How strongly the Hunter's resonance_affinity feeds ability power.</summary>
     /// <remarks>

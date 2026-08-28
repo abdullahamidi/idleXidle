@@ -111,9 +111,20 @@ public sealed class SoloExpeditionScreen
     // Derived from one countdown rather than a state machine: _breakTimer already existed, already
     // gated re-entry correctly, and a second source of truth for "where are we in the transition" is
     // how these things drift.
-    private const float FallenBeat = 0.70f;
-    private const float SpoilsBeat = 1.00f;
-    private const float BreathBeat = 0.35f;
+    //
+    // HALVED 2026-08-28, with the wave-length change and as one decision with it. The three beats were
+    // measured against a wave that was 2.6 seconds of fighting: 2.05 s of transition against 2.6 s of
+    // fight meant 44% of the loop was the pause between fights, and the designer's complaint was that
+    // the fight never got going. The wave is now 5-7.5 s (ExpeditionTuning.WaveLengthScale), so the
+    // transition can afford to be brisk without taking the reading time back — 1.10 s against 6 s is
+    // 15% of the loop, and each beat still has its own moment.
+    //
+    // FallenBeat stays the longest of the three because it is the one with art behind it:
+    // DrawCreatureDeath runs on DownedSeconds and is not cut here — the death effect plays across the
+    // beats that follow it.
+    private const float FallenBeat = 0.45f;
+    private const float SpoilsBeat = 0.45f;
+    private const float BreathBeat = 0.20f;
     private const float WaveBreakSeconds = FallenBeat + SpoilsBeat + BreathBeat;
     private const float DownedSeconds = 1.6f;   // the recovery beat before the champion tries again
 
@@ -2106,6 +2117,20 @@ public sealed class SoloExpeditionScreen
         [Source.Machine] = new(0xBC, 0x78, 0x40), [Source.Nature] = new(0x48, 0xB8, 0x88),
         [Source.Mind] = new(0x74, 0xC6, 0xE8), [Source.Spirit] = new(0xDC, 0xD4, 0xEC),
     };
+    /// <summary>"FOURTH", "SIXTH" — the rhythm line's counting word.</summary>
+    /// <remarks>
+    /// A WORD, not "4TH", because the two shorter rhythms beside it are already words ("EVERY OTHER
+    /// ACTION", "EVERY THIRD ACTION") and because the game is read in English as a second language: a
+    /// spelled-out ordinal is one less thing to decode. Only 4 and 6 ship today (Projectile and Strike);
+    /// the rest of the table is here so a new Form cannot silently print a digit.
+    /// </remarks>
+    private static string OrdinalWord(int n) => n switch
+    {
+        4 => "FOURTH", 5 => "FIFTH", 6 => "SIXTH", 7 => "SEVENTH", 8 => "EIGHTH",
+        9 => "NINTH", 10 => "TENTH", 11 => "ELEVENTH", 12 => "TWELFTH",
+        _ => $"{n}TH",
+    };
+
     private static string FormShort(Form f) => f switch
     {
         Form.Projectile => "VOLLEY", Form.Transformation => "MORPH", _ => f.ToString().ToUpperInvariant(),
@@ -2764,7 +2789,12 @@ public sealed class SoloExpeditionScreen
                 {
                     2 => "EVERY OTHER ACTION",
                     3 => "EVERY THIRD ACTION",
-                    > 3 => $"EVERY {FormBehaviour.CooldownBeats(s.Form)} ACTIONS",
+                    // ORDINAL, like the two above it. "EVERY 4 ACTIONS" reads as four actions of
+                    // WAITING and the rule is the other one: the cast IS the fourth action, so the
+                    // cycle is cast, hit, hit, hit, cast (playtest 2026-08-28 — "it says 4 but it
+                    // casts on the 4th hit"). The dial already agrees: each action fills a quarter of
+                    // the ring and it is full exactly on the action it casts on.
+                    > 3 => $"EVERY {OrdinalWord(FormBehaviour.CooldownBeats(s.Form))} ACTION",
                     _ => s.Form == Form.Aura ? "ALWAYS ON" : s.Form == Form.Trap ? "WHEN BITTEN" : "TIMED",
                 };
                 _ui.TextBig(b, rhythm, box.Right + 12, box.Y + 32, Slate, UiTypography.Caption);

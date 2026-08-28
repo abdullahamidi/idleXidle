@@ -29,6 +29,10 @@ public class RunReportTests
 
     private static RunReport RunIn(string region, Build build, int hp = 600, int cap = 90)
     {
+        // The pool carries the wave-length transform with the wave (ExpeditionTuning.WaveLengthScale).
+        // Left flat, this fixture fought 2.5x the health with the old pool — the "health alone" case
+        // that only makes runs shallower, and it collapsed the armour reading this test exists to make.
+        hp = (int)(hp * SoloBattle.ChampionPoolScale);
         var run = new SoloExpedition(build, new Champion { MaxHealth = hp, Health = hp }, new Hunter(),
             120f, 9f, ExpeditionTuning.Default, enemySource: null, rng: new Random(7))
         { RegionId = region, RunIndex = 1 };

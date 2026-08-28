@@ -54,8 +54,13 @@ public class PacingTest
     private static Run PlayFresh(int stopAtWave, float baseHealth = 110f, float baseDamage = 9f)
     {
         var hunter = new Hunter();
-        var champ = new Champion { MaxHealth = hunter.MaxHealth, Health = hunter.MaxHealth };
-        var run = new SoloExpedition(StarterBuild(), champ, hunter, baseHealth, baseDamage,
+        // THROUGH THE SHARED MINT, not `hunter.MaxHealth`. The pool is half of the wave-length
+        // transform (ExpeditionTuning.WaveLengthScale), so a hand-minted pool fights a wave from a
+        // different game — this file measured a fresh champion dying at wave 2 for exactly that reason.
+        var build = StarterBuild();
+        var pool = SoloBattle.ChampionHealth(build, hunter);
+        var champ = new Champion { MaxHealth = pool, Health = pool };
+        var run = new SoloExpedition(build, champ, hunter, baseHealth, baseDamage,
                                      T, Source.Nature, new Random(31));
 
         var perWave = new List<int>();

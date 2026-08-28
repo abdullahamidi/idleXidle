@@ -231,7 +231,11 @@ public sealed class SoloExpedition
     /// </remarks>
     public void RefreshPool()
     {
-        var pool = SoloBattle.ChampionHealth(_build, _hunter);
+        // THROUGH THIS RUN'S OWN TUNING. The wave-length transform scales the pool as well as the wave
+        // (see ExpeditionTuning.WaveLengthScale), and re-minting from the DEFAULT scale here would hand
+        // a probe sweeping that knob a champion from a different game than the wave it is fighting —
+        // which is how the first measurement of this change came back wrong.
+        var pool = SoloBattle.ChampionHealth(_build, _hunter, _tuning.ChampionPoolScale);
         if (pool == _champion.MaxHealth || _champion.MaxHealth <= 0) return;
         var fraction = _champion.Health / (float)_champion.MaxHealth;
         _champion.MaxHealth = pool;
@@ -268,7 +272,13 @@ public sealed class SoloExpedition
         var compRng = new Random(Bands.Seed(RegionId, next, RunIndex));
         var archetype = Bands.Roll(band, compRng);
 
-        var health = _enemyBaseHealth * scale * repeat * Bands.HealthMultiplier(affixes);
+        // WAVE LENGTH. The wave carries ExpeditionTuning.WaveLengthScale times the health, and the
+        // CHAMPION'S POOL carries the same factor (SoloBattle.ChampionHealth) — so the fight lasts that
+        // many times longer and costs exactly the same share of the champion. The bite itself is
+        // untouched: see that knob's remarks for why scaling health alone, or health against a thinned
+        // bite, both move depth instead of only time.
+        var health = _enemyBaseHealth * scale * repeat * Bands.HealthMultiplier(affixes)
+                     * MathF.Max(0.1f, _tuning.WaveLengthScale);
         var damage = _enemyBaseDamage * damageScale * dmgMult * repeat
                      * Bands.DamageMultiplier(affixes, wavesIntoBand);
 
@@ -411,7 +421,12 @@ public sealed class SoloExpedition
             // relationship the game wants: playing pays more than leaving it running. See
             // gleam_economy_test, which states both sides of the economy as hours of play — the only
             // form in which either number means anything.
-            Gleam: (int)MathF.Round(GleamPerWaveCoefficient * scale * haul),
+            // ...times the wave's own LENGTH. Gleam per second is what gleam_economy_test bounds, and
+            // it is per-wave gleam over per-wave WALL TIME, so a wave that lasts longer and pays the
+            // same would have quietly cut income. See ExpeditionTuning.WaveHaulScale for why the factor
+            // is measured rather than borrowed from the health multiplier.
+            Gleam: (int)MathF.Round(GleamPerWaveCoefficient * scale * haul
+                                    * MathF.Max(0.1f, _tuning.WaveHaulScale)),
             Quality: MathF.Max(0.05f, mods.Rarity) + bonus.Quality);      // SPLINTER adds quality
     }
 

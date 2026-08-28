@@ -55,12 +55,22 @@ public class FullLoopTests
         Assert.True(hunter.Gleam > 0, "Twenty kills must be worth something.");
 
         // ── 3. Train. The live damage lever actually moves. ───────────────────────────────────
-        var damageBefore = hunter.SquadDamageMultiplier;
+        //
+        // AutoDamageMultiplier, not SquadDamageMultiplier. This step had been failing since the
+        // MIGHT/RESONANCE split of 2026-08-26: SquadDamageMultiplier is the WORN gear's product
+        // (weapon × affixes × charm) and MIGHT left it that day for the basic attack's own channel,
+        // so the loop was training AttackPower and then asserting against a number AttackPower no
+        // longer touches. The chain was never broken; the test was reading the wrong end of it.
+        var damageBefore = hunter.AutoDamageMultiplier;
 
         while (hunter.CanTrain(HunterStat.AttackPower) && hunter.RankOf(HunterStat.AttackPower) < 10)
             hunter.Train(HunterStat.AttackPower);
 
-        var damageAfter = hunter.SquadDamageMultiplier;
+        Assert.True(hunter.RankOf(HunterStat.AttackPower) > 0,
+            "Twenty kills' loot did not fund a single rank — the loot -> forge -> train chain is broken "
+            + "before the damage assertion below can say anything.");
+
+        var damageAfter = hunter.AutoDamageMultiplier;
         Assert.True(damageAfter > damageBefore, "Training must change what the fight deals.");
 
         // ── 4. Mastery. The kills the champion landed built the region's record. ──────────────
