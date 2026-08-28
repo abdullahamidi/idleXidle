@@ -168,10 +168,23 @@ Seeker's five read well. The recipe is one `create_image_pixen` shape (1 generat
 `animate_image` pass (5 generations at 192x192x8), filed by `fxclips.py`.
 
 **Prompting the shape.** pixen takes similes literally and fills dark discs when asked for a glow:
-"like a beetle carapace" returned a beetle, and "a white glowing rune brand" returned a dark disc
-with a rune on it. Describe the SHAPE and nothing else, say "solid white", and end with "on empty
-transparent space with nothing behind it". Roughly two in five come back usable on the first try, and
-a re-roll is 1 generation.
+"like a beetle carapace" returned a beetle, "a white glowing rune brand" returned a dark disc with a
+rune on it, "a ring of charms" returned a christmas tree, and "a bow" returned a ribbon bow.
+Describe the SHAPE and nothing else, say "solid white", say what must be EMPTY, and end with "on
+empty transparent space with nothing behind it". Roughly two in five come back usable on the first
+try, and a re-roll is 1 generation.
+
+**And the effect must not fill the frame.** Asked for "a tangle of barbed wire lying on the ground",
+pixen drew the ground too — rocks, rubble, edge to edge — and the strip came out as a textured square
+that would sit on the arena like a decal of a photograph. An effect is ONE object with air around it.
+Every shape prompt therefore ends with "wide empty space around it" and names the scenery it must not
+draw. This matters more than it looks: the strip is composited over the fight at 3x scale, so
+whatever touches the frame edge touches half the arena.
+
+**Colour is fixed by the pipeline, not by re-rolling.** `rhart.py whiten` — luminance, lifted so the
+darkest surviving pixel is 96, written back over the same alpha — runs on every strip `fxclips.py`
+files. The generator returns gold traps and blue tick bars whatever the prompt says, and re-rolling
+for colour spends a generation on something a transform does for free and for certain.
 
 ## 4. Naming (unchanged where the code already asks)
 

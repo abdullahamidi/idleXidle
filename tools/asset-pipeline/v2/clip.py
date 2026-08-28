@@ -29,7 +29,7 @@ CHAR_BASE = "https://backblaze.pixellab.ai/file/pixellab-characters/a5e233f5-b48
 IMG_BASE = "https://api.pixellab.ai/mcp/images"
 
 
-def fetch_all(urls: list[str], cache_dir: str, key: str = "") -> list[str]:
+def fetch_all(urls: list[str], into: str, key: str = "") -> list[str]:
     """Download `urls` into `cache_dir` as f0..fN, reusing whatever is already there.
 
     The cache is keyed by OUTPUT PATH, which is right for a retry after a network stall and wrong for
@@ -37,23 +37,43 @@ def fetch_all(urls: list[str], cache_dir: str, key: str = "") -> list[str]:
     being replaced would be reused and the re-roll would change nothing. `key` (the animation id)
     is stamped in the directory; a different one empties it first.
     """
-    os.makedirs(cache_dir, exist_ok=True)
+    os.makedirs(into, exist_ok=True)
     if key:
-        stamp = os.path.join(cache_dir, "SOURCE")
+        stamp = os.path.join(into, "SOURCE")
         was = open(stamp).read().strip() if os.path.exists(stamp) else ""
         if was != key:
-            for f in os.listdir(cache_dir):
-                os.remove(os.path.join(cache_dir, f))
+            for f in os.listdir(into):
+                os.remove(os.path.join(into, f))
             with open(stamp, "w") as fh:
                 fh.write(key)
     paths = []
     for i, u in enumerate(urls):
-        p = os.path.join(cache_dir, f"f{i}.png")
+        p = os.path.join(into, f"f{i}.png")
         if not os.path.exists(p) or os.path.getsize(p) < 100:
             rhart.fetch(u, p)
         paths.append(p)
     return paths
 
+
+
+
+REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
+STAGING = os.path.join(REPO, "tools", "asset-pipeline", ".staging", "frames")
+
+
+def cache_dir(out: str) -> str:
+    """Where the downloaded frames are cached — OUTSIDE the shipped asset tree.
+
+    This used to be `<out>.frames`, i.e. a directory sitting next to the strip inside `assets/art`.
+    The game's csproj copies `assets/art/**/*.png` to the output directory and AssetLibrary keys every
+    PNG it finds by BASENAME, so 808 cache frames — all of them named f0.png .. f7.png — were being
+    copied and loaded at every boot, eight hundred textures fighting over eight keys. Gitignoring them
+    hid it from CI and from other machines and did nothing for the machine doing the work.
+
+    A build INPUT does not belong in the shipped asset tree. The cache now lives under
+    tools/asset-pipeline/.staging/frames/<strip name>/, keyed by the output's basename.
+    """
+    return os.path.join(STAGING, os.path.basename(out))
 
 
 def exists(url: str) -> bool:
@@ -109,7 +129,7 @@ def main(argv: list[str]) -> int:
     s.add_argument("--flip", action="store_true")
 
     a = ap.parse_args(argv)
-    cache = a.out + ".frames"
+    cache = cache_dir(a.out)
 
     if a.cmd == "char":
         urls = [f"{CHAR_BASE}/{a.char}/animations/{a.anim}/{a.dir}/{i}.png" for i in char_range(a)]

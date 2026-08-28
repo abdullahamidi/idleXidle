@@ -42,7 +42,15 @@
     dropping-in new PNGs stays a zero-config operation.
   -->
   <ItemGroup>
-    <Content Include="..\..\assets\art\**\*.png" Link="assets\art\%(RecursiveDir)%(Filename)%(Extension)">
+    <!--
+      Exclude the asset pipeline's fetch cache. It used to live at assets/art/**/<strip>.png.frames/
+      and every frame in it is named f0.png .. f7.png, so this glob copied 808 of them into the output
+      and AssetLibrary — which keys textures by BASENAME — loaded all of them into eight keys. clip.py
+      caches under tools/asset-pipeline/.staging/ now; this exclude is the guard that stops a stray one
+      ever reaching a build again.
+    -->
+    <Content Include="..\..\assets\art\**\*.png" Exclude="..\..\assets\art\**\*.png.frames\**"
+             Link="assets\art\%(RecursiveDir)%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <!-- Audio, same pipeline-free drop-in as the art: raw WAVs copied to output, loaded by SoundBank. -->
