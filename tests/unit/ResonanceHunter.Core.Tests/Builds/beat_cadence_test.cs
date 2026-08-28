@@ -145,6 +145,103 @@ public class BeatCadenceTest
         _out.WriteLine($"{form}: the ring fills across {beats} actions and is full exactly on the cast.");
     }
 
+    /// <summary>
+    /// The rail's own arithmetic, re-implemented here because the Game assembly has no test project.
+    /// </summary>
+    /// <remarks>
+    /// SoloExpeditionScreen fills a skill's ring with <c>ActionsBetween(last cast, now) / beats</c>, and
+    /// since 2026-08-28 it adds a CARRY when the wave being replayed holds no cast of its own — the
+    /// actions that passed in earlier waves. What is pinned here is that carry's arithmetic, which is
+    /// the part that can drift; the screen's wiring of it cannot be reached from here.
+    /// </remarks>
+    private static (int Carry, float Ms) Fold(WaveReplay replay, int endMs, int carry, float carryMs,
+                                              Source src, Form form)
+    {
+        var last = replay.LastSkillBefore(endMs + 1, (int)src, (int)form);
+        return last >= 0
+            ? (replay.ActionsBetween(last, endMs + 1), endMs - last)
+            : (carry + replay.ActionsBetween(-1, endMs + 1), carryMs + endMs);
+    }
+
+    [Fact]
+    public void test_a_skills_cycle_does_not_restart_when_a_wave_does()
+    {
+        // THE COMPLAINT (playtest 2026-08-28): "wave başlayınca skiller resetlenmesin, aynı akışında
+        // devam etsin." The SIM was already continuous — Champion.BeatCount never resets — but every
+        // wave gets a fresh WaveReplay that knows only its own events, so the readout wound back to
+        // empty on a skill that was four actions into a six-action cycle. Worse, a skill could sit out
+        // a whole short wave (its ring crawling up from zero) and then cast on the FIRST action of the
+        // next one, which reads as random.
+        var beats = FormBehaviour.CooldownBeats(Form.Projectile);
+        var build = OneRhythmSkill(Form.Projectile);
+        var hunter = new Hunter();
+        var pool = SoloBattle.ChampionHealth(build, hunter) * 200;   // survives; the cadence is the subject
+        var champ = new Champion { MaxHealth = pool, Health = pool };
+        var run = new SoloExpedition(build, champ, hunter, 110f, 1f,
+                                     ExpeditionTuning.Default, Source.Nature, new Random(5));
+
+        var carry = 0;
+        var carryMs = 0f;
+        var wavesWithoutACast = 0;
+        var openings = new List<float>();
+
+        for (var w = 0; w < 6; w++)
+        {
+            run.RefreshPool();
+            run.PushWave();
+            var events = run.LastWaveEvents;
+            if (events.Count == 0) break;
+            var endMs = events.Max(e => e.AtMs);
+            var replay = new WaveReplay(events, new Dictionary<int, int> { [0] = 100 },
+                                        new Dictionary<int, int> { [0] = 100 }, 400_000f);
+
+            // THE RING AT THIS WAVE'S OPENING, read the way the rail reads it: no cast yet in this
+            // replay, so the whole value is the carry.
+            var opening = Math.Clamp(carry / (float)beats, 0f, 1f);
+            openings.Add(opening);
+
+            var cast = replay.LastSkillBefore(endMs + 1, (int)Source.Body, (int)Form.Projectile);
+            if (cast < 0) wavesWithoutACast++;
+
+            _out.WriteLine($"wave {run.Wave}: opens with the ring at {opening:P0} "
+                           + $"({carry} of {beats} actions carried), "
+                           + (cast < 0 ? "no cast this wave" : $"cast at {cast}ms"));
+
+            (carry, carryMs) = Fold(replay, endMs, carry, carryMs, Source.Body, Form.Projectile);
+        }
+
+        // THE CLAIM. Some wave must open mid-cycle — otherwise this fixture never exercises the carry
+        // and the assertion below is vacuous.
+        Assert.Contains(openings.Skip(1), o => o > 0f);
+
+        // And the carry must survive a wave the skill sat out entirely: that is the case that used to
+        // re-zero the ring, and the case a short wave produces most often.
+        Assert.True(wavesWithoutACast > 0,
+            "no wave passed without a cast, so the fixture never reached the case the carry exists for");
+    }
+
+    [Fact]
+    public void test_a_wave_the_skill_sits_out_adds_to_the_carry_rather_than_replacing_it()
+    {
+        // The fold has two branches and only one is obvious. When the skill DID cast, the carry is what
+        // has happened since. When it did NOT, the wave's whole length must be ADDED to what was already
+        // carried — overwriting there would re-zero a skill every time a wave passed without it, which
+        // is the same bug one level down.
+        var events = LongWave(Form.Strike);
+        var end = events.Max(e => e.AtMs);
+        var replay = new WaveReplay(events, new Dictionary<int, int> { [0] = 100 },
+                                    new Dictionary<int, int> { [0] = 100 }, 400_000f);
+
+        // A Form this wave never cast: the fold must fall to the adding branch.
+        var (carry, ms) = Fold(replay, end, carry: 3, carryMs: 900f, Source.Body, Form.Projectile);
+        var actions = ActionTimes(events).Count;
+
+        _out.WriteLine($"a wave of {actions} actions with no Projectile cast: carry 3 -> {carry}, ms 900 -> {ms}");
+
+        Assert.Equal(3 + actions, carry);
+        Assert.Equal(900f + end, ms);
+    }
+
     [Fact]
     public void test_the_two_counters_agree_about_what_an_action_is()
     {

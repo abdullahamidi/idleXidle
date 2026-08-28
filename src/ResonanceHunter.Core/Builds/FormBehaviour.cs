@@ -100,7 +100,21 @@ public static class FormBehaviour
     public static bool IsPassive(Form form) => form == Form.Aura;
 
     /// <summary>How often a passive Form ticks.</summary>
-    public const int AuraTickMs = 500;
+    /// <remarks>
+    /// 1000, from 500 (playtest 2026-08-28: "aura skillinin tetiklenme süresini 0.5 saniyeden 1 saniyeye
+    /// çıkaralım"). Twice as slow and twice as big, so an Aura reads as a PULSE the eye can follow rather
+    /// than a blur of small numbers — the wave is long enough now to show four or five of them.
+    ///
+    /// DAMAGE IS UNCHANGED, by construction rather than by retuning: a tick pays
+    /// <c>BaseDamage × (AuraTickMs / 1000)</c>, so the per-tick number scales with the interval and the
+    /// damage per second comes out identical. RADIANCE keeps its ratio for the same reason — it shortens
+    /// the INTERVAL to three fifths (600 ms) while a tick still pays a full second, so it is worth x1.67
+    /// exactly as it was at 500/300.
+    ///
+    /// Must stay a multiple of <see cref="Expeditions.ExpeditionTuning.TickMs"/> (100), and so must its
+    /// RADIANCE three-fifths, or the modulo the tick loop is gated on never lands.
+    /// </remarks>
+    public const int AuraTickMs = 1000;
 
     /// <summary>TRAP only pays when the enemy attacks. That is its whole identity.</summary>
     public static bool FiresOnBeingHit(Form form) => form == Form.Trap;

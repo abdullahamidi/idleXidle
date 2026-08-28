@@ -150,34 +150,39 @@ public sealed record WeavingTuning
     /// <summary>Static Vows: power granted per 1.0 of effective HP sacrificed.</summary>
     /// <remarks>
     /// <para>
-    /// 6.0, from 3.0 (2026-08-28). At 3.0 the two static-cost Vows were the only ones in the catalogue a
-    /// player was WRONG to swear: measured on the vow sweep's mid-career fixture, FRAGILITY and RECKLESS
-    /// OFFERING each cost a wave of depth (31 against a bare 32) while every demand Vow paid between 2
-    /// and 7. They had been marginal for a while — +1 and +4 before the wave-length change of the same
-    /// day — and the longer wave tipped them over.
+    /// 8.0, from 3.0 (2026-08-28). At 3.0 the two static-cost Vows were the only ones in the catalogue
+    /// a player was WRONG to swear: on the vow sweep's mid-career fixture, FRAGILITY and RECKLESS
+    /// OFFERING each cost depth while every demand Vow paid. They had been marginal for a while, and the
+    /// same day's wave-length change and Aura repacing each tipped them over again.
     /// </para>
     /// <para>
     /// The reason is structural, not a mispriced fraction: a static Vow charges the WHOLE CHAMPION
     /// (health, or damage taken) and pays only the SKILLS, and under the beat model the basic attack is
     /// about a third of a build's damage. Demand Vows carry the same asymmetry and survive it only
-    /// because they are priced at x1.75-x2.20. So the static rate was swept until they were worth
-    /// swearing, which is also where their multipliers join that band:
+    /// because they are priced at x1.75-x2.20.
+    /// </para>
+    /// <para>
+    /// SWEPT ON THE MEAN, not the median, and that is why this is 8.0 rather than the 6.0 a first pass
+    /// chose. Median depth over forty seeds is quantised to whole waves against a six-wave interquartile
+    /// spread, so it reported "-1" and "0" for the two Vows while their real mean effects were -0.27 and
+    /// +0.27 — a coin flip in both directions, and a sign the metric could not resolve what it was being
+    /// asked. Re-swept on the mean:
     /// </para>
     /// <code>
-    ///   rate   FRAGILITY          RECKLESS OFFERING
-    ///    3.0   x1.33  gain -1     x1.45  gain -1
-    ///    4.0   x1.44  gain  0     x1.60  gain -1
-    ///    5.0   x1.56  gain  0     x1.75  gain  0
-    ///    6.0   x1.67  gain +2     x1.90  gain +1   &lt;- here
-    ///    8.0   x1.89  gain +3     x2.20  gain +3
+    ///   rate   FRAGILITY              RECKLESS OFFERING
+    ///    6.0   x1.67  mean -0.27      x1.90  mean +0.27    both a coin flip
+    ///    8.0   x1.89  mean +1.10      x2.20  mean +1.30    &lt;- here
+    ///   10.0   x2.11  mean +1.58      x2.50  mean +1.73
+    ///   12.0   x2.33  mean +2.30      x2.80  mean +3.18
     /// </code>
     /// <para>
-    /// 6.0 is the first rate at which both pay, and it leaves them mid-pack rather than dominant — the
-    /// demand Vows still gain up to 7. 8.0 was measured too and is deliberately not taken: it buys the
-    /// same standing for a price that no longer reads as a sacrifice.
+    /// 8.0 is chosen against a DESIGN LEVEL rather than against zero: it lands both Vows on +1.1 and
+    /// +1.3, which is where VOW OF COMPLETION — the weakest demand Vow — sits at +1.23, and it keeps
+    /// both multipliers inside the demand band that x2.20 tops. Past it the prices stop reading as
+    /// sacrifices: at 10.0 RECKLESS OFFERING alone would out-pay every demand Vow in the game.
     /// </para>
     /// </remarks>
-    public float StaticCostConversionRate { get; init; } = 6.0f;
+    public float StaticCostConversionRate { get; init; } = 8.0f;
 
     /// <summary>How strongly the Hunter's resonance_affinity feeds ability power.</summary>
     /// <remarks>

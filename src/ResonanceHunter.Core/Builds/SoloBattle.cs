@@ -1088,7 +1088,15 @@ public static class SoloBattle
                     // enchantment) ticks it faster — same damage per tick, so more ticks is more DPS, and
                     // that item is worth nothing to a build that isn't running Aura.
                     var auraTick = triggers.Contains(BuildTrigger.Radiance) ? FormBehaviour.AuraTickMs * 3 / 5 : FormBehaviour.AuraTickMs;
-                    if (ms % auraTick != 0) continue;
+                    // IN ARREARS, NOT IN ADVANCE. `ms` starts at 0 and 0 is a multiple of everything, so
+                    // the wave's very first instant used to pay a whole interval of a field that had
+                    // been up for no time at all. That was worth half a second at a 500 ms tick and
+                    // became a whole second at 1000 ms (2026-08-28), which is the entire reason a purely
+                    // cosmetic pacing change moved depth and income: an Aura front-loading twice as hard
+                    // kills the opening creatures sooner, and everything downstream is measured off when
+                    // things die. A field pays for time it has ALREADY been up, so the first pulse lands
+                    // one interval in — which is also what "ticks every second" means to a player.
+                    if (ms == 0 || ms % auraTick != 0) continue;
                     // The tick announces itself, so the screen never has to infer one from a timestamp.
                     events.Add(new BattleEvent(BattleEventKind.Aura, (int)sk.Source, (int)form, ms));
                     var aura = FormBehaviour.BaseDamage(form, resonance, wt)

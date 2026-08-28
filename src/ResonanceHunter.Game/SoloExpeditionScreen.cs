@@ -305,8 +305,72 @@ public sealed class SoloExpeditionScreen
     /// </remarks>
     private readonly Dictionary<int, float> _skillFlash = new();
 
+    /// <summary>
+    /// Where each skill stood in its cycle when the LAST wave ended — actions taken since its last cast,
+    /// and milliseconds since it, carried into the wave now being replayed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// THE DIALS USED TO RESTART EVERY WAVE, and the fight did not (playtest 2026-08-28: "wave başlayınca
+    /// skiller resetlenmesin, aynı akışında devam etsin"). Cooldowns are expedition-cumulative in the sim
+    /// — <c>Champion.BeatCount</c> never resets and <c>ReadyAtBeat</c> persists, which is what makes a
+    /// descent one continuous fight — but <see cref="WaveReplay"/> is built per wave and knows only the
+    /// events of the wave it holds. So <c>LastSkillBefore</c> answered "never" at every wave's opening and
+    /// the ring wound back to empty on a skill that was four actions into a six-action cycle.
+    /// </para>
+    /// <para>
+    /// The lie was visible and expensive: a four-action Projectile that had cast late in one wave could
+    /// go a whole short wave without firing, its ring crawling up from zero, and then cast on the FIRST
+    /// action of the wave after — from a ring the player had watched sit near empty. The rhythm the rail
+    /// exists to teach looked arbitrary, and the readout was the only part that was wrong.
+    /// </para>
+    /// <para>
+    /// Folded at each boundary in <see cref="FoldSkillCarry"/> and added back in the rail's own arithmetic
+    /// whenever this wave holds no cast of its own to measure from. Cleared by <see cref="StartRun"/>: a
+    /// new descent is a new champion, and its cooldowns really do start empty.
+    /// </para>
+    /// </remarks>
+    private readonly Dictionary<int, int> _carryActions = new();
+    private readonly Dictionary<int, float> _carryMs = new();
+
+    /// <summary>The last event's timestamp in the wave currently replayed — the fold's "end of wave".</summary>
+    private float _replayEndMs;
+
     /// <summary>One key per skill for the rail's flash and readout: the Source (a Skill event's Slot) and the Form.</summary>
     private static int SkillKey(int source, int form) => source * 16 + form;
+
+    /// <summary>
+    /// Roll the outgoing wave into <see cref="_carryActions"/> / <see cref="_carryMs"/>, so the next
+    /// wave's rail opens where this one left off instead of at zero.
+    /// </summary>
+    /// <remarks>
+    /// Two cases, and the second is the one that matters. If the skill CAST in the wave that is ending,
+    /// the carry is simply what has happened since that cast. If it did NOT cast at all — a short wave,
+    /// or a long cooldown — the wave's whole length is ADDED to the carry it already had, because the
+    /// skill has been waiting across both. Overwriting instead of adding would quietly re-zero a skill
+    /// every time a wave passed without it, which is the same bug one level up.
+    /// </remarks>
+    private void FoldSkillCarry()
+    {
+        if (_replay is null) return;
+        // Past the last event, so a cast landing exactly on it is still counted as having happened.
+        var end = _replayEndMs + 1f;
+        foreach (var s in Loadout.Skills)
+        {
+            var key = SkillKey((int)s.Source, (int)s.Form);
+            var last = _replay.LastSkillBefore(end, (int)s.Source, (int)s.Form);
+            if (last >= 0)
+            {
+                _carryActions[key] = _replay.ActionsBetween(last, end);
+                _carryMs[key] = _replayEndMs - last;
+            }
+            else
+            {
+                _carryActions[key] = _carryActions.GetValueOrDefault(key) + _replay.ActionsBetween(-1f, end);
+                _carryMs[key] = _carryMs.GetValueOrDefault(key) + _replayEndMs;
+            }
+        }
+    }
 
     // CHARGE — latched off Charge events at the playhead, never re-derived (a replayed rule can
     // drift from the sim's). Live only when the build carries a keystone that reads the pool.
@@ -677,6 +741,13 @@ public sealed class SoloExpeditionScreen
         _recordToBeat = BestDepthHere;   // before a wave is pushed, or the run competes with itself
         _chargeNow = 0;
 
+        // A NEW DESCENT IS A NEW CHAMPION. The rail carries a skill's place in its cycle across wave
+        // boundaries (see _carryActions), and carrying it across a DEATH would open the next run with
+        // rings inherited from the corpse — the sim mints a fresh Champion here, cooldowns and all.
+        _carryActions.Clear();
+        _carryMs.Clear();
+        _replayEndMs = 0f;
+
         // Charged once here at mint: RECKLESS OFFERING's health price and the build's health multipliers.
         var hp = SoloBattle.ChampionHealth(build, hunter);
         _champ = new Champion { MaxHealth = hp, Health = hp };
@@ -761,7 +832,12 @@ public sealed class SoloExpeditionScreen
         // zero on a wave already won.
         var enemyHp = _run.LastWaveCreatures.Sum(c => c.MaxHealth);
 
+        // WHERE EACH SKILL STOOD WHEN THAT WAVE ENDED, banked before the replay carrying it is dropped.
+        // The sim's cooldowns cross this boundary; the rail's readout only does because of this line.
+        FoldSkillCarry();
+
         _replay = new WaveReplay(_run.LastWaveEvents, startHealth, maxHealth, enemyHp);
+        _replayEndMs = _run.LastWaveEvents.Count == 0 ? 0f : _run.LastWaveEvents.Max(e => e.AtMs);
         _diedAt.Clear();          // the previous wave's fallen are gone with its replay
         _creatureRect.Clear();
         // Hand the replay the composition so each creature drains its own bar and vanishes on its own
@@ -2736,6 +2812,11 @@ public sealed class SoloExpeditionScreen
                 {
                     var next = _replay.NextSkillAfter(_playheadMs, (int)s.Source, formKey);
                     var prev = _replay.LastSkillBefore(_playheadMs, (int)s.Source, formKey);
+                    // WHAT THE PREVIOUS WAVES ALREADY SPENT. Used only when THIS wave holds no cast to
+                    // measure from — once the skill has fired inside this replay, that cast is the
+                    // truth and the carry is stale. See _carryActions.
+                    var carryActions = prev >= 0 ? 0 : _carryActions.GetValueOrDefault(skillKey);
+                    var carryMs = prev >= 0 ? 0f : _carryMs.GetValueOrDefault(skillKey);
                     if (next != int.MaxValue && next - _playheadMs is > 0f and <= 300f) telegraph = 1f - (next - _playheadMs) / 300f;
                     if (FormBehaviour.CooldownBeats(s.Form) is var bts and > 0)
                     {
@@ -2743,13 +2824,14 @@ public sealed class SoloExpeditionScreen
                         // wave opened), against the actions it waits. Deriving the step from the TIME
                         // between two casts made the dial jump two at once or stall, because a deferred
                         // cast stretches that span (playtest 2026-08-30).
-                        var since = _replay!.ActionsBetween(prev >= 0 ? prev : -1, _playheadMs);
+                        var since = _replay!.ActionsBetween(prev >= 0 ? prev : -1, _playheadMs) + carryActions;
                         ready = Math.Clamp(since / (float)bts, 0f, 1f);
                     }
                     else if (next != int.MaxValue)
                     {
-                        // From the previous cast, or from the top of the wave for the very first one.
-                        var from = prev >= 0 ? prev : 0;
+                        // From the previous cast, or — for the first one of a wave — from wherever the
+                        // last wave left the cooldown, which is BEFORE this wave's zero.
+                        var from = prev >= 0 ? prev : -carryMs;
                         var span = MathF.Max(1f, next - from);
                         ready = Math.Clamp((_playheadMs - from) / span, 0f, 1f);
                     }
@@ -2762,19 +2844,52 @@ public sealed class SoloExpeditionScreen
                         var cdMs = MathF.Max(1f, FormBehaviour.BaseCooldownMs(s.Form));
                         ready = Math.Clamp((_playheadMs - prev) / cdMs, 0f, 1f);
                     }
+                    else
+                    {
+                        // A TIMED SKILL THAT NEITHER FIRED THIS WAVE NOR WILL. Its ring used to sit dead
+                        // at empty for the whole wave, which reads as a broken skill rather than a
+                        // waiting one — and it is the case a short wave produces most often. The carry
+                        // knows how long it has really been waiting, so it keeps filling.
+                        var cdMs = MathF.Max(1f, FormBehaviour.BaseCooldownMs(s.Form));
+                        ready = Math.Clamp((_playheadMs + carryMs) / cdMs, 0f, 1f);
+                    }
                 }
+
+                // THE DIAL'S OWN VALUE, needed here rather than below because the medallion is DIMMED
+                // while it is short of full. A beat-counted skill STEPS — a sixth of the circle unwinds
+                // per action for a six-action skill — so the player reads "two more swings" at a glance
+                // instead of a smooth clock that lies about being timed (playtest 2026-08-30: "no need
+                // for a bar; the radial gauge again, and each action takes 360/X off it"). A timed skill
+                // sweeps continuously.
+                var beats = FormBehaviour.CooldownBeats(s.Form);
+                var swept = beats > 0
+                    ? Math.Clamp((int)MathF.Floor(ready * beats + 0.001f), 0, beats) / (float)beats
+                    : ready;
+
+                // READY OR NOT, IN THE ICON'S OWN BRIGHTNESS (playtest 2026-08-28: "kullanılmaya hazır
+                // değilken skill'in ikonu kararsın"). The ring around the rim answers HOW MUCH LONGER;
+                // this answers WHETHER, and it is the faster read of the two — a glance down the rail
+                // sorts the rows into lit and unlit without counting anything.
+                //
+                // Deliberately a STEP and not a fade: brightening in proportion to the fill would be a
+                // second, blurrier copy of the ring, and the moment worth seeing is the one where the
+                // skill becomes available. A passive is always ready and so never dims, which is what
+                // its ALWAYS ON label promises. The ring itself is drawn at full strength over the top,
+                // so a dark medallion never costs the readout any contrast.
+                var waiting = swept < 1f && flash <= 0f;
+                var wake = waiting ? WaitingSkillDim : 1f;
 
                 // TELEGRAPH: the medallion warms to gold over the 300 ms before its cast, so the effect
                 // in the arena has a cause the eye already saw (playtest 2026-08-27).
                 var lit = Math.Max(flash, telegraph);
                 if (_ui.Assets.Get("ui_slot_skill_hex") is { } sl)
-                    b.Draw(sl, box, lit > 0f ? Color.Lerp(Color.White, Gold, lit) : Color.White);
+                    b.Draw(sl, box, lit > 0f ? Color.Lerp(Color.White, Gold, lit) : Color.White * wake);
                 // §18.3 Layer 1: source-coloured inner glow (no Form-glyph asset ships, so the Source glyph is
                 // the central identity and the Form name labels it — a quieter composition per §36).
-                _ui.Diamond(b, new Rectangle(box.Center.X - 22, box.Center.Y - 22, 44, 44), sc * 0.28f);
+                _ui.Diamond(b, new Rectangle(box.Center.X - 22, box.Center.Y - 22, 44, 44), sc * (0.28f * wake));
                 if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } g)
-                    b.Draw(g, new Rectangle(box.X + 16, box.Y + 14, box.Width - 32, box.Height - 28), Color.White);
-                else _ui.Diamond(b, new Rectangle(box.Center.X - 24, box.Center.Y - 24, 48, 48), sc);
+                    b.Draw(g, new Rectangle(box.X + 16, box.Y + 14, box.Width - 32, box.Height - 28), Color.White * wake);
+                else _ui.Diamond(b, new Rectangle(box.Center.X - 24, box.Center.Y - 24, 48, 48), sc * wake);
                 // (§16 Vow glyph omitted: the loadout SkillChoice doesn't carry the Vow — it lives on the built
                 // ability. Wiring the built skills through would add it; deferred, logged once below.)
                 // §16.2: a DESCRIPTIVE Source+Form label ("SHADOW STRIKE"), never a bare form name — shrunk to
@@ -2818,16 +2933,9 @@ public sealed class SoloExpeditionScreen
                 // row of pips under the medallion, one lit per action taken since its last cast, all lit
                 // when it is next. A clock on a skill that counts actions read as "still timed" (playtest
                 // 2026-08-28). Time-counted skills keep the clockwise sweep.
-                // ONE READOUT FOR BOTH KINDS: the clockwise sweep over the medallion. A beat-counted skill
-                // STEPS it — a sixth of the circle unwinds per action for a six-action skill — so the
-                // player reads "two more swings" at a glance instead of a smooth clock that lies about
-                // being timed (playtest 2026-08-30: "no need for a bar; the radial gauge again, and each
-                // action takes 360/X off it"). A timed skill sweeps continuously, as before.
-                var beats = FormBehaviour.CooldownBeats(s.Form);
-                var swept = beats > 0
-                    ? Math.Clamp((int)MathF.Floor(ready * beats + 0.001f), 0, beats) / (float)beats
-                    : ready;
-
+                // ONE READOUT FOR BOTH KINDS: the clockwise sweep over the medallion — computed above the
+                // medallion's own draw, because the icon is dimmed while this is short of full.
+                //
                 // DRAWN LAST, AND AROUND THE RIM. The dial used to be painted before the medallion's
                 // own art, so the frame and the Source glyph covered it — the readout the player is
                 // watching sat behind the icon it belongs to (playtest 2026-08-28). It is a ring at the
@@ -2958,6 +3066,15 @@ public sealed class SoloExpeditionScreen
     // and 13 px to fit. At 28 they fit at the Caption rung with room to spare.
     private const int RailContentX = RailX + UiTypography.PanelPadNarrow;
     private const int RailContentW = RailW - UiTypography.PanelPadNarrow * 2;
+
+    /// <summary>How bright a skill's medallion is while it is still waiting to come ready.</summary>
+    /// <remarks>
+    /// 0.45, which is dark enough to sort the rail into lit and unlit at a glance and light enough that
+    /// the Source glyph stays legible — a waiting skill still has to say WHICH skill it is. The empty
+    /// slots further down the rail sit at 0.5, so a waiting skill reads as dimmer than a real row but
+    /// not as absent.
+    /// </remarks>
+    private const float WaitingSkillDim = 0.45f;
 
 
     /// <summary>

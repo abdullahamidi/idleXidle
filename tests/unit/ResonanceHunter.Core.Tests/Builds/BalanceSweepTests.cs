@@ -449,14 +449,28 @@ public class BalanceSweepTests
 
         foreach (var (v, s, w) in rows.OrderByDescending(r => r.S.Median - r.Without.Median))
             _out.WriteLine($"{v.Name,-26} x{Weaving.VowMultiplier(v, WeavingTuning.Default):0.00}  "
-                           + $"with {s.Median,3}  without {w.Median,3}  gain {s.Median - w.Median,+3}");
+                           + $"with {s.Median,3}  without {w.Median,3}  gain {s.Median - w.Median,+3}"
+                           + $"   MEAN {s.Mean,6:0.00} vs {w.Mean,6:0.00}  d {s.Mean - w.Mean,+6:0.00}"
+                           + $"   p25 {s.P25,3}/{w.P25,3}  p75 {s.P75,3}/{w.P75,3}");
         if (skipped.Count > 0) _out.WriteLine($"SKIPPED (no fixture): {string.Join(", ", skipped)}");
 
         Assert.True(rows.All(r => r.S.Max < DepthCap), "the metric is saturated");
+
+        // ON THE MEAN, NOT THE MEDIAN, and the difference is resolution rather than strictness.
+        //
+        // A median over forty INTEGER depths is quantised to whole waves, against an interquartile
+        // spread of about six. For the two static-cost Vows — the only ones whose true effect is under a
+        // wave — it therefore reported the WRONG SIGN: "gain -1" for a mean effect of -0.27 and "gain 0"
+        // for +0.27. Two retunes were spent chasing that quantisation before the means were printed, and
+        // the second of them moved the knob by less than the metric's own step. A mean over the same
+        // forty runs costs nothing and resolves tenths of a wave, so the claim ("this Vow is worth
+        // swearing") is finally measured at the size the claim is about. The median stays in the report,
+        // because whole waves are what a player experiences.
         foreach (var (v, s, w) in rows)
-            Assert.True(s.Median > w.Median,
+            Assert.True(s.Mean > w.Mean,
                         $"{v.Name} is worth x{Weaving.VowMultiplier(v, WeavingTuning.Default):0.00} and "
-                        + $"buys NOTHING — {s.Median} deep with it, {w.Median} without");
+                        + $"buys NOTHING — {s.Mean:0.00} deep with it on average, {w.Mean:0.00} without "
+                        + $"(medians {s.Median} and {w.Median})");
     }
 
     [Fact]

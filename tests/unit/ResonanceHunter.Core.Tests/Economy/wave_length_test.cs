@@ -76,7 +76,27 @@ public class WaveLengthTest
         return h;
     }
 
-    private readonly record struct Run(int Depth, float FightSecondsPerWave, float ActionsPerWave, float GleamPerMinute);
+    private readonly record struct Run(int Depth, float FightSecondsPerWave, float ActionsPerWave, float GleamPerMinute,
+                                       IReadOnlyList<int> WaveGleam, IReadOnlyList<int> WaveMs, long BreakMs)
+    {
+        /// <summary>
+        /// Gleam per real minute over the FIRST <paramref name="waves"/> waves only.
+        /// </summary>
+        /// <remarks>
+        /// Comparing two runs' lifetime income compares two different NUMBERS OF WAVES, and reward grows
+        /// with depth — so a run that happened to get four waves further read as richer per minute when
+        /// nothing about its pay rate had changed. That is depth leaking into an income measurement. Held
+        /// to the waves both runs actually fought, the comparison is about the RATE and nothing else.
+        /// </remarks>
+        public float GleamPerMinuteOver(int waves)
+        {
+            var n = Math.Min(waves, Math.Min(WaveGleam.Count, WaveMs.Count));
+            if (n == 0) return 0f;
+            long gleam = 0, ms = 0;
+            for (var i = 0; i < n; i++) { gleam += WaveGleam[i]; ms += WaveMs[i] + BreakMs; }
+            return ms == 0 ? 0f : gleam / (ms / 60000f);
+        }
+    }
 
     /// <summary>Play a whole run at a given training level and report what one wave felt like.</summary>
     private static Run Play(int ranks, float waveScale, float poolScale, float haulScale, long breakMs)
@@ -95,22 +115,27 @@ public class WaveLengthTest
         var beat = SoloBattle.BeatFor(build.Resolve(hunter).SkillRate);
 
         long fightMs = 0, gleam = 0;
-        var waves = 0;
+        var perWaveGleam = new List<int>();
+        var perWaveMs = new List<int>();
         while (!run.Over && run.Wave < 200)
         {
             var before = run.Wave;
             run.RefreshPool();
             run.PushWave();
             if (run.Wave == before) break;         // stalled: no progress, do not spin
-            waves++;
+            var ms = run.LastWaveEvents.Count == 0 ? 0 : run.LastWaveEvents.Max(e => e.AtMs);
+            perWaveGleam.Add(run.LastWaveHaul.Gleam);
+            perWaveMs.Add(ms);
             gleam += run.LastWaveHaul.Gleam;
-            fightMs += run.LastWaveEvents.Count == 0 ? 0 : run.LastWaveEvents.Max(e => e.AtMs);
+            fightMs += ms;
         }
 
-        if (waves == 0) return new Run(run.Wave, 0f, 0f, 0f);
+        var waves = perWaveMs.Count;
+        if (waves == 0) return new Run(run.Wave, 0f, 0f, 0f, perWaveGleam, perWaveMs, breakMs);
         var perWave = fightMs / (float)waves;
         var wallMs = fightMs + waves * breakMs;
-        return new Run(run.Wave, perWave / 1000f, perWave / beat, gleam / (wallMs / 60000f));
+        return new Run(run.Wave, perWave / 1000f, perWave / beat,
+                       gleam / (wallMs / 60000f), perWaveGleam, perWaveMs, breakMs);
     }
 
     /// <summary>The game as it ships.</summary>
@@ -157,23 +182,46 @@ public class WaveLengthTest
         // carries the stretch too (SoloExpedition.HaulForWave). Asserted as a RATIO against the
         // pre-stretch game rather than an absolute, because the absolute is gleam_economy_test's band
         // and duplicating it here would be a second copy of a number that drifts.
+        // COLLECTED, PRINTED, THEN ASSERTED. Throwing on the first bad row hides every row after it,
+        // and on an economy the shape across the range is the finding — one outlier at the shallow end
+        // means something different from a drift at every level.
+        var offenders = new List<string>();
+
         foreach (var ranks in Ranks)
         {
             var before = Legacy(ranks);
             var after = Live(ranks);
-            var ratio = after.GleamPerMinute / MathF.Max(1f, before.GleamPerMinute);
 
-            _out.WriteLine($"{ranks,4} ranks: {before.GleamPerMinute,7:N0} -> {after.GleamPerMinute,7:N0} "
-                           + $"gleam/min  (x{ratio:0.00})");
+            // OVER THE WAVES BOTH RUNS FOUGHT. Lifetime income folds in how DEEP each run got, and
+            // reward grows with depth, so two runs of different length cannot be compared on pay rate —
+            // at 300 ranks that leak alone read as a 36% pay rise while the canonical economy band
+            // (gleam_economy_test, which holds its wave count fixed) had not moved at all.
+            var common = Math.Min(before.Depth, after.Depth);
+            var beforeRate = before.GleamPerMinuteOver(common);
+            var afterRate = after.GleamPerMinuteOver(common);
+            var ratio = afterRate / MathF.Max(1f, beforeRate);
+
+            // MEASURED, BUT ONLY JUDGED WHERE THERE IS ENOUGH TO JUDGE. A fresh champion dies on wave
+            // four, and four waves of a linear-in-depth reward is not an income measurement — the two
+            // runs do not even meet the same wave compositions there. Printed at every level so the
+            // shallow end stays visible; asserted where the sample is one.
+            const int Enough = 8;
+            var judged = common >= Enough;
+            _out.WriteLine($"{ranks,4} ranks: {beforeRate,7:N0} -> {afterRate,7:N0} "
+                           + $"gleam/min over the first {common,3} waves  (x{ratio:0.00})"
+                           + (judged ? "" : $"   — under {Enough} waves, reported only"));
 
             // A TIGHT BAND, because this one is solved for rather than tolerated: ExpeditionTuning
             // .WaveHaulScale is calibrated against exactly this ratio (see its table). Paying the
             // wave's own 2.5 instead landed 1.49 and cut the lifetime grind from 230 hours to 154.
-            Assert.True(ratio is > 0.80f and < 1.25f,
-                $"at {ranks} ranks the whole change moved income to x{ratio:0.00} of what it was. "
-                + "Longer waves and a shorter transition are meant to change how the loop FEELS; "
-                + "WaveHaulScale is the knob that keeps them from changing what it pays.");
+            if (judged && ratio is <= 0.80f or >= 1.25f)
+                offenders.Add($"at {ranks} ranks income moved to x{ratio:0.00} over {common} waves");
         }
+
+        Assert.True(offenders.Count == 0,
+            string.Join("; ", offenders)
+            + ". Longer waves and a shorter transition are meant to change how the loop FEELS; "
+            + "WaveHaulScale is the knob that keeps them from changing what it pays.");
     }
 
     [Fact]
