@@ -1150,9 +1150,24 @@ public static class SoloBattle
                         continue;
                     }
 
+                    // PER-TICK, NOT PER-CAST. FormBaseValue is quoted in the units each Form is
+                    // PAID in: AURA's 12 is a second's worth, but STRIKE's 500 is one nine-second
+                    // cast and TRANSFORMATION's 260 is one eight-second cast. Ticking those at their
+                    // cast value every second is nine and eight times their intended output — which
+                    // is exactly what a skill spilled into a passive slot was doing.
+                    //
+                    // A Field pays the same DAMAGE PER SECOND its active face pays, so moving a skill
+                    // between slots trades burst for steadiness and not power. That parity is the
+                    // deliberate starting point and the knob a playtest should move, not an accident:
+                    // a passive costs no beat, so it may well deserve to sit a little under parity.
+                    var castMs = FormBehaviour.BaseCooldownMs(form);
+                    var perTick = castMs > 0
+                        ? FormBehaviour.AuraTickMs / (float)castMs   // spilled: scale a cast to a tick
+                        : FormBehaviour.AuraTickMs / 1000f;          // native field: already per second
+
                     var aura = FormBehaviour.BaseDamage(form, resonance, wt)
                                * VowFactor(sk, weaveCtx, wt, shape)
-                               * (FormBehaviour.AuraTickMs / 1000f);
+                               * perTick;
                     var auraDealt = LandSpread(aura, ms, shape.TargetsFor(form), sk.Source, form, abs, countsAsActivation: false);
                     // NATURE'S SIGNATURE follows the DAMAGE, not the cast: the card promises 3% of
                     // what its skills deal, with no cast clause — an Aura that deals must heal.

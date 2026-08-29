@@ -402,3 +402,69 @@ public class PassiveEffectTests
             "what it deals is the style's whole identity and it cannot be lost by changing slot.");
     }
 }
+
+/// <summary>
+/// A skill moved into a passive slot trades burst for steadiness — not power.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <c>WeavingTuning.FormBaseValue</c> quotes each Form in the units it is PAID in: AURA's 12 is one
+/// second's worth, but STRIKE's 500 is a single nine-second cast and TRANSFORMATION's 260 an
+/// eight-second one. The Field branch ticks every second, so a spilled skill paid its whole cast
+/// value every tick — nine and eight times its intended output, on the very path the slot split
+/// created.
+/// </para>
+/// <para>
+/// Parity is the deliberate starting point rather than a law: a passive costs no beat, so it may
+/// well deserve to sit under its active face. What must never return is a passive slot silently
+/// multiplying a skill by its cooldown.
+/// </para>
+/// </remarks>
+public class PassiveCadenceTests
+{
+    private static Build OneSkill(Form form, bool passive)
+    {
+        var b = new Build { ActiveCapacity = 1, PassiveCapacity = 1 };
+        b.Weave(new EquippedSkill(
+            new WovenAbility { Name = form.ToString(), Source = Source.Body, Form = form },
+            FormBehaviour.BaseCooldownMs(form), PassiveSlot: passive));
+        return b;
+    }
+
+    private static long DamageIn(Build build, int waveMs)
+    {
+        var champ = new Champion { MaxHealth = 50_000_000, Health = 50_000_000 };
+        var (_, events) = SoloBattle.ResolveWave(
+            champ, build, new Hunter(),
+            // Health far beyond anything the wave can chew through, so the fight runs the full clock
+            // and the comparison is over the same elapsed time on both sides.
+            enemyHealth: 500_000_000f, enemyDamage: 0f, enemyIntervalMs: 100_000,
+            ExpeditionTuning.Default, new Random(5));
+        return events.Where(e => e.Kind == BattleEventKind.Strike && e.AtMs <= waveMs)
+                     .Sum(e => (long)e.Amount);
+    }
+
+    [Theory]
+    [InlineData(Form.Strike)]
+    [InlineData(Form.Transformation)]
+    [InlineData(Form.Projectile)]
+    public void test_a_spilled_skill_does_not_multiply_itself_by_its_cooldown(Form form)
+    {
+        const int window = 30_000;
+        var asActive = DamageIn(OneSkill(form, passive: false), window);
+        var asPassive = DamageIn(OneSkill(form, passive: true), window);
+
+        Assert.True(asPassive > 0, $"{form} in a passive slot dealt nothing at all.");
+
+        // Both builds also swing, so neither figure is the skill alone; what is being caught is an
+        // ORDER-OF-MAGNITUDE break, which is what ticking a cast value every second produces.
+        var ratio = asPassive / (double)asActive;
+        Assert.True(ratio < 2.0,
+            $"{form} dealt {ratio:0.00}x as much from a passive slot as from an active one. A Field " +
+            "ticks every second and FormBaseValue is quoted per CAST, so an unscaled spill multiplies " +
+            "the skill by its whole cooldown.");
+        Assert.True(ratio > 0.4,
+            $"{form} dealt only {ratio:0.00}x as much passively; moving a slot should cost steadiness, " +
+            "not most of the skill.");
+    }
+}
