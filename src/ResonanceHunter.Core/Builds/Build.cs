@@ -203,12 +203,38 @@ public sealed record Keystone
 /// the player WOVE. That is what <c>Core.Abilities</c> was always for, and it is why Form finally
 /// matters: a build is a choice of Forms, and the Vow on each is what it cost to have them.
 /// </remarks>
-public sealed record EquippedSkill(WovenAbility Ability, int CooldownMs)
+public sealed record EquippedSkill(WovenAbility Ability, int CooldownMs, bool Passive = false)
 {
     public string Name => Ability.Name;
     public Form Form => Ability.Form;
     public Source Source => Ability.Source;
     public Vow? Vow => Ability.Vow;
+
+    /// <summary>
+    /// The catalogue entry behind this skill, resolved through the legacy <see cref="Form"/> bridge.
+    /// </summary>
+    /// <remarks>
+    /// The bridge is deliberate and temporary. <see cref="WovenAbility"/> still carries a Form, so a
+    /// saved build and every existing call site keep working while the rework lands stage by stage;
+    /// once <c>WovenAbility</c> carries a <c>SkillId</c> this becomes a lookup by id and the Form
+    /// column disappears. See <c>design/gdd/skill-slots-and-skill-trees.md</c> §11.
+    /// </remarks>
+    public SkillDef Def => SkillCatalogue.ForLegacy(Form);
+
+    /// <summary>Which face of the skill this slot chose — the tree's ring 0.</summary>
+    public SkillFace Face => Def.Face(Passive);
+
+    /// <summary>
+    /// Does this skill cost the champion its action?
+    /// </summary>
+    /// <remarks>
+    /// <b>This is the number the whole rework turns on.</b> Beat demand is the share of beats claimed
+    /// by a cast, and the basic attack only swings on what is left over
+    /// (<c>SoloBattle</c>: <c>if (onBeat &amp;&amp; !acted)</c>). Four beat-taking skills demanded ~0.80 of
+    /// the beats, so the champion's own swing clip almost never played — which is the animation
+    /// chaos, the effect pile-up and the jammed cooldown knob, all from one cause.
+    /// </remarks>
+    public bool TakesABeat => Face.TakesABeat;
 }
 
 /// <summary>
@@ -270,6 +296,73 @@ public sealed class Build
     private int _slotCapacity = SkillSlots;
 
     /// <summary>
+    /// How many ACTIVE skills — ones that cost the champion an action — a build may carry.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The rework's target is <b>two</b>, against two passive slots. Beat demand with four actives is
+    /// about 0.80 (Strike 0.17 + Projectile 0.25 + Mark 0.19 + Transformation 0.19), so four beats in
+    /// five were somebody's cast and the plain swing almost never played. Two actives takes it to
+    /// about 0.44 <i>without moving a single cooldown</i>, which is why the knob that had no room
+    /// left in it stops mattering.
+    /// </para>
+    /// <para>
+    /// <b>It is deliberately still four here.</b> Stage 2 of the rework installs the machinery — the
+    /// per-kind capacities and the enforcement in <see cref="Weave"/> — with the numbers left where
+    /// they are, so the whole suite stays green while the mechanism is proven. Flipping this to 2
+    /// is stage 2b, and it lands together with the balance re-measurement that has to come with it:
+    /// halving the actives roughly halves cast output, so <c>AutoAttackDamage</c> and
+    /// <c>FormBaseValue</c> move with it. See <c>design/gdd/skill-slots-and-skill-trees.md</c> §10.
+    /// </para>
+    /// </remarks>
+    public int ActiveCapacity
+    {
+        get => Math.Max(_activeCapacity ?? SlotCapacity, ActiveCount);
+        set => _activeCapacity = Math.Max(1, value);
+    }
+
+    /// <summary>How many PASSIVE skills — ones that never cost an action — a build may carry.</summary>
+    public int PassiveCapacity
+    {
+        get => Math.Max(_passiveCapacity ?? SlotCapacity, PassiveCount);
+        set => _passiveCapacity = Math.Max(0, value);
+    }
+
+    // UNSET MEANS "THE WHOLE BUDGET", not a constant. A build handed a fifth slot by the trait spine
+    // raises SlotCapacity, and a per-kind cap frozen at the old constant would clamp that fifth slot
+    // off — which is the exact bug FIFTH WEAVE already had once (see SlotCapacity's note). Stage 2b
+    // sets these to 2 and 2 explicitly; until then a build's budget is undivided, as it is today.
+    private int? _activeCapacity;
+    private int? _passiveCapacity;
+
+    /// <summary>Woven skills that cost the champion an action.</summary>
+    public int ActiveCount => _skills.Count(s => s.TakesABeat);
+
+    /// <summary>Woven skills that never cost an action — Fields and Reactions.</summary>
+    public int PassiveCount => _skills.Count(s => !s.TakesABeat);
+
+    /// <summary>
+    /// The share of beats a build's actives demand, 0..1 — and therefore how little is left for the
+    /// champion's own swing.
+    /// </summary>
+    /// <remarks>
+    /// An upper bound rather than a measurement: two ready skills contend for one beat and the loser
+    /// waits, so the realised share is a little under this. It is the number the whole rework exists
+    /// to bring down, and it is exposed so a test can assert on it instead of a human counting swings
+    /// in a capture.
+    /// </remarks>
+    public float BeatDemand
+    {
+        get
+        {
+            var demand = 0f;
+            foreach (var s in _skills)
+                if (s.TakesABeat && s.Face.Beats > 0) demand += 1f / s.Face.Beats;
+            return Math.Min(1f, demand);
+        }
+    }
+
+    /// <summary>
     /// The character's Form AFFINITY — the Nen-hexagon axis. Null means unchosen (everything neutral).
     /// </summary>
     /// <remarks>
@@ -289,6 +382,16 @@ public sealed class Build
     {
         ArgumentNullException.ThrowIfNull(skill);
         if (_skills.Count >= SlotCapacity) return false;
+        // PER-KIND CAPACITY. An active costs the champion an action and a passive never does, so they
+        // are two different budgets and a build cannot spend one on the other. Enforced from the
+        // moment the field exists rather than left switched off, because a capacity nothing checks is
+        // exactly the dormant-feature failure this codebase keeps producing — FIFTH WEAVE was bought,
+        // persisted, resolved, displayed and then clamped off at the last step.
+        if (skill.TakesABeat)
+        {
+            if (ActiveCount >= ActiveCapacity) return false;
+        }
+        else if (PassiveCount >= PassiveCapacity) return false;
         _skills.Add(skill);
         return true;
     }
