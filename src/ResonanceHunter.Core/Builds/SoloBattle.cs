@@ -1106,7 +1106,7 @@ public static class SoloBattle
                 // this loop is unchanged — a Reaction is answered at the enemy's swing, a Field ticks
                 // on its own clock, an Active takes the beat — but the question is now the skill's,
                 // which is what lets one style be woven either way. (Rework stage 3.)
-                var kind = sk.Face.Kind;
+                var kind = sk.Def.Kind;
 
                 // A REACTION fires on its event, not here.
                 if (kind == SkillKind.Reaction) continue;
@@ -1191,7 +1191,12 @@ public static class SoloBattle
                 // A CAST IS A BEAT'S ACTION — never between beats, never two in one. A ready skill that
                 // loses the beat to an earlier slot stays ready (nothing is written) and takes the next.
                 if (!onBeat || acted) continue;
-                var beats = FormBehaviour.CooldownBeats(form);
+                // THE SKILL'S OWN CADENCE. FormBehaviour.CooldownBeats answered per FORM, so every
+                // skill of a style shared one number and a variation could never change it. The
+                // catalogue owns it now (design §5), which is also what makes Build.BeatDemand tell
+                // the truth — it reads the same field, and a readout that disagrees with the fight is
+                // the failure this codebase keeps paying for.
+                var beats = sk.Def.Beats;
                 if (beats > 0)
                 {
                     // COUNTED IN BEATS: "every fourth action". PREPARATION waives the opening wait.
@@ -1511,7 +1516,7 @@ public static class SoloBattle
                 for (var idx = 0; idx < skills.Count; idx++)
                 {
                     var sk = skills[idx];
-                    if (sk.Face.Kind != SkillKind.Reaction || sk.Face.On != ReactionOn.Bitten) continue;
+                    if (sk.Def.Kind != SkillKind.Reaction || sk.Def.On != ReactionOn.Bitten) continue;
 
                     // COILED re-arms the TRAP far faster, so it answers more bites. This loop only runs for
                     // a woven Trap, so the enchant is naturally dead on any build without one.

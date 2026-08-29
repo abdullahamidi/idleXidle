@@ -110,8 +110,12 @@ public static class BuildComposer
             var s = picks[i];
             var vow = Weaving.ById(s.VowId);
             var ability = new WovenAbility { Name = s.Name, Source = s.Source, Form = s.Form, Vow = vow };
-            build.Weave(new EquippedSkill(ability, FormBehaviour.BaseCooldownMs(s.Form),
-                                          PassiveSlot: passive[i]));
+            // The skill's own timing seeds its cooldown. A beat-counted skill still counts BEATS in
+            // the fight; this is the millisecond figure the readouts and the wave-length rule use.
+            var def = SkillCatalogue.Resolve(s.Form, passive[i]);
+            var cooldown = def.Beats > 0 ? def.Beats * SoloBattle.DefaultBeatMs
+                                         : FormBehaviour.BaseCooldownMs(s.Form);
+            build.Weave(new EquippedSkill(ability, cooldown, PassiveSlot: passive[i]));
         }
         return build;
     }

@@ -33,9 +33,9 @@ public class SkillSlotKindTests
 {
     private static EquippedSkill Skill(Form form, bool passive = false, string? name = null)
     {
-        var def = SkillCatalogue.ForLegacy(form);
+        var def = SkillCatalogue.Resolve(form, passive);
         return new EquippedSkill(
-            new WovenAbility { Name = name ?? def.Face(passive).Name, Source = Source.Body, Form = form },
+            new WovenAbility { Name = name ?? def.Name, Source = Source.Body, Form = form },
             CooldownMs: 1000,
             PassiveSlot: passive);
     }
@@ -48,10 +48,10 @@ public class SkillSlotKindTests
 
         Assert.True(active.TakesABeat);
         Assert.False(passive.TakesABeat);
-        // Same skill, same style, same art — the slot is the only difference.
-        Assert.Equal(active.Def.Id, passive.Def.Id);
+        // Same STYLE and same art; a spilled active becomes a different ability of that style.
+        Assert.Equal(active.Def.Style, passive.Def.Style);
         Assert.Equal(active.Def.ClipKey, passive.Def.ClipKey);
-        Assert.NotEqual(active.Face.Name, passive.Face.Name);
+        Assert.NotEqual(active.Def.Name, passive.Def.Name);
     }
 
     [Fact]
@@ -138,14 +138,14 @@ public class SkillSlotKindTests
         // must leave the champion's own swing the majority of its beats, or the rework has not
         // actually fixed the thing it exists for.
         var shortest = SkillCatalogue.All
-            .OrderBy(s => s.Active.Beats).Take(2).ToList();
+            .Where(s => s.TakesABeat).OrderBy(s => s.Beats).Take(2).ToList();
 
         var b = new Build { ActiveCapacity = 2 };
         foreach (var def in shortest)
-            b.Weave(Skill(def.LegacyForm, name: def.Id));
+            b.Weave(Skill(def.LegacyForm ?? Form.Strike, name: def.Id));
 
         Assert.True(b.BeatDemand < 0.5f,
-            $"the worst active pair ({string.Join(" + ", shortest.Select(s => s.Active.Name))}) " +
+            $"the worst active pair ({string.Join(" + ", shortest.Select(s => s.Name))}) " +
             $"demands {b.BeatDemand:0.00} of the beats");
     }
 }
@@ -507,16 +507,31 @@ public class PerSkillCooldownTests
     }
 
     [Fact]
-    public void test_two_skills_of_one_style_can_differ_in_cooldown()
+    public void test_a_skills_own_beat_count_drives_its_cadence()
     {
-        // MARK is counted in milliseconds rather than beats, so its cooldown is exactly the number
-        // this field carries. Halve it and it must cast about twice as often.
-        var slow = CastsIn(WithCooldown(Form.Mark, 8000));
-        var fast = CastsIn(WithCooldown(Form.Mark, 4000));
+        // Every ACTIVE is beat-counted now, so the cadence a variation would change is Def.Beats.
+        // A four-beat skill must cast more often than a six-beat one over the same wave.
+        var six = CastsIn(WithCooldown(Form.Strike, FormBehaviour.BaseCooldownMs(Form.Strike)));
+        var four = CastsIn(WithCooldown(Form.Projectile, FormBehaviour.BaseCooldownMs(Form.Projectile)));
 
-        Assert.True(slow > 0, "the slow build never cast at all — the wave was too short to measure.");
-        Assert.True(fast > slow,
-            $"halving CooldownMs changed nothing ({fast} casts against {slow}). The field is being " +
-            "ignored again and the sim has gone back to reading the Form table.");
+        Assert.Equal(6, SkillCatalogue.Resolve(Form.Strike, false).Beats);
+        Assert.Equal(4, SkillCatalogue.Resolve(Form.Projectile, false).Beats);
+        Assert.True(six > 0, "the slower build never cast at all — the wave was too short to measure.");
+        Assert.True(four > six,
+            $"the four-beat skill cast {four} times against the six-beat skill's {six}. The sim is not " +
+            "reading the skill's own beat count.");
+    }
+
+    [Fact]
+    public void test_the_form_table_now_answers_from_the_catalogue()
+    {
+        // ONE SOURCE. FormBehaviour is the Form-shaped door onto SkillCatalogue, not a second table:
+        // the hunt rail's cooldown ring reads it, the sim reads the catalogue, and they must agree or
+        // the dial lies about the fight — the exact failure the Beat event was added to stop.
+        foreach (var form in Enum.GetValues<Form>())
+        {
+            var def = SkillCatalogue.Resolve(form, passive: false);
+            Assert.Equal(def.Beats, FormBehaviour.CooldownBeats(form));
+        }
     }
 }

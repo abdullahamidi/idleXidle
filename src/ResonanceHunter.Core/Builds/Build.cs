@@ -233,10 +233,7 @@ public sealed record EquippedSkill(WovenAbility Ability, int CooldownMs, bool? P
     /// once <c>WovenAbility</c> carries a <c>SkillId</c> this becomes a lookup by id and the Form
     /// column disappears. See <c>design/gdd/skill-slots-and-skill-trees.md</c> §11.
     /// </remarks>
-    public SkillDef Def => SkillCatalogue.ForLegacy(Form);
-
-    /// <summary>Which face of the skill this slot chose — the tree's ring 0.</summary>
-    public SkillFace Face => Def.Face(Passive);
+    public SkillDef Def => SkillCatalogue.Resolve(Form, Passive);
 
     /// <summary>
     /// Does this skill cost the champion its action?
@@ -248,7 +245,7 @@ public sealed record EquippedSkill(WovenAbility Ability, int CooldownMs, bool? P
     /// the beats, so the champion's own swing clip almost never played — which is the animation
     /// chaos, the effect pile-up and the jammed cooldown knob, all from one cause.
     /// </remarks>
-    public bool TakesABeat => Face.TakesABeat;
+    public bool TakesABeat => Def.TakesABeat;
 }
 
 /// <summary>
@@ -395,7 +392,7 @@ public sealed class Build
         {
             var demand = 0f;
             foreach (var s in _skills)
-                if (s.TakesABeat && s.Face.Beats > 0) demand += 1f / s.Face.Beats;
+                if (s.TakesABeat && s.Def.Beats > 0) demand += 1f / s.Def.Beats;
             return Math.Min(1f, demand);
         }
     }

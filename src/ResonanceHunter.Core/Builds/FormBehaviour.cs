@@ -49,12 +49,16 @@ public static class FormBehaviour
     /// are rhythm skills and count beats, so a fast build casts them sooner in seconds but not in
     /// actions; Transformation and Mark are windows and count seconds; Trap answers a bite; Aura ticks.
     /// </summary>
-    public static int CooldownBeats(Form form) => form switch
-    {
-        Form.Strike => 6,                // the heavy blow: every sixth action
-        Form.Projectile => 4,            // every fourth action
-        _ => 0,
-    };
+    /// <remarks>
+    /// <b>DELEGATES TO THE CATALOGUE.</b> This table used to hold the numbers, which meant every skill
+    /// of a style shared one cadence and a variation could never change it. <see cref="SkillCatalogue"/>
+    /// owns them now (design §5), and this stays as the Form-shaped door onto it so the readouts and
+    /// the tests that speak Form keep working — and, more importantly, keep agreeing with the fight.
+    /// Two counters for one rule is the shape this project keeps paying for.
+    ///
+    /// A passive skill returns 0: it counts no beats because it takes none.
+    /// </remarks>
+    public static int CooldownBeats(Form form) => SkillCatalogue.Resolve(form, passive: false).Beats;
 
     /// <summary>
     /// The time-counted cooldown; for a beat-counted Form this is its beats at action speed 1.0, for
@@ -86,15 +90,17 @@ public static class FormBehaviour
     // the designer wants to design in its own session (2 active + 2 passive; a passive costs no beat, the
     // way Aura does today). Until then the FEEL was improved where it costs no balance — the swing takes a
     // smaller share of the beat and a cast a larger one (see ClipShareOfBeat / SkillClipShareOfBeat).
-    public static int BaseCooldownMs(Form form) => form switch
+    /// <remarks>
+    /// Also from the catalogue now. An ACTIVE reports its beats as milliseconds at speed 1.0; a
+    /// passive reports the clock it actually runs on — a Field its tick interval, a Reaction the
+    /// 8 seconds a trap waits to re-arm.
+    /// </remarks>
+    public static int BaseCooldownMs(Form form)
     {
-        Form.Strike => 6 * SoloBattle.DefaultBeatMs,       // 9000 at speed 1.0
-        Form.Projectile => 4 * SoloBattle.DefaultBeatMs,   // 6000
-        Form.Aura => 0,                  // always on — see IsPassive
-        Form.Trap => 8_000,              // rare, and only pays when bitten
-        Form.Mark => 8_000,              // a window, not a rhythm
-        _ => 8_000,                      // Transformation — a window, counted in time
-    };
+        var def = SkillCatalogue.Resolve(form, passive: false);
+        if (def.Beats > 0) return def.Beats * SoloBattle.DefaultBeatMs;
+        return def.IntervalMs > 0 ? def.IntervalMs : 8_000;
+    }
 
     /// <summary>
     /// How many creatures one activation of this Form reaches.

@@ -4,6 +4,7 @@ using System.Linq;
 using ResonanceHunter.Core.Abilities;
 using ResonanceHunter.Core.Automation;
 using ResonanceHunter.Core.Builds;
+using ResonanceHunter.Core.Prestige;
 using ResonanceHunter.Core.Economy;
 using ResonanceHunter.Core.Expeditions;
 using Xunit;
@@ -250,19 +251,27 @@ public class BeatCadenceTest
     }
 
     /// <summary>A real loadout: four skills competing for one action per beat.</summary>
+    /// <summary>
+    /// The loadout a real player carries: two actives and two passives, through the composer.
+    /// </summary>
+    /// <remarks>
+    /// It used to weave four skills into a bare <see cref="Build"/>, which after the slot rework is a
+    /// state no player can reach — the composer divides the budget, and four beat-taking skills
+    /// contended so hard that a Projectile could wait six actions and the ring sat full for two of
+    /// them. That is a true observation about a build the game no longer produces, and pinning a
+    /// READOUT against an unreachable fixture is how a test outlives the thing it was protecting.
+    /// </remarks>
     private static Build FourSkillLoadout()
-    {
-        var b = new Build();
-        var plan = new (Source S, Form F)[]
-        {
-            (Source.Body, Form.Strike), (Source.Mind, Form.Projectile),
-            (Source.Nature, Form.Aura), (Source.Spirit, Form.Mark),
-        };
-        foreach (var (s, f) in plan)
-            b.Weave(new EquippedSkill(new WovenAbility { Name = f.ToString(), Source = s, Form = f },
-                                      FormBehaviour.BaseCooldownMs(f)));
-        return b;
-    }
+        => BuildComposer.Compose(
+            new MemoryDustTree(), new MasteryTree(), character: null,
+            skills: new[]
+            {
+                new BuildComposer.SkillPick(Source.Body, Form.Strike, null, "Strike"),
+                new BuildComposer.SkillPick(Source.Mind, Form.Projectile, null, "Projectile"),
+                new BuildComposer.SkillPick(Source.Nature, Form.Aura, null, "Aura"),
+                new BuildComposer.SkillPick(Source.Spirit, Form.Mark, null, "Mark"),
+            },
+            keystoneIds: Array.Empty<string>(), slotCapacity: 4);
 
     /// <summary>The ring, read exactly the way SoloExpeditionScreen reads it.</summary>
     private static float Ring(WaveReplay replay, float playhead, int carry, Source src, Form form)
@@ -308,7 +317,9 @@ public class BeatCadenceTest
         var carry = 0;
         var checkedCasts = 0;
 
-        for (var w = 0; w < 5; w++)
+        // TEN WAVES, from five. With two actives instead of four the champion clears a wave in fewer
+        // actions, so five waves no longer hold the three casts this needs to prove anything.
+        for (var w = 0; w < 10; w++)
         {
             run.RefreshPool();
             run.PushWave();
