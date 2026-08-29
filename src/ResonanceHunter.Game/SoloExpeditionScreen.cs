@@ -2818,6 +2818,14 @@ public sealed class SoloExpeditionScreen
         // Spec §14: auto-skill dock centred under the arena (500,770,920,145). Hex slots (ui_slot_skill_hex),
         // Source glyph inside, Form + AUTO beneath. Presentation Model C (§14.4): AUTO/READY, no fake cooldowns.
         var skills = Loadout.Skills;
+        // WHICH OF THESE COST AN ACTION. From BuildComposer, the same walk the fight and the weave
+        // screen read, so all three agree by construction rather than by three copies of a rule.
+        // It matters here because a skill can now be passive WITHOUT its Form being one: an old build
+        // with four beat-taking skills spills its overflow into the passive slots, and a spilled MARK
+        // asked about its Form would be drawn with a cooldown ring that never fills.
+        var railPassive = BuildComposer.SlotKinds(
+            skills.Select(k => new BuildComposer.SkillPick(k.Source, k.Form, k.VowId, "")).ToList(),
+            Loadout.SkillCapacity);
         var n = Loadout.SkillCapacity;     // the dock shows the slots you have, not the four everyone starts with
         // Stacked down the control rail instead of a horizontal dock across the bottom centre, which
         // sat over the stage and collided with the nav rail at y=934.
@@ -2864,7 +2872,8 @@ public sealed class SoloExpeditionScreen
                 // A PASSIVE IS ALWAYS READY. Every branch below asks the replay when this skill last
                 // cast, and an Aura never "casts" — so ready stayed 0 and the dial shaded the whole
                 // medallion for the entire run, under a label reading ALWAYS ON (review 2026-08-30).
-                var ready = FormBehaviour.IsPassive(s.Form) ? 1f : 0f;
+                var isPassiveSlot = i < railPassive.Count && railPassive[i];
+                var ready = isPassiveSlot ? 1f : 0f;
                 // How many notches the ring has. Set by the beat-counted branch to the plain actions in
                 // THIS cycle, so one action is always exactly one notch; 0 leaves the ring continuous.
                 var ringSteps = 0;
@@ -2974,7 +2983,9 @@ public sealed class SoloExpeditionScreen
                 // Beside the slot: the name is short and pairs with the medallion.
                 _ui.TextBig(b, label, box.Right + 12, box.Y + 10, Bone, lpx);
                 // The rhythm, in words, under the name: what the pips count.
-                var rhythm = FormBehaviour.CooldownBeats(s.Form) switch
+                var rhythm = isPassiveSlot
+                    ? (s.Form == Form.Trap ? "WHEN BITTEN" : "ALWAYS ON")
+                    : FormBehaviour.CooldownBeats(s.Form) switch
                 {
                     2 => "EVERY OTHER ACTION",
                     3 => "EVERY THIRD ACTION",
