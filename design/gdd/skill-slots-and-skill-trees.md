@@ -220,135 +220,209 @@ Everything that shipped. The slot machinery does not care how a skill got its ki
 | A Field's damage scales to its own cadence | A spilled skill becomes its style's PASSIVE skill |
 | Old saves keep all four woven skills | |
 
-## 6. The other five trees
+## 6. The twelve skills
 
-> Rewritten 2026-08-29 under the two laws in §8. The first version of this section was
-> rejected as too clever; the second was simple but had collapsed into sameness — all five
-> ring 2s were "defence break / defence ignore" and SAP appeared in three trees. The fix is
-> the ownership table below.
+Authored 2026-08-30, gated against the two laws (§8) and the ownership table, then corrected. The
+72-node design this section used to hold is superseded; it was the raw material.
 
 ### Mechanic ownership — each style owns its verbs
-
-A mechanic belongs to exactly ONE style. This is what stops six trees from becoming one
-tree with six skins, and it is checkable: no node may use a mechanic another style owns.
 
 | Style | Owns |
 |---|---|
 | **HAMMER** | defence break, defence ignore, stun, execute threshold |
-| **VOLLEY** | hit count, bleed (damage over time), cooldown reduction, spread on kill |
-| **SNARE** | reflect, taunt, shield, damage taken |
-| **SIGN** | amplify — magnitude, duration, uptime. Nothing else; it deals no damage. |
+| **VOLLEY** | hit count, bleed, cooldown reduction, spread on kill |
+| **SNARE** | reflect, shield, damage taken |
+| **SIGN** | amplify only — magnitude, duration, uptime. It deals no damage itself. |
 | **FIELD** | slow, area damage, scaling with the number of living enemies |
 | **DRAIN** | lifesteal, healing, attack break, scaling with health |
 
-### VOLLEY
+> **TAUNT WAS REMOVED from SNARE's list.** Every creature in a wave attacks the champion already, so
+> "the enemies target you" names nothing. What the taunt reinforcements actually did was *pull the
+> wave's next attack forward* — which put a third writer on the enemy bite clock, alongside HAMMER's
+> stun (pushes it back) and FIELD's slow (stretches the interval). A build carrying HAMMER's PIN and
+> SNARE's HOOK cancelled itself out and nothing on the screen said so. **Only two styles write that
+> clock now:** FIELD scales the interval, HAMMER offsets the next bite. They compose; they do not fight.
 
-*You fire many small arrows and hit several enemies at once.*
+### HAMMER
 
-| Ring | Node | Effect |
+| | Entry | Effect |
 |---|---|---|
-| **0 · What it is** | **SPRAY** | Active. Fires 5 arrows at random enemies. With fewer enemies they are split between them. |
-| | **RAIN** | Passive. Arrow rain hits the whole wave every 3s. |
-| **1 · How it hits** | **VOLUME** | +2 arrows, +50% cooldown. |
-| | **BROADHEAD** | +60% damage per arrow, 2 fewer arrows. |
-| | **SNAPSHOT** | -30% cooldown, -30% damage per arrow. |
-| **2 · What it beats** | **QUARRY** | Double damage to enemies above 60% health. |
-| | **THICKET** | +15% damage per living enemy. |
-| **3 · After the hit** | **BLEED** | Damage over time: hit enemies bleed for 4s. |
-| | **NOCK** | Each arrow that hits lowers this skill's cooldown by 0.2s. |
-| | **RICOCHET** | An arrow that kills hits one more enemy. |
-| **4 · Capstone** | **STORM** | Cooldown falls 10% for each living enemy. |
-| | **SCATTER** | After a kill, the next volley hits every enemy. |
+| **Active** | **BLOW** | Heavy damage to one target. Every 6 beats. |
+| ▸ | **FLATTEN** | Defence ignore: the blow ignores the target's defence. |
+| | TOLL | The defence the blow ignores is added to its damage. |
+| | SHEAR | The blow is 50% larger against a target whose defence it ignored. |
+| | TRAIL | The defence ignore also applies to your basic attack for 3s. |
+| ▸ | **FINISH** | Execute threshold: the blow kills a target under 15% health. Once per wave. |
+| | BRINK | The execute threshold rises to 25% health. |
+| | TWICE | The blow may execute twice each wave. |
+| | SPUR | The blow deals 20% more for each enemy it has executed this wave. |
+| **Passive** | **PRESS** | A weight sits on the front enemy: its defence drops 5 every 2s, down to -25. |
+| ▸ | **CRUSHING** | The defence drop is 10 every 2s instead of 5, down to -50. |
+| | SETTLE | The floor falls from -50 to -90. |
+| | SEIZE | When the front enemy dies, its broken defence carries to the next. |
+| | UNDERMINE | The weight breaks defence on the two front enemies instead of one. |
+| ▸ | **PIN** | 1s stun on the front enemy every 6s. |
+| | HOLD | The stun is 1.5s instead of 1s. |
+| | BUCKLE | Each stun strips 10 defence from the front enemy. |
+| | SEAL | While an enemy is stunned the weight's defence drop comes every 1s. |
+
+> BURDEN ("the weight also deals heavy damage every 2s") was cut: recurring damage on a fixed clock
+> is damage over time, which the table gives to VOLLEY. MASS, GRIND and PULP all hung off that
+> borrowed verb, so half of PRESS's tree rested on another style's mechanic. CRUSHING replaces it and
+> stays inside defence break, which is what PRESS is.
 
 ### SNARE
 
-*Being attacked works in your favour.*
-
-| Ring | Node | Effect |
+| | Entry | Effect |
 |---|---|---|
-| **0 · What it is** | **JAWS** | Passive. A trap rings you: every attack on you takes 50% back. Rearms every 3s. |
-| | **SNAP** | Active. Damage to one target, raised by your maximum health. |
-| **1 · How it hits** | **TEETH** | +100% damage, +50% cooldown. |
-| | **NET** | Hits the whole wave for 50% each. |
-| | **SPRING** | Rearms twice as fast for half the damage. |
-| **2 · What it beats** | **BAIT** | Taunt: the wave attacks you 1s sooner, and the trap is armed for it. |
-| | **PLATE** | Take 25% less damage while the trap is armed. |
-| **3 · After the hit** | **SHELL** | Gives you a shield equal to the damage it reflected. |
-| | **SALVE** | Heals you for 30% of the damage taken. |
-| | **HOOK** | The enemy that set off the trap attacks you again 1s sooner. |
-| **4 · Capstone** | **RECOIL** | Reflects 100% of the attack back at the enemy. |
-| | **IRON** | While the trap is armed you take no damage; it rearms 50% slower. |
+| **Active** | **REPAY** | Deals 200% of the damage you have taken since its last cast. Every 5 beats. |
+| ▸ | **VENGEANCE** | 350% instead of 200%, but only damage taken in the last 3s counts. |
+| | GRUDGE | The total is not cleared when it pays; it halves instead. |
+| | SCARRED | Damage taken below half health counts double. |
+| | BRUISED | Damage the trap already reflected still counts toward the total. |
+| ▸ | **BANKED** | Instead of dealing it, the total becomes a shield of equal size. |
+| | STANDING | The shield does not expire; it holds until it is spent. |
+| | CARRIED | Any shield left when a wave ends carries into the next. |
+| | LINING | The shield is 50% larger. |
+| **Passive** | **JAWS** | Every bite returns 50% of it to the enemy that bit you. Rearms every 3s. |
+| ▸ | **NET** | The reflect returns 100% of the bite instead of 50%. |
+| | MESH | The reflect grows 10% per bite taken this wave, up to +50%. |
+| | RECOIL | The reflect still lands at half strength while the trap rearms. |
+| | SPITE | A reflect that kills the enemy that bit you rearms the trap at once. |
+| ▸ | **IRON** | No reflect: the trap stops a whole bite, but rearms every 6s. |
+| | REPRISAL | A stopped bite is returned to the enemy that made it, in full. |
+| | BLUNT | The trap springs on two bites before it rearms. |
+| | HARDEN | Each spring raises the reflect 20% for the wave, up to 40%. |
+
+> SHELL — a 4-beat shield — was cut, and REPAY written in its place. SHELL was the only one of the
+> twelve to spend the champion's scarcest resource and return no damage and no enemy debuff, and in
+> an idle game the currency is clear speed. It was also dominated by its own style's passive
+> (JAWS/IRON stops a whole bite every 6s at zero action cost, against SOAK's roughly 20% average
+> mitigation bought with a beat), and six of its seven entries were bare numbers — the failure
+> `SkillShape.cs`'s own header warns about. REPAY is SNARE's sentence as an ACTIVE: the more you have
+> been hit, the harder it pays.
+>
+> STORE ("reflected to the whole wave") was cut for the same reason PLAGUE was cut from DRAIN
+> earlier: wave-wide delivery is FIELD's area damage.
 
 ### SIGN
 
-*You deal nothing yourself; you make everything else bigger.*
-
-| Ring | Node | Effect |
+| | Entry | Effect |
 |---|---|---|
-| **0 · What it is** | **CALL** | Active. Damage amplify: all your damage +50% for 4s. |
-| | **BRAND** | Passive. A mark sits on the front enemy: your damage to it is +30%. |
-| **1 · How it hits** | **SWELL** | +10% amplify per hit landed since the last cast, up to +50%. |
-| | **SPEND** | +150% amplify, 2s duration. |
-| | **STRETCH** | +4s duration, amplify halved. |
-| **2 · What it beats** | **OPENING** | Double amplify during the first 3s of a wave. |
-| | **CHORUS** | The amplify applies to every enemy at half strength. |
-| **3 · After the hit** | **RESIDUE** | When the amplify ends, the biggest hit under it lands again at 50%. |
-| | **FOCUS** | The amplify is doubled while only one enemy is alive. |
-| | **PRIME** | The amplify is at full strength from its first instant. |
-| **4 · Capstone** | **BOTH WAYS** | Double amplify, double damage taken. |
-| | **STANDING** | The amplify never falls below +25%. |
+| **Active** | **CALL** | All your damage +60% for 6s. Every 5 beats. |
+| ▸ | **SPEND** | The window is 2s and amplifies +200%. |
+| | OVERSPEND | Amplify +100% more; the window falls to 1.5s. |
+| | HERALD | The window opens on its own when a wave starts. |
+| | AFTERGLOW | When the window closes, +40% holds until the next cast. |
+| ▸ | **STEADY** | Each cast adds +40% amplify for the rest of the wave, up to +80%. |
+| | REDOUBLE | Each cast adds +70% instead of +40%. |
+| | PILLAR | The cap rises from +80% to +160%. |
+| | FOOTING | Half the amplify carries into the next wave. |
+| **Passive** | **BRAND** | Your damage to the front enemy is +70%. |
+| ▸ | **SPRAWL** | The mark covers every enemy instead, at half strength. |
+| | EVEN | Every enemy's mark rises from half to three-quarters strength. |
+| | WINNOW | A marked enemy's death deepens every other mark +10%, up to +50%. |
+| | RIPPLE | Each death deepens the other marks +20% instead of +10%. |
+| ▸ | **ETCH** | The mark deepens +50% every 2s to +170%, and keeps its depth when it moves. |
+| | SINK | The mark deepens +80% each time instead of +50%. |
+| | GRAVEN | The cap rises from +170% to +250%. |
+| | PACE | The mark deepens every 1s instead of every 2s. |
+
+### VOLLEY
+
+| | Entry | Effect |
+|---|---|---|
+| **Active** | **SPRAY** | Fires 5 arrows at random enemies. With fewer enemies they are split between them. Every 3 beats. |
+| ▸ | **SPLAY** | Fires an arrow at every enemy, and never fewer than 5 arrows. |
+| | TWIN | Every enemy takes 2 arrows instead of 1. |
+| | NOCK | Cooldown falls 0.3s for each enemy beyond the first that it hits. |
+| | FLIGHT | Every enemy the cast hits bleeds for 20% of the arrow. |
+| ▸ | **CLUSTER** | All 5 arrows hit one enemy. |
+| | DRIVE | Each arrow after the first into the same enemy deals +15%. |
+| | RUPTURE | Each arrow after the first into the same enemy leaves bleed worth 20% of it. |
+| | GROUPING | When the target dies, the rest of the cast's arrows fire at the next enemy. |
+| **Passive** | **WEEP** | When an enemy dies it leaves bleed on the wave worth 30% of its health. |
+| ▸ | **TORRENT** | The bleed deals its damage twice as fast. |
+| | DRY | A kill made while nothing is bleeding leaves double bleed. |
+| | SPILLWAY | When the bleed kills, its next payment lands at once. |
+| | EBB | The bleed's last payment is doubled. |
+| ▸ | **CARRION** | The bleed carries into the next wave instead of ending. |
+| | DREGS | Bleed carried into a new wave pays double for its first 3s. |
+| | ONSET | Bleed carried into a wave hits every enemy with its first payment. |
+| | LAST DROP | The kill that clears a wave doubles the standing bleed. |
+
+> RUNOFF ("skill cooldowns fall 0.5s each time the bleed empties") was cut. Cooldown reduction is
+> VOLLEY's, so it passed the table — but the chain is kill, then bleed, then the bleed empties, then
+> EVERY cooldown falls, and TORRENT makes the bleed empty twice as fast. That is banned rule 3's
+> shape. "Each time the bleed empties" was also undefined between per-enemy and per-wave; per enemy
+> in a Swarm of eight is four seconds off every cooldown per clear — LooseAgain again.
 
 ### FIELD
 
-*You hit the whole wave, all the time.*
-
-| Ring | Node | Effect |
+| | Entry | Effect |
 |---|---|---|
-| **0 · What it is** | **PULSE** | Active. Area damage to every enemy. |
-| | **GLOW** | Passive. Damage every 1s to every enemy. |
-| **1 · How it hits** | **DENSE** | +50% damage, +50% cooldown. |
-| | **RAPID** | -40% damage, -40% cooldown. |
-| | **SHARE** | 300% damage, split between all enemies. |
-| **2 · What it beats** | **CHILL** | Slow: enemies attack 25% slower. |
-| | **CREEP** | +10% damage for every second the field has been up this wave. |
-| **3 · After the hit** | **NUMB** | The slow deepens 5% each second, up to 40%. |
-| | **SPARK** | Every 5th hit deals triple damage. |
-| | **FADE** | Enemies under 10% health die when the field hits them. |
-| **4 · Capstone** | **TEMPEST** | +25% damage per living enemy. |
-| | **OVERLOAD** | Every 3s the field deals 5x damage to every enemy. |
+| **Active** | **PULSE** | Area damage to every enemy in the wave. Every 3 beats. |
+| ▸ | **THRONG** | Damage rises 20% for each living enemy. |
+| | HORDE | The per-enemy bonus rises from 20% to 35%. |
+| | PACKED | Above two living enemies the per-enemy bonus is doubled. |
+| | CROWDED | The bonus counts the wave's starting enemies, not the living ones. |
+| ▸ | **SHARE** | 300% damage, split evenly between every living enemy. |
+| | POOL | The split pool rises from 300% to 450%. |
+| | NARROWED | The pool is split four ways at most, however many enemies are alive. |
+| | RECLAIM | An enemy killed by the pulse returns its share to the others. |
+| **Passive** | **MIRE** | Slows every enemy's attacks by 25%. |
+| ▸ | **NUMB** | The slow deepens 5% each second, up to 40%. |
+| | DEEPEN | The slow deepens 8% a second instead of 5%. |
+| | SEDIMENT | The ceiling rises from 40% to 55%. |
+| | SILT | At the ceiling the field also deals area damage every 1s. |
+| ▸ | **TEEMING** | Slows 6% for each living enemy on top of the 25%, up to 60%. |
+| | CLOG | 8% for each living enemy instead of 6%. |
+| | BRIM | The per-enemy ceiling rises from 60% to 75%. |
+| | REMNANT | Enemies killed this wave still count toward the slow for 3s. |
+
+> UNDIVIDED ("while only one enemy is alive the pool is not split") was cut. With POOL it put 450%
+> into a single enemy on a 3-beat cooldown — one enormous blow, at half BLOW's cadence, delivered by
+> the style whose line is "you never close, and you touch everything". No table mechanic was stolen,
+> but it broke the HAMMER/VOLLEY and SNARE/FIELD oppositions the ring now rests on entirely (§4).
 
 ### DRAIN
 
-*You take part of the damage you deal back as health.*
-
-| Ring | Node | Effect |
+| | Entry | Effect |
 |---|---|---|
-| **0 · What it is** | **DRINK** | Active. Heavy damage to one target; heals you for 50% of it. |
-| | **SEEP** | Passive. Damage over time on the front enemy; heals you for 50% of it. |
-| **1 · How it hits** | **GULP** | +50% damage, +50% cooldown. |
-| | **SPILL** | Hits 3 enemies for 50% each. |
-| | **THIRST** | Double lifesteal, -25% damage. |
-| **2 · What it beats** | **GORGE** | +100% damage to enemies above 80% health. |
-| | **SAP** | Attack break: permanently lowers the target's damage. |
-| **3 · After the hit** | **HUSK** | Take up to 30% less damage as your health falls. |
-| | **TAP** | Heals 5% of your maximum health per enemy hit. |
-| | **SCAB** | Healing above full becomes a shield. |
-| **4 · Capstone** | **VESSEL** | The front enemy's attacks heal you instead of hurting you. |
-| | **FEAST** | Double damage to enemies below 30% health. |
+| **Active** | **DRINK** | Heavy damage to one target; heals you for 50% of it. Every 6 beats. |
+| ▸ | **THIRST** | Lifesteal doubles, and your per-wave healing limit doubles with it. |
+| | GREEDY | Lifesteal is 50% stronger against the enemy with the most health. |
+| | PARCH | Lifesteal doubles again while below 50% health. |
+| | TRICKLE | Your basic attacks lifesteal too, at a quarter strength. |
+| ▸ | **GLUT** | No lifesteal. Damage rises with your current health, up to +150% at full. |
+| | SURFEIT | The health scaling counts double. |
+| | STOUT | Missing health costs you only half as much of the scaling. |
+| | HIGH WATER | The scaling reads the health you started the wave with. |
+| **Passive** | **WILT** | Attack break: every enemy's damage drops 10% a pulse, down to -50%. |
+| ▸ | **SUP** | Each pulse also heals 1% of your maximum health. |
+| | BROOK | The pulse heals twice as much while below 50% health. |
+| | BALM | The healing pulse runs every 0.5s; the break keeps its 1s clock. |
+| | RESERVE | The pulse heals 1% more for every 10% the break has deepened. |
+| ▸ | **SHRIVEL** | The front enemy only: 20% a pulse, down to -80%. |
+| | HOLLOW | The break also reaches the second enemy, at half depth. |
+| | SEIZED | The front enemy starts each wave already fully broken. |
+| | GAUNT | When the front enemy dies, its break carries to the next one. |
 
-### What the ownership table cost
+> OVERFLOW ("+20% maximum health") was cut. Maximum health is not a DRAIN mechanic at all — it is a
+> CHAMPION stat, and §7's own test puts those on the mastery tree, where §9b gives it to ENDURE. A
+> layer breach rather than a style one, and it crossed the line the document had most recently drawn.
 
-Nodes cut in the differentiation pass, and why:
+### Names, audited
 
-| Cut | Was in | Reason |
-|---|---|---|
-| PILE, CLAMP, STRIP, RUST, ROT | VOLLEY, SNARE, SIGN, FIELD, DRAIN ring 2 | Five defence-break nodes with five names. Defence break is HAMMER's. |
-| BARB, PIERCE, SLIP | SNARE, FIELD, DRAIN ring 2 | Three defence-ignore nodes. Also HAMMER's. |
-| SAP (x2 of 3) | SNARE, FIELD ring 3 | Same attack break in three trees. DRAIN keeps it. |
-| DRAG (x2) | SNARE ring 3, SIGN ring 2 | Same word, same mechanic (slow). Slow is FIELD's. |
-| SNAP (SIGN), SPILL (SIGN), STORM (FIELD) | — | Duplicate names across trees. |
-| CLIP, SCAR, FEED | VOLLEY, SIGN, VOLLEY | Slow, damage over time and lifesteal used outside their owner. |
-| PLAGUE | DRAIN capstone | Area damage is FIELD's; replaced by VESSEL. |
+108 named entries, checked by set intersection against the style names, the keystones and item
+enchantments, the live mastery nodes, the champion names and the `THE X` ban — no exact collision.
+Four words were used more than once inside the twelve and are renamed here: WAKE appeared **four**
+times for four unrelated mechanics (now TRAIL, RIPPLE, LAST DROP, REMNANT), MASS twice (now HORDE in
+FIELD), DEEPEN twice (SNARE's went with SHELL), DREGS twice (now HIGH WATER in DRAIN).
+
+Two near-collisions are accepted knowingly: WEEP sits in the same tree as the mastery node SWEEP, and
+BLOW in the same tree as SECOND BLOW. Both are one letter apart from a word the player meets on an
+adjacent screen, and both should be revisited if a playtest shows anyone confusing them.
 
 ## 7. Where a rule lives — RESOLVED
 
