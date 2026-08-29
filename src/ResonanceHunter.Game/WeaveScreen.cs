@@ -754,6 +754,16 @@ public sealed class WeaveScreen
 
         var skills = Loadout.Skills;
         var ctx = Context;
+
+        // WHICH SLOTS COST AN ACTION. Read from BuildComposer rather than worked out here, so the
+        // screen and the fight cannot drift: the composer's walk IS the rule, and a second copy of it
+        // would agree only until one of them was edited. The player needs this on the screen because
+        // the two kinds are no longer interchangeable — an active takes the champion's turn and a
+        // passive never can, which is why four skills used to leave the plain attack almost no beats.
+        var passiveSlot = BuildComposer.SlotKinds(
+            skills.Select(k => new BuildComposer.SkillPick(k.Source, k.Form, k.VowId, "")).ToList(),
+            Loadout.SkillCapacity);
+
         for (var i = 0; i < Loadout.SkillCapacity; i++)
         {
             if (i >= skills.Count) break;
@@ -812,6 +822,13 @@ public sealed class WeaveScreen
             _ui.Icon(b, $"icon_form_{s.Form.ToString().ToLowerInvariant()}", fbox, col);
 
             _ui.TextBig(b, Fit($"{SourceName(s.Source)} {FormName(s.Form)}", 158), row.X + 134, row.Y + 8, Bone, UiTypography.Body);
+
+            // THE SLOT'S KIND, said in words. ACTIVE and PASSIVE are the terms the rest of the genre
+            // uses and the ones the designer asked for; spelling out the consequence underneath is
+            // what stops "passive" reading as "weaker".
+            var isPassive = i < passiveSlot.Count && passiveSlot[i];
+            _ui.TextRight(b, isPassive ? "PASSIVE" : "ACTIVE", row.Right - 50, row.Y + 8,
+                          isPassive ? Met : Gold);
 
             // The hexagon's verdict on this woven skill — and the Vow buy-back drawn as the LIFT it
             // is ("x0.45→x0.75"), so swearing a Vow on an off-discipline skill visibly pays.

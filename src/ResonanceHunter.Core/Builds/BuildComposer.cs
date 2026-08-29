@@ -22,6 +22,49 @@ public static class BuildComposer
 {
     public readonly record struct SkillPick(Source Source, Form Form, string? VowId, string Name);
 
+    /// <summary>
+    /// Which slot each woven skill lands in — <c>true</c> for a passive slot.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>ONE RULE, READ BY BOTH THE SIM AND THE SCREEN.</b> The weave screen has to tell the player
+    /// which of their skills costs an action and which does not, and the fight has to act on the same
+    /// answer. Two implementations of that walk would agree right up until one of them was edited —
+    /// which is the shape this project keeps paying for, most recently as a cadence dial that
+    /// reconstructed the beat count instead of reading it.
+    /// </para>
+    /// <para>
+    /// The walk, in composition order:
+    /// </para>
+    /// <list type="number">
+    /// <item>A skill whose Form never took a beat (AURA, TRAP) is passive and spends no active budget.</item>
+    /// <item>Otherwise it takes an active slot while the active budget has room.</item>
+    /// <item>Otherwise it SPILLS into a passive slot — it is not dropped. A build saved before the
+    ///   rework can hold four beat-taking skills against an active budget of two, and refusing the
+    ///   overflow would take half of someone's build away on load without a word.</item>
+    /// </list>
+    /// <para>
+    /// Composition order decides, so the skills woven FIRST keep their actives. Any other rule would
+    /// reorder a player's build for them.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<bool> SlotKinds(IReadOnlyList<SkillPick> skills, int slotCapacity)
+    {
+        ArgumentNullException.ThrowIfNull(skills);
+        var activeBudget = Build.ActiveSlotsFor(slotCapacity);
+        var passive = new bool[skills.Count];
+        var actives = 0;
+        for (var i = 0; i < skills.Count; i++)
+        {
+            var naturallyPassive = FormBehaviour.IsPassive(skills[i].Form)
+                                   || FormBehaviour.FiresOnBeingHit(skills[i].Form);
+            if (naturallyPassive) { passive[i] = true; continue; }
+            if (actives < activeBudget) { actives++; continue; }
+            passive[i] = true;
+        }
+        return passive;
+    }
+
     public static Build Compose(MemoryDustTree tree, MasteryTree mastery, Character? character,
                                 IEnumerable<SkillPick> skills, IEnumerable<string> keystoneIds, int slotCapacity)
     {
@@ -60,22 +103,15 @@ public static class BuildComposer
             if (learned.FirstOrDefault(k => k.Id == id) is { } k)
                 build.Take(k);
 
-        foreach (var s in skills)
+        var picks = skills as IReadOnlyList<SkillPick> ?? skills.ToList();
+        var passive = SlotKinds(picks, slotCapacity);
+        for (var i = 0; i < picks.Count; i++)
         {
+            var s = picks[i];
             var vow = Weaving.ById(s.VowId);
             var ability = new WovenAbility { Name = s.Name, Source = s.Source, Form = s.Form, Vow = vow };
-            var cooldown = FormBehaviour.BaseCooldownMs(s.Form);
-
-            // SPILL INTO THE PASSIVE SLOT RATHER THAN DROP THE SKILL. A build saved before the rework
-            // can hold four beat-taking skills, and the active budget is two — so the last two would
-            // simply fail to weave and the player would lose half their build on load, with nothing
-            // said. They keep all four instead: the overflow takes its style's PASSIVE face, which is
-            // the same skill and the same art acting on its own clock instead of on the beat.
-            //
-            // Deliberately in composition order, so the two skills the player wove FIRST stay their
-            // actives. Any other rule would reorder someone's build for them.
-            if (!build.Weave(new EquippedSkill(ability, cooldown)))
-                build.Weave(new EquippedSkill(ability, cooldown, PassiveSlot: true));
+            build.Weave(new EquippedSkill(ability, FormBehaviour.BaseCooldownMs(s.Form),
+                                          PassiveSlot: passive[i]));
         }
         return build;
     }
