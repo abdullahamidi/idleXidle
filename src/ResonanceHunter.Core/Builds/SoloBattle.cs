@@ -517,7 +517,11 @@ public static class SoloBattle
             for (var i = 0; i < skills.Count; i++)
             {
                 var f0 = skills[i].Form;
-                if (FormBehaviour.IsPassive(f0) || FormBehaviour.FiresOnBeingHit(f0)) continue;
+                // THE SKILL'S OWN KIND decides this now, not its Form. Only an Active face casts, so
+                // only an Active face can owe an opening pause. (Stage 3 of the rework: the fork moves
+                // to SkillDef.Kind; every NUMBER below still comes from FormBehaviour until stage 5
+                // measures them. See design/gdd/skill-slots-and-skill-trees.md §11.)
+                if (!skills[i].TakesABeat) continue;
                 if (FormBehaviour.CooldownBeats(f0) > 0) continue;   // beat-counted: the first beat is its breath
                 var cd0 = Math.Max(1, (int)(FormBehaviour.BaseCooldownMs(f0)
                                             / Math.Max(0.1f, mods.SkillRate * shape.SkillRate)));
@@ -1098,10 +1102,16 @@ public static class SoloBattle
                 var sk = skills[i];
                 var form = sk.Form;
 
-                // TRAP fires only when bitten; it is handled at the enemy's swing, not here.
-                if (FormBehaviour.FiresOnBeingHit(form)) continue;
+                // THE THREE-WAY FORK, asked about the SKILL instead of about the Form. The shape of
+                // this loop is unchanged — a Reaction is answered at the enemy's swing, a Field ticks
+                // on its own clock, an Active takes the beat — but the question is now the skill's,
+                // which is what lets one style be woven either way. (Rework stage 3.)
+                var kind = sk.Face.Kind;
 
-                if (FormBehaviour.IsPassive(form))
+                // A REACTION fires on its event, not here.
+                if (kind == SkillKind.Reaction) continue;
+
+                if (kind == SkillKind.Field)
                 {
                     // AURA: always on, no cooldown. Ticks steadily for the whole fight. RADIANCE (an item
                     // enchantment) ticks it faster — same damage per tick, so more ticks is more DPS, and
@@ -1448,7 +1458,7 @@ public static class SoloBattle
                 for (var idx = 0; idx < skills.Count; idx++)
                 {
                     var sk = skills[idx];
-                    if (!FormBehaviour.FiresOnBeingHit(sk.Form)) continue;
+                    if (sk.Face.Kind != SkillKind.Reaction || sk.Face.On != ReactionOn.Bitten) continue;
 
                     // COILED re-arms the TRAP far faster, so it answers more bites. This loop only runs for
                     // a woven Trap, so the enchant is naturally dead on any build without one.

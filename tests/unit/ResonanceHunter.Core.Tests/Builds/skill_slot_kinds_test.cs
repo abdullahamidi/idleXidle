@@ -3,6 +3,11 @@ using System.Linq;
 using ResonanceHunter.Core.Abilities;
 using ResonanceHunter.Core.Automation;
 using ResonanceHunter.Core.Builds;
+using ResonanceHunter.Core.Economy;
+using ResonanceHunter.Core.Prestige;
+using ResonanceHunter.Core.Expeditions;
+using Xunit.Abstractions;
+using System.Collections.Generic;
 using Xunit;
 
 namespace ResonanceHunter.Core.Tests.Builds;
@@ -32,7 +37,7 @@ public class SkillSlotKindTests
         return new EquippedSkill(
             new WovenAbility { Name = name ?? def.Face(passive).Name, Source = Source.Body, Form = form },
             CooldownMs: 1000,
-            Passive: passive);
+            PassiveSlot: passive);
     }
 
     [Fact]
@@ -142,5 +147,193 @@ public class SkillSlotKindTests
         Assert.True(b.BeatDemand < 0.5f,
             $"the worst active pair ({string.Join(" + ", shortest.Select(s => s.Active.Name))}) " +
             $"demands {b.BeatDemand:0.00} of the beats");
+    }
+}
+
+/// <summary>
+/// The live composition path, where the slot split is actually applied. Stage 2b of the rework.
+/// </summary>
+/// <remarks>
+/// The tests above build a <see cref="Build"/> bare, which keeps the undivided budget on purpose so
+/// a test about damage need not learn the slot rules. That means NOTHING above would notice if the
+/// split were never applied to a real player's build — which is exactly the dormant-feature shape
+/// this codebase keeps producing. These pin the composer instead.
+/// </remarks>
+public class ComposedSlotSplitTests
+{
+    private static BuildComposer.SkillPick S(string name, Form form)
+        => new(Source.Body, form, null, name);
+
+    private static Build Compose(int slots, params BuildComposer.SkillPick[] skills)
+        => BuildComposer.Compose(new MemoryDustTree(), new MasteryTree(), character: null,
+                                 skills: skills, keystoneIds: Array.Empty<string>(), slotCapacity: slots);
+
+    [Theory]
+    [InlineData(1, 1, 0)]
+    [InlineData(2, 1, 1)]
+    [InlineData(3, 2, 1)]
+    [InlineData(4, 2, 2)]
+    [InlineData(5, 3, 2)]
+    public void test_slots_unlock_active_passive_active_passive(int total, int actives, int passives)
+    {
+        Assert.Equal(actives, Build.ActiveSlotsFor(total));
+        Assert.Equal(passives, Build.PassiveSlotsFor(total));
+        Assert.Equal(total, Build.ActiveSlotsFor(total) + Build.PassiveSlotsFor(total));
+    }
+
+    [Fact]
+    public void test_a_composed_build_gets_two_active_slots_not_four()
+    {
+        var b = Compose(4,
+            S("a", Form.Strike), S("b", Form.Projectile),
+            S("c", Form.Mark), S("d", Form.Transformation));
+
+        Assert.Equal(2, b.ActiveCapacity);
+        Assert.Equal(2, b.PassiveCapacity);
+        Assert.Equal(2, b.ActiveCount);
+    }
+
+    [Fact]
+    public void test_an_old_four_active_build_keeps_all_four_skills()
+    {
+        // The migration that matters. Before the rework a player could weave four beat-taking
+        // skills; the active budget is two now. Dropping the overflow would take half of someone's
+        // build away on load without a word, so it spills into the passive slots instead.
+        var b = Compose(4,
+            S("a", Form.Strike), S("b", Form.Projectile),
+            S("c", Form.Mark), S("d", Form.Transformation));
+
+        Assert.Equal(4, b.Skills.Count);
+        Assert.Equal(new[] { "a", "b", "c", "d" }, b.Skills.Select(s => s.Name).ToArray());
+        // The two woven FIRST keep their actives; any other rule reorders the player's build for them.
+        Assert.Equal(new[] { "a", "b" }, b.Skills.Where(s => s.TakesABeat).Select(s => s.Name).ToArray());
+        Assert.Equal(new[] { "c", "d" }, b.Skills.Where(s => !s.TakesABeat).Select(s => s.Name).ToArray());
+    }
+
+    [Fact]
+    public void test_the_composed_build_leaves_the_swing_most_of_its_beats()
+    {
+        // The whole point, measured on the path a real player actually takes. Four beat-taking
+        // skills demanded about 0.80 and the basic attack only lands on what is left over.
+        var b = Compose(4,
+            S("a", Form.Strike), S("b", Form.Projectile),
+            S("c", Form.Mark), S("d", Form.Transformation));
+
+        Assert.True(b.BeatDemand < 0.5f,
+            $"a full composed build still demands {b.BeatDemand:0.00} of the beats");
+    }
+
+    [Fact]
+    public void test_aura_and_trap_still_cost_no_beat_after_the_split()
+    {
+        // They never did, and the split must not have quietly promoted them into the active budget:
+        // if it had, a classic Aura+Trap build would now be spending actions it never spent.
+        var b = Compose(4,
+            S("a", Form.Aura), S("b", Form.Trap),
+            S("c", Form.Strike), S("d", Form.Projectile));
+
+        Assert.Equal(4, b.Skills.Count);
+        Assert.Equal(2, b.ActiveCount);
+        Assert.Equal(new[] { "c", "d" }, b.Skills.Where(s => s.TakesABeat).Select(s => s.Name).ToArray());
+    }
+}
+
+/// <summary>
+/// The rework's whole purpose, measured in a real fight rather than derived from the cooldowns.
+/// Stage 4 (design/gdd/skill-slots-and-skill-trees.md §11).
+/// </summary>
+/// <remarks>
+/// <c>Build.BeatDemand</c> is arithmetic over the cooldown table and an upper bound: two ready skills
+/// contend for one beat and the loser waits. This file runs <see cref="SoloBattle"/> and COUNTS, so
+/// that the claim "the champion's own swing came back" is evidence and not a calculation. The
+/// playtest that started this work was a person watching the screen and seeing no plain attack at
+/// all; the equivalent of that observation belongs in the suite.
+/// </remarks>
+public class SwingShareTests
+{
+    private readonly ITestOutputHelper _out;
+    public SwingShareTests(ITestOutputHelper output) => _out = output;
+
+    private static BuildComposer.SkillPick S(string name, Form form) => new(Source.Body, form, null, name);
+
+    /// <summary>Actions the champion took, and how many of them were plain swings.</summary>
+    private static (int beats, int casts) Cadence(Build build)
+    {
+        // One enormous creature that cannot kill the champion: the fight has to last long enough to
+        // hold many cycles, because a wave that ends early measures one cycle of the cadence.
+        var champ = new Champion { MaxHealth = 5_000_000, Health = 5_000_000 };
+        var (_, events) = SoloBattle.ResolveWave(
+            champ, build, new Hunter(),
+            enemyHealth: 3_000_000f, enemyDamage: 0f, enemyIntervalMs: 1_500,
+            ExpeditionTuning.Default, new Random(7));
+
+        var beats = events.Count(e => e.Kind == BattleEventKind.Beat);
+        // A cast is a Skill event that claimed the beat. A Reaction never does, so it is not an action.
+        var casts = events.Count(e => e.Kind == BattleEventKind.Skill && (Form)e.Amount != Form.Trap);
+        return (beats, casts);
+    }
+
+    [Fact]
+    public void test_four_beat_taking_skills_leave_almost_no_room_for_the_swing()
+    {
+        // The state the playtest complained about, reproduced: "there are even scenarios with no
+        // plain attack at all". This is the BEFORE half of the measurement and it must keep failing
+        // to leave room, or the AFTER half proves nothing.
+        var before = new Build { ActiveCapacity = 4, PassiveCapacity = 0 };
+        foreach (var (n, f) in new[] { ("a", Form.Strike), ("b", Form.Projectile),
+                                       ("c", Form.Mark), ("d", Form.Transformation) })
+            before.Weave(new EquippedSkill(
+                new WovenAbility { Name = n, Source = Source.Body, Form = f },
+                FormBehaviour.BaseCooldownMs(f)));
+
+        var (beats, casts) = Cadence(before);
+        var swingShare = beats == 0 ? 0f : (beats - casts) / (float)beats;
+        _out.WriteLine($"four actives: {beats} actions, {casts} casts, swing share {swingShare:0.00}");
+
+        Assert.True(swingShare < 0.4f,
+            $"the four-slot build already left the swing {swingShare:0.00} of its actions, so there " +
+            "was nothing for this rework to fix — check the cooldown table before trusting the next assert.");
+    }
+
+    [Fact]
+    public void test_a_composed_build_gives_the_swing_back_the_majority_of_its_actions()
+    {
+        var after = BuildComposer.Compose(
+            new MemoryDustTree(), new MasteryTree(), character: null,
+            skills: new[] { S("a", Form.Strike), S("b", Form.Projectile),
+                            S("c", Form.Mark), S("d", Form.Transformation) },
+            keystoneIds: Array.Empty<string>(), slotCapacity: 4);
+
+        var (beats, casts) = Cadence(after);
+        var swingShare = beats == 0 ? 0f : (beats - casts) / (float)beats;
+        _out.WriteLine($"two actives + two passives: {beats} actions, {casts} casts, swing share {swingShare:0.00}");
+
+        Assert.True(beats > 20, $"only {beats} actions were taken; the wave was too short to measure a cadence");
+        Assert.True(swingShare > 0.5f,
+            $"the champion swung on {swingShare:0.00} of its actions. The rework exists so the plain " +
+            "attack is a right and not a leftover, and more than half is the bar.");
+    }
+
+    [Fact]
+    public void test_the_passives_still_act_even_though_they_take_no_beat()
+    {
+        // The other half of the promise. Moving two skills into passive slots must not silence them —
+        // if it did, the swing would come back only because half the build stopped working.
+        var after = BuildComposer.Compose(
+            new MemoryDustTree(), new MasteryTree(), character: null,
+            skills: new[] { S("a", Form.Strike), S("b", Form.Projectile),
+                            S("c", Form.Aura), S("d", Form.Trap) },
+            keystoneIds: Array.Empty<string>(), slotCapacity: 4);
+
+        var champ = new Champion { MaxHealth = 5_000_000, Health = 5_000_000 };
+        var (_, events) = SoloBattle.ResolveWave(
+            champ, after, new Hunter(),
+            enemyHealth: 3_000_000f, enemyDamage: 40f, enemyIntervalMs: 1_500,
+            ExpeditionTuning.Default, new Random(7));
+
+        Assert.True(events.Any(e => e.Kind == BattleEventKind.Aura),
+            "the woven Field never ticked — a passive slot that costs no beat must still act.");
+        Assert.True(events.Any(e => e.Kind == BattleEventKind.Skill && (Form)e.Amount == Form.Trap),
+            "the woven Reaction never fired, though the champion was being bitten.");
     }
 }

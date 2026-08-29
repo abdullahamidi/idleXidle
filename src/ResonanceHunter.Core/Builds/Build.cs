@@ -203,8 +203,22 @@ public sealed record Keystone
 /// the player WOVE. That is what <c>Core.Abilities</c> was always for, and it is why Form finally
 /// matters: a build is a choice of Forms, and the Vow on each is what it cost to have them.
 /// </remarks>
-public sealed record EquippedSkill(WovenAbility Ability, int CooldownMs, bool Passive = false)
+public sealed record EquippedSkill(WovenAbility Ability, int CooldownMs, bool? PassiveSlot = null)
 {
+    /// <summary>
+    /// Which face of the skill this slot took — the tree's ring 0. Null means "whichever face this
+    /// Form has always had", which is what every call site written before the rework means.
+    /// </summary>
+    /// <remarks>
+    /// A computed fallback rather than <c>false</c>, and the distinction is load-bearing: AURA and
+    /// TRAP have never taken a beat, so defaulting them to their ACTIVE face would silently turn two
+    /// passives into casts and change every fight in the game. The default is the migration bridge —
+    /// eighty-odd call sites keep their exact meaning, and a caller that has a real ring-0 choice
+    /// says so.
+    /// </remarks>
+    public bool Passive => PassiveSlot
+        ?? (FormBehaviour.IsPassive(Form) || FormBehaviour.FiresOnBeingHit(Form));
+
     public string Name => Ability.Name;
     public Form Form => Ability.Form;
     public Source Source => Ability.Source;
@@ -330,10 +344,34 @@ public sealed class Build
 
     // UNSET MEANS "THE WHOLE BUDGET", not a constant. A build handed a fifth slot by the trait spine
     // raises SlotCapacity, and a per-kind cap frozen at the old constant would clamp that fifth slot
-    // off — which is the exact bug FIFTH WEAVE already had once (see SlotCapacity's note). Stage 2b
-    // sets these to 2 and 2 explicitly; until then a build's budget is undivided, as it is today.
+    // off — which is the exact bug FIFTH WEAVE already had once (see SlotCapacity's note). A build
+    // composed for a real player has both set (see ActiveSlotsFor); one built bare in a test keeps
+    // the undivided budget, so a test that only cares about damage need not learn the slot rules.
     private int? _activeCapacity;
     private int? _passiveCapacity;
+
+    /// <summary>
+    /// How many of a build's slots are ACTIVE, given the total it has earned.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The unlock order is <b>active, passive, active, passive</b>, so a full four-slot build is
+    /// 2 + 2 and the SECOND slot a player ever earns already teaches that the two kinds are
+    /// different. A character that has earned one slot gets an active, because a build with nothing
+    /// but a Field never chooses an action at all.
+    /// </para>
+    /// <para>
+    /// The fifth slot the trait spine sells falls to the active side here. §11 wants it to become the
+    /// player's own choice of a third active or a third passive — that is a workbench decision and a
+    /// save field, and it is deliberately not invented in this pass. It matters because a third
+    /// active pushes beat demand back toward 0.6, which is a real cost the player should be electing
+    /// rather than being handed.
+    /// </para>
+    /// </remarks>
+    public static int ActiveSlotsFor(int totalSlots) => (Math.Max(1, totalSlots) + 1) / 2;
+
+    /// <summary>The passive half of <see cref="ActiveSlotsFor"/>.</summary>
+    public static int PassiveSlotsFor(int totalSlots) => Math.Max(1, totalSlots) - ActiveSlotsFor(totalSlots);
 
     /// <summary>Woven skills that cost the champion an action.</summary>
     public int ActiveCount => _skills.Count(s => s.TakesABeat);

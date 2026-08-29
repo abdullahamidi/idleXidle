@@ -44,6 +44,15 @@ public static class BuildComposer
             Shape = SkillShape.Combine(SkillShape.Combine(mastery.Shape(), character?.TotalShape ?? SkillShape.None),
                                        DustEffects.TreeShape(tree)),
             SlotCapacity = slotCapacity,
+            // THE SLOT SPLIT (rework stage 2b). A composed build is a real player's, so its budget is
+            // divided: two actives and two passives at four slots, unlocked active-passive-active-
+            // passive. This is the change the whole rework is for — four beat-taking skills demanded
+            // about 0.80 of the beats and the champion's own swing only lands on what is left over,
+            // so the plain attack had almost stopped appearing. Two actives take that to about 0.44
+            // WITHOUT any cooldown moving, which is why the knob that had no room left in it stops
+            // being the problem. See design/gdd/skill-slots-and-skill-trees.md §2 and §10.
+            ActiveCapacity = Build.ActiveSlotsFor(slotCapacity),
+            PassiveCapacity = Build.PassiveSlotsFor(slotCapacity),
         };
 
         var learned = DustEffects.LearnedKeystones(tree);
@@ -55,7 +64,18 @@ public static class BuildComposer
         {
             var vow = Weaving.ById(s.VowId);
             var ability = new WovenAbility { Name = s.Name, Source = s.Source, Form = s.Form, Vow = vow };
-            build.Weave(new EquippedSkill(ability, FormBehaviour.BaseCooldownMs(s.Form)));
+            var cooldown = FormBehaviour.BaseCooldownMs(s.Form);
+
+            // SPILL INTO THE PASSIVE SLOT RATHER THAN DROP THE SKILL. A build saved before the rework
+            // can hold four beat-taking skills, and the active budget is two — so the last two would
+            // simply fail to weave and the player would lose half their build on load, with nothing
+            // said. They keep all four instead: the overflow takes its style's PASSIVE face, which is
+            // the same skill and the same art acting on its own clock instead of on the beat.
+            //
+            // Deliberately in composition order, so the two skills the player wove FIRST stay their
+            // actives. Any other rule would reorder someone's build for them.
+            if (!build.Weave(new EquippedSkill(ability, cooldown)))
+                build.Weave(new EquippedSkill(ability, cooldown, PassiveSlot: true));
         }
         return build;
     }
