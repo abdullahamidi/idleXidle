@@ -468,3 +468,55 @@ public class PassiveCadenceTests
             "not most of the skill.");
     }
 }
+
+/// <summary>
+/// The per-skill cooldown is READ. It went unread for the whole of the project's life.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <c>EquippedSkill(WovenAbility, int CooldownMs)</c> has carried that field since it was written.
+/// It was set from the Form table at construction, persisted, and then dereferenced NOWHERE — a test
+/// comment elsewhere in this suite says so outright. Somebody opened a per-skill cooldown and there
+/// was never a system to fill it, because the Form owned the number.
+/// </para>
+/// <para>
+/// It has to be live before a variation or a reinforcement can change one skill's cooldown without
+/// changing every skill of that style. This test exists so it cannot quietly go back to sleep: it
+/// fails the moment the sim stops asking the skill and goes back to asking the table.
+/// </para>
+/// </remarks>
+public class PerSkillCooldownTests
+{
+    private static Build WithCooldown(Form form, int cooldownMs)
+    {
+        var b = new Build { ActiveCapacity = 1, PassiveCapacity = 0 };
+        b.Weave(new EquippedSkill(
+            new WovenAbility { Name = "s", Source = Source.Body, Form = form },
+            cooldownMs, PassiveSlot: false));
+        return b;
+    }
+
+    private static int CastsIn(Build build)
+    {
+        var champ = new Champion { MaxHealth = 5_000_000, Health = 5_000_000 };
+        var (_, events) = SoloBattle.ResolveWave(
+            champ, build, new Hunter(),
+            enemyHealth: 20_000_000f, enemyDamage: 0f, enemyIntervalMs: 100_000,
+            ExpeditionTuning.Default, new Random(9));
+        return events.Count(e => e.Kind == BattleEventKind.Skill);
+    }
+
+    [Fact]
+    public void test_two_skills_of_one_style_can_differ_in_cooldown()
+    {
+        // MARK is counted in milliseconds rather than beats, so its cooldown is exactly the number
+        // this field carries. Halve it and it must cast about twice as often.
+        var slow = CastsIn(WithCooldown(Form.Mark, 8000));
+        var fast = CastsIn(WithCooldown(Form.Mark, 4000));
+
+        Assert.True(slow > 0, "the slow build never cast at all — the wave was too short to measure.");
+        Assert.True(fast > slow,
+            $"halving CooldownMs changed nothing ({fast} casts against {slow}). The field is being " +
+            "ignored again and the sim has gone back to reading the Form table.");
+    }
+}

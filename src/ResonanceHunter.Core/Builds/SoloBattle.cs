@@ -523,7 +523,7 @@ public static class SoloBattle
                 // measures them. See design/gdd/skill-slots-and-skill-trees.md §11.)
                 if (!skills[i].TakesABeat) continue;
                 if (FormBehaviour.CooldownBeats(f0) > 0) continue;   // beat-counted: the first beat is its breath
-                var cd0 = Math.Max(1, (int)(FormBehaviour.BaseCooldownMs(f0)
+                var cd0 = Math.Max(1, (int)(skills[i].CooldownMs
                                             / Math.Max(0.1f, mods.SkillRate * shape.SkillRate)));
                 champ.ReadyAt[i] = Math.Max(champ.ReadyAt.GetValueOrDefault(i, wave0 + cd0),
                                             wave0 + tuning.WaveOpeningMs);
@@ -1215,7 +1215,13 @@ public static class SoloBattle
                 }
                 else
                 {
-                    var cd = Math.Max(1, (int)(FormBehaviour.BaseCooldownMs(form)
+                    // THE SKILL'S OWN COOLDOWN, at last. EquippedSkill has carried a CooldownMs since
+                    // it was written and NOTHING HAS EVER READ IT — it was set from the Form table at
+                    // construction and then ignored, because the Form owned the number. Reading it is
+                    // what lets one skill's cooldown differ from another of the same style, which is
+                    // what a variation or a reinforcement has to be able to change (design §5, §10).
+                    // Behaviour is unchanged today: BuildComposer still seeds it from the same table.
+                    var cd = Math.Max(1, (int)(sk.CooldownMs
                                                / Math.Max(0.1f, RateNow())));   // TIDE and RHYTHM move it live
                     // PREPARATION — every skill's FIRST cast of a wave is free of its cooldown. The
                     // default is SINCE + cd, not a bare `cd`: `abs` is expedition-cumulative, so a bare
@@ -1509,7 +1515,7 @@ public static class SoloBattle
 
                     // COILED re-arms the TRAP far faster, so it answers more bites. This loop only runs for
                     // a woven Trap, so the enchant is naturally dead on any build without one.
-                    var trapBase = FormBehaviour.BaseCooldownMs(Form.Trap);
+                    var trapBase = sk.CooldownMs;
                     if (triggers.Contains(BuildTrigger.Coiled)) trapBase = (int)(trapBase * CoiledCooldownFactor);
                     var cd = Math.Max(1, (int)(trapBase / Math.Max(0.1f, RateNow())));
                     if (abs < champ.ReadyAt.GetValueOrDefault(idx, 0)) continue;
