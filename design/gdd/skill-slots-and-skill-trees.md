@@ -6,10 +6,10 @@
 ## 1. Overview
 
 The champion carries **two active and two passive skill slots** instead of four
-undifferentiated ones. There are **six skills, one per style**, and each has its
-own specialisation tree. A skill's tree decides whether it is an active (it takes
-the champion's turn) or a passive (it never does) — so the active/passive split is
-a player decision inside the tree, not a property of the catalogue.
+undifferentiated ones. There are **twelve skills, two per style** — one active and
+one passive, distinct abilities rather than two faces of one — each unlocked by its
+own node on the mastery tree, and each deepened by two variations and three
+reinforcements bought with levels the skill earns from being used.
 
 Build diversity moves from breadth to depth: fewer things equipped, each of them
 shaped far more.
@@ -153,71 +153,72 @@ MIND, NATURE, MACHINE, SHADOW, SPIRIT) and the branches (WEIGHT, SPREAD, TEMPO,
 ENDURE). `SkillShape.FirstCastMultiplier`'s nickname "OPENING VOLLEY" must be renamed
 so it does not collide with the VOLLEY style.
 
-## 5. Six skills, six trees
+## 5. Twelve skills, each with its own node
 
-**One skill per style. Each has its own tree. The tree's first ring decides what kind
-of thing the skill is** — a move that takes the champion's turn, or a state that
-never does.
-
-This is why the catalogue is six rows and not sixty: everything that would have been
-a separate skill is a node instead. A first draft of this design proposed twelve
-fixed skills (an active and a passive per style) and the designer rejected it —
-correctly. Those twelve were derived backwards from what the sim could already do,
-which produces relabelled code paths rather than abilities. The content was not
-wrong; its home was. FOLLOW-THROUGH is a poor skill and a fine node.
-
-### Worked example — the HAMMER tree
-
-This is the quality bar for the other five. Written under the two laws in §8: game
-terms, one mechanic per node, and a passive that never touches the champion's animation.
-
-| Ring | Node | Effect |
-|---|---|---|
-| **0 · What it is** | **BLOW** | Active. Heavy damage to one target. |
-| | **PRESS** | Passive. A weight sits on the front enemy: damage every 2s, defence breaks steadily. |
-| **1 · How it hits** | **OVERHEAD** | +50% damage, +50% cooldown. |
-| | **CHARGE** | +25% damage per basic attack landed since the last cast. |
-| | **SPLIT** | Hits 2 targets for 50% each. |
-| **2 · What it beats** | **CRACK** | Defence break — permanently lowers the target's defence. |
-| | **FLATTEN** | Defence ignore. |
-| **3 · After the hit** | **SHOCK** | 1s stun. |
-| | **DENT** | Attack break — permanently lowers the target's damage. |
-| | **FINISH** | Execute threshold: instantly kills a target under 15% health. |
-| **4 · Capstone** | **CRATER** | Area damage: hits the whole wave for 50%. |
-| | **EXECUTIONER** | Always targets the highest-health enemy, double damage to it. |
-
-`BLOW -> CHARGE -> FLATTEN -> FINISH -> EXECUTIONER` is a single-target executioner.
-`PRESS -> SPLIT -> CRACK -> SHOCK -> CRATER` never takes a beat until the capstone and
-grinds the whole wave down. Same skill, same style, same art.
-
-> **Three earlier drafts of this tree were rejected, and the reasons are the laws in §8.**
-> The first was prose ("the blow lands one beat late and hits far harder"). The second kept
-> WEIGHT as the passive — "every fourth basic attack becomes a hammer blow" — which changes
-> the champion's animation and so defeats the point of the rework. The third used WIND
-> ("every turn you do not spend it, it grows"), which is incoherent when skills fire
-> automatically, and FOLLOW ("a kill readies it at once"), which fires nonstop because
-> enemies die constantly.
+> **SUPERSEDED 2026-08-30.** This section used to say "six skills, one per style, each with two
+> faces" — the same skill woven either as a move that takes the champion's turn or as a state that
+> never does. The designer replaced it:
 >
-> Node names were also renamed away from live mastery nodes: WEIGHT (a mastery *branch*
-> name) -> PRESS, SUNDER -> CRACK, OVERWHELM -> FLATTEN, STAGGER -> SHOCK, FOLLOW -> RING
-> -> deleted. CARRY was deleted outright: it was the same rule as the existing mastery
-> greater BREAKER. Capstones were THE ANVIL and THE PIN until it was noticed that `THE X`
-> is the champion naming scheme and THE ANVIL is literally one of the ten champions.
+> *"Aynı skilleri aktif/pasif versiyon gibi kullanmak yerine farklı skiller olarak tasarlasak daha
+> güzel olur. Bu skilleri de mastery tree üzerinden açsak ve skillerin kullandıkça yükseltebildiğimiz
+> çok detaylı olmayan davranış seçenekleri (başlangıç için 2 varyasyon bile yeterli) ve seçilen
+> varyasyonun 2-3 nodelik güçlendirmeleri olsa."*
+>
+> The two-faces model was a layer: the player had to hold "this is HAMMER, but its passive half" in
+> their head. Distinct skills delete that layer. §6 below is kept because its 72 nodes are the raw
+> material this section is built from, not because its structure still stands.
 
-### Where the points come from
+### The shape
 
-**A skill earns its own levels by being used.** An equipped skill levels as you hunt,
-and its levels are its tree points. Natural for an idle game: the skill grows while
-you wait, and descending deep buys identity as well as loot.
+**Twelve skills. Two per style — one active, one passive — and they are different abilities that
+share a style, not one ability twice.** Each is unlocked by **its own node** on the mastery tree.
 
-Two rules make experimenting safe, because the loudest complaint about Last Epoch's
-system is that per-skill progress makes players afraid to change anything:
+```
+MASTERY TREE   four character branches (§9) + six style roads on the rim
+      | a node unlocks
+SKILL          active (takes the champion's action) or passive (never does). Levels by being used.
+      | its levels buy
+VARIATION      one of two. Changes what the skill DOES.
+      | then
+REINFORCEMENT  three nodes belonging to that variation, and worthless to the other one.
+```
 
-- **Levels are never lost.** Unequipping a skill keeps everything it earned; coming
-  back to it resumes where you left off.
-- **Respec inside a tree is free**, at the workbench.
+Four purchases per skill: one variation, three reinforcements. That is the whole of a skill's depth,
+and it is deliberately small — the previous design gave each skill a five-ring twelve-node tree and
+the designer's verdict on the first draft of that was that it was too clever to read.
 
-The cost of switching is therefore time-to-catch-up, never destroyed progress.
+### Two currencies, two questions
+
+| Currency | Earned by | Buys |
+|---|---|---|
+| **Mastery points** | first-time depth, per region | character branches, and the node that unlocks a skill |
+| **Skill levels** | using that skill | its variation, then that variation's three reinforcements |
+
+Levels are never lost when a skill is unequipped, and respec inside a skill is free. The cost of
+switching is time-to-catch-up, never destroyed progress — the loudest complaint about Last Epoch's
+system is that per-skill progress makes players afraid to change anything.
+
+### Why a node per skill
+
+The designer chose this over "one gate per style hands out both of that style's skills". It is the
+finest-grained option: you can enter a style far enough for one skill and stop, or walk it out. It is
+also the cheapest to grow — **a new skill is a new node and nothing else changes**, which is the
+property that lets the catalogue expand for the life of the game without touching a screen.
+
+Its price is that the tree looks busier and "how many skills do I have" is not answerable at a
+glance. Accepted knowingly.
+
+### What survives from the two-faces model
+
+Everything that shipped. The slot machinery does not care how a skill got its kind:
+
+| Still true | Now different |
+|---|---|
+| Two active slots and two passive ones | A skill has ONE kind; the slot follows from the skill |
+| Only an Active costs a beat | The catalogue is twelve entries, not six with two faces each |
+| The sim forks on the skill's Kind | `SkillDef.Active`/`.Passive` collapse to `SkillDef.Kind` |
+| A Field's damage scales to its own cadence | A spilled skill becomes its style's PASSIVE skill |
+| Old saves keep all four woven skills | |
 
 ## 6. The other five trees
 
@@ -528,10 +529,15 @@ enough. Your character build and your style commitment become **orthogonal**: wh
 you walk says how your champion is built, which specialisations you buy says how it fights.
 Today those two are tangled, which is part of why the same rule kept getting sold twice.
 
-A specialisation grants **access**: how far that style's skill tree opens. No road walked
-and the skill plays in its base form; the road walked to its end and the capstone ring
-unlocks. **Mastery grants access, skill level grants progress.** No player can take six
-styles deep, so choosing an affinity is finally the real commitment the hexagon wanted.
+**Each style road carries that style's SKILL NODES** — one node per skill, unlocked one
+at a time as the road is walked (§5). Mastery points buy the skill; the skill's own levels
+buy its variation and reinforcements. **Mastery grants access, skill level grants
+progress**, and no player can walk six roads, so choosing an affinity is finally the real
+commitment the hexagon wanted.
+
+> This replaces the earlier rule, where a specialisation decided *how deep a skill's own
+> tree could be opened*. With skills as distinct objects unlocked one node at a time that
+> indirection is gone: the road hands you the skill itself.
 
 ### Many roads to one destination
 
@@ -705,7 +711,28 @@ fires — 6 beats is the ceiling), `test_projectile_trades_weight_for_volume` (V
 fire more often than HAMMER), and WEAVER's price. The knob that was empty stays untouched;
 the rework removes the *contention*, not the numbers.
 
-### What DOES have to move, and must be measured not guessed
+### MEASURED 2026-08-30 — nothing had to move
+
+The worry below did not materialise, and it was settled by running a whole expedition rather
+than by reasoning about one wave:
+
+| Build | Reached | Fight time |
+|---|---|---|
+| four actives | wave 12 | 57.9s |
+| two actives + two passives | **wave 14** | 58.9s |
+
+Depth x1.17, pace x0.98 — deeper, at the same pace. The plain swing landing on 60% of the
+beats instead of 29%, plus passives that still work, more than covers the casts given up.
+`AutoAttackDamage` and `FormBaseValue` were **not** touched. `SlotSplitBalanceTests` pins the
+run to a 0.70-1.40 band so a later change cannot drift it silently, and the x1.17 is a mild
+strengthening a playtest should confirm.
+
+One real defect surfaced on the way, and it was severe: `FormBaseValue` quotes each Form in
+the units it is *paid* in — AURA's 12 is a second's worth, STRIKE's 500 one nine-second cast —
+and the Field branch multiplied by the tick regardless, so a skill spilled into a passive slot
+paid its whole cast value every second. A Field now scales to its own cadence.
+
+### The original worry, kept for the record
 
 Cutting active slots from four to two roughly halves cast output. The champion gains beats
 back, so the **basic attack** has to carry what the missing casts used to:
