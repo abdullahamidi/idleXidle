@@ -1128,6 +1128,28 @@ public static class SoloBattle
                     if (ms == 0 || ms % auraTick != 0) continue;
                     // The tick announces itself, so the screen never has to infer one from a timestamp.
                     events.Add(new BattleEvent(BattleEventKind.Aura, (int)sk.Source, (int)form, ms));
+
+                    // A FIELD IS NOT ALWAYS A DAMAGE FIELD. Kind says WHEN a skill acts and Effect says
+                    // WHAT it does, and they are separate axes on purpose — so a Field that amplifies
+                    // (SIGN's BRAND) is a setting of two existing boxes rather than a new system.
+                    //
+                    // This branch exists because the slot split made it REACHABLE: a build saved with
+                    // four beat-taking skills spills its overflow into the passive slots, and if that
+                    // overflow is a MARK it arrives here. Without this it would fall through to the
+                    // damage path, where BaseDamage(Mark) is zero by definition — a skill the player
+                    // can see in a slot, doing nothing at all, which is this codebase's signature
+                    // failure wearing yet another hat.
+                    if (FormBehaviour.IsAmplifier(form))
+                    {
+                        // The standing mark: a window refreshed on the field's own clock instead of
+                        // opened by a cast. It costs no beat, so it is deliberately the SHORTER window —
+                        // it holds until the next tick rather than for a cast's full duration.
+                        var standing = (int)(auraTick * shape.MarkWindowMultiplier);
+                        if (triggers.Contains(BuildTrigger.Linger)) standing = standing * 9 / 5;
+                        champ.MarkUntilMs = Math.Max(champ.MarkUntilMs, abs + standing);
+                        continue;
+                    }
+
                     var aura = FormBehaviour.BaseDamage(form, resonance, wt)
                                * VowFactor(sk, weaveCtx, wt, shape)
                                * (FormBehaviour.AuraTickMs / 1000f);
@@ -1137,6 +1159,16 @@ public static class SoloBattle
                     // (Spirit/Mind speak of CASTS, and an Aura never casts, so they stay silent here.)
                     if (sk.Source == Source.Nature && auraDealt > 0f)
                         Heal((int)MathF.Round(auraDealt * heal.NatureSignatureLeech), ms);
+                    // A HEALING FORM HEALS FROM ITS FIELD TOO. Same reachability as the amplifier
+                    // above: a TRANSFORMATION spilled into a passive slot ticks here, and its whole
+                    // identity is that it gives back what it deals. SIPHON deepens it, exactly as it
+                    // does on the cast path, so the enchant is not silently dead on a passive slot.
+                    if (FormBehaviour.Heals(form) && auraDealt > 0f)
+                    {
+                        var fieldLeech = heal.TransformationLeech;
+                        if (triggers.Contains(BuildTrigger.Siphon)) fieldLeech *= heal.SiphonMultiplier;
+                        Heal((int)MathF.Round(auraDealt * fieldLeech), ms);
+                    }
                     if (alive == 0) return Kill(ms);
                     continue;
                 }

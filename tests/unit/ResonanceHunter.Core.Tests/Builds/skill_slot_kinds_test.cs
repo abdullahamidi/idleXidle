@@ -337,3 +337,68 @@ public class SwingShareTests
             "the woven Reaction never fired, though the champion was being bitten.");
     }
 }
+
+/// <summary>
+/// A skill in a passive slot must still DO its thing — not merely stop costing a beat.
+/// </summary>
+/// <remarks>
+/// The slot split made this reachable for the first time: a build saved with four beat-taking skills
+/// spills its overflow into the passive slots, so a MARK or a TRANSFORMATION can now arrive at the
+/// Field branch. The Field branch only knew how to deal damage, and <c>BaseDamage(Mark)</c> is zero
+/// by definition — so a spilled Mark sat in a slot the player could see, doing nothing whatever.
+/// That is this codebase's signature failure, and it was introduced by the fix for another one.
+/// </remarks>
+public class PassiveEffectTests
+{
+    private static BuildComposer.SkillPick S(string name, Form form) => new(Source.Body, form, null, name);
+
+    private static Build Compose(params BuildComposer.SkillPick[] skills)
+        => BuildComposer.Compose(new MemoryDustTree(), new MasteryTree(), character: null,
+                                 skills: skills, keystoneIds: Array.Empty<string>(), slotCapacity: 4);
+
+    /// <summary>Total damage the champion put out in one wave, summed from the event stream.</summary>
+    private static long DamageOver(Build build, float enemyHealth)
+    {
+        var champ = new Champion { MaxHealth = 5_000_000, Health = 5_000_000 };
+        var (_, events) = SoloBattle.ResolveWave(
+            champ, build, new Hunter(),
+            enemyHealth: enemyHealth, enemyDamage: 0f, enemyIntervalMs: 1_500,
+            ExpeditionTuning.Default, new Random(3));
+        return events.Where(e => e.Kind == BattleEventKind.Strike).Sum(e => (long)e.Amount);
+    }
+
+    [Fact]
+    public void test_a_mark_in_a_passive_slot_still_amplifies()
+    {
+        // Same two actives either way; the third slot is the variable. If the passive Mark did
+        // nothing, these two would deal the same damage.
+        var withMark = Compose(S("a", Form.Strike), S("b", Form.Projectile), S("c", Form.Mark));
+        var without  = Compose(S("a", Form.Strike), S("b", Form.Projectile));
+
+        Assert.Equal(1, withMark.PassiveCount);
+        Assert.False(withMark.Skills.Single(s => s.Name == "c").TakesABeat);
+
+        var amplified = DamageOver(withMark, 2_000_000f);
+        var plain = DamageOver(without, 2_000_000f);
+        Assert.True(amplified > plain,
+            $"a MARK in a passive slot changed nothing: {amplified:0} against {plain:0}. It costs no " +
+            "beat, but it must still open its window or it is a slot the player can see doing nothing.");
+    }
+
+    [Fact]
+    public void test_a_transformation_in_a_passive_slot_still_heals()
+    {
+        var build = Compose(S("a", Form.Strike), S("b", Form.Projectile), S("c", Form.Transformation));
+        Assert.False(build.Skills.Single(s => s.Name == "c").TakesABeat);
+
+        // Hurt to begin with, and bitten for nothing, so any recovery is the skill's.
+        var champ = new Champion { MaxHealth = 100_000, Health = 40_000 };
+        SoloBattle.ResolveWave(champ, build, new Hunter(),
+            enemyHealth: 2_000_000f, enemyDamage: 0f, enemyIntervalMs: 1_500,
+            ExpeditionTuning.Default, new Random(3));
+
+        Assert.True(champ.Health > 40_000,
+            $"a TRANSFORMATION in a passive slot healed nothing (health {champ.Health}); giving back " +
+            "what it deals is the style's whole identity and it cannot be lost by changing slot.");
+    }
+}
