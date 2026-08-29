@@ -571,6 +571,17 @@ public static class SoloBattle
         // when the player cannot watch and react — they must be able to reason about a composition
         // before they descend.
         var alive = creatures.Count;
+
+        // ── WHAT THE TWELVE SKILLS' BASE LINES NEED, held for the wave. Each is zero unless a woven
+        //    skill carries the matching dial, so a build without them pays nothing at all. ─────────
+        //
+        // WILT's attack break and MIRE's slow are held as factors rather than written into the
+        // creatures: WaveCreature.Damage is init-only on purpose (only Defense is settable, for
+        // SUNDER), and the enemy interval is a local. Keeping them here also means they cannot leak
+        // into the next wave, which is the same reason creatures are minted per wave.
+        var attackBreak = 0f;      // WILT — fraction of every enemy's bite removed, toward its floor
+        var slowFactor = 0f;       // MIRE — fraction by which the enemy interval is stretched
+        var takenSinceCast = new Dictionary<int, float>();   // REPAY — damage taken since slot i last cast
         var since = champ.ElapsedMs;
         var healthAtStart = champ.Health;
 
@@ -911,6 +922,17 @@ public static class SoloBattle
                 // remove; the wave-cleared signal is the outcome, not this event.
                 events.Add(new BattleEvent(BattleEventKind.EnemyDown, idx, 0, atMs));
 
+                // WEEP — a kill leaves bleed on the wave, worth a share of what died. Read here
+                // rather than in the skill loop so ANY kill pays: a cast, the plain swing, a carried
+                // overkill or the bleed itself. It feeds the standing poison pool, which already
+                // bleeds into the front of the wave every half second — one pool, not a second
+                // parallel system, because two decaying pools would be two rules for one idea.
+                for (var k = 0; k < skills.Count; k++)
+                {
+                    var wd = skills[k].Def;
+                    if (wd.BleedOnKillFraction > 0f) poison += target.MaxHealth * wd.BleedOnKillFraction;
+                }
+
                 // LOOSE AGAIN — every skill is ready the instant something dies. Clearing the whole
                 // table rather than one entry is deliberate: the card says "the NEXT shot", and which
                 // skill that is depends on what the rotation reaches first.
@@ -1139,6 +1161,44 @@ public static class SoloBattle
                     // damage path, where BaseDamage(Mark) is zero by definition — a skill the player
                     // can see in a slot, doing nothing at all, which is this codebase's signature
                     // failure wearing yet another hat.
+                    // ── PRESS, MIRE and WILT: a Field that breaks, slows or wears down rather
+                    //    than dealing. Each reads its own dial off the catalogue, so a skill without
+                    //    one falls straight through to the damage path below. ─────────────────────
+                    var def = sk.Def;
+
+                    if (def.DefenceBreakPerTick > 0f)
+                    {
+                        // PRESS — the weight on the front enemy. Defense is settable for exactly this
+                        // kind of lasting strip (see WaveCreature.Defense), and creatures are minted
+                        // per wave so it cannot carry into the next one.
+                        var target = FirstAlive();
+                        if (target is not null)
+                            target.Defense = Math.Max(def.DefenceBreakFloor,
+                                                      target.Defense - def.DefenceBreakPerTick);
+                        continue;
+                    }
+
+                    if (def.SlowFraction > 0f)
+                        // MIRE — read at the bite, where the interval is decided. Set rather than
+                        // accumulated: the base line is a flat slow, and its variations deepen it.
+                        //
+                        // NO `continue`. MIRE also DEALS, falling through to the damage path below,
+                        // and the reason is FIELD's own sentence: "you hit the whole wave, all the
+                        // time". A passive that only slows contradicts the style it belongs to — and
+                        // it is the skill a saved AURA migrates onto, so without this every existing
+                        // aura build would silently lose all of its damage and the RADIANCE
+                        // enchantment would have nothing left to speed up.
+                        slowFactor = Math.Max(slowFactor, def.SlowFraction);
+
+                    if (def.AttackBreakPerTick > 0f)
+                    {
+                        // WILT — every enemy bites softer, to a floor. Held as a factor because
+                        // WaveCreature.Damage is init-only.
+                        attackBreak = Math.Max(def.AttackBreakFloor,
+                                               attackBreak - def.AttackBreakPerTick);
+                        continue;
+                    }
+
                     if (FormBehaviour.IsAmplifier(form))
                     {
                         // The standing mark: a window refreshed on the field's own clock instead of
@@ -1285,8 +1345,21 @@ public static class SoloBattle
                 events.Add(new BattleEvent(BattleEventKind.Skill, (int)sk.Source, (int)form, ms));
                 for (var c = 0; c < casts; c++)
                 {
-                    var raw = FormBehaviour.BaseDamage(form, resonance, wt)
-                              * VowFactor(sk, weaveCtx, wt, shape);
+                    // REPAY is the one active whose size is not its Form's base value: it deals a
+                    // multiple of what the champion has taken since it last fired, which is SNARE's
+                    // whole sentence said as an action. The bank is spent here and cleared, so two
+                    // casts never pay for the same bite twice.
+                    float raw;
+                    if (sk.Def.PaysBackDamageTaken > 0f)
+                    {
+                        raw = takenSinceCast.GetValueOrDefault(i) * sk.Def.PaysBackDamageTaken;
+                        takenSinceCast[i] = 0f;
+                    }
+                    else
+                    {
+                        raw = FormBehaviour.BaseDamage(form, resonance, wt);
+                    }
+                    raw *= VowFactor(sk, weaveCtx, wt, shape);
 
                     // OPENING VOLLEY — this skill's first activation of the wave, or one of the later ones.
                     raw *= firstCast ? shape.FirstCastMultiplier : shape.LaterCastMultiplier;
@@ -1441,7 +1514,9 @@ public static class SoloBattle
             // has always accumulated its own next time; this now does the same.
             if (ms >= nextBite)
             {
-                nextBite += enemyIntervalMs;
+                // MIRE stretches the interval; the slow is a fraction of it, so 25% is a quarter
+                // longer between bites rather than a quarter less damage.
+                nextBite += (int)MathF.Round(enemyIntervalMs * (1f + slowFactor));
                 staggeredThisBite = false;   // STAGGER may push the next one
                 castRamp = 0;                // RHYTHM — a bite resets the run of casts
                 // EVERY LIVING CREATURE BITES. This is what makes action economy real: a Swarm's combined
@@ -1453,6 +1528,10 @@ public static class SoloBattle
                     if (creatures[ci].Alive) incoming += creatures[ci].Damage;
 
                 // mods.Health no longer divides the bite — it multiplies the pool (see ChampionHealth).
+                // WILT's attack break, applied to the whole wave's bite. Negative, and floored by
+                // the skill's own dial, so it can never turn a bite into healing.
+                if (attackBreak < 0f) incoming *= Math.Max(0f, 1f + attackBreak);
+
                 var taken = incoming * defenseFactor * fragilityMult;
 
                 // ── ENDURE. Applied in this order on purpose: multipliers first, then the flat cut, so
@@ -1474,6 +1553,14 @@ public static class SoloBattle
                 // and rare, which is precisely a Bruiser band.
                 if (shape.FirstBiteFree && !firstBiteTaken) taken = 0f;
                 firstBiteTaken = true;
+
+                // REPAY banks what the champion took, per slot, until that slot casts. Banked for
+                // every slot rather than only the one that pays it back, because a build may carry
+                // two and each has its own clock — and because the accumulator has to be running
+                // before the first cast, not started by it.
+                for (var k = 0; k < skills.Count; k++)
+                    if (skills[k].Def.PaysBackDamageTaken > 0f)
+                        takenSinceCast[k] = takenSinceCast.GetValueOrDefault(k) + taken;
 
                 champ.Health -= (int)MathF.Round(taken);
                 events.Add(new BattleEvent(BattleEventKind.EnemyStrike, 0, (int)MathF.Round(taken), ms));

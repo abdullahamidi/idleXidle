@@ -150,7 +150,20 @@ public sealed record SkillDef(
     string ClipKey,
     string FxKey,
     IReadOnlyList<SkillVariation> Variations,
-    Form? LegacyForm)
+    Form? LegacyForm,
+    // ── WHAT THE BASE LINE DOES, as numbers the sim reads. ────────────────────────────────────────
+    //
+    // Zero everywhere by default, so a skill carries only the dials its own sentence needs and the
+    // fight can ask every skill about every dial without a switch on the id. Gameplay values are data
+    // here rather than constants in the loop — the repo's standing rule, and what will let a variation
+    // move one of these without touching another skill of the same style.
+    float DefenceBreakPerTick = 0f,      // PRESS: defence stripped from the target each tick
+    float DefenceBreakFloor = 0f,        // PRESS: how far defence may be driven, negative
+    float SlowFraction = 0f,             // MIRE: how much every enemy's attack interval stretches
+    float AttackBreakPerTick = 0f,       // WILT: fraction of its damage each enemy loses per tick
+    float AttackBreakFloor = 0f,         // WILT: the deepest that break may go, negative
+    float BleedOnKillFraction = 0f,      // WEEP: bleed left on a kill, as a fraction of max health
+    float PaysBackDamageTaken = 0f)      // REPAY: multiple of the damage taken since its last cast
 {
     /// <summary>Does this skill cost the champion its action?</summary>
     public bool TakesABeat => Kind == SkillKind.Active;
@@ -219,7 +232,7 @@ public static class SkillCatalogue
                     ("BUCKLE", "Each stun strips 10 defence from the front enemy."),
                     ("SEAL",   "While an enemy is stunned the weight's defence drop comes every 1s.")),
             },
-            LegacyForm: null),
+            LegacyForm: null, DefenceBreakPerTick: 5f, DefenceBreakFloor: -25f),
 
         // ── SNARE — reflect, shield, damage taken. TAUNT was removed from this style's list: every
         //    creature already attacks the champion, so it named nothing, and what its nodes actually
@@ -239,7 +252,7 @@ public static class SkillCatalogue
                     ("CARRIED",  "Any shield left when a wave ends carries into the next."),
                     ("LINING",   "The shield is 50% larger.")),
             },
-            LegacyForm: null),
+            LegacyForm: null, PaysBackDamageTaken: 2.0f),
 
         new("snare_jaws", "JAWS", Style.Snare, SkillKind.Reaction, SkillEffect.Damage,
             "Every bite returns 50% of it to the enemy that bit you. Rearms every 3s.",
@@ -326,7 +339,7 @@ public static class SkillCatalogue
                     ("ONSET",     "Bleed carried into a wave hits every enemy with its first payment."),
                     ("LAST DROP", "The kill that clears a wave doubles the standing bleed.")),
             },
-            LegacyForm: null),
+            LegacyForm: null, BleedOnKillFraction: 0.30f),
 
         // ── FIELD — slow, area damage, scaling with the number of living enemies ──────────────────
         new("field_pulse", "PULSE", Style.Field, SkillKind.Active, SkillEffect.Damage,
@@ -347,7 +360,7 @@ public static class SkillCatalogue
             LegacyForm: null),
 
         new("field_mire", "MIRE", Style.Field, SkillKind.Field, SkillEffect.Damage,
-            "Slows every enemy's attacks by 25%.",
+            "Damages every enemy every 1s, and slows their attacks by 25%.",
             Beats: 0, IntervalMs: 1000, On: ReactionOn.None, Targets: WholeWave,
             ClipKey: "aura", FxKey: "aura",
             Variations: new[]
@@ -361,7 +374,7 @@ public static class SkillCatalogue
                     ("BRIM",    "The per-enemy ceiling rises from 60% to 75%."),
                     ("REMNANT", "Enemies killed this wave still count toward the slow for 3s.")),
             },
-            LegacyForm: Form.Aura),
+            LegacyForm: Form.Aura, SlowFraction: 0.25f),
 
         // ── DRAIN — lifesteal, healing, attack break, scaling with health ─────────────────────────
         new("drain_drink", "DRINK", Style.Drain, SkillKind.Active, SkillEffect.Heal,
@@ -396,7 +409,7 @@ public static class SkillCatalogue
                     ("SEIZED", "The front enemy starts each wave already fully broken."),
                     ("GAUNT",  "When the front enemy dies, its break carries to the next one.")),
             },
-            LegacyForm: null),
+            LegacyForm: null, AttackBreakPerTick: 0.10f, AttackBreakFloor: -0.50f),
     };
 
     public static SkillDef ById(string id)

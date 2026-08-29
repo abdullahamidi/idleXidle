@@ -386,20 +386,34 @@ public class PassiveEffectTests
     }
 
     [Fact]
-    public void test_a_transformation_in_a_passive_slot_still_heals()
+    public void test_a_spilled_transformation_becomes_wilt_and_breaks_the_waves_attack()
     {
+        // A spill changes which SKILL is woven: TRANSFORMATION overflows onto DRAIN's passive, WILT,
+        // which is an attack break rather than a lifesteal. It must DO that — a slot the player can
+        // see doing nothing is the failure this whole file exists to refuse — but what it does is
+        // WILT's job, not the one the active face used to have.
         var build = Compose(S("a", Form.Strike), S("b", Form.Projectile), S("c", Form.Transformation));
-        Assert.False(build.Skills.Single(s => s.Name == "c").TakesABeat);
+        var spilled = build.Skills.Single(s => s.Name == "c");
+        Assert.False(spilled.TakesABeat);
+        Assert.Equal("WILT", spilled.Def.Name);
+        Assert.True(spilled.Def.AttackBreakPerTick > 0f);
 
-        // Hurt to begin with, and bitten for nothing, so any recovery is the skill's.
-        var champ = new Champion { MaxHealth = 100_000, Health = 40_000 };
-        SoloBattle.ResolveWave(champ, build, new Hunter(),
-            enemyHealth: 2_000_000f, enemyDamage: 0f, enemyIntervalMs: 1_500,
-            ExpeditionTuning.Default, new Random(3));
+        // Bitten hard, for long enough that the break has deepened. Against the same wave without it,
+        // the champion must have taken visibly less.
+        static int HealthAfter(Build b)
+        {
+            var champ = new Champion { MaxHealth = 400_000, Health = 400_000 };
+            SoloBattle.ResolveWave(champ, b, new Hunter(),
+                enemyHealth: 4_000_000f, enemyDamage: 900f, enemyIntervalMs: 700,
+                ExpeditionTuning.Default, new Random(3));
+            return champ.Health;
+        }
 
-        Assert.True(champ.Health > 40_000,
-            $"a TRANSFORMATION in a passive slot healed nothing (health {champ.Health}); giving back " +
-            "what it deals is the style's whole identity and it cannot be lost by changing slot.");
+        var withWilt = HealthAfter(build);
+        var without = HealthAfter(Compose(S("a", Form.Strike), S("b", Form.Projectile)));
+        Assert.True(withWilt > without,
+            $"WILT changed nothing: {withWilt} health against {without} without it. Its whole line is " +
+            "that every enemy bites softer.");
     }
 }
 
