@@ -774,6 +774,17 @@ def stills() -> list[dict]:
         add(f"icon_skill_{sk}", "assets/art/UI/icons/skills", "relic", motif,
             width=192, height=192, detail="highly detailed", single_subject=True)
 
+    # --- STATUS EFFECT badges: icon_effect_<effect> (SoloExpeditionScreen, over a creature)
+    #
+    # A creature's defence is drawn nowhere, so PRESS stripping it every two seconds was a rule the
+    # player could read on the build screen and never once see happen. These are STATE badges — they
+    # stand over the creature for as long as the effect does, with a stack count — rather than a rise
+    # and fade: this is an idle game and the player is often not watching, so a half-second flourish
+    # is a flourish nobody sees, while a badge is still there when they come back.
+    add("icon_effect_break", "assets/art/UI/icons/effects", "relic",
+        "round shield cracked and split down the middle with a jagged break, one half falling away",
+        width=128, height=128, detail="highly detailed", single_subject=True)
+
     # --- TRAIT ROAD glyphs: icon_road_<road> (PrestigeScreen)
     #
     # The four roads plus the spine are the entire decision this screen exists to present, and they were

@@ -2086,6 +2086,16 @@
       "single_subject": true
     },
     {
+      "key": "icon_effect_break",
+      "dest": "assets/art/UI/icons/effects",
+      "style": "relic",
+      "subject": "round shield cracked and split down the middle with a jagged break, one half falling away",
+      "width": 128,
+      "height": 128,
+      "detail": "highly detailed",
+      "single_subject": true
+    },
+    {
       "key": "icon_road_spine",
       "dest": "assets/art/UI/icons/roads",
       "style": "glyph",

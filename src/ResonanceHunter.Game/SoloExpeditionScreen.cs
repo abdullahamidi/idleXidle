@@ -1749,6 +1749,24 @@ public sealed class SoloExpeditionScreen
 
             _ui.GroundShadow(b, box.Center.X, EnemyBox.Bottom - 10, (int)(w * 0.55f), (int)(38 * scale), 0.55f);
 
+            // ── WHAT IS ON THIS CREATURE. A STATE, not a flourish (designer, 2026-08-30: "düşmanın
+            //    üstünde olan efektin ikonu ve kaç X stack olduğu kalıcı olarak görünse de olur").
+            //
+            //    A rise-and-fade would have been the other option and it is the wrong one HERE: this is
+            //    an idle game whose whole premise is that the champion fights while you are not looking,
+            //    so a half-second flourish is a flourish nobody sees. A badge that stands for as long as
+            //    the effect does is still there when the player comes back — which is the only moment
+            //    that reliably exists.
+            //
+            //    Defence break is the first of these because it was the one the playtest could not feel;
+            //    slow and attack break belong here too, and the layout leaves room to the right.
+            if (_replay?.CreatureBreaks(i) is > 0 and var stacks)
+            {
+                var badge = new Rectangle(box.Center.X - 40, box.Y - 34, 26, 26);
+                _ui.Icon(b, "icon_effect_break", badge, Ember);
+                _ui.TextBig(b, $"x{stacks}", badge.Right + 2, badge.Y + 5, Ember, UiTypography.Caption);
+            }
+
             // MEASURED headroom, not a constant. The 2026-08-22 strips fill ~90% of their frame with the
             // figure sat 3.5% up from the floor, so a fixed 8% crop bit the top of the tallest creatures;
             // a negative topCrop makes AnimSprite trim exactly the empty rows and never the figure.

@@ -75,6 +75,20 @@ public sealed class WeaveScreen
     private int _tab;
     private string? _readingVowId;
     private string _msg = "";
+
+    /// <summary>
+    /// What the cursor is over, in words — and the ONLY prose the middle column draws.
+    /// </summary>
+    /// <remarks>
+    /// The panel used to explain every control where it stood: a line under each of the twelve
+    /// library cells, a line under each variation, a line under each reinforcement, a sentence on the
+    /// respec button. The verdict was "kelimelerde sürekli bir şey anlatmaya çalışıyorsun ama UI sade
+    /// olmalı... açıklamalar hover edilince gelmeli sadece". So the controls are icons and names, and
+    /// this is the one box that ever holds a sentence. Set during Draw by whatever the cursor is on;
+    /// empty means the cursor is on nothing and the box says so once, quietly.
+    /// </remarks>
+    private string _hoverTitle = "";
+    private string _hoverBody = "";
     private int _vowScroll;
 
     /// <summary>First VISIBLE keystone. Three fit; the tree teaches far more than three.</summary>
@@ -448,14 +462,23 @@ public sealed class WeaveScreen
     private static int LibTop => UiKit.BodyTop(PickPanel);
     private static int LibRowH => (PickPanel.Bottom - 24 - LibTop) / LibRows;
 
-    private static Rectangle LibCell(int style, int which)
+    /// <summary>
+    /// One of the twelve library tiles: an icon, a name, and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// FOUR ROWS OF THREE, not six rows of two with the style spelled down the side. The grid is read
+    /// as a shape rather than as a list, the tile is square enough for the icon to be the biggest
+    /// thing on it, and the style is carried by the ORDER (its two skills are always adjacent) instead
+    /// of by a word repeated twelve times.
+    /// </remarks>
+    private static Rectangle LibCell(int i)
     {
-        var w = (PickPanel.Width - PickPad * 2 - LibStyleW - 10) / 2;
-        return new(PickPanel.X + PickPad + LibStyleW + which * (w + 10),
-                   LibTop + style * LibRowH, w, LibRowH - 10);
+        var w = (PickPanel.Width - PickPad * 2 - 16) / 3;
+        var h = 132;
+        return new(PickPanel.X + PickPad + i % 3 * (w + 8), LibTop + i / 3 * (h + 8), w, h);
     }
 
-    private const int LibStyleW = 92;
+    private const int LibStyleW = 0;
 
     // ── THE SKILL'S OWN TREE, the middle column's second face.
     //
@@ -491,7 +514,7 @@ public sealed class WeaveScreen
     /// thing this button must not read as is a page-level action.
     /// </remarks>
     private static Rectangle RespecBtn
-        => new(PickPanel.X + PickPad, TreeTop + 560, PickPanel.Width - PickPad * 2, 38);
+        => new(PickPanel.X + PickPad, TreeTop + 552, PickPanel.Width - PickPad * 2, 38);
 
     private static Rectangle SourceCell(int i) =>
         new(PickPanel.X + PickPad + i % 3 * CellPitch, SourceTop + i / 3 * CellRow, CellW, CellH);
@@ -804,12 +827,11 @@ public sealed class WeaveScreen
         // PICKING FROM THE LIBRARY. A skill you have not learned is not silently inert — it says
         // which road teaches it, because "why can I not click this" is the one question a locked
         // control must always answer.
-        for (var st = 0; st < LibRows; st++)
-        for (var which = 0; which < 2; which++)
+        for (var i = 0; i < 12; i++)
         {
-            if (!LibCell(st, which).Contains(hit)) continue;
-            var style = (Style)st;
-            var def = which == 0 ? SkillCatalogue.ActiveOf(style) : SkillCatalogue.PassiveOf(style);
+            if (!LibCell(i).Contains(hit)) continue;
+            var style = (Style)(i / 2);
+            var def = i % 2 == 0 ? SkillCatalogue.ActiveOf(style) : SkillCatalogue.PassiveOf(style);
             if (!KnownSkills().Contains(def.Id))
             {
                 _msg = $"{def.Name} IS LEARNED ON {style.ToString().ToUpperInvariant()}'S ROAD, ON THE MASTERY TREE.";
@@ -1386,8 +1408,30 @@ public sealed class WeaveScreen
         if (on) Outline(b, r, accent, 2);
     }
 
+    /// <summary>The foot of the middle column: the one place a sentence is allowed.</summary>
+    private static Rectangle HoverBox
+        => new(PickPanel.X + PickPad, PickPanel.Bottom - 168, PickPanel.Width - PickPad * 2, 146);
+
+    private void DrawHover(SpriteBatch b)
+    {
+        var r = HoverBox;
+        _ui.Fill(b, r, new Color(0x0C, 0x09, 0x14) * 0.55f);
+        Outline(b, r, Slate, 1);
+        if (_hoverTitle.Length == 0)
+        {
+            _ui.TextCenter(b, "HOVER ANYTHING TO READ IT.", r.Center.X, r.Center.Y - 8, Dim);
+            return;
+        }
+        _ui.TextBig(b, _hoverTitle, r.X + 12, r.Y + 10, Gold, UiTypography.Body);
+        DrawWrapped(b, _hoverBody, r.X + 12, r.Y + 38, r.Width - 24, Slate, r.Bottom - 8);
+    }
+
     private void DrawPicker(SpriteBatch b, Point hit)
     {
+        // PER FRAME. The box says what the cursor is on RIGHT NOW, so last frame's answer must not
+        // survive into this one — a stale sentence under a cursor that has moved is worse than none.
+        _hoverTitle = "";
+        _hoverBody = "";
         _ui.PanelQuiet(b, PickPanel);
         var skills = Loadout.Skills;
         if (_slot >= skills.Count)
@@ -1418,56 +1462,52 @@ public sealed class WeaveScreen
         if (_tab == 1)
         {
             DrawSkillTree(b, hit, cur);
+            DrawHover(b);
             DrawReadout(b, null, null);
             return;
         }
 
         _ui.TextCenterBig(b, "YOUR SKILLS", PickPanel.Center.X, UiKit.TitleTop(PickPanel), Gold, UiTypography.PanelTitle);
-        _ui.TextCenter(b, "LEARNED ON THE MASTERY TREE · PICK ONE FOR THIS SLOT",
-                       PickPanel.Center.X, UiKit.CaptionTop(PickPanel), Slate);
 
         var known = KnownSkills();
         Source? hoverSource = null;
         Form? hoverForm = null;
 
-        for (var st = 0; st < LibRows; st++)
+        // TWELVE TILES, IN STYLE ORDER. A style's two skills sit side by side, so the pairing is read
+        // off the grid instead of being written beside it twelve times.
+        for (var i = 0; i < 12; i++)
         {
-            var style = (Style)st;
-            var label = new Rectangle(PickPanel.X + PickPad, LibTop + st * LibRowH, LibStyleW, LibRowH - 10);
-            // THE STYLE'S NAME DOWN THE LEFT, once per pair. It is the axis the mastery tree is
-            // organised by, so naming it here is what connects the two screens.
-            _ui.Text(b, style.ToString().ToUpperInvariant(), label.X, label.Center.Y - 8, Slate);
+            var style = (Style)(i / 2);
+            var def = i % 2 == 0 ? SkillCatalogue.ActiveOf(style) : SkillCatalogue.PassiveOf(style);
+            var cell = LibCell(i);
+            var have = known.Contains(def.Id);
+            var over = cell.Contains(hit);
+            var on = _slot < Loadout.Skills.Count && Loadout.Skills[_slot].SkillId == def.Id;
 
-            for (var which = 0; which < 2; which++)
+            if (over)
             {
-                var def = which == 0 ? SkillCatalogue.ActiveOf(style) : SkillCatalogue.PassiveOf(style);
-                var cell = LibCell(st, which);
-                var have = known.Contains(def.Id);
-                var over = cell.Contains(hit);
-                var on = _slot < Loadout.Skills.Count && Loadout.Skills[_slot].SkillId == def.Id;
-
-                if (over && have) { hoverForm = def.LegacyForm; hoverSource = Loadout.Skills.Count > _slot ? Loadout.Skills[_slot].Source : null; }
-
-                // LOCKED IS DIM, NOT HIDDEN. The whole catalogue is visible so the shape of the game
-                // is legible from the first wave, and each locked cell names the road that opens it.
-                var tint = !have ? Dim : on ? Gold : over ? Bone : Slate;
-                Card(b, cell, Gold, on, over && have, !have);
-
-                // THE SKILL'S OWN GLYPH. Twelve of them, so BLOW and PRESS stop wearing the same
-                // picture — the rail and this list both showed the SOURCE gem, which is the element
-                // rather than the ability.
-                var ico = new Rectangle(cell.X + 8, cell.Y + 6, 30, 30);
-                if (!_ui.Icon(b, $"icon_skill_{def.Id}", ico, tint))
-                    _ui.Diamond(b, ico, tint * 0.6f);
-                _ui.TextBig(b, def.Name, cell.X + 44, cell.Y + 10, tint, UiTypography.Body);
-                // THE KIND, as a word rather than a colour: it decides which budget the slot spends.
-                _ui.Text(b, def.TakesABeat ? "ACTIVE" : "PASSIVE", cell.Right - 66, cell.Y + 10,
-                         !have ? Dim : def.TakesABeat ? Gold : Met);
-                DrawWrapped(b, have ? def.Line : $"MASTERY · {style.ToString().ToUpperInvariant()}'S ROAD",
-                            cell.X + 10, cell.Y + 42, cell.Width - 20, !have ? Dim : Slate, cell.Bottom - 6);
+                _hoverTitle = have ? def.Name : $"{def.Name} — NOT LEARNED";
+                _hoverBody = have ? def.Line
+                                  : $"Learned on {style.ToString().ToUpperInvariant()}'s road, on the mastery tree.";
+                if (have) { hoverForm = def.LegacyForm; }
             }
+
+            Card(b, cell, Gold, on, over && have, !have);
+
+            // THE ICON IS THE BIGGEST THING ON THE TILE, which is the whole point of having twelve.
+            var ico = new Rectangle(cell.Center.X - 30, cell.Y + 12, 60, 60);
+            if (!_ui.Icon(b, $"icon_skill_{def.Id}", ico, !have ? Dim : on ? Gold : over ? Bone : Slate))
+                _ui.Diamond(b, ico, Dim);
+
+            _ui.TextCenter(b, Fit(def.Name, cell.Width - 12), cell.Center.X, cell.Y + 80,
+                           !have ? Dim : on ? Gold : Bone);
+            // The kind as one short word, because it decides which of the two budgets the slot spends
+            // and a player choosing between two skills of a style is choosing exactly that.
+            _ui.TextCenter(b, def.TakesABeat ? "ACTIVE" : "PASSIVE", cell.Center.X, cell.Y + 102,
+                           !have ? Dim : def.TakesABeat ? Gold * 0.8f : Met * 0.8f);
         }
 
+        DrawHover(b);
         DrawReadout(b, hoverSource, hoverForm);
 
         // THE CARD IS NOT DRAWN HERE. It has to sit over the panels beside it, and this method runs
@@ -1549,23 +1589,34 @@ public sealed class WeaveScreen
         var uses = SkillLevels.UsesOf(def.Id);
 
         // ── THE HEADER: what this is, and what it does in one line. ──────────────────────────────
-        _ui.TextBig(b, def.Name, PickPanel.X + PickPad, TreeTop, Gold, UiTypography.PanelTitle);
-        _ui.Text(b, def.TakesABeat ? "ACTIVE" : "PASSIVE", PickPanel.Right - PickPad - 70, TreeTop + 6,
+        // THE SKILL, AS AN ICON AND A NAME. Its rule used to sit here as a paragraph; it is in the
+        // hover box now, where every sentence on this panel lives.
+        var head = new Rectangle(PickPanel.X + PickPad, TreeTop - 4, 54, 54);
+        _ui.Icon(b, $"icon_skill_{def.Id}", head, Gold);
+        if (head.Contains(hit)) { _hoverTitle = def.Name; _hoverBody = def.Line; }
+        _ui.TextBig(b, def.Name, head.Right + 14, TreeTop + 6, Gold, UiTypography.PanelTitle);
+        _ui.Text(b, def.TakesABeat ? "ACTIVE" : "PASSIVE", PickPanel.Right - PickPad - 70, TreeTop + 12,
                  def.TakesABeat ? Gold : Met);
-        DrawWrapped(b, def.Line, PickPanel.X + PickPad, TreeTop + 36, PickPanel.Width - PickPad * 2, Slate,
-                    TreeTop + 92);
 
         // ── THE LEVEL LINE. Says where the next one comes from, because "use it" is the whole rule
         //    and a player who does not know that will look for a currency that does not exist. ────
         var next = SkillProgress.UsesForLevel(level + 1);
-        var progress = level >= SkillProgress.MaxLevel
-            ? $"LEVEL {level} \u00b7 FULLY LEVELLED"
-            : $"LEVEL {level} \u00b7 NEXT AT {next} WAVES CLEARED WITH IT ({uses}/{next})";
-        _ui.Text(b, free > 0 ? progress + $"   \u00b7   {free} TO SPEND" : progress,
-                 PickPanel.X + PickPad, TreeTop + 100, free > 0 ? Gold : Slate);
+        // NUMBERS, NOT A SENTENCE. "NEXT AT 16 WAVES CLEARED WITH IT" is the kind of line the
+        // designer asked to stop drawing everywhere; the hover box carries the explanation and the
+        // panel carries the count.
+        var progress = level >= SkillProgress.MaxLevel ? $"LEVEL {level}" : $"LEVEL {level}   {uses}/{next}";
+        _ui.Text(b, free > 0 ? progress + $"   +{free}" : progress,
+                 PickPanel.X + PickPad, TreeTop + 62, free > 0 ? Gold : Slate);
+        if (new Rectangle(PickPanel.X + PickPad, TreeTop + 58, 200, 20).Contains(hit))
+        {
+            _hoverTitle = $"LEVEL {level}";
+            _hoverBody = level >= SkillProgress.MaxLevel
+                ? "This skill is fully levelled."
+                : $"Clear {next} waves with this skill equipped to reach level {level + 1}. "
+                  + "Levels are never lost, and respec is free.";
+        }
 
         // ── THE FORK. Two cards, each naming the SOURCE it commits the skill to. ─────────────────
-        _ui.Text(b, "WHAT IT BECOMES", PickPanel.X + PickPad, TreeTop + 128, Slate);
         for (var vi = 0; vi < def.Variations.Count && vi < 2; vi++)
         {
             var v = def.Variations[vi];
@@ -1580,30 +1631,29 @@ public sealed class WeaveScreen
 
             // THE SOURCE GEM, because the element is half of what this card commits to and a colour
             // swatch is the fastest thing on screen to read.
-            var gem = new Rectangle(card.X + 10, card.Y + 8, 34, 34);
+            var gem = new Rectangle(card.Center.X - 26, card.Y + 16, 52, 52);
             _ui.Diamond(b, new Rectangle(gem.X - 3, gem.Y - 3, gem.Width + 6, gem.Height + 6),
                         col * (other ? 0.10f : taken ? 0.40f : 0.22f));
             if (_ui.Assets.Get($"source_{v.Source.ToString().ToLowerInvariant()}") is { } gg)
                 b.Draw(gg, gem, other ? Color.White * 0.35f : Color.White);
 
-            _ui.TextBig(b, v.Name, card.X + 52, card.Y + 12, other ? Dim : taken ? Bone : Gold, UiTypography.Body);
-            _ui.Text(b, SourceName(v.Source), card.X + 52, card.Y + 34, other ? Dim : col);
-            DrawWrapped(b, v.Line, card.X + 12, card.Y + 62, card.Width - 24,
-                        other ? Dim : Slate, card.Bottom - 8);
+            _ui.TextCenter(b, v.Name, card.Center.X, card.Bottom - 46, other ? Dim : taken ? Bone : Gold);
+            _ui.TextCenter(b, SourceName(v.Source), card.Center.X, card.Bottom - 24, other ? Dim : col);
+            if (card.Contains(hit))
+            {
+                _hoverTitle = $"{v.Name} · {SourceName(v.Source)}";
+                _hoverBody = v.Line;
+            }
         }
 
         // ── AND WHAT IT BUYS NEXT. ───────────────────────────────────────────────────────────────
         if (chosen is null)
         {
-            _ui.TextCenter(b, free > 0 ? "TAKE ONE, AND ITS THREE REINFORCEMENTS OPEN BELOW."
-                                       : "CLEAR WAVES WITH THIS SKILL TO EARN ITS FIRST LEVEL.",
-                           PickPanel.Center.X, TreeTop + 400, Slate);
             return;
         }
 
         var bought = chosen.Reinforcements.Count(r => SkillLevels.HasReinforcement(def.Id, r.Name));
-        _ui.Text(b, $"{chosen.Name}'S REINFORCEMENTS   {bought}/{chosen.Reinforcements.Count}",
-                 PickPanel.X + PickPad, TreeTop + 358, Slate);
+        _ui.Text(b, $"{bought}/{chosen.Reinforcements.Count}", PickPanel.X + PickPad, TreeTop + 358, Slate);
 
         for (var ri = 0; ri < chosen.Reinforcements.Count && ri < 3; ri++)
         {
@@ -1614,15 +1664,14 @@ public sealed class WeaveScreen
             var over = card.Contains(hit) && can;
 
             Card(b, card, have ? Met : Gold, have, over, !have && !can);
-            _ui.Text(b, Fit(r.Name, card.Width - 20), card.X + 10, card.Y + 10,
-                     have ? Bone : can ? Gold : Dim);
+            _ui.TextCenter(b, Fit(r.Name, card.Width - 16), card.Center.X, card.Center.Y - 16,
+                           have ? Bone : can ? Gold : Dim);
             // A BOUGHT ONE IS MARKED IN WORDS. Colour alone carries it for a player who reads colour;
             // the mark carries it for everyone else. A tick glyph would have been the obvious choice
             // and the font gate refused it — U+2713 is not in the proven set and would have drawn as
             // nothing at all, which is the failure a second channel exists to prevent.
-            if (have) _ui.Text(b, "OWNED", card.Right - 52, card.Y + 10, Met);
-            DrawWrapped(b, r.Line, card.X + 10, card.Y + 32, card.Width - 20,
-                        have ? Slate : can ? Slate : Dim, card.Bottom - 8);
+            if (have) _ui.TextCenter(b, "OWNED", card.Center.X, card.Center.Y + 8, Met);
+            if (card.Contains(hit)) { _hoverTitle = r.Name; _hoverBody = r.Line; }
         }
 
         // ── RESPEC, and it says the price out loud because the price is nothing. ─────────────────
@@ -1630,8 +1679,12 @@ public sealed class WeaveScreen
         var overR = rb2.Contains(hit);
         _ui.Fill(b, rb2, Ember * (overR ? 0.22f : 0.10f));
         Outline(b, rb2, overR ? Ember : Slate, overR ? 2 : 1);
-        _ui.TextCenter(b, "GIVE THESE LEVELS BACK \u00b7 FREE, AND YOU KEEP EVERY LEVEL EARNED",
-                       rb2.Center.X, rb2.Y + 9, overR ? Ember : Slate);
+        _ui.TextCenter(b, "RESPEC", rb2.Center.X, rb2.Y + 9, overR ? Ember : Slate);
+        if (overR)
+        {
+            _hoverTitle = "RESPEC";
+            _hoverBody = "Give this skill's levels back. Free, and it keeps every level it has earned.";
+        }
     }
 
     private void DrawSlotBanner(SpriteBatch b, PlayerLoadout.SkillChoice cur)

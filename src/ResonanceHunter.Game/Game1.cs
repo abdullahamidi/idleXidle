@@ -1718,10 +1718,19 @@ public class Game1 : Game
                     if (sm is "fight" or "fightswing" or "fightflash")
                     {
                         _loadout.SkillCapacity = Math.Max(_loadout.SkillCapacity, 4);
+                        // The roads, or every skill but the champion's own is refused and the fixture
+                        // photographs an empty build.
+                        _mastery.SetEarned(9999);
+                        _mastery.RestoreTaken(_mastery.Taken
+                            .Concat(MasteryCatalog.Nodes.Where(x => x.Kind == MasteryKind.SkillRoad).Select(x => x.Id))
+                            .ToList());
+                        // PRESS IS IN THE FIXTURE ON PURPOSE: it is the skill whose whole effect had no
+                        // picture, so a capture of the fight that does not carry it cannot show the
+                        // badge that was added for it.
                         foreach (var (src, form, passive) in new[]
                                  {
                                      (Source.Mind, Form.Projectile, (bool?)false),
-                                     (Source.Nature, Form.Aura, (bool?)true),
+                                     (Source.Body, Form.Strike, (bool?)true),
                                      (Source.Shadow, Form.Trap, (bool?)true),
                                  })
                         {

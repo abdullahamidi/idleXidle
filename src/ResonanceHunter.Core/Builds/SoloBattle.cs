@@ -588,6 +588,7 @@ public static class SoloBattle
         var executes = 0;          // HAMMER/FINISH — its execute is once a wave; TWICE buys a second
         var secondBreak = 0f;      // DRAIN/HOLLOW — SHRIVEL reaching past the front enemy
         var bites = 0;             // SNARE/MESH and HARDEN — how many bites the trap has answered
+        var breaks = new Dictionary<int, int>();   // HAMMER/PRESS — how deep each creature is broken
         var bankedShield = 0f;     // SNARE/BANKED — what REPAY kept instead of spending, eaten by bites
         var steadyAmp = 0f;        // SIGN/STEADY — the swell it has built this wave
         // VOLLEY/TORRENT pays the standing bleed out faster and CARRION makes it linger; both are
@@ -1309,11 +1310,18 @@ public static class SoloBattle
                         // per wave so it cannot carry into the next one.
                         // SEIZE widens it past the front one; the base line is 1 + 0.
                         var want = 1 + def.TargetsBonus;
-                        foreach (var c in creatures)
+                        for (var ci = 0; ci < creatures.Count && want > 0; ci++)
                         {
-                            if (want <= 0) break;
+                            var c = creatures[ci];
                             if (!c.Alive) continue;
+                            var before = c.Defense;
                             c.Defense = Math.Max(def.DefenceBreakFloor, c.Defense - def.DefenceBreakPerTick);
+                            // PUBLISHED, so the fight can SHOW it. Only when the number actually moved:
+                            // once a creature is at the floor the break is doing nothing, and a badge
+                            // that keeps counting past the floor would be lying about the last tick.
+                            if (c.Defense < before)
+                                events.Add(new BattleEvent(BattleEventKind.Break, ci,
+                                                          breaks[ci] = breaks.GetValueOrDefault(ci) + 1, ms));
                             want--;
                         }
                         continue;

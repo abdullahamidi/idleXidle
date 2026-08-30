@@ -238,7 +238,22 @@ public enum WaveOutcome { Cleared, Wiped, Stalled }
 /// </remarks>
 // Charge: Value is the pool AFTER the change — the HUD latches the latest one at its playhead
 // rather than re-deriving the sim's rules (a replayed rule is a rule that can drift).
-public enum BattleEventKind { Strike, EnemyStrike, Down, Heal, EnemyDown, Skill, Shield, Charge, Aura, Beat }
+public enum BattleEventKind
+{
+    Strike, EnemyStrike, Down, Heal, EnemyDown, Skill, Shield, Charge, Aura, Beat,
+
+    /// <summary>
+    /// A creature's defence was broken. <c>Slot</c> is the creature's index, <c>Amount</c> the number
+    /// of breaks it is now carrying.
+    /// </summary>
+    /// <remarks>
+    /// PRESS strips defence every two seconds and the fight showed NOTHING for it — a rule the player
+    /// reads on the build screen and can never see happen (playtest: "2 saniyede bir 6 defans kırıyor
+    /// diyor ama ben oyunda çok farkedemedim"). A creature's defence is not drawn anywhere, so this
+    /// event exists to put a state badge over the one being broken.
+    /// </remarks>
+    Break,
+}
 
 /// <summary>
 /// BEAT: one per action the champion takes, carrying <see cref="Builds.Champion.BeatCount"/> in

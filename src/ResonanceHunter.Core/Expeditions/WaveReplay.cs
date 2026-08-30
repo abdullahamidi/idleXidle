@@ -67,12 +67,20 @@ public sealed class WaveReplay
         ArgumentNullException.ThrowIfNull(maxHealths);
         _creatureHealth.Clear();
         _creatureMax.Clear();
+        // A NEW WAVE IS A NEW SET OF CREATURES. Carrying the breaks over would badge wave two's front
+        // enemy with wave one's damage — creatures are minted per wave and so is this.
+        _creatureBreak.Clear();
         for (var i = 0; i < maxHealths.Count; i++)
         {
             _creatureHealth[i] = maxHealths[i];
             _creatureMax[i] = MathF.Max(1f, maxHealths[i]);
         }
     }
+
+    private readonly Dictionary<int, int> _creatureBreak = new();
+
+    /// <summary>How many defence breaks this creature is carrying right now. 0 for an untouched one.</summary>
+    public int CreatureBreaks(int index) => _creatureBreak.GetValueOrDefault(index);
 
     public int CreatureCount => _creatureMax.Count;
 
@@ -331,6 +339,13 @@ public sealed class WaveReplay
 
             case BattleEventKind.EnemyStrike:
                 _health[e.Slot] = Math.Max(0, HealthOf(e.Slot) - e.Amount);
+                break;
+
+            // HOW DEEP THIS CREATURE IS BROKEN, as of the playhead. A STATE rather than a moment: the
+            // fight screen draws it as a standing badge, so scrubbing backwards has to un-break it too,
+            // which is why it is assigned rather than incremented.
+            case BattleEventKind.Break:
+                _creatureBreak[e.Slot] = e.Amount;
                 break;
 
             // Clamped to the ceiling because the SIM clamps before it heals but reports the UNCLAMPED
