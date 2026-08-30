@@ -177,7 +177,37 @@ public sealed record SkillDef(
     float AttackBreakPerTick = 0f,       // WILT: fraction of its damage each enemy loses per tick
     float AttackBreakFloor = 0f,         // WILT: the deepest that break may go, negative
     float BleedOnKillFraction = 0f,      // WEEP: bleed left on a kill, as a fraction of max health
-    float PaysBackDamageTaken = 0f)      // REPAY: multiple of the damage taken since its last cast
+    float PaysBackDamageTaken = 0f,      // REPAY: multiple of the damage taken since its last cast
+
+    // ── WHAT THE VARIATIONS TURN. Every one is zero or false at the base line, so a skill carries
+    //    only the dials its own sentence needs and a variation is a DELTA on this record rather than
+    //    a branch in the fight loop. Twenty-four variations would otherwise be twenty-four cases. ──
+    bool DefenceIgnore = false,          // HAMMER/FLATTEN
+    float ExecuteFraction = 0f,          // HAMMER/FINISH — kills a target under this share of health
+    int StunMs = 0,                      // HAMMER/PIN
+    bool ShieldInsteadOfDamage = false,  // SNARE/BANKED — the banked total becomes a shield
+    float ReflectFraction = 0f,          // SNARE/JAWS base, deepened by NET
+    bool StopsWholeBite = false,         // SNARE/IRON
+    float AmplifyPercent = 0f,           // SIGN — how much everything else is multiplied by
+    int AmplifyMs = 0,                   // SIGN/CALL — how long the window holds
+    float AmplifyPerCast = 0f,           // SIGN/STEADY — added per cast
+    float AmplifyCap = 0f,               // SIGN/STEADY — and its ceiling
+    bool AmplifyWholeWave = false,       // SIGN/SPRAWL — the mark covers everything, at half
+    float AmplifyDeepenPerTick = 0f,     // SIGN/ETCH
+    float AmplifyDeepenCap = 0f,         // SIGN/ETCH
+    float BleedRate = 1f,                // VOLLEY/TORRENT — multiplier on how fast bleed pays
+    bool BleedCarriesWaves = false,      // VOLLEY/CARRION
+    float DamagePerLivingEnemy = 0f,     // FIELD/THRONG
+    float SplitPool = 0f,                // FIELD/SHARE — total damage split between the living
+    int SplitMaxWays = 0,                // FIELD/SHARE — and the most ways it may split
+    float SlowDeepenPerTick = 0f,        // FIELD/NUMB
+    float SlowCeiling = 0f,              // FIELD/NUMB and TEEMING
+    float SlowPerEnemy = 0f,             // FIELD/TEEMING
+    float Lifesteal = 0f,                // DRAIN/DRINK base, doubled by THIRST
+    float DamagePerHealth = 0f,          // DRAIN/GLUT — damage rises with health held
+    float HealPerPulse = 0f,             // DRAIN/SUP — share of maximum health each pulse returns
+    bool FrontEnemyOnly = false,         // DRAIN/SHRIVEL
+    int MinimumHits = 0)                 // VOLLEY/SPLAY — arrows double up when the wave is small
 {
     /// <summary>Does this skill cost the champion its action?</summary>
     public bool TakesABeat => Kind == SkillKind.Active;
@@ -225,10 +255,12 @@ public static class SkillCatalogue
             Variations: new[]
             {
                 V("FLATTEN", "Defence ignore: the blow ignores the target's defence.",
+                    d => d with { DefenceIgnore = true },
                     ("TOLL",  "The defence the blow ignores is added to its damage."),
                     ("SHEAR", "The blow is 50% larger against a target whose defence it ignored."),
                     ("TRAIL", "The defence ignore also applies to your basic attack for 3s.")),
                 V("FINISH", "Execute threshold: the blow kills a target under 15% health. Once per wave.",
+                    d => d with { ExecuteFraction = 0.15f },
                     ("BRINK", "The execute threshold rises to 25% health."),
                     ("TWICE", "The blow may execute twice each wave."),
                     ("SPUR",  "The blow deals 20% more for each enemy it has executed this wave.")),
@@ -242,10 +274,12 @@ public static class SkillCatalogue
             Variations: new[]
             {
                 V("CRUSHING", "The defence drop is 10 every 2s instead of 5, down to -50.",
+                    d => d with { DefenceBreakPerTick = 10f, DefenceBreakFloor = -50f },
                     ("SETTLE",    "The floor falls from -50 to -90."),
                     ("SEIZE",     "When the front enemy dies, its broken defence carries to the next."),
                     ("UNDERMINE", "The weight breaks defence on the two front enemies instead of one.")),
                 V("PIN", "1s stun on the front enemy every 6s.",
+                    d => d with { DefenceBreakPerTick = 0f, StunMs = 1000, IntervalMs = 6000 },
                     ("HOLD",   "The stun is 1.5s instead of 1s."),
                     ("BUCKLE", "Each stun strips 10 defence from the front enemy."),
                     ("SEAL",   "While an enemy is stunned the weight's defence drop comes every 1s.")),
@@ -262,10 +296,12 @@ public static class SkillCatalogue
             Variations: new[]
             {
                 V("VENGEANCE", "350% instead of 200%, but only damage taken in the last 3s counts.",
+                    d => d with { PaysBackDamageTaken = 3.5f },
                     ("GRUDGE",  "The total is not cleared when it pays; it halves instead."),
                     ("SCARRED", "Damage taken below half health counts double."),
                     ("BRUISED", "Damage the trap already reflected still counts toward the total.")),
                 V("BANKED", "Instead of dealing it, the total becomes a shield of equal size.",
+                    d => d with { ShieldInsteadOfDamage = true },
                     ("STANDING", "The shield does not expire; it holds until it is spent."),
                     ("CARRIED",  "Any shield left when a wave ends carries into the next."),
                     ("LINING",   "The shield is 50% larger.")),
@@ -279,10 +315,12 @@ public static class SkillCatalogue
             Variations: new[]
             {
                 V("NET", "The reflect returns 100% of the bite instead of 50%.",
+                    d => d with { ReflectFraction = 1.0f },
                     ("MESH",   "The reflect grows 10% per bite taken this wave, up to +50%."),
                     ("RECOIL", "The reflect still lands at half strength while the trap rearms."),
                     ("SPITE",  "A reflect that kills the enemy that bit you rearms the trap at once.")),
                 V("IRON", "No reflect: the trap stops a whole bite, but rearms every 6s.",
+                    d => d with { ReflectFraction = 0f, StopsWholeBite = true },
                     ("REPRISAL", "A stopped bite is returned to the enemy that made it, in full."),
                     ("BLUNT",    "The trap springs on two bites before it rearms."),
                     ("HARDEN",   "Each spring raises the reflect 20% for the wave, up to 40%.")),
@@ -297,10 +335,12 @@ public static class SkillCatalogue
             Variations: new[]
             {
                 V("SPEND", "The window is 2s and amplifies +200%.",
+                    d => d with { AmplifyPercent = 2.0f, AmplifyMs = 2000 },
                     ("OVERSPEND", "Amplify +100% more; the window falls to 1.5s."),
                     ("HERALD",    "The window opens on its own when a wave starts."),
                     ("AFTERGLOW", "When the window closes, +40% holds until the next cast.")),
                 V("STEADY", "Each cast adds +40% amplify for the rest of the wave, up to +80%.",
+                    d => d with { AmplifyPercent = 0f, AmplifyPerCast = 0.40f, AmplifyCap = 0.80f },
                     ("REDOUBLE", "Each cast adds +70% instead of +40%."),
                     ("PILLAR",   "The cap rises from +80% to +160%."),
                     ("FOOTING",  "Half the amplify carries into the next wave.")),
@@ -314,10 +354,12 @@ public static class SkillCatalogue
             Variations: new[]
             {
                 V("SPRAWL", "The mark covers every enemy instead, at half strength.",
+                    d => d with { AmplifyWholeWave = true, AmplifyPercent = 0.35f },
                     ("EVEN",   "Every enemy's mark rises from half to three-quarters strength."),
                     ("WINNOW", "A marked enemy's death deepens every other mark +10%, up to +50%."),
                     ("RIPPLE", "Each death deepens the other marks +20% instead of +10%.")),
                 V("ETCH", "The mark deepens +50% every 2s to +170%, and keeps its depth when it moves.",
+                    d => d with { AmplifyDeepenPerTick = 0.50f, AmplifyDeepenCap = 1.70f },
                     ("SINK",   "The mark deepens +80% each time instead of +50%."),
                     ("GRAVEN", "The cap rises from +170% to +250%."),
                     ("PACE",   "The mark deepens every 1s instead of every 2s.")),
@@ -332,10 +374,12 @@ public static class SkillCatalogue
             Variations: new[]
             {
                 V("SPLAY", "Fires an arrow at every enemy, and never fewer than 5 arrows.",
+                    d => d with { Targets = WholeWave, MinimumHits = 5 },
                     ("TWIN",   "Every enemy takes 2 arrows instead of 1."),
                     ("NOCK",   "Cooldown falls 0.3s for each enemy beyond the first that it hits."),
                     ("FLIGHT", "Every enemy the cast hits bleeds for 20% of the arrow.")),
                 V("CLUSTER", "All 5 arrows hit one enemy.",
+                    d => d with { Targets = 1 },
                     ("DRIVE",    "Each arrow after the first into the same enemy deals +15%."),
                     ("RUPTURE",  "Each arrow after the first into the same enemy leaves bleed worth 20% of it."),
                     ("GROUPING", "When the target dies, the rest of the cast's arrows fire at the next enemy.")),
@@ -349,10 +393,12 @@ public static class SkillCatalogue
             Variations: new[]
             {
                 V("TORRENT", "The bleed deals its damage twice as fast.",
+                    d => d with { BleedRate = 2f },
                     ("DRY",      "A kill made while nothing is bleeding leaves double bleed."),
                     ("SPILLWAY", "When the bleed kills, its next payment lands at once."),
                     ("EBB",      "The bleed's last payment is doubled.")),
-                V("CARRION", "The bleed carries into the next wave instead of ending.",
+                V("CARRION", "The bleed lingers, paying out over more than twice as long.",
+                    d => d with { BleedCarriesWaves = true },
                     ("DREGS",     "Bleed carried into a new wave pays double for its first 3s."),
                     ("ONSET",     "Bleed carried into a wave hits every enemy with its first payment."),
                     ("LAST DROP", "The kill that clears a wave doubles the standing bleed.")),
@@ -367,10 +413,12 @@ public static class SkillCatalogue
             Variations: new[]
             {
                 V("THRONG", "Damage rises 20% for each living enemy.",
+                    d => d with { DamagePerLivingEnemy = 0.20f },
                     ("HORDE",   "The per-enemy bonus rises from 20% to 35%."),
                     ("PACKED",  "Above two living enemies the per-enemy bonus is doubled."),
                     ("CROWDED", "The bonus counts the wave's starting enemies, not the living ones.")),
                 V("SHARE", "300% damage, split evenly between every living enemy.",
+                    d => d with { SplitPool = 3.0f, SplitMaxWays = 99 },
                     ("POOL",     "The split pool rises from 300% to 450%."),
                     ("NARROWED", "The pool is split four ways at most, however many enemies are alive."),
                     ("RECLAIM",  "An enemy killed by the pulse returns its share to the others.")),
@@ -384,10 +432,12 @@ public static class SkillCatalogue
             Variations: new[]
             {
                 V("NUMB", "The slow deepens 5% each second, up to 40%.",
+                    d => d with { SlowDeepenPerTick = 0.05f, SlowCeiling = 0.40f },
                     ("DEEPEN",   "The slow deepens 8% a second instead of 5%."),
                     ("SEDIMENT", "The ceiling rises from 40% to 55%."),
                     ("SILT",     "At the ceiling the field also deals area damage every 1s.")),
                 V("TEEMING", "Slows 6% for each living enemy on top of the 25%, up to 60%.",
+                    d => d with { SlowPerEnemy = 0.06f, SlowCeiling = 0.60f },
                     ("CLOG",    "8% for each living enemy instead of 6%."),
                     ("BRIM",    "The per-enemy ceiling rises from 60% to 75%."),
                     ("REMNANT", "Enemies killed this wave still count toward the slow for 3s.")),
@@ -402,10 +452,12 @@ public static class SkillCatalogue
             Variations: new[]
             {
                 V("THIRST", "Lifesteal doubles, and your per-wave healing limit doubles with it.",
+                    d => d with { Lifesteal = HealTuning.Default.TransformationLeech },
                     ("GREEDY",  "Lifesteal is 50% stronger against the enemy with the most health."),
                     ("PARCH",   "Lifesteal doubles again while below 50% health."),
                     ("TRICKLE", "Your basic attacks lifesteal too, at a quarter strength.")),
                 V("GLUT", "No lifesteal. Damage rises with your current health, up to +150% at full.",
+                    d => d with { Lifesteal = 0f, DamagePerHealth = 1.5f },
                     ("SURFEIT",    "The health scaling counts double."),
                     ("STOUT",      "Missing health costs you only half as much of the scaling."),
                     ("HIGH WATER", "The scaling reads the health you started the wave with.")),
@@ -419,10 +471,12 @@ public static class SkillCatalogue
             Variations: new[]
             {
                 V("SUP", "Each pulse also heals 1% of your maximum health.",
+                    d => d with { HealPerPulse = 0.01f },
                     ("BROOK",   "The pulse heals twice as much while below 50% health."),
                     ("BALM",    "The healing pulse runs every 0.5s; the break keeps its 1s clock."),
                     ("RESERVE", "The pulse heals 1% more for every 10% the break has deepened.")),
                 V("SHRIVEL", "The front enemy only: 20% a pulse, down to -80%.",
+                    d => d with { FrontEnemyOnly = true, AttackBreakPerTick = 0.20f, AttackBreakFloor = -0.80f },
                     ("HOLLOW", "The break also reaches the second enemy, at half depth."),
                     ("SEIZED", "The front enemy starts each wave already fully broken."),
                     ("GAUNT",  "When the front enemy dies, its break carries to the next one.")),

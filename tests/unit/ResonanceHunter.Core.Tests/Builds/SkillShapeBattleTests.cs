@@ -177,7 +177,10 @@ public class SkillShapeBattleTests
     [Fact]
     public void test_the_spread_branch_reaches_more_creatures()
     {
-        var swarm = () => Wave(6, 400f, 15f, archetype: Archetype.Swarm);
+        // TWELVE, from six. VOLLEY's SPRAY reaches five creatures where the old Projectile reached
+        // two, so a six-strong wave is nearly saturated before the branch buys anything and the
+        // difference this test exists to see had nowhere left to appear.
+        var swarm = () => Wave(12, 400f, 15f, archetype: Archetype.Swarm);
 
         var neutral = Fight(SkillShape.None, swarm(), Form.Projectile);
         var spread = Fight(WholeBranch(Branch.Spread), swarm(), Form.Projectile);

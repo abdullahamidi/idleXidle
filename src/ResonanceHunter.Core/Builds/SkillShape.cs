@@ -357,12 +357,22 @@ public sealed record SkillShape
     public float MaxHealth { get; init; } = 1f;
 
     /// <summary>Targets this Form reaches, after the shape's general and per-Form additions.</summary>
-    public int TargetsFor(Form form)
+    public int TargetsFor(Form form) => TargetsFor(form, FormBehaviour.Targets(form));
+
+    /// <summary>
+    /// The same, but told how many the SKILL reaches rather than asking the Form.
+    /// </summary>
+    /// <remarks>
+    /// A style's two skills do not reach the same number of creatures, and neither do a skill's two
+    /// variations — VOLLEY's SPRAY throws five where the Form table says two, SPLAY throws at
+    /// everything and CLUSTER puts them all into one. Asking the Form meant the catalogue could
+    /// declare a target count the fight never read, so both variations changed nothing at all.
+    /// </remarks>
+    public int TargetsFor(Form form, int baseline)
     {
         if (StrikesEveryCreature) return int.MaxValue;
 
-        var baseline = FormBehaviour.Targets(form);
-        if (baseline == int.MaxValue) return baseline;   // Aura already reaches everything
+        if (baseline == int.MaxValue) return baseline;   // a field already reaches everything
 
         var extra = ExtraTargets + (FormTargets.TryGetValue(form, out var f) ? f : 0);
         return Math.Max(1, baseline + extra);
