@@ -1554,7 +1554,6 @@ public class Game1 : Game
                     _dust.Purchase("socket_2");   // weave_5 hangs off it on the capacity chain
                     _dust.Purchase("weave_5");
                     ApplySkillCapacity();
-                    _loadout.AddSkill();
                     // SIX passives, which is the most the panel will list (it Takes 6). Same reasoning as
                     // the fifth skill card above: the passives list is variable-length and the RESONANCE
                     // heading below it used to be pinned at a fixed offset, so a full list was drawn
@@ -1688,6 +1687,28 @@ public class Game1 : Game
                     {
                         var auraSlot = _loadout.AddSkill();
                         if (auraSlot >= 0) { _loadout.SetSource(auraSlot, Source.Nature); _loadout.SetForm(auraSlot, Form.Aura); }
+                    }
+                    // A FULL LOADOUT, BOTH KINDS. The plain `fight` fixture carried a single skill, so
+                    // no capture of the hunt rail could ever show a PASSIVE row — and its cadence line
+                    // (ALWAYS ON / WHEN BITTEN, rather than a beat count) went unphotographed for
+                    // exactly that reason. One skill also cannot show the thing the rework is for: two
+                    // actives leaving the plain swing most of its beats.
+                    if (sm is "fight" or "fightswing" or "fightflash")
+                    {
+                        _loadout.SkillCapacity = Math.Max(_loadout.SkillCapacity, 4);
+                        foreach (var (src, form, passive) in new[]
+                                 {
+                                     (Source.Mind, Form.Projectile, (bool?)false),
+                                     (Source.Nature, Form.Aura, (bool?)true),
+                                     (Source.Shadow, Form.Trap, (bool?)true),
+                                 })
+                        {
+                            var slot = _loadout.AddSkill();
+                            if (slot < 0) break;
+                            _loadout.SetSource(slot, src);
+                            _loadout.SetForm(slot, form);
+                            _loadout.SetPassive(slot, passive!.Value);
+                        }
                     }
                     // fightswing holds the strike clip at its apex, so the one pose a timed capture can
                     // never catch — the blade at full extension — is checkable.
@@ -1998,7 +2019,29 @@ public class Game1 : Game
                                                "ks_glass_cannon", "ks_ironclad", "ks_echo", "ks_greed" })
                         _dust.Purchase(id);
                     ApplySkillCapacity();
-                    _loadout.AddSkill();
+                    // The gradual-unlock gate would hold a fresh fixture at two slots, and two slots
+                    // is one active and one passive — not enough to show a build.
+                    _loadout.SkillCapacity = Math.Max(_loadout.SkillCapacity, 4);
+
+                    // FOUR WOVEN SLOTS, AND BOTH KINDS. The fixture used to add ONE skill, which meant
+                    // no capture of this screen could ever show a passive row — and three UI changes
+                    // in a row went unphotographed because of it (the ACTIVE/PASSIVE switch, the
+                    // resolved skill name, the slot badge). A fixture that cannot show the thing under
+                    // test is a fixture that certifies nothing.
+                    foreach (var (src, form, passive) in new[]
+                             {
+                                 (Source.Mind, Form.Projectile, (bool?)false),
+                                 (Source.Nature, Form.Aura, (bool?)true),
+                                 (Source.Shadow, Form.Trap, (bool?)true),
+                             })
+                    {
+                        var slot = _loadout.AddSkill();
+                        if (slot < 0) break;
+                        _loadout.SetSource(slot, src);
+                        _loadout.SetForm(slot, form);
+                        _loadout.SetPassive(slot, passive!.Value);
+                    }
+
                     // RH_SHOT_POSE=<vowId>[,<0..1>] opens a seal's BIND row and, with the second
                     // number, holds the bind chain part-played so the flourish can be photographed.
                     var wp = Environment.GetEnvironmentVariable("RH_SHOT_POSE");
