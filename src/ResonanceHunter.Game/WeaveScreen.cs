@@ -1013,10 +1013,27 @@ public sealed class WeaveScreen
             // AND IT IS THE SKILL'S GLYPH, NOT THE FORM'S. A Form icon gave BLOW and PRESS the same
             // picture, which is the one thing an icon is read for.
             var rowDef0 = SkillCatalogue.Resolve(s.Form, i < passiveSlot.Count && passiveSlot[i]);
+            // IS THIS SLOT ACTUALLY CARRYING ANYTHING? The composer refuses to weave a skill the
+            // champion has not learned, and this row was drawing the resolved skill regardless — so a
+            // brand-new slot displayed PRESS, in full, with its rule, while the fight had nothing in
+            // that slot at all (playtest: "yeni skill slotu açtım skill hemen geldi, henüz mastery
+            // tree açık bile değil"). A screen that shows what the simulation refused is the same
+            // dormant-feature failure read backwards, and it is worse, because the player believes it.
+            var slotEmpty = !KnownSkills().Contains(rowDef0.Id);
+
             var fbox = new Rectangle(row.X + 88, row.Y + 20, 38, 38);
             _ui.Fill(b, fbox, new Color(0x0C, 0x09, 0x14) * 0.55f);
-            if (!_ui.Icon(b, $"icon_skill_{rowDef0.Id}", fbox, col))
+            if (slotEmpty)
+                _ui.Icon(b, "ui_slot_locked", fbox, Dim);
+            else if (!_ui.Icon(b, $"icon_skill_{rowDef0.Id}", fbox, col))
                 _ui.Icon(b, $"icon_form_{s.Form.ToString().ToLowerInvariant()}", fbox, col);
+
+            if (slotEmpty)
+            {
+                _ui.TextBig(b, "EMPTY SLOT", row.X + 134, row.Y + 8, Dim, UiTypography.Body);
+                _ui.Text(b, "PICK A SKILL YOU HAVE LEARNED", row.X + 134, row.Y + 32, Slate);
+                continue;
+            }
 
             // THE SKILL'S OWN NAME, not the Source and Form it used to be composed from. Its element
             // is written beside it because the variation owns that now, and a player still has to be
@@ -1514,6 +1531,18 @@ public sealed class WeaveScreen
             Loadout.Skills.Select(k => new BuildComposer.SkillPick(k.Source, k.Form, k.VowId, "", k.Passive)).ToList(),
             Loadout.SkillCapacity);
         var def = SkillCatalogue.Resolve(cur.Form, _slot < kinds.Count && kinds[_slot]);
+
+        // AN EMPTY SLOT HAS NO TREE. Without this the page drew the tree of whatever skill the slot
+        // WOULD hold if the champion had learned it — a full page about an ability it does not have.
+        if (!KnownSkills().Contains(def.Id))
+        {
+            _ui.TextCenterBig(b, "THIS SLOT IS EMPTY", PickPanel.Center.X, TreeTop + 120, Slate,
+                              UiTypography.PanelTitle);
+            _ui.TextCenter(b, "PICK ONE OF YOUR SKILLS, THEN ITS OWN TREE OPENS HERE.",
+                           PickPanel.Center.X, TreeTop + 156, Dim);
+            return;
+        }
+
         var chosen = SkillLevels.VariationOf(def);
         var free = SkillLevels.FreeOn(def.Id);
         var level = SkillLevels.LevelOf(def.Id);

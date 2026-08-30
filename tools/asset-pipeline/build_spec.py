@@ -202,6 +202,21 @@ STILL_STYLES = {
                  "frame. It is a plain stencil symbol: NO shield, NO crest, NO coat of arms, NO "
                  "banner, NO ribbon, NO frame, NO border, NO badge, NO background, NO scene, NO text",
 
+    # The SKILL icons. Not "glyph": a flat single-tone stencil is what the first twelve were, and the
+    # verdict was "çok süssüz" — too plain beside the game's own source gems and node frames. These are
+    # carved objects with bevelled relief and chiselled ornament, then desaturated at install so the
+    # relief survives and the draw-time tint is still free to colour them.
+    #
+    # "EMBLEM" IS THE WORD THAT MAKES A BADGE, exactly as "heraldic" made a shield. Say what the OBJECT
+    # is instead. And a motif made of several loose pieces (five arrows, three drops) needs binding into
+    # one object — a bound bundle, a basin they fall from — or the model invents a plaque to hold them.
+    # "Carved in stone" is its own trap for anything squat: it produced a plinth, a sarcophagus and a
+    # fountain before PRESS and MIRE were re-worded to iron and to brambles.
+    "relic":     "an ornate engraved {subject}, bevelled relief, deep chiselled grooves, subtle "
+                 "shading and highlights giving it depth, pale bone-white, filling the frame, "
+                 "centered on an empty background. NO shield, NO crest, NO badge, NO plaque, NO "
+                 "building, NO frame, NO border, NO background, NO text",
+
     "rig":       "ONLY {subject} and nothing else. A single detached body part lying alone, "
                  "cut out for a 2D puppet rig. NO full character, NO whole body, NO head unless "
                  "asked, NO other limbs. Dark fantasy hunter garb in bone-parchment cloth and "
@@ -742,24 +757,22 @@ def stills() -> list[dict]:
     # shield stops a description of one. MIRE became a mud puddle with bubbles and PRESS an arrow
     # bearing down on a bar — both say the verb without borrowing the vocabulary.
     skill_glyph = {
-        "hammer_blow":  "a war hammer with a big rectangular head and a straight handle, pointing down",
-        "hammer_press": "one thick downward-pointing arrow pressing onto a flat horizontal bar beneath it",
-        "snare_repay":  "one broad arrow curving back on itself in a half circle, its head pointing back where it came from",
-        "snare_jaws":   "one closed toothed bear trap seen from the side, jaws shut tight together",
-        "sign_call":    "one upward chevron with three short rays fanning up from its point",
-        "sign_brand":   "one bold branding iron mark: a thick ring with a short straight stem below it",
-        "volley_spray": "five short arrows fanning outward from one point at the bottom, spreading wide",
-        "volley_weep":  "three large teardrop shapes falling, arranged in a triangle",
-        "field_pulse":  "one solid filled circle with two thick rings expanding outward around it",
-        "field_mire":   "a wide shallow puddle of thick mud with three round bubbles rising above it",
-        "drain_drink":  "one wide chalice with a thick stem, and one drop falling into its bowl",
-        "drain_wilt":   "one drooping flower on a bent stem, its head hanging straight down",
+        "hammer_blow":  "war hammer with a big rectangular head, decorative notches along it and a wrapped grip, pointing down",
+        "hammer_press": "cast-iron scale weight, a heavy rounded bell-shaped block with a thick loop handle on top and decorative banding",
+        "snare_repay":  "barbed arrow curved back on itself in a full loop, its head returning toward its own fletching",
+        "snare_jaws":   "iron bear trap seen from the side with its toothed jaws closed tight, decorative chain ring and sprung coils",
+        "sign_call":    "war horn with a flared decorated mouth and three carved rays rising from it",
+        "sign_brand":   "branding iron with a ringed circular head and a long decorated handle",
+        "volley_spray": "bundle of five barbed arrows fanning outward from a bound base",
+        "volley_weep":  "stone basin with three carved teardrops falling from its lip",
+        "field_pulse":  "carved disc with three concentric raised rings radiating out from a domed centre",
+        "field_mire":   "tangle of thick thorned brambles and creeping vines matted together into a dense clump",
+        "drain_drink":  "goblet with a wide bowl, a decorated knotted stem and a single drop falling into it",
+        "drain_wilt":   "wilted flower with its heavy head hanging straight down from a bent stem, drooping petals and two limp leaves",
     }
-    heraldry_bait = {"hammer_blow", "hammer_press", "volley_weep", "field_mire"}
     for sk, motif in skill_glyph.items():
-        add(f"icon_skill_{sk}", "assets/art/UI/icons/skills",
-            "pictogram" if sk in heraldry_bait else "glyph", motif,
-            width=192, height=192, shading="flat shading", detail="low detail", single_subject=True)
+        add(f"icon_skill_{sk}", "assets/art/UI/icons/skills", "relic", motif,
+            width=192, height=192, detail="highly detailed", single_subject=True)
 
     # --- TRAIT ROAD glyphs: icon_road_<road> (PrestigeScreen)
     #

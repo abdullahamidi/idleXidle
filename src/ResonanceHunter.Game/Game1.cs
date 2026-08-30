@@ -2040,6 +2040,16 @@ public class Game1 : Game
                     foreach (var id in new[] { "socket_2", "weave_5", "vow_study_1", "ledger",
                                                "ks_glass_cannon", "ks_ironclad", "ks_echo", "ks_greed" })
                         _dust.Purchase(id);
+                    // THE ROADS THIS FIXTURE'S BUILD NEEDS. Every skill is learned on the mastery tree
+                    // now, so a fixture that walks none of them photographs four empty slots — true,
+                    // and useless as a picture of the screen.
+                    // RestoreTaken, not Take: a road needs its specialisation and a specialisation is
+                    // one per hunter, so walking them honestly would take a career. The fixture is
+                    // posing a champion who HAS walked them.
+                    _mastery.SetEarned(9999);
+                    _mastery.RestoreTaken(_mastery.Taken
+                        .Concat(MasteryCatalog.Nodes.Where(x => x.Kind == MasteryKind.SkillRoad).Select(x => x.Id))
+                        .ToList());
                     ApplySkillCapacity();
                     // The gradual-unlock gate would hold a fresh fixture at two slots, and two slots
                     // is one active and one passive — not enough to show a build.
