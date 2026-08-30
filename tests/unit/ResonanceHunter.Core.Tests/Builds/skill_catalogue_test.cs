@@ -193,11 +193,13 @@ public class SkillCatalogueTests
         Assert.False(spilled.TakesABeat);
         Assert.NotEqual(strike.Id, spilled.Id);
 
-        // AURA and TRAP were never actives, so they resolve to their own passive whichever is asked.
+        // AURA and TRAP were never actives, but their STYLES have one — and asking for an active
+        // slot must reach it, or FIELD's PULSE and SNARE's REPAY have no door at all.
         foreach (var f in new[] { Form.Aura, Form.Trap })
         {
-            Assert.False(SkillCatalogue.Resolve(f, passive: false).TakesABeat);
-            Assert.Equal(SkillCatalogue.Resolve(f, passive: false), SkillCatalogue.Resolve(f, passive: true));
+            Assert.True(SkillCatalogue.Resolve(f, passive: false).TakesABeat);
+            Assert.False(SkillCatalogue.Resolve(f, passive: true).TakesABeat);
+            Assert.NotEqual(SkillCatalogue.Resolve(f, passive: false), SkillCatalogue.Resolve(f, passive: true));
         }
     }
 

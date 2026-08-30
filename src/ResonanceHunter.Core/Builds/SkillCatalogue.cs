@@ -441,9 +441,13 @@ public static class SkillCatalogue
     /// </remarks>
     public static SkillDef Resolve(Form form, bool passive)
     {
-        var native = All.First(s => s.LegacyForm == form);
-        if (!passive) return native;
-        return native.TakesABeat ? PassiveOf(native.Style) : native;
+        // THE STYLE COMES FROM THE FORM; THE SLOT PICKS WHICH OF ITS TWO SKILLS THIS IS. It used to
+        // return the Form's native skill whenever an active was asked for, which meant AURA and TRAP
+        // resolved passive from either side — and FIELD's PULSE and SNARE's REPAY had no door at all.
+        // Two of the twelve were unreachable, which is a catalogue entry nothing can select: the same
+        // dead weight as a field nothing reads.
+        var style = All.First(s => s.LegacyForm == form).Style;
+        return passive ? PassiveOf(style) : ActiveOf(style);
     }
 
     /// <summary>

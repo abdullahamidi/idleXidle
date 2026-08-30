@@ -55,12 +55,18 @@ public class SkillSlotKindTests
     }
 
     [Fact]
-    public void test_every_legacy_form_resolves_to_a_catalogue_entry()
+    public void test_every_legacy_form_resolves_inside_its_own_style()
     {
-        // A saved build carries a Form ordinal. If any one of them failed to resolve, the player's
-        // build would be silently unwoven on load.
+        // A saved build carries a Form ordinal. It must always land on a real skill — and always on
+        // one of ITS OWN STYLE'S two, because the slot may change which ability it is but never who
+        // the champion is. LegacyForm itself is not the assertion: six of the twelve have none, since
+        // no old save could hold them.
         foreach (var form in Enum.GetValues<Form>())
-            Assert.Equal(form, Skill(form).Def.LegacyForm);
+        {
+            var style = SkillCatalogue.Resolve(form, passive: false).Style;
+            Assert.Equal(style, SkillCatalogue.Resolve(form, passive: true).Style);
+            Assert.Equal(style, Skill(form).Def.Style);
+        }
     }
 
     [Fact]
@@ -544,8 +550,73 @@ public class PerSkillCooldownTests
         // the dial lies about the fight — the exact failure the Beat event was added to stop.
         foreach (var form in Enum.GetValues<Form>())
         {
-            var def = SkillCatalogue.Resolve(form, passive: false);
+            // The table answers for the Form's NATURAL kind — what this Form has always been — not
+            // for the style's active. Forcing AURA to its style's active would make a field
+            // beat-counted and hand it a cast's cooldown.
+            var natural = FormBehaviour.IsPassive(form) || FormBehaviour.FiresOnBeingHit(form);
+            var def = SkillCatalogue.Resolve(form, natural);
             Assert.Equal(def.Beats, FormBehaviour.CooldownBeats(form));
+        }
+    }
+}
+
+/// <summary>
+/// Every one of the twelve can actually be reached by a player.
+/// </summary>
+/// <remarks>
+/// A catalogue entry nothing can select is the same dead weight as a field nothing reads, and this
+/// gap was real: slot POSITION used to decide which face a Form resolved to, so AURA and TRAP
+/// resolved passive from either side and FIELD's PULSE and SNARE's REPAY had no door at all. The slot
+/// kind is the player's own choice now, and this file is what stops a future skill being added with
+/// no way in.
+/// </remarks>
+public class SkillReachabilityTests
+{
+    [Fact]
+    public void test_every_skill_in_the_catalogue_can_be_selected()
+    {
+        var reachable = new HashSet<string>();
+        foreach (var form in Enum.GetValues<Form>())
+        foreach (var passive in new[] { false, true })
+            reachable.Add(SkillCatalogue.Resolve(form, passive).Id);
+
+        var missing = SkillCatalogue.All.Select(s => s.Id).Where(id => !reachable.Contains(id)).ToList();
+        Assert.True(missing.Count == 0,
+            "no (Form, slot) pair reaches: " + string.Join(", ", missing) +
+            ". A skill the player cannot select is dead weight in the catalogue.");
+        Assert.Equal(SkillCatalogue.All.Count, reachable.Count);
+    }
+
+    [Fact]
+    public void test_the_players_choice_of_slot_beats_the_spill_rule()
+    {
+        // The spill exists for saves that predate the choice. Once a player has made one it must win,
+        // or the workbench is showing a decision the fight ignores.
+        var picks = new[]
+        {
+            new BuildComposer.SkillPick(Source.Body, Form.Strike, null, "a", Passive: true),
+            new BuildComposer.SkillPick(Source.Body, Form.Projectile, null, "b"),
+            new BuildComposer.SkillPick(Source.Body, Form.Mark, null, "c"),
+        };
+        var kinds = BuildComposer.SlotKinds(picks, slotCapacity: 4);
+
+        Assert.True(kinds[0], "the player asked for a passive Strike and the composer overruled it.");
+        Assert.False(kinds[1]);
+        Assert.False(kinds[2]);   // the active budget is two, and the first skill did not spend one
+    }
+
+    [Fact]
+    public void test_choosing_the_passive_slot_reaches_the_styles_other_skill()
+    {
+        // The whole point of the switch: the same Form in the other slot is a DIFFERENT ability.
+        foreach (var form in new[] { Form.Strike, Form.Projectile, Form.Mark, Form.Transformation })
+        {
+            var active = SkillCatalogue.Resolve(form, passive: false);
+            var passive = SkillCatalogue.Resolve(form, passive: true);
+            Assert.Equal(active.Style, passive.Style);
+            Assert.NotEqual(active.Id, passive.Id);
+            Assert.True(active.TakesABeat);
+            Assert.False(passive.TakesABeat);
         }
     }
 }

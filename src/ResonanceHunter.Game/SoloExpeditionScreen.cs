@@ -2824,7 +2824,7 @@ public sealed class SoloExpeditionScreen
         // with four beat-taking skills spills its overflow into the passive slots, and a spilled MARK
         // asked about its Form would be drawn with a cooldown ring that never fills.
         var railPassive = BuildComposer.SlotKinds(
-            skills.Select(k => new BuildComposer.SkillPick(k.Source, k.Form, k.VowId, "")).ToList(),
+            skills.Select(k => new BuildComposer.SkillPick(k.Source, k.Form, k.VowId, "", k.Passive)).ToList(),
             Loadout.SkillCapacity);
         var n = Loadout.SkillCapacity;     // the dock shows the slots you have, not the four everyone starts with
         // Stacked down the control rail instead of a horizontal dock across the bottom centre, which

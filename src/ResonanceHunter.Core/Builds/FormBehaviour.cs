@@ -58,7 +58,19 @@ public static class FormBehaviour
     ///
     /// A passive skill returns 0: it counts no beats because it takes none.
     /// </remarks>
-    public static int CooldownBeats(Form form) => SkillCatalogue.Resolve(form, passive: false).Beats;
+    public static int CooldownBeats(Form form) => Native(form).Beats;
+
+    /// <summary>
+    /// The skill a Form resolves to IN ITS OWN NATURAL KIND — an AURA's field, a STRIKE's blow.
+    /// </summary>
+    /// <remarks>
+    /// Not <c>Resolve(form, passive: false)</c>. That asks for the style's ACTIVE, which is right when
+    /// a player has chosen an active slot and wrong here: this table answers "what has this Form always
+    /// been", and forcing AURA to its style's active made a field beat-counted and gave it a cast's
+    /// cooldown.
+    /// </remarks>
+    private static SkillDef Native(Form form)
+        => SkillCatalogue.Resolve(form, IsPassive(form) || FiresOnBeingHit(form));
 
     /// <summary>
     /// The time-counted cooldown; for a beat-counted Form this is its beats at action speed 1.0, for
@@ -97,7 +109,7 @@ public static class FormBehaviour
     /// </remarks>
     public static int BaseCooldownMs(Form form)
     {
-        var def = SkillCatalogue.Resolve(form, passive: false);
+        var def = Native(form);
         if (def.Beats > 0) return def.Beats * SoloBattle.DefaultBeatMs;
         return def.IntervalMs > 0 ? def.IntervalMs : 8_000;
     }

@@ -313,6 +313,21 @@ public sealed class WeaveScreen
     private static Rectangle SlotRow(int i) => new(SlotColX, UiKit.BodyTopBare(SlotsPanel) + i * 86, SlotColW, 76);
     private static Rectangle DropX(int i) { var r = SlotRow(i); return new(r.Right - 34, r.Y + 4, 30, 30); }
 
+    /// <summary>
+    /// The ACTIVE / PASSIVE switch on a woven row — the only door to two of the twelve skills.
+    /// </summary>
+    /// <remarks>
+    /// A style has two skills and the SLOT decides which one this is. AURA and TRAP resolve to their
+    /// styles' passives from either side, so FIELD's PULSE and SNARE's REPAY cannot be reached at all
+    /// without this. Padded generously beyond its text, per the input rules — a 20px word is not a
+    /// click target.
+    /// </remarks>
+    private static Rectangle KindToggle(int i)
+    {
+        var r = SlotRow(i);
+        return new(r.Right - 132, r.Y + 4, 92, 28);
+    }
+
     /// <summary>Everything below the slot list hangs off the CAPACITY, not off the type's floor.</summary>
     private int SlotsEnd => UiKit.BodyTopBare(SlotsPanel) + Loadout.SkillCapacity * 86;
 
@@ -560,6 +575,26 @@ public sealed class WeaveScreen
                 _msg = "SLOT UNWOVEN.";
                 return;
             }
+            if (KindToggle(i).Contains(hit))
+            {
+                // FLIPPING THE SLOT CHANGES WHICH SKILL IT IS, not merely when it acts — a style's
+                // two skills are different abilities. Say which one it became, because the row's
+                // name line changes underneath the click and an unexplained change reads as a bug.
+                // What it is RIGHT NOW, resolved the way the fight resolves it — an unset choice is
+                // not the same as ACTIVE, so the flip reads the effective kind rather than the field.
+                var effective = BuildComposer.SlotKinds(
+                    skills.Select(k => new BuildComposer.SkillPick(k.Source, k.Form, k.VowId, "", k.Passive)).ToList(),
+                    Loadout.SkillCapacity);
+                var nowPassive = !(i < effective.Count && effective[i]);
+                if (Loadout.SetPassive(i, nowPassive))
+                {
+                    _slot = i;
+                    Dirty = true; _buildRev++;
+                    var became = SkillCatalogue.Resolve(Loadout.Skills[i].Form, nowPassive);
+                    _msg = $"NOW {became.Name} — {(nowPassive ? "COSTS NO ACTION" : "TAKES AN ACTION")}.";
+                }
+                return;
+            }
             if (SlotRow(i).Contains(hit))
             {
                 _slot = i; _msg = "";
@@ -761,7 +796,7 @@ public sealed class WeaveScreen
         // the two kinds are no longer interchangeable — an active takes the champion's turn and a
         // passive never can, which is why four skills used to leave the plain attack almost no beats.
         var passiveSlot = BuildComposer.SlotKinds(
-            skills.Select(k => new BuildComposer.SkillPick(k.Source, k.Form, k.VowId, "")).ToList(),
+            skills.Select(k => new BuildComposer.SkillPick(k.Source, k.Form, k.VowId, "", k.Passive)).ToList(),
             Loadout.SkillCapacity);
 
         for (var i = 0; i < Loadout.SkillCapacity; i++)
@@ -823,12 +858,21 @@ public sealed class WeaveScreen
 
             _ui.TextBig(b, Fit($"{SourceName(s.Source)} {FormName(s.Form)}", 158), row.X + 134, row.Y + 8, Bone, UiTypography.Body);
 
-            // THE SLOT'S KIND, said in words. ACTIVE and PASSIVE are the terms the rest of the genre
-            // uses and the ones the designer asked for; spelling out the consequence underneath is
-            // what stops "passive" reading as "weaker".
+            // THE SLOT'S KIND, as a SWITCH rather than a label. ACTIVE and PASSIVE are the genre's
+            // own terms and the ones the designer asked for, and the line under the name says which
+            // of the style's two skills the choice actually produces — BLOW or PRESS, not "the
+            // passive one", because they are different abilities and the screen should say so.
             var isPassive = i < passiveSlot.Count && passiveSlot[i];
-            _ui.TextRight(b, isPassive ? "PASSIVE" : "ACTIVE", row.Right - 50, row.Y + 8,
-                          isPassive ? Met : Gold);
+            var kindBox = KindToggle(i);
+            var overKind = kindBox.Contains(hit);
+            _ui.Fill(b, kindBox, (isPassive ? Met : Gold) * (overKind ? 0.30f : 0.16f));
+            Outline(b, kindBox, isPassive ? Met : Gold, overKind ? 2 : 1);
+            _ui.TextCenter(b, isPassive ? "PASSIVE" : "ACTIVE", kindBox.Center.X, kindBox.Y + 5,
+                           isPassive ? Met : Gold);
+
+            // The skill this slot actually resolves to, under its Source and Form.
+            var resolved = SkillCatalogue.Resolve(s.Form, isPassive);
+            _ui.Text(b, resolved.Name, row.X + 134, row.Y + 30, isPassive ? Met : Gold);
 
             // The hexagon's verdict on this woven skill — and the Vow buy-back drawn as the LIFT it
             // is ("x0.45→x0.75"), so swearing a Vow on an off-discipline skill visibly pays.

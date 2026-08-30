@@ -285,6 +285,17 @@ public sealed record SavedSkill
     public required string Source { get; init; }
     public required string Form { get; init; }
     public string? VowId { get; init; }
+
+    /// <summary>
+    /// Whether the player put this skill in a PASSIVE slot — which decides which of its style's two
+    /// skills it actually is.
+    /// </summary>
+    /// <remarks>
+    /// Defaults to false, so a save written before the slot rework loads with every skill claiming an
+    /// active slot and the composer's spill rule sorts out the overflow, exactly as it did before this
+    /// field existed. Nothing is lost on the way in.
+    /// </remarks>
+    public bool? Passive { get; init; }
 }
 
 /// <summary>One post-run report, flattened for the save file.</summary>

@@ -28,7 +28,17 @@ namespace ResonanceHunter.Client;
 public sealed class PlayerLoadout
 {
     /// <summary>One woven skill, before it becomes an <see cref="EquippedSkill"/>. Vow is by id, so it saves.</summary>
-    public sealed record SkillChoice(Source Source, Form Form, string? VowId);
+    /// <summary>
+    /// One woven skill: its element, its style's Form, its Vow, and WHICH SLOT it sits in.
+    /// </summary>
+    /// <remarks>
+    /// <b>Passive is the player's choice, not a consequence.</b> A style has two skills and the slot
+    /// decides which one this is — HAMMER's BLOW in an active slot, its PRESS in a passive one. It
+    /// defaults to false so every construction written before the rework still means what it meant,
+    /// and so a save that predates the field loads with the composer's spill rule sorting the
+    /// overflow exactly as it used to.
+    /// </remarks>
+    public sealed record SkillChoice(Source Source, Form Form, string? VowId, bool? Passive = null);
 
     private readonly List<SkillChoice> _skills = new();
     private readonly List<string> _keystoneIds = new();
@@ -226,7 +236,7 @@ public sealed class PlayerLoadout
         // The assembly itself lives in Core (BuildComposer) so what reaches the sim can be tested; this
         // only gathers the loadout's lists.
         return BuildComposer.Compose(tree, mastery, character,
-            _skills.Select(s => new BuildComposer.SkillPick(s.Source, s.Form, s.VowId, NameOf(s))),
+            _skills.Select(s => new BuildComposer.SkillPick(s.Source, s.Form, s.VowId, NameOf(s), s.Passive)),
             _keystoneIds, SkillCapacity);
     }
 
@@ -236,11 +246,11 @@ public sealed class PlayerLoadout
 
     // ── Persistence (id-based, so it survives a reload) ─────────────────────────────────────────────
 
-    public IReadOnlyList<(string Source, string Form, string? VowId)> SaveSkills() =>
-        _skills.Select(s => (s.Source.ToString(), s.Form.ToString(), s.VowId)).ToList();
+    public IReadOnlyList<(string Source, string Form, string? VowId, bool? Passive)> SaveSkills() =>
+        _skills.Select(s => (s.Source.ToString(), s.Form.ToString(), s.VowId, s.Passive)).ToList();
 
     public void Restore(
-        IEnumerable<(string Source, string Form, string? VowId)> skills, IEnumerable<string> keystoneIds)
+        IEnumerable<(string Source, string Form, string? VowId, bool? Passive)> skills, IEnumerable<string> keystoneIds)
     {
         _skills.Clear();
         _keystoneIds.Clear();
@@ -248,9 +258,9 @@ public sealed class PlayerLoadout
             // Take(SkillCapacity), not Take(MaxSkills) — a saved fifth skill would otherwise be dropped
             // on the way in. The host sets the capacity from the trait tree BEFORE calling this, which
             // is the ordering that makes the truncation right rather than merely smaller.
-            foreach (var (src, form, vow) in skills.Take(SkillCapacity))
+            foreach (var (src, form, vow, passive) in skills.Take(SkillCapacity))
                 if (Enum.TryParse<Source>(src, out var s) && Enum.TryParse<Form>(form, out var f))
-                    _skills.Add(new SkillChoice(s, f, vow));
+                    _skills.Add(new SkillChoice(s, f, vow, passive));
         if (keystoneIds is not null)
             _keystoneIds.AddRange(keystoneIds.Take(MaxKeystones));
     }
@@ -279,6 +289,22 @@ public sealed class PlayerLoadout
         var l = new PlayerLoadout();
         l._skills.Add(new SkillChoice(Source.Body, Form.Strike, null));
         return l;
+    }
+
+    /// <summary>
+    /// Move a woven skill between the active and passive slot — which changes WHICH SKILL it is.
+    /// </summary>
+    /// <remarks>
+    /// This is the only way to reach two of the twelve: AURA and TRAP resolve to their styles'
+    /// passives from either side, so FIELD's PULSE and SNARE's REPAY have no other door. It is also
+    /// the decision the whole rework turns on — an active costs the champion an action and a passive
+    /// never can — so it belongs to the player rather than to composition order.
+    /// </remarks>
+    public bool SetPassive(int slot, bool passive)
+    {
+        if (!InRange(slot)) return false;
+        _skills[slot] = _skills[slot] with { Passive = passive };
+        return true;
     }
 
     private bool InRange(int slot) => slot >= 0 && slot < _skills.Count;

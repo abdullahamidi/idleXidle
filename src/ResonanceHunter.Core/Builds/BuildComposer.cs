@@ -20,7 +20,14 @@ namespace ResonanceHunter.Core.Builds;
 /// </remarks>
 public static class BuildComposer
 {
-    public readonly record struct SkillPick(Source Source, Form Form, string? VowId, string Name);
+        /// <param name="Passive">
+    /// Which slot the player put this skill in, or <c>null</c> for a save written before the choice
+    /// existed. THREE-STATE on purpose: a plain <c>false</c> cannot tell "the player chose ACTIVE"
+    /// from "nobody has chosen", and those must differ — a TRAP has always been passive, so an unset
+    /// one stays passive, while a player who deliberately puts one in an active slot gets SNARE's
+    /// REPAY instead.
+    /// </param>
+    public readonly record struct SkillPick(Source Source, Form Form, string? VowId, string Name, bool? Passive = null);
 
     /// <summary>
     /// Which slot each woven skill lands in — <c>true</c> for a passive slot.
@@ -56,6 +63,17 @@ public static class BuildComposer
         var actives = 0;
         for (var i = 0; i < skills.Count; i++)
         {
+            // THE PLAYER'S OWN CHOICE FIRST, and it is final. A slot's kind decides WHICH of its
+            // style's two skills this is, so it is a decision rather than a derivation; everything
+            // below is only what happens when nobody has chosen.
+            if (skills[i].Passive is { } chosen)
+            {
+                if (chosen) { passive[i] = true; continue; }
+                if (actives < activeBudget) { actives++; continue; }
+                passive[i] = true;   // chosen active, but the budget is spent: it still spills
+                continue;
+            }
+
             var naturallyPassive = FormBehaviour.IsPassive(skills[i].Form)
                                    || FormBehaviour.FiresOnBeingHit(skills[i].Form);
             if (naturallyPassive) { passive[i] = true; continue; }
