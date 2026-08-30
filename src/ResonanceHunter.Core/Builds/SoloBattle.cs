@@ -582,7 +582,9 @@ public static class SoloBattle
         var attackBreak = 0f;      // WILT — fraction of every enemy's bite removed, toward its floor
         var frontBreak = 0f;       // WILT/SHRIVEL — the same, but only on the creature in front
         var slowTicks = 0;         // MIRE/NUMB — how many times the field has deepened its slow
-        var executed = false;      // HAMMER/FINISH — its execute is once a wave
+        var executes = 0;          // HAMMER/FINISH — its execute is once a wave; TWICE buys a second
+        var secondBreak = 0f;      // DRAIN/HOLLOW — SHRIVEL reaching past the front enemy
+        var bites = 0;             // SNARE/MESH and HARDEN — how many bites the trap has answered
         var bankedShield = 0f;     // SNARE/BANKED — what REPAY kept instead of spending, eaten by bites
         var steadyAmp = 0f;        // SIGN/STEADY — the swell it has built this wave
         // VOLLEY/TORRENT pays the standing bleed out faster and CARRION makes it linger; both are
@@ -591,10 +593,26 @@ public static class SoloBattle
         // applied to most of it.
         var bleedRate = 1f;
         var bleedShed = VenomBleedPerHalfSecond;
+        var bleedFromHits = 0f;
         foreach (var wsk in skills)
         {
             if (wsk.Def.BleedRate > 1f) bleedRate = Math.Max(bleedRate, wsk.Def.BleedRate);
             if (wsk.Def.BleedCarriesWaves) bleedShed = VenomBleedPerHalfSecond * 0.45f;
+            // FLIGHT, RUPTURE, EBB, ONSET — a bleed skill in the loadout makes the champion's CASTS
+            // feed the pool. Gathered from the whole weave rather than read off the casting skill,
+            // because two of the four sit on WEEP, and WEEP is a Reaction that never casts: read the
+            // other way they were dials on a skill that could not turn them.
+            bleedFromHits = Math.Max(bleedFromHits, wsk.Def.BleedFromHits);
+        }
+        // HAMMER/TRAIL and DRAIN/TRICKLE — the plain swing borrows a skill's rule. Read here, once,
+        // for the same reason the bleed rate is: the swing fires from the very first beat, and a rule
+        // gathered at the first CAST would miss every swing before it.
+        var swingIgnoresArmour = false;
+        var swingLifesteal = 0f;
+        foreach (var wsk in skills)
+        {
+            if (wsk.Def.SwingIgnoresArmour) swingIgnoresArmour = true;
+            swingLifesteal = Math.Max(swingLifesteal, wsk.Def.SwingLifesteal);
         }
         var markBonus = 0f;        // SIGN — how much a standing mark adds, over the Form's own multiplier
         var markDeepen = 0f;       // SIGN/ETCH — how far it has deepened so far this wave
@@ -822,6 +840,15 @@ public static class SoloBattle
             return null;
         }
 
+        /// <summary>The one behind the front. DRAIN/HOLLOW is the only thing that asks.</summary>
+        WaveCreature? SecondAlive()
+        {
+            var seen = 0;
+            for (var i = 0; i < creatures.Count; i++)
+                if (creatures[i].Alive && ++seen == 2) return creatures[i];
+            return null;
+        }
+
         int IndexOf(WaveCreature c)
         {
             for (var i = 0; i < creatures.Count; i++)
@@ -896,13 +923,20 @@ public static class SoloBattle
                 ignoresArmour = true;
             }
 
-            if (!ignoresArmour && target.Defense > 0f)
+            // ARMOUR IS FLAT AND SIGNED. It used to be guarded on `Defense > 0f`, and under that guard
+            // a creature broken PAST zero was identical to one broken exactly to zero — which made
+            // PRESS's "-25", CRUSHING's "-50" and SETTLE's "-90" three ways of writing the same
+            // promise, three floors no player could ever tell apart. The same subtraction run with a
+            // negative number is the reading those three lines already assume: broken armour does not
+            // merely stop mitigating, it starts helping. Found by ReinforcementLivenessTests, which is
+            // what it is for.
+            if (!ignoresArmour && target.Defense != 0f)
             {
                 var armour = target.Defense;
 
                 // SHARPENED / EXECUTIONER cut flat armour; CRUSH halves whatever is left, but only for a
                 // hit already many times the creature's mitigation — it rewards size, not persistence.
-                if (fromSkill)
+                if (fromSkill && armour > 0f)
                 {
                     armour = MathF.Max(0f, armour - shape.ArmourPenetration);
                     if (shape.CrushArmourMultiple > 0f && armour > 0f
@@ -911,6 +945,9 @@ public static class SoloBattle
                 }
 
                 if (armour > 0f) dmg = MathF.Max(dmg * MinHitFraction, dmg - armour);
+                // BROKEN PAST ZERO. Bounded by the hit itself, so a deep break can at most double a
+                // blow rather than turning every stray tick into a hit the break's depth is worth.
+                else if (armour < 0f) dmg += MathF.Min(-armour, dmg);
             }
 
             if (metrics is not null)
@@ -1172,7 +1209,16 @@ public static class SoloBattle
                     // AURA: always on, no cooldown. Ticks steadily for the whole fight. RADIANCE (an item
                     // enchantment) ticks it faster — same damage per tick, so more ticks is more DPS, and
                     // that item is worth nothing to a build that isn't running Aura.
-                    var auraTick = triggers.Contains(BuildTrigger.Radiance) ? FormBehaviour.AuraTickMs * 3 / 5 : FormBehaviour.AuraTickMs;
+                    //
+                    // THE SKILL'S OWN CLOCK, at last. This read FormBehaviour.AuraTickMs for every Field
+                    // alike, so SkillDef.IntervalMs — declared per skill, validated by
+                    // test_a_skill_carries_the_timing_its_kind_needs, printed on the weave screen — was
+                    // decoration: PRESS and BRAND both say "every 2s" and both ticked every 1s, and the
+                    // six reinforcements that buy a faster clock bought nothing at all. Found by
+                    // ReinforcementLivenessTests 2026-08-30. The constant stays as the fallback for a
+                    // skill with no clock of its own (a spilled active resolves to one that has).
+                    var ownTick = sk.Def.IntervalMs > 0 ? sk.Def.IntervalMs : FormBehaviour.AuraTickMs;
+                    var auraTick = triggers.Contains(BuildTrigger.Radiance) ? ownTick * 3 / 5 : ownTick;
                     // IN ARREARS, NOT IN ADVANCE. `ms` starts at 0 and 0 is a multiple of everything, so
                     // the wave's very first instant used to pay a whole interval of a field that had
                     // been up for no time at all. That was worth half a second at a 500 ms tick and
@@ -1210,7 +1256,11 @@ public static class SoloBattle
                             nextBite += def.StunMs;
                             staggeredThisBite = true;
                         }
-                        continue;
+                        // NO UNCONDITIONAL `continue`. PIN is the one variation that stuns INSTEAD of
+                        // breaking, so the stun used to end the tick outright — and BUCKLE, whose whole
+                        // purchase is "each stun strips 10 defence", was read one branch too late to
+                        // exist. A stun that also carries a break falls through to it.
+                        if (def.DefenceBreakPerTick <= 0f) continue;
                     }
 
                     if (def.DefenceBreakPerTick > 0f)
@@ -1218,10 +1268,15 @@ public static class SoloBattle
                         // PRESS — the weight on the front enemy. Defense is settable for exactly this
                         // kind of lasting strip (see WaveCreature.Defense), and creatures are minted
                         // per wave so it cannot carry into the next one.
-                        var target = FirstAlive();
-                        if (target is not null)
-                            target.Defense = Math.Max(def.DefenceBreakFloor,
-                                                      target.Defense - def.DefenceBreakPerTick);
+                        // SEIZE widens it past the front one; the base line is 1 + 0.
+                        var want = 1 + def.TargetsBonus;
+                        foreach (var c in creatures)
+                        {
+                            if (want <= 0) break;
+                            if (!c.Alive) continue;
+                            c.Defense = Math.Max(def.DefenceBreakFloor, c.Defense - def.DefenceBreakPerTick);
+                            want--;
+                        }
                         continue;
                     }
 
@@ -1253,7 +1308,14 @@ public static class SoloBattle
                         // goes far deeper, which is the trade: one creature nearly silenced against
                         // the whole wave taken down a step.
                         if (def.FrontEnemyOnly)
+                        {
                             frontBreak = Math.Max(def.AttackBreakFloor, frontBreak - def.AttackBreakPerTick);
+                            // HOLLOW — the same break on the one behind it, at its own fraction, and
+                            // floored the same way so two reinforcements cannot silence a wave.
+                            if (def.BreakSecondEnemy > 0f)
+                                secondBreak = Math.Max(def.AttackBreakFloor,
+                                                       secondBreak - def.AttackBreakPerTick * def.BreakSecondEnemy);
+                        }
                         else
                             attackBreak = Math.Max(def.AttackBreakFloor, attackBreak - def.AttackBreakPerTick);
 
@@ -1301,14 +1363,19 @@ public static class SoloBattle
                     // deliberate starting point and the knob a playtest should move, not an accident:
                     // a passive costs no beat, so it may well deserve to sit a little under parity.
                     var castMs = FormBehaviour.BaseCooldownMs(form);
+                    // THE SKILL'S OWN CLOCK, not the accelerated one: RADIANCE buys MORE TICKS AT THE
+                    // SAME SIZE, which is the whole of what that enchantment is. Scaling the tick down
+                    // by the speed-up would hand back exactly what it bought.
                     var perTick = castMs > 0
-                        ? FormBehaviour.AuraTickMs / (float)castMs   // spilled: scale a cast to a tick
-                        : FormBehaviour.AuraTickMs / 1000f;          // native field: already per second
+                        ? ownTick / (float)castMs   // spilled: scale a cast to a tick
+                        : ownTick / 1000f;          // native field: already per second
 
                     var aura = FormBehaviour.BaseDamage(form, resonance, wt)
                                * VowFactor(sk, weaveCtx, wt, shape)
-                               * perTick;
-                    var auraDealt = LandSpread(aura, ms, shape.TargetsFor(form), sk.Source, form, abs, countsAsActivation: false);
+                               * perTick
+                               * def.DamageMultiplier;   // MIRE/SILT
+                    var auraDealt = LandSpread(aura, ms, shape.TargetsFor(form) + def.TargetsBonus,
+                                               sk.Source, form, abs, countsAsActivation: false);
                     // NATURE'S SIGNATURE follows the DAMAGE, not the cast: the card promises 3% of
                     // what its skills deal, with no cast clause — an Aura that deals must heal.
                     // (Spirit/Mind speak of CASTS, and an Aura never casts, so they stay silent here.)
@@ -1517,6 +1584,10 @@ public static class SoloBattle
                     //    skill whose variation is unchosen lands exactly as it always did. ─────────
                     var vdef = sk.Def;
 
+                    // ── AND WHAT THE REINFORCEMENTS TURN ON IT. Each is neutral at the base line
+                    //    (a multiplier of 1, a bonus of 0), so an unbought reinforcement is invisible.
+                    raw *= vdef.DamageMultiplier;
+
                     // GLUT — DRAIN trades its lifesteal for damage that rises with the health it holds.
                     if (vdef.DamagePerHealth > 0f && champ.MaxHealth > 0)
                         raw *= 1f + vdef.DamagePerHealth * (champ.Health / (float)champ.MaxHealth);
@@ -1533,7 +1604,7 @@ public static class SoloBattle
 
                     // SHARE — one pool split between the living, and never more ways than its own cap.
                     // The trade THRONG refuses: the same total however many are standing.
-                    var spreadTargets = shape.TargetsFor(form, vdef.Targets);
+                    var spreadTargets = shape.TargetsFor(form, vdef.Targets) + vdef.TargetsBonus;
                     if (vdef.SplitPool > 0f)
                     {
                         var ways = Math.Max(1, Math.Min(alive, vdef.SplitMaxWays > 0 ? vdef.SplitMaxWays : alive));
@@ -1543,10 +1614,10 @@ public static class SoloBattle
 
                     // FINISH — HAMMER's execute. Once a wave, and outright rather than as a bonus:
                     // against a Bruiser "kill it" and "hit it hard" are different promises.
-                    if (!executed && vdef.ExecuteFraction > 0f && FirstAlive() is { } weak
+                    if (executes < vdef.ExecutesPerWave && vdef.ExecuteFraction > 0f && FirstAlive() is { } weak
                         && weak.Health < weak.MaxHealth * vdef.ExecuteFraction)
                     {
-                        executed = true;
+                        executes++;
                         LandOn(weak, weak.Health, ms, fromSkill: false, ignoresArmour: true);
                         if (alive == 0) return Kill(ms);
                     }
@@ -1563,6 +1634,10 @@ public static class SoloBattle
                     // FLATTEN — the blow ignores defence entirely.
                     var dealt = LandSpread(raw, ms, spreadTargets, sk.Source, form, abs,
                                            ignoresArmour: vdef.DefenceIgnore);
+
+                    // FLIGHT, RUPTURE, EBB, ONSET — the cast leaves bleed behind it. Fed from the RAW
+                    // force for the same reason VENOM is: armour must not shrink the pool AND the bleed.
+                    if (bleedFromHits > 0f) poison += raw * bleedFromHits;
 
                     // THIRST / the base DRINK — DRAIN gives back a share of what it dealt. Through Heal,
                     // so the per-wave ceiling and BLOOD MAGIC's refusal both still hold.
@@ -1638,7 +1713,11 @@ public static class SoloBattle
             // ── THE BASIC ATTACK: the beat's action when no skill took it. MIGHT's hit. ─────────────
             if (onBeat && !acted && tuning.AutoAttackDamage > 0f)
             {
-                LandSpread(tuning.AutoAttackDamage * hunter.AutoDamageMultiplier * shape.AutoAttackDamage, ms, 1, null, null, abs, fromSkill: false, swing: true);
+                var swung = LandSpread(tuning.AutoAttackDamage * hunter.AutoDamageMultiplier * shape.AutoAttackDamage,
+                                       ms, 1, null, null, abs, fromSkill: false, swing: true,
+                                       ignoresArmour: swingIgnoresArmour);
+                if (swingLifesteal > 0f && swung > 0f)
+                    Heal((int)MathF.Round(swung * swingLifesteal), ms);
                 if (alive == 0) return Kill(ms);
             }
             if (onBeat)
@@ -1686,6 +1765,8 @@ public static class SoloBattle
                         // the front one is counted at its own depth.
                         if (frontBreak < 0f && ReferenceEquals(creatures[ci], front))
                             bite *= Math.Max(0f, 1f + frontBreak);
+                        else if (secondBreak < 0f && ReferenceEquals(creatures[ci], SecondAlive()))
+                            bite *= Math.Max(0f, 1f + secondBreak);
                         incoming += bite;
                     }
 
@@ -1777,7 +1858,7 @@ public static class SoloBattle
 
                     // COILED re-arms the TRAP far faster, so it answers more bites. This loop only runs for
                     // a woven Trap, so the enchant is naturally dead on any build without one.
-                    var trapBase = sk.CooldownMs;
+                    var trapBase = (int)(sk.CooldownMs * sk.Def.CooldownMultiplier);   // RECOIL, BLUNT
                     if (triggers.Contains(BuildTrigger.Coiled)) trapBase = (int)(trapBase * CoiledCooldownFactor);
                     var cd = Math.Max(1, (int)(trapBase / Math.Max(0.1f, RateNow())));
                     if (abs < champ.ReadyAt.GetValueOrDefault(idx, 0)) continue;
@@ -1786,8 +1867,15 @@ public static class SoloBattle
                     // JAWS REFLECTS THE BITE, it does not throw a blow of its own — which is what
                     // "being attacked works in your favour" actually says. The Form's flat value is
                     // the fallback for a build with no reflect dial at all.
-                    var trapRaw = sk.Def.ReflectFraction > 0f
-                        ? taken * sk.Def.ReflectFraction
+                    // MESH and HARDEN — the reflect grows with every bite the trap has answered this
+                    // wave, to its own ceiling. Zero growth at the base line, so a plain JAWS is a
+                    // flat fraction exactly as it was.
+                    var reflect = sk.Def.ReflectFraction;
+                    if (sk.Def.ReflectGrowthPerBite > 0f)
+                        reflect += Math.Min(sk.Def.ReflectGrowthCap, sk.Def.ReflectGrowthPerBite * bites);
+                    bites++;
+                    var trapRaw = reflect > 0f
+                        ? taken * reflect
                         : FormBehaviour.BaseDamage(Form.Trap, resonance, wt);
                     trapRaw *= VowFactor(sk, weaveCtx, wt, shape)
                                // OPENING VOLLEY — the Trap's first spring counts as its first cast.
@@ -1799,7 +1887,10 @@ public static class SoloBattle
                     if (sk.Def.StopsWholeBite)
                     {
                         champ.Health += (int)MathF.Round(taken);
-                        trapRaw = 0f;
+                        // REPRISAL buys the half IRON gave up: the stopped bite is ALSO returned. Without
+                        // this the reinforcement was silently erased one line after it was read, because
+                        // the stop cleared the raw unconditionally.
+                        if (reflect <= 0f) trapRaw = 0f;
                     }
                     events.Add(new BattleEvent(BattleEventKind.Skill, (int)sk.Source, (int)Form.Trap, ms));
                     var trapDealt = LandSpread(trapRaw, ms, shape.TargetsFor(Form.Trap), sk.Source, Form.Trap, abs);

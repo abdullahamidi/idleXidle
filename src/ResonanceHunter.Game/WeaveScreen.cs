@@ -600,7 +600,8 @@ public sealed class WeaveScreen
                     skills.Select(k => new BuildComposer.SkillPick(k.Source, k.Form, k.VowId, "", k.Passive)).ToList(),
                     Loadout.SkillCapacity);
                 var rd = SkillCatalogue.Resolve(skills[i].Form, i < kindsNow.Count && kindsNow[i]);
-                if (SkillLevels.VariationOf(rd) is null && SkillLevels.FreeOn(rd.Id) > 0)
+                var takenVar = SkillLevels.VariationOf(rd);
+                if (takenVar is null && SkillLevels.FreeOn(rd.Id) > 0)
                     for (var vi = 0; vi < rd.Variations.Count && vi < 2; vi++)
                         if (VariationBtn(i, vi).Contains(hit))
                         {
@@ -609,6 +610,22 @@ public sealed class WeaveScreen
                             _msg = $"{rd.Name} IS NOW {rd.Variations[vi].Name}.";
                             return;
                         }
+                // BUYING A REINFORCEMENT. Same strip, same rule as the draw below: a variation is
+                // taken and a level is spare. Only the UNBOUGHT ones are offered, so the list shortens
+                // as it is spent and the last purchase leaves the plain name line behind it.
+                else if (takenVar is not null && SkillLevels.FreeOn(rd.Id) > 0)
+                {
+                    var open = takenVar.Reinforcements
+                        .Where(r => !SkillLevels.HasReinforcement(rd.Id, r.Name)).ToList();
+                    for (var ri = 0; ri < open.Count && ri < 2; ri++)
+                        if (VariationBtn(i, ri).Contains(hit))
+                        {
+                            SkillLevels.TakeReinforcement(rd, open[ri].Name);
+                            _slot = i; Dirty = true; _buildRev++;
+                            _msg = $"{open[ri].Name}: {open[ri].Line.ToUpperInvariant()}";
+                            return;
+                        }
+                }
             }
 
             if (KindToggle(i).Contains(hit))
@@ -925,11 +942,39 @@ public sealed class WeaveScreen
                     _ui.TextCenter(b, Fit(resolved.Variations[vi].Name, vb.Width - 8), vb.Center.X, vb.Y + 2, Gold);
                 }
             }
+            else if (chosen is not null && free > 0
+                     && chosen.Reinforcements.Where(r => !SkillLevels.HasReinforcement(resolved.Id, r.Name))
+                               .ToList() is { Count: > 0 } open)
+            {
+                // A LEVEL IS WAITING AND THE SKILL ALREADY KNOWS WHAT IT IS. Now the level buys one of
+                // the variation's reinforcements, in the same two-across strip the variations used —
+                // the question has not changed, only the answers have.
+                //
+                // TWO AT A TIME, not all three. Three buttons across this strip leave about sixty
+                // pixels each, and the first capture of it read "DEEP… SEDI… SILT" — a purchase whose
+                // name the player cannot finish reading is not a choice they can make. The third
+                // appears once one of these is bought, and all three are bought by level 4 anyway, so
+                // what is deferred is the ORDER rather than the content.
+                for (var ri = 0; ri < open.Count && ri < 2; ri++)
+                {
+                    var rb = VariationBtn(i, ri);
+                    var overR = rb.Contains(hit);
+                    _ui.Fill(b, rb, Gold * (overR ? 0.32f : 0.14f));
+                    Outline(b, rb, Gold, overR ? 2 : 1);
+                    _ui.TextCenter(b, Fit(open[ri].Name, rb.Width - 8), rb.Center.X, rb.Y + 2, Gold);
+                }
+            }
             else
             {
-                // The skill, and what it was taken as. A level still spare is said out loud, or the
-                // player has no way to know a reinforcement is waiting for them.
+                // The skill, what it was taken as, and how much of that variation is bought. The count
+                // is spelled out rather than shown as pips: a player who cannot see how much is left
+                // has no reason to come back to a skill they already levelled.
                 var line = chosen is null ? resolved.Name : $"{resolved.Name} · {chosen.Name}";
+                if (chosen is not null)
+                {
+                    var bought = chosen.Reinforcements.Count(r => SkillLevels.HasReinforcement(resolved.Id, r.Name));
+                    line += $"  {bought}/{chosen.Reinforcements.Count}";
+                }
                 if (free > 0) line += $"   +{free}";
                 _ui.Text(b, Fit(line, row.Right - 140 - (row.X + 134)), row.X + 134, row.Y + 30,
                          free > 0 ? Gold : isPassive ? Met : Slate);

@@ -2060,18 +2060,25 @@ public class Game1 : Game
                         _loadout.SetForm(slot, form);
                         _loadout.SetPassive(slot, passive!.Value);
                     }
-                    // LEVELS ON THE BOARD, so a capture shows the choice as well as the slot. The
-                    // first slot has a level waiting and is asked to choose; the second has already
-                    // chosen, so both states are photographable from one shot.
-                    foreach (var sk in _loadout.Skills)
+                    // ALL FOUR STATES OF A SKILL'S OWN LEVELS, one per slot, so a single shot certifies
+                    // the whole ladder. Posing one state at a time is how the reinforcement strip could
+                    // have shipped unphotographed the way the variation strip nearly did: a fixture that
+                    // cannot show the thing under test certifies nothing.
+                    //   slot 1 — a level waiting, nothing chosen      -> the two variation buttons
+                    //   slot 2 — chosen, nothing spare                -> the name line, 0/3
+                    //   slot 3 — chosen and a level spare             -> the three reinforcement buttons
+                    //   slot 4 — chosen and fully reinforced          -> the name line, 3/3
+                    for (var si = 0; si < _loadout.Skills.Count; si++)
                     {
+                        var sk = _loadout.Skills[si];
                         var rd = SkillCatalogue.Resolve(sk.Form, sk.Passive ?? false);
-                        for (var u = 0; u < SkillProgress.UsesForLevel(1); u++) _skillProgress.RecordWave(rd.Id);
-                    }
-                    if (_loadout.Skills.Count > 1)
-                    {
-                        var second = SkillCatalogue.Resolve(_loadout.Skills[1].Form, _loadout.Skills[1].Passive ?? false);
-                        _skillProgress.ChooseVariation(second, second.Variations[0].Name);
+                        var level = si switch { 0 => 1, 1 => 1, 2 => 2, _ => SkillProgress.MaxLevel };
+                        for (var u = 0; u < SkillProgress.UsesForLevel(level); u++) _skillProgress.RecordWave(rd.Id);
+                        if (si == 0) continue;                       // left unchosen on purpose
+                        var v = rd.Variations[0];
+                        _skillProgress.ChooseVariation(rd, v.Name);
+                        if (si < 3) continue;                        // slot 3 keeps its spare level
+                        foreach (var r in v.Reinforcements) _skillProgress.TakeReinforcement(rd, r.Name);
                     }
 
                     // RH_SHOT_POSE=<vowId>[,<0..1>] opens a seal's BIND row and, with the second
