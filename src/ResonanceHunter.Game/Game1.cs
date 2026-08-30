@@ -2060,6 +2060,19 @@ public class Game1 : Game
                         _loadout.SetForm(slot, form);
                         _loadout.SetPassive(slot, passive!.Value);
                     }
+                    // LEVELS ON THE BOARD, so a capture shows the choice as well as the slot. The
+                    // first slot has a level waiting and is asked to choose; the second has already
+                    // chosen, so both states are photographable from one shot.
+                    foreach (var sk in _loadout.Skills)
+                    {
+                        var rd = SkillCatalogue.Resolve(sk.Form, sk.Passive ?? false);
+                        for (var u = 0; u < SkillProgress.UsesForLevel(1); u++) _skillProgress.RecordWave(rd.Id);
+                    }
+                    if (_loadout.Skills.Count > 1)
+                    {
+                        var second = SkillCatalogue.Resolve(_loadout.Skills[1].Form, _loadout.Skills[1].Passive ?? false);
+                        _skillProgress.ChooseVariation(second, second.Variations[0].Name);
+                    }
 
                     // RH_SHOT_POSE=<vowId>[,<0..1>] opens a seal's BIND row and, with the second
                     // number, holds the bind chain part-played so the flourish can be photographed.
@@ -2712,6 +2725,7 @@ public class Game1 : Game
             _weave.Loadout = _loadout;
             _weave.Mastery = _mastery;
             _weave.Tree = _dust;
+            _weave.SkillLevels = _skillProgress;
             _weave.Hunter = _hunter;
             _weave.Character = _characters.Active;
             _weave.RegionId = _activeRegion;

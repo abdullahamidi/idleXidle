@@ -248,6 +248,16 @@ public sealed class WeaveScreen
     public PlayerLoadout Loadout { get; set; } = PlayerLoadout.Starter();
     public MasteryTree Mastery { get; set; } = new();
     public MemoryDustTree Tree { get; set; } = new();
+
+    /// <summary>
+    /// What each skill has earned by being used, and where the player spends it.
+    /// </summary>
+    /// <remarks>
+    /// Without this the variation system is unreachable: the skills level, the fight reads whatever
+    /// was chosen, and there is nowhere to choose. A progression the player cannot spend is the same
+    /// dead weight as a field nothing reads.
+    /// </remarks>
+    public SkillProgress SkillLevels { get; set; } = new();
     public Hunter? Hunter { get; set; }
     public Character? Character { get; set; }
 
@@ -322,6 +332,14 @@ public sealed class WeaveScreen
     /// without this. Padded generously beyond its text, per the input rules — a 20px word is not a
     /// click target.
     /// </remarks>
+    /// <summary>One of a skill's two variation buttons, drawn under its name.</summary>
+    private static Rectangle VariationBtn(int i, int which)
+    {
+        var r = SlotRow(i);
+        var w = (r.Right - 140 - (r.X + 134)) / 2 - 3;
+        return new(r.X + 134 + which * (w + 6), r.Y + 26, w, 20);
+    }
+
     private static Rectangle KindToggle(int i)
     {
         var r = SlotRow(i);
@@ -575,6 +593,24 @@ public sealed class WeaveScreen
                 _msg = "SLOT UNWOVEN.";
                 return;
             }
+            {
+                // TAKING A VARIATION. Only offered while a level is free and none is taken, which is
+                // the same condition the row draws them under — the button and the rule are one test.
+                var kindsNow = BuildComposer.SlotKinds(
+                    skills.Select(k => new BuildComposer.SkillPick(k.Source, k.Form, k.VowId, "", k.Passive)).ToList(),
+                    Loadout.SkillCapacity);
+                var rd = SkillCatalogue.Resolve(skills[i].Form, i < kindsNow.Count && kindsNow[i]);
+                if (SkillLevels.VariationOf(rd) is null && SkillLevels.FreeOn(rd.Id) > 0)
+                    for (var vi = 0; vi < rd.Variations.Count && vi < 2; vi++)
+                        if (VariationBtn(i, vi).Contains(hit))
+                        {
+                            SkillLevels.ChooseVariation(rd, rd.Variations[vi].Name);
+                            _slot = i; Dirty = true; _buildRev++;
+                            _msg = $"{rd.Name} IS NOW {rd.Variations[vi].Name}.";
+                            return;
+                        }
+            }
+
             if (KindToggle(i).Contains(hit))
             {
                 // FLIPPING THE SLOT CHANGES WHICH SKILL IT IS, not merely when it acts — a style's
@@ -872,7 +908,32 @@ public sealed class WeaveScreen
 
             // The skill this slot actually resolves to, under its Source and Form.
             var resolved = SkillCatalogue.Resolve(s.Form, isPassive);
-            _ui.Text(b, resolved.Name, row.X + 134, row.Y + 30, isPassive ? Met : Gold);
+            var chosen = SkillLevels.VariationOf(resolved);
+            var free = SkillLevels.FreeOn(resolved.Id);
+
+            if (chosen is null && free > 0)
+            {
+                // A LEVEL IS WAITING. The two variations are offered where the skill's name would be,
+                // because deciding what this skill IS is the more urgent sentence — and the name is
+                // already on the row above, in the Source-and-Form line.
+                for (var vi = 0; vi < resolved.Variations.Count && vi < 2; vi++)
+                {
+                    var vb = VariationBtn(i, vi);
+                    var overV = vb.Contains(hit);
+                    _ui.Fill(b, vb, Gold * (overV ? 0.32f : 0.14f));
+                    Outline(b, vb, Gold, overV ? 2 : 1);
+                    _ui.TextCenter(b, Fit(resolved.Variations[vi].Name, vb.Width - 8), vb.Center.X, vb.Y + 2, Gold);
+                }
+            }
+            else
+            {
+                // The skill, and what it was taken as. A level still spare is said out loud, or the
+                // player has no way to know a reinforcement is waiting for them.
+                var line = chosen is null ? resolved.Name : $"{resolved.Name} · {chosen.Name}";
+                if (free > 0) line += $"   +{free}";
+                _ui.Text(b, Fit(line, row.Right - 140 - (row.X + 134)), row.X + 134, row.Y + 30,
+                         free > 0 ? Gold : isPassive ? Met : Slate);
+            }
 
             // The hexagon's verdict on this woven skill — and the Vow buy-back drawn as the LIFT it
             // is ("x0.45→x0.75"), so swearing a Vow on an off-discipline skill visibly pays.
