@@ -927,8 +927,26 @@ demand back up toward 0.6, which is a real cost the player should be electing.
 | **7** | Skill trees: ring 0 only (the active/passive fork), then the outer rings | Per-tree tests |
 | **8a** | ~~WEIGHT -> RESONANCE~~ and ~~SPREAD -> LOOT~~ — **done 2026-08-30** (`110e3af`, `f4052b8`) | `MasteryNodeLivenessTests`, `LootNodeLivenessTests` |
 | **8b** | TEMPO and ENDURE gain §9b's plain-stat minors; the `MasteryNode.Stats` channel they need is built | Mastery tests |
-| **8c** | Specialisations move to the rim; the six skill-unlock nodes hang off them. **Respec RE-LOCKS** (designer, 2026-08-30), so a woven-but-locked slot falls back to its style's free skill and says so | Slot tests + a capture |
+| **8c** | ~~The six skill-unlock nodes~~ — **done 2026-08-30** (`3a5eab3`). Each specialisation is its style's road head and its road node teaches that style's second skill; respec re-locks | `test_a_skill_the_tree_has_not_taught_cannot_be_chosen` + a capture |
 
 Stages 1-6 are the playable slice: the fight changes, the swing comes back, and the trees
 arrive afterwards as depth on top of a system that already works.
+
+### Where the skill gate sits, and why it is not where it looks like it should be
+
+Three placements were tried before one held, and the two that failed are worth keeping:
+
+- **On the SPILL.** An old four-active build spills two skills into passive slots, and those passives
+  are exactly the taught ones — so gating there unwove half of someone's build on load, which §11
+  forbids in as many words.
+- **Keeping the overflow ACTIVE instead.** `Build.Weave` refuses a third active, so the skill was
+  dropped anyway. The same silent unweaving, one layer further down.
+- **On the player's own choice** (`SkillPick.Passive == true`). This is the one. A spill is the
+  BUDGET's decision, not the player's, so it is exempt; what is refused is a slot deliberately set to
+  a kind whose skill has not been learned. The door that leaves open — wire three actives, collect the
+  passive free — is shut on the weave screen, whose toggle refuses and names the road.
+
+**Only the six with no `LegacyForm` are gated.** Gating all twelve would leave a fresh champion with
+no skills at all; the other six are reached by picking a Source and a Form, which is the door that
+already exists.
 
