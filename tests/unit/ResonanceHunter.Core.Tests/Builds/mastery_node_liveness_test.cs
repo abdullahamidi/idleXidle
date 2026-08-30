@@ -13,12 +13,14 @@ using Xunit.Abstractions;
 namespace ResonanceHunter.Core.Tests.Builds;
 
 /// <summary>
-/// Every node of the re-axed RESONANCE branch must CHANGE THE FIGHT.
+/// Every node of RESONANCE, TEMPO and ENDURE must CHANGE THE FIGHT.
 /// </summary>
 /// <remarks>
 /// <para>
 /// The same guarantee <see cref="ReinforcementLivenessTests"/> makes for the 72 reinforcements, applied
-/// to the branch that replaced WEIGHT (design §9b). It is the cheapest insurance this codebase has: the
+/// to the three branches whose subject is the fight. LOOT has its own file, because a loot node is
+/// allowed to change no damage at all and this probe would call the whole branch dormant. It is the
+/// cheapest insurance this codebase has: the
 /// reinforcement pass found four dials that the catalogue declared and the fight never read, and a
 /// mastery node is bought with the scarcer of the two currencies — a player reaches ring 4 once.
 /// </para>
@@ -38,7 +40,11 @@ public class MasteryNodeLivenessTests
             // The specialisation is EXCLUDED because it is this test's own constant: a discipline has
             // to be posed on both sides or NARROW and BROAD read nothing, and a node held on both
             // sides can never be the thing that moved.
-            .Where(n => n.Branch == Branch.Resonance
+            // ALL THREE fight branches, not just the re-axed one. TEMPO and ENDURE gained twelve
+            // plain-stat minors on 2026-08-30 and a stat node reaches the sim by a different route
+            // from a shape node (Hunter.ValueOf rather than Build.Shape) — exactly the kind of second
+            // channel BalanceSweepTests was blind to. Nothing was checking it end to end.
+            .Where(n => n.Branch is Branch.Resonance or Branch.Tempo or Branch.Endure
                         && n.Kind is not MasteryKind.Start and not MasteryKind.Specialisation)
             .Select(n => new object[] { n.Id });
 

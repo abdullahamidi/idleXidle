@@ -153,17 +153,6 @@ public class mastery_new_nodes_liveness_test
 
     // ── ENDURE ────────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>MENDING — health comes back a little every second.</summary>
-    [Fact]
-    public void test_mending_regains_health_over_the_wave()
-    {
-        // A pool nothing drains and a bite that chips it: without MENDING the chips only add up.
-        var plain = Fight(SkillShape.None, Wave(1, 1_000_000f, 40f), NoSwing, hp: 10_000).Metrics;
-        var mending = Fight(Node("mending"), Wave(1, 1_000_000f, 40f), NoSwing, hp: 10_000).Metrics;
-        Assert.True(plain.HealthLost > 0);
-        Assert.True(mending.HealthLost < plain.HealthLost,
-            $"MENDING lost {mending.HealthLost} against {plain.HealthLost} — the trickle is not reaching the pool.");
-    }
 
     /// <summary>PAYBACK — bites bank a bonus for the next skill, up to the cap.</summary>
     [Fact]
@@ -197,9 +186,11 @@ public class mastery_new_nodes_liveness_test
 
     /// <summary>Every survivor of the twelve exists, costs what its ring costs, and changes a shape.</summary>
     /// <remarks>
-    /// SIX, not twelve. HEFT, HEADLONG and STAGGER were WEIGHT's and FAN, RALLY and TIDE were
-    /// SPREAD's; the 2026-08-30 re-axe replaced both branches, with RESONANCE and LOOT (design §9).
-    /// The nodes
+    /// FIVE, not twelve. HEFT, HEADLONG and STAGGER were WEIGHT's and FAN, RALLY and TIDE were
+    /// SPREAD's; the 2026-08-30 re-axe replaced both branches, with RESONANCE and LOOT. MENDING went
+    /// in the same pass when ring 1 stopped being rules — it and RECOVERY were both regeneration, and
+    /// RECOVERY is the only feeder of BetweenWaveRegen while MENDING's RegenFraction still reaches the
+    /// sim from the element sets. BRISK survives and is a NOTABLE now. The nodes
     /// that replaced them are pinned by <c>MasteryNodeLivenessTests</c>, which asks a harder question of
     /// each — not "is it in the catalogue" but "does the fight come out different".
     /// </remarks>
@@ -208,7 +199,7 @@ public class mastery_new_nodes_liveness_test
     {
         var ids = new[]
         {
-            "brisk", "rhythm", "opening_volley", "mending", "payback", "rebound",
+            "brisk", "rhythm", "opening_volley", "payback", "rebound",
         };
         foreach (var id in ids)
         {

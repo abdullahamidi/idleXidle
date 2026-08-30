@@ -851,11 +851,21 @@ public static class SoloBattle
                     ? 1f + shape.OpeningBonus
                     : 1f - shape.AfterOpeningPenalty;
 
-            // INTERRUPT. There is no windup model; the enemy bites on an interval, so the last quarter of
-            // that interval IS the windup, and damage landed there is what interrupting means here.
+            // INTERRUPT. There is no windup model; the enemy bites on a clock, so the last quarter of
+            // the gap before the NEXT bite is the windup, and damage landed there is what interrupting
+            // means here.
+            //
+            // IT READS `nextBite`, NOT A MODULO. This was `(absMs - since) % enemyIntervalMs >=
+            // enemyIntervalMs * 3 / 4` — the model the bite clock itself abandoned twenty lines below,
+            // where the note explains that an exact modulo only fires where the interval divides a
+            // multiple of the 100ms tick. The bite loop was corrected to ACCUMULATE and this read of it
+            // was left behind, so INTERRUPT was timing its bonus against a clock the enemy no longer
+            // keeps — and MIRE's slow, which stretches `nextBite` and not the interval, pulled the two
+            // further apart the more a build invested in it. Found 2026-08-30 when the mastery liveness
+            // probe was widened past RESONANCE: taking INTERRUPT changed nothing at all.
             if (shape.InterruptBonus > 0f
                 && absMs - since > 0
-                && (absMs - since) % enemyIntervalMs >= enemyIntervalMs * 3 / 4)
+                && absMs - since >= nextBite - enemyIntervalMs / 4)
                 m *= 1f + shape.InterruptBonus;
 
             return m;

@@ -249,28 +249,44 @@ public static class MasteryCatalog
                 Greaters(n, b));
     }
 
+    /// <summary>
+    /// TEMPO — your own attack: how often you swing, how hard, how often it crits (design §9b).
+    /// </summary>
+    /// <remarks>
+    /// <b>Ring 1 stopped being rules on 2026-08-30</b>, on the designer's direction: "Ara düğüm
+    /// kuralının şöyle bir sıkıntısı var, oyunda bunu hissedemiyorsun ve çok fazla yazı okuman
+    /// gerekiyor. Bunun yerine 5 health statı, 6 resonance gibi stat versek." A minor is connective
+    /// tissue — it should be felt as accumulation, not read — so the six here pay in
+    /// <see cref="HunterStat"/> and everything from notable upward stays a named rule.
+    ///
+    /// <b>Six rules went to make room</b>, and each for a reason rather than to hit a count. OPENER
+    /// (+25% first hit) is what ALPHA does harder. HASTEN was a bare +15% skill rate, which is exactly
+    /// the shape the stat minors replace. FOCUS (+8% crit) is literally SHARP with more words.
+    /// FLASH is the opening window SURGE already owns. MARK MASTERY is granted by the SIGN
+    /// specialisation and by a champion besides. PREPARATION's <c>FreeOpeningCast</c> still reaches
+    /// the sim from CharacterRoster, so nothing it fed goes dark.
+    ///
+    /// BRISK was PROMOTED rather than cut: it is the only thing in the game that feeds
+    /// <see cref="SkillShape.AutoAttackRate"/>, and cutting it would have orphaned a field the sim
+    /// reads — the dormant-feature failure one layer down from a dormant node.
+    /// </remarks>
     private static void Tempo(List<MasteryNode> n)
     {
         const Branch b = Branch.Tempo;
 
-        // The basic swing is a third of a build's damage and had no node; this is its Tempo node.
-        Minor(n, b, "brisk", "BRISK — YOUR BASIC SWING COMES 20% SOONER",
-            S with { AutoAttackRate = 1.20f });
-        Minor(n, b, "opener", "OPENER — +25% ON THE FIRST HIT AGAINST EACH CREATURE",
-            S with { FirstHitMultiplier = 1.25f });
-        Minor(n, b, "hasten", "HASTEN — +15% SKILL RATE",
-            S with { SkillRate = 1.15f });
-        Minor(n, b, "preparation", "PREPARATION — YOUR FIRST CAST OF A WAVE COMES WITH NO WAIT",
-            S with { FreeOpeningCast = true });
-        Minor(n, b, "focus", "FOCUS — +8% CRITICAL CHANCE",
-            S with { BonusCritPercent = 8f });
-        // The side road's spur: the mastery's shape at a minor's size, with no price. The window fields
-        // take the kinder value and the bonuses ADD, so it keeps paying under SURGE and FIRST STRIKE.
-        // Two seconds, not one: the wave opens with a 700ms breath, so a one-second window would have
-        // held the auto-swing and nothing else.
-        Spur(n, b, "flash", "focus", "FLASH — +20% FOR THE FIRST TWO SECONDS OF EACH WAVE",
-            S with { OpeningSeconds = 2f, OpeningBonus = 0.20f });
+        Minor(n, b, "bite", "BITE — +4 ATTACK POWER", S, Stat(HunterStat.AttackPower, 4f));
+        Minor(n, b, "force", "FORCE — +5 ATTACK POWER", S, Stat(HunterStat.AttackPower, 5f));
+        Minor(n, b, "swift", "SWIFT — +3 ENGINEERING", S, Stat(HunterStat.Engineering, 3f));
+        Minor(n, b, "quick", "QUICK — +3 ENGINEERING", S, Stat(HunterStat.Engineering, 3f));
+        Minor(n, b, "sharp", "SHARP — +1% CRITICAL CHANCE", S, Stat(HunterStat.CriticalChance, 1f));
+        // The spur, and the head of the side road.
+        Spur(n, b, "poise", "sharp", "POISE — +4 FOCUS", S, Stat(HunterStat.Focus, 4f));
 
+        // BRISK shortens the beat the champion spends on the SWING and leaves every cooldown alone,
+        // which is worth far more since the slot split handed the swing about 60% of the beats.
+        Notable(n, b, "brisk", "BRISK — YOUR BASIC SWING COMES 20% SOONER",
+            S with { AutoAttackRate = 1.20f },
+            SpineMinors(n, b));
         // RHYTHM is the branch's promise as a clock: faster while nothing has bitten you, which is the
         // Caster band, and back to nothing in the Bruiser band where every bite lands.
         Notable(n, b, "rhythm", "RHYTHM — EACH CAST MAKES THE NEXT COME 8% SOONER, UP TO FIVE TIMES; A BITE RESETS IT",
@@ -278,9 +294,6 @@ public static class MasteryCatalog
             SpineMinors(n, b));
         Notable(n, b, "alpha", "ALPHA — FIRST HIT x1.9, EVERY LATER HIT x0.8",
             S with { FirstHitMultiplier = 1.9f, LaterHitMultiplier = 0.80f },
-            SpineMinors(n, b));
-        Notable(n, b, "mark_mastery", "MARK MASTERY — THE WINDOW LASTS 60% LONGER AND HITS 30% HARDER",
-            S with { MarkWindowMultiplier = 1.6f, MarkPowerBonus = 0.30f },
             SpineMinors(n, b));
         Notable(n, b, "interrupt", "INTERRUPT — DAMAGE IN THE RUN-UP TO AN ENEMY SWING +45%",
             S with { InterruptBonus = 0.45f },
@@ -290,7 +303,7 @@ public static class MasteryCatalog
         // after three seconds" stays true with SURGE taken.
         Notable(n, b, "surge", "SURGE — +40% FOR THE FIRST THREE SECONDS OF EACH WAVE",
             S with { OpeningSeconds = 3f, OpeningBonus = 0.40f },
-            new[] { "flash" });
+            new[] { "poise" });
 
         // Per SKILL, not per creature or per second — the third kind of opening this branch sells, and
         // the only one that pays on every later cast rather than on the clock.
@@ -316,51 +329,54 @@ public static class MasteryCatalog
             Greaters(n, b));
     }
 
-    // ── ENDURE — answers Bruiser, and extends every other band. ───────────────────────────────────
-
+    /// <summary>
+    /// ENDURE — how hard you are to kill, and how you come back (design §9b).
+    /// </summary>
+    /// <remarks>
+    /// Same 2026-08-30 pass as TEMPO above: ring 1 pays in stats now. <b>Six rules went</b>, and §9b
+    /// named the two overlaps to look at first. MENDING and RECOVERY were both regeneration, so one
+    /// goes — RECOVERY stays because it is the only feeder of
+    /// <see cref="SkillShape.BetweenWaveRegen"/> and MENDING's <c>RegenFraction</c> still reaches the
+    /// sim from the element sets. PADDING and THICK SKIN were both flat bite reduction, so THICK SKIN
+    /// goes. TOUGHNESS was a bare +15% maximum health, which is the shape HIDE, BULK and ROOTED
+    /// replace. LEECH and FORTIFY are both granted by element sets besides. BRACE is BULWARK with a
+    /// different price tag.
+    ///
+    /// SECOND WIND, PADDING and THORNS were PROMOTED rather than cut: each is the only thing feeding
+    /// <c>HealOnClear</c>, <c>FlatDamageReduction</c> and <c>ReflectFraction</c> respectively. ABSORB
+    /// moved down a ring to become the side road's greater — it is the only feeder of
+    /// <c>AbsorbAtLowHealth</c>, and mitigation that deepens as you fall is the right end for a road
+    /// that opens with thorns.
+    /// </remarks>
     private static void Endure(List<MasteryNode> n)
     {
         const Branch b = Branch.Endure;
 
-        // In-fight regeneration, under the heal ceiling — the third kind of heal this branch sells,
-        // beside LEECH (per hit) and SECOND WIND (per clear).
-        Minor(n, b, "mending", "MENDING — REGAIN 0.3% OF MAXIMUM HEALTH EVERY SECOND",
-            S with { RegenFraction = 0.003f });
-        Minor(n, b, "toughness", "TOUGHNESS — +15% MAXIMUM HEALTH",
-            S with { MaxHealth = 1.15f });
-        Minor(n, b, "leech", "LEECH — HEAL 1.5% OF DAMAGE DEALT",
-            S with { Leech = 0.015f });
-        Minor(n, b, "padding", "PADDING — EVERY BITE DEALS 5 LESS",
-            S with { FlatDamageReduction = 5f });
-        Minor(n, b, "second_wind", "SECOND WIND — HEAL 6% ON CLEARING A WAVE",
-            S with { HealOnClear = 0.06f });
-        // The side road's spur: more of PADDING's flat cut, which ADDS — nine off every bite with both,
-        // and the flat cut is the one Endure number that erases a Swarm's nibbles outright.
-        Spur(n, b, "thick_skin", "second_wind", "THICK SKIN — EVERY BITE DEALS 4 LESS",
-            S with { FlatDamageReduction = 4f });
+        Minor(n, b, "hide", "HIDE — +12 MAXIMUM HEALTH", S, Stat(HunterStat.MaxHealth, 12f));
+        Minor(n, b, "bulk", "BULK — +12 MAXIMUM HEALTH", S, Stat(HunterStat.MaxHealth, 12f));
+        Minor(n, b, "guard", "GUARD — +3 DEFENCE", S, Stat(HunterStat.Defense, 3f));
+        Minor(n, b, "stand", "STAND — +3 DEFENCE", S, Stat(HunterStat.Defense, 3f));
+        Minor(n, b, "knit", "KNIT — +2 VITALITY", S, Stat(HunterStat.Vitality, 2f));
+        Spur(n, b, "rooted", "knit", "ROOTED — +10 MAXIMUM HEALTH, +1 VITALITY", S,
+             Stat(HunterStat.MaxHealth, 10f, HunterStat.Vitality, 1f));
 
-        // PAYBACK is RHYTHM's mirror across the axis: Endure builds up FROM being bitten.
-        Notable(n, b, "payback", "PAYBACK — EVERY BITE MAKES YOUR NEXT SKILL HIT 15% HARDER, UP TO FOUR TIMES",
-            S with { BiteFuelBonus = 0.15f, BiteFuelMax = 4 },
+        Notable(n, b, "second_wind", "SECOND WIND — HEAL 6% ON CLEARING A WAVE",
+            S with { HealOnClear = 0.06f },
             SpineMinors(n, b));
-        // The one node in the game that buys an exception to "health does not regenerate between waves".
+        Notable(n, b, "padding", "PADDING — EVERY BITE DEALS 5 LESS",
+            S with { FlatDamageReduction = 5f },
+            SpineMinors(n, b));
         Notable(n, b, "recovery", "RECOVERY — REGAIN 15% OF HEALTH BETWEEN WAVES",
             S with { BetweenWaveRegen = 0.15f },
             SpineMinors(n, b));
-        Notable(n, b, "absorb", "ABSORB — MITIGATION RISES AS HEALTH FALLS, TO -30%",
-            S with { AbsorbAtLowHealth = 0.30f },
+        Notable(n, b, "payback", "PAYBACK — EVERY BITE MAKES YOUR NEXT SKILL HIT 15% HARDER, UP TO FOUR TIMES",
+            S with { BiteFuelBonus = 0.15f, BiteFuelMax = 4 },
             SpineMinors(n, b));
-        Notable(n, b, "fortify", "FORTIFY — THE FIRST BITE OF EACH WAVE DEALS NOTHING",
-            S with { FirstBiteFree = true },
-            SpineMinors(n, b));
-        // The side road's notable: the Endure answer that SCALES WITH THE THREAT. A Bruiser's identity is
-        // the size of its bite, so the harder it bites the more it pays back; a Swarm of nibblers pays
-        // almost nothing per head. Read against the raw bite, so the rest of the branch cannot shrink it.
+        // The side road's notable: being bitten is the road's whole subject.
         Notable(n, b, "thorns", "THORNS — EVERY CREATURE THAT BITES YOU TAKES 15% OF ITS BITE BACK",
             S with { ReflectFraction = 0.15f },
-            new[] { "thick_skin" });
+            new[] { "rooted" });
 
-        // REBOUND reads the bite that LANDED, after the branch's cuts, and pays in hit size like BULWARK.
         Greater(n, b, "rebound", "REBOUND — A FIFTH OF EVERY BITE COMES BACK AS HEALTH, DAMAGE DEALT -15%",
             S with { HealOnBiteFraction = 0.20f, DamageDealt = 0.85f },
             SpineNotables(n, b));
@@ -370,21 +386,15 @@ public static class MasteryCatalog
         Greater(n, b, "bastion", "BASTION — +1% DAMAGE PER 250 MAXIMUM HEALTH",
             S with { DamagePerMaxHealth = 0.01f / 250f },
             SpineNotables(n, b));
-        // The side road's greater pays in the OPPOSED branch's currency: mitigation bought with time.
-        // BULWARK pays in hit size; this pays in rate, so the two Endure greaters are different prices
-        // for the same wall rather than one price twice.
-        Greater(n, b, "brace", "BRACE — DAMAGE TAKEN -20%, COOLDOWNS +20%",
-            S with { DamageTaken = 0.80f, SkillRate = 0.83f },
+        // The side road's greater, and the one node whose value RISES as the road fails.
+        Greater(n, b, "absorb", "ABSORB — MITIGATION RISES AS HEALTH FALLS, TO -30%",
+            S with { AbsorbAtLowHealth = 0.30f },
             new[] { "thorns" });
 
-        // The depth-pusher's node: it converts a health POOL into a per-wave ALLOWANCE, which is strictly
-        // better the deeper you go and strictly worse in any single hard wave.
         Mastery(n, b, "endless", "ENDLESS — FULL HEALTH EVERY WAVE; MAXIMUM HEALTH HALVED",
             S with { FullHealBetweenWaves = true, MaxHealth = 0.5f },
             Greaters(n, b));
     }
-
-    // ── BRIDGES — hybridising, at a price that costs a mastery. ───────────────────────────────────
 
     private static void Bridges(List<MasteryNode> n)
     {

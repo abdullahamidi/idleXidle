@@ -365,7 +365,10 @@ public class MasteryTreeTests
     [Fact]
     public void test_greaters_are_costed_or_conditional()
     {
-        var conditional = new[] { "bastion", "cascade", "assassinate", "pure" };
+        // ABSORB joined the list when it moved down a ring in the 2026-08-30 pass: "mitigation rises
+        // as health falls" pays nothing to a champion that is winning, which is a price of the same
+        // kind BASTION carries.
+        var conditional = new[] { "bastion", "cascade", "assassinate", "pure", "absorb" };
 
         foreach (var node in MasteryCatalog.Nodes.Where(n => n.Kind == MasteryKind.Greater))
         {
@@ -400,8 +403,10 @@ public class MasteryTreeTests
         // and against the fight rather than against the wiring.
         var road = new (string Minor, string Notable, string Greater)[]
         {
-            ("brisk", "rhythm", "opening_volley"),
-            ("mending", "payback", "rebound"),
+            // TEMPO and ENDURE's ring-1 rules became plain stats on 2026-08-30, so the trio starts
+            // at a STAT minor now and the rule it used to start at (BRISK) is the notable.
+            ("bite", "brisk", "opening_volley"),
+            ("hide", "payback", "rebound"),
         };
 
         foreach (var (minor, notable, greater) in road)
@@ -423,7 +428,7 @@ public class MasteryTreeTests
         Assert.True(MasteryCatalog.ById("zealot")!.Shape.DamageTaken > 1f, "ZEALOT must pay in bites taken.");
         Assert.True(MasteryCatalog.ById("lode")!.Shape.AutoAttackDamage < 1f, "LODE must pay in the swing.");
         Assert.True(MasteryCatalog.ById("rush")!.Shape.DamageTaken > 1f, "RUSH must pay in bites taken.");
-        Assert.True(MasteryCatalog.ById("brace")!.Shape.SkillRate < 1f, "BRACE must pay in rate.");
+        Assert.True(MasteryCatalog.ById("rebound")!.Shape.DamageDealt < 1f, "REBOUND must pay in damage dealt.");
     }
 
     /// <summary>
