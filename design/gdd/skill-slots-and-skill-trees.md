@@ -700,12 +700,20 @@ notable upward is a named rule.
 Sells skill power, the Source matchup, Vow strength and how sharp your affinity lean is.
 **Never cooldown reduction** — VOLLEY owns that (§6).
 
+> **Built 2026-08-30.** Four lines changed at implementation, each against a law this codebase
+> already enforced. RESERVE was renamed **STEEP** (RESERVE is a WILT/SUP reinforcement, and
+> `test_every_name_in_the_catalogue_is_unique` is not the only place a repeated name hurts). CHORD was
+> written as pure upside and every Mastery must be a trade, so it now softens every skill 15%. ZEALOT's
+> price was *"you cannot unswear one during a run"*, which nothing models — it pays in bites taken
+> instead. DISCORD was uncosted and now trades the peak for the floor. The sixteen are pinned one at a
+> time by `MasteryNodeLivenessTests`.
+
 | Tier | Node | Effect |
 |---|---|---|
 | Minor | **CHIME** | +6 resonance |
 | Minor | **HUM** | +6 resonance |
 | Minor | **TONE** | +8 resonance |
-| Minor | **RESERVE** | +6 resonance, +5 health |
+| Minor | **STEEP** | +6 resonance, +5 health |
 | Minor | **CLARITY** | +8 resonance |
 | Minor | **TIMBRE** | +6 resonance, +4 attack power |
 | Notable | **KEYED** | Your strong Source matchup pays 25% more. |
@@ -714,35 +722,54 @@ Sells skill power, the Source matchup, Vow strength and how sharp your affinity 
 | Notable | **BROAD** | The opposite style's penalty is halved. |
 | Notable | **DEEP** | +12 resonance, and resonance is worth 20% more. |
 | Greater | **PURE** | While every woven skill shares one Source, all skills hit 35% harder. |
-| Greater | **DISCORD** | Your weak Source matchup no longer weakens you. |
-| Greater | **ZEALOT** | Vows pay 60% more; you cannot unswear one during a run. |
+| Greater | **DISCORD** | Your weak Source matchup no longer weakens you; skills -10%. |
+| Greater | **ZEALOT** | Vows pay 60% more, and you take 15% more damage. |
 | Greater | **RESONANT** | +25% skill power, -15% basic attack damage. |
-| Mastery | **CHORD** | Every Source matchup counts as strong. |
+| Mastery | **CHORD** | Every Source matchup counts as strong, and every skill is 15% softer. |
 
 ### LOOT — what you carry out
 
-Sells haul, rarity, chest quality and the banking decision. **Must not duplicate the
-Memory Dust tree**, which teaches the loot KEYSTONES (GREED, DISCERNING EYE, FORTUNE,
-HOARDER) and crosses runs; this branch sells incremental value *within* a run.
+> **REWRITTEN 2026-08-30, AT IMPLEMENTATION.** The draft below this line sold **the banking
+> decision** — PRUDENCE, STASH, GAMBLE, PATIENT and LODE, five of ten rules — and this game does not
+> have one. `SoloExpedition` ends with the note that settles it: *"NO Bank / Retreat / Wipe payout,
+> and no ExitShare. The idle loop pays every wave the instant it clears... Removing the priced exit
+> is the whole point of the idle turn."* BLOODPRICE also duplicated the existing Desperation trigger.
+>
+> The designer's unblock is what the branch is built on now: *"hasar almadığın her saniye drop şansın
+> artar gibi... hasar ve loot mekaniğini birleştirebilirsin"* — **every LOOT rule keys on something
+> the FIGHT already knows.** That is not a compromise, it is the better branch: it gives an idle run
+> the tension it actually has (how cleanly and how deep one attempt goes), and it satisfies the
+> no-bare-multiplier law by construction, because a haul bonus earned inside a wave is not a flat
+> percentage.
+>
+> The two notables at the top are a **fork, not a ladder** — UNTOUCHED pays for the quiet, BLOODPRICE
+> for finishing nearly dead — and `LootNodeLivenessTests` asserts they disagree about which run they
+> want. **Must not duplicate the Memory Dust tree**, which teaches the loot KEYSTONES and crosses runs.
 
 | Tier | Node | Effect |
 |---|---|---|
-| Minor | **KEEN** | +6 guile |
+| Minor | **GLEAN** | +6 guile |
 | Minor | **POCKETS** | +8 guile |
 | Minor | **SCAVENGE** | +6 guile |
-| Minor | **LEDGER** | +6 guile, +5 health |
+| Minor | **COUNT** | +6 guile, +5 health |
 | Minor | **WEIGH** | +8 guile |
-| Minor | **TALLY** | +6 guile |
-| Notable | **CACHE** | Every 5th wave cleared drops an extra chest. |
-| Notable | **PRUDENCE** | Retreating pays 75% of the haul instead of 60%. |
-| Notable | **BLOODPRICE** | +30% haul while you are below half health. |
-| Notable | **STASH** | Haul grows 2% per wave cleared, and resets when you bank. |
-| Notable | **SIFTED** | Chests refused by your keep filter pay double compensation. |
-| Greater | **GAMBLE** | +60% haul, but a wipe pays nothing instead of 30%. |
-| Greater | **PATIENT** | Every 10 waves without banking, all chests gain a tier. |
-| Greater | **LODE** | The last wave before you bank pays triple. |
-| Greater | **SECOND LOOK** | Rarity is rolled twice; the better roll is kept. |
-| Mastery | **PROSPECTOR** | Every wave cleared past depth 30 adds 3% haul for the rest of the run. |
+| Minor | **TALLY** | +6 guile, +4 focus (the spur — head of the side road) |
+| Notable | **UNTOUCHED** | +3% haul for each second of the wave nothing bit you, up to +45%. |
+| Notable | **BLOODPRICE** | +35% haul on a wave you end below half health. |
+| Notable | **CACHE** | Every 5th wave cleared pays +60%. |
+| Notable | **SPOTLESS** | +25% haul on a wave you finish above 90% health. |
+| Notable | **PROSPECT** | +1% haul for every wave past depth 20. (side road) |
+| Greater | **GAMBLE** | +70% haul, and every bite hits you 25% harder. |
+| Greater | **SECOND LOOK** | A quiet wave raises chest QUALITY too, +0.04 a second; hits -8%. |
+| Greater | **VEIN** | A wave finished above 90% health pays +90% instead of +25%; skills -8%. |
+| Greater | **LODE** | Depth pays +2% a wave instead of +1%, and you swing 10% softer. (side road) |
+| Mastery | **PROSPECTOR** | +3% haul for every wave past depth 30, and skills -15%. |
+
+> **Two conditions were caught unreachable before they shipped**, which is the same species the
+> reinforcement pass spent a day on and the reason every branch now gets a liveness file. *"A wave
+> nothing bit you in"* does not exist — every creature in a wave attacks. *"A wave finished at FULL
+> health"* does not either — there is no full heal between waves, so a champion chipped once stays
+> chipped for the run. **Nine tenths is the first version a real build can hold.**
 
 ### TEMPO — your own attack
 
@@ -884,7 +911,9 @@ demand back up toward 0.6, which is a real cost the player should be electing.
 | **5** | Numbers re-measured against `BalanceSweepTests` | The sweeps |
 | **6** | `WeaveScreen` shows 2 active + 2 passive | Screenshot |
 | **7** | Skill trees: ring 0 only (the active/passive fork), then the outer rings | Per-tree tests |
-| **8** | Mastery tree re-axed to TEMPO / ENDURE / RESONANCE / LOOT | Mastery tests |
+| **8a** | ~~WEIGHT -> RESONANCE~~ and ~~SPREAD -> LOOT~~ — **done 2026-08-30** (`110e3af`, `f4052b8`) | `MasteryNodeLivenessTests`, `LootNodeLivenessTests` |
+| **8b** | TEMPO and ENDURE gain §9b's plain-stat minors; the `MasteryNode.Stats` channel they need is built | Mastery tests |
+| **8c** | Specialisations move to the rim; the six skill-unlock nodes hang off them. **Respec RE-LOCKS** (designer, 2026-08-30), so a woven-but-locked slot falls back to its style's free skill and says so | Slot tests + a capture |
 
 Stages 1-6 are the playable slice: the fight changes, the swing comes back, and the trees
 arrive afterwards as depth on top of a system that already works.
