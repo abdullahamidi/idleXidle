@@ -70,6 +70,9 @@ public sealed class WeaveScreen
 
     private readonly UiKit _ui;
     private int _slot;
+
+    /// <summary>Which face the middle column is showing: 0 the library, 1 this slot's skill tree.</summary>
+    private int _tab;
     private string? _readingVowId;
     private string _msg = "";
     private int _vowScroll;
@@ -454,6 +457,42 @@ public sealed class WeaveScreen
 
     private const int LibStyleW = 92;
 
+    // ── THE SKILL'S OWN TREE, the middle column's second face.
+    //
+    // MASTER-DETAIL, which is the pattern every loadout screen worth copying uses: the slots are the
+    // master list on the left, and this is the detail. The two faces are tabbed rather than stacked
+    // because the panel is 640 wide and a fork of two plus a row of three needs all of it — and
+    // because "what can I put here" and "what is this becoming" are different questions a player asks
+    // at different times. Progressive disclosure: the tree does not exist until a slot is chosen.
+    private static Rectangle Tab(int which)
+        => new(PickPanel.X + PickPad + which * ((PickPanel.Width - PickPad * 2) / 2),
+               UiKit.BodyTop(PickPanel) - 46, (PickPanel.Width - PickPad * 2) / 2 - 6, 30);
+
+    private static int TreeTop => UiKit.BodyTop(PickPanel) + 4;
+
+    /// <summary>One of the two variation cards — the fork that also picks the Source.</summary>
+    private static Rectangle VarCard(int which)
+    {
+        var w = (PickPanel.Width - PickPad * 2 - 12) / 2;
+        return new(PickPanel.X + PickPad + which * (w + 12), TreeTop + 150, w, 190);
+    }
+
+    /// <summary>One of the chosen variation's three reinforcements.</summary>
+    private static Rectangle ReinfCard(int which)
+    {
+        var w = (PickPanel.Width - PickPad * 2 - 16) / 3;
+        return new(PickPanel.X + PickPad + which * (w + 8), TreeTop + 384, w, 200);
+    }
+
+    /// <summary>Directly under the reinforcements, not pinned to the panel's floor.</summary>
+    /// <remarks>
+    /// A control that undoes what is above it belongs beside what is above it. Pinned to the bottom it
+    /// floated a hundred and fifty pixels clear of everything, which reads as "unrelated" — and the one
+    /// thing this button must not read as is a page-level action.
+    /// </remarks>
+    private static Rectangle RespecBtn
+        => new(PickPanel.X + PickPad, TreeTop + 610, PickPanel.Width - PickPad * 2, 38);
+
     private static Rectangle SourceCell(int i) =>
         new(PickPanel.X + PickPad + i % 3 * CellPitch, SourceTop + i / 3 * CellRow, CellW, CellH);
 
@@ -616,40 +655,6 @@ public sealed class WeaveScreen
                 _msg = "SLOT UNWOVEN.";
                 return;
             }
-            {
-                // TAKING A VARIATION. Only offered while a level is free and none is taken, which is
-                // the same condition the row draws them under — the button and the rule are one test.
-                var kindsNow = BuildComposer.SlotKinds(
-                    skills.Select(k => new BuildComposer.SkillPick(k.Source, k.Form, k.VowId, "", k.Passive)).ToList(),
-                    Loadout.SkillCapacity);
-                var rd = SkillCatalogue.Resolve(skills[i].Form, i < kindsNow.Count && kindsNow[i]);
-                var takenVar = SkillLevels.VariationOf(rd);
-                if (takenVar is null && SkillLevels.FreeOn(rd.Id) > 0)
-                    for (var vi = 0; vi < rd.Variations.Count && vi < 2; vi++)
-                        if (VariationBtn(i, vi).Contains(hit))
-                        {
-                            SkillLevels.ChooseVariation(rd, rd.Variations[vi].Name);
-                            _slot = i; Dirty = true; _buildRev++;
-                            _msg = $"{rd.Name} IS NOW {rd.Variations[vi].Name}.";
-                            return;
-                        }
-                // BUYING A REINFORCEMENT. Same strip, same rule as the draw below: a variation is
-                // taken and a level is spare. Only the UNBOUGHT ones are offered, so the list shortens
-                // as it is spent and the last purchase leaves the plain name line behind it.
-                else if (takenVar is not null && SkillLevels.FreeOn(rd.Id) > 0)
-                {
-                    var open = takenVar.Reinforcements
-                        .Where(r => !SkillLevels.HasReinforcement(rd.Id, r.Name)).ToList();
-                    for (var ri = 0; ri < open.Count && ri < 2; ri++)
-                        if (VariationBtn(i, ri).Contains(hit))
-                        {
-                            SkillLevels.TakeReinforcement(rd, open[ri].Name);
-                            _slot = i; Dirty = true; _buildRev++;
-                            _msg = $"{open[ri].Name}: {open[ri].Line.ToUpperInvariant()}";
-                            return;
-                        }
-                }
-            }
 
             if (KindToggle(i).Contains(hit))
             {
@@ -735,6 +740,66 @@ public sealed class WeaveScreen
         }
 
         if (_slot >= skills.Count) return;
+
+        // ── THE MIDDLE COLUMN'S TWO FACES. The tabs are tested before either face, since both
+        //    draw underneath them.
+        for (var t = 0; t < 2; t++)
+            if (Tab(t).Contains(hit)) { _tab = t; return; }
+
+        if (_tab == 1)
+        {
+            var kindsT = BuildComposer.SlotKinds(
+                skills.Select(k => new BuildComposer.SkillPick(k.Source, k.Form, k.VowId, "", k.Passive)).ToList(),
+                Loadout.SkillCapacity);
+            var td = SkillCatalogue.Resolve(skills[_slot].Form, _slot < kindsT.Count && kindsT[_slot]);
+            var tv = SkillLevels.VariationOf(td);
+
+            // TAKING A VARIATION — and with it the skill's Source.
+            if (tv is null)
+            {
+                for (var vi = 0; vi < td.Variations.Count && vi < 2; vi++)
+                    if (VarCard(vi).Contains(hit))
+                    {
+                        if (SkillLevels.FreeOn(td.Id) < 1)
+                        {
+                            _msg = $"{td.Name} HAS NO LEVEL TO SPEND. CLEAR WAVES WITH IT.";
+                            return;
+                        }
+                        var v = td.Variations[vi];
+                        SkillLevels.ChooseVariation(td, v.Name);
+                        Dirty = true; _buildRev++;
+                        _msg = $"{td.Name} IS NOW {v.Name}, AND IT IS {SourceName(v.Source).ToUpperInvariant()}.";
+                        return;
+                    }
+            }
+            else
+            {
+                for (var ri = 0; ri < tv.Reinforcements.Count && ri < 3; ri++)
+                    if (ReinfCard(ri).Contains(hit))
+                    {
+                        var r = tv.Reinforcements[ri];
+                        if (SkillLevels.HasReinforcement(td.Id, r.Name)) return;
+                        if (SkillLevels.FreeOn(td.Id) < 1)
+                        {
+                            _msg = $"{td.Name} HAS NO LEVEL TO SPEND. CLEAR WAVES WITH IT.";
+                            return;
+                        }
+                        SkillLevels.TakeReinforcement(td, r.Name);
+                        Dirty = true; _buildRev++;
+                        _msg = $"{r.Name}: {r.Line.ToUpperInvariant()}";
+                        return;
+                    }
+
+                if (RespecBtn.Contains(hit))
+                {
+                    SkillLevels.Respec(td.Id);
+                    Dirty = true; _buildRev++;
+                    _msg = $"{td.Name} IS UNSPENT AGAIN. EVERY LEVEL IT EARNED IS STILL THERE.";
+                    return;
+                }
+            }
+            return;   // the tree owns every click on this panel while it is showing
+        }
 
         // PICKING FROM THE LIBRARY. A skill you have not learned is not silently inert — it says
         // which road teaches it, because "why can I not click this" is the one question a locked
@@ -973,43 +1038,11 @@ public sealed class WeaveScreen
             var chosen = SkillLevels.VariationOf(resolved);
             var free = SkillLevels.FreeOn(resolved.Id);
 
-            if (chosen is null && free > 0)
-            {
-                // A LEVEL IS WAITING. The two variations are offered where the skill's name would be,
-                // because deciding what this skill IS is the more urgent sentence — and the name is
-                // already on the row above, in the Source-and-Form line.
-                for (var vi = 0; vi < resolved.Variations.Count && vi < 2; vi++)
-                {
-                    var vb = VariationBtn(i, vi);
-                    var overV = vb.Contains(hit);
-                    _ui.Fill(b, vb, Gold * (overV ? 0.32f : 0.14f));
-                    Outline(b, vb, Gold, overV ? 2 : 1);
-                    _ui.TextCenter(b, Fit(resolved.Variations[vi].Name, vb.Width - 8), vb.Center.X, vb.Y + 2, Gold);
-                }
-            }
-            else if (chosen is not null && free > 0
-                     && chosen.Reinforcements.Where(r => !SkillLevels.HasReinforcement(resolved.Id, r.Name))
-                               .ToList() is { Count: > 0 } open)
-            {
-                // A LEVEL IS WAITING AND THE SKILL ALREADY KNOWS WHAT IT IS. Now the level buys one of
-                // the variation's reinforcements, in the same two-across strip the variations used —
-                // the question has not changed, only the answers have.
-                //
-                // TWO AT A TIME, not all three. Three buttons across this strip leave about sixty
-                // pixels each, and the first capture of it read "DEEP… SEDI… SILT" — a purchase whose
-                // name the player cannot finish reading is not a choice they can make. The third
-                // appears once one of these is bought, and all three are bought by level 4 anyway, so
-                // what is deferred is the ORDER rather than the content.
-                for (var ri = 0; ri < open.Count && ri < 2; ri++)
-                {
-                    var rb = VariationBtn(i, ri);
-                    var overR = rb.Contains(hit);
-                    _ui.Fill(b, rb, Gold * (overR ? 0.32f : 0.14f));
-                    Outline(b, rb, Gold, overR ? 2 : 1);
-                    _ui.TextCenter(b, Fit(open[ri].Name, rb.Width - 8), rb.Center.X, rb.Y + 2, Gold);
-                }
-            }
-            else
+            // THE ROW REPORTS; THE PANEL ACTS. The variations and reinforcements used to be bought
+            // from two buttons wedged into this strip, at about sixty pixels each — the first capture
+            // of three across read "DEEP… SEDI… SILT". A purchase whose name you cannot finish reading
+            // is not a choice, so the whole skill tree moved to the middle column where it has room,
+            // and the row went back to saying what a row is for: what this slot currently IS.
             {
                 // The skill, what it was taken as, and how much of that variation is bought. The count
                 // is spelled out rather than shown as pips: a player who cannot see how much is left
@@ -1309,6 +1342,28 @@ public sealed class WeaveScreen
         }
         var cur = skills[_slot];
 
+        // THE TWO FACES. Named for the question each answers, not for what they contain.
+        for (var t = 0; t < 2; t++)
+        {
+            var tb = Tab(t);
+            var on = _tab == t;
+            var over = tb.Contains(hit);
+            _ui.Fill(b, tb, Gold * (on ? 0.22f : over ? 0.12f : 0.05f));
+            Outline(b, tb, on ? Gold : Slate, on ? 2 : 1);
+            _ui.TextCenter(b, t == 0 ? "YOUR SKILLS" : "THIS SLOT", tb.Center.X, tb.Y + 7,
+                           on ? Gold : over ? Bone : Slate);
+        }
+
+        // THE READOUT BELONGS TO THE PAGE, NOT TO A FACE. Drawing it only under the library lost the
+        // build's own numbers the moment a player opened a skill — and comparison is the one thing the
+        // loadout literature is unanimous about: the delta has to be on screen while you decide.
+        if (_tab == 1)
+        {
+            DrawSkillTree(b, hit, cur);
+            DrawReadout(b, null, null);
+            return;
+        }
+
         _ui.TextCenterBig(b, "YOUR SKILLS", PickPanel.Center.X, UiKit.TitleTop(PickPanel), Gold, UiTypography.PanelTitle);
         _ui.TextCenter(b, "LEARNED ON THE MASTERY TREE · PICK ONE FOR THIS SLOT",
                        PickPanel.Center.X, UiKit.CaptionTop(PickPanel), Slate);
@@ -1391,6 +1446,109 @@ public sealed class WeaveScreen
     /// next click lands on. This says it in the game's own terms (the Source gem, the Form glyph, the
     /// composed name), so the answer is a picture rather than a sentence.
     /// </remarks>
+    /// <summary>
+    /// The selected slot's own tree: what its skill becomes, and what that choice buys next.
+    /// </summary>
+    /// <remarks>
+    /// This is the depth the design promised and the row could not hold. A skill levels by being used
+    /// (four levels, at 4/16/36/64 waves cleared); the first level picks one of two VARIATIONS, and
+    /// each variation carries its own SOURCE — the designer folded the element choice onto this fork
+    /// rather than adding a layer. The three levels after it buy that variation's REINFORCEMENTS.
+    ///
+    /// Respec is free and gives every level back, which is stated on the button rather than hidden in
+    /// a tooltip: a per-skill tree that punishes experimenting is the known failure of the system this
+    /// copies, and a player who cannot see that it is free will assume it is not.
+    /// </remarks>
+    /// <summary>Open the slot's own tree — the capture fixture's way in to the page under test.</summary>
+    public void DevOpenSkillTree() => _tab = 1;
+
+    private void DrawSkillTree(SpriteBatch b, Point hit, PlayerLoadout.SkillChoice cur)
+    {
+        var kinds = BuildComposer.SlotKinds(
+            Loadout.Skills.Select(k => new BuildComposer.SkillPick(k.Source, k.Form, k.VowId, "", k.Passive)).ToList(),
+            Loadout.SkillCapacity);
+        var def = SkillCatalogue.Resolve(cur.Form, _slot < kinds.Count && kinds[_slot]);
+        var chosen = SkillLevels.VariationOf(def);
+        var free = SkillLevels.FreeOn(def.Id);
+        var level = SkillLevels.LevelOf(def.Id);
+        var uses = SkillLevels.UsesOf(def.Id);
+
+        // ── THE HEADER: what this is, and what it does in one line. ──────────────────────────────
+        _ui.TextBig(b, def.Name, PickPanel.X + PickPad, TreeTop, Gold, UiTypography.PanelTitle);
+        _ui.Text(b, def.TakesABeat ? "ACTIVE" : "PASSIVE", PickPanel.Right - PickPad - 70, TreeTop + 6,
+                 def.TakesABeat ? Gold : Met);
+        DrawWrapped(b, def.Line, PickPanel.X + PickPad, TreeTop + 36, PickPanel.Width - PickPad * 2, Slate,
+                    TreeTop + 92);
+
+        // ── THE LEVEL LINE. Says where the next one comes from, because "use it" is the whole rule
+        //    and a player who does not know that will look for a currency that does not exist. ────
+        var next = SkillProgress.UsesForLevel(level + 1);
+        var progress = level >= SkillProgress.MaxLevel
+            ? $"LEVEL {level} \u00b7 FULLY LEVELLED"
+            : $"LEVEL {level} \u00b7 NEXT AT {next} WAVES CLEARED WITH IT ({uses}/{next})";
+        _ui.Text(b, free > 0 ? progress + $"   \u00b7   {free} TO SPEND" : progress,
+                 PickPanel.X + PickPad, TreeTop + 100, free > 0 ? Gold : Slate);
+
+        // ── THE FORK. Two cards, each naming the SOURCE it commits the skill to. ─────────────────
+        _ui.Text(b, "WHAT IT BECOMES", PickPanel.X + PickPad, TreeTop + 128, Slate);
+        for (var vi = 0; vi < def.Variations.Count && vi < 2; vi++)
+        {
+            var v = def.Variations[vi];
+            var card = VarCard(vi);
+            var taken = chosen?.Name == v.Name;
+            var other = chosen is not null && !taken;
+            var can = chosen is null && free > 0;
+            var over = card.Contains(hit) && can;
+
+            var col = SourceColor.GetValueOrDefault(v.Source, Bone);
+            _ui.Fill(b, card, (taken ? col : Bone) * (taken ? 0.20f : other ? 0.03f : over ? 0.14f : 0.07f));
+            Outline(b, card, other ? Dim : taken ? col : can ? Gold : Slate, taken || over ? 2 : 1);
+
+            _ui.TextBig(b, v.Name, card.X + 10, card.Y + 8, other ? Dim : taken ? Bone : Gold, UiTypography.Body);
+            // THE SOURCE IS THE OTHER HALF OF THIS CHOICE, so it is drawn as loud as the name.
+            _ui.Text(b, SourceName(v.Source), card.Right - 74, card.Y + 11, other ? Dim : col);
+            DrawWrapped(b, v.Line, card.X + 10, card.Y + 34, card.Width - 20,
+                        other ? Dim : Slate, card.Bottom - 6);
+        }
+
+        // ── AND WHAT IT BUYS NEXT. ───────────────────────────────────────────────────────────────
+        if (chosen is null)
+        {
+            _ui.TextCenter(b, free > 0 ? "TAKE ONE, AND ITS THREE REINFORCEMENTS OPEN BELOW."
+                                       : "CLEAR WAVES WITH THIS SKILL TO EARN ITS FIRST LEVEL.",
+                           PickPanel.Center.X, TreeTop + 400, Slate);
+            return;
+        }
+
+        var bought = chosen.Reinforcements.Count(r => SkillLevels.HasReinforcement(def.Id, r.Name));
+        _ui.Text(b, $"{chosen.Name}'S REINFORCEMENTS   {bought}/{chosen.Reinforcements.Count}",
+                 PickPanel.X + PickPad, TreeTop + 358, Slate);
+
+        for (var ri = 0; ri < chosen.Reinforcements.Count && ri < 3; ri++)
+        {
+            var r = chosen.Reinforcements[ri];
+            var card = ReinfCard(ri);
+            var have = SkillLevels.HasReinforcement(def.Id, r.Name);
+            var can = !have && free > 0;
+            var over = card.Contains(hit) && can;
+
+            _ui.Fill(b, card, (have ? Met : Gold) * (have ? 0.16f : over ? 0.20f : can ? 0.10f : 0.04f));
+            Outline(b, card, have ? Met : can ? Gold : Dim, have || over ? 2 : 1);
+            _ui.Text(b, Fit(r.Name, card.Width - 16), card.X + 8, card.Y + 8,
+                     have ? Bone : can ? Gold : Dim);
+            DrawWrapped(b, r.Line, card.X + 8, card.Y + 28, card.Width - 16,
+                        have ? Slate : can ? Slate : Dim, card.Bottom - 4);
+        }
+
+        // ── RESPEC, and it says the price out loud because the price is nothing. ─────────────────
+        var rb2 = RespecBtn;
+        var overR = rb2.Contains(hit);
+        _ui.Fill(b, rb2, Ember * (overR ? 0.22f : 0.10f));
+        Outline(b, rb2, overR ? Ember : Slate, overR ? 2 : 1);
+        _ui.TextCenter(b, "GIVE THESE LEVELS BACK \u00b7 FREE, AND YOU KEEP EVERY LEVEL EARNED",
+                       rb2.Center.X, rb2.Y + 9, overR ? Ember : Slate);
+    }
+
     private void DrawSlotBanner(SpriteBatch b, PlayerLoadout.SkillChoice cur)
     {
         var x = UiKit.ContentLeft(PickPanel);

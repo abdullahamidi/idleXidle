@@ -2063,6 +2063,7 @@ public class Game1 : Game
                         _loadout.SetForm(slot, form);
                         _loadout.SetPassive(slot, passive!.Value);
                     }
+                    _weave.DevOpenSkillTree();
                     // ALL FOUR STATES OF A SKILL'S OWN LEVELS, one per slot, so a single shot certifies
                     // the whole ladder. Posing one state at a time is how the reinforcement strip could
                     // have shipped unphotographed the way the variation strip nearly did: a fixture that
