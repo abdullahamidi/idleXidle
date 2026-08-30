@@ -27,7 +27,13 @@ public static class BuildComposer
     /// one stays passive, while a player who deliberately puts one in an active slot gets SNARE's
     /// REPAY instead.
     /// </param>
-    public readonly record struct SkillPick(Source Source, Form Form, string? VowId, string Name, bool? Passive = null);
+    /// <summary>
+    /// One slot's worth of choice. <see cref="SkillId"/> names the skill outright when the player
+    /// picked it from the library; without one the Form and the slot kind resolve it, which is how
+    /// every save written before 2026-08-30 still says what it meant.
+    /// </summary>
+    public readonly record struct SkillPick(Source Source, Form Form, string? VowId, string Name,
+                                            bool? Passive = null, string? SkillId = null);
 
     /// <summary>
     /// Which slot each woven skill lands in — <c>true</c> for a passive slot.
@@ -76,6 +82,14 @@ public static class BuildComposer
             // THE PLAYER'S OWN CHOICE FIRST, and it is final. A slot's kind decides WHICH of its
             // style's two skills this is, so it is a decision rather than a derivation; everything
             // below is only what happens when nobody has chosen.
+            // A NAMED SKILL BRINGS ITS OWN KIND. PRESS is a Field whatever slot it lands in, so the
+            // walk cannot put it in an active slot and then wonder why the beat budget does not add up.
+            if (skills[i].SkillId is { } named && SkillCatalogue.Find(named) is { } def0)
+            {
+                if (!def0.TakesABeat) { passive[i] = true; continue; }
+                actives++;
+                continue;
+            }
             if (skills[i].Passive is { } chosen)
             {
                 if (chosen) { passive[i] = true; continue; }
@@ -152,7 +166,11 @@ public static class BuildComposer
             var ability = new WovenAbility { Name = s.Name, Source = s.Source, Form = s.Form, Vow = vow };
             // The skill's own timing seeds its cooldown. A beat-counted skill still counts BEATS in
             // the fight; this is the millisecond figure the readouts and the wave-length rule use.
-            var def = SkillCatalogue.Resolve(s.Form, passive[i]);
+            // THE ID WINS when there is one: the library named this skill, and no Form-and-kind
+            // round trip can contradict it. Without one it is an old save, and the Form resolves it.
+            var def = s.SkillId is { } id && SkillCatalogue.Find(id) is { } named
+                ? named
+                : SkillCatalogue.Resolve(s.Form, passive[i]);
             // THE GATE, AND IT IS UNCONDITIONAL NOW. You weave what you know: all twelve skills are
             // learned on the mastery tree since 2026-08-30, so there is no longer a free half for a
             // spill to fall back on. The exemption a spill used to get existed only to protect the six

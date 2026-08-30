@@ -38,7 +38,18 @@ public sealed class PlayerLoadout
     /// and so a save that predates the field loads with the composer's spill rule sorting the
     /// overflow exactly as it used to.
     /// </remarks>
-    public sealed record SkillChoice(Source Source, Form Form, string? VowId, bool? Passive = null);
+    /// <summary>
+    /// One woven slot. <see cref="SkillId"/> is what the player chose; the rest is history.
+    /// </summary>
+    /// <remarks>
+    /// A slot used to BE a Source and a Form, and the skill was composed from the pair. The designer
+    /// retired that on 2026-08-30 — a skill is learned on the mastery tree now and has its own depth —
+    /// so the slot names the skill outright. <c>Source</c> and <c>Form</c> stay for one reason each:
+    /// Form is how a save written before today says which skill it meant, and Source is the fallback
+    /// element for a skill whose variation has not been chosen yet (the variation owns the Source now).
+    /// </remarks>
+    public sealed record SkillChoice(Source Source, Form Form, string? VowId, bool? Passive = null,
+                                     string? SkillId = null);
 
     private readonly List<SkillChoice> _skills = new();
     private readonly List<string> _keystoneIds = new();
@@ -51,7 +62,7 @@ public sealed class PlayerLoadout
     /// build when it changed — no revision counter to forget in a mutator.
     /// </summary>
     public string Signature =>
-        string.Join(";", _skills.Select(s => $"{s.Source}:{s.Form}:{s.VowId}")) + "|" + string.Join(",", _keystoneIds)
+        string.Join(";", _skills.Select(s => $"{s.SkillId ?? $"{s.Source}:{s.Form}"}:{s.VowId}")) + "|" + string.Join(",", _keystoneIds)
         + $"|{SkillCapacity}|{KeystoneCapacity}";
     public IReadOnlyList<string> KeystoneIds => _keystoneIds;
 
@@ -167,6 +178,23 @@ public sealed class PlayerLoadout
     {
         if (!InRange(slot)) return;
         _skills[slot] = _skills[slot] with { Form = form };
+    }
+
+    /// <summary>
+    /// Put a named SKILL in a slot — what picking one from the library does.
+    /// </summary>
+    /// <remarks>
+    /// It writes the Form and the kind alongside the id, so every reader that still speaks Form (the
+    /// hunt rail's art, the affinity hexagon, an old save round-trip) keeps working while the id is
+    /// what actually decides the skill.
+    /// </remarks>
+    public void SetSkill(int slot, string skillId)
+    {
+        if (!InRange(slot) || SkillCatalogue.Find(skillId) is not { } def) return;
+        var form = def.LegacyForm
+                   ?? (def.TakesABeat ? SkillCatalogue.PassiveOf(def.Style) : SkillCatalogue.ActiveOf(def.Style))
+                       .LegacyForm!.Value;
+        _skills[slot] = _skills[slot] with { SkillId = def.Id, Form = form, Passive = !def.TakesABeat };
     }
 
     /// <summary>

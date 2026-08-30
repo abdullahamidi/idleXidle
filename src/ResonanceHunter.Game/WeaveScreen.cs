@@ -431,6 +431,29 @@ public sealed class WeaveScreen
     /// <summary>FORM's first cell row — its heading and caption, on the same rhythm the panel's own use.</summary>
     private static int FormTop => FormTitleTop + (UiTypography.PanelBodyTop - UiTypography.PanelTitleTop);
 
+    // ── THE LIBRARY. Six rows, one per style, each holding that style's two skills.
+    //
+    // The panel used to be a SOURCE grid over a FORM grid and the skill was the pair — that door is
+    // gone (the designer, 2026-08-30: "Artık source ve form skill oluşturmamın bir önemi kalmadı").
+    // What replaces it is the list of things you can actually put in a slot, which is the question
+    // the panel was always standing in for.
+    //
+    // GROUPED BY STYLE ON PURPOSE, and every one of the twelve is drawn whether you have it or not.
+    // A library that hides what you have not learned cannot teach the shape of the game, and the
+    // dim rows are the pull toward the tree: each says which road teaches it.
+    private const int LibRows = 6;
+    private static int LibTop => UiKit.BodyTop(PickPanel);
+    private static int LibRowH => (PickPanel.Bottom - 24 - LibTop) / LibRows;
+
+    private static Rectangle LibCell(int style, int which)
+    {
+        var w = (PickPanel.Width - PickPad * 2 - LibStyleW - 10) / 2;
+        return new(PickPanel.X + PickPad + LibStyleW + which * (w + 10),
+                   LibTop + style * LibRowH, w, LibRowH - 10);
+    }
+
+    private const int LibStyleW = 92;
+
     private static Rectangle SourceCell(int i) =>
         new(PickPanel.X + PickPad + i % 3 * CellPitch, SourceTop + i / 3 * CellRow, CellW, CellH);
 
@@ -713,25 +736,27 @@ public sealed class WeaveScreen
 
         if (_slot >= skills.Count) return;
 
-        for (var i = 0; i < Sources.Length; i++)
-            if (SourceCell(i).Contains(hit))
+        // PICKING FROM THE LIBRARY. A skill you have not learned is not silently inert — it says
+        // which road teaches it, because "why can I not click this" is the one question a locked
+        // control must always answer.
+        for (var st = 0; st < LibRows; st++)
+        for (var which = 0; which < 2; which++)
+        {
+            if (!LibCell(st, which).Contains(hit)) continue;
+            var style = (Style)st;
+            var def = which == 0 ? SkillCatalogue.ActiveOf(style) : SkillCatalogue.PassiveOf(style);
+            if (!KnownSkills().Contains(def.Id))
             {
-                var changed = skills[_slot].Source != Sources[i];
-                Loadout.SetSource(_slot, Sources[i]); Dirty = true; _buildRev++;
-                // ONLY WHEN IT CHANGED. Re-picking what is already picked is a no-op, and a flourish
-                // on a no-op teaches the player that the flourish means nothing.
-                if (changed) { _slotFlash[_slot] = SetFlashSeconds; Sound?.Play("sfx_weave", 0.45f); }
+                _msg = $"{def.Name} IS LEARNED ON {style.ToString().ToUpperInvariant()}'S ROAD, ON THE MASTERY TREE.";
                 return;
             }
-
-        for (var i = 0; i < Forms.Length; i++)
-            if (FormCell(i).Contains(hit))
-            {
-                var changed = skills[_slot].Form != Forms[i];
-                Loadout.SetForm(_slot, Forms[i]); Dirty = true; _buildRev++;
-                if (changed) { _slotFlash[_slot] = SetFlashSeconds; Sound?.Play("sfx_weave", 0.45f); }
-                return;
-            }
+            var changed = skills[_slot].SkillId != def.Id;
+            Loadout.SetSkill(_slot, def.Id); Dirty = true; _buildRev++;
+            // ONLY WHEN IT CHANGED. Re-picking what is already picked is a no-op, and a flourish
+            // on a no-op teaches the player that the flourish means nothing.
+            if (changed) { _slotFlash[_slot] = SetFlashSeconds; Sound?.Play("sfx_weave", 0.45f); }
+            return;
+        }
 
         var openRow = OpenBindRow(known);
 
@@ -784,7 +809,7 @@ public sealed class WeaveScreen
         // you looked at and this was the page you used. The rail's BUILD tile opens this directly.
         _ui.TextCenterBig(b, "BUILD", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
-        _ui.TextCenterBig(b, "A SKILL IS A SOURCE, A FORM, AND THE VOW YOU PUT ON IT",
+        _ui.TextCenterBig(b, "A SKILL IS LEARNED ON THE MASTERY TREE, THEN WOVEN INTO A SLOT",
                           960, 80, Slate, UiTypography.Secondary);
 
         // THE DISCIPLINE LINE — the Nen frame this game was born from, finally said out loud: your
@@ -852,7 +877,7 @@ public sealed class WeaveScreen
     private void DrawSlots(SpriteBatch b, Point hit)
     {
         _ui.Panel(b, SlotsPanel);
-        _ui.TextCenterBig(b, "YOUR SKILLS", SlotsPanel.Center.X, UiKit.TitleTop(SlotsPanel), Gold, UiTypography.PanelTitle);
+        _ui.TextCenterBig(b, "WHAT YOU ARE WEAVING", SlotsPanel.Center.X, UiKit.TitleTop(SlotsPanel), Gold, UiTypography.PanelTitle);
 
         var skills = Loadout.Skills;
         var ctx = Context;
@@ -923,7 +948,13 @@ public sealed class WeaveScreen
             _ui.Fill(b, fbox, new Color(0x0C, 0x09, 0x14) * 0.55f);
             _ui.Icon(b, $"icon_form_{s.Form.ToString().ToLowerInvariant()}", fbox, col);
 
-            _ui.TextBig(b, Fit($"{SourceName(s.Source)} {FormName(s.Form)}", 158), row.X + 134, row.Y + 8, Bone, UiTypography.Body);
+            // THE SKILL'S OWN NAME, not the Source and Form it used to be composed from. Its element
+            // is written beside it because the variation owns that now, and a player still has to be
+            // able to read what a slot is made of.
+            var rowDef = SkillCatalogue.Resolve(s.Form, i < passiveSlot.Count && passiveSlot[i]);
+            _ui.TextBig(b, Fit(rowDef.Name, 100), row.X + 134, row.Y + 8, Bone, UiTypography.Body);
+            _ui.Text(b, SourceName(s.Source), row.X + 134 + 104, row.Y + 11,
+                     SourceColor.GetValueOrDefault(s.Source, Slate));
 
             // THE SLOT'S KIND, as a SWITCH rather than a label. ACTIVE and PASSIVE are the genre's
             // own terms and the ones the designer asked for, and the line under the name says which
@@ -1183,7 +1214,7 @@ public sealed class WeaveScreen
             // SIZED AND INKED FOR THE COLUMN. At the default 32px raster this measured ~540px against a
             // 440px column, so it ran across the panel's ornate frame and into the gutter — and in Dim
             // it was barely visible while doing it.
-            _ui.TextBig(b, "hover a SOURCE or FORM to compare", x, y, Slate, UiTypography.Secondary);
+            _ui.TextBig(b, "hover a skill to compare", x, y, Slate, UiTypography.Secondary);
             y += 54;
         }
 
@@ -1259,6 +1290,14 @@ public sealed class WeaveScreen
     private float Dps(PlayerLoadout loadout, Hunter hunter)
         => DamageBench.Measure(loadout.ToBuild(Tree, Mastery, Character), hunter).Dps;
 
+    /// <summary>Every skill this champion can weave: the roads walked, plus what it was born with.</summary>
+    private IReadOnlySet<string> KnownSkills()
+    {
+        var set = Mastery.LearnedSkills().ToHashSet(StringComparer.Ordinal);
+        if (Character?.StartingSkillId is { } born) set.Add(born);
+        return set;
+    }
+
     private void DrawPicker(SpriteBatch b, Point hit)
     {
         _ui.PanelQuiet(b, PickPanel);
@@ -1270,87 +1309,47 @@ public sealed class WeaveScreen
         }
         var cur = skills[_slot];
 
-        _ui.TextCenterBig(b, "SOURCE", PickPanel.Center.X, UiKit.TitleTop(PickPanel), Gold, UiTypography.PanelTitle);
-        _ui.TextCenter(b, "WHAT IT IS MADE OF", PickPanel.Center.X, UiKit.CaptionTop(PickPanel), Slate);
+        _ui.TextCenterBig(b, "YOUR SKILLS", PickPanel.Center.X, UiKit.TitleTop(PickPanel), Gold, UiTypography.PanelTitle);
+        _ui.TextCenter(b, "LEARNED ON THE MASTERY TREE · PICK ONE FOR THIS SLOT",
+                       PickPanel.Center.X, UiKit.CaptionTop(PickPanel), Slate);
 
-        // What the player is ASKING about — whatever the cursor is over, falling back to what they
-        // already picked. Hovering is the question "what is this?", and until now the screen had no
-        // answer to it at all: six Source icons and six Form icons, named and otherwise silent.
+        var known = KnownSkills();
         Source? hoverSource = null;
         Form? hoverForm = null;
 
-        for (var i = 0; i < Sources.Length; i++)
+        for (var st = 0; st < LibRows; st++)
         {
-            var cell = SourceCell(i);
-            var s = Sources[i];
-            var over = cell.Contains(hit);
-            if (over) hoverSource = s;
-            var on = cur.Source == s;
-            var col = SourceColor.GetValueOrDefault(s, Bone);
-            PickCell(b, cell, on, over, col);
-            // THE GEM SITS IN ITS OWN LIGHT. A source-tinted halo behind the art gives the six cells
-            // their identity at a glance — the icons are close in silhouette and were reading as one
-            // grey grid until the colour was doing something other than labelling the caption.
-            var art = new Rectangle(cell.Center.X - 36, cell.Y + 16, 72, 72);
-            _ui.Diamond(b, new Rectangle(art.X - 6, art.Y - 6, art.Width + 12, art.Height + 12),
-                        col * (on ? 0.34f : over ? 0.22f : 0.10f));
-            if (_ui.Assets.Get($"source_{s.ToString().ToLowerInvariant()}") is { } gem)
-                b.Draw(gem, art, on || over ? Color.White : Color.White * 0.72f);
-            else _ui.Diamond(b, art, col);
-            _ui.TextCenterBig(b, SourceName(s), cell.Center.X, cell.Bottom - 34,
-                              on ? Bone : over ? col : col * 0.85f, UiTypography.Body);
-        }
+            var style = (Style)st;
+            var label = new Rectangle(PickPanel.X + PickPad, LibTop + st * LibRowH, LibStyleW, LibRowH - 10);
+            // THE STYLE'S NAME DOWN THE LEFT, once per pair. It is the axis the mastery tree is
+            // organised by, so naming it here is what connects the two screens.
+            _ui.Text(b, style.ToString().ToUpperInvariant(), label.X, label.Center.Y - 8, Slate);
 
-        _ui.TextCenterBig(b, "FORM", PickPanel.Center.X, FormTitleTop, Gold, UiTypography.PanelTitle);
-        _ui.TextCenter(b, "WHAT IT DOES", PickPanel.Center.X, FormTitleTop + (UiTypography.PanelCaptionTop - UiTypography.PanelTitleTop), Slate);
-
-        var wanted = GearWants();
-
-        var slotCol = SourceColor.GetValueOrDefault(cur.Source, Bone);
-
-        for (var i = 0; i < Forms.Length; i++)
-        {
-            var cell = FormCell(i);
-            var f = Forms[i];
-            var over = cell.Contains(hit);
-            if (over) hoverForm = f;
-            var on = cur.Form == f;
-            PickCell(b, cell, on, over, slotCol);
-
-            // Tinted by the slot's SOURCE, so the picker previews the pairing rather than showing six
-            // grey shapes — the skill you are building is a Source AND a Form, never either alone.
-            var glyphTint = on ? slotCol : over ? Bone : Slate;
-            var art = new Rectangle(cell.Center.X - 34, cell.Y + 18, 68, 68);
-            if (on) _ui.Diamond(b, new Rectangle(art.X - 6, art.Y - 6, art.Width + 12, art.Height + 12), slotCol * 0.28f);
-            if (!_ui.Icon(b, $"icon_form_{f.ToString().ToLowerInvariant()}", art, glyphTint))
-                _ui.Diamond(b, new Rectangle(cell.Center.X - 24, cell.Y + 26, 48, 48), glyphTint);
-            _ui.TextCenterBig(b, FormName(f), cell.Center.X, cell.Bottom - 34,
-                              on ? Bone : over ? Bone : Slate, UiTypography.Body);
-
-            // THE HEXAGON'S VERDICT on this Form for YOUR discipline, on the cell itself — the picker
-            // teaches the class while you choose. A CHIP now rather than loose text: at 140px tall the
-            // cell has room for the number to be readable instead of tucked into a corner.
-            if (Discipline is { } dpick)
+            for (var which = 0; which < 2; which++)
             {
-                var factor = FormBehaviour.AffinityFactor(dpick, f);
-                var (aTag, aCol) = factor >= 1.99f ? ("x2.0", Gold)
-                    : factor >= 1.14f ? ("x1.15", Met)
-                    : factor >= 0.74f ? ("x0.75", Slate)
-                    : ("x0.45", Ember);
-                var chip = new Rectangle(cell.X + 8, cell.Y + 8, 54, 22);
-                _ui.Fill(b, chip, new Color(0x0C, 0x09, 0x14) * 0.85f);
-                _ui.Fill(b, new Rectangle(chip.X, chip.Bottom - 2, chip.Width, 2), aCol * 0.9f);
-                _ui.TextCenter(b, aTag, chip.Center.X, chip.Y + 4, aCol);
-                if (factor >= 1.99f && !on) Outline(b, cell, Gold, 2);
-            }
+                var def = which == 0 ? SkillCatalogue.ActiveOf(style) : SkillCatalogue.PassiveOf(style);
+                var cell = LibCell(st, which);
+                var have = known.Contains(def.Id);
+                var over = cell.Contains(hit);
+                var on = _slot < Loadout.Skills.Count && Loadout.Skills[_slot].SkillId == def.Id;
 
-            // YOUR GEAR IS WAITING FOR THIS ONE. A small mark rather than a line of text: the point is
-            // to draw the eye, not to explain here — the hover card spells out which item wants it.
-            if (wanted.Any(w => w.Form == f))
-                _ui.Fill(b, new Rectangle(cell.Right - 24, cell.Y + 12, 12, 12), Met);
+                if (over && have) { hoverForm = def.LegacyForm; hoverSource = Loadout.Skills.Count > _slot ? Loadout.Skills[_slot].Source : null; }
+
+                // LOCKED IS DIM, NOT HIDDEN. The whole catalogue is visible so the shape of the game
+                // is legible from the first wave, and each locked cell names the road that opens it.
+                var tint = !have ? Dim : on ? Gold : over ? Bone : Slate;
+                _ui.Fill(b, cell, (on ? Gold : Bone) * (!have ? 0.04f : on ? 0.20f : over ? 0.12f : 0.06f));
+                Outline(b, cell, !have ? Dim : on ? Gold : Slate, on || over ? 2 : 1);
+
+                _ui.TextBig(b, def.Name, cell.X + 10, cell.Y + 8, tint, UiTypography.Body);
+                // THE KIND, as a word rather than a colour: it decides which budget the slot spends.
+                _ui.Text(b, def.TakesABeat ? "ACTIVE" : "PASSIVE", cell.Right - 66, cell.Y + 10,
+                         !have ? Dim : def.TakesABeat ? Gold : Met);
+                DrawWrapped(b, have ? def.Line : $"MASTERY · {style.ToString().ToUpperInvariant()}'S ROAD",
+                            cell.X + 10, cell.Y + 30, cell.Width - 20, !have ? Dim : Slate, cell.Bottom - 4);
+            }
         }
 
-        DrawSlotBanner(b, cur);
         DrawReadout(b, hoverSource, hoverForm);
 
         // THE CARD IS NOT DRAWN HERE. It has to sit over the panels beside it, and this method runs
