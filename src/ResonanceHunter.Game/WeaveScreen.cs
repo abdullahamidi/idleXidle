@@ -481,7 +481,7 @@ public sealed class WeaveScreen
     private static Rectangle ReinfCard(int which)
     {
         var w = (PickPanel.Width - PickPad * 2 - 16) / 3;
-        return new(PickPanel.X + PickPad + which * (w + 8), TreeTop + 384, w, 200);
+        return new(PickPanel.X + PickPad + which * (w + 8), TreeTop + 384, w, 150);
     }
 
     /// <summary>Directly under the reinforcements, not pinned to the panel's floor.</summary>
@@ -491,7 +491,7 @@ public sealed class WeaveScreen
     /// thing this button must not read as is a page-level action.
     /// </remarks>
     private static Rectangle RespecBtn
-        => new(PickPanel.X + PickPad, TreeTop + 610, PickPanel.Width - PickPad * 2, 38);
+        => new(PickPanel.X + PickPad, TreeTop + 560, PickPanel.Width - PickPad * 2, 38);
 
     private static Rectangle SourceCell(int i) =>
         new(PickPanel.X + PickPad + i % 3 * CellPitch, SourceTop + i / 3 * CellRow, CellW, CellH);
@@ -1006,18 +1006,22 @@ public sealed class WeaveScreen
             // was four gems and a wall of words — and the Form is the half that says what the skill DOES.
             if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } gem)
                 b.Draw(gem, new Rectangle(row.X + 28, row.Y + 12, 52, 52), Color.White);
-            // BESIDE THE GEM, NOT ON IT. A 26px badge tucked into the gem's corner drew the Strike
-            // sword as a two-pixel sliver against the gem's own ornament — unreadable, and worse than
-            // nothing because it looked like an artefact. It gets its own square and its own ground.
+            // BESIDE THE GEM, NOT ON IT. A 26px badge tucked into the gem's corner drew the glyph as a
+            // two-pixel sliver against the gem's own ornament — unreadable, and worse than nothing
+            // because it looked like an artefact. It gets its own square and its own ground.
+            //
+            // AND IT IS THE SKILL'S GLYPH, NOT THE FORM'S. A Form icon gave BLOW and PRESS the same
+            // picture, which is the one thing an icon is read for.
+            var rowDef0 = SkillCatalogue.Resolve(s.Form, i < passiveSlot.Count && passiveSlot[i]);
             var fbox = new Rectangle(row.X + 88, row.Y + 20, 38, 38);
             _ui.Fill(b, fbox, new Color(0x0C, 0x09, 0x14) * 0.55f);
-            _ui.Icon(b, $"icon_form_{s.Form.ToString().ToLowerInvariant()}", fbox, col);
+            if (!_ui.Icon(b, $"icon_skill_{rowDef0.Id}", fbox, col))
+                _ui.Icon(b, $"icon_form_{s.Form.ToString().ToLowerInvariant()}", fbox, col);
 
             // THE SKILL'S OWN NAME, not the Source and Form it used to be composed from. Its element
             // is written beside it because the variation owns that now, and a player still has to be
             // able to read what a slot is made of.
-            var rowDef = SkillCatalogue.Resolve(s.Form, i < passiveSlot.Count && passiveSlot[i]);
-            _ui.TextBig(b, Fit(rowDef.Name, 100), row.X + 134, row.Y + 8, Bone, UiTypography.Body);
+            _ui.TextBig(b, Fit(rowDef0.Name, 100), row.X + 134, row.Y + 8, Bone, UiTypography.Body);
             _ui.Text(b, SourceName(s.Source), row.X + 134 + 104, row.Y + 11,
                      SourceColor.GetValueOrDefault(s.Source, Slate));
 
@@ -1034,7 +1038,7 @@ public sealed class WeaveScreen
                            isPassive ? Met : Gold);
 
             // The skill this slot actually resolves to, under its Source and Form.
-            var resolved = SkillCatalogue.Resolve(s.Form, isPassive);
+            var resolved = rowDef0;
             var chosen = SkillLevels.VariationOf(resolved);
             var free = SkillLevels.FreeOn(resolved.Id);
 
@@ -1087,7 +1091,10 @@ public sealed class WeaveScreen
             // reporting an absence — "NO VOW" named the state and left the player to discover that a
             // seal from the right-hand column can be dropped here.
             var vow = Weaving.ById(s.VowId);
-            var seal = new Rectangle(row.X + 134, row.Y + 44, row.Width - 134 - 14, 24);
+            // AT +50, NOT +44. The state line above it starts at +30 and is fourteen pixels tall, so
+            // the socket's top edge landed exactly on the text's baseline and the two read as one
+            // smudged line. The row is 76 tall and this ends at 74 — the space was always there.
+            var seal = new Rectangle(row.X + 134, row.Y + 50, row.Width - 134 - 14, 24);
             if (vow is null)
             {
                 _ui.Fill(b, seal, new Color(0x0E, 0x0B, 0x16) * 0.7f);
@@ -1331,6 +1338,37 @@ public sealed class WeaveScreen
         return set;
     }
 
+    /// <summary>
+    /// One card: the nine-sliced plate every list cell on this screen sits on.
+    /// </summary>
+    /// <remarks>
+    /// The library, the variation fork and the reinforcements were three hand-drawn Fill+Outline
+    /// rectangles, which is what a placeholder looks like next to a nine-sliced panel. They share one
+    /// plate now, tinted by state, so the three lists read as one family and a state change is a
+    /// change of LIGHT rather than of construction.
+    /// </remarks>
+    private void Card(SpriteBatch b, Rectangle r, Color accent, bool on, bool over, bool locked)
+    {
+        // A FRAME HAS A MINIMUM SIZE, and this is where it is. `ui_panel_small`'s corner filigree ran
+        // straight through the text at card size — worse than the flat rectangles it replaced — and
+        // PanelQuiet, which the house rule does prescribe for anything inside a screen, still draws
+        // ornament that a 195px card cannot spare. So the two BIG cards (the variation fork) wear the
+        // house frame and the small ones wear a plain plate. It is the same decision the frame art
+        // itself makes by aspect ratio; it just has to be made by size as well.
+        if (r.Width >= 240) _ui.PanelQuiet(b, r, locked ? 0.45f : over ? 1f : 0.85f);
+        else
+        {
+            _ui.Fill(b, r, new Color(0x0E, 0x0B, 0x16) * (locked ? 0.5f : 0.8f));
+            Outline(b, r, locked ? Dim : on ? accent : over ? Bone : Slate, on || over ? 2 : 1);
+        }
+        // The state is LIGHT on the plate rather than a second edge at a different radius, which is
+        // the thing that makes a UI look assembled from parts.
+        var inner = new Rectangle(r.X + 5, r.Y + 5, r.Width - 10, r.Height - 10);
+        if (on) _ui.Fill(b, inner, accent * 0.20f);
+        else if (over && !locked) _ui.Fill(b, inner, Bone * 0.07f);
+        if (on) Outline(b, r, accent, 2);
+    }
+
     private void DrawPicker(SpriteBatch b, Point hit)
     {
         _ui.PanelQuiet(b, PickPanel);
@@ -1348,8 +1386,11 @@ public sealed class WeaveScreen
             var tb = Tab(t);
             var on = _tab == t;
             var over = tb.Contains(hit);
-            _ui.Fill(b, tb, Gold * (on ? 0.22f : over ? 0.12f : 0.05f));
-            Outline(b, tb, on ? Gold : Slate, on ? 2 : 1);
+            // THE GAME'S OWN TAB ART, the same pair the Gear screen uses. A hand-drawn rectangle
+            // beside a nine-sliced panel reads as a placeholder, and this screen had four of them.
+            if (_ui.Assets.Get(on ? "ui_tab_active" : "ui_tab_inactive") is { } ta)
+                b.Draw(ta, tb, on || over ? Color.White : Color.White * 0.72f);
+            else { _ui.Fill(b, tb, Gold * (on ? 0.22f : 0.05f)); Outline(b, tb, on ? Gold : Slate, 1); }
             _ui.TextCenter(b, t == 0 ? "YOUR SKILLS" : "THIS SLOT", tb.Center.X, tb.Y + 7,
                            on ? Gold : over ? Bone : Slate);
         }
@@ -1393,15 +1434,20 @@ public sealed class WeaveScreen
                 // LOCKED IS DIM, NOT HIDDEN. The whole catalogue is visible so the shape of the game
                 // is legible from the first wave, and each locked cell names the road that opens it.
                 var tint = !have ? Dim : on ? Gold : over ? Bone : Slate;
-                _ui.Fill(b, cell, (on ? Gold : Bone) * (!have ? 0.04f : on ? 0.20f : over ? 0.12f : 0.06f));
-                Outline(b, cell, !have ? Dim : on ? Gold : Slate, on || over ? 2 : 1);
+                Card(b, cell, Gold, on, over && have, !have);
 
-                _ui.TextBig(b, def.Name, cell.X + 10, cell.Y + 8, tint, UiTypography.Body);
+                // THE SKILL'S OWN GLYPH. Twelve of them, so BLOW and PRESS stop wearing the same
+                // picture — the rail and this list both showed the SOURCE gem, which is the element
+                // rather than the ability.
+                var ico = new Rectangle(cell.X + 8, cell.Y + 6, 30, 30);
+                if (!_ui.Icon(b, $"icon_skill_{def.Id}", ico, tint))
+                    _ui.Diamond(b, ico, tint * 0.6f);
+                _ui.TextBig(b, def.Name, cell.X + 44, cell.Y + 10, tint, UiTypography.Body);
                 // THE KIND, as a word rather than a colour: it decides which budget the slot spends.
                 _ui.Text(b, def.TakesABeat ? "ACTIVE" : "PASSIVE", cell.Right - 66, cell.Y + 10,
                          !have ? Dim : def.TakesABeat ? Gold : Met);
                 DrawWrapped(b, have ? def.Line : $"MASTERY · {style.ToString().ToUpperInvariant()}'S ROAD",
-                            cell.X + 10, cell.Y + 30, cell.Width - 20, !have ? Dim : Slate, cell.Bottom - 4);
+                            cell.X + 10, cell.Y + 42, cell.Width - 20, !have ? Dim : Slate, cell.Bottom - 6);
             }
         }
 
@@ -1501,14 +1547,20 @@ public sealed class WeaveScreen
             var over = card.Contains(hit) && can;
 
             var col = SourceColor.GetValueOrDefault(v.Source, Bone);
-            _ui.Fill(b, card, (taken ? col : Bone) * (taken ? 0.20f : other ? 0.03f : over ? 0.14f : 0.07f));
-            Outline(b, card, other ? Dim : taken ? col : can ? Gold : Slate, taken || over ? 2 : 1);
+            Card(b, card, col, taken, over, other);
 
-            _ui.TextBig(b, v.Name, card.X + 10, card.Y + 8, other ? Dim : taken ? Bone : Gold, UiTypography.Body);
-            // THE SOURCE IS THE OTHER HALF OF THIS CHOICE, so it is drawn as loud as the name.
-            _ui.Text(b, SourceName(v.Source), card.Right - 74, card.Y + 11, other ? Dim : col);
-            DrawWrapped(b, v.Line, card.X + 10, card.Y + 34, card.Width - 20,
-                        other ? Dim : Slate, card.Bottom - 6);
+            // THE SOURCE GEM, because the element is half of what this card commits to and a colour
+            // swatch is the fastest thing on screen to read.
+            var gem = new Rectangle(card.X + 10, card.Y + 8, 34, 34);
+            _ui.Diamond(b, new Rectangle(gem.X - 3, gem.Y - 3, gem.Width + 6, gem.Height + 6),
+                        col * (other ? 0.10f : taken ? 0.40f : 0.22f));
+            if (_ui.Assets.Get($"source_{v.Source.ToString().ToLowerInvariant()}") is { } gg)
+                b.Draw(gg, gem, other ? Color.White * 0.35f : Color.White);
+
+            _ui.TextBig(b, v.Name, card.X + 52, card.Y + 12, other ? Dim : taken ? Bone : Gold, UiTypography.Body);
+            _ui.Text(b, SourceName(v.Source), card.X + 52, card.Y + 34, other ? Dim : col);
+            DrawWrapped(b, v.Line, card.X + 12, card.Y + 62, card.Width - 24,
+                        other ? Dim : Slate, card.Bottom - 8);
         }
 
         // ── AND WHAT IT BUYS NEXT. ───────────────────────────────────────────────────────────────
@@ -1532,12 +1584,16 @@ public sealed class WeaveScreen
             var can = !have && free > 0;
             var over = card.Contains(hit) && can;
 
-            _ui.Fill(b, card, (have ? Met : Gold) * (have ? 0.16f : over ? 0.20f : can ? 0.10f : 0.04f));
-            Outline(b, card, have ? Met : can ? Gold : Dim, have || over ? 2 : 1);
-            _ui.Text(b, Fit(r.Name, card.Width - 16), card.X + 8, card.Y + 8,
+            Card(b, card, have ? Met : Gold, have, over, !have && !can);
+            _ui.Text(b, Fit(r.Name, card.Width - 20), card.X + 10, card.Y + 10,
                      have ? Bone : can ? Gold : Dim);
-            DrawWrapped(b, r.Line, card.X + 8, card.Y + 28, card.Width - 16,
-                        have ? Slate : can ? Slate : Dim, card.Bottom - 4);
+            // A BOUGHT ONE IS MARKED IN WORDS. Colour alone carries it for a player who reads colour;
+            // the mark carries it for everyone else. A tick glyph would have been the obvious choice
+            // and the font gate refused it — U+2713 is not in the proven set and would have drawn as
+            // nothing at all, which is the failure a second channel exists to prevent.
+            if (have) _ui.Text(b, "OWNED", card.Right - 52, card.Y + 10, Met);
+            DrawWrapped(b, r.Line, card.X + 10, card.Y + 32, card.Width - 20,
+                        have ? Slate : can ? Slate : Dim, card.Bottom - 8);
         }
 
         // ── RESPEC, and it says the price out loud because the price is nothing. ─────────────────

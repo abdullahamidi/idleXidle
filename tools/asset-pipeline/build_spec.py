@@ -196,6 +196,12 @@ STILL_STYLES = {
     # The rig style must say "ONLY" and name the exclusions explicitly. Without
     # that the model drew a whole hooded figure for every part, which is useless
     # for a cutout rig that composes parts itself.
+    # The glyph recipe without the word "heraldic", for motifs that word turns into a coat of arms.
+    "pictogram": "a simple flat pictogram of {subject}, in solid pale bone-white on an empty "
+                 "background, one uniform light tone, bold thick chunky silhouette, filling the "
+                 "frame. It is a plain stencil symbol: NO shield, NO crest, NO coat of arms, NO "
+                 "banner, NO ribbon, NO frame, NO border, NO badge, NO background, NO scene, NO text",
+
     "rig":       "ONLY {subject} and nothing else. A single detached body part lying alone, "
                  "cut out for a 2D puppet rig. NO full character, NO whole body, NO head unless "
                  "asked, NO other limbs. Dark fantasy hunter garb in bone-parchment cloth and "
@@ -710,6 +716,49 @@ def stills() -> list[dict]:
     }
     for fm, motif in form_glyph.items():
         add(f"icon_form_{fm}", "assets/art/UI/icons/forms", "glyph", motif,
+            width=192, height=192, shading="flat shading", detail="low detail", single_subject=True)
+
+    # --- SKILL glyphs: icon_skill_<id> (WeaveScreen library and tree, SoloExpeditionScreen rail)
+    #
+    # TWELVE, one per skill, because a skill is a thing you LEARN now rather than a Source crossed
+    # with a Form (designer, 2026-08-30). The rail and the library were both showing the SOURCE gem
+    # with the skill's name beside it, which meant BLOW and PRESS — the two HAMMER skills — wore the
+    # same picture. A player reads the icon first and the name second.
+    #
+    # Each motif is the skill's VERB, not its style: the pairs inside a style have to be told apart at
+    # 48px, so HAMMER is a falling hammer against a bearing weight, SNARE a sprung trap against a
+    # returned blow, and so on.
+    #
+    # FOUR OF THESE USE THE "pictogram" STYLE, NOT "glyph", AND THE REASON IS WORTH KEEPING. The glyph
+    # recipe says "flat heraldic emblem", and for a motif that already sounds like something on a coat
+    # of arms — a war hammer, a slab, falling drops, wavy bands — that one word wins: all four came
+    # back as a SHIELD with the motif quartered on it. The eight abstract motifs were unaffected. The
+    # fix is to drop the word and forbid the shape ("NO shield, NO crest, NO coat of arms"); the
+    # lesson is the same one SPREAD's glyph taught, that when a prompt fails repeatedly it is one WORD
+    # doing it and not the phrasing around it.
+    #
+    # TWO OF THE FOUR NEEDED A NEW MOTIF AS WELL, because the motif itself was heraldry: "three thick
+    # wavy bands stacked" is barry wavy, a real coat-of-arms field, and no amount of forbidding a
+    # shield stops a description of one. MIRE became a mud puddle with bubbles and PRESS an arrow
+    # bearing down on a bar — both say the verb without borrowing the vocabulary.
+    skill_glyph = {
+        "hammer_blow":  "a war hammer with a big rectangular head and a straight handle, pointing down",
+        "hammer_press": "one thick downward-pointing arrow pressing onto a flat horizontal bar beneath it",
+        "snare_repay":  "one broad arrow curving back on itself in a half circle, its head pointing back where it came from",
+        "snare_jaws":   "one closed toothed bear trap seen from the side, jaws shut tight together",
+        "sign_call":    "one upward chevron with three short rays fanning up from its point",
+        "sign_brand":   "one bold branding iron mark: a thick ring with a short straight stem below it",
+        "volley_spray": "five short arrows fanning outward from one point at the bottom, spreading wide",
+        "volley_weep":  "three large teardrop shapes falling, arranged in a triangle",
+        "field_pulse":  "one solid filled circle with two thick rings expanding outward around it",
+        "field_mire":   "a wide shallow puddle of thick mud with three round bubbles rising above it",
+        "drain_drink":  "one wide chalice with a thick stem, and one drop falling into its bowl",
+        "drain_wilt":   "one drooping flower on a bent stem, its head hanging straight down",
+    }
+    heraldry_bait = {"hammer_blow", "hammer_press", "volley_weep", "field_mire"}
+    for sk, motif in skill_glyph.items():
+        add(f"icon_skill_{sk}", "assets/art/UI/icons/skills",
+            "pictogram" if sk in heraldry_bait else "glyph", motif,
             width=192, height=192, shading="flat shading", detail="low detail", single_subject=True)
 
     # --- TRAIT ROAD glyphs: icon_road_<road> (PrestigeScreen)

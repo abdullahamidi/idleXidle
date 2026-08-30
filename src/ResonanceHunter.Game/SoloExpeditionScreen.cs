@@ -2986,22 +2986,38 @@ public sealed class SoloExpeditionScreen
                     b.Draw(sl, box, lit > 0f ? Color.Lerp(Color.White, Gold, lit) : Color.White * wake);
                 // §18.3 Layer 1: source-coloured inner glow (no Form-glyph asset ships, so the Source glyph is
                 // the central identity and the Form name labels it — a quieter composition per §36).
-                _ui.Diamond(b, new Rectangle(box.Center.X - 22, box.Center.Y - 22, 44, 44), sc * (0.28f * wake));
-                if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } g)
-                    b.Draw(g, new Rectangle(box.X + 16, box.Y + 14, box.Width - 32, box.Height - 28), Color.White * wake);
-                else _ui.Diamond(b, new Rectangle(box.Center.X - 24, box.Center.Y - 24, 48, 48), sc * wake);
+                // THE SKILL'S OWN NAME AND PICTURE. Both read "SHADOW STRIKE" and a Source gem — the
+                // pair the designer retired on 2026-08-30 when skills moved onto the mastery tree.
+                // What the champion is carrying is BLOW.
+                var railDef = SkillCatalogue.Resolve(s.Form, isPassiveSlot);
+
+                // THE SKILL'S OWN GLYPH IN THE SOURCE'S LIGHT. It used to be the Source gem alone,
+                // which meant every HAMMER skill wore the same picture and the medallion said what a
+                // skill was MADE OF rather than what it DID — the one thing an icon is read for. The
+                // element survives as the halo behind it, so both facts are still on the medallion.
+                _ui.Diamond(b, new Rectangle(box.Center.X - 24, box.Center.Y - 24, 48, 48), sc * (0.34f * wake));
+                var glyphBox = new Rectangle(box.X + 18, box.Y + 16, box.Width - 36, box.Height - 32);
+                if (_ui.Assets.Get($"icon_skill_{railDef.Id}") is { } sg)
+                    b.Draw(sg, glyphBox, Color.Lerp(sc, Color.White, 0.65f) * wake);
+                else if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } g)
+                    b.Draw(g, glyphBox, Color.White * wake);
+                else _ui.Diamond(b, glyphBox, sc * wake);
                 // (§16 Vow glyph omitted: the loadout SkillChoice doesn't carry the Vow — it lives on the built
                 // ability. Wiring the built skills through would add it; deferred, logged once below.)
                 // §16.2: a DESCRIPTIVE Source+Form label ("SHADOW STRIKE"), never a bare form name — shrunk to
                 // fit the slot pitch rather than clipped.
-                var label = $"{s.Source.ToString().ToUpperInvariant()} {FormShort(s.Form)}";
+                var label = railDef.Name;
                 var lpx = UiTypography.Secondary;
                 while (lpx > UiTypography.Caption && _ui.MeasureBig(label, lpx) > RailContentW - box.Width - 20) lpx--;
                 // Beside the slot: the name is short and pairs with the medallion.
                 _ui.TextBig(b, label, box.Right + 12, box.Y + 10, Bone, lpx);
                 // The rhythm, in words, under the name: what the pips count.
-                var rhythm = isPassiveSlot
-                    ? (s.Form == Form.Trap ? "WHEN BITTEN" : "ALWAYS ON")
+                // AND ITS OWN CADENCE, read off the skill rather than off the Form: a Reaction waits to
+                // be bitten, a Field runs on its own clock, an Active counts beats.
+                var rhythm = railDef.Kind == SkillKind.Reaction
+                    ? "WHEN BITTEN"
+                    : railDef.Kind == SkillKind.Field
+                    ? "ALWAYS ON"
                     : FormBehaviour.CooldownBeats(s.Form) switch
                 {
                     2 => "EVERY OTHER ACTION",
@@ -3054,7 +3070,9 @@ public sealed class SoloExpeditionScreen
                     _ui.Fill(b, new Rectangle(halo.Right - 2, halo.Y, 2, halo.Height), Gold * flash);
                 }
 
-                var head = BuildGlossary.FormHeadline(s.Form);
+                // THE SKILL'S OWN LINE, not the Form's headline. A Form headline said "ONE HEAVY BLOW"
+                // for BLOW and for PRESS alike — the two skills of one style, described identically.
+                var head = railDef.Line.ToUpperInvariant();
                 // CLEAR OF THE PIPS. The beat row sits at box.Bottom + 4 and is 10 px tall, so a
                 // headline at +12 printed through it — visible in every capture of a beat-counted skill.
                 var hy = box.Bottom + 12;
