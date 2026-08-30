@@ -111,6 +111,9 @@ public static class MasteryCatalog
     public const int BridgeCost = 6;
     public const int SpecialisationCost = 6;
 
+    /// <summary>What a style road's skill node costs, on top of its specialisation's 6.</summary>
+    public const int SkillRoadCost = 5;
+
     public static IReadOnlyList<MasteryNode> Nodes { get; } = Build();
 
     public static MasteryNode? ById(string id) => Nodes.FirstOrDefault(n => n.Id == id);
@@ -120,7 +123,9 @@ public static class MasteryCatalog
 
     /// <summary>What one complete branch costs — the design's affordability unit.</summary>
     public static int BranchCost(Branch branch)
-        => Nodes.Where(n => n.Branch == branch && n.Kind is not MasteryKind.Bridge and not MasteryKind.Specialisation)
+        => Nodes.Where(n => n.Branch == branch
+                            && n.Kind is not MasteryKind.Bridge and not MasteryKind.Specialisation
+                                          and not MasteryKind.SkillRoad)
                 .Sum(n => n.Cost);
 
     private static SkillShape S => SkillShape.None;
@@ -441,6 +446,36 @@ public static class MasteryCatalog
         Spec(n, Branch.Endure, Form.Transformation, "spec_transformation",
             $"MORPH SPECIALIST — LEECH DOUBLED, HEAL LIMIT {HealTuning.Default.CeilingText(siphon: true)} A WAVE",
             BuildTrigger.Siphon, S);
+
+        // ── THE SKILL ROADS. Each specialisation is the head of its style's road, and the road's one
+        //    node teaches that style's SECOND skill — the one with no Source-and-Form door on the
+        //    weave screen (design §5, "a node unlocks a skill"). Six nodes, six skills, and the other
+        //    six stay free because a champion that has learned nothing must still be able to fight.
+        //
+        //    Priced at a GREATER rather than a specialisation: the specialisation before it already
+        //    cost 6, so a whole road to one skill is 11 points, and a player has about 66 at full
+        //    content. Two roads is a third of a career, which is the commitment the hexagon wanted.
+        Teaches(n, Branch.Resonance, "road_hammer", "spec_strike", "hammer_press");
+        Teaches(n, Branch.Resonance, "road_snare", "spec_trap", "snare_repay");
+        Teaches(n, Branch.Loot, "road_volley", "spec_projectile", "volley_weep");
+        Teaches(n, Branch.Loot, "road_field", "spec_aura", "field_pulse");
+        Teaches(n, Branch.Tempo, "road_sign", "spec_mark", "sign_brand");
+        Teaches(n, Branch.Endure, "road_drain", "spec_transformation", "drain_wilt");
+    }
+
+    /// <summary>One style road's skill node: it teaches, and it changes nothing else.</summary>
+    /// <remarks>
+    /// The one kind of node exempt from "every node changes a shape" — what it changes is which
+    /// abilities exist for this champion, which is a larger change than any shape on the tree.
+    /// </remarks>
+    private static void Teaches(List<MasteryNode> n, Branch b, string id, string spec, string skillId)
+    {
+        var def = SkillCatalogue.ById(skillId);
+        n.Add(new(id, MasteryKind.SkillRoad, b, 3, SkillRoadCost,
+                  $"{def.Name} — {def.Line.ToUpperInvariant()}", S, null, new[] { spec })
+        {
+            GrantsSkillId = skillId,
+        });
     }
 
     // ── Construction helpers. Ring decides cost, so a node cannot be mispriced by hand. ───────────

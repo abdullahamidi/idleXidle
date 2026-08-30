@@ -38,6 +38,29 @@ public class VariationLivenessTests
     public static IEnumerable<object[]> EveryVariation()
         => SkillCatalogue.All.SelectMany(d => d.Variations.Select(v => new object[] { d.Id, v.Name }));
 
+    /// <summary>
+    /// A tree with every style road walked — the probe means to weave any of the twelve.
+    /// </summary>
+    /// <remarks>
+    /// Six skills are taught by the mastery tree (design §5), so a fixture holding a bare tree can
+    /// only ever weave the other six and a probe over all twelve would report half of them dormant
+    /// for a reason that has nothing to do with what it is measuring.
+    /// </remarks>
+    internal static MasteryTree EveryRoadWalked()
+    {
+        var tree = new MasteryTree();
+        tree.SetEarned(9999);
+        // THE ROAD NODES ONLY, without the specialisations that gate them. RestoreTaken does not
+        // walk prerequisites, which is what makes that possible — and it has to be done, because a
+        // specialisation also grants a trigger and sets an Affinity, and taking all six turned the
+        // fixture into a champion with six enchantments. CLUSTER measured as dormant under it: the
+        // VOLLEY specialisation's extra target had already covered the reach it gives up.
+        tree.RestoreTaken(MasteryCatalog.Nodes
+            .Where(x => x.Kind == MasteryKind.SkillRoad)
+            .Select(x => x.Id));
+        return tree;
+    }
+
     private static Build Build(SkillDef def, string? variation)
     {
         var progress = new SkillProgress();
@@ -66,7 +89,7 @@ public class VariationLivenessTests
                                                   !def.TakesABeat));
         }
 
-        return BuildComposer.Compose(new MemoryDustTree(), new MasteryTree(), character: null,
+        return BuildComposer.Compose(new MemoryDustTree(), EveryRoadWalked(), character: null,
                                      skills: picks, keystoneIds: Array.Empty<string>(),
                                      slotCapacity: 4, progress: progress);
     }

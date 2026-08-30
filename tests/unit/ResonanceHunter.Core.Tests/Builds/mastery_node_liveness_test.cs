@@ -45,7 +45,13 @@ public class MasteryNodeLivenessTests
             // from a shape node (Hunter.ValueOf rather than Build.Shape) — exactly the kind of second
             // channel BalanceSweepTests was blind to. Nothing was checking it end to end.
             .Where(n => n.Branch is Branch.Resonance or Branch.Tempo or Branch.Endure
-                        && n.Kind is not MasteryKind.Start and not MasteryKind.Specialisation)
+                        && n.Kind is not MasteryKind.Start and not MasteryKind.Specialisation
+                                     // A STYLE ROAD grants an ABILITY, and these fixtures weave a
+                                     // fixed loadout — the skill it teaches is not in it, so the probe
+                                     // could only ever report the node dormant. It is proven instead by
+                                     // test_a_skill_the_tree_has_not_taught_cannot_be_chosen, which
+                                     // asks the question that actually applies: is the skill weavable?
+                                     and not MasteryKind.SkillRoad)
             .Select(n => new object[] { n.Id });
 
     /// <summary>

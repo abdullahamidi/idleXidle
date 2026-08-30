@@ -205,6 +205,11 @@ public class ComposedSlotSplitTests
         // The migration that matters. Before the rework a player could weave four beat-taking
         // skills; the active budget is two now. Dropping the overflow would take half of someone's
         // build away on load without a word, so it spills into the passive slots instead.
+        //
+        // A SPILL IS EXEMPT FROM THE SKILL GATE (2026-08-30). Two of these styles' passive skills are
+        // among the six the mastery tree teaches, and this champion has walked no roads — but the
+        // budget put those slots where they are, not the player, and §11 will not have a build
+        // silently unwoven. The gate applies to the player's own choice; see the two tests below.
         var b = Compose(4,
             S("a", Form.Strike), S("b", Form.Projectile),
             S("c", Form.Mark), S("d", Form.Transformation));
@@ -214,6 +219,43 @@ public class ComposedSlotSplitTests
         // The two woven FIRST keep their actives; any other rule reorders the player's build for them.
         Assert.Equal(new[] { "a", "b" }, b.Skills.Where(s => s.TakesABeat).Select(s => s.Name).ToArray());
         Assert.Equal(new[] { "c", "d" }, b.Skills.Where(s => !s.TakesABeat).Select(s => s.Name).ToArray());
+    }
+
+    /// <summary>
+    /// Six skills have to be TAUGHT, and choosing one you have not learned is refused (design §5).
+    /// </summary>
+    /// <remarks>
+    /// The gate the style roads exist for. Respec RE-LOCKS (designer, 2026-08-30), so this is asserted
+    /// in both directions: without the road the slot is not woven, with it the slot is.
+    /// </remarks>
+    [Fact]
+    public void test_a_skill_the_tree_has_not_taught_cannot_be_chosen()
+    {
+        Build With(MasteryTree mastery) => BuildComposer.Compose(
+            new MemoryDustTree(), mastery, character: null,
+            skills: new[]
+            {
+                S("a", Form.Strike),
+                // DELIBERATELY passive: HAMMER's PRESS, one of the six with no Form of its own.
+                S("b", Form.Strike) with { Passive = true },
+            },
+            keystoneIds: Array.Empty<string>(), slotCapacity: 4);
+
+        var untaught = new MasteryTree();
+        Assert.Single(With(untaught).Skills);
+        Assert.Equal("a", With(untaught).Skills[0].Name);
+
+        var walked = new MasteryTree();
+        walked.SetEarned(999);
+        walked.RestoreTaken(new[] { "spec_strike", "road_hammer" });
+        var b = With(walked);
+        Assert.Equal(2, b.Skills.Count);
+        Assert.Equal(SkillCatalogue.PassiveOf(Style.Hammer).Id, b.Skills[1].Def.Id);
+
+        // AND RESPEC TAKES IT BACK. The designer chose a road that re-locks, so the same build
+        // composed after the point is refunded is the one-skill build again.
+        walked.Respec();
+        Assert.Single(With(walked).Skills);
     }
 
     [Fact]

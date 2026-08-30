@@ -1600,6 +1600,9 @@ public class Game1 : Game
                             foreach (var wn in MasteryCatalog.Nodes.Where(x => x.Branch == Branch.Resonance && x.Kind == k))
                                 _mastery.Take(wn.Id);
                         _mastery.Take("spec_strike");
+                        // ONE STYLE ROAD WALKED, so a capture shows both sides of the skill gate:
+                        // HAMMER's PRESS is learned and the other five roads are not.
+                        _mastery.Take("road_hammer");
                         _buildScreen.DevOpenTree();
                         if (sm == "attune") _buildScreen.DevAttune(Form.Strike);
                     }

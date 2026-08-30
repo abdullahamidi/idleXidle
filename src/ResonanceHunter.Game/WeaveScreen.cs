@@ -630,6 +630,20 @@ public sealed class WeaveScreen
 
             if (KindToggle(i).Contains(hit))
             {
+                // THE SKILL GATE, WHERE THE PLAYER MEETS IT. Six of the twelve are taught by the
+                // mastery tree (design §5), and flipping a slot is how you would ask for one. Refused
+                // out loud rather than silently: the row's name would otherwise change to a skill the
+                // build then quietly drops, which is the worst of both.
+                var kinds = BuildComposer.SlotKinds(
+                    skills.Select(k => new BuildComposer.SkillPick(k.Source, k.Form, k.VowId, "", k.Passive)).ToList(),
+                    Loadout.SkillCapacity);
+                var wanted = SkillCatalogue.Resolve(skills[i].Form, !(i < kinds.Count && kinds[i]));
+                if (SkillCatalogue.NeedsUnlock(wanted) && !Mastery.LearnedSkills().Contains(wanted.Id))
+                {
+                    _msg = $"{wanted.Name} IS LEARNED ON THE MASTERY TREE, ON {wanted.Style.ToString().ToUpperInvariant()}'S ROAD.";
+                    return;
+                }
+
                 // FLIPPING THE SLOT CHANGES WHICH SKILL IT IS, not merely when it acts — a style's
                 // two skills are different abilities. Say which one it became, because the row's
                 // name line changes underneath the click and an unexplained change reads as a bug.

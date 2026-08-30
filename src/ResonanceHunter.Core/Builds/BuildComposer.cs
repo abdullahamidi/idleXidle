@@ -55,10 +55,20 @@ public static class BuildComposer
     /// reorder a player's build for them.
     /// </para>
     /// </remarks>
-    public static IReadOnlyList<bool> SlotKinds(IReadOnlyList<SkillPick> skills, int slotCapacity)
+    public static IReadOnlyList<bool> SlotKinds(IReadOnlyList<SkillPick> skills, int slotCapacity,
+                                               IReadOnlySet<string>? taught = null)
     {
         ArgumentNullException.ThrowIfNull(skills);
         var activeBudget = Build.ActiveSlotsFor(slotCapacity);
+
+        // THE SPILL IS NOT GATED, and the `taught` set it is handed is only for the screen to read
+        // back. A spill is the BUDGET's decision, not the player's, and §11 promises an old
+        // four-active build keeps all four skills — refusing there would silently unweave half of
+        // someone's build on load, and Build.Weave would drop the overflow rather than keep it as an
+        // active, because the active capacity refuses a third. What IS gated is the player's own
+        // choice, in Compose below.
+        _ = taught;
+
         var passive = new bool[skills.Count];
         var actives = 0;
         for (var i = 0; i < skills.Count; i++)
@@ -70,6 +80,7 @@ public static class BuildComposer
             {
                 if (chosen) { passive[i] = true; continue; }
                 if (actives < activeBudget) { actives++; continue; }
+                // chosen active, but the budget is spent: it spills — if it has anywhere to spill to.
                 passive[i] = true;   // chosen active, but the budget is spent: it still spills
                 continue;
             }
@@ -123,7 +134,13 @@ public static class BuildComposer
                 build.Take(k);
 
         var picks = skills as IReadOnlyList<SkillPick> ?? skills.ToList();
-        var passive = SlotKinds(picks, slotCapacity);
+        var taughtSkills = mastery.LearnedSkills();
+        var passive = SlotKinds(picks, slotCapacity, taughtSkills);
+
+        // WHAT THIS CHAMPION HAS BEEN TAUGHT feeds BOTH halves of the rule: SlotKinds above will not
+        // spill into an unlearned passive, and the loop below refuses to weave one that was chosen
+        // outright. Respec RE-LOCKS (designer, 2026-08-30), so this set shrinks the moment a point is
+        // given back — and the weave screen says which skill went.
         for (var i = 0; i < picks.Count; i++)
         {
             var s = picks[i];
@@ -132,6 +149,14 @@ public static class BuildComposer
             // The skill's own timing seeds its cooldown. A beat-counted skill still counts BEATS in
             // the fight; this is the millisecond figure the readouts and the wave-length rule use.
             var def = SkillCatalogue.Resolve(s.Form, passive[i]);
+            // THE GATE, AT THE ONE PLACE IT BELONGS: a slot the player DELIBERATELY set to this kind.
+            // Six skills are taught by the mastery tree (design §5) and this refuses to weave one that
+            // has not been. A SPILLED slot is exempt — the budget put it there, not the player, and
+            // §11 will not have an old build silently unwoven. The door a live player could otherwise
+            // walk through (wire three actives, collect the passive) is shut on the weave screen,
+            // which will not set more actives than the budget holds.
+            if (s.Passive == true && SkillCatalogue.NeedsUnlock(def) && !taughtSkills.Contains(def.Id))
+                continue;
             var cooldown = def.Beats > 0 ? def.Beats * SoloBattle.DefaultBeatMs
                                          : FormBehaviour.BaseCooldownMs(s.Form);
 

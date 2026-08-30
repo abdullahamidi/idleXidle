@@ -85,6 +85,14 @@ public static class MasteryLayout
     /// <summary>A SPECIALISATION hangs off the side of its branch rather than on the spine.</summary>
     public const float SpecialisationFraction = 0.86f;
 
+    /// <summary>How far past its specialisation a style road's skill node sits, in world units.</summary>
+    /// <remarks>
+    /// A specialisation's drawn radius is 129 and a road's 114, so anything under 243 has them
+    /// touching — the overlap gate caught 150 immediately. 260 clears it with a margin that reads as
+    /// a deliberate step rather than a near miss.
+    /// </remarks>
+    public const float SkillRoadStep = 260f;
+
     /// <remarks>
     /// 30°, from 26°. Ring 3 holds four greaters since the 2026-08-27 pass and its fan reaches ±17°; at
     /// 26° the outer greater and the specialisation beside it cleared by 36 world units, which the
@@ -229,6 +237,7 @@ public static class MasteryLayout
         MasteryKind.Start => 70f,
         MasteryKind.Mastery => 76f,
         MasteryKind.Specialisation => 68f,
+        MasteryKind.SkillRoad => 60f,
         MasteryKind.Greater => 54f,
         MasteryKind.Bridge => 49f,
         MasteryKind.Notable => 45f,
@@ -258,15 +267,18 @@ public static class MasteryLayout
     /// MOVED the existing ones. A layout key that is right by coincidence is a layout key that breaks
     /// on the first content change.
     ///
-    /// Bridges, specialisations and spurs are excluded because none of them sits on the spine — each
-    /// has its own placement rule below and its own sibling list. A spur is ring 1 by price and would
-    /// otherwise re-space the four minors it hangs off.
+    /// Bridges, specialisations, spurs and SKILL ROADS are excluded because none of them sits on the
+    /// spine — each has its own placement rule below and its own sibling list. A spur is ring 1 by
+    /// price and would otherwise re-space the four minors it hangs off; a skill road is ring 3 by
+    /// price and DID re-space the greaters when it arrived (2026-08-30), shoving RESONANCE's PURE
+    /// onto its own specialisation — the overlap test is what caught it.
     /// </remarks>
     private static (int Index, int Count) SpineSibling(MasteryNode n)
     {
         var peers = MasteryCatalog.Nodes
             .Where(x => x.Branch == n.Branch && x.Ring == n.Ring
-                        && x.Link is null && x.Kind != MasteryKind.Specialisation && !x.Spur)
+                        && x.Link is null && !x.Spur
+                        && x.Kind is not MasteryKind.Specialisation and not MasteryKind.SkillRoad)
             .ToList();
         return (Math.Max(0, peers.FindIndex(x => x.Id == n.Id)), Math.Max(1, peers.Count));
     }
@@ -309,6 +321,19 @@ public static class MasteryLayout
             var spread = SpecialisationOffsetDegrees * MathF.PI / 180f;
             var sOffset = sCount <= 1 ? -spread : (sIdx - (sCount - 1) / 2f) * 2f * spread;
             return Polar(WorldRadius * SpecialisationFraction, baseAngle + sOffset);
+        }
+
+        if (node.Kind == MasteryKind.SkillRoad)
+        {
+            // ON ITS SPECIALISATION'S OWN SPOKE, one step further out — the road IS that
+            // specialisation continued, and any other placement would make the wire cross the rim.
+            var spec = node.Prereqs.Select(MasteryCatalog.ById).FirstOrDefault(x => x is not null);
+            if (spec is not null)
+            {
+                var at = PositionOf(spec, maxRing);
+                var angle = MathF.Atan2(at.Y, at.X);
+                return Polar(WorldRadius * SpecialisationFraction + SkillRoadStep, angle);
+            }
         }
 
         if (node.Spur)

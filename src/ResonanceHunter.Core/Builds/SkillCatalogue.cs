@@ -594,6 +594,23 @@ public static class SkillCatalogue
     /// TRAP were never actives, so they resolve to their styles' passives whichever slot is asked for.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Does this skill have to be TAUGHT by a mastery node before it can be woven?
+    /// </summary>
+    /// <remarks>
+    /// Exactly the six with no <see cref="SkillDef.LegacyForm"/>. The other six are reachable by
+    /// picking a Source and a Form on the weave screen, which is how a champion fights on its first
+    /// wave with nothing learned; these six have no such door and the tree is it (design §5).
+    /// </remarks>
+    public static bool NeedsUnlock(SkillDef def)
+    {
+        ArgumentNullException.ThrowIfNull(def);
+        return def.LegacyForm is null;
+    }
+
+    /// <summary>The six that a style road has to teach, in ring order.</summary>
+    public static IReadOnlyList<SkillDef> Taught { get; } = All.Where(NeedsUnlock).ToList();
+
     public static SkillDef Resolve(Form form, bool passive)
     {
         // THE STYLE COMES FROM THE FORM; THE SLOT PICKS WHICH OF ITS TWO SKILLS THIS IS. It used to

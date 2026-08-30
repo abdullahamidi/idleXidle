@@ -21,6 +21,17 @@ public enum MasteryKind
     /// <summary>Ring 3, cost 5. A behaviour with a visible price attached.</summary>
     Greater,
 
+    /// <summary>
+    /// A STYLE ROAD's skill node: it teaches one of the six skills that have no Form of their own.
+    /// </summary>
+    /// <remarks>
+    /// Its own kind rather than a Greater, because a branch is 6/5/4/1 and costs 49 — invariants two
+    /// tests hold — and a road hangs off a SPECIALISATION on the rim, not off the branch's own fan.
+    /// It is also the one node exempt from "every node changes a shape": what it changes is which
+    /// abilities exist for this champion, which is larger than any shape on the tree.
+    /// </remarks>
+    SkillRoad,
+
     /// <summary>Ring 4, cost 8. The branch's identity, and always a trade.</summary>
     Mastery,
 
@@ -65,6 +76,21 @@ public sealed record MasteryNode(
     /// alike, so a stat node cannot be live in one screen and dead in the fight.
     /// </remarks>
     public IReadOnlyDictionary<HunterStat, float>? Stats { get; init; }
+
+    /// <summary>
+    /// The <see cref="SkillDef.Id"/> this node TEACHES, for a skill road's node (design §5).
+    /// </summary>
+    /// <remarks>
+    /// Six of the twelve skills have no <c>LegacyForm</c> — no Source-and-Form door on the weave
+    /// screen — and this is how a player reaches them. The other six are free from the first wave,
+    /// because a champion that has learned nothing must still be able to fight.
+    ///
+    /// <b>Respec RE-LOCKS</b> (designer, 2026-08-30). Nothing here is monotone: give the point back
+    /// and the skill is gone again, which is what makes a style road a commitment rather than a
+    /// collection. A build holding a skill it has just un-learned is not left broken — the composer
+    /// drops that slot and the weave screen says why.
+    /// </remarks>
+    public string? GrantsSkillId { get; init; }
 
     /// <summary>
     /// A SPUR: a ring-1 Minor that hangs off another Minor instead of off START.
@@ -244,6 +270,13 @@ public sealed class MasteryTree
                     total[stat] = total.GetValueOrDefault(stat) + value;
         return total;
     }
+
+    /// <summary>Every skill the taken nodes have taught.</summary>
+    public IReadOnlySet<string> LearnedSkills()
+        => _taken.Select(MasteryCatalog.ById)
+                 .Where(n => n?.GrantsSkillId is not null)
+                 .Select(n => n!.GrantsSkillId!)
+                 .ToHashSet(StringComparer.Ordinal);
 
     /// <summary>Every trigger the taken specialisations grant.</summary>
     public IReadOnlySet<BuildTrigger> Triggers()

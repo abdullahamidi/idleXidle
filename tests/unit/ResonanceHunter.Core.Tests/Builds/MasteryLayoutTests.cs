@@ -347,6 +347,10 @@ public class MasteryLayoutTests
         foreach (var other in MasteryCatalog.Nodes)
         {
             if (ReferenceEquals(s, other)) continue;
+            // ITS OWN SKILL ROAD IS NOT A NEAR MISS. The road is the next node on the same spoke and
+            // is meant to sit right outside it — measuring the pair here would report the layout's
+            // intent as its tightest accident. The overlap gate above still holds them apart.
+            if (other.Kind == MasteryKind.SkillRoad && other.Prereqs.Contains(s.Id)) continue;
             var gap = Distance(MasteryLayout.PositionOf(s), MasteryLayout.PositionOf(other))
                       - MasteryLayout.NodeWorldRadius(s.Kind)
                       - MasteryLayout.NodeWorldRadius(other.Kind);
