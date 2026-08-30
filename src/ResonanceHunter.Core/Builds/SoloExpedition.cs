@@ -416,6 +416,63 @@ public sealed class SoloExpedition
         var mods = _build.Resolve(_hunter);
 
         var haul = MathF.Max(0.05f, mods.Haul);
+        var shape = _build.Shape;
+
+        // ── LOOT (design §9b, re-keyed 2026-08-30). Every one of these reads THE WAVE THAT JUST
+        //    HAPPENED rather than a banking decision this game does not have. LastWaveEvents is
+        //    written above, before this runs, so the bites the champion took — and did not take —
+        //    are the currency the branch trades in.
+        var bites = LastWaveEvents.Where(e => e.Kind == BattleEventKind.EnemyStrike).ToList();
+        var waveMs = LastWaveEvents.Count == 0 ? 0 : LastWaveEvents.Max(e => e.AtMs);
+        // The longest stretch of the wave with nothing landing on you. Measured as a GAP between
+        // consecutive bites (and from the wave's start and to its end), because "seconds without
+        // damage" is a run of quiet, not a count of quiet ticks.
+        var cleanMs = waveMs;
+        if (bites.Count > 0)
+        {
+            var last = 0;
+            cleanMs = 0;
+            foreach (var e in bites.OrderBy(e => e.AtMs))
+            {
+                cleanMs = Math.Max(cleanMs, e.AtMs - last);
+                last = e.AtMs;
+            }
+            cleanMs = Math.Max(cleanMs, waveMs - last);
+        }
+
+        // UNTOUCHED — the quiet itself pays, to the node's own ceiling.
+        if (shape.HaulPerCleanSecond > 0f)
+        {
+            var earned = shape.HaulPerCleanSecond * (cleanMs / 1000f);
+            haul *= 1f + (shape.HaulCleanCap > 0f ? MathF.Min(shape.HaulCleanCap, earned) : earned);
+        }
+
+        // SPOTLESS and VEIN — a wave you finish NEARLY WHOLE, at nine tenths or better.
+        //
+        // Two earlier readings were unreachable and would have shipped dead. "A wave nothing bit you
+        // in" never happens: every creature in a wave attacks. "A wave finished at FULL health" never
+        // happens either, because there is no full heal between waves — the champion is chipped once
+        // and stays chipped for the run. Nine tenths is the first version a real build can hold, and
+        // it is still the strict opposite of BLOODPRICE's half.
+        if (shape.HaulUntouchedWave > 0f
+            && _champion.Health * 10 >= _champion.MaxHealth * 9)
+            haul *= 1f + shape.HaulUntouchedWave;
+
+        // BLOODPRICE — the opposite pole, and the reason UNTOUCHED is a fork rather than a ladder:
+        // one branch of LOOT pays for never being hit, the other for finishing the wave nearly dead.
+        if (shape.HaulWhenHurt > 0f && _champion.Health * 2 < _champion.MaxHealth)
+            haul *= 1f + shape.HaulWhenHurt;
+
+        // PROSPECT and LODE — depth itself, past a floor. This is the "rest of the run" the design
+        // asked for, expressed the only way a per-wave payout can express it: the deeper the wave,
+        // the larger every one of them is.
+        if (shape.HaulPerWavePastDepth > 0f)
+            haul *= 1f + shape.HaulPerWavePastDepth * Math.Max(0, wave - shape.HaulDepthFloor);
+
+        // CACHE — every Nth wave is worth more. A rhythm rather than a ramp.
+        if (shape.HaulEveryNthWave > 0 && wave % shape.HaulEveryNthWave == 0)
+            haul *= 1f + shape.HaulNthWaveBonus;
+
         if (_build.Triggers(_hunter).Contains(BuildTrigger.Desperation)
             && _champion.Health <= _champion.MaxHealth / 3)
         {
@@ -446,7 +503,10 @@ public sealed class SoloExpedition
             // is measured rather than borrowed from the health multiplier.
             Gleam: (int)MathF.Round(GleamPerWaveCoefficient * scale * haul
                                     * MathF.Max(0.1f, _tuning.WaveHaulScale)),
-            Quality: MathF.Max(0.05f, mods.Rarity) + bonus.Quality);      // SPLINTER adds quality
+            // SECOND LOOK — the clean stretch raises what the chest IS, not just what the wave pays.
+            // Rarity is the one channel gleam cannot buy, so it is deliberately the greater's reward.
+            Quality: MathF.Max(0.05f, mods.Rarity) + bonus.Quality
+                     + shape.RarityFromClean * (cleanMs / 1000f));      // SPLINTER adds quality
     }
 
     // NO Bank / Retreat / Wipe payout, and no ExitShare. The idle loop pays every wave the instant it

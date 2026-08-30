@@ -126,7 +126,7 @@ public static class MasteryLayout
     {
         Branch.Resonance => -90f,
         Branch.Tempo => 0f,
-        Branch.Spread => 90f,
+        Branch.Loot => 90f,
         _ => 180f,
     } * MathF.PI / 180f;
 

@@ -90,7 +90,7 @@ public sealed class RosterScreen
 
     private static string BranchName(Branch b) => b switch
     {
-        Branch.Resonance => "RESONANCE", Branch.Spread => "SPREAD", Branch.Tempo => "TEMPO", _ => "ENDURE",
+        Branch.Resonance => "RESONANCE", Branch.Loot => "LOOT", Branch.Tempo => "TEMPO", _ => "ENDURE",
     };
 
     // The same four colours the mastery tree uses. A character's lean has to read as the SAME road the
@@ -98,7 +98,7 @@ public sealed class RosterScreen
     private static Color BranchColor(Branch b) => b switch
     {
         Branch.Resonance => new Color(0xD6, 0x48, 0x5C),
-        Branch.Spread => new Color(0x48, 0xB8, 0x88),
+        Branch.Loot => new Color(0x48, 0xB8, 0x88),
         Branch.Tempo => new Color(0x74, 0xC6, 0xE8),
         _ => new Color(0xC0, 0x6E, 0xE0),
     };

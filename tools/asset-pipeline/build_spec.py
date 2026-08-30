@@ -616,9 +616,12 @@ def stills() -> list[dict]:
         # read as the Spread arrows, the Tempo bolt or the Endure shield at 40px. The old maul is
         # kept on disk under its own key until the mastery screen stops offering a WEIGHT branch.
         "resonance": "one upright two-tined tuning fork with a rounded stem, seen straight on",
-        # SPREAD is generated OUT OF BAND — see the literal prompt below the loop. Left here so the
-        # four branches read as one set in source; the loop skips it.
-        "spread": None,
+        # LOOT replaced SPREAD in the 2026-08-30 re-axe (design §9). A drawstring pouch is the one
+        # shape that says "what you carried out" and cannot be read as the Resonance fork, the Tempo
+        # bolt or the Endure shield at 40px. (SPREAD's old "one line that becomes three" had no name
+        # in the model's vocabulary and needed draw_branch_spread.py to author it by hand; LOOT does
+        # not, so it rejoins the loop.)
+        "loot": "one plump drawstring pouch with a cinched neck and two hanging cord ends, seen straight on",
         # TEMPO is rate. A forked bolt reads as speed at any size and needs no legend.
         "tempo": "one jagged forked lightning bolt striking downward",
         # ENDURE is staying alive. A tower shield, not a round one: round reads as a boss or a coin.
@@ -630,16 +633,13 @@ def stills() -> list[dict]:
         add(f"icon_branch_{br}", "assets/art/UI/icons/branches", "glyph", motif,
             width=192, height=192, shading="flat shading", detail="low detail", single_subject=True)
 
-    # SPREAD is NOT generated, and is deliberately absent from this manifest — see
-    # draw_branch_spread.py, which authors it. Six attempts returned a feathered trident, a single
-    # arrow, a spread-winged phoenix, a solid crescent moon, a trident embossed on a SHIELD (Endure's
-    # glyph, the worst collision available) and a bare corner bracket. "One line that becomes three"
-    # has no name of its own in the model's vocabulary, so every phrasing landed on the nearest shape
-    # that does — and the last two attempts dropped the "heraldic" style prefix and still failed.
-    #
-    # It is listed here only so a reader of this file finds out where it went. Adding a key back into
-    # the manifest would let a `--force` run overwrite the authored art with a seventh guess, which is
-    # exactly the trap the cut rig parts are kept out of the manifest to avoid.
+    # ALL FOUR BRANCH GLYPHS ARE IN THE LOOP AGAIN as of the 2026-08-30 re-axe. SPREAD used to be
+    # hand-authored by draw_branch_spread.py because "one line that becomes three" has no name in the
+    # model's vocabulary — six attempts returned a trident, an arrow, a phoenix, a crescent, a trident
+    # on a SHIELD (Endure's glyph, the worst collision available) and a corner bracket. That branch is
+    # LOOT now and a drawstring pouch is a thing the model knows, so the exception and its script both
+    # went with SPREAD. The lesson survives them: if a motif needs six tries, it is the WORD that is
+    # wrong, not the prompt around it.
 
     # The FRAMES. Each is a socket with a hollow middle, because the branch glyph and the node's state
     # colour are both drawn through it. Ring count and spikes climb with price so the shape of a

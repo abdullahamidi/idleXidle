@@ -432,7 +432,7 @@ public sealed class BuildScreen
     private static string BranchPromise(Branch b) => b switch
     {
         Branch.Resonance => "STRONGER SKILLS, BEFORE YOU PICK ONE",
-        Branch.Spread => "HIT MANY AT ONCE",
+        Branch.Loot => "CARRY MORE OUT OF EVERY RUN",
         Branch.Tempo => "HIT FIRST AND OFTEN",
         _ => "OUTLAST THE ENEMY",
     };
@@ -1088,7 +1088,7 @@ public sealed class BuildScreen
         }
         // THE FOUR DIRECTIONS, NAMED OUTSIDE THE RIM. Between the wires and the nodes, so a header is
         // never drawn over a plaque even if the arithmetic in HeaderRing is one day wrong.
-        foreach (var br in new[] { Branch.Resonance, Branch.Spread, Branch.Tempo, Branch.Endure })
+        foreach (var br in new[] { Branch.Resonance, Branch.Loot, Branch.Tempo, Branch.Endure })
             DrawBranchHeader(b, br);
 
         foreach (var node in MasteryCatalog.Nodes) DrawNode(b, node, hit, aff);
@@ -1210,7 +1210,7 @@ public sealed class BuildScreen
         Outline(b, r, Path, 2);
 
         var y = r.Y + 4;
-        foreach (var br in new[] { Branch.Resonance, Branch.Spread, Branch.Tempo, Branch.Endure })
+        foreach (var br in new[] { Branch.Resonance, Branch.Loot, Branch.Tempo, Branch.Endure })
         {
             var taken = MasteryCatalog.Nodes.Count(x => x.Branch == br && Mastery.IsTaken(x.Id));
             var spent = MasteryCatalog.Nodes.Where(x => x.Branch == br && Mastery.IsTaken(x.Id)).Sum(x => x.Cost);
@@ -1459,7 +1459,7 @@ public sealed class BuildScreen
             // strip saying something nothing else said, so it moved here rather than being deleted.
             _ui.Fill(b, rule with { Y = y0 + 104 }, Dim);
             var hintY = y0 + 118;
-            foreach (var line in _ui.WrapBig("RESONANCE OR SPREAD.  TEMPO OR ENDURE.  YOU HAVE POINTS FOR ONE BRANCH, NOT TWO.",
+            foreach (var line in _ui.WrapBig("RESONANCE OR LOOT.  TEMPO OR ENDURE.  YOU HAVE POINTS FOR ONE BRANCH, NOT TWO.",
                                              UiKit.ContentRight(NodePanel) - UiKit.ContentLeft(NodePanel),
                                              UiTypography.Secondary))
             {
@@ -1586,7 +1586,7 @@ public sealed class BuildScreen
     private static Color BranchColor(Branch b) => b switch
     {
         Branch.Resonance => new Color(0xD6, 0x48, 0x5C),
-        Branch.Spread => new Color(0x48, 0xB8, 0x88),
+        Branch.Loot => new Color(0x48, 0xB8, 0x88),
         Branch.Tempo => new Color(0x74, 0xC6, 0xE8),
         _ => new Color(0xC0, 0x6E, 0xE0),
     };
@@ -1617,7 +1617,7 @@ public sealed class BuildScreen
     private static string BranchGlyph(Branch b) => b switch
     {
         Branch.Resonance => "icon_branch_resonance",
-        Branch.Spread => "icon_branch_spread",
+        Branch.Loot => "icon_branch_loot",
         Branch.Tempo => "icon_branch_tempo",
         _ => "icon_branch_endure",
     };

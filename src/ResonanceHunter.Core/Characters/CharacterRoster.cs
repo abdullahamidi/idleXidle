@@ -82,7 +82,7 @@ public static class CharacterRoster
             Id = "chorus", Name = "THE CHORUS",
             Class = ItemClass.Ranger, Tier = ClassTier.First,
             Blurb = "Never speaks. The charms do it.",
-            Lean = Branch.Spread, Aptitude = Form.Aura,
+            Lean = Branch.Loot, Aptitude = Form.Aura,
             PassiveName = "MANY MOUTHS",
             PassiveText = "+5% damage for each enemy alive in the wave.",
             // Scales with the thing Spread is for and evaporates in a boss room, which is the honest

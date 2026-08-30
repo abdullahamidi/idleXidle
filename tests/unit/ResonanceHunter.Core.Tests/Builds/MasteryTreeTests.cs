@@ -17,7 +17,7 @@ namespace ResonanceHunter.Core.Tests.Builds;
 public class MasteryTreeTests
 {
     private static readonly Branch[] Branches =
-        { Branch.Resonance, Branch.Spread, Branch.Tempo, Branch.Endure };
+        { Branch.Resonance, Branch.Loot, Branch.Tempo, Branch.Endure };
 
     private static MasteryTree TreeWith(int points)
     {
@@ -194,7 +194,7 @@ public class MasteryTreeTests
     public void test_two_complete_branches_are_out_of_reach()
     {
         var budgetAtFullContent = FullCareerPoints;
-        var two = MasteryCatalog.BranchCost(Branch.Resonance) + MasteryCatalog.BranchCost(Branch.Spread);
+        var two = MasteryCatalog.BranchCost(Branch.Resonance) + MasteryCatalog.BranchCost(Branch.Loot);
 
         Assert.True(two > budgetAtFullContent,
             $"Two branches cost {two} against {budgetAtFullContent} available. Both halves of an opposed " +
@@ -304,8 +304,8 @@ public class MasteryTreeTests
         WalkBranch(t, Branch.Resonance);
         Assert.Equal(Branch.Resonance, t.MasteredBranch());
 
-        WalkBranch(t, Branch.Spread);
-        Assert.False(t.IsTaken(Of(Branch.Spread, MasteryKind.Mastery).Single().Id));
+        WalkBranch(t, Branch.Loot);
+        Assert.False(t.IsTaken(Of(Branch.Loot, MasteryKind.Mastery).Single().Id));
         Assert.Equal(Branch.Resonance, t.MasteredBranch());
     }
 
@@ -382,7 +382,6 @@ public class MasteryTreeTests
     [Fact]
     public void test_the_new_greaters_each_pay_a_different_price()
     {
-        Assert.True(MasteryCatalog.ById("tide")!.Shape.HitSize < 1f, "TIDE must pay in hit size.");
         Assert.True(MasteryCatalog.ById("opening_volley")!.Shape.LaterCastMultiplier < 1f,
             "OPENING VOLLEY must pay on every later cast.");
         Assert.True(MasteryCatalog.ById("rebound")!.Shape.DamageDealt < 1f, "REBOUND must pay in damage dealt.");
@@ -395,12 +394,12 @@ public class MasteryTreeTests
     [Fact]
     public void test_the_new_nodes_are_wired_into_their_fans()
     {
-        // WEIGHT's trio (HEFT, HEADLONG, STAGGER) is gone with the branch — the 2026-08-30 re-axe
-        // replaced it with RESONANCE, whose sixteen nodes are pinned by MasteryNodeLivenessTests
-        // instead, one at a time and against the fight rather than against the wiring.
+        // WEIGHT's trio (HEFT, HEADLONG, STAGGER) and SPREAD's (FAN, RALLY, TIDE) went with their
+        // branches — the 2026-08-30 re-axe replaced both, with RESONANCE and LOOT. Their sixteen nodes
+        // each are pinned by MasteryNodeLivenessTests and LootNodeLivenessTests instead, one at a time
+        // and against the fight rather than against the wiring.
         var road = new (string Minor, string Notable, string Greater)[]
         {
-            ("fan", "rally", "tide"),
             ("brisk", "rhythm", "opening_volley"),
             ("mending", "payback", "rebound"),
         };
@@ -422,7 +421,7 @@ public class MasteryTreeTests
     public void test_the_side_road_greaters_each_pay_a_different_price()
     {
         Assert.True(MasteryCatalog.ById("zealot")!.Shape.DamageTaken > 1f, "ZEALOT must pay in bites taken.");
-        Assert.True(MasteryCatalog.ById("outnumbered")!.Shape.DamageDealt < 1f, "OUTNUMBERED must pay in hits.");
+        Assert.True(MasteryCatalog.ById("lode")!.Shape.AutoAttackDamage < 1f, "LODE must pay in the swing.");
         Assert.True(MasteryCatalog.ById("rush")!.Shape.DamageTaken > 1f, "RUSH must pay in bites taken.");
         Assert.True(MasteryCatalog.ById("brace")!.Shape.SkillRate < 1f, "BRACE must pay in rate.");
     }
@@ -490,7 +489,7 @@ public class MasteryTreeTests
     public void test_respec_gives_every_point_back()
     {
         var t = TreeWith(60);
-        WalkBranch(t, Branch.Spread);
+        WalkBranch(t, Branch.Loot);
         Assert.True(t.Spent > 0);
 
         t.Respec();

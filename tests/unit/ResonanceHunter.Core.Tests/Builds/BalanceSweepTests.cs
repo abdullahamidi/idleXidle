@@ -252,7 +252,7 @@ public class BalanceSweepTests
             var per = Enum.GetValues<Branch>()
                 .ToDictionary(br => br, br => { var (bd, h) = Walked(br, Budget, geared); return Measure(bd, h, def.Id).Median; });
             var win = per.MaxBy(kv => kv.Value);
-            _out.WriteLine($"{def.Name,-16}{per[Branch.Resonance],9}{per[Branch.Spread],9}"
+            _out.WriteLine($"{def.Name,-16}{per[Branch.Resonance],9}{per[Branch.Loot],9}"
                            + $"{per[Branch.Tempo],9}{per[Branch.Endure],9}   {win.Key}");
         }
 

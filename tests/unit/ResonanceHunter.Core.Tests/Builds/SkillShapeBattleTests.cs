@@ -173,22 +173,6 @@ public class SkillShapeBattleTests
 
     // ── SPREAD. ───────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>A Spread build reaches more creatures per cast.</summary>
-    [Fact]
-    public void test_the_spread_branch_reaches_more_creatures()
-    {
-        // TWELVE, from six. VOLLEY's SPRAY reaches five creatures where the old Projectile reached
-        // two, so a six-strong wave is nearly saturated before the branch buys anything and the
-        // difference this test exists to see had nowhere left to appear.
-        var swarm = () => Wave(12, 400f, 15f, archetype: Archetype.Swarm);
-
-        var neutral = Fight(SkillShape.None, swarm(), Form.Projectile);
-        var spread = Fight(WholeBranch(Branch.Spread), swarm(), Form.Projectile);
-
-        Assert.True(spread.TargetsPerActivation > neutral.TargetsPerActivation,
-            $"Reach was {spread.TargetsPerActivation:F2} for the Spread build and " +
-            $"{neutral.TargetsPerActivation:F2} for a neutral one — the branch buys no action economy.");
-    }
 
     /// <summary>EVERYWHERE strikes the whole wave with one cast.</summary>
     [Fact]
@@ -321,38 +305,17 @@ public class SkillShapeBattleTests
 
     // ── THE ACCEPTANCE TEST FOR THE WHOLE DESIGN. ─────────────────────────────────────────────────
 
-    /// <summary>
-    /// The opposed pairs are actually opposed.
-    /// </summary>
-    /// <remarks>
-    /// EVERYTHING RESTS ON THIS. The tree's four branches, the archetype engine, the band cycles, the
-    /// counter-band rule and the post-run report all assume that a build shaped one way is worse when the
-    /// content asks the opposite question. If a Weight build were merely "a bit different" in a Swarm band
-    /// rather than genuinely worse, there would be no wall to hit, nothing for the report to diagnose,
-    /// and no reason to ever visit the tree a second time.
-    /// </remarks>
-    [Fact]
-    public void test_weight_and_spread_win_and_lose_the_opposite_waves()
-    {
-        var weight = WholeBranch(Branch.Resonance);
-        var spread = WholeBranch(Branch.Spread);
-
-        List<WaveCreature> Armoured() => Wave(2, 3000f, 40f, defense: 60f, archetype: Archetype.Armoured);
-        List<WaveCreature> Swarm() => Wave(7, 2600f, 14f, archetype: Archetype.Swarm);
-
-        var weightVsArmour = Fight(weight, Armoured(), Form.Strike, Form.Trap).DeliveredDamage;
-        var spreadVsArmour = Fight(spread, Armoured(), Form.Strike, Form.Trap).DeliveredDamage;
-        var weightVsSwarm = Fight(weight, Swarm(), Form.Strike, Form.Trap).DurationMs;
-        var spreadVsSwarm = Fight(spread, Swarm(), Form.Strike, Form.Trap).DurationMs;
-
-        Assert.True(weightVsArmour > spreadVsArmour,
-            $"Against armour, Weight delivered {weightVsArmour:F0} and Spread {spreadVsArmour:F0}. " +
-            "The pair is not opposed, so neither branch has a reason to exist.");
-
-        Assert.True(spreadVsSwarm < weightVsSwarm,
-            $"Against a swarm, Spread took {spreadVsSwarm}ms and Weight took {weightVsSwarm}ms. " +
-            "A Weight build is supposed to STALL here — that stall is the game.");
-    }
+    // TWO TESTS RETIRED 2026-08-30, with the branches they defended. They asserted the WEIGHT /
+    // SPREAD opposition — hit size against target count, one branch winning the Armoured wave and
+    // stalling in the Swarm — and the re-axe deleted both branches for the very reason those tests
+    // were the last defenders of: under the skill rework the enemy BANDS are answered by SKILLS
+    // (HAMMER's defence break answers Armoured, VOLLEY's hit count and FIELD's area damage answer
+    // Swarm), so a branch selling the same rule was charging for it twice.
+    //
+    // THE CLAIM DID NOT VANISH, IT MOVED. "A build shaped one way is worse when the content asks the
+    // opposite question" is now carried by the skills, and VariationLivenessTests is what holds it:
+    // SPLAY and CLUSTER are the same skill choosing reach or concentration, and each must change the
+    // fight. If that ever stops being true, this file is not where it will be caught.
 
     // ── THE SIDE ROADS' TWO NEW FIELDS. Each one is a new read in the sim, so each gets the "does the
     //    fight actually read it" test that the rest of this file exists for. ──────────────────────

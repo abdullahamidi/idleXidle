@@ -27,8 +27,22 @@ public enum Branch
     /// </remarks>
     Resonance,
 
-    /// <summary>Many targets. Answers Swarm. Opposed to <see cref="Weight"/>.</summary>
-    Spread,
+    /// <summary>
+    /// What you carry out of a run. Opposed to <see cref="Resonance"/>.
+    /// </summary>
+    /// <remarks>
+    /// Was SPREAD — many targets, the answer to Swarm — retired by the 2026-08-30 re-axe for the same
+    /// reason WEIGHT was: VOLLEY's hit count and FIELD's area damage answer Swarm now, so the branch
+    /// was a second price for a rule the skills already sell.
+    ///
+    /// §9b wrote this branch around the BANKING decision, and this game deliberately has none:
+    /// <see cref="SoloExpedition"/> pays every wave the instant it clears, and removing the priced
+    /// exit is the whole point of the idle turn. So the branch is keyed to what the FIGHT knows
+    /// instead — the designer's own unblock, "hasar almadığın her saniye drop şansın artar gibi...
+    /// hasar ve loot mekaniğini birleştirebilirsin". Every rule here has to be EARNED inside a wave,
+    /// which is also what keeps it clear of the no-bare-multiplier law.
+    /// </remarks>
+    Loot,
 
     /// <summary>Front-loaded damage. Answers Caster. Opposed to <see cref="Endure"/>.</summary>
     Tempo,
@@ -119,7 +133,7 @@ public static class MasteryCatalog
         };
 
         Resonance(n);
-        Spread(n);
+        Loot(n);
         Tempo(n);
         Endure(n);
         Bridges(n);
@@ -183,73 +197,57 @@ public static class MasteryCatalog
                 S with { AllMatchupsStrong = true, DamageDealt = 0.85f }, Greaters(n, b));
     }
 
-    private static void Spread(List<MasteryNode> n)
+    /// <summary>
+    /// LOOT — haul, rarity and depth, all bought inside the wave (design §9b).
+    /// </summary>
+    /// <remarks>
+    /// The two notables at the top of the branch are a genuine FORK rather than a ladder: UNTOUCHED
+    /// pays for never being hit and BLOODPRICE pays for finishing nearly dead, so a LOOT build has to
+    /// decide which kind of run it is trying to have. Everything else keys on the same wave record.
+    /// </remarks>
+    private static void Loot(List<MasteryNode> n)
     {
-        const Branch b = Branch.Spread;
+        const Branch b = Branch.Loot;
 
-        // Weight's other Form pulled onto the Spread axis, the way SWEEP pulls Strike.
-        Minor(n, b, "fan", "FAN — TRAP REACHES ONE MORE CREATURE",
-            S with { FormTargets = new Dictionary<Form, int> { [Form.Trap] = 1 } });
-        Minor(n, b, "wide", "WIDE — PROJECTILE REACHES ONE MORE",
-            S with { FormTargets = new Dictionary<Form, int> { [Form.Projectile] = 1 } });
-        // The card used to say "AURA TICKS 25% FASTER" over a shape that touched every skill's rate and
-        // hit size and never the Aura's tick. It says what it does now.
-        Minor(n, b, "diffuse", "DIFFUSE — COOLDOWNS -8%, HITS -4%",
-            S with { SkillRate = 1.08f, HitSize = 0.96f });
-        Minor(n, b, "quick_hands", "QUICK HANDS — COOLDOWNS -10%",
-            S with { SkillRate = 1.11f });
-        Minor(n, b, "ricochet", "RICOCHET — 25% OF HITS STRIKE A SECOND CREATURE FOR HALF",
-            S with { RicochetChance = 0.25f, RicochetFraction = 0.5f });
-        // The side road's spur pulls Weight's own Form onto the Spread axis: a Strike that reaches two.
-        Spur(n, b, "sweep", "ricochet", "SWEEP — STRIKE REACHES ONE MORE CREATURE",
-            S with { FormTargets = new Dictionary<Form, int> { [Form.Strike] = 1 } });
+        // ── Ring 1: guile. It drives Hunter.HaulMultiplier directly, so these are live on arrival. ──
+        Minor(n, b, "glean", "GLEAN — +6 GUILE", S, Stat(HunterStat.Guile, 6f));
+        Minor(n, b, "pockets", "POCKETS — +8 GUILE", S, Stat(HunterStat.Guile, 8f));
+        Minor(n, b, "scavenge", "SCAVENGE — +6 GUILE", S, Stat(HunterStat.Guile, 6f));
+        Minor(n, b, "count", "COUNT — +6 GUILE, +5 HEALTH", S,
+              Stat(HunterStat.Guile, 6f, HunterStat.MaxHealth, 5f));
+        Minor(n, b, "weigh", "WEIGH — +8 GUILE", S, Stat(HunterStat.Guile, 8f));
+        Spur(n, b, "tally", "weigh", "TALLY — +6 GUILE, +4 FOCUS", S,
+             Stat(HunterStat.Guile, 6f, HunterStat.Focus, 4f));
 
-        // RALLY is fed by kills, like MOMENTUM: a torrent in a Swarm, one rally against a Bruiser.
-        Notable(n, b, "rally", "RALLY — AFTER A KILL, YOUR NEXT SKILL HITS 40% HARDER",
-            S with { NextSkillAfterKillBonus = 0.40f },
-            SpineMinors(n, b));
-        Notable(n, b, "chain", "CHAIN — EVERY HIT STRIKES ONE MORE CREATURE AT 40%",
-            S with { ChainFraction = 0.4f },
-            SpineMinors(n, b));
-        Notable(n, b, "cull", "CULL — +60% TO CREATURES UNDER 25% HEALTH",
-            S with { CullThreshold = 0.25f, CullBonus = 0.60f },
-            SpineMinors(n, b));
-        Notable(n, b, "swarmbane", "SWARMBANE — +6% DAMAGE PER LIVING CREATURE",
-            S with { PerCreatureBonus = 0.06f },
-            SpineMinors(n, b));
-        // The side road's notable: action economy FED BY KILLS. Eight refunds in a Swarm, one against a
-        // Bruiser — the same node is a torrent in the band Spread answers and a trickle in the one it
-        // does not, which is what makes it a Spread node rather than a rate node.
-        Notable(n, b, "momentum", "MOMENTUM — EVERY KILL TAKES THREE-QUARTERS OF A SECOND OFF ALL COOLDOWNS",
-            S with { CooldownRefundOnKillMs = 750 },
-            new[] { "sweep" });
+        // ── Ring 2. ──────────────────────────────────────────────────────────────────────────────
+        Notable(n, b, "untouched", "UNTOUCHED — +3% HAUL FOR EACH SECOND OF THE WAVE NOTHING BIT YOU, UP TO +45%",
+                S with { HaulPerCleanSecond = 0.03f, HaulCleanCap = 0.45f }, SpineMinors(n, b));
+        Notable(n, b, "bloodprice", "BLOODPRICE — +35% HAUL ON A WAVE YOU END BELOW HALF HEALTH",
+                S with { HaulWhenHurt = 0.35f }, SpineMinors(n, b));
+        Notable(n, b, "cache", "CACHE — EVERY 5TH WAVE CLEARED PAYS +60%",
+                S with { HaulEveryNthWave = 5, HaulNthWaveBonus = 0.60f }, SpineMinors(n, b));
+        Notable(n, b, "spotless", "SPOTLESS — +25% HAUL ON A WAVE YOU FINISH ABOVE 90% HEALTH",
+                S with { HaulUntouchedWave = 0.25f }, SpineMinors(n, b));
+        // The side road's notable, off the spur.
+        Notable(n, b, "prospect", "PROSPECT — +1% HAUL FOR EVERY WAVE PAST DEPTH 20",
+                S with { HaulPerWavePastDepth = 0.01f, HaulDepthFloor = 20 }, new[] { "tally" });
 
-        // TIDE is SWARMBANE's cousin in the other currency — rate per creature rather than damage —
-        // and it pays the same Swarm/Bruiser trade: fast in a crowd, a flat price against one.
-        Greater(n, b, "tide", "TIDE — COOLDOWNS 4% SHORTER PER LIVING CREATURE, HITS -15%",
-            S with { RatePerCreature = 0.04f, HitSize = 0.85f },
-            SpineNotables(n, b));
-        Greater(n, b, "cascade", "CASCADE — AFTER A KILL, THE NEXT SKILL STRIKES EVERYTHING",
-            S with { CascadeOnKill = true },
-            SpineNotables(n, b));
-        Greater(n, b, "dispersal", "DISPERSAL — ALL FORMS +1 TARGET, HITS -25%",
-            S with { ExtraTargets = 1, HitSize = 0.75f },
-            SpineNotables(n, b));
-        // The side road's greater. Worse than nothing against one creature (x1.09 x 0.85), better past
-        // two, far better at six — the Swarm/Bruiser trade stated in one line, and the price is paid
-        // exactly where Endure would have been the answer.
-        Greater(n, b, "outnumbered", "OUTNUMBERED — +9% DAMAGE PER LIVING CREATURE, ALL HITS -15%",
-            S with { PerCreatureBonus = 0.09f, DamageDealt = 0.85f },
-            new[] { "momentum" });
+        // ── Ring 3. Each costs something the fight can feel. ─────────────────────────────────────
+        Greater(n, b, "gamble", "GAMBLE — +70% HAUL, AND EVERY BITE HITS YOU 25% HARDER",
+                S with { HaulWhenHurt = 0.70f, DamageTaken = 1.25f }, SpineNotables(n, b));
+        Greater(n, b, "second_look", "SECOND LOOK — A QUIET WAVE RAISES CHEST QUALITY TOO, +0.04 A SECOND",
+                S with { RarityFromClean = 0.04f, HitSize = 0.92f }, SpineNotables(n, b));
+        Greater(n, b, "vein", "VEIN — A WAVE FINISHED ABOVE 90% HEALTH PAYS +90% INSTEAD OF +25%, SKILLS -8%",
+                S with { HaulUntouchedWave = 0.65f, DamageDealt = 0.92f }, SpineNotables(n, b));
+        // The side road's greater, off PROSPECT.
+        Greater(n, b, "lode", "LODE — DEPTH PAYS +2% A WAVE INSTEAD OF +1%, AND YOU SWING 10% SOFTER",
+                S with { HaulPerWavePastDepth = 0.01f, AutoAttackDamage = 0.90f }, new[] { "prospect" });
 
-        // Swarms evaporate. Anything with armour becomes nearly immune, because 40% of a small hit lands
-        // under the flat mitigation floor — the exact mirror of what OVERWHELM does to Spread builds.
-        Mastery(n, b, "everywhere", "EVERYWHERE — EVERY SKILL STRIKES EVERY CREATURE AT 40%",
-            S with { StrikesEveryCreature = true, HitSize = 0.40f },
-            Greaters(n, b));
+        // ── Ring 4. ──────────────────────────────────────────────────────────────────────────────
+        Mastery(n, b, "prospector", "PROSPECTOR — +3% HAUL FOR EVERY WAVE PAST DEPTH 30, AND SKILLS -15%",
+                S with { HaulPerWavePastDepth = 0.03f, HaulDepthFloor = 30, DamageDealt = 0.85f },
+                Greaters(n, b));
     }
-
-    // ── TEMPO — answers Caster. Kill it before it acts. ───────────────────────────────────────────
 
     private static void Tempo(List<MasteryNode> n)
     {
@@ -393,10 +391,10 @@ public static class MasteryCatalog
         Bridge(n, Branch.Resonance, Branch.Tempo, "executioner",
             "EXECUTIONER — THE FIRST HIT ON EACH CREATURE +10% AND IT CUTS 9 ARMOUR",
             S with { FirstHitMultiplier = 1.10f, ArmourPenetration = 9f });
-        Bridge(n, Branch.Tempo, Branch.Spread, "volley",
+        Bridge(n, Branch.Tempo, Branch.Loot, "volley",
             "VOLLEY — +1 TARGET AND -20% COOLDOWN, HITS -25%",
             S with { ExtraTargets = 1, SkillRate = 1.25f, HitSize = 0.75f });
-        Bridge(n, Branch.Spread, Branch.Endure, "feedback",
+        Bridge(n, Branch.Loot, Branch.Endure, "feedback",
             "FEEDBACK — HEAL 1.2% OF MAXIMUM PER CREATURE STRUCK",
             S with { HealPerTargetStruck = 0.012f });
         Bridge(n, Branch.Endure, Branch.Resonance, "anchor",
@@ -422,9 +420,9 @@ public static class MasteryCatalog
             BuildTrigger.Execute, S with { CullThreshold = 0.35f, CullBonus = 0.40f });
         Spec(n, Branch.Resonance, Form.Trap, "spec_trap", "TRAP SPECIALIST — TRAPS RE-ARM ON BEING HIT",
             BuildTrigger.Coiled, S);
-        Spec(n, Branch.Spread, Form.Projectile, "spec_projectile", "VOLLEY SPECIALIST — ONE MORE SHOT, ONE MORE TARGET",
+        Spec(n, Branch.Loot, Form.Projectile, "spec_projectile", "VOLLEY SPECIALIST — ONE MORE SHOT, ONE MORE TARGET",
             BuildTrigger.Overdraw, S with { FormTargets = new Dictionary<Form, int> { [Form.Projectile] = 1 } });
-        Spec(n, Branch.Spread, Form.Aura, "spec_aura", "AURA SPECIALIST — TICKS 30% FASTER",
+        Spec(n, Branch.Loot, Form.Aura, "spec_aura", "AURA SPECIALIST — TICKS 30% FASTER",
             BuildTrigger.Radiance, S);
         Spec(n, Branch.Tempo, Form.Mark, "spec_mark", "MARK SPECIALIST — THE WINDOW STRETCHES",
             BuildTrigger.Linger, S with { MarkWindowMultiplier = 1.3f });

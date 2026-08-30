@@ -81,6 +81,45 @@ public sealed record SkillShape
     /// <summary>PURE — what every skill gains while the whole weave shares one Source.</summary>
     public float OneSourceBonus { get; init; }
 
+    // ── LOOT. What you carry out — and every rule of it is keyed to something THE FIGHT already
+    //    knows, which is the designer's own unblock: "hasar almadığın her saniye drop şansın artar
+    //    gibi... hasar ve loot mekaniğini birleştirebilirsin". §9b wrote the branch around banking
+    //    and this game deliberately has no bank (SoloExpedition pays every wave the instant it
+    //    clears), so the tension it sells is the one an idle run actually has: how cleanly and how
+    //    deep a single attempt goes. It also settles the no-bare-multiplier law by construction —
+    //    a haul bonus you have to EARN inside the wave is not a flat percentage. ─────────────────
+
+    /// <summary>UNTOUCHED — haul per second of the wave in which nothing bit you, to its own cap.</summary>
+    public float HaulPerCleanSecond { get; init; }
+    public float HaulCleanCap { get; init; }
+
+    /// <summary>
+    /// SPOTLESS and VEIN — what a wave you finish ABOVE NINE TENTHS HEALTH is worth on top.
+    /// </summary>
+    /// <remarks>
+    /// It was "a wave nothing bit you in", and that wave does not exist: every creature in a wave
+    /// attacks, so the condition was unreachable by construction and both nodes were dead — the same
+    /// failure the reinforcement pass spent a day finding. "Finished at FULL health" was unreachable
+    /// too — there is no full heal between waves, so a champion chipped once stays chipped. Nine
+    /// tenths is the first version a real build can hold; it is still the strict opposite of
+    /// BLOODPRICE's half, and it is a thing the player can read off their own health bar.
+    /// </remarks>
+    public float HaulUntouchedWave { get; init; }
+
+    /// <summary>BLOODPRICE — the opposite pole: what a wave ended under half health is worth.</summary>
+    public float HaulWhenHurt { get; init; }
+
+    /// <summary>PROSPECT and LODE — haul per wave cleared past <see cref="HaulDepthFloor"/>.</summary>
+    public float HaulPerWavePastDepth { get; init; }
+    public int HaulDepthFloor { get; init; }
+
+    /// <summary>SECOND LOOK — a clean wave raises the chest's quality, not just its gleam.</summary>
+    public float RarityFromClean { get; init; }
+
+    /// <summary>CACHE — every Nth wave cleared pays this much more.</summary>
+    public int HaulEveryNthWave { get; init; }
+    public float HaulNthWaveBonus { get; init; }
+
     public float ArmourPenetration { get; init; }
 
     /// <summary>Fraction of the remaining armour a qualifying hit ignores (CRUSH).</summary>
@@ -436,6 +475,16 @@ public sealed record SkillShape
             HitSize = a.HitSize * b.HitSize,
             VowPowerMultiplier = a.VowPowerMultiplier * b.VowPowerMultiplier,
 
+            HaulPerCleanSecond = a.HaulPerCleanSecond + b.HaulPerCleanSecond,
+            HaulCleanCap = Math.Max(a.HaulCleanCap, b.HaulCleanCap),
+            HaulUntouchedWave = a.HaulUntouchedWave + b.HaulUntouchedWave,
+            HaulWhenHurt = a.HaulWhenHurt + b.HaulWhenHurt,
+            HaulPerWavePastDepth = a.HaulPerWavePastDepth + b.HaulPerWavePastDepth,
+            HaulDepthFloor = Pick(a.HaulDepthFloor, b.HaulDepthFloor, lower: true),
+            RarityFromClean = a.RarityFromClean + b.RarityFromClean,
+            HaulEveryNthWave = Pick(a.HaulEveryNthWave, b.HaulEveryNthWave, lower: true),
+            HaulNthWaveBonus = a.HaulNthWaveBonus + b.HaulNthWaveBonus,
+
             StrongMatchupBonus = a.StrongMatchupBonus + b.StrongMatchupBonus,
             WeakMatchupRelief = Math.Min(1f, a.WeakMatchupRelief + b.WeakMatchupRelief),
             AllMatchupsStrong = a.AllMatchupsStrong || b.AllMatchupsStrong,
@@ -520,6 +569,14 @@ public sealed record SkillShape
     {
         if (a <= 0f) return b;
         if (b <= 0f) return a;
+        return lower ? Math.Min(a, b) : Math.Max(a, b);
+    }
+
+    /// <summary>The same rule for a whole-number dial (a wave count, a depth floor).</summary>
+    private static int Pick(int a, int b, bool lower)
+    {
+        if (a <= 0) return b;
+        if (b <= 0) return a;
         return lower ? Math.Min(a, b) : Math.Max(a, b);
     }
 

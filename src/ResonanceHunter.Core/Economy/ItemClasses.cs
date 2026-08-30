@@ -101,7 +101,7 @@ public static class ItemClasses
         },
         new()
         {
-            Class = ItemClass.Ranger, Name = "RANGER", Road = Branch.Spread,
+            Class = ItemClass.Ranger, Name = "RANGER", Road = Branch.Loot,
             Description = "Many targets. Built for the SPREAD road.",
             // THE OATHBOUND, not THE QUIVER. The brief put THE QUIVER here, but THE QUIVER leans TEMPO
             // in the roster and a class whose champion walks a different road than the class is named

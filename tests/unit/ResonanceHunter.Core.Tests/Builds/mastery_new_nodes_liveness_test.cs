@@ -84,63 +84,8 @@ public class mastery_new_nodes_liveness_test
         Assert.True(Bites(stagger.Events) > 0, "STAGGER held every bite off — the once-per-bite cap is not working.");
     }
 
-    // ── SPREAD ────────────────────────────────────────────────────────────────────────────────────
-
-    /// <summary>FAN — a Trap reaches one more creature, through the same TargetsFor the sim reads.</summary>
-    [Fact]
-    public void test_fan_gives_the_trap_a_second_target()
-    {
-        Assert.Equal(FormBehaviour.Targets(Form.Trap) + 1, Node("fan").TargetsFor(Form.Trap));
-        Assert.Equal(FormBehaviour.Targets(Form.Strike), Node("fan").TargetsFor(Form.Strike));
-
-        // And the fight agrees: a Trap that is bitten strikes two creatures, not one.
-        var plain = Fight(SkillShape.None, Wave(3, 1_000_000f, 10f), NoSwing, forms: Form.Trap).Metrics;
-        var fan = Fight(Node("fan"), Wave(3, 1_000_000f, 10f), NoSwing, forms: Form.Trap).Metrics;
-        Assert.True(fan.TargetsStruck > plain.TargetsStruck,
-            $"FAN struck {fan.TargetsStruck} against {plain.TargetsStruck} — the extra target is not reaching the Trap.");
-    }
-
-    /// <summary>RALLY — after a kill, the next skill activation hits harder.</summary>
-    [Fact]
-    public void test_rally_spends_a_kill_on_the_next_skill()
-    {
-        // One creature a single Strike finishes, then a pool nothing kills: the kill arms the rally
-        // and the whole of the second creature's damage is the measurement.
-        var field = () => new List<WaveCreature>
-        {
-            new() { MaxHealth = 10f, Health = 10f, Damage = 1f },
-            new() { MaxHealth = 1_000_000f, Health = 1_000_000f, Damage = 1f },
-        };
-        var plain = Fight(SkillShape.None, field(), NoSwing).Metrics;
-        var rally = Fight(Node("rally"), field(), NoSwing).Metrics;
-
-        Assert.Equal(1, plain.CreaturesKilled);
-        Assert.True(rally.RawDamage > plain.RawDamage,
-            $"RALLY dealt {rally.RawDamage:N0} against {plain.RawDamage:N0} — the kill is not arming the next skill.");
-        // ONE activation, not every one after: the total moves by less than the node's whole bonus.
-        Assert.True(rally.RawDamage < plain.RawDamage * (1f + Node("rally").NextSkillAfterKillBonus),
-            "RALLY paid on every hit after the kill, not on the next skill.");
-    }
-
-    /// <summary>TIDE — cooldowns shorten with the crowd, so a wide wave dies sooner.</summary>
-    [Fact]
-    public void test_tide_casts_faster_in_a_crowd()
-    {
-        // Six creatures a Strike kills in one hit each. TIDE's rate bonus is per LIVING creature,
-        // so it is worth the most on the first cast and fades as they fall; the price is paid flat.
-        var field = () => Wave(6, 30f, 1f);
-        var plain = Fight(SkillShape.None with { HitSize = 0.85f }, field(), NoSwing).Metrics;
-        var tide = Fight(Node("tide"), field(), NoSwing).Metrics;
-
-        Assert.Equal(6, plain.CreaturesKilled);
-        Assert.Equal(6, tide.CreaturesKilled);
-        Assert.True(tide.DurationMs < plain.DurationMs,
-            $"TIDE cleared in {tide.DurationMs}ms against {plain.DurationMs}ms at the same hit size — the rate is not reading the crowd.");
-    }
-
     // ── TEMPO ─────────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>BRISK — the basic swing comes sooner; the skills keep their own pace.</summary>
     [Fact]
     public void test_brisk_speeds_the_swing_and_not_the_skills()
     {
@@ -252,8 +197,9 @@ public class mastery_new_nodes_liveness_test
 
     /// <summary>Every survivor of the twelve exists, costs what its ring costs, and changes a shape.</summary>
     /// <remarks>
-    /// NINE, not twelve. HEFT, HEADLONG and STAGGER were all WEIGHT's, and the 2026-08-30 re-axe
-    /// replaced that branch with RESONANCE (design §9). The nodes
+    /// SIX, not twelve. HEFT, HEADLONG and STAGGER were WEIGHT's and FAN, RALLY and TIDE were
+    /// SPREAD's; the 2026-08-30 re-axe replaced both branches, with RESONANCE and LOOT (design §9).
+    /// The nodes
     /// that replaced them are pinned by <c>MasteryNodeLivenessTests</c>, which asks a harder question of
     /// each — not "is it in the catalogue" but "does the fight come out different".
     /// </remarks>
@@ -262,7 +208,6 @@ public class mastery_new_nodes_liveness_test
     {
         var ids = new[]
         {
-            "fan", "rally", "tide",
             "brisk", "rhythm", "opening_volley", "mending", "payback", "rebound",
         };
         foreach (var id in ids)

@@ -1802,6 +1802,17 @@
       "single_subject": true
     },
     {
+      "key": "icon_branch_loot",
+      "dest": "assets/art/UI/icons/branches",
+      "style": "glyph",
+      "subject": "one plump drawstring pouch with a cinched neck and two hanging cord ends, seen straight on",
+      "width": 192,
+      "height": 192,
+      "shading": "flat shading",
+      "detail": "low detail",
+      "single_subject": true
+    },
+    {
       "key": "icon_branch_tempo",
       "dest": "assets/art/UI/icons/branches",
       "style": "glyph",
