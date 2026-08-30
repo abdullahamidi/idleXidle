@@ -327,12 +327,17 @@ public static class MasteryLayout
         {
             // ON ITS SPECIALISATION'S OWN SPOKE, one step further out — the road IS that
             // specialisation continued, and any other placement would make the wire cross the rim.
-            var spec = node.Prereqs.Select(MasteryCatalog.ById).FirstOrDefault(x => x is not null);
-            if (spec is not null)
+            // FROM ITS PREREQUISITE'S OWN RADIUS, not from the specialisation's. A road is two nodes
+            // deep — the style's active, then its passive off that — so the second must step out from
+            // where the FIRST actually landed. Reading the fraction instead put both at one radius and
+            // the overlap gate caught them stacked.
+            var before = node.Prereqs.Select(MasteryCatalog.ById).FirstOrDefault(x => x is not null);
+            if (before is not null)
             {
-                var at = PositionOf(spec, maxRing);
+                var at = PositionOf(before, maxRing);
                 var angle = MathF.Atan2(at.Y, at.X);
-                return Polar(WorldRadius * SpecialisationFraction + SkillRoadStep, angle);
+                var radius = MathF.Sqrt(at.X * at.X + at.Y * at.Y);
+                return Polar(radius + SkillRoadStep, angle);
             }
         }
 

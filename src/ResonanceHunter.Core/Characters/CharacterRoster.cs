@@ -50,6 +50,7 @@ public static class CharacterRoster
         new()
         {
             Id = "seeker", Name = "THE SEEKER",
+            StartingSkillId = "hammer_blow",   // the plainest of the twelve, for the champion with no lean
             Class = ItemClass.Wanderer, Tier = ClassTier.First,
             Blurb = "Walked every road far enough to know none of them is home.",
             Lean = null, Aptitude = null,
@@ -66,6 +67,7 @@ public static class CharacterRoster
         new()
         {
             Id = "anvil", Name = "THE ANVIL",
+            StartingSkillId = "hammer_press",   // a weight that sits on the front enemy — an anvil, not a hammer
             Class = ItemClass.Warden, Tier = ClassTier.First,
             Blurb = "Hits things until they are a different shape.",
             Lean = Branch.Resonance, Aptitude = Form.Strike,
@@ -80,6 +82,7 @@ public static class CharacterRoster
         new()
         {
             Id = "chorus", Name = "THE CHORUS",
+            StartingSkillId = "field_mire",   // many mouths, one field
             Class = ItemClass.Ranger, Tier = ClassTier.First,
             Blurb = "Never speaks. The charms do it.",
             Lean = Branch.Loot, Aptitude = Form.Aura,
@@ -93,6 +96,7 @@ public static class CharacterRoster
         new()
         {
             Id = "metronome", Name = "THE METRONOME",
+            StartingSkillId = "volley_spray",   // the one that fires on a count
             Class = ItemClass.Mystic, Tier = ClassTier.First,
             Blurb = "Keeps time. The fight is what happens between the beats.",
             Lean = Branch.Tempo, Aptitude = Form.Projectile,
@@ -108,6 +112,7 @@ public static class CharacterRoster
         new()
         {
             Id = "unbroken", Name = "THE UNBROKEN",
+            StartingSkillId = "drain_wilt",   // it wears the wave down rather than out-hitting it
             Class = ItemClass.Bulwark, Tier = ClassTier.First,
             Blurb = "Has been killed. Declined.",
             Lean = Branch.Endure, Aptitude = Form.Transformation,
@@ -121,6 +126,7 @@ public static class CharacterRoster
         new()
         {
             Id = "tower", Name = "THE FALLING TOWER",
+            StartingSkillId = "hammer_blow",   // the falling tower IS one enormous hit
             Class = ItemClass.Warden, Tier = ClassTier.Second,
             Blurb = "Slow. Arrives anyway.",
             Lean = Branch.Resonance, Aptitude = Form.Strike, AptitudePower = 1.15f,
@@ -137,6 +143,7 @@ public static class CharacterRoster
         new()
         {
             Id = "quiver", Name = "THE QUIVER",
+            StartingSkillId = "volley_weep",   // what a quiver leaves behind it
             Class = ItemClass.Mystic, Tier = ClassTier.Second,
             Blurb = "Counts arrows the way other people count breaths.",
             Lean = Branch.Tempo, Aptitude = Form.Projectile, AptitudePower = 1.35f,
@@ -156,6 +163,7 @@ public static class CharacterRoster
         new()
         {
             Id = "thornwall", Name = "THE THORNWALL",
+            StartingSkillId = "snare_jaws",   // a wall that answers being touched
             Class = ItemClass.Bulwark, Tier = ClassTier.Second,
             Blurb = "Stands where the road narrows, and lets it narrow further.",
             Lean = Branch.Endure, Aptitude = Form.Trap, AptitudePower = 1.35f,
@@ -175,6 +183,7 @@ public static class CharacterRoster
         new()
         {
             Id = "oathbound", Name = "THE OATHBOUND",
+            StartingSkillId = "sign_call",   // a vow-keeper opens the window for everyone else
             Class = ItemClass.Ranger, Tier = ClassTier.Second,
             Blurb = "Gave up their eyes for a better bargain.",
             Lean = null, Aptitude = Form.Mark, AptitudePower = 1.30f,
@@ -197,6 +206,7 @@ public static class CharacterRoster
         new()
         {
             Id = "magpie", Name = "THE MAGPIE",
+            StartingSkillId = "snare_repay",   // it collects what it is owed
             Class = ItemClass.Wanderer, Tier = ClassTier.Second,
             Blurb = "Fights for the pockets, not the glory.",
             Lean = null, Aptitude = Form.Trap,

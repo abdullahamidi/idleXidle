@@ -3,6 +3,7 @@ using System.Linq;
 using ResonanceHunter.Core.Builds;
 using ResonanceHunter.Core.Loot;
 using ResonanceHunter.Core.Prestige;
+using ResonanceHunter.Core.Tests.Builds;
 using Xunit;
 
 namespace ResonanceHunter.Core.Tests.Prestige;
@@ -369,7 +370,7 @@ public class DustEffectsTests
         var composed = BuildComposer.Compose(tree, new MasteryTree(), null, Array.Empty<BuildComposer.SkillPick>(),
                                              Array.Empty<string>(), 4);
         Assert.Equal(1.25f, composed.Shape.VowPowerMultiplier, 3);
-        var plain = BuildComposer.Compose(new MemoryDustTree(), new MasteryTree(), null, Array.Empty<BuildComposer.SkillPick>(),
+        var plain = BuildComposer.Compose(new MemoryDustTree(), Taught.Everything(), null, Array.Empty<BuildComposer.SkillPick>(),
                                           Array.Empty<string>(), 4);
         Assert.Equal(1f, plain.Shape.VowPowerMultiplier, 3);
     }

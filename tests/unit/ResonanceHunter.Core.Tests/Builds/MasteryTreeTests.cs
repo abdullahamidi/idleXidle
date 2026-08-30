@@ -81,8 +81,8 @@ public class MasteryTreeTests
         // Four branches at 49, four bridges at 6, six specialisations at 6 — and, since 2026-08-30,
         // six STYLE ROADS at 5, one per specialisation, each teaching a skill that has no Form of its
         // own (design §5). A whole road is 11 points: the specialisation, then the skill.
-        Assert.Equal(4 * 49 + 4 * 6 + 6 * 6 + 6 * MasteryCatalog.SkillRoadCost, MasteryCatalog.TotalCost);
-        Assert.Equal(286, MasteryCatalog.TotalCost);
+        Assert.Equal(4 * 49 + 4 * 6 + 6 * 6 + 12 * MasteryCatalog.SkillRoadCost, MasteryCatalog.TotalCost);
+        Assert.Equal(316, MasteryCatalog.TotalCost);
     }
 
     /// <summary>No two nodes share an id — a duplicate would make ById, Take and the save ambiguous.</summary>
@@ -135,9 +135,11 @@ public class MasteryTreeTests
         bool Reached(MasteryNode n)
         {
             if (t.IsTaken(n.Id) || n.Unlocked(t.IsTaken)) return true;
+            // A road is TWO nodes deep — the style's active, then its passive off that — so the
+            // second one's prerequisite is the first road, not the specialisation. Walk the chain.
             return n.Kind == MasteryKind.SkillRoad
                    && n.Prereqs.Select(MasteryCatalog.ById)
-                       .All(p => p is not null && p.Unlocked(t.IsTaken));
+                       .All(p => p is not null && (p.Unlocked(t.IsTaken) || Reached(p)));
         }
 
         var unreached = MasteryCatalog.Nodes.Where(n => !Reached(n)).Select(n => n.Id).ToList();
@@ -224,10 +226,11 @@ public class MasteryTreeTests
     /// ceiling), and never so large that a career buys less than a branch and a half (the floor:
     /// 0.25 × 256 = 64 > 49).
     ///
-    /// <b>The floor moved to 0.22 on 2026-08-30</b>, when the six style roads took the tree from 256
-    /// to 286 and a full career from 26% to 23%. The floor's REASON still holds — its point is that a
+    /// <b>The floor moved on 2026-08-30</b>, twice in one day. Six style roads took the tree from 256
+    /// to 286 and a career from 26% to 23%; then ALL TWELVE skills moved onto the tree — the designer
+    /// retired composing a skill from a Source and a Form — which took it to 316 and 21%. The floor's REASON still holds — its point is that a
     /// career must buy more than one branch, and 0.22 × 286 = 63, still comfortably over 49. What
-    /// changed is that the tree grew and the point income did not, which is a real signal and is
+    /// changed is that the tree grew twice and the point income did not, which is a real signal and is
     /// deliberately NOT answered here by quietly raising the curve: whether a champion should earn
     /// more mastery now that mastery also buys skills is a playtest question, not a number to move
     /// because a test went red.
@@ -238,8 +241,8 @@ public class MasteryTreeTests
         var midCareer = MasteryPoints.Total(new[] { 150, 150, 150, 150, 150, 150 }) / (float)MasteryCatalog.TotalCost;
         var fullCareer = FullCareerPoints / (float)MasteryCatalog.TotalCost;
 
-        Assert.InRange(midCareer, 0.22f, 0.38f);
-        Assert.InRange(fullCareer, 0.22f, 0.38f);
+        Assert.InRange(midCareer, 0.20f, 0.38f);
+        Assert.InRange(fullCareer, 0.20f, 0.38f);
         Assert.True(FullCareerPoints > MasteryCatalog.BranchCost(Branch.Resonance) * 1.5f,
             "a full career must buy a branch and a half, or the second start is fiction.");
     }

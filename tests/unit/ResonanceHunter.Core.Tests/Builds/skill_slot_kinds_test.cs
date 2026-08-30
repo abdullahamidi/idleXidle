@@ -171,7 +171,7 @@ public class ComposedSlotSplitTests
         => new(Source.Body, form, null, name);
 
     private static Build Compose(int slots, params BuildComposer.SkillPick[] skills)
-        => BuildComposer.Compose(new MemoryDustTree(), new MasteryTree(), character: null,
+        => BuildComposer.Compose(new MemoryDustTree(), Taught.Everything(), character: null,
                                  skills: skills, keystoneIds: Array.Empty<string>(), slotCapacity: slots);
 
     [Theory]
@@ -206,13 +206,21 @@ public class ComposedSlotSplitTests
         // skills; the active budget is two now. Dropping the overflow would take half of someone's
         // build away on load without a word, so it spills into the passive slots instead.
         //
-        // A SPILL IS EXEMPT FROM THE SKILL GATE (2026-08-30). Two of these styles' passive skills are
-        // among the six the mastery tree teaches, and this champion has walked no roads — but the
-        // budget put those slots where they are, not the player, and §11 will not have a build
-        // silently unwoven. The gate applies to the player's own choice; see the two tests below.
-        var b = Compose(4,
-            S("a", Form.Strike), S("b", Form.Projectile),
-            S("c", Form.Mark), S("d", Form.Transformation));
+        // THE CHAMPION HAS TO KNOW THEM. Every skill is learned on the mastery tree since
+        // 2026-08-30, so the migration is only a migration for a champion that walked the roads —
+        // which is what this poses. Without them the build is empty, and that is the gate's own test.
+        var mastery = new MasteryTree();
+        mastery.SetEarned(9999);
+        mastery.RestoreTaken(MasteryCatalog.Nodes
+            .Where(x => x.Kind == MasteryKind.SkillRoad).Select(x => x.Id));
+        var b = BuildComposer.Compose(
+            new MemoryDustTree(), mastery, character: null,
+            skills: new[]
+            {
+                S("a", Form.Strike), S("b", Form.Projectile),
+                S("c", Form.Mark), S("d", Form.Transformation),
+            },
+            keystoneIds: Array.Empty<string>(), slotCapacity: 4);
 
         Assert.Equal(4, b.Skills.Count);
         Assert.Equal(new[] { "a", "b", "c", "d" }, b.Skills.Select(s => s.Name).ToArray());
@@ -241,21 +249,22 @@ public class ComposedSlotSplitTests
             },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4);
 
+        // ALL TWELVE are learned on the tree since 2026-08-30, so an untaught champion with no
+        // character weaves NOTHING — which is exactly why every champion brings one skill of its own.
         var untaught = new MasteryTree();
-        Assert.Single(With(untaught).Skills);
-        Assert.Equal("a", With(untaught).Skills[0].Name);
+        Assert.Empty(With(untaught).Skills);
 
         var walked = new MasteryTree();
         walked.SetEarned(999);
-        walked.RestoreTaken(new[] { "spec_strike", "road_hammer" });
+        walked.RestoreTaken(new[] { "spec_strike", "road_hammer", "road_hammer_2" });
         var b = With(walked);
         Assert.Equal(2, b.Skills.Count);
         Assert.Equal(SkillCatalogue.PassiveOf(Style.Hammer).Id, b.Skills[1].Def.Id);
 
         // AND RESPEC TAKES IT BACK. The designer chose a road that re-locks, so the same build
-        // composed after the point is refunded is the one-skill build again.
+        // composed after the points are refunded weaves nothing at all.
         walked.Respec();
-        Assert.Single(With(walked).Skills);
+        Assert.Empty(With(walked).Skills);
     }
 
     [Fact]
@@ -347,7 +356,7 @@ public class SwingShareTests
     public void test_a_composed_build_gives_the_swing_back_the_majority_of_its_actions()
     {
         var after = BuildComposer.Compose(
-            new MemoryDustTree(), new MasteryTree(), character: null,
+            new MemoryDustTree(), Taught.Everything(), character: null,
             skills: new[] { S("a", Form.Strike), S("b", Form.Projectile),
                             S("c", Form.Mark), S("d", Form.Transformation) },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4);
@@ -368,7 +377,7 @@ public class SwingShareTests
         // The other half of the promise. Moving two skills into passive slots must not silence them —
         // if it did, the swing would come back only because half the build stopped working.
         var after = BuildComposer.Compose(
-            new MemoryDustTree(), new MasteryTree(), character: null,
+            new MemoryDustTree(), Taught.Everything(), character: null,
             skills: new[] { S("a", Form.Strike), S("b", Form.Projectile),
                             S("c", Form.Aura), S("d", Form.Trap) },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4);
@@ -401,7 +410,7 @@ public class PassiveEffectTests
     private static BuildComposer.SkillPick S(string name, Form form) => new(Source.Body, form, null, name);
 
     private static Build Compose(params BuildComposer.SkillPick[] skills)
-        => BuildComposer.Compose(new MemoryDustTree(), new MasteryTree(), character: null,
+        => BuildComposer.Compose(new MemoryDustTree(), Taught.Everything(), character: null,
                                  skills: skills, keystoneIds: Array.Empty<string>(), slotCapacity: 4);
 
     /// <summary>Total damage the champion put out in one wave, summed from the event stream.</summary>

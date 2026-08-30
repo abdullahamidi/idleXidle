@@ -66,7 +66,13 @@ public class MasteryNodeLivenessTests
     {
         var tree = new MasteryTree();
         tree.SetEarned(999);
-        tree.RestoreTaken(ids);
+        // EVERY SKILL ROAD, ALWAYS, on top of whatever the case asks for. All twelve skills are
+        // learned on the tree since 2026-08-30, so a probe holding only the node under test would
+        // compose an empty build and report the whole branch dormant for a reason that has nothing to
+        // do with the node. The roads are held identical on both sides, so they cannot be the thing
+        // that moved.
+        tree.RestoreTaken(ids.Concat(MasteryCatalog.Nodes
+            .Where(n => n.Kind == MasteryKind.SkillRoad).Select(n => n.Id)));
         return tree;
     }
 

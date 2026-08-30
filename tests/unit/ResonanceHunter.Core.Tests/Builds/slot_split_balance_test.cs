@@ -66,7 +66,7 @@ public class SlotSplitBalanceTests
     /// <summary>The build a real player gets now: two actives, two passives, through the composer.</summary>
     private static Build TwoAndTwo((string Name, Form Form)[] loadout)
         => BuildComposer.Compose(
-            new MemoryDustTree(), new MasteryTree(), character: null,
+            new MemoryDustTree(), Taught.Everything(), character: null,
             skills: loadout.Select(l => new BuildComposer.SkillPick(Source.Body, l.Form, null, l.Name)).ToList(),
             keystoneIds: Array.Empty<string>(), slotCapacity: 4);
 

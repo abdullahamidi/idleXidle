@@ -455,12 +455,20 @@ public static class MasteryCatalog
         //    Priced at a GREATER rather than a specialisation: the specialisation before it already
         //    cost 6, so a whole road to one skill is 11 points, and a player has about 66 at full
         //    content. Two roads is a third of a career, which is the commitment the hexagon wanted.
-        Teaches(n, Branch.Resonance, "road_hammer", "spec_strike", "hammer_press");
-        Teaches(n, Branch.Resonance, "road_snare", "spec_trap", "snare_repay");
-        Teaches(n, Branch.Loot, "road_volley", "spec_projectile", "volley_weep");
-        Teaches(n, Branch.Loot, "road_field", "spec_aura", "field_pulse");
-        Teaches(n, Branch.Tempo, "road_sign", "spec_mark", "sign_brand");
-        Teaches(n, Branch.Endure, "road_drain", "spec_transformation", "drain_wilt");
+        // TWO NODES PER ROAD, one for each of the style's skills — the active first, then the
+        // passive off it, so a road is walked rather than arrived at. Twelve skills, twelve nodes.
+        Teaches(n, Branch.Resonance, "road_hammer", "spec_strike", "hammer_blow");
+        Teaches(n, Branch.Resonance, "road_hammer_2", "road_hammer", "hammer_press");
+        Teaches(n, Branch.Resonance, "road_snare", "spec_trap", "snare_jaws");
+        Teaches(n, Branch.Resonance, "road_snare_2", "road_snare", "snare_repay");
+        Teaches(n, Branch.Loot, "road_volley", "spec_projectile", "volley_spray");
+        Teaches(n, Branch.Loot, "road_volley_2", "road_volley", "volley_weep");
+        Teaches(n, Branch.Loot, "road_field", "spec_aura", "field_mire");
+        Teaches(n, Branch.Loot, "road_field_2", "road_field", "field_pulse");
+        Teaches(n, Branch.Tempo, "road_sign", "spec_mark", "sign_call");
+        Teaches(n, Branch.Tempo, "road_sign_2", "road_sign", "sign_brand");
+        Teaches(n, Branch.Endure, "road_drain", "spec_transformation", "drain_drink");
+        Teaches(n, Branch.Endure, "road_drain_2", "road_drain", "drain_wilt");
     }
 
     /// <summary>One style road's skill node: it teaches, and it changes nothing else.</summary>

@@ -221,7 +221,23 @@ public sealed record EquippedSkill(WovenAbility Ability, int CooldownMs, bool? P
 
     public string Name => Ability.Name;
     public Form Form => Ability.Form;
-    public Source Source => Ability.Source;
+    /// <summary>
+    /// What this skill is MADE OF — its element, its matchup on the ring, its signature.
+    /// </summary>
+    /// <remarks>
+    /// THE SKILL'S OWN TREE OWNS IT NOW (designer, 2026-08-30): "Source skillerin ağacında seçim
+    /// olarak gelsin. Her skillin 2 ayrı uyumlu sourcesi olsun. Skill ağacında iki farklı seçenek
+    /// olarak 2 dala ayrılsın ve devam geliştirmeleri bununla bağlantılı geliştirmeler olsun."
+    ///
+    /// The fork was already there — a skill has two variations and three reinforcements hanging off
+    /// whichever one you take — so the Source rides that fork rather than adding a layer. Choosing
+    /// what the skill BECOMES and choosing what it is MADE OF are one decision, and the three
+    /// reinforcements under it are that decision's continuation.
+    ///
+    /// Until a variation is taken the skill falls back to the Source it was woven with, so a
+    /// champion that has not levelled a skill yet still has an element.
+    /// </remarks>
+    public Source Source => Variation?.Source ?? Ability.Source;
     public Vow? Vow => Ability.Vow;
 
     /// <summary>

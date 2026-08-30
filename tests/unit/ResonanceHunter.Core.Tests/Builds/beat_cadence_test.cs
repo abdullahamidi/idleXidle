@@ -263,7 +263,7 @@ public class BeatCadenceTest
     /// </remarks>
     private static Build FourSkillLoadout()
         => BuildComposer.Compose(
-            new MemoryDustTree(), new MasteryTree(), character: null,
+            new MemoryDustTree(), Taught.Everything(), character: null,
             skills: new[]
             {
                 new BuildComposer.SkillPick(Source.Body, Form.Strike, null, "Strike"),

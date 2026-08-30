@@ -134,7 +134,11 @@ public static class BuildComposer
                 build.Take(k);
 
         var picks = skills as IReadOnlyList<SkillPick> ?? skills.ToList();
-        var taughtSkills = mastery.LearnedSkills();
+        // WHAT THIS CHAMPION KNOWS: the roads it has walked, plus the one skill it was born with.
+        // Without the second half a fresh champion could weave nothing at all, because all twelve are
+        // learned on the tree now and a new game has no points.
+        var taughtSkills = mastery.LearnedSkills().ToHashSet(StringComparer.Ordinal);
+        if (character?.StartingSkillId is { } born) taughtSkills.Add(born);
         var passive = SlotKinds(picks, slotCapacity, taughtSkills);
 
         // WHAT THIS CHAMPION HAS BEEN TAUGHT feeds BOTH halves of the rule: SlotKinds above will not
@@ -149,14 +153,11 @@ public static class BuildComposer
             // The skill's own timing seeds its cooldown. A beat-counted skill still counts BEATS in
             // the fight; this is the millisecond figure the readouts and the wave-length rule use.
             var def = SkillCatalogue.Resolve(s.Form, passive[i]);
-            // THE GATE, AT THE ONE PLACE IT BELONGS: a slot the player DELIBERATELY set to this kind.
-            // Six skills are taught by the mastery tree (design §5) and this refuses to weave one that
-            // has not been. A SPILLED slot is exempt — the budget put it there, not the player, and
-            // §11 will not have an old build silently unwoven. The door a live player could otherwise
-            // walk through (wire three actives, collect the passive) is shut on the weave screen,
-            // which will not set more actives than the budget holds.
-            if (s.Passive == true && SkillCatalogue.NeedsUnlock(def) && !taughtSkills.Contains(def.Id))
-                continue;
+            // THE GATE, AND IT IS UNCONDITIONAL NOW. You weave what you know: all twelve skills are
+            // learned on the mastery tree since 2026-08-30, so there is no longer a free half for a
+            // spill to fall back on. The exemption a spill used to get existed only to protect the six
+            // that a Source and a Form composed for free, and those six are gone with that door.
+            if (!taughtSkills.Contains(def.Id)) continue;
             var cooldown = def.Beats > 0 ? def.Beats * SoloBattle.DefaultBeatMs
                                          : FormBehaviour.BaseCooldownMs(s.Form);
 

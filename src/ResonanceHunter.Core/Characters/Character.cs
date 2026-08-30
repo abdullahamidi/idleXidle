@@ -117,6 +117,18 @@ public sealed record Character
     /// <summary>The Form they are better at than you are.</summary>
     public Form? Aptitude { get; init; }
 
+    /// <summary>
+    /// The one skill this champion already knows, before a single mastery point is spent.
+    /// </summary>
+    /// <remarks>
+    /// Every one of the twelve is learned on the mastery tree now, so without this a fresh champion
+    /// would stand in its first wave with nothing to weave. The designer chose it as the answer AND
+    /// as a character rule: "Her karakterin basic pasif veya aktif bir skilli olabilir. Böylelikle
+    /// karakterlerin de ayrımı daha net olabilir." Some bring an active and some a passive, which is
+    /// a sharper difference between two champions than an aptitude multiplier is.
+    /// </remarks>
+    public string? StartingSkillId { get; init; }
+
     /// <summary>How much better. 1.25 = +25% on that Form's skills.</summary>
     public float AptitudePower { get; init; } = 1.25f;
 
