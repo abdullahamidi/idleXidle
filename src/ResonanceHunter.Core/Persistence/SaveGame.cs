@@ -144,6 +144,17 @@ public sealed record SaveGame
     /// <summary>Which learned keystones are socketed. Ids into the keystone catalog.</summary>
     public List<string> SocketedKeystoneIds { get; init; } = new();
 
+    /// <summary>
+    /// What each skill has earned by being used, and what the player spent it on.
+    /// </summary>
+    /// <remarks>
+    /// Keyed by skill id rather than by slot, because a skill's levels belong to the SKILL and not to
+    /// where it happens to be woven — unequipping one keeps everything it earned, which is the rule
+    /// that lets a player experiment without losing progress. A save that predates this simply
+    /// carries no rows and every skill starts at its base line.
+    /// </remarks>
+    public List<SavedSkillProgress> SkillProgress { get; init; } = new();
+
     /// <summary>The character's Form affinity (the Nen-hexagon identity). Legacy — the Mastery tree owns it now.</summary>
     public string Affinity { get; init; } = "";
 
@@ -681,4 +692,19 @@ public static class SaveSystem
 
     public static double CreditedOfflineSeconds(double elapsed)
         => Math.Clamp(elapsed, 0, MaxOfflineSeconds);
+}
+
+/// <summary>One skill's earned levels and spent choices, flattened for the save file.</summary>
+public sealed record SavedSkillProgress
+{
+    public required string SkillId { get; init; }
+
+    /// <summary>Waves cleared with it equipped.</summary>
+    public int Uses { get; init; }
+
+    /// <summary>Which of its two variations was taken, or null while unchosen.</summary>
+    public string? Variation { get; init; }
+
+    /// <summary>Which of that variation's reinforcements are bought.</summary>
+    public List<string> Reinforcements { get; init; } = new();
 }

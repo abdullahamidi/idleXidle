@@ -101,12 +101,26 @@ public enum ReactionOn
 /// A reinforcement belongs to its variation and must be worthless to the other one. That is what
 /// makes the variation a real fork rather than a label on a shared upgrade path.
 /// </remarks>
-public sealed record Reinforcement(string Name, string Line);
+public sealed record Reinforcement(string Name, string Line, Func<SkillDef, SkillDef>? Modify = null);
 
 /// <summary>
 /// One of the two ways a skill can be taken. Changes what the skill DOES, not how much of it.
 /// </summary>
-public sealed record SkillVariation(string Name, string Line, IReadOnlyList<Reinforcement> Reinforcements);
+/// <param name="Modify">
+/// How the skill's dials change when this variation is taken.
+/// </param>
+/// <remarks>
+/// <b>A DELTA ON THE DEFINITION, not a branch in the fight loop.</b> The variation says what the
+/// skill BECOMES and the sim keeps reading one <see cref="SkillDef"/>, so a fight-loop that already
+/// knows how to read a dial does not gain a case per variation — which is how the Form table turned
+/// into six price tags with a switch behind each. It also means a variation and a reinforcement
+/// compose by construction: each is a function on the definition, applied in order.
+/// </remarks>
+public sealed record SkillVariation(
+    string Name,
+    string Line,
+    IReadOnlyList<Reinforcement> Reinforcements,
+    Func<SkillDef, SkillDef>? Modify = null);
 
 /// <summary>
 /// One skill: a distinct ability belonging to one style, unlocked by its own mastery node.
@@ -197,6 +211,10 @@ public static class SkillCatalogue
     private static SkillVariation V(string name, string line, params (string N, string L)[] rs)
         => new(name, line, rs.Select(r => new Reinforcement(r.N, r.L)).ToList());
 
+    private static SkillVariation V(string name, string line, Func<SkillDef, SkillDef> modify,
+                                    params (string N, string L)[] rs)
+        => new(name, line, rs.Select(r => new Reinforcement(r.N, r.L)).ToList(), modify);
+
     public static IReadOnlyList<SkillDef> All { get; } = new List<SkillDef>
     {
         // ── HAMMER — defence break, defence ignore, stun, execute threshold ───────────────────────
@@ -220,7 +238,7 @@ public static class SkillCatalogue
         new("hammer_press", "PRESS", Style.Hammer, SkillKind.Field, SkillEffect.Damage,
             "A weight sits on the front enemy: its defence drops 5 every 2s, down to -25.",
             Beats: 0, IntervalMs: 2000, On: ReactionOn.None, Targets: 1,
-            ClipKey: "strike", FxKey: "strike",
+            ClipKey: "strike", FxKey: "press",
             Variations: new[]
             {
                 V("CRUSHING", "The defence drop is 10 every 2s instead of 5, down to -50.",
@@ -327,7 +345,7 @@ public static class SkillCatalogue
         new("volley_weep", "WEEP", Style.Volley, SkillKind.Reaction, SkillEffect.Damage,
             "When an enemy dies it leaves bleed on the wave worth 30% of its health.",
             Beats: 0, IntervalMs: 0, On: ReactionOn.Kill, Targets: WholeWave,
-            ClipKey: "projectile", FxKey: "projectile",
+            ClipKey: "projectile", FxKey: "weep",
             Variations: new[]
             {
                 V("TORRENT", "The bleed deals its damage twice as fast.",
@@ -397,7 +415,7 @@ public static class SkillCatalogue
         new("drain_wilt", "WILT", Style.Drain, SkillKind.Field, SkillEffect.Heal,
             "Attack break: every enemy's damage drops 10% a pulse, down to -50%.",
             Beats: 0, IntervalMs: 1000, On: ReactionOn.None, Targets: WholeWave,
-            ClipKey: "transformation", FxKey: "transformation",
+            ClipKey: "transformation", FxKey: "wilt",
             Variations: new[]
             {
                 V("SUP", "Each pulse also heals 1% of your maximum health.",

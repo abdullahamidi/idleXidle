@@ -329,6 +329,15 @@ public class Game1 : Game
     private bool _showChests;
     private bool _showPrestige;
     private MemoryDustTree _dust = new();
+
+    /// <summary>
+    /// What each skill has earned by being used. Owned by the game, not the expedition.
+    /// </summary>
+    /// <remarks>
+    /// An expedition is minted per run and a skill's levels outlive every run, so this lives here and
+    /// is handed to each expedition. That is the rule that makes unequipping a skill cost nothing.
+    /// </remarks>
+    private SkillProgress _skillProgress = new();
     private int _highestMasteryAwarded;
 
 
@@ -626,6 +635,8 @@ public class Game1 : Game
         if (save.WovenSkills.Count > 0)
             _loadout.Restore(
                 save.WovenSkills.Select(s => (s.Source, s.Form, s.VowId, s.Passive)), save.SocketedKeystoneIds);
+        _skillProgress.Restore(save.SkillProgress.Select(
+            r => (r.SkillId, r.Uses, r.Variation, (IReadOnlyList<string>)r.Reinforcements)));
 
         _deepestEver = save.MasteryEarned;         // stored the deepest-ever; Earned re-derives from it
         _mastery.RestoreTaken(save.MasteryTaken);
@@ -868,6 +879,12 @@ public class Game1 : Game
             WovenSkills = _loadout.SaveSkills()
                 .Select(s => new SavedSkill { Source = s.Source, Form = s.Form, VowId = s.VowId, Passive = s.Passive }).ToList(),
             SocketedKeystoneIds = _loadout.KeystoneIds.ToList(),
+            SkillProgress = _skillProgress.ToSave()
+                .Select(r => new SavedSkillProgress
+                {
+                    SkillId = r.SkillId, Uses = r.Uses, Variation = r.Variation,
+                    Reinforcements = r.Taken.ToList(),
+                }).ToList(),
             // The expedition log rides along the same way. The report is the only place this game can
             // teach, and the player it teaches is by definition not watching — the lesson has to survive
             // being closed.
@@ -970,6 +987,7 @@ public class Game1 : Game
         _loadout = PlayerLoadout.Starter();
         _mastery = new MasteryTree();
         _dust = new MemoryDustTree();
+        _skillProgress = new SkillProgress();
         _characters = new CharacterState();
         _warren = new Warren();
         _warrenMasteryPool = 0;
@@ -1511,7 +1529,7 @@ public class Game1 : Game
                         SellValue = 80, ItemLevel = 8,
                     });
                     _forge.AddLoot(seed);
-                    TellForgeTheBuild(_loadout.ToBuild(_dust, _mastery, _characters.Active));
+                    TellForgeTheBuild(_loadout.ToBuild(_dust, _mastery, _characters.Active, _skillProgress));
                     _forge.DevFocus("dev_siphon");   // the SIPHON charm — poses the longest combo line on the bench
                     // Stock every tier so the reforge/refine buttons pose live, not greyed.
                     _hunter.AddMaterials(500);   // SCRAP
@@ -1607,6 +1625,7 @@ public class Game1 : Game
                     _showCharacter = true;
                     _character.Loadout = _loadout;
                     _character.Mastery = _mastery;
+                    _character.SkillLevels = _skillProgress;
                     _character.Tree = _dust;
                     // Seed gear so the bag and the three worn slots pose with content, gleam so the train
                     // buttons are live, and a few trained ranks so the values aren't all at base.
@@ -2756,7 +2775,7 @@ public class Game1 : Game
         {
             // Keep the Forge told which Forms the build runs, so it can flag live combos here too (not
             // only when arrived at from the fight).
-            TellForgeTheBuild(_loadout.ToBuild(_dust, _mastery, _characters.Active));
+            TellForgeTheBuild(_loadout.ToBuild(_dust, _mastery, _characters.Active, _skillProgress));
             // The keyboard is LOCKED while any host modal owns the frame — without this, the S that
             // dismissed an unlock panel also SOLD the focused (rarest-first!) bag item behind it, and
             // S/D/J kept working under the settings panel and the reveal. MouseClicked already carries
@@ -3401,6 +3420,9 @@ public class Game1 : Game
     {
         var def = Regions.Get(_activeRegion);
         _expedition.EnemySource = def.Theme;          // region element → the Source matchup
+        // The skills bank their levels in the game's own progress, not the screen's or the run's:
+        // a run ends and a skill's levels do not.
+        _expedition.Progress = _skillProgress;
         _expedition.RegionId = def.Id;                // region id → the boss creature (boss_<region>) on boss waves
         _expedition.EnemyBias = def.CombatBias;       // region character → the enemy's bite tempo (feel + TRAP synergy)
         _expedition.CorruptionTier = _world.CorruptionTier;   // → creature tint, the boss's epithet, the header line
@@ -3463,7 +3485,7 @@ public class Game1 : Game
         // The loot-quality tilt reaches the roll that opens a chest. Until this line, Rarity was resolved
         // from keystones, gear and the trait tree, carried as Haul.Quality, and read by nothing at all.
         // The build is made ONCE and used twice — the Forge's combo line needs the same object.
-        var wornBuild = _loadout.ToBuild(_dust, _mastery, _characters.Active);
+        var wornBuild = _loadout.ToBuild(_dust, _mastery, _characters.Active, _skillProgress);
         _forge.RarityBonus = wornBuild.Resolve(_hunter).Rarity;
         TellForgeTheBuild(wornBuild);
 
@@ -5111,7 +5133,7 @@ public class Game1 : Game
     /// </remarks>
     private bool VowWasKept()
     {
-        var build = _loadout.ToBuild(_dust, _mastery, _characters.Active);
+        var build = _loadout.ToBuild(_dust, _mastery, _characters.Active, _skillProgress);
         var ctx = SoloBattle.DescribeBuild(build, _hunter);
         return build.Skills.Any(s => s.Vow is { } v && Weaving.IsActive(v, ctx));
     }

@@ -144,6 +144,16 @@ public sealed class SoloExpedition
     }
 
     public Champion Champion => _champion;
+    /// <summary>
+    /// Where the woven skills bank the levels they earn, or null when nothing is tracking them.
+    /// </summary>
+    /// <remarks>
+    /// Injected rather than owned: the expedition is minted per run and a skill's levels outlive
+    /// every run, so an expedition that owned this would hand back a champion whose skills forgot
+    /// everything the moment it banked. Null in the tests that only measure a fight.
+    /// </remarks>
+    public SkillProgress? Progress { get; init; }
+
     public int Wave { get; private set; }
     public bool Over { get; private set; }
     public Haul Carried { get; private set; }
@@ -338,6 +348,15 @@ public sealed class SoloExpedition
         }
 
         Wave = next;
+
+        // ── THE SKILLS EARN THEIR OWN LEVELS. One per CLEARED wave, per equipped skill, which is the
+        //    unit an active and a passive share: an active casts a few times a wave and a Field ticks
+        //    a dozen times, so counting activations would level a passive three times faster for
+        //    doing the same job — and the player did not choose the tick rate, the catalogue did.
+        //    Only a cleared wave counts, so a run that dies teaches nothing on its way out. ─────────
+        if (Progress is { } prog)
+            foreach (var sk in _build.Skills)
+                prog.RecordWave(sk.Def.Id);
 
         // ── BETWEEN WAVES. game-flow.md §3.3 makes "health does not regenerate between waves" a rule of
         //    the game — it is what turns a descent into one continuous fight rather than a series of

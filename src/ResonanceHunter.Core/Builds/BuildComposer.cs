@@ -84,7 +84,8 @@ public static class BuildComposer
     }
 
     public static Build Compose(MemoryDustTree tree, MasteryTree mastery, Character? character,
-                                IEnumerable<SkillPick> skills, IEnumerable<string> keystoneIds, int slotCapacity)
+                                IEnumerable<SkillPick> skills, IEnumerable<string> keystoneIds, int slotCapacity,
+                                SkillProgress? progress = null)
     {
         ArgumentNullException.ThrowIfNull(tree);
         ArgumentNullException.ThrowIfNull(mastery);
@@ -133,7 +134,19 @@ public static class BuildComposer
             var def = SkillCatalogue.Resolve(s.Form, passive[i]);
             var cooldown = def.Beats > 0 ? def.Beats * SoloBattle.DefaultBeatMs
                                          : FormBehaviour.BaseCooldownMs(s.Form);
-            build.Weave(new EquippedSkill(ability, cooldown, PassiveSlot: passive[i]));
+
+            // WHAT THE PLAYER HAS SPENT ON THIS SKILL. Null progress means an unlevelled build — a
+            // test, or a champion that has not fought yet — and every skill runs at its base line.
+            var variation = progress?.VariationOf(def);
+            var taken = variation is null
+                ? Array.Empty<Reinforcement>()
+                : variation.Reinforcements.Where(r => progress!.HasReinforcement(def.Id, r.Name)).ToArray();
+
+            build.Weave(new EquippedSkill(ability, cooldown, PassiveSlot: passive[i])
+            {
+                Variation = variation,
+                Reinforcements = taken,
+            });
         }
         return build;
     }

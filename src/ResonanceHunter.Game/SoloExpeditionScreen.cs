@@ -783,6 +783,9 @@ public sealed class SoloExpeditionScreen
         return build;
     }
 
+    /// <summary>Where the woven skills bank the levels they earn. Set by the host.</summary>
+    public SkillProgress? Progress { get; set; }
+
     private void StartRun(Hunter hunter)
     {
         var build = ComposeBuild(hunter);
@@ -808,6 +811,9 @@ public sealed class SoloExpeditionScreen
             EnemyBias = EnemyBias,
             RegionId = RegionId,
             RunIndex = ++_runIndex,
+            // The skills bank their levels here rather than in the run, because a run ends and a
+            // skill's levels do not.
+            Progress = Progress,
         };
         // A CHECKPOINT START. The region's chosen start wave (Map screen) skips the waves already
         // cleared, and the Memory Dust it costs is charged through the host (CheckpointCharge) — the
@@ -849,7 +855,18 @@ public sealed class SoloExpeditionScreen
             var cb = ComposeBuild(rh);
             _castRate = cb.Resolve(rh).SkillRate * cb.Shape.SkillRate;
             _beatMs = SoloBattle.BeatFor(_castRate);
-            var aura = Loadout.Skills.FirstOrDefault(k => k.Form == Form.Aura);
+            // WHICHEVER PASSIVE FIELD IS WOVEN, not always the Aura. After the slot rework a passive
+            // can be any style's — a spilled STRIKE is PRESS, a spilled TRANSFORMATION is WILT — and
+            // hunting for Form.Aura meant every one of them drew nothing at all.
+            var kinds = BuildComposer.SlotKinds(
+                Loadout.Skills.Select(k => new BuildComposer.SkillPick(k.Source, k.Form, k.VowId, "", k.Passive)).ToList(),
+                Loadout.SkillCapacity);
+            var fieldIdx = -1;
+            for (var fi = 0; fi < Loadout.Skills.Count && fi < kinds.Count; fi++)
+                if (kinds[fi] && SkillCatalogue.Resolve(Loadout.Skills[fi].Form, true).Kind == SkillKind.Field)
+                { fieldIdx = fi; break; }
+            var aura = fieldIdx >= 0 ? Loadout.Skills[fieldIdx] : null;
+            _auraForm = aura?.Form ?? Form.Aura;
             _auraColour = aura is null ? null : SourceColor.GetValueOrDefault(aura.Source, Bone);
             FlushAuraTotal();   // the wave's last tick still owes its number
             _auraTotal = 0; _auraTotalMs = -1;
@@ -3294,11 +3311,15 @@ public sealed class SoloExpeditionScreen
     /// the shape says who cast it and the colour says what it is made of.
     /// </para>
     /// </remarks>
-    private string FxFor(Form form)
+    private string FxFor(Form form, bool passive = false)
     {
-        var f = form.ToString().ToLowerInvariant();
-        var own = $"fx_{Character.Id}_{f}_strip8_512";
-        return _ui.Assets.Has(own) ? own : $"fx_{f}";
+        // THE SKILL'S OWN KEY, not the Form's. A style has two skills and they do not look alike: the
+        // weight PRESS lays on an enemy is not the blow BLOW lands, and the bleed WEEP leaves is not
+        // the bolt SPRAY flies. Resolving through the catalogue is what lets the passive half of the
+        // roster carry its own art without the renderer growing a case per skill.
+        var key = SkillCatalogue.Resolve(form, passive).FxKey;
+        var own = $"fx_{Character.Id}_{key}_strip8_512";
+        return _ui.Assets.Has(own) ? own : $"fx_{key}";
     }
 
     /// <summary>The build's action-speed multiplier for the wave being shown.</summary>
@@ -3364,6 +3385,9 @@ public sealed class SoloExpeditionScreen
 
     /// <summary>The slotted Aura's Source colour for the wave being shown, or null when the build carries no Aura.</summary>
     private Color? _auraColour;
+
+    /// <summary>Which Form the held field belongs to — it decides the art, and it is not always AURA.</summary>
+    private Form _auraForm = Form.Aura;
 
     /// <summary>Real seconds since the last aura pulse — the pulse runs on the wall clock, not the replay's.</summary>
     private float _auraSincePulse = 999f;
@@ -3442,7 +3466,7 @@ public sealed class SoloExpeditionScreen
         // both directions, so every step up buried more of it under the floor. Placing its BOTTOM just
         // under the soles means the growth goes where it is wanted — up and out around the figure.
         var h = AuraScale * VfxPlayer.BaseUnitPx;
-        _vfx.Hold(FxFor(Form.Aura), ChampBox.Center.X, (int)(ChampBox.Bottom + 18 - h / 2f),
+        _vfx.Hold(FxFor(_auraForm, passive: true), ChampBox.Center.X, (int)(ChampBox.Bottom + 18 - h / 2f),
                   AuraScale, 10f, colour * level);
     }
 

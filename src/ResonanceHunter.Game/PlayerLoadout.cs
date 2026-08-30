@@ -224,7 +224,8 @@ public sealed class PlayerLoadout
     /// indistinguishable from a deliberate null at the call site, so the omission is no longer offered:
     /// callers that mean "no character" now have to say so.
     /// </remarks>
-    public Build ToBuild(MemoryDustTree tree, MasteryTree mastery, Character? character)
+    public Build ToBuild(MemoryDustTree tree, MasteryTree mastery, Character? character,
+                         SkillProgress? progress = null)
     {
         ArgumentNullException.ThrowIfNull(tree);
         ArgumentNullException.ThrowIfNull(mastery);
@@ -237,7 +238,7 @@ public sealed class PlayerLoadout
         // only gathers the loadout's lists.
         return BuildComposer.Compose(tree, mastery, character,
             _skills.Select(s => new BuildComposer.SkillPick(s.Source, s.Form, s.VowId, NameOf(s), s.Passive)),
-            _keystoneIds, SkillCapacity);
+            _keystoneIds, SkillCapacity, progress);
     }
 
     /// <summary>A human name for a woven skill — "BODY STRIKE", "SHADOW TRAP".</summary>

@@ -61,6 +61,12 @@ public sealed class CharacterScreen
     public PlayerLoadout Loadout { get; set; } = null!;
     public MasteryTree Mastery { get; set; } = null!;
     public MemoryDustTree Tree { get; set; } = null!;
+
+    /// <summary>
+    /// What the woven skills have earned. Set by the host so this screen's damage readout is measured
+    /// against the same build the fight runs — a preview that ignores a bought variation lies.
+    /// </summary>
+    public SkillProgress? SkillLevels { get; set; }
     public bool Dirty { get; private set; }
     public void ClearDirty() => Dirty = false;
     /// <summary>F7 layout-debug (spec §18): panel rects, content-safe rects, selection, active nav.</summary>
@@ -417,7 +423,7 @@ public sealed class CharacterScreen
         var was = hunter.Worn(GearSlot.Weapon);
         if (weapon is null) hunter.Unequip(GearSlot.Weapon); else hunter.Equip(weapon);
         float dps;
-        try { dps = DamageBench.Measure(Loadout.ToBuild(Tree, Mastery, Character), hunter).Dps; }
+        try { dps = DamageBench.Measure(Loadout.ToBuild(Tree, Mastery, Character, SkillLevels), hunter).Dps; }
         finally { if (was is null) hunter.Unequip(GearSlot.Weapon); else hunter.Equip(was); }
         if (_dpsCache.Count > 512) _dpsCache.Clear();
         _dpsCache[key] = dps;

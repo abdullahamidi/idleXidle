@@ -233,7 +233,25 @@ public sealed record EquippedSkill(WovenAbility Ability, int CooldownMs, bool? P
     /// once <c>WovenAbility</c> carries a <c>SkillId</c> this becomes a lookup by id and the Form
     /// column disappears. See <c>design/gdd/skill-slots-and-skill-trees.md</c> §11.
     /// </remarks>
-    public SkillDef Def => SkillCatalogue.Resolve(Form, Passive);
+    public SkillDef Def
+    {
+        get
+        {
+            var def = SkillCatalogue.Resolve(Form, Passive);
+            // THE VARIATION AND ITS REINFORCEMENTS ARE DELTAS ON THE DEFINITION, applied in order.
+            // The fight loop keeps reading one SkillDef and gains no case per variation — which is
+            // what stops twenty-four variations becoming twenty-four branches.
+            if (Variation?.Modify is { } m) def = m(def);
+            foreach (var r in Reinforcements) if (r.Modify is { } rm) def = rm(def);
+            return def;
+        }
+    }
+
+    /// <summary>The variation the player took, or null while this skill's identity is unchosen.</summary>
+    public SkillVariation? Variation { get; init; }
+
+    /// <summary>The reinforcements bought for that variation.</summary>
+    public IReadOnlyList<Reinforcement> Reinforcements { get; init; } = Array.Empty<Reinforcement>();
 
     /// <summary>
     /// Does this skill cost the champion its action?
