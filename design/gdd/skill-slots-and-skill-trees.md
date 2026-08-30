@@ -773,10 +773,20 @@ Sells skill power, the Source matchup, Vow strength and how sharp your affinity 
 
 ### TEMPO — your own attack
 
-Seven rules survive from the old branch and fill the upper tiers: FLASH, SURGE, INTERRUPT
-and RHYTHM's replacement as notables, BRISK, HASTEN and FIRST STRIKE as greaters and
-mastery. It has **no plain-stat minors**, because every node in the old tree was a rule.
-Six are added:
+> **BUILT 2026-08-30.** The draft below guessed at which rules would survive; what decided it was
+> not taste. **Five `SkillShape` fields have exactly one feeder in the whole game** — `AutoAttackRate`
+> (BRISK), `HealOnClear` (SECOND WIND), `BetweenWaveRegen` (RECOVERY), `ReflectFraction` (THORNS),
+> `AbsorbAtLowHealth` (ABSORB) — so cutting any of those nodes would have orphaned a field the sim
+> reads. All five were promoted; the twelve that went all have another feeder (an element set, a
+> champion) or duplicate a node one ring up. TEMPO cut OPENER, HASTEN, PREPARATION, FOCUS, FLASH and
+> MARK MASTERY; SURGE inherited the side road, and BRISK became a notable.
+>
+> **INTERRUPT was dead when the probe reached it.** It timed its bonus with
+> `(absMs - since) % enemyIntervalMs`, the modulo model the bite clock itself abandoned — an exact
+> modulo only fires where the interval divides a multiple of the 100ms tick, and MIRE's slow stretches
+> `nextBite` and not the interval, so the two clocks drifted apart the more a build slowed the wave.
+
+The six plain-stat minors:
 
 | Tier | Node | Effect |
 |---|---|---|
@@ -789,10 +799,14 @@ Six are added:
 
 ### ENDURE — survival
 
-Arrives with fourteen surviving rules against ten upper-tier slots, so four must be cut or
-demoted when the branch is laid out; the overlap is between THICK SKIN and PADDING (both
-flat bite reduction) and between MENDING and RECOVERY (both regeneration). Six plain-stat
-minors are added:
+> **BUILT 2026-08-30.** The count was four; it was six. Sixteen rules had to become six plain-stat
+> minors plus ten rule slots, and the draft undercounted because it assumed some minors would stay as
+> rules. Cut: TOUGHNESS (a bare +15% maximum health, the shape the stat minors replace), THICK SKIN
+> and MENDING (the two overlaps this section already named), LEECH and FORTIFY (both granted by
+> element sets besides), and BRACE (BULWARK with a different price tag). SECOND WIND and PADDING were
+> promoted to notables and ABSORB moved down a ring to end the side road that opens with THORNS.
+
+The six plain-stat minors:
 
 | Tier | Node | Effect |
 |---|---|---|
