@@ -68,7 +68,7 @@ public static class CharacterRoster
             Id = "anvil", Name = "THE ANVIL",
             Class = ItemClass.Warden, Tier = ClassTier.First,
             Blurb = "Hits things until they are a different shape.",
-            Lean = Branch.Weight, Aptitude = Form.Strike,
+            Lean = Branch.Resonance, Aptitude = Form.Strike,
             PassiveName = "DEADWEIGHT",
             PassiveText = "A third of the damage left over from a kill hits the next enemy.",
             // Weight's structural weakness is a swarm: an enormous hit on a small creature throws most
@@ -123,7 +123,7 @@ public static class CharacterRoster
             Id = "tower", Name = "THE FALLING TOWER",
             Class = ItemClass.Warden, Tier = ClassTier.Second,
             Blurb = "Slow. Arrives anyway.",
-            Lean = Branch.Weight, Aptitude = Form.Strike, AptitudePower = 1.15f,
+            Lean = Branch.Resonance, Aptitude = Form.Strike, AptitudePower = 1.15f,
             PassiveName = "MOMENTUM",
             PassiveText = "Your first hit on each enemy is weaker. Every hit after it is stronger.",
             // A Weight+Tempo bridge stated as a trade rather than a bonus. It is the exact inverse of

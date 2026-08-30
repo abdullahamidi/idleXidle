@@ -611,9 +611,11 @@ def stills() -> list[dict]:
     # seven frames cover all thirty-odd nodes instead of thirty-odd bespoke pictures — and a new node
     # added to the catalogue arrives already drawn.
     branch_glyph = {
-        # WEIGHT is fewer, heavier hits. A maul head is the blunt-mass silhouette, and it is the one
-        # weapon shape that cannot be confused with the Spread arrows or a Tempo bolt at 40px.
-        "weight": "a massive blunt double-headed iron maul head, squat and heavy, seen straight on",
+        # RESONANCE replaced WEIGHT in the 2026-08-30 re-axe (design §9). A tuning fork is the one
+        # shape that says "a tone, before anything is struck with it", and its two tines cannot be
+        # read as the Spread arrows, the Tempo bolt or the Endure shield at 40px. The old maul is
+        # kept on disk under its own key until the mastery screen stops offering a WEIGHT branch.
+        "resonance": "one upright two-tined tuning fork with a rounded stem, seen straight on",
         # SPREAD is generated OUT OF BAND — see the literal prompt below the loop. Left here so the
         # four branches read as one set in source; the loop skips it.
         "spread": None,

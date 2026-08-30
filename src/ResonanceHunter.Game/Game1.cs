@@ -1597,7 +1597,7 @@ public class Game1 : Game
                     {
                         _mastery.SetEarned(80);
                         foreach (var k in new[] { MasteryKind.Minor, MasteryKind.Notable })
-                            foreach (var wn in MasteryCatalog.Nodes.Where(x => x.Branch == Branch.Weight && x.Kind == k))
+                            foreach (var wn in MasteryCatalog.Nodes.Where(x => x.Branch == Branch.Resonance && x.Kind == k))
                                 _mastery.Take(wn.Id);
                         _mastery.Take("spec_strike");
                         _buildScreen.DevOpenTree();
@@ -2726,6 +2726,12 @@ public class Game1 : Game
             _dust.AwardFromMastery((int)((totalMasteryLevels - _highestMasteryAwarded) * 15 * reward));
             _highestMasteryAwarded = totalMasteryLevels;
         }
+
+        // THE MASTERY TREE'S PLAIN STATS, pushed into the champion every frame. Unconditional on
+        // purpose: the tree is mutated from the build screen, from the dev fixtures and by respec, and
+        // refreshing at any one of those sites is how a stat node ends up live on the screen that
+        // changed it and dead everywhere else. Respec is free, so this REPLACES rather than adds.
+        _hunter.SetMasteryStats(_mastery.Stats());
 
         if (_showWeave)
         {

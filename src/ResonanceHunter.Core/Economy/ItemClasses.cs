@@ -90,8 +90,12 @@ public static class ItemClasses
     {
         new()
         {
-            Class = ItemClass.Warden, Name = "WARDEN", Road = Branch.Weight,
-            Description = "Heavy blows. Built for the WEIGHT road.",
+            // WARDEN kept its NAME through the 2026-08-30 re-axe and changed what it is for. The class
+            // named the WEIGHT road, and WEIGHT is gone — its hit-size content went to the skills
+            // (design §9). A warden is still the one who holds a line, so the name survives the road:
+            // it now points at RESONANCE, where a champion's skills are made to carry.
+            Class = ItemClass.Warden, Name = "WARDEN", Road = Branch.Resonance,
+            Description = "Skills that carry. Built for the RESONANCE road.",
             ChampionIds = new[] { "anvil", "tower" },
             WeaponFamilies = new[] { Blade, Spear },
         },

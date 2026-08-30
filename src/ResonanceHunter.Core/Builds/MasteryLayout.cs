@@ -124,7 +124,7 @@ public static class MasteryLayout
     /// </remarks>
     public static float AngleOf(Branch b) => b switch
     {
-        Branch.Weight => -90f,
+        Branch.Resonance => -90f,
         Branch.Tempo => 0f,
         Branch.Spread => 90f,
         _ => 180f,

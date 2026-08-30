@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using ResonanceHunter.Core.Abilities;
+using ResonanceHunter.Core.Economy;
 
 namespace ResonanceHunter.Core.Builds;
 
@@ -12,8 +13,19 @@ namespace ResonanceHunter.Core.Builds;
 /// </remarks>
 public enum Branch
 {
-    /// <summary>Few, enormous hits. Answers Armoured. Opposed to <see cref="Spread"/>.</summary>
-    Weight,
+    /// <summary>
+    /// How strong every skill is BEFORE you choose one. Opposed to <see cref="Spread"/>.
+    /// </summary>
+    /// <remarks>
+    /// Was WEIGHT — few, enormous hits, the answer to Armoured. The 2026-08-30 re-axe retired it:
+    /// under the skill rework the four enemy bands are answered by SKILLS (HAMMER's defence break
+    /// answers Armoured, VOLLEY's hit count answers Swarm), so a branch that also sold hit size was
+    /// selling the same rule twice at two prices. What a band never asks about is how strong a skill
+    /// is before any of them is picked — the Source matchup, the affinity lean, what a point of
+    /// resonance is worth — and that is what this branch sells now. Never cooldown: VOLLEY owns it.
+    /// See design/gdd/skill-slots-and-skill-trees.md §9.
+    /// </remarks>
+    Resonance,
 
     /// <summary>Many targets. Answers Swarm. Opposed to <see cref="Weight"/>.</summary>
     Spread,
@@ -103,10 +115,10 @@ public static class MasteryCatalog
     {
         var n = new List<MasteryNode>
         {
-            new(StartId, MasteryKind.Start, Branch.Weight, 0, 0, "YOU", S, null, Array.Empty<string>()),
+            new(StartId, MasteryKind.Start, Branch.Resonance, 0, 0, "YOU", S, null, Array.Empty<string>()),
         };
 
-        Weight(n);
+        Resonance(n);
         Spread(n);
         Tempo(n);
         Endure(n);
@@ -117,80 +129,59 @@ public static class MasteryCatalog
 
     // ── WEIGHT — answers Armoured. Fewer, larger hits. ────────────────────────────────────────────
 
-    private static void Weight(List<MasteryNode> n)
+    /// <summary>
+    /// RESONANCE — skill power, the Source matchup, Vow strength (design §9b).
+    /// </summary>
+    /// <remarks>
+    /// The minors pay in plain resonance and are not meant to be read; everything from notable upward
+    /// is a named rule that turns one of the seven dials on <see cref="SkillShape"/>. The three that
+    /// touch the Source matchup — KEYED, DISCORD and CHORD — deliberately turn the SAME number, so a
+    /// build holding two of them cannot stack one promise twice.
+    /// </remarks>
+    private static void Resonance(List<MasteryNode> n)
     {
-        const Branch b = Branch.Weight;
+        const Branch b = Branch.Resonance;
 
-        // The 2026-08-27 pass added one node to every ring and took every existing number down by a
-        // fifth to a third, so a full walk lands roughly where it did with three more decisions in it.
-        // The new node of each ring is listed FIRST so it sits on the inner shoulder of its fan and the
-        // side road (spur, side notable, side greater) keeps the outer edge end to end.
-        Minor(n, b, "heft", "HEFT — STRIKE AND TRAP HIT 20% HARDER",
-            S with { FormPower = new Dictionary<Form, float> { [Form.Strike] = 1.20f, [Form.Trap] = 1.20f } });
-        Minor(n, b, "heavy_hand", "HEAVY HAND — BIGGER HITS, SLOWER",
-            S with { HitSize = 1.18f, SkillRate = 0.88f });
-        Minor(n, b, "sharpened", "SHARPENED — HITS CUT 6 ARMOUR",
-            S with { ArmourPenetration = 6f });
-        Minor(n, b, "follow_through", "FOLLOW THROUGH — FIRST HIT ON A CREATURE +20%",
-            S with { FirstHitMultiplier = 1.20f });
-        Minor(n, b, "deliberate", "DELIBERATE — MUCH BIGGER HITS, MUCH SLOWER",
-            S with { HitSize = 1.22f, SkillRate = 0.85f });
-        // THE SIDE ROAD'S SPUR. A small SUNDER that a minor can afford: with SUNDER itself the threshold
-        // takes the kinder 150 and the strips ADD, so the spur keeps paying after the notable — a
-        // 1-point node that goes dead the moment its 3-point neighbour arrives is dormant content.
-        Spur(n, b, "dent", "deliberate", "DENT — A HIT OVER 150 STRIPS 6 ARMOUR FOR THE WAVE",
-            S with { SunderThreshold = 150f, SunderAmount = 6f });
+        // ── Ring 1: plain resonance. The connective tissue a road is walked on. ──────────────────
+        Minor(n, b, "chime", "CHIME — +6 RESONANCE", S, Stat(HunterStat.ResonanceAffinity, 6f));
+        Minor(n, b, "hum", "HUM — +6 RESONANCE", S, Stat(HunterStat.ResonanceAffinity, 6f));
+        Minor(n, b, "tone", "TONE — +8 RESONANCE", S, Stat(HunterStat.ResonanceAffinity, 8f));
+        Minor(n, b, "steep", "STEEP — +6 RESONANCE, +5 HEALTH", S,
+              Stat(HunterStat.ResonanceAffinity, 6f, HunterStat.MaxHealth, 5f));
+        Minor(n, b, "clarity_res", "CLARITY — +8 RESONANCE", S, Stat(HunterStat.ResonanceAffinity, 8f));
+        // The spur, and the head of the side road: the longer way to the rim.
+        Spur(n, b, "timbre", "clarity_res", "TIMBRE — +6 RESONANCE, +4 ATTACK POWER", S,
+             Stat(HunterStat.ResonanceAffinity, 6f, HunterStat.AttackPower, 4f));
 
-        // HEADLONG is CULL's mirror: Weight puts its few big hits into a FULL pool.
-        Notable(n, b, "headlong", "HEADLONG — +30% AGAINST CREATURES ABOVE HALF HEALTH",
-            S with { FreshThreshold = 0.5f, FreshBonus = 0.30f },
-            SpineMinors(n, b));
-        // SUNDER strips armour permanently for the rest of the wave, so a Weight build gets STRONGER as an
-        // Armoured wave goes on — the opposite of how flat mitigation normally works, and the reason the
-        // branch beats Plated bands rather than merely surviving them.
-        Notable(n, b, "sunder", "SUNDER — A HIT OVER 200 STRIPS 15 ARMOUR FOR THE WAVE",
-            S with { SunderThreshold = 200f, SunderAmount = 15f },
-            SpineMinors(n, b));
-        // "HITS 8x A CREATURE'S ARMOUR IGNORE HALF OF IT" — a sentence with no verb where the reader
-        // needs one, so it parsed as "hits eight times" rather than "a hit eight times the size of".
-        Notable(n, b, "crush", "CRUSH — A HIT 8x BIGGER THAN THE ARMOUR IGNORES 40% OF IT",
-            S with { CrushArmourMultiple = 8f, ArmourIgnoreFraction = 0.4f },
-            SpineMinors(n, b));
-        Notable(n, b, "breaker", "BREAKER — 40% OF ANY OVERKILL CARRIES TO THE NEXT CREATURE",
-            S with { OverkillCarry = 0.4f },
-            SpineMinors(n, b));
-        // The side road's notable: the mirror of Tempo's ALPHA. Weight keeps hitting the SAME creature,
-        // and every hit after the first is the bigger one — a single-target commitment stated as a
-        // shape, which is why it is worth nothing to a build that touches each creature once.
-        Notable(n, b, "second_blow", "SECOND BLOW — EVERY HIT AFTER THE FIRST ON A CREATURE +15%",
-            S with { LaterHitMultiplier = 1.15f },
-            new[] { "dent" });
+        // ── Ring 2: the named rules. ─────────────────────────────────────────────────────────────
+        Notable(n, b, "keyed", "KEYED — YOUR STRONG SOURCE MATCHUP PAYS 25% MORE",
+                S with { StrongMatchupBonus = 0.25f }, SpineMinors(n, b));
+        Notable(n, b, "pledge", "PLEDGE — VOWS PAY 30% MORE",
+                S with { VowPowerMultiplier = 1.30f }, SpineMinors(n, b));
+        Notable(n, b, "narrow", "NARROW — YOUR DISCIPLINE'S FORM +20%, EVERY OTHER FORM -10%",
+                S with { AffinityStyleBonus = 0.20f, OffStylePenalty = 0.10f }, SpineMinors(n, b));
+        Notable(n, b, "broad", "BROAD — HALF OF THE OPPOSITE FORM'S PENALTY IS GIVEN BACK",
+                S with { OppositePenaltyRelief = 0.5f }, SpineMinors(n, b));
+        // The side road's notable: it needs the spur, not the spine.
+        Notable(n, b, "deep", "DEEP — +12 RESONANCE, AND RESONANCE IS WORTH 20% MORE",
+                S with { ResonanceWorth = 0.20f }, new[] { "timbre" },
+                Stat(HunterStat.ResonanceAffinity, 12f));
 
-        // The new greater pays in Weight's own currency, like SHATTER: slower, for a bite held off.
-        Greater(n, b, "stagger", "STAGGER — A HIT OVER 200 PUSHES THE NEXT ENEMY BITE BACK HALF A SECOND, COOLDOWNS +15%",
-            S with { StaggerThreshold = 200f, StaggerMs = 500, SkillRate = 0.87f },
-            SpineNotables(n, b));
-        Greater(n, b, "monolith", "MONOLITH — HALF AS MANY HITS, EACH TWICE AS LARGE",
-            S with { HitSize = 2f, SkillRate = 0.5f },
-            SpineNotables(n, b));
-        Greater(n, b, "siege", "SIEGE — +35% TO ARMOURED, -20% TO EVERYTHING ELSE",
-            S with { VsArmouredBonus = 0.35f, VsOtherPenalty = 0.20f },
-            SpineNotables(n, b));
-        // The side road's greater. With DENT and SUNDER the threshold drops to 120 and the strips sum to
-        // 43 — a plated wave is bare after two swings — and the price is Weight's own currency: slower.
-        Greater(n, b, "shatter", "SHATTER — A HIT OVER 120 STRIPS 22 ARMOUR FOR THE WAVE, COOLDOWNS +18%",
-            S with { SunderThreshold = 120f, SunderAmount = 22f, SkillRate = 0.85f },
-            new[] { "second_blow" });
+        // ── Ring 3. ──────────────────────────────────────────────────────────────────────────────
+        Greater(n, b, "pure", "PURE — WHILE EVERY WOVEN SKILL SHARES ONE SOURCE, ALL SKILLS HIT 35% HARDER",
+                S with { OneSourceBonus = 0.35f }, SpineNotables(n, b));
+        Greater(n, b, "discord", "DISCORD — YOUR WEAK SOURCE MATCHUP NO LONGER WEAKENS YOU, SKILLS -10%",
+                S with { WeakMatchupRelief = 1f, DamageDealt = 0.90f }, SpineNotables(n, b));
+        Greater(n, b, "resonant", "RESONANT — SKILLS +25%, YOUR BASIC ATTACK -15%",
+                S with { DamageDealt = 1.25f, AutoAttackDamage = 0.85f }, SpineNotables(n, b));
+        // The side road's greater, off DEEP.
+        Greater(n, b, "zealot", "ZEALOT — VOWS PAY 60% MORE, AND YOU TAKE 15% MORE DAMAGE",
+                S with { VowPowerMultiplier = 1.60f, DamageTaken = 1.15f }, new[] { "deep" });
 
-        // THE BRANCH IN ONE NODE. Armour stops existing — and so does any build that delivers its damage
-        // in small pieces, which is every Spread build in the game. It is the clearest statement in the
-        // tree that the two axes are opposed.
-        Mastery(n, b, "overwhelm", "OVERWHELM — HITS UNDER 60 DO NOTHING; HITS OVER 60 IGNORE ARMOUR",
-            S with { OverwhelmFloor = 60f },
-            Greaters(n, b));
+        // ── Ring 4: the capstone. Any greater opens it, the side road included. ──────────────────
+        Mastery(n, b, "chord", "CHORD — EVERY SOURCE MATCHUP COUNTS AS STRONG, AND EVERY SKILL IS 15% SOFTER",
+                S with { AllMatchupsStrong = true, DamageDealt = 0.85f }, Greaters(n, b));
     }
-
-    // ── SPREAD — answers Swarm. Target count and action economy. ──────────────────────────────────
 
     private static void Spread(List<MasteryNode> n)
     {
@@ -399,7 +390,7 @@ public static class MasteryCatalog
 
     private static void Bridges(List<MasteryNode> n)
     {
-        Bridge(n, Branch.Weight, Branch.Tempo, "executioner",
+        Bridge(n, Branch.Resonance, Branch.Tempo, "executioner",
             "EXECUTIONER — THE FIRST HIT ON EACH CREATURE +10% AND IT CUTS 9 ARMOUR",
             S with { FirstHitMultiplier = 1.10f, ArmourPenetration = 9f });
         Bridge(n, Branch.Tempo, Branch.Spread, "volley",
@@ -408,7 +399,7 @@ public static class MasteryCatalog
         Bridge(n, Branch.Spread, Branch.Endure, "feedback",
             "FEEDBACK — HEAL 1.2% OF MAXIMUM PER CREATURE STRUCK",
             S with { HealPerTargetStruck = 0.012f });
-        Bridge(n, Branch.Endure, Branch.Weight, "anchor",
+        Bridge(n, Branch.Endure, Branch.Resonance, "anchor",
             "ANCHOR — +1% HIT SIZE PER 200 MAXIMUM HEALTH",
             S with { HitSizePerMaxHealth = 0.01f / 200f });
     }
@@ -427,9 +418,9 @@ public static class MasteryCatalog
     /// </remarks>
     private static void Specialisations(List<MasteryNode> n)
     {
-        Spec(n, Branch.Weight, Form.Strike, "spec_strike", "STRIKE SPECIALIST — EXECUTE WEAKENED FOES",
+        Spec(n, Branch.Resonance, Form.Strike, "spec_strike", "STRIKE SPECIALIST — EXECUTE WEAKENED FOES",
             BuildTrigger.Execute, S with { CullThreshold = 0.35f, CullBonus = 0.40f });
-        Spec(n, Branch.Weight, Form.Trap, "spec_trap", "TRAP SPECIALIST — TRAPS RE-ARM ON BEING HIT",
+        Spec(n, Branch.Resonance, Form.Trap, "spec_trap", "TRAP SPECIALIST — TRAPS RE-ARM ON BEING HIT",
             BuildTrigger.Coiled, S);
         Spec(n, Branch.Spread, Form.Projectile, "spec_projectile", "VOLLEY SPECIALIST — ONE MORE SHOT, ONE MORE TARGET",
             BuildTrigger.Overdraw, S with { FormTargets = new Dictionary<Form, int> { [Form.Projectile] = 1 } });
@@ -446,23 +437,40 @@ public static class MasteryCatalog
 
     // ── Construction helpers. Ring decides cost, so a node cannot be mispriced by hand. ───────────
 
-    private static void Minor(List<MasteryNode> n, Branch b, string id, string label, SkillShape shape)
-        => n.Add(new(id, MasteryKind.Minor, b, 1, RingCost[1], label, shape, null, new[] { StartId }));
+    private static void Minor(List<MasteryNode> n, Branch b, string id, string label, SkillShape shape,
+                              IReadOnlyDictionary<HunterStat, float>? stats = null)
+        => n.Add(new(id, MasteryKind.Minor, b, 1, RingCost[1], label, shape, null, new[] { StartId })
+        {
+            Stats = stats,
+        });
+
+    /// <summary>One or two plain stats, for a node whose whole payment is stats.</summary>
+    private static Dictionary<HunterStat, float> Stat(HunterStat a, float av,
+                                                      HunterStat? c = null, float cv = 0f)
+    {
+        var d = new Dictionary<HunterStat, float> { [a] = av };
+        if (c is { } second) d[second] = cv;
+        return d;
+    }
 
     /// <summary>
     /// A SPUR minor: ring 1 by price, but it hangs off <paramref name="parent"/> rather than off START,
     /// and the layout draws it off that parent's shoulder. See <see cref="MasteryNode.Spur"/>.
     /// </summary>
     private static void Spur(List<MasteryNode> n, Branch b, string id, string parent, string label,
-                             SkillShape shape)
+                             SkillShape shape, IReadOnlyDictionary<HunterStat, float>? stats = null)
         => n.Add(new(id, MasteryKind.Minor, b, 1, RingCost[1], label, shape, null, new[] { parent })
         {
             Spur = true,
+            Stats = stats,
         });
 
     private static void Notable(List<MasteryNode> n, Branch b, string id, string label, SkillShape shape,
-                                string[] prereqs)
-        => n.Add(new(id, MasteryKind.Notable, b, 2, RingCost[2], label, shape, null, prereqs));
+                                string[] prereqs, IReadOnlyDictionary<HunterStat, float>? stats = null)
+        => n.Add(new(id, MasteryKind.Notable, b, 2, RingCost[2], label, shape, null, prereqs)
+        {
+            Stats = stats,
+        });
 
     private static void Greater(List<MasteryNode> n, Branch b, string id, string label, SkillShape shape,
                                 string[] prereqs)

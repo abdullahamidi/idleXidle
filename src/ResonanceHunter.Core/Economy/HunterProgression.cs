@@ -177,8 +177,26 @@ public sealed class Hunter
     /// </remarks>
     public int StatRankCap => _tuning.StatRankCap;
 
+    /// <summary>
+    /// Stats granted by the MASTERY TREE, refreshed whenever that tree changes.
+    /// </summary>
+    /// <remarks>
+    /// Not trained and not paid for in Gleam — the mastery tree's minors pay in these (design §9).
+    /// Held here rather than in <see cref="Builds.BuildMods"/> because <see cref="ValueOf"/> is the one
+    /// funnel every consumer reads: damage, health, haul, defence, crit and resonance all come through
+    /// it, so a stat node is live everywhere or nowhere. Respec is free, so this is REPLACED wholesale
+    /// rather than accumulated — a tree that gives a point back must take the stat back with it.
+    /// </remarks>
+    private IReadOnlyDictionary<HunterStat, float> _mastery = new Dictionary<HunterStat, float>();
+
+    public void SetMasteryStats(IReadOnlyDictionary<HunterStat, float>? stats)
+        => _mastery = stats ?? new Dictionary<HunterStat, float>();
+
+    /// <summary>What the mastery tree alone contributes to a stat — for a screen that wants to say so.</summary>
+    public float MasteryBonus(HunterStat stat) => _mastery.GetValueOrDefault(stat);
+
     public float ValueOf(HunterStat stat)
-        => _tuning.BaseValue[stat] + _tuning.GainPerRank[stat] * _ranks[stat];
+        => _tuning.BaseValue[stat] + _tuning.GainPerRank[stat] * _ranks[stat] + _mastery.GetValueOrDefault(stat);
 
     /// <summary>What one rank of training adds to a stat. Public so a screen can say it without copying the tuning.</summary>
     public float GainPerRank(HunterStat stat) => _tuning.GainPerRank[stat];

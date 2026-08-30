@@ -102,7 +102,7 @@ public class SkillShapeBattleTests
         var armoured = () => Wave(2, 3000f, 40f, defense: 60f, archetype: Archetype.Armoured);
 
         var neutral = Fight(SkillShape.None, armoured());
-        var weight = Fight(WholeBranch(Branch.Weight), armoured());
+        var weight = Fight(WholeBranch(Branch.Resonance), armoured());
 
         Assert.True(weight.AbsorbedFraction < neutral.AbsorbedFraction,
             $"Armour ate {weight.AbsorbedFraction:P0} of the Weight build and {neutral.AbsorbedFraction:P0} " +
@@ -334,7 +334,7 @@ public class SkillShapeBattleTests
     [Fact]
     public void test_weight_and_spread_win_and_lose_the_opposite_waves()
     {
-        var weight = WholeBranch(Branch.Weight);
+        var weight = WholeBranch(Branch.Resonance);
         var spread = WholeBranch(Branch.Spread);
 
         List<WaveCreature> Armoured() => Wave(2, 3000f, 40f, defense: 60f, archetype: Archetype.Armoured);

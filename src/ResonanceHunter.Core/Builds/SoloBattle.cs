@@ -481,7 +481,10 @@ public static class SoloBattle
 
         var skills = build.Skills;
         var wt = WeavingTuning.Default;
-        var resonance = hunter.ValueOf(Economy.HunterStat.ResonanceAffinity);
+        // DEEP (RESONANCE) — a point of resonance is worth more. Applied HERE, at the single place the
+        // stat enters the fight, so it lifts every skill's base damage rather than one branch of it.
+        var resonance = hunter.ValueOf(Economy.HunterStat.ResonanceAffinity)
+                        * (1f + Math.Max(0f, shape.ResonanceWorth));
 
         // VENOM — how much of each skill hit lingers as poison. Zero unless the build carries the trigger
         // (VENOMANCER, or a Venom weapon); a worn enchant sets its own strength, a bare keystone the base.
@@ -594,6 +597,8 @@ public static class SoloBattle
         var bleedRate = 1f;
         var bleedShed = VenomBleedPerHalfSecond;
         var bleedFromHits = 0f;
+        // PURE (RESONANCE) — does every woven skill share one Source? Read once, at the wave's start.
+        var oneSource = skills.Count > 0 && skills.All(x => x.Source == skills[0].Source);
         foreach (var wsk in skills)
         {
             if (wsk.Def.BleedRate > 1f) bleedRate = Math.Max(bleedRate, wsk.Def.BleedRate);
@@ -701,15 +706,39 @@ public static class SoloBattle
             // AFFINITY — the Nen hexagon. A skill in your affinity's Form hits far harder than one in its
             // opposite. Auto-attacks pass no Form and are unaffected.
             if (build.Affinity is { } aff && skillForm is { } f)
-                m *= FormBehaviour.AffinityFactor(aff, f);
+            {
+                var factor = FormBehaviour.AffinityFactor(aff, f);
+                // BROAD — the far side of the hexagon is walked back toward parity. Only ever LIFTS a
+                // factor under 1, so it cannot turn a penalty into a bonus.
+                if (shape.OppositePenaltyRelief > 0f && factor < 1f)
+                    factor += (1f - factor) * Math.Min(1f, shape.OppositePenaltyRelief);
+                // NARROW — the opposite trade: your own Form harder, every other one softer.
+                if (aff == f) factor *= 1f + shape.AffinityStyleBonus;
+                else factor *= Math.Max(0f, 1f - shape.OffStylePenalty);
+                m *= factor;
+            }
 
             if (against?.Source is { } target && skillSource is { } s)
-                m *= Weaving.SourceEffectiveness(s, target, wt);
+            {
+                // CHORD reads every matchup as strong; KEYED deepens a strong one; DISCORD refunds a
+                // weak one. All three turn the SAME number, so a build carrying two of them cannot
+                // stack the same promise twice.
+                var match = shape.AllMatchupsStrong
+                    ? wt.StrongMultiplier
+                    : Weaving.SourceEffectiveness(s, target, wt);
+                if (match > 1f) match += (match - 1f) * shape.StrongMatchupBonus;
+                else if (match < 1f) match += (1f - match) * Math.Min(1f, shape.WeakMatchupRelief);
+                m *= match;
+            }
 
             // THE ELEMENT SETS' own-skill rungs: a skill of the set's Source hits harder. The swing
             // passes no Source and gets nothing here (the BODY set's fifth piece is its own rule).
             if (skillSource is { } own && shape.SourceBonus.TryGetValue(own, out var setBonus) && setBonus > 0f)
                 m *= 1f + setBonus;
+
+            // PURE — the reward for refusing the matchup game entirely. Read from the woven skills, so a
+            // build that swaps one slot to another Source loses it the moment it does.
+            if (shape.OneSourceBonus > 0f && oneSource) m *= 1f + shape.OneSourceBonus;
 
             // BLOODLUST — damage scales with health MISSING. The keystone that rewards the edge.
             if (triggers.Contains(BuildTrigger.Bloodlust))

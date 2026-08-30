@@ -17,7 +17,7 @@ namespace ResonanceHunter.Core.Tests.Builds;
 public class MasteryTreeTests
 {
     private static readonly Branch[] Branches =
-        { Branch.Weight, Branch.Spread, Branch.Tempo, Branch.Endure };
+        { Branch.Resonance, Branch.Spread, Branch.Tempo, Branch.Endure };
 
     private static MasteryTree TreeWith(int points)
     {
@@ -194,7 +194,7 @@ public class MasteryTreeTests
     public void test_two_complete_branches_are_out_of_reach()
     {
         var budgetAtFullContent = FullCareerPoints;
-        var two = MasteryCatalog.BranchCost(Branch.Weight) + MasteryCatalog.BranchCost(Branch.Spread);
+        var two = MasteryCatalog.BranchCost(Branch.Resonance) + MasteryCatalog.BranchCost(Branch.Spread);
 
         Assert.True(two > budgetAtFullContent,
             $"Two branches cost {two} against {budgetAtFullContent} available. Both halves of an opposed " +
@@ -217,7 +217,7 @@ public class MasteryTreeTests
 
         Assert.InRange(midCareer, 0.25f, 0.38f);
         Assert.InRange(fullCareer, 0.25f, 0.38f);
-        Assert.True(FullCareerPoints > MasteryCatalog.BranchCost(Branch.Weight) * 1.5f,
+        Assert.True(FullCareerPoints > MasteryCatalog.BranchCost(Branch.Resonance) * 1.5f,
             "a full career must buy a branch and a half, or the second start is fiction.");
     }
 
@@ -231,8 +231,8 @@ public class MasteryTreeTests
     public void test_points_are_spent_by_cost_not_by_count()
     {
         var t = TreeWith(100);
-        var minor = Of(Branch.Weight, MasteryKind.Minor).First();
-        var notable = Of(Branch.Weight, MasteryKind.Notable).First();
+        var minor = Of(Branch.Resonance, MasteryKind.Minor).First();
+        var notable = Of(Branch.Resonance, MasteryKind.Notable).First();
 
         t.Take(minor.Id);
         Assert.Equal(1, t.Spent);
@@ -301,12 +301,12 @@ public class MasteryTreeTests
     public void test_only_one_branch_can_be_mastered()
     {
         var t = TreeWith(400);
-        WalkBranch(t, Branch.Weight);
-        Assert.Equal(Branch.Weight, t.MasteredBranch());
+        WalkBranch(t, Branch.Resonance);
+        Assert.Equal(Branch.Resonance, t.MasteredBranch());
 
         WalkBranch(t, Branch.Spread);
         Assert.False(t.IsTaken(Of(Branch.Spread, MasteryKind.Mastery).Single().Id));
-        Assert.Equal(Branch.Weight, t.MasteredBranch());
+        Assert.Equal(Branch.Resonance, t.MasteredBranch());
     }
 
     // ── The two rules the design says both trees obey. ────────────────────────────────────────────
@@ -325,7 +325,7 @@ public class MasteryTreeTests
     {
         foreach (var node in MasteryCatalog.Nodes.Where(n => n.Kind != MasteryKind.Start))
             Assert.True(
-                node.Shape != SkillShape.None || node.Grant is not null,
+                node.Shape != SkillShape.None || node.Grant is not null || node.Stats is { Count: > 0 },
                 $"{node.Id} changes nothing. A node that is only a price is worse than a flat percentage.");
     }
 
@@ -365,7 +365,7 @@ public class MasteryTreeTests
     [Fact]
     public void test_greaters_are_costed_or_conditional()
     {
-        var conditional = new[] { "bastion", "cascade", "assassinate" };
+        var conditional = new[] { "bastion", "cascade", "assassinate", "pure" };
 
         foreach (var node in MasteryCatalog.Nodes.Where(n => n.Kind == MasteryKind.Greater))
         {
@@ -373,7 +373,7 @@ public class MasteryTreeTests
             var s = node.Shape;
             Assert.True(
                 s.HitSize < 1f || s.SkillRate < 1f || s.DamageDealt < 1f || s.VsOtherPenalty > 0f
-                || s.DamageTaken > 1f || s.LaterCastMultiplier < 1f,
+                || s.DamageTaken > 1f || s.LaterCastMultiplier < 1f || s.AutoAttackDamage < 1f,
                 $"{node.Id} is an unconditional upgrade at ring 3. Greaters cost something.");
         }
     }
@@ -382,7 +382,6 @@ public class MasteryTreeTests
     [Fact]
     public void test_the_new_greaters_each_pay_a_different_price()
     {
-        Assert.True(MasteryCatalog.ById("stagger")!.Shape.SkillRate < 1f, "STAGGER must pay in rate.");
         Assert.True(MasteryCatalog.ById("tide")!.Shape.HitSize < 1f, "TIDE must pay in hit size.");
         Assert.True(MasteryCatalog.ById("opening_volley")!.Shape.LaterCastMultiplier < 1f,
             "OPENING VOLLEY must pay on every later cast.");
@@ -396,9 +395,11 @@ public class MasteryTreeTests
     [Fact]
     public void test_the_new_nodes_are_wired_into_their_fans()
     {
+        // WEIGHT's trio (HEFT, HEADLONG, STAGGER) is gone with the branch — the 2026-08-30 re-axe
+        // replaced it with RESONANCE, whose sixteen nodes are pinned by MasteryNodeLivenessTests
+        // instead, one at a time and against the fight rather than against the wiring.
         var road = new (string Minor, string Notable, string Greater)[]
         {
-            ("heft", "headlong", "stagger"),
             ("fan", "rally", "tide"),
             ("brisk", "rhythm", "opening_volley"),
             ("mending", "payback", "rebound"),
@@ -420,7 +421,7 @@ public class MasteryTreeTests
     [Fact]
     public void test_the_side_road_greaters_each_pay_a_different_price()
     {
-        Assert.True(MasteryCatalog.ById("shatter")!.Shape.SkillRate < 1f, "SHATTER must pay in rate.");
+        Assert.True(MasteryCatalog.ById("zealot")!.Shape.DamageTaken > 1f, "ZEALOT must pay in bites taken.");
         Assert.True(MasteryCatalog.ById("outnumbered")!.Shape.DamageDealt < 1f, "OUTNUMBERED must pay in hits.");
         Assert.True(MasteryCatalog.ById("rush")!.Shape.DamageTaken > 1f, "RUSH must pay in bites taken.");
         Assert.True(MasteryCatalog.ById("brace")!.Shape.SkillRate < 1f, "BRACE must pay in rate.");
@@ -465,13 +466,17 @@ public class MasteryTreeTests
     public void test_taken_nodes_compose_their_shapes()
     {
         var t = TreeWith(100);
-        WalkBranch(t, Branch.Weight);
+        WalkBranch(t, Branch.Resonance);
         t.Take("spec_strike");
 
         var shape = t.Shape();
 
-        Assert.True(shape.HitSize > 1f, "A walked Weight branch must hit harder.");
-        Assert.True(shape.ArmourPenetration > 0f, "SHARPENED's armour cut did not reach the shape.");
+        // RESONANCE does not sell hit size — that was WEIGHT, and the skills own it now (design §9).
+        // What a walked RESONANCE road must produce is a champion whose skills are worth more before
+        // any one of them is chosen: a deeper matchup, a stronger lean, a heavier Vow.
+        Assert.True(shape.StrongMatchupBonus > 0f, "KEYED's matchup bonus did not reach the shape.");
+        Assert.True(shape.VowPowerMultiplier > 1f, "PLEDGE's Vow power did not reach the shape.");
+        Assert.True(shape.AllMatchupsStrong, "CHORD did not reach the shape.");
         Assert.Contains(BuildTrigger.Execute, t.Triggers());
         Assert.Equal(Form.Strike, t.Affinity());
     }
@@ -565,9 +570,9 @@ public class MasteryTreeTests
     public void test_an_unknown_node_id_is_ignored_on_restore()
     {
         var t = TreeWith(20);
-        t.RestoreTaken(new[] { "strike_1", "volley_m", "heavy_hand" });
+        t.RestoreTaken(new[] { "strike_1", "volley_m", "chime" });
 
-        Assert.True(t.IsTaken("heavy_hand"));
+        Assert.True(t.IsTaken("chime"));
         Assert.False(t.IsTaken("strike_1"));
         Assert.Equal(1, t.Spent);
     }

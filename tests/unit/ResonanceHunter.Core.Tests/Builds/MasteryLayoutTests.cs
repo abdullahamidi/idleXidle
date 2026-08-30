@@ -208,7 +208,7 @@ public class MasteryLayoutTests
         // physically MOVING the existing ones, on a screen where a player has memorised where their
         // build sits. A layout key that is right by coincidence breaks on the first content change.
         var before = MasteryCatalog.Nodes
-            .Where(n => n.Branch == Branch.Weight && n.Kind == MasteryKind.Minor)
+            .Where(n => n.Branch == Branch.Resonance && n.Kind == MasteryKind.Minor)
             .Select(n => (n.Id, At: MasteryLayout.PositionOf(n)))
             .ToList();
 
@@ -218,10 +218,10 @@ public class MasteryLayoutTests
         // with the same ring count has to be stable, and the count of ring-1 peers must not include any
         // node from another ring.
         var ringOnePeers = MasteryCatalog.Nodes.Count(
-            n => n.Branch == Branch.Weight && n.Ring == 1
+            n => n.Branch == Branch.Resonance && n.Ring == 1
                  && n.Link is null && n.Kind != MasteryKind.Specialisation);
         var kindPeers = MasteryCatalog.Nodes.Count(
-            n => n.Branch == Branch.Weight && n.Kind == MasteryKind.Minor && n.Link is null);
+            n => n.Branch == Branch.Resonance && n.Kind == MasteryKind.Minor && n.Link is null);
 
         Assert.Equal(kindPeers, ringOnePeers);   // true today; the guard is that the layout keys on ring
 

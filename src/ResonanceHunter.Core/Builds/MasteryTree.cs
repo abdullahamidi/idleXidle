@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using ResonanceHunter.Core.Abilities;
+using ResonanceHunter.Core.Economy;
 
 namespace ResonanceHunter.Core.Builds;
 
@@ -49,6 +50,21 @@ public sealed record MasteryNode(
 
     /// <summary>For a SPECIALISATION: the Form it deepens.</summary>
     public Form? Form { get; init; }
+
+    /// <summary>
+    /// Plain champion stats this node pays, on top of whatever SHAPE it changes.
+    /// </summary>
+    /// <remarks>
+    /// The connective tissue the 2026-08-30 re-axe added (design §9, "What each tier gives"). The
+    /// standing law is "no node is a bare multiplier" and this does not break it: its real target was
+    /// flat LARGE nodes, and a MINOR that pays six resonance is what makes walking a road feel
+    /// incremental. Everything from Notable upward still has to change a shape or be an explicit trade.
+    ///
+    /// Paid in <see cref="HunterStat"/> because that is the one funnel every consumer already reads —
+    /// <see cref="Economy.Hunter.ValueOf"/> feeds damage, health, haul, defence, crit and resonance
+    /// alike, so a stat node cannot be live in one screen and dead in the fight.
+    /// </remarks>
+    public IReadOnlyDictionary<HunterStat, float>? Stats { get; init; }
 
     /// <summary>
     /// A SPUR: a ring-1 Minor that hangs off another Minor instead of off START.
@@ -217,6 +233,17 @@ public sealed class MasteryTree
     /// <summary>Everything the taken nodes add up to as a change of SHAPE.</summary>
     public SkillShape Shape()
         => SkillShape.Sum(_taken.Select(MasteryCatalog.ById).Where(n => n is not null).Select(n => n!.Shape));
+
+    /// <summary>Every plain stat the taken nodes add up to.</summary>
+    public IReadOnlyDictionary<HunterStat, float> Stats()
+    {
+        var total = new Dictionary<HunterStat, float>();
+        foreach (var n in _taken.Select(MasteryCatalog.ById))
+            if (n?.Stats is { } stats)
+                foreach (var (stat, value) in stats)
+                    total[stat] = total.GetValueOrDefault(stat) + value;
+        return total;
+    }
 
     /// <summary>Every trigger the taken specialisations grant.</summary>
     public IReadOnlySet<BuildTrigger> Triggers()

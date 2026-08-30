@@ -55,6 +55,32 @@ public sealed record SkillShape
     public float VowPowerMultiplier { get; init; } = 1f;
 
     /// <summary>Flat armour subtracted before mitigation — the cheap answer to Plated bands.</summary>
+    // ── RESONANCE. The branch that sells how strong every skill is BEFORE you choose one: the Source
+    //    matchup, the affinity lean, and how much a point of resonance is worth. Never cooldown —
+    //    VOLLEY owns that (design §9). Each is zero at the base line. ─────────────────────────────
+
+    /// <summary>KEYED — how much MORE a strong Source matchup pays, on top of its own multiplier.</summary>
+    public float StrongMatchupBonus { get; init; }
+
+    /// <summary>DISCORD — how much of a weak matchup's penalty is refunded. 1 removes it entirely.</summary>
+    public float WeakMatchupRelief { get; init; }
+
+    /// <summary>CHORD — every matchup counts as strong, whatever the ring says.</summary>
+    public bool AllMatchupsStrong { get; init; }
+
+    /// <summary>NARROW — your discipline's own Form hits harder, and every other Form softer.</summary>
+    public float AffinityStyleBonus { get; init; }
+    public float OffStylePenalty { get; init; }
+
+    /// <summary>BROAD — how much of the OPPOSITE Form's affinity penalty is given back. 1 removes it.</summary>
+    public float OppositePenaltyRelief { get; init; }
+
+    /// <summary>DEEP — a point of resonance is worth this much more.</summary>
+    public float ResonanceWorth { get; init; }
+
+    /// <summary>PURE — what every skill gains while the whole weave shares one Source.</summary>
+    public float OneSourceBonus { get; init; }
+
     public float ArmourPenetration { get; init; }
 
     /// <summary>Fraction of the remaining armour a qualifying hit ignores (CRUSH).</summary>
@@ -409,6 +435,15 @@ public sealed record SkillShape
         {
             HitSize = a.HitSize * b.HitSize,
             VowPowerMultiplier = a.VowPowerMultiplier * b.VowPowerMultiplier,
+
+            StrongMatchupBonus = a.StrongMatchupBonus + b.StrongMatchupBonus,
+            WeakMatchupRelief = Math.Min(1f, a.WeakMatchupRelief + b.WeakMatchupRelief),
+            AllMatchupsStrong = a.AllMatchupsStrong || b.AllMatchupsStrong,
+            AffinityStyleBonus = a.AffinityStyleBonus + b.AffinityStyleBonus,
+            OffStylePenalty = a.OffStylePenalty + b.OffStylePenalty,
+            OppositePenaltyRelief = Math.Min(1f, a.OppositePenaltyRelief + b.OppositePenaltyRelief),
+            ResonanceWorth = a.ResonanceWorth + b.ResonanceWorth,
+            OneSourceBonus = a.OneSourceBonus + b.OneSourceBonus,
             ArmourPenetration = a.ArmourPenetration + b.ArmourPenetration,
             ArmourIgnoreFraction = Math.Max(a.ArmourIgnoreFraction, b.ArmourIgnoreFraction),
             CrushArmourMultiple = Pick(a.CrushArmourMultiple, b.CrushArmourMultiple, lower: true),

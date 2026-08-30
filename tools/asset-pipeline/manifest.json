@@ -1791,10 +1791,10 @@
       "subject": "a slim hourglass with running sand"
     },
     {
-      "key": "icon_branch_weight",
+      "key": "icon_branch_resonance",
       "dest": "assets/art/UI/icons/branches",
       "style": "glyph",
-      "subject": "a massive blunt double-headed iron maul head, squat and heavy, seen straight on",
+      "subject": "one upright two-tined tuning fork with a rounded stem, seen straight on",
       "width": 192,
       "height": 192,
       "shading": "flat shading",
@@ -2170,14 +2170,6 @@
       "dest": "assets/art/Characters/Hunter/portraits",
       "style": "medallion",
       "subject": "the face of a stern bearded man looking forward from under a dark green hood, brown leather collar"
-    },
-    {
-      "key": "logo_horizontal_full",
-      "dest": "assets/art/BrandingSymbols/branding",
-      "style": "chrome",
-      "subject": "an ornate gold heraldic crest emblem with radiating filigree wings",
-      "width": 384,
-      "height": 192
     }
   ]
 }

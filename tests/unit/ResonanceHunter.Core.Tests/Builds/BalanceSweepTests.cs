@@ -156,7 +156,7 @@ public class BalanceSweepTests
     /// Spend a budget down ONE branch, cheapest-first, honouring prerequisites — which is how a player
     /// actually walks a branch and therefore the only spend that measures what the branch offers.
     /// </summary>
-    private static SkillShape WalkBranch(Branch branch, int budget)
+    private static MasteryTree WalkBranch(Branch branch, int budget)
     {
         var taken = new MasteryTree();
         taken.SetEarned(budget);
@@ -176,7 +176,26 @@ public class BalanceSweepTests
                 progress = true;
             }
         } while (progress);
-        return taken.Shape();
+        return taken;
+    }
+
+    /// <summary>
+    /// The champion a walked branch produces — its SHAPE and the plain stats it pays.
+    /// </summary>
+    /// <remarks>
+    /// This returned only <see cref="MasteryTree.Shape"/> until 2026-08-30, and the re-axe added a
+    /// second payment channel the sweep could not see: RESONANCE's six minors pay entirely in
+    /// <see cref="HunterStat"/> values, so a branch whose connective tissue is stats measured as
+    /// buying NOTHING and this gate reported it as dormant. It was the harness that was blind. Every
+    /// branch gains plain-stat minors as §9b is built out, so reading both channels is not a
+    /// RESONANCE special case — it is what measuring a branch means now.
+    /// </remarks>
+    private static (Build Build, Hunter Hunter) Walked(Branch branch, int budget, BuildMods? mods = null)
+    {
+        var tree = WalkBranch(branch, budget);
+        var hunter = MidCareerHunter();
+        hunter.SetMasteryStats(tree.Stats());
+        return (BuildWith(tree.Shape(), mods), hunter);
     }
 
     // ── The sweeps ────────────────────────────────────────────────────────────────────────────────
@@ -205,7 +224,11 @@ public class BalanceSweepTests
     public void test_no_mastery_branch_dominates_at_the_same_point_budget()
     {
         var bare = Enum.GetValues<Branch>()
-            .ToDictionary(br => br, br => Measure(BuildWith(WalkBranch(br, Budget))));
+            .ToDictionary(br =>
+            {
+                var (build, hunter) = Walked(br, Budget);
+                return br;
+            }, br => { var (build, hunter) = Walked(br, Budget); return Measure(build, hunter); });
         var bareBase = Measure(BuildWith(SkillShape.None));
         _out.WriteLine($"UNGEARED BASELINE             {bareBase}");
         foreach (var (b, sp) in bare) _out.WriteLine($"UNGEARED {b,-8} @ {Budget}     {sp}");
@@ -214,7 +237,7 @@ public class BalanceSweepTests
         var geared = new BuildMods(3.0f, 1.4f, 1f, 1f, 1f);
         var gearedBase = Measure(BuildWith(SkillShape.None, geared));
         var rows = Enum.GetValues<Branch>()
-            .ToDictionary(br => br, br => Measure(BuildWith(WalkBranch(br, Budget), geared)));
+            .ToDictionary(br => br, br => { var (bd, h) = Walked(br, Budget, geared); return Measure(bd, h); });
         _out.WriteLine($"GEARED BASELINE               {gearedBase}");
         foreach (var (b, sp) in rows) _out.WriteLine($"GEARED {b,-8} @ {Budget}       {sp}");
 
@@ -227,9 +250,9 @@ public class BalanceSweepTests
         foreach (var def in ResonanceHunter.Core.Encounters.Regions.All)
         {
             var per = Enum.GetValues<Branch>()
-                .ToDictionary(br => br, br => Measure(BuildWith(WalkBranch(br, Budget), geared), null, def.Id).Median);
+                .ToDictionary(br => br, br => { var (bd, h) = Walked(br, Budget, geared); return Measure(bd, h, def.Id).Median; });
             var win = per.MaxBy(kv => kv.Value);
-            _out.WriteLine($"{def.Name,-16}{per[Branch.Weight],9}{per[Branch.Spread],9}"
+            _out.WriteLine($"{def.Name,-16}{per[Branch.Resonance],9}{per[Branch.Spread],9}"
                            + $"{per[Branch.Tempo],9}{per[Branch.Endure],9}   {win.Key}");
         }
 
@@ -309,10 +332,13 @@ public class BalanceSweepTests
         // stall-bound and reports the same depth however much health you take off it, so it is blind to
         // exactly the failure under test.
         var geared = new BuildMods(3.0f, 1.4f, 1f, 1f, 1f);
-        var weight = WalkBranch(Branch.Weight, Budget);
+        var walked = WalkBranch(Branch.Resonance, Budget);
+        var weight = walked.Shape();
+        var h = MidCareerHunter();
+        h.SetMasteryStats(walked.Stats());
 
-        var whole = Measure(BuildWith(weight, geared)).Median;
-        var gutted = Measure(BuildWith(weight with { MaxHealth = 0.5f }, geared)).Median;
+        var whole = Measure(BuildWith(weight, geared), h).Median;
+        var gutted = Measure(BuildWith(weight with { MaxHealth = 0.5f }, geared), h).Median;
         _out.WriteLine($"WEIGHT full health {whole} · half health {gutted}");
 
         Assert.True(gutted < whole,

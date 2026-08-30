@@ -22,7 +22,7 @@ public class OneDisciplineTest
         var tree = new MasteryTree();
         tree.SetEarned(80);
         foreach (var kind in new[] { MasteryKind.Minor, MasteryKind.Notable })
-            foreach (var n in MasteryCatalog.Nodes.Where(x => x.Branch == Branch.Weight && x.Kind == kind))
+            foreach (var n in MasteryCatalog.Nodes.Where(x => x.Branch == Branch.Resonance && x.Kind == kind))
                 Assert.True(tree.Take(n.Id), $"fixture could not take {n.Id}");
         Assert.True(tree.Take("spec_strike"));
         Assert.Equal(Form.Strike, tree.Affinity());

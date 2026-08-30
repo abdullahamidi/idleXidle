@@ -68,37 +68,6 @@ public class mastery_new_nodes_liveness_test
 
     // ── WEIGHT ────────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>HEFT — Strike and Trap hit harder, and a Projectile does not.</summary>
-    [Fact]
-    public void test_heft_lifts_strike_and_not_projectile()
-    {
-        var plainStrike = Fight(SkillShape.None, Wave(1, 1_000_000f, 1f), NoSwing, forms: Form.Strike).Metrics;
-        var heftStrike = Fight(Node("heft"), Wave(1, 1_000_000f, 1f), NoSwing, forms: Form.Strike).Metrics;
-        Assert.True(heftStrike.RawDamage > plainStrike.RawDamage * 1.10f,
-            $"HEFT Strike dealt {heftStrike.RawDamage:N0} against {plainStrike.RawDamage:N0} — the per-Form power is not reaching the hit.");
-
-        var plainBolt = Fight(SkillShape.None, Wave(1, 1_000_000f, 1f), NoSwing, forms: Form.Projectile).Metrics;
-        var heftBolt = Fight(Node("heft"), Wave(1, 1_000_000f, 1f), NoSwing, forms: Form.Projectile).Metrics;
-        Assert.Equal(plainBolt.RawDamage, heftBolt.RawDamage, 0);
-    }
-
-    /// <summary>HEADLONG pays against a creature above half health and stops below it.</summary>
-    [Fact]
-    public void test_headlong_pays_only_while_the_creature_is_mostly_whole()
-    {
-        // A pool no Strike can drain inside the ceiling: every hit lands on a creature above half.
-        var whole = Fight(SkillShape.None, Wave(1, 1_000_000f, 1f), NoSwing).Metrics;
-        var headlong = Fight(Node("headlong"), Wave(1, 1_000_000f, 1f), NoSwing).Metrics;
-        Assert.True(headlong.RawDamage > whole.RawDamage * 1.20f,
-            $"HEADLONG dealt {headlong.RawDamage:N0} against {whole.RawDamage:N0} on a creature above half health.");
-
-        // The same creature starting at a third of its health: nothing to pay on.
-        var hurt = () => new List<WaveCreature> { new() { MaxHealth = 1_000_000f, Health = 300_000f, Damage = 1f } };
-        var plainHurt = Fight(SkillShape.None, hurt(), NoSwing).Metrics;
-        var headlongHurt = Fight(Node("headlong"), hurt(), NoSwing).Metrics;
-        Assert.Equal(plainHurt.RawDamage, headlongHurt.RawDamage, 0);
-    }
-
     /// <summary>STAGGER pushes bites back, so fewer land — and only one push per bite.</summary>
     [Fact]
     public void test_stagger_holds_bites_off_and_never_for_ever()
@@ -281,13 +250,19 @@ public class mastery_new_nodes_liveness_test
             "REBOUND gave back more than a fifth of every bite — it is reading the wrong number.");
     }
 
-    /// <summary>Every one of the twelve exists, costs what its ring costs, and changes a shape.</summary>
+    /// <summary>Every survivor of the twelve exists, costs what its ring costs, and changes a shape.</summary>
+    /// <remarks>
+    /// NINE, not twelve. HEFT, HEADLONG and STAGGER were all WEIGHT's, and the 2026-08-30 re-axe
+    /// replaced that branch with RESONANCE (design §9). The nodes
+    /// that replaced them are pinned by <c>MasteryNodeLivenessTests</c>, which asks a harder question of
+    /// each — not "is it in the catalogue" but "does the fight come out different".
+    /// </remarks>
     [Fact]
-    public void test_the_twelve_new_nodes_are_in_the_catalogue()
+    public void test_the_surviving_new_nodes_are_in_the_catalogue()
     {
         var ids = new[]
         {
-            "heft", "headlong", "stagger", "fan", "rally", "tide",
+            "fan", "rally", "tide",
             "brisk", "rhythm", "opening_volley", "mending", "payback", "rebound",
         };
         foreach (var id in ids)
