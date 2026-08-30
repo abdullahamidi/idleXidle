@@ -243,28 +243,47 @@ Authored 2026-08-30, gated against the two laws (§8) and the ownership table, t
 > SNARE's HOOK cancelled itself out and nothing on the screen said so. **Only two styles write that
 > clock now:** FIELD scales the interval, HAMMER offsets the next bite. They compose; they do not fight.
 
+> **THE REINFORCEMENT LINES BELOW ARE THE ONES THAT SHIPPED, AND 51 OF THE 72 WERE REWRITTEN TO GET
+> THERE (2026-08-30).** They were authored as *design* prose — "the total is not cleared when it pays,
+> it halves instead", "when the front enemy dies its broken defence carries to the next" — and each of
+> those sentences quietly asked the fight for state it does not keep: a bank that survives its own
+> spend, a break that outlives its creature, a per-arrow ramp inside a cast the sim resolves as one
+> pool. Written that way a reinforcement is not a small feature, it is a sim change wearing a one-line
+> disguise, and seventy-two of them is a rewrite of the battle loop.
+>
+> So each was rewritten to the nearest thing the fight can actually do, and `ReinforcementLivenessTests`
+> is what decides "actually": every one runs against the same skill and variation without it, at two
+> depths, and damage, health, healing, shield or depth reached must move. **Do not restore a line from
+> an earlier draft of this section without a delta and a passing liveness case** — the version in
+> `SkillCatalogue` is the specification now, and this table follows it rather than leading it.
+>
+> Four dials that this section already assumed turned out to be unread by the sim, and were repaired
+> rather than written around: armour was clamped at zero (so every floor below it was unreachable
+> text), Fields ignored their own `IntervalMs` and all ticked on one global clock, PIN's stun ended
+> its tick before any break could run, and IRON cleared its own reflect one line after computing it.
+
 ### HAMMER
 
 | | Entry | Effect |
 |---|---|---|
 | **Active** | **BLOW** | Heavy damage to one target. Every 6 beats. |
 | ▸ | **FLATTEN** | Defence ignore: the blow ignores the target's defence. |
-| | TOLL | The defence the blow ignores is added to its damage. |
-| | SHEAR | The blow is 50% larger against a target whose defence it ignored. |
-| | TRAIL | The defence ignore also applies to your basic attack for 3s. |
+| | TOLL | The blow deals 50% more damage. |
+| | SHEAR | The blow reaches a second target. |
+| | TRAIL | Your basic attacks ignore defence too. |
 | ▸ | **FINISH** | Execute threshold: the blow kills a target under 15% health. Once per wave. |
 | | BRINK | The execute threshold rises to 25% health. |
-| | TWICE | The blow may execute twice each wave. |
-| | SPUR | The blow deals 20% more for each enemy it has executed this wave. |
+| | TWICE | The blow may execute twice each wave, and the threshold rises to 20% health. |
+| | SPUR | Cooldown falls from 6 beats to 5, so it finds more executes. |
 | **Passive** | **PRESS** | A weight sits on the front enemy: its defence drops 5 every 2s, down to -25. |
 | ▸ | **CRUSHING** | The defence drop is 10 every 2s instead of 5, down to -50. |
 | | SETTLE | The floor falls from -50 to -90. |
-| | SEIZE | When the front enemy dies, its broken defence carries to the next. |
-| | UNDERMINE | The weight breaks defence on the two front enemies instead of one. |
+| | SEIZE | The weight breaks the two front enemies instead of one. |
+| | UNDERMINE | The weight works every 1s instead of every 2s. |
 | ▸ | **PIN** | 1s stun on the front enemy every 6s. |
 | | HOLD | The stun is 1.5s instead of 1s. |
 | | BUCKLE | Each stun strips 10 defence from the front enemy. |
-| | SEAL | While an enemy is stunned the weight's defence drop comes every 1s. |
+| | SEAL | The stun comes every 4s instead of every 6s. |
 
 > BURDEN ("the weight also deals heavy damage every 2s") was cut: recurring damage on a fixed clock
 > is damage over time, which the table gives to VOLLEY. MASS, GRIND and PULP all hung off that
@@ -277,21 +296,21 @@ Authored 2026-08-30, gated against the two laws (§8) and the ownership table, t
 |---|---|---|
 | **Active** | **REPAY** | Deals 200% of the damage you have taken since its last cast. Every 5 beats. |
 | ▸ | **VENGEANCE** | 350% instead of 200%, but only damage taken in the last 3s counts. |
-| | GRUDGE | The total is not cleared when it pays; it halves instead. |
-| | SCARRED | Damage taken below half health counts double. |
-| | BRUISED | Damage the trap already reflected still counts toward the total. |
+| | GRUDGE | It pays back 500% instead of 350%. |
+| | SCARRED | The payback deals 40% more damage. |
+| | BRUISED | Cooldown falls from 5 beats to 4, so less damage goes uncollected. |
 | ▸ | **BANKED** | Instead of dealing it, the total becomes a shield of equal size. |
-| | STANDING | The shield does not expire; it holds until it is spent. |
-| | CARRIED | Any shield left when a wave ends carries into the next. |
-| | LINING | The shield is 50% larger. |
+| | STANDING | The shield is 50% larger. |
+| | CARRIED | Cooldown falls from 5 beats to 4, so the shield renews sooner. |
+| | LINING | It banks 300% of the damage taken instead of 200%. |
 | **Passive** | **JAWS** | Every bite returns 50% of it to the enemy that bit you. Rearms every 3s. |
 | ▸ | **NET** | The reflect returns 100% of the bite instead of 50%. |
 | | MESH | The reflect grows 10% per bite taken this wave, up to +50%. |
-| | RECOIL | The reflect still lands at half strength while the trap rearms. |
-| | SPITE | A reflect that kills the enemy that bit you rearms the trap at once. |
+| | RECOIL | The trap rearms a third sooner. |
+| | SPITE | The reflect returns 140% of the bite instead of 100%. |
 | ▸ | **IRON** | No reflect: the trap stops a whole bite, but rearms every 6s. |
 | | REPRISAL | A stopped bite is returned to the enemy that made it, in full. |
-| | BLUNT | The trap springs on two bites before it rearms. |
+| | BLUNT | The trap rearms twice as fast. |
 | | HARDEN | Each spring raises the reflect 20% for the wave, up to 40%. |
 
 > SHELL — a 4-beat shield — was cut, and REPAY written in its place. SHELL was the only one of the
@@ -312,17 +331,17 @@ Authored 2026-08-30, gated against the two laws (§8) and the ownership table, t
 | **Active** | **CALL** | All your damage +60% for 6s. Every 5 beats. |
 | ▸ | **SPEND** | The window is 2s and amplifies +200%. |
 | | OVERSPEND | Amplify +100% more; the window falls to 1.5s. |
-| | HERALD | The window opens on its own when a wave starts. |
-| | AFTERGLOW | When the window closes, +40% holds until the next cast. |
+| | HERALD | Cooldown falls from 5 beats to 4, so the window opens more often. |
+| | AFTERGLOW | The window holds 4s instead of 2s. |
 | ▸ | **STEADY** | Each cast adds +40% amplify for the rest of the wave, up to +80%. |
 | | REDOUBLE | Each cast adds +70% instead of +40%. |
 | | PILLAR | The cap rises from +80% to +160%. |
-| | FOOTING | Half the amplify carries into the next wave. |
+| | FOOTING | Cooldown falls from 5 beats to 4, so it reaches the cap sooner. |
 | **Passive** | **BRAND** | Your damage to the front enemy is +70%. |
 | ▸ | **SPRAWL** | The mark covers every enemy instead, at half strength. |
 | | EVEN | Every enemy's mark rises from half to three-quarters strength. |
-| | WINNOW | A marked enemy's death deepens every other mark +10%, up to +50%. |
-| | RIPPLE | Each death deepens the other marks +20% instead of +10%. |
+| | WINNOW | The marks deepen +10% every 2s, up to +50%. |
+| | RIPPLE | The marks refresh every 1s instead of every 2s. |
 | ▸ | **ETCH** | The mark deepens +50% every 2s to +170%, and keeps its depth when it moves. |
 | | SINK | The mark deepens +80% each time instead of +50%. |
 | | GRAVEN | The cap rises from +170% to +250%. |
@@ -335,21 +354,21 @@ Authored 2026-08-30, gated against the two laws (§8) and the ownership table, t
 | **Active** | **SPRAY** | Fires 5 arrows at random enemies. With fewer enemies they are split between them. Every 3 beats. |
 | ▸ | **SPLAY** | Fires an arrow at every enemy, and never fewer than 5 arrows. |
 | | TWIN | Every enemy takes 2 arrows instead of 1. |
-| | NOCK | Cooldown falls 0.3s for each enemy beyond the first that it hits. |
-| | FLIGHT | Every enemy the cast hits bleeds for 20% of the arrow. |
+| | NOCK | Every arrow deals 25% more. |
+| | FLIGHT | Your casts leave bleed worth 20% of what they deal. |
 | ▸ | **CLUSTER** | All 5 arrows hit one enemy. |
-| | DRIVE | Each arrow after the first into the same enemy deals +15%. |
-| | RUPTURE | Each arrow after the first into the same enemy leaves bleed worth 20% of it. |
-| | GROUPING | When the target dies, the rest of the cast's arrows fire at the next enemy. |
+| | DRIVE | The cast deals 50% more damage. |
+| | RUPTURE | Your casts leave bleed worth 30% of what they deal. |
+| | GROUPING | The cast reaches a second enemy. |
 | **Passive** | **WEEP** | When an enemy dies it leaves bleed on the wave worth 30% of its health. |
 | ▸ | **TORRENT** | The bleed deals its damage twice as fast. |
-| | DRY | A kill made while nothing is bleeding leaves double bleed. |
-| | SPILLWAY | When the bleed kills, its next payment lands at once. |
-| | EBB | The bleed's last payment is doubled. |
+| | DRY | A kill leaves 45% of the enemy's health as bleed instead of 30%. |
+| | SPILLWAY | The bleed pays out three times as fast instead of twice. |
+| | EBB | Your casts leave bleed worth 10% of what they deal. |
 | ▸ | **CARRION** | The bleed carries into the next wave instead of ending. |
-| | DREGS | Bleed carried into a new wave pays double for its first 3s. |
-| | ONSET | Bleed carried into a wave hits every enemy with its first payment. |
-| | LAST DROP | The kill that clears a wave doubles the standing bleed. |
+| | DREGS | A kill leaves 45% of the enemy's health as bleed instead of 30%. |
+| | ONSET | Your casts leave bleed worth 10% of what they deal, and it carries too. |
+| | LAST DROP | The carried bleed pays out 50% faster. |
 
 > RUNOFF ("skill cooldowns fall 0.5s each time the bleed empties") was cut. Cooldown reduction is
 > VOLLEY's, so it passed the table — but the chain is kill, then bleed, then the bleed empties, then
@@ -364,21 +383,21 @@ Authored 2026-08-30, gated against the two laws (§8) and the ownership table, t
 | **Active** | **PULSE** | Area damage to every enemy in the wave. Every 3 beats. |
 | ▸ | **THRONG** | Damage rises 20% for each living enemy. |
 | | HORDE | The per-enemy bonus rises from 20% to 35%. |
-| | PACKED | Above two living enemies the per-enemy bonus is doubled. |
-| | CROWDED | The bonus counts the wave's starting enemies, not the living ones. |
+| | PACKED | The pulse deals 30% more damage. |
+| | CROWDED | Cooldown falls from 5 beats to 4. |
 | ▸ | **SHARE** | 300% damage, split evenly between every living enemy. |
 | | POOL | The split pool rises from 300% to 450%. |
 | | NARROWED | The pool is split four ways at most, however many enemies are alive. |
-| | RECLAIM | An enemy killed by the pulse returns its share to the others. |
+| | RECLAIM | The pulse comes back a beat sooner, 4 instead of 5. |
 | **Passive** | **MIRE** | Slows every enemy's attacks by 25%. |
 | ▸ | **NUMB** | The slow deepens 5% each second, up to 40%. |
-| | DEEPEN | The slow deepens 8% a second instead of 5%. |
+| | DEEPEN | The slow deepens 10% a second instead of 5%, and its ceiling rises to 50%. |
 | | SEDIMENT | The ceiling rises from 40% to 55%. |
-| | SILT | At the ceiling the field also deals area damage every 1s. |
+| | SILT | The field's damage rises 50%. |
 | ▸ | **TEEMING** | Slows 6% for each living enemy on top of the 25%, up to 60%. |
-| | CLOG | 8% for each living enemy instead of 6%. |
-| | BRIM | The per-enemy ceiling rises from 60% to 75%. |
-| | REMNANT | Enemies killed this wave still count toward the slow for 3s. |
+| | CLOG | 10% for each living enemy instead of 6%, and the ceiling rises to 78%. |
+| | BRIM | The slow starts at 40% instead of 25%, and its ceiling rises to 85%. |
+| | REMNANT | The field acts every 0.5s instead of every 1s. |
 
 > UNDIVIDED ("while only one enemy is alive the pool is not split") was cut. With POOL it put 450%
 > into a single enemy on a 3-beat cooldown — one enormous blow, at half BLOW's cadence, delivered by
@@ -391,22 +410,22 @@ Authored 2026-08-30, gated against the two laws (§8) and the ownership table, t
 |---|---|---|
 | **Active** | **DRINK** | Heavy damage to one target; heals you for 50% of it. Every 6 beats. |
 | ▸ | **THIRST** | Lifesteal doubles, and your per-wave healing limit doubles with it. |
-| | GREEDY | Lifesteal is 50% stronger against the enemy with the most health. |
-| | PARCH | Lifesteal doubles again while below 50% health. |
-| | TRICKLE | Your basic attacks lifesteal too, at a quarter strength. |
+| | GREEDY | Lifesteal is 50% stronger. |
+| | PARCH | The cast deals 30% more damage, so it drinks more. |
+| | TRICKLE | Your basic attacks lifesteal 3% of their damage too. |
 | ▸ | **GLUT** | No lifesteal. Damage rises with your current health, up to +150% at full. |
 | | SURFEIT | The health scaling counts double. |
-| | STOUT | Missing health costs you only half as much of the scaling. |
-| | HIGH WATER | The scaling reads the health you started the wave with. |
+| | STOUT | The cast deals 30% more damage. |
+| | HIGH WATER | Cooldown falls from 6 beats to 5. |
 | **Passive** | **WILT** | Attack break: every enemy's damage drops 10% a pulse, down to -50%. |
 | ▸ | **SUP** | Each pulse also heals 1% of your maximum health. |
-| | BROOK | The pulse heals twice as much while below 50% health. |
-| | BALM | The healing pulse runs every 0.5s; the break keeps its 1s clock. |
-| | RESERVE | The pulse heals 1% more for every 10% the break has deepened. |
+| | BROOK | The attack break reaches -70% instead of -50%. |
+| | BALM | The pulse runs every 0.5s instead of every 1s. |
+| | RESERVE | The attack break deepens 15% a pulse instead of 10%. |
 | ▸ | **SHRIVEL** | The front enemy only: 20% a pulse, down to -80%. |
 | | HOLLOW | The break also reaches the second enemy, at half depth. |
-| | SEIZED | The front enemy starts each wave already fully broken. |
-| | GAUNT | When the front enemy dies, its break carries to the next one. |
+| | SEIZED | The break deepens 30% a pulse instead of 20%. |
+| | GAUNT | The floor falls from -80% to -95%. |
 
 > OVERFLOW ("+20% maximum health") was cut. Maximum health is not a DRAIN mechanic at all — it is a
 > CHAMPION stat, and §7's own test puts those on the mastery tree, where §9b gives it to ENDURE. A
