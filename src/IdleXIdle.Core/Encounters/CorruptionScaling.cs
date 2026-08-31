@@ -29,4 +29,14 @@ public static class CorruptionScaling
 
     public static int DeepeningDustAward(int newCorruptionTier)
         => 60 * Math.Max(1, Clamp(newCorruptionTier));
+
+    /// <summary>Dust paid when region-mastery levels are crossed — per new level, scaled by the tier's reward.</summary>
+    /// <remarks>P12: the host used to inline this as a bare <c>15 ×</c> literal; on the model, a test pins it.</remarks>
+    public static int MasteryLevelDust(int newLevels, int corruptionTier)
+        => (int)(Math.Max(0, newLevels) * 15 * RewardMultiplier(corruptionTier));
+
+    /// <summary>Dust paid once when a region is conquered, scaled by the tier's reward.</summary>
+    /// <remarks>P12: hoisted from the host's bare <c>40 ×</c> literal for the same reason.</remarks>
+    public static int ConquestDust(int corruptionTier)
+        => (int)(40 * RewardMultiplier(corruptionTier));
 }

@@ -84,8 +84,9 @@ public class WarrenTests
     [Fact]
     public void test_each_currency_is_produced_by_at_least_one_facility()
     {
-        var w = new Warren();
-        foreach (var r in new[] { WarrenResource.Gleam, WarrenResource.Mastery, WarrenResource.Dust })
+        // At full conquest — the material facilities sit at the end of the unlock ramp.
+        var w = new Warren { ConqueredRegions = 6 };
+        foreach (var r in new[] { WarrenResource.Gleam, WarrenResource.Dust, WarrenResource.Scrap, WarrenResource.Essence })
             Assert.True(w.ProductionPerMinute(r) > 0, $"{r} should have a producing facility");
     }
 
@@ -98,20 +99,18 @@ public class WarrenTests
         var dear = w.UpgradeCost(FacilityKind.Nursery);
 
         Assert.True(dear.Gleam > cheap.Gleam);
-        Assert.True(dear.Mastery > cheap.Mastery);
         Assert.True(dear.Dust > cheap.Dust);
     }
 
     [Fact]
-    public void test_can_afford_gates_on_all_three_currencies()
+    public void test_can_afford_gates_on_both_currencies()
     {
         var w = new Warren();
         var c = w.UpgradeCost(FacilityKind.Nursery);
 
-        Assert.True(w.CanAfford(FacilityKind.Nursery, c.Gleam, c.Mastery, c.Dust));
-        Assert.False(w.CanAfford(FacilityKind.Nursery, c.Gleam - 1, c.Mastery, c.Dust));
-        Assert.False(w.CanAfford(FacilityKind.Nursery, c.Gleam, c.Mastery - 1, c.Dust));
-        Assert.False(w.CanAfford(FacilityKind.Nursery, c.Gleam, c.Mastery, c.Dust - 1));
+        Assert.True(w.CanAfford(FacilityKind.Nursery, c.Gleam, c.Dust));
+        Assert.False(w.CanAfford(FacilityKind.Nursery, c.Gleam - 1, c.Dust));
+        Assert.False(w.CanAfford(FacilityKind.Nursery, c.Gleam, c.Dust - 1));
     }
 
     [Fact]
@@ -155,18 +154,20 @@ public class WarrenTests
     public void test_many_small_ticks_equal_one_big_tick()
     {
         // Determinism / no-truncation guard: 3600 one-second ticks must equal a single 3600-second tick.
-        var incremental = new Warren();
+        // Full conquest, so all four channels (materials included) are exercised.
+        var incremental = new Warren { ConqueredRegions = 6 };
         incremental.Restore(level: 15, xp: 0, facilityLevels: null);
-        long g = 0, m = 0, d = 0;
-        for (var i = 0; i < 3600; i++) { var t = incremental.Tick(1f); g += t.Gleam; m += t.Mastery; d += t.Dust; }
+        long g = 0, d = 0, s = 0, e = 0;
+        for (var i = 0; i < 3600; i++) { var t = incremental.Tick(1f); g += t.Gleam; d += t.Dust; s += t.Scrap; e += t.Essence; }
 
-        var bulk = new Warren();
+        var bulk = new Warren { ConqueredRegions = 6 };
         bulk.Restore(level: 15, xp: 0, facilityLevels: null);
         var big = bulk.Tick(3600f);
 
         Assert.Equal(big.Gleam, g);
-        Assert.Equal(big.Mastery, m);
         Assert.Equal(big.Dust, d);
+        Assert.Equal(big.Scrap, s);
+        Assert.Equal(big.Essence, e);
     }
 
     [Fact]
@@ -218,5 +219,77 @@ public class WarrenTests
         var w = new Warren();
         Assert.Equal(1, w.Facility(FacilityKind.Nursery).Level);
         Assert.Equal(2 * Warren.DepthPerFacilityLevel, w.DepthForNextLevel(FacilityKind.Nursery));
+    }
+
+    // ── P12: unlock-by-conquest, the material facilities, the depth-cap derivation ──
+
+    /// <summary>game-flow 3.8: facilities unlock by conquest — a fresh Warren is three cards, not eight.</summary>
+    [Fact]
+    public void test_facilities_unlock_one_per_conquest_in_catalog_order()
+    {
+        var unopened = new Warren();                        // 0 conquests — the Warren itself is not even open
+        Assert.Equal(2, unopened.UnlockedFacilityCount);
+
+        var opened = new Warren { ConqueredRegions = 1 };   // the conquest that opens the Warren
+        Assert.Equal(3, opened.UnlockedFacilityCount);
+        Assert.True(opened.IsUnlocked(Facilities.All[0].Kind));
+        Assert.True(opened.IsUnlocked(Facilities.All[2].Kind));
+        Assert.False(opened.IsUnlocked(Facilities.All[3].Kind));
+
+        var full = new Warren { ConqueredRegions = 6 };     // full current content
+        Assert.All(full.AllFacilities, f => Assert.True(full.IsUnlocked(f.Kind)));
+    }
+
+    /// <summary>A locked facility neither produces nor upgrades — it is a promise, not a faucet.</summary>
+    [Fact]
+    public void test_a_locked_facility_produces_nothing_and_cannot_upgrade()
+    {
+        var w = new Warren { ConqueredRegions = 1 };
+        const long plenty = 1_000_000_000;
+        var locked = Facilities.All[^1].Kind;   // the last ramp slot — far beyond one conquest
+
+        Assert.False(w.IsUnlocked(locked));
+        Assert.False(w.CanUpgrade(locked, plenty, plenty));
+        Assert.Equal(0, w.ProductionPerMinute(WarrenResource.Essence));   // both Essence facilities locked
+    }
+
+    /// <summary>The grandfather rule: a facility already raised past level 1 stays open under any ramp.</summary>
+    /// <remarks>
+    /// The ramp shipped after the facilities did. A save that invested in a building must never watch
+    /// its production vanish because a rule arrived later.
+    /// </remarks>
+    [Fact]
+    public void test_a_facility_already_raised_stays_unlocked()
+    {
+        var w = new Warren();   // 0 conquests — BreedingChamber's ramp slot is the very last
+        w.Restore(level: 1, xp: 0, facilityLevels: new Dictionary<FacilityKind, int>
+        {
+            [FacilityKind.BreedingChamber] = 3,
+        });
+
+        Assert.True(w.IsUnlocked(FacilityKind.BreedingChamber));
+        Assert.True(w.ProductionPerMinute(WarrenResource.Essence) > 0);
+    }
+
+    /// <summary>The host's cap arithmetic lives on the model: one facility level per five proven waves.</summary>
+    [Fact]
+    public void test_the_depth_cap_derivation_is_one_level_per_five_waves_with_a_floor_of_one()
+    {
+        Assert.Equal(1, Warren.CapForDepth(0));
+        Assert.Equal(1, Warren.CapForDepth(4));    // the floor: a new player can still read the screen
+        Assert.Equal(1, Warren.CapForDepth(5));
+        Assert.Equal(2, Warren.CapForDepth(10));
+        Assert.Equal(12, Warren.CapForDepth(60));
+    }
+
+    /// <summary>The two material facilities pay the Forge's wallets — Scrap and Essence, in the yield.</summary>
+    [Fact]
+    public void test_the_material_facilities_pay_scrap_and_essence()
+    {
+        var w = new Warren { ConqueredRegions = 6 };
+        var y = w.Tick(600f);   // ten minutes, so the slow Essence trickle clears whole units
+
+        Assert.True(y.Scrap > 0, "SCAVENGER RUNS / HOARD VAULTS should have paid Scrap");
+        Assert.True(y.Essence > 0, "RITUAL NEST / BREEDING CHAMBER should have paid Essence");
     }
 }

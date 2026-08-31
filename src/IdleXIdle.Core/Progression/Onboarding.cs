@@ -321,7 +321,7 @@ public static class Onboarding
         {
             new TourStep(TourTarget.Facilities, "THE FACILITIES",
                 "Each card is a facility. They produce on their own, even while the game is closed. "
-                + "Click one to read it."),
+                + "Conquering regions opens more of them. Click one to read it."),
 
             new TourStep(TourTarget.FacilityDetail, "UPGRADING",
                 "What the chosen facility makes each minute, and what the next level costs. "

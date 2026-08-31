@@ -146,13 +146,15 @@ public sealed class MemoryDustTree
     public void SetEarned(int earned) => Earned = Math.Max(0, earned);
 
     /// <summary>
-    /// Award Dust earned from a region mastery milestone.
+    /// Credit Memory Dust — the wallet's one faucet method.
     /// </summary>
     /// <remarks>
-    /// This is the ONLY faucet: Dust comes from mastering regions, never from a reset, never from
-    /// grinding. A player who never opens this screen still earns it, harmlessly, in the background.
+    /// The callers are the real faucet list (the old remark claimed mastery milestones were the ONLY
+    /// one, which was false on four counts): the Warren's Dust facilities, region-mastery milestones,
+    /// conquests, and first-time corruption deepenings — the last three priced in
+    /// <c>CorruptionScaling</c>, so a test can pin them.
     /// </remarks>
-    public void AwardFromMastery(int amount) => MemoryDust += Math.Max(0, amount);
+    public void AddDust(int amount) => MemoryDust += Math.Max(0, amount);
 
     /// <summary>
     /// Spend Dust on a cost outside the unlock tree (a Warren facility upgrade). Spends nothing and returns

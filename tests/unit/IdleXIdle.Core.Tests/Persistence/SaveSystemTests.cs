@@ -463,7 +463,7 @@ public class SaveSystemTests
     public void test_memory_dust_and_unlocks_survive_a_reload()
     {
         var tree = new IdleXIdle.Core.Prestige.MemoryDustTree();
-        tree.AwardFromMastery(200);   // dust, the Warren material — still saved
+        tree.AddDust(200);            // dust, the Warren material — still saved
         tree.SetEarned(200);          // trait points, which is what the tree actually spends
         tree.Purchase("recall_1");
         tree.Purchase("socket_2");

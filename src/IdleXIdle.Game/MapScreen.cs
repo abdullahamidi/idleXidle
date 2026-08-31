@@ -270,8 +270,6 @@ public sealed class MapScreen
         if (idx >= 0) _selected = idx;
     }
 
-    public void Draw(SpriteBatch b) => Draw(b, new Point(-1, -1), false);
-
     public void Draw(SpriteBatch b, Point mouse, bool clicked)
     {
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).

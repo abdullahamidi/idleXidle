@@ -67,23 +67,23 @@ public class PointIncomeTests
         var warren = new Warren() { FacilityLevelCap = 1 };
         const long plenty = 1_000_000_000;
 
-        Assert.True(warren.CanAfford(FacilityKind.Nursery, plenty, plenty, plenty),
+        Assert.True(warren.CanAfford(FacilityKind.Nursery, plenty, plenty),
             "The fixture must be able to afford the upgrade, or this proves nothing about the cap.");
-        Assert.False(warren.CanUpgrade(FacilityKind.Nursery, plenty, plenty, plenty));
+        Assert.False(warren.CanUpgrade(FacilityKind.Nursery, plenty, plenty));
 
         warren.FacilityLevelCap = 4;
-        Assert.True(warren.CanUpgrade(FacilityKind.Nursery, plenty, plenty, plenty));
+        Assert.True(warren.CanUpgrade(FacilityKind.Nursery, plenty, plenty));
     }
 
     /// <summary>The cap binds every facility, not the selected one.</summary>
     [Fact]
     public void test_the_depth_ceiling_binds_every_facility()
     {
-        var warren = new Warren() { FacilityLevelCap = 1 };
+        var warren = new Warren() { FacilityLevelCap = 1, ConqueredRegions = 6 };   // all open — the CAP must be what blocks
         const long plenty = 1_000_000_000;
 
         foreach (var kind in warren.AllFacilities.Select(f => f.Kind))
-            Assert.False(warren.CanUpgrade(kind, plenty, plenty, plenty),
+            Assert.False(warren.CanUpgrade(kind, plenty, plenty),
                 $"{kind} escaped the depth ceiling — one uncapped facility is enough to reopen the hole.");
     }
 }

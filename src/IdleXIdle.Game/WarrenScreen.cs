@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using IdleXIdle.Core.Warrens;
@@ -12,9 +13,8 @@ namespace IdleXIdle.Game;
 /// </summary>
 /// <remarks>
 /// Every value is real, from the <see cref="Core.Warrens.Warren"/> model the host owns: facility levels
-/// and outputs, the Warren level/XP, the derived production bonuses, and the real upgrade costs in Gleam /
-/// Mastery / Dust. The creature "den" (the old Warren) is preserved as a sub-view reached via the CREATURES
-/// button. The host sets the model + owned balances each frame and consumes the upgrade / den requests.
+/// and outputs, the Warren level/XP, the derived production bonuses, and the real upgrade costs in
+/// Gleam / Dust. The host sets the model + owned balances each frame and consumes the upgrade request.
 /// </remarks>
 public sealed class WarrenScreen
 {
@@ -25,8 +25,10 @@ public sealed class WarrenScreen
     private static readonly Color Dim = new(0x3A, 0x3A, 0x44);
     private static readonly Color Met = new(0x6E, 0xC8, 0x7A);
     private static readonly Color GleamC = new(0xF0, 0xA8, 0x30);   // gold coin track
-    private static readonly Color MasteryC = new(0xC0, 0x6E, 0xE0); // purple gem track
+    private static readonly Color Violet = new(0xC0, 0x6E, 0xE0);   // accent (crest fallback, caption)
     private static readonly Color DustC = new(0x5F, 0xE0, 0xC8);    // teal gem track
+    private static readonly Color ScrapC = new(0x9A, 0xC0, 0x88);   // scrap green — the Forge wallet's tint
+    private static readonly Color EssenceC = new(0x74, 0xC6, 0xE8); // essence blue — the Forge wallet's tint
 
     private readonly UiKit _ui;
     public WarrenScreen(UiKit ui) => _ui = ui;
@@ -34,7 +36,6 @@ public sealed class WarrenScreen
     // ── Host-set each frame ───────────────────────────────────────────────────────────────────────
     public Warren Warren { get; set; } = null!;
     public long GleamOwned { get; set; }
-    public long MasteryOwned { get; set; }
     public long DustOwned { get; set; }
     public bool DevWarrenDebug { get; set; }
 
@@ -78,12 +79,13 @@ public sealed class WarrenScreen
 
     private Color ResColor(WarrenResource r) => r switch
     {
-        WarrenResource.Gleam => GleamC, WarrenResource.Mastery => MasteryC, _ => DustC,
+        WarrenResource.Gleam => GleamC, WarrenResource.Dust => DustC,
+        WarrenResource.Scrap => ScrapC, _ => EssenceC,
     };
 
     /// <summary>
-    /// The currency's real icon (Gleam coin, Memory Dust, Insight medallion), the tinted diamond only
-    /// when the art is missing. Playtest 2026-08-23: "Gleam, Dust ve Insight kaynaklarının ikonları yok."
+    /// The currency's real icon (Gleam coin, Memory Dust, the Forge's material gems), the tinted
+    /// diamond only when the art is missing.
     /// </summary>
     private void ResGlyph(SpriteBatch b, Rectangle box, WarrenResource? r, Color? fallback = null)
     {
@@ -91,37 +93,17 @@ public sealed class WarrenScreen
         {
             WarrenResource.Gleam => "ui_gleam_coin",
             WarrenResource.Dust => "ui_memory_dust",
-            WarrenResource.Mastery => "ui_insight",
+            WarrenResource.Scrap => "mat_scrap",
+            WarrenResource.Essence => "mat_essence",
             _ => "",
         };
         if (key.Length > 0 && _ui.Assets.Get(key) is { } tex) { b.Draw(tex, box, Color.White); return; }
         _ui.Diamond(b, box, fallback ?? (r is { } rr ? ResColor(rr) : Dim));
     }
 
-    private static WarrenResource? ResFromLabel(string label) => label.ToUpperInvariant() switch
-    {
-        "GLEAM" => WarrenResource.Gleam,
-        "INSIGHT" => WarrenResource.Mastery,
-        "DUST" or "MEMORY DUST" => WarrenResource.Dust,
-        _ => null,
-    };
-
-    private static string ResName(WarrenResource r) => r switch
-    {
-        // THE GAME'S OWN NAMES FOR ITS OWN CURRENCIES. Two of these three were simply wrong: the first
-        // pool is Hunter.Gleam, which every other screen calls GLEAM, and the third is
-        // MemoryDust.MemoryDust, which the TRAITS screen spends and calls DUST — this screen called them
-        // GOLD and NATURE. The middle one is renamed rather than corrected: it is a Warren-only pool
-        // (see the note on WarrenResource) and calling it MASTERY now collides with a rail tile, a tree
-        // and a point currency that it has nothing to do with.
-        WarrenResource.Gleam => "GLEAM", WarrenResource.Mastery => "INSIGHT", _ => "DUST",
-    };
-
     private static string Ab(long v) => v >= 1_000_000
         ? $"{v / 1_000_000.0:0.#}M"
         : v >= 1000 ? $"{v / 1000.0:0.#}K" : v.ToString();
-
-    public void Draw(SpriteBatch b) => Draw(b, new Point(-1, -1), false);
 
     public void Draw(SpriteBatch b, Point mouse, bool clicked)
     {
@@ -178,7 +160,7 @@ public sealed class WarrenScreen
     /// </remarks>
     private void LevelBadge(SpriteBatch b, Rectangle box, float progress)
     {
-        if (!_ui.Icon(b, "icon_warren_crest", box, Color.White)) _ui.Diamond(b, box, MasteryC);
+        if (!_ui.Icon(b, "icon_warren_crest", box, Color.White)) _ui.Diamond(b, box, Violet);
 
         var centre = new Vector2(box.Center.X, box.Center.Y);
         var radius = box.Width * 0.54f;
@@ -208,7 +190,7 @@ public sealed class WarrenScreen
         // stack beside the crest; the house grid keeps the line that says WHICH one of these you are
         // looking at directly under the title, which is where every other panel in the game puts it.
         _ui.TextCenterBig(b, _ui.ShortenBig(Warren.Name, width, UiTypography.Secondary),
-                          OverviewPanel.Center.X, UiKit.CaptionTop(OverviewPanel), MasteryC, UiTypography.Secondary);
+                          OverviewPanel.Center.X, UiKit.CaptionTop(OverviewPanel), Violet, UiTypography.Secondary);
 
         // ── THE LEVEL, ON ITS BADGE, WITH WHAT THE LEVEL BUYS BESIDE IT ──
         var crest = new Rectangle(left, UiKit.BodyTop(OverviewPanel), 84, 84);
@@ -240,27 +222,24 @@ public sealed class WarrenScreen
         // Total production, per real currency (bonuses applied).
         _ui.TextBig(b, "TOTAL PRODUCTION", left, rule + 18, Gold, UiTypography.Body);
         _ui.TextRightBig(b, "(IDLE RATE)", right, rule + 22, Slate, UiTypography.Secondary);
-        var y = rule + 66;
-        foreach (var r in new[] { WarrenResource.Gleam, WarrenResource.Mastery, WarrenResource.Dust })
+        var y = rule + 60;
+        foreach (var r in new[] { WarrenResource.Gleam, WarrenResource.Dust, WarrenResource.Scrap, WarrenResource.Essence })
         {
             ResGlyph(b, new Rectangle(left, y - 2, 38, 38), r);
             _ui.TextBig(b, $"+{Ab(Warren.ProductionPerMinute(r))} /min", left + 60, y + 2, Bone, UiTypography.Headline);
-            // The three rows are spaced to REACH the rule above the closing paragraph rather than to a
-            // tight 52: the panel is 708 px tall and its content used to stop 110 px short of that rule,
-            // which reads as a panel that ran out of things to say rather than as breathing room.
-            y += 72;
+            // Four rows (P12 traded the INSIGHT row for the two Forge materials), still spaced to REACH
+            // the rule above the closing paragraph rather than to a tight 52 — a panel that stops a
+            // hand-width short of its own rule reads as one that ran out of things to say.
+            y += 54;
         }
 
         // Production runs on every screen (see Game1.TickFarms) — a quiet reminder that the base earns idle.
         _ui.Fill(b, new Rectangle(left, OverviewPanel.Bottom - 124, width, 2), Dim);
-        // WHAT EACH OF THE THREE IS FOR, because the screen was silent about it and one of them is
-        // unlike the other two. GLEAM and DUST are the game's shared currencies — spent on stats and on
-        // the trait tree — while INSIGHT is produced here and spent here, on nothing else. That is a
-        // legitimate design (it paces the base's own growth) but the player has no way to learn it from
-        // a row of three coloured diamonds, and its old name made it look like the mastery points it
-        // has nothing to do with.
-        DrawWrapped(b, "The warren earns while you are away. GLEAM and DUST are used all over the game. "
-                     + "INSIGHT is used only here, on upgrades.",
+        // WHAT EACH OF THE FOUR IS FOR — one plain line, because a row of coloured diamonds teaches
+        // nothing. GLEAM buys stat training, DUST starts checkpoint descents and builds the warren,
+        // SCRAP and ESSENCE are the Forge's refine and socket fuel.
+        DrawWrapped(b, "The warren earns while you are away. GLEAM and DUST are spent all over the game. "
+                     + "SCRAP and ESSENCE feed the Forge.",
             left, OverviewPanel.Bottom - 104, width, Slate);
     }
 
@@ -271,6 +250,21 @@ public sealed class WarrenScreen
         foreach (var f in Warren.AllFacilities)
         {
             var card = Card(i++);
+
+            // game-flow 3.8: facilities unlock by conquest. A locked card is a promise, not a faucet —
+            // it says what would open it and takes no clicks.
+            if (!Warren.IsUnlocked(f.Kind))
+            {
+                _ui.Fill(b, card, new Color(0x10, 0x0C, 0x16, 0xD0));
+                _ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, 4), Dim);
+                _ui.Fill(b, new Rectangle(card.X, card.Bottom - 4, card.Width, 4), Dim);
+                _ui.TextCenterBig(b, f.Info.Name, card.Center.X, card.Y + 14, Dim, UiTypography.Secondary);
+                _ui.Hex(b, new Rectangle(card.Center.X - 44, card.Y + 46, 88, 76), Dim * 0.4f);
+                _ui.TextCenterBig(b, "LOCKED", card.Center.X, card.Bottom - 70, Slate, UiTypography.Body);
+                _ui.TextCenterBig(b, "TAKE ANOTHER REGION", card.Center.X, card.Bottom - 38, Slate, UiTypography.Secondary);
+                continue;
+            }
+
             var sel = f.Kind == _selected;
             if (UiKit.ClickedIn(card, hit, clicked)) _selected = f.Kind;
 
@@ -312,8 +306,8 @@ public sealed class WarrenScreen
         // must never re-derive the sum.
         _ui.TextCenterBig(b,
             $"GLEAM x{Warren.Multiplier(WarrenResource.Gleam):0.00}   ·   "
-            + $"INSIGHT x{Warren.Multiplier(WarrenResource.Mastery):0.00}   ·   "
-            + $"DUST x{Warren.Multiplier(WarrenResource.Dust):0.00}"
+            + $"DUST x{Warren.Multiplier(WarrenResource.Dust):0.00}   ·   "
+            + $"MATERIALS x{Warren.Multiplier(WarrenResource.Scrap):0.00}"
             + "   —   EACH IS 1 PLUS ALL THREE PLUS CONQUEST PLUS ITS OWN CHIP",
             BonusStrip.Center.X, UiKit.CaptionTop(BonusStrip), Slate, UiTypography.Secondary);
 
@@ -321,8 +315,8 @@ public sealed class WarrenScreen
         var entries = new (string Key, Color Gem, string Value, string Label, string Why)[]
         {
             ("ui_gleam_coin", GleamC, $"+{Warren.ResourceBonus(WarrenResource.Gleam) * 100f:0}%", "GLEAM", "2% A LEVEL"),
-            ("ui_insight", MasteryC, $"+{Warren.ResourceBonus(WarrenResource.Mastery) * 100f:0}%", "INSIGHT", "1.3% A LEVEL"),
             ("ui_memory_dust", DustC, $"+{Warren.ResourceBonus(WarrenResource.Dust) * 100f:0}%", "DUST", "0.9% A LEVEL"),
+            ("mat_scrap", ScrapC, $"+{Warren.ResourceBonus(WarrenResource.Scrap) * 100f:0}%", "MATERIALS", "1.3% A LEVEL"),
             ("icon_blessing_amplifier", Met, $"+{Warren.AllProductionBonus * 100f:0}%", "ALL THREE", "3% A LEVEL AFTER 1"),
             ("icon_blessing_expansion", Ember, $"+{Warren.ConquestBonus * 100f:0}%", "CONQUEST",
                 regions == 1 ? "1 REGION TAKEN" : $"{regions} REGIONS TAKEN"),
@@ -343,6 +337,10 @@ public sealed class WarrenScreen
     private void DrawDetail(SpriteBatch b, Point hit, bool clicked)
     {
         _ui.PanelQuiet(b, DetailPanel);
+        // A locked selection can only arrive by state reset (the grid never selects a locked card);
+        // fall back to the first open facility rather than posing a locked one.
+        if (!Warren.IsUnlocked(_selected))
+            _selected = Warren.AllFacilities.First(x => Warren.IsUnlocked(x.Kind)).Kind;
         var f = Warren.Facility(_selected);
         var rc = ResColor(f.Info.Produces);
 
@@ -369,11 +367,10 @@ public sealed class WarrenScreen
 
         var cost = f.UpgradeCost();
         var y = DetailPanel.Y + 388;
-        DrawReq(b, y, GleamC, "GLEAM", GleamOwned, cost.Gleam);
-        DrawReq(b, y + 42, MasteryC, "INSIGHT", MasteryOwned, cost.Mastery);
-        DrawReq(b, y + 84, DustC, "DUST", DustOwned, cost.Dust);
+        DrawReq(b, y, WarrenResource.Gleam, "GLEAM", GleamOwned, cost.Gleam);
+        DrawReq(b, y + 42, WarrenResource.Dust, "DUST", DustOwned, cost.Dust);
 
-        var afford = GleamOwned >= cost.Gleam && MasteryOwned >= cost.Mastery && DustOwned >= cost.Dust;
+        var afford = GleamOwned >= cost.Gleam && DustOwned >= cost.Dust;
 
         // The cap is stated, not merely enforced. A greyed button with no reason reads as a bug; a
         // player who is told the ceiling is theirs to raise knows the answer is to go and descend.
@@ -396,10 +393,10 @@ public sealed class WarrenScreen
             _upgradeRequest = _selected;
     }
 
-    private void DrawReq(SpriteBatch b, int y, Color gem, string label, long owned, int required)
+    private void DrawReq(SpriteBatch b, int y, WarrenResource res, string label, long owned, int required)
     {
         var ok = owned >= required;
-        ResGlyph(b, new Rectangle(UiKit.ContentLeft(DetailPanel), y, 30, 30), ResFromLabel(label), gem);
+        ResGlyph(b, new Rectangle(UiKit.ContentLeft(DetailPanel), y, 30, 30), res, ResColor(res));
         _ui.TextBig(b, label, UiKit.ContentLeft(DetailPanel) + 40, y, Bone, UiTypography.Body);
         // The verdict is a fixed 46px column; the ratio ends where that column starts. Previously both were
         // right-aligned 28px apart, so "131.9M / 7.8M" ran straight through the "OK" beside it.

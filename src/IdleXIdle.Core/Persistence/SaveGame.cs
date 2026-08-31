@@ -274,15 +274,9 @@ public sealed record SaveGame
     /// <summary>Facility levels, by FacilityKind name. Empty on a pre-Warren save → every facility loads at 1.</summary>
     public Dictionary<string, int> WarrenFacilities { get; init; } = new();
 
-    /// <summary>
-    /// Total Mastery Points the Warren has produced over the game's life.
-    /// </summary>
-    /// <remarks>
-    /// Mastery Earned is DERIVED each frame (depth + conquests), not accumulated, so facility-produced
-    /// mastery cannot live in the tree — it lives here and the host adds it into SetEarned. Persisted, or a
-    /// reload would silently erase every mastery point the Warren ever made.
-    /// </remarks>
-    public long WarrenMasteryPool { get; init; }
+    // WarrenMasteryPool (the closed-loop INSIGHT pool) was retired 2026-08-31 (P12). The key in old
+    // saves is skipped on load like any other unknown member; nothing needs migrating — the pool
+    // bought only Warren upgrades, which now cost Gleam + Dust.
 }
 
 /// <summary>An unopened chest in the save — grade, loot tier, and region element, by primitive.</summary>
@@ -532,7 +526,7 @@ public static class SaveSystem
         IReadOnlyList<ItemInstance> inventory, long nowMs,
         Prestige.MemoryDustTree? prestige = null, int highestMasteryAwarded = 0,
         Encounters.World? world = null, string activeRegion = "",
-        Warren? warren = null, long warrenMasteryPool = 0)
+        Warren? warren = null)
         => new()
         {
             SavedAtMs = nowMs,
@@ -541,7 +535,6 @@ public static class SaveSystem
             WarrenFacilities = warren is null
                 ? new Dictionary<string, int>()
                 : warren.FacilityLevels.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value),
-            WarrenMasteryPool = warrenMasteryPool,
             Gleam = hunter.Gleam,
             Materials = hunter.Materials,
             Charters = hunter.AllCharters.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value),

@@ -120,7 +120,6 @@ public sealed class AssetLibrary
     {
         ["ui_gleam_coin"] = "currency_gleam",       // package_05 currencies
         ["ui_memory_dust"] = "currency_memory_dust",
-        ["ui_insight"] = "currency_insight",         // 2026-08-23: the Warren's third currency got a face
         // Generic per-slot glyphs. The previous item_<slot> targets never existed on disk, so every
         // equipment slot glyph resolved to null; these point at the shipped item_slot_<slot> art.
         ["item_glyph_weapon"] = "item_slot_weapon", ["item_glyph_charm"] = "item_slot_charm",

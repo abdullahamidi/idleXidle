@@ -291,19 +291,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // built but unreachable, so no player ever had a creature or spent a core.
     private WarrenScreen _warrenScreen = null!;
     private Warren _warren = new();
-    /// <summary>What the Warren's INSIGHT facilities have produced. Spendable on Warren upgrades only.</summary>
-    /// <remarks>
-    /// <b>THE COMMENT HERE USED TO SAY "feeds SetEarned", AND IT DOES NOT.</b> Two more comments said the
-    /// same thing. The only <c>MasteryTree.SetEarned</c> calls in the game are DEV fixtures — mastery
-    /// POINTS are derived from deepest-ever depth and nothing else — so this pool is produced by two
-    /// facilities and spent on upgrading facilities: a closed loop, which is exactly what the design note
-    /// on <c>WarrenResource</c> says the Warren was built to avoid.
-    ///
-    /// Renamed to INSIGHT on screen rather than rewired, because wiring it into the build tree would add
-    /// a second source of mastery points and change progression — a balance decision, not a label fix.
-    /// Flagged for the designer; the naming collision with the MASTERY rail tile is fixed either way.
-    /// </remarks>
-    private long _warrenMasteryPool;
+    // (The INSIGHT pool — produced by two facilities, spendable only on facility upgrades — was cut
+    // 2026-08-31 (P12): a closed loop that never decided anything the Gleam cost had not. The Warren
+    // pays the Forge's Scrap/Essence instead; an old save's WarrenMasteryPool key is skipped on load.)
 
     // ── Memory Dust prestige (Full Vision). NOTHING RESETS — Dust accrues from mastery. ───────
     private PrestigeScreen _prestige = null!;
@@ -667,7 +657,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // The Warren facility economy — levels/XP restored before the offline tick below so its production
         // is computed against the real facility levels, not a fresh level-1 base.
         SaveSystem.RestoreWarren(save, _warren);
-        _warrenMasteryPool = save.WarrenMasteryPool;
         // PARKED, not applied. This method runs from Initialize(); every screen — _expedition included —
         // is constructed in LoadContent(), which has not run yet, so reaching through _expedition here
         // dereferences null and takes the whole game down before the window opens.
@@ -754,8 +743,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // actually produced something — a "0.0 HOURS, 0 GLEAM" banner is noise, not a welcome.
         var credited = SaveSystem.CreditedOfflineSeconds(result.OfflineSeconds);
 
-        // The Warren produced the whole time you were away — credit it into the real balances (Gleam and
-        // Dust are shared accumulators; Insight banks into the Warren's own pool -- see _warrenMasteryPool).
+        // The Warren produced the whole time you were away — credit it into the real balances (Gleam,
+        // Dust, and the Forge's Scrap/Essence — the same wallets the live tick feeds).
         //
         // ConqueredRegions IS SET HERE, and was not before. Its only other assignments live in TickWarren
         // and DrawWarren, both of which run from Update/Draw — while this runs from Initialize, before
@@ -768,8 +757,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
             ? _warren.Tick((float)credited)
             : default;
         _hunter.AddGleam((int)wOffline.Gleam);
-        _dust.AwardFromMastery((int)wOffline.Dust);
-        _warrenMasteryPool += wOffline.Mastery;
+        _dust.AddDust((int)wOffline.Dust);
+        _hunter.AddMaterial(Material.Scrap, (int)wOffline.Scrap);
+        _hunter.AddMaterial(Material.Essence, (int)wOffline.Essence);
 
         // THE CHAMPION fought while you were away — the SAME simulation, headless (P5). The old
         // credit was a rate measured LAST session × seconds × 0.5: zero for anyone whose final
@@ -890,7 +880,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         var save = SaveSystem.Capture(
             _hunter, _region, _forge.Inventory, SaveFile.NowMs,
-            _dust, _highestMasteryAwarded, _world, _activeRegion, _warren, _warrenMasteryPool) with
+            _dust, _highestMasteryAwarded, _world, _activeRegion, _warren) with
         {
             // The build rides along via `with`, so Core's Capture stays unaware of the Game-layer loadout.
             WovenSkills = _loadout.SaveSkills()
@@ -1017,7 +1007,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _skillProgress = new SkillProgress();
         _characters = new CharacterState();
         _warren = new Warren();
-        _warrenMasteryPool = 0;
         _activeRegion = VerdantHollow.RegionId;
 
         _deepestEver = 0;
@@ -1101,8 +1090,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var span = _warrenAccum;
         _warrenAccum = 0f;
 
-        // The Warren's facilities produce every second, on every screen — Gleam/Dust into the real
-        // balances, Insight into the Warren's own upgrade pool (which does NOT feed the build tree).
+        // The Warren's facilities produce every second, on every screen — Gleam and Dust into the
+        // shared balances, Scrap and Essence into the Forge's material wallet.
         //
         // GATED ON THE WARREN BEING OPEN, which it was not. The gradual-unlock pass gated the Warren's
         // nav TILE on the first conquest but nothing gated its PRODUCTION, so a brand-new player was
@@ -1115,8 +1104,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _warren.ConqueredRegions = _world.ConqueredIds.Count;   // conquest → a standing production bonus
         var w = _warren.Tick(span);
         if (w.Gleam > 0) _hunter.AddGleam((int)w.Gleam);
-        if (w.Dust > 0) _dust.AwardFromMastery((int)w.Dust);
-        _warrenMasteryPool += w.Mastery;
+        if (w.Dust > 0) _dust.AddDust((int)w.Dust);
+        if (w.Scrap > 0) _hunter.AddMaterial(Material.Scrap, (int)w.Scrap);
+        if (w.Essence > 0) _hunter.AddMaterial(Material.Essence, (int)w.Essence);
     }
 
     /// <summary>
@@ -1124,8 +1114,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// </summary>
     /// <remarks>
     /// The dashboard performs its upgrade in the DRAW pass (the same place Forge does its Refine), so the
-    /// spend + <see cref="Warren.Upgrade"/> happen here, right after Draw sets the request. Gleam and Dust
-    /// spend from their real balances; Mastery spends from the produced pool.
+    /// spend + <see cref="Warren.Upgrade"/> happen here, right after Draw sets the request. Gleam and
+    /// Dust spend from their real balances.
     /// </remarks>
     private void DrawWarren()
     {
@@ -1134,21 +1124,19 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _warrenScreen.Warren = _warren;
 
         // One facility level per five waves of proven depth. Recomputed every frame it draws, so a
-        // record set this session raises the ceiling without a restart. Floor of 1: a new player must
-        // still be able to see what a facility does before their first descent ends.
-        _warren.FacilityLevelCap = Math.Max(1, DeepestAnywhere() / Warren.DepthPerFacilityLevel);
+        // record set this session raises the ceiling without a restart. The arithmetic (and its floor
+        // of 1) lives on the model, where a test pins it.
+        _warren.FacilityLevelCap = Warren.CapForDepth(DeepestAnywhere());
 
         _warrenScreen.GleamOwned = _hunter.Gleam;
-        _warrenScreen.MasteryOwned = _warrenMasteryPool;
         _warrenScreen.DustOwned = _dust.MemoryDust;
         _warrenScreen.Draw(_batch, CanvasMouse, MouseClicked);
 
         if (_warrenScreen.ConsumeUpgrade() is { } kind
-            && _warren.CanUpgrade(kind, _hunter.Gleam, _warrenMasteryPool, _dust.MemoryDust))
+            && _warren.CanUpgrade(kind, _hunter.Gleam, _dust.MemoryDust))
         {
             var c = _warren.UpgradeCost(kind);
             _hunter.SpendGleam(c.Gleam);
-            _warrenMasteryPool -= c.Mastery;
             _dust.Spend(c.Dust);
             _warren.Upgrade(kind);
             Save();
@@ -1921,7 +1909,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _mapScreen.ActiveRegion = _activeRegion;
                     _mapScreen.SelectActive();
                     _hunter.AddGleam(131_900_000);      // top currency pills read like the reference
-                    _dust.AwardFromMastery(77_400);
+                    _dust.AddDust(77_400);
                 }
                 if (sm == "region2")
                 {
@@ -1977,7 +1965,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _hunter.AddMaterial(Material.Essence, 3_400);
                     _hunter.AddMaterial(Material.Core, 820);
                     _hunter.AddMaterial(Material.Crystal, 400);
-                    _dust.AwardFromMastery(77_400);               // the Memory-Dust pill, so it reads like the ref
+                    _dust.AddDust(77_400);               // the Memory-Dust pill, so it reads like the ref
 
                     // ("hybrid" and the DevReforge pose retired with the pile screen — one workbench now.)
                 }
@@ -1996,8 +1984,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     });
                     // Owned balances at the reference's scale so the upgrade requirements read as MET.
                     _hunter.AddGleam(131_900_000);
-                    _warrenMasteryPool = 77_400;
-                    _dust.AwardFromMastery(12_600);
+                    _dust.AddDust(12_600);
                 }
                 if (sm == "farm")
                 {
@@ -2174,7 +2161,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 if (sm is "dust" or "traitlit" or "traitterm" or "traitterminal")
                 {
                     _showPrestige = true;
-                    _dust.AwardFromMastery(77_605);   // Dust still shows in the top pills; it no longer buys traits
+                    _dust.AddDust(77_605);   // Dust still shows in the top pills; it no longer buys traits
 
                     // TRAIT POINTS, and real ids. This fixture used to award Dust and then buy
                     // "might_1", "might_2", "grit_1", "grit_2", "tempo_1" and "blood_1" — none of which
@@ -2772,8 +2759,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var totalMasteryLevels = Regions.All.Sum(r => (int)_world.RegionFarm(r.Id).MasteryLevel);
         if (totalMasteryLevels > _highestMasteryAwarded)
         {
-            var reward = CorruptionScaling.RewardMultiplier(_world.CorruptionTier);
-            _dust.AwardFromMastery((int)((totalMasteryLevels - _highestMasteryAwarded) * 15 * reward));
+            _dust.AddDust(CorruptionScaling.MasteryLevelDust(
+                totalMasteryLevels - _highestMasteryAwarded, _world.CorruptionTier));
             _highestMasteryAwarded = totalMasteryLevels;
         }
 
@@ -3741,7 +3728,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_expedition.Deepest >= ConquerWaveDepth && !_world.IsConquered(_activeRegion))
         {
             var unlocked = _world.Conquer(_activeRegion);
-            _dust.AwardFromMastery((int)(40 * CorruptionScaling.RewardMultiplier(_world.CorruptionTier)));
+            _dust.AddDust(CorruptionScaling.ConquestDust(_world.CorruptionTier));
             _sound.PlayFirst(1f, "sfx_conquer", "sfx_levelup");
             _conquerMsg = unlocked is not null
                 ? $"{Regions.Get(_activeRegion).Name} CONQUERED!  {unlocked.Name} UNLOCKED — MAP (W)."
@@ -5020,7 +5007,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // The award is for REACHING a tier, paid once: SHALLOWER then DEEPER used to mint it again on every
         // cycle (review, 2026-08-23). The trait point for the tier keys off the peak too (TraitPointsEarned).
         var firstTime = tier > peakBefore;
-        if (firstTime) _dust.AwardFromMastery(CorruptionScaling.DeepeningDustAward(tier));
+        if (firstTime) _dust.AddDust(CorruptionScaling.DeepeningDustAward(tier));
         _conquerMsg = firstTime
             ? $"THE CORRUPTION DEEPENS — {CorruptionLook.Label(tier)}. HARDER ENEMIES, MORE DUST."
             : $"THE CORRUPTION DEEPENS AGAIN — {CorruptionLook.Label(tier)}. (YOU ALREADY GOT THE DUST FOR THIS TIER.)";

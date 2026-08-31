@@ -38,6 +38,20 @@ public class CorruptionScalingTests
         Assert.True(CorruptionScaling.DeepeningDustAward(1) > 0);
     }
 
+    /// <summary>The two Dust faucets P12 hoisted out of the host: pinned, tier-scaled, and clamped.</summary>
+    [Fact]
+    public void test_the_mastery_and_conquest_dust_faucets_are_pinned_and_tier_scaled()
+    {
+        Assert.Equal(15, CorruptionScaling.MasteryLevelDust(1, 0));   // 15 Dust per mastery level at the base world
+        Assert.Equal(30, CorruptionScaling.MasteryLevelDust(2, 0));
+        Assert.Equal(40, CorruptionScaling.ConquestDust(0));          // 40 Dust per conquest at the base world
+        Assert.Equal(80, CorruptionScaling.ConquestDust(1));          // x2 reward at tier 1
+
+        Assert.Equal(0, CorruptionScaling.MasteryLevelDust(-3, 0));   // garbage level deltas pay nothing
+        Assert.Equal(CorruptionScaling.ConquestDust(CorruptionScaling.MaxTier),
+                     CorruptionScaling.ConquestDust(CorruptionScaling.MaxTier + 7));   // the ladder has a top
+    }
+
     /// <summary>Negative/garbage tiers never produce sub-identity scaling.</summary>
     [Fact]
     public void test_negative_tiers_are_clamped()
