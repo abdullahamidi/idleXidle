@@ -47,7 +47,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-GAME = ROOT / "src" / "ResonanceHunter.Game"
+GAME = ROOT / "src" / "IdleXIdle.Game"
 
 # method name -> zero-based index of the argument that is a text size
 SIZED = {

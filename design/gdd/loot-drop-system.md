@@ -45,7 +45,7 @@ reused directly, never re-derived), `design/gdd/creature-data-schema.md` (full �
 
 ## 1. Overview
 
-The loot drop system is Resonance Hunter's **economic faucet** — the sole point in the game where
+The loot drop system is IDLExIDLE's **economic faucet** — the sole point in the game where
 new Item Instances are created and enter play. Every weapon, piece of armor, charm, raw material,
 and creature core a player will ever own originates from this document's drop resolution, which
 fires exactly once per defeated creature (the Kill outcome's `CreatureDefeated` event, owned by

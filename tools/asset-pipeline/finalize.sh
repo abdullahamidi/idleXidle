@@ -2,7 +2,7 @@
 # Wait for every generation job to finish, then leave the repo in a testable
 # state. Runs unattended so the final build happens even if nobody is watching.
 #
-# The build matters: ResonanceHunter.Game.csproj copies assets/art/** into
+# The build matters: IdleXIdle.Game.csproj copies assets/art/** into
 # bin/Debug/net8.0/assets/art, and AssetLibrary loads from the BIN copy, not the
 # repo. Regenerating art without rebuilding means testing yesterday's pictures.
 
@@ -29,10 +29,10 @@ echo "[$(stamp)] audit"
 py -u tools/asset-pipeline/audit.py 2>&1 | head -25
 
 echo "[$(stamp)] build"
-dn build src/ResonanceHunter.Game/ResonanceHunter.Game.csproj -v q --nologo 2>&1 | tail -5
+dn build src/IdleXIdle.Game/IdleXIdle.Game.csproj -v q --nologo 2>&1 | tail -5
 
 echo "[$(stamp)] runtime assets: $(find assets/art -name '*.png' | wc -l)"
-echo "[$(stamp)] build output  : $(find src/ResonanceHunter.Game/bin/Debug/net8.0/assets/art -name '*.png' 2>/dev/null | wc -l)"
+echo "[$(stamp)] build output  : $(find src/IdleXIdle.Game/bin/Debug/net8.0/assets/art -name '*.png' 2>/dev/null | wc -l)"
 py - <<'PY'
 import os, datetime
 CUT = datetime.datetime(2026, 8, 10, 0, 0).timestamp()

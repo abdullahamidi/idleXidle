@@ -87,7 +87,7 @@ Master Visual Rule promises for every other system in the game. This is also whe
 Discovery and Expression pillars (game-concept.md's MDA table) become concrete: theorycrafting a
 Source/Form/Vow combo that lets a brutal Vow's condition hold *safely*, because of a specific Form
 choice or a specific creature matchup, is the build-identity payoff Path of Exile's itemization
-promises and Resonance Hunter is explicitly built to deliver without a passive skill tree — through
+promises and IDLExIDLE is explicitly built to deliver without a passive skill tree — through
 three deliberate choices instead of a hundred small ones.
 
 ## 3. Detailed Rules

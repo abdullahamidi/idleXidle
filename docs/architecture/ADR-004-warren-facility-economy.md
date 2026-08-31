@@ -21,7 +21,7 @@ currencies (Gleam, Mastery Points, Memory Dust) into the player's actual balance
 
 ## Decision
 
-1. **A new pure Core model** `ResonanceHunter.Core.Warrens.Warren` owns facilities, levels/XP, production
+1. **A new pure Core model** `IdleXIdle.Core.Warrens.Warren` owns facilities, levels/XP, production
    formulas, and upgrade costs. It holds **no balances and no rendering**: `Tick(seconds)` returns what
    was produced and the host credits the real currencies (ADR-001 — logic stays MonoGame-free and
    unit-testable). Upgrades are instant in v1 (build timers are a documented follow-up).

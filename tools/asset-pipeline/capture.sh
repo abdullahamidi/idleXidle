@@ -71,7 +71,7 @@ WINDIR="$(winpath "$PWD")"
 # BUILD FIRST. Asset PNGs are copied into the output directory as a build step, so a --no-build run
 # renders whatever art was there last time. That silently verified a stale portrait once; a three
 # second build is much cheaper than trusting a screenshot that lies.
-dn build src/ResonanceHunter.Game -v q --nologo >/dev/null 2>&1 \
+dn build src/IdleXIdle.Game -v q --nologo >/dev/null 2>&1 \
   || { echo "build failed" >&2; exit 1; }
 # RH_SHOT is read by a Windows process, so it must be a Windows path even when this shell
 # is using /c or /mnt/c. OUT stays repo-relative — an absolute one fails with a bare
@@ -84,5 +84,5 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 [ -n "$ZOOM" ] && RH_ENV+=(RH_SHOT_ZOOM="$ZOOM" RH_SHOT_T="$ZOOM")
 # `tour`: the screen and the card. The game resolves the mode to that screen's own fixture.
 [ -n "$TOUR_TAB" ] && RH_ENV+=(RH_SHOT_TAB="$TOUR_TAB" RH_SHOT_STEP="$TOUR_STEP")
-dn run --project src/ResonanceHunter.Game --no-build >/dev/null 2>&1
+dn run --project src/IdleXIdle.Game --no-build >/dev/null 2>&1
 [ -f "$OUT" ] && echo "captured $OUT ($(stat -c%s "$OUT") bytes)" || { echo "capture failed" >&2; exit 1; }

@@ -1,4 +1,4 @@
-# Art Bible: Resonance Hunter
+# Art Bible: IDLExIDLE
 
 ## Document Status
 - **Version**: 1.0
@@ -64,7 +64,7 @@ These are not gaps in the bible — they are decisions it correctly defers to a 
 > **Read the world, don't just watch it: every mechanically important state renders as a distinct glyph — never a color swap alone.**
 
 Every corrupted creature, every region, and every choice that matters to survival
-or strategy earns its own glyph. Resonance Hunter is a game about *seeing* mastery
+or strategy earns its own glyph. IDLExIDLE is a game about *seeing* mastery
 before you *feel* it — a player's skill ceiling is defined by how quickly they can
 read a glyph, not how fast they can react to one. This rule arbitrates every visual
 ambiguity that follows in this bible: if a decision could go toward "palette
@@ -233,7 +233,7 @@ its neighbors by silhouette alone, in under a second, without relying on color?*
 
 A creature must satisfy two silhouette requirements that are normally in tension: it
 must read as **one cohesive living thing** at a glance, and its **targetable body parts
-must read as distinct clickable zones** in the middle of combat. Resonance Hunter
+must read as distinct clickable zones** in the middle of combat. IDLExIDLE
 resolves this by putting the two jobs on two different layers of the silhouette,
 borrowing directly from the stained-glass metaphor established in Section 1, Principle 2:
 

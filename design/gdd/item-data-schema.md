@@ -39,7 +39,7 @@ itself.
 
 ## 1. Overview
 
-The item data schema is the single, canonical data model every item in Resonance Hunter is built
+The item data schema is the single, canonical data model every item in IDLExIDLE is built
 from — every weapon, piece of armor, charm, enchantment material, and creature core that exists
 in the game, whether sitting in a player's inventory, mid-Forge-merge, or freshly dropped by a
 broken creature part. It defines two related but distinct shapes: the **Item Definition** (the
@@ -55,7 +55,7 @@ field below exists because a named dependent system needs it — nothing here is
 ## 2. Player Fantasy
 
 A game with no narrative focus (per game-concept.md, narrative is explicitly N/A for MVP) still
-needs its objects to feel like they matter, and in Resonance Hunter that weight is carried
+needs its objects to feel like they matter, and in IDLExIDLE that weight is carried
 entirely by data made visible, not by story text. This schema is what makes that possible: every
 item you carry has a story, and that story is legible because it's structured, not decorative —
 where it came from (a specific rarity roll off a specific creature, or three items fused at the

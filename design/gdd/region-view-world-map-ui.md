@@ -1,4 +1,4 @@
-# Region View & World Map UI: Resonance Hunter
+# Region View & World Map UI: IDLExIDLE
 
 ## Document Status
 

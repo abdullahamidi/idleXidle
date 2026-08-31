@@ -32,7 +32,7 @@ fi
 SHA="$(git rev-parse --short HEAD)"
 OUT="build/release/IDLExIDLE-win64"
 echo "== publish ${SHA} → ${OUT}"
-dn publish src/ResonanceHunter.Game -c Release -r win-x64 --self-contained -o "$OUT" -v q --nologo \
+dn publish src/IdleXIdle.Game -c Release -r win-x64 --self-contained -o "$OUT" -v q --nologo \
   || { echo "publish failed" >&2; exit 1; }
 
 echo "== smoke boot of the published exe"

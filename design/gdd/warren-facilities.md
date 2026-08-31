@@ -1,7 +1,7 @@
 # Warren Facility Economy
 
 > **Status**: Implemented (v1)
-> **System**: `ResonanceHunter.Core.Warrens.Warren`
+> **System**: `IdleXIdle.Core.Warrens.Warren`
 > **Screen**: `WarrenScreen` (nav: WARREN)
 > **Reference**: `warren_management_dashboard_in_dark_fantasy.png`, `warren_screen_production_spec_revision_1.md`
 

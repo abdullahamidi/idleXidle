@@ -1,4 +1,4 @@
-# Resonance Hunter — Character Art Generation Spec (Batch 1: the Hunter, rigged parts)
+# IDLExIDLE — Character Art Generation Spec (Batch 1: the Hunter, rigged parts)
 
 > **Hand this file to the art-generation agent verbatim.** The agent has no access to the game
 > codebase — everything it needs is here.
@@ -31,7 +31,7 @@ in §2.
 
 ## 1. What a "character" is here (Option B — cutout rig)
 
-The game (Resonance Hunter, MonoGame 3.8.4.1, C#/.NET 8) will render battle characters as a **2D cutout
+The game (IDLExIDLE, MonoGame 3.8.4.1, C#/.NET 8) will render battle characters as a **2D cutout
 rig**: a parent→child bone hierarchy. At runtime the engine walks the tree, computes each bone's world
 position + rotation, and draws **one texture per bone**, rotated about that texture's pivot, in a fixed
 back-to-front paint order (§2). Idle sway, breathing, attack swings, hit recoil, and death are authored

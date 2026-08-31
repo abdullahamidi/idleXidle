@@ -1,4 +1,4 @@
-# Input Targeting System: Resonance Hunter
+# Input Targeting System: IDLExIDLE
 
 ## Document Status
 

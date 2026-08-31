@@ -1,4 +1,4 @@
-# Onboarding & Tutorial System: Resonance Hunter
+# Onboarding & Tutorial System: IDLExIDLE
 
 ## Document Status
 
@@ -28,7 +28,7 @@
 
 ## 1. Overview
 
-The onboarding & tutorial system is Resonance Hunter's answer to a genuinely hard problem: this
+The onboarding & tutorial system is IDLExIDLE's answer to a genuinely hard problem: this
 game asks a first-time player to learn a glyph language, weak-point targeting across two input
 paths, telegraph reading, a three-tier defensive triad, part-break mechanics, a Resonance/Ultimate
 economy, a boss encounter, and — immediately after — an entirely new automation/Forge/creature-job

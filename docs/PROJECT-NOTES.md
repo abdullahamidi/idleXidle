@@ -310,7 +310,7 @@ It needed a big composition to reach, so no capture and no short run could find 
 for longer than a screenshot:
 
 ```bash
-RH_BOOTCHECK=18000 RH_SAVE_DIR="$(cygpath -w "$TEMP/rh_soak")"   dotnet run --project src/ResonanceHunter.Game --no-build
+RH_BOOTCHECK=18000 RH_SAVE_DIR="$(cygpath -w "$TEMP/rh_soak")"   dotnet run --project src/IdleXIdle.Game --no-build
 ```
 
 I then audited every other `Math.Clamp` in the Game assembly for the same inversion. **All clean** —
@@ -478,7 +478,7 @@ and there is no in-flight work to recover.
 
 ```bash
 bash tools/check_all.sh                      # font + asset/audio key gates, ~2s
-WINDIR="$(wslpath -w "$PWD")" && cmd.exe /c "cd /d $WINDIR && dotnet test tests\unit\ResonanceHunter.Core.Tests --nologo"
+WINDIR="$(wslpath -w "$PWD")" && cmd.exe /c "cd /d $WINDIR && dotnet test tests\unit\IdleXIdle.Core.Tests --nologo"
 ```
 
 **Environment — check this first on a new machine.** On the machine these notes were
@@ -1334,7 +1334,7 @@ The third argument is that mode's one dial — the tree camera's zoom for `build
 
 ## RUNNING THE GAME, and the blind spot that hid a crash
 
-`dotnet run --project src/ResonanceHunter.Game` **fails from a WSL shell** — there is
+`dotnet run --project src/IdleXIdle.Game` **fails from a WSL shell** — there is
 no Linux .NET SDK in this distro, only the Windows one at `/mnt/c/Program Files/dotnet`.
 Use `bash tools/run.sh` (which hands it to cmd.exe, exactly as `capture.sh` does), or
 run the plain command from PowerShell/cmd.

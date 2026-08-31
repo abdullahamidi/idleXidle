@@ -1,4 +1,4 @@
-# Systems Index: Resonance Hunter
+# Systems Index: IDLExIDLE
 
 > **Status**: Approved
 > **Created**: 2026-07-14
@@ -9,7 +9,7 @@
 
 ## Overview
 
-Resonance Hunter's mechanical scope splits into five domains that mirror the five game
+IDLExIDLE's mechanical scope splits into five domains that mirror the five game
 pillars: a precision combat layer (weak-point targeting, telegraphs, part-breaks — Pillar 1),
 an earned-automation layer (region mastery, staged unlock, offline production — Pillars 2 & 3),
 an itemization/build layer (the Forge, Resonance Weaving, Vow-condition tracking — Pillar 4),

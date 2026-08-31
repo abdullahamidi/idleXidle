@@ -1,4 +1,4 @@
-# Creature Jobs & Evolution System: Resonance Hunter
+# Creature Jobs & Evolution System: IDLExIDLE
 
 ## Document Status
 

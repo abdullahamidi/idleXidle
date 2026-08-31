@@ -48,12 +48,12 @@ referencing this GDD's envelope contract.
 
 ## Player Fantasy
 
-Persistence's entire job is to be invisible when it works. Resonance Hunter's core fantasy is
+Persistence's entire job is to be invisible when it works. IDLExIDLE's core fantasy is
 building a world that keeps running without you (game-concept.md's Core Fantasy) — an empire of
 mastered regions, an evolving creature roster, a Hunter build shaped by hard-won trade-offs. None
 of that means anything if closing the game can lose it. The promise this system makes is simple
 and unconditional: **the empire you're building never disappears.** You should be able to close
-Resonance Hunter mid-expedition, mid-Forge-session, or right after a boss kill, walk away for five
+IDLExIDLE mid-expedition, mid-Forge-session, or right after a boss kill, walk away for five
 minutes or five days, and come back to find exactly what you left — no anxiety about "did that
 save," no manual save-scumming ritual, no fine print.
 

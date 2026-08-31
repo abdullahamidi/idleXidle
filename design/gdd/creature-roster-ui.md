@@ -63,7 +63,7 @@ Discovery retention hook), `design/gdd/systems-index.md` (this system's entry an
 
 ## 1. Overview
 
-The Creature Roster UI is the player-facing home for every bound creature in Resonance Hunter — the
+The Creature Roster UI is the player-facing home for every bound creature in IDLExIDLE — the
 single screen where a player reviews their whole team, diagnoses and fixes a stalled worker,
 understands and pursues a creature's next evolution branch, places a creature into a region and job
 slot, equips its one charm, and mints brand-new creatures from held `creature_core` items via Core

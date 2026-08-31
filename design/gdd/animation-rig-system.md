@@ -1,4 +1,4 @@
-# Animation & Rig System: Resonance Hunter
+# Animation & Rig System: IDLExIDLE
 
 ## Document Status
 
@@ -40,7 +40,7 @@
 
 ## 1. Overview
 
-The animation & rig system is Resonance Hunter's answer to a hard constraint: MonoGame ships no
+The animation & rig system is IDLExIDLE's answer to a hard constraint: MonoGame ships no
 animation or rigging system whatsoever. This document specifies a **homebrew cutout rig** — a
 parent-child bone hierarchy built on vanilla `SpriteBatch`, with `MonoGame.Extended.Tweening`
 driving curve evaluation — that renders every creature's full performance surface (hostile

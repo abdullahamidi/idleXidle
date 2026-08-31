@@ -1,4 +1,6 @@
-# Resonance Hunter
+# IDLExIDLE
+
+> Formerly **Resonance Hunter** — renamed to IDLExIDLE on 2026-08-24; the C# identity (folders, namespaces, projects) is `IdleXIdle` since 2026-08-31. The save folder alone keeps the old name so existing saves stay intact.
 
 A 2D pixel-art **idle action RPG**. You hunt corrupted spirit creatures by reading their attacks and
 striking the openings that reading them creates. Then you teach your creatures to do it for you.
@@ -6,7 +8,7 @@ striking the openings that reading them creates. Then you teach your creatures t
 **MonoGame 3.8.4.1 · C# / .NET 8 · Windows, Linux, macOS**
 
 ```bash
-dotnet run --project src/ResonanceHunter.Game
+dotnet run --project src/IdleXIdle.Game
 ```
 
 > **Status: playable prototype.** The full loop runs — hunt, loot, forge, train, hatch, farm, save,
@@ -58,8 +60,8 @@ another.
 ## Architecture
 
 ```
-src/ResonanceHunter.Core     all game logic — ZERO MonoGame references
-src/ResonanceHunter.Game     rendering, input, the game loop (DesktopGL)
+src/IdleXIdle.Core     all game logic — ZERO MonoGame references
+src/IdleXIdle.Game     rendering, input, the game loop (DesktopGL)
 tests/unit                   176 tests, headless, ~70 ms
 tests/integration            3 cross-system tests
 ```

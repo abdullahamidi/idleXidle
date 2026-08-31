@@ -13,10 +13,10 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 
 if [ "${1:-}" != "--no-build" ]; then
-  dn build src/ResonanceHunter.Game -v q --nologo \
+  dn build src/IdleXIdle.Game -v q --nologo \
     || { echo "build failed" >&2; exit 1; }
 fi
 
 # No RH_SHOT: this is a real session. It reads and WRITES the player's save, which is
 # why the capture rig deliberately never does (see Game1.LoadOrStartFresh).
-dn run --project src/ResonanceHunter.Game --no-build
+dn run --project src/IdleXIdle.Game --no-build

@@ -15,11 +15,11 @@ OUT="${4:-seq_$MODE}"
 . "$(dirname "${BASH_SOURCE[0]}")/../shellenv.sh" || exit 1
 cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1
 WINDIR="$(winpath "$PWD")"
-dn build src/ResonanceHunter.Game -v q --nologo >/dev/null 2>&1 \
+dn build src/IdleXIdle.Game -v q --nologo >/dev/null 2>&1 \
   || { echo "build failed" >&2; exit 1; }
 rm -f "${OUT}"_[0-9][0-9].png
 RH_ENV=(RH_SHOT="$WINDIR\\$OUT.png" RH_SHOT_MODE="$MODE" RH_SHOT_SEQ="$COUNT,$STRIDE")
-dn run --project src/ResonanceHunter.Game --no-build >/dev/null 2>&1   # dn applies RH_ENV (shellenv.sh)
+dn run --project src/IdleXIdle.Game --no-build >/dev/null 2>&1   # dn applies RH_ENV (shellenv.sh)
 N="$(ls "${OUT}"_[0-9][0-9].png 2>/dev/null | wc -l)"
 [ "$N" -gt 0 ] || { echo "capture failed" >&2; exit 1; }
 py tools/asset-pipeline/v2/filmstrip.py "$OUT" "${OUT}"_[0-9][0-9].png

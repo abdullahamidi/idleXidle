@@ -1,0 +1,79 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>IdleXIdle.Game</RootNamespace>
+    <!-- The game is IDLExIDLE (player-facing, stylised). The C# identity is IdleXIdle — folders,
+         namespaces and this project, since the 2026-08-31 identity migration. It was Resonance Hunter
+         until 2026-08-24; only the save folder keeps that name (see SaveFile.AppDataFolderName). -->
+    <AssemblyName>IDLExIDLE</AssemblyName>
+    <Nullable>enable</Nullable>
+    <RollForward>Major</RollForward>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <TieredCompilation>false</TieredCompilation>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Icon.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Remove="Icon.ico" />
+    <None Remove="Icon.bmp" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Icon.ico">
+      <LogicalName>Icon.ico</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Icon.bmp">
+      <LogicalName>Icon.bmp</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FontStashSharp.MonoGame" Version="1.5.6" />
+    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.4.1" />
+    <PackageReference Include="MonoGame.Content.Builder.Task" Version="3.8.4.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\IdleXIdle.Core\IdleXIdle.Core.csproj" />
+  </ItemGroup>
+  <!--
+    Copy the raw PNG assets to the output directory so the game can load them at runtime via
+    Texture2D.FromStream. This deliberately sidesteps the MGCB content pipeline (no .xnb build step):
+    the art is small, flat, point-sampled pixel art, so there is nothing the pipeline would add, and
+    dropping-in new PNGs stays a zero-config operation.
+  -->
+  <ItemGroup>
+    <!--
+      Exclude the asset pipeline's fetch cache. It used to live at assets/art/**/<strip>.png.frames/
+      and every frame in it is named f0.png .. f7.png, so this glob copied 808 of them into the output
+      and AssetLibrary — which keys textures by BASENAME — loaded all of them into eight keys. clip.py
+      caches under tools/asset-pipeline/.staging/ now; this exclude is the guard that stops a stray one
+      ever reaching a build again.
+    -->
+    <Content Include="..\..\assets\art\**\*.png" Exclude="..\..\assets\art\**\*.png.frames\**"
+             Link="assets\art\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <!-- Audio, same pipeline-free drop-in as the art: raw WAVs copied to output, loaded by SoundBank. -->
+    <Content Include="..\..\assets\audio\**\*.wav" Link="assets\audio\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <!--
+      The bundled typefaces, read at runtime by SmoothFont. THIS RULE DID NOT EXIST, which meant the
+      loader's bundled-font branch had never executed once: assets/fonts was never copied next to the
+      executable, so every player was silently rendered in whatever bahnschrift.ttf their own Windows
+      install happened to have — and on a machine without it, in the blocky pixel fallback. Both faces
+      are SIL OFL, so the licences ship beside them.
+    -->
+    <Content Include="..\..\assets\fonts\*.ttf" Link="assets\fonts\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\assets\fonts\OFL-*.txt" Link="assets\fonts\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <Target Name="RestoreDotnetTools" BeforeTargets="CollectPackageReferences">
+    <Message Text="Restoring dotnet tools (this might take a while depending on your internet speed and should only happen upon building your project for the first time, or after upgrading MonoGame, or clearing your nuget cache)" Importance="High" />
+    <Exec Command="dotnet tool restore" />
+  </Target>
+</Project>

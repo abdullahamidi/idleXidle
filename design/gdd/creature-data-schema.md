@@ -1,4 +1,4 @@
-# Creature Data Schema: Resonance Hunter
+# Creature Data Schema: IDLExIDLE
 
 ## Document Status
 
@@ -30,7 +30,7 @@
 ## 1. Overview
 
 The creature data schema is the single authoritative data model for every creature entity in
-Resonance Hunter — both the authored, static definition of a creature species/variant (a
+IDLExIDLE — both the authored, static definition of a creature species/variant (a
 **CreatureTemplate**: its Source, Role, targetable parts, base stats, and evolution tree shape)
 and the live, per-individual runtime record of a specific creature the player encounters or owns
 (a **CreatureInstance**: current health, part-break progress, vulnerability state, bind state,

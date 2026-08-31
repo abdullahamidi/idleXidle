@@ -1,4 +1,4 @@
-# Combat Encounter System: Resonance Hunter
+# Combat Encounter System: IDLExIDLE
 
 
 > **SUPERSEDED 2026-08-12 by `design/gdd/game-flow.md`.**
@@ -41,7 +41,7 @@
 
 ## 1. Overview
 
-The combat encounter system is Resonance Hunter's **resolution layer** — the system that takes
+The combat encounter system is IDLExIDLE's **resolution layer** — the system that takes
 every mechanic the other combat documents define in isolation (a creature's parts and health from
 `creature-data-schema`, its rig and clips from `animation-rig-system`, the player's target
 selection from `input-targeting-system`, its telegraph timing and vulnerability windows from
@@ -828,7 +828,7 @@ to exactly zero at Fully Mastered**, deleting the entire reward premium for play
 inverted**.
 
 > **These figures are now verified by executable test, not by hand.** See
-> `tests/unit/ResonanceHunter.Core.Tests/Progression/BlockerB1RegressionTests.cs`, which reconstructs
+> `tests/unit/IdleXIdle.Core.Tests/Progression/BlockerB1RegressionTests.cs`, which reconstructs
 > the original formula and asserts the inversion, then asserts the fixed formula holds steady on the
 > same inputs. An earlier hand-computed version of this table published *166 / 92.5 / 63.2 / 50* —
 > those numbers came from an unstated parameterization and **did not reproduce**. The inversion was

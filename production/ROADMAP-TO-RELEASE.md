@@ -1,4 +1,4 @@
-# Roadmap to Release — Resonance Hunter
+# Roadmap to Release — IDLExIDLE
 
 **Target:** Paid on Steam, ~$10–15.
 **Sequencing:** Playtest-gated. Nothing downstream starts until the loop is proven fun.
@@ -126,7 +126,7 @@ than everything.
 ## The playtest protocol — do this next
 
 Delete the save first so you start clean:
-`rm -f "$LOCALAPPDATA/ResonanceHunter/save.json"` then `dotnet run --project src/ResonanceHunter.Game`
+`rm -f "$LOCALAPPDATA/ResonanceHunter/save.json"` then `dotnet run --project src/IdleXIdle.Game`
 
 **Play 30–45 minutes.** Do roughly: 10+ fights, hatch and staff the Warren, conquer Verdant Hollow,
 travel to Cinderworks, try a boss, open Memory Dust.

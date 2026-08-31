@@ -163,7 +163,7 @@ production/session-state/
 
 # === Source directories the Unity build-output rules were eating ===
 # `[Bb]uilds/` above (line ~53) is a Unity convention for compiled output. In THIS codebase
-# `src/ResonanceHunter.Core/Builds/` is source — the character build system — and the rule
+# `src/IdleXIdle.Core/Builds/` is source — the character build system — and the rule
 # swallowed it silently: the files sat on disk, the tests passed, `git status` said "clean",
 # and a fresh clone would not have compiled. Same class of bug as the `*.csproj` rule above.
 #

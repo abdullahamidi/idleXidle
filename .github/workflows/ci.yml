@@ -27,13 +27,13 @@ jobs:
         run: dotnet build --no-restore --configuration Release -warnaserror
 
       # The unit suite is headless by design (ADR-001): all game logic lives in
-      # ResonanceHunter.Core, which has ZERO MonoGame references, so the balance math runs
+      # IdleXIdle.Core, which has ZERO MonoGame references, so the balance math runs
       # without a window or a GL context. That is the whole reason it is testable in CI.
       - name: Unit tests
-        run: dotnet test tests/unit/ResonanceHunter.Core.Tests --no-build --configuration Release --verbosity normal
+        run: dotnet test tests/unit/IdleXIdle.Core.Tests --no-build --configuration Release --verbosity normal
 
       # Unit tests prove each system is internally correct. They cannot prove the systems FIT.
       # The two worst bugs in this project were both integration failures that every unit test
       # happily passed.
       - name: Integration tests
-        run: dotnet test tests/integration/ResonanceHunter.Integration.Tests --no-build --configuration Release --verbosity normal
+        run: dotnet test tests/integration/IdleXIdle.Integration.Tests --no-build --configuration Release --verbosity normal

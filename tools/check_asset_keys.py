@@ -25,7 +25,7 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-GAME = os.path.join(ROOT, "src", "ResonanceHunter.Game")
+GAME = os.path.join(ROOT, "src", "IdleXIdle.Game")
 ART = os.path.join(ROOT, "assets", "art")
 AUDIO = os.path.join(ROOT, "assets", "audio")
 
@@ -115,7 +115,7 @@ def main() -> int:
     #
     # The themes come from Regions.cs, so adding a seventh region fails this the day it lands
     # rather than the day someone notices two regions share a bed.
-    regions_cs = os.path.join(ROOT, "src", "ResonanceHunter.Core", "Encounters", "Regions.cs")
+    regions_cs = os.path.join(ROOT, "src", "IdleXIdle.Core", "Encounters", "Regions.cs")
     if os.path.exists(regions_cs):
         themes = set(re.findall(r"Source\.([A-Z][a-z]+)", open(regions_cs, encoding="utf-8").read()))
         for theme in sorted(themes):
@@ -140,7 +140,7 @@ def main() -> int:
     # while NONE of the five exists the gate says so and passes, because the fallback is the design
     # until the art ships; the moment ANY of them exists all five must, because four badges with
     # painted icons and one with a diamond is the "unfinished" look the stat rows had.
-    classes_cs = os.path.join(ROOT, "src", "ResonanceHunter.Core", "Economy", "ItemClasses.cs")
+    classes_cs = os.path.join(ROOT, "src", "IdleXIdle.Core", "Economy", "ItemClasses.cs")
     if os.path.exists(classes_cs):
         names = re.findall(r"^\s+(\w+),\s*$", re.search(r"public enum ItemClass\s*\{(.*?)\}",
                            open(classes_cs, encoding="utf-8").read(), re.S).group(1), re.M)

@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-GAME = ROOT / "src" / "ResonanceHunter.Game"
+GAME = ROOT / "src" / "IdleXIdle.Game"
 GAME1 = GAME / "Game1.cs"
 
 # A method converts if it does either of the two sanctioned things.

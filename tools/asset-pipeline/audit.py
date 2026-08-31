@@ -32,7 +32,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
 SRC = os.path.join(REPO, "src")
 ART = os.path.join(REPO, "assets", "art")
-ASSET_LIBRARY = os.path.join(SRC, "ResonanceHunter.Game", "AssetLibrary.cs")
+ASSET_LIBRARY = os.path.join(SRC, "IdleXIdle.Game", "AssetLibrary.cs")
 
 # Directories AssetLibrary skips when building its filename -> texture map.
 SKIP_DIRS = ("/native/", "/preview/", "/mask/", "/medallion/")
@@ -86,7 +86,7 @@ def referenced() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     dynamic: dict[str, list[str]] = {}
     # Only the client project draws anything; Core is pure simulation, so a
     # snake_case literal there is a gameplay tag, not an asset key.
-    client = os.path.join(SRC, "ResonanceHunter.Game")
+    client = os.path.join(SRC, "IdleXIdle.Game")
     for dirpath, dirs, files in os.walk(client):
         dirs[:] = [d for d in dirs if d not in ("obj", "bin")]
         for fname in files:

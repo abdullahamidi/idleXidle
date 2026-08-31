@@ -1,4 +1,4 @@
-# Game Concept: Resonance Hunter
+# Game Concept: IDLExIDLE
 
 *Created: 2026-07-13*
 *Status: Draft*
@@ -31,7 +31,7 @@
 
 ## Core Fantasy
 
-You are a Resonance Hunter who tames chaos. Every corrupted region you conquer
+You are a Hunter who tames chaos. Every corrupted region you conquer
 through skill becomes a living, self-sustaining part of your growing empire —
 freeing you to push into ever-wilder frontiers instead of re-fighting what
 you've already mastered. The fantasy isn't just "get strong" — it's "build a
@@ -73,7 +73,7 @@ of every system.
 | Aesthetic | Priority | How We Deliver It |
 | ---- | ---- | ---- |
 | **Sensation** (sensory pleasure) | 4 | Glyph-based visual feedback on weak points/telegraphs, hit-stop and audio payoff on part-breaks |
-| **Fantasy** (make-believe, role-playing) | 6 | The Resonance Hunter identity; taming corrupted spirit creatures |
+| **Fantasy** (make-believe, role-playing) | 6 | The Hunter identity; taming corrupted spirit creatures |
 | **Narrative** (drama, story arc) | N/A (MVP) | Not a focus for MVP; world/lore color exists but isn't the design driver — revisit post-MVP if Relatedness needs strengthening |
 | **Challenge** (obstacle course, mastery) | 1 (primary) | Weak-point precision combat, telegraphed attacks, part-break mechanics, Vow-restricted builds |
 | **Fellowship** (social connection) | N/A | Single-player only; no social systems planned |
