@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Characters;
@@ -21,20 +20,14 @@ namespace IdleXIdle.Core.Builds;
 /// </remarks>
 public static class BuildComposer
 {
-        /// <param name="Passive">
-    /// Which slot the player put this skill in, or <c>null</c> for a save written before the choice
-    /// existed. THREE-STATE on purpose: a plain <c>false</c> cannot tell "the player chose ACTIVE"
-    /// from "nobody has chosen", and those must differ — a TRAP has always been passive, so an unset
-    /// one stays passive, while a player who deliberately puts one in an active slot gets SNARE's
-    /// REPAY instead.
-    /// </param>
     /// <summary>
-    /// One slot's worth of choice. <see cref="SkillId"/> names the skill outright when the player
-    /// picked it from the library; without one the Form and the slot kind resolve it, which is how
-    /// every save written before 2026-08-30 still says what it meant.
+    /// One slot's worth of choice. <see cref="SkillId"/> names the skill outright — a null id is an
+    /// EMPTY slot and composes nothing. <see cref="Source"/> is the woven element, the fallback
+    /// until a chosen variation owns it; <see cref="Passive"/> survives only as the save's echo of
+    /// the slot the player once chose (a named skill brings its own kind).
     /// </summary>
-    public readonly record struct SkillPick(Source Source, Form Form, string? VowId, string Name,
-                                            bool? Passive = null, string? SkillId = null);
+    public readonly record struct SkillPick(Source Source, string? VowId, bool? Passive = null,
+                                            string? SkillId = null);
 
     /// <summary>
     /// Which slot each woven skill lands in — <c>true</c> for a passive slot.
@@ -51,7 +44,7 @@ public static class BuildComposer
     /// The walk, in composition order:
     /// </para>
     /// <list type="number">
-    /// <item>A skill whose Form never took a beat (AURA, TRAP) is passive and spends no active budget.</item>
+    /// <item>A named skill brings its own kind — a Field or a Reaction is passive wherever it lands.</item>
     /// <item>Otherwise it takes an active slot while the active budget has room.</item>
     /// <item>Otherwise it SPILLS into a passive slot — it is not dropped. A build saved before the
     ///   rework can hold four beat-taking skills against an active budget of two, and refusing the
@@ -100,10 +93,8 @@ public static class BuildComposer
                 continue;
             }
 
-            var naturallyPassive = FormBehaviour.IsPassive(skills[i].Form)
-                                   || FormBehaviour.FiresOnBeingHit(skills[i].Form);
-            if (naturallyPassive) { passive[i] = true; continue; }
-            if (actives < activeBudget) { actives++; continue; }
+            // NO ID AND NO CHOICE IS AN EMPTY SLOT. It spends neither budget — there is nothing in
+            // it — and it reads as passive only so the walk's answer stays one bool per slot.
             passive[i] = true;
         }
         return passive;
@@ -154,47 +145,34 @@ public static class BuildComposer
         // learned on the tree now and a new game has no points.
         var taughtSkills = mastery.LearnedSkills().ToHashSet(StringComparer.Ordinal);
         if (character?.StartingSkillId is { } born) taughtSkills.Add(born);
-        var passive = SlotKinds(picks, slotCapacity, taughtSkills);
 
-        // WHAT THIS CHAMPION HAS BEEN TAUGHT feeds BOTH halves of the rule: SlotKinds above will not
-        // spill into an unlearned passive, and the loop below refuses to weave one that was chosen
-        // outright. Respec RE-LOCKS (designer, 2026-08-30), so this set shrinks the moment a point is
-        // given back — and the weave screen says which skill went.
         for (var i = 0; i < picks.Count; i++)
         {
             var s = picks[i];
             var vow = Vows.ById(s.VowId);
-            // The skill's own timing seeds its cooldown. A beat-counted skill still counts BEATS in
-            // the fight; this is the millisecond figure the readouts and the wave-length rule use.
-            // THE ID WINS when there is one: the library named this skill, and no Form-and-kind
-            // round trip can contradict it. Without one it is an old save, and the Form resolves it.
-            var def = s.SkillId is { } id && SkillCatalogue.Find(id) is { } named
-                ? named
-                : SkillCatalogue.Resolve(s.Form, passive[i]);
-            // THE GATE, AND IT IS UNCONDITIONAL NOW. You weave what you know: all twelve skills are
-            // learned on the mastery tree since 2026-08-30, so there is no longer a free half for a
-            // spill to fall back on. The exemption a spill used to get existed only to protect the six
-            // that a Source and a Form composed for free, and those six are gone with that door.
+            // THE ID IS THE IDENTITY — an id-less pick is an EMPTY SLOT and composes nothing.
+            // (Form-era picks stopped reaching this loop at P3-final: PlayerLoadout.Restore pins
+            // every legacy row to its SkillId through LegacySkillForm before anything composes.)
+            if (s.SkillId is not { } id || SkillCatalogue.Find(id) is not { } def) continue;
+            // THE GATE, AND IT IS UNCONDITIONAL. You weave what you know: all twelve skills are
+            // learned on the mastery tree since 2026-08-30. Respec RE-LOCKS, so this set shrinks
+            // the moment a point is given back — and the weave screen says which skill went.
             if (!taughtSkills.Contains(def.Id)) continue;
-            // The ability carries the RESOLVED id from here on: whichever door this pick came
-            // through — the library's own name, or a legacy (Form, slot) pair — what reaches the
-            // sim and the next save is the SkillId.
-            var ability = new WovenAbility { Name = s.Name, Source = s.Source, Form = s.Form, Vow = vow, SkillId = def.Id };
-            var cooldown = def.Beats > 0 ? def.Beats * SoloBattle.DefaultBeatMs
-                                         : FormBehaviour.BaseCooldownMs(s.Form);
 
-            // WHAT THE PLAYER HAS SPENT ON THIS SKILL. Null progress means an unlevelled build — a
-            // test, or a champion that has not fought yet — and every skill runs at its base line.
+            // WHAT THE PLAYER HAS SPENT ON THIS SKILL, applied ONCE, here. Null progress means an
+            // unlevelled build — a test, or a champion that has not fought yet — and the skill runs
+            // at its base line. The fight reads the finished def and never re-derives any of this,
+            // which is what keeps twenty-four variations from becoming twenty-four branches.
             var variation = progress?.VariationOf(def);
-            var taken = variation is null
-                ? Array.Empty<Reinforcement>()
-                : variation.Reinforcements.Where(r => progress!.HasReinforcement(def.Id, r.Name)).ToArray();
+            var resolved = def;
+            if (variation?.Modify is { } m) resolved = m(resolved);
+            if (variation is not null)
+                foreach (var r in variation.Reinforcements)
+                    if (progress!.HasReinforcement(def.Id, r.Name) && r.Modify is { } rm)
+                        resolved = rm(resolved);
 
-            build.Weave(new EquippedSkill(ability, cooldown, PassiveSlot: passive[i])
-            {
-                Variation = variation,
-                Reinforcements = taken,
-            });
+            // The chosen variation owns the element; the woven element is the fallback before it.
+            build.Weave(new EquippedSkill(resolved, variation?.Source ?? s.Source, vow));
         }
         return build;
     }

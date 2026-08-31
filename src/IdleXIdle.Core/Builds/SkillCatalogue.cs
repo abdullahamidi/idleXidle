@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 
@@ -149,10 +148,6 @@ public sealed record SkillVariation(
 /// <param name="IntervalMs">Milliseconds between ticks for a Field; 0 otherwise. Must be a multiple of 100.</param>
 /// <param name="On">The event a Reaction answers.</param>
 /// <param name="Targets">How many creatures one activation reaches. <see cref="int.MaxValue"/> is the wave.</param>
-/// <param name="LegacyForm">
-/// The <see cref="Form"/> a saved build maps onto this skill through, or null for a skill no old save
-/// can hold. A migration bridge and nothing more.
-/// </param>
 public sealed record SkillDef(
     string Id,
     string Name,
@@ -167,7 +162,6 @@ public sealed record SkillDef(
     string ClipKey,
     string FxKey,
     IReadOnlyList<SkillVariation> Variations,
-    Form? LegacyForm,
     // ── WHAT ONE ACTIVATION IS WORTH — the number the Form table used to own. Per activation for
     //    an Active or a Reaction; PER SECOND for a Field's damage path (the loop scales it by the
     //    tick interval). Zero for a skill whose base line deals nothing (PRESS, WILT, the SIGNs,
@@ -307,8 +301,7 @@ public static class SkillCatalogue
                      d => d with { ExecutesPerWave = 2, ExecuteFraction = 0.20f }),
                     ("SPUR",  "Cooldown falls from 6 beats to 5, so it finds more executes.",
                      d => d with { Beats = 5 })),
-            },
-            LegacyForm: Form.Strike),
+            }),
 
         new("hammer_press", "PRESS", Style.Hammer, SkillKind.Field, SkillEffect.Damage,
             "A weight sits on the front enemy: its defence drops 5 every 2s, down to -25.",
@@ -335,7 +328,7 @@ public static class SkillCatalogue
                     ("SEAL",   "The stun comes every 4s instead of every 6s.",
                      d => d with { IntervalMs = 4000 })),
             },
-            LegacyForm: null, DefenceBreakPerTick: 5f, DefenceBreakFloor: -25f),
+            DefenceBreakPerTick: 5f, DefenceBreakFloor: -25f),
 
         // ── SNARE — reflect, shield, damage taken. TAUNT was removed from this style's list: every
         //    creature already attacks the champion, so it named nothing, and what its nodes actually
@@ -367,7 +360,7 @@ public static class SkillCatalogue
                     ("LINING",   "It banks 300% of the damage taken instead of 200%.",
                      d => d with { PaysBackDamageTaken = 3.0f })),
             },
-            LegacyForm: null, PaysBackDamageTaken: 2.0f),
+            PaysBackDamageTaken: 2.0f),
 
         new("snare_jaws", "JAWS", Style.Snare, SkillKind.Reaction, SkillEffect.Damage,
             "Every bite returns 50% of it to the enemy that bit you. Rearms every 3s.",
@@ -394,7 +387,7 @@ public static class SkillCatalogue
                     ("HARDEN",   "Each spring raises the reflect 20% for the wave, up to 40%.",
                      d => d with { ReflectGrowthPerBite = 0.20f, ReflectGrowthCap = 0.40f })),
             },
-            LegacyForm: Form.Trap, ReflectFraction: 0.5f, RearmMs: 3_000),
+            ReflectFraction: 0.5f, RearmMs: 3_000),
 
         // ── SIGN — amplify only. It deals no damage itself. ───────────────────────────────────────
         new("sign_call", "CALL", Style.Sign, SkillKind.Active, SkillEffect.Amplify,
@@ -424,8 +417,7 @@ public static class SkillCatalogue
                      d => d with { AmplifyCap = 1.60f }),
                     ("FOOTING",  "Cooldown falls from 5 beats to 4, so it reaches the cap sooner.",
                      d => d with { Beats = 4 })),
-            },
-            LegacyForm: Form.Mark),
+            }),
 
         new("sign_brand", "BRAND", Style.Sign, SkillKind.Field, SkillEffect.Amplify,
             "Your damage to the front enemy is +70%.",
@@ -456,8 +448,7 @@ public static class SkillCatalogue
                      d => d with { AmplifyDeepenCap = 2.50f }),
                     ("PACE",   "The mark deepens every 1s instead of every 2s.",
                      d => d with { IntervalMs = 1000 })),
-            },
-            LegacyForm: null),
+            }),
 
         // ── VOLLEY — hit count, bleed, cooldown reduction, spread on kill ─────────────────────────
         new("volley_spray", "SPRAY", Style.Volley, SkillKind.Active, SkillEffect.Damage,
@@ -487,8 +478,7 @@ public static class SkillCatalogue
                      d => d with { BleedFromHits = 0.30f }),
                     ("GROUPING", "The cast reaches a second enemy.",
                      d => d with { TargetsBonus = 1 })),
-            },
-            LegacyForm: Form.Projectile),
+            }),
 
         new("volley_weep", "WEEP", Style.Volley, SkillKind.Reaction, SkillEffect.Damage,
             "When an enemy dies it leaves bleed on the wave worth 30% of its health.",
@@ -515,7 +505,7 @@ public static class SkillCatalogue
                     ("LAST DROP", "The carried bleed pays out 50% faster.",
                      d => d with { BleedRate = 1.5f })),
             },
-            LegacyForm: null, BleedOnKillFraction: 0.30f),
+            BleedOnKillFraction: 0.30f),
 
         // ── FIELD — slow, area damage, scaling with the number of living enemies ──────────────────
         new("field_pulse", "PULSE", Style.Field, SkillKind.Active, SkillEffect.Damage,
@@ -546,8 +536,7 @@ public static class SkillCatalogue
                      d => d with { SplitMaxWays = 2 }),
                     ("RECLAIM",  "The pulse comes back a beat sooner, 4 instead of 5.",
                      d => d with { Beats = 4 })),
-            },
-            LegacyForm: null),
+            }),
 
         new("field_mire", "MIRE", Style.Field, SkillKind.Field, SkillEffect.Damage,
             "Damages every enemy every 1s, and slows their attacks by 25%.",
@@ -576,7 +565,7 @@ public static class SkillCatalogue
                     ("REMNANT", "The field acts every 0.5s instead of every 1s.",
                      d => d with { IntervalMs = 500 })),
             },
-            LegacyForm: Form.Aura, SlowFraction: 0.25f),
+            SlowFraction: 0.25f),
 
         // ── DRAIN — lifesteal, healing, attack break, scaling with health ─────────────────────────
         new("drain_drink", "DRINK", Style.Drain, SkillKind.Active, SkillEffect.Heal,
@@ -607,8 +596,7 @@ public static class SkillCatalogue
                      d => d with { DamageMultiplier = 1.3f }),
                     ("HIGH WATER", "Cooldown falls from 6 beats to 5.",
                      d => d with { Beats = 5 })),
-            },
-            LegacyForm: Form.Transformation),
+            }),
 
         new("drain_wilt", "WILT", Style.Drain, SkillKind.Field, SkillEffect.Heal,
             "Attack break: every enemy's damage drops 10% a pulse, down to -50%.",
@@ -635,7 +623,7 @@ public static class SkillCatalogue
                     ("GAUNT",  "The floor falls from -80% to -95%.",
                      d => d with { AttackBreakFloor = -0.95f })),
             },
-            LegacyForm: null, AttackBreakPerTick: 0.10f, AttackBreakFloor: -0.50f),
+            AttackBreakPerTick: 0.10f, AttackBreakFloor: -0.50f),
     };
 
     public static SkillDef ById(string id)
@@ -651,25 +639,10 @@ public static class SkillCatalogue
     public static SkillDef PassiveOf(Style style) => All.First(s => s.Style == style && !s.TakesABeat);
 
     /// <summary>
-    /// The skill a saved <see cref="Form"/> becomes, in the slot it lands in.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The migration bridge. A saved build holds a Form, and every one of them must resolve or the
-    /// player's build is silently unwoven on load.
-    /// </para>
-    /// <para>
-    /// <b>A spill changes which SKILL is woven, not a flag on one.</b> Under the two-faces design an
-    /// overflowing active took the passive face of the same skill; with distinct skills it becomes its
-    /// style's passive skill instead — the same style and the same art, a different ability. AURA and
-    /// TRAP were never actives, so they resolve to their styles' passives whichever slot is asked for.
-    /// </para>
-    /// </remarks>
-    /// <summary>
     /// Does this skill have to be TAUGHT by a mastery node before it can be woven?
     /// </summary>
     /// <remarks>
-    /// <b>ALL TWELVE, since 2026-08-30.</b> It was the six with no <c>LegacyForm</c>, and the other
+    /// <b>ALL TWELVE, since 2026-08-30.</b> It was six of them, and the other
     /// six were free because a Source and a Form on the weave screen composed them. The designer
     /// retired that door: "Şu an skiller hala en baştan açılıyor ama, benim skilleri mastery treeden
     /// açmam lazım. Artık source ve form skill oluşturmamın bir önemi kalmadı." A skill is a thing you
@@ -688,20 +661,9 @@ public static class SkillCatalogue
     /// <summary>The six that a style road has to teach, in ring order.</summary>
     public static IReadOnlyList<SkillDef> Taught { get; } = All.Where(NeedsUnlock).ToList();
 
-    public static SkillDef Resolve(Form form, bool passive)
-    {
-        // THE STYLE COMES FROM THE FORM; THE SLOT PICKS WHICH OF ITS TWO SKILLS THIS IS. It used to
-        // return the Form's native skill whenever an active was asked for, which meant AURA and TRAP
-        // resolved passive from either side — and FIELD's PULSE and SNARE's REPAY had no door at all.
-        // Two of the twelve were unreachable, which is a catalogue entry nothing can select: the same
-        // dead weight as a field nothing reads.
-        var style = All.First(s => s.LegacyForm == form).Style;
-        return passive ? PassiveOf(style) : ActiveOf(style);
-    }
-
     /// <summary>
     /// Cyclic distance on the six-style ring, 0..3 — the affinity hexagon, unchanged in shape from
-    /// <see cref="FormBehaviour"/>'s and corrected in ORDER (see <see cref="Style"/>).
+    /// the Form era's and corrected in ORDER (see <see cref="Style"/>).
     /// </summary>
     public static int RingDistance(Style a, Style b)
     {

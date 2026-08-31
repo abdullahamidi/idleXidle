@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
-using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Expeditions;
@@ -26,16 +24,7 @@ public class WaveReplayTests
     // Amount, so the exact number is arbitrary — it only has to outlast, then lapse within, the advances.
     private const int ShieldMs = 2500;
 
-    private static EquippedSkill Sk(Form form)
-        => new(new WovenAbility { Name = form.ToString(), Source = Source.Nature, Form = form },
-               FormBehaviour.BaseCooldownMs(form));
-
-    private static Build With(params Form[] forms)
-    {
-        var b = new Build();
-        foreach (var f in forms) b.Weave(Sk(f));
-        return b;
-    }
+    private static Build With(params string[] skillIds) => TestBuilds.Of(skillIds);
 
     /// <summary>
     /// Resolve one wave for a champion and replay it to the end, returning (sim health, replayed health).
@@ -65,24 +54,24 @@ public class WaveReplayTests
     [Fact]
     public void test_replayed_health_matches_the_sim_without_healing()
     {
-        // STRIKE deals damage but leeches nothing, so no Heal beat ever enters the stream. A huge enemy
+        // BLOW deals damage but leeches nothing, so no Heal beat ever enters the stream. A huge enemy
         // means the wave stalls at the ceiling — the champion takes many bites without ever winning.
-        var (sim, replayed) = RunAndReplay(With(Form.Strike), championHp: 4000, enemyHealth: 500_000f, enemyDamage: 5f);
+        var (sim, replayed) = RunAndReplay(With("hammer_blow"), championHp: 4000, enemyHealth: 500_000f, enemyDamage: 5f);
 
         Assert.Equal(sim, replayed);
     }
 
     /// <summary>
-    /// THE regression. TRANSFORMATION leeches health mid-wave, so a replay that only ever subtracts drifts
+    /// THE regression. DRINK leeches health mid-wave, so a replay that only ever subtracts drifts
     /// LOW — the bar shows the champion dying while the sim has it healthy, then snaps upward at the next
-    /// wave with no explanation. If the screen can't show the heal, the whole Form looks worthless.
+    /// wave with no explanation. If the screen can't show the heal, the whole skill looks worthless.
     /// </summary>
     [Fact]
     public void test_replayed_health_matches_the_sim_when_a_heal_lands_mid_wave()
     {
-        // A moderate bite hurts the champion; TRANSFORMATION's on-hit leech heals some back. The trajectory
+        // A moderate bite hurts the champion; DRINK's lifesteal heals some back. The trajectory
         // rises and falls, so a replay that dropped the Heal beats would end on a different number.
-        var (sim, replayed) = RunAndReplay(With(Form.Transformation), championHp: 400, enemyHealth: 500_000f, enemyDamage: 22f);
+        var (sim, replayed) = RunAndReplay(With("drain_drink"), championHp: 400, enemyHealth: 500_000f, enemyDamage: 22f);
 
         Assert.Equal(sim, replayed);
     }
@@ -215,7 +204,7 @@ public class WaveReplayTests
         var champ = new Champion { MaxHealth = 400, Health = 400 };
 
         var (outcome, events) = SoloBattle.ResolveWave(
-            champ, With(Form.Strike, Form.Aura), new Hunter(), creatures,
+            champ, With("hammer_blow", "field_mire"), new Hunter(), creatures,
             enemyIntervalMs: 1000, ExpeditionTuning.Default, new Random(7), new WaveBonus());
         Assert.Equal(WaveOutcome.Cleared, outcome);
         Assert.True(events.Count(e => e.Kind == BattleEventKind.Strike) > 8, "a wave this size must take many strikes");
@@ -268,7 +257,7 @@ public class WaveReplayTests
     public void test_the_expedition_stamps_each_strike_with_the_index_of_the_creature_it_reports()
     {
         var champ = new Champion { MaxHealth = 5000, Health = 5000 };
-        var run = new SoloExpedition(With(Form.Strike, Form.Projectile), champ, new Hunter(),
+        var run = new SoloExpedition(With("hammer_blow", "volley_spray"), champ, new Hunter(),
             enemyBaseHealth: 80f, enemyBaseDamage: 2f, ExpeditionTuning.Default, rng: new Random(11))
         { RegionId = "umbral_reach" };
 

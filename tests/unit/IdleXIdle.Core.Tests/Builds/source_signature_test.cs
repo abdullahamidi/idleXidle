@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -27,12 +26,10 @@ public class SourceSignatureTest
             MathF.Abs(SourceMatchup.Effectiveness(a, t)
                       - SourceMatchup.Effectiveness(b, t)) < 0.001f);
 
-    private static Build OneSkill(Source source, Form form)
+    private static Build OneSkill(Source source)
     {
         var b = new Build();
-        b.Weave(new EquippedSkill(
-            new WovenAbility { Name = "S", Source = source, Form = form },
-            FormBehaviour.BaseCooldownMs(form)));
+        b.Weave(TestBuilds.Skill("hammer_blow", source));
         return b;
     }
 
@@ -55,8 +52,8 @@ public class SourceSignatureTest
         var huge = () => WaveCreature.Single(5_000_000f, 1f, 0f, target);
 
         // Act
-        var body = Run(OneSkill(Source.Body, Form.Strike), huge()).Delivered;
-        var control = Run(OneSkill(Source.Machine, Form.Strike), huge()).Delivered;
+        var body = Run(OneSkill(Source.Body), huge()).Delivered;
+        var control = Run(OneSkill(Source.Machine), huge()).Delivered;
 
         // Assert: the wound ramp is real damage, not a tooltip.
         Assert.True(body > control * 1.05f, $"body {body} vs control {control}");
@@ -74,8 +71,8 @@ public class SourceSignatureTest
         };
 
         // Act
-        var shadow = Run(OneSkill(Source.Shadow, Form.Strike), hurt()).Delivered;
-        var control = Run(OneSkill(Source.Mind, Form.Strike), hurt()).Delivered;
+        var shadow = Run(OneSkill(Source.Shadow), hurt()).Delivered;
+        var control = Run(OneSkill(Source.Mind), hurt()).Delivered;
 
         // Assert
         Assert.True(shadow > control * 1.05f, $"shadow {shadow} vs control {control}");
@@ -88,9 +85,9 @@ public class SourceSignatureTest
         var target = EqualTarget(Source.Machine, Source.Shadow);
 
         // Act
-        var (_, _, bent) = Run(OneSkill(Source.Machine, Form.Strike),
+        var (_, _, bent) = Run(OneSkill(Source.Machine),
                                WaveCreature.Single(5_000_000f, 1f, 40f, target));
-        var (_, _, whole) = Run(OneSkill(Source.Shadow, Form.Strike),
+        var (_, _, whole) = Run(OneSkill(Source.Shadow),
                                 WaveCreature.Single(5_000_000f, 1f, 40f, target));
 
         // Assert: exactly the cap comes off — no more, and the control's plate is untouched.
@@ -108,10 +105,10 @@ public class SourceSignatureTest
         // before the wave's ceiling (a dead champion ends both runs at 0 and proves nothing).
         var huge = () => WaveCreature.Single(5_000_000f, 800f, 0f, target);
 
-        // Act — Strike, not Transformation: the signature must heal on its OWN, not ride the
-        // Form's leech.
-        var nature = Run(OneSkill(Source.Nature, Form.Strike), huge()).Champ;
-        var control = Run(OneSkill(Source.Machine, Form.Strike), huge()).Champ;
+        // Act — BLOW, not DRINK: the signature must heal on its OWN, not ride the Drain style's
+        // leech.
+        var nature = Run(OneSkill(Source.Nature), huge()).Champ;
+        var control = Run(OneSkill(Source.Machine), huge()).Champ;
 
         // Assert
         Assert.True(nature.Health > control.Health,
@@ -130,12 +127,8 @@ public class SourceSignatureTest
         Build Pair(Source first)
         {
             var b = new Build();
-            b.Weave(new EquippedSkill(
-                new WovenAbility { Name = "A", Source = first, Form = Form.Strike },
-                FormBehaviour.BaseCooldownMs(Form.Strike)));
-            b.Weave(new EquippedSkill(
-                new WovenAbility { Name = "B", Source = Source.Body, Form = Form.Strike },
-                FormBehaviour.BaseCooldownMs(Form.Strike)));
+            b.Weave(TestBuilds.Skill("hammer_blow", first));
+            b.Weave(TestBuilds.Skill("hammer_blow", Source.Body));
             return b;
         }
 
@@ -150,7 +143,7 @@ public class SourceSignatureTest
     [Fact]
     public void test_signature_mind_stretches_the_mark_window()
     {
-        // Arrange: both builds open MARK windows with the same Nature Mark (deals nothing, so its
+        // Arrange: both builds open MARK windows with the same Nature CALL (deals nothing, so its
         // Source is inert); the caster slot is MIND against inert SHADOW. A stretched window keeps
         // the amplifier lit for more of the casts that follow.
         var target = EqualTarget(Source.Mind, Source.Shadow);
@@ -159,26 +152,18 @@ public class SourceSignatureTest
         Build MarkAnd(Source caster)
         {
             var b = new Build();
-            b.Weave(new EquippedSkill(
-                new WovenAbility { Name = "M", Source = Source.Nature, Form = Form.Mark },
-                FormBehaviour.BaseCooldownMs(Form.Mark)));
+            b.Weave(TestBuilds.Skill("sign_call", Source.Nature));
             // TWO casters, so the stretches ROLL: the first cast inside a window pushes its edge
             // far enough that the second cast still lands lit, and that cast pushes it again. A
             // single caster at these cadences always misses the edge it just moved — which is the
             // realistic shape too: the signature pays in rotations, not in a one-skill vacuum.
-            b.Weave(new EquippedSkill(
-                new WovenAbility { Name = "C", Source = caster, Form = Form.Strike },
-                FormBehaviour.BaseCooldownMs(Form.Strike)));
-            b.Weave(new EquippedSkill(
-                new WovenAbility { Name = "D", Source = caster, Form = Form.Strike },
-                FormBehaviour.BaseCooldownMs(Form.Strike)));
-            // DESYNC. The Strikes must land at a cadence where the window's edge matters, so the
-            // stretch has something to convert. (Set via Shape — the sim recomputes cooldowns from
-            // the Form and SkillRate; EquippedSkill.CooldownMs is not its input.) 0.95, was 0.77:
-            // the cast lock became the cast clip's length ÷ rate (2026-08-26), then the BEAT model
-            // (2026-08-27: Strike every third beat of 1500 ms ÷ rate). Re-swept under the beat: the
-            // signature pays at 1.1 and at no other rate between 0.8 and 1.3 — a window-edge effect
-            // only some cadences catch (probed, not guessed).
+            b.Weave(TestBuilds.Skill("hammer_blow", caster));
+            b.Weave(TestBuilds.Skill("hammer_blow", caster));
+            // DESYNC. The casts must land at a cadence where the window's edge matters, so the
+            // stretch has something to convert. Set via Shape — the sim recomputes cooldowns from
+            // each def's Beats and the build's SkillRate; an EquippedSkill carries no cooldown of
+            // its own. A window-edge effect only some cadences catch, so the rate is part of the
+            // fixture (probed, not guessed).
             b.Shape = SkillShape.None with { SkillRate = 1.0f };
             return b;
         }

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -39,13 +38,13 @@ public class TriggerLivenessTests
     private static readonly global::IdleXIdle.Core.Sources.Source Body
         = global::IdleXIdle.Core.Sources.Source.Body;
 
-    private static EquippedSkill Strike(Form form = Form.Strike)
-        => new(new WovenAbility { Name = "s", Source = Body, Form = form }, 1_500);
+    private static EquippedSkill Sk(string skillId = "hammer_blow")
+        => TestBuilds.Skill(skillId, Body);
 
     private static Build BuildWith(params string[] keystoneIds)
     {
         var build = new Build();
-        build.Weave(Strike());
+        build.Weave(Sk());
         foreach (var id in keystoneIds) build.Take(Keystones.ById(id)!);
         return build;
     }
@@ -99,9 +98,7 @@ public class TriggerLivenessTests
             Shape = SkillShape.None,
             ExtraTriggers = new HashSet<BuildTrigger>(triggers),
         };
-        build.Weave(new EquippedSkill(
-            new WovenAbility { Name = "P", Source = Source.Nature, Form = Form.Projectile },
-            FormBehaviour.BaseCooldownMs(Form.Projectile)));
+        build.Weave(TestBuilds.Skill("volley_spray", Source.Nature));
 
         var champ = new Champion { MaxHealth = 100_000, Health = 100_000 };
         var (_, events) = SoloBattle.ResolveWave(
@@ -264,8 +261,8 @@ public class TriggerLivenessTests
         // 2026-08-30 an activation announces itself exactly once however many passes it makes, because
         // the screen starts an effect, a sound and a callout per announcement and ECHO fired all three
         // twice on the same frame.
-        var plain = new Build(); plain.Weave(Strike());
-        var echo = new Build(); echo.Weave(Strike()); echo.Take(Keystones.ById("echo")!);
+        var plain = new Build(); plain.Weave(Sk());
+        var echo = new Build(); echo.Weave(Sk()); echo.Take(Keystones.ById("echo")!);
 
         (int Blows, int Damage) Landed(Build b)
         {
@@ -297,7 +294,7 @@ public class TriggerLivenessTests
         // penalty and prove nothing about the trigger.
         float Hurt(int startingHealth)
         {
-            var build = new Build(); build.Weave(Strike());
+            var build = new Build(); build.Weave(Sk());
             build.Take(Keystones.ById("bloodlust")!);
 
             var champ = new Champion { MaxHealth = 1_000, Health = startingHealth };
@@ -312,12 +309,12 @@ public class TriggerLivenessTests
     [Fact]
     public void test_no_healing_switches_transformation_off()
     {
-        // BLOOD MAGIC's cost is total: it does not reduce healing, it removes it. TRANSFORMATION is the
-        // Form it argues with, so that is the Form that proves it.
+        // BLOOD MAGIC's cost is total: it does not reduce healing, it removes it. DRINK's lifesteal is
+        // the healing it argues with, so DRAIN's active is what proves it.
         int HealEvents(bool bloodMagic)
         {
             var build = new Build();
-            build.Weave(Strike(Form.Transformation));
+            build.Weave(Sk("drain_drink"));
             if (bloodMagic) build.Take(Keystones.ById("blood_magic")!);
 
             var champ = new Champion { MaxHealth = 1_000, Health = 500 };
@@ -361,7 +358,7 @@ public class TriggerLivenessTests
     [Fact]
     public void test_splinter_pays_out_on_a_kill()
     {
-        var build = new Build(); build.Weave(Strike());
+        var build = new Build(); build.Weave(Sk());
         build.Take(Keystones.ById("reaper")!);          // grants Splinter
 
         var bonus = new WaveBonus();
@@ -450,27 +447,27 @@ public class TriggerLivenessTests
     // ── WEAVER — the ARTIFICE terminal ────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Every skill also fires as the NEXT Form carried — one slot answering two demands.
+    /// Every skill also fires as the NEXT skill carried — one slot answering two demands.
     /// </summary>
     /// <remarks>
-    /// The design's "two Forms in one slot", and the only thing in the game that lets a single
-    /// activation be both a Weight hit and a Spread hit. Needs two Forms woven to mean anything, which
-    /// is exactly the build commitment it is meant to demand.
+    /// The design's "two styles in one slot", and the only thing in the game that lets a single
+    /// activation be both a Weight hit and a Spread hit. Needs two skills woven to mean anything,
+    /// which is exactly the build commitment it is meant to demand.
     /// </remarks>
     [Fact]
     public void test_weaver_fires_the_next_form_as_well()
     {
-        Build TwoForms(params string[] keystones)
+        Build TwoWoven(params string[] keystones)
         {
             var b = new Build();
-            b.Weave(Strike(Form.Strike));
-            b.Weave(Strike(Form.Projectile));
+            b.Weave(Sk("hammer_blow"));
+            b.Weave(Sk("volley_spray"));
             foreach (var id in keystones) b.Take(Keystones.ById(id)!);
             return b;
         }
 
-        var plain = Output(TwoForms());
-        var woven = Output(TwoForms("weaver"));
+        var plain = Output(TwoWoven());
+        var woven = Output(TwoWoven("weaver"));
 
         Assert.True(woven > plain,
             $"WEAVER changed nothing ({plain:F0} -> {woven:F0}) — the ARTIFICE terminal is a label. " +

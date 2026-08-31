@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -65,10 +64,12 @@ public class LootNodeLivenessTests
             new MemoryDustTree(), mastery, character: null,
             skills: new[]
             {
-                new BuildComposer.SkillPick(Source.Body, Form.Strike, null, "a"),
-                new BuildComposer.SkillPick(Source.Mind, Form.Projectile, null, "b"),
-                new BuildComposer.SkillPick(Source.Nature, Form.Aura, null, "c"),
-                new BuildComposer.SkillPick(Source.Shadow, Form.Trap, null, "d"),
+                // The old Strike/Projectile/Aura/Trap spread by catalogue id: two actives and the
+                // two passives the Aura and Trap slots resolved to, filling the 2+2 slot split.
+                new BuildComposer.SkillPick(Source.Body, null, SkillId: "hammer_blow"),
+                new BuildComposer.SkillPick(Source.Mind, null, SkillId: "volley_spray"),
+                new BuildComposer.SkillPick(Source.Nature, null, SkillId: "field_mire"),
+                new BuildComposer.SkillPick(Source.Shadow, null, SkillId: "snare_jaws"),
             },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4);
 

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -21,13 +20,11 @@ public class ChargeKeystoneTest
 {
     private static Build TwoSkills(params string[] keystoneIds)
     {
+        // BLOW is the Hammer active REND dumps the pool through; SPRAY keeps the casts — and so the
+        // pool's points — coming between dumps.
         var b = new Build();
-        b.Weave(new EquippedSkill(
-            new WovenAbility { Name = "A", Source = Source.Nature, Form = Form.Strike },
-            FormBehaviour.BaseCooldownMs(Form.Strike)));
-        b.Weave(new EquippedSkill(
-            new WovenAbility { Name = "B", Source = Source.Nature, Form = Form.Projectile },
-            FormBehaviour.BaseCooldownMs(Form.Projectile)));
+        b.Weave(TestBuilds.Skill("hammer_blow", Source.Nature));
+        b.Weave(TestBuilds.Skill("volley_spray", Source.Nature));
         foreach (var id in keystoneIds)
             Assert.True(b.Take(Keystones.ById(id)!), $"could not socket {id}");
         return b;
@@ -123,15 +120,13 @@ public class ChargeKeystoneTest
     [Fact]
     public void test_charge_dynamo_winds_the_pool_on_bites()
     {
-        // Arrange: a TRAP-only build. A Trap never CASTS (it discharges on being bitten), so it
+        // Arrange: a JAWS-only build. A Reaction never CASTS (it discharges on being bitten), so it
         // stores no cast-side charge — every Charge event in this run can only be DYNAMO's. The
-        // first draft used a casting build and passed with Dynamo deleted, because the Projectile's
-        // 900ms cooldown collided with the 900ms bite interval and cast-gains landed on bite
-        // timestamps by construction. Mutation-proofed: this arrangement fails if the branch dies.
+        // first draft used a casting build and passed with Dynamo deleted, because the old
+        // Projectile Form's 900ms cooldown collided with the 900ms bite interval and cast-gains
+        // landed on bite timestamps by construction. Mutation-proofed: fails if the branch dies.
         var b = new Build();
-        b.Weave(new EquippedSkill(
-            new WovenAbility { Name = "T", Source = Source.Nature, Form = Form.Trap },
-            FormBehaviour.BaseCooldownMs(Form.Trap)));
+        b.Weave(TestBuilds.Skill("snare_jaws", Source.Nature));
         Assert.True(b.Take(Keystones.ById("dynamo")!));
 
         // Act

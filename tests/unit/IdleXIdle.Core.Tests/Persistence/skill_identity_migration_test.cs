@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -157,9 +156,8 @@ public class SkillIdentityMigrationTest
         // Act
         var build = loadout.ToBuild(new MemoryDustTree(), Taught.Everything(), character: null);
 
-        // Assert — the ability carries the id, and Def resolves through it.
+        // Assert — the resolved def carries the id: the only identity a skill has left (P3-final).
         Assert.Equal(2, build.Skills.Count);
-        Assert.Equal("hammer_blow", build.Skills[0].Ability.SkillId);
         Assert.Equal("hammer_blow", build.Skills[0].Def.Id);
         Assert.Equal("field_mire", build.Skills[1].Def.Id);
     }

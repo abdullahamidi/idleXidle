@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -27,14 +26,11 @@ namespace IdleXIdle.Core.Tests.Builds;
 /// </remarks>
 public class mastery_new_nodes_liveness_test
 {
-    private static EquippedSkill Sk(Form form)
-        => new(new WovenAbility { Name = form.ToString(), Source = Source.Spirit, Form = form, Vow = null },
-               FormBehaviour.BaseCooldownMs(form));
-
-    private static Build BuildWith(SkillShape shape, params Form[] forms)
+    private static Build BuildWith(SkillShape shape, params string[] skillIds)
     {
         var b = new Build { Shape = shape };
-        foreach (var f in forms.Length == 0 ? new[] { Form.Strike } : forms) b.Weave(Sk(f));
+        foreach (var id in skillIds.Length == 0 ? new[] { "hammer_blow" } : skillIds)
+            b.Weave(TestBuilds.Skill(id, Source.Spirit));
         return b;
     }
 
@@ -50,12 +46,12 @@ public class mastery_new_nodes_liveness_test
 
     private static (WaveMetrics Metrics, Champion Champ, List<BattleEvent> Events) Fight(
         SkillShape shape, List<WaveCreature> creatures, ExpeditionTuning? tuning = null,
-        int intervalMs = 900, int hp = 200_000, params Form[] forms)
+        int intervalMs = 900, int hp = 200_000, params string[] skillIds)
     {
         var metrics = new WaveMetrics();
         var champ = Champ(hp);
         var (_, events) = SoloBattle.ResolveWave(
-            champ, BuildWith(shape, forms), new Hunter(), creatures, intervalMs,
+            champ, BuildWith(shape, skillIds), new Hunter(), creatures, intervalMs,
             tuning ?? ExpeditionTuning.Default, new Random(11), metrics: metrics);
         return (metrics, champ, events);
     }
@@ -73,8 +69,8 @@ public class mastery_new_nodes_liveness_test
     [Fact]
     public void test_stagger_holds_bites_off_and_never_for_ever()
     {
-        // Bites every 900 ms against a pool nothing kills. A big Strike lands every 2,000 ms or so,
-        // so a stagger of 500 ms per bite should cut the bite count but never to zero.
+        // Bites every 900 ms against a pool nothing kills. HAMMER BLOW casts every 9,000 ms or so
+        // (6 beats), so a stagger of 500 ms per bite should cut the bite count but never to zero.
         var shape = SkillShape.None with { StaggerThreshold = 1f, StaggerMs = 500, HitSize = 3f };
         var plain = Fight(SkillShape.None with { HitSize = 3f }, Wave(1, 1_000_000f, 10f), NoSwing);
         var stagger = Fight(shape, Wave(1, 1_000_000f, 10f), NoSwing);

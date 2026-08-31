@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -79,7 +78,7 @@ public class MasteryNodeLivenessTests
 
     /// <summary>
     /// A build posed so no dial is dead for want of a subject: four filled slots (so VOW OF COMPLETION
-    /// holds and PLEDGE has something to pay on) and a Form in every slot.
+    /// holds and PLEDGE has something to pay on) — two actives and two passives, a skill in every slot.
     /// </summary>
     /// <param name="oneSource">
     /// PURE only pays while the whole weave shares a Source, and every other node wants the matchup
@@ -93,10 +92,10 @@ public class MasteryNodeLivenessTests
             new MemoryDustTree(), mastery, character: null,
             skills: new[]
             {
-                new BuildComposer.SkillPick(Src(Source.Body), Form.Strike, "vow_complete", "a"),
-                new BuildComposer.SkillPick(Src(Source.Mind), Form.Projectile, null, "b"),
-                new BuildComposer.SkillPick(Src(Source.Nature), Form.Aura, null, "c"),
-                new BuildComposer.SkillPick(Src(Source.Shadow), Form.Trap, null, "d"),
+                new BuildComposer.SkillPick(Src(Source.Body), "vow_complete", SkillId: "hammer_blow"),
+                new BuildComposer.SkillPick(Src(Source.Mind), null, SkillId: "volley_spray"),
+                new BuildComposer.SkillPick(Src(Source.Nature), null, SkillId: "field_mire"),
+                new BuildComposer.SkillPick(Src(Source.Shadow), null, SkillId: "snare_jaws"),
             },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4);
     }

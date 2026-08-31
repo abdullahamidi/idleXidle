@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Automation;
@@ -76,9 +75,7 @@ public class AttritionTest
     {
         var b = new Build();
         for (var i = 0; i < 4; i++)
-            b.Weave(new EquippedSkill(
-                new WovenAbility { Name = "S", Source = Source.Body, Form = Form.Strike },
-                FormBehaviour.BaseCooldownMs(Form.Strike)));
+            b.Weave(TestBuilds.Skill("hammer_blow"));
         return b;
     }
 

@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -29,8 +28,6 @@ public class BuildGlossaryTest
     [Fact]
     public void test_the_strong_and_weak_claims_match_what_the_fight_actually_does()
     {
-        var t = WeavingTuning.Default;
-
         foreach (var attacker in Enum.GetValues<Source>())
         {
             var (s1, s2) = BuildGlossary.StrongAgainst(attacker);
@@ -54,46 +51,34 @@ public class BuildGlossaryTest
     }
 
     [Fact]
-    public void test_every_form_is_described_and_the_numbers_are_the_real_ones()
+    public void test_the_skills_that_deal_no_damage_say_what_they_do_instead()
     {
-        _out.WriteLine("THE FORMS, as the player will read them:");
-        foreach (var form in Enum.GetValues<Form>())
+        // SIGN is the single most misreadable pick in the game: its skills deal nothing themselves,
+        // and a player who slots nothing else has built a champion that cannot kill anything. The
+        // parity harness made exactly this mistake with a four-Mark build before the skills had
+        // sentences. The card's number must be the dial the sim reads, not a hand-typed copy —
+        // a second copy of the design is the one that goes stale.
+        foreach (var id in new[] { "sign_call", "sign_brand" })
         {
-            var headline = BuildGlossary.FormHeadline(form);
-            var rule = BuildGlossary.FormRule(form);
-
-            _out.WriteLine($"   {form,-16} {headline}");
-            _out.WriteLine($"                    {rule}");
-
-            Assert.False(string.IsNullOrWhiteSpace(headline), $"{form} has no headline");
-            Assert.False(string.IsNullOrWhiteSpace(rule), $"{form} has no rule line");
-
-            // The cooldown is quoted in seconds; it must be the cooldown the sim uses. A description
-            // with a hand-typed number is a second copy of the design, and the copy is what goes stale.
-            var cd = FormBehaviour.BaseCooldownMs(form) / 1000f;
-            if (!FormBehaviour.IsPassive(form))
-                Assert.Contains($"{cd:0.#}s", rule);
+            var def = SkillCatalogue.ById(id);
+            Assert.Equal(SkillEffect.Amplify, def.Effect);
+            Assert.Equal(0f, def.BasePower);
+            Assert.Contains($"+{def.AmplifyPercent * 100:0}%", def.Line);
         }
     }
 
     [Fact]
-    public void test_the_form_that_deals_no_damage_says_so()
+    public void test_the_skill_that_only_pays_when_attacked_says_so()
     {
-        // MARK is the single most misreadable pick in the game: it is the only Form that deals nothing,
-        // and a player who slots four of them has built a champion that cannot kill anything. The
-        // parity harness made exactly this mistake with a four-Mark build before the glossary existed.
-        var rule = BuildGlossary.FormRule(Form.Mark);
-        Assert.Contains("NO damage", rule);
-        Assert.Contains($"{FormBehaviour.MarkMultiplier:0.0}x", rule);
-    }
-
-    [Fact]
-    public void test_the_form_that_only_pays_when_attacked_says_so()
-    {
-        // TRAP is the other trap. Against a boss that swings rarely it is close to dead weight, and
-        // nothing on screen said so — the player just watched a slot do nothing and blamed the game.
-        Assert.Contains("ONLY pays when the enemy attacks", BuildGlossary.FormRule(Form.Trap));
-        Assert.True(FormBehaviour.FiresOnBeingHit(Form.Trap));
+        // SNARE's reaction is the other trap. Against a boss that swings rarely it is close to dead
+        // weight, and nothing on screen said so — the player just watched a slot do nothing and
+        // blamed the game. The reflect share and the re-arm clock quoted on the card must be the
+        // dials the sim reads.
+        var jaws = SkillCatalogue.ById("snare_jaws");
+        Assert.Equal(ReactionOn.Bitten, jaws.On);
+        Assert.Contains("bite", jaws.Line, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains($"{jaws.ReflectFraction * 100:0}%", jaws.Line);
+        Assert.Contains($"{jaws.RearmMs / 1000f:0.#}s", jaws.Line);
     }
 
     [Fact]

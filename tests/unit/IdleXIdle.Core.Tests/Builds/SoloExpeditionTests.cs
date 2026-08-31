@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -20,14 +19,13 @@ namespace IdleXIdle.Core.Tests.Builds;
 /// </summary>
 public class SoloExpeditionTests
 {
-    private static EquippedSkill Sk(Form form, Source src = Source.Nature)
-        => new(new WovenAbility { Name = form.ToString(), Source = src, Form = form, Vow = null },
-               FormBehaviour.BaseCooldownMs(form));
+    private static EquippedSkill Sk(string id, Source src = Source.Nature)
+        => TestBuilds.Skill(id, src);
 
-    private static Build BuildOf(BuildMods passive = default, params Form[] forms)
+    private static Build BuildOf(BuildMods passive = default, params string[] skillIds)
     {
         var b = new Build { PassiveMods = passive.Equals(default(BuildMods)) ? BuildMods.None : passive };
-        foreach (var f in forms) b.Weave(Sk(f));
+        foreach (var id in skillIds) b.Weave(Sk(id));
         return b;
     }
 
@@ -51,7 +49,7 @@ public class SoloExpeditionTests
     /// <remarks>
     /// REGRESSION: AttackBias was set on every region and advertised, but nothing read it — all six fought
     /// on a flat 1500ms cadence. It now bends the enemy tempo, which is what gives regions their own feel
-    /// (and, because TRAP fires on being hit, their own build synergy).
+    /// (and, because a Snare Reaction fires on being hit, their own build synergy).
     /// </remarks>
     [Fact]
     public void test_a_regions_bias_changes_the_enemy_tempo()
@@ -59,7 +57,7 @@ public class SoloExpeditionTests
         int Bites(AttackBias bias)
         {
             var champ = Champ(1_000_000);   // survives the whole stalling wave, so every bite is counted
-            var run = new SoloExpedition(BuildOf(default, Form.Strike), champ, new Hunter(),
+            var run = new SoloExpedition(BuildOf(default, "hammer_blow"), champ, new Hunter(),
                 1_000_000f, 30f, ExpeditionTuning.Default, enemySource: null, rng: new Random(7)) { EnemyBias = bias };
             run.PushWave();
             return run.LastWaveEvents.Count(e => e.Kind == BattleEventKind.EnemyStrike);
@@ -73,8 +71,8 @@ public class SoloExpeditionTests
     [Fact]
     public void test_a_solo_run_resolves_with_no_input_and_is_deterministic()
         => Assert.Equal(
-            DepthOf(BuildOf(default, Form.Strike, Form.Projectile)),
-            DepthOf(BuildOf(default, Form.Strike, Form.Projectile)));
+            DepthOf(BuildOf(default, "hammer_blow", "volley_spray")),
+            DepthOf(BuildOf(default, "hammer_blow", "volley_spray")));
 
     /// <summary>
     /// Health carries between waves — the same Champion fights the whole run, so cooldowns, UNDYING and
@@ -85,7 +83,7 @@ public class SoloExpeditionTests
     public void test_the_same_champion_fights_every_wave_and_attrition_carries()
     {
         var champ = Champ(500);
-        var run = Run(BuildOf(default, Form.Strike), champ, enemyHp: 60f, enemyDmg: 8f);
+        var run = Run(BuildOf(default, "hammer_blow"), champ, enemyHp: 60f, enemyDmg: 8f);
 
         run.PushWave();
         var afterOne = champ.Health;
@@ -106,8 +104,8 @@ public class SoloExpeditionTests
     {
         // 2.5x, was 1.6x — depth moves in whole waves and the beat's longer waits widened a wave's step;
         // the claim is that damage REACHES the run, not what a particular multiplier buys.
-        var naked = DepthOf(BuildOf(BuildMods.None, Form.Strike));
-        var mighty = DepthOf(BuildOf(new BuildMods(2.5f, 1f, 1f, 1f, 1f), Form.Strike));
+        var naked = DepthOf(BuildOf(BuildMods.None, "hammer_blow"));
+        var mighty = DepthOf(BuildOf(new BuildMods(2.5f, 1f, 1f, 1f, 1f), "hammer_blow"));
 
         Assert.True(mighty > naked, $"more damage must reach the run: naked={naked} mighty={mighty}");
     }
@@ -122,8 +120,8 @@ public class SoloExpeditionTests
         // 2.5x, was 1.5x: depth moves in whole waves, and with the beat's longer waits a one-and-a-half
         // multiplier no longer crosses a wave boundary on this fixture. The claim is that the passive
         // mods REACH the run at all, not how much a particular multiplier is worth.
-        var naked = DepthOf(BuildOf(BuildMods.None, Form.Strike));
-        var trained = DepthOf(BuildOf(new BuildMods(2.5f, 2.5f, 1f, 1f, 1f), Form.Strike));
+        var naked = DepthOf(BuildOf(BuildMods.None, "hammer_blow"));
+        var trained = DepthOf(BuildOf(new BuildMods(2.5f, 2.5f, 1f, 1f, 1f), "hammer_blow"));
 
         Assert.True(trained > naked, $"passive nodes must reach the run: naked={naked} trained={trained}");
     }
@@ -138,7 +136,7 @@ public class SoloExpeditionTests
         int GleamAt3(BuildMods passive)
         {
             // A fat champion against a soft enemy, so both builds clear the same three waves.
-            var run = Run(BuildOf(passive, Form.Strike, Form.Projectile), Champ(4000), enemyHp: 60f, enemyDmg: 1f);
+            var run = Run(BuildOf(passive, "hammer_blow", "volley_spray"), Champ(4000), enemyHp: 60f, enemyDmg: 1f);
             for (var i = 0; i < 3 && !run.Over; i++) run.PushWave();
             return run.Carried.Gleam;
         }
@@ -164,7 +162,7 @@ public class SoloExpeditionTests
     {
         int WaveGleamAt(int startHealth)
         {
-            var build = BuildOf(default, Form.Strike, Form.Projectile);
+            var build = BuildOf(default, "hammer_blow", "volley_spray");
             build.ExtraTriggers = new HashSet<BuildTrigger> { BuildTrigger.Desperation };
             var champ = Champ(4000);
             champ.Health = startHealth;
@@ -189,7 +187,7 @@ public class SoloExpeditionTests
     [Fact]
     public void test_each_cleared_wave_pays_out_immediately()
     {
-        var run = Run(BuildOf(default, Form.Strike, Form.Projectile), Champ(4000), enemyHp: 60f, enemyDmg: 1f);
+        var run = Run(BuildOf(default, "hammer_blow", "volley_spray"), Champ(4000), enemyHp: 60f, enemyDmg: 1f);
 
         var before = run.Carried;
         var outcome = run.PushWave();
@@ -203,7 +201,7 @@ public class SoloExpeditionTests
     [Fact]
     public void test_a_failed_push_pays_nothing()
     {
-        var run = Run(BuildOf(default, Form.Strike), Champ(40), enemyHp: 400f, enemyDmg: 60f);
+        var run = Run(BuildOf(default, "hammer_blow"), Champ(40), enemyHp: 400f, enemyDmg: 60f);
         while (!run.Over && run.Wave < 100) run.PushWave();
 
         Assert.True(run.Over);
@@ -214,7 +212,7 @@ public class SoloExpeditionTests
     [Fact]
     public void test_a_deeper_run_carries_more()
     {
-        var run = Run(BuildOf(default, Form.Strike, Form.Projectile), Champ(4000), enemyHp: 60f, enemyDmg: 1f);
+        var run = Run(BuildOf(default, "hammer_blow", "volley_spray"), Champ(4000), enemyHp: 60f, enemyDmg: 1f);
         run.PushWave();
         var afterOne = run.Carried.Gleam;
         run.PushWave();
@@ -227,7 +225,7 @@ public class SoloExpeditionTests
     [Fact]
     public void test_pushing_after_the_run_ends_is_a_no_op()
     {
-        var run = Run(BuildOf(default, Form.Strike), Champ(50), enemyHp: 400f, enemyDmg: 60f);
+        var run = Run(BuildOf(default, "hammer_blow"), Champ(50), enemyHp: 400f, enemyDmg: 60f);
         while (!run.Over && run.Wave < 100) run.PushWave();
 
         var wave = run.Wave;
@@ -329,8 +327,8 @@ public class SoloExpeditionTests
     [Fact]
     public void test_a_region_rewards_the_build_shape_it_is_built_around()
     {
-        var weight = BuildOf(BuildMods.None, Form.Trap, Form.Strike);       // few, enormous hits
-        var spread = BuildOf(BuildMods.None, Form.Aura, Form.Projectile);   // many, small hits
+        var weight = BuildOf(BuildMods.None, "snare_jaws", "hammer_blow");     // few, enormous hits
+        var spread = BuildOf(BuildMods.None, "field_mire", "volley_spray");    // many, small hits
 
         var weightArmoured = DepthIn("cinderworks", weight);
         var weightSwarm = DepthIn("umbral_reach", weight);
@@ -352,7 +350,7 @@ public class SoloExpeditionTests
     [Fact]
     public void test_bands_change_the_composition_as_depth_grows()
     {
-        var run = RunIn("umbral_reach", BuildOf(BuildMods.None, Form.Aura, Form.Projectile), hp: 500_000);
+        var run = RunIn("umbral_reach", BuildOf(BuildMods.None, "field_mire", "volley_spray"), hp: 500_000);
 
         var seen = new HashSet<Archetype>();
         while (!run.Over && run.Wave < 45)
@@ -376,7 +374,7 @@ public class SoloExpeditionTests
     {
         List<(Archetype, int)> Walk()
         {
-            var run = RunIn("marrow_wastes", BuildOf(BuildMods.None, Form.Strike), hp: 500_000);
+            var run = RunIn("marrow_wastes", BuildOf(BuildMods.None, "hammer_blow"), hp: 500_000);
             var seen = new List<(Archetype, int)>();
             for (var i = 0; i < 12 && !run.Over; i++)
             {
@@ -393,7 +391,7 @@ public class SoloExpeditionTests
     [Fact]
     public void test_a_boss_wave_holds_exactly_one_creature()
     {
-        var run = RunIn("verdant_hollow", BuildOf(BuildMods.None, Form.Strike), hp: 500_000);
+        var run = RunIn("verdant_hollow", BuildOf(BuildMods.None, "hammer_blow"), hp: 500_000);
         while (!run.Over && run.Wave < 20)
         {
             run.PushWave();

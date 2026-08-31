@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -143,13 +142,15 @@ public class SkillProgressTests
 
         var build = BuildComposer.Compose(
             new MemoryDustTree(), Taught.Everything(), character: null,
-            skills: new[] { new BuildComposer.SkillPick(Source.Body, Form.Strike, null, "a") },
+            skills: new[] { new BuildComposer.SkillPick(Source.Body, null, SkillId: Hammer.Id) },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4, progress: p);
 
+        // The woven def IS the purchase: the variation's and reinforcement's deltas applied, and the
+        // variation's element replacing the woven one. TestBuilds.Resolved runs the same arithmetic.
         var woven = build.Skills.Single();
-        Assert.Equal(v.Name, woven.Variation?.Name);
-        Assert.Single(woven.Reinforcements);
-        Assert.Equal(v.Reinforcements[0].Name, woven.Reinforcements[0].Name);
+        Assert.Equal(TestBuilds.Resolved(Hammer.Id, v.Name, v.Reinforcements[0].Name), woven.Def);
+        Assert.NotEqual(Hammer, woven.Def);
+        Assert.Equal(TestBuilds.SourceOf(Hammer.Id, v.Name), woven.Source);
     }
 
     [Fact]
@@ -158,13 +159,12 @@ public class SkillProgressTests
         // Null progress is a champion that has not fought yet, and every test that does not care.
         var build = BuildComposer.Compose(
             new MemoryDustTree(), Taught.Everything(), character: null,
-            skills: new[] { new BuildComposer.SkillPick(Source.Body, Form.Strike, null, "a") },
+            skills: new[] { new BuildComposer.SkillPick(Source.Body, null, SkillId: Hammer.Id) },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4);
 
+        // No progress means no deltas: the woven def is the catalogue's, untouched.
         var woven = build.Skills.Single();
-        Assert.Null(woven.Variation);
-        Assert.Empty(woven.Reinforcements);
-        Assert.Equal(SkillCatalogue.ActiveOf(Style.Hammer).Id, woven.Def.Id);
+        Assert.Equal(SkillCatalogue.ActiveOf(Style.Hammer), woven.Def);
     }
 }
 
@@ -186,8 +186,8 @@ public class SkillProgressLivenessTests
             new MemoryDustTree(), Taught.Everything(), character: null,
             skills: new[]
             {
-                new BuildComposer.SkillPick(Source.Body, Form.Strike, null, "a"),
-                new BuildComposer.SkillPick(Source.Nature, Form.Aura, null, "b"),
+                new BuildComposer.SkillPick(Source.Body, null, SkillId: SkillCatalogue.ActiveOf(Style.Hammer).Id),
+                new BuildComposer.SkillPick(Source.Nature, null, SkillId: SkillCatalogue.PassiveOf(Style.Field).Id),
             },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4, progress: progress);
 
@@ -223,7 +223,7 @@ public class SkillProgressLivenessTests
         var progress = new SkillProgress();
         var build = BuildComposer.Compose(
             new MemoryDustTree(), Taught.Everything(), character: null,
-            skills: new[] { new BuildComposer.SkillPick(Source.Body, Form.Strike, null, "a") },
+            skills: new[] { new BuildComposer.SkillPick(Source.Body, null, SkillId: SkillCatalogue.ActiveOf(Style.Hammer).Id) },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4, progress: progress);
 
         var hunter = new IdleXIdle.Core.Economy.Hunter();

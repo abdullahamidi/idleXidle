@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Expeditions;
@@ -20,15 +19,8 @@ public class PaybackWindowTest
     private static Build RepayBuild(int windowMs)
     {
         var build = new Build();
-        var variation = new SkillVariation(
-            "PROBE", "test-only window setting",
-            Array.Empty<Reinforcement>(),
-            d => d with { PaysBackDamageTaken = 2.0f, PaybackWindowMs = windowMs },
-            Source.Shadow);
-        build.Weave(new EquippedSkill(
-            new WovenAbility { Name = "probe", Source = Source.Shadow, Form = Form.Trap, SkillId = "snare_repay" },
-            5 * SoloBattle.DefaultBeatMs, PassiveSlot: false)
-        { Variation = variation });
+        build.Weave(TestBuilds.Skill("snare_repay", Source.Shadow,
+            tweak: d => d with { PaysBackDamageTaken = 2.0f, PaybackWindowMs = windowMs }));
         return build;
     }
 
@@ -71,8 +63,7 @@ public class PaybackWindowTest
     public void test_vengeance_carries_the_window_its_card_promises()
     {
         // The content itself: VENGEANCE's resolved def pays 3.5x and counts only the last 3s.
-        var repay = SkillCatalogue.ById("snare_repay");
-        var vengeance = repay.Variations.Single(v => v.Name == "VENGEANCE").Modify!(repay);
+        var vengeance = TestBuilds.Resolved("snare_repay", "VENGEANCE");
 
         Assert.Equal(3.5f, vengeance.PaysBackDamageTaken, precision: 3);
         Assert.Equal(3_000, vengeance.PaybackWindowMs);

@@ -1,7 +1,6 @@
 using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Builds;
 
 namespace IdleXIdle.Game;

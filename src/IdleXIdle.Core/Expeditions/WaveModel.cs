@@ -283,8 +283,8 @@ public enum BattleEventKind
 /// </para>
 /// </remarks>
 /// <summary>
-/// AURA: one per tick of a passive Form, carrying the Source in <c>Slot</c> and the Form in
-/// <c>Amount</c> exactly as <see cref="BattleEventKind.Skill"/> does — but it is NOT an action and
+/// AURA: one per tick of a passive skill, slot-keyed exactly as
+/// <see cref="BattleEventKind.Skill"/> is — but it is NOT an action and
 /// raises no cast. Until 2026-08-30 an Aura emitted nothing but its damage, so the screen had to tell
 /// its blows from a cast's by their timestamp; at some action speeds a fifth of the ticks collided with
 /// a cast and were reported as that cast's, and the skill rail could never answer "when did the Aura

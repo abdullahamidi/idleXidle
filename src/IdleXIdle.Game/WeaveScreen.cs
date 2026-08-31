@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -16,7 +15,7 @@ using IdleXIdle.Core.Progression;
 namespace IdleXIdle.Game;
 
 /// <summary>
-/// THE WEAVE: pick each skill's Source and Form, and swear its Vow.
+/// THE WEAVE: pick each slot's skill from the library, and swear its Vow.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -110,7 +109,7 @@ public sealed class WeaveScreen
     // Cached by the thing being previewed, because a reading costs ~0.5ms and only changes when the
     // hover or the build does. Measured, not assumed — a per-frame bench would have been fine too, but
     // the cache makes that a fact rather than a hope.
-    private (Source S, Form F, int Slot, int Rev)? _previewKey;
+    private (string Id, int Slot, int Rev)? _previewKey;
     private float _previewDps;
     private float _currentDps;
     private int _currentRev = -1;
@@ -414,8 +413,6 @@ public sealed class WeaveScreen
         }
     }
 
-    private static readonly Source[] Sources = Enum.GetValues<Source>();
-    private static readonly Form[] Forms = Enum.GetValues<Form>();
 
     // Every vertical offset here was measured off a capture, not guessed. The first pass put the FORM
     // heading at +356 while the source grid's second row ran to +364, so the heading printed straight
@@ -426,28 +423,6 @@ public sealed class WeaveScreen
     // width exactly, which is also what makes the right margin equal the left.
     private static int PickPad => UiKit.PadX(PickPanel);
     private static int PickInner => PickPanel.Width - PickPad * 2;
-    // 122, from 104. The strip of description that used to close this panel is gone — it is a hover
-    // card beside the cursor now (playtest 2026-08-28: "açıklamaların altta bir bölümde değil de
-    // seçeneğe hover yapılınca hover paneliyle çıkması") — and most of the height it was eating goes
-    // to the twelve cells that are the actual content of the panel.
-    //
-    // NOT ALL OF IT, and the arithmetic is written down because a first pass took 140 and silently
-    // lost the footer. The panel gives 728px between its body line (236) and its floor (964); the two
-    // grids cost 4*CellH plus two 16px gaps plus the 104px FORM heading block, and DrawSlotBanner
-    // needs ~80 under them. 4*122 + 154 + 80 = 722, which fits with six to spare. At 140 the grids
-    // alone reached 950 and the banner's own guard dropped it — dead space where the footer should be.
-    private const int CellGap = 16, CellH = 122, CellRow = CellH + CellGap;
-    private static int CellW => (PickInner - CellGap * 2) / 3;
-    private static int CellPitch => CellW + CellGap;
-
-    /// <summary>The SOURCE grid's first row — the panel's standard body line.</summary>
-    private static int SourceTop => UiKit.BodyTop(PickPanel);
-
-    /// <summary>FORM's heading, a clear gap under the last SOURCE cell.</summary>
-    private static int FormTitleTop => SourceTop + CellRow + CellH + 34;
-
-    /// <summary>FORM's first cell row — its heading and caption, on the same rhythm the panel's own use.</summary>
-    private static int FormTop => FormTitleTop + (UiTypography.PanelBodyTop - UiTypography.PanelTitleTop);
 
     // ── THE LIBRARY. Six rows, one per style, each holding that style's two skills.
     //
@@ -517,12 +492,6 @@ public sealed class WeaveScreen
     private static Rectangle RespecBtn
         => new(PickPanel.X + PickPad, TreeTop + 552, PickPanel.Width - PickPad * 2, 38);
 
-    private static Rectangle SourceCell(int i) =>
-        new(PickPanel.X + PickPad + i % 3 * CellPitch, SourceTop + i / 3 * CellRow, CellW, CellH);
-
-    private static Rectangle FormCell(int i) =>
-        new(PickPanel.X + PickPad + i % 3 * CellPitch, FormTop + i / 3 * CellRow, CellW, CellH);
-
     // Five rows, not six. Six fitted only by squeezing each to 54px, where a Vow's name and its
     // verdict printed over one another.
     // Five again. This was cut to four when the panel was 718 tall and a three-line description ran
@@ -571,7 +540,6 @@ public sealed class WeaveScreen
         => new(VowColX, UiKit.BodyTop(VowPanel) + VowRows * (VowRowH + 8) + 4
                         + (openRow >= 0 ? VowBindH + VowBindGap : 0), VowColW, 44);
 
-    private static string FormName(Form f) => f.ToString().ToUpperInvariant();
     private static string SourceName(Source s) => s.ToString().ToUpperInvariant();
 
     /// <summary>What a Vow demands, in one line the player can check against their own build.</summary>
@@ -682,36 +650,27 @@ public sealed class WeaveScreen
 
             if (KindToggle(i).Contains(hit))
             {
-                // THE SKILL GATE, WHERE THE PLAYER MEETS IT. Six of the twelve are taught by the
-                // mastery tree (design §5), and flipping a slot is how you would ask for one. Refused
-                // out loud rather than silently: the row's name would otherwise change to a skill the
-                // build then quietly drops, which is the worst of both.
-                var kinds = BuildComposer.SlotKinds(
-                    skills.Select(k => new BuildComposer.SkillPick(k.Source, k.Form, k.VowId, "", k.Passive)).ToList(),
-                    Loadout.SkillCapacity);
-                var wanted = SkillCatalogue.Resolve(skills[i].Form, !(i < kinds.Count && kinds[i]));
-                if (SkillCatalogue.NeedsUnlock(wanted) && !Mastery.LearnedSkills().Contains(wanted.Id))
+                // FLIPPING THE SLOT CHANGES WHICH SKILL IT IS — a style's two skills are different
+                // abilities, so the toggle swaps to the OTHER skill of the same style. An empty
+                // slot has no style to flip within.
+                if (SkillCatalogue.Find(skills[i].SkillId) is not { } cur0) return;
+                var wanted = cur0.TakesABeat
+                    ? SkillCatalogue.PassiveOf(cur0.Style)
+                    : SkillCatalogue.ActiveOf(cur0.Style);
+                // THE SKILL GATE, WHERE THE PLAYER MEETS IT. Refused out loud rather than silently:
+                // the row's name would otherwise change to a skill the build then quietly drops,
+                // which is the worst of both.
+                if (!KnownSkills().Contains(wanted.Id))
                 {
                     _msg = $"{wanted.Name} IS LEARNED ON THE MASTERY TREE, ON {wanted.Style.ToString().ToUpperInvariant()}'S ROAD.";
                     return;
                 }
-
-                // FLIPPING THE SLOT CHANGES WHICH SKILL IT IS, not merely when it acts — a style's
-                // two skills are different abilities. Say which one it became, because the row's
-                // name line changes underneath the click and an unexplained change reads as a bug.
-                // What it is RIGHT NOW, resolved the way the fight resolves it — an unset choice is
-                // not the same as ACTIVE, so the flip reads the effective kind rather than the field.
-                var effective = BuildComposer.SlotKinds(
-                    skills.Select(k => new BuildComposer.SkillPick(k.Source, k.Form, k.VowId, "", k.Passive)).ToList(),
-                    Loadout.SkillCapacity);
-                var nowPassive = !(i < effective.Count && effective[i]);
-                if (Loadout.SetPassive(i, nowPassive))
-                {
-                    _slot = i;
-                    Dirty = true; _buildRev++;
-                    var became = SkillCatalogue.Resolve(Loadout.Skills[i].Form, nowPassive);
-                    _msg = $"NOW {became.Name} — {(nowPassive ? "COSTS NO ACTION" : "TAKES AN ACTION")}.";
-                }
+                _slot = i;
+                Loadout.SetSkill(i, wanted.Id);
+                Dirty = true; _buildRev++;
+                // Say which one it became, because the row's name line changes underneath the click
+                // and an unexplained change reads as a bug.
+                _msg = $"NOW {wanted.Name} — {(wanted.TakesABeat ? "TAKES AN ACTION" : "COSTS NO ACTION")}.";
                 return;
             }
             if (SlotRow(i).Contains(hit))
@@ -750,9 +709,9 @@ public sealed class WeaveScreen
                 {
                     Skills = Loadout.Skills.Select(s => new IdleXIdle.Core.Persistence.SavedSkill
                     {
-                        // The id and the slot kind ride along now — an RHB code used to carry only
-                        // (Source, Form), so a shared "BODY STRIKE" could not say BLOW from PRESS.
-                        SkillId = s.SkillId, Source = s.Source.ToString(), Form = s.Form.ToString(),
+                        // The id IS the identity (code v2); the element rides beside it as the
+                        // fallback a chosen variation has not yet overridden.
+                        SkillId = s.SkillId, Source = s.Source.ToString(),
                         VowId = s.VowId, Passive = s.Passive,
                     }).ToList(),
                     Keystones = Loadout.KeystoneIds.ToList(),
@@ -775,10 +734,8 @@ public sealed class WeaveScreen
 
         if (_tab == 1)
         {
-            var kindsT = BuildComposer.SlotKinds(
-                skills.Select(k => new BuildComposer.SkillPick(k.Source, k.Form, k.VowId, "", k.Passive)).ToList(),
-                Loadout.SkillCapacity);
-            var td = SkillCatalogue.Resolve(skills[_slot].Form, _slot < kindsT.Count && kindsT[_slot]);
+            // The slot's own skill, by id — an empty slot has no tree and takes no clicks.
+            if (SkillCatalogue.Find(skills[_slot].SkillId) is not { } td) return;
             var tv = SkillLevels.VariationOf(td);
 
             // TAKING A VARIATION — and with it the skill's Source.
@@ -913,7 +870,6 @@ public sealed class WeaveScreen
                               960, 108, Slate, UiTypography.Secondary);
 
         TickEffects();
-        _card = null;
 
         DrawSlots(b, hit);
         DrawPicker(b, hit);
@@ -933,10 +889,8 @@ public sealed class WeaveScreen
 
         if (_msg.Length > 0) _ui.TextCenter(b, _msg, 960, 1016, Gold);
 
-        // LAST, AND IN THIS ORDER. The card explains a cell in the middle panel and must sit over the
-        // column beside it; the carried seal must sit over everything including the card, because it
-        // is attached to the cursor and anything drawn on top of it would look like the drop failed.
-        if (_carrying == Carry.None && _card is { } card) DrawCard(b, card.What, card.Cell);
+        // LAST: the carried seal sits over everything — it is attached to the cursor, and
+        // anything drawn on top of it would look like the drop failed.
         DrawCarried(b);
     }
 
@@ -961,7 +915,8 @@ public sealed class WeaveScreen
             Outline(b, r, Bone, 2);
             if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } gem)
                 b.Draw(gem, new Rectangle(r.X + 10, r.Y + 6, 32, 32), Color.White);
-            _ui.Text(b, Fit($"{SourceName(s.Source)} {FormName(s.Form)}", 118), r.X + 50, r.Y + 14, Bone);
+            _ui.Text(b, Fit($"{SourceName(s.Source)} {SkillCatalogue.Find(s.SkillId)?.Name ?? "EMPTY"}", 118),
+                     r.X + 50, r.Y + 14, Bone);
         }
     }
 
@@ -979,7 +934,7 @@ public sealed class WeaveScreen
         // the two kinds are no longer interchangeable — an active takes the champion's turn and a
         // passive never can, which is why four skills used to leave the plain attack almost no beats.
         var passiveSlot = BuildComposer.SlotKinds(
-            skills.Select(k => new BuildComposer.SkillPick(k.Source, k.Form, k.VowId, "", k.Passive)).ToList(),
+            skills.Select(k => new BuildComposer.SkillPick(k.Source, k.VowId, k.Passive, k.SkillId)).ToList(),
             Loadout.SkillCapacity);
 
         for (var i = 0; i < Loadout.SkillCapacity; i++)
@@ -1038,21 +993,21 @@ public sealed class WeaveScreen
             //
             // AND IT IS THE SKILL'S GLYPH, NOT THE FORM'S. A Form icon gave BLOW and PRESS the same
             // picture, which is the one thing an icon is read for.
-            var rowDef0 = SkillCatalogue.Resolve(s.Form, i < passiveSlot.Count && passiveSlot[i]);
-            // IS THIS SLOT ACTUALLY CARRYING ANYTHING? The composer refuses to weave a skill the
-            // champion has not learned, and this row was drawing the resolved skill regardless — so a
-            // brand-new slot displayed PRESS, in full, with its rule, while the fight had nothing in
-            // that slot at all (playtest: "yeni skill slotu açtım skill hemen geldi, henüz mastery
-            // tree açık bile değil"). A screen that shows what the simulation refused is the same
-            // dormant-feature failure read backwards, and it is worse, because the player believes it.
-            var slotEmpty = !KnownSkills().Contains(rowDef0.Id);
+            // THE SLOT'S SKILL, BY ID — null is an EMPTY slot. A slot can also hold a skill the
+            // champion no longer knows (respec re-locks), and that reads as empty for the same
+            // reason: the composer refuses it, and a screen that shows what the simulation refused
+            // is the dormant-feature failure read backwards — worse, because the player believes it
+            // (playtest: "yeni skill slotu açtım skill hemen geldi, henüz mastery tree açık bile
+            // değil").
+            var rowDef0 = SkillCatalogue.Find(s.SkillId);
+            var slotEmpty = rowDef0 is null || !KnownSkills().Contains(rowDef0.Id);
 
             var fbox = new Rectangle(row.X + 88, row.Y + 20, 38, 38);
             _ui.Fill(b, fbox, new Color(0x0C, 0x09, 0x14) * 0.55f);
-            if (slotEmpty)
+            if (slotEmpty || rowDef0 is null)
                 _ui.Icon(b, "ui_slot_locked", fbox, Dim);
-            else if (!_ui.Icon(b, $"icon_skill_{rowDef0.Id}", fbox, col))
-                _ui.Icon(b, $"icon_form_{s.Form.ToString().ToLowerInvariant()}", fbox, col);
+            else
+                _ui.Icon(b, $"icon_skill_{rowDef0.Id}", fbox, col);
 
             if (slotEmpty)
             {
@@ -1064,7 +1019,7 @@ public sealed class WeaveScreen
             // THE SKILL'S OWN NAME, not the Source and Form it used to be composed from. Its element
             // is written beside it because the variation owns that now, and a player still has to be
             // able to read what a slot is made of.
-            _ui.TextBig(b, Fit(rowDef0.Name, 100), row.X + 134, row.Y + 8, Bone, UiTypography.Body);
+            _ui.TextBig(b, Fit(rowDef0!.Name, 100), row.X + 134, row.Y + 8, Bone, UiTypography.Body);
             _ui.Text(b, SourceName(s.Source), row.X + 134 + 104, row.Y + 11,
                      SourceColor.GetValueOrDefault(s.Source, Slate));
 
@@ -1080,8 +1035,8 @@ public sealed class WeaveScreen
             _ui.TextCenter(b, isPassive ? "PASSIVE" : "ACTIVE", kindBox.Center.X, kindBox.Y + 5,
                            isPassive ? Met : Gold);
 
-            // The skill this slot actually resolves to, under its Source and Form.
-            var resolved = rowDef0;
+            // The skill this slot actually carries — non-null past the EMPTY guard above.
+            var resolved = rowDef0!;
             var chosen = SkillLevels.VariationOf(resolved);
             var free = SkillLevels.FreeOn(resolved.Id);
 
@@ -1219,7 +1174,7 @@ public sealed class WeaveScreen
     /// know the place you are going fields them.
     /// </para>
     /// </remarks>
-    private void DrawReadout(SpriteBatch b, Source? hoverSource, Form? hoverForm)
+    private void DrawReadout(SpriteBatch b, string? hoverSkillId)
     {
         if (Hunter is not { } hunter) return;
 
@@ -1256,13 +1211,12 @@ public sealed class WeaveScreen
         y += 30;
         if (y + 30 > floor) return;
 
-        // THE PICK UNDER THE CURSOR, measured on a COPY so hovering never mutates the real loadout.
-        if ((hoverSource is not null || hoverForm is not null) && _slot >= 0 && _slot < Loadout.Skills.Count)
+        // THE SKILL UNDER THE CURSOR. A preview needs a slot that holds a real skill to swap out
+        // and back; hovering with an empty slot selected falls through to the idle line.
+        if (hoverSkillId is not null && _slot >= 0 && _slot < Loadout.Skills.Count
+            && Loadout.Skills[_slot].SkillId is { } keepId)
         {
-            var cur = Loadout.Skills[_slot];
-            var s2 = hoverSource ?? cur.Source;
-            var f2 = hoverForm ?? cur.Form;
-            var key = (s2, f2, _slot, _buildRev);
+            var key = (hoverSkillId, _slot, _buildRev);
 
             if (_previewKey != key)
             {
@@ -1271,13 +1225,9 @@ public sealed class WeaveScreen
                 // "copy of the build" type would be a second place for the build's rules to live, and
                 // the copy is the one that goes stale. The game is single-threaded and this runs inside
                 // Draw, so nothing observes the intermediate state.
-                var keepSource = cur.Source;
-                var keepForm = cur.Form;
-                Loadout.SetSource(_slot, s2);
-                Loadout.SetForm(_slot, f2);
+                Loadout.SetSkill(_slot, hoverSkillId);
                 _previewDps = Dps(Loadout, hunter);
-                Loadout.SetSource(_slot, keepSource);
-                Loadout.SetForm(_slot, keepForm);
+                Loadout.SetSkill(_slot, keepId);
                 _previewKey = key;
             }
 
@@ -1328,9 +1278,9 @@ public sealed class WeaveScreen
         _ui.Text(b, $"IN {(RegionName.Length > 0 ? RegionName : RegionId).ToUpperInvariant()}", x, y, Slate);
         y += 30;
 
-        var judged = hoverSource ?? (_slot >= 0 && _slot < Loadout.Skills.Count
+        var judged = _slot >= 0 && _slot < Loadout.Skills.Count
             ? Loadout.Skills[_slot].Source
-            : Source.Body);
+            : Source.Body;
 
         foreach (var enemy in roster.Distinct().Take(4))
         {
@@ -1467,15 +1417,14 @@ public sealed class WeaveScreen
         {
             DrawSkillTree(b, hit, cur);
             DrawHover(b);
-            DrawReadout(b, null, null);
+            DrawReadout(b, null);
             return;
         }
 
         _ui.TextCenterBig(b, "YOUR SKILLS", PickPanel.Center.X, UiKit.TitleTop(PickPanel), Gold, UiTypography.PanelTitle);
 
         var known = KnownSkills();
-        Source? hoverSource = null;
-        Form? hoverForm = null;
+        string? hoverSkillId = null;
 
         // TWELVE TILES, IN STYLE ORDER. A style's two skills sit side by side, so the pairing is read
         // off the grid instead of being written beside it twelve times.
@@ -1493,7 +1442,7 @@ public sealed class WeaveScreen
                 _hoverTitle = have ? def.Name : $"{def.Name} — NOT LEARNED";
                 _hoverBody = have ? def.Line
                                   : $"Learned on {style.ToString().ToUpperInvariant()}'s road, on the mastery tree.";
-                if (have) { hoverForm = def.LegacyForm; }
+                if (have) hoverSkillId = def.Id;
             }
 
             Card(b, cell, Gold, on, over && have, !have);
@@ -1512,19 +1461,7 @@ public sealed class WeaveScreen
         }
 
         DrawHover(b);
-        DrawReadout(b, hoverSource, hoverForm);
-
-        // THE CARD IS NOT DRAWN HERE. It has to sit over the panels beside it, and this method runs
-        // before them — Draw renders it last. Recorded, not rendered.
-        if (hoverSource is not null || hoverForm is not null)
-        {
-            // ANCHORED TO THE CELL, not to the cursor. A card at cursor+28 lands ON the option it is
-            // explaining — the capture showed it covering PROJECTILE's own label while describing it.
-            var cell = hoverForm is { } hf
-                ? FormCell(Array.IndexOf(Forms, hf))
-                : SourceCell(Array.IndexOf(Sources, hoverSource!.Value));
-            _card = (ReadingFor(hit, cur, hoverSource, hoverForm), cell);
-        }
+        DrawReadout(b, hoverSkillId);
     }
 
     /// <summary>
@@ -1571,14 +1508,9 @@ public sealed class WeaveScreen
 
     private void DrawSkillTree(SpriteBatch b, Point hit, PlayerLoadout.SkillChoice cur)
     {
-        var kinds = BuildComposer.SlotKinds(
-            Loadout.Skills.Select(k => new BuildComposer.SkillPick(k.Source, k.Form, k.VowId, "", k.Passive)).ToList(),
-            Loadout.SkillCapacity);
-        var def = SkillCatalogue.Resolve(cur.Form, _slot < kinds.Count && kinds[_slot]);
-
-        // AN EMPTY SLOT HAS NO TREE. Without this the page drew the tree of whatever skill the slot
-        // WOULD hold if the champion had learned it — a full page about an ability it does not have.
-        if (!KnownSkills().Contains(def.Id))
+        // AN EMPTY SLOT HAS NO TREE — and neither has a skill the champion un-learned (respec
+        // re-locks). Without this the page drew a full page about an ability the build does not have.
+        if (SkillCatalogue.Find(cur.SkillId) is not { } def || !KnownSkills().Contains(def.Id))
         {
             _ui.TextCenterBig(b, "THIS SLOT IS EMPTY", PickPanel.Center.X, TreeTop + 120, Slate,
                               UiTypography.PanelTitle);
@@ -1646,7 +1578,9 @@ public sealed class WeaveScreen
             if (card.Contains(hit))
             {
                 _hoverTitle = $"{v.Name} · {SourceName(v.Source)}";
-                _hoverBody = v.Line;
+                // The variation owns the skill's element, so the card that commits to it is where
+                // the element's signature is worth a sentence.
+                _hoverBody = $"{v.Line} {BuildGlossary.SourceLine(v.Source)}.";
             }
         }
 
@@ -1691,154 +1625,6 @@ public sealed class WeaveScreen
         }
     }
 
-    private void DrawSlotBanner(SpriteBatch b, PlayerLoadout.SkillChoice cur)
-    {
-        var x = UiKit.ContentLeft(PickPanel);
-        var w = PickPanel.Width - UiKit.PadX(PickPanel) * 2;
-        var top = FormCell(Forms.Length - 1).Bottom + 18;
-        var r = new Rectangle(x, top, w, Math.Max(0, PickPanel.Bottom - 30 - top));
-        if (r.Height < 40) return;
-
-        var col = SourceColor.GetValueOrDefault(cur.Source, Bone);
-        _ui.Fill(b, r, new Color(0x11, 0x0D, 0x1A, 0xE0));
-        _ui.Fill(b, new Rectangle(r.X, r.Y, 4, r.Height), col);
-
-        var mid = r.Y + r.Height / 2;
-        if (_ui.Assets.Get($"source_{cur.Source.ToString().ToLowerInvariant()}") is { } gem)
-            b.Draw(gem, new Rectangle(r.X + 16, mid - 24, 48, 48), Color.White);
-        _ui.Icon(b, $"icon_form_{cur.Form.ToString().ToLowerInvariant()}",
-                 new Rectangle(r.X + 72, mid - 22, 44, 44), col);
-
-        _ui.TextBig(b, $"SLOT {_slot + 1}", r.X + 130, mid - 26, Slate, UiTypography.Caption);
-        _ui.TextBig(b, $"{SourceName(cur.Source)} {FormName(cur.Form)}", r.X + 130, mid - 6, Bone, UiTypography.Body);
-        _ui.TextRight(b, cur.VowId is null ? "NO VOW" : (Vows.ById(cur.VowId)?.Name ?? "").ToUpperInvariant(),
-                      r.Right - 16, mid - 6, cur.VowId is null ? Dim : Gold);
-    }
-
-    /// <summary>One title line and one paragraph — everything the strip under the picker ever says.</summary>
-    private readonly record struct Explanation(string Title, string Body, bool IsSelection);
-
-    /// <summary>
-    /// WHAT THE STRIP IS TALKING ABOUT: the one thing under the cursor, or — when the cursor rests on
-    /// nothing this screen explains — the skill in the chosen slot, its Source and its Form together.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Playtest, 2026-08-28: <i>"Aura is selected but I am hovering over a source — the Aura
-    /// description takes more room. It is not readable."</i> Exactly right, and the strip was doing it
-    /// on purpose: it printed the SELECTED Form's rule and the HOVERED Source's lines at once, so the
-    /// answer to "what is this gem?" arrived underneath three lines about a Form the player had not
-    /// asked about. Two answers in a space sized for one is the same as no answer.
-    /// </para>
-    /// <para>
-    /// The rule is now ONE SUBJECT AT A TIME, and the cursor picks it. Every hoverable thing the
-    /// composer offers answers here — a Source gem, a Form glyph, a Vow row, a keystone chip — which
-    /// makes the strip one predictable place to look rather than a panel with moods of its own. The
-    /// last two live in the neighbouring columns; their rows already light up under the cursor, and
-    /// this is where the sentence behind the light goes.
-    /// </para>
-    /// <para>
-    /// There is no keyboard focus to follow: this composer is pointer-driven (<see cref="Update"/>
-    /// takes a mouse position and a wheel and no keys at all), so hover IS the focus. If a focused
-    /// cell is ever added, it belongs in this one method and nowhere else.
-    /// </para>
-    /// </remarks>
-    private Explanation ReadingFor(Point hit, PlayerLoadout.SkillChoice cur, Source? hoverSource, Form? hoverForm)
-    {
-        if (hoverSource is { } hs)
-            return new Explanation($"SOURCE: {SourceName(hs)}",
-                                   $"{BuildGlossary.SourceLine(hs)}. {BuildGlossary.MatchupLine(hs)}.", false);
-
-        if (hoverForm is { } hf)
-            return new Explanation($"FORM: {FormName(hf)} — {BuildGlossary.FormHeadline(hf)}",
-                                   BuildGlossary.FormRule(hf), false);
-
-        var known = Known;
-        for (var r = 0; r < VowRows; r++)
-        {
-            var idx = _vowScroll + r;
-            // _vowScroll is clamped in DrawVows, which runs AFTER this — so the bound is checked here
-            // rather than assumed. Same for the keystone window below.
-            if (idx < known.Count && VowRow(r, OpenBindRow(known)).Contains(hit))
-                return new Explanation(Titled("VOW", known[idx].Name), known[idx].Description, false);
-        }
-
-        var learned = DustEffects.LearnedKeystones(Tree);
-        for (var i = 0; i < KeystoneRows; i++)
-        {
-            var idx = _keystoneScroll + i;
-            if (idx < learned.Count && KeystoneChip(i).Contains(hit))
-                return new Explanation(Titled("KEYSTONE", learned[idx].Name), learned[idx].Blurb, false);
-        }
-
-        // NOTHING UNDER THE CURSOR — the skill being edited. Both halves, because a skill IS both, and
-        // this is the only reading where the player has not pointed at one of them.
-        return new Explanation(
-            $"YOUR SKILL: {SourceName(cur.Source)} {FormName(cur.Form)} — {BuildGlossary.FormHeadline(cur.Form)}",
-            $"{BuildGlossary.FormRule(cur.Form)} {BuildGlossary.SourceLine(cur.Source)}.", true);
-    }
-
-    /// <summary>
-    /// The description strip: a title line, a paragraph, and never a second of either.
-    /// </summary>
-    /// <remarks>
-    /// The playtest's flattest sentence was "I do not know what the skills do, or what difference the
-    /// ones I picked make", and it was a fair description of this screen: it asked for four picks out
-    /// of thirty-six combinations and printed only their names. The text is <see cref="BuildGlossary"/>,
-    /// in Core, derived from the same constants the fight reads — so a retuned cooldown cannot leave a
-    /// lie behind on this panel. WHICH of those strings the strip shows is decided in one place, and
-    /// this is not it: see <see cref="ReadingFor"/>.
-    /// </remarks>
-    /// <summary>The explanation card and where the cursor was, recorded by the picker for Draw.</summary>
-    private (Explanation What, Rectangle Cell)? _card;
-
-    /// <summary>
-    /// The hovered option's explanation, on a card beside the cursor.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// This replaces a strip across the foot of the picker (playtest 2026-08-28: "açıklamaların altta
-    /// bir bölümde değil de seçeneğe hover yapılınca hover paneliyle çıkması"). The strip had the
-    /// reader looking 400px away from the thing they were asking about, and it cost the panel the
-    /// height that now belongs to the cells.
-    /// </para>
-    /// <para>
-    /// Its own drawing rather than <see cref="UiKit.HoverTip"/>: this card carries a TITLE as well as a
-    /// paragraph, and the title is the half that says which of twelve options is being explained.
-    /// Flipped away from the screen edges the same way, so a card on the last column is never clipped.
-    /// </para>
-    /// <para>
-    /// NOTHING IS HOVER-ONLY HERE, which the project forbids. Every cell still carries its name, its
-    /// affinity chip and its gear mark, the foot of the panel names the slot being edited, and the
-    /// left column's readout answers "is this better than what I have" without a cursor. The card is
-    /// the long form, not the only form.
-    /// </para>
-    /// </remarks>
-    private void DrawCard(SpriteBatch b, Explanation what, Rectangle cell)
-    {
-        const int width = 460, pad = 16;
-        var lines = _ui.WrapBig(what.Body, width - pad * 2, UiTypography.Secondary);
-        var h = pad * 2 + 30 + lines.Count * 21;
-
-        // BESIDE THE PANEL, level with the row being asked about. Anchoring to the cell's own right
-        // edge would still overlap the two cells beside it, and the grid is what the player is
-        // reading — so the card clears the whole picker and lines up with the cell instead.
-        var x = PickPanel.Right + 12;
-        if (x + width > 1908) x = PickPanel.X - width - 12;
-        var y = Math.Clamp(cell.Center.Y - h / 2, 12, 1068 - h);
-
-        _ui.Fill(b, new Rectangle(x + 5, y + 6, width, h), new Color(0, 0, 0) * 0.5f);
-        _ui.Fill(b, new Rectangle(x, y, width, h), new Color(0x15, 0x10, 0x22));
-        Outline(b, new Rectangle(x, y, width, h), new Color(0x3A, 0x30, 0x50), 2);
-        // The accent bar carries the same colour language as the cell it came from: gold for the thing
-        // you have chosen, bone for one you are only asking about.
-        _ui.Fill(b, new Rectangle(x, y, width, 3), what.IsSelection ? Gold : Bone * 0.7f);
-
-        _ui.TextBig(b, FitBig(what.Title, width - pad * 2, UiTypography.Body), x + pad, y + pad,
-                    what.IsSelection ? Gold : Bone, UiTypography.Body);
-        var ty = y + pad + 30;
-        foreach (var line in lines) { _ui.TextBig(b, line, x + pad, ty, Bone, UiTypography.Secondary); ty += 21; }
-    }
 
     /// <summary>
     /// A title line: what kind of thing it is, then its name — unless the name already says the kind.
@@ -1956,7 +1742,7 @@ public sealed class WeaveScreen
             // left and the button has to say which one it means.
             var label = !canBind ? "PICK A SLOT ON THE LEFT"
                 : already ? $"BREAK THIS VOW ON SLOT {_slot + 1}"
-                : $"BIND TO SLOT {_slot + 1}  ·  {SourceName(skills[_slot].Source)} {FormName(skills[_slot].Form)}";
+                : $"BIND TO SLOT {_slot + 1}  ·  {SkillCatalogue.Find(skills[_slot].SkillId)?.Name ?? "EMPTY"}";
             _ui.TextCenter(b, Fit(label, btn.Width - 20), btn.Center.X, btn.Y + 13,
                            !canBind ? Dim : already ? Ember : over ? Gold : Bone);
         }

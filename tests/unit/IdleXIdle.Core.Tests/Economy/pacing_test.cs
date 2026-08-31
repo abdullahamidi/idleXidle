@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -35,14 +34,16 @@ public class PacingTest
 
     private static readonly ExpeditionTuning T = ExpeditionTuning.Default;
 
-    /// <summary>The build a brand-new save starts with: four Body Strikes, no Vows, no tree.</summary>
+    /// <summary>
+    /// Four Body BLOWs, no Vows, no tree — the full four-slot baseline these probes were tuned
+    /// against. (A brand-new save now opens with a single slot and earns the rest; the probe keeps
+    /// the four-slot shape so its measured bands stay comparable.)
+    /// </summary>
     private static Build StarterBuild()
     {
         var b = new Build();
         for (var i = 0; i < 4; i++)
-            b.Weave(new EquippedSkill(
-                new WovenAbility { Name = "S", Source = Source.Body, Form = Form.Strike },
-                FormBehaviour.BaseCooldownMs(Form.Strike)));
+            b.Weave(TestBuilds.Skill("hammer_blow"));
         return b;
     }
 
@@ -83,7 +84,7 @@ public class PacingTest
     {
         var run = PlayFresh(stopAtWave: 20);
 
-        _out.WriteLine("A FRESH CHAMPION, no gear, no tree, four Body Strikes:");
+        _out.WriteLine("A FRESH CHAMPION, no gear, no tree, four Body BLOWs:");
         for (var i = 0; i < run.WaveMs.Count; i++)
             _out.WriteLine($"   wave {i + 1,3}   {run.WaveMs[i] / 1000f,6:0.0}s"
                            + (WaveScaling.IsBossWave(i + 1, T) ? "   (boss)" : ""));

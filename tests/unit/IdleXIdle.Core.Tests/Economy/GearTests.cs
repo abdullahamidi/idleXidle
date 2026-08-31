@@ -1,5 +1,4 @@
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -108,9 +107,7 @@ public class GearTests
         static long Damage(Hunter hunter)
         {
             var build = new Build();
-            build.Weave(new EquippedSkill(
-                new WovenAbility { Name = "STRIKE", Source = Source.Nature, Form = Form.Strike },
-                FormBehaviour.BaseCooldownMs(Form.Strike)));
+            build.Weave(TestBuilds.Skill("hammer_blow", source: Source.Nature));
             return DamageBench.Measure(build, hunter).TotalDamage;
         }
 

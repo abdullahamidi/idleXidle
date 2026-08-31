@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -24,8 +23,9 @@ namespace IdleXIdle.Core.Tests.Builds;
 /// <para>
 /// It asserts the whole chain, not the field. A <c>StartingSkillId</c> that composes to nothing is the
 /// dormant-feature failure this project produces most reliably: declared on the champion, shown on its
-/// card, and never once woven. So each champion's skill is woven the way a player would reach it — its
-/// style's Form, in the slot kind its own kind demands — and the composed build has to contain it.
+/// card, and never once woven. So each champion's skill is woven the way a player would reach it — the
+/// skill's own id in a pick, against a tree that has taught nothing — and the composed build has to
+/// contain it.
 /// </para>
 /// </remarks>
 public class ChampionStartingSkillTests
@@ -45,17 +45,12 @@ public class ChampionStartingSkillTests
             var def = SkillCatalogue.Find(c.StartingSkillId!);
             Assert.True(def is not null, $"{c.Name} names {c.StartingSkillId}, which is not a skill.");
 
-            // The door a player would use: the style's Form, and the slot kind the skill demands.
-            // Six of the twelve have no Form of their own and are reached through their style's other
-            // Form plus the ACTIVE/PASSIVE switch, which is exactly what this walks.
-            var form = def!.LegacyForm
-                       ?? (def.TakesABeat
-                               ? SkillCatalogue.PassiveOf(def.Style)
-                               : SkillCatalogue.ActiveOf(def.Style)).LegacyForm!.Value;
-
+            // The door a player would use: the skill's own id in a pick — the id is the identity
+            // now, and a named skill brings its own slot kind. The tree is BARE, so the only thing
+            // that can carry this past the composer's taught-gate is the champion's birthright.
             var build = BuildComposer.Compose(
                 new MemoryDustTree(), new MasteryTree(), c,
-                skills: new[] { new BuildComposer.SkillPick(Source.Body, form, null, "a", !def.TakesABeat) },
+                skills: new[] { new BuildComposer.SkillPick(Source.Body, null, SkillId: def!.Id) },
                 keystoneIds: Array.Empty<string>(), slotCapacity: 4);
 
             _out.WriteLine($"{c.Name,-20} brings {def.Name,-6} ({(def.TakesABeat ? "ACTIVE" : "PASSIVE")})"

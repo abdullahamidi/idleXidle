@@ -5,7 +5,8 @@ using Xunit;
 
 // NOTE: Tests.Forging, not Tests.Forge — a Tests.Forge namespace SHADOWS the Forge class itself, so
 // every call in this file would resolve to the namespace and fail to compile. The same trap already
-// forced Core.Forge -> Core.Forging and Core.Weaving -> Core.Abilities.
+// forced Core.Forge -> Core.Forging and, in its day, Core.Weaving -> Core.Abilities (a namespace
+// since deleted outright with the Form era, P3-final).
 namespace IdleXIdle.Core.Tests.Forging;
 
 /// <summary>

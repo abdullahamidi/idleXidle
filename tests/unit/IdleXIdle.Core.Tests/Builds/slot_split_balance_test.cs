@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
+using IdleXIdle.Core.Persistence;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Expeditions;
 using IdleXIdle.Core.Prestige;
@@ -38,38 +38,45 @@ public class SlotSplitBalanceTests
 
     private static readonly ExpeditionTuning T = ExpeditionTuning.Default;
 
-    /// <summary>The four beat-taking Forms — the only loadout the pre-rework model could hold.</summary>
-    private static readonly (string Name, Form Form)[] AllCasters =
-    {
-        ("a", Form.Strike), ("b", Form.Projectile), ("c", Form.Mark), ("d", Form.Transformation),
-    };
+    /// <summary>
+    /// The four beat-taking styles — the only loadout the pre-rework model could hold. Named in the
+    /// Form-era vocabulary on purpose: these fixtures describe PRE-REWORK loadouts, and the frozen
+    /// migration walk (<see cref="LegacySkillForm"/>) is what turns a Form name into a skill id.
+    /// </summary>
+    private static readonly string[] AllCasters = { "Strike", "Projectile", "Mark", "Transformation" };
 
     /// <summary>Two casters and two passives that both pay — what a player would actually build.</summary>
-    private static readonly (string Name, Form Form)[] Mixed =
-    {
-        ("a", Form.Strike), ("b", Form.Projectile), ("c", Form.Aura), ("d", Form.Trap),
-    };
+    private static readonly string[] Mixed = { "Strike", "Projectile", "Aura", "Trap" };
 
     /// <summary>
     /// The pre-rework build for a given loadout: four undifferentiated slots, each skill in its
     /// natural kind, and no per-kind budget at all.
     /// </summary>
-    private static Build OldModel((string Name, Form Form)[] loadout)
+    private static Build OldModel(string[] forms)
     {
         var b = new Build();   // an unset per-kind capacity is the whole budget — the old behaviour
-        foreach (var (n, f) in loadout)
-            b.Weave(new EquippedSkill(
-                new WovenAbility { Name = n, Source = Source.Body, Form = f },
-                FormBehaviour.BaseCooldownMs(f)));
+        foreach (var f in forms)
+            b.Weave(TestBuilds.Skill(
+                LegacySkillForm.Resolve(f, LegacySkillForm.IsNaturallyPassive(f))!, Source.Body));
         return b;
     }
 
-    /// <summary>The build a real player gets now: two actives, two passives, through the composer.</summary>
-    private static Build TwoAndTwo((string Name, Form Form)[] loadout)
-        => BuildComposer.Compose(
+    /// <summary>
+    /// The build a real player gets now: two actives, two passives, through the composer. The
+    /// loadout's rows go through the FROZEN restore walk first — which of a style's two skills each
+    /// pre-rework slot lands on — exactly the path <c>PlayerLoadout.Restore</c> sends an old save
+    /// down, so the "after" side is the migration a real player receives, not a fixture's guess.
+    /// </summary>
+    private static Build TwoAndTwo(string[] forms)
+    {
+        var kinds = LegacySkillForm.SlotKinds(
+            forms.Select(f => ((string?)f, (bool?)null, (string?)null)).ToList(), capacity: 4);
+        return BuildComposer.Compose(
             new MemoryDustTree(), Taught.Everything(), character: null,
-            skills: loadout.Select(l => new BuildComposer.SkillPick(Source.Body, l.Form, null, l.Name)).ToList(),
+            skills: forms.Select((f, i) => new BuildComposer.SkillPick(
+                Source.Body, null, SkillId: LegacySkillForm.Resolve(f, kinds[i]))).ToList(),
             keystoneIds: Array.Empty<string>(), slotCapacity: 4);
+    }
 
     private sealed record Run(int Reached, float Seconds);
 

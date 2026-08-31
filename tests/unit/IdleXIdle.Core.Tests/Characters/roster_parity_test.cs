@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Economy;
@@ -10,9 +9,9 @@ using IdleXIdle.Core.Prestige;
 using Xunit;
 using Xunit.Abstractions;
 
-// Aliased, not imported. `Source` lives in Core.Sources, not Core.Abilities where a skill's Source
-// property would suggest, and this file's namespace sits under ...Tests.Characters where the test
-// assembly's own sub-namespaces shadow the short name. The alias is the one spelling that survives both.
+// Aliased, not imported. `Source` lives in Core.Sources, and this file's namespace sits under
+// ...Tests.Characters where the test assembly's own sub-namespaces shadow the short name. The
+// alias is the one spelling that survives both.
 using CoreSource = IdleXIdle.Core.Sources.Source;
 
 namespace IdleXIdle.Core.Tests.Characters;
@@ -161,8 +160,7 @@ public class RosterParityTest
     /// (single Source) met on every build — the vow channel is judged identically for everyone.
     /// </summary>
     private static BuildComposer.SkillPick Pick(SkillDef def, Vow? vow) =>
-        new(CoreSource.Nature, def.LegacyForm ?? Form.Strike, vow?.Id, def.Name,
-            Passive: !def.TakesABeat, SkillId: def.Id);
+        new(CoreSource.Nature, vow?.Id, Passive: !def.TakesABeat, SkillId: def.Id);
 
     /// <summary>
     /// Compose a build the way the GAME composes one — through <see cref="BuildComposer.Compose"/>.

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -47,10 +46,8 @@ public class SplinterPaysTests
             Shape = SkillShape.None,
             ExtraTriggers = new HashSet<BuildTrigger>(triggers),
         };
-        foreach (var f in new[] { Form.Strike, Form.Projectile })
-            b.Weave(new EquippedSkill(
-                new WovenAbility { Name = f.ToString(), Source = Source.Nature, Form = f },
-                FormBehaviour.BaseCooldownMs(f)));
+        foreach (var id in new[] { "hammer_blow", "volley_spray" })
+            b.Weave(TestBuilds.Skill(id, Source.Nature));
         return b;
     }
 

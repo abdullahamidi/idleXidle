@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -56,20 +55,20 @@ public class BalanceSweepTests
     // Mono-Spirit is the one neutral choice: the prime is only consumed by a DIFFERENT Source's
     // cast, so a single-source build never cashes it. Nature (the old default) now heals 3% of
     // everything dealt, which compressed the vow-worth medians into ties.
-    private static EquippedSkill Sk(Form form, Source src = Source.Spirit)
-        => new(new WovenAbility { Name = form.ToString(), Source = src, Form = form, Vow = null },
-               FormBehaviour.BaseCooldownMs(form));
+    private static EquippedSkill Sk(string skillId, Source src = Source.Spirit, Vow? vow = null)
+        => TestBuilds.Skill(skillId, src, vow);
+
+    /// <summary>
+    /// The skills the Form-era Strike/Projectile/Aura/Mark quartet fought with — three actives and
+    /// the MIRE field — so every threshold measured under the old fixture still means the same fight.
+    /// </summary>
+    private static readonly string[] Quartet = { "hammer_blow", "volley_spray", "field_mire", "sign_call" };
 
     /// <summary>A four-skill build — the shape a real loadout has — with a given shape applied.</summary>
     private static Build BuildWith(SkillShape shape, BuildMods? mods = null, Vow? vow = null)
     {
         var b = new Build { PassiveMods = mods ?? BuildMods.None, Shape = shape };
-        foreach (var f in new[] { Form.Strike, Form.Projectile, Form.Aura, Form.Mark })
-            b.Weave(vow is null
-                ? Sk(f)
-                : new EquippedSkill(
-                    new WovenAbility { Name = f.ToString(), Source = Source.Spirit, Form = f, Vow = vow },
-                    FormBehaviour.BaseCooldownMs(f)));
+        foreach (var id in Quartet) b.Weave(Sk(id, vow: vow));
         return b;
     }
 
@@ -366,15 +365,12 @@ public class BalanceSweepTests
     {
         var hunter = MidCareerHunter();
         var geared = new BuildMods(3.0f, 1.4f, 1f, 1f, 1f);
-        var forms = new[] { Form.Strike, Form.Projectile, Form.Aura, Form.Mark };
+        var quartet = Quartet;
 
-        Build Weave(SkillShape shape, IEnumerable<Form> fs, Source source = Source.Spirit, BuildMods? mods = null)
+        Build Weave(SkillShape shape, IEnumerable<string> ids, Source source = Source.Spirit, BuildMods? mods = null)
         {
             var b = new Build { PassiveMods = mods ?? geared, Shape = shape };
-            foreach (var f in fs)
-                b.Weave(new EquippedSkill(
-                    new WovenAbility { Name = f.ToString(), Source = source, Form = f, Vow = v },
-                    FormBehaviour.BaseCooldownMs(f)));
+            foreach (var id in ids) b.Weave(TestBuilds.Skill(id, source, v));
             return b;
         }
 
@@ -382,20 +378,20 @@ public class BalanceSweepTests
         {
             // Static-cost Vows demand nothing, so any build measures them honestly.
             case VowDemand.None:
-                return (Weave(SkillShape.None, forms), hunter);
+                return (Weave(SkillShape.None, quartet), hunter);
 
-            // ONE FORM, not one skill: two Strikes keep a rotation under the beat model (2026-08-27).
-            // And UNGEARED damage: overkill is discarded, and with the ×3 gear a Strike already killed
+            // ONE STYLE, not one skill: two BLOWs keep a rotation under the beat model (2026-08-27).
+            // And UNGEARED damage: overkill is discarded, and with the ×3 gear a BLOW already killed
             // every creature it touched, so doubling it bought nothing — the harness measured 18 deep
             // with the Vow and 18 without, which is the fixture's saturation, not the Vow's worth.
             case VowDemand.SingleStyle:
-                return (Weave(SkillShape.None, new[] { Form.Strike, Form.Strike }, mods: geared with { Damage = 0.4f }), hunter);
+                return (Weave(SkillShape.None, new[] { "hammer_blow", "hammer_blow" }, mods: geared with { Damage = 0.4f }), hunter);
 
             case VowDemand.SingleSource:
-                return (Weave(SkillShape.None, forms), hunter);
+                return (Weave(SkillShape.None, quartet), hunter);
 
             case VowDemand.EveryWeaveFilled:
-                return (Weave(SkillShape.None, forms), hunter);
+                return (Weave(SkillShape.None, quartet), hunter);
 
             // Crit must sit at base, so the Hunter may not have trained FOCUS.
             case VowDemand.NoCritInvestment:
@@ -408,14 +404,14 @@ public class BalanceSweepTests
                              HunterStat.Vitality, HunterStat.Defense, HunterStat.ResonanceAffinity,
                          })
                     for (var i = 0; i < 20; i++) h.Train(stat);
-                return (Weave(SkillShape.None, forms), h);
+                return (Weave(SkillShape.None, quartet), h);
             }
 
             case VowDemand.CadenceAtOrBelow:
-                return (Weave(SkillShape.None with { SkillRate = 0.5f }, forms), hunter);
+                return (Weave(SkillShape.None with { SkillRate = 0.5f }, quartet), hunter);
 
             case VowDemand.CadenceAtOrAbove:
-                return (Weave(SkillShape.None with { SkillRate = 2.0f }, forms), hunter);
+                return (Weave(SkillShape.None with { SkillRate = 2.0f }, quartet), hunter);
 
             // Defence must be ZERO, which no trained Hunter has — so this one is untrained by necessity
             // and its depths are not comparable with the rest. It is still measured against its OWN
@@ -430,16 +426,16 @@ public class BalanceSweepTests
                              HunterStat.Vitality, HunterStat.ResonanceAffinity,
                          })
                     for (var i = 0; i < 20; i++) h.Train(stat);
-                return (Weave(SkillShape.None, forms), h);
+                return (Weave(SkillShape.None, quartet), h);
             }
 
             // The Hunter wears nothing in the fixture, so every slot is already bare.
             case VowDemand.SlotLeftBare:
-                return (Weave(SkillShape.None, forms), hunter);
+                return (Weave(SkillShape.None, quartet), hunter);
 
             // No keystones are socketed on a Build nobody socketed one into.
             case VowDemand.NoKeystone:
-                return (Weave(SkillShape.None, forms), hunter);
+                return (Weave(SkillShape.None, quartet), hunter);
 
             default:
                 return null;
@@ -461,9 +457,7 @@ public class BalanceSweepTests
             // contribution rather than the cost of the demand.
             var bare = new Build { PassiveMods = fx.Build.PassiveMods, Shape = fx.Build.Shape };
             foreach (var s in fx.Build.Skills)
-                bare.Weave(new EquippedSkill(
-                    new WovenAbility { Name = s.Ability.Name, Source = s.Source, Form = s.Form, Vow = null },
-                    FormBehaviour.BaseCooldownMs(s.Form)));
+                bare.Weave(s with { Vow = null });
 
             // Prove the demand IS met before trusting the number.
             var ctx = SoloBattle.DescribeBuild(fx.Build, fx.Hunter);

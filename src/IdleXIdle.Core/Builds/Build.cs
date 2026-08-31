@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Economy;
@@ -197,91 +196,27 @@ public sealed record Keystone
 }
 
 /// <summary>
-/// One equipped skill: the player's own Source x Form x Vow, plus how fast it comes back.
+/// One equipped skill, RESOLVED: the catalogue definition with its variation and reinforcement
+/// deltas already applied, the element it is made of, and the Vow sworn on it.
 /// </summary>
 /// <remarks>
-/// The roster is gone, so a skill is no longer something a creature's Role hands you — it is something
-/// the player WOVE. That is what <c>Core.Abilities</c> was always for, and it is why Form finally
-/// matters: a build is a choice of Forms, and the Vow on each is what it cost to have them.
+/// <para>
+/// <b>The Def is final.</b> The composer applies the player's variation and its bought
+/// reinforcements exactly once, at composition — the fight reads dials off this one record and
+/// never asks who set them. The Form-era shape (a WovenAbility plus a cooldown plus a slot flag)
+/// went with the Form enum itself (P3-final, 2026-08-31): a skill's identity is its catalogue id,
+/// its cadence lives on the def (Beats / IntervalMs / RearmMs), and whether it costs the champion
+/// an action is the def's own kind.
+/// </para>
+/// <para>
+/// SOURCE rides beside the def rather than on it because the element is the player's — the chosen
+/// variation owns it, the woven element is the fallback before that choice — so one def can be
+/// woven as two different elements by two players.
+/// </para>
 /// </remarks>
-public sealed record EquippedSkill(WovenAbility Ability, int CooldownMs, bool? PassiveSlot = null)
+public sealed record EquippedSkill(SkillDef Def, Source Source, Vow? Vow = null)
 {
-    /// <summary>
-    /// Which face of the skill this slot took — the tree's ring 0. Null means "whichever face this
-    /// Form has always had", which is what every call site written before the rework means.
-    /// </summary>
-    /// <remarks>
-    /// A computed fallback rather than <c>false</c>, and the distinction is load-bearing: AURA and
-    /// TRAP have never taken a beat, so defaulting them to their ACTIVE face would silently turn two
-    /// passives into casts and change every fight in the game. The default is the migration bridge —
-    /// eighty-odd call sites keep their exact meaning, and a caller that has a real ring-0 choice
-    /// says so.
-    /// </remarks>
-    public bool Passive => PassiveSlot
-        ?? (FormBehaviour.IsPassive(Form) || FormBehaviour.FiresOnBeingHit(Form));
-
-    public string Name => Ability.Name;
-    public Form Form => Ability.Form;
-    /// <summary>
-    /// What this skill is MADE OF — its element, its matchup on the ring, its signature.
-    /// </summary>
-    /// <remarks>
-    /// THE SKILL'S OWN TREE OWNS IT NOW (designer, 2026-08-30): "Source skillerin ağacında seçim
-    /// olarak gelsin. Her skillin 2 ayrı uyumlu sourcesi olsun. Skill ağacında iki farklı seçenek
-    /// olarak 2 dala ayrılsın ve devam geliştirmeleri bununla bağlantılı geliştirmeler olsun."
-    ///
-    /// The fork was already there — a skill has two variations and three reinforcements hanging off
-    /// whichever one you take — so the Source rides that fork rather than adding a layer. Choosing
-    /// what the skill BECOMES and choosing what it is MADE OF are one decision, and the three
-    /// reinforcements under it are that decision's continuation.
-    ///
-    /// Until a variation is taken the skill falls back to the Source it was woven with, so a
-    /// champion that has not levelled a skill yet still has an element.
-    /// </remarks>
-    public Source Source => Variation?.Source ?? Ability.Source;
-    public Vow? Vow => Ability.Vow;
-
-    /// <summary>
-    /// The catalogue entry behind this skill, resolved through the legacy <see cref="Form"/> bridge.
-    /// </summary>
-    /// <remarks>
-    /// The bridge is deliberate and temporary. <see cref="WovenAbility"/> still carries a Form, so a
-    /// saved build and every existing call site keep working while the rework lands stage by stage;
-    /// once <c>WovenAbility</c> carries a <c>SkillId</c> this becomes a lookup by id and the Form
-    /// column disappears. See <c>design/gdd/skill-slots-and-skill-trees.md</c> §11.
-    /// </remarks>
-    public SkillDef Def
-    {
-        get
-        {
-            // THE ID WINS when the ability carries one (every composed build does, since save
-            // v3); the (Form, Passive) round trip is the fixture-and-legacy fallback only.
-            var def = SkillCatalogue.Find(Ability.SkillId) ?? SkillCatalogue.Resolve(Form, Passive);
-            // THE VARIATION AND ITS REINFORCEMENTS ARE DELTAS ON THE DEFINITION, applied in order.
-            // The fight loop keeps reading one SkillDef and gains no case per variation — which is
-            // what stops twenty-four variations becoming twenty-four branches.
-            if (Variation?.Modify is { } m) def = m(def);
-            foreach (var r in Reinforcements) if (r.Modify is { } rm) def = rm(def);
-            return def;
-        }
-    }
-
-    /// <summary>The variation the player took, or null while this skill's identity is unchosen.</summary>
-    public SkillVariation? Variation { get; init; }
-
-    /// <summary>The reinforcements bought for that variation.</summary>
-    public IReadOnlyList<Reinforcement> Reinforcements { get; init; } = Array.Empty<Reinforcement>();
-
-    /// <summary>
-    /// Does this skill cost the champion its action?
-    /// </summary>
-    /// <remarks>
-    /// <b>This is the number the whole rework turns on.</b> Beat demand is the share of beats claimed
-    /// by a cast, and the basic attack only swings on what is left over
-    /// (<c>SoloBattle</c>: <c>if (onBeat &amp;&amp; !acted)</c>). Four beat-taking skills demanded ~0.80 of
-    /// the beats, so the champion's own swing clip almost never played — which is the animation
-    /// chaos, the effect pile-up and the jammed cooldown knob, all from one cause.
-    /// </remarks>
+    /// <summary>Does this skill cost the champion its action? The def's own kind decides.</summary>
     public bool TakesABeat => Def.TakesABeat;
 }
 
@@ -469,7 +404,8 @@ public sealed class Build
         return true;
     }
 
-    public bool Unweave(string abilityName) => _skills.RemoveAll(s => s.Name == abilityName) > 0;
+    /// <summary>Unequip a skill by its catalogue id — the only name a skill has left.</summary>
+    public bool Unweave(string skillId) => _skills.RemoveAll(s => s.Def.Id == skillId) > 0;
 
     /// <summary>
     /// How many keystones a build may socket at once.

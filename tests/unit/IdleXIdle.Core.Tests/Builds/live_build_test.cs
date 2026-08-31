@@ -1,5 +1,4 @@
 using System;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -17,16 +16,16 @@ namespace IdleXIdle.Core.Tests.Builds;
 /// </summary>
 public class LiveBuildTests
 {
-    private static EquippedSkill Sk(Form form)
-        => new(new WovenAbility { Name = form.ToString(), Source = Source.Nature, Form = form, Vow = null },
-               FormBehaviour.BaseCooldownMs(form));
+    private static EquippedSkill Sk(string id) => TestBuilds.Skill(id, Source.Nature);
 
     private static Build Bare() => new() { PassiveMods = BuildMods.None };
 
     private static Build Armed()
     {
         var b = new Build { PassiveMods = BuildMods.None };
-        foreach (var f in new[] { Form.Strike, Form.Projectile, Form.Aura, Form.Trap }) b.Weave(Sk(f));
+        // Two actives and two passives — the same spread the Form-era fixture wove (Strike,
+        // Projectile, and the naturally-passive Aura and Trap).
+        foreach (var id in new[] { "hammer_blow", "volley_spray", "field_mire", "snare_jaws" }) b.Weave(Sk(id));
         return b;
     }
 
@@ -81,25 +80,25 @@ public class LiveBuildTests
     [Fact]
     public void test_live_build_replace_forgets_only_the_swapped_slots_cooldown()
     {
-        // Arrange — Strike in slot 0, Projectile in slot 1 (both ACTIVE forms — passives and
-        // on-hit forms never get a ready-at); fight until both slots carry one.
-        Build Two(Form first)
+        // Arrange — BLOW in slot 0, SPRAY in slot 1 (both ACTIVE skills — Fields and Reactions
+        // never get a ready-at); fight until both slots carry one.
+        Build Two(string firstId)
         {
             var b = new Build { PassiveMods = BuildMods.None };
-            b.Weave(Sk(first)); b.Weave(Sk(Form.Projectile));
+            b.Weave(Sk(firstId)); b.Weave(Sk("volley_spray"));
             return b;
         }
         var champ = new Champion { MaxHealth = 400, Health = 400 };
-        var run = new SoloExpedition(Two(Form.Strike), champ, new Hunter(), 120f, 9f,
+        var run = new SoloExpedition(Two("hammer_blow"), champ, new Hunter(), 120f, 9f,
             ExpeditionTuning.Default, enemySource: null, rng: new Random(7));
         // One cast at a time — a short wave may end before the second slot ever fires, so fight until both have.
-        // Strike and Projectile count their cooldowns in BEATS (2026-08-27), so the carried table is ReadyAtBeat.
+        // Actives count their cooldowns in BEATS (2026-08-27), so the carried table is ReadyAtBeat.
         for (var w = 0; w < 20 && !(champ.ReadyAtBeat.ContainsKey(0) && champ.ReadyAtBeat.ContainsKey(1)) && !run.Over; w++) run.PushWave();
         Assert.True(champ.ReadyAtBeat.ContainsKey(0) && champ.ReadyAtBeat.ContainsKey(1), "both slots should carry a cooldown once both have cast");
         var secondReady = champ.ReadyAtBeat[1];
 
-        // Act — slot 0 becomes a Mark, slot 1 stays a Projectile.
-        run.ReplaceBuild(Two(Form.Mark));
+        // Act — slot 0 becomes CALL, slot 1 stays a SPRAY.
+        run.ReplaceBuild(Two("sign_call"));
 
         // Assert — the swapped slot starts fresh; the unchanged slot keeps its carried cooldown.
         Assert.False(champ.ReadyAt.ContainsKey(0) || champ.ReadyAtBeat.ContainsKey(0), "the swapped-in skill must not inherit the old slot's cooldown");

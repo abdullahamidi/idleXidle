@@ -2,7 +2,6 @@ using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Economy;
@@ -317,10 +316,10 @@ public sealed class StatsScreen
             }
             case HunterStat.ResonanceAffinity:
             {
-                // ResonanceWeaving.BasePower: a skill's base power = FormBaseValue × (1 + 0.008 × RESONANCE),
-                // read by SoloBattle through FormBehaviour.BaseDamage for every skill hit.
+                // SkillCatalogue.PoweredBase: a skill's base = BasePower × (1 + ResonancePerPoint × R),
+                // read by SoloBattle for every skill hit.
                 var v = hunter.ValueOf(stat);
-                var per = 100f * WeavingTuning.Default.SourceScalingCoefficient;
+                var per = 100f * SkillCatalogue.ResonancePerPoint;
                 return ($"SKILLS START +{per * v:0}% STRONGER", new[]
                 {
                     $"RESONANCE is your skills' damage. Every point adds {per:0.0}% to a skill's base power, before anything else multiplies it. The basic attack does not read it; it reads MIGHT.",
@@ -635,8 +634,4 @@ public sealed class StatsScreen
         _ui.TextBig(b, "nav STATS  merged training + respec", 60, 112, Gold, UiTypography.Secondary);
     }
 
-    private static string FormShort(Form f) => f switch
-    {
-        Form.Projectile => "VOLLEY", Form.Transformation => "MORPH", _ => f.ToString().ToUpperInvariant(),
-    };
 }

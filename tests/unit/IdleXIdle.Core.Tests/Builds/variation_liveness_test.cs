@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -71,24 +70,14 @@ public class VariationLivenessTests
             Assert.True(progress.ChooseVariation(def, variation), $"could not take {variation}");
         }
 
-        // The skill under test, in the slot its kind demands, beside a plain Strike so the champion
-        // can still fight when the skill itself deals nothing.
+        // The skill under test, named by its id — the only identity a pick has left, and exactly how
+        // a player reaches it — beside a plain BLOW so the champion can still fight when the skill
+        // itself deals nothing. A named skill brings its own kind, so it lands in the slot it demands.
         var picks = new List<BuildComposer.SkillPick>
         {
-            new(Source.Body, Form.Strike, null, "filler"),
+            new(Source.Body, null, SkillId: SkillCatalogue.ActiveOf(Style.Hammer).Id),
+            new(Source.Body, null, SkillId: def.Id),
         };
-        if (def.LegacyForm is { } lf)
-            picks.Add(new BuildComposer.SkillPick(Source.Body, lf, null, "subject", !def.TakesABeat));
-        else
-        {
-            // Six of the twelve have no legacy Form: they are reached by putting their style's Form in
-            // the other slot, which is exactly how a player reaches them.
-            var sibling = def.TakesABeat
-                ? SkillCatalogue.PassiveOf(def.Style)
-                : SkillCatalogue.ActiveOf(def.Style);
-            picks.Add(new BuildComposer.SkillPick(Source.Body, sibling.LegacyForm!.Value, null, "subject",
-                                                  !def.TakesABeat));
-        }
 
         return BuildComposer.Compose(new MemoryDustTree(), EveryRoadWalked(), character: null,
                                      skills: picks, keystoneIds: Array.Empty<string>(),

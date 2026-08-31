@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Expeditions;
@@ -59,15 +58,9 @@ public class PassiveTreeTests
     {
         var hunter = new Hunter();
         var champ = new Champion { MaxHealth = 500, Health = 500 };
-        // Spelled out from the root, and it has to be: inside an object initializer `Source = Source.Body`
-        // resolves the right-hand side against the PROPERTY, and the obvious repair — `Abilities.Source`
-        // — then binds to Tests.Abilities instead. Two shadows deep, the same family of trap that forced
-        // Core.Forge to become Core.Forging.
-        build.Weave(new EquippedSkill(
-            new WovenAbility
-            {
-                Name = "cut", Source = global::IdleXIdle.Core.Sources.Source.Body, Form = Form.Strike,
-            }, 1_500));
+        // One plain single-target active (BLOW), so every keystone ratio below is measured through
+        // the same output path.
+        build.Weave(TestBuilds.Skill("hammer_blow"));
 
         // A wall: enough health to survive the ceiling, and it never swings back. What comes out is a
         // clean measure of output and nothing else.

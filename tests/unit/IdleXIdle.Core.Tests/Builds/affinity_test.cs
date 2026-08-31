@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Expeditions;
@@ -32,17 +31,10 @@ public class AffinityTest
     public AffinityTest(ITestOutputHelper output) => _out = output;
 
     /// <summary>
-    /// One equipped copy of a catalogue skill. The id is the identity; the Form column is only the
-    /// legacy bridge's required field, and the ms cooldown is never read by the sim (an Active counts
-    /// its own <c>Beats</c>, a Reaction re-arms on its own <c>RearmMs</c>).
+    /// One equipped copy of a catalogue skill at its base line. The id is the identity; cadence is
+    /// the def's own (an Active counts its <c>Beats</c>, a Reaction re-arms on its <c>RearmMs</c>).
     /// </summary>
-    private static EquippedSkill Skill(string id)
-    {
-        var def = SkillCatalogue.ById(id);
-        return new EquippedSkill(
-            new WovenAbility { Name = def.Name, Source = Source.Body, Form = def.LegacyForm ?? Form.Strike, SkillId = id },
-            CooldownMs: 0);
-    }
+    private static EquippedSkill Skill(string id) => TestBuilds.Skill(id);
 
     /// <summary>A build woven entirely from one style's active skill, optionally with an affinity declared.</summary>
     private static Build Of(Style style, Style? affinity, int skills = 4)

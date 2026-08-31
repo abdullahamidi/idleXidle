@@ -1,8 +1,6 @@
 using System;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
-using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Encounters;
@@ -17,16 +15,7 @@ namespace IdleXIdle.Core.Tests.Expeditions;
 /// </summary>
 public class RunReportTests
 {
-    private static EquippedSkill Sk(Form form)
-        => new(new WovenAbility { Name = form.ToString(), Source = Source.Nature, Form = form, Vow = null },
-               FormBehaviour.BaseCooldownMs(form));
-
-    private static Build BuildOf(params Form[] forms)
-    {
-        var b = new Build();
-        foreach (var f in forms) b.Weave(Sk(f));
-        return b;
-    }
+    private static Build BuildOf(params string[] skillIds) => TestBuilds.Of(skillIds);
 
     private static RunReport RunIn(string region, Build build, int hp = 600, int cap = 90)
     {
@@ -53,16 +42,16 @@ public class RunReportTests
     [Fact]
     public void test_a_small_hit_build_is_told_that_armour_is_the_problem()
     {
-        var spread = RunIn("cinderworks", BuildOf(Form.Aura, Form.Projectile));
-        // Strike + Transformation, not Trap + Strike: card-true JAWS (P3c) reflects half the BITE,
-        // which against this fixture's biters is the smallest hit in the game — it dragged the
-        // "large-hit" build's absorbed share up to the small-hit build's and erased the very gap
-        // this test exists to see. BLOW (500) and DRINK (260) are the honest large hits.
-        var weight = RunIn("cinderworks", BuildOf(Form.Strike, Form.Transformation));
+        var spread = RunIn("cinderworks", BuildOf("field_mire", "volley_spray"));
+        // BLOW + DRINK, not JAWS + BLOW: card-true JAWS reflects half the BITE, which against this
+        // fixture's biters is the smallest hit in the game — it dragged the "large-hit" build's
+        // absorbed share up to the small-hit build's and erased the very gap this test exists to
+        // see. BLOW (500) and DRINK (260) are the honest large hits.
+        var weight = RunIn("cinderworks", BuildOf("hammer_blow", "drain_drink"));
 
         // 1.25, from 1.4 (2026-08-27): under the beat model the basic attack — a small hit — is a third
-        // of BOTH builds' blows, and the Projectile is "every other beat" at 66, so the two shares sit
-        // closer (measured 39% against 29%). The ordering is the claim; the margin is one of noise.
+        // of BOTH builds' blows, and SPRAY splits its cast into five small arrows, so the two shares sit
+        // closer than the raw multiplier suggests. The ordering is the claim; the margin is one of noise.
         Assert.True(
             spread.AbsorbedFraction > weight.AbsorbedFraction * 1.25f,
             $"Armour ate {spread.AbsorbedFraction:P0} of the small-hit build and " +
@@ -76,8 +65,8 @@ public class RunReportTests
     {
         // The Hollow's opening band, where the waves are swarms: reach is creatures struck per cast, and
         // a band of lone Bruisers (where both runs died under the beat model) caps it at 1.00 for anyone.
-        var single = RunIn("verdant_hollow", BuildOf(Form.Trap, Form.Strike), cap: 8);
-        var multi = RunIn("verdant_hollow", BuildOf(Form.Aura, Form.Projectile), cap: 8);
+        var single = RunIn("verdant_hollow", BuildOf("snare_jaws", "hammer_blow"), cap: 8);
+        var multi = RunIn("verdant_hollow", BuildOf("field_mire", "volley_spray"), cap: 8);
 
         Assert.True(
             multi.TargetsPerActivation > single.TargetsPerActivation,
@@ -90,7 +79,7 @@ public class RunReportTests
     [Fact]
     public void test_the_report_names_the_wave_that_ended_the_run()
     {
-        var r = RunIn("marrow_wastes", BuildOf(Form.Strike));
+        var r = RunIn("marrow_wastes", BuildOf("hammer_blow"));
 
         Assert.True(r.WallWave > 0);
         Assert.True(r.WallCreatures > 0);
@@ -112,8 +101,8 @@ public class RunReportTests
         foreach (var region in new[] { "cinderworks", "umbral_reach", "marrow_wastes", "still_archive" })
             foreach (var build in new[]
                      {
-                         BuildOf(Form.Trap), BuildOf(Form.Aura),
-                         BuildOf(Form.Strike, Form.Projectile), BuildOf(Form.Transformation),
+                         BuildOf("snare_jaws"), BuildOf("field_mire"),
+                         BuildOf("hammer_blow", "volley_spray"), BuildOf("drain_drink"),
                      })
             {
                 var verdict = RunIn(region, build).Verdict().ToLowerInvariant();
@@ -131,7 +120,7 @@ public class RunReportTests
     [Fact]
     public void test_measurements_are_scoped_to_the_last_band()
     {
-        var r = RunIn("verdant_hollow", BuildOf(Form.Strike, Form.Projectile), hp: 4000);
+        var r = RunIn("verdant_hollow", BuildOf("hammer_blow", "volley_spray"), hp: 4000);
 
         Assert.True(r.SampledWaves > 0);
         Assert.True(r.SampledWaves <= Bands.WavesPerBand,
@@ -143,8 +132,8 @@ public class RunReportTests
     [Fact]
     public void test_the_diff_reports_what_changed_between_runs()
     {
-        var before = RunIn("cinderworks", BuildOf(Form.Aura, Form.Projectile));
-        var after = RunIn("cinderworks", BuildOf(Form.Trap, Form.Strike));
+        var before = RunIn("cinderworks", BuildOf("field_mire", "volley_spray"));
+        var after = RunIn("cinderworks", BuildOf("snare_jaws", "hammer_blow"));
 
         var lines = after.DiffAgainst(before).ToList();
 
@@ -156,8 +145,8 @@ public class RunReportTests
     [Fact]
     public void test_no_diff_across_regions()
     {
-        var a = RunIn("cinderworks", BuildOf(Form.Strike));
-        var b = RunIn("umbral_reach", BuildOf(Form.Strike));
+        var a = RunIn("cinderworks", BuildOf("hammer_blow"));
+        var b = RunIn("umbral_reach", BuildOf("hammer_blow"));
 
         Assert.Empty(b.DiffAgainst(a));
     }

@@ -294,7 +294,7 @@ public sealed record SavedChest
     public string? Gift { get; init; }
 }
 
-/// <summary>One woven skill in the saved build — Source x Form x Vow, all by name/id so it survives.</summary>
+/// <summary>One woven skill in the saved build — the skill's id, its element and its Vow.</summary>
 public sealed record SavedSkill
 {
     /// <summary>
@@ -304,8 +304,12 @@ public sealed record SavedSkill
     /// </summary>
     public string? SkillId { get; init; }
 
-    public required string Source { get; init; }
-    public required string Form { get; init; }
+    /// <summary>The woven element's name — the fallback until a chosen variation owns the Source.</summary>
+    public string? Source { get; init; }
+
+    /// <summary>The Form-era identity. WRITTEN NO MORE (P3-final) — read only to migrate a pre-v3 row.</summary>
+    public string? Form { get; init; }
+
     public string? VowId { get; init; }
 
     /// <summary>

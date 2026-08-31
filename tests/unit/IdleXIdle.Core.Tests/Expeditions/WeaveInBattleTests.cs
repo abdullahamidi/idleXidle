@@ -1,6 +1,3 @@
-using System.Linq;
-using IdleXIdle.Core.Abilities;
-using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Expeditions;
 using IdleXIdle.Core.Builds;
@@ -15,9 +12,10 @@ namespace IdleXIdle.Core.Tests.Expeditions;
 /// <remarks>
 /// The in-fight wiring — that a Vow's BENEFIT changes what a strike does, that the Source matchup reaches a
 /// blow — is proven against the live single-champion engine in <c>Builds/SoloBattleTests</c> (the Source
-/// matchup, every conditional Vow, affinity). This file keeps the vehicle-free half: the circulant Source
-/// table, the Vow pricing curve, the "every conditional Vow can both hold AND fail" structural guard, and
-/// the shared boss-wave scaling helpers.
+/// matchup, every conditional Vow, affinity). This file keeps the vehicle-free half: the Vow pricing curve,
+/// the "every conditional Vow can both hold AND fail" structural guard, and the shared boss-wave scaling
+/// helpers. (The circulant Source table itself is proven in <c>Weaving/WeavingTests</c> and
+/// <c>Builds/source_signature_test</c>.)
 ///
 /// The Vow COSTS the squad engine used to charge (RECKLESS OFFERING's health, FRAGILITY's damage-taken)
 /// are wired into the solo fight too — FRAGILITY in <c>SoloBattle.ResolveWave</c>, RECKLESS at champion
@@ -25,22 +23,6 @@ namespace IdleXIdle.Core.Tests.Expeditions;
 /// </remarks>
 public class WeaveInBattleTests
 {
-    // ── The Source matchup ────────────────────────────────────────────────────────────────────
-
-    [Fact]
-    public void test_no_source_is_the_best_source()
-    {
-        // The circulant table's whole promise: every Source has exactly 2 strengths and 2 weaknesses,
-        // so there is no creature you simply always bring.
-        var t = WeavingTuning.Default;
-        foreach (var attacker in System.Enum.GetValues<Source>())
-        {
-            var targets = System.Enum.GetValues<Source>();
-            Assert.Equal(2, targets.Count(x => SourceMatchup.Effectiveness(attacker, x) > 1f));
-            Assert.Equal(2, targets.Count(x => SourceMatchup.Effectiveness(attacker, x) < 1f));
-        }
-    }
-
     // ── Vow pricing ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -48,7 +30,6 @@ public class WeaveInBattleTests
     {
         // The pricing promise: a Vow that costs the build less is always worth less, so no demand Vow
         // can dominate another.
-        var t = WeavingTuning.Default;
         var unbound = Vows.ById("vow_unbound")!;    // severity 0.80 — refuse the trait tree's payoff
         var complete = Vows.ById("vow_complete")!;  // severity 0.20 — most builds already satisfy it
 
@@ -67,21 +48,18 @@ public class WeaveInBattleTests
     [Fact]
     public void test_the_sim_describes_a_build_the_vows_can_read()
     {
-        static EquippedSkill Sk(Form form, Source src)
-            => new(new WovenAbility { Name = "s", Source = src, Form = form }, 1_500);
-
         var mono = new Build();
-        mono.Weave(Sk(Form.Strike, Source.Body));
+        mono.Weave(TestBuilds.Skill("hammer_blow", Source.Body));
 
         var broad = new Build();
-        broad.Weave(Sk(Form.Strike, Source.Body));
-        broad.Weave(Sk(Form.Aura, Source.Mind));
+        broad.Weave(TestBuilds.Skill("hammer_blow", Source.Body));
+        broad.Weave(TestBuilds.Skill("field_mire", Source.Mind));
 
         var monoCtx = SoloBattle.DescribeBuild(mono, new Hunter());
         var broadCtx = SoloBattle.DescribeBuild(broad, new Hunter());
 
         Assert.True(Vows.IsActive(Vows.ById("vow_singular")!, monoCtx),
-            "A one-Form build does not satisfy THE SINGULAR — the sim is not describing Forms.");
+            "A one-style build does not satisfy THE SINGULAR — the sim is not describing styles.");
         Assert.False(Vows.IsActive(Vows.ById("vow_singular")!, broadCtx));
 
         Assert.True(Vows.IsActive(Vows.ById("vow_pure")!, monoCtx));

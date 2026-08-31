@@ -4,7 +4,6 @@ using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Animation;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
@@ -2305,10 +2304,6 @@ public sealed class SoloExpeditionScreen
         _ => $"{n}TH",
     };
 
-    private static string FormShort(Form f) => f switch
-    {
-        Form.Projectile => "VOLLEY", Form.Transformation => "MORPH", _ => f.ToString().ToUpperInvariant(),
-    };
 
     /// <summary>Top-left hunter HUD (package_10 region A): portrait medallion, name/level, HP, power, and a
     /// row of Source icons for the build's elements.</summary>

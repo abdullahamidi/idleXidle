@@ -1,16 +1,13 @@
 using System;
 using System.Linq;
-using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Builds;
 using Xunit;
 
-namespace IdleXIdle.Core.Tests.Abilities;
+namespace IdleXIdle.Core.Tests.Weaving;
 
 public class WeavingTests
 {
-    private static readonly WeavingTuning Tuning = WeavingTuning.Default;
     private static readonly Source[] AllSources = Enum.GetValues<Source>();
 
     // ── The Source table: no element may dominate ─────────────────────────────────────────────
@@ -194,44 +191,6 @@ public class WeavingTests
         Assert.True(fragility.StaticCostMagnitude > 0f);
     }
 
-    /// <summary>A demand Vow grants NOTHING when the build does not meet it. That is the trade.</summary>
-    [Fact]
-    public void test_a_conditional_vow_grants_no_power_when_its_condition_is_unmet()
-    {
-        var ability = new WovenAbility
-        {
-            Name = "TEST",
-            Source = Source.Body,
-            Form = Form.Strike,
-            Vow = Vows.Catalog.Single(v => v.Id == "vow_singular"),
-        };
-
-        var active = Weaving.AbilityPower(ability, Source.Body, 50f, vowActive: true, Tuning);
-        var inactive = Weaving.AbilityPower(ability, Source.Body, 50f, vowActive: false, Tuning);
-
-        Assert.True(active > inactive);
-        Assert.Equal(Weaving.BasePower(Form.Strike, 50f, Tuning), inactive, precision: 3);
-    }
-
-    /// <summary>A static Vow is always on — its power does not depend on any condition.</summary>
-    [Fact]
-    public void test_a_static_vow_applies_regardless_of_condition()
-    {
-        var ability = new WovenAbility
-        {
-            Name = "TEST",
-            Source = Source.Body,
-            Form = Form.Strike,
-            Vow = Vows.Catalog.Single(v => v.Id == "vow_reckless_offering"),
-        };
-
-        var a = Weaving.AbilityPower(ability, Source.Body, 50f, vowActive: false, Tuning);
-        var b = Weaving.AbilityPower(ability, Source.Body, 50f, vowActive: true, Tuning);
-
-        Assert.Equal(a, b, precision: 4);
-        Assert.True(a > Weaving.BasePower(Form.Strike, 50f, Tuning));
-    }
-
     // ── Composition beats stat-stacking ───────────────────────────────────────────────────────
 
     /// <summary>
@@ -242,37 +201,32 @@ public class WeavingTests
     /// one at DOUBLE stats — and that world is exactly what the playtest called "çok basit": the
     /// deepest-looking axis reduced to a colour chart. Since the SIGNATURE pass, an element is an
     /// identity (what it DOES when it lands), and the matchup is seasoning. Both directions are
-    /// pinned so neither a re-inflation nor a total flattening can slip through.
+    /// pinned so neither a re-inflation nor a total flattening can slip through. The root of a
+    /// skill hit is SkillCatalogue.PoweredBase (the RESONANCE investment) times the matchup factor
+    /// — the retired Weaving pipeline said the same sentence with more machinery.
     /// </remarks>
     [Fact]
     public void test_the_matchup_wins_ties_but_no_longer_beats_real_investment()
     {
         var target = Source.Mind;
-
-        var wellMatched = new WovenAbility { Name = "A", Source = Source.Body, Form = Form.Strike };
-        var mismatched = new WovenAbility { Name = "B", Source = Source.Machine, Form = Form.Strike };
+        var def = SkillCatalogue.ById("hammer_blow");
 
         Assert.True(SourceMatchup.Effectiveness(Source.Body, target) > 1f);
         Assert.True(SourceMatchup.Effectiveness(Source.Machine, target) < 1f);
 
-        // At EQUAL stats the counter still wins — the nudge is real...
-        var matched = Weaving.AbilityPower(wellMatched, target, 100f, false, Tuning);
-        var evenMismatch = Weaving.AbilityPower(mismatched, target, 100f, false, Tuning);
+        // At EQUAL resonance the counter still wins — the nudge is real...
+        var matched = SkillCatalogue.PoweredBase(def, 100f) * SourceMatchup.Effectiveness(Source.Body, target);
+        var evenMismatch = SkillCatalogue.PoweredBase(def, 100f) * SourceMatchup.Effectiveness(Source.Machine, target);
         Assert.True(matched > evenMismatch,
-            $"At equal stats the matched Source ({matched:0.0}) must still beat the mismatched ({evenMismatch:0.0}).");
+            $"At equal resonance the matched Source ({matched:0.0}) must still beat the mismatched ({evenMismatch:0.0}).");
 
-        // ...but a DOUBLED stat with the wrong element beats it COMFORTABLY. Evaluated at 100/200,
-        // far past the ~59 crossover, with a stated margin — the first draft sat at 60/120 and
-        // passed by 0.19%, a knife-edge that any retune would trip for the wrong reason.
-        var stacked = Weaving.AbilityPower(mismatched, target, 200f, false, Tuning);
+        // ...but DOUBLED resonance with the wrong element beats it COMFORTABLY. Evaluated at
+        // 100/200, past the ~150 crossover of the linear resonance curve, with a stated margin —
+        // a knife-edge pass here would trip on any retune for the wrong reason.
+        var stacked = SkillCatalogue.PoweredBase(def, 200f) * SourceMatchup.Effectiveness(Source.Machine, target);
         Assert.True(stacked > matched * 1.05f,
             $"Doubled investment ({stacked:0.0}) must out-damage the bare counter ({matched:0.0}) clearly.");
     }
-
-    /// <summary>Mark deals no direct damage — it is an amplifier, not a hit.</summary>
-    [Fact]
-    public void test_mark_deals_no_direct_damage()
-        => Assert.Equal(0f, Weaving.BasePower(Form.Mark, 100f, Tuning));
 
     /// <summary>Every catalog Vow is internally valid — a build-time content check.</summary>
     [Fact]

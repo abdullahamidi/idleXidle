@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -61,7 +60,7 @@ public class ProgressionCurveTest
         SellValue = 100,
     };
 
-    /// <summary>Damage a four-Strike build lands per second with this weapon worn.</summary>
+    /// <summary>Damage a four-BLOW build (hammer_blow in every slot) lands per second with this weapon worn.</summary>
     private static float DamagePerSecond(ItemInstance? weapon)
     {
         var hunter = new Hunter();
@@ -69,9 +68,7 @@ public class ProgressionCurveTest
 
         var build = new Build();
         for (var i = 0; i < 4; i++)
-            build.Weave(new EquippedSkill(
-                new WovenAbility { Name = "S", Source = Source.Nature, Form = Form.Strike },
-                FormBehaviour.BaseCooldownMs(Form.Strike)));
+            build.Weave(TestBuilds.Skill("hammer_blow", Source.Nature));
 
         // One unkillable target, so the window measures throughput rather than time-to-kill.
         const int windowMs = 30_000;
@@ -96,7 +93,7 @@ public class ProgressionCurveTest
                            + (WaveScaling.IsBossWave(wave, T) ? "   (boss)" : ""));
 
         _out.WriteLine("");
-        _out.WriteLine("POWER — one weapon, four Strike skills, no tree and no training:");
+        _out.WriteLine("POWER — one weapon, four BLOW skills, no tree and no training:");
         _out.WriteLine($"   {"weapon",-24} {"dmg/sec",12} {"weapon x",10} {"item power",12}");
 
         var rungs = new (string Label, ItemInstance? It)[]

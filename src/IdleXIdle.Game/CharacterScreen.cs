@@ -4,7 +4,6 @@ using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Economy;
@@ -411,7 +410,7 @@ public sealed class CharacterScreen
         if (Loadout is null || Mastery is null || Tree is null)
             return weapon is null ? 0f : hunter.PowerContribution(weapon);
         var others = string.Join(",", AllSlots.Where(sl => sl != GearSlot.Weapon).Select(sl => hunter.Worn(sl)?.InstanceId ?? "-"));
-        var skills = string.Join(",", Loadout.Skills.Select(sk => $"{sk.Source}:{sk.Form}:{sk.VowId}"));
+        var skills = string.Join(",", Loadout.Skills.Select(sk => $"{sk.Source}:{sk.SkillId}:{sk.VowId}"));
         // Everything ToBuild and the bench read: the candidate, the rest of the worn set, the woven
         // skills, the socketed keystones, the two trees, the hunter's stats and the character. A key
         // that missed the trees served a stale number after a Dust or mastery buy (review, 2026-08-23).
@@ -1164,10 +1163,6 @@ public sealed class CharacterScreen
         _ui.Fill(b, new Rectangle(r.Right - len, r.Bottom - t, len, t), c); _ui.Fill(b, new Rectangle(r.Right - t, r.Bottom - len, t, len), c);
     }
 
-    private static string FormShort(Form f) => f switch
-    {
-        Form.Projectile => "VOLLEY", Form.Transformation => "MORPH", _ => f.ToString().ToUpperInvariant(),
-    };
     private static string SlotWord(ItemBaseType t) => t switch
     {
         ItemBaseType.Weapon => "WEAPON", ItemBaseType.Charm => "CHARM", ItemBaseType.AbilityFocus => "FOCUS",

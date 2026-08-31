@@ -1,5 +1,4 @@
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -19,8 +18,12 @@ namespace IdleXIdle.Core.Tests.Builds;
 /// </remarks>
 public class BuildTests
 {
-    private static EquippedSkill Skill(string name, Form form = Form.Strike, Source src = Source.Nature)
-        => new(new WovenAbility { Name = name, Source = src, Form = form }, 1500);
+    // Six distinct catalogue ids, so a fixture can fill five slots and still hold one to refuse.
+    // Distinct because Unweave removes by Def.Id — a build of four copies would unweave all four.
+    private static readonly string[] SkillIds =
+        { "hammer_blow", "snare_repay", "sign_call", "volley_spray", "field_pulse", "drain_drink" };
+
+    private static EquippedSkill Skill(int slot) => TestBuilds.Skill(SkillIds[slot]);
 
     // ── The law of the catalog ────────────────────────────────────────────────────────────────
 
@@ -138,37 +141,39 @@ public class BuildTests
         Assert.Empty(build.Keystones);
     }
 
-    // ── Skills: a bounded budget, so Form is a CHOICE ─────────────────────────────────────────
+    // ── Skills: a bounded budget, so WHICH skills is a CHOICE ─────────────────────────────────
 
     [Fact]
     public void test_the_skill_slots_are_bounded()
     {
-        // Six Forms and six slots would mean everyone carries everything, and the Form axis collapses
+        // Six styles and six slots would mean everyone carries everything, and the style axis collapses
         // — exactly how an unbounded gear budget collapsed "which item" into "the biggest number".
         var build = new Build();
         for (var i = 0; i < Build.SkillSlots; i++)
-            Assert.True(build.Weave(Skill($"s{i}")), "a slot inside the budget was refused");
+            Assert.True(build.Weave(Skill(i)), "a slot inside the budget was refused");
 
-        Assert.False(build.Weave(Skill("one_too_many")));
+        Assert.False(build.Weave(Skill(Build.SkillSlots)));
         Assert.Equal(Build.SkillSlots, build.Skills.Count);
     }
 
     [Fact]
-    public void test_there_are_more_forms_than_slots()
+    public void test_there_are_more_styles_than_slots()
     {
-        // The property that makes the budget bite. If Forms ever drop to 4, the choice disappears.
-        Assert.True(System.Enum.GetValues<Form>().Length > Build.SkillSlots,
-            "there are no more Forms than skill slots — the player is no longer choosing anything");
+        // The property that makes the budget bite. If the styles ever drop to 4, the choice disappears.
+        Assert.True(System.Enum.GetValues<Style>().Length > Build.SkillSlots,
+            "there are no more styles than skill slots — the player is no longer choosing anything");
+        Assert.True(SkillCatalogue.All.Count > Build.SkillSlots,
+            "there are no more skills than skill slots — the player is no longer choosing anything");
     }
 
     [Fact]
     public void test_a_skill_can_be_unwoven_to_make_room()
     {
         var build = new Build();
-        for (var i = 0; i < Build.SkillSlots; i++) build.Weave(Skill($"s{i}"));
+        for (var i = 0; i < Build.SkillSlots; i++) build.Weave(Skill(i));
 
-        Assert.True(build.Unweave("s0"));
-        Assert.True(build.Weave(Skill("replacement")));
+        Assert.True(build.Unweave(SkillIds[0]));
+        Assert.True(build.Weave(Skill(4)));
     }
 
     // ── Triggers ──────────────────────────────────────────────────────────────────────────────
@@ -236,10 +241,10 @@ public class BuildTests
         // failure. The test drives the END of the chain, which is the only place it was ever visible.
         var build = new Build { SlotCapacity = 5 };
         for (var i = 0; i < 5; i++)
-            Assert.True(build.Weave(Skill($"s{i}")), $"slot {i} was refused at a capacity of 5");
+            Assert.True(build.Weave(Skill(i)), $"slot {i} was refused at a capacity of 5");
 
         Assert.Equal(5, build.Skills.Count);
-        Assert.False(build.Weave(Skill("sixth")), "capacity 5 must still refuse a sixth");
+        Assert.False(build.Weave(Skill(5)), "capacity 5 must still refuse a sixth");
     }
 
     [Fact]
@@ -256,12 +261,12 @@ public class BuildTests
         // to unweave something. That is a floor of WHAT IS WOVEN, not of a constant.
         var narrow = new Build { SlotCapacity = 1 };
         Assert.Equal(1, narrow.SlotCapacity);
-        Assert.True(narrow.Weave(Skill("only")));
-        Assert.False(narrow.Weave(Skill("second")), "a one-slot build accepted a second skill");
+        Assert.True(narrow.Weave(Skill(0)));
+        Assert.False(narrow.Weave(Skill(1)), "a one-slot build accepted a second skill");
 
         // Now shrink a build that already holds more than the new capacity: it must not lose any.
         var full = new Build { SlotCapacity = 4 };
-        for (var i = 0; i < 4; i++) Assert.True(full.Weave(Skill($"s{i}")));
+        for (var i = 0; i < 4; i++) Assert.True(full.Weave(Skill(i)));
 
         full.SlotCapacity = 1;
         Assert.Equal(4, full.SlotCapacity);
@@ -273,8 +278,8 @@ public class BuildTests
     {
         var build = new Build();
         Assert.Equal(Build.SkillSlots, build.SlotCapacity);
-        for (var i = 0; i < Build.SkillSlots; i++) Assert.True(build.Weave(Skill($"s{i}")));
-        Assert.False(build.Weave(Skill("fifth")), "a build nobody expanded must not grow one for free");
+        for (var i = 0; i < Build.SkillSlots; i++) Assert.True(build.Weave(Skill(i)));
+        Assert.False(build.Weave(Skill(4)), "a build nobody expanded must not grow one for free");
     }
 
     [Fact]
@@ -287,7 +292,7 @@ public class BuildTests
         var hunter = new Hunter();
 
         var onboarding = new Build { SlotCapacity = 1 };
-        onboarding.Weave(Skill("only"));
+        onboarding.Weave(Skill(0));
 
         var ctx = SoloBattle.DescribeBuild(onboarding, hunter);
         Assert.Equal(1, ctx.SkillSlots);
@@ -299,7 +304,7 @@ public class BuildTests
 
         // And it must still REFUSE a build that genuinely has a gap.
         var gappy = new Build { SlotCapacity = 3 };
-        gappy.Weave(Skill("a"));
+        gappy.Weave(Skill(0));
         Assert.False(Vows.IsActive(vow, SoloBattle.DescribeBuild(gappy, hunter)),
             "a build with two empty slots met a Vow that demands none.");
     }

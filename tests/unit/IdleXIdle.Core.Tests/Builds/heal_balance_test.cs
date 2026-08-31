@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -68,10 +67,6 @@ public class HealBalanceTest
         return h;
     }
 
-    private static EquippedSkill Sk(Form form, Source src)
-        => new(new WovenAbility { Name = form.ToString(), Source = src, Form = form, Vow = null },
-               FormBehaviour.BaseCooldownMs(form));
-
     /// <summary>A keystone that refuses healing and changes nothing else.</summary>
     private static readonly Keystone NoHeals = new()
     {
@@ -79,11 +74,11 @@ public class HealBalanceTest
         Grants = new[] { BuildTrigger.NoHealing },
     };
 
-    private static Build Weave(IEnumerable<(Form Form, Source Source)> skills, SkillShape shape,
+    private static Build Weave(IEnumerable<(string Id, Source Source)> skills, SkillShape shape,
                                BuildMods mods, bool heals, BuildTrigger? extra = null)
     {
         var b = new Build { PassiveMods = mods, Shape = shape };
-        foreach (var (f, s) in skills) b.Weave(Sk(f, s));
+        foreach (var (id, s) in skills) b.Weave(TestBuilds.Skill(id, s));
         if (extra is { } t)
             b.Take(new Keystone { Id = $"probe_{t}", Name = t.ToString(), Blurb = "probe", Grants = new[] { t } });
         if (!heals) b.Take(NoHeals);
@@ -93,13 +88,13 @@ public class HealBalanceTest
     // SPIRIT everywhere a Source is not the point: a single-Source Spirit build never cashes its own
     // prime, so it is the signature-neutral choice (the same reasoning as the balance sweep).
     private static Build Morphs(bool heals, bool siphon = false, BuildMods? mods = null)
-        => Weave(Enumerable.Repeat((Form.Transformation, Source.Spirit), 4), SkillShape.None,
+        => Weave(Enumerable.Repeat(("drain_drink", Source.Spirit), 4), SkillShape.None,
                  mods ?? Geared, heals, siphon ? BuildTrigger.Siphon : null);
 
     private static Build NatureAuras(bool heals)
-        => Weave(Enumerable.Repeat((Form.Aura, Source.Nature), 4), SkillShape.None, Geared, heals);
+        => Weave(Enumerable.Repeat(("field_mire", Source.Nature), 4), SkillShape.None, Geared, heals);
 
-    /// <summary>The sweep's four-Form loadout carrying the ENDURE walk — the tree's own heals.</summary>
+    /// <summary>The sweep's four-skill loadout carrying the ENDURE walk — the tree's own heals.</summary>
     private static Build EndureWalk(bool heals)
     {
         var taken = new MasteryTree();
@@ -118,8 +113,8 @@ public class HealBalanceTest
             }
         } while (progress);
 
-        var forms = new[] { Form.Strike, Form.Projectile, Form.Aura, Form.Mark };
-        return Weave(forms.Select(f => (f, Source.Spirit)), taken.Shape(), Geared, heals);
+        var skills = new[] { "hammer_blow", "volley_spray", "field_mire", "sign_call" };
+        return Weave(skills.Select(id => (id, Source.Spirit)), taken.Shape(), Geared, heals);
     }
 
     /// <param name="OverPoolShare">
@@ -297,15 +292,17 @@ public class HealBalanceTest
         Assert.Equal(2.0f, h.SiphonMultiplier, 3);
         Assert.Equal(1.5f, h.SiphonCeilingMultiplier, 3);
 
-        // The forwarding properties the glossary and screens read are the SAME numbers — one source.
-        Assert.Equal(h.TransformationLeech, FormBehaviour.TransformationLeech);
+        // The places the sim and screens read are the SAME numbers — one source. The base lifesteal
+        // lives on the skill's own catalogue dial now (P3c); the tuning is what seeds it.
+        Assert.Equal(h.TransformationLeech, SkillCatalogue.ById("drain_drink").Lifesteal);
         Assert.Equal(h.NatureSignatureLeech, SoloBattle.SignatureNatureLeech);
         Assert.Equal(h.SiphonMultiplier, SoloBattle.SiphonLeechMultiplier);
         Assert.Same(h, ExpeditionTuning.Default.Heal);
 
-        // And what the player is told matches them.
-        Assert.Contains("12%", BuildGlossary.FormRule(Form.Transformation));
-        Assert.Contains("40%", BuildGlossary.FormRule(Form.Transformation));
+        // And what the player is told matches them. The heal-ceiling sentence lives ONLY in
+        // HealCeilingRule since the per-Form rule lines died with the Form table; the 12% leech is
+        // pinned above as DRINK's own dial.
+        Assert.Contains("40%", BuildGlossary.HealCeilingRule());
         Assert.Contains("60%", BuildGlossary.HealCeilingRule());
         Assert.Contains("3%", BuildGlossary.Signature(Source.Nature));
     }
@@ -317,7 +314,7 @@ public class HealBalanceTest
         // Health 1 so there is room for the whole ceiling and more; a creature that dies (so
         // SECOND WIND's on-clear heal fires) but only after many hits (so leech has time to overshoot).
         var champ = new Champion { MaxHealth = pool, Health = 1 };
-        var build = Weave(Enumerable.Repeat((Form.Strike, Source.Spirit), 2), shape, BuildMods.None, heals: true, trigger);
+        var build = Weave(Enumerable.Repeat(("hammer_blow", Source.Spirit), 2), shape, BuildMods.None, heals: true, trigger);
         var (outcome, events) = SoloBattle.ResolveWave(champ, build, new Hunter(),
             new[] { WaveCreature.Single(3_000f, 0f) }, enemyIntervalMs: 100_000, tuning, new Random(5));
         Assert.Equal(WaveOutcome.Cleared, outcome);
@@ -404,7 +401,7 @@ public class HealBalanceTest
         // A full champion that leeches for the whole fight, then takes ONE late bite: the heals that
         // landed on a full pool must not have spent the budget, so the bite is healed back.
         var champ = new Champion { MaxHealth = 10_000, Health = 10_000 };
-        var build = Weave(Enumerable.Repeat((Form.Strike, Source.Spirit), 2),
+        var build = Weave(Enumerable.Repeat(("hammer_blow", Source.Spirit), 2),
                           SkillShape.None with { Leech = 5f }, BuildMods.None, heals: true);
         // One bite at 30s, 1_000 deep, then nothing for the rest of the fight.
         var foe = WaveCreature.Single(1e9f, 1_000f);
@@ -426,7 +423,7 @@ public class HealBalanceTest
         int HealthAfterOneWave(bool bloodMagic)
         {
             var shape = SkillShape.None with { BetweenWaveRegen = 0.20f };
-            var build = Weave(Enumerable.Repeat((Form.Strike, Source.Spirit), 4), shape, Geared, heals: !bloodMagic);
+            var build = Weave(Enumerable.Repeat(("hammer_blow", Source.Spirit), 4), shape, Geared, heals: !bloodMagic);
             var champ = new Champion { MaxHealth = 1_000, Health = 1_000 };
             var run = new SoloExpedition(build, champ, MidCareerHunter(), 120f, 9f,
                                          ExpeditionTuning.Default, null, new Random(1))

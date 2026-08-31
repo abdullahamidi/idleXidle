@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Persistence;
@@ -28,28 +27,17 @@ namespace IdleXIdle.Core.Builds;
 /// </remarks>
 public sealed class PlayerLoadout
 {
-    /// <summary>One woven skill, before it becomes an <see cref="EquippedSkill"/>. Vow is by id, so it saves.</summary>
     /// <summary>
-    /// One woven skill: its element, its style's Form, its Vow, and WHICH SLOT it sits in.
+    /// One woven slot. <see cref="SkillId"/> is what the player chose — null is an EMPTY slot.
     /// </summary>
     /// <remarks>
-    /// <b>Passive is the player's choice, not a consequence.</b> A style has two skills and the slot
-    /// decides which one this is — HAMMER's BLOW in an active slot, its PRESS in a passive one. It
-    /// defaults to false so every construction written before the rework still means what it meant,
-    /// and so a save that predates the field loads with the composer's spill rule sorting the
-    /// overflow exactly as it used to.
+    /// A slot used to BE a Source and a Form, and the skill was composed from the pair; the Form
+    /// column died with P3-final (a pre-v3 save's Form is understood once, at
+    /// <see cref="Restore"/>, through <see cref="LegacySkillForm"/>). <c>Source</c> stays as the
+    /// fallback element for a skill whose variation has not been chosen yet (the variation owns the
+    /// Source now); <c>Passive</c> stays only as the save's echo of the slot the player once chose.
     /// </remarks>
-    /// <summary>
-    /// One woven slot. <see cref="SkillId"/> is what the player chose; the rest is history.
-    /// </summary>
-    /// <remarks>
-    /// A slot used to BE a Source and a Form, and the skill was composed from the pair. The designer
-    /// retired that on 2026-08-30 — a skill is learned on the mastery tree now and has its own depth —
-    /// so the slot names the skill outright. <c>Source</c> and <c>Form</c> stay for one reason each:
-    /// Form is how a save written before today says which skill it meant, and Source is the fallback
-    /// element for a skill whose variation has not been chosen yet (the variation owns the Source now).
-    /// </remarks>
-    public sealed record SkillChoice(Source Source, Form Form, string? VowId, bool? Passive = null,
+    public sealed record SkillChoice(Source Source, string? VowId, bool? Passive = null,
                                      string? SkillId = null);
 
     private readonly List<SkillChoice> _skills = new();
@@ -63,7 +51,7 @@ public sealed class PlayerLoadout
     /// build when it changed — no revision counter to forget in a mutator.
     /// </summary>
     public string Signature =>
-        string.Join(";", _skills.Select(s => $"{s.SkillId ?? $"{s.Source}:{s.Form}"}:{s.VowId}")) + "|" + string.Join(",", _keystoneIds)
+        string.Join(";", _skills.Select(s => $"{s.SkillId ?? "-"}:{s.Source}:{s.VowId}")) + "|" + string.Join(",", _keystoneIds)
         + $"|{SkillCapacity}|{KeystoneCapacity}";
     public IReadOnlyList<string> KeystoneIds => _keystoneIds;
 
@@ -94,11 +82,18 @@ public sealed class PlayerLoadout
 
     // ── Skill editing ───────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Add an empty-ish skill slot if there is room. Returns its index, or -1 when full.</summary>
+    /// <summary>
+    /// Add an EMPTY skill slot if there is room. Returns its index, or -1 when full.
+    /// </summary>
+    /// <remarks>
+    /// Empty means empty: the slot holds no skill until one is picked from the library. It used to
+    /// hold a default Body Strike, and the screen then showed a skill the fight refused — the
+    /// dormant-feature failure read backwards, and worse, because the player believes the screen.
+    /// </remarks>
     public int AddSkill()
     {
         if (_skills.Count >= SkillCapacity) return -1;
-        _skills.Add(new SkillChoice(Source.Body, Form.Strike, null));
+        _skills.Add(new SkillChoice(Source.Body, null));
         return _skills.Count - 1;
     }
 
@@ -135,12 +130,6 @@ public sealed class PlayerLoadout
         _skills[slot] = _skills[slot] with { Source = Cycle(_skills[slot].Source, dir) };
     }
 
-    public void CycleForm(int slot, int dir)
-    {
-        if (!InRange(slot)) return;
-        _skills[slot] = _skills[slot] with { Form = Cycle(_skills[slot].Form, dir) };
-    }
-
     /// <summary>Cycle the Vow through the studied ones plus "no vow". Only studied Vows are offerable.</summary>
     public void CycleVow(int slot, int dir, IReadOnlyList<Vow> knownVows)
     {
@@ -174,28 +163,14 @@ public sealed class PlayerLoadout
         _skills[slot] = _skills[slot] with { Source = source };
     }
 
-    /// <summary>Set a slot's Form outright.</summary>
-    public void SetForm(int slot, Form form)
-    {
-        if (!InRange(slot)) return;
-        _skills[slot] = _skills[slot] with { Form = form };
-    }
-
     /// <summary>
-    /// Put a named SKILL in a slot — what picking one from the library does.
+    /// Put a named SKILL in a slot — what picking one from the library does. The slot's kind is the
+    /// skill's own; there is nothing else to write.
     /// </summary>
-    /// <remarks>
-    /// It writes the Form and the kind alongside the id, so every reader that still speaks Form (the
-    /// hunt rail's art, the affinity hexagon, an old save round-trip) keeps working while the id is
-    /// what actually decides the skill.
-    /// </remarks>
     public void SetSkill(int slot, string skillId)
     {
         if (!InRange(slot) || SkillCatalogue.Find(skillId) is not { } def) return;
-        var form = def.LegacyForm
-                   ?? (def.TakesABeat ? SkillCatalogue.PassiveOf(def.Style) : SkillCatalogue.ActiveOf(def.Style))
-                       .LegacyForm!.Value;
-        _skills[slot] = _skills[slot] with { SkillId = def.Id, Form = form, Passive = !def.TakesABeat };
+        _skills[slot] = _skills[slot] with { SkillId = def.Id, Passive = !def.TakesABeat };
     }
 
     /// <summary>
@@ -266,18 +241,14 @@ public sealed class PlayerLoadout
         // The assembly itself lives in Core (BuildComposer) so what reaches the sim can be tested; this
         // only gathers the loadout's lists.
         return BuildComposer.Compose(tree, mastery, character,
-            _skills.Select(s => new BuildComposer.SkillPick(s.Source, s.Form, s.VowId, NameOf(s), s.Passive, s.SkillId)),
+            _skills.Select(s => new BuildComposer.SkillPick(s.Source, s.VowId, s.Passive, s.SkillId)),
             _keystoneIds, SkillCapacity, progress);
     }
 
-    /// <summary>A human name for a woven skill — "BODY STRIKE", "SHADOW TRAP".</summary>
-    public static string NameOf(SkillChoice s) =>
-        $"{s.Source.ToString().ToUpperInvariant()} {s.Form.ToString().ToUpperInvariant()}";
-
     // ── Persistence (id-based, so it survives a reload) ─────────────────────────────────────────────
 
-    public IReadOnlyList<(string? SkillId, string Source, string Form, string? VowId, bool? Passive)> SaveSkills() =>
-        _skills.Select(s => (s.SkillId, s.Source.ToString(), s.Form.ToString(), s.VowId, s.Passive)).ToList();
+    public IReadOnlyList<(string? SkillId, string Source, string? VowId, bool? Passive)> SaveSkills() =>
+        _skills.Select(s => (s.SkillId, s.Source.ToString(), s.VowId, s.Passive)).ToList();
 
     public void Restore(
         IEnumerable<(string? SkillId, string? Source, string? Form, string? VowId, bool? Passive)> skills,
@@ -286,46 +257,39 @@ public sealed class PlayerLoadout
         _skills.Clear();
         _keystoneIds.Clear();
         if (skills is not null)
+        {
             // Take(SkillCapacity), not Take(MaxSkills) — a saved fifth skill would otherwise be dropped
             // on the way in. The host sets the capacity from the trait tree BEFORE calling this, which
             // is the ordering that makes the truncation right rather than merely smaller.
-            foreach (var (id, src, form, vow, passive) in skills.Take(SkillCapacity))
+            var rows = skills.Take(SkillCapacity).ToList();
+
+            // THE MIGRATION, run once per load: a pre-v3 row carries only (Form, Passive), and its
+            // effective slot kind comes from LegacySkillForm's FROZEN walk — the composer's budget
+            // spill as it stood the day the Form vocabulary was retired — so a pre-rework
+            // four-active build lands on exactly the skills it has been fighting with, never on
+            // four actives it cannot hold. The LIVE walk is free to evolve without rewriting
+            // anyone's save a second time.
+            var kinds = LegacySkillForm.SlotKinds(
+                rows.Select(r => (r.Form, r.Passive, r.SkillId)).ToList(), SkillCapacity);
+
+            for (var i = 0; i < rows.Count; i++)
             {
+                var (id, src, form, vow, passive) = rows[i];
                 var sourceOk = Enum.TryParse<Source>(src, out var s);
-                var formOk = Enum.TryParse<Form>(form, out var f);
-                if (id is not null && SkillCatalogue.Find(id) is { } def)
+                var source = sourceOk ? s : Source.Body;
+                if (SkillCatalogue.Find(id) is { } def)
                 {
-                    // A v3 row: the id IS the identity. The Form is only the legacy echo the old
-                    // readers still want; when it is absent it is derived exactly as SetSkill
-                    // writes it, so the id can never disagree with the echo beside it.
-                    var echo = formOk
-                        ? f
-                        : def.LegacyForm
-                          ?? (def.TakesABeat ? SkillCatalogue.PassiveOf(def.Style) : SkillCatalogue.ActiveOf(def.Style))
-                              .LegacyForm!.Value;
-                    _skills.Add(new SkillChoice(sourceOk ? s : Source.Body, echo, vow,
-                                                passive ?? !def.TakesABeat, def.Id));
+                    // A v3 row: the id IS the identity.
+                    _skills.Add(new SkillChoice(source, vow, passive ?? !def.TakesABeat, def.Id));
                     continue;
                 }
-                // A pre-v3 row, or an id this build does not know riding beside a readable Form:
-                // the Form-era identity. Neither an id nor a readable (Source, Form) means there is
-                // nothing to restore — the row is dropped, like every unknown catalogue name.
-                if (sourceOk && formOk) _skills.Add(new SkillChoice(s, f, vow, passive));
+                // A pre-v3 row: the Form-era identity, understood ONE more time. Neither an id nor
+                // a readable (Source, Form) means there is nothing to restore — the row is dropped,
+                // like every unknown catalogue name.
+                if (sourceOk && LegacySkillForm.Resolve(form, kinds[i]) is { } migrated
+                    && SkillCatalogue.Find(migrated) is { } def2)
+                    _skills.Add(new SkillChoice(source, vow, passive ?? !def2.TakesABeat, def2.Id));
             }
-
-        // THE MIGRATION, run once per load: every id-less slot is pinned to the SkillId it has
-        // always meant. The effective slot kind comes from the same walk the composer uses —
-        // SlotKinds, budget spill included — so a pre-rework four-active build migrates onto
-        // exactly the skills it has been fighting with, never onto four actives it cannot hold.
-        if (_skills.Any(sk => sk.SkillId is null))
-        {
-            var picks = _skills.Select(sk =>
-                new BuildComposer.SkillPick(sk.Source, sk.Form, sk.VowId, NameOf(sk), sk.Passive, sk.SkillId)).ToList();
-            var passiveKinds = BuildComposer.SlotKinds(picks, SkillCapacity);
-            for (var i = 0; i < _skills.Count; i++)
-                if (_skills[i].SkillId is null
-                    && LegacySkillForm.Resolve(_skills[i].Form.ToString(), passiveKinds[i]) is { } migrated)
-                    _skills[i] = _skills[i] with { SkillId = migrated };
         }
 
         if (keystoneIds is not null)
@@ -354,24 +318,8 @@ public sealed class PlayerLoadout
     public static PlayerLoadout Starter()
     {
         var l = new PlayerLoadout();
-        l._skills.Add(new SkillChoice(Source.Body, Form.Strike, null, null, "hammer_blow"));
+        l._skills.Add(new SkillChoice(Source.Body, null, false, "hammer_blow"));
         return l;
-    }
-
-    /// <summary>
-    /// Move a woven skill between the active and passive slot — which changes WHICH SKILL it is.
-    /// </summary>
-    /// <remarks>
-    /// This is the only way to reach two of the twelve: AURA and TRAP resolve to their styles'
-    /// passives from either side, so FIELD's PULSE and SNARE's REPAY have no other door. It is also
-    /// the decision the whole rework turns on — an active costs the champion an action and a passive
-    /// never can — so it belongs to the player rather than to composition order.
-    /// </remarks>
-    public bool SetPassive(int slot, bool passive)
-    {
-        if (!InRange(slot)) return false;
-        _skills[slot] = _skills[slot] with { Passive = passive };
-        return true;
     }
 
     /// <summary>
@@ -379,10 +327,9 @@ public sealed class PlayerLoadout
     /// badge and the weave screen's "your gear is waiting for a …" hint read.
     /// </summary>
     public IReadOnlyList<Style> WovenStyles()
-        => _skills.Select(sk => SkillCatalogue.Find(sk.SkillId ?? "")
-                                ?? SkillCatalogue.Resolve(sk.Form,
-                                       sk.Passive ?? LegacySkillForm.IsNaturallyPassive(sk.Form.ToString())))
-                  .Select(d => d.Style)
+        => _skills.Select(sk => SkillCatalogue.Find(sk.SkillId))
+                  .Where(d => d is not null)
+                  .Select(d => d!.Style)
                   .ToList();
 
     private bool InRange(int slot) => slot >= 0 && slot < _skills.Count;

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -83,9 +82,7 @@ public class GleamEconomyTest
     private static Build StarterBuild()
     {
         var b = new Build();
-        b.Weave(new EquippedSkill(
-            new WovenAbility { Name = "S", Source = Source.Body, Form = Form.Strike },
-            FormBehaviour.BaseCooldownMs(Form.Strike)));
+        b.Weave(TestBuilds.Skill("hammer_blow"));
         return b;
     }
 

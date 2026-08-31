@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -31,14 +30,9 @@ public class FamilyStyleAffinityTests
 
     private static Build BuildWith(Style style)
     {
-        // The style's own Active from the catalogue — the id is the identity, the Form is the
-        // legacy bridge column WovenAbility still carries.
-        var def = SkillCatalogue.ActiveOf(style);
+        // The style's own Active from the catalogue, at its base line — the id is the identity.
         var b = new Build();
-        b.Weave(new EquippedSkill(
-            new WovenAbility { Name = "S", Source = Source.Body, Form = def.LegacyForm ?? Form.Strike, SkillId = def.Id },
-            def.Beats * SoloBattle.DefaultBeatMs,
-            PassiveSlot: false));
+        b.Weave(TestBuilds.Skill(SkillCatalogue.ActiveOf(style).Id));
         return b;
     }
 

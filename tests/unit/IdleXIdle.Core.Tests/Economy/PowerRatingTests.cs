@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -62,10 +61,10 @@ public class PowerRatingTests
     private static int MedianDepth(Hunter h)
     {
         var build = new Build { PassiveMods = BuildMods.None, Shape = SkillShape.None };
-        foreach (var f in new[] { Form.Strike, Form.Projectile, Form.Aura, Form.Mark })
-            build.Weave(new EquippedSkill(
-                new WovenAbility { Name = f.ToString(), Source = Source.Nature, Form = f },
-                FormBehaviour.BaseCooldownMs(f)));
+        // The old Strike/Projectile/Aura/Mark spread by catalogue id — three actives plus the Field
+        // the Aura slot resolved to. Cadence lives on each def now, so no cooldown is passed.
+        foreach (var id in new[] { "hammer_blow", "volley_spray", "field_mire", "sign_call" })
+            build.Weave(TestBuilds.Skill(id, Source.Nature));
 
         var depths = Enumerable.Range(0, 40).Select(i =>
         {

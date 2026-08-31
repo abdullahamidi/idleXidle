@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -41,9 +40,9 @@ public class BreakBadgeTests
             new MemoryDustTree(), mastery, character: null,
             skills: new[]
             {
-                new BuildComposer.SkillPick(Source.Body, Form.Strike, null, "a"),
-                // The same Form again, deliberately passive: HAMMER's PRESS, the skill under test.
-                new BuildComposer.SkillPick(Source.Body, Form.Strike, null, "b", true),
+                new BuildComposer.SkillPick(Source.Body, null, SkillId: "hammer_blow"),
+                // The same style's Field beside its blow: HAMMER's PRESS, the skill under test.
+                new BuildComposer.SkillPick(Source.Body, null, SkillId: "hammer_press"),
             },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4);
 
@@ -86,7 +85,7 @@ public class BreakBadgeTests
         var mastery = Taught.Everything();
         var build = BuildComposer.Compose(
             new MemoryDustTree(), mastery, character: null,
-            skills: new[] { new BuildComposer.SkillPick(Source.Body, Form.Strike, null, "a") },
+            skills: new[] { new BuildComposer.SkillPick(Source.Body, null, SkillId: "hammer_blow") },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4);
 
         var hunter = new Hunter();

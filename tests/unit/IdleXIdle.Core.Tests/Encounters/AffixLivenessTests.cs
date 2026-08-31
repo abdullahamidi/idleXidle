@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -39,10 +38,8 @@ public class AffixLivenessTests
     private static Build BuildWith(SkillShape shape)
     {
         var b = new Build { PassiveMods = BuildMods.None, Shape = shape };
-        foreach (var f in new[] { Form.Strike, Form.Projectile, Form.Aura, Form.Mark })
-            b.Weave(new EquippedSkill(
-                new WovenAbility { Name = f.ToString(), Source = Source.Nature, Form = f },
-                FormBehaviour.BaseCooldownMs(f)));
+        foreach (var id in new[] { "hammer_blow", "volley_spray", "field_mire", "sign_call" })
+            b.Weave(TestBuilds.Skill(id, Source.Nature));
         return b;
     }
 

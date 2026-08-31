@@ -4,7 +4,6 @@ using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -51,9 +50,9 @@ public sealed class BuildScreen
 
     private static string Short(Style s) => s.ToString().ToUpperInvariant();
 
-    /// <summary>The word for a woven slot: the skill's NAME when it is named, the legacy Form word otherwise.</summary>
+    /// <summary>The word for a woven slot: the skill's NAME, or EMPTY for a slot holding nothing.</summary>
     private static string SkillWord(PlayerLoadout.SkillChoice s)
-        => SkillCatalogue.Find(s.SkillId ?? "")?.Name ?? s.Form.ToString().ToUpperInvariant();
+        => SkillCatalogue.Find(s.SkillId)?.Name ?? "EMPTY";
 
     /// <summary>A node label's NAME — everything before the em dash that introduces what it does.</summary>
     /// <remarks>

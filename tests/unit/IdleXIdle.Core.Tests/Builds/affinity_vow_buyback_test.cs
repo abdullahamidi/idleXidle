@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -64,18 +63,7 @@ public class AffinityVowBuybackTest
         Build Casting(Vow? vow)
         {
             var b = new Build { Affinity = affinity };
-            b.Weave(new EquippedSkill(
-                new WovenAbility
-                {
-                    Name = "C",
-                    Source = Source.Nature,
-                    // The legacy bridge only — the SkillId wins the Def resolution.
-                    Form = caster.LegacyForm ?? Form.Strike,
-                    Vow = vow,
-                    SkillId = caster.Id,
-                },
-                caster.Beats * SoloBattle.DefaultBeatMs,
-                PassiveSlot: false));
+            b.Weave(new EquippedSkill(caster, Source.Nature, vow));
             return b;
         }
 

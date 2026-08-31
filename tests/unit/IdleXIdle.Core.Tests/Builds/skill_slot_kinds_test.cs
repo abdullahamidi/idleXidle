@@ -1,14 +1,13 @@
 using System;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
-using IdleXIdle.Core.Automation;
+using System.Collections.Generic;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Economy;
+using IdleXIdle.Core.Persistence;
 using IdleXIdle.Core.Prestige;
 using IdleXIdle.Core.Expeditions;
 using Xunit.Abstractions;
-using System.Collections.Generic;
 using Xunit;
 
 namespace IdleXIdle.Core.Tests.Builds;
@@ -32,41 +31,43 @@ namespace IdleXIdle.Core.Tests.Builds;
 /// </remarks>
 public class SkillSlotKindTests
 {
-    private static EquippedSkill Skill(Form form, bool passive = false, string? name = null)
-    {
-        var def = SkillCatalogue.Resolve(form, passive);
-        return new EquippedSkill(
-            new WovenAbility { Name = name ?? def.Name, Source = Source.Body, Form = form },
-            CooldownMs: 1000,
-            PassiveSlot: passive);
-    }
-
     [Fact]
     public void test_a_slot_chooses_the_face_and_the_face_decides_the_beat()
     {
-        var active = Skill(Form.Strike);
-        var passive = Skill(Form.Strike, passive: true);
+        // A style's two skills are the two slots' answers: same STYLE and same art, and only the
+        // active costs the champion its action. (The kind is the def's own since P3-final — there is
+        // no PassiveSlot flag left to disagree with it.)
+        foreach (var style in Enum.GetValues<Style>())
+        {
+            var active = TestBuilds.Skill(SkillCatalogue.ActiveOf(style).Id);
+            var passive = TestBuilds.Skill(SkillCatalogue.PassiveOf(style).Id);
 
-        Assert.True(active.TakesABeat);
-        Assert.False(passive.TakesABeat);
-        // Same STYLE and same art; a spilled active becomes a different ability of that style.
-        Assert.Equal(active.Def.Style, passive.Def.Style);
-        Assert.Equal(active.Def.ClipKey, passive.Def.ClipKey);
-        Assert.NotEqual(active.Def.Name, passive.Def.Name);
+            Assert.True(active.TakesABeat);
+            Assert.False(passive.TakesABeat);
+            Assert.Equal(active.Def.Style, passive.Def.Style);
+            Assert.Equal(active.Def.ClipKey, passive.Def.ClipKey);
+            Assert.NotEqual(active.Def.Name, passive.Def.Name);
+        }
     }
 
     [Fact]
     public void test_every_legacy_form_resolves_inside_its_own_style()
     {
-        // A saved build carries a Form ordinal. It must always land on a real skill — and always on
+        // A pre-v3 save carries a Form name. It must always land on a real skill — and always on
         // one of ITS OWN STYLE'S two, because the slot may change which ability it is but never who
-        // the champion is. LegacyForm itself is not the assertion: six of the twelve have none, since
-        // no old save could hold them.
-        foreach (var form in Enum.GetValues<Form>())
+        // the champion is. The map is FROZEN history now (LegacySkillForm), read once at restore.
+        foreach (var form in new[] { "Strike", "Trap", "Mark", "Projectile", "Aura", "Transformation" })
         {
-            var style = SkillCatalogue.Resolve(form, passive: false).Style;
-            Assert.Equal(style, SkillCatalogue.Resolve(form, passive: true).Style);
-            Assert.Equal(style, Skill(form).Def.Style);
+            var activeId = LegacySkillForm.Resolve(form, passive: false);
+            var passiveId = LegacySkillForm.Resolve(form, passive: true);
+            Assert.NotNull(activeId);
+            Assert.NotNull(passiveId);
+
+            var active = SkillCatalogue.ById(activeId!);
+            var passive = SkillCatalogue.ById(passiveId!);
+            Assert.Equal(active.Style, passive.Style);
+            Assert.True(active.TakesABeat, $"{form}'s active face resolved to something that costs no beat.");
+            Assert.False(passive.TakesABeat, $"{form} in a passive slot resolved to something that costs a beat.");
         }
     }
 
@@ -74,9 +75,9 @@ public class SkillSlotKindTests
     public void test_actives_and_passives_are_counted_separately()
     {
         var b = new Build();
-        b.Weave(Skill(Form.Strike, name: "a"));
-        b.Weave(Skill(Form.Projectile, name: "b"));
-        b.Weave(Skill(Form.Aura, passive: true, name: "c"));
+        b.Weave(TestBuilds.Skill("hammer_blow"));
+        b.Weave(TestBuilds.Skill("volley_spray"));
+        b.Weave(TestBuilds.Skill("field_mire"));
 
         Assert.Equal(2, b.ActiveCount);
         Assert.Equal(1, b.PassiveCount);
@@ -87,15 +88,15 @@ public class SkillSlotKindTests
     public void test_a_full_active_budget_does_not_block_a_passive()
     {
         var b = new Build { ActiveCapacity = 2, PassiveCapacity = 2 };
-        Assert.True(b.Weave(Skill(Form.Strike, name: "a")));
-        Assert.True(b.Weave(Skill(Form.Projectile, name: "b")));
+        Assert.True(b.Weave(TestBuilds.Skill("hammer_blow")));
+        Assert.True(b.Weave(TestBuilds.Skill("volley_spray")));
 
         // Actives are full; a third active is refused...
-        Assert.False(b.Weave(Skill(Form.Mark, name: "c")));
+        Assert.False(b.Weave(TestBuilds.Skill("sign_call")));
         // ...but the passive budget is untouched, which is the entire point of splitting them.
-        Assert.True(b.Weave(Skill(Form.Aura, passive: true, name: "d")));
-        Assert.True(b.Weave(Skill(Form.Trap, passive: true, name: "e")));
-        Assert.False(b.Weave(Skill(Form.Transformation, passive: true, name: "f")));
+        Assert.True(b.Weave(TestBuilds.Skill("field_mire")));
+        Assert.True(b.Weave(TestBuilds.Skill("snare_jaws")));
+        Assert.False(b.Weave(TestBuilds.Skill("drain_wilt")));
 
         Assert.Equal(2, b.ActiveCount);
         Assert.Equal(2, b.PassiveCount);
@@ -109,7 +110,7 @@ public class SkillSlotKindTests
         // per-kind cap frozen at the old constant.
         var b = new Build { SlotCapacity = 5 };
         for (var i = 0; i < 5; i++)
-            Assert.True(b.Weave(Skill(Form.Strike, name: $"s{i}")), $"slot {i + 1} of 5 was refused");
+            Assert.True(b.Weave(TestBuilds.Skill("hammer_blow")), $"slot {i + 1} of 5 was refused");
         Assert.Equal(5, b.Skills.Count);
     }
 
@@ -119,19 +120,19 @@ public class SkillSlotKindTests
         // Four beat-taking skills is the state that made the basic attack disappear: the swing only
         // lands when no skill claimed the beat, so ~0.8 demand leaves ~1 beat in 5 for it.
         var four = new Build { ActiveCapacity = 4 };
-        four.Weave(Skill(Form.Strike, name: "a"));
-        four.Weave(Skill(Form.Projectile, name: "b"));
-        four.Weave(Skill(Form.Mark, name: "c"));
-        four.Weave(Skill(Form.Transformation, name: "d"));
+        four.Weave(TestBuilds.Skill("hammer_blow"));
+        four.Weave(TestBuilds.Skill("volley_spray"));
+        four.Weave(TestBuilds.Skill("sign_call"));
+        four.Weave(TestBuilds.Skill("drain_drink"));
         Assert.True(four.BeatDemand > 0.75f, $"four actives demanded only {four.BeatDemand:0.00}");
 
         // Two actives plus two passives: the passives add NOTHING, by construction.
         var two = new Build { ActiveCapacity = 2, PassiveCapacity = 2 };
-        two.Weave(Skill(Form.Strike, name: "a"));
-        two.Weave(Skill(Form.Projectile, name: "b"));
+        two.Weave(TestBuilds.Skill("hammer_blow"));
+        two.Weave(TestBuilds.Skill("volley_spray"));
         var withoutPassives = two.BeatDemand;
-        two.Weave(Skill(Form.Aura, passive: true, name: "c"));
-        two.Weave(Skill(Form.Trap, passive: true, name: "d"));
+        two.Weave(TestBuilds.Skill("field_mire"));
+        two.Weave(TestBuilds.Skill("snare_jaws"));
 
         Assert.Equal(withoutPassives, two.BeatDemand);
         Assert.True(two.BeatDemand < 0.5f,
@@ -149,7 +150,7 @@ public class SkillSlotKindTests
 
         var b = new Build { ActiveCapacity = 2 };
         foreach (var def in shortest)
-            b.Weave(Skill(def.LegacyForm ?? Form.Strike, name: def.Id));
+            b.Weave(TestBuilds.Skill(def.Id));
 
         Assert.True(b.BeatDemand < 0.5f,
             $"the worst active pair ({string.Join(" + ", shortest.Select(s => s.Name))}) " +
@@ -168,8 +169,8 @@ public class SkillSlotKindTests
 /// </remarks>
 public class ComposedSlotSplitTests
 {
-    private static BuildComposer.SkillPick S(string name, Form form)
-        => new(Source.Body, form, null, name);
+    private static BuildComposer.SkillPick P(string skillId)
+        => new(Source.Body, null, SkillId: skillId);
 
     private static Build Compose(int slots, params BuildComposer.SkillPick[] skills)
         => BuildComposer.Compose(new MemoryDustTree(), Taught.Everything(), character: null,
@@ -192,42 +193,12 @@ public class ComposedSlotSplitTests
     public void test_a_composed_build_gets_two_active_slots_not_four()
     {
         var b = Compose(4,
-            S("a", Form.Strike), S("b", Form.Projectile),
-            S("c", Form.Mark), S("d", Form.Transformation));
+            P("hammer_blow"), P("volley_spray"),
+            P("sign_brand"), P("drain_wilt"));
 
         Assert.Equal(2, b.ActiveCapacity);
         Assert.Equal(2, b.PassiveCapacity);
         Assert.Equal(2, b.ActiveCount);
-    }
-
-    [Fact]
-    public void test_an_old_four_active_build_keeps_all_four_skills()
-    {
-        // The migration that matters. Before the rework a player could weave four beat-taking
-        // skills; the active budget is two now. Dropping the overflow would take half of someone's
-        // build away on load without a word, so it spills into the passive slots instead.
-        //
-        // THE CHAMPION HAS TO KNOW THEM. Every skill is learned on the mastery tree since
-        // 2026-08-30, so the migration is only a migration for a champion that walked the roads —
-        // which is what this poses. Without them the build is empty, and that is the gate's own test.
-        var mastery = new MasteryTree();
-        mastery.SetEarned(9999);
-        mastery.RestoreTaken(MasteryCatalog.Nodes
-            .Where(x => x.Kind == MasteryKind.SkillRoad).Select(x => x.Id));
-        var b = BuildComposer.Compose(
-            new MemoryDustTree(), mastery, character: null,
-            skills: new[]
-            {
-                S("a", Form.Strike), S("b", Form.Projectile),
-                S("c", Form.Mark), S("d", Form.Transformation),
-            },
-            keystoneIds: Array.Empty<string>(), slotCapacity: 4);
-
-        Assert.Equal(4, b.Skills.Count);
-        Assert.Equal(new[] { "a", "b", "c", "d" }, b.Skills.Select(s => s.Name).ToArray());
-        // The two woven FIRST keep their actives; any other rule reorders the player's build for them.
-        Assert.Equal(new[] { "a", "b" }, b.Skills.Where(s => s.TakesABeat).Select(s => s.Name).ToArray());
-        Assert.Equal(new[] { "c", "d" }, b.Skills.Where(s => !s.TakesABeat).Select(s => s.Name).ToArray());
     }
 
     /// <summary>
@@ -244,9 +215,9 @@ public class ComposedSlotSplitTests
             new MemoryDustTree(), mastery, character: null,
             skills: new[]
             {
-                S("a", Form.Strike),
-                // DELIBERATELY passive: HAMMER's PRESS, one of the six with no Form of its own.
-                S("b", Form.Strike) with { Passive = true },
+                P("hammer_blow"),
+                // DELIBERATELY the style's passive: HAMMER's PRESS, the road's second node.
+                P("hammer_press"),
             },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4);
 
@@ -272,10 +243,11 @@ public class ComposedSlotSplitTests
     public void test_the_composed_build_leaves_the_swing_most_of_its_beats()
     {
         // The whole point, measured on the path a real player actually takes. Four beat-taking
-        // skills demanded about 0.80 and the basic attack only lands on what is left over.
+        // skills demanded about 0.80 and the basic attack only lands on what is left over; the
+        // two-and-two loadout must leave the swing the majority.
         var b = Compose(4,
-            S("a", Form.Strike), S("b", Form.Projectile),
-            S("c", Form.Mark), S("d", Form.Transformation));
+            P("hammer_blow"), P("volley_spray"),
+            P("sign_brand"), P("drain_wilt"));
 
         Assert.True(b.BeatDemand < 0.5f,
             $"a full composed build still demands {b.BeatDemand:0.00} of the beats");
@@ -284,15 +256,17 @@ public class ComposedSlotSplitTests
     [Fact]
     public void test_aura_and_trap_still_cost_no_beat_after_the_split()
     {
-        // They never did, and the split must not have quietly promoted them into the active budget:
-        // if it had, a classic Aura+Trap build would now be spending actions it never spent.
+        // Fields and Reactions never cost a beat, and the split must not have quietly promoted them
+        // into the active budget: if it had, a classic MIRE+JAWS build would now be spending actions
+        // it never spent.
         var b = Compose(4,
-            S("a", Form.Aura), S("b", Form.Trap),
-            S("c", Form.Strike), S("d", Form.Projectile));
+            P("field_mire"), P("snare_jaws"),
+            P("hammer_blow"), P("volley_spray"));
 
         Assert.Equal(4, b.Skills.Count);
         Assert.Equal(2, b.ActiveCount);
-        Assert.Equal(new[] { "c", "d" }, b.Skills.Where(s => s.TakesABeat).Select(s => s.Name).ToArray());
+        Assert.Equal(new[] { "hammer_blow", "volley_spray" },
+            b.Skills.Where(s => s.TakesABeat).Select(s => s.Def.Id).ToArray());
     }
 }
 
@@ -312,7 +286,8 @@ public class SwingShareTests
     private readonly ITestOutputHelper _out;
     public SwingShareTests(ITestOutputHelper output) => _out = output;
 
-    private static BuildComposer.SkillPick S(string name, Form form) => new(Source.Body, form, null, name);
+    private static BuildComposer.SkillPick P(string skillId)
+        => new(Source.Body, null, SkillId: skillId);
 
     /// <summary>Actions the champion took, and how many of them were plain swings.</summary>
     private static (int beats, int casts) Cadence(Build build)
@@ -344,11 +319,8 @@ public class SwingShareTests
         // plain attack at all". This is the BEFORE half of the measurement and it must keep failing
         // to leave room, or the AFTER half proves nothing.
         var before = new Build { ActiveCapacity = 4, PassiveCapacity = 0 };
-        foreach (var (n, f) in new[] { ("a", Form.Strike), ("b", Form.Projectile),
-                                       ("c", Form.Mark), ("d", Form.Transformation) })
-            before.Weave(new EquippedSkill(
-                new WovenAbility { Name = n, Source = Source.Body, Form = f },
-                FormBehaviour.BaseCooldownMs(f)));
+        foreach (var id in new[] { "hammer_blow", "volley_spray", "sign_call", "drain_drink" })
+            before.Weave(TestBuilds.Skill(id));
 
         var (beats, casts) = Cadence(before);
         var swingShare = beats == 0 ? 0f : (beats - casts) / (float)beats;
@@ -362,10 +334,12 @@ public class SwingShareTests
     [Fact]
     public void test_a_composed_build_gives_the_swing_back_the_majority_of_its_actions()
     {
+        // The two-and-two loadout — the same shape the restore migration hands an old four-caster
+        // save (BLOW, SPRAY, and the overflow landed on BRAND and WILT).
         var after = BuildComposer.Compose(
             new MemoryDustTree(), Taught.Everything(), character: null,
-            skills: new[] { S("a", Form.Strike), S("b", Form.Projectile),
-                            S("c", Form.Mark), S("d", Form.Transformation) },
+            skills: new[] { P("hammer_blow"), P("volley_spray"),
+                            P("sign_brand"), P("drain_wilt") },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4);
 
         var (beats, casts) = Cadence(after);
@@ -385,8 +359,8 @@ public class SwingShareTests
         // if it did, the swing would come back only because half the build stopped working.
         var after = BuildComposer.Compose(
             new MemoryDustTree(), Taught.Everything(), character: null,
-            skills: new[] { S("a", Form.Strike), S("b", Form.Projectile),
-                            S("c", Form.Aura), S("d", Form.Trap) },
+            skills: new[] { P("hammer_blow"), P("volley_spray"),
+                            P("field_mire"), P("snare_jaws") },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4);
 
         var champ = new Champion { MaxHealth = 5_000_000, Health = 5_000_000 };
@@ -410,14 +384,16 @@ public class SwingShareTests
 /// </summary>
 /// <remarks>
 /// The slot split made this reachable for the first time: a build saved with four beat-taking skills
-/// spills its overflow into the passive slots, so a MARK or a TRANSFORMATION can now arrive at the
-/// Field branch. The Field branch only knew how to deal damage, and <c>BaseDamage(Mark)</c> is zero
-/// by definition — so a spilled Mark sat in a slot the player could see, doing nothing whatever.
-/// That is this codebase's signature failure, and it was introduced by the fix for another one.
+/// lands its overflow on the styles' passive skills (a restore-time migration since P3-final — see
+/// <see cref="LegacySkillForm"/>), so a Sign or a Drain slot can arrive at the Field branch. The
+/// Field branch only knew how to deal damage — so an amplifying or breaking Field sat in a slot the
+/// player could see, doing nothing whatever. That is this codebase's signature failure, and it was
+/// introduced by the fix for another one.
 /// </remarks>
 public class PassiveEffectTests
 {
-    private static BuildComposer.SkillPick S(string name, Form form) => new(Source.Body, form, null, name);
+    private static BuildComposer.SkillPick P(string skillId)
+        => new(Source.Body, null, SkillId: skillId);
 
     private static Build Compose(params BuildComposer.SkillPick[] skills)
         => BuildComposer.Compose(new MemoryDustTree(), Taught.Everything(), character: null,
@@ -437,30 +413,32 @@ public class PassiveEffectTests
     [Fact]
     public void test_a_mark_in_a_passive_slot_still_amplifies()
     {
-        // Same two actives either way; the third slot is the variable. If the passive Mark did
+        // Same two actives either way; the third slot is the variable. If the passive BRAND did
         // nothing, these two would deal the same damage.
-        var withMark = Compose(S("a", Form.Strike), S("b", Form.Projectile), S("c", Form.Mark));
-        var without  = Compose(S("a", Form.Strike), S("b", Form.Projectile));
+        var withMark = Compose(P("hammer_blow"), P("volley_spray"), P("sign_brand"));
+        var without  = Compose(P("hammer_blow"), P("volley_spray"));
 
         Assert.Equal(1, withMark.PassiveCount);
-        Assert.False(withMark.Skills.Single(s => s.Name == "c").TakesABeat);
+        Assert.False(withMark.Skills.Single(s => s.Def.Id == "sign_brand").TakesABeat);
 
         var amplified = DamageOver(withMark, 2_000_000f);
         var plain = DamageOver(without, 2_000_000f);
         Assert.True(amplified > plain,
-            $"a MARK in a passive slot changed nothing: {amplified:0} against {plain:0}. It costs no " +
+            $"BRAND in a passive slot changed nothing: {amplified:0} against {plain:0}. It costs no " +
             "beat, but it must still open its window or it is a slot the player can see doing nothing.");
     }
 
     [Fact]
     public void test_a_spilled_transformation_becomes_wilt_and_breaks_the_waves_attack()
     {
-        // A spill changes which SKILL is woven: TRANSFORMATION overflows onto DRAIN's passive, WILT,
-        // which is an attack break rather than a lifesteal. It must DO that — a slot the player can
-        // see doing nothing is the failure this whole file exists to refuse — but what it does is
-        // WILT's job, not the one the active face used to have.
-        var build = Compose(S("a", Form.Strike), S("b", Form.Projectile), S("c", Form.Transformation));
-        var spilled = build.Skills.Single(s => s.Name == "c");
+        // A spill changes which SKILL is woven: a legacy Transformation slot that lands passive
+        // migrates onto DRAIN's WILT, which is an attack break rather than a lifesteal. It must DO
+        // that — a slot the player can see doing nothing is the failure this whole file exists to
+        // refuse — but what it does is WILT's job, not the one the active face used to have.
+        Assert.Equal("drain_wilt", LegacySkillForm.Resolve("Transformation", passive: true));
+
+        var build = Compose(P("hammer_blow"), P("volley_spray"), P("drain_wilt"));
+        var spilled = build.Skills.Single(s => s.Def.Id == "drain_wilt");
         Assert.False(spilled.TakesABeat);
         Assert.Equal("WILT", spilled.Def.Name);
         Assert.True(spilled.Def.AttackBreakPerTick > 0f);
@@ -477,147 +455,10 @@ public class PassiveEffectTests
         }
 
         var withWilt = HealthAfter(build);
-        var without = HealthAfter(Compose(S("a", Form.Strike), S("b", Form.Projectile)));
+        var without = HealthAfter(Compose(P("hammer_blow"), P("volley_spray")));
         Assert.True(withWilt > without,
             $"WILT changed nothing: {withWilt} health against {without} without it. Its whole line is " +
             "that every enemy bites softer.");
-    }
-}
-
-/// <summary>
-/// A skill moved into a passive slot trades burst for steadiness — not power.
-/// </summary>
-/// <remarks>
-/// <para>
-/// <c>WeavingTuning.FormBaseValue</c> quotes each Form in the units it is PAID in: AURA's 12 is one
-/// second's worth, but STRIKE's 500 is a single nine-second cast and TRANSFORMATION's 260 an
-/// eight-second one. The Field branch ticks every second, so a spilled skill paid its whole cast
-/// value every tick — nine and eight times its intended output, on the very path the slot split
-/// created.
-/// </para>
-/// <para>
-/// Parity is the deliberate starting point rather than a law: a passive costs no beat, so it may
-/// well deserve to sit under its active face. What must never return is a passive slot silently
-/// multiplying a skill by its cooldown.
-/// </para>
-/// </remarks>
-public class PassiveCadenceTests
-{
-    private static Build OneSkill(Form form, bool passive)
-    {
-        var b = new Build { ActiveCapacity = 1, PassiveCapacity = 1 };
-        b.Weave(new EquippedSkill(
-            new WovenAbility { Name = form.ToString(), Source = Source.Body, Form = form },
-            FormBehaviour.BaseCooldownMs(form), PassiveSlot: passive));
-        return b;
-    }
-
-    private static long DamageIn(Build build, int waveMs)
-    {
-        var champ = new Champion { MaxHealth = 50_000_000, Health = 50_000_000 };
-        var (_, events) = SoloBattle.ResolveWave(
-            champ, build, new Hunter(),
-            // Health far beyond anything the wave can chew through, so the fight runs the full clock
-            // and the comparison is over the same elapsed time on both sides.
-            enemyHealth: 500_000_000f, enemyDamage: 0f, enemyIntervalMs: 100_000,
-            ExpeditionTuning.Default, new Random(5));
-        return events.Where(e => e.Kind == BattleEventKind.Strike && e.AtMs <= waveMs)
-                     .Sum(e => (long)e.Amount);
-    }
-
-    [Theory]
-    [InlineData(Form.Strike)]
-    [InlineData(Form.Transformation)]
-    [InlineData(Form.Projectile)]
-    public void test_a_spilled_skill_does_not_multiply_itself_by_its_cooldown(Form form)
-    {
-        const int window = 30_000;
-        var asActive = DamageIn(OneSkill(form, passive: false), window);
-        var asPassive = DamageIn(OneSkill(form, passive: true), window);
-
-        Assert.True(asPassive > 0, $"{form} in a passive slot dealt nothing at all.");
-
-        // Both builds also swing, so neither figure is the skill alone; what is being caught is an
-        // ORDER-OF-MAGNITUDE break, which is what ticking a cast value every second produces.
-        var ratio = asPassive / (double)asActive;
-        Assert.True(ratio < 2.0,
-            $"{form} dealt {ratio:0.00}x as much from a passive slot as from an active one. A Field " +
-            "ticks every second and FormBaseValue is quoted per CAST, so an unscaled spill multiplies " +
-            "the skill by its whole cooldown.");
-        Assert.True(ratio > 0.4,
-            $"{form} dealt only {ratio:0.00}x as much passively; moving a slot should cost steadiness, " +
-            "not most of the skill.");
-    }
-}
-
-/// <summary>
-/// The per-skill cooldown is READ. It went unread for the whole of the project's life.
-/// </summary>
-/// <remarks>
-/// <para>
-/// <c>EquippedSkill(WovenAbility, int CooldownMs)</c> has carried that field since it was written.
-/// It was set from the Form table at construction, persisted, and then dereferenced NOWHERE — a test
-/// comment elsewhere in this suite says so outright. Somebody opened a per-skill cooldown and there
-/// was never a system to fill it, because the Form owned the number.
-/// </para>
-/// <para>
-/// It has to be live before a variation or a reinforcement can change one skill's cooldown without
-/// changing every skill of that style. This test exists so it cannot quietly go back to sleep: it
-/// fails the moment the sim stops asking the skill and goes back to asking the table.
-/// </para>
-/// </remarks>
-public class PerSkillCooldownTests
-{
-    private static Build WithCooldown(Form form, int cooldownMs)
-    {
-        var b = new Build { ActiveCapacity = 1, PassiveCapacity = 0 };
-        b.Weave(new EquippedSkill(
-            new WovenAbility { Name = "s", Source = Source.Body, Form = form },
-            cooldownMs, PassiveSlot: false));
-        return b;
-    }
-
-    private static int CastsIn(Build build)
-    {
-        var champ = new Champion { MaxHealth = 5_000_000, Health = 5_000_000 };
-        var (_, events) = SoloBattle.ResolveWave(
-            champ, build, new Hunter(),
-            enemyHealth: 20_000_000f, enemyDamage: 0f, enemyIntervalMs: 100_000,
-            ExpeditionTuning.Default, new Random(9));
-        return events.Count(e => e.Kind == BattleEventKind.Skill);
-    }
-
-    [Fact]
-    public void test_a_skills_own_beat_count_drives_its_cadence()
-    {
-        // Every ACTIVE is beat-counted now, so the cadence a variation would change is Def.Beats.
-        // A four-beat skill must cast more often than a six-beat one over the same wave.
-        var six = CastsIn(WithCooldown(Form.Strike, FormBehaviour.BaseCooldownMs(Form.Strike)));
-        var four = CastsIn(WithCooldown(Form.Projectile, FormBehaviour.BaseCooldownMs(Form.Projectile)));
-
-        Assert.Equal(6, SkillCatalogue.Resolve(Form.Strike, false).Beats);
-        Assert.Equal(4, SkillCatalogue.Resolve(Form.Projectile, false).Beats);
-        Assert.True(six > 0, "the slower build never cast at all — the wave was too short to measure.");
-        Assert.True(four > six,
-            $"the four-beat skill cast {four} times against the six-beat skill's {six}. The sim is not " +
-            "reading the skill's own beat count.");
-    }
-
-    [Fact]
-    public void test_the_form_table_now_answers_from_the_catalogue()
-    {
-        // ONE SOURCE. FormBehaviour is the Form-shaped door onto SkillCatalogue, not a second table:
-        // the hunt rail's cooldown ring reads it, the sim reads the catalogue, and they must agree or
-        // the dial lies about the fight — the exact failure the Beat event was added to stop.
-        foreach (var form in Enum.GetValues<Form>())
-        {
-            // The table answers for the Form's NATURAL kind — what this Form has always been — not
-            // for the style's active. Forcing AURA to its style's active would make a field
-            // beat-counted and hand it a cast's cooldown.
-            var natural = FormBehaviour.IsPassive(form) || FormBehaviour.FiresOnBeingHit(form);
-            var def = SkillCatalogue.Resolve(form, natural);
-            Assert.Equal(def.Beats, FormBehaviour.CooldownBeats(form));
-        }
     }
 }
 
@@ -626,58 +467,45 @@ public class PerSkillCooldownTests
 /// </summary>
 /// <remarks>
 /// A catalogue entry nothing can select is the same dead weight as a field nothing reads, and this
-/// gap was real: slot POSITION used to decide which face a Form resolved to, so AURA and TRAP
-/// resolved passive from either side and FIELD's PULSE and SNARE's REPAY had no door at all. The slot
-/// kind is the player's own choice now, and this file is what stops a future skill being added with
-/// no way in.
+/// gap was real: slot POSITION used to decide which skill a slot resolved to, so a style's active
+/// or passive could have no door at all. The door is the mastery tree now — a skill is a thing you
+/// LEARN — and this file is what stops a future skill being added with no road to it.
 /// </remarks>
 public class SkillReachabilityTests
 {
     [Fact]
     public void test_every_skill_in_the_catalogue_can_be_selected()
     {
-        var reachable = new HashSet<string>();
-        foreach (var form in Enum.GetValues<Form>())
-        foreach (var passive in new[] { false, true })
-            reachable.Add(SkillCatalogue.Resolve(form, passive).Id);
+        // The tree with every style road walked must know all twelve — a skill no road teaches is
+        // unreachable, since composing an untaught skill is refused.
+        var taught = Taught.Everything().LearnedSkills();
 
-        var missing = SkillCatalogue.All.Select(s => s.Id).Where(id => !reachable.Contains(id)).ToList();
+        var missing = SkillCatalogue.All.Select(s => s.Id).Where(id => !taught.Contains(id)).ToList();
         Assert.True(missing.Count == 0,
-            "no (Form, slot) pair reaches: " + string.Join(", ", missing) +
-            ". A skill the player cannot select is dead weight in the catalogue.");
-        Assert.Equal(SkillCatalogue.All.Count, reachable.Count);
+            "no style road teaches: " + string.Join(", ", missing) +
+            ". A skill the player cannot learn is dead weight in the catalogue.");
+
+        // And the roads teach no ghosts: every taught id is a real catalogue skill.
+        foreach (var id in taught)
+            Assert.NotNull(SkillCatalogue.Find(id));
     }
 
     [Fact]
     public void test_the_players_choice_of_slot_beats_the_spill_rule()
     {
-        // The spill exists for saves that predate the choice. Once a player has made one it must win,
-        // or the workbench is showing a decision the fight ignores.
+        // The Passive flag survives as the save's echo of the slot the player once chose (a named
+        // skill brings its own kind). Once a player has made that choice it must win, or the
+        // workbench is showing a decision the fight ignores.
         var picks = new[]
         {
-            new BuildComposer.SkillPick(Source.Body, Form.Strike, null, "a", Passive: true),
-            new BuildComposer.SkillPick(Source.Body, Form.Projectile, null, "b"),
-            new BuildComposer.SkillPick(Source.Body, Form.Mark, null, "c"),
+            new BuildComposer.SkillPick(Source.Body, null, Passive: true),
+            new BuildComposer.SkillPick(Source.Body, null, Passive: false),
+            new BuildComposer.SkillPick(Source.Body, null, Passive: false),
         };
         var kinds = BuildComposer.SlotKinds(picks, slotCapacity: 4);
 
-        Assert.True(kinds[0], "the player asked for a passive Strike and the composer overruled it.");
+        Assert.True(kinds[0], "the player asked for a passive slot and the composer overruled it.");
         Assert.False(kinds[1]);
         Assert.False(kinds[2]);   // the active budget is two, and the first skill did not spend one
-    }
-
-    [Fact]
-    public void test_choosing_the_passive_slot_reaches_the_styles_other_skill()
-    {
-        // The whole point of the switch: the same Form in the other slot is a DIFFERENT ability.
-        foreach (var form in new[] { Form.Strike, Form.Projectile, Form.Mark, Form.Transformation })
-        {
-            var active = SkillCatalogue.Resolve(form, passive: false);
-            var passive = SkillCatalogue.Resolve(form, passive: true);
-            Assert.Equal(active.Style, passive.Style);
-            Assert.NotEqual(active.Id, passive.Id);
-            Assert.True(active.TakesABeat);
-            Assert.False(passive.TakesABeat);
-        }
     }
 }

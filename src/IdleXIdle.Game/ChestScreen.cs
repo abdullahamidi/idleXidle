@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -745,7 +744,11 @@ public sealed class ChestScreen
             {
                 var vowName = s.VowId is null ? null
                     : Vows.Catalog.FirstOrDefault(v => v.Id == s.VowId)?.Name ?? s.VowId;
-                var line = $"{s.Source.ToUpperInvariant()} {s.Form.ToUpperInvariant()}"
+                // The id names the skill outright (code v2); a v1 code still speaks the legacy
+                // Source x Form pair, and prints it as the words it saved.
+                var word = SkillCatalogue.Find(s.SkillId)?.Name
+                           ?? $"{s.Source?.ToUpperInvariant()} {s.Form?.ToUpperInvariant()}".Trim();
+                var line = word
                            + (vowName is null ? "" : $"  —  {vowName.ToUpperInvariant()}");
                 _ui.TextBig(b, line, panel.X + 80, y, Bone, UiTypography.Secondary);
                 y += 26;

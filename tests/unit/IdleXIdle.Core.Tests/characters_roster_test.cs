@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
@@ -208,11 +207,8 @@ public class CharactersRosterTest
     private static float DamageWith(SkillShape shape, Vow? vow)
     {
         var build = new Build { PassiveMods = BuildMods.None, Shape = shape };
-        // The SkillId is the identity the sim reads now (P3c); the Form is the legacy fixture bridge,
-        // and the cooldown argument is inert — cadence comes from the catalogue def's Beats.
-        build.Weave(new EquippedSkill(
-            new WovenAbility { Name = "S", Source = Source.Nature, Form = Form.Strike, Vow = vow, SkillId = "hammer_blow" },
-            FormBehaviour.BaseCooldownMs(Form.Strike)));
+        // The catalogue id is the skill's whole identity (P3-final); cadence comes from the def's Beats.
+        build.Weave(TestBuilds.Skill("hammer_blow", Source.Nature, vow));
 
         var champ = new Champion { MaxHealth = 100_000, Health = 100_000 };
         var target = new WaveCreature { MaxHealth = 1e9f, Health = 1e9f, Damage = 0f };

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -17,25 +16,24 @@ namespace IdleXIdle.Core.Tests.Builds;
 /// </summary>
 /// <remarks>
 /// Playtest: "Skiller sırasıyla atılmalı, hepsini bir anda atıyor." Every ready skill used to fire on
-/// the same 100ms tick. The fix is a global <see cref="SoloBattle.CastGapMs"/> lock: a deferred skill
-/// stays READY (its cooldown is not consumed), so the stagger spreads casts without eating them. This
+/// the same 100ms tick. The fix is the beat gate: one action per beat, so a deferred skill stays
+/// READY (its cooldown is not consumed) and the stagger spreads casts without eating them. This
 /// test asserts the END of that chain, on the same sim the game runs.
 /// </remarks>
 public class SkillStaggerTest
 {
-    private static EquippedSkill Sk(Form form)
-        => new(new WovenAbility { Name = form.ToString(), Source = Source.Nature, Form = form, Vow = null },
-               FormBehaviour.BaseCooldownMs(form));
+    private static EquippedSkill Sk(string id) => TestBuilds.Skill(id, Source.Nature);
 
     [Fact]
     public void test_no_two_casts_share_an_instant_and_every_gap_honours_the_lock()
     {
-        // Four CASTING forms (Aura is passive and emits no Skill event; Trap fires on being bitten).
-        // No triggers/keystones, so every Skill event is its own activation — Echo and Weaver
-        // deliberately fire twice within ONE activation and are out of scope here.
+        // Four ACTIVES (a Field ticks on its own clock and emits an Aura event, not a Skill one; a
+        // Reaction answers a bite off the beat). No triggers/keystones, so every Skill event is its
+        // own activation — Echo and Weaver deliberately fire twice within ONE activation and are out
+        // of scope here.
         var build = new Build();
-        foreach (var f in new[] { Form.Strike, Form.Projectile, Form.Transformation, Form.Mark })
-            build.Weave(Sk(f));
+        foreach (var id in new[] { "hammer_blow", "volley_spray", "drain_drink", "sign_call" })
+            build.Weave(Sk(id));
 
         var champ = new Champion { MaxHealth = 200_000, Health = 200_000 };
         // One enormous creature, so the wave runs long enough for many casts of every skill.

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -45,22 +44,7 @@ public class BeatCadenceTest
     public BeatCadenceTest(ITestOutputHelper output) => _out = output;
 
     /// <summary>One beat-counted skill and nothing else, so every cast in the stream is that skill's.</summary>
-    private static Build OneRhythmSkill(string skillId)
-    {
-        var def = SkillCatalogue.ById(skillId);
-        var b = new Build();
-        b.Weave(new EquippedSkill(
-            new WovenAbility
-            {
-                Name = def.Name,
-                Source = Source.Body,
-                Form = def.LegacyForm ?? Form.Strike,
-                SkillId = skillId,
-            },
-            def.Beats * SoloBattle.DefaultBeatMs,
-            PassiveSlot: false));
-        return b;
-    }
+    private static Build OneRhythmSkill(string skillId) => TestBuilds.Of(skillId);
 
     /// <summary>
     /// A wave long enough to hold many casts: one creature with a great deal of health, biting for
@@ -295,10 +279,10 @@ public class BeatCadenceTest
             new MemoryDustTree(), Taught.Everything(), character: null,
             skills: new[]
             {
-                new BuildComposer.SkillPick(Source.Body, Form.Strike, null, "Blow", SkillId: "hammer_blow"),
-                new BuildComposer.SkillPick(Source.Mind, Form.Projectile, null, "Spray", SkillId: "volley_spray"),
-                new BuildComposer.SkillPick(Source.Nature, Form.Aura, null, "Mire", SkillId: "field_mire"),
-                new BuildComposer.SkillPick(Source.Spirit, Form.Mark, null, "Brand", SkillId: "sign_brand"),
+                new BuildComposer.SkillPick(Source.Body, null, SkillId: "hammer_blow"),
+                new BuildComposer.SkillPick(Source.Mind, null, SkillId: "volley_spray"),
+                new BuildComposer.SkillPick(Source.Nature, null, SkillId: "field_mire"),
+                new BuildComposer.SkillPick(Source.Spirit, null, SkillId: "sign_brand"),
             },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4);
 

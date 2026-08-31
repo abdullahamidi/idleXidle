@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -70,13 +69,14 @@ public class ReinforcementLivenessTests
         if (reinforcement is not null)
             Assert.True(progress.TakeReinforcement(def, reinforcement), $"could not buy {reinforcement}");
 
-        // The skill under test in the slot its kind demands, beside a plain Strike so the champion can
-        // still fight when the skill itself deals nothing — the same shape the variation file uses.
-        var picks = new List<BuildComposer.SkillPick> { new(Source.Body, Form.Strike, null, "filler") };
-        var reached = def.LegacyForm
-                      ?? (def.TakesABeat ? SkillCatalogue.PassiveOf(def.Style) : SkillCatalogue.ActiveOf(def.Style))
-                          .LegacyForm!.Value;
-        picks.Add(new BuildComposer.SkillPick(Source.Body, reached, null, "subject", !def.TakesABeat));
+        // The skill under test, named by its id, beside a plain BLOW so the champion can still fight
+        // when the skill itself deals nothing — the same shape the variation file uses. A named
+        // skill brings its own kind, so it lands in the slot it demands.
+        var picks = new List<BuildComposer.SkillPick>
+        {
+            new(Source.Body, null, SkillId: SkillCatalogue.ActiveOf(Style.Hammer).Id),
+            new(Source.Body, null, SkillId: def.Id),
+        };
 
         return BuildComposer.Compose(new MemoryDustTree(), EveryRoadWalked(), character: null,
                                      skills: picks, keystoneIds: Array.Empty<string>(),

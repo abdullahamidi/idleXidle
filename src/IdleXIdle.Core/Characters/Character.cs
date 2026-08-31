@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Builds;
 
 namespace IdleXIdle.Core.Characters;

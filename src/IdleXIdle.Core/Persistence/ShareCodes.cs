@@ -34,7 +34,11 @@ public static class ShareCodes
     private const string ItemPrefix = "RHI";
     private const string BuildPrefix = "RHB";
     private const string FeedbackPrefix = "RHF";
-    private const int Version = 1;
+    // 2 (2026-08-31, P3-final): a shared build's skills are catalogue IDS — SavedSkill.Form is no
+    // longer written. A v1 code still decodes (the validator below accepts the legacy Source×Form
+    // pair); an old client refuses a v2 code as "newer version" instead of guessing, which is what
+    // the prefix digit exists for.
+    private const int Version = 2;
 
     // A legitimate code is a few hundred bytes; deflate expands up to ~1000:1. Without these caps a
     // one-megabyte pasted "code" could balloon toward a gigabyte of string from a single click.
@@ -235,8 +239,10 @@ public static class ShareCodes
             || build.Skills is null || build.Keystones is null || build.Mastery is null
             || build.Skills.Count > 8 || build.Keystones.Count > 8 || build.Mastery.Count > 200
             || build.Skills.Any(s => s is null
-                                     || string.IsNullOrEmpty(s.Source) || s.Source.Length > 40
-                                     || string.IsNullOrEmpty(s.Form) || s.Form.Length > 40
+                                     // A v2 row names the skill; a v1 row must carry the legacy pair.
+                                     || (s.SkillId is null
+                                         && (string.IsNullOrEmpty(s.Source) || string.IsNullOrEmpty(s.Form)))
+                                     || s.Source is { Length: > 40 } || s.Form is { Length: > 40 }
                                      || s.SkillId is { Length: > 64 }
                                      || s.VowId is { Length: > 64 })
             || build.Keystones.Any(k => string.IsNullOrEmpty(k) || k.Length > 64)

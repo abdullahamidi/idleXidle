@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -51,19 +50,20 @@ public class WaveLengthTest
     /// </summary>
     private const long LegacyWaveBreakMs = 2_050;
 
-    /// <summary>A real four-skill loadout: one of each shape a player actually weaves.</summary>
+    /// <summary>
+    /// A real four-skill loadout: one of each shape a player actually weaves — the same skills the
+    /// Form-era Strike/Projectile/Aura/Mark fixture resolved to, so the bands below still measure
+    /// the fight they were calibrated against.
+    /// </summary>
     private static Build FourSkill()
     {
         var b = new Build();
-        var plan = new (Source Src, Form Form)[]
+        var plan = new (Source Src, string Id)[]
         {
-            (Source.Body, Form.Strike), (Source.Mind, Form.Projectile),
-            (Source.Nature, Form.Aura), (Source.Spirit, Form.Mark),
+            (Source.Body, "hammer_blow"), (Source.Mind, "volley_spray"),
+            (Source.Nature, "field_mire"), (Source.Spirit, "sign_call"),
         };
-        foreach (var (src, form) in plan)
-            b.Weave(new EquippedSkill(
-                new WovenAbility { Name = form.ToString(), Source = src, Form = form },
-                FormBehaviour.BaseCooldownMs(form)));
+        foreach (var (src, id) in plan) b.Weave(TestBuilds.Skill(id, src));
         return b;
     }
 

@@ -4,7 +4,6 @@ using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -869,7 +868,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             WovenSkills = _loadout.SaveSkills()
                 .Select(s => new SavedSkill
                 {
-                    SkillId = s.SkillId, Source = s.Source, Form = s.Form, VowId = s.VowId, Passive = s.Passive,
+                    SkillId = s.SkillId, Source = s.Source, VowId = s.VowId, Passive = s.Passive,
                 }).ToList(),
             SocketedKeystoneIds = _loadout.KeystoneIds.ToList(),
             SkillProgress = _skillProgress.ToSave()
@@ -938,7 +937,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             Skills = _loadout.SaveSkills()
                 .Select(s => new SavedSkill
                 {
-                    SkillId = s.SkillId, Source = s.Source, Form = s.Form, VowId = s.VowId, Passive = s.Passive,
+                    SkillId = s.SkillId, Source = s.Source, VowId = s.VowId, Passive = s.Passive,
                 }).ToList(),
             Keystones = _loadout.KeystoneIds.ToList(),
             Mastery = _mastery.Taken.ToList(),
@@ -1705,7 +1704,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     if (sm == "fightaura")
                     {
                         var auraSlot = _loadout.AddSkill();
-                        if (auraSlot >= 0) { _loadout.SetSource(auraSlot, Source.Nature); _loadout.SetForm(auraSlot, Form.Aura); }
+                        if (auraSlot >= 0) { _loadout.SetSource(auraSlot, Source.Nature); _loadout.SetSkill(auraSlot, "field_mire"); }
                     }
                     // A FULL LOADOUT, BOTH KINDS. The plain `fight` fixture carried a single skill, so
                     // no capture of the hunt rail could ever show a PASSIVE row — and its cadence line
@@ -1724,18 +1723,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         // PRESS IS IN THE FIXTURE ON PURPOSE: it is the skill whose whole effect had no
                         // picture, so a capture of the fight that does not carry it cannot show the
                         // badge that was added for it.
-                        foreach (var (src, form, passive) in new[]
+                        foreach (var (src, skillId) in new[]
                                  {
-                                     (Source.Mind, Form.Projectile, (bool?)false),
-                                     (Source.Body, Form.Strike, (bool?)true),
-                                     (Source.Shadow, Form.Trap, (bool?)true),
+                                     (Source.Mind, "volley_spray"),
+                                     (Source.Body, "hammer_press"),
+                                     (Source.Shadow, "snare_jaws"),
                                  })
                         {
                             var slot = _loadout.AddSkill();
                             if (slot < 0) break;
                             _loadout.SetSource(slot, src);
-                            _loadout.SetForm(slot, form);
-                            _loadout.SetPassive(slot, passive!.Value);
+                            _loadout.SetSkill(slot, skillId);
                         }
                     }
                     // fightswing holds the strike clip at its apex, so the one pose a timed capture can
@@ -2066,18 +2064,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // in a row went unphotographed because of it (the ACTIVE/PASSIVE switch, the
                     // resolved skill name, the slot badge). A fixture that cannot show the thing under
                     // test is a fixture that certifies nothing.
-                    foreach (var (src, form, passive) in new[]
+                    foreach (var (src, skillId) in new[]
                              {
-                                 (Source.Mind, Form.Projectile, (bool?)false),
-                                 (Source.Nature, Form.Aura, (bool?)true),
-                                 (Source.Shadow, Form.Trap, (bool?)true),
+                                 (Source.Mind, "volley_spray"),
+                                 (Source.Nature, "field_mire"),
+                                 (Source.Shadow, "snare_jaws"),
                              })
                     {
                         var slot = _loadout.AddSkill();
                         if (slot < 0) break;
                         _loadout.SetSource(slot, src);
-                        _loadout.SetForm(slot, form);
-                        _loadout.SetPassive(slot, passive!.Value);
+                        _loadout.SetSkill(slot, skillId);
                     }
                     _weave.DevOpenSkillTree();
                     // ALL FOUR STATES OF A SKILL'S OWN LEVELS, one per slot, so a single shot certifies
@@ -2091,7 +2088,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     for (var si = 0; si < _loadout.Skills.Count; si++)
                     {
                         var sk = _loadout.Skills[si];
-                        var rd = SkillCatalogue.Resolve(sk.Form, sk.Passive ?? false);
+                        if (SkillCatalogue.Find(sk.SkillId) is not { } rd) continue;
                         var level = si switch { 0 => 1, 1 => 1, 2 => 2, _ => SkillProgress.MaxLevel };
                         for (var u = 0; u < SkillProgress.UsesForLevel(level); u++) _skillProgress.RecordWave(rd.Id);
                         if (si == 0) continue;                       // left unchosen on purpose
@@ -2926,7 +2923,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         var skills = _loadout.Skills;
         if (skills.Count != 1) return true;
-        return skills[0].Source != Source.Body || skills[0].Form != Form.Strike || skills[0].VowId is not null;
+        return skills[0].SkillId != "hammer_blow" || skills[0].Source != Source.Body || skills[0].VowId is not null;
     }
 
     /// <summary>Pick the looping music bed for the current screen. No-op until the music_* WAVs exist.</summary>

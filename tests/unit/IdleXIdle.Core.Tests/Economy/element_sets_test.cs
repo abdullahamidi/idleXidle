@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -31,7 +30,7 @@ public class element_sets_test
     {
         InstanceId = $"set-{element}-{slot}-{i}", BaseType = TypeFor(slot), Rarity = Rarity.Common,
         SellValue = 1, ItemLevel = 1, Element = element,
-        Family = 0,   // pinned: a weapon's family (and so its favoured Forms) otherwise hashes off the id
+        Family = 0,   // pinned: a weapon's family (and so its favoured styles) otherwise hashes off the id
     };
 
     /// <summary>A hunter wearing <paramref name="pieces"/> plain pieces of one element and nothing else.</summary>
@@ -53,14 +52,12 @@ public class element_sets_test
         return h;
     }
 
-    private static EquippedSkill Sk(Source src, Form form)
-        => new(new WovenAbility { Name = form.ToString(), Source = src, Form = form, Vow = null },
-               FormBehaviour.BaseCooldownMs(form));
+    private static EquippedSkill Sk(Source src, string skillId) => TestBuilds.Skill(skillId, source: src);
 
-    private static Build BuildOf(Source src, params Form[] forms)
+    private static Build BuildOf(Source src, params string[] skillIds)
     {
         var b = new Build();
-        foreach (var f in forms) b.Weave(Sk(src, f));
+        foreach (var id in skillIds) b.Weave(Sk(src, id));
         return b;
     }
 
@@ -138,10 +135,10 @@ public class element_sets_test
     [Fact]
     public void test_two_pieces_make_the_elements_own_skills_hit_harder_and_no_other()
     {
-        var bare = Fight(Plain(2), BuildOf(Source.Spirit, Form.Strike));
-        var two = Fight(Wearing(Source.Spirit, 2), BuildOf(Source.Spirit, Form.Strike));
-        var other = Fight(Wearing(Source.Spirit, 2), BuildOf(Source.Body, Form.Strike));
-        var bareOther = Fight(Plain(2), BuildOf(Source.Body, Form.Strike));
+        var bare = Fight(Plain(2), BuildOf(Source.Spirit, "hammer_blow"));
+        var two = Fight(Wearing(Source.Spirit, 2), BuildOf(Source.Spirit, "hammer_blow"));
+        var other = Fight(Wearing(Source.Spirit, 2), BuildOf(Source.Body, "hammer_blow"));
+        var bareOther = Fight(Plain(2), BuildOf(Source.Body, "hammer_blow"));
 
         Assert.True(Dealt(two.Events, true) > Dealt(bare.Events, true) * 1.05f, $"two Spirit pieces did not make Spirit skills hit harder: {Dealt(two.Events, true)} vs plain {Dealt(bare.Events, true)}");
         Assert.Equal(Dealt(bareOther.Events, true), Dealt(other.Events, true));   // a Body skill gets nothing from Spirit pieces
@@ -151,10 +148,10 @@ public class element_sets_test
     [Fact]
     public void test_four_pieces_pay_twice_what_two_do()
     {
-        var plain2 = Dealt(Fight(Plain(2), BuildOf(Source.Shadow, Form.Strike)).Events, true);
-        var plain4 = Dealt(Fight(Plain(4), BuildOf(Source.Shadow, Form.Strike)).Events, true);
-        var two = Dealt(Fight(Wearing(Source.Shadow, 2), BuildOf(Source.Shadow, Form.Strike)).Events, true);
-        var four = Dealt(Fight(Wearing(Source.Shadow, 4), BuildOf(Source.Shadow, Form.Strike)).Events, true);
+        var plain2 = Dealt(Fight(Plain(2), BuildOf(Source.Shadow, "hammer_blow")).Events, true);
+        var plain4 = Dealt(Fight(Plain(4), BuildOf(Source.Shadow, "hammer_blow")).Events, true);
+        var two = Dealt(Fight(Wearing(Source.Shadow, 2), BuildOf(Source.Shadow, "hammer_blow")).Events, true);
+        var four = Dealt(Fight(Wearing(Source.Shadow, 4), BuildOf(Source.Shadow, "hammer_blow")).Events, true);
         Assert.InRange(two / (float)plain2, 1.06f, 1.10f);
         Assert.InRange(four / (float)plain4, 1.14f, 1.18f);
     }
@@ -163,7 +160,7 @@ public class element_sets_test
     public void test_body_three_grows_the_pool_and_five_swings_harder()
     {
         var h5 = Wearing(Source.Body, 5);
-        var build = BuildOf(Source.Spirit, Form.Mark);   // a build that deals nothing of its own: the swing is the measure
+        var build = BuildOf(Source.Spirit, "sign_call");   // CALL deals nothing of its own: the swing is the measure
         Assert.True(SoloBattle.ChampionHealth(build, Wearing(Source.Body, 3)) > SoloBattle.ChampionHealth(build, Plain(3)) * 1.08f);
         var bare = Dealt(Fight(Plain(5), build).Events, false);
         var five = Dealt(Fight(h5, build).Events, false);
@@ -175,7 +172,7 @@ public class element_sets_test
     {
         int Taken(Hunter h, int hp = 100_000)
         {
-            var (_, champ, _) = Fight(h, BuildOf(Source.Machine, Form.Mark), enemyHp: 5_000_000f, enemyDmg: 30f, hp: hp);
+            var (_, champ, _) = Fight(h, BuildOf(Source.Machine, "sign_call"), enemyHp: 5_000_000f, enemyDmg: 30f, hp: hp);
             return hp - (int)champ.Health;
         }
         Assert.True(Taken(Wearing(Source.Machine, 3)) < Taken(Plain(3)), "three Machine pieces blunted nothing");
@@ -188,33 +185,34 @@ public class element_sets_test
     [Fact]
     public void test_mind_three_crits_more_and_five_stretches_the_mark()
     {
-        var bare = Fight(Plain(3), BuildOf(Source.Mind, Form.Strike));
-        var three = Fight(Wearing(Source.Mind, 3), BuildOf(Source.Mind, Form.Strike));
+        var bare = Fight(Plain(3), BuildOf(Source.Mind, "hammer_blow"));
+        var three = Fight(Wearing(Source.Mind, 3), BuildOf(Source.Mind, "hammer_blow"));
         // more crits land as bigger blows: the mean skill hit rises beyond the 2-piece rung's 8%
         Assert.True(Dealt(three.Events, true) > Dealt(bare.Events, true) * 1.09f, "three Mind pieces changed no crit");
-        // The fifth piece (boots, no damage of their own) stretches the window: the second Strike after a
-        // MARK lands lit at 3.75 s where the plain 2.5 s window had closed.
-        var marked = Fight(Wearing(Source.Mind, 4), BuildOf(Source.Mind, Form.Mark, Form.Strike, Form.Strike));
-        var stretched = Fight(Wearing(Source.Mind, 5), BuildOf(Source.Mind, Form.Mark, Form.Strike, Form.Strike));
+        // The fifth piece (boots, no damage of their own) stretches the window: CALL holds a 6 s mark
+        // against its own 7.5 s cast cycle (5 beats), so at four pieces each cycle ends dark — the
+        // 5-piece rung stretches the window by half and the hits that fell dark land lit.
+        var marked = Fight(Wearing(Source.Mind, 4), BuildOf(Source.Mind, "sign_call", "hammer_blow", "hammer_blow"));
+        var stretched = Fight(Wearing(Source.Mind, 5), BuildOf(Source.Mind, "sign_call", "hammer_blow", "hammer_blow"));
         Assert.True(Dealt(stretched.Events, true) > Dealt(marked.Events, true) * 1.03f, "five Mind pieces stretched no window");
     }
 
     [Fact]
     public void test_nature_three_regenerates_and_five_leeches()
     {
-        var (_, bareChamp, _) = Fight(new Hunter(), BuildOf(Source.Nature, Form.Strike), enemyDmg: 0f, hp: 100_000);
+        var (_, bareChamp, _) = Fight(new Hunter(), BuildOf(Source.Nature, "hammer_blow"), enemyDmg: 0f, hp: 100_000);
         var champ3 = new Champion { MaxHealth = 100_000, Health = 50_000 };
-        SoloBattle.ResolveWave(champ3, BuildOf(Source.Nature, Form.Mark), Wearing(Source.Nature, 3),
+        SoloBattle.ResolveWave(champ3, BuildOf(Source.Nature, "sign_call"), Wearing(Source.Nature, 3),
             new List<WaveCreature> { new() { MaxHealth = 5_000_000f, Health = 5_000_000f, Damage = 0f } },
             enemyIntervalMs: 900, ExpeditionTuning.Default, new Random(11));
         Assert.True(champ3.Health > 50_000 + 100_000 * 0.003f * 60, "three Nature pieces regained nothing");
 
         var champ5 = new Champion { MaxHealth = 100_000, Health = 50_000 };
-        SoloBattle.ResolveWave(champ5, BuildOf(Source.Nature, Form.Strike), Wearing(Source.Nature, 5),
+        SoloBattle.ResolveWave(champ5, BuildOf(Source.Nature, "hammer_blow"), Wearing(Source.Nature, 5),
             new List<WaveCreature> { new() { MaxHealth = 5_000_000f, Health = 5_000_000f, Damage = 0f } },
             enemyIntervalMs: 900, ExpeditionTuning.Default, new Random(11));
         var champ4 = new Champion { MaxHealth = 100_000, Health = 50_000 };
-        SoloBattle.ResolveWave(champ4, BuildOf(Source.Nature, Form.Strike), Wearing(Source.Nature, 4),
+        SoloBattle.ResolveWave(champ4, BuildOf(Source.Nature, "hammer_blow"), Wearing(Source.Nature, 4),
             new List<WaveCreature> { new() { MaxHealth = 5_000_000f, Health = 5_000_000f, Damage = 0f } },
             enemyIntervalMs: 900, ExpeditionTuning.Default, new Random(11));
         Assert.True(champ5.Health > champ4.Health, "the fifth Nature piece healed nothing");
@@ -227,7 +225,7 @@ public class element_sets_test
         float Weakened(Hunter h)
         {
             var champ = new Champion { MaxHealth = 100_000, Health = 100_000 };
-            var (_, e) = SoloBattle.ResolveWave(champ, BuildOf(Source.Shadow, Form.Strike), h,
+            var (_, e) = SoloBattle.ResolveWave(champ, BuildOf(Source.Shadow, "hammer_blow"), h,
                 new List<WaveCreature> { new() { MaxHealth = 100_000_000f, Health = 20_000_000f, Damage = 0f } },
                 enemyIntervalMs: 900, ExpeditionTuning.Default, new Random(11));
             return Dealt(e, true);
@@ -237,16 +235,16 @@ public class element_sets_test
         int Casts(Hunter h)
         {
             var champ = new Champion { MaxHealth = 100_000, Health = 100_000 };
-            var (_, e) = SoloBattle.ResolveWave(champ, BuildOf(Source.Shadow, Form.Strike), h,
+            var (_, e) = SoloBattle.ResolveWave(champ, BuildOf(Source.Shadow, "hammer_blow"), h,
                 Enumerable.Range(0, 5).Select(_ => new WaveCreature { MaxHealth = 30f, Health = 30f, Damage = 0f }).ToList(),
                 enemyIntervalMs: 900, ExpeditionTuning.Default with { AutoAttackDamage = 0f }, new Random(11));
             return e.Count(x => x.Kind == BattleEventKind.Skill);
         }
-        // Five kills, each refunding a beat: the five Strikes land in fewer beats than without.
+        // Five kills, each refunding a beat: the five BLOWs land in fewer beats than without.
         int KillMs(Hunter h)
         {
             var champ = new Champion { MaxHealth = 100_000, Health = 100_000 };
-            var (_, e) = SoloBattle.ResolveWave(champ, BuildOf(Source.Shadow, Form.Strike), h,
+            var (_, e) = SoloBattle.ResolveWave(champ, BuildOf(Source.Shadow, "hammer_blow"), h,
                 Enumerable.Range(0, 5).Select(_ => new WaveCreature { MaxHealth = 30f, Health = 30f, Damage = 0f }).ToList(),
                 enemyIntervalMs: 900, ExpeditionTuning.Default with { AutoAttackDamage = 0f }, new Random(11));
             return e.Where(x => x.Kind == BattleEventKind.EnemyDown).Max(x => x.AtMs);
@@ -260,14 +258,14 @@ public class element_sets_test
     {
         int Actions(Hunter h)
         {
-            var (e, _, _) = Fight(h, BuildOf(Source.Spirit, Form.Strike));
+            var (e, _, _) = Fight(h, BuildOf(Source.Spirit, "hammer_blow"));
             return e.Count(x => x.Kind == BattleEventKind.Strike);
         }
         Assert.True(Actions(Wearing(Source.Spirit, 3)) > Actions(Wearing(Source.Spirit, 2)), "three Spirit pieces sped nothing");
 
         int FirstHit(Hunter h)
         {
-            var (e, _, _) = Fight(h, BuildOf(Source.Spirit, Form.Strike));
+            var (e, _, _) = Fight(h, BuildOf(Source.Spirit, "hammer_blow"));
             return e.First(x => x.Kind == BattleEventKind.Strike && x.FromSkill).Amount;
         }
         Assert.InRange(FirstHit(Wearing(Source.Spirit, 5)) / (float)FirstHit(Wearing(Source.Spirit, 4)), 1.20f, 1.30f);

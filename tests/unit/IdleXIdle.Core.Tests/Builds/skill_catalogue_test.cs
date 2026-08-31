@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Builds;
 using Xunit;
 
@@ -122,9 +121,9 @@ public class SkillCatalogueTests
     [Fact]
     public void test_no_active_cooldown_outlives_a_wave()
     {
-        // Waves run 6-15 seconds; a cooldown longer than one can never fire. The invariant
-        // test_cooldowns_are_sized_to_a_wave_not_to_each_other pins for the Form table, kept here so
-        // a new skill cannot reintroduce it.
+        // Waves run 6-15 seconds; a cooldown longer than one can never fire. An Active's cooldown
+        // is Beats * SoloBattle.DefaultBeatMs, so the beat count is the whole knob — pinned so a
+        // new skill cannot reintroduce a cooldown that outlives the wave.
         foreach (var d in SkillCatalogue.All.Where(s => s.TakesABeat))
             Assert.True(d.Beats <= 6, $"{d.Name} waits {d.Beats} beats, which outlives a wave.");
     }
@@ -160,46 +159,6 @@ public class SkillCatalogueTests
             Assert.Equal(SkillCatalogue.RingDistance(b, a), d);
             Assert.InRange(d, 0, 3);
             Assert.Equal(a == b, d == 0);
-        }
-    }
-
-    [Fact]
-    public void test_every_saved_form_resolves_in_both_slots()
-    {
-        // The migration bridge. A saved build holds a Form ordinal; every one must resolve, in either
-        // slot, or a player's build is silently unwoven on load.
-        foreach (var form in Enum.GetValues<Form>())
-        {
-            var active = SkillCatalogue.Resolve(form, passive: false);
-            var passive = SkillCatalogue.Resolve(form, passive: true);
-            Assert.NotNull(active);
-            Assert.NotNull(passive);
-            Assert.False(passive.TakesABeat, $"{form} in a passive slot resolved to something that costs a beat.");
-            // Both stay inside the style: a spill changes the ABILITY, never the identity.
-            Assert.Equal(active.Style, passive.Style);
-        }
-    }
-
-    [Fact]
-    public void test_a_spilled_active_becomes_its_styles_passive_skill()
-    {
-        // Under the two-faces design an overflowing active took the passive face of the SAME skill.
-        // With distinct skills it becomes a different ability of the same style — which is why the
-        // spill has to be resolved here rather than by a flag on the equipped skill.
-        var strike = SkillCatalogue.Resolve(Form.Strike, passive: false);
-        Assert.True(strike.TakesABeat);
-        var spilled = SkillCatalogue.Resolve(Form.Strike, passive: true);
-        Assert.Equal(Style.Hammer, spilled.Style);
-        Assert.False(spilled.TakesABeat);
-        Assert.NotEqual(strike.Id, spilled.Id);
-
-        // AURA and TRAP were never actives, but their STYLES have one — and asking for an active
-        // slot must reach it, or FIELD's PULSE and SNARE's REPAY have no door at all.
-        foreach (var f in new[] { Form.Aura, Form.Trap })
-        {
-            Assert.True(SkillCatalogue.Resolve(f, passive: false).TakesABeat);
-            Assert.False(SkillCatalogue.Resolve(f, passive: true).TakesABeat);
-            Assert.NotEqual(SkillCatalogue.Resolve(f, passive: false), SkillCatalogue.Resolve(f, passive: true));
         }
     }
 

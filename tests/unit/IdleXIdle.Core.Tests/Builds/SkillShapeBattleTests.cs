@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
@@ -30,14 +29,12 @@ namespace IdleXIdle.Core.Tests.Builds;
 /// </remarks>
 public class SkillShapeBattleTests
 {
-    private static EquippedSkill Sk(Form form)
-        => new(new WovenAbility { Name = form.ToString(), Source = Source.Nature, Form = form, Vow = null },
-               FormBehaviour.BaseCooldownMs(form));
+    private static EquippedSkill Sk(string skillId) => TestBuilds.Skill(skillId, Source.Nature);
 
-    private static Build BuildWith(SkillShape shape, params Form[] forms)
+    private static Build BuildWith(SkillShape shape, params string[] skillIds)
     {
         var b = new Build { Shape = shape };
-        foreach (var f in forms) b.Weave(Sk(f));
+        foreach (var id in skillIds) b.Weave(Sk(id));
         return b;
     }
 
@@ -64,8 +61,8 @@ public class SkillShapeBattleTests
         }).ToList();
 
     /// <summary>Run one wave and return what it measured.</summary>
-    private static WaveMetrics Fight(SkillShape shape, List<WaveCreature> creatures, params Form[] forms)
-        => Fight(shape, creatures, ExpeditionTuning.Default, forms);
+    private static WaveMetrics Fight(SkillShape shape, List<WaveCreature> creatures, params string[] skillIds)
+        => Fight(shape, creatures, ExpeditionTuning.Default, skillIds);
 
     /// <summary>
     /// The basic attack switched off — for a probe that must isolate ONE node's effect on the skills.
@@ -73,11 +70,11 @@ public class SkillShapeBattleTests
     /// </summary>
     private static readonly ExpeditionTuning NoSwing = ExpeditionTuning.Default with { AutoAttackDamage = 0f };
 
-    private static WaveMetrics Fight(SkillShape shape, List<WaveCreature> creatures, ExpeditionTuning tuning, params Form[] forms)
+    private static WaveMetrics Fight(SkillShape shape, List<WaveCreature> creatures, ExpeditionTuning tuning, params string[] skillIds)
     {
         var metrics = new WaveMetrics();
         SoloBattle.ResolveWave(
-            Champ(), BuildWith(shape, forms.Length == 0 ? new[] { Form.Strike } : forms), new Hunter(),
+            Champ(), BuildWith(shape, skillIds.Length == 0 ? new[] { "hammer_blow" } : skillIds), new Hunter(),
             creatures, enemyIntervalMs: 900, tuning, new Random(11),
             metrics: metrics);
         return metrics;
@@ -140,12 +137,13 @@ public class SkillShapeBattleTests
     {
         var shape = SkillShape.None with { OverwhelmFloor = 60f };
 
-        // Aura ticks are tiny by construction — far below the floor. The comparison is against the same
-        // build WITHOUT the mastery rather than against zero, because the background auto-attack is not a
-        // skill and correctly ignores the floor; asserting a flat zero measured the auto-attack instead.
+        // MIRE's ticks are tiny by construction (12 a second) — far below the floor. The comparison is
+        // against the same build WITHOUT the mastery rather than against zero, because the background
+        // auto-attack is not a skill and correctly ignores the floor; asserting a flat zero measured the
+        // auto-attack instead.
         var tiny = () => Wave(3, 900f, 20f);
-        var unhindered = Fight(SkillShape.None, tiny(), NoSwing, Form.Aura);
-        var floored = Fight(shape, tiny(), NoSwing, Form.Aura);
+        var unhindered = Fight(SkillShape.None, tiny(), NoSwing, "field_mire");
+        var floored = Fight(shape, tiny(), NoSwing, "field_mire");
 
         Assert.True(floored.DeliveredDamage < unhindered.DeliveredDamage * 0.25f,
             $"Small hits delivered {floored.DeliveredDamage:F0} against {unhindered.DeliveredDamage:F0} " +
@@ -157,8 +155,8 @@ public class SkillShapeBattleTests
         // card-true JAWS reflects half the BITE now, and a 20-damage biter reflects ~10 — the
         // smallest hit in the game, which is the opposite of what this half of the test needs.)
         var heavy = () => Wave(1, 40000f, 20f, defense: 200f);
-        var plain = Fight(SkillShape.None, heavy(), NoSwing, Form.Strike);
-        var over = Fight(shape, heavy(), NoSwing, Form.Strike);
+        var plain = Fight(SkillShape.None, heavy(), NoSwing, "hammer_blow");
+        var over = Fight(shape, heavy(), NoSwing, "hammer_blow");
 
         Assert.True(over.DeliveredDamage > plain.DeliveredDamage,
             "A large hit did not ignore armour — OVERWHELM is charging its price and paying nothing.");
@@ -168,8 +166,10 @@ public class SkillShapeBattleTests
     [Fact]
     public void test_sunder_strips_armour_during_the_wave()
     {
+        // JAWS's reflect is the skill hit here — the biter springs it every re-arm, and each spring
+        // clears the 1-damage threshold.
         var creatures = Wave(1, 60000f, 20f, defense: 150f);
-        Fight(SkillShape.None with { SunderThreshold = 1f, SunderAmount = 20f }, creatures, Form.Trap);
+        Fight(SkillShape.None with { SunderThreshold = 1f, SunderAmount = 20f }, creatures, "snare_jaws");
 
         Assert.True(creatures[0].Defense < 150f,
             "The creature's armour is untouched — SUNDER is a label on a node that does nothing.");
@@ -185,7 +185,7 @@ public class SkillShapeBattleTests
         // 40 000 health each: nothing dies during the fight, so every cast finds all five (a creature
         // that fell to the beat's heavier hits made the average read 4.4 of 5).
         var m = Fight(SkillShape.None with { StrikesEveryCreature = true, HitSize = 0.4f },
-                      Wave(5, 40_000f, 10f), Form.Strike);
+                      Wave(5, 40_000f, 10f), "hammer_blow");
 
         Assert.True(m.TargetsPerActivation >= 4.5f,
             $"One cast reached {m.TargetsPerActivation:F1} creatures of five. EVERYWHERE reaches all of them.");
@@ -197,8 +197,8 @@ public class SkillShapeBattleTests
     {
         var swarm = () => Wave(5, 1200f, 10f);
 
-        var plain = Fight(SkillShape.None, swarm(), Form.Strike);
-        var chained = Fight(SkillShape.None with { ChainFraction = 0.5f }, swarm(), Form.Strike);
+        var plain = Fight(SkillShape.None, swarm(), "hammer_blow");
+        var chained = Fight(SkillShape.None with { ChainFraction = 0.5f }, swarm(), "hammer_blow");
 
         Assert.True(chained.TargetsPerActivation > plain.TargetsPerActivation);
     }
@@ -211,8 +211,8 @@ public class SkillShapeBattleTests
     {
         var wave = () => Wave(2, 1400f, 12f, archetype: Archetype.Caster);
 
-        var neutral = Fight(SkillShape.None, wave(), Form.Strike, Form.Projectile);
-        var tempo = Fight(WholeBranch(Branch.Tempo), wave(), Form.Strike, Form.Projectile);
+        var neutral = Fight(SkillShape.None, wave(), "hammer_blow", "volley_spray");
+        var tempo = Fight(WholeBranch(Branch.Tempo), wave(), "hammer_blow", "volley_spray");
 
         Assert.True(tempo.DurationMs < neutral.DurationMs,
             $"Tempo took {tempo.DurationMs}ms against {neutral.DurationMs}ms. The branch that exists to " +
@@ -223,14 +223,14 @@ public class SkillShapeBattleTests
     [Fact]
     public void test_preparation_frees_the_opening_cast()
     {
-        // NOT Trap: Trap fires only when bitten, so it never walks the cooldown path this node changes.
-        // 200 health: one Strike kills it, so the kill IS the opening cast — with PREPARATION on the
-        // wave's first beat, without it on the second (the beat model, 2026-08-27). At 300 both builds
-        // needed the same number of beats and the swing masked the opener.
+        // NOT JAWS: a Reaction fires only when bitten, so it never walks the cooldown path this node
+        // changes. 200 health: one BLOW kills it, so the kill IS the opening cast — with PREPARATION on
+        // the wave's first beat, without it on BLOW's own sixth (the beat model, 2026-08-27). At 300
+        // both builds needed the same number of beats and the swing masked the opener.
         var wave = () => Wave(1, 200f, 5f);
 
-        var waited = Fight(SkillShape.None, wave(), NoSwing, Form.Strike);
-        var ready = Fight(SkillShape.None with { FreeOpeningCast = true }, wave(), NoSwing, Form.Strike);
+        var waited = Fight(SkillShape.None, wave(), NoSwing, "hammer_blow");
+        var ready = Fight(SkillShape.None with { FreeOpeningCast = true }, wave(), NoSwing, "hammer_blow");
 
         Assert.True(ready.DurationMs < waited.DurationMs,
             "The opening cast still waited a full cooldown — PREPARATION does nothing.");
@@ -243,11 +243,12 @@ public class SkillShapeBattleTests
         var weakened = Wave(1, 20000f, 10f);
         weakened[0].Health = 3000f;   // 15% — under the threshold
 
-        var m = Fight(SkillShape.None with { AssassinateThreshold = 0.40f }, weakened, Form.Strike);
+        var m = Fight(SkillShape.None with { AssassinateThreshold = 0.40f }, weakened, "hammer_blow");
 
         Assert.Equal(1, m.CreaturesKilled);
-        // The opening cast waits one cooldown (3000 ms since 2026-08-26); the kill must be THAT cast.
-        Assert.True(m.DurationMs <= FormBehaviour.BaseCooldownMs(Form.Strike) + 200,
+        // The opening cast waits one full cooldown — BLOW's own Beats, in beat time; the kill must be
+        // THAT cast.
+        Assert.True(m.DurationMs <= SkillCatalogue.ById("hammer_blow").Beats * SoloBattle.DefaultBeatMs + 200,
             "A creature under the threshold survived long enough that ordinary damage killed it — the " +
             "node is not firing, it is being overtaken.");
     }
@@ -329,9 +330,9 @@ public class SkillShapeBattleTests
     /// </summary>
     /// <remarks>
     /// Measured on duration, not activations: both builds make the same six kills, so the count is the
-    /// same; what the refund buys is the six kills arriving sooner. A Strike recovers in 2,000ms and a
-    /// kill hands back 1,000, so with one kill per swing the second half of the wave should run at
-    /// roughly double pace.
+    /// same; what the refund buys is the six kills arriving sooner. BLOW recovers in six beats (9 s)
+    /// and a kill hands back 3,000 ms, so with one kill per cast the back half of the wave runs
+    /// visibly faster.
     /// </remarks>
     [Fact]
     public void test_momentum_refunds_cooldowns_on_every_kill()
@@ -343,8 +344,8 @@ public class SkillShapeBattleTests
         // 3000 ms, was 1000: a Strike waits six beats (9 s) since 2026-08-29, so a one-second refund is
         // 11% of the wait and the measurement is noise. The node's liveness is what is under test, not its
         // size — the catalogue's own MOMENTUM is a beat, which this proves reaches the beat table.
-        var plain = Fight(SkillShape.None, field(), NoSwing, Form.Strike);
-        var momentum = Fight(SkillShape.None with { CooldownRefundOnKillMs = 3_000 }, field(), NoSwing, Form.Strike);
+        var plain = Fight(SkillShape.None, field(), NoSwing, "hammer_blow");
+        var momentum = Fight(SkillShape.None with { CooldownRefundOnKillMs = 3_000 }, field(), NoSwing, "hammer_blow");
 
         Assert.Equal(6, plain.CreaturesKilled);
         Assert.Equal(6, momentum.CreaturesKilled);
@@ -362,8 +363,8 @@ public class SkillShapeBattleTests
         var shape = SkillShape.None with { CooldownRefundOnKillMs = 1_000 };
 
         // One creature with the health of six: one kill, one refund, and nothing left to spend it on.
-        var one = Fight(shape, Wave(1, 180f, 5f), Form.Strike);
-        var onePlain = Fight(SkillShape.None, Wave(1, 180f, 5f), Form.Strike);
+        var one = Fight(shape, Wave(1, 180f, 5f), "hammer_blow");
+        var onePlain = Fight(SkillShape.None, Wave(1, 180f, 5f), "hammer_blow");
         Assert.Equal(onePlain.DurationMs, one.DurationMs);
     }
 
@@ -372,18 +373,17 @@ public class SkillShapeBattleTests
     /// </summary>
     /// <remarks>
     /// The champion's own damage is identical in both runs (same skills, same seed), so any change in
-    /// how long the creature lasts is the thorns and nothing else. 3,000 health, not more: a bare
-    /// Strike lands roughly 28 a second, so a pool a lone Strike cannot empty inside the 120-second
-    /// ceiling makes BOTH runs stall at the ceiling and the metric saturates — the same fixture trap
-    /// the class remarks describe for health.
+    /// how long the creature lasts is the thorns and nothing else. 3,000 health, not more: a pool a
+    /// lone BLOW build cannot empty inside the 120-second ceiling makes BOTH runs stall at the ceiling
+    /// and the metric saturates — the same fixture trap the class remarks describe for health.
     /// </remarks>
     [Fact]
     public void test_thorns_return_a_share_of_every_bite()
     {
         var bruiser = () => Wave(1, 3_000f, 300f, archetype: Archetype.Bruiser);
 
-        var plain = Fight(SkillShape.None, bruiser(), Form.Strike);
-        var thorns = Fight(SkillShape.None with { ReflectFraction = 0.20f }, bruiser(), Form.Strike);
+        var plain = Fight(SkillShape.None, bruiser(), "hammer_blow");
+        var thorns = Fight(SkillShape.None with { ReflectFraction = 0.20f }, bruiser(), "hammer_blow");
 
         Assert.True(thorns.DurationMs < plain.DurationMs,
             $"With THORNS the bruiser lasted {thorns.DurationMs}ms against {plain.DurationMs}ms without. " +
@@ -401,8 +401,8 @@ public class SkillShapeBattleTests
     {
         var shape = SkillShape.None with { ReflectFraction = 0.20f };
 
-        var light = Fight(shape, Wave(1, 3_000f, 100f), Form.Strike);
-        var heavy = Fight(shape, Wave(1, 3_000f, 600f), Form.Strike);
+        var light = Fight(shape, Wave(1, 3_000f, 100f), "hammer_blow");
+        var heavy = Fight(shape, Wave(1, 3_000f, 600f), "hammer_blow");
 
         Assert.True(light.DurationMs < ExpeditionTuning.Default.TickCeilingMs
                     && heavy.DurationMs < ExpeditionTuning.Default.TickCeilingMs,
