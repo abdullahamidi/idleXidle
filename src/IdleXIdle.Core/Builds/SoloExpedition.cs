@@ -77,8 +77,13 @@ public sealed class SoloExpedition
     /// </remarks>
     public int RunIndex { get; set; }
 
-// (LastWaveTopForm retired 2026-08-31 — declared for the WARDED affix, assigned by nothing,
-    // read by nothing. WARDED's own verdict is an encounters-phase decision.)
+    /// <summary>
+    /// The STYLE whose skills dealt the most damage LAST wave — what WARDED wards. Null until a wave
+    /// has resolved: the affix needs history and must not guess, so it never applies on a run's first
+    /// wave. Ties break toward more casts, then by style order — deterministic, because the player
+    /// must be able to predict what tomorrow's wall resists.
+    /// </summary>
+    public Style? LastWaveTopStyle { get; private set; }
 
     /// <summary>The composition the last resolved wave held — the report reads this.</summary>
     public IReadOnlyList<WaveCreature> LastWaveCreatures { get; private set; } = Array.Empty<WaveCreature>();
@@ -334,8 +339,21 @@ public sealed class SoloExpedition
         var sustain = Bands.SustainMultiplier(affixes);
         var (outcome, events) = SoloBattle.ResolveWave(
             _champion, _build, _hunter, creatures, biteInterval, _tuning, _rng, bonus, isBoss, metrics,
-            sustain);
+            sustain,
+            wardedStyle: affixes.Contains(Affix.Warded) ? LastWaveTopStyle : null,
+            entrenched: affixes.Contains(Affix.Entrenched),
+            legionSplits: affixes.Contains(Affix.Legion));
         Recorder.Record(next, metrics);
+
+        // The ledger WARDED reads next wave: this wave's top style by damage, ties toward more casts,
+        // then style order. A wave in which no skill landed wards nothing.
+        LastWaveTopStyle = metrics.StyleDamage.Count == 0
+            ? null
+            : metrics.StyleDamage
+                .OrderByDescending(kv => kv.Value)
+                .ThenByDescending(kv => metrics.StyleActivations.GetValueOrDefault(kv.Key))
+                .ThenBy(kv => (int)kv.Key)
+                .First().Key;
 
         LastOutcome = outcome;
         LastWaveEvents = events;

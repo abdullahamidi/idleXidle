@@ -136,6 +136,12 @@ public sealed class WaveMetrics
 
     /// <summary>Creatures reached per cast. The Spread axis, as one number.</summary>
     public float TargetsPerActivation => Activations <= 0 ? 0f : TargetsStruck / (float)Activations;
+
+    /// <summary>Skill damage landed, by the skill's STYLE — the ledger WARDED reads next wave.</summary>
+    public Dictionary<Style, float> StyleDamage { get; } = new();
+
+    /// <summary>Skill casts by STYLE — WARDED's deterministic tie-break.</summary>
+    public Dictionary<Style, int> StyleActivations { get; } = new();
 }
 
 /// <summary>
@@ -347,6 +353,18 @@ public static class SoloBattle
     /// <summary>How long UNDYING's shield reads as lit on the champion, in ms — the event's Amount.</summary>
     public const int UndyingShieldMs = 1_500;
 
+    /// <summary>WARDED — what the warded STYLE's skills still deal (the other 60% is resisted).</summary>
+    public const float WardedResistFactor = 0.4f;
+
+    /// <summary>ENTRENCHED — the share the first hit on each creature deals.</summary>
+    public const float EntrenchedFirstHitFactor = 0.25f;
+
+    /// <summary>LEGION — a split child arrives at this share of its parent's strength.</summary>
+    public const float LegionChildFactor = 0.5f;
+
+    /// <summary>LEGION — the wave never grows past this many creatures (a Swarm band cannot soft-lock).</summary>
+    public const int LegionMaxCreatures = 8;
+
     /// <summary>
     /// The gap between two casts at skill rate 1: the cast clip's authored length. The real gap is this
     /// divided by the build's skill rate (see the cast loop), so a faster build casts — and animates —
@@ -424,7 +442,10 @@ public static class SoloBattle
         WaveBonus? bonus = null,
         bool isBoss = false,
         WaveMetrics? metrics = null,
-        float sustain = 1f)
+        float sustain = 1f,
+        Style? wardedStyle = null,
+        bool entrenched = false,
+        bool legionSplits = false)
     {
         ArgumentNullException.ThrowIfNull(creatures);
         if (creatures.Count == 0) throw new ArgumentException("A wave needs at least one creature.", nameof(creatures));
@@ -433,6 +454,13 @@ public static class SoloBattle
         ArgumentNullException.ThrowIfNull(hunter);
         ArgumentNullException.ThrowIfNull(tuning);
         ArgumentNullException.ThrowIfNull(rng);
+
+        // LEGION appends its splits into the CALLER'S list — the live path always passes a List — so
+        // the expedition's LastWaveCreatures, and through it the screen's composition and the enemy
+        // bar's total, include the brood. Every roster walk in here is index-based, so appending
+        // mid-wave is safe. Only creatures minted WITH the wave split; a child does not re-split.
+        var legionRoster = legionSplits ? creatures as List<WaveCreature> : null;
+        var legionBrood = legionRoster is null ? null : new HashSet<WaveCreature>(creatures);
 
         var events = new List<BattleEvent>();
         var mods = build.Resolve(hunter);
@@ -451,6 +479,7 @@ public static class SoloBattle
         // Per-wave state the shape's conditional nodes need. All of it is local, so nothing leaks into
         // the next wave — which matters most for SUNDER, whose armour strip is explicitly wave-scoped.
         var struckOnce = new HashSet<WaveCreature>();   // FOLLOW THROUGH / OPENER / ALPHA
+        var entrenchedStruck = entrenched ? new HashSet<WaveCreature>() : null;   // ENTRENCHED — first hit each
         var assassinated = false;                       // ASSASSINATE — once per wave
         // SIGNATURE state. Wounds and bent armour are per-CREATURE (they die with the wave); the
         // Spirit prime and the Mind budget are per-champion moments inside it.
@@ -901,6 +930,12 @@ public static class SoloBattle
             // would leave the Venom path with nothing to be good at.
             if (metrics is not null) metrics.RawDamage += dmg;
 
+            // ENTRENCHED — the first hit on each creature deals a quarter. ANY first hit: the swing, a
+            // cast, even the poison's first tick. Dug-in is dug-in — it punishes openers by name, which
+            // is the affix's whole pressure (TEMPO, and Alpha/First Strike specifically).
+            if (entrenchedStruck is not null && entrenchedStruck.Add(target))
+                dmg *= EntrenchedFirstHitFactor;
+
             var raw = dmg;
 
             // ARMOUR IS FLAT AND SIGNED. It used to be guarded on `Defense > 0f`, and under that guard
@@ -945,6 +980,22 @@ public static class SoloBattle
                 // One EnemyDown per CREATURE, not per wave. The screen needs to know which sprite to
                 // remove; the wave-cleared signal is the outcome, not this event.
                 events.Add(new BattleEvent(BattleEventKind.EnemyDown, idx, 0, atMs));
+
+                // LEGION — the creature splits once on death: two half-strength copies join the wave.
+                // Only originals split (children carry no brood mark), and the roster never grows past
+                // LegionMaxCreatures — the design's cap, so a Swarm band cannot soft-lock.
+                if (legionRoster is not null && legionBrood!.Remove(target))
+                    for (var twin = 0; twin < 2 && legionRoster.Count < LegionMaxCreatures; twin++)
+                    {
+                        legionRoster.Add(new WaveCreature
+                        {
+                            MaxHealth = MathF.Max(1f, target.MaxHealth * LegionChildFactor),
+                            Health = MathF.Max(1f, target.MaxHealth * LegionChildFactor),
+                            Damage = target.Damage * LegionChildFactor,
+                            Defense = target.Defense, Source = target.Source, Archetype = target.Archetype,
+                        });
+                        alive++;
+                    }
 
                 // WEEP — a kill leaves bleed on the wave, worth a share of what died. Read here
                 // rather than in the skill loop so ANY kill pays: a cast, the plain swing, a carried
@@ -1012,6 +1063,12 @@ public static class SoloBattle
             // Raw is scaled before the per-target loop so every hit carries the same bank.
             if (fromSkill && biteFuel > 0) { raw *= 1f + shape.BiteFuelBonus * biteFuel; biteFuel = 0; }
 
+            // WARDED — the wave resists the style that hurt it most LAST wave (SoloExpedition keeps the
+            // ledger and passes it). Previous wave on purpose: the player can see it coming, and an
+            // affix that reacted to the wave in progress would be unanswerable in a game with no
+            // in-run decisions. It reads the SKILL's style, so the plain swing is never warded.
+            if (fromSkill && wardedStyle is { } ws && skillDef?.Style == ws) raw *= WardedResistFactor;
+
             var dealt = 0f;
             var struck = 0;
             for (var i = 0; i < creatures.Count && struck < targets; i++)
@@ -1036,6 +1093,14 @@ public static class SoloBattle
                 }
                 struck++;
                 if (fromSkill && countsAsActivation && metrics is not null) metrics.TargetsStruck++;
+            }
+
+            if (fromSkill && skillDef is { } sd && metrics is not null)
+            {
+                // The per-style ledger WARDED reads next wave: damage, and casts for its tie-break.
+                metrics.StyleDamage[sd.Style] = metrics.StyleDamage.GetValueOrDefault(sd.Style) + dealt;
+                if (countsAsActivation)
+                    metrics.StyleActivations[sd.Style] = metrics.StyleActivations.GetValueOrDefault(sd.Style) + 1;
             }
 
             if (!fromSkill) return dealt;

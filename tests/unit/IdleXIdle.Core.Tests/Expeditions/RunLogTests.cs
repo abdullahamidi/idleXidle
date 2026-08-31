@@ -116,6 +116,36 @@ public class RunLogTests
         Assert.Equal(before.SampledWaves, after.SampledWaves);
     }
 
+    /// <summary>Old saves wrote bare enum ints; they read through the frozen table, never a cast.</summary>
+    [Fact]
+    public void test_a_legacy_int_only_report_maps_its_affixes_through_the_frozen_table()
+    {
+        // An old report's ints, written when the enum still carried HOLLOW at 9 and LEGION at 10.
+        var s = RunLog.ToSave(Report("cinderworks", 31)) with
+        {
+            OutcomeName = null, WallArchetypeName = null, WallAffixNames = new List<string>(),
+            WallAffixes = new List<int> { 8, 9, 10, 99 },   // Warded, Hollow (retired), Legion, garbage
+        };
+
+        var report = RunLog.FromSave(s);
+
+        Assert.Equal(new[] { Affix.Warded, Affix.Legion }, report.WallAffixes);
+    }
+
+    /// <summary>A report written today carries its enums as names — retiring a member can never re-label a wall.</summary>
+    [Fact]
+    public void test_a_report_written_today_carries_its_enums_as_names()
+    {
+        var s = RunLog.ToSave(Report("cinderworks", 31) with
+        {
+            WallAffixes = new List<Affix> { Affix.Legion },
+        });
+
+        Assert.Equal("Legion", Assert.Single(s.WallAffixNames));
+        Assert.False(string.IsNullOrEmpty(s.OutcomeName));
+        Assert.False(string.IsNullOrEmpty(s.WallArchetypeName));
+    }
+
     /// <summary>The whole log round-trips in order.</summary>
     [Fact]
     public void test_the_log_survives_a_save_round_trip()

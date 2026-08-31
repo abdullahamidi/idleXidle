@@ -38,17 +38,14 @@ public enum Affix
     Swift,
 
     /// <summary>
-    /// Enemies take 60% less from whichever Form dealt the most damage LAST wave. Pressures
-    /// concentration rather than a shape — the strongest push toward carrying more than one Form.
+    /// Enemies take 60% less from whichever STYLE dealt the most damage LAST wave. Pressures
+    /// concentration rather than a shape — the strongest push toward carrying more than one style.
     /// </summary>
     /// <remarks>
     /// It reads the PREVIOUS wave, not the current one, so the player can see it coming. An affix that
     /// reacted to the wave in progress would be unanswerable in a game with no in-run decisions.
     /// </remarks>
     Warded,
-
-    /// <summary>No chests, doubled haul. An economy decision rather than a combat one.</summary>
-    Hollow,
 
     /// <summary>Each creature splits once on death. Pressures SPREAD.</summary>
     Legion,

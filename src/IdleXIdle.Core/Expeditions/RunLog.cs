@@ -95,9 +95,12 @@ public sealed class RunLog
             Depth = r.Depth,
             IsRecord = r.IsRecord,
             Outcome = (int)r.Outcome,
+            OutcomeName = r.Outcome.ToString(),
             WallWave = r.WallWave,
             WallArchetype = (int)r.WallArchetype,
+            WallArchetypeName = r.WallArchetype.ToString(),
             WallAffixes = r.WallAffixes.Select(a => (int)a).ToList(),
+            WallAffixNames = r.WallAffixes.Select(a => a.ToString()).ToList(),
             WallCreatures = r.WallCreatures,
             AbsorbedFraction = r.AbsorbedFraction,
             AverageHitSize = r.AverageHitSize,
@@ -117,10 +120,16 @@ public sealed class RunLog
             RegionId = s.RegionId,
             Depth = s.Depth,
             IsRecord = s.IsRecord,
-            Outcome = (WaveOutcome)s.Outcome,
+            Outcome = Enum.TryParse<WaveOutcome>(s.OutcomeName, out var oc) ? oc : (WaveOutcome)s.Outcome,
             WallWave = s.WallWave,
-            WallArchetype = (Encounters.Archetype)s.WallArchetype,
-            WallAffixes = s.WallAffixes.Select(a => (Encounters.Affix)a).ToList(),
+            WallArchetype = Enum.TryParse<Encounters.Archetype>(s.WallArchetypeName, out var arch)
+                ? arch
+                : (Encounters.Archetype)s.WallArchetype,
+            WallAffixes = s.WallAffixNames.Count > 0
+                ? s.WallAffixNames
+                    .Select(n => Enum.TryParse<Encounters.Affix>(n, out var a) ? a : (Encounters.Affix?)null)
+                    .Where(a => a is not null).Select(a => a!.Value).ToList()
+                : s.WallAffixes.Select(LegacyAffix).Where(a => a is not null).Select(a => a!.Value).ToList(),
             WallCreatures = s.WallCreatures,
             AbsorbedFraction = s.AbsorbedFraction,
             AverageHitSize = s.AverageHitSize,
@@ -131,4 +140,21 @@ public sealed class RunLog
             SampledWaves = s.SampledWaves,
         };
     }
+
+    /// <summary>
+    /// The Affix enum's order AS IT WAS while reports saved bare ints (through 2026-08-31). Frozen:
+    /// HOLLOW (9) was cut from the enum — authored into no band, implementing no rule — which shifted
+    /// every later member, so a bare int from an old save must come through this table, never a cast.
+    /// Saves written since carry names, and an unknown name (a future retirement) is skipped the same
+    /// way the null row is here.
+    /// </summary>
+    private static readonly Encounters.Affix?[] LegacyAffixByIndex =
+    {
+        Encounters.Affix.None, Encounters.Affix.Numbers, Encounters.Affix.Plated, Encounters.Affix.Ritual,
+        Encounters.Affix.Endless, Encounters.Affix.Brittle, Encounters.Affix.Entrenched, Encounters.Affix.Swift,
+        Encounters.Affix.Warded, null /* Hollow — retired */, Encounters.Affix.Legion,
+    };
+
+    private static Encounters.Affix? LegacyAffix(int index)
+        => index >= 0 && index < LegacyAffixByIndex.Length ? LegacyAffixByIndex[index] : null;
 }

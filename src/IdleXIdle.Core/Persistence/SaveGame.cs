@@ -347,6 +347,14 @@ public sealed record RunReportSave
     public int WallWave { get; init; }
     public int WallArchetype { get; init; }
     public List<int> WallAffixes { get; init; } = new();
+
+    // ── 2026-08-31 (P13): enums travel by NAME. The bare ints above remain for saves written before,
+    //    read through a frozen legacy table (RunLog.LegacyAffixByIndex) because the Affix enum has
+    //    since changed shape. ──
+    public string? OutcomeName { get; init; }
+    public string? WallArchetypeName { get; init; }
+    public List<string> WallAffixNames { get; init; } = new();
+
     public int WallCreatures { get; init; }
     public float AbsorbedFraction { get; init; }
     public float AverageHitSize { get; init; }

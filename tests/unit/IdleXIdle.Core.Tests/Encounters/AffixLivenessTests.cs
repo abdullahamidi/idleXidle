@@ -182,4 +182,95 @@ public class AffixLivenessTests
             bonus: null, isBoss: false, metrics: null, sustain: sustain);
         return champ.Health;
     }
+
+    // ── ENTRENCHED ──
+
+    [Fact]
+    public void test_entrenched_makes_the_first_hit_on_a_creature_land_smaller()
+    {
+        // Direction, not magnitude: the same build's FIRST strike into a fresh creature lands smaller
+        // under ENTRENCHED; what happens after the opener is the fight's own business.
+        var plain = FirstStrikeAmount(entrenched: false);
+        var dugIn = FirstStrikeAmount(entrenched: true);
+        _out.WriteLine($"first hit plain {plain} · entrenched {dugIn}");
+
+        Assert.True(dugIn < plain,
+            $"ENTRENCHED must shrink the opener — got {dugIn} against {plain}");
+    }
+
+    private static int FirstStrikeAmount(bool entrenched)
+    {
+        var champ = new Champion { MaxHealth = int.MaxValue, Health = int.MaxValue };
+        var target = new WaveCreature { MaxHealth = 1e12f, Health = 1e12f, Damage = 0f };
+        var (_, events) = SoloBattle.ResolveWave(
+            champ, BuildWith(SkillShape.None), new Hunter(), new List<WaveCreature> { target },
+            enemyIntervalMs: 100_000, ExpeditionTuning.Default, new Random(11),
+            bonus: null, isBoss: false, metrics: null, sustain: 1f, entrenched: entrenched);
+        return events.First(e => e.Kind == BattleEventKind.Strike).Amount;
+    }
+
+    // ── WARDED ──
+
+    [Fact]
+    public void test_warded_shrinks_the_warded_styles_damage_and_spares_the_rest()
+    {
+        // hammer_blow's style is HAMMER; ward it and less lands. Ward a style the build does not
+        // carry and nothing changes — the affix reads the skill, never the swing.
+        var free = DeliveredBy(warded: null);
+        var warded = DeliveredBy(warded: Style.Hammer);
+        _out.WriteLine($"delivered free {free:0} · HAMMER warded {warded:0}");
+
+        Assert.True(warded < free, "warding the build's own style must shrink what lands");
+        Assert.Equal(free, DeliveredBy(warded: Style.Drain), precision: 1);
+    }
+
+    private static float DeliveredBy(Style? warded)
+    {
+        var champ = new Champion { MaxHealth = int.MaxValue, Health = int.MaxValue };
+        var target = new WaveCreature { MaxHealth = 1e12f, Health = 1e12f, Damage = 0f };
+        var metrics = new WaveMetrics();
+        SoloBattle.ResolveWave(
+            champ, BuildWith(SkillShape.None), new Hunter(), new List<WaveCreature> { target },
+            enemyIntervalMs: 100_000, ExpeditionTuning.Default, new Random(11),
+            bonus: null, isBoss: false, metrics: metrics, sustain: 1f, wardedStyle: warded);
+        return metrics.DeliveredDamage;
+    }
+
+    [Fact]
+    public void test_warded_reads_the_previous_wave_through_the_expedition()
+    {
+        // The expedition keeps the ledger: before any wave there is no history, so WARDED can never
+        // guess on a run's first wave; after a wave in which skills fired, the top style is known.
+        var run = Run("verdant_hollow", seed: 3);
+        Assert.Null(run.LastWaveTopStyle);
+
+        run.PushWave();
+        Assert.NotNull(run.LastWaveTopStyle);
+    }
+
+    // ── LEGION ──
+
+    [Fact]
+    public void test_legion_splits_a_dying_creature_into_two_and_respects_the_cap()
+    {
+        // A killable pair under LEGION: the wave ends with more corpses than it started with bodies,
+        // because each ORIGINAL split once — children do not re-split, and the roster never passes
+        // the cap. The children land in the caller's own list, which is what the screen composes from.
+        var champ = new Champion { MaxHealth = int.MaxValue, Health = int.MaxValue };
+        var roster = new List<WaveCreature>
+        {
+            new() { MaxHealth = 40f, Health = 40f, Damage = 0f },
+            new() { MaxHealth = 40f, Health = 40f, Damage = 0f },
+        };
+        var (outcome, events) = SoloBattle.ResolveWave(
+            champ, BuildWith(SkillShape.None), new Hunter(), roster,
+            enemyIntervalMs: 100_000, ExpeditionTuning.Default, new Random(11),
+            bonus: null, isBoss: false, metrics: null, sustain: 1f, legionSplits: true);
+
+        Assert.Equal(WaveOutcome.Cleared, outcome);
+        Assert.True(roster.Count > 2, "the dying originals must have split children into the list");
+        Assert.True(roster.Count <= SoloBattle.LegionMaxCreatures);
+        Assert.Equal(roster.Count, events.Count(e => e.Kind == BattleEventKind.EnemyDown));
+        Assert.All(roster, c => Assert.False(c.Alive));
+    }
 }

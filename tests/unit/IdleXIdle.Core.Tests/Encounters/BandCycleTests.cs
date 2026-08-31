@@ -116,12 +116,14 @@ public class BandCycleTests
     [Fact]
     public void test_every_affix_in_use_pressures_something()
     {
-        var pressureless = new[] { Affix.None, Affix.Hollow };
+        // Every affix a band can carry now implements a rule (P13b: WARDED/ENTRENCHED/LEGION are
+        // live and HOLLOW — the last costume — was cut), so the only thing AffixesOf must never
+        // yield is None, which it filters by contract. Asserted anyway: a future affix added to the
+        // enum without a rule should be authored into no band until it has one.
         foreach (var region in Regions)
             foreach (var band in BandCycles.For(region))
                 foreach (var affix in Bands.AffixesOf(band))
-                    Assert.False(pressureless.Contains(affix) && affix != Affix.Hollow,
-                        $"{region} uses {affix}, which pressures no branch of the skill tree.");
+                    Assert.NotEqual(Affix.None, affix);
     }
 
     /// <summary>A region's roster is its own Source plus two neighbours — never a single matchup.</summary>
