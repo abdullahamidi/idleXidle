@@ -191,6 +191,7 @@ public sealed record SkillDef(
     float AttackBreakFloor = 0f,         // WILT: the deepest that break may go, negative
     float BleedOnKillFraction = 0f,      // WEEP: bleed left on a kill, as a fraction of max health
     float PaysBackDamageTaken = 0f,      // REPAY: multiple of the damage taken since its last cast
+    int PaybackWindowMs = 0,             // REPAY/VENGEANCE: only damage this recent counts. 0 = all of it
 
     // ── WHAT THE VARIATIONS TURN. Every one is zero or false at the base line, so a skill carries
     //    only the dials its own sentence needs and a variation is a DELTA on this record rather than
@@ -221,6 +222,7 @@ public sealed record SkillDef(
     float HealPerPulse = 0f,             // DRAIN/SUP — share of maximum health each pulse returns
     bool FrontEnemyOnly = false,         // DRAIN/SHRIVEL
     int MinimumHits = 0,                 // VOLLEY/SPLAY — arrows double up when the wave is small
+    int HitsPerTarget = 1,               // VOLLEY/CLUSTER — arrows landed on EACH creature reached
 
     // ── WHAT THE REINFORCEMENTS TURN. Ten, deliberately: a dial per reinforcement would be seventy
     //    of them, and most of what a reinforcement wants to say is "the same thing, more of it" —
@@ -346,7 +348,9 @@ public static class SkillCatalogue
             {
                 V("VENGEANCE", "350% instead of 200%, but only damage taken in the last 3s counts.",
                     Source.Shadow,
-                    d => d with { PaysBackDamageTaken = 3.5f },
+                    // The window was on the card from the day this was authored and the sim banked
+                    // everything since the last cast — the variation's stated price was pure upside.
+                    d => d with { PaysBackDamageTaken = 3.5f, PaybackWindowMs = 3_000 },
                     ("GRUDGE",  "It pays back 500% instead of 350%.",
                      d => d with { PaysBackDamageTaken = 5.0f }),
                     ("SCARRED", "The payback deals 40% more damage.",
@@ -473,7 +477,10 @@ public static class SkillCatalogue
                      d => d with { BleedFromHits = 0.20f })),
                 V("CLUSTER", "All 5 arrows hit one enemy.",
                     Source.Shadow,
-                    d => d with { Targets = 1 },
+                    // FIVE ARROWS, as the card says — not one arrow's worth (the audit measured the
+                    // old Targets=1 reading as a 5x nerf). Flat armour taxes each arrow separately,
+                    // which is exactly the trade against BLOW's one big hit.
+                    d => d with { Targets = 1, HitsPerTarget = 5 },
                     ("DRIVE",    "The cast deals 50% more damage.",
                      d => d with { DamageMultiplier = 1.5f }),
                     ("RUPTURE",  "Your casts leave bleed worth 30% of what they deal.",

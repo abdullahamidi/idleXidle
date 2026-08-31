@@ -607,7 +607,7 @@ public static class SoloBattle
         var markDeepen = 0f;       // SIGN/ETCH — how far it has deepened so far this wave
         var ampWholeWave = false;  // SIGN — CALL, STEADY and SPRAWL cover everything; BRAND the front
         var slowFactor = 0f;       // MIRE — fraction by which the enemy interval is stretched
-        var takenSinceCast = new Dictionary<int, float>();   // REPAY — damage taken since slot i last cast
+        var takenSinceCast = new Dictionary<int, List<(int Ms, float Amount)>>();   // REPAY — the bites banked for slot i, stamped
         var since = champ.ElapsedMs;
         var healthAtStart = champ.Health;
 
@@ -1053,7 +1053,7 @@ public static class SoloBattle
         /// </summary>
         float LandSpread(float raw, int atMs, int targets, Source? skillSource, SkillDef? skillDef, int absMs,
                          bool fromSkill = true, bool swing = false, bool countsAsActivation = true,
-                         bool ignoresArmour = false)
+                         bool ignoresArmour = false, int hitsPerTarget = 1)
         {
             if (targets <= 0) return 0f;
             // An AURA tick is not an activation: counting one every 500 ms made the run report's REACH
@@ -1077,17 +1077,22 @@ public static class SoloBattle
             {
                 var c = creatures[i];
                 if (!c.Alive) continue;
-                // Amp is per TARGET: the Source matchup belongs to the creature being hit, so one cast
-                // can be strong against one creature in a wave and weak against another.
-                var hit = raw * Amp(absMs, skillSource, skillDef, c);
+                // HITS PER TARGET (CLUSTER's five arrows): each lands separately, re-amplified —
+                // so the first arrow gets the first-hit rule and armour taxes every one, which is
+                // the whole trade against one big blow. Amp stays per TARGET per HIT: the Source
+                // matchup belongs to the creature being hit.
+                for (var h = 0; h < Math.Max(1, hitsPerTarget) && c.Alive; h++)
+                {
+                    var hit = raw * Amp(absMs, skillSource, skillDef, c);
 
-                // ── SIGNATURES, hit-side. The WOUND bonus reads stacks laid by ANY Body skill and
-                //    pays EVERY skill hit — that is what makes it a team primitive rather than a
-                //    self-buff. Laying happens after the landing, so a hit never feeds itself. ──
-                if (fromSkill) hit = SignatureAmp(hit, c, skillSource);
-                LandOn(c, hit, atMs, fromSkill, swing: swing, ignoresArmour: ignoresArmour);
-                if (fromSkill) SignatureLay(c, skillSource);
-                dealt += hit;
+                    // ── SIGNATURES, hit-side. The WOUND bonus reads stacks laid by ANY Body skill
+                    //    and pays EVERY skill hit; laying happens after the landing, so a hit never
+                    //    feeds itself. ──
+                    if (fromSkill) hit = SignatureAmp(hit, c, skillSource);
+                    LandOn(c, hit, atMs, fromSkill, swing: swing, ignoresArmour: ignoresArmour);
+                    if (fromSkill) SignatureLay(c, skillSource);
+                    dealt += hit;
+                }
                 struck++;
                 lastIndex = i;
                 if (fromSkill && countsAsActivation && metrics is not null) metrics.TargetsStruck++;
@@ -1491,8 +1496,18 @@ public static class SoloBattle
                     float raw;
                     if (sk.Def.PaysBackDamageTaken > 0f)
                     {
-                        raw = takenSinceCast.GetValueOrDefault(i) * sk.Def.PaysBackDamageTaken;
-                        takenSinceCast[i] = 0f;
+                        // Only what the WINDOW still counts — VENGEANCE's "last 3s" is a real price
+                        // now, not a card decoration. The bank clears either way: two casts never
+                        // pay for the same bite twice.
+                        var owed = 0f;
+                        if (takenSinceCast.TryGetValue(i, out var bank))
+                        {
+                            foreach (var (bMs, amount) in bank)
+                                if (sk.Def.PaybackWindowMs <= 0 || ms - bMs <= sk.Def.PaybackWindowMs)
+                                    owed += amount;
+                            bank.Clear();
+                        }
+                        raw = owed * sk.Def.PaysBackDamageTaken;
                     }
                     else
                     {
@@ -1606,7 +1621,8 @@ public static class SoloBattle
 
                     // FLATTEN — the blow ignores defence entirely.
                     var dealt = LandSpread(raw, ms, spreadTargets, sk.Source, vdef, abs,
-                                           ignoresArmour: vdef.DefenceIgnore);
+                                           ignoresArmour: vdef.DefenceIgnore,
+                                           hitsPerTarget: vdef.HitsPerTarget);
 
                     // FLIGHT, RUPTURE, EBB, ONSET — the cast leaves bleed behind it. Fed from the RAW
                     // force for the same reason VENOM is: armour must not shrink the pool AND the bleed.
@@ -1776,7 +1792,11 @@ public static class SoloBattle
                 // before the first cast, not started by it.
                 for (var k = 0; k < skills.Count; k++)
                     if (skills[k].Def.PaysBackDamageTaken > 0f)
-                        takenSinceCast[k] = takenSinceCast.GetValueOrDefault(k) + taken;
+                    {
+                        if (!takenSinceCast.TryGetValue(k, out var bank))
+                            takenSinceCast[k] = bank = new List<(int, float)>();
+                        bank.Add((ms, taken));
+                    }
 
                 // BANKED's shield stands in front of the pool and is eaten first.
                 if (bankedShield > 0f)
