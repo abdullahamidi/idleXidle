@@ -61,6 +61,9 @@ public static class SaveFile
     /// <summary>Delete the live save — the deliberate START A NEW GAME path. Backups and quarantines stay.</summary>
     public static bool TryDelete(out string error) => SaveStore.TryDelete(Dir, out error);
 
+    /// <summary>Copy an older-format save aside before this build's first write migrates it — see <see cref="SaveStore.SnapshotBeforeUpgrade"/>.</summary>
+    public static string? SnapshotBeforeUpgrade(int fileVersion) => SaveStore.SnapshotBeforeUpgrade(Dir, fileVersion, DateTimeOffset.UtcNow);
+
     /// <summary>Must this session refuse to write, given how the load ended?</summary>
     public static bool LocksSaving(LoadFailure failure) => SaveStore.LocksSaving(failure);
 }

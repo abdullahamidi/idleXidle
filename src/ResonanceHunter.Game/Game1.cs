@@ -607,6 +607,12 @@ public class Game1 : Game
         var save = result.Save!;
         _hasSave = true; // the title screen offers CONTINUE rather than NEW HUNT
 
+        // An OLDER-format file is snapshotted before anything can write over it. The rolling backup
+        // is one generation deep and rotates out ~20 seconds after boot, which was the whole window
+        // in which a bad format migration stayed recoverable. Once per format version; a no-op on a
+        // current-format save.
+        SaveFile.SnapshotBeforeUpgrade(save.Version);
+
         SaveSystem.RestoreHunter(save, _hunter);
         // MERGE CHARTS retired with the manual merge tray (AUTO-MERGE takes no paper). Held ones become
         // SALVAGE CHARTS — also a breaking-down permission — instead of dead paper in an old save.
@@ -716,32 +722,14 @@ public class Game1 : Game
             [GearSlot.Boots] = save.WornBootsId, [GearSlot.Ring] = save.WornRingId,
         };
 
-        // ── Restore the world. Conquest, corruption, and the active region are restored UNCONDITIONALLY,
-        // so a save that carries them but (through an old or edited state) has no per-region farms keeps its
-        // whole conquered world and endgame corruption instead of being silently reset to the home region.
-        // Ordered before the IsUnlocked check so the active region resolves against the restored conquest.
-        _world.RestoreConquered(save.ConqueredRegions);
-        _world.RestoreCorruption(save.CorruptionTier, save.CorruptionPeak);
+        // ── Restore the world: conquest, corruption, per-region farms. In Core now
+        // (SaveSystem.RestoreWorld) because the farm loop used to index the region table directly —
+        // a renamed region id in an old save was a KeyNotFoundException before the window opened,
+        // unreachable by any capture. Core drops unknown ids, and a test holds it to that. The
+        // active region resolves against the restored conquest; unknown or locked falls back home.
+        SaveSystem.RestoreWorld(save, _world);
         if (!string.IsNullOrEmpty(save.ActiveRegion) && _world.IsUnlocked(save.ActiveRegion))
             _activeRegion = save.ActiveRegion;
-
-        // Per-region progress — multi-region saves carry one record each; older single-region
-        // saves fold everything into the home region. (Creature assignments and the automation
-        // stage retired with the creature subsystem, 2026-08-24.)
-        if (save.RegionFarms.Count > 0)
-        {
-            foreach (var rf in save.RegionFarms)
-            {
-                var farm = _world.RegionFarm(rf.Id);
-                farm.RestoreMasteryPoints(rf.MasteryPoints);
-                farm.RestoreBestDepth(rf.BestDepth);
-                farm.RestoreStartWave(rf.StartWave);
-            }
-        }
-        else
-        {
-            _world.RegionFarm(VerdantHollow.RegionId).RestoreMasteryPoints(save.RegionMasteryPoints);
-        }
 
         _region = _world.RegionFarm(_activeRegion);
 

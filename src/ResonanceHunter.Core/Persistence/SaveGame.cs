@@ -575,26 +575,49 @@ public static class SaveSystem
         Gems = i.Gems.Select(ToSavedItem).ToList(),
     };
 
+    /// <summary>
+    /// Can this saved item be restored at all? An unknown <see cref="SavedItem.BaseType"/> — a
+    /// retired or future member — fails here and the item is DROPPED on load, the same lenient rule
+    /// every other catalogue name in the save follows.
+    /// </summary>
+    /// <remarks>
+    /// This gate replaced a strict <c>Enum.Parse</c> inside <see cref="FromSavedItem"/> that the
+    /// host's load path reached with no try/catch around it: one unknown base-type name in an old or
+    /// edited save crashed the game BEFORE THE WINDOW OPENED — the load-path failure shape no
+    /// capture can see (2026-08-31 audit, step 0 of the refactor: load must never throw).
+    /// </remarks>
+    internal static bool CanRestore(SavedItem s) => Enum.TryParse<ItemBaseType>(s.BaseType, out _);
+
     /// <summary>The mirror of <see cref="ToSavedItem"/> — same recursion, same lenient enum parsing.</summary>
-    internal static ItemInstance FromSavedItem(SavedItem s) => new()
+    internal static ItemInstance FromSavedItem(SavedItem s)
     {
-        InstanceId = s.InstanceId,
-        BaseType = Enum.Parse<ItemBaseType>(s.BaseType),
-        Rarity = (Rarity)s.Rarity,
-        SellValue = s.SellValue,
-        ItemLevel = s.ItemLevel,
-        Upgrades = s.Upgrades,
-        EquippedToCreatureId = s.EquippedToCreatureId,
-        TraitOverride = s.TraitOverride is null
-            ? Economy.GearTraits.LegacyDerivedTrait(s.InstanceId, Enum.Parse<ItemBaseType>(s.BaseType))
-            : Enum.TryParse<GearTrait>(s.TraitOverride, out var t) ? t : null,   // "NONE" -> null
-        EnchantOverride = Enum.TryParse<EnchantKind>(s.EnchantOverride, out var e) ? e : null,
-        Element = Enum.TryParse<Automation.Source>(s.Element, out var el) ? el : null,
-        // Lenient, like every enum here: an unparseable class is a null class, which is "anyone".
-        Class = Enum.TryParse<Economy.ItemClass>(s.Class, out var cl) ? cl : null,
-        Family = s.Family is { } fam && fam >= 0 && fam < Economy.ItemNaming.WeaponFamilies.Length ? fam : null,
-        Gems = s.Gems.Select(FromSavedItem).ToList(),
-    };
+        // Callers filter with CanRestore; the fallback below only exists so a direct call cannot
+        // throw. default(ItemBaseType) is the enum's first member — an arbitrary but valid answer
+        // to a question the filter should already have refused.
+        var baseType = Enum.TryParse<ItemBaseType>(s.BaseType, out var bt) ? bt : default;
+        return new()
+        {
+            InstanceId = s.InstanceId,
+            BaseType = baseType,
+            // CLAMPED: rarity is persisted as an ordinal, and an out-of-range value from a
+            // hand-edited or future save would otherwise ride into colour-table indexing — the
+            // same hole the share-code decoder already closed for pasted codes.
+            Rarity = (Rarity)Math.Clamp(s.Rarity, (int)Rarity.Common, (int)Rarity.Legendary),
+            SellValue = s.SellValue,
+            ItemLevel = s.ItemLevel,
+            Upgrades = s.Upgrades,
+            EquippedToCreatureId = s.EquippedToCreatureId,
+            TraitOverride = s.TraitOverride is null
+                ? Economy.GearTraits.LegacyDerivedTrait(s.InstanceId, baseType)
+                : Enum.TryParse<GearTrait>(s.TraitOverride, out var t) ? t : null,   // "NONE" -> null
+            EnchantOverride = Enum.TryParse<EnchantKind>(s.EnchantOverride, out var e) ? e : null,
+            Element = Enum.TryParse<Automation.Source>(s.Element, out var el) ? el : null,
+            // Lenient, like every enum here: an unparseable class is a null class, which is "anyone".
+            Class = Enum.TryParse<Economy.ItemClass>(s.Class, out var cl) ? cl : null,
+            Family = s.Family is { } fam && fam >= 0 && fam < Economy.ItemNaming.WeaponFamilies.Length ? fam : null,
+            Gems = s.Gems.Where(CanRestore).Select(FromSavedItem).ToList(),
+        };
+    }
 
     public static List<ItemInstance> RestoreInventory(SaveGame save)
         // Dedup by InstanceId: a save polluted with duplicate ids (see the regression test) collapses to one
@@ -602,6 +625,7 @@ public static class SaveSystem
         // copies of the same thing. Nothing is lost — same id means an identical, id-derived item.
         => save.Inventory
             .GroupBy(s => s.InstanceId).Select(g => g.First())
+            .Where(CanRestore)          // an unknown BaseType is dropped, never a boot crash
             .Select(FromSavedItem).ToList();
 
     public static void RestoreHunter(SaveGame save, Hunter hunter)
@@ -668,6 +692,41 @@ public static class SaveSystem
     {
         ArgumentNullException.ThrowIfNull(save);
         return save.FreeSocketUsed || save.Inventory.Any(i => i.Gems.Count > 0);
+    }
+
+    /// <summary>
+    /// Restore the world — conquered regions, corruption, and each region's farm — from a save.
+    /// </summary>
+    /// <remarks>
+    /// Moved out of the host (2026-08-31) because the host's farm loop indexed the region table
+    /// directly, so a renamed or removed region id inside <see cref="SaveGame.RegionFarms"/> was a
+    /// KeyNotFoundException BEFORE THE WINDOW OPENED — the second load-path boot crash this
+    /// project has shipped, and one no screenshot can reach. Unknown ids are dropped, like every
+    /// other catalogue name in the save; living in Core, the rule is pinned by a test. A save with
+    /// no per-region farms is a pre-multi-region save: its single mastery number folds into the
+    /// home region, exactly as the host used to do.
+    /// </remarks>
+    public static void RestoreWorld(SaveGame save, Encounters.World world)
+    {
+        ArgumentNullException.ThrowIfNull(save);
+        ArgumentNullException.ThrowIfNull(world);
+        world.RestoreConquered(save.ConqueredRegions);
+        world.RestoreCorruption(save.CorruptionTier, save.CorruptionPeak);
+        if (save.RegionFarms.Count > 0)
+        {
+            foreach (var rf in save.RegionFarms)
+            {
+                if (Encounters.Regions.Find(rf.Id) is null) continue;   // renamed/removed region: dropped
+                var farm = world.RegionFarm(rf.Id);
+                farm.RestoreMasteryPoints(rf.MasteryPoints);
+                farm.RestoreBestDepth(rf.BestDepth);
+                farm.RestoreStartWave(rf.StartWave);
+            }
+        }
+        else
+        {
+            world.RegionFarm(Encounters.VerdantHollow.RegionId).RestoreMasteryPoints(save.RegionMasteryPoints);
+        }
     }
 
     public static void RestoreWarren(SaveGame save, Warren warren)

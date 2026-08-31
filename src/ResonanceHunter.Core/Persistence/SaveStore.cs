@@ -157,6 +157,37 @@ public static class SaveStore
     public static string? PreserveBackupAside(string dir, DateTimeOffset utcNow)
         => MoveAside(BackupPath(dir), Path.Combine(dir, $"save.bak-pre-reset-{utcNow:yyyyMMdd-HHmmss}"));
 
+    /// <summary>
+    /// Copy an OLDER-format save aside as <c>save.pre-v&lt;current&gt;-&lt;time&gt;.json</c> before this
+    /// build's first write migrates it. Once per format version — a later boot that finds a
+    /// snapshot for the current version does nothing.
+    /// </summary>
+    /// <remarks>
+    /// The rolling backup is one generation deep and the autosave runs every ten seconds, so after
+    /// a format upgrade the last old-format file leaves <c>save.bak</c> within about twenty seconds
+    /// — which was the entire window in which a bad migration stayed recoverable (2026-08-31
+    /// audit). This snapshot is the migration's evidence and its undo. A COPY, never a move: the
+    /// live file goes on being the live file.
+    /// </remarks>
+    public static string? SnapshotBeforeUpgrade(string dir, int fileVersion, DateTimeOffset utcNow)
+    {
+        try
+        {
+            if (fileVersion >= SaveGame.CurrentVersion) return null;   // nothing is about to migrate
+            var path = SavePath(dir);
+            if (!File.Exists(path)) return null;
+            if (Directory.GetFiles(dir, $"save.pre-v{SaveGame.CurrentVersion}-*.json").Length > 0)
+                return null;                                           // this upgrade is already witnessed
+            var target = Path.Combine(dir, $"save.pre-v{SaveGame.CurrentVersion}-{utcNow:yyyyMMdd-HHmmss}.json");
+            File.Copy(path, target);
+            return target;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Rename a file out of every later write's reach. Null if absent or the move failed.</summary>
     private static string? MoveAside(string path, string stem)
     {

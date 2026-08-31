@@ -162,7 +162,7 @@ public static class ShareCodes
         try
         {
             var saved = JsonSerializer.Deserialize<SavedItem>(json);
-            if (saved is null) { error = DamagedError; return false; }
+            if (saved is null || !ValidSaved(saved)) { error = DamagedError; return false; }
             item = SaveSystem.FromSavedItem(saved);
         }
         // BROAD on purpose: the checksum proves the paste survived transit, not that the payload is
@@ -184,6 +184,19 @@ public static class ShareCodes
         }
         return true;
     }
+
+    /// <summary>
+    /// Refuses a RAW payload the save path would quietly repair. The save is deliberately lenient
+    /// — an unknown BaseType is dropped and an out-of-range rarity clamps
+    /// (<see cref="SaveSystem.CanRestore"/> / <c>FromSavedItem</c>) — because a player's own file
+    /// must load whatever happens to it. A PASTED CODE is the opposite contract: it claims to be an
+    /// item this game minted, and one the game could not have minted is refused whole, never
+    /// silently rewritten into a different item than the sender saw.
+    /// </summary>
+    private static bool ValidSaved(SavedItem s)
+        => Enum.TryParse<Loot.ItemBaseType>(s.BaseType, out _)
+           && s.Rarity >= (int)Loot.Rarity.Common && s.Rarity <= (int)Loot.Rarity.Legendary
+           && s.Gems is not null && s.Gems.All(ValidSaved);
 
     /// <summary>Range-checks a decoded item, recursively through its gems — lenient parsing can
     /// still produce out-of-range enums ((Rarity)77 draws by INDEXING a colour table) and absurd
