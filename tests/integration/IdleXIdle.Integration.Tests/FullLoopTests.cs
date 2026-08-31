@@ -109,7 +109,6 @@ public class FullLoopTests
             {
                 PowerTier = 1,
                 LootTiltPercent = 0f,
-                AutomationStage = 1,
             }, rng, LootTuning.Default);
 
             foreach (var item in loot) seenRarities.Add(item.Rarity);

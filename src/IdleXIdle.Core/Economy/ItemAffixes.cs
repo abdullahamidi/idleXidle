@@ -128,8 +128,10 @@ public static class ItemAffixes
     /// <para>
     /// The shape mirrors <c>Gear.ItemLevelFactor</c> deliberately — the two levers item level pulls
     /// should saturate together, or the one that does not becomes the only one that matters. Tuned to
-    /// keep the early curve the design was built around: iL20 lands within a whisker of the old linear
-    /// value (1.80 against 1.80) and iL45 at 2.5, then flattens toward 4.
+    /// keep the early curve the design was built around; with the shipped constants (slope 0.04,
+    /// half-point 45) it reads 1.55 at iL20 and 2.03 at iL60, flattening toward 1 + 0.04x45 = 2.8.
+    /// (An earlier revision of this remark promised 1.80 and "toward 4" — numbers the code never
+    /// produced; the ledger test pins the real ceiling.)
     /// </para>
     /// </remarks>
     public static float IlvlFactor(int itemLevel)

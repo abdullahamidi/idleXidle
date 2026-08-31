@@ -287,7 +287,7 @@ public class AttritionTest
                     // whether the gate is openable with what the game drops.
                     for (var roll = 0; roll < 20; roll++)
                         foreach (var item in LootSystem.Roll(
-                                     new KillContext { PowerTier = 30, IsBoss = true, LootTiltPercent = 40f },
+                                     new KillContext { PowerTier = 30, LootTiltPercent = 40f },
                                      rng, LootTuning.Default))
                             hunter.Equip(item);
 

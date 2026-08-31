@@ -103,7 +103,7 @@ public static class ExpeditionLoot
         };
 
         // ONE ROLL, THEN TAKE. This used to run the loop `count` times and add EVERY item each roll
-        // produced — and LootSystem.Roll does not return an item, it returns a core plus DropCount of
+        // produced — and LootSystem.Roll (pre-P11b) returned a core plus DropCount of
         // them. So "one, occasionally two" was one-or-two ROLLS of about two items each, and a boss
         // actually handed over 2.55. Measured, not guessed: LootRateTest counted 65 items across a
         // hundred waves, which at two seconds a wave is nineteen items a minute.
@@ -111,8 +111,9 @@ public static class ExpeditionLoot
         // The docstring above was right and the code under it was not. Rolling once and taking the
         // intended count makes the number the comment already promised.
         var count = 1 + (rng.NextDouble() < 0.25 ? 1 : 0);   // one, occasionally two — never a pile
+        // The CreatureCore filter died in P11b with the mint itself — the roller returns only
+        // wearables now, so the take is the whole story.
         return LootSystem.Roll(ctx, rng, lootTuning)
-                         .Where(it => it.BaseType != ItemBaseType.CreatureCore)
                          .Take(count)
                          .ToList();
     }

@@ -146,10 +146,8 @@ public sealed record LootTuning
     public float BonusDropChancePercent { get; init; } = 35f;
     public int BonusRollAttempts { get; init; } = 3;
     public int DropCountBaseStandard { get; init; } = 1;
-    public int DropCountBaseBoss { get; init; } = 3;
 
     public float TiltQuantityScalar { get; init; } = 0.6f;
-    public float EfficiencyQuantityScalar { get; init; } = 0.8f;
 
     /// <summary>Sums to 1000. Common is overwhelmingly likely; Legendary is 0.05%.</summary>
     public IReadOnlyList<float> BaseRarityWeight { get; init; } = new[] { 700f, 250f, 45f, 4.5f, 0.5f };
@@ -162,27 +160,12 @@ public sealed record LootTuning
 
     public static LootTuning Default { get; } = new();
 
-    /// <summary>
-    /// How much of the rarity TILT an automated kill retains. Stage 1 keeps none; Stage 2 keeps half.
-    /// </summary>
-    /// <remarks>
-    /// This only ever dampens the bonus tilt ABOVE the baseline weight — it never scales the baseline
-    /// itself. That is what guarantees every rarity tier keeps a non-zero probability on an automated
-    /// kill, which is the provable form of "idle play is never locked out of anything" (Pillar 3).
-    /// </remarks>
-    public float AutomationRarityParityPercent(int automationStage) => automationStage switch
-    {
-        <= 1 => 0f,
-        2 => 0.5f,
-        _ => 1.0f,
-    };
 }
 
 /// <summary>The context a kill produces, feeding the drop roll.</summary>
 public sealed record KillContext
 {
     public required int PowerTier { get; init; }
-    public bool IsBoss { get; init; }
 
     /// <summary>The region's element. Wearable drops are attuned to it; null leaves them inert.</summary>
     public Source? Element { get; init; }
@@ -196,9 +179,6 @@ public sealed record KillContext
     /// so the old name pointed the reader at a mechanic that no longer exists.
     /// </remarks>
     public float LootTiltPercent { get; init; }
-
-    /// <summary>Formula 7's output. Exactly 100 for an automated kill — automation IS the reference.</summary>
-    public float ActiveEfficiencyPercent { get; init; } = 100f;
 
     /// <summary>
     /// The slots the REGION is known for. Twice as likely to drop here; never exclusive.
@@ -216,10 +196,6 @@ public sealed record KillContext
     /// </summary>
     public ItemClass? FavouredClass { get; init; }
 
-    /// <summary>Null for an active kill. Set for an automated one.</summary>
-    public int? AutomationStage { get; init; }
-
-    public bool IsAutomated => AutomationStage is not null;
 }
 
 public static class LootSystem
@@ -238,10 +214,10 @@ public static class LootSystem
     /// Roll a kill's loot.
     /// </summary>
     /// <remarks>
-    /// <b>Every kill mints exactly one creature_core, unconditionally, at 100%</b> — active or
-    /// automated. Only its RARITY varies. This is non-tunable and is the structural guarantee that idle
-    /// play can never be locked out of core progression (Pillar 3): cores are the only way to acquire a
-    /// creature at MVP, since capture is Vertical-Slice-deferred.
+    /// WEARABLES ONLY (P11b). This used to mint a guaranteed CreatureCore per kill and roll 45%
+    /// of its count as Material ITEMS — both for the retired creature era, both filtered out by
+    /// every live caller before a player could see them. Half the roller's work was discarded
+    /// on every kill; now it mints only what a bag can hold.
     /// </remarks>
     public static IReadOnlyList<ItemInstance> Roll(KillContext ctx, Random rng, LootTuning tuning)
     {
@@ -251,20 +227,15 @@ public static class LootSystem
 
         var items = new List<ItemInstance>();
 
-        // The guaranteed core. Never rolled, never skipped, never gated behind active play.
-        items.Add(Mint(ItemBaseType.CreatureCore, RollRarity(ctx, rng, tuning), rng, tuning, ctx.Element, ctx.PowerTier));
-
         var count = DropCount(ctx, rng, tuning);
         for (var i = 0; i < count; i++)
         {
-            // 45% material; the rest across the wearable slots, tilted toward what this region is for.
-            // Half of a region's wearables come from its favoured pool — so a forge really does hand you
-            // weapons — and the other half stay uniform, so nothing is ever unobtainable in the wrong place.
-            var baseType = rng.NextDouble() < 0.45
-                ? ItemBaseType.Material
-                : ctx.FavouredTypes.Count > 0 && rng.NextDouble() < RegionFavourShare
-                    ? ctx.FavouredTypes[rng.Next(ctx.FavouredTypes.Count)]
-                    : Wearables[rng.Next(Wearables.Length)];
+            // Half of a region's wearables come from its favoured pool — so a forge really does
+            // hand you weapons — and the other half stay uniform, so nothing is unobtainable in
+            // the wrong place.
+            var baseType = ctx.FavouredTypes.Count > 0 && rng.NextDouble() < RegionFavourShare
+                ? ctx.FavouredTypes[rng.Next(ctx.FavouredTypes.Count)]
+                : Wearables[rng.Next(Wearables.Length)];
             items.Add(Mint(baseType, RollRarity(ctx, rng, tuning), rng, tuning, ctx.Element, ctx.PowerTier, ctx.FavouredClass));
         }
 
@@ -309,10 +280,8 @@ public static class LootSystem
             ItemLevel = Math.Max(1, itemLevel),
             TraitOverride = prefix,
 
-            // Only wearables are attuned. An elemental lump of scrap would be noise — and it would let a
-            // trio of materials carry an element into a hybrid, which is the one thing mixing must cost.
-            // Materials and cores are the only inert types; every wearable slot attunes.
-            Element = type is ItemBaseType.Material or ItemBaseType.CreatureCore ? null : element,
+            // Every minted type is a wearable since P11b, and every wearable attunes.
+            Element = element,
             Class = cls,
             Family = type == ItemBaseType.Weapon && cls is { } c ? ItemClasses.RollFamily(c, rng) : null,
         };
@@ -322,7 +291,9 @@ public static class LootSystem
     public static int DropCount(KillContext ctx, Random rng, LootTuning tuning)
     {
         var chance = EffectiveBonusDropChancePercent(ctx, tuning);
-        var baseCount = ctx.IsBoss ? tuning.DropCountBaseBoss : tuning.DropCountBaseStandard;
+        // One base drop per kill (P11b): the boss branch keyed on a flag no live caller ever
+        // set — bosses pay through CHESTS (Chests.RollDrop), not a fatter direct roll.
+        var baseCount = tuning.DropCountBaseStandard;
 
         var bonus = 0;
         for (var i = 0; i < tuning.BonusRollAttempts; i++)
@@ -335,19 +306,15 @@ public static class LootSystem
     /// The clamped bonus chance.
     /// </summary>
     /// <remarks>
-    /// <b>The clamp to 100 is load-bearing.</b> active_efficiency_percent feeds BOTH kills/hour (via
-    /// Formula 7's clear-time term) and loot/kill (here), which looks like it should compound
-    /// multiplicatively and blow past the design's "~3x" ceiling. It cannot, because this clamp binds
-    /// first: peak skill already overshoots to ~110% and is cut back to 100. Remove the clamp and peak
-    /// active throughput grows without a ceiling.
+    /// <b>The clamp to 100 is load-bearing.</b> The tilt multiplies loot/kill on top of what
+    /// already multiplies kills/hour; the clamp is the ceiling that keeps the pair from
+    // compounding without bound. (The manual-combat efficiency term died in P11b: no live
+    /// caller ever set ActiveEfficiencyPercent off its default.)
     /// </remarks>
     public static float EffectiveBonusDropChancePercent(KillContext ctx, LootTuning tuning)
     {
         var tilt = 1f + tuning.TiltQuantityScalar * (ctx.LootTiltPercent / 100f);
-        var efficiency = 1f + tuning.EfficiencyQuantityScalar
-            * MathF.Max(0f, (ctx.ActiveEfficiencyPercent - 100f) / 100f);
-
-        return Math.Clamp(tuning.BonusDropChancePercent * tilt * efficiency, 0f, 100f);
+        return Math.Clamp(tuning.BonusDropChancePercent * tilt, 0f, 100f);
     }
 
     /// <summary>Formula 2 — Rarity Distribution (Weighted Tilt).</summary>
@@ -375,18 +342,14 @@ public static class LootSystem
     /// <list type="number">
     ///   <item>At i=0 (Common) the <c>i</c> factor zeroes both bonus terms, so Common's weight is never
     ///         suppressed.</item>
-    ///   <item>For every i&gt;0 the applied tilt is &gt;= 1, because automation parity only dampens the
-    ///         bonus ABOVE the baseline — it never scales the baseline down. So <b>every rarity tier
-    ///         keeps a non-zero probability under every combination of power_tier, part-break
-    ///         performance, and automation stage.</b> Idle can never be locked out of a tier.</item>
+    ///   <item>For every i&gt;0 the tilt is &gt;= 1, so <b>every rarity tier keeps a non-zero
+    ///         probability under every combination of power tier and loot tilt</b> — no context
+    ///         can zero a tier. (The automation-parity damper died in P11b with the stage flag
+    ///         no live caller ever set.)</item>
     /// </list>
     /// </remarks>
     public static IReadOnlyList<float> RarityWeights(KillContext ctx, LootTuning tuning)
     {
-        var parity = ctx.AutomationStage is { } stage
-            ? tuning.AutomationRarityParityPercent(stage)
-            : 1.0f; // an active kill retains the full tilt
-
         var weights = new float[5];
 
         for (var i = 0; i < 5; i++)
@@ -395,9 +358,7 @@ public static class LootSystem
                 (1f + i * tuning.PowerTierRarityScalar * (ctx.PowerTier - 1))
                 * (1f + i * tuning.TiltRarityScalar * (ctx.LootTiltPercent / 100f));
 
-            var applied = 1f + (tilt - 1f) * parity;
-
-            weights[i] = tuning.BaseRarityWeight[i] * applied;
+            weights[i] = tuning.BaseRarityWeight[i] * tilt;
         }
 
         return weights;

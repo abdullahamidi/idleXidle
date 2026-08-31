@@ -11,59 +11,29 @@ public class LootSystemTests
     private static readonly LootTuning Tuning = LootTuning.Default;
     private static Random Seeded() => new(9001);
 
-    private static KillContext Kill(
-        int tier = 1, bool boss = false, float partBreak = 0f, float eff = 100f, int? automationStage = null)
+    private static KillContext Kill(int tier = 1, float partBreak = 0f)
         => new()
         {
             PowerTier = tier,
-            IsBoss = boss,
             LootTiltPercent = partBreak,
-            ActiveEfficiencyPercent = eff,
-            AutomationStage = automationStage,
         };
 
     /// <summary>
-    /// PILLAR 3, THE LOAD-BEARING GUARANTEE: every kill mints a core, active or automated.
+    /// Every rarity tier keeps a NON-ZERO chance, under every combination of tier and tilt —
+    /// no context can lock a player out of a rarity.
     /// </summary>
-    /// <remarks>
-    /// Cores are the ONLY way to acquire a creature at MVP (capture is Vertical-Slice-deferred). If an
-    /// automated kill could ever fail to drop one, idle play would be locked out of the game's entire
-    /// creature-acquisition path.
-    /// </remarks>
-    [Theory]
-    [InlineData(null)]  // active
-    [InlineData(1)]     // automated, stage 1 — the most throttled case
-    [InlineData(2)]
-    public void test_every_single_kill_mints_exactly_one_creature_core(int? automationStage)
-    {
-        var rng = Seeded();
-
-        for (var i = 0; i < 500; i++)
-        {
-            var loot = LootSystem.Roll(Kill(automationStage: automationStage), rng, Tuning);
-            Assert.Equal(1, loot.Count(x => x.BaseType == ItemBaseType.CreatureCore));
-        }
-    }
-
-    /// <summary>
-    /// Every rarity tier keeps a NON-ZERO chance, under every combination — including the worst
-    /// automated case. This is the provable form of "idle is never locked out of anything".
-    /// </summary>
-    [Theory]
-    [InlineData(null)]
-    [InlineData(1)]
-    [InlineData(2)]
-    public void test_no_rarity_tier_can_ever_be_zeroed_out(int? automationStage)
+    [Fact]
+    public void test_no_rarity_tier_can_ever_be_zeroed_out()
     {
         foreach (var tier in new[] { 1, 10, 20 })
         foreach (var partBreak in new[] { 0f, 20f, 40f })
         {
             var weights = LootSystem.RarityWeights(
-                Kill(tier: tier, partBreak: partBreak, automationStage: automationStage), Tuning);
+                Kill(tier: tier, partBreak: partBreak), Tuning);
 
             Assert.All(weights, w => Assert.True(w > 0f, "A rarity tier was zeroed — Pillar 3 violated."));
 
-            // And no tier may fall BELOW its baseline: automation dampens the bonus, never the floor.
+            // And no tier may fall BELOW its baseline weight: tilts only ever add.
             for (var i = 0; i < 5; i++)
                 Assert.True(weights[i] >= Tuning.BaseRarityWeight[i] - 0.001f);
         }
@@ -88,30 +58,14 @@ public class LootSystemTests
         Assert.True(high[4] / high.Sum() > low[4] / low.Sum());
     }
 
-    /// <summary>An automated kill is WORSE than an active one — but never worthless.</summary>
-    [Fact]
-    public void test_automation_dampens_rarity_without_ever_removing_it()
-    {
-        var active = LootSystem.RarityWeights(Kill(tier: 10, partBreak: 30f), Tuning);
-        var stage1 = LootSystem.RarityWeights(Kill(tier: 10, partBreak: 30f, automationStage: 1), Tuning);
-        var stage2 = LootSystem.RarityWeights(Kill(tier: 10, partBreak: 30f, automationStage: 2), Tuning);
-
-        // Active > Stage 2 > Stage 1, at the top tier...
-        Assert.True(active[4] > stage2[4]);
-        Assert.True(stage2[4] > stage1[4]);
-
-        // ...but Stage 1 still keeps the full baseline. Never zero.
-        Assert.Equal(Tuning.BaseRarityWeight[4], stage1[4], precision: 3);
-    }
-
     /// <summary>
-    /// THE CLAMP. Without it, active efficiency compounds through both kills/hour AND loot/kill,
-    /// and peak active throughput grows without a ceiling — breaching the "~3x" contract.
+    /// THE CLAMP. Without it an extreme tilt compounds loot/kill on top of kills/hour, and
+    /// throughput grows without a ceiling.
     /// </summary>
     [Fact]
     public void test_the_bonus_drop_chance_is_hard_clamped_at_100()
     {
-        var absurd = Kill(tier: 20, partBreak: 40f, eff: 300f);
+        var absurd = Kill(tier: 20, partBreak: 1000f);
         Assert.Equal(100f, LootSystem.EffectiveBonusDropChancePercent(absurd, Tuning));
     }
 
@@ -120,23 +74,23 @@ public class LootSystemTests
     public void test_drop_count_never_exceeds_its_hard_ceiling()
     {
         var rng = Seeded();
-        var absurd = Kill(tier: 20, partBreak: 40f, eff: 300f, boss: true);
+        var absurd = Kill(tier: 20, partBreak: 1000f);
 
         for (var i = 0; i < 1000; i++)
         {
             var n = LootSystem.DropCount(absurd, rng, Tuning);
-            Assert.InRange(n, Tuning.DropCountBaseBoss, Tuning.DropCountBaseBoss + Tuning.BonusRollAttempts);
+            Assert.InRange(n, Tuning.DropCountBaseStandard, Tuning.DropCountBaseStandard + Tuning.BonusRollAttempts);
         }
     }
 
-    /// <summary>Active play must actually produce more loot — the premium the B1 bug had deleted.</summary>
+    /// <summary>A tilted kill must actually produce more loot — the premium the tilt exists for.</summary>
     [Fact]
-    public void test_skilled_active_play_yields_more_items_than_an_automated_kill()
+    public void test_a_tilted_kill_yields_more_items_than_a_plain_one()
     {
-        var automated = Mean(Kill(tier: 5, automationStage: 1));
-        var skilled = Mean(Kill(tier: 5, partBreak: 40f, eff: 290f));
+        var plain = Mean(Kill(tier: 5));
+        var tilted = Mean(Kill(tier: 5, partBreak: 40f));
 
-        Assert.True(skilled > automated, $"Active ({skilled:F2}) must beat automated ({automated:F2}).");
+        Assert.True(tilted > plain, $"Tilted ({tilted:F2}) must beat plain ({plain:F2}).");
     }
 
     private static float Mean(KillContext ctx)

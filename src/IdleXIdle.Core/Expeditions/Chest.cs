@@ -331,21 +331,16 @@ public static class Chests
         var itemCount = tuning.MinItems + (rng.NextDouble() < tuning.ExtraItemChance ? 1 : 0);
         var floor = tuning.ItemFloorByGrade[(int)chest.Rarity];
 
-        // A chest's ITEMS are always GEAR. The chest already pays material CURRENCY above, so a Material-type
-        // item would be redundant clutter and an anticlimactic reveal ("a Legendary chest gave me… a
-        // material"). Material rolls are discarded; if the whole roll happened to be materials, one gear
-        // piece is minted at the grade's floor so a chest is never "just materials".
-        // The build's standing rarity AND how the run that won this chest was fought, multiplied: both
-        // are "you earned better odds", and they compose the way every other pair of multipliers here
-        // does. RunTilt defaults to 1, so a chest from before it existed rolls exactly as it always did.
+        // A chest's ITEMS are always GEAR — and since P11b the roller can mint nothing else, so
+        // the old material-discard-and-backfill dance went with the material rolls themselves.
+        // The build's standing rarity AND how the run that won this chest was fought, multiplied:
+        // both are "you earned better odds", and they compose the way every other pair here does.
+        // RunTilt defaults to 1, so a chest from before it existed rolls exactly as it always did.
         var gear = ExpeditionLoot.RollBoss(
                 chest.Tier, quality, rng, loot, element: chest.Element,
                 buildTilt: MathF.Max(0.05f, rarityBonus * MathF.Max(0.05f, chest.RunTilt)),
                 region: chest.Region, favouredClass: favouredClass)
-            .Where(i => i.BaseType is not ItemBaseType.Material)
             .ToList();
-        if (gear.Count == 0)
-            gear.Add(MintGear(floor, chest.Element, rng, loot, chest.Tier, favouredClass));
 
         var items = gear.Take(itemCount).Select(i => Elevate(i, floor, loot)).ToList();
 
@@ -359,35 +354,6 @@ public static class Chests
         return new ChestReward(materials, items) { Gems = gems };
     }
 
-    private static readonly ItemBaseType[] GearTypes =
-    {
-        ItemBaseType.Weapon, ItemBaseType.Charm, ItemBaseType.AbilityFocus,
-        ItemBaseType.Helm, ItemBaseType.Chest, ItemBaseType.Gloves, ItemBaseType.Boots, ItemBaseType.Ring,
-    };
-
-    /// <summary>Mint one wearable at a set rarity — the guaranteed-gear fallback when a roll was all materials.</summary>
-    private static ItemInstance MintGear(Rarity rarity, Source? element, Random rng, LootTuning loot, int tier,
-                                         ItemClass? favouredClass)
-    {
-        var type = GearTypes[rng.Next(GearTypes.Length)];
-        var id = $"itm_{rng.Next(int.MaxValue):x8}";
-        var prefix = Economy.GearTraits.RollPrefix(type, rng);   // the prefix is born here
-        // Same class shape as LootSystem.Mint: class-locked slots roll one, the rest stay null, and a
-        // weapon's family comes from its class's own shapes. Drawn after the id and prefix.
-        var cls = ItemClasses.IsClassLocked(type) ? ItemClasses.Roll(favouredClass, rng, loot.ClassRoll) : (ItemClass?)null;
-        return new()
-        {
-            InstanceId = id,
-            BaseType = type,
-            Rarity = rarity,
-            SellValue = loot.RaritySellValue[(int)rarity],
-            Element = element,
-            ItemLevel = Math.Max(1, tier),
-            TraitOverride = prefix,
-            Class = cls,
-            Family = type == ItemBaseType.Weapon && cls is { } c ? ItemClasses.RollFamily(c, rng) : null,
-        };
-    }
 
     /// <summary>Lift an item to the grade's rarity FLOOR if the roll came in below it — never lower it.</summary>
     /// <remarks>
