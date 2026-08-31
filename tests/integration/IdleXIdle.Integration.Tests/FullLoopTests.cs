@@ -81,12 +81,11 @@ public class FullLoopTests
 
         // ── 5. Save, quit, come back two hours later. ─────────────────────────────────────────
         var now = 1_700_000_000_000L;
-        var json = SaveSystem.Serialize(SaveSystem.Capture(hunter, region, inventory, now));
+        var json = SaveSystem.Serialize(SaveSystem.Capture(hunter, inventory, now));
 
         var loaded = SaveSystem.Deserialize(json, now + 2 * 3600 * 1000L);
         Assert.True(loaded.Ok);
         Assert.Equal(7200.0, loaded.OfflineSeconds, precision: 0);
-        Assert.Equal(region.RegionMasteryPoints, loaded.Save!.RegionMasteryPoints, precision: 1);
 
         var restoredHunter = new Hunter();
         SaveSystem.RestoreHunter(loaded.Save!, restoredHunter);

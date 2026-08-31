@@ -606,10 +606,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // current-format save.
         SaveFile.SnapshotBeforeUpgrade(save.Version);
 
-        SaveSystem.RestoreHunter(save, _hunter);
-        // MERGE CHARTS retired with the manual merge tray (AUTO-MERGE takes no paper). Held ones become
-        // SALVAGE CHARTS — also a breaking-down permission — instead of dead paper in an old save.
-        while (_hunter.SpendCharter(Charter.Merge)) _hunter.AddCharter(Charter.Salvage);
+        SaveSystem.RestoreHunter(save, _hunter);   // (the Merge→Salvage charter fold lives inside — Core, tested)
         _dust.Restore(save.MemoryDust, save.MemoryDustUnlocks);
 
         // BEFORE the loadout is restored, because Restore truncates to the capacity. Restoring first and
@@ -707,7 +704,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // An older save carried one slot; it becomes the one wanted slot.
         if (_chestKeepSlots.Count == 0 && Enum.TryParse<ItemBaseType>(save.ChestKeepSlot ?? "", out var legacySlot))
             _chestKeepSlots.Add(legacySlot);
-        _ = Enum.TryParse<ItemBaseType>(save.ChestKeepSlot ?? "", out _);   // (legacy field read above)
         _pendingInventory = SaveSystem.RestoreInventory(save);
         _pendingChests = save.UnopenedChests
             .Select(s => new Chest
@@ -879,7 +875,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("RH_SAVE_DIR"))) return;
 
         var save = SaveSystem.Capture(
-            _hunter, _region, _forge.Inventory, SaveFile.NowMs,
+            _hunter, _forge.Inventory, SaveFile.NowMs,
             _dust, _highestMasteryAwarded, _world, _activeRegion, _warren) with
         {
             // The build rides along via `with`, so Core's Capture stays unaware of the Game-layer loadout.
@@ -922,7 +918,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
             ChestKeepMinTier = _chestKeepMinTier,
             TraderWeekStamp = _traderWeek,
             TraderBoughtSlots = _traderBought.ToList(),
-            ChestKeepSlot = _chestKeepSlots.Count == 1 ? _chestKeepSlots.First().ToString() : null,   // legacy mirror
             ChestKeepSlots = _chestKeepSlots.Select(sl => sl.ToString()).ToList(),
             MasteryEarned = _deepestEver,          // stored as deepest-ever; Earned is re-derived on load
             ChampionGleamRate = _champGleamRate,

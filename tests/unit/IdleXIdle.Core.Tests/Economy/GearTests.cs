@@ -131,7 +131,7 @@ public class GearTests
         hunter.Equip(charm);
 
         var save = IdleXIdle.Core.Persistence.SaveSystem.Capture(
-            hunter, new IdleXIdle.Core.Automation.Region("verdant_hollow"),
+            hunter,
             new[] { weapon, charm }, 1_700_000_000_000L);
 
         var json = IdleXIdle.Core.Persistence.SaveSystem.Serialize(save);

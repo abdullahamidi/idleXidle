@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Loot;
@@ -51,7 +50,8 @@ public sealed record SaveGame
 
     public Dictionary<string, int> TrainingRanks { get; init; } = new();
 
-    /// <summary>Legacy single-region mastery (pre-multi-region saves). Newer saves carry RegionFarms.</summary>
+    /// <summary>Legacy single-region mastery (pre-multi-region saves). WRITTEN NO MORE (P14) —
+    /// read only to fold into the home region when RegionFarms is absent.</summary>
     public float RegionMasteryPoints { get; init; }
 
     // RETIRED FIELDS (2026-08-24): AutomationStage, UnhatchedCores, Roster and AssignedCreatureIds
@@ -166,9 +166,6 @@ public sealed record SaveGame
     /// </remarks>
     public List<SavedSkillProgress> SkillProgress { get; init; } = new();
 
-    /// <summary>The character's Form affinity (the Nen-hexagon identity). Legacy — the Mastery tree owns it now.</summary>
-    public string Affinity { get; init; } = "";
-
     /// <summary>Mastery-tree nodes the player has taken (ids into MasteryCatalog).</summary>
     public List<string> MasteryTaken { get; init; } = new();
 
@@ -251,7 +248,8 @@ public sealed record SaveGame
     /// <summary>The VAULT's keep-filter: chests below this tier arrive as a little Scrap instead. 0 = keep all.</summary>
     public int ChestKeepMinTier { get; init; }
 
-    /// <summary>The keep-filter's slot lean (an <c>ItemBaseType</c> name), or null for any slot.</summary>
+    /// <summary>The keep-filter's one-slot lean. WRITTEN NO MORE (P14) — read only when the newer
+    /// <see cref="ChestKeepSlots"/> list is absent.</summary>
     public string? ChestKeepSlot { get; init; }
 
     /// <summary>The keep-filter's wanted slots (2026-08-23, several at once). When absent, the older single
@@ -530,7 +528,7 @@ public static class SaveSystem
     // ── Capture / restore ─────────────────────────────────────────────────────────────────────
 
     public static SaveGame Capture(
-        Hunter hunter, Region region,
+        Hunter hunter,
         IReadOnlyList<ItemInstance> inventory, long nowMs,
         Prestige.MemoryDustTree? prestige = null, int highestMasteryAwarded = 0,
         Encounters.World? world = null, string activeRegion = "",
@@ -577,7 +575,6 @@ public static class SaveSystem
             }).ToList(),
             TrainingRanks = Enum.GetValues<HunterStat>()
                 .ToDictionary(s => s.ToString(), hunter.RankOf),
-            RegionMasteryPoints = region.RegionMasteryPoints,
             Inventory = inventory.Select(ToSavedItem).ToList(),
         };
 
@@ -667,6 +664,12 @@ public static class SaveSystem
         hunter.RestoreCharters(save.Charters
             .Where(kv => Enum.TryParse<Charter>(kv.Key, out _))
             .Select(kv => new KeyValuePair<Charter, int>(Enum.Parse<Charter>(kv.Key), kv.Value)));
+
+        // MERGE CHARTS retired with the manual merge tray (AUTO-MERGE takes no paper). Held ones
+        // become SALVAGE CHARTS — also a breaking-down permission — instead of dead paper. Moved
+        // here from the host (P14) so the fold is testable, and so Charter.Merge can one day leave
+        // the enum with its migration standing beside it.
+        while (hunter.SpendCharter(Charter.Merge)) hunter.AddCharter(Charter.Salvage);
 
         // Re-buy each rank, but credit the Gleam first — otherwise restoring a maxed Hunter would
         // fail on affordability and silently drop their progress.

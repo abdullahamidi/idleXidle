@@ -40,7 +40,7 @@ public class SaveSystemTests
     {
         var (hunter, region, inventory) = BuildGame();
 
-        var json = SaveSystem.Serialize(SaveSystem.Capture(hunter, region, inventory, Now));
+        var json = SaveSystem.Serialize(SaveSystem.Capture(hunter, inventory, Now));
 
         var loaded = SaveSystem.Deserialize(json, Now);
         Assert.True(loaded.Ok);
@@ -50,7 +50,6 @@ public class SaveSystemTests
         Assert.Equal(hunter.Gleam, save.Gleam);
         Assert.Equal(12, save.TrainingRanks[nameof(HunterStat.AttackPower)]);
         Assert.Equal(5, save.TrainingRanks[nameof(HunterStat.Defense)]);
-        Assert.Equal(region.RegionMasteryPoints, save.RegionMasteryPoints, precision: 1);
         Assert.Equal(2, save.Inventory.Count);
     }
 
@@ -198,7 +197,7 @@ public class SaveSystemTests
             new() { InstanceId = "unique", BaseType = ItemBaseType.Charm, Rarity = Rarity.Common, SellValue = 5 },
         };
 
-        var restored = SaveSystem.RestoreInventory(SaveSystem.Capture(hunter, region, inventory, Now));
+        var restored = SaveSystem.RestoreInventory(SaveSystem.Capture(hunter, inventory, Now));
 
         Assert.Equal(2, restored.Count);
         Assert.Single(restored.Where(i => i.InstanceId == "dupe"));
@@ -223,7 +222,7 @@ public class SaveSystemTests
             new() { InstanceId = "e2", BaseType = ItemBaseType.Charm, Rarity = Rarity.Common, SellValue = 5 },
         };
 
-        var json = SaveSystem.Serialize(SaveSystem.Capture(hunter, region, inv, Now));
+        var json = SaveSystem.Serialize(SaveSystem.Capture(hunter, inv, Now));
         var back = SaveSystem.RestoreInventory(SaveSystem.Deserialize(json, Now).Save!);
 
         Assert.Equal(Source.Shadow, back.Single(i => i.InstanceId == "e1").Element);
@@ -252,7 +251,7 @@ public class SaveSystemTests
         var reforged = baseItem with { TraitOverride = GearTrait.Focused, EnchantOverride = EnchantKind.Radiance };
         var inventory = new List<ItemInstance> { reforged };
 
-        var json = SaveSystem.Serialize(SaveSystem.Capture(hunter, region, inventory, Now));
+        var json = SaveSystem.Serialize(SaveSystem.Capture(hunter, inventory, Now));
         var loaded = SaveSystem.Deserialize(json, Now);
         Assert.True(loaded.Ok);
 
@@ -268,7 +267,7 @@ public class SaveSystemTests
     public void test_unopened_chests_survive_a_reload()
     {
         var (hunter, region, inventory) = BuildGame();
-        var save = SaveSystem.Capture(hunter, region, inventory, Now) with
+        var save = SaveSystem.Capture(hunter, inventory, Now) with
         {
             UnopenedChests = new List<SavedChest>
             {
@@ -299,7 +298,7 @@ public class SaveSystemTests
         };
 
         var json = SaveSystem.Serialize(
-            SaveSystem.Capture(hunter, region, new List<ItemInstance> { plain }, Now));
+            SaveSystem.Capture(hunter, new List<ItemInstance> { plain }, Now));
         var back = SaveSystem.RestoreInventory(SaveSystem.Deserialize(json, Now).Save!).Single();
 
         Assert.Null(back.TraitOverride);
@@ -318,7 +317,7 @@ public class SaveSystemTests
     public void test_a_saved_build_survives_a_reload()
     {
         var (hunter, region, inventory) = BuildGame();
-        var save = SaveSystem.Capture(hunter, region, inventory, Now) with
+        var save = SaveSystem.Capture(hunter, inventory, Now) with
         {
             WovenSkills = new List<SavedSkill>
             {
@@ -359,7 +358,7 @@ public class SaveSystemTests
     public void test_a_save_without_a_tree_camera_asks_for_the_first_open_framing()
     {
         var (hunter, region, inventory) = BuildGame();
-        var json = SaveSystem.Serialize(SaveSystem.Capture(hunter, region, inventory, Now));
+        var json = SaveSystem.Serialize(SaveSystem.Capture(hunter, inventory, Now));
         var loaded = SaveSystem.Deserialize(json, Now);
         Assert.True(loaded.Ok);
         Assert.Equal(0f, loaded.Save!.MasteryZoom);
@@ -372,7 +371,7 @@ public class SaveSystemTests
     public void test_a_restored_hunter_has_identical_stats()
     {
         var (hunter, region, inventory) = BuildGame();
-        var save = SaveSystem.Capture(hunter, region, inventory, Now);
+        var save = SaveSystem.Capture(hunter, inventory, Now);
 
         var restored = new Hunter();
         SaveSystem.RestoreHunter(save, restored);
@@ -468,8 +467,7 @@ public class SaveSystemTests
         tree.Purchase("recall_1");
         tree.Purchase("socket_2");
 
-        var region = new Region("r");
-        var save = SaveSystem.Capture(new Hunter(), region,
+        var save = SaveSystem.Capture(new Hunter(),
             Array.Empty<ItemInstance>(), Now, tree, highestMasteryAwarded: 2);
 
         var loaded = SaveSystem.Deserialize(SaveSystem.Serialize(save), Now).Save!;
@@ -489,7 +487,7 @@ public class SaveSystemTests
     public void test_serialization_is_stable_and_round_trips_byte_for_byte()
     {
         var (hunter, region, inventory) = BuildGame();
-        var save = SaveSystem.Capture(hunter, region, inventory, Now);
+        var save = SaveSystem.Capture(hunter, inventory, Now);
 
         var once = SaveSystem.Serialize(save);
         var twice = SaveSystem.Serialize(SaveSystem.Deserialize(once, Now).Save!);
@@ -513,7 +511,7 @@ public class WorldSaveTests
         for (var i = 0; i < 40; i++) home.RecordActiveKill();
         home.RecordDepth(17);
 
-        var save = SaveSystem.Capture(new Hunter(), home, System.Array.Empty<ItemInstance>(),
+        var save = SaveSystem.Capture(new Hunter(), System.Array.Empty<ItemInstance>(),
             Now, world: world, activeRegion: "cinderworks");
 
         var loaded = SaveSystem.Deserialize(SaveSystem.Serialize(save), Now).Save!;
