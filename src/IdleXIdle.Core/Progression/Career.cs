@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Economy;
@@ -31,14 +32,16 @@ public static class Career
     /// <summary>
     /// The world as the quest layer is allowed to see it: flat, pure, rebuilt on demand.
     /// </summary>
-    public static QuestProgress QuestSnapshot(World world, int chestsOpened, int runsWithVowKept)
+    public static QuestProgress QuestSnapshot(World world, int runsWithVowKept, int bossesFelled,
+                                              IReadOnlyDictionary<string, int> wavesBySkill)
     {
         ArgumentNullException.ThrowIfNull(world);
+        ArgumentNullException.ThrowIfNull(wavesBySkill);
         return new QuestProgress(
             DepthByRegion: Regions.All.ToDictionary(d => d.Id, d => world.RegionFarm(d.Id).BestDepth),
-            RegionsConquered: world.ConqueredIds.Count,
-            ChestsOpened: chestsOpened,
-            RunsWithVowKept: runsWithVowKept);
+            RunsWithVowKept: runsWithVowKept,
+            BossesFelled: bossesFelled,
+            WavesBySkill: wavesBySkill);
     }
 
     /// <summary>

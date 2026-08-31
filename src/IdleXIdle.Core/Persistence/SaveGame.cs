@@ -142,6 +142,13 @@ public sealed record SaveGame
     /// </remarks>
     public int ChestsOpened { get; init; }
 
+    /// <summary>
+    /// Bosses felled across the career (P10) — the deterministic counter THE MAGPIE's gate reads.
+    /// Absent on an older save; the host seeds it from <see cref="ChestsOpened"/> as an honest
+    /// floor (every opened chest was a felled boss).
+    /// </summary>
+    public int BossesFelled { get; init; }
+
     /// <summary>The player's woven build — four skills. Empty on a pre-solo-model save (keeps the starter).</summary>
     public List<SavedSkill> WovenSkills { get; init; } = new();
 

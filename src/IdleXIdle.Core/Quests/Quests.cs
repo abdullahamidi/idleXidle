@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using IdleXIdle.Core.Builds;
 
 namespace IdleXIdle.Core.Quests;
 
@@ -17,11 +18,22 @@ public enum QuestGoal
     /// <summary>Reach <see cref="Quest.Threshold"/> depth in <see cref="Quest.RegionId"/>.</summary>
     DepthInRegion,
 
-    /// <summary>Conquer <see cref="Quest.Threshold"/> regions.</summary>
-    RegionsConquered,
+    /// <summary>
+    /// Clear <see cref="Quest.Threshold"/> waves with a skill of <see cref="Quest.Style"/> woven
+    /// (P10) — summed across the style's two skills, from the same tally that levels them
+    /// (<see cref="Builds.SkillProgress"/>). Deterministic practice, never luck.
+    /// </summary>
+    WavesWithStyle,
 
-    /// <summary>Open <see cref="Quest.Threshold"/> chests.</summary>
-    ChestsOpened,
+    /// <summary>
+    /// Fell <see cref="Quest.Threshold"/> bosses (P10). Every fifth wave holds one — no roll.
+    /// </summary>
+    /// <remarks>
+    /// Replaced ChestsOpened, whose quest was the one gate in the game hostage to a drop roll
+    /// (a flat 20% boss chest). RegionsConquered went in the same pass: no quest ever used it —
+    /// deliberately, per the roster's own rule — which made it a dead member wearing a goal's name.
+    /// </remarks>
+    BossesFelled,
 
     /// <summary>
     /// Finish <see cref="Quest.Threshold"/> descents with a Vow whose demand was MET at the end.
@@ -49,6 +61,9 @@ public sealed record Quest
     /// <summary>For <see cref="QuestGoal.DepthInRegion"/>.</summary>
     public string? RegionId { get; init; }
 
+    /// <summary>For <see cref="QuestGoal.WavesWithStyle"/>.</summary>
+    public Style? Style { get; init; }
+
     public int Threshold { get; init; } = 1;
 
     /// <summary>
@@ -61,8 +76,10 @@ public sealed record Quest
     public int Current(QuestProgress p) => Goal switch
     {
         QuestGoal.DepthInRegion => RegionId is { } r && p.DepthByRegion.TryGetValue(r, out var d) ? d : 0,
-        QuestGoal.RegionsConquered => p.RegionsConquered,
-        QuestGoal.ChestsOpened => p.ChestsOpened,
+        QuestGoal.WavesWithStyle => Style is { } st
+            ? SkillCatalogue.All.Where(s => s.Style == st).Sum(s => p.WavesBySkill.GetValueOrDefault(s.Id))
+            : 0,
+        QuestGoal.BossesFelled => p.BossesFelled,
         QuestGoal.RunsWithVowKept => p.RunsWithVowKept,
         _ => 0,
     };
@@ -85,16 +102,18 @@ public sealed record Quest
 /// same reason: it makes every quest testable without a game, and it stops the catalogue from quietly
 /// growing a dependency on whatever screen happened to be open.
 ///
-/// Everything here is DERIVED from world state each frame except <see cref="RunsWithVowKept"/>, which
-/// is a latched counter the host increments once per qualifying descent and persists.
+/// Everything here is DERIVED from live state each frame except <see cref="RunsWithVowKept"/> and
+/// <see cref="BossesFelled"/> — latched counters the host increments and persists (a descent ends,
+/// a boss falls; neither is a fact you can re-ask the world about later).
 /// </remarks>
 public readonly record struct QuestProgress(
     IReadOnlyDictionary<string, int> DepthByRegion,
-    int RegionsConquered,
-    int ChestsOpened,
-    int RunsWithVowKept)
+    int RunsWithVowKept,
+    int BossesFelled,
+    IReadOnlyDictionary<string, int> WavesBySkill)
 {
-    public static QuestProgress Empty { get; } = new(new Dictionary<string, int>(), 0, 0, 0);
+    public static QuestProgress Empty { get; } =
+        new(new Dictionary<string, int>(), 0, 0, new Dictionary<string, int>());
 }
 
 /// <summary>The quests that exist.</summary>
@@ -131,6 +150,15 @@ public readonly record struct QuestProgress(
 /// and <c>q_quiver_hollow</c>; progress is derived from chests opened and depth, so nobody mid-way
 /// loses a step, and the bank keeps what was earned under the old names.
 /// </para>
+/// <para>
+/// P10 (2026-08-31) retires those two in turn, by the same law. <c>q_quiver_hollow</c>'s depth
+/// demand was the third "reach wave N" in a five-quest catalogue; <c>q_quiver_volleys</c> asks for
+/// the thing the champion is ABOUT. <c>q_magpie_chests</c> was the one gate hostage to a drop roll;
+/// <c>q_magpie_bosses</c> counts the bosses the chests came from. A champion already earned rides
+/// the unlock BANK (nothing is ever taken back); partial progress under an old demand does not
+/// carry — except that BossesFelled seeds from ChestsOpened as an honest floor, since every opened
+/// chest was a felled boss.
+/// </para>
 /// </remarks>
 public static class QuestCatalogue
 {
@@ -150,9 +178,11 @@ public static class QuestCatalogue
         },
         new()
         {
-            Id = "q_magpie_chests", Name = "THE FULL HOLD",
-            Demand = "Open 30 chests",
-            Goal = QuestGoal.ChestsOpened, Threshold = 30, Unit = "CHESTS",
+            // Re-keyed from q_magpie_chests (P10): the only drop-roll gate in the game. Bosses are
+            // the deterministic thing the chests came from — every fifth wave, no luck involved.
+            Id = "q_magpie_bosses", Name = "THE FULL HOLD",
+            Demand = "Fell 40 bosses",
+            Goal = QuestGoal.BossesFelled, Threshold = 40, Unit = "BOSSES",
         },
         new()
         {
@@ -166,9 +196,12 @@ public static class QuestCatalogue
         },
         new()
         {
-            Id = "q_quiver_hollow", Name = "THE DEEP HOLLOW",
-            Demand = "Reach wave 60 in the Verdant Hollow",
-            Goal = QuestGoal.DepthInRegion, RegionId = "verdant_hollow", Threshold = 60, Unit = "WAVES",
+            // Re-keyed from q_quiver_hollow (P10): the catalogue's THIRD "reach wave N" became the
+            // quest about what THE QUIVER is — practice with VOLLEY skills, counted by the same
+            // tally that levels them, across both of the style's skills.
+            Id = "q_quiver_volleys", Name = "THE COUNTED ARROWS",
+            Demand = "Clear 150 waves with VOLLEY skills woven",
+            Goal = QuestGoal.WavesWithStyle, Style = Builds.Style.Volley, Threshold = 150, Unit = "WAVES",
         },
     };
 

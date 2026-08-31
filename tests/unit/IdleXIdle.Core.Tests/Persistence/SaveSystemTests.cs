@@ -554,8 +554,8 @@ public class WorldSaveTests
     /// <remarks>
     /// CHESTS OPENED sat on the STATS page between HIGHEST WAVE and MASTERY POINTS, both of which
     /// survive a reload, and it did not — it lived in a field on the Forge screen that nothing saved,
-    /// so a career of hundreds read zero after every launch. It also feeds
-    /// <c>QuestGoal.ChestsOpened</c>, so the loss was not only cosmetic.
+    /// so a career of hundreds read zero after every launch. It also seeds P10's BossesFelled
+    /// floor, so the loss was not only cosmetic.
     /// </remarks>
     [Fact]
     public void test_the_career_chest_count_survives_a_reload()

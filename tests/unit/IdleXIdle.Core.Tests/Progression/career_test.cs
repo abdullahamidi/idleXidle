@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Encounters;
@@ -44,16 +45,31 @@ public class CareerTest
         var world = new World();
         var region = Regions.All[0].Id;
         world.RegionFarm(region).RecordDepth(9);
-        world.Conquer(region);
 
         // Act
-        var p = Career.QuestSnapshot(world, chestsOpened: 4, runsWithVowKept: 2);
+        var p = Career.QuestSnapshot(world, runsWithVowKept: 2, bossesFelled: 7,
+                                     wavesBySkill: new Dictionary<string, int> { ["volley_spray"] = 5 });
 
         // Assert — every field is the fact it names, nothing derived twice.
         Assert.Equal(9, p.DepthByRegion[region]);
-        Assert.Equal(1, p.RegionsConquered);
-        Assert.Equal(4, p.ChestsOpened);
         Assert.Equal(2, p.RunsWithVowKept);
+        Assert.Equal(7, p.BossesFelled);
+        Assert.Equal(5, p.WavesBySkill["volley_spray"]);
+    }
+
+    [Fact]
+    public void test_volley_practice_sums_across_the_styles_two_skills()
+    {
+        // THE QUIVER's demand reads the same tally that levels skills, and BOTH volley skills feed
+        // it — carrying the pair is faster practice, which is exactly what a quiver would say.
+        var quiver = IdleXIdle.Core.Quests.QuestCatalogue.Find("q_quiver_volleys")!;
+        var p = IdleXIdle.Core.Quests.QuestProgress.Empty with
+        {
+            WavesBySkill = new Dictionary<string, int> { ["volley_spray"] = 90, ["volley_weep"] = 60 },
+        };
+
+        Assert.Equal(150, quiver.Current(p));
+        Assert.True(quiver.IsDone(p));
     }
 
     [Fact]

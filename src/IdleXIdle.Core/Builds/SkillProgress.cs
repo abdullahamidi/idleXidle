@@ -57,6 +57,9 @@ public sealed class SkillProgress
 
     public int UsesOf(string skillId) => _uses.GetValueOrDefault(skillId);
 
+    /// <summary>Every skill's cleared-wave tally — the career fact the quest layer reads (P10).</summary>
+    public IReadOnlyDictionary<string, int> UsesBySkill() => new Dictionary<string, int>(_uses);
+
     public int LevelOf(string skillId) => LevelFor(UsesOf(skillId));
 
     /// <summary>Levels already committed — the variation counts as one, each reinforcement as one.</summary>

@@ -155,11 +155,11 @@ public static class CharacterRoster
             // paid out as a loot bonus, on the passive a player unlocks by finishing a quest for it.
             Grants = new[] { BuildTrigger.LooseAgain },
             Shape = new SkillShape { SkillRate = 1.10f },
-            // SECOND MYSTIC. The old gate was depth 20 in the Verdant Hollow, which conquest-at-20 made
-            // free; then it was thirty chests, which belonged on the loot champion (playtest 2026-08-26:
-            // "THE MAGPIE should have the chest quest — swap it with THE QUIVER"). So: the deepest
-            // demand in the roster, in the region every player knows best.
-            Unlock = CharacterUnlock.Quest("q_quiver_hollow", "Reach wave 60 in the Verdant Hollow"),
+            // SECOND MYSTIC. Gate history: depth 20 (free at conquest), thirty chests (moved to
+            // the loot champion), wave 60 in the Hollow (the catalogue's THIRD depth quest). P10
+            // finally asks for the thing this champion IS: practice with VOLLEY skills, read from
+            // the same tally that levels them.
+            Unlock = CharacterUnlock.Quest("q_quiver_volleys", "Clear 150 waves with VOLLEY skills woven"),
         },
         new()
         {
@@ -223,11 +223,11 @@ public static class CharacterRoster
             // Haul and Rarity, which the AVARICE road also buys — so this character is the cheap
             // version of a thirty-point path, and the road stays worth walking because it goes further.
             Mods = new BuildMods(1f, 1f, 1f, 1.35f, 1.20f),
-            // SECOND WANDERER. Was Cinderworks' conquest, the same frame as THE ANVIL; then wave 60 in
-            // the Hollow. Now the chest quest, because a champion whose whole passive is FULL POCKETS
-            // should be earned by filling them — chests are the Forge's currency and the thing an idle
-            // player collects most.
-            Unlock = CharacterUnlock.Quest("q_magpie_chests", "Open 30 chests"),
+            // SECOND WANDERER. Was Cinderworks' conquest; then wave 60 in the Hollow; then thirty
+            // chests — the one gate in the game hostage to a drop roll (a flat 20% boss chest).
+            // P10 counts the BOSSES the chests came from instead: every fifth wave holds one,
+            // deterministically, and the pockets still fill along the way.
+            Unlock = CharacterUnlock.Quest("q_magpie_bosses", "Fell 40 bosses"),
         },
     };
 

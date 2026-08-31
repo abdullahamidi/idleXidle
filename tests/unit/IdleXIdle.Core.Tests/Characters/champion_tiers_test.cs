@@ -127,7 +127,7 @@ public class ChampionTiersTest
     /// </summary>
     private static QuestProgress ConquestOf(IReadOnlyList<string> conqueredInOrder) =>
         new(conqueredInOrder.ToDictionary(id => id, _ => IdleXIdle.Core.Encounters.Checkpoints.ConquestWave),
-            conqueredInOrder.Count, ChestsOpened: 0, RunsWithVowKept: 0);
+            RunsWithVowKept: 0, BossesFelled: 0, WavesBySkill: new Dictionary<string, int>());
 
     [Fact]
     public void test_the_class_catalogue_lists_the_first_champion_before_the_second()
@@ -173,12 +173,16 @@ public class ChampionTiersTest
     private static QuestProgress AtThreshold(Quest q, int margin)
     {
         var n = q.Threshold + margin;
+        var none = new Dictionary<string, int>();
         return q.Goal switch
         {
-            QuestGoal.DepthInRegion => new QuestProgress(new Dictionary<string, int> { [q.RegionId!] = n }, 0, 0, 0),
-            QuestGoal.RegionsConquered => new QuestProgress(new Dictionary<string, int>(), n, 0, 0),
-            QuestGoal.ChestsOpened => new QuestProgress(new Dictionary<string, int>(), 0, n, 0),
-            QuestGoal.RunsWithVowKept => new QuestProgress(new Dictionary<string, int>(), 0, 0, n),
+            QuestGoal.DepthInRegion => new QuestProgress(new Dictionary<string, int> { [q.RegionId!] = n }, 0, 0, none),
+            QuestGoal.RunsWithVowKept => new QuestProgress(none, n, 0, none),
+            QuestGoal.BossesFelled => new QuestProgress(none, 0, n, none),
+            // The style tally: the whole count on the style's ACTIVE skill — the SUM is what counts,
+            // and the sum law has its own test in career_test.
+            QuestGoal.WavesWithStyle => new QuestProgress(none, 0, 0, new Dictionary<string, int>
+                { [IdleXIdle.Core.Builds.SkillCatalogue.ActiveOf(q.Style!.Value).Id] = n }),
             _ => throw new System.NotSupportedException(q.Goal.ToString()),
         };
     }

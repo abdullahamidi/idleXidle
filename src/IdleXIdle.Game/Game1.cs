@@ -319,6 +319,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// run ends, so if this is not latched at that instant it can never be proved afterwards.
     /// </remarks>
     private int _runsWithVowKept;
+
+    /// <summary>Bosses felled across the career — latched at the reward, saved, quest-read (P10).</summary>
+    private int _bossesFelled;
     private RosterScreen _roster = null!;
     private bool _showRoster;
     private WeaveScreen _weave = null!;
@@ -680,6 +683,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // gates that were true when it was written (LegacyUnlocks), so no champion is taken back.
         SaveSystem.RestoreCharacters(save, _characters);
         _runsWithVowKept = save.RunsWithVowKept;
+        // Seeded from chests on a pre-P10 save: every opened chest was a felled boss, so the floor
+        // is honest — and a MAGPIE chase already underway keeps most of its steps.
+        _bossesFelled = save.BossesFelled > 0 ? save.BossesFelled : save.ChestsOpened;
         // The guide rungs the player closed by hand — names, so a reordered enum can never
         // dismiss a different lesson. A plain field, so restoring here (Initialize) is safe.
         _dismissedGuide.Clear();
@@ -920,6 +926,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             UnlockedCharacters = _characters.SaveUnlocked().ToList(),
             QuestsDone = _characters.SaveQuests().ToList(),
             RunsWithVowKept = _runsWithVowKept,
+            BossesFelled = _bossesFelled,
             ChestsOpened = _forge.ChestsOpened,
             FreeSocketUsed = _forge.FreeSocketUsed,
             ChestKeepMinTier = _chestKeepMinTier,
@@ -1024,6 +1031,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _traderStock = null;
         _traderStockLevel = 0;
         _runsWithVowKept = 0;
+        _bossesFelled = 0;
         _highestMasteryAwarded = 0;
         _hasSave = false;
 
@@ -3689,6 +3697,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 spoil.Material.ToString().ToUpperInvariant(),
                 spoil.Charter is { } c2 ? Charters.Name(c2) : null);
 
+            // THE CAREER'S BOSS TALLY (P10) — deterministic, unlike the chest roll beneath it.
+            if (r.IsBoss) _bossesFelled++;
             if (r.IsBoss && DropBossChest(r, def)) _expedition.FlashChest();   // a chest is a LOW-rate drop now, not a given
         }
         if (_champSecondsAccrued > 10) _champGleamRate = (float)(_champGleamAccrued / _champSecondsAccrued);
@@ -5205,7 +5215,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// branch in UpdateExpedition.
     /// </remarks>
     private QuestProgress QuestSnapshot()
-        => Career.QuestSnapshot(_world, _forge.ChestsOpened, _runsWithVowKept);
+        => Career.QuestSnapshot(_world, _runsWithVowKept, _bossesFelled, _skillProgress.UsesBySkill());
 
     /// <summary>
     /// Did the descent that just ended run under a Vow whose demand the build actually met?

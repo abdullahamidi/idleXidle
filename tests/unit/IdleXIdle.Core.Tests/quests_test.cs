@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Quests;
 using Xunit;
@@ -12,9 +13,9 @@ namespace IdleXIdle.Core.Tests;
 public class QuestsTest
 {
     private static QuestProgress Progress(
-        int hollowDepth = 0, int conquered = 0, int chests = 0, int vowRuns = 0, int cinderDepth = 0) =>
+        int hollowDepth = 0, int vowRuns = 0, int cinderDepth = 0, int bosses = 0) =>
         new(new Dictionary<string, int> { ["verdant_hollow"] = hollowDepth, ["cinderworks"] = cinderDepth },
-            conquered, chests, vowRuns);
+            vowRuns, bosses, new Dictionary<string, int>());
 
     [Fact]
     public void test_a_fresh_player_has_finished_nothing()
@@ -25,19 +26,18 @@ public class QuestsTest
     [Fact]
     public void test_depth_quest_completes_only_at_its_threshold()
     {
-        var q = QuestCatalogue.Find("q_quiver_hollow")!;
-        Assert.Equal(60, q.Threshold);
-        Assert.False(q.IsDone(Progress(hollowDepth: 59)));
-        Assert.True(q.IsDone(Progress(hollowDepth: 60)));
-        Assert.True(q.IsDone(Progress(hollowDepth: 90)));
+        var q = QuestCatalogue.Find("q_cinder_deep")!;
+        Assert.Equal(50, q.Threshold);
+        Assert.False(q.IsDone(Progress(cinderDepth: 49)));
+        Assert.True(q.IsDone(Progress(cinderDepth: 50)));
+        Assert.True(q.IsDone(Progress(cinderDepth: 90)));
     }
 
     [Fact]
     public void test_depth_in_one_region_does_not_satisfy_a_quest_about_another()
     {
-        var q = QuestCatalogue.Find("q_quiver_hollow")!;
-        var elsewhere = new QuestProgress(
-            new Dictionary<string, int> { ["cinderworks"] = 99 }, 1, 0, 0);
+        var q = QuestCatalogue.Find("q_cinder_deep")!;
+        var elsewhere = Progress(hollowDepth: 99);
         Assert.False(q.IsDone(elsewhere));
         Assert.Equal(0, q.Current(elsewhere));
     }
@@ -46,7 +46,7 @@ public class QuestsTest
     public void test_the_vow_quest_needs_a_latched_run()
     {
         var q = QuestCatalogue.Find("q_three_vows")!;
-        Assert.False(q.IsDone(Progress(hollowDepth: 999, conquered: 6, chests: 500)));
+        Assert.False(q.IsDone(Progress(hollowDepth: 999, cinderDepth: 999, bosses: 500)));
         Assert.False(q.IsDone(Progress(vowRuns: 2)));
         Assert.True(q.IsDone(Progress(vowRuns: 3)));
     }
@@ -99,8 +99,9 @@ public class QuestsTest
         state.Refresh(everyRegion);
         Assert.False(state.IsUnlocked("magpie"));
 
-        // Thirty chests is THE MAGPIE's quest — the loot champion is earned by collecting loot.
-        foreach (var done in QuestCatalogue.Satisfied(Progress(chests: 30)))
+        // Forty bosses is THE MAGPIE's quest (P10) — the loot champion is earned by felling the
+        // things the loot comes from, deterministically.
+        foreach (var done in QuestCatalogue.Satisfied(Progress(bosses: 40)))
             state.CompleteQuest(done.Id);
 
         var fresh = state.Refresh(everyRegion);
@@ -153,6 +154,18 @@ public class QuestsTest
     }
 
     [Fact]
+    public void test_no_gate_depends_on_a_drop_roll()
+    {
+        // The brief's rule: measurable, deterministic. Depth, practice, bosses and kept vows are
+        // facts a player can WALK toward; the retired chest gate was a 20% roll they could only
+        // wait on — the one gate in the game hostage to luck.
+        foreach (var q in QuestCatalogue.All)
+            Assert.True(q.Goal is QuestGoal.DepthInRegion or QuestGoal.WavesWithStyle
+                            or QuestGoal.BossesFelled or QuestGoal.RunsWithVowKept,
+                        $"{q.Name} counts {q.Goal}, which is not a deterministic career fact");
+    }
+
+    [Fact]
     public void test_the_bulwark_quest_is_an_endurance_hold_far_past_the_conquest_line()
     {
         // Playtest 2026-08-26: "both Bulwarks unlock at the same time — silly. Bulwark stands for
@@ -168,26 +181,28 @@ public class QuestsTest
         Assert.Equal(80, q.Threshold);
         Assert.True(q.Threshold >= IdleXIdle.Core.Encounters.Checkpoints.ConquestWave * 4);
         Assert.Null(QuestCatalogue.Find("q_every_region"));
-        Assert.DoesNotContain(QuestCatalogue.All, x => x.Goal == QuestGoal.RegionsConquered);
 
         // What the card and the EARNED line say, in the player's words.
         Assert.Equal("HOLD WAVE 80 IN MARROW WASTES", q.Demand.ToUpperInvariant());
         Assert.Equal("34 / 80 WAVES", q.ProgressLine(new QuestProgress(
-            new Dictionary<string, int> { ["marrow_wastes"] = 34 }, 6, 0, 0)));
+            new Dictionary<string, int> { ["marrow_wastes"] = 34 }, 0, 0, new Dictionary<string, int>())));
     }
 
     [Fact]
-    public void test_the_chest_quest_is_the_magpies_and_the_hollow_depth_is_the_quivers()
+    public void test_the_re_keyed_gates_retired_their_old_ids()
     {
-        // Playtest 2026-08-26: "THE MAGPIE should have the chest quest (it is loot-focused) — swap it
-        // with THE QUIVER." The champions swapped AND the ids were retired: a save with the old
-        // "q_thirty_chests" done had earned THE QUIVER, and the same id on THE MAGPIE would have handed
-        // that save a second champion for one quest (review 2026-08-26).
+        // The catalogue's own law, applied twice more in P10: a quest whose MEANING changes takes a
+        // NEW id, because a banked "done" under the old id must neither hand out a champion for a
+        // different demand nor be revoked. Champions already earned ride the unlock BANK either way.
         Assert.Null(QuestCatalogue.Find("q_thirty_chests"));
         Assert.Null(QuestCatalogue.Find("q_hollow_deep"));
-        Assert.Equal("q_magpie_chests", CharacterRoster.Get("magpie").Unlock.QuestId);
-        Assert.Equal(QuestGoal.ChestsOpened, QuestCatalogue.Find("q_magpie_chests")!.Goal);
-        Assert.Equal("q_quiver_hollow", CharacterRoster.Get("quiver").Unlock.QuestId);
-        Assert.Equal("verdant_hollow", QuestCatalogue.Find("q_quiver_hollow")!.RegionId);
+        Assert.Null(QuestCatalogue.Find("q_magpie_chests"));   // was the one drop-roll gate
+        Assert.Null(QuestCatalogue.Find("q_quiver_hollow"));   // was the catalogue's THIRD depth quest
+
+        Assert.Equal("q_magpie_bosses", CharacterRoster.Get("magpie").Unlock.QuestId);
+        Assert.Equal(QuestGoal.BossesFelled, QuestCatalogue.Find("q_magpie_bosses")!.Goal);
+        Assert.Equal("q_quiver_volleys", CharacterRoster.Get("quiver").Unlock.QuestId);
+        Assert.Equal(QuestGoal.WavesWithStyle, QuestCatalogue.Find("q_quiver_volleys")!.Goal);
+        Assert.Equal(Style.Volley, QuestCatalogue.Find("q_quiver_volleys")!.Style);
     }
 }
