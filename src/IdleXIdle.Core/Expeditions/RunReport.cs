@@ -82,24 +82,14 @@ public sealed record RunReport
         return $"Out-scaled on wave {WallWave} — nothing specific beat you, the numbers did.";
     }
 
-    /// <summary>What changed since the previous run in this region, as ready-to-show lines.</summary>
-    /// <remarks>
-    /// The diff is what makes iteration legible: it is how a player sees that a change raised their
-    /// average hit by 60% and moved their wall from Armoured to Swarm. Without it every run is judged in
-    /// isolation and the build lab has no feedback at all.
-    /// </remarks>
-    public IEnumerable<string> DiffAgainst(RunReport? previous)
-    {
-        foreach (var e in DiffEntries(previous))
-            yield return e.Numeric ? Line(e.Label, e.Was, e.Now, e.Unit) : $"{e.Label}   {e.WasText} -> {e.NowText}";
-    }
 
     /// <summary>
-    /// The same diff as <see cref="DiffAgainst"/>, as structured rows — for a screen that wants to lay
-    /// the before, the after and the change out in columns rather than print one string per line.
+    /// What changed since the previous run in this region, as structured rows. The diff is what makes
+    /// iteration legible — without it every run is judged in isolation and the build lab has no
+    /// feedback at all.
     /// </summary>
     /// <remarks>
-    /// Nothing new is measured here; every row is one <see cref="DiffAgainst"/> line taken apart. The
+    /// The
     /// screen colours a change by <see cref="DiffEntry.Improved"/>, which is why each row says which
     /// direction is the good one: more depth, bigger hits and more reach are better, less absorbed is.
     /// </remarks>
@@ -114,13 +104,6 @@ public sealed record RunReport
 
         if (previous.WallArchetype != WallArchetype)
             yield return DiffEntry.Named("WALL", previous.WallArchetype.ToString(), WallArchetype.ToString());
-    }
-
-    private static string Line(string label, float was, float now, string unit)
-    {
-        var delta = now - was;
-        var sign = delta >= 0 ? "+" : "";
-        return $"{label,-10} {was:F1}{unit} -> {now:F1}{unit}   ({sign}{delta:F1})";
     }
 }
 

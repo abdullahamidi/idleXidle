@@ -115,7 +115,7 @@ public class ReinforcementLivenessTests
         var pool = SoloBattle.ChampionHealth(build, hunter);
         var champ = new Champion { MaxHealth = pool * 40, Health = pool * 20 };   // survives, and can be healed
         var run = new SoloExpedition(build, champ, hunter, region.Power, region.Pressure,
-                                     ExpeditionTuning.Default, Source.Machine, new Random(19));
+                                     ExpeditionTuning.Default, new Random(19));
 
         long dealt = 0, healed = 0, shielded = 0;
         for (var w = 0; w < 6; w++)

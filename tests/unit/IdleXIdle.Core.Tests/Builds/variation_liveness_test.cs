@@ -94,7 +94,7 @@ public class VariationLivenessTests
         var pool = SoloBattle.ChampionHealth(build, hunter);
         var champ = new Champion { MaxHealth = pool * 40, Health = pool * 40 };   // survives, so the run is the subject
         var run = new SoloExpedition(build, champ, hunter, 260f, 26f,
-                                     ExpeditionTuning.Default, Source.Machine, new Random(19));
+                                     ExpeditionTuning.Default, new Random(19));
 
         long dealt = 0;
         for (var w = 0; w < 6; w++)

@@ -131,7 +131,7 @@ public class HealBalanceTest
         var hp = SoloBattle.ChampionHealth(build, hunter);
         var champ = new Champion { MaxHealth = hp, Health = hp };
         var run = new SoloExpedition(build, champ, hunter, enemyBaseHealth: 120f, enemyBaseDamage: 9f,
-                                     tuning, enemySource: null, rng: new Random(9_000 + runIndex))
+                                     tuning, rng: new Random(9_000 + runIndex))
         {
             RegionId = "verdant_hollow",
             RunIndex = runIndex,
@@ -426,7 +426,7 @@ public class HealBalanceTest
             var build = Weave(Enumerable.Repeat(("hammer_blow", Source.Spirit), 4), shape, Geared, heals: !bloodMagic);
             var champ = new Champion { MaxHealth = 1_000, Health = 1_000 };
             var run = new SoloExpedition(build, champ, MidCareerHunter(), 120f, 9f,
-                                         ExpeditionTuning.Default, null, new Random(1))
+                                         ExpeditionTuning.Default, new Random(1))
                 { RegionId = "verdant_hollow", RunIndex = 0 };
             run.PushWave();
             return champ.Health;

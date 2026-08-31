@@ -55,7 +55,7 @@ public class SplinterPaysTests
     {
         var champ = new Champion { MaxHealth = 5_000_000, Health = 5_000_000 };
         return new SoloExpedition(build, champ, new Hunter(), 1f, 0f,
-                                  ExpeditionTuning.Default, enemySource: null, rng: new Random(seed))
+                                  ExpeditionTuning.Default, rng: new Random(seed))
         { RegionId = "verdant_hollow", RunIndex = 0 };
     }
 

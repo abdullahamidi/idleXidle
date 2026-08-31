@@ -16,7 +16,7 @@ namespace IdleXIdle.Core.Tests.Progression;
 /// </remarks>
 public class PointIncomeTests
 {
-    private static Region RegionOf(string id) => new(id, parClearTimeSeconds: 60);
+    private static Region RegionOf(string id) => new(id);
 
     /// <summary>Points are paid for NEW depth, once.</summary>
     /// <remarks>

@@ -231,8 +231,8 @@ public class TraitNamesTests
         sharp.SetEarned(100);
         foreach (var id in new[] { "recall_1", "recall_2", "recall_3", "recall_4" }) Assert.True(sharp.Purchase(id));
 
-        var plain = new Region("verdant_hollow", 15, AutomationTuning.Default);
-        var boosted = new Region("verdant_hollow", 15, AutomationTuning.Default);
+        var plain = new Region("verdant_hollow", AutomationTuning.Default);
+        var boosted = new Region("verdant_hollow", AutomationTuning.Default);
         for (var i = 0; i < 20; i++)
         {
             plain.RecordActiveKill(DustEffects.MasteryRate(bare));

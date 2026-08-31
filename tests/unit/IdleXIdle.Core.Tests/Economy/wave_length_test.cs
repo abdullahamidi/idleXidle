@@ -112,7 +112,7 @@ public class WaveLengthTest
         var build = FourSkill();
         var pool = SoloBattle.ChampionHealth(build, hunter, poolScale);
         var champ = new Champion { MaxHealth = pool, Health = pool };
-        var run = new SoloExpedition(build, champ, hunter, 110f, 9f, tuning, Source.Nature, new Random(17));
+        var run = new SoloExpedition(build, champ, hunter, 110f, 9f, tuning, new Random(17));
         var beat = SoloBattle.BeatFor(build.Resolve(hunter).SkillRate);
 
         long fightMs = 0, gleam = 0;

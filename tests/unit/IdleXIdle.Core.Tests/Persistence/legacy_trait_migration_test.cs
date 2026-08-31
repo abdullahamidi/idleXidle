@@ -52,7 +52,7 @@ public class LegacyTraitMigrationTest
             SellValue = 50, ItemLevel = 3,
         };
         var save = SaveSystem.Capture(
-            new Hunter(), new IdleXIdle.Core.Automation.Region("verdant_hollow", 15),
+            new Hunter(), new IdleXIdle.Core.Automation.Region("verdant_hollow"),
             new[] { plain }, nowMs: 0);
 
         // Act

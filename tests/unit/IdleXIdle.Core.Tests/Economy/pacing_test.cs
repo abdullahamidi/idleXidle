@@ -63,7 +63,7 @@ public class PacingTest
         var pool = SoloBattle.ChampionHealth(build, hunter);
         var champ = new Champion { MaxHealth = pool, Health = pool };
         var run = new SoloExpedition(build, champ, hunter, baseHealth, baseDamage,
-                                     T, Source.Nature, new Random(31));
+                                     T, new Random(31));
 
         var perWave = new List<int>();
         while (!run.Over && run.Wave < stopAtWave)

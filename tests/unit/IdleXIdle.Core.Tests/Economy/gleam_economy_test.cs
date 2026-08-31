@@ -107,7 +107,7 @@ public class GleamEconomyTest
         var build = StarterBuild();
         var pool = SoloBattle.ChampionHealth(build, hunter);
         var champ = new Champion { MaxHealth = pool, Health = pool };
-        var run = new SoloExpedition(build, champ, hunter, 110f, 9f, T, Source.Nature,
+        var run = new SoloExpedition(build, champ, hunter, 110f, 9f, T,
                                      new Random(17));
 
         long gleam = 0;

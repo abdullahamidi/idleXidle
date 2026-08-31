@@ -119,7 +119,7 @@ public sealed class Descent
         var hp = SoloBattle.ChampionHealth(build, hunter);
         Champion = new Champion { MaxHealth = hp, Health = hp };
         Run = new SoloExpedition(build, Champion, hunter, enemyBaseHealth, enemyBaseDamage,
-                                 Tuning, enemySource: null, Rng)
+                                 Tuning, Rng)
         {
             EnemyBias = EnemyBias,
             RegionId = RegionId,

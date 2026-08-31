@@ -34,9 +34,9 @@ public class FullLoopTests
     public void test_a_full_session_produces_a_stronger_hunter_and_a_mastered_region()
     {
         var hunter = new Hunter();
-        var region = new Region(VerdantHollow.RegionId, parClearTimeSeconds: 15);
+        var region = new Region(VerdantHollow.RegionId);
         var inventory = new List<ItemInstance>();
-        var powerTier = VerdantHollow.Templates.First(t => !t.IsBoss).PowerTierBase;
+        var powerTier = 1;   // the home region's loot tier floor (the template chain that authored it is gone)
 
         // ── 1. Hunt. Twenty kills' worth of loot from the live roller. ────────────────────────────
         for (var i = 0; i < 20; i++)

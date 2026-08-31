@@ -50,7 +50,7 @@ public class BreakBadgeTests
         var pool = SoloBattle.ChampionHealth(build, hunter);
         var champ = new Champion { MaxHealth = pool * 40, Health = pool * 40 };
         return new SoloExpedition(build, champ, hunter, 260f, 26f,
-                                  ExpeditionTuning.Default, Source.Machine, new Random(19));
+                                  ExpeditionTuning.Default, new Random(19));
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public class BreakBadgeTests
         var pool = SoloBattle.ChampionHealth(build, hunter);
         var champ = new Champion { MaxHealth = pool * 40, Health = pool * 40 };
         var run = new SoloExpedition(build, champ, hunter, 260f, 26f,
-                                     ExpeditionTuning.Default, Source.Machine, new Random(19));
+                                     ExpeditionTuning.Default, new Random(19));
         run.PushWave();
 
         Assert.DoesNotContain(run.LastWaveEvents, e => e.Kind == BattleEventKind.Break);

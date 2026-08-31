@@ -152,7 +152,7 @@ public class AffixLivenessTests
         var build = BuildWith(SkillShape.None);
         var champ = new Champion { MaxHealth = 5_000_000, Health = 5_000_000 };
         return new SoloExpedition(build, champ, new Hunter(), 0.01f, 0f,
-                                  ExpeditionTuning.Default, enemySource: null, rng: new Random(seed))
+                                  ExpeditionTuning.Default, rng: new Random(seed))
         { RegionId = region, RunIndex = 0 };
     }
 

@@ -40,7 +40,6 @@ public sealed class SoloExpedition
     private readonly ExpeditionTuning _tuning;
     private readonly float _enemyBaseHealth;
     private readonly float _enemyBaseDamage;
-    private readonly Source? _enemySource;
     private readonly Random _rng;
 
     /// <summary>The balanced enemy bite cadence, in ms. A region's bias bends this — see <see cref="BiasTempo"/>.</summary>
@@ -122,7 +121,6 @@ public sealed class SoloExpedition
         float enemyBaseHealth,
         float enemyBaseDamage,
         ExpeditionTuning? tuning = null,
-        Source? enemySource = null,
         Random? rng = null)
     {
         ArgumentNullException.ThrowIfNull(build);
@@ -135,7 +133,6 @@ public sealed class SoloExpedition
         _tuning = tuning ?? ExpeditionTuning.Default;
         _enemyBaseHealth = enemyBaseHealth;
         _enemyBaseDamage = enemyBaseDamage;
-        _enemySource = enemySource;
         _rng = rng ?? new Random(20260716);
     }
 
@@ -303,7 +300,7 @@ public sealed class SoloExpedition
         // PLATED thickens whatever armour the composition brought. On a Swarm band that is zero, and the
         // affix is wasted — which is allowed. Re-rolling affixes to avoid it would cost the player the
         // one thing this system gives them: a ladder they can learn before they descend.
-        var defMult = Bands.DefenceMultiplierOrOne(affixes);
+        var defMult = Bands.DefenseMultiplier(affixes);
         if (defMult != 1f)
             creatures = creatures
                 // Archetype is COPIED, and forgetting it inverted the one node that reads it. A creature
@@ -489,8 +486,9 @@ public sealed class SoloExpedition
         }
 
         // BOSS-WAVE CORES ARE GONE (2026-08-24). They fed the hatchery of the retired creature
-        // subsystem — "2 per boss" into a currency that could never be spent. Only the skill payouts
-        // (HARVEST/LODESTONE) still write the channel, and nothing consumes it; see WaveBonus.Cores.
+        // subsystem — "2 per boss" into a currency that could never be spent. The skill payouts
+        // (HARVEST/LODESTONE) still write the channel, and the HOST pays it out as the CORE material
+        // (Game1 credits Haul.Cores into the material wallet) — live, despite the retired name.
         return new Haul(
             Cores: bonus.Cores,
             // THE COEFFICIENT WAS 8 AND IS MEASURED, NOT GUESSED. At 8 a trained champion earned 287

@@ -7,14 +7,12 @@ namespace IdleXIdle.Core.Tests.Automation;
 
 /// <summary>
 /// The region progress record that survived the creature-farm retirement (2026-08-24): mastery from
-/// the champion's own kills, the depth record that pays skill points, and the away-earnings readout.
+/// the champion's own kills, and the depth record that pays skill points.
 /// </summary>
 public class RegionFarmTests
 {
     private static readonly AutomationTuning Tuning = AutomationTuning.Default;
-    private const int Par = 15;
-
-    private static Region NewRegion() => new("verdant_hollow", Par, Tuning);
+    private static Region NewRegion() => new("verdant_hollow", Tuning);
 
     [Fact]
     public void test_region_farm_active_kills_accrue_mastery_points()
@@ -63,42 +61,6 @@ public class RegionFarmTests
 
         // Assert
         Assert.Equal(MasteryLevel.Perfected, region.MasteryLevel);
-    }
-
-    /// <summary>The map's away-earnings line: always the band FLOOR for the current mastery level.</summary>
-    [Fact]
-    public void test_region_farm_idle_efficiency_reads_the_band_floor()
-    {
-        // Arrange
-        var region = NewRegion();
-
-        // Act + Assert — at each mastery level, the readout is that band's minimum (team quality is
-        // pinned to zero — exactly what an unstaffable farm always scored).
-        Assert.Equal(EfficiencyContract.IdleBand(MasteryLevel.NewlyConquered).Min, region.IdleEfficiencyPercent());
-
-        region.RestoreMasteryPoints(Tuning.RmpThreshold1);
-        Assert.Equal(EfficiencyContract.IdleBand(MasteryLevel.PartiallyMastered).Min, region.IdleEfficiencyPercent());
-
-        region.RestoreMasteryPoints(Tuning.RmpThreshold2);
-        Assert.Equal(EfficiencyContract.IdleBand(MasteryLevel.FullyMastered).Min, region.IdleEfficiencyPercent());
-
-        region.RestoreMasteryPoints(Tuning.RmpThreshold3);
-        Assert.Equal(EfficiencyContract.IdleBand(MasteryLevel.Perfected).Min, region.IdleEfficiencyPercent());
-    }
-
-    /// <summary>Par is the fixed anchor of the efficiency contract. Nothing here may move it.</summary>
-    [Fact]
-    public void test_region_farm_par_is_never_altered()
-    {
-        // Arrange
-        var region = NewRegion();
-
-        // Act
-        for (var i = 0; i < 1000; i++) region.RecordActiveKill();
-        region.RecordDepth(40);
-
-        // Assert
-        Assert.Equal(Par, region.ParClearTimeSeconds);
     }
 
     /// <summary>Depth records pay first-time only — the source of skill points must not re-pay.</summary>

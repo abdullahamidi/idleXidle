@@ -31,7 +31,7 @@ public class LiveBuildTests
 
     private static SoloExpedition Run(Build build)
         => new(build, new Champion { MaxHealth = 400, Health = 400 }, new Hunter(), 120f, 9f,
-               ExpeditionTuning.Default, enemySource: null, rng: new Random(7));
+               ExpeditionTuning.Default, rng: new Random(7));
 
     [Fact]
     public void test_live_build_replace_keeps_the_wave_and_the_haul()
@@ -90,7 +90,7 @@ public class LiveBuildTests
         }
         var champ = new Champion { MaxHealth = 400, Health = 400 };
         var run = new SoloExpedition(Two("hammer_blow"), champ, new Hunter(), 120f, 9f,
-            ExpeditionTuning.Default, enemySource: null, rng: new Random(7));
+            ExpeditionTuning.Default, rng: new Random(7));
         // One cast at a time — a short wave may end before the second slot ever fires, so fight until both have.
         // Actives count their cooldowns in BEATS (2026-08-27), so the carried table is ReadyAtBeat.
         for (var w = 0; w < 20 && !(champ.ReadyAtBeat.ContainsKey(0) && champ.ReadyAtBeat.ContainsKey(1)) && !run.Over; w++) run.PushWave();

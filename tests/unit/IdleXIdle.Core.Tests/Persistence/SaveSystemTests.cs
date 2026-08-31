@@ -21,7 +21,7 @@ public class SaveSystemTests
         for (var i = 0; i < 12; i++) hunter.Train(HunterStat.AttackPower);
         for (var i = 0; i < 5; i++) hunter.Train(HunterStat.Defense);
 
-        var region = new Region("verdant_hollow", 15);
+        var region = new Region("verdant_hollow");
         for (var i = 0; i < 30; i++) region.RecordActiveKill();
         region.RecordDepth(9);
 
@@ -468,7 +468,7 @@ public class SaveSystemTests
         tree.Purchase("recall_1");
         tree.Purchase("socket_2");
 
-        var region = new Region("r", 15);
+        var region = new Region("r");
         var save = SaveSystem.Capture(new Hunter(), region,
             Array.Empty<ItemInstance>(), Now, tree, highestMasteryAwarded: 2);
 

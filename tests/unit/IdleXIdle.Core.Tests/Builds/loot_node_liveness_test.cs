@@ -85,7 +85,7 @@ public class LootNodeLivenessTests
             ? new Champion { MaxHealth = pool * 40, Health = pool }
             : new Champion { MaxHealth = pool * 4000, Health = pool * 4000 };
         var run = new SoloExpedition(build, champ, hunter, 260f, 26f,
-                                     ExpeditionTuning.Default, Source.Machine, new Random(19));
+                                     ExpeditionTuning.Default, new Random(19));
 
         long gleam = 0;
         double quality = 0;

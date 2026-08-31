@@ -197,7 +197,7 @@ public class BeatCadenceTest
         var pool = SoloBattle.ChampionHealth(build, hunter) * 200;   // survives; the cadence is the subject
         var champ = new Champion { MaxHealth = pool, Health = pool };
         var run = new SoloExpedition(build, champ, hunter, 110f, 1f,
-                                     ExpeditionTuning.Default, Source.Nature, new Random(5));
+                                     ExpeditionTuning.Default, new Random(5));
 
         var carry = 0;
         var carryMs = 0f;
@@ -326,7 +326,7 @@ public class BeatCadenceTest
         var pool = SoloBattle.ChampionHealth(build, hunter);
         var champ = new Champion { MaxHealth = pool, Health = pool };
         var run = new SoloExpedition(build, champ, hunter, 110f, 9f,
-                                     ExpeditionTuning.Default, Source.Nature, new Random(17));
+                                     ExpeditionTuning.Default, new Random(17));
 
         var carry = 0;
         var checkedCasts = 0;
@@ -409,7 +409,7 @@ public class BeatCadenceTest
         var pool = SoloBattle.ChampionHealth(build, hunter) * 50;   // survives; the count is the subject
         var champ = new Champion { MaxHealth = pool, Health = pool };
         var run = new SoloExpedition(build, champ, hunter, 110f, 1f,
-                                     ExpeditionTuning.Default, Source.Nature, new Random(17));
+                                     ExpeditionTuning.Default, new Random(17));
 
         var lastBeat = 0;
         for (var w = 0; w < 5; w++)
@@ -448,7 +448,7 @@ public class BeatCadenceTest
         var pool = SoloBattle.ChampionHealth(build, hunter) * 50;
         var champ = new Champion { MaxHealth = pool, Health = pool };
         var run = new SoloExpedition(build, champ, hunter, 110f, 1f,
-                                     ExpeditionTuning.Default, Source.Nature, new Random(17));
+                                     ExpeditionTuning.Default, new Random(17));
         run.PushWave();
 
         var actions = ActionTimes(run.LastWaveEvents, build);

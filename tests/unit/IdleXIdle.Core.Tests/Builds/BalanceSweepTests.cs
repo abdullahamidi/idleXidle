@@ -126,8 +126,7 @@ public class BalanceSweepTests
             : ExpeditionTuning.Default);
         var run = new SoloExpedition(build, new Champion { MaxHealth = hp, Health = hp }, hunter,
                                      enemyBaseHealth: 120f, enemyBaseDamage: 9f,
-                                     tuning, enemySource: null,
-                                     rng: new Random(9_000 + runIndex))
+                                     tuning, rng: new Random(9_000 + runIndex))
         {
             RegionId = region,
             RunIndex = runIndex,

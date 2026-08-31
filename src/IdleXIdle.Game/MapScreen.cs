@@ -515,18 +515,12 @@ public sealed class MapScreen
             modY += 22;
         }
 
-        // Objective + what it earns while you are away (real).
+        // Objective.
         _ui.TextBig(b, "GOAL", UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 470, Gold, UiTypography.Secondary);
         if (conq) { DrawCheck(b, new Rectangle(UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 506, 22, 18), Met); _ui.TextBig(b, "REGION CONQUERED", UiKit.ContentLeft(DetailPanel) + 36, DetailPanel.Y + 504, Met, UiTypography.Body); }
         else _ui.TextBig(b, $"HOLD {ConquerWaves} WAVES TO CONQUER", UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 504, unlocked ? Bone : Slate, UiTypography.Body);
-        if (unlocked)
-            // "IDLE FARM: PARTIAL · 50%" was two pieces of jargon and a number with no unit. The percent
-            // is the only part a player can act on, and it needed a sentence to say what it is a percent
-            // OF. The mastery word went with the label: it named a tier nothing on screen explains, and
-            // the number it produces is already right there. On the GOAL line now, right-aligned, so
-            // the row it used to hold can carry the checkpoints.
-            _ui.TextRightBig(b, $"EARNS {farm.IdleEfficiencyPercent():0}% WHILE YOU ARE AWAY",
-                             UiKit.ContentRight(DetailPanel), DetailPanel.Y + 472, Slate, UiTypography.Secondary);
+        // (The "EARNS N% WHILE YOU ARE AWAY" caption died with the EfficiencyContract, P13: it read a
+        // band no payout implemented — offline pay is the real simulation plus the Warren.)
         if (conq) DrawCheckpoints(b, def, farm, hit, clicked);
 
         // WHAT THIS PLACE DROPS — LISTED, not described. The map decided a difficulty and an element

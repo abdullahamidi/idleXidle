@@ -19,20 +19,15 @@ public sealed record RegionDefinition
 
     /// <summary>Which attack tempo this region's creatures favour — how it feels to fight, not just look at.</summary>
     public AttackBias CombatBias { get; init; } = AttackBias.Balanced;
-
-    public required IReadOnlyList<EncounterTemplate> Templates { get; init; }
-
-    public EncounterTemplate Boss => Templates.First(t => t.IsBoss);
 }
 
 /// <summary>
 /// The world: the ordered chain of regions to conquer.
 /// </summary>
 /// <remarks>
-/// Regions are content, not code — each is the same encounter/automation machinery with a different
-/// theme and difficulty band. The chain gives the game its progression spine: conquer a region's boss
-/// to unlock the next. New regions beyond Verdant Hollow have no creature art yet, so they render as
-/// the flat greybox fallback until sprites arrive — the systems work regardless.
+/// Regions are content, not code — each is a theme, a combat bias, a band cycle and a drop profile
+/// over the same wave machinery. The chain gives the game its progression spine: hold the conquest
+/// wave to take a region and unlock the next. (Enemy art keys live in Game1.EnemyArtFor.)
 /// </remarks>
 public static class Regions
 {
@@ -57,7 +52,7 @@ public static class Regions
         var index = -1;
         for (var i = 0; i < All.Count; i++)
             if (All[i].Id == region.Id) { index = i; break; }
-        if (index < 0) return 170 + region.Boss.PowerTierBase * 60;   // an off-catalogue region keeps the old floor
+        if (index < 0) return 410;   // an off-catalogue region reads as the first rung
         return (int)MathF.Round(410f * MathF.Pow(MathF.Sqrt(RegionLadder.HealthStep), index));
     }
 
@@ -67,15 +62,13 @@ public static class Regions
         {
             // The starting region stays Balanced — the player learns the baseline before it's bent.
             Id = VerdantHollow.RegionId, Name = "VERDANT HOLLOW", Theme = Source.Nature,
-            PrereqId = null, Templates = VerdantHollow.Templates, CombatBias = AttackBias.Balanced,
+            PrereqId = null, CombatBias = AttackBias.Balanced,
         },
         // Cinderworks grinds you down with slow, heavy industrial blows.
         BuildRegion("cinderworks", "CINDERWORKS", Source.Machine, prereq: VerdantHollow.RegionId,
-            tierBase: 4, bossHealth: 3200, bossTier: 8, stdBaseHealth: new[] { 120, 95, 160 },
             bias: AttackBias.Heavy),
         // Umbral Reach harries you with fast, creeping strikes.
         BuildRegion("umbral_reach", "UMBRAL REACH", Source.Shadow, prereq: "cinderworks",
-            tierBase: 9, bossHealth: 6000, bossTier: 14, stdBaseHealth: new[] { 180, 150, 240 },
             bias: AttackBias.Fast),
         // The back half of the world — one region per remaining Source, so all six get a home and the
         // Source matchup has somewhere to land every element. (An older comment here promised these were
@@ -85,15 +78,12 @@ public static class Regions
         // the journey is SPREAD across more, sharper places rather than three long grinds.
         // Marrow Wastes: BODY. Brutal, heavy blows — a slaughterhouse that grinds you down.
         BuildRegion("marrow_wastes", "MARROW WASTES", Source.Body, prereq: "umbral_reach",
-            tierBase: 12, bossHealth: 10000, bossTier: 17, stdBaseHealth: new[] { 260, 220, 340 },
             bias: AttackBias.Heavy),
         // The Still Archive: MIND. Fast, precise psychic lances — death by a thousand cuts.
         BuildRegion("still_archive", "THE STILL ARCHIVE", Source.Mind, prereq: "marrow_wastes",
-            tierBase: 15, bossHealth: 15000, bossTier: 19, stdBaseHealth: new[] { 360, 300, 460 },
             bias: AttackBias.Fast),
         // The Pale Choir: SPIRIT. The deepest reach — balanced, relentless, the end of the known world.
         BuildRegion("pale_choir", "THE PALE CHOIR", Source.Spirit, prereq: "still_archive",
-            tierBase: 18, bossHealth: 24000, bossTier: 20, stdBaseHealth: new[] { 520, 440, 680 },
             bias: AttackBias.Balanced),
     };
 
@@ -107,54 +97,9 @@ public static class Regions
         return idx >= 0 && idx + 1 < All.Count ? All[idx + 1] : null;
     }
 
-    /// <summary>Every template across every region — the flat list an <see cref="EncounterSpawner"/> takes.</summary>
-    public static IReadOnlyList<EncounterTemplate> AllTemplates => All.SelectMany(r => r.Templates).ToList();
-
     private static RegionDefinition BuildRegion(
-        string id, string name, Source theme, string prereq, int tierBase, int bossHealth, int bossTier,
-        int[] stdBaseHealth, AttackBias bias = AttackBias.Balanced)
-    {
-        var t = SpawnTuning.Default;
-        var src = theme.ToString().ToLowerInvariant();
-
-        EncounterTemplate Std(string variant, string role, int baseHealth, float weight)
-        {
-            var creature = new CreatureTemplate { Id = $"{src}_{role}_{variant}_std", BaseHealth = baseHealth };
-            return new EncounterTemplate
-            {
-                TemplateId = $"enc_{id}_{variant}_std",
-                RegionId = id,
-                IsBoss = false,
-                CreaturePool = new[] { creature },
-                PowerTierBase = tierBase,
-                SelectionWeight = weight,
-                ParClearTimeSeconds = EncounterSpawner.DerivePar(baseHealth, tierBase, isBoss: false, t),
-            };
-        }
-
-        var boss = new EncounterTemplate
-        {
-            TemplateId = $"enc_{id}_boss",
-            RegionId = id,
-            IsBoss = true,
-            CreaturePool = new[] { new CreatureTemplate { Id = $"{src}_atk_{id}boss_boss", BaseHealth = bossHealth } },
-            PowerTierBase = bossTier,
-            SelectionWeight = 0,
-            ParClearTimeSeconds = EncounterSpawner.DerivePar(bossHealth, bossTier, isBoss: true, t),
-        };
-
-        return new RegionDefinition
-        {
-            Id = id, Name = name, Theme = theme, PrereqId = prereq, CombatBias = bias,
-            Templates = new[]
-            {
-                Std("warden", "atk", stdBaseHealth[0], 10),
-                Std("drone", "sup", stdBaseHealth[1], 10),
-                Std("bulwark", "def", stdBaseHealth[2], 8),
-                boss,
-            },
-        };
-    }
+        string id, string name, Source theme, string prereq, AttackBias bias = AttackBias.Balanced)
+        => new() { Id = id, Name = name, Theme = theme, PrereqId = prereq, CombatBias = bias };
 }
 
 /// <summary>
@@ -173,21 +118,7 @@ public sealed class World
     public World(AutomationTuning? tuning = null)
     {
         foreach (var def in Regions.All)
-            _regions[def.Id] = new Region(def.Id, FarmParSeconds(def), tuning);
-    }
-
-    /// <summary>
-    /// The par time a region's farm is balanced against.
-    /// </summary>
-    /// <remarks>
-    /// A farm auto-grinds the region's STANDARD encounters, never its boss, so its par is the average
-    /// standard-encounter par — not the boss par. Keying the farm to the boss would make every
-    /// conquered region's automated output crawl, defeating the point of conquering it.
-    /// </remarks>
-    private static int FarmParSeconds(RegionDefinition def)
-    {
-        var standard = def.Templates.Where(t => !t.IsBoss).Select(t => t.ParClearTimeSeconds).ToList();
-        return standard.Count > 0 ? (int)Math.Round(standard.Average()) : def.Boss.ParClearTimeSeconds;
+            _regions[def.Id] = new Region(def.Id, tuning);
     }
 
     public Region RegionFarm(string id) => _regions[id];

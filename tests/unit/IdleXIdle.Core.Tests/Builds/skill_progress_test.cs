@@ -196,7 +196,7 @@ public class SkillProgressLivenessTests
         var champ = new Champion { MaxHealth = pool, Health = pool };
         var run = new IdleXIdle.Core.Builds.SoloExpedition(
             build, champ, hunter, 110f, 9f,
-            IdleXIdle.Core.Expeditions.ExpeditionTuning.Default, Source.Nature, new Random(31))
+            IdleXIdle.Core.Expeditions.ExpeditionTuning.Default, new Random(31))
         {
             Progress = progress,
         };
@@ -231,7 +231,7 @@ public class SkillProgressLivenessTests
         var champ = new Champion { MaxHealth = pool, Health = pool };
         var run = new IdleXIdle.Core.Builds.SoloExpedition(
             build, champ, hunter, 110f, 9f,
-            IdleXIdle.Core.Expeditions.ExpeditionTuning.Default, Source.Nature, new Random(31))
+            IdleXIdle.Core.Expeditions.ExpeditionTuning.Default, new Random(31))
         {
             Progress = progress,
         };

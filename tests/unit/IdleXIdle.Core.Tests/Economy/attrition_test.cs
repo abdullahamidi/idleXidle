@@ -101,7 +101,7 @@ public class AttritionTest
         var champ = FreshChampion(hunter);
         var run = new SoloExpedition(StarterBuild(), champ, hunter,
                                      LadderHealth(regionIndex), LadderDamage(regionIndex),
-                                     T, Source.Nature, rng);
+                                     T, rng);
 
         while (!run.Over && run.Wave < 200)
         {
@@ -246,7 +246,7 @@ public class AttritionTest
                 var champ = FreshChampion(hunter);
                 var run = new SoloExpedition(StarterBuild(), champ, hunter,
                                              LadderHealth(region), LadderDamage(region),
-                                             T, Source.Nature, rng);
+                                             T, rng);
                 while (!run.Over && run.Wave < 200)
                 {
                     var before = run.Wave;
@@ -294,7 +294,7 @@ public class AttritionTest
                     var champ = FreshChampion(hunter);
                     var run = new SoloExpedition(StarterBuild(), champ, hunter,
                                                  LadderHealth(region), LadderDamage(region),
-                                                 T, Source.Nature, rng);
+                                                 T, rng);
                     while (!run.Over && run.Wave < 200)
                     {
                         var before = run.Wave;

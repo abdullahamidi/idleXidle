@@ -82,8 +82,6 @@ public sealed class RunLog
         _entries.AddRange(reports.Take(Capacity));
     }
 
-    public void Clear() => _entries.Clear();
-
     // ── Save shape conversion. It lives here, beside the log, rather than in the persistence layer:
     //    the report's fields are gameplay knowledge, and the save layer should not have to know which
     //    of them is a fraction and which an enum. ──────────────────────────────────────────────────

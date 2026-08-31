@@ -34,7 +34,7 @@ public class SoloExpeditionTests
     private static SoloExpedition Run(
         Build build, Champion? champ = null, float enemyHp = 120f, float enemyDmg = 9f)
         => new(build, champ ?? Champ(), new Hunter(), enemyHp, enemyDmg,
-               ExpeditionTuning.Default, enemySource: null, rng: new Random(7));
+               ExpeditionTuning.Default, rng: new Random(7));
 
     private static int DepthOf(Build build, int hp = 400)
     {
@@ -58,7 +58,7 @@ public class SoloExpeditionTests
         {
             var champ = Champ(1_000_000);   // survives the whole stalling wave, so every bite is counted
             var run = new SoloExpedition(BuildOf(default, "hammer_blow"), champ, new Hunter(),
-                1_000_000f, 30f, ExpeditionTuning.Default, enemySource: null, rng: new Random(7)) { EnemyBias = bias };
+                1_000_000f, 30f, ExpeditionTuning.Default, rng: new Random(7)) { EnemyBias = bias };
             run.PushWave();
             return run.LastWaveEvents.Count(e => e.Kind == BattleEventKind.EnemyStrike);
         }
@@ -297,7 +297,7 @@ public class SoloExpeditionTests
     private static SoloExpedition RunIn(string region, Build build, int hp = 600)
     {
         var run = new SoloExpedition(build, Champ(hp), new Hunter(), 120f, 9f,
-            ExpeditionTuning.Default, enemySource: null, rng: new Random(7))
+            ExpeditionTuning.Default, rng: new Random(7))
         { RegionId = region, RunIndex = 1 };
         return run;
     }

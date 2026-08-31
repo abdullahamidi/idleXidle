@@ -71,8 +71,7 @@ public class PowerRatingTests
             var hp = SoloBattle.ChampionHealth(build, h);
             var run = new SoloExpedition(build, new Champion { MaxHealth = hp, Health = hp }, h,
                                          enemyBaseHealth: 120f, enemyBaseDamage: 9f,
-                                         ExpeditionTuning.Default, enemySource: null,
-                                         rng: new Random(9_000 + i))
+                                         ExpeditionTuning.Default, rng: new Random(9_000 + i))
             { RegionId = "verdant_hollow", RunIndex = i };
             while (!run.Over && run.Wave < 400) run.PushWave();
             return run.Wave;

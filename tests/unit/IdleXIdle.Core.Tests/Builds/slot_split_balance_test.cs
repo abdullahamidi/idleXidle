@@ -88,7 +88,7 @@ public class SlotSplitBalanceTests
         // fights a wave from a different game.
         var pool = SoloBattle.ChampionHealth(build, hunter);
         var champ = new Champion { MaxHealth = pool, Health = pool };
-        var run = new SoloExpedition(build, champ, hunter, 110f, 9f, T, Source.Nature, new Random(31));
+        var run = new SoloExpedition(build, champ, hunter, 110f, 9f, T, new Random(31));
 
         var ms = 0;
         while (!run.Over && run.Wave < stopAtWave)

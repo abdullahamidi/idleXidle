@@ -24,7 +24,7 @@ public class RunReportTests
         // that only makes runs shallower, and it collapsed the armour reading this test exists to make.
         hp = (int)(hp * SoloBattle.ChampionPoolScale);
         var run = new SoloExpedition(build, new Champion { MaxHealth = hp, Health = hp }, new Hunter(),
-            120f, 9f, ExpeditionTuning.Default, enemySource: null, rng: new Random(7))
+            120f, 9f, ExpeditionTuning.Default, rng: new Random(7))
         { RegionId = region, RunIndex = 1 };
 
         while (!run.Over && run.Wave < cap) run.PushWave();
@@ -135,10 +135,10 @@ public class RunReportTests
         var before = RunIn("cinderworks", BuildOf("field_mire", "volley_spray"));
         var after = RunIn("cinderworks", BuildOf("snare_jaws", "hammer_blow"));
 
-        var lines = after.DiffAgainst(before).ToList();
+        var rows = after.DiffEntries(before).ToList();
 
-        Assert.NotEmpty(lines);
-        Assert.Contains(lines, l => l.Contains("HIT SIZE"));
+        Assert.NotEmpty(rows);
+        Assert.Contains(rows, r => r.Label == "HIT SIZE");
     }
 
     /// <summary>A diff across different regions is meaningless and must not be offered.</summary>
@@ -148,6 +148,6 @@ public class RunReportTests
         var a = RunIn("cinderworks", BuildOf("hammer_blow"));
         var b = RunIn("umbral_reach", BuildOf("hammer_blow"));
 
-        Assert.Empty(b.DiffAgainst(a));
+        Assert.Empty(b.DiffEntries(a));
     }
 }

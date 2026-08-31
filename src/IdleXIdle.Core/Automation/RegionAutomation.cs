@@ -38,9 +38,9 @@ public sealed record AutomationTuning
 /// out kills, Gleam and Cores. That whole subsystem was retired on 2026-08-24: it was fully built
 /// and completely unreachable (its screen was never drawn, so no team could ever be assigned), which
 /// means the farm never produced anything for any player. What survives is exactly what live play
-/// feeds and reads: <see cref="RecordActiveKill"/> accrues mastery, <see cref="RecordDepth"/> tracks
-/// the depth record, and <see cref="IdleEfficiencyPercent"/> reports the away-earnings band the map
-/// shows — pinned to the no-team quality score the game has always effectively had.
+/// feeds and reads: <see cref="RecordActiveKill"/> accrues mastery and <see cref="RecordDepth"/>
+/// tracks the depth record. (The away-earnings band readout died with the EfficiencyContract, P13 —
+/// offline pay is a real simulation now, and the band never backed any payout.)
 /// </para>
 /// <para>
 /// The third tier — <see cref="Progression.MasteryLevel.Perfected"/> — was unreachable until P7
@@ -53,17 +53,13 @@ public sealed class Region
 {
     private readonly AutomationTuning _tuning;
 
-    public Region(string regionId, int parClearTimeSeconds, AutomationTuning? tuning = null)
+    public Region(string regionId, AutomationTuning? tuning = null)
     {
         RegionId = regionId;
-        ParClearTimeSeconds = parClearTimeSeconds;
         _tuning = tuning ?? AutomationTuning.Default;
     }
 
     public string RegionId { get; }
-
-    /// <summary>The fixed par anchor for this region (see EfficiencyContract). Never recomputed.</summary>
-    public int ParClearTimeSeconds { get; }
 
     public float RegionMasteryPoints { get; private set; }
 
@@ -105,9 +101,8 @@ public sealed class Region
     /// </summary>
     /// <remarks>
     /// All three thresholds are earned by the champion's own kills. PERFECTED pays the third trait
-    /// point this region owes the tree's budget (Career.TraitPointsEarned), raises the map's
-    /// away-earnings band to its top (EfficiencyContract), and — through the host's region
-    /// progression step — hardens the region one more notch for better loot.
+    /// point this region owes the tree's budget (Career.TraitPointsEarned) and — through the host's
+    /// region progression step — hardens the region one more notch for better loot.
     /// </remarks>
     public MasteryLevel MasteryLevel
     {
@@ -119,17 +114,6 @@ public sealed class Region
             return Progression.MasteryLevel.NewlyConquered;
         }
     }
-
-    /// <summary>
-    /// Percent of par this region earns while the player is away — what the map's detail panel shows.
-    /// </summary>
-    /// <remarks>
-    /// The team-quality term is pinned to 0: it measured the assigned creature team, which no player
-    /// could ever assemble (the assignment screen was never reachable), so the LIVE value was always
-    /// the mastery band's floor. Retiring the subsystem preserves that exact behaviour.
-    /// </remarks>
-    public float IdleEfficiencyPercent()
-        => EfficiencyContract.IdleEfficiencyPercent(MasteryLevel, 0f);
 
     /// <summary>RMP for an active kill the player fought here — playing is what builds mastery.</summary>
     /// <param name="rate">

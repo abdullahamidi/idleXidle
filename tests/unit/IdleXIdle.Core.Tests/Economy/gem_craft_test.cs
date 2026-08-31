@@ -228,7 +228,7 @@ public class GemCraftTest
         // Arrange: a worn-style item with a gem inside, through the REAL capture + serializer.
         var host = GemCraft.Socket(Host(Rarity.Epic, "host_save"), Gem("gem_save", 6)).Product!;
         var save = SaveSystem.Capture(
-            new Hunter(), new IdleXIdle.Core.Automation.Region("verdant_hollow", 15),
+            new Hunter(), new IdleXIdle.Core.Automation.Region("verdant_hollow"),
             new[] { host }, nowMs: 0);
 
         // Act

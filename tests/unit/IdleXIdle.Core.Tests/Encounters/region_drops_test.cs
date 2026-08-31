@@ -28,7 +28,8 @@ public class RegionDropsTest
         foreach (var region in Regions.All)
         {
             var profile = RegionDrops.For(region.Id);
-            _out.WriteLine($"   {region.Name,-20} {string.Join(", ", profile.FavouredNames)}  ({profile.Blurb})");
+            var names = profile.Favoured.Select(RegionDrops.PlainName).ToList();
+            _out.WriteLine($"   {region.Name,-20} {string.Join(", ", names)}  ({profile.Blurb})");
 
             Assert.True(profile.Favoured.Count > 0,
                 $"{region.Name} ({region.Id}) has no drop profile — it falls back to uniform loot.");
@@ -36,8 +37,8 @@ public class RegionDropsTest
                 $"{region.Name} has a profile the chest screen cannot describe.");
             // The map lists the favoured slots by name, one per line: every one needs a plain,
             // capitalised name the font can draw — no enum leaking through as "ABILITYFOCUS".
-            Assert.Equal(profile.Favoured.Count, profile.FavouredNames.Count);
-            foreach (var name in profile.FavouredNames)
+            Assert.Equal(profile.Favoured.Count, names.Count);
+            foreach (var name in names)
             {
                 Assert.False(string.IsNullOrWhiteSpace(name), $"{region.Name} favours a slot with no name.");
                 Assert.Equal(name.ToUpperInvariant(), name);

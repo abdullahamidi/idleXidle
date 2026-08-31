@@ -12,7 +12,6 @@ public class WorldTests
     {
         Assert.True(Regions.All.Count >= 3);
         Assert.Equal(VerdantHollow.RegionId, Regions.All[0].Id);
-        Assert.All(Regions.All, r => Assert.Contains(r.Templates, t => t.IsBoss));
     }
 
     /// <summary>Only the first region is open at the start; the rest are locked behind their prereqs.</summary>
@@ -105,15 +104,16 @@ public class WorldTests
         Assert.False(world.IsConquered("umbral_reach"));
     }
 
-    /// <summary>Later regions are harder — higher tiers and longer par times than the start.</summary>
+    /// <summary>Later regions are harder — the map's own ruler climbs the chain.</summary>
     [Fact]
     public void test_later_regions_are_tougher_than_earlier_ones()
     {
-        var verdant = Regions.Get(VerdantHollow.RegionId).Boss;
-        var umbral = Regions.Get("umbral_reach").Boss;
+        // RECOMMENDED POWER is anchored to the RegionLadder's geometric enemy step — the live scale.
+        // (The retired template chain's PowerTierBase/par used to carry this assert.)
+        var verdant = Regions.RecommendedPower(Regions.Get(VerdantHollow.RegionId));
+        var umbral = Regions.RecommendedPower(Regions.Get("umbral_reach"));
 
-        Assert.True(umbral.PowerTierBase > verdant.PowerTierBase);
-        Assert.True(umbral.ParClearTimeSeconds > verdant.ParClearTimeSeconds);
+        Assert.True(umbral > verdant);
     }
 
     // Removed test_no_region_boss_is_rare_eligible: RareEligible was a capture-system property, and capture
@@ -126,19 +126,6 @@ public class WorldTests
         Assert.Equal(AttackBias.Balanced, Regions.Get(VerdantHollow.RegionId).CombatBias);
         Assert.Equal(AttackBias.Heavy, Regions.Get("cinderworks").CombatBias);
         Assert.Equal(AttackBias.Fast, Regions.Get("umbral_reach").CombatBias);
-    }
-
-    /// <summary>Verdant Hollow's standard encounters draw from more than one creature, for variety.</summary>
-    [Fact]
-    public void test_verdant_hollow_offers_creature_variety()
-    {
-        var standard = VerdantHollow.Templates.Where(t => !t.IsBoss).ToList();
-        // At least one slot must roll between multiple creatures — otherwise every hunt looks identical.
-        Assert.Contains(standard, t => t.CreaturePool.Count > 1);
-
-        // Every creature in every pool is a real, distinct id (no accidental duplicates).
-        var ids = standard.SelectMany(t => t.CreaturePool).Select(c => c.Id).ToList();
-        Assert.Equal(ids.Count, ids.Distinct().Count());
     }
 
     // ── Corruption endgame ──────────────────────────────────────────────────────────────────────
@@ -179,17 +166,6 @@ public class WorldTests
 
         world.RestoreCorruption(-5); // a corrupt value floors at zero, never negative
         Assert.Equal(0, world.CorruptionTier);
-    }
-
-    /// <summary>Each region declares its standard pool of encounters and exactly one boss.</summary>
-    [Fact]
-    public void test_each_region_declares_its_standard_pool_and_a_boss()
-    {
-        // Asserted straight off the region content now — the old EncounterSpawner that rolled from it was
-        // retired with the manual-combat model.
-        Assert.Equal(3, Regions.Get(VerdantHollow.RegionId).Templates.Count(t => !t.IsBoss));
-        Assert.Equal(3, Regions.Get("cinderworks").Templates.Count(t => !t.IsBoss));
-        Assert.Contains(Regions.Get("umbral_reach").Templates, t => t.IsBoss);
     }
 
     [Fact]

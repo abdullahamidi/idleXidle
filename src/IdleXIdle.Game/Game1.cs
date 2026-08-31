@@ -3483,7 +3483,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private void UpdateExpedition(GameTime gameTime)
     {
         var def = Regions.Get(_activeRegion);
-        _expedition.EnemySource = def.Theme;          // region element → the Source matchup
+        _expedition.EnemySource = def.Theme;          // the screen keys enemy art + name off the theme
         // The skills bank their levels in the game's own progress, not the screen's or the run's:
         // a run ends and a skill's levels do not.
         _expedition.Progress = _skillProgress;

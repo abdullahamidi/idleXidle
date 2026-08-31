@@ -10,7 +10,7 @@ namespace IdleXIdle.Core.Expeditions;
 /// <remarks>
 /// <para>
 /// The sim resolves a whole wave in one call, but the player must watch it happen over several seconds.
-/// So the screen rewinds to zero and re-derives the squad's health from the event stream as a playhead
+/// So the screen rewinds to zero and re-derives the champion's health from the event stream as a playhead
 /// crosses each beat. That re-derivation is the thing that must not drift: if the replay and the sim
 /// disagree, the health bars LIE, and the player judges the squad on a fiction.
 /// </para>
@@ -106,7 +106,7 @@ public sealed class WaveReplay
     public int BankedShield { get; private set; }
 
     public int HealthOf(int slot) => _health.GetValueOrDefault(slot);
-    public int MaxHealthOf(int slot) => _maxHealth.GetValueOrDefault(slot);
+    private int MaxHealthOf(int slot) => _maxHealth.GetValueOrDefault(slot);
 
     public float HealthFractionOf(int slot)
     {
