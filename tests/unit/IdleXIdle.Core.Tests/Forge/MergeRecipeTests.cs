@@ -97,7 +97,11 @@ public class MergeRecipeTests
         // REAL rule: the most equippable input wins (see MergeRecipe.HybridPriority). The property that
         // matters is therefore simply — every mixture has ONE deterministic answer, it is always one of
         // the inputs, and the load order never changes it. That is what lets a player aim.
-        var types = Enum.GetValues<ItemBaseType>();
+        // Only the types a bag can HOLD: Material and CreatureCore items died with the creature
+        // era (P11a), so no merge tray can ever contain one.
+        var types = Enum.GetValues<ItemBaseType>()
+            .Where(x => x is not (ItemBaseType.Material or ItemBaseType.CreatureCore))
+            .ToArray();
         var combos = from a in types
                      from b in types
                      from c in types
@@ -180,28 +184,6 @@ public class MergeRecipeTests
             It("c", ItemBaseType.Charm));
 
         Assert.Null(r.Product!.Element);
-    }
-
-    // ── Preview ───────────────────────────────────────────────────────────────────────────────
-
-    [Fact]
-    public void test_the_preview_tells_the_truth()
-    {
-        // FORGE INSIGHT ("preview a merge's result before committing") is only honest if the preview
-        // and the merge cannot disagree — which is only possible because the result is decided.
-        var trio = new[]
-        {
-            It("a", ItemBaseType.Weapon, Source.Mind),
-            It("b", ItemBaseType.Charm, Source.Mind),
-            It("c", ItemBaseType.Material, Source.Mind),
-        };
-
-        var (type, element, isHybrid) = Forge.Preview(trio);
-        var product = Merge(trio).Product!;
-
-        Assert.Equal(product.BaseType, type);
-        Assert.Equal(product.Element, element);
-        Assert.True(isHybrid);
     }
 
     [Fact]

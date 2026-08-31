@@ -222,27 +222,6 @@ public class HunterProgressionTests
     }
 
     /// <summary>An equipped charm is ineligible for sale. The hole that got shipped once already.</summary>
-    [Fact]
-    public void test_an_equipped_charm_cannot_be_sold()
-    {
-        var hunter = new Hunter();
-
-        var equipped = new ItemInstance
-        {
-            InstanceId = "a", BaseType = ItemBaseType.Charm, Rarity = Rarity.Epic,
-            SellValue = 82, EquippedToCreatureId = "creature_1",
-        };
-        var loose = new ItemInstance
-        {
-            InstanceId = "b", BaseType = ItemBaseType.Charm, Rarity = Rarity.Epic, SellValue = 82,
-        };
-
-        var gained = hunter.Sell(new[] { equipped, loose });
-
-        Assert.Equal(82, gained);       // only the loose one sold
-        Assert.Equal(82, hunter.Gleam);
-    }
-
     /// <summary>
     /// Pillar 1 survives progression: maxing offence does not trivialize combat.
     /// </summary>

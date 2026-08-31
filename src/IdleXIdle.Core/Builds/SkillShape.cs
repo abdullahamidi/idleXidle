@@ -47,7 +47,7 @@ public sealed record SkillShape
     /// <para>
     /// Exists because THE OATHBOUND's headline passive, TWICE SWORN, reads "Vows pay far more, and the
     /// Mark window they buy lasts longer" and only the second half was implemented. The character's
-    /// Shape carried MarkWindowMultiplier and MarkPowerBonus and nothing whatever about Vows — the
+    /// Shape carried AmplifyWindowMultiplier and AmplifyPowerBonus and nothing whatever about Vows — the
     /// first clause of the sentence had no field to write to, on the one character built around a
     /// SYSTEM rather than a branch.
     /// </para>
@@ -222,8 +222,8 @@ public sealed record SkillShape
     public float BonusCritPercent { get; init; }
 
     /// <summary>MARK MASTERY — stretches the amplify window and deepens it.</summary>
-    public float MarkWindowMultiplier { get; init; } = 1f;
-    public float MarkPowerBonus { get; init; }
+    public float AmplifyWindowMultiplier { get; init; } = 1f;
+    public float AmplifyPowerBonus { get; init; }
 
     /// <summary>ASSASSINATE — once per wave, a creature below this health fraction dies to the next hit.</summary>
     public float AssassinateThreshold { get; init; }
@@ -432,8 +432,8 @@ public sealed record SkillShape
             SkillRate = a.SkillRate * b.SkillRate,
             FreeOpeningCast = a.FreeOpeningCast || b.FreeOpeningCast,
             BonusCritPercent = a.BonusCritPercent + b.BonusCritPercent,
-            MarkWindowMultiplier = a.MarkWindowMultiplier * b.MarkWindowMultiplier,
-            MarkPowerBonus = a.MarkPowerBonus + b.MarkPowerBonus,
+            AmplifyWindowMultiplier = a.AmplifyWindowMultiplier * b.AmplifyWindowMultiplier,
+            AmplifyPowerBonus = a.AmplifyPowerBonus + b.AmplifyPowerBonus,
             AssassinateThreshold = Math.Max(a.AssassinateThreshold, b.AssassinateThreshold),
             AutoAttackRate = a.AutoAttackRate * b.AutoAttackRate,
             AutoAttackDamage = a.AutoAttackDamage * b.AutoAttackDamage,

@@ -328,13 +328,14 @@ public sealed class PlayerLoadout
     }
 
     /// <summary>
-    /// The STYLES this loadout carries, one per slot that resolves — what the Forge's combo-enchant
-    /// badge and the weave screen's "your gear is waiting for a …" hint read.
+    /// The BASE defs this loadout carries, one per slot that resolves — what the weave screen's
+    /// "your gear is waiting for a …" hint reads (the Forge's badge reads the composed build's
+    /// RESOLVED defs, handed over by the host).
     /// </summary>
-    public IReadOnlyList<Style> WovenStyles()
+    public IReadOnlyList<SkillDef> WovenDefs()
         => _skills.Select(sk => SkillCatalogue.Find(sk.SkillId))
                   .Where(d => d is not null)
-                  .Select(d => d!.Style)
+                  .Select(d => d!)
                   .ToList();
 
     private bool InRange(int slot) => slot >= 0 && slot < _skills.Count;

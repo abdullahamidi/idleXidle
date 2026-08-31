@@ -206,7 +206,7 @@ public static class CharacterRoster
             // a branch, and the one gated behind the quest that teaches Vows.
             Shape = new SkillShape
             {
-                VowPowerMultiplier = 1.5f, MarkWindowMultiplier = 1.5f, MarkPowerBonus = 0.25f,
+                VowPowerMultiplier = 1.5f, AmplifyWindowMultiplier = 1.5f, AmplifyPowerBonus = 0.25f,
             },
             // SECOND RANGER. One kept Vow was the old gate; three is a habit rather than an accident.
             Unlock = CharacterUnlock.Quest("q_three_vows", "Finish three descents with a Vow's demand still met"),

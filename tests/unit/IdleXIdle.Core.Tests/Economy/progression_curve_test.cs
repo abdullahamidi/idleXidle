@@ -111,8 +111,7 @@ public class ProgressionCurveTest
         {
             var dps = DamagePerSecond(it);
             var mult = Gear.WeaponDamageMultiplier(it);
-            var score = Gear.ItemScore(it);
-            _out.WriteLine($"   {label,-24} {dps,12:N0} {mult,9:0.0}x {score,12:N0}");
+            _out.WriteLine($"   {label,-24} {dps,12:N0} {mult,9:0.0}x");
         }
     }
 

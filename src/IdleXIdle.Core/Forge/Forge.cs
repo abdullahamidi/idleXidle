@@ -8,14 +8,15 @@ using IdleXIdle.Core.Loot;
 
 namespace IdleXIdle.Core.Forging;
 
-public enum ForgeOperation { Merge, Dismantle, Sell, Feed }
-
 /// <summary>Why an item cannot be used. Rejections must be explainable, never silent.</summary>
+/// <remarks>
+/// DEGENERATE since P11a: both real reasons died with the creature era (EquippedToCreature was
+/// never assigned by any live path and bricked legacy items; VowBound was never produced). The
+/// seam stays until the Forge screen's P11b pass deletes its call sites with it.
+/// </remarks>
 public enum IneligibleReason
 {
     Eligible,
-    EquippedToCreature,
-    VowBound,
 }
 
 public sealed record ForgeTuning
@@ -31,14 +32,6 @@ public sealed record ForgeTuning
     /// would be a value-neutral loop that could be run forever to launder rarity. It must lose value.
     /// </remarks>
     public float DismantleReturnRate { get; init; } = 0.4f;
-
-    /// <summary>Sell and Feed convert at the SAME rate, deliberately.</summary>
-    /// <remarks>
-    /// The player's choice must be "which resource do I need?", never "which one pays more?". If one
-    /// dominated numerically, the other would be a trap and the choice would be fake. The UI must
-    /// therefore never render them on a shared numeric axis.
-    /// </remarks>
-    public float FeedConversionRate { get; init; } = 1.0f;
 
     /// <summary>REFINE's base Scrap cost; the full cost adds the item's current level, so it always climbs.</summary>
     public int RefineScrapBase { get; init; } = 4;
@@ -98,19 +91,12 @@ public static class Forge
     public static IneligibleReason CheckEligible(ItemInstance item)
     {
         ArgumentNullException.ThrowIfNull(item);
-
-        if (item.EquippedToCreatureId is not null) return IneligibleReason.EquippedToCreature;
         return IneligibleReason.Eligible;
     }
 
     public static bool IsEligible(ItemInstance item) => CheckEligible(item) == IneligibleReason.Eligible;
 
-    public static string Explain(IneligibleReason reason) => reason switch
-    {
-        IneligibleReason.EquippedToCreature => "EQUIPPED TO A CREATURE. UNEQUIP IT FIRST.",
-        IneligibleReason.VowBound => "A VOW IS BOUND TO THIS ITEM. IT CANNOT BE UNMADE.",
-        _ => "",
-    };
+    public static string Explain(IneligibleReason reason) => "";
 
     /// <summary>
     /// Merge three items of the same rarity into one of the next rarity up.
@@ -221,13 +207,6 @@ public static class Forge
         };
     }
 
-    /// <summary>What a given trio WOULD produce, without consuming it. Powers the merge preview.</summary>
-    public static (ItemBaseType Type, Source? Element, bool IsHybrid) Preview(IReadOnlyList<ItemInstance> inputs)
-    {
-        ArgumentNullException.ThrowIfNull(inputs);
-        return (MergeRecipe.TypeOf(inputs), MergeRecipe.ElementOf(inputs), MergeRecipe.IsHybrid(inputs));
-    }
-
     /// <summary>
     /// Break an item down into MATERIALS for the shared stock. Returns strictly less than it is worth.
     /// </summary>
@@ -244,33 +223,6 @@ public static class Forge
         if (!IsEligible(item)) return 0;
 
         return (int)MathF.Floor(item.SellValue * tuning.DismantleReturnRate);
-    }
-
-    /// <summary>
-    /// Feed an item straight to one creature — materials into ITS evolution, nobody else's.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <see cref="ForgeOperation.Feed"/> was declared, and <see cref="ForgeTuning.FeedConversionRate"/>
-    /// carried a fifteen-line justification of its rate — and <b>the method never existed</b>. The enum
-    /// member had zero references in the entire source tree. "Fed to creatures to influence their
-    /// evolution" was a design with a tuning constant and no code.
-    /// </para>
-    /// <para>
-    /// The full rate against DISMANTLE's 0.4 is what makes the pair a decision rather than a ranking:
-    /// feeding is <b>efficient but committed</b> (all of it, into one creature, now), dismantling is
-    /// <b>lossy but liquid</b> (into a stock you can spend on anyone later). Neither dominates, which is
-    /// exactly what the tuning's own note demands — the choice must be "which resource do I need?",
-    /// never "which one pays more?".
-    /// </para>
-    /// </remarks>
-    public static int Feed(ItemInstance item, ForgeTuning tuning)
-    {
-        ArgumentNullException.ThrowIfNull(item);
-        ArgumentNullException.ThrowIfNull(tuning);
-        if (!IsEligible(item)) return 0;
-
-        return (int)MathF.Floor(item.SellValue * tuning.FeedConversionRate);
     }
 
     /// <summary>

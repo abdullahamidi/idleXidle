@@ -517,17 +517,18 @@ public sealed class ForgeScreen
     public ForgeTuning Tuning { get; set; } = ForgeTuning.Default;
 
     /// <summary>
-    /// The Forms the player's current build runs. Set by the host so the Forge can tell you whether an
-    /// item's Form-combo enchantment is LIVE for your build or dead weight — the whole loot philosophy in
-    /// one line: not "is this a bigger number", but "does this fit what I'm building".
+    /// The RESOLVED defs of the build the fight runs (P11 — variations included, so a variation
+    /// that opens an amplify window lights LINGER). Set by the host so the Forge can tell you
+    /// whether an item's combo enchantment is LIVE for your build or dead weight — the loot
+    /// philosophy in one line: not "is this a bigger number", but "does this fit my build".
     /// </summary>
-    public IReadOnlyCollection<Style> ActiveStyles { get; set; } = Array.Empty<Style>();
+    public IReadOnlyCollection<SkillDef> ActiveDefs { get; set; } = Array.Empty<SkillDef>();
 
     /// <summary>
     /// The triggers the worn build carries, so a KEYSTONE combo can say whether it is live.
     /// </summary>
     /// <remarks>
-    /// Set by the host beside <see cref="ActiveStyles"/>. An empty set is not "no keystones" so much as
+    /// Set by the host beside <see cref="ActiveDefs"/>. An empty set is not "no keystones" so much as
     /// "nobody told this screen", and the failure is quiet either way — every keystone combo simply
     /// reads as dead. That is the safe direction: an item wrongly greyed is a player who looks again,
     /// an item wrongly gilded is a player who equips it and wonders why nothing changed.
@@ -548,7 +549,7 @@ public sealed class ForgeScreen
     /// believes whichever one they read first.
     /// </remarks>
     private bool CombosWithBuild(ItemInstance? item)
-        => Enchantments.Of(item)?.Needs?.MetBy(ActiveStyles, ActiveTriggers, SwornVows) == true;
+        => Enchantments.Of(item)?.Needs?.MetBy(ActiveDefs, ActiveTriggers, SwornVows) == true;
 
     /// <summary>
     /// The Memory Dust auto-sell floor. Set by the host so a chest's rolled loot honours the same filter a

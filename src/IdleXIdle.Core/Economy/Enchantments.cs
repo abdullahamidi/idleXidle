@@ -104,9 +104,24 @@ public enum EnchantKind
 public sealed record EnchantNeed(
     string Label,
     Builds.Style? Style = null,
+    Builds.SkillKind? Kind = null,
+    bool AnyAmplify = false,
     Builds.BuildTrigger? Keystone = null,
     bool AnyVow = false)
 {
+    /// <summary>
+    /// The SKILL half of the requirement, against the build's woven defs — which is what the sim
+    /// actually gates on (P11): RADIANCE pays any Field-KIND tick (a PRESS build's included) and
+    /// LINGER any amplify window, so a need keyed on the FIELD/SIGN styles greyed live combos.
+    /// </summary>
+    public bool MetBySkills(IReadOnlyCollection<Builds.SkillDef> woven)
+    {
+        ArgumentNullException.ThrowIfNull(woven);
+        return (Style is not { } s || woven.Any(d => d.Style == s))
+               && (Kind is not { } k || woven.Any(d => d.Kind == k))
+               && (!AnyAmplify || woven.Any(d => d.AmplifyPercent > 0f || d.AmplifyMs > 0));
+    }
+
     /// <summary>Is this requirement satisfied by the build the player is actually running?</summary>
     /// <remarks>
     /// It lives in Core rather than beside the screen that draws the answer, for two reasons. Two
@@ -116,14 +131,13 @@ public sealed record EnchantNeed(
     /// is. The clauses are ANDed, but each enchantment sets exactly one, so in practice this asks the
     /// single question that enchantment cares about.
     /// </remarks>
-    public bool MetBy(IReadOnlyCollection<Builds.Style> styles,
+    public bool MetBy(IReadOnlyCollection<Builds.SkillDef> woven,
                       IReadOnlyCollection<Builds.BuildTrigger> triggers,
                       int swornVows)
     {
-        ArgumentNullException.ThrowIfNull(styles);
         ArgumentNullException.ThrowIfNull(triggers);
 
-        return (Style is not { } s || styles.Contains(s))
+        return MetBySkills(woven)
                && (Keystone is not { } k || triggers.Contains(k))
                && (!AnyVow || swornVows > 0);
     }
@@ -149,10 +163,10 @@ public sealed record Enchantment(EnchantKind Kind, float Magnitude)
         EnchantKind.Venom => $"SKILLS POISON +{Magnitude * 100f:0}%",
         EnchantKind.Desperation => $"NEAR DEATH: +{Magnitude * 100f:0}% LOOT",
         EnchantKind.Overdraw => "VOLLEY FIRES +1",
-        EnchantKind.Linger => "MARK LASTS LONGER",
-        EnchantKind.Radiance => "AURA HITS FASTER",
-        EnchantKind.Execute => "STRIKE CRUSHES WEAK",
-        EnchantKind.Coiled => "TRAP READY SOONER",
+        EnchantKind.Linger => "AMPLIFY LASTS LONGER",
+        EnchantKind.Radiance => "FIELDS TICK FASTER",
+        EnchantKind.Execute => "HAMMER CRUSHES WEAK",
+        EnchantKind.Coiled => "SNARES RE-ARM SOONER",
         // Both halves from HealTuning, so the card cannot drift from the sim: the leech doubling and
         // the raised per-wave healing limit (the half that is measurable under the ceiling). The
         // Form it needs ("TRANSFORMATION") is printed by the row from Need, so the 21 characters
@@ -173,8 +187,11 @@ public sealed record Enchantment(EnchantKind Kind, float Magnitude)
     public EnchantNeed? Needs => Kind switch
     {
         EnchantKind.Overdraw => new EnchantNeed("VOLLEY", Style: Builds.Style.Volley),
-        EnchantKind.Linger => new EnchantNeed("SIGN", Style: Builds.Style.Sign),
-        EnchantKind.Radiance => new EnchantNeed("FIELD", Style: Builds.Style.Field),
+        // KIND and EFFECT, not style, for the two whose sim gate never asked about style (P11):
+        // Radiance speeds ANY Field's tick — hammer_press's as much as field_mire's — and
+        // Linger stretches ANY amplify window. The style-keyed need greyed those live combos.
+        EnchantKind.Linger => new EnchantNeed("AN AMPLIFY WINDOW", AnyAmplify: true),
+        EnchantKind.Radiance => new EnchantNeed("A FIELD SKILL", Kind: Builds.SkillKind.Field),
         EnchantKind.Execute => new EnchantNeed("HAMMER", Style: Builds.Style.Hammer),
         EnchantKind.Coiled => new EnchantNeed("SNARE", Style: Builds.Style.Snare),
         EnchantKind.Siphon => new EnchantNeed("DRAIN", Style: Builds.Style.Drain),
@@ -185,8 +202,6 @@ public sealed record Enchantment(EnchantKind Kind, float Magnitude)
         _ => null,
     };
 
-    /// <summary>Which STYLE this enchantment needs, if its requirement happens to be one.</summary>
-    public Builds.Style? NeedsStyle => Needs?.Style;
 }
 
 /// <summary>
@@ -230,9 +245,9 @@ public static class Enchantments
         EnchantKind.Undying, EnchantKind.Desperation, EnchantKind.Siphon,
         EnchantKind.Bulwark, EnchantKind.Tithe,
     };
-    // The FOCUS shapes your SKILLS, so the skill-cadence combos live here — one per offensive Form
-    // (VOLLEY/MARK/AURA/STRIKE/TRAP). That is what makes a Focus worth chasing: it is the slot that can
-    // turn "I run Aura" into "my Aura build actually works".
+    // The FOCUS shapes your SKILLS, so the skill-cadence combos live here — one per demand the
+    // build can answer (extra shot, longer window, faster ticks, a finisher, quicker snares).
+    // That is the slot that turns "I run Fields" into "my Field build actually works".
     private static readonly EnchantKind[] FocusPool =
         { EnchantKind.Linger, EnchantKind.Radiance, EnchantKind.Overdraw, EnchantKind.Execute, EnchantKind.Coiled };
 

@@ -49,13 +49,6 @@ public static class Gear
         _ => null,
     };
 
-    /// <summary>Every wearable base type, in slot order — for loot tables and the paper-doll.</summary>
-    public static readonly ItemBaseType[] WearableTypes =
-    {
-        ItemBaseType.Weapon, ItemBaseType.Charm, ItemBaseType.AbilityFocus,
-        ItemBaseType.Helm, ItemBaseType.Chest, ItemBaseType.Gloves, ItemBaseType.Boots, ItemBaseType.Ring,
-    };
-
     public static bool IsWearable(ItemInstance item)
     {
         ArgumentNullException.ThrowIfNull(item);
@@ -219,18 +212,4 @@ public static class Gear
                             + 100f * MathF.Sqrt(MathF.Max(0.05f, healthMultiplier) * MathF.Max(1, maxHealth) / 100f
                                                 * (1f + MathF.Max(0, defense) / 100f)));
 
-    /// <summary>
-    /// A rough "how good is this piece" score, for the inventory's "is this an upgrade?" badge.
-    /// </summary>
-    /// <remarks>
-    /// Rarity dominates (it gates affix COUNT), then item level (it scales affix MAGNITUDE), then the
-    /// rolled affixes themselves. It is a heuristic for a green ▲, not the exact fight contribution — an
-    /// idle player wants "probably better" at a glance, and opens the tooltip only when it is close.
-    /// </remarks>
-    public static int ItemScore(ItemInstance? item)
-    {
-        if (item is null || SlotFor(item.BaseType) is null) return 0;
-        var affix = ItemAffixes.Of(item).Sum(a => a.Magnitude);
-        return (int)MathF.Round(RarityPower(item.Rarity) * 100f + item.ItemLevel * 4f + affix * 40f);
-    }
 }

@@ -394,8 +394,6 @@ public sealed record SavedItem
     /// <summary>Refines taken (0..15). Pre-ladder saves default to 0 — a fresh ladder, not a crash.</summary>
     public int Upgrades { get; init; }
 
-    public string? EquippedToCreatureId { get; init; }
-
     /// <summary>
     /// A reforged trait / enchantment, by enum NAME, or null for an un-reforged item.
     /// </summary>
@@ -593,7 +591,6 @@ public static class SaveSystem
         SellValue = i.SellValue,
         ItemLevel = i.ItemLevel,
         Upgrades = i.Upgrades,
-        EquippedToCreatureId = i.EquippedToCreatureId,
         // "NONE" for a genuinely plain item, so the loader can tell "rolled plain" from "written by
         // a pre-redesign build that never had this field" — the latter gets the legacy derivation.
         TraitOverride = i.TraitOverride?.ToString() ?? "NONE",
@@ -635,7 +632,6 @@ public static class SaveSystem
             SellValue = s.SellValue,
             ItemLevel = s.ItemLevel,
             Upgrades = s.Upgrades,
-            EquippedToCreatureId = s.EquippedToCreatureId,
             TraitOverride = s.TraitOverride is null
                 ? Economy.GearTraits.LegacyDerivedTrait(s.InstanceId, baseType)
                 : Enum.TryParse<GearTrait>(s.TraitOverride, out var t) ? t : null,   // "NONE" -> null

@@ -28,38 +28,10 @@ public class SalvageTests
     // ── The trade ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void test_feeding_returns_more_than_dismantling()
-    {
-        // The pair is only a decision because they trade against each other: feeding is efficient but
-        // COMMITTED (all of it, one creature, now); dismantling is lossy but LIQUID (a stock, anyone,
-        // later). If dismantle paid as well, feeding would be strictly correct and vice versa.
-        Assert.True(Forge.Feed(Item(), T)
-                    > Forge.Dismantle(Item(), T));
-    }
-
-    [Fact]
     public void test_dismantling_is_a_real_loss()
     {
         var item = Item(100);
         Assert.True(Forge.Dismantle(item, T) < item.SellValue);
-    }
-
-    [Fact]
-    public void test_feeding_and_selling_pay_the_same()
-    {
-        // The tuning's own note: the choice must be "which resource do I need?", never "which one pays
-        // more?". If one dominated numerically the other would be a trap and the choice would be fake.
-        var item = Item(100);
-        Assert.Equal(item.SellValue, Forge.Feed(item, T));
-    }
-
-    [Fact]
-    public void test_an_equipped_item_can_be_neither_fed_nor_dismantled()
-    {
-        var worn = Item() with { EquippedToCreatureId = "c1" };
-
-        Assert.Equal(0, Forge.Feed(worn, T));
-        Assert.Equal(0, Forge.Dismantle(worn, T));
     }
 
     // ── The materials stock ───────────────────────────────────────────────────────────────────

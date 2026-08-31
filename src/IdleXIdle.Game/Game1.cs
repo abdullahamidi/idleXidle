@@ -2902,7 +2902,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     private void TellForgeTheBuild(Build build)
     {
-        _forge.ActiveStyles = _loadout.WovenStyles();
+        _forge.ActiveDefs = build.Skills.Select(s => s.Def).ToList();
         _forge.ActiveTriggers = build.Triggers(_hunter).ToList();
         _forge.SwornVows = _loadout.Skills
                                    .Select(s => s.VowId)

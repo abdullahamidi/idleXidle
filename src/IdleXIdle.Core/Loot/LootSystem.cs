@@ -71,7 +71,6 @@ public sealed record ItemInstance
     public Source? Element { get; init; }
 
     /// <summary>Non-null only for an equipped charm. Makes the item ineligible for EVERY Forge operation.</summary>
-    public string? EquippedToCreatureId { get; init; }
 
     /// <summary>
     /// The STAT GEMS socketed into this item — themselves items (<see cref="ItemBaseType.Gem"/>).

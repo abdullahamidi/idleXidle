@@ -114,14 +114,23 @@ public class EnchantmentsTests
     }
 
     [Fact]
-    public void test_every_style_has_a_combo_enchantment()
+    public void test_every_style_has_a_combo_enchantment_its_own_skills_light()
     {
-        // The combo axis is complete only if committing to ANY Style has an item that rewards it. A Style
-        // with no combo enchant is a build path with nothing to chase — the gap this feature closed for
-        // Hammer, Snare and Drain.
+        // The combo axis is complete only if committing to ANY style has an item that rewards
+        // it. Since P11a two needs are keyed on KIND and EFFECT rather than style (the sim's
+        // own gates), the law is stated the honest way round: a build woven from a style's own
+        // two skills must light at least one combo enchantment.
+        var combos = new[]
+        {
+            EnchantKind.Overdraw, EnchantKind.Linger, EnchantKind.Radiance,
+            EnchantKind.Execute, EnchantKind.Coiled, EnchantKind.Siphon,
+        };
         foreach (var style in System.Enum.GetValues<IdleXIdle.Core.Builds.Style>())
-            Assert.Contains(System.Enum.GetValues<EnchantKind>(),
-                k => new Enchantment(k, 1f).NeedsStyle == style);
+        {
+            var own = IdleXIdle.Core.Builds.SkillCatalogue.All
+                .Where(d => d.Style == style).ToList();
+            Assert.Contains(combos, k => new Enchantment(k, 1f).Needs!.MetBySkills(own));
+        }
     }
 
     [Fact]
@@ -199,7 +208,8 @@ public class EnchantmentsTests
             var need = new Enchantment(kind, 1f).Needs;
             Assert.True(need is not null, $"{kind} is a combo and names no requirement");
             Assert.False(string.IsNullOrWhiteSpace(need!.Label), $"{kind}'s requirement has no label");
-            Assert.True(need.Style is not null || need.Keystone is not null || need.AnyVow,
+            Assert.True(need.Style is not null || need.Kind is not null || need.AnyAmplify
+                        || need.Keystone is not null || need.AnyVow,
                         $"{kind} has a label but no actual condition — the Forge would always call it live");
         }
     }
@@ -209,29 +219,39 @@ public class EnchantmentsTests
     {
         // The rule the Forge draws its COMBOS / NEEDS line from, and the FITS badge on the loot grid.
         // It used to live inside a Draw method, where no test could reach it.
-        var noStyles = System.Array.Empty<IdleXIdle.Core.Builds.Style>();
+        var none = System.Array.Empty<IdleXIdle.Core.Builds.SkillDef>();
         var noTriggers = System.Array.Empty<IdleXIdle.Core.Builds.BuildTrigger>();
+        IdleXIdle.Core.Builds.SkillDef[] Woven(params string[] ids)
+            => ids.Select(IdleXIdle.Core.Builds.SkillCatalogue.ById).ToArray();
 
         var style = new Enchantment(EnchantKind.Overdraw, 1f).Needs!;
-        Assert.True(style.MetBy(new[] { IdleXIdle.Core.Builds.Style.Volley }, noTriggers, 0));
-        Assert.False(style.MetBy(new[] { IdleXIdle.Core.Builds.Style.Hammer }, noTriggers, 0));
+        Assert.True(style.MetBy(Woven("volley_spray"), noTriggers, 0));
+        Assert.False(style.MetBy(Woven("hammer_blow"), noTriggers, 0));
+
+        // The truth-keyed needs (P11a): RADIANCE is met by ANY Field-kind skill — HAMMER's own
+        // PRESS included, which the style-keyed need wrongly greyed — and LINGER by any skill
+        // that opens an amplify window.
+        var kind = new Enchantment(EnchantKind.Radiance, 1f).Needs!;
+        Assert.True(kind.MetBy(Woven("hammer_press"), noTriggers, 0));
+        Assert.False(kind.MetBy(Woven("hammer_blow"), noTriggers, 0));
+
+        var amplify = new Enchantment(EnchantKind.Linger, 1f).Needs!;
+        Assert.True(amplify.MetBy(Woven("sign_call"), noTriggers, 0));
+        Assert.False(amplify.MetBy(Woven("volley_spray"), noTriggers, 0));
 
         var keystone = new Enchantment(EnchantKind.Fervour, 1f).Needs!;
-        Assert.True(keystone.MetBy(noStyles, new[] { IdleXIdle.Core.Builds.BuildTrigger.Bloodlust }, 0));
-        Assert.False(keystone.MetBy(noStyles, new[] { IdleXIdle.Core.Builds.BuildTrigger.Echo }, 0));
+        Assert.True(keystone.MetBy(none, new[] { IdleXIdle.Core.Builds.BuildTrigger.Bloodlust }, 0));
+        Assert.False(keystone.MetBy(none, new[] { IdleXIdle.Core.Builds.BuildTrigger.Echo }, 0));
 
         var vow = new Enchantment(EnchantKind.Tithe, 1f).Needs!;
-        Assert.True(vow.MetBy(noStyles, noTriggers, swornVows: 1));
-        Assert.False(vow.MetBy(noStyles, noTriggers, swornVows: 0));
+        Assert.True(vow.MetBy(none, noTriggers, swornVows: 1));
+        Assert.False(vow.MetBy(none, noTriggers, swornVows: 0));
 
-        // AND THE CROSS-AXIS CHECK, which is the one worth having. A keystone combo must not read as
-        // live because the player happens to run a Style, and a Style combo must not read as live because
-        // they happen to have sworn a Vow. Each requirement answers its own axis and ignores the rest.
-        Assert.False(keystone.MetBy(
-            new[] { IdleXIdle.Core.Builds.Style.Volley,
-                    IdleXIdle.Core.Builds.Style.Hammer }, noTriggers, swornVows: 4));
-        Assert.False(vow.MetBy(
-            new[] { IdleXIdle.Core.Builds.Style.Volley },
+        // AND THE CROSS-AXIS CHECK, which is the one worth having. A keystone combo must not
+        // read as live because the player happens to run a style, and a style combo must not
+        // read as live because they happen to have sworn a Vow. Each answers its own axis.
+        Assert.False(keystone.MetBy(Woven("volley_spray", "hammer_blow"), noTriggers, swornVows: 4));
+        Assert.False(vow.MetBy(Woven("volley_spray"),
             new[] { IdleXIdle.Core.Builds.BuildTrigger.Bloodlust }, swornVows: 0));
     }
 

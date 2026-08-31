@@ -754,7 +754,7 @@ public static class SoloBattle
                 var amped = ampWholeWave || (against is not null && ReferenceEquals(against, FirstAlive()));
                 if (amped)
                 {
-                    var depth = ampBonus + shape.MarkPowerBonus;
+                    var depth = ampBonus + shape.AmplifyPowerBonus;
                     // A SIGN adept's attunement lands on the amplifier's DEPTH — the one lever that
                     // scales with the whole build rather than with one skill (measured when the old
                     // Mark-specialist node was a -23% trap; see the port note in StyleAffinity).
@@ -1271,7 +1271,7 @@ public static class SoloBattle
                         // The standing mark: a window refreshed on the field's own clock instead of
                         // opened by a cast. It costs no beat, so it is deliberately the SHORTER window —
                         // it holds until the next tick rather than for a cast's full duration.
-                        var standing = (int)(auraTick * shape.MarkWindowMultiplier);
+                        var standing = (int)(auraTick * shape.AmplifyWindowMultiplier);
                         if (triggers.Contains(BuildTrigger.Linger)) standing = standing * 9 / 5;
                         ampUntil = Math.Max(ampUntil, abs + standing);
 
@@ -1361,7 +1361,7 @@ public static class SoloBattle
                     // base instead of stacking on a hidden one.
                     var window = sk.Def.AmplifyMs > 0 ? sk.Def.AmplifyMs : 6_000;
                     if (triggers.Contains(BuildTrigger.Linger)) window = window * 9 / 5;
-                    window = (int)(window * shape.MarkWindowMultiplier);   // MARK MASTERY
+                    window = (int)(window * shape.AmplifyWindowMultiplier);   // MARK MASTERY
 
                     if (sk.Def.AmplifyPerCast > 0f)
                     {

@@ -69,16 +69,10 @@ public static class MergeRecipe
     /// </remarks>
     private static readonly Dictionary<string, ItemBaseType> HybridTable = new()
     {
-        [Key(ItemBaseType.Weapon, ItemBaseType.Charm, ItemBaseType.Material)] = ItemBaseType.Weapon,
-        [Key(ItemBaseType.Weapon, ItemBaseType.AbilityFocus, ItemBaseType.Material)] = ItemBaseType.AbilityFocus,
-        [Key(ItemBaseType.Charm, ItemBaseType.AbilityFocus, ItemBaseType.Material)] = ItemBaseType.Charm,
+        // The ONE reachable authored row (P11a): metal, a trinket and a catalyst attune into a
+        // FOCUS. The other nine rows all named Material or CreatureCore ITEMS, which have not
+        // reached a live bag since the creature era ended — nine recipes nobody could cook.
         [Key(ItemBaseType.Weapon, ItemBaseType.Charm, ItemBaseType.AbilityFocus)] = ItemBaseType.AbilityFocus,
-        [Key(ItemBaseType.Weapon, ItemBaseType.Charm, ItemBaseType.CreatureCore)] = ItemBaseType.Charm,
-        [Key(ItemBaseType.Weapon, ItemBaseType.AbilityFocus, ItemBaseType.CreatureCore)] = ItemBaseType.Weapon,
-        [Key(ItemBaseType.Charm, ItemBaseType.AbilityFocus, ItemBaseType.CreatureCore)] = ItemBaseType.AbilityFocus,
-        [Key(ItemBaseType.Weapon, ItemBaseType.Material, ItemBaseType.CreatureCore)] = ItemBaseType.Weapon,
-        [Key(ItemBaseType.Charm, ItemBaseType.Material, ItemBaseType.CreatureCore)] = ItemBaseType.Charm,
-        [Key(ItemBaseType.AbilityFocus, ItemBaseType.Material, ItemBaseType.CreatureCore)] = ItemBaseType.AbilityFocus,
     };
 
     /// <summary>
@@ -95,15 +89,11 @@ public static class MergeRecipe
     {
         ItemBaseType.Weapon, ItemBaseType.Charm, ItemBaseType.AbilityFocus,
         ItemBaseType.Helm, ItemBaseType.Chest, ItemBaseType.Gloves, ItemBaseType.Boots, ItemBaseType.Ring,
-        ItemBaseType.Material, ItemBaseType.CreatureCore,
+        // A GEM is the least equippable thing a bag can hold — it sockets rather than wears — so it
+        // yields to every wearable. (Material and CreatureCore left this list in P11a: those ITEM
+        // types cannot reach a bag, so no mixture can contain them.)
+        ItemBaseType.Gem,
     };
-
-    /// <summary>Is this mixture in the AUTHORED table (as opposed to resolving by the generic rule)?</summary>
-    public static bool HasRecipe(IEnumerable<ItemBaseType> types)
-    {
-        ArgumentNullException.ThrowIfNull(types);
-        return HybridTable.ContainsKey(Key(types.Distinct()));
-    }
 
     public static ItemBaseType HybridOf(IEnumerable<ItemBaseType> types)
     {

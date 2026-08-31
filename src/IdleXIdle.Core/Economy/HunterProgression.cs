@@ -528,7 +528,9 @@ public sealed class Hunter
     {
         ArgumentNullException.ThrowIfNull(items);
 
-        var eligible = items.Where(i => i.EquippedToCreatureId is null).ToList();
+        // The creature-equip filter died in P11a: the field was never assigned by any live path,
+        // and on a pre-2026-08-24 save it silently made legacy items unsellable forever.
+        var eligible = items.ToList();
         var gained = eligible.Sum(i => i.SellValue);
 
         AddGleam(gained);

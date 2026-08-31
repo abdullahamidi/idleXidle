@@ -87,7 +87,7 @@ public static class ElementSets
         // MIND — the precise hit and the open window.
         [Source.Mind] = Set(Source.Mind,
             "+6% critical chance.", new SkillShape { BonusCritPercent = 6f },
-            "A MARK's window lasts 50% longer.", new SkillShape { MarkWindowMultiplier = 1.5f }),
+            "A MARK's window lasts 50% longer.", new SkillShape { AmplifyWindowMultiplier = 1.5f }),
 
         // NATURE — growth: life that comes back.
         [Source.Nature] = Set(Source.Nature,

@@ -439,7 +439,7 @@ public static class MasteryCatalog
         Spec(n, Branch.Loot, Style.Field, "spec_aura", "AURA SPECIALIST — TICKS 30% FASTER",
             BuildTrigger.Radiance, S);
         Spec(n, Branch.Tempo, Style.Sign, "spec_mark", "MARK SPECIALIST — THE WINDOW STRETCHES",
-            BuildTrigger.Linger, S with { MarkWindowMultiplier = 1.3f });
+            BuildTrigger.Linger, S with { AmplifyWindowMultiplier = 1.3f });
         // Grants SIPHON, whose two halves are read from HealTuning: the leech doubling, and the raised
         // per-wave healing limit that makes the doubling measurable under the heal ceiling.
         Spec(n, Branch.Endure, Style.Drain, "spec_transformation",

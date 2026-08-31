@@ -183,7 +183,7 @@ public class CharactersRosterTest
         var oathbound = CharacterRoster.All.Single(c => c.Id == "oathbound");
         Assert.True(oathbound.Shape.VowPowerMultiplier > 1f,
                     "TWICE SWORN says Vows pay far more; nothing in its Shape says so");
-        Assert.True(oathbound.Shape.MarkWindowMultiplier > 1f,
+        Assert.True(oathbound.Shape.AmplifyWindowMultiplier > 1f,
                     "…and the other half of the same sentence must still hold");
     }
 

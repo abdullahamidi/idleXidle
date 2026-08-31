@@ -1258,10 +1258,10 @@ public sealed class WeaveScreen
         {
             _ui.Fill(b, new Rectangle(x, y, width, 2), Dim);
             y += 14;
-            foreach (var (form, enchant) in wants.Take(2))
+            foreach (var (want, enchant) in wants.Take(2))
             {
                 _ui.Text(b, $"{enchant.ToUpperInvariant()} WANTS", x + 10, y, Slate);
-                _ui.TextRight(b, form.ToString().ToUpperInvariant(), x + width, y, Met);
+                _ui.TextRight(b, want, x + width, y, Met);
                 y += 24;
             }
             y += 6;
@@ -1295,7 +1295,7 @@ public sealed class WeaveScreen
     }
 
     /// <summary>
-    /// Forms your WORN GEAR is waiting for, that your build does not yet fire.
+    /// What your WORN GEAR is waiting for, that your build does not yet fire.
     /// </summary>
     /// <remarks>
     /// Six enchantments are Form combos — Overdraw wants a PROJECTILE, Execute wants a STRIKE — and
@@ -1307,14 +1307,17 @@ public sealed class WeaveScreen
     /// This is the cheapest possible way to make the Weave feel connected to the rest of the game, and
     /// it turns a shrug into a reason: not "pick a Form" but "your focus is waiting for a VOLLEY".
     /// </remarks>
-    private IReadOnlyList<(Style Style, string Enchant)> GearWants()
+    private IReadOnlyList<(string Wants, string Enchant)> GearWants()
     {
-        if (Hunter is not { } h) return Array.Empty<(Style, string)>();
+        if (Hunter is not { } h) return Array.Empty<(string, string)>();
 
-        var have = Loadout.WovenStyles().ToHashSet();
+        // Judged on the slots' BASE defs (this screen composes no build); the Forge's own badge
+        // judges the RESOLVED ones. Keystone- and vow-shaped needs are not skill advice, so the
+        // hint skips them.
+        var woven = Loadout.WovenDefs();
         return h.WornEnchantments
-                .Where(e => e.NeedsStyle is { } s && !have.Contains(s))
-                .Select(e => (e.NeedsStyle!.Value, e.Name))
+                .Where(e => e.Needs is { Keystone: null, AnyVow: false } n && !n.MetBySkills(woven))
+                .Select(e => (e.Needs!.Label, e.Name))
                 .DistinctBy(t => t.Item1)
                 .ToList();
     }

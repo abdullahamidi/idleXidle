@@ -13,13 +13,12 @@ public class ForgeTests
     private static readonly LootTuning Loot = LootTuning.Default;
     private static Random Seeded() => new(31337);
 
-    private static ItemInstance Item(Rarity rarity, string id, string? equippedTo = null) => new()
+    private static ItemInstance Item(Rarity rarity, string id) => new()
     {
         InstanceId = id,
         BaseType = ItemBaseType.Weapon,
         Rarity = rarity,
         SellValue = Loot.RaritySellValue[(int)rarity],
-        EquippedToCreatureId = equippedTo,
     };
 
     private static List<ItemInstance> Three(Rarity r) =>
@@ -98,33 +97,6 @@ public class ForgeTests
         Assert.True(Forge.Dismantle(item, Tuning) < item.SellValue);
     }
 
-    // ── The Universal Input Gate ──────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// An equipped charm is ineligible for EVERY operation. This hole shipped once already.
-    /// </summary>
-    /// <remarks>
-    /// The eligibility field existed on the item schema and no operation read it, so an equipped charm
-    /// stayed fully sellable, mergeable, dismantleable and feedable. Four operations is four chances to
-    /// forget. Hence one gate.
-    /// </remarks>
-    [Fact]
-    public void test_an_equipped_item_is_rejected_by_every_forge_operation()
-    {
-        var equipped = Item(Rarity.Epic, "e", equippedTo: "creature_1");
-
-        Assert.False(Forge.IsEligible(equipped));
-        Assert.Equal(IneligibleReason.EquippedToCreature, Forge.CheckEligible(equipped));
-
-        // Merge rejects it...
-        var merge = Forge.Merge([equipped, Item(Rarity.Epic, "b"), Item(Rarity.Epic, "c")], Seeded(), Tuning, Loot);
-        Assert.False(merge.Success);
-        Assert.NotNull(merge.Rejection);
-
-        // ...and dismantle refuses to pay out for it.
-        Assert.Equal(0, Forge.Dismantle(equipped, Tuning));
-    }
-
     /// <summary>A rejection must SAY why. A silently ignored click reads as a broken game.</summary>
     [Fact]
     public void test_every_rejection_explains_itself()
@@ -133,8 +105,6 @@ public class ForgeTests
         Assert.False(merge.Success);
         Assert.False(string.IsNullOrWhiteSpace(merge.Rejection));
 
-        Assert.False(string.IsNullOrWhiteSpace(Forge.Explain(IneligibleReason.EquippedToCreature)));
-        Assert.False(string.IsNullOrWhiteSpace(Forge.Explain(IneligibleReason.VowBound)));
     }
 
     // ── Trap prevention ───────────────────────────────────────────────────────────────────────
@@ -209,10 +179,4 @@ public class ForgeTests
         Assert.Equal(ItemBaseType.Charm, result.Product!.BaseType);
     }
 
-    /// <summary>
-    /// Sell and Feed pay the SAME. The choice must be "which resource do I need", never "which pays".
-    /// </summary>
-    [Fact]
-    public void test_sell_and_feed_convert_at_the_same_rate()
-        => Assert.Equal(1.0f, Tuning.FeedConversionRate);
 }
