@@ -1,5 +1,7 @@
 # Memory Dust Prestige System: IDLExIDLE
 
+> **SUPERSEDED 2026-09-01 by the live trait tree — 51 nodes bought with TRAIT POINTS, not Dust (Prestige/MemoryDust.cs; prose in skill-and-trait-trees.md §3.4-3.6). Dust itself fuels checkpoints and Warren upgrades.** Describes the Dust-bought prestige model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
+
 ## Document Status
 
 | Field | Value |

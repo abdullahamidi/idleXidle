@@ -1,5 +1,7 @@
 # GDD: Item Data Schema
 
+> **SUPERSEDED 2026-09-01 by the live item model (Economy/Gear.cs, ItemAffixes.cs, Enchantments.cs, GemCraft.cs, ElementSets.cs).** Describes the Source×Form item schema model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
+
 ## Document Status
 
 - **Status**: Complete — all 8 sections authored

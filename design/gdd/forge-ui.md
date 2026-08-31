@@ -1,5 +1,7 @@
 # GDD: Forge UI
 
+> **SUPERSEDED 2026-09-01 by the live ForgeScreen (merge / reforge / refine / socket).** Describes the Source×Form forge UI model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
+
 ## Document Status
 
 - **Status**: Complete — all 8 sections authored

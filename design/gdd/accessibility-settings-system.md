@@ -1,5 +1,7 @@
 # Accessibility Settings System: IDLExIDLE
 
+> **SUPERSEDED 2026-09-01 by the live settings panel (DisplaySettings.cs, Game1 settings overlay).** Describes the manual-combat model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
+
 ## Document Status
 
 | Field | Value |

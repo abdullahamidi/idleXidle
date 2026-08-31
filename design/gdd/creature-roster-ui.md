@@ -1,5 +1,7 @@
 # GDD: Creature Roster UI
 
+> **SUPERSEDED 2026-09-01 by nothing — the subsystem was retired 2026-08-24.** Describes the creature-roster UI model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
+
 ## Document Status
 
 - **Status**: Complete — all 8 sections authored

@@ -91,8 +91,9 @@ public sealed record MemoryDustUnlock
 /// <remarks>
 /// Most prestige systems ask you to say goodbye: a shining new multiplier in one hand, and in the
 /// other, they take back the regions you mastered and the creatures you shaped. This one takes
-/// nothing. Memory Dust accrues as a side effect of mastering regions — you never "prestige" in the
-/// reset-the-world sense — and it buys from a FINITE, completable tree. A player can see the horizon:
+/// nothing. Memory Dust accrues from the Warren and from play — you never "prestige" in the
+/// reset-the-world sense. The TREE is bought with TRAIT POINTS earned by conquest and mastery;
+/// Dust itself fuels checkpoints and facility upgrades. A player can see the horizon:
 /// a finite, completable set of nodes (the exact total is <see cref="TotalTreeCost"/>, computed live), then done — not trapped in an infinite
 /// multiplier grind.
 ///

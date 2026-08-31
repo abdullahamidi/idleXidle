@@ -1,5 +1,7 @@
 # Input Targeting System: IDLExIDLE
 
+> **SUPERSEDED 2026-09-01 by nothing — the fight is an auto-battler; no targeting input exists.** Describes the manual-combat targeting model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
+
 ## Document Status
 
 | Field | Value |

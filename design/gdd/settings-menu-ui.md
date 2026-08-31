@@ -1,5 +1,7 @@
 # Settings Menu UI: IDLExIDLE
 
+> **SUPERSEDED 2026-09-01 by the live settings panel (DisplaySettings.cs).** Describes the manual-combat settings model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
+
 ## Document Status
 
 | Field | Value |

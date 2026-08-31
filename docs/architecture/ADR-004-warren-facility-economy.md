@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted |
+| **Status** | Superseded 2026-09-01 — P12 (commit 5f15730) cut the INSIGHT currency (a closed loop), re-pointed two facilities at Forge materials (Scrap/Essence), added the conquest unlock ramp and the depth cap, and rebased the Dust rates. The creature den this ADR preserves was retired 2026-08-24. Current spec: design/gdd/warren-facilities.md |
 | **Date** | 2026-07-28 |
 | **Deciders** | user (chose "build facilities for real" + "3 real currencies") + Claude (implementation) |
 | **Supersedes** | — |

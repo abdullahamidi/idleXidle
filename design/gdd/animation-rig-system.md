@@ -1,5 +1,7 @@
 # Animation & Rig System: IDLExIDLE
 
+> **SUPERSEDED 2026-09-01 by ADR-002 and src Animation/Rig.cs (the cutout rig).** Describes the creature part-rig / weak-point targeting model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
+
 ## Document Status
 
 | Field | Value |

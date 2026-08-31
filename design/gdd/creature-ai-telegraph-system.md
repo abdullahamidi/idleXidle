@@ -1,5 +1,7 @@
 # Creature AI & Telegraph System: IDLExIDLE
 
+> **SUPERSEDED 2026-09-01 by nothing — no telegraph code exists.** Describes the manual-combat telegraph AI model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
+
 ## Document Status
 
 | Field | Value |

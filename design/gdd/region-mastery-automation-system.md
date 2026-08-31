@@ -1,5 +1,7 @@
 # Region Mastery & Automation System: IDLExIDLE
 
+> **SUPERSEDED 2026-09-01 by the surviving descendant: region-mastery levels feed difficulty, Dust milestones and trait points (Automation/RegionAutomation.cs).** Describes the creature-team automation model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
+
 ## Document Status
 
 | Field | Value |

@@ -1,5 +1,7 @@
 # Save & Load Persistence
 
+> **SUPERSEDED 2026-09-01 by the live save layer — one versioned SaveGame record, lenient by name (Persistence/SaveGame.cs).** Describes the per-section save-envelope design that never shipped model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
+
 > **Status**: Draft (authored autonomously — see Author's Note below)
 > **Created**: 2026-07-14
 > **Last Updated**: 2026-07-14

@@ -1,5 +1,7 @@
 # Creature Data Schema: IDLExIDLE
 
+> **SUPERSEDED 2026-09-01 by the wave model (Archetypes.cs, Bands.cs) — creatures are archetypes now.** Describes the creature-roster schema model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
+
 ## Document Status
 
 | Field | Value |

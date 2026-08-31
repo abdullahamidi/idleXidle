@@ -1,7 +1,9 @@
 # Skill Slots and Skill Trees — the 2026-08-29 rework
 
-> **STATUS: DESIGN IN PROGRESS.** Sections 1–9 are agreed with the designer.
-> Sections 10–11 are still drafts. Nothing here is implemented yet.
+> **STATUS: CURRENT — the authoritative skill-system spec** (STYLE → SKILL → VARIATION →
+> REINFORCEMENTS; RESONANCE / LOOT / TEMPO / ENDURE). Implemented: see §9b and the 2026-08-31
+> refactor (P3–P9), which made SkillId the runtime identity and deleted Form from the sim.
+> In-body passages that still say "not implemented" predate that.
 
 ## 1. Overview
 

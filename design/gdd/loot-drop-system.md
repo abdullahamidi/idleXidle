@@ -1,5 +1,7 @@
 # GDD: Loot Drop System
 
+> **SUPERSEDED 2026-09-01 by Loot/LootSystem.cs (chest-driven, wearables only).** Describes the manual-combat part-break loot model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
+
 ## Document Status
 
 - **Status**: Complete — all 8 sections authored

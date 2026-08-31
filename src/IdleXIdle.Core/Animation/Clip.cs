@@ -28,7 +28,7 @@ public readonly record struct Keyframe(float TimeSeconds, float Angle, Easing Ea
 /// <remarks>
 /// The telegraph contract lives here as much as in the AI. A creature's windup is the player's ONLY
 /// warning, so a strike clip's shape is a gameplay-critical value, not decoration: the windup must be
-/// long enough to read (<see cref="Combat.Telegraph.WindupFloorMs"/> = 600 ms, from WCAG 2.3.1
+/// long enough to read (600 ms — the retired Telegraph model's floor, from WCAG 2.3.1
 /// anti-strobe limits plus Hick's Law) and the strike itself must be visually distinct from it.
 /// </remarks>
 public sealed class Clip

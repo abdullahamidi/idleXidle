@@ -1,5 +1,7 @@
 # Game Concept: IDLExIDLE
 
+> **SUPERSEDED 2026-09-01 by design/gdd/game-flow.md and docs/store/store-page.md — the live pitch.** Describes the manual-combat weak-point pitch model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
+
 *Created: 2026-07-13*
 *Status: Draft*
 

@@ -349,7 +349,7 @@ public sealed class BuildScreen
     /// <b>IT STARTS UNDER THE SCREEN'S HEADER NOW (y=112, was 40).</b> Playtest 2026-08-30: <i>"on the
     /// other screens the title is at the top, a rule under it, and then the screen's content begins."</i>
     /// The tree page's title is at the top like the rest of the game now (see
-    /// <see cref="DrawTreeChrome"/>) — and at the whole-tree framing this canvas plants the WEIGHT
+    /// <see cref="DrawTreeChrome"/>) — and at the whole-tree framing this canvas plants the north
     /// branch header 24 px inside its own top edge, i.e. straight through that title, the rule and the
     /// caption. A canvas that begins where the header ends is what every other screen does and what the
     /// TRAITS tree next door already did (its view starts at 136).
@@ -424,11 +424,8 @@ public sealed class BuildScreen
 
     /// <summary>What a branch IS, in one plain line — the promise its nodes then keep.</summary>
     /// <remarks>
-    /// Each line is a compression of that branch's own catalogue text, not a new claim: RESONANCE's
-    /// nodes read "YOUR STRONG SOURCE MATCHUP PAYS 25% MORE" and "EVERY SOURCE MATCHUP COUNTS AS
-    /// STRONG"; SPREAD's read "EVERY HIT
-    /// STRIKES ONE MORE CREATURE" and "ALL FORMS +1 TARGET"; TEMPO's read "+35% ON THE FIRST HIT" and
-    /// "COOLDOWNS -40%"; ENDURE's read "+20% MAXIMUM HEALTH" and "REGAIN 20% OF HEALTH BETWEEN WAVES".
+    /// Each line is a compression of that branch's own catalogue text, not a new claim — one summary
+    /// per branch (RESONANCE / LOOT / TEMPO / ENDURE), drawn from that branch's own node lines.
     /// </remarks>
     private static string BranchPromise(Branch b) => b switch
     {
@@ -1252,7 +1249,7 @@ public sealed class BuildScreen
         var col = BranchColor(br);
         // A direction the player has actually walked burns; one they have not is still legible but
         // quiet. Bridges are excluded: a bridge is filed under one branch but belongs to neither.
-        // START is filed under Weight (it has to be filed somewhere) and is always taken, so without
+        // START is filed under the first branch (it has to be filed somewhere) and is always taken, so without
         // the Start test WEIGHT burned as "walked" on a brand-new hunter who has spent nothing.
         var walked = MasteryCatalog.Nodes.Any(n => n.Branch == br && n.Kind != MasteryKind.Bridge
                                                    && n.Kind != MasteryKind.Start && Mastery.IsTaken(n.Id));
@@ -1824,7 +1821,7 @@ public sealed class BuildScreen
         //
         // OUTWARD, not below. The north capstone's captions drawn under it were printed straight
         // through the ring-3 greaters inside it (the first capture said so); on the north arm the
-        // room is ABOVE the medallion, between it and the WEIGHT header, so the two lines stack away
+        // room is ABOVE the medallion, between it and the branch header, so the two lines stack away
         // from the centre there and below the node everywhere else. The name is always the line
         // nearer the medallion.
         if (node.Kind == MasteryKind.Mastery && _zoom > LabelZoom)

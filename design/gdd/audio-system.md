@@ -1,5 +1,7 @@
 # Audio System: IDLExIDLE
 
+> **SUPERSEDED 2026-09-01 by src Game/SoundBank.cs + design/audio/asset-generation-audio.md.** Describes the manual-combat telegraph audio model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
+
 ## Document Status
 
 | Field | Value |

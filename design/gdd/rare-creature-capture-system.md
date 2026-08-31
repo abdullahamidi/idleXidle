@@ -1,5 +1,7 @@
 # Rare Creature Capture System: IDLExIDLE
 
+> **SUPERSEDED 2026-09-01 by nothing — no capture code ever shipped.** Describes the creature capture model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
+
 ## Document Status
 
 | Field | Value |

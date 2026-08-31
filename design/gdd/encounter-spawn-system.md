@@ -1,5 +1,7 @@
 # Encounter Spawn System: IDLExIDLE
 
+> **SUPERSEDED 2026-09-01 by the band cycle (design/gdd/regions-and-rosters.md §3); the template/par chain was deleted 2026-09-01 (P13).** Describes the manual-combat encounter/par model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
+
 ## Document Status
 
 | Field | Value |

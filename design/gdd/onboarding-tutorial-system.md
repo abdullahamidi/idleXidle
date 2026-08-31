@@ -1,5 +1,7 @@
 # Onboarding & Tutorial System: IDLExIDLE
 
+> **SUPERSEDED 2026-09-01 by the live tour cards (Progression/Onboarding.cs, Tutorial.cs).** Describes the manual-combat tutorial model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
+
 ## Document Status
 
 | Field | Value |

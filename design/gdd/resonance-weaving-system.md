@@ -1,5 +1,7 @@
 # GDD: Resonance Weaving System
 
+> **SUPERSEDED 2026-09-01 by design/gdd/skill-slots-and-skill-trees.md (skills) and design/gdd/sources.md (the six Sources). Its §4.1 Vow uptime formula alone is still implemented verbatim in Weaving/ResonanceWeaving.cs — with the static conversion at 8.0, not 3.0.** Describes the Source×Form weaving model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
+
 ## Document Status
 
 - **Status**: Complete — all 8 sections authored
