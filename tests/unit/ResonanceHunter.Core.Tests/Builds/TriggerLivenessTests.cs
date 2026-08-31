@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using ResonanceHunter.Core.Abilities;
+using ResonanceHunter.Core.Automation;
 using ResonanceHunter.Core.Builds;
 using ResonanceHunter.Core.Economy;
 using ResonanceHunter.Core.Expeditions;
@@ -60,6 +61,54 @@ public class TriggerLivenessTests
         return events.Where(e => e.Kind == BattleEventKind.Strike).Sum(e => e.Amount);
     }
 
+    [Fact]
+    public void test_loose_again_actually_looses_again()
+    {
+        // THE QUIVER's card reads "a kill sends the next shot immediately" and the character granted
+        // SPLINTER, whose own blurb is "on kill: richer loot". Two different sentences, and the one on
+        // the card was the one nothing implemented — on a passive a player unlocks by finishing a quest
+        // specifically to get it.
+        //
+        // Measured on a SWARM: many weak creatures, so kills come often and the readied cooldowns
+        // compound. A single-creature fixture would show nothing, which is correct — the passive is
+        // meant to be dead weight on a boss.
+        var swarm = Enumerable.Range(0, 8)
+            .Select(_ => new WaveCreature { MaxHealth = 40f, Health = 40f, Damage = 0f })
+            .ToArray();
+
+        // CLEAR TIME, not cast count. Counting casts measures the creatures, not the cadence: a wave
+        // ends when the last one dies, so eight creatures take eight killing casts however fast they
+        // arrive. What the passive buys is those casts arriving SOONER.
+        var plain = ClearMs(swarm.Select(Fresh).ToArray());
+        var loose = ClearMs(swarm.Select(Fresh).ToArray(), BuildTrigger.LooseAgain);
+
+        Assert.True(loose < plain,
+                    $"LOOSE AGAIN must clear a swarm faster — {loose}ms against {plain}ms");
+    }
+
+    private static WaveCreature Fresh(WaveCreature c)
+        => new() { MaxHealth = c.MaxHealth, Health = c.MaxHealth, Damage = c.Damage };
+
+    /// <summary>The millisecond the wave was cleared — lower is a faster build.</summary>
+    private static int ClearMs(WaveCreature[] creatures, params BuildTrigger[] triggers)
+    {
+        var build = new Build
+        {
+            PassiveMods = BuildMods.None,
+            Shape = SkillShape.None,
+            ExtraTriggers = new HashSet<BuildTrigger>(triggers),
+        };
+        build.Weave(new EquippedSkill(
+            new WovenAbility { Name = "P", Source = Source.Nature, Form = Form.Projectile },
+            FormBehaviour.BaseCooldownMs(Form.Projectile)));
+
+        var champ = new Champion { MaxHealth = 100_000, Health = 100_000 };
+        var (_, events) = SoloBattle.ResolveWave(
+            champ, build, new Hunter(), creatures,
+            enemyIntervalMs: 100_000, ExpeditionTuning.Default, new Random(5));
+        return events.Count == 0 ? int.MaxValue : events.Max(e => e.AtMs);
+    }
+
     // ── The roll-call ─────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -87,6 +136,13 @@ public class TriggerLivenessTests
             BuildTrigger.Coiled,        // SoloBattleTests.test_coiled_fires_the_trap_more_often
             BuildTrigger.Siphon,        // SoloBattleTests.test_siphon_deepens_the_transformation_leech
             BuildTrigger.Desperation,   // SoloExpeditionTests.test_desperation_swells_the_haul_at_low_health
+            BuildTrigger.Hoarder,       // test_hoarder_turns_haul_into_force
+            BuildTrigger.Weaver,        // test_weaver_fires_the_next_form_as_well
+            BuildTrigger.LooseAgain,    // test_loose_again_actually_looses_again
+            BuildTrigger.Rend,          // ChargeKeystoneTest.test_charge_rend_spends_the_pool_and_the_spend_pays
+            BuildTrigger.Capacitor,     // ChargeKeystoneTest.test_charge_capacitor_raises_the_cap_and_alone_it_only_fills
+            BuildTrigger.Dynamo,        // ChargeKeystoneTest.test_charge_dynamo_winds_the_pool_on_bites
+            BuildTrigger.Lodestone,     // ChargeKeystoneTest.test_charge_lodestone_pays_a_core_for_a_full_pool_at_the_clear
         };
 
         // DESPERATION was parked here for a long time as "dead" — a HAUL effect the squad Expedition read
@@ -130,9 +186,12 @@ public class TriggerLivenessTests
             enemyHealth: 10_000_000f, enemyDamage: 0f, enemyIntervalMs: 1_000,
             ExpeditionTuning.Default, new Random(99));
 
+        // TWO CAST CYCLES PER WINDOW, not five seconds each: since the cooldowns doubled (2026-08-29) a
+        // rhythm skill fires every four to six beats, so a five-second window holds one cast or none and
+        // the comparison measured which window a cast happened to land in.
         var poison = events.Where(e => e.Kind == BattleEventKind.Strike).ToList();
-        var early = poison.Where(e => e.AtMs <= 5_000).Sum(e => e.Amount);
-        var late = poison.Where(e => e.AtMs > 5_000 && e.AtMs <= 10_000).Sum(e => e.Amount);
+        var early = poison.Where(e => e.AtMs <= 15_000).Sum(e => e.Amount);
+        var late = poison.Where(e => e.AtMs > 15_000 && e.AtMs <= 30_000).Sum(e => e.Amount);
 
         Assert.True(late > early, $"venom did not ramp ({early} in the first 5s, {late} in the next)");
     }
@@ -166,7 +225,10 @@ public class TriggerLivenessTests
         var mid = Window(30_000, 60_000);
         var late = Window(90_000, 120_000);
 
-        Assert.True(late <= mid * 1.10f,
+        // 1.25, was 1.10: a STRIKE leaves WOUNDS (+3% per wound, five deep) and with six beats between
+        // casts the wound stack is still filling through the mid window — the late window's extra is the
+        // wound ramp, not the poison pool, which converges within a few casts either way.
+        Assert.True(late <= mid * 1.25f,
             $"venom is still climbing late in the fight ({mid} over 30-60s, {late} over 90-120s) — the pool has no equilibrium");
     }
 
@@ -185,7 +247,8 @@ public class TriggerLivenessTests
             ExpeditionTuning.Default, new Random(99));
 
         var mods = noSkills.Resolve(new Hunter());
-        var expectedAuto = (int)MathF.Round(SoloBattle.AutoAttackDamage * mods.Damage);
+        // MIGHT's and the weapon's multiplier is the basic attack's own (2026-08-26); the shared mods still apply.
+        var expectedAuto = (int)MathF.Round(SoloBattle.AutoAttackDamage * new Hunter().AutoDamageMultiplier * mods.Damage);
 
         Assert.All(events.Where(e => e.Kind == BattleEventKind.Strike),
             e => Assert.Equal(expectedAuto, e.Amount));
@@ -196,19 +259,33 @@ public class TriggerLivenessTests
     [Fact]
     public void test_echo_fires_twice()
     {
-        // ECHO is x0.6 damage for two casts — a 1.2x net, and the point is the cast COUNT, so count them.
+        // ECHO is x0.6 damage for two casts — a 1.2x net. Counted in BLOWS, not in Skill events: since
+        // 2026-08-30 an activation announces itself exactly once however many passes it makes, because
+        // the screen starts an effect, a sound and a callout per announcement and ECHO fired all three
+        // twice on the same frame.
         var plain = new Build(); plain.Weave(Strike());
         var echo = new Build(); echo.Weave(Strike()); echo.Take(Keystones.ById("echo")!);
 
-        int Casts(Build b)
+        (int Blows, int Damage) Landed(Build b)
         {
             var champ = new Champion { MaxHealth = 10_000, Health = 10_000 };
             var (_, events) = SoloBattle.ResolveWave(champ, b, new Hunter(),
                 10_000_000f, 0f, 1_000, ExpeditionTuning.Default, new Random(3));
-            return events.Count(e => e.Kind == BattleEventKind.Skill);
+            var blows = events.Where(e => e.Kind == BattleEventKind.Strike && e.FromSkill).ToList();
+            return (blows.Count, blows.Sum(e => e.Amount));
         }
 
-        Assert.Equal(Casts(plain) * 2, Casts(echo));
+        var one = Landed(plain);
+        var twice = Landed(echo);
+        Assert.Equal(one.Blows * 2, twice.Blows);
+        // ...and the pair lands about 1.2x what one cast does, which is the keystone's whole bargain.
+        Assert.InRange(twice.Damage / (float)one.Damage, 1.1f, 1.3f);
+        // One announcement per activation, whatever ECHO does behind it.
+        var champCheck = new Champion { MaxHealth = 10_000, Health = 10_000 };
+        var (_, echoEvents) = SoloBattle.ResolveWave(champCheck, echo, new Hunter(),
+            10_000_000f, 0f, 1_000, ExpeditionTuning.Default, new Random(3));
+        var announceMs = echoEvents.Where(e => e.Kind == BattleEventKind.Skill).Select(e => e.AtMs).ToList();
+        Assert.Equal(announceMs.Distinct().Count(), announceMs.Count);
     }
 
     [Fact]
@@ -328,5 +405,74 @@ public class TriggerLivenessTests
         });
 
         Assert.True(paid, "HARVEST never paid a core across 40 kills — nothing reads the trigger");
+    }
+
+    // ── HOARDER — the AVARICE terminal ────────────────────────────────────────────────────────
+
+    /// <summary>Haul becomes force, or the whole economy path ends in money and nothing else.</summary>
+    /// <remarks>
+    /// The path HOARDER terminates buys no combat power at all — that is what makes choosing it a real
+    /// decision — so this terminal is the only thing standing between "the economy build" and "the build
+    /// that cannot fight". If it reads nothing, twelve permanent points buy a label.
+    /// </remarks>
+    [Fact]
+    public void test_hoarder_turns_haul_into_force()
+    {
+        // GREED is the haul keystone; HOARDER is what converts what it bought.
+        var greedy = BuildWith("greed");
+        var hoarding = BuildWith("greed", "hoarder");
+
+        Assert.True(Output(hoarding) > Output(greedy),
+            $"HOARDER changed nothing ({Output(greedy):F0} -> {Output(hoarding):F0}). The AVARICE path's " +
+            "terminal is inert and its whole road ends in money.");
+    }
+
+    /// <summary>Without haul to convert, HOARDER is nearly all price.</summary>
+    /// <remarks>
+    /// The other half of the trade, and what stops it being a free damage keystone. NOT "pays nothing":
+    /// the Hunter's base Guile puts the haul multiplier a little above 1 before any investment, so a
+    /// bare build does gain about 2% — measured, not assumed. What matters is the GAP: the same keystone
+    /// is worth an order of magnitude more to a build that actually walked the economy path.
+    /// </remarks>
+    [Fact]
+    public void test_hoarder_is_worth_far_more_to_a_haul_build()
+    {
+        var bareGain = Output(BuildWith("hoarder")) / Output(BuildWith()) - 1f;
+        var haulGain = Output(BuildWith("greed", "hoarder")) / Output(BuildWith("greed")) - 1f;
+
+        Assert.True(haulGain > bareGain * 5f,
+            $"HOARDER gave {haulGain:P1} to a haul build and {bareGain:P1} to a bare one. It is meant " +
+            "to convert what the AVARICE path bought, not to be a damage keystone anyone can splash.");
+        Assert.True(Keystones.ById("hoarder")!.Mods.Rarity < 1f, "HOARDER must still charge its price.");
+    }
+
+    // ── WEAVER — the ARTIFICE terminal ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Every skill also fires as the NEXT Form carried — one slot answering two demands.
+    /// </summary>
+    /// <remarks>
+    /// The design's "two Forms in one slot", and the only thing in the game that lets a single
+    /// activation be both a Weight hit and a Spread hit. Needs two Forms woven to mean anything, which
+    /// is exactly the build commitment it is meant to demand.
+    /// </remarks>
+    [Fact]
+    public void test_weaver_fires_the_next_form_as_well()
+    {
+        Build TwoForms(params string[] keystones)
+        {
+            var b = new Build();
+            b.Weave(Strike(Form.Strike));
+            b.Weave(Strike(Form.Projectile));
+            foreach (var id in keystones) b.Take(Keystones.ById(id)!);
+            return b;
+        }
+
+        var plain = Output(TwoForms());
+        var woven = Output(TwoForms("weaver"));
+
+        Assert.True(woven > plain,
+            $"WEAVER changed nothing ({plain:F0} -> {woven:F0}) — the ARTIFICE terminal is a label. " +
+            "It costs 30% cadence, so an inert one is strictly worse than not taking it.");
     }
 }

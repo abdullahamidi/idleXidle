@@ -24,9 +24,14 @@ namespace ResonanceHunter.Client;
 public sealed class AssetLibrary
 {
     private readonly Dictionary<string, Texture2D> _textures = new(StringComparer.OrdinalIgnoreCase);
+    private readonly GraphicsDevice _device;
+
+    /// <summary>Winning source path per key, so collision tie-breaks stay deterministic.</summary>
+    private readonly Dictionary<string, string> _sources = new(StringComparer.OrdinalIgnoreCase);
 
     public AssetLibrary(GraphicsDevice device)
     {
+        _device = device;
         var root = Path.Combine(AppContext.BaseDirectory, "assets", "art");
         if (!Directory.Exists(root)) return;
 
@@ -51,7 +56,31 @@ public sealed class AssetLibrary
                 using var stream = File.OpenRead(path);
                 var texture = Texture2D.FromStream(device, stream);
                 Premultiply(texture);
-                _textures[Path.GetFileNameWithoutExtension(path)] = texture;
+
+                // 98 basenames exist at two or three runtime paths with DIFFERENT content —
+                // typically a full-size sprite plus a smaller thumbnails/ copy. Keys are flat
+                // basenames, so "last writer wins" made the winner depend on directory
+                // enumeration order: the same item could render full-res or thumbnail-res
+                // between runs. Resolve deterministically and in favour of quality by keeping
+                // the larger image; equal areas tie-break on path so the choice is stable.
+                var key = Path.GetFileNameWithoutExtension(path);
+                if (_textures.TryGetValue(key, out var existing))
+                {
+                    var incomingArea = texture.Width * texture.Height;
+                    var existingArea = existing.Width * existing.Height;
+                    var keepIncoming = incomingArea > existingArea
+                        || (incomingArea == existingArea
+                            && string.CompareOrdinal(norm, _sources[key]) < 0);
+                    if (!keepIncoming)
+                    {
+                        texture.Dispose();
+                        continue;
+                    }
+                    existing.Dispose();
+                }
+
+                _textures[key] = texture;
+                _sources[key] = norm;
             }
             catch (Exception ex) when (ex is IOException or InvalidOperationException)
             {
@@ -91,39 +120,67 @@ public sealed class AssetLibrary
     {
         ["ui_gleam_coin"] = "currency_gleam",       // package_05 currencies
         ["ui_memory_dust"] = "currency_memory_dust",
-        ["item_glyph_weapon"] = "item_weapon", ["item_glyph_charm"] = "item_charm",
-        ["item_glyph_focus"] = "item_focus", ["item_glyph_helm"] = "item_helm",
-        ["item_glyph_chest"] = "item_chest", ["item_glyph_gloves"] = "item_gloves",
-        ["item_glyph_boots"] = "item_boots", ["item_glyph_ring"] = "item_ring",
+        ["ui_insight"] = "currency_insight",         // 2026-08-23: the Warren's third currency got a face
+        // Generic per-slot glyphs. The previous item_<slot> targets never existed on disk, so every
+        // equipment slot glyph resolved to null; these point at the shipped item_slot_<slot> art.
+        ["item_glyph_weapon"] = "item_slot_weapon", ["item_glyph_charm"] = "item_slot_charm",
+        ["item_glyph_focus"] = "item_slot_focus", ["item_glyph_helm"] = "item_slot_helm",
+        ["item_glyph_chest"] = "item_slot_chest", ["item_glyph_gloves"] = "item_slot_gloves",
+        ["item_glyph_boots"] = "item_slot_boots", ["item_glyph_ring"] = "item_slot_ring",
         ["item_glyph_core"] = "core_hatch",
-        ["item_frame_common"] = "frame_common", ["item_frame_uncommon"] = "frame_uncommon",
-        ["item_frame_rare"] = "frame_rare", ["item_frame_epic"] = "frame_epic",
-        ["item_frame_legendary"] = "frame_legendary",
+        // Rarity frames ship as ui_frame_rarity_<tier> (assets/art/UI/slots + ItemsLoot/frames). The
+        // earlier frame_<tier> targets never existed on disk, so every one of these keys resolved to
+        // null and no item ever drew a rarity frame.
+        ["item_frame_common"] = "ui_frame_rarity_common", ["item_frame_uncommon"] = "ui_frame_rarity_uncommon",
+        ["item_frame_rare"] = "ui_frame_rarity_rare", ["item_frame_epic"] = "ui_frame_rarity_epic",
+        ["item_frame_legendary"] = "ui_frame_rarity_legendary",
+        // UiKit.KeyCap asks for ui_keycap; the pack ships the blank square variant under a longer name.
+        ["ui_keycap"] = "ui_keycap_square_blank",
+        // STAT GEMS get a FACE. Six medallions (assets/art/ItemsLoot/glyphs/affix) shipped with the
+        // item pack and were referenced by nothing in src/ — dormant art for a feature that was drawing
+        // a flat coloured diamond instead, so every gem on every screen looked like every other gem.
+        // Keyed by the gem's AffixStat, which is what a gem IS; the medallion depicts that stat.
+        ["gem_damage"] = "affix_power", ["gem_health"] = "affix_health",
+        ["gem_skillrate"] = "affix_timer", ["gem_haul"] = "affix_resonance",
+        ["gem_crit"] = "affix_critical", ["gem_defense"] = "affix_defense",
+        // TRAINING ROWS get a FACE (playtest: "MAIN TRAINING has dummy icons, COMBAT TRAINING has no
+        // icons"). Keyed by the stat the row trains; each points at the ONE shipped icon that depicts
+        // that stat's effect — the icon_status_* set covers seven, and the two without a status glyph
+        // borrow the tree art that means the same thing: WEIGHT (heavier hits) for the crit-damage
+        // stat, AVARICE (the loot road) for the loot stat. No new art.
+        ["stat_might"] = "icon_status_power", ["stat_resonance"] = "icon_status_resonance",
+        ["stat_tempo"] = "icon_status_timer", ["stat_vitality"] = "icon_status_healing",
+        ["stat_health"] = "icon_status_health", ["stat_defense"] = "icon_status_defense",
+        ["stat_critical"] = "icon_status_critical", // FOCUS and GUILE pointed at glyph art (a white hammer, a cream purse) beside seven painted
+        // medallions and read as unfinished (playtest 2026-08-25). Painted stand-ins from the same
+        // package: crossed blades for the critical's bite, a chest of coin for the loot.
+        ["stat_focus"] = "icon_role_attacker",
+        ["stat_guile"] = "icon_facility_hoardvaults",
+        // GEAR CLASS ICONS are NOT aliased. ItemClasses.IconKey builds icon_class_<warden|ranger|
+        // mystic|bulwark|wanderer>, and the loader keys every PNG by its basename, so the files the
+        // art pass drops under assets/art/Characters/Hunter/icons/class/ resolve the moment they land.
+        // An alias from a key to a file of the same name would be a no-op that the asset gate would
+        // flag as a dead target until the art exists. Until it does, UiKit.ClassIcon draws a diamond
+        // in the class colour, and tools/check_asset_keys.py reports the family by name.
         // Per-source creatures → package_03 enemy idle poses. One representative enemy per element (the
         // Warren's per-role keys fall back here; no Nature enemy shipped, so a wisp stands in).
         ["crea_body"] = "bonecrawler_idle_01", ["crea_machine"] = "stone_sentinel_idle_01",
         ["crea_mind"] = "soul_leech_idle_01", ["crea_nature"] = "wisp_idle_01",
         ["crea_shadow"] = "shadeling_idle_01", ["crea_spirit"] = "rift_guardian_idle_01",
-        // Region bosses → package_04 boss idle poses (normalized 1024 canvases), matched to region theme.
-        ["boss_verdant_hollow"] = "thorn_regent_idle_1024", ["boss_cinderworks"] = "forge_colossus_idle_1024",
-        ["boss_umbral_reach"] = "void_reaper_idle_1024", ["boss_still_archive"] = "crystal_lich_idle_1024",
-        ["boss_pale_choir"] = "lumen_angel_idle_1024", ["boss_marrow_wastes"] = "spirit_matron_idle_1024",
-        // package_07 region arenas — the fight draws bg_arena_<Source theme>; resolve to the element's
-        // full-screen background (the 'unconquered' variant is the in-combat look).
-        // Use the CLEAN variant — the 'unconquered' variant bakes purple corruption-marker circles into the
-        // art (they read as stray targeting reticles over the arena).
-        ["bg_arena_body"] = "body_blood_moors_clean", ["bg_arena_mind"] = "mind_crystal_caverns_clean",
-        ["bg_arena_nature"] = "nature_verdant_hollow_clean", ["bg_arena_machine"] = "machine_forge_wastes_clean",
-        ["bg_arena_shadow"] = "shadow_void_wastes_clean", ["bg_arena_spirit"] = "spirit_twilight_sanctum_clean",
-        ["bg_arena_verdant"] = "nature_verdant_hollow_clean",   // the DrawSceneBackground fallback key
-        // Combat FX: the sim fires semantic events; the pack ships GENERIC effect strips meant to serve them
-        // (a crit reads as a slash, an interrupt as a shield). This is the strips' intended use, not a stand-in
-        // for a missing bespoke effect. fx_bolt / fx_aura / fx_heal are authored but not yet triggered anywhere.
-        // package_06 VFX strips (8 square 512 frames each). VfxPlayer resolves these keys through Get().
-        ["vfx_hit"] = "impact_gold_strip8_512", ["vfx_weakhit"] = "smoke_puff_strip8_512",
-        ["vfx_crit"] = "slash_void_strip8_512", ["vfx_ability_ruinstrike"] = "slash_void_strip8_512",
-        ["vfx_death"] = "smoke_puff_strip8_512", ["vfx_interrupt"] = "heal_holy_burst_strip8_512",
-        ["vfx_levelup"] = "levelup_gold_purple_strip8_512",
+        // Arena backgrounds now ship under their own bg_arena_<Source> keys, so the old
+        // <element>_<region>_clean indirection is gone. Only the legacy fallback key still
+        // needs a bridge.
+        ["bg_arena_verdant"] = "bg_arena_nature",   // the DrawSceneBackground fallback key
+        // Combat effects (2026-08-22 art contract, design/art/arena-art-contract.md §5): one white strip per
+        // FORM (tinted by the casting skill's Source at play time) plus the combat beats. VfxPlayer resolves
+        // these short keys through Get(); every strip is 8 square 512 frames, drawn additively.
+        ["fx_strike"] = "fx_strike_strip8_512", ["fx_projectile"] = "fx_projectile_strip8_512",
+        ["fx_aura"] = "fx_aura_strip8_512", ["fx_trap"] = "fx_trap_strip8_512",
+        ["fx_mark"] = "fx_mark_strip8_512", ["fx_transformation"] = "fx_transformation_strip8_512",
+        ["fx_hit"] = "fx_hit_strip8_512", ["fx_weakhit"] = "fx_weakhit_strip8_512",
+        ["fx_crit"] = "fx_crit_strip8_512", ["fx_death"] = "fx_death_strip8_512",
+        ["fx_heal"] = "fx_heal_strip8_512", ["fx_shield"] = "fx_shield_strip8_512",
+        ["fx_levelup"] = "fx_levelup_strip8_512",
     };
 
     private Texture2D? Resolve(string key)
@@ -134,6 +191,35 @@ public sealed class AssetLibrary
     public Texture2D? Get(string key) => Resolve(key);
 
     public bool Has(string key) => Resolve(key) is not null;
+
+    /// <summary>The key a texture's white silhouette is registered under (see <see cref="WhiteMask"/>).</summary>
+    public static string MaskKey(string key) => key + "|mask";
+
+    /// <summary>
+    /// A WHITE SILHOUETTE of a texture — every pixel's colour replaced by its alpha (premultiplied, so
+    /// white at the alpha) — built once and registered under <see cref="MaskKey"/>, so it can be drawn
+    /// through the same strip/sprite helpers as the original. The hit flash draws a creature's mask over
+    /// the creature: a tint can only darken a sprite and an additive pass only adds the sprite's own
+    /// dark colours, so "flash white" needs a white shape (playtest 2026-08-28: "the white flash is
+    /// definitely not showing").
+    /// </summary>
+    public Texture2D? WhiteMask(string key)
+    {
+        var maskKey = MaskKey(key);
+        if (_textures.TryGetValue(maskKey, out var have)) return have;
+        if (Resolve(key) is not { } src) return null;
+        var data = new Color[src.Width * src.Height];
+        src.GetData(data);
+        for (var i = 0; i < data.Length; i++)
+        {
+            var a = data[i].A;
+            data[i] = new Color(a, a, a, a);
+        }
+        var mask = new Texture2D(_device, src.Width, src.Height);
+        mask.SetData(data);
+        _textures[maskKey] = mask;
+        return mask;
+    }
 
     /// <summary>First present texture among candidates, or null. Lets callers try a specific-then-generic key.</summary>
     public Texture2D? GetFirst(params string[] keys) => keys.Select(Get).FirstOrDefault(t => t is not null);

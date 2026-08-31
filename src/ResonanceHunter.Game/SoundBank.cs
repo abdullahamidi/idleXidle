@@ -28,6 +28,26 @@ public sealed class SoundBank
 
     private float _masterSfx = 0.8f;
     private float _masterMusic = 0.5f;
+    private float _musicBase = 1f;   // the track's own volume, so the master can be re-applied live
+
+    /// <summary>Effects master volume, 0..1. Applied to every subsequent one-shot.</summary>
+    public float SfxVolume
+    {
+        get => _masterSfx;
+        set => _masterSfx = Clamp01(value);
+    }
+
+    /// <summary>Music master volume, 0..1. Applied to the CURRENTLY PLAYING bed immediately.</summary>
+    public float MusicVolume
+    {
+        get => _masterMusic;
+        set
+        {
+            _masterMusic = Clamp01(value);
+            try { if (_music is not null) _music.Volume = Clamp01(_musicBase * _masterMusic); }
+            catch (Exception) { /* a disposed voice must never break the settings screen */ }
+        }
+    }
 
     /// <param name="disable">
     /// Force-off, used for headless screenshot/CI runs where no audio device exists. When true, nothing
@@ -71,10 +91,74 @@ public sealed class SoundBank
     public bool Enabled => _enabled;
     public bool Has(string key) => _sounds.ContainsKey(key);
 
+    // ── The combat throttle. The fight fires the same cue in bursts — a swarm wave lands five hits
+    // inside a frame, and BATTLE SPEED multiplies the playback clock — and five simultaneous copies
+    // of one sample are one sample five times as loud. Two rules, applied to EVERY one-shot:
+    //   1. the same cue never STARTS twice inside its minimum gap (~90 ms unless MinGapMs says otherwise);
+    //   2. a cue re-fired while its recent copies still ring plays QUIETER (divided by the square
+    //      root of a decaying repeat count), so a swarm reads as a swarm, not as a wall.
+    // Centralised here rather than at each call site so no caller can forget it.
+    private const long MinRepeatMs = 90;
+
+    /// <summary>Per-cue minimum gap between two starts, in milliseconds, where the 90 ms default is wrong.</summary>
+    /// <remarks>
+    /// Playtest 2026-08-26 ("the sounds lower the weight of the game"): the fight cues were rebuilt with
+    /// real tails — a hit rings for ~300 ms, a death for 700–900 ms. A hit may start again after 60 ms
+    /// (a swarm should sound busy, and the repeat-ducking above keeps the pile quiet), but a death that
+    /// restarts while its own crumble is still falling turns three deaths into one wash, so the deaths are
+    /// held further apart. FMOD calls this an event "cooldown"; it exists so simultaneous copies of one
+    /// sample never stack into a rattle.
+    /// </remarks>
+    private static readonly Dictionary<string, long> MinGapMs = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["sfx_hit"] = 60,
+        ["sfx_enemy_down"] = 140,
+        ["sfx_boss_down"] = 220,
+        ["sfx_champ_down"] = 300,
+    };
+
+    // Per-play pitch variation. A one-shot heard a thousand times identically "draws attention to itself
+    // through its artificial precision" (Mushel); a small random offset per play is the standard cure,
+    // and small is the rule — ±0.06 octave is under a semitone, enough to stop the ear locking on.
+    private readonly Random _vary = new(0x5EED);
+    private readonly Dictionary<string, (long LastMs, float Recent)> _recent = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Play a one-shot cue. No-op if audio is off or the cue is missing.</summary>
-    public void Play(string key, float volume = 1f, float pitch = 0f, float pan = 0f)
+    /// <remarks>
+    /// Rate-limited per cue: a repeat inside the cue's minimum gap (~90 ms; see <see cref="MinGapMs"/>)
+    /// is dropped, and rapid repeats play progressively quieter (see the throttle note above). Volume
+    /// always rides <see cref="SfxVolume"/>, so the settings slider governs every effect in the game.
+    /// <paramref name="pitch"/> is in octaves (-1 = one octave down, +1 = one octave up, MonoGame's
+    /// convention); <paramref name="vary"/> adds a random offset in ±<paramref name="vary"/> octaves
+    /// on every play, so a cue that fires constantly never repeats itself exactly.
+    /// </remarks>
+    public void Play(string key, float volume = 1f, float pitch = 0f, float pan = 0f, bool throttle = true,
+                     float vary = 0f)
     {
         if (!_enabled || !_sounds.TryGetValue(key, out var fx)) return;
+        if (vary > 0f) pitch += ((float)_vary.NextDouble() * 2f - 1f) * vary;
+
+        if (!throttle)
+        {
+            // A caller that paces itself (the reveal's landing ticks run on the reveal's own clock,
+            // faster than the 90 ms gate) opts out of the repeat throttle entirely.
+            try { fx.Play(Clamp01(volume * _masterSfx), Clamp(pitch, -1f, 1f), Clamp(pan, -1f, 1f)); }
+            catch (Exception) { /* an exhausted voice pool must never break a frame */ }
+            return;
+        }
+
+        var now = Environment.TickCount64;
+        if (_recent.TryGetValue(key, out var t))
+        {
+            var since = now - t.LastMs;
+            if (since < (MinGapMs.TryGetValue(key, out var gap) ? gap : MinRepeatMs)) return;
+            // Half-life 250 ms: a cue that last fired long ago is back to full volume.
+            var recent = t.Recent * MathF.Pow(0.5f, since / 250f) + 1f;
+            _recent[key] = (now, recent);
+            volume /= MathF.Sqrt(recent);
+        }
+        else _recent[key] = (now, 1f);
+
         try { fx.Play(Clamp01(volume * _masterSfx), Clamp(pitch, -1f, 1f), Clamp(pan, -1f, 1f)); }
         catch (Exception) { /* an exhausted voice pool must never break a frame */ }
     }
@@ -100,6 +184,7 @@ public sealed class SoundBank
             _music?.Dispose();
             _music = fx.CreateInstance();
             _music.IsLooped = true;
+            _musicBase = Clamp01(volume);
             _music.Volume = Clamp01(volume * _masterMusic);
             _music.Play();
             _musicKey = key;

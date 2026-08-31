@@ -64,33 +64,33 @@ public static class Keystones
         new()
         {
             Id = "greed", Name = "GREED",
-            Blurb = "DOUBLE HAUL. YOU HIT 30% SOFTER.",
+            Blurb = "DOUBLE LOOT. YOU HIT 30% SOFTER.",
             Mods = new BuildMods(Damage: 0.7f, Health: 1f, SkillRate: 1f, Haul: 2.0f, Rarity: 1f),
         },
         new()
         {
             Id = "discerning_eye", Name = "DISCERNING EYE",
-            Blurb = "FAR RARER FINDS. HALF THE HAUL.",
+            Blurb = "FAR RARER FINDS. HALF THE LOOT.",
             Mods = new BuildMods(Damage: 1f, Health: 1f, SkillRate: 1f, Haul: 0.5f, Rarity: 2.0f),
         },
         new()
         {
             Id = "reaper", Name = "REAPER",
-            Blurb = "EVERY KILL YIELDS RICHER LOOT. YOUR SKILLS COME BACK 25% SLOWER.",
+            Blurb = "EVERY KILL GIVES RICHER LOOT. YOUR SKILLS COME BACK 25% SLOWER.",
             Mods = new BuildMods(Damage: 1f, Health: 1f, SkillRate: 0.75f, Haul: 1f, Rarity: 1f),
             Grants = new[] { BuildTrigger.Splinter },
         },
         new()
         {
             Id = "undying", Name = "UNDYING",
-            Blurb = "THE FIRST KILLING BLOW EACH RUN LEAVES YOU AT 1 HP. YOU HIT 15% SOFTER.",
+            Blurb = "THE FIRST KILLING BLOW EACH RUN LEAVES YOU ON 1 HEALTH. YOU HIT 15% SOFTER.",
             Mods = new BuildMods(Damage: 0.85f, Health: 1f, SkillRate: 1f, Haul: 1f, Rarity: 1f),
             Grants = new[] { BuildTrigger.Undying },
         },
         new()
         {
             Id = "venomancer", Name = "VENOMANCER",
-            Blurb = "YOUR SKILLS POISON. THEY LAND 20% SOFTER.",
+            Blurb = "YOUR SKILLS POISON. THEY HIT 20% SOFTER.",
             Mods = new BuildMods(Damage: 0.8f, Health: 1f, SkillRate: 1f, Haul: 1f, Rarity: 1f),
             Grants = new[] { BuildTrigger.Venom },
         },
@@ -120,6 +120,70 @@ public static class Keystones
             Id = "titan", Name = "TITAN",
             Blurb = "TRIPLE HEALTH. YOUR SKILLS COME BACK 60% SLOWER.",
             Mods = new BuildMods(Damage: 1f, Health: 3.0f, SkillRate: 0.4f, Haul: 1f, Rarity: 1f),
+        },
+        new()
+        {
+            // THE AVARICE TERMINAL. The path that ends here buys no combat power at all — that is what
+            // makes choosing it a real decision — and this is what stops it being a dead end: the haul a
+            // Greed build stacks becomes hit size. It pays for it in RARITY, the loot build's other half,
+            // so taking it means choosing between being rich and being dangerous rather than getting both.
+            Id = "hoarder", Name = "HOARDER",
+            Blurb = "MORE LOOT MEANS HARDER HITS. RARE FINDS COME HALF AS OFTEN.",
+            Mods = new BuildMods(Damage: 1f, Health: 1f, SkillRate: 1f, Haul: 1f, Rarity: 0.5f),
+            Grants = new[] { BuildTrigger.Hoarder },
+        },
+        new()
+        {
+            // THE CHARGE SPENDER. CHARGE is the game's one shared stack primitive: every cast
+            // stores a point, and only a reader makes the pool real. REND turns a rotation into a
+            // rhythm — pool through the other skills, dump through the Strike — and pays for the
+            // spikes with a flat tax on everything. Wants TEMPO (faster pooling) or DYNAMO (bites
+            // pool too); refuses builds with no Strike at all.
+            Id = "rend", Name = "REND",
+            Blurb = "EVERY SKILL USE STORES 1 CHARGE, UP TO 10. YOUR STRIKES SPEND IT ALL, +5% PER CHARGE. ALL HITS 10% SOFTER.",
+            Mods = new BuildMods(Damage: 0.9f, Health: 1f, SkillRate: 1f, Haul: 1f, Rarity: 1f),
+            Grants = new[] { BuildTrigger.Rend },
+        },
+        new()
+        {
+            // The bender: it changes what the pool CAN be, not what anything does. Deliberately
+            // inert without REND — the blurb says so — because a cap on a pool nobody spends is
+            // the exact dormant shape this game hunts, and here it must be a visible player error.
+            Id = "capacitor", Name = "CAPACITOR",
+            Blurb = "YOUR CHARGE POOL HOLDS 20, NOT 10. LODESTONE THEN NEEDS ALL 20. SKILLS COME BACK 15% SLOWER. USELESS UNLESS A KEYSTONE USES THE POOL.",
+            Mods = new BuildMods(Damage: 1f, Health: 1f, SkillRate: 0.85f, Haul: 1f, Rarity: 1f),
+            Grants = new[] { BuildTrigger.Capacitor },
+        },
+        new()
+        {
+            // The wall that winds the spring: being hit feeds the pool, so an ENDURE chassis can
+            // fuel a REND spike without racing TEMPO for cast count. Pays in the same currency it
+            // farms — you take more of every bite you are milking.
+            Id = "dynamo", Name = "DYNAMO",
+            Blurb = "EVERY HIT YOU TAKE STORES 2 CHARGE. YOU TAKE 15% MORE.",
+            Mods = new BuildMods(Damage: 1f, Health: 0.85f, SkillRate: 1f, Haul: 1f, Rarity: 1f),
+            Grants = new[] { BuildTrigger.Dynamo },
+        },
+        new()
+        {
+            // The HOLDER — the direct rival of REND: one wants the pool dumped through a Strike,
+            // one wants it carried whole to the clear. Socketing both is a rhythm argument the
+            // player has to settle in the rotation, which is exactly the min/max texture CHARGE
+            // exists to create. The AVARICE entry in the set: it pays in loot, and costs rarity.
+            Id = "lodestone", Name = "LODESTONE",
+            Blurb = "CLEAR A WAVE WITH A FULL CHARGE POOL TO GET A SPARE CORE. RARE FINDS COME 20% LESS OFTEN.",
+            Mods = new BuildMods(Damage: 1f, Health: 1f, SkillRate: 1f, Haul: 1f, Rarity: 0.8f),
+            Grants = new[] { BuildTrigger.Lodestone },
+        },
+        new()
+        {
+            // THE ARTIFICE TERMINAL. Strange rather than large: one slot answers two of the content's
+            // four demands, which no other thing in the game can do. The cadence price is what keeps it
+            // from being simply "more damage" — a Weaver casts less often and covers more ground.
+            Id = "weaver", Name = "WEAVER",
+            Blurb = "EVERY SKILL ALSO FIRES AS THE NEXT FORM YOU CARRY, AT 45%. SKILLS RETURN 30% SLOWER.",
+            Mods = new BuildMods(Damage: 1f, Health: 1f, SkillRate: 0.70f, Haul: 1f, Rarity: 1f),
+            Grants = new[] { BuildTrigger.Weaver },
         },
     };
 

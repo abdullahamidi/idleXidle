@@ -10,7 +10,7 @@ namespace ResonanceHunter.Core.Tests.Progression;
 /// This file once also held the ACTIVE-vs-idle contract (combat-encounter-system AC21-23), the executable
 /// guard for Blocker B1. That half went with the manual-combat model — there is no "active play" in the
 /// single-champion auto-battler, so EfficiencyContract.ActiveEfficiencyPercent / ActiveLootBonus were dead
-/// and are removed. The idle half below is live: RegionAutomation reads it to run the farm.
+/// and are removed. The idle half below is live: the Region record reads it for the map's away-earnings line.
 /// </remarks>
 public class EfficiencyContractTests
 {

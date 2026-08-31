@@ -81,4 +81,90 @@ public class PowerContributionTests
         Assert.Equal(0, hunter.PowerContribution(Item("mat", ItemBaseType.Material, Rarity.Rare)));
         Assert.Equal(0, hunter.PowerContribution(null));
     }
+
+    /// <summary>
+    /// The power number must move when the things the SIM multiplies by move.
+    /// </summary>
+    /// <remarks>
+    /// REGRESSION. PowerRating read the raw weapon multiplier and the raw attack-power stat, so gear
+    /// TRAITS and DAMAGE/HEALTH affixes — which multiply every hit and every health pool in the sim —
+    /// moved it by nothing. A player equipping a piece that genuinely made them stronger watched their
+    /// "power" sit still, and EQUIP BEST, which ranks by this number, would hand back the weaker item.
+    ///
+    /// Nothing caught it: the whole suite passed with the bug in place, because every existing test
+    /// compared PowerRating against ITSELF (contribution deltas) rather than against what the fight
+    /// actually reads.
+    /// </remarks>
+    [Fact]
+    public void test_power_rating_moves_with_the_multipliers_the_sim_reads()
+    {
+        var checkedAny = false;
+
+        foreach (var type in new[]
+                 {
+                     ItemBaseType.Ring, ItemBaseType.Helm, ItemBaseType.Boots,
+                     ItemBaseType.Gloves, ItemBaseType.Chest, ItemBaseType.AbilityFocus,
+                 })
+            foreach (var rarity in new[] { Rarity.Rare, Rarity.Epic, Rarity.Legendary })
+            {
+                var bare = new Hunter();
+                var worn = new Hunter();
+                worn.Equip(Item($"{type}-{rarity}", type, rarity, ilvl: 40));
+
+                // STRICT improvements only. Gear traits are trades — a Rare Ring raises health 12% and
+                // costs 10% damage — so "either multiplier went up" is not a claim about power at all,
+                // and the first version of this test failed on exactly that piece while PowerRating was
+                // behaving correctly. Only a piece that is better on one axis and no worse on the other
+                // says anything about whether the number follows the sim.
+                var damageUp = worn.SquadDamageMultiplier > bare.SquadDamageMultiplier * 1.001f;
+                var healthUp = worn.SquadHealthMultiplier > bare.SquadHealthMultiplier * 1.001f;
+                var damageDown = worn.SquadDamageMultiplier < bare.SquadDamageMultiplier * 0.999f;
+                var healthDown = worn.SquadHealthMultiplier < bare.SquadHealthMultiplier * 0.999f;
+                if (!((damageUp && !healthDown) || (healthUp && !damageDown))) continue;
+
+                checkedAny = true;
+                Assert.True(worn.PowerRating > bare.PowerRating,
+                    $"{rarity} {type} raised the multipliers the sim reads " +
+                    $"(damage {bare.SquadDamageMultiplier:F3} -> {worn.SquadDamageMultiplier:F3}, " +
+                    $"health {bare.SquadHealthMultiplier:F3} -> {worn.SquadHealthMultiplier:F3}) " +
+                    $"and PowerRating did not move ({bare.PowerRating} -> {worn.PowerRating}).");
+            }
+
+        Assert.True(checkedAny,
+            "No generated item moved the sim's multipliers, so this test proved nothing. Either the " +
+            "affix roller stopped producing DAMAGE/HEALTH affixes or the fixture is wrong.");
+    }
+
+    [Fact]
+    public void test_the_crit_constants_match_the_fight()
+    {
+        // Economy cannot reference Builds, so Hunter mirrors the fight's three crit constants. A silent
+        // divergence would make the gear page state a number the simulation does not use — which is
+        // exactly the "the screen says one thing and the fight does another" drift this codebase keeps
+        // finding, and the reason ITEM POWER was rebuilt to read the sim's own functions in the first
+        // place.
+        Assert.Equal(ResonanceHunter.Core.Builds.SoloBattle.CritBaseMultiplier,
+                     Hunter.CritBaseMultiplierMirror);
+        Assert.Equal(ResonanceHunter.Core.Builds.SoloBattle.MaxCritChance,
+                     Hunter.MaxCritChanceMirror);
+        Assert.Equal(ResonanceHunter.Core.Builds.SoloBattle.FocusCritDamagePerPoint,
+                     Hunter.FocusCritDamagePerPointMirror);
+    }
+
+    [Fact]
+    public void test_a_crit_affix_raises_item_power()
+    {
+        // THE BUG THIS CLOSES. PowerRating consumed only damage / skill rate / health / defense, so an
+        // item that rolled Crit — one of six rollable affix stats, fully live in the fight — added
+        // nothing to the number that exists to say how good it is. Two same-rarity, same-item-level
+        // pieces could differ wildly on affix luck alone, and the crit-heavy one showed LESS.
+        var hunter = new Hunter();
+        var before = hunter.PowerRating;
+
+        hunter.AddGleam(1_000_000);
+        for (var i = 0; i < 12; i++) hunter.Train(HunterStat.CriticalChance);
+
+        Assert.True(hunter.PowerRating > before,
+            "training critical chance did not move PowerRating — the number is still blind to crit.");
+    }
 }

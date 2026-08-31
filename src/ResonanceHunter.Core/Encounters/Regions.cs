@@ -35,6 +35,31 @@ public sealed record RegionDefinition
 /// </remarks>
 public static class Regions
 {
+    /// <summary>
+    /// The power rating a region asks of the champion — the map's RECOMMENDED POWER, on the same ruler
+    /// as <c>Hunter.PowerRating</c>.
+    /// </summary>
+    /// <remarks>
+    /// Re-anchored 2026-08-23 with the rating itself (PowerScaleTests): a bare hunter reads ~170, a full
+    /// Legendary set ~2,200. The old <c>PowerTierBase × 350</c> (1,400 … 7,000) was the linear rating's
+    /// scale and would now sit above anything wearable. A flat floor near bare plus 60 per boss tier
+    /// lands the first region a little above a fresh champion and the last below a full Legendary set.
+    /// </remarks>
+    public static int RecommendedPower(RegionDefinition region)
+    {
+        ArgumentNullException.ThrowIfNull(region);
+        // Anchored to the world's own ladder (2026-08-23 audit): enemies grow by HealthStep per region,
+        // and the rating is square-root-shaped (PowerRating = 100·sqrt(offence) + 100·sqrt(toughness)),
+        // so the rating NEEDED grows by sqrt(HealthStep) ≈ 1.27 per region — a uniform step. The old
+        // flat 170 + tier×60 flattened exactly where the world does not (+59%, +55%, then +18/+10/+5%).
+        // The base keeps the old endpoints: region 0 still reads 410, the last still ~1,370.
+        var index = -1;
+        for (var i = 0; i < All.Count; i++)
+            if (All[i].Id == region.Id) { index = i; break; }
+        if (index < 0) return 170 + region.Boss.PowerTierBase * 60;   // an off-catalogue region keeps the old floor
+        return (int)MathF.Round(410f * MathF.Pow(MathF.Sqrt(RegionLadder.HealthStep), index));
+    }
+
     public static IReadOnlyList<RegionDefinition> All { get; } = new List<RegionDefinition>
     {
         new()
@@ -52,7 +77,10 @@ public static class Regions
             tierBase: 9, bossHealth: 6000, bossTier: 14, stdBaseHealth: new[] { 180, 150, 240 },
             bias: AttackBias.Fast),
         // The back half of the world — one region per remaining Source, so all six get a home and the
-        // Source matchup has somewhere to land every element. Shorter to conquer (see ConquerWaveDepth), so
+        // Source matchup has somewhere to land every element. (An older comment here promised these were
+        // "shorter to conquer"; they never were — the conquest bar is one constant for the whole world.
+        // What actually separates them is RegionLadder, which prices each one at a fixed multiple of the
+        // last, so the back half asks for gear rather than for more waves.) So
         // the journey is SPREAD across more, sharper places rather than three long grinds.
         // Marrow Wastes: BODY. Brutal, heavy blows — a slaughterhouse that grinds you down.
         BuildRegion("marrow_wastes", "MARROW WASTES", Source.Body, prereq: "umbral_reach",
@@ -194,22 +222,52 @@ public sealed class World
     /// <summary>How deep into the corruption the world has been pushed. 0 = the base world.</summary>
     public int CorruptionTier { get; private set; }
 
+    /// <summary>
+    /// The deepest tier the world has EVER been pushed to. The deepening award and the trait points a
+    /// career earns key off this, not the live tier — otherwise SHALLOWER then DEEPER would mint the
+    /// award again every cycle, and easing would quietly take a trait point away.
+    /// </summary>
+    public int PeakCorruptionTier { get; private set; }
+
     /// <summary>True once every region has been conquered — the precondition for deepening.</summary>
     public bool AllConquered => Regions.All.All(r => _conquered.Contains(r.Id));
 
-    /// <summary>You may only deepen the corruption once the whole world is yours.</summary>
-    public bool CanDeepenCorruption => AllConquered;
+    /// <summary>You may only deepen the corruption once the whole world is yours — and only to the top of the ladder.</summary>
+    public bool CanDeepenCorruption => AllConquered && CorruptionTier < CorruptionScaling.MaxTier;
+
+    /// <summary>The corruption can always be eased back toward the base world.</summary>
+    public bool CanEaseCorruption => CorruptionTier > 0;
 
     /// <summary>
     /// Push the world one corruption tier deeper. Nothing resets — this is a pure difficulty/reward
-    /// ratchet. Returns the new tier, or the unchanged tier if the world isn't fully conquered yet.
+    /// ratchet with a top (<see cref="CorruptionScaling.MaxTier"/>). Returns the new tier, or the
+    /// unchanged tier if the world isn't fully conquered yet or is already at the floor of the world.
     /// </summary>
     public int DeepenCorruption()
     {
         if (CanDeepenCorruption) CorruptionTier++;
+        PeakCorruptionTier = Math.Max(PeakCorruptionTier, CorruptionTier);
         return CorruptionTier;
     }
 
-    /// <summary>Restore the corruption tier from a save (floored at 0).</summary>
-    public void RestoreCorruption(int tier) => CorruptionTier = Math.Max(0, tier);
+    /// <summary>True when the last <see cref="DeepenCorruption"/> reached a tier never reached before.</summary>
+    public bool IsNewPeak => CorruptionTier == PeakCorruptionTier;
+
+    /// <summary>
+    /// Pull the world one corruption tier back. Playtest 2026-08-23: "Deepen butonu var, bunu
+    /// azaltamıyorum" — a difficulty you can only raise is a trap, not a choice.
+    /// </summary>
+    public int EaseCorruption()
+    {
+        if (CanEaseCorruption) CorruptionTier--;
+        return CorruptionTier;
+    }
+
+    /// <summary>Restore the corruption tier (and the peak it has reached) from a save, clamped into the
+    /// ladder — old saves could be past the top, and older ones carry no peak (then the tier is the peak).</summary>
+    public void RestoreCorruption(int tier, int peak = -1)
+    {
+        CorruptionTier = CorruptionScaling.Clamp(tier);
+        PeakCorruptionTier = Math.Max(CorruptionTier, CorruptionScaling.Clamp(peak));
+    }
 }

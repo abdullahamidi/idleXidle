@@ -1,5 +1,4 @@
 using System.Linq;
-using ResonanceHunter.Core.Automation;
 using ResonanceHunter.Core.Combat;
 using ResonanceHunter.Core.Encounters;
 using Xunit;
@@ -73,53 +72,25 @@ public class WorldTests
         Assert.Null(unlocked);
     }
 
-    /// <summary>Each region has its own farm — you can master and staff them independently.</summary>
+    /// <summary>Each region has its own progress record — mastery and depth are earned independently.</summary>
     [Fact]
     public void test_each_region_has_its_own_independent_farm()
     {
+        // Arrange
         var world = new World();
         var home = world.RegionFarm(VerdantHollow.RegionId);
         var cinder = world.RegionFarm("cinderworks");
-
         Assert.NotSame(home, cinder);
-        home.Assign(Creature.Hatch("a", Source.Nature, Role.Attacker, 5));
-        Assert.Single(home.Team);
-        Assert.Empty(cinder.Team); // assigning to one does not touch the other
-    }
 
-    /// <summary>
-    /// Two staffed region farms both produce when ticked — the payoff of conquest is that every
-    /// region you own farms at once, not just the one you are standing in.
-    /// </summary>
-    [Fact]
-    public void test_two_staffed_regions_both_produce_when_ticked()
-    {
-        var world = new World();
-        var home = world.RegionFarm(VerdantHollow.RegionId);
-        var cinder = world.RegionFarm("cinderworks");
+        // Act — fight in the home region only.
+        for (var i = 0; i < 10; i++) home.RecordActiveKill();
+        home.RecordDepth(12);
 
-        // Stage 3 = fully automated (kills, collects cores, and auto-sells for Gleam).
-        home.AutomationStage = 3;
-        cinder.AutomationStage = 3;
-        home.Assign(Creature.Hatch("a", Source.Nature, Role.Attacker, 10));
-        cinder.Assign(Creature.Hatch("b", Source.Machine, Role.Attacker, 10));
-
-        var homeYield = home.Tick(3600f, gleamPerKill: 8);
-        var cinderYield = cinder.Tick(3600f, gleamPerKill: 8);
-
-        Assert.True(homeYield.Kills > 0 && homeYield.GleamRealized > 0);
-        Assert.True(cinderYield.Kills > 0 && cinderYield.GleamRealized > 0);
-    }
-
-    /// <summary>An unstaffed region farm yields nothing — the caller can safely skip it.</summary>
-    [Fact]
-    public void test_an_unstaffed_region_produces_nothing()
-    {
-        var world = new World();
-        var yield = world.RegionFarm("cinderworks").Tick(3600f, gleamPerKill: 8);
-
-        Assert.Equal(0, yield.GleamRealized);
-        Assert.Equal(0, yield.Kills);
+        // Assert — the other region's record is untouched.
+        Assert.True(home.RegionMasteryPoints > 0);
+        Assert.Equal(12, home.BestDepth);
+        Assert.Equal(0f, cinder.RegionMasteryPoints);
+        Assert.Equal(0, cinder.BestDepth);
     }
 
     /// <summary>Conquered state restores from a save.</summary>
@@ -219,5 +190,52 @@ public class WorldTests
         Assert.Equal(3, Regions.Get(VerdantHollow.RegionId).Templates.Count(t => !t.IsBoss));
         Assert.Equal(3, Regions.Get("cinderworks").Templates.Count(t => !t.IsBoss));
         Assert.Contains(Regions.Get("umbral_reach").Templates, t => t.IsBoss);
+    }
+
+    [Fact]
+    public void test_corruption_stops_at_the_top_and_can_be_eased_back()
+    {
+        var world = new World();
+        foreach (var r in Regions.All) world.Conquer(r.Id);
+        Assert.False(world.CanEaseCorruption);
+        for (var i = 0; i < CorruptionScaling.MaxTier + 3; i++) world.DeepenCorruption();
+        Assert.Equal(CorruptionScaling.MaxTier, world.CorruptionTier);
+        Assert.False(world.CanDeepenCorruption);
+        Assert.True(world.CanEaseCorruption);
+        Assert.Equal(CorruptionScaling.MaxTier - 1, world.EaseCorruption());
+        Assert.True(world.CanDeepenCorruption);
+        while (world.CanEaseCorruption) world.EaseCorruption();
+        Assert.Equal(0, world.CorruptionTier);
+        Assert.Equal(0, world.EaseCorruption());   // the floor holds
+        world.RestoreCorruption(99);                 // an old save past the top lands ON the top
+        Assert.Equal(CorruptionScaling.MaxTier, world.CorruptionTier);
+    }
+
+    [Fact]
+    public void test_the_peak_tier_is_remembered_across_easing_and_restores()
+    {
+        // The deepening award and the trait points key off the PEAK, so SHALLOWER then DEEPER pays nothing
+        // twice and easing takes nothing away (review, 2026-08-23).
+        var world = new World();
+        foreach (var r in Regions.All) world.Conquer(r.Id);
+        world.DeepenCorruption(); world.DeepenCorruption(); world.DeepenCorruption();
+        Assert.Equal(3, world.PeakCorruptionTier);
+        Assert.True(world.IsNewPeak);
+        world.EaseCorruption(); world.EaseCorruption();
+        Assert.Equal(1, world.CorruptionTier);
+        Assert.Equal(3, world.PeakCorruptionTier);
+        world.DeepenCorruption();
+        Assert.False(world.IsNewPeak);          // tier 2 again — reached before
+        world.DeepenCorruption(); world.DeepenCorruption();
+        Assert.True(world.IsNewPeak);           // tier 4 — new
+        Assert.Equal(4, world.PeakCorruptionTier);
+
+        var restored = new World();
+        foreach (var r in Regions.All) restored.Conquer(r.Id);
+        restored.RestoreCorruption(tier: 1, peak: 4);
+        Assert.Equal(4, restored.PeakCorruptionTier);
+        var legacy = new World();
+        legacy.RestoreCorruption(2);             // an older save carries no peak: the tier is the peak
+        Assert.Equal(2, legacy.PeakCorruptionTier);
     }
 }

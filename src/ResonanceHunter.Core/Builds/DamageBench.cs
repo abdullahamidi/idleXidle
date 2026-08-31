@@ -42,8 +42,8 @@ public static class DamageBench
         ArgumentNullException.ThrowIfNull(hunter);
         var t = tuning ?? ExpeditionTuning.Default;
 
-        // Mirrors SoloExpeditionScreen's champion construction, RECKLESS OFFERING's health price included.
-        var hp = Math.Max(1, (int)MathF.Round(Math.Max(60, hunter.MaxHealth) * SoloBattle.VowHealthMultiplier(build)));
+        // The one mint helper, shared with the live screen so the bench cannot drift from the game.
+        var hp = SoloBattle.ChampionHealth(build, hunter);
         var champ = new Champion { MaxHealth = hp, Health = hp };
 
         // enemyDamage 0 and an interval far past the window so the dummy's (zero) swing never interferes.

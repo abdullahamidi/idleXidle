@@ -4,6 +4,7 @@ using ResonanceHunter.Core.Abilities;
 using ResonanceHunter.Core.Automation;
 using ResonanceHunter.Core.Builds;
 using ResonanceHunter.Core.Economy;
+using ResonanceHunter.Core.Loot;
 using ResonanceHunter.Core.Expeditions;
 using Xunit;
 
@@ -29,9 +30,9 @@ public class SoloBattleTests
 
     private static (WaveOutcome, System.Collections.Generic.List<BattleEvent>) Fight(
         Build build, float enemyHp = 300f, float enemyDmg = 5f, int hp = 400,
-        Source? enemySrc = null, Champion? champ = null, bool boss = false)
+        Source? enemySrc = null, Champion? champ = null, bool boss = false, float enemyDef = 0f)
         => SoloBattle.ResolveWave(champ ?? Champ(hp), build, new Hunter(), enemyHp, enemyDmg,
-            enemyIntervalMs: 1000, T, new Random(7), new WaveBonus(), enemySrc, boss);
+            enemyIntervalMs: 1000, T, new Random(7), new WaveBonus(), enemySrc, boss, enemyDef);
 
     private static Build With(params Form[] forms)
     {
@@ -311,48 +312,70 @@ public class SoloBattleTests
         Assert.True(DamageDealt(strong) > DamageDealt(weak), "the Source matchup did not reach the fight");
     }
 
-    [Fact]
-    public void test_a_vow_still_pays_only_when_its_condition_holds()
-    {
-        var vow = Weaving.ById("vow_bloodied")!;   // only below 40% health
-        var build = new Build();
-        build.Weave(Sk(Form.Strike, Source.Nature, vow));
-
-        var healthy = Champ(400); healthy.Health = 400;
-        var (_, whole) = SoloBattle.ResolveWave(healthy, build, new Hunter(), 100_000f, 0f,
-            1000, T, new Random(9), new WaveBonus());
-
-        var bloodied = Champ(400); bloodied.Health = 40;
-        var (_, hurt) = SoloBattle.ResolveWave(bloodied, build, new Hunter(), 100_000f, 0f,
-            1000, T, new Random(9), new WaveBonus());
-
-        Assert.True(DamageDealt(hurt) > DamageDealt(whole), "the Vow paid nothing while bloodied");
-    }
-
     /// <summary>
-    /// THE UNBROKEN pays only while WHOLE — the mirror of THE BLOODIED, and proof its fix reaches the fight.
+    /// A Vow pays only when the BUILD meets its demand — proven through the sim, not the pure layer.
     /// </summary>
     /// <remarks>
-    /// Before the re-point it was always active in solo (it watched the phantom front slot), so a champ at
-    /// 10% HP dealt exactly as much as one at 100%. Now the two must DIVERGE, the opposite way round from
-    /// bloodied — the whole champion hits harder, the hurt one loses the Vow entirely.
+    /// Rewritten with the Vow system. The two tests here used to drive a champion to 10% health and back
+    /// to prove a Vow read the fight; a Vow that reads the fight is a lottery in a game with no in-run
+    /// decisions, so both of those properties are gone along with the Vows that had them. What replaced
+    /// them is the same claim about the new axis: two BUILDS, one satisfying the demand and one not.
     /// </remarks>
     [Fact]
-    public void test_the_unbroken_vow_pays_only_while_whole()
+    public void test_a_vow_pays_only_when_the_build_meets_its_demand()
     {
-        var vow = Weaving.ById("vow_vanguard")!;   // now: only ABOVE 70% health
-        var build = new Build();
-        build.Weave(Sk(Form.Strike, Source.Nature, vow));
+        var vow = Weaving.ById("vow_singular")!;   // every skill must be the same Form
 
-        var healthy = Champ(400); healthy.Health = 400;   // 100% — above the threshold
-        var (_, whole) = SoloBattle.ResolveWave(healthy, build, new Hunter(), 100_000f, 0f,
+        var mono = new Build();
+        mono.Weave(Sk(Form.Strike, Source.Nature, vow));
+
+        var mixed = new Build();
+        mixed.Weave(Sk(Form.Strike, Source.Nature, vow));
+        mixed.Weave(Sk(Form.Aura, Source.Nature));
+
+        var (_, kept) = SoloBattle.ResolveWave(Champ(400), mono, new Hunter(), 100_000f, 0f,
+            1000, T, new Random(9), new WaveBonus());
+        var (_, broken) = SoloBattle.ResolveWave(Champ(400), mixed, new Hunter(), 100_000f, 0f,
             1000, T, new Random(9), new WaveBonus());
 
-        var battered = Champ(400); battered.Health = 40;  // 10% — below it, so the Vow is dead
-        var (_, hurt) = SoloBattle.ResolveWave(battered, build, new Hunter(), 100_000f, 0f,
+        // The mixed build casts MORE (it carries an extra skill) and must still land a smaller Strike,
+        // so the comparison is on the Strike events alone.
+        int StrikeOnly(List<BattleEvent> ev) =>
+            ev.Where(e => e.Kind == BattleEventKind.Strike).Select(e => e.Amount).DefaultIfEmpty(0).Max();
+
+        Assert.True(StrikeOnly(kept) > StrikeOnly(broken),
+            $"The one-Form build's biggest hit was {StrikeOnly(kept)} and the two-Form build's was " +
+            $"{StrikeOnly(broken)}. THE SINGULAR is paying a build that breaks it.");
+    }
+
+    /// <summary>A Vow whose demand the build cannot meet grants nothing at all. That is the trade.</summary>
+    [Fact]
+    public void test_a_broken_vow_grants_nothing()
+    {
+        var vow = Weaving.ById("vow_unbound")!;   // no keystone may be socketed
+
+        var bare = new Build();
+        bare.Weave(Sk(Form.Strike, Source.Nature, vow));
+
+        var socketed = new Build();
+        socketed.Weave(Sk(Form.Strike, Source.Nature, vow));
+        socketed.Take(Keystones.ById("ironclad")!);
+
+        var plain = new Build();
+        plain.Weave(Sk(Form.Strike, Source.Nature));
+        plain.Take(Keystones.ById("ironclad")!);
+
+        var (_, withVow) = SoloBattle.ResolveWave(Champ(400), socketed, new Hunter(), 100_000f, 0f,
+            1000, T, new Random(9), new WaveBonus());
+        var (_, without) = SoloBattle.ResolveWave(Champ(400), plain, new Hunter(), 100_000f, 0f,
             1000, T, new Random(9), new WaveBonus());
 
-        Assert.True(DamageDealt(whole) > DamageDealt(hurt), "THE UNBROKEN paid nothing while whole");
+        Assert.Equal(DamageDealt(without), DamageDealt(withVow));
+
+        var (_, honoured) = SoloBattle.ResolveWave(Champ(400), bare, new Hunter(), 100_000f, 0f,
+            1000, T, new Random(9), new WaveBonus());
+        Assert.True(DamageDealt(honoured) > DamageDealt(withVow),
+            "Keeping THE UNBOUND paid no more than breaking it.");
     }
 
     // ── The build budget bites ────────────────────────────────────────────────────────────────
@@ -361,11 +384,13 @@ public class SoloBattleTests
     public void test_cooldowns_are_sized_to_a_wave_not_to_each_other()
     {
         // The lesson the old skills layer learned the hard way: cooldowns longer than a wave can never
-        // fire. Waves run 2-4s. Every non-passive Form must fire at least once inside 4 seconds.
+        // fire. Under the beat model waves run 6-15 s and, since the cooldowns doubled (2026-08-29),
+        // the longest rhythm skill is six beats (9 s at speed 1.0); every non-passive Form must fire
+        // inside six beats — a wave that ends sooner is a wave the swing cleared, which is the point.
         foreach (var f in Enum.GetValues<Form>())
         {
             if (FormBehaviour.IsPassive(f)) continue;
-            Assert.True(FormBehaviour.BaseCooldownMs(f) <= 4_000,
+            Assert.True(FormBehaviour.BaseCooldownMs(f) <= 6 * SoloBattle.DefaultBeatMs,
                 $"{f} has a {FormBehaviour.BaseCooldownMs(f)}ms cooldown — longer than a wave, so it can never fire");
         }
     }
@@ -416,10 +441,15 @@ public class SoloBattleTests
             => SoloBattle.ResolveWave(Champ(4000), b, new Hunter(), float.MaxValue, 0f, 1_000_000, T,
                 new Random(7), new WaveBonus());
 
-        var plain = SkillCasts(Run(With(Form.Projectile)).Item2, Form.Projectile);
-        var overdrawn = SkillCasts(Run(WithTrigger(BuildTrigger.Overdraw, Form.Projectile)).Item2, Form.Projectile);
+        // Counted in BLOWS: an activation announces itself once since 2026-08-30, so a third pass shows
+        // in what it lands, not in a third Skill event (which the screen would have played as a third
+        // projectile effect on the same frame).
+        int Blows(System.Collections.Generic.List<BattleEvent> e) =>
+            e.Count(x => x.Kind == BattleEventKind.Strike && x.FromSkill);
+        var plain = Blows(Run(With(Form.Projectile)).Item2);
+        var overdrawn = Blows(Run(WithTrigger(BuildTrigger.Overdraw, Form.Projectile)).Item2);
 
-        Assert.True(overdrawn > plain, $"OVERDRAW must add Volley casts: plain={plain} overdrawn={overdrawn}");
+        Assert.True(overdrawn > plain, $"OVERDRAW must add Volley blows: plain={plain} overdrawn={overdrawn}");
     }
 
     /// <summary>OVERDRAW is DEAD on a build with no Projectile — the whole point of a combo item.</summary>
@@ -522,9 +552,17 @@ public class SoloBattleTests
     [Fact]
     public void test_execute_speeds_the_kill_of_a_weakened_enemy()
     {
-        Assert.True(KillMs(WithTrigger(BuildTrigger.Execute, Form.Strike), 1500f)
-                    < KillMs(With(Form.Strike), 1500f),
-            "EXECUTE did not finish the weakened enemy any faster");
+        // Measured as DAMAGE against a creature held under the threshold for the whole fight, not as a
+        // kill time: under the beat model (2026-08-27) kills land on beats, and a 1.6x Strike finished the
+        // 1500-health enemy on the same beat as a plain one.
+        float DealtWeakened(Build b)
+        {
+            var weakened = new List<WaveCreature> { new() { MaxHealth = 100_000_000f, Health = 20_000_000f, Damage = 0.01f } };
+            var (_, e) = SoloBattle.ResolveWave(Champ(400_000), b, new Hunter(), weakened, enemyIntervalMs: 1_000_000, T, new Random(7), metrics: new WaveMetrics());
+            return DamageDealt(e);
+        }
+        Assert.True(DealtWeakened(WithTrigger(BuildTrigger.Execute, Form.Strike)) > DealtWeakened(With(Form.Strike)) * 1.2f,
+            "EXECUTE did not hit the weakened enemy any harder");
     }
 
     /// <summary>COILED re-arms the TRAP faster, so it answers more of a biting enemy's swings.</summary>
@@ -557,6 +595,156 @@ public class SoloBattleTests
         Assert.True(FinalHealth(WithTrigger(BuildTrigger.Siphon, Form.Transformation))
                     > FinalHealth(With(Form.Transformation)),
             "SIPHON did not heal more than a bare Transformation");
+    }
+
+    // ── The KEYSTONE and VOW combos ───────────────────────────────────────────────────────────
+    //
+    // Every test in this block is written as a PAIR, and the second half is the one that matters. A
+    // combo that pays out is easy to write and easy to get wrong in the invisible direction: the
+    // failure mode this project keeps hitting is not "the bonus is missing", it is "the bonus is there
+    // unconditionally and the condition is decoration". So each proves the effect fires WITH its
+    // partner and that the fight is byte-identical WITHOUT it.
+
+    /// <summary>
+    /// A hunter wearing ONE weapon that carries exactly this enchantment.
+    /// </summary>
+    /// <remarks>
+    /// The InstanceId is FIXED rather than derived from the kind, and that detail is the whole test.
+    /// Equipping does not just hand over an enchantment — it hands over a Legendary weapon's stats, and
+    /// the id is what the trait and its numbers are rolled from. The first version of these tests used
+    /// <c>$"e_{kind}"</c> and compared a hunter wearing this against a hunter wearing NOTHING, so the
+    /// "dead without its partner" half failed at 96,332 against 6,118: it was measuring the weapon, not
+    /// the enchantment. One id means every hunter below carries the identical item and the only thing
+    /// that differs between two runs is the one line under test.
+    /// </remarks>
+    private static Hunter Wearing(EnchantKind kind)
+    {
+        var h = new Hunter();
+        h.Equip(new ItemInstance
+        {
+            InstanceId = "combo_probe",
+            BaseType = ItemBaseType.Weapon,
+            Rarity = Rarity.Legendary,   // the magnitude curve's top, so the effect is easy to see
+            SellValue = 100,
+            EnchantOverride = kind,      // overrules the id-derived roll — see Enchantments.Of
+        });
+        return h;
+    }
+
+    /// <summary>
+    /// The control: the same weapon carrying an enchantment that cannot touch damage.
+    /// </summary>
+    /// <remarks>
+    /// HARVEST buds a spare core ON A KILL, and every fight in this block runs against a creature with
+    /// a health pool nothing can exhaust — so it never fires, and even if it did it pays economy rather
+    /// than damage. It is the neutral element for a damage comparison.
+    /// </remarks>
+    private static Hunter WearingNeutral() => Wearing(EnchantKind.Harvest);
+
+    private static float DamageWith(Build build, Hunter hunter, int hp, int startHealth)
+    {
+        var champ = new Champion { MaxHealth = hp, Health = startHealth };
+        var (_, events) = SoloBattle.ResolveWave(
+            champ, build, hunter, enemyHealth: 1e9f, enemyDamage: 0f,
+            enemyIntervalMs: 1_000_000, T, new Random(11), new WaveBonus());
+        return DamageDealt(events);
+    }
+
+    [Fact]
+    public void test_fervour_steepens_bloodlust_and_is_dead_without_it()
+    {
+        // Half health, so BLOODLUST's missing-health term is live and FERVOUR has something to steepen.
+        const int Max = 1000, Now = 500;
+
+        var keystoneOnly = DamageWith(WithTrigger(BuildTrigger.Bloodlust, Form.Strike), WearingNeutral(), Max, Now);
+        var withBoth = DamageWith(WithTrigger(BuildTrigger.Bloodlust, Form.Strike),
+                                  Wearing(EnchantKind.Fervour), Max, Now);
+        Assert.True(withBoth > keystoneOnly,
+            $"FERVOUR did not steepen BLOODLUST — {withBoth:N0} vs {keystoneOnly:N0}");
+
+        // And the half that matters: no BLOODLUST, no payout at all.
+        var neutral = DamageWith(With(Form.Strike), WearingNeutral(), Max, Now);
+        var alone = DamageWith(With(Form.Strike), Wearing(EnchantKind.Fervour), Max, Now);
+        Assert.Equal(neutral, alone);
+    }
+
+    [Fact]
+    public void test_bulwark_steepens_zeal_and_is_dead_without_it()
+    {
+        const int Max = 1000, Now = 1000;   // whole, so ZEAL's present-health term is at its strongest
+
+        var keystoneOnly = DamageWith(WithTrigger(BuildTrigger.Zeal, Form.Strike), WearingNeutral(), Max, Now);
+        var withBoth = DamageWith(WithTrigger(BuildTrigger.Zeal, Form.Strike),
+                                  Wearing(EnchantKind.Bulwark), Max, Now);
+        Assert.True(withBoth > keystoneOnly,
+            $"BULWARK did not steepen ZEAL — {withBoth:N0} vs {keystoneOnly:N0}");
+
+        var neutral = DamageWith(With(Form.Strike), WearingNeutral(), Max, Now);
+        Assert.Equal(neutral, DamageWith(With(Form.Strike), Wearing(EnchantKind.Bulwark), Max, Now));
+    }
+
+    [Fact]
+    public void test_reverb_sharpens_echo_and_is_dead_without_it()
+    {
+        const int Max = 1000, Now = 1000;
+
+        var keystoneOnly = DamageWith(WithTrigger(BuildTrigger.Echo, Form.Strike), WearingNeutral(), Max, Now);
+        var withBoth = DamageWith(WithTrigger(BuildTrigger.Echo, Form.Strike),
+                                  Wearing(EnchantKind.Reverb), Max, Now);
+        Assert.True(withBoth > keystoneOnly,
+            $"REVERB did not sharpen ECHO — {withBoth:N0} vs {keystoneOnly:N0}");
+
+        var neutral = DamageWith(With(Form.Strike), WearingNeutral(), Max, Now);
+        Assert.Equal(neutral, DamageWith(With(Form.Strike), Wearing(EnchantKind.Reverb), Max, Now));
+    }
+
+    [Fact]
+    public void test_tithe_pays_per_sworn_vow_and_is_dead_without_one()
+    {
+        const int Max = 1000, Now = 1000;
+        var vow = Weaving.Catalog.First(v => v.Id == "vow_pure");
+
+        Build Sworn()
+        {
+            var b = new Build();
+            b.Weave(Sk(Form.Strike, vow: vow));
+            return b;
+        }
+
+        var plain = DamageWith(Sworn(), WearingNeutral(), Max, Now);
+        var tithed = DamageWith(Sworn(), Wearing(EnchantKind.Tithe), Max, Now);
+        Assert.True(tithed > plain, $"TITHE did not pay on a sworn Vow — {tithed:N0} vs {plain:N0}");
+
+        // No Vow sworn, no tithe. The build that promised nothing gets nothing.
+        var unsworn = DamageWith(With(Form.Strike), WearingNeutral(), Max, Now);
+        Assert.Equal(unsworn, DamageWith(With(Form.Strike), Wearing(EnchantKind.Tithe), Max, Now));
+    }
+
+    [Fact]
+    public void test_tithe_counts_distinct_vows_not_skills_wearing_one()
+    {
+        // The same rule the FRAGILITY price already follows. A Vow is SWORN, not equipped: weaving one
+        // promise onto four skills is one promise. Paying it four times would make the tithe worth most
+        // to the player who diversified least, which inverts what the whole Vow system is for.
+        const int Max = 1000, Now = 1000;
+        var vow = Weaving.Catalog.First(v => v.Id == "vow_pure");
+
+        Build OneVowNSkills(int n)
+        {
+            var b = new Build();
+            for (var i = 0; i < n; i++) b.Weave(Sk(Form.Strike, vow: vow));
+            return b;
+        }
+
+        // Compare the tithe's SHARE, not raw damage — four skills swing more than one either way.
+        float Share(int n)
+        {
+            var plain = DamageWith(OneVowNSkills(n), WearingNeutral(), Max, Now);
+            var tithed = DamageWith(OneVowNSkills(n), Wearing(EnchantKind.Tithe), Max, Now);
+            return tithed / plain;
+        }
+
+        Assert.Equal(Share(1), Share(4), precision: 3);
     }
 
     /// <summary>
@@ -609,4 +797,172 @@ public class SoloBattleTests
         Assert.True(SoloBattle.VowHealthMultiplier(withVow) < 1f, "RECKLESS OFFERING cost no health");
         Assert.Equal(1f, SoloBattle.VowHealthMultiplier(without), 3);
     }
+
+    // ── ENEMY ARMOUR. Flat per hit, which is what makes hit SIZE a build axis. ──────────────────────
+
+    /// <summary>
+    /// Flat armour must punish many small hits far more than a few large ones.
+    /// </summary>
+    /// <remarks>
+    /// This is the load-bearing property of the whole Armoured archetype, and it is the one a
+    /// multiplicative curve cannot have. If enemy mitigation ever goes back to K/(K+def), this test
+    /// fails and the Weight branch of the skill tree loses its reason to exist.
+    ///
+    /// PROJECTILE fires roughly twice as often as STRIKE for less per hit, so it is the natural
+    /// small-hit build; STRIKE is the large-hit one. Both are given the same armoured enemy.
+    /// </remarks>
+    [Fact]
+    public void test_flat_armour_punishes_small_hits_much_harder_than_large_ones()
+    {
+        const float armour = 25f;
+
+        float DealtBy(Form form, float def)
+        {
+            var (_, ev) = Fight(With(form), enemyHp: 100_000f, enemyDmg: 0f, enemyDef: def);
+            return ev.Where(e => e.Kind == BattleEventKind.Strike).Sum(e => e.Amount);
+        }
+
+        var strikeLoss = 1f - DealtBy(Form.Strike, armour) / DealtBy(Form.Strike, 0f);
+        var projLoss = 1f - DealtBy(Form.Projectile, armour) / DealtBy(Form.Projectile, 0f);
+
+        Assert.True(
+            projLoss > strikeLoss * 1.3f,
+            $"Armour cost the small-hit build {projLoss:P0} and the large-hit build {strikeLoss:P0}. " +
+            "Flat armour must read hit size; these being close means it is behaving multiplicatively.");
+    }
+
+    /// <summary>A hit never lands for nothing, however armoured the target.</summary>
+    [Fact]
+    public void test_armour_can_never_reduce_a_hit_below_the_floor()
+    {
+        var (_, ev) = Fight(With(Form.Projectile), enemyHp: 100_000f, enemyDmg: 0f, enemyDef: 100_000f);
+        var hits = ev.Where(e => e.Kind == BattleEventKind.Strike && e.Amount > 0).ToList();
+
+        Assert.True(hits.Count > 0, "Armour erased every hit — MinHitFraction is not being applied.");
+    }
+
+    /// <summary>
+    /// Poison bypasses armour, which is the Venom path's whole niche.
+    /// </summary>
+    /// <remarks>
+    /// A bleed tick is small by construction, so flat armour would erase it and leave VENOMANCER — a
+    /// keystone that already pays -20% damage — with nothing to be good at. Bypassing gives it a clear
+    /// identity instead: poison is the answer to a plate you cannot hit hard enough to crack.
+    /// </remarks>
+    [Fact]
+    public void test_poison_ignores_enemy_armour()
+    {
+        var b = WithTrigger(BuildTrigger.Venom, Form.Strike);
+
+        float Total(float def)
+        {
+            var (_, ev) = Fight(b, enemyHp: 100_000f, enemyDmg: 0f, enemyDef: def);
+            return ev.Where(e => e.Kind == BattleEventKind.Strike).Sum(e => e.Amount);
+        }
+
+        var plain = With(Form.Strike);
+        float TotalPlain(float def)
+        {
+            var (_, ev) = Fight(plain, enemyHp: 100_000f, enemyDmg: 0f, enemyDef: def);
+            return ev.Where(e => e.Kind == BattleEventKind.Strike).Sum(e => e.Amount);
+        }
+
+        var venomEdgeUnarmoured = Total(0f) - TotalPlain(0f);
+        var venomEdgeArmoured = Total(40f) - TotalPlain(40f);
+
+        Assert.True(
+            venomEdgeArmoured >= venomEdgeUnarmoured * 0.9f,
+            $"Venom's contribution fell from {venomEdgeUnarmoured:F0} to {venomEdgeArmoured:F0} against " +
+            "armour. Poison must bypass it.");
+    }
+
+
+    // ── COMPOSITION. A wave is a list of creatures, and that is what makes a build a SHAPE. ─────────
+
+    private static (WaveOutcome, System.Collections.Generic.List<BattleEvent>) FightMany(
+        Build build, System.Collections.Generic.IReadOnlyList<WaveCreature> creatures, int hp = 400)
+        => SoloBattle.ResolveWave(Champ(hp), build, new Hunter(), creatures,
+            enemyIntervalMs: 1000, T, new Random(7), new WaveBonus());
+
+    private static System.Collections.Generic.List<WaveCreature> Swarm(int n, float each, float dmg)
+        => Enumerable.Range(0, n).Select(_ => WaveCreature.Single(each, dmg)).ToList();
+
+    /// <summary>
+    /// A Swarm must punish a single-target build far more than a multi-target one.
+    /// </summary>
+    /// <remarks>
+    /// This is the other half of the archetype engine, and the reason target count exists at all.
+    /// Against ONE creature holding the same total health, a Trap build (110 per hit, one target) and an
+    /// Aura build (12 per tick, every target) should be roughly comparable. Split that health across five
+    /// creatures and the Trap spends each cooldown killing one of them — with its overkill discarded —
+    /// while the Aura touches all five every tick.
+    ///
+    /// If this ever fails, Spread has nothing to be about and half the skill tree is decoration.
+    /// </remarks>
+    [Fact]
+    public void test_a_swarm_punishes_single_target_far_more_than_multi_target()
+    {
+        const float total = 500f;
+
+        float TimeToClear(Form form, System.Collections.Generic.IReadOnlyList<WaveCreature> comp)
+        {
+            var (outcome, ev) = FightMany(With(form), comp, hp: 100_000);
+            return outcome == WaveOutcome.Cleared ? ev[^1].AtMs : T.TickCeilingMs;
+        }
+
+        var singleTargetSolo = TimeToClear(Form.Trap, new[] { WaveCreature.Single(total, 0f) });
+        var multiTargetSolo = TimeToClear(Form.Aura, new[] { WaveCreature.Single(total, 0f) });
+
+        var singleTargetSwarm = TimeToClear(Form.Trap, Swarm(5, total / 5f, 0f));
+        var multiTargetSwarm = TimeToClear(Form.Aura, Swarm(5, total / 5f, 0f));
+
+        var singleTargetCost = singleTargetSwarm / (float)Math.Max(1, singleTargetSolo);
+        var multiTargetCost = multiTargetSwarm / (float)Math.Max(1, multiTargetSolo);
+
+        Assert.True(
+            singleTargetCost > multiTargetCost * 1.5f,
+            $"Splitting the same health across five creatures cost the single-target build " +
+            $"x{singleTargetCost:F2} and the multi-target build x{multiTargetCost:F2}. Target count " +
+            "is not reaching the fight.");
+    }
+
+    /// <summary>Killing a creature removes its share of the incoming damage.</summary>
+    /// <remarks>
+    /// This is why a Swarm is dangerous and why clearing it fast matters: the wave's threat is the SUM
+    /// of what is still alive, so action economy is a defensive stat as well as an offensive one.
+    /// </remarks>
+    [Fact]
+    public void test_incoming_damage_falls_as_creatures_die()
+    {
+        var champ = Champ(100_000);
+        var (_, ev) = SoloBattle.ResolveWave(champ, With(Form.Projectile), new Hunter(),
+            Swarm(5, 60f, 20f), enemyIntervalMs: 1000, T, new Random(7), new WaveBonus());
+
+        var bites = ev.Where(e => e.Kind == BattleEventKind.EnemyStrike).Select(e => e.Amount).ToList();
+
+        Assert.True(bites.Count >= 2, "Not enough enemy swings to compare.");
+        Assert.True(
+            bites[^1] < bites[0],
+            $"First bite {bites[0]}, last bite {bites[^1]}. Dead creatures are still swinging.");
+    }
+
+    /// <summary>Overkill is discarded — it does not carry to the next creature.</summary>
+    /// <remarks>
+    /// A 110 Trap hit into a 30-health creature must waste 80. Carrying it would quietly hand large-hit
+    /// builds the cleave they are supposed to have to buy, and Swarm would stop punishing anything.
+    /// </remarks>
+    [Fact]
+    public void test_overkill_does_not_carry_to_the_next_creature()
+    {
+        var comp = Swarm(3, 10f, 0f);
+        var (outcome, _) = FightMany(With(Form.Trap), comp, hp: 100_000);
+
+        Assert.Equal(WaveOutcome.Cleared, outcome);
+
+        // Three creatures, one target per Trap activation: the wave cannot end before the third cast.
+        var trapCd = FormBehaviour.BaseCooldownMs(Form.Trap);
+        Assert.True(comp.All(c => !c.Alive));
+        Assert.True(trapCd > 0);
+    }
+
 }

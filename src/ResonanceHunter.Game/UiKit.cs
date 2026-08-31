@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
@@ -82,10 +83,32 @@ public sealed class UiKit
     /// </remarks>
     public static readonly Color Bronze = new(0x3D, 0x26, 0x04);
 
+    /// <summary>
+    /// The five ITEM CLASS colours, one per class, shared by every screen that names a class.
+    /// </summary>
+    /// <remarks>
+    /// The four road classes borrow the MASTERY TREE's own branch colours (the roster's card edges
+    /// already use them), so a WARDEN's gear is the same red as the WEIGHT road it was built for. The
+    /// WANDERER, which has no road, gets an olive that no rarity uses: it must never read as Uncommon
+    /// green (6EC87A), Rare blue, Epic violet or Legendary gold, because those own the frame tint and
+    /// the left bar of every item cell.
+    /// </remarks>
+    public static Color ClassColor(ResonanceHunter.Core.Economy.ItemClass cls) => cls switch
+    {
+        ResonanceHunter.Core.Economy.ItemClass.Warden => new Color(0xD6, 0x48, 0x5C),
+        ResonanceHunter.Core.Economy.ItemClass.Ranger => new Color(0x48, 0xB8, 0x88),
+        ResonanceHunter.Core.Economy.ItemClass.Mystic => new Color(0x74, 0xC6, 0xE8),
+        ResonanceHunter.Core.Economy.ItemClass.Bulwark => new Color(0xC0, 0x6E, 0xE0),
+        _ => new Color(0xB4, 0xB8, 0x62),
+    };
+
     private readonly Texture2D _pixel;
     private readonly Texture2D _hex;
     private readonly Texture2D _diamond;
+    private readonly Texture2D _blob;
     private readonly System.Collections.Generic.Dictionary<string, float> _topPadCache = new();
+    private readonly System.Collections.Generic.Dictionary<string, float> _bottomPadCache = new();
+    private readonly System.Collections.Generic.Dictionary<string, float> _sidePadCache = new();
 
     public UiKit(GraphicsDevice device, PixelFont font, AssetLibrary assets)
     {
@@ -97,6 +120,7 @@ public sealed class UiKit
         _pixel.SetData(new[] { Color.White });
         _hex = MakeHex(device, 120, 104);       // flat-top hexagon, drawn tinted + scaled (LinearClamp keeps it smooth)
         _diamond = MakeDiamond(device, 64);      // a gem for the nav / accents
+        _blob = MakeBlob(device, 128);           // soft contact shadow under the fighters
     }
 
     /// <summary>Draw the flat-top hexagon filling <paramref name="dest"/>, tinted.</summary>
@@ -153,7 +177,124 @@ public sealed class UiKit
         return frac;
     }
 
-    public bool AnimSprite(SpriteBatch b, string stripKey, Rectangle box, float seconds, float fps, bool loop, Color tint, float topCrop = 0f)
+    /// <summary>
+    /// Fraction of a texture's height that is fully transparent across the BOTTOM, cached per key.
+    /// </summary>
+    /// <remarks>
+    /// The mirror of <see cref="TopPadFraction"/>, and the fix for characters that look like they are
+    /// fighting in mid-air. <see cref="Sprite"/> scales the WHOLE texture — padding included — to fill
+    /// the destination box, so a sprite with empty rows under its feet lands its visible sole that many
+    /// pixels ABOVE the box bottom. Measured on the shipped art that gap is 43 px for the hunter and
+    /// 15 px for an enemy at the arena's box size, which is plainly visible against a ground line.
+    /// Callers that must stand something on the floor use <see cref="SpriteGrounded"/>, which pushes the
+    /// draw down by this fraction so the opaque sole meets <c>box.Bottom</c>.
+    /// </remarks>
+    /// <summary>
+    /// Empty columns on BOTH sides of an animation strip, as a fraction of FRAME width — the least any
+    /// frame has, so trimming by it can never cut the one frame that reaches furthest.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The twin of <see cref="TopPadFraction"/>, and it fixes a CLIPPED figure rather than a small one.
+    /// <see cref="AnimSprite"/> scales a SQUARE frame by the destination's HEIGHT, so the width it draws
+    /// is the frame's full width at that scale whatever the art actually fills. The generated champion
+    /// strips are letterboxed on every side, so a 430-tall champion box drew 573 pixels wide; centred at
+    /// x=700 that reaches x=413, and the arena's scissor starts at 492. The cloak came off against a
+    /// straight vertical edge (playtest 2026-08-28: "spriteyi kesiyor").
+    /// </para>
+    /// <para>
+    /// SYMMETRIC, and measured across the WHOLE strip — both deliberately. Cropping each side to its own
+    /// content would re-centre a figure the artist placed off-centre and make it jump between frames;
+    /// taking the least pad of any frame keeps every pose intact. What is removed is margin transparent
+    /// in all eight frames, so the visible figure is pixel-identical and only its rectangle shrinks.
+    /// </para>
+    /// </remarks>
+    public float SidePadFraction(string key)
+    {
+        if (_sidePadCache.TryGetValue(key, out var cached)) return cached;
+        var frac = 0f;
+        if (Assets.Get(key) is { } t && t is { Width: > 0, Height: > 0 })
+        {
+            var fw = t.Height;                       // square frames
+            var frames = Math.Max(1, t.Width / fw);
+            var data = new Color[t.Width * t.Height];
+            t.GetData(data);
+            var least = fw / 2;                      // the tightest pad found on any frame, either side
+            for (var f = 0; f < frames; f++)
+            {
+                int left = fw, right = fw;
+                for (var x = 0; x < fw && left == fw; x++)
+                    for (var y = 0; y < t.Height; y++)
+                        if (data[y * t.Width + f * fw + x].A > 8) { left = x; break; }
+                for (var x = fw - 1; x >= 0 && right == fw; x--)
+                    for (var y = 0; y < t.Height; y++)
+                        if (data[y * t.Width + f * fw + x].A > 8) { right = fw - 1 - x; break; }
+                if (left == fw) continue;            // an empty frame says nothing about the margin
+                least = Math.Min(least, Math.Min(left, right));
+            }
+            frac = Math.Max(0, least - 1) / (float)fw;   // a pixel of slack, so no soft edge is shaved
+        }
+        _sidePadCache[key] = frac;
+        return frac;
+    }
+
+    public float BottomPadFraction(string key)
+    {
+        if (_bottomPadCache.TryGetValue(key, out var cached)) return cached;
+        var frac = 0f;
+        if (Assets.Get(key) is { } t && t is { Width: > 0, Height: > 0 })
+        {
+            var data = new Color[t.Width * t.Height];
+            t.GetData(data);
+            var bottom = -1;
+            for (var y = t.Height - 1; y >= 0; y--)
+            {
+                var opaque = false;
+                for (var x = 0; x < t.Width; x++)
+                    if (data[y * t.Width + x].A > 8) { opaque = true; break; }
+                if (opaque) { bottom = y; break; }
+            }
+            frac = bottom < 0 ? 0f : (t.Height - 1 - bottom) / (float)t.Height;
+        }
+        _bottomPadCache[key] = frac;
+        return frac;
+    }
+
+    /// <summary>
+    /// Draw a sprite so its VISIBLE bottom edge rests on <paramref name="box"/>.Bottom, rather than its
+    /// padded canvas bottom. Use for anything that stands on the ground.
+    /// </summary>
+    /// <returns>false if the texture is missing, so callers can fall back exactly as with <see cref="Sprite"/>.</returns>
+    public bool SpriteGrounded(SpriteBatch b, string key, Rectangle box, Color tint, float topCrop = 0f, bool flip = false)
+    {
+        if (Assets.Get(key) is not { } tex || tex.Height <= 0) return false;
+        var cropY = (int)(tex.Height * Math.Clamp(topCrop, 0f, 0.6f));
+        var srcH = tex.Height - cropY;
+        var sc = box.Height / (float)srcH;
+        var w = Math.Max(1, (int)(tex.Width * sc));
+
+        // The pad fraction is of the FULL texture; the visible gap after scaling is that
+        // fraction of the drawn height. Shifting down by it plants the sole on box.Bottom.
+        var drop = (int)MathF.Round(BottomPadFraction(key) * tex.Height * sc);
+        b.Draw(tex, new Rectangle(box.Center.X - w / 2, box.Y + drop, w, box.Height),
+            new Rectangle(0, cropY, tex.Width, srcH), tint,
+            0f, Vector2.Zero, flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
+        return true;
+    }
+
+    /// <param name="flip">
+    /// Mirror horizontally. THE RENDERER HAD NO CONCEPT OF FACING AT ALL before this parameter.
+    /// </param>
+    /// <remarks>
+    /// <b>Every sprite entry point here ended in the four-argument <c>SpriteBatch.Draw</c> overload,
+    /// which cannot express orientation</b> — <c>SpriteEffects</c> appeared in zero source files in the
+    /// whole repository. Meanwhile the arena is an explicit left-versus-right composition and encodes
+    /// that direction in MOTION: the champion lunges +40 right, the enemies lunge -40 left and slide in
+    /// from +280 right. So every figure was drawn in whatever orientation its generator happened to
+    /// produce, and the starter champion's attack clip swings LEFT — away from the enemies it is
+    /// hitting. Playtest: "Karakter animasyonları ters tarafa oynuyor gibi, yön hatası var sanırım."
+    /// </remarks>
+    public bool AnimSprite(SpriteBatch b, string stripKey, Rectangle box, float seconds, float fps, bool loop, Color tint, float topCrop = 0f, bool flip = false)
     {
         if (Assets.Get(stripKey) is not { } tex || tex.Height <= 0) return false;
         var fw = tex.Height;
@@ -165,16 +306,68 @@ public sealed class UiKit
             System.Diagnostics.Debug.WriteLine($"Animation strip '{stripKey}' width {tex.Width} is not a whole multiple of frame size {fw}.");
         var i = (int)(seconds * fps);
         i = loop ? (i % frames + frames) % frames : Math.Clamp(i, 0, frames - 1);
+        // A NEGATIVE topCrop means "measure it". Character strips are generated from a source that was
+        // deliberately letterboxed to leave the animator's crop somewhere to land, so a third of the
+        // frame is empty sky — and drawn as-is, that empty sky is a third of the box and the champion
+        // renders two thirds the size the layout asked for. The pad differs per clip (an attack is
+        // letterboxed harder than an idle), so it has to be measured rather than passed in.
+        //
+        // TopPadFraction scans the WHOLE strip and reports the LEAST headroom any frame has, so
+        // cropping by it can never cut into the figure on the one frame that raises its arms.
+        if (topCrop < 0f) topCrop = TopPadFraction(stripKey);
         // Trim the transparent headroom (and any streak artifacts) off the top of the frame, then FILL the
         // box height with the remaining figure, anchored bottom-centre. Side padding overflows harmlessly.
         // Fitting the whole square frame instead left the figure tiny and "boxed" inside the panel.
         var cropY = (int)(fw * Math.Clamp(topCrop, 0f, 0.6f));
         var srcH = tex.Height - cropY;
-        var src = new Rectangle(i * fw, cropY, fw, srcH);
+        // ...and the same for the SIDES, symmetrically. The frame is SQUARE and the scale comes from the
+        // HEIGHT, so a 430-tall box drew a 573-wide sprite — 170px of it empty margin — and on the
+        // champion (centred at x=700, in an arena whose scissor starts at 492) that margin plus the cloak
+        // fell outside the clip and the figure was sliced by a straight vertical edge. Trimming the
+        // margin that is empty in EVERY frame changes no pixel of the figure — same height, same centre,
+        // same scale — it only stops the draw claiming space the art never used.
+        var cropX = (int)(fw * Math.Clamp(SidePadFraction(stripKey), 0f, 0.4f));
+        var srcW = fw - 2 * cropX;
+        var src = new Rectangle(i * fw + cropX, cropY, srcW, srcH);
         var sc = box.Height / (float)srcH;
-        var w = Math.Max(1, (int)(fw * sc));
-        b.Draw(tex, new Rectangle(box.Center.X - w / 2, box.Bottom - box.Height, w, box.Height), src, tint);
+        var w = Math.Max(1, (int)(srcW * sc));
+        // Same grounding as SpriteGrounded. The pad is measured once for the whole strip rather than
+        // per frame on purpose: a per-frame sole would make the figure slide up and down as the
+        // animation played. One offset for the clip keeps the feet planted while it animates.
+        var drop = (int)MathF.Round(StripBottomPadFraction(stripKey) * fw * sc);
+        b.Draw(tex, new Rectangle(box.Center.X - w / 2, box.Y + drop, w, box.Height), src, tint,
+               0f, Vector2.Zero, flip ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
         return true;
+    }
+
+    /// <summary>
+    /// Empty rows under the lowest opaque pixel of an animation strip, as a fraction of FRAME height.
+    /// </summary>
+    /// <remarks>
+    /// Measured across the whole strip, so every frame of a clip shares one ground offset and the figure
+    /// does not bob as it plays. Cached per key — this scans the full texture, which for a boss strip is
+    /// 8192x1024.
+    /// </remarks>
+    public float StripBottomPadFraction(string stripKey)
+    {
+        if (_bottomPadCache.TryGetValue(stripKey, out var cached)) return cached;
+        var frac = 0f;
+        if (Assets.Get(stripKey) is { } t && t is { Width: > 0, Height: > 0 })
+        {
+            var data = new Color[t.Width * t.Height];
+            t.GetData(data);
+            var bottom = -1;
+            for (var y = t.Height - 1; y >= 0; y--)
+            {
+                var opaque = false;
+                for (var x = 0; x < t.Width; x++)
+                    if (data[y * t.Width + x].A > 8) { opaque = true; break; }
+                if (opaque) { bottom = y; break; }
+            }
+            frac = bottom < 0 ? 0f : (t.Height - 1 - bottom) / (float)t.Height;
+        }
+        _bottomPadCache[stripKey] = frac;
+        return frac;
     }
 
     private static Texture2D MakeHex(GraphicsDevice d, int w, int h)
@@ -191,6 +384,74 @@ public sealed class UiKit
         tex.SetData(data);
         return tex;
     }
+
+    /// <summary>
+    /// A soft radial blob, used as the fighters' contact shadow.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately procedural rather than a generated sprite: a shadow is pure alpha falloff, and the
+    /// art pipeline's border flood-fill knockout keys on a background colour, so it would clip the very
+    /// gradient that makes a shadow read. A hard-edged rectangle under each fighter — which is what shipped
+    /// — announces itself as a rectangle; this fades out and just reads as ground contact.
+    /// </remarks>
+    private static Texture2D MakeBlob(GraphicsDevice d, int s)
+    {
+        var tex = new Texture2D(d, s, s);
+        var data = new Color[s * s];
+        var c = (s - 1) / 2f;
+        for (var y = 0; y < s; y++)
+            for (var x = 0; x < s; x++)
+            {
+                var r = MathF.Sqrt((x - c) * (x - c) + (y - c) * (y - c)) / c;
+                // Squared falloff: a linear ramp still shows a visible disc edge at low alpha.
+                var a = r >= 1f ? 0f : (1f - r) * (1f - r);
+                data[y * s + x] = new Color(0f, 0f, 0f, a);
+            }
+        tex.SetData(data);
+        return tex;
+    }
+
+    private readonly System.Collections.Generic.Dictionary<Texture2D, Vector4> _contentPad = new();
+
+    /// <summary>
+    /// A texture's transparent margins as fractions of its size: (left, top, right, bottom).
+    /// </summary>
+    /// <remarks>
+    /// Generated art arrives on a square canvas with however much empty space the model felt like
+    /// leaving — measured across the ten boot variants that is anywhere from 6% to 18% vertically. Any
+    /// placement expressed against the CANVAS therefore lands somewhere different for every variant,
+    /// which is why a worn boot calibrated on one trait sat halfway up the shin on another. Callers
+    /// that place art by its content are immune to that.
+    /// </remarks>
+    public Vector4 ContentPad(Texture2D t)
+    {
+        if (_contentPad.TryGetValue(t, out var cached)) return cached;
+        var pad = Vector4.Zero;
+        if (t is { Width: > 0, Height: > 0 })
+        {
+            var data = new Color[t.Width * t.Height];
+            t.GetData(data);
+            int l = t.Width, r = 0, top = t.Height, bot = 0;
+            for (var y = 0; y < t.Height; y++)
+                for (var x = 0; x < t.Width; x++)
+                    if (data[y * t.Width + x].A > 8)
+                    {
+                        if (x < l) l = x;
+                        if (x >= r) r = x + 1;
+                        if (y < top) top = y;
+                        if (y >= bot) bot = y + 1;
+                    }
+            if (r > l && bot > top)
+                pad = new Vector4(l / (float)t.Width, top / (float)t.Height,
+                                  (t.Width - r) / (float)t.Width, (t.Height - bot) / (float)t.Height);
+        }
+        _contentPad[t] = pad;
+        return pad;
+    }
+
+    /// <summary>A soft elliptical contact shadow centred on (cx, cy).</summary>
+    public void GroundShadow(SpriteBatch b, int cx, int cy, int width, int height, float strength = 0.55f)
+        => b.Draw(_blob, new Rectangle(cx - width / 2, cy - height / 2, width, height), Color.White * strength);
 
     private static Texture2D MakeDiamond(GraphicsDevice d, int s)
     {
@@ -212,7 +473,7 @@ public sealed class UiKit
     public GraphicsDevice Device { get; }
 
     /// <summary>Logical width of a string in the active font. Use this instead of PixelFont.Measure.</summary>
-    public int Measure(string s) => Text2.Measure(s);
+    public int Measure(string s) => Text2.Measure(s, UiTypography.Label);
 
     // ── Primitives ──────────────────────────────────────────────────────────────────────────────
     public void Fill(SpriteBatch b, Rectangle r, Color c) => b.Draw(_pixel, r, c);
@@ -270,11 +531,111 @@ public sealed class UiKit
     /// known cost of scaling a decorated frame to arbitrary panel sizes.
     /// </summary>
     public void Panel(SpriteBatch b, Rectangle r, bool gold = false)
+        => PanelAt(b, r, gold ? new Color(0xFF, 0xDC, 0xA0) : Color.White, gold);
+
+    /// <summary>
+    /// Tier 2: a SUPPORTING surface. The same frame, drawn quiet, so the ornate one is the subject.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>EVERY PANEL IN THE GAME WORE THE SAME GOLD FILIGREE</b>, from a 630px paper-doll down to a
+    /// 60x28 training chip. A frame that heavy is a claim — "look here" — and when eleven regions on one
+    /// screen all make it, none of them wins and the screen reads as an undifferentiated thicket. That is
+    /// the "her şey çok karmaşıkmış gibi" from the playtest, and it is not a density problem: the same
+    /// information inside two visual weights reads as half as much.
+    /// </para>
+    /// <para>
+    /// <b>This tints the art rather than replacing it with a flat rectangle</b>, which was the other
+    /// option and the wrong one. The ornate frame IS the game's visual identity; ninety percent of the
+    /// screens turning into plain boxes would read as unfinished, not as calm. Tinted, the filigree
+    /// survives as a dark bronze texture at the edge — present if you look at it, silent if you are
+    /// looking for something else.
+    /// </para>
+    /// <para>
+    /// It also costs NOTHING in layout. A quiet panel occupies exactly the rectangle its ornate twin did,
+    /// so a screen converts by changing the call and nothing else — no content moves, and no hand-placed
+    /// literal can collide with a border that was already there.
+    /// </para>
+    /// <para>
+    /// <b>THE FRAME RULE (playtest 2026-08-26):</b> the gold nine-slice (<see cref="PanelNine"/> with
+    /// <c>ui_panel_modal_wide</c>) is for MODALS only — a panel that takes the screen and asks something.
+    /// Every panel that lives IN a screen wears this quiet brown, both columns alike; a screen with one
+    /// gold column and one brown column reads as two screens.
+    /// </para>
+    /// </remarks>
+    /// <param name="alpha">A fade for transient panels (a toast on its way out); 1 draws it solid.</param>
+    public void PanelQuiet(SpriteBatch b, Rectangle r, float alpha = 1f) => PanelAt(b, r, QuietFrame * alpha, false);
+
+    /// <summary>The tint that turns the gold frame to dark bronze. Multiplied, so the interior stays black.</summary>
+    private static readonly Color QuietFrame = new(0x58, 0x52, 0x62);
+
+    /// <summary>
+    /// WHICH FRAME ART a panel of this shape will wear. Chosen by aspect ratio, so resizing a panel
+    /// silently changes its texture — and the three have visibly different ornaments.
+    /// </summary>
+    /// <remarks>
+    /// It bit twice in one session (the HUNT skills rail, the Forge bag's counter), so the switch lives
+    /// in one public method rather than inline: the layout helpers below have to ask the same question
+    /// the renderer does, and two copies of this arithmetic would drift.
+    /// </remarks>
+    public static string PanelArtKey(Rectangle r)
     {
         var aspect = r.Width / MathF.Max(1f, r.Height);
-        var key = aspect >= 1.30f ? "ui_panel_medium"
-                : aspect >= 0.82f ? "ui_panel_square"
-                : "ui_panel_vertical";
+        return aspect >= 1.30f ? "ui_panel_medium"
+             : aspect >= 0.82f ? "ui_panel_square"
+             : "ui_panel_vertical";
+    }
+
+    /// <summary>
+    /// How much deeper this panel's frame reaches than the house standard assumes.
+    /// </summary>
+    /// <remarks>
+    /// Measured off the art, not guessed: at the panel's own centre the top ornament of
+    /// <c>ui_panel_medium</c> is 20 source px deep and <c>ui_panel_vertical</c>'s is 21, but the SQUARE
+    /// frame carries a crest that runs to 51 — two and a half times as far. That single fact is why
+    /// StatsScreen's PROGRESS panel had to write its title at +40 while every other panel on the same
+    /// screen wrote +22, and why ROSTER's detail column sat 27 px lower than the grid beside it. The
+    /// screens had each rediscovered it by eye and written a different number; this returns it.
+    /// </remarks>
+    public static int FrameDrop(Rectangle r) => PanelArtKey(r) == "ui_panel_square" ? UiTypography.SquareFrameDrop : 0;
+
+    /// <summary>Where this panel's TITLE sits, as an absolute y. See <see cref="UiTypography.PanelTitleTop"/>.</summary>
+    public static int TitleTop(Rectangle r) => r.Y + UiTypography.PanelTitleTop + FrameDrop(r);
+
+    /// <summary>Where this panel's one-line CAPTION sits, under its title.</summary>
+    public static int CaptionTop(Rectangle r) => r.Y + UiTypography.PanelCaptionTop + FrameDrop(r);
+
+    /// <summary>Where this panel's first content row starts, under a title AND a caption.</summary>
+    public static int BodyTop(Rectangle r) => r.Y + UiTypography.PanelBodyTop + FrameDrop(r);
+
+    /// <summary>Where this panel's first content row starts under a title with NO caption.</summary>
+    public static int BodyTopBare(Rectangle r) => r.Y + UiTypography.PanelBodyTopBare + FrameDrop(r);
+
+    /// <summary>
+    /// This panel's left/right content inset: the house margin, widened for a narrow plate's sake and for
+    /// the square frame's deeper side rails. See <see cref="UiTypography.PanelPadX"/>.
+    /// </summary>
+    public static int PadX(Rectangle r)
+        // A SQUARE-FRAMED PANEL NEVER TAKES THE NARROW MARGIN, however narrow it is: its side rails are
+        // 49 source px deep, so the narrow 24 would put the first column ON the flourish. StatsScreen's
+        // PROGRESS panel is 372 px wide and had already been pushed to 60 by hand for exactly this.
+        => (PanelArtKey(r) == "ui_panel_square" || r.Width >= UiTypography.WidePanelFrom
+                ? UiTypography.PanelPadX
+                : UiTypography.PanelPadNarrow)
+           + FrameDrop(r);
+
+    /// <summary>This panel's left content edge, as an absolute x.</summary>
+    public static int ContentLeft(Rectangle r) => r.X + PadX(r);
+
+    /// <summary>This panel's right content edge, as an absolute x — where a right-aligned value ends.</summary>
+    public static int ContentRight(Rectangle r) => r.Right - PadX(r);
+
+    /// <summary>This panel's bottom content edge — the last row must end above it.</summary>
+    public static int ContentBottom(Rectangle r) => r.Bottom - UiTypography.PanelPadBottom - FrameDrop(r);
+
+    private void PanelAt(SpriteBatch b, Rectangle r, Color tint, bool gold)
+    {
+        var key = PanelArtKey(r);
         var tex = Assets.Get(key);
         if (tex is null)
         {
@@ -285,7 +646,103 @@ public sealed class UiKit
             return;
         }
 
-        NineSlice(b, tex, r, 52, gold ? new Color(0xFF, 0xDC, 0xA0) : Color.White);
+        NineSlice(b, tex, r, PanelCorner, tint);
+    }
+
+    /// <summary>
+    /// How far a <see cref="Panel"/>'s ornate border reaches in from its rectangle.
+    /// </summary>
+    /// <remarks>
+    /// Was 52. Screens had been written against a plain rectangle and inset their content by 24–32, so on
+    /// several panels the first column of text sat ON the filigree and right-aligned values were clipped by
+    /// the opposite edge. Thinning the border to 40 is the change that costs nothing — the corner art is
+    /// sampled whole and drawn smaller, so it reads as a FINER frame rather than a cropped one — and it
+    /// closes most of the gap without touching several hundred hand-placed literals.
+    /// </remarks>
+    /// <summary>A straight line of a given thickness, as ONE rotated quad rather than a stamp of squares.</summary>
+    /// <remarks>
+    /// <b>THE MASTERY TREE DREW EVERY EDGE BY STAMPING AN 8x8 SQUARE AT EVERY PIXEL OF ITS LONGER AXIS.</b>
+    /// Three consequences, all of them visible: the thickness was a hardcoded 8 with no zoom term, so at
+    /// the default zoom a wire was 29% of the node it connected and at minimum zoom 57% — the tree read
+    /// as a grey asterisk; a square brush is 8*sqrt(2) = 11.3px across on a diagonal, so the diagonals
+    /// were half again as fat as the horizontals; and fifty edges averaging 150px cost about 7,500
+    /// sprite draws per frame, rising to 35,000 zoomed in.
+    ///
+    /// One quad is one draw, its thickness is perpendicular so a diagonal is no fatter than a
+    /// horizontal, and the width can be fractional — which is what lets it scale with the camera.
+    /// </remarks>
+    /// <summary>
+    /// A cooldown sweep over a round icon: the part of the circle still WAITING is shaded, from the
+    /// moving edge clockwise round to twelve o'clock, and the shade unwinds clockwise as
+    /// <paramref name="ready"/> grows from 0 to 1 — the clock-face wipe every action game uses.
+    /// Drawn as a fan of thin radial strokes from one pixel texture, so it batches with everything else.
+    /// Nothing is drawn at ready ≥ 1 (the icon is lit) and the whole disc is shaded at ready ≤ 0.
+    /// </summary>
+    public void CooldownSweep(SpriteBatch b, Vector2 centre, float radius, float ready, Color shade, Color edge)
+    {
+        ready = Math.Clamp(ready, 0f, 1f);
+        if (ready >= 1f) return;
+        const float step = MathF.PI / 72f;                     // 2.5° strokes
+        var from = -MathF.PI / 2f + ready * MathF.Tau;          // the moving edge (twelve o'clock + the elapsed share)
+        var to = -MathF.PI / 2f + MathF.Tau;                     // round to twelve o'clock again
+        var thick = MathF.Max(2f, radius * step * 1.9f);
+        // A RING, not a pie. Filled wedges from the centre covered the medallion's own glyph, so for most
+        // of every second the player could not see WHICH skill a slot held — and a skill that is never on
+        // cooldown (an Aura) was painted out entirely (review 2026-08-30). The waiting share is a band
+        // around the rim; the art inside stays readable.
+        var inner = radius * 0.84f;   // a thin band ON the medallion's rim — see the note above
+        for (var a = from; a < to; a += step)
+        {
+            var dir = new Vector2(MathF.Cos(a), MathF.Sin(a));
+            LineSeg(b, centre + dir * inner, centre + dir * radius, thick, shade);
+        }
+        // the edge that moves, so the eye can read the sweep even when it is slow
+        var e = new Vector2(MathF.Cos(from), MathF.Sin(from));
+        LineSeg(b, centre + e * inner, centre + e * radius, 2f, edge);
+    }
+
+    public void LineSeg(SpriteBatch b, Vector2 a, Vector2 c, float thickness, Color col)
+    {
+        var d = c - a;
+        var len = d.Length();
+        if (len < 0.5f || thickness <= 0f) return;
+        b.Draw(_pixel, a, null, col, MathF.Atan2(d.Y, d.X), new Vector2(0f, 0.5f),
+               new Vector2(len, thickness), SpriteEffects.None, 0f);
+    }
+
+    /// <summary>
+    /// A scrim rect, in AUTHORED coordinates, that actually covers the whole picture.
+    /// </summary>
+    /// <remarks>
+    /// <b>EVERY MENU SCREEN WAS DIMMING 1920x1080 AND THE PICTURE IS BIGGER THAN THAT.</b> These screens
+    /// are authored in 1920x1080 and drawn through Game1's overlay inset — scale 1720/1920 = 0.8958,
+    /// translated right by the nav rail's 180px. So authored y 1080 lands at canvas y 967, and authored
+    /// x 1920 lands at canvas x 1900: a 112px band across the bottom of every menu screen, plus a 20px
+    /// strip down the right, showed the fight scene UNDIMMED behind the panels.
+    ///
+    /// That band is most of what "çok fazla boş alan var, her şey yukarıya sıkışmış" was pointing at. It
+    /// is not empty space a panel failed to fill — it is a brighter, busier strip that makes the dimmed
+    /// area above it read as a box the content has been squeezed into.
+    ///
+    /// 2144 x 1206 authored covers canvas 1920 x 1080 with a margin: 2144 * 0.8958 + 180 = 2100, and
+    /// 1206 * 0.8958 = 1080. Overshoot is free — Fill clips to the render target.
+    /// </remarks>
+    public static readonly Rectangle OverlayScrim = new(0, 0, 2144, 1206);
+
+    public const int PanelCorner = 40;
+
+    /// <summary>
+    /// The usable interior of a panel: its rectangle less the ornate border.
+    /// </summary>
+    /// <remarks>
+    /// The inset is clamped the same way <see cref="NineSlice"/> clamps its corner, so a SHORT panel (a
+    /// settings row is 54px tall) gets a proportionally smaller border rather than an inverted rectangle.
+    /// Without the clamp this returned a negative-height rect and everything drawn into it vanished.
+    /// </remarks>
+    public static Rectangle PanelInner(Rectangle r)
+    {
+        var c = Math.Max(2, Math.Min(PanelCorner, Math.Min(r.Width, r.Height) / 2 - 2));
+        return new Rectangle(r.X + c, r.Y + c, r.Width - c * 2, r.Height - c * 2);
     }
 
     /// <summary>
@@ -293,6 +750,22 @@ public sealed class UiKit
     /// 4×-scaled canvas (crisp corners, no upscale blur). Edges and the center stretch. <paramref name="srcCornerMax"/>
     /// is the corner slice in ASSET px — set it to cover the decorative corner (gem cluster).
     /// </summary>
+    /// <summary>
+    /// Draw a frame texture by key as a 9-slice — corners at native scale, edges and centre stretched.
+    /// </summary>
+    /// <remarks>
+    /// The stage banner, the welcome toast and the currency pill each stretched a whole frame texture
+    /// into a rect of a wildly different aspect (a 384x224 modal frame into 560x135 — 2.4x anisotropic,
+    /// and a DOWNscale on the vertical), which is exactly the "çerçeve scaleden dolayı sırıtıyor" of the
+    /// 2026-08-23 playtest. The slicer existed but was private; this is its public door. Falls back to
+    /// the flat panel when the key is missing.
+    /// </remarks>
+    public void PanelNine(SpriteBatch b, Rectangle r, string key, int cornerPx = PanelCorner, Color? tint = null)
+    {
+        if (Assets.Get(key) is { } tex) NineSlice(b, tex, r, cornerPx, tint ?? Color.White);
+        else Panel(b, r);
+    }
+
     private void NineSlice(SpriteBatch b, Texture2D tex, Rectangle r, int srcCornerMax, Color tint)
     {
         var scale = Scale;
@@ -357,6 +830,9 @@ public sealed class UiKit
         var r = new Rectangle(right - w, y, w, h);
 
         // Ornate capsule from package_01 (guide), not a flat fill.
+        // Whole-texture stretch ON PURPOSE: the 256-px square frame's corner ornaments are ~50 px, so a
+        // 9-slice into a 60-px capsule cuts them into the edge bands and smears them across the text
+        // (tried 2026-08-23; reverted). The uniform squash reads as a capsule; the slice did not.
         if (Assets.Get("ui_panel_small") is { } cap) b.Draw(cap, r, Color.White);
         else
         {
@@ -380,7 +856,11 @@ public sealed class UiKit
     // ── Buttons (mouse-clickable) ───────────────────────────────────────────────────────────────
     private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
     private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
-    private static readonly Color Slate = new(0x57, 0x61, 0x6F);
+    // 0x8A96A8, was 0x57616F. The old value measured 1.77:1 on parchment and 1.63:1 on the dim
+    // arena — it failed on BOTH of this game's surfaces, which is why every secondary label ("TEMPO
+    // 4.94x SKILL RATE", "BATTLE SPEED", "Deepest wave reached") read as a ghost. This one measures
+    // ~6.9:1 on the dark panels while staying clearly below Bone, so the hierarchy survives.
+    private static readonly Color Slate = new(0x8A, 0x96, 0xA8);
 
     /// <summary>
     /// Draw a clickable button and return true if it was clicked this frame.
@@ -396,19 +876,167 @@ public sealed class UiKit
         // package_01 ornate buttons: DARK (secondary) at rest, GREEN (primary) on hover, GREY when disabled.
         var key = !enabled ? "ui_button_disabled" : hover ? "ui_button_primary" : "ui_button_secondary";
         var tex = Assets.Get(key);
-        // Whole-image stretch (not 9-slice): the game's buttons are short, and a fixed-size ornate corner
-        // would dominate them and bury the label. Stretching keeps the border proportionally thin.
-        if (tex is not null) b.Draw(tex, r, Color.White);
+        // Whole-image stretch for a button near the art's own aspect; a WIDE button is 3-sliced so its
+        // ornamented ends keep their shape and only the plain middle stretches (playtest 2026-08-26:
+        // "the button frame is stretched and looks cheap" — the 420 px reset button, the 400 px settings
+        // pair). The end caps are the art's ornament, scaled with the button's height.
+        if (tex is not null)
+        {
+            if (r.Width > r.Height * tex.Width / tex.Height * 1.15f) HSliceScaled(b, tex, r, ButtonCapSrcPx, Color.White);
+            else b.Draw(tex, r, Color.White);
+        }
         else { Fill(b, r, hover ? Slate : PanelBg); Fill(b, new Rectangle(r.X + 1, r.Y + 1, r.Width - 2, r.Height - 2), enabled ? PanelEdge : Dim); }
 
         // Every button surface is dark or deep-green, so the label is always LIGHT — bright cream on hover
         // for feedback, dim when disabled. (No more dark-ink-on-hover; that was the unreadable flip.)
         var label3 = !enabled ? new Color(0x7C, 0x76, 0x88) : hover ? new Color(0xF6, 0xEA, 0xC6) : Bone;
-        // The pixel font is drawn 1:1 in the ×4 canvas (s==1) or ×4 in the ×1 native canvas (s==4), so the
-        // label keeps the SAME physical size either way. The vertical nudge scales with it.
-        var s = 4 / Scale;
-        Font.DrawCentered(b, label, r.Center.X, r.Center.Y - 3 * s, label3, s);
+        // The SAME font as every other label. Buttons alone still went through the blocky pixel font, so
+        // "UPGRADE" / "RE-ENTER" / "CONFIRM UPGRADE" rendered in a wide monospace face that belongs to no
+        // other text on the screen — the single loudest inconsistency in the UI.
+        // ALWAYS the structural weight, never the size-derived one. A button label is an action, and a
+        // short button that shrank its text to fit would otherwise drop below the weight threshold and
+        // come out lighter than the button beside it — the same control, two different voices.
+        //
+        // ONE SIZE FOR EVERY BUTTON. It used to be Clamp(height / 2, 14, 22), so a 44px button spoke at
+        // 22 and a 36px one beside it at 18 — the same control, two sizes, decided by a dimension the
+        // player cannot see. It is UiTypography.ButtonText now, shrinking only when the label genuinely
+        // does not fit, and never past Caption. A very short button still gets a size that fits it.
+        var px = Math.Min(UiTypography.ButtonText, Math.Max(UiTypography.Caption, r.Height - 14));
+        // THE LABEL MUST CLEAR THE ART'S END ORNAMENT, not a flat 12px. The button art draws its
+        // scrollwork over FieldCapWidth(height) at each end, which is 20px on a 44px button and 24 on a
+        // 52 — so "MERGE THREES INTO BETTER" and "SALVAGE ALL THE JUNK" were printing straight onto it.
+        var pad = Math.Max(UiTypography.ButtonPadX, FieldCapWidth(r.Height));
+        while (px > UiTypography.Caption && Text2.Measure(label, px, TextFace.Strong) > r.Width - pad * 2) px--;
+        TextCenterBig(b, label, r.Center.X, r.Center.Y - px * 27 / 40, label3, px, TextFace.Strong);
         return enabled && hover && clicked;
+    }
+
+    /// <summary>The ornamented end of the 256×96 button art, in source pixels — everything past it is plain border.</summary>
+    private const int ButtonCapSrcPx = 44;   // ui-size-ok: source pixels in the button art, not type
+
+    /// <summary>
+    /// How wide the button art's end ornament lands at a given control height — the inset a caller
+    /// laying out its OWN content (see <see cref="Field"/>) must clear on both sides.
+    /// </summary>
+    public static int FieldCapWidth(int height)
+        => Math.Max(2, (int)MathF.Round(ButtonCapSrcPx * height / 96f));
+
+    /// <summary>
+    /// A FIELD: the button's frame with no label of its own, for a control whose content the caller
+    /// lays out — a dropdown showing a left-aligned value and a chevron, rather than a centred verb.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The same three arts as <see cref="Button"/>, so a field and a button on one panel read as the
+    /// same family: dark frame at rest, bright gold when <paramref name="lit"/> (hovered, or holding an
+    /// open list), grey when disabled. Always 3-sliced — a field is wide by nature, and stretching the
+    /// whole 256×96 art across 524 px is the "the frame looks cheap" of the 2026-08-26 playtest.
+    /// </para>
+    /// <para>
+    /// The WELL IS PAINTED FIRST, and it has to be: <c>ui_button_primary</c>'s interior is fully
+    /// transparent, so the lit state without it is a gold frame around whatever happens to be behind.
+    /// </para>
+    /// <para>
+    /// DISABLED IS THE RESTING ART, DIMMED — not <c>ui_button_disabled</c>, which a <see cref="Button"/>
+    /// wears. That asset has a light grey OPAQUE interior: it reads as an off switch, which is right for
+    /// a verb and wrong for a field, where it makes the one control you cannot use the brightest thing
+    /// on a near-black panel. Tinting the resting art keeps the same silhouette and only takes the gold
+    /// out of it, which is what "you cannot change this right now" should look like.
+    /// </para>
+    /// </remarks>
+    public void Field(SpriteBatch b, Rectangle r, bool enabled, bool lit, Color? well = null)
+    {
+        Fill(b, new Rectangle(r.X + 6, r.Y + 5, r.Width - 12, r.Height - 10), well ?? Ink);
+        var key = enabled && lit ? "ui_button_primary" : "ui_button_secondary";
+        if (Assets.Get(key) is { } tex) HSliceScaled(b, tex, r, ButtonCapSrcPx, enabled ? Color.White : FieldOff);
+        else
+        {
+            Fill(b, r, PanelBg);
+            Fill(b, new Rectangle(r.X + 1, r.Y + 1, r.Width - 2, r.Height - 2), enabled ? PanelEdge : Dim);
+        }
+    }
+
+    /// <summary>The multiply tint that takes the gold out of a field's frame when it is inert.</summary>
+    private static readonly Color FieldOff = new(0x5C, 0x56, 0x62);
+
+    // The 256×64 bar frames: corner ornaments in the first/last 32 source px, the centre ornament between
+    // x 94 and 162, plain stone border between; the window starts 14 px in. Measured on ui_bar_boss_frame.
+    private const int BarCapSrcPx = 32;   // ui-size-ok: source pixels in the bar frame art, not type
+    private const int BarOrnamentSrcX0 = 94;
+    private const int BarOrnamentSrcX1 = 162;
+    private const int BarWindowInsetSrcPx = 14;   // ui-size-ok: source pixels in the bar frame art
+
+    /// <summary>
+    /// Five-piece horizontal slice for art with ornaments at BOTH ends AND in the middle: the caps and the
+    /// centre piece are scaled with the height and keep their proportions; the two plain runs between them
+    /// stretch to fill. For the bar frames, whose centre scroll a 3-slice would still smear.
+    /// </summary>
+    private static void HSliceOrnament(SpriteBatch b, Texture2D t, Rectangle r, int srcCap, int ornX0, int ornX1, Color tint)
+    {
+        var scale = r.Height / (float)t.Height;
+        var dstCap = Math.Max(2, (int)MathF.Round(srcCap * scale));
+        var ornW = Math.Max(2, (int)MathF.Round((ornX1 - ornX0) * scale));
+        if (dstCap * 2 + ornW >= r.Width) { b.Draw(t, r, tint); return; }   // too narrow to slice: stretch
+        var ornX = r.X + (r.Width - ornW) / 2;
+        // caps
+        b.Draw(t, new Rectangle(r.X, r.Y, dstCap, r.Height), new Rectangle(0, 0, srcCap, t.Height), tint);
+        b.Draw(t, new Rectangle(r.Right - dstCap, r.Y, dstCap, r.Height), new Rectangle(t.Width - srcCap, 0, srcCap, t.Height), tint);
+        // plain runs
+        b.Draw(t, new Rectangle(r.X + dstCap, r.Y, ornX - (r.X + dstCap), r.Height), new Rectangle(srcCap, 0, ornX0 - srcCap, t.Height), tint);
+        b.Draw(t, new Rectangle(ornX + ornW, r.Y, r.Right - dstCap - (ornX + ornW), r.Height), new Rectangle(ornX1, 0, t.Width - srcCap - ornX1, t.Height), tint);
+        // the centre ornament, true to scale
+        b.Draw(t, new Rectangle(ornX, r.Y, ornW, r.Height), new Rectangle(ornX0, 0, ornX1 - ornX0, t.Height), tint);
+    }
+
+    /// <summary>
+    /// Horizontal 3-slice with the caps SCALED to the destination height: <paramref name="srcCap"/> source
+    /// pixels at each end become srcCap × (r.Height ÷ t.Height) destination pixels, so the ornament keeps
+    /// its own proportions at any button height; only the middle stretches.
+    /// </summary>
+    private static void HSliceScaled(SpriteBatch b, Texture2D t, Rectangle r, int srcCap, Color tint)
+    {
+        var dstCap = Math.Max(2, (int)MathF.Round(srcCap * r.Height / (float)t.Height));
+        dstCap = Math.Min(dstCap, r.Width / 2);
+        var midSrc = t.Width - 2 * srcCap;
+        var midDst = r.Width - 2 * dstCap;
+        b.Draw(t, new Rectangle(r.X, r.Y, dstCap, r.Height), new Rectangle(0, 0, srcCap, t.Height), tint);
+        if (midDst > 0) b.Draw(t, new Rectangle(r.X + dstCap, r.Y, midDst, r.Height), new Rectangle(srcCap, 0, midSrc, t.Height), tint);
+        b.Draw(t, new Rectangle(r.Right - dstCap, r.Y, dstCap, r.Height), new Rectangle(t.Width - srcCap, 0, srcCap, t.Height), tint);
+    }
+
+    /// <summary>
+    /// THE close button — one icon (icon_close, a gold × in a round medallion) for every panel, strip
+    /// and overlay that can be shut. Draws it fitted in <paramref name="r"/>, brighter under the mouse,
+    /// and returns true on the click. Playtest 2026-08-26: "replace the drawn × with a proper icon and
+    /// use it everywhere." Falls back to the old dark square with a × if the art is missing.
+    /// </summary>
+    /// <summary>The close icon's edge, in pixels — one size everywhere so the corners of the game match.</summary>
+    public const int CloseSize = 44;
+
+    /// <summary>
+    /// WHERE a close icon sits on an ornate panel: inside the frame's corner ornament, not on it. The
+    /// nine-sliced frames keep <see cref="PanelCorner"/> px of scrollwork on every edge; the icon starts
+    /// 8 px past that on the right and 4 px short of it on top, so it clears the ornament with a
+    /// visible margin and lines up with the panel's title row (playtest 2026-08-26: "the close buttons
+    /// have no margin, they run into the frame").
+    /// </summary>
+    public static Rectangle CloseRect(Rectangle panel, int size = CloseSize) =>
+        new(panel.Right - PanelCorner - 8 - size, panel.Y + PanelCorner - 4, size, size);
+
+    public bool CloseButton(SpriteBatch b, Rectangle r, Point mouse, bool clicked)
+    {
+        var hot = r.Contains(mouse);
+        if (Assets.Get("icon_close") is { } t)
+        {
+            var box = hot ? new Rectangle(r.X - 2, r.Y - 2, r.Width + 4, r.Height + 4) : r;
+            SpriteFit(b, t, box, hot ? Color.White : new Color(0xE0, 0xD8, 0xC8));
+        }
+        else
+        {
+            Fill(b, r, hot ? new Color(0x4A, 0x28, 0x30) : new Color(0x22, 0x1A, 0x30));
+            TextCenterBig(b, "×", r.Center.X, r.Y + r.Height / 2 - 12, hot ? Color.White : Vellum, UiTypography.Headline);
+        }
+        return clicked && hot;
     }
 
     /// <summary>Horizontal 3-slice: fixed <paramref name="cap"/>-wide ends, stretched middle.</summary>
@@ -443,16 +1071,126 @@ public sealed class UiKit
         return true;
     }
 
+    /// <summary>
+    /// A gear class's icon in a box — <c>icon_class_warden</c> and its four siblings — or a diamond
+    /// in the class colour (or <paramref name="fallback"/>) while that art has not shipped.
+    /// </summary>
+    /// <remarks>
+    /// The same shape as the STATS screen's stat rows: try the key, draw the flat shape when it is
+    /// absent. The five keys are built from <see cref="ResonanceHunter.Core.Economy.ItemClasses.IconKey"/>,
+    /// so tools/check_asset_keys.py cannot see them as literals; it checks the family by name instead.
+    /// </remarks>
+    public void ClassIcon(SpriteBatch b, ResonanceHunter.Core.Economy.ItemClass cls, Rectangle box, Color? fallback = null)
+    {
+        if (Icon(b, ResonanceHunter.Core.Economy.ItemClasses.IconKey(cls), box, Color.White)) return;
+        var inset = box.Width / 6;
+        Diamond(b, new Rectangle(box.X + inset, box.Y + inset, box.Width - 2 * inset, box.Height - 2 * inset),
+                fallback ?? ClassColor(cls));
+    }
+
     // ── Text proxies (route through the active font — smooth TTF or pixel fallback) ────────────────
-    public void Text(SpriteBatch b, string s, int x, int y, Color c) => Text2.Draw(b, s, x, y, c);
-    public void TextRight(SpriteBatch b, string s, int right, int y, Color c) => Text2.DrawRight(b, s, right, y, c);
-    public void TextCenter(SpriteBatch b, string s, int cx, int y, Color c) => Text2.DrawCentered(b, s, cx, y, c);
+    // THE UNSIZED PROXIES NOW HAVE A NAMED SIZE. They used to fall through to the font's raster height
+    // (32px), which outranked every typography token but ScreenTitle — see UiTypography.Label for what
+    // that did to the hierarchy of half the screens in the game.
+    public void Text(SpriteBatch b, string s, int x, int y, Color c) => Text2.Draw(b, s, x, y, c, UiTypography.Label);
+    public void TextRight(SpriteBatch b, string s, int right, int y, Color c) => Text2.DrawRight(b, s, right, y, c, UiTypography.Label);
+    public void TextCenter(SpriteBatch b, string s, int cx, int y, Color c) => Text2.DrawCentered(b, s, cx, y, c, UiTypography.Label);
 
     // Sized text — build a type hierarchy (big titles/numbers, small labels). `px` is the logical height.
-    public void TextBig(SpriteBatch b, string s, int x, int y, Color c, int px) => Text2.Draw(b, s, x, y, c, px);
-    public void TextRightBig(SpriteBatch b, string s, int right, int y, Color c, int px) => Text2.DrawRight(b, s, right, y, c, px);
-    public void TextCenterBig(SpriteBatch b, string s, int cx, int y, Color c, int px) => Text2.DrawCentered(b, s, cx, y, c, px);
-    public int MeasureBig(string s, int px) => Text2.Measure(s, px);
+    // `face` picks the typeface: the data face at the weight `px` implies by default, or the ceremony
+    // face for a screen title. See SmoothFont for why weight is derived from size rather than passed in.
+    public void TextBig(SpriteBatch b, string s, int x, int y, Color c, int px, TextFace face = TextFace.Data) => Text2.Draw(b, s, x, y, c, px, face);
+    public void TextRightBig(SpriteBatch b, string s, int right, int y, Color c, int px, TextFace face = TextFace.Data) => Text2.DrawRight(b, s, right, y, c, px, face);
+    public void TextCenterBig(SpriteBatch b, string s, int cx, int y, Color c, int px, TextFace face = TextFace.Data) => Text2.DrawCentered(b, s, cx, y, c, px, face);
+    public int MeasureBig(string s, int px, TextFace face = TextFace.Data) => Text2.Measure(s, px, face);
+
+    /// <summary>
+    /// Trim a string until it fits <paramref name="width"/> pixels, ending in an ellipsis.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than on one screen because the alternative is a second copy, and a screen without
+    /// one does not fail loudly — it draws the label straight off the panel and through whatever the
+    /// frame art has there, which reads as a rendering glitch rather than as a string that is too long.
+    /// Every catalogue label is authored freely and no rule caps its length, so any list that draws one
+    /// into a fixed column needs this.
+    /// </remarks>
+    public string Shorten(string text, int width)
+    {
+        if (string.IsNullOrEmpty(text) || width <= 0) return "";
+        if (Measure(text) <= width) return text;
+        var s = text;
+        while (s.Length > 1 && Measure(s + "…") > width) s = s[..^1];
+        return s.TrimEnd() + "…";
+    }
+
+    /// <summary>
+    /// Break a sentence into lines that each fit <paramref name="width"/> pixels.
+    /// </summary>
+    /// <remarks>
+    /// There was no wrapping in this codebase at all, which is why every explanatory string in it is a
+    /// fragment sized to a column — "ON KILL: RICHER LOOT", 21 characters, because that is what fits on
+    /// one line. That constraint is fine for a label and fatal for an explanation: a build game has to
+    /// be able to say "deals NO damage; it opens a window in which everything else hits harder", and
+    /// there is no way to shorten that into a caption without deleting the part the player needs.
+    /// Breaks on spaces only — a word longer than the column is left long rather than cut mid-word,
+    /// because a truncated word reads as a rendering fault.
+    /// </remarks>
+    public IReadOnlyList<string> WrapBig(string text, int width, int px)
+    {
+        var lines = new List<string>();
+        if (string.IsNullOrWhiteSpace(text) || width <= 0) return lines;
+
+        var line = "";
+        foreach (var word in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var candidate = line.Length == 0 ? word : line + " " + word;
+            if (line.Length > 0 && MeasureBig(candidate, px) > width)
+            {
+                lines.Add(line);
+                line = word;
+            }
+            else line = candidate;
+        }
+
+        if (line.Length > 0) lines.Add(line);
+        return lines;
+    }
+
+    /// <summary>
+    /// A small explanation panel beside the cursor — the hover tooltip the settings rows use.
+    /// </summary>
+    /// <remarks>
+    /// Callers draw it LAST so it sits over the row it explains. Near the right or bottom edge of the
+    /// 1920×1080 chrome space it flips to the other side of the anchor, so a tip on the last row is
+    /// never clipped off screen. Deliberately a flat plate rather than an ornate panel: a tooltip is
+    /// furniture, and the ornate frame is a claim of importance this text should not make.
+    /// </remarks>
+    public void HoverTip(SpriteBatch b, string text, Point anchor)
+    {
+        const int width = 430, pad = 14, lineH = 22;
+        var lines = WrapBig(text, width - pad * 2, UiTypography.Secondary);
+        if (lines.Count == 0) return;
+        var h = pad * 2 + lines.Count * lineH;
+        var x = anchor.X + 26;
+        if (x + width > 1912) x = anchor.X - width - 12;
+        var y = anchor.Y + 30;
+        if (y + h > 1072) y = anchor.Y - h - 14;
+        Fill(b, new Rectangle(x + 4, y + 5, width, h), new Color(0, 0, 0) * 0.45f);   // soft drop shadow
+        Fill(b, new Rectangle(x, y, width, h), new Color(0x14, 0x0E, 0x20));
+        Fill(b, new Rectangle(x, y, width, 2), new Color(0xC8, 0x9A, 0x3C));
+        var ty = y + pad;
+        foreach (var l in lines) { TextBig(b, l, x + pad, ty, Vellum, UiTypography.Secondary); ty += lineH; }
+    }
+
+    /// <summary>The sized-text twin of <see cref="Shorten"/>, for anything drawn with TextBig.</summary>
+    public string ShortenBig(string text, int width, int px)
+    {
+        if (string.IsNullOrEmpty(text) || width <= 0) return "";
+        if (MeasureBig(text, px) <= width) return text;
+        var s = text;
+        while (s.Length > 1 && MeasureBig(s + "…", px) > width) s = s[..^1];
+        return s.TrimEnd() + "…";
+    }
 
     /// <summary>A bar from the package_01 art: the ornate frame (ui_bar_&lt;type&gt;_frame) with the pre-coloured
     /// fill (ui_bar_&lt;type&gt;_fill) clipped to <paramref name="pct"/> drawn INSIDE its window (on top, because
@@ -467,12 +1205,23 @@ public sealed class UiKit
             if (pct > 0f) Fill(b, new Rectangle(r.X + 1, r.Y + 1, (int)((r.Width - 2) * pct), r.Height - 2), new Color(0xF0, 0xA8, 0x30));
             return;
         }
-        b.Draw(frame, r, Color.White);   // ornate frame + its (opaque) dark window
+        // An opaque TRACK first. The frame art's window is not opaque everywhere, and on the enemy
+        // nameplate — the one bar that floats over the scene rather than sitting on a panel — the
+        // forest showed through the depleted section, so a half-dead enemy read as a bar with a hole.
+        // A WIDE bar (the boss's, 600 px from 256 px of art) is drawn in five pieces so its corner and
+        // centre ornaments keep their shape and only the plain stone between them stretches — whole-image
+        // stretching smeared the scrollwork 2.3x (playtest 2026-08-26: "the boss bar's frame is stretched
+        // and looks cheap"). The window's inset then follows the scaled art, not a percentage of the width.
+        var scale = r.Height / (float)frame.Height;
+        var wide = r.Width > r.Height * frame.Width / frame.Height * 1.15f;
+        var insetX = wide ? Math.Max(2, (int)MathF.Round(BarWindowInsetSrcPx * scale)) : Math.Max(2, r.Width * 7 / 100);
+        var win = new Rectangle(r.X + insetX, r.Y + Math.Max(2, r.Height * 30 / 100),
+                                r.Width - insetX * 2, Math.Max(1, r.Height * 42 / 100));
+        Fill(b, win, new Color(0x12, 0x0C, 0x10));
+        if (wide) HSliceOrnament(b, frame, r, BarCapSrcPx, BarOrnamentSrcX0, BarOrnamentSrcX1, Color.White);
+        else b.Draw(frame, r, Color.White);   // ornate frame + its (opaque) dark window
         if (pct > 0f && Assets.Get($"ui_bar_{type}_fill") is { } fill && fill.Width > 0)
         {
-            // The fill sits inside the frame window — insets carry the ornate border/gem out of the fill area.
-            var win = new Rectangle(r.X + Math.Max(2, r.Width * 7 / 100), r.Y + Math.Max(2, r.Height * 30 / 100),
-                                    r.Width - Math.Max(4, r.Width * 14 / 100), Math.Max(1, r.Height * 42 / 100));
             var fw = Math.Max(1, (int)(win.Width * pct));
             var src = new Rectangle(0, 0, Math.Max(1, (int)(fill.Width * pct)), fill.Height);
             b.Draw(fill, new Rectangle(win.X, win.Y, fw, win.Height), src, Color.White);

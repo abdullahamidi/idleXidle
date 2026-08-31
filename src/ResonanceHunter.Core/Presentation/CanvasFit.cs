@@ -31,8 +31,13 @@ public static class CanvasFit
     public const int CanvasWidth = 480;
     public const int CanvasHeight = 270;
 
-    /// <summary>Scales offered in windowed mode. Beyond 4x exceeds most laptop panels.</summary>
-    public static readonly int[] WindowedScales = { 2, 3, 4 };
+    /// <summary>
+    /// Scales offered in windowed mode. Beyond 4x exceeds most laptop panels. 2x (960x540) was cut
+    /// after the 2026-08-23 playtest — "I cannot read any of the text, everything is tiny": the 1920
+    /// chrome's body type lands at ~11 physical pixels there, below what the hand-drawn face can hold.
+    /// 3x (1440x810) is the floor that stays readable.
+    /// </summary>
+    public static readonly int[] WindowedScales = { 3, 4 };
 
     /// <summary>
     /// The biggest whole multiple of the canvas that fits in a viewport.
@@ -55,6 +60,25 @@ public static class CanvasFit
     }
 
     /// <summary>
+    /// Aspect-fit at ANY scale: the canvas fills the viewport's shorter axis edge to edge, centred.
+    /// </summary>
+    /// <remarks>
+    /// The integer-only rule above belonged to the abandoned flat-fill pixel-art direction; the live
+    /// renderer is hand-drawn art presented through LinearClamp, and the source is a 1920x1080 render
+    /// target, so a fractional fit is a smooth DOWNSCALE, not pixel smearing. What forced this was the
+    /// 2026-08-23 audit: on a 1366x768 or 1280x720 laptop the integer rule presented 960x540 with a
+    /// letterbox on every side and ~7-pixel body text. Fullscreen and borderless use this; windowed
+    /// keeps the exact integer sizes it advertises.
+    /// </remarks>
+    public static FitRect PresentFit(int viewportWidth, int viewportHeight)
+    {
+        var scale = MathF.Max(1f, MathF.Min(viewportWidth / (float)CanvasWidth, viewportHeight / (float)CanvasHeight));
+        var w = (int)MathF.Round(CanvasWidth * scale);
+        var h = (int)MathF.Round(CanvasHeight * scale);
+        return new FitRect((viewportWidth - w) / 2, (viewportHeight - h) / 2, w, h);
+    }
+
+    /// <summary>
     /// Screen point → canvas point, through the letterbox.
     /// </summary>
     /// <remarks>
@@ -65,13 +89,11 @@ public static class CanvasFit
     /// </remarks>
     public static (int X, int Y) ToCanvas(int screenX, int screenY, FitRect present)
     {
-        var scale = Math.Max(1, present.Width / CanvasWidth);
-        return (FloorDiv(screenX - present.X, scale), FloorDiv(screenY - present.Y, scale));
+        // Float scale, so a PresentFit rect maps as exactly as an integer one. Floor toward negative
+        // infinity for the same reason the old integer path did: a point one pixel LEFT of the canvas
+        // must not round into it and click the leftmost button from off-canvas.
+        var scale = MathF.Max(1f, present.Width / (float)CanvasWidth);
+        return ((int)MathF.Floor((screenX - present.X) / scale), (int)MathF.Floor((screenY - present.Y) / scale));
     }
 
-    private static int FloorDiv(int a, int b)
-    {
-        var q = a / b;
-        return a % b != 0 && (a < 0) != (b < 0) ? q - 1 : q;
-    }
 }

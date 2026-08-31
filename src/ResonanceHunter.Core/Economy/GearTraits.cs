@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using ResonanceHunter.Core.Loot;
 
 namespace ResonanceHunter.Core.Economy;
@@ -13,9 +14,56 @@ public readonly record struct GearMods(float Damage, float Health, float Haul, f
 {
     public static readonly GearMods None = new(1f, 1f, 1f, 1f);
 
-    /// <summary>Gear stacks multiplicatively — three slots must never add up to a flat runaway.</summary>
+    /// <summary>Two layers of ONE item multiply (a trait on top of a base). Not for stacking slots — see <see cref="Stack"/>.</summary>
     public GearMods Combine(GearMods o)
         => new(Damage * o.Damage, Health * o.Health, Haul * o.Haul, SkillRate * o.SkillRate);
+
+    /// <summary>
+    /// How the EIGHT WORN SLOTS stack: each slot's bonus (its multiplier minus one) is ADDED, the sum
+    /// saturates toward a per-channel ceiling, and drawbacks subtract linearly. 1.0 everywhere = bare.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Slots used to multiply (<see cref="Combine"/> folded over the worn set), and the comment beside it
+    /// said that was the safe choice. It was the runaway: eight slots, six of them drawing from one trait
+    /// pool, compounded to 2.5^6 on a single channel, and then <c>PowerRating</c> multiplied the damage
+    /// channel by the skill-rate channel — a degree-fourteen polynomial in per-slot factors that no
+    /// per-item cap could hold down. Playtest, 2026-08-23: "1.5m item power veren silah var."
+    /// </para>
+    /// <para>
+    /// Additive with a ceiling is the shape every other layer here already has (<c>ItemLevelFactor</c>,
+    /// <c>IlvlFactor</c>, the family scale, gems all saturate): a second FOCUSED piece still helps, a
+    /// sixth helps a little, and no set of eight can exceed the ceiling. Ceilings: damage +300%, health
+    /// +200%, haul +200%, skill rate +150% (the skill clock is the channel that hurt most).
+    /// </para>
+    /// </remarks>
+    public static GearMods Stack(IEnumerable<GearMods> slots)
+    {
+        float dUp = 0f, hUp = 0f, lUp = 0f, rUp = 0f, dDown = 0f, hDown = 0f, lDown = 0f, rDown = 0f;
+        foreach (var m in slots)
+        {
+            Split(m.Damage, ref dUp, ref dDown); Split(m.Health, ref hUp, ref hDown);
+            Split(m.Haul, ref lUp, ref lDown); Split(m.SkillRate, ref rUp, ref rDown);
+        }
+        return new GearMods(
+            Channel(dUp, dDown, DamageCeiling), Channel(hUp, hDown, HealthCeiling),
+            Channel(lUp, lDown, HaulCeiling), Channel(rUp, rDown, SkillRateCeiling));
+
+        static void Split(float mult, ref float up, ref float down)
+        {
+            if (mult >= 1f) up += mult - 1f; else down += 1f - mult;
+        }
+        // Bonuses saturate (S / (1 + S/ceiling) never reaches the ceiling) and so do drawbacks — toward
+        // DrawbackCeiling — so the n-th trade piece shrinks on BOTH sides. With linear drawbacks a third
+        // FOCUSED piece was net-negative: its +skill-rate had saturated while its -15% damage had not,
+        // which made "more of the same" a trap (review, 2026-08-23). Floored so nothing zeros a channel.
+        static float Channel(float up, float down, float ceiling)
+            => MathF.Max(0.25f, 1f + up / (1f + up / ceiling) - down / (1f + down / DrawbackCeiling));
+    }
+
+    public const float DamageCeiling = 3.0f, HealthCeiling = 2.0f, HaulCeiling = 2.0f, SkillRateCeiling = 1.5f;
+    /// <summary>The most a channel can lose to stacked drawbacks (-75%), approached, never reached.</summary>
+    public const float DrawbackCeiling = 0.75f;
 }
 
 /// <summary>
@@ -56,52 +104,144 @@ public static class GearTraits
     };
 
     /// <summary>
-    /// The item's trait, derived from its id.
+    /// The item's PREFIX — its rolled character, or null for a plain drop.
     /// </summary>
     /// <remarks>
-    /// FNV-1a rather than <see cref="string.GetHashCode()"/>: .NET randomises string hashing per
-    /// process, so an item's trait would silently change every time the game restarted.
+    /// <para>
+    /// <b>The prefix is DATA now, not a hash, and it is immutable.</b> Playtest, item-system redesign:
+    /// a prefix "itemin karakteristiği" — rolled at mint, carried for life, never re-rolled. The old
+    /// model derived a trait from the id for EVERY wearable and let the Forge re-roll it, which meant
+    /// (a) no item could ever be plain, and (b) re-rolling rewrote the item's NAME and read as the
+    /// weapon turning into a different weapon.
+    /// </para>
+    /// <para>
+    /// It lives in <see cref="ItemInstance.TraitOverride"/> (the field name survives for save
+    /// compatibility), written exactly once by <see cref="RollPrefix"/> at the three mint sites.
+    /// </para>
     /// </remarks>
     public static GearTrait? TraitOf(ItemInstance? item)
     {
         if (item is null) return null;
-        if (Gear.SlotFor(item.BaseType) is not { } slot) return null;
+        if (Gear.SlotFor(item.BaseType) is null) return null;
+        return item.TraitOverride;
+    }
 
-        // A REFORGE won this slot: the player spent materials to overrule the id-derived roll. It takes
-        // precedence over the hash — that overruling IS the feature — but only exists on a wearable item,
-        // so the null-slot guard above still runs first.
-        if (item.TraitOverride is { } forced) return forced;
-
+    /// <summary>
+    /// The trait a PRE-REDESIGN item had under the old id-derivation. MIGRATION ONLY.
+    /// </summary>
+    /// <remarks>
+    /// Old saves never wrote TraitOverride — the trait was derived from the id at read time. Deleting
+    /// the derivation without this would have silently stripped every legacy item's prefix AND its
+    /// combat mods on load (a 2-5x stealth nerf across a worn loadout — adversarial review, pass five,
+    /// HIGH). The save loader calls this exactly when the field is ABSENT; new saves write "NONE" for
+    /// a genuinely plain item, so plain stays plain.
+    /// </remarks>
+    public static GearTrait? LegacyDerivedTrait(string instanceId, ItemBaseType type)
+    {
+        ArgumentNullException.ThrowIfNull(instanceId);
+        if (Gear.SlotFor(type) is not { } slot) return null;
         var pool = PoolFor(slot);
-        return pool[(int)(Fnv1a(item.InstanceId) % (uint)pool.Length)];
+        return pool[(int)(Fnv1a(instanceId) % (uint)pool.Length)];
     }
 
     private static uint Fnv1a(string s)
     {
         var hash = 2166136261u;
-        foreach (var ch in s)
-        {
-            hash ^= ch;
-            hash *= 16777619u;
-        }
+        foreach (var ch in s) { hash ^= ch; hash *= 16777619u; }
         return hash;
+    }
+
+    /// <summary>The chance a freshly minted wearable carries a prefix at all.</summary>
+    public const double PrefixChance = 0.55;
+
+    /// <summary>
+    /// Roll a fresh item's PREFIX: roughly half carry one, drawn from the slot's own pool.
+    /// </summary>
+    /// <remarks>
+    /// Prefixless drops are the point, not a failure case — "legendary x sword bomboş prefixsiz de
+    /// gelebilir". A prefix on every item is a prefix on no item.
+    /// </remarks>
+    public static GearTrait? RollPrefix(ItemBaseType type, Random rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        if (Gear.SlotFor(type) is not { } slot) return null;
+        if (rng.NextDouble() >= PrefixChance) return null;
+        var pool = PoolFor(slot);
+        return pool[rng.Next(pool.Length)];
     }
 
     public static string NameOf(GearTrait t) => t.ToString().ToUpperInvariant();
 
+    /// <summary>
+    /// What a trait does <b>on this exact item</b>, in numbers.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="BlurbOf"/> can only ever be qualitative — "far harder hits, skills come slower" — because
+    /// the real figures depend on the item's rarity AND its refine level, and a sentence written next to
+    /// the enum knows neither. So the player was told the DIRECTION of every trait and never the size of
+    /// one, which is the same as not being told: "harder hits" is a decision only once you know whether
+    /// it means four percent or forty.
+    /// </para>
+    /// <para>
+    /// This reads the item's own <see cref="ModsFor"/> result and prints every channel that moved, with
+    /// its sign. It is generated, so it cannot drift from the trait it describes, and it answers the
+    /// question the blurb raises rather than repeating it.
+    /// </para>
+    /// </remarks>
+    public static string EffectOf(ItemInstance? item)
+    {
+        if (item is null || TraitOf(item) is not { } trait) return "";
+
+        var m = ModsFor(trait, item.Rarity, item.ItemLevel);
+        var parts = new List<string>(4);
+
+        void Channel(string label, float value)
+        {
+            var pct = (value - 1f) * 100f;
+            if (MathF.Abs(pct) < 0.5f) return;                    // a rounding artefact is not an effect
+            parts.Add($"{(pct > 0 ? "+" : "")}{pct:0}% {label}");
+        }
+
+        Channel(Channels[0], m.Damage);
+        Channel(Channels[1], m.Health);
+        Channel(Channels[2], m.SkillRate);
+        Channel(Channels[3], m.Haul);
+
+        return parts.Count == 0 ? "" : string.Join("  ", parts);
+    }
+
+    /// <summary>The four channels a trait can move, in the order <see cref="EffectOf"/> prints them.</summary>
+    /// <remarks>
+    /// <para>
+    /// Public because the test that checks a trait line tells the truth has to name these channels to
+    /// find them, and a second hand-typed copy of the labels is a copy that goes stale the day one is
+    /// renamed — silently, since the assertion would then be looking for a word the string no longer
+    /// contains and "does not contain" is exactly what it asserts in the negative case.
+    /// </para>
+    /// <para>
+    /// They read DMG / HP / SKILL / HAUL until a playtester said the items were unreadable. Every one
+    /// was either an abbreviation or a term you only know if you already play this genre in English —
+    /// "haul" especially, which is not a word for loot outside games. The words cost about twenty
+    /// pixels each in a condensed face and the panel wraps.
+    /// </para>
+    /// </remarks>
+    public static readonly string[] Channels = { "DAMAGE", "HEALTH", "SKILL RATE", "LOOT" };
+
     /// <summary>One line, player-facing. States the cost as plainly as the benefit.</summary>
+    /// <remarks>The DIRECTION of the trade. <see cref="EffectOf"/> gives the size, per item.</remarks>
     public static string BlurbOf(GearTrait t) => t switch
     {
-        GearTrait.Keen => "Cleaner hits. No drawback.",
+        GearTrait.Keen => "Harder hits. No downside.",
         GearTrait.Heavy => "Far harder hits — skills come slower.",
         GearTrait.Swift => "Skills come faster — hits land softer.",
-        GearTrait.Savage => "Brutal hits — the squad is frailer.",
-        GearTrait.Warding => "The squad is tougher — and hits softer.",
-        GearTrait.Vital => "The squad is tougher. No drawback.",
-        GearTrait.Greedy => "A richer haul — the squad is frailer.",
-        GearTrait.Attuned => "Skills come faster. No drawback.",
+        GearTrait.Savage => "Brutal hits — you have less health.",
+        GearTrait.Warding => "More health — but hits land softer.",
+        GearTrait.Vital => "More health. No downside.",
+        GearTrait.Greedy => "More loot — you have less health.",
+        GearTrait.Attuned => "Skills come faster. No downside.",
         GearTrait.Focused => "Skills far faster — hits land softer.",
-        _ => "Harder hits, faster skills — a frail squad.",
+        _ => "Harder hits, faster skills — less health.",
     };
 
     /// <summary>
@@ -111,30 +251,49 @@ public static class GearTraits
     /// <c>up</c> scales with the rarity curve; the downside is a flat constant. See the class remarks —
     /// this asymmetry is deliberate and is what keeps a Legendary feeling like a Legendary.
     /// </remarks>
-    public static GearMods ModsFor(GearTrait trait, Rarity rarity)
+    /// <param name="itemLevel">
+    /// The item's REFINE level. 1 leaves the trait exactly where rarity alone put it.
+    /// </param>
+    /// <remarks>
+    /// Item level was ignored here for the whole of development, and it is the reason REFINE felt like
+    /// nothing. A weapon's damage multiplier and a charm's defence and health all scale with level; a
+    /// TRAIT did not. For a helm, boots, gloves or a ring — slots that contribute through their trait and
+    /// their affixes and nothing else — that meant refining a COMMON one cost scrap and gold and changed
+    /// literally zero, and refining any other rarity moved only half of what the item was worth.
+    ///
+    /// The same <see cref="Gear.ItemLevelFactor"/> the weapon and charm already used, applied to the
+    /// rarity term, so a level-1 item is unchanged and the curves stay in the same family.
+    /// </remarks>
+    public static GearMods ModsFor(GearTrait trait, Rarity rarity, int itemLevel = 1)
     {
-        // 0.20 (Common) → 7.00 (Legendary), damped so a Legendary is a big deal and not a 700% one.
-        var up = 1f + 0.10f * Gear.RarityPower(rarity);
+        // 0.20 (Common) → 7.00 (Legendary), damped so a Legendary is a big deal and not a 700% one,
+        // then deepened by however much the player has poured into this particular piece.
+        // 0.05, was 0.10 — and the trait's own edge is no longer a flat x1.15-x1.20 MULTIPLIER on top of
+        // this (which made a Common HEAVY +17% and a Legendary one +150% on its own, before stacking):
+        // every drawback trait now pays a small flat identity plus a rarity/level term, so a Common
+        // still reads as its trait and a Legendary is strong without being a second multiplier.
+        var up = 1f + 0.05f * Gear.RarityPower(rarity) * Gear.ItemLevelFactor(itemLevel);
+        var t = up - 1f;
 
         return trait switch
         {
             // No-drawback traits are deliberately the WEAK ones. "Safe" should cost you the ceiling.
-            GearTrait.Keen => new(1f + 0.5f * (up - 1f), 1f, 1f, 1f),
-            GearTrait.Vital => new(1f, 1f + 0.5f * (up - 1f), 1f, 1f),
-            GearTrait.Attuned => new(1f, 1f, 1f, 1f + 0.5f * (up - 1f)),
+            GearTrait.Keen => new(1f + 0.5f * t, 1f, 1f, 1f),
+            GearTrait.Vital => new(1f, 1f + 0.5f * t, 1f, 1f),
+            GearTrait.Attuned => new(1f, 1f, 1f, 1f + 0.5f * t),
 
-            GearTrait.Heavy => new(up * 1.15f, 1f, 1f, 0.80f),
-            GearTrait.Swift => new(0.90f, 1f, 1f, up * 1.10f),
-            GearTrait.Savage => new(up * 1.10f, 0.85f, 1f, 1f),
-            GearTrait.Warding => new(0.90f, up * 1.15f, 1f, 1f),
-            GearTrait.Greedy => new(1f, 0.85f, up * 1.20f, 1f),
-            GearTrait.Focused => new(0.85f, 1f, 1f, up * 1.20f),
+            GearTrait.Heavy => new(1.12f + 1.15f * t, 1f, 1f, 0.80f),
+            GearTrait.Swift => new(0.90f, 1f, 1f, 1.10f + 1.10f * t),
+            GearTrait.Savage => new(1.10f + 1.10f * t, 0.85f, 1f, 1f),
+            GearTrait.Warding => new(0.90f, 1.12f + 1.15f * t, 1f, 1f),
+            GearTrait.Greedy => new(1f, 0.85f, 1.15f + 1.20f * t, 1f),
+            GearTrait.Focused => new(0.85f, 1f, 1f, 1.15f + 1.20f * t),
 
             // WILD: everything up, health hard down. A real glass cannon, and a real gamble.
-            _ => new(up * 1.10f, 0.70f, 1f, up * 1.10f),
+            _ => new(1.08f + 1.10f * t, 0.70f, 1f, 1.08f + 1.10f * t),
         };
     }
 
     public static GearMods ModsOf(ItemInstance? item)
-        => TraitOf(item) is { } t && item is not null ? ModsFor(t, item.Rarity) : GearMods.None;
+        => TraitOf(item) is { } t && item is not null ? ModsFor(t, item.Rarity, item.ItemLevel) : GearMods.None;
 }

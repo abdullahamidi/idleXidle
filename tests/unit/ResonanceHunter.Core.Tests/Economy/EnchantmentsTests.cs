@@ -60,7 +60,11 @@ public class EnchantmentsTests
         var pairs = new HashSet<(GearTrait, EnchantKind)>();
         for (var i = 0; i < 400; i++)
         {
-            var it = Item($"w_{i}", ItemBaseType.Weapon);
+            // Minted the way loot mints: prefix from the RNG, enchantment from the id — two dice.
+            var it = Item($"w_{i}", ItemBaseType.Weapon) with
+            {
+                TraitOverride = GearTraits.RollPrefix(ItemBaseType.Weapon, new Random(i)),
+            };
             if (GearTraits.TraitOf(it) is { } t && Enchantments.Of(it) is { } e)
                 pairs.Add((t, e.Kind));
         }
@@ -140,6 +144,94 @@ public class EnchantmentsTests
     {
         var worn = Enchantments.Worn(WeaponWith(EnchantKind.Splinter));
         Assert.Equal(0f, Enchantments.MagnitudeOf(worn, EnchantKind.Undying));
+    }
+
+    [Fact]
+    public void test_every_enchantment_is_claimed_by_a_test_that_proves_it_does_something()
+    {
+        // The enchant-axis twin of Builds/TriggerLivenessTests, and it exists because that guard could
+        // not cover this. It indexes BuildTrigger, and the four keystone/Vow combos deliberately have no
+        // BuildTrigger — they are magnitudes read straight off the worn items, so they could have been
+        // added, shipped and read by nothing with every existing test still green. That is exactly how
+        // VENOM shipped dead: a correct catalogue entry, a correct blurb, and no sim.
+        //
+        // Hand-maintained, for the same reason its twin is: no reflection can ask "does the fight read
+        // this?". Adding an EnchantKind fails this test, and the failure names what you must go prove.
+        var proved = new HashSet<EnchantKind>
+        {
+            EnchantKind.Splinter,    // Builds/TriggerLivenessTests.test_splinter_pays_out_on_a_kill
+            EnchantKind.Harvest,     // Builds/TriggerLivenessTests.test_harvest_pays_out_on_a_kill
+            EnchantKind.Venom,       // Builds/TriggerLivenessTests.test_venom_actually_poisons
+            EnchantKind.Desperation, // Builds/SoloExpeditionTests.test_desperation_swells_the_haul_at_low_health
+            EnchantKind.Undying,     // Builds/TriggerLivenessTests.test_undying_buys_exactly_one_death
+            EnchantKind.Overdraw,    // Builds/SoloBattleTests.test_overdraw_adds_a_projectile_cast
+            EnchantKind.Linger,      // Builds/SoloBattleTests.test_linger_stretches_the_mark_window
+            EnchantKind.Radiance,    // Builds/SoloBattleTests.test_radiance_makes_an_aura_tick_more
+            EnchantKind.Execute,     // Builds/SoloBattleTests.test_execute_speeds_the_kill_of_a_weakened_enemy
+            EnchantKind.Coiled,      // Builds/SoloBattleTests.test_coiled_fires_the_trap_more_often
+            EnchantKind.Siphon,      // Builds/SoloBattleTests.test_siphon_deepens_the_transformation_leech
+            EnchantKind.Fervour,     // Builds/SoloBattleTests.test_fervour_steepens_bloodlust_and_is_dead_without_it
+            EnchantKind.Reverb,      // Builds/SoloBattleTests.test_reverb_sharpens_echo_and_is_dead_without_it
+            EnchantKind.Bulwark,     // Builds/SoloBattleTests.test_bulwark_steepens_zeal_and_is_dead_without_it
+            EnchantKind.Tithe,       // Builds/SoloBattleTests.test_tithe_pays_per_sworn_vow_and_is_dead_without_one
+        };
+
+        foreach (var k in System.Enum.GetValues<EnchantKind>())
+            Assert.True(proved.Contains(k),
+                $"{k} has no test proving the fight reads it. This is how VENOM shipped dead.");
+    }
+
+    [Fact]
+    public void test_every_combo_enchantment_names_what_it_needs()
+    {
+        // A combo whose requirement is null reads to the player as an unconditional effect, because the
+        // Forge only draws the "NEEDS … IN YOUR BUILD" line when there is a requirement to draw. An
+        // enchantment that is dead without a partner and does not SAY so is worse than one that is
+        // simply weak — the player equips it and concludes the game is broken.
+        foreach (var kind in new[]
+                 {
+                     EnchantKind.Overdraw, EnchantKind.Linger, EnchantKind.Radiance, EnchantKind.Execute,
+                     EnchantKind.Coiled, EnchantKind.Siphon, EnchantKind.Fervour, EnchantKind.Reverb,
+                     EnchantKind.Bulwark, EnchantKind.Tithe,
+                 })
+        {
+            var need = new Enchantment(kind, 1f).Needs;
+            Assert.True(need is not null, $"{kind} is a combo and names no requirement");
+            Assert.False(string.IsNullOrWhiteSpace(need!.Label), $"{kind}'s requirement has no label");
+            Assert.True(need.Form is not null || need.Keystone is not null || need.AnyVow,
+                        $"{kind} has a label but no actual condition — the Forge would always call it live");
+        }
+    }
+
+    [Fact]
+    public void test_a_requirement_is_met_only_by_the_axis_it_names()
+    {
+        // The rule the Forge draws its COMBOS / NEEDS line from, and the FITS badge on the loot grid.
+        // It used to live inside a Draw method, where no test could reach it.
+        var noForms = System.Array.Empty<ResonanceHunter.Core.Abilities.Form>();
+        var noTriggers = System.Array.Empty<ResonanceHunter.Core.Builds.BuildTrigger>();
+
+        var form = new Enchantment(EnchantKind.Overdraw, 1f).Needs!;
+        Assert.True(form.MetBy(new[] { ResonanceHunter.Core.Abilities.Form.Projectile }, noTriggers, 0));
+        Assert.False(form.MetBy(new[] { ResonanceHunter.Core.Abilities.Form.Strike }, noTriggers, 0));
+
+        var keystone = new Enchantment(EnchantKind.Fervour, 1f).Needs!;
+        Assert.True(keystone.MetBy(noForms, new[] { ResonanceHunter.Core.Builds.BuildTrigger.Bloodlust }, 0));
+        Assert.False(keystone.MetBy(noForms, new[] { ResonanceHunter.Core.Builds.BuildTrigger.Echo }, 0));
+
+        var vow = new Enchantment(EnchantKind.Tithe, 1f).Needs!;
+        Assert.True(vow.MetBy(noForms, noTriggers, swornVows: 1));
+        Assert.False(vow.MetBy(noForms, noTriggers, swornVows: 0));
+
+        // AND THE CROSS-AXIS CHECK, which is the one worth having. A keystone combo must not read as
+        // live because the player happens to run a Form, and a Form combo must not read as live because
+        // they happen to have sworn a Vow. Each requirement answers its own axis and ignores the rest.
+        Assert.False(keystone.MetBy(
+            new[] { ResonanceHunter.Core.Abilities.Form.Projectile,
+                    ResonanceHunter.Core.Abilities.Form.Strike }, noTriggers, swornVows: 4));
+        Assert.False(vow.MetBy(
+            new[] { ResonanceHunter.Core.Abilities.Form.Projectile },
+            new[] { ResonanceHunter.Core.Builds.BuildTrigger.Bloodlust }, swornVows: 0));
     }
 
     [Fact]

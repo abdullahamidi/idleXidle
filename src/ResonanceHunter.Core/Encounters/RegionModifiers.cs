@@ -13,7 +13,7 @@ namespace ResonanceHunter.Core.Encounters;
 /// </remarks>
 public sealed record RegionModifier(string Name, string Blurb, float EnemyHealthMult, float EnemyDamageMult, int LootTierBonus)
 {
-    public static readonly RegionModifier None = new("STABLE GROUND", "No regional modifier.", 1f, 1f, 0);
+    public static readonly RegionModifier None = new("STABLE GROUND", "No special rule here.", 1f, 1f, 0);
 }
 
 public static class RegionModifiers
@@ -23,11 +23,11 @@ public static class RegionModifiers
     private static readonly Dictionary<string, RegionModifier> ByRegion = new()
     {
         ["verdant_hollow"] = new("VERDANT OVERGROWTH", "Enemies +10% health.", 1.10f, 1f, 0),
-        ["cinderworks"]    = new("MOLTEN PLATING", "Enemies +20% health · richer loot.", 1.20f, 1f, 1),
-        ["umbral_reach"]   = new("UMBRAL VEIL", "Enemies hit +20% harder · richer loot.", 1f, 1.20f, 1),
-        ["marrow_wastes"]  = new("BLOODHUNGER", "Enemies +25% HP & +10% damage.", 1.25f, 1.10f, 1),
-        ["still_archive"]  = new("PSYCHIC STATIC", "Enemies hit +25% harder · richer loot.", 1f, 1.25f, 2),
-        ["pale_choir"]     = new("PALE REQUIEM", "Enemies +20% HP & damage · rich loot.", 1.20f, 1.20f, 2),
+        ["cinderworks"]    = new("MOLTEN PLATING", "Enemies +20% health · better loot.", 1.20f, 1f, 1),
+        ["umbral_reach"]   = new("UMBRAL VEIL", "Enemies hit +20% harder · better loot.", 1f, 1.20f, 1),
+        ["marrow_wastes"]  = new("BLOODHUNGER", "Enemies have +25% health and +10% damage.", 1.25f, 1.10f, 1),
+        ["still_archive"]  = new("PSYCHIC STATIC", "Enemies hit +25% harder · better loot.", 1f, 1.25f, 2),
+        ["pale_choir"]     = new("PALE REQUIEM", "Enemies have +20% health and damage · better loot.", 1.20f, 1.20f, 2),
     };
 
     /// <summary>The modifier for a region, or <see cref="RegionModifier.None"/> for an unmodified one.</summary>

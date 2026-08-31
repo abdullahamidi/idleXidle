@@ -10,6 +10,8 @@ public enum AffixStat { Damage, Health, SkillRate, Haul, Crit, Defense }
 /// <summary>One rolled property on an item: a stat and how much of it.</summary>
 public readonly record struct ItemAffix(AffixStat Stat, float Magnitude);
 
+/// <summary>Formats a raw magnitude for its stat's own unit — see <see cref="ItemAffixes.GrantLabel"/>.</summary>
+
 /// <summary>
 /// An item's EXPLICIT affixes — the rolled bonuses on top of its base type's implicit trait + enchant.
 /// </summary>
@@ -32,6 +34,55 @@ public readonly record struct ItemAffix(AffixStat Stat, float Magnitude);
 /// </remarks>
 public static class ItemAffixes
 {
+    /// <summary>
+    /// A magnitude in its stat's OWN unit: Crit is percentage POINTS, Defense is FLAT, the four
+    /// multiplicative channels are percentages.
+    /// </summary>
+    /// <remarks>
+    /// The Forge's gem and family lines multiplied everything by 100 with a "%" — so a WARD gem
+    /// granting +5.6 flat defense advertised "+560% DEFENCE" (adversarial review, pass five). One
+    /// formatter, beside the magnitudes it formats, so a new display site cannot re-invent the bug.
+    /// </remarks>
+    public static string GrantLabel(AffixStat stat, float magnitude) => stat switch
+    {
+        AffixStat.Crit => $"+{magnitude:0.0}%",
+        AffixStat.Defense => $"+{magnitude:0}",
+        _ => $"+{magnitude * 100f:0}%",
+    };
+
+    /// <summary>
+    /// <see cref="GrantLabel"/> at one extra decimal, for before → after comparisons. A single upgrade
+    /// rung moves an affix by ~2% of itself, which the round figure swallows whole — both sides of the
+    /// arrow printed the same number and the growth looked fake (playtest 2026-08-23).
+    /// </summary>
+    public static string GrantLabelPrecise(AffixStat stat, float magnitude) => stat switch
+    {
+        AffixStat.Crit => $"+{magnitude:0.00}%",
+        AffixStat.Defense => $"+{magnitude:0.0}",
+        _ => $"+{magnitude * 100f:0.0}%",
+    };
+
+    /// <summary>
+    /// The stat's player-facing WORD — the other half of <see cref="GrantLabel"/>.
+    /// </summary>
+    /// <remarks>
+    /// The number had one formatter and the word had three copies: <c>ForgeScreen.AffixName</c>,
+    /// <c>CharacterScreen.AffixLabel</c> and the tail of <see cref="Describe(ItemAffix)"/>. Three copies
+    /// of a six-arm switch is how one screen ends up saying DEFENCE while another says Defense — and a
+    /// player reading two screens has no way to know they are the same stat. Kept beside the magnitudes
+    /// it names, so a new stat cannot be added with a number and no word.
+    /// </remarks>
+    public static string StatWord(AffixStat stat) => stat switch
+    {
+        AffixStat.Damage => "DAMAGE",
+        AffixStat.Health => "HEALTH",
+        AffixStat.SkillRate => "SKILL RATE",
+        AffixStat.Haul => "LOOT",
+        AffixStat.Crit => "CRITICAL CHANCE",
+        AffixStat.Defense => "DEFENCE",
+        _ => stat.ToString().ToUpperInvariant(),
+    };
+
     /// <summary>How many explicit affixes a rarity carries. Common is implicit-only; a Legendary is loaded.</summary>
     public static int CountFor(Rarity rarity) => rarity switch
     {
@@ -55,7 +106,40 @@ public static class ItemAffixes
     };
 
     /// <summary>Per-ilvl growth of an affix's magnitude — the "a deeper drop is better" curve.</summary>
+    /// <remarks>
+    /// Read together with <see cref="IlvlHalf"/>: this is the SLOPE near iL0, not a rate that continues
+    /// forever. See <see cref="IlvlFactor"/>.
+    /// </remarks>
     public const float IlvlScale = 0.04f;
+
+    /// <summary>Where the affix curve has spent half of its total growth.</summary>
+    private const float IlvlHalf = 45f;
+
+    /// <summary>
+    /// How much item level multiplies an affix — saturating, not linear.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This was <c>1 + iL × 0.04</c>, unbounded, which meant a +4% damage affix reached +164% at iL1000
+    /// and four of them turned one item into the entire build. It is half of why the playtest saw
+    /// "meaningless big numbers": capping the weapon multiplier alone still left a deeply refined
+    /// Legendary at 43k damage a second, because the affixes kept climbing after the weapon stopped.
+    /// </para>
+    /// <para>
+    /// The shape mirrors <c>Gear.ItemLevelFactor</c> deliberately — the two levers item level pulls
+    /// should saturate together, or the one that does not becomes the only one that matters. Tuned to
+    /// keep the early curve the design was built around: iL20 lands within a whisker of the old linear
+    /// value (1.80 against 1.80) and iL45 at 2.5, then flattens toward 4.
+    /// </para>
+    /// </remarks>
+    public static float IlvlFactor(int itemLevel)
+    {
+        var levels = MathF.Max(0f, itemLevel);
+
+        // 1 + G·x/(x+H) with G chosen so the slope at x=0 is IlvlScale: G = IlvlScale × H.
+        const float growth = IlvlScale * IlvlHalf;
+        return 1f + growth * levels / (levels + IlvlHalf);
+    }
 
     /// <summary>The base per-affix magnitude of a stat (before ilvl/rarity/variance). Lets callers compare
     /// affixes of different stats on a common "how many multiples of a typical roll" scale — e.g. to pick an
@@ -73,7 +157,7 @@ public static class ItemAffixes
         if (count == 0) return Array.Empty<ItemAffix>();
 
         var stats = Enum.GetValues<AffixStat>();
-        var ilvlFactor = 1f + Math.Max(0, item.ItemLevel) * IlvlScale;
+        var ilvlFactor = IlvlFactor(item.ItemLevel);
         var rarityFactor = 0.6f + Gear.RarityPower(item.Rarity) * 0.10f;   // modest — rarity mostly buys COUNT
 
         var affixes = new List<ItemAffix>(count);
@@ -90,15 +174,7 @@ public static class ItemAffixes
     }
 
     /// <summary>A one-line, player-facing description of an affix (its sign and unit).</summary>
-    public static string Describe(ItemAffix a) => a.Stat switch
-    {
-        AffixStat.Damage => $"+{a.Magnitude * 100f:0}% DMG",
-        AffixStat.Health => $"+{a.Magnitude * 100f:0}% HP",
-        AffixStat.SkillRate => $"+{a.Magnitude * 100f:0}% SKILL",
-        AffixStat.Haul => $"+{a.Magnitude * 100f:0}% HAUL",
-        AffixStat.Crit => $"+{a.Magnitude:0.0}% CRIT",
-        _ => $"+{a.Magnitude:0} DEF",
-    };
+    public static string Describe(ItemAffix a) => $"{GrantLabel(a.Stat, a.Magnitude)} {StatWord(a.Stat)}";
 
     private static uint Fnv1a(string s)
     {

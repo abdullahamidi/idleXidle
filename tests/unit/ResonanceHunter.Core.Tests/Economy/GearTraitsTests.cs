@@ -19,15 +19,15 @@ public class GearTraitsTests
     // ── The trait itself ──────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void test_trait_of_the_same_item_is_always_the_same()
+    public void test_the_prefix_is_the_items_own_field_and_nothing_else()
     {
-        // Derived, not stored — so it must be a pure function of the id. FNV-1a, not GetHashCode(),
-        // because .NET randomises string hashing per process: an item's trait would change on restart.
-        var item = Item("weapon_abc123", ItemBaseType.Weapon);
-        var first = GearTraits.TraitOf(item);
+        // The prefix is DATA now — rolled once at mint, immutable. TraitOf must read the field verbatim
+        // and never invent one for an item that rolled plain.
+        var keen = Item("weapon_abc123", ItemBaseType.Weapon) with { TraitOverride = GearTrait.Keen };
+        Assert.Equal(GearTrait.Keen, GearTraits.TraitOf(keen));
 
-        for (var i = 0; i < 50; i++)
-            Assert.Equal(first, GearTraits.TraitOf(Item("weapon_abc123", ItemBaseType.Weapon)));
+        var plain = Item("weapon_abc123", ItemBaseType.Weapon);
+        Assert.Null(GearTraits.TraitOf(plain));
     }
 
     [Fact]
@@ -38,9 +38,9 @@ public class GearTraitsTests
     }
 
     [Fact]
-    public void test_a_trait_always_comes_from_its_slots_pool()
+    public void test_a_rolled_prefix_always_comes_from_its_slots_pool()
     {
-        // A charm must never roll HEAVY: the trait has to mean something for the slot it sits in.
+        // A charm must never roll HEAVY: the prefix has to mean something for the slot it sits in.
         foreach (var (type, slot) in new[]
                  {
                      (ItemBaseType.Weapon, GearSlot.Weapon),
@@ -50,24 +50,26 @@ public class GearTraitsTests
         {
             var pool = GearTraits.PoolFor(slot);
             for (var i = 0; i < 200; i++)
-            {
-                var t = GearTraits.TraitOf(Item($"item_{i}", type));
-                Assert.NotNull(t);
-                Assert.Contains(t!.Value, pool);
-            }
+                if (GearTraits.RollPrefix(type, new Random(i)) is { } t)
+                    Assert.Contains(t, pool);
         }
     }
 
     [Fact]
-    public void test_ids_spread_across_the_whole_pool()
+    public void test_the_prefix_roll_spreads_across_the_pool_and_leaves_items_plain()
     {
-        // A hash that collapsed onto one trait would technically pass every test above while quietly
-        // making every weapon in the game identical.
+        // The roll must reach every prefix in the pool AND leave a real share of items plain — a
+        // prefix on every item is a prefix on no item ("prefixsiz de gelebilir").
         var seen = new HashSet<GearTrait>();
-        for (var i = 0; i < 200; i++)
-            seen.Add(GearTraits.TraitOf(Item($"weapon_{i}", ItemBaseType.Weapon))!.Value);
+        var plain = 0;
+        for (var i = 0; i < 400; i++)
+        {
+            if (GearTraits.RollPrefix(ItemBaseType.Weapon, new Random(i)) is { } t) seen.Add(t);
+            else plain++;
+        }
 
         Assert.Equal(GearTraits.PoolFor(GearSlot.Weapon).Length, seen.Count);
+        Assert.InRange(plain / 400.0, 0.25, 0.65);
     }
 
     // ── The trade. This is the whole point of the layer. ──────────────────────────────────────
@@ -174,6 +176,29 @@ public class GearTraitsTests
     }
 
     [Fact]
+    public void test_slots_stack_additively_and_saturate()
+    {
+        // The 2026-08-23 rule: across slots the bonuses ADD (1.5 + 2.0 → +150%, not x3) and the sum
+        // saturates toward the channel ceiling; drawbacks subtract linearly. This is the pin against the
+        // "1.5m item power" weapon — eight compounding slots can never happen again by accident.
+        var two = GearMods.Stack(new[] { new GearMods(1.5f, 1f, 1f, 1f), new GearMods(2f, 1f, 1f, 1f) });
+        Assert.True(two.Damage < 3f, $"two slots must not multiply (got {two.Damage})");
+        Assert.True(two.Damage > 1.9f, $"two slots must still add up to a real bonus (got {two.Damage})");
+
+        var eight = GearMods.Stack(Enumerable.Repeat(new GearMods(1f, 1f, 1f, 2.6f), 8));
+        Assert.True(eight.SkillRate < 1f + GearMods.SkillRateCeiling, $"eight slots must stay under the ceiling (got {eight.SkillRate})");
+        Assert.True(eight.SkillRate > 1.9f, "eight FOCUSED slots must still be a big deal");
+
+        var oneDown = GearMods.Stack(new[] { new GearMods(0.8f, 1f, 1f, 1f) });
+        var twoDown = GearMods.Stack(new[] { new GearMods(0.8f, 1f, 1f, 1f), new GearMods(0.8f, 1f, 1f, 1f) });
+        Assert.True(twoDown.Damage < oneDown.Damage, "a second drawback must still cost something");
+        Assert.True(twoDown.Damage > 0.6f, $"but drawbacks soften as they stack, like the bonuses (got {twoDown.Damage})");
+        var many = GearMods.Stack(Enumerable.Repeat(new GearMods(0.7f, 1f, 1f, 1f), 8));
+        Assert.True(many.Damage > 1f - GearMods.DrawbackCeiling, "eight drawbacks cannot pass the drawback ceiling");
+        Assert.Equal(GearMods.None, GearMods.Stack(Array.Empty<GearMods>()));
+    }
+
+    [Fact]
     public void test_none_is_the_identity()
     {
         var m = new GearMods(1.5f, 0.8f, 1.1f, 1.2f);
@@ -212,21 +237,20 @@ public class GearTraitsTests
     {
         // `_worn[slot]?.Rarity ?? 0` would be Rarity.Common, whose RarityPower is 0.20 — an empty slot
         // would quietly pay like a Common item. Note SquadHealthMultiplier is NOT 1.0 while bare: the
-        // Vitality stat has a non-zero base value, so it starts at 1.12. Nothing to do with gear.
+        // VITALITY left the health multiplier on 2026-08-26 (it is regeneration now), so a bare hunter's
+        // health multiplier is exactly 1. Nothing to do with gear.
         var bare = new Hunter();
         Assert.Equal(GearMods.None, bare.WornMods);
 
         // Neither multiplier is 1.0 while bare: Vitality and Engineering both have non-zero base stat
         // values, so they start at 1.12 and 1.06. Nothing to do with gear — what must hold is that an
         // EMPTY slot adds nothing on top of the stat baseline.
-        Assert.Equal(1f + 0.012f * bare.ValueOf(HunterStat.Vitality), bare.SquadHealthMultiplier, 4);
+        Assert.Equal(1f, bare.SquadHealthMultiplier, 4);
         Assert.Equal(1f + 0.006f * bare.ValueOf(HunterStat.Engineering), bare.SquadSkillRate, 4);
     }
 
     private static ItemInstance CharmWith(GearTrait trait, Rarity rarity)
-        => Enumerable.Range(0, 500)
-            .Select(i => Item($"charm_{i}", ItemBaseType.Charm, rarity))
-            .First(it => GearTraits.TraitOf(it) == trait);
+        => Item($"charm_{trait}", ItemBaseType.Charm, rarity) with { TraitOverride = trait };
 
     [Fact]
     public void test_a_worn_traits_drawback_actually_reaches_the_squad()
@@ -258,16 +282,30 @@ public class GearTraitsTests
         // Commons on purpose: they carry a TRAIT but no explicit affixes (ItemAffixes.CountFor is 0), so
         // WornMods is exactly the trait product here. Affixes fold into WornMods too — proven separately in
         // ItemAffixesTests — but they would muddy this test of the trait-stacking alone.
+        var weapon = Item("weapon_1", ItemBaseType.Weapon, Rarity.Common) with { TraitOverride = GearTrait.Heavy };
+        var charm = Item("charm_1", ItemBaseType.Charm, Rarity.Common) with { TraitOverride = GearTrait.Vital };
+        var focus = Item("focus_1", ItemBaseType.AbilityFocus, Rarity.Common) with { TraitOverride = GearTrait.Focused };
+
         var hunter = new Hunter();
-        hunter.Equip(Item("weapon_1", ItemBaseType.Weapon, Rarity.Common));
-        hunter.Equip(Item("charm_1", ItemBaseType.Charm, Rarity.Common));
-        hunter.Equip(Item("focus_1", ItemBaseType.AbilityFocus, Rarity.Common));
+        hunter.Equip(weapon);
+        hunter.Equip(charm);
+        hunter.Equip(focus);
 
-        var expected = GearTraits.ModsOf(Item("weapon_1", ItemBaseType.Weapon, Rarity.Common))
-            .Combine(GearTraits.ModsOf(Item("charm_1", ItemBaseType.Charm, Rarity.Common)))
-            .Combine(GearTraits.ModsOf(Item("focus_1", ItemBaseType.AbilityFocus, Rarity.Common)));
+        // The trait STACK (additive across slots, GearMods.Stack — the 2026-08-23 fix for the
+        // multiplicative runaway), with the BUILT-IN family layer folded in on top — every worn piece's
+        // identity (ItemFamilies) rides the same channel the affixes use, so WornMods is stacked traits x
+        // (1 + summed built-ins). Commons still carry no explicit affixes, so those two layers are
+        // exactly what this composition tests.
+        float Fam(ItemInstance it, AffixStat s)
+            => ItemFamilies.BonusOf(it) is { } f && f.Stat == s ? f.Magnitude : 0f;
+        float Tot(AffixStat s) => Fam(weapon, s) + Fam(charm, s) + Fam(focus, s);
+        var builtIns = new GearMods(1f + Tot(AffixStat.Damage), 1f + Tot(AffixStat.Health), 1f + Tot(AffixStat.Haul), 1f + Tot(AffixStat.SkillRate));
+        var stacked = GearMods.Stack(new[] { GearTraits.ModsOf(weapon), GearTraits.ModsOf(charm), GearTraits.ModsOf(focus), builtIns });
 
-        Assert.Equal(expected, hunter.WornMods);
+        Assert.Equal(stacked.Damage, hunter.WornMods.Damage, 5);
+        Assert.Equal(stacked.Health, hunter.WornMods.Health, 5);
+        Assert.Equal(stacked.Haul, hunter.WornMods.Haul, 5);
+        Assert.Equal(stacked.SkillRate, hunter.WornMods.SkillRate, 5);
     }
 
     [Fact]
@@ -283,9 +321,59 @@ public class GearTraitsTests
 
             // The player must be able to read the trade off the tooltip, not discover it by dying.
             if (hasDrawback)
-                Assert.DoesNotContain("No drawback", blurb);
+                Assert.DoesNotContain("No downside", blurb);
             else
-                Assert.Contains("No drawback", blurb);
+                Assert.Contains("No downside", blurb);
         }
+    }
+
+    /// <summary>
+    /// REFINE must change something, in every slot, at every rarity.
+    /// </summary>
+    /// <remarks>
+    /// REGRESSION, and the reason the upgrade layer felt hollow. A weapon's damage multiplier and a
+    /// charm's defence and health scaled with item level; a gear TRAIT did not. Helm, boots, gloves and
+    /// ring contribute through their trait and their affixes and nothing else, and a COMMON has no
+    /// affixes at all — so refining a Common helm cost scrap and gold and moved not one number in the
+    /// game. There was no way for the player to find that out except by not getting stronger.
+    ///
+    /// This walks every wearable type at every rarity and asserts a refined piece beats an unrefined
+    /// one, measured on the two multipliers the sim actually reads.
+    /// </remarks>
+    [Fact]
+    public void test_refining_any_wearable_changes_the_character()
+    {
+        var types = new[]
+        {
+            ItemBaseType.Weapon, ItemBaseType.Charm, ItemBaseType.AbilityFocus,
+            ItemBaseType.Helm, ItemBaseType.Chest, ItemBaseType.Gloves,
+            ItemBaseType.Boots, ItemBaseType.Ring,
+        };
+
+        foreach (var type in types)
+            foreach (var rarity in new[] { Rarity.Common, Rarity.Uncommon, Rarity.Rare, Rarity.Epic, Rarity.Legendary })
+            {
+                ItemInstance At(int ilvl) => new()
+                {
+                    InstanceId = $"{type}-{rarity}", BaseType = type, Rarity = rarity,
+                    SellValue = 10, ItemLevel = ilvl,
+                };
+
+                var plain = new Hunter();
+                plain.Equip(At(1));
+                var refined = new Hunter();
+                refined.Equip(At(30));
+
+                var moved =
+                    refined.SquadDamageMultiplier > plain.SquadDamageMultiplier * 1.0001f ||
+                    refined.SquadHealthMultiplier > plain.SquadHealthMultiplier * 1.0001f ||
+                    refined.Defense > plain.Defense ||
+                    refined.SquadSkillRate > plain.SquadSkillRate * 1.0001f ||
+                    refined.HaulMultiplier > plain.HaulMultiplier * 1.0001f;
+
+                Assert.True(moved,
+                    $"Refining a {rarity} {type} from level 1 to 30 changed nothing the sim reads. " +
+                    "The player pays scrap and gold for it.");
+            }
     }
 }

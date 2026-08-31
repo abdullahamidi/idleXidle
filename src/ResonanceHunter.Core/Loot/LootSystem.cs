@@ -8,7 +8,13 @@ namespace ResonanceHunter.Core.Loot;
 
 public enum Rarity { Common = 0, Uncommon = 1, Rare = 2, Epic = 3, Legendary = 4 }
 
-public enum ItemBaseType { CreatureCore, Weapon, Charm, Material, AbilityFocus, Helm, Chest, Gloves, Boots, Ring }
+public enum ItemBaseType
+{
+    CreatureCore, Weapon, Charm, Material, AbilityFocus, Helm, Chest, Gloves, Boots, Ring,
+
+    /// <summary>A socketable STAT GEM — not wearable itself; it lives inside a Rare+ item's socket.</summary>
+    Gem,
+}
 
 /// <summary>
 /// A minted item instance.
@@ -47,6 +53,13 @@ public sealed record ItemInstance
     public int ItemLevel { get; init; } = 1;
 
     /// <summary>
+    /// How many REFINES this item has taken, 0..15. The redesign's enhancement ladder: the first five
+    /// never fail, then a rising slip chance, and +15 is the top. A failed refine steps BOTH this and
+    /// the item level back by one, so the ladder is climbed, not bought.
+    /// </summary>
+    public int Upgrades { get; init; }
+
+    /// <summary>
     /// The item's element, or null for the elementally inert (materials, cores).
     /// </summary>
     /// <remarks>
@@ -58,6 +71,17 @@ public sealed record ItemInstance
 
     /// <summary>Non-null only for an equipped charm. Makes the item ineligible for EVERY Forge operation.</summary>
     public string? EquippedToCreatureId { get; init; }
+
+    /// <summary>
+    /// The STAT GEMS socketed into this item — themselves items (<see cref="ItemBaseType.Gem"/>).
+    /// </summary>
+    /// <remarks>
+    /// Playtest, item-system redesign: "rare eşyada 1, epicte 2 ve legendary'de 3 slot... stat taşları
+    /// rastgele özellik verecek ve kendi seviyeleri olacak." Wearables only; a gem never nests gems.
+    /// NOTE: a record `with`-copy SHARES this list — <c>GemCraft.Socket/Crush</c> therefore always
+    /// build a NEW list for their product, so an old copy can never see a gem it should not.
+    /// </remarks>
+    public List<ItemInstance> Gems { get; init; } = new();
 
     /// <summary>
     /// A REFORGED trait, overriding the id-derived one. Null (the default) means "derive from the id".
@@ -89,10 +113,36 @@ public sealed record ItemInstance
     /// Reforge never sets it there, and <c>Enchantments.Of</c> still returns null for a sub-Rare item.
     /// </remarks>
     public EnchantKind? EnchantOverride { get; init; }
+
+    /// <summary>
+    /// The item's CLASS — who can wear it — or null for an item minted before classes existed.
+    /// </summary>
+    /// <remarks>
+    /// Nullable for the same reason <see cref="Element"/> is: a `?? Warden` would silently hand every
+    /// pre-class save's helms to two champions and take them off the other eight. Null reads as
+    /// "anyone" — see <c>ItemClasses.CanWear</c> — so an update never strips a worn piece. Meaningless
+    /// on a universal slot (charm, ring, focus) and on anything unwearable; every mint path sets it on
+    /// the five class-locked slots and leaves it null elsewhere.
+    /// </remarks>
+    public ItemClass? Class { get; init; }
+
+    /// <summary>
+    /// A weapon's FAMILY (an index into <c>ItemNaming.WeaponFamilies</c>), or null to derive it from the id.
+    /// </summary>
+    /// <remarks>
+    /// The family used to be a pure function of the id, which was fine while any weapon could be any
+    /// shape. A class carries only two shapes, so a fresh weapon's family is chosen from its class's
+    /// list and stored here; an old weapon keeps null and therefore keeps the exact family — the art,
+    /// the name and the stat channel — it has always had. See <c>ItemNaming.WeaponFamilyIndex</c>.
+    /// </remarks>
+    public int? Family { get; init; }
 }
 
 public sealed record LootTuning
 {
+    /// <summary>How a class-locked drop picks its class. See <see cref="ClassRollTuning"/>.</summary>
+    public ClassRollTuning ClassRoll { get; init; } = ClassRollTuning.Default;
+
     public float BonusDropChancePercent { get; init; } = 35f;
     public int BonusRollAttempts { get; init; } = 3;
     public int DropCountBaseStandard { get; init; } = 1;
@@ -150,6 +200,22 @@ public sealed record KillContext
     /// <summary>Formula 7's output. Exactly 100 for an automated kill — automation IS the reference.</summary>
     public float ActiveEfficiencyPercent { get; init; } = 100f;
 
+    /// <summary>
+    /// The slots the REGION is known for. Twice as likely to drop here; never exclusive.
+    /// </summary>
+    /// <remarks>
+    /// Empty means "anywhere", which is what every region used to be: eight slots at uniform odds, so
+    /// the only thing a place decided about its loot was the element. A tilt rather than a lock, because
+    /// a region that could only drop two slots would force a tour of the map to finish a set.
+    /// </remarks>
+    public IReadOnlyList<ItemBaseType> FavouredTypes { get; init; } = Array.Empty<ItemBaseType>();
+
+    /// <summary>
+    /// The active champion's item class, so four in five class-locked drops are theirs. Null rolls
+    /// uniformly across the five — a kill with no champion behind it, which only the tests make.
+    /// </summary>
+    public ItemClass? FavouredClass { get; init; }
+
     /// <summary>Null for an active kill. Set for an automated one.</summary>
     public int? AutomationStage { get; init; }
 
@@ -159,6 +225,9 @@ public sealed record KillContext
 public static class LootSystem
 {
     /// <summary>The eight wearable base types. Spelled out here so Loot keeps no dependency on Economy's Gear.</summary>
+    /// <summary>How often a region's wearable drop comes from its favoured pool rather than the full set.</summary>
+    public const double RegionFavourShare = 0.5;
+
     private static readonly ItemBaseType[] Wearables =
     {
         ItemBaseType.Weapon, ItemBaseType.Charm, ItemBaseType.AbilityFocus,
@@ -188,9 +257,15 @@ public static class LootSystem
         var count = DropCount(ctx, rng, tuning);
         for (var i = 0; i < count; i++)
         {
-            // 45% material, the rest split evenly across the eight wearable slots.
-            var baseType = rng.NextDouble() < 0.45 ? ItemBaseType.Material : Wearables[rng.Next(Wearables.Length)];
-            items.Add(Mint(baseType, RollRarity(ctx, rng, tuning), rng, tuning, ctx.Element, ctx.PowerTier));
+            // 45% material; the rest across the wearable slots, tilted toward what this region is for.
+            // Half of a region's wearables come from its favoured pool — so a forge really does hand you
+            // weapons — and the other half stay uniform, so nothing is ever unobtainable in the wrong place.
+            var baseType = rng.NextDouble() < 0.45
+                ? ItemBaseType.Material
+                : ctx.FavouredTypes.Count > 0 && rng.NextDouble() < RegionFavourShare
+                    ? ctx.FavouredTypes[rng.Next(ctx.FavouredTypes.Count)]
+                    : Wearables[rng.Next(Wearables.Length)];
+            items.Add(Mint(baseType, RollRarity(ctx, rng, tuning), rng, tuning, ctx.Element, ctx.PowerTier, ctx.FavouredClass));
         }
 
         return items;
@@ -213,19 +288,35 @@ public static class LootSystem
     /// element is possible at all — a random element per drop would make a matched trio pure luck.
     /// </para>
     /// </remarks>
-    private static ItemInstance Mint(ItemBaseType type, Rarity rarity, Random rng, LootTuning tuning, Source? element, int itemLevel) => new()
+    private static ItemInstance Mint(ItemBaseType type, Rarity rarity, Random rng, LootTuning tuning, Source? element, int itemLevel,
+                                     ItemClass? favouredClass = null)
     {
-        InstanceId = $"itm_{rng.Next(int.MaxValue):x8}",
-        BaseType = type,
-        Rarity = rarity,
-        SellValue = tuning.RaritySellValue[(int)rarity],
-        ItemLevel = Math.Max(1, itemLevel),
+        // Draw order is id, prefix, class, family — the two new draws come LAST so every seeded
+        // fixture that pinned an id or a prefix before classes existed still gets the same one.
+        var id = $"itm_{rng.Next(int.MaxValue):x8}";
+        // The PREFIX is rolled once, here at mint, and never changes — see GearTraits.RollPrefix.
+        var prefix = Economy.GearTraits.RollPrefix(type, rng);
+        // THE CLASS IS ROLLED HERE, ONCE, for the five class-locked slots and never for the rest — a
+        // charm with a class would be a field the wear rule ignores, which is a lie waiting to be read.
+        // A weapon's family comes from its class's own two shapes, so a WARDEN's bow cannot exist.
+        var cls = ItemClasses.IsClassLocked(type) ? ItemClasses.Roll(favouredClass, rng, tuning.ClassRoll) : (ItemClass?)null;
+        return new()
+        {
+            InstanceId = id,
+            BaseType = type,
+            Rarity = rarity,
+            SellValue = tuning.RaritySellValue[(int)rarity],
+            ItemLevel = Math.Max(1, itemLevel),
+            TraitOverride = prefix,
 
-        // Only wearables are attuned. An elemental lump of scrap would be noise — and it would let a
-        // trio of materials carry an element into a hybrid, which is the one thing mixing must cost.
-        // Materials and cores are the only inert types; every wearable slot attunes.
-        Element = type is ItemBaseType.Material or ItemBaseType.CreatureCore ? null : element,
-    };
+            // Only wearables are attuned. An elemental lump of scrap would be noise — and it would let a
+            // trio of materials carry an element into a hybrid, which is the one thing mixing must cost.
+            // Materials and cores are the only inert types; every wearable slot attunes.
+            Element = type is ItemBaseType.Material or ItemBaseType.CreatureCore ? null : element,
+            Class = cls,
+            Family = type == ItemBaseType.Weapon && cls is { } c ? ItemClasses.RollFamily(c, rng) : null,
+        };
+    }
 
     /// <summary>Formula 1 — Drop Count. Hard-bounded; the clamp is what makes it un-exploitable.</summary>
     public static int DropCount(KillContext ctx, Random rng, LootTuning tuning)

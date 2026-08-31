@@ -94,30 +94,63 @@ public class WeavingTests
     [Fact]
     public void test_two_vows_with_identical_uptime_are_priced_identically()
     {
-        var bloodied = Weaving.Catalog.Single(v => v.Id == "vow_bloodied");
-        var bossBound = Weaving.Catalog.Single(v => v.Id == "vow_boss_bound");
+        var a = Weaving.Catalog.Single(v => v.Id == "vow_deliberate");
+        var b = Weaving.Catalog.Single(v => v.Id == "vow_frantic");
 
-        Assert.Equal(bloodied.ExpectedUptime, bossBound.ExpectedUptime);
-        Assert.Equal(Weaving.VowMultiplier(bloodied, Tuning), Weaving.VowMultiplier(bossBound, Tuning), precision: 4);
+        Assert.Equal(a.Severity, b.Severity);
+        Assert.Equal(Weaving.VowMultiplier(a, Tuning), Weaving.VowMultiplier(b, Tuning), precision: 4);
     }
 
     /// <summary>
-    /// THE UNBROKEN's condition can actually be FALSE — the regression for a Vow that was always-on.
+    /// Every demand can be BOTH met and unmet. The regression for a Vow that was always-on.
     /// </summary>
     /// <remarks>
-    /// Its old trigger (InTheFront) watched the squad slot, which the solo champion ALWAYS occupies, so
-    /// the Vow paid its full 2.2x multiplier every fight for free — a strictly-dominant pick, priced as a
-    /// restriction it never actually bore. It now watches health: active while whole, dead once a real
-    /// fight brings you low. If IsActive ever returns true for BOTH states again, a conditional Vow has
-    /// stopped being conditional.
+    /// THE UNBROKEN's old trigger watched the squad slot, which the solo champion ALWAYS occupies, so it
+    /// paid its full multiplier every fight for free — a strictly-dominant pick priced as a restriction
+    /// it never bore. The same hole exists for build demands: a demand every build satisfies is a free
+    /// multiplier, and one no build can satisfy is a dead entry. This walks the whole catalogue rather
+    /// than one Vow, so neither can be added quietly.
     /// </remarks>
     [Fact]
-    public void test_the_unbroken_vow_binds_to_health_not_a_phantom_slot()
+    public void test_every_demand_can_be_both_met_and_unmet()
     {
-        var v = Weaving.ById("vow_vanguard")!;
+        // Two extremes of the build space. Nothing in between is needed: a demand that is true in both
+        // or false in both is broken whichever way it leans.
+        var wide = new WeaveContext(
+            DistinctForms: 4, DistinctSources: 4, SkillsWoven: 4, SkillSlots: 4,
+            CritPercent: 40f, BaseCritPercent: 5f, SkillRate: 2.0f, Defence: 60,
+            KeystonesWorn: 3, WornSlots: new HashSet<BareSlot>
+                { BareSlot.Boots, BareSlot.Gloves, BareSlot.Helm, BareSlot.Ring, BareSlot.Charm });
 
-        Assert.True(Weaving.IsActive(v, new WeaveContext(0.90f, 0, false, 0)), "THE UNBROKEN must hold while whole");
-        Assert.False(Weaving.IsActive(v, new WeaveContext(0.30f, 0, false, 0)), "THE UNBROKEN must drop once you are hurt");
+        var narrow = new WeaveContext(
+            DistinctForms: 1, DistinctSources: 1, SkillsWoven: 1, SkillSlots: 4,
+            CritPercent: 5f, BaseCritPercent: 5f, SkillRate: 0.6f, Defence: 0,
+            KeystonesWorn: 0, WornSlots: new HashSet<BareSlot>());
+
+        foreach (var vow in Weaving.Catalog.Where(v => v.Kind == VowKind.Demand))
+        {
+            var met = Weaving.IsActive(vow, wide) || Weaving.IsActive(vow, narrow);
+            var unmet = !Weaving.IsActive(vow, wide) || !Weaving.IsActive(vow, narrow);
+
+            Assert.True(met, $"{vow.Id} is satisfied by no build at all — it is a dead catalogue entry.");
+            Assert.True(unmet, $"{vow.Id} is satisfied by every build — it is a free multiplier wearing " +
+                               "the word VOW, which is exactly what THE UNBROKEN was.");
+        }
+    }
+
+    /// <summary>A demand is answered at the WORKBENCH, so it cannot read the fight.</summary>
+    /// <remarks>
+    /// The whole point of the rewrite. A Vow that paid only below 40% health was a lottery on how the
+    /// wave went, in a game where the player cannot react to a wave at all — so whether the Vow paid was
+    /// decided by the content rather than by them.
+    /// </remarks>
+    [Fact]
+    public void test_a_demand_does_not_depend_on_how_the_fight_goes()
+    {
+        var fields = typeof(WeaveContext).GetProperties().Select(p => p.Name).ToList();
+
+        foreach (var banned in new[] { "Health", "Elapsed", "Boss", "Wave", "Damage" })
+            Assert.DoesNotContain(fields, f => f.Contains(banned, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -159,7 +192,7 @@ public class WeavingTests
         Assert.True(fragility.StaticCostMagnitude > 0f);
     }
 
-    /// <summary>A conditional Vow grants NOTHING when its condition is unmet. That is the trade.</summary>
+    /// <summary>A demand Vow grants NOTHING when the build does not meet it. That is the trade.</summary>
     [Fact]
     public void test_a_conditional_vow_grants_no_power_when_its_condition_is_unmet()
     {
@@ -168,7 +201,7 @@ public class WeavingTests
             Name = "TEST",
             Source = Source.Body,
             Form = Form.Strike,
-            Vow = Weaving.Catalog.Single(v => v.Id == "vow_bloodied"),
+            Vow = Weaving.Catalog.Single(v => v.Id == "vow_singular"),
         };
 
         var active = Weaving.AbilityPower(ability, Source.Body, 50f, vowActive: true, Tuning);
@@ -200,14 +233,17 @@ public class WeavingTests
     // ── Composition beats stat-stacking ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// Picking the right Source against a target beats raw affinity investment. Pillar 4.
+    /// The matchup is a NUDGE now: it wins ties, and it no longer beats real investment.
     /// </summary>
     /// <remarks>
-    /// A player who reads the matchup and brings the right element out-damages one who simply piles
-    /// stats into resonance. If that were not true, builds would be stat-stacks, not trade-offs.
+    /// This test used to pin the opposite — a matched Source at modest stats beating a mismatched
+    /// one at DOUBLE stats — and that world is exactly what the playtest called "çok basit": the
+    /// deepest-looking axis reduced to a colour chart. Since the SIGNATURE pass, an element is an
+    /// identity (what it DOES when it lands), and the matchup is seasoning. Both directions are
+    /// pinned so neither a re-inflation nor a total flattening can slip through.
     /// </remarks>
     [Fact]
-    public void test_the_right_source_beats_a_higher_stat_with_the_wrong_source()
+    public void test_the_matchup_wins_ties_but_no_longer_beats_real_investment()
     {
         var target = Source.Mind;
 
@@ -217,12 +253,18 @@ public class WeavingTests
         Assert.True(Weaving.SourceEffectiveness(Source.Body, target, Tuning) > 1f);
         Assert.True(Weaving.SourceEffectiveness(Source.Machine, target, Tuning) < 1f);
 
-        // The matched Source at MODEST affinity beats the mismatched one at DOUBLE the affinity.
-        var matched = Weaving.AbilityPower(wellMatched, target, 60f, false, Tuning);
-        var stacked = Weaving.AbilityPower(mismatched, target, 120f, false, Tuning);
+        // At EQUAL stats the counter still wins — the nudge is real...
+        var matched = Weaving.AbilityPower(wellMatched, target, 100f, false, Tuning);
+        var evenMismatch = Weaving.AbilityPower(mismatched, target, 100f, false, Tuning);
+        Assert.True(matched > evenMismatch,
+            $"At equal stats the matched Source ({matched:0.0}) must still beat the mismatched ({evenMismatch:0.0}).");
 
-        Assert.True(matched > stacked,
-            $"Matched Source ({matched:0.0}) must beat a mismatched stat-stack ({stacked:0.0}).");
+        // ...but a DOUBLED stat with the wrong element beats it COMFORTABLY. Evaluated at 100/200,
+        // far past the ~59 crossover, with a stated margin — the first draft sat at 60/120 and
+        // passed by 0.19%, a knife-edge that any retune would trip for the wrong reason.
+        var stacked = Weaving.AbilityPower(mismatched, target, 200f, false, Tuning);
+        Assert.True(stacked > matched * 1.05f,
+            $"Doubled investment ({stacked:0.0}) must out-damage the bare counter ({matched:0.0}) clearly.");
     }
 
     /// <summary>Mark deals no direct damage — it is an amplifier, not a hit.</summary>
@@ -238,8 +280,8 @@ public class WeavingTests
         {
             Assert.False(string.IsNullOrWhiteSpace(vow.Description));
 
-            if (vow.Kind == VowKind.Conditional)
-                Assert.InRange(vow.ExpectedUptime, 0.01f, 0.99f);
+            if (vow.Kind == VowKind.Demand)
+                Assert.InRange(vow.Severity, 0.01f, 0.99f);
             else
                 Assert.True(vow.StaticCostMagnitude > 0f, $"{vow.Id} is a static Vow that costs nothing.");
         }

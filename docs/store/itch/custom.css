@@ -1,0 +1,74 @@
+/* IDLExIDLE — itch.io custom CSS. Paste into Edit theme → Custom CSS once itch grants it for the
+   project. The page works without this; it only sharpens what the theme colours already set. */
+
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&display=swap');
+
+/* The game's palette (UiKit.cs) */
+:root {
+  --void: #14101A;
+  --ink: #1B1620;
+  --panel: #0A0810;
+  --vellum: #EDE3C8;
+  --vellum-dim: #B8AE96;
+  --gold: #F0A830;
+  --gold-soft: #C48A2C;
+}
+
+/* Headings in the wordmark's face */
+.game_frame h1, .game_frame h2, .game_frame h3,
+.formatted_description h2, .formatted_description h3 {
+  font-family: 'Cinzel', 'Times New Roman', serif;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--gold);
+  text-shadow: 0 1px 0 #2A1A0C;
+}
+
+/* Body text: vellum, a touch larger, roomier lines */
+.formatted_description, .formatted_description p, .formatted_description li {
+  color: var(--vellum);
+  font-size: 17px;
+  line-height: 1.55;
+}
+.formatted_description strong { color: #FFF3D6; }
+.formatted_description hr {
+  border: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold-soft), transparent);
+  margin: 28px 0;
+}
+
+/* The baked strips sit flush and never scale past their own width */
+.formatted_description img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+
+/* Screenshot sidebar and download box: gold hairlines over panel ink */
+.screenshot_list img, .game_thumb, .video_embed {
+  border: 2px solid var(--gold-soft);
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px #2A1A0C, 0 8px 24px rgba(0,0,0,.6);
+}
+.uploads, .buy_row, .game_info_panel_widget, .more_information_toggle {
+  background: rgba(10, 8, 16, .85);
+  border: 1px solid var(--gold-soft);
+  border-radius: 6px;
+  color: var(--vellum);
+}
+.game_info_panel_widget td, .game_info_panel_widget a { color: var(--vellum); }
+.game_info_panel_widget a:hover { color: var(--gold); }
+
+/* Buttons: hearth gold with void ink lettering, like the game's confirm button */
+.button, .download_btn, .buy_btn {
+  background: linear-gradient(180deg, #F6D888, #C48A2C);
+  color: var(--void) !important;
+  border: 1px solid #2A1A0C;
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-shadow: none;
+}
+.button:hover, .download_btn:hover, .buy_btn:hover { filter: brightness(1.08); }
+
+/* Comments and the itch footer recede into the ink */
+.community_widget, .game_comments_widget { color: var(--vellum-dim); }
+.footer, .footer a { color: var(--vellum-dim); }

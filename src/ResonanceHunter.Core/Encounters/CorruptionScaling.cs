@@ -3,32 +3,30 @@ using System;
 namespace ResonanceHunter.Core.Encounters;
 
 /// <summary>
-/// The endgame ratchet. Once the whole world is conquered, the player may "deepen the corruption":
-/// every region's creatures get tougher, and every reward gets richer, forever.
+/// What a corruption tier does to the fight and the payout.
 /// </summary>
 /// <remarks>
-/// This is what an idle game needs past its finish line — a reason to keep hunting after the last boss
-/// falls. It is deliberately a ONE-WAY ratchet that resets NOTHING (the game's prestige pillar): higher
-/// corruption is pure "more", scaling both threat and payoff so the permanent Memory Dust economy keeps
-/// moving. Kept as pure functions of the tier so the balance lives in tests, not in the UI layer.
+/// BOUNDED since 2026-08-23: every function clamps its tier to <see cref="MaxTier"/>. DEEPEN used to
+/// count up forever, and the playtest said exactly what that felt like — "bir sayı arttırıyormuşum
+/// hissi veriyor, zorluk arttırdığımı hissedemiyorum." Five named tiers the world visibly answers to
+/// (<see cref="CorruptionLook"/>) read as a climb; an unbounded counter reads as a counter.
 /// </remarks>
 public static class CorruptionScaling
 {
-    /// <summary>Corrupted creatures are tankier: +60% max health per tier.</summary>
+    /// <summary>The deepest the corruption goes. Tiers are 0 (the base world) to this.</summary>
+    public const int MaxTier = 5;
+
+    /// <summary>A tier clamped into the ladder — what every other function and the presentation read.</summary>
+    public static int Clamp(int corruptionTier) => Math.Clamp(corruptionTier, 0, MaxTier);
+
     public static float HealthMultiplier(int corruptionTier)
-        => 1f + 0.6f * Math.Max(0, corruptionTier);
+        => 1f + 0.6f * Clamp(corruptionTier);
 
-    /// <summary>Each corruption tier adds one effective power tier, so attacks hit harder and wind faster.</summary>
-    public static int TierBonus(int corruptionTier) => Math.Max(0, corruptionTier);
+    public static int TierBonus(int corruptionTier) => Clamp(corruptionTier);
 
-    /// <summary>Rewards (Memory Dust from mastery and boss kills) scale up: ×(1 + tier).</summary>
     public static float RewardMultiplier(int corruptionTier)
-        => 1f + Math.Max(0, corruptionTier);
+        => 1f + Clamp(corruptionTier);
 
-    /// <summary>
-    /// The Memory Dust milestone paid the moment a new corruption tier is reached — a concrete, one-off
-    /// payoff for choosing to make the world harder.
-    /// </summary>
     public static int DeepeningDustAward(int newCorruptionTier)
-        => 60 * Math.Max(1, newCorruptionTier);
+        => 60 * Math.Max(1, Clamp(newCorruptionTier));
 }

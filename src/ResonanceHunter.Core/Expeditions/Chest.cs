@@ -34,10 +34,61 @@ public sealed record Chest
 
     /// <summary>The region's element, so the items inside are attuned like any other regional drop.</summary>
     public Source? Element { get; init; }
+
+    /// <summary>
+    /// WHERE this chest was won, so its contents lean toward what that place is known for.
+    /// </summary>
+    /// <remarks>
+    /// A chest is opened long after the fight that dropped it, often in another region entirely, so the
+    /// place has to travel WITH the chest — the same reason <see cref="RunTilt"/> exists. Null is a
+    /// chest from before regions had drop profiles, and it rolls exactly as it always did.
+    /// </remarks>
+    public string? Region { get; init; }
+
+    /// <summary>How well the descent that earned this chest was fought — a rarity tilt, 1.0 for neutral.</summary>
+    /// <remarks>
+    /// <para>
+    /// THE CHEST REMEMBERS ITS RUN, and it has to, because a chest is opened long after the fight that
+    /// dropped it. Without this the run's <c>Haul.Quality</c> had nowhere to go: it was accumulated
+    /// correctly wave by wave, carried correctly to the end, and then read by nothing at all — the
+    /// SPLINTER trigger's ONLY effect in the whole simulation, spent into a field with no consumer.
+    /// </para>
+    /// <para>
+    /// That made everything granting SPLINTER pay nothing: the REAPER keystone, which costs -25% skill
+    /// rate for it and was therefore a strictly negative socket; the Splinter weapon enchant, one of
+    /// three in the weapon pool, including its rarity-scaled magnitude; and THE QUIVER's grant.
+    /// </para>
+    /// <para>
+    /// Neutral is 1.0 rather than 0, because it multiplies through the same <c>buildTilt</c> path the
+    /// build's own rarity uses — an old chest deserialised without the field must behave exactly as it
+    /// did before, and 0 would silently make every one of them worthless.
+    /// </para>
+    /// </remarks>
+    public float RunTilt { get; init; } = 1f;
+
+    /// <summary>
+    /// A GIFT's catalogue key (<see cref="GiftChests"/>), or null for the ordinary chest that rolls its
+    /// contents at open.
+    /// </summary>
+    /// <remarks>
+    /// The one exception to "contents are rolled at open": a gift is handed over, not gambled, so its
+    /// contents are fixed data and its dossier says exactly what it holds. Null-default, name-keyed and
+    /// ignored when unknown — a save from before gifts existed, or from a build with a gift this one
+    /// lacks, opens as the plain chest its grade and tier describe.
+    /// </remarks>
+    public string? Gift { get; init; }
 }
 
 /// <summary>What a chest paid out when opened: materials, and the items to land in the bag.</summary>
-public sealed record ChestReward(int Materials, IReadOnlyList<ItemInstance> Items);
+/// <summary>
+/// What an opened chest paid. GEMS ride their own channel: the dossier promises "N items", and a gem
+/// inflating that count (or breaking the rarity floor with its level-tracking frame grade) would make
+/// the promise a lie.
+/// </summary>
+public sealed record ChestReward(int Materials, IReadOnlyList<ItemInstance> Items)
+{
+    public IReadOnlyList<ItemInstance> Gems { get; init; } = Array.Empty<ItemInstance>();
+}
 
 /// <summary>Knobs for what chests drop and what they pay. Data-driven so the numbers live in one place.</summary>
 /// <remarks>
@@ -69,6 +120,9 @@ public sealed record ChestTuning
     /// <summary>Chance of ONE extra item on top. Keeps it "mostly 1, sometimes 2" — never a pile, any grade.</summary>
     public float ExtraItemChance { get; init; } = 0.35f;
 
+    /// <summary>Chance a chest also carries a STAT GEM (see <c>GemCraft</c>).</summary>
+    public float GemChance { get; init; } = 0.30f;
+
     /// <summary>
     /// The MINIMUM item rarity each grade GUARANTEES (indexed Common..Legendary). A good chest cannot
     /// disappoint — a Legendary always yields at least an Epic, an Epic at least a Rare.
@@ -97,9 +151,28 @@ public sealed record ChestTuning
     /// does is a moment. The chance rises a little with depth — farming a deeper region pays out somewhat
     /// more often, "seviyeye göre" — but is capped so it never becomes a guarantee again.
     /// </remarks>
-    public float BaseDropChance { get; init; } = 0.30f;
-    public float DropChancePerTier { get; init; } = 0.015f;
-    public float MaxDropChance { get; init; } = 0.60f;
+    /// <remarks>
+    /// <b>Retuned after counting.</b> 0.30 rising to 0.60 sounded like "sometimes" and measured as a
+    /// metronome: 60% of bosses, and a boss every fifth wave, is a chest every eight waves — about one
+    /// every twenty seconds at the speed waves actually die. The playtest's "still too many chests"
+    /// was correct and the old numbers said so if anyone added them up.
+    ///
+    /// A chest is now roughly one boss in eight at the surface and one in three at depth. That keeps
+    /// the promise the comment above always made — an event, not a paycheck — and it makes the depth
+    /// nudge readable: farming deep genuinely pays out more often instead of both ends sitting at the
+    /// cap.
+    /// </remarks>
+    /// <remarks>
+    /// <b>ONE FLAT PERCENTAGE, no depth ramp.</b> Player direction after playing it: a chest should be
+    /// "a percent chance to drop from a boss", not a number you have to reconstruct from a base, a
+    /// per-tier slope and a cap. The ramp was invisible from inside the game — nobody can feel 12%
+    /// creeping toward 35% — so it bought nothing except a rule the player could not hold in their head,
+    /// and it quietly made deep farming the only sensible place to be.
+    ///
+    /// Depth still buys everything it should: the chest's GRADE, and the item tier inside it. What it no
+    /// longer buys is how OFTEN, which is now the same promise everywhere in the game: one boss in five.
+    /// </remarks>
+    public float DropChance { get; init; } = 0.20f;
 
     public static ChestTuning Default { get; } = new();
 }
@@ -107,6 +180,47 @@ public sealed record ChestTuning
 /// <summary>Dropping chests, and cracking them open.</summary>
 public static class Chests
 {
+    /// <summary>
+    /// Does this chest pass the player's keep-filter?
+    /// </summary>
+    /// <remarks>
+    /// Playtest: "Gereksiz chestleri almak istemezsem diye loot filtresi koyabilmem lazım... örneğin
+    /// sadece tier 10 üstü, veya sadece ring atan kutuları al." Two axes: a tier floor, and a slot the
+    /// chest's region must favour. A chest with NO regional lean can drop anything, so it passes every
+    /// slot filter — filtering it away would throw out exactly the chests that might hold the wanted
+    /// slot.
+    /// </remarks>
+    public static bool PassesKeepFilter(Chest chest, int minTier, ItemBaseType? slot)
+        => PassesKeepFilter(chest, minTier, slot is { } one ? new[] { one } : Array.Empty<ItemBaseType>());
+
+    /// <summary>
+    /// The keep-filter with SEVERAL wanted slots (2026-08-23: "hem bot hem kolye arıyor olabilirim"):
+    /// a chest passes the slot half when nothing is wanted, when its region has no lean, or when its
+    /// lean favours ANY of the wanted slots. The tier floor applies as before.
+    /// </summary>
+    public static bool PassesKeepFilter(Chest chest, int minTier, IReadOnlyCollection<ItemBaseType> slots)
+    {
+        ArgumentNullException.ThrowIfNull(chest);
+        ArgumentNullException.ThrowIfNull(slots);
+        if (chest.Tier < minTier) return false;
+        if (slots.Count == 0) return true;
+        var favoured = ChestDossiers.For(chest).Favoured;
+        if (favoured.Count == 0) return true;
+        foreach (var wanted in slots)
+            if (favoured.Contains(wanted)) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// What a filtered-away chest pays instead of landing — modest Scrap, so the filter is a
+    /// convenience, never a farm that outearns opening.
+    /// </summary>
+    public static int FilterCompensation(Chest chest)
+    {
+        ArgumentNullException.ThrowIfNull(chest);
+        return 8 + chest.Tier;
+    }
+
     /// <summary>
     /// Roll a chest's GRADE for a drop at a given tier. Deeper tiers push the odds toward the top.
     /// </summary>
@@ -137,18 +251,28 @@ public static class Chests
         return Rarity.Legendary;
     }
 
-    /// <summary>How likely a felled boss at this tier is to drop a chest at all. Low, rising with depth, capped.</summary>
+    /// <summary>How likely a felled boss is to drop a chest at all — one flat chance, everywhere.</summary>
+    /// <remarks>
+    /// Keeps the tier parameter it no longer reads. Callers pass a depth because a chest's GRADE and
+    /// item TIER are still depth-driven, and removing it from this one signature would make the call
+    /// sites disagree about whether depth matters here at all — it does, just not to the frequency.
+    /// </remarks>
     public static float DropChance(int tier, ChestTuning? tuning = null)
-    {
-        tuning ??= ChestTuning.Default;
-        return Math.Min(tuning.MaxDropChance, tuning.BaseDropChance + Math.Max(0, tier) * tuning.DropChancePerTier);
-    }
+        => (tuning ?? ChestTuning.Default).DropChance;
 
     /// <summary>Mint a chest a boss drops at this tier — grade rolled now, contents rolled at open.</summary>
-    public static Chest RollDrop(int tier, Source? element, Random rng, ChestTuning? tuning = null)
+    public static Chest RollDrop(int tier, Source? element, Random rng, ChestTuning? tuning = null,
+                                 float runTilt = 1f, string? region = null)
     {
         ArgumentNullException.ThrowIfNull(rng);
-        return new Chest { Rarity = RollRarity(tier, rng, tuning), Tier = Math.Max(1, tier), Element = element };
+        return new Chest
+        {
+            Rarity = RollRarity(tier, rng, tuning),
+            Tier = Math.Max(1, tier),
+            Element = element,
+            Region = region,
+            RunTilt = MathF.Max(0.05f, runTilt),
+        };
     }
 
     /// <summary>
@@ -164,12 +288,33 @@ public static class Chests
     /// materials, exactly as the Forge's merge and reforge are pure and the screen owns the mutation.
     /// </para>
     /// </remarks>
-    public static ChestReward Open(Chest chest, Random rng, LootTuning? loot = null, ChestTuning? tuning = null)
+    /// <param name="rarityBonus">
+    /// The build's loot-quality tilt, from <see cref="Builds.BuildMods.Rarity"/> — 1 is neutral.
+    /// </param>
+    /// <remarks>
+    /// REGRESSION FIX. Rarity was resolved from keystones, gear and the trait tree, carried through the
+    /// expedition as Haul.Quality, summed across waves — and then read by nothing. Every node on the
+    /// FORTUNE road, and every "+RARITY" affix, was inert. The tilt multiplies the chest grade's own
+    /// quality so a rarity build makes GOOD chests better rather than making bad ones adequate.
+    /// </remarks>
+    /// <param name="favouredClass">
+    /// The class of the champion opening it — four in five class-locked pieces inside are theirs.
+    /// Null rolls uniformly across the five classes.
+    /// </param>
+    public static ChestReward Open(
+        Chest chest, Random rng, LootTuning? loot = null, ChestTuning? tuning = null,
+        float rarityBonus = 1f, ItemClass? favouredClass = null)
     {
         ArgumentNullException.ThrowIfNull(chest);
         ArgumentNullException.ThrowIfNull(rng);
         tuning ??= ChestTuning.Default;
         loot ??= LootTuning.Default;
+
+        // A GIFT IS NOT A ROLL. Its contents are catalogue data, minted the same on every open, and it
+        // takes nothing from the random source — so a gift can never move what the next boss's chest
+        // holds. Everything below is the ordinary chest.
+        if (GiftChests.Get(chest.Gift) is { } gift)
+            return GiftChests.Open(chest, gift, loot);
 
         // Materials: a tight band, nudged only by depth. GRADE is deliberately absent — it must not pay
         // MORE, only rarer items below.
@@ -189,15 +334,28 @@ public static class Chests
         // item would be redundant clutter and an anticlimactic reveal ("a Legendary chest gave me… a
         // material"). Material rolls are discarded; if the whole roll happened to be materials, one gear
         // piece is minted at the grade's floor so a chest is never "just materials".
-        var gear = ExpeditionLoot.RollBoss(chest.Tier, quality, rng, loot, element: chest.Element)
+        // The build's standing rarity AND how the run that won this chest was fought, multiplied: both
+        // are "you earned better odds", and they compose the way every other pair of multipliers here
+        // does. RunTilt defaults to 1, so a chest from before it existed rolls exactly as it always did.
+        var gear = ExpeditionLoot.RollBoss(
+                chest.Tier, quality, rng, loot, element: chest.Element,
+                buildTilt: MathF.Max(0.05f, rarityBonus * MathF.Max(0.05f, chest.RunTilt)),
+                region: chest.Region, favouredClass: favouredClass)
             .Where(i => i.BaseType is not ItemBaseType.Material)
             .ToList();
         if (gear.Count == 0)
-            gear.Add(MintGear(floor, chest.Element, rng, loot, chest.Tier));
+            gear.Add(MintGear(floor, chest.Element, rng, loot, chest.Tier, favouredClass));
 
         var items = gear.Take(itemCount).Select(i => Elevate(i, floor, loot)).ToList();
 
-        return new ChestReward(materials, items);
+        // STAT GEMS ride in chests — the socket system's supply line. On their OWN channel, outside
+        // Elevate and the item-count promise: a gem's frame grade tracks its LEVEL, and the chest's
+        // rarity floor must not repaint it.
+        var gems = rng.NextDouble() < tuning.GemChance
+            ? new[] { Economy.GemCraft.MintGem(chest.Tier, rng) }
+            : Array.Empty<ItemInstance>();
+
+        return new ChestReward(materials, items) { Gems = gems };
     }
 
     private static readonly ItemBaseType[] GearTypes =
@@ -207,15 +365,28 @@ public static class Chests
     };
 
     /// <summary>Mint one wearable at a set rarity — the guaranteed-gear fallback when a roll was all materials.</summary>
-    private static ItemInstance MintGear(Rarity rarity, Source? element, Random rng, LootTuning loot, int tier) => new()
+    private static ItemInstance MintGear(Rarity rarity, Source? element, Random rng, LootTuning loot, int tier,
+                                         ItemClass? favouredClass)
     {
-        InstanceId = $"itm_{rng.Next(int.MaxValue):x8}",
-        BaseType = GearTypes[rng.Next(GearTypes.Length)],
-        Rarity = rarity,
-        SellValue = loot.RaritySellValue[(int)rarity],
-        Element = element,
-        ItemLevel = Math.Max(1, tier),
-    };
+        var type = GearTypes[rng.Next(GearTypes.Length)];
+        var id = $"itm_{rng.Next(int.MaxValue):x8}";
+        var prefix = Economy.GearTraits.RollPrefix(type, rng);   // the prefix is born here
+        // Same class shape as LootSystem.Mint: class-locked slots roll one, the rest stay null, and a
+        // weapon's family comes from its class's own shapes. Drawn after the id and prefix.
+        var cls = ItemClasses.IsClassLocked(type) ? ItemClasses.Roll(favouredClass, rng, loot.ClassRoll) : (ItemClass?)null;
+        return new()
+        {
+            InstanceId = id,
+            BaseType = type,
+            Rarity = rarity,
+            SellValue = loot.RaritySellValue[(int)rarity],
+            Element = element,
+            ItemLevel = Math.Max(1, tier),
+            TraitOverride = prefix,
+            Class = cls,
+            Family = type == ItemBaseType.Weapon && cls is { } c ? ItemClasses.RollFamily(c, rng) : null,
+        };
+    }
 
     /// <summary>Lift an item to the grade's rarity FLOOR if the roll came in below it — never lower it.</summary>
     /// <remarks>

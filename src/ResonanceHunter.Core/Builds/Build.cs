@@ -82,6 +82,38 @@ public enum BuildTrigger
     /// <summary>Damage scales with how much health is PRESENT — the mirror of <see cref="Bloodlust"/>.</summary>
     Zeal,
 
+    /// <summary>Your STRIKES spend the whole CHARGE pool for bonus force — the CHARGE spender.</summary>
+    /// <remarks>
+    /// CHARGE is the shared stack primitive: every skill cast stores one point, and nothing reads
+    /// the pool unless a keystone does. REND is what turns the pool into a rhythm — pool casts,
+    /// then dump them through a Strike. Dead without a Strike in the build, on purpose: a spender
+    /// with nothing to spend through is a keystone you should not have socketed.
+    /// </remarks>
+    Rend,
+
+    /// <summary>The CHARGE pool holds twice as much. Means nothing without a spender.</summary>
+    Capacitor,
+
+    /// <summary>Every bite you take stores CHARGE — the wall that winds the spring.</summary>
+    Dynamo,
+
+    /// <summary>Clearing a wave with a FULL pool yields a spare core — the holder's reward.</summary>
+    /// <remarks>In direct tension with <see cref="Rend"/>: one wants the pool dumped, one wants it kept.</remarks>
+    Lodestone,
+
+    /// <summary>A KILL readies every skill at once — the next shot goes out immediately.</summary>
+    /// <remarks>
+    /// Written because THE QUIVER's card said it and nothing did it. The character granted
+    /// <see cref="Splinter"/>, whose own blurb is "on kill: richer loot", so the passive a player
+    /// unlocks by finishing a quest promised an action-economy payoff and delivered a loot one — two
+    /// different sentences, neither of them the one on the card.
+    ///
+    /// Worth most in a Swarm band and nothing at all against a single creature, which is exactly the
+    /// shape a Projectile specialist's passive should have: it rewards the build that can convert one
+    /// kill into the next, and it is dead weight on a boss.
+    /// </remarks>
+    LooseAgain,
+
     // ── Form-combo triggers, granted by item enchantments. Each is dead weight without its Form. ─────
     /// <summary>PROJECTILE fires one extra time.</summary>
     Overdraw,
@@ -100,6 +132,35 @@ public enum BuildTrigger
 
     /// <summary>TRANSFORMATION leeches far more health.</summary>
     Siphon,
+
+    // NOTE — the keystone/Vow combo enchantments (FERVOUR, REVERB, BULWARK, TITHE) deliberately have
+    // NO entry here. A BuildTrigger earns its place by being something more than one source can grant
+    // and the sim can ASK about: VENOM comes from a keystone or a weapon, UNDYING from a keystone, a
+    // charm or a character. Those four come from exactly one place, an item, and what the sim needs
+    // from them is a magnitude rather than a yes — so they are read straight off the worn enchantments
+    // like Venom's and Harvest's strengths are. Adding them here would have put four values in this
+    // enum that nothing ever reads, which is precisely the shape of failure
+    // TriggerLivenessTests exists to refuse. Their own guard lives in EnchantmentsTests.
+
+    /// <summary>
+    /// HOARDER — the AVARICE terminal. Haul becomes force.
+    /// </summary>
+    /// <remarks>
+    /// The path it ends buys no combat power at all, which is what makes it a real choice; the terminal
+    /// is what stops it being a dead end. Without this, an Avarice hunter's reward for a whole permanent
+    /// path is money, and money's only use is gear they could have had by pushing depth instead.
+    /// </remarks>
+    Hoarder,
+
+    /// <summary>
+    /// WEAVER — the ARTIFICE terminal. Every skill also fires as the NEXT Form in the loadout.
+    /// </summary>
+    /// <remarks>
+    /// The design's "two Forms in one slot", expressed with the loadout that exists. It is the path for
+    /// players who want their build to do something strange rather than something large, and it is the
+    /// only thing in the game that lets a single slot answer two of the content's four demands.
+    /// </remarks>
+    Weaver,
 }
 
 /// <summary>
@@ -142,12 +203,83 @@ public sealed record Keystone
 /// the player WOVE. That is what <c>Core.Abilities</c> was always for, and it is why Form finally
 /// matters: a build is a choice of Forms, and the Vow on each is what it cost to have them.
 /// </remarks>
-public sealed record EquippedSkill(WovenAbility Ability, int CooldownMs)
+public sealed record EquippedSkill(WovenAbility Ability, int CooldownMs, bool? PassiveSlot = null)
 {
+    /// <summary>
+    /// Which face of the skill this slot took — the tree's ring 0. Null means "whichever face this
+    /// Form has always had", which is what every call site written before the rework means.
+    /// </summary>
+    /// <remarks>
+    /// A computed fallback rather than <c>false</c>, and the distinction is load-bearing: AURA and
+    /// TRAP have never taken a beat, so defaulting them to their ACTIVE face would silently turn two
+    /// passives into casts and change every fight in the game. The default is the migration bridge —
+    /// eighty-odd call sites keep their exact meaning, and a caller that has a real ring-0 choice
+    /// says so.
+    /// </remarks>
+    public bool Passive => PassiveSlot
+        ?? (FormBehaviour.IsPassive(Form) || FormBehaviour.FiresOnBeingHit(Form));
+
     public string Name => Ability.Name;
     public Form Form => Ability.Form;
-    public Source Source => Ability.Source;
+    /// <summary>
+    /// What this skill is MADE OF — its element, its matchup on the ring, its signature.
+    /// </summary>
+    /// <remarks>
+    /// THE SKILL'S OWN TREE OWNS IT NOW (designer, 2026-08-30): "Source skillerin ağacında seçim
+    /// olarak gelsin. Her skillin 2 ayrı uyumlu sourcesi olsun. Skill ağacında iki farklı seçenek
+    /// olarak 2 dala ayrılsın ve devam geliştirmeleri bununla bağlantılı geliştirmeler olsun."
+    ///
+    /// The fork was already there — a skill has two variations and three reinforcements hanging off
+    /// whichever one you take — so the Source rides that fork rather than adding a layer. Choosing
+    /// what the skill BECOMES and choosing what it is MADE OF are one decision, and the three
+    /// reinforcements under it are that decision's continuation.
+    ///
+    /// Until a variation is taken the skill falls back to the Source it was woven with, so a
+    /// champion that has not levelled a skill yet still has an element.
+    /// </remarks>
+    public Source Source => Variation?.Source ?? Ability.Source;
     public Vow? Vow => Ability.Vow;
+
+    /// <summary>
+    /// The catalogue entry behind this skill, resolved through the legacy <see cref="Form"/> bridge.
+    /// </summary>
+    /// <remarks>
+    /// The bridge is deliberate and temporary. <see cref="WovenAbility"/> still carries a Form, so a
+    /// saved build and every existing call site keep working while the rework lands stage by stage;
+    /// once <c>WovenAbility</c> carries a <c>SkillId</c> this becomes a lookup by id and the Form
+    /// column disappears. See <c>design/gdd/skill-slots-and-skill-trees.md</c> §11.
+    /// </remarks>
+    public SkillDef Def
+    {
+        get
+        {
+            var def = SkillCatalogue.Resolve(Form, Passive);
+            // THE VARIATION AND ITS REINFORCEMENTS ARE DELTAS ON THE DEFINITION, applied in order.
+            // The fight loop keeps reading one SkillDef and gains no case per variation — which is
+            // what stops twenty-four variations becoming twenty-four branches.
+            if (Variation?.Modify is { } m) def = m(def);
+            foreach (var r in Reinforcements) if (r.Modify is { } rm) def = rm(def);
+            return def;
+        }
+    }
+
+    /// <summary>The variation the player took, or null while this skill's identity is unchosen.</summary>
+    public SkillVariation? Variation { get; init; }
+
+    /// <summary>The reinforcements bought for that variation.</summary>
+    public IReadOnlyList<Reinforcement> Reinforcements { get; init; } = Array.Empty<Reinforcement>();
+
+    /// <summary>
+    /// Does this skill cost the champion its action?
+    /// </summary>
+    /// <remarks>
+    /// <b>This is the number the whole rework turns on.</b> Beat demand is the share of beats claimed
+    /// by a cast, and the basic attack only swings on what is left over
+    /// (<c>SoloBattle</c>: <c>if (onBeat &amp;&amp; !acted)</c>). Four beat-taking skills demanded ~0.80 of
+    /// the beats, so the champion's own swing clip almost never played — which is the animation
+    /// chaos, the effect pile-up and the jammed cooldown knob, all from one cause.
+    /// </remarks>
+    public bool TakesABeat => Def.TakesABeat;
 }
 
 /// <summary>
@@ -167,13 +299,137 @@ public sealed record EquippedSkill(WovenAbility Ability, int CooldownMs)
 /// </remarks>
 public sealed class Build
 {
-    /// <summary>How many skills a character may have woven at once.</summary>
+    /// <summary>How many skills a character STARTS able to weave.</summary>
     /// <remarks>
     /// Four, because a build must be a CHOICE of Forms. Six Forms and six slots would mean everyone
     /// carries everything and the Form axis collapses — the same way an unbounded gear budget collapsed
     /// "which item" into "the biggest number".
+    ///
+    /// This is the FLOOR, not the rule. The trait spine sells a fifth (<c>weave_5</c>); see
+    /// <see cref="SlotCapacity"/>, which is what <see cref="Weave"/> actually enforces.
     /// </remarks>
     public const int SkillSlots = 4;
+
+    /// <summary>How many skills THIS build may weave — four, or five once the spine has sold the fifth.</summary>
+    /// <remarks>
+    /// An instance value rather than the const above, because the const was the whole bug. FIFTH WEAVE
+    /// is a three-point node on the trait spine; <c>DustEffects.SkillSlots</c> returned 5 for a player
+    /// who owned it, the host wrote that into <c>PlayerLoadout.SkillCapacity</c>, and then <c>AddSkill</c>
+    /// took <c>Math.Min(MaxSkills, SkillCapacity)</c> against a hard 4 and threw it away. The node was
+    /// bought, persisted, resolved, displayed — and clamped off at the last step, which is this
+    /// codebase's signature failure wearing a different hat.
+    ///
+    /// <b>The floor is WHAT IS ALREADY WOVEN, not <see cref="SkillSlots"/>.</b> It used to be the
+    /// constant 4, on the reasoning that a build handed a smaller capacity would silently unweave skills
+    /// the player already had — which was sound while every player had four slots from the first frame.
+    ///
+    /// The gradual-unlock pass ended that: a new champion has ONE slot and earns the rest. Against a
+    /// hard floor of 4 the build reported four slots to a player who had one, and the consequence was
+    /// not cosmetic — VOW OF COMPLETION demands "no skill slot is empty", so it compared 1 woven against
+    /// 4 slots and was UNMEETABLE for the entire onboarding, reading UNMET on the Weave screen for a
+    /// build that in fact had no empty slot at all.
+    ///
+    /// Keeping the real protection and dropping the wrong constant: the capacity can never report fewer
+    /// slots than there are skills in them, so nothing is ever unwoven, and it is otherwise honest.
+    /// </remarks>
+    public int SlotCapacity
+    {
+        get => Math.Max(_slotCapacity, _skills.Count);
+        set => _slotCapacity = Math.Max(1, value);
+    }
+
+    private int _slotCapacity = SkillSlots;
+
+    /// <summary>
+    /// How many ACTIVE skills — ones that cost the champion an action — a build may carry.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The rework's target is <b>two</b>, against two passive slots. Beat demand with four actives is
+    /// about 0.80 (Strike 0.17 + Projectile 0.25 + Mark 0.19 + Transformation 0.19), so four beats in
+    /// five were somebody's cast and the plain swing almost never played. Two actives takes it to
+    /// about 0.44 <i>without moving a single cooldown</i>, which is why the knob that had no room
+    /// left in it stops mattering.
+    /// </para>
+    /// <para>
+    /// <b>It is deliberately still four here.</b> Stage 2 of the rework installs the machinery — the
+    /// per-kind capacities and the enforcement in <see cref="Weave"/> — with the numbers left where
+    /// they are, so the whole suite stays green while the mechanism is proven. Flipping this to 2
+    /// is stage 2b, and it lands together with the balance re-measurement that has to come with it:
+    /// halving the actives roughly halves cast output, so <c>AutoAttackDamage</c> and
+    /// <c>FormBaseValue</c> move with it. See <c>design/gdd/skill-slots-and-skill-trees.md</c> §10.
+    /// </para>
+    /// </remarks>
+    public int ActiveCapacity
+    {
+        get => Math.Max(_activeCapacity ?? SlotCapacity, ActiveCount);
+        set => _activeCapacity = Math.Max(1, value);
+    }
+
+    /// <summary>How many PASSIVE skills — ones that never cost an action — a build may carry.</summary>
+    public int PassiveCapacity
+    {
+        get => Math.Max(_passiveCapacity ?? SlotCapacity, PassiveCount);
+        set => _passiveCapacity = Math.Max(0, value);
+    }
+
+    // UNSET MEANS "THE WHOLE BUDGET", not a constant. A build handed a fifth slot by the trait spine
+    // raises SlotCapacity, and a per-kind cap frozen at the old constant would clamp that fifth slot
+    // off — which is the exact bug FIFTH WEAVE already had once (see SlotCapacity's note). A build
+    // composed for a real player has both set (see ActiveSlotsFor); one built bare in a test keeps
+    // the undivided budget, so a test that only cares about damage need not learn the slot rules.
+    private int? _activeCapacity;
+    private int? _passiveCapacity;
+
+    /// <summary>
+    /// How many of a build's slots are ACTIVE, given the total it has earned.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The unlock order is <b>active, passive, active, passive</b>, so a full four-slot build is
+    /// 2 + 2 and the SECOND slot a player ever earns already teaches that the two kinds are
+    /// different. A character that has earned one slot gets an active, because a build with nothing
+    /// but a Field never chooses an action at all.
+    /// </para>
+    /// <para>
+    /// The fifth slot the trait spine sells falls to the active side here. §11 wants it to become the
+    /// player's own choice of a third active or a third passive — that is a workbench decision and a
+    /// save field, and it is deliberately not invented in this pass. It matters because a third
+    /// active pushes beat demand back toward 0.6, which is a real cost the player should be electing
+    /// rather than being handed.
+    /// </para>
+    /// </remarks>
+    public static int ActiveSlotsFor(int totalSlots) => (Math.Max(1, totalSlots) + 1) / 2;
+
+    /// <summary>The passive half of <see cref="ActiveSlotsFor"/>.</summary>
+    public static int PassiveSlotsFor(int totalSlots) => Math.Max(1, totalSlots) - ActiveSlotsFor(totalSlots);
+
+    /// <summary>Woven skills that cost the champion an action.</summary>
+    public int ActiveCount => _skills.Count(s => s.TakesABeat);
+
+    /// <summary>Woven skills that never cost an action — Fields and Reactions.</summary>
+    public int PassiveCount => _skills.Count(s => !s.TakesABeat);
+
+    /// <summary>
+    /// The share of beats a build's actives demand, 0..1 — and therefore how little is left for the
+    /// champion's own swing.
+    /// </summary>
+    /// <remarks>
+    /// An upper bound rather than a measurement: two ready skills contend for one beat and the loser
+    /// waits, so the realised share is a little under this. It is the number the whole rework exists
+    /// to bring down, and it is exposed so a test can assert on it instead of a human counting swings
+    /// in a capture.
+    /// </remarks>
+    public float BeatDemand
+    {
+        get
+        {
+            var demand = 0f;
+            foreach (var s in _skills)
+                if (s.TakesABeat && s.Def.Beats > 0) demand += 1f / s.Def.Beats;
+            return Math.Min(1f, demand);
+        }
+    }
 
     /// <summary>
     /// The character's Form AFFINITY — the Nen-hexagon axis. Null means unchosen (everything neutral).
@@ -194,7 +450,17 @@ public sealed class Build
     public bool Weave(EquippedSkill skill)
     {
         ArgumentNullException.ThrowIfNull(skill);
-        if (_skills.Count >= SkillSlots) return false;
+        if (_skills.Count >= SlotCapacity) return false;
+        // PER-KIND CAPACITY. An active costs the champion an action and a passive never does, so they
+        // are two different budgets and a build cannot spend one on the other. Enforced from the
+        // moment the field exists rather than left switched off, because a capacity nothing checks is
+        // exactly the dormant-feature failure this codebase keeps producing — FIFTH WEAVE was bought,
+        // persisted, resolved, displayed and then clamped off at the last step.
+        if (skill.TakesABeat)
+        {
+            if (ActiveCount >= ActiveCapacity) return false;
+        }
+        else if (PassiveCount >= PassiveCapacity) return false;
         _skills.Add(skill);
         return true;
     }
@@ -295,6 +561,20 @@ public sealed class Build
     /// </remarks>
     public IReadOnlySet<BuildTrigger> ExtraTriggers { get; set; } = new HashSet<BuildTrigger>();
 
+    /// <summary>
+    /// How the skill tree changes the WAY this build fights, as opposed to how big its numbers are.
+    /// </summary>
+    /// <remarks>
+    /// A third channel alongside <see cref="PassiveMods"/> and <see cref="ExtraTriggers"/>, set by whoever
+    /// owns the MasteryTree, for the same reason: Core.Builds must not know what a MasteryTree is.
+    ///
+    /// Left at <see cref="SkillShape.None"/> it changes nothing — which is the correct reading for an
+    /// unallocated tree and also the reading for a wire someone forgot to connect. The tests in
+    /// SkillShapeBattleTests are what tell those two apart, and they exist because exactly that silent
+    /// failure left the entire loot-rarity chain inert for the whole of development.
+    /// </remarks>
+    public SkillShape Shape { get; set; } = SkillShape.None;
+
     /// <summary>Every behaviour this build turns on — from keystones and from worn gear alike.</summary>
     /// <remarks>
     /// A HashSet: two sources granting the same trigger is one trigger, not two. UNDYING from a
@@ -325,6 +605,8 @@ public sealed class Build
         EnchantKind.Execute => BuildTrigger.Execute,
         EnchantKind.Coiled => BuildTrigger.Coiled,
         EnchantKind.Siphon => BuildTrigger.Siphon,
+        // FERVOUR / REVERB / BULWARK / TITHE fall through to null on purpose — see the note in the
+        // BuildTrigger enum. They are magnitudes, not answers to a yes/no question.
         _ => null,
     };
 }

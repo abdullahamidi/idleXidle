@@ -14,9 +14,13 @@ namespace ResonanceHunter.Core.Persistence;
 public sealed record SaveGame
 {
     /// <summary>Bumped whenever the shape changes. A save from the future must be refused, not guessed at.</summary>
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
 
     public int Version { get; init; } = CurrentVersion;
+
+    // Version history: 2 = the item-system redesign (BaseType "Gem", nested SavedItem.Gems, and
+    // TraitOverride's "NONE" sentinel). An older build's strict Enum.Parse would crash on "Gem", so
+    // the bump turns that crash into the designed FromNewerVersion refusal.
 
     /// <summary>UTC epoch milliseconds. The basis of offline progression.</summary>
     public long SavedAtMs { get; init; }
@@ -31,14 +35,26 @@ public sealed record SaveGame
     public int Core { get; init; }
     public int Crystal { get; init; }
 
+    /// <summary>
+    /// Single-use Forge charters, by name. Absent on every save written before they existed, which
+    /// loads as "none" — the right answer, and no migration.
+    /// </summary>
+    /// <remarks>
+    /// Keyed by the enum's NAME rather than its ordinal, so inserting a charter into the middle of the
+    /// enum later cannot silently turn every player's REFORGE stock into SALVAGE.
+    /// </remarks>
+    public Dictionary<string, int> Charters { get; init; } = new();
+
     public Dictionary<string, int> TrainingRanks { get; init; } = new();
 
+    /// <summary>Legacy single-region mastery (pre-multi-region saves). Newer saves carry RegionFarms.</summary>
     public float RegionMasteryPoints { get; init; }
-    public int AutomationStage { get; init; } = 1;
 
-    public int UnhatchedCores { get; init; }
-    public List<SavedCreature> Roster { get; init; } = new();
-    public List<string> AssignedCreatureIds { get; init; } = new();
+    // RETIRED FIELDS (2026-08-24): AutomationStage, UnhatchedCores, Roster and AssignedCreatureIds
+    // belonged to the creature/evolution/automation subsystem, which was removed. Old saves still
+    // carry them as JSON members; System.Text.Json skips unknown members by default, so they load
+    // clean (see the save-compat test in SaveSystemTests).
+
     public List<SavedItem> Inventory { get; init; } = new();
 
     public int MemoryDust { get; init; }
@@ -64,14 +80,80 @@ public sealed record SaveGame
     public string ActiveRegion { get; init; } = "";
     public List<RegionFarmSave> RegionFarms { get; init; } = new();
 
+    /// <summary>
+    /// The last ten run reports, newest first.
+    /// </summary>
+    /// <remarks>
+    /// Saved, because the report is the only place this game can teach and the player it is teaching is
+    /// by definition not watching — an idle game's lesson has to survive being closed.
+    /// </remarks>
+    public List<RunReportSave> RunLog { get; init; } = new();
+
     /// <summary>The endgame corruption ratchet — how deep the fully-conquered world has been pushed.</summary>
     public int CorruptionTier { get; init; }
+
+    /// <summary>The deepest tier ever reached (2026-08-23) — the award and the trait points key off it. Absent
+    /// in older saves: then the tier is the peak.</summary>
+    public int CorruptionPeak { get; init; }
+
+    /// <summary>
+    /// Which character is being played. Empty or unknown falls back to the starter.
+    /// </summary>
+    public string ActiveCharacterId { get; init; } = "";
+
+    /// <summary>
+    /// The champions the player has earned, by id. Absent on every save written before the tiered
+    /// roster (2026-08-26), which loads as empty and is seeded from <see cref="Characters.LegacyUnlocks"/>.
+    /// </summary>
+    /// <remarks>
+    /// This used to be derived from conquest every frame and never saved, on the argument that a
+    /// derived set cannot fall out of step with the world. It cannot — but it CAN fall out of step
+    /// with the rules, and the tiered roster tightened them. A champion earned under the old gate has
+    /// to survive the new one, so the set is banked. A new save always writes at least the starter, so
+    /// "empty" is unambiguous: it means "written before the field existed", never "nothing earned".
+    /// The field is additive, so an older build reading this save simply ignores it — no version bump.
+    /// </remarks>
+    public List<string> UnlockedCharacters { get; init; } = new();
+
+    /// <summary>Quest ids finished.</summary>
+    public List<string> QuestsDone { get; init; } = new();
+
+    /// <summary>
+    /// Descents finished with a Vow's demand still met. The one quest counter that must be saved.
+    /// </summary>
+    /// <remarks>
+    /// Every other quest reads a fact that is still true when you look at it — the depth you reached is
+    /// on the region, the chests you opened are counted. This one is an EVENT, and an event that is not
+    /// latched when it happens cannot be proved afterwards: a run's Vow is gone the moment the run ends.
+    /// </remarks>
+    public int RunsWithVowKept { get; init; }
+
+    /// <summary>Chests opened over the whole career. Shown on STATS and feeds a quest goal.</summary>
+    /// <remarks>
+    /// The remark above claimed "the chests you opened are counted", and they were — in a field on the
+    /// Forge screen that nothing saved. STATS printed it beside HIGHEST WAVE and MASTERY POINTS, both
+    /// persisted, so a career counter read zero after every reload while its neighbours read true.
+    /// (ChestsCredited, which paid this counter's delta to the CRAFTER evolution path, was retired
+    /// with the creature subsystem on 2026-08-24; old saves carrying it load clean.)
+    /// </remarks>
+    public int ChestsOpened { get; init; }
 
     /// <summary>The player's woven build — four skills. Empty on a pre-solo-model save (keeps the starter).</summary>
     public List<SavedSkill> WovenSkills { get; init; } = new();
 
     /// <summary>Which learned keystones are socketed. Ids into the keystone catalog.</summary>
     public List<string> SocketedKeystoneIds { get; init; } = new();
+
+    /// <summary>
+    /// What each skill has earned by being used, and what the player spent it on.
+    /// </summary>
+    /// <remarks>
+    /// Keyed by skill id rather than by slot, because a skill's levels belong to the SKILL and not to
+    /// where it happens to be woven — unequipping one keeps everything it earned, which is the rule
+    /// that lets a player experiment without losing progress. A save that predates this simply
+    /// carries no rows and every skill starts at its base line.
+    /// </remarks>
+    public List<SavedSkillProgress> SkillProgress { get; init; } = new();
 
     /// <summary>The character's Form affinity (the Nen-hexagon identity). Legacy — the Mastery tree owns it now.</summary>
     public string Affinity { get; init; } = "";
@@ -81,6 +163,49 @@ public sealed record SaveGame
 
     /// <summary>Total mastery points earned over the whole game.</summary>
     public int MasteryEarned { get; init; }
+
+    /// <summary>
+    /// The mastery tree's camera: zoom in screen pixels per world unit, and the world point at the centre
+    /// of the view. Zoom 0 means the tree has never been opened, and the screen answers with its
+    /// first-open framing (the centre node and ring 1).
+    /// </summary>
+    /// <remarks>
+    /// "On later visits the player's zoom should be saved" (2026-08-27). Default 0 on purpose: an older
+    /// save loads clean with no version bump and gets the first-open framing exactly once, like a new
+    /// game does.
+    /// </remarks>
+    public float MasteryZoom { get; init; }
+    public float MasteryPanX { get; init; }
+    public float MasteryPanY { get; init; }
+
+    /// <summary>
+    /// First-run guide rungs the player closed by hand, as <c>TutorialStep</c> NAMES.
+    /// </summary>
+    /// <remarks>
+    /// Names rather than ordinals, so reordering the enum can never silently dismiss a different
+    /// lesson. Default-empty means every older save loads clean — no version bump. A dismissed rung is
+    /// a DISPLAY choice only: the facts the guide derives its ladder from are untouched, the closed
+    /// rung just never shows again.
+    /// </remarks>
+    public List<string> DismissedGuideRungs { get; init; } = new();
+
+    /// <summary>Has the click-through intro been finished or skipped? False on every older save.</summary>
+    /// <remarks>
+    /// False alone does not mean "show it": a save from before the intro existed is false too, and
+    /// <c>Onboarding.IntroDue</c> reads a cleared wave as having seen it. Default-false, no version bump.
+    /// </remarks>
+    public bool IntroSeen { get; init; }
+
+    /// <summary>
+    /// Screens whose first-open explanation the player has closed, as <c>Activity</c> NAMES — plus
+    /// <c>SkillSlotN</c> entries for the skill-slot notes shown on the BUILD screen.
+    /// </summary>
+    /// <remarks>
+    /// Names, not ordinals, for the same reason as <see cref="DismissedGuideRungs"/>. Default-empty
+    /// means an older save loads clean; <c>Onboarding.SeedExplained</c> then treats every screen that
+    /// was already open as read, so a returning player is not re-taught the game they have been playing.
+    /// </remarks>
+    public List<string> ExplainedScreens { get; init; } = new();
 
     /// <summary>The champion's recent GLEAM-per-second, so it keeps earning while the game is closed.</summary>
     public float ChampionGleamRate { get; init; }
@@ -93,6 +218,35 @@ public sealed record SaveGame
     /// Default-empty means pre-chest saves load clean, so no version bump.
     /// </remarks>
     public List<SavedChest> UnopenedChests { get; init; } = new();
+
+    /// <summary>
+    /// Has the player set a gem into a socket yet? The FIRST setting is free (see
+    /// <c>GemCraft.SocketCost</c>); this remembers that the free one has been spent.
+    /// </summary>
+    /// <remarks>
+    /// Default-false, so every older save loads clean with no version bump. An old save that has
+    /// already socketed gems but predates this field is caught by <see cref="SaveSystem.RestoreFreeSocketUsed"/>,
+    /// which reads the gems sitting in its items — the gift is for a first gem, not a fifth.
+    /// </remarks>
+    public bool FreeSocketUsed { get; init; }
+
+    /// <summary>The VAULT's keep-filter: chests below this tier arrive as a little Scrap instead. 0 = keep all.</summary>
+    public int ChestKeepMinTier { get; init; }
+
+    /// <summary>The keep-filter's slot lean (an <c>ItemBaseType</c> name), or null for any slot.</summary>
+    public string? ChestKeepSlot { get; init; }
+
+    /// <summary>The keep-filter's wanted slots (2026-08-23, several at once). When absent, the older single
+    /// <see cref="ChestKeepSlot"/> is the one wanted slot.</summary>
+    public List<string> ChestKeepSlots { get; init; } = new();
+
+    /// <summary>The ISO week (year*100+week) whose trader stall the two fields below describe.</summary>
+    /// <remarks>Zero on old saves — the host treats a mismatch with the CURRENT week as "new week,
+    /// stall resets", so the migration is the rollover itself.</remarks>
+    public int TraderWeekStamp { get; init; }
+
+    /// <summary>Stall slots (0..3) already bought this week. One of each, per week, per hunter.</summary>
+    public List<int> TraderBoughtSlots { get; init; } = new();
 
     // ── The Warren facility economy ──────────────────────────────────────────────────────────────
     /// <summary>Warren level. Defaults to 1 so pre-Warren saves load a fresh level-1 base — no version bump.</summary>
@@ -119,6 +273,21 @@ public sealed record SavedChest
     public required int Rarity { get; init; }
     public required int Tier { get; init; }
     public string? Element { get; init; }
+
+    /// <summary>Where it was won, so its drop profile survives a save. Null on a pre-profile save.</summary>
+    public string? Region { get; init; }
+
+    /// <summary>The rarity tilt earned by the descent that dropped it. 1 on a save written before it existed.</summary>
+    /// <remarks>
+    /// Defaulted to 1 rather than 0 for the same reason <c>Chest.RunTilt</c> is: it multiplies into the
+    /// loot roll, so an old chest deserialised without the field has to come back NEUTRAL. A 0 default
+    /// would quietly make every chest a player was holding at upgrade time worthless, which is the kind
+    /// of migration bug nobody reports because it looks like bad luck.
+    /// </remarks>
+    public float RunTilt { get; init; } = 1f;
+
+    /// <summary>A gift chest's catalogue key (<c>GiftChests</c>), or null for a chest that rolls. Null on every older save.</summary>
+    public string? Gift { get; init; }
 }
 
 /// <summary>One woven skill in the saved build — Source x Form x Vow, all by name/id so it survives.</summary>
@@ -127,42 +296,60 @@ public sealed record SavedSkill
     public required string Source { get; init; }
     public required string Form { get; init; }
     public string? VowId { get; init; }
+
+    /// <summary>
+    /// Whether the player put this skill in a PASSIVE slot — which decides which of its style's two
+    /// skills it actually is.
+    /// </summary>
+    /// <remarks>
+    /// Defaults to false, so a save written before the slot rework loads with every skill claiming an
+    /// active slot and the composer's spill rule sorts out the overflow, exactly as it did before this
+    /// field existed. Nothing is lost on the way in.
+    /// </remarks>
+    public bool? Passive { get; init; }
 }
 
-/// <summary>A single region's farm: its mastery, automation stage, and which creatures are assigned to it.</summary>
+/// <summary>One post-run report, flattened for the save file.</summary>
+/// <remarks>
+/// A separate shape rather than serialising <c>RunReport</c> directly: the live record carries an
+/// affix LIST and an enum, and a save format that mirrors a gameplay type breaks the moment the gameplay
+/// type gains a field. Flattening it here means an old save loads into a newer report.
+/// </remarks>
+public sealed record RunReportSave
+{
+    public required string RegionId { get; init; }
+    public int Depth { get; init; }
+    public bool IsRecord { get; init; }
+    public int Outcome { get; init; }
+    public int WallWave { get; init; }
+    public int WallArchetype { get; init; }
+    public List<int> WallAffixes { get; init; } = new();
+    public int WallCreatures { get; init; }
+    public float AbsorbedFraction { get; init; }
+    public float AverageHitSize { get; init; }
+    public float TargetsPerActivation { get; init; }
+    public float CreaturesPerWave { get; init; }
+    public float HealthLostPerWaveFraction { get; init; }
+    public float SecondsPerWave { get; init; }
+    public int SampledWaves { get; init; }
+}
+
+/// <summary>A single region's progress record: mastery earned there, and its depth record.</summary>
+/// <remarks>
+/// The Stage and AssignedIds members retired with the creature subsystem (2026-08-24); old saves
+/// carrying them load clean because unknown JSON members are skipped. (SavedCreature, the roster's
+/// DTO, retired with them.)
+/// </remarks>
 public sealed record RegionFarmSave
 {
     public required string Id { get; init; }
     public float MasteryPoints { get; init; }
-    public int Stage { get; init; } = 1;
-    public List<string> AssignedIds { get; init; } = new();
-}
 
-public sealed record SavedCreature
-{
-    public required string Id { get; init; }
-    public required string Source { get; init; }
-    public required string Role { get; init; }
-    public required int PowerTier { get; init; }
-    public bool IsHealthy { get; init; } = true;
+    /// <summary>Deepest wave ever held here — the source of skill points. See Region.BestDepth.</summary>
+    public int BestDepth { get; init; }
 
-    /// <summary>
-    /// The Vow this creature swore, or null. Nullable and defaulted, so pre-Weaving saves load clean.
-    /// </summary>
-    /// <remarks>
-    /// Stored as the Vow's id rather than its index or its stats: a catalog that gets re-ordered must
-    /// not silently re-swear everyone's creatures, and an id that no longer exists resolves to null via
-    /// Weaving.ById rather than throwing.
-    /// </remarks>
-    public string? VowId { get; init; }
-
-    // Evolution state. Persisted in FULL — half-saving it would silently discard a player's accrued
-    // part-break and job progress on reload, which reads as the game forgetting what they did.
-    public string EvolutionNodeId { get; init; } = "";
-    public int EvolutionMaterials { get; init; }
-    public Dictionary<string, int> EvolutionWorkTicks { get; init; } = new();
-    public Dictionary<string, int> EvolutionCombatTally { get; init; } = new();
-    public string? EvolutionEquippedTrait { get; init; }
+    /// <summary>The checkpoint chosen here (Checkpoints). 0 = start from the top; absent in older saves.</summary>
+    public int StartWave { get; init; }
 }
 
 public sealed record SavedItem
@@ -175,6 +362,9 @@ public sealed record SavedItem
     /// <summary>The item's level. Defaulted to 1 so pre-ilvl saves load clean, no version bump needed.</summary>
     public int ItemLevel { get; init; } = 1;
 
+    /// <summary>Refines taken (0..15). Pre-ladder saves default to 0 — a fresh ladder, not a crash.</summary>
+    public int Upgrades { get; init; }
+
     public string? EquippedToCreatureId { get; init; }
 
     /// <summary>
@@ -182,12 +372,15 @@ public sealed record SavedItem
     /// </summary>
     /// <remarks>
     /// Stored by name, not index, and ignored at load if it no longer parses — the same rule the whole
-    /// save uses for Vow ids and creature Roles: a catalog that gets re-ordered must never silently
+    /// save uses for Vow ids: a catalog that gets re-ordered must never silently
     /// re-roll every player's crafted gear. Null-default means every pre-Reforge save loads clean, so
     /// no version bump is needed (the trait/enchant simply fall back to the id-derived roll).
     /// </remarks>
     public string? TraitOverride { get; init; }
     public string? EnchantOverride { get; init; }
+
+    /// <summary>Socketed stat gems, as nested items. Empty for gem-less gear and every pre-gem save.</summary>
+    public List<SavedItem> Gems { get; init; } = new();
 
     /// <summary>
     /// The item's region ELEMENT (a <see cref="Automation.Source"/> name), or null for inert loot.
@@ -199,6 +392,20 @@ public sealed record SavedItem
     /// element; items simply missed the same treatment. Null-default so pre-fix saves load clean.
     /// </remarks>
     public string? Element { get; init; }
+
+    /// <summary>
+    /// The item's CLASS (an <see cref="Economy.ItemClass"/> name), or null for a piece minted before
+    /// classes existed or on a universal slot.
+    /// </summary>
+    /// <remarks>
+    /// Null-default, stored by name and ignored if it no longer parses — the same three rules the
+    /// trait, enchant and element fields follow, for the same reason: a pre-class save must load
+    /// clean, with every item wearable by everyone, and never take a worn helm off a player.
+    /// </remarks>
+    public string? Class { get; init; }
+
+    /// <summary>A weapon's family index, or null to derive it from the id as every older weapon does.</summary>
+    public int? Family { get; init; }
 }
 
 /// <summary>Why a load failed. A corrupt save must never silently become a fresh game.</summary>
@@ -294,8 +501,8 @@ public static class SaveSystem
     // ── Capture / restore ─────────────────────────────────────────────────────────────────────
 
     public static SaveGame Capture(
-        Hunter hunter, Region region, IReadOnlyList<Creature> roster,
-        IReadOnlyList<ItemInstance> inventory, int unhatchedCores, long nowMs,
+        Hunter hunter, Region region,
+        IReadOnlyList<ItemInstance> inventory, long nowMs,
         Prestige.MemoryDustTree? prestige = null, int highestMasteryAwarded = 0,
         Encounters.World? world = null, string activeRegion = "",
         Warren? warren = null, long warrenMasteryPool = 0)
@@ -310,6 +517,7 @@ public static class SaveSystem
             WarrenMasteryPool = warrenMasteryPool,
             Gleam = hunter.Gleam,
             Materials = hunter.Materials,
+            Charters = hunter.AllCharters.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value),
             Essence = hunter.MaterialOf(Material.Essence),
             Core = hunter.MaterialOf(Material.Core),
             Crystal = hunter.MaterialOf(Material.Crystal),
@@ -327,6 +535,7 @@ public static class SaveSystem
             ConqueredRegions = world?.ConqueredIds.ToList() ?? new List<string>(),
             ActiveRegion = activeRegion,
             CorruptionTier = world?.CorruptionTier ?? 0,
+            CorruptionPeak = world?.PeakCorruptionTier ?? 0,
             RegionFarms = world is null ? new List<RegionFarmSave>() : Encounters.Regions.All.Select(def =>
             {
                 var f = world.RegionFarm(def.Id);
@@ -334,73 +543,58 @@ public static class SaveSystem
                 {
                     Id = def.Id,
                     MasteryPoints = f.RegionMasteryPoints,
-                    Stage = f.AutomationStage,
-                    AssignedIds = f.Team.Select(c => c.Id).ToList(),
+                    BestDepth = f.BestDepth,
+                    StartWave = f.StartWave,
                 };
             }).ToList(),
             TrainingRanks = Enum.GetValues<HunterStat>()
                 .ToDictionary(s => s.ToString(), hunter.RankOf),
             RegionMasteryPoints = region.RegionMasteryPoints,
-            AutomationStage = region.AutomationStage,
-            UnhatchedCores = unhatchedCores,
-            Roster = roster.Select(c => new SavedCreature
-            {
-                Id = c.Id,
-                Source = c.Source.ToString(),
-                Role = c.Role.ToString(),
-                PowerTier = c.PowerTier,
-                IsHealthy = c.IsHealthy,
-                VowId = c.VowId,
-                EvolutionNodeId = c.EvolutionNodeId,
-                EvolutionMaterials = c.Evolution?.Materials ?? 0,
-                EvolutionWorkTicks = c.Evolution?.HealthyWorkTicks.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value)
-                                     ?? new Dictionary<string, int>(),
-                EvolutionCombatTally = c.Evolution is null
-                    ? new Dictionary<string, int>()
-                    : new Dictionary<string, int>(c.Evolution.CombatTally),
-                EvolutionEquippedTrait = c.Evolution?.EquippedTrait,
-            }).ToList(),
-            AssignedCreatureIds = region.Team.Select(c => c.Id).ToList(),
-            Inventory = inventory.Select(i => new SavedItem
-            {
-                InstanceId = i.InstanceId,
-                BaseType = i.BaseType.ToString(),
-                Rarity = (int)i.Rarity,
-                SellValue = i.SellValue,
-                ItemLevel = i.ItemLevel,
-                EquippedToCreatureId = i.EquippedToCreatureId,
-                TraitOverride = i.TraitOverride?.ToString(),
-                EnchantOverride = i.EnchantOverride?.ToString(),
-                Element = i.Element?.ToString(),
-            }).ToList(),
+            Inventory = inventory.Select(ToSavedItem).ToList(),
         };
 
-    public static List<Creature> RestoreRoster(SaveGame save)
-        => save.Roster.Select(s =>
-        {
-            var creature = new Creature
-            {
-                Id = s.Id,
-                Source = Enum.Parse<Source>(s.Source),
-                RoleSeed = Enum.Parse<Role>(s.Role),
-                PowerTierSeed = s.PowerTier,
-                IsHealthy = s.IsHealthy,
-                VowId = s.VowId,
-            };
+    /// <summary>One item to its saved form — recursive, so socketed gems ride inside their host.</summary>
+    // INTERNAL, not private: ShareCodes reuses the exact same DTO round-trip, so a shared item
+    // passes through the same lenient parsing and legacy migrations as a loaded save.
+    internal static SavedItem ToSavedItem(ItemInstance i) => new()
+    {
+        InstanceId = i.InstanceId,
+        BaseType = i.BaseType.ToString(),
+        Rarity = (int)i.Rarity,
+        SellValue = i.SellValue,
+        ItemLevel = i.ItemLevel,
+        Upgrades = i.Upgrades,
+        EquippedToCreatureId = i.EquippedToCreatureId,
+        // "NONE" for a genuinely plain item, so the loader can tell "rolled plain" from "written by
+        // a pre-redesign build that never had this field" — the latter gets the legacy derivation.
+        TraitOverride = i.TraitOverride?.ToString() ?? "NONE",
+        EnchantOverride = i.EnchantOverride?.ToString(),
+        Element = i.Element?.ToString(),
+        Class = i.Class?.ToString(),
+        Family = i.Family,
+        Gems = i.Gems.Select(ToSavedItem).ToList(),
+    };
 
-            if (s.EvolutionNodeId.Length > 0)
-            {
-                var progress = Evolution.EvolutionProgress.Restore(
-                    s.EvolutionMaterials,
-                    s.EvolutionWorkTicks.ToDictionary(kv => Enum.Parse<Role>(kv.Key), kv => kv.Value),
-                    s.EvolutionCombatTally,
-                    s.EvolutionEquippedTrait);
-
-                creature.RestoreEvolution(s.EvolutionNodeId, progress);
-            }
-
-            return creature;
-        }).ToList();
+    /// <summary>The mirror of <see cref="ToSavedItem"/> — same recursion, same lenient enum parsing.</summary>
+    internal static ItemInstance FromSavedItem(SavedItem s) => new()
+    {
+        InstanceId = s.InstanceId,
+        BaseType = Enum.Parse<ItemBaseType>(s.BaseType),
+        Rarity = (Rarity)s.Rarity,
+        SellValue = s.SellValue,
+        ItemLevel = s.ItemLevel,
+        Upgrades = s.Upgrades,
+        EquippedToCreatureId = s.EquippedToCreatureId,
+        TraitOverride = s.TraitOverride is null
+            ? Economy.GearTraits.LegacyDerivedTrait(s.InstanceId, Enum.Parse<ItemBaseType>(s.BaseType))
+            : Enum.TryParse<GearTrait>(s.TraitOverride, out var t) ? t : null,   // "NONE" -> null
+        EnchantOverride = Enum.TryParse<EnchantKind>(s.EnchantOverride, out var e) ? e : null,
+        Element = Enum.TryParse<Automation.Source>(s.Element, out var el) ? el : null,
+        // Lenient, like every enum here: an unparseable class is a null class, which is "anyone".
+        Class = Enum.TryParse<Economy.ItemClass>(s.Class, out var cl) ? cl : null,
+        Family = s.Family is { } fam && fam >= 0 && fam < Economy.ItemNaming.WeaponFamilies.Length ? fam : null,
+        Gems = s.Gems.Select(FromSavedItem).ToList(),
+    };
 
     public static List<ItemInstance> RestoreInventory(SaveGame save)
         // Dedup by InstanceId: a save polluted with duplicate ids (see the regression test) collapses to one
@@ -408,20 +602,7 @@ public static class SaveSystem
         // copies of the same thing. Nothing is lost — same id means an identical, id-derived item.
         => save.Inventory
             .GroupBy(s => s.InstanceId).Select(g => g.First())
-            .Select(s => new ItemInstance
-        {
-            InstanceId = s.InstanceId,
-            BaseType = Enum.Parse<ItemBaseType>(s.BaseType),
-            Rarity = (Rarity)s.Rarity,
-            SellValue = s.SellValue,
-            ItemLevel = s.ItemLevel,
-            EquippedToCreatureId = s.EquippedToCreatureId,
-            // A reforged passive that no longer parses is dropped, not guessed — the item falls back to
-            // its id-derived roll rather than throwing on an unknown enum name from an older/newer build.
-            TraitOverride = Enum.TryParse<GearTrait>(s.TraitOverride, out var t) ? t : null,
-            EnchantOverride = Enum.TryParse<EnchantKind>(s.EnchantOverride, out var e) ? e : null,
-            Element = Enum.TryParse<Automation.Source>(s.Element, out var el) ? el : null,
-        }).ToList();
+            .Select(FromSavedItem).ToList();
 
     public static void RestoreHunter(SaveGame save, Hunter hunter)
     {
@@ -430,6 +611,12 @@ public static class SaveSystem
         hunter.AddMaterial(Material.Essence, save.Essence);
         hunter.AddMaterial(Material.Core, save.Core);
         hunter.AddMaterial(Material.Crystal, save.Crystal);
+
+        // RESTORE, not add: this method runs once per load, but "replace" is the honest verb for a
+        // stock read off disk and it makes a double-call harmless rather than a duplication bug.
+        hunter.RestoreCharters(save.Charters
+            .Where(kv => Enum.TryParse<Charter>(kv.Key, out _))
+            .Select(kv => new KeyValuePair<Charter, int>(Enum.Parse<Charter>(kv.Key), kv.Value)));
 
         // Re-buy each rank, but credit the Gleam first — otherwise restoring a maxed Hunter would
         // fail on affordability and silently drop their progress.
@@ -450,6 +637,39 @@ public static class SaveSystem
     }
 
     /// <summary>Restore the Warren's level, XP, and facility levels from a save (crash-safe on unknown keys).</summary>
+    /// <summary>
+    /// Restore the roster: which champion is active, which quests are done, and which champions are
+    /// earned — seeding the earned set from the pre-tier rules when the save predates the field.
+    /// </summary>
+    /// <remarks>
+    /// The seeding decision lives here, in Core, so a test can hand it an old save and watch a champion
+    /// survive. The host's Refresh still re-derives every unlock the current rules grant on top.
+    /// </remarks>
+    public static void RestoreCharacters(SaveGame save, Characters.CharacterState state)
+    {
+        ArgumentNullException.ThrowIfNull(save);
+        ArgumentNullException.ThrowIfNull(state);
+        var banked = save.UnlockedCharacters.Count > 0
+            ? save.UnlockedCharacters
+            : Characters.LegacyUnlocks.Seed(
+                save.ConqueredRegions,
+                save.QuestsDone,
+                save.RegionFarms.GroupBy(f => f.Id).ToDictionary(g => g.Key, g => g.Max(f => f.BestDepth)),
+                save.RunsWithVowKept);
+        state.Restore(save.ActiveCharacterId, save.QuestsDone, banked);
+    }
+
+    /// <summary>
+    /// Has this save spent its free first gem? True if it says so — or, for a save written before the
+    /// field existed, if any item in it already carries a gem: a player who has socketed before is not
+    /// on their first gem, whatever an absent flag reads.
+    /// </summary>
+    public static bool RestoreFreeSocketUsed(SaveGame save)
+    {
+        ArgumentNullException.ThrowIfNull(save);
+        return save.FreeSocketUsed || save.Inventory.Any(i => i.Gems.Count > 0);
+    }
+
     public static void RestoreWarren(SaveGame save, Warren warren)
     {
         ArgumentNullException.ThrowIfNull(warren);
@@ -472,4 +692,19 @@ public static class SaveSystem
 
     public static double CreditedOfflineSeconds(double elapsed)
         => Math.Clamp(elapsed, 0, MaxOfflineSeconds);
+}
+
+/// <summary>One skill's earned levels and spent choices, flattened for the save file.</summary>
+public sealed record SavedSkillProgress
+{
+    public required string SkillId { get; init; }
+
+    /// <summary>Waves cleared with it equipped.</summary>
+    public int Uses { get; init; }
+
+    /// <summary>Which of its two variations was taken, or null while unchosen.</summary>
+    public string? Variation { get; init; }
+
+    /// <summary>Which of that variation's reinforcements are bought.</summary>
+    public List<string> Reinforcements { get; init; } = new();
 }

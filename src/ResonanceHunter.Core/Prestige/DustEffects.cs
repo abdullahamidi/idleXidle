@@ -65,7 +65,7 @@ public static class DustEffects
 
     // ── Earn rates ────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Region mastery rate: +5% per SHARPENED RECALL, to +20%.</summary>
+    /// <summary>Region mastery rate: +5% per FASTER REGION MASTERY node, to +20%. Read by <c>RegionAutomation.RecordActiveKill</c>.</summary>
     public static float MasteryRate(MemoryDustTree tree)
     {
         ArgumentNullException.ThrowIfNull(tree);
@@ -102,11 +102,19 @@ public static class DustEffects
     /// </remarks>
     private static readonly Dictionary<string, string[]> VowGrants = new()
     {
-        ["vow_study_1"] = new[] { "vow_patience" },
-        ["vow_study_2"] = new[] { "vow_vanguard" },
-        ["vow_study_3"] = new[] { "vow_bloodied" },
-        ["vow_binding"] = new[] { "vow_boss_bound" },
-        ["vow_sacrifice"] = new[] { "vow_fragility", "vow_reckless_offering" },
+        // Repointed with the Vow rewrite: the old ids named run-state Vows (below 40% health, against a
+        // boss, after ten seconds) that no longer exist. Ordered gentlest first — a player's FIRST VOW
+        // should be one most builds already satisfy, and the ones that cost a gear slot come late.
+        ["vow_study_1"] = new[] { "vow_complete", "vow_deliberate" },
+        ["vow_study_2"] = new[] { "vow_pure", "vow_frantic" },
+        ["vow_study_3"] = new[] { "vow_singular", "vow_bluntedge" },
+        // BINDING VOWS teaches the three that cost a gear SLOT — its stats, its enchantment and its
+        // affixes all at once, which is the harshest thing the catalogue asks and the most visible.
+        ["vow_binding"] = new[] { "vow_barefoot", "vow_openhand", "vow_bareskull" },
+        ["vow_sacrifice"] = new[]
+        {
+            "vow_fragility", "vow_reckless_offering", "vow_unguarded", "vow_unbound",
+        },
     };
 
     /// <summary>Every Vow the player has learned. Empty until the first study is bought.</summary>
@@ -189,11 +197,57 @@ public static class DustEffects
         "vow_study_1", "vow_study_2", "vow_study_3", "vow_binding", "vow_sacrifice",
         "filter_common", "filter_uncommon",
         "ledger", "attunement",
+        "socket_2", "socket_3", "weave_5", "artifice_vows",
     };
 
+    /// <summary>
+    /// How many keystone sockets the character has. One to start; the spine sells the other two.
+    /// </summary>
+    /// <remarks>
+    /// Three free sockets meant a player wore every keystone they had learned, so learning one was the
+    /// only decision and wearing it was automatic. Starting at one makes the SOCKET the scarce thing and
+    /// the keystone the choice — which is what the paths are for.
+    /// </remarks>
+    public static int KeystoneSockets(MemoryDustTree tree)
+    {
+        ArgumentNullException.ThrowIfNull(tree);
+        return 1 + (tree.Owns("socket_2") ? 1 : 0) + (tree.Owns("socket_3") ? 1 : 0);
+    }
+
+    /// <summary>Skill slots — four to start, five once the spine buys the fifth weave.</summary>
+    public static int SkillSlots(MemoryDustTree tree)
+    {
+        ArgumentNullException.ThrowIfNull(tree);
+        return 4 + (tree.Owns("weave_5") ? 1 : 0);
+    }
+
+    /// <summary>VOWS PAY 25% MORE (artifice_vows) — every Vow sworn pays 25% more. Reaches the fight through <see cref="TreeShape"/>.</summary>
+    /// <remarks>
+    /// This wire used to be <c>UnboundVows</c> — "every Vow known may be carried at once" — and nothing
+    /// read it: there was never a one-vow limit to lift, so the node promised a freedom the game already
+    /// had and delivered nothing. The house failure mode, caught in the 2026-08-23 traits pass. A vow
+    /// power multiplier is the one thing this node can honestly sell: SoloBattle already scales every
+    /// vow's bonus by <see cref="SkillShape.VowPowerMultiplier"/> (the Oathbound's passive rides it).
+    /// </remarks>
+    public static float VowPowerMultiplier(MemoryDustTree tree)
+    {
+        ArgumentNullException.ThrowIfNull(tree);
+        return tree.Owns("artifice_vows") ? 1.25f : 1f;
+    }
+
+    /// <summary>What the Dust tree adds to the build's shape — folded in at <c>PlayerLoadout.ToBuild</c>.</summary>
+    public static SkillShape TreeShape(MemoryDustTree tree)
+    {
+        ArgumentNullException.ThrowIfNull(tree);
+        var vow = VowPowerMultiplier(tree);
+        return vow == 1f ? SkillShape.None : new SkillShape { VowPowerMultiplier = vow };
+    }
+
     public static IReadOnlySet<string> WiredIds { get; } = NamedWires
-        // Attribute nodes and keystone gates need no hand-written wire: TreeMods and LearnedKeystones
-        // read them generically off the node itself, so carrying an id here is the wire.
+        // Keystone gates need no hand-written wire: LearnedKeystones reads them generically off the
+        // node itself, so carrying an id there is the wire. (The attribute nodes that TreeMods used to
+        // cover are gone — numbers belong to the skill tree now, and this tree sells only capacity,
+        // keystones and behaviour.)
         .Concat(MemoryDustTree.Catalog
             .Where(u => u.Mods != BuildMods.None || u.GrantsKeystone is not null)
             .Select(u => u.Id))

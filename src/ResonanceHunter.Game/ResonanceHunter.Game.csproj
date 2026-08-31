@@ -3,6 +3,9 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>ResonanceHunter.Client</RootNamespace>
+    <!-- The game is IDLExIDLE (renamed 2026-08-24); the project folder keeps its old name so every path
+         in the tools and the docs stays true, but the file the player runs says the game's name. -->
+    <AssemblyName>IDLExIDLE</AssemblyName>
     <Nullable>enable</Nullable>
     <RollForward>Major</RollForward>
     <PublishReadyToRun>false</PublishReadyToRun>
@@ -39,11 +42,32 @@
     dropping-in new PNGs stays a zero-config operation.
   -->
   <ItemGroup>
-    <Content Include="..\..\assets\art\**\*.png" Link="assets\art\%(RecursiveDir)%(Filename)%(Extension)">
+    <!--
+      Exclude the asset pipeline's fetch cache. It used to live at assets/art/**/<strip>.png.frames/
+      and every frame in it is named f0.png .. f7.png, so this glob copied 808 of them into the output
+      and AssetLibrary — which keys textures by BASENAME — loaded all of them into eight keys. clip.py
+      caches under tools/asset-pipeline/.staging/ now; this exclude is the guard that stops a stray one
+      ever reaching a build again.
+    -->
+    <Content Include="..\..\assets\art\**\*.png" Exclude="..\..\assets\art\**\*.png.frames\**"
+             Link="assets\art\%(RecursiveDir)%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <!-- Audio, same pipeline-free drop-in as the art: raw WAVs copied to output, loaded by SoundBank. -->
     <Content Include="..\..\assets\audio\**\*.wav" Link="assets\audio\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <!--
+      The bundled typefaces, read at runtime by SmoothFont. THIS RULE DID NOT EXIST, which meant the
+      loader's bundled-font branch had never executed once: assets/fonts was never copied next to the
+      executable, so every player was silently rendered in whatever bahnschrift.ttf their own Windows
+      install happened to have — and on a machine without it, in the blocky pixel fallback. Both faces
+      are SIL OFL, so the licences ship beside them.
+    -->
+    <Content Include="..\..\assets\fonts\*.ttf" Link="assets\fonts\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\assets\fonts\OFL-*.txt" Link="assets\fonts\%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

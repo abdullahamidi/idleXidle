@@ -22,19 +22,37 @@ public enum FacilityKind
 /// <summary>Static, authored metadata for a facility — never changes at runtime.</summary>
 public sealed record FacilityInfo(FacilityKind Kind, string Name, string Description, WarrenResource Produces, float BaseRatePerMin);
 
-/// <summary>The authored facility catalog. Base rates are chosen so a mid-Warren reads on the reference's scale.</summary>
+/// <summary>
+/// The authored facility catalog.
+/// </summary>
+/// <remarks>
+/// <b>THE GLEAM RATES WERE CALIBRATED AGAINST AN ART MOCK-UP AND NOT AGAINST THE COST CURVE.</b> The
+/// old comment here said so outright — "base rates are chosen so a mid-Warren reads on the reference's
+/// scale" — and that reference was a UI painting whose currency pill read 131,900,000. The most
+/// expensive single purchase in the actual game costs 445 Gleam.
+///
+/// Measured (gleam_economy_test): the four Gleam facilities paid 1,780/min at level 1, for free, before
+/// the player had ever opened the screen — against a 79,578 Gleam lifetime training sink. The entire
+/// nine-stat progression funded itself in under 40 minutes, which is the playtest's "çok fazla gold
+/// geliyor" stated as arithmetic. The Warren alone was 87% of all income in the game.
+///
+/// Rates are now set against the SINK, and the Warren's role is stated rather than assumed: it is the
+/// IDLE economy — roughly half of what an actively-fought champion earns, so leaving the game running
+/// is worth something and playing it is worth more. GleamCostBase moved by the same factor, or the
+/// Warren would have become un-upgradeable at a stroke.
+/// </remarks>
 public static class Facilities
 {
     public static readonly IReadOnlyList<FacilityInfo> All = new List<FacilityInfo>
     {
-        new(FacilityKind.Nursery,        "NURSERY",         "Hatch and nurture young. Increases gold production.",        WarrenResource.Gleam,   520f),
-        new(FacilityKind.Tunnels,        "TUNNELS",         "Dig deeper veins. Steady gold from the warren's diggings.", WarrenResource.Gleam,   480f),
-        new(FacilityKind.ForagingPits,   "FORAGING PITS",   "Forage the deep loam for memory-rich spores.",              WarrenResource.Dust,    450f),
-        new(FacilityKind.ScavengerRuns,  "SCAVENGER RUNS",  "Send runners abroad to bring back gold.",                   WarrenResource.Gleam,   410f),
-        new(FacilityKind.BreedingChamber,"BREEDING CHAMBER","Breed keener minds. Yields mastery insight.",               WarrenResource.Mastery, 122f),
-        new(FacilityKind.RitualNest,     "RITUAL NEST",     "Commune with the resonance. Slow, deep mastery.",           WarrenResource.Mastery, 118f),
-        new(FacilityKind.HoardVaults,    "HOARD VAULTS",    "Store and compound the warren's gold.",                     WarrenResource.Gleam,   370f),
-        new(FacilityKind.SentryBurrows,  "SENTRY BURROWS",  "Guard the forage lines, protecting dust yield.",            WarrenResource.Dust,    108f),
+        new(FacilityKind.Nursery,        "NURSERY",         "Hatch and raise young. Makes more Gleam.",        WarrenResource.Gleam,   17f),
+        new(FacilityKind.Tunnels,        "TUNNELS",         "Dig deeper veins. Steady Gleam from the digging.", WarrenResource.Gleam,   16f),
+        new(FacilityKind.ForagingPits,   "FORAGING PITS",   "Search the deep soil for Memory Dust.",              WarrenResource.Dust,    450f),
+        new(FacilityKind.ScavengerRuns,  "SCAVENGER RUNS",  "Send runners out to bring back Gleam.",                   WarrenResource.Gleam,   14f),
+        new(FacilityKind.BreedingChamber,"BREEDING CHAMBER","Breed sharper minds. Makes Insight.",               WarrenResource.Mastery, 122f),
+        new(FacilityKind.RitualNest,     "RITUAL NEST",     "Listen to the resonance. Slow, deep Insight.",           WarrenResource.Mastery, 118f),
+        new(FacilityKind.HoardVaults,    "HOARD VAULTS",    "Store the warren's Gleam so it grows.",                     WarrenResource.Gleam,   12f),
+        new(FacilityKind.SentryBurrows,  "SENTRY BURROWS",  "Guard the forage trails. Keeps the Dust safe.",            WarrenResource.Dust,    108f),
     };
 
     public static FacilityInfo Info(FacilityKind kind) => All.First(f => f.Kind == kind);
@@ -61,7 +79,10 @@ public sealed record WarrenTuning
     // Facility upgrade cost — geometric in the facility's current level (cost to go level -> level+1).
     // Balance pass: a gentle on-ramp (L1 ≈ 8K gleam) that steepens hard (L18 ≈ 7.8M, ~the reference scale)
     // so the Warren supports progression early and stays a real sink late. Mastery/Dust stay modest.
-    public int GleamCostBase { get; init; } = 5_300;
+    // Cut by the same ~30x as the Gleam rates above. These two numbers are one decision: the upgrade
+    // price is only meaningful as a multiple of what the building earns, and moving one without the
+    // other either freezes the Warren solid or makes it self-funding in a single tick.
+    public int GleamCostBase { get; init; } = 180;
     public float GleamCostGrowth { get; init; } = 1.50f;
     public int MasteryCostBase { get; init; } = 43;
     public float MasteryCostGrowth { get; init; } = 1.25f;
@@ -205,12 +226,55 @@ public sealed class Warren
 
     public WarrenCost UpgradeCost(FacilityKind kind) => _facilities[kind].UpgradeCost();
 
+    /// <summary>
+    /// The highest level any facility may reach, set by the host from the champion's deepest descent.
+    /// </summary>
+    /// <remarks>
+    /// THE WARREN CANNOT OUTRUN THE CHAMPION. Without a cap, an idle player's facilities out-scale the
+    /// player who actually descends: the Warren pays in gleam and materials, so a long enough absence
+    /// buys gear the descent never earned, and the game's answer to "how do I get stronger" becomes
+    /// "close the game". One facility level per five waves of proven depth keeps the idle layer as
+    /// what the design calls it — a multiplier on progress, never a substitute for it.
+    ///
+    /// int.MaxValue by default so the pure model stays testable without a host.
+    /// </remarks>
+    /// <summary>Waves of depth each facility level costs. The host derives <see cref="FacilityLevelCap"/> from it.</summary>
+    /// <remarks>
+    /// Lives here rather than in the host because the SCREEN needs it too: a facility that cannot be
+    /// upgraded has to say what would unlock it, and "descend deeper" without a number is not an
+    /// instruction. With the constant on the model, the screen can name the exact depth instead of
+    /// re-deriving the host's arithmetic and drifting from it.
+    /// </remarks>
+    public const int DepthPerFacilityLevel = 5;
+
+    /// <summary>The depth-derived ceiling on every facility's level.</summary>
+    public int FacilityLevelCap { get; set; } = int.MaxValue;
+
+    /// <summary>The depth that would let <paramref name="kind"/> take its next level.</summary>
+    /// <remarks>
+    /// Reads the facility's OWN level, not the cap. The two are normally the same when a facility is
+    /// blocked, but they can part: the cap is derived from the deepest run anywhere, and if that number
+    /// ever falls — a region id renamed out from under its recorded BestDepth would do it — a level 18
+    /// facility would sit under a cap of 1 and the screen would announce "CAPPED AT LEVEL 1" to a
+    /// player looking at LEVEL 18. Answering with the depth the NEXT level needs is both the useful
+    /// answer and one that cannot contradict what is on screen beside it.
+    /// </remarks>
+    public int DepthForNextLevel(FacilityKind kind) =>
+        (_facilities[kind].Level + 1) * DepthPerFacilityLevel;
+
+    /// <summary>Is this facility already at the depth-derived ceiling?</summary>
+    public bool IsAtLevelCap(FacilityKind kind) => _facilities[kind].Level >= FacilityLevelCap;
+
     /// <summary>Can the given balances afford this facility's next upgrade?</summary>
     public bool CanAfford(FacilityKind kind, long gleam, long mastery, long dust)
     {
         var c = UpgradeCost(kind);
         return gleam >= c.Gleam && mastery >= c.Mastery && dust >= c.Dust;
     }
+
+    /// <summary>Affordable AND under the cap — what a caller should actually check before spending.</summary>
+    public bool CanUpgrade(FacilityKind kind, long gleam, long mastery, long dust)
+        => !IsAtLevelCap(kind) && CanAfford(kind, gleam, mastery, dust);
 
     /// <summary>
     /// Raise a facility one level and grant Warren XP. The CALLER must already have checked affordability

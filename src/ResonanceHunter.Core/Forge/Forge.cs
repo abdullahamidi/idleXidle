@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using ResonanceHunter.Core.Automation;
+using ResonanceHunter.Core.Economy;
 using ResonanceHunter.Core.Loot;
 
 namespace ResonanceHunter.Core.Forging;
@@ -41,6 +42,13 @@ public sealed record ForgeTuning
     /// <summary>REFINE's base Scrap cost; the full cost adds the item's current level, so it always climbs.</summary>
     public int RefineScrapBase { get; init; } = 4;
 
+    // ── The refine LADDER (playtest, upgrade rework): 15 rungs, the first 5 safe, then a rising
+    //    slip chance. A slip drops one level and one rung. ──
+    public int MaxUpgrades { get; init; } = 15;
+    public int RefineSafeUpgrades { get; init; } = 5;
+    public float RefineFailStep { get; init; } = 0.06f;
+    public float RefineFailCap { get; init; } = 0.60f;
+
     /// <summary>REFINE's base Gold cost; the full cost adds 8× the item's level.</summary>
     public int RefineGoldBase { get; init; } = 15;
 
@@ -48,7 +56,17 @@ public sealed record ForgeTuning
 }
 
 /// <summary>The outcome of a refine: the leveled-up item and what it costs across the tiers.</summary>
-public sealed record RefineResult(ItemInstance Product, int Scrap, int Gold, int Crystal);
+public sealed record RefineResult(ItemInstance Product, int Scrap, int Gold, int Crystal)
+{
+    /// <summary>Chance this refine SLIPS (see <see cref="Forge.RefineFailChance"/>). Zero on the safe rungs.</summary>
+    public double FailChance { get; init; }
+
+    /// <summary>GreaterRefine only: how many rungs it actually buys (the +15 cap can shrink it).</summary>
+    public int Steps { get; init; } = 1;
+}
+
+/// <summary>What a rolled refine actually did: the product, and whether it slipped a level.</summary>
+public sealed record RefineOutcome(ItemInstance Product, bool Failed);
 
 public sealed record MergeResult
 {
@@ -101,7 +119,29 @@ public static class Forge
     /// Legendary into the machine and lose the Legendary, which is a trap, not a decision.
     /// Legendary cannot be merged: there is nothing above it, so it would be a pure destruction.
     /// </remarks>
-    public static MergeResult Merge(IReadOnlyList<ItemInstance> inputs, Random rng, ForgeTuning tuning, LootTuning loot)
+    /// <param name="ignoreRarity">
+    /// A MERGE CHART was spent: mix rarities, and the LOWEST of the three sets the grade.
+    /// </param>
+    /// <remarks>
+    /// The same-rarity rule exists so a player cannot feed a Legendary in beside two Commons and lose
+    /// it — a trap, not a decision. The chart does not remove that protection, it PRICES it: the output
+    /// is built from the lowest input, so mixing still costs you the difference and you can see exactly
+    /// what you are giving up before you spend the paper.
+    /// </remarks>
+    /// <summary>The class most of the inputs of <paramref name="type"/> carry (then most of any classed input); ties to the earliest.</summary>
+    private static ItemClass? MajorityClass(IReadOnlyList<ItemInstance> inputs, ItemBaseType type)
+    {
+        var own = inputs.Where(i => i.BaseType == type && i.Class is not null).ToList();
+        var pool = own.Count > 0 ? own : inputs.Where(i => i.Class is not null).ToList();
+        if (pool.Count == 0) return null;
+        return pool.GroupBy(i => i.Class!.Value)
+                   .OrderByDescending(g => g.Count())
+                   .ThenBy(g => pool.FindIndex(i => i.Class == g.Key))
+                   .First().Key;
+    }
+
+    public static MergeResult Merge(IReadOnlyList<ItemInstance> inputs, Random rng, ForgeTuning tuning, LootTuning loot,
+                                    bool ignoreRarity = false)
     {
         ArgumentNullException.ThrowIfNull(inputs);
 
@@ -120,7 +160,13 @@ public static class Forge
 
         var rarity = inputs[0].Rarity;
         if (inputs.Any(i => i.Rarity != rarity))
-            return new MergeResult { Rejection = "ALL THREE ITEMS MUST BE THE SAME RARITY." };
+        {
+            if (!ignoreRarity)
+                return new MergeResult { Rejection = "ALL THREE ITEMS MUST BE THE SAME RARITY." };
+
+            // The chart's whole effect, and its whole price: the weakest input decides the grade.
+            rarity = inputs.Min(i => i.Rarity);
+        }
 
         if (rarity == Rarity.Legendary)
             return new MergeResult { Rejection = "LEGENDARY IS THE HIGHEST RARITY. NOTHING TO MERGE INTO." };
@@ -131,11 +177,34 @@ public static class Forge
         var type = MergeRecipe.TypeOf(inputs);
         var element = MergeRecipe.ElementOf(inputs);
 
+        // THE CLASS IS INHERITED, NEVER ROLLED, in the same spirit as the type and the element: the
+        // MAJORITY class among the inputs of the product's own type decides, then the majority among
+        // any classed input; a tie goes to the earliest input so a seeded merge stays deterministic.
+        // (Review 2026-08-25: "first classed input" let [WARDEN, RANGER, RANGER] fuse into a WARDEN
+        // helm — two wearable pieces consumed for one the champion cannot wear.) Three legacy pieces
+        // (no class) fuse into a legacy piece — anyone's — so a pre-class bag keeps its promise all
+        // the way through the forge. A universal product (charm, ring, focus) never carries a class.
+        var cls = ItemClasses.IsClassLocked(type) ? MajorityClass(inputs, type) : null;
+        // A weapon's family follows the same rule: the first weapon input whose family the class can
+        // carry keeps its shape; otherwise the class picks one of its own. A legacy product keeps
+        // null and derives its family from the id, exactly like a legacy drop.
+        // Drawn AFTER the id and the prefix, so a seeded merge still mints the id it always did.
+        var id = $"itm_{rng.Next(int.MaxValue):x8}";
+        // A fused item is a NEW item, so its prefix is rolled fresh like any other mint.
+        var prefix = Economy.GearTraits.RollPrefix(type, rng);
+        int? family = null;
+        if (type == ItemBaseType.Weapon && cls is { } c)
+        {
+            var kept = inputs.FirstOrDefault(i => i.BaseType == ItemBaseType.Weapon
+                                                  && ItemClasses.FamilyAllowed(c, ItemNaming.WeaponFamilyIndex(i)));
+            family = kept is not null ? ItemNaming.WeaponFamilyIndex(kept) : ItemClasses.RollFamily(c, rng);
+        }
+
         return new MergeResult
         {
             Product = new ItemInstance
             {
-                InstanceId = $"itm_{rng.Next(int.MaxValue):x8}",
+                InstanceId = id,
                 BaseType = type,
                 Rarity = upgraded,
                 Element = element,
@@ -144,6 +213,9 @@ public static class Forge
                 // voiding every Refine spent on the fused items (affix magnitude is ilvl-scaled). SellValue
                 // is rarity-only, so carrying the level up concentrates investment without paying anything.
                 ItemLevel = inputs.Max(i => i.ItemLevel),
+                TraitOverride = prefix,
+                Class = cls,
+                Family = family,
             },
         };
     }
@@ -209,27 +281,79 @@ public static class Forge
     /// one thing an idle economy must have or its late-game currency inflates into meaninglessness. Pure:
     /// it returns the leveled item and the price; the caller checks the stock and spends, like Reforge.
     /// </remarks>
+    /// <summary>
+    /// The chance the NEXT refine of this item slips. Zero through the safe rungs, then climbing.
+    /// </summary>
+    /// <remarks>
+    /// Playtest, upgrade rework: "+15 olarak sınırlayarak... giderek yükselecek şekilde downgrade
+    /// oranı koyarak." Rung 6 risks 6%, each further rung +6%, capped at 60% for rung 15. A slip
+    /// steps the item level AND the rung back by one — the ladder is climbed, not bought, and a slip
+    /// also re-cheapens the next attempt, so a bad streak softens itself.
+    /// </remarks>
+    public static double RefineFailChance(ItemInstance item, ForgeTuning tuning)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(tuning);
+        var attempt = item.Upgrades + 1;
+        if (attempt <= tuning.RefineSafeUpgrades) return 0;
+        return Math.Min(tuning.RefineFailCap, (attempt - tuning.RefineSafeUpgrades) * tuning.RefineFailStep);
+    }
+
+    /// <summary>Has this item climbed the whole ladder?</summary>
+    public static bool AtRefineCap(ItemInstance item, ForgeTuning tuning)
+        => item.Upgrades >= tuning.MaxUpgrades;
+
+    /// <summary>
+    /// The refine PREVIEW: the success product, the price, and the slip chance. Deterministic — the
+    /// screens draw from this; the actual roll is <see cref="TryRefine"/>.
+    /// </summary>
     public static RefineResult Refine(ItemInstance item, ForgeTuning tuning)
     {
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(tuning);
+        // The cost climbs with the item level AND with the rung — the ladder's top must be earned.
+        var costScale = 4 + item.Upgrades;
         return new RefineResult(
-            item with { ItemLevel = item.ItemLevel + 1 },
-            Scrap: tuning.RefineScrapBase + item.ItemLevel,
-            Gold: tuning.RefineGoldBase + item.ItemLevel * 8,
-            Crystal: 0);
+            item with { ItemLevel = item.ItemLevel + 1, Upgrades = item.Upgrades + 1 },
+            Scrap: (tuning.RefineScrapBase + item.ItemLevel) * costScale / 4,
+            Gold: (tuning.RefineGoldBase + item.ItemLevel * 8) * costScale / 4,
+            Crystal: 0)
+        { FailChance = RefineFailChance(item, tuning) };
     }
 
-    /// <summary>GREATER REFINE: +5 item levels for one CRYSTAL (plus Gold) — the premium sink for the rarest tier.</summary>
+    /// <summary>
+    /// Roll the refine: the success product, or the SLIP product (one level and one rung down, never
+    /// below the floor). The caller has already checked the cap and paid — a slip is not a refund.
+    /// </summary>
+    public static RefineOutcome TryRefine(ItemInstance item, ForgeTuning tuning, Random rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        var preview = Refine(item, tuning);
+        if (rng.NextDouble() >= preview.FailChance) return new RefineOutcome(preview.Product, Failed: false);
+        return new RefineOutcome(
+            item with
+            {
+                ItemLevel = Math.Max(1, item.ItemLevel - 1),
+                Upgrades = Math.Max(0, item.Upgrades - 1),
+            },
+            Failed: true);
+    }
+
+    /// <summary>
+    /// GREATER REFINE: up to +5 rungs for one CRYSTAL (plus Gold) — SAFE, never slips. The premium
+    /// currency's promise is certainty; it still cannot pass the +15 cap (Steps says what it bought).
+    /// </summary>
     public static RefineResult GreaterRefine(ItemInstance item, ForgeTuning tuning)
     {
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(tuning);
+        var steps = Math.Clamp(tuning.MaxUpgrades - item.Upgrades, 0, 5);
         return new RefineResult(
-            item with { ItemLevel = item.ItemLevel + 5 },
+            item with { ItemLevel = item.ItemLevel + steps, Upgrades = item.Upgrades + steps },
             Scrap: 0,
             Gold: (tuning.RefineGoldBase + item.ItemLevel * 8) * 3,
-            Crystal: 1);
+            Crystal: 1)
+        { Steps = steps };
     }
 
     /// <summary>
