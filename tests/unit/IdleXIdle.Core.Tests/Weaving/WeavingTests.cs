@@ -1,7 +1,9 @@
 using System;
 using System.Linq;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Abilities;
+using IdleXIdle.Core.Builds;
 using Xunit;
 
 namespace IdleXIdle.Core.Tests.Abilities;
@@ -21,8 +23,8 @@ public class WeavingTests
     {
         foreach (var attacker in AllSources)
         {
-            var strong = AllSources.Count(t => Weaving.SourceEffectiveness(attacker, t, Tuning) > 1.0f);
-            var weak = AllSources.Count(t => Weaving.SourceEffectiveness(attacker, t, Tuning) < 1.0f);
+            var strong = AllSources.Count(t => SourceMatchup.Effectiveness(attacker, t) > 1.0f);
+            var weak = AllSources.Count(t => SourceMatchup.Effectiveness(attacker, t) < 1.0f);
 
             Assert.Equal(2, strong);
             Assert.Equal(2, weak);
@@ -36,8 +38,8 @@ public class WeavingTests
         foreach (var a in AllSources)
         foreach (var b in AllSources)
         {
-            var ab = Weaving.SourceEffectiveness(a, b, Tuning);
-            var ba = Weaving.SourceEffectiveness(b, a, Tuning);
+            var ab = SourceMatchup.Effectiveness(a, b);
+            var ba = SourceMatchup.Effectiveness(b, a);
 
             if (ab > 1.0f) Assert.True(ba < 1.0f, $"{a} beats {b}, so {b} must be weak to {a}.");
             if (ab < 1.0f) Assert.True(ba > 1.0f);
@@ -49,7 +51,7 @@ public class WeavingTests
     public void test_no_source_is_better_than_another_on_average()
     {
         var totals = AllSources
-            .Select(a => AllSources.Sum(t => Weaving.SourceEffectiveness(a, t, Tuning)))
+            .Select(a => AllSources.Sum(t => SourceMatchup.Effectiveness(a, t)))
             .ToList();
 
         Assert.All(totals, t => Assert.Equal(totals[0], t, precision: 4));
@@ -57,7 +59,7 @@ public class WeavingTests
 
     [Fact]
     public void test_a_source_is_neutral_against_itself()
-        => Assert.All(AllSources, s => Assert.Equal(1.0f, Weaving.SourceEffectiveness(s, s, Tuning)));
+        => Assert.All(AllSources, s => Assert.Equal(1.0f, SourceMatchup.Effectiveness(s, s)));
 
     // ── Vows: the heart of Pillar 4 ───────────────────────────────────────────────────────────
 
@@ -73,8 +75,8 @@ public class WeavingTests
     {
         for (var uptime = 0.05f; uptime < 0.95f; uptime += 0.05f)
         {
-            var harder = Weaving.ConditionalMultiplier(uptime, Tuning);
-            var easier = Weaving.ConditionalMultiplier(uptime + 0.05f, Tuning);
+            var harder = Vows.ConditionalMultiplier(uptime);
+            var easier = Vows.ConditionalMultiplier(uptime + 0.05f);
 
             Assert.True(harder > easier,
                 $"Uptime {uptime:0.00} ({harder:0.000}) must beat {uptime + 0.05f:0.00} ({easier:0.000}).");
@@ -88,17 +90,17 @@ public class WeavingTests
     [InlineData(-0.1f)]
     [InlineData(1.5f)]
     public void test_a_vow_uptime_outside_zero_to_one_is_rejected(float uptime)
-        => Assert.Throws<ArgumentOutOfRangeException>(() => Weaving.ConditionalMultiplier(uptime, Tuning));
+        => Assert.Throws<ArgumentOutOfRangeException>(() => Vows.ConditionalMultiplier(uptime));
 
     /// <summary>Two Vows with the same uptime are worth the same — the formula prices rarity, not flavour.</summary>
     [Fact]
     public void test_two_vows_with_identical_uptime_are_priced_identically()
     {
-        var a = Weaving.Catalog.Single(v => v.Id == "vow_deliberate");
-        var b = Weaving.Catalog.Single(v => v.Id == "vow_frantic");
+        var a = Vows.Catalog.Single(v => v.Id == "vow_deliberate");
+        var b = Vows.Catalog.Single(v => v.Id == "vow_frantic");
 
         Assert.Equal(a.Severity, b.Severity);
-        Assert.Equal(Weaving.VowMultiplier(a, Tuning), Weaving.VowMultiplier(b, Tuning), precision: 4);
+        Assert.Equal(Vows.Multiplier(a), Vows.Multiplier(b), precision: 4);
     }
 
     /// <summary>
@@ -117,20 +119,20 @@ public class WeavingTests
         // Two extremes of the build space. Nothing in between is needed: a demand that is true in both
         // or false in both is broken whichever way it leans.
         var wide = new WeaveContext(
-            DistinctForms: 4, DistinctSources: 4, SkillsWoven: 4, SkillSlots: 4,
+            DistinctStyles: 4, DistinctSources: 4, SkillsWoven: 4, SkillSlots: 4,
             CritPercent: 40f, BaseCritPercent: 5f, SkillRate: 2.0f, Defence: 60,
             KeystonesWorn: 3, WornSlots: new HashSet<BareSlot>
                 { BareSlot.Boots, BareSlot.Gloves, BareSlot.Helm, BareSlot.Ring, BareSlot.Charm });
 
         var narrow = new WeaveContext(
-            DistinctForms: 1, DistinctSources: 1, SkillsWoven: 1, SkillSlots: 4,
+            DistinctStyles: 1, DistinctSources: 1, SkillsWoven: 1, SkillSlots: 4,
             CritPercent: 5f, BaseCritPercent: 5f, SkillRate: 0.6f, Defence: 0,
             KeystonesWorn: 0, WornSlots: new HashSet<BareSlot>());
 
-        foreach (var vow in Weaving.Catalog.Where(v => v.Kind == VowKind.Demand))
+        foreach (var vow in Vows.Catalog.Where(v => v.Kind == VowKind.Demand))
         {
-            var met = Weaving.IsActive(vow, wide) || Weaving.IsActive(vow, narrow);
-            var unmet = !Weaving.IsActive(vow, wide) || !Weaving.IsActive(vow, narrow);
+            var met = Vows.IsActive(vow, wide) || Vows.IsActive(vow, narrow);
+            var unmet = !Vows.IsActive(vow, wide) || !Vows.IsActive(vow, narrow);
 
             Assert.True(met, $"{vow.Id} is satisfied by no build at all — it is a dead catalogue entry.");
             Assert.True(unmet, $"{vow.Id} is satisfied by every build — it is a free multiplier wearing " +
@@ -165,18 +167,18 @@ public class WeavingTests
     [Fact]
     public void test_no_static_vow_dominates_another()
     {
-        var statics = Weaving.Catalog.Where(v => v.Kind == VowKind.StaticCost).ToList();
+        var statics = Vows.Catalog.Where(v => v.Kind == VowKind.StaticCost).ToList();
         Assert.True(statics.Count >= 2);
 
         foreach (var vow in statics)
         {
-            var power = Weaving.VowMultiplier(vow, Tuning) - 1f;   // the bonus granted
+            var power = Vows.Multiplier(vow) - 1f;   // the bonus granted
             var cost = vow.StaticCostMagnitude;                    // the eHP paid
 
             var ratio = power / cost;
 
             // Every static Vow must buy power at the SAME exchange rate.
-            Assert.Equal(Tuning.StaticCostConversionRate, ratio, precision: 2);
+            Assert.Equal(VowTuning.Default.StaticCostConversionRate, ratio, precision: 2);
         }
     }
 
@@ -184,7 +186,7 @@ public class WeavingTests
     [Fact]
     public void test_vow_fragility_is_not_free_for_a_zero_defense_build()
     {
-        var fragility = Weaving.Catalog.Single(v => v.Id == "vow_fragility");
+        var fragility = Vows.Catalog.Single(v => v.Id == "vow_fragility");
 
         // The cost is a post-mitigation damage multiplier, so it cannot be dodged by declining to
         // invest in defense. If this ever becomes a defense-percentage again, it is free once more.
@@ -201,7 +203,7 @@ public class WeavingTests
             Name = "TEST",
             Source = Source.Body,
             Form = Form.Strike,
-            Vow = Weaving.Catalog.Single(v => v.Id == "vow_singular"),
+            Vow = Vows.Catalog.Single(v => v.Id == "vow_singular"),
         };
 
         var active = Weaving.AbilityPower(ability, Source.Body, 50f, vowActive: true, Tuning);
@@ -220,7 +222,7 @@ public class WeavingTests
             Name = "TEST",
             Source = Source.Body,
             Form = Form.Strike,
-            Vow = Weaving.Catalog.Single(v => v.Id == "vow_reckless_offering"),
+            Vow = Vows.Catalog.Single(v => v.Id == "vow_reckless_offering"),
         };
 
         var a = Weaving.AbilityPower(ability, Source.Body, 50f, vowActive: false, Tuning);
@@ -250,8 +252,8 @@ public class WeavingTests
         var wellMatched = new WovenAbility { Name = "A", Source = Source.Body, Form = Form.Strike };
         var mismatched = new WovenAbility { Name = "B", Source = Source.Machine, Form = Form.Strike };
 
-        Assert.True(Weaving.SourceEffectiveness(Source.Body, target, Tuning) > 1f);
-        Assert.True(Weaving.SourceEffectiveness(Source.Machine, target, Tuning) < 1f);
+        Assert.True(SourceMatchup.Effectiveness(Source.Body, target) > 1f);
+        Assert.True(SourceMatchup.Effectiveness(Source.Machine, target) < 1f);
 
         // At EQUAL stats the counter still wins — the nudge is real...
         var matched = Weaving.AbilityPower(wellMatched, target, 100f, false, Tuning);
@@ -276,7 +278,7 @@ public class WeavingTests
     [Fact]
     public void test_every_catalog_vow_is_well_formed()
     {
-        foreach (var vow in Weaving.Catalog)
+        foreach (var vow in Vows.Catalog)
         {
             Assert.False(string.IsNullOrWhiteSpace(vow.Description));
 

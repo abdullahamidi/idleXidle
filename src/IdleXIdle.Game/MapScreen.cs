@@ -5,6 +5,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Combat;
 using IdleXIdle.Core.Encounters;
 using IdleXIdle.Core.Loot;

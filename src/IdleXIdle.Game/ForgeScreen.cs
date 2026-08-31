@@ -6,6 +6,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Expeditions;

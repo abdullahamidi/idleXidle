@@ -1,5 +1,6 @@
 using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 
 
 namespace IdleXIdle.Core.Builds;
@@ -82,7 +83,7 @@ public static class BuildGlossary
     /// <remarks>
     /// A Source is the only lever whose value depends on WHERE you are rather than on your build, so
     /// the line has to say that. The strong/weak pairs come from
-    /// <see cref="Weaving.SourceEffectiveness"/> rather than being listed by hand.
+    /// <see cref="SourceMatchup.Effectiveness"/> rather than being listed by hand.
     /// </remarks>
     public static string SourceRule(Source source, WeavingTuning? tuning = null)
     {

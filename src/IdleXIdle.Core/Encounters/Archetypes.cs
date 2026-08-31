@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
 
 namespace IdleXIdle.Core.Encounters;

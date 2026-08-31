@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
 using Xunit;
 
@@ -15,7 +16,7 @@ namespace IdleXIdle.Core.Tests.Builds;
 /// Each test pairs the signature under proof with a CONTROL Source whose own signature is provably
 /// inert in that arena (no armour to bend, a foe too healthy to execute), and picks a target Source
 /// against which BOTH attackers hold the same matchup — so the only living difference is the
-/// signature itself. The pairing is SEARCHED from <see cref="Weaving.SourceEffectiveness"/>, never
+/// signature itself. The pairing is SEARCHED from <see cref="SourceMatchup.Effectiveness"/>, never
 /// hand-listed, so an enum reorder cannot silently break the premise.
 /// </remarks>
 public class SourceSignatureTest
@@ -23,8 +24,8 @@ public class SourceSignatureTest
     /// <summary>A target Source both attackers are equally effective against — the level arena.</summary>
     private static Source EqualTarget(Source a, Source b)
         => Enum.GetValues<Source>().First(t =>
-            MathF.Abs(Weaving.SourceEffectiveness(a, t, new WeavingTuning())
-                      - Weaving.SourceEffectiveness(b, t, new WeavingTuning())) < 0.001f);
+            MathF.Abs(SourceMatchup.Effectiveness(a, t)
+                      - SourceMatchup.Effectiveness(b, t)) < 0.001f);
 
     private static Build OneSkill(Source source, Form form)
     {

@@ -5,6 +5,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Expeditions;
@@ -743,7 +744,7 @@ public sealed class ChestScreen
             foreach (var s in build.Skills.Take(5))
             {
                 var vowName = s.VowId is null ? null
-                    : Weaving.Catalog.FirstOrDefault(v => v.Id == s.VowId)?.Name ?? s.VowId;
+                    : Vows.Catalog.FirstOrDefault(v => v.Id == s.VowId)?.Name ?? s.VowId;
                 var line = $"{s.Source.ToUpperInvariant()} {s.Form.ToUpperInvariant()}"
                            + (vowName is null ? "" : $"  —  {vowName.ToUpperInvariant()}");
                 _ui.TextBig(b, line, panel.X + 80, y, Bone, UiTypography.Secondary);

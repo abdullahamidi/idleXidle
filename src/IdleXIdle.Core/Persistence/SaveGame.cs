@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Loot;
 using IdleXIdle.Core.Warrens;
@@ -393,7 +394,7 @@ public sealed record SavedItem
     public List<SavedItem> Gems { get; init; } = new();
 
     /// <summary>
-    /// The item's region ELEMENT (a <see cref="Automation.Source"/> name), or null for inert loot.
+    /// The item's region ELEMENT (a <see cref="Sources.Source"/> name), or null for inert loot.
     /// </summary>
     /// <remarks>
     /// This was FORGOTTEN — the field was live state (set at mint, carried through merges, read by the
@@ -621,7 +622,7 @@ public static class SaveSystem
                 ? Economy.GearTraits.LegacyDerivedTrait(s.InstanceId, baseType)
                 : Enum.TryParse<GearTrait>(s.TraitOverride, out var t) ? t : null,   // "NONE" -> null
             EnchantOverride = Enum.TryParse<EnchantKind>(s.EnchantOverride, out var e) ? e : null,
-            Element = Enum.TryParse<Automation.Source>(s.Element, out var el) ? el : null,
+            Element = Enum.TryParse<Sources.Source>(s.Element, out var el) ? el : null,
             // Lenient, like every enum here: an unparseable class is a null class, which is "anyone".
             Class = Enum.TryParse<Economy.ItemClass>(s.Class, out var cl) ? cl : null,
             Family = s.Family is { } fam && fam >= 0 && fam < Economy.ItemNaming.WeaponFamilies.Length ? fam : null,

@@ -66,7 +66,7 @@ public class PassiveTreeTests
         build.Weave(new EquippedSkill(
             new WovenAbility
             {
-                Name = "cut", Source = global::IdleXIdle.Core.Automation.Source.Body, Form = Form.Strike,
+                Name = "cut", Source = global::IdleXIdle.Core.Sources.Source.Body, Form = Form.Strike,
             }, 1_500));
 
         // A wall: enough health to survive the ceiling, and it never swings back. What comes out is a

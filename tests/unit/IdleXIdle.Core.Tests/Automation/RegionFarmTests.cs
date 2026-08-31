@@ -1,4 +1,5 @@
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Progression;
 using Xunit;
 

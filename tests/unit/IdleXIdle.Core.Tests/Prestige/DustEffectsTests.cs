@@ -282,7 +282,7 @@ public class DustEffectsTests
         var tree = With("vow_study_1", "vow_study_2", "vow_study_3", "vow_binding", "vow_sacrifice");
         var known = DustEffects.KnownVows(tree).Select(v => v.Id).ToHashSet();
 
-        foreach (var vow in IdleXIdle.Core.Abilities.Weaving.Catalog)
+        foreach (var vow in IdleXIdle.Core.Builds.Vows.Catalog)
             Assert.Contains(vow.Id, known);
     }
 
@@ -291,7 +291,7 @@ public class DustEffectsTests
     {
         // The mirror of the above: a grant pointing at a renamed Vow would silently teach nothing.
         var tree = With("vow_study_1", "vow_study_2", "vow_study_3", "vow_binding", "vow_sacrifice");
-        Assert.Equal(IdleXIdle.Core.Abilities.Weaving.Catalog.Count, DustEffects.KnownVows(tree).Count);
+        Assert.Equal(IdleXIdle.Core.Builds.Vows.Catalog.Count, DustEffects.KnownVows(tree).Count);
     }
 
     // ── Loot filters ──────────────────────────────────────────────────────────────────────────

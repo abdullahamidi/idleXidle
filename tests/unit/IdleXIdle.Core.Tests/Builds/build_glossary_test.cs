@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Loot;
@@ -36,16 +37,16 @@ public class BuildGlossaryTest
             var (w1, w2) = BuildGlossary.WeakAgainst(attacker);
 
             foreach (var target in new[] { s1, s2 })
-                Assert.True(Weaving.SourceEffectiveness(attacker, target, t) > 1f,
+                Assert.True(SourceMatchup.Effectiveness(attacker, target) > 1f,
                     $"the glossary says {attacker} is strong against {target}, and the fight disagrees.");
 
             foreach (var target in new[] { w1, w2 })
-                Assert.True(Weaving.SourceEffectiveness(attacker, target, t) < 1f,
+                Assert.True(SourceMatchup.Effectiveness(attacker, target) < 1f,
                     $"the glossary says {attacker} is weak against {target}, and the fight disagrees.");
 
             // And the two it names must be the ONLY ones, or the line is true and still misleading.
             var actuallyStrong = Enum.GetValues<Source>()
-                .Where(x => Weaving.SourceEffectiveness(attacker, x, t) > 1f).ToList();
+                .Where(x => SourceMatchup.Effectiveness(attacker, x) > 1f).ToList();
             Assert.Equal(2, actuallyStrong.Count);
             Assert.Contains(s1, actuallyStrong);
             Assert.Contains(s2, actuallyStrong);

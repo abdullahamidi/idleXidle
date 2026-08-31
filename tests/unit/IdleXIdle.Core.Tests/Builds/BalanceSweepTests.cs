@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Expeditions;
@@ -315,7 +316,7 @@ public class BalanceSweepTests
         // the Vow measured alone, deliberately: RECKLESS OFFERING charges 15% per SKILL that wears it, so
         // this four-skill fixture pays 0.85^4 and not 0.85, and an assertion that hard-coded the single
         // price would be asserting the fixture's shape instead of the composition rule under test.
-        var reckless = Weaving.Catalog.First(v => v.Id == "vow_reckless_offering");
+        var reckless = Vows.Catalog.First(v => v.Id == "vow_reckless_offering");
         var vowOnly = SoloBattle.ChampionHealth(BuildWith(SkillShape.None, vow: reckless), hunter);
         var both = SoloBattle.ChampionHealth(
             BuildWith(SkillShape.None with { MaxHealth = 0.5f }, vow: reckless), hunter);
@@ -356,7 +357,7 @@ public class BalanceSweepTests
     /// </para>
     /// <para>
     /// The demand is not assumed to be met, either — the caller re-derives the context through
-    /// <c>SoloBattle.DescribeBuild</c> and asserts <c>Weaving.IsActive</c> before trusting the number,
+    /// <c>SoloBattle.DescribeBuild</c> and asserts <c>Vows.IsActive</c> before trusting the number,
     /// so a fixture that silently stops satisfying its Vow fails loudly instead of quietly measuring an
     /// inert one.
     /// </para>
@@ -387,7 +388,7 @@ public class BalanceSweepTests
             // And UNGEARED damage: overkill is discarded, and with the ×3 gear a Strike already killed
             // every creature it touched, so doubling it bought nothing — the harness measured 18 deep
             // with the Vow and 18 without, which is the fixture's saturation, not the Vow's worth.
-            case VowDemand.SingleForm:
+            case VowDemand.SingleStyle:
                 return (Weave(SkillShape.None, new[] { Form.Strike, Form.Strike }, mods: geared with { Damage = 0.4f }), hunter);
 
             case VowDemand.SingleSource:
@@ -451,7 +452,7 @@ public class BalanceSweepTests
         var skipped = new List<string>();
         var rows = new List<(Vow V, Spread S, Spread Without)>();
 
-        foreach (var v in Weaving.Catalog)
+        foreach (var v in Vows.Catalog)
         {
             if (SatisfyingFixture(v) is not { } fx) { skipped.Add(v.Name); continue; }
 
@@ -466,7 +467,7 @@ public class BalanceSweepTests
 
             // Prove the demand IS met before trusting the number.
             var ctx = SoloBattle.DescribeBuild(fx.Build, fx.Hunter);
-            Assert.True(Weaving.IsActive(v, ctx),
+            Assert.True(Vows.IsActive(v, ctx),
                         $"the fixture for {v.Name} does not satisfy its own demand — the measurement "
                         + "would be of an inactive Vow");
 
@@ -474,7 +475,7 @@ public class BalanceSweepTests
         }
 
         foreach (var (v, s, w) in rows.OrderByDescending(r => r.S.Median - r.Without.Median))
-            _out.WriteLine($"{v.Name,-26} x{Weaving.VowMultiplier(v, WeavingTuning.Default):0.00}  "
+            _out.WriteLine($"{v.Name,-26} x{Vows.Multiplier(v):0.00}  "
                            + $"with {s.Median,3}  without {w.Median,3}  gain {s.Median - w.Median,+3}"
                            + $"   MEAN {s.Mean,6:0.00} vs {w.Mean,6:0.00}  d {s.Mean - w.Mean,+6:0.00}"
                            + $"   p25 {s.P25,3}/{w.P25,3}  p75 {s.P75,3}/{w.P75,3}");
@@ -494,7 +495,7 @@ public class BalanceSweepTests
         // because whole waves are what a player experiences.
         foreach (var (v, s, w) in rows)
             Assert.True(s.Mean > w.Mean,
-                        $"{v.Name} is worth x{Weaving.VowMultiplier(v, WeavingTuning.Default):0.00} and "
+                        $"{v.Name} is worth x{Vows.Multiplier(v):0.00} and "
                         + $"buys NOTHING — {s.Mean:0.00} deep with it on average, {w.Mean:0.00} without "
                         + $"(medians {s.Median} and {w.Median})");
     }

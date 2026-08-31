@@ -1,6 +1,7 @@
 using System.Linq;
 using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Loot;
@@ -292,14 +293,14 @@ public class BuildTests
         Assert.Equal(1, ctx.SkillSlots);
         Assert.Equal(1, ctx.SkillsWoven);
 
-        var vow = Weaving.Catalog.First(v => v.Id == "vow_complete");
-        Assert.True(Weaving.IsActive(vow, ctx),
+        var vow = Vows.Catalog.First(v => v.Id == "vow_complete");
+        Assert.True(Vows.IsActive(vow, ctx),
             "a one-skill champion with one slot has no empty slot, but VOW OF COMPLETION reads UNMET.");
 
         // And it must still REFUSE a build that genuinely has a gap.
         var gappy = new Build { SlotCapacity = 3 };
         gappy.Weave(Skill("a"));
-        Assert.False(Weaving.IsActive(vow, SoloBattle.DescribeBuild(gappy, hunter)),
+        Assert.False(Vows.IsActive(vow, SoloBattle.DescribeBuild(gappy, hunter)),
             "a build with two empty slots met a Vow that demands none.");
     }
 }

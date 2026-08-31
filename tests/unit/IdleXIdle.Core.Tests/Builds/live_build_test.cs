@@ -1,6 +1,7 @@
 using System;
 using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Combat;
 using IdleXIdle.Core.Economy;

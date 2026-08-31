@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Expeditions;
 
 namespace IdleXIdle.Core.Builds;
@@ -726,7 +727,7 @@ public static class SoloBattle
                 // stack the same promise twice.
                 var match = shape.AllMatchupsStrong
                     ? wt.StrongMultiplier
-                    : Weaving.SourceEffectiveness(s, target, wt);
+                    : SourceMatchup.Effectiveness(s, target);
                 if (match > 1f) match += (match - 1f) * shape.StrongMatchupBonus;
                 else if (match < 1f) match += (1f - match) * Math.Min(1f, shape.WeakMatchupRelief);
                 m *= match;
@@ -1418,7 +1419,7 @@ public static class SoloBattle
                         : ownTick / 1000f;          // native field: already per second
 
                     var aura = FormBehaviour.BaseDamage(form, resonance, wt)
-                               * VowFactor(sk, weaveCtx, wt, shape)
+                               * VowFactor(sk, weaveCtx, shape)
                                * perTick
                                * def.DamageMultiplier;   // MIRE/SILT
                     var auraDealt = LandSpread(aura, ms, shape.TargetsFor(form) + def.TargetsBonus,
@@ -1572,7 +1573,7 @@ public static class SoloBattle
                     {
                         raw = FormBehaviour.BaseDamage(form, resonance, wt);
                     }
-                    raw *= VowFactor(sk, weaveCtx, wt, shape);
+                    raw *= VowFactor(sk, weaveCtx, shape);
 
                     // OPENING VOLLEY — this skill's first activation of the wave, or one of the later ones.
                     raw *= firstCast ? shape.FirstCastMultiplier : shape.LaterCastMultiplier;
@@ -1705,7 +1706,7 @@ public static class SoloBattle
                         if (!FormBehaviour.IsAmplifier(woven.Form) && !FormBehaviour.FiresOnBeingHit(woven.Form))
                         {
                             var wovenRaw = FormBehaviour.BaseDamage(woven.Form, resonance, wt)
-                                           * VowFactor(woven, weaveCtx, wt, shape)
+                                           * VowFactor(woven, weaveCtx, shape)
                                            * WeaverEchoFraction;
                             // The woven echo carries ITS OWN skill's buy-back, same ratio rule as above.
                             if (build.Affinity is { } wovenAff && woven.Vow is not null)
@@ -1924,7 +1925,7 @@ public static class SoloBattle
                     var trapRaw = reflect > 0f
                         ? taken * reflect
                         : FormBehaviour.BaseDamage(Form.Trap, resonance, wt);
-                    trapRaw *= VowFactor(sk, weaveCtx, wt, shape)
+                    trapRaw *= VowFactor(sk, weaveCtx, shape)
                                // OPENING VOLLEY — the Trap's first spring counts as its first cast.
                                * (castOnce.Add(idx) ? shape.FirstCastMultiplier : shape.LaterCastMultiplier);
 
@@ -2098,16 +2099,16 @@ public static class SoloBattle
     /// boss — was a lottery on how the wave went in a game where the player cannot react; this is a
     /// decision they made at the workbench and can see the consequences of in the report.
     /// </remarks>
-    private static float VowFactor(EquippedSkill sk, WeaveContext ctx, WeavingTuning wt, SkillShape shape)
+    private static float VowFactor(EquippedSkill sk, WeaveContext ctx, SkillShape shape)
     {
         if (sk.Vow is not { } vow) return 1f;
-        if (!Weaving.IsActive(vow, ctx)) return 1f;
+        if (!Vows.IsActive(vow, ctx)) return 1f;
 
         // THE BONUS is scaled, not the factor. A Vow worth x1.90 pays +0.90; TWICE SWORN at 1.4 makes
         // that +1.26. Scaling the whole factor would pay out on a build with no Vow sworn at all, which
         // would make a Vow-specialist passive into a flat damage bonus that happens to be named after
         // Vows — and would pay most to the player who ignored the system it is about.
-        var bonus = Weaving.VowMultiplier(vow, wt) - 1f;
+        var bonus = Vows.Multiplier(vow) - 1f;
         return 1f + bonus * MathF.Max(0f, shape.VowPowerMultiplier);
     }
 
@@ -2130,7 +2131,7 @@ public static class SoloBattle
 
         var mods = build.Resolve(hunter);
         return new WeaveContext(
-            DistinctForms: build.Skills.Select(s => s.Form).Distinct().Count(),
+            DistinctStyles: build.Skills.Select(s => s.Def.Style).Distinct().Count(),
             DistinctSources: build.Skills.Select(s => s.Source).Distinct().Count(),
             SkillsWoven: build.Skills.Count,
             // The BUILD's capacity, not the type's floor. VOW OF COMPLETION demands "no skill slot is

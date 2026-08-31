@@ -1,5 +1,6 @@
 using System;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Forging;
 using IdleXIdle.Core.Loot;

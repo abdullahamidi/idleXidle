@@ -12,7 +12,7 @@ using Xunit.Abstractions;
 // Aliased, not imported. `Source` lives in Core.Automation, not Core.Abilities where a skill's Source
 // property would suggest, and this file's namespace sits under ...Tests.Characters where the test
 // assembly's own sub-namespaces shadow the short name. The alias is the one spelling that survives both.
-using CoreSource = IdleXIdle.Core.Automation.Source;
+using CoreSource = IdleXIdle.Core.Sources.Source;
 
 namespace IdleXIdle.Core.Tests.Characters;
 
@@ -243,7 +243,7 @@ public class RosterParityTest
         // and this project's own notes are explicit that the enemy curve must not be retuned blind.
         // A number in the log is what a later balance pass needs; a threshold guessed today is what
         // makes a gate start lying.
-        var vow = Weaving.Catalog.First(v => v.Id == "vow_pure");
+        var vow = Vows.Catalog.First(v => v.Id == "vow_pure");
         const int windowMs = 60_000;
 
         _out.WriteLine("SINGLE-TARGET throughput — damage into one unkillable creature over 60s");
@@ -286,7 +286,7 @@ public class RosterParityTest
         // they really are — and a build that fails by a hair reports slower than one that fails badly
         // but on a shorter earlier wave. Every Form the parity tests touch has to actually finish the
         // fixture, or the ranking silently becomes a ranking of who saturated first.
-        var vow = Weaving.Catalog.First(v => v.Id == "vow_pure");
+        var vow = Vows.Catalog.First(v => v.Id == "vow_pure");
 
         var waves = new (string Name, Func<List<WaveCreature>> Make)[]
         {
@@ -327,7 +327,7 @@ public class RosterParityTest
         // the day a passive starts rolling dice, a 5% delta stops being evidence and this test is what
         // notices. It is the same discipline the animation gate settled on: measure the known-good
         // distribution, do not assume its shape.
-        var vow = Weaving.Catalog.First(v => v.Id == "vow_pure");
+        var vow = Vows.Catalog.First(v => v.Id == "vow_pure");
 
         foreach (var form in new[] { Form.Strike, Form.Trap, Form.Projectile })
         {
@@ -348,7 +348,7 @@ public class RosterParityTest
     [Fact]
     public void test_no_character_is_dead_weight_on_every_axis()
     {
-        var vow = Weaving.Catalog.First(v => v.Id == "vow_pure");
+        var vow = Vows.Catalog.First(v => v.Id == "vow_pure");
         var baseline = Measure(null, Form.Strike, vow);
 
         _out.WriteLine("ROSTER PARITY — each character on its own aptitude, against a no-character");
@@ -414,7 +414,7 @@ public class RosterParityTest
         // game to commit it: ten passives, one of which quietly multiplies everything. This does not
         // demand equality — an aptitude is SUPPOSED to beat no-character — it demands that the best
         // offensive character is not so far ahead that the other nine are a mistake to pick.
-        var vow = Weaving.Catalog.First(v => v.Id == "vow_pure");
+        var vow = Vows.Catalog.First(v => v.Id == "vow_pure");
         var ratios = new List<(string Name, float Ratio)>();
 
         foreach (var c in CharacterRoster.All)

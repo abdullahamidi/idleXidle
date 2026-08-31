@@ -19,7 +19,7 @@ public class ShareCodesTest
         InstanceId = "itm_deadbeef", BaseType = ItemBaseType.Weapon, Rarity = Rarity.Legendary,
         SellValue = 200, ItemLevel = 23, Upgrades = 11,
         TraitOverride = IdleXIdle.Core.Economy.GearTrait.Savage,
-        Element = IdleXIdle.Core.Automation.Source.Shadow,
+        Element = IdleXIdle.Core.Sources.Source.Shadow,
         Gems = new List<ItemInstance>
         {
             new() { InstanceId = "gem_1", BaseType = ItemBaseType.Gem, Rarity = Rarity.Epic,

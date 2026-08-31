@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
 using Xunit;
 
@@ -68,7 +69,7 @@ public class AffinityVowBuybackTest
             return b;
         }
 
-        var unmeetable = Weaving.Catalog.FirstOrDefault(v => v.Demand == VowDemand.EveryWeaveFilled);
+        var unmeetable = Vows.Catalog.FirstOrDefault(v => v.Demand == VowDemand.EveryWeaveFilled);
 
         static float Damage(Build build)
         {

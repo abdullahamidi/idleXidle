@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Persistence;
 using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Prestige;

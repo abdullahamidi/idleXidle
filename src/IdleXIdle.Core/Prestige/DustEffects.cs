@@ -123,7 +123,7 @@ public static class DustEffects
         ArgumentNullException.ThrowIfNull(tree);
 
         var ids = VowGrants.Where(kv => tree.Owns(kv.Key)).SelectMany(kv => kv.Value).ToHashSet();
-        return Weaving.Catalog.Where(v => ids.Contains(v.Id)).ToList();
+        return Vows.Catalog.Where(v => ids.Contains(v.Id)).ToList();
     }
 
     public static bool KnowsVow(MemoryDustTree tree, string? vowId)

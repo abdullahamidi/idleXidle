@@ -6,6 +6,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Economy;
@@ -5180,7 +5181,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         var build = _loadout.ToBuild(_dust, _mastery, _characters.Active, _skillProgress);
         var ctx = SoloBattle.DescribeBuild(build, _hunter);
-        return build.Skills.Any(s => s.Vow is { } v && Weaving.IsActive(v, ctx));
+        return build.Skills.Any(s => s.Vow is { } v && Vows.IsActive(v, ctx));
     }
 
     private int TraitPointsEarned()

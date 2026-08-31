@@ -1,6 +1,7 @@
 using System.Linq;
 using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Expeditions;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Economy;
@@ -35,8 +36,8 @@ public class WeaveInBattleTests
         foreach (var attacker in System.Enum.GetValues<Source>())
         {
             var targets = System.Enum.GetValues<Source>();
-            Assert.Equal(2, targets.Count(x => Weaving.SourceEffectiveness(attacker, x, t) > 1f));
-            Assert.Equal(2, targets.Count(x => Weaving.SourceEffectiveness(attacker, x, t) < 1f));
+            Assert.Equal(2, targets.Count(x => SourceMatchup.Effectiveness(attacker, x) > 1f));
+            Assert.Equal(2, targets.Count(x => SourceMatchup.Effectiveness(attacker, x) < 1f));
         }
     }
 
@@ -48,10 +49,10 @@ public class WeaveInBattleTests
         // The pricing promise: a Vow that costs the build less is always worth less, so no demand Vow
         // can dominate another.
         var t = WeavingTuning.Default;
-        var unbound = Weaving.ById("vow_unbound")!;    // severity 0.80 — refuse the trait tree's payoff
-        var complete = Weaving.ById("vow_complete")!;  // severity 0.20 — most builds already satisfy it
+        var unbound = Vows.ById("vow_unbound")!;    // severity 0.80 — refuse the trait tree's payoff
+        var complete = Vows.ById("vow_complete")!;  // severity 0.20 — most builds already satisfy it
 
-        Assert.True(Weaving.VowMultiplier(unbound, t) > Weaving.VowMultiplier(complete, t));
+        Assert.True(Vows.Multiplier(unbound) > Vows.Multiplier(complete));
     }
 
     /// <summary>
@@ -79,18 +80,18 @@ public class WeaveInBattleTests
         var monoCtx = SoloBattle.DescribeBuild(mono, new Hunter());
         var broadCtx = SoloBattle.DescribeBuild(broad, new Hunter());
 
-        Assert.True(Weaving.IsActive(Weaving.ById("vow_singular")!, monoCtx),
+        Assert.True(Vows.IsActive(Vows.ById("vow_singular")!, monoCtx),
             "A one-Form build does not satisfy THE SINGULAR — the sim is not describing Forms.");
-        Assert.False(Weaving.IsActive(Weaving.ById("vow_singular")!, broadCtx));
+        Assert.False(Vows.IsActive(Vows.ById("vow_singular")!, broadCtx));
 
-        Assert.True(Weaving.IsActive(Weaving.ById("vow_pure")!, monoCtx));
-        Assert.False(Weaving.IsActive(Weaving.ById("vow_pure")!, broadCtx));
+        Assert.True(Vows.IsActive(Vows.ById("vow_pure")!, monoCtx));
+        Assert.False(Vows.IsActive(Vows.ById("vow_pure")!, broadCtx));
 
         // A fresh Hunter trains no crit, wears nothing and sockets nothing.
-        Assert.True(Weaving.IsActive(Weaving.ById("vow_bluntedge")!, monoCtx));
-        Assert.True(Weaving.IsActive(Weaving.ById("vow_unguarded")!, monoCtx));
-        Assert.True(Weaving.IsActive(Weaving.ById("vow_unbound")!, monoCtx));
-        Assert.True(Weaving.IsActive(Weaving.ById("vow_barefoot")!, monoCtx));
+        Assert.True(Vows.IsActive(Vows.ById("vow_bluntedge")!, monoCtx));
+        Assert.True(Vows.IsActive(Vows.ById("vow_unguarded")!, monoCtx));
+        Assert.True(Vows.IsActive(Vows.ById("vow_unbound")!, monoCtx));
+        Assert.True(Vows.IsActive(Vows.ById("vow_barefoot")!, monoCtx));
     }
 
     // ── Boss waves ────────────────────────────────────────────────────────────────────────────

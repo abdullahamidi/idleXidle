@@ -4,6 +4,7 @@ using System.Linq;
 using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Expeditions;
@@ -179,7 +180,7 @@ public class CharactersRosterTest
         // The formulation matters more than the number. A Vow worth x1.90 pays +0.90, and TWICE SWORN
         // scales THAT. Scaling the whole factor would pay out on a build with no Vow sworn — a flat
         // damage bonus wearing a Vow's name, worth most to the player ignoring the system it is about.
-        var vow = Weaving.Catalog.First(v => v.Id == "vow_pure");
+        var vow = Vows.Catalog.First(v => v.Id == "vow_pure");
         var plain = DamageWith(SkillShape.None, vow);
         var sworn = DamageWith(SkillShape.None with { VowPowerMultiplier = 1.5f }, vow);
         var noVowPlain = DamageWith(SkillShape.None, null);

@@ -5,6 +5,7 @@ using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Encounters;
 using IdleXIdle.Core.Loot;
 using IdleXIdle.Core.Expeditions;

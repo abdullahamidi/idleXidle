@@ -81,7 +81,7 @@ public static class ExpeditionLoot
     /// </param>
     public static IReadOnlyList<ItemInstance> RollBoss(
         int powerTier, float quality, Random rng, LootTuning? lootTuning = null,
-        ExpeditionLootTuning? tuning = null, Automation.Source? element = null, float buildTilt = 1f,
+        ExpeditionLootTuning? tuning = null, Sources.Source? element = null, float buildTilt = 1f,
         string? region = null, Economy.ItemClass? favouredClass = null)
     {
         ArgumentNullException.ThrowIfNull(rng);

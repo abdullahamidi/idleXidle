@@ -7,6 +7,7 @@ using Microsoft.Xna.Framework.Input;
 using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Animation;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Combat;

@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Loot;
@@ -324,7 +325,7 @@ public class SoloBattleTests
     [Fact]
     public void test_a_vow_pays_only_when_the_build_meets_its_demand()
     {
-        var vow = Weaving.ById("vow_singular")!;   // every skill must be the same Form
+        var vow = Vows.ById("vow_singular")!;   // every skill must be the same Form
 
         var mono = new Build();
         mono.Weave(Sk(Form.Strike, Source.Nature, vow));
@@ -352,7 +353,7 @@ public class SoloBattleTests
     [Fact]
     public void test_a_broken_vow_grants_nothing()
     {
-        var vow = Weaving.ById("vow_unbound")!;   // no keystone may be socketed
+        var vow = Vows.ById("vow_unbound")!;   // no keystone may be socketed
 
         var bare = new Build();
         bare.Weave(Sk(Form.Strike, Source.Nature, vow));
@@ -702,7 +703,7 @@ public class SoloBattleTests
     public void test_tithe_pays_per_sworn_vow_and_is_dead_without_one()
     {
         const int Max = 1000, Now = 1000;
-        var vow = Weaving.Catalog.First(v => v.Id == "vow_pure");
+        var vow = Vows.Catalog.First(v => v.Id == "vow_pure");
 
         Build Sworn()
         {
@@ -727,7 +728,7 @@ public class SoloBattleTests
         // promise onto four skills is one promise. Paying it four times would make the tithe worth most
         // to the player who diversified least, which inverts what the whole Vow system is for.
         const int Max = 1000, Now = 1000;
-        var vow = Weaving.Catalog.First(v => v.Id == "vow_pure");
+        var vow = Vows.Catalog.First(v => v.Id == "vow_pure");
 
         Build OneVowNSkills(int n)
         {
@@ -768,7 +769,7 @@ public class SoloBattleTests
     {
         // The same champion, taking the same bites over a stalling wave, must end LOWER for wearing
         // FRAGILITY — the Vow's price is damage taken, and the solo fight had stopped charging it.
-        var fragility = Weaving.Catalog.Single(v => v.Id == "vow_fragility");
+        var fragility = Vows.Catalog.Single(v => v.Id == "vow_fragility");
 
         int Remaining(Vow? vow)
         {
@@ -787,7 +788,7 @@ public class SoloBattleTests
     public void test_reckless_offering_costs_max_health_at_mint()
     {
         // RECKLESS OFFERING pays with a smaller pool for the whole run. The health price must reach the mint.
-        var reckless = Weaving.Catalog.Single(v => v.Id == "vow_reckless_offering");
+        var reckless = Vows.Catalog.Single(v => v.Id == "vow_reckless_offering");
 
         var withVow = new Build();
         withVow.Weave(Sk(Form.Strike, Source.Nature, reckless));

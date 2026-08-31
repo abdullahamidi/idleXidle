@@ -6,6 +6,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Prestige;
@@ -756,7 +757,7 @@ public sealed class BuildScreen
         var skills = Loadout.Skills;
         var focus = skills.GroupBy(s => s.Source).OrderByDescending(g => g.Count()).FirstOrDefault();
         var forms = string.Join("  ·  ", skills.Select(s => Short(s.Form)).Distinct());
-        var vowList = skills.Select(s => Weaving.ById(s.VowId)?.Short.ToUpperInvariant()).Where(v => v is not null).Distinct();
+        var vowList = skills.Select(s => Vows.ById(s.VowId)?.Short.ToUpperInvariant()).Where(v => v is not null).Distinct();
         var vows = vowList.Any() ? string.Join("  ·  ", vowList) : "NONE";
 
         var x = CorePanel.X + 44;
@@ -776,7 +777,7 @@ public sealed class BuildScreen
         // A note that LOOKS derived and is partly hardcoded is worse than no note: the player cannot
         // tell which half to trust, and here both halves were readable as false from the same screen.
         // The comment above it said "no invented copy" — the invented copy was already there.
-        var vowCount = skills.Count(s => Weaving.ById(s.VowId) is not null);
+        var vowCount = skills.Count(s => Vows.ById(s.VowId) is not null);
         var note = focus is null
             ? "Add a skill to begin. Every skill is a SOURCE and a FORM."
             : Sentences(focus.Key.ToString().ToUpperInvariant(), vowCount);
@@ -827,7 +828,7 @@ public sealed class BuildScreen
                 else _ui.Diamond(b, new Rectangle(card.Center.X - 32, card.Y + 28, 64, 64), sc);
                 // Title = the real skill identity (Source + Form); state line = the Vow (§8 concise state line).
                 _ui.TextCenterBig(b, $"{s.Source.ToString().ToUpperInvariant()} {Short(s.Form)}", card.Center.X, card.Y + 118, Bone, UiTypography.Body);
-                var vow = Weaving.ById(s.VowId);
+                var vow = Vows.ById(s.VowId);
                 _ui.TextCenterBig(b, vow is null ? "NO VOW" : $"VOW · {vow.Short.ToUpperInvariant()}", card.Center.X, card.Y + 152, vow is null ? Slate : Gold, UiTypography.Secondary);
             }
             else

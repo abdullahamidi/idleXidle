@@ -5,6 +5,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Economy;
@@ -27,7 +28,7 @@ namespace IdleXIdle.Game;
 /// <para>
 /// THE POINT OF THE SCREEN IS THE VOW COLUMN. A Vow pays a large multiplier only while the BUILD meets
 /// its demand — one Form, no crit investment, a bare gear slot — and it pays nothing at all when the
-/// demand is unmet. That check already existed and was already correct (<c>Weaving.IsActive</c>), but it
+/// demand is unmet. That check already existed and was already correct (<c>Vows.IsActive</c>), but it
 /// ran inside the simulation, which is to say: after the player had descended, where they could not see
 /// it. A Vow whose condition you cannot check before you leave is a coin flip wearing a decision's
 /// clothes. <c>SoloBattle.DescribeBuild</c> is pure and public, so this screen asks the same question
@@ -576,7 +577,7 @@ public sealed class WeaveScreen
     /// <summary>What a Vow demands, in one line the player can check against their own build.</summary>
     private static string DemandText(Vow v) => v.Demand switch
     {
-        VowDemand.SingleForm => "EVERY SKILL THE SAME FORM",
+        VowDemand.SingleStyle => "EVERY SKILL THE SAME STYLE",
         VowDemand.SingleSource => "EVERY SKILL THE SAME SOURCE",
         VowDemand.EveryWeaveFilled => "NO EMPTY SKILL SLOT",
         VowDemand.NoCritInvestment => "NO CRITICAL BONUS",
@@ -1132,7 +1133,7 @@ public sealed class WeaveScreen
             // THE VOW LINE IS A SOCKET NOW. Empty, it says what to do with it rather than merely
             // reporting an absence — "NO VOW" named the state and left the player to discover that a
             // seal from the right-hand column can be dropped here.
-            var vow = Weaving.ById(s.VowId);
+            var vow = Vows.ById(s.VowId);
             // AT +50, NOT +44. The state line above it starts at +30 and is fourteen pixels tall, so
             // the socket's top edge landed exactly on the text's baseline and the two read as one
             // smudged line. The row is 76 tall and this ends at 74 — the space was always there.
@@ -1145,7 +1146,7 @@ public sealed class WeaveScreen
             }
             else
             {
-                var live = Weaving.IsActive(vow, ctx);
+                var live = Vows.IsActive(vow, ctx);
                 _ui.Fill(b, seal, (live ? Gold : Slate) * 0.13f);
                 _ui.Fill(b, new Rectangle(seal.X, seal.Y, 3, seal.Height), live ? Gold : Ember);
                 _ui.Text(b, Fit(vow.Short.ToUpperInvariant(), seal.Width - 66), seal.X + 10, seal.Y + 4,
@@ -1333,7 +1334,7 @@ public sealed class WeaveScreen
 
         foreach (var enemy in roster.Distinct().Take(4))
         {
-            var mult = Weaving.SourceEffectiveness(judged, enemy, new WeavingTuning());
+            var mult = SourceMatchup.Effectiveness(judged, enemy);
             var verdict = mult > 1.01f ? "STRONG" : mult < 0.99f ? "WEAK" : "even";
             var tint = mult > 1.01f ? Met : mult < 0.99f ? Ember : Slate;
 
@@ -1710,7 +1711,7 @@ public sealed class WeaveScreen
 
         _ui.TextBig(b, $"SLOT {_slot + 1}", r.X + 130, mid - 26, Slate, UiTypography.Caption);
         _ui.TextBig(b, $"{SourceName(cur.Source)} {FormName(cur.Form)}", r.X + 130, mid - 6, Bone, UiTypography.Body);
-        _ui.TextRight(b, cur.VowId is null ? "NO VOW" : (Weaving.ById(cur.VowId)?.Name ?? "").ToUpperInvariant(),
+        _ui.TextRight(b, cur.VowId is null ? "NO VOW" : (Vows.ById(cur.VowId)?.Name ?? "").ToUpperInvariant(),
                       r.Right - 16, mid - 6, cur.VowId is null ? Dim : Gold);
     }
 
@@ -1891,7 +1892,7 @@ public sealed class WeaveScreen
             var row = VowRow(r, openRow);
             var on = v.Id == sworn;
             var picked = v.Id == _readingVowId;
-            var live = Weaving.IsActive(v, ctx);
+            var live = Vows.IsActive(v, ctx);
             var hover = row.Contains(hit);
 
             // ── A SEAL, NOT A LIST ROW ──────────────────────────────────────────────────────────
@@ -1915,7 +1916,7 @@ public sealed class WeaveScreen
             _ui.Diamond(b, med, (live ? Gold : Ember) * (on ? 0.85f : 0.55f));
             _ui.Diamond(b, new Rectangle(med.X + 5, med.Y + 5, med.Width - 10, med.Height - 10),
                         new Color(0x16, 0x11, 0x22));
-            _ui.TextCenter(b, $"x{Weaving.VowMultiplier(v, WeavingTuning.Default):0.00}",
+            _ui.TextCenter(b, $"x{Vows.Multiplier(v):0.00}",
                            med.Center.X, med.Y + 16, live ? Gold : Slate);
 
             const int verdict = 74;
@@ -1971,7 +1972,7 @@ public sealed class WeaveScreen
 
         // The reading panel: the full text of whichever Vow was last touched, because the row can only
         // carry its demand and a Vow's cost is the half that decides whether to take it.
-        var reading = Weaving.ById(_readingVowId) ?? Weaving.ById(sworn) ?? known[_vowScroll];
+        var reading = Vows.ById(_readingVowId) ?? Vows.ById(sworn) ?? known[_vowScroll];
         var y = clear.Bottom + 18;
         _ui.Fill(b, new Rectangle(VowColX, y, VowColW, 2), Dim);
         y += 16;

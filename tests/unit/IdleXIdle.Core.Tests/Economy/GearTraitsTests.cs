@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Expeditions;
 using IdleXIdle.Core.Loot;

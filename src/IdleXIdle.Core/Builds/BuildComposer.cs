@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Prestige;
 
@@ -162,7 +163,7 @@ public static class BuildComposer
         for (var i = 0; i < picks.Count; i++)
         {
             var s = picks[i];
-            var vow = Weaving.ById(s.VowId);
+            var vow = Vows.ById(s.VowId);
             // The skill's own timing seeds its cooldown. A beat-counted skill still counts BEATS in
             // the fight; this is the millisecond figure the readouts and the wave-length rule use.
             // THE ID WINS when there is one: the library named this skill, and no Form-and-kind

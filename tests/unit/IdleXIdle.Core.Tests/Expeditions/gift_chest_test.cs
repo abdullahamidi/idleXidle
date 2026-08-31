@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Encounters;

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
+using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Expeditions;
@@ -35,8 +36,8 @@ namespace IdleXIdle.Core.Tests.Builds;
 /// </remarks>
 public class TriggerLivenessTests
 {
-    private static readonly global::IdleXIdle.Core.Automation.Source Body
-        = global::IdleXIdle.Core.Automation.Source.Body;
+    private static readonly global::IdleXIdle.Core.Sources.Source Body
+        = global::IdleXIdle.Core.Sources.Source.Body;
 
     private static EquippedSkill Strike(Form form = Form.Strike)
         => new(new WovenAbility { Name = "s", Source = Body, Form = form }, 1_500);
