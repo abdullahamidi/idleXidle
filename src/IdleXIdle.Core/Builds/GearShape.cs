@@ -22,10 +22,10 @@ public static class GearShape
         if (hunter is null) return SkillShape.None;
         // The ELEMENT SETS (2026-08-27): worn pieces of one element unlock that element's rungs.
         var sets = ElementSets.ShapeFor(hunter);
-        var forms = ItemFamilies.FavouredFormsOf(hunter.Worn(GearSlot.Weapon));
-        if (forms.Count == 0) return sets;
-        var power = new Dictionary<Form, float>();
-        foreach (var f in forms) power[f] = ItemFamilies.FormAffinity;
-        return SkillShape.Combine(new SkillShape { FormPower = power }, sets);
+        var styles = ItemFamilies.FavouredStylesOf(hunter.Worn(GearSlot.Weapon));
+        if (styles.Count == 0) return sets;
+        var power = new Dictionary<Style, float>();
+        foreach (var s in styles) power[s] = ItemFamilies.StyleAffinityBonus;
+        return SkillShape.Combine(new SkillShape { StylePower = power }, sets);
     }
 }

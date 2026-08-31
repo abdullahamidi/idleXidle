@@ -152,10 +152,13 @@ public class SkillShapeBattleTests
             "without the mastery. OVERWHELM is charging nothing for its upside.");
         Assert.True(floored.RawDamage > 0f, "The hits must be MADE and then erased, not simply never thrown.");
 
-        // Trap hits are the largest in the game — comfortably over it, and armour stops mattering.
+        // The canonical large hit is HAMMER's blow (BasePower 500) — comfortably over the floor,
+        // and armour stops mattering. (It was a Trap probe when the base JAWS dealt a flat 290;
+        // card-true JAWS reflects half the BITE now, and a 20-damage biter reflects ~10 — the
+        // smallest hit in the game, which is the opposite of what this half of the test needs.)
         var heavy = () => Wave(1, 40000f, 20f, defense: 200f);
-        var plain = Fight(SkillShape.None, heavy(), Form.Trap);
-        var over = Fight(shape, heavy(), Form.Trap);
+        var plain = Fight(SkillShape.None, heavy(), NoSwing, Form.Strike);
+        var over = Fight(shape, heavy(), NoSwing, Form.Strike);
 
         Assert.True(over.DeliveredDamage > plain.DeliveredDamage,
             "A large hit did not ignore armour — OVERWHELM is charging its price and paying nothing.");

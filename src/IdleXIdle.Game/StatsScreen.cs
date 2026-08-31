@@ -224,7 +224,7 @@ public sealed class StatsScreen
         _ui.TextCenterBig(b, $"{life:N0} / {life:N0}", hpBar.Center.X, hpBar.Y + 4, Bone, UiTypography.Secondary);
         _ui.TextBig(b, $"TEMPO {hunter.SquadSkillRate:0.00}x ACTION SPEED", tx, HunterCard.Y + 176, Slate, UiTypography.Secondary);
         if (Mastery?.Affinity() is { } mf)
-            _ui.TextBig(b, $"{FormShort(mf)} ADEPT", tx, HunterCard.Y + 198, Slate, UiTypography.Secondary);
+            _ui.TextBig(b, $"{mf.ToString().ToUpperInvariant()} ADEPT", tx, HunterCard.Y + 198, Slate, UiTypography.Secondary);
 
         _ui.Fill(b, new Rectangle(HunterCard.X + 24, HunterCard.Y + 224, HunterCard.Width - 48, 2), Dim);
 

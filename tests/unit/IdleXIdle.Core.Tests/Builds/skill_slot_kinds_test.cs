@@ -326,8 +326,14 @@ public class SwingShareTests
             ExpeditionTuning.Default, new Random(7));
 
         var beats = events.Count(e => e.Kind == BattleEventKind.Beat);
-        // A cast is a Skill event that claimed the beat. A Reaction never does, so it is not an action.
-        var casts = events.Count(e => e.Kind == BattleEventKind.Skill && (Form)e.Amount != Form.Trap);
+        // A cast is a Skill event that claimed the beat. A Reaction never does, so it is not an
+        // action — and events are slot-keyed now, so the reactions are found by what they are.
+        var reactionSlots = build.Skills
+            .Select((s, i) => (Skill: s, Slot: i))
+            .Where(x => x.Skill.Def.Kind == SkillKind.Reaction)
+            .Select(x => x.Slot)
+            .ToHashSet();
+        var casts = events.Count(e => e.Kind == BattleEventKind.Skill && !reactionSlots.Contains(e.Slot));
         return (beats, casts);
     }
 
@@ -391,7 +397,10 @@ public class SwingShareTests
 
         Assert.True(events.Any(e => e.Kind == BattleEventKind.Aura),
             "the woven Field never ticked — a passive slot that costs no beat must still act.");
-        Assert.True(events.Any(e => e.Kind == BattleEventKind.Skill && (Form)e.Amount == Form.Trap),
+        // Events carry the SLOT now, so the reaction is found by what it IS.
+        var trapSlot = after.Skills.ToList().FindIndex(s => s.Def.Kind == SkillKind.Reaction);
+        Assert.True(trapSlot >= 0, "the composed build carries no Reaction at all");
+        Assert.True(events.Any(e => e.Kind == BattleEventKind.Skill && e.Slot == trapSlot),
             "the woven Reaction never fired, though the champion was being bitten.");
     }
 }

@@ -374,6 +374,17 @@ public sealed class PlayerLoadout
         return true;
     }
 
+    /// <summary>
+    /// The STYLES this loadout carries, one per slot that resolves — what the Forge's combo-enchant
+    /// badge and the weave screen's "your gear is waiting for a …" hint read.
+    /// </summary>
+    public IReadOnlyList<Style> WovenStyles()
+        => _skills.Select(sk => SkillCatalogue.Find(sk.SkillId ?? "")
+                                ?? SkillCatalogue.Resolve(sk.Form,
+                                       sk.Passive ?? LegacySkillForm.IsNaturallyPassive(sk.Form.ToString())))
+                  .Select(d => d.Style)
+                  .ToList();
+
     private bool InRange(int slot) => slot >= 0 && slot < _skills.Count;
 
     private static T Cycle<T>(T value, int dir) where T : struct, Enum

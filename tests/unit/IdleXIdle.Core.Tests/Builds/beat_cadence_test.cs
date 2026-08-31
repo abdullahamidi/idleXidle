@@ -32,6 +32,11 @@ namespace IdleXIdle.Core.Tests.Builds;
 /// different answer from the ring. The sim publishes its beat now
 /// (<see cref="BattleEventKind.Beat"/>); what is pinned here is that the readout reads it.
 /// </para>
+/// <para>
+/// The cadence itself belongs to the CATALOGUE since P3c: a skill's beats are
+/// <see cref="SkillDef.Beats"/> on its own definition (BLOW at six, SPRAY at four), not a row in the
+/// retired Form table.
+/// </para>
 /// </remarks>
 public class BeatCadenceTest
 {
@@ -40,12 +45,20 @@ public class BeatCadenceTest
     public BeatCadenceTest(ITestOutputHelper output) => _out = output;
 
     /// <summary>One beat-counted skill and nothing else, so every cast in the stream is that skill's.</summary>
-    private static Build OneRhythmSkill(Form form)
+    private static Build OneRhythmSkill(string skillId)
     {
+        var def = SkillCatalogue.ById(skillId);
         var b = new Build();
         b.Weave(new EquippedSkill(
-            new WovenAbility { Name = form.ToString(), Source = Source.Body, Form = form },
-            FormBehaviour.BaseCooldownMs(form)));
+            new WovenAbility
+            {
+                Name = def.Name,
+                Source = Source.Body,
+                Form = def.LegacyForm ?? Form.Strike,
+                SkillId = skillId,
+            },
+            def.Beats * SoloBattle.DefaultBeatMs,
+            PassiveSlot: false));
         return b;
     }
 
@@ -54,11 +67,11 @@ public class BeatCadenceTest
     /// nothing, against a champion that cannot die. What is being measured is the CADENCE, and a fight
     /// that ends early measures one cycle of it.
     /// </summary>
-    private static List<BattleEvent> LongWave(Form form)
+    private static List<BattleEvent> LongWave(Build build)
     {
         var champ = new Champion { MaxHealth = 5_000_000, Health = 5_000_000 };
         var (_, events) = SoloBattle.ResolveWave(
-            champ, OneRhythmSkill(form), new Hunter(),
+            champ, build, new Hunter(),
             enemyHealth: 400_000f, enemyDamage: 0f, enemyIntervalMs: 1_500,
             ExpeditionTuning.Default, new Random(11));
         return events;
@@ -68,16 +81,20 @@ public class BeatCadenceTest
     /// Every ACTION in the stream, in order — the same definition the dial counts by.
     /// </summary>
     /// <remarks>
-    /// A cast, or an auto-swing that is not a skill's own hit. Deliberately re-derived here from the raw
-    /// events rather than borrowed from <see cref="WaveReplay"/>, so this file can catch the replay
-    /// drifting rather than agree with it by construction.
+    /// A cast by a beat-taking skill, or an auto-swing that is not a skill's own hit. A Reaction (JAWS)
+    /// raises a Skill event too and is NOT an action — it answers a bite, off the beat — which is why
+    /// the slot's own definition is consulted. Deliberately re-derived here from the raw events rather
+    /// than borrowed from <see cref="WaveReplay"/>, so this file can catch the replay drifting rather
+    /// than agree with it by construction.
     /// </remarks>
-    private static List<int> ActionTimes(IEnumerable<BattleEvent> events)
+    private static List<int> ActionTimes(IEnumerable<BattleEvent> events, Build build)
     {
         var times = new List<int>();
         foreach (var e in events)
         {
-            var isAction = (e.Kind == BattleEventKind.Skill && (Form)e.Amount != Form.Trap)
+            var isAction = (e.Kind == BattleEventKind.Skill
+                            && e.Slot >= 0 && e.Slot < build.Skills.Count
+                            && build.Skills[e.Slot].TakesABeat)
                            || (e.Kind == BattleEventKind.Strike && !e.FromSkill);
             if (!isAction) continue;
             if (times.Count > 0 && times[^1] == e.AtMs) continue;
@@ -87,20 +104,30 @@ public class BeatCadenceTest
         return times;
     }
 
-    [Theory]
-    [InlineData(Form.Strike)]        // six
-    [InlineData(Form.Projectile)]    // four
-    public void test_a_rhythm_skill_casts_on_exactly_every_nth_action(Form form)
+    /// <summary>The build slot a skill landed in — the index the sim publishes on its events.</summary>
+    private static int SlotOf(Build build, string skillId)
     {
-        var beats = FormBehaviour.CooldownBeats(form);
-        var events = LongWave(form);
-        var actions = ActionTimes(events);
+        for (var i = 0; i < build.Skills.Count; i++)
+            if (build.Skills[i].Def.Id == skillId)
+                return i;
+        throw new InvalidOperationException($"{skillId} is not woven into this build.");
+    }
+
+    [Theory]
+    [InlineData("hammer_blow")]      // six
+    [InlineData("volley_spray")]     // four
+    public void test_a_rhythm_skill_casts_on_exactly_every_nth_action(string skillId)
+    {
+        var beats = SkillCatalogue.ById(skillId).Beats;
+        var build = OneRhythmSkill(skillId);
+        var events = LongWave(build);
+        var actions = ActionTimes(events, build);
         var castMs = events.Where(e => e.Kind == BattleEventKind.Skill).Select(e => e.AtMs).Distinct().ToList();
 
         // The INDEX of each cast in the action stream — which action of the fight it was.
         var castIndices = castMs.Select(ms => actions.IndexOf(ms)).ToList();
 
-        _out.WriteLine($"{form} waits {beats} actions. {actions.Count} actions, {castIndices.Count} casts.");
+        _out.WriteLine($"{skillId} waits {beats} actions. {actions.Count} actions, {castIndices.Count} casts.");
         _out.WriteLine($"   cast on action #: {string.Join(", ", castIndices.Take(12))}");
 
         Assert.True(castIndices.Count >= 4, $"only {castIndices.Count} casts — too few to read a cadence from");
@@ -113,9 +140,9 @@ public class BeatCadenceTest
     }
 
     [Theory]
-    [InlineData(Form.Strike)]
-    [InlineData(Form.Projectile)]
-    public void test_the_dial_reads_full_on_the_action_the_skill_casts_on(Form form)
+    [InlineData("hammer_blow")]
+    [InlineData("volley_spray")]
+    public void test_the_dial_reads_full_on_the_action_the_skill_casts_on(string skillId)
     {
         // THE READOUT, against the same wave the rule was read from, and read through the SAME helper
         // the rail's own arithmetic is mirrored in.
@@ -126,10 +153,12 @@ public class BeatCadenceTest
         // asserted on was never on screen for a single frame. It passed while the ring the player
         // actually watched was one notch short at every cast (playtest 2026-08-28). A test that
         // computes its own expression instead of the one under test proves only that arithmetic works.
-        var events = LongWave(form);
+        var beats = SkillCatalogue.ById(skillId).Beats;
+        var build = OneRhythmSkill(skillId);
+        var events = LongWave(build);
         var replay = new WaveReplay(events, new Dictionary<int, int> { [0] = 100 },
                                     new Dictionary<int, int> { [0] = 100 }, 400_000f);
-        var actions = ActionTimes(events);
+        var actions = ActionTimes(events, build);
         var castMs = events.Where(e => e.Kind == BattleEventKind.Skill).Select(e => e.AtMs).Distinct().ToList();
 
         foreach (var cast in castMs.Skip(1).Take(4))
@@ -137,16 +166,16 @@ public class BeatCadenceTest
             var before = actions.Where(a => a < cast).ToList();
             var last = before[^1];
 
-            Assert.True(Ring(replay, last, 0, Source.Body, form) >= 1f,
-                $"{form}'s ring was short of full on the action before it cast — the player is shown a "
+            Assert.True(Ring(replay, last, 0, slot: 0, beats) >= 1f,
+                $"{skillId}'s ring was short of full on the action before it cast — the player is shown a "
                 + "skill still winding up and then watches it fire.");
             if (before.Count >= 2)
-                Assert.True(Ring(replay, before[^2], 0, Source.Body, form) < 1f,
-                    $"{form}'s ring was already full two actions before the cast — it reads as ready "
+                Assert.True(Ring(replay, before[^2], 0, slot: 0, beats) < 1f,
+                    $"{skillId}'s ring was already full two actions before the cast — it reads as ready "
                     + "and refusing to fire.");
         }
 
-        _out.WriteLine($"{form}: the ring fills across the cycle's plain actions and is full on the last "
+        _out.WriteLine($"{skillId}: the ring fills across the cycle's plain actions and is full on the last "
                        + "one, with the cast as the action after.");
     }
 
@@ -159,10 +188,9 @@ public class BeatCadenceTest
     /// that passed in earlier waves. What is pinned here is that arithmetic, which is the part that can
     /// drift; the screen's wiring of it cannot be reached from here.
     /// </remarks>
-    private static (int Carry, float Ms) Fold(WaveReplay replay, int endMs, int carry, float carryMs,
-                                              Source src, Form form)
+    private static (int Carry, float Ms) Fold(WaveReplay replay, int endMs, int carry, float carryMs, int slot)
     {
-        var last = replay.LastSkillBefore(endMs + 1, (int)src, (int)form);
+        var last = replay.LastSkillBefore(endMs + 1, slot);
         var lastBeat = replay.LastBeat;
         if (lastBeat < 0) return (carry, carryMs);
         return last >= 0
@@ -179,8 +207,8 @@ public class BeatCadenceTest
         // empty on a skill that was four actions into a six-action cycle. Worse, a skill could sit out
         // a whole short wave (its ring crawling up from zero) and then cast on the FIRST action of the
         // next one, which reads as random.
-        var beats = FormBehaviour.CooldownBeats(Form.Projectile);
-        var build = OneRhythmSkill(Form.Projectile);
+        var beats = SkillCatalogue.ById("volley_spray").Beats;
+        var build = OneRhythmSkill("volley_spray");
         var hunter = new Hunter();
         var pool = SoloBattle.ChampionHealth(build, hunter) * 200;   // survives; the cadence is the subject
         var champ = new Champion { MaxHealth = pool, Health = pool };
@@ -204,18 +232,18 @@ public class BeatCadenceTest
 
             // THE RING AT THIS WAVE'S OPENING, read through the same helper the rail's arithmetic is
             // mirrored in, on the wave's first action.
-            var firstAction = ActionTimes(events).FirstOrDefault(-1);
-            var opening = firstAction < 0 ? 0f : Ring(replay, firstAction, carry, Source.Body, Form.Projectile);
+            var firstAction = ActionTimes(events, build).FirstOrDefault(-1);
+            var opening = firstAction < 0 ? 0f : Ring(replay, firstAction, carry, slot: 0, beats);
             openings.Add(opening);
 
-            var cast = replay.LastSkillBefore(endMs + 1, (int)Source.Body, (int)Form.Projectile);
+            var cast = replay.LastSkillBefore(endMs + 1, slot: 0);
             if (cast < 0) wavesWithoutACast++;
 
             _out.WriteLine($"wave {run.Wave}: opens with the ring at {opening:P0} "
                            + $"({carry} of {beats} actions carried), "
                            + (cast < 0 ? "no cast this wave" : $"cast at {cast}ms"));
 
-            (carry, carryMs) = Fold(replay, endMs, carry, carryMs, Source.Body, Form.Projectile);
+            (carry, carryMs) = Fold(replay, endMs, carry, carryMs, slot: 0);
         }
 
         // THE CLAIM. Some wave must open MID-CYCLE — a ring part-filled by beats that happened in an
@@ -236,29 +264,29 @@ public class BeatCadenceTest
         // has happened since. When it did NOT, the wave's whole length must be ADDED to what was already
         // carried — overwriting there would re-zero a skill every time a wave passed without it, which
         // is the same bug one level down.
-        var events = LongWave(Form.Strike);
+        var build = OneRhythmSkill("hammer_blow");
+        var events = LongWave(build);
         var end = events.Max(e => e.AtMs);
         var replay = new WaveReplay(events, new Dictionary<int, int> { [0] = 100 },
                                     new Dictionary<int, int> { [0] = 100 }, 400_000f);
 
-        // A Form this wave never cast: the fold must fall to the adding branch.
-        var (carry, ms) = Fold(replay, end, carry: 3, carryMs: 900f, Source.Body, Form.Projectile);
-        var actions = ActionTimes(events).Count;
+        // A slot this wave holds no cast for: the fold must fall to the adding branch.
+        var (carry, ms) = Fold(replay, end, carry: 3, carryMs: 900f, slot: 1);
+        var actions = ActionTimes(events, build).Count;
 
-        _out.WriteLine($"a wave of {actions} actions with no Projectile cast: carry 3 -> {carry}, ms 900 -> {ms}");
+        _out.WriteLine($"a wave of {actions} actions with no cast in the asked slot: carry 3 -> {carry}, ms 900 -> {ms}");
 
         Assert.Equal(3 + actions, carry);
         Assert.Equal(900f + end, ms);
     }
 
-    /// <summary>A real loadout: four skills competing for one action per beat.</summary>
     /// <summary>
     /// The loadout a real player carries: two actives and two passives, through the composer.
     /// </summary>
     /// <remarks>
     /// It used to weave four skills into a bare <see cref="Build"/>, which after the slot rework is a
     /// state no player can reach — the composer divides the budget, and four beat-taking skills
-    /// contended so hard that a Projectile could wait six actions and the ring sat full for two of
+    /// contended so hard that SPRAY could wait six actions and the ring sat full for two of
     /// them. That is a true observation about a build the game no longer produces, and pinning a
     /// READOUT against an unreachable fixture is how a test outlives the thing it was protecting.
     /// </remarks>
@@ -267,18 +295,17 @@ public class BeatCadenceTest
             new MemoryDustTree(), Taught.Everything(), character: null,
             skills: new[]
             {
-                new BuildComposer.SkillPick(Source.Body, Form.Strike, null, "Strike"),
-                new BuildComposer.SkillPick(Source.Mind, Form.Projectile, null, "Projectile"),
-                new BuildComposer.SkillPick(Source.Nature, Form.Aura, null, "Aura"),
-                new BuildComposer.SkillPick(Source.Spirit, Form.Mark, null, "Mark"),
+                new BuildComposer.SkillPick(Source.Body, Form.Strike, null, "Blow", SkillId: "hammer_blow"),
+                new BuildComposer.SkillPick(Source.Mind, Form.Projectile, null, "Spray", SkillId: "volley_spray"),
+                new BuildComposer.SkillPick(Source.Nature, Form.Aura, null, "Mire", SkillId: "field_mire"),
+                new BuildComposer.SkillPick(Source.Spirit, Form.Mark, null, "Brand", SkillId: "sign_brand"),
             },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4);
 
     /// <summary>The ring, read exactly the way SoloExpeditionScreen reads it.</summary>
-    private static float Ring(WaveReplay replay, float playhead, int carry, Source src, Form form)
+    private static float Ring(WaveReplay replay, float playhead, int carry, int slot, int beats)
     {
-        var prev = replay.LastSkillBefore(playhead, (int)src, (int)form);
-        var from = prev >= 0 ? prev : -1;
+        var prev = replay.LastSkillBefore(playhead, slot);
         var carried = prev >= 0 ? 0 : carry;
         var beatNow = replay.BeatAt(playhead);
         var since = prev >= 0
@@ -286,7 +313,7 @@ public class BeatCadenceTest
             : Math.Max(0, beatNow - replay.FirstBeat + 1) + carried;
         // THE PLAIN ACTIONS IN THIS CYCLE, one fewer than the cooldown because the next cast is itself
         // an action. See the test below.
-        var span = Math.Max(1, FormBehaviour.CooldownBeats(form) - 1);
+        var span = Math.Max(1, beats - 1);
         return Math.Clamp(since / (float)span, 0f, 1f);
     }
 
@@ -301,7 +328,7 @@ public class BeatCadenceTest
         //
         //   THE OPENING — on a run's first wave a slot has no ReadyAtBeat entry, so the default is
         //   min(1, beats-1) = 1: the skill may cast from the wave's SECOND beat. Traced on a four-skill
-        //   loadout, the first Projectile lands on the third action, with a ring reading 3/4.
+        //   loadout, the first SPRAY lands on the third action, with a ring reading 3/4.
         //
         //   CONTENTION — one action per beat, so a ready skill that loses the beat to an earlier slot
         //   takes the next one. Measured gap: five actions, so the ring sat full for an action doing
@@ -309,6 +336,8 @@ public class BeatCadenceTest
         //
         // A readout that reports a nominal rule instead of the fight is a readout that lies twice.
         var build = FourSkillLoadout();
+        var spraySlot = SlotOf(build, "volley_spray");
+        var beats = build.Skills[spraySlot].Def.Beats;
         var hunter = new Hunter();
         var pool = SoloBattle.ChampionHealth(build, hunter);
         var champ = new Champion { MaxHealth = pool, Health = pool };
@@ -330,10 +359,8 @@ public class BeatCadenceTest
             var replay = new WaveReplay(events, new Dictionary<int, int> { [0] = 100 },
                                         new Dictionary<int, int> { [0] = 100 }, 400_000f);
 
-            var actions = ActionTimes(events);
-            var casts = events.Where(e => e.Kind == BattleEventKind.Skill
-                                          && e.Slot == (int)Source.Mind
-                                          && (Form)e.Amount == Form.Projectile)
+            var actions = ActionTimes(events, build);
+            var casts = events.Where(e => e.Kind == BattleEventKind.Skill && e.Slot == spraySlot)
                               .Select(e => e.AtMs).Distinct().ToList();
 
             foreach (var cast in casts)
@@ -347,11 +374,11 @@ public class BeatCadenceTest
                 if (before.Count == 0) continue;      // the wave opened on this cast; nothing to show yet
                 checkedCasts++;
 
-                var ring = Ring(replay, before[^1], carry, Source.Mind, Form.Projectile);
+                var ring = Ring(replay, before[^1], carry, spraySlot, beats);
                 _out.WriteLine($"wave {run.Wave}: cast at {cast}ms — the ring on the action before it "
                                + $"({before[^1]}ms) reads {ring:P0}");
                 Assert.True(ring >= 1f,
-                    $"wave {run.Wave}: the Projectile fired at {cast}ms while its ring still read "
+                    $"wave {run.Wave}: SPRAY fired at {cast}ms while its ring still read "
                     + $"{ring:P0} on the action before. The player is told the skill is waiting and "
                     + "then watches it fire anyway.");
 
@@ -366,13 +393,13 @@ public class BeatCadenceTest
                     // two actives instead of four the champion clears a wave in fewer actions, so
                     // this case is now the common one rather than the rare one.
                     if (prevCast < 0) continue;
-                    Assert.True(Ring(replay, earlier, carry, Source.Mind, Form.Projectile) < 1f,
+                    Assert.True(Ring(replay, earlier, carry, spraySlot, beats) < 1f,
                         $"wave {run.Wave}: the ring was already full at {earlier}ms but the skill did "
                         + $"not fire until {cast}ms — it reads as ready and refusing.");
                 }
             }
 
-            (carry, _) = Fold(replay, endMs, carry, 0f, Source.Mind, Form.Projectile);
+            (carry, _) = Fold(replay, endMs, carry, 0f, spraySlot);
         }
 
         Assert.True(checkedCasts >= 3, $"only {checkedCasts} casts seen — too few to prove anything");
@@ -393,7 +420,7 @@ public class BeatCadenceTest
         // then needed FIVE real actions to come round instead of four, because one of them never
         // reached the counter. Inside a single wave the cadence was always exactly right, which is why
         // it reads as random rather than as broken.
-        var build = OneRhythmSkill(Form.Projectile);
+        var build = OneRhythmSkill("volley_spray");
         var hunter = new Hunter();
         var pool = SoloBattle.ChampionHealth(build, hunter) * 50;   // survives; the count is the subject
         var champ = new Champion { MaxHealth = pool, Health = pool };
@@ -407,7 +434,7 @@ public class BeatCadenceTest
             run.PushWave();
             if (run.LastWaveEvents.Count == 0) break;
 
-            var actions = ActionTimes(run.LastWaveEvents).Count;
+            var actions = ActionTimes(run.LastWaveEvents, build).Count;
             var beats = champ.BeatCount - lastBeat;
             lastBeat = champ.BeatCount;
 
@@ -420,9 +447,9 @@ public class BeatCadenceTest
     }
 
     [Theory]
-    [InlineData(Form.Strike)]
-    [InlineData(Form.Projectile)]
-    public void test_a_new_run_waits_the_full_cooldown_before_its_first_cast(Form form)
+    [InlineData("hammer_blow")]
+    [InlineData("volley_spray")]
+    public void test_a_new_run_waits_the_full_cooldown_before_its_first_cast(string skillId)
     {
         // THE SECOND REPORT: "öldükten sonra 2. vuruşta skill'i attı." A death starts a new run, which
         // mints a new Champion — so ReadyAtBeat is empty, and the opening default decided instead of
@@ -431,8 +458,8 @@ public class BeatCadenceTest
         // The rail says EVERY FOURTH ACTION. A rule with an unnamed exception on the one wave every
         // player sees most often — the first one after dying — is not a rule, and the exception was
         // measured against a wave a third of the length waves are now.
-        var beats = FormBehaviour.CooldownBeats(form);
-        var build = OneRhythmSkill(form);
+        var beats = SkillCatalogue.ById(skillId).Beats;
+        var build = OneRhythmSkill(skillId);
         var hunter = new Hunter();
         var pool = SoloBattle.ChampionHealth(build, hunter) * 50;
         var champ = new Champion { MaxHealth = pool, Health = pool };
@@ -440,11 +467,11 @@ public class BeatCadenceTest
                                      ExpeditionTuning.Default, Source.Nature, new Random(17));
         run.PushWave();
 
-        var actions = ActionTimes(run.LastWaveEvents);
+        var actions = ActionTimes(run.LastWaveEvents, build);
         var first = run.LastWaveEvents.First(e => e.Kind == BattleEventKind.Skill).AtMs;
         var index = actions.IndexOf(first);
 
-        _out.WriteLine($"{form} (waits {beats}) first cast of a new run on action #{index}");
+        _out.WriteLine($"{skillId} (waits {beats}) first cast of a new run on action #{index}");
 
         // Zero-based, so the Nth action is index N-1: a four-action skill casts ON the fourth action.
         Assert.Equal(beats - 1, index);
@@ -462,12 +489,13 @@ public class BeatCadenceTest
         //
         // The sim publishes its own counter now (BattleEventKind.Beat), so this asserts the thing that
         // actually matters: one Beat per action the champion took, carrying the number the cooldowns
-        // are measured against. A Trap raises a Skill event and is NOT an action — it fires on being
-        // bitten, off the beat — so it must not appear here either.
-        var events = LongWave(Form.Strike);
+        // are measured against. A Reaction (JAWS) raises a Skill event and is NOT an action — it fires
+        // on being bitten, off the beat — so it must not appear here either.
+        var build = OneRhythmSkill("hammer_blow");
+        var events = LongWave(build);
         var replay = new WaveReplay(events, new Dictionary<int, int> { [0] = 100 },
                                     new Dictionary<int, int> { [0] = 100 }, 400_000f);
-        var actions = ActionTimes(events);
+        var actions = ActionTimes(events, build);
         var beats = events.Where(e => e.Kind == BattleEventKind.Beat).ToList();
 
         _out.WriteLine($"{actions.Count} champion actions, {beats.Count} beats published");

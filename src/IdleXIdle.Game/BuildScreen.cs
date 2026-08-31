@@ -49,10 +49,11 @@ public sealed class BuildScreen
     };
     private static string Short(Branch b) => b.ToString().ToUpperInvariant();
 
-    private static string Short(Form f) => f switch
-    {
-        Form.Projectile => "VOLLEY", Form.Transformation => "MORPH", _ => f.ToString().ToUpperInvariant(),
-    };
+    private static string Short(Style s) => s.ToString().ToUpperInvariant();
+
+    /// <summary>The word for a woven slot: the skill's NAME when it is named, the legacy Form word otherwise.</summary>
+    private static string SkillWord(PlayerLoadout.SkillChoice s)
+        => SkillCatalogue.Find(s.SkillId ?? "")?.Name ?? s.Form.ToString().ToUpperInvariant();
 
     /// <summary>A node label's NAME — everything before the em dash that introduces what it does.</summary>
     /// <remarks>
@@ -81,7 +82,7 @@ public sealed class BuildScreen
     private string? _hoverNodeId;          // the node under the pointer this frame
     private string? _pinnedNodeId;         // the last node clicked — what the detail panel shows when nothing is hovered
     private string? _attuneNodeId;         // non-null: THE ATTUNEMENT ceremony is open for this just-taken node
-    private Form _attuneForm;
+    private Style _attuneForm;
 
     /// <summary>The host reads this to hold the rail, its hotkeys, L and T while the ceremony is open.</summary>
     public bool CeremonyOpen => _attuneNodeId is not null;
@@ -171,10 +172,10 @@ public sealed class BuildScreen
     public BuildScreen(UiKit ui) => _ui = ui;
 
     /// <summary>DEV: pose THE ATTUNEMENT ceremony for a capture, without touching the tree's state.</summary>
-    public void DevAttune(Form form)
+    public void DevAttune(Style form)
     {
         _attuneNodeId = MasteryCatalog.Nodes
-            .First(n => n.Kind == MasteryKind.Specialisation && n.Form == form).Id;
+            .First(n => n.Kind == MasteryKind.Specialisation && n.Style == form).Id;
         _attuneForm = form;
     }
 
@@ -650,7 +651,7 @@ public sealed class BuildScreen
                 // THE ATTUNEMENT: your first Specialisation is the moment this game is named for,
                 // so it gets a ceremony instead of a click-sound — the hexagon shown whole, the
                 // choice sealed or taken back, nothing else clickable until you decide.
-                if (firstSpec && node.Form is { } nf) { _attuneNodeId = node.Id; _attuneForm = nf; }
+                if (firstSpec && node.Style is { } nf) { _attuneNodeId = node.Id; _attuneForm = nf; }
             }
             // WHY THE CLICK DID NOTHING, NAMED EXACTLY.
             //
@@ -756,7 +757,7 @@ public sealed class BuildScreen
         _ui.TextCenterBig(b, "CORE COMPOSITION", CorePanel.Center.X, UiKit.TitleTop(CorePanel), Gold, UiTypography.PanelTitle);
         var skills = Loadout.Skills;
         var focus = skills.GroupBy(s => s.Source).OrderByDescending(g => g.Count()).FirstOrDefault();
-        var forms = string.Join("  ·  ", skills.Select(s => Short(s.Form)).Distinct());
+        var forms = string.Join("  ·  ", skills.Select(SkillWord).Distinct());
         var vowList = skills.Select(s => Vows.ById(s.VowId)?.Short.ToUpperInvariant()).Where(v => v is not null).Distinct();
         var vows = vowList.Any() ? string.Join("  ·  ", vowList) : "NONE";
 
@@ -827,7 +828,7 @@ public sealed class BuildScreen
                     b.Draw(g, new Rectangle(card.Center.X - 38, card.Y + 24, 76, 76), Color.White);
                 else _ui.Diamond(b, new Rectangle(card.Center.X - 32, card.Y + 28, 64, 64), sc);
                 // Title = the real skill identity (Source + Form); state line = the Vow (§8 concise state line).
-                _ui.TextCenterBig(b, $"{s.Source.ToString().ToUpperInvariant()} {Short(s.Form)}", card.Center.X, card.Y + 118, Bone, UiTypography.Body);
+                _ui.TextCenterBig(b, $"{s.Source.ToString().ToUpperInvariant()} {SkillWord(s)}", card.Center.X, card.Y + 118, Bone, UiTypography.Body);
                 var vow = Vows.ById(s.VowId);
                 _ui.TextCenterBig(b, vow is null ? "NO VOW" : $"VOW · {vow.Short.ToUpperInvariant()}", card.Center.X, card.Y + 152, vow is null ? Slate : Gold, UiTypography.Secondary);
             }
@@ -1030,7 +1031,7 @@ public sealed class BuildScreen
     /// is shared rather than copied so the two cannot drift.
     /// </para>
     /// </remarks>
-    private void DrawTreeWorld(SpriteBatch b, Point hit, Form? aff)
+    private void DrawTreeWorld(SpriteBatch b, Point hit, Style? aff)
     {
         b.End();
         _ui.Device.ScissorRectangle =
@@ -1049,7 +1050,7 @@ public sealed class BuildScreen
         }
     }
 
-    private void DrawTreeNodes(SpriteBatch b, Point hit, Form? aff)
+    private void DrawTreeNodes(SpriteBatch b, Point hit, Style? aff)
     {
         // ONE EDGE PER NODE, to its NEAREST prerequisite.
         //
@@ -1292,7 +1293,7 @@ public sealed class BuildScreen
     /// sizes of one drawing stand on one surface.
     /// </para>
     /// </remarks>
-    private void DrawHexPanel(SpriteBatch b, Form? aff)
+    private void DrawHexPanel(SpriteBatch b, Style? aff)
     {
         _ui.PanelQuiet(b, HexPanel);
         _ui.TextCenterBig(b, "YOUR ATTUNEMENT", HexPanel.Center.X, UiKit.TitleTop(HexPanel), Gold,
@@ -1387,7 +1388,7 @@ public sealed class BuildScreen
 
         var name = _attuneForm.ToString().ToUpperInvariant();
         _ui.TextCenterBig(b, "THE ATTUNEMENT", 960, UiKit.TitleTop(AttunePanel), Gold, UiTypography.PanelTitle);
-        _ui.TextCenter(b, "SIX FORMS ON THE LOOM — ONE IS YOURS.", 960, UiKit.CaptionTop(AttunePanel), Slate);
+        _ui.TextCenter(b, "SIX STYLES ON THE LOOM — ONE IS YOURS.", 960, UiKit.CaptionTop(AttunePanel), Slate);
 
         // THE CEREMONY STANDS ON THE SAME FIELD THE DOCKED CHART DOES. It used to have none — the
         // hexagon floated on the modal's black interior — so the game's founding moment was the one
@@ -1491,7 +1492,7 @@ public sealed class BuildScreen
         // no discipline at all SoloBattle applies no factor, so taking this really does double the
         // Form named on it. The far Forms fall to 0.75 and the opposite to 0.45 by the same table.
         var y = NodePanel.Y + 240;
-        if (n.Kind == MasteryKind.Specialisation && n.Form is { } specForm)
+        if (n.Kind == MasteryKind.Specialisation && n.Style is { } specForm)
         {
             var f = Short(specForm);
             var mine = Mastery.Affinity();
@@ -1643,7 +1644,7 @@ public sealed class BuildScreen
     /// all. Labels vanish below a threshold: forty overlapping words is less readable than none, and the
     /// detail panel is where reading happens anyway.
     /// </remarks>
-    private void DrawNode(SpriteBatch b, MasteryNode node, Point mouse, Form? aff)
+    private void DrawNode(SpriteBatch b, MasteryNode node, Point mouse, Style? aff)
     {
         var w = NodePos(node);
         var sp = Screen(w);
@@ -1766,7 +1767,7 @@ public sealed class BuildScreen
             // Bright while the discipline is still open, quiet once it is spent. The five a hunter did
             // NOT take are dead content — a bone-white Form name over an unlit frame read as a bug in
             // the capture, a caption floating in empty space.
-            _ui.TextCenterBig(b, node.Form is { } sf ? Short(sf) : "FORM", cx, cy - 9,
+            _ui.TextCenterBig(b, node.Style is { } sf ? Short(sf) : "STYLE", cx, cy - 9,
                               taken ? new Color(0x14, 0x11, 0x1E) : aff is null ? Bone : Muted(Bone, 0.62f),
                               UiTypography.Secondary);
             _ui.TextCenterBig(b, "SPECIALISATION", cx, box.Bottom + 5,

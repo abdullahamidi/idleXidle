@@ -102,6 +102,9 @@ public sealed class WaveReplay
     /// <summary>True once every beat has been played out — the wave is done animating.</summary>
     public bool Finished => _cursor >= _events.Count;
 
+    /// <summary>The BANKED shield standing in front of the pool at the playhead, in health.</summary>
+    public int BankedShield { get; private set; }
+
     public int HealthOf(int slot) => _health.GetValueOrDefault(slot);
     public int MaxHealthOf(int slot) => _maxHealth.GetValueOrDefault(slot);
 
@@ -164,84 +167,48 @@ public sealed class WaveReplay
     /// the heavier attack) clip runs up to the moment the skill lands, so the hand opens exactly as the
     /// effect appears instead of a second after it.
     /// </summary>
-    public BattleEvent? NextSkillEventAfter(float ms)
+    public BattleEvent? NextSkillEventAfter(float ms, IReadOnlySet<int>? reactionSlots = null)
     {
-        // TRAPS ARE SKIPPED, not stopped at. A Trap fires on a bite and gets no clip; returning it made
-        // the screen's clip picker give up and miss the real cast behind it (review 2026-08-30).
+        // REACTION SLOTS ARE SKIPPED, not stopped at. A reaction fires on a bite and gets no cast
+        // clip; returning it made the clip picker give up and miss the real cast behind it. The
+        // caller says which slots react — the event no longer carries a Form to guess from.
         foreach (var e in _events)
-            if (e.Kind == BattleEventKind.Skill && (Abilities.Form)e.Amount != Abilities.Form.Trap && e.AtMs > ms) return e;
+            if (e.Kind == BattleEventKind.Skill && e.AtMs > ms
+                && (reactionSlots is null || !reactionSlots.Contains(e.Slot)))
+                return e;
         return null;
     }
 
     /// <summary>
-    /// When a given FORM next fires after <paramref name="ms"/>, and when it last fired before it.
+    /// When the skill in SLOT <paramref name="slot"/> next acts after <paramref name="ms"/> — its
+    /// cast, or its Aura tick, which is the closest thing an always-on field has to one. Slot-keyed:
+    /// the Form-era overloads collided for two skills of one style ("both bars fill at once").
+    /// Returns <see cref="int.MaxValue"/> when it never acts again this wave.
     /// </summary>
-    /// <remarks>
-    /// The fight screen could show a skill going off — it already reads Skill events and plays a VFX for
-    /// them — but it could not show a skill WAITING, which is the half a player actually watches. The
-    /// events already carry the Form in <c>Amount</c> and the moment in <c>AtMs</c>, so a cooldown
-    /// readout built on these is the real rhythm of the resolved wave rather than a decorative bar
-    /// ticking at a rate nobody chose.
-    ///
-    /// Returns <see cref="int.MaxValue"/> when the Form never fires again in this wave, and -1 when it
-    /// has not fired yet — the caller needs to tell "waiting for the first cast" from "on cooldown".
-    /// </remarks>
-    public int NextSkillAfter(float ms, int form)
+    public int NextSkillAfter(float ms, int slot)
     {
         foreach (var e in _events)
-            if (e.Kind == BattleEventKind.Skill && e.Amount == form && e.AtMs > ms)
-                return e.AtMs;
-
-        return int.MaxValue;
-    }
-
-    /// <summary>
-    /// <see cref="NextSkillAfter(float, int)"/> for ONE skill: its Source (the event's Slot) and its
-    /// Form. Two skills of the same Form — two Projectiles — used to share one readout, so their bars
-    /// filled and emptied in lockstep and read as "both skills fire at once" (playtest 2026-08-26).
-    /// </summary>
-    public int NextSkillAfter(float ms, int source, int form)
-    {
-        foreach (var e in _events)
-            if (IsCastOf(e, source, form) && e.AtMs > ms)
+            if (IsActOf(e, slot) && e.AtMs > ms)
                 return e.AtMs;
         return int.MaxValue;
     }
 
-    /// <summary>
-    /// A cast of one skill: its Skill event, or — for a passive Form — its Aura tick, which is the
-    /// closest thing an always-on field has to a cast. Without this the rail could never answer "when
-    /// did the Aura last fire" and pinned that row's readout at empty forever (review 2026-08-30).
-    /// </summary>
-    private static bool IsCastOf(BattleEvent e, int source, int form) =>
-        (e.Kind == BattleEventKind.Skill || e.Kind == BattleEventKind.Aura)
-        && e.Slot == source && e.Amount == form;
-
-    /// <inheritdoc cref="NextSkillAfter(float, int, int)"/>
-    public int LastSkillBefore(float ms, int source, int form)
+    /// <inheritdoc cref="NextSkillAfter(float, int)"/> Returns -1 when it has not acted yet.
+    public int LastSkillBefore(float ms, int slot)
     {
         var last = -1;
         foreach (var e in _events)
         {
-            if (!IsCastOf(e, source, form)) continue;
+            if (!IsActOf(e, slot)) continue;
             if (e.AtMs > ms) break;
             last = e.AtMs;
         }
         return last;
     }
 
-    /// <inheritdoc cref="NextSkillAfter"/>
-    public int LastSkillBefore(float ms, int form)
-    {
-        var last = -1;
-        foreach (var e in _events)
-        {
-            if (e.Kind != BattleEventKind.Skill || e.Amount != form) continue;
-            if (e.AtMs > ms) break;
-            last = e.AtMs;
-        }
-        return last;
-    }
+    /// <summary>One act of the slot's skill: its cast, or its field's tick.</summary>
+    private static bool IsActOf(BattleEvent e, int slot) =>
+        (e.Kind == BattleEventKind.Skill || e.Kind == BattleEventKind.Aura) && e.Slot == slot;
 
     /// <summary>
     /// How many ACTIONS the champion took in (<paramref name="fromMs"/>, <paramref name="toMs"/>] — one
@@ -295,12 +262,12 @@ public sealed class WaveReplay
     /// life of the fight. The screen commits its clip opportunistically off this, which is why the
     /// question is "when did one last fire" rather than "when is the next".
     /// </remarks>
-    public float? LastTrapBefore(float ms)
+    public float? LastTrapBefore(float ms, int trapSlot)
     {
         float? last = null;
         foreach (var e in _events)
         {
-            if (e.Kind != BattleEventKind.Skill || (Abilities.Form)e.Amount != Abilities.Form.Trap) continue;
+            if (e.Kind != BattleEventKind.Skill || e.Slot != trapSlot) continue;
             if (e.AtMs > ms) break;
             last = e.AtMs;
         }
@@ -367,8 +334,13 @@ public sealed class WaveReplay
                 if (_creatureMax.Count == 0 || _creatureHealth.Values.All(h => h <= 0f)) EnemyHealth = 0f;
                 break;
 
-            case BattleEventKind.Shield:
+            case BattleEventKind.Undying:
                 _shieldUntil[e.Slot] = e.AtMs + e.Amount;   // the sim tells us the reach; we just draw it
+                break;
+
+            // The BANKED shield's standing size, as of the playhead — a STATE, so scrubbing works.
+            case BattleEventKind.Shield:
+                BankedShield = e.Amount;
                 break;
         }
     }

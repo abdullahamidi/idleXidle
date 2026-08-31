@@ -184,8 +184,8 @@ public sealed record SkillShape
     /// <summary>Extra creatures every Form reaches per activation.</summary>
     public int ExtraTargets { get; init; }
 
-    /// <summary>Extra targets for one Form specifically — the Form specialisations.</summary>
-    public IReadOnlyDictionary<Form, int> FormTargets { get; init; } = new Dictionary<Form, int>();
+    /// <summary>Extra targets for one STYLE specifically — the specialisations.</summary>
+    public IReadOnlyDictionary<Style, int> StyleTargets { get; init; } = new Dictionary<Style, int>();
 
     /// <summary>
     /// A damage multiplier that applies to ONE Form only. A character's APTITUDE lives here.
@@ -200,10 +200,10 @@ public sealed record SkillShape
     /// Multiplicative on combine, like every other multiplier here, so a character's aptitude and a
     /// Form specialisation node on the same Form compound instead of racing.
     /// </remarks>
-    public IReadOnlyDictionary<Form, float> FormPower { get; init; } = new Dictionary<Form, float>();
+    public IReadOnlyDictionary<Style, float> StylePower { get; init; } = new Dictionary<Style, float>();
 
-    /// <summary>This Form's damage multiplier, or 1 when nothing favours it.</summary>
-    public float FormPowerFor(Form form) => FormPower.TryGetValue(form, out var f) && f > 0f ? f : 1f;
+    /// <summary>This STYLE's damage multiplier, or 1 when nothing favours it.</summary>
+    public float StylePowerFor(Style style) => StylePower.TryGetValue(style, out var f) && f > 0f ? f : 1f;
 
     /// <summary>EVERYWHERE — every skill strikes every creature, at <see cref="HitSize"/>'s cost.</summary>
     public bool StrikesEveryCreature { get; init; }
@@ -422,25 +422,20 @@ public sealed record SkillShape
     /// <summary>Multiplier on maximum health, applied at champion mint.</summary>
     public float MaxHealth { get; init; } = 1f;
 
-    /// <summary>Targets this Form reaches, after the shape's general and per-Form additions.</summary>
-    public int TargetsFor(Form form) => TargetsFor(form, FormBehaviour.Targets(form));
+    /// <summary>Targets this SKILL reaches, after the shape's general and per-style additions.</summary>
+    public int TargetsFor(SkillDef def) => TargetsFor(def, def.Targets);
 
     /// <summary>
-    /// The same, but told how many the SKILL reaches rather than asking the Form.
+    /// The same, told the baseline outright — for the cast path, whose resolved def already carries
+    /// the variation's own target count.
     /// </summary>
-    /// <remarks>
-    /// A style's two skills do not reach the same number of creatures, and neither do a skill's two
-    /// variations — VOLLEY's SPRAY throws five where the Form table says two, SPLAY throws at
-    /// everything and CLUSTER puts them all into one. Asking the Form meant the catalogue could
-    /// declare a target count the fight never read, so both variations changed nothing at all.
-    /// </remarks>
-    public int TargetsFor(Form form, int baseline)
+    public int TargetsFor(SkillDef def, int baseline)
     {
         if (StrikesEveryCreature) return int.MaxValue;
 
         if (baseline == int.MaxValue) return baseline;   // a field already reaches everything
 
-        var extra = ExtraTargets + (FormTargets.TryGetValue(form, out var f) ? f : 0);
+        var extra = ExtraTargets + (StyleTargets.TryGetValue(def.Style, out var f) ? f : 0);
         return Math.Max(1, baseline + extra);
     }
 
@@ -459,13 +454,13 @@ public sealed record SkillShape
         ArgumentNullException.ThrowIfNull(a);
         ArgumentNullException.ThrowIfNull(b);
 
-        var targets = new Dictionary<Form, int>(a.FormTargets);
-        foreach (var (form, n) in b.FormTargets)
-            targets[form] = targets.TryGetValue(form, out var have) ? have + n : n;
+        var targets = new Dictionary<Style, int>(a.StyleTargets);
+        foreach (var (style, n) in b.StyleTargets)
+            targets[style] = targets.TryGetValue(style, out var have) ? have + n : n;
 
-        var power = new Dictionary<Form, float>(a.FormPower);
-        foreach (var (form, f) in b.FormPower)
-            power[form] = power.TryGetValue(form, out var had) ? had * f : f;
+        var power = new Dictionary<Style, float>(a.StylePower);
+        foreach (var (style, f) in b.StylePower)
+            power[style] = power.TryGetValue(style, out var had) ? had * f : f;
 
         var sourceBonus = new Dictionary<Source, float>(a.SourceBonus);
         foreach (var (src, bonus) in b.SourceBonus)
@@ -507,8 +502,8 @@ public sealed record SkillShape
             StaggerMs = a.StaggerMs + b.StaggerMs,
 
             ExtraTargets = a.ExtraTargets + b.ExtraTargets,
-            FormTargets = targets,
-            FormPower = power,
+            StyleTargets = targets,
+            StylePower = power,
             StrikesEveryCreature = a.StrikesEveryCreature || b.StrikesEveryCreature,
             ChainFraction = Math.Max(a.ChainFraction, b.ChainFraction),
             RicochetChance = Math.Max(a.RicochetChance, b.RicochetChance),

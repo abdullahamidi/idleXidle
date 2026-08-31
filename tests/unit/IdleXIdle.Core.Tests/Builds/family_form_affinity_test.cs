@@ -11,10 +11,11 @@ using Xunit;
 namespace IdleXIdle.Core.Tests.Builds;
 
 /// <summary>
-/// The weapon family favours two Forms (2026-08-23): a bow makes Projectiles hit harder, a blade makes
-/// Strikes hit harder, and it happens INSIDE the sim — so the bench, the fight and any ranking agree.
+/// The weapon family favours two Styles (2026-08-23, ported to the Style ring in P3c): a bow makes
+/// Volley skills hit harder, a blade makes Hammer skills hit harder, and it happens INSIDE the sim —
+/// so the bench, the fight and any ranking agree.
 /// </summary>
-public class FamilyFormAffinityTests
+public class FamilyStyleAffinityTests
 {
     private static ItemInstance WeaponOfFamily(string family)
     {
@@ -28,54 +29,59 @@ public class FamilyFormAffinityTests
         throw new InvalidOperationException("no id landed on " + family);
     }
 
-    private static Build BuildWith(Form form)
+    private static Build BuildWith(Style style)
     {
+        // The style's own Active from the catalogue — the id is the identity, the Form is the
+        // legacy bridge column WovenAbility still carries.
+        var def = SkillCatalogue.ActiveOf(style);
         var b = new Build();
-        b.Weave(new EquippedSkill(new WovenAbility { Name = "S", Source = Source.Body, Form = form },
-                                  FormBehaviour.BaseCooldownMs(form)));
+        b.Weave(new EquippedSkill(
+            new WovenAbility { Name = "S", Source = Source.Body, Form = def.LegacyForm ?? Form.Strike, SkillId = def.Id },
+            def.Beats * SoloBattle.DefaultBeatMs,
+            PassiveSlot: false));
         return b;
     }
 
     [Fact]
-    public void test_every_form_is_favoured_by_some_family_and_each_family_favours_two()
+    public void test_every_style_is_favoured_by_some_family_and_each_family_favours_two()
     {
-        Assert.Equal(ItemNaming.WeaponFamilies.Length, ItemFamilies.FavouredForms.Length);
-        foreach (var pair in ItemFamilies.FavouredForms) Assert.Equal(2, pair.Distinct().Count());
-        foreach (Form f in Enum.GetValues<Form>())
-            Assert.Contains(ItemFamilies.FavouredForms, pair => pair.Contains(f));
+        Assert.Equal(ItemNaming.WeaponFamilies.Length, ItemFamilies.FavouredStyles.Length);
+        foreach (var pair in ItemFamilies.FavouredStyles) Assert.Equal(2, pair.Distinct().Count());
+        foreach (Style s in Enum.GetValues<Style>())
+            Assert.Contains(ItemFamilies.FavouredStyles, pair => pair.Contains(s));
     }
 
     [Fact]
-    public void test_gear_shape_is_the_weapons_favoured_forms_and_nothing_bare()
+    public void test_gear_shape_is_the_weapons_favoured_styles_and_nothing_bare()
     {
-        Assert.Equal(SkillShape.None.FormPower.Count, GearShape.Of(null).FormPower.Count);
+        Assert.Equal(SkillShape.None.StylePower.Count, GearShape.Of(null).StylePower.Count);
         var h = new Hunter();
-        Assert.Empty(GearShape.Of(h).FormPower);
+        Assert.Empty(GearShape.Of(h).StylePower);
         h.Equip(WeaponOfFamily("bow"));
         var shape = GearShape.Of(h);
-        Assert.Equal(ItemFamilies.FormAffinity, shape.FormPowerFor(Form.Projectile), 3);
-        Assert.Equal(ItemFamilies.FormAffinity, shape.FormPowerFor(Form.Mark), 3);
-        Assert.Equal(1f, shape.FormPowerFor(Form.Strike), 3);
+        Assert.Equal(ItemFamilies.StyleAffinityBonus, shape.StylePowerFor(Style.Volley), 3);
+        Assert.Equal(ItemFamilies.StyleAffinityBonus, shape.StylePowerFor(Style.Sign), 3);
+        Assert.Equal(1f, shape.StylePowerFor(Style.Hammer), 3);
     }
 
     [Fact]
-    public void test_a_bow_benches_higher_for_projectiles_and_a_blade_for_strikes()
+    public void test_a_bow_benches_higher_for_volleys_and_a_blade_for_hammers()
     {
         // Two weapons of equal rarity and level, different families, the SAME build — only the family
         // changes between the two measurements. The favoured pairing must win in the real sim.
         var bow = WeaponOfFamily("bow");
         var blade = WeaponOfFamily("blade");
 
-        float Dps(ItemInstance weapon, Form form)
+        float Dps(ItemInstance weapon, Style style)
         {
             var h = new Hunter();
             h.Equip(weapon);
-            return DamageBench.Measure(BuildWith(form), h).Dps;
+            return DamageBench.Measure(BuildWith(style), h).Dps;
         }
 
-        Assert.True(Dps(bow, Form.Projectile) > Dps(blade, Form.Projectile) * 1.05f,
-            "the bow must out-shoot the blade on a Projectile build");
-        Assert.True(Dps(blade, Form.Strike) > Dps(bow, Form.Strike) * 1.05f,
-            "the blade must out-hit the bow on a Strike build");
+        Assert.True(Dps(bow, Style.Volley) > Dps(blade, Style.Volley) * 1.05f,
+            "the bow must out-shoot the blade on a Volley build");
+        Assert.True(Dps(blade, Style.Hammer) > Dps(bow, Style.Hammer) * 1.05f,
+            "the blade must out-hit the bow on a Hammer build");
     }
 }

@@ -386,9 +386,16 @@ public class HealBalanceTest
 
         var live = HealedBy(HealTuning.Default);
         var legacy = HealedBy(HealTuning.Legacy);
-        Assert.True(live > 0, "a Transformation build healed nothing");
-        // 0.50 against 0.12 on the same damage, neither at the ceiling (a million-point pool).
-        Assert.InRange(legacy / (double)live, 3.9, 4.5);
+        Assert.True(live > 0, "a DRAIN build healed nothing");
+        // THE DIAL MOVED HOME (P3c, 2026-08-31). The base lifesteal is the SKILL'S OWN dial in the
+        // catalogue now — drain_drink carries HealTuning.Default.TransformationLeech as data — so
+        // swapping the injected tuning deliberately no longer reroutes it: the two runs heal the
+        // same. What injection still owns is the per-wave budget and SIPHON's multiplier, which
+        // their own tests cover. The old assertion (legacy heals ~4.2x more) proved the injection
+        // reached the base leech; this one proves it no longer does, which is the new contract.
+        Assert.Equal(legacy, live);
+        Assert.Equal(HealTuning.Default.TransformationLeech,
+                     SkillCatalogue.ById("drain_drink").Lifesteal, precision: 4);
     }
 
     [Fact]

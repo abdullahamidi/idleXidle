@@ -168,6 +168,16 @@ public sealed record SkillDef(
     string FxKey,
     IReadOnlyList<SkillVariation> Variations,
     Form? LegacyForm,
+    // ── WHAT ONE ACTIVATION IS WORTH — the number the Form table used to own. Per activation for
+    //    an Active or a Reaction; PER SECOND for a Field's damage path (the loop scales it by the
+    //    tick interval). Zero for a skill whose base line deals nothing (PRESS, WILT, the SIGNs,
+    //    REPAY, WEEP) — their dials below are their whole sentence. The six skills that used to
+    //    borrow a sibling's Form value have AUTHORED numbers at last: PULSE was casting the Aura
+    //    tick value (12) and measured NET-NEGATIVE against bare hands on the bench. ─────────────
+    float BasePower = 0f,
+    // ── A Reaction's re-arm clock, in ms. JAWS said "3s" and IRON "6s" while both re-armed at an
+    //    8,000 ms Form-table fallback; the card is the spec now. 0 for non-Reactions. ───────────
+    int RearmMs = 0,
     // ── WHAT THE BASE LINE DOES, as numbers the sim reads. ────────────────────────────────────────
     //
     // Zero everywhere by default, so a skill carries only the dials its own sentence needs and the
@@ -255,6 +265,15 @@ public static class SkillCatalogue
     /// <summary>How many creatures a skill that reaches the whole wave reports.</summary>
     public const int WholeWave = int.MaxValue;
 
+    /// <summary>How strongly the trained RESONANCE stat feeds every skill's base power.</summary>
+    /// <remarks>Moved from the retired WeavingTuning (0.018 since 2026-08-26, when RESONANCE took
+    /// over the load MIGHT used to carry for skills). One coefficient for all twelve skills.</remarks>
+    public const float ResonancePerPoint = 0.018f;
+
+    /// <summary>A skill's base power at this resonance — the root of every skill hit.</summary>
+    public static float PoweredBase(SkillDef def, float resonance)
+        => def.BasePower * (1f + ResonancePerPoint * resonance);
+
     private static SkillVariation V(string name, string line, Source source, Func<SkillDef, SkillDef> modify,
                                     params (string N, string L, Func<SkillDef, SkillDef> M)[] rs)
         => new(name, line, rs.Select(r => new Reinforcement(r.N, r.L, r.M)).ToList(), modify, source);
@@ -264,7 +283,7 @@ public static class SkillCatalogue
         // ── HAMMER — defence break, defence ignore, stun, execute threshold ───────────────────────
         new("hammer_blow", "BLOW", Style.Hammer, SkillKind.Active, SkillEffect.Damage,
             "Heavy damage to one target.",
-            Beats: 6, IntervalMs: 0, On: ReactionOn.None, Targets: 1,
+            Beats: 6, IntervalMs: 0, On: ReactionOn.None, Targets: 1, BasePower: 500f,
             ClipKey: "strike", FxKey: "strike",
             Variations: new[]
             {
@@ -363,7 +382,7 @@ public static class SkillCatalogue
                      d => d with { ReflectFraction = 1.4f })),
                 V("IRON", "No reflect: the trap stops a whole bite, but rearms every 6s.",
                     Source.Machine,
-                    d => d with { ReflectFraction = 0f, StopsWholeBite = true },
+                    d => d with { ReflectFraction = 0f, StopsWholeBite = true, RearmMs = 6_000 },
                     ("REPRISAL", "A stopped bite is returned to the enemy that made it, in full.",
                      d => d with { ReflectFraction = 1.0f }),
                     ("BLUNT",    "The trap rearms twice as fast.",
@@ -371,13 +390,16 @@ public static class SkillCatalogue
                     ("HARDEN",   "Each spring raises the reflect 20% for the wave, up to 40%.",
                      d => d with { ReflectGrowthPerBite = 0.20f, ReflectGrowthCap = 0.40f })),
             },
-            LegacyForm: Form.Trap),
+            LegacyForm: Form.Trap, ReflectFraction: 0.5f, RearmMs: 3_000),
 
         // ── SIGN — amplify only. It deals no damage itself. ───────────────────────────────────────
         new("sign_call", "CALL", Style.Sign, SkillKind.Active, SkillEffect.Amplify,
             "All your damage +60% for 6s.",
             Beats: 5, IntervalMs: 0, On: ReactionOn.None, Targets: 1,
             ClipKey: "mark", FxKey: "mark",
+            // The base line owns its own numbers now — the Form table's flat 1.6x/6,000 ms window is
+            // gone, and with it the DOUBLE-APPLY the audit measured (SPEND read 1.6 x 3.0 = 4.8x).
+            AmplifyPercent: 0.60f, AmplifyMs: 6_000, AmplifyWholeWave: true,
             Variations: new[]
             {
                 V("SPEND", "The window is 2s and amplifies +200%.",
@@ -405,6 +427,7 @@ public static class SkillCatalogue
             "Your damage to the front enemy is +70%.",
             Beats: 0, IntervalMs: 2000, On: ReactionOn.None, Targets: 1,
             ClipKey: "mark", FxKey: "mark",
+            AmplifyPercent: 0.70f,
             Variations: new[]
             {
                 V("SPRAWL", "The mark covers every enemy instead, at half strength.",
@@ -414,8 +437,12 @@ public static class SkillCatalogue
                      d => d with { AmplifyPercent = 0.525f }),
                     ("WINNOW", "The marks deepen +10% every 2s, up to +50%.",
                      d => d with { AmplifyDeepenPerTick = 0.10f, AmplifyDeepenCap = 0.50f }),
-                    ("RIPPLE", "The marks refresh every 1s instead of every 2s.",
-                     d => d with { IntervalMs = 1000 })),
+                    // RE-AUTHORED with the wave-local amplifier (P3c): the faster refresh alone was
+                    // only ever measurable through the old cross-wave window leak, and at the beat's
+                    // quantisation a 1s-earlier onset amplifies the same set of blows. The cadence
+                    // stays; the depth rider is what makes the purchase felt.
+                    ("RIPPLE", "The marks refresh every 1s instead of every 2s, and bite 7% deeper.",
+                     d => d with { IntervalMs = 1000, AmplifyPercent = 0.42f })),
                 V("ETCH", "The mark deepens +50% every 2s to +170%, and keeps its depth when it moves.",
                     Source.Spirit,
                     d => d with { AmplifyDeepenPerTick = 0.50f, AmplifyDeepenCap = 1.70f },
@@ -431,7 +458,7 @@ public static class SkillCatalogue
         // ── VOLLEY — hit count, bleed, cooldown reduction, spread on kill ─────────────────────────
         new("volley_spray", "SPRAY", Style.Volley, SkillKind.Active, SkillEffect.Damage,
             "Fires 5 arrows at random enemies. With fewer enemies they are split between them.",
-            Beats: 4, IntervalMs: 0, On: ReactionOn.None, Targets: 5,
+            Beats: 4, IntervalMs: 0, On: ReactionOn.None, Targets: 5, BasePower: 215f,
             ClipKey: "projectile", FxKey: "projectile",
             Variations: new[]
             {
@@ -486,7 +513,11 @@ public static class SkillCatalogue
         // ── FIELD — slow, area damage, scaling with the number of living enemies ──────────────────
         new("field_pulse", "PULSE", Style.Field, SkillKind.Active, SkillEffect.Damage,
             "Area damage to every enemy in the wave.",
-            Beats: 5, IntervalMs: 0, On: ReactionOn.None, Targets: WholeWave,
+            // AUTHORED, not borrowed: PULSE resolved through Form.Aura and cast the TICK value (12)
+            // — net-negative against bare hands on the bench, since the cast also spent a beat the
+            // 72-damage swing wanted. 140 per creature per cast: parity with BLOW against three
+            // creatures, weaker alone, stronger against a full wave — which is FIELD's sentence.
+            Beats: 5, IntervalMs: 0, On: ReactionOn.None, Targets: WholeWave, BasePower: 140f,
             ClipKey: "aura", FxKey: "aura",
             Variations: new[]
             {
@@ -513,7 +544,9 @@ public static class SkillCatalogue
 
         new("field_mire", "MIRE", Style.Field, SkillKind.Field, SkillEffect.Damage,
             "Damages every enemy every 1s, and slows their attacks by 25%.",
-            Beats: 0, IntervalMs: 1000, On: ReactionOn.None, Targets: WholeWave,
+            // Per SECOND — the loop pays BasePower x (IntervalMs/1000) per tick, so REMNANT's faster
+            // clock buys cadence for its slow, not extra damage, exactly as the old spill maths did.
+            Beats: 0, IntervalMs: 1000, On: ReactionOn.None, Targets: WholeWave, BasePower: 12f,
             ClipKey: "aura", FxKey: "aura",
             Variations: new[]
             {
@@ -540,14 +573,18 @@ public static class SkillCatalogue
 
         // ── DRAIN — lifesteal, healing, attack break, scaling with health ─────────────────────────
         new("drain_drink", "DRINK", Style.Drain, SkillKind.Active, SkillEffect.Heal,
-            "Heavy damage to one target; heals you for 50% of it.",
-            Beats: 6, IntervalMs: 0, On: ReactionOn.None, Targets: 1,
+            "Heavy damage to one target; heals you back a share of it.",
+            // The lifesteal is the skill's OWN dial now. The Form path healed TransformationLeech for
+            // any Transformation-Form skill regardless of the dial — which made GLUT ("No lifesteal")
+            // heal 12% anyway, and made THIRST's dial stack on the hidden base.
+            Beats: 6, IntervalMs: 0, On: ReactionOn.None, Targets: 1, BasePower: 260f,
+            Lifesteal: HealTuning.Default.TransformationLeech,
             ClipKey: "transformation", FxKey: "transformation",
             Variations: new[]
             {
                 V("THIRST", "Lifesteal doubles, and your per-wave healing limit doubles with it.",
                     Source.Shadow,
-                    d => d with { Lifesteal = HealTuning.Default.TransformationLeech },
+                    d => d with { Lifesteal = HealTuning.Default.TransformationLeech * 2f },
                     ("GREEDY",  "Lifesteal is 50% stronger.",
                      d => d with { Lifesteal = d.Lifesteal * 1.5f }),
                     ("PARCH",   "The cast deals 30% more damage, so it drinks more.",

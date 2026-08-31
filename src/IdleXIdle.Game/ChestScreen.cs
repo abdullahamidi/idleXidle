@@ -732,7 +732,7 @@ public sealed class ChestScreen
             var spec = build.Mastery
                 .Select(MasteryCatalog.ById)
                 .FirstOrDefault(n => n is { Kind: MasteryKind.Specialisation });
-            _ui.TextBig(b, spec?.Form is { } f
+            _ui.TextBig(b, spec?.Style is { } f
                             ? $"DISCIPLINE: {f.ToString().ToUpperInvariant()}"
                             : "NO DISCIPLINE CHOSEN",
                         panel.X + 60, y, spec is null ? Slate : Gold, UiTypography.Body);

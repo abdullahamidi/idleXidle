@@ -114,9 +114,6 @@ public sealed record Character
     /// </summary>
     public required ClassTier Tier { get; init; }
 
-    /// <summary>The Form they are better at than you are.</summary>
-    public Form? Aptitude { get; init; }
-
     /// <summary>
     /// The one skill this champion already knows, before a single mastery point is spent.
     /// </summary>
@@ -128,9 +125,6 @@ public sealed record Character
     /// a sharper difference between two champions than an aptitude multiplier is.
     /// </remarks>
     public string? StartingSkillId { get; init; }
-
-    /// <summary>How much better. 1.25 = +25% on that Form's skills.</summary>
-    public float AptitudePower { get; init; } = 1.25f;
 
     public required string PassiveName { get; init; }
     public required string PassiveText { get; init; }
@@ -202,12 +196,4 @@ public sealed record Character
     /// </summary>
     public string PortraitKey => $"char_{Id}_portrait";
 
-    /// <summary>The aptitude expressed as the shape the sim actually reads.</summary>
-    public SkillShape AptitudeShape =>
-        Aptitude is { } f
-            ? new SkillShape { FormPower = new Dictionary<Form, float> { [f] = AptitudePower } }
-            : SkillShape.None;
-
-    /// <summary>Everything this character contributes to a build, as one shape.</summary>
-    public SkillShape TotalShape => SkillShape.Combine(Shape, AptitudeShape);
 }

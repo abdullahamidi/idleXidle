@@ -14,7 +14,7 @@ namespace IdleXIdle.Core.Tests.Economy;
 /// This file owns the DATA MODEL — which item carries which enchant, its magnitude curve, its blurb. The
 /// triggers firing INSIDE a fight are proven against the live single-champion engine in
 /// <c>Builds/TriggerLivenessTests</c>, <c>Builds/SoloBattleTests</c> and <c>Builds/SoloExpeditionTests</c>
-/// (UNDYING, HARVEST, SPLINTER, DESPERATION and every Form-combo), so they are not re-proven here through
+/// (UNDYING, HARVEST, SPLINTER, DESPERATION and every Style-combo), so they are not re-proven here through
 /// the retired squad engine.
 /// </remarks>
 public class EnchantmentsTests
@@ -114,14 +114,14 @@ public class EnchantmentsTests
     }
 
     [Fact]
-    public void test_every_form_has_a_combo_enchantment()
+    public void test_every_style_has_a_combo_enchantment()
     {
-        // The combo axis is complete only if committing to ANY Form has an item that rewards it. A Form
+        // The combo axis is complete only if committing to ANY Style has an item that rewards it. A Style
         // with no combo enchant is a build path with nothing to chase — the gap this feature closed for
-        // Strike, Trap and Transformation.
-        foreach (var form in System.Enum.GetValues<IdleXIdle.Core.Abilities.Form>())
+        // Hammer, Snare and Drain.
+        foreach (var style in System.Enum.GetValues<IdleXIdle.Core.Builds.Style>())
             Assert.Contains(System.Enum.GetValues<EnchantKind>(),
-                k => new Enchantment(k, 1f).NeedsForm == form);
+                k => new Enchantment(k, 1f).NeedsStyle == style);
     }
 
     [Fact]
@@ -199,7 +199,7 @@ public class EnchantmentsTests
             var need = new Enchantment(kind, 1f).Needs;
             Assert.True(need is not null, $"{kind} is a combo and names no requirement");
             Assert.False(string.IsNullOrWhiteSpace(need!.Label), $"{kind}'s requirement has no label");
-            Assert.True(need.Form is not null || need.Keystone is not null || need.AnyVow,
+            Assert.True(need.Style is not null || need.Keystone is not null || need.AnyVow,
                         $"{kind} has a label but no actual condition — the Forge would always call it live");
         }
     }
@@ -209,29 +209,29 @@ public class EnchantmentsTests
     {
         // The rule the Forge draws its COMBOS / NEEDS line from, and the FITS badge on the loot grid.
         // It used to live inside a Draw method, where no test could reach it.
-        var noForms = System.Array.Empty<IdleXIdle.Core.Abilities.Form>();
+        var noStyles = System.Array.Empty<IdleXIdle.Core.Builds.Style>();
         var noTriggers = System.Array.Empty<IdleXIdle.Core.Builds.BuildTrigger>();
 
-        var form = new Enchantment(EnchantKind.Overdraw, 1f).Needs!;
-        Assert.True(form.MetBy(new[] { IdleXIdle.Core.Abilities.Form.Projectile }, noTriggers, 0));
-        Assert.False(form.MetBy(new[] { IdleXIdle.Core.Abilities.Form.Strike }, noTriggers, 0));
+        var style = new Enchantment(EnchantKind.Overdraw, 1f).Needs!;
+        Assert.True(style.MetBy(new[] { IdleXIdle.Core.Builds.Style.Volley }, noTriggers, 0));
+        Assert.False(style.MetBy(new[] { IdleXIdle.Core.Builds.Style.Hammer }, noTriggers, 0));
 
         var keystone = new Enchantment(EnchantKind.Fervour, 1f).Needs!;
-        Assert.True(keystone.MetBy(noForms, new[] { IdleXIdle.Core.Builds.BuildTrigger.Bloodlust }, 0));
-        Assert.False(keystone.MetBy(noForms, new[] { IdleXIdle.Core.Builds.BuildTrigger.Echo }, 0));
+        Assert.True(keystone.MetBy(noStyles, new[] { IdleXIdle.Core.Builds.BuildTrigger.Bloodlust }, 0));
+        Assert.False(keystone.MetBy(noStyles, new[] { IdleXIdle.Core.Builds.BuildTrigger.Echo }, 0));
 
         var vow = new Enchantment(EnchantKind.Tithe, 1f).Needs!;
-        Assert.True(vow.MetBy(noForms, noTriggers, swornVows: 1));
-        Assert.False(vow.MetBy(noForms, noTriggers, swornVows: 0));
+        Assert.True(vow.MetBy(noStyles, noTriggers, swornVows: 1));
+        Assert.False(vow.MetBy(noStyles, noTriggers, swornVows: 0));
 
         // AND THE CROSS-AXIS CHECK, which is the one worth having. A keystone combo must not read as
-        // live because the player happens to run a Form, and a Form combo must not read as live because
+        // live because the player happens to run a Style, and a Style combo must not read as live because
         // they happen to have sworn a Vow. Each requirement answers its own axis and ignores the rest.
         Assert.False(keystone.MetBy(
-            new[] { IdleXIdle.Core.Abilities.Form.Projectile,
-                    IdleXIdle.Core.Abilities.Form.Strike }, noTriggers, swornVows: 4));
+            new[] { IdleXIdle.Core.Builds.Style.Volley,
+                    IdleXIdle.Core.Builds.Style.Hammer }, noTriggers, swornVows: 4));
         Assert.False(vow.MetBy(
-            new[] { IdleXIdle.Core.Abilities.Form.Projectile },
+            new[] { IdleXIdle.Core.Builds.Style.Volley },
             new[] { IdleXIdle.Core.Builds.BuildTrigger.Bloodlust }, swornVows: 0));
     }
 

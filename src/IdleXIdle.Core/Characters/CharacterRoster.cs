@@ -53,7 +53,7 @@ public static class CharacterRoster
             StartingSkillId = "hammer_blow",   // the plainest of the twelve, for the champion with no lean
             Class = ItemClass.Wanderer, Tier = ClassTier.First,
             Blurb = "Walked every road far enough to know none of them is home.",
-            Lean = null, Aptitude = null,
+            Lean = null,
             PassiveName = "EVEN HAND",
             PassiveText = "Any road fits you. Every skill hits 8% harder.",
             // Deliberately the dullest passive in the roster, and deliberately the one that is never
@@ -70,7 +70,7 @@ public static class CharacterRoster
             StartingSkillId = "hammer_press",   // a weight that sits on the front enemy — an anvil, not a hammer
             Class = ItemClass.Warden, Tier = ClassTier.First,
             Blurb = "Hits things until they are a different shape.",
-            Lean = Branch.Resonance, Aptitude = Form.Strike,
+            Lean = Branch.Resonance,
             PassiveName = "DEADWEIGHT",
             PassiveText = "A third of the damage left over from a kill hits the next enemy.",
             // Weight's structural weakness is a swarm: an enormous hit on a small creature throws most
@@ -85,7 +85,7 @@ public static class CharacterRoster
             StartingSkillId = "field_mire",   // many mouths, one field
             Class = ItemClass.Ranger, Tier = ClassTier.First,
             Blurb = "Never speaks. The charms do it.",
-            Lean = Branch.Loot, Aptitude = Form.Aura,
+            Lean = Branch.Loot,
             PassiveName = "MANY MOUTHS",
             PassiveText = "+5% damage for each enemy alive in the wave.",
             // Scales with the thing Spread is for and evaporates in a boss room, which is the honest
@@ -99,7 +99,7 @@ public static class CharacterRoster
             StartingSkillId = "volley_spray",   // the one that fires on a count
             Class = ItemClass.Mystic, Tier = ClassTier.First,
             Blurb = "Keeps time. The fight is what happens between the beats.",
-            Lean = Branch.Tempo, Aptitude = Form.Projectile,
+            Lean = Branch.Tempo,
             PassiveName = "FIRST BEAT",
             // 2026-08-23: this said "free", which reads as a resource cost — the game has no mana and
             // never had one. FreeOpeningCast waives the WAIT (the 700ms wave-opening pause, and the
@@ -115,7 +115,7 @@ public static class CharacterRoster
             StartingSkillId = "drain_wilt",   // it wears the wave down rather than out-hitting it
             Class = ItemClass.Bulwark, Tier = ClassTier.First,
             Blurb = "Has been killed. Declined.",
-            Lean = Branch.Endure, Aptitude = Form.Transformation,
+            Lean = Branch.Endure,
             PassiveName = "SECOND WIND",
             PassiveText = "Once per expedition, a hit that would kill you leaves you at 1 health.",
             Grants = new[] { BuildTrigger.Undying },
@@ -129,7 +129,7 @@ public static class CharacterRoster
             StartingSkillId = "hammer_blow",   // the falling tower IS one enormous hit
             Class = ItemClass.Warden, Tier = ClassTier.Second,
             Blurb = "Slow. Arrives anyway.",
-            Lean = Branch.Resonance, Aptitude = Form.Strike, AptitudePower = 1.15f,
+            Lean = Branch.Resonance,
             PassiveName = "MOMENTUM",
             PassiveText = "Your first hit on each enemy is weaker. Every hit after it is stronger.",
             // A Weight+Tempo bridge stated as a trade rather than a bonus. It is the exact inverse of
@@ -146,7 +146,7 @@ public static class CharacterRoster
             StartingSkillId = "volley_weep",   // what a quiver leaves behind it
             Class = ItemClass.Mystic, Tier = ClassTier.Second,
             Blurb = "Counts arrows the way other people count breaths.",
-            Lean = Branch.Tempo, Aptitude = Form.Projectile, AptitudePower = 1.35f,
+            Lean = Branch.Tempo,
             PassiveName = "LOOSE AGAIN",
             PassiveText = "A kill sends the next shot immediately.",
             // LooseAgain, not Splinter. The card reads "a kill sends the next shot immediately" and the
@@ -166,10 +166,17 @@ public static class CharacterRoster
             StartingSkillId = "snare_jaws",   // a wall that answers being touched
             Class = ItemClass.Bulwark, Tier = ClassTier.Second,
             Blurb = "Stands where the road narrows, and lets it narrow further.",
-            Lean = Branch.Endure, Aptitude = Form.Trap, AptitudePower = 1.35f,
+            Lean = Branch.Endure,
             PassiveName = "REPRISAL",
             PassiveText = "Every hit you take does less. Every trap you set does more.",
-            Shape = new SkillShape { FlatDamageReduction = 6f, DamageTaken = 0.90f },
+            // BOTH sentences of the card. "Every trap you set does more" used to be implemented by
+            // the legacy Form aptitude and nothing else — deleting that without this line would have
+            // turned half the card into a lie no test catches.
+            Shape = new SkillShape
+            {
+                FlatDamageReduction = 6f, DamageTaken = 0.90f,
+                StylePower = new Dictionary<Style, float> { [Style.Snare] = 1.35f },
+            },
             // SECOND BULWARK. Was the FIRST region's conquest — the earliest unlock in the game — then
             // "conquer every region". That was still a conquest: THE UNBROKEN opens on the fifth
             // region's conquest and the whole map is the sixth, one region later, the same effort again
@@ -186,7 +193,7 @@ public static class CharacterRoster
             StartingSkillId = "sign_call",   // a vow-keeper opens the window for everyone else
             Class = ItemClass.Ranger, Tier = ClassTier.Second,
             Blurb = "Gave up their eyes for a better bargain.",
-            Lean = null, Aptitude = Form.Mark, AptitudePower = 1.30f,
+            Lean = null,
             PassiveName = "TWICE SWORN",
             PassiveText = "Vows pay far more. Your Marks last longer and hit harder.",
             // The only character built around a SYSTEM rather than a branch. A player with no Vows
@@ -209,7 +216,7 @@ public static class CharacterRoster
             StartingSkillId = "snare_repay",   // it collects what it is owed
             Class = ItemClass.Wanderer, Tier = ClassTier.Second,
             Blurb = "Fights for the pockets, not the glory.",
-            Lean = null, Aptitude = Form.Trap,
+            Lean = null,
             PassiveName = "FULL POCKETS",
             PassiveText = "All the loot you bring home is worth more. Rare finds show up more often.",
             // Haul and Rarity, which the AVARICE road also buys — so this character is the cheap

@@ -54,7 +54,11 @@ public class RunReportTests
     public void test_a_small_hit_build_is_told_that_armour_is_the_problem()
     {
         var spread = RunIn("cinderworks", BuildOf(Form.Aura, Form.Projectile));
-        var weight = RunIn("cinderworks", BuildOf(Form.Trap, Form.Strike));
+        // Strike + Transformation, not Trap + Strike: card-true JAWS (P3c) reflects half the BITE,
+        // which against this fixture's biters is the smallest hit in the game — it dragged the
+        // "large-hit" build's absorbed share up to the small-hit build's and erased the very gap
+        // this test exists to see. BLOW (500) and DRINK (260) are the honest large hits.
+        var weight = RunIn("cinderworks", BuildOf(Form.Strike, Form.Transformation));
 
         // 1.25, from 1.4 (2026-08-27): under the beat model the basic attack — a small hit — is a third
         // of BOTH builds' blows, and the Projectile is "every other beat" at 66, so the two shares sit

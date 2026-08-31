@@ -46,22 +46,22 @@ public static class ItemFamilies
     /// same <c>SkillShape.FormPower</c> a character's aptitude uses, so the fight, the bench and every
     /// dmg/s readout agree without a second ruler.
     /// </remarks>
-    public static readonly Form[][] FavouredForms =
+    public static readonly Builds.Style[][] FavouredStyles =
     {
-        new[] { Form.Strike, Form.Transformation },   // blade
-        new[] { Form.Projectile, Form.Mark },         // bow
-        new[] { Form.Strike, Form.Trap },             // spear
-        new[] { Form.Aura, Form.Transformation },     // scythe
+        new[] { Builds.Style.Hammer, Builds.Style.Drain },    // blade — the blow and the surge
+        new[] { Builds.Style.Volley, Builds.Style.Sign },     // bow — the shot and the aim
+        new[] { Builds.Style.Hammer, Builds.Style.Snare },    // spear — the thrust and the planted snare
+        new[] { Builds.Style.Field, Builds.Style.Drain },     // scythe — the reaping field and the surge
     };
 
-    /// <summary>How much harder a favoured Form's skill hits while its weapon is worn (x1.25).</summary>
-    public const float FormAffinity = 1.25f;
+    /// <summary>How much harder a favoured STYLE's skill hits while its weapon is worn (x1.25).</summary>
+    public const float StyleAffinityBonus = 1.25f;
 
-    /// <summary>The Forms this weapon favours, or none for anything that is not a weapon.</summary>
-    public static IReadOnlyList<Form> FavouredFormsOf(ItemInstance? item)
+    /// <summary>The styles this weapon favours, or none for anything that is not a weapon.</summary>
+    public static IReadOnlyList<Builds.Style> FavouredStylesOf(ItemInstance? item)
         => item is { BaseType: ItemBaseType.Weapon }
-            ? FavouredForms[ItemNaming.WeaponFamilyIndex(item)]
-            : Array.Empty<Form>();
+            ? FavouredStyles[ItemNaming.WeaponFamilyIndex(item)]
+            : Array.Empty<Builds.Style>();
 
     /// <summary>
     /// The built-in bonus this item carries by being what it is, or null for the unwearable.

@@ -38,10 +38,10 @@ namespace IdleXIdle.Game;
 public sealed class WeaveScreen
 {
     /// <summary>
-    /// The build's DISCIPLINE — the Form specialisation taken on the mastery tree. Host-fed each
+    /// The build's DISCIPLINE — the STYLE specialisation taken on the mastery tree. Host-fed each
     /// frame. Null until a Specialisation node is bought, and the screen says where to get one.
     /// </summary>
-    public Form? Discipline { get; set; }
+    public Style? Discipline { get; set; }
 
     /// <summary>Host-fed mastery walk, for the build share code. The code is identity, not power.</summary>
     public System.Collections.Generic.IReadOnlyCollection<string> MasteryTaken { get; set; }
@@ -906,7 +906,7 @@ public sealed class WeaveScreen
         // THE DISCIPLINE LINE — the Nen frame this game was born from, finally said out loud: your
         // skills are your specialisation's craft, and a sworn Vow buys back what it does not give you.
         if (Discipline is { } disc)
-            _ui.TextCenterBig(b, $"DISCIPLINE: {FormName(disc)} — ITS SKILLS HIT TWICE AS HARD  ·  A VOW ON A FAR-FORM SKILL PULLS IT ONE RING CLOSER",
+            _ui.TextCenterBig(b, $"DISCIPLINE: {disc.ToString().ToUpperInvariant()} — ITS SKILLS HIT TWICE AS HARD  ·  A VOW ON A FAR-STYLE SKILL PULLS IT ONE RING CLOSER",
                               960, 108, Gold, UiTypography.Secondary);
         else
             _ui.TextCenterBig(b, "NO DISCIPLINE YET — A SPECIALISATION NODE ON THE MASTERY TREE (E) GIVES YOU ONE",
@@ -1109,8 +1109,8 @@ public sealed class WeaveScreen
             // is ("x0.45→x0.75"), so swearing a Vow on an off-discipline skill visibly pays.
             if (Discipline is { } dd)
             {
-                var baseF = FormBehaviour.AffinityFactor(dd, s.Form);
-                var vowF = FormBehaviour.AffinityFactor(dd, s.Form, vowSworn: s.VowId is not null);
+                var baseF = StyleAffinity.Factor(dd, resolved.Style);
+                var vowF = StyleAffinity.Factor(dd, resolved.Style, vowSworn: s.VowId is not null);
                 var lifted = vowF > baseF + 0.001f;
                 var boughtUp = vowF > baseF + 0.001f;
                 var tag = boughtUp ? $"x{baseF:0.0#}→x{vowF:0.0#}" : $"x{vowF:0.0#}";
@@ -1311,7 +1311,7 @@ public sealed class WeaveScreen
             foreach (var (form, enchant) in wants.Take(2))
             {
                 _ui.Text(b, $"{enchant.ToUpperInvariant()} WANTS", x + 10, y, Slate);
-                _ui.TextRight(b, FormName(form), x + width, y, Met);
+                _ui.TextRight(b, form.ToString().ToUpperInvariant(), x + width, y, Met);
                 y += 24;
             }
             y += 6;
@@ -1357,14 +1357,14 @@ public sealed class WeaveScreen
     /// This is the cheapest possible way to make the Weave feel connected to the rest of the game, and
     /// it turns a shrug into a reason: not "pick a Form" but "your focus is waiting for a VOLLEY".
     /// </remarks>
-    private IReadOnlyList<(Form Form, string Enchant)> GearWants()
+    private IReadOnlyList<(Style Style, string Enchant)> GearWants()
     {
-        if (Hunter is not { } h) return Array.Empty<(Form, string)>();
+        if (Hunter is not { } h) return Array.Empty<(Style, string)>();
 
-        var have = Loadout.Skills.Select(sk => sk.Form).ToHashSet();
+        var have = Loadout.WovenStyles().ToHashSet();
         return h.WornEnchantments
-                .Where(e => e.NeedsForm is { } f && !have.Contains(f))
-                .Select(e => (e.NeedsForm!.Value, e.Name))
+                .Where(e => e.NeedsStyle is { } s && !have.Contains(s))
+                .Select(e => (e.NeedsStyle!.Value, e.Name))
                 .DistinctBy(t => t.Item1)
                 .ToList();
     }

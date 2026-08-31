@@ -302,12 +302,8 @@ public sealed class RosterScreen
         _ui.TextRightBig(b, c.Lean is { } br ? BranchName(br) : "NONE — ANY WORKS",
                          UiKit.ContentRight(DetailPanel), y - 2, lean, UiTypography.Body);
         y += 32;
-        _ui.TextBig(b, "BEST AT", left, y, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, c.Aptitude is { } f
-                            ? $"{f.ToString().ToUpperInvariant()}  +{(int)Math.Round((c.AptitudePower - 1f) * 100)}%"
-                            : "NONE",
-                         UiKit.ContentRight(DetailPanel), y - 2, c.Aptitude is null ? Dim : Bone, UiTypography.Body);
-        y += 32;
+        // (The BEST AT row died with the aptitude, 2026-08-31: a generic per-style damage tax no
+        // card advertised — and for THE OATHBOUND, a lie: its MARK +30% multiplied nothing at all.)
         // THE CLASS, on its own line in its own colour with its icon, then its one sentence. Two
         // champions share each class, so the sentence names the road the class was built for rather
         // than the champion — that is the roster's whole answer to "which of these two should I be" —

@@ -121,26 +121,41 @@ public class CharactersRosterTest
     }
 
     [Fact]
-    public void test_an_aptitude_lifts_only_its_own_form()
+    public void test_a_character_style_power_lifts_only_its_own_style()
     {
-        var quiver = CharacterRoster.Get("quiver");
-        Assert.Equal(Form.Projectile, quiver.Aptitude);
+        // Aptitude is gone (P3c): a character's whole contribution is Shape, Mods and Grants. The one
+        // style bonus left in the roster is THE THORNWALL's — its card's second sentence, "Every trap
+        // you set does more", carried in its Shape where the sim actually reads it.
+        var thornwall = CharacterRoster.Get("thornwall");
 
-        var shape = quiver.TotalShape;
-        Assert.True(shape.FormPowerFor(Form.Projectile) > 1f);
-        Assert.Equal(1f, shape.FormPowerFor(Form.Strike));
-        Assert.Equal(1f, shape.FormPowerFor(Form.Aura));
+        var shape = thornwall.Shape;
+
+        Assert.Equal(1.35f, shape.StylePowerFor(Style.Snare), 3);
+        Assert.Equal(1f, shape.StylePowerFor(Style.Hammer));
+        Assert.Equal(1f, shape.StylePowerFor(Style.Volley));
     }
 
     [Fact]
-    public void test_aptitudes_compound_with_a_tree_node_on_the_same_form()
+    public void test_quiver_passive_is_carried_by_grants_and_skill_rate()
     {
-        // Multiplicative, not "the larger wins". A character built for Projectiles and a Form
-        // specialisation node on Projectiles should both matter.
-        var a = new SkillShape { FormPower = new Dictionary<Form, float> { [Form.Projectile] = 1.35f } };
-        var b = new SkillShape { FormPower = new Dictionary<Form, float> { [Form.Projectile] = 1.20f } };
+        // This test's slot used to pin THE QUIVER's Projectile aptitude. Aptitudes were unadvertised
+        // bonuses and are deleted; what the character really contributes now is the trigger its card
+        // names (LOOSE AGAIN) and a skill-rate lift — the fields the sim reads.
+        var quiver = CharacterRoster.Get("quiver");
+
+        Assert.Contains(BuildTrigger.LooseAgain, quiver.Grants);
+        Assert.Equal(1.10f, quiver.Shape.SkillRate, 3);
+    }
+
+    [Fact]
+    public void test_style_powers_compound_with_a_tree_node_on_the_same_style()
+    {
+        // Multiplicative, not "the larger wins". A character shaped for Snares and a Style
+        // specialisation node on Snare should both matter.
+        var a = new SkillShape { StylePower = new Dictionary<Style, float> { [Style.Snare] = 1.35f } };
+        var b = new SkillShape { StylePower = new Dictionary<Style, float> { [Style.Snare] = 1.20f } };
         var combined = SkillShape.Combine(a, b);
-        Assert.Equal(1.62f, combined.FormPowerFor(Form.Projectile), 3);
+        Assert.Equal(1.62f, combined.StylePowerFor(Style.Snare), 3);
     }
 
     [Fact]
@@ -153,8 +168,7 @@ public class CharactersRosterTest
             var touchesMods = c.Mods != BuildMods.None;
             var touchesShape = c.Shape != SkillShape.None;
             var grants = c.Grants.Count > 0;
-            var hasAptitude = c.Aptitude is not null;
-            Assert.True(touchesMods || touchesShape || grants || hasAptitude,
+            Assert.True(touchesMods || touchesShape || grants,
                         $"{c.Name} contributes nothing the simulation reads.");
         }
     }
@@ -163,14 +177,14 @@ public class CharactersRosterTest
     public void test_twice_sworn_actually_makes_a_vow_pay_more()
     {
         // THE TEST THE ONE ABOVE COULD NOT BE. `test_every_character_changes_something_the_sim_reads`
-        // passes if ANY of the four channels is non-default, and THE OATHBOUND's Shape carried its Mark
-        // half — so the character sailed through it while the clause it is NAMED for, "Vows pay far
-        // more", had no field in SkillShape to write to at all. A passive with two promises needs a
-        // test per promise.
+        // passes if ANY of the three channels is non-default, and THE OATHBOUND's Shape carried its
+        // Mark half — so the character sailed through it while the clause it is NAMED for, "Vows pay
+        // far more", had no field in SkillShape to write to at all. A passive with two promises needs
+        // a test per promise.
         var oathbound = CharacterRoster.All.Single(c => c.Id == "oathbound");
-        Assert.True(oathbound.TotalShape.VowPowerMultiplier > 1f,
+        Assert.True(oathbound.Shape.VowPowerMultiplier > 1f,
                     "TWICE SWORN says Vows pay far more; nothing in its Shape says so");
-        Assert.True(oathbound.TotalShape.MarkWindowMultiplier > 1f,
+        Assert.True(oathbound.Shape.MarkWindowMultiplier > 1f,
                     "…and the other half of the same sentence must still hold");
     }
 
@@ -194,8 +208,10 @@ public class CharactersRosterTest
     private static float DamageWith(SkillShape shape, Vow? vow)
     {
         var build = new Build { PassiveMods = BuildMods.None, Shape = shape };
+        // The SkillId is the identity the sim reads now (P3c); the Form is the legacy fixture bridge,
+        // and the cooldown argument is inert — cadence comes from the catalogue def's Beats.
         build.Weave(new EquippedSkill(
-            new WovenAbility { Name = "S", Source = Source.Nature, Form = Form.Strike, Vow = vow },
+            new WovenAbility { Name = "S", Source = Source.Nature, Form = Form.Strike, Vow = vow, SkillId = "hammer_blow" },
             FormBehaviour.BaseCooldownMs(Form.Strike)));
 
         var champ = new Champion { MaxHealth = 100_000, Health = 100_000 };

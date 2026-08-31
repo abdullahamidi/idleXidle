@@ -7,7 +7,7 @@ using IdleXIdle.Core.Builds;
 namespace IdleXIdle.Game;
 
 /// <summary>
-/// The six-Form hexagon — the diagram of who you are.
+/// The six-STYLE hexagon — the diagram of who you are.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -16,8 +16,8 @@ namespace IdleXIdle.Game;
 /// the native one bound to the others by threads whose weight is the hexagon's own verdict.
 /// </para>
 /// <para>
-/// Factors come straight from <see cref="FormBehaviour.AffinityFactor"/>, so the diagram cannot
-/// drift from the sim. With no native Form it draws quiet and unclaimed.
+/// Factors come straight from <see cref="StyleAffinity.Factor"/>, so the diagram cannot
+/// drift from the sim. With no native style it draws quiet and unclaimed.
 /// </para>
 /// <para>
 /// <b>IT WAS PLOTTED, NOT DRAWN</b> (playtest 2026-08-30: <i>"you framed the specialisation chart,
@@ -120,11 +120,11 @@ internal static class FormHexDiagram
     /// radius, which is right for the ceremony's 150 px hexagon and far too heavy for a docked chart
     /// half that size.
     /// </param>
-    public static void Draw(UiKit ui, SpriteBatch b, Point centre, int radius, Form? native, bool showFactors,
+    public static void Draw(UiKit ui, SpriteBatch b, Point centre, int radius, Style? native, bool showFactors,
                             int labelGap = 26, int labelPx = UiTypography.Body,
                             int factorPx = UiTypography.Secondary, int sealPx = 34)
     {
-        var forms = Enum.GetValues<Form>();
+        var forms = Enum.GetValues<Style>();
         var pos = new Vector2[forms.Length];
         var dir = new Vector2[forms.Length];
         for (var i = 0; i < forms.Length; i++)
@@ -153,7 +153,7 @@ internal static class FormHexDiagram
             for (var i = 0; i < forms.Length; i++)
             {
                 if (i == ni) continue;
-                var f = FormBehaviour.AffinityFactor(nat, forms[i]);
+                var f = StyleAffinity.Factor(nat, forms[i]);
                 var (col, weight) = f >= 1.14f ? (Gold * 0.88f, 2.6f + 3.0f * scale)
                                   : f >= 0.74f ? (Slate * 0.60f, 1.8f + 1.8f * scale)
                                                : (Ember * 0.58f, 1.4f + 1.2f * scale);
@@ -169,7 +169,7 @@ internal static class FormHexDiagram
         {
             var f = forms[i];
             var isNative = native == f;
-            var factor = native is { } n2 ? FormBehaviour.AffinityFactor(n2, f) : 1f;
+            var factor = native is { } n2 ? StyleAffinity.Factor(n2, f) : 1f;
             var col = native is null ? Slate
                 : factor >= 1.99f ? Gold
                 : factor >= 1.14f ? Met
@@ -193,7 +193,7 @@ internal static class FormHexDiagram
             // banked down by distance for the rest.
             var art = Box(pos[i], sealPx * IconFraction);
             var lit = Color.White * (isNative ? 1f : factor >= 1.14f ? 0.88f : factor >= 0.74f ? 0.70f : 0.52f);
-            if (!ui.Icon(b, $"icon_form_{f.ToString().ToLowerInvariant()}", art, lit))
+            if (!ui.Icon(b, IconKey(f), art, lit))
                 ui.Diamond(b, art, col);
 
             // The BOUND seal: a ring of short threads around your own Form, just outside the medallion.
@@ -312,6 +312,20 @@ internal static class FormHexDiagram
         for (var i = 0; i < 12; i++)
             ui.Hex(b, Box(p, sealPx * (2.50f - i * 0.12f)), Gold * 0.022f);
     }
+
+    /// <summary>
+    /// The seal art for a style — the Form-era icons, re-read as the styles they always depicted.
+    /// The PNGs keep their names (renaming forty assets is churn); the mapping is the meaning.
+    /// </summary>
+    private static string IconKey(Style s) => s switch
+    {
+        Style.Hammer => "icon_form_strike",
+        Style.Snare => "icon_form_trap",
+        Style.Sign => "icon_form_mark",
+        Style.Volley => "icon_form_projectile",
+        Style.Field => "icon_form_aura",
+        _ => "icon_form_transformation",
+    };
 
     private static Vector2 Ray(float a) => new(MathF.Cos(a), MathF.Sin(a));
 

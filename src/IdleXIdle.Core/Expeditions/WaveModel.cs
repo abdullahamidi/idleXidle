@@ -243,6 +243,13 @@ public enum BattleEventKind
     Strike, EnemyStrike, Down, Heal, EnemyDown, Skill, Shield, Charge, Aura, Beat,
 
     /// <summary>
+    /// UNDYING caught a killing blow. <c>Amount</c> is how long the steel shows, in ms. Its own kind
+    /// because <see cref="Shield"/>'s Amount is a banked HEALTH figure — one payload carrying a
+    /// duration for one producer and a magnitude for another was a live replay bug.
+    /// </summary>
+    Undying,
+
+    /// <summary>
     /// A creature's defence was broken. <c>Slot</c> is the creature's index, <c>Amount</c> the number
     /// of breaks it is now carrying.
     /// </summary>
@@ -288,9 +295,10 @@ public enum BattleEventKind
 /// Who the beat is about. For <see cref="BattleEventKind.EnemyStrike"/> and
 /// <see cref="BattleEventKind.Heal"/> this is the champion's slot; for
 /// <see cref="BattleEventKind.Strike"/> and <see cref="BattleEventKind.EnemyDown"/> it is the INDEX OF
-/// THE CREATURE in the wave's composition. For <see cref="BattleEventKind.Skill"/> it is the casting
-/// skill's <c>(int)Source</c> (2026-08-22: the HUNT screen tints the Form's effect by it) and
-/// <c>Amount</c> is the <c>(int)Form</c>.
+/// THE CREATURE in the wave's composition. For <see cref="BattleEventKind.Skill"/> and
+/// <see cref="BattleEventKind.Aura"/> it is the SLOT INDEX of the acting skill in the build — the
+/// screen resolves name, art and Source from the equipped skill itself (P3c, 2026-08-31; the old
+/// payload was a (Source, Form) ordinal pair, which two skills of one style collided on).
 /// </param>
 /// <remarks>
 /// A wave used to hold one enemy, so every Strike carried slot 0 and the replay could keep a single

@@ -129,7 +129,7 @@ public static class BuildComposer
             Affinity = mastery.Affinity(),
             ExtraTriggers = new HashSet<BuildTrigger>(
                 mastery.Triggers().Concat(character?.Grants ?? Array.Empty<BuildTrigger>())),
-            Shape = SkillShape.Combine(SkillShape.Combine(mastery.Shape(), character?.TotalShape ?? SkillShape.None),
+            Shape = SkillShape.Combine(SkillShape.Combine(mastery.Shape(), character?.Shape ?? SkillShape.None),
                                        DustEffects.TreeShape(tree)),
             SlotCapacity = slotCapacity,
             // THE SLOT SPLIT (rework stage 2b). A composed build is a real player's, so its budget is

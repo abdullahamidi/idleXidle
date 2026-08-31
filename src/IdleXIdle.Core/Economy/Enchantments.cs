@@ -103,7 +103,7 @@ public enum EnchantKind
 /// </remarks>
 public sealed record EnchantNeed(
     string Label,
-    Abilities.Form? Form = null,
+    Builds.Style? Style = null,
     Builds.BuildTrigger? Keystone = null,
     bool AnyVow = false)
 {
@@ -116,14 +116,14 @@ public sealed record EnchantNeed(
     /// is. The clauses are ANDed, but each enchantment sets exactly one, so in practice this asks the
     /// single question that enchantment cares about.
     /// </remarks>
-    public bool MetBy(IReadOnlyCollection<Abilities.Form> forms,
+    public bool MetBy(IReadOnlyCollection<Builds.Style> styles,
                       IReadOnlyCollection<Builds.BuildTrigger> triggers,
                       int swornVows)
     {
-        ArgumentNullException.ThrowIfNull(forms);
+        ArgumentNullException.ThrowIfNull(styles);
         ArgumentNullException.ThrowIfNull(triggers);
 
-        return (Form is not { } f || forms.Contains(f))
+        return (Style is not { } s || styles.Contains(s))
                && (Keystone is not { } k || triggers.Contains(k))
                && (!AnyVow || swornVows > 0);
     }
@@ -172,12 +172,12 @@ public sealed record Enchantment(EnchantKind Kind, float Magnitude)
     /// <remarks>The Forge greys the blurb when the worn build lacks it, so a dead combo reads as dead.</remarks>
     public EnchantNeed? Needs => Kind switch
     {
-        EnchantKind.Overdraw => new EnchantNeed("PROJECTILE", Form: Abilities.Form.Projectile),
-        EnchantKind.Linger => new EnchantNeed("MARK", Form: Abilities.Form.Mark),
-        EnchantKind.Radiance => new EnchantNeed("AURA", Form: Abilities.Form.Aura),
-        EnchantKind.Execute => new EnchantNeed("STRIKE", Form: Abilities.Form.Strike),
-        EnchantKind.Coiled => new EnchantNeed("TRAP", Form: Abilities.Form.Trap),
-        EnchantKind.Siphon => new EnchantNeed("TRANSFORMATION", Form: Abilities.Form.Transformation),
+        EnchantKind.Overdraw => new EnchantNeed("VOLLEY", Style: Builds.Style.Volley),
+        EnchantKind.Linger => new EnchantNeed("SIGN", Style: Builds.Style.Sign),
+        EnchantKind.Radiance => new EnchantNeed("FIELD", Style: Builds.Style.Field),
+        EnchantKind.Execute => new EnchantNeed("HAMMER", Style: Builds.Style.Hammer),
+        EnchantKind.Coiled => new EnchantNeed("SNARE", Style: Builds.Style.Snare),
+        EnchantKind.Siphon => new EnchantNeed("DRAIN", Style: Builds.Style.Drain),
         EnchantKind.Fervour => new EnchantNeed("BLOODLUST", Keystone: Builds.BuildTrigger.Bloodlust),
         EnchantKind.Reverb => new EnchantNeed("ECHO", Keystone: Builds.BuildTrigger.Echo),
         EnchantKind.Bulwark => new EnchantNeed("ZEAL", Keystone: Builds.BuildTrigger.Zeal),
@@ -185,8 +185,8 @@ public sealed record Enchantment(EnchantKind Kind, float Magnitude)
         _ => null,
     };
 
-    /// <summary>Which Form this enchantment needs, if its requirement happens to be a Form.</summary>
-    public Abilities.Form? NeedsForm => Needs?.Form;
+    /// <summary>Which STYLE this enchantment needs, if its requirement happens to be one.</summary>
+    public Builds.Style? NeedsStyle => Needs?.Style;
 }
 
 /// <summary>

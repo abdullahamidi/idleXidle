@@ -13,32 +13,32 @@ namespace IdleXIdle.Core.Tests.Builds;
 /// </summary>
 /// <remarks>
 /// The rule the game's Vows were born from — in the source system, a restriction is how you wield
-/// what your affinity does not give you. The native Form gains nothing (you already own it), and an
-/// unsworn skill pays the full hexagon distance.
+/// what your affinity does not give you. The native style gains nothing (you already own it), and an
+/// unsworn skill pays the full ring distance.
 /// </remarks>
 public class AffinityVowBuybackTest
 {
     [Fact]
-    public void test_affinity_buyback_a_vow_lifts_every_off_form_exactly_one_ring()
+    public void test_affinity_buyback_a_vow_lifts_every_off_style_exactly_one_ring()
     {
-        foreach (var affinity in Enum.GetValues<Form>())
-            foreach (var skill in Enum.GetValues<Form>())
+        foreach (var affinity in Enum.GetValues<Style>())
+            foreach (var skill in Enum.GetValues<Style>())
             {
                 // Arrange
-                var plain = FormBehaviour.AffinityFactor(affinity, skill);
-                var sworn = FormBehaviour.AffinityFactor(affinity, skill, vowSworn: true);
+                var plain = StyleAffinity.Factor(affinity, skill);
+                var sworn = StyleAffinity.Factor(affinity, skill, vowSworn: true);
 
                 if (skill == affinity)
                 {
-                    // Assert: the native Form gains nothing — you already own it.
+                    // Assert: the native style gains nothing — you already own it.
                     Assert.Equal(plain, sworn);
                     continue;
                 }
 
                 // Assert: sworn is strictly better, and equals SOME ring's plain factor — one step in.
                 Assert.True(sworn > plain, $"{affinity}->{skill}: sworn {sworn} not above plain {plain}");
-                var ringFactors = Enum.GetValues<Form>()
-                    .Select(f => FormBehaviour.AffinityFactor(affinity, f)).Distinct().ToList();
+                var ringFactors = Enum.GetValues<Style>()
+                    .Select(s => StyleAffinity.Factor(affinity, s)).Distinct().ToList();
                 Assert.Contains(sworn, ringFactors);
             }
     }
@@ -46,26 +46,36 @@ public class AffinityVowBuybackTest
     [Fact]
     public void test_affinity_buyback_reaches_the_fight_for_a_sworn_opposite_skill()
     {
-        // Arrange: two identical single-skill builds at an off-discipline CASTING Form; one skill
-        // carries a Vow whose demand is UNMET on this build (so VowFactor adds nothing and the only
-        // delta is the buy-back), one carries none. The (affinity, caster) pair is MEASURED off the
-        // ring — the first draft assumed Strike's far ring held a caster, and it holds only a passive,
-        // an on-bite Trap and a damageless Mark, so the buy-back path never ran and the test proved
-        // exactly the dormant-wiring it exists to catch.
-        var forms = Enum.GetValues<Form>();
-        var (affinity, caster) = forms
-            .SelectMany(a => forms.Select(f => (a, f)))
-            .First(p => p.a != p.f
-                        && !FormBehaviour.IsPassive(p.f) && !FormBehaviour.FiresOnBeingHit(p.f)
-                        && !FormBehaviour.IsAmplifier(p.f)
-                        && FormBehaviour.AffinityFactor(p.a, p.f) < 1f);
+        // Arrange: two identical single-skill builds at an off-discipline CASTING skill; one carries
+        // a Vow whose demand is UNMET on this build (so VowFactor adds nothing and the only delta is
+        // the buy-back), one carries none. The (affinity, caster) pair is MEASURED off the catalogue
+        // rather than assumed — the first draft assumed Strike's far ring held a caster, and it held
+        // only a passive, an on-bite Trap and a damageless Mark, so the buy-back path never ran and
+        // the test proved exactly the dormant-wiring it exists to catch. The same trap still exists
+        // in Style terms: a style's roster holds amplify SIGNs, Fields, on-bite Reactions and the
+        // banked-bite REPAY (BasePower 0), none of which would exercise the cast-path buy-back.
+        var (affinity, caster) = Enum.GetValues<Style>()
+            .SelectMany(a => SkillCatalogue.All.Select(d => (a, d)))
+            .First(p => p.d.Kind == SkillKind.Active
+                        && p.d.Effect != SkillEffect.Amplify
+                        && p.d.BasePower > 0f
+                        && StyleAffinity.Factor(p.a, p.d.Style) < 1f);
 
         Build Casting(Vow? vow)
         {
             var b = new Build { Affinity = affinity };
             b.Weave(new EquippedSkill(
-                new WovenAbility { Name = "C", Source = Source.Nature, Form = caster, Vow = vow },
-                FormBehaviour.BaseCooldownMs(caster)));
+                new WovenAbility
+                {
+                    Name = "C",
+                    Source = Source.Nature,
+                    // The legacy bridge only — the SkillId wins the Def resolution.
+                    Form = caster.LegacyForm ?? Form.Strike,
+                    Vow = vow,
+                    SkillId = caster.Id,
+                },
+                caster.Beats * SoloBattle.DefaultBeatMs,
+                PassiveSlot: false));
             return b;
         }
 

@@ -29,9 +29,6 @@ public sealed class Champion
     /// <summary>UNDYING is once per EXPEDITION, so it lives here and not in a wave-scoped local.</summary>
     public bool UndyingSpent { get; set; }
 
-    /// <summary>Absolute ms until which a MARK is amplifying. 0 = none.</summary>
-    public int MarkUntilMs { get; set; }
-
     /// <summary>
     /// Beats the champion has taken across the whole expedition. Beat-counted cooldowns
     /// (<see cref="ReadyAtBeat"/>) are measured against it, so they persist across waves like the
@@ -481,7 +478,6 @@ public static class SoloBattle
         var charge = 0;
 
         var skills = build.Skills;
-        var wt = WeavingTuning.Default;
         // DEEP (RESONANCE) — a point of resonance is worth more. Applied HERE, at the single place the
         // stat enters the fight, so it lifts every skill's base damage rather than one branch of it.
         var resonance = hunter.ValueOf(Economy.HunterStat.ResonanceAffinity)
@@ -515,26 +511,11 @@ public static class SoloBattle
         //    opening taxed slow, heavy builds hardest and broke both balance sweeps (Weight fell 1.41x
         //    behind Endure). A flat pause costs every build the same instant. PREPARATION
         //    (FreeOpeningCast) waives it — waiving openings is that node's entire identity. ──
-        if (!shape.FreeOpeningCast)
-        {
-            var wave0 = champ.ElapsedMs;
-            for (var i = 0; i < skills.Count; i++)
-            {
-                var f0 = skills[i].Form;
-                // THE SKILL'S OWN KIND decides this now, not its Form. Only an Active face casts, so
-                // only an Active face can owe an opening pause. (Stage 3 of the rework: the fork moves
-                // to SkillDef.Kind; every NUMBER below still comes from FormBehaviour until stage 5
-                // measures them. See design/gdd/skill-slots-and-skill-trees.md §11.)
-                if (!skills[i].TakesABeat) continue;
-                if (FormBehaviour.CooldownBeats(f0) > 0) continue;   // beat-counted: the first beat is its breath
-                var cd0 = Math.Max(1, (int)(skills[i].CooldownMs
-                                            / Math.Max(0.1f, mods.SkillRate * shape.SkillRate)));
-                champ.ReadyAt[i] = Math.Max(champ.ReadyAt.GetValueOrDefault(i, wave0 + cd0),
-                                            wave0 + tuning.WaveOpeningMs);
-            }
-        }
+        // (The ms-cooldown opening-pause writes that stood here were unreachable — every Active
+        // in the catalogue counts BEATS, and a beat-counted skill never reads ReadyAt. The breath
+        // itself lives on the beat clock: see nextBeat below. 2026-08-31 audit, dead path #8.)
 
-        var fervour = Economy.Enchantments.MagnitudeOf(hunter.WornEnchantments, Economy.EnchantKind.Fervour);
+                var fervour = Economy.Enchantments.MagnitudeOf(hunter.WornEnchantments, Economy.EnchantKind.Fervour);
         var bulwark = Economy.Enchantments.MagnitudeOf(hunter.WornEnchantments, Economy.EnchantKind.Bulwark);
         var reverb = Economy.Enchantments.MagnitudeOf(hunter.WornEnchantments, Economy.EnchantKind.Reverb);
         var tithe = Economy.Enchantments.MagnitudeOf(hunter.WornEnchantments, Economy.EnchantKind.Tithe);
@@ -621,9 +602,10 @@ public static class SoloBattle
             if (wsk.Def.SwingIgnoresArmour) swingIgnoresArmour = true;
             swingLifesteal = Math.Max(swingLifesteal, wsk.Def.SwingLifesteal);
         }
-        var markBonus = 0f;        // SIGN — how much a standing mark adds, over the Form's own multiplier
+        var ampBonus = 0f;         // SIGN — the amplifier's current depth
+        var ampUntil = 0;          // SIGN — the absolute ms the window holds until. Wave-local.
         var markDeepen = 0f;       // SIGN/ETCH — how far it has deepened so far this wave
-        var markWholeWave = false; // SIGN/SPRAWL — whether every creature carries it
+        var ampWholeWave = false;  // SIGN — CALL, STEADY and SPRAWL cover everything; BRAND the front
         var slowFactor = 0f;       // MIRE — fraction by which the enemy interval is stretched
         var takenSinceCast = new Dictionary<int, float>();   // REPAY — damage taken since slot i last cast
         var since = champ.ElapsedMs;
@@ -701,21 +683,21 @@ public static class SoloBattle
         }
 
         // How much a hit is worth right now: build mods, AFFINITY, the Source matchup, BLOODLUST, and MARK.
-        float Amp(int absMs, Source? skillSource, Form? skillForm = null, WaveCreature? against = null)
+        float Amp(int absMs, Source? skillSource, SkillDef? skillDef = null, WaveCreature? against = null)
         {
             var m = mods.Damage;
 
             // AFFINITY — the Nen hexagon. A skill in your affinity's Form hits far harder than one in its
             // opposite. Auto-attacks pass no Form and are unaffected.
-            if (build.Affinity is { } aff && skillForm is { } f)
+            if (build.Affinity is { } aff && skillDef is { } d0)
             {
-                var factor = FormBehaviour.AffinityFactor(aff, f);
+                var factor = StyleAffinity.Factor(aff, d0.Style);
                 // BROAD — the far side of the hexagon is walked back toward parity. Only ever LIFTS a
                 // factor under 1, so it cannot turn a penalty into a bonus.
                 if (shape.OppositePenaltyRelief > 0f && factor < 1f)
                     factor += (1f - factor) * Math.Min(1f, shape.OppositePenaltyRelief);
                 // NARROW — the opposite trade: your own Form harder, every other one softer.
-                if (aff == f) factor *= 1f + shape.AffinityStyleBonus;
+                if (aff == d0.Style) factor *= 1f + shape.AffinityStyleBonus;
                 else factor *= Math.Max(0f, 1f - shape.OffStylePenalty);
                 m *= factor;
             }
@@ -726,7 +708,7 @@ public static class SoloBattle
                 // weak one. All three turn the SAME number, so a build carrying two of them cannot
                 // stack the same promise twice.
                 var match = shape.AllMatchupsStrong
-                    ? wt.StrongMultiplier
+                    ? SourceMatchup.Strong
                     : SourceMatchup.Effectiveness(s, target);
                 if (match > 1f) match += (match - 1f) * shape.StrongMatchupBonus;
                 else if (match < 1f) match += (1f - match) * Math.Min(1f, shape.WeakMatchupRelief);
@@ -767,49 +749,35 @@ public static class SoloBattle
             // the player who has given up the most, which is the same bargain the Vows themselves make.
             if (swornVows > 0) m *= 1f + tithe * swornVows;
 
-            // MARK, and where a Mark adept's AFFINITY finally lands.
-            //
-            // Affinity is applied at the top of this method against the skill's own Form — which Mark
-            // can never reach, because Mark deals no damage and its branch returns before any hit
-            // exists to multiply. So MARK SPECIALIST, a six-point mastery node, applied its x2.00 to
-            // NOTHING while still imposing its off-Form penalties on every other skill in the build
-            // (Projectile to x0.45, Strike and Aura to x0.75). A Mark build is necessarily mostly other
-            // Forms — an amplifier with nothing to amplify is zero damage — so the node landed its
-            // entire cost on the build's only damage source and none of its benefit anywhere. It could
-            // only make you weaker, and the tree sold it as a specialisation.
-            //
-            // Amplifying the MARK ITSELF is the honest reading of "you have specialised in Mark", and it
-            // is the one lever that scales with the whole build rather than with one skill. Measured
-            // against the real simulation in affinity_test: it turns a -23% node into a positive one, in
-            // the same band as the other five.
-            if (champ.MarkUntilMs > absMs)
+            // THE AMPLIFY WINDOW — SIGN's identity as ONE state: a depth, a reach, a clock.
+            // The Form era ran TWO amplifiers here — a flat x1.6 whenever the window was open, and
+            // the dials' own depth on top — so SPEND measured x4.8 where its card said x3.0, and a
+            // depth written by STEADY outlived its wave. One wave-local state now; the base line's
+            // own AmplifyPercent (0.60 on CALL, 0.70 on BRAND) carries what the constant used to.
+            if (ampUntil > absMs && ampBonus > 0f)
             {
-                var mark = FormBehaviour.MarkMultiplier + shape.MarkPowerBonus;
-                if (build.Affinity is { } markAff)
-                    mark *= FormBehaviour.AffinityFactor(markAff, Form.Mark);
-                m *= mark;
-            }
-
-            // A STANDING MARK'S OWN DEPTH, over the Form's flat multiplier above. BRAND marks the
-            // creature IN FRONT; SPRAWL trades depth for reach and every creature carries it. `against`
-            // is null for a blow with no particular target — a whole-wave pulse costed once — and a
-            // mark that reads "the front enemy" must not quietly pay on all of them, so a null target
-            // is only amplified when the mark covers everything.
-            if (markBonus > 0f)
-            {
-                var marked = markWholeWave || (against is not null && ReferenceEquals(against, FirstAlive()));
-                if (marked) m *= 1f + markBonus;
+                var amped = ampWholeWave || (against is not null && ReferenceEquals(against, FirstAlive()));
+                if (amped)
+                {
+                    var depth = ampBonus + shape.MarkPowerBonus;
+                    // A SIGN adept's attunement lands on the amplifier's DEPTH — the one lever that
+                    // scales with the whole build rather than with one skill (measured when the old
+                    // Mark-specialist node was a -23% trap; see the port note in StyleAffinity).
+                    if (build.Affinity is { } signAff) depth *= StyleAffinity.Factor(signAff, Style.Sign);
+                    m *= 1f + depth;
+                }
             }
 
             // ── THE SKILL TREE. Everything past here is gated on skillForm, so the background
             //    auto-attack never triggers a node — it is a trickle, not a build. ────────────────────
-            if (skillForm is null) return m;
+            if (skillDef is null) return m;
 
             m *= shape.HitSize * shape.DamageDealt;
 
-            // The character's APTITUDE. Behind the same skillForm gate as everything else here, so it
-            // lifts woven skills and never the background auto-attack.
-            m *= shape.FormPowerFor(skillForm.Value);
+            // The worn weapon family's favoured styles (and any other per-style favour). Behind
+            // the same skillDef gate as everything else here, so it lifts woven skills and never
+            // the background auto-attack.
+            m *= shape.StylePowerFor(skillDef.Style);
 
             // HOARDER — the AVARICE terminal. Every point of haul the path bought becomes force, so a
             // Greed/Fortune build finally has a reason to exist in a fight instead of only in the bag.
@@ -1083,7 +1051,7 @@ public static class SoloBattle
         /// Land one activation across up to <paramref name="targets"/> living creatures. Returns the raw
         /// total dealt, which is what leech reads.
         /// </summary>
-        float LandSpread(float raw, int atMs, int targets, Source? skillSource, Form? skillForm, int absMs,
+        float LandSpread(float raw, int atMs, int targets, Source? skillSource, SkillDef? skillDef, int absMs,
                          bool fromSkill = true, bool swing = false, bool countsAsActivation = true,
                          bool ignoresArmour = false)
         {
@@ -1111,7 +1079,7 @@ public static class SoloBattle
                 if (!c.Alive) continue;
                 // Amp is per TARGET: the Source matchup belongs to the creature being hit, so one cast
                 // can be strong against one creature in a wave and weak against another.
-                var hit = raw * Amp(absMs, skillSource, skillForm, c);
+                var hit = raw * Amp(absMs, skillSource, skillDef, c);
 
                 // ── SIGNATURES, hit-side. The WOUND bonus reads stacks laid by ANY Body skill and
                 //    pays EVERY skill hit — that is what makes it a team primitive rather than a
@@ -1139,7 +1107,7 @@ public static class SoloBattle
                 {
                     var c = creatures[i];
                     if (!c.Alive) continue;
-                    var hit = SignatureAmp(raw * extraFraction * Amp(absMs, skillSource, skillForm, c),
+                    var hit = SignatureAmp(raw * extraFraction * Amp(absMs, skillSource, skillDef, c),
                                            c, skillSource);
                     LandOn(c, hit, atMs, fromSkill: true);
                     SignatureLay(c, skillSource);
@@ -1234,7 +1202,6 @@ public static class SoloBattle
             for (var i = 0; i < skills.Count; i++)
             {
                 var sk = skills[i];
-                var form = sk.Form;
 
                 // THE THREE-WAY FORK, asked about the SKILL instead of about the Form. The shape of
                 // this loop is unchanged — a Reaction is answered at the enemy's swing, a Field ticks
@@ -1258,7 +1225,7 @@ public static class SoloBattle
                     // six reinforcements that buy a faster clock bought nothing at all. Found by
                     // ReinforcementLivenessTests 2026-08-30. The constant stays as the fallback for a
                     // skill with no clock of its own (a spilled active resolves to one that has).
-                    var ownTick = sk.Def.IntervalMs > 0 ? sk.Def.IntervalMs : FormBehaviour.AuraTickMs;
+                    var ownTick = sk.Def.IntervalMs > 0 ? sk.Def.IntervalMs : 1_000;
                     var auraTick = triggers.Contains(BuildTrigger.Radiance) ? ownTick * 3 / 5 : ownTick;
                     // IN ARREARS, NOT IN ADVANCE. `ms` starts at 0 and 0 is a multiple of everything, so
                     // the wave's very first instant used to pay a whole interval of a field that had
@@ -1270,7 +1237,9 @@ public static class SoloBattle
                     // one interval in — which is also what "ticks every second" means to a player.
                     if (ms == 0 || ms % auraTick != 0) continue;
                     // The tick announces itself, so the screen never has to infer one from a timestamp.
-                    events.Add(new BattleEvent(BattleEventKind.Aura, (int)sk.Source, (int)form, ms));
+                    // The tick announces WHICH SLOT ticked; the screen resolves art and name
+                    // from the equipped skill rather than decoding a Form ordinal.
+                    events.Add(new BattleEvent(BattleEventKind.Aura, i, 0, ms));
 
                     // A FIELD IS NOT ALWAYS A DAMAGE FIELD. Kind says WHEN a skill acts and Effect says
                     // WHAT it does, and they are separate axes on purpose — so a Field that amplifies
@@ -1374,14 +1343,14 @@ public static class SoloBattle
                         continue;
                     }
 
-                    if (FormBehaviour.IsAmplifier(form))
+                    if (def.Effect == SkillEffect.Amplify)
                     {
                         // The standing mark: a window refreshed on the field's own clock instead of
                         // opened by a cast. It costs no beat, so it is deliberately the SHORTER window —
                         // it holds until the next tick rather than for a cast's full duration.
                         var standing = (int)(auraTick * shape.MarkWindowMultiplier);
                         if (triggers.Contains(BuildTrigger.Linger)) standing = standing * 9 / 5;
-                        champ.MarkUntilMs = Math.Max(champ.MarkUntilMs, abs + standing);
+                        ampUntil = Math.Max(ampUntil, abs + standing);
 
                         // HOW DEEP the mark is. ETCH deepens it every tick to its own ceiling; SPRAWL
                         // trades depth for reach and the whole wave carries it. Held as a bonus over
@@ -1395,50 +1364,24 @@ public static class SoloBattle
                                 : markDeepen + def.AmplifyDeepenPerTick;
                             depth += markDeepen;
                         }
-                        markBonus = depth;
-                        markWholeWave = def.AmplifyWholeWave;
+                        ampBonus = depth;
+                        ampWholeWave = def.AmplifyWholeWave;
                         continue;
                     }
 
-                    // PER-TICK, NOT PER-CAST. FormBaseValue is quoted in the units each Form is
-                    // PAID in: AURA's 12 is a second's worth, but STRIKE's 500 is one nine-second
-                    // cast and TRANSFORMATION's 260 is one eight-second cast. Ticking those at their
-                    // cast value every second is nine and eight times their intended output — which
-                    // is exactly what a skill spilled into a passive slot was doing.
-                    //
-                    // A Field pays the same DAMAGE PER SECOND its active face pays, so moving a skill
-                    // between slots trades burst for steadiness and not power. That parity is the
-                    // deliberate starting point and the knob a playtest should move, not an accident:
-                    // a passive costs no beat, so it may well deserve to sit a little under parity.
-                    var castMs = FormBehaviour.BaseCooldownMs(form);
-                    // THE SKILL'S OWN CLOCK, not the accelerated one: RADIANCE buys MORE TICKS AT THE
-                    // SAME SIZE, which is the whole of what that enchantment is. Scaling the tick down
-                    // by the speed-up would hand back exactly what it bought.
-                    var perTick = castMs > 0
-                        ? ownTick / (float)castMs   // spilled: scale a cast to a tick
-                        : ownTick / 1000f;          // native field: already per second
-
-                    var aura = FormBehaviour.BaseDamage(form, resonance, wt)
+                    // THE SKILL'S OWN NUMBER, in its own units: a Field's BasePower is per
+                    // second, and a tick pays its interval's share — so a faster clock (REMNANT)
+                    // buys cadence for the slow, never free damage, and RADIANCE still buys full
+                    // ticks faster because its acceleration touches the SCHEDULE, not this line.
+                    var aura = SkillCatalogue.PoweredBase(def, resonance)
                                * VowFactor(sk, weaveCtx, shape)
-                               * perTick
+                               * (def.IntervalMs > 0 ? def.IntervalMs / 1000f : 1f)
                                * def.DamageMultiplier;   // MIRE/SILT
-                    var auraDealt = LandSpread(aura, ms, shape.TargetsFor(form) + def.TargetsBonus,
-                                               sk.Source, form, abs, countsAsActivation: false);
-                    // NATURE'S SIGNATURE follows the DAMAGE, not the cast: the card promises 3% of
-                    // what its skills deal, with no cast clause — an Aura that deals must heal.
-                    // (Spirit/Mind speak of CASTS, and an Aura never casts, so they stay silent here.)
+                    var auraDealt = LandSpread(aura, ms, shape.TargetsFor(def) + def.TargetsBonus,
+                                               sk.Source, def, abs, countsAsActivation: false);
+                    // NATURE'S SIGNATURE follows the DAMAGE, not the cast — an Aura that deals must heal.
                     if (sk.Source == Source.Nature && auraDealt > 0f)
                         Heal((int)MathF.Round(auraDealt * heal.NatureSignatureLeech), ms);
-                    // A HEALING FORM HEALS FROM ITS FIELD TOO. Same reachability as the amplifier
-                    // above: a TRANSFORMATION spilled into a passive slot ticks here, and its whole
-                    // identity is that it gives back what it deals. SIPHON deepens it, exactly as it
-                    // does on the cast path, so the enchant is not silently dead on a passive slot.
-                    if (FormBehaviour.Heals(form) && auraDealt > 0f)
-                    {
-                        var fieldLeech = heal.TransformationLeech;
-                        if (triggers.Contains(BuildTrigger.Siphon)) fieldLeech *= heal.SiphonMultiplier;
-                        Heal((int)MathF.Round(auraDealt * fieldLeech), ms);
-                    }
                     if (alive == 0) return Kill(ms);
                     continue;
                 }
@@ -1475,24 +1418,10 @@ public static class SoloBattle
                 }
                 else
                 {
-                    // THE SKILL'S OWN COOLDOWN, at last. EquippedSkill has carried a CooldownMs since
-                    // it was written and NOTHING HAS EVER READ IT — it was set from the Form table at
-                    // construction and then ignored, because the Form owned the number. Reading it is
-                    // what lets one skill's cooldown differ from another of the same style, which is
-                    // what a variation or a reinforcement has to be able to change (design §5, §10).
-                    // Behaviour is unchanged today: BuildComposer still seeds it from the same table.
-                    var cd = Math.Max(1, (int)(sk.CooldownMs
-                                               / Math.Max(0.1f, RateNow())));   // TIDE and RHYTHM move it live
-                    // PREPARATION — every skill's FIRST cast of a wave is free of its cooldown. The
-                    // default is SINCE + cd, not a bare `cd`: `abs` is expedition-cumulative, so a bare
-                    // duration is in the past forever once a run is older than one cooldown, and a slot
-                    // with no entry then fired on EVERY beat (review 2026-08-30 — LOOSE AGAIN produced
-                    // exactly that state on every kill, and THE QUIVER, whose passive is LOOSE AGAIN,
-                    // cast one skill eighteen times in twenty-five seconds while a third of its loadout
-                    // never fired).
-                    var opening = shape.FreeOpeningCast ? since : since + cd;
-                    if (abs < champ.ReadyAt.GetValueOrDefault(i, opening)) continue;
-                    champ.ReadyAt[i] = abs + cd;
+                    // Unreachable for the current catalogue — every Active counts beats — and kept
+                    // shut rather than kept dead (2026-08-31 audit, dead path #8). A future
+                    // time-counted Active gets its clock back deliberately, with a test.
+                    continue;
                 }
                 acted = true;
 
@@ -1501,47 +1430,43 @@ public static class SoloBattle
                 if (castRamp < shape.CastRampMax) castRamp++;
                 var firstCast = castOnce.Add(i);
 
-                if (FormBehaviour.IsAmplifier(form))
+                if (sk.Def.Effect == SkillEffect.Amplify)
                 {
-                    // MARK deals nothing. It opens a window. LINGER (an item enchantment) stretches that
-                    // window, so a Mark build gets far more of its big hits inside the amplify.
-                    var window = triggers.Contains(BuildTrigger.Linger) ? FormBehaviour.MarkWindowMs * 9 / 5 : FormBehaviour.MarkWindowMs;
+                    // A SIGN cast deals nothing: it opens the window its OWN dials describe. The
+                    // Form constants (a flat 1.6x, a 6,000 ms window) are gone — CALL's base line
+                    // carries them as AmplifyPercent/AmplifyMs now, so a variation replaces the
+                    // base instead of stacking on a hidden one.
+                    var window = sk.Def.AmplifyMs > 0 ? sk.Def.AmplifyMs : 6_000;
+                    if (triggers.Contains(BuildTrigger.Linger)) window = window * 9 / 5;
                     window = (int)(window * shape.MarkWindowMultiplier);   // MARK MASTERY
 
-                    // (Affinity does NOT land on the window. Measured: the window is 2,500ms against a
-                    // 4,000ms cooldown, so doubling it only lifts uptime from 62% to continuous and buys
-                    // about 1.5% — the mark is already up most of the time. It lands on the mark's POWER
-                    // instead; see the Amp() line that consumes MarkUntilMs.)
-
-                    // SPEND buys a shorter, far deeper window; STEADY gives up the window entirely
-                    // and builds a bonus that holds for the rest of the wave. The skill's own dials,
-                    // so an unchosen CALL opens exactly the window MARK always did.
-                    if (sk.Def.AmplifyMs > 0) window = sk.Def.AmplifyMs;
                     if (sk.Def.AmplifyPerCast > 0f)
                     {
+                        // STEADY — a build-wide swell that holds for the REST OF THE WAVE. Bounded
+                        // by the tick ceiling rather than an int.MaxValue sentinel: the sentinel
+                        // overflowed the clock the moment a MIND cast stretched the window, and the
+                        // champion's amplifier flipped negative for the rest of the run.
                         steadyAmp = sk.Def.AmplifyCap > 0f
                             ? Math.Min(sk.Def.AmplifyCap, steadyAmp + sk.Def.AmplifyPerCast)
                             : steadyAmp + sk.Def.AmplifyPerCast;
-                        markBonus = steadyAmp;
-                        markWholeWave = true;      // STEADY is a build-wide swell, not a mark on one creature
-                        window = int.MaxValue - abs - 1;   // and it does not close
+                        ampBonus = steadyAmp;
+                        ampWholeWave = true;
+                        window = tuning.TickCeilingMs;
                     }
                     else if (sk.Def.AmplifyPercent > 0f)
                     {
-                        markBonus = sk.Def.AmplifyPercent;
-                        markWholeWave = true;      // CALL raises ALL your damage, not one creature's share
+                        ampBonus = sk.Def.AmplifyPercent;
+                        ampWholeWave = sk.Def.AmplifyWholeWave;
                     }
 
-                    champ.MarkUntilMs = abs + window;
+                    ampUntil = abs + window;
                     mindExtendBudget = SignatureMindExtendCapMs;   // MIND's signature stretches THIS window
-                    // A MARK is a real CAST — cooldown, cast-lock, its own Skill event — so it stores
-                    // CHARGE like any other cast, and a SPIRIT Mark primes the next other-Source cast
-                    // (the amplifier is the conductor's most natural home). It deals nothing, so the
-                    // damage-following rules (Nature's leech, the prime CONSUME) stay no-ops here.
+                    // A SIGN cast is a real CAST — cooldown, its own Skill event — so it stores
+                    // CHARGE like any other cast, and a SPIRIT one primes the next other-Source cast.
                     if (sk.Source == Source.Spirit) spiritPrimed = true;
                     if (chargeLive && charge < chargeCap)
                         events.Add(new BattleEvent(BattleEventKind.Charge, 0, ++charge, ms));
-                    events.Add(new BattleEvent(BattleEventKind.Skill, (int)sk.Source, (int)Form.Mark, ms));
+                    events.Add(new BattleEvent(BattleEventKind.Skill, i, 0, ms));
                     continue;
                 }
 
@@ -1549,14 +1474,14 @@ public static class SoloBattle
                 // build commitments — Echo is a keystone you socketed, Overdraw is an item that is dead
                 // unless this skill is a Projectile.
                 var casts = triggers.Contains(BuildTrigger.Echo) ? 2 : 1;
-                if (form == Form.Projectile && triggers.Contains(BuildTrigger.Overdraw)) casts += 1;
+                if (sk.Def.Style == Style.Volley && triggers.Contains(BuildTrigger.Overdraw)) casts += 1;
                 // ONE EVENT PER ACTIVATION, and it comes first. ECHO doubles the loop and OVERDRAW adds a
                 // third pass for a Projectile, and each pass used to announce itself — so the screen
                 // started fx_projectile, sfx_cast and the callout two or three times on the same frame,
                 // which is what "the projectile effect does not play properly" was (review 2026-08-30).
                 // Emitting it above the loop also puts it ahead of ASSASSINATE's execution strike, which
                 // used to land BEFORE its own cast's event and read as a basic attack.
-                events.Add(new BattleEvent(BattleEventKind.Skill, (int)sk.Source, (int)form, ms));
+                events.Add(new BattleEvent(BattleEventKind.Skill, i, 0, ms));
                 for (var c = 0; c < casts; c++)
                 {
                     // REPAY is the one active whose size is not its Form's base value: it deals a
@@ -1571,7 +1496,7 @@ public static class SoloBattle
                     }
                     else
                     {
-                        raw = FormBehaviour.BaseDamage(form, resonance, wt);
+                        raw = SkillCatalogue.PoweredBase(sk.Def, resonance);
                     }
                     raw *= VowFactor(sk, weaveCtx, shape);
 
@@ -1582,9 +1507,9 @@ public static class SoloBattle
                     // build's affinity (restriction buys power — the rule the Vows were born from).
                     // Applied as a RATIO over Amp's base affinity factor, so it composes with every
                     // later multiplication and can never double-apply.
-                    if (build.Affinity is { } affinityForm && sk.Vow is not null)
-                        raw *= FormBehaviour.AffinityFactor(affinityForm, form, vowSworn: true)
-                               / FormBehaviour.AffinityFactor(affinityForm, form);
+                    if (build.Affinity is { } sworn && sk.Vow is not null)
+                        raw *= StyleAffinity.Factor(sworn, sk.Def.Style, vowSworn: true)
+                               / StyleAffinity.Factor(sworn, sk.Def.Style);
 
                     // SPIRIT'S SIGNATURE, consumed: a Spirit cast primes the NEXT cast of any other
                     // Source. The conductor raises the orchestra, not itself.
@@ -1599,7 +1524,7 @@ public static class SoloBattle
                     // never feed itself. c == 0: one dump per activation SET — without it, Echo's
                     // second activation drained the point the first had just stored, a permanent
                     // trivial +5% that broke this very invariant.
-                    if (chargeLive && charge > 0 && form == Form.Strike && c == 0
+                    if (chargeLive && charge > 0 && sk.Def.Style == Style.Hammer && c == 0
                         && triggers.Contains(BuildTrigger.Rend))
                     {
                         raw *= 1f + ChargeRendPerPoint * charge;
@@ -1611,7 +1536,7 @@ public static class SoloBattle
                     // fraction, so in a multi-creature wave it fires on whichever creature is in front and
                     // hurt, not on the wave as a whole. Dead without a Strike, and strongest on bosses —
                     // trash is dead before it reaches the threshold.
-                    if (form == Form.Strike && triggers.Contains(BuildTrigger.Execute)
+                    if (sk.Def.Style == Style.Hammer && triggers.Contains(BuildTrigger.Execute)
                         && FirstAlive() is { } victim
                         && victim.Health < victim.MaxHealth * ExecuteThreshold)
                         raw *= ExecuteMultiplier;
@@ -1652,7 +1577,7 @@ public static class SoloBattle
 
                     // SHARE — one pool split between the living, and never more ways than its own cap.
                     // The trade THRONG refuses: the same total however many are standing.
-                    var spreadTargets = shape.TargetsFor(form, vdef.Targets) + vdef.TargetsBonus;
+                    var spreadTargets = shape.TargetsFor(vdef, vdef.Targets) + vdef.TargetsBonus;
                     if (vdef.SplitPool > 0f)
                     {
                         var ways = Math.Max(1, Math.Min(alive, vdef.SplitMaxWays > 0 ? vdef.SplitMaxWays : alive));
@@ -1680,17 +1605,26 @@ public static class SoloBattle
                     }
 
                     // FLATTEN — the blow ignores defence entirely.
-                    var dealt = LandSpread(raw, ms, spreadTargets, sk.Source, form, abs,
+                    var dealt = LandSpread(raw, ms, spreadTargets, sk.Source, vdef, abs,
                                            ignoresArmour: vdef.DefenceIgnore);
 
                     // FLIGHT, RUPTURE, EBB, ONSET — the cast leaves bleed behind it. Fed from the RAW
                     // force for the same reason VENOM is: armour must not shrink the pool AND the bleed.
                     if (bleedFromHits > 0f) poison += raw * bleedFromHits;
 
-                    // THIRST / the base DRINK — DRAIN gives back a share of what it dealt. Through Heal,
-                    // so the per-wave ceiling and BLOOD MAGIC's refusal both still hold.
+                    // DRINK and THIRST — DRAIN gives back its OWN dial's share of what it dealt,
+                    // through Heal, so the per-wave ceiling and BLOOD MAGIC's refusal still hold.
+                    // SIPHON sharpens the dial here, and stays dead without a DRAIN skill. (The Form
+                    // path used to heal TransformationLeech for ANY Transformation-Form skill,
+                    // dial or no dial — which made GLUT's "No lifesteal" a lie and hid half of
+                    // THIRST's arithmetic in a constant.)
                     if (vdef.Lifesteal > 0f && dealt > 0f)
-                        Heal((int)MathF.Round(dealt * vdef.Lifesteal), ms);
+                    {
+                        var leech = vdef.Lifesteal;
+                        if (sk.Def.Style == Style.Drain && triggers.Contains(BuildTrigger.Siphon))
+                            leech *= heal.SiphonMultiplier;
+                        Heal((int)MathF.Round(dealt * leech), ms);
+                    }
 
                     // WEAVER — the ARTIFICE terminal. The cast ALSO lands as the next Form in the loadout,
                     // with that Form's own base damage, target count and Source matchup. One slot answers
@@ -1702,44 +1636,35 @@ public static class SoloBattle
                     // no-op or a second Trap that ignored its own rule.
                     if (triggers.Contains(BuildTrigger.Weaver) && skills.Count > 1)
                     {
-                        var woven = skills[(i + 1) % skills.Count];
-                        if (!FormBehaviour.IsAmplifier(woven.Form) && !FormBehaviour.FiresOnBeingHit(woven.Form))
+                        var wovenIdx = (i + 1) % skills.Count;
+                        var woven = skills[wovenIdx];
+                        // Echo only what CAN echo: a Reaction answers a bite, an amplifier deals
+                        // nothing, and a zero-power base line (PRESS, WILT, REPAY) has no number
+                        // to fire at a fraction of.
+                        if (woven.Def is { Kind: not SkillKind.Reaction, Effect: not SkillEffect.Amplify, BasePower: > 0f })
                         {
-                            var wovenRaw = FormBehaviour.BaseDamage(woven.Form, resonance, wt)
+                            var wovenRaw = SkillCatalogue.PoweredBase(woven.Def, resonance)
                                            * VowFactor(woven, weaveCtx, shape)
                                            * WeaverEchoFraction;
                             // The woven echo carries ITS OWN skill's buy-back, same ratio rule as above.
                             if (build.Affinity is { } wovenAff && woven.Vow is not null)
-                                wovenRaw *= FormBehaviour.AffinityFactor(wovenAff, woven.Form, vowSworn: true)
-                                            / FormBehaviour.AffinityFactor(wovenAff, woven.Form);
-                            events.Add(new BattleEvent(BattleEventKind.Skill, (int)woven.Source, (int)woven.Form, ms));
-                            dealt += LandSpread(wovenRaw, ms, shape.TargetsFor(woven.Form),
-                                                woven.Source, woven.Form, abs);
+                                wovenRaw *= StyleAffinity.Factor(wovenAff, woven.Def.Style, vowSworn: true)
+                                            / StyleAffinity.Factor(wovenAff, woven.Def.Style);
+                            events.Add(new BattleEvent(BattleEventKind.Skill, wovenIdx, 0, ms));
+                            dealt += LandSpread(wovenRaw, ms, shape.TargetsFor(woven.Def),
+                                                woven.Source, woven.Def, abs);
                             if (alive == 0) return Kill(ms);
                         }
-                    }
-
-                    if (FormBehaviour.Heals(form))
-                    {
-                        // SIPHON deepens TRANSFORMATION's leech. Dead without Transformation — nothing else
-                        // heals on hit, so the enchant is inert on any other build. Leeches from the TOTAL
-                        // dealt, so a multi-target Transformation heals from every creature it touches.
-                        // The fraction is the injected tuning's (0.12 since the heal rework — it was
-                        // 0.50, and 0.50 out-healed the curve; see HealTuning), and the per-wave
-                        // ceiling inside Heal() is what stops a stacked build from climbing back.
-                        var leech = heal.TransformationLeech;
-                        if (triggers.Contains(BuildTrigger.Siphon)) leech *= heal.SiphonMultiplier;
-                        Heal((int)MathF.Round(dealt * leech), ms);
                     }
 
                     // ── SIGNATURES, cast-side. ────────────────────────────────────────────────
                     // MIND stretches an open MARK window — a Mind rotation keeps the amplifier lit
                     // longer than the window's own clock would allow, budgeted so it cannot become
                     // a permanent mark.
-                    if (sk.Source == Source.Mind && champ.MarkUntilMs > abs && mindExtendBudget > 0)
+                    if (sk.Source == Source.Mind && ampUntil > abs && mindExtendBudget > 0)
                     {
                         var stretch = Math.Min(SignatureMindExtendMs, mindExtendBudget);
-                        champ.MarkUntilMs += stretch;
+                        ampUntil += stretch;
                         mindExtendBudget -= stretch;
                     }
                     // NATURE heals a sliver of the total dealt. On a Transformation it stacks with
@@ -1906,7 +1831,7 @@ public static class SoloBattle
 
                     // COILED re-arms the TRAP far faster, so it answers more bites. This loop only runs for
                     // a woven Trap, so the enchant is naturally dead on any build without one.
-                    var trapBase = (int)(sk.CooldownMs * sk.Def.CooldownMultiplier);   // RECOIL, BLUNT
+                    var trapBase = (int)(Math.Max(1_000, sk.Def.RearmMs) * sk.Def.CooldownMultiplier);   // RECOIL, BLUNT
                     if (triggers.Contains(BuildTrigger.Coiled)) trapBase = (int)(trapBase * CoiledCooldownFactor);
                     var cd = Math.Max(1, (int)(trapBase / Math.Max(0.1f, RateNow())));
                     if (abs < champ.ReadyAt.GetValueOrDefault(idx, 0)) continue;
@@ -1924,7 +1849,7 @@ public static class SoloBattle
                     bites++;
                     var trapRaw = reflect > 0f
                         ? taken * reflect
-                        : FormBehaviour.BaseDamage(Form.Trap, resonance, wt);
+                        : SkillCatalogue.PoweredBase(sk.Def, resonance);
                     trapRaw *= VowFactor(sk, weaveCtx, shape)
                                // OPENING VOLLEY — the Trap's first spring counts as its first cast.
                                * (castOnce.Add(idx) ? shape.FirstCastMultiplier : shape.LaterCastMultiplier);
@@ -1940,8 +1865,8 @@ public static class SoloBattle
                         // the stop cleared the raw unconditionally.
                         if (reflect <= 0f) trapRaw = 0f;
                     }
-                    events.Add(new BattleEvent(BattleEventKind.Skill, (int)sk.Source, (int)Form.Trap, ms));
-                    var trapDealt = LandSpread(trapRaw, ms, shape.TargetsFor(Form.Trap), sk.Source, Form.Trap, abs);
+                    events.Add(new BattleEvent(BattleEventKind.Skill, idx, 0, ms));
+                    var trapDealt = LandSpread(trapRaw, ms, shape.TargetsFor(sk.Def), sk.Source, sk.Def, abs);
                     // NATURE'S SIGNATURE follows the damage here too — a Trap that bites back heals
                     // its sliver. A Trap never CASTS, so the cast-following rules (CHARGE, Spirit's
                     // prime, Mind's stretch) are rightly silent on this path.
@@ -1960,7 +1885,10 @@ public static class SoloBattle
                         // window as AtMs + Amount — so the shield closed the instant it opened and the
                         // screen's steel outline never drew once (review 2026-08-30: a dormant feature
                         // whose unit test passed because the test built its own event).
-                        events.Add(new BattleEvent(BattleEventKind.Shield, 0, UndyingShieldMs, ms));
+                        // Its OWN kind: Shield's Amount is a banked HEALTH figure, and this one
+                        // is a DURATION — one overloaded payload with two meanings was a live
+                        // replay bug (the audit's D8).
+                        events.Add(new BattleEvent(BattleEventKind.Undying, 0, UndyingShieldMs, ms));
                     }
                     else
                     {

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Builds;
 using Xunit;
 
@@ -459,34 +458,34 @@ public class MasteryTreeTests
     }
 
     /// <summary>
-    /// This tree grants ONLY the six Form-combo triggers.
+    /// This tree grants ONLY the six Style-combo triggers.
     /// </summary>
     /// <remarks>
     /// The old mastery tree handed out general triggers for free while the Dust tree charged a permanent
-    /// price for the same ones, so one tree was quietly giving away what the other sold. A Form-combo
-    /// trigger is dead weight without its Form, which makes it a specialisation rather than a gift.
+    /// price for the same ones, so one tree was quietly giving away what the other sold. A Style-combo
+    /// trigger is dead weight without its Style, which makes it a specialisation rather than a gift.
     /// </remarks>
     [Fact]
-    public void test_only_form_combo_triggers_are_granted()
+    public void test_only_style_combo_triggers_are_granted()
     {
-        var formCombo = new[]
+        var styleCombo = new[]
         {
             BuildTrigger.Execute, BuildTrigger.Coiled, BuildTrigger.Overdraw,
             BuildTrigger.Radiance, BuildTrigger.Linger, BuildTrigger.Siphon,
         };
 
         foreach (var node in MasteryCatalog.Nodes.Where(n => n.Grant is not null))
-            Assert.Contains(node.Grant!.Value, formCombo);
+            Assert.Contains(node.Grant!.Value, styleCombo);
     }
 
-    /// <summary>Each of the six Forms has exactly one specialisation, and it is the only Form node.</summary>
+    /// <summary>Each of the six Styles has exactly one specialisation, and it is the only Style node.</summary>
     [Fact]
-    public void test_every_form_has_one_specialisation()
+    public void test_every_style_has_one_specialisation()
     {
         var specs = MasteryCatalog.Nodes.Where(n => n.Kind == MasteryKind.Specialisation).ToList();
 
         Assert.Equal(6, specs.Count);
-        Assert.Equal(6, specs.Select(n => n.Form).Distinct().Count());
+        Assert.Equal(6, specs.Select(n => n.Style).Distinct().Count());
         Assert.All(specs, n => Assert.Equal(MasteryCatalog.SpecialisationCost, n.Cost));
     }
 
@@ -509,7 +508,7 @@ public class MasteryTreeTests
         Assert.True(shape.VowPowerMultiplier > 1f, "PLEDGE's Vow power did not reach the shape.");
         Assert.True(shape.AllMatchupsStrong, "CHORD did not reach the shape.");
         Assert.Contains(BuildTrigger.Execute, t.Triggers());
-        Assert.Equal(Form.Strike, t.Affinity());
+        Assert.Equal(Style.Hammer, t.Affinity());
     }
 
     /// <summary>Respec returns every point, instantly and for free.</summary>

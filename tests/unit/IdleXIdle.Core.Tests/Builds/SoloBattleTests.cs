@@ -53,8 +53,9 @@ public class SoloBattleTests
     private static float DamageDealt(System.Collections.Generic.List<BattleEvent> e)
         => e.Where(x => x.Kind == BattleEventKind.Strike).Sum(x => x.Amount);
 
-    private static int SkillCasts(System.Collections.Generic.List<BattleEvent> e, Form form)
-        => e.Count(x => x.Kind == BattleEventKind.Skill && x.Amount == (int)form);
+    /// <summary>Casts by the skill in SLOT <paramref name="slot"/> — events are slot-keyed now.</summary>
+    private static int SkillCasts(System.Collections.Generic.List<BattleEvent> e, int slot = 0)
+        => e.Count(x => x.Kind == BattleEventKind.Skill && x.Slot == slot);
 
     // ── The character fights alone ────────────────────────────────────────────────────────────
 
@@ -137,11 +138,11 @@ public class SoloBattleTests
         // than the fight, not as a damage of zero.
         var never = SoloBattle.ResolveWave(Champ(), With(Form.Trap), new Hunter(), 100_000f, 5f,
             enemyIntervalMs: 999_999, T, new Random(7), new WaveBonus());
-        Assert.DoesNotContain(never.Events, e => e.Kind == BattleEventKind.Skill && e.Amount == (int)Form.Trap);
+        Assert.DoesNotContain(never.Events, e => e.Kind == BattleEventKind.Skill && e.Slot == 0);
 
         var often = SoloBattle.ResolveWave(Champ(100_000), With(Form.Trap), new Hunter(), 100_000f, 1f,
             enemyIntervalMs: 1000, T, new Random(7), new WaveBonus());
-        Assert.Contains(often.Events, e => e.Kind == BattleEventKind.Skill && e.Amount == (int)Form.Trap);
+        Assert.Contains(often.Events, e => e.Kind == BattleEventKind.Skill && e.Slot == 0);
 
         Assert.True(DamageDealt(often.Events) > DamageDealt(never.Events),
             "TRAP paid the same whether or not it was being attacked — it is just a Strike");
@@ -161,8 +162,8 @@ public class SoloBattleTests
         Assert.True(DamageDealt(marked) < DamageDealt(striking),
             "a MARK on its own is competitive with a real damage Form — it is not an amplifier, it is a weapon");
 
-        // Every MARK cast is a Skill event that lands no Strike behind it.
-        Assert.Contains(marked, e => e.Kind == BattleEventKind.Skill && e.Amount == (int)Form.Mark);
+        // Every SIGN cast is a Skill event (slot-keyed now) that lands no Strike behind it.
+        Assert.Contains(marked, e => e.Kind == BattleEventKind.Skill && e.Slot == 0);
     }
 
     [Fact]
@@ -399,13 +400,13 @@ public class SoloBattleTests
     // ── Affinity: the Nen hexagon ────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// A skill in your AFFINITY's Form hits far harder than the same skill in its opposite. This is the
+    /// A skill in your AFFINITY's Style hits far harder than the same skill in its opposite. This is the
     /// identity axis — committing to your affinity must be worth more than splashing against it.
     /// </summary>
     [Fact]
-    public void test_affinity_rewards_your_form_and_punishes_its_opposite()
+    public void test_affinity_rewards_your_style_and_punishes_its_opposite()
     {
-        float StrikeDamage(Form? affinity)
+        float StrikeDamage(Style? affinity)
         {
             var b = With(Form.Strike);
             b.Affinity = affinity;
@@ -413,11 +414,11 @@ public class SoloBattleTests
                 float.MaxValue, 0f, 1_000_000, T, new Random(7), new WaveBonus()).Item2);
         }
 
-        var onAffinity = StrikeDamage(Form.Strike);   // Strike specialist swinging Strike
+        var onAffinity = StrikeDamage(Style.Hammer);   // Hammer adept swinging the Hammer skill
         var neutral = StrikeDamage(null);              // no affinity chosen
-        var against = StrikeDamage(Form.Trap);         // Trap specialist forced onto Strike (opposite-ish)
+        var against = StrikeDamage(Style.Volley);      // Volley adept forced onto Hammer (the ring's opposite)
 
-        Assert.True(onAffinity > neutral, $"your affinity's Form must hit harder: on={onAffinity} neutral={neutral}");
+        Assert.True(onAffinity > neutral, $"your affinity's Style must hit harder: on={onAffinity} neutral={neutral}");
         Assert.True(neutral > against, $"the wrong affinity must hurt: neutral={neutral} against={against}");
     }
 
@@ -574,7 +575,7 @@ public class SoloBattleTests
         {
             var (_, e) = SoloBattle.ResolveWave(Champ(400_000), b, new Hunter(), float.MaxValue, 0f,
                 1000, T, new Random(7), new WaveBonus());
-            return SkillCasts(e, Form.Trap);
+            return SkillCasts(e);   // the single woven skill sits in slot 0
         }
 
         Assert.True(TrapCasts(WithTrigger(BuildTrigger.Coiled, Form.Trap)) > TrapCasts(With(Form.Trap)),

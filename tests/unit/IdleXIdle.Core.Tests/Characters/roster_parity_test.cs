@@ -6,10 +6,11 @@ using IdleXIdle.Core.Builds;
 using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Expeditions;
+using IdleXIdle.Core.Prestige;
 using Xunit;
 using Xunit.Abstractions;
 
-// Aliased, not imported. `Source` lives in Core.Automation, not Core.Abilities where a skill's Source
+// Aliased, not imported. `Source` lives in Core.Sources, not Core.Abilities where a skill's Source
 // property would suggest, and this file's namespace sits under ...Tests.Characters where the test
 // assembly's own sub-namespaces shadow the short name. The alias is the one spelling that survives both.
 using CoreSource = IdleXIdle.Core.Sources.Source;
@@ -66,16 +67,17 @@ public class RosterParityTest
     /// <see cref="ExpeditionTuning.TickCeilingMs"/> is 120 seconds in the real game, where its job is to
     /// stop a hopeless wave hanging the loop. As a MEASUREMENT boundary it is poison: a wave that hits
     /// it reports 120s whatever the truth was, so every build slower than the ceiling records the same
-    /// time and the ranking silently becomes a list of who saturated. Aura puts 18 damage a second into
-    /// a single armoured target (see the throughput report below), so the 14,000-health boss takes it
-    /// about thirteen minutes — real, measurable, and utterly invisible under a two-minute cap.
+    /// time and the ranking silently becomes a list of who saturated. The Form-era fixture measured its
+    /// slowest build at about 18 damage a second into a single armoured target, so the 14,000-health
+    /// boss took it about thirteen minutes — real, measurable, and utterly invisible under a two-minute
+    /// cap.
     /// </para>
     /// <para>
     /// Shrinking the fixture instead was the first attempt and it failed the other way: with a
     /// 1,200-health boss the whole gauntlet fits in a few hundred 100ms ticks, and THE SEEKER's +8%
     /// stopped registering at all because it no longer moved any creature's death across a tick
     /// boundary. The fixture has to be heavy enough to resolve the smallest passive and unbounded
-    /// enough not to clip the slowest Form; lifting the ceiling is what buys both at once.
+    /// enough not to clip the slowest build; lifting the ceiling is what buys both at once.
     /// </para>
     /// </remarks>
     private static readonly ExpeditionTuning Tuning =
@@ -110,57 +112,96 @@ public class RosterParityTest
     /// is bounded by the target, so a character twice as powerful scores the same and the ±5% actually
     /// being compared is overkill wastage. Worse, the builds too weak to clear scored LOWER, so the
     /// column ranked the strongest and the weakest builds by two different quantities at once — which is
-    /// how THE THORNWALL, carrying a ×1.35 aptitude on the Form it was running, came out below a
-    /// no-character control.
+    /// how THE THORNWALL, carrying a ×1.35 multiplier on the very style it was running, came out below
+    /// a no-character control.
     /// </para>
     /// <para>
     /// What actually separates them is how FAST the same health pool comes down. <see cref="Stalls"/>
-    /// guards the other end: a wave that hits the tick ceiling pins the clock at 120s and saturates the
-    /// metric, so a stalled run is reported rather than averaged into a ranking.
+    /// guards the other end: a wave that hits the tick ceiling pins the clock at the ceiling and
+    /// saturates the metric, so a stalled run is reported rather than averaged into a ranking.
     /// </para>
     /// </remarks>
     private sealed record Score(string Id, string Name, int ClearMs, int Stalls, int HealthLost,
                                 float Haul, float Rarity, bool DeathSave);
 
+    /// <summary>The plainest damage skill in the catalogue — every measured build's common chassis.</summary>
+    private static readonly SkillDef Chassis = SkillCatalogue.ById("hammer_blow");
+
+    /// <summary>A mastery tree that has learned the chassis and nothing else.</summary>
+    /// <remarks>
+    /// <see cref="MasteryTree.RestoreTaken"/> is the load path: it validates ids only, and a SkillRoad
+    /// node "teaches, and changes nothing else" (see <c>MasteryCatalog</c>) — so this tree differs from
+    /// a bare one by exactly one taught skill. No shape, no trigger, no affinity rides along to
+    /// contaminate the measurement.
+    /// </remarks>
+    private static MasteryTree ChassisTaught()
+    {
+        var tree = new MasteryTree();
+        tree.RestoreTaken(new[] { "road_hammer" });   // the node that teaches hammer_blow
+        return tree;
+    }
+
+    /// <summary>The control: a character that is nothing but the same starting skill.</summary>
+    /// <remarks>
+    /// The composer's taught-skill gate only weaves what a champion knows, and "knows" is the mastery
+    /// tree plus <see cref="Character.StartingSkillId"/> — so the no-character control is a BLANK
+    /// champion born with the measured skill: same skills, same slots, and not one non-default channel.
+    /// </remarks>
+    private static Character Blank(SkillDef skill) => new()
+    {
+        Id = "(none)", Name = "NO CHARACTER",
+        Blurb = "The control. The same skills, no passive.",
+        Class = ItemClass.Wanderer, Tier = ClassTier.First,
+        PassiveName = "NONE", PassiveText = "Nothing at all.",
+        StartingSkillId = skill.Id,
+    };
+
     /// <summary>
-    /// Fold a character into a build exactly the way <c>PlayerLoadout.ToBuild</c> does.
+    /// One slot's pick. Every pick is woven with the same Source, which is what keeps VOW OF THE PURE
+    /// (single Source) met on every build — the vow channel is judged identically for everyone.
+    /// </summary>
+    private static BuildComposer.SkillPick Pick(SkillDef def, Vow? vow) =>
+        new(CoreSource.Nature, def.LegacyForm ?? Form.Strike, vow?.Id, def.Name,
+            Passive: !def.TakesABeat, SkillId: def.Id);
+
+    /// <summary>
+    /// Compose a build the way the GAME composes one — through <see cref="BuildComposer.Compose"/>.
     /// </summary>
     /// <remarks>
-    /// Three channels and no fourth: Mods, TotalShape (passive shape combined with aptitude) and Grants.
-    /// This mirrors the one seam in the game where a character reaches the simulation. If that seam ever
-    /// grows a fourth channel, this harness stops measuring the whole character and the mirror has to be
-    /// updated with it — which is why it is spelled out here rather than hidden behind a helper.
+    /// <para>
+    /// The old harness hand-mirrored <c>PlayerLoadout.ToBuild</c>'s three channels and carried a warning
+    /// that the mirror had to move whenever the seam did. The seam moved (P3c: a character's whole
+    /// contribution is <c>.Mods</c>/<c>.Shape</c>/<c>.Grants</c>, and affinity belongs to the mastery
+    /// tree), so the mirror is retired: this calls the same composer the game calls, and a new channel
+    /// reaches this measurement the day it reaches the sim.
+    /// </para>
+    /// <para>
+    /// <b>THE COMMON CHASSIS.</b> Every measured build carries the plainest damage active — HAMMER's
+    /// BLOW — beside the skill being measured (unless it IS the skill), woven second so the measured
+    /// skill wins beat ties. Two reasons, both learned the hard way. First, half the catalogue's base
+    /// lines deal nothing by themselves: the SIGNs only amplify, WEEP needs a kill to bleed from, WILT
+    /// only breaks the enemies' attack — the first run of the Form-era harness measured an amplifier
+    /// with nothing to amplify and reported THE OATHBOUND at 1,570 damage against a roster averaging
+    /// 20,000, a broken fixture reading as a broken character. Second, a build that cannot bring the
+    /// boss down runs out the tick ceiling, and a stall saturates the clock (see the clearability
+    /// gate). The chassis is identical for a champion and its control, so the delta between them is
+    /// still the character and nothing else.
+    /// </para>
     /// </remarks>
-    private static Build BuildFor(Character? c, Form form, Vow? vow)
+    private static Build BuildFor(Character? c, SkillDef skill, Vow? vow)
     {
-        var build = new Build
-        {
-            PassiveMods = c?.Mods ?? BuildMods.None,
-            Shape = c?.TotalShape ?? SkillShape.None,
-            ExtraTriggers = new HashSet<BuildTrigger>(c?.Grants ?? Array.Empty<BuildTrigger>()),
-        };
+        var picks = new List<BuildComposer.SkillPick> { Pick(skill, vow) };
+        if (skill.Id != Chassis.Id) picks.Add(Pick(Chassis, vow));
 
-        // Four skills, because the game gives four and several passives are per-cast.
-        //
-        // An AMPLIFIER Form is not played four times over. Mark "deals no damage at all" by the sim's own
-        // comment — it opens a window in which other skills hit harder — so a four-Mark build swings
-        // nothing but auto-attacks. The first run of this harness did exactly that and reported THE
-        // OATHBOUND at 1,570 damage against a roster averaging 20,000, which reads as a broken character
-        // and is really a broken fixture: it measured an amplifier with nothing to amplify. The rule is
-        // taken from the sim's own predicate rather than special-cased by character id, so a second
-        // amplifier Form would be handled without touching this file.
-        var amplifier = FormBehaviour.IsAmplifier(form);
-        for (var i = 0; i < 4; i++)
-        {
-            var f = amplifier && i > 0 ? Form.Strike : form;
-            build.Weave(new EquippedSkill(
-                new WovenAbility
-                {
-                    Name = $"S{i}", Source = CoreSource.Nature, Form = f, Vow = vow,
-                },
-                FormBehaviour.BaseCooldownMs(f)));
-        }
+        var build = BuildComposer.Compose(
+            new MemoryDustTree(), ChassisTaught(), c ?? Blank(skill),
+            picks, Array.Empty<string>(), slotCapacity: 4);
 
+        // A pick the composer's taught-gate silently refused would measure bare hands and report the
+        // number as the skill's. The fixture fails loudly instead.
+        Assert.True(build.Skills.Count == picks.Count,
+                    $"the fixture wove {build.Skills.Count} of {picks.Count} picks for {skill.Id} — " +
+                    "a refused weave measures bare hands and calls it the skill.");
         return build;
     }
 
@@ -171,21 +212,21 @@ public class RosterParityTest
     /// Not decoration. A single seed cannot rank these characters: a passive that kills marginally
     /// faster draws a different number of RNG samples from that point on, so two runs of the SAME build
     /// diverge, and the divergence is the same size as the effects being measured. The first version of
-    /// this harness ran one seed and reported THE THORNWALL — which carries a ×1.35 aptitude on the very
-    /// Form it was running — at 5% BELOW a no-character control, which is not a balance finding, it is
-    /// noise wearing one. <see cref="test_the_measurement_noise_floor_is_below_the_effects_measured"/>
+    /// this harness ran one seed and reported THE THORNWALL — which carries a ×1.35 multiplier on the
+    /// very style it starts with — at 5% BELOW a no-character control, which is not a balance finding,
+    /// it is noise wearing one. <see cref="test_the_measurement_is_deterministic"/>
     /// keeps this number honest by measuring the floor rather than assuming it.
     /// </remarks>
     private const int Seeds = 40;
 
     /// <summary>Average the gauntlet over <see cref="Seeds"/> seeds.</summary>
-    private static Score Measure(Character? c, Form form, Vow? vow)
+    private static Score Measure(Character? c, SkillDef skill, Vow? vow)
     {
         double clear = 0, lost = 0;
         var stalls = 0;
         for (var s = 0; s < Seeds; s++)
         {
-            var one = Run(c, form, vow, seed: 20260814 + s * 7919);
+            var one = Run(c, skill, vow, seed: 20260814 + s * 7919);
             clear += one.ClearMs;
             lost += one.HealthLost;
             stalls += one.Stalls;
@@ -199,10 +240,10 @@ public class RosterParityTest
     }
 
     /// <summary>Run the three-wave gauntlet once and total how long it took to clear.</summary>
-    private static Score Run(Character? c, Form form, Vow? vow, int seed)
+    private static Score Run(Character? c, SkillDef skill, Vow? vow, int seed)
     {
         var champ = new Champion { MaxHealth = ChampionHealth, Health = ChampionHealth };
-        var build = BuildFor(c, form, vow);
+        var build = BuildFor(c, skill, vow);
         var hunter = new Hunter();
         var clearMs = 0;
         var stalls = 0;
@@ -225,19 +266,24 @@ public class RosterParityTest
                          (c?.Grants ?? Array.Empty<BuildTrigger>()).Contains(BuildTrigger.Undying));
     }
 
-    /// <summary>The Form a character is built to play — what a player actually equips.</summary>
-    private static Form PlayedForm(Character c) => c.Aptitude ?? Form.Strike;
+    /// <summary>The skill a character is born knowing — what a fresh champion actually has woven.</summary>
+    private static SkillDef PlayedSkill(Character c)
+        => c.StartingSkillId is { } id ? SkillCatalogue.ById(id) : Chassis;
 
     [Fact]
-    public void test_single_target_throughput_per_form_is_reported()
+    public void test_single_target_throughput_per_skill_is_reported()
     {
         // NOT an assertion about balance — a measurement, printed, so the boss-wall question has a
         // number attached to it the next time anyone asks. It exists because the fixture above had to
-        // be lightened twice, and the reason turned out to be a property of the Forms rather than of
-        // the numbers I picked: against ONE creature, Aura and Projectile deliver a small fraction of
-        // what Strike and Trap do. That is a legible trade for a spread Form — until it crosses the
-        // line from "slower on bosses" to "cannot finish a boss", which is a dead end for a player who
-        // built into it and is invisible from inside the game.
+        // be lightened twice, and the reason turned out to be a property of the skills rather than of
+        // the numbers I picked: against ONE creature, the wave tools (FIELD's, VOLLEY's spread lines)
+        // deliver a small fraction of what HAMMER and SNARE do. That is a legible trade for a spread
+        // style — until it crosses the line from "slower on bosses" to "cannot finish a boss", which is
+        // a dead end for a player who built into it and is invisible from inside the game.
+        //
+        // Every build carries the common BLOW chassis (see BuildFor), so a support skill's row reads as
+        // "what this skill adds beside the plainest blow" — compare it against the Hammer/BLOW row,
+        // which is the chassis alone.
         //
         // Deliberately assertion-free: the roster balance pass this file serves has not been playtested,
         // and this project's own notes are explicit that the enemy curve must not be retuned blind.
@@ -250,8 +296,8 @@ public class RosterParityTest
         _out.WriteLine("(the boss axis; contrast with the swarm column of the clearability table)");
         _out.WriteLine("");
 
-        var perForm = new List<(Form Form, float Dps)>();
-        foreach (var form in Enum.GetValues<Form>())
+        var perSkill = new List<(SkillDef Def, float Dps)>();
+        foreach (var def in SkillCatalogue.All)
         {
             var champ = new Champion { MaxHealth = ChampionHealth, Health = ChampionHealth };
             var metrics = new WaveMetrics();
@@ -261,30 +307,33 @@ public class RosterParityTest
             {
                 new() { MaxHealth = 1e9f, Health = 1e9f, Damage = 0f, Defense = 40f },
             };
-            SoloBattle.ResolveWave(champ, BuildFor(null, form, vow), new Hunter(), target,
+            SoloBattle.ResolveWave(champ, BuildFor(null, def, vow), new Hunter(), target,
                                    enemyIntervalMs: 900,
                                    ExpeditionTuning.Default with { TickCeilingMs = windowMs },
                                    new Random(20260814), metrics: metrics);
-            perForm.Add((form, metrics.DeliveredDamage / (windowMs / 1000f)));
+            perSkill.Add((def, metrics.DeliveredDamage / (windowMs / 1000f)));
         }
 
-        foreach (var (form, dps) in perForm.OrderByDescending(p => p.Dps))
-            _out.WriteLine($"  {form,-16} {dps,10:N0} damage/sec into a single armoured target");
+        foreach (var (def, dps) in perSkill.OrderByDescending(p => p.Dps))
+        {
+            var label = $"{def.Style}/{def.Name}";
+            _out.WriteLine($"  {label,-16} {dps,10:N0} damage/sec into a single armoured target");
+        }
 
-        var best = perForm.Max(p => p.Dps);
-        var worst = perForm.Min(p => p.Dps);
+        var best = perSkill.Max(p => p.Dps);
+        var worst = perSkill.Min(p => p.Dps);
         _out.WriteLine("");
-        _out.WriteLine($"  spread: {best / MathF.Max(1f, worst):0.0}x between the best and worst Form " +
+        _out.WriteLine($"  spread: {best / MathF.Max(1f, worst):0.0}x between the best and worst skill " +
                        "on the single-target axis");
     }
 
     [Fact]
-    public void test_the_gauntlet_is_clearable_by_every_form_it_measures()
+    public void test_the_gauntlet_is_clearable_by_every_skill_it_measures()
     {
-        // A STALL SATURATES THE CLOCK. A wave that runs out the 120-second tick ceiling reports that
-        // ceiling as its duration, so two builds that both fail report identical times however far apart
-        // they really are — and a build that fails by a hair reports slower than one that fails badly
-        // but on a shorter earlier wave. Every Form the parity tests touch has to actually finish the
+        // A STALL SATURATES THE CLOCK. A wave that runs out the tick ceiling reports that ceiling as
+        // its duration, so two builds that both fail report identical times however far apart they
+        // really are — and a build that fails by a hair reports slower than one that fails badly but
+        // on a shorter earlier wave. Every build the parity tests touch has to actually finish the
         // fixture, or the ranking silently becomes a ranking of who saturated first.
         var vow = Vows.Catalog.First(v => v.Id == "vow_pure");
 
@@ -294,8 +343,8 @@ public class RosterParityTest
         };
 
         var failures = new List<string>();
-        _out.WriteLine($"{"FORM",-16} {"swarm",12} {"pack",12} {"boss",12}");
-        foreach (var form in Enum.GetValues<Form>())
+        _out.WriteLine($"{"SKILL",-16} {"swarm",12} {"pack",12} {"boss",12}");
+        foreach (var def in SkillCatalogue.All)
         {
             var cells = new List<string>();
             foreach (var (name, make) in waves)
@@ -303,18 +352,19 @@ public class RosterParityTest
                 var champ = new Champion { MaxHealth = ChampionHealth, Health = ChampionHealth };
                 var metrics = new WaveMetrics();
                 var (outcome, _) = SoloBattle.ResolveWave(
-                    champ, BuildFor(null, form, vow), new Hunter(), make(),
+                    champ, BuildFor(null, def, vow), new Hunter(), make(),
                     enemyIntervalMs: 900, Tuning, new Random(20260814), metrics: metrics);
                 cells.Add(outcome == WaveOutcome.Cleared ? $"{metrics.DurationMs,10:N0}ms" : "     STALL");
-                if (outcome != WaveOutcome.Cleared) failures.Add($"{form}/{name}");
+                if (outcome != WaveOutcome.Cleared) failures.Add($"{def.Name}/{name}");
             }
 
-            _out.WriteLine($"{form,-16} {string.Join(" ", cells)}");
+            var label = $"{def.Style}/{def.Name}";
+            _out.WriteLine($"{label,-16} {string.Join(" ", cells)}");
         }
 
         Assert.True(failures.Count == 0,
-                    "the fixture is too heavy for the weakest Form it measures — " +
-                    string.Join(", ", failures) + " ran out the 120s tick ceiling. A stalled wave " +
+                    "the fixture is too heavy for the weakest build it measures — " +
+                    string.Join(", ", failures) + " ran out the lifted tick ceiling. A stalled wave " +
                     "reports the ceiling as its duration, so the clock stops ranking and starts " +
                     "recording who saturated.");
     }
@@ -329,18 +379,19 @@ public class RosterParityTest
         // distribution, do not assume its shape.
         var vow = Vows.Catalog.First(v => v.Id == "vow_pure");
 
-        foreach (var form in new[] { Form.Strike, Form.Trap, Form.Projectile })
+        foreach (var skill in new[] { "hammer_blow", "snare_jaws", "volley_spray" }
+                     .Select(SkillCatalogue.ById))
         {
             var samples = Enumerable.Range(0, Seeds)
-                                    .Select(s => (double)Run(null, form, vow, 20260814 + s * 7919).ClearMs)
+                                    .Select(s => (double)Run(null, skill, vow, 20260814 + s * 7919).ClearMs)
                                     .ToList();
             var mean = samples.Average();
             var spread = mean <= 0 ? 0 : (samples.Max() - samples.Min()) / mean;
 
-            _out.WriteLine($"{form,-12} mean clear {mean,9:N0} ms   spread across {Seeds} seeds {spread,6:0.0%}");
+            _out.WriteLine($"{skill.Name,-12} mean clear {mean,9:N0} ms   spread across {Seeds} seeds {spread,6:0.0%}");
 
             Assert.True(spread < 0.02,
-                        $"{form}: clear time varies {spread:0.0%} across seeds. The parity deltas are " +
+                        $"{skill.Name}: clear time varies {spread:0.0%} across seeds. The parity deltas are " +
                         "smaller than that, so they can no longer be read as effects. Average more seeds.");
         }
     }
@@ -349,30 +400,30 @@ public class RosterParityTest
     public void test_no_character_is_dead_weight_on_every_axis()
     {
         var vow = Vows.Catalog.First(v => v.Id == "vow_pure");
-        var baseline = Measure(null, Form.Strike, vow);
+        var baseline = Measure(null, Chassis, vow);
 
-        _out.WriteLine("ROSTER PARITY — each character on its own aptitude, against a no-character");
-        _out.WriteLine("control running the SAME Form. Forms differ in raw throughput, so a shared");
-        _out.WriteLine("baseline would rank the Form and call it the character.");
+        _out.WriteLine("ROSTER PARITY — each character on its own starting skill, against a no-character");
+        _out.WriteLine("control running the SAME skills. Skills differ in raw throughput, so a shared");
+        _out.WriteLine("baseline would rank the skill and call it the character.");
         _out.WriteLine("");
-        _out.WriteLine($"{"CHARACTER",-20} {"FORM",-14} {"CLEAR ms",9} {"(ctl)",9} {"FASTER",8} " +
+        _out.WriteLine($"{"CHARACTER",-20} {"SKILL",-14} {"CLEAR ms",9} {"(ctl)",9} {"FASTER",8} " +
                        $"{"HP LOST",9} {"(ctl)",9} {"HAUL",6} {"RARITY",7}  CLAIMED AXIS");
         _out.WriteLine(new string('-', 128));
-        _out.WriteLine($"{baseline.Name,-20} {"Strike",-14} {baseline.ClearMs,9:N0} {"—",9} {"—",8} " +
-                       $"{baseline.HealthLost,9:N0} {"—",9} {1f,6:0.00} {1f,7:0.00}  (Strike reference)");
+        _out.WriteLine($"{baseline.Name,-20} {Chassis.Name,-14} {baseline.ClearMs,9:N0} {"—",9} {"—",8} " +
+                       $"{baseline.HealthLost,9:N0} {"—",9} {1f,6:0.00} {1f,7:0.00}  ({Chassis.Name} reference)");
 
         var scores = new List<(Character C, Score S, Score Ctl)>();
         foreach (var c in CharacterRoster.All)
         {
-            var form = PlayedForm(c);
-            var control = Measure(null, form, vow);
-            var score = Measure(c, form, vow);
+            var skill = PlayedSkill(c);
+            var control = Measure(null, skill, vow);
+            var score = Measure(c, skill, vow);
             scores.Add((c, score, control));
 
             // Positive = clears faster than no character at all.
             var faster = score.ClearMs <= 0 ? 0f : 100f * ((float)control.ClearMs / score.ClearMs - 1f);
             var axis = ClaimedAxis(c);
-            _out.WriteLine($"{c.Name,-20} {form,-14} {score.ClearMs,9:N0} {control.ClearMs,9:N0} " +
+            _out.WriteLine($"{c.Name,-20} {skill.Name,-14} {score.ClearMs,9:N0} {control.ClearMs,9:N0} " +
                            $"{faster,7:+0.0;-0.0;0.0}% {score.HealthLost,9:N0} {control.HealthLost,9:N0} " +
                            $"{score.Haul,6:0.00} {score.Rarity,7:0.00}  {axis}");
         }
@@ -412,22 +463,22 @@ public class RosterParityTest
     {
         // The Pillar-4 sin is a strictly dominant option, and the roster is the easiest place in the
         // game to commit it: ten passives, one of which quietly multiplies everything. This does not
-        // demand equality — an aptitude is SUPPOSED to beat no-character — it demands that the best
-        // offensive character is not so far ahead that the other nine are a mistake to pick.
+        // demand equality — a passive is SUPPOSED to beat no character at all — it demands that the
+        // best offensive character is not so far ahead that the other nine are a mistake to pick.
         var vow = Vows.Catalog.First(v => v.Id == "vow_pure");
         var ratios = new List<(string Name, float Ratio)>();
 
         foreach (var c in CharacterRoster.All)
         {
-            var form = PlayedForm(c);
-            var control = Measure(null, form, vow);
-            var score = Measure(c, form, vow);
+            var skill = PlayedSkill(c);
+            var control = Measure(null, skill, vow);
+            var score = Measure(c, skill, vow);
             // Clear-time SPEEDUP: control time over character time, so >1 means faster.
             if (score.ClearMs > 0) ratios.Add((c.Name, (float)control.ClearMs / score.ClearMs));
         }
 
         var ranked = ratios.OrderByDescending(r => r.Ratio).ToList();
-        _out.WriteLine("CLEAR-SPEED MULTIPLE over a no-character run of the same Form:");
+        _out.WriteLine("CLEAR-SPEED MULTIPLE over a no-character run of the same skills:");
         foreach (var (name, ratio) in ranked) _out.WriteLine($"  {name,-20} {ratio,6:0.00}x");
 
         var best = ranked.First();

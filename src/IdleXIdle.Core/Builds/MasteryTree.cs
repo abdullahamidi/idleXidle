@@ -59,8 +59,8 @@ public sealed record MasteryNode(
     /// <summary>For a BRIDGE: the second branch it spans.</summary>
     public Branch? Link { get; init; }
 
-    /// <summary>For a SPECIALISATION: the Form it deepens.</summary>
-    public Form? Form { get; init; }
+    /// <summary>For a SPECIALISATION: the STYLE it deepens.</summary>
+    public Style? Style { get; init; }
 
     /// <summary>
     /// Plain champion stats this node pays, on top of whatever SHAPE it changes.
@@ -241,20 +241,20 @@ public sealed class MasteryTree
     }
 
     /// <summary>
-    /// The Form this build has specialised in, which the sim reads as its AFFINITY.
+    /// The STYLE this build has specialised in, which the sim reads as its AFFINITY.
     /// </summary>
     /// <remarks>
-    /// It comes from the Form specialisations rather than from a branch, because a branch is a way of
-    /// fighting and affinity is about which Form you carry. ONE DISCIPLINE PER HUNTER — CanTake
+    /// It comes from the specialisations rather than from a branch, because a branch is a way of
+    /// fighting and affinity is about which STYLE you have committed to. ONE DISCIPLINE PER HUNTER — CanTake
     /// refuses a second Specialisation outright. First-wins still matters for exactly one path:
     /// RestoreTaken validates ids only, so an old save holding two specialisations loads both, and
     /// affinity follows the first.
     /// </remarks>
-    public Form? Affinity()
+    public Style? Affinity()
         => _taken.Select(MasteryCatalog.ById)
                  .Where(n => n is { Kind: MasteryKind.Specialisation })
-                 .Select(n => n!.Form)
-                 .FirstOrDefault(f => f is not null);
+                 .Select(n => n!.Style)
+                 .FirstOrDefault(s => s is not null);
 
     /// <summary>Everything the taken nodes add up to as a change of SHAPE.</summary>
     public SkillShape Shape()

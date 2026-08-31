@@ -345,8 +345,8 @@ public sealed class SoloExpeditionScreen
     /// <summary>The last event's timestamp in the wave currently replayed — the fold's "end of wave".</summary>
     private float _replayEndMs;
 
-    /// <summary>One key per skill for the rail's flash and readout: the Source (a Skill event's Slot) and the Form.</summary>
-    private static int SkillKey(int source, int form) => source * 16 + form;
+    /// <summary>The wave being replayed, skill by slot — the build THE FIGHT ran (see SoloExpedition.Skills).</summary>
+    private IReadOnlyList<EquippedSkill> _waveSkills = Array.Empty<EquippedSkill>();
 
     /// <summary>
     /// Roll the outgoing wave into <see cref="_carryBeats"/> / <see cref="_carryMs"/>, so the next
@@ -366,10 +366,9 @@ public sealed class SoloExpeditionScreen
         var end = _replayEndMs + 1f;
         var lastBeat = _replay.LastBeat;
         if (lastBeat < 0) return;               // a wave with no action at all changes nothing
-        foreach (var s in Loadout.Skills)
+        for (var key = 0; key < _waveSkills.Count; key++)
         {
-            var key = SkillKey((int)s.Source, (int)s.Form);
-            var last = _replay.LastSkillBefore(end, (int)s.Source, (int)s.Form);
+            var last = _replay.LastSkillBefore(end, key);
             if (last >= 0)
             {
                 _carryBeats[key] = lastBeat - _replay.BeatAt(last);
@@ -679,15 +678,15 @@ public sealed class SoloExpeditionScreen
     public bool HasReward => _rewards.Count > 0;
     public WaveReward TakeReward() => _rewards.Dequeue();
 
-    /// <summary>What each Form looks like when it fires — the fight is watched, so the effect is the read.</summary>
-    private static (string Text, Color Color) CalloutFor(Form form) => form switch
+    /// <summary>What each STYLE announces when it fires — the fight is watched, so the effect is the read.</summary>
+    private static (string Text, Color Color) CalloutFor(Style style) => style switch
     {
-        Form.Strike => ("STRIKE", Ember),
-        Form.Projectile => ("VOLLEY", Steel),
-        Form.Aura => ("AURA", Bloom),
-        Form.Trap => ("TRAP", Gold),
-        Form.Mark => ("MARK", Bone),
-        _ => ("MORPH", Verdant),
+        Style.Hammer => ("HAMMER", Ember),
+        Style.Volley => ("VOLLEY", Steel),
+        Style.Field => ("FIELD", Bloom),
+        Style.Snare => ("SNARE", Gold),
+        Style.Sign => ("SIGN", Bone),
+        _ => ("DRAIN", Verdant),
     };
 
     // ══════════════════════════════════════════════════════════════════════════════════════════
@@ -859,16 +858,6 @@ public sealed class SoloExpeditionScreen
             // WHICHEVER PASSIVE FIELD IS WOVEN, not always the Aura. After the slot rework a passive
             // can be any style's — a spilled STRIKE is PRESS, a spilled TRANSFORMATION is WILT — and
             // hunting for Form.Aura meant every one of them drew nothing at all.
-            var kinds = BuildComposer.SlotKinds(
-                Loadout.Skills.Select(k => new BuildComposer.SkillPick(k.Source, k.Form, k.VowId, "", k.Passive)).ToList(),
-                Loadout.SkillCapacity);
-            var fieldIdx = -1;
-            for (var fi = 0; fi < Loadout.Skills.Count && fi < kinds.Count; fi++)
-                if (kinds[fi] && SkillCatalogue.Resolve(Loadout.Skills[fi].Form, true).Kind == SkillKind.Field)
-                { fieldIdx = fi; break; }
-            var aura = fieldIdx >= 0 ? Loadout.Skills[fieldIdx] : null;
-            _auraForm = aura?.Form ?? Form.Aura;
-            _auraColour = aura is null ? null : SourceColor.GetValueOrDefault(aura.Source, Bone);
             FlushAuraTotal();   // the wave's last tick still owes its number
             _auraTotal = 0; _auraTotalMs = -1;
             _auraSincePulse = 999f;
@@ -901,6 +890,15 @@ public sealed class SoloExpeditionScreen
         // WHERE EACH SKILL STOOD WHEN THAT WAVE ENDED, banked before the replay carrying it is dropped.
         // The sim's cooldowns cross this boundary; the rail's readout only does because of this line.
         FoldSkillCarry();
+
+        // THE WAVE'S OWN SKILLS, slot for slot — what every event's Slot indexes into. From the run,
+        // not the loadout: the composer may have skipped an unlearned pick, and after a mid-descent
+        // edit the loadout and the fight differ for a whole wave.
+        _waveSkills = _run.Skills;
+        // WHICHEVER PASSIVE FIELD THE FIGHT ACTUALLY RUNS decides the held-field art and colour.
+        var fieldSk = _waveSkills.FirstOrDefault(k => k.Def.Kind == SkillKind.Field);
+        _auraFxKey = fieldSk?.Def.FxKey;
+        _auraColour = fieldSk is null ? null : SourceColor.GetValueOrDefault(fieldSk.Source, Bone);
 
         _replay = new WaveReplay(_run.LastWaveEvents, startHealth, maxHealth, enemyHp);
         _replayEndMs = _run.LastWaveEvents.Count == 0 ? 0f : _run.LastWaveEvents.Max(e => e.AtMs);
@@ -1147,7 +1145,7 @@ public sealed class SoloExpeditionScreen
 
         // The aura's tick prints ONE number, and it prints on time: it used to wait for the NEXT tick's
         // events to arrive, which put it 500 ms late over whatever creature was alive by then.
-        if (_auraTotal > 0 && _playheadMs > _auraTotalMs + FormBehaviour.AuraTickMs * 0.5f) FlushAuraTotal();
+        if (_auraTotal > 0 && _playheadMs > _auraTotalMs + 1_000 * 0.5f) FlushAuraTotal();
         if (_hitFlash.Count > 0)
             foreach (var key in _hitFlash.Keys.ToList())
             {
@@ -1252,24 +1250,30 @@ public sealed class SoloExpeditionScreen
                     _vfx.Play("fx_hit", ChampBox.Center.X, ChampBox.Center.Y + 40, scale: 2, fps: 14f, tint: Ember);
                     break;
                 case BattleEventKind.Skill:
-                    var form = (Form)e.Amount;
-                    _skillFlash[SkillKey(e.Slot, e.Amount)] = 0.42f;
-                    var (text, colour) = CalloutFor(form);
+                {
+                    // THE SLOT IS THE IDENTITY. The event names which equipped skill acted; name,
+                    // art, colour and kind all come from the skill itself — the old payload was a
+                    // (Source, Form) ordinal pair, and two skills of one style collided on it.
+                    if (e.Slot < 0 || e.Slot >= _waveSkills.Count) break;
+                    var castSk = _waveSkills[e.Slot];
+                    var castDef = castSk.Def;
+                    _skillFlash[e.Slot] = 0.42f;
+                    var (text, colour) = CalloutFor(castDef.Style);
                     if (ShowSkillCallouts) Say(text, colour);   // settings: SKILL NAMES hides exactly this
-                    // Slot carries the casting skill's Source (WaveModel.BattleEvent) — the effect is the
-                    // Form's shape in the Source's colour, which is the whole hexagon in one flash.
                     // The creature this cast HITS is the one its own Strike in the same batch names — the
                     // batch has already applied the kill, so "first alive" would point past a creature the
                     // cast just killed and the flash would land on its neighbour.
                     int? castTarget = null;
                     for (var k = bi + 1; k < batch.Count && batch[k].AtMs <= e.AtMs + 1; k++)
                         if (batch[k].Kind == BattleEventKind.Strike) { castTarget = batch[k].Slot; break; }
-                    PlayFormVfx(form, (Source)e.Slot, castTarget);
+                    PlaySkillVfx(castDef, castSk.Source, castTarget);
                     Sound?.Play("sfx_cast", 0.42f, vary: 0.06f);
-                    if (form == Form.Trap) Sound?.Play("sfx_crit", 0.46f, vary: 0.06f);   // the crit-graded blow (SpawnDamage's crit flag below)
+                    var isReaction = castDef.Kind == SkillKind.Reaction;
+                    if (isReaction) Sound?.Play("sfx_crit", 0.46f, vary: 0.06f);   // the crit-graded blow
                     skillAtMs = e.AtMs;                          // the Strikes at this beat are this cast's
-                    if (form == Form.Trap) trapAtMs = e.AtMs;    // ...and a Trap's are the crit-graded ones
+                    if (isReaction) trapAtMs = e.AtMs;           // ...and a reaction's are the crit-graded ones
                     break;
+                }
                 case BattleEventKind.Heal:
                     if (ShowDamageNumbers) Say($"+{e.Amount}", Verdant);   // a number — follows DAMAGE NUMBERS; UNDYING below always shows
                     // Centred so the effect's FOOT (its ground ring) sits on the ground line: at scale 3 the
@@ -1277,7 +1281,7 @@ public sealed class SoloExpeditionScreen
                     // (playtest 2026-08-28: "the heal effect's ground part appears at the character's middle").
                     _vfx.Play("fx_heal", ChampBox.Center.X, ChampBox.Bottom - 156, scale: 3, fps: 10f, tint: Verdant);
                     break;
-                case BattleEventKind.Shield:
+                case BattleEventKind.Undying:
                     Say("UNDYING", Gold);
                     _vfx.Play("fx_shield", ChampBox.Center.X, ChampBox.Center.Y - 20, scale: 4, fps: 12f, tint: Gold);
                     break;
@@ -1364,7 +1368,7 @@ public sealed class SoloExpeditionScreen
     /// the glow colours below are brighter than the bible's body colours (Umbra Indigo added to black is
     /// nothing at all).
     /// </remarks>
-    private void PlayFormVfx(Form form, Source source, int? hitSlot = null)
+    private void PlaySkillVfx(SkillDef def, Source source, int? hitSlot = null)
     {
         var glow = SourceGlow(source);
         // ON the creature being hit, sized to it: the sim lands single-target Forms on the first living
@@ -1373,12 +1377,9 @@ public sealed class SoloExpeditionScreen
         // Forms stay on the champion.
         var target = hitSlot ?? TargetSlot();
         var (tx, ty) = EnemyPoint(target, 0.45f);
-        switch (form)
+        switch (def.ClipKey)
         {
-            case Form.Strike:
-                _vfx.Play(FxFor(Form.Strike), tx, ty, scale: EnemyScale(target, 1.25f), fps: 12f, tint: glow);
-                break;
-            case Form.Projectile:
+            case "projectile":
                 // IT CROSSES THE GAP. It used to be played at the midpoint between the two figures and
                 // simply appear there — "projectile efektlerinin gitme animasyonu yok, direkt düşmanın
                 // üstünde çıkıyor" (2026-08-28). The strip itself is authored as an in-place spin, which
@@ -1389,21 +1390,24 @@ public sealed class SoloExpeditionScreen
                 // rather than to the creature it hits — a Swarm creature used to get a 208 px bolt and a
                 // boss a 520 px one for the same flight. 8 fps, not 14: only the strip's first frames
                 // carry the streak, so at 14 fps the bolt was over in 214 ms.
-                _vfx.Play(FxFor(Form.Projectile), ChampBox.Right - 40, ChampBox.Center.Y + 30,
+                _vfx.Play(FxFor(def), ChampBox.Right - 40, ChampBox.Center.Y + 30,
                           scale: Math.Clamp((tx - ChampBox.Right) / 104, 2, 5), fps: 8f, tint: glow,
                           toX: tx, toY: ty);
                 break;
-            case Form.Aura:
-                _vfx.Play(FxFor(Form.Aura), ChampBox.Center.X, ChampBox.Center.Y + 20, scale: 3, fps: 12f, tint: glow);
+            case "aura":
+                _vfx.Play(FxFor(def), ChampBox.Center.X, ChampBox.Center.Y + 20, scale: 3, fps: 12f, tint: glow);
                 break;
-            case Form.Trap:
-                _vfx.Play(FxFor(Form.Trap), _rowCentreX, EnemyPoint(target, 0.7f).Y, scale: EnemyScale(target, 1.3f), fps: 12f, tint: glow);
+            case "trap":
+                _vfx.Play(FxFor(def), _rowCentreX, EnemyPoint(target, 0.7f).Y, scale: EnemyScale(target, 1.3f), fps: 12f, tint: glow);
                 break;
-            case Form.Mark:
-                _vfx.Play(FxFor(Form.Mark), tx, ty, scale: EnemyScale(target, 0.9f), fps: 12f, tint: glow);
+            case "mark":
+                _vfx.Play(FxFor(def), tx, ty, scale: EnemyScale(target, 0.9f), fps: 12f, tint: glow);
                 break;
-            case Form.Transformation:
-                _vfx.Play(FxFor(Form.Transformation), ChampBox.Center.X, ChampBox.Center.Y, scale: 3, fps: 12f, tint: glow);
+            case "transformation":
+                _vfx.Play(FxFor(def), ChampBox.Center.X, ChampBox.Center.Y, scale: 3, fps: 12f, tint: glow);
+                break;
+            default:   // "strike" and any future key: on the creature being hit, sized to it
+                _vfx.Play(FxFor(def), tx, ty, scale: EnemyScale(target, 1.25f), fps: 12f, tint: glow);
                 break;
         }
     }
@@ -2338,7 +2342,7 @@ public sealed class SoloExpeditionScreen
         nx += _ui.MeasureBig(sep, px);
         _ui.TextBig(b, cls, nx, ny, UiKit.ClassColor(Character.Class), px);
         if (Mastery.Affinity() is { } mf)
-            _ui.TextBig(b, $"{FormShort(mf)} ADEPT", 334, 67, Slate, UiTypography.Caption);           // mastery title
+            _ui.TextBig(b, $"{mf.ToString().ToUpperInvariant()} ADEPT", 334, 67, Slate, UiTypography.Caption);   // mastery title
         _ui.TextBig(b, $"LV {_hunter?.HunterLevel ?? 1}", 334, 86, Gold, UiTypography.Body);        // level
         // Combat power — an icon + value (spec: an icon, not a "PWR" label).
         if (_ui.Assets.Get("state_resonance_128") is { } pi) b.Draw(pi, new Rectangle(440, 81, 30, 30), Ember);
@@ -2853,15 +2857,9 @@ public sealed class SoloExpeditionScreen
     {
         // Spec §14: auto-skill dock centred under the arena (500,770,920,145). Hex slots (ui_slot_skill_hex),
         // Source glyph inside, Form + AUTO beneath. Presentation Model C (§14.4): AUTO/READY, no fake cooldowns.
-        var skills = Loadout.Skills;
-        // WHICH OF THESE COST AN ACTION. From BuildComposer, the same walk the fight and the weave
-        // screen read, so all three agree by construction rather than by three copies of a rule.
-        // It matters here because a skill can now be passive WITHOUT its Form being one: an old build
-        // with four beat-taking skills spills its overflow into the passive slots, and a spilled MARK
-        // asked about its Form would be drawn with a cooldown ring that never fills.
-        var railPassive = BuildComposer.SlotKinds(
-            skills.Select(k => new BuildComposer.SkillPick(k.Source, k.Form, k.VowId, "", k.Passive)).ToList(),
-            Loadout.SkillCapacity);
+        // THE FIGHT'S OWN SKILLS — the same list every event's Slot indexes. Rendering the
+        // editable loadout here was the UI-state/sim-state split this screen has already paid for.
+        var skills = _waveSkills;
         var n = Loadout.SkillCapacity;     // the dock shows the slots you have, not the four everyone starts with
         // Stacked down the control rail instead of a horizontal dock across the bottom centre, which
         // sat over the stage and collided with the nav rail at y=934.
@@ -2902,13 +2900,12 @@ public sealed class SoloExpeditionScreen
                 // player could see WHAT their champion carries and never WHEN any of it happens.
                 // Keyed by SOURCE and FORM — one readout per skill. Keyed by Form alone, two Projectiles
                 // shared a bar and "fired at once" (playtest 2026-08-26).
-                var formKey = (int)s.Form;
-                var skillKey = SkillKey((int)s.Source, formKey);
-                var flash = _skillFlash.TryGetValue(skillKey, out var fl) ? Math.Clamp(fl / 0.42f, 0f, 1f) : 0f;
+                var railDef = s.Def;
+                var flash = _skillFlash.TryGetValue(i, out var fl) ? Math.Clamp(fl / 0.42f, 0f, 1f) : 0f;
                 // A PASSIVE IS ALWAYS READY. Every branch below asks the replay when this skill last
                 // cast, and an Aura never "casts" — so ready stayed 0 and the dial shaded the whole
                 // medallion for the entire run, under a label reading ALWAYS ON (review 2026-08-30).
-                var isPassiveSlot = i < railPassive.Count && railPassive[i];
+                var isPassiveSlot = !railDef.TakesABeat;
                 var ready = isPassiveSlot ? 1f : 0f;
                 // How many notches the ring has. Set by the beat-counted branch to the plain actions in
                 // THIS cycle, so one action is always exactly one notch; 0 leaves the ring continuous.
@@ -2916,15 +2913,15 @@ public sealed class SoloExpeditionScreen
                 var telegraph = 0f;
                 if (_replay is not null)
                 {
-                    var next = _replay.NextSkillAfter(_playheadMs, (int)s.Source, formKey);
-                    var prev = _replay.LastSkillBefore(_playheadMs, (int)s.Source, formKey);
+                    var next = _replay.NextSkillAfter(_playheadMs, i);
+                    var prev = _replay.LastSkillBefore(_playheadMs, i);
                     // WHAT THE PREVIOUS WAVES ALREADY SPENT. Used only when THIS wave holds no cast to
                     // measure from — once the skill has fired inside this replay, that cast is the
                     // truth and the carry is stale. See _carryBeats.
-                    var carryBeats = prev >= 0 ? 0 : _carryBeats.GetValueOrDefault(skillKey);
-                    var carryMs = prev >= 0 ? 0f : _carryMs.GetValueOrDefault(skillKey);
+                    var carryBeats = prev >= 0 ? 0 : _carryBeats.GetValueOrDefault(i);
+                    var carryMs = prev >= 0 ? 0f : _carryMs.GetValueOrDefault(i);
                     if (next != int.MaxValue && next - _playheadMs is > 0f and <= 300f) telegraph = 1f - (next - _playheadMs) / 300f;
-                    if (FormBehaviour.CooldownBeats(s.Form) is var bts and > 0)
+                    if (railDef.Beats is var bts and > 0)
                     {
                         // COUNTED IN BEATS, AND THE SIM'S OWN BEATS. The rail used to rebuild a count
                         // by walking the damage stream — see WaveReplay.BeatAt for why that was a
@@ -2961,7 +2958,7 @@ public sealed class SoloExpeditionScreen
                         // as "this skill never cools down" (playtest: "ilk skill hiç cooldown'a
                         // girmiyor"). Refill over the form's base cooldown instead, so the rhythm
                         // stays visible when a short wave outlives the last cast.
-                        var cdMs = MathF.Max(1f, FormBehaviour.BaseCooldownMs(s.Form));
+                        var cdMs = MathF.Max(1f, RailCooldownMs(railDef));
                         ready = Math.Clamp((_playheadMs - prev) / cdMs, 0f, 1f);
                     }
                     else
@@ -2970,7 +2967,7 @@ public sealed class SoloExpeditionScreen
                         // at empty for the whole wave, which reads as a broken skill rather than a
                         // waiting one — and it is the case a short wave produces most often. The carry
                         // knows how long it has really been waiting, so it keeps filling.
-                        var cdMs = MathF.Max(1f, FormBehaviour.BaseCooldownMs(s.Form));
+                        var cdMs = MathF.Max(1f, RailCooldownMs(railDef));
                         ready = Math.Clamp((_playheadMs + carryMs) / cdMs, 0f, 1f);
                     }
                 }
@@ -3005,10 +3002,6 @@ public sealed class SoloExpeditionScreen
                     b.Draw(sl, box, lit > 0f ? Color.Lerp(Color.White, Gold, lit) : Color.White * wake);
                 // §18.3 Layer 1: source-coloured inner glow (no Form-glyph asset ships, so the Source glyph is
                 // the central identity and the Form name labels it — a quieter composition per §36).
-                // THE SKILL'S OWN NAME AND PICTURE. Both read "SHADOW STRIKE" and a Source gem — the
-                // pair the designer retired on 2026-08-30 when skills moved onto the mastery tree.
-                // What the champion is carrying is BLOW.
-                var railDef = SkillCatalogue.Resolve(s.Form, isPassiveSlot);
 
                 // THE SKILL'S OWN GLYPH IN THE SOURCE'S LIGHT. It used to be the Source gem alone,
                 // which meant every HAMMER skill wore the same picture and the medallion said what a
@@ -3037,7 +3030,7 @@ public sealed class SoloExpeditionScreen
                     ? "WHEN BITTEN"
                     : railDef.Kind == SkillKind.Field
                     ? "ALWAYS ON"
-                    : FormBehaviour.CooldownBeats(s.Form) switch
+                    : railDef.Beats switch
                 {
                     2 => "EVERY OTHER ACTION",
                     3 => "EVERY THIRD ACTION",
@@ -3046,8 +3039,8 @@ public sealed class SoloExpeditionScreen
                     // cycle is cast, hit, hit, hit, cast (playtest 2026-08-28 — "it says 4 but it
                     // casts on the 4th hit"). The dial already agrees: each action fills a quarter of
                     // the ring and it is full exactly on the action it casts on.
-                    > 3 => $"EVERY {OrdinalWord(FormBehaviour.CooldownBeats(s.Form))} ACTION",
-                    _ => s.Form == Form.Aura ? "ALWAYS ON" : s.Form == Form.Trap ? "WHEN BITTEN" : "TIMED",
+                    > 3 => $"EVERY {OrdinalWord(railDef.Beats)} ACTION",
+                    _ => "TIMED",
                 };
                 _ui.TextBig(b, rhythm, box.Right + 12, box.Y + 32, Slate, UiTypography.Caption);
 
@@ -3275,10 +3268,14 @@ public sealed class SoloExpeditionScreen
         //
         // A Trap is still excluded HERE because it fires on being bitten rather than on the beat, so it
         // has no beat to be aimed at. It gets its own commitment below.
-        if (_replay.NextSkillEventAfter(_playheadMs) is { } nextSkill && (Form)nextSkill.Amount != Form.Trap)
+        var reactionSlots = new HashSet<int>();
+        for (var ri = 0; ri < _waveSkills.Count; ri++)
+            if (_waveSkills[ri].Def.Kind == SkillKind.Reaction) reactionSlots.Add(ri);
+        if (_replay.NextSkillEventAfter(_playheadMs, reactionSlots) is { } nextSkill
+            && nextSkill.Slot >= 0 && nextSkill.Slot < _waveSkills.Count)
         {
             beatMs = nextSkill.AtMs;
-            clip = ((Form)nextSkill.Amount).ToString().ToLowerInvariant();
+            clip = _waveSkills[nextSkill.Slot].Def.ClipKey;
         }
         // The basic attack's swing. It is a real action now (MIGHT's hit, at TEMPO's cadence) and the
         // sim holds one lock for swings and casts alike, so this clip can never start inside a cast nor
@@ -3295,10 +3292,14 @@ public sealed class SoloExpeditionScreen
         // Committed opportunistically, and only when nothing else is due: a Trap consumes no beat, so
         // it must never take the clip a real action was about to use. That it fires on the enemy's
         // swing — off the champion's own metronome — is what makes the opening usually there.
-        if (beatMs is null && _replay.LastTrapBefore(_playheadMs) is { } trapMs
+        float? lastTrap = null;
+        foreach (var ri in reactionSlots)
+            if (_replay.LastTrapBefore(_playheadMs, ri) is { } tms && (lastTrap is null || tms > lastTrap))
+                lastTrap = tms;
+        if (beatMs is null && lastTrap is { } trapMs
             && _playheadMs - trapMs < TrapClipGraceMs)
         {
-            _clipSpeed = Math.Max(0.6f, ClipMs / (_beatMs * FormBehaviour.SkillClipShareOfBeat));
+            _clipSpeed = Math.Max(0.6f, ClipMs / (_beatMs * SkillClipShareOfBeat));
             _clipStartMs = trapMs;
             _clipName = "trap";
             return;
@@ -3306,7 +3307,7 @@ public sealed class SoloExpeditionScreen
 
         if (beatMs is null) return;
 
-        // EVERY action fills its share of the BEAT (FormBehaviour.ClipShareOfBeat): the sim acts on the
+        // EVERY action fills its share of the BEAT (ClipShareOfBeat): the sim acts on the
         // beat and only on it, so a clip sized to 0.65 of a beat — plus its settle — is always over
         // before the next action's clip may start, and a fast build visibly fights fast.
         // A CAST IS NOT A SWING. Both used to take the same share of the beat, so TEMPO hurried them
@@ -3314,7 +3315,7 @@ public sealed class SoloExpeditionScreen
         // gibi". The swing keeps the beat-scaled share (so Tempo is felt ON THE SWING, which is what the
         // designer asked for) and now takes LESS of it, leaving more beat standing after it; a cast takes
         // more, so it plays close to its authored second.
-        var share = clip == "attack" ? FormBehaviour.ClipShareOfBeat : FormBehaviour.SkillClipShareOfBeat;
+        var share = clip == "attack" ? ClipShareOfBeat : SkillClipShareOfBeat;
         var baseSpeed = Math.Max(0.6f, ClipMs / (_beatMs * share));
         var contactMs = ClipMs * ContactFraction / baseSpeed;
         var lead = beatMs.Value - _playheadMs;
@@ -3348,16 +3349,26 @@ public sealed class SoloExpeditionScreen
     /// the shape says who cast it and the colour says what it is made of.
     /// </para>
     /// </remarks>
-    private string FxFor(Form form, bool passive = false)
+    private string FxFor(SkillDef def) => FxFor(def.FxKey);
+
+    /// <summary>The character's own strip for an effect key, or the shared one.</summary>
+    private string FxFor(string fxKey)
     {
-        // THE SKILL'S OWN KEY, not the Form's. A style has two skills and they do not look alike: the
-        // weight PRESS lays on an enemy is not the blow BLOW lands, and the bleed WEEP leaves is not
-        // the bolt SPRAY flies. Resolving through the catalogue is what lets the passive half of the
-        // roster carry its own art without the renderer growing a case per skill.
-        var key = SkillCatalogue.Resolve(form, passive).FxKey;
-        var own = $"fx_{Character.Id}_{key}_strip8_512";
-        return _ui.Assets.Has(own) ? own : $"fx_{key}";
+        var own = $"fx_{Character.Id}_{fxKey}_strip8_512";
+        return _ui.Assets.Has(own) ? own : $"fx_{fxKey}";
     }
+
+    /// <summary>A skill's full-cycle length in ms, for the rail's refill sweep.</summary>
+    private static float RailCooldownMs(SkillDef d)
+        => d.Beats > 0 ? d.Beats * (float)SoloBattle.DefaultBeatMs
+         : d.IntervalMs > 0 ? d.IntervalMs
+         : Math.Max(1_000, d.RearmMs);
+
+    // ── The action clips' own timing — presentation constants, moved here from the Core Form
+    //    table (they were never gameplay: the sim acts on the beat whatever a clip does). ─────────
+    private const int CastClipMs = 700;
+    private const float ClipShareOfBeat = 0.55f;
+    private const float SkillClipShareOfBeat = 0.90f;
 
     /// <summary>The build's action-speed multiplier for the wave being shown.</summary>
     private float _castRate = 1f;
@@ -3423,14 +3434,14 @@ public sealed class SoloExpeditionScreen
     /// <summary>The slotted Aura's Source colour for the wave being shown, or null when the build carries no Aura.</summary>
     private Color? _auraColour;
 
-    /// <summary>Which Form the held field belongs to — it decides the art, and it is not always AURA.</summary>
-    private Form _auraForm = Form.Aura;
+    /// <summary>The held field's effect key — it decides the art, and it is not always the aura's.</summary>
+    private string? _auraFxKey;
 
     /// <summary>Real seconds since the last aura pulse — the pulse runs on the wall clock, not the replay's.</summary>
     private float _auraSincePulse = 999f;
 
     /// <summary>Seconds between aura pulses — two sim ticks, so the ring is always in the room without stacking.</summary>
-    private const float AuraPulseSeconds = FormBehaviour.AuraTickMs / 1000f;
+    private const float AuraPulseSeconds = 1f;
 
     /// <summary>
     /// The aura's pulse: the authored fx_aura in the Aura's Source colour, WRAPPED AROUND THE CHAMPION —
@@ -3503,7 +3514,7 @@ public sealed class SoloExpeditionScreen
         // both directions, so every step up buried more of it under the floor. Placing its BOTTOM just
         // under the soles means the growth goes where it is wanted — up and out around the figure.
         var h = AuraScale * VfxPlayer.BaseUnitPx;
-        _vfx.Hold(FxFor(_auraForm, passive: true), ChampBox.Center.X, (int)(ChampBox.Bottom + 18 - h / 2f),
+        _vfx.Hold(FxFor(_auraFxKey ?? "aura"), ChampBox.Center.X, (int)(ChampBox.Bottom + 18 - h / 2f),
                   AuraScale, 10f, colour * level);
     }
 

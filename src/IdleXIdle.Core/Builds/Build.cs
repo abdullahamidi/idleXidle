@@ -435,13 +435,14 @@ public sealed class Build
     }
 
     /// <summary>
-    /// The character's Form AFFINITY — the Nen-hexagon axis. Null means unchosen (everything neutral).
+    /// The hunter's STYLE affinity — the attunement axis. Null means unchosen (everything neutral).
     /// </summary>
     /// <remarks>
-    /// Set from the player's loadout. The sim reads it through <see cref="FormBehaviour.AffinityFactor"/>
-    /// to reward committing to your affinity's Form and to make splashing its opposite cost something.
+    /// Set from the mastery tree's specialisation. The sim reads it through
+    /// <see cref="StyleAffinity.Factor"/> to reward committing to your discipline and to make
+    /// splashing its opposite cost something.
     /// </remarks>
-    public Form? Affinity { get; set; }
+    public Style? Affinity { get; set; }
 
     private readonly List<EquippedSkill> _skills = new();
     private readonly List<Keystone> _keystones = new();

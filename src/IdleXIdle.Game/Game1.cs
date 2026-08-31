@@ -1600,7 +1600,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         // HAMMER's PRESS is learned and the other five roads are not.
                         _mastery.Take("road_hammer");
                         _buildScreen.DevOpenTree();
-                        if (sm == "attune") _buildScreen.DevAttune(Form.Strike);
+                        if (sm == "attune") _buildScreen.DevAttune(Style.Hammer);
                     }
                     // The same tree at a working zoom. Node art is thirty pixels across in the
                     // overview, where a capture can only prove that something was drawn. RH_SHOT_ZOOM
@@ -2871,7 +2871,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     private void TellForgeTheBuild(Build build)
     {
-        _forge.ActiveForms = _loadout.Skills.Select(s => s.Form).ToList();
+        _forge.ActiveStyles = _loadout.WovenStyles();
         _forge.ActiveTriggers = build.Triggers(_hunter).ToList();
         _forge.SwornVows = _loadout.Skills
                                    .Select(s => s.VowId)

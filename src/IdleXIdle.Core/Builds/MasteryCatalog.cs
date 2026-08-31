@@ -431,19 +431,19 @@ public static class MasteryCatalog
     /// </remarks>
     private static void Specialisations(List<MasteryNode> n)
     {
-        Spec(n, Branch.Resonance, Form.Strike, "spec_strike", "STRIKE SPECIALIST — EXECUTE WEAKENED FOES",
+        Spec(n, Branch.Resonance, Style.Hammer, "spec_strike", "STRIKE SPECIALIST — EXECUTE WEAKENED FOES",
             BuildTrigger.Execute, S with { CullThreshold = 0.35f, CullBonus = 0.40f });
-        Spec(n, Branch.Resonance, Form.Trap, "spec_trap", "TRAP SPECIALIST — TRAPS RE-ARM ON BEING HIT",
+        Spec(n, Branch.Resonance, Style.Snare, "spec_trap", "TRAP SPECIALIST — TRAPS RE-ARM ON BEING HIT",
             BuildTrigger.Coiled, S);
-        Spec(n, Branch.Loot, Form.Projectile, "spec_projectile", "VOLLEY SPECIALIST — ONE MORE SHOT, ONE MORE TARGET",
-            BuildTrigger.Overdraw, S with { FormTargets = new Dictionary<Form, int> { [Form.Projectile] = 1 } });
-        Spec(n, Branch.Loot, Form.Aura, "spec_aura", "AURA SPECIALIST — TICKS 30% FASTER",
+        Spec(n, Branch.Loot, Style.Volley, "spec_projectile", "VOLLEY SPECIALIST — ONE MORE SHOT, ONE MORE TARGET",
+            BuildTrigger.Overdraw, S with { StyleTargets = new Dictionary<Style, int> { [Style.Volley] = 1 } });
+        Spec(n, Branch.Loot, Style.Field, "spec_aura", "AURA SPECIALIST — TICKS 30% FASTER",
             BuildTrigger.Radiance, S);
-        Spec(n, Branch.Tempo, Form.Mark, "spec_mark", "MARK SPECIALIST — THE WINDOW STRETCHES",
+        Spec(n, Branch.Tempo, Style.Sign, "spec_mark", "MARK SPECIALIST — THE WINDOW STRETCHES",
             BuildTrigger.Linger, S with { MarkWindowMultiplier = 1.3f });
         // Grants SIPHON, whose two halves are read from HealTuning: the leech doubling, and the raised
         // per-wave healing limit that makes the doubling measurable under the heal ceiling.
-        Spec(n, Branch.Endure, Form.Transformation, "spec_transformation",
+        Spec(n, Branch.Endure, Style.Drain, "spec_transformation",
             $"MORPH SPECIALIST — LEECH DOUBLED, HEAL LIMIT {HealTuning.Default.CeilingText(siphon: true)} A WAVE",
             BuildTrigger.Siphon, S);
 
@@ -539,10 +539,10 @@ public static class MasteryCatalog
             SecondPrereqs = NotablesOf(n, c).ToArray(),
         });
 
-    private static void Spec(List<MasteryNode> n, Branch b, Form form, string id, string label,
+    private static void Spec(List<MasteryNode> n, Branch b, Style style, string id, string label,
                              BuildTrigger grant, SkillShape shape)
         => n.Add(new(id, MasteryKind.Specialisation, b, 3, SpecialisationCost, label, shape, grant,
-                     NotablesOf(n, b).ToArray()) { Form = form });
+                     NotablesOf(n, b).ToArray()) { Style = style });
 
     private static IEnumerable<string> NotablesOf(List<MasteryNode> n, Branch b)
         => n.Where(x => x.Branch == b && x.Kind == MasteryKind.Notable).Select(x => x.Id);

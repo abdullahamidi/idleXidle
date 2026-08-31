@@ -145,7 +145,10 @@ public class WaveReplayTests
     {
         var events = new List<BattleEvent>
         {
-            new(BattleEventKind.Shield, 1, ShieldMs, 1000),
+            // UNDYING, not Shield: the duration-carrying cover got its own kind when the audit
+            // found Shield's Amount meaning milliseconds for one producer and banked HEALTH for
+            // the other (D8) — one payload, two meanings, and the replay could only honour one.
+            new(BattleEventKind.Undying, 1, ShieldMs, 1000),
         };
 
         var replay = new WaveReplay(

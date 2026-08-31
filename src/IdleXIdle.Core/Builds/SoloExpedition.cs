@@ -79,12 +79,8 @@ public sealed class SoloExpedition
     /// </remarks>
     public int RunIndex { get; set; }
 
-    /// <summary>The Form that dealt the most damage last wave — what WARDED reads.</summary>
-    /// <remarks>
-    /// It deliberately lags by a wave. An affix that reacted to the wave in progress would be
-    /// unanswerable in a game with no in-run decisions; lagging lets the player see it coming.
-    /// </remarks>
-    public Form? LastWaveTopForm { get; private set; }
+// (LastWaveTopForm retired 2026-08-31 — declared for the WARDED affix, assigned by nothing,
+    // read by nothing. WARDED's own verdict is an encounters-phase decision.)
 
     /// <summary>The composition the last resolved wave held — the report reads this.</summary>
     public IReadOnlyList<WaveCreature> LastWaveCreatures { get; private set; } = Array.Empty<WaveCreature>();
@@ -145,6 +141,15 @@ public sealed class SoloExpedition
     }
 
     public Champion Champion => _champion;
+
+    /// <summary>
+    /// The equipped skills of the build THE FIGHT IS RUNNING — slot order matches every
+    /// <see cref="BattleEvent"/>'s slot payload. The screen renders from this, never from the
+    /// editable loadout: the two can differ for a whole wave after an edit (ReplaceBuild lands at
+    /// the boundary), and drawing the loadout is the exact UI-state/sim-state split this project
+    /// has been bitten by before.
+    /// </summary>
+    public IReadOnlyList<EquippedSkill> Skills => _build.Skills;
     /// <summary>
     /// Where the woven skills bank the levels they earn, or null when nothing is tracking them.
     /// </summary>
@@ -210,8 +215,8 @@ public sealed class SoloExpedition
         var now = build.Skills;
         for (var i = 0; i < Math.Max(old.Count, now.Count); i++)
             if (i >= old.Count || i >= now.Count
-                || old[i].Ability.Form != now[i].Ability.Form
-                || old[i].Ability.Source != now[i].Ability.Source)
+                || old[i].Def.Id != now[i].Def.Id
+                || old[i].Source != now[i].Source)
             {
                 _champion.ReadyAt.Remove(i);
                 _champion.ReadyAtBeat.Remove(i);   // the beat-counted table is keyed the same way
