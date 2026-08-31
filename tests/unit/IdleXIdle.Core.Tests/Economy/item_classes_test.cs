@@ -60,16 +60,14 @@ public class ItemClassesTest
     }
 
     [Fact]
-    public void test_no_champion_leans_a_different_road_than_their_class_is_built_for()
+    public void test_champions_of_one_class_never_lean_different_roads()
     {
-        // A WARDEN who leans TEMPO would be the first lie on the card. A champion with no lean fits
-        // any class; a champion with a lean must sit in the class named for that road.
-        foreach (var c in CharacterRoster.All)
-        {
-            var road = ItemClasses.Get(c.Class).Road;
-            Assert.True(c.Lean is null || c.Lean == road,
-                $"{c.Name} leans {c.Lean} but wears {c.Class}, which is built for {road}.");
-        }
+        // A WARDEN leaning TEMPO beside a WARDEN leaning RESONANCE would be the first lie on the
+        // card. (The class's own Road field died in P9 — Character.Lean is the ONE road field,
+        // with the roster screen as its reader — so the law is stated between classmates.)
+        foreach (var group in CharacterRoster.All.GroupBy(c => c.Class))
+            Assert.True(group.Select(c => c.Lean).Where(l => l is not null).Distinct().Count() <= 1,
+                $"{group.Key} champions lean different roads.");
     }
 
     [Fact]

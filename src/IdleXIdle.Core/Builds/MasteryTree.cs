@@ -221,6 +221,18 @@ public sealed class MasteryTree
     }
 
     /// <summary>
+    /// Latch a skill as learned OUTSIDE the tree — a champion's birth skill, latched when the
+    /// player becomes them (P9). The roster promises YOU KEEP SKILLS, and it was true for
+    /// everything except the one skill a champion brings: switch away, and a build woven around
+    /// the old champion's birth skill silently lost it at the next compose. Idempotent; unknown
+    /// ids are ignored, like everywhere else.
+    /// </summary>
+    public void LearnSkill(string? skillId)
+    {
+        if (skillId is not null && SkillCatalogue.Find(skillId) is not null) _learned.Add(skillId);
+    }
+
+    /// <summary>
     /// Give back one node, if nothing taken still depends on it.
     /// </summary>
     /// <remarks>

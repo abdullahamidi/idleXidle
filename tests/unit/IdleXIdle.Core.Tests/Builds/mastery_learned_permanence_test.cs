@@ -76,6 +76,27 @@ public class MasteryLearnedPermanenceTest
     }
 
     [Fact]
+    public void test_becoming_a_champion_latches_its_birth_skill_for_good()
+    {
+        // ROSTER: "SWITCH FREELY — YOU KEEP SKILLS." True for the tree's skills since D7; P9 makes
+        // it true for the one skill a champion brings, by latching it when the player becomes them.
+        var t = new MasteryTree();
+        t.LearnSkill("volley_weep");   // becoming THE QUIVER
+        t.LearnSkill("ghost_skill");   // an id no catalogue knows is ignored
+
+        Assert.Contains("volley_weep", t.LearnedSkills());
+        Assert.DoesNotContain("ghost_skill", t.LearnedSkills());
+
+        // And the build still carries it with a DIFFERENT champion active (character: null — no
+        // birth-skill union to lean on). Two slots: WEEP is a passive, and a one-slot build has
+        // one ACTIVE slot and no passive budget at all.
+        var loadout = new PlayerLoadout { SkillCapacity = 2 };
+        loadout.SetSkill(loadout.AddSkill(), "volley_weep");
+        var build = loadout.ToBuild(new MemoryDustTree(), t, character: null);
+        Assert.Equal("volley_weep", Assert.Single(build.Skills).Def.Id);
+    }
+
+    [Fact]
     public void test_the_composer_weaves_a_learned_skill_after_the_points_moved_on()
     {
         // Arrange — learn HAMMER's road, then respec into nothing.

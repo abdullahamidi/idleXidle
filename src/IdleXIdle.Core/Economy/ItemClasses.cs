@@ -55,8 +55,6 @@ public sealed record ItemClassDef
     public required string Description { get; init; }
 
     /// <summary>The mastery road this class was built for, or null for a class that favours none.</summary>
-    public Branch? Road { get; init; }
-
     /// <summary>The two champions who wear this class. Exactly two, always.</summary>
     public required IReadOnlyList<string> ChampionIds { get; init; }
 
@@ -94,14 +92,14 @@ public static class ItemClasses
             // named the WEIGHT road, and WEIGHT is gone — its hit-size content went to the skills
             // (design §9). A warden is still the one who holds a line, so the name survives the road:
             // it now points at RESONANCE, where a champion's skills are made to carry.
-            Class = ItemClass.Warden, Name = "WARDEN", Road = Branch.Resonance,
+            Class = ItemClass.Warden, Name = "WARDEN",
             Description = "Skills that carry. Built for the RESONANCE road.",
             ChampionIds = new[] { "anvil", "tower" },
             WeaponFamilies = new[] { Blade, Spear },
         },
         new()
         {
-            Class = ItemClass.Ranger, Name = "RANGER", Road = Branch.Loot,
+            Class = ItemClass.Ranger, Name = "RANGER",
             Description = "Many targets. Built for the SPREAD road.",
             // THE OATHBOUND, not THE QUIVER. The brief put THE QUIVER here, but THE QUIVER leans TEMPO
             // in the roster and a class whose champion walks a different road than the class is named
@@ -113,21 +111,21 @@ public static class ItemClasses
         },
         new()
         {
-            Class = ItemClass.Mystic, Name = "MYSTIC", Road = Branch.Tempo,
+            Class = ItemClass.Mystic, Name = "MYSTIC",
             Description = "Front-loaded skills. Built for the TEMPO road.",
             ChampionIds = new[] { "metronome", "quiver" },
             WeaponFamilies = new[] { Scythe, Bow },
         },
         new()
         {
-            Class = ItemClass.Bulwark, Name = "BULWARK", Road = Branch.Endure,
+            Class = ItemClass.Bulwark, Name = "BULWARK",
             Description = "Lasting. Built for the ENDURE road.",
             ChampionIds = new[] { "unbroken", "thornwall" },
             WeaponFamilies = new[] { Blade, Scythe },
         },
         new()
         {
-            Class = ItemClass.Wanderer, Name = "WANDERER", Road = null,
+            Class = ItemClass.Wanderer, Name = "WANDERER",
             Description = "Any road. Wears every weapon shape.",
             ChampionIds = new[] { CharacterRoster.StarterId, "magpie" },
             WeaponFamilies = new[] { Blade, Bow, Spear, Scythe },

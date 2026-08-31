@@ -642,6 +642,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _loadout.Restore(
                 save.WovenSkills.Select(s => (s.SkillId, (string?)s.Source, (string?)s.Form, s.VowId, s.Passive)),
                 save.SocketedKeystoneIds);
+
+        // AN UNTAUGHT VOW IS NOT WORN (P8). The composer refuses to pay one (P7's gate) — but a
+        // restored slot silently wearing it would be invisible too: the weave screen lists only
+        // KNOWN vows, so nothing on any screen could explain the missing pay. Dropped on the way
+        // in, like every other id the account does not know.
+        for (var i = 0; i < _loadout.Skills.Count; i++)
+            if (_loadout.Skills[i].VowId is { } vid && !DustEffects.KnowsVow(_dust, vid))
+                _loadout.SetVow(i, null, DustEffects.KnownVows(_dust));
         _skillProgress.Restore(save.SkillProgress.Select(
             r => (r.SkillId, r.Uses, r.Variation, (IReadOnlyList<string>)r.Reinforcements)));
 
@@ -3598,6 +3606,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _lastActiveCharacterId = _characters.ActiveId;
         // Four in five class-locked pieces a chest pays are the active champion's.
         _forge.FavouredClass = _characters.Active.Class;
+        // BIRTH SKILLS ARE LEARNED BY BEING SOMEONE (P9). Becoming a champion latches theirs into
+        // the permanent set (D7), so the roster's YOU KEEP SKILLS holds for the one skill a
+        // champion brings, not only for the tree's. Idempotent, so per-frame is free.
+        _mastery.LearnSkill(_characters.Active.StartingSkillId);
 
         _expedition.Character = _characters.Active;
         _character.Character = _characters.Active;

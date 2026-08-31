@@ -73,12 +73,12 @@ public sealed record CharacterUnlock
 /// is the shape of the build you already have.
 /// </para>
 /// <para>
-/// Three levers, and every one of them is read by the sim rather than printed on a card:
+/// Two levers — one advisory, one the sim actually reads:
 /// </para>
 /// <list type="bullet">
-/// <item><b>Lean</b> — which of the four opposed roads this character was built to walk. Advisory: it
-/// colours the roster screen and tells a new player where to spend, and costs nothing.</item>
-/// <item><b>Aptitude</b> — a real per-Form damage multiplier through <see cref="SkillShape.FormPower"/>.</item>
+/// <item><b>Lean</b> — which trait road this character was built to walk. Advisory: it colours the
+/// roster screen and tells a new player where to spend, and costs nothing. (The one road field —
+/// the class's duplicate died in P9.)</item>
 /// <item><b>Passive</b> — <see cref="Mods"/>, <see cref="Shape"/> and <see cref="Grants"/>, folded into
 /// the build at <c>PlayerLoadout.ToBuild</c> alongside the two trees.</item>
 /// </list>

@@ -72,9 +72,9 @@ public static class CharacterRoster
             Lean = Branch.Resonance,
             PassiveName = "DEADWEIGHT",
             PassiveText = "A third of the damage left over from a kill hits the next enemy.",
-            // Weight's structural weakness is a swarm: an enormous hit on a small creature throws most
-            // of itself away. This does not fix that — it refunds a third of it, which is the most a
-            // character passive should do to a branch's actual price.
+            // A heavy hitter's structural weakness is a swarm: an enormous hit on a small
+            // creature throws most of itself away. This does not fix that — it refunds a third,
+            // the most a character passive should do to a playstyle's actual price.
             Shape = new SkillShape { OverkillCarry = 0.33f },
             Unlock = CharacterUnlock.Conquest("cinderworks"),
         },
@@ -87,8 +87,8 @@ public static class CharacterRoster
             Lean = Branch.Loot,
             PassiveName = "MANY MOUTHS",
             PassiveText = "+5% damage for each enemy alive in the wave.",
-            // Scales with the thing Spread is for and evaporates in a boss room, which is the honest
-            // shape of the branch rather than a flat bonus wearing its colours.
+            // Scales with the crowd a many-target build is for and evaporates in a boss room —
+            // the honest shape of that playstyle rather than a flat bonus wearing its colours.
             Shape = new SkillShape { PerCreatureBonus = 0.05f },
             Unlock = CharacterUnlock.Conquest("umbral_reach"),
         },
@@ -131,7 +131,7 @@ public static class CharacterRoster
             Lean = Branch.Resonance,
             PassiveName = "MOMENTUM",
             PassiveText = "Your first hit on each enemy is weaker. Every hit after it is stronger.",
-            // A Weight+Tempo bridge stated as a trade rather than a bonus. It is the exact inverse of
+            // A heavy-hit/Tempo bridge stated as a trade rather than a bonus. It is the exact inverse of
             // ALPHA in the mastery tree, so the two cancel — which is the point: this character is for
             // players who did not walk that node.
             Shape = new SkillShape { FirstHitMultiplier = 0.85f, LaterHitMultiplier = 1.35f },
@@ -147,7 +147,9 @@ public static class CharacterRoster
             Blurb = "Counts arrows the way other people count breaths.",
             Lean = Branch.Tempo,
             PassiveName = "LOOSE AGAIN",
-            PassiveText = "A kill sends the next shot immediately.",
+            // BOTH halves of the passive, on the card: the shape's +10% skill rate shipped
+            // undisclosed — a number the sim read on every cast that no screen ever admitted to.
+            PassiveText = "A kill sends the next shot immediately, and your skills come back 10% sooner.",
             // LooseAgain, not Splinter. The card reads "a kill sends the next shot immediately" and the
             // grant was SPLINTER, whose own blurb is "on kill: richer loot" — an action-economy promise
             // paid out as a loot bonus, on the passive a player unlocks by finishing a quest for it.
