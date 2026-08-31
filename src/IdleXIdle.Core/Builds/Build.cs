@@ -253,7 +253,9 @@ public sealed record EquippedSkill(WovenAbility Ability, int CooldownMs, bool? P
     {
         get
         {
-            var def = SkillCatalogue.Resolve(Form, Passive);
+            // THE ID WINS when the ability carries one (every composed build does, since save
+            // v3); the (Form, Passive) round trip is the fixture-and-legacy fallback only.
+            var def = SkillCatalogue.Find(Ability.SkillId) ?? SkillCatalogue.Resolve(Form, Passive);
             // THE VARIATION AND ITS REINFORCEMENTS ARE DELTAS ON THE DEFINITION, applied in order.
             // The fight loop keeps reading one SkillDef and gains no case per variation — which is
             // what stops twenty-four variations becoming twenty-four branches.

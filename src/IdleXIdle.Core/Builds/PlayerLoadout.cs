@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Abilities;
 using IdleXIdle.Core.Automation;
-using IdleXIdle.Core.Builds;
+using IdleXIdle.Core.Persistence;
 using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Prestige;
 
-namespace IdleXIdle.Game;
+namespace IdleXIdle.Core.Builds;
 
 /// <summary>
 /// The player's build, as CHOICES — the four woven skills and the sockets — before it is resolved.
@@ -265,7 +265,7 @@ public sealed class PlayerLoadout
         // The assembly itself lives in Core (BuildComposer) so what reaches the sim can be tested; this
         // only gathers the loadout's lists.
         return BuildComposer.Compose(tree, mastery, character,
-            _skills.Select(s => new BuildComposer.SkillPick(s.Source, s.Form, s.VowId, NameOf(s), s.Passive)),
+            _skills.Select(s => new BuildComposer.SkillPick(s.Source, s.Form, s.VowId, NameOf(s), s.Passive, s.SkillId)),
             _keystoneIds, SkillCapacity, progress);
     }
 
@@ -275,11 +275,12 @@ public sealed class PlayerLoadout
 
     // ── Persistence (id-based, so it survives a reload) ─────────────────────────────────────────────
 
-    public IReadOnlyList<(string Source, string Form, string? VowId, bool? Passive)> SaveSkills() =>
-        _skills.Select(s => (s.Source.ToString(), s.Form.ToString(), s.VowId, s.Passive)).ToList();
+    public IReadOnlyList<(string? SkillId, string Source, string Form, string? VowId, bool? Passive)> SaveSkills() =>
+        _skills.Select(s => (s.SkillId, s.Source.ToString(), s.Form.ToString(), s.VowId, s.Passive)).ToList();
 
     public void Restore(
-        IEnumerable<(string Source, string Form, string? VowId, bool? Passive)> skills, IEnumerable<string> keystoneIds)
+        IEnumerable<(string? SkillId, string? Source, string? Form, string? VowId, bool? Passive)> skills,
+        IEnumerable<string> keystoneIds)
     {
         _skills.Clear();
         _keystoneIds.Clear();
@@ -287,9 +288,45 @@ public sealed class PlayerLoadout
             // Take(SkillCapacity), not Take(MaxSkills) — a saved fifth skill would otherwise be dropped
             // on the way in. The host sets the capacity from the trait tree BEFORE calling this, which
             // is the ordering that makes the truncation right rather than merely smaller.
-            foreach (var (src, form, vow, passive) in skills.Take(SkillCapacity))
-                if (Enum.TryParse<Source>(src, out var s) && Enum.TryParse<Form>(form, out var f))
-                    _skills.Add(new SkillChoice(s, f, vow, passive));
+            foreach (var (id, src, form, vow, passive) in skills.Take(SkillCapacity))
+            {
+                var sourceOk = Enum.TryParse<Source>(src, out var s);
+                var formOk = Enum.TryParse<Form>(form, out var f);
+                if (id is not null && SkillCatalogue.Find(id) is { } def)
+                {
+                    // A v3 row: the id IS the identity. The Form is only the legacy echo the old
+                    // readers still want; when it is absent it is derived exactly as SetSkill
+                    // writes it, so the id can never disagree with the echo beside it.
+                    var echo = formOk
+                        ? f
+                        : def.LegacyForm
+                          ?? (def.TakesABeat ? SkillCatalogue.PassiveOf(def.Style) : SkillCatalogue.ActiveOf(def.Style))
+                              .LegacyForm!.Value;
+                    _skills.Add(new SkillChoice(sourceOk ? s : Source.Body, echo, vow,
+                                                passive ?? !def.TakesABeat, def.Id));
+                    continue;
+                }
+                // A pre-v3 row, or an id this build does not know riding beside a readable Form:
+                // the Form-era identity. Neither an id nor a readable (Source, Form) means there is
+                // nothing to restore — the row is dropped, like every unknown catalogue name.
+                if (sourceOk && formOk) _skills.Add(new SkillChoice(s, f, vow, passive));
+            }
+
+        // THE MIGRATION, run once per load: every id-less slot is pinned to the SkillId it has
+        // always meant. The effective slot kind comes from the same walk the composer uses —
+        // SlotKinds, budget spill included — so a pre-rework four-active build migrates onto
+        // exactly the skills it has been fighting with, never onto four actives it cannot hold.
+        if (_skills.Any(sk => sk.SkillId is null))
+        {
+            var picks = _skills.Select(sk =>
+                new BuildComposer.SkillPick(sk.Source, sk.Form, sk.VowId, NameOf(sk), sk.Passive, sk.SkillId)).ToList();
+            var passiveKinds = BuildComposer.SlotKinds(picks, SkillCapacity);
+            for (var i = 0; i < _skills.Count; i++)
+                if (_skills[i].SkillId is null
+                    && LegacySkillForm.Resolve(_skills[i].Form.ToString(), passiveKinds[i]) is { } migrated)
+                    _skills[i] = _skills[i] with { SkillId = migrated };
+        }
+
         if (keystoneIds is not null)
             _keystoneIds.AddRange(keystoneIds.Take(MaxKeystones));
     }
@@ -316,7 +353,7 @@ public sealed class PlayerLoadout
     public static PlayerLoadout Starter()
     {
         var l = new PlayerLoadout();
-        l._skills.Add(new SkillChoice(Source.Body, Form.Strike, null));
+        l._skills.Add(new SkillChoice(Source.Body, Form.Strike, null, null, "hammer_blow"));
         return l;
     }
 

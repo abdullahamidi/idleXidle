@@ -640,7 +640,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // save has an empty list, and restoring THAT would strip a returning player down to no skills.
         if (save.WovenSkills.Count > 0)
             _loadout.Restore(
-                save.WovenSkills.Select(s => (s.Source, s.Form, s.VowId, s.Passive)), save.SocketedKeystoneIds);
+                save.WovenSkills.Select(s => (s.SkillId, (string?)s.Source, (string?)s.Form, s.VowId, s.Passive)),
+                save.SocketedKeystoneIds);
         _skillProgress.Restore(save.SkillProgress.Select(
             r => (r.SkillId, r.Uses, r.Variation, (IReadOnlyList<string>)r.Reinforcements)));
 
@@ -865,7 +866,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             // The build rides along via `with`, so Core's Capture stays unaware of the Game-layer loadout.
             WovenSkills = _loadout.SaveSkills()
-                .Select(s => new SavedSkill { Source = s.Source, Form = s.Form, VowId = s.VowId, Passive = s.Passive }).ToList(),
+                .Select(s => new SavedSkill
+                {
+                    SkillId = s.SkillId, Source = s.Source, Form = s.Form, VowId = s.VowId, Passive = s.Passive,
+                }).ToList(),
             SocketedKeystoneIds = _loadout.KeystoneIds.ToList(),
             SkillProgress = _skillProgress.ToSave()
                 .Select(r => new SavedSkillProgress
@@ -931,7 +935,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         Loadout = new ShareCodes.SharedBuild
         {
             Skills = _loadout.SaveSkills()
-                .Select(s => new SavedSkill { Source = s.Source, Form = s.Form, VowId = s.VowId, Passive = s.Passive }).ToList(),
+                .Select(s => new SavedSkill
+                {
+                    SkillId = s.SkillId, Source = s.Source, Form = s.Form, VowId = s.VowId, Passive = s.Passive,
+                }).ToList(),
             Keystones = _loadout.KeystoneIds.ToList(),
             Mastery = _mastery.Taken.ToList(),
         },

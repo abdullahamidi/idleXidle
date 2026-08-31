@@ -749,7 +749,10 @@ public sealed class WeaveScreen
                 {
                     Skills = Loadout.Skills.Select(s => new IdleXIdle.Core.Persistence.SavedSkill
                     {
-                        Source = s.Source.ToString(), Form = s.Form.ToString(), VowId = s.VowId,
+                        // The id and the slot kind ride along now — an RHB code used to carry only
+                        // (Source, Form), so a shared "BODY STRIKE" could not say BLOW from PRESS.
+                        SkillId = s.SkillId, Source = s.Source.ToString(), Form = s.Form.ToString(),
+                        VowId = s.VowId, Passive = s.Passive,
                     }).ToList(),
                     Keystones = Loadout.KeystoneIds.ToList(),
                     Mastery = MasteryTaken.ToList(),

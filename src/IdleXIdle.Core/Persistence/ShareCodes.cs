@@ -237,6 +237,7 @@ public static class ShareCodes
             || build.Skills.Any(s => s is null
                                      || string.IsNullOrEmpty(s.Source) || s.Source.Length > 40
                                      || string.IsNullOrEmpty(s.Form) || s.Form.Length > 40
+                                     || s.SkillId is { Length: > 64 }
                                      || s.VowId is { Length: > 64 })
             || build.Keystones.Any(k => string.IsNullOrEmpty(k) || k.Length > 64)
             || build.Mastery.Any(m => string.IsNullOrEmpty(m) || m.Length > 64))

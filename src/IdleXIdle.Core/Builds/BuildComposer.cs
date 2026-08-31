@@ -163,7 +163,6 @@ public static class BuildComposer
         {
             var s = picks[i];
             var vow = Weaving.ById(s.VowId);
-            var ability = new WovenAbility { Name = s.Name, Source = s.Source, Form = s.Form, Vow = vow };
             // The skill's own timing seeds its cooldown. A beat-counted skill still counts BEATS in
             // the fight; this is the millisecond figure the readouts and the wave-length rule use.
             // THE ID WINS when there is one: the library named this skill, and no Form-and-kind
@@ -176,6 +175,10 @@ public static class BuildComposer
             // spill to fall back on. The exemption a spill used to get existed only to protect the six
             // that a Source and a Form composed for free, and those six are gone with that door.
             if (!taughtSkills.Contains(def.Id)) continue;
+            // The ability carries the RESOLVED id from here on: whichever door this pick came
+            // through — the library's own name, or a legacy (Form, slot) pair — what reaches the
+            // sim and the next save is the SkillId.
+            var ability = new WovenAbility { Name = s.Name, Source = s.Source, Form = s.Form, Vow = vow, SkillId = def.Id };
             var cooldown = def.Beats > 0 ? def.Beats * SoloBattle.DefaultBeatMs
                                          : FormBehaviour.BaseCooldownMs(s.Form);
 

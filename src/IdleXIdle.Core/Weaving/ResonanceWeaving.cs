@@ -260,6 +260,13 @@ public sealed record WovenAbility
     public required Source Source { get; init; }
     public required Form Form { get; init; }
     public Vow? Vow { get; init; }
+
+    /// <summary>
+    /// The catalogue id this ability resolves to — the identity that outlives Form. Set by the
+    /// composer for every production build since save v3; null only in fixtures that still speak
+    /// Form, which resolve through the legacy bridge exactly as before.
+    /// </summary>
+    public string? SkillId { get; init; }
 }
 
 public static class Weaving

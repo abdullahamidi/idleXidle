@@ -14,13 +14,16 @@ namespace IdleXIdle.Core.Persistence;
 public sealed record SaveGame
 {
     /// <summary>Bumped whenever the shape changes. A save from the future must be refused, not guessed at.</summary>
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
 
     public int Version { get; init; } = CurrentVersion;
 
     // Version history: 2 = the item-system redesign (BaseType "Gem", nested SavedItem.Gems, and
     // TraitOverride's "NONE" sentinel). An older build's strict Enum.Parse would crash on "Gem", so
     // the bump turns that crash into the designed FromNewerVersion refusal.
+    // 3 = SkillId becomes a woven skill's persisted identity (2026-08-31). Source/Form are still
+    // written as a legacy echo for now; an older build reading a v3 file must refuse it as
+    // FromNewerVersion rather than mis-resolve the build, which is what this bump buys.
 
     /// <summary>UTC epoch milliseconds. The basis of offline progression.</summary>
     public long SavedAtMs { get; init; }
@@ -293,6 +296,13 @@ public sealed record SavedChest
 /// <summary>One woven skill in the saved build — Source x Form x Vow, all by name/id so it survives.</summary>
 public sealed record SavedSkill
 {
+    /// <summary>
+    /// The skill's REAL identity since save v3 — a <c>SkillCatalogue</c> id. Null on every older
+    /// save, where <see cref="Form"/> + <see cref="Passive"/> carry the identity instead and
+    /// <c>LegacySkillForm</c> migrates them forward on load.
+    /// </summary>
+    public string? SkillId { get; init; }
+
     public required string Source { get; init; }
     public required string Form { get; init; }
     public string? VowId { get; init; }
