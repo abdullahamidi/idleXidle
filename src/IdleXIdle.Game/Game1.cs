@@ -1587,10 +1587,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // the fifth skill card above: the passives list is variable-length and the RESONANCE
                     // heading below it used to be pinned at a fixed offset, so a full list was drawn
                     // straight through the heading. A fixture stopping at three could never show that.
-                    foreach (var id in new[] { "heavy_hand", "sharpened", "sunder", "crush", "breaker",
-                                               "monolith", "opener", "hasten", "alpha", "mark_mastery",
-                                               "interrupt" })
-                        _mastery.Take(id);
+                    // By BRANCH, not by a hard-coded id list: nine of the eleven ids the old list
+                    // named retired at the 2026-08-30 re-axe, Take() no-ops on an unknown id, and the
+                    // "six passives" pose had quietly become an empty list. Walking a branch's Minors
+                    // and Notables in catalog order respects prereqs the same way the ATTUNE fixture does.
+                    foreach (var wn in MasteryCatalog.Nodes.Where(
+                                 x => x.Branch == Branch.Resonance
+                                      && x.Kind is MasteryKind.Minor or MasteryKind.Notable))
+                        _mastery.Take(wn.Id);
 
                     // BUILDTREE frames the whole tree. The TOUR of this screen is, by definition, a first
                     // visit, so it is posed on the first-open framing a real first visit gets — the

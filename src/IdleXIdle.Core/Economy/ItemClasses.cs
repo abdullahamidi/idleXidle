@@ -51,7 +51,7 @@ public sealed record ItemClassDef
     /// <summary>The word on the card — "WARDEN".</summary>
     public required string Name { get; init; }
 
-    /// <summary>One plain sentence: "Heavy blows. Built for the WEIGHT road."</summary>
+    /// <summary>One plain sentence: "Skills that carry. Built for the RESONANCE road."</summary>
     public required string Description { get; init; }
 
     /// <summary>The mastery road this class was built for, or null for a class that favours none.</summary>
@@ -100,7 +100,7 @@ public static class ItemClasses
         new()
         {
             Class = ItemClass.Ranger, Name = "RANGER",
-            Description = "Many targets. Built for the SPREAD road.",
+            Description = "Many targets. Built for the LOOT road.",
             // THE OATHBOUND, not THE QUIVER. The brief put THE QUIVER here, but THE QUIVER leans TEMPO
             // in the roster and a class whose champion walks a different road than the class is named
             // for would be the first lie on the card. THE OATHBOUND has no lean, so it fits any class,

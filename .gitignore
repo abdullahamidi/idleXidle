@@ -203,3 +203,7 @@ seq_*.png
 # inputs, not assets: the strip beside them is what ships.
 *.png.frames/
 build/
+
+# P16 repo hygiene: one-off local artifacts, never content
+audit_character.png
+lfs-trace.txt
