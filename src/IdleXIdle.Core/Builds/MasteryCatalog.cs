@@ -419,12 +419,12 @@ public static class MasteryCatalog
     // ── FORM SPECIALISATIONS — the only triggers this tree grants. ────────────────────────────────
 
     /// <summary>
-    /// One per Form, hanging off the axis its Form belongs to.
+    /// One per STYLE, hanging off the axis it belongs to.
     /// </summary>
     /// <remarks>
     /// This is how the skill tree stops giving away what the trait tree sells. The old tree handed out
     /// general triggers for free while the Dust tree charged a permanent price for the same ones. Here the
-    /// skill tree grants only the six FORM-COMBO triggers — each dead weight without its Form, so it is a
+    /// skill tree grants only the six style-combo triggers — each dead weight without its style, so it is a
     /// specialisation rather than a gift — and every general trigger (Echo, Bloodlust, Undying, Venom,
     /// Splinter, Harvest, Desperation, Zeal, NoHealing) belongs to the trait tree alone.
     /// </remarks>
@@ -446,16 +446,15 @@ public static class MasteryCatalog
             $"MORPH SPECIALIST — LEECH DOUBLED, HEAL LIMIT {HealTuning.Default.CeilingText(siphon: true)} A WAVE",
             BuildTrigger.Siphon, S);
 
-        // ── THE SKILL ROADS. Each specialisation is the head of its style's road, and the road's one
-        //    node teaches that style's SECOND skill — the one with no Source-and-Form door on the
-        //    weave screen (design §5, "a node unlocks a skill"). Six nodes, six skills, and the other
-        //    six stay free because a champion that has learned nothing must still be able to fight.
+        // ── THE SKILL ROADS. Each specialisation is the head of its style's road; TWO NODES PER
+        //    ROAD, one per skill — walked, not arrived at. Twelve skills, twelve nodes, and none is
+        //    free: a champion that has learned nothing still fights with its birth skill.
         //
-        //    Priced at a GREATER rather than a specialisation: the specialisation before it already
-        //    cost 6, so a whole road to one skill is 11 points, and a player has about 66 at full
-        //    content. Two roads is a third of a career, which is the commitment the hexagon wanted.
-        // TWO NODES PER ROAD, one for each of the style's skills — the active first, then the
-        // passive off it, so a road is walked rather than arrived at. Twelve skills, twelve nodes.
+        //    Priced at a GREATER (5): the cheapest path to a first taught skill is minor 1 +
+        //    notable 3 + specialisation 6 + road 5 = 15 points; the style's second skill is 5 more.
+        //    LEARNING IS PERMANENT (D7): the road is the discovery gate, and respec returns the
+        //    points, never the skill — which is how, one discipline at a time, a career reaches
+        //    the other styles' skills at all.
         Teaches(n, Branch.Resonance, "road_hammer", "spec_strike", "hammer_blow");
         Teaches(n, Branch.Resonance, "road_hammer_2", "road_hammer", "hammer_press");
         Teaches(n, Branch.Resonance, "road_snare", "spec_trap", "snare_jaws");

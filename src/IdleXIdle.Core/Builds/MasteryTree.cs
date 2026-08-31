@@ -21,7 +21,7 @@ public enum MasteryKind
     Greater,
 
     /// <summary>
-    /// A STYLE ROAD's skill node: it teaches one of the six skills that have no Form of their own.
+    /// A STYLE ROAD's skill node: it TEACHES one of the twelve skills — permanently (D7).
     /// </summary>
     /// <remarks>
     /// Its own kind rather than a Greater, because a branch is 6/5/4/1 and costs 49 — invariants two
@@ -80,14 +80,14 @@ public sealed record MasteryNode(
     /// The <see cref="SkillDef.Id"/> this node TEACHES, for a skill road's node (design §5).
     /// </summary>
     /// <remarks>
-    /// Six of the twelve skills have no <c>LegacyForm</c> — no Source-and-Form door on the weave
-    /// screen — and this is how a player reaches them. The other six are free from the first wave,
-    /// because a champion that has learned nothing must still be able to fight.
+    /// All twelve skills are learned on the tree; a champion that has learned nothing still fights
+    /// with its birth skill (<c>Character.StartingSkillId</c>).
     ///
-    /// <b>Respec RE-LOCKS</b> (designer, 2026-08-30). Nothing here is monotone: give the point back
-    /// and the skill is gone again, which is what makes a style road a commitment rather than a
-    /// collection. A build holding a skill it has just un-learned is not left broken — the composer
-    /// drops that slot and the weave screen says why.
+    /// <b>Learning is PERMANENT</b> (D7, 2026-08-31 — it re-locked on respec until then). The node
+    /// is the DISCOVERY gate: taking it latches the skill into the learned set for good, and respec
+    /// returns the points, never the skill. That permanence is load-bearing, not a kindness — one
+    /// discipline gates one style's road, so learning across respecs is the only way a four-slot
+    /// build ever fills from twelve skills.
     /// </remarks>
     public string? GrantsSkillId { get; init; }
 
@@ -151,6 +151,12 @@ public sealed class MasteryTree
 {
     private readonly HashSet<string> _taken = new() { MasteryCatalog.StartId };
 
+    // ── DISCOVERY IS PERMANENT (D7, 2026-08-31). Taking a road node LATCHES its skill here; respec
+    //    and refund return points and never touch this set. Persisted (SaveGame.LearnedSkills) and
+    //    unioned with what the currently-taken roads teach, so a pre-D7 save seeds itself from its
+    //    own MasteryTaken on first load. ─────────────────────────────────────────────────────────────
+    private readonly HashSet<string> _learned = new(StringComparer.Ordinal);
+
     /// <summary>Total points earned over the whole game. Derived by the host from depth every frame.</summary>
     public int Earned { get; private set; }
 
@@ -200,7 +206,18 @@ public sealed class MasteryTree
     {
         if (!CanTake(id)) return false;
         _taken.Add(id);
+        // THE LATCH (D7): a taught skill is learned the moment its node is taken, for good.
+        if (MasteryCatalog.ById(id)?.GrantsSkillId is { } learned) _learned.Add(learned);
         return true;
+    }
+
+    /// <summary>Restore the permanently learned skills. Unknown ids are dropped, like RestoreTaken's.</summary>
+    public void RestoreLearned(IEnumerable<string> ids)
+    {
+        _learned.Clear();
+        if (ids is null) return;
+        foreach (var id in ids)
+            if (SkillCatalogue.Find(id) is not null) _learned.Add(id);
     }
 
     /// <summary>
@@ -224,7 +241,8 @@ public sealed class MasteryTree
     }
 
     /// <summary>
-    /// Give every point back. Free and instant — see the class remarks.
+    /// Give every point back. Free and instant — see the class remarks. Learned SKILLS stay
+    /// learned (D7): the respec moves points, never discoveries.
     /// </summary>
     public void Respec()
     {
@@ -270,25 +288,21 @@ public sealed class MasteryTree
         return total;
     }
 
-    /// <summary>Every skill the taken nodes have taught.</summary>
+    /// <summary>
+    /// Every skill this champion has EVER learned: the permanent latch, plus whatever the
+    /// currently-taken road nodes teach — which is how a pre-D7 save seeds itself (its next save
+    /// writes the union, and the latch carries it from there).
+    /// </summary>
     public IReadOnlySet<string> LearnedSkills()
-        => _taken.Select(MasteryCatalog.ById)
-                 .Where(n => n?.GrantsSkillId is not null)
-                 .Select(n => n!.GrantsSkillId!)
-                 .ToHashSet(StringComparer.Ordinal);
+    {
+        var set = new HashSet<string>(_learned, StringComparer.Ordinal);
+        foreach (var n in _taken.Select(MasteryCatalog.ById))
+            if (n?.GrantsSkillId is { } s) set.Add(s);
+        return set;
+    }
 
     /// <summary>Every trigger the taken specialisations grant.</summary>
     public IReadOnlySet<BuildTrigger> Triggers()
         => _taken.Select(MasteryCatalog.ById).Where(n => n?.Grant is not null)
                  .Select(n => n!.Grant!.Value).ToHashSet();
-
-    /// <summary>
-    /// The numeric mods, kept for the call sites that still speak <see cref="BuildMods"/>.
-    /// </summary>
-    /// <remarks>
-    /// Deliberately NEUTRAL. The whole point of the rebuild is that this tree changes shapes rather than
-    /// scalars; anything it did add here would be the bare multiplier the design forbids. It exists so
-    /// Build.Resolve keeps its signature, not because the tree has numbers to contribute.
-    /// </remarks>
-    public BuildMods Mods() => BuildMods.None;
 }

@@ -269,8 +269,8 @@ public static class Tutorial
             + "what is worn.",
 
         TutorialStep.WeaveBuild =>
-            "Press B for BUILD. Every skill is a SOURCE and a FORM — hover either one to read exactly "
-            + "what it does before you commit.",
+            "Press B for BUILD. Pick a slot, then one of your learned skills from the library — "
+            + "skills are learned on the MASTERY tree (E), and stay learned for good.",
 
         TutorialStep.Conquer =>
             $"Reach CONQUEST {Checkpoints.ConquestWave} / {Checkpoints.ConquestWave} in the banner over the arena to conquer the region and open the next. "

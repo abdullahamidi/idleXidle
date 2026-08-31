@@ -43,47 +43,6 @@ public class AffixLivenessTests
         return b;
     }
 
-    // ── SIEGE AND THE PLATED RE-MINT ──────────────────────────────────────────────────────────────
-
-    [Fact]
-    public void test_siege_pays_its_bonus_against_a_plated_armoured_wave()
-    {
-        // THE REGRESSION TEST FOR THE INVERTED NODE. PushWave re-mints every creature to apply PLATED's
-        // armour multiplier, and the re-mint copied MaxHealth, Health, Damage, Defense and Source while
-        // silently dropping Archetype. WaveCreature.Archetype has exactly one reader — SIEGE, "+45% to
-        // ARMOURED, -25% to everything else" — so a null tag turned the anti-armour Greater into a
-        // penalty on the one wave type it was bought to answer.
-        var siege = SkillShape.None with { VsArmouredBonus = 0.45f, VsOtherPenalty = 0.25f };
-
-        // HEALTH FAR BEYOND WHAT THE WINDOW CAN CHEW. The first version of this fixture gave the
-        // creature 4,000 health, both builds killed it, and both therefore "dealt" about 4,000 — the
-        // test passed by 1.4% on rounding noise and would have passed just as happily with SIEGE still
-        // inverted. A fixture that saturates its own metric proves nothing; the creature has to survive
-        // so that the number being compared is throughput and not the target's health bar.
-        const float unkillable = 1e9f;
-        var armoured = new WaveCreature
-        {
-            MaxHealth = unkillable, Health = unkillable, Damage = 10f, Defense = 20f,
-            Archetype = Archetype.Armoured,
-        };
-        var untagged = new WaveCreature
-        {
-            MaxHealth = unkillable, Health = unkillable, Damage = 10f, Defense = 20f,
-        };
-
-        var withTag = DamageInto(siege, armoured);
-        var without = DamageInto(siege, untagged);
-        _out.WriteLine($"SIEGE into ARMOURED {withTag:N0} · into an untagged clone of it {without:N0}");
-
-        // The node is +45% against Armoured and -25% against everything else, so the ratio it is worth
-        // is 1.45 / 0.75 = 1.93. Asserted well under that, at 1.5, because hit quantisation and flat
-        // armour both eat into the raw multiplier — but far enough above 1 that noise cannot carry it.
-        Assert.True(withTag > without * 1.5f,
-                    "SIEGE must pay MUCH more into a creature tagged Armoured than into the same "
-                    + $"creature with its tag missing — got {withTag:N0} against {without:N0}, a ratio "
-                    + $"of {withTag / Math.Max(1f, without):0.00} where 1.93 is the node's own");
-    }
-
     [Fact]
     public void test_the_plated_affix_does_not_strip_the_archetype_it_armours()
     {
@@ -198,14 +157,6 @@ public class AffixLivenessTests
     }
 
     /// <summary>Total damage a build lands into one creature over a fixed window.</summary>
-    private static float DamageInto(SkillShape shape, WaveCreature target)
-    {
-        var champ = new Champion { MaxHealth = 100_000, Health = 100_000 };
-        var (_, events) = SoloBattle.ResolveWave(
-            champ, BuildWith(shape), new Hunter(), new[] { target },
-            enemyIntervalMs: 100_000, ExpeditionTuning.Default, new Random(11));
-        return events.Where(e => e.Kind == BattleEventKind.Strike).Sum(e => e.Amount);
-    }
 
     /// <summary>How many times the champion was bitten inside one wave.</summary>
     private static int BitesTaken(int intervalMs)

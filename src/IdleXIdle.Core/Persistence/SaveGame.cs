@@ -165,6 +165,13 @@ public sealed record SaveGame
     /// <summary>Mastery-tree nodes the player has taken (ids into MasteryCatalog).</summary>
     public List<string> MasteryTaken { get; init; } = new();
 
+    /// <summary>
+    /// Skills learned FOR GOOD (D7, 2026-08-31): catalogue ids latched when a road node is taken.
+    /// Respec never removes one. Absent on an older save — the tree seeds the set from
+    /// <see cref="MasteryTaken"/>'s roads, and the next save writes the union.
+    /// </summary>
+    public List<string> LearnedSkills { get; init; } = new();
+
     /// <summary>Total mastery points earned over the whole game.</summary>
     public int MasteryEarned { get; init; }
 

@@ -370,8 +370,7 @@ public class MasteryTreeTests
         {
             var s = node.Shape;
             var costs = s.HitSize < 1f || s.SkillRate < 1f || s.MaxHealth < 1f || s.DamageDealt < 1f
-                        || s.LaterHitMultiplier < 1f || s.AfterOpeningPenalty > 0f
-                        || s.VsOtherPenalty > 0f || s.OverwhelmFloor > 0f;
+                        || s.LaterHitMultiplier < 1f || s.AfterOpeningPenalty > 0f;
 
             Assert.True(costs, $"{node.Id} is pure upside. Every mastery must make something worse.");
         }
@@ -381,8 +380,8 @@ public class MasteryTreeTests
     /// Every greater carries a visible price too.
     /// </summary>
     /// <remarks>
-    /// Ring 3 is where a branch stops being free. BASTION and CASCADE are the two exceptions: both are
-    /// conditional rather than costed — they pay only when a condition the player must build for holds,
+    /// Ring 3 is where a branch stops being free. BASTION is the canonical exception: conditional
+    /// rather than costed — it pays only when a condition the player must build for holds,
     /// which is a price of a different kind. Damage TAKEN above 1 joined the list of recognised prices
     /// with RUSH: Tempo's side-road greater pays in the opposed branch's currency, which is the most
     /// honest price a Tempo node can carry. A LATER-CAST multiplier under 1 joined it with OPENING
@@ -394,14 +393,14 @@ public class MasteryTreeTests
         // ABSORB joined the list when it moved down a ring in the 2026-08-30 pass: "mitigation rises
         // as health falls" pays nothing to a champion that is winning, which is a price of the same
         // kind BASTION carries.
-        var conditional = new[] { "bastion", "cascade", "assassinate", "pure", "absorb" };
+        var conditional = new[] { "bastion", "assassinate", "pure", "absorb" };
 
         foreach (var node in MasteryCatalog.Nodes.Where(n => n.Kind == MasteryKind.Greater))
         {
             if (conditional.Contains(node.Id)) continue;
             var s = node.Shape;
             Assert.True(
-                s.HitSize < 1f || s.SkillRate < 1f || s.DamageDealt < 1f || s.VsOtherPenalty > 0f
+                s.HitSize < 1f || s.SkillRate < 1f || s.DamageDealt < 1f
                 || s.DamageTaken > 1f || s.LaterCastMultiplier < 1f || s.AutoAttackDamage < 1f,
                 $"{node.Id} is an unconditional upgrade at ring 3. Greaters cost something.");
         }

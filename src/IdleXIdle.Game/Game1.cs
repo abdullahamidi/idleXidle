@@ -647,6 +647,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _deepestEver = save.MasteryEarned;         // stored the deepest-ever; Earned re-derives from it
         _mastery.RestoreTaken(save.MasteryTaken);
+        _mastery.RestoreLearned(save.LearnedSkills);   // D7 — discoveries survive every respec
         // The tree's camera. PARKED like the run log below: _buildScreen is built in LoadContent. A
         // save from before the camera existed carries zoom 0, which the screen answers with its
         // first-open framing — the same first sight of the tree a new game gets.
@@ -895,6 +896,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // being closed.
             RunLog = _expedition.Log.Entries.Select(RunLog.ToSave).ToList(),
             MasteryTaken = _mastery.Taken.ToList(),
+            // D7: the UNION (latch + currently-taken roads), so a pre-D7 save latches everything
+            // its roads ever taught the first time it saves under this build.
+            LearnedSkills = _mastery.LearnedSkills().OrderBy(s => s, StringComparer.Ordinal).ToList(),
             // The tree's camera, so the zoom a player settled on is the zoom they come back to. The
             // ten-second autosave carries it; nothing marks the screen dirty per wheel-tick.
             MasteryZoom = _buildScreen.CameraZoom,
@@ -5154,11 +5158,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private static readonly Color NavLabel = new(0x8A, 0x82, 0xA0);
 
     /// <summary>
-    /// Skill-tree points: one per five waves of first-time depth, summed across regions.
+    /// Mastery points: floor(sqrt(first-time depth) × 0.9) per region, summed — see MasteryPoints.
     /// </summary>
     /// <remarks>
-    /// Three grants at the start so a new player has something to spend before their first descent
-    /// ends. Nothing else feeds this — not the Warren, not conquest. See game-flow.md §3.5.
+    /// Nothing else feeds this — not the Warren, not conquest, and there are no free starting
+    /// points: the tree opens at wave 25, which already pays four.
     /// </remarks>
     private int SkillPointsEarned()
     {

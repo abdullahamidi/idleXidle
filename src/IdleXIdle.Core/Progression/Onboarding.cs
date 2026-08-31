@@ -51,7 +51,7 @@ public enum TourTarget
     // ── BUILD (the weave) ──
     /// <summary>The skill slot rows.</summary>
     SkillSlots,
-    /// <summary>The SOURCE and FORM picker.</summary>
+    /// <summary>The skill library picker — the twelve learnable skills.</summary>
     SkillPicker,
     /// <summary>The VOWS column and the keystone sockets.</summary>
     Vows,
@@ -253,9 +253,9 @@ public static class Onboarding
                 "Each row is one skill slot. Click a row to change the skill in it. "
                 + "More slots open as you go deeper."),
 
-            new TourStep(TourTarget.SkillPicker, "SOURCE AND FORM",
-                "A skill is a Source and a Form. The Source is its element. The Form is how it acts. "
-                + "Pick one of each and the skill is woven."),
+            new TourStep(TourTarget.SkillPicker, "YOUR SKILL LIBRARY",
+                "Twelve skills exist, two per style. You learn them on the MASTERY tree, and once "
+                + "learned they are yours for good — pick any learned one for the chosen slot."),
 
             new TourStep(TourTarget.Vows, "VOWS AND KEYSTONES",
                 "A Vow is a promise on one skill. It pays a lot while the promise is kept, and nothing "
@@ -269,12 +269,12 @@ public static class Onboarding
         Activity.Mastery => new[]
         {
             new TourStep(TourTarget.MasteryTree, "FOUR DIRECTIONS",
-                "Four directions grow out of the centre. WEIGHT is fewer, bigger hits. TEMPO is hitting "
-                + "first and often. SPREAD hits many at once, and ENDURE outlasts the enemy."),
+                "Four directions grow out of the centre. RESONANCE is your skills' power. LOOT is a "
+                + "richer haul. TEMPO is hitting first and often, and ENDURE outlasts the enemy."),
 
             new TourStep(TourTarget.Specialisations, "ONE DISCIPLINE",
-                "Each direction ends in specialisation nodes. Taking one gives your champion a "
-                + "discipline: one Form whose skills hit twice as hard. You can hold only one."),
+                "A specialisation is your discipline: that STYLE's skills hit twice as hard, and "
+                + "its road teaches the style's two skills — learned for good."),
 
             new TourStep(TourTarget.NodeCard, "POINTS, AND TAKING THEM BACK",
                 "Rest the pointer on a node to read it here. Points come from reaching a depth you "

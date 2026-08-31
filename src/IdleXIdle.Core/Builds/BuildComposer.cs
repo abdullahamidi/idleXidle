@@ -55,19 +55,10 @@ public static class BuildComposer
     /// reorder a player's build for them.
     /// </para>
     /// </remarks>
-    public static IReadOnlyList<bool> SlotKinds(IReadOnlyList<SkillPick> skills, int slotCapacity,
-                                               IReadOnlySet<string>? taught = null)
+    public static IReadOnlyList<bool> SlotKinds(IReadOnlyList<SkillPick> skills, int slotCapacity)
     {
         ArgumentNullException.ThrowIfNull(skills);
         var activeBudget = Build.ActiveSlotsFor(slotCapacity);
-
-        // THE SPILL IS NOT GATED, and the `taught` set it is handed is only for the screen to read
-        // back. A spill is the BUDGET's decision, not the player's, and §11 promises an old
-        // four-active build keeps all four skills — refusing there would silently unweave half of
-        // someone's build on load, and Build.Weave would drop the overflow rather than keep it as an
-        // active, because the active capacity refuses a third. What IS gated is the player's own
-        // choice, in Compose below.
-        _ = taught;
 
         var passive = new bool[skills.Count];
         var actives = 0;
@@ -115,8 +106,9 @@ public static class BuildComposer
         // Dust tree's (THE BOUND HAND's vow power). This is the ONE place a character reaches the sim.
         var build = new Build
         {
-            PassiveMods = DustEffects.TreeMods(tree).Combine(mastery.Mods())
-                                     .Combine(character?.Mods ?? BuildMods.None),
+            // The mastery tree contributes SHAPES, never BuildMods — its old Mods() channel
+            // returned None unconditionally and died with P6.
+            PassiveMods = DustEffects.TreeMods(tree).Combine(character?.Mods ?? BuildMods.None),
             Affinity = mastery.Affinity(),
             ExtraTriggers = new HashSet<BuildTrigger>(
                 mastery.Triggers().Concat(character?.Grants ?? Array.Empty<BuildTrigger>())),
@@ -155,8 +147,8 @@ public static class BuildComposer
             // every legacy row to its SkillId through LegacySkillForm before anything composes.)
             if (s.SkillId is not { } id || SkillCatalogue.Find(id) is not { } def) continue;
             // THE GATE, AND IT IS UNCONDITIONAL. You weave what you know: all twelve skills are
-            // learned on the mastery tree since 2026-08-30. Respec RE-LOCKS, so this set shrinks
-            // the moment a point is given back — and the weave screen says which skill went.
+            // learned on the mastery tree — and since D7 (2026-08-31) learning is PERMANENT, so
+            // this set only ever grows and a respec moves points without unweaving anything.
             if (!taughtSkills.Contains(def.Id)) continue;
 
             // WHAT THE PLAYER HAS SPENT ON THIS SKILL, applied ONCE, here. Null progress means an

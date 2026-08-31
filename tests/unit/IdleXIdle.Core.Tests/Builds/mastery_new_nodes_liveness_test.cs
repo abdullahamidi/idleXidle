@@ -63,24 +63,6 @@ public class mastery_new_nodes_liveness_test
         return n!.Shape;
     }
 
-    // ── WEIGHT ────────────────────────────────────────────────────────────────────────────────────
-
-    /// <summary>STAGGER pushes bites back, so fewer land — and only one push per bite.</summary>
-    [Fact]
-    public void test_stagger_holds_bites_off_and_never_for_ever()
-    {
-        // Bites every 900 ms against a pool nothing kills. HAMMER BLOW casts every 9,000 ms or so
-        // (6 beats), so a stagger of 500 ms per bite should cut the bite count but never to zero.
-        var shape = SkillShape.None with { StaggerThreshold = 1f, StaggerMs = 500, HitSize = 3f };
-        var plain = Fight(SkillShape.None with { HitSize = 3f }, Wave(1, 1_000_000f, 10f), NoSwing);
-        var stagger = Fight(shape, Wave(1, 1_000_000f, 10f), NoSwing);
-
-        int Bites(List<BattleEvent> ev) => ev.Count(e => e.Kind == BattleEventKind.EnemyStrike);
-        Assert.True(Bites(stagger.Events) < Bites(plain.Events),
-            $"STAGGER took {Bites(stagger.Events)} bites against {Bites(plain.Events)} without — nothing is being pushed back.");
-        Assert.True(Bites(stagger.Events) > 0, "STAGGER held every bite off — the once-per-bite cap is not working.");
-    }
-
     // ── TEMPO ─────────────────────────────────────────────────────────────────────────────────────
 
     [Fact]

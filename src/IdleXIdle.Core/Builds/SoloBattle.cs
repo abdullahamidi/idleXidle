@@ -451,7 +451,6 @@ public static class SoloBattle
         // Per-wave state the shape's conditional nodes need. All of it is local, so nothing leaks into
         // the next wave — which matters most for SUNDER, whose armour strip is explicitly wave-scoped.
         var struckOnce = new HashSet<WaveCreature>();   // FOLLOW THROUGH / OPENER / ALPHA
-        var cascadeArmed = false;                       // CASCADE
         var assassinated = false;                       // ASSASSINATE — once per wave
         // SIGNATURE state. Wounds and bent armour are per-CREATURE (they die with the wave); the
         // Spirit prime and the Mind budget are per-champion moments inside it.
@@ -461,7 +460,6 @@ public static class SoloBattle
         var mindExtendBudget = 0;                               // MIND — refilled when a MARK opens
 
         var firstBiteTaken = false;                     // FORTIFY
-        var killFuelArmed = false;                      // RALLY — the next skill after a kill
         var biteFuel = 0;                               // PAYBACK — bites banked for the next skill
         var castRamp = 0;                               // RHYTHM — casts since the last bite
         var staggeredThisBite = false;                  // STAGGER — one push-back per bite
@@ -640,11 +638,9 @@ public static class SoloBattle
         var beatOwed = false;
         var nextBite = enemyIntervalMs;
 
-        // THE LIVE SKILL RATE. The build's rate, then the two nodes that move it DURING a wave: TIDE
-        // (faster per living creature) and RHYTHM (faster per cast since the last bite). Read at every
-        // cast and swing, so a kill or a bite changes the NEXT cooldown rather than the wave's.
+        // THE LIVE SKILL RATE. The build's rate, then RHYTHM (faster per cast since the last
+        // bite) — read at every cast and swing, so a bite changes the NEXT cooldown, not the wave's.
         float RateNow() => mods.SkillRate * shape.SkillRate
-                           * (1f + shape.RatePerCreature * alive)
                            * (1f + shape.CastRampPerCast * castRamp);
 
         (WaveOutcome, List<BattleEvent>) Finish(WaveOutcome o, int atMs)
@@ -798,16 +794,6 @@ public static class SoloBattle
                 if (shape.CullBonus > 0f && against.Health < against.MaxHealth * shape.CullThreshold)
                     m *= 1f + shape.CullBonus;
 
-                // HEADLONG — CULL's mirror: the bonus is for a creature still mostly whole, which is
-                // where a few big hits count and a stream of small ones does not.
-                if (shape.FreshBonus > 0f && against.Health > against.MaxHealth * shape.FreshThreshold)
-                    m *= 1f + shape.FreshBonus;
-
-                // SIEGE — the branch's one explicitly narrow node.
-                if (shape.VsArmouredBonus > 0f || shape.VsOtherPenalty > 0f)
-                    m *= against.Archetype == Encounters.Archetype.Armoured
-                        ? 1f + shape.VsArmouredBonus
-                        : 1f - shape.VsOtherPenalty;
             }
 
             // SWARMBANE — the more of them there are, the harder you hit. The mirror of what a Swarm
@@ -917,20 +903,6 @@ public static class SoloBattle
 
             var raw = dmg;
 
-            // OVERWHELM. Both halves of the mastery: a hit under the floor lands for NOTHING, and a hit
-            // over it ignores armour entirely. It is the one node in the tree that can make a build deal
-            // literally zero, which is exactly why it is priced at a mastery and why it makes every
-            // Spread build unplayable.
-            if (fromSkill && shape.OverwhelmFloor > 0f)
-            {
-                if (dmg < shape.OverwhelmFloor)
-                {
-                    if (metrics is not null) metrics.Hits++;
-                    return;
-                }
-                ignoresArmour = true;
-            }
-
             // ARMOUR IS FLAT AND SIGNED. It used to be guarded on `Defense > 0f`, and under that guard
             // a creature broken PAST zero was identical to one broken exactly to zero — which made
             // PRESS's "-25", CRUSHING's "-50" and SETTLE's "-90" three ways of writing the same
@@ -942,15 +914,9 @@ public static class SoloBattle
             {
                 var armour = target.Defense;
 
-                // SHARPENED / EXECUTIONER cut flat armour; CRUSH halves whatever is left, but only for a
-                // hit already many times the creature's mitigation — it rewards size, not persistence.
+                // SHARPENED / EXECUTIONER cut flat armour.
                 if (fromSkill && armour > 0f)
-                {
                     armour = MathF.Max(0f, armour - shape.ArmourPenetration);
-                    if (shape.CrushArmourMultiple > 0f && armour > 0f
-                        && dmg > armour * shape.CrushArmourMultiple)
-                        armour *= 1f - shape.ArmourIgnoreFraction;
-                }
 
                 if (armour > 0f) dmg = MathF.Max(dmg * MinHitFraction, dmg - armour);
                 // BROKEN PAST ZERO. Bounded by the hit itself, so a deep break can at most double a
@@ -970,29 +936,12 @@ public static class SoloBattle
             target.Health -= dmg;
             if (fromSkill) struckOnce.Add(target);
 
-            // SUNDER — armour stripped for the rest of the wave. Reads the RAW force of the swing, not
-            // what got through: a hit that armour mostly absorbed still bent the plate.
-            if (fromSkill && shape.SunderThreshold > 0f && raw >= shape.SunderThreshold)
-                target.Defense = MathF.Max(0f, target.Defense - shape.SunderAmount);
-
-            // STAGGER — a swing that big pushes the whole wave's next bite back. Once per bite: the flag
-            // is cleared when the bite lands, so a heavy build cannot chain pushes into immunity.
-            if (fromSkill && shape.StaggerMs > 0 && raw >= shape.StaggerThreshold && !staggeredThisBite)
-            {
-                nextBite += shape.StaggerMs;
-                staggeredThisBite = true;
-            }
-
             if (metrics is not null && target.Health <= 0f) metrics.CreaturesKilled++;
             var idx = IndexOf(target);
             events.Add(new BattleEvent(BattleEventKind.Strike, idx, (int)MathF.Round(dmg), atMs, FromSkill: !swing));
             if (!target.Alive)
             {
                 alive--;
-                if (shape.CascadeOnKill) cascadeArmed = true;
-                // RALLY — the next skill activation hits harder. Any kill, like MOMENTUM.
-                if (shape.NextSkillAfterKillBonus > 0f) killFuelArmed = true;
-
                 // One EnemyDown per CREATURE, not per wave. The screen needs to know which sprite to
                 // remove; the wave-cleared signal is the outcome, not this event.
                 events.Add(new BattleEvent(BattleEventKind.EnemyDown, idx, 0, atMs));
@@ -1059,19 +1008,12 @@ public static class SoloBattle
             // read 4.6 creatures per cast for a build whose casts reach 1.6 (review 2026-08-30).
             if (fromSkill && countsAsActivation && metrics is not null) metrics.Activations++;
 
-            // CASCADE — one activation after a kill reaches everything. Armed in LandOn, spent here, so
-            // the reward lands on the NEXT cast and a player can see the ripple rather than guess at it.
-            if (fromSkill && cascadeArmed) { targets = int.MaxValue; cascadeArmed = false; }
-
-            // RALLY and PAYBACK — bonuses banked by a kill and by bites, spent whole on the next skill
-            // activation, every hit of it. Raw is scaled before the per-target loop so CHAIN and
-            // RICOCHET's extra hit carry the same rally.
-            if (fromSkill && killFuelArmed) { raw *= 1f + shape.NextSkillAfterKillBonus; killFuelArmed = false; }
+            // PAYBACK — bites banked, spent whole on the next skill activation, every hit of it.
+            // Raw is scaled before the per-target loop so every hit carries the same bank.
             if (fromSkill && biteFuel > 0) { raw *= 1f + shape.BiteFuelBonus * biteFuel; biteFuel = 0; }
 
             var dealt = 0f;
             var struck = 0;
-            var lastIndex = -1;
             for (var i = 0; i < creatures.Count && struck < targets; i++)
             {
                 var c = creatures[i];
@@ -1093,33 +1035,10 @@ public static class SoloBattle
                     dealt += hit;
                 }
                 struck++;
-                lastIndex = i;
                 if (fromSkill && countsAsActivation && metrics is not null) metrics.TargetsStruck++;
             }
 
             if (!fromSkill) return dealt;
-
-            // CHAIN and RICOCHET both reach PAST the activation's own target count, which is what makes
-            // them Spread nodes rather than damage nodes — they buy action economy, and a build already
-            // striking everything gains nothing from either.
-            var extraFraction = shape.ChainFraction;
-            if (shape.RicochetChance > 0f && rng.NextDouble() < shape.RicochetChance)
-                extraFraction = MathF.Max(extraFraction, shape.RicochetFraction);
-
-            if (extraFraction > 0f)
-                for (var i = lastIndex + 1; i < creatures.Count; i++)
-                {
-                    var c = creatures[i];
-                    if (!c.Alive) continue;
-                    var hit = SignatureAmp(raw * extraFraction * Amp(absMs, skillSource, skillDef, c),
-                                           c, skillSource);
-                    LandOn(c, hit, atMs, fromSkill: true);
-                    SignatureLay(c, skillSource);
-                    dealt += hit;
-                    struck++;
-                    if (metrics is not null) metrics.TargetsStruck++;
-                    break;
-                }
 
             // FEEDBACK — the Spread/Endure bridge. Sustain that scales with how WIDE you are, which is
             // the only way the two branches have of paying each other.

@@ -639,29 +639,6 @@ public static class SkillCatalogue
     public static SkillDef PassiveOf(Style style) => All.First(s => s.Style == style && !s.TakesABeat);
 
     /// <summary>
-    /// Does this skill have to be TAUGHT by a mastery node before it can be woven?
-    /// </summary>
-    /// <remarks>
-    /// <b>ALL TWELVE, since 2026-08-30.</b> It was six of them, and the other
-    /// six were free because a Source and a Form on the weave screen composed them. The designer
-    /// retired that door: "Şu an skiller hala en baştan açılıyor ama, benim skilleri mastery treeden
-    /// açmam lazım. Artık source ve form skill oluşturmamın bir önemi kalmadı." A skill is a thing you
-    /// LEARN now, and where you learn it is the road you walked.
-    ///
-    /// A champion that has learned nothing is not left unarmed: every champion brings one skill of
-    /// its own (<see cref="Characters.Character.StartingSkillId"/>), which is also what tells two
-    /// champions apart before either has spent a point.
-    /// </remarks>
-    public static bool NeedsUnlock(SkillDef def)
-    {
-        ArgumentNullException.ThrowIfNull(def);
-        return true;
-    }
-
-    /// <summary>The six that a style road has to teach, in ring order.</summary>
-    public static IReadOnlyList<SkillDef> Taught { get; } = All.Where(NeedsUnlock).ToList();
-
-    /// <summary>
     /// Cyclic distance on the six-style ring, 0..3 — the affinity hexagon, unchanged in shape from
     /// the Form era's and corrected in ORDER (see <see cref="Style"/>).
     /// </summary>

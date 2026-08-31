@@ -24,10 +24,12 @@ namespace IdleXIdle.Core.Builds;
 /// specialisation as the first thing to want.
 /// </para>
 /// <para>
-/// 0.9, from 0.8 (2026-08-27): the tree grew from 220 to 256 points when every ring gained a node, and
-/// the curve grew with it so six regions at depth 150 still buy about a quarter of it (66 of 256) and
-/// two complete branches (98) stay out of reach. Wave 40 still pays 5, short of the 10 a
-/// specialisation's shortest path costs.
+/// 0.9, from 0.8 (2026-08-27), when the tree was 256 points; the twelve skill roads later took it
+/// to 316, so six regions at depth 150 buy about a fifth of it (66 of 316) and two complete
+/// branches (98) stay out of reach. That squeeze is a real signal, and it is deliberately NOT
+/// answered by raising this curve — whether a champion should earn more mastery now that mastery
+/// also buys skills is a playtest question (MasteryTreeTests owns the band). Wave 40 still pays 5,
+/// short of the 15 a first taught skill's shortest path costs.
 /// </para>
 /// </remarks>
 public static class MasteryPoints

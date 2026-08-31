@@ -122,27 +122,6 @@ public sealed record SkillShape
 
     public float ArmourPenetration { get; init; }
 
-    /// <summary>Fraction of the remaining armour a qualifying hit ignores (CRUSH).</summary>
-    public float ArmourIgnoreFraction { get; init; }
-
-    /// <summary>A hit must exceed this multiple of the target's armour to qualify for CRUSH.</summary>
-    public float CrushArmourMultiple { get; init; }
-
-    /// <summary>
-    /// OVERWHELM. Hits below <see cref="OverwhelmFloor"/> deal NOTHING; hits at or above it ignore armour
-    /// completely. Zero disables both halves.
-    /// </summary>
-    /// <remarks>
-    /// The single most consequential node in the game, and the reason the shape has a floor at all: it
-    /// makes armour stop existing for a Weight build and makes any build that delivers damage in small
-    /// pieces stop working. A multiplier could not express either half.
-    /// </remarks>
-    public float OverwhelmFloor { get; init; }
-
-    /// <summary>SUNDER — a hit above this size permanently strips <see cref="SunderAmount"/> armour.</summary>
-    public float SunderThreshold { get; init; }
-    public float SunderAmount { get; init; }
-
     /// <summary>
     /// BREAKER — the fraction of a hit's OVERKILL that carries to the next living creature.
     /// </summary>
@@ -153,30 +132,6 @@ public sealed record SkillShape
     /// the tax a large-hit build pays in a Swarm band.
     /// </remarks>
     public float OverkillCarry { get; init; }
-
-    /// <summary>
-    /// HEADLONG — bonus against a creature still above <see cref="FreshThreshold"/> of its health.
-    /// </summary>
-    /// <remarks>
-    /// The mirror of CULL. Weight wants to put its few big hits into a FULL pool — a Bruiser at the top
-    /// of its health is exactly where a small-hit build has the least to say — so this pays while the
-    /// creature is mostly whole and stops the moment the finishing nodes start. Threshold and bonus,
-    /// like CULL: a threshold is a condition, and conditions do not add.
-    /// </remarks>
-    public float FreshThreshold { get; init; }
-    public float FreshBonus { get; init; }
-
-    /// <summary>
-    /// STAGGER — a skill hit whose raw force is at least <see cref="StaggerThreshold"/> pushes the wave's
-    /// next bite back by <see cref="StaggerMs"/>. Once per bite.
-    /// </summary>
-    /// <remarks>
-    /// Read in <c>LandOn</c> against the RAW swing, like SUNDER: a plated creature that soaked most of the
-    /// hit was still hit that hard. Capped at one push per bite, or a heavy build swinging every second
-    /// would hold the whole wave off for ever — the cap is what keeps it a delay rather than immunity.
-    /// </remarks>
-    public float StaggerThreshold { get; init; }
-    public int StaggerMs { get; init; }
 
     // ── TARGET COUNT — the SPREAD axis. What action economy reads. ────────────────────────────────
 
@@ -204,19 +159,6 @@ public sealed record SkillShape
     /// <summary>This STYLE's damage multiplier, or 1 when nothing favours it.</summary>
     public float StylePowerFor(Style style) => StylePower.TryGetValue(style, out var f) && f > 0f ? f : 1f;
 
-    /// <summary>EVERYWHERE — every skill strikes every creature, at <see cref="HitSize"/>'s cost.</summary>
-    public bool StrikesEveryCreature { get; init; }
-
-    /// <summary>CHAIN — an extra creature struck for this fraction of the hit. Zero disables.</summary>
-    public float ChainFraction { get; init; }
-
-    /// <summary>RICOCHET — chance a hit also strikes a second creature for <see cref="RicochetFraction"/>.</summary>
-    public float RicochetChance { get; init; }
-    public float RicochetFraction { get; init; }
-
-    /// <summary>CASCADE — after a kill, the next activation strikes every living creature.</summary>
-    public bool CascadeOnKill { get; init; }
-
     /// <summary>
     /// MOMENTUM — every kill takes this many milliseconds off every skill's remaining cooldown.
     /// </summary>
@@ -228,22 +170,6 @@ public sealed record SkillShape
     /// EVERY KILL and a rule with an unstated exception is the kind this project keeps finding dormant.
     /// </remarks>
     public int CooldownRefundOnKillMs { get; init; }
-
-    /// <summary>RALLY — after any kill, the next skill activation's hits are amplified by this much.</summary>
-    /// <remarks>
-    /// Armed in <c>LandOn</c> on the kill, spent in <c>LandSpread</c> on the next skill activation — every
-    /// hit of it, so a wide build spends the rally across the whole wave. Fed by kills like MOMENTUM,
-    /// which is what makes it a Spread node: eight rallies in a Swarm, one against a Bruiser.
-    /// </remarks>
-    public float NextSkillAfterKillBonus { get; init; }
-
-    /// <summary>TIDE — skill rate rises by this fraction per living creature in the wave.</summary>
-    /// <remarks>
-    /// Read at every cast through the sim's live rate, so a kill slows the next cooldown rather than the
-    /// wave's. SWARMBANE is damage per creature; this is TEMPO per creature, and the two are different
-    /// answers to the same crowd.
-    /// </remarks>
-    public float RatePerCreature { get; init; }
 
     // ── CONDITIONAL DAMAGE. Each one is a shape: it asks a question about the target or the clock. ──
 
@@ -259,10 +185,6 @@ public sealed record SkillShape
 
     /// <summary>SWARMBANE — damage bonus per living creature in the wave.</summary>
     public float PerCreatureBonus { get; init; }
-
-    /// <summary>SIEGE — bonus against Armoured, and the penalty against everything else.</summary>
-    public float VsArmouredBonus { get; init; }
-    public float VsOtherPenalty { get; init; }
 
     /// <summary>FIRST STRIKE — the opening seconds are amplified, everything after is cut.</summary>
     public float OpeningSeconds { get; init; }
@@ -430,8 +352,6 @@ public sealed record SkillShape
     /// </summary>
     public int TargetsFor(SkillDef def, int baseline)
     {
-        if (StrikesEveryCreature) return int.MaxValue;
-
         if (baseline == int.MaxValue) return baseline;   // a field already reaches everything
 
         var extra = ExtraTargets + (StyleTargets.TryGetValue(def.Style, out var f) ? f : 0);
@@ -489,36 +409,18 @@ public sealed record SkillShape
             ResonanceWorth = a.ResonanceWorth + b.ResonanceWorth,
             OneSourceBonus = a.OneSourceBonus + b.OneSourceBonus,
             ArmourPenetration = a.ArmourPenetration + b.ArmourPenetration,
-            ArmourIgnoreFraction = Math.Max(a.ArmourIgnoreFraction, b.ArmourIgnoreFraction),
-            CrushArmourMultiple = Pick(a.CrushArmourMultiple, b.CrushArmourMultiple, lower: true),
-            OverwhelmFloor = Math.Max(a.OverwhelmFloor, b.OverwhelmFloor),
-            SunderThreshold = Pick(a.SunderThreshold, b.SunderThreshold, lower: true),
-            SunderAmount = a.SunderAmount + b.SunderAmount,
             OverkillCarry = Math.Max(a.OverkillCarry, b.OverkillCarry),
-            FreshThreshold = Pick(a.FreshThreshold, b.FreshThreshold, lower: true),
-            FreshBonus = a.FreshBonus + b.FreshBonus,
-            StaggerThreshold = Pick(a.StaggerThreshold, b.StaggerThreshold, lower: true),
-            StaggerMs = a.StaggerMs + b.StaggerMs,
 
             ExtraTargets = a.ExtraTargets + b.ExtraTargets,
             StyleTargets = targets,
             StylePower = power,
-            StrikesEveryCreature = a.StrikesEveryCreature || b.StrikesEveryCreature,
-            ChainFraction = Math.Max(a.ChainFraction, b.ChainFraction),
-            RicochetChance = Math.Max(a.RicochetChance, b.RicochetChance),
-            RicochetFraction = Math.Max(a.RicochetFraction, b.RicochetFraction),
-            CascadeOnKill = a.CascadeOnKill || b.CascadeOnKill,
             CooldownRefundOnKillMs = a.CooldownRefundOnKillMs + b.CooldownRefundOnKillMs,
-            NextSkillAfterKillBonus = a.NextSkillAfterKillBonus + b.NextSkillAfterKillBonus,
-            RatePerCreature = a.RatePerCreature + b.RatePerCreature,
 
             FirstHitMultiplier = a.FirstHitMultiplier * b.FirstHitMultiplier,
             LaterHitMultiplier = a.LaterHitMultiplier * b.LaterHitMultiplier,
             CullThreshold = Math.Max(a.CullThreshold, b.CullThreshold),
             CullBonus = a.CullBonus + b.CullBonus,
             PerCreatureBonus = a.PerCreatureBonus + b.PerCreatureBonus,
-            VsArmouredBonus = a.VsArmouredBonus + b.VsArmouredBonus,
-            VsOtherPenalty = a.VsOtherPenalty + b.VsOtherPenalty,
             OpeningSeconds = Math.Max(a.OpeningSeconds, b.OpeningSeconds),
             OpeningBonus = a.OpeningBonus + b.OpeningBonus,
             AfterOpeningPenalty = a.AfterOpeningPenalty + b.AfterOpeningPenalty,

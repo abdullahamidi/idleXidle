@@ -802,7 +802,7 @@ public sealed class BuildScreen
             _ => $"{vowCount} of them carry a vow.",
         });
         if (Mastery.Affinity() is { } lean) said.Add($"Your mastery leans {Short(lean)}.");
-        else if (Mastery.Spent > 0) said.Add("Your mastery is spread evenly across forms.");
+        else if (Mastery.Spent > 0) said.Add("Your mastery is spread evenly across styles.");
         return string.Join(" ", said);
     }
 
@@ -852,9 +852,9 @@ public sealed class BuildScreen
         // THE POINTS LINE GETS ITS OWN ROW. It shared one with the VIEW TREE button, whose left edge is
         // at 1544 — 264px from the text's start, and the string needs about 300. It rendered as
         // "MASTERY POINTS   18 SPENT  ·  6 FI" with the rest under the button. Shortening the label would
-        // have hidden it for now and brought it back the moment a player earned a third digit: mastery
-        // points are 3 + deepestEver/5 + conquered*5, so three digits is a real endgame value, not a
-        // hypothetical. The row is free instead.
+        // have hidden it for now and brought it back the moment a player earned a third digit:
+        // points grow with per-region first-time depth (MasteryPoints), so three digits is a real
+        // endgame value, not a hypothetical. The row is free instead.
         // ONE NAME FOR ONE POOL. This line called them SKILL POINTS while STATS calls the same number
         // MASTERY POINTS and the rail tile that spends them is now labelled MASTERY. Three names for one
         // currency is three currencies as far as a player is concerned.
@@ -1132,7 +1132,7 @@ public sealed class BuildScreen
         // something to say back, and then it is the message. The refusals ("NEEDS 3 POINTS — YOU HAVE
         // 0") used to print at the bottom-left corner of the screen, as far from the click that raised
         // them as the canvas allows; the screen's own voice row is where a screen speaks.
-        var say = _msg.Length > 0 ? _msg : "FOUR DIRECTIONS  ·  SIX SPECIALISATIONS  ·  ONE DISCIPLINE";
+        var say = _msg.Length > 0 ? _msg : "FOUR DIRECTIONS  ·  ONE DISCIPLINE  ·  TWELVE SKILLS TO LEARN";
         _ui.TextCenterBig(b, say, 960, 80, _msg.Length > 0 ? Ember : Slate, UiTypography.Secondary);
 
         // ── THE CORNER PLATE: the mastery glyph and the points you can spend, and nothing else. ──
@@ -1450,7 +1450,7 @@ public sealed class BuildScreen
                               UiTypography.Secondary);
             _ui.TextCenterBig(b, "MINOR 1  \u00b7  NOTABLE 3  \u00b7  GREATER 5", NodePanel.Center.X, y0 + 40,
                               Bone, UiTypography.Body);
-            _ui.TextCenterBig(b, "SPECIALISATION 6  \u00b7  CAPSTONE 8", NodePanel.Center.X, y0 + 66,
+            _ui.TextCenterBig(b, "SKILL 5  \u00b7  SPECIALISATION 6  \u00b7  CAPSTONE 8", NodePanel.Center.X, y0 + 66,
                               Bone, UiTypography.Body);
 
             // THE TREE'S ONE RULE, in the panel that explains the tree. It used to print at the
@@ -1487,9 +1487,9 @@ public sealed class BuildScreen
         // trigger and not the thing the node is FOR. Every one of the six also sets the hunter's
         // DISCIPLINE, which is the largest single multiplier in the game and can be chosen exactly
         // once — and that was written down nowhere the player could reach before committing six
-        // points. The x2 is not a rounded boast: FormBehaviour.FactorAtDistance(0) is 2.00, and with
-        // no discipline at all SoloBattle applies no factor, so taking this really does double the
-        // Form named on it. The far Forms fall to 0.75 and the opposite to 0.45 by the same table.
+        // points. The x2 is not a rounded boast: StyleAffinity.Factor at distance 0 is 2.00, and
+        // with no discipline at all SoloBattle applies no factor, so taking this really does double
+        // the style named on it. The far styles fall to 0.75 and the opposite to 0.45 by the ring.
         var y = NodePanel.Y + 240;
         if (n.Kind == MasteryKind.Specialisation && n.Style is { } specForm)
         {
@@ -1509,6 +1509,20 @@ public sealed class BuildScreen
             var after = DrawWrapped(b, says, UiKit.ContentLeft(NodePanel), afterLabel + 14,
                                     NodePanel.Width - UiKit.PadX(NodePanel) * 2, taken2 || mine is null ? Gold : Slate);
             y = Math.Max(y, after + 20);
+        }
+
+        // A ROAD NODE'S PROMISE, stated where the six points are about to be spent: learning is
+        // permanent (D7), and saying so is what makes respec feel safe enough to actually use.
+        if (n.Kind == MasteryKind.SkillRoad && n.GrantsSkillId is { } roadSkill)
+        {
+            var learned = Mastery.LearnedSkills().Contains(roadSkill);
+            var road = learned
+                ? "LEARNED — FOR GOOD. RESPEC RETURNS THE POINTS, NEVER THE SKILL."
+                : "TAKING IT TEACHES THIS SKILL PERMANENTLY — RESPEC RETURNS THE POINTS, NEVER THE "
+                  + "SKILL. WEAVE IT ON THE BUILD SCREEN (B).";
+            var afterRoad = DrawWrapped(b, road, UiKit.ContentLeft(NodePanel), afterLabel + 14,
+                                        NodePanel.Width - UiKit.PadX(NodePanel) * 2, learned ? Gold : Slate);
+            y = Math.Max(y, afterRoad + 20);
         }
 
         _ui.Fill(b, new Rectangle(UiKit.ContentLeft(NodePanel) - 4, y - 16, NodePanel.Width - UiKit.PadX(NodePanel) * 2 - 8, 2), Dim);
@@ -1574,6 +1588,9 @@ public sealed class BuildScreen
         MasteryKind.Mastery => "BRANCH CAPSTONE",
         MasteryKind.Bridge => "BRIDGE",
         MasteryKind.Specialisation => "SPECIALISATION — YOUR DISCIPLINE",
+        // A road node used to fall through to "START" — the tree's most consequential kind wearing
+        // the label of its most trivial one.
+        MasteryKind.SkillRoad => "SKILL — LEARNED FOR GOOD",
         _ => "START",
     };
 
@@ -1611,6 +1628,7 @@ public sealed class BuildScreen
         MasteryKind.Greater => "ui_node_greater",
         MasteryKind.Mastery => "ui_node_greater",
         MasteryKind.Bridge => "ui_node_minor",
+        MasteryKind.SkillRoad => "ui_node_greater",   // priced like one, framed like one
         _ => "ui_node_spec",
     };
 
