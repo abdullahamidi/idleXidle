@@ -293,7 +293,12 @@ public sealed class PlayerLoadout
         }
 
         if (keystoneIds is not null)
-            _keystoneIds.AddRange(keystoneIds.Take(MaxKeystones));
+            // THE SOCKET GATE, at last (P7). This truncated to the constant 3, so a save written
+            // when three sockets were free kept wearing three keystones over ONE bought socket —
+            // socket_2/socket_3 (7 spine points) bought nothing for that player and the sim
+            // honoured the unpaid sockets. The host sets KeystoneCapacity from the trait tree
+            // BEFORE calling this, exactly as it does SkillCapacity for the skill rows above.
+            _keystoneIds.AddRange(keystoneIds.Take(Math.Min(MaxKeystones, KeystoneCapacity)));
     }
 
     /// <summary>

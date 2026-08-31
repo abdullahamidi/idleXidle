@@ -232,10 +232,21 @@ public class MemoryDustTests
     [Fact]
     public void test_two_terminals_are_out_of_reach()
     {
-        // DERIVED from the same rules Game1.TraitPointsEarned applies: one per conquest, two per corruption
-        // tier reached (the ladder is capped — CorruptionScaling.MaxTier), three mastery goals per region.
-        var budgetAtFullContent = Regions.All.Count + 2 * CorruptionScaling.MaxTier
-                                  + Regions.All.Count * (int)MasteryLevel.OptimizedTeam;   // 6 + 10 + 18 = 34
+        // DERIVED FROM THE LIVE RULE (P7): Career.TraitPointsEarned against a world at full
+        // content — every region conquered and PERFECTED, the corruption ladder at its top. The
+        // old derivation re-typed the formula by hand with a then-unreachable third mastery tier,
+        // so it certified a budget (34) of which the game only ever paid 28; P7 made the tier real
+        // instead of leaving the test dishonest.
+        var world = new World();
+        foreach (var def in Regions.All)
+        {
+            world.Conquer(def.Id);
+            world.RegionFarm(def.Id).RestoreMasteryPoints(
+                IdleXIdle.Core.Automation.AutomationTuning.Default.RmpThreshold3);
+        }
+        world.RestoreCorruption(CorruptionScaling.MaxTier, CorruptionScaling.MaxTier);
+        var budgetAtFullContent = IdleXIdle.Core.Progression.Career.TraitPointsEarned(world);
+        Assert.Equal(34, budgetAtFullContent);   // 6 + 10 + 18 — the number the tree was built around
 
         var terminals = new[] { "ks_reaper", "ks_titan", "ks_hoarder", "ks_weaver" };
         var tree = new MemoryDustTree();

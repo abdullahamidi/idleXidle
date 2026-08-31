@@ -325,12 +325,6 @@ public class DustEffectsTests
     {
         Assert.False(DustEffects.AutoMergeAfterRuns(Rich()));
         Assert.True(DustEffects.AutoMergeAfterRuns(With("ledger", "forge_insight", "auto_merge")));
-
-        Assert.False(DustEffects.ShowExactNumbers(Rich()));
-        Assert.True(DustEffects.ShowExactNumbers(With("ledger")));
-
-        Assert.False(DustEffects.ShowMergePreview(Rich()));
-        Assert.True(DustEffects.ShowMergePreview(With("ledger", "forge_insight")));
     }
 
     [Fact]

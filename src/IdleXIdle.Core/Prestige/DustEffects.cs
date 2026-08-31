@@ -160,21 +160,16 @@ public static class DustEffects
 
     // ── Convenience ──────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Show exact numbers on bars rather than just a fill.</summary>
-    public static bool ShowExactNumbers(MemoryDustTree tree)
-    {
-        ArgumentNullException.ThrowIfNull(tree);
-        return tree.Owns("ledger");
-    }
-
-    /// <summary>Preview a merge's outcome before committing to it.</summary>
-    public static bool ShowMergePreview(MemoryDustTree tree)
-    {
-        ArgumentNullException.ThrowIfNull(tree);
-        return tree.Owns("forge_insight");
-    }
-
-    /// <summary>The capstone: a quiet mark, and deliberately nothing more.</summary>
+    /// <summary>
+    /// The quiet mark: bought when all four roads are started, shown on the TRAITS screen's
+    /// subtitle — and deliberately nothing more.
+    /// </summary>
+    /// <remarks>
+    /// (The two QoL accessors that used to sit here — ShowExactNumbers on "ledger",
+    /// ShowMergePreview on "forge_insight" — described meanings those nodes no longer have and had
+    /// zero callers. The nodes themselves are GATES now, named so on their own cards, and their
+    /// liveness is the requirement graph: what they open is what they are.)
+    /// </remarks>
     public static bool TreeComplete(MemoryDustTree tree)
     {
         ArgumentNullException.ThrowIfNull(tree);
@@ -192,10 +187,10 @@ public static class DustEffects
     private static readonly HashSet<string> NamedWires = new()
     {
         "recall_1", "recall_2", "recall_3", "recall_4",
-        "efficient_forge", "forge_insight", "auto_merge",
+        "efficient_forge", "auto_merge",
         "vow_study_1", "vow_study_2", "vow_study_3", "vow_binding", "vow_sacrifice",
         "filter_common", "filter_uncommon",
-        "ledger", "attunement",
+        "attunement",
         "socket_2", "socket_3", "weave_5", "artifice_vows",
     };
 
@@ -250,5 +245,10 @@ public static class DustEffects
         .Concat(MemoryDustTree.Catalog
             .Where(u => u.Mods != BuildMods.None || u.GrantsKeystone is not null)
             .Select(u => u.Id))
+        // A GATE is wired by the requirement graph itself: a node other nodes hang off is bought
+        // for what it opens, and says so on its own card ("Does nothing by itself. It unlocks…").
+        // ledger and forge_insight are wired HERE, not by a method — their old QoL accessors had
+        // zero callers and died in P7.
+        .Concat(MemoryDustTree.Catalog.SelectMany(u => u.Requires))
         .ToHashSet();
 }

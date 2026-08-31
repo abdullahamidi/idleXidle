@@ -42,15 +42,18 @@ public class RegionFarmTests
 
         while (region.RegionMasteryPoints < Tuning.RmpThreshold2) region.RecordActiveKill();
         Assert.Equal(MasteryLevel.FullyMastered, region.MasteryLevel);
+
+        while (region.RegionMasteryPoints < Tuning.RmpThreshold3) region.RecordActiveKill();
+        Assert.Equal(MasteryLevel.Perfected, region.MasteryLevel);
     }
 
     /// <summary>
-    /// OptimizedTeam is unreachable: it was gated on a complete creature team, and the creature
-    /// subsystem is retired. However much mastery accrues, the ladder tops at FullyMastered —
-    /// which is the behaviour every real save always had, since no team could ever be assigned.
+    /// PERFECTED is the ladder's top (P7): the third mastery goal, earned by fighting. It was
+    /// unreachable while it was gated on the retired creature-team subsystem — and the trait
+    /// budget's third point per region silently went with it.
     /// </summary>
     [Fact]
-    public void test_region_farm_mastery_tops_at_fully_mastered()
+    public void test_region_farm_mastery_tops_at_perfected()
     {
         // Arrange
         var region = NewRegion();
@@ -59,7 +62,7 @@ public class RegionFarmTests
         region.RestoreMasteryPoints(1_000_000_000f);
 
         // Assert
-        Assert.Equal(MasteryLevel.FullyMastered, region.MasteryLevel);
+        Assert.Equal(MasteryLevel.Perfected, region.MasteryLevel);
     }
 
     /// <summary>The map's away-earnings line: always the band FLOOR for the current mastery level.</summary>
@@ -78,6 +81,9 @@ public class RegionFarmTests
 
         region.RestoreMasteryPoints(Tuning.RmpThreshold2);
         Assert.Equal(EfficiencyContract.IdleBand(MasteryLevel.FullyMastered).Min, region.IdleEfficiencyPercent());
+
+        region.RestoreMasteryPoints(Tuning.RmpThreshold3);
+        Assert.Equal(EfficiencyContract.IdleBand(MasteryLevel.Perfected).Min, region.IdleEfficiencyPercent());
     }
 
     /// <summary>Par is the fixed anchor of the efficiency contract. Nothing here may move it.</summary>

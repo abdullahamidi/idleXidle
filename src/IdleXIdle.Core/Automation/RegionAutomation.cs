@@ -17,6 +17,14 @@ public sealed record AutomationTuning
     public float RmpThreshold1 { get; init; } = 500f;    // Partially Mastered
     public float RmpThreshold2 { get; init; } = 2000f;   // Fully Mastered
 
+    /// <summary>
+    /// PERFECTED (P7, 2026-08-31) — the third mastery goal, far past full mastery. At 5 RMP per
+    /// cleared wave this is a thousand waves fought IN one region (fewer with the FASTER REGION
+    /// MASTERY traits) — deliberately a long-haul commitment: it is the third trait point each
+    /// region owes the tree's 34-point budget, and it must not arrive with the second.
+    /// </summary>
+    public float RmpThreshold3 { get; init; } = 5000f;   // Perfected
+
     public static AutomationTuning Default { get; } = new();
 }
 
@@ -35,9 +43,10 @@ public sealed record AutomationTuning
 /// shows — pinned to the no-team quality score the game has always effectively had.
 /// </para>
 /// <para>
-/// <see cref="Progression.MasteryLevel.OptimizedTeam"/> is unreachable by design here: it required a
-/// complete creature team, which no player could ever assemble. The ladder tops out at
-/// <see cref="Progression.MasteryLevel.FullyMastered"/>, exactly as it always did in practice.
+/// The third tier — <see cref="Progression.MasteryLevel.Perfected"/> — was unreachable until P7
+/// (2026-08-31): as "OptimizedTeam" it was gated on a complete creature team no player could ever
+/// assemble, and the trait budget's third point per region silently went with it. It is earned by
+/// fighting now, like the other two.
 /// </para>
 /// </remarks>
 public sealed class Region
@@ -95,13 +104,16 @@ public sealed class Region
     /// Formula 2 — Mastery Level, from accrued points.
     /// </summary>
     /// <remarks>
-    /// The OptimizedTeam tier is not returned here: it was gated on a complete creature team, and the
-    /// creature subsystem is retired. The two point thresholds behave exactly as they always did.
+    /// All three thresholds are earned by the champion's own kills. PERFECTED pays the third trait
+    /// point this region owes the tree's budget (Career.TraitPointsEarned), raises the map's
+    /// away-earnings band to its top (EfficiencyContract), and — through the host's region
+    /// progression step — hardens the region one more notch for better loot.
     /// </remarks>
     public MasteryLevel MasteryLevel
     {
         get
         {
+            if (RegionMasteryPoints >= _tuning.RmpThreshold3) return Progression.MasteryLevel.Perfected;
             if (RegionMasteryPoints >= _tuning.RmpThreshold2) return Progression.MasteryLevel.FullyMastered;
             if (RegionMasteryPoints >= _tuning.RmpThreshold1) return Progression.MasteryLevel.PartiallyMastered;
             return Progression.MasteryLevel.NewlyConquered;

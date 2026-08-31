@@ -162,6 +162,14 @@ public class RosterParityTest
     private static BuildComposer.SkillPick Pick(SkillDef def, Vow? vow) =>
         new(CoreSource.Nature, vow?.Id, Passive: !def.TakesABeat, SkillId: def.Id);
 
+    /// <summary>A tree that has STUDIED the vows these fixtures swear — the composer refuses untaught ones (P7).</summary>
+    private static MemoryDustTree VowStudied()
+    {
+        var t = new MemoryDustTree();
+        t.Restore(0, new[] { "vow_study_1", "vow_study_2" });
+        return t;
+    }
+
     /// <summary>
     /// Compose a build the way the GAME composes one — through <see cref="BuildComposer.Compose"/>.
     /// </summary>
@@ -192,7 +200,7 @@ public class RosterParityTest
         if (skill.Id != Chassis.Id) picks.Add(Pick(Chassis, vow));
 
         var build = BuildComposer.Compose(
-            new MemoryDustTree(), ChassisTaught(), c ?? Blank(skill),
+            VowStudied(), ChassisTaught(), c ?? Blank(skill),
             picks, Array.Empty<string>(), slotCapacity: 4);
 
         // A pick the composer's taught-gate silently refused would measure bare hands and report the

@@ -24,7 +24,7 @@ public class EfficiencyContractTests
         var newlyConquered = EfficiencyContract.AutomationClearTimeSeconds(
             ParSeconds, EfficiencyContract.IdleEfficiencyPercent(MasteryLevel.NewlyConquered, 1.0f));
         var optimized = EfficiencyContract.AutomationClearTimeSeconds(
-            ParSeconds, EfficiencyContract.IdleEfficiencyPercent(MasteryLevel.OptimizedTeam, 1.0f));
+            ParSeconds, EfficiencyContract.IdleEfficiencyPercent(MasteryLevel.Perfected, 1.0f));
 
         // 15/0.40 = 37.5s  ->  15/1.20 = 12.5s : automation gets 3x faster.
         Assert.True(optimized < newlyConquered);
@@ -36,7 +36,7 @@ public class EfficiencyContractTests
     [InlineData(MasteryLevel.NewlyConquered, 25f, 40f)]
     [InlineData(MasteryLevel.PartiallyMastered, 50f, 70f)]
     [InlineData(MasteryLevel.FullyMastered, 80f, 100f)]
-    [InlineData(MasteryLevel.OptimizedTeam, 100f, 120f)]
+    [InlineData(MasteryLevel.Perfected, 100f, 120f)]
     public void test_idle_efficiency_never_leaves_its_locked_band(MasteryLevel level, float min, float max)
     {
         for (var q = 0f; q <= 1.0f; q += 0.05f)

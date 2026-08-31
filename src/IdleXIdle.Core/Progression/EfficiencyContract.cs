@@ -8,7 +8,7 @@ public enum MasteryLevel
     NewlyConquered = 0,
     PartiallyMastered = 1,
     FullyMastered = 2,
-    OptimizedTeam = 3,
+    Perfected = 3,
 }
 
 /// <summary>
@@ -37,15 +37,15 @@ public static class EfficiencyContract
 {
     /// <summary>
     /// The locked idle-efficiency bands, as percentages of par. Specified by the design brief.
-    /// Note that FullyMastered's ceiling converges on par (100%) and OptimizedTeam modestly exceeds
-    /// it — exactly what you would expect if par is *defined* as a fully-mastered automated team.
+    /// Note that FullyMastered's ceiling converges on par (100%) and Perfected modestly exceeds
+    /// it — mastery far past full is the one thing allowed to beat the anchor.
     /// </summary>
     public static (float Min, float Max) IdleBand(MasteryLevel level) => level switch
     {
         MasteryLevel.NewlyConquered => (25f, 40f),
         MasteryLevel.PartiallyMastered => (50f, 70f),
         MasteryLevel.FullyMastered => (80f, 100f),
-        MasteryLevel.OptimizedTeam => (100f, 120f),
+        MasteryLevel.Perfected => (100f, 120f),
         _ => throw new ArgumentOutOfRangeException(nameof(level)),
     };
 

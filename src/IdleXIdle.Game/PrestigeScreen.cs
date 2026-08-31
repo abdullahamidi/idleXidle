@@ -531,7 +531,14 @@ public sealed class PrestigeScreen
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
         // "NO TAKING BACK", not "NO RESPEC" — the reader plays in English as a second language, and
         // "respec" is a word only the genre knows.
-        _ui.TextCenterBig(b, "ONE SPINE  ·  FOUR ROADS  ·  NO TAKING BACK", 960, 80, Slate, UiTypography.Secondary);
+        // THE QUIET MARK, finally visible (P7): attunement's whole promise is "a mark", and its
+        // wire (TreeComplete) had no reader — four points bought for something the player could
+        // never see. A standing fact about the account belongs on the screen's own subtitle.
+        if (DustEffects.TreeComplete(tree))
+            _ui.TextCenterBig(b, "ONE SPINE  ·  FOUR ROADS  ·  NO TAKING BACK  ·  ATTUNED",
+                              960, 80, new Color(0xF0, 0xB2, 0x4A), UiTypography.Secondary);
+        else
+            _ui.TextCenterBig(b, "ONE SPINE  ·  FOUR ROADS  ·  NO TAKING BACK", 960, 80, Slate, UiTypography.Secondary);
 
         // How many points you have to spend, how much of the tree you have learned, and what all of it
         // would cost. A header rather than a panel: a player checks "can I afford this" constantly and

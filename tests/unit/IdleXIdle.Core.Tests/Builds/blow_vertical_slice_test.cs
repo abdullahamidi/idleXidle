@@ -142,13 +142,16 @@ public class BlowVerticalSliceTest
         // VOW OF COMPLETION demands every slot filled — met by this one-slot build; then the same
         // vow judged against an empty second slot is unmet and pays nothing. Both through the real
         // composition, neither through a special case.
+        // A tree that has STUDIED the vow — the composer refuses an untaught one since P7.
+        var vowTree = new MemoryDustTree();
+        vowTree.Restore(0, new[] { "vow_study_1" });   // teaches VOW OF COMPLETION
         var met = LoadoutWithBlow(vowId: "vow_complete")
-            .ToBuild(new MemoryDustTree(), Taught.Everything(), character: null, Chosen("TOLL"));
+            .ToBuild(vowTree, Taught.Everything(), character: null, Chosen("TOLL"));
         var unmetLoadout = LoadoutWithBlow(vowId: "vow_complete");
         unmetLoadout.SkillCapacity = 2;
         unmetLoadout.AddSkill();   // an EMPTY second slot the vow can see... but an added slot is a
         unmetLoadout.RemoveSkill(1);            // woven default — remove it so the slot stays empty
-        var unmet = unmetLoadout.ToBuild(new MemoryDustTree(), Taught.Everything(), character: null, Chosen("TOLL"));
+        var unmet = unmetLoadout.ToBuild(vowTree, Taught.Everything(), character: null, Chosen("TOLL"));
 
         var metDps = DamageBench.Measure(met, new Hunter()).Dps;
         var unmetDps = DamageBench.Measure(unmet, new Hunter()).Dps;
