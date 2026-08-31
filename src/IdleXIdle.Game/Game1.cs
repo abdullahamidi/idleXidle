@@ -756,11 +756,24 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _dust.AwardFromMastery((int)wOffline.Dust);
         _warrenMasteryPool += wOffline.Mastery;
 
-        // THE CHAMPION earned while you were away too, at HALF the rate it was managing live (offline is
-        // never as good as playing — that's what brings you back). Its gleam-rate was measured last
-        // session, so this is grounded in what your build actually does, not a guess.
-        var champOffline = (int)(credited * save.ChampionGleamRate * 0.5);
-        if (champOffline > 0) _hunter.AddGleam(champOffline);
+        // THE CHAMPION fought while you were away — the SAME simulation, headless (P5). The old
+        // credit was a rate measured LAST session × seconds × 0.5: zero for anyone whose final
+        // session never fought ten sustained seconds, and wrong for anyone whose build, region or
+        // corruption changed since. OfflineHunt runs the real descent against the build as it
+        // stands NOW — capped at a bounded number of waves, the remainder extrapolated at the rate
+        // the simulated portion just measured — with the 50% haircut inside it (away is never as
+        // good as playing; that's what brings you back).
+        var champOffline = 0L;
+        if (credited > 0)
+        {
+            var (obh, obd) = EnemyBaselineFor(_activeRegion);
+            var offline = OfflineHunt.Simulate(
+                _loadout.ToBuild(_dust, _mastery, _characters.Active, _skillProgress),
+                _hunter, credited, _activeRegion, Regions.Get(_activeRegion).CombatBias, obh, obd,
+                seed: unchecked((int)Math.Round(result.OfflineSeconds)) ^ _deepestEver);
+            champOffline = offline.Gleam;
+            if (champOffline > 0) _hunter.AddGleam((int)Math.Min(int.MaxValue, champOffline));
+        }
 
         // Seed the LIVE rate from the save, not just the offline calc above. Without this the field stays 0
         // until the champion fights for >10s and recomputes it — so a short or farm-only session would
@@ -780,7 +793,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // the total: it is the difference between "the game gave me money" and knowing WHICH of
             // your two economies is paying you.
             _bootMessage = $"WELCOME BACK — {span} AWAY\n"
-                           + $"+{Abbrev((long)champOffline + wOffline.Gleam)} GLEAM "
+                           + $"+{Abbrev(champOffline + (long)wOffline.Gleam)} GLEAM "
                            + $"({Abbrev(wOffline.Gleam)} WARREN · {Abbrev(champOffline)} HUNT)";
             _bootColor = Gold;
         }
@@ -2528,7 +2541,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // menu — the whole point of an idle game. The fight screen's own clicks are handled in its Draw,
         // which only runs when that screen is the one on top, so a click in the Forge cannot fall
         // through into the fight without any flag being threaded down for it.
-        _regionProgression = Math.Clamp((int)_region.MasteryLevel + (_region.MasteryLevel > 0 ? 1 : 0), 0, 4);
+        _regionProgression = RegionProgressionOf(_region);
         UpdateExpedition(gameTime);
 
         // A modal eats the frame's INPUT, but not the frame, and not the fight. The autosave and the
@@ -3593,20 +3606,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // (A slot the player just earned is not announced here, or anywhere: the BUILD tile derives its
         // NEW mark from the slot count and the explained list every frame — see Onboarding.IsNew.)
         _forge.AutoMergeOnOpen = DustEffects.AutoMergeAfterRuns(_dust);
-        var scale = CorruptionScaling.HealthMultiplier(_world.CorruptionTier);
-        var mod = RegionModifiers.For(_activeRegion);   // the region's themed combat twist (Map variety)
-
-        _expedition.Update(
-            gameTime, _hunter,
-            // Every region is a rung up the ladder for the champion, not just a new element — so reaching
-            // the sixth region is a real climb, and "more regions" is more progression, not more of the same.
-            // The region MODIFIER twists this region's health/damage on top of the ladder + corruption.
-            // THE REGION STEP IS GEOMETRIC, not linear — see Core/Encounters/RegionLadder for why the
-            // linear form let a player conquer the fourth map with no gear at all. Region MASTERY stays
-            // linear on purpose: it is a difficulty a player opts into inside one place, and it should
-            // stack in even increments rather than compound with the chain.
-            enemyBaseHealth: 110f * (1f + 0.35f * _regionProgression) * RegionLadder.Health(LadderIndex(_activeRegion)) * scale * mod.EnemyHealthMult,
-            enemyBaseDamage: 9f * (1f + 0.20f * _regionProgression) * RegionLadder.Damage(LadderIndex(_activeRegion)) * scale * mod.EnemyDamageMult);
+        // Every region is a rung up the ladder for the champion, not just a new element — see
+        // EnemyBaselineFor, which is also what the offline simulation fights against.
+        var (ebh, ebd) = EnemyBaselineFor(_activeRegion);
+        _expedition.Update(gameTime, _hunter, enemyBaseHealth: ebh, enemyBaseDamage: ebd);
 
         // Measure the champion's gleam/second over this session, for offline earnings later.
         //
@@ -3721,6 +3724,30 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
     }
 
+    /// <summary>The region's mastery-driven progression step, 0..4 — shared by difficulty and the loot tier.</summary>
+    private static int RegionProgressionOf(Region region)
+        => Math.Clamp((int)region.MasteryLevel + (region.MasteryLevel > 0 ? 1 : 0), 0, 4);
+
+    /// <summary>
+    /// The enemy baseline for a region AS IT STANDS NOW — ladder rung, region mastery, corruption
+    /// and the region modifier folded into one formula, used by the live fight and the offline
+    /// simulation alike, so the champion earns away against the same enemies it fights here.
+    /// </summary>
+    /// <remarks>
+    /// THE REGION STEP IS GEOMETRIC, not linear — see Core/Encounters/RegionLadder for why the
+    /// linear form let a player conquer the fourth map with no gear at all. Region MASTERY stays
+    /// linear on purpose: a difficulty a player opts into inside one place should stack in even
+    /// increments rather than compound with the chain.
+    /// </remarks>
+    private (float Health, float Damage) EnemyBaselineFor(string regionId)
+    {
+        var scale = CorruptionScaling.HealthMultiplier(_world.CorruptionTier);
+        var mod = RegionModifiers.For(regionId);
+        var prog = RegionProgressionOf(_world.RegionFarm(regionId));
+        return (110f * (1f + 0.35f * prog) * RegionLadder.Health(LadderIndex(regionId)) * scale * mod.EnemyHealthMult,
+                9f * (1f + 0.20f * prog) * RegionLadder.Damage(LadderIndex(regionId)) * scale * mod.EnemyDamageMult);
+    }
+
     /// <summary>A boss dropped a CHEST — its grade rolled by depth now, its contents rolled when opened.</summary>
     /// <remarks>
     /// Depth buys RARITY, not quantity: every boss cleared deeper folds into the tier, so a wave-40 boss
@@ -3728,7 +3755,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// filter, and any auto-merge now happen at OPEN (in the Forge), so nothing lands in the bag unbidden.
     /// </remarks>
     /// <summary>Roll whether this boss drops a chest (a LOW, depth-scaled chance). Returns true if one did.</summary>
-    private bool DropBossChest(SoloExpeditionScreen.WaveReward r, RegionDefinition def)
+    private bool DropBossChest(WaveReward r, RegionDefinition def)
     {
         var depthTier = r.Wave / Math.Max(1, ExpeditionTuning.Default.BossEvery);   // one tier per boss cleared
         // Loot quality climbs with PROGRESSION: how far up the region ladder you are, how deeply you have
@@ -5161,11 +5188,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// exception is <c>_runsWithVowKept</c>, which is an event and has to be latched — see the run-end
     /// branch in UpdateExpedition.
     /// </remarks>
-    private QuestProgress QuestSnapshot() => new(
-        DepthByRegion: Regions.All.ToDictionary(d => d.Id, d => _world.RegionFarm(d.Id).BestDepth),
-        RegionsConquered: _world.ConqueredIds.Count,
-        ChestsOpened: _forge.ChestsOpened,
-        RunsWithVowKept: _runsWithVowKept);
+    private QuestProgress QuestSnapshot()
+        => Career.QuestSnapshot(_world, _forge.ChestsOpened, _runsWithVowKept);
 
     /// <summary>
     /// Did the descent that just ended run under a Vow whose demand the build actually met?
@@ -5176,30 +5200,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// character exists to reward.
     /// </remarks>
     private bool VowWasKept()
-    {
-        var build = _loadout.ToBuild(_dust, _mastery, _characters.Active, _skillProgress);
-        var ctx = SoloBattle.DescribeBuild(build, _hunter);
-        return build.Skills.Any(s => s.Vow is { } v && Vows.IsActive(v, ctx));
-    }
+        => Career.VowWasKept(_loadout.ToBuild(_dust, _mastery, _characters.Active, _skillProgress), _hunter);
 
-    private int TraitPointsEarned()
-    {
-        // Two per corruption tier REACHED (the peak, so SHALLOWER never costs a point): with the ladder
-        // capped at five, one point a tier left every road's end unaffordable — 6 + 5 + 18 = 29 against a
-        // cheapest terminal path of 31. 6 + 10 + 18 = 34 is the budget the tree was built around
-        // (MemoryDustTests: one terminal reachable, two never).
-        var total = _world.ConqueredIds.Count + 2 * _world.PeakCorruptionTier;
-        foreach (var def in Regions.All) total += (int)_world.RegionFarm(def.Id).MasteryLevel;
-        return total;
-    }
+    // The arithmetic (and its tuning history) is Career's, in Core, since P5.
+    private int TraitPointsEarned() => Career.TraitPointsEarned(_world);
 
     /// <summary>The deepest wave held in any region — what the Warren's ceiling is derived from.</summary>
-    private int DeepestAnywhere()
-    {
-        var best = _deepestEver;
-        foreach (var def in Regions.All) best = Math.Max(best, _world.RegionFarm(def.Id).BestDepth);
-        return best;
-    }
+    private int DeepestAnywhere() => Career.DeepestAnywhere(_world, _deepestEver);
 
     /// <summary>Which nav slot is lit: 0 HUNT (fight), else the open overlay.</summary>
     /// <summary>Which rail tile is lit. The Weave has no tile of its own, so it lights BUILD's.</summary>

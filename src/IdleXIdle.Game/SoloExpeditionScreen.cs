@@ -122,11 +122,14 @@ public sealed class SoloExpeditionScreen
     // FallenBeat stays the longest of the three because it is the one with art behind it:
     // DrawCreatureDeath runs on DownedSeconds and is not cut here — the death effect plays across the
     // beats that follow it.
-    private const float FallenBeat = 0.45f;
-    private const float SpoilsBeat = 0.45f;
-    private const float BreathBeat = 0.20f;
-    private const float WaveBreakSeconds = FallenBeat + SpoilsBeat + BreathBeat;
-    private const float DownedSeconds = 1.6f;   // the recovery beat before the champion tries again
+    // THE VALUES ARE CORE'S NOW (P5). The loop's rhythm is economy, not decoration — waves per
+    // hour is sim time plus these breaths, and OfflineHunt spends the same beats as time. A second
+    // copy here would let live and offline drift apart, which is a silent earnings bug either way.
+    private const float FallenBeat = Descent.FallenBeat;
+    private const float SpoilsBeat = Descent.SpoilsBeat;
+    private const float BreathBeat = Descent.BreathBeat;
+    private const float WaveBreakSeconds = Descent.WaveBreakSeconds;
+    private const float DownedSeconds = Descent.DownedSeconds;
 
     /// <summary>How long the fallen banner outlives the recovery beat.</summary>
     /// <remarks>
@@ -233,7 +236,6 @@ public sealed class SoloExpeditionScreen
 
     private readonly UiKit _ui;
     private readonly VfxPlayer _vfx;
-    private readonly Random _rng = new();
 
     /// <summary>
     /// Every run's report, kept and readable — set by the host so it can be saved.
@@ -296,8 +298,12 @@ public sealed class SoloExpeditionScreen
     private enum Mode { Fighting, Downed }
     private Mode _mode = Mode.Fighting;
 
-    private SoloExpedition? _run;
-    private Champion? _champ;
+    // THE DESCENT IS CORE'S NOW (P5). This screen configures and drives it — and draws it — but
+    // the run state machine itself is headless: OfflineHunt runs the same machine with nobody
+    // watching, which is what makes offline credit real simulation instead of a rate guess.
+    private readonly Descent _descent = new();
+    private SoloExpedition? _run => _descent.Run;
+    private Champion? _champ => _descent.Champion;
     private float _anim;
     private float _downedTimer;
     private float _breakTimer;   // the between-wave breath; while >0 the cleared frame holds, then the next wave begins
@@ -471,7 +477,7 @@ public sealed class SoloExpeditionScreen
     private string _enemyArt = "";
 
     /// <summary>Deepest wave reached in this region, across restarts — what conquest is measured against.</summary>
-    public int Deepest { get; private set; }
+    public int Deepest => _descent.Deepest;
 
     private readonly List<Callout> _callouts = new();
     /// <summary>Which column a callout stacks in. Two columns that never collide must not push each other.</summary>
@@ -671,8 +677,10 @@ public sealed class SoloExpeditionScreen
         _vfx = new VfxPlayer(ui.Assets);
     }
 
-    // ── Reward channel: one entry per cleared wave, drained by the host ─────────────────────────────
-    public readonly record struct WaveReward(Haul Haul, int Wave, bool IsBoss);
+    // ── Reward channel: one entry per cleared wave, drained by the host. The record is Core's
+    //    (Expeditions.WaveReward) since P5, and the DESCENT banks a wave the moment the sim clears
+    //    it; this queue holds the ANNOUNCED rewards — forwarded when the replay catches up, so the
+    //    player is paid at the moment they SEE the clear rather than a whole replay early. ─────────
     private readonly Queue<WaveReward> _rewards = new();
     public bool HasReward => _rewards.Count > 0;
     public WaveReward TakeReward() => _rewards.Dequeue();
@@ -732,8 +740,7 @@ public sealed class SoloExpeditionScreen
         if (EnemySource != _lastSource && !DevHoldReport)
         {
             _lastSource = EnemySource;
-            _run = null;
-            Deepest = 0;
+            _descent.Reset();
             // The fall's presentation belongs to the region it happened in — carried across travel,
             // the old "YOUR CHAMPION FELL" banner outranked the new region's own banners for six
             // seconds (review 2026-08-24). The flash clear is defensive; it decays in under a second.
@@ -759,9 +766,6 @@ public sealed class SoloExpeditionScreen
                 break;
         }
     }
-
-    /// <summary>Counts descents, so each one seeds its own compositions. See SoloExpedition.RunIndex.</summary>
-    private int _runIndex;
 
     /// <summary>What the run's build was composed from — compared at every wave boundary (see BeginWave).</summary>
     private string _buildStamp = "";
@@ -793,36 +797,23 @@ public sealed class SoloExpeditionScreen
 
         // A NEW DESCENT IS A NEW CHAMPION. The rail carries a skill's place in its cycle across wave
         // boundaries (see _carryBeats), and carrying it across a DEATH would open the next run with
-        // rings inherited from the corpse — the sim mints a fresh Champion here, cooldowns and all.
+        // rings inherited from the corpse — the descent mints a fresh Champion, cooldowns and all.
         _carryBeats.Clear();
         _carryMs.Clear();
         _replayEndMs = 0f;
 
-        // Charged once here at mint: RECKLESS OFFERING's health price and the build's health multipliers.
-        var hp = SoloBattle.ChampionHealth(build, hunter);
-        _champ = new Champion { MaxHealth = hp, Health = hp };
-        // RegionId reaches the sim, not just the boss art: it selects the band cycle and the creature
-        // roster, which is what makes one region a different PLACE rather than the same place with
-        // bigger numbers. RunIndex seeds each descent's compositions so a replay is identical.
-        _run = new SoloExpedition(build, _champ, hunter, _enemyBaseHealth, _enemyBaseDamage,
-            ExpeditionTuning.Default, EnemySource, _rng)
-        {
-            EnemyBias = EnemyBias,
-            RegionId = RegionId,
-            RunIndex = ++_runIndex,
-            // The skills bank their levels here rather than in the run, because a run ends and a
-            // skill's levels do not.
-            Progress = Progress,
-        };
+        // THE DESCENT IS CORE'S (P5). RegionId reaches the sim, not just the boss art: it selects
+        // the band cycle and the creature roster, which is what makes one region a different PLACE
+        // rather than the same place with bigger numbers; the descent's own RunIndex seeds each
+        // run's compositions so a replay is identical.
+        _descent.RegionId = RegionId;
+        _descent.EnemyBias = EnemyBias;
+        _descent.Progress = Progress;
+        _descent.StartRun(build, hunter, _enemyBaseHealth, _enemyBaseDamage, StartWave);
         // A CHECKPOINT START. The region's chosen start wave (Map screen) skips the waves already
         // cleared, and the Memory Dust it costs is charged through the host (CheckpointCharge) — the
         // host fed StartWave = 0 when the Dust was not there, so a start here is always affordable.
-        if (StartWave > 0)
-        {
-            _run.StartAtWave(StartWave);
-            Deepest = Math.Max(Deepest, StartWave);
-            CheckpointCharge += Checkpoints.DustCost(StartWave);
-        }
+        if (StartWave > 0) CheckpointCharge += Checkpoints.DustCost(StartWave);
         _mode = Mode.Fighting;
         BeginWave();
     }
@@ -869,7 +860,7 @@ public sealed class SoloExpeditionScreen
         var startHealth = new Dictionary<int, int> { [0] = _champ.Health };
         var maxHealth = new Dictionary<int, int> { [0] = _champ.MaxHealth };
         _replayWave = _run.Wave + 1;
-        _outcome = _run.PushWave();
+        _outcome = _descent.PushWave();
 
         // The boss's arrival horn. Played when the boss wave actually BEGINS rather than at the
         // INCOMING banner, so it lands as the creature walks in — and so a reload straight into a
@@ -1314,9 +1305,10 @@ public sealed class SoloExpeditionScreen
 
         if (_outcome == WaveOutcome.Cleared)
         {
-            // Pay this wave out NOW, then walk straight into the next one — no boundary, no button.
-            _rewards.Enqueue(new WaveReward(_run.LastWaveHaul, _run.Wave, _run.LastWaveWasBoss));
-            if (_run.Wave > Deepest) Deepest = _run.Wave;
+            // Pay this wave out NOW, then walk straight into the next one — no boundary, no
+            // button. The descent banked the reward (and the depth) the moment the sim cleared the
+            // wave; the screen forwards it here, when the player SEES the clear.
+            while (_descent.HasReward) _rewards.Enqueue(_descent.TakeReward());
 
             // Announce the clear and slide the NEXT enemy in, so the wave boundary is something you SEE.
             // A boss falling is the reward beat — it dropped a chest — so it gets its own louder banner
@@ -3749,7 +3741,7 @@ public sealed class SoloExpeditionScreen
         // first version checked _run.Over at the TOP of the loop and so broke out without ever building
         // the report — the capture caught a fresh descent every time.
         var guard = 0;
-        while (_run is { Over: false } && guard++ < 400) _outcome = _run.PushWave();
+        while (_run is { Over: false } && guard++ < 400) _outcome = _descent.PushWave();
 
         if (_run is null) return;
         var previous = Log.PreviousIn(RegionId);
