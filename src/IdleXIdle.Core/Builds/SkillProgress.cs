@@ -123,6 +123,18 @@ public sealed class SkillProgress
     }
 
     // ── PERSISTENCE. Flattened, so a save that predates a skill simply carries no row for it. ────
+    /// <summary>
+    /// A fingerprint of every choice that changes a composed build — which variation each skill
+    /// took and which reinforcements are bought. The hunt folds it into its build stamp, so buying
+    /// a reinforcement mid-descent re-composes the fight at the next wave boundary; leaving it out
+    /// was how the whole variation layer shipped dormant (audit 2026-08-31, finding #2).
+    /// </summary>
+    public string Signature =>
+        string.Join(";", ToSave()
+            .Where(r => r.Variation is not null || r.Taken.Count > 0)
+            .OrderBy(r => r.SkillId, StringComparer.Ordinal)
+            .Select(r => $"{r.SkillId}:{r.Variation}:{string.Join(",", r.Taken)}"));
+
     public IReadOnlyList<(string SkillId, int Uses, string? Variation, IReadOnlyList<string> Taken)> ToSave()
         => _uses.Keys
             .Union(_variation.Keys)

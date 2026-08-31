@@ -1687,6 +1687,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _stats.Mastery = _mastery;
                     _stats.Tree = _dust;
                     _stats.Character = _characters.Active;
+                    _stats.SkillLevels = _skillProgress;
                     _hunter.AddGleam(20000);
                     for (var i = 0; i < 12; i++) _hunter.Train(HunterStat.AttackPower);
                     for (var i = 0; i < 6; i++) _hunter.Train(HunterStat.CriticalChance);

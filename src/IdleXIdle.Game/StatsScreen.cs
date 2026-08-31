@@ -64,6 +64,9 @@ public sealed class StatsScreen
     /// The character layer arrived later and re-opened that exact bug once already.
     /// </remarks>
     public Character? Character { get; set; }
+
+    /// <summary>The skills' earned choices — without it this page priced a build the sim never runs.</summary>
+    public SkillProgress? SkillLevels { get; set; }
     public int HighestWave { get; set; }
     public int ChestsOpened { get; set; }
     public int MasteryPoints { get; set; }
@@ -171,7 +174,7 @@ public sealed class StatsScreen
 
         // ONE build, resolved ONCE, and every row reads from it — the same composition the fight uses
         // (Build.Resolve folds keystones, worn gear, trained stats and the passive tree together).
-        var build = Loadout.ToBuild(Tree, Mastery, Character);
+        var build = Loadout.ToBuild(Tree, Mastery, Character, SkillLevels);
         var mods = build.Resolve(hunter);
         var shape = build.Shape;
 

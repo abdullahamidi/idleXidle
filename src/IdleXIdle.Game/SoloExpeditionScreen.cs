@@ -767,12 +767,12 @@ public sealed class SoloExpeditionScreen
     /// <summary>What the run's build was composed from — compared at every wave boundary (see BeginWave).</summary>
     private string _buildStamp = "";
     private string BuildStamp()
-        => $"{Loadout.Signature}|{Tree.OwnedIds.Count}:{string.Join(",", Tree.OwnedIds)}|{Mastery.Taken.Count}:{string.Join(",", Mastery.Taken)}|{Character.Id}";
+        => $"{Loadout.Signature}|{Tree.OwnedIds.Count}:{string.Join(",", Tree.OwnedIds)}|{Mastery.Taken.Count}:{string.Join(",", Mastery.Taken)}|{Character.Id}|{Progress?.Signature}";
 
     /// <summary>Compose the build and refresh what the screen caches off it (the CHARGE pill).</summary>
     private Build ComposeBuild(Hunter hunter)
     {
-        var build = Loadout.ToBuild(Tree, Mastery, Character);
+        var build = Loadout.ToBuild(Tree, Mastery, Character, Progress);
         _buildStamp = BuildStamp();
         // The CHARGE pill only exists when the pool does.
         var trig = build.Triggers(hunter);

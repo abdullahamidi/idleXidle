@@ -608,7 +608,7 @@ public sealed class WeaveScreen
     /// being true one edit later.
     /// </remarks>
     private WeaveContext Context =>
-        Hunter is { } h ? SoloBattle.DescribeBuild(Loadout.ToBuild(Tree, Mastery, Character), h) : WeaveContext.Empty;
+        Hunter is { } h ? SoloBattle.DescribeBuild(Loadout.ToBuild(Tree, Mastery, Character, SkillLevels), h) : WeaveContext.Empty;
 
     public void Update(Point mouse, bool clicked, bool held, int wheel)
     {
@@ -1371,7 +1371,7 @@ public sealed class WeaveScreen
 
     /// <summary>One damage reading for a loadout, through the same bench the balance tests use.</summary>
     private float Dps(PlayerLoadout loadout, Hunter hunter)
-        => DamageBench.Measure(loadout.ToBuild(Tree, Mastery, Character), hunter).Dps;
+        => DamageBench.Measure(loadout.ToBuild(Tree, Mastery, Character, SkillLevels), hunter).Dps;
 
     /// <summary>Every skill this champion can weave: the roads walked, plus what it was born with.</summary>
     private IReadOnlySet<string> KnownSkills()
