@@ -282,8 +282,12 @@ public sealed class UiKit
         // mis-declared (or a preview/contact sheet slipped in) and frame extraction would smear.
         if (tex.Width % fw != 0)   // dev warning only — a Debug.Assert here would abort the game's Debug build
             System.Diagnostics.Debug.WriteLine($"Animation strip '{stripKey}' width {tex.Width} is not a whole multiple of frame size {fw}.");
-        var i = (int)(seconds * fps);
-        i = loop ? (i % frames + frames) % frames : Math.Clamp(i, 0, frames - 1);
+        // REDUCED MOTION holds the strip on its first frame. This is the one call every looping
+        // sprite in the game goes through — the hunt's hunter and creatures, the roster's ten cards —
+        // so the accessibility switch reaches all of them here rather than in each screen.
+        var i = Game1.ReducedMotion ? 0 : (int)(seconds * fps);
+        if (!Game1.ReducedMotion)
+            i = loop ? (i % frames + frames) % frames : Math.Clamp(i, 0, frames - 1);
         // A NEGATIVE topCrop means "measure it". Character strips are generated from a source that was
         // deliberately letterboxed to leave the animator's crop somewhere to land, so a third of the
         // frame is empty sky — and drawn as-is, that empty sky is a third of the box and the champion

@@ -163,7 +163,7 @@ public static class Display
     public readonly record struct GamePrefs(
         DisplayMode Mode, WindowSize Window, int SfxVolume, int MusicVolume, bool AskBeforeScrap,
         bool ShowDamageNumbers = true, bool ShowSkillCallouts = true, bool ShowHitEffects = true, bool ShowScreenFlash = true,
-        int UiScalePercent = 100);
+        int UiScalePercent = 100, bool ReducedMotion = false);
 
     /// <summary>
     /// The UI SCALE steps the game OFFERS. 0 is AUTO.
@@ -190,6 +190,9 @@ public static class Display
 
     private const string UiScaleKey = "uiscale=";
 
+    /// <summary>REDUCED MOTION, written as <c>motion=0|1</c>. Absent in an older file means off.</summary>
+    private const string MotionKey = "reducedmotion=";
+
     // ── FILE FORMAT ────────────────────────────────────────────────────────────────────────────
     // One value per line: Mode, Window, SfxVolume, MusicVolume, AskBeforeScrap, then the four
     // fight-effect switches (1/0 each). Lines 3-4 are the volumes, and their SCALE changed on
@@ -214,7 +217,8 @@ public static class Display
                 $"{p.Mode}\n{p.Window.Width}x{p.Window.Height}\n{p.SfxVolume}\n{p.MusicVolume}\n{(p.AskBeforeScrap ? 1 : 0)}\n"
                 + $"{(p.ShowDamageNumbers ? 1 : 0)}\n{(p.ShowSkillCallouts ? 1 : 0)}\n{(p.ShowHitEffects ? 1 : 0)}\n{(p.ShowScreenFlash ? 1 : 0)}\n"
                 + PercentMarker + "\n"
-                + UiScaleKey + (p.UiScalePercent is 100 or 125 or 150 ? p.UiScalePercent.ToString() : "auto") + "\n");
+                + UiScaleKey + (p.UiScalePercent is 100 or 125 or 150 ? p.UiScalePercent.ToString() : "auto") + "\n"
+                + MotionKey + (p.ReducedMotion ? "1" : "0") + "\n");
         }
         catch (System.IO.IOException) { /* prefs are a convenience; never block the game on them */ }
         catch (UnauthorizedAccessException) { }
@@ -269,6 +273,10 @@ public static class Display
             var ask = At(4) != "0";
             // A keyed line (2026-09-01), found wherever it sits, so the positional lines above never move.
             var uiScale = 100;
+            var reduced = false;
+            foreach (var l in lines)
+                if (l.Trim().StartsWith(MotionKey, StringComparison.Ordinal))
+                    reduced = l.Trim()[MotionKey.Length..] == "1";
             foreach (var l in lines)
             {
                 if (!l.Trim().StartsWith(UiScaleKey, StringComparison.Ordinal)) continue;
@@ -281,7 +289,7 @@ public static class Display
             return new GamePrefs(mode, window, sfx, music, ask,
                 ShowDamageNumbers: At(5) != "0", ShowSkillCallouts: At(6) != "0",
                 ShowHitEffects: At(7) != "0", ShowScreenFlash: At(8) != "0",
-                UiScalePercent: uiScale);
+                UiScalePercent: uiScale, ReducedMotion: reduced);
         }
         catch (System.IO.IOException) { return Default; }
         catch (UnauthorizedAccessException) { return Default; }

@@ -86,6 +86,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // The fight's text and effects — quality-of-life switches (playtest 2026-08-23), same prefs file.
     private bool _showDamageNumbers = true, _showSkillCallouts = true, _showHitEffects = true, _showScreenFlash = true;
 
+    /// <summary>
+    /// REDUCED MOTION: the accessibility switch that stops the interface from moving on its own.
+    /// </summary>
+    /// <remarks>
+    /// Static so the two places that actually animate — <see cref="UiKit.AnimSprite"/>, which loops
+    /// every idle sprite in the game, and the vault card's hover grow — can read it without every
+    /// screen having to be handed a flag. It is shipped WITH those consumers on purpose: a setting
+    /// that changes nothing is worse than no setting, because it teaches the player that the options
+    /// screen lies.
+    /// </remarks>
+    internal static bool ReducedMotion { get; private set; }
+
     // art-bible §4.1. Hearth Gold marks EARNED states only — never decoration.
     private static readonly Color VoidInk = new(0x1B, 0x16, 0x20);
 
@@ -547,6 +559,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             (_showDamageNumbers, _showSkillCallouts, _showHitEffects, _showScreenFlash)
                 = (prefs.ShowDamageNumbers, prefs.ShowSkillCallouts, prefs.ShowHitEffects, prefs.ShowScreenFlash);
             _uiScalePercent = prefs.UiScalePercent;
+            ReducedMotion = prefs.ReducedMotion;
             ApplyDisplay();
         }
         else
@@ -4659,7 +4672,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private void SaveDisplay() => Display.Save(new Display.GamePrefs(
         _displayMode, _windowSize, _sfxVolume, _musicVolume, _askBeforeScrap,
         _showDamageNumbers, _showSkillCallouts, _showHitEffects, _showScreenFlash,
-        UiScalePercent: _uiScalePercent));
+        UiScalePercent: _uiScalePercent, ReducedMotion: ReducedMotion));
 
     // ── Settings ──────────────────────────────────────────────────────────────────────────────
     // 1920-space (scale-1 chrome). 2026-08-24, playtest nine: MODE and WINDOW SIZE became dropdowns
@@ -4670,32 +4683,46 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // edge instead of sitting on its frame.
     private static readonly Rectangle SettingsPanel = new(335, 100, 1250, 880);
 
+    // ── TWO COLUMNS, GROUPED BY PURPOSE (brief §36). One column of nine unrelated rows made the
+    //    player read the whole list to find one switch, and it left the panel's right half empty
+    //    while its controls stayed small enough to be a chore to hit (§35).
+    private const int SetColW = 560, SetLeftX = 372, SetRightX = 372 + 560 + 44;
+    private const int SetTop = 176, SetRowH = 64;
+
     /// <summary>The closed MODE dropdown row — shows the current mode, opens the list on click.</summary>
-    private static readonly Rectangle SettingsModeRow = new(860, 202, 524, 58);
+    private static readonly Rectangle SettingsModeRow = new(SetLeftX + 230, SetTop + 34, SetColW - 230, 56);
 
     /// <summary>The closed WINDOW SIZE dropdown row. Dim and inert outside WINDOWED mode.</summary>
-    private static readonly Rectangle SettingsSizeRow = new(860, 278, 524, 58);
+    private static readonly Rectangle SettingsSizeRow = new(SetLeftX + 230, SetTop + 34 + SetRowH, SetColW - 230, 56);
+
+    /// <summary>The UI SCALE row — a button that steps through the offered scales.</summary>
+    private static readonly Rectangle SettingsScaleRow = new(SetLeftX + 230, SetTop + 34 + SetRowH * 2, SetColW - 230, 56);
 
     /// <summary>The effects-volume slider track (the grab area is padded around it).</summary>
-    private static readonly Rectangle SettingsFxTrack = new(900, 416, 400, 30);
+    private static readonly Rectangle SettingsFxTrack = new(SetLeftX + 230, SetTop + 316, SetColW - 300, 30);
 
     /// <summary>The music-volume slider track.</summary>
-    private static readonly Rectangle SettingsMusicTrack = new(900, 472, 400, 30);
+    private static readonly Rectangle SettingsMusicTrack = new(SetLeftX + 230, SetTop + 316 + 56, SetColW - 300, 30);
 
     // CLOSE sits on the RIGHT, where every other panel in the game puts its way out (playtest
     // 2026-08-25: "close is left behind on the left"); the exit to the desktop sits left of it.
     // The CLOSE button is gone (playtest 2026-08-26: "remove the CLOSE text; the corner icon closes");
     // QUIT TO DESKTOP sits centred in the row it had shared.
-    private static readonly Rectangle SettingsQuit = new(810, 880, 300, 56);
+    private static readonly Rectangle SettingsQuit = new(SetLeftX, 884, 360, 52);
     /// <summary>The panel's corner close icon — UiKit.CloseButton at UiKit.CloseRect, inside the ornament.</summary>
     private static readonly Rectangle SettingsCornerClose = UiKit.CloseRect(SettingsPanel);
 
     /// <summary>Copies the feedback code (build stamp + progress + run log) to the clipboard.</summary>
-    private static readonly Rectangle SettingsCopyFeedback = new(536, 800, 400, 52);
+    private static readonly Rectangle SettingsCopyFeedback = new(SetLeftX, 790, 360, 52);
 
-    /// <summary>START A NEW GAME at rest, and its wider red armed state spanning the whole row.</summary>
-    private static readonly Rectangle SettingsNewGame = new(984, 800, 400, 52);
-    private static readonly Rectangle SettingsNewGameArmed = new(536, 800, 848, 52);
+    // ── THE DANGER ZONE (brief §37). START A NEW GAME used to sit beside COPY FEEDBACK CODE, two
+    //    identical buttons in a row, one of which deletes the save. It has its own bordered region
+    //    now, with the sentence that says what it does, and it still takes two clicks.
+    private static readonly Rectangle SettingsDanger = new(SetRightX - 24, 780, SetColW + 24, 156);
+
+    /// <summary>START A NEW GAME at rest, and its wider red armed state spanning the zone.</summary>
+    private static readonly Rectangle SettingsNewGame = new(SettingsDanger.Right - 24 - 360, SettingsDanger.Y + 84, 360, 52);
+    private static readonly Rectangle SettingsNewGameArmed = new(SettingsDanger.X + 16, SettingsDanger.Y + 84, SettingsDanger.Width - 32, 52);
 
     /// <summary>Which settings dropdown is open: 0 none, 1 MODE, 2 WINDOW SIZE. One at a time.</summary>
     private int _settingsDropdown;
@@ -4816,10 +4843,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         _ui.Scrim(_batch, 0.75f);
         _ui.Panel(_batch, SettingsPanel);
-        // The panel is DARK glass, so light text on it — gold heading, bone labels. THE HEADING IS A
-        // PANEL TITLE: it used to be an unsized call, so the one word naming the modal was drawn at the
-        // body size — smaller than the MODE and WINDOW SIZE labels underneath it. It sits on the close
-        // icon's row, which is what UiTypography.ModalTitleTop is.
         _ui.TextCenterBig(_batch, "SETTINGS", 960, SettingsPanel.Y + UiTypography.ModalTitleTop,
                           Gold, UiTypography.PanelTitle);
 
@@ -4829,11 +4852,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var mouse = ChromeMouse;
 
         // The COPIED confirmation, up under the title where no row lives.
-        if (_feedbackToastTimer > 0f) TextCenter(_feedbackToast, 960, SettingsPanel.Y + 82, Gold);
+        if (_feedbackToastTimer > 0f) TextCenter(_feedbackToast, 960, SettingsPanel.Y + 74, Gold);
 
-        // ── DISPLAY: two dropdowns. Closed rows draw here in layout order; the open list waits for
-        //    the end of the method. ──
-        Text("MODE", 536, 216, Bone);
+        // ── GROUPED BY PURPOSE, IN TWO COLUMNS (brief §36). Left: what the game looks and sounds
+        //    like. Right: how it behaves, what it shows in a fight, and the one destructive door. ──
+        void Group(string name, int x, int y) =>
+            _ui.TextBig(_batch, name, x, y, Gold, UiTypography.Secondary);
+
+        void Label(string s, int x, int y, Color c) =>
+            _ui.TextBig(_batch, s, x, y, c, UiTypography.Body);
+
+        void Rule(int x, int y) => _ui.Fill(_batch, new Rectangle(x, y, SetColW, 1), new Color(0x3A, 0x3A, 0x44));
+
+        // ── DISPLAY ──────────────────────────────────────────────────────────────────────────────
+        Group("DISPLAY", SetLeftX, SetTop);
+        Rule(SetLeftX, SetTop + 26);
+
+        Label("MODE", SetLeftX, SettingsModeRow.Y + 16, Bone);
         var modeNames = new[] { "WINDOWED", "BORDERLESS", "FULLSCREEN" };
         var modeIdx = _displayMode == DisplayMode.Windowed ? 0 : _displayMode == DisplayMode.Borderless ? 1 : 2;
         DropdownClosed(SettingsModeRow, modeNames[modeIdx], enabled: true, open: _settingsDropdown == 1);
@@ -4841,7 +4876,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var windowed = _displayMode == DisplayMode.Windowed;
         var desktop = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode;
         var sizes = Display.OfferedWindowSizes(desktop.Width, desktop.Height);
-        Text("WINDOW SIZE", 536, 292, windowed ? Bone : Slate);
+        Label("WINDOW SIZE", SetLeftX, SettingsSizeRow.Y + 16, windowed ? Bone : Slate);
         // Outside WINDOWED the size is the monitor's to decide, so the row says which one rather than
         // going blank — "AUTO" was a word about the setting; this is the answer the player wanted.
         var sizeValue = windowed
@@ -4849,19 +4884,28 @@ public class Game1 : Microsoft.Xna.Framework.Game
             : $"YOUR SCREEN — {desktop.Width} × {desktop.Height}";
         DropdownClosed(SettingsSizeRow, sizeValue, enabled: windowed, open: _settingsDropdown == 2);
 
-        // ── SOUND. Draggable 0-100 sliders: a click jumps there, holding drags, releasing saves —
-        //    and the effects row clicks once on release so the new level is heard at the new level. ──
-        _ui.Fill(_batch, new Rectangle(536, 366, 848, 2), new Color(0x3A, 0x3A, 0x44));
-        Text("SOUND", 536, 380, Gold);
+        // UI SCALE, out of the dev keys and onto the panel (P0.5 built it; F8 was its only door).
+        Label("UI SCALE", SetLeftX, SettingsScaleRow.Y + 16, Bone);
+        if (_ui.Button(_batch, SettingsScaleRow, Display.UiScaleLabel(_uiScalePercent), mouse, uiClick))
+        {
+            CycleUiScale();
+            SaveDisplay();
+        }
+        _ui.TextBig(_batch, "AUTO PICKS 125% IN A SMALL WINDOW", SetLeftX, SettingsScaleRow.Bottom + 6,
+                    Slate, UiTypography.Secondary);
 
-        var fx = SliderRow("EFFECTS VOLUME", SettingsFxTrack, _sfxVolume, 1, uiClick);
+        // ── AUDIO ────────────────────────────────────────────────────────────────────────────────
+        Group("AUDIO", SetLeftX, SetTop + 262);
+        Rule(SetLeftX, SetTop + 288);
+
+        var fx = SliderRow("EFFECTS VOLUME", SettingsFxTrack, _sfxVolume, 1, uiClick, SetLeftX);
         if (fx >= 0 && fx != _sfxVolume)
         {
             _sfxVolume = fx;
             _sound.SfxVolume = _sfxVolume / 100f;   // live, so the release click previews the new level
         }
 
-        var mu = SliderRow("MUSIC VOLUME", SettingsMusicTrack, _musicVolume, 2, uiClick);
+        var mu = SliderRow("MUSIC VOLUME", SettingsMusicTrack, _musicVolume, 2, uiClick, SetLeftX);
         if (mu >= 0 && mu != _musicVolume)
         {
             _musicVolume = mu;
@@ -4876,11 +4920,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
             SaveDisplay();
         }
 
-        // ── FORGE. The way BACK for "don't ask me again" — a preference the player can suppress from
-        //    a dialog must be reversible from settings, or one hasty click is permanent. ──
-        _ui.Fill(_batch, new Rectangle(536, 542, 848, 2), new Color(0x3A, 0x3A, 0x44));
-        Text("ASK BEFORE SELL OR SALVAGE", 536, 566, Bone);
-        var askBtn = new Rectangle(1160, 554, 224, 52);
+        // ── CONTROLS. Only what the game really has: the keys, and where they are listed. ────────
+        Group("CONTROLS", SetLeftX, SetTop + 424);
+        Rule(SetLeftX, SetTop + 450);
+        Label("EVERY KEY IS LISTED IN HELP — PRESS F1", SetLeftX, SetTop + 468, Slate);
+        Label("KEYS CANNOT BE REBOUND YET", SetLeftX, SetTop + 468 + UiTypography.Pitch(UiTypography.Body), Slate);
+
+        // ── GAMEPLAY ─────────────────────────────────────────────────────────────────────────────
+        Group("GAMEPLAY", SetRightX, SetTop);
+        Rule(SetRightX, SetTop + 26);
+        Label("ASK BEFORE SELL OR SALVAGE", SetRightX, SetTop + 50, Bone);
+        var askBtn = new Rectangle(SetRightX + SetColW - 260, SetTop + 38, 260, 52);
         if (_ui.Button(_batch, askBtn, _askBeforeScrap ? "ON — IT ASKS" : "OFF", mouse, uiClick))
         {
             _askBeforeScrap = !_askBeforeScrap;
@@ -4888,22 +4938,29 @@ public class Game1 : Microsoft.Xna.Framework.Game
             SaveDisplay();
         }
 
-        // ── FIGHT TEXT AND EFFECTS. Quality-of-life switches (playtest 2026-08-23). Each is a plain
-        //    ON/OFF; the hunt reads them on its next frame (fed in Update with the other flags). ──
-        _ui.Fill(_batch, new Rectangle(536, 632, 848, 2), new Color(0x3A, 0x3A, 0x44));
-        Text("FIGHT TEXT AND EFFECTS", 536, 646, Gold);
+        // ── ACCESSIBILITY. The fight's text and effects, and the motion switch. ──────────────────
+        Group("ACCESSIBILITY", SetRightX, SetTop + 112);
+        Rule(SetRightX, SetTop + 138);
+        // Five switches, one per row, each the full column width. Two to a row they were 260 px
+        // apart and the second label sat under the first row's button.
         var changed = false;
-        changed |= ToggleRow("DAMAGE NUMBERS", 536, 684, ref _showDamageNumbers, uiClick);
-        changed |= ToggleRow("SKILL NAMES", 1000, 684, ref _showSkillCallouts, uiClick);
-        changed |= ToggleRow("FIGHT EFFECTS", 536, 732, ref _showHitEffects, uiClick);
-        changed |= ToggleRow("RED FLASH", 1000, 732, ref _showScreenFlash, uiClick);
+        var sy = SetTop + 158;
+        changed |= ToggleRow("DAMAGE NUMBERS", SetRightX, sy, SetColW, ref _showDamageNumbers, uiClick);
+        sy += 58;
+        changed |= ToggleRow("SKILL NAMES", SetRightX, sy, SetColW, ref _showSkillCallouts, uiClick);
+        sy += 58;
+        changed |= ToggleRow("FIGHT EFFECTS", SetRightX, sy, SetColW, ref _showHitEffects, uiClick);
+        sy += 58;
+        changed |= ToggleRow("RED FLASH", SetRightX, sy, SetColW, ref _showScreenFlash, uiClick);
+        sy += 58;
+        var reduced = ReducedMotion;
+        changed |= ToggleRow("REDUCED MOTION", SetRightX, sy, SetColW, ref reduced, uiClick);
+        if (reduced != ReducedMotion) ReducedMotion = reduced;
         if (changed) SaveDisplay();
+        _ui.TextBig(_batch, "REDUCED MOTION HOLDS IDLE ANIMATIONS STILL", SetRightX, sy + 54,
+                    Slate, UiTypography.Secondary);
 
-        // ── FEEDBACK + RESET, side by side above the exit row. One click copies a code carrying the
-        //    build stamp and progress; two deliberate clicks delete the save (see StartNewGame). ──
-        _ui.Fill(_batch, new Rectangle(536, 786, 848, 2), new Color(0x3A, 0x3A, 0x44));
-        // Hidden while the red SURE? bar covers this exact area — the confirm click must not also
-        // copy a code over the player's clipboard (review 2026-08-24).
+        // ── THE WAY OUT, and the one door that destroys something. ───────────────────────────────
         if (_resetArmTimer <= 0f && _ui.Button(_batch, SettingsCopyFeedback, "COPY FEEDBACK CODE", mouse, uiClick))
         {
             // The failure is NOT silent (same rule as the weave's copy button): no clipboard, no lie.
@@ -4912,13 +4969,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 : "COPY FAILED — TRY AGAIN";
             _feedbackToastTimer = 4f;
         }
+        _ui.TextBig(_batch, "SENDS THE DEVELOPER YOUR BUILD AND PROGRESS", SetLeftX,
+                    SettingsCopyFeedback.Bottom + 8, Slate, UiTypography.Secondary);
 
+        // DANGER ZONE — its own bordered region, so the button that deletes a save is not one of a
+        // pair of identical buttons (brief §37).
+        _ui.Plate(_batch, SettingsDanger, Ember);
+        _ui.TextBig(_batch, "DANGER ZONE", SettingsDanger.X + 16, SettingsDanger.Y + 12, Ember, UiTypography.Secondary);
         if (_resetArmTimer > 0f)
         {
             _ui.Fill(_batch, SettingsNewGameArmed, new Color(0x8C, 0x1E, 0x1E));
             _ui.Fill(_batch, new Rectangle(SettingsNewGameArmed.X, SettingsNewGameArmed.Y, SettingsNewGameArmed.Width, 3), Ember);
-            _ui.TextCenter(_batch, "SURE? THIS DELETES YOUR SAVE — CLICK AGAIN",
-                           SettingsNewGameArmed.Center.X, SettingsNewGameArmed.Center.Y - 12, Color.White);
+            _ui.TextCenterBig(_batch, "SURE? THIS DELETES YOUR SAVE — CLICK AGAIN",
+                              SettingsNewGameArmed.Center.X, SettingsNewGameArmed.Center.Y - 12,
+                              Color.White, UiTypography.Body);
             if (UiKit.ClickedIn(SettingsNewGameArmed, mouse, uiClick))
             {
                 _resetArmTimer = 0f;
@@ -4929,9 +4993,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _resetArmTimer = 0f;   // any click that is not the confirmation disarms
             }
         }
-        else if (_ui.Button(_batch, SettingsNewGame, "START A NEW GAME", mouse, uiClick))
+        else
         {
-            _resetArmTimer = ResetArmSeconds;
+            _ui.TextBig(_batch, "DELETES THIS SAVE AND STARTS OVER. NOTHING COMES BACK.",
+                        SettingsDanger.X + 16, SettingsDanger.Y + 44, Bone, UiTypography.Body);
+            if (_ui.Button(_batch, SettingsNewGame, "START A NEW GAME", mouse, uiClick))
+                _resetArmTimer = ResetArmSeconds;
         }
 
         if (_ui.CloseButton(_batch, SettingsCornerClose, mouse, uiClick))
@@ -5160,10 +5227,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
     }
 
     /// <summary>A label and an ON/OFF button. Returns true when the click flipped it.</summary>
-    private bool ToggleRow(string label, int x, int y, ref bool value, bool clicked)
+    /// <summary>
+    /// One ON/OFF row: the label at the left of the given width, the button at its right end.
+    /// </summary>
+    /// <remarks>
+    /// The button's x used to be the label's plus a fixed 276, which is a layout the caller cannot
+    /// see and cannot fit around: regrouped into two columns, the settings panel put two of these
+    /// buttons outside the panel and one on top of the next label. The row owns its width now.
+    /// </remarks>
+    private bool ToggleRow(string label, int x, int y, int width, ref bool value, bool clicked)
     {
-        Text(label, x, y + 10, Bone);
-        var btn = new Rectangle(x + 276, y, 108, 44);
+        _ui.TextBig(_batch, label, x, y + 12, Bone, UiTypography.Body);
+        var btn = new Rectangle(x + width - 116, y, 116, 48);
         if (!_ui.Button(_batch, btn, value ? "ON" : "OFF", ChromeMouse, clicked)) return false;
         value = !value;
         return true;
@@ -5178,16 +5253,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// modal. Persisting happens on RELEASE, back in DrawSettings, so a drag is one write, not sixty.
     /// The percent label updates live as the handle moves.
     /// </remarks>
-    private int SliderRow(string label, Rectangle track, int current, int dragId, bool clickable)
+    private int SliderRow(string label, Rectangle track, int current, int dragId, bool clickable, int labelX)
     {
-        Text(label, 536, track.Y + 8, Bone);
+        _ui.TextBig(_batch, label, labelX, track.Y + 4, Bone, UiTypography.Body);
 
         var bed = new Rectangle(track.X, track.Center.Y - 4, track.Width, 8);
         _ui.Fill(_batch, bed, new Color(0x2A, 0x24, 0x38));
         var fillW = (int)(track.Width * (current / 100f));
         if (fillW > 0) _ui.Fill(_batch, new Rectangle(bed.X, bed.Y, fillW, 8), new Color(0xC8, 0x9A, 0x3C));
         _ui.Fill(_batch, new Rectangle(track.X + fillW - 7, track.Y, 14, track.Height), Bone);
-        Text($"{current}%", 1322, track.Y + 8, Slate);
+        _ui.TextBig(_batch, $"{current}%", track.Right + 14, track.Y + 4, Slate, UiTypography.Body);
 
         var mouse = ChromeMouse;
         var grab = new Rectangle(track.X - 10, track.Y - 6, track.Width + 20, track.Height + 12);

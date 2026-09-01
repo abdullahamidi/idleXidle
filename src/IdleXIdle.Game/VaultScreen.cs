@@ -532,7 +532,9 @@ public sealed class VaultScreen
     {
         var d = ChestDossiers.For(chest);
         var grade = RarityColors[(int)chest.Rarity];
-        var ease = hovered ? _hoverT * _hoverT * (3f - 2f * _hoverT) : 0f;   // smoothstep
+        // REDUCED MOTION keeps the value step and drops the movement: the card still brightens under
+        // the pointer, it just does not grow or ease into it.
+        var ease = hovered ? Game1.ReducedMotion ? 1f : _hoverT * _hoverT * (3f - 2f * _hoverT) : 0f;   // smoothstep
 
         // A STACK LOOKS LIKE A STACK. Two identical chests were one card with a small "x2" in the
         // corner, and testers did not see it (playtest 2026-08-25). Now the card sits on two offset
@@ -561,7 +563,8 @@ public sealed class VaultScreen
 
         // THE CHEST IS THE PICTURE, lifted toward white so grade never decides how VISIBLE it is
         // (SpriteBatch tint multiplies). On hover it grows 6% about its own centre.
-        var icon = Grow(new Rectangle(card.X + 24, card.Y + 40, ArtSize, ArtSize), 1f + 0.06f * ease);
+        var icon = Grow(new Rectangle(card.X + 24, card.Y + 40, ArtSize, ArtSize),
+                        Game1.ReducedMotion ? 1f : 1f + 0.06f * ease);
         if (_ui.Assets.Get("chest_loot") is { } chestArt)
             _ui.SpriteFit(b, chestArt, icon, Color.Lerp(grade, Color.White, 0.45f + 0.1f * ease));
         else _ui.Diamond(b, icon, grade);
