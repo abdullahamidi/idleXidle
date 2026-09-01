@@ -1601,11 +1601,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
                     // Pose a partly-walked tree so the shot shows taken / takeable / locked states, a
                     // bridge with only one side satisfied, and a mastery still out of reach.
-                    // Depth per region, not a point total: SkillPointsEarned reads BestDepth/5 per
-                    // region every frame and would otherwise stamp this back down to the base 3. Three
-                    // regions at depth 35 is 3 + 21 = 24, the number this fixture always meant.
-                    foreach (var def in Regions.All.Take(3)) _world.RegionFarm(def.Id).RestoreBestDepth(35);
-                    _mastery.SetEarned(24);
+                    // Depth per region, not a point total: the host re-derives earned points from
+                    // MasteryPoints.Total every frame. Three regions at depth 100 pay 3 × ⌊√100 × 0.9⌋ = 27;
+                    // the Resonance minors and notables below cost 21, so SIX points stay AVAILABLE and a
+                    // takeable node is actually photographed (UX V2 P1.5 — the old depth-35 pose paid 15
+                    // against 21 spent, a state the game cannot produce, and no capture ever showed a node
+                    // in its takeable light).
+                    foreach (var def in Regions.All.Take(3)) _world.RegionFarm(def.Id).RestoreBestDepth(100);
+                    _mastery.SetEarned(27);
 
                     // FIVE auto-skill cards, not four. The fifth slot is the thing this screen was
                     // silently unable to draw, and a fixture that poses the easy case would not have
@@ -1643,6 +1646,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         if (Environment.GetEnvironmentVariable("RH_SHOT_MODE") == "tour") _masteryScreen.DevOpenTreeFirstVisit();
                         else _masteryScreen.DevOpenTree();
                     }
+                    // RH_SHOT_NODE=<id> pins a node in the inspector, so a Notable, a Specialisation, a road
+                    // node and a locked node can each be photographed read (UX V2 P1.5).
+                    if (Environment.GetEnvironmentVariable("RH_SHOT_NODE") is { } pinNode) _masteryScreen.DevPin(pinNode);
 
                     // ATTUNE poses THE ATTUNEMENT ceremony; ATTUNED poses the tree after sealing
                     // (the hex panel gold, the discipline live). Both walk the REAL path — Weight's

@@ -84,6 +84,8 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 [ -n "$RH_SHOT_UISCALE" ] && RH_ENV+=(RH_SHOT_UISCALE="$RH_SHOT_UISCALE")
 # A REAL window size (e.g. 1280x720): the capture is then the presented backbuffer, not the 1920 render target.
 [ -n "$RH_SHOT_WINDOW" ] && RH_ENV+=(RH_SHOT_WINDOW="$RH_SHOT_WINDOW")
+# MASTERY: pin a node in the inspector (a MasteryCatalog id) for the buildtree/buildzoom modes.
+[ -n "$RH_SHOT_NODE" ] && RH_ENV+=(RH_SHOT_NODE="$RH_SHOT_NODE")
 # The third argument means "zoom" to buildzoom and "seconds into the flourish" to
 # traitlit/traitterm — both are the one dial that mode's capture needs.
 [ -n "$ZOOM" ] && RH_ENV+=(RH_SHOT_ZOOM="$ZOOM" RH_SHOT_T="$ZOOM")

@@ -88,12 +88,15 @@ public sealed class MasteryScreen
     /// canvas under it. The reset button is hit-tested BEFORE this gate in <see cref="Update"/>, so it
     /// still works. (The top strip needs no entry: the canvas starts below it.)
     /// </remarks>
-    private static bool OverDock(Point p) => HexPanel.Contains(p) || NodePanel.Contains(p) || PointsPanel.Contains(p);
+    private static bool OverDock(Point p) => InspectorPanel.Contains(p) || PointsPanel.Contains(p) || ResetBtn.Contains(p);
     private bool _resetArmed;   // the reset button has been pressed once and is waiting for the second
 
     // (This class carried a second, unreachable view until 2026-09-01 — a "BUILD OVERVIEW" of four
     // panels whose copy still said "EVERY SKILL IS A SOURCE AND A FORM". The rail had opened the tree
     // directly for weeks; the overview, its door, its flags and its colour table are gone: UX V2 P0.2.)
+
+    /// <summary>DEV: pin a node in the inspector, so a capture can photograph it read (RH_SHOT_NODE).</summary>
+    public void DevPin(string nodeId) => _pinnedNodeId = nodeId;
 
     /// <summary>Arming survives no navigation: the two-click reset disarms whenever the screen is (re)opened.</summary>
     public void Disarm() => _resetArmed = false;
@@ -186,7 +189,7 @@ public sealed class MasteryScreen
     // the top left should be only the symbol and the number, as on the traits screen — the four tree
     // rows there are unnecessary"). The branch tally and the SPENT cell are gone; TAKE EVERY POINT BACK
     // is its own button under the plate, because it is an action and not a readout.
-    private static readonly Rectangle PointsPanel = new(40, 112, 200, 96);
+    private static readonly Rectangle PointsPanel = new(40, 112, 300, 140);
 
     // ON THE TREE PAGE, NOT THE OVERVIEW. Playtest: "'Take all mastery points back' buranın butonu
     // değil, mastery tree'nin butonu." Right — it un-spends every point in a tree the overview does not
@@ -299,7 +302,9 @@ public sealed class MasteryScreen
     /// the arithmetic doing its job rather than a retune.
     /// </para>
     /// </remarks>
-    private static readonly Rectangle TreeView = new(180, 112, 1260, 952);
+    // THE CANVAS ENDS WHERE THE INSPECTOR BEGINS (UX V2 P1.5): the east ring used to be cut by a dock that
+    // started 32 px inside the view. Both hang off UiKit.Page, so UI SCALE moves them together.
+    private static Rectangle TreeView => new(180, 112, InspectorPanel.X - 8 - 180, UiKit.PageBottom(16) - 112);
 
     private Vector2 Screen(Vector2 world)
         => new(TreeView.Center.X + (world.X - _pan.X) * _zoom,
@@ -396,12 +401,16 @@ public sealed class MasteryScreen
     private static int NodeRadius(MasteryKind k) => (int)(MasteryLayout.NodeWorldRadius(k) / 1.9f);
     private const int SbX = 1200;
 
-    // A DOCKED CARD, not a column. The tree is the page now; a 700px panel permanently taking a third
-    // of the canvas is exactly the "sıkışmış" the layout was accused of.
-    private static readonly Rectangle NodePanel = new(1408, 588, 496, 460);
-    // Level with the corner plate opposite it (both start at 112, where the header strip ends), so the
-    // three plates on this page read as one row hung under one header rather than as three arrivals.
-    private static readonly Rectangle HexPanel = new(1408, 112, 496, 460);
+    /// <summary>
+    /// THE INSPECTOR (UX V2 P1.5, D3): the whole right column. It replaced two equal ornate frames — a
+    /// standing YOUR STYLE chart that was an empty state for most of the game, and a node card with no
+    /// control in it. What a node is, what it does, what it needs, what it costs, and the one button.
+    /// </summary>
+    private static Rectangle InspectorPanel => new(UiKit.PageRight(16) - 496, 112, 496, UiKit.PageBottom(16) - 112);
+    private static Rectangle TakeBtn => new(UiKit.ContentLeft(InspectorPanel), InspectorPanel.Bottom - 92,
+                                            UiKit.ContentRight(InspectorPanel) - UiKit.ContentLeft(InspectorPanel), 56);
+    private const int InspectorHexRadius = 70;
+    private const int InspectorSealPx = 30;   // ui-size-ok: the seal medallion's edge in pixels, not a text size
     private static readonly Rectangle SpecPanel = new(480, 180, 960, 720);
     private static readonly Rectangle SpecSealBtn = new(560, 816, 360, 52);
     private static readonly Rectangle SpecUndoBtn = new(1000, 816, 360, 52);
@@ -411,7 +420,6 @@ public sealed class MasteryScreen
     // 144, sidebar ending at 928) had no room for it — the fifth card would have run over the keystone
     // chips, and the keystone header already sat on top of slot four's Vow row in a capture. Everything
     // below is derived from fitting five cards plus a header plus three chips inside 1080.
-    private static readonly Rectangle Sidebar = new(SbX, 200, 1920 - SbX - 16, 860);
 
     /// <summary>
     /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
@@ -421,8 +429,8 @@ public sealed class MasteryScreen
     internal static Rectangle[] Spotlights(TourTarget target) => target switch
     {
         TourTarget.MasteryTree => new[] { TreeView },
-        TourTarget.Specialisations => new[] { HexPanel },
-        TourTarget.NodeCard => new[] { NodePanel, ResetBtn },
+        TourTarget.Specialisations => new[] { InspectorPanel },
+        TourTarget.NodeCard => new[] { InspectorPanel, ResetBtn },
         _ => Array.Empty<Rectangle>(),
     };
 
@@ -550,6 +558,19 @@ public sealed class MasteryScreen
 
         // The docked cards are CARDS, not glass: a click on them must not take, pin, or refund the
         // node that happens to sit underneath (at the default framing, Tempo's rim does).
+        // THE INSPECTOR'S BUTTON (UX V2 P1.5): TAKE the pinned node, or GIVE BACK a taken one — the same
+        // rules a click on the node itself runs, so the two doors cannot disagree.
+        if (TakeBtn.Contains(hit) && _pinnedNodeId is { } pinId && MasteryCatalog.ById(pinId) is { } pinned)
+        {
+            if (Mastery.IsTaken(pinId))
+            {
+                if (Mastery.Refund(pinId)) { _msg = "POINTS RETURNED."; Dirty = true; }
+                else _msg = "ANOTHER NODE DEPENDS ON THIS ONE.";
+            }
+            else TakeNode(pinned);
+            return;
+        }
+
         if (OverDock(hit)) return;
 
         foreach (var node in MasteryCatalog.Nodes)
@@ -565,36 +586,35 @@ public sealed class MasteryScreen
             _pinnedNodeId = node.Id;
 
 
-            var firstSpec = node.Kind == MasteryKind.Specialisation && Mastery.Affinity() is null;
-            if (Mastery.Take(node.Id))
-            {
-                _msg = "";
-                Dirty = true;
-                // THE ATTUNEMENT: your first Specialisation is the moment this game is named for,
-                // so it gets a ceremony instead of a click-sound — the hexagon shown whole, the
-                // choice sealed or taken back, nothing else clickable until you decide.
-                if (firstSpec && node.Style is { } nf) { _specNodeId = node.Id; _specStyle = nf; }
-            }
-            // WHY THE CLICK DID NOTHING, NAMED EXACTLY.
-            //
-            // The capstone line used to read "YOU'VE ALREADY MASTERED A FORM." and it was wrong twice
-            // over. It tested Affinity() — the FORM DISCIPLINE — while the rule CanTake actually
-            // enforces for a ring-4 node is MasteredBranch(): one CAPSTONE per hunter, nothing to do
-            // with Forms. So a player refused a capstone was told about their Form, and a player who
-            // had taken a capstone but no Specialisation was refused with no message at all. It now
-            // reads the same rule the refusal came from and says which branch already holds it.
-            else _msg = Mastery.IsTaken(node.Id) ? "ALREADY TAKEN." :
-                Mastery.Available < node.Cost
-                    ? $"NEEDS {node.Cost} POINTS — YOU HAVE {Mastery.Available}. GO DEEPER." :
-                node.Kind == MasteryKind.Mastery && Mastery.MasteredBranch() is { } heldBranch
-                    ? $"YOU ALREADY TOOK THE {Short(heldBranch)} CAPSTONE — ONE CAPSTONE PER HUNTER." :
-                node.Kind == MasteryKind.Specialisation && Mastery.Affinity() is not null
-                    ? "YOU ALREADY CHOSE A STYLE — ONE STYLE PER HUNTER." :
-                "TAKE A CONNECTED NODE FIRST.";
+            TakeNode(node);
             return;
         }
 
         // Skills, Vows and keystone sockets are all LoadoutScreen's now.
+    }
+
+    /// <summary>Take a node, or say exactly why not — for a click on the node and for the inspector's button alike.</summary>
+    private void TakeNode(MasteryNode node)
+    {
+        var firstSpec = node.Kind == MasteryKind.Specialisation && Mastery.Affinity() is null;
+        if (Mastery.Take(node.Id))
+        {
+            _msg = "";
+            Dirty = true;
+            // THE SPECIALISATION: your first is the moment this game is named for, so it gets a ceremony
+            // instead of a click-sound — the hexagon shown whole, the choice sealed or taken back.
+            if (firstSpec && node.Style is { } nf) { _specNodeId = node.Id; _specStyle = nf; }
+            return;
+        }
+        // WHY THE CLICK DID NOTHING, NAMED EXACTLY — from the rule the refusal came from.
+        _msg = Mastery.IsTaken(node.Id) ? "ALREADY TAKEN." :
+            Mastery.Available < node.Cost
+                ? $"NEEDS {node.Cost} POINTS — YOU HAVE {Mastery.Available}. GO DEEPER." :
+            node.Kind == MasteryKind.Mastery && Mastery.MasteredBranch() is { } heldBranch
+                ? $"YOU ALREADY TOOK THE {Short(heldBranch)} CAPSTONE — ONE CAPSTONE PER HUNTER." :
+            node.Kind == MasteryKind.Specialisation && Mastery.Affinity() is not null
+                ? "YOU ALREADY CHOSE A STYLE — ONE STYLE PER HUNTER." :
+            "TAKE A CONNECTED NODE FIRST.";
     }
 
     // ── Draw ─────────────────────────────────────────────────────────────────────────────────────
@@ -644,7 +664,6 @@ public sealed class MasteryScreen
         // answered neither. The tree's own question ("what does this node do, can I afford it, what does
         // it cost me") had no home at all except a one-line strip at the very bottom of the screen.
         DrawNodeDetail(b, hit);
-        DrawHexPanel(b, aff);
 
         // THE BOTTOM-LEFT STRIP IS GONE (playtest 2026-08-29, item 4: "the explanation written on the
         // right of the MASTERY screen is also written at the bottom left — remove the undecorated text
@@ -784,118 +803,32 @@ public sealed class MasteryScreen
         _ui.TextCenterBig(b, "MASTERY TREE", 960, 24, Gold, UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(700, 74, 520, 3), Gold * 0.5f);
 
-        // ONE ROW, TWO JOBS. It is the screen's caption — what the tree IS — until the tree has
-        // something to say back, and then it is the message. The refusals ("NEEDS 3 POINTS — YOU HAVE
-        // 0") used to print at the bottom-left corner of the screen, as far from the click that raised
-        // them as the canvas allows; the screen's own voice row is where a screen speaks.
-        var say = _msg.Length > 0 ? _msg : "FOUR DIRECTIONS  ·  ONE STYLE  ·  TWELVE SKILLS TO LEARN";
-        _ui.TextCenterBig(b, say, 960, 80, _msg.Length > 0 ? Ember : Slate, UiTypography.Secondary);
+        // The caption is the screen's, and only the screen's. Refusals and results speak in the inspector,
+        // beside the button that raised them (UX V2 P1.5) — not five hundred pixels away under the title.
+        _ui.TextCenterBig(b, "FOUR DIRECTIONS  ·  ONE STYLE  ·  TWELVE SKILLS TO LEARN", 960, 80, Slate, UiTypography.Secondary);
 
-        // ── THE CORNER PLATE: the mastery glyph and the points you can spend, and nothing else. ──
+        // ── THE CORNER PLATE: the points you can spend, what you have spent, and your style. ──
         _ui.PanelQuiet(b, PointsPanel);
-
-        var num = $"{Mastery.Available}";
-        var numW = _ui.MeasureBig(num, UiTypography.PrimaryValue);
-        const int glyphBox = 56, gap = 14;
-        var group = glyphBox + gap + numW;
-        var gx = PointsPanel.X + (PointsPanel.Width - group) / 2;
-        var medal = new Rectangle(gx, PointsPanel.Y + (PointsPanel.Height - glyphBox) / 2, glyphBox, glyphBox);
+        var px0 = PointsPanel.X + 22;
+        var medal = new Rectangle(px0, PointsPanel.Y + 20, 56, 56);
         if (_ui.Assets.Get("ui_medallion_round") is { } ring) b.Draw(ring, medal, Color.White);
         if (_ui.Assets.Get("state_mastery_128") is { } glyph)
             b.Draw(glyph, new Rectangle(medal.X + 13, medal.Y + 13, 30, 30), Gold);
-        _ui.TextBig(b, num, medal.Right + gap,
-                    PointsPanel.Y + (PointsPanel.Height - UiTypography.PrimaryValue) / 2 - 2,
-                    Mastery.Available > 0 ? Gold : Slate, UiTypography.PrimaryValue);
+        // NEVER SLATE AT ZERO: the most important figure on the page must not read as switched off in
+        // the exact state where the player most needs to read it. Gold when there is something to spend.
+        _ui.TextBig(b, $"{Mastery.Available}", medal.Right + 14, PointsPanel.Y + 14,
+                    Mastery.Available > 0 ? Gold : Bone, UiTypography.PrimaryValue);
+        _ui.TextBig(b, "AVAILABLE", medal.Right + 14 + _ui.MeasureBig($"{Mastery.Available}", UiTypography.PrimaryValue) + 10,
+                    PointsPanel.Y + 14 + UiTypography.PrimaryValue - UiTypography.Secondary - 2, Slate, UiTypography.Secondary);
+        _ui.TextBig(b, $"{Mastery.Spent} SPENT", medal.Right + 14, PointsPanel.Y + 14 + UiTypography.Pitch(UiTypography.PrimaryValue), Slate, UiTypography.Secondary);
+        var styleLine = Mastery.Affinity() is { } st ? $"STYLE · {Short(st)}  x2.0" : "NO STYLE YET";
+        _ui.TextBig(b, _ui.ShortenBig(styleLine, PointsPanel.Width - 44, UiTypography.Body), px0, PointsPanel.Bottom - 22 - UiTypography.Body,
+                    Mastery.Affinity() is not null ? Gold : Slate, UiTypography.Body);
 
         if (Mastery.Spent > 0)
             Button(b, ResetBtn, _resetArmed ? "PRESS AGAIN TO CONFIRM" : "TAKE EVERY POINT BACK", hit, true);
     }
 
-    // The plate's rows, as offsets from its own top. Named rather than inlined because four of them
-    // have to agree with each other and with ResetBtn, which is a static field and cannot read them
-    // from a draw call. The last row must end above UiKit.ContentBottom(PointsPanel), which is 448.
-    private const int MedallionTop = 14;     // 126 .. 182, straddling the title line at TitleTop (134)
-    private const int PointsRowTop = 78;     // 190 .. 252
-    private const int BranchRowTop = 152;    // 264 .. 376
-    private const int BranchRowH = 28;
-    private const int ResetRowTop = 276;     // 388 .. 440
-
-    /// <summary>
-    /// WHAT THE TREE HAS COST YOU — the two numbers, as a two-celled framed strip.
-    /// </summary>
-    /// <remarks>
-    /// It was one sentence at the default label size: "POINTS 0 · 24 SPENT". Two different facts joined
-    /// by a middle dot, both at the size of a caption, on a page whose entire economy they describe.
-    /// A number the player is deciding against is a headline (<see cref="UiTypography.PrimaryValue"/>,
-    /// the rung GEAR POWER and MASTERY POINTS use on the STATS card), and two facts in one row want a
-    /// rule between them.
-    /// </remarks>
-    private void DrawPointsStrip(SpriteBatch b, Rectangle r)
-    {
-        _ui.Fill(b, r, Quiet);
-        Outline(b, r, Path, 2);
-        _ui.Fill(b, new Rectangle(r.Center.X - 1, r.Y + 10, 2, r.Height - 20), Path);
-
-        var cells = new[]
-        {
-            (Label: "POINTS", Value: $"{Mastery.Available}", Tint: Mastery.Available > 0 ? Gold : Slate,
-             X: r.X + r.Width / 4),
-            (Label: "SPENT", Value: $"{Mastery.Spent}", Tint: Mastery.Spent > 0 ? Bone : Slate,
-             X: r.X + r.Width * 3 / 4),
-        };
-        foreach (var (label, value, tint, x) in cells)
-        {
-            _ui.TextCenterBig(b, label, x, r.Y + 8, Slate, UiTypography.Secondary);
-            _ui.TextCenterBig(b, value, x, r.Y + 26, tint, UiTypography.PrimaryValue);
-        }
-    }
-
-    /// <summary>
-    /// WHERE YOU SPENT IT — one row per direction, as a small framed table.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// These four rows used to live in the node card on the right, where they were visible only while
-    /// nothing was hovered — so the readout that answers "have I committed to a branch yet" vanished
-    /// the moment the player reached for a node to check. It is a standing fact about the build, not a
-    /// thing you read instead of a node, so it stands in the header and never moves.
-    /// </para>
-    /// </remarks>
-    private void DrawBranchTable(SpriteBatch b, Rectangle r)
-    {
-        _ui.Fill(b, r, Quiet);
-        Outline(b, r, Path, 2);
-
-        var y = r.Y + 4;
-        foreach (var br in new[] { Branch.Resonance, Branch.Loot, Branch.Tempo, Branch.Endure })
-        {
-            var taken = MasteryCatalog.Nodes.Count(x => x.Branch == br && Mastery.IsTaken(x.Id));
-            var spent = MasteryCatalog.Nodes.Where(x => x.Branch == br && Mastery.IsTaken(x.Id)).Sum(x => x.Cost);
-            _ui.Fill(b, new Rectangle(r.X + 10, y + 3, 6, 16), BranchColor(br));
-            _ui.TextBig(b, Short(br), r.X + 28, y, Bone, UiTypography.Secondary);
-            _ui.TextRightBig(b, $"{taken} · {spent} POINTS", r.Right - 12, y,
-                             spent > 0 ? Gold : Dim, UiTypography.Secondary);
-            y += BranchRowH;
-        }
-    }
-
-    /// <summary>
-    /// One branch's name and promise, planted outside the rim at the end of its arm.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// THE FOUR DIRECTIONS HAD NO LABEL OF THEIR OWN. Their names were printed on the ring-4 capstones
-    /// instead — the four biggest objects on the page read WEIGHT / SPREAD / TEMPO / ENDURE while their
-    /// own names (OVERWHELM, EVERYWHERE, FIRST STRIKE, ENDLESS) appeared nowhere — so a player read the
-    /// tree as four masteries called after the directions and could not find the directions at all. A
-    /// playtester said exactly that. A direction is not a node: it is a region of the page, so it is
-    /// labelled the way a region is, outside the thing it contains.
-    /// </para>
-    /// <para>
-    /// Hidden with the node captions below <see cref="LabelZoom"/> for the same reason they are: zoomed
-    /// out far enough, four headings around a thumbnail is furniture, not information.
-    /// </para>
-    /// </remarks>
     private void DrawBranchHeader(SpriteBatch b, Branch br)
     {
         if (_zoom <= LabelZoom) return;
@@ -916,98 +849,6 @@ public sealed class MasteryScreen
                           UiTypography.PanelTitle);
         _ui.TextCenterBig(b, BranchPromise(br), (int)p.X, (int)p.Y + 7, Slate, UiTypography.Secondary);
     }
-
-    /// <summary>
-    /// THE SPECIALISATION CHART — the tree page's standing answer to "what does my discipline reach".
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Sits above the node-detail panel so the right side reads as one column: WHO YOU ARE on top,
-    /// WHAT YOU ARE READING below. Unattuned it draws quiet and says where attunement lives.
-    /// </para>
-    /// <para>
-    /// <b>IT WAS THE ONE PANEL IN THE GAME WITH NO FRAME.</b> Playtest 2026-08-29: <i>"the
-    /// specialisation chart on the right of the MASTERY screen is undecorated."</i> It was a flat
-    /// <c>Fill</c> with a two-pixel outline, sitting directly above the ornate node card — two panels
-    /// in one column, one of them looking like a debug rectangle. It wears
-    /// <see cref="UiKit.PanelQuiet"/> now, the same frame as the card under it, so the column reads as
-    /// one thing.
-    /// </para>
-    /// <para>
-    /// The three pieces are laid out to the house grid rather than by eye: the title at
-    /// <see cref="UiKit.TitleTop"/>, the STATE as a centred plate under it — the attuned Form's name,
-    /// or the two lines that say how to get one — and the diagram in a FIELD, so the hexagon reads as
-    /// a chart on a surface rather than as six icons floating in a box. The field is what lets the six
-    /// Form names sit close to their own points: it is the edge they are measured against, so the
-    /// label gap can drop from the ceremony's 58 px to 8 without any of them looking unmoored.
-    /// </para>
-    /// <para>
-    /// <b>THE FIELD IS THE CHART'S OWN NOW</b> (<see cref="StyleAffinityDiagram.Field"/>) rather than a flat
-    /// fill with a two-pixel outline — playtest 2026-08-30: <i>"the chart picture is still careless."</i>
-    /// The same inlaid well is drawn under the ceremony's hexagon, which had none at all, so the two
-    /// sizes of one drawing stand on one surface.
-    /// </para>
-    /// </remarks>
-    private void DrawHexPanel(SpriteBatch b, Style? aff)
-    {
-        _ui.PanelQuiet(b, HexPanel);
-        _ui.TextCenterBig(b, "YOUR STYLE", HexPanel.Center.X, UiKit.TitleTop(HexPanel), Gold,
-                          UiTypography.PanelTitle);
-
-        // THE STATE, AS A PLATE. "UNATTUNED / TAKE A SPECIALISATION NODE" used to be two bare centred
-        // lines hanging under a title with nothing to sit on — the emptiest-looking state on a screen
-        // whose whole job is to make you want to fill it. A plate says "this is a slot, and it is not
-        // filled yet"; bare words say "nothing here".
-        var plate = new Rectangle(HexPanel.Center.X - 170, HexPanel.Y + StatePlateTop, 340, StatePlateH);
-        _ui.Fill(b, plate, aff is null ? Quiet : Hi);
-        Outline(b, plate, aff is null ? Path : Gold * 0.55f, 2);
-        if (aff is { } a)
-            _ui.TextCenterBig(b, a.ToString().ToUpperInvariant(), plate.Center.X, plate.Y + 7, Gold,
-                              UiTypography.Headline);
-        else
-        {
-            _ui.TextCenterBig(b, "NOT CHOSEN", plate.Center.X, plate.Y + 1, Slate, UiTypography.Body);
-            _ui.TextCenterBig(b, "TAKE A SPECIALISATION NODE", plate.Center.X, plate.Y + 22, Slate,
-                              UiTypography.Secondary);
-        }
-
-        // THE FIELD. Inset to the frame's own interior (UiKit.PanelInner), not to the content margin:
-        // the six labels reach further out than any text column would, and the field is the thing that
-        // has to hold them.
-        var inner = UiKit.PanelInner(HexPanel);
-        var field = inner with { Y = plate.Bottom + 10, Height = UiKit.ContentBottom(HexPanel) - plate.Bottom - 10 };
-        StyleAffinityDiagram.Field(_ui, b, field);
-
-        StyleAffinityDiagram.Draw(_ui, b, field.Center, HexRadius, aff, showFactors: aff is not null,
-                            labelGap: HexLabelGap, labelPx: UiTypography.Secondary,
-                            factorPx: UiTypography.Caption, sealPx: HexSealPx);
-    }
-
-    /// <summary>Where the state plate sits below the chart's own top edge — one title line down.</summary>
-    /// <remarks>The panel wears the SQUARE frame, so <see cref="UiKit.FrameDrop"/>'s 28 is in this.</remarks>
-    private const int StatePlateTop = 84;
-
-    /// <summary>The state plate's depth: two short lines, or one name set at the in-panel headline.</summary>
-    private const int StatePlateH = 40;
-
-    /// <summary>
-    /// The docked chart's hexagon, sized to its field rather than to the ceremony's.
-    /// </summary>
-    /// <remarks>
-    /// The field is 266 px deep, so each half has 133 px for <c>radius + the seal's rim (0.62 of its
-    /// edge) + the gap + one Secondary line</c>: 78 + 21 + 8 + 16 = 123, leaving 10 px of air at both
-    /// ends. (The pole labels carry their factor beside the name rather than under it — see
-    /// StyleAffinityDiagram — which is what buys the last twenty pixels of radius.) It was 105 with the
-    /// ceremony's 58 px gap: 326 px of diagram in a box that never framed it, so the top label ran into
-    /// the caption above and the bottom one had nothing under it.
-    /// </remarks>
-    private const int HexRadius = 78;
-
-    /// <inheritdoc cref="HexRadius"/>
-    private const int HexLabelGap = 8;
-
-    /// <summary>The Form seals — the MEDALLION's edge, scaled to this hexagon rather than to the ceremony's.</summary>
-    private const int HexSealPx = 34;   // ui-size-ok: the seal medallion's edge in pixels, not a text size
 
     /// <summary>
     /// The ceremony's own label clearance. Its hexagon is twice the docked one's, on a modal with room
@@ -1063,146 +904,167 @@ public sealed class MasteryScreen
         Button(b, SpecUndoBtn, "NOT YET — TAKE THE POINTS BACK", hit, true);
     }
 
+    /// <summary>The label's tail — what the node DOES, after the em dash that follows its name.</summary>
+    private static string Tail(string label)
+    {
+        var cut = label.IndexOf('—');
+        return cut < 0 ? "" : label[(cut + 1)..].Trim();
+    }
+
     /// <summary>
-    /// What the node under the pointer — or the last one clicked — actually does.
+    /// THE INSPECTOR (D3): the node under the pointer, or the last one clicked — CATEGORY · NAME · what it
+    /// does · what you need first · what it costs · a refusal line · the one button.
     /// </summary>
     /// <remarks>
-    /// The one thing the tree page never had. A node was a coloured rectangle whose entire description
-    /// was a single line of text at the bottom of the screen, printed only while the pointer was exactly
-    /// on it; a player could not read a node and then look at the tree, which is what reading a tree IS.
-    /// Hover shows, click PINS — including a node you cannot afford, which is the one you most want to
-    /// read before deciding what to walk toward.
+    /// Hover shows, click PINS — including a node you cannot afford, which is the one you most want to read
+    /// before deciding what to walk toward. A Specialisation draws the style hexagon here, where the
+    /// decision is made, instead of as a standing panel that was an empty state for most of the game.
+    /// Nothing here re-derives a rule: the refusal is what <see cref="MasteryTree.Take"/> would say.
     /// </remarks>
     private void DrawNodeDetail(SpriteBatch b, Point hit)
     {
-        _ui.PanelQuiet(b, NodePanel);
+        var panel = InspectorPanel;
+        _ui.PanelQuiet(b, panel);
+        var x = UiKit.ContentLeft(panel);
+        var w = UiKit.ContentRight(panel) - x;
+        var y = panel.Y + UiTypography.PanelTitleTop;
+        var btn = TakeBtn;
+        var floor = btn.Y - 40;
+
+        void Section(string s, Color? c = null)
+        {
+            if (y + UiTypography.Pitch(UiTypography.Secondary) > floor) return;
+            _ui.TextBig(b, s, x, y, c ?? Slate, UiTypography.Secondary); y += UiTypography.Pitch(UiTypography.Secondary);
+        }
+        void Line(string s, Color c, int px = UiTypography.Body, int maxLines = 3)
+        {
+            foreach (var l in _ui.WrapBig(s, w, px).Take(maxLines))
+            {
+                if (y + UiTypography.Pitch(px) > floor) return;
+                _ui.TextBig(b, l, x, y, c, px); y += UiTypography.Pitch(px);
+            }
+        }
+        void Rule() { if (y + 14 < floor) { _ui.Fill(b, new Rectangle(x, y + 6, w, 1), Dim); y += 16; } }
 
         var id = _hoverNodeId ?? _pinnedNodeId;
         if (id is null || MasteryCatalog.ById(id) is not { } n)
         {
-            // No panel title: the frame's centred top medallion sits exactly where one would go, and the
-            // two lines below already say what this panel is.
-            _ui.TextCenterBig(b, "HOVER A NODE TO READ IT.", NodePanel.Center.X, UiKit.BodyTop(NodePanel), Slate,
-                              UiTypography.Body);
-            // Three words, not a sentence: the card is 496 wide and the long form ran out of both sides
-            // of its own frame.
-            _ui.TextCenterBig(b, "DRAG  \u00b7  WHEEL  \u00b7  HOME", NodePanel.Center.X,
-                              UiKit.BodyTop(NodePanel) + 36, Dim, UiTypography.Secondary);
-
-            // THE LADDER. Size is this tree's price tag, and until now nothing on the page said what
-            // the sizes MEANT \u2014 a player could see that a Specialisation is bigger than a Notable and
-            // had to click both to learn it costs twice as much. Five kinds, cheapest first, so the
-            // order on the line is the order of the rings on the screen.
-            //
-            // THE FOUR BRANCH ROWS THAT USED TO SIT ABOVE IT ARE IN THE HEADER NOW (DrawBranchTable).
-            // They answer "have I committed to a branch yet", which is a standing fact about the build,
-            // and they were readable only while nothing was hovered \u2014 so they blanked at the exact
-            // moment a player reached for a node to check them against.
-            var y0 = UiKit.BodyTop(NodePanel) + 92;
-            var rule = new Rectangle(UiKit.ContentLeft(NodePanel) + 6, y0,
-                                     NodePanel.Width - UiKit.PadX(NodePanel) * 2 - 12, 2);
-            _ui.Fill(b, rule, Dim);
-            _ui.TextCenterBig(b, "WHAT EACH KIND COSTS IN POINTS", NodePanel.Center.X, y0 + 14, Slate,
-                              UiTypography.Secondary);
-            _ui.TextCenterBig(b, "MINOR 1  \u00b7  NOTABLE 3  \u00b7  GREATER 5", NodePanel.Center.X, y0 + 40,
-                              Bone, UiTypography.Body);
-            _ui.TextCenterBig(b, "SKILL 5  \u00b7  SPECIALISATION 6  \u00b7  CAPSTONE 8", NodePanel.Center.X, y0 + 66,
-                              Bone, UiTypography.Body);
-
-            // THE TREE'S ONE RULE, in the panel that explains the tree. It used to print at the
-            // bottom-left corner of the screen, in the same undecorated strip that also repeated \u2014
-            // word for word \u2014 the label of whichever node this card was already showing. The
-            // duplication is gone (playtest 2026-08-29, item 4); this line was the only part of that
-            // strip saying something nothing else said, so it moved here rather than being deleted.
-            _ui.Fill(b, rule with { Y = y0 + 104 }, Dim);
-            var hintY = y0 + 118;
-            foreach (var line in _ui.WrapBig("RESONANCE OR LOOT.  TEMPO OR ENDURE.  YOU HAVE POINTS FOR ONE BRANCH, NOT TWO.",
-                                             UiKit.ContentRight(NodePanel) - UiKit.ContentLeft(NodePanel),
-                                             UiTypography.Secondary))
-            {
-                _ui.TextCenterBig(b, line, NodePanel.Center.X, hintY, Slate, UiTypography.Secondary);
-                hintY += 24;
-            }
+            Section("MASTERY TREE");
+            _ui.TextBig(b, "PICK A NODE TO READ IT", x, y, UiInk.Empty, UiTypography.Headline); y += UiTypography.Pitch(UiTypography.Headline) + 4;
+            Line("Hover shows a node here; click pins it. Take it with the button below.", Slate);
+            Rule();
+            Section("WHAT EACH KIND COSTS IN POINTS");
+            Line("MINOR 1  ·  NOTABLE 3  ·  GREATER 5", Bone);
+            Line("SKILL 5  ·  SPECIALISATION 6  ·  CAPSTONE 8", Bone);
+            Rule();
+            Section("HOW POINTS ARE EARNED");
+            Line("The first time you reach a new depth in a region. Deeper pays more; every region pays.", Bone, UiTypography.Body, 3);
+            Line("Points buy about one full branch — choose a direction.", Slate, UiTypography.Secondary, 2);
+            Rule();
+            Section("CONTROLS");
+            Line("DRAG TO MOVE  ·  WHEEL TO ZOOM  ·  HOME SHOWS THE WHOLE TREE", Slate, UiTypography.Secondary, 2);
+            Line("RIGHT-CLICK A TAKEN NODE TO GIVE IT BACK  ·  RESPEC IS FREE", Slate, UiTypography.Secondary, 2);
             return;
         }
 
         var col = BranchColor(n.Branch);
-        var taken2 = Mastery.IsTaken(n.Id);
+        var taken = Mastery.IsTaken(n.Id);
         var can = Mastery.CanTake(n.Id);
+        var roadDef = n.Kind == MasteryKind.SkillRoad && n.GrantsSkillId is { } rs ? SkillCatalogue.Find(rs) : null;
+        var learned = roadDef is not null && Mastery.LearnedSkills().Contains(roadDef.Id);
 
-        _ui.Fill(b, new Rectangle(UiKit.ContentLeft(NodePanel) - 4, NodePanel.Y + 40, NodePanel.Width - UiKit.PadX(NodePanel) * 2 - 8, 4), col);
-        _ui.TextBig(b, KindWord(n.Kind), UiKit.ContentLeft(NodePanel), NodePanel.Y + 56, col, UiTypography.Secondary);
-        _ui.TextRightBig(b, Short(n.Branch), UiKit.ContentRight(NodePanel), NodePanel.Y + 56, Slate, UiTypography.Secondary);
+        // CATEGORY · BRANCH, in the branch's colour; NAME at Headline — gold once it is yours.
+        _ui.Fill(b, new Rectangle(x, y - 6, 5, UiTypography.Pitch(UiTypography.Secondary) + UiTypography.Pitch(UiTypography.Headline)), col);
+        var xs = x; x += 16; w -= 16;
+        var kindHead = n.Kind switch { MasteryKind.Specialisation => "SPECIALISATION", MasteryKind.SkillRoad => "SKILL", MasteryKind.Mastery => "CAPSTONE", _ => KindWord(n.Kind) };
+        Section(_ui.ShortenBig($"{kindHead}  ·  {Short(n.Branch)}{(n.Link is { } lk ? $" + {Short(lk)}" : "")}", w, UiTypography.Secondary), col);
+        var name = roadDef is not null ? roadDef.Name
+                 : n.Kind == MasteryKind.Specialisation && n.Style is { } ss ? $"{Short(ss)} SPECIALISATION"
+                 : Head(n.Label);
+        if (roadDef is not null) { _ui.Icon(b, $"icon_skill_{roadDef.Id}", new Rectangle(x, y - 2, 34, 34), learned || taken ? Gold : Bone); _ui.TextBig(b, name, x + 44, y, taken ? Gold : Bone, UiTypography.Headline); }
+        else _ui.TextBig(b, name, x, y, taken ? Gold : Bone, UiTypography.Headline);
+        y += UiTypography.Pitch(UiTypography.Headline) + 6;
+        x = xs; w += 16;
 
-        var afterLabel = DrawWrapped(b, n.Label, UiKit.ContentLeft(NodePanel), NodePanel.Y + 100,
-                                     NodePanel.Width - UiKit.PadX(NodePanel) * 2, Bone);
-
-        // WHAT A SPECIALISATION ACTUALLY DOES, IN ONE SENTENCE.
-        //
-        // Its own catalogue label says "STRIKE SPECIALIST — EXECUTE WEAKENED FOES", which names the
-        // trigger and not the thing the node is FOR. Every one of the six also sets the hunter's
-        // DISCIPLINE, which is the largest single multiplier in the game and can be chosen exactly
-        // once — and that was written down nowhere the player could reach before committing six
-        // points. The x2 is not a rounded boast: StyleAffinity.Factor at distance 0 is 2.00, and
-        // with no discipline at all SoloBattle applies no factor, so taking this really does double
-        // the style named on it. The far styles fall to 0.75 and the opposite to 0.45 by the ring.
-        var y = NodePanel.Y + 240;
-        if (n.Kind == MasteryKind.Specialisation && n.Style is { } specForm)
+        // WHAT IT DOES: the label's tail, the stat lines, the kind's own sentence.
+        Section("WHAT IT DOES");
+        var tail = Tail(n.Label);
+        if (tail.Length > 0) Line(tail, Bone, UiTypography.Body, 3);
+        if (n.Stats is { Count: > 0 } stats)
+            foreach (var kv in stats.Take(3)) Line($"+{kv.Value:0} {kv.Key.ToString().ToUpperInvariant()}", Bone, UiTypography.Body, 1);
+        if (roadDef is not null)
         {
-            var f = Short(specForm);
+            Line($"TEACHES {roadDef.Name.ToUpperInvariant()} — {roadDef.Line}", Bone, UiTypography.Body, 3);
+            Line(learned ? "LEARNED — FOR GOOD. RESPEC RETURNS THE POINTS, NEVER THE SKILL." : "LEARNING IS PERMANENT: RESPEC RETURNS THE POINTS, NEVER THE SKILL. EQUIP IT ON THE BUILD SCREEN.",
+                 learned ? Gold : Slate, UiTypography.Secondary, 3);
+        }
+        if (n.Kind == MasteryKind.Specialisation && n.Style is { } specStyle)
+        {
             var mine = Mastery.Affinity();
-            // Three states, three sentences. Reading a Specialisation you cannot have and being told
-            // what TAKING it would do is the same lie as a button that does nothing.
-            var says =
-                taken2
-                    ? $"{f} IS YOUR STYLE. YOUR {f} SKILLS HIT TWICE AS HARD, AND SKILLS FAR "
-                      + "FROM IT HIT SOFTER."
-                : mine is null
-                    ? $"TAKING IT MAKES {f} YOUR STYLE. YOUR {f} SKILLS THEN HIT TWICE AS HARD, "
-                      + "AND SKILLS FAR FROM IT HIT SOFTER. ONE STYLE PER HUNTER."
-                    : $"YOUR STYLE IS ALREADY {Short(mine.Value)}. ONE STYLE PER HUNTER — "
-                      + "TAKE EVERY POINT BACK IF YOU WANT TO CHOOSE AGAIN.";
-            var after = DrawWrapped(b, says, UiKit.ContentLeft(NodePanel), afterLabel + 14,
-                                    NodePanel.Width - UiKit.PadX(NodePanel) * 2, taken2 || mine is null ? Gold : Slate);
-            y = Math.Max(y, after + 20);
+            var f = Short(specStyle);
+            Line(taken ? $"{f} IS YOUR STYLE. YOUR {f} SKILLS HIT TWICE AS HARD; SKILLS FAR FROM IT HIT SOFTER."
+                 : mine is null ? $"TAKING IT MAKES {f} YOUR STYLE: {f} SKILLS HIT TWICE AS HARD, FAR STYLES SOFTER. ONE STYLE PER HUNTER."
+                 : $"YOUR STYLE IS ALREADY {Short(mine.Value)}. ONE STYLE PER HUNTER — TAKE EVERY POINT BACK TO CHOOSE AGAIN.",
+                 taken || mine is null ? Bone : Slate, UiTypography.Body, 4);
+            // THE HEXAGON, where the decision is made: this style at the centre, the six factors around it.
+            var need = (InspectorHexRadius + InspectorSealPx + 8 + UiTypography.Body) * 2 + 24;
+            if (y + need < floor)
+            {
+                var field = new Rectangle(x, y + 8, w, need - 16);
+                StyleAffinityDiagram.Field(_ui, b, field);
+                StyleAffinityDiagram.Draw(_ui, b, field.Center, InspectorHexRadius, specStyle, showFactors: true,
+                                          labelGap: 8, labelPx: UiTypography.Secondary, factorPx: UiTypography.Secondary, sealPx: InspectorSealPx);
+                y += need;
+            }
         }
+        if (n.Kind == MasteryKind.Mastery)
+            Line(Mastery.MasteredBranch() is { } mb && mb != n.Branch ? $"YOU ALREADY TOOK THE {Short(mb)} CAPSTONE — ONE CAPSTONE PER HUNTER." : "THE BRANCH'S CAPSTONE — ONE PER HUNTER.",
+                 Slate, UiTypography.Secondary, 2);
+        Rule();
 
-        // A ROAD NODE'S PROMISE, stated where the six points are about to be spent: learning is
-        // permanent (D7), and saying so is what makes respec feel safe enough to actually use.
-        if (n.Kind == MasteryKind.SkillRoad && n.GrantsSkillId is { } roadSkill)
+        // YOU NEED FIRST: the prerequisites BY NAME, with their state in words.
+        if (n.Prereqs.Count > 0 && !taken)
         {
-            var learned = Mastery.LearnedSkills().Contains(roadSkill);
-            var road = learned
-                ? "LEARNED — FOR GOOD. RESPEC RETURNS THE POINTS, NEVER THE SKILL."
-                : "TAKING IT TEACHES THIS SKILL PERMANENTLY — RESPEC RETURNS THE POINTS, NEVER THE "
-                  + "SKILL. EQUIP IT ON THE BUILD SCREEN (B).";
-            var afterRoad = DrawWrapped(b, road, UiKit.ContentLeft(NodePanel), afterLabel + 14,
-                                        NodePanel.Width - UiKit.PadX(NodePanel) * 2, learned ? Gold : Slate);
-            y = Math.Max(y, afterRoad + 20);
+            Section("YOU NEED FIRST");
+            var names = n.Prereqs.Select(MasteryCatalog.ById).Where(p => p is not null).Select(p => (Name: p!.Kind == MasteryKind.Start ? "START" : Head(p.Label), Taken: Mastery.IsTaken(p.Id))).ToList();
+            var anyTaken = names.Any(p => p.Taken);
+            var shown = names.Where(p => p.Taken).Concat(names.Where(p => !p.Taken)).Take(3).ToList();
+            Line((names.Count > 1 ? "ANY OF  " : "") + string.Join("  ·  ", shown.Select(p => $"{p.Name.ToUpperInvariant()} {(p.Taken ? "(TAKEN)" : "(NOT YET)")}")) + (names.Count > 3 ? " …" : ""),
+                 anyTaken ? UiInk.Good : Bone, UiTypography.Body, 3);
+            if (n.SecondPrereqs.Count > 0)
+            {
+                var second = n.SecondPrereqs.Select(MasteryCatalog.ById).Where(p => p is not null).Select(p => (Name: Head(p!.Label), Taken: Mastery.IsTaken(p.Id))).ToList();
+                Line("AND ONE OF  " + string.Join("  ·  ", second.Take(3).Select(p => $"{p.Name.ToUpperInvariant()} {(p.Taken ? "(TAKEN)" : "(NOT YET)")}")),
+                     second.Any(p => p.Taken) ? UiInk.Good : Bone, UiTypography.Body, 3);
+            }
+            Rule();
         }
 
-        _ui.Fill(b, new Rectangle(UiKit.ContentLeft(NodePanel) - 4, y - 16, NodePanel.Width - UiKit.PadX(NodePanel) * 2 - 8, 2), Dim);
-        _ui.TextBig(b, "COST", UiKit.ContentLeft(NodePanel), y, Slate, UiTypography.Body);
-        _ui.TextRightBig(b, $"{n.Cost} POINT{(n.Cost == 1 ? "" : "S")}", UiKit.ContentRight(NodePanel), y,
-                         taken2 ? Gold : can ? Bone : Ember, UiTypography.Headline);
+        // WHAT IT COSTS · YOU HAVE.
+        if (y + UiTypography.Pitch(UiTypography.Headline) < floor)
+        {
+            _ui.TextBig(b, taken ? "PAID" : "COST", x, y + 6, Slate, UiTypography.Secondary);
+            _ui.TextRightBig(b, $"{n.Cost} POINT{(n.Cost == 1 ? "" : "S")}", x + w, y, taken ? Gold : can ? Bone : Ember, UiTypography.Headline);
+            y += UiTypography.Pitch(UiTypography.Headline);
+        }
+        if (!taken && y + UiTypography.Pitch(UiTypography.Headline) < floor)
+        {
+            _ui.TextBig(b, "YOU HAVE", x, y + 6, Slate, UiTypography.Secondary);
+            _ui.TextRightBig(b, $"{Mastery.Available}", x + w, y, Mastery.Available >= n.Cost ? Bone : Ember, UiTypography.Headline);
+            y += UiTypography.Pitch(UiTypography.Headline);
+        }
 
-        y += 56;
-        _ui.TextBig(b, "YOU HAVE", UiKit.ContentLeft(NodePanel), y, Slate, UiTypography.Body);
-        _ui.TextRightBig(b, $"{Mastery.Available}", UiKit.ContentRight(NodePanel), y,
-                         Mastery.Available >= n.Cost ? Bone : Ember, UiTypography.Headline);
-
-        y += 72;
-        // THE TWO ONCE-PER-HUNTER RULES GET THEIR OWN LINE. Without them a second Specialisation, or a
-        // second capstone, fell through to "LOCKED — WALK TO IT FIRST" — which tells a player to do
-        // something that cannot help, since the path is already walked and the rule is what refused.
-        var state = taken2 ? "TAKEN" : can ? "AVAILABLE — CLICK THE NODE"
-                    : Mastery.Available < n.Cost ? "NOT ENOUGH POINTS"
-                    : n.Kind == MasteryKind.Specialisation && Mastery.Affinity() is not null
-                        ? "CLOSED — YOU ALREADY CHOSE A STYLE"
-                    : n.Kind == MasteryKind.Mastery && Mastery.MasteredBranch() is not null
-                        ? "CLOSED — YOU ALREADY TOOK A CAPSTONE"
-                    : "LOCKED — WALK TO IT FIRST";
-        _ui.TextCenter(b, state, NodePanel.Center.X, y, taken2 ? Gold : can ? Verd : Ember);
+        // THE REFUSAL, beside the button that would have done it; then the button.
+        var refusal = _msg.Length > 0 ? _msg
+            : taken || can ? ""
+            : Mastery.Available < n.Cost ? $"NEEDS {n.Cost} POINTS — YOU HAVE {Mastery.Available}. GO DEEPER."
+            : n.Kind == MasteryKind.Specialisation && Mastery.Affinity() is not null ? "ONE STYLE PER HUNTER — ALREADY CHOSEN."
+            : n.Kind == MasteryKind.Mastery && Mastery.MasteredBranch() is not null ? "ONE CAPSTONE PER HUNTER — ALREADY TAKEN."
+            : "TAKE A CONNECTED NODE FIRST.";
+        if (refusal.Length > 0)
+            _ui.TextBig(b, _ui.ShortenBig(refusal, w, UiTypography.Secondary), x, btn.Y - 30, _msg.Length > 0 && (taken || can) ? UiInk.Good : Ember, UiTypography.Secondary);
+        var label = taken ? "GIVE BACK" : $"TAKE  ·  {n.Cost} POINT{(n.Cost == 1 ? "" : "S")}";
+        _ui.Button(b, btn, label, hit, false, taken || can, !taken && can ? ButtonStyle.Primary : ButtonStyle.Secondary);
     }
 
     /// <summary>
@@ -1436,13 +1298,32 @@ public sealed class MasteryScreen
             _ui.TextCenterBig(b, node.Style is { } sf ? Short(sf) : "STYLE", cx, cy - 9,
                               taken ? new Color(0x14, 0x11, 0x1E) : aff is null ? Bone : Muted(Bone, 0.62f),
                               UiTypography.Secondary);
-            _ui.TextCenterBig(b, "SPECIALISATION", cx, box.Bottom + 5,
+            // INWARD, toward the centre: on the south arms the road node stands just outside this diamond and
+            // used to print through the caption ("S ECIALISATION").
+            var specCapY = w.Y > 1f ? box.Top - 6 - UiTypography.Secondary : box.Bottom + 5;
+            _ui.TextCenterBig(b, "SPECIALISATION", cx, specCapY,
                               taken ? Gold : aff is null ? Muted(Gold, 0.90f) : Muted(Slate, 0.72f),
                               UiTypography.Secondary);
         }
         // The branch glyph, over the frame's hollow centre. Below about twenty pixels it is a smudge
         // that only muddies the socket, and the frame alone still carries the kind — so it drops out
         // rather than degrading, the same way the labels do.
+        // A ROAD NODE WEARS THE SKILL IT TEACHES (UX V2 P1.5) — the twelve most consequential nodes on the
+        // tree used to carry the same branch glyph as a one-point minor. A small gold mark says DISCOVERED:
+        // the skill is learned for good, and the mark survives a respec that takes the points back.
+        else if (node.Kind == MasteryKind.SkillRoad && node.GrantsSkillId is { } roadSkill && box.Width >= 20
+                 && _ui.Assets.Get($"icon_skill_{roadSkill}") is { } skillGlyph)
+        {
+            var g = (int)(box.Width * 0.50f);
+            var learnedRoad = Mastery.LearnedSkills().Contains(roadSkill);
+            _ui.SpriteFit(b, skillGlyph, new Rectangle(cx - g / 2, cy - g / 2, g, g),
+                          taken ? new Color(0x14, 0x11, 0x1E) : learnedRoad ? Gold : canTake ? branchCol : new Color(0x4A, 0x46, 0x58));
+            if (learnedRoad && !taken)
+            {
+                var bd = Math.Max(8, rad / 3);
+                _ui.Diamond(b, new Rectangle(box.Right - bd, box.Y - bd / 4, bd, bd), Gold);
+            }
+        }
         else if (box.Width >= 20
                  && _ui.Assets.Get(BranchGlyph(node.Branch)) is { } glyph)
         {
@@ -1490,6 +1371,24 @@ public sealed class MasteryScreen
                 _ui.TextCenterBig(b, Head(node.Label), cx, box.Bottom + 4, nameCol, UiTypography.Body);
                 _ui.TextCenterBig(b, "CAPSTONE", cx, box.Bottom + 26, kindCol, UiTypography.Secondary);
             }
+        }
+
+        // NAMES ON THE CANVAS (UX V2 P1.5): every node that is a decision says what it is without a hover.
+        // Body once the camera is near, Secondary at the whole-tree framing where a longer word would cross
+        // its neighbour; a minor shows the stat it gives instead of a name.
+        // Not at the whole-tree framing: ring-2 names cross their neighbours there, and the capstones and
+        // specialisations already name the far view. From about half the first-open zoom the words fit.
+        if (_zoom >= FirstOpenZoom * 0.55f && node.Kind is MasteryKind.Notable or MasteryKind.Greater or MasteryKind.Bridge or MasteryKind.SkillRoad)
+        {
+            var nm = node.Kind == MasteryKind.SkillRoad && node.GrantsSkillId is { } rs2 && SkillCatalogue.Find(rs2) is { } rd2 ? rd2.Name : Head(node.Label);
+            var npx = _zoom >= FirstOpenZoom * 0.8f ? UiTypography.Body : UiTypography.Secondary;
+            var ny = w.Y < -1f ? box.Top - 6 - npx : box.Bottom + 4;
+            _ui.TextCenterBig(b, nm, cx, ny, taken || canTake ? Bone : Slate, npx);
+        }
+        else if (node.Kind == MasteryKind.Minor && _zoom >= FirstOpenZoom * 0.8f && node.Stats is { Count: > 0 } st0)
+        {
+            var kv0 = st0.First();
+            _ui.TextCenterBig(b, $"+{kv0.Value:0}", cx, box.Bottom + 2, taken ? Bone : Slate, UiTypography.Secondary);
         }
 
         if (hover && node.Kind != MasteryKind.Start)
