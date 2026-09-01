@@ -11,7 +11,9 @@
 # Modes: fight boss expedition forge build character stats warren map dust world
 #        region2 region3 conquered lootforge reforge vow hybrid rig vfx help
 #        buildtree buildzoom itemmenu runlog fightgear vaultfilter traitlit intro typespec welcome
-#        vaultempty vaultemptyfilter vaultsell vaultmany
+#        vaultempty vaultemptyfilter vaultsell vaultmany forgeempty
+# `forge` takes RH_SHOT_ITEM=<instanceId> (dev_hero | dev_rung | dev_cap | dev_low) and
+# RH_SHOT_FILTER=all|gear|gems, so every item state is a dial rather than a new mode.
 #
 # `fight` takes a third argument: seconds into the wave to pose (default: about one).
 # The fixture's creatures are thick on purpose, so a bar only visibly moves a few

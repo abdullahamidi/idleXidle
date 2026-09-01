@@ -1527,7 +1527,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
                 or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "traitlit" or "traitterm" or "traitterminal"
                 or "roster" or "rosterlocked" or "weave" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
-                or "vaultempty" or "vaultemptyfilter" or "vaultsell" or "vaultmany"
+                or "vaultempty" or "vaultemptyfilter" or "vaultsell" or "vaultmany" or "forgeempty"
                 or "gemtour" or "intro" or "typespec")
             {
                 _showTitle = false;
@@ -2009,7 +2009,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 }
                 // GEMTOUR is the forge fixture plus loose gems, with the first-gem lesson owed (see
                 // SeedExplained) — so the lesson's two cards can be posed over the furniture they name.
-                if (sm is "forge" or "reforge" or "gemtour")
+                if (sm is "forge" or "reforge" or "gemtour" or "forgeempty")
                 {
                     _showForge = true;
                     if (sm == "gemtour")
@@ -2019,7 +2019,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     }
                     // Seed a spread of loot so SALVAGE has content, and a hero item the UPGRADE view poses.
                     var rar = new[] { Rarity.Common, Rarity.Uncommon, Rarity.Rare, Rarity.Epic, Rarity.Legendary };
-                    var types = new[] { ItemBaseType.Weapon, ItemBaseType.Charm, ItemBaseType.Material, ItemBaseType.AbilityFocus };
+                    // NOT Material: Bag() filters to Gear.IsWearable, so three of the nine seeded rows
+                    // never rendered — and the bag never showed an armour slot at all.
+                    var types = new[] { ItemBaseType.Weapon, ItemBaseType.Charm, ItemBaseType.Helm,
+                                        ItemBaseType.AbilityFocus, ItemBaseType.Boots, ItemBaseType.Ring };
                     var loot = new List<ItemInstance>();
                     for (var i = 0; i < 9; i++)
                         loot.Add(new ItemInstance
@@ -2039,7 +2042,33 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         SellValue = 200, Element = Source.Shadow, ItemLevel = 8,
                         EnchantOverride = EnchantKind.Fervour,
                     });
-                    _forge.AddLoot(loot);
+                    // THE THREE STATES §95 ASKS FOR AND NO FIXTURE COULD POSE. dev_hero has Upgrades = 0,
+                    // so the slip branch, the at-cap state and every below-Rare locked state were
+                    // unphotographable — the copy for all three shipped unchecked.
+                    loot.Add(new ItemInstance
+                    {
+                        InstanceId = "dev_rung", BaseType = ItemBaseType.Weapon, Rarity = Rarity.Rare,
+                        SellValue = 90, Element = Source.Machine, ItemLevel = 6, Upgrades = 7,
+                    });
+                    loot.Add(new ItemInstance
+                    {
+                        InstanceId = "dev_cap", BaseType = ItemBaseType.Charm, Rarity = Rarity.Epic,
+                        SellValue = 140, Element = Source.Mind, ItemLevel = 12, Upgrades = 15,
+                    });
+                    loot.Add(new ItemInstance
+                    {
+                        InstanceId = "dev_low", BaseType = ItemBaseType.Boots, Rarity = Rarity.Common,
+                        SellValue = 8, ItemLevel = 1,
+                    });
+                    // forgeempty poses the OTHER unphotographable state: a bench with nothing on it.
+                    if (sm != "forgeempty")
+                    {
+                        _forge.AddLoot(loot);
+                        // One piece WORN, so the row tag, the category tag and the worn-salvage variant
+                        // (which always asks, and has no "don't ask again" box) are all in the default shot.
+                        if (loot.FirstOrDefault(i => i.InstanceId == "dev1") is { } wear)
+                            _hunter.Equip(wear);
+                    }
                     _forge.DevFocus("dev_hero");   // pose the UPGRADE screen on the hero item
 
                     // Stock the tiers + Gleam so the cost rows read as MET and the top pills show real values.
