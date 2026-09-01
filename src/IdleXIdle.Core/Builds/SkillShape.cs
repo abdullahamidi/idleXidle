@@ -230,6 +230,83 @@ public sealed record SkillShape
     /// <summary>MACHINE 5p — once a wave, prevent the first bite that would actually deal damage.</summary>
     public bool PreventFirstDamagingBite { get; init; }
 
+    /// <summary>MIND 3p — percentage points added to critical damage.</summary>
+    public float BonusCritDamagePercent { get; init; }
+
+    /// <summary>
+    /// MIND 4p FOCUS — percentage points of critical chance a direct damaging hit that did not crit
+    /// adds, and the ceiling those additions stack to.
+    /// </summary>
+    /// <remarks>
+    /// Crit in this simulation is an EXPECTED VALUE, not a rolled event (see <c>critFactor</c>), so
+    /// "a hit that does not crit" cannot be a branch. FOCUS counts the NON-CRIT SHARE of each hit —
+    /// one whole hit at zero crit chance, half a hit at fifty percent — which is the expectation of
+    /// the rule as written, is deterministic, and keeps the property the set is selling: the less you
+    /// have been critting, the closer the next one is.
+    /// </remarks>
+    public float FocusPerHitPercent { get; init; }
+
+    /// <summary>MIND 4p FOCUS — the ceiling, in percentage points.</summary>
+    public float FocusCapPercent { get; init; }
+
+    /// <summary>
+    /// MIND 5p CERTAINTY — at the FOCUS ceiling the next direct damaging hit crits for certain, and
+    /// FOCUS empties.
+    /// </summary>
+    public bool CertaintyAtFocusCap { get; init; }
+
+    /// <summary>
+    /// BODY 5p MOMENTUM — how much harder the basic attack lands when an Active has just resolved.
+    /// The IMPACT swing also carries all of its overkill. One pending at a time.
+    /// </summary>
+    public float ImpactSwingBonus { get; init; }
+
+    /// <summary>NATURE 3p — how much stronger combat healing lands. Never applied to shield.</summary>
+    public float HealingMultiplier { get; init; } = 1f;
+
+    /// <summary>NATURE 4p — how much wider the wave's healing ceiling opens.</summary>
+    public float HealCeilingBonus { get; init; }
+
+    /// <summary>
+    /// NATURE 5p OVERGROWTH — the share of healing wasted at full health that becomes shield instead.
+    /// Shield is not healing: it does not spend the ceiling again, and nothing that reads health reads it.
+    /// </summary>
+    public float OverhealToShield { get; init; }
+
+    /// <summary>SHADOW 3p SHADE — how much harder the Active that spends a shade lands.</summary>
+    public float ShadeActiveBonus { get; init; }
+
+    /// <summary>SHADOW 4p — how many shades may be held at once.</summary>
+    public int ShadeMax { get; init; }
+
+    /// <summary>
+    /// SHADOW 5p AFTERIMAGE — the share of a shade-spent Active's resolved direct damage that falls a
+    /// second time on the same targets. It costs no beat, starts no cooldown, is not a cast, spends no
+    /// shade, makes no shade, and cannot make another afterimage.
+    /// </summary>
+    public float AfterimageFraction { get; init; }
+
+    /// <summary>
+    /// SPIRIT 3p — how much stronger each skill's FIRST activation of a wave is. Narrow by design:
+    /// direct damage, direct healing, a shield grant, and the bonus part of an amplify. Never a stun
+    /// length, a slow ceiling or a defence-break floor.
+    /// </summary>
+    public float FirstActivationMagnitude { get; init; } = 1f;
+
+    /// <summary>SPIRIT 4p RESONANCE — skill rate gained the first time each distinct skill activates.</summary>
+    public float ResonanceRatePerSkill { get; init; }
+
+    /// <summary>SPIRIT 4p RESONANCE — the ceiling that gain stacks to.</summary>
+    public float ResonanceRateCap { get; init; }
+
+    /// <summary>
+    /// SPIRIT 5p HARMONY — once all four equipped skills have activated in a wave, each is given one
+    /// charge: its next activation takes the 3p magnitude a second time. Needs four filled slots, so a
+    /// Vow that asks for an empty one is a real conflict rather than a special case.
+    /// </summary>
+    public bool HarmonyCharges { get; init; }
+
+    /// <summary>MIND 2p — percentage points added to critical chance.</summary>
     public float BonusCritPercent { get; init; }
 
     /// <summary>MARK MASTERY — stretches the amplify window and deepens it.</summary>
@@ -443,6 +520,24 @@ public sealed record SkillShape
             SkillRate = a.SkillRate * b.SkillRate,
             FreeOpeningCast = a.FreeOpeningCast || b.FreeOpeningCast,
             BonusCritPercent = a.BonusCritPercent + b.BonusCritPercent,
+
+            // ── THE SIX SET LADDERS. Each rung is one of these, and the fold is chosen per dial:
+            //    percentage points add, multipliers multiply, ceilings and rules take the stronger. ──
+            BonusCritDamagePercent = a.BonusCritDamagePercent + b.BonusCritDamagePercent,
+            FocusPerHitPercent = a.FocusPerHitPercent + b.FocusPerHitPercent,
+            FocusCapPercent = Math.Max(a.FocusCapPercent, b.FocusCapPercent),
+            CertaintyAtFocusCap = a.CertaintyAtFocusCap || b.CertaintyAtFocusCap,
+            ImpactSwingBonus = a.ImpactSwingBonus + b.ImpactSwingBonus,
+            HealingMultiplier = a.HealingMultiplier * b.HealingMultiplier,
+            HealCeilingBonus = a.HealCeilingBonus + b.HealCeilingBonus,
+            OverhealToShield = Math.Max(a.OverhealToShield, b.OverhealToShield),
+            ShadeActiveBonus = a.ShadeActiveBonus + b.ShadeActiveBonus,
+            ShadeMax = Math.Max(a.ShadeMax, b.ShadeMax),
+            AfterimageFraction = Math.Max(a.AfterimageFraction, b.AfterimageFraction),
+            FirstActivationMagnitude = a.FirstActivationMagnitude * b.FirstActivationMagnitude,
+            ResonanceRatePerSkill = a.ResonanceRatePerSkill + b.ResonanceRatePerSkill,
+            ResonanceRateCap = Math.Max(a.ResonanceRateCap, b.ResonanceRateCap),
+            HarmonyCharges = a.HarmonyCharges || b.HarmonyCharges,
 
             // SHIELD: the wave-start grants add, the shielded-damage multipliers multiply, and
             // prevention is a rule either half may carry.

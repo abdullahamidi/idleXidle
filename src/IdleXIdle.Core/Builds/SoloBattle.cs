@@ -65,6 +65,13 @@ public sealed class Champion
     /// </summary>
     public int BeatCount { get; set; }
 
+    /// <summary>
+    /// SHADOW 3p SHADE — deaths waiting to be spent by a damaging Active. On the CHAMPION rather than
+    /// in the wave, because the design lets a shade wait for the next one; the ceiling is the set's
+    /// (<c>SkillShape.ShadeMax</c>), so taking the gear off simply stops it climbing.
+    /// </summary>
+    public int Shades { get; set; }
+
     /// <summary>Per skill slot: the beat at which a beat-counted skill is ready again (see FormBehaviour.CooldownBeats).</summary>
     public Dictionary<int, int> ReadyAtBeat { get; } = new();
 
@@ -649,7 +656,7 @@ public static class SoloBattle
         // so the sim stays reproducible — no rng draw, no crit-lottery variance to break a seeded test.
         // DEFENSE (including the worn charm's, itself long inert) mitigates each incoming bite below.
         var critChance = CritChance(hunter, shape);
-        var critMult = CritMultiplier(hunter);
+        var critMult = CritMultiplier(hunter) + shape.BonusCritDamagePercent / 100f;   // MIND 3p
         var critFactor = 1f + critChance * (critMult - 1f);
         var defenseFactor = DefenseMitigationConstant / (DefenseMitigationConstant + hunter.Defense);
 
@@ -706,6 +713,17 @@ public static class SoloBattle
         var ampFrontFull = 0f;     // SIGN/ANCHOR — the front enemy's own deeper mark
         var ampCritKeeps = false;  // SIGN/PERFECT CLAUSE
         var deadThisWave = 0;      // FIELD/REMNANT — enemies this wave has already lost
+
+        // ── THE SIX SET LADDERS (ElementSets). One typed field per rule the design names — not a
+        //    generic buff runtime, and not six engines: every rung below is written in the vocabulary
+        //    the fight already speaks (overkill, shield, critical, healing, a kill, an activation). ──
+        var mindFocus = 0f;          // MIND 4p — critical chance banked since the last certainty, in points
+        var impactPending = false;   // BODY 5p — an Active has resolved; the next swing is an IMPACT
+        var impactSwing = false;     // BODY 5p — true only while that swing is landing, so its overkill carries
+        var resonanceRate = 0f;      // SPIRIT 4p — rate gained from the distinct skills used this wave
+        var harmonyGiven = false;    // SPIRIT 5p — the charges are handed out once a wave
+        var harmonyCharge = new bool[skills.Count];   // SPIRIT 5p — one per skill, spent by its next activation
+        var activated = new HashSet<int>();           // SPIRIT — every skill that has ACTED this wave, cast or pulse
 
         // REMNANT — the mire keeps what it has drowned, and the survivors wade through it. Read once,
         // from whichever skill carries the rule, because it is a property of the field standing on the
@@ -770,7 +788,8 @@ public static class SoloBattle
         // The wave's healing ceiling, widened by any skill that buys the room. Without this a bigger
         // pulse heal is unbuyable: WILT's 1% a pulse already fills the budget, so 1.5% healed exactly
         // as much and the reinforcement changed nothing a player could ever see.
-        var healRoomBonus = 0f;
+        // NATURE 4p opens it too — the set and the skill each widen the same ceiling.
+        var healRoomBonus = shape.HealCeilingBonus;
         for (var k = 0; k < skills.Count; k++)
             healRoomBonus = MathF.Max(healRoomBonus, skills[k].Def.Rule.HealCeilingBonus);
         if (healRoomBonus > 0f) healBudget = (long)MathF.Round(healBudget * (1f + healRoomBonus));
@@ -836,7 +855,8 @@ public static class SoloBattle
         // THE LIVE SKILL RATE. The build's rate, then RHYTHM (faster per cast since the last
         // bite) — read at every cast and swing, so a bite changes the NEXT cooldown, not the wave's.
         float RateNow() => mods.SkillRate * shape.SkillRate
-                           * (1f + shape.CastRampPerCast * castRamp);
+                           * (1f + shape.CastRampPerCast * castRamp)
+                           * (1f + resonanceRate);   // SPIRIT 4p RESONANCE
 
         (WaveOutcome, List<BattleEvent>) Finish(WaveOutcome o, int atMs)
         {
@@ -1101,7 +1121,32 @@ public static class SoloBattle
 
             // CRIT lands on SKILL hits only — the idle auto-swing and the poison bleed never crit (both
             // call this with fromSkill:false). Applied first, so a crit stings with more poison too.
-            if (fromSkill) dmg *= critFactor;
+            if (fromSkill)
+            {
+                // MIND 4p FOCUS and 5p CERTAINTY. A critical here is an EXPECTED VALUE, not a rolled
+                // event (see critFactor), so "a hit that does not crit" is not a branch — it is a
+                // SHARE of every hit, and that share is exactly what FOCUS banks. A build already
+                // critting often climbs slowly, which is the reset clause the design wrote, expressed
+                // as the expectation it actually has. CERTAINTY is the one hit that is not an
+                // expectation at all: at the ceiling the next one crits outright and the climb restarts,
+                // and because it empties FOCUS it cannot chain into itself.
+                if (shape.FocusPerHitPercent > 0f)
+                {
+                    var chance = Math.Min(MaxCritChance, critChance + mindFocus / 100f);
+                    if (shape.CertaintyAtFocusCap && mindFocus >= shape.FocusCapPercent)
+                    {
+                        chance = 1f;
+                        mindFocus = 0f;
+                    }
+                    else
+                    {
+                        mindFocus = MathF.Min(shape.FocusCapPercent,
+                                              mindFocus + shape.FocusPerHitPercent * (1f - critChance));
+                    }
+                    dmg *= 1f + chance * (critMult - 1f);
+                }
+                else dmg *= critFactor;
+            }
 
             // VENOM poisons on SKILL hits only (the blurb says "SKILLS POISON") — never on the auto-attack,
             // and never on the poison's own bleed, or it would feed itself. Fed from the hit's RAW force,
@@ -1188,6 +1233,9 @@ public static class SoloBattle
                 // bleeds into the front of the wave every half second — one pool, not a second
                 // parallel system, because two decaying pools would be two rules for one idea.
                 deadThisWave++;
+                // SHADOW 3p SHADE — every death, from any source, leaves one. Held on the champion
+                // rather than in the wave, because the design lets a shade wait for the next one.
+                if (shape.ShadeMax > 0 && champ.Shades < shape.ShadeMax) champ.Shades++;
                 for (var k = 0; k < skills.Count; k++)
                 {
                     var wd = skills[k].Def;
@@ -1237,7 +1285,9 @@ public static class SoloBattle
                 // should not multiply into a chain that clears a wave from one blow.
                 var spill = -target.Health;
                 var carry = MathF.Max(shape.OverkillCarry, castCarry);
-                if (fromSkill && carry > 0f && spill > 0f && FirstAlive() is { } next)
+                // BODY 5p — an IMPACT is the one basic attack whose waste carries. Everywhere else the
+                // carry is a direct-SKILL rule, which is what keeps a bleed or a thorn from feeding it.
+                if ((fromSkill || impactSwing) && carry > 0f && spill > 0f && FirstAlive() is { } next)
                     // fromSkill:false on the carried hit is what bounds it — a carry cannot carry again.
                     LandOn(next, spill * carry, atMs, fromSkill: false, ignoresArmour: true);
             }
@@ -1347,7 +1397,9 @@ public static class SoloBattle
             // solution, so the affix that exists to pressure ENDURE did nothing to it whatever.
             // Deliberately NOT applied to FullHealBetweenWaves: that is a reset, not regeneration, and
             // halving a binary is a design change rather than a repair.
-            amount = (int)MathF.Round(amount * sustain);
+            // NATURE 3p — legitimate healing only, and never applied to a shield: the shield below is
+            // computed from what this heal COULD NOT USE, so multiplying it here would pay twice.
+            amount = (int)MathF.Round(amount * sustain * shape.HealingMultiplier);
             if (amount <= 0) return;
 
             // THE CEILING (HealTuning.MaxHealFractionPerWave). Charged against what actually LANDS:
@@ -1361,6 +1413,14 @@ public static class SoloBattle
             // build. Sum in long, clamp, then narrow.
             var room = Math.Max(0L, (long)champ.MaxHealth - champ.Health);
             var landed = Math.Min((long)amount, room);
+            // NATURE 5p OVERGROWTH — healing wasted AT FULL HEALTH becomes shield, half of it. Only
+            // the part the pool had no room for: healing the wave's ceiling refused was never eligible,
+            // and turning that into shield would be a way around the ceiling rather than a use for the
+            // overflow. Shield is not healing — it spends no budget, and nothing that reads Health
+            // reads it — so there is no path back into this function and no recursion.
+            if (shape.OverhealToShield > 0f && amount > room)
+                GrantShield((amount - room) * shape.OverhealToShield, atMs);
+
             if (underCeiling) landed = Math.Min(landed, healBudget - healedThisWave);
             if (landed <= 0) return;
             if (underCeiling) healedThisWave += landed;
@@ -1444,6 +1504,10 @@ public static class SoloBattle
                     // The tick announces WHICH SLOT ticked; the screen resolves art and name
                     // from the equipped skill rather than decoding a Form ordinal.
                     events.Add(new BattleEvent(BattleEventKind.Aura, i, 0, ms));
+                    // SPIRIT counts a pulse as this skill acting. A passive that never "casts" would
+                    // otherwise make HARMONY unreachable for every build that runs one — which is most
+                    // of them, since two of the four slots are passive.
+                    activated.Add(i);
 
                     // A FIELD IS NOT ALWAYS A DAMAGE FIELD. Kind says WHEN a skill acts and Effect says
                     // WHAT it does, and they are separate axes on purpose — so a Field that amplifies
@@ -1648,11 +1712,32 @@ public static class SoloBattle
                     continue;
                 }
                 acted = true;
+                // BODY 5p MOMENTUM — a skill has been thrown, and the body follows it. One pending at a
+                // time by construction: it is a flag, so a second cast before the swing re-arms rather
+                // than stacking.
+                if (shape.ImpactSwingBonus > 0f) impactPending = true;
 
                 // RHYTHM counts every cast, a MARK included; OPENING VOLLEY remembers which skills have
                 // cast this wave. Both decided here, before the Form branches, so no path forgets them.
                 if (castRamp < shape.CastRampMax) castRamp++;
                 var firstCast = castOnce.Add(i);
+                activated.Add(i);
+
+                // SPIRIT 4p RESONANCE — a rate bonus the first time each DISTINCT skill acts, to its
+                // ceiling. Read by RateNow, so it moves the beat for the rest of the wave.
+                if (firstCast && shape.ResonanceRatePerSkill > 0f)
+                    resonanceRate = MathF.Min(shape.ResonanceRateCap, resonanceRate + shape.ResonanceRatePerSkill);
+
+                // SPIRIT 5p HARMONY — all four slots filled, and every one of them has acted. The
+                // four-slot requirement is the design's, and it is a REAL conflict with a Vow that asks
+                // for an empty slot rather than a branch that excuses one. Handed out once a wave, one
+                // charge each, spent by that skill's next activation.
+                if (!harmonyGiven && shape.HarmonyCharges
+                    && skills.Count >= 4 && activated.Count >= skills.Count)
+                {
+                    harmonyGiven = true;
+                    for (var h = 0; h < harmonyCharge.Length; h++) harmonyCharge[h] = true;
+                }
 
                 if (sk.Def.Effect == SkillEffect.Amplify)
                 {
@@ -1687,6 +1772,16 @@ public static class SoloBattle
                     ampHitsLeft = sk.Def.Rule.AmplifyHits;
                     ampCountsHits = sk.Def.Rule.AmplifyHits > 0;
                     ampCritKeeps = sk.Def.Rule.CritKeepsAmplifyCharge;
+
+                    // SPIRIT 3p / 5p — the opening strength reaches the BONUS half of an amplify and
+                    // nothing else about it: not the window, which is a duration, and not the count.
+                    var signMagnitude = castOnce.Contains(i) && firstCast ? shape.FirstActivationMagnitude : 1f;
+                    if (harmonyCharge[i])
+                    {
+                        harmonyCharge[i] = false;
+                        signMagnitude *= shape.FirstActivationMagnitude;
+                    }
+                    ampBonus *= signMagnitude;
 
                     ampUntil = abs + window;
                     mindExtendBudget = SignatureMindExtendCapMs;   // MIND's signature stretches THIS window
@@ -1746,6 +1841,29 @@ public static class SoloBattle
 
                     // OPENING VOLLEY — this skill's first activation of the wave, or one of the later ones.
                     raw *= firstCast ? shape.FirstCastMultiplier : shape.LaterCastMultiplier;
+
+                    // SPIRIT 3p and 5p — the opening strength, and the charge that gives it once more.
+                    // Deliberately NARROW: it multiplies direct damage here, direct healing and a
+                    // shield grant where those are produced, and the bonus half of an amplify in the
+                    // Sign branch. It never touches a stun length, a slow ceiling or a break floor,
+                    // because "20% stronger" has no honest meaning for those.
+                    var magnitude = firstCast ? shape.FirstActivationMagnitude : 1f;
+                    if (harmonyCharge[i])
+                    {
+                        harmonyCharge[i] = false;
+                        magnitude *= shape.FirstActivationMagnitude;
+                    }
+                    raw *= magnitude;
+
+                    // SHADOW 3p — a damaging Active spends one death to make the next one bigger. Only
+                    // a DAMAGING one: this branch is the damage path, so a Sign never eats a shade.
+                    var spentShade = false;
+                    if (shape.ShadeActiveBonus > 0f && champ.Shades > 0)
+                    {
+                        champ.Shades--;
+                        spentShade = true;
+                        raw *= 1f + shape.ShadeActiveBonus;
+                    }
 
                     // THE NEN BUY-BACK: a sworn Vow pulls an off-discipline skill one ring toward the
                     // build's affinity (restriction buys power — the rule the Vows were born from).
@@ -1884,6 +2002,21 @@ public static class SoloBattle
                                            hitsPerTarget: vdef.HitsPerTarget);
                     castCarry = 0f;
 
+                    // SHADOW 5p AFTERIMAGE — the blow falls a second time, half as hard, across the same
+                    // enemies. It is NOT a cast: it takes no beat, starts no cooldown, counts as no
+                    // activation (so it is not skill-progression use and stores no CHARGE), spends no
+                    // shade and creates none, and it re-lands DAMAGE only — never the skill's stateful
+                    // logic, so REPAY's bank cannot be spent twice by it. It cannot make another
+                    // afterimage because nothing here reads spentShade again.
+                    if (spentShade && shape.AfterimageFraction > 0f && dealt > 0f && alive > 0)
+                    {
+                        dealt += LandSpread(raw * shape.AfterimageFraction, ms, spreadTargets,
+                                            sk.Source, vdef, abs, countsAsActivation: false,
+                                            ignoresArmour: vdef.DefenceIgnore,
+                                            hitsPerTarget: vdef.HitsPerTarget);
+                        if (alive == 0) return Kill(ms);
+                    }
+
                     // TRAIL — the blow leaves the hunter's arm moving: the NEXT basic attack borrows
                     // its rule. One use, armed here and spent by the swing.
                     if (vdef.Rule.TrailNextSwing) trailArmed = true;
@@ -1966,9 +2099,18 @@ public static class SoloBattle
             // ── THE BASIC ATTACK: the beat's action when no skill took it. MIGHT's hit. ─────────────
             if (onBeat && !acted && tuning.AutoAttackDamage > 0f)
             {
-                var swung = LandSpread(tuning.AutoAttackDamage * hunter.AutoDamageMultiplier * shape.AutoAttackDamage,
+                // BODY 5p MOMENTUM — the IMPACT. Harder, and the only basic attack whose overkill
+                // carries; the flag is cleared whether or not the set is worn, so nothing can hold one.
+                var impact = impactPending && shape.ImpactSwingBonus > 0f;
+                impactPending = false;
+                impactSwing = impact;
+                if (impact) castCarry = 1f;
+                var swung = LandSpread(tuning.AutoAttackDamage * hunter.AutoDamageMultiplier * shape.AutoAttackDamage
+                                       * (impact ? 1f + shape.ImpactSwingBonus : 1f),
                                        ms, 1, null, null, abs, fromSkill: false, swing: true,
                                        ignoresArmour: swingIgnoresArmour || trailArmed);
+                impactSwing = false;
+                castCarry = 0f;
                 if (swingLifesteal > 0f && swung > 0f)
                     Heal((int)MathF.Round(swung * swingLifesteal), ms);
                 if (alive == 0) return Kill(ms);

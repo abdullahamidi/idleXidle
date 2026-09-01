@@ -150,3 +150,61 @@ four depths: a **90** where a healthy hunter beats the wave (and pairs with SPRA
 hits sees hits), and a **1600** where the wave wins the exchange and a bigger heal is a bigger heal.
 
 **Green:** 1285/1285 unit · all gates · boot reads, writes, and reads back.
+
+---
+
+## 5. C3 — the six ladders
+
+**Done.** `ElementSets` is re-authored end to end and every rung is measured on the sim the game runs.
+
+### The matching-Source bonus is gone, and its absence is a test
+
+The old ladder paid "+8% to your matching-Source skills" at two pieces and again at four. That was
+paying the player twice for one decision — Source already decides the variation they may take, the
+matchup they fight into and the Vows they may swear — so it is deleted and **not** replaced by a bigger
+number. `test_a_set_never_pays_a_build_for_matching_its_source` asserts the absence two ways: no tier
+carries a `SourceBonus`, and the same five SHADOW pieces are worth the same *ratio* to a SHADOW build
+and a BODY one. (Not the same damage — two builds of different Sources fight different matchups before
+any gear is worn. Asserting the raw totals was the fixture's first, wrong answer.)
+
+### The six
+
+| Set | 2p | 3p | 4p | 5p |
+|---|---|---|---|---|
+| **BODY — MOMENTUM** | +10% health | swing +20% | 35% of a direct hit's overkill carries | after a skill the next swing is an IMPACT: +75% and it carries all its waste |
+| **MACHINE — PLATING** | −4 a bite | wave opens with 12% health as shield | −10% while shielded | once a wave the first bite that would hurt is stopped and becomes shield |
+| **MIND — CERTAINTY** | +5% crit | +20% crit damage | FOCUS: every hit without a critical brings the next closer, to +15% | at the peak the next hit crits outright, then resets |
+| **NATURE — OVERGROWTH** | 0.3% health a second | healing +20% | healing ceiling +50% | overheal at full health becomes shield, half of it |
+| **SHADOW — AFTERIMAGE** | +12% under 30% health | a kill leaves a SHADE, spent by the next damaging skill for +25% | hold two | a shade-spent skill strikes again for half |
+| **SPIRIT — HARMONY** | +6% rate | each skill's first use +20% | +2% rate per distinct skill used, to +8% | all four slots filled and used: every skill opens again |
+
+### Typed state added — exactly the five the design names
+
+`Champion.Shades` (persists between waves, per §56) plus wave-local `mindFocus`, `impactPending`,
+`resonanceRate` / `harmonyCharge[]` / `activated`. Shield came in C1. No generic buff runtime, no
+property bag.
+
+### MIND met the same crit conflict as PERFECT CLAUSE
+
+A critical here is an expected value, so "a critical resets FOCUS" cannot be a branch. FOCUS banks the
+**non-crit share** of every hit — one whole hit at zero crit chance, a quarter at seventy-five percent —
+which is the expectation of the written rule, is deterministic, and keeps the property the set sells: a
+champion already critting climbs slowly. CERTAINTY is the one hit that is not an expectation; it empties
+FOCUS, so it cannot chain.
+
+### PLATING was briefly two dials, and that was a trap
+
+Prevention and "the stopped bite becomes shield" were split into `PreventFirstDamagingBite` +
+`ShieldFromPreventedBite`, which made a shape that prevents and grants nothing reachable — the two
+shield tests found it immediately. Collapsed back into one rule.
+
+### What the fixtures were measuring instead of the rung
+
+Five of the six set tests failed first time on the fixture, not the content, and each is worth naming
+because the same mistake is easy to repeat: the BODY carry does not clear MORE of a wave it always
+cleared, it clears it SOONER; MACHINE's 4p is invisible in health because the 3p shield swallows every
+bite whole, so it is read as absorbed-plus-health; NATURE's overflow needs a build that actually heals;
+an AFTERIMAGE's proof is that the cast CADENCE is untouched, not that the cast count matches — a wave
+that dies sooner casts a different number of times for reasons that have nothing to do with the rung.
+
+**Green:** 1287/1287 unit · all gates · boot.
