@@ -1920,11 +1920,20 @@ public static class SoloBattle
                     if (vdef.DamagePerLivingEnemy > 0f) raw *= 1f + vdef.DamagePerLivingEnemy * alive;
 
                     // SPLAY — "an arrow at every enemy, and never fewer than five". Against a small
-                    // wave the surplus arrows double up rather than being discarded, which is the
-                    // half of that sentence LandSpread cannot express: its loop stops at the last
+                    // wave the surplus arrows double up rather than being discarded, which is the half
+                    // of that sentence LandSpread cannot express on its own: its loop stops at the last
                     // living creature and throws the rest away.
+                    //
+                    // THEY DOUBLE UP AS ARROWS, and that is not a detail. Multiplying the raw instead
+                    // made the surplus one enormous hit that paid armour ONCE — which turned SPLAY into
+                    // a better CLUSTER against a single enemy than CLUSTER is: five separate arrows pay
+                    // armour five times, so the branch built to concentrate was beaten at concentrating
+                    // by the branch built to spread. Measured on the Bruiser bench, SPLAY dealt 2833 to
+                    // CLUSTER's 2408 — and §37 says in as many words that nothing may undermine
+                    // CLUSTER's identity. Extra arrows are extra HITS now, and each one pays the toll.
+                    var minimumHits = 1;
                     if (vdef.MinimumHits > 0 && alive > 0 && alive < vdef.MinimumHits)
-                        raw *= vdef.MinimumHits / (float)alive;
+                        minimumHits = (int)MathF.Ceiling(vdef.MinimumHits / (float)alive);
 
                     // SHARE — one pool split between the living, and never more ways than its own cap.
                     // The trade THRONG refuses: the same total however many are standing.
@@ -1951,20 +1960,6 @@ public static class SoloBattle
                         spreadTargets = ways;
                     }
 
-                    // FINISH — HAMMER's execute. Once a wave, and outright rather than as a bonus:
-                    // against a Bruiser "kill it" and "hit it hard" are different promises.
-                    if (executes < vdef.ExecutesPerWave && vdef.ExecuteFraction > 0f && FirstAlive() is { } weak
-                        && weak.Health < weak.MaxHealth * vdef.ExecuteFraction)
-                    {
-                        executes++;
-                        // CLEAN CUT — the excess an execute throws away is the branch's own waste, so
-                        // it carries. Landed with the cast's carry armed, and disarmed straight after.
-                        castCarry = vdef.Rule.OverkillCarry;
-                        LandOn(weak, weak.Health, ms, fromSkill: true, ignoresArmour: true);
-                        castCarry = 0f;
-                        if (alive == 0) return Kill(ms);
-                    }
-
                     // BANKED — SNARE keeps what it was owed instead of spending it. Through the same
                     // one Shield the rest of the game uses: same cap, same wave reset, same bar.
                     if (vdef.ShieldInsteadOfDamage)
@@ -1979,7 +1974,7 @@ public static class SoloBattle
                     castCarry = vdef.Rule.OverkillCarry;
                     var dealt = LandSpread(raw, ms, spreadTargets, sk.Source, vdef, abs,
                                            ignoresArmour: vdef.DefenceIgnore,
-                                           hitsPerTarget: vdef.HitsPerTarget);
+                                           hitsPerTarget: Math.Max(vdef.HitsPerTarget, minimumHits));
                     castCarry = 0f;
 
                     // SHADOW 5p AFTERIMAGE — the blow falls a second time, half as hard, across the same
@@ -1988,6 +1983,40 @@ public static class SoloBattle
                     // shade and creates none, and it re-lands DAMAGE only — never the skill's stateful
                     // logic, so REPAY's bank cannot be spent twice by it. It cannot make another
                     // afterimage because nothing here reads spentShade again.
+                    // FINISH — HAMMER's execute, decided AFTER the blow lands, because that is what
+                    // its own sentence says: "the blow kills a target under 15% health". Asked BEFORE
+                    // the blow it was very nearly never eligible — the target has to already be under
+                    // the line at the exact instant a six-beat skill comes round, and against a wave
+                    // whose creatures go from full to dead in two hits nothing ever passes through the
+                    // window at all. Measured across all four bands, FINISH and FLATTEN dealt IDENTICAL
+                    // damage in two of them: the execute simply never fired, and a branch that never
+                    // fires is a permanent level spent on nothing.
+                    //
+                    // Asked afterwards it is the rule it reads as — you swing, and what the swing leaves
+                    // under the line does not get up. Deterministic: the living enemy with the least
+                    // health, ties broken by position. It is also what finally gives CLEAN CUT something
+                    // to carry, since the killing hit is the BLOW's damage and not a tidy deletion of
+                    // exactly the health that was left.
+                    if (executes < vdef.ExecutesPerWave && vdef.ExecuteFraction > 0f && alive > 0)
+                    {
+                        WaveCreature? weak = null;
+                        for (var ci = 0; ci < creatures.Count; ci++)
+                        {
+                            var dying = creatures[ci];
+                            if (!dying.Alive || dying.MaxHealth <= 0f) continue;
+                            if (dying.Health >= dying.MaxHealth * vdef.ExecuteFraction) continue;
+                            if (weak is null || dying.Health < weak.Health) weak = dying;
+                        }
+                        if (weak is not null)
+                        {
+                            executes++;
+                            castCarry = vdef.Rule.OverkillCarry;
+                            LandOn(weak, MathF.Max(raw, weak.Health), ms, fromSkill: true, ignoresArmour: true);
+                            castCarry = 0f;
+                            if (alive == 0) return Kill(ms);
+                        }
+                    }
+
                     if (spentShade && shape.AfterimageFraction > 0f && dealt > 0f && alive > 0)
                     {
                         dealt += LandSpread(raw * shape.AfterimageFraction, ms, spreadTargets,

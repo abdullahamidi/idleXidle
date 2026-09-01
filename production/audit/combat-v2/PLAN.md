@@ -326,3 +326,60 @@ wears the full MACHINE set, so the 3-piece wave-start shield fills the bar from 
 rather than depending on a grant landing in the instant the shutter opens.
 
 **Green:** 1303/1303 unit · all gates · boot · photographed at 1280×720.
+
+---
+
+## 8. C6 — the bench, and the three things it caught
+
+**Done.** `combat_balance_test.cs` runs against the repository's own archetypes — Swarm, Armoured,
+Caster, Bruiser, composed by `Archetypes.Compose` (§83) — at two pressures, measuring every channel §84
+asks for. The assertions are relationships and bounds, never pinned figures: a test that pins "BODY
+deals 41,207" fails on every retune and teaches the next person to update the number rather than to
+think about it.
+
+### The bench was wrong three times before it was right, and every version accused the content
+
+This is the same failure C2 hit, at a larger scale, and it is worth writing down because it will happen
+again:
+
+1. **The champion died in almost every band.** Six skills "failed" variation balance. Every one was the
+   fixture: PIN's stun, NET's reflect, TEEMING's slow and SPEND's window all buy TIME, and time is worth
+   nothing to someone who dies either way.
+2. **The pool was then multiplied eight-fold to keep the champion alive** — which multiplied every
+   percent-of-maximum-health effect eight-fold while the wave's damage stayed put. WILT's 1%-a-pulse heal
+   became worth more than an attack break of ninety percent, and SUP "beat" SHRIVEL for a reason that
+   existed only in the fixture. The fix was to lower the WAVE, keeping the ratios the game has.
+3. **Counting band wins was the wrong question.** SIPHON heals and GLUT does not, so on a channel count
+   SIPHON "won" every band on a free point while GLUT was quietly dealing 40% more damage in three of
+   them. The rule is now the design's own: a branch is a real choice if there is **one** problem where it
+   leads — "when would I choose this?" needs an answer, not a majority.
+
+Also added: a second **pressure** (§83's "high incoming damage"). At one pressure a branch that buys
+survival can only be compared on the damage axis, and it loses. SHRIVEL takes less than half the damage
+SUP does — its break works exactly as designed — and still trailed everywhere, because at a gentle
+pressure SUP's heal covers the whole difference. The answer to "when would I choose the cripple?" is
+"when the wave is killing you", and a bench with no such wave cannot hear it.
+
+### Three genuine content faults the corrected bench found
+
+| Found | Why it was wrong | Fixed |
+|---|---|---|
+| **SPLAY beat CLUSTER at concentrating** (2833 vs 2408 on a Bruiser) | `MinimumHits` multiplied the raw, so SPLAY's surplus arrows landed as ONE hit paying armour once, while CLUSTER's five paid it five times. §37 says nothing may undermine CLUSTER's identity — and this was the branch built to spread beating the branch built to concentrate, at concentrating. | Surplus arrows are extra **hits**, and each pays the toll. |
+| **FINISH's execute almost never fired** — identical damage to FLATTEN in two of four bands | It was asked *before* the blow, of the FRONT enemy only. A creature has to be under the line at the exact instant a six-beat skill comes round, and a wave whose creatures go from full to dead in two hits never passes through the window at all. | Asked **after** the blow lands, of the weakest living enemy — which is what "the blow kills a target under 15% health" says. It also finally gives CLEAN CUT something to carry: executing for exactly the health that was left produced no overkill at all, so §27's third purchase had nothing to buy. |
+| **SHRIVEL led nowhere** | Structural: SUP keeps WILT's wave-wide break *and* heals; SHRIVEL only narrows and deepens. | Deepened to 25%/pulse and −90% — and the bench gained the pressure at which crippling beats healing. |
+
+### The rest of §63–§68
+
+- **§63** — all six mono-Source builds compose from their own variations, two Active and two Passive, on
+  four distinct skills, and fight in every band. (Measured on a longer wave than the balance bench:
+  SPIRIT's own Actives are five and six beats, and against a wave that ends in four neither comes round.)
+- **§64** — seven skill/set pairings each move a channel somewhere, out of the general rules. The eighth
+  is a **conflict**, asserted as one: HARMONY is worth exactly nothing to a hunter holding a slot open,
+  with no branch anywhere excusing it.
+- **§67** — the hungriest pair of Actives still leaves the basic attack a quarter of the beats, so
+  MOMENTUM is buyable beside any of them.
+- **§68** — the MACHINE ladder keeps more health than nothing and never absorbs more than a capped,
+  wave-local resource can account for; and no shield survives the wave that made it, asserted across six
+  waves of a real expedition.
+
+**Green:** 1332/1332 unit · all gates · boot.

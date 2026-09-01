@@ -548,7 +548,7 @@ public static class SkillCatalogue
             ClipKey: "projectile", FxKey: "projectile",
             Variations: new[]
             {
-                V("SPLAY", "Fires an arrow at every enemy, and never fewer than 5 arrows.",
+                V("SPLAY", "An arrow at every enemy, and never fewer than 5 arrows in all.",
                     Source.Mind,
                     d => d with { Targets = WholeWave, MinimumHits = 5 },
                     // Was TWIN, doubling every arrow — a damage multiplier wearing a target-economy
@@ -732,15 +732,21 @@ public static class SkillCatalogue
                      d => d with { AttackBreakPerTick = 0.15f })),
                 // MIND, not NATURE: picking the one enemy that matters and crippling it precisely is
                 // manipulation and selection. NATURE's passives are TORRENT and NUMB.
-                V("SHRIVEL", "The front enemy only: 20% a pulse, down to -80%.",
+                // GIVING UP THE WAVE HAS TO BUY SOMETHING. SUP keeps WILT's base break — which reaches
+                // every enemy — and heals on top; SHRIVEL trades that reach for depth on one. On any
+                // band with a crowd the trade is plainly worse, so it has to be plainly better on the
+                // band it is FOR, and it was not: measured against a single Bruiser, SUP's 1% a pulse
+                // out-healed everything the deeper break saved. A cripple that loses to a bandage on
+                // the one target it was built for is not a choice.
+                V("SHRIVEL", "The front enemy only: 25% a pulse, down to -90%.",
                     Source.Mind,
-                    d => d with { FrontEnemyOnly = true, AttackBreakPerTick = 0.20f, AttackBreakFloor = -0.80f },
+                    d => d with { FrontEnemyOnly = true, AttackBreakPerTick = 0.25f, AttackBreakFloor = -0.90f },
                     ("HOLLOW", "The break also reaches the second enemy, at half depth.",
                      d => d with { BreakSecondEnemy = 0.5f }),
-                    ("SEIZED", "The break deepens 30% a pulse instead of 20%.",
-                     d => d with { AttackBreakPerTick = 0.30f }),
-                    ("GAUNT",  "The floor falls from -80% to -95%.",
-                     d => d with { AttackBreakFloor = -0.95f })),
+                    ("SEIZED", "The break deepens 35% a pulse instead of 25%.",
+                     d => d with { AttackBreakPerTick = 0.35f }),
+                    ("GAUNT",  "The floor falls from -90% to -97%.",
+                     d => d with { AttackBreakFloor = -0.97f })),
             },
             AttackBreakPerTick: 0.10f, AttackBreakFloor: -0.50f),
     };
