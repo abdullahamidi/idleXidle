@@ -124,9 +124,37 @@ public sealed class TraitsScreen
         (_worldMin, _worldMax) = WorldExtent();
         _homeZoom = FitZoom();
         _homePan = (_worldMin + _worldMax) / 2f;
-        _zoom = _homeZoom;
-        _pan = _homePan;
+        // FIRST OPEN FRAMES THE SPINE AND THE ROAD STARTS (UX V2 P1.6, brief §43): the whole tree at minimum
+        // zoom is a shape, not a list — names were 9 px at 720p. Home still shows the whole tree.
+        _zoom = Math.Clamp(_homeZoom * 1.55f, MinZoom, MaxZoom);
+        var spineHead = tree.All.Where(u => u.Road == TraitRoad.Spine).OrderBy(u => u.Cost).FirstOrDefault();
+        _pan = spineHead is not null ? Pos(spineHead.Id) : _homePan;
+        ClampPan();
     }
+
+    /// <summary>Frame one road: its nodes and its header, fitted to the view (brief §44).</summary>
+    private void FrameRoad(MemoryDustTree tree, TraitRoad road)
+    {
+        var nodes = tree.All.Where(u => u.Road == road).Select(u => Pos(u.Id)).ToList();
+        if (nodes.Count == 0) return;
+        var min = new Vector2(nodes.Min(p => p.X) - TraitTreeLayout.NodeWidth, nodes.Min(p => p.Y) - HeaderRoom - 40f);
+        var max = new Vector2(nodes.Max(p => p.X) + TraitTreeLayout.NodeWidth, nodes.Max(p => p.Y) + TraitTreeLayout.NodeHeight);
+        var span = Vector2.Max(max - min, new Vector2(1f));
+        _zoom = Math.Clamp(MathF.Min(View.Width / span.X, View.Height / span.Y) * 0.92f, MinZoom, MaxZoom);
+        _pan = (min + max) / 2f;
+        ClampPan();
+    }
+
+    /// <summary>The road headers as last drawn, in screen space — click one to frame its road.</summary>
+    private readonly Dictionary<TraitRoad, Rectangle> _headerRects = new();
+
+    /// <summary>The terminal armed for a two-step COMMIT (brief §46), or null.</summary>
+    private string? _armedId;
+    private string? _tip;
+    private Point _tipAt;
+
+    /// <summary>The camera's three buttons at the canvas's foot: zoom out, the whole tree, zoom in.</summary>
+    private static Rectangle CamBtn(int i) => new(View.Right - 12 - (3 - i) * 50, View.Bottom - 56, 44, 44);
 
     /// <summary>DEV ONLY: pose the detail panel on a specific blessing for the screenshot fixture.</summary>
     public void DevSelect(string id) => _selectedId = id;
@@ -168,7 +196,7 @@ public sealed class TraitsScreen
     private static readonly Rectangle View = new(40, 136, 1300, 934);
 
     /// <summary>The docked reading panel, at 1368..1868.</summary>
-    private static readonly Rectangle DetailPanel = new(1368, 144, 500, 790);
+    private static Rectangle DetailPanel => new(UiKit.PageRight(52) - 500, 136, 500, UiKit.PageBottom(10) - 136);
 
     /// <summary>
     /// THE POINT COUNTER'S PLATE — a framed readout in the band between the subtitle and the canvas.
@@ -456,16 +484,38 @@ public sealed class TraitsScreen
         if (Pressed(keys, Keys.OemMinus) || Pressed(keys, Keys.Subtract)) ZoomAt(View.Center, 1f / 1.25f);
         if (Pressed(keys, Keys.Home)) { _pan = _homePan; _zoom = _homeZoom; }
 
-        if (Pressed(keys, Keys.Enter)) Buy(tree, Selected(tree));
+        if (Pressed(keys, Keys.D1)) FrameRoad(tree, TraitRoad.Ruin);
+        if (Pressed(keys, Keys.D2)) FrameRoad(tree, TraitRoad.Aegis);
+        if (Pressed(keys, Keys.D3)) FrameRoad(tree, TraitRoad.Artifice);
+        if (Pressed(keys, Keys.D4)) FrameRoad(tree, TraitRoad.Avarice);
+
+        if (Pressed(keys, Keys.Enter)) TryBuy(tree, Selected(tree));
 
         _prevKeys = keys;
+    }
+
+    /// <summary>
+    /// The one door to a purchase. A minor permanent node buys on one press — no modal spam; a TERMINAL
+    /// (a road's crown, a permanent identity choice) arms on the first press and buys on the second (brief §46).
+    /// </summary>
+    private void TryBuy(MemoryDustTree tree, MemoryDustUnlock u)
+    {
+        var terminal = TerminalArt(u) is not null;
+        if (terminal && !tree.Owns(u.Id) && tree.CanUnlock(u.Id) && _armedId != u.Id)
+        {
+            _armedId = u.Id;
+            _msg = $"THIS IS A PERMANENT IDENTITY CHOICE. PRESS AGAIN TO COMMIT TO {RoadName(u.Road)}.";
+            return;
+        }
+        _armedId = null;
+        Buy(tree, u);
     }
 
     private void Buy(MemoryDustTree tree, MemoryDustUnlock u)
     {
         if (tree.Owns(u.Id)) _msg = "ALREADY LEARNED — A TRAIT IS PERMANENT.";
         else if (tree.Purchase(u.Id)) { _msg = $"LEARNED: {u.Name}."; BeginLit(u); }
-        else if (tree.Available < u.Cost) _msg = "NOT ENOUGH TRAIT POINTS. EARN MORE: CONQUER A REGION, GO DEEPER INTO THE CORRUPTION, OR RAISE A REGION'S MASTERY.";
+        else if (tree.Available < u.Cost) _msg = "NOT ENOUGH TRAIT POINTS.";
         else _msg = "LOCKED — LEARN WHAT IT NEEDS FIRST.";
     }
 
@@ -543,17 +593,11 @@ public sealed class TraitsScreen
         // How many points you have to spend, how much of the tree you have learned, and what all of it
         // would cost. A header rather than a panel: a player checks "can I afford this" constantly and
         // "what does the whole tree cost" once, and neither is worth a third of the page.
-        var spent = tree.All.Where(u => tree.Owns(u.Id)).Sum(u => u.Cost);
-        var learned = tree.All.Count(u => tree.Owns(u.Id));
+        _tip = null;
         DrawPointPlate(b, tree);
-        // The long tally is the OTHER half of the same line and stays a quiet caption — it is read once
-        // a session, not before every purchase — but it now sits on the plate's own optical centre
-        // instead of ten pixels below it.
-        _ui.TextRightBig(b, $"{learned} OF {tree.All.Count} TRAITS LEARNED  ·  {spent} POINTS SPENT  ·  {tree.TotalTreeCost} FOR EVERYTHING",
-                         View.Right, PointPlate.Y + (PointPlate.Height - UiTypography.Secondary) / 2, Slate, UiTypography.Secondary);
-
         DrawDetail(b, tree, hit, clicked);
         DrawFlourish(b);
+        if (_tip is { } tip) _ui.HoverTip(b, tip, _tipAt);
         if (DevDustDebug) DrawDebug(b);
     }
 
@@ -580,22 +624,24 @@ public sealed class TraitsScreen
         _ui.PanelQuiet(b, PointPlate);
 
         var has = tree.Available > 0;
-        var ink = has ? Gold : Slate;
+        var ink = has ? Gold : Bone;   // never the disabled grey on the one figure the screen is about
         // THE HOUSE GRID, not a hand-measured centre: the glyph starts at ContentLeft, the number ends at
         // ContentRight, and both sit on the plate's vertical middle — the same rule every other panel uses.
         // The glyph and the number are ONE group, centred in the frame's interior: the plate is a fixed
         // width so the tour's spotlight and this drawing cannot disagree, and a one-digit number pinned
         // to ContentRight left the group hanging off the frame's right ornament.
+        // AVAILABLE on the left, the tally on the right (UX V2 P1.6). The "226 FOR EVERYTHING" that used to
+        // stand beside it is gone: a career earns about thirty-four points, and a total the player can
+        // never reach is a number without a meaning (brief §92).
         var num = $"{tree.Available}";
         var numW = _ui.MeasureBig(num, UiTypography.PrimaryValue);
         const int gap = 14;
         var group = PointGlyph + gap + numW;
         var x = PointPlate.X + (PointPlate.Width - group) / 2;
         var glyph = new Rectangle(x, PointPlate.Y + (PointPlate.Height - PointGlyph) / 2, PointGlyph, PointGlyph);
-        if (!_ui.Icon(b, "nav_prestige", glyph, has ? Color.White : Slate)) _ui.Diamond(b, glyph, ink);
-        _ui.TextBig(b, num, glyph.Right + gap,
-                    PointPlate.Y + (PointPlate.Height - UiTypography.PrimaryValue) / 2 - 2,
-                    ink, UiTypography.PrimaryValue);
+        if (!_ui.Icon(b, "nav_prestige", glyph, has ? Color.White : Bone)) _ui.Diamond(b, glyph, ink);
+        _ui.TextBig(b, num, glyph.Right + gap, PointPlate.Y + (PointPlate.Height - UiTypography.PrimaryValue) / 2 - 2,
+                    has ? Gold : Bone, UiTypography.PrimaryValue);
     }
 
     /// <summary>
@@ -779,8 +825,29 @@ public sealed class TraitsScreen
         // has to say that a framed one did not. Screen space, over the clipped tree. Two SHORT lines:
         // one long line ran into the spine's caption at the foot, and at the head it ran into the RUIN
         // header — both measured on a capture, not guessed.
-        _ui.TextBig(b, "DRAG TO MOVE  ·  SCROLL TO ZOOM", View.X + 12, View.Bottom - 46, Slate * 0.9f, UiTypography.Secondary);
-        _ui.TextBig(b, "HOME KEY SHOWS THE WHOLE TREE", View.X + 12, View.Bottom - 24, Slate * 0.9f, UiTypography.Secondary);
+        // The camera's controls, as controls (UX V2 P1.6): zoom out · the whole tree · zoom in — and one line
+        // that says what a click on a road's name does. Readable Slate, never a dimmed Slate.
+        _ui.TextBig(b, "DRAG TO MOVE  ·  WHEEL TO ZOOM  ·  CLICK A ROAD'S NAME OR PRESS 1–4 TO FRAME IT", View.X + 12, View.Bottom - 40, Slate, UiTypography.Secondary);
+        // The tally, beside the camera's buttons — read once a session, not before every purchase. The
+        // "226 FOR EVERYTHING" that used to follow it is gone: a career earns about thirty-four points.
+        var spent = tree.All.Where(u => tree.Owns(u.Id)).Sum(u => u.Cost);
+        var learned = tree.All.Count(u => tree.Owns(u.Id));
+        _ui.TextRightBig(b, $"{spent} SPENT  ·  {learned} OF {tree.All.Count} LEARNED", CamBtn(0).X - 20, View.Bottom - 40, Slate, UiTypography.Secondary);
+        var camLabels = new[] { "–", "ALL", "+" };
+        for (var i = 0; i < 3; i++)
+        {
+            var r = CamBtn(i);
+            var over = r.Contains(hit);
+            _ui.Plate(b, r);
+            if (over) Outline(b, r, Slate, 1);
+            _ui.TextCenterBig(b, camLabels[i], r.Center.X, r.Y + (i == 1 ? 12 : 8), over ? Bone : Slate, i == 1 ? UiTypography.Caption : UiTypography.Body);
+            if (clicked && over)
+            {
+                if (i == 0) ZoomAt(View.Center, 1f / 1.25f);
+                else if (i == 2) ZoomAt(View.Center, 1.25f);
+                else { _pan = _homePan; _zoom = _homeZoom; }
+            }
+        }
     }
 
     private void DrawWorld(SpriteBatch b, MemoryDustTree tree, Point hit, bool clicked)
@@ -825,7 +892,7 @@ public sealed class TraitsScreen
         }
 
         var labels = _zoom > LabelZoom;
-        if (labels) DrawRoadHeaders(b, tree);
+        if (labels) DrawRoadHeaders(b, tree, hit, clicked);
         if (labels) DrawSpineCaption(b, tree);
 
         // Names first, then nodes, then their cost tags: a plate never covers a node, and a tag sits
@@ -843,8 +910,9 @@ public sealed class TraitsScreen
     /// road used to be a name and a colour; now RUIN says "Hit harder. Live closer to death." under its
     /// name, on the diagram, before a single node is read. The sentences are <see cref="TraitRoads"/>'s.
     /// </remarks>
-    private void DrawRoadHeaders(SpriteBatch b, MemoryDustTree tree)
+    private void DrawRoadHeaders(SpriteBatch b, MemoryDustTree tree, Point hit, bool clicked)
     {
+        _headerRects.Clear();
         var heads = new[]
             {
                 (TraitRoad.Ruin, "ks_reaper"), (TraitRoad.Aegis, "ks_titan"),
@@ -881,6 +949,12 @@ public sealed class TraitsScreen
             var name = _ui.ShortenBig(RoadName(road), column - glyphPx - Px(8), namePx);
             var nameW = _ui.MeasureBig(name, namePx);
             var x0 = (int)p.X - (nameW + glyphPx + Px(8)) / 2;
+            // THE HEADER IS A DOOR (UX V2 P1.6, brief §44): click the road's name and the camera frames the road.
+            var headRect = new Rectangle(x0 - 8, nameY - 6, nameW + glyphPx + Px(8) + 16, Px(34) + 12);
+            _headerRects[road] = headRect;
+            var overHead = headRect.Contains(hit) && View.Contains(hit);
+            if (overHead) { _ui.Fill(b, headRect, Bone * 0.06f); _tip = $"{RoadName(road)} — click to frame this road."; _tipAt = hit; }
+            if (clicked && overHead) FrameRoad(tree, road);
             _ui.Icon(b, RoadGlyph(road), new Rectangle(x0, nameY + (Px(34) - glyphPx) / 2, glyphPx, glyphPx), col);
             _ui.TextBig(b, name, x0 + glyphPx + Px(8), nameY, col, namePx);
 
@@ -916,16 +990,16 @@ public sealed class TraitsScreen
     // so tools/check_ui_type.py can tell the two apart.
 
     /// <summary>The size the names under the nodes are drawn at, in world units.</summary>
-    private const int NamePx = 28;   // ui-size-ok: tree WORLD units, multiplied by the camera zoom
+    private const int NamePx = 30;   // ui-size-ok: tree WORLD units, multiplied by the camera zoom
 
     /// <summary>A road's own name at the head of its branch, in world units.</summary>
-    private const int RoadNameWorldPx = 32;   // ui-size-ok: tree WORLD units, multiplied by the zoom
+    private const int RoadNameWorldPx = 36;   // ui-size-ok: tree WORLD units, multiplied by the zoom
 
     /// <summary>A road's sentence and tally under its name, in world units.</summary>
-    private const int RoadLineWorldPx = 24;   // ui-size-ok: tree WORLD units, multiplied by the zoom
+    private const int RoadLineWorldPx = 28;   // ui-size-ok: tree WORLD units, multiplied by the zoom
 
     /// <summary>The cost tag on an unlit node, in world units.</summary>
-    private const int NodeCostWorldPx = 19;   // ui-size-ok: tree WORLD units, multiplied by the zoom
+    private const int NodeCostWorldPx = 24;   // ui-size-ok: tree WORLD units, multiplied by the zoom
     private const int NameLineH = 30;
     private const int NameGap = 4;
 
@@ -1059,8 +1133,8 @@ public sealed class TraitsScreen
         }
         var hover = View.Contains(hit) && hitBox.Contains(hit);
 
-        if (clicked && hover) { _selectedId = u.Id; _msg = ""; }
-        if (hover) _hoverId = u.Id;
+        if (clicked && hover) { _selectedId = u.Id; _msg = ""; _armedId = null; }
+        if (hover) { _hoverId = u.Id; _tip = $"{u.Name} — {u.Cost} TRAIT POINT{(u.Cost == 1 ? "" : "S")}"; _tipAt = hit; }
 
         var isOwned = tree.Owns(u.Id);
         var buyable = tree.CanUnlock(u.Id);
@@ -1080,6 +1154,16 @@ public sealed class TraitsScreen
         }
 
         DrawFace(b, tree, u, box, hover || u.Id == _selectedId);
+        if (u.Id == _selectedId) Outline(b, new Rectangle(box.X - 3, box.Y - 3, box.Width + 6, box.Height + 6), Gold, Math.Max(2, Px(3)));   // gold = selected
+
+        // STATE IN A SHAPE, not only in a tint (brief §8): a lock on a locked node, a tick on a learned one.
+        if (labels && box.Width >= 18)
+        {
+            var chip = Math.Max(10, Px(16));
+            var cr = new Rectangle(box.Right - chip / 2, box.Y - chip / 3, chip, chip);
+            if (isOwned) { _ui.Fill(b, cr, Plate); DrawTick(b, cr, true); }
+            else if (!buyable) _ui.Icon(b, "ui_slot_locked", cr, Bone);
+        }
 
         // The cost, as a small tag on the node's right edge — over whatever wire runs under it.
         // Unlit only: a bought trait's price is history.
@@ -1224,78 +1308,80 @@ public sealed class TraitsScreen
         _ui.Fill(b, new Rectangle(r.Right - t, r.Y, t, r.Height), c);
     }
 
+    /// <summary>What kind of thing a node is, in the player's words — the inspector's CATEGORY.</summary>
+    private static string KindWord(SocketKind k) => k switch
+    {
+        SocketKind.Terminal => "TERMINAL — THE ROAD'S END",
+        SocketKind.Rung => "KEYSTONE GATE",
+        SocketKind.Spur => "KEYSTONE SPUR",
+        SocketKind.Gate => "SPINE GATE",
+        SocketKind.Mark => "MARK",
+        _ => "ATTRIBUTE",
+    };
+
     /// <summary>
-    /// The detail panel: one trait, read properly — its road and what that road is for, its picture,
-    /// its name, and then the sheet in the order a player decides in: what it does (with the real
-    /// numbers), what it costs, what it needs first, and that it is permanent.
+    /// THE INSPECTOR (D3, brief §45): the SELECTED trait, read properly — its road and what that road is for,
+    /// its face, its name, its state as a pill, then the sheet in the order a player decides in: what it does,
+    /// what it costs, what it needs first, and that it is permanent; the reason beside the button; one button.
     /// </summary>
     /// <remarks>
-    /// The text comes from <see cref="MemoryDustText.Describe"/>, which composes the hand-written
-    /// description with the keystone's own blurb; the cost, prerequisite and permanence lines are the
-    /// same facts <see cref="MemoryDustText.Sheet"/> prints, in the same order, so the sheet a test
-    /// holds and the one the player reads are the same words. Nothing is printed that the player
-    /// cannot act on: the old "kind" line ("A small permanent boost", "Opens more of the game") is
-    /// gone, and the reminder that learning is not wearing became the description's own words.
+    /// Click pins; hover only highlights and tips (D5) — the panel used to swap to whatever the pointer crossed
+    /// on the way to the button, and the button's enabled state flipped with it. The words come from
+    /// <see cref="MemoryDustText.Describe"/>, so the sheet a test holds and the one the player reads agree.
     /// </remarks>
     private void DrawDetail(SpriteBatch b, MemoryDustTree tree, Point hit, bool clicked)
     {
-        _ui.PanelQuiet(b, DetailPanel);
-        // Hover reads, click PINS — the lesson the mastery tree's node panel learned. A player cannot
-        // read a node and then look at the tree if reading requires keeping the pointer still.
-        var u = (_hoverId is not null ? tree.All.FirstOrDefault(x => x.Id == _hoverId) : null)
-                ?? Selected(tree);
+        var panel = DetailPanel;
+        _ui.PanelQuiet(b, panel);
+        var u = Selected(tree);
         var isOwned = tree.Owns(u.Id);
         var buyable = tree.CanUnlock(u.Id);
-
-        var terminal = TerminalArt(u);
+        var terminal = TerminalArt(u) is not null;
         var roadCol = RoadColor(u.Road);
-        var left = UiKit.ContentLeft(DetailPanel);
-        var right = UiKit.ContentRight(DetailPanel);
-        var width = DetailPanel.Width - UiKit.PadX(DetailPanel) * 2;
+        var left = UiKit.ContentLeft(panel);
+        var right = UiKit.ContentRight(panel);
+        var width = right - left;
+        var btn = new Rectangle(left, panel.Bottom - 92, width, 68);
+        var permY = panel.Bottom - 204;   // the permanence line, clear of the reason above the button
+        var floor = permY - 12;
+        var y = panel.Y + UiTypography.PanelTitleTop;
 
-        _ui.TextCenterBig(b, "TRAIT DETAIL", DetailPanel.Center.X, UiKit.TitleTop(DetailPanel), Gold, UiTypography.PanelTitle);
-
-        // Everything below runs off ONE CURSOR, so adding a row moves the rows under it rather than
-        // running one through the next.
-        var y = UiKit.CaptionTop(DetailPanel);
-
-        // THE ROAD, named and drawn, and under it what walking it means — the same sentence the header
-        // on the diagram prints, so the panel and the picture agree.
+        // CATEGORY: the road's glyph and name with the kind, then the road's own sentence.
         var badge = new Rectangle(left, y, 26, 26);
         var hasGlyph = _ui.Icon(b, RoadGlyph(u.Road), badge, roadCol);
-        _ui.TextBig(b, RoadName(u.Road), hasGlyph ? badge.Right + 10 : left, y + 4, roadCol, UiTypography.Body);
-        y += UiTypography.Pitch(UiTypography.Body);
-        _ui.TextBig(b, _ui.ShortenBig(TraitRoads.Sentence(u.Road), width, UiTypography.Secondary),
-                    left, y, Slate, UiTypography.Secondary);
-        y += 28;
+        _ui.TextBig(b, _ui.ShortenBig($"{RoadName(u.Road)}  —  {KindWord(KindOf(tree, u))}", width - 36, UiTypography.Secondary),
+                    hasGlyph ? badge.Right + 10 : left, y + 3, roadCol, UiTypography.Secondary);
+        y += UiTypography.Pitch(UiTypography.Secondary) + 4;
+        _ui.TextBig(b, _ui.ShortenBig(TraitRoads.Sentence(u.Road), width, UiTypography.Body), left, y, Slate, UiTypography.Body);
+        y += UiTypography.Pitch(UiTypography.Body) + 8;
 
-        // The node's own face — the same frame, field and glyph it wears on the diagram, drawn large.
-        var size = terminal is not null ? 100 : 80;
-        var icon = new Rectangle(DetailPanel.Center.X - size / 2, y, size, size);
+        // THE FACE, NAME and STATE pill.
+        var size = terminal ? 96 : 76;
+        var icon = new Rectangle(panel.Center.X - size / 2, y, size, size);
         DrawFace(b, tree, u, icon, hot: false);
-        y += size + 4;
-
-        _ui.TextCenterBig(b, _ui.ShortenBig(u.Name, width, UiTypography.Headline), DetailPanel.Center.X, y,
-                          isOwned ? Gold : buyable ? Bone : Slate, UiTypography.Headline);
-        y += UiTypography.Pitch(UiTypography.Headline);
-        // The state in a word — and only the state. The "kind" that used to sit beside it was a label
-        // about the engine's categories, not a fact a player could do anything with.
+        y += size + 6;
+        _ui.TextCenterBig(b, _ui.ShortenBig(u.Name, width, UiTypography.PanelTitle), panel.Center.X, y, isOwned ? Gold : Bone, UiTypography.PanelTitle);
+        y += UiTypography.Pitch(UiTypography.PanelTitle);
         var state = isOwned ? "LEARNED" : buyable ? "AVAILABLE NOW" : "LOCKED";
-        _ui.TextCenterBig(b, state, DetailPanel.Center.X, y, isOwned ? Gold : buyable ? Met : Slate, UiTypography.Secondary);
-        y += 28;
+        var stateCol = isOwned ? Gold : buyable ? Met : Bone;
+        var pillW = _ui.MeasureBig(state, UiTypography.Secondary) + 44;
+        var pill = new Rectangle(panel.Center.X - pillW / 2, y, pillW, UiTypography.Secondary + 10);
+        _ui.Fill(b, pill, stateCol * 0.14f);
+        Outline(b, pill, stateCol, 1);
+        if (isOwned) DrawTick(b, new Rectangle(pill.X + 10, pill.Y + 5, 16, 14), true);
+        else if (buyable) _ui.Diamond(b, new Rectangle(pill.X + 12, pill.Y + 7, 12, 12), Met);
+        else _ui.Icon(b, "ui_slot_locked", new Rectangle(pill.X + 9, pill.Y + 3, 18, 18), Bone);
+        _ui.TextBig(b, state, pill.X + 32, pill.Y + 4, stateCol, UiTypography.Secondary);
+        y += pill.Height + 10;
 
-        // ── 1. WHAT IT DOES — at Body size, wrapped to the measured width, and never allowed to run
-        //    into the blocks under it: the text gets as many lines as leave the cost and the
-        //    prerequisites their room, and ends with an ellipsis past that (a long keystone blurb is
-        //    the only thing that could get there).
-        var lineH = UiTypography.Pitch(UiTypography.Body);
-        var floor = DetailPanel.Bottom - 176;   // the permanence line and the button own the panel below this
-        _ui.Fill(b, new Rectangle(left, y, width, 2), Dim * 0.7f);
-        y += 12;
+        void Rule() { _ui.Fill(b, new Rectangle(left, y, width, 1), Dim); y += 10; }
+
+        // 1. WHAT IT DOES — at Body, wrapped, bounded so the blocks under it keep their room.
+        Rule();
         _ui.TextBig(b, "WHAT IT DOES", left, y, Slate, UiTypography.Secondary);
         y += UiTypography.Pitch(UiTypography.Secondary);
-        var reserve = (isOwned ? 44 : 66)                                    // the cost block
-                      + 40 + 32 * Math.Max(1, Math.Min(u.Requires.Count, 3));  // and the prerequisite block's minimum
+        var lineH = UiTypography.Pitch(UiTypography.Body);
+        var reserve = (isOwned ? 40 : 60) + 40 + lineH * Math.Max(1, Math.Min(u.Requires.Count, 3));
         var lines = _ui.WrapBig(MemoryDustText.Describe(u), width, UiTypography.Body);
         var room = Math.Max(1, (floor - reserve - y) / lineH);
         for (var i = 0; i < Math.Min(lines.Count, room); i++)
@@ -1306,68 +1392,67 @@ public sealed class TraitsScreen
         }
         y += 6;
 
-        // ── 2. WHAT IT COSTS — priced in TRAIT POINTS and it says so, beside how many you have. The
-        //    whole word, not "PTS"; and here, under what it does, rather than parked at the foot of
-        //    the panel a screen away from the decision it belongs to.
-        _ui.Fill(b, new Rectangle(left, y, width, 2), Dim * 0.7f);
-        y += 12;
+        // 2. WHAT IT COSTS — in TRAIT POINTS, beside how many you have; and, when short, where points come from.
+        Rule();
         _ui.TextBig(b, "WHAT IT COSTS", left, y, Slate, UiTypography.Secondary);
         if (isOwned) _ui.TextRightBig(b, "LEARNED", right, y - 4, Gold, UiTypography.Headline);
-        else
-            _ui.TextRightBig(b, $"{u.Cost} TRAIT {(u.Cost == 1 ? "POINT" : "POINTS")}", right, y - 4,
-                             buyable ? Bone : Ember, UiTypography.Headline);
-        y += 26;
+        else _ui.TextRightBig(b, $"{u.Cost} TRAIT {(u.Cost == 1 ? "POINT" : "POINTS")}", right, y - 4, buyable ? Bone : Ember, UiTypography.Headline);
+        y += UiTypography.Pitch(UiTypography.Headline);
         if (!isOwned)
         {
             _ui.TextBig(b, $"You have {tree.Available} trait {(tree.Available == 1 ? "point" : "points")}.", left, y,
-                        tree.Available >= u.Cost ? Slate : Ember, UiTypography.Secondary);
-            y += 22;
+                        tree.Available >= u.Cost ? Bone : Ember, UiTypography.Body);
+            y += lineH;
+            if (tree.Available < u.Cost && y + UiTypography.Pitch(UiTypography.Secondary) * 2 < floor - reserve + 60)
+            {
+                foreach (var l in _ui.WrapBig("Points come from conquering regions, going deeper into the corruption, and raising a region's mastery.", width, UiTypography.Secondary).Take(2))
+                { _ui.TextBig(b, l, left, y, Slate, UiTypography.Secondary); y += UiTypography.Pitch(UiTypography.Secondary); }
+            }
         }
-        y += 6;
+        y += 4;
 
-        // ── 3. YOU NEED FIRST — the real Requires, each with a tick once you have it.
-        _ui.Fill(b, new Rectangle(left, y, width, 2), Dim * 0.7f);
-        y += 12;
-        _ui.TextBig(b, "YOU NEED FIRST", left, y, Gold, UiTypography.Secondary);
-        y += 28;
-        // The permanence line below is anchored to the panel's bottom, so the list has a hard floor.
-        // Say what was dropped rather than drawing a row through the divider — a silently truncated
-        // list reads as "these are all the prerequisites", which is the one thing it must never say.
-        if (u.Requires.Count == 0) _ui.TextBig(b, "Nothing. You can start here.", left + 2, y, Slate, UiTypography.Body);
+        // 3. YOU NEED FIRST — the real Requires, each with a tick once you have it; at Body, in words too.
+        Rule();
+        _ui.TextBig(b, "YOU NEED FIRST", left, y, Slate, UiTypography.Secondary);
+        y += UiTypography.Pitch(UiTypography.Secondary);
+        if (u.Requires.Count == 0) { _ui.TextBig(b, "Nothing. You can start here.", left, y, Bone, UiTypography.Body); y += lineH; }
         else
             for (var i = 0; i < u.Requires.Count; i++)
             {
-                if (y > floor)
+                if (y + lineH > floor)
                 {
-                    _ui.TextBig(b, $"and {u.Requires.Count - i} more — hover them on the tree", left + 2, y, Slate, UiTypography.Secondary);
+                    _ui.TextBig(b, $"and {u.Requires.Count - i} more — hover them on the tree", left, y, Slate, UiTypography.Secondary);
                     break;
                 }
                 var reqId = u.Requires[i];
                 var req = tree.All.FirstOrDefault(x => x.Id == reqId);
                 var got = tree.Owns(reqId);
-                DrawTick(b, new Rectangle(left + 2, y + 2, 20, 18), got);
-                _ui.TextBig(b, _ui.ShortenBig(req?.Name ?? reqId, width - 110, UiTypography.Body), left + 32, y, got ? Bone : Slate, UiTypography.Body);
-                _ui.TextRightBig(b, got ? "learned" : "not yet", right, y + 3, got ? Met : Slate, UiTypography.Secondary);
-                y += 32;
+                DrawTick(b, new Rectangle(left + 2, y + 5, 20, 16), got);
+                _ui.TextBig(b, _ui.ShortenBig(req?.Name ?? reqId, width - 130, UiTypography.Body), left + 32, y, got ? Bone : Slate, UiTypography.Body);
+                _ui.TextRightBig(b, got ? "learned" : "not yet", right, y, got ? Met : Slate, UiTypography.Body);
+                y += lineH;
             }
 
-        // ── 4. PERMANENT. NEVER RESETS. — on every node, in gold, the last thing read before the
-        //    button. The one fact the whole tree rests on, and the one a new player most needs.
-        _ui.Fill(b, new Rectangle(left, DetailPanel.Bottom - 166, width, 2), Dim * 0.7f);
-        _ui.TextCenterBig(b, MemoryDustText.Permanence, DetailPanel.Center.X, DetailPanel.Bottom - 152, Gold * 0.85f, UiTypography.Body);
+        // 4. PERMANENT. NEVER RESETS. — the last thing read before the button, in gold.
+        _ui.Fill(b, new Rectangle(left, permY, width, 1), Dim);
+        _ui.TextCenterBig(b, MemoryDustText.Permanence, panel.Center.X, permY + 10, Gold * 0.85f, UiTypography.Body);
 
-        // Every refusal this screen has — already taken, not enough points, prerequisites unlit — is
-        // said on the page that produced it, above the button that produced it. A fresh refusal from
-        // the button takes the line; otherwise the standing reason the node cannot be bought.
+        // THE REASON, at Body, beside the button: success in Met, refusal in Ember, the standing reason otherwise.
         var reason = _msg.Length > 0 ? _msg
                    : isOwned || buyable ? ""
                    : tree.Available < u.Cost ? "NOT ENOUGH TRAIT POINTS" : "LEARN WHAT IT NEEDS FIRST";
+        var good = _msg.StartsWith("LEARNED:", StringComparison.Ordinal);
+        var armedHere = _armedId == u.Id;
         if (reason.Length > 0)
-            _ui.TextCenterBig(b, _ui.ShortenBig(reason, width, UiTypography.Secondary), DetailPanel.Center.X, DetailPanel.Bottom - 120, Ember, UiTypography.Secondary);
+            foreach (var (l, k) in _ui.WrapBig(reason, width, UiTypography.Secondary).Take(2).Select((l, k) => (l, k)))
+                _ui.TextCenterBig(b, l, panel.Center.X, btn.Y - 58 + k * UiTypography.Pitch(UiTypography.Secondary), good ? Met : armedHere ? Gold : Ember, UiTypography.Secondary);
 
-        var label = isOwned ? "LEARNED" : "LEARN THIS TRAIT";
-        if (_ui.Button(b, new Rectangle(left, DetailPanel.Bottom - 92, width, 68), label, hit, clicked, enabled: buyable))
-            Buy(tree, u);
+        var label = isOwned ? "LEARNED"
+                  : armedHere ? "PRESS AGAIN TO COMMIT"
+                  : terminal ? $"COMMIT TO {RoadName(u.Road)}"
+                  : "LEARN THIS TRAIT";
+        if (_ui.Button(b, btn, label, hit, clicked, enabled: buyable, buyable ? ButtonStyle.Primary : ButtonStyle.Secondary))
+            TryBuy(tree, u);
     }
 
     private void DrawTick(SpriteBatch b, Rectangle r, bool on)

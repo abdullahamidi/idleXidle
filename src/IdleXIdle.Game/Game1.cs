@@ -2243,6 +2243,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                                                "filter_common", "recall_1", "ks_glass_cannon" })
                         _dust.Purchase(id);
                     _traits.DevSelect("ks_bloodlust");   // AVAILABLE: its prerequisite (KEYSTONE — GLASS CANNON) is lit
+                    // RH_SHOT_NODE=<id> selects another trait, so a blocked node or a terminal can be photographed read.
+                    if (Environment.GetEnvironmentVariable("RH_SHOT_NODE") is { } traitPin) _traits.DevSelect(traitPin);
                     _hunter.AddGleam(131_900_000);     // the top currency pills read like the reference
                     _hunter.AddMaterials(12_600);
 
@@ -2253,7 +2255,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         && float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_ZOOM"),
                                           System.Globalization.NumberStyles.Float,
                                           System.Globalization.CultureInfo.InvariantCulture, out var devZoom))
-                        _traits.DevCamera(devZoom, "ks_bloodlust");
+                        _traits.DevCamera(devZoom, Environment.GetEnvironmentVariable("RH_SHOT_NODE") ?? "ks_bloodlust");
 
                     // Frozen at 0.30s: past the flash, into the shockwaves, with the name plate risen
                     // and readable. RH_SHOT_T moves the freeze so the other beats can be checked too.
