@@ -938,8 +938,9 @@ public sealed class MasteryScreen
             if (y + UiTypography.Pitch(UiTypography.Secondary) > floor) return;
             _ui.TextBig(b, s, x, y, c ?? Slate, UiTypography.Secondary); y += UiTypography.Pitch(UiTypography.Secondary);
         }
-        void Line(string s, Color c, int px = UiTypography.Body, int maxLines = 3)
+        void Line(string s, Color c, int px = 0, int maxLines = 3)
         {
+            if (px == 0) px = UiTypography.Body;   // a rung is a profile-scaled property, not a constant
             foreach (var l in _ui.WrapBig(s, w, px).Take(maxLines))
             {
                 if (y + UiTypography.Pitch(px) > floor) return;

@@ -1453,6 +1453,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _keys = Keyboard.GetState();
         _mouse = Mouse.GetState();
         ReadCursor();
+        UiKit.MouseHeld = _mouse.LeftButton == ButtonState.Pressed;
+        UiMotion.Reduced = ReducedMotion;
+        UiMotion.Tick((float)gameTime.ElapsedGameTime.TotalSeconds);
 
         // Latch the click EDGE once per frame, here, before anything reads it. The edge lives for
         // exactly one Update, and _prevMouse is overwritten in Latch() at the end of Update — so a
@@ -4800,7 +4803,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _ui.TextBig(_batch, "The hunter fell at WAVE 13 — 12 waves cleared · 0123456789", x, y, UiInk.Primary, px);
             y += pitch + 14;
         }
-        _ui.TextBig(_batch, $"PAGE {UiKit.Page.Width} × {UiKit.Page.Height} · UI SCALE {(int)MathF.Round(UiScaleFactor * 100)}%"
+        _ui.TextBig(_batch, $"PAGE {UiKit.Page.Width} × {UiKit.Page.Height} · UI SCALE {UiMetrics.Percent}%"
                             + (ShotWindow is { } sw ? $" · WINDOW {sw.X} × {sw.Y}" : ""),
                     x, 1010, UiInk.Secondary, UiTypography.Secondary);
 
@@ -4961,10 +4964,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private const int DropListInset = UiKit.PanelCorner;
 
     /// <summary>Text inset from the edge of a row, and from the closed field's end ornament.</summary>
-    private const int DropPadX = UiTypography.ButtonPadX;
+    private static int DropPadX => UiTypography.ButtonPadX;
 
     /// <summary>The size an option row and a closed field's value are set at — a control's own rung.</summary>
-    private const int DropTextPx = UiTypography.ButtonText;
+    private static int DropTextPx => UiTypography.ButtonText;
 
     /// <summary>The cursor row's fill. Warm and QUIET — the gold text on it is the signal, not this.</summary>
     /// <remarks>
@@ -6033,14 +6036,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
     internal const float BaseOverlayScale = (1920f - NavRailWidth - 20f) / 1920f;
 
     /// <summary>
-    /// THE PAGE SCALE: what one logical page pixel is in canvas pixels. <see cref="BaseOverlayScale"/> times
-    /// the UI SCALE factor (1, 1.25 or 1.5). The overlay matrix, the mouse inverse, the font density and
-    /// <see cref="UiKit.Page"/> all read it, so a scale change is one number changing in one place.
+    /// THE PAGE SCALE: what one logical page pixel is in canvas pixels. The overlay matrix, the cursor's
+    /// inverse (Core's PageFrame) and the font density all read it. It no longer multiplies by a UI SCALE
+    /// factor: UI SCALE is a density profile (<see cref="UiMetrics"/>) and the page keeps its size.
     /// </summary>
-    internal static float OverlayScale => BaseOverlayScale * UiScaleFactor;
-
-    /// <summary>The resolved UI SCALE as a factor: 1, 1.25 or 1.5. AUTO has already been decided.</summary>
-    internal static float UiScaleFactor { get; private set; } = 1f;
+    internal static float OverlayScale => BaseOverlayScale;
 
     /// <summary>The UI SCALE preference: 100, 125, 150, or 0 for AUTO. Resolved in <see cref="ApplyUiScale"/>.</summary>
     private int _uiScalePercent = 100;
@@ -6050,14 +6050,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// </summary>
     /// <remarks>
     /// Called from <see cref="RecomputePresent"/>, the one place the present rect changes, so AUTO follows a
-    /// window resize without anyone remembering to ask. The page shrinks as the scale grows — 1536×864 at
-    /// 125% — because the canvas is fixed and bigger text needs fewer logical pixels to fill it.
+    /// window resize without anyone remembering to ask. Nothing else moves: the page and the overlay matrix
+    /// are the same at every profile, and the screens reflow their rows to the bigger type.
     /// </remarks>
     private void ApplyUiScale()
     {
-        var pct = Display.ResolveUiScale(_uiScalePercent, _present.Width);
-        UiScaleFactor = pct / 100f;
-        UiKit.Page = new Rectangle(0, 0, (int)MathF.Round(1920f / UiScaleFactor), (int)MathF.Round(1080f / UiScaleFactor));
+        // A DENSITY profile (UiMetrics), not a page zoom: the page stays 1920×1080 and the overlay
+        // matrix stays BaseOverlayScale at every step. The first UI SCALE shrank UiKit.Page to 1920/f
+        // and every screen laid out for 1080 px overflowed at 150 % (UX V2 REPORT §4).
+        UiMetrics.Apply(Display.ResolveUiScale(_uiScalePercent, _present.Width));
     }
 
     /// <summary>Dev (F8 under RH_DEV): step the UI SCALE 100 → 125 → 150 → AUTO → 100 and keep it.</summary>

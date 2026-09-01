@@ -120,9 +120,11 @@ internal static class StyleAffinityDiagram
     /// half that size.
     /// </param>
     public static void Draw(UiKit ui, SpriteBatch b, Point centre, int radius, Style? native, bool showFactors,
-                            int labelGap = 26, int labelPx = UiTypography.Body,
-                            int factorPx = UiTypography.Secondary, int sealPx = 34)
+                            int labelGap = 26, int labelPx = 0,
+                            int factorPx = 0, int sealPx = 34)
     {
+        if (factorPx == 0) factorPx = UiTypography.Secondary;   // a rung is a profile-scaled property, not a constant
+        if (labelPx == 0) labelPx = UiTypography.Body;   // a rung is a profile-scaled property, not a constant
         var forms = Enum.GetValues<Style>();
         var pos = new Vector2[forms.Length];
         var dir = new Vector2[forms.Length];

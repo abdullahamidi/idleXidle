@@ -517,9 +517,9 @@ public sealed class HuntScreen
     // The three combat-callout sizes, from the one place the game keeps its type. They were three
     // private constants here while UiTypography carried a DamageNormal and a DamageCritical that
     // nothing drew with — the same three sizes, written down twice, disagreeing.
-    private const int DamagePx = UiTypography.DamageNormal;
-    private const int SkillHitPx = UiTypography.DamageSkill;
-    private const int CritPx = UiTypography.DamageCritical;
+    private static int DamagePx => UiTypography.DamageNormal;
+    private static int SkillHitPx => UiTypography.DamageSkill;
+    private static int CritPx => UiTypography.DamageCritical;
 
     /// <summary>Where the enemy wave label sits, relative to the row anchor.</summary>
     /// <remarks>
@@ -2705,8 +2705,9 @@ public sealed class HuntScreen
 
     /// <summary>A small labelled chip — a dark plate, a one-pixel edge, the word inside. Returns its width.</summary>
     private int Chip(SpriteBatch b, int x, int y, string text, Color ink, Color edge,
-                     int px = UiTypography.Caption)
+                     int px = 0)
     {
+        if (px == 0) px = UiTypography.Caption;   // a rung is a profile-scaled property, not a constant
         var w = ChipWidth(text, px);
         var r = new Rectangle(x, y, w, px + UiTypography.ChipPadY * 2);
         _ui.Fill(b, r, new Color(0x14, 0x10, 0x1A, 0xE0));
@@ -2715,8 +2716,8 @@ public sealed class HuntScreen
         return w;
     }
 
-    private int ChipWidth(string text, int px = UiTypography.Caption)
-        => _ui.MeasureBig(text, px) + UiTypography.ChipPadX * 2;
+    private int ChipWidth(string text, int px = 0)   // 0 = Caption: a rung is a profile-scaled property, not a constant
+        => _ui.MeasureBig(text, px == 0 ? UiTypography.Caption : px) + UiTypography.ChipPadX * 2;
 
     private void Hairline(SpriteBatch b, int x, int y, int w, Color c) => _ui.Fill(b, new Rectangle(x, y, w, 1), c);
 
@@ -2744,7 +2745,7 @@ public sealed class HuntScreen
     //    number. The doors name no keys in their labels; the tour and the help sheet teach the keys.
     private const int ColumnX = 1570, ColumnW = 326;
     private const int UtilityTop = 110;
-    private const int UtilityPad = UiTypography.PanelPadNarrow;
+    private static int UtilityPad => UiTypography.PanelPadNarrow;
     private const int DoorHeight = 44, DoorPitch = 52;
 
     /// <summary>The utility's bottom edge as last drawn (+ margin) — the right column's true extent, for the tour.</summary>

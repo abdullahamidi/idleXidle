@@ -150,11 +150,11 @@ public static class Display
     /// be treated, and starting a new game must not resurrect a dialog they turned off.
     /// </remarks>
     /// <param name="UiScalePercent">
-    /// UI SCALE: 100, 125 or 150, or 0 for AUTO (125 in a window under 1600 px wide, else 100). It scales the
-    /// PAGE — every menu screen's panels and text — inside the fixed 1920×1080 canvas; the nav rail and the
-    /// fight are not pages and do not move. Written as <c>uiscale=100|125|150|auto</c>; an old build never
-    /// reads the line, a new build reads 100 when it is absent. 100 is the default until every page screen
-    /// lays out to <see cref="UiKit.Page"/> (UX V2 P1); Auto becomes the default then.
+    /// UI SCALE: 100, 125 or 150, or 0 for AUTO (125 in a window under 1600 px wide, else 100). A DENSITY
+    /// profile (<see cref="UiMetrics"/>): the page stays 1920×1080 and the type, rows, buttons, icons and
+    /// paddings grow — on every screen, the chrome and the fight included. Written as
+    /// <c>uiscale=100|125|150|auto</c>; an old build never reads the line, a new build reads 100 when it
+    /// is absent.
     /// </param>
     public readonly record struct GamePrefs(
         DisplayMode Mode, WindowSize Window, int SfxVolume, int MusicVolume, bool AskBeforeScrap,
@@ -165,17 +165,13 @@ public static class Display
     /// The UI SCALE steps the game OFFERS. 0 is AUTO.
     /// </summary>
     /// <remarks>
-    /// <b>150 IS NOT OFFERED YET, AND THE REASON IS VERTICAL.</b> The page a scale leaves is 1920/s wide by
-    /// 1080/s tall, so 150% gives a screen 720 logical pixels of height where its rows, its slot columns and
-    /// its grids were laid out against 1080. Posed at RH_SHOT_UISCALE=150 on 2026-09-01, every converted
-    /// screen overflowed: BUILD's bench readout printed through its third slot row, GEAR's paper doll ran out
-    /// of its panel, TRAITS' permanence line landed on YOU NEED FIRST. Width was fine everywhere — the columns
-    /// already follow <see cref="UiKit.Page"/> — so this is not a layout bug to nudge, it is work: every
-    /// vertical rhythm (row pitch, slot pitch, visible grid rows) has to be derived from the height that is
-    /// actually there rather than assumed. Until that pass lands, offering the step would ship a setting that
-    /// produces a broken screen. The rig can still pose 150 (RH_SHOT_UISCALE) so that work can see it.
+    /// <b>150 IS OFFERED AGAIN (UI polish, 2026-09-01), because the scale stopped being a zoom.</b> The
+    /// first UI SCALE shrank the page to 1920/s × 1080/s, so 150 % handed every screen 720 px of height it
+    /// had laid out against 1080, and the step was withdrawn after every converted screen overflowed. The
+    /// profile is a DENSITY now (<see cref="UiMetrics"/>): the page stays 1920×1080 and the type, rows,
+    /// buttons and paddings grow, with each screen reflowing or scrolling where that no longer fits.
     /// </remarks>
-    public static readonly int[] UiScaleSteps = { 100, 125, 0 };
+    public static readonly int[] UiScaleSteps = { 100, 125, 150, 0 };
 
     /// <summary>What a UI SCALE preference resolves to for a present rect this wide: AUTO picks 125 under 1600 px.</summary>
     public static int ResolveUiScale(int percent, int presentWidth)
@@ -277,9 +273,9 @@ public static class Display
             {
                 if (!l.Trim().StartsWith(UiScaleKey, StringComparison.Ordinal)) continue;
                 var v = l.Trim()[UiScaleKey.Length..];
-                // A saved 150 comes back as 125 while the step is not offered (see UiScaleSteps): a preference
-                // must never resolve to a state the game cannot draw.
-                uiScale = v == "auto" ? 0 : int.TryParse(v, out var pct) && pct is 100 or 125 ? pct : v == "150" ? 125 : 100;
+                // Every offered step round-trips; anything else is 100 — a preference must never resolve
+                // to a state the game cannot draw. (150 came back as 125 while the step was withdrawn.)
+                uiScale = v == "auto" ? 0 : int.TryParse(v, out var pct) && pct is 100 or 125 or 150 ? pct : 100;
             }
             // Lines 6-9 (2026-08-23): the fight's text and effects. Absent in an older file = on.
             return new GamePrefs(mode, window, sfx, music, ask,

@@ -19,6 +19,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "integration", "integration"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IdleXIdle.Integration.Tests", "tests\integration\IdleXIdle.Integration.Tests\IdleXIdle.Integration.Tests.csproj", "{0278E94D-7B09-4032-B397-BF4E110A285C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IdleXIdle.Game.Tests", "tests\unit\IdleXIdle.Game.Tests\IdleXIdle.Game.Tests.csproj", "{405EBABA-297B-4838-AD5A-5745E59B3B1F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -44,6 +46,10 @@ Global
 		{0278E94D-7B09-4032-B397-BF4E110A285C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0278E94D-7B09-4032-B397-BF4E110A285C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0278E94D-7B09-4032-B397-BF4E110A285C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{405EBABA-297B-4838-AD5A-5745E59B3B1F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{405EBABA-297B-4838-AD5A-5745E59B3B1F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{405EBABA-297B-4838-AD5A-5745E59B3B1F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{405EBABA-297B-4838-AD5A-5745E59B3B1F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{B0273BE6-3B63-4247-8C97-8FEA6BF1E1F2} = {52F87538-A160-4AC1-BD12-815A84563522}
@@ -52,5 +58,6 @@ Global
 		{A0C6F739-6657-4969-8C9C-D6091565D583} = {ABD69E3E-C753-4309-8B6D-45038F7C1EC3}
 		{FC544227-970F-411D-8628-256BAC6ADE2A} = {D89C40FB-2260-4E72-BCCD-8F93E5B94C39}
 		{0278E94D-7B09-4032-B397-BF4E110A285C} = {FC544227-970F-411D-8628-256BAC6ADE2A}
+		{405EBABA-297B-4838-AD5A-5745E59B3B1F} = {ABD69E3E-C753-4309-8B6D-45038F7C1EC3}
 	EndGlobalSection
 EndGlobal

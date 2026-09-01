@@ -502,8 +502,9 @@ public sealed class WarrenScreen
             y += UiTypography.Pitch(UiTypography.Secondary);
         }
 
-        void Line(string s, Color c, int px = UiTypography.Body, int max = 3)
+        void Line(string s, Color c, int px = 0, int max = 3)
         {
+            if (px == 0) px = UiTypography.Body;   // a rung is a profile-scaled property, not a constant
             foreach (var l in _ui.WrapBig(s, w, px).Take(max))
             {
                 if (y + UiTypography.Pitch(px) > floor) return;
@@ -615,7 +616,7 @@ public sealed class WarrenScreen
     /// </remarks>
     private void DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c)
     {
-        const int px = UiTypography.Body;
+        var px = UiTypography.Body;
         foreach (var line in _ui.WrapBig(text, width, px)) { _ui.TextBig(b, line, x, y, c, px); y += UiTypography.Pitch(px); }
     }
 

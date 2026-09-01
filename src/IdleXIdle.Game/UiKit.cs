@@ -27,13 +27,16 @@ public sealed class UiKit
 
     /// <summary>
     /// THE PAGE: the logical rectangle a menu screen lays out into, in the screen's own 1920-space units.
-    /// 1920×1080 at UI SCALE 100%, 1536×864 at 125%, 1280×720 at 150% — the page gets SMALLER as the
-    /// scale grows, because the same canvas has to hold bigger text. Set by Game1 whenever the scale changes.
+    /// 1920×1080 at EVERY UI SCALE: the profile is a density (<see cref="UiMetrics"/>) — bigger type,
+    /// rows, buttons and paddings inside the same page — not a zoom. (It shrank with the scale in UX V2,
+    /// to 1280×720 at 150 %, and every screen laid out for 1080 px overflowed; that is why the step was
+    /// withdrawn, and why it is a density now.)
     /// </summary>
     /// <remarks>
     /// Not a layout engine (brief §91): the three anchors below are the numbers screens already subtract
-    /// from 1920 and 1080, given one name so that every right edge, bottom edge and centre can follow the
-    /// scale. A screen that still writes <c>1920 - 40</c> is a screen that clips at 125%.
+    /// from 1920 and 1080, given one name so that every right edge, bottom edge and centre come from one
+    /// place. A screen still writes its top-level regions against these; what it must not write is a
+    /// literal row height or button height — those come from <see cref="UiMetrics"/>.
     /// </remarks>
     public static Rectangle Page { get; internal set; } = new(0, 0, 1920, 1080);
 
@@ -859,6 +862,10 @@ public sealed class UiKit
     }
 
     // ── Buttons (mouse-clickable) ───────────────────────────────────────────────────────────────
+
+    /// <summary>The left mouse button is down this frame — set by the host before any screen draws; the PRESSED state reads it.</summary>
+    public static bool MouseHeld { get; set; }
+
     private static readonly Color Bone = UiInk.Primary;
     private static readonly Color Gold = UiInk.Accent;
     private static readonly Color Slate = UiInk.Secondary;
@@ -875,6 +882,14 @@ public sealed class UiKit
                        ButtonStyle style = ButtonStyle.Secondary)
     {
         var hover = enabled && r.Contains(mouse);
+        // THE STANDARD STATES (UI polish §25–§29). HOVER eases in over ~100 ms as a thin luminance lift on
+        // top of the art swap, so a hover is noticed without a card jumping; PRESSED is the mouse held
+        // over the button — the whole face drops 2 px and darkens for exactly as long as the button is
+        // held, and the click still fires on release like everything else. DISABLED keeps its label
+        // readable (UiInk.Disabled on the grey art) so a button can say WHY it is off.
+        var lift = UiMotion.Ease(UiMotion.KeyOf(r), hover ? 1f : 0f);
+        var pressed = hover && MouseHeld;
+        if (pressed) r = new Rectangle(r.X, r.Y + 2, r.Width, r.Height);
         // package_01 ornate buttons: DARK (secondary) at rest, GREEN (primary) on hover — and, since UX V2
         // P0.3, GREEN at rest too for the ONE button on a screen that is its primary action (brief §84:
         // one clear primary decision per screen, never five equal gold claims). GREY when disabled.
@@ -892,6 +907,8 @@ public sealed class UiKit
             else b.Draw(tex, r, Color.White);
         }
         else { Fill(b, r, hover ? Slate : PanelBg); Fill(b, new Rectangle(r.X + 1, r.Y + 1, r.Width - 2, r.Height - 2), enabled ? PanelEdge : Dim); }
+        if (lift > 0f) Fill(b, PanelInner(r), Color.White * (0.07f * lift));
+        if (pressed) Fill(b, PanelInner(r), Color.Black * 0.18f);
 
         // Every button surface is dark or deep-green, so the label is always LIGHT — bright cream on hover
         // for feedback, dim when disabled. (No more dark-ink-on-hover; that was the unreadable flip.)
@@ -907,7 +924,7 @@ public sealed class UiKit
         // 22 and a 36px one beside it at 18 — the same control, two sizes, decided by a dimension the
         // player cannot see. It is UiTypography.ButtonText now, shrinking only when the label genuinely
         // does not fit, and never past Caption. A very short button still gets a size that fits it.
-        var px = Math.Min(UiTypography.ButtonText, Math.Max(UiTypography.Caption, r.Height - 14));
+        var px = Math.Min(UiTypography.ButtonText, Math.Max(UiTypography.Caption, r.Height - UiMetrics.Space(14)));
         // THE LABEL MUST CLEAR THE ART'S END ORNAMENT, not a flat 12px. The button art draws its
         // scrollwork over FieldCapWidth(height) at each end, which is 20px on a 44px button and 24 on a
         // 52 — so "MERGE THREES INTO BETTER" and "SALVAGE ALL THE JUNK" were printing straight onto it.
@@ -1026,8 +1043,11 @@ public sealed class UiKit
     /// visible margin and lines up with the panel's title row (playtest 2026-08-26: "the close buttons
     /// have no margin, they run into the frame").
     /// </summary>
-    public static Rectangle CloseRect(Rectangle panel, int size = CloseSize) =>
-        new(panel.Right - PanelCorner - 8 - size, panel.Y + PanelCorner - 4, size, size);
+    public static Rectangle CloseRect(Rectangle panel, int size = 0)
+    {
+        if (size <= 0) size = UiMetrics.Control(CloseSize);   // a hit target: it follows the profile
+        return new Rectangle(panel.Right - PanelCorner - 8 - size, panel.Y + PanelCorner - 4, size, size);
+    }
 
     public bool CloseButton(SpriteBatch b, Rectangle r, Point mouse, bool clicked)
     {
@@ -1057,6 +1077,29 @@ public sealed class UiKit
 
     /// <summary>True if the mouse clicked inside a rectangle — for clickable list rows and slots.</summary>
     public static bool ClickedIn(Rectangle r, Point mouse, bool clicked) => clicked && r.Contains(mouse);
+
+    /// <summary>
+    /// A vertical scrollbar for a list showing <paramref name="visible"/> of <paramref name="total"/> rows
+    /// from <paramref name="first"/>: a quiet track and a thumb whose length is the visible share. Drawn
+    /// only when there is something to scroll. <see cref="UiMetrics.ScrollbarWidth"/> wide — the caller
+    /// reserves that lane. Returns true when it drew, so a caller can shorten its rows once.
+    /// </summary>
+    public bool ScrollBar(SpriteBatch b, Rectangle track, int first, int visible, int total)
+    {
+        if (total <= visible || visible <= 0 || track.Height <= 0) return false;
+        Fill(b, track, UiInk.Plate);
+        Fill(b, new Rectangle(track.X, track.Y, track.Width, 1), UiInk.Rule);
+        Fill(b, new Rectangle(track.X, track.Bottom - 1, track.Width, 1), UiInk.Rule);
+        var thumbH = Math.Max(UiMetrics.Control(24), track.Height * visible / total);
+        var maxFirst = Math.Max(1, total - visible);
+        var thumbY = track.Y + (track.Height - thumbH) * Math.Clamp(first, 0, maxFirst) / maxFirst;
+        Fill(b, new Rectangle(track.X + 2, thumbY, track.Width - 4, thumbH), UiInk.Secondary * 0.85f);
+        return true;
+    }
+
+    /// <summary>The first visible row after a wheel notch, clamped so the last page stays full.</summary>
+    public static int Scrolled(int first, int wheel, int visible, int total)
+        => Math.Clamp(first - wheel, 0, Math.Max(0, total - visible));
     public static bool Hover(Rectangle r, Point mouse) => r.Contains(mouse);
 
     // ── Key-caps and icons ──────────────────────────────────────────────────────────────────────
@@ -1173,7 +1216,7 @@ public sealed class UiKit
     /// </remarks>
     public void HoverTip(SpriteBatch b, string text, Point anchor)
     {
-        const int width = 430, pad = 14;
+        int width = UiMetrics.Text(430), pad = UiMetrics.Space(14);
         var lineH = UiTypography.Pitch(UiTypography.Secondary);
         var lines = WrapBig(text, width - pad * 2, UiTypography.Secondary);
         if (lines.Count == 0) return;

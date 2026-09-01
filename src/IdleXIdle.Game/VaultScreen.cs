@@ -995,7 +995,7 @@ public sealed class VaultScreen
     /// <summary>The filter's controls: the lowest tier to keep, and the gear slots — as medallions.</summary>
     private void DrawFilterPopover(SpriteBatch b, Rectangle pop, Point hit, bool clicked)
     {
-        const int inset = UiTypography.PanelPadNarrow;
+        var inset = UiTypography.PanelPadNarrow;
         _ui.PanelQuiet(b, pop);
         var inner = new Rectangle(pop.X + inset, pop.Y + inset, pop.Width - inset * 2, pop.Height - inset * 2);
         var close = UiKit.CloseRect(pop, 36);
