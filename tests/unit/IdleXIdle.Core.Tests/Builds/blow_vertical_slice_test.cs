@@ -60,7 +60,7 @@ public class BlowVerticalSliceTest
     [Fact]
     public void test_the_resolved_blow_carries_every_chosen_layer_as_data()
     {
-        // Arrange — BLOW, its FLATTEN variation (Source BODY, defence ignore), and TOLL (+50%).
+        // Arrange — BLOW, its FLATTEN variation (Source BODY, defence ignore), and TOLL (+40%).
         var loadout = LoadoutWithBlow();
         var progress = Chosen("TOLL");
 
@@ -71,7 +71,7 @@ public class BlowVerticalSliceTest
         var sk = Assert.Single(build.Skills);
         Assert.Equal("hammer_blow", sk.Def.Id);
         Assert.True(sk.Def.DefenceIgnore, "FLATTEN's defence ignore did not reach the resolved skill");
-        Assert.Equal(1.5f, sk.Def.DamageMultiplier, precision: 3);   // TOLL
+        Assert.Equal(1.4f, sk.Def.DamageMultiplier, precision: 3);   // TOLL
         Assert.Equal(Source.Body, sk.Source);                        // the variation OWNS the Source
         Assert.Equal(500f, sk.Def.BasePower, precision: 1);          // the skill owns its number
     }

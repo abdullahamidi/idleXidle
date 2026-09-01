@@ -696,6 +696,29 @@ public static class SoloBattle
         // preventer see that the bite is already gone and keep its own charge. Hoisted out of the
         // tick loop: this is walked on every bite and a fresh list per bite is a per-frame allocation.
         var answering = new List<(int Index, float Reflect, bool Stops)>();
+
+        // ── THE RULES THE REINFORCEMENTS TURN (see SkillRules). Every one is wave-local, and every
+        //    one is read in exactly one place below. ────────────────────────────────────────────────
+        var castCarry = 0f;        // BREAKTHROUGH / CLEAN CUT / — the carry belonging to the cast landing now
+        var trailArmed = false;    // HAMMER/TRAIL — the next basic attack ignores defence, once
+        var pinArmed = 0;          // HAMMER/INTERCEPT — a stun held back for the bite that is coming
+        var ampHitsLeft = 0f;      // SIGN/SPEND — empowered hits still owed (fractional: see PERFECT CLAUSE)
+        var ampFrontFull = 0f;     // SIGN/ANCHOR — the front enemy's own deeper mark
+        var ampCritKeeps = false;  // SIGN/PERFECT CLAUSE
+        var deadThisWave = 0;      // FIELD/REMNANT — enemies this wave has already lost
+
+        // REMNANT — the mire keeps what it has drowned, and the survivors wade through it. Read once,
+        // from whichever skill carries the rule, because it is a property of the field standing on the
+        // ground rather than of any one cast.
+        var weakenPerDead = 0f;
+        var weakenCap = 0f;
+        for (var k = 0; k < skills.Count; k++)
+            if (skills[k].Def.Rule.WeakenPerDeadEnemy > 0f)
+            {
+                weakenPerDead = MathF.Max(weakenPerDead, skills[k].Def.Rule.WeakenPerDeadEnemy);
+                weakenCap = MathF.Max(weakenCap, skills[k].Def.Rule.WeakenPerDeadCap);
+            }
+        var ampCountsHits = false; // SIGN/SPEND — is this window counted in hits rather than seconds?
         var steadyAmp = 0f;        // SIGN/STEADY — the swell it has built this wave
         // VOLLEY/TORRENT pays the standing bleed out faster and CARRION makes it linger; both are
         // read from the WOVEN SKILLS at the wave's start rather than set by the first kill, because
@@ -744,12 +767,32 @@ public static class SoloBattle
         // dormant under any ceiling (see HealTuning).
         var heal = tuning.Heal;
         var healBudget = heal.BudgetFor(champ.MaxHealth, siphon: triggers.Contains(BuildTrigger.Siphon));
+        // The wave's healing ceiling, widened by any skill that buys the room. Without this a bigger
+        // pulse heal is unbuyable: WILT's 1% a pulse already fills the budget, so 1.5% healed exactly
+        // as much and the reinforcement changed nothing a player could ever see.
+        var healRoomBonus = 0f;
+        for (var k = 0; k < skills.Count; k++)
+            healRoomBonus = MathF.Max(healRoomBonus, skills[k].Def.Rule.HealCeilingBonus);
+        if (healRoomBonus > 0f) healBudget = (long)MathF.Round(healBudget * (1f + healRoomBonus));
         long healedThisWave = 0;
 
         // ── SHIELD IS WAVE-LOCAL. Zero at the start of every wave, before any wave-start effect
         //    grants into it. Without the reset an idle run would accumulate a shield while nothing
         //    was happening, and standing still would be the strongest defensive play in the game.
         champ.ResetShield();
+
+        // FOUNDATION — STEADY's swell does not start from nothing. Applied at the wave's start, after
+        // the reset that clears everything else, so it is a standing start rather than a carried one.
+        foreach (var wsk in skills)
+            if (wsk.Def.Rule.AmplifyStartsPrimed && wsk.Def.AmplifyPerCast > 0f)
+            {
+                steadyAmp = wsk.Def.AmplifyCap > 0f
+                    ? Math.Min(wsk.Def.AmplifyCap, wsk.Def.AmplifyPerCast)
+                    : wsk.Def.AmplifyPerCast;
+                ampBonus = steadyAmp;
+                ampWholeWave = true;
+                ampUntil = int.MaxValue / 4;
+            }
 
         /// <summary>MACHINE 5p is once a wave and its charge is spent only on a bite that would land.</summary>
         var platingSpent = false;
@@ -903,10 +946,29 @@ public static class SoloBattle
             // own AmplifyPercent (0.60 on CALL, 0.70 on BRAND) carries what the constant used to.
             if (ampUntil > absMs && ampBonus > 0f)
             {
-                var amped = ampWholeWave || (against is not null && ReferenceEquals(against, FirstAlive()));
+                var front = against is not null && ReferenceEquals(against, FirstAlive());
+                var amped = ampWholeWave || front;
+                // SPEND — the window empowers a COUNT of damaging hits rather than a stretch of
+                // seconds. An idle player does not choose when anything fires, so a two-second window
+                // was a lottery ticket; a number of hits is a promise the build can be built around.
+                if (amped && ampHitsLeft > 0f)
+                {
+                    // PERFECT CLAUSE, under this sim's crit model. Crit here is an EXPECTED VALUE
+                    // (see critFactor) rather than a rolled event, so "a critical hit does not spend a
+                    // charge" cannot be a branch — it is the expectation of one: the charge is spent
+                    // at the rate a hit is NOT a crit. Deterministic, and it makes crit chance feed
+                    // SPEND, which is the interaction the reinforcement is for.
+                    ampHitsLeft -= ampCritKeeps ? MathF.Max(0.05f, 1f - critChance) : 1f;
+                    if (ampHitsLeft <= 0f) ampUntil = 0;   // spent: the window closes on the count
+                }
+                else if (amped && ampHitsLeft <= 0f && ampCountsHits)
+                {
+                    amped = false;   // a counted window with nothing left empowers nothing
+                }
                 if (amped)
                 {
-                    var depth = ampBonus + shape.AmplifyPowerBonus;
+                    // ANCHOR — the spread keeps the wave, and the front enemy takes the full mark.
+                    var depth = (front && ampFrontFull > 0f ? ampFrontFull : ampBonus) + shape.AmplifyPowerBonus;
                     // A SIGN adept's attunement lands on the amplifier's DEPTH — the one lever that
                     // scales with the whole build rather than with one skill (measured when the old
                     // Mark-specialist node was a -23% trap; see the port note in StyleAffinity).
@@ -1125,12 +1187,19 @@ public static class SoloBattle
                 // overkill or the bleed itself. It feeds the standing poison pool, which already
                 // bleeds into the front of the wave every half second — one pool, not a second
                 // parallel system, because two decaying pools would be two rules for one idea.
+                deadThisWave++;
                 for (var k = 0; k < skills.Count; k++)
                 {
                     var wd = skills[k].Def;
                     if (wd.BleedOnKillFraction > 0f)
                     {
-                        poison += target.MaxHealth * wd.BleedOnKillFraction;
+                        // FLOOD — a wave already bleeding takes a further kill harder. Bounded: a flat
+                        // extra share of the ORDINARY kill contribution, never a share of the standing
+                        // pool, so it adds and never compounds.
+                        var onKill = target.MaxHealth * wd.BleedOnKillFraction;
+                        if (wd.Rule.ExtraBleedWhileBleeding > 0f && poison > 0f)
+                            onKill *= 1f + wd.Rule.ExtraBleedWhileBleeding;
+                        poison += onKill;
                     }
                 }
 
@@ -1163,9 +1232,14 @@ public static class SoloBattle
                 // the sim has no part-break model, and this answers the same complaint from inside the
                 // model that exists, because discarded overkill IS the tax a large-hit build pays in a
                 // Swarm band. One level only: a chain of carries would let one hit clear a whole wave.
+                // BREAKTHROUGH and CLEAN CUT — the SKILL's own carry, beside the build's. Taken as the
+                // larger of the two rather than the sum: two rules that both answer "wasted overkill"
+                // should not multiply into a chain that clears a wave from one blow.
                 var spill = -target.Health;
-                if (fromSkill && shape.OverkillCarry > 0f && spill > 0f && FirstAlive() is { } next)
-                    LandOn(next, spill * shape.OverkillCarry, atMs, fromSkill: false, ignoresArmour: true);
+                var carry = MathF.Max(shape.OverkillCarry, castCarry);
+                if (fromSkill && carry > 0f && spill > 0f && FirstAlive() is { } next)
+                    // fromSkill:false on the carried hit is what bounds it — a carry cannot carry again.
+                    LandOn(next, spill * carry, atMs, fromSkill: false, ignoresArmour: true);
             }
         }
 
@@ -1192,9 +1266,18 @@ public static class SoloBattle
             // in-run decisions. It reads the SKILL's style, so the plain swing is never warded.
             if (fromSkill && wardedStyle is { } ws && skillDef?.Style == ws) raw *= WardedResistFactor;
 
+            // CLEANUP and PUNCH THROUGH — hits owed to an enemy that died before they landed. Bounded
+            // by construction: `pending` only ever falls, and a hit that lands is never re-owed.
+            var retarget = skillDef?.Rule.RetargetOnDeath == true;
+            var pending = 0;
+
+            // CLEANUP — the finishing bonus, read once per activation.
+            var underShare = skillDef?.Rule.BonusUnderHealth ?? 0f;
+            var underBonus = skillDef?.Rule.BonusUnderHealthAmount ?? 0f;
+
             var dealt = 0f;
             var struck = 0;
-            for (var i = 0; i < creatures.Count && struck < targets; i++)
+            for (var i = 0; i < creatures.Count && (struck < targets || pending > 0); i++)
             {
                 var c = creatures[i];
                 if (!c.Alive) continue;
@@ -1202,9 +1285,17 @@ public static class SoloBattle
                 // so the first arrow gets the first-hit rule and armour taxes every one, which is
                 // the whole trade against one big blow. Amp stays per TARGET per HIT: the Source
                 // matchup belongs to the creature being hit.
-                for (var h = 0; h < Math.Max(1, hitsPerTarget) && c.Alive; h++)
+                var want = Math.Max(1, hitsPerTarget) + pending;
+                pending = 0;
+                var landed = 0;
+                for (var h = 0; h < want && c.Alive; h++)
                 {
+                    landed++;
                     var hit = raw * Amp(absMs, skillSource, skillDef, c);
+                    // CLEANUP — read per HIT, not per target, so with CLUSTER's five arrows the ones
+                    // that land after the target crosses the line are the ones that get the bonus.
+                    if (underShare > 0f && c.MaxHealth > 0f && c.Health < c.MaxHealth * underShare)
+                        hit *= 1f + underBonus;
 
                     // ── SIGNATURES, hit-side. The WOUND bonus reads stacks laid by ANY Body skill
                     //    and pays EVERY skill hit; laying happens after the landing, so a hit never
@@ -1214,6 +1305,8 @@ public static class SoloBattle
                     if (fromSkill) SignatureLay(c, skillSource);
                     dealt += hit;
                 }
+                // The corpse's share moves on rather than vanishing — which is the whole purchase.
+                if (retarget && landed < want) pending = want - landed;
                 struck++;
                 if (fromSkill && countsAsActivation && metrics is not null) metrics.TargetsStruck++;
             }
@@ -1369,10 +1462,19 @@ public static class SoloBattle
 
                     if (def.StunMs > 0)
                     {
+                        // INTERCEPT — a stun spent just after a bite is very nearly wasted, and one
+                        // spent just before it takes the whole interval. The machine HOLDS its stun for
+                        // the bite that is coming rather than firing on its own clock. Deterministic:
+                        // it reads the wave's own bite time, which is the only attack clock this model
+                        // has (there are no per-enemy timers to prioritise between).
+                        if (def.Rule.StunTimedToBite)
+                        {
+                            pinArmed = def.StunMs;
+                        }
                         // PRESS / PIN — the weight stops breaking and starts holding. The wave's next
                         // bite is pushed back, which is HAMMER's owned stun; the same push STAGGER
                         // uses, so a build carrying both cannot stack them into immunity.
-                        if (!staggeredThisBite)
+                        else if (!staggeredThisBite)
                         {
                             nextBite += def.StunMs;
                             staggeredThisBite = true;
@@ -1425,6 +1527,11 @@ public static class SoloBattle
                         if (def.SlowDeepenPerTick > 0f) want += def.SlowDeepenPerTick * (slowTicks + 1);
                         if (def.SlowPerEnemy > 0f) want += def.SlowPerEnemy * alive;
                         if (def.SlowCeiling > 0f) want = Math.Min(want, def.SlowCeiling);
+                        // The grip HOLDS. A mire does not let go of a wave because part of it died,
+                        // and — measured — a grip that tracked the survivors was no grip at all: a
+                        // swarm is gone in two seconds, so for almost the whole wave it read one
+                        // enemy, and CLOG's 10% of one enemy and TEEMING's 6% of one enemy rounded to
+                        // the same millisecond on the bite clock.
                         slowFactor = Math.Max(slowFactor, want);
                         slowTicks++;
                     }
@@ -1467,6 +1574,8 @@ public static class SoloBattle
                         // trades depth for reach and the whole wave carries it. Held as a bonus over
                         // the Form's flat MarkMultiplier so a skill with no amplify dials at all is
                         // exactly what it was.
+                        // ANCHOR — the spread keeps the wave and the front enemy takes the full mark.
+                        ampFrontFull = def.Rule.AmplifyFrontFull;
                         var depth = def.AmplifyPercent;
                         if (def.AmplifyDeepenPerTick > 0f)
                         {
@@ -1506,6 +1615,10 @@ public static class SoloBattle
                 // the truth — it reads the same field, and a readout that disagrees with the fight is
                 // the failure this codebase keeps paying for.
                 var beats = sk.Def.Beats;
+                // CROWDED — FIELD buys its cadence with FIELD's own condition rather than with an
+                // unconditional beat off the top. An unconditional cut spends the beat budget the
+                // basic attack needs, and BODY's own set capstone is built on that swing.
+                if (beats > 1 && sk.Def.CrowdedBeats > 0 && alive >= sk.Def.CrowdedBeats) beats--;
                 if (beats > 0)
                 {
                     // COUNTED IN BEATS: "every fourth action". PREPARATION waives the opening wait.
@@ -1570,6 +1683,11 @@ public static class SoloBattle
                         ampWholeWave = sk.Def.AmplifyWholeWave;
                     }
 
+                    // SPEND — the window is spent in hits. Refilled on every cast, never stacked.
+                    ampHitsLeft = sk.Def.Rule.AmplifyHits;
+                    ampCountsHits = sk.Def.Rule.AmplifyHits > 0;
+                    ampCritKeeps = sk.Def.Rule.CritKeepsAmplifyCharge;
+
                     ampUntil = abs + window;
                     mindExtendBudget = SignatureMindExtendCapMs;   // MIND's signature stretches THIS window
                     // A SIGN cast is a real CAST — cooldown, its own Skill event — so it stores
@@ -1614,6 +1732,11 @@ public static class SoloBattle
                             bank.Clear();
                         }
                         raw = owed * sk.Def.PaysBackDamageTaken;
+                        // SCARRED — hurt, it hits back harder. The threshold reads the POOL: a shield
+                        // standing in front of a wounded hunter does not make them well.
+                        if (sk.Def.Rule.PaybackBelowHealth > 0f && champ.MaxHealth > 0
+                            && champ.Health < champ.MaxHealth * sk.Def.Rule.PaybackBelowHealth)
+                            raw *= 1f + sk.Def.Rule.PaybackBelowHealthBonus;
                     }
                     else
                     {
@@ -1684,7 +1807,16 @@ public static class SoloBattle
 
                     // GLUT — DRAIN trades its lifesteal for damage that rises with the health it holds.
                     if (vdef.DamagePerHealth > 0f && champ.MaxHealth > 0)
-                        raw *= 1f + vdef.DamagePerHealth * (champ.Health / (float)champ.MaxHealth);
+                    {
+                        // HEALTH, never shield: GLUT pays for being biologically well, and a shield in
+                        // front of a half-empty pool is not wellness.
+                        var share = champ.Health / (float)champ.MaxHealth;
+                        var scale = vdef.DamagePerHealth;
+                        // RIPE — kept near full, the scaling reaches half again as far.
+                        if (vdef.Rule.HealthScalingAbove > 0f && share >= vdef.Rule.HealthScalingAbove)
+                            scale *= 1f + vdef.Rule.HealthScalingAboveBonus;
+                        raw *= 1f + scale * share;
+                    }
 
                     // THRONG — FIELD's pulse pays for the crowd it lands in.
                     if (vdef.DamagePerLivingEnemy > 0f) raw *= 1f + vdef.DamagePerLivingEnemy * alive;
@@ -1702,6 +1834,21 @@ public static class SoloBattle
                     if (vdef.SplitPool > 0f)
                     {
                         var ways = Math.Max(1, Math.Min(alive, vdef.SplitMaxWays > 0 ? vdef.SplitMaxWays : alive));
+                        // BALANCE — a share poured into an almost-dead enemy is a share wasted, so the
+                        // pool is measured against the enemies that can absorb it. Deterministic: the
+                        // count of enemies holding more than an even share of the pool, in wave order,
+                        // never a search. A pool split fewer ways is a bigger share each.
+                        if (vdef.Rule.SplitByHealth && ways > 1)
+                        {
+                            var even = raw * vdef.SplitPool / ways;
+                            var worth = 0;
+                            for (var ci = 0; ci < creatures.Count; ci++)
+                                if (creatures[ci].Alive && creatures[ci].Health >= even) worth++;
+                            // Nobody left standing can absorb a full share — so the pool stops being
+                            // a pool and goes into one enemy. That is the case this reinforcement is
+                            // FOR: a thinned wave is exactly where an even split wastes the most.
+                            ways = worth > 0 ? Math.Min(ways, worth) : 1;
+                        }
                         raw = raw * vdef.SplitPool / ways;
                         spreadTargets = ways;
                     }
@@ -1712,7 +1859,11 @@ public static class SoloBattle
                         && weak.Health < weak.MaxHealth * vdef.ExecuteFraction)
                     {
                         executes++;
-                        LandOn(weak, weak.Health, ms, fromSkill: false, ignoresArmour: true);
+                        // CLEAN CUT — the excess an execute throws away is the branch's own waste, so
+                        // it carries. Landed with the cast's carry armed, and disarmed straight after.
+                        castCarry = vdef.Rule.OverkillCarry;
+                        LandOn(weak, weak.Health, ms, fromSkill: true, ignoresArmour: true);
+                        castCarry = 0f;
                         if (alive == 0) return Kill(ms);
                     }
 
@@ -1725,9 +1876,17 @@ public static class SoloBattle
                     }
 
                     // FLATTEN — the blow ignores defence entirely.
+                    // BREAKTHROUGH — the carry belongs to THIS cast while it lands, and to nothing
+                    // else: set here, cleared immediately after, so a thorn or a bleed never inherits it.
+                    castCarry = vdef.Rule.OverkillCarry;
                     var dealt = LandSpread(raw, ms, spreadTargets, sk.Source, vdef, abs,
                                            ignoresArmour: vdef.DefenceIgnore,
                                            hitsPerTarget: vdef.HitsPerTarget);
+                    castCarry = 0f;
+
+                    // TRAIL — the blow leaves the hunter's arm moving: the NEXT basic attack borrows
+                    // its rule. One use, armed here and spent by the swing.
+                    if (vdef.Rule.TrailNextSwing) trailArmed = true;
 
                     // FLIGHT, RUPTURE, EBB, ONSET — the cast leaves bleed behind it. Fed from the RAW
                     // force for the same reason VENOM is: armour must not shrink the pool AND the bleed.
@@ -1809,7 +1968,7 @@ public static class SoloBattle
             {
                 var swung = LandSpread(tuning.AutoAttackDamage * hunter.AutoDamageMultiplier * shape.AutoAttackDamage,
                                        ms, 1, null, null, abs, fromSkill: false, swing: true,
-                                       ignoresArmour: swingIgnoresArmour);
+                                       ignoresArmour: swingIgnoresArmour || trailArmed);
                 if (swingLifesteal > 0f && swung > 0f)
                     Heal((int)MathF.Round(swung * swingLifesteal), ms);
                 if (alive == 0) return Kill(ms);
@@ -1838,7 +1997,21 @@ public static class SoloBattle
             // "The creatures strike more often" was a band the player could learn to fear, and on two of
             // the three attack biases it was a band that let them rest. The auto-attack ten lines above
             // has always accumulated its own next time; this now does the same.
-            if (ms >= nextBite)
+            // INTERCEPT spends its held stun HERE, on the bite it was kept for: the wave is held and
+            // this bite does not happen at all. A stun is not damage prevention — nothing was dealt to
+            // absorb or bank — so nothing here touches the shield or REPAY.
+            if (ms >= nextBite && pinArmed > 0)
+            {
+                // The whole bite is intercepted, not delayed. A DELAY is worth nothing against this
+                // model: there is one wave-wide bite clock, so pushing it back a second costs the wave
+                // the same second whenever the push happens — measured, and it moved no number. A
+                // machine that catches the attack is what MACHINE actually promises, and it is a real
+                // difference: that damage never arrives rather than arriving later.
+                nextBite += (int)MathF.Round(enemyIntervalMs * (1f + slowFactor));
+                pinArmed = 0;
+                staggeredThisBite = false;
+            }
+            else if (ms >= nextBite)
             {
                 // MIRE stretches the interval; the slow is a fraction of it, so 25% is a quarter
                 // longer between bites rather than a quarter less damage.
@@ -1875,6 +2048,13 @@ public static class SoloBattle
                 //    PADDING is worth MORE to a build that already mitigates — small bites are what a
                 //    flat reduction erases, and that is the branch's whole answer to a Swarm. ────────
                 taken *= shape.DamageTaken;
+
+                // REMNANT — the mire keeps what it has drowned, and everything still standing wades
+                // through it. Floored by the skill's own cap, so a long wave cannot weaken the bite to
+                // nothing: what is bought is a wave that gets easier as you cut it down, never a wave
+                // that stops mattering.
+                if (weakenPerDead > 0f && deadThisWave > 0)
+                    taken *= MathF.Max(1f - weakenCap, 1f - weakenPerDead * deadThisWave);
 
                 // ABSORB — mitigation rises as health falls, to its cap at death's door. The node that
                 // makes a low-health build survivable without making a healthy one invincible.

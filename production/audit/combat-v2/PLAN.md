@@ -101,3 +101,52 @@ One current truth in `design/gdd/`; stale claims deleted; `REPORT.md` written.
   `ShieldGained` / `ShieldAbsorbed` / `ShieldBroken`; `WaveReplay` tracks `CurrentShield` / `MaxShield`.
 - **Sets are matching-Source damage** — `ElementSets.cs`. §49. → C3.
 - **`SkillDef.ShieldInsteadOfDamage`** becomes a typed grant in C1 and its old dial is swept in C4. §78.
+
+---
+
+## 4. C2 — what the fight actually consumed
+
+**Done.** Twelve skills re-authored against the Source matrix (§27–§48), 24 variations, 72
+reinforcements, all live at four depths. `SkillRules` carries the fifteen typed rules the sim reads;
+`SkillDef` gained no loose booleans (§80).
+
+### Five rules were written, measured, and found structurally inert — re-authored rather than shipped
+
+A reinforcement that sets a field the battle never consumes is the exact failure §65 exists to catch.
+Each of these was proved dormant by measurement, not suspected:
+
+| Rule as first written | Why the model cannot express it | What it became |
+|---|---|---|
+| **INTERCEPT** — "the stun is timed to the enemy attacking soonest" | There is ONE wave-wide bite clock, not per-enemy timers. Pushing it back a second costs the wave that second whenever the push happens, so timing changed no number at all. | The bite is **prevented**, not delayed: `nextBite` advances a whole interval. That damage never arrives. |
+| **CLEANUP** — "arrows left over by a corpse re-aim" | SPLAY reaches the whole wave, one arrow each. It has no leftover arrow, and no aiming order that matters. (The retarget IS live on CLUSTER, which fires five per target — PUNCH THROUGH keeps it.) | A finisher: an enemy under half health takes the arrow 60% harder. |
+| **REMNANT** — "the dead still count toward the slow" | The mire's grip is a running maximum, and living + dead is the number the wave opened with. The maximum was already holding that depth. | The dead drag on the survivors instead: the wave bites 5% softer per enemy lost, floored at −40%. |
+| **BALM** — "1.5% a pulse instead of 1%" | The per-wave heal ceiling saturates at 1%, so both healed the identical number. | The pulse AND the room: the wave's healing ceiling rises 40% alongside it. |
+| **SPEND**'s 6 s clock beside its hit count | Barely three damaging hits fall inside six seconds, so "3 hits" and "5 hits" were the same window and COUNT bought nothing. | The count is the whole rule. It holds until it is spent — which is also the honest shape for a hunter who does not choose when anything fires. |
+
+### Two model conflicts, translated honestly rather than faked
+
+- **Crit is an expected value** (`critFactor`), not a rolled event, so PERFECT CLAUSE cannot branch on
+  "was this a crit". It spends a charge at the rate a hit is *not* one — which makes crit chance feed
+  SPEND, the interaction the reinforcement is for.
+- **One bite clock** — see INTERCEPT above.
+
+### Defects closed in C2
+
+- ~~SPEND charges skipped the basic attack~~ — a swing is a damaging hit; it was taking the
+  amplification free and never spending a charge, which is what made COUNT unmeasurable.
+- ~~`ampFrontFull` declared and never assigned~~ — ANCHOR was dormant. BRAND is a field, so the front
+  enemy's deeper mark is armed on the tick, not on a cast.
+- ~~`deadThisWave` counted once per SKILL per kill~~ — a four-skill build buried four dead for every
+  creature that fell.
+- ~~`BlowVerticalSliceTest` pinned TOLL at +50%~~ — the FLATTEN ladder is TOLL / BREAKTHROUGH / TRAIL
+  and TOLL is +40%.
+
+### The fixture was reporting on itself — two depths added
+
+`ReinforcementLivenessTests` ran at 260 and 620 with the champion at half its pool. Under that fixture
+RIPE (needs ≥90% health), BALM (needs to be hurt), and REMNANT / BALANCE / CLEANUP / PUNCH THROUGH (need
+enemies that die mid-wave) could not register — the fixture's answer, not the content's. It now runs
+four depths: a **90** where a healthy hunter beats the wave (and pairs with SPRAY, so a rule counted in
+hits sees hits), and a **1600** where the wave wins the exchange and a bigger heal is a bigger heal.
+
+**Green:** 1285/1285 unit · all gates · boot reads, writes, and reads back.
