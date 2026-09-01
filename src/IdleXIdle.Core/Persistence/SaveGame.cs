@@ -176,6 +176,14 @@ public sealed record SaveGame
     /// </summary>
     public List<string> LearnedSkills { get; init; } = new();
 
+    /// <summary>
+    /// The set ladders (by Source name) whose five-piece completion has already been celebrated — the
+    /// "MACHINE SET COMPLETE · PLATING ACTIVE" moment fires once per set (UI polish §52), not every time
+    /// the fifth piece goes back on after a swap. Additive (2026-09-01): absent on an older save means
+    /// none celebrated yet, and the next completion is the first.
+    /// </summary>
+    public List<string> CompletedSets { get; init; } = new();
+
     /// <summary>Total mastery points earned over the whole game.</summary>
     public int MasteryEarned { get; init; }
 

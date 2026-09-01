@@ -30,7 +30,33 @@ decisions that are not derivable from the diff.*
 |---|---|---|
 | C1 | LAW 13: duplicate-skill invariant, restore migration, BUILD copy, Warren.Name deleted | `5b0623d` |
 | C2 | One cursor: PageFrame (21 tests), ReadCursor, eleven screens swept, gate rewritten | `dc261ae` |
-| C3 | The owed fixtures: fightstatus · fightfive · fightmulti · fightshieldbroken · fightreport×3 limits; rig: event-aimed seek, dump, pinned baseline, page-space posed cursor | — |
+| C3 | The owed fixtures: fightstatus · fightfive · fightmulti · fightshieldbroken · fightreport×3 limits; rig: event-aimed seek, dump, pinned baseline, page-space posed cursor | `1fda3a8` |
+| C4 | UiMetrics + scale-aware ladder + Button states + UiMotion + ScrollBar; 150 % offered; Game test project (21 tests) | `645db62` |
+| C5 | Ten synthesised cues (the §86 vocabulary); Shield art (icon_shield, the defence medallion, fx_shield_break, the mana bar reused as the shield bar); six capstone emblems; ADR-005 | `e654d84` |
+| C6 | Per-screen density reflow — twelve branches `polish/<screen>` merged | — |
+
+## Asset decisions (brief §89, §96–§97)
+
+- **Source glyphs — kept.** The six are one generated family (the same ornate gold ring, six different
+  gem shapes: BODY a red heater gem, MACHINE an orange spiked shield, MIND a cyan faceted crystal, NATURE
+  a green crystal with antlers, SHADOW a violet crystal face, SPIRIT a pale crystal with tendrils). At the
+  20–28 px they are drawn at, colour and the printed Source word beside them carry identity; the shapes
+  differ but not enough to stand alone. Regenerating six good medallions for a distinction the label
+  already makes is the "generate because PixelLab exists" the brief forbids.
+- **Set capstone emblems — generated.** A fifth rung with a name and no picture had nothing to pulse and
+  nothing a HUNT chip could show; six engraved bone-white emblems (the skill icons' style, tinted by
+  Source at draw time) give the ladder's top rung, the completion toast and the "capstone live" chip one
+  mark each. MOMENTUM's wrecking ball is the weakest read and is on the re-roll list if it fails in context.
+- **Shield — one glyph, one medallion, one strip, one reuse.** See C5.
+
+## Phase 6 — audio — cues done, wiring with the screen polish
+
+Ten cues exist (README lists the vocabulary). Wiring plan: nav rail → sfx_nav; refusals (locked tile,
+BUILD locked, ALREADY EQUIPPED) → sfx_error; TRAIN → sfx_train (replaces sfx_click 0.8); RE-ROLL →
+sfx_reroll (replaces sfx_forge); SALVAGE/SELL → sfx_salvage; VAULT open → sfx_chest_open (+ sfx_chest_rare
+for Epic and up; replaces sfx_forge); HUNT ShieldGained → sfx_shield_gain, ShieldAbsorbed → sfx_shield_hit,
+ShieldBroken → sfx_shield_break (replaces sfx_champ_down 0.30). UiKit.Button keeps no sound of its own —
+each site says what it means.
 
 ## Phase 1 — correctness — DONE at C3
 
