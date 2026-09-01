@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -11,27 +12,28 @@ using IdleXIdle.Core.Progression;
 namespace IdleXIdle.Game;
 
 /// <summary>
-/// The STATS screen (nav: STATS): the hunter summary card, ONE merged training panel — every trainable
-/// stat as icon + name + rank + the REAL number the fight uses + a priced TRAIN button — a PROGRESS
-/// panel, and RESET ALL TRAINING (the respec). Hovering a training row opens a plain-words card that
-/// states the stat's exact rule with the player's own numbers filled in.
+/// TRAINING: the nine things a hunter can train, grouped by what they change, each row saying what it
+/// is NOW and what it becomes AFTER one rank — with a right-hand inspector that explains the selected
+/// one in full, and RESET ALL TRAINING along the foot.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Rebuilt to playtest item 3: <i>"I train my stats, fine, but I cannot SEE what my attack, health,
-/// attack speed etc. actually ARE... MAIN TRAINING has dummy icons, COMBAT TRAINING has no icons —
-/// two unrelated-looking panels. Merge them properly, icons for everything, explanations on hover."</i>
-/// The two panels were the same purchase drawn in two dialects; they are now nine identical rows in one
-/// panel, and every row's headline is the number the simulation actually consumes — read through
-/// <see cref="Build.Resolve"/> and <see cref="SoloBattle"/>'s own public formulas, never recomputed
-/// here, because a screen that recomputes a formula is a second implementation of it and the second one
-/// is the one that drifts.
+/// Every figure is read through <see cref="Build.Resolve"/> and <see cref="SoloBattle"/>'s own public
+/// formulas, never recomputed here, because a screen that recomputes a formula is a second
+/// implementation of it and the second one is the one that drifts. The AFTER figures obey the same
+/// rule: they come from <see cref="Hunter.Preview{T}"/>, which raises the rank, measures with the real
+/// formula and restores it — so the screen cannot promise a number the purchase will not deliver.
 /// </para>
 /// <para>
-/// Playtest item 4 adds the respec: RESET ALL TRAINING returns 100% of the Gleam the ranks cost
-/// (computed by <see cref="Hunter.TrainingRefund"/> from the real cost curve) and costs one Crystal.
-/// Two clicks on purpose, exactly like the settings panel's START A NEW GAME: the first arms a red
-/// are-you-sure state, the second confirms, any other click disarms.
+/// Before UX V2 P2.3 the screen said what each stat IS and what a rank COSTS but never what a rank
+/// would DO, so the one decision it exists for was made blind. It also spent a third of its width on
+/// GEAR POWER, MASTERY POINTS, CHESTS OPENED and HIGHEST WAVE — four numbers that belong to four other
+/// screens and none of which move when you train.
+/// </para>
+/// <para>
+/// RESET ALL TRAINING costs one Crystal and returns NO Gleam. Two clicks on purpose, exactly like the
+/// settings panel's START A NEW GAME: the first arms a red are-you-sure state, the second confirms,
+/// any other click disarms.
 /// </para>
 /// </remarks>
 public sealed class TrainingScreen
@@ -41,14 +43,12 @@ public sealed class TrainingScreen
     private static readonly Color Ember = UiInk.Danger;
     private static readonly Color Slate = UiInk.Secondary;
     private static readonly Color Dim = UiInk.Rule;
-    private static readonly Color Sky = new(0x7A, 0x9A, 0xC0);
-    private static readonly Color RowBg = new(0x1A, 0x16, 0x24, 0xC0);
+    private static readonly Color Met = UiInk.Good;
     private static readonly Color ArmedRed = new(0x8C, 0x1E, 0x1E);   // the settings panel's are-you-sure red
 
     private readonly UiKit _ui;
 
-    // Set by the host each frame (like the other screens). Mastery gives the adept title; the career values
-    // come from the game loop (they live in Game1, not on the Hunter).
+    // Set by the host each frame (like the other screens).
     public MasteryTree Mastery { get; set; } = null!;
     public PlayerLoadout Loadout { get; set; } = null!;
     public MemoryDustTree Tree { get; set; } = null!;
@@ -60,32 +60,103 @@ public sealed class TrainingScreen
     /// <remarks>
     /// Passing this to <c>ToBuild</c> is not optional bookkeeping. The two-argument overload silently
     /// substitutes <c>null</c>, and a shape built without the character is a shape the sim never uses.
-    /// The character layer arrived later and re-opened that exact bug once already.
     /// </remarks>
     public Character? Character { get; set; }
 
     /// <summary>The skills' earned choices — without it this page priced a build the sim never runs.</summary>
     public SkillProgress? SkillLevels { get; set; }
-    public int HighestWave { get; set; }
-    public int ChestsOpened { get; set; }
-    public int MasteryPoints { get; set; }
     public bool Dirty { get; private set; }
     public void ClearDirty() => Dirty = false;
     public bool DevStatsDebug { get; set; }
 
     public TrainingScreen(UiKit ui) => _ui = ui;
 
-    /// <summary>The house abbreviation, so the subtitle agrees with the currency pill above it.</summary>
-    private static string Ab(long v) => v >= 1_000_000
-        ? $"{v / 1_000_000.0:0.#}M"
-        : v >= 1000 ? $"{v / 1000.0:0.#}K" : v.ToString();
+    /// <summary>The player's word for a trained stat — MIGHT, never AttackPower.</summary>
+    /// <remarks>
+    /// Public because the HOST builds this screen's hint line, and was printing the enum name into it:
+    /// "YOU CAN TRAIN ATTACKPOWER FOR 25 GLEAM". The words existed only inside a tuple in this file,
+    /// where the host could not reach them.
+    /// </remarks>
+    public static string WordFor(HunterStat s) => s switch
+    {
+        HunterStat.AttackPower => "MIGHT",
+        HunterStat.ResonanceAffinity => "RESONANCE",
+        HunterStat.CriticalChance => "CRITICAL",
+        HunterStat.Focus => "FOCUS",
+        HunterStat.MaxHealth => "HEALTH",
+        HunterStat.Defense => "DEFENSE",
+        HunterStat.Vitality => "VITALITY",
+        HunterStat.Engineering => "TEMPO",
+        _ => "GUILE",
+    };
 
-    // ── Layout: hunter card + progress on the left, ONE training panel in the middle, and the reset
-    //    bar under it. Panels sized to what they draw — a column that ends where its content does. ──
-    private static readonly Rectangle HunterCard = new(56, 150, 372, 480);
-    private static readonly Rectangle ProgressPanel = new(56, 670, 372, 290);
-    private static readonly Rectangle TrainPanel = new(472, 150, 1318, 700);
-    private static readonly Rectangle ResetBar = new(472, 874, 1318, 106);
+    /// <summary>The nine stats grouped by what each one actually changes in the fight.</summary>
+    /// <remarks>
+    /// Not a taste: DAMAGE is the four stats the damage formulas read; SURVIVAL is the three the pool
+    /// and the mitigation read; SPEED is the one the beat reads; REWARD is the one the payout reads.
+    /// Every stat is in exactly one group, and no group is invented.
+    /// </remarks>
+    private static readonly (string Caption, HunterStat[] Stats)[] Groups =
+    {
+        ("DAMAGE — WHAT YOUR HITS ARE WORTH",
+            new[] { HunterStat.AttackPower, HunterStat.ResonanceAffinity, HunterStat.CriticalChance, HunterStat.Focus }),
+        ("SURVIVAL — HOW LONG YOU STAY UP",
+            new[] { HunterStat.MaxHealth, HunterStat.Defense, HunterStat.Vitality }),
+        ("SPEED — HOW OFTEN YOU ACT", new[] { HunterStat.Engineering }),
+        ("REWARD — WHAT A CLEARED WAVE PAYS", new[] { HunterStat.Guile }),
+    };
+
+    /// <summary>The group a stat belongs to — the inspector's CATEGORY line reads it.</summary>
+    private static string GroupOf(HunterStat s)
+    {
+        foreach (var (caption, stats) in Groups)
+            if (Array.IndexOf(stats, s) >= 0)
+                return caption.Split(" — ")[0];
+        return "TRAINED STAT";
+    }
+
+    /// <summary>The row's icon and its flat-diamond fallback, if the art ever goes missing.</summary>
+    private static (string Key, Color Gem) ArtFor(HunterStat s) => s switch
+    {
+        HunterStat.AttackPower => ("stat_might", new Color(0xD6, 0x48, 0x5C)),
+        HunterStat.ResonanceAffinity => ("stat_resonance", new Color(0x74, 0xC6, 0xE8)),
+        HunterStat.Engineering => ("stat_tempo", new Color(0x48, 0xB8, 0x88)),
+        HunterStat.Vitality => ("stat_vitality", new Color(0xC0, 0x6E, 0xE0)),
+        HunterStat.MaxHealth => ("stat_health", new Color(0x6E, 0xC8, 0x7A)),
+        HunterStat.Defense => ("stat_defense", new Color(0x8A, 0x96, 0xA8)),
+        HunterStat.CriticalChance => ("stat_critical", new Color(0xF0, 0xA8, 0x30)),
+        HunterStat.Focus => ("stat_focus", new Color(0xE8, 0xC8, 0x7A)),
+        _ => ("stat_guile", UiInk.Accent),
+    };
+
+    /// <summary>One line saying what the stat is, for the inspector and for a row's hover tip.</summary>
+    private static string IdentityOf(HunterStat s) => s switch
+    {
+        HunterStat.AttackPower => "Your basic attack — the plain swing between skills.",
+        HunterStat.ResonanceAffinity => "Your skills' damage.",
+        HunterStat.CriticalChance => "How often a hit becomes a critical hit.",
+        HunterStat.Focus => "How hard a critical hit lands.",
+        HunterStat.MaxHealth => "The base of your hunter's life.",
+        HunterStat.Defense => "How much smaller every hit you take becomes.",
+        HunterStat.Vitality => "Life you regain every second of a fight.",
+        HunterStat.Engineering => "How fast you act — swings, skills and animations.",
+        _ => "How much a cleared wave pays.",
+    };
+
+    // ── LAYOUT. Two columns to the page plus a reset footer, so UI SCALE can shrink the page under
+    //    them. Every rectangle here used to be a hand-placed 1920x1080 literal. ───────────────────
+    private const int Top = 150;          // under the hint slot's band (canvas y 86-134 stays free)
+    private const int BottomMargin = 60;
+    private const int ResetH = 84;
+
+    private static Rectangle ResetBar =>
+        new(38, UiKit.PageBottom(BottomMargin) - ResetH, UiKit.PageRight(40) - 38, ResetH);
+
+    private static Rectangle InspectorPanel =>
+        new(UiKit.PageRight(40) - 496, Top, 496, ResetBar.Y - 16 - Top);
+
+    private static Rectangle ListPanel =>
+        new(38, Top, InspectorPanel.X - 20 - 38, ResetBar.Y - 16 - Top);
 
     /// <summary>
     /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
@@ -93,14 +164,11 @@ public sealed class TrainingScreen
     /// </summary>
     internal static Rectangle[] Spotlights(TourTarget target) => target switch
     {
-        TourTarget.TrainingRows => new[] { TrainPanel },
-        TourTarget.HunterCard => new[] { HunterCard },
+        TourTarget.TrainingRows => new[] { ListPanel },
+        TourTarget.TrainingDetail => new[] { InspectorPanel },
         TourTarget.ResetBar => new[] { ResetBar },
         _ => Array.Empty<Rectangle>(),
     };
-
-    // The screen only draws and hit-tests inside Draw; nothing to advance per-frame.
-    public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, int wheel, Hunter hunter) { }
 
     // ── Request/consume, like WarrenScreen: the screen never mutates the Hunter, so the host stays the
     //    only place a currency is spent and the screen stays drawable in a capture with no game state. ──
@@ -149,27 +217,55 @@ public sealed class TrainingScreen
         Environment.GetEnvironmentVariable("RH_SHOT") is not null
         && Environment.GetEnvironmentVariable("RH_SHOT_ARM") == "reset";
 
-    // The hover card raised by whichever row the pointer rests on this frame. Stored during the row
-    // draws and drawn LAST, over every panel, so no later panel can sit on top of the explanation.
-    private string? _hoverTitle;
-    private string[]? _hoverBody;
-    private Point _hoverAt;
+    /// <summary>DEV: pose the inspector on a named stat for a capture (RH_SHOT_SELECT).</summary>
+    public void DevSelect(string word)
+    {
+        foreach (var s in Order)
+            if (string.Equals(WordFor(s), word, StringComparison.OrdinalIgnoreCase)) { _selected = s; return; }
+    }
+
+    /// <summary>The row the inspector is reading. Set by a click, by the keys, or by the first draw.</summary>
+    private HunterStat? _selected;
+
+    /// <summary>
+    /// The keyboard path: up and down move the selection, Enter buys, Escape withdraws the armed reset.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately does NOT hit-test the mouse — only Draw does, and check_mouse_space.py's entry-point
+    /// set stays as it is.
+    /// </remarks>
+    public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, int wheel, Hunter hunter)
+    {
+        ArgumentNullException.ThrowIfNull(hunter);
+        var order = Order;
+        var at = _selected is { } s ? Math.Max(0, Array.IndexOf(order, s)) : 0;
+
+        bool Pressed(Keys k) => keys.IsKeyDown(k) && !prev.IsKeyDown(k);
+        if (Pressed(Keys.Down)) _selected = order[(at + 1) % order.Length];
+        if (Pressed(Keys.Up)) _selected = order[(at - 1 + order.Length) % order.Length];
+        if (Pressed(Keys.Enter) && _selected is { } pick && hunter.CanTrain(pick)) _trainRequest = pick;
+        if (Pressed(Keys.Escape)) CancelConfirm();
+    }
+
+    /// <summary>The nine stats in the order the list draws them.</summary>
+    private static HunterStat[] Order => Groups.SelectMany(g => g.Stats).ToArray();
 
     public void Draw(SpriteBatch b, Point mouse, Hunter hunter, bool clicked = false)
     {
+        ArgumentNullException.ThrowIfNull(hunter);
         // INVERT THE OVERLAY INSET BEFORE ANY HIT-TEST. Every rect on this screen is authored in
         // 1920x1080 and drawn through Game1.BeginOverlayCanvas; the cursor arrives in 480x270 canvas
-        // space. Without this conversion the two spaces never meet — the exact bug that once made
-        // every TRAIN button unclickable. check_mouse_space.py enforces it now.
+        // space. check_mouse_space.py enforces it.
         var hit = Game1.ToOverlay(mouse);
-        _hoverTitle = null;
-        _hoverBody = null;
+        _tip = null;
 
-        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xD8));   // scrim over the shared backdrop
+        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xD8));
 
-        _ui.TextCenterBig(b, "STATS", 960, 24, Gold, UiTypography.ScreenTitle, TextFace.Display);
-        _ui.Fill(b, new Rectangle(700, 74, 520, 3), Gold * 0.5f);
-        _ui.TextCenterBig(b, $"SPEND GLEAM TO GET STRONGER — YOU HAVE {Ab(hunter.Gleam)}", 960, 80, Slate, UiTypography.Secondary);
+        // TRAINING, not STATS: this screen is a purchase, and the subtitle that used to sit under it
+        // repeated the Gleam pill two inches above it. The exact figure moves into the list header,
+        // where it stands beside the prices it is compared against.
+        _ui.TextCenterBig(b, "TRAINING", UiKit.PageCenterX, 24, Gold, UiTypography.ScreenTitle, TextFace.Display);
+        _ui.Fill(b, new Rectangle(UiKit.PageCenterX - 240, 74, 480, 3), Gold * 0.5f);
 
         // ONE build, resolved ONCE, and every row reads from it — the same composition the fight uses
         // (Build.Resolve folds keystones, worn gear, trained stats and the passive tree together).
@@ -177,115 +273,355 @@ public sealed class TrainingScreen
         var mods = build.Resolve(hunter);
         var shape = build.Shape;
 
-        DrawHunterCard(b, hunter, build, hit);
-        DrawTraining(b, hunter, build, mods, shape, hit, clicked);
+        // The panel is never empty (§82): it opens on the first thing you could actually buy.
+        _selected ??= Array.Find(Order, s => hunter.CanTrain(s));
+        _selected ??= HunterStat.AttackPower;
+
+        DrawList(b, hunter, build, mods, shape, hit, clicked);
+        DrawInspector(b, hunter, build, mods, shape, hit, clicked);
         DrawReset(b, hunter, hit, clicked);
-        DrawProgression(b, hunter, hit);
         if (DevStatsDebug) DrawDebug(b);
-
-        DrawHoverCard(b);
+        if (_tip is { } tip) _ui.HoverTip(b, tip, hit);
     }
 
-    private void DrawHunterCard(SpriteBatch b, Hunter hunter, Build build, Point hit)
+    /// <summary>Every trainable stat, grouped by what it changes, each row saying NOW and AFTER.</summary>
+    private void DrawList(SpriteBatch b, Hunter hunter, Build build, BuildMods mods, SkillShape shape,
+                          Point hit, bool clicked)
     {
-        _ui.PanelQuiet(b, HunterCard);
-        _ui.TextCenterBig(b, "HUNTER", HunterCard.Center.X, UiKit.TitleTop(HunterCard), Gold, UiTypography.PanelTitle);
+        _ui.PanelQuiet(b, ListPanel);
+        var left = UiKit.ContentLeft(ListPanel);
+        var right = UiKit.ContentRight(ListPanel);
 
-        var por = new Rectangle(HunterCard.X + 40, HunterCard.Y + 66, 118, 118);
-        if (_ui.Assets.GetFirst(Character?.PortraitKey ?? "hunter_portrait", "hunter_portrait") is { } p)
-            b.Draw(p, por, Color.White);
+        // THE HEADER LINE — what you have to spend, beside the prices, at the rung a number that
+        // matters is set in. Not gold: a wallet is neither earned, selected nor active.
+        var hy = ListPanel.Y + UiTypography.PanelTitleTop;
+        _ui.TextBig(b, $"{hunter.TotalTrainedRanks} RANKS TRAINED  ·  HUNTER LEVEL {hunter.HunterLevel}",
+                    left, hy + 6, Slate, UiTypography.Body);
+        _ui.TextRightBig(b, $"GLEAM  {hunter.Gleam:N0}", right, hy, Bone, UiTypography.Headline);
+        // LEVEL is a medal, not a stat — the honest answer stays, as a tip rather than a panel.
+        if (new Rectangle(left, hy, 460, UiTypography.Pitch(UiTypography.Body)).Contains(hit))
+            _tip = "HUNTER LEVEL IS ONE PER FIVE RANKS TRAINED. IT DOES NOT CHANGE THE FIGHT — IT IS A MEDAL, NOT A STAT.";
+        var ruleY = hy + UiTypography.Pitch(UiTypography.Body) + 8;
+        _ui.Fill(b, new Rectangle(left, ruleY, right - left, 1), Dim);
 
-        var tx = por.Right + 20;
-        // WHO, AND WHAT CLASS — the same line the HUNT HUD prints, so the two cards agree on who you
-        // are. The mastery title ("STRIKE ADEPT") used to stand here as the name; it is a title, not a
-        // name, and it moves down beside the tempo line.
-        var who = Character ?? CharacterRoster.Get(CharacterRoster.StarterId);
-        var cls = ItemClasses.NameOf(who.Class);
-        const string sep = " · ";
-        var column = HunterCard.Right - 24 - tx;
-        var px = UiTypography.Headline;
-        while (px > 14 && _ui.MeasureBig(who.ShortName, px) + _ui.MeasureBig(sep, px) + _ui.MeasureBig(cls, px) > column) px--;
-        var nx = tx;
-        var ny = HunterCard.Y + 74 + (UiTypography.Headline - px) / 2;
-        _ui.TextBig(b, who.ShortName, nx, ny, Bone, px);
-        nx += _ui.MeasureBig(who.ShortName, px);
-        _ui.TextBig(b, sep, nx, ny, Slate, px);
-        nx += _ui.MeasureBig(sep, px);
-        _ui.TextBig(b, cls, nx, ny, UiKit.ClassColor(who.Class), px);
-        _ui.TextBig(b, $"LEVEL {hunter.HunterLevel}", tx, HunterCard.Y + 106, Gold, UiTypography.Body);
-        // The card's LEVEL line answers "what does level mean" on hover — same card as PROGRESS's row.
-        if (new Rectangle(tx, HunterCard.Y + 102, 180, 30).Contains(hit))
-            SetHover(hit, "LEVEL", LevelCard(hunter));
-        var hpBar = new Rectangle(tx, HunterCard.Y + 138, HunterCard.Right - tx - 24, 26);
-        _ui.BarArt(b, hpBar, 1f, "health");
-        // THE SAME NUMBER THE FIGHT SHOWS. This bar printed the base HEALTH stat while the hunt's bar
-        // printed the pool after vows and gear, and the two disagreed on every save with a charm
-        // (playtest 2026-08-25: "health looks different on the stats screen, the left panel and the
-        // fight"). One formula, three screens.
-        var life = SoloBattle.ChampionHealth(build, hunter);
-        _ui.TextCenterBig(b, $"{life:N0} / {life:N0}", hpBar.Center.X, hpBar.Y + 4, Bone, UiTypography.Secondary);
-        _ui.TextBig(b, $"TEMPO {hunter.SquadSkillRate:0.00}x ACTION SPEED", tx, HunterCard.Y + 176, Slate, UiTypography.Secondary);
-        if (Mastery?.Affinity() is { } mf)
-            _ui.TextBig(b, $"{mf.ToString().ToUpperInvariant()} ADEPT", tx, HunterCard.Y + 198, Slate, UiTypography.Secondary);
-
-        _ui.Fill(b, new Rectangle(HunterCard.X + 24, HunterCard.Y + 224, HunterCard.Width - 48, 2), Dim);
-
-        if (_ui.Assets.Get("state_resonance_128") is { } gi) b.Draw(gi, new Rectangle(HunterCard.X + 32, HunterCard.Y + 258, 44, 44), Ember);
-        _ui.TextBig(b, "GEAR POWER", HunterCard.X + 88, HunterCard.Y + 256, Slate, UiTypography.Secondary);
-        _ui.TextBig(b, $"{hunter.PowerRating:N0}", HunterCard.X + 88, HunterCard.Y + 284, Bone, UiTypography.PrimaryValue);
-
-        if (_ui.Assets.Get("state_mastery_128") is { } mi) b.Draw(mi, new Rectangle(HunterCard.X + 32, HunterCard.Y + 350, 44, 44), Gold);
-        _ui.TextBig(b, "MASTERY POINTS", HunterCard.X + 88, HunterCard.Y + 348, Slate, UiTypography.Secondary);
-        _ui.TextBig(b, $"{MasteryPoints:N0}", HunterCard.X + 88, HunterCard.Y + 376, Bone, UiTypography.PrimaryValue);
-    }
-
-    /// <summary>Every trainable stat, one identical row each: icon, name, rank, live effect, TRAIN.</summary>
-    private void DrawTraining(SpriteBatch b, Hunter hunter, Build build, BuildMods mods, SkillShape shape,
-                              Point hit, bool clicked)
-    {
-        _ui.Panel(b, TrainPanel);
-        _ui.TextCenterBig(b, "TRAINING", TrainPanel.Center.X, UiKit.TitleTop(TrainPanel), Gold, UiTypography.PanelTitle);
-        _ui.TextCenterBig(b, "EVERY ROW SHOWS THE REAL NUMBER THE FIGHT USES · REST THE POINTER ON A ROW TO SEE ITS RULE",
-                          TrainPanel.Center.X, UiKit.CaptionTop(TrainPanel), Slate, UiTypography.Secondary);
-
-        // Icon keys are AssetLibrary aliases (stat_*) onto shipped art; the colour is the flat-diamond
-        // fallback if a file ever goes missing (the house rule: fail soft, never blank).
-        var rows = new (string Label, HunterStat Stat, string IconKey, Color Gem)[]
+        var y = RowsTop;
+        var first = true;
+        foreach (var (caption, stats) in Groups)
         {
-            ("MIGHT", HunterStat.AttackPower, "stat_might", new(0xD6, 0x48, 0x5C)),
-            ("RESONANCE", HunterStat.ResonanceAffinity, "stat_resonance", new(0x74, 0xC6, 0xE8)),
-            ("TEMPO", HunterStat.Engineering, "stat_tempo", new(0x48, 0xB8, 0x88)),
-            ("VITALITY", HunterStat.Vitality, "stat_vitality", new(0xC0, 0x6E, 0xE0)),
-            ("HEALTH", HunterStat.MaxHealth, "stat_health", new(0x6E, 0xC8, 0x7A)),
-            ("DEFENSE", HunterStat.Defense, "stat_defense", new(0x8A, 0x96, 0xA8)),
-            ("CRITICAL", HunterStat.CriticalChance, "stat_critical", new(0xF0, 0xA8, 0x30)),
-            ("FOCUS", HunterStat.Focus, "stat_focus", new(0xE8, 0xC8, 0x7A)),
-            ("GUILE", HunterStat.Guile, "stat_guile", UiInk.Accent),
-        };
+            if (!first) y += GroupGap;
+            first = false;
+            if (TightRows)
+            {
+                _ui.Fill(b, new Rectangle(left, y + 4, right - left, 1), Dim);
+                y += 10;
+            }
+            else
+            {
+                _ui.TextBig(b, caption, left, y, Slate, UiTypography.Secondary);
+                _ui.Fill(b, new Rectangle(left, y + UiTypography.Pitch(UiTypography.Secondary) - 2, right - left, 1), Dim);
+                y += CaptionH;
+            }
 
-        var y = UiKit.BodyTop(TrainPanel);
-        foreach (var (label, stat, iconKey, gem) in rows)
-        {
-            var row = new Rectangle(UiKit.ContentLeft(TrainPanel), y - 8, TrainPanel.Width - UiKit.PadX(TrainPanel) * 2, 54);
-            var hovered = row.Contains(hit);
-            _ui.Fill(b, row, hovered ? new Color(0x2A, 0x24, 0x38, 0xD0) : RowBg);
-
-            var iconBox = new Rectangle(TrainPanel.X + 52, y - 1, 40, 40);
-            if (!_ui.Icon(b, iconKey, iconBox, Color.White))
-                _ui.Diamond(b, new Rectangle(iconBox.X + 7, iconBox.Y + 7, 26, 26), gem);
-
-            _ui.TextBig(b, label, TrainPanel.X + 108, y + 8, Bone, UiTypography.Body);
-            _ui.TextBig(b, $"RANK {hunter.RankOf(stat)} OF {hunter.StatRankCap}", TrainPanel.X + 300, y + 10, Slate, UiTypography.Secondary);
-
-            var (effect, card) = Describe(stat, hunter, build, mods, shape);
-            _ui.TextBig(b, effect, TrainPanel.X + 470, y + 10, Sky, UiTypography.Secondary);
-
-            DrawTrain(b, hunter, stat, TrainPanel.Right - 216, y - 3, hit, clicked);
-
-            if (hovered) SetHover(hit, label, card);
-            y += 62;
+            foreach (var stat in stats)
+            {
+                DrawRow(b, hunter, build, mods, shape, stat, new Rectangle(left, y, right - left, RowH), hit, clicked);
+                y += RowPitch;
+            }
         }
     }
+
+    // ── ROW METRICS, DERIVED. ────────────────────────────────────────────────────────────────
+    //
+    // Written as fixed pixels the list overflowed its own panel at UI SCALE 125 %: nine rows plus
+    // four captions need 660 px and the page leaves 447, so the last two groups drew over the reset
+    // footer, and the value column ran under the TRAIN button because its offset was written for a
+    // 1246 px row and the row was 862. Height comes from the space, the columns are fractions of the
+    // row, and when even the tightest row does not fit, the captions give way to a hairline — the
+    // grouping survives as spacing, which is what it was doing anyway.
+    private const int GroupGap = 12, IconCol = 6, NameCol = 54, BtnH = 44;   // ui-size-ok: control sizes
+
+    private static int RowsTop =>
+        ListPanel.Y + UiTypography.PanelTitleTop + UiTypography.Pitch(UiTypography.Body) + 24;
+
+    private static int RowsAvail => UiKit.ContentBottom(ListPanel) - RowsTop;
+
+    private static int CaptionH => UiTypography.Pitch(UiTypography.Secondary) + 8;
+
+    /// <summary>True when the captions do not fit and the groups are marked by a rule instead.</summary>
+    private static bool TightRows =>
+        RowsAvail < 9 * 40 + Groups.Length * CaptionH + (Groups.Length - 1) * GroupGap;
+
+    private static int RowPitch => Math.Clamp(
+        (RowsAvail - (TightRows ? Groups.Length * 10 : Groups.Length * CaptionH)
+                   - (Groups.Length - 1) * GroupGap) / 9,
+        36, 56);
+
+    private static int RowH => RowPitch - 4;
+
+    private static int RowW => UiKit.ContentRight(ListPanel) - UiKit.ContentLeft(ListPanel);
+    private static int RankCol => RowW * 20 / 100;
+    private static int ValueCol => RowW * 39 / 100;
+    private static int RankBarW => RowW * 16 / 100;
+    private static int BtnW => Math.Min(224, RowW * 19 / 100);
+
+    private void DrawRow(SpriteBatch b, Hunter hunter, Build build, BuildMods mods, SkillShape shape,
+                         HunterStat stat, Rectangle row, Point hit, bool clicked)
+    {
+        var selected = _selected == stat;
+        var hot = row.Contains(hit);
+        // The 5 px gold left rule IS the selection mark — one accent, one meaning.
+        _ui.Plate(b, row, selected ? Gold : null);
+        if (hot && !selected)
+            _ui.Fill(b, new Rectangle(row.X + 1, row.Y + 1, row.Width - 2, row.Height - 2), Slate * 0.10f);
+        if (hot) _tip = IdentityOf(stat);
+
+        var (key, gem) = ArtFor(stat);
+        var art = Math.Min(36, row.Height - 8);
+        var iconBox = new Rectangle(row.X + IconCol, row.Y + (row.Height - art) / 2, art, art);
+        if (!_ui.Icon(b, key, iconBox, Color.White))
+            _ui.Diamond(b, new Rectangle(iconBox.X + 6, iconBox.Y + 6, art - 12, art - 12), gem);
+
+        var textY = row.Y + (row.Height - UiTypography.Body) / 2 - 2;
+        _ui.TextBig(b, WordFor(stat), row.X + NameCol, textY, Bone, UiTypography.Body);
+
+        // RANK AS A SHAPE as well as a number (§8): sixty ranks is a long way, and a bare "12 / 60"
+        // does not say how far.
+        _ui.TextBig(b, $"{hunter.RankOf(stat)} / {hunter.StatRankCap}", row.X + RankCol, row.Y + 4,
+                    Slate, UiTypography.Secondary);
+        var barY = row.Y + row.Height - 14;
+        _ui.Fill(b, new Rectangle(row.X + RankCol, barY, RankBarW, 6), Dim);
+        _ui.Fill(b, new Rectangle(row.X + RankCol, barY,
+                                  (int)(RankBarW * (hunter.RankOf(stat) / (float)hunter.StatRankCap)), 6), Bone);
+
+        // NOW → AFTER, at Headline, because this is the decision. When the two format the same — at
+        // the cap, or a gain too small to show — the arrow is dropped: a "96 → 96" promises a change
+        // the number does not make.
+        var (label, now, after) = Effect(stat, hunter, build, mods, shape);
+        var btn = new Rectangle(row.Right - BtnW, row.Y + (row.Height - BtnH) / 2, BtnW, BtnH);
+        var x = row.X + ValueCol;
+        var vy = row.Y + (row.Height - UiTypography.Headline) / 2 - 2;
+        // The value column ends where the button begins — it used to be written as an offset for one
+        // page width and ran straight under the button at any other.
+        var room = btn.X - 16 - x;
+        var head = $"{label} {now}";
+        if (after != now)
+        {
+            var full = $"{head}  →  {after}";
+            if (_ui.MeasureBig(full, UiTypography.Headline) <= room)
+            {
+                _ui.TextBig(b, head, x, vy, Bone, UiTypography.Headline);
+                x += _ui.MeasureBig(head, UiTypography.Headline);
+                _ui.TextBig(b, "  →  ", x, vy, Slate, UiTypography.Headline);
+                x += _ui.MeasureBig("  →  ", UiTypography.Headline);
+                _ui.TextBig(b, after, x, vy, Met, UiTypography.Headline);
+            }
+            else
+            {
+                // Too narrow for both: the AFTER is the decision, so the label gives way first.
+                _ui.TextBig(b, _ui.ShortenBig($"{now}  →  ", room - _ui.MeasureBig(after, UiTypography.Headline),
+                                              UiTypography.Headline),
+                            x, vy, Bone, UiTypography.Headline);
+                _ui.TextRightBig(b, after, btn.X - 16, vy, Met, UiTypography.Headline);
+            }
+        }
+        else
+            _ui.TextBig(b, _ui.ShortenBig(head, room, UiTypography.Headline), x, vy, Bone, UiTypography.Headline);
+
+        var maxed = hunter.RankOf(stat) >= hunter.StatRankCap;
+        var cost = hunter.NextRankCost(stat);
+        var afford = hunter.CanTrain(stat);
+        if (_ui.Button(b, btn, maxed ? "MAXED" : afford ? $"TRAIN  {cost:N0} GLEAM" : $"NEED  {cost:N0} GLEAM",
+                       hit, clicked, enabled: afford))
+            _trainRequest = stat;
+        // A click anywhere else in the row SELECTS it — click selects, the button commits (D5).
+        else if (UiKit.ClickedIn(row, hit, clicked) && !btn.Contains(hit))
+            _selected = stat;
+    }
+
+    // ── THE INSPECTOR — the house grammar (§6). It replaces a 640 px hover document that covered the
+    //    rows beside the one it was explaining, and could only be read by holding the pointer still. ──
+    private void DrawInspector(SpriteBatch b, Hunter hunter, Build build, BuildMods mods, SkillShape shape,
+                               Point hit, bool clicked)
+    {
+        _ui.PanelQuiet(b, InspectorPanel);
+        if (_selected is not { } stat) return;
+
+        var left = UiKit.ContentLeft(InspectorPanel);
+        var right = UiKit.ContentRight(InspectorPanel);
+        var width = right - left;
+        var cta = new Rectangle(left, InspectorPanel.Bottom - 92, width, 68);
+        var refusalY = cta.Y - 8 - 2 * UiTypography.Pitch(UiTypography.Secondary);
+        var lineH = UiTypography.Pitch(UiTypography.Body);
+        // THE STATE BLOCK IS ANCHORED and the prose stops above it. Flowed, it walked into the button
+        // at 125 %, where the panel is 554 px tall instead of 770 and the prose fills the difference.
+        var stateH = UiTypography.Pitch(UiTypography.Secondary) + 8 + lineH
+                     + UiTypography.Pitch(UiTypography.PrimaryValue) + lineH * 2;
+        var stateTop = refusalY - 8 - stateH;
+        var floor = stateTop - 12;
+        var y = InspectorPanel.Y + UiTypography.PanelTitleTop;
+
+        void Line(string s, Color ink, int px)
+        {
+            if (y + UiTypography.Pitch(px) > floor) return;
+            _ui.TextBig(b, _ui.ShortenBig(s, width, px), left, y, ink, px);
+            y += UiTypography.Pitch(px);
+        }
+
+        void Wrap(string s, Color ink, int px, int max)
+        {
+            foreach (var l in _ui.WrapBig(s, width, px).Take(max))
+            {
+                if (y + UiTypography.Pitch(px) > floor) return;
+                _ui.TextBig(b, l, left, y, ink, px);
+                y += UiTypography.Pitch(px);
+            }
+        }
+
+        void Rule()
+        {
+            if (y + 12 > floor) return;
+            _ui.Fill(b, new Rectangle(left, y + 4, width, 1), Dim);
+            y += 14;
+        }
+
+        void Pair(string k, string v, Color ink)
+        {
+            if (y + lineH > floor) return;
+            _ui.TextBig(b, k, left, y, Slate, UiTypography.Body);
+            _ui.TextRightBig(b, v, right, y, ink, UiTypography.Body);
+            y += lineH;
+        }
+
+        Line($"{GroupOf(stat)}  ·  TRAINED STAT", Slate, UiTypography.Secondary);
+        Line(WordFor(stat), Bone, UiTypography.Headline);
+        Wrap(IdentityOf(stat), Slate, UiTypography.Body, 2);
+
+        Rule();
+        Line("WHAT IT DOES", Slate, UiTypography.Secondary);
+        foreach (var para in Describe(stat, hunter, build, mods, shape))
+        {
+            Wrap(para, Bone, UiTypography.Body, 4);
+            y += 6;
+        }
+
+        // CURRENT STATE — anchored to the foot so the loudest number sits in the same place on every
+        // stat, which is what the eye compares between rows.
+        var (_, now, after) = Effect(stat, hunter, build, mods, shape);
+        var maxed = hunter.RankOf(stat) >= hunter.StatRankCap;
+        var cost = hunter.NextRankCost(stat);
+        var afford = hunter.CanTrain(stat);
+
+        // The closures stop at the prose's floor; the state block lives BELOW it, so the floor is
+        // lifted to the button before the block is drawn — otherwise Pair() politely refuses to draw
+        // the very rows the block exists for.
+        y = stateTop;
+        floor = cta.Y - 8;
+        _ui.Fill(b, new Rectangle(left, y, width, 1), Dim);
+        y += 12;
+        _ui.TextBig(b, "CURRENT STATE", left, y, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, $"RANK {hunter.RankOf(stat)} OF {hunter.StatRankCap}", right, y - 4, Bone,
+                         UiTypography.Headline);
+        y += UiTypography.Pitch(UiTypography.Secondary) + 4;
+        Pair("NOW", now, Bone);
+        if (!maxed)
+        {
+            _ui.TextBig(b, "AFTER ONE RANK", left, y + 6, Slate, UiTypography.Body);
+            _ui.TextRightBig(b, after, right, y, Met, UiTypography.PrimaryValue);
+            y += UiTypography.Pitch(UiTypography.PrimaryValue);
+            Line($"ONE RANK ADDS {hunter.GainPerRank(stat):0.##} {WordFor(stat)}", Slate, UiTypography.Body);
+        }
+
+        Pair("WHAT IT COSTS", maxed ? "—" : $"{cost:N0} GLEAM", maxed ? Slate : afford ? Bone : Ember);
+
+        if (!afford)
+            _ui.TextBig(b, _ui.ShortenBig(
+                            maxed ? $"THIS STAT IS FULLY TRAINED. RANK {hunter.StatRankCap} IS THE MOST IT CAN REACH."
+                                  : $"NOT ENOUGH GLEAM — {cost:N0} NEEDED, YOU HAVE {hunter.Gleam:N0}.",
+                            width, UiTypography.Secondary),
+                        left, refusalY, Ember, UiTypography.Secondary);
+
+        if (_ui.Button(b, cta, maxed ? "MAXED" : afford ? $"TRAIN  {cost:N0} GLEAM" : $"NEED  {cost:N0} GLEAM",
+                       hit, clicked, enabled: afford, afford ? ButtonStyle.Primary : ButtonStyle.Secondary))
+            _trainRequest = stat;
+    }
+
+    /// <summary>The row's label, its NOW and its AFTER — the AFTER through <see cref="Hunter.Preview{T}"/>.</summary>
+    private (string Label, string Now, string After) Effect(HunterStat stat, Hunter hunter, Build build,
+                                                            BuildMods mods, SkillShape shape)
+    {
+        switch (stat)
+        {
+            case HunterStat.AttackPower:
+            {
+                var now = SoloBattle.AutoAttackDamage * hunter.AutoDamageMultiplier * mods.Damage;
+                var aft = hunter.Preview(stat, h => SoloBattle.AutoAttackDamage * h.AutoDamageMultiplier * build.Resolve(h).Damage);
+                return ("BASIC HIT", $"{now:0}", $"{aft:0}");
+            }
+            case HunterStat.ResonanceAffinity:
+            {
+                var per = 100f * SkillCatalogue.ResonancePerPoint;
+                var now = per * hunter.ValueOf(stat);
+                var aft = hunter.Preview(stat, h => per * h.ValueOf(stat));
+                return ("SKILL POWER", $"+{now:0}%", $"+{aft:0}%");
+            }
+            case HunterStat.CriticalChance:
+            {
+                var now = SoloBattle.CritChance(hunter, shape);
+                var aft = hunter.Preview(stat, h => SoloBattle.CritChance(h, shape));
+                return ("CRITICAL HITS", $"{100f * now:0.0}%", $"{100f * aft:0.0}%");
+            }
+            case HunterStat.Focus:
+            {
+                var now = SoloBattle.CritMultiplier(hunter);
+                var aft = hunter.Preview(stat, h => SoloBattle.CritMultiplier(h));
+                return ("CRITICAL DAMAGE", $"{100f * now:0}%", $"{100f * aft:0}%");
+            }
+            case HunterStat.MaxHealth:
+            {
+                var now = SoloBattle.ChampionHealth(build, hunter);
+                var aft = hunter.Preview(stat, h => SoloBattle.ChampionHealth(build, h));
+                return ("LIFE", $"{now:N0}", $"{aft:N0}");
+            }
+            case HunterStat.Defense:
+            {
+                var k = SoloBattle.DefenseMitigationConstant;
+                var now = 100f - 100f * (k / (k + hunter.Defense));
+                var aft = hunter.Preview(stat, h => 100f - 100f * (k / (k + h.Defense)));
+                return ("DAMAGE TAKEN", $"-{now:0.0}%", $"-{aft:0.0}%");
+            }
+            case HunterStat.Vitality:
+            {
+                var now = Regen(hunter, SoloBattle.ChampionHealth(build, hunter));
+                var aft = hunter.Preview(stat, h => Regen(h, SoloBattle.ChampionHealth(build, h)));
+                return ("LIFE EACH SECOND", $"{now:N0}", $"{aft:N0}");
+            }
+            case HunterStat.Engineering:
+            {
+                var now = mods.SkillRate * shape.SkillRate;
+                var aft = hunter.Preview(stat, h => build.Resolve(h).SkillRate * shape.SkillRate);
+                return ("ACTION SPEED", $"{now:0.00}×", $"{aft:0.00}×");
+            }
+            default:
+            {
+                var now = 100f * (mods.Haul - 1f);
+                var aft = hunter.Preview(stat, h => 100f * (build.Resolve(h).Haul - 1f));
+                return ("LOOT", $"+{now:0}%", $"+{aft:0}%");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Life regained each second — the sim's own guard, verbatim.
+    /// </summary>
+    /// <remarks>
+    /// Zero stays zero: the sim heals nothing at 0 VITALITY, and a card that promised "1 life every
+    /// second" to a fresh hunter lied. Max(1, …) is the sim's own floor once the rate is above zero.
+    /// </remarks>
+    private static int Regen(Hunter h, float pool) =>
+        h.RegenPerSecond > 0f ? Math.Max(1, (int)MathF.Round(pool * h.RegenPerSecond)) : 0;
+
+    /// <summary>What a hovered row or the header is saying this frame — drawn last, over everything.</summary>
+    private string? _tip;
 
     /// <summary>
     /// One stat's live headline and its plain-words hover card, with the player's real numbers filled in.
@@ -295,8 +631,7 @@ public sealed class TrainingScreen
     /// each case name it. Nothing here re-derives a formula; the worst bug this screen can have is
     /// stating a number the simulation does not use.
     /// </remarks>
-    private (string Effect, string[] Card) Describe(HunterStat stat, Hunter hunter, Build build,
-                                                    BuildMods mods, SkillShape shape)
+    private string[] Describe(HunterStat stat, Hunter hunter, Build build, BuildMods mods, SkillShape shape)
     {
         switch (stat)
         {
@@ -307,12 +642,12 @@ public sealed class TrainingScreen
                 // keystones, tree) like every hit. Skills never read MIGHT (2026-08-26).
                 var v = hunter.ValueOf(stat);
                 var swing = SoloBattle.AutoAttackDamage * hunter.AutoDamageMultiplier * mods.Damage;
-                return ($"YOUR BASIC ATTACK HITS FOR {swing:0}", new[]
+                return new[]
                 {
                     "MIGHT is your basic attack — the plain swing between skills. Every point of MIGHT adds 1% to it. Skills do not read MIGHT; they read RESONANCE.",
                     $"One rank of training adds {hunter.GainPerRank(stat):0} MIGHT. You have {v:0} MIGHT, so your MIGHT alone gives the swing +{v:0}%.",
                     $"With your weapon, keystones and tree counted in, one basic attack hits for {swing:0}. This is the number the fight uses.",
-                });
+                };
             }
             case HunterStat.ResonanceAffinity:
             {
@@ -320,12 +655,12 @@ public sealed class TrainingScreen
                 // read by SoloBattle for every skill hit.
                 var v = hunter.ValueOf(stat);
                 var per = 100f * SkillCatalogue.ResonancePerPoint;
-                return ($"SKILLS START +{per * v:0}% STRONGER", new[]
+                return new[]
                 {
                     $"RESONANCE is your skills' damage. Every point adds {per:0.0}% to a skill's base power, before anything else multiplies it. The basic attack does not read it; it reads MIGHT.",
                     $"One rank of training adds {hunter.GainPerRank(stat):0} RESONANCE. You have {v:0} RESONANCE.",
                     $"Your skills now start +{per * v:0}% above their base power.",
-                });
+                };
             }
             case HunterStat.Engineering:
             {
@@ -334,12 +669,12 @@ public sealed class TrainingScreen
                 // by mods.SkillRate × shape.SkillRate (SoloBattle cooldowns and the beat, SoloBattle.BeatFor).
                 var rate = mods.SkillRate * shape.SkillRate;
                 var v = hunter.ValueOf(stat);
-                return ($"YOU ACT {rate:0.00}× AS FAST", new[]
+                return new[]
                 {
                     "TEMPO is your speed: the basic attack swings sooner, skills come back sooner, and every animation plays faster. Every point makes it 0.6% quicker.",
                     $"One rank of training adds {hunter.GainPerRank(stat):0} TEMPO. You have {v:0} TEMPO.",
                     $"With your gear and your build counted in, you act {rate:0.00}× as fast. This is the number the fight uses.",
-                });
+                };
             }
             case HunterStat.Vitality:
             {
@@ -354,61 +689,61 @@ public sealed class TrainingScreen
                 var perSecond = hunter.RegenPerSecond > 0f ? Math.Max(1, (int)MathF.Round(pool * hunter.RegenPerSecond)) : 0;
                 var pct = 100f * hunter.RegenPerSecond;
                 var perPoint = 100f * hunter.RegenPerVitalityPoint;
-                return (perSecond > 0 ? $"REGAINS {perSecond:N0} LIFE EVERY SECOND" : "NOTHING YET — TRAIN IT TO REGAIN LIFE", new[]
+                return new[]
                 {
                     "VITALITY heals your champion a little every second of a fight, even while it is being hit.",
                     $"One rank of training adds {hunter.GainPerRank(stat):0} VITALITY. You have {v:0} VITALITY, and every point regains {perPoint:0.00}% of your life each second — {pct:0.00}% in total.",
                     perSecond > 0
                         ? $"With {pool:N0} life, that is {perSecond:N0} life back every second. It cannot take you past full."
                         : "With no VITALITY trained, nothing comes back on its own.",
-                });
+                };
             }
             case HunterStat.MaxHealth:
             {
                 // SoloBattle.ChampionHealth: the pool a fight starts with = max(60, Hunter.MaxHealth)
                 // × the build's health multiplier (vows and passives) × mods.Health (vitality, gear).
                 var pool = SoloBattle.ChampionHealth(build, hunter);
-                return ($"{pool:N0} LIFE IN A FIGHT", new[]
+                return new[]
                 {
                     $"HEALTH is the base of your champion's life. One rank of training adds {hunter.GainPerRank(stat):0} health.",
                     $"With your charm counted in, your base health is {hunter.MaxHealth:N0}. After your gear, your promises and your passives, your champion starts a fight with {pool:N0} life — the same number the fight screen shows.",
                     "When it reaches zero, the descent ends.",
-                });
+                };
             }
             case HunterStat.Defense:
             {
                 // SoloBattle: taken × 100 ÷ (100 + DEFENSE) — a curve that never reaches 100%.
                 var k = SoloBattle.DefenseMitigationConstant;
                 var less = 100f - 100f * (k / (k + hunter.Defense));
-                return ($"{less:0.0}% LESS DAMAGE TAKEN", new[]
+                return new[]
                 {
                     "DEFENSE shrinks every hit you take. The rule: damage is multiplied by 100, then divided by 100 plus your DEFENSE.",
                     $"One rank of training adds {hunter.GainPerRank(stat):0} DEFENSE. With your gear you have {hunter.Defense} DEFENSE, so you take {less:0.0}% less damage.",
                     "Each new point helps a little less than the last, and it can never reach 100%.",
-                });
+                };
             }
             case HunterStat.CriticalChance:
             {
                 // SoloBattle.CritChance: trained + gear affixes + tree nodes, capped at 75%.
                 var p = SoloBattle.CritChance(hunter, shape);
-                return ($"{100f * p:0.0}% OF HITS ARE CRITICAL", new[]
+                return new[]
                 {
                     $"CRITICAL is your chance that a hit becomes a critical hit. One rank of training adds {hunter.GainPerRank(stat):0.00}% chance.",
                     $"With your gear and tree counted in, {100f * p:0.0}% of your hits are critical right now.",
                     $"The most it can ever be is {100f * SoloBattle.MaxCritChance:0}%. FOCUS decides how hard a critical hit lands.",
-                });
+                };
             }
             case HunterStat.Focus:
             {
                 // SoloBattle.CritMultiplier: 1.5 + 0.01 × FOCUS — FOCUS is the crit-DAMAGE stat.
                 var m = SoloBattle.CritMultiplier(hunter);
                 var v = hunter.ValueOf(stat);
-                return ($"CRITICAL HITS DEAL {100f * m:0}% DAMAGE", new[]
+                return new[]
                 {
                     $"FOCUS makes your critical hits land harder. A critical hit deals {100f * SoloBattle.CritBaseMultiplier:0}% damage, plus 1% for every point of FOCUS.",
                     $"One rank of training adds {hunter.GainPerRank(stat):0} FOCUS. You have {v:0} FOCUS.",
                     $"Your critical hits now deal {100f * m:0}% damage. CRITICAL decides how often they happen.",
-                });
+                };
             }
             default:   // HunterStat.Guile
             {
@@ -417,12 +752,12 @@ public sealed class TrainingScreen
                 var v = hunter.ValueOf(HunterStat.Guile);
                 var pct = 100f * (mods.Haul - 1f);
                 var sign = pct >= 0f ? "+" : "";
-                return ($"{sign}{pct:0}% LOOT FROM EVERY WAVE", new[]
+                return new[]
                 {
                     "GUILE raises what a fight pays. Every point adds 1% to the Gleam every cleared wave hands over.",
                     $"One rank of training adds {hunter.GainPerRank(HunterStat.Guile):0} GUILE. You have {v:0} GUILE.",
                     $"With gear and keystones counted in, your waves now pay {sign}{pct:0}% loot.",
-                });
+                };
             }
         }
     }
@@ -449,70 +784,71 @@ public sealed class TrainingScreen
     }
 
     /// <summary>
-    /// RESET ALL TRAINING — the respec bar. Refunds 100% of the Gleam the ranks cost; costs 1 Crystal.
+    /// RESET ALL TRAINING — the respec footer. Costs one Crystal, and returns NO Gleam.
     /// </summary>
     /// <remarks>
-    /// The no-refund warning is on the armed bar because it IS the decision, and it comes from
-    /// <see cref="Hunter.TrainingRefund"/> — the sum of the real geometric rank costs — never from a
-    /// tracked total. Two clicks like START A NEW GAME: first arms red, second confirms, any other
-    /// click disarms. When the Crystal is missing, or nothing is trained, the button says so plainly
-    /// and refuses.
+    /// The no-refund warning is the decision, so it is drawn at the rung a decision is drawn at. It
+    /// used to be the smallest type on the page, under a Body label — and the player reads the price
+    /// BEFORE arming, not after. Two clicks like START A NEW GAME: first arms red, second confirms,
+    /// any other click disarms, and the arm expires by itself.
+    ///
+    /// This bar is also the only place in the game a Crystal count is visible outside a pill's hover.
     /// </remarks>
     private void DrawReset(SpriteBatch b, Hunter hunter, Point hit, bool clicked)
     {
         if (_devArmPending) { _resetArmed = true; _resetArmedAtMs = Environment.TickCount64; _devArmPending = false; }
 
-        _ui.Fill(b, ResetBar, RowBg);
-        _ui.Fill(b, new Rectangle(ResetBar.X, ResetBar.Y, ResetBar.Width, 2), Dim);
+        _ui.Plate(b, ResetBar);
 
         var ranks = hunter.TotalTrainedRanks;
         var crystals = hunter.MaterialOf(Material.Crystal);
         var price = hunter.TrainingResetCrystalCost;
 
-        // THE BUTTON IS BUTTON-SIZED. It was 960 px wide, and the ornate button art is a whole-image
-        // stretch (UiKit.Button — deliberately, for short buttons), so its corner scrollwork smeared into
-        // a long streak (playtest 2026-08-25: "the reset button frame is stretched, low quality"). The
-        // explanation now lives in plain text on the bar's left, and the button says only its verb.
-        var button = new Rectangle(UiKit.ContentRight(ResetBar) - 420, ResetBar.Y + 25, 420, 56);
-        var tx = UiKit.ContentLeft(ResetBar);
+        // THE BUTTON IS BUTTON-SIZED. The ornate button art is a whole-image stretch, so a 960 px one
+        // smeared its corner scrollwork into a streak; the explanation lives in text beside it.
+        var button = new Rectangle(ResetBar.Right - 24 - 360, ResetBar.Y + 18, 360, 48);
+        var tx = ResetBar.X + 24;
+        var textW = button.X - 24 - tx;
+        var lineY = ResetBar.Y + 12 + UiTypography.Pitch(UiTypography.Body);
 
         if (_resetArmed && Environment.TickCount64 - _resetArmedAtMs > (long)(ArmSeconds * 1000))
-            _resetArmed = false;   // the settings pattern this mirrors auto-disarms; so does this now
+            _resetArmed = false;   // the settings pattern this mirrors auto-disarms; so does this
         if (_resetArmed)
         {
-            _ui.TextBig(b, "SURE? ALL RANKS GO TO ZERO.", tx, ResetBar.Y + 24, Color.White, UiTypography.Body);
-            _ui.TextBig(b, "THE GLEAM YOU SPENT DOES NOT COME BACK. CLICK THE RED BUTTON AGAIN TO DO IT.", tx, ResetBar.Y + 54, Ember, UiTypography.Secondary);
-            // The settings panel's armed pattern, exactly: red ground, warning stripe, white text.
+            _ui.TextBig(b, $"SURE? ALL {ranks} RANKS GO BACK TO ZERO.", tx, ResetBar.Y + 12,
+                        Color.White, UiTypography.Body);
+            _ui.TextBig(b, _ui.ShortenBig("THE GLEAM YOU SPENT DOES NOT COME BACK. CLICK THE RED BUTTON AGAIN TO DO IT.",
+                                          textW, UiTypography.Body),
+                        tx, lineY, Ember, UiTypography.Body);
             _ui.Fill(b, button, ArmedRed);
             _ui.Fill(b, new Rectangle(button.X, button.Y, button.Width, 3), Ember);
-            _ui.TextCenterBig(b, "YES, RESET — NO GLEAM BACK", button.Center.X, button.Center.Y - 10, Color.White, UiTypography.Body, TextFace.Strong);
+            _ui.TextCenterBig(b, "YES, RESET — NO GLEAM BACK", button.Center.X, button.Center.Y - 10,
+                              Color.White, UiTypography.Body, TextFace.Strong);
             if (UiKit.ClickedIn(button, hit, clicked))
             {
                 _resetArmed = false;
                 _resetRequest = true;
             }
-            else if (clicked)
-            {
-                _resetArmed = false;   // any click that is not the confirmation disarms
-            }
+            else if (clicked) _resetArmed = false;   // any click that is not the confirmation disarms
             return;
         }
 
-        _ui.TextBig(b, "RESET ALL TRAINING", tx, ResetBar.Y + 24, Bone, UiTypography.Body);
-        // The three honest states: nothing to reset, missing the Crystal, or ready.
+        _ui.TextBig(b, "RESET ALL TRAINING", tx, ResetBar.Y + 12, Bone, UiTypography.Body);
+        var cost = $"{ranks} RANKS GO BACK TO ZERO. IT COSTS {price:N0} CRYSTAL — YOU HAVE {crystals:N0}. THE GLEAM YOU SPENT DOES NOT COME BACK.";
         if (ranks <= 0)
         {
-            _ui.TextBig(b, "NOTHING TO RESET — NO TRAINING BOUGHT YET.", tx, ResetBar.Y + 54, Slate, UiTypography.Secondary);
+            _ui.TextBig(b, "NOTHING TO RESET — YOU HAVE NOT TRAINED ANYTHING YET.", tx, lineY,
+                        Slate, UiTypography.Body);
             _ui.Button(b, button, "RESET", hit, clicked, enabled: false);
         }
         else if (crystals < price)
         {
-            _ui.TextBig(b, $"COSTS {price:N0} CRYSTAL — YOU HAVE {crystals:N0}. THE GLEAM YOU SPENT DOES NOT COME BACK.", tx, ResetBar.Y + 54, Slate, UiTypography.Secondary);
+            _ui.TextBig(b, _ui.ShortenBig(cost, textW, UiTypography.Body), tx, lineY, Bone, UiTypography.Body);
             _ui.Button(b, button, $"NEEDS {price:N0} CRYSTAL", hit, clicked, enabled: false);
         }
         else
         {
-            _ui.TextBig(b, $"COSTS {price:N0} CRYSTAL — YOU HAVE {crystals:N0}. THE GLEAM YOU SPENT DOES NOT COME BACK.", tx, ResetBar.Y + 54, Slate, UiTypography.Secondary);
+            _ui.TextBig(b, _ui.ShortenBig(cost, textW, UiTypography.Body), tx, lineY, Bone, UiTypography.Body);
             if (_ui.Button(b, button, $"RESET — {price:N0} CRYSTAL", hit, clicked))
             {
                 _resetArmed = true;
@@ -521,117 +857,26 @@ public sealed class TrainingScreen
         }
     }
 
-    private void DrawProgression(SpriteBatch b, Hunter hunter, Point hit)
-    {
-        _ui.PanelQuiet(b, ProgressPanel);
-        // The title, the margins and the first row all come from UiKit's frame-aware helpers — this
-        // panel is nearly square, so it wears the SQUARE frame, whose crest and side rails reach about
-        // twice as far in as the other two. That fact used to live here as three hand-measured numbers
-        // (+40, inset 60, first row +84); it lives in UiKit.FrameDrop now, so every square panel in the
-        // game gets it instead of only the one whose author noticed.
-        _ui.TextCenterBig(b, "PROGRESS", ProgressPanel.Center.X, UiKit.TitleTop(ProgressPanel), Gold, UiTypography.PanelTitle);
-        // Only the counters the game actually tracks — monsters/bosses/play-time/deaths aren't recorded.
-        var rows = new (string, string)[]
-        {
-            ("HUNTER LEVEL", $"{hunter.HunterLevel}"),
-            ("HIGHEST WAVE", $"{HighestWave}"),
-            ("CHESTS OPENED", $"{ChestsOpened:N0}"),
-            ("MASTERY POINTS", $"{MasteryPoints:N0}"),
-        };
-        // Rows inset 40 sat on the ornament and the last row ran under the bottom rail (playtest
-        // 2026-08-25: "the text in the progress table is not aligned").
-        var inset = UiKit.PadX(ProgressPanel);
-        var y = UiKit.BodyTopBare(ProgressPanel);
-        foreach (var (label, value) in rows)
-        {
-            var row = new Rectangle(ProgressPanel.X + inset, y - 6, ProgressPanel.Width - inset * 2, 38);
-            if (label == "HUNTER LEVEL" && row.Contains(hit))
-                SetHover(hit, "LEVEL", LevelCard(hunter));
-            _ui.TextBig(b, label, row.X, y, Slate, UiTypography.Secondary);
-            _ui.TextRightBig(b, value, row.Right, y, Bone, UiTypography.Secondary);
-            _ui.Fill(b, new Rectangle(row.X, y + 30, row.Width, 2), Dim * 0.5f);
-            y += 40;
-        }
-    }
-
-    /// <summary>
-    /// The honest answer to "what does the character level mean?" (playtest item 8).
-    /// </summary>
-    /// <remarks>
-    /// Investigated before writing: <c>Hunter.HunterLevel</c> is <c>1 + total ranks ÷ 5</c> and its own
-    /// doc comment says "Cosmetic only — never a gate". Every consumer is a display (this screen, the
-    /// character screen, the fight HUD, the build summary, the boot log). It feeds NO formula, so this
-    /// card says exactly that rather than inventing a mechanic the game does not have.
-    /// </remarks>
-    private static string[] LevelCard(Hunter hunter) => new[]
-    {
-        "LEVEL shows how far your training has come. Every five ranks of training make one level.",
-        $"You have level {hunter.HunterLevel}. It does not change the fight — it is a medal, not a stat.",
-        "If you reset your training, your level goes back with it.",
-    };
-
-    private void SetHover(Point at, string title, string[] body)
-    {
-        _hoverTitle = title;
-        _hoverBody = body;
-        _hoverAt = at;
-    }
-
-    /// <summary>
-    /// The plain-words card for the hovered row: what the stat does, the exact rule, the live numbers.
-    /// </summary>
-    /// <remarks>
-    /// Drawn like <see cref="ItemTooltip"/>: its own dark ground rather than a panel frame, flipped to
-    /// the pointer's other side near the right edge, and clamped to the canvas so it can never run off.
-    /// </remarks>
-    private void DrawHoverCard(SpriteBatch b)
-    {
-        if (_hoverTitle is null || _hoverBody is null) return;
-
-        const int w = 640;
-        var lineH = UiTypography.Pitch(UiTypography.Secondary);
-        var wrapped = new System.Collections.Generic.List<string>();
-        var breaks = new System.Collections.Generic.List<int>();   // index of each paragraph's last line
-        foreach (var para in _hoverBody)
-        {
-            foreach (var line in _ui.WrapBig(para, w - 48, UiTypography.Secondary)) wrapped.Add(line);
-            breaks.Add(wrapped.Count - 1);
-        }
-        var h = 62 + wrapped.Count * lineH + (breaks.Count - 1) * 10 + 20;
-
-        // FLIP, don't clamp: a card pinned to the edge sits on the row it is explaining.
-        var x = _hoverAt.X + 28 + w <= 1900 ? _hoverAt.X + 28 : _hoverAt.X - w - 28;
-        var y = Math.Clamp(_hoverAt.Y - 24, 150, Math.Max(150, 1060 - h));
-        var card = new Rectangle(x, y, w, h);
-
-        _ui.Fill(b, new Rectangle(card.X + 4, card.Y + 4, card.Width, card.Height), new Color(0, 0, 0, 140));
-        _ui.Fill(b, card, new Color(0x0E, 0x0C, 0x14, 0xF2));
-        _ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, 3), Gold);
-        _ui.Fill(b, new Rectangle(card.X, card.Bottom - 3, card.Width, 3), Gold * 0.4f);
-        _ui.Fill(b, new Rectangle(card.X, card.Y, 3, card.Height), Gold * 0.4f);
-        _ui.Fill(b, new Rectangle(card.Right - 3, card.Y, 3, card.Height), Gold * 0.4f);
-
-        _ui.TextBig(b, _hoverTitle, card.X + 24, card.Y + 18, Gold, UiTypography.Headline);
-
-        var ty = card.Y + 56;
-        for (var i = 0; i < wrapped.Count; i++)
-        {
-            _ui.TextBig(b, wrapped[i], card.X + 24, ty, Bone, UiTypography.Secondary);
-            ty += lineH;
-            if (breaks.Contains(i)) ty += 10;
-        }
-    }
+    // DrawProgression, LevelCard, SetHover and DrawHoverCard are gone with UX V2 P2.3.
+    //
+    // The PROGRESS panel showed HIGHEST WAVE, CHESTS OPENED, MASTERY POINTS and HUNTER LEVEL — the
+    // Map's number, the Vault's, the Mastery tree's, and one this screen already printed elsewhere.
+    // None of the four moves when you train, which is the only question this screen exists to answer.
+    // LEVEL's honest "it is a medal, not a stat" answer survives as the header's hover tip.
+    //
+    // The 640 px hover document is replaced by the inspector: it covered the rows beside the one it
+    // explained, and it could only be read by holding the pointer perfectly still.
 
     private void DrawDebug(SpriteBatch b)
     {
-        foreach (var r in new[] { HunterCard, TrainPanel, ResetBar, ProgressPanel })
+        foreach (var r in new[] { ListPanel, InspectorPanel, ResetBar })
         {
             _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, 2), Ember);
             _ui.Fill(b, new Rectangle(r.X, r.Bottom - 2, r.Width, 2), Ember);
             _ui.Fill(b, new Rectangle(r.X, r.Y, 2, r.Height), Ember);
             _ui.Fill(b, new Rectangle(r.Right - 2, r.Y, 2, r.Height), Ember);
         }
-        _ui.TextBig(b, "nav STATS  merged training + respec", 60, 112, Gold, UiTypography.Secondary);
+        _ui.TextBig(b, "nav TRAINING  grouped list + inspector + respec", 60, 112, Gold, UiTypography.Secondary);
     }
 
 }

@@ -1524,7 +1524,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // screen is gone, so they had nothing to pose.
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "mapdeep" or "maplocked" or "help" or "expedition" or "fight" or "welcome" or "boss" or "bossdebug"
-                or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
+                or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "trainingpoor" or "trainingreset" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
                 or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "traitlit" or "traitterm" or "traitterminal"
                 or "roster" or "rosterlocked" or "rosterswitch" or "weave" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
                 or "vaultempty" or "vaultemptyfilter" or "vaultsell" or "vaultmany" or "forgeempty"
@@ -1745,7 +1745,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     if (sm == "itemmenu") _gear.DevOpenItemMenu();
                 }
 
-                if (sm == "stats")
+                if (sm is "stats" or "trainingpoor" or "trainingreset")
                 {
                     _showTraining = true;
                     _training.Loadout = _loadout;
@@ -1753,12 +1753,29 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _training.Tree = _dust;
                     _training.Character = _characters.Active;
                     _training.SkillLevels = _skillProgress;
+                    // RH_SHOT_SELECT poses the inspector against a chosen row.
+                    if (Environment.GetEnvironmentVariable("RH_SHOT_SELECT") is { Length: > 0 } pick)
+                        _training.DevSelect(pick);
+
                     _hunter.AddGleam(20000);
                     for (var i = 0; i < 12; i++) _hunter.Train(HunterStat.AttackPower);
                     for (var i = 0; i < 6; i++) _hunter.Train(HunterStat.CriticalChance);
                     for (var i = 0; i < 5; i++) _hunter.Train(HunterStat.Defense);
                     for (var i = 0; i < 8; i++) _hunter.Train(HunterStat.Vitality);
                     _deepestEver = 23; _mastery.SetEarned(77400);   // fixture career values (Stats §13)
+
+                    // AFTER the common seeding, or the purse it leaves would undo the state posed here.
+                    // trainingpoor: a MAXED row, a row you cannot afford, and one still untrained.
+                    if (sm == "trainingpoor")
+                    {
+                        _hunter.AddGleam(400_000);
+                        for (var i = 0; i < 60; i++) _hunter.Train(HunterStat.Guile);
+                        for (var i = 0; i < 20; i++) _hunter.Train(HunterStat.AttackPower);
+                        _hunter.SpendGleam(_hunter.Gleam - 120);
+                    }
+                    // trainingreset: one Crystal, so the ENABLED reset button is in a capture at all —
+                    // only the dev-armed state had ever been photographed.
+                    if (sm == "trainingreset") _hunter.AddMaterial(Material.Crystal, 1);
                 }
 
                 if (sm is "fight" or "welcome" or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "runlog")
@@ -2928,9 +2945,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _training.Mastery = _mastery;
             _training.Tree = _dust;
             _training.Character = _characters.Active;
-            _training.HighestWave = _deepestEver;          // real career counters (Stats spec §9.2)
-            _training.ChestsOpened = _forge.ChestsOpened;
-            _training.MasteryPoints = _mastery.Earned;
+            // (HighestWave / ChestsOpened / MasteryPoints are gone with the PROGRESS panel — they
+            //  are the Map's, the Vault's and the Mastery tree's numbers, and none of them moves
+            //  when you train.)
+            _training.SkillLevels = _skillProgress;   // the live screen resolved a build without them
             _training.Update(ScreenKeys, _prevKeys, CanvasMouse, MouseClicked, MouseWheel, _hunter);
             if (_training.Dirty) { _training.ClearDirty(); Save(); }
             Latch(gameTime);
@@ -3349,7 +3367,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             if (!_hunter.CanTrain(s)) continue;
             var c = _hunter.NextRankCost(s);
-            if (stat is null || c < cost) { stat = s.ToString(); cost = c; }
+            // THE PLAYER'S WORD, not the enum's: this line rendered "YOU CAN TRAIN ATTACKPOWER
+            // FOR 25 GLEAM" — and RESONANCEAFFINITY, and CRITICALCHANCE — because the words lived
+            // inside the training screen where the host could not reach them.
+            if (stat is null || c < cost) { stat = TrainingScreen.WordFor(s); cost = c; }
         }
         string? upgrade = null;
         foreach (var f in Facilities.All)
@@ -5297,7 +5318,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             (new Rectangle(l1, 16, e1 - l1, 60), allMats, -1),
             (new Rectangle(l2, 16, e2 - l2, 60), "MEMORY DUST — STARTS A DESCENT FROM A WAVE YOU HAVE CLEARED (MAP) · BUILDS THE WARREN", dustVal),
-            (new Rectangle(leftEdge, 16, e3 - leftEdge, 60), "GLEAM — BUYS UPGRADES ON STATS (V)", gleamVal),
+            (new Rectangle(leftEdge, 16, e3 - leftEdge, 60), "GLEAM — PAYS FOR TRAINING (V)", gleamVal),
         };
         foreach (var (rr, name, v) in pillRows)
         {
@@ -5473,7 +5494,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // the two this list did not have. B said "WEAVE YOUR BUILD", which is the OTHER screen.
             ("H", "HUNT — THE FIGHT"),
             ("C", "GEAR — WHAT YOU WEAR"),
-            ("V", "STATS — SPEND GLEAM"),
+            ("V", "TRAINING — SPEND GLEAM TO GET STRONGER"),
             ("B", "BUILD — CHOOSE YOUR SKILLS"),
             ("E", "MASTERY — HOW YOUR SKILLS WORK"),
             ("K", "VAULT — CHESTS YOU HAVE NOT OPENED"),
@@ -5513,7 +5534,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             "WHEN IT FALLS, IT GETS UP AND GOES AGAIN. YOU LOSE NOTHING.",
             176, 664, 900, Bone);
         WrapText(
-            $"SPEND GLEAM ON STATS (V) TO GROW STRONGER. REACH WAVE {ConquerWaveDepth} TO CONQUER A REGION AND UNLOCK THE NEXT.",
+            $"SPEND GLEAM ON TRAINING (V) TO GROW STRONGER. REACH WAVE {ConquerWaveDepth} TO CONQUER A REGION AND UNLOCK THE NEXT.",
             176, 788, 900, Bone * 0.7f);
     }
 
@@ -5564,7 +5585,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // shipped set, which is why every scene audit reported the rail as half-blank; theirs are
         // generated (icon_nav_*).
         ("HUNT", 'H', "nav_hunt_128"), ("GEAR", 'C', "nav_inventory_128"),
-        ("STATS", 'V', "state_resonance_128"), ("BUILD", 'B', "state_mastery_128"),
+        ("TRAINING", 'V', "state_resonance_128"), ("BUILD", 'B', "state_mastery_128"),
         // THE MASTERY TREE GETS ITS OWN DOOR. It was reachable only through a button labelled EDIT BUILD
         // on the Build overview — neither what it edits nor what anyone would go looking for — and it is
         // the second-largest system in the game. nav_build is the only unused nav emblem with a real

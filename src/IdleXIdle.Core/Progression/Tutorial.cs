@@ -263,8 +263,8 @@ public static class Tutorial
             + "You are here to decide WHAT it is, not to swing for it.",
 
         TutorialStep.SpendGleam =>
-            "Every wave pays Gleam. Press V for STATS and train — that is the champion's own power, "
-            + "and it never resets.",
+            "Every wave pays Gleam. Press V for TRAINING and spend it — that is the hunter's own "
+            + "power, and it never resets.",
 
         TutorialStep.MeetABoss =>
             "Bosses hit far harder, and a boss is the only thing in the game that drops a chest. "

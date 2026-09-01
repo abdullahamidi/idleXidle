@@ -202,7 +202,7 @@ public static class Unlocks
     public static string Headline(Activity activity) => activity switch
     {
         Activity.Hunt => "THE HUNT",
-        Activity.Training => "STATS — TRAIN YOUR CHAMPION",
+        Activity.Training => "TRAINING — MAKE YOUR HUNTER STRONGER",
         Activity.Gear => "GEAR — WHAT YOU WEAR",
         Activity.Vault => "VAULT — CHESTS YOU HAVE NOT OPENED",
         Activity.Forge => "THE FORGE — WHERE ITEMS ARE MADE",

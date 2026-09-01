@@ -11,7 +11,7 @@
 # Modes: fight boss expedition forge build character stats warren map dust world
 #        region2 region3 conquered lootforge reforge vow hybrid rig vfx help
 #        buildtree buildzoom itemmenu runlog fightgear vaultfilter traitlit intro typespec welcome
-#        vaultempty vaultemptyfilter vaultsell vaultmany forgeempty
+#        vaultempty vaultemptyfilter vaultsell vaultmany forgeempty trainingpoor trainingreset
 # `forge` takes RH_SHOT_ITEM=<instanceId> (dev_hero | dev_rung | dev_cap | dev_low) and
 # RH_SHOT_FILTER=all|gear|gems, so every item state is a dial rather than a new mode.
 #
@@ -68,7 +68,7 @@ ZOOM="${3:-}"
 # `tour`'s third argument is a screen, not a dial — it must not reach RH_SHOT_ZOOM /
 # RH_SHOT_T, which the screen's own fixture may read as a zoom or a pose time.
 TOUR_TAB=""; TOUR_STEP=""
-if [ "$MODE" = "tour" ]; then TOUR_TAB="${3:-Stats}"; TOUR_STEP="${4:-1}"; ZOOM=""; fi
+if [ "$MODE" = "tour" ]; then TOUR_TAB="${3:-Training}"; TOUR_STEP="${4:-1}"; ZOOM=""; fi
 . "$(dirname "${BASH_SOURCE[0]}")/../shellenv.sh" || exit 1
 cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1
 WINDIR="$(winpath "$PWD")"

@@ -32,11 +32,11 @@ public enum TourTarget
     /// <summary>Where the fight's lesson card appears — the toast slot under the header stack.</summary>
     LessonSlot,
 
-    // ── STATS ──
-    /// <summary>The training rows: one per stat, with its TRAIN button and the real fight number.</summary>
+    // ── TRAINING ──
+    /// <summary>The training rows: one per stat, grouped, each with what it is now and after a rank.</summary>
     TrainingRows,
-    /// <summary>The hunter card: level, gear power, mastery points.</summary>
-    HunterCard,
+    /// <summary>The right-hand column that explains the selected stat in full.</summary>
+    TrainingDetail,
     /// <summary>The RESET ALL TRAINING bar under the rows.</summary>
     ResetBar,
 
@@ -245,13 +245,13 @@ public static class Onboarding
 
         Activity.Training => new[]
         {
-            new TourStep(TourTarget.TrainingRows, "TRAIN YOUR CHAMPION",
-                "Every row is one thing your champion can train. Press TRAIN to spend Gleam on it. "
-                + "The number on the row is the real number the fight uses."),
+            new TourStep(TourTarget.TrainingRows, "WHAT TO TRAIN",
+                "Every row is one thing your hunter can train, grouped by what it changes. The two "
+                + "numbers are what it is now and what it becomes if you buy one rank."),
 
-            new TourStep(TourTarget.HunterCard, "YOUR CHAMPION",
-                "Your champion's level, life, gear power and mastery points. Gear power comes from "
-                + "what you wear on the GEAR screen. Mastery points go to the MASTERY tree."),
+            new TourStep(TourTarget.TrainingDetail, "THE FULL STORY",
+                "Click a row and this column explains it: what the stat does, what one rank adds, "
+                + "and what the next rank costs."),
 
             new TourStep(TourTarget.ResetBar, "STARTING OVER",
                 "This bar takes every trained rank back, so you can train differently. "
