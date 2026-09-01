@@ -386,17 +386,17 @@ public static class Onboarding
 
         Activity.Roster => new[]
         {
-            new TourStep(TourTarget.ChampionCards, "THE CHAMPIONS",
-                "One card per champion, one column per gear class, the first of the class above the "
-                + "second. A card shows its road and what unlocks it. Click one to read it."),
+            new TourStep(TourTarget.ChampionCards, "THE HUNTERS",
+                "One card per hunter, one column per gear class. A card shows its innate power and "
+                + "what unlocks it. Click one to read it here."),
 
             new TourStep(TourTarget.ChampionDetail, "WHO THEY ARE",
-                "The champion's always-on power, what it is best at, and its gear class. "
-                + "Two champions share each class. Gear of another class cannot be worn."),
+                "The hunter's starting skill, its always-on innate power, its road and its gear "
+                + "class. Gear of another class cannot be worn."),
 
-            new TourStep(TourTarget.BecomeThem, "BECOME THEM",
-                "Press BECOME THEM to play as this champion. Nothing is lost: gear it cannot wear "
-                + "goes back to the bag, and your build and progress stay."),
+            new TourStep(TourTarget.BecomeThem, "SET ACTIVE",
+                "Press SET ACTIVE to play as this hunter. Nothing resets. Gear this hunter cannot "
+                + "wear goes back to your bag."),
         },
 
         // A cast that is not a declared Activity is a programming error, and an empty tour would reach

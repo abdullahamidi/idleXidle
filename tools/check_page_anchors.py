@@ -61,6 +61,7 @@ CONVERTED = [
     "GearScreen.cs",      # GEAR     — P1.7
     "VaultScreen.cs",     # VAULT    — P1.8
     "ForgeScreen.cs",     # FORGE    — P1.9
+    "RosterScreen.cs",    # ROSTER   — P2.2
 ]
 
 # The canvas's own numbers. 540 is deliberately absent: it collides with too many honest sizes.

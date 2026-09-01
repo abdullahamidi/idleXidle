@@ -1526,7 +1526,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 or "region2" or "region3" or "conquered" or "mapdeep" or "maplocked" or "help" or "expedition" or "fight" or "welcome" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
                 or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "traitlit" or "traitterm" or "traitterminal"
-                or "roster" or "rosterlocked" or "weave" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
+                or "roster" or "rosterlocked" or "rosterswitch" or "weave" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
                 or "vaultempty" or "vaultemptyfilter" or "vaultsell" or "vaultmany" or "forgeempty"
                 or "gemtour" or "intro" or "typespec")
             {
@@ -2319,8 +2319,31 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         _world.RegionFarm("cinderworks").RestoreBestDepth(23);
                         _forge.RestoreChestsOpened(12);
                         _runsWithVowKept = 1;
+                        // The three counters no fixture posed, so the capture shows live progress on
+                        // every gate rather than three zeroes: bosses felled, waves cleared with a
+                        // VOLLEY skill, and a region held part-way to conquest (11 of 20 — under the
+                        // threshold, so THE CHORUS is still locked and still counting).
+                        _bossesFelled = 17;
+                        for (var u = 0; u < 88; u++) _skillProgress.RecordWave("volley_spray");
+                        _world.RegionFarm("umbral_reach").RestoreBestDepth(11);
                         _roster.DevSelect("quiver");
                     }
+                }
+
+                // rosterswitch: the frame after a switch — the toast, the moved gold edge and the
+                // inspector's new state line, which is the feedback §86 asks for and which no fixture
+                // could photograph.
+                if (sm == "rosterswitch")
+                {
+                    _showRoster = true;
+                    _world.RestoreConquered(Regions.All.Select(r => r.Id));
+                    foreach (var c in CharacterRoster.All)
+                        if (c.Unlock.QuestId is { } q) _characters.CompleteQuest(q);
+                    _characters.Refresh(_world.ConqueredIds);
+                    _characters.Select("seeker");
+                    _roster.DevSelect("seeker");
+                    PostNotice("YOU ARE THE SEEKER",
+                               "SWITCHING IS FREE — YOUR SKILLS, TRAITS, GEAR AND THE WARREN STAY");
                 }
 
                 if (sm is "dust" or "traitlit" or "traitterm" or "traitterminal")
@@ -2961,7 +2984,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_showRoster)
         {
             _roster.Progress = QuestSnapshot();
+            _roster.Mastery = _mastery;   // so the inspector can say a starting skill is ALREADY KNOWN
+            _roster.Hunter = _hunter;     // so it can count the worn pieces a switch would shed
             _roster.Update(CanvasMouse, MouseClicked, _characters);
+            // THE SWITCH ANNOUNCES ITSELF on the channel every other arrival uses, instead of a stray
+            // line printed inside the panel. Polled in Update, not Draw, so nothing fires from a draw
+            // pass; the one-frame delay is invisible.
+            if (_roster.TakeNotice() is { } who)
+                PostNotice($"YOU ARE {who.ToUpperInvariant()}",
+                           "SWITCHING IS FREE — YOUR SKILLS, TRAITS, GEAR AND THE WARREN STAY");
             Latch(gameTime);
             return;
         }
@@ -3839,7 +3870,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // A toast, and a NEW mark on the ROSTER tile that stays until the roster is opened. The
             // champion's power and the "nothing resets" reassurance live on the roster card itself,
             // which is where a player who follows the mark will read them.
-            PostNotice($"{got.Name.ToUpperInvariant()} JOINS YOU", "SWITCH CHAMPION ON THE ROSTER SCREEN");
+            PostNotice($"{got.Name.ToUpperInvariant()} JOINS YOU", "SWITCH HUNTER ON THE ROSTER SCREEN");
             _rosterNews = true;
             _rosterNewName = got.Name;
         }
@@ -4400,7 +4431,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_showForge) _forge.Draw(_batch, _hunter, CanvasMouse, MouseClicked, MouseRightClicked);
         else if (_showWorld) DrawWorld();
         else if (_showTraits) _traits.Draw(_batch, _dust, CanvasMouse, MouseClicked);
-        else if (_showRoster) { _roster.Progress = QuestSnapshot(); _roster.Draw(_batch, _characters, CanvasMouse, MouseClicked); }
+        else if (_showRoster)
+        {
+            _roster.Progress = QuestSnapshot();
+            _roster.Mastery = _mastery;
+            _roster.Hunter = _hunter;
+            _roster.Draw(_batch, _characters, CanvasMouse, MouseClicked);
+        }
         else if (_showVault) _vault.Draw(_batch, _forge.UnopenedChests, CanvasMouse, MouseClicked);
         else if (_showLoadout) _loadoutScreen.Draw(_batch, CanvasMouse, MouseClicked);
         else if (_showWarren) DrawWarren();
@@ -5444,7 +5481,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             ("A", "WARREN — WORK WHILE YOU ARE AWAY"),
             ("W", "MAP — WHERE TO HUNT"),
             ("P", "TRAITS — PERMANENT BONUSES"),
-            ("R", "ROSTER — YOUR CHAMPIONS"),
+            ("R", "ROSTER — YOUR HUNTERS"),
             ("L", "THE EXPEDITION LOG"),
             ("ESC", "SETTINGS — DISPLAY, SOUND, QUIT"),
             ("F1", "CLOSE"),
