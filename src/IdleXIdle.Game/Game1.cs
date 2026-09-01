@@ -863,7 +863,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // screen stays locked until wave 5 (Unlocks) — so the very first thing the game told a new
         // player was an instruction the game itself then refused. The one thing that IS open from
         // frame one is the fight, and watching it is genuinely the job.
-        _bootMessage = "YOUR CHAMPION IS ALREADY FIGHTING\nWATCH THE FIRST WAVES — SCREENS OPEN AS YOU PLAY";
+        _bootMessage = "YOUR HUNTER IS ALREADY FIGHTING\nWATCH THE FIRST WAVES — SCREENS OPEN AS YOU PLAY";
         _bootColor = Gold;
 
         // THE WELCOME GIFT: one chest in the vault from the first frame (playtest 2026-08-26: "the
@@ -5298,11 +5298,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
             (new Rectangle(536, 680, 420, 50), "dmg",
                 "Shows the damage of every hit as a small number in the fight."),
             (new Rectangle(1000, 680, 420, 50), "skills",
-                "Shows the name of each skill as your champion uses it."),
+                "Shows the name of each skill as your hunter uses it."),
             (new Rectangle(536, 728, 420, 50), "hitfx",
                 "Shows the flashes and sparks when hits land in the fight."),
             (new Rectangle(1000, 728, 420, 50), "flash",
-                "When your champion falls, the screen glows red for a moment. Turn this off if you do not want it."),
+                "When your hunter falls, the screen glows red for a moment. Turn this off if you do not want it."),
             (SettingsCopyFeedback, "feedback",
                 "Copies a short code that describes your game. Paste it to the developer with your feedback."),
             (SettingsNewGame, "newgame",

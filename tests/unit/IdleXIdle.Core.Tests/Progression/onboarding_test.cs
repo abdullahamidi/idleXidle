@@ -42,7 +42,7 @@ public class OnboardingTest
     public void test_a_save_that_has_cleared_a_wave_is_not_due_the_intro()
     {
         // A save written before the intro existed carries IntroSeen = false and real progress. Teaching
-        // that player where the champion stands is the interruption the intro replaced.
+        // that player where the hunter stands is the interruption the intro replaced.
         Assert.False(Onboarding.IntroDue(new TutorialFacts(WavesCleared: 1), introSeen: false));
         Assert.False(Onboarding.IntroDue(new TutorialFacts(WavesCleared: 400), introSeen: false));
     }
@@ -61,14 +61,14 @@ public class OnboardingTest
         // playtest called "much clearer".
         var expected = new (TourTarget Target, string Title, string Body)[]
         {
-            (TourTarget.Champion, "YOUR CHAMPION",
-                "This is your champion. It fights on its own. You never press attack."),
+            (TourTarget.Champion, "YOUR HUNTER",
+                "This is your hunter. It fights on its own. You never press attack."),
             (TourTarget.Enemies, "THE ENEMIES",
                 "Enemies come in waves. Every fifth wave is a boss. The banner at the top counts the waves and the conquest."),
-            (TourTarget.HunterHud, "YOUR CHAMPION'S LIFE",
-                "This is your champion's life. When it reaches zero the descent ends — then it gets back up and starts again. Nothing is lost."),
+            (TourTarget.HunterHud, "YOUR HUNTER'S LIFE",
+                "This is your hunter's life. When it reaches zero the descent ends — then it gets back up and starts again. Nothing is lost."),
             (TourTarget.CurrencyPills, "GLEAM",
-                "Every cleared wave pays Gleam. Spend Gleam on the STATS screen to train your champion."),
+                "Every cleared wave pays Gleam. Spend Gleam on the TRAINING screen to make your hunter stronger."),
             (TourTarget.Skills, "YOUR SKILLS",
                 "Your skills. They fire on their own timers. You choose them on the BUILD screen later."),
             (TourTarget.RightColumn, "REWARDS AND ERRANDS",

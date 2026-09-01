@@ -213,19 +213,19 @@ public static class Onboarding
     {
         Activity.Hunt => new[]
         {
-            new TourStep(TourTarget.Champion, "YOUR CHAMPION",
-                "This is your champion. It fights on its own. You never press attack."),
+            new TourStep(TourTarget.Champion, "YOUR HUNTER",
+                "This is your hunter. It fights on its own. You never press attack."),
 
             new TourStep(TourTarget.Enemies, "THE ENEMIES",
                 "Enemies come in waves. Every fifth wave is a boss. "
                 + "The banner at the top counts the waves and the conquest."),
 
-            new TourStep(TourTarget.HunterHud, "YOUR CHAMPION'S LIFE",
-                "This is your champion's life. When it reaches zero the descent ends — "
+            new TourStep(TourTarget.HunterHud, "YOUR HUNTER'S LIFE",
+                "This is your hunter's life. When it reaches zero the descent ends — "
                 + "then it gets back up and starts again. Nothing is lost."),
 
             new TourStep(TourTarget.CurrencyPills, "GLEAM",
-                "Every cleared wave pays Gleam. Spend Gleam on the STATS screen to train your champion."),
+                "Every cleared wave pays Gleam. Spend Gleam on the TRAINING screen to make your hunter stronger."),
 
             new TourStep(TourTarget.Skills, "YOUR SKILLS",
                 "Your skills. They fire on their own timers. You choose them on the BUILD screen later."),

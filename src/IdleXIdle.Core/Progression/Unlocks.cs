@@ -211,7 +211,7 @@ public static class Unlocks
         Activity.Map => "THE MAP — THE WORLD BEYOND",
         Activity.Warren => "THE WARREN — WORK THAT RUNS WITHOUT YOU",
         Activity.Traits => "TRAITS — PERMANENT BONUSES THAT NEVER RESET",
-        Activity.Roster => "THE ROSTER — OTHER CHAMPIONS",
+        Activity.Roster => "ROSTER — THE OTHER HUNTERS",
 
         // A cast that is not a declared Activity is a programming error, and a blank string here would
         // reach the player as an empty panel instead of as the bug it is.

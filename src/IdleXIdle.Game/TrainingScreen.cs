@@ -691,7 +691,7 @@ public sealed class TrainingScreen
                 var perPoint = 100f * hunter.RegenPerVitalityPoint;
                 return new[]
                 {
-                    "VITALITY heals your champion a little every second of a fight, even while it is being hit.",
+                    "VITALITY heals your hunter a little every second of a fight, even while it is being hit.",
                     $"One rank of training adds {hunter.GainPerRank(stat):0} VITALITY. You have {v:0} VITALITY, and every point regains {perPoint:0.00}% of your life each second — {pct:0.00}% in total.",
                     perSecond > 0
                         ? $"With {pool:N0} life, that is {perSecond:N0} life back every second. It cannot take you past full."
@@ -705,8 +705,8 @@ public sealed class TrainingScreen
                 var pool = SoloBattle.ChampionHealth(build, hunter);
                 return new[]
                 {
-                    $"HEALTH is the base of your champion's life. One rank of training adds {hunter.GainPerRank(stat):0} health.",
-                    $"With your charm counted in, your base health is {hunter.MaxHealth:N0}. After your gear, your promises and your passives, your champion starts a fight with {pool:N0} life — the same number the fight screen shows.",
+                    $"HEALTH is the base of your hunter's life. One rank of training adds {hunter.GainPerRank(stat):0} health.",
+                    $"With your charm counted in, your base health is {hunter.MaxHealth:N0}. After your gear, your vows and your passives, your hunter starts a fight with {pool:N0} life — the same number the fight screen shows.",
                     "When it reaches zero, the descent ends.",
                 };
             }

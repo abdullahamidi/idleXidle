@@ -93,7 +93,17 @@ public sealed class GearScreen
     // The doll and its eight slots: armour down the left, weapon and jewellery down the right.
     // 356, not 300: the header's two full-width lines (what this hunter may wear, and the innate) end at
     // about 346, and the slot columns used to be drawn straight through them.
-    private const int SlotBox = 102, SlotPitch = 130, SlotsTop = 356;
+    // THE COLUMN FITS THE PANEL IT IS IN. Written as a fixed 102-box on a 130 pitch from y 356, the
+    // four rows needed 508 px and asked for 520 — which the 1080 page has and the 125 % page does not:
+    // at 864 the last two slots drew through the footer strip and out of the panel's bottom edge.
+    // Every figure below is derived from the room between the header and the footer.
+    private const int SlotsTop = 356;
+
+    private static int SlotSpan => FooterStrip.Y - 16 - SlotsTop;
+
+    private static int SlotPitch => Math.Clamp(SlotSpan / 4, 74, 130);
+
+    private static int SlotBox => Math.Min(102, SlotPitch - 28);
     private static readonly (GearSlot Slot, string Label, int Column, int Row)[] SlotLayout =
     {
         (GearSlot.Helm, "HELM", 0, 0), (GearSlot.Chest, "CHEST", 0, 1), (GearSlot.Gloves, "GLOVES", 0, 2), (GearSlot.Boots, "BOOTS", 0, 3),
@@ -101,7 +111,8 @@ public sealed class GearScreen
     };
     private static Rectangle SlotRect(int column, int row)
         => new(column == 0 ? EquippedPanel.X + 46 : EquippedPanel.Right - 46 - SlotBox, SlotsTop + row * SlotPitch, SlotBox, SlotBox);
-    private static Rectangle HunterBox => new(EquippedPanel.Center.X - 180, 346, 360, 534);
+    private static Rectangle HunterBox =>
+        new(EquippedPanel.Center.X - 180, 346, 360, Math.Max(300, FooterStrip.Y - 16 - 346));
     private static readonly GearSlot[] AllSlots =
     {
         GearSlot.Weapon, GearSlot.Charm, GearSlot.Focus, GearSlot.Helm,

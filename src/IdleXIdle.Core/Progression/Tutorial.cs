@@ -245,7 +245,7 @@ public static class Tutorial
 
     public static string Title(TutorialStep step) => step switch
     {
-        TutorialStep.Watch => "YOUR CHAMPION FIGHTS ON ITS OWN",
+        TutorialStep.Watch => "YOUR HUNTER FIGHTS ON ITS OWN",
         TutorialStep.SpendGleam => "YOU HAVE GLEAM TO SPEND",
         TutorialStep.MeetABoss => "EVERY FIFTH WAVE IS A BOSS",
         TutorialStep.OpenChest => "CHESTS ARE WHERE ITEMS COME FROM",

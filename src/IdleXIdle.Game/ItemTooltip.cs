@@ -159,7 +159,7 @@ public static class ItemTooltip
             {
                 // No UPGRADE verdict on a piece this champion cannot put on — a "+21" they cannot
                 // collect is a promise the EQUIP button then breaks. Same 46px slot, so the height holds.
-                ui.Text(b, $"NOT FOR {wearer.Name} — SWITCH CHAMPION ON THE ROSTER", lx, cy, Bad);
+                ui.Text(b, $"NOT FOR {wearer.Name} — SWITCH HUNTER ON THE ROSTER", lx, cy, Bad);
                 cy += 46;
             }
             else if (worn is not null && worn.InstanceId != item.InstanceId)
