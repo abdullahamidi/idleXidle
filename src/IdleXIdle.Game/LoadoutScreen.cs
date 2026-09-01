@@ -10,48 +10,39 @@ using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Encounters;
 using IdleXIdle.Core.Prestige;
-
 using IdleXIdle.Core.Progression;
+
 namespace IdleXIdle.Game;
 
 /// <summary>
-/// THE WEAVE: pick each slot's skill from the library, and swear its Vow.
+/// BUILD: what your hunter carries into the fight — the skills in their slots, each skill's own variation
+/// and reinforcements, the keystones, and the Vow bound to a slot — edited as master-detail.
 /// </summary>
 /// <remarks>
 /// <para>
-/// This replaces a column of <c>&lt; VALUE &gt;</c> cycling cells wedged beside the mastery tree. Cycling
-/// is the wrong verb for a list of six — picking SPIRIT from BODY was five clicks and five reads, and
-/// nothing on screen ever said what the other five options were. Everything choosable is now visible
-/// and one click away.
+/// UX V2 P1.4 (brief §66–§71, D3, D5, D9). Three columns. YOUR LOADOUT on the left is the one ornate surface:
+/// the slots grouped ACTIVE / PASSIVE, each row saying skill · style · level · variation · Source · vow. The
+/// SKILLS column is a quiet plate: the twelve skills grouped by style, and under them the selected skill's own
+/// tree drawn as the fork it is — a variation OWNS the skill's Source, so the player never wonders whether a
+/// Source is equipped separately (§70). The INSPECTOR on the right speaks the shared grammar — CATEGORY ·
+/// NAME · IDENTITY · WHAT IT DOES · YOU NEED FIRST · WHAT IT COSTS / CURRENT STATE · a refusal line · ONE
+/// primary action — and carries the Vow as a VALIDATOR: the demand, what your build actually is, and whether
+/// the vow holds (§71). Hover highlights and tips; click selects; the primary button commits (D5).
 /// </para>
 /// <para>
-/// THE POINT OF THE SCREEN IS THE VOW COLUMN. A Vow pays a large multiplier only while the BUILD meets
-/// its demand — one Form, no crit investment, a bare gear slot — and it pays nothing at all when the
-/// demand is unmet. That check already existed and was already correct (<c>Vows.IsActive</c>), but it
-/// ran inside the simulation, which is to say: after the player had descended, where they could not see
-/// it. A Vow whose condition you cannot check before you leave is a coin flip wearing a decision's
-/// clothes. <c>SoloBattle.DescribeBuild</c> is pure and public, so this screen asks the same question
-/// against the live loadout and shows the answer next to every Vow, updating as you edit.
+/// Everything shown is computed by Core today: <see cref="Vows.IsActive"/> against
+/// <see cref="SoloBattle.DescribeBuild"/>, <see cref="DamageBench"/> for the bench figure, <see cref="SkillProgress"/>
+/// for levels, <see cref="StyleAffinity"/> for the style factor, <see cref="SourceMatchup"/> for the region line.
+/// Nothing here is a guess.
 /// </para>
 /// </remarks>
 public sealed class LoadoutScreen
 {
-    /// <summary>
-    /// The build's DISCIPLINE — the STYLE specialisation taken on the mastery tree. Host-fed each
-    /// frame. Null until a Specialisation node is bought, and the screen says where to get one.
-    /// </summary>
+    /// <summary>The build's STYLE specialisation, taken on the mastery tree. Host-fed. Null until chosen.</summary>
     public Style? ChosenStyle { get; set; }
 
-    /// <summary>Host-fed mastery walk, for the build share code. The code is identity, not power.</summary>
-    public System.Collections.Generic.IReadOnlyCollection<string> MasteryTaken { get; set; }
-        = System.Array.Empty<string>();
-
-    // COPY BUILD CODE — moved HERE from the build overview after the adversarial review found the
-    // overview had been retired a commit earlier: the button was drawn on a page no player can
-    // reach. This screen is where builds are woven, which is where sharing them belongs.
-    private static readonly Rectangle CopyCodeBtn = new(1389, 918, 340, 48);
-    private int _copyToastFrames;
-    private string _copyToast = "";
+    /// <summary>Host-fed mastery walk, for the build share code.</summary>
+    public IReadOnlyCollection<string> MasteryTaken { get; set; } = Array.Empty<string>();
 
     private static readonly Color Bone = UiInk.Primary;
     private static readonly Color Gold = UiInk.Accent;
@@ -70,189 +61,42 @@ public sealed class LoadoutScreen
 
     private readonly UiKit _ui;
     private int _slot;
-
-    /// <summary>Which face the middle column is showing: 0 the library, 1 this slot's skill tree.</summary>
-    private int _tab;
-    private string? _readingVowId;
     private string _msg = "";
-
-    /// <summary>
-    /// What the cursor is over, in words — and the ONLY prose the middle column draws.
-    /// </summary>
-    /// <remarks>
-    /// The panel used to explain every control where it stood: a line under each of the twelve
-    /// library cells, a line under each variation, a line under each reinforcement, a sentence on the
-    /// respec button. The verdict was "kelimelerde sürekli bir şey anlatmaya çalışıyorsun ama UI sade
-    /// olmalı... açıklamalar hover edilince gelmeli sadece". So the controls are icons and names, and
-    /// this is the one box that ever holds a sentence. Set during Draw by whatever the cursor is on;
-    /// empty means the cursor is on nothing and the box says so once, quietly.
-    /// </remarks>
-    private string _hoverTitle = "";
-    private string _hoverBody = "";
-    private int _vowScroll;
-
-    /// <summary>First VISIBLE keystone. Three fit; the tree teaches far more than three.</summary>
-    /// <remarks>
-    /// The list used to be drawn `for (i = 0; i < 3; i++)` straight off the learned collection, and 3 is
-    /// the SOCKET count, not a list length — a player who learned a fourth keystone could never see it,
-    /// let alone choose it over the three the catalogue happened to order first. Sockets stay scarce;
-    /// the CHOICE of what goes in them is the decision the trait tree's roads are selling.
-    /// </remarks>
+    private int _copyToastFrames;
+    private string _copyToast = "";
     private int _keystoneScroll;
+    private int _vowScroll;
+    private bool _vowListOpen;
 
-    // ── The build readout ───────────────────────────────────────────────────────────────────────
-    // DamageBench measures a build against a reference dummy and has lived in Core, fully tested, with
-    // ZERO callers in the game — the exact "built and never reaches the player" shape this codebase
-    // keeps producing. It is what this screen was missing: the player picks from thirty-six
-    // combinations and had no way to see what any of them DID to their damage.
-    //
-    // Cached by the thing being previewed, because a reading costs ~0.5ms and only changes when the
-    // hover or the build does. Measured, not assumed — a per-frame bench would have been fine too, but
-    // the cache makes that a fact rather than a hope.
+    // ── WHAT IS SELECTED: the thing the inspector is about and the primary button acts on. ──────────────
+    private enum Pick { Slot, Library, Variation, Reinforcement, Keystone }
+    private Pick _pick = Pick.Slot;
+    private string _pickSkillId = "";      // Library
+    private int _pickIndex;                // Variation / Reinforcement
+    private string _pickKeystoneId = "";   // Keystone
+
+    // ── THE BENCH. DamageBench measures a build against a reference dummy; cached by what it measured. ──
     private (string Id, int Slot, int Rev)? _previewKey;
     private float _previewDps;
     private float _currentDps;
     private int _currentRev = -1;
     private int _buildRev;
 
-    // ── DRAGGING ────────────────────────────────────────────────────────────────────────────────
-    //
-    // Playtest 2026-08-28: <i>"skill seçimlerinin tıkladım oldu gibi basit bir aksiyondan ziyade,
-    // sürükleme bırakma ... ile pekiştirilmesi"</i> and, for the Vow column, <i>"skille sürükleme
-    // bırakma ve 'bind' hissiyatı için efekt ve seslerle desteklenmesi"</i>.
-    //
-    // A Vow BINDS BY BUTTON, not by carrying it (designer's call, 2026-08-28): clicking a seal opens
-    // a BIND row directly beneath it, and that row is what commits. Dragging a seal was tried first
-    // and dropped — the gesture was fine and the reachability was not, since drag needs a pointer and
-    // this project targets gamepad through cycle-and-confirm (technical-preferences.md). A button is
-    // one target, states its consequence, and every input can press it.
-    //
-    // The SLOT carry stays: reordering is the one decision here with no other control, and the order
-    // is cast priority.
+    // ── DRAGGING a slot row reorders — the order IS cast priority. ─────────────────────────────────────
     private enum Carry { None, Slot }
-
     private Carry _carrying;
-    private int _carrySlot = -1;      // Carry.Slot — which woven skill is being reordered
-    private Point _carryFrom;         // where the press began, to tell a drag from a click
-    private Point _carryAt;           // the cursor now, for the ghost
-    private bool _carryMoved;         // past the slop radius: this is a drag, not a click
+    private int _carrySlot = -1;
+    private Point _carryFrom;
+    private Point _carryAt;
+    private bool _carryMoved;
     private bool _wasHeld;
-
-    /// <summary>How far the cursor must travel before a press becomes a drag.</summary>
-    /// <remarks>
-    /// Generous on purpose. A player aiming at a 70px row with a mouse moves a pixel or two while
-    /// clicking, and a drag that arms at 2px turns every click into a cancelled drag.
-    /// </remarks>
     private const int DragSlop = 7;
 
-    /// <summary>How long a pick's flourish and a bind's seal last, in seconds.</summary>
-    /// <remarks>
-    /// The bind runs longer than the pick because it is the heavier act and because sfx_bind's own
-    /// ring hangs for about that long — a flourish that ends before its sound does reads as two
-    /// unrelated events.
-    /// </remarks>
     private const float SetFlashSeconds = 0.34f;
     private const float BindFlashSeconds = 0.85f;
-
-    /// <summary>
-    /// A CHAIN CLOSING ON A SKILL — the flourish a bound Vow plays over its row.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Designer's brief (2026-08-28): <i>"bind edilince de skill üzerinde bir zincirleme efekt ve
-    /// animasyonu (genişleyip sıkışan zincir animasyonu olabilir) oynasın"</i>.
-    /// </para>
-    /// <para>
-    /// A REAL ASSET, not a ring of drawn diamonds. The first pass composed the chain out of UiKit
-    /// primitives and the designer's note on it was the whole point of this round: <i>"kendin bir
-    /// kutucuk veya buton oluşturup görsel olarak onu kullanıyorsun"</i>. <c>fx_bind_chain</c> is an
-    /// eight-frame strip generated through the same route as every arena effect (arena-art-contract.md
-    /// §5-6) — heavy interlocking gold links with inward spikes, drawn wide and closing.
-    /// </para>
-    /// <para>
-    /// It plays over the SOURCE MEDALLION rather than the row's outline, which is what the asset's own
-    /// shape asks for: a ring wraps a disc, not a 440x76 rectangle. It also puts the flourish on the
-    /// half of the row that identifies the skill — the thing the Vow is being bound to.
-    /// </para>
-    /// <param name="t">1 at the instant of binding, falling to 0 as the flourish ends.</param>
-    /// </remarks>
-    private void DrawBindChain(SpriteBatch b, Rectangle row, float t)
-    {
-        t = Math.Clamp(t, 0f, 1f);
-        var played = 1f - t;                   // 0 at the bind, 1 when the flourish ends
-
-        // The plate lights under the chain and fades faster, so the chain is what is left to look at.
-        _ui.Fill(b, row, Gold * (0.22f * t * t));
-
-        // Centred on the gem, and it OVERSHOOTS it: the strip's own art contracts across its frames,
-        // so the box only has to start clear of the medallion and end tight on it for the two motions
-        // to read as one. Alpha holds through the close and lets go at the end.
-        var gem = new Rectangle(row.X + 28, row.Y + 12, 52, 52);
-        var wide = 46f * t * t;
-        var box = new Rectangle((int)(gem.X - wide), (int)(gem.Y - wide),
-                                (int)(gem.Width + wide * 2), (int)(gem.Height + wide * 2));
-        var alpha = Math.Clamp(t * 1.9f, 0f, 1f);
-
-        // ChainClipSeconds, not the flourish's own length: the strip is authored to close over its
-        // eight frames and is played once, held on the last. Driving it off `played` means the art's
-        // contraction and the box's contraction finish together.
-        if (!_ui.AnimSprite(b, "fx_bind_chain_strip8_512", box, played * ChainClipSeconds, 8f,
-                            loop: false, Color.White * alpha))
-        {
-            // The asset is missing: say so with the row's own gold rather than drawing nothing, so a
-            // stripped build still shows that something was bound.
-            Outline(b, row, Gold * alpha, 3);
-        }
-    }
-
-    /// <summary>How long the chain strip takes to play its eight frames, in seconds.</summary>
-    /// <remarks>Shorter than the flourish it rides, so the links are CLOSED for the last of it.</remarks>
     private const float ChainClipSeconds = 0.55f;
-
-    /// <summary>Which woven slot the cursor is over, or -1. The drop target for both carries.</summary>
-    /// <remarks>
-    /// PADDED by half a row gap, per technical-preferences.md's Fitts's-Law note: a drop that must
-    /// land inside 76 exact pixels is a drop that misses. The pad closes the dead gap BETWEEN rows
-    /// rather than growing the list, so every point inside the slot column belongs to some row.
-    /// </remarks>
-    private int SlotUnder(Point p)
-    {
-        for (var i = 0; i < Loadout.Skills.Count; i++)
-        {
-            var r = SlotRow(i);
-            if (new Rectangle(r.X - 8, r.Y - 5, r.Width + 16, r.Height + 10).Contains(p)) return i;
-        }
-        return -1;
-    }
-
-    /// <summary>Age the flourishes. Called once per frame from Draw, off this screen's own clock.</summary>
-    private void TickEffects()
-    {
-        var now = _clock.Elapsed.TotalSeconds;
-        var dt = (float)Math.Clamp(now - _lastTick, 0.0, 0.10);   // clamped: a load hitch must not skip a flash
-        _lastTick = now;
-        Decay(_slotFlash, dt);
-        if (!_devHoldChain) Decay(_bindFlash, dt);
-
-        static void Decay(Dictionary<int, float> d, float dt)
-        {
-            if (d.Count == 0) return;
-            foreach (var k in d.Keys.ToList())
-            {
-                var left = d[k] - dt;
-                if (left <= 0f) d.Remove(k); else d[k] = left;
-            }
-        }
-    }
-
-    // ── EFFECTS ─────────────────────────────────────────────────────────────────────────────────
-    // Seconds remaining on each flourish. Decayed in Draw off a stopwatch, because this screen's
-    // Update takes no GameTime and threading one through for two timers is a worse trade than the
-    // four lines below.
-    private readonly Dictionary<int, float> _slotFlash = new();   // slot -> a Source/Form was set
-    private readonly Dictionary<int, float> _bindFlash = new();   // slot -> a Vow was bound
-
-    /// <summary>DEV: freeze the bind chain where <see cref="DevPose"/> put it, for a capture.</summary>
+    private readonly Dictionary<int, float> _slotFlash = new();
+    private readonly Dictionary<int, float> _bindFlash = new();
     private bool _devHoldChain;
     private static readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
     private double _lastTick;
@@ -265,282 +109,152 @@ public sealed class LoadoutScreen
     public PlayerLoadout Loadout { get; set; } = PlayerLoadout.Starter();
     public MasteryTree Mastery { get; set; } = new();
     public MemoryDustTree Tree { get; set; } = new();
-
-    /// <summary>
-    /// What each skill has earned by being used, and where the player spends it.
-    /// </summary>
-    /// <remarks>
-    /// Without this the variation system is unreachable: the skills level, the fight reads whatever
-    /// was chosen, and there is nowhere to choose. A progression the player cannot spend is the same
-    /// dead weight as a field nothing reads.
-    /// </remarks>
+    /// <summary>What each skill has earned by being used, and where the player spends it.</summary>
     public SkillProgress SkillLevels { get; set; } = new();
     public Hunter? Hunter { get; set; }
     public Character? Character { get; set; }
-
-    /// <summary>Where the champion is hunting, so a Source pick can be judged against real creatures.</summary>
-    /// <remarks>
-    /// The screen told the player "BODY is strong against MIND and NATURE" and stopped there — a rule
-    /// with no board to play it on. The region's roster is what turns that into a decision, and it was
-    /// available in Core the whole time (<c>BandCycles.RosterFor</c>) with nothing on this screen asking.
-    /// </remarks>
+    /// <summary>Where the hunter is hunting, so a Source can be judged against real creatures.</summary>
     public string RegionId { get; set; } = "";
     public string RegionName { get; set; } = "";
 
-    /// <summary>Set when the loadout changed, so the host can save. Same shape as the other editors.</summary>
+    /// <summary>Set when the loadout changed, so the host can save.</summary>
     public bool Dirty { get; private set; }
     public void ClearDirty() => Dirty = false;
 
-    /// <summary>DEV: pose a slot and a vow for the capture fixture.</summary>
-    /// <param name="chainAt">
-    /// DEV: hold the bind chain part-played over this slot, so the flourish is photographable. It runs
-    /// for under a second in play, which is exactly long enough to be impossible to capture by hand.
-    /// </param>
+    /// <summary>DEV: pose a slot and, with a vow id, the vow list open, for the capture fixture.</summary>
     public void DevPose(int slot, string? vowId, float chainAt = 0f)
     {
         _slot = slot;
-        _readingVowId = vowId;
+        _pick = Pick.Slot;
+        _vowListOpen = vowId is not null;
         if (chainAt > 0f)
         {
-            // HELD, not merely started. The flourish is over inside a second, and a capture run draws
-            // several frames before it writes the file — so a posed chain that decays like a live one
-            // is a chain nobody can photograph. Same idea as the hunt screen's DevShowFall.
             _bindFlash[slot] = BindFlashSeconds * Math.Clamp(chainAt, 0f, 1f);
             _devHoldChain = true;
         }
     }
 
-    // ── Layout ────────────────────────────────────────────────────────────────────────────────────
-    // 800, not 718. The left column's height is DATA — one row per skill slot, then the add button,
-    // then the keystone sockets — and the fifth weave pushed the third socket 68px through the frame.
-    // (At four slots it already cleared the interior by 12; the fifth only made it obvious.) All three
-    // grow together so the row of panels still reads as a row.
-    /// <summary>
-    /// The way out. Set when the player asked to go back; the host clears it and opens BUILD.
-    /// </summary>
-    /// <remarks>
-    /// THIS SCREEN HAD NO EXIT. It is opened FROM the Build overview, and the only way to leave was T —
-    /// which toggles, so it landed on the HUNT rather than back where you came from. A sub-screen you
-    /// can enter and not return from teaches the player to avoid entering it.
-    /// </remarks>
-    public bool WantsBack { get; set; }
+    /// <summary>DEV: kept for the fixtures that call it — the skill tree is always on screen now.</summary>
+    public void DevOpenSkillTree() { }
 
-    /// <summary>Top-left, in the band the centred title leaves empty on both sides.</summary>
-    private static readonly Rectangle BackBtn = new(38, 26, 240, 46);
+    // ── LAYOUT. Three columns to the page, so UI SCALE can shrink the page under them. ─────────────────
+    private const int Top = 150;          // under the hint slot's band (y 86–134 stays free of controls)
+    private const int BottomMargin = 60;
+    private static Rectangle LoadoutPanel => new(38, Top, 520, UiKit.PageBottom(BottomMargin) - Top);
+    private static Rectangle InspectorPanel => new(UiKit.PageRight(40) - 496, Top, 496, UiKit.PageBottom(BottomMargin) - Top);
+    private static Rectangle SkillsPanel => new(LoadoutPanel.Right + 20, Top, InspectorPanel.X - 20 - (LoadoutPanel.Right + 20), UiKit.PageBottom(BottomMargin) - Top);
 
-    // 850, not 800 — bottom 994, which is canvas 890 and still 168 canvas px clear of the picture's
-    // floor. The three columns keep a shared baseline. Aspects 0.612 / 0.753 / 0.755 stay in
-    // ui_panel_vertical's bucket (< 0.82), so no frame art changes.
-    private static readonly Rectangle SlotsPanel = new(38, 144, 520, 850);
-    private static readonly Rectangle PickPanel = new(578, 144, 640, 850);
-    private static readonly Rectangle VowPanel = new(1238, 144, 642, 850);
-
-    private static int SlotColX => UiKit.ContentLeft(SlotsPanel);
-    private static int SlotColW => SlotsPanel.Width - UiKit.PadX(SlotsPanel) * 2;
-    private static Rectangle SlotRow(int i) => new(SlotColX, UiKit.BodyTopBare(SlotsPanel) + i * 86, SlotColW, 76);
-    private static Rectangle DropX(int i) { var r = SlotRow(i); return new(r.Right - 34, r.Y + 4, 30, 30); }
-
-    /// <summary>
-    /// The ACTIVE / PASSIVE switch on a woven row — the only door to two of the twelve skills.
-    /// </summary>
-    /// <remarks>
-    /// A style has two skills and the SLOT decides which one this is. AURA and TRAP resolve to their
-    /// styles' passives from either side, so FIELD's PULSE and SNARE's REPAY cannot be reached at all
-    /// without this. Padded generously beyond its text, per the input rules — a 20px word is not a
-    /// click target.
-    /// </remarks>
-    /// <summary>One of a skill's two variation buttons, drawn under its name.</summary>
-    private static Rectangle VariationBtn(int i, int which)
-    {
-        var r = SlotRow(i);
-        var w = (r.Right - 140 - (r.X + 134)) / 2 - 3;
-        return new(r.X + 134 + which * (w + 6), r.Y + 26, w, 20);
-    }
-
-    private static Rectangle KindToggle(int i)
-    {
-        var r = SlotRow(i);
-        return new(r.Right - 132, r.Y + 4, 92, 28);
-    }
-
-    /// <summary>Everything below the slot list hangs off the CAPACITY, not off the type's floor.</summary>
-    private int SlotsEnd => UiKit.BodyTopBare(SlotsPanel) + Loadout.SkillCapacity * 86;
-
-    private Rectangle AddBtn => new(SlotColX, SlotsEnd, SlotColW, 48);
-
-    // KEYSTONE SOCKETS live here too. They were chips at the bottom of the deleted sidebar, and a
-    // keystone is a loadout decision exactly like a Vow is — the trait tree TEACHES them, this screen
-    // is where you decide which of them you are carrying. Losing the only UI for them along with the
-    // sidebar would have been a silent regression: the tree would keep selling a payoff with nowhere
-    // left to equip it.
-    /// <summary>
-    /// How many keystone chips are on screen at once. A WINDOW, not the socket count.
-    /// </summary>
-    /// <remarks>
-    /// TWO AT FIVE SLOTS, because everything below the slot list hangs off SkillCapacity and the fifth
-    /// slot pushes the chips 86px down. The list already scrolls, so a shorter window costs a scroll;
-    /// a third chip at five slots costs the WHAT THIS BUILD DOES readout entirely — see DrawReadout.
-    /// </remarks>
+    private static int LoadX => UiKit.ContentLeft(LoadoutPanel);
+    private static int LoadW => UiKit.ContentRight(LoadoutPanel) - LoadX;
+    private const int SlotH = 90, SlotPitch = 98;
+    private const int ChipH = 44, ChipPitch = 48;
     private int KeystoneRows => Loadout.SkillCapacity >= 5 ? 2 : 3;
 
-    // 94/46/42, measured against the WORST case rather than the current one: at five slots SlotsEnd is
-    // 670, so a 102/48/44 row ends at 912 against a panel interior that closes at 904. Eight pixels, and
-    // the third chip is drawn on the frame.
-    private Rectangle KeystoneChip(int i) => new(SlotColX, SlotsEnd + 94 + i * 46, SlotColW, 42);
+    /// <summary>The rows this frame: slot index (or -1 for an empty), and where it is drawn.</summary>
+    private readonly List<(int Slot, Rectangle Rect, bool Passive)> _rows = new();
+    private int _rowsEnd;
 
-    /// <summary>
-    /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
-    /// first is the one the caption card is placed beside; a target that is not this screen's gets none.
-    /// </summary>
-    /// <remarks>
-    /// An instance method, unlike the other screens': the slot rows and the keystone sockets under them
-    /// sit where the loadout's capacity puts them, so the light has to be measured against the live one.
-    /// </remarks>
-    internal Rectangle[] Spotlights(TourTarget target)
+    /// <summary>Lay the slot rows out: actives first, then passives, each group to its capacity.</summary>
+    private void LayoutRows()
     {
-        switch (target)
+        _rows.Clear();
+        var skills = Loadout.Skills;
+        var cap = Math.Max(1, Loadout.SkillCapacity);
+        var kinds = BuildComposer.SlotKinds(
+            skills.Select(k => new BuildComposer.SkillPick(k.Source, k.VowId, k.Passive, k.SkillId)).ToList(), cap);
+        var actives = new List<int>();
+        var passives = new List<int>();
+        for (var i = 0; i < skills.Count; i++) (i < kinds.Count && kinds[i] ? passives : actives).Add(i);
+        var activeCap = Math.Max(Build.ActiveSlotsFor(cap), actives.Count);
+        var passiveCap = Math.Max(Build.PassiveSlotsFor(cap), passives.Count);
+        // Empties beyond the equipped count are drawn in the group that still has room.
+        var empties = Math.Max(0, cap - skills.Count);
+        var y = LoadoutPanel.Y + UiTypography.PanelBodyTopBare;
+        void Group(List<int> members, int groupCap, bool passive)
         {
-            case TourTarget.SkillSlots:
-                return new[] { new Rectangle(SlotsPanel.X, SlotsPanel.Y, SlotsPanel.Width, SlotsEnd + 60 - SlotsPanel.Y) };
-            case TourTarget.SkillPicker:
-                return new[] { PickPanel };
-            case TourTarget.Vows:
-                var top = KeystoneChip(0).Y - 54;
-                var sockets = new Rectangle(SlotsPanel.X, top, SlotsPanel.Width, KeystoneChip(KeystoneRows - 1).Bottom + 16 - top);
-                return new[] { VowPanel, sockets };
-            default:
-                return Array.Empty<Rectangle>();
+            y += UiTypography.Pitch(UiTypography.Secondary) + 4;   // the caption's line
+            for (var k = 0; k < groupCap; k++)
+            {
+                var slot = k < members.Count ? members[k] : -1;
+                if (slot < 0) { if (empties <= 0) continue; empties--; }
+                _rows.Add((slot, new Rectangle(LoadX, y, LoadW, SlotH), passive));
+                y += SlotPitch;
+            }
+            y += 10;
         }
+        Group(actives, activeCap, false);
+        if (passiveCap > 0) Group(passives, passiveCap, true);
+        _rowsEnd = y;
     }
 
+    private Rectangle KeystoneHead => new(LoadX, _rowsEnd + 6, LoadW, 30);
+    private Rectangle KeystoneChip(int i) => new(LoadX, _rowsEnd + 6 + UiTypography.Pitch(UiTypography.Secondary) + 6 + i * ChipPitch, LoadW, ChipH);
+    private Rectangle BenchBlock => new(LoadX, LoadoutPanel.Bottom - UiKit.PanelCorner - 96, LoadW, 86);
 
-    // Every vertical offset here was measured off a capture, not guessed. The first pass put the FORM
-    // heading at +356 while the source grid's second row ran to +364, so the heading printed straight
-    // through the bottom of the gems.
-    // THE GRID SPANS THE PANEL'S OWN MARGIN. It used to inset 74 a side with a comment claiming the
-    // frame ate 70 — this panel wears the VERTICAL frame, whose side rail is 24, so 34 px of each
-    // margin was nothing but a narrower column. Three cells and their two gaps now fill the content
-    // width exactly, which is also what makes the right margin equal the left.
-    private static int PickPad => UiKit.PadX(PickPanel);
-    private static int PickInner => PickPanel.Width - PickPad * 2;
-
-    // ── THE LIBRARY. Six rows, one per style, each holding that style's two skills.
-    //
-    // The panel used to be a SOURCE grid over a FORM grid and the skill was the pair — that door is
-    // gone (the designer, 2026-08-30: "Artık source ve form skill oluşturmamın bir önemi kalmadı").
-    // What replaces it is the list of things you can actually put in a slot, which is the question
-    // the panel was always standing in for.
-    //
-    // GROUPED BY STYLE ON PURPOSE, and every one of the twelve is drawn whether you have it or not.
-    // A library that hides what you have not learned cannot teach the shape of the game, and the
-    // dim rows are the pull toward the tree: each says which road teaches it.
-    private const int LibRows = 6;
-    private static int LibTop => UiKit.BodyTop(PickPanel);
-    private static int LibRowH => (PickPanel.Bottom - 24 - LibTop) / LibRows;
-
-    /// <summary>
-    /// One of the twelve library tiles: an icon, a name, and nothing else.
-    /// </summary>
-    /// <remarks>
-    /// FOUR ROWS OF THREE, not six rows of two with the style spelled down the side. The grid is read
-    /// as a shape rather than as a list, the tile is square enough for the icon to be the biggest
-    /// thing on it, and the style is carried by the ORDER (its two skills are always adjacent) instead
-    /// of by a word repeated twelve times.
-    /// </remarks>
-    private static Rectangle LibCell(int i)
+    private static int SkillsX => SkillsPanel.X + 24;
+    private static int SkillsW => SkillsPanel.Width - 48;
+    private const int LibRowPitch = 62, LibTileH = 52, LibStyleW = 118;
+    private static int LibTop => SkillsPanel.Y + 54;
+    private static Rectangle LibTile(int style, int which)
     {
-        var w = (PickPanel.Width - PickPad * 2 - 16) / 3;
-        var h = 132;
-        return new(PickPanel.X + PickPad + i % 3 * (w + 8), LibTop + i / 3 * (h + 8), w, h);
+        var w = (SkillsW - LibStyleW - 12) / 2;
+        return new(SkillsX + LibStyleW + which * (w + 12), LibTop + style * LibRowPitch, w, LibTileH);
     }
-
-    private const int LibStyleW = 0;
-
-    // ── THE SKILL'S OWN TREE, the middle column's second face.
-    //
-    // MASTER-DETAIL, which is the pattern every loadout screen worth copying uses: the slots are the
-    // master list on the left, and this is the detail. The two faces are tabbed rather than stacked
-    // because the panel is 640 wide and a fork of two plus a row of three needs all of it — and
-    // because "what can I put here" and "what is this becoming" are different questions a player asks
-    // at different times. Progressive disclosure: the tree does not exist until a slot is chosen.
-    private static Rectangle Tab(int which)
-        => new(PickPanel.X + PickPad + which * ((PickPanel.Width - PickPad * 2) / 2),
-               UiKit.BodyTop(PickPanel) - 46, (PickPanel.Width - PickPad * 2) / 2 - 6, 30);
-
-    private static int TreeTop => UiKit.BodyTop(PickPanel) + 4;
-
-    /// <summary>One of the two variation cards — the fork that also picks the Source.</summary>
+    private static int TreeTop => LibTop + 6 * LibRowPitch + 22;
     private static Rectangle VarCard(int which)
     {
-        var w = (PickPanel.Width - PickPad * 2 - 12) / 2;
-        return new(PickPanel.X + PickPad + which * (w + 12), TreeTop + 150, w, 190);
+        var w = (SkillsW - 16) / 2;
+        return new(SkillsX + which * (w + 16), TreeTop + 74, w, 96);
     }
-
-    /// <summary>One of the chosen variation's three reinforcements.</summary>
-    private static Rectangle ReinfCard(int which)
+    private static Rectangle ReinfChip(int which, int ri)
     {
-        var w = (PickPanel.Width - PickPad * 2 - 16) / 3;
-        return new(PickPanel.X + PickPad + which * (w + 8), TreeTop + 384, w, 150);
+        var card = VarCard(which);
+        return new(card.X, card.Bottom + 10 + ri * 40, card.Width, 34);
     }
 
-    /// <summary>Directly under the reinforcements, not pinned to the panel's floor.</summary>
-    /// <remarks>
-    /// A control that undoes what is above it belongs beside what is above it. Pinned to the bottom it
-    /// floated a hundred and fifty pixels clear of everything, which reads as "unrelated" — and the one
-    /// thing this button must not read as is a page-level action.
-    /// </remarks>
-    private static Rectangle RespecBtn
-        => new(PickPanel.X + PickPad, TreeTop + 552, PickPanel.Width - PickPad * 2, 38);
+    private static int InsX => UiKit.ContentLeft(InspectorPanel);
+    private static int InsW => UiKit.ContentRight(InspectorPanel) - InsX;
+    private static Rectangle PrimaryBtn => new(InsX, InspectorPanel.Bottom - 92, InsW, 56);
+    private static Rectangle RespecText => new(InsX, PrimaryBtn.Y - 36, InsW / 2 - 8, 28);
+    private static Rectangle CopyText => new(InsX + InsW / 2 + 8, PrimaryBtn.Y - 36, InsW / 2 - 8, 28);
+    private static Rectangle ChangeVowBtn(int y) => new(InsX, y, InsW, 40);
+    private static Rectangle VowListRow(int i, int top) => new(InsX, top + i * 50, InsW, 46);
+    private const int VowListRows = 7;
 
-    // Five rows, not six. Six fitted only by squeezing each to 54px, where a Vow's name and its
-    // verdict printed over one another.
-    // Five again. This was cut to four when the panel was 718 tall and a three-line description ran
-    // out through the bottom ornament; at 800 both fit, and the reading block is still bounded so the
-    // next long Vow ellipsises instead of escaping.
-    private const int VowRows = 5;
-    private const int VowRowH = 70;
-    private static int VowColX => UiKit.ContentLeft(VowPanel);
-    private static int VowColW => VowPanel.Width - UiKit.PadX(VowPanel) * 2;
-
-    /// <summary>The BIND row's height, plus the gap that separates it from the seal above it.</summary>
-    private const int VowBindH = 42, VowBindGap = 6;
-
-    /// <summary>
-    /// The visible row whose BIND control is open — the seal the player last clicked, or -1.
-    /// </summary>
-    /// <remarks>
-    /// Derived from <see cref="_readingVowId"/> every time it is asked rather than stored as an index:
-    /// the list scrolls, and an index into a scrolling window is a stale number waiting to happen.
-    /// </remarks>
-    private int OpenBindRow(IReadOnlyList<Vow> known)
+    /// <summary>The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates.</summary>
+    internal Rectangle[] Spotlights(TourTarget target) => target switch
     {
-        if (_readingVowId is null) return -1;
-        for (var r = 0; r < VowRows; r++)
-        {
-            var idx = _vowScroll + r;
-            if (idx < known.Count && known[idx].Id == _readingVowId) return r;
-        }
-        return -1;
-    }
+        TourTarget.SkillSlots => new[] { new Rectangle(LoadoutPanel.X, LoadoutPanel.Y, LoadoutPanel.Width, Math.Max(200, _rowsEnd - LoadoutPanel.Y)) },
+        TourTarget.SkillPicker => new[] { SkillsPanel },
+        TourTarget.Vows => new[] { InspectorPanel, new Rectangle(LoadoutPanel.X, KeystoneHead.Y - 10, LoadoutPanel.Width, KeystoneChip(KeystoneRows - 1).Bottom + 16 - KeystoneHead.Y + 10) },
+        _ => Array.Empty<Rectangle>(),
+    };
 
-    /// <summary>How far rows below the open seal are pushed down.</summary>
-    private int VowShift(int row, int openRow) => openRow >= 0 && row > openRow ? VowBindH + VowBindGap : 0;
-
-    private Rectangle VowRow(int i, int openRow)
-        => new(VowColX, UiKit.BodyTop(VowPanel) + i * (VowRowH + 8) + VowShift(i, openRow), VowColW, VowRowH);
-
-    /// <summary>The BIND control, directly under the seal it belongs to.</summary>
-    private Rectangle VowBindBtn(int openRow)
-    {
-        var above = VowRow(openRow, openRow);
-        return new Rectangle(VowColX + 16, above.Bottom + VowBindGap, VowColW - 32, VowBindH);
-    }
-
-    private Rectangle VowClearAt(int openRow)
-        => new(VowColX, UiKit.BodyTop(VowPanel) + VowRows * (VowRowH + 8) + 4
-                        + (openRow >= 0 ? VowBindH + VowBindGap : 0), VowColW, 44);
-
+    // ── MODEL READS ─────────────────────────────────────────────────────────────────────────────────────
     private static string SourceName(Source s) => s.ToString().ToUpperInvariant();
+    private static string StyleName(Style s) => s.ToString().ToUpperInvariant();
+    private IReadOnlyList<Vow> Known => DustEffects.KnownVows(Tree);
+
+    /// <summary>The live build, described to the Vow layer — the same struct the simulation judges against.</summary>
+    private BuildContext Context =>
+        Hunter is { } h ? SoloBattle.DescribeBuild(Loadout.ToBuild(Tree, Mastery, Character, SkillLevels), h) : BuildContext.Empty;
+
+    /// <summary>Every skill this hunter can equip: the roads walked, plus what it was born with.</summary>
+    private IReadOnlySet<string> KnownSkills()
+    {
+        var set = Mastery.LearnedSkills().ToHashSet(StringComparer.Ordinal);
+        if (Character?.StartingSkillId is { } born) set.Add(born);
+        return set;
+    }
+
+    private SkillDef? SlotDef(int slot) =>
+        slot >= 0 && slot < Loadout.Skills.Count ? SkillCatalogue.Find(Loadout.Skills[slot].SkillId) : null;
+
+    /// <summary>A slot that holds a skill the hunter knows. Anything else reads as empty — the composer refuses it.</summary>
+    private bool SlotFilled(int slot) => SlotDef(slot) is { } d && KnownSkills().Contains(d.Id);
+
+    private float Dps(PlayerLoadout loadout, Hunter hunter)
+        => DamageBench.Measure(loadout.ToBuild(Tree, Mastery, Character, SkillLevels), hunter).Dps;
 
     /// <summary>What a Vow demands, in one line the player can check against their own build.</summary>
     private static string DemandText(Vow v) => v.Demand switch
@@ -549,14 +263,6 @@ public sealed class LoadoutScreen
         VowDemand.SingleSource => "EVERY SKILL THE SAME SOURCE",
         VowDemand.EverySlotFilled => "NO EMPTY SKILL SLOT",
         VowDemand.NoCritInvestment => "NO CRITICAL BONUS",
-        // SHORTENED SO THE NUMBER SURVIVES. "SKILL RATE AT OR BELOW 1.20x" is wider than the 338px the
-        // row leaves, and Fit() cut it at "SKILL RATE AT OR BE..." — deleting the threshold, which is
-        // the entire content of the demand.
-        //
-        // MAX/MIN rather than the obvious mathematical symbols: check_font_coverage.py refused U+2264
-        // and U+2265, because the shipping font's proven set is ASCII plus nine marks and an unproven
-        // glyph draws as NOTHING. The gate caught it on the frame after I wrote it — which is the whole
-        // reason it exists, and worth recording as a case where it earned its keep.
         VowDemand.CadenceAtOrBelow => $"SKILL RATE MAX {v.Threshold:0.##}x",
         VowDemand.CadenceAtOrAbove => $"SKILL RATE MIN {v.Threshold:0.##}x",
         VowDemand.NoDefence => "NO DEFENCE AT ALL",
@@ -565,345 +271,874 @@ public sealed class LoadoutScreen
         _ => "NO DEMAND — ALWAYS ON",
     };
 
-    private IReadOnlyList<Vow> Known => DustEffects.KnownVows(Tree);
+    /// <summary>What the build actually IS, against the same demand — the validator's second line.</summary>
+    private string YourBuildText(Vow v, BuildContext ctx)
+    {
+        switch (v.Demand)
+        {
+            case VowDemand.SingleStyle:
+                var styles = Loadout.EquippedDefs().Select(d => StyleName(d.Style)).Distinct().ToList();
+                return styles.Count == 0 ? "NO SKILLS" : $"{styles.Count} STYLE{(styles.Count == 1 ? "" : "S")}: {string.Join(", ", styles)}";
+            case VowDemand.SingleSource:
+                var sources = Loadout.ToBuild(Tree, Mastery, Character, SkillLevels).Skills.Select(s => SourceName(s.Source)).Distinct().ToList();
+                return sources.Count == 0 ? "NO SKILLS" : $"{sources.Count} SOURCE{(sources.Count == 1 ? "" : "S")}: {string.Join(", ", sources)}";
+            case VowDemand.EverySlotFilled: return $"{ctx.SkillsWoven} OF {ctx.SkillSlots} SLOTS FILLED";
+            case VowDemand.NoCritInvestment: return $"CRITICAL {ctx.CritPercent:0.#}% (BASE {ctx.BaseCritPercent:0.#}%)";
+            case VowDemand.CadenceAtOrBelow:
+            case VowDemand.CadenceAtOrAbove: return $"SKILL RATE {ctx.SkillRate:0.00}x";
+            case VowDemand.NoDefence: return $"DEFENCE {ctx.Defence}";
+            case VowDemand.NoKeystone: return $"{ctx.KeystonesWorn} KEYSTONE{(ctx.KeystonesWorn == 1 ? "" : "S")} IN USE";
+            case VowDemand.SlotLeftBare: return $"{v.Bare.ToString().ToUpperInvariant()} SLOT {(ctx.WornSlots.Contains(v.Bare) ? "WORN" : "EMPTY")}";
+            default: return "ALWAYS ON";
+        }
+    }
 
-    /// <summary>
-    /// The live build, described to the Vow layer — the same struct the simulation judges against.
-    /// </summary>
-    /// <remarks>
-    /// Rebuilt every frame rather than cached. It has to be: the whole value of this screen is that
-    /// changing a Form flips a Vow from UNMET to MET while you watch, and a cache is how that stops
-    /// being true one edit later.
-    /// </remarks>
-    private BuildContext Context =>
-        Hunter is { } h ? SoloBattle.DescribeBuild(Loadout.ToBuild(Tree, Mastery, Character, SkillLevels), h) : BuildContext.Empty;
-
+    // ── UPDATE ──────────────────────────────────────────────────────────────────────────────────────────
     public void Update(Point mouse, bool clicked, bool held, int wheel)
     {
         var hit = Game1.ToOverlay(mouse);
         var skills = Loadout.Skills;
         var known = Known;
+        LayoutRows();
 
         _carryAt = hit;
         var released = _wasHeld && !held;
         _wasHeld = held;
-
-        // A CARRY CANNOT OUTLIVE THE PRESS THAT STARTED IT. Update stops being called when the player
-        // navigates away, so a button released on another screen never reaches the release path below —
-        // and the carry would still be armed on the way back, resolving against wherever the cursor
-        // happened to land. Any frame with the button up and no release to handle clears it.
-        if (!held && !released && _carrying != Carry.None)
-        {
-            _carrying = Carry.None; _carrySlot = -1; _carryMoved = false;
-        }
+        if (!held && !released && _carrying != Carry.None) { _carrying = Carry.None; _carrySlot = -1; _carryMoved = false; }
         if (_carrying != Carry.None && held
             && (Math.Abs(hit.X - _carryFrom.X) > DragSlop || Math.Abs(hit.Y - _carryFrom.Y) > DragSlop))
             _carryMoved = true;
 
-        // ── A DRAG ENDS ─────────────────────────────────────────────────────────────────────────
-        //
-        // On RELEASE, and only a drag that actually moved is treated as one. A press that never left
-        // its slop radius already did its work through the click path below, so resolving it again
-        // here would bind twice — and, on the slot carry, would reorder on every ordinary click.
         if (released && _carrying != Carry.None)
         {
             var from = _carrySlot;
             var moved = _carryMoved;
             _carrying = Carry.None; _carrySlot = -1; _carryMoved = false;
-
             if (moved)
             {
                 var onto = SlotUnder(hit);
                 if (from >= 0 && onto >= 0 && Loadout.MoveSkill(from, onto))
                 {
-                    _slot = onto;
+                    _slot = onto; _pick = Pick.Slot;
                     Dirty = true; _buildRev++;
                     _slotFlash[onto] = SetFlashSeconds;
                     Sound?.Play("sfx_weave", 0.5f);
-                    // SLOT ORDER IS CAST PRIORITY, so the message names the consequence rather than
-                    // the gesture — "moved" would describe the mouse, not the build.
                     _msg = onto == 0 ? "FIRST IN LINE — IT WINS EVERY TIED BEAT." : $"NOW SLOT {onto + 1}.";
                 }
                 return;
             }
         }
 
-        if (wheel != 0 && VowPanel.Contains(hit))
-            _vowScroll = Math.Clamp(_vowScroll - wheel, 0, Math.Max(0, known.Count - VowRows));
-        if (wheel != 0 && SlotsPanel.Contains(hit))
-            _keystoneScroll = Math.Clamp(_keystoneScroll - wheel, 0,
-                                         Math.Max(0, DustEffects.LearnedKeystones(Tree).Count - KeystoneRows));
+        if (wheel != 0 && LoadoutPanel.Contains(hit))
+            _keystoneScroll = Math.Clamp(_keystoneScroll - wheel, 0, Math.Max(0, DustEffects.LearnedKeystones(Tree).Count - KeystoneRows));
+        if (wheel != 0 && _vowListOpen && InspectorPanel.Contains(hit))
+            _vowScroll = Math.Clamp(_vowScroll - wheel, 0, Math.Max(0, known.Count + 1 - VowListRows));
 
         if (!clicked) return;
 
-        for (var i = 0; i < skills.Count; i++)
+        // ── THE LOADOUT COLUMN: rows select (and arm a reorder); an empty row adds a slot. ──────────
+        foreach (var (slot, rect, _) in _rows)
         {
-            // The X first: it sits inside the row, so testing the row first would swallow it.
-            if (skills.Count > 1 && DropX(i).Contains(hit))
+            if (!rect.Contains(hit)) continue;
+            if (slot >= 0)
             {
-                Loadout.RemoveSkill(i);
-                _slot = Math.Max(0, Math.Min(_slot, Loadout.Skills.Count - 1));
+                _slot = slot; _pick = Pick.Slot; _vowListOpen = false; _msg = "";
+                _carrying = Carry.Slot; _carrySlot = slot; _carryFrom = hit; _carryMoved = false;
+            }
+            else if (skills.Count < Loadout.SkillCapacity)
+            {
+                _slot = Loadout.AddSkill(); _pick = Pick.Slot; _vowListOpen = false;
                 Dirty = true; _buildRev++;
-                _msg = "SLOT CLEARED.";
-                return;
+                _msg = "PICK A SKILL FROM THE LIBRARY FOR THIS SLOT.";
             }
-
-            if (KindToggle(i).Contains(hit))
-            {
-                // FLIPPING THE SLOT CHANGES WHICH SKILL IT IS — a style's two skills are different
-                // abilities, so the toggle swaps to the OTHER skill of the same style. An empty
-                // slot has no style to flip within.
-                if (SkillCatalogue.Find(skills[i].SkillId) is not { } cur0) return;
-                var wanted = cur0.TakesABeat
-                    ? SkillCatalogue.PassiveOf(cur0.Style)
-                    : SkillCatalogue.ActiveOf(cur0.Style);
-                // THE SKILL GATE, WHERE THE PLAYER MEETS IT. Refused out loud rather than silently:
-                // the row's name would otherwise change to a skill the build then quietly drops,
-                // which is the worst of both.
-                if (!KnownSkills().Contains(wanted.Id))
-                {
-                    _msg = $"{wanted.Name} IS LEARNED ON THE MASTERY TREE, ON {wanted.Style.ToString().ToUpperInvariant()}'S ROAD.";
-                    return;
-                }
-                _slot = i;
-                Loadout.SetSkill(i, wanted.Id);
-                Dirty = true; _buildRev++;
-                // Say which one it became, because the row's name line changes underneath the click
-                // and an unexplained change reads as a bug.
-                _msg = $"NOW {wanted.Name} — {(wanted.TakesABeat ? "TAKES AN ACTION" : "COSTS NO ACTION")}.";
-                return;
-            }
-            if (SlotRow(i).Contains(hit))
-            {
-                _slot = i; _msg = "";
-                // ARMED, not acted on: if the cursor leaves the row while held this becomes a reorder,
-                // and if it does not, selecting the slot (already done) was the whole click.
-                _carrying = Carry.Slot; _carrySlot = i; _carryFrom = hit; _carryMoved = false;
-                return;
-            }
-        }
-
-        if (skills.Count < Loadout.SkillCapacity && AddBtn.Contains(hit))
-        {
-            // The guard above is the negation of the only way AddSkill refuses, and the button is only
-            // drawn under the same guard — the old else-branch ("NO MORE SLOTS…") had never rendered.
-            _slot = Loadout.AddSkill();
-            Dirty = true; _buildRev++; _msg = "SKILL EQUIPPED.";
             return;
         }
-
         var learned = DustEffects.LearnedKeystones(Tree);
         _keystoneScroll = Math.Clamp(_keystoneScroll, 0, Math.Max(0, learned.Count - KeystoneRows));
         for (var i = 0; i < KeystoneRows && _keystoneScroll + i < learned.Count; i++)
         {
             if (!KeystoneChip(i).Contains(hit)) continue;
-            if (Loadout.ToggleKeystone(learned[_keystoneScroll + i].Id, learned)) { Dirty = true; _buildRev++; _msg = ""; }
-            else _msg = $"ONLY {Loadout.KeystoneCapacity} SOCKET(S) — MORE IN TRAITS (P).";
+            _pick = Pick.Keystone; _pickKeystoneId = learned[_keystoneScroll + i].Id; _vowListOpen = false; _msg = "";
             return;
         }
 
-        if (CopyCodeBtn.Contains(hit))
+        // ── THE SKILLS COLUMN: tiles, the fork, the chips — all select. ─────────────────────────────
+        for (var st = 0; st < 6; st++)
+            for (var w = 0; w < 2; w++)
+            {
+                if (!LibTile(st, w).Contains(hit)) continue;
+                var def = w == 0 ? SkillCatalogue.ActiveOf((Style)st) : SkillCatalogue.PassiveOf((Style)st);
+                _pick = Pick.Library; _pickSkillId = def.Id; _vowListOpen = false; _msg = "";
+                return;
+            }
+        if (SlotDef(_slot) is { } cur && KnownSkills().Contains(cur.Id))
+        {
+            var chosen = SkillLevels.VariationOf(cur);
+            for (var vi = 0; vi < cur.Variations.Count && vi < 2; vi++)
+            {
+                if (VarCard(vi).Contains(hit)) { _pick = Pick.Variation; _pickIndex = vi; _vowListOpen = false; _msg = ""; return; }
+                var v = cur.Variations[vi];
+                for (var ri = 0; ri < v.Reinforcements.Count && ri < 3; ri++)
+                    if (ReinfChip(vi, ri).Contains(hit))
+                    {
+                        if (chosen?.Name != v.Name) { _pick = Pick.Variation; _pickIndex = vi; _msg = $"CHOOSE {v.Name} FIRST — ITS REINFORCEMENTS COME AFTER."; }
+                        else { _pick = Pick.Reinforcement; _pickIndex = ri; _msg = ""; }
+                        _vowListOpen = false;
+                        return;
+                    }
+            }
+        }
+
+        // ── THE INSPECTOR: the primary button, the text actions, the vow list. ──────────────────────
+        if (_vowListOpen)
+        {
+            var top = _vowListTop;
+            for (var r = 0; r < VowListRows; r++)
+            {
+                var idx = _vowScroll + r - 1;   // row 0 is NO VOW
+                if (idx >= known.Count) break;
+                if (!VowListRow(r, top).Contains(hit)) continue;
+                if (_slot >= skills.Count) { _msg = "PICK A SLOT FIRST."; return; }
+                if (idx < 0)
+                {
+                    if (Loadout.SetVow(_slot, null, known)) { Dirty = true; _buildRev++; _msg = "NO VOW ON THIS SLOT."; }
+                }
+                else
+                {
+                    var v = known[idx];
+                    var already = skills[_slot].VowId == v.Id;
+                    if (Loadout.SetVow(_slot, already ? null : v.Id, known))
+                    {
+                        Dirty = true; _buildRev++;
+                        if (already) _msg = $"{v.Name.ToUpperInvariant()} BROKEN.";
+                        else { _msg = $"{v.Name.ToUpperInvariant()} BOUND TO SLOT {_slot + 1}."; _bindFlash[_slot] = BindFlashSeconds; Sound?.Play("sfx_bind", 0.55f); }
+                    }
+                    else _msg = "THIS SLOT CANNOT TAKE THAT VOW.";
+                }
+                _vowListOpen = false;
+                return;
+            }
+            if (ChangeVowBtn(_changeVowY).Contains(hit)) { _vowListOpen = false; return; }
+            if (InspectorPanel.Contains(hit)) return;
+        }
+        else if (_changeVowY > 0 && ChangeVowBtn(_changeVowY).Contains(hit) && _pick == Pick.Slot && SlotFilled(_slot))
+        {
+            _vowListOpen = true; _vowScroll = 0;
+            return;
+        }
+        if (RespecText.Contains(hit) && _respecShown && SlotDef(_slot) is { } rd)
+        {
+            SkillLevels.Respec(rd.Id);
+            Dirty = true; _buildRev++;
+            if (_pick == Pick.Reinforcement) _pick = Pick.Slot;
+            _msg = $"{rd.Name} IS UNSPENT AGAIN. EVERY LEVEL IT EARNED IS STILL THERE.";
+            return;
+        }
+        if (CopyText.Contains(hit))
         {
             var code = IdleXIdle.Core.Persistence.ShareCodes.EncodeBuild(
                 new IdleXIdle.Core.Persistence.ShareCodes.SharedBuild
                 {
                     Skills = Loadout.Skills.Select(s => new IdleXIdle.Core.Persistence.SavedSkill
                     {
-                        // The id IS the identity (code v2); the element rides beside it as the
-                        // fallback a chosen variation has not yet overridden.
-                        SkillId = s.SkillId, Source = s.Source.ToString(),
-                        VowId = s.VowId, Passive = s.Passive,
+                        SkillId = s.SkillId, Source = s.Source.ToString(), VowId = s.VowId, Passive = s.Passive,
                     }).ToList(),
                     Keystones = Loadout.KeystoneIds.ToList(),
                     Mastery = MasteryTaken.ToList(),
                 });
-            // The failure is NOT silent (the review's other note): no clipboard, no lie.
-            _copyToast = ClipboardInterop.TrySet(code)
-                ? "COPIED — A FRIEND PASTES IT IN THE VAULT"
-                : "COPY FAILED — TRY AGAIN";
+            _copyToast = ClipboardInterop.TrySet(code) ? "COPIED — A FRIEND PASTES IT IN THE VAULT" : "COPY FAILED — TRY AGAIN";
             _copyToastFrames = 240;
             return;
         }
+        if (PrimaryBtn.Contains(hit)) Commit();
+    }
 
-        if (_slot >= skills.Count) return;
-
-        // ── THE MIDDLE COLUMN'S TWO FACES. The tabs are tested before either face, since both
-        //    draw underneath them.
-        for (var t = 0; t < 2; t++)
-            if (Tab(t).Contains(hit)) { _tab = t; return; }
-
-        if (_tab == 1)
+    /// <summary>The primary button's verb for the current selection, and whether it may be pressed.</summary>
+    private (string Label, bool Enabled, string Refusal) Primary()
+    {
+        var skills = Loadout.Skills;
+        var known = KnownSkills();
+        switch (_pick)
         {
-            // The slot's own skill, by id — an empty slot has no tree and takes no clicks.
-            if (SkillCatalogue.Find(skills[_slot].SkillId) is not { } td) return;
-            var tv = SkillLevels.VariationOf(td);
-
-            // TAKING A VARIATION — and with it the skill's Source.
-            if (tv is null)
+            case Pick.Library:
             {
-                for (var vi = 0; vi < td.Variations.Count && vi < 2; vi++)
-                    if (VarCard(vi).Contains(hit))
-                    {
-                        if (SkillLevels.FreeOn(td.Id) < 1)
-                        {
-                            _msg = $"{td.Name} HAS NO LEVEL TO SPEND. CLEAR WAVES WITH IT.";
-                            return;
-                        }
-                        var v = td.Variations[vi];
-                        SkillLevels.ChooseVariation(td, v.Name);
-                        Dirty = true; _buildRev++;
-                        _msg = $"{td.Name} IS NOW {v.Name}, AND IT IS {SourceName(v.Source).ToUpperInvariant()}.";
-                        return;
-                    }
+                if (SkillCatalogue.Find(_pickSkillId) is not { } def) return ("", false, "");
+                if (!known.Contains(def.Id)) return ($"LEARN ON {StyleName(def.Style)}'S ROAD", false, $"LEARNED ON {StyleName(def.Style)}'S ROAD, ON THE MASTERY TREE.");
+                if (_slot >= skills.Count) return ("EQUIP", false, "PICK A SLOT ON THE LEFT FIRST.");
+                if (skills[_slot].SkillId == def.Id) return ($"EQUIPPED IN SLOT {_slot + 1}", false, "");
+                return ($"EQUIP TO SLOT {_slot + 1}", true, "");
             }
-            else
+            case Pick.Variation:
             {
-                for (var ri = 0; ri < tv.Reinforcements.Count && ri < 3; ri++)
-                    if (ReinfCard(ri).Contains(hit))
-                    {
-                        var r = tv.Reinforcements[ri];
-                        if (SkillLevels.HasReinforcement(td.Id, r.Name)) return;
-                        if (SkillLevels.FreeOn(td.Id) < 1)
-                        {
-                            _msg = $"{td.Name} HAS NO LEVEL TO SPEND. CLEAR WAVES WITH IT.";
-                            return;
-                        }
-                        SkillLevels.TakeReinforcement(td, r.Name);
-                        Dirty = true; _buildRev++;
-                        _msg = $"{r.Name}: {r.Line.ToUpperInvariant()}";
-                        return;
-                    }
-
-                if (RespecBtn.Contains(hit))
-                {
-                    SkillLevels.Respec(td.Id);
-                    Dirty = true; _buildRev++;
-                    _msg = $"{td.Name} IS UNSPENT AGAIN. EVERY LEVEL IT EARNED IS STILL THERE.";
-                    return;
-                }
+                if (SlotDef(_slot) is not { } def || _pickIndex >= def.Variations.Count) return ("", false, "");
+                var v = def.Variations[_pickIndex];
+                var chosen = SkillLevels.VariationOf(def);
+                if (chosen?.Name == v.Name) return ("CHOSEN", false, "");
+                if (chosen is not null) return ($"CHOOSE {v.Name}", false, $"{def.Name} IS {chosen.Name}. RESPEC TO CHANGE — IT IS FREE.");
+                if (SkillLevels.FreeOn(def.Id) < 1)
+                    return ($"CHOOSE {v.Name}", false, $"NO LEVEL TO SPEND — {WavesToNext(def)} MORE WAVES WITH {def.Name} EQUIPPED.");
+                return ($"CHOOSE {v.Name}", true, "");
             }
-            return;   // the tree owns every click on this panel while it is showing
-        }
-
-        // PICKING FROM THE LIBRARY. A skill you have not learned is not silently inert — it says
-        // which road teaches it, because "why can I not click this" is the one question a locked
-        // control must always answer.
-        for (var i = 0; i < 12; i++)
-        {
-            if (!LibCell(i).Contains(hit)) continue;
-            var style = (Style)(i / 2);
-            var def = i % 2 == 0 ? SkillCatalogue.ActiveOf(style) : SkillCatalogue.PassiveOf(style);
-            if (!KnownSkills().Contains(def.Id))
+            case Pick.Reinforcement:
             {
-                _msg = $"{def.Name} IS LEARNED ON {style.ToString().ToUpperInvariant()}'S ROAD, ON THE MASTERY TREE.";
-                return;
+                if (SlotDef(_slot) is not { } def || SkillLevels.VariationOf(def) is not { } v || _pickIndex >= v.Reinforcements.Count) return ("", false, "");
+                var r = v.Reinforcements[_pickIndex];
+                if (SkillLevels.HasReinforcement(def.Id, r.Name)) return ("OWNED", false, "");
+                if (SkillLevels.FreeOn(def.Id) < 1)
+                    return ($"TAKE {r.Name}", false, $"NO LEVEL TO SPEND — {WavesToNext(def)} MORE WAVES WITH {def.Name} EQUIPPED.");
+                return ($"TAKE {r.Name}", true, "");
             }
-            var changed = skills[_slot].SkillId != def.Id;
-            Loadout.SetSkill(_slot, def.Id); Dirty = true; _buildRev++;
-            // ONLY WHEN IT CHANGED. Re-picking what is already picked is a no-op, and a flourish
-            // on a no-op teaches the player that the flourish means nothing.
-            if (changed) { _slotFlash[_slot] = SetFlashSeconds; Sound?.Play("sfx_weave", 0.45f); }
-            return;
-        }
-
-        var openRow = OpenBindRow(known);
-
-        // THE BIND CONTROL, tested BEFORE the seals: it sits between two of them, and whichever is
-        // checked first owns the overlap.
-        if (openRow >= 0 && VowBindBtn(openRow).Contains(hit) && _slot < skills.Count)
-        {
-            var v = known[_vowScroll + openRow];
-            var already = skills[_slot].VowId == v.Id;
-            if (Loadout.SetVow(_slot, already ? null : v.Id, known))
+            case Pick.Keystone:
             {
-                Dirty = true; _buildRev++;
-                if (already) _msg = $"{v.Name.ToUpperInvariant()} BROKEN.";
-                else
-                {
-                    _msg = $"{v.Name.ToUpperInvariant()} BOUND TO SLOT {_slot + 1}.";
-                    _bindFlash[_slot] = BindFlashSeconds;
-                    Sound?.Play("sfx_bind", 0.55f);
-                }
+                if (Loadout.HasKeystone(_pickKeystoneId)) return ("UNSOCKET", true, "");
+                if (Loadout.KeystoneIds.Count >= Loadout.KeystoneCapacity)
+                    return ("SOCKET", false, $"ONLY {Loadout.KeystoneCapacity} SOCKET{(Loadout.KeystoneCapacity == 1 ? "" : "S")} — MORE ON THE TRAITS SCREEN.");
+                return ("SOCKET", true, "");
             }
-            else _msg = "THIS SLOT CANNOT TAKE THAT VOW.";
-            return;
-        }
-
-        for (var r = 0; r < VowRows; r++)
-        {
-            var idx = _vowScroll + r;
-            if (idx >= known.Count || !VowRow(r, openRow).Contains(hit)) continue;
-            var v = known[idx];
-            // CLICKING AN OPEN SEAL CLOSES IT. Otherwise the only way to put the BIND row away is to
-            // open a different one, and a control that cannot be dismissed reads as modal.
-            _readingVowId = _readingVowId == v.Id ? null : v.Id;
-            return;
-        }
-
-        if (VowClearAt(openRow).Contains(hit) && Loadout.SetVow(_slot, null, known))
-        {
-            Dirty = true; _buildRev++;
-            _msg = "NO VOW ON THIS SLOT.";
+            default:
+            {
+                if (!SlotFilled(_slot)) return ("REMOVE FROM SLOT", false, "");
+                if (skills.Count <= 1) return ("REMOVE FROM SLOT", false, "THE LAST SKILL STAYS — A HUNTER NEEDS ONE.");
+                return ("REMOVE FROM SLOT", true, "");
+            }
         }
     }
+
+    private string WavesToNext(SkillDef def)
+    {
+        var level = SkillLevels.LevelOf(def.Id);
+        if (level >= SkillProgress.MaxLevel) return "0";
+        return Math.Max(0, SkillProgress.UsesForLevel(level + 1) - SkillLevels.UsesOf(def.Id)).ToString();
+    }
+
+    /// <summary>Press the primary button: the one commit per selection.</summary>
+    private void Commit()
+    {
+        var (_, enabled, _) = Primary();
+        if (!enabled) return;
+        switch (_pick)
+        {
+            case Pick.Library:
+                Loadout.SetSkill(_slot, _pickSkillId); Dirty = true; _buildRev++;
+                _slotFlash[_slot] = SetFlashSeconds; Sound?.Play("sfx_weave", 0.45f);
+                _msg = $"{SkillCatalogue.Find(_pickSkillId)?.Name} EQUIPPED IN SLOT {_slot + 1}.";
+                _pick = Pick.Slot;
+                break;
+            case Pick.Variation:
+            {
+                var def = SlotDef(_slot)!;
+                var v = def.Variations[_pickIndex];
+                SkillLevels.ChooseVariation(def, v.Name); Dirty = true; _buildRev++;
+                _msg = $"{def.Name} IS NOW {v.Name}, AND IT IS {SourceName(v.Source)}.";
+                break;
+            }
+            case Pick.Reinforcement:
+            {
+                var def = SlotDef(_slot)!;
+                var r = SkillLevels.VariationOf(def)!.Reinforcements[_pickIndex];
+                SkillLevels.TakeReinforcement(def, r.Name); Dirty = true; _buildRev++;
+                _msg = $"{r.Name}: {r.Line.ToUpperInvariant()}";
+                break;
+            }
+            case Pick.Keystone:
+                if (Loadout.ToggleKeystone(_pickKeystoneId, DustEffects.LearnedKeystones(Tree))) { Dirty = true; _buildRev++; _msg = ""; }
+                break;
+            default:
+                Loadout.RemoveSkill(_slot);
+                _slot = Math.Max(0, Math.Min(_slot, Loadout.Skills.Count - 1));
+                Dirty = true; _buildRev++; _msg = "SLOT CLEARED.";
+                break;
+        }
+    }
+
+    private int SlotUnder(Point p)
+    {
+        foreach (var (slot, r, _) in _rows)
+            if (slot >= 0 && new Rectangle(r.X - 8, r.Y - 4, r.Width + 16, r.Height + 8).Contains(p)) return slot;
+        return -1;
+    }
+
+    // ── DRAW ────────────────────────────────────────────────────────────────────────────────────────────
+    private string? _tip;
+    private Point _tipAt;
+    private int _changeVowY;
+    private int _vowListTop;
+    private bool _respecShown;
 
     public void Draw(SpriteBatch b, Point mouse, bool clicked)
     {
         var hit = Game1.ToOverlay(mouse);
-        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xC8));
-        // THIS IS THE BUILD SCREEN NOW. Playtest: "'Choose your skills' butonu ile açılan sayfayı bu
-        // sayfaya entegre edelim. Ana mantığı o aslında bu sayfanın." Right — the overview it used to
-        // hang off showed the same skills without letting you change any of them, so BUILD was a page
-        // you looked at and this was the page you used. The rail's BUILD tile opens this directly.
-        _ui.TextCenterBig(b, "BUILD", 960, 24, UiInk.Accent, UiTypography.ScreenTitle, TextFace.Display);
-        _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
-        _ui.TextCenterBig(b, "LEARN A SKILL ON THE MASTERY TREE, THEN EQUIP IT IN A SLOT",
-                          960, 80, Slate, UiTypography.Secondary);
-
-        // THE DISCIPLINE LINE — the Nen frame this game was born from, finally said out loud: your
-        // skills are your specialisation's craft, and a sworn Vow buys back what it does not give you.
-        if (ChosenStyle is { } disc)
-            _ui.TextCenterBig(b, $"YOUR STYLE: {disc.ToString().ToUpperInvariant()} — ITS SKILLS HIT TWICE AS HARD  ·  A VOW ON A FAR-STYLE SKILL PULLS IT ONE RING CLOSER",
-                              960, 108, Gold, UiTypography.Secondary);
-        else
-            _ui.TextCenterBig(b, "NO STYLE CHOSEN YET — A SPECIALISATION NODE ON THE MASTERY TREE (E) CHOOSES ONE",
-                              960, 108, Slate, UiTypography.Secondary);
-
+        _tip = null;
+        LayoutRows();
         TickEffects();
 
-        DrawSlots(b, hit);
-        DrawPicker(b, hit);
-        DrawVows(b, hit);
+        _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xC8));
+        _ui.TextCenterBig(b, "BUILD", UiKit.PageCenterX, 24, Gold, UiTypography.ScreenTitle, TextFace.Display);
+        _ui.Fill(b, new Rectangle(UiKit.PageCenterX - 240, 74, 480, 3), Gold * 0.5f);
 
-        // The build as one line on the clipboard — show, don't trade. Same flat-cell idiom as
-        // VowClear — this screen has no ornate-button helper of its own.
-        _ui.Fill(b, CopyCodeBtn, CopyCodeBtn.Contains(hit) ? new Color(0x2C, 0x25, 0x44) : Quiet);
-        _ui.TextCenter(b, "COPY BUILD CODE", CopyCodeBtn.Center.X, CopyCodeBtn.Y + 16,
-                       CopyCodeBtn.Contains(hit) ? Bone : Slate);
+        DrawLoadout(b, hit);
+        DrawSkills(b, hit);
+        DrawInspector(b, hit);
+
+        if (_msg.Length > 0) _ui.TextCenterBig(b, _msg, UiKit.PageCenterX, UiKit.PageBottom(BottomMargin) + 16, Gold, UiTypography.Body);
         if (_copyToastFrames > 0)
         {
             _copyToastFrames--;
-            _ui.TextCenter(b, _copyToast, CopyCodeBtn.Center.X, CopyCodeBtn.Y - 26,
-                           _copyToast.StartsWith("COPIED", StringComparison.Ordinal) ? Gold : Ember);
+            _ui.TextCenterBig(b, _copyToast, InspectorPanel.Center.X, InspectorPanel.Bottom + 14,
+                              _copyToast.StartsWith("COPIED", StringComparison.Ordinal) ? Gold : Ember, UiTypography.Secondary);
         }
-
-        if (_msg.Length > 0) _ui.TextCenter(b, _msg, 960, 1016, Gold);
-
-        // LAST: the carried seal sits over everything — it is attached to the cursor, and
-        // anything drawn on top of it would look like the drop failed.
         DrawCarried(b);
+        if (_tip is { } tip) _ui.HoverTip(b, tip, _tipAt);
     }
 
-    /// <summary>What is in hand, under the cursor, while a drag is live.</summary>
-    /// <remarks>
-    /// Drawn only once the press has passed the slop radius: a ghost that appears on every click makes
-    /// the screen feel twitchy and tells the player they started something they did not.
-    /// </remarks>
+    private void Tip(Rectangle r, Point hit, string text) { if (r.Contains(hit) && _carrying == Carry.None) { _tip = text; _tipAt = hit; } }
+
+    // ── YOUR LOADOUT ────────────────────────────────────────────────────────────────────────────────────
+    private void DrawLoadout(SpriteBatch b, Point hit)
+    {
+        var panel = LoadoutPanel;
+        _ui.Panel(b, panel);   // the one ornate surface: the build IS the subject of this screen
+        _ui.TextCenterBig(b, "YOUR LOADOUT", panel.Center.X, UiKit.TitleTop(panel), Gold, UiTypography.PanelTitle);
+
+        var skills = Loadout.Skills;
+        var ctx = Context;
+        var known = KnownSkills();
+        var captionDrawn = new bool[2];
+        foreach (var (slot, row, passive) in _rows)
+        {
+            var g = passive ? 1 : 0;
+            if (!captionDrawn[g])
+            {
+                _ui.TextBig(b, passive ? "PASSIVE — ALWAYS ON" : "ACTIVE — TAKES A TURN", row.X, row.Y - UiTypography.Pitch(UiTypography.Secondary) - 2, Slate, UiTypography.Secondary);
+                captionDrawn[g] = true;
+            }
+            if (slot < 0) { DrawEmptyRow(b, row, hit); continue; }
+
+            var s = skills[slot];
+            var def = SkillCatalogue.Find(s.SkillId);
+            var filled = def is not null && known.Contains(def.Id);
+            var on = slot == _slot && _pick != Pick.Keystone;
+            var over = row.Contains(hit) && _carrying == Carry.None;
+            var dropping = _carrying == Carry.Slot && _carryMoved && SlotUnder(_carryAt) == slot && _carrySlot != slot;
+            var inHand = _carrying == Carry.Slot && _carryMoved && _carrySlot == slot;
+            var col = SourceColor.GetValueOrDefault(s.Source, Bone);
+
+            _ui.Fill(b, row, on ? new Color(0x2C, 0x25, 0x44) : over ? new Color(0x1E, 0x18, 0x2C) : Quiet);
+            if (dropping) { _ui.Fill(b, row, col * 0.16f); Outline(b, row, Bone, 3); }
+            if (inHand) _ui.Fill(b, row, new Color(0x0C, 0x09, 0x14) * 0.6f);
+            if (_slotFlash.TryGetValue(slot, out var sf)) { var t = Math.Clamp(sf / SetFlashSeconds, 0f, 1f); _ui.Fill(b, row, col * (0.30f * t)); }
+            if (_bindFlash.TryGetValue(slot, out var bf)) DrawBindChain(b, row, bf / BindFlashSeconds);
+            if (on && !dropping) Outline(b, row, Gold, 2);   // gold = selected
+
+            // The numbered spine: this order IS cast priority.
+            var spine = new Rectangle(row.X, row.Y, 22, row.Height);
+            _ui.Fill(b, spine, col * (on ? 0.55f : 0.34f));
+            _ui.TextCenterBig(b, $"{slot + 1}", spine.Center.X, row.Y + row.Height / 2 - 12, on ? Bone : Bone * 0.75f, UiTypography.Body);
+
+            var gbox = new Rectangle(row.X + 32, row.Y + 17, 56, 56);
+            _ui.Fill(b, gbox, new Color(0x0C, 0x09, 0x14) * 0.55f);
+            if (!filled || def is null)
+            {
+                _ui.Icon(b, "ui_slot_locked", gbox, Slate);
+                _ui.TextBig(b, "EMPTY SLOT", row.X + 100, row.Y + 12, UiInk.Empty, UiTypography.Headline);
+                _ui.TextBig(b, "PICK A SKILL FROM THE LIBRARY", row.X + 100, row.Y + 12 + UiTypography.Pitch(UiTypography.Headline), Slate, UiTypography.Secondary);
+                continue;
+            }
+            _ui.Icon(b, $"icon_skill_{def.Id}", gbox, col);
+
+            var tx = row.X + 100;
+            var right = row.Right - 12;
+            // Line 1: NAME, and the vow pill at the right.
+            var vow = Vows.ById(s.VowId);
+            var pillW = 0;
+            if (vow is not null)
+            {
+                var live = Vows.IsActive(vow, ctx);
+                var pill = $"{vow.Short.ToUpperInvariant()} {(live ? "OK" : "BROKEN")}";
+                pillW = _ui.MeasureBig(pill, UiTypography.Caption) + UiTypography.ChipPadX * 2;
+                var pr = new Rectangle(right - pillW, row.Y + 12, pillW, UiTypography.Caption + UiTypography.ChipPadY * 2);
+                _ui.Fill(b, pr, (live ? Gold : Ember) * 0.16f);
+                Outline(b, pr, live ? Gold : Ember, 1);
+                _ui.TextBig(b, pill, pr.X + UiTypography.ChipPadX, pr.Y + UiTypography.ChipPadY, live ? Gold : Ember, UiTypography.Caption);
+                Tip(pr, hit, live ? $"{vow.Name.ToUpperInvariant()} holds — x{Vows.Multiplier(vow):0.00}." : $"{vow.Name.ToUpperInvariant()} is broken: {DemandText(vow)} — it pays nothing until it holds.");
+            }
+            _ui.TextBig(b, _ui.ShortenBig(def.Name, right - pillW - 12 - tx, UiTypography.Headline), tx, row.Y + 10, on ? Gold : Bone, UiTypography.Headline);
+            // Line 2: STYLE · LEVEL · the style factor.
+            var level = SkillLevels.LevelOf(def.Id);
+            var line2 = $"{StyleName(def.Style)} · LV {level}";
+            if (ChosenStyle is { } dd)
+            {
+                var f = StyleAffinity.Factor(dd, def.Style, vowSworn: s.VowId is not null);
+                line2 += f >= 1.99f ? " · x2.0 YOURS" : $" · x{f:0.0#}";
+            }
+            _ui.TextBig(b, line2, tx, row.Y + 10 + UiTypography.Pitch(UiTypography.Headline) - 4, Slate, UiTypography.Secondary);
+            // Line 3: the variation, its Source (gem + word), and how much of it is bought — or the level to spend.
+            var chosen = SkillLevels.VariationOf(def);
+            var free = SkillLevels.FreeOn(def.Id);
+            var y3 = row.Y + row.Height - 8 - UiTypography.Body;
+            if (chosen is null)
+            {
+                _ui.TextBig(b, free > 0 ? $"+{free} LEVEL TO SPEND — CHOOSE A VARIATION" : "NO VARIATION YET", tx, y3, free > 0 ? Gold : Slate, UiTypography.Body);
+            }
+            else
+            {
+                var vc = SourceColor.GetValueOrDefault(chosen.Source, Bone);
+                if (_ui.Assets.Get($"source_{chosen.Source.ToString().ToLowerInvariant()}") is { } gem)
+                    b.Draw(gem, new Rectangle(tx, y3 + 1, 22, 22), Color.White);
+                var bought = chosen.Reinforcements.Count(r => SkillLevels.HasReinforcement(def.Id, r.Name));
+                var x3 = tx + 28;
+                _ui.TextBig(b, chosen.Name.ToUpperInvariant(), x3, y3, Bone, UiTypography.Body); x3 += _ui.MeasureBig(chosen.Name.ToUpperInvariant(), UiTypography.Body);
+                _ui.TextBig(b, " · ", x3, y3, Slate, UiTypography.Body); x3 += _ui.MeasureBig(" · ", UiTypography.Body);
+                _ui.TextBig(b, SourceName(chosen.Source), x3, y3, vc, UiTypography.Body); x3 += _ui.MeasureBig(SourceName(chosen.Source), UiTypography.Body);
+                _ui.TextBig(b, $" · {bought}/{chosen.Reinforcements.Count}{(free > 0 ? $"  +{free}" : "")}", x3, y3, free > 0 ? Gold : Slate, UiTypography.Body);
+            }
+            Tip(row, hit, $"{def.Name} — {def.Line}");
+        }
+
+        // ── KEYSTONES: chips; click selects, the inspector sockets. ──────────────────────────────────
+        var learned = DustEffects.LearnedKeystones(Tree);
+        _keystoneScroll = Math.Clamp(_keystoneScroll, 0, Math.Max(0, learned.Count - KeystoneRows));
+        var head = KeystoneHead;
+        if (head.Bottom < BenchBlock.Y - 30)
+        {
+            _ui.TextBig(b, "KEYSTONES", head.X, head.Y, Slate, UiTypography.Secondary);
+            _ui.TextRightBig(b, learned.Count == 0 ? "LEARN THEM ON THE TRAITS SCREEN"
+                                : $"{Loadout.KeystoneIds.Count} / {Loadout.KeystoneCapacity} SOCKETS" + (learned.Count > KeystoneRows ? $"  ·  {_keystoneScroll + 1}-{Math.Min(learned.Count, _keystoneScroll + KeystoneRows)} OF {learned.Count}" : ""),
+                             head.Right, head.Y, Slate, UiTypography.Secondary);
+            for (var i = 0; i < KeystoneRows; i++)
+            {
+                var chip = KeystoneChip(i);
+                if (chip.Bottom > BenchBlock.Y - 8) break;
+                var idx = _keystoneScroll + i;
+                if (idx >= learned.Count)
+                {
+                    _ui.Plate(b, chip);
+                    _ui.TextBig(b, learned.Count == 0 && i == 0 ? "NO KEYSTONES LEARNED YET" : "EMPTY SOCKET", chip.X + 16, chip.Y + 10, UiInk.Empty, UiTypography.Body);
+                    continue;
+                }
+                var k = learned[idx];
+                var worn = Loadout.HasKeystone(k.Id);
+                var on = _pick == Pick.Keystone && _pickKeystoneId == k.Id;
+                var over = chip.Contains(hit);
+                _ui.Fill(b, chip, on ? new Color(0x2C, 0x25, 0x44) : over ? new Color(0x1E, 0x18, 0x2C) : Quiet);
+                if (worn) _ui.Fill(b, new Rectangle(chip.X, chip.Y, 5, chip.Height), Gold);
+                if (on) Outline(b, chip, Gold, 2);
+                _ui.TextBig(b, k.Name.ToUpperInvariant(), chip.X + 16, chip.Y + 10, worn ? Gold : Bone, UiTypography.Body);
+                if (worn) _ui.TextRightBig(b, "IN USE", chip.Right - 14, chip.Y + 12, Met, UiTypography.Secondary);
+                Tip(chip, hit, k.Blurb);
+            }
+        }
+
+        // ── THE BENCH: what the build does against the reference dummy, and what the pick would do. ──
+        if (Hunter is { } hunter)
+        {
+            var bench = BenchBlock;
+            _ui.Fill(b, new Rectangle(bench.X, bench.Y - 10, bench.Width, 1), Dim);
+            _ui.TextBig(b, "BUILD DAMAGE (BENCH)", bench.X, bench.Y, Slate, UiTypography.Secondary);
+            if (_currentRev != _buildRev) { _currentDps = Dps(Loadout, hunter); _currentRev = _buildRev; }
+            var vy = bench.Y + UiTypography.Pitch(UiTypography.Secondary);
+            _ui.TextBig(b, $"{_currentDps:N0} / s", bench.X, vy, Bone, UiTypography.PrimaryValue);
+            // The library pick under inspection, previewed in the selected slot: measured on the real loadout, then put back.
+            if (_pick == Pick.Library && SkillCatalogue.Find(_pickSkillId) is { } pd && known.Contains(pd.Id)
+                && _slot < skills.Count && skills[_slot].SkillId is { } keepId && keepId != pd.Id)
+            {
+                var key = (pd.Id, _slot, _buildRev);
+                if (_previewKey != key)
+                {
+                    Loadout.SetSkill(_slot, pd.Id);
+                    _previewDps = Dps(Loadout, hunter);
+                    Loadout.SetSkill(_slot, keepId);
+                    _previewKey = key;
+                }
+                var pct = _currentDps > 0.01f ? (_previewDps - _currentDps) / _currentDps * 100f : 0f;
+                var tint = MathF.Abs(pct) < 0.5f ? Slate : pct > 0f ? Met : Ember;
+                _ui.TextRightBig(b, MathF.Abs(pct) < 0.5f ? "NO CHANGE" : $"{(pct > 0 ? "+" : "")}{pct:0}% WITH {pd.Name}", bench.Right, vy + 8, tint, UiTypography.Body);
+            }
+            Tip(bench, hit, "Damage per second against a reference dummy, from the same bench the balance tests use. The fight varies; this compares builds.");
+        }
+    }
+
+    private void DrawEmptyRow(SpriteBatch b, Rectangle row, Point hit)
+    {
+        var over = row.Contains(hit);
+        _ui.Plate(b, row);
+        if (over) Outline(b, row, Slate, 1);
+        var gbox = new Rectangle(row.X + 32, row.Y + 17, 56, 56);
+        Outline(b, gbox, UiInk.Empty, 1);
+        _ui.TextBig(b, "EMPTY SLOT", row.X + 100, row.Y + 14, UiInk.Empty, UiTypography.Headline);
+        _ui.TextBig(b, "CLICK, THEN PICK A SKILL FROM THE LIBRARY", row.X + 100, row.Y + 14 + UiTypography.Pitch(UiTypography.Headline), Slate, UiTypography.Secondary);
+    }
+
+    // ── SKILLS: the library by style, and the selected skill's tree ────────────────────────────────────
+    private void DrawSkills(SpriteBatch b, Point hit)
+    {
+        var panel = SkillsPanel;
+        _ui.Plate(b, panel);
+        var known = KnownSkills();
+        var skills = Loadout.Skills;
+        _ui.TextBig(b, "SKILLS", SkillsX, panel.Y + 16, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, $"LEARNED {known.Count(id => SkillCatalogue.Find(id) is not null)} / 12  ·  LEARN MORE ON THE MASTERY TREE", SkillsX + SkillsW, panel.Y + 16, Slate, UiTypography.Secondary);
+
+        var equipped = skills.Select(s => s.SkillId).ToHashSet(StringComparer.Ordinal);
+        for (var st = 0; st < 6; st++)
+        {
+            var style = (Style)st;
+            var rowY = LibTop + st * LibRowPitch;
+            var yours = ChosenStyle == style;
+            _ui.TextBig(b, StyleName(style), SkillsX, rowY + 14, yours ? Gold : Slate, UiTypography.Body);
+            if (yours) _ui.TextBig(b, "YOURS", SkillsX, rowY + 14 + UiTypography.Pitch(UiTypography.Body) - 6, Gold, UiTypography.Caption);
+            for (var w = 0; w < 2; w++)
+            {
+                var def = w == 0 ? SkillCatalogue.ActiveOf(style) : SkillCatalogue.PassiveOf(style);
+                var tile = LibTile(st, w);
+                var have = known.Contains(def.Id);
+                var isEquipped = equipped.Contains(def.Id);
+                var on = _pick == Pick.Library && _pickSkillId == def.Id;
+                var over = tile.Contains(hit);
+                _ui.Fill(b, tile, on ? new Color(0x2C, 0x25, 0x44) : over ? new Color(0x1E, 0x18, 0x2C) : new Color(0x0E, 0x0B, 0x16) * 0.8f);
+                Outline(b, tile, on ? Bone : isEquipped ? Gold : over ? Slate : Dim, on || isEquipped ? 2 : 1);
+                var ico = new Rectangle(tile.X + 8, tile.Y + 8, 36, 36);
+                if (!_ui.Icon(b, $"icon_skill_{def.Id}", ico, have ? (isEquipped ? Gold : Bone) : Slate)) _ui.Diamond(b, ico, Slate);
+                _ui.TextBig(b, _ui.ShortenBig(def.Name, tile.Width - 56 - 70, UiTypography.Body), tile.X + 52, tile.Y + 6, have ? (isEquipped ? Gold : Bone) : Slate, UiTypography.Body);
+                _ui.TextBig(b, def.TakesABeat ? "ACTIVE" : "PASSIVE", tile.X + 52, tile.Y + 6 + UiTypography.Pitch(UiTypography.Body) - 6, Slate, UiTypography.Caption);
+                if (!have) _ui.Icon(b, "ui_slot_locked", new Rectangle(tile.Right - 28, tile.Y + 14, 20, 20), Slate);
+                else if (isEquipped) _ui.TextRightBig(b, $"SLOT {skills.ToList().FindIndex(s => s.SkillId == def.Id) + 1}", tile.Right - 8, tile.Y + 16, Gold, UiTypography.Caption);
+                Tip(tile, hit, have ? $"{def.Name} — {def.Line}" : $"{def.Name} — learned on {StyleName(style)}'s road, on the MASTERY tree.");
+            }
+        }
+
+        // ── THE SKILL TREE of the selected slot's skill — drawn as the fork it is. ───────────────────
+        _ui.Fill(b, new Rectangle(SkillsX, TreeTop - 14, SkillsW, 1), Dim);
+        if (SlotDef(_slot) is not { } treeDef || !known.Contains(treeDef.Id))
+        {
+            _ui.TextBig(b, "SKILL TREE", SkillsX, TreeTop, Slate, UiTypography.Secondary);
+            _ui.TextBig(b, "PICK A FILLED SLOT — ITS SKILL'S OWN TREE OPENS HERE", SkillsX, TreeTop + UiTypography.Pitch(UiTypography.Secondary) + 6, UiInk.Empty, UiTypography.Body);
+            return;
+        }
+        var chosen = SkillLevels.VariationOf(treeDef);
+        var free = SkillLevels.FreeOn(treeDef.Id);
+        var level = SkillLevels.LevelOf(treeDef.Id);
+        var uses = SkillLevels.UsesOf(treeDef.Id);
+        var headIco = new Rectangle(SkillsX, TreeTop, 48, 48);
+        _ui.Icon(b, $"icon_skill_{treeDef.Id}", headIco, Gold);
+        _ui.TextBig(b, $"{treeDef.Name} — SKILL TREE", headIco.Right + 14, TreeTop, Bone, UiTypography.Headline);
+        var lvl = level >= SkillProgress.MaxLevel ? $"LEVEL {level} · MAX" : $"LEVEL {level} · {uses}/{SkillProgress.UsesForLevel(level + 1)} WAVES TO THE NEXT";
+        if (free > 0) lvl += $"  ·  +{free} TO SPEND";
+        _ui.TextBig(b, lvl, headIco.Right + 14, TreeTop + UiTypography.Pitch(UiTypography.Headline) - 4, free > 0 ? Gold : Slate, UiTypography.Secondary);
+        Tip(new Rectangle(SkillsX, TreeTop, SkillsW, 60), hit, "A skill levels by being used: clear waves with it equipped. The first level chooses a variation — and the variation is what gives the skill its Source. The next levels buy that variation's reinforcements. Respec is free.");
+
+        // The rails from the skill down to the two variations.
+        var railY = TreeTop + 58;
+        _ui.Fill(b, new Rectangle(headIco.Center.X - 1, headIco.Bottom, 2, railY - headIco.Bottom), Dim);
+        _ui.Fill(b, new Rectangle(VarCard(0).Center.X, railY, VarCard(1).Center.X - VarCard(0).Center.X, 2), Dim);
+        for (var vi = 0; vi < treeDef.Variations.Count && vi < 2; vi++)
+        {
+            var v = treeDef.Variations[vi];
+            var card = VarCard(vi);
+            _ui.Fill(b, new Rectangle(card.Center.X - 1, railY, 2, card.Y - railY), Dim);
+            var taken = chosen?.Name == v.Name;
+            var other = chosen is not null && !taken;
+            var on = _pick == Pick.Variation && _pickIndex == vi;
+            var over = card.Contains(hit);
+            var col = SourceColor.GetValueOrDefault(v.Source, Bone);
+            _ui.Fill(b, card, on ? new Color(0x2C, 0x25, 0x44) : over ? new Color(0x1E, 0x18, 0x2C) : new Color(0x0E, 0x0B, 0x16) * 0.85f);
+            Outline(b, card, on ? Bone : taken ? Gold : Dim, on || taken ? 2 : 1);
+            if (taken) _ui.Fill(b, new Rectangle(card.X, card.Y, 5, card.Height), Gold);
+            var gem = new Rectangle(card.X + 16, card.Y + 12, 40, 40);
+            _ui.Diamond(b, new Rectangle(gem.X - 3, gem.Y - 3, gem.Width + 6, gem.Height + 6), col * (other ? 0.12f : 0.30f));
+            if (_ui.Assets.Get($"source_{v.Source.ToString().ToLowerInvariant()}") is { } gg) b.Draw(gg, gem, other ? Color.White * 0.55f : Color.White);
+            _ui.TextBig(b, v.Name.ToUpperInvariant(), gem.Right + 12, card.Y + 10, taken ? Gold : other ? Slate : Bone, UiTypography.Body);
+            _ui.TextBig(b, $"{SourceName(v.Source)}{(taken ? " · CHOSEN" : "")}", gem.Right + 12, card.Y + 10 + UiTypography.Pitch(UiTypography.Body) - 4, other ? Slate : col, UiTypography.Secondary);
+            _ui.TextBig(b, _ui.ShortenBig(v.Line.ToUpperInvariant(), card.Width - 24, UiTypography.Caption), card.X + 12, card.Bottom - 8 - UiTypography.Caption - 2, Slate, UiTypography.Caption);
+            Tip(card, hit, $"{v.Name} · {SourceName(v.Source)} — {v.Line} {BuildGlossary.SourceLine(v.Source)}.");
+
+            // Its three reinforcements: under a taken fork they are buyable; under the other, a road not taken (readable, not dim).
+            for (var ri = 0; ri < v.Reinforcements.Count && ri < 3; ri++)
+            {
+                var r = v.Reinforcements[ri];
+                var chip = ReinfChip(vi, ri);
+                var owned = taken && SkillLevels.HasReinforcement(treeDef.Id, r.Name);
+                var can = taken && !owned && free > 0;
+                var onR = _pick == Pick.Reinforcement && taken && _pickIndex == ri;
+                var overR = chip.Contains(hit);
+                _ui.Fill(b, chip, onR ? new Color(0x2C, 0x25, 0x44) : overR ? new Color(0x1E, 0x18, 0x2C) : new Color(0x0E, 0x0B, 0x16) * 0.7f);
+                Outline(b, chip, onR ? Bone : owned ? Met : Dim, onR || owned ? 2 : 1);
+                _ui.TextBig(b, r.Name.ToUpperInvariant(), chip.X + 10, chip.Y + 6, owned ? Met : can ? Gold : taken ? Bone : Slate, UiTypography.Secondary);
+                _ui.TextRightBig(b, owned ? "OWNED" : can ? "READY" : taken ? $"LEVEL {level + 1}" : "", chip.Right - 10, chip.Y + 6, owned ? Met : can ? Gold : Slate, UiTypography.Caption);
+                Tip(chip, hit, $"{r.Name} — {r.Line}");
+            }
+        }
+    }
+
+    // ── THE INSPECTOR (D3) ──────────────────────────────────────────────────────────────────────────────
+    private void DrawInspector(SpriteBatch b, Point hit)
+    {
+        var panel = InspectorPanel;
+        _ui.PanelQuiet(b, panel);
+        var x = InsX; var w = InsW;
+        var y = panel.Y + UiTypography.PanelTitleTop;
+        var floor = RespecText.Y - 16;
+        var known = KnownSkills();
+        var skills = Loadout.Skills;
+        var ctx = Context;
+        _changeVowY = 0;
+        _respecShown = false;
+
+        void Head(string s) { if (y + UiTypography.Pitch(UiTypography.Secondary) > floor) return; _ui.TextBig(b, s, x, y, Slate, UiTypography.Secondary); y += UiTypography.Pitch(UiTypography.Secondary); }
+        void Line(string s, Color c, int px = UiTypography.Body, int maxLines = 3)
+        {
+            foreach (var l in _ui.WrapBig(s, w, px).Take(maxLines))
+            {
+                if (y + UiTypography.Pitch(px) > floor) return;
+                _ui.TextBig(b, l, x, y, c, px); y += UiTypography.Pitch(px);
+            }
+        }
+        void Gap(int px = 10) { y += px; }
+        void Rule() { if (y + 12 < floor) { _ui.Fill(b, new Rectangle(x, y + 4, w, 1), Dim); y += 12; } }
+
+        SkillDef? def = null;
+        switch (_pick)
+        {
+            case Pick.Library: def = SkillCatalogue.Find(_pickSkillId); break;
+            case Pick.Keystone: break;
+            default: def = SlotDef(_slot); break;
+        }
+
+        if (_pick == Pick.Keystone)
+        {
+            var k = DustEffects.LearnedKeystones(Tree).FirstOrDefault(ks => ks.Id == _pickKeystoneId);
+            if (k is null) { _pick = Pick.Slot; return; }
+            Head("KEYSTONE");
+            _ui.TextBig(b, k.Name.ToUpperInvariant(), x, y, Loadout.HasKeystone(k.Id) ? Gold : Bone, UiTypography.Headline); y += UiTypography.Pitch(UiTypography.Headline) + 4;
+            Head("WHAT IT DOES"); Line(k.Blurb, Bone, UiTypography.Body, 6); Gap();
+            Head("CURRENT STATE"); Line(Loadout.HasKeystone(k.Id) ? "IN USE" : "NOT IN USE", Bone);
+            Line($"SOCKETS {Loadout.KeystoneIds.Count} / {Loadout.KeystoneCapacity} — MORE ON THE TRAITS SCREEN", Slate, UiTypography.Secondary);
+        }
+        else if (def is null || (_pick == Pick.Slot && !known.Contains(def.Id)))
+        {
+            Head(_slot < skills.Count ? $"SLOT {_slot + 1}" : "NOTHING SELECTED");
+            _ui.TextBig(b, "EMPTY", x, y, UiInk.Empty, UiTypography.Headline); y += UiTypography.Pitch(UiTypography.Headline) + 4;
+            Line("Pick a skill from the library and press EQUIP. A skill is learned on the MASTERY tree; once learned it is yours for good.", Slate);
+        }
+        else
+        {
+            var have = known.Contains(def.Id);
+            var chosen = SkillLevels.VariationOf(def);
+            var free = SkillLevels.FreeOn(def.Id);
+            var level = SkillLevels.LevelOf(def.Id);
+            var slotOf = skills.ToList().FindIndex(s => s.SkillId == def.Id);
+
+            if (_pick == Pick.Variation && _pickIndex < def.Variations.Count)
+            {
+                var v = def.Variations[_pickIndex];
+                var col = SourceColor.GetValueOrDefault(v.Source, Bone);
+                Head($"VARIATION OF {def.Name.ToUpperInvariant()}");
+                _ui.TextBig(b, v.Name.ToUpperInvariant(), x, y, chosen?.Name == v.Name ? Gold : Bone, UiTypography.Headline);
+                _ui.TextRightBig(b, SourceName(v.Source), x + w, y + 6, col, UiTypography.Body);
+                y += UiTypography.Pitch(UiTypography.Headline) + 4;
+                Line($"{v.Line} {BuildGlossary.SourceLine(v.Source)}.", Bone); Gap(); Rule();
+                Head("WHAT IT BUYS NEXT");
+                foreach (var r in v.Reinforcements.Take(3)) Line($"{r.Name.ToUpperInvariant()} — {r.Line}", Bone, UiTypography.Body, 2);
+                Gap(); Rule();
+                Head("YOU NEED FIRST");
+                Line(chosen is null
+                        ? (free > 0 ? $"ONE FREE LEVEL — YOU HAVE {free}" : $"LEVEL 1 — {WavesToNext(def)} MORE WAVES WITH {def.Name.ToUpperInvariant()} EQUIPPED")
+                        : chosen.Name == v.Name ? "CHOSEN — ITS REINFORCEMENTS ARE OPEN" : $"{def.Name.ToUpperInvariant()} IS {chosen.Name.ToUpperInvariant()}. RESPEC TO CHANGE — FREE.",
+                     free > 0 && chosen is null ? Gold : Bone);
+                _respecShown = chosen is not null || SkillLevels.SpentOn(def.Id) > 0;
+            }
+            else if (_pick == Pick.Reinforcement && chosen is { } cv && _pickIndex < cv.Reinforcements.Count)
+            {
+                var r = cv.Reinforcements[_pickIndex];
+                var owned = SkillLevels.HasReinforcement(def.Id, r.Name);
+                Head($"REINFORCEMENT OF {def.Name.ToUpperInvariant()} · {cv.Name.ToUpperInvariant()}");
+                _ui.TextBig(b, r.Name.ToUpperInvariant(), x, y, owned ? Met : Bone, UiTypography.Headline); y += UiTypography.Pitch(UiTypography.Headline) + 4;
+                Head("WHAT IT DOES"); Line(r.Line, Bone); Gap(); Rule();
+                Head("YOU NEED FIRST");
+                Line(owned ? "OWNED" : free > 0 ? $"ONE FREE LEVEL — YOU HAVE {free}" : $"LEVEL {level + 1} — {WavesToNext(def)} MORE WAVES WITH {def.Name.ToUpperInvariant()} EQUIPPED", owned ? Met : free > 0 ? Gold : Bone);
+                _respecShown = true;
+            }
+            else
+            {
+                // A skill: from a slot, or from the library.
+                Head($"SKILL · {StyleName(def.Style)} · {(def.TakesABeat ? "ACTIVE" : "PASSIVE")}{(slotOf >= 0 ? $" · SLOT {slotOf + 1}" : "")}");
+                var ico = new Rectangle(x, y, 48, 48);
+                _ui.Icon(b, $"icon_skill_{def.Id}", ico, have ? Gold : Slate);
+                _ui.TextBig(b, def.Name.ToUpperInvariant(), ico.Right + 12, y + 8, Bone, UiTypography.Headline);
+                y += 56;
+                Line(def.Line, Bone); Gap(); Rule();
+                Head("WHAT IT DOES");
+                if (chosen is null)
+                {
+                    foreach (var v in def.Variations.Take(2)) Line($"{v.Name.ToUpperInvariant()} · {SourceName(v.Source)} — {v.Line}", Bone, UiTypography.Body, 2);
+                    if (have) Line("A VARIATION IS CHOSEN IN THE SKILL TREE — IT GIVES THE SKILL ITS SOURCE.", Slate, UiTypography.Secondary, 2);
+                }
+                else
+                {
+                    Line($"{chosen.Name.ToUpperInvariant()} · {SourceName(chosen.Source)} — {chosen.Line}", Bone, UiTypography.Body, 2);
+                    foreach (var r in chosen.Reinforcements.Where(r => SkillLevels.HasReinforcement(def.Id, r.Name))) Line($"{r.Name.ToUpperInvariant()} — {r.Line}", Met, UiTypography.Body, 2);
+                }
+                Gap(); Rule();
+                if (!have)
+                {
+                    Head("YOU NEED FIRST");
+                    _ui.Icon(b, "ui_slot_locked", new Rectangle(x, y + 2, 20, 20), Bone);
+                    _ui.TextBig(b, $"LEARNED ON {StyleName(def.Style)}'S ROAD, ON THE MASTERY TREE", x + 28, y, Bone, UiTypography.Body); y += UiTypography.Pitch(UiTypography.Body);
+                }
+                else
+                {
+                    Head("CURRENT STATE");
+                    Line(level >= SkillProgress.MaxLevel ? $"LEVEL {level} · MAX" : $"LEVEL {level} · {SkillLevels.UsesOf(def.Id)}/{SkillProgress.UsesForLevel(level + 1)} WAVES TO THE NEXT{(free > 0 ? $" · +{free} TO SPEND" : "")}", free > 0 ? Gold : Bone);
+                    if (ChosenStyle is { } dd)
+                    {
+                        var f = StyleAffinity.Factor(dd, def.Style, vowSworn: slotOf >= 0 && skills[slotOf].VowId is not null);
+                        Line(f >= 1.99f ? $"YOUR STYLE IS {StyleName(dd)} — THIS SKILL HITS x2.0" : $"YOUR STYLE IS {StyleName(dd)} — THIS {StyleName(def.Style)} SKILL HITS x{f:0.0#}", f >= 1.99f ? Gold : Slate, UiTypography.Secondary, 2);
+                    }
+                    else Line("NO STYLE CHOSEN YET — A SPECIALISATION NODE ON THE MASTERY TREE CHOOSES ONE.", Slate, UiTypography.Secondary, 2);
+                    if (_pick == Pick.Library && _slot < skills.Count && skills[_slot].SkillId != def.Id && SkillCatalogue.Find(skills[_slot].SkillId) is { } replacing)
+                        Line($"EQUIP REPLACES {replacing.Name.ToUpperInvariant()} IN SLOT {_slot + 1}", Slate, UiTypography.Secondary);
+                }
+                _respecShown = slotOf >= 0 && have && SkillLevels.SpentOn(def.Id) > 0;
+
+                // THE VOW — the validator block, on the slot's own skill.
+                if (_pick == Pick.Slot && slotOf >= 0 && have)
+                {
+                    Gap(); Rule();
+                    var vow = Vows.ById(skills[slotOf].VowId);
+                    if (_vowListOpen) { DrawVowList(b, hit, ref y, floor); }
+                    else
+                    {
+                        Head("VOW");
+                        if (vow is null)
+                        {
+                            Line(Known.Count == 0 ? "NO VOW ON THIS SLOT — VOWS ARE LEARNED ON THE TRAITS SCREEN" : "NO VOW ON THIS SLOT", Slate);
+                        }
+                        else
+                        {
+                            var live = Vows.IsActive(vow, ctx);
+                            _ui.TextBig(b, vow.Name.ToUpperInvariant(), x, y, live ? Gold : Bone, UiTypography.Body);
+                            _ui.TextRightBig(b, $"x{Vows.Multiplier(vow):0.00}", x + w, y, live ? Gold : Slate, UiTypography.Body);
+                            y += UiTypography.Pitch(UiTypography.Body);
+                            Pair("DEMAND", DemandText(vow));
+                            Pair("YOUR BUILD", YourBuildText(vow, ctx));
+                            Line(live ? "HOLDS — THE VOW PAYS" : $"BROKEN — IT PAYS NOTHING UNTIL {DemandText(vow)}", live ? Met : Ember, UiTypography.Body, 2);
+                        }
+                        if (Known.Count > 0 && y + 48 < floor)
+                        {
+                            _changeVowY = y + 4;
+                            var btn = ChangeVowBtn(_changeVowY);
+                            _ui.Fill(b, btn, btn.Contains(hit) ? new Color(0x2C, 0x25, 0x44) : Quiet);
+                            Outline(b, btn, btn.Contains(hit) ? Bone : Dim, 1);
+                            _ui.TextCenterBig(b, vow is null ? "BIND A VOW" : "CHANGE VOW", btn.Center.X, btn.Y + 9, btn.Contains(hit) ? Bone : Slate, UiTypography.Body);
+                            y = btn.Bottom + 8;
+                        }
+                    }
+                }
+
+                // WHERE YOU ARE HUNTING — the skill's Source against the creatures that live there.
+                if (!_vowListOpen && RegionId.Length > 0 && chosen is not null && BandCycles.RosterFor(RegionId) is { Count: > 0 } roster)
+                {
+                    Gap(); Rule();
+                    Head($"{def.Name.ToUpperInvariant()}'S {SourceName(chosen.Source)} IN {(RegionName.Length > 0 ? RegionName : RegionId).ToUpperInvariant()}");
+                    foreach (var enemy in roster.Distinct().Take(3))
+                    {
+                        if (y + UiTypography.Pitch(UiTypography.Body) > floor) break;
+                        var mult = SourceMatchup.Effectiveness(chosen.Source, enemy);
+                        var verdict = mult > 1.01f ? "STRONG" : mult < 0.99f ? "WEAK" : "EVEN";
+                        _ui.TextBig(b, SourceName(enemy), x, y, SourceColor.GetValueOrDefault(enemy, Bone), UiTypography.Body);
+                        _ui.TextRightBig(b, $"{verdict}  x{mult:0.00}", x + w, y, mult > 1.01f ? Met : mult < 0.99f ? Ember : Slate, UiTypography.Body);
+                        y += UiTypography.Pitch(UiTypography.Body);
+                    }
+                }
+                // WHAT YOUR GEAR IS WAITING FOR.
+                if (!_vowListOpen && Hunter is { } h)
+                {
+                    var wants = h.WornEnchantments
+                        .Where(e => e.Needs is { Keystone: null, AnyVow: false } n && !n.MetBySkills(Loadout.EquippedDefs()))
+                        .Select(e => (e.Needs!.Label, e.Name)).DistinctBy(t => t.Item1).Take(2).ToList();
+                    if (wants.Count > 0) { Gap(); Rule(); Head("YOUR GEAR IS WAITING FOR"); foreach (var (want, ench) in wants) Line($"{want} — {ench.ToUpperInvariant()}", Met, UiTypography.Body, 1); }
+                }
+            }
+        }
+
+        // ── The actions: a refusal line, one primary button, two text actions. ───────────────────────
+        var (label, enabled, refusal) = Primary();
+        if (refusal.Length > 0)
+            _ui.TextBig(b, _ui.ShortenBig(refusal, w, UiTypography.Secondary), x, RespecText.Y - 30, Ember, UiTypography.Secondary);
+        if (_respecShown)
+        {
+            var over = RespecText.Contains(hit);
+            _ui.TextBig(b, "RESPEC — FREE", RespecText.X, RespecText.Y + 4, over ? Bone : Slate, UiTypography.Secondary);
+            Tip(RespecText, hit, "Give this skill's levels back. Free, and it keeps every level it has earned.");
+        }
+        {
+            var over = CopyText.Contains(hit);
+            _ui.TextRightBig(b, "COPY BUILD CODE", CopyText.Right, CopyText.Y + 4, over ? Bone : Slate, UiTypography.Secondary);
+            Tip(CopyText, hit, "Copies this build as a code. A friend pastes it in the VAULT.");
+        }
+        if (label.Length > 0)
+            _ui.Button(b, PrimaryBtn, label, hit, false, enabled, enabled ? ButtonStyle.Primary : ButtonStyle.Secondary);
+
+        void Pair(string k, string v)
+        {
+            if (y + UiTypography.Pitch(UiTypography.Body) > floor) return;
+            _ui.TextBig(b, k, x, y, Slate, UiTypography.Secondary);
+            _ui.TextRightBig(b, _ui.ShortenBig(v, w - 120, UiTypography.Body), x + w, y - 2, Bone, UiTypography.Body);
+            y += UiTypography.Pitch(UiTypography.Body);
+        }
+    }
+
+    /// <summary>The known vows, in place of the sections below the validator: click one to bind it to the selected slot.</summary>
+    private void DrawVowList(SpriteBatch b, Point hit, ref int y, int floor)
+    {
+        var known = Known;
+        var ctx = Context;
+        var skills = Loadout.Skills;
+        var sworn = _slot < skills.Count ? skills[_slot].VowId : null;
+        _ui.TextBig(b, $"BIND TO SLOT {_slot + 1}", InsX, y, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, "CLICK ONE", InsX + InsW, y, Slate, UiTypography.Secondary);
+        y += UiTypography.Pitch(UiTypography.Secondary) + 4;
+        _vowListTop = y;
+        _vowScroll = Math.Clamp(_vowScroll, 0, Math.Max(0, known.Count + 1 - VowListRows));
+        for (var r = 0; r < VowListRows; r++)
+        {
+            var idx = _vowScroll + r - 1;
+            if (idx >= known.Count) break;
+            var row = VowListRow(r, _vowListTop);
+            if (row.Bottom > floor - 48) break;
+            var over = row.Contains(hit);
+            if (idx < 0)
+            {
+                _ui.Fill(b, row, over ? new Color(0x1E, 0x18, 0x2C) : Quiet);
+                Outline(b, row, sworn is null ? Gold : over ? Slate : Dim, sworn is null ? 2 : 1);
+                _ui.TextBig(b, "NO VOW", row.X + 12, row.Y + 10, sworn is null ? Gold : Bone, UiTypography.Body);
+                continue;
+            }
+            var v = known[idx];
+            var live = Vows.IsActive(v, ctx);
+            var on = v.Id == sworn;
+            _ui.Fill(b, row, on ? new Color(0x2C, 0x25, 0x44) : over ? new Color(0x1E, 0x18, 0x2C) : Quiet);
+            Outline(b, row, on ? Gold : over ? Slate : Dim, on ? 2 : 1);
+            _ui.TextBig(b, _ui.ShortenBig(v.Name.ToUpperInvariant(), row.Width - 170, UiTypography.Body), row.X + 12, row.Y + 4, on ? Gold : Bone, UiTypography.Body);
+            _ui.TextBig(b, _ui.ShortenBig(DemandText(v), row.Width - 170, UiTypography.Caption), row.X + 12, row.Y + 4 + UiTypography.Pitch(UiTypography.Body) - 6, Slate, UiTypography.Caption);
+            _ui.TextRightBig(b, $"x{Vows.Multiplier(v):0.00}", row.Right - 12, row.Y + 4, live ? Gold : Slate, UiTypography.Body);
+            _ui.TextRightBig(b, live ? "HOLDS" : "BROKEN", row.Right - 12, row.Y + 4 + UiTypography.Pitch(UiTypography.Body) - 6, live ? Met : Ember, UiTypography.Caption);
+            Tip(row, hit, v.Description);
+        }
+        y = Math.Min(floor - 48, _vowListTop + Math.Min(VowListRows, known.Count + 1) * 50);
+        _changeVowY = y + 4;
+        var btn = ChangeVowBtn(_changeVowY);
+        _ui.Fill(b, btn, btn.Contains(hit) ? new Color(0x2C, 0x25, 0x44) : Quiet);
+        Outline(b, btn, Dim, 1);
+        _ui.TextCenterBig(b, "CLOSE", btn.Center.X, btn.Y + 9, btn.Contains(hit) ? Bone : Slate, UiTypography.Body);
+        y = btn.Bottom + 8;
+    }
+
+    // ── EFFECTS ─────────────────────────────────────────────────────────────────────────────────────────
     private void DrawCarried(SpriteBatch b)
     {
         if (_carrying == Carry.None || !_carryMoved) return;
         var p = _carryAt;
-
         if (_carrying == Carry.Slot && _carrySlot >= 0 && _carrySlot < Loadout.Skills.Count)
         {
             var s = Loadout.Skills[_carrySlot];
@@ -913,887 +1148,35 @@ public sealed class LoadoutScreen
             _ui.Fill(b, r, new Color(0x2C, 0x25, 0x44));
             _ui.Fill(b, new Rectangle(r.X, r.Y, 5, r.Height), col);
             Outline(b, r, Bone, 2);
-            if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } gem)
-                b.Draw(gem, new Rectangle(r.X + 10, r.Y + 6, 32, 32), Color.White);
-            _ui.Text(b, Fit($"{SourceName(s.Source)} {SkillCatalogue.Find(s.SkillId)?.Name ?? "EMPTY"}", 118),
-                     r.X + 50, r.Y + 14, Bone);
+            _ui.TextBig(b, _ui.ShortenBig(SkillCatalogue.Find(s.SkillId)?.Name ?? "EMPTY", 150, UiTypography.Body), r.X + 16, r.Y + 10, Bone, UiTypography.Body);
         }
     }
 
-    private void DrawSlots(SpriteBatch b, Point hit)
+    /// <summary>A chain closing on the slot's skill glyph — the flourish a bound Vow plays over its row.</summary>
+    private void DrawBindChain(SpriteBatch b, Rectangle row, float t)
     {
-        _ui.Panel(b, SlotsPanel);
-        _ui.TextCenterBig(b, "YOUR LOADOUT", SlotsPanel.Center.X, UiKit.TitleTop(SlotsPanel), Gold, UiTypography.PanelTitle);
-
-        var skills = Loadout.Skills;
-        var ctx = Context;
-
-        // WHICH SLOTS COST AN ACTION. Read from BuildComposer rather than worked out here, so the
-        // screen and the fight cannot drift: the composer's walk IS the rule, and a second copy of it
-        // would agree only until one of them was edited. The player needs this on the screen because
-        // the two kinds are no longer interchangeable — an active takes the champion's turn and a
-        // passive never can, which is why four skills used to leave the plain attack almost no beats.
-        var passiveSlot = BuildComposer.SlotKinds(
-            skills.Select(k => new BuildComposer.SkillPick(k.Source, k.VowId, k.Passive, k.SkillId)).ToList(),
-            Loadout.SkillCapacity);
-
-        for (var i = 0; i < Loadout.SkillCapacity; i++)
-        {
-            if (i >= skills.Count) break;
-            var s = skills[i];
-            var row = SlotRow(i);
-            var on = i == _slot;
-            var col = SourceColor.GetValueOrDefault(s.Source, Bone);
-
-            // ── THE ROW'S STATE, in the order it is painted: ground, drop light, edge. ──────────
-            var dropping = _carrying == Carry.Slot && _carryMoved && SlotUnder(_carryAt) == i
-                           && _carrySlot != i;
-            var hovering = row.Contains(hit) && _carrying == Carry.None;
-            var inHand = _carrying == Carry.Slot && _carryMoved && _carrySlot == i;
-
-            _ui.Fill(b, row, on ? new Color(0x2C, 0x25, 0x44) : hovering ? new Color(0x1E, 0x18, 0x2C) : Quiet);
-
-            // A ROW THE SEAL IS OVER LIGHTS UP. Without it a drag is a ghost floating over an inert
-            // list and the player has to guess where it would land — which is the whole reason a
-            // list-and-click was not worth replacing with a drag in the first place.
-            if (dropping)
-            {
-                _ui.Fill(b, row, col * 0.16f);
-                Outline(b, row, Bone, 3);
-            }
-            // The row being carried stays in place but goes hollow, so the list still shows its length
-            // and the gap says where the thing came from.
-            if (inHand) _ui.Fill(b, row, new Color(0x0C, 0x09, 0x14) * 0.6f);
-
-            // THE NUMBERED SPINE. The order of this list IS the cast priority — SoloBattle takes the
-            // first READY skill in slot order, so slot 1 wins every tied beat — and the screen never
-            // said so. A 5px colour bar became a 22px spine carrying the number, which is also what
-            // makes dragging a row read as changing something rather than tidying a list.
-            var spine = new Rectangle(row.X, row.Y, 22, row.Height);
-            _ui.Fill(b, spine, col * (on ? 0.55f : 0.34f));
-            _ui.TextCenter(b, $"{i + 1}", spine.Center.X, row.Y + 26, on ? Bone : Bone * 0.75f);
-            if (on && !dropping) Outline(b, row, Bone, 2);
-
-            // ── THE FLOURISHES. A pick pulses the row's own colour; a bind presses a gold seal. ──
-            if (_slotFlash.TryGetValue(i, out var sf))
-            {
-                var t = Math.Clamp(sf / SetFlashSeconds, 0f, 1f);
-                _ui.Fill(b, row, col * (0.30f * t));
-                _ui.Fill(b, new Rectangle(row.X, row.Y, row.Width, 3), col * t);
-            }
-            if (_bindFlash.TryGetValue(i, out var bf)) DrawBindChain(b, row, bf / BindFlashSeconds);
-
-            // THE PAIR, AS TWO GLYPHS. The Form used to live only in the name, so a list of four skills
-            // was four gems and a wall of words — and the Form is the half that says what the skill DOES.
-            if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } gem)
-                b.Draw(gem, new Rectangle(row.X + 28, row.Y + 12, 52, 52), Color.White);
-            // BESIDE THE GEM, NOT ON IT. A 26px badge tucked into the gem's corner drew the glyph as a
-            // two-pixel sliver against the gem's own ornament — unreadable, and worse than nothing
-            // because it looked like an artefact. It gets its own square and its own ground.
-            //
-            // AND IT IS THE SKILL'S GLYPH, NOT THE FORM'S. A Form icon gave BLOW and PRESS the same
-            // picture, which is the one thing an icon is read for.
-            // THE SLOT'S SKILL, BY ID — null is an EMPTY slot. A slot can also hold a skill the
-            // champion no longer knows (respec re-locks), and that reads as empty for the same
-            // reason: the composer refuses it, and a screen that shows what the simulation refused
-            // is the dormant-feature failure read backwards — worse, because the player believes it
-            // (playtest: "yeni skill slotu açtım skill hemen geldi, henüz mastery tree açık bile
-            // değil").
-            var rowDef0 = SkillCatalogue.Find(s.SkillId);
-            var slotEmpty = rowDef0 is null || !KnownSkills().Contains(rowDef0.Id);
-
-            var fbox = new Rectangle(row.X + 88, row.Y + 20, 38, 38);
-            _ui.Fill(b, fbox, new Color(0x0C, 0x09, 0x14) * 0.55f);
-            if (slotEmpty || rowDef0 is null)
-                _ui.Icon(b, "ui_slot_locked", fbox, Dim);
-            else
-                _ui.Icon(b, $"icon_skill_{rowDef0.Id}", fbox, col);
-
-            if (slotEmpty)
-            {
-                _ui.TextBig(b, "EMPTY SLOT", row.X + 134, row.Y + 8, Dim, UiTypography.Body);
-                _ui.Text(b, "PICK A SKILL YOU HAVE LEARNED", row.X + 134, row.Y + 32, Slate);
-                continue;
-            }
-
-            // THE SKILL'S OWN NAME, not the Source and Form it used to be composed from. Its element
-            // is written beside it because the variation owns that now, and a player still has to be
-            // able to read what a slot is made of.
-            _ui.TextBig(b, Fit(rowDef0!.Name, 100), row.X + 134, row.Y + 8, Bone, UiTypography.Body);
-            _ui.Text(b, SourceName(s.Source), row.X + 134 + 104, row.Y + 11,
-                     SourceColor.GetValueOrDefault(s.Source, Slate));
-
-            // THE SLOT'S KIND, as a SWITCH rather than a label. ACTIVE and PASSIVE are the genre's
-            // own terms and the ones the designer asked for, and the line under the name says which
-            // of the style's two skills the choice actually produces — BLOW or PRESS, not "the
-            // passive one", because they are different abilities and the screen should say so.
-            var isPassive = i < passiveSlot.Count && passiveSlot[i];
-            var kindBox = KindToggle(i);
-            var overKind = kindBox.Contains(hit);
-            _ui.Fill(b, kindBox, (isPassive ? Met : Gold) * (overKind ? 0.30f : 0.16f));
-            Outline(b, kindBox, isPassive ? Met : Gold, overKind ? 2 : 1);
-            _ui.TextCenter(b, isPassive ? "PASSIVE" : "ACTIVE", kindBox.Center.X, kindBox.Y + 5,
-                           isPassive ? Met : Gold);
-
-            // The skill this slot actually carries — non-null past the EMPTY guard above.
-            var resolved = rowDef0!;
-            var chosen = SkillLevels.VariationOf(resolved);
-            var free = SkillLevels.FreeOn(resolved.Id);
-
-            // THE ROW REPORTS; THE PANEL ACTS. The variations and reinforcements used to be bought
-            // from two buttons wedged into this strip, at about sixty pixels each — the first capture
-            // of three across read "DEEP… SEDI… SILT". A purchase whose name you cannot finish reading
-            // is not a choice, so the whole skill tree moved to the middle column where it has room,
-            // and the row went back to saying what a row is for: what this slot currently IS.
-            {
-                // The skill, what it was taken as, and how much of that variation is bought. The count
-                // is spelled out rather than shown as pips: a player who cannot see how much is left
-                // has no reason to come back to a skill they already levelled.
-                var line = chosen is null ? resolved.Name : $"{resolved.Name} · {chosen.Name}";
-                if (chosen is not null)
-                {
-                    var bought = chosen.Reinforcements.Count(r => SkillLevels.HasReinforcement(resolved.Id, r.Name));
-                    line += $"  {bought}/{chosen.Reinforcements.Count}";
-                }
-                if (free > 0) line += $"   +{free}";
-                _ui.Text(b, Fit(line, row.Right - 140 - (row.X + 134)), row.X + 134, row.Y + 30,
-                         free > 0 ? Gold : isPassive ? Met : Slate);
-            }
-
-            // The hexagon's verdict on this woven skill — and the Vow buy-back drawn as the LIFT it
-            // is ("x0.45→x0.75"), so swearing a Vow on an off-discipline skill visibly pays.
-            if (ChosenStyle is { } dd)
-            {
-                var baseF = StyleAffinity.Factor(dd, resolved.Style);
-                var vowF = StyleAffinity.Factor(dd, resolved.Style, vowSworn: s.VowId is not null);
-                var lifted = vowF > baseF + 0.001f;
-                var boughtUp = vowF > baseF + 0.001f;
-                var tag = boughtUp ? $"x{baseF:0.0#}→x{vowF:0.0#}" : $"x{vowF:0.0#}";
-                var tc = vowF >= 1.99f ? Gold : boughtUp ? Met : vowF >= 1.14f ? Met : vowF >= 0.74f ? Slate : Ember;
-                _ui.TextRight(b, tag, row.Right - 50, row.Y + 32, tc);
-            }
-
-            // The Vow line carries its VERDICT, not just its name. "SWORN" on a Vow that pays nothing
-            // is the most misleading thing this screen could say.
-            if (skills.Count > 1)
-            {
-                var x = DropX(i);
-                // U+00D7, not U+2715. The heavier multiplication X drew as NOTHING on the system-font
-                // path, so this button \u2014 the only way to remove a skill \u2014 was an invisible 30px square
-                // that worked perfectly when clicked and advertised itself not at all. It hid behind a
-                // `"\u2715"` escape, which the font gate could not see until it learned to decode them.
-                _ui.TextCenter(b, "\u00d7", x.Center.X, x.Y + 6, x.Contains(hit) ? Ember : Slate);
-            }
-
-            // THE VOW LINE IS A SOCKET NOW. Empty, it says what to do with it rather than merely
-            // reporting an absence — "NO VOW" named the state and left the player to discover that a
-            // seal from the right-hand column can be dropped here.
-            var vow = Vows.ById(s.VowId);
-            // AT +50, NOT +44. The state line above it starts at +30 and is fourteen pixels tall, so
-            // the socket's top edge landed exactly on the text's baseline and the two read as one
-            // smudged line. The row is 76 tall and this ends at 74 — the space was always there.
-            var seal = new Rectangle(row.X + 134, row.Y + 50, row.Width - 134 - 14, 24);
-            if (vow is null)
-            {
-                _ui.Fill(b, seal, new Color(0x0E, 0x0B, 0x16) * 0.7f);
-                Outline(b, seal, Dim, 1);
-                _ui.Text(b, "EMPTY VOW SOCKET", seal.X + 8, seal.Y + 4, Dim);
-            }
-            else
-            {
-                var live = Vows.IsActive(vow, ctx);
-                _ui.Fill(b, seal, (live ? Gold : Slate) * 0.13f);
-                _ui.Fill(b, new Rectangle(seal.X, seal.Y, 3, seal.Height), live ? Gold : Ember);
-                _ui.Text(b, Fit(vow.Short.ToUpperInvariant(), seal.Width - 66), seal.X + 10, seal.Y + 4,
-                         live ? Gold : Slate);
-                _ui.TextRight(b, live ? "MET" : "UNMET", seal.Right - 6, seal.Y + 4, live ? Met : Ember);
-            }
-        }
-
-        if (skills.Count < Loadout.SkillCapacity)
-        {
-            var r = AddBtn;
-            _ui.Fill(b, r, r.Contains(hit) ? new Color(0x2C, 0x25, 0x44) : Quiet);
-            _ui.TextCenter(b, "+ ADD A SKILL", r.Center.X, r.Y + 14, r.Contains(hit) ? Gold : Slate);
-        }
-
-        // ── KEYSTONE SOCKETS ──
-        var learned = DustEffects.LearnedKeystones(Tree);
-        _keystoneScroll = Math.Clamp(_keystoneScroll, 0, Math.Max(0, learned.Count - KeystoneRows));
-        var head = new Rectangle(SlotColX, KeystoneChip(0).Y - 44, SlotColW, 30);
-        _ui.TextBig(b, "KEYSTONES", head.X, head.Y, Gold, UiTypography.Body);
-        // Sockets used, then the window into the list — a player with six learned needs to know both
-        // that they may wear two and that there are three more below the fold.
-        _ui.TextRight(b, learned.Count == 0
-                          ? "LEARN IN TRAITS (P)"
-                          : learned.Count > KeystoneRows
-                              ? $"{Loadout.KeystoneIds.Count} / {Loadout.KeystoneCapacity}   "
-                                + $"[{_keystoneScroll + 1}-{Math.Min(learned.Count, _keystoneScroll + KeystoneRows)} of {learned.Count}]"
-                              : $"{Loadout.KeystoneIds.Count} / {Loadout.KeystoneCapacity}",
-                      head.Right, head.Y + 6, Slate);
-
-        for (var i = 0; i < KeystoneRows; i++)
-        {
-            var chip = KeystoneChip(i);
-            var idx = _keystoneScroll + i;
-            if (idx >= learned.Count)
-            {
-                _ui.Fill(b, chip, new Color(0x11, 0x0E, 0x18, 0xC0));
-                _ui.Text(b, "—", chip.X + 18, chip.Y + 12, Dim);
-                continue;
-            }
-            var k = learned[idx];
-            var worn = Loadout.HasKeystone(k.Id);
-            var hover = chip.Contains(hit);
-            _ui.Fill(b, chip, worn ? new Color(0x2A, 0x24, 0x14) : hover ? new Color(0x1E, 0x18, 0x2C) : Quiet);
-            if (worn) _ui.Fill(b, new Rectangle(chip.X, chip.Y, 5, chip.Height), Gold);
-            _ui.Text(b, k.Name.ToUpperInvariant(), chip.X + 18, chip.Y + 12, worn ? Gold : hover ? Bone : Slate);
-            _ui.TextRight(b, worn ? "IN USE" : "", chip.Right - 14, chip.Y + 12, Met);
-        }
+        t = Math.Clamp(t, 0f, 1f);
+        var played = 1f - t;
+        _ui.Fill(b, row, Gold * (0.22f * t * t));
+        var gem = new Rectangle(row.X + 32, row.Y + 17, 56, 56);
+        var wide = 46f * t * t;
+        var box = new Rectangle((int)(gem.X - wide), (int)(gem.Y - wide), (int)(gem.Width + wide * 2), (int)(gem.Height + wide * 2));
+        var alpha = Math.Clamp(t * 1.9f, 0f, 1f);
+        if (!_ui.AnimSprite(b, "fx_bind_chain_strip8_512", box, played * ChainClipSeconds, 8f, loop: false, Color.White * alpha))
+            Outline(b, row, Gold * alpha, 3);
     }
 
-    /// <summary>
-    /// What this build DOES, and what the pick under the cursor would do to it.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Playtest: <i>"Skiller hala yavan, skill oluşturma kısmı oyunun en unique kısımlarından biri.
-    /// Buranın çok özenli olması lazım ve mantığını arayüzünden anlatabilmesi lazım."</i>
-    /// </para>
-    /// <para>
-    /// The screen already explained each Form and Source in isolation. What it could not do was answer
-    /// the only question a player actually has at the moment of choosing: <b>is this better than what I
-    /// have?</b> Thirty-six combinations, four slots, and no way to compare any two of them except by
-    /// committing and going to watch. That is what "yavan" describes — not missing text, missing
-    /// consequence.
-    /// </para>
-    /// <para>
-    /// Three things, in the order they matter: what the build does now, what it would do with the pick
-    /// under the cursor, and whether that Source is any good WHERE YOU ARE HUNTING. The last one turns
-    /// the matchup from a rule into a decision — "BODY beats MIND and NATURE" means nothing until you
-    /// know the place you are going fields them.
-    /// </para>
-    /// </remarks>
-    private void DrawReadout(SpriteBatch b, string? hoverSkillId)
+    private void TickEffects()
     {
-        if (Hunter is not { } hunter) return;
-
-        var top = KeystoneChip(KeystoneRows - 1).Bottom + 26;
-        var x = SlotColX;
-        var width = SlotColW;
-
-        // A FLOOR, NOT A BAIL — this readout was DEAD for most of the game.
-        //
-        // Everything in this column hangs off SkillCapacity: top = 494 + 86*capacity. The old guard was
-        // `if (top > SlotsPanel.Bottom - 120) return;` = 824, so at FOUR slots (top 838) and five (924)
-        // the whole block vanished — and four is where a normal build lives. The one readout that
-        // answers "is this pick better than what I have" was invisible for the entire mid and late game,
-        // silently, on the screen it exists for.
-        //
-        // It now draws what fits and stops, which is what the guard's own comment said it was for.
-        var floor = SlotsPanel.Bottom - UiKit.PanelCorner - 8;
-        if (top + 64 > floor) return;   // not even a heading and one row; never draw through the frame
-
-        _ui.Fill(b, new Rectangle(x - 12, top - 12, width + 24, floor - top + 4), Quiet);
-        _ui.Text(b, "WHAT THIS BUILD DOES", x, top, Slate);
-
-        var y = top + 34;
-
-        // CURRENT. Re-measured only when the build actually changes.
-        if (_currentRev != _buildRev)
+        var now = _clock.Elapsed.TotalSeconds;
+        var dt = (float)Math.Clamp(now - _lastTick, 0.0, 0.10);
+        _lastTick = now;
+        Decay(_slotFlash, dt);
+        if (!_devHoldChain) Decay(_bindFlash, dt);
+        static void Decay(Dictionary<int, float> d, float dt)
         {
-            _currentDps = Dps(Loadout, hunter);
-            _currentRev = _buildRev;
-        }
-
-        _ui.TextBig(b, "NOW", x, y, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, $"{_currentDps:N0} damage each second", x + width, y, Bone, UiTypography.Body);
-        y += UiTypography.Pitch(UiTypography.Body);
-        if (y + 30 > floor) return;
-
-        // THE SKILL UNDER THE CURSOR. A preview needs a slot that holds a real skill to swap out
-        // and back; hovering with an empty slot selected falls through to the idle line.
-        if (hoverSkillId is not null && _slot >= 0 && _slot < Loadout.Skills.Count
-            && Loadout.Skills[_slot].SkillId is { } keepId)
-        {
-            var key = (hoverSkillId, _slot, _buildRev);
-
-            if (_previewKey != key)
-            {
-                // MEASURED ON THE REAL LOADOUT, then put back — the same trick
-                // Hunter.PowerContribution uses to price an item, and for the same reason: a second
-                // "copy of the build" type would be a second place for the build's rules to live, and
-                // the copy is the one that goes stale. The game is single-threaded and this runs inside
-                // Draw, so nothing observes the intermediate state.
-                Loadout.SetSkill(_slot, hoverSkillId);
-                _previewDps = Dps(Loadout, hunter);
-                Loadout.SetSkill(_slot, keepId);
-                _previewKey = key;
-            }
-
-            var delta = _previewDps - _currentDps;
-            var pct = _currentDps > 0.01f ? delta / _currentDps * 100f : 0f;
-            var tint = MathF.Abs(pct) < 0.5f ? Slate : pct > 0f ? Met : Ember;
-
-            _ui.TextBig(b, "WITH THIS", x, y, Slate, UiTypography.Secondary);
-            _ui.TextRightBig(b, $"{_previewDps:N0} damage each second", x + width, y, tint, UiTypography.Body);
-            y += UiTypography.Pitch(UiTypography.Body);
-            _ui.TextRightBig(b, MathF.Abs(pct) < 0.5f ? "no change" : $"{(pct > 0 ? "+" : "")}{pct:0}%",
-                             x + width, y, tint, UiTypography.Secondary);
-            y += 30;
-        }
-        else
-        {
-            // SIZED AND INKED FOR THE COLUMN. At the default 32px raster this measured ~540px against a
-            // 440px column, so it ran across the panel's ornate frame and into the gutter — and in Dim
-            // it was barely visible while doing it.
-            _ui.TextBig(b, "hover a skill to compare", x, y, Slate, UiTypography.Secondary);
-            y += 54;
-        }
-
-        // WHAT YOUR GEAR IS WAITING FOR. The badge on the Form cell draws the eye; this says which item
-        // and which enchantment, because a marker with no sentence behind it is a riddle.
-        var wants = GearWants();
-        if (wants.Count > 0)
-        {
-            _ui.Fill(b, new Rectangle(x, y, width, 2), Dim);
-            y += 14;
-            foreach (var (want, enchant) in wants.Take(2))
-            {
-                _ui.Text(b, $"{enchant.ToUpperInvariant()} WANTS", x + 10, y, Slate);
-                _ui.TextRight(b, want, x + width, y, Met);
-                y += UiTypography.Pitch(UiTypography.Label);
-            }
-            y += 6;
-        }
-
-        // WHERE YOU ARE HUNTING. The matchup, against the creatures that actually live there.
-        if (RegionId.Length == 0) return;
-
-        var roster = BandCycles.RosterFor(RegionId);
-        if (roster.Count == 0) return;
-
-        _ui.Fill(b, new Rectangle(x, y, width, 2), Dim);
-        y += 14;
-        _ui.Text(b, $"IN {(RegionName.Length > 0 ? RegionName : RegionId).ToUpperInvariant()}", x, y, Slate);
-        y += UiTypography.Pitch(UiTypography.Label);
-
-        var judged = _slot >= 0 && _slot < Loadout.Skills.Count
-            ? Loadout.Skills[_slot].Source
-            : Source.Body;
-
-        foreach (var enemy in roster.Distinct().Take(4))
-        {
-            var mult = SourceMatchup.Effectiveness(judged, enemy);
-            var verdict = mult > 1.01f ? "STRONG" : mult < 0.99f ? "WEAK" : "even";
-            var tint = mult > 1.01f ? Met : mult < 0.99f ? Ember : Slate;
-
-            _ui.Text(b, SourceName(enemy), x + 10, y, SourceColor.GetValueOrDefault(enemy, Bone));
-            _ui.TextRight(b, $"{verdict}  x{mult:0.00}", x + width, y, tint);
-            y += UiTypography.Pitch(UiTypography.Label);
-        }
-    }
-
-    /// <summary>
-    /// What your WORN GEAR is waiting for, that your build does not yet fire.
-    /// </summary>
-    /// <remarks>
-    /// Six enchantments are Form combos — Overdraw wants a PROJECTILE, Execute wants a STRIKE — and
-    /// without that Form they are dead weight on the item. The dependency ran ONE WAY: the Forge greys
-    /// out a combo the build cannot meet, but the screen where Forms are actually CHOSEN never mentioned
-    /// that a piece of your gear was waiting on one. Core has carried the requirement, machine-readable,
-    /// the whole time (<c>Enchantment.NeedsForm</c>); nothing on this screen asked it.
-    ///
-    /// This is the cheapest possible way to make the Weave feel connected to the rest of the game, and
-    /// it turns a shrug into a reason: not "pick a Form" but "your focus is waiting for a VOLLEY".
-    /// </remarks>
-    private IReadOnlyList<(string Wants, string Enchant)> GearWants()
-    {
-        if (Hunter is not { } h) return Array.Empty<(string, string)>();
-
-        // Judged on the slots' BASE defs (this screen composes no build); the Forge's own badge
-        // judges the RESOLVED ones. Keystone- and vow-shaped needs are not skill advice, so the
-        // hint skips them.
-        var woven = Loadout.EquippedDefs();
-        return h.WornEnchantments
-                .Where(e => e.Needs is { Keystone: null, AnyVow: false } n && !n.MetBySkills(woven))
-                .Select(e => (e.Needs!.Label, e.Name))
-                .DistinctBy(t => t.Item1)
-                .ToList();
-    }
-
-    /// <summary>One damage reading for a loadout, through the same bench the balance tests use.</summary>
-    private float Dps(PlayerLoadout loadout, Hunter hunter)
-        => DamageBench.Measure(loadout.ToBuild(Tree, Mastery, Character, SkillLevels), hunter).Dps;
-
-    /// <summary>Every skill this champion can weave: the roads walked, plus what it was born with.</summary>
-    private IReadOnlySet<string> KnownSkills()
-    {
-        var set = Mastery.LearnedSkills().ToHashSet(StringComparer.Ordinal);
-        if (Character?.StartingSkillId is { } born) set.Add(born);
-        return set;
-    }
-
-    /// <summary>
-    /// One card: the nine-sliced plate every list cell on this screen sits on.
-    /// </summary>
-    /// <remarks>
-    /// The library, the variation fork and the reinforcements were three hand-drawn Fill+Outline
-    /// rectangles, which is what a placeholder looks like next to a nine-sliced panel. They share one
-    /// plate now, tinted by state, so the three lists read as one family and a state change is a
-    /// change of LIGHT rather than of construction.
-    /// </remarks>
-    private void Card(SpriteBatch b, Rectangle r, Color accent, bool on, bool over, bool locked)
-    {
-        // A FRAME HAS A MINIMUM SIZE, and this is where it is. `ui_panel_small`'s corner filigree ran
-        // straight through the text at card size — worse than the flat rectangles it replaced — and
-        // PanelQuiet, which the house rule does prescribe for anything inside a screen, still draws
-        // ornament that a 195px card cannot spare. So the two BIG cards (the variation fork) wear the
-        // house frame and the small ones wear a plain plate. It is the same decision the frame art
-        // itself makes by aspect ratio; it just has to be made by size as well.
-        if (r.Width >= 240) _ui.PanelQuiet(b, r, locked ? 0.45f : over ? 1f : 0.85f);
-        else
-        {
-            _ui.Fill(b, r, new Color(0x0E, 0x0B, 0x16) * (locked ? 0.5f : 0.8f));
-            Outline(b, r, locked ? Dim : on ? accent : over ? Bone : Slate, on || over ? 2 : 1);
-        }
-        // The state is LIGHT on the plate rather than a second edge at a different radius, which is
-        // the thing that makes a UI look assembled from parts.
-        var inner = new Rectangle(r.X + 5, r.Y + 5, r.Width - 10, r.Height - 10);
-        if (on) _ui.Fill(b, inner, accent * 0.20f);
-        else if (over && !locked) _ui.Fill(b, inner, Bone * 0.07f);
-        if (on) Outline(b, r, accent, 2);
-    }
-
-    /// <summary>The foot of the middle column: the one place a sentence is allowed.</summary>
-    private static Rectangle HoverBox
-        => new(PickPanel.X + PickPad, PickPanel.Bottom - 168, PickPanel.Width - PickPad * 2, 146);
-
-    private void DrawHover(SpriteBatch b)
-    {
-        var r = HoverBox;
-        _ui.Fill(b, r, new Color(0x0C, 0x09, 0x14) * 0.55f);
-        Outline(b, r, Slate, 1);
-        if (_hoverTitle.Length == 0)
-        {
-            _ui.TextCenter(b, "HOVER ANYTHING TO READ IT.", r.Center.X, r.Center.Y - 8, Dim);
-            return;
-        }
-        _ui.TextBig(b, _hoverTitle, r.X + 12, r.Y + 10, Gold, UiTypography.Body);
-        DrawWrapped(b, _hoverBody, r.X + 12, r.Y + 38, r.Width - 24, Slate, r.Bottom - 8);
-    }
-
-    private void DrawPicker(SpriteBatch b, Point hit)
-    {
-        // PER FRAME. The box says what the cursor is on RIGHT NOW, so last frame's answer must not
-        // survive into this one — a stale sentence under a cursor that has moved is worse than none.
-        _hoverTitle = "";
-        _hoverBody = "";
-        _ui.PanelQuiet(b, PickPanel);
-        var skills = Loadout.Skills;
-        if (_slot >= skills.Count)
-        {
-            _ui.TextCenter(b, "PICK A SLOT ON THE LEFT.", PickPanel.Center.X, PickPanel.Center.Y, Slate);
-            return;
-        }
-        var cur = skills[_slot];
-
-        // THE TWO FACES. Named for the question each answers, not for what they contain.
-        for (var t = 0; t < 2; t++)
-        {
-            var tb = Tab(t);
-            var on = _tab == t;
-            var over = tb.Contains(hit);
-            // THE GAME'S OWN TAB ART, the same pair the Gear screen uses. A hand-drawn rectangle
-            // beside a nine-sliced panel reads as a placeholder, and this screen had four of them.
-            if (_ui.Assets.Get(on ? "ui_tab_active" : "ui_tab_inactive") is { } ta)
-                b.Draw(ta, tb, on || over ? Color.White : Color.White * 0.72f);
-            else { _ui.Fill(b, tb, Gold * (on ? 0.22f : 0.05f)); Outline(b, tb, on ? Gold : Slate, 1); }
-            _ui.TextCenter(b, t == 0 ? "YOUR SKILLS" : "THIS SLOT", tb.Center.X, tb.Y + 7,
-                           on ? Gold : over ? Bone : Slate);
-        }
-
-        // THE READOUT BELONGS TO THE PAGE, NOT TO A FACE. Drawing it only under the library lost the
-        // build's own numbers the moment a player opened a skill — and comparison is the one thing the
-        // loadout literature is unanimous about: the delta has to be on screen while you decide.
-        if (_tab == 1)
-        {
-            DrawSkillTree(b, hit, cur);
-            DrawHover(b);
-            DrawReadout(b, null);
-            return;
-        }
-
-        _ui.TextCenterBig(b, "YOUR SKILLS", PickPanel.Center.X, UiKit.TitleTop(PickPanel), Gold, UiTypography.PanelTitle);
-
-        var known = KnownSkills();
-        string? hoverSkillId = null;
-
-        // TWELVE TILES, IN STYLE ORDER. A style's two skills sit side by side, so the pairing is read
-        // off the grid instead of being written beside it twelve times.
-        for (var i = 0; i < 12; i++)
-        {
-            var style = (Style)(i / 2);
-            var def = i % 2 == 0 ? SkillCatalogue.ActiveOf(style) : SkillCatalogue.PassiveOf(style);
-            var cell = LibCell(i);
-            var have = known.Contains(def.Id);
-            var over = cell.Contains(hit);
-            var on = _slot < Loadout.Skills.Count && Loadout.Skills[_slot].SkillId == def.Id;
-
-            if (over)
-            {
-                _hoverTitle = have ? def.Name : $"{def.Name} — NOT LEARNED";
-                _hoverBody = have ? def.Line
-                                  : $"Learned on {style.ToString().ToUpperInvariant()}'s road, on the mastery tree.";
-                if (have) hoverSkillId = def.Id;
-            }
-
-            Card(b, cell, Gold, on, over && have, !have);
-
-            // THE ICON IS THE BIGGEST THING ON THE TILE, which is the whole point of having twelve.
-            var ico = new Rectangle(cell.Center.X - 30, cell.Y + 12, 60, 60);
-            if (!_ui.Icon(b, $"icon_skill_{def.Id}", ico, !have ? Dim : on ? Gold : over ? Bone : Slate))
-                _ui.Diamond(b, ico, Dim);
-
-            _ui.TextCenter(b, Fit(def.Name, cell.Width - 12), cell.Center.X, cell.Y + 80,
-                           !have ? Dim : on ? Gold : Bone);
-            // The kind as one short word, because it decides which of the two budgets the slot spends
-            // and a player choosing between two skills of a style is choosing exactly that.
-            _ui.TextCenter(b, def.TakesABeat ? "ACTIVE" : "PASSIVE", cell.Center.X, cell.Y + 102,
-                           !have ? Dim : def.TakesABeat ? Gold * 0.8f : Met * 0.8f);
-        }
-
-        DrawHover(b);
-        DrawReadout(b, hoverSkillId);
-    }
-
-    /// <summary>
-    /// One pick cell's plate: its ground, its edge, and the lift a hovered cell gets.
-    /// </summary>
-    /// <remarks>
-    /// Shared by both grids so SOURCE and FORM cannot drift apart, which they had: the Source grid
-    /// outlined its hover in the source's own colour and the Form grid in gold, so the same gesture
-    /// looked like two different affordances on one panel.
-    /// </remarks>
-    private void PickCell(SpriteBatch b, Rectangle cell, bool on, bool over, Color accent)
-    {
-        _ui.Fill(b, cell, on ? new Color(0x2C, 0x25, 0x44) : over ? new Color(0x1E, 0x18, 0x2C) : Quiet);
-        // A SELECTED CELL IS LIT FROM ITS TOP EDGE — the same language the slot rows and the vow seals
-        // use for "this is the one", so the three panels read as one screen.
-        if (on) _ui.Fill(b, new Rectangle(cell.X, cell.Y, cell.Width, 3), accent);
-        Outline(b, cell, on ? Bone : over ? accent : Dim, on ? 3 : 2);
-    }
-
-    /// <summary>
-    /// What you are editing, across the foot of the picker: the pair as one thing.
-    /// </summary>
-    /// <remarks>
-    /// The description strip that used to close this panel became a hover card, and leaving the space
-    /// empty would have been the wrong trade — a panel of twelve options needs to say which slot the
-    /// next click lands on. This says it in the game's own terms (the Source gem, the Form glyph, the
-    /// composed name), so the answer is a picture rather than a sentence.
-    /// </remarks>
-    /// <summary>
-    /// The selected slot's own tree: what its skill becomes, and what that choice buys next.
-    /// </summary>
-    /// <remarks>
-    /// This is the depth the design promised and the row could not hold. A skill levels by being used
-    /// (four levels, at 4/16/36/64 waves cleared); the first level picks one of two VARIATIONS, and
-    /// each variation carries its own SOURCE — the designer folded the element choice onto this fork
-    /// rather than adding a layer. The three levels after it buy that variation's REINFORCEMENTS.
-    ///
-    /// Respec is free and gives every level back, which is stated on the button rather than hidden in
-    /// a tooltip: a per-skill tree that punishes experimenting is the known failure of the system this
-    /// copies, and a player who cannot see that it is free will assume it is not.
-    /// </remarks>
-    /// <summary>Open the slot's own tree — the capture fixture's way in to the page under test.</summary>
-    public void DevOpenSkillTree() => _tab = 1;
-
-    private void DrawSkillTree(SpriteBatch b, Point hit, PlayerLoadout.SkillChoice cur)
-    {
-        // AN EMPTY SLOT HAS NO TREE — and neither has a skill the champion un-learned (respec
-        // re-locks). Without this the page drew a full page about an ability the build does not have.
-        if (SkillCatalogue.Find(cur.SkillId) is not { } def || !KnownSkills().Contains(def.Id))
-        {
-            _ui.TextCenterBig(b, "THIS SLOT IS EMPTY", PickPanel.Center.X, TreeTop + 120, Slate,
-                              UiTypography.PanelTitle);
-            _ui.TextCenter(b, "PICK ONE OF YOUR SKILLS, THEN ITS OWN TREE OPENS HERE.",
-                           PickPanel.Center.X, TreeTop + 156, Dim);
-            return;
-        }
-
-        var chosen = SkillLevels.VariationOf(def);
-        var free = SkillLevels.FreeOn(def.Id);
-        var level = SkillLevels.LevelOf(def.Id);
-        var uses = SkillLevels.UsesOf(def.Id);
-
-        // ── THE HEADER: what this is, and what it does in one line. ──────────────────────────────
-        // THE SKILL, AS AN ICON AND A NAME. Its rule used to sit here as a paragraph; it is in the
-        // hover box now, where every sentence on this panel lives.
-        var head = new Rectangle(PickPanel.X + PickPad, TreeTop - 4, 54, 54);
-        _ui.Icon(b, $"icon_skill_{def.Id}", head, Gold);
-        if (head.Contains(hit)) { _hoverTitle = def.Name; _hoverBody = def.Line; }
-        _ui.TextBig(b, def.Name, head.Right + 14, TreeTop + 6, Gold, UiTypography.PanelTitle);
-        _ui.Text(b, def.TakesABeat ? "ACTIVE" : "PASSIVE", PickPanel.Right - PickPad - 70, TreeTop + 12,
-                 def.TakesABeat ? Gold : Met);
-
-        // ── THE LEVEL LINE. Says where the next one comes from, because "use it" is the whole rule
-        //    and a player who does not know that will look for a currency that does not exist. ────
-        var next = SkillProgress.UsesForLevel(level + 1);
-        // NUMBERS, NOT A SENTENCE. "NEXT AT 16 WAVES CLEARED WITH IT" is the kind of line the
-        // designer asked to stop drawing everywhere; the hover box carries the explanation and the
-        // panel carries the count.
-        var progress = level >= SkillProgress.MaxLevel ? $"LEVEL {level}" : $"LEVEL {level}   {uses}/{next}";
-        _ui.Text(b, free > 0 ? progress + $"   +{free}" : progress,
-                 PickPanel.X + PickPad, TreeTop + 62, free > 0 ? Gold : Slate);
-        if (new Rectangle(PickPanel.X + PickPad, TreeTop + 58, 200, 20).Contains(hit))
-        {
-            _hoverTitle = $"LEVEL {level}";
-            _hoverBody = level >= SkillProgress.MaxLevel
-                ? "This skill is fully levelled."
-                : $"Clear {next} waves with this skill equipped to reach level {level + 1}. "
-                  + "Levels are never lost, and respec is free.";
-        }
-
-        // ── THE FORK. Two cards, each naming the SOURCE it commits the skill to. ─────────────────
-        for (var vi = 0; vi < def.Variations.Count && vi < 2; vi++)
-        {
-            var v = def.Variations[vi];
-            var card = VarCard(vi);
-            var taken = chosen?.Name == v.Name;
-            var other = chosen is not null && !taken;
-            var can = chosen is null && free > 0;
-            var over = card.Contains(hit) && can;
-
-            var col = SourceColor.GetValueOrDefault(v.Source, Bone);
-            Card(b, card, col, taken, over, other);
-
-            // THE SOURCE GEM, because the element is half of what this card commits to and a colour
-            // swatch is the fastest thing on screen to read.
-            var gem = new Rectangle(card.Center.X - 26, card.Y + 16, 52, 52);
-            _ui.Diamond(b, new Rectangle(gem.X - 3, gem.Y - 3, gem.Width + 6, gem.Height + 6),
-                        col * (other ? 0.10f : taken ? 0.40f : 0.22f));
-            if (_ui.Assets.Get($"source_{v.Source.ToString().ToLowerInvariant()}") is { } gg)
-                b.Draw(gg, gem, other ? Color.White * 0.35f : Color.White);
-
-            _ui.TextCenter(b, v.Name, card.Center.X, card.Bottom - 46, other ? Dim : taken ? Bone : Gold);
-            _ui.TextCenter(b, SourceName(v.Source), card.Center.X, card.Bottom - 24, other ? Dim : col);
-            if (card.Contains(hit))
-            {
-                _hoverTitle = $"{v.Name} · {SourceName(v.Source)}";
-                // The variation owns the skill's element, so the card that commits to it is where
-                // the element's signature is worth a sentence.
-                _hoverBody = $"{v.Line} {BuildGlossary.SourceLine(v.Source)}.";
-            }
-        }
-
-        // ── AND WHAT IT BUYS NEXT. ───────────────────────────────────────────────────────────────
-        if (chosen is null)
-        {
-            return;
-        }
-
-        var bought = chosen.Reinforcements.Count(r => SkillLevels.HasReinforcement(def.Id, r.Name));
-        _ui.Text(b, $"{bought}/{chosen.Reinforcements.Count}", PickPanel.X + PickPad, TreeTop + 358, Slate);
-
-        for (var ri = 0; ri < chosen.Reinforcements.Count && ri < 3; ri++)
-        {
-            var r = chosen.Reinforcements[ri];
-            var card = ReinfCard(ri);
-            var have = SkillLevels.HasReinforcement(def.Id, r.Name);
-            var can = !have && free > 0;
-            var over = card.Contains(hit) && can;
-
-            Card(b, card, have ? Met : Gold, have, over, !have && !can);
-            _ui.TextCenter(b, Fit(r.Name, card.Width - 16), card.Center.X, card.Center.Y - 16,
-                           have ? Bone : can ? Gold : Dim);
-            // A BOUGHT ONE IS MARKED IN WORDS. Colour alone carries it for a player who reads colour;
-            // the mark carries it for everyone else. A tick glyph would have been the obvious choice
-            // and the font gate refused it — U+2713 is not in the proven set and would have drawn as
-            // nothing at all, which is the failure a second channel exists to prevent.
-            if (have) _ui.TextCenter(b, "OWNED", card.Center.X, card.Center.Y + 8, Met);
-            if (card.Contains(hit)) { _hoverTitle = r.Name; _hoverBody = r.Line; }
-        }
-
-        // ── RESPEC, and it says the price out loud because the price is nothing. ─────────────────
-        var rb2 = RespecBtn;
-        var overR = rb2.Contains(hit);
-        _ui.Fill(b, rb2, Ember * (overR ? 0.22f : 0.10f));
-        Outline(b, rb2, overR ? Ember : Slate, overR ? 2 : 1);
-        _ui.TextCenter(b, "RESPEC", rb2.Center.X, rb2.Y + 9, overR ? Ember : Slate);
-        if (overR)
-        {
-            _hoverTitle = "RESPEC";
-            _hoverBody = "Give this skill's levels back. Free, and it keeps every level it has earned.";
-        }
-    }
-
-
-    /// <summary>
-    /// A title line: what kind of thing it is, then its name — unless the name already says the kind.
-    /// </summary>
-    /// <remarks>
-    /// Twelve of the thirteen Vows are called "VOW OF something", so a flat prefix reads
-    /// "VOW: VOW OF THE DELIBERATE". The thirteenth (RECKLESS OFFERING) needs the word, which is why
-    /// the prefix is conditional rather than simply dropped.
-    /// </remarks>
-    private static string Titled(string kind, string name)
-    {
-        var n = name.ToUpperInvariant();
-        return n.StartsWith(kind, StringComparison.Ordinal) ? n : $"{kind}: {n}";
-    }
-
-    /// <summary>Truncate to a pixel width at a given size — <see cref="Fit"/> measures at the default.</summary>
-    private string FitBig(string text, int width, int px)
-    {
-        if (_ui.MeasureBig(text, px) <= width) return text;
-        var s = text;
-        while (s.Length > 1 && _ui.MeasureBig(s + "…", px) > width) s = s[..^1];
-        return s.TrimEnd() + "…";
-    }
-
-    private void DrawVows(SpriteBatch b, Point hit)
-    {
-        _ui.PanelQuiet(b, VowPanel);
-        _ui.TextCenterBig(b, "VOWS", VowPanel.Center.X, UiKit.TitleTop(VowPanel), Gold, UiTypography.PanelTitle);
-
-        var known = Known;
-        var skills = Loadout.Skills;
-        var sworn = _slot < skills.Count ? skills[_slot].VowId : null;
-        var ctx = Context;
-
-        if (known.Count == 0)
-        {
-            _ui.TextCenter(b, "YOU KNOW NO VOWS YET.", VowPanel.Center.X, VowPanel.Y + 140, Slate);
-            _ui.TextCenter(b, "LEARN THEM IN TRAITS (P).", VowPanel.Center.X, VowPanel.Y + 176, Dim);
-            return;
-        }
-
-        _ui.TextCenter(b, "WORKS ONLY IF YOU MEET ITS DEMAND", VowPanel.Center.X, UiKit.CaptionTop(VowPanel), Slate);
-
-        _vowScroll = Math.Clamp(_vowScroll, 0, Math.Max(0, known.Count - VowRows));
-        var openRow = OpenBindRow(known);
-        for (var r = 0; r < VowRows; r++)
-        {
-            var idx = _vowScroll + r;
-            if (idx >= known.Count) break;
-            var v = known[idx];
-            var row = VowRow(r, openRow);
-            var on = v.Id == sworn;
-            var picked = v.Id == _readingVowId;
-            var live = Vows.IsActive(v, ctx);
-            var hover = row.Contains(hit);
-
-            // ── A SEAL, NOT A LIST ROW ──────────────────────────────────────────────────────────
-            //
-            // Playtest 2026-08-28: the column read as "düz sıralı, tıkladım eklendi" — a settings list.
-            // A Vow is bound TO A SKILL (SkillChoice carries the id), so it is drawn as the thing that
-            // gets pressed into one: a wax medallion carrying the price, the name beside it, and the
-            // demand underneath as the condition written on the seal. Clicking it opens the BIND row.
-            _ui.Fill(b, row, on || picked ? new Color(0x2C, 0x25, 0x44) : hover ? new Color(0x1E, 0x18, 0x2C) : Quiet);
-            if (on) Outline(b, row, Gold, 2);
-            else if (picked) Outline(b, row, Bone, 2);
-            else if (hover) Outline(b, row, Bone * 0.55f, 1);
-
-            // THE MEDALLION carries the multiplier, because the price is what a player is shopping for
-            // and it was the smallest thing on the row. Its ring is the verdict: gold while the demand
-            // holds, ember while it does not.
-            // A RING OF WAX, not a boxed icon. A rectangle outline around a diamond reads as a frame
-            // holding a shape — two silhouettes arguing. Two diamonds, the outer one the verdict's
-            // colour and the inner one the panel's own dark, give the medallion a single edge.
-            var med = new Rectangle(row.X + 10, row.Y + 11, 48, 48);
-            _ui.Diamond(b, med, (live ? Gold : Ember) * (on ? 0.85f : 0.55f));
-            _ui.Diamond(b, new Rectangle(med.X + 5, med.Y + 5, med.Width - 10, med.Height - 10),
-                        new Color(0x16, 0x11, 0x22));
-            _ui.TextCenter(b, $"x{Vows.Multiplier(v):0.00}",
-                           med.Center.X, med.Y + 16, live ? Gold : Slate);
-
-            const int verdict = 74;
-            var tx = row.X + 70;
-            _ui.TextBig(b, Fit(v.Name.ToUpperInvariant(), row.Width - 70 - verdict - 18), tx, row.Y + 10,
-                        on ? Gold : Bone, UiTypography.Body);
-            // SLATE, NOT DIM, WHEN UNMET. Dim on this row plate measures ~1.6:1, so the demand — the
-            // thing the player is deciding whether to chase — was hardest to read exactly when it
-            // mattered most. Gold-when-live against slate-when-not is still an unmistakable two-state.
-            _ui.Text(b, Fit(DemandText(v), row.Width - 70 - verdict - 18), tx, row.Y + 42, live ? Met : Slate);
-            _ui.TextRight(b, live ? "MET" : "UNMET", row.Right - 14, row.Y + 42, live ? Met : Ember);
-
-            // WHAT TO DO WITH IT, on the row the cursor is on. The gesture is new, so it is taught
-            // where it is used rather than in a legend nobody reads.
-            if (on) _ui.TextRight(b, "SWORN", row.Right - 14, row.Y + 12, Gold);
-        }
-
-        // ── THE BIND CONTROL, under the seal that opened it ─────────────────────────────────────
-        //
-        // Designer's call (2026-08-28), replacing a drag: a seal is CHOSEN by clicking it and BOUND by
-        // pressing this. One target, one consequence, and reachable by any input — a drag needs a
-        // pointer, and combat targeting here is cycle-and-confirm for exactly that reason.
-        if (openRow >= 0 && _vowScroll + openRow < known.Count)
-        {
-            var v = known[_vowScroll + openRow];
-            var btn = VowBindBtn(openRow);
-            var canBind = _slot < skills.Count;
-            var already = canBind && skills[_slot].VowId == v.Id;
-            var over = btn.Contains(hit);
-
-            _ui.Fill(b, btn, !canBind ? Quiet
-                             : already ? new Color(0x30, 0x18, 0x18)
-                             : over ? new Color(0x3A, 0x2E, 0x18) : new Color(0x24, 0x1D, 0x2E));
-            Outline(b, btn, !canBind ? Dim : already ? Ember : over ? Gold : Gold * 0.55f, 2);
-
-            // NAMES THE SLOT, not "the current skill": the player is looking at four of them on the
-            // left and the button has to say which one it means.
-            var label = !canBind ? "PICK A SLOT ON THE LEFT"
-                : already ? $"BREAK THIS VOW ON SLOT {_slot + 1}"
-                : $"BIND TO SLOT {_slot + 1}  ·  {SkillCatalogue.Find(skills[_slot].SkillId)?.Name ?? "EMPTY"}";
-            _ui.TextCenter(b, Fit(label, btn.Width - 20), btn.Center.X, btn.Y + 13,
-                           !canBind ? Dim : already ? Ember : over ? Gold : Bone);
-        }
-
-        if (known.Count > VowRows)
-            _ui.TextRight(b, $"{_vowScroll + 1}-{Math.Min(known.Count, _vowScroll + VowRows)} / {known.Count}",
-                          UiKit.ContentRight(VowPanel), UiKit.CaptionTop(VowPanel), Slate);
-
-        var clear = VowClearAt(openRow);
-        _ui.Fill(b, clear, clear.Contains(hit) ? new Color(0x2C, 0x25, 0x44) : Quiet);
-        _ui.TextCenter(b, sworn is null ? "NO VOW SWORN" : "BREAK THE VOW",
-                       clear.Center.X, clear.Y + 14, sworn is null ? Dim : Ember);
-
-        // The reading panel: the full text of whichever Vow was last touched, because the row can only
-        // carry its demand and a Vow's cost is the half that decides whether to take it.
-        var reading = Vows.ById(_readingVowId) ?? Vows.ById(sworn) ?? known[_vowScroll];
-        var y = clear.Bottom + 18;
-        _ui.Fill(b, new Rectangle(VowColX, y, VowColW, 2), Dim);
-        y += 16;
-        _ui.TextBig(b, reading.Name.ToUpperInvariant(), VowColX, y, Gold, UiTypography.Body);
-        y += UiTypography.Pitch(UiTypography.Body);
-        // Bounded, so a longer Vow than any in the catalogue today cannot reintroduce the overflow: the
-        // panel's frame art reaches 40px in, and text drawn past that is text on the ornament.
-        DrawWrapped(b, reading.Description, VowColX, y, VowColW, Bone, VowPanel.Bottom - 40);
-    }
-
-    /// <summary>Truncate to a pixel width, with an ellipsis, so a long line cannot invade its neighbour.</summary>
-    private string Fit(string text, int width)
-    {
-        if (_ui.Measure(text) <= width) return text;
-        var s = text;
-        while (s.Length > 1 && _ui.Measure(s + "\u2026") > width) s = s[..^1];
-        return s.TrimEnd() + "\u2026";
-    }
-
-    /// <summary>Wrap to <paramref name="width"/>, and stop at <paramref name="maxY"/> rather than run past it.</summary>
-    private void DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c, int maxY = int.MaxValue)
-    {
-        var lineH = UiTypography.Pitch(UiTypography.Label);
-        var lines = _ui.WrapBig(text.ToUpperInvariant(), width, UiTypography.Label);
-        for (var i = 0; i < lines.Count; i++)
-        {
-            if (y + lineH > maxY) return;
-            // The last line that FITS wears the ellipsis when more would have followed.
-            var last = i == lines.Count - 1 || y + lineH * 2 > maxY;
-            _ui.Text(b, last && i < lines.Count - 1 ? lines[i] + "\u2026" : lines[i], x, y, c);
-            if (last) return;
-            y += lineH;
+            if (d.Count == 0) return;
+            foreach (var k in d.Keys.ToList()) { var left = d[k] - dt; if (left <= 0f) d.Remove(k); else d[k] = left; }
         }
     }
 
