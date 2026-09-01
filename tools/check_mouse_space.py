@@ -6,13 +6,13 @@ THE BUG THIS EXISTS TO CATCH, in the player's words: "Stat upgrade tiklayamiyoru
 Screens are AUTHORED in 1920x1080 and DRAWN through an inset transform, but Game1 hands them
 `CanvasMouse`, which lives in 480x270 canvas space. Each screen has to invert the transform itself
 with `Game1.ToOverlay` (or, for the fight screen, its own documented `mouse.X * 4`). Nine screens
-remembered. StatsScreen did not -- so its nearest TRAIN button, authored at x=938, was hit-tested
+remembered. TrainingScreen did not -- so its nearest TRAIN button, authored at x=938, was hit-tested
 against a cursor whose x can never exceed ~479. `Rectangle.Contains` was false at every cursor
 position on every frame, and the entire stat economy was unreachable.
 
 Nothing in C# enforces this: the types match, it compiles, it draws correctly, and only the CLICKS
 are dead. That is the worst possible failure shape -- it looks fine in a screenshot. A second
-instance (SoloExpeditionScreen.DrawLog's page buttons) shipped the same way and was found the same
+instance (HuntScreen.DrawLog's page buttons) shipped the same way and was found the same
 day.
 
 There is no test project for the Game assembly, which is why this is a script and not a unit test.
@@ -203,9 +203,9 @@ def reachable_body(text, entry):
     """
     The entry method's body PLUS every same-file method it transitively calls.
 
-    THE GATE IS USELESS WITHOUT THIS, and the first draft proved it. StatsScreen.Draw contains no
+    THE GATE IS USELESS WITHOUT THIS, and the first draft proved it. TrainingScreen.Draw contains no
     hit-test of its own -- it calls DrawPrimary, which calls DrawTrain, which is where the dead
-    `_ui.Button` lives. A body-only check reported StatsScreen clean while the reported bug sat two
+    `_ui.Button` lives. A body-only check reported TrainingScreen clean while the reported bug sat two
     calls below it. That is the same shape as an earlier gate here that matched a CALL instead of a
     DECLARATION and passed with the real bug present, so it gets the same treatment: follow the calls.
     """
@@ -274,7 +274,7 @@ def main():
             # Any hit test still aimed at the RAW parameter is a dead click hiding behind a live one.
             # THE ENTRY METHOD'S OWN BODY, NOT THE REACHABLE CLOSURE. Inside the entry point the
             # parameter name unambiguously means the raw cursor; three helpers down it does not.
-            # StatsScreen.DrawTrain, ChestScreen and BuildScreen all take a parameter ALSO called
+            # TrainingScreen.DrawTrain, VaultScreen and MasteryScreen all take a parameter ALSO called
             # `mouse` and are called with the already-converted local, so searching the closure
             # flagged three correct screens on a name collision. A gate that cries wolf on working
             # code gets switched off, which costs more than the hole it was closing.

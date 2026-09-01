@@ -25,7 +25,7 @@ namespace IdleXIdle.Game;
 /// current build. Resonance is the real source composition of the equipped skills; passives are the taken
 /// mastery nodes; there is no numeric "trait bonus %" table, so that is shown as the real passive list.
 /// </remarks>
-public sealed class BuildScreen
+public sealed class MasteryScreen
 {
     private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
     private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
@@ -168,7 +168,7 @@ public sealed class BuildScreen
         ClampPan();
     }
 
-    public BuildScreen(UiKit ui) => _ui = ui;
+    public MasteryScreen(UiKit ui) => _ui = ui;
 
     /// <summary>DEV: pose THE ATTUNEMENT ceremony for a capture, without touching the tree's state.</summary>
     public void DevAttune(Style form)
@@ -668,7 +668,7 @@ public sealed class BuildScreen
             return;
         }
 
-        // Skills, Vows and keystone sockets are all WeaveScreen's now.
+        // Skills, Vows and keystone sockets are all LoadoutScreen's now.
     }
 
     // ── Draw ─────────────────────────────────────────────────────────────────────────────────────
@@ -1283,7 +1283,7 @@ public sealed class BuildScreen
     /// label gap can drop from the ceremony's 58 px to 8 without any of them looking unmoored.
     /// </para>
     /// <para>
-    /// <b>THE FIELD IS THE CHART'S OWN NOW</b> (<see cref="FormHexDiagram.Field"/>) rather than a flat
+    /// <b>THE FIELD IS THE CHART'S OWN NOW</b> (<see cref="StyleAffinityDiagram.Field"/>) rather than a flat
     /// fill with a two-pixel outline — playtest 2026-08-30: <i>"the chart picture is still careless."</i>
     /// The same inlaid well is drawn under the ceremony's hexagon, which had none at all, so the two
     /// sizes of one drawing stand on one surface.
@@ -1317,9 +1317,9 @@ public sealed class BuildScreen
         // has to hold them.
         var inner = UiKit.PanelInner(HexPanel);
         var field = inner with { Y = plate.Bottom + 10, Height = UiKit.ContentBottom(HexPanel) - plate.Bottom - 10 };
-        FormHexDiagram.Field(_ui, b, field);
+        StyleAffinityDiagram.Field(_ui, b, field);
 
-        FormHexDiagram.Draw(_ui, b, field.Center, HexRadius, aff, showFactors: aff is not null,
+        StyleAffinityDiagram.Draw(_ui, b, field.Center, HexRadius, aff, showFactors: aff is not null,
                             labelGap: HexLabelGap, labelPx: UiTypography.Secondary,
                             factorPx: UiTypography.Caption, sealPx: HexSealPx);
     }
@@ -1338,7 +1338,7 @@ public sealed class BuildScreen
     /// The field is 266 px deep, so each half has 133 px for <c>radius + the seal's rim (0.62 of its
     /// edge) + the gap + one Secondary line</c>: 78 + 21 + 8 + 16 = 123, leaving 10 px of air at both
     /// ends. (The pole labels carry their factor beside the name rather than under it — see
-    /// FormHexDiagram — which is what buys the last twenty pixels of radius.) It was 105 with the
+    /// StyleAffinityDiagram — which is what buys the last twenty pixels of radius.) It was 105 with the
     /// ceremony's 58 px gap: 326 px of diagram in a box that never framed it, so the top label ran into
     /// the caption above and the bottom one had nothing under it.
     /// </remarks>
@@ -1390,8 +1390,8 @@ public sealed class BuildScreen
         // hexagon floated on the modal's black interior — so the game's founding moment was the one
         // place the chart was drawn without the surface that makes it a chart.
         var field = new Rectangle(630, AttunePanel.Y + 86, 660, 492);
-        FormHexDiagram.Field(_ui, b, field);
-        FormHexDiagram.Draw(_ui, b, field.Center, CeremonyRadius, _attuneForm, showFactors: true,
+        StyleAffinityDiagram.Field(_ui, b, field);
+        StyleAffinityDiagram.Draw(_ui, b, field.Center, CeremonyRadius, _attuneForm, showFactors: true,
                             labelGap: CeremonyLabelGap, labelPx: UiTypography.Body,
                             factorPx: UiTypography.Secondary, sealPx: CeremonySealPx);
 
@@ -1644,7 +1644,7 @@ public sealed class BuildScreen
     // nothing on screen naming the other five — and a Vow's whole bargain (does my BUILD meet its
     // demand?) could not be answered from a cell that showed one word at a time.
     //
-    // WeaveScreen owns it now, at full width, with every Source, every Form and every studied Vow
+    // LoadoutScreen owns it now, at full width, with every Source, every Form and every studied Vow
     // visible at once and each Vow's demand checked live against the build. Deleted rather than left
     // behind a flag: two editors for one loadout is the parallel-systems failure this codebase has
     // been bitten by twice already.
@@ -1889,7 +1889,7 @@ public sealed class BuildScreen
     /// A wire's thickness in pixels at the current zoom.
     /// </summary>
     /// <remarks>
-    /// 5.7 is not a taste call. PrestigeScreen — the tree the same playtester has NOT complained about —
+    /// 5.7 is not a taste call. TraitsScreen — the tree the same playtester has NOT complained about —
     /// draws a 3px wire against a 52px node, a ratio of 1:17.3. A Minor node here is 98.8 * _zoom pixels
     /// across, and 98.8 / 17.3 = 5.7. So these wires land at exactly the weight the trait tree already
     /// ships, at every zoom, instead of a constant 8 that is 29% of a node at the default camera and 57%

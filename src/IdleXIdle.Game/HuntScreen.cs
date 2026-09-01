@@ -35,7 +35,7 @@ namespace IdleXIdle.Game;
 /// run's end that no longer exists.
 /// </para>
 /// </remarks>
-public sealed class SoloExpeditionScreen
+public sealed class HuntScreen
 {
     private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
     private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
@@ -671,7 +671,7 @@ public sealed class SoloExpeditionScreen
     private Source? _lastSource;
     private Hunter? _hunter;
 
-    public SoloExpeditionScreen(UiKit ui)
+    public HuntScreen(UiKit ui)
     {
         _ui = ui;
         _vfx = new VfxPlayer(ui.Assets);

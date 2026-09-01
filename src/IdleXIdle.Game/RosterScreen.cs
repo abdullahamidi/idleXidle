@@ -230,7 +230,7 @@ public sealed class RosterScreen
             // The character themselves. A roster of names is a menu; a roster of people is a roster.
             // Each breathes on its own phase, so ten cards do not pulse in unison — and the sprite is
             // the approved full-body design rather than a generated clip, for the reason set out in
-            // SoloExpeditionScreen.DrawChampion.
+            // HuntScreen.DrawChampion.
             // 118 tall: the card took on a fourth line of text (the tier) and a badge strip, and the
             // portrait is the only thing on it with height to spare.
             var portrait = new Rectangle(card.X + 16, badge.Bottom + 8, card.Width - 32, 118);

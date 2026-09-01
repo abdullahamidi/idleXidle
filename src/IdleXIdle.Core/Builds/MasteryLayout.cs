@@ -8,7 +8,7 @@ public readonly record struct TreePoint(float X, float Y);
 /// </summary>
 /// <remarks>
 /// <para>
-/// This lived in <c>BuildScreen.NodePos</c>, which made it untestable — the one thing about a tree
+/// This lived in <c>MasteryScreen.NodePos</c>, which made it untestable — the one thing about a tree
 /// layout worth asserting is that no two nodes land on top of each other, and no test could reach the
 /// function that decided. It is Core now, and <c>MasteryLayoutTests</c> asserts exactly that.
 /// </para>

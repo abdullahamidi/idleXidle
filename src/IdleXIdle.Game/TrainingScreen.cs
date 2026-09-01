@@ -34,7 +34,7 @@ namespace IdleXIdle.Game;
 /// are-you-sure state, the second confirms, any other click disarms.
 /// </para>
 /// </remarks>
-public sealed class StatsScreen
+public sealed class TrainingScreen
 {
     private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
     private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
@@ -73,7 +73,7 @@ public sealed class StatsScreen
     public void ClearDirty() => Dirty = false;
     public bool DevStatsDebug { get; set; }
 
-    public StatsScreen(UiKit ui) => _ui = ui;
+    public TrainingScreen(UiKit ui) => _ui = ui;
 
     /// <summary>The house abbreviation, so the subtitle agrees with the currency pill above it.</summary>
     private static string Ab(long v) => v >= 1_000_000

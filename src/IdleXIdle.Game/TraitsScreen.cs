@@ -27,12 +27,12 @@ namespace IdleXIdle.Game;
 /// panel — fifty-one nodes and their names at fifteen pixels, because that is what fitted. Now the tree
 /// lives in WORLD units (<see cref="TraitTreeLayout"/>) and a camera decides what is on screen: the
 /// default framing shows the whole tree, and the wheel, a held drag, the arrow keys and +/- move in to
-/// read one road at a time. Same camera as <c>BuildScreen</c> — pan is the world point at the view's
+/// read one road at a time. Same camera as <c>MasteryScreen</c> — pan is the world point at the view's
 /// centre, zoom is screen pixels per world unit, and the hit-testing goes through the same transform
 /// as the drawing so the two can never disagree.
 /// </para>
 /// </remarks>
-public sealed class PrestigeScreen
+public sealed class TraitsScreen
 {
     private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
     private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
@@ -96,7 +96,7 @@ public sealed class PrestigeScreen
     /// <summary>
     /// The sound cue for a trait just taken, cleared by reading — the host owns audio, this screen does not.
     /// </summary>
-    /// <remarks>Same shape as StatsScreen.ConsumeTrain, so the host's Update reads one way everywhere.</remarks>
+    /// <remarks>Same shape as TrainingScreen.ConsumeTrain, so the host's Update reads one way everywhere.</remarks>
     public string? ConsumeCue()
     {
         var c = _cue;
@@ -106,7 +106,7 @@ public sealed class PrestigeScreen
 
     public bool DevDustDebug { get; set; }
 
-    public PrestigeScreen(UiKit ui, MemoryDustTree tree)
+    public TraitsScreen(UiKit ui, MemoryDustTree tree)
     {
         _ui = ui;
         _selectedId = tree.All.OrderBy(u => u.Cost).First().Id;
@@ -114,12 +114,12 @@ public sealed class PrestigeScreen
         // construction; this is the loud version for a debug build, so a tree the layout has never seen
         // is noticed at the desk rather than in a capture — and Pos() still draws it either way.
         System.Diagnostics.Debug.Assert(TraitTreeLayout.Covers(tree.All.Select(u => u.Id)),
-            "TraitTreeLayout does not cover every node of this tree — see TraitTreeLayout.Unauthored / PrestigeScreen.Pos");
+            "TraitTreeLayout does not cover every node of this tree — see TraitTreeLayout.Unauthored / TraitsScreen.Pos");
         // The drawing sizes below must fit the room the layout promises, or the layout's no-overlap
         // test is holding a promise the screen breaks.
         System.Diagnostics.Debug.Assert(NameWidth + 8 <= TraitTreeLayout.NodeWidth
                                         && RadiusOf(SocketKind.Terminal) * 2 + NameGap + 3 * NameLineH + 2 <= TraitTreeLayout.NodeHeight,
-            "PrestigeScreen draws nodes larger than TraitTreeLayout.NodeWidth/NodeHeight allow");
+            "TraitsScreen draws nodes larger than TraitTreeLayout.NodeWidth/NodeHeight allow");
 
         (_worldMin, _worldMax) = WorldExtent();
         _homeZoom = FitZoom();

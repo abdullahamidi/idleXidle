@@ -32,11 +32,11 @@ public class HuntScreenFeedbackTests
         var dir = AppContext.BaseDirectory;
         for (var i = 0; i < 10 && dir is not null; i++)
         {
-            var candidate = Path.Combine(dir, "src", "IdleXIdle.Game", "SoloExpeditionScreen.cs");
+            var candidate = Path.Combine(dir, "src", "IdleXIdle.Game", "HuntScreen.cs");
             if (File.Exists(candidate)) return File.ReadAllText(candidate);
             dir = Path.GetDirectoryName(dir);
         }
-        throw new FileNotFoundException("SoloExpeditionScreen.cs not found above the test binary.");
+        throw new FileNotFoundException("HuntScreen.cs not found above the test binary.");
     }
 
     /// <summary>One method's text, so an assertion about DrawComposition cannot pass on DrawBossBar.</summary>

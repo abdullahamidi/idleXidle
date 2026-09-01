@@ -67,7 +67,7 @@ public static class ItemAffixes
     /// </summary>
     /// <remarks>
     /// The number had one formatter and the word had three copies: <c>ForgeScreen.AffixName</c>,
-    /// <c>CharacterScreen.AffixLabel</c> and the tail of <see cref="Describe(ItemAffix)"/>. Three copies
+    /// <c>GearScreen.AffixLabel</c> and the tail of <see cref="Describe(ItemAffix)"/>. Three copies
     /// of a six-arm switch is how one screen ends up saying DEFENCE while another says Defense — and a
     /// player reading two screens has no way to know they are the same stat. Kept beside the magnitudes
     /// it names, so a new stat cannot be added with a number and no word.

@@ -218,14 +218,17 @@ public class OnboardingTest
         // The Map and Roster are open from the first frame; a player who finished the intro and never
         // visited them still has both tours waiting — the list is honoured as saved.
         var facts = new UnlockFacts(WavesCleared: 3, DeepestWave: 3);
-        var seeded = Onboarding.SeedExplained(facts, introSeen: true, explained: new[] { "Stats" });
+        // An OLD save says "Stats"; the host reads it forward through ModernScreenKey before seeding
+        // (the screen became TRAINING 2026-09-01), so the returning player keeps what they learned.
+        var seeded = Onboarding.SeedExplained(facts, introSeen: true,
+            explained: new[] { Onboarding.ModernScreenKey("Stats") });
 
-        Assert.Equal(new[] { "Stats" }, seeded.OrderBy(s => s));
+        Assert.Equal(new[] { "Training" }, seeded.OrderBy(s => s));
         Assert.True(Onboarding.IsNew(Activity.Map, facts, seeded));
         Assert.True(Onboarding.IsNew(Activity.Roster, facts, seeded));
-        Assert.False(Onboarding.IsNew(Activity.Stats, facts, seeded));
+        Assert.False(Onboarding.IsNew(Activity.Training, facts, seeded));
         Assert.NotNull(Onboarding.TourDue(Activity.Map, seeded));
-        Assert.Null(Onboarding.TourDue(Activity.Stats, seeded));
+        Assert.Null(Onboarding.TourDue(Activity.Training, seeded));
     }
 
     [Fact]

@@ -36,7 +36,7 @@ public enum TutorialStep
     EquipItem,
 
     /// <summary>The build is the game. Skills, and what they are made of.</summary>
-    WeaveBuild,
+    ChooseBuild,
 
     /// <summary>Nothing left to say.</summary>
     Done,
@@ -125,7 +125,7 @@ public static class Tutorial
         // woven build all arrive well before the twentieth wave, so any earlier seat would let the
         // rungs after it be satisfied before they were ever shown.
         TutorialStep.Watch, TutorialStep.SpendGleam, TutorialStep.MeetABoss,
-        TutorialStep.OpenChest, TutorialStep.EquipItem, TutorialStep.WeaveBuild, TutorialStep.Conquer,
+        TutorialStep.OpenChest, TutorialStep.EquipItem, TutorialStep.ChooseBuild, TutorialStep.Conquer,
     };
 
     /// <summary>Has this rung's lesson already been performed, whether or not it was read?</summary>
@@ -144,7 +144,7 @@ public static class Tutorial
         TutorialStep.Conquer => f.RegionsConquered >= 1,
         TutorialStep.OpenChest => f.ItemsOwned >= 1,
         TutorialStep.EquipItem => f.ItemsWorn >= 1,
-        TutorialStep.WeaveBuild => f.SkillsWoven >= 1,
+        TutorialStep.ChooseBuild => f.SkillsWoven >= 1,
         _ => true,
     };
 
@@ -232,6 +232,17 @@ public static class Tutorial
     }
 
     /// <summary>The line shown for a step. One sentence, and it names the key that acts on it.</summary>
+    /// <summary>
+    /// A saved dismissed-rung name, read forward across renames: WEAVEBUILD became CHOOSEBUILD when the
+    /// weave vocabulary retired (2026-09-01, UX V2). Without this a player who had closed that lesson
+    /// would see it again.
+    /// </summary>
+    public static string ModernRungName(string saved) => saved switch
+    {
+        "WeaveBuild" => nameof(TutorialStep.ChooseBuild),
+        _ => saved,
+    };
+
     public static string Title(TutorialStep step) => step switch
     {
         TutorialStep.Watch => "YOUR CHAMPION FIGHTS ON ITS OWN",
@@ -239,7 +250,7 @@ public static class Tutorial
         TutorialStep.MeetABoss => "EVERY FIFTH WAVE IS A BOSS",
         TutorialStep.OpenChest => "CHESTS ARE WHERE ITEMS COME FROM",
         TutorialStep.EquipItem => "SOMETHING DROPPED",
-        TutorialStep.WeaveBuild => "THE BUILD IS THE GAME",
+        TutorialStep.ChooseBuild => "THE BUILD IS THE GAME",
         TutorialStep.Conquer => $"{Checkpoints.ConquestWave} WAVES CONQUER A REGION",
         _ => "",
     };
@@ -268,7 +279,7 @@ public static class Tutorial
             "Press C for GEAR and equip it. An item in the bag does nothing; the fight only reads "
             + "what is worn.",
 
-        TutorialStep.WeaveBuild =>
+        TutorialStep.ChooseBuild =>
             "Press B for BUILD. Pick a slot, then one of your learned skills from the library — "
             + "skills are learned on the MASTERY tree (E), and stay learned for good.",
 
@@ -311,7 +322,7 @@ public static class Tutorial
     /// </remarks>
     public static Activity? Sends(TutorialStep step, TutorialFacts f) => step switch
     {
-        TutorialStep.SpendGleam => Activity.Stats,
+        TutorialStep.SpendGleam => Activity.Training,
 
         // OpenChest is the one step that speaks DURING A WAIT — a chest is a 20% roll and the guide
         // would otherwise go silent for tens of waves. Until one actually drops its body is in the
@@ -321,7 +332,7 @@ public static class Tutorial
         TutorialStep.OpenChest => f.ChestsHeld >= 1 ? Activity.Vault : null,
 
         TutorialStep.EquipItem => Activity.Gear,
-        TutorialStep.WeaveBuild => Activity.Build,
+        TutorialStep.ChooseBuild => Activity.Build,
         _ => null,   // Watch, MeetABoss and Conquer are about the fight itself
     };
 

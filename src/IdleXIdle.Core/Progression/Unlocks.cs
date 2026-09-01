@@ -15,8 +15,13 @@ public enum Activity
     /// <summary>The hunt itself. Never locked — it is the game.</summary>
     Hunt,
 
-    /// <summary>Spending Gleam on the champion. The first decision anyone makes.</summary>
-    Stats,
+    /// <summary>Spending Gleam on the champion's stats. The first decision anyone makes.</summary>
+    /// <remarks>
+    /// Named TRAINING since 2026-09-01 (UX V2): the screen is a purchase screen, and calling it STATS set
+    /// the wrong expectation. The save stores explained-screen keys by NAME, so
+    /// <see cref="Onboarding.ModernScreenKey"/> maps the old "Stats" forward on read.
+    /// </remarks>
+    Training,
 
     /// <summary>Wearing what dropped.</summary>
     Gear,
@@ -99,7 +104,7 @@ public static class Unlocks
         Activity.Hunt => true,
 
         // The first wave pays Gleam, so the first wave is when spending it becomes a real thought.
-        Activity.Stats => f.WavesCleared >= 1,
+        Activity.Training => f.WavesCleared >= 1,
 
         // Opens the moment there is something to wear. Gated on OWNING, not on a wave count — a Gear
         // screen with an empty bag teaches a new player that gear is not part of this game.
@@ -173,7 +178,7 @@ public static class Unlocks
     public static string Requirement(Activity activity) => activity switch
     {
         Activity.Hunt => "",
-        Activity.Stats => "Clear your first wave",
+        Activity.Training => "Clear your first wave",
         Activity.Gear => "Find your first item",
         Activity.Vault => "Earn a chest from a boss",
         Activity.Forge => "Earn a chest from a boss",
@@ -197,7 +202,7 @@ public static class Unlocks
     public static string Headline(Activity activity) => activity switch
     {
         Activity.Hunt => "THE HUNT",
-        Activity.Stats => "STATS — TRAIN YOUR CHAMPION",
+        Activity.Training => "STATS — TRAIN YOUR CHAMPION",
         Activity.Gear => "GEAR — WHAT YOU WEAR",
         Activity.Vault => "THE VAULT — CHESTS YOU HAVE NOT OPENED",
         Activity.Forge => "THE FORGE — WHERE ITEMS ARE MADE",

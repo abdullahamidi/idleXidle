@@ -37,7 +37,7 @@ namespace IdleXIdle.Game;
 /// the same tuning the roll reads, so this screen cannot drift into lying.
 /// </para>
 /// </remarks>
-public sealed class ChestScreen
+public sealed class VaultScreen
 {
     private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
     private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
@@ -59,7 +59,7 @@ public sealed class ChestScreen
 
     private readonly UiKit _ui;
 
-    public ChestScreen(UiKit ui) => _ui = ui;
+    public VaultScreen(UiKit ui) => _ui = ui;
 
     private int _cursor;     // which SORTED chest a click chose — the host reads it via SelectedIndex
     private int _scroll;     // first visible card, in steps of a row
@@ -114,7 +114,7 @@ public sealed class ChestScreen
     /// What the player asked to open, taken by the host exactly once.
     /// </summary>
     /// <remarks>
-    /// The house pattern (see <c>StatsScreen.ConsumeTrain</c>): the screen records intent, the host
+    /// The house pattern (see <c>TrainingScreen.ConsumeTrain</c>): the screen records intent, the host
     /// performs the mutation. A screen that opened chests itself would need the Hunter, the loot
     /// tuning and the build's rarity bonus, which is most of the game reaching into a view.
     /// </remarks>
@@ -141,7 +141,7 @@ public sealed class ChestScreen
     public Chest? SelectedChest { get; private set; }
 
     // The TAKE ONLY keep-filter used to be edited here. It concerns what the HUNT lets through, so it
-    // lives on the HUNT screen now (SoloExpeditionScreen.DrawKeepFilter); the host still persists it.
+    // lives on the HUNT screen now (HuntScreen.DrawKeepFilter); the host still persists it.
 
     // ── Layout ──────────────────────────────────────────────────────────────────────────────────
     /// <summary>

@@ -12,7 +12,7 @@ namespace IdleXIdle.Core.Tests.Builds;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The layout used to live in <c>BuildScreen.NodePos</c>, where nothing could test it, and it was a
+/// The layout used to live in <c>MasteryScreen.NodePos</c>, where nothing could test it, and it was a
 /// pair of lookup tables: ring radius <c>{1: 0.37, 2: 0.61, 3: 0.81, _: 1.0}</c> and sibling spread
 /// <c>{1: 26°, 2: 16°, 3: 9°, _: 0°}</c>. Read the fallthroughs together and a ring 5 draws at the same
 /// radius as ring 4 with every sibling at zero spread — the entire ring collapsed onto one point.

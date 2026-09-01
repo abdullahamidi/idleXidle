@@ -38,7 +38,7 @@ namespace IdleXIdle.Game;
 /// a function of <c>radius</c> through <c>scale</c>, so neither is a hand-tuned copy of the other.
 /// </para>
 /// </remarks>
-internal static class FormHexDiagram
+internal static class StyleAffinityDiagram
 {
     private static readonly Color Gold = new(0xF0, 0xB2, 0x4A);
     private static readonly Color Met = new(0x5F, 0xC8, 0x8F);

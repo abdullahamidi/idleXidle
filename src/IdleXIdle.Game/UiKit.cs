@@ -593,7 +593,7 @@ public sealed class UiKit
     /// Measured off the art, not guessed: at the panel's own centre the top ornament of
     /// <c>ui_panel_medium</c> is 20 source px deep and <c>ui_panel_vertical</c>'s is 21, but the SQUARE
     /// frame carries a crest that runs to 51 — two and a half times as far. That single fact is why
-    /// StatsScreen's PROGRESS panel had to write its title at +40 while every other panel on the same
+    /// TrainingScreen's PROGRESS panel had to write its title at +40 while every other panel on the same
     /// screen wrote +22, and why ROSTER's detail column sat 27 px lower than the grid beside it. The
     /// screens had each rediscovered it by eye and written a different number; this returns it.
     /// </remarks>
@@ -617,7 +617,7 @@ public sealed class UiKit
     /// </summary>
     public static int PadX(Rectangle r)
         // A SQUARE-FRAMED PANEL NEVER TAKES THE NARROW MARGIN, however narrow it is: its side rails are
-        // 49 source px deep, so the narrow 24 would put the first column ON the flourish. StatsScreen's
+        // 49 source px deep, so the narrow 24 would put the first column ON the flourish. TrainingScreen's
         // PROGRESS panel is 372 px wide and had already been pushed to 60 by hand for exactly this.
         => (PanelArtKey(r) == "ui_panel_square" || r.Width >= UiTypography.WidePanelFrom
                 ? UiTypography.PanelPadX

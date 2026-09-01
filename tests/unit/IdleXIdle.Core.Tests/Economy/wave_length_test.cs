@@ -34,7 +34,7 @@ public class WaveLengthTest
 
     public WaveLengthTest(ITestOutputHelper output) => _out = output;
 
-    /// <summary>The transition the screen holds between waves — SoloExpeditionScreen.WaveBreakSeconds.</summary>
+    /// <summary>The transition the screen holds between waves — HuntScreen.WaveBreakSeconds.</summary>
     /// <remarks>
     /// 0.45 + 0.45 + 0.20. Counted because income is per REAL minute and the break is real time: a
     /// figure measured in fight seconds alone reads roughly double the wall clock on short waves, which

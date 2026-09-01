@@ -14,7 +14,7 @@ name pointing at nothing.
 Synthesised rather than generated or sourced: a bell is a sum of decaying partials,
 which is nine lines of arithmetic and is exactly reproducible. There is no asset to
 license, nothing to knock out, and re-tuning it is editing a number here rather than
-rolling a generator again. Same call as PrestigeScreen.Ring — when the right asset is
+rolling a generator again. Same call as TraitsScreen.Ring — when the right asset is
 a formula, write the formula.
 
 16-bit mono PCM at 44.1 kHz, which is what SoundEffect.FromStream wants.

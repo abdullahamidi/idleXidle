@@ -29,7 +29,7 @@ namespace IdleXIdle.Game;
 /// The game is a <b>single-champion idle auto-battler</b>: you build ONE character and it fights on its
 /// own, wave after wave, on every screen and even while the game is closed. There is no squad and no
 /// bank-or-push decision any more — every cleared wave pays out at once, and the depth the build can hold
-/// is the only thing that gates the haul. <see cref="SoloExpeditionScreen"/> is the main screen; the
+/// is the only thing that gates the haul. <see cref="HuntScreen"/> is the main screen; the
 /// build/mastery tree, Warren, Forge, world map and Memory Dust hang off it. This class renders and
 /// routes — all rules live in IdleXIdle.Core (ADR-001), and it decides nothing.
 /// </para>
@@ -243,7 +243,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     // ── The idle half. Automation is EARNED here, never assumed. ──────────────────────────────
     private ForgeScreen _forge = null!;
-    private SoloExpeditionScreen _expedition = null!;   // solo build model — one champion, not a squad
+    private HuntScreen _expedition = null!;   // solo build model — one champion, not a squad
     private bool _showForge;
 
     // The player's build (four woven skills + three keystones), the mastery tree it walks, and the editor.
@@ -255,7 +255,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // actually managing — not a guessed number. Saved, and applied on the next load as time-away gleam.
     private double _champGleamAccrued, _champSecondsAccrued;
     private float _champGleamRate;
-    // The VAULT's keep-filter — playthrough state, saved with the run (see ChestScreen.KeepMinTier).
+    // The VAULT's keep-filter — playthrough state, saved with the run (see VaultScreen.KeepMinTier).
     private int _chestKeepMinTier;
 
     // ── THE WANDERING TRADER. Week + purchases persist; the stock is re-minted on demand (identity
@@ -275,14 +275,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>The keep-filter's wanted slots — several at once since 2026-08-23 (empty = any).</summary>
     private readonly HashSet<ItemBaseType> _chestKeepSlots = new();
     private float? _pendingRevealPose;   // RH_SHOT_T for the chest reveal, applied once the fixture has opened one
-    private BuildScreen _buildScreen = null!;
-    private bool _showBuild;
+    private MasteryScreen _masteryScreen = null!;
+    private bool _showMastery;
 
     // The character sheet — equipment + stat training + a live damage bench, apart from the fight it feeds.
-    private CharacterScreen _character = null!;
-    private bool _showCharacter;
-    private StatsScreen _stats = null!;
-    private bool _showStats;
+    private GearScreen _gear = null!;
+    private bool _showGear;
+    private TrainingScreen _training = null!;
+    private bool _showTraining;
 
     private bool _showWarren;
 
@@ -296,7 +296,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // pays the Forge's Scrap/Essence instead; an old save's WarrenMasteryPool key is skipped on load.)
 
     // ── Memory Dust prestige (Full Vision). NOTHING RESETS — Dust accrues from mastery. ───────
-    private PrestigeScreen _prestige = null!;
+    private TraitsScreen _traits = null!;
 
     /// <summary>Which characters are yours, and which one you are. Unlocks derive from conquest.</summary>
     private CharacterState _characters = new();
@@ -314,13 +314,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private int _bossesFelled;
     private RosterScreen _roster = null!;
     private bool _showRoster;
-    private WeaveScreen _weave = null!;
-    private bool _showWeave;
+    private LoadoutScreen _loadoutScreen = null!;
+    private bool _showLoadout;
 
     /// <summary>THE VAULT — unopened chests, read before they are cracked.</summary>
-    private ChestScreen _chests = null!;
-    private bool _showChests;
-    private bool _showPrestige;
+    private VaultScreen _vault = null!;
+    private bool _showVault;
+    private bool _showTraits;
     private MemoryDustTree _dust = new();
 
     /// <summary>
@@ -351,9 +351,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         if (_showForge) { _ui.Background(_batch, "bg_forge"); return; }
         if (_showWorld) { _ui.Background(_batch, "bg_regionmap"); return; }
-        if (_showPrestige) { _ui.Background(_batch, "bg_constellation"); return; }
+        if (_showTraits) { _ui.Background(_batch, "bg_constellation"); return; }
         if (_showWarren) { _ui.Background(_batch, "bg_warren"); return; }
-        if (_showBuild) { _ui.Background(_batch, "bg_warren"); return; }   // the workshop, reused as the build bench
+        if (_showMastery) { _ui.Background(_batch, "bg_warren"); return; }   // the workshop, reused as the build bench
 
         // Combat and results share the arena; results dims it so the panels read. Prefer a
         // region-themed arena when its art exists (bg_arena_machine, bg_arena_shadow, …), and fall
@@ -472,7 +472,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         "tour" => ShotTab switch
         {
             Activity.Hunt => "intro",
-            Activity.Stats => "stats",
+            Activity.Training => "stats",
             Activity.Gear => "character",
             Activity.Build => "weave",
             Activity.Mastery => "buildtree",
@@ -646,7 +646,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _deepestEver = save.MasteryEarned;         // stored the deepest-ever; Earned re-derives from it
         _mastery.RestoreTaken(save.MasteryTaken);
         _mastery.RestoreLearned(save.LearnedSkills);   // D7 — discoveries survive every respec
-        // The tree's camera. PARKED like the run log below: _buildScreen is built in LoadContent. A
+        // The tree's camera. PARKED like the run log below: _masteryScreen is built in LoadContent. A
         // save from before the camera existed carries zoom 0, which the screen answers with its
         // first-open framing — the same first sight of the tree a new game gets.
         _pendingTreeCamera = (save.MasteryZoom, save.MasteryPanX, save.MasteryPanY);
@@ -675,12 +675,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // The guide rungs the player closed by hand — names, so a reordered enum can never
         // dismiss a different lesson. A plain field, so restoring here (Initialize) is safe.
         _dismissedGuide.Clear();
-        foreach (var rung in save.DismissedGuideRungs) _dismissedGuide.Add(rung);
+        foreach (var rung in save.DismissedGuideRungs) _dismissedGuide.Add(Tutorial.ModernRungName(rung));
         // The intro flag is a plain field; the explained list is PARKED, because seeding it asks the
         // unlock gates, and those read the Forge's inventory — a screen LoadContent has not built yet.
         // Seeded in SeedExplained, from ApplyRestoredState, once the bag is real.
         _introSeen = save.IntroSeen;
-        _pendingExplained = save.ExplainedScreens.ToList();
+        _pendingExplained = save.ExplainedScreens.Select(Onboarding.ModernScreenKey).ToList();
         // PARKED, exactly like the run log above and for exactly the reason the comment above gives.
         // This line was `_forge.RestoreChestsOpened(...)`, and _forge is a ForgeScreen built in
         // LoadContent — which has not run yet. It threw a NullReferenceException and took the game down
@@ -901,9 +901,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
             LearnedSkills = _mastery.LearnedSkills().OrderBy(s => s, StringComparer.Ordinal).ToList(),
             // The tree's camera, so the zoom a player settled on is the zoom they come back to. The
             // ten-second autosave carries it; nothing marks the screen dirty per wheel-tick.
-            MasteryZoom = _buildScreen.CameraZoom,
-            MasteryPanX = _buildScreen.CameraPanX,
-            MasteryPanY = _buildScreen.CameraPanY,
+            MasteryZoom = _masteryScreen.CameraZoom,
+            MasteryPanX = _masteryScreen.CameraPanX,
+            MasteryPanY = _masteryScreen.CameraPanY,
             // WHICH character, and WHICH ARE EARNED. The earned set used to be derived every frame
             // and never written, on the argument that it could not fall out of step with the world.
             // It can fall out of step with the RULES: the tiered roster tightened every second
@@ -1059,8 +1059,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _bootTimer = 7f;
 
         _showSettings = _showHelp = false;
-        _showCharacter = _showStats = _showBuild = _showForge = _showWarren = false;
-        _showWorld = _showPrestige = _showRoster = _showWeave = _showChests = false;
+        _showGear = _showTraining = _showMastery = _showForge = _showWarren = false;
+        _showWorld = _showTraits = _showRoster = _showLoadout = _showVault = false;
         _showTitle = true;           // back to the title, which now offers BEGIN THE HUNT
         _titleCursor = 0;
         _sinceAutosave = 0f;
@@ -1175,16 +1175,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _forge = new ForgeScreen(_ui);
         _forge.Sound = _sound;   // the reveal's landing ticks, the gem set, the successful upgrade
         _forge.AskBeforeScrap = _askBeforeScrap;
-        _prestige = new PrestigeScreen(_ui, _dust);
+        _traits = new TraitsScreen(_ui, _dust);
         _roster = new RosterScreen(_ui);
-        _chests = new ChestScreen(_ui);
-        _weave = new WeaveScreen(_ui);
-        _weave.Sound = _sound;   // the weave's pick, and the seal a bound Vow presses
-        _expedition = new SoloExpeditionScreen(_ui);
+        _vault = new VaultScreen(_ui);
+        _loadoutScreen = new LoadoutScreen(_ui);
+        _loadoutScreen.Sound = _sound;   // the weave's pick, and the seal a bound Vow presses
+        _expedition = new HuntScreen(_ui);
         _expedition.Sound = _sound;   // the fight's hits, casts, deaths and the boss horn
-        _buildScreen = new BuildScreen(_ui);
-        _character = new CharacterScreen(_ui, _forge);
-        _stats = new StatsScreen(_ui);
+        _masteryScreen = new MasteryScreen(_ui);
+        _gear = new GearScreen(_ui, _forge);
+        _training = new TrainingScreen(_ui);
         _warrenScreen = new WarrenScreen(_ui);
         _mapScreen = new MapScreen(_ui);
     }
@@ -1218,7 +1218,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _expedition.KeepMinTier = _chestKeepMinTier;
         _expedition.KeepSlots.Clear(); foreach (var sl in _chestKeepSlots) _expedition.KeepSlots.Add(sl);
         if (_pendingRunLog is not null) _expedition.Log.Restore(_pendingRunLog);
-        if (_pendingTreeCamera is { } cam) _buildScreen.RestoreCamera(cam.Zoom, cam.PanX, cam.PanY);
+        if (_pendingTreeCamera is { } cam) _masteryScreen.RestoreCamera(cam.Zoom, cam.PanX, cam.PanY);
         SeedExplained();
     }
 
@@ -1312,15 +1312,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         ("title", () => _showTitle = true),
         ("hunt", () => _showTitle = false),
-        ("gear", () => _showCharacter = true),
-        ("stats", () => { _showCharacter = false; _showStats = true; }),
-        ("build", () => { _showStats = false; _showBuild = true; }),
-        ("weave", () => { _showBuild = false; _showWeave = true; }),
-        ("forge", () => { _showWeave = false; _showForge = true; }),
+        ("gear", () => _showGear = true),
+        ("stats", () => { _showGear = false; _showTraining = true; }),
+        ("build", () => { _showTraining = false; _showMastery = true; }),
+        ("weave", () => { _showMastery = false; _showLoadout = true; }),
+        ("forge", () => { _showLoadout = false; _showForge = true; }),
         ("warren", () => { _showForge = false; _showWarren = true; }),
         ("map", () => { _showWarren = false; _showWorld = true; }),
-        ("traits", () => { _showWorld = false; _showPrestige = true; }),
-        ("roster", () => { _showPrestige = false; _showRoster = true; }),
+        ("traits", () => { _showWorld = false; _showTraits = true; }),
+        ("roster", () => { _showTraits = false; _showRoster = true; }),
         ("help", () => { _showRoster = false; _showHelp = true; }),
         ("settings", () => { _showHelp = false; _showSettings = true; }),
         ("hunt again", () => _showSettings = false),
@@ -1416,7 +1416,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // THE BOOT CHECK SWITCHES SCREENS HERE, at the top, and the position took two tries to get
         // right. At the END of Update it flipped a flag after the `if (_showX)` blocks that hand each
         // screen its data, so the next Draw ran against null fields and it reported a
-        // NullReferenceException in StatsScreen that a player cannot produce. Beside the hotkeys it
+        // NullReferenceException in TrainingScreen that a player cannot produce. Beside the hotkeys it
         // was better but still wrong: while the title is up, Update returns long before reaching them,
         // so the walk never left the first screen and the run hung until it was killed. Ahead of every
         // early return, a flag set here is fed by the same blocks that feed a keypress, on the same
@@ -1558,7 +1558,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
                 if (sm is "build" or "buildtree" or "buildzoom" or "attune" or "attuned")
                 {
-                    _showBuild = true;
+                    _showMastery = true;
 
                     // Pose a partly-walked tree so the shot shows taken / takeable / locked states, a
                     // bridge with only one side satisfied, and a mastery still out of reach.
@@ -1601,8 +1601,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // card's light has to fall on what the player actually sees.
                     if (sm == "buildtree")
                     {
-                        if (Environment.GetEnvironmentVariable("RH_SHOT_MODE") == "tour") _buildScreen.DevOpenTreeFirstVisit();
-                        else _buildScreen.DevOpenTree();
+                        if (Environment.GetEnvironmentVariable("RH_SHOT_MODE") == "tour") _masteryScreen.DevOpenTreeFirstVisit();
+                        else _masteryScreen.DevOpenTree();
                     }
 
                     // ATTUNE poses THE ATTUNEMENT ceremony; ATTUNED poses the tree after sealing
@@ -1618,8 +1618,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         // ONE STYLE ROAD WALKED, so a capture shows both sides of the skill gate:
                         // HAMMER's PRESS is learned and the other five roads are not.
                         _mastery.Take("road_hammer");
-                        _buildScreen.DevOpenTree();
-                        if (sm == "attune") _buildScreen.DevAttune(Style.Hammer);
+                        _masteryScreen.DevOpenTree();
+                        if (sm == "attune") _masteryScreen.DevAttune(Style.Hammer);
                     }
                     // The same tree at a working zoom. Node art is thirty pixels across in the
                     // overview, where a capture can only prove that something was drawn. RH_SHOT_ZOOM
@@ -1630,8 +1630,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     {
                         if (float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_ZOOM"),
                                            System.Globalization.CultureInfo.InvariantCulture, out var dz))
-                            _buildScreen.DevOpenTree(dz);
-                        else _buildScreen.DevOpenTreeFirstVisit();
+                            _masteryScreen.DevOpenTree(dz);
+                        else _masteryScreen.DevOpenTreeFirstVisit();
                     }
 
                 }
@@ -1640,11 +1640,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 // seeding a second, different bag would pose a screen the game never shows.
                 if (sm is "character" or "itemmenu")
                 {
-                    _showCharacter = true;
-                    _character.Loadout = _loadout;
-                    _character.Mastery = _mastery;
-                    _character.SkillLevels = _skillProgress;
-                    _character.Tree = _dust;
+                    _showGear = true;
+                    _gear.Loadout = _loadout;
+                    _gear.Mastery = _mastery;
+                    _gear.SkillLevels = _skillProgress;
+                    _gear.Tree = _dust;
                     // Seed gear so the bag and the three worn slots pose with content, gleam so the train
                     // buttons are live, and a few trained ranks so the values aren't all at base.
                     var rar = new[] { Rarity.Uncommon, Rarity.Rare, Rarity.Epic, Rarity.Legendary };
@@ -1696,17 +1696,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
                     // LAST, and inside this block: the item menu poses ON this fixture, so it can only
                     // open after the bag it points into has actually been filled.
-                    if (sm == "itemmenu") _character.DevOpenItemMenu();
+                    if (sm == "itemmenu") _gear.DevOpenItemMenu();
                 }
 
                 if (sm == "stats")
                 {
-                    _showStats = true;
-                    _stats.Loadout = _loadout;
-                    _stats.Mastery = _mastery;
-                    _stats.Tree = _dust;
-                    _stats.Character = _characters.Active;
-                    _stats.SkillLevels = _skillProgress;
+                    _showTraining = true;
+                    _training.Loadout = _loadout;
+                    _training.Mastery = _mastery;
+                    _training.Tree = _dust;
+                    _training.Character = _characters.Active;
+                    _training.SkillLevels = _skillProgress;
                     _hunter.AddGleam(20000);
                     for (var i = 0; i < 12; i++) _hunter.Train(HunterStat.AttackPower);
                     for (var i = 0; i < 6; i++) _hunter.Train(HunterStat.CriticalChance);
@@ -1999,21 +1999,21 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 // with the variety it exists to show rather than five copies of one card.
                 if (sm == "trader")
                 {
-                    _showChests = true;
+                    _showVault = true;
                     // A wallet that can afford the Rare and the gem but NOT the Legendary, so the
                     // capture shows both the payable and the refused price colours.
                     _hunter.AddMaterials(2_000);
                     _hunter.AddMaterial(Material.Essence, 400);
                     _hunter.AddMaterial(Material.Core, 20);
                     _deepestEver = 18;
-                    _chests.DevOpenTrader();
+                    _vault.DevOpenTrader();
                 }
 
                 // VAULTFIRST is a NEW GAME's vault: exactly what SeedNewGame parks — the one welcome
                 // gift — so the first visit the Vault's tour describes can be looked at, not assumed.
                 if (sm == "vaultfirst")
                 {
-                    _showChests = true;
+                    _showVault = true;
                     foreach (var gift in GiftChests.NewGameChests()) _forge.AddChest(gift);
                     // RH_SHOT_OPEN poses the gift's REVEAL — the one reveal whose contents are known
                     // in advance, so the card can be checked against the catalogue.
@@ -2026,7 +2026,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
                 if (sm == "vault")
                 {
-                    _showChests = true;
+                    _showVault = true;
                     var grades = new[] { Rarity.Legendary, Rarity.Epic, Rarity.Rare, Rarity.Rare,
                                          Rarity.Uncommon, Rarity.Common };
                     var regions = new[] { "cinderworks", "umbral_reach", VerdantHollow.RegionId,
@@ -2047,7 +2047,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
                 if (sm == "weave")
                 {
-                    _showWeave = true;
+                    _showLoadout = true;
                     _dust.SetEarned(22);
                     // weave_5 is in the fixture ON PURPOSE: the fifth slot is the one that was bought
                     // and silently discarded for the whole of development, and a capture that poses four
@@ -2095,7 +2095,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         _loadout.SetSource(slot, src);
                         _loadout.SetSkill(slot, skillId);
                     }
-                    _weave.DevOpenSkillTree();
+                    _loadoutScreen.DevOpenSkillTree();
                     // ALL FOUR STATES OF A SKILL'S OWN LEVELS, one per slot, so a single shot certifies
                     // the whole ladder. Posing one state at a time is how the reinforcement strip could
                     // have shipped unphotographed the way the variation strip nearly did: a fixture that
@@ -2126,9 +2126,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         var chain = parts.Length > 1 && float.TryParse(parts[1],
                             System.Globalization.NumberStyles.Float,
                             System.Globalization.CultureInfo.InvariantCulture, out var ct) ? ct : 0f;
-                        _weave.DevPose(1, parts[0], chain);
+                        _loadoutScreen.DevPose(1, parts[0], chain);
                     }
-                    else _weave.DevPose(1, null);
+                    else _loadoutScreen.DevPose(1, null);
                 }
 
                 if (sm is "roster" or "rosterlocked")
@@ -2159,7 +2159,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
                 if (sm is "dust" or "traitlit" or "traitterm" or "traitterminal")
                 {
-                    _showPrestige = true;
+                    _showTraits = true;
                     _dust.AddDust(77_605);   // Dust still shows in the top pills; it no longer buys traits
 
                     // TRAIT POINTS, and real ids. This fixture used to award Dust and then buy
@@ -2183,7 +2183,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     foreach (var id in new[] { "socket_2", "ledger", "vow_study_1", "forge_insight",
                                                "filter_common", "recall_1", "ks_glass_cannon" })
                         _dust.Purchase(id);
-                    _prestige.DevSelect("ks_bloodlust");   // AVAILABLE: its prerequisite (KEYSTONE — GLASS CANNON) is lit
+                    _traits.DevSelect("ks_bloodlust");   // AVAILABLE: its prerequisite (KEYSTONE — GLASS CANNON) is lit
                     _hunter.AddGleam(131_900_000);     // the top currency pills read like the reference
                     _hunter.AddMaterials(12_600);
 
@@ -2194,21 +2194,21 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         && float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_ZOOM"),
                                           System.Globalization.NumberStyles.Float,
                                           System.Globalization.CultureInfo.InvariantCulture, out var devZoom))
-                        _prestige.DevCamera(devZoom, "ks_bloodlust");
+                        _traits.DevCamera(devZoom, "ks_bloodlust");
 
                     // Frozen at 0.30s: past the flash, into the shockwaves, with the name plate risen
                     // and readable. RH_SHOT_T moves the freeze so the other beats can be checked too.
                     var poseT = float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_T"),
                                                System.Globalization.CultureInfo.InvariantCulture, out var pt)
                         ? pt : 0.30f;
-                    if (sm == "traitlit") _prestige.DevPoseLit(_dust, "ks_bloodlust", poseT);
+                    if (sm == "traitlit") _traits.DevPoseLit(_dust, "ks_bloodlust", poseT);
                     if (sm is "traitterm" or "traitterminal")
                     {
                         // The Ruin road walked to its end — the one purchase in the game that costs
                         // twelve points and closes off three other roads.
                         foreach (var id in new[] { "socket_2", "ks_glass_cannon", "ks_bloodlust", "ks_blood_magic" })
                             _dust.Purchase(id);
-                        _prestige.DevPoseLit(_dust, "ks_reaper", poseT);
+                        _traits.DevPoseLit(_dust, "ks_reaper", poseT);
                     }
                 }
             }
@@ -2295,7 +2295,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             else if (_showForge && _forge.ConfirmOpen) _forge.CancelConfirm();
             // The vault's modals outrank the settings reflex too — Esc on the stall means "close
             // the stall", not "stack the settings panel on top of it".
-            else if (_showChests && _chests.ModalUp) _chests.CloseModals();
+            else if (_showVault && _vault.ModalUp) _vault.CloseModals();
             // The hunt's CHEST FILTER popover is the same kind of thing: Esc on it means "close it".
             else if (!OverlayActive && !_expedition.LogOpen && _expedition.FilterOpen) _expedition.FilterOpen = false;
             else _showSettings = true;
@@ -2331,7 +2331,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // overlays, and they sat one key away from F1 (help) and F10 (settings), live in normal play —
         // a playtester could trip either and reasonably conclude the game was broken.
         if (DevKeysEnabled && Pressed(Keys.F6)) _expedition.DevForceBoss = !_expedition.DevForceBoss;   // dev: force the Crystal Lich boss render (Rev 4 §12)
-        if (DevKeysEnabled && Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _character.DevGearDebug = !_character.DevGearDebug; _stats.DevStatsDebug = !_stats.DevStatsDebug; _buildScreen.DevBuildDebug = !_buildScreen.DevBuildDebug; _forge.DevForgeDebug = !_forge.DevForgeDebug; _warrenScreen.DevWarrenDebug = !_warrenScreen.DevWarrenDebug; _mapScreen.DevMapDebug = !_mapScreen.DevMapDebug; _prestige.DevDustDebug = !_prestige.DevDustDebug; }   // dev layout overlays
+        if (DevKeysEnabled && Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _gear.DevGearDebug = !_gear.DevGearDebug; _training.DevStatsDebug = !_training.DevStatsDebug; _masteryScreen.DevBuildDebug = !_masteryScreen.DevBuildDebug; _forge.DevForgeDebug = !_forge.DevForgeDebug; _warrenScreen.DevWarrenDebug = !_warrenScreen.DevWarrenDebug; _mapScreen.DevMapDebug = !_mapScreen.DevMapDebug; _traits.DevDustDebug = !_traits.DevDustDebug; }   // dev layout overlays
         if (Pressed(Keys.F1)) _showHelp = !_showHelp;
         if (Pressed(Keys.F10)) _showSettings = !_showSettings;
 
@@ -2353,7 +2353,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // is impossible to have open on the first frame. This one is not: a brand-new save starts the
         // intro on its first gameplay frame, so an early return here would skip the per-frame block
         // that feeds every screen its dependencies, and the first Draw would hit a null Loadout in
-        // StatsScreen. check_boot.sh caught exactly that shape twice before, under the modal panel this
+        // TrainingScreen. check_boot.sh caught exactly that shape twice before, under the modal panel this
         // replaced. Swallow the input; never skip the frame.
         //
         // The champion keeps fighting behind it. An idle game does not pause to talk to you.
@@ -2459,8 +2459,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // THE ATTUNEMENT holds the door — and so do the vault's modals (the trader stall and the
         // code-inspect cards). A modal can only swallow its own screen's input; the rail, the nine
         // hotkeys, L and T are the host's, so the host holds them while any modal is open.
-        var attunementHolds = (_showBuild && _buildScreen.CeremonyOpen)
-                              || (_showChests && _chests.ModalUp);
+        var attunementHolds = (_showMastery && _masteryScreen.CeremonyOpen)
+                              || (_showVault && _vault.ModalUp);
 
         if (!attunementHolds) HandleNavClick();   // a click on the shared hex nav works from any screen
 
@@ -2476,7 +2476,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // keys: the guide was teaching the bypass.
         //
         // Each handler also cleared its own idiosyncratic subset of the flags, and three of them forgot
-        // _showRoster and _showWeave — so the player could see one screen while an invisible one
+        // _showRoster and _showLoadout — so the player could see one screen while an invisible one
         // consumed their clicks. OpenNav clears all nine, every time.
         for (var navKey = 0; navKey < Nav.Length && !attunementHolds; navKey++)
         {
@@ -2486,7 +2486,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // toggle these handlers used to have — EXCEPT from the Weave. The Weave lights the BUILD
             // tile (it is a sub-screen of it), so NavActive() reports 3 there, and pressing B to "go to
             // BUILD" read as "you are already on BUILD" and dropped the player onto the fight instead.
-            OpenNav(NavActive() == navKey && !_showWeave ? 0 : navKey);
+            OpenNav(NavActive() == navKey && !_showLoadout ? 0 : navKey);
             break;
         }
         // L — THE EXPEDITION LOG. It closes every other overlay, because it is a full-screen read and
@@ -2499,13 +2499,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _expedition.ToggleLog();
             if (_expedition.LogOpen)
             {
-                // ALL NINE, not seven. _showRoster and _showWeave were missing, so opening the log from
+                // ALL NINE, not seven. _showRoster and _showLoadout were missing, so opening the log from
                 // the roster or the weave left that screen live underneath it — and because the log is
                 // drawn in the same batch, OverlayActive stayed true and the batch kept the OVERLAY
                 // inset transform instead of the plain canvas one. DrawLog's own hit-tests assume the
                 // plain one, so its page buttons landed in a third coordinate space.
-                _showPrestige = _showWarren = _showForge = _showWorld = false;
-                _showBuild = _showCharacter = _showStats = _showRoster = _showWeave = _showChests = false;
+                _showTraits = _showWarren = _showForge = _showWorld = false;
+                _showMastery = _showGear = _showTraining = _showRoster = _showLoadout = _showVault = false;
             }
         }
         if (_expedition.LogOpen)
@@ -2528,9 +2528,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
             else
             {
-                var wasWeave = _showWeave;
+                var wasWeave = _showLoadout;
                 OpenNav(0);              // clears all nine flags in one place
-                _showWeave = !wasWeave;
+                _showLoadout = !wasWeave;
             }
         }
 
@@ -2557,36 +2557,36 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         if (_showWorld) { UpdateWorld(); Latch(gameTime); return; }
 
-        if (_showBuild)
+        if (_showMastery)
         {
             // One lock, read by both doors — the rail tile and the button on the page.
-            _buildScreen.TreeUnlocked = Unlocks.IsOpen(Activity.Mastery, GuideUnlockFacts());
-            _buildScreen.Loadout = _loadout;
-            _buildScreen.Mastery = _mastery;
-            _buildScreen.Power = _hunter.PowerRating;   // the Build screen has no Hunter ref of its own
-            _buildScreen.Level = _hunter.HunterLevel;
-            _buildScreen.Update(ScreenKeys, _prevKeys, CanvasMouse, MouseClicked,
+            _masteryScreen.TreeUnlocked = Unlocks.IsOpen(Activity.Mastery, GuideUnlockFacts());
+            _masteryScreen.Loadout = _loadout;
+            _masteryScreen.Mastery = _mastery;
+            _masteryScreen.Power = _hunter.PowerRating;   // the Build screen has no Hunter ref of its own
+            _masteryScreen.Level = _hunter.HunterLevel;
+            _masteryScreen.Update(ScreenKeys, _prevKeys, CanvasMouse, MouseClicked,
                                 _mouse.LeftButton == ButtonState.Pressed, MouseWheel, _dust, MouseRightClicked);
-            if (_buildScreen.Dirty) { _buildScreen.ClearDirty(); Save(); }
+            if (_masteryScreen.Dirty) { _masteryScreen.ClearDirty(); Save(); }
             // The BUILD page asks for the weave editor; the host owns which screen is open.
             // The tree's BACK and its skills door both land on BUILD, which is the weave now.
-            if (_buildScreen.WantsWeave) { _buildScreen.WantsWeave = false; _showBuild = false; _showWeave = true; }
+            if (_masteryScreen.WantsWeave) { _masteryScreen.WantsWeave = false; _showMastery = false; _showLoadout = true; }
 
             Latch(gameTime);
             return;
         }
 
-        if (_showCharacter)
+        if (_showGear)
         {
-            _character.Loadout = _loadout;
-            _character.Mastery = _mastery;
-            _character.Tree = _dust;
-            _character.Update(ScreenKeys, _prevKeys, CanvasMouse, MouseClicked, MouseRightClicked, MouseWheel, _hunter);
+            _gear.Loadout = _loadout;
+            _gear.Mastery = _mastery;
+            _gear.Tree = _dust;
+            _gear.Update(ScreenKeys, _prevKeys, CanvasMouse, MouseClicked, MouseRightClicked, MouseWheel, _hunter);
 
             // ── THE ITEM MENU'S VERBS. Three of the four live in the Forge, so the gear screen names
             //    what it wants and the host carries the player there, already pointed at the item.
             //    EQUIP is the exception: it is the gear screen's own verb and never leaves. ────────
-            if (_character.ConsumeItemAction() is { } request)
+            if (_gear.ConsumeItemAction() is { } request)
             {
                 if (request.Action == ItemAction.Equip)
                 {
@@ -2631,7 +2631,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         case ItemAction.Salvage: _forge.FocusFor(request.InstanceId); _forge.RequestSalvage(request.InstanceId); break;
                         default: _forge.RequestUpgrade(request.InstanceId); break;
                     }
-                    _showCharacter = false;
+                    _showGear = false;
                     _showForge = true;
                     // The click that picked the menu row is spent HERE. Without this the forge's first Draw
                     // ran with MouseClicked still true and pressed whatever button sat under the cursor —
@@ -2641,7 +2641,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _sound.PlayFirst(1f, "sfx_forge", "sfx_click");
                 }
             }
-            if (_character.Dirty) { _character.ClearDirty(); Save(); }
+            if (_gear.Dirty) { _gear.ClearDirty(); Save(); }
             Latch(gameTime);
             return;
         }
@@ -2650,9 +2650,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Draw's screen chains are two independent statements of the same priority and nothing enforces
         // that they agree — a screen inserted at a different point in each is a screen the player sees
         // while an invisible one eats their clicks.
-        if (_showChests)
+        if (_showVault)
         {
-            // NO per-frame push. The filter is edited during ChestScreen.DRAW; pushing the stored
+            // NO per-frame push. The filter is edited during VaultScreen.DRAW; pushing the stored
             // value here every Update clobbered the edit one frame later and then copied the clobber
             // back — the whole TAKE ONLY row was inoperative while its Core tests stayed green.
             // (Adversarial review, pass five, HIGH.) The screen is authoritative; LoadContent seeds it
@@ -2670,7 +2670,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _traderBought.Clear();
                 _traderStock = null;
                 // A BUY clicked in the old week's dying frame must not buy the NEW week's slot.
-                _chests.ConsumeTraderBuy();
+                _vault.ConsumeTraderBuy();
                 Save();
             }
             var traderLevel = Math.Max(1, _deepestEver);
@@ -2683,15 +2683,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _traderStockLevel = traderLevel;
                 _traderStockClass = traderClass;
             }
-            _chests.Hunter = _hunter;
-            _chests.TraderStock = _traderStock;
-            _chests.TraderBought = _traderBought;
+            _vault.Hunter = _hunter;
+            _vault.TraderStock = _traderStock;
+            _vault.TraderBought = _traderBought;
 
-            _chests.Update(dt, _forge.UnopenedChests, CanvasMouse, MouseClicked, MouseWheel);
+            _vault.Update(dt, _forge.UnopenedChests, CanvasMouse, MouseClicked, MouseWheel);
 
             // A stall purchase: pay in materials, and the good goes to the FORGE bench like any
             // other loot — the vault shows chests, not items.
-            if (_chests.ConsumeTraderBuy() is { } stallSlot
+            if (_vault.ConsumeTraderBuy() is { } stallSlot
                 && _traderStock is not null && stallSlot >= 0 && stallSlot < _traderStock.Count
                 && !_traderBought.Contains(stallSlot)
                 && WanderingTrader.TryBuy(_hunter, _traderStock[stallSlot], TraderTuning.Default))
@@ -2702,9 +2702,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 Save();
             }
 
-            switch (_chests.ConsumeOpen())
+            switch (_vault.ConsumeOpen())
             {
-                case ChestScreen.OpenRequest.Selected:
+                case VaultScreen.OpenRequest.Selected:
                 {
                     // The vault shows STACKS of identical chests; the click names a real member of the
                     // stack (SelectedChest) and record equality finds it in storage — any member of the
@@ -2713,16 +2713,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     var sorted = ChestDossiers.BestFirst(_forge.UnopenedChests);
                     if (sorted.Count > 0)
                     {
-                        var pick = _chests.SelectedChest is { } sample && _forge.UnopenedChests.Contains(sample)
+                        var pick = _vault.SelectedChest is { } sample && _forge.UnopenedChests.Contains(sample)
                             ? sample
-                            : sorted[Math.Clamp(_chests.SelectedIndex, 0, sorted.Count - 1)];
+                            : sorted[Math.Clamp(_vault.SelectedIndex, 0, sorted.Count - 1)];
                         _forge.OpenOneChest(pick, _hunter);
                         _sound.Play("sfx_forge", 0.9f);
                         Save();
                     }
                     break;
                 }
-                case ChestScreen.OpenRequest.All:
+                case VaultScreen.OpenRequest.All:
                     _forge.OpenEveryChest(_hunter);
                     _sound.Play("sfx_forge", 0.9f);
                     Save();
@@ -2733,17 +2733,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
             return;
         }
 
-        if (_showStats)
+        if (_showTraining)
         {
-            _stats.Loadout = _loadout;
-            _stats.Mastery = _mastery;
-            _stats.Tree = _dust;
-            _stats.Character = _characters.Active;
-            _stats.HighestWave = _deepestEver;          // real career counters (Stats spec §9.2)
-            _stats.ChestsOpened = _forge.ChestsOpened;
-            _stats.MasteryPoints = _mastery.Earned;
-            _stats.Update(ScreenKeys, _prevKeys, CanvasMouse, MouseClicked, MouseWheel, _hunter);
-            if (_stats.Dirty) { _stats.ClearDirty(); Save(); }
+            _training.Loadout = _loadout;
+            _training.Mastery = _mastery;
+            _training.Tree = _dust;
+            _training.Character = _characters.Active;
+            _training.HighestWave = _deepestEver;          // real career counters (Stats spec §9.2)
+            _training.ChestsOpened = _forge.ChestsOpened;
+            _training.MasteryPoints = _mastery.Earned;
+            _training.Update(ScreenKeys, _prevKeys, CanvasMouse, MouseClicked, MouseWheel, _hunter);
+            if (_training.Dirty) { _training.ClearDirty(); Save(); }
             Latch(gameTime);
             return;
         }
@@ -2769,22 +2769,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // changed it and dead everywhere else. Respec is free, so this REPLACES rather than adds.
         _hunter.SetMasteryStats(_mastery.Stats());
 
-        if (_showWeave)
+        if (_showLoadout)
         {
-            _weave.Loadout = _loadout;
-            _weave.Mastery = _mastery;
-            _weave.Tree = _dust;
-            _weave.SkillLevels = _skillProgress;
-            _weave.Hunter = _hunter;
-            _weave.Character = _characters.Active;
-            _weave.RegionId = _activeRegion;
-            _weave.RegionName = Regions.Get(_activeRegion).Name;
-            _weave.Discipline = _mastery.Affinity();
-            _weave.MasteryTaken = _mastery.Taken;
-            _weave.Update(CanvasMouse, MouseClicked, _mouse.LeftButton == ButtonState.Pressed, MouseWheel);
-            if (_weave.Dirty) { _weave.ClearDirty(); Save(); }
-            // CONSUMED HERE, where the Weave actually runs. It was read inside `if (_showBuild)`, and
-            // _showBuild and _showWeave are mutually exclusive on every path that opens this screen —
+            _loadoutScreen.Loadout = _loadout;
+            _loadoutScreen.Mastery = _mastery;
+            _loadoutScreen.Tree = _dust;
+            _loadoutScreen.SkillLevels = _skillProgress;
+            _loadoutScreen.Hunter = _hunter;
+            _loadoutScreen.Character = _characters.Active;
+            _loadoutScreen.RegionId = _activeRegion;
+            _loadoutScreen.RegionName = Regions.Get(_activeRegion).Name;
+            _loadoutScreen.ChosenStyle = _mastery.Affinity();
+            _loadoutScreen.MasteryTaken = _mastery.Taken;
+            _loadoutScreen.Update(CanvasMouse, MouseClicked, _mouse.LeftButton == ButtonState.Pressed, MouseWheel);
+            if (_loadoutScreen.Dirty) { _loadoutScreen.ClearDirty(); Save(); }
+            // CONSUMED HERE, where the Weave actually runs. It was read inside `if (_showMastery)`, and
+            // _showMastery and _showLoadout are mutually exclusive on every path that opens this screen —
             // so the flag was set and never read, the BACK button did nothing, and the stale flag then
             // fired on the next visit to BUILD and switched OFF the tree the MASTERY tile had just
             // switched on. A request consumed in a branch its producer cannot reach is not wiring.
@@ -2800,15 +2800,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
             return;
         }
 
-        if (_showPrestige)
+        if (_showTraits)
         {
             // HELD, as well as clicked: the tree is a free canvas now, and a held button drags it.
-            _prestige.Update(ScreenKeys, CanvasMouse, MouseClicked, _mouse.LeftButton == ButtonState.Pressed,
+            _traits.Update(ScreenKeys, CanvasMouse, MouseClicked, _mouse.LeftButton == ButtonState.Pressed,
                              MouseWheel, _dust, dt);
             // Taking a trait is permanent and there is no respec, so it is worth a sound and worth
             // writing to disk immediately. The screen owns neither: it hands back a cue the same way
-            // StatsScreen hands back a trained stat.
-            if (_prestige.ConsumeCue() is { } cue)
+            // TrainingScreen hands back a trained stat.
+            if (_traits.ConsumeCue() is { } cue)
             {
                 _sound.PlayFirst(1f, cue, "sfx_conquer", "sfx_levelup", "sfx_click");
                 Save();
@@ -2952,7 +2952,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_showTitle) track = "music_title";
         else if (_showForge) track = "music_forge";
         else if (_showWarren) track = "music_warren";
-        else if (_showPrestige) track = "music_constellation";
+        else if (_showTraits) track = "music_constellation";
         else if (_showWorld) track = "music_map";
         else
         {
@@ -3089,7 +3089,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// <remarks>
     /// <para>
     /// <b>THIS USED TO LIVE INSIDE THE ARENA, and that was the reported bug.</b> DrawGuide was called
-    /// from SoloExpeditionScreen.DrawArena, which is reached only through the terminal <c>else</c> of
+    /// from HuntScreen.DrawArena, which is reached only through the terminal <c>else</c> of
     /// the screen chain — so the guide appeared on HUNT and nowhere else. Every step from SpendGleam
     /// onward names a key that navigates away from the hunt, so the player read "press V for STATS",
     /// pressed V, and the instruction vanished. Nothing confirmed the step had completed; nothing
@@ -3311,16 +3311,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         var own = screen switch
         {
-            Activity.Hunt => SoloExpeditionScreen.Spotlights(target),
-            Activity.Stats => StatsScreen.Spotlights(target),
-            Activity.Gear => CharacterScreen.Spotlights(target),
-            Activity.Build => _weave.Spotlights(target),
-            Activity.Mastery => BuildScreen.Spotlights(target),
-            Activity.Vault => ChestScreen.Spotlights(target),
+            Activity.Hunt => HuntScreen.Spotlights(target),
+            Activity.Training => TrainingScreen.Spotlights(target),
+            Activity.Gear => GearScreen.Spotlights(target),
+            Activity.Build => _loadoutScreen.Spotlights(target),
+            Activity.Mastery => MasteryScreen.Spotlights(target),
+            Activity.Vault => VaultScreen.Spotlights(target),
             Activity.Forge => ForgeScreen.Spotlights(target),
             Activity.Warren => WarrenScreen.Spotlights(target),
             Activity.Map => MapScreen.Spotlights(target),
-            Activity.Traits => PrestigeScreen.Spotlights(target),
+            Activity.Traits => TraitsScreen.Spotlights(target),
             Activity.Roster => RosterScreen.Spotlights(target),
             _ => Array.Empty<Rectangle>(),
         };
@@ -3468,13 +3468,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// </summary>
     /// <remarks>
     /// Bank-or-push is gone (playtest: "I don't want to click after every fight"). The champion fights on
-    /// a timer inside <see cref="SoloExpeditionScreen"/> and hands each cleared wave to us as a reward we
+    /// a timer inside <see cref="HuntScreen"/> and hands each cleared wave to us as a reward we
     /// credit the instant it lands: gleam and cores every wave, ITEMS on boss waves only (so the Forge
     /// isn't flooded and depth is what earns loot). Conquest is measured by the deepest wave reached.
     /// </remarks>
     /// <remarks>
     /// THE `interactive` PARAMETER IS GONE. It carried "is the combat screen the one on top", threaded
-    /// down to SoloExpeditionScreen.Update — which read none of its four input arguments, because click
+    /// down to HuntScreen.Update — which read none of its four input arguments, because click
     /// handling had migrated into Draw and the Update-side plumbing was left standing. A gate that gates
     /// nothing is worse than no gate: the next person to need one would have found this and believed it
     /// was already handled. The fight screen's clicks are gated where they are actually read, in Draw.
@@ -3606,8 +3606,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _mastery.LearnSkill(_characters.Active.StartingSkillId);
 
         _expedition.Character = _characters.Active;
-        _character.Character = _characters.Active;
-        _buildScreen.Character = _characters.Active;
+        _gear.Character = _characters.Active;
+        _masteryScreen.Character = _characters.Active;
 
         // The spine's capacity nodes reach the loadout. Without this the sockets and the fifth weave are
         // bought and never granted — the shape of the failure this codebase keeps repeating.
@@ -3808,7 +3808,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     /// <summary>
     /// Waves held to conquer a region. 20, was 7 (playtest 2026-08-26: "seven waves is far too short to
-    /// clear a map"): the fourth boss, past the mastery door. Mirrored by SoloExpeditionScreen.ConquerAt
+    /// clear a map"): the fourth boss, past the mastery door. Mirrored by HuntScreen.ConquerAt
     /// and Checkpoints.ConquestWave — the pinned test keeps the three in step.
     /// </summary>
     private const int ConquerWaveDepth = Checkpoints.ConquestWave;
@@ -4011,7 +4011,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // present blit, driven by manual combat, and sat at a permanent zero from the pivot onward
         // because nothing owned it; this asks the active screen instead, so the kick exists only while
         // something is actually asking for it.
-        var kick = _showPrestige ? _prestige.Shake : Vector2.Zero;
+        var kick = _showTraits ? _traits.Shake : Vector2.Zero;
         _batch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
             null, null, null, OverlayTransform(kick));
     }
@@ -4037,8 +4037,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     /// <summary>True when a menu screen owns the frame — those draw inset; the fight screen does not.</summary>
     private bool OverlayActive =>
-        _showForge || _showWorld || _showPrestige || _showWarren || _showBuild || _showCharacter
-        || _showStats || _showRoster || _showWeave || _showChests;
+        _showForge || _showWorld || _showTraits || _showWarren || _showMastery || _showGear
+        || _showTraining || _showRoster || _showLoadout || _showVault;
 
     /// <summary>The counter-scale the active screen draws at. Converted 1920-coord screens return 1; the
     /// HUNT screen is converted, so it returns 1 whenever no other screen flag is set (the else branch below).</summary>
@@ -4091,21 +4091,21 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (OverlayActive) BeginOverlayCanvas(); else BeginCanvas(ScreenScale());
         if (_showForge) _forge.Draw(_batch, _hunter, CanvasMouse, MouseClicked, MouseRightClicked);
         else if (_showWorld) DrawWorld();
-        else if (_showPrestige) _prestige.Draw(_batch, _dust, CanvasMouse, MouseClicked);
+        else if (_showTraits) _traits.Draw(_batch, _dust, CanvasMouse, MouseClicked);
         else if (_showRoster) { _roster.Progress = QuestSnapshot(); _roster.Draw(_batch, _characters, CanvasMouse, MouseClicked); }
-        else if (_showChests) _chests.Draw(_batch, _forge.UnopenedChests, CanvasMouse, MouseClicked);
-        else if (_showWeave) _weave.Draw(_batch, CanvasMouse, MouseClicked);
+        else if (_showVault) _vault.Draw(_batch, _forge.UnopenedChests, CanvasMouse, MouseClicked);
+        else if (_showLoadout) _loadoutScreen.Draw(_batch, CanvasMouse, MouseClicked);
         else if (_showWarren) DrawWarren();
-        else if (_showBuild) _buildScreen.Draw(_batch, CanvasMouse, _dust);
-        else if (_showCharacter) _character.Draw(_batch, CanvasMouse, _hunter);
-        else if (_showStats)
+        else if (_showMastery) _masteryScreen.Draw(_batch, CanvasMouse, _dust);
+        else if (_showGear) _gear.Draw(_batch, CanvasMouse, _hunter);
+        else if (_showTraining)
         {
-            _stats.Draw(_batch, CanvasMouse, _hunter, MouseClicked);
+            _training.Draw(_batch, CanvasMouse, _hunter, MouseClicked);
 
             // Gleam is one of the three payouts a descent makes, and this is the layer it buys. The model
             // (geometric cost, rank cap) has always been here; until now nothing in the game called it.
-            if (_stats.ConsumeTrain() is { } stat && _hunter.Train(stat)) { _sound.Play("sfx_click", 0.8f); Save(); }
-            if (_stats.ConsumeReset() && _hunter.ResetTraining()) { _sound.Play("sfx_forge", 0.8f); Save(); }
+            if (_training.ConsumeTrain() is { } stat && _hunter.Train(stat)) { _sound.Play("sfx_click", 0.8f); Save(); }
+            if (_training.ConsumeReset() && _hunter.ResetTraining()) { _sound.Play("sfx_forge", 0.8f); Save(); }
         }
         else _expedition.Draw(_batch, CanvasMouse, MouseClicked, Regions.Get(_activeRegion).Name, EnemyArtFor(_activeRegion), _bootTimer > 0f);
 
@@ -5223,17 +5223,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>Which nav slot is lit: 0 HUNT (fight), else the open overlay.</summary>
     /// <summary>Which rail tile is lit. The Weave has no tile of its own, so it lights BUILD's.</summary>
     /// <remarks>
-    /// <c>_showWeave</c> had no case here at all and fell through to 0, so the rail cheerfully reported
+    /// <c>_showLoadout</c> had no case here at all and fell through to 0, so the rail cheerfully reported
     /// HUNT while the player was standing on the Weave — the game's most distinctive screen, telling
     /// them they were somewhere else. It is reached from the Build overview and is part of the same
     /// activity, so it lights that tile rather than claiming one.
     /// </remarks>
     private int NavActive() =>
-        _showCharacter ? 1 : _showStats ? 2 :
+        _showGear ? 1 : _showTraining ? 2 :
         // BUILD is the weave; MASTERY is the tree. Two tiles, two screens, no shared flag.
-        _showBuild ? 4 : _showWeave ? 3 :
-        _showChests ? 5 : _showForge ? 6 : _showWarren ? 7 : _showWorld ? 8 :
-        _showPrestige ? 9 : _showRoster ? 10 : 0;
+        _showMastery ? 4 : _showLoadout ? 3 :
+        _showVault ? 5 : _showForge ? 6 : _showWarren ? 7 : _showWorld ? 8 :
+        _showTraits ? 9 : _showRoster ? 10 : 0;
 
     /// <summary>
     /// Which activity each rail tile is, so one table decides both what a tile opens and whether it may.
@@ -5245,7 +5245,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     private static readonly Activity[] NavActivity =
     {
-        Activity.Hunt, Activity.Gear, Activity.Stats, Activity.Build, Activity.Mastery,
+        Activity.Hunt, Activity.Gear, Activity.Training, Activity.Build, Activity.Mastery,
         Activity.Vault, Activity.Forge, Activity.Warren, Activity.Map, Activity.Traits, Activity.Roster,
     };
 
@@ -5268,11 +5268,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
             return;
         }
 
-        _showCharacter = _showStats = _showBuild = _showForge = _showWarren = _showWorld = _showPrestige = _showRoster = _showWeave = _showChests = false;
+        _showGear = _showTraining = _showMastery = _showForge = _showWarren = _showWorld = _showTraits = _showRoster = _showLoadout = _showVault = false;
         // Navigating away abandons a pending SELL/SALVAGE question. Without this it sat armed and
         // invisible, and the player's first click on returning answered a dialog they had forgotten.
         _forge.CancelConfirm();
-        _stats.CancelConfirm();   // an armed RESET ALL TRAINING must not survive leaving the screen
+        _training.CancelConfirm();   // an armed RESET ALL TRAINING must not survive leaving the screen
         _expedition.FilterOpen = false;   // the hunt's CHEST FILTER popover folds when the player walks away
         // Looked at: the tile's NEW mark goes (its banner, if any, waits on the screen until closed),
         // and the roster's "someone joined" mark is satisfied by a visit.
@@ -5283,19 +5283,19 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // would show the overview, and the tile would look broken rather than the state being stale.
         switch (i)
         {
-            case 1: _showCharacter = true; break;
-            case 2: _showStats = true; break;
+            case 1: _showGear = true; break;
+            case 2: _showTraining = true; break;
             // BUILD opens the weave itself. The old overview is retired: it listed the same skills
             // without letting you change one, so it was a page you looked at in front of the page
             // you used. What was unique to it — the taken mastery nodes — is the MASTERY tile's
             // diagram, drawn rather than listed.
-            case 3: _showWeave = true; break;
-            case 4: _showBuild = true; _buildScreen.ShowTree = true; break;
-            case 5: _showChests = true; break;
+            case 3: _showLoadout = true; break;
+            case 4: _showMastery = true; _masteryScreen.ShowTree = true; break;
+            case 5: _showVault = true; break;
             case 6: _showForge = true; break;
             case 7: _showWarren = true; break;
             case 8: _showWorld = true; _mapScreen.ActiveRegion = _activeRegion; _mapScreen.SelectActive(); break;
-            case 9: _showPrestige = true; break;
+            case 9: _showTraits = true; break;
             case 10: _showRoster = true; break;
             // case 0 HUNT: everything cleared above → back to the fight.
         }

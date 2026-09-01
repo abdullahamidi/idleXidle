@@ -20,7 +20,7 @@ public readonly record struct WaveReward(Haul Haul, int Wave, bool IsBoss);
 /// </summary>
 /// <remarks>
 /// <para>
-/// Extracted from <c>SoloExpeditionScreen.StartRun/BeginWave</c> (P5, 2026-08-31 — audit critique
+/// Extracted from <c>HuntScreen.StartRun/BeginWave</c> (P5, 2026-08-31 — audit critique
 /// G2: "Game1 and the hunt screen are the second Core"). The descent state machine living in a
 /// MonoGame class meant there was NO headless fast-forward: offline progress was a rate estimate
 /// (<c>ChampionGleamRate × seconds × 0.5</c>), loop probes could not model the loop, and the

@@ -64,7 +64,7 @@ public static class UiTypography
     // fight, they never sit beside prose, and they have to be told apart from each other at speed —
     // which is the whole reason there are three of them rather than one.
     //
-    // THEY LIVED IN SoloExpeditionScreen AS A SECOND LADDER (DamagePx 34 / SkillHitPx 40 / CritPx 46)
+    // THEY LIVED IN HuntScreen AS A SECOND LADDER (DamagePx 34 / SkillHitPx 40 / CritPx 46)
     // while the DamageNormal and DamageCritical named here were 30 and 40 and used by NOTHING. Two
     // ladders, one of them dead, is exactly the shape the drift takes: the file that draws the thing
     // quietly grows its own copy, and the shared one stops describing the game. The values below are
@@ -195,14 +195,14 @@ public static class UiTypography
     //              │       PanelPadBottom     the last row clears the bottom frame by this
     //     panel.Bottom ────────────────────────
     //
-    // The numbers are StatsScreen's, unchanged — it is the screen the 2026-08-28 captures show behaving,
+    // The numbers are TrainingScreen's, unchanged — it is the screen the 2026-08-28 captures show behaving,
     // and picking a screen that already works beats inventing a fashion.
 
     /// <summary>
     /// Where a panel's TITLE sits: this far below the panel's top edge.
     /// </summary>
     /// <remarks>
-    /// StatsScreen (HUNTER, TRAINING), WarrenScreen (WARREN OVERVIEW, the facility detail) and
+    /// TrainingScreen (HUNTER, TRAINING), WarrenScreen (WARREN OVERVIEW, the facility detail) and
     /// ForgeScreen (WHAT TO DO WITH IT, YOUR MATERIALS) all already used 22, which is the largest
     /// agreement in the codebase and reads correctly against the frame's top rail. Everything else was
     /// pulled to it: the FORGE's bag (40), the ROSTER's grid (44), the BUILD screen's three columns
@@ -224,7 +224,7 @@ public static class UiTypography
     /// </para>
     /// <para>
     /// Both screens that own a square panel had already found this the hard way and landed on different
-    /// numbers — StatsScreen's PROGRESS wrote +40 and inset 60, RosterScreen's detail column wrote +74
+    /// numbers — TrainingScreen's PROGRESS wrote +40 and inset 60, RosterScreen's detail column wrote +74
     /// and inset 74 with a comment beginning "DERIVED FROM THE PANEL'S INTERIOR, not a hand-picked +44".
     /// Applied by <see cref="UiKit.FrameDrop"/> now, so no screen has to know which frame its own
     /// rectangle happens to select — which is a thing a screen cannot know, since the frame is chosen
@@ -235,13 +235,13 @@ public static class UiTypography
 
     /// <summary>
     /// Where a panel's one-line CAPTION sits, under its title. Exactly one <see cref="PanelTitle"/> line
-    /// below <see cref="PanelTitleTop"/>. StatsScreen's TRAINING caption is the precedent.
+    /// below <see cref="PanelTitleTop"/>. TrainingScreen's TRAINING caption is the precedent.
     /// </summary>
     public const int PanelCaptionTop = 56;
 
     /// <summary>
     /// Where a panel's first content row starts when it has BOTH a title and a caption.
-    /// StatsScreen's TRAINING rows are the precedent.
+    /// TrainingScreen's TRAINING rows are the precedent.
     /// </summary>
     public const int PanelBodyTop = 92;
 
@@ -269,7 +269,7 @@ public static class UiTypography
     /// </summary>
     /// <remarks>
     /// It is <see cref="UiKit.PanelCorner"/>: the frame's corner ornament reaches exactly this far in, so
-    /// content at this inset can never sit on the filigree even level with a corner. StatsScreen's
+    /// content at this inset can never sit on the filigree even level with a corner. TrainingScreen's
     /// TRAINING rows and every RosterScreen column already used it.
     /// </remarks>
     public const int PanelPadX = 40;
@@ -282,7 +282,7 @@ public static class UiTypography
     /// The frame's ornament is only about 18 px deep along a straight EDGE; the 40 of
     /// <see cref="PanelPadX"/> is what the CORNER needs. A narrow plate has no room to honour the corner
     /// and nothing sitting beside one, so it honours the edge. The arena's rail (RailInset) and
-    /// StatsScreen's hunter card and the arena's rail already used 24, and WARREN, MAP and TRAITS
+    /// TrainingScreen's hunter card and the arena's rail already used 24, and WARREN, MAP and TRAITS
     /// already used 28 — 28 across 20 call sites is the single largest agreement on a left margin in
     /// the codebase, and it clears the vertical frame's 24 px side rail where 24 sits flush on it.
     /// </remarks>

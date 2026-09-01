@@ -34,7 +34,7 @@ public enum ItemAction { Equip, Upgrade, Reforge, Salvage }
 /// real loadout summary. Items have no authored name, so identity is composed from rarity + source + slot;
 /// there is no lock system, so LOCK is a disabled fallback.
 /// </remarks>
-public sealed class CharacterScreen
+public sealed class GearScreen
 {
     private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
     private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
@@ -71,7 +71,7 @@ public sealed class CharacterScreen
     /// <summary>F7 layout-debug (spec §18): panel rects, content-safe rects, selection, active nav.</summary>
     public bool DevGearDebug { get; set; }
 
-    public CharacterScreen(UiKit ui, ForgeScreen forge) { _ui = ui; _forge = forge; }
+    public GearScreen(UiKit ui, ForgeScreen forge) { _ui = ui; _forge = forge; }
 
     // ── Spec §4 layout: four content panels + a title band, all clearing the shared nav rail at y=934. ──
     private static readonly Rectangle TitleBand = new(0, 0, 1920, 106);

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Derive every static sprite the runtime asks for out of the animation strips.
 
-`SoloExpeditionScreen` falls back to a static when a strip is missing or still
+`HuntScreen` falls back to a static when a strip is missing or still
 loading, and `DrawHunter` asks for statics directly:
 
     staticKey = attacking ? $"{en}_attack_01" : $"{en}_idle_01"   (:505)
@@ -104,7 +104,7 @@ def main() -> int:
             emit(fit_square(fa, 1024), os.path.join(base, "normalized", f"{boss}_attack_1024.png"))
             made += 2
 
-    # --- Hunter: the three keys SoloExpeditionScreen asks for by name
+    # --- Hunter: the three keys HuntScreen asks for by name
     H = "assets/art/Animations/Hunter"
     C = os.path.join(REPO, "assets/art/Characters/Hunter/poses")
     idle = strip_path(f"{H}/hunter_idle", "hunter_idle_strip8_512")

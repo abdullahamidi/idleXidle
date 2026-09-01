@@ -118,7 +118,7 @@ public sealed class ForgeScreen
 
     private readonly List<ItemInstance> _inv = new();
     private readonly List<Chest> _chests = new();    // unopened chests, waiting for the click
-    /// <summary>The item under the pointer this frame. Re-established every draw; see CharacterScreen.</summary>
+    /// <summary>The item under the pointer this frame. Re-established every draw; see GearScreen.</summary>
     private ItemInstance? _hovered;
 
     private string _msg = "";
@@ -1443,7 +1443,7 @@ public sealed class ForgeScreen
         // A SCROLLBAR, so "there is more below" is something you can SEE rather than something you find
         // out by spinning the wheel. The list had no visible affordance of any kind: no bar, no arrows,
         // no cut-off row — six rows and then a frame, which reads as a bag holding six items. The GEAR
-        // screen's inventory has had one all along (CharacterScreen.cs); this is the same geometry,
+        // screen's inventory has had one all along (GearScreen.cs); this is the same geometry,
         // drawn down the inside edge of the row column.
         if (bag.Count > BagRows)
         {

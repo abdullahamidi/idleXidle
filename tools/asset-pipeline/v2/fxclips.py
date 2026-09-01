@@ -4,7 +4,7 @@
     python tools/asset-pipeline/v2/fxclips.py <charId> <form>=<animate_image jobId> [...]
 
 Each pair becomes `assets/art/VFX/<char>_<form>/fx_<char>_<form>_strip8_512.png`, which is the key
-`SoloExpeditionScreen.FxFor` asks for first, before it falls back to the shared `fx_<form>`.
+`HuntScreen.FxFor` asks for first, before it falls back to the shared `fx_<form>`.
 
 This is skillclips.py's twin and exists for the same reason: 45 effects arrive in nine batches of
 five, each needing fetch -> strip -> gate -> file in that order, and a loop typed fresh per character

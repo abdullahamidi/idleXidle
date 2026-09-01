@@ -167,7 +167,7 @@ public class BeatCadenceTest
     /// The rail's own arithmetic, re-implemented here because the Game assembly has no test project.
     /// </summary>
     /// <remarks>
-    /// SoloExpeditionScreen fills a skill's ring with the BEATS since its last cast over the cycle's
+    /// HuntScreen fills a skill's ring with the BEATS since its last cast over the cycle's
     /// plain actions, and adds a CARRY when the wave being replayed holds no cast of its own — the beats
     /// that passed in earlier waves. What is pinned here is that arithmetic, which is the part that can
     /// drift; the screen's wiring of it cannot be reached from here.
@@ -286,7 +286,7 @@ public class BeatCadenceTest
             },
             keystoneIds: Array.Empty<string>(), slotCapacity: 4);
 
-    /// <summary>The ring, read exactly the way SoloExpeditionScreen reads it.</summary>
+    /// <summary>The ring, read exactly the way HuntScreen reads it.</summary>
     private static float Ring(WaveReplay replay, float playhead, int carry, int slot, int beats)
     {
         var prev = replay.LastSkillBefore(playhead, slot);

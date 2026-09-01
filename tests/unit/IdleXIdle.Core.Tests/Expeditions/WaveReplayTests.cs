@@ -190,7 +190,7 @@ public class WaveReplayTests
     /// whether "the bars drop correctly". Four DIFFERENT pools, so a strike credited to the wrong slot
     /// cannot hide behind a twin. It was written to find the bug in the report and found none here: the
     /// replay is honest, and the number that disagreed with the bars was the screen's own invention
-    /// (see SoloExpeditionScreen — the damage callouts now print the event's amount).
+    /// (see HuntScreen — the damage callouts now print the event's amount).
     /// </remarks>
     [Fact]
     public void test_each_creature_replays_to_exactly_where_the_sim_left_it()

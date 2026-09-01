@@ -13,7 +13,7 @@ namespace IdleXIdle.Game;
 /// <para>
 /// Drives the impact effects of the solo fight — a hit spark on every blow, a burst on a Form's cast,
 /// a death puff when the enemy or the champion drops. It sat unwired for several commits (its only
-/// caller, manual combat, was deleted) until <see cref="SoloExpeditionScreen"/> picked it up.
+/// caller, manual combat, was deleted) until <see cref="HuntScreen"/> picked it up.
 /// </para>
 /// <para>
 /// A strip is a horizontal PNG of equal-width frames; frame height = image height, frame count =
@@ -130,7 +130,7 @@ public sealed class VfxPlayer
     /// </summary>
     /// <remarks>
     /// Named because a caller that must PLACE an effect has to know how big it will be: the aura is
-    /// anchored by its bottom edge (see SoloExpeditionScreen.HoldAura) and cannot work that out from a
+    /// anchored by its bottom edge (see HuntScreen.HoldAura) and cannot work that out from a
     /// multiplier alone. It is not a factor on the raw frame — the strips are 512 px and multiplying
     /// those directly would fill the screen.
     /// </remarks>

@@ -217,7 +217,7 @@ public static class Onboarding
                 + "That is all — go and watch the first wave."),
         },
 
-        Activity.Stats => new[]
+        Activity.Training => new[]
         {
             new TourStep(TourTarget.TrainingRows, "TRAIN YOUR CHAMPION",
                 "Every row is one thing your champion can train. Press TRAIN to spend Gleam on it. "
@@ -398,6 +398,17 @@ public static class Onboarding
 
     /// <summary>The explained-list key for a screen.</summary>
     public static string ScreenKey(Activity screen) => screen.ToString();
+
+    /// <summary>
+    /// A saved explained-screen key, read forward across renames. The save stores <see cref="Activity"/>
+    /// NAMES; when STATS became TRAINING (2026-09-01, UX V2) every existing save still said "Stats", and
+    /// without this a returning player would be re-toured through a screen they had already learned.
+    /// </summary>
+    public static string ModernScreenKey(string saved) => saved switch
+    {
+        "Stats" => nameof(Activity.Training),
+        _ => saved,
+    };
 
     /// <summary>The explained-list key of the first-gem lesson — the Forge's second, smaller tour.</summary>
     /// <remarks>

@@ -34,13 +34,13 @@ namespace IdleXIdle.Game;
 /// against the live loadout and shows the answer next to every Vow, updating as you edit.
 /// </para>
 /// </remarks>
-public sealed class WeaveScreen
+public sealed class LoadoutScreen
 {
     /// <summary>
     /// The build's DISCIPLINE — the STYLE specialisation taken on the mastery tree. Host-fed each
     /// frame. Null until a Specialisation node is bought, and the screen says where to get one.
     /// </summary>
-    public Style? Discipline { get; set; }
+    public Style? ChosenStyle { get; set; }
 
     /// <summary>Host-fed mastery walk, for the build share code. The code is identity, not power.</summary>
     public System.Collections.Generic.IReadOnlyCollection<string> MasteryTaken { get; set; }
@@ -260,7 +260,7 @@ public sealed class WeaveScreen
     /// <summary>Cues, host-fed like every other screen's.</summary>
     public SoundBank? Sound { get; set; }
 
-    public WeaveScreen(UiKit ui) => _ui = ui;
+    public LoadoutScreen(UiKit ui) => _ui = ui;
 
     public PlayerLoadout Loadout { get; set; } = PlayerLoadout.Starter();
     public MasteryTree Mastery { get; set; } = new();
@@ -862,7 +862,7 @@ public sealed class WeaveScreen
 
         // THE DISCIPLINE LINE — the Nen frame this game was born from, finally said out loud: your
         // skills are your specialisation's craft, and a sworn Vow buys back what it does not give you.
-        if (Discipline is { } disc)
+        if (ChosenStyle is { } disc)
             _ui.TextCenterBig(b, $"DISCIPLINE: {disc.ToString().ToUpperInvariant()} — ITS SKILLS HIT TWICE AS HARD  ·  A VOW ON A FAR-STYLE SKILL PULLS IT ONE RING CLOSER",
                               960, 108, Gold, UiTypography.Secondary);
         else
@@ -1062,7 +1062,7 @@ public sealed class WeaveScreen
 
             // The hexagon's verdict on this woven skill — and the Vow buy-back drawn as the LIFT it
             // is ("x0.45→x0.75"), so swearing a Vow on an off-discipline skill visibly pays.
-            if (Discipline is { } dd)
+            if (ChosenStyle is { } dd)
             {
                 var baseF = StyleAffinity.Factor(dd, resolved.Style);
                 var vowF = StyleAffinity.Factor(dd, resolved.Style, vowSworn: s.VowId is not null);
