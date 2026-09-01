@@ -594,7 +594,8 @@ public sealed class HuntScreen
         // intro (review 2026-08-26). The screen draws before the tour asks, so the measure is fresh.
         TourTarget.RightColumn => new[] { new Rectangle(1560, 100, 350, Math.Max(268, s_railBottom - 100)) },
         TourTarget.NavRail => new[] { new Rectangle(0, 0, 184, 1080) },
-        TourTarget.GuideStrip => new[] { new Rectangle(456, 936, 1008, 130) },
+        // The lesson card hangs under the header stack (UX V2 P0.7) — the same slot the toasts use.
+        TourTarget.LessonSlot => new[] { new Rectangle(630, s_headerStackBottom + 8, 560, 130) },
         _ => Array.Empty<Rectangle>(),
     };
     private RasterizerState? _arenaRasterizer;
@@ -637,14 +638,14 @@ public sealed class HuntScreen
     /// that belongs over the fight, not behind a menu they have no reason to open.
     /// </remarks>
     /// <summary>
-    /// UNUSED — the guide moved to the host as shared chrome (Game1.DrawGuideBanner).
+    /// UNUSED — the guide moved to the host as shared chrome (Game1.DrawHuntLesson / DrawHintSlot).
     /// </summary>
     /// <remarks>
     /// Kept as a deliberate tombstone rather than deleted silently, because the capture fixtures and
     /// the scene audits both reference "the guide on the hunt screen" and the next person to look for
     /// it here should find out where it went rather than conclude the feature was cut.
     /// </remarks>
-    [Obsolete("The guide is drawn by Game1.DrawGuideBanner over every screen. Setting this does nothing.")]
+    [Obsolete("The guide is drawn by Game1 (DrawHuntLesson on the HUNT, DrawHintSlot on a menu screen). Setting this does nothing.")]
     public TutorialStep? Guide { get; set; }
 
     /// <summary>The player's build choices and the tree that powers them. Set by the host each frame.</summary>
@@ -2230,7 +2231,7 @@ public sealed class HuntScreen
     /// step completes when its lesson is performed, so a player who already knows the loop never has to
     /// acknowledge a single one of these.
     /// </remarks>
-    // DrawGuide MOVED TO Game1.DrawGuideBanner — it is shared chrome now, not arena furniture.
+    // DrawGuide MOVED TO Game1.DrawHuntLesson — it is shared chrome now, not arena furniture.
     //
     // It lived here, inside DrawArena, which is reached only through the terminal `else` of Game1's
     // screen chain. So the guide drew on the HUNT screen and nowhere else — and every step from
@@ -2460,7 +2461,10 @@ public sealed class HuntScreen
     /// Where the header stack ends this frame — the enemy strip's foot, the boss bar's, or the header's
     /// own — so the host can hang its transient toasts under it rather than across it.
     /// </summary>
-    public int HeaderStackBottom { get; private set; } = StageHeaderBottomY;
+    public int HeaderStackBottom { get => _headerStackBottom; private set => s_headerStackBottom = _headerStackBottom = value; }
+    private int _headerStackBottom = StageHeaderBottomY;
+    /// <summary>A static mirror for the static <see cref="Spotlights"/>, like <c>s_railBottom</c>.</summary>
+    private static int s_headerStackBottom = StageHeaderBottomY;
 
     private void DrawStageHeader(SpriteBatch b, string regionName, bool isBossWave)
     {

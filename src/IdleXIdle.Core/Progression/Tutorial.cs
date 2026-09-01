@@ -160,7 +160,7 @@ public static class Tutorial
     /// </summary>
     /// <param name="f">What the player has done so far.</param>
     /// <param name="dismissedRungs">
-    /// Rung NAMES (<c>TutorialStep.ToString()</c>) the player dismissed with the guide strip's close
+    /// Rung NAMES (<c>TutorialStep.ToString()</c>) the player dismissed with a lesson's ×
     /// button, or null for none. A dismissed rung is skipped exactly as if it were completed — but only
     /// for DISPLAY: nothing here fakes the underlying facts, so the gates and unlocks that read those
     /// facts are untouched. A dismissed rung never returns.

@@ -217,6 +217,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>A champion joined and the roster has not been looked at since. Session-only.</summary>
     private bool _rosterNews;
 
+    /// <summary>Who joined most recently — the name the ROSTER hint says while <see cref="_rosterNews"/> holds.</summary>
+    private string _rosterNewName = "";
+
     /// <summary>Notices waiting their turn — "QUEST COMPLETE", "X JOINS YOU" — shown one at a time.</summary>
     private readonly Queue<string> _noticeQueue = new();
     private string _notice = "";
@@ -2401,7 +2404,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         //
         // A TOUR IS THE ONLY THING THAT SETS THIS TRUE FOR A WHOLE FRAME. The notice toasts and the
         // slot-note banner are deliberately not modal: a toast never touches this flag, and the banner
-        // only spends the one click that lands on it (below, beside the guide strip's close).
+        // only spends the one click that lands on it (below, beside the hint slot's close).
         _swallowInput = _tourActive;
         // NOT UNDER THE CAPTURE RIG. The game window takes focus while a shot renders, so a key the
         // developer happens to press in the sixty frames advances the card — a capture asked for card
@@ -2458,37 +2461,26 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _swallowInput = true;
         }
 
-        // THE GUIDE STRIP CAN BE CLOSED (playtest: "messages stay forever until I do the thing").
-        // Its small x dismisses THAT rung for good — remembered in the save — and the guide shows
-        // the next lesson as if this one were completed. Display only: no underlying fact is
-        // faked, so unlocks and gates are untouched. Handled here rather than in Draw so the
-        // click is swallowed before any screen hit-tests it.
-        if (!_showSettings && !_showHelp && !_swallowInput && _clicked
-            && _guideStep is { } closable && Tutorial.HasGuidance(closable)
-            && GuideCloseRect(GuideBannerRect(closable)).Contains(ChromeMouse))
+        // THE HINT SLOT at the top of a menu screen — a slot note, the lesson about this screen, or a hint
+        // from real state — closes with its × (a note and a lesson are remembered in the save; a hint for
+        // the session), and a click anywhere else on it is spent: it sits over the screen's own controls,
+        // and a click that closed nothing must not press a TRAIN button underneath. THE HUNT'S LESSON
+        // CARD closes the same way (playtest: "messages stay forever until I do the thing"). Display only:
+        // no underlying fact is faked, so unlocks and gates are untouched. Handled here rather than in
+        // Draw so the click is swallowed before any screen hit-tests it.
+        if (!_showSettings && !_showHelp && !_swallowInput && _clicked)
         {
-            _dismissedGuide.Add(closable.ToString());
-            _guideStep = Tutorial.Showing(GuideFacts(), _dismissedGuide);
-            _sound.Play("sfx_click", 0.6f);
-            Save();
-            _swallowInput = true;
-        }
-
-        // THE SLOT-NOTE BANNER at the top of the BUILD screen closes the same way, and remembers itself
-        // in the save. A click anywhere else on the banner is spent too — it sits over the screen's own
-        // controls, and a click that closed nothing must not press a TRAIN button underneath.
-        if (!_showSettings && !_showHelp && !_swallowInput && _clicked
-            && ScreenBannerShowing() is { } banner)
-        {
-            var rect = ScreenBannerRect(banner);
-            if (GuideCloseRect(rect).Contains(ChromeMouse))
+            if (SlotShowing() is { } slot)
             {
-                _explained.Add(banner.Key);
-                _sound.Play("sfx_click", 0.6f);
-                Save();
+                var rect = HintSlotRect(slot);
+                if (HintCloseRect(rect).Contains(ChromeMouse)) { CloseSlot(slot); _swallowInput = true; }
+                else if (rect.Contains(ChromeMouse)) _swallowInput = true;
+            }
+            else if (HuntLessonShowing() is { } lesson && HintCloseRect(HuntLessonRect(lesson)).Contains(ChromeMouse))
+            {
+                CloseLesson(lesson);
                 _swallowInput = true;
             }
-            else if (rect.Contains(ChromeMouse)) _swallowInput = true;
         }
 
         // THE ATTUNEMENT holds the door — and so do the vault's modals (the trader stall and the
@@ -3114,72 +3106,147 @@ public class Game1 : Microsoft.Xna.Framework.Game
     }
 
 
-    /// <summary>
-    /// The first-run guide, drawn as shared chrome over every screen in the game.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <b>THIS USED TO LIVE INSIDE THE ARENA, and that was the reported bug.</b> DrawGuide was called
-    /// from HuntScreen.DrawArena, which is reached only through the terminal <c>else</c> of
-    /// the screen chain — so the guide appeared on HUNT and nowhere else. Every step from SpendGleam
-    /// onward names a key that navigates away from the hunt, so the player read "press V for STATS",
-    /// pressed V, and the instruction vanished. Nothing confirmed the step had completed; nothing
-    /// carried the lesson onto the screen it had just sent them to. Playtest: "Tutorial bozuk, düzgün
-    /// ilerlemiyor."
-    /// </para>
-    /// <para>
-    /// As chrome it follows the player. Press V and the guide is still there on the STATS screen saying
-    /// what to do; train a stat and it visibly advances to the next rung. That transition IS the sense
-    /// of progress the guide was missing.
-    /// </para>
-    /// <para>
-    /// Suppressed while a tour is up, so two pieces of teaching never compete for the same
-    /// attention — the intro's last card points at the place this strip will appear.
-    /// </para>
-    /// </remarks>
-    private void DrawGuideBanner()
+    /// <summary>The small close button top-right of a hint slot or lesson card.</summary>
+    private static Rectangle HintCloseRect(Rectangle slot) => new(slot.Right - 42, slot.Y + 10, 32, 32);
+
+    // ── The hint slot (UX V2 P0.7) ─────────────────────────────────────────────────────────────
+    //
+    // One place at the top of a menu screen that says the one thing worth saying about it right now:
+    // a slot note (Onboarding.BannerFor), the guide rung that is ABOUT this screen (Tutorial.Sends), or a
+    // hint from real state (Onboarding.HintFor) — in that order, one at a time. The strip that used to
+    // cross the bottom of every screen with a lesson about some other screen is gone; where a rung is
+    // about another screen, that screen's rail tile wears the NEW mark instead.
+
+    /// <summary>What kind of thing the slot holds, which decides what closing it remembers.</summary>
+    private enum SlotKind { Note, Lesson, Hint }
+
+    /// <summary>The slot's content: the key that closes it, its title, its body (empty for a one-line hint).</summary>
+    private readonly record struct SlotContent(SlotKind Kind, string Key, string Title, string Body);
+
+    /// <summary>Hints closed this session. Not saved: a hint is about now, and returns when its fact changes.</summary>
+    private readonly HashSet<string> _dismissedHints = new();
+
+    /// <summary>The slot content owed on the current menu screen, or null. Never during a tour, never on the HUNT.</summary>
+    private SlotContent? SlotShowing()
     {
-        if (_showTitle || _showHelp || _showSettings) return;
-        if (_tourActive) return;
-        if (_guideStep is not { } step || !Tutorial.HasGuidance(step)) return;
-        DrawGuideStrip(step);
+        if (_showTitle || _tourActive || _showHelp || _showSettings || !OverlayActive) return null;
+        if (ScreenBannerShowing() is { } note) return new SlotContent(SlotKind.Note, note.Key, note.Title, note.Body);
+        var screen = ScreenActivity();
+        var tf = GuideFacts();
+        if (_guideStep is { } step && Tutorial.HasGuidance(step) && Tutorial.Sends(step, tf) == screen)
+            return new SlotContent(SlotKind.Lesson, step.ToString(), Tutorial.Title(step), Tutorial.Body(step, tf));
+        if (Onboarding.HintFor(screen, HintFactsNow()) is { } hint && !_dismissedHints.Contains(hint.Key))
+            return new SlotContent(SlotKind.Hint, hint.Key, hint.Text, "");
+        return null;
     }
 
-    /// <summary>One guide rung as a strip — the live one, or the intro's preview of what a lesson looks like.</summary>
-    private void DrawGuideStrip(TutorialStep step)
+    /// <summary>Close the slot: a note is remembered in the save, a lesson is dismissed for good, a hint for this session.</summary>
+    private void CloseSlot(SlotContent slot)
     {
-        var r = GuideBannerRect(step);
-        // The facts-aware body: the chest rung reads differently while a chest is actually waiting.
+        switch (slot.Kind)
+        {
+            case SlotKind.Note: _explained.Add(slot.Key); Save(); break;
+            case SlotKind.Lesson: _dismissedGuide.Add(slot.Key); _guideStep = Tutorial.Showing(GuideFacts(), _dismissedGuide); Save(); break;
+            default: _dismissedHints.Add(slot.Key); break;
+        }
+        _sound.Play("sfx_click", 0.6f);
+    }
+
+    /// <summary>The stats in ladder order, once — <see cref="HintFactsNow"/> runs every frame and must not allocate.</summary>
+    private static readonly HunterStat[] s_stats = Enum.GetValues<HunterStat>();
+
+    /// <summary>
+    /// What is true right now that a screen could point at — gathered from the models the host already
+    /// holds. Every value here is one a screen already displays somewhere; nothing is invented.
+    /// </summary>
+    private HintFacts HintFactsNow()
+    {
+        string? newRegion = null;
+        foreach (var def in Regions.All)
+        {
+            if (def.Id == _activeRegion || !_world.IsUnlocked(def.Id) || _world.IsConquered(def.Id)) continue;
+            if (_world.RegionFarm(def.Id).BestDepth > 0) continue;   // hunted there before: not new
+            newRegion = def.Name;
+            break;
+        }
+        string? stat = null;
+        long cost = 0;
+        foreach (var s in s_stats)
+        {
+            if (!_hunter.CanTrain(s)) continue;
+            var c = _hunter.NextRankCost(s);
+            if (stat is null || c < cost) { stat = s.ToString(); cost = c; }
+        }
+        string? upgrade = null;
+        foreach (var f in Facilities.All)
+            if (_warren.CanUpgrade(f.Kind, _hunter.Gleam, _dust.MemoryDust)) { upgrade = f.Name; break; }
+
+        return new HintFacts(
+            NewRegionName: newRegion,
+            TraitPointsFree: _dust.Available,
+            MasteryPointsFree: _mastery.Available,
+            EmptySkillSlots: Math.Max(0, Unlocks.SkillSlots(GuideUnlockFacts()) - _loadout.Skills.Count),
+            NewChampionName: _rosterNews ? _rosterNewName : null,
+            ChestsWaiting: _forge?.UnopenedChests.Count ?? 0,
+            TrainableStat: stat,
+            TrainableCost: cost,
+            AffordableUpgradeName: upgrade);
+    }
+
+    // ── The HUNT's lesson card (UX V2 P0.7) ────────────────────────────────────────────────────
+    //
+    // The fight's own rungs — Watch, MeetABoss, Conquer, and OpenChest while no chest is held — are the
+    // HUNT's onboarding. They render one at a time in the toast slot under the header stack, as a quiet
+    // card with an ×, and yield to the boot and notice toasts (a queue, not a stack).
+
+    /// <summary>The fight rung to show on the HUNT this frame, or null.</summary>
+    private TutorialStep? HuntLessonShowing()
+    {
+        if (_showTitle || _tourActive || _showHelp || _showSettings || OverlayActive) return null;
+        if (_expedition.LogOpen) return null;
+        if (_bootTimer > 0f && _bootMessage.Length > 0) return null;       // the welcome toast has the slot
+        if (_noticeTimer > 0f && _notice.Length > 0) return null;          // so does a notice
+        if (_guideStep is not { } step || !Tutorial.HasGuidance(step)) return null;
+        // A rung about another screen is that screen's business (and its tile's NEW mark), not the fight's.
+        return Tutorial.Sends(step, GuideFacts()) is null ? step : null;
+    }
+
+    /// <summary>Where the lesson card hangs: the toast slot, as tall as its wrapped body.</summary>
+    private Rectangle HuntLessonRect(TutorialStep step)
+    {
+        var body = _ui.WrapBig(Tutorial.Body(step, GuideFacts()), 560 - 44, UiTypography.Secondary);
+        return new Rectangle(630, ToastTop, 560, 58 + body.Count * UiTypography.Pitch(UiTypography.Secondary));
+    }
+
+    private void DrawHuntLesson()
+    {
+        if (HuntLessonShowing() is { } step) DrawLessonCard(step, 1f);
+    }
+
+    /// <summary>One fight rung as a card — the live one, or the intro's preview of what a lesson looks like.</summary>
+    private void DrawLessonCard(TutorialStep step, float alpha)
+    {
+        var r = HuntLessonRect(step);
         var body = _ui.WrapBig(Tutorial.Body(step, GuideFacts()), r.Width - 44, UiTypography.Secondary);
-
-        _ui.Fill(_batch, r, new Color(0x10, 0x0D, 0x18, 0xEE));
-        _ui.Fill(_batch, new Rectangle(r.X, r.Y, 5, r.Height), NavGold);
-
-        _ui.TextBig(_batch, Tutorial.Title(step), r.X + 22, r.Y + 14, NavGold, UiTypography.Body);
+        _ui.PanelQuiet(_batch, r, alpha);
+        _ui.TextBig(_batch, Tutorial.Title(step), r.X + 22, r.Y + 14, UiInk.Accent * alpha, UiTypography.Body);
         var ty = r.Y + 44;
         foreach (var line in body)
         {
-            _ui.TextBig(_batch, line, r.X + 22, ty, UiKit.Vellum, UiTypography.Secondary);
+            _ui.TextBig(_batch, line, r.X + 22, ty, UiInk.Primary * alpha, UiTypography.Secondary);
             ty += UiTypography.Pitch(UiTypography.Secondary);
         }
-
-        // The x that closes THIS lesson for good — see the dismissal handler in Update.
-        var close = GuideCloseRect(r);
-        var hover = close.Contains(ChromeMouse);
-        _ui.CloseButton(_batch, close, ChromeMouse, false);   // drawn here; the click is handled in Update
+        _ui.CloseButton(_batch, HintCloseRect(r), ChromeMouse, false);   // drawn here; the click is handled in Update
     }
 
-    /// <summary>Where the guide strip sits this frame — its height follows the wrapped body.</summary>
-    private Rectangle GuideBannerRect(TutorialStep step)
+    /// <summary>Close a fight lesson for good — remembered in the save, like closing any rung.</summary>
+    private void CloseLesson(TutorialStep step)
     {
-        const int width = 980;
-        var body = _ui.WrapBig(Tutorial.Body(step, GuideFacts()), width - 44, UiTypography.Secondary);
-        var height = 58 + body.Count * UiTypography.Pitch(UiTypography.Secondary);
-        return new Rectangle((1920 - width) / 2, 1080 - height - 26, width, height);
+        _dismissedGuide.Add(step.ToString());
+        _guideStep = Tutorial.Showing(GuideFacts(), _dismissedGuide);
+        _sound.Play("sfx_click", 0.6f);
+        Save();
     }
-
-    /// <summary>The guide strip's small close button, top-right of the banner.</summary>
-    private static Rectangle GuideCloseRect(Rectangle banner) => new(banner.Right - 42, banner.Y + 10, 32, 32);
 
     /// <summary>
     /// Take off every worn piece the new champion's class cannot wear, tell the player where it went,
@@ -3236,7 +3303,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// <remarks>
     /// The first cut spanned the content (1700px) and the Stats explanation came out as two lines of
     /// a hundred and sixty characters each, which nobody reads to the end. 1200 keeps a line near
-    /// the length of the guide strip's and centres the banner under the screen's title.
+    /// a comfortable reading line and centres the slot under the screen's title.
     /// </remarks>
     private const int ScreenBannerWidth = 1200;
 
@@ -3252,43 +3319,45 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// It does cover the top of the screen's own content, which is the point: it is that screen's
     /// explanation, and it is closed with one click.
     /// </remarks>
-    private Rectangle ScreenBannerRect(ScreenBanner banner)
+    private Rectangle HintSlotRect(SlotContent slot)
     {
-        var body = _ui.WrapBig(banner.Body, ScreenBannerWrap, UiTypography.Secondary);
         var x = NavRailWidth + (1920 - NavRailWidth - ScreenBannerWidth) / 2;
+        if (slot.Body.Length == 0) return new Rectangle(x, 86, ScreenBannerWidth, 48);   // a one-line hint
+        var body = _ui.WrapBig(slot.Body, ScreenBannerWrap, UiTypography.Secondary);
         return new Rectangle(x, 86, ScreenBannerWidth, 58 + body.Count * UiTypography.Pitch(UiTypography.Secondary));
     }
 
     /// <summary>
-    /// The note owed at the top of the screen on top — the BUILD screen's new-slot line — in the guide
-    /// strip's visual language, and closed the same way.
+    /// The slot at the top of the screen on top: a slot note, the lesson about this screen, or a one-line
+    /// hint from its state — the quiet plate with a gold rule, closed with the ×.
     /// </summary>
     /// <remarks>
-    /// Not a timed toast, for the reason the old panel was not one: these are paragraphs, and a
+    /// Not a timed toast, for the reason the old panel was not one: a note is a paragraph, and a
     /// paragraph on a timer is a paragraph nobody finishes. Not modal either, for the reason the old
-    /// panel was removed: it is on the screen it is about, and the player came here on purpose.
+    /// panel was removed: it is on the screen it is about, and the player came here on purpose. A hint
+    /// is one line and needs no timer at all — it leaves when its fact does.
     /// </remarks>
-    private void DrawScreenBanner()
+    private void DrawHintSlot()
     {
-        if (ScreenBannerShowing() is not { } banner) return;
+        if (SlotShowing() is not { } slot) return;
 
-        var r = ScreenBannerRect(banner);
-        var body = _ui.WrapBig(banner.Body, ScreenBannerWrap, UiTypography.Secondary);
-
-        _ui.Fill(_batch, r, new Color(0x10, 0x0D, 0x18, 0xEE));
-        _ui.Fill(_batch, new Rectangle(r.X, r.Y, 5, r.Height), NavGold);
-
-        _ui.TextBig(_batch, banner.Title, r.X + 22, r.Y + 14, NavGold, UiTypography.Body);
-        var ty = r.Y + 44;
-        foreach (var line in body)
+        var r = HintSlotRect(slot);
+        _ui.Plate(_batch, r, UiInk.Accent);
+        if (slot.Body.Length == 0)
         {
-            _ui.TextBig(_batch, line, r.X + 22, ty, UiKit.Vellum, UiTypography.Secondary);
-            ty += UiTypography.Pitch(UiTypography.Secondary);
+            _ui.TextBig(_batch, slot.Title, r.X + 22, r.Y + 11, UiInk.Primary, UiTypography.Body);
         }
-
-        var close = GuideCloseRect(r);
-        var hover = close.Contains(ChromeMouse);
-        _ui.CloseButton(_batch, close, ChromeMouse, false);   // drawn here; the click is handled in Update
+        else
+        {
+            _ui.TextBig(_batch, slot.Title, r.X + 22, r.Y + 14, UiInk.Accent, UiTypography.Body);
+            var ty = r.Y + 44;
+            foreach (var line in _ui.WrapBig(slot.Body, ScreenBannerWrap, UiTypography.Secondary))
+            {
+                _ui.TextBig(_batch, line, r.X + 22, ty, UiInk.Primary, UiTypography.Secondary);
+                ty += UiTypography.Pitch(UiTypography.Secondary);
+            }
+        }
+        _ui.CloseButton(_batch, HintCloseRect(r), ChromeMouse, false);   // drawn here; the click is handled in Update
     }
 
     // ── Notice toasts ──────────────────────────────────────────────────────────────────────────
@@ -3450,9 +3519,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var holes = TourSpotlights(_tourScreen, step.Target);
 
         // The last card points at where lessons appear — so a lesson appears there. It is the first
-        // rung, the very strip that will be standing in that light when the intro ends: the light
-        // lifts and nothing has moved. (The live strip itself is suppressed while the intro is up.)
-        if (step.Target == TourTarget.GuideStrip) DrawGuideStrip(TutorialStep.Watch);
+        // rung, the very card that will be standing in that light when the intro ends: the light
+        // lifts and nothing has moved. (The live card itself is suppressed while the intro is up.)
+        if (step.Target == TourTarget.LessonSlot) DrawLessonCard(TutorialStep.Watch, 1f);
 
         DrawScrimAround(holes, new Color(0x05, 0x03, 0x0A) * 0.74f);
         foreach (var h in holes) TourOutline(h, 3, NavGold);
@@ -3564,7 +3633,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_expedition.WantsMastery) { _expedition.WantsMastery = false; OpenNav(4); }   // MASTERY (E) — the tree where the points are spent
 
         // The first-run guide, or null once outgrown. Held on the HOST, not on the fight screen: it is
-        // drawn as chrome over every screen now (DrawGuideBanner), because a guide that vanishes the
+        // drawn as chrome by the host now (the HUNT's lesson card, a menu screen's hint slot, the rail's NEW mark), because a guide that vanishes the
         // moment you obey it reads as a guide that has stopped working.
         _guideStep = Tutorial.Showing(GuideFacts(), _dismissedGuide);
 
@@ -3620,6 +3689,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // which is where a player who follows the mark will read them.
             PostNotice($"{got.Name.ToUpperInvariant()} JOINS YOU", "SWITCH CHAMPION ON THE ROSTER SCREEN");
             _rosterNews = true;
+            _rosterNewName = got.Name;
         }
         _rosterBaselined = true;
 
@@ -4165,8 +4235,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_showSettings) DrawSettings();
 
         DrawBootToast();
-        DrawGuideBanner();
-        DrawScreenBanner();
+        DrawHuntLesson();
+        DrawHintSlot();
         DrawLockedToast();
         DrawNoticeToast();
         // LAST of the chrome, so a tour's scrim and spotlight sit over everything — including the
@@ -5509,7 +5579,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _ui.Fill(_batch, new Rectangle(NavRailWidth - 3, 0, 3, 1080), NavGem * 0.4f);
 
         var active = NavActive();
-        var navFacts = GuideUnlockFacts();   // once per frame, not once per tile
+        var navFacts = GuideUnlockFacts();
+        var navGuide = GuideFacts();   // once per frame, not once per tile   // once per frame, not once per tile
         var navGems = GemsHeld();            // the first-gem lesson marks the FORGE tile the same way
         for (var i = 0; i < Nav.Length; i++)
         {
@@ -5563,10 +5634,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // the banner at the top of that screen is the mark's payload. A tile visited this session
             // drops its mark even with the banner still open — the mark means "you have not looked".
             var activity = NavActivity[i];
+            // A rung ABOUT this tile's screen marks it for as long as the rung shows — visited or not; the
+            // lesson is waiting on that screen, and the mark is how the rail says so (UX V2 P0.7).
+            var rungSends = _guideStep is { } rung && Tutorial.HasGuidance(rung) && Tutorial.Sends(rung, navGuide) == activity;
             var isNew = !on && unlocked
                         && (((Onboarding.IsNew(activity, navFacts, _explained)
                               || (activity == Activity.Forge && Onboarding.GemTourDue(navGems, _explained) is not null))
                              && !_visited.Contains(activity))
+                            || rungSends
                             || (activity == Activity.Roster && _rosterNews));
             if (isNew)
             {

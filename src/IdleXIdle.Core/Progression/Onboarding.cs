@@ -29,8 +29,8 @@ public enum TourTarget
     RightColumn,
     /// <summary>The navigation rail down the left edge.</summary>
     NavRail,
-    /// <summary>Where the guide strip will appear, bottom centre.</summary>
-    GuideStrip,
+    /// <summary>Where the fight's lesson card appears — the toast slot under the header stack.</summary>
+    LessonSlot,
 
     // ── STATS ──
     /// <summary>The training rows: one per stat, with its TRAIN button and the real fight number.</summary>
@@ -127,6 +127,34 @@ public readonly record struct TourStep(TourTarget Target, string Title, string B
 public readonly record struct ScreenBanner(string Key, string Title, string Body);
 
 /// <summary>
+/// What is true right now that a screen could point at — the inputs to <see cref="Onboarding.HintFor"/>.
+/// Every field is a fact the host already holds; nothing here is telemetry.
+/// </summary>
+/// <param name="NewRegionName">A region that is open, not conquered, and never hunted — or null.</param>
+/// <param name="TraitPointsFree">Trait points earned and not spent.</param>
+/// <param name="MasteryPointsFree">Mastery points earned and not spent.</param>
+/// <param name="EmptySkillSlots">Open skill slots with nothing equipped.</param>
+/// <param name="NewChampionName">A champion who joined and has not been looked at on the roster — or null.</param>
+/// <param name="ChestsWaiting">Unopened chests in the vault.</param>
+/// <param name="TrainableStat">The cheapest stat the player can afford to train right now — or null.</param>
+/// <param name="TrainableCost">What that rank costs.</param>
+/// <param name="AffordableUpgradeName">The first Warren facility whose next level is affordable — or null.</param>
+public readonly record struct HintFacts(
+    string? NewRegionName = null,
+    int TraitPointsFree = 0,
+    int MasteryPointsFree = 0,
+    int EmptySkillSlots = 0,
+    string? NewChampionName = null,
+    int ChestsWaiting = 0,
+    string? TrainableStat = null,
+    long TrainableCost = 0,
+    string? AffordableUpgradeName = null);
+
+/// <summary>One line a screen says at the top about its own state, and the key that dismisses it.</summary>
+/// <param name="Key">Encodes the fact, so the same hint returns when the fact changes (two chests after one).</param>
+public readonly record struct ScreenHint(string Key, string Text);
+
+/// <summary>
 /// The first minute on every screen: a click-through tour of the HUNT before the first wave, and a tour
 /// of each other screen the first time it is opened.
 /// </summary>
@@ -212,9 +240,9 @@ public static class Onboarding
                 "The other screens. Most are closed for now. They open as you play — "
                 + "a gold NEW mark shows what just opened."),
 
-            new TourStep(TourTarget.GuideStrip, "LESSONS",
-                "When there is something new to do, a short lesson appears down here. Close it with the ×. "
-                + "That is all — go and watch the first wave."),
+            new TourStep(TourTarget.LessonSlot, "LESSONS",
+                "A gold NEW mark on a tile means that screen has something new, and the screen says what at the top. "
+                + "The fight's own lessons appear here. Close one with the ×."),
         },
 
         Activity.Training => new[]
@@ -526,4 +554,60 @@ public static class Onboarding
     public static bool IsNew(Activity screen, UnlockFacts f, IReadOnlyCollection<string> explained)
         => screen != Activity.Hunt && Unlocks.IsOpen(screen, f)
            && (TourDue(screen, explained) is not null || BannerFor(screen, f, explained) is not null);
+
+    /// <summary>
+    /// <see cref="IsNew(Activity, UnlockFacts, IReadOnlyCollection{string})"/>, plus the lesson clause: while
+    /// a guide rung is showing, the tile it <see cref="Tutorial.Sends"/> the player to wears the mark too.
+    /// </summary>
+    /// <remarks>
+    /// UX V2 P0.7. A lesson used to be a strip across the bottom of EVERY screen ("press V for STATS" over
+    /// the Forge). Now it renders only on the screen it is about; everywhere else, the rung is this mark
+    /// on the tile it points at — the rail says where, the screen says what.
+    /// </remarks>
+    public static bool IsNew(Activity screen, UnlockFacts f, IReadOnlyCollection<string> explained,
+                             TutorialStep? showing, TutorialFacts tf)
+        => IsNew(screen, f, explained)
+           || (screen != Activity.Hunt && Unlocks.IsOpen(screen, f)
+               && showing is { } s && Tutorial.HasGuidance(s) && Tutorial.Sends(s, tf) == screen);
+
+    /// <summary>
+    /// The one line this screen says about its own state right now, or null when nothing is true.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// UX V2 P0.7 (chrome audit §7). After the tours and the slot notes, a screen teaches by pointing at a
+    /// fact: unspent points, a waiting chest, a rank you can afford. Every line is a pure function of state
+    /// the host already holds, so it appears when the fact becomes true and disappears on its own when it
+    /// stops — nothing is scheduled, nothing is guessed. The key carries the fact, so dismissing "1 CHEST"
+    /// does not silence "2 CHESTS".
+    /// </para>
+    /// <para>
+    /// GEAR says nothing: "an unworn item may beat what you wear" needs a per-slot comparison Core does not
+    /// make yet. FORGE says nothing: nothing in Core says an item wants work. HUNT teaches through its
+    /// lessons, not a hint. A hint is a line, never a paragraph.
+    /// </para>
+    /// </remarks>
+    public static ScreenHint? HintFor(Activity screen, HintFacts f) => screen switch
+    {
+        Activity.Map when f.NewRegionName is { Length: > 0 } r =>
+            new ScreenHint($"Hint:Map:{r}", $"A NEW REGION IS AVAILABLE — {r.ToUpperInvariant()}"),
+        Activity.Traits when f.TraitPointsFree > 0 =>
+            new ScreenHint($"Hint:Traits:{f.TraitPointsFree}", $"YOU HAVE {f.TraitPointsFree} TRAIT POINT{Plural(f.TraitPointsFree)}"),
+        Activity.Mastery when f.MasteryPointsFree > 0 =>
+            new ScreenHint($"Hint:Mastery:{f.MasteryPointsFree}", $"YOU HAVE {f.MasteryPointsFree} MASTERY POINT{Plural(f.MasteryPointsFree)}"),
+        Activity.Build when f.EmptySkillSlots > 0 =>
+            new ScreenHint($"Hint:Build:{f.EmptySkillSlots}",
+                           f.EmptySkillSlots == 1 ? "AN EMPTY SKILL SLOT — EQUIP A SKILL" : $"{f.EmptySkillSlots} EMPTY SKILL SLOTS — EQUIP SKILLS"),
+        Activity.Roster when f.NewChampionName is { Length: > 0 } c =>
+            new ScreenHint($"Hint:Roster:{c}", $"A NEW HUNTER HAS JOINED — {c.ToUpperInvariant()}"),
+        Activity.Vault when f.ChestsWaiting > 0 =>
+            new ScreenHint($"Hint:Vault:{f.ChestsWaiting}", f.ChestsWaiting == 1 ? "1 CHEST IS WAITING" : $"{f.ChestsWaiting} CHESTS ARE WAITING"),
+        Activity.Training when f.TrainableStat is { Length: > 0 } s =>
+            new ScreenHint($"Hint:Training:{s}:{f.TrainableCost}", $"YOU CAN TRAIN {s.ToUpperInvariant()} FOR {f.TrainableCost} GLEAM"),
+        Activity.Warren when f.AffordableUpgradeName is { Length: > 0 } u =>
+            new ScreenHint($"Hint:Warren:{u}", $"AN UPGRADE IS AFFORDABLE — {u.ToUpperInvariant()}"),
+        _ => null,
+    };
+
+    private static string Plural(int n) => n == 1 ? "" : "S";
 }

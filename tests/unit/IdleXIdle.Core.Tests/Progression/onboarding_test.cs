@@ -75,8 +75,8 @@ public class OnboardingTest
                 "Rewards and errands. A chest waits in the VAULT already; when a boss drops another, or you earn mastery points, the buttons here take you there."),
             (TourTarget.NavRail, "THE OTHER SCREENS",
                 "The other screens. Most are closed for now. They open as you play — a gold NEW mark shows what just opened."),
-            (TourTarget.GuideStrip, "LESSONS",
-                "When there is something new to do, a short lesson appears down here. Close it with the ×. That is all — go and watch the first wave."),
+            (TourTarget.LessonSlot, "LESSONS",
+                "A gold NEW mark on a tile means that screen has something new, and the screen says what at the top. The fight's own lessons appear here. Close one with the ×."),
         };
 
         var intro = Onboarding.Intro;
