@@ -69,8 +69,8 @@ Palette (D-tokens): `UiKit.Ink` — `Primary E8DFC8` · `Secondary 8A96A8` (≥ 
 
 ### P3 — polish
 - **P3.1 Settings** — DONE. Two columns grouped by purpose: DISPLAY (mode · window size · UI SCALE) · AUDIO · CONTROLS on the left, GAMEPLAY · ACCESSIBILITY on the right, and START A NEW GAME moved out of a pair of identical buttons into a bordered DANGER ZONE that says what it destroys. UI SCALE is a real row (F8 was its only door since P0.5). REDUCED MOTION ships with its consumers: `UiKit.AnimSprite` holds every looping sprite in the game on its first frame, and the vault card's hover stops growing — a switch that changed nothing would teach the player that the options screen lies. `ToggleRow`/`SliderRow` now take their own geometry; the fixed +276 button offset put two switches outside the panel the moment the rows moved.
-- **P3.2 Transitions** — inspector crossfade, node pulse, equip movement, resource tick; all under Reduced Motion.
-- **P3.3 Contextual help** — F1 sheet re-authored to the current model.
+- **P3.2 Feedback** — DONE for the part that changes what the player can read: a cast that lands several blows on ONE creature in ONE instant is now one number, `-635 ×5`, instead of five numbers up one column (brief §21; aura ticks were already summed). The decorative transitions the line also listed (crossfade, node pulse, equip movement) were NOT added: Reduced Motion shipped in P3.1 with real consumers, and adding motion for its own sake to a screen set this pass spent its time calming is the wrong trade. Registered as deliberately not done rather than silently skipped.
+- **P3.3 Contextual help** — DONE. The F1 sheet's build column was seven fragments ("SOURCE VS REGION", "EACH HAS A COST") that name a subject without saying anything; it is seven sentences now, and the screen list, the FORGE's four jobs and THE IDEA are current ("ONE HUNTER", and only a boss drops a chest).
 - **P3.4 Final responsive pass** — every screen at 720/1080/1440 through the real capture; the §101 deliverable written to `REPORT.md`.
 
 ## 3. Laws applied to every checkpoint

@@ -5567,15 +5567,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // trait spine sells a fifth, and "3 KEYSTONE SOCKETS" when a player starts with ONE and buys the
         // others. Both numbers now come from the live loadout, so the help cannot be wrong about what
         // the player actually has.
+        // SENTENCES, NOT FRAGMENTS. This column used to be seven half-lines — "SOURCE VS REGION",
+        // "EACH HAS A COST" — which name a subject without saying anything about it. A player opening
+        // the only page that explains the game deserves a sentence per row.
         var build = new (string Key, string What)[]
         {
-            ($"{_loadout.SkillCapacity}", "SKILL SLOTS"),
-            ("", "STYLE  ·  SKILL  ·  VARIATION  ·  REINFORCEMENTS"),
-            ($"{_loadout.KeystoneCapacity}", "KEYSTONE SOCKETS"),
-            ("", "EACH HAS A COST"),
-            ("", "TRAITS (P) SELL MORE OF BOTH"),
-            ("", "A SKILL IS HOW YOU FIGHT"),
-            ("", "SOURCE VS REGION"),
+            ($"{_loadout.SkillCapacity}", "SKILL SLOTS — EACH HOLDS ONE SKILL"),
+            ("", "A SKILL IS A STYLE, A VARIATION AND ITS REINFORCEMENTS"),
+            ($"{_loadout.KeystoneCapacity}", "KEYSTONE SOCKETS — EACH KEYSTONE COSTS SOMETHING"),
+            ("", "TRAITS (P) SELL MORE SLOTS AND MORE SOCKETS"),
+            ("", "ONE ACTION AT A TIME — TEMPO DECIDES HOW OFTEN"),
+            ("", "MIGHT IS YOUR BASIC ATTACK, RESONANCE IS YOUR SKILLS"),
+            ("", "A SKILL'S SOURCE IS ITS ELEMENT, NOT THE REGION'S"),
         };
         // Every tile on the nav rail, plus the two keys that open nothing on it. HUNT and ROSTER were
         // missing outright — ROSTER is ten characters and a quest chain, and nothing in the game told
@@ -5591,7 +5594,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             ("B", "BUILD — CHOOSE YOUR SKILLS"),
             ("E", "MASTERY — HOW YOUR SKILLS WORK"),
             ("K", "VAULT — CHESTS YOU HAVE NOT OPENED"),
-            ("F", "FORGE — CRAFT & CHESTS"),
+            ("F", "FORGE — UPGRADE, RE-ROLL, SOCKET, SALVAGE"),
             ("A", "WARREN — WORK WHILE YOU ARE AWAY"),
             ("W", "MAP — WHERE TO HUNT"),
             ("P", "TRAITS — PERMANENT BONUSES"),
@@ -5622,9 +5625,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         Text("THE IDEA:", 176, 620, Gold);
         WrapText(
-            "ONE CHAMPION, YOUR BUILD. IT FIGHTS ON ITS OWN, ON EVERY SCREEN, EVEN WHILE THE GAME IS " +
-            "CLOSED. EACH WAVE IT CLEARS PAYS GLEAM AT ONCE. EVERY 5TH WAVE IS A BOSS. IT MAY DROP A CHEST. " +
-            "WHEN IT FALLS, IT GETS UP AND GOES AGAIN. YOU LOSE NOTHING.",
+            "ONE HUNTER, YOUR BUILD. IT FIGHTS ON ITS OWN, ON EVERY SCREEN, EVEN WHILE THE GAME IS " +
+            "CLOSED. EACH WAVE IT CLEARS PAYS GLEAM AT ONCE. EVERY 5TH WAVE IS A BOSS, AND ONLY A BOSS " +
+            "DROPS A CHEST. WHEN IT FALLS, IT GETS UP AND GOES AGAIN. YOU LOSE NOTHING.",
             176, 664, 900, Bone);
         WrapText(
             $"SPEND GLEAM ON TRAINING (V) TO GROW STRONGER. REACH WAVE {ConquerWaveDepth} TO CONQUER A REGION AND UNLOCK THE NEXT.",

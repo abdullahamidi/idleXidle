@@ -483,6 +483,9 @@ public sealed class HuntScreen
     public int Deepest => _descent.Deepest;
 
     private readonly List<Callout> _callouts = new();
+
+    /// <summary>Batch indices whose damage has been summed into an earlier blow's number (§21).</summary>
+    private readonly HashSet<int> _summed = new();
     /// <summary>Which column a callout stacks in. Two columns that never collide must not push each other.</summary>
     private enum CalloutLane { Champion, Enemy }
 
@@ -1058,7 +1061,7 @@ public sealed class HuntScreen
     /// <param name="slot">The creature struck — the column the number rises from.</param>
     /// <param name="crit">A Trap's bite: gold, larger, and it lingers.</param>
     /// <param name="skill">A cast's hit, drawn a size up from the auto-swing's.</param>
-    private void SpawnDamage(int amount, int slot, bool crit, bool skill)
+    private void SpawnDamage(int amount, int slot, bool crit, bool skill, int hits = 1)
     {
         if (!ShowDamageNumbers) return;   // settings: DAMAGE NUMBERS off
         // ABOVE the creature's health bar, and STACKED. Numbers used to spawn at EnemyBox.Y + 8..40,
@@ -1077,7 +1080,9 @@ public sealed class HuntScreen
         // if it is one.
         _callouts.Add(new Callout
         {
-            Text = crit ? $"-{amount:N0} CRITICAL" : $"-{amount:N0}",
+            // The count rides on the number rather than replacing it: "-635 ×5" says both what the
+            // creature lost and that one cast did it.
+            Text = (crit ? $"-{amount:N0} CRITICAL" : $"-{amount:N0}") + (hits > 1 ? $" ×{hits}" : ""),
             Color = crit ? Gold : skill ? UiKit.Vellum : Bone,
             // Over the creature it struck, not the row's centre: in a swarm the row centre is the gap
             // between two creatures, and a number there names neither of them.
@@ -1168,6 +1173,9 @@ public sealed class HuntScreen
         UpdateChampionClip();
 
         var batch = _replay.Advance(_playheadMs);
+        // Which blows in THIS batch have already been folded into another's number. A field, not a
+        // local: this runs every frame and §93 forbids a per-frame allocation.
+        _summed.Clear();
         // The beat a cast lands on. A Skill event precedes the Strike events its hit produces, at the
         // same timestamp, so a Strike stamped with the cast's beat is that cast's blow — graded a size
         // up, and gold when the cast was a Trap. Anything else at another beat is the auto-swing.
@@ -1224,7 +1232,29 @@ public sealed class HuntScreen
                         if (e.AtMs != _auraTotalMs) { FlushAuraTotal(); _auraTotalMs = e.AtMs; }
                         _auraTotal += e.Amount;
                     }
-                    else if (e.Amount > 0) SpawnDamage(e.Amount, e.Slot, crit: e.FromSkill && e.AtMs == trapAtMs, skill: e.FromSkill && e.AtMs == skillAtMs);
+                    else if (e.Amount > 0)
+                    {
+                        // ONE CREATURE, ONE INSTANT, ONE NUMBER (brief §21). A multi-hit cast emits a
+                        // Strike per hit at the SAME millisecond, so five hits on one creature printed
+                        // five numbers up one column and the player read a flurry instead of a total.
+                        // They are summed here and drawn as "-635 ×5" — the total is what the fight did,
+                        // and the count is what makes it legible as one cast rather than one hit.
+                        var crit = e.FromSkill && e.AtMs == trapAtMs;
+                        var skill = e.FromSkill && e.AtMs == skillAtMs;
+                        var hits = 1;
+                        var total = e.Amount;
+                        for (var kj = bi + 1; kj < batch.Count; kj++)
+                        {
+                            var o = batch[kj];
+                            if (o.AtMs != e.AtMs) break;              // the batch is in time order
+                            if (o.Kind != BattleEventKind.Strike || o.Slot != e.Slot || o.Amount <= 0) continue;
+                            if (o.FromSkill != e.FromSkill) continue; // a swing and a cast stay separate
+                            total += o.Amount;
+                            hits++;
+                            _summed.Add(kj);        // its own turn still flashes and sounds; it draws no number
+                        }
+                        if (!_summed.Contains(bi)) SpawnDamage(total, e.Slot, crit, skill, hits);
+                    }
                     // The creature that took it FLASHES — but ONLY for a real blow, and only once its last
                     // flash has finished. An aura ticks twice a second and the swing lands every beat, and
                     // together they strobed the pack ("the enemy blinks like a disco ball", playtest
