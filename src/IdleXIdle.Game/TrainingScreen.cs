@@ -253,10 +253,11 @@ public sealed class TrainingScreen
     public void Draw(SpriteBatch b, Point mouse, Hunter hunter, bool clicked = false)
     {
         ArgumentNullException.ThrowIfNull(hunter);
-        // INVERT THE OVERLAY INSET BEFORE ANY HIT-TEST. Every rect on this screen is authored in
-        // 1920x1080 and drawn through Game1.BeginOverlayCanvas; the cursor arrives in 480x270 canvas
-        // space. check_mouse_space.py enforces it.
-        var hit = Game1.ToOverlay(mouse);
+        // THE CURSOR ARRIVES IN PAGE SPACE — the space every rect here is authored in — mapped once by
+        // the host (Game1.PageCursor through Core's PageFrame). This screen once forgot to invert the
+        // old canvas-space cursor and its TRAIN buttons were unreachable; check_mouse_space.py now
+        // refuses any screen that converts at all.
+        var hit = mouse;
         _tip = null;
 
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xD8));

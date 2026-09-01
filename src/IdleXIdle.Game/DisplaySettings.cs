@@ -125,13 +125,9 @@ public static class Display
         return new Rectangle(r.X, r.Y, r.Width, r.Height);
     }
 
-    /// <summary>Screen point → canvas point, accounting for the letterbox origin.</summary>
-    public static Point ToCanvas(Point screen, Rectangle present)
-    {
-        var (x, y) = CanvasFit.ToCanvas(screen.X, screen.Y,
-            new FitRect(present.X, present.Y, present.Width, present.Height));
-        return new Point(x, y);
-    }
+    // ToCanvas(Point, Rectangle) — the 480-space cursor mapping — was deleted 2026-09-01: the cursor is
+    // mapped once in Game1.ReadCursor through Core.Presentation.PageFrame, in floating point, and no
+    // second cursor space exists to disagree with it.
 
     /// <summary>
     /// Display prefs live in their OWN file, not in the save.

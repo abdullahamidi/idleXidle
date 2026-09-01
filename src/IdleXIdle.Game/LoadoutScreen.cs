@@ -296,7 +296,7 @@ public sealed class LoadoutScreen
     // ── UPDATE ──────────────────────────────────────────────────────────────────────────────────────────
     public void Update(Point mouse, bool clicked, bool held, int wheel)
     {
-        var hit = Game1.ToOverlay(mouse);
+        var hit = mouse;
         var skills = Loadout.Skills;
         var known = Known;
         LayoutRows();
@@ -579,7 +579,7 @@ public sealed class LoadoutScreen
 
     public void Draw(SpriteBatch b, Point mouse, bool clicked)
     {
-        var hit = Game1.ToOverlay(mouse);
+        var hit = mouse;
         _tip = null;
         LayoutRows();
         TickEffects();

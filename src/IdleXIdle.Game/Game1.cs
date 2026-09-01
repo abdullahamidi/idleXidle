@@ -14,6 +14,7 @@ using IdleXIdle.Core.Expeditions;
 using IdleXIdle.Core.Forging;
 using IdleXIdle.Core.Loot;
 using IdleXIdle.Core.Persistence;
+using IdleXIdle.Core.Presentation;
 using IdleXIdle.Core.Prestige;
 using IdleXIdle.Core.Progression;
 using IdleXIdle.Core.Quests;
@@ -1171,7 +1172,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _warrenScreen.GleamOwned = _hunter.Gleam;
         _warrenScreen.DustOwned = _dust.MemoryDust;
-        _warrenScreen.Draw(_batch, CanvasMouse, MouseClicked);
+        _warrenScreen.Draw(_batch, PageCursor, MouseClicked);
 
         if (_warrenScreen.ConsumeUpgrade() is { } kind
             && _warren.CanUpgrade(kind, _hunter.Gleam, _dust.MemoryDust))
@@ -1451,6 +1452,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         _keys = Keyboard.GetState();
         _mouse = Mouse.GetState();
+        ReadCursor();
 
         // Latch the click EDGE once per frame, here, before anything reads it. The edge lives for
         // exactly one Update, and _prevMouse is overwritten in Latch() at the end of Update — so a
@@ -2655,7 +2657,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // NOT also skip — a click that sells an item and dismisses the card that said so is the
             // worst of both. Everything else still skips, for everyone who does not care.
             //
-            // ChromeMouse, not CanvasMouse: the reveal is drawn in BeginCanvas(1), true 1920x1080.
+            // ChromeMouse, not PageCursor: the reveal is drawn in BeginCanvas(1), true 1920x1080.
             var onRevealButton = revealClick && _forge.RevealWantsClick(ChromeMouse);
             _forge.RevealInput(ChromeMouse, onRevealButton);
             if (!onRevealButton && (revealClick || Pressed(Keys.Space) || Pressed(Keys.Enter)))
@@ -2808,7 +2810,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _masteryScreen.Mastery = _mastery;
             _masteryScreen.Power = _hunter.PowerRating;   // the Build screen has no Hunter ref of its own
             _masteryScreen.Level = _hunter.HunterLevel;
-            _masteryScreen.Update(ScreenKeys, _prevKeys, CanvasMouse, MouseClicked,
+            _masteryScreen.Update(ScreenKeys, _prevKeys, PageCursor, MouseClicked,
                                 _mouse.LeftButton == ButtonState.Pressed, MouseWheel, _dust, MouseRightClicked);
             if (_masteryScreen.Dirty) { _masteryScreen.ClearDirty(); Save(); }
 
@@ -2821,7 +2823,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _gear.Loadout = _loadout;
             _gear.Mastery = _mastery;
             _gear.Tree = _dust;
-            _gear.Update(ScreenKeys, _prevKeys, CanvasMouse, MouseClicked, MouseRightClicked, MouseWheel, _hunter);
+            _gear.Update(ScreenKeys, _prevKeys, PageCursor, MouseClicked, MouseRightClicked, MouseWheel, _hunter);
 
             // ── THE ITEM MENU'S VERBS. Three of the four live in the Forge, so the gear screen names
             //    what it wants and the host carries the player there, already pointed at the item.
@@ -2932,7 +2934,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _vault.TraderStock = _traderStock;
             _vault.TraderBought = _traderBought;
 
-            _vault.Update(dt, _forge.UnopenedChests, CanvasMouse, MouseClicked, MouseWheel);
+            _vault.Update(dt, _forge.UnopenedChests, PageCursor, MouseClicked, MouseWheel);
 
             // A stall purchase: pay in materials, and the good goes to the FORGE bench like any
             // other loot — the vault shows chests, not items.
@@ -2988,7 +2990,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             //  are the Map's, the Vault's and the Mastery tree's numbers, and none of them moves
             //  when you train.)
             _training.SkillLevels = _skillProgress;   // the live screen resolved a build without them
-            _training.Update(ScreenKeys, _prevKeys, CanvasMouse, MouseClicked, MouseWheel, _hunter);
+            _training.Update(ScreenKeys, _prevKeys, PageCursor, MouseClicked, MouseWheel, _hunter);
             if (_training.Dirty) { _training.ClearDirty(); Save(); }
             Latch(gameTime);
             return;
@@ -3027,7 +3029,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _loadoutScreen.RegionName = Regions.Get(_activeRegion).Name;
             _loadoutScreen.ChosenStyle = _mastery.Affinity();
             _loadoutScreen.MasteryTaken = _mastery.Taken;
-            _loadoutScreen.Update(CanvasMouse, MouseClicked, _mouse.LeftButton == ButtonState.Pressed, MouseWheel);
+            _loadoutScreen.Update(PageCursor, MouseClicked, _mouse.LeftButton == ButtonState.Pressed, MouseWheel);
             if (_loadoutScreen.Dirty) { _loadoutScreen.ClearDirty(); Save(); }
             // CONSUMED HERE, where the Weave actually runs. It was read inside `if (_showMastery)`, and
             // _showMastery and _showLoadout are mutually exclusive on every path that opens this screen —
@@ -3043,7 +3045,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _roster.Progress = QuestSnapshot();
             _roster.Mastery = _mastery;   // so the inspector can say a starting skill is ALREADY KNOWN
             _roster.Hunter = _hunter;     // so it can count the worn pieces a switch would shed
-            _roster.Update(CanvasMouse, MouseClicked, _characters);
+            _roster.Update(PageCursor, MouseClicked, _characters);
             // THE SWITCH ANNOUNCES ITSELF on the channel every other arrival uses, instead of a stray
             // line printed inside the panel. Polled in Update, not Draw, so nothing fires from a draw
             // pass; the one-frame delay is invisible.
@@ -3057,7 +3059,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_showTraits)
         {
             // HELD, as well as clicked: the tree is a free canvas now, and a held button drags it.
-            _traits.Update(ScreenKeys, CanvasMouse, MouseClicked, _mouse.LeftButton == ButtonState.Pressed,
+            _traits.Update(ScreenKeys, PageCursor, MouseClicked, _mouse.LeftButton == ButtonState.Pressed,
                              MouseWheel, _dust, dt);
             // Taking a trait is permanent and there is no respec, so it is worth a sound and worth
             // writing to disk immediately. The screen owns neither: it hands back a cue the same way
@@ -3097,7 +3099,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // dismissed an unlock panel also SOLD the focused (rarest-first!) bag item behind it, and
             // S/D/J kept working under the settings panel and the reveal. MouseClicked already carries
             // these gates; the keys did not. (Adversarial review, pass four.)
-            _forge.Update(gameTime, ScreenKeys, CanvasMouse, MouseClicked, MouseWheel, _hunter,
+            _forge.Update(gameTime, ScreenKeys, PageCursor, MouseClicked, MouseWheel, _hunter,
                           inputLocked: _swallowInput || _showSettings || WelcomeUp || _forge.RevealActive);
             // The dialog's "don't ask me again" writes through to the prefs file the moment it is used.
             if (_forge.PrefsDirty) { _forge.PrefsDirty = false; _askBeforeScrap = _forge.AskBeforeScrap; SaveDisplay(); }
@@ -4260,53 +4262,94 @@ public class Game1 : Microsoft.Xna.Framework.Game
         return false;
     }
 
-    /// <summary>The mouse position in 480×270 canvas space (the backbuffer is upscaled 3×).</summary>
-    /// <summary>Screen → canvas, through the letterbox. Never divide by a bare scale again.</summary>
-    /// <remarks>
-    /// RH_SHOT_MOUSE=x,y forces the canvas cursor to a fixed point, so a screenshot run can pose a
-    /// hover-only affordance (a tooltip, a hot row) that a real cursor would otherwise have to be over.
-    /// </remarks>
-    private Point CanvasMouse =>
-        Environment.GetEnvironmentVariable("RH_SHOT_MOUSE") is { } sm
-        && sm.Split(',') is [var sx, var sy]
-        && int.TryParse(sx, out var mx) && int.TryParse(sy, out var my)
-            ? new Point(mx, my)
-            : Display.ToCanvas(new Point(_mouse.X, _mouse.Y), _present);
+    // ── THE CURSOR: one transform, read once a frame ───────────────────────────────────────────
+    //
+    // Core.Presentation.PageFrame is the exact inverse of the matrices the frame is drawn through, in
+    // floating point; the ONLY rounding is the final floor to a page (or canvas) pixel, which is where
+    // a drawn rectangle's edge is. Until 2026-09-01 the menu screens received a cursor floored to a
+    // 480×270 canvas, multiplied by four and divided by the page scale — a ~4.5 page-pixel grid on every
+    // hover and click ("mouse quantisation across eleven screens", UX V2 REPORT §4). The chrome had
+    // been mapped at full resolution since the day the bug was named; the screens had not. Now every
+    // consumer reads one of the properties below, computed in ReadCursor() at the top of Update, and
+    // no screen converts anything (tools/check_mouse_space.py refuses one that tries).
+
+    /// <summary>This frame's canvas ↔ screen ↔ page geometry. Rebuilt by <see cref="RecomputePresent"/>.</summary>
+    private PageFrame _frame = new(new FitRect(0, 0, CanvasWidth * ArtScale, CanvasHeight * ArtScale),
+                                   CanvasWidth * ArtScale, CanvasHeight * ArtScale, BaseOverlayScale, OverlayLeft);
+
+    /// <summary>The cursor in PAGE space, floored once to the page pixel — what every inset menu screen hit-tests with.</summary>
+    internal static Point PageCursor { get; private set; } = new(-1, -1);
+
+    /// <summary>The cursor in PAGE space as a float — the exact inverse of the overlay matrix, for drags and anything sub-pixel.</summary>
+    internal static Vector2 PageMouseF { get; private set; }
 
     /// <summary>
-    /// The mouse in TRUE 1920×1080 space — the chrome's own coordinates.
+    /// The cursor in TRUE 1920×1080 canvas space — the chrome's own coordinates, and the fight's.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// The shared chrome (currency pills, hex nav, title, settings modal) authors in 1920 coords at
-    /// scale 1, so its hit-tests must compare against a 1920-space cursor. <see cref="CanvasMouse"/>
-    /// stays 480-space for the screens that still author there.
-    /// </para>
-    /// <para>
-    /// MAPPED AT FULL RESOLUTION rather than as <c>CanvasMouse × 4</c>, which is what it was: floor to
-    /// 480-space and multiply back and the chrome cursor can only ever land on a multiple of 4, so
-    /// every hit-test in the chrome was quantised to a 4-px grid it never asked for. Same letterbox
-    /// arithmetic as Core's ToCanvas, at the scale this space actually uses — and the floor is toward
-    /// negative infinity for the same reason it is there: a point one pixel LEFT of the canvas must map
-    /// outside it, not onto its leftmost column.
-    /// </para>
-    /// <para>
-    /// NO CLAMP ON THE SCALE. Core clamps at 1 because a 480-wide canvas is never presented smaller
-    /// than 480; a 1920-wide one is routinely presented smaller — a 1280×720 window shows it at 0.667.
-    /// </para>
+    /// The shared chrome (currency pills, hex nav, title, settings modal) and the fight author in canvas
+    /// coords at scale 1, so their hit-tests compare against this. Floored toward negative infinity for
+    /// the same reason the page cursor is: a point one pixel LEFT of the canvas must map outside it, not
+    /// onto its leftmost column. No clamp on the scale — a 1920-wide canvas is routinely presented smaller.
     /// </remarks>
-    private Point ChromeMouse
+    internal static Point ChromeMouse { get; private set; } = new(-1, -1);
+
+    /// <summary>The chrome cursor as a float.</summary>
+    internal static Vector2 ChromeMouseF { get; private set; }
+
+    /// <summary>
+    /// The rig can POSE the cursor so a screenshot run can photograph a hover-only affordance:
+    /// RH_SHOT_PAGE_MOUSE=x,y in page space (exact), or RH_SHOT_MOUSE=x,y in the rig's historical
+    /// 480×270 unit (×4 = canvas). Parsed once.
+    /// </summary>
+    private static readonly (bool Page, float X, float Y)? PosedCursor = ParsePosedCursor();
+
+    private static (bool Page, float X, float Y)? ParsePosedCursor()
     {
-        get
+        if (Environment.GetEnvironmentVariable("RH_SHOT_PAGE_MOUSE") is { } pm && ParsePair(pm, out var px, out var py))
+            return (true, px, py);
+        if (Environment.GetEnvironmentVariable("RH_SHOT_MOUSE") is { } sm && ParsePair(sm, out var mx, out var my))
+            return (false, mx * ArtScale, my * ArtScale);
+        return null;
+
+        static bool ParsePair(string text, out float x, out float y)
         {
-            // The posed cursor is authored in canvas coords, so it keeps the ×4 route it was written for.
-            if (Environment.GetEnvironmentVariable("RH_SHOT_MOUSE") is not null)
-                return new Point(CanvasMouse.X * 4, CanvasMouse.Y * 4);
-            var scale = _present.Width / (float)(CanvasWidth * ArtScale);
-            if (scale <= 0f) return new Point(CanvasMouse.X * 4, CanvasMouse.Y * 4);
-            return new Point((int)MathF.Floor((_mouse.X - _present.X) / scale),
-                             (int)MathF.Floor((_mouse.Y - _present.Y) / scale));
+            x = y = 0f;
+            var parts = text.Split(',');
+            return parts.Length == 2
+                && float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out x)
+                && float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out y);
         }
+    }
+
+    /// <summary>Map the raw mouse through this frame's geometry, once. Called at the top of Update.</summary>
+    private void ReadCursor()
+    {
+        (float X, float Y) chrome, page;
+        if (PosedCursor is { } posed)
+        {
+            if (posed.Page)
+            {
+                page = (posed.X, posed.Y);
+                chrome = (posed.X * OverlayScale + OverlayLeft, posed.Y * OverlayScale);
+            }
+            else
+            {
+                chrome = (posed.X, posed.Y);
+                page = ((posed.X - OverlayLeft) / OverlayScale, posed.Y / OverlayScale);
+            }
+        }
+        else
+        {
+            chrome = _frame.ScreenToCanvas(_mouse.X, _mouse.Y);
+            page = _frame.ScreenToPage(_mouse.X, _mouse.Y);
+        }
+        ChromeMouseF = new Vector2(chrome.X, chrome.Y);
+        PageMouseF = new Vector2(page.X, page.Y);
+        var (cx, cy) = PageFrame.Floor(chrome);
+        ChromeMouse = new Point(cx, cy);
+        var (px, py) = PageFrame.Floor(page);
+        PageCursor = new Point(px, py);
     }
 
     /// <summary>
@@ -4365,6 +4408,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         _present = Display.PresentFit(_graphics.PreferredBackBufferWidth, _graphics.PreferredBackBufferHeight);
         ApplyUiScale();
+        _frame = new PageFrame(new FitRect(_present.X, _present.Y, _present.Width, _present.Height),
+                               CanvasWidth * ArtScale, CanvasHeight * ArtScale, OverlayScale, OverlayLeft);
+        ReadCursor();
     }
 
     /// <summary>Wheel notches this frame: + = scroll up/away, - = down/toward. Latched in Update.</summary>
@@ -4488,35 +4534,35 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // Batch B — the active screen. Menu screens draw through the overlay inset (see OverlayScale).
         if (OverlayActive) BeginOverlayCanvas(); else BeginCanvas(ScreenScale());
-        if (_showForge) _forge.Draw(_batch, _hunter, CanvasMouse, MouseClicked, MouseRightClicked);
+        if (_showForge) _forge.Draw(_batch, _hunter, PageCursor, MouseClicked, MouseRightClicked);
         else if (_showWorld) DrawWorld();
-        else if (_showTraits) _traits.Draw(_batch, _dust, CanvasMouse, MouseClicked);
+        else if (_showTraits) _traits.Draw(_batch, _dust, PageCursor, MouseClicked);
         else if (_showRoster)
         {
             _roster.Progress = QuestSnapshot();
             _roster.Mastery = _mastery;
             _roster.Hunter = _hunter;
-            _roster.Draw(_batch, _characters, CanvasMouse, MouseClicked);
+            _roster.Draw(_batch, _characters, PageCursor, MouseClicked);
         }
-        else if (_showVault) _vault.Draw(_batch, _forge.UnopenedChests, CanvasMouse, MouseClicked);
-        else if (_showLoadout) _loadoutScreen.Draw(_batch, CanvasMouse, MouseClicked);
+        else if (_showVault) _vault.Draw(_batch, _forge.UnopenedChests, PageCursor, MouseClicked);
+        else if (_showLoadout) _loadoutScreen.Draw(_batch, PageCursor, MouseClicked);
         else if (_showWarren) DrawWarren();
-        else if (_showMastery) _masteryScreen.Draw(_batch, CanvasMouse, _dust);
-        else if (_showGear) _gear.Draw(_batch, CanvasMouse, _hunter);
+        else if (_showMastery) _masteryScreen.Draw(_batch, PageCursor, _dust);
+        else if (_showGear) _gear.Draw(_batch, PageCursor, _hunter);
         else if (_showTraining)
         {
-            _training.Draw(_batch, CanvasMouse, _hunter, MouseClicked);
+            _training.Draw(_batch, PageCursor, _hunter, MouseClicked);
 
             // Gleam is one of the three payouts a descent makes, and this is the layer it buys. The model
             // (geometric cost, rank cap) has always been here; until now nothing in the game called it.
             if (_training.ConsumeTrain() is { } stat && _hunter.Train(stat)) { _sound.Play("sfx_click", 0.8f); Save(); }
             if (_training.ConsumeReset() && _hunter.ResetTraining()) { _sound.Play("sfx_forge", 0.8f); Save(); }
         }
-        else _expedition.Draw(_batch, CanvasMouse, MouseClicked, Regions.Get(_activeRegion).Name, EnemyArtFor(_activeRegion), _bootTimer > 0f || WelcomeUp);
+        else _expedition.Draw(_batch, ChromeMouse, MouseClicked, Regions.Get(_activeRegion).Name, EnemyArtFor(_activeRegion), _bootTimer > 0f || WelcomeUp);
 
         // The LOG draws over everything, including the nav rail: it is a full-screen read, and the one
         // overlay a player opens to think rather than to act.
-        _expedition.DrawLog(_batch, CanvasMouse, MouseClicked);
+        _expedition.DrawLog(_batch, ChromeMouse, MouseClicked);
         _batch.End();
 
         // Batch C — the shared overlays (pills, nav, help/settings, boot toast), authored in true 1920 coords.
@@ -5489,7 +5535,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private void UpdateWorld()
     {
         PushMapState();
-        _mapScreen.Update(ScreenKeys, _prevKeys, CanvasMouse, MouseClicked);
+        _mapScreen.Update(ScreenKeys, _prevKeys, PageCursor, MouseClicked);
         ConsumeMapRequests();
     }
 
@@ -5555,7 +5601,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private void DrawWorld()
     {
         PushMapState();
-        _mapScreen.Draw(_batch, CanvasMouse, MouseClicked);
+        _mapScreen.Draw(_batch, PageCursor, MouseClicked);
         ConsumeMapRequests();
     }
 
@@ -5903,16 +5949,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>Canvas x the inset content starts at.</summary>
     internal const float OverlayLeft = NavRailWidth;
 
-    /// <summary>
-    /// The 480-space cursor, mapped into an inset screen's own 1920-space coordinates.
-    /// </summary>
-    /// <remarks>
-    /// Menu screens hit-test with <c>mouse * 4</c>. Under the inset that lands 180px right of where the
-    /// player is actually pointing, so every one of them must invert the same transform its drawing goes
-    /// through — hence one shared helper rather than the multiplication repeated per screen.
-    /// </remarks>
-    internal static Point ToOverlay(Point canvasMouse)
-        => new((int)((canvasMouse.X * 4 - OverlayLeft) / OverlayScale), (int)(canvasMouse.Y * 4 / OverlayScale));
     // DERIVED from the table, not a literal. It was 1080/8 with a comment saying "eight items fill the
     // full height exactly", which was true right up until the roster added a ninth and the last tile
     // hung 135px off the bottom of the screen.

@@ -454,7 +454,7 @@ public sealed class TraitsScreen
         _time += dt;
 
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
-        var over = Game1.ToOverlay(mouse);
+        var over = mouse;
 
         // ── THE CAMERA — the mastery tree's, verbatim in spirit. ──────────────────────────────
         if (wheel != 0 && View.Contains(over))
@@ -566,7 +566,7 @@ public sealed class TraitsScreen
     public void Draw(SpriteBatch b, MemoryDustTree tree, Point mouse, bool clicked)
     {
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
-        var hit = Game1.ToOverlay(mouse);
+        var hit = mouse;
 
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xC0));
 

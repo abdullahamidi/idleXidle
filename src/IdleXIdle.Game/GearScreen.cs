@@ -194,7 +194,7 @@ public sealed class GearScreen
     // ── UPDATE ──────────────────────────────────────────────────────────────────────────────────────────
     public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, bool rightClicked, int wheel, Hunter hunter)
     {
-        var hit = Game1.ToOverlay(mouse);
+        var hit = mouse;
         var list = Filtered(hunter);
 
         // The selection is adopted only when the item is GONE from the bag, not merely off-tab.
@@ -349,7 +349,7 @@ public sealed class GearScreen
     public void Draw(SpriteBatch b, Point mouse, Hunter hunter)
     {
         _anim += 1f / 60f;
-        var hit = Game1.ToOverlay(mouse);
+        var hit = mouse;
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xD8));
 
         _ui.TextCenterBig(b, "GEAR", UiKit.PageCenterX, 24, Gold, UiTypography.ScreenTitle, TextFace.Display);

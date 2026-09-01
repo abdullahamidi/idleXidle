@@ -854,10 +854,11 @@ public sealed class ForgeScreen
 
 
         // THE CURSOR, IN THE SPACE THE RECTANGLES ARE AUTHORED IN. Every rect on this screen is written
-        // in 1920x1080 and drawn through Game1's overlay inset; the incoming cursor is in 480x270 canvas
-        // space. Draw already converts (see the twin below); Update did not, which is half of why the bag
-        // was unusable — see the note on the wheel.
-        var overlay = Game1.ToOverlay(mouse);
+        // in 1920x1080 page space, and since 2026-09-01 the host hands the cursor in that same space
+        // (Game1.PageCursor, mapped once through Core's PageFrame) — nothing to convert here. Update once
+        // hit-tested a cursor in another space, which is half of why the bag was unusable — see the
+        // note on the wheel.
+        var overlay = mouse;
 
         // THE BAG'S WHEEL. It once sat below a mode return and tested the raw cursor against a
         // 1920-space rect — the full pathology is in 98ca957's message. The rule it settled on stands:
@@ -1341,7 +1342,7 @@ public sealed class ForgeScreen
     {
         // Every rect is authored ×4 (1920×1080) and rendered at scale 1, so hit-tests take the mouse ×4.
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
-        var hit = Game1.ToOverlay(mouse);
+        var hit = mouse;
         _hovered = null;                 // re-established by whichever surface finds the pointer over an item
         if (_devPosePending) ApplyDevPose(hunter);
 

@@ -167,7 +167,7 @@ public sealed class RosterScreen
     public void Update(Point mouse, bool clicked, CharacterState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        var hit = Game1.ToOverlay(mouse);
+        var hit = mouse;
 
         foreach (var cell in CharacterRoster.Grid)
             if (UiKit.ClickedIn(Card(cell), hit, clicked))
@@ -195,7 +195,7 @@ public sealed class RosterScreen
         ArgumentNullException.ThrowIfNull(state);
         _anim += 1f / 60f;
         _tip = null;
-        var hit = Game1.ToOverlay(mouse);
+        var hit = mouse;
 
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xC0));
         _ui.TextCenterBig(b, "ROSTER", UiKit.PageCenterX, 24, Gold, UiTypography.ScreenTitle, TextFace.Display);

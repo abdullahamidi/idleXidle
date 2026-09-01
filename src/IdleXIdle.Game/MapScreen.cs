@@ -341,7 +341,7 @@ public sealed class MapScreen
     public void Draw(SpriteBatch b, Point mouse, bool clicked)
     {
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
-        var hit = Game1.ToOverlay(mouse);
+        var hit = mouse;
 
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xB0));
         _ui.TextCenterBig(b, "MAP", UiKit.PageCenterX, 24, UiInk.Accent, UiTypography.ScreenTitle, TextFace.Display);

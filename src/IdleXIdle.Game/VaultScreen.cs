@@ -335,7 +335,7 @@ public sealed class VaultScreen
         _anim += dt;
 
         // Authored 1920, cursor arrives 480 — the same one line every inset screen carries.
-        var hit = Game1.ToOverlay(mouse);
+        var hit = mouse;
 
         // One card per STACK of identical chests (ChestDossiers.Stacked); the grid, the hover and the
         // cursor all count stacks. `sorted` is the stacks' samples in best-first order.
@@ -383,7 +383,7 @@ public sealed class VaultScreen
         ArgumentNullException.ThrowIfNull(b);
         ArgumentNullException.ThrowIfNull(chests);
 
-        var hit = Game1.ToOverlay(mouse);
+        var hit = mouse;
 
         var stacks = ChestDossiers.Stacked(chests);
         var sorted = stacks.Select(st => st.Sample).ToList();

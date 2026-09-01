@@ -1484,9 +1484,9 @@ public sealed class HuntScreen
     {
         _enemyArt = enemyArt;
         _vfx.Scale = 1;   // this screen authors at canvas scale 1, so the VFX overlay draws at scale 1 too
-        // The host hands us the mouse in 480-logical space; lift it into this screen's 1920 space so every
-        // hit-test (the only clickables are the BATTLE SPEED buttons) lands on the drawn rects.
-        var hit = new Point(mouse.X * 4, mouse.Y * 4);
+        // The host hands us the cursor in this screen's own 1920 space (Game1.ChromeMouse, mapped once at
+        // full resolution), so the log button, the utility doors and the fall plate hit-test it as is.
+        var hit = mouse;
         if (_run is null || _replay is null || _champ is null) return;
 
         // The dev boss fixture is a STATIC verification shot — clear transient combat churn (death smoke,
@@ -2086,10 +2086,10 @@ public sealed class HuntScreen
     {
         if (!_logOpen) return;
 
-        // The host hands us the mouse in 480-logical space; lift it into this screen's 1920 space. Safe
-        // unconditionally because opening the log closes every overlay screen, so this batch is never
-        // under the overlay inset transform.
-        var hit = new Point(mouse.X * 4, mouse.Y * 4);
+        // The host hands us the cursor in true 1920 space (Game1.ChromeMouse). Correct unconditionally
+        // because opening the log closes every overlay screen, so this batch is never under the overlay
+        // inset transform.
+        var hit = mouse;
 
         _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10, 0xE6));
 

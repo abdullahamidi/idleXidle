@@ -450,7 +450,7 @@ public sealed class MasteryScreen
 
         if (_specNodeId is null)
         {
-            var over = Game1.ToOverlay(mouse);
+            var over = mouse;
 
             if (wheel != 0 && TreeView.Contains(over) && !OverDock(over))
                 ZoomAt(over, wheel > 0 ? 1.16f : 1f / 1.16f);
@@ -494,7 +494,7 @@ public sealed class MasteryScreen
         // Everything under the gate assumes a left click, so this runs first rather than widening it.
         if (rightClicked && !_draggedThisPress && _specNodeId is null)
         {
-            var rhit = Game1.ToOverlay(mouse);
+            var rhit = mouse;
             if (OverDock(rhit)) return;
             foreach (var node in MasteryCatalog.Nodes)
             {
@@ -517,7 +517,7 @@ public sealed class MasteryScreen
         // also spent a point on whatever node the pointer happened to stop over.
         if (_draggedThisPress) { _draggedThisPress = false; return; }
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
-        var hit = Game1.ToOverlay(mouse);
+        var hit = mouse;
 
         // ── THE ATTUNEMENT swallows the click while it is open. Seal keeps the node; undo is a
         //    real Refund, so backing out costs nothing — deliberation, not punishment. ──────────
@@ -625,7 +625,7 @@ public sealed class MasteryScreen
         Tree = tree;
         _hoverNodeId = null;
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
-        var hit = Game1.ToOverlay(mouse);
+        var hit = mouse;
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xD8));
 
         DrawEditor(b, hit, tree);
