@@ -63,11 +63,11 @@ public class AffinityVowBuybackTest
         Build Casting(Vow? vow)
         {
             var b = new Build { Affinity = affinity };
-            b.Weave(new EquippedSkill(caster, Source.Nature, vow));
+            b.Equip(new EquippedSkill(caster, Source.Nature, vow));
             return b;
         }
 
-        var unmeetable = Vows.Catalog.FirstOrDefault(v => v.Demand == VowDemand.EveryWeaveFilled);
+        var unmeetable = Vows.Catalog.FirstOrDefault(v => v.Demand == VowDemand.EverySlotFilled);
 
         static float Damage(Build build)
         {

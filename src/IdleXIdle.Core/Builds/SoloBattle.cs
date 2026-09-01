@@ -2030,7 +2030,7 @@ public static class SoloBattle
     /// boss — was a lottery on how the wave went in a game where the player cannot react; this is a
     /// decision they made at the workbench and can see the consequences of in the report.
     /// </remarks>
-    private static float VowFactor(EquippedSkill sk, WeaveContext ctx, SkillShape shape)
+    private static float VowFactor(EquippedSkill sk, BuildContext ctx, SkillShape shape)
     {
         if (sk.Vow is not { } vow) return 1f;
         if (!Vows.IsActive(vow, ctx)) return 1f;
@@ -2044,7 +2044,7 @@ public static class SoloBattle
     }
 
     /// <summary>Describe a build to the Vow layer.</summary>
-    public static WeaveContext DescribeBuild(Build build, Economy.Hunter hunter)
+    public static BuildContext DescribeBuild(Build build, Economy.Hunter hunter)
     {
         ArgumentNullException.ThrowIfNull(build);
         ArgumentNullException.ThrowIfNull(hunter);
@@ -2061,7 +2061,7 @@ public static class SoloBattle
             if (hunter.Worn(slot) is not null) worn.Add(bare);
 
         var mods = build.Resolve(hunter);
-        return new WeaveContext(
+        return new BuildContext(
             DistinctStyles: build.Skills.Select(s => s.Def.Style).Distinct().Count(),
             DistinctSources: build.Skills.Select(s => s.Source).Distinct().Count(),
             SkillsWoven: build.Skills.Count,

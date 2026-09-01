@@ -25,7 +25,7 @@ public class LiveBuildTests
         var b = new Build { PassiveMods = BuildMods.None };
         // Two actives and two passives — the same spread the Form-era fixture wove (Strike,
         // Projectile, and the naturally-passive Aura and Trap).
-        foreach (var id in new[] { "hammer_blow", "volley_spray", "field_mire", "snare_jaws" }) b.Weave(Sk(id));
+        foreach (var id in new[] { "hammer_blow", "volley_spray", "field_mire", "snare_jaws" }) b.Equip(Sk(id));
         return b;
     }
 
@@ -85,7 +85,7 @@ public class LiveBuildTests
         Build Two(string firstId)
         {
             var b = new Build { PassiveMods = BuildMods.None };
-            b.Weave(Sk(firstId)); b.Weave(Sk("volley_spray"));
+            b.Equip(Sk(firstId)); b.Equip(Sk("volley_spray"));
             return b;
         }
         var champ = new Champion { MaxHealth = 400, Health = 400 };

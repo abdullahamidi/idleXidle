@@ -19,7 +19,7 @@ public class PaybackWindowTest
     private static Build RepayBuild(int windowMs)
     {
         var build = new Build();
-        build.Weave(TestBuilds.Skill("snare_repay", Source.Shadow,
+        build.Equip(TestBuilds.Skill("snare_repay", Source.Shadow,
             tweak: d => d with { PaysBackDamageTaken = 2.0f, PaybackWindowMs = windowMs }));
         return build;
     }

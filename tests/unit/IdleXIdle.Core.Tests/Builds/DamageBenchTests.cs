@@ -14,7 +14,7 @@ public class DamageBenchTests
     private static Build StrikeBuild(params string[] keystones)
     {
         var b = new Build();
-        b.Weave(TestBuilds.Skill("hammer_blow"));
+        b.Equip(TestBuilds.Skill("hammer_blow"));
         foreach (var k in keystones) b.Take(Keystones.ById(k)!);
         return b;
     }

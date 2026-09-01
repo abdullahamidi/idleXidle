@@ -79,9 +79,9 @@ public class CareerTest
         // meets it; the same build against a two-slot capacity does not.
         var vow = Vows.ById("vow_complete")!;
         var met = new Build { SlotCapacity = 1 };
-        met.Weave(TestBuilds.Skill("hammer_blow", Source.Body, vow));
+        met.Equip(TestBuilds.Skill("hammer_blow", Source.Body, vow));
         var unmet = new Build { SlotCapacity = 2 };
-        unmet.Weave(TestBuilds.Skill("hammer_blow", Source.Body, vow));
+        unmet.Equip(TestBuilds.Skill("hammer_blow", Source.Body, vow));
 
         // Act/Assert
         Assert.True(Career.VowWasKept(met, new Hunter()));

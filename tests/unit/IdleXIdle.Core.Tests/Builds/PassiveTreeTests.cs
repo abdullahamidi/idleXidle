@@ -60,7 +60,7 @@ public class PassiveTreeTests
         var champ = new Champion { MaxHealth = 500, Health = 500 };
         // One plain single-target active (BLOW), so every keystone ratio below is measured through
         // the same output path.
-        build.Weave(TestBuilds.Skill("hammer_blow"));
+        build.Equip(TestBuilds.Skill("hammer_blow"));
 
         // A wall: enough health to survive the ceiling, and it never swings back. What comes out is a
         // clean measure of output and nothing else.

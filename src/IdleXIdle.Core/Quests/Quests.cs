@@ -98,7 +98,7 @@ public sealed record Quest
 /// Everything the quest layer is allowed to know about the player, as one flat snapshot.
 /// </summary>
 /// <remarks>
-/// Pure data, no host types — the same contract <c>WeaveContext</c> keeps, and for the
+/// Pure data, no host types — the same contract <c>BuildContext</c> keeps, and for the
 /// same reason: it makes every quest testable without a game, and it stops the catalogue from quietly
 /// growing a dependency on whatever screen happened to be open.
 ///
@@ -200,7 +200,7 @@ public static class QuestCatalogue
             // quest about what THE QUIVER is — practice with VOLLEY skills, counted by the same
             // tally that levels them, across both of the style's skills.
             Id = "q_quiver_volleys", Name = "THE COUNTED ARROWS",
-            Demand = "Clear 150 waves with VOLLEY skills woven",
+            Demand = "Clear 150 waves with a VOLLEY skill equipped",
             Goal = QuestGoal.WavesWithStyle, Style = Builds.Style.Volley, Threshold = 150, Unit = "WAVES",
         },
     };

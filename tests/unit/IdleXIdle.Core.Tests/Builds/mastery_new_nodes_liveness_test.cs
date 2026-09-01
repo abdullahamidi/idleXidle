@@ -30,7 +30,7 @@ public class mastery_new_nodes_liveness_test
     {
         var b = new Build { Shape = shape };
         foreach (var id in skillIds.Length == 0 ? new[] { "hammer_blow" } : skillIds)
-            b.Weave(TestBuilds.Skill(id, Source.Spirit));
+            b.Equip(TestBuilds.Skill(id, Source.Spirit));
         return b;
     }
 

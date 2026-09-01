@@ -176,9 +176,9 @@ public static class MasteryCatalog
                 S with { StrongMatchupBonus = 0.25f }, SpineMinors(n, b));
         Notable(n, b, "pledge", "PLEDGE — VOWS PAY 30% MORE",
                 S with { VowPowerMultiplier = 1.30f }, SpineMinors(n, b));
-        Notable(n, b, "narrow", "NARROW — YOUR DISCIPLINE'S FORM +20%, EVERY OTHER FORM -10%",
+        Notable(n, b, "narrow", "NARROW — YOUR OWN STYLE +20%, EVERY OTHER STYLE -10%",
                 S with { AffinityStyleBonus = 0.20f, OffStylePenalty = 0.10f }, SpineMinors(n, b));
-        Notable(n, b, "broad", "BROAD — HALF OF THE OPPOSITE FORM'S PENALTY IS GIVEN BACK",
+        Notable(n, b, "broad", "BROAD — HALF OF THE OPPOSITE STYLE'S PENALTY IS GIVEN BACK",
                 S with { OppositePenaltyRelief = 0.5f }, SpineMinors(n, b));
         // The side road's notable: it needs the spur, not the spine.
         Notable(n, b, "deep", "DEEP — +12 RESONANCE, AND RESONANCE IS WORTH 20% MORE",
@@ -186,7 +186,7 @@ public static class MasteryCatalog
                 Stat(HunterStat.ResonanceAffinity, 12f));
 
         // ── Ring 3. ──────────────────────────────────────────────────────────────────────────────
-        Greater(n, b, "pure", "PURE — WHILE EVERY WOVEN SKILL SHARES ONE SOURCE, ALL SKILLS HIT 35% HARDER",
+        Greater(n, b, "pure", "PURE — WHILE EVERY EQUIPPED SKILL SHARES ONE SOURCE, ALL SKILLS HIT 35% HARDER",
                 S with { OneSourceBonus = 0.35f }, SpineNotables(n, b));
         Greater(n, b, "discord", "DISCORD — YOUR WEAK SOURCE MATCHUP NO LONGER WEAKENS YOU, SKILLS -10%",
                 S with { WeakMatchupRelief = 1f, DamageDealt = 0.90f }, SpineNotables(n, b));
@@ -438,7 +438,7 @@ public static class MasteryCatalog
             BuildTrigger.Overdraw, S with { StyleTargets = new Dictionary<Style, int> { [Style.Volley] = 1 } });
         Spec(n, Branch.Loot, Style.Field, "spec_aura", "AURA SPECIALIST — TICKS 30% FASTER",
             BuildTrigger.Radiance, S);
-        Spec(n, Branch.Tempo, Style.Sign, "spec_mark", "MARK SPECIALIST — THE WINDOW STRETCHES",
+        Spec(n, Branch.Tempo, Style.Sign, "spec_mark", "SIGN SPECIALIST — MARKS LAST LONGER",
             BuildTrigger.Linger, S with { AmplifyWindowMultiplier = 1.3f });
         // Grants SIPHON, whose two halves are read from HealTuning: the leech doubling, and the raised
         // per-wave healing limit that makes the doubling measurable under the heal ceiling.

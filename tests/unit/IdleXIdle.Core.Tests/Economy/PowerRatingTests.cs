@@ -64,7 +64,7 @@ public class PowerRatingTests
         // The old Strike/Projectile/Aura/Mark spread by catalogue id — three actives plus the Field
         // the Aura slot resolved to. Cadence lives on each def now, so no cooldown is passed.
         foreach (var id in new[] { "hammer_blow", "volley_spray", "field_mire", "sign_call" })
-            build.Weave(TestBuilds.Skill(id, Source.Nature));
+            build.Equip(TestBuilds.Skill(id, Source.Nature));
 
         var depths = Enumerable.Range(0, 40).Select(i =>
         {

@@ -41,7 +41,7 @@ public class AffinityTest
     {
         var b = new Build { Affinity = affinity };
         for (var i = 0; i < skills; i++)
-            b.Weave(Skill(SkillCatalogue.ActiveOf(style).Id));
+            b.Equip(Skill(SkillCatalogue.ActiveOf(style).Id));
         return b;
     }
 
@@ -54,9 +54,9 @@ public class AffinityTest
     private static Build SignBuild(Style? affinity)
     {
         var b = new Build { Affinity = affinity };
-        b.Weave(Skill("sign_call"));
+        b.Equip(Skill("sign_call"));
         for (var i = 0; i < 3; i++)
-            b.Weave(Skill("hammer_blow"));
+            b.Equip(Skill("hammer_blow"));
         return b;
     }
 
@@ -67,10 +67,10 @@ public class AffinityTest
     private static Build SnareBuild(Style? affinity)
     {
         var b = new Build { Affinity = affinity };
-        b.Weave(Skill("snare_repay"));
-        b.Weave(Skill("snare_jaws"));
-        b.Weave(Skill("snare_repay"));
-        b.Weave(Skill("snare_jaws"));
+        b.Equip(Skill("snare_repay"));
+        b.Equip(Skill("snare_jaws"));
+        b.Equip(Skill("snare_repay"));
+        b.Equip(Skill("snare_jaws"));
         return b;
     }
 

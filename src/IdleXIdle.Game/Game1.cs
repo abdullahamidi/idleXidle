@@ -1480,7 +1480,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
         {
             // DEV: when capturing a gameplay screenshot, skip straight past the title (and open a screen).
             // ShotMode, not the raw variable: `tour` arrives here as the fixture of the screen it tours.
-            var sm = ShotMode;
+            var sm = ShotMode switch
+            {
+                // Screen-named aliases (UX V2 P0.2). The handlers below keep their older names so
+                // capture.sh's mode list and every baseline capture still work.
+                "loadout" => "weave", "mastery" => "buildtree", "traits" => "dust", "gear" => "character",
+                "training" => "stats", "hunt" => "fight", "build" => "buildtree",
+                "specialise" => "attune", "specialised" => "attuned",
+                var other => other,
+            };
             // `telegraph`, `combat` and `boss2` posed the manual-combat screen for screenshots. That
             // screen is gone, so they had nothing to pose.
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
@@ -1619,7 +1627,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         // HAMMER's PRESS is learned and the other five roads are not.
                         _mastery.Take("road_hammer");
                         _masteryScreen.DevOpenTree();
-                        if (sm == "attune") _masteryScreen.DevAttune(Style.Hammer);
+                        if (sm == "attune") _masteryScreen.DevSpecialise(Style.Hammer);
                     }
                     // The same tree at a working zoom. Node art is thirty pixels across in the
                     // overview, where a capture can only prove that something was drawn. RH_SHOT_ZOOM
@@ -2459,10 +2467,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // THE ATTUNEMENT holds the door — and so do the vault's modals (the trader stall and the
         // code-inspect cards). A modal can only swallow its own screen's input; the rail, the nine
         // hotkeys, L and T are the host's, so the host holds them while any modal is open.
-        var attunementHolds = (_showMastery && _masteryScreen.CeremonyOpen)
+        var ceremonyHolds = (_showMastery && _masteryScreen.SpecialisationOpen)
                               || (_showVault && _vault.ModalUp);
 
-        if (!attunementHolds) HandleNavClick();   // a click on the shared hex nav works from any screen
+        if (!ceremonyHolds) HandleNavClick();   // a click on the shared hex nav works from any screen
 
         // EVERY NAV HOTKEY GOES THROUGH OpenNav — the unlock gate, the refusal toast and the
         // flag-clearing all live in exactly one place now.
@@ -2478,7 +2486,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Each handler also cleared its own idiosyncratic subset of the flags, and three of them forgot
         // _showRoster and _showLoadout — so the player could see one screen while an invisible one
         // consumed their clicks. OpenNav clears all nine, every time.
-        for (var navKey = 0; navKey < Nav.Length && !attunementHolds; navKey++)
+        for (var navKey = 0; navKey < Nav.Length && !ceremonyHolds; navKey++)
         {
             // Keys.A..Keys.Z are the ASCII letter codes, so the table's char IS the key.
             if (!Pressed((Keys)Nav[navKey].Key)) continue;
@@ -2494,7 +2502,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // The hunt screen's LOG button raises WantsLog (drawn last frame); it is the same door as L.
         var wantsLog = _expedition.WantsLog;
         _expedition.WantsLog = false;
-        if ((Pressed(Keys.L) || wantsLog) && !attunementHolds)
+        if ((Pressed(Keys.L) || wantsLog) && !ceremonyHolds)
         {
             _expedition.ToggleLog();
             if (_expedition.LogOpen)
@@ -2517,7 +2525,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // T — THE WEAVE. The one screen with no rail tile of its own, so it cannot go through OpenNav;
         // it is gated on Activity.Build, which is the screen it is reached from and the thing it is
         // part of. Without this it was the last remaining way to walk past the unlock gate.
-        if (Pressed(Keys.T) && !attunementHolds)
+        if (Pressed(Keys.T) && !ceremonyHolds)
         {
             if (!Unlocks.IsOpen(Activity.Build, GuideUnlockFacts()))
             {
@@ -2560,17 +2568,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_showMastery)
         {
             // One lock, read by both doors — the rail tile and the button on the page.
-            _masteryScreen.TreeUnlocked = Unlocks.IsOpen(Activity.Mastery, GuideUnlockFacts());
-            _masteryScreen.Loadout = _loadout;
+                        _masteryScreen.Loadout = _loadout;
             _masteryScreen.Mastery = _mastery;
             _masteryScreen.Power = _hunter.PowerRating;   // the Build screen has no Hunter ref of its own
             _masteryScreen.Level = _hunter.HunterLevel;
             _masteryScreen.Update(ScreenKeys, _prevKeys, CanvasMouse, MouseClicked,
                                 _mouse.LeftButton == ButtonState.Pressed, MouseWheel, _dust, MouseRightClicked);
             if (_masteryScreen.Dirty) { _masteryScreen.ClearDirty(); Save(); }
-            // The BUILD page asks for the weave editor; the host owns which screen is open.
-            // The tree's BACK and its skills door both land on BUILD, which is the weave now.
-            if (_masteryScreen.WantsWeave) { _masteryScreen.WantsWeave = false; _showMastery = false; _showLoadout = true; }
 
             Latch(gameTime);
             return;
@@ -3714,7 +3718,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // frame later the expedition has reset and there is nothing left to ask.
             //
             // "Kept" is judged the way the simulation judged it while the run was paying out: the Vow's
-            // demand tested against the same WeaveContext. That matters — a Vow SWORN and a Vow KEPT are
+            // demand tested against the same BuildContext. That matters — a Vow SWORN and a Vow KEPT are
             // different things, and the quest is about the second.
             if (VowWasKept()) _runsWithVowKept++;
             Save();
@@ -5038,12 +5042,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // the player actually has.
         var build = new (string Key, string What)[]
         {
-            ($"{_loadout.SkillCapacity}", "WOVEN SKILLS"),
-            ("", "SOURCE x FORM x VOW"),
+            ($"{_loadout.SkillCapacity}", "SKILL SLOTS"),
+            ("", "STYLE  ·  SKILL  ·  VARIATION  ·  REINFORCEMENTS"),
             ($"{_loadout.KeystoneCapacity}", "KEYSTONE SOCKETS"),
             ("", "EACH HAS A COST"),
             ("", "TRAITS (P) SELL MORE OF BOTH"),
-            ("", "FORM IS HOW YOU FIGHT"),
+            ("", "A SKILL IS HOW YOU FIGHT"),
             ("", "SOURCE VS REGION"),
         };
         // Every tile on the nav rail, plus the two keys that open nothing on it. HUNT and ROSTER were
@@ -5059,7 +5063,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
             ("V", "STATS — SPEND GLEAM"),
             ("B", "BUILD — CHOOSE YOUR SKILLS"),
             ("E", "MASTERY — HOW YOUR SKILLS WORK"),
-            ("T", "BUILD, THE SAME PLACE AS B"),
             ("K", "VAULT — CHESTS YOU HAVE NOT OPENED"),
             ("F", "FORGE — CRAFT & CHESTS"),
             ("A", "WARREN — WORK WHILE YOU ARE AWAY"),
@@ -5290,7 +5293,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // you used. What was unique to it — the taken mastery nodes — is the MASTERY tile's
             // diagram, drawn rather than listed.
             case 3: _showLoadout = true; break;
-            case 4: _showMastery = true; _masteryScreen.ShowTree = true; break;
+            case 4: _showMastery = true; _masteryScreen.Disarm(); break;
             case 5: _showVault = true; break;
             case 6: _showForge = true; break;
             case 7: _showWarren = true; break;

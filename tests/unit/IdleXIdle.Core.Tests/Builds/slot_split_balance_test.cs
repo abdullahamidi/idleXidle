@@ -56,7 +56,7 @@ public class SlotSplitBalanceTests
     {
         var b = new Build();   // an unset per-kind capacity is the whole budget — the old behaviour
         foreach (var f in forms)
-            b.Weave(TestBuilds.Skill(
+            b.Equip(TestBuilds.Skill(
                 LegacySkillForm.Resolve(f, LegacySkillForm.IsNaturallyPassive(f))!, Source.Body));
         return b;
     }

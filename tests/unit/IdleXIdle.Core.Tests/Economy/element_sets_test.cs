@@ -57,7 +57,7 @@ public class element_sets_test
     private static Build BuildOf(Source src, params string[] skillIds)
     {
         var b = new Build();
-        foreach (var id in skillIds) b.Weave(Sk(src, id));
+        foreach (var id in skillIds) b.Equip(Sk(src, id));
         return b;
     }
 

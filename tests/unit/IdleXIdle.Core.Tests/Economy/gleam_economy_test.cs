@@ -82,7 +82,7 @@ public class GleamEconomyTest
     private static Build StarterBuild()
     {
         var b = new Build();
-        b.Weave(TestBuilds.Skill("hammer_blow"));
+        b.Equip(TestBuilds.Skill("hammer_blow"));
         return b;
     }
 

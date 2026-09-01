@@ -732,22 +732,24 @@ public sealed class VaultScreen
                 .Select(MasteryCatalog.ById)
                 .FirstOrDefault(n => n is { Kind: MasteryKind.Specialisation });
             _ui.TextBig(b, spec?.Style is { } f
-                            ? $"DISCIPLINE: {f.ToString().ToUpperInvariant()}"
-                            : "NO DISCIPLINE CHOSEN",
+                            ? $"STYLE: {f.ToString().ToUpperInvariant()}"
+                            : "NO STYLE CHOSEN",
                         panel.X + 60, y, spec is null ? Slate : Gold, UiTypography.Body);
             y += 40;
 
             _ui.TextBig(b, "SKILLS", panel.X + 60, y, Slate, UiTypography.SectionLabel);
             y += 26;
-            if (build.Skills.Count == 0) { _ui.TextBig(b, "NONE WOVEN", panel.X + 80, y, Dim, UiTypography.Secondary); y += 26; }
+            if (build.Skills.Count == 0) { _ui.TextBig(b, "NO SKILLS", panel.X + 80, y, Dim, UiTypography.Secondary); y += 26; }
             foreach (var s in build.Skills.Take(5))
             {
                 var vowName = s.VowId is null ? null
                     : Vows.Catalog.FirstOrDefault(v => v.Id == s.VowId)?.Name ?? s.VowId;
-                // The id names the skill outright (code v2); a v1 code still speaks the legacy
-                // Source x Form pair, and prints it as the words it saved.
+                // The id names the skill outright (code v2); a v1 code still carries the legacy
+                // Form pair, which the frozen migration map turns into the skill it always meant.
                 var word = SkillCatalogue.Find(s.SkillId)?.Name
-                           ?? $"{s.Source?.ToUpperInvariant()} {s.Form?.ToUpperInvariant()}".Trim();
+                           ?? SkillCatalogue.Find(LegacySkillForm.Resolve(
+                                  s.Form, s.Passive ?? LegacySkillForm.IsNaturallyPassive(s.Form)))?.Name
+                           ?? "UNKNOWN SKILL";
                 var line = word
                            + (vowName is null ? "" : $"  —  {vowName.ToUpperInvariant()}");
                 _ui.TextBig(b, line, panel.X + 80, y, Bone, UiTypography.Secondary);

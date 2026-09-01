@@ -159,7 +159,7 @@ public static class CharacterRoster
             // the loot champion), wave 60 in the Hollow (the catalogue's THIRD depth quest). P10
             // finally asks for the thing this champion IS: practice with VOLLEY skills, read from
             // the same tally that levels them.
-            Unlock = CharacterUnlock.Quest("q_quiver_volleys", "Clear 150 waves with VOLLEY skills woven"),
+            Unlock = CharacterUnlock.Quest("q_quiver_volleys", "Clear 150 waves with a VOLLEY skill equipped"),
         },
         new()
         {

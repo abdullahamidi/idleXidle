@@ -75,9 +75,9 @@ public class SkillSlotKindTests
     public void test_actives_and_passives_are_counted_separately()
     {
         var b = new Build();
-        b.Weave(TestBuilds.Skill("hammer_blow"));
-        b.Weave(TestBuilds.Skill("volley_spray"));
-        b.Weave(TestBuilds.Skill("field_mire"));
+        b.Equip(TestBuilds.Skill("hammer_blow"));
+        b.Equip(TestBuilds.Skill("volley_spray"));
+        b.Equip(TestBuilds.Skill("field_mire"));
 
         Assert.Equal(2, b.ActiveCount);
         Assert.Equal(1, b.PassiveCount);
@@ -88,15 +88,15 @@ public class SkillSlotKindTests
     public void test_a_full_active_budget_does_not_block_a_passive()
     {
         var b = new Build { ActiveCapacity = 2, PassiveCapacity = 2 };
-        Assert.True(b.Weave(TestBuilds.Skill("hammer_blow")));
-        Assert.True(b.Weave(TestBuilds.Skill("volley_spray")));
+        Assert.True(b.Equip(TestBuilds.Skill("hammer_blow")));
+        Assert.True(b.Equip(TestBuilds.Skill("volley_spray")));
 
         // Actives are full; a third active is refused...
-        Assert.False(b.Weave(TestBuilds.Skill("sign_call")));
+        Assert.False(b.Equip(TestBuilds.Skill("sign_call")));
         // ...but the passive budget is untouched, which is the entire point of splitting them.
-        Assert.True(b.Weave(TestBuilds.Skill("field_mire")));
-        Assert.True(b.Weave(TestBuilds.Skill("snare_jaws")));
-        Assert.False(b.Weave(TestBuilds.Skill("drain_wilt")));
+        Assert.True(b.Equip(TestBuilds.Skill("field_mire")));
+        Assert.True(b.Equip(TestBuilds.Skill("snare_jaws")));
+        Assert.False(b.Equip(TestBuilds.Skill("drain_wilt")));
 
         Assert.Equal(2, b.ActiveCount);
         Assert.Equal(2, b.PassiveCount);
@@ -110,7 +110,7 @@ public class SkillSlotKindTests
         // per-kind cap frozen at the old constant.
         var b = new Build { SlotCapacity = 5 };
         for (var i = 0; i < 5; i++)
-            Assert.True(b.Weave(TestBuilds.Skill("hammer_blow")), $"slot {i + 1} of 5 was refused");
+            Assert.True(b.Equip(TestBuilds.Skill("hammer_blow")), $"slot {i + 1} of 5 was refused");
         Assert.Equal(5, b.Skills.Count);
     }
 
@@ -120,19 +120,19 @@ public class SkillSlotKindTests
         // Four beat-taking skills is the state that made the basic attack disappear: the swing only
         // lands when no skill claimed the beat, so ~0.8 demand leaves ~1 beat in 5 for it.
         var four = new Build { ActiveCapacity = 4 };
-        four.Weave(TestBuilds.Skill("hammer_blow"));
-        four.Weave(TestBuilds.Skill("volley_spray"));
-        four.Weave(TestBuilds.Skill("sign_call"));
-        four.Weave(TestBuilds.Skill("drain_drink"));
+        four.Equip(TestBuilds.Skill("hammer_blow"));
+        four.Equip(TestBuilds.Skill("volley_spray"));
+        four.Equip(TestBuilds.Skill("sign_call"));
+        four.Equip(TestBuilds.Skill("drain_drink"));
         Assert.True(four.BeatDemand > 0.75f, $"four actives demanded only {four.BeatDemand:0.00}");
 
         // Two actives plus two passives: the passives add NOTHING, by construction.
         var two = new Build { ActiveCapacity = 2, PassiveCapacity = 2 };
-        two.Weave(TestBuilds.Skill("hammer_blow"));
-        two.Weave(TestBuilds.Skill("volley_spray"));
+        two.Equip(TestBuilds.Skill("hammer_blow"));
+        two.Equip(TestBuilds.Skill("volley_spray"));
         var withoutPassives = two.BeatDemand;
-        two.Weave(TestBuilds.Skill("field_mire"));
-        two.Weave(TestBuilds.Skill("snare_jaws"));
+        two.Equip(TestBuilds.Skill("field_mire"));
+        two.Equip(TestBuilds.Skill("snare_jaws"));
 
         Assert.Equal(withoutPassives, two.BeatDemand);
         Assert.True(two.BeatDemand < 0.5f,
@@ -150,7 +150,7 @@ public class SkillSlotKindTests
 
         var b = new Build { ActiveCapacity = 2 };
         foreach (var def in shortest)
-            b.Weave(TestBuilds.Skill(def.Id));
+            b.Equip(TestBuilds.Skill(def.Id));
 
         Assert.True(b.BeatDemand < 0.5f,
             $"the worst active pair ({string.Join(" + ", shortest.Select(s => s.Name))}) " +
@@ -320,7 +320,7 @@ public class SwingShareTests
         // to leave room, or the AFTER half proves nothing.
         var before = new Build { ActiveCapacity = 4, PassiveCapacity = 0 };
         foreach (var id in new[] { "hammer_blow", "volley_spray", "sign_call", "drain_drink" })
-            before.Weave(TestBuilds.Skill(id));
+            before.Equip(TestBuilds.Skill(id));
 
         var (beats, casts) = Cadence(before);
         var swingShare = beats == 0 ? 0f : (beats - casts) / (float)beats;

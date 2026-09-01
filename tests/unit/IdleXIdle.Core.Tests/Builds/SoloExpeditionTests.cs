@@ -25,7 +25,7 @@ public class SoloExpeditionTests
     private static Build BuildOf(BuildMods passive = default, params string[] skillIds)
     {
         var b = new Build { PassiveMods = passive.Equals(default(BuildMods)) ? BuildMods.None : passive };
-        foreach (var id in skillIds) b.Weave(Sk(id));
+        foreach (var id in skillIds) b.Equip(Sk(id));
         return b;
     }
 

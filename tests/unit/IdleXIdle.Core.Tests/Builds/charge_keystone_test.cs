@@ -23,8 +23,8 @@ public class ChargeKeystoneTest
         // BLOW is the Hammer active REND dumps the pool through; SPRAY keeps the casts — and so the
         // pool's points — coming between dumps.
         var b = new Build();
-        b.Weave(TestBuilds.Skill("hammer_blow", Source.Nature));
-        b.Weave(TestBuilds.Skill("volley_spray", Source.Nature));
+        b.Equip(TestBuilds.Skill("hammer_blow", Source.Nature));
+        b.Equip(TestBuilds.Skill("volley_spray", Source.Nature));
         foreach (var id in keystoneIds)
             Assert.True(b.Take(Keystones.ById(id)!), $"could not socket {id}");
         return b;
@@ -126,7 +126,7 @@ public class ChargeKeystoneTest
         // Projectile Form's 900ms cooldown collided with the 900ms bite interval and cast-gains
         // landed on bite timestamps by construction. Mutation-proofed: fails if the branch dies.
         var b = new Build();
-        b.Weave(TestBuilds.Skill("snare_jaws", Source.Nature));
+        b.Equip(TestBuilds.Skill("snare_jaws", Source.Nature));
         Assert.True(b.Take(Keystones.ById("dynamo")!));
 
         // Act

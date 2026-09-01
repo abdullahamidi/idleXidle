@@ -332,7 +332,7 @@ public sealed class PlayerLoadout
     /// "your gear is waiting for a …" hint reads (the Forge's badge reads the composed build's
     /// RESOLVED defs, handed over by the host).
     /// </summary>
-    public IReadOnlyList<SkillDef> WovenDefs()
+    public IReadOnlyList<SkillDef> EquippedDefs()
         => _skills.Select(sk => SkillCatalogue.Find(sk.SkillId))
                   .Where(d => d is not null)
                   .Select(d => d!)

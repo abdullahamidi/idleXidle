@@ -49,11 +49,11 @@ public class WeaveInBattleTests
     public void test_the_sim_describes_a_build_the_vows_can_read()
     {
         var mono = new Build();
-        mono.Weave(TestBuilds.Skill("hammer_blow", Source.Body));
+        mono.Equip(TestBuilds.Skill("hammer_blow", Source.Body));
 
         var broad = new Build();
-        broad.Weave(TestBuilds.Skill("hammer_blow", Source.Body));
-        broad.Weave(TestBuilds.Skill("field_mire", Source.Mind));
+        broad.Equip(TestBuilds.Skill("hammer_blow", Source.Body));
+        broad.Equip(TestBuilds.Skill("field_mire", Source.Mind));
 
         var monoCtx = SoloBattle.DescribeBuild(mono, new Hunter());
         var broadCtx = SoloBattle.DescribeBuild(broad, new Hunter());

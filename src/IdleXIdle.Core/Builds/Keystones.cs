@@ -181,7 +181,7 @@ public static class Keystones
             // four demands, which no other thing in the game can do. The cadence price is what keeps it
             // from being simply "more damage" — a Weaver casts less often and covers more ground.
             Id = "weaver", Name = "WEAVER",
-            Blurb = "EVERY SKILL ALSO FIRES AS THE NEXT FORM YOU CARRY, AT 45%. SKILLS RETURN 30% SLOWER.",
+            Blurb = "EVERY SKILL ALSO FIRES THE NEXT SKILL IN YOUR BUILD, AT 45%. SKILLS RETURN 30% SLOWER.",
             Mods = new BuildMods(Damage: 1f, Health: 1f, SkillRate: 0.70f, Haul: 1f, Rarity: 1f),
             Grants = new[] { BuildTrigger.Weaver },
         },

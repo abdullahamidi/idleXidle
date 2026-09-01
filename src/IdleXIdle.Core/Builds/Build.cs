@@ -386,7 +386,7 @@ public sealed class Build
     public IReadOnlyList<Keystone> Keystones => _keystones;
 
     /// <summary>Equip a skill. Returns false when the slots are full — a bounded budget is the point.</summary>
-    public bool Weave(EquippedSkill skill)
+    public bool Equip(EquippedSkill skill)
     {
         ArgumentNullException.ThrowIfNull(skill);
         if (_skills.Count >= SlotCapacity) return false;
@@ -405,7 +405,7 @@ public sealed class Build
     }
 
     /// <summary>Unequip a skill by its catalogue id — the only name a skill has left.</summary>
-    public bool Unweave(string skillId) => _skills.RemoveAll(s => s.Def.Id == skillId) > 0;
+    public bool Unequip(string skillId) => _skills.RemoveAll(s => s.Def.Id == skillId) > 0;
 
     /// <summary>
     /// How many keystones a build may socket at once.

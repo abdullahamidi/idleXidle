@@ -34,7 +34,7 @@ public class SkillShapeBattleTests
     private static Build BuildWith(SkillShape shape, params string[] skillIds)
     {
         var b = new Build { Shape = shape };
-        foreach (var id in skillIds) b.Weave(Sk(id));
+        foreach (var id in skillIds) b.Equip(Sk(id));
         return b;
     }
 

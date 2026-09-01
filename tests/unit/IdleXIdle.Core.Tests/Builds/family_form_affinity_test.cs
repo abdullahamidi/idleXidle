@@ -32,7 +32,7 @@ public class FamilyStyleAffinityTests
     {
         // The style's own Active from the catalogue, at its base line — the id is the identity.
         var b = new Build();
-        b.Weave(TestBuilds.Skill(SkillCatalogue.ActiveOf(style).Id));
+        b.Equip(TestBuilds.Skill(SkillCatalogue.ActiveOf(style).Id));
         return b;
     }
 

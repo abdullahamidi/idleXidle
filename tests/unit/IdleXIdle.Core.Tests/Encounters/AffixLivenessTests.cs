@@ -39,7 +39,7 @@ public class AffixLivenessTests
     {
         var b = new Build { PassiveMods = BuildMods.None, Shape = shape };
         foreach (var id in new[] { "hammer_blow", "volley_spray", "field_mire", "sign_call" })
-            b.Weave(TestBuilds.Skill(id, Source.Nature));
+            b.Equip(TestBuilds.Skill(id, Source.Nature));
         return b;
     }
 

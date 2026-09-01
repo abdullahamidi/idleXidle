@@ -46,7 +46,7 @@ public static class TestBuilds
     public static Build Of(params string[] ids)
     {
         var b = new Build();
-        foreach (var id in ids) b.Weave(Skill(id));
+        foreach (var id in ids) b.Equip(Skill(id));
         return b;
     }
 }

@@ -37,7 +37,7 @@ public class SoloBattleTests
     private static Build With(params string[] skillIds)
     {
         var b = new Build();
-        foreach (var id in skillIds) b.Weave(Sk(id));
+        foreach (var id in skillIds) b.Equip(Sk(id));
         return b;
     }
 
@@ -323,11 +323,11 @@ public class SoloBattleTests
         var vow = Vows.ById("vow_singular")!;   // every skill must be the same Style
 
         var mono = new Build();
-        mono.Weave(Sk("hammer_blow", Source.Nature, vow));
+        mono.Equip(Sk("hammer_blow", Source.Nature, vow));
 
         var mixed = new Build();
-        mixed.Weave(Sk("hammer_blow", Source.Nature, vow));
-        mixed.Weave(Sk("field_mire", Source.Nature));
+        mixed.Equip(Sk("hammer_blow", Source.Nature, vow));
+        mixed.Equip(Sk("field_mire", Source.Nature));
 
         var (_, kept) = SoloBattle.ResolveWave(Champ(400), mono, new Hunter(), 100_000f, 0f,
             1000, T, new Random(9), new WaveBonus());
@@ -351,14 +351,14 @@ public class SoloBattleTests
         var vow = Vows.ById("vow_unbound")!;   // no keystone may be socketed
 
         var bare = new Build();
-        bare.Weave(Sk("hammer_blow", Source.Nature, vow));
+        bare.Equip(Sk("hammer_blow", Source.Nature, vow));
 
         var socketed = new Build();
-        socketed.Weave(Sk("hammer_blow", Source.Nature, vow));
+        socketed.Equip(Sk("hammer_blow", Source.Nature, vow));
         socketed.Take(Keystones.ById("ironclad")!);
 
         var plain = new Build();
-        plain.Weave(Sk("hammer_blow", Source.Nature));
+        plain.Equip(Sk("hammer_blow", Source.Nature));
         plain.Take(Keystones.ById("ironclad")!);
 
         var (_, withVow) = SoloBattle.ResolveWave(Champ(400), socketed, new Hunter(), 100_000f, 0f,
@@ -667,7 +667,7 @@ public class SoloBattleTests
         Build Sworn()
         {
             var b = new Build();
-            b.Weave(Sk("hammer_blow", vow: vow));
+            b.Equip(Sk("hammer_blow", vow: vow));
             return b;
         }
 
@@ -692,7 +692,7 @@ public class SoloBattleTests
         Build OneVowNSkills(int n)
         {
             var b = new Build();
-            for (var i = 0; i < n; i++) b.Weave(Sk("hammer_blow", vow: vow));
+            for (var i = 0; i < n; i++) b.Equip(Sk("hammer_blow", vow: vow));
             return b;
         }
 
@@ -733,7 +733,7 @@ public class SoloBattleTests
         int Remaining(Vow? vow)
         {
             var b = new Build();
-            b.Weave(Sk("hammer_blow", Source.Nature, vow));
+            b.Equip(Sk("hammer_blow", Source.Nature, vow));
             var champ = Champ(1_000_000);   // survives the whole wave, so the remaining health is readable
             SoloBattle.ResolveWave(champ, b, new Hunter(), 1_000_000f, 50f, 1000, T, new Random(7));
             return champ.Health;
@@ -750,9 +750,9 @@ public class SoloBattleTests
         var reckless = Vows.Catalog.Single(v => v.Id == "vow_reckless_offering");
 
         var withVow = new Build();
-        withVow.Weave(Sk("hammer_blow", Source.Nature, reckless));
+        withVow.Equip(Sk("hammer_blow", Source.Nature, reckless));
         var without = new Build();
-        without.Weave(Sk("hammer_blow", Source.Nature, null));
+        without.Equip(Sk("hammer_blow", Source.Nature, null));
 
         Assert.True(SoloBattle.VowHealthMultiplier(withVow) < 1f, "RECKLESS OFFERING cost no health");
         Assert.Equal(1f, SoloBattle.VowHealthMultiplier(without), 3);

@@ -17,7 +17,7 @@ namespace IdleXIdle.Game;
 /// <summary>
 /// The BUILD screen: a four-panel overview of the woven loadout — an identity card, the Source/Form/Vow
 /// composition, the skill cards with their two actions docked beneath them, and the passives / resonance
-/// column. The mastery tree is the SAME class in its other view (see ShowTree) and has its own rail tile.
+/// column. It is the MASTERY rail tile's one and only view.
 /// </summary>
 /// <remarks>
 /// Built to the Build production spec (rev 1). All data is REAL: the game has ONE live loadout (not the
@@ -40,12 +40,6 @@ public sealed class MasteryScreen
     private static readonly Color Verd = new(0x5A, 0x9A, 0x4A);
     private static readonly Color Purple = new(0x8A, 0x5A, 0xC8);
 
-    private static readonly Dictionary<Source, Color> SourceColor = new()
-    {
-        [Source.Shadow] = new(0x8A, 0x5A, 0xC8), [Source.Body] = new(0xD6, 0x48, 0x5C),
-        [Source.Machine] = new(0xBC, 0x78, 0x40), [Source.Nature] = new(0x48, 0xB8, 0x88),
-        [Source.Mind] = new(0x74, 0xC6, 0xE8), [Source.Spirit] = new(0xDC, 0xD4, 0xEC),
-    };
     private static string Short(Branch b) => b.ToString().ToUpperInvariant();
 
     private static string Short(Style s) => s.ToString().ToUpperInvariant();
@@ -80,11 +74,11 @@ public sealed class MasteryScreen
     private string _msg = "";
     private string? _hoverNodeId;          // the node under the pointer this frame
     private string? _pinnedNodeId;         // the last node clicked — what the detail panel shows when nothing is hovered
-    private string? _attuneNodeId;         // non-null: THE ATTUNEMENT ceremony is open for this just-taken node
-    private Style _attuneForm;
+    private string? _specNodeId;         // non-null: the SPECIALISATION ceremony is open for this just-taken node
+    private Style _specStyle;
 
     /// <summary>The host reads this to hold the rail, its hotkeys, L and T while the ceremony is open.</summary>
-    public bool CeremonyOpen => _attuneNodeId is not null;
+    public bool SpecialisationOpen => _specNodeId is not null;
 
     /// <summary>The docked plates — input over them must never reach the tree behind.</summary>
     /// <remarks>
@@ -95,37 +89,16 @@ public sealed class MasteryScreen
     /// still works. (The top strip needs no entry: the canvas starts below it.)
     /// </remarks>
     private static bool OverDock(Point p) => HexPanel.Contains(p) || NodePanel.Contains(p) || PointsPanel.Contains(p);
-    /// <summary>Set when the player asked for the weave editor. The host opens it and clears this.</summary>
-    public bool WantsWeave { get; set; }
     private bool _resetArmed;   // the reset button has been pressed once and is waiting for the second
-    private bool _editMode;   // false = the overview; true = the mastery-tree + skill editor sub-view
 
-    /// <summary>Which of this screen's two views is open. The rail's BUILD and MASTERY tiles both set it.</summary>
-    /// <remarks>
-    /// The tree used to be reachable only from inside this screen, so the flag was private. It has its
-    /// own rail tile now, and a tile that opened "whichever view you happened to leave open" would read
-    /// as a broken button rather than as stale state.
-    /// </remarks>
-    public bool ShowTree
-    {
-        get => _editMode;
-        // Arming survives no navigation. The two-click reset used to stay armed when the player left
-        // BUILD and came back, so a single click on a screen they had just opened wiped the whole tree.
-        set { _editMode = value; _resetArmed = false; }
-    }
+    // (This class carried a second, unreachable view until 2026-09-01 — a "BUILD OVERVIEW" of four
+    // panels whose copy still said "EVERY SKILL IS A SOURCE AND A FORM". The rail had opened the tree
+    // directly for weeks; the overview, its door, its flags and its colour table are gone: UX V2 P0.2.)
 
-    /// <summary>
-    /// Whether <see cref="Activity.Mastery"/> is open yet. Host-set, like every other fact here.
-    /// </summary>
-    /// <remarks>
-    /// The rail refuses the MASTERY tile until wave 8, and OPEN THE MASTERY TREE on this screen walked
-    /// straight past that — so the tree was reachable at wave 5 from a button drawn beside a tile that
-    /// was dimmed and saying "REACH WAVE 8". Two doors into one room have to agree about the lock.
-    /// </remarks>
-    public bool TreeUnlocked { get; set; } = true;
+    /// <summary>Arming survives no navigation: the two-click reset disarms whenever the screen is (re)opened.</summary>
+    public void Disarm() => _resetArmed = false;
 
-    /// <summary>Open straight onto the tree — used by the headless capture so the shot shows the tree.</summary>
-    /// <summary>DEV ONLY: open the tree sub-view, optionally framed on the centre at a given zoom.</summary>
+    /// <summary>DEV ONLY: frame the tree on the centre at a given zoom (the whole-tree framing by default).</summary>
     /// <remarks>
     /// The zoom argument exists because node ART cannot be verified from the default overview —
     /// at that scale a Notable is thirty pixels across and a capture proves only that something was
@@ -133,7 +106,6 @@ public sealed class MasteryScreen
     /// </remarks>
     public void DevOpenTree(float zoom = 0f)
     {
-        _editMode = true;
         _pan = Vector2.Zero;
         _zoom = zoom > 0f ? zoom : WholeTreeZoom;
     }
@@ -141,7 +113,6 @@ public sealed class MasteryScreen
     /// <summary>DEV ONLY: open the tree the way a player's FIRST visit opens it — centre and ring 1.</summary>
     public void DevOpenTreeFirstVisit()
     {
-        _editMode = true;
         FrameFirstOpen();
     }
 
@@ -171,11 +142,11 @@ public sealed class MasteryScreen
     public MasteryScreen(UiKit ui) => _ui = ui;
 
     /// <summary>DEV: pose THE ATTUNEMENT ceremony for a capture, without touching the tree's state.</summary>
-    public void DevAttune(Style form)
+    public void DevSpecialise(Style form)
     {
-        _attuneNodeId = MasteryCatalog.Nodes
+        _specNodeId = MasteryCatalog.Nodes
             .First(n => n.Kind == MasteryKind.Specialisation && n.Style == form).Id;
-        _attuneForm = form;
+        _specStyle = form;
     }
 
     public PlayerLoadout Loadout { get; set; } = new();
@@ -190,20 +161,6 @@ public sealed class MasteryScreen
     public void ClearDirty() => Dirty = false;
     public bool DevBuildDebug { get; set; }
 
-    // ── Spec §4 overview layout. ──
-    private static readonly Rectangle SummaryPanel = new(40, 138, 360, 460);
-    private static readonly Rectangle CorePanel = new(426, 138, 774, 450);
-    // 330, NOT 278 — the buttons live inside it now. They sat at y=902 while this panel ended at 884,
-    // so the two controls that act on the build floated on the dungeon wall below the frame holding it,
-    // reading as chrome that belonged to no panel at all.
-    private static readonly Rectangle AuraPanel = new(426, 606, 774, 330);
-    // 800, not 746. This column is the only one on the screen whose height is DATA — six passives, up
-    // to five resonance rows, then the keystone block — and at 746 the worst case ran off the bottom.
-    // The extra 54 puts its foot level with the middle column's button row rather than short of it.
-    private static readonly Rectangle PassivePanel = new(1228, 138, 652, 800);
-    // Docked in AuraPanel's foot, sharing its interior width. EditBtn is gone: it ran the same line as
-    // VIEW TREE, and the tree has its own rail tile now.
-    private static readonly Rectangle WeaveBtn = new(466, 842, 337, 44);
     /// <summary>
     /// YOUR POINTS — the mastery glyph, what the tree has cost you, where it went, and the one button
     /// that undoes it. A compact plate in the corner, the way the TRAITS screen carries its own counter.
@@ -240,25 +197,6 @@ public sealed class MasteryScreen
     // INSIDE THE POINTS PLATE now, on its content width, rather than floating on the tree beneath it.
     private static readonly Rectangle ResetBtn =
         new(PointsPanel.X, PointsPanel.Bottom + 12, 300, 52);
-    /// <summary>The i-th of <paramref name="n"/> auto-skill cards, sharing the panel's width between them.</summary>
-    /// <remarks>
-    /// Divided rather than fixed at a pitch of 182, which fitted exactly four and put a fifth at
-    /// x=1180..1348 — off the end of a panel that stops at 1200 and across the passives column beside
-    /// it. FIFTH WEAVE is a node the player can buy, so "four" was never a safe constant to lay out
-    /// against; the cards now narrow to make room instead of walking off the edge.
-    /// </remarks>
-    private static Rectangle AuraCard(int i, int n)
-    {
-        const int gap = 14;
-        var left = AuraPanel.X + UiKit.PanelCorner;
-        var usable = AuraPanel.Width - UiKit.PanelCorner * 2;
-        var w = (usable - (Math.Max(1, n) - 1) * gap) / Math.Max(1, n);
-        return new Rectangle(left + i * (w + gap), 648, w, 178);
-    }
-    // Under the panel's top crest, which the title now clears too — at y=196 the button was drawn
-    // straight through it.
-    // Left-aligned to the panel's text column (PassivePanel.X + 52) and on its OWN row, below the
-    // points line rather than beside it. See DrawPassives — sharing that row clipped the line.
 
     // ══ THE TREE'S OWN SPACE ═══════════════════════════════════════════════════════════════════
     //
@@ -464,9 +402,9 @@ public sealed class MasteryScreen
     // Level with the corner plate opposite it (both start at 112, where the header strip ends), so the
     // three plates on this page read as one row hung under one header rather than as three arrivals.
     private static readonly Rectangle HexPanel = new(1408, 112, 496, 460);
-    private static readonly Rectangle AttunePanel = new(480, 180, 960, 720);
-    private static readonly Rectangle AttuneSealBtn = new(560, 816, 360, 52);
-    private static readonly Rectangle AttuneUndoBtn = new(1000, 816, 360, 52);
+    private static readonly Rectangle SpecPanel = new(480, 180, 960, 720);
+    private static readonly Rectangle SpecSealBtn = new(560, 816, 360, 52);
+    private static readonly Rectangle SpecUndoBtn = new(1000, 816, 360, 52);
     // Sized for FIVE skill cards, not four.
     //
     // The trait tree's spine sells a fifth weave, and the old geometry (four cards of 132 at a pitch of
@@ -498,9 +436,9 @@ public sealed class MasteryScreen
         Tree = tree;
 
         // ── THE CAMERA. Only while the tree page is open; the overview has nothing to pan. ────────
-        if (_attuneNodeId is not null) { _dragFrom = null; _draggedThisPress = false; }
+        if (_specNodeId is not null) { _dragFrom = null; _draggedThisPress = false; }
 
-        if (_editMode && _attuneNodeId is null)
+        if (_specNodeId is null)
         {
             var over = Game1.ToOverlay(mouse);
 
@@ -544,7 +482,7 @@ public sealed class MasteryScreen
         // independent latches — so the refund could only fire on a frame where both buttons were pressed
         // at once. Shipped dead, in the same commit whose comment celebrated wiring up a dead method.
         // Everything under the gate assumes a left click, so this runs first rather than widening it.
-        if (rightClicked && _editMode && !_draggedThisPress && _attuneNodeId is null)
+        if (rightClicked && !_draggedThisPress && _specNodeId is null)
         {
             var rhit = Game1.ToOverlay(mouse);
             if (OverDock(rhit)) return;
@@ -573,32 +511,20 @@ public sealed class MasteryScreen
 
         // ── THE ATTUNEMENT swallows the click while it is open. Seal keeps the node; undo is a
         //    real Refund, so backing out costs nothing — deliberation, not punishment. ──────────
-        if (_attuneNodeId is { } attId)
+        if (_specNodeId is { } attId)
         {
-            if (AttuneSealBtn.Contains(hit))
+            if (SpecSealBtn.Contains(hit))
             {
-                _attuneNodeId = null;
-                _msg = $"ATTUNED. {_attuneForm.ToString().ToUpperInvariant()} IS YOURS — ITS SKILLS HIT TWICE AS HARD.";
+                _specNodeId = null;
+                _msg = $"{_specStyle.ToString().ToUpperInvariant()} IS YOUR STYLE — ITS SKILLS HIT TWICE AS HARD.";
             }
-            else if (AttuneUndoBtn.Contains(hit))
+            else if (SpecUndoBtn.Contains(hit))
             {
                 Mastery.Refund(attId);
-                _attuneNodeId = null;
+                _specNodeId = null;
                 Dirty = true;
-                _msg = "THE POINTS ARE BACK. ATTUNE WHEN YOU ARE READY.";
+                _msg = "THE POINTS ARE BACK. CHOOSE A STYLE WHEN YOU ARE READY.";
             }
-            return;
-        }
-
-        if (!_editMode)
-        {
-            if (WeaveBtn.Contains(hit)) { WantsWeave = true; return; }
-            // AN EMPTY SKILL CARD IS A DOOR. It drew a "+B" hint and did nothing when clicked, which is
-            // the one place on this screen a player is most likely to press: the hole where a skill
-            // should be.
-            for (var i = Loadout.Skills.Count; i < Loadout.SkillCapacity; i++)
-                if (AuraCard(i, Loadout.SkillCapacity).Contains(hit)) { WantsWeave = true; return; }
-            _resetArmed = false;
             return;
         }
 
@@ -647,7 +573,7 @@ public sealed class MasteryScreen
                 // THE ATTUNEMENT: your first Specialisation is the moment this game is named for,
                 // so it gets a ceremony instead of a click-sound — the hexagon shown whole, the
                 // choice sealed or taken back, nothing else clickable until you decide.
-                if (firstSpec && node.Style is { } nf) { _attuneNodeId = node.Id; _attuneForm = nf; }
+                if (firstSpec && node.Style is { } nf) { _specNodeId = node.Id; _specStyle = nf; }
             }
             // WHY THE CLICK DID NOTHING, NAMED EXACTLY.
             //
@@ -663,7 +589,7 @@ public sealed class MasteryScreen
                 node.Kind == MasteryKind.Mastery && Mastery.MasteredBranch() is { } heldBranch
                     ? $"YOU ALREADY TOOK THE {Short(heldBranch)} CAPSTONE — ONE CAPSTONE PER HUNTER." :
                 node.Kind == MasteryKind.Specialisation && Mastery.Affinity() is not null
-                    ? "YOU ARE ALREADY ATTUNED — ONE DISCIPLINE PER HUNTER." :
+                    ? "YOU ALREADY CHOSE A STYLE — ONE STYLE PER HUNTER." :
                 "TAKE A CONNECTED NODE FIRST.";
             return;
         }
@@ -680,270 +606,8 @@ public sealed class MasteryScreen
         var hit = Game1.ToOverlay(mouse);
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xD8));
 
-        if (_editMode) { DrawEditor(b, hit, tree); return; }
-
-        _ui.TextCenterBig(b, "BUILD", 960, 24, Gold, UiTypography.ScreenTitle, TextFace.Display);
-        _ui.Fill(b, new Rectangle(700, 74, 520, 3), Gold * 0.5f);
-        // The screen's PROMISE, not a recital of the panel headings under it. It read
-        // "SOURCE · FORM · VOW · AURAS" — four words already printed larger a few hundred pixels below,
-        // spending the biggest line on the page to say nothing the eye had not already reached.
-        _ui.TextCenterBig(b, "EVERY SKILL IS A SOURCE AND A FORM — YOU CHOOSE BOTH", 960, 80, Slate, UiTypography.Secondary);
-
-        DrawSummary(b);
-        DrawCore(b);
-        DrawAuraCards(b, hit);
-        DrawPassives(b, hit, tree);
-
-        // TWO BUTTONS, NOT THREE. "EDIT BUILD" and "VIEW TREE" ran the same line of code — both set
-        // _editMode — so the screen offered two differently-named doors into one room while the room
-        // itself is now a rail tile. What is left names what it opens and what it costs.
-        Button(b, WeaveBtn, "CHOOSE YOUR SKILLS", hit, true);
+        DrawEditor(b, hit, tree);
         if (DevBuildDebug) DrawDebug(b);
-    }
-
-    private void DrawSummary(SpriteBatch b)
-    {
-        _ui.PanelQuiet(b, SummaryPanel);
-        _ui.TextCenterBig(b, "BUILD OVERVIEW", SummaryPanel.Center.X, UiKit.TitleTop(SummaryPanel), Gold, UiTypography.PanelTitle);
-
-        var por = new Rectangle(SummaryPanel.Center.X - 66, SummaryPanel.Y + 72, 132, 132);
-        if (_ui.Assets.GetFirst(Character?.PortraitKey ?? "hunter_portrait", "hunter_portrait") is { } p)
-            b.Draw(p, por, Color.White);
-
-        var adept = Mastery.Affinity() is { } mf ? $"{Short(mf)} ADEPT" : "SEEKER";
-        _ui.TextCenterBig(b, adept, SummaryPanel.Center.X, SummaryPanel.Y + 220, Bone, UiTypography.Headline);
-        _ui.TextCenterBig(b, $"LEVEL {Level}", SummaryPanel.Center.X, SummaryPanel.Y + 254, Gold, UiTypography.Body);
-        // "BUILD POWER" IS DELETED, AND THE REASON IS THAT IT WAS NOT A BUILD NUMBER.
-        //
-        // Playtest: "Build power denen şey nedir? Neye bağlı? Ben skillerimi neye göre seçiyorum da
-        // artıyor azalıyor?" Traced it: this was Hunter.PowerRating (Game1 assigns it), which is
-        //
-        //     damage x skillRate x critFactor x 120  +  defence x 2  +  healthMultiplier x maxHealth x 0.5
-        //
-        // and every one of those three multipliers is built from GEAR AND STATS ONLY —
-        // SquadDamageMultiplier is gear x AttackPower x worn item mods, SquadSkillRate is focus
-        // attunement x worn mods x Engineering, SquadHealthMultiplier is Vitality x charm x worn mods.
-        // Nothing in it reads a woven skill, a Source, a Form, a Vow, a keystone or the mastery tree.
-        //
-        // So the answer to "why does it move when I choose skills" is that IT DOES NOT. It is the gear
-        // number, printed in the largest type on the one screen where gear is not the subject — and the
-        // same figure is already the headline of the GEAR screen (GEAR POWER) and of the STATS card.
-        // Detailing it, which was the other option offered, would have meant explaining at length why a
-        // number on this page cannot respond to anything on this page.
-        //
-        // What belongs here instead is the readout the Weave already computes and this screen does not
-        // show: damage per second for the build as woven. That arrives with the Weave merge; until then
-        // an honest gap beats a confident wrong number.
-
-        // THE FOUR ROWS THAT USED TO SIT HERE ARE GONE, and the panel is a pure identity card.
-        //
-        // SOURCE FOCUS / ACTIVE FORMS / VOW-BOUND / MASTERY restated, one panel to the right and in
-        // larger type, exactly what CORE COMPOSITION already says: SOURCE, FORMS, VOWS. Two panels, the
-        // same three facts, four hundred pixels apart — and they had already contradicted each other
-        // once (ACTIVE FORMS counted skills while CORE counted distinct Forms, so a build running two
-        // BODY STRIKEs reported five against four on one screen).
-        //
-        // CORE keeps them because it is the panel the screen is named for and it has the room to say
-        // them properly; what is left here is who you are and what that is worth.
-    }
-
-    private void DrawCore(SpriteBatch b)
-    {
-        _ui.PanelQuiet(b, CorePanel);
-        _ui.TextCenterBig(b, "CORE COMPOSITION", CorePanel.Center.X, UiKit.TitleTop(CorePanel), Gold, UiTypography.PanelTitle);
-        var skills = Loadout.Skills;
-        var focus = skills.GroupBy(s => s.Source).OrderByDescending(g => g.Count()).FirstOrDefault();
-        var forms = string.Join("  ·  ", skills.Select(SkillWord).Distinct());
-        var vowList = skills.Select(s => Vows.ById(s.VowId)?.Short.ToUpperInvariant()).Where(v => v is not null).Distinct();
-        var vows = vowList.Any() ? string.Join("  ·  ", vowList) : "NONE";
-
-        var x = CorePanel.X + 44;
-        var y = CorePanel.Y + 90;
-        Big(b, "SOURCE", focus is null ? "—" : focus.Key.ToString().ToUpperInvariant(), focus is null ? Slate : SourceColor.GetValueOrDefault(focus.Key, Bone), x, ref y);
-        Big(b, "FORMS", forms.Length == 0 ? "—" : forms, Bone, x, ref y);
-        Big(b, "VOWS", vows, vows == "NONE" ? Slate : Gold, x, ref y);
-
-        // EVERY CLAUSE IS NOW CONDITIONAL ON THE FACT IT ASSERTS, and the panel no longer contradicts
-        // itself. The old line was "{SOURCE}-led auto-skills with {affinity} mastery and layered vow
-        // uptime" — and its last four words were a CONSTANT. A build with no vows at all was told it
-        // had "layered vow uptime" while the row two lines above it read VOWS: NONE. The mastery
-        // clause was wrong in the other direction: Affinity() returns the tree's DOMINANT FORM, so a
-        // tree with 24 points spent but no single leading Form printed "no mastery" beside a row in
-        // the next panel reading MASTERY 24 POINTS.
-        //
-        // A note that LOOKS derived and is partly hardcoded is worse than no note: the player cannot
-        // tell which half to trust, and here both halves were readable as false from the same screen.
-        // The comment above it said "no invented copy" — the invented copy was already there.
-        var vowCount = skills.Count(s => Vows.ById(s.VowId) is not null);
-        var note = focus is null
-            ? "Add a skill to begin. Every skill is a SOURCE and a FORM."
-            : Sentences(focus.Key.ToString().ToUpperInvariant(), vowCount);
-
-        _ui.Fill(b, new Rectangle(CorePanel.X + 44, CorePanel.Bottom - 140, CorePanel.Width - 88, 2), Dim);
-        _ui.TextBig(b, "IN SHORT", CorePanel.X + 44, CorePanel.Bottom - 124, Slate, UiTypography.Secondary);
-        // WRAPPED, because the sentences are now written to be read rather than to fit. Two lines is
-        // what the space below the rows allows once the divider moves up into the void that was there.
-        var lines = _ui.WrapBig(note, CorePanel.Width - 88, UiTypography.Body);
-        for (var i = 0; i < Math.Min(3, lines.Count); i++)
-            _ui.TextBig(b, lines[i], CorePanel.X + 44, CorePanel.Bottom - 96 + i * 28, Bone, UiTypography.Body);
-    }
-
-    /// <summary>The plain-words reading of a build: what it leads on, what it has bound, where it leans.</summary>
-    private string Sentences(string lead, int vowCount)
-    {
-        var said = new List<string> { $"Most of your skills use {lead}." };
-        said.Add(vowCount switch
-        {
-            0 => "None of them has a vow yet. A vow makes a skill stronger, but it costs you something.",
-            1 => "One of them carries a vow.",
-            _ => $"{vowCount} of them carry a vow.",
-        });
-        if (Mastery.Affinity() is { } lean) said.Add($"Your mastery leans {Short(lean)}.");
-        else if (Mastery.Spent > 0) said.Add("Your mastery is spread evenly across styles.");
-        return string.Join(" ", said);
-    }
-
-    private void DrawAuraCards(SpriteBatch b, Point hit)
-    {
-        _ui.Panel(b, AuraPanel);
-        _ui.TextCenterBig(b, "YOUR SKILLS", AuraPanel.Center.X, UiKit.TitleTop(AuraPanel), Gold, UiTypography.PanelTitle);
-        var skills = Loadout.Skills;
-        // The slots this player HAS. Against the const, a fifth woven skill was invisible on the one
-        // screen whose whole job is to show the build.
-        for (var i = 0; i < Loadout.SkillCapacity; i++)
-        {
-            var card = AuraCard(i, Loadout.SkillCapacity);
-            if (i < skills.Count)
-            {
-                var s = skills[i];
-                var sc = SourceColor.GetValueOrDefault(s.Source, Bone);
-                _ui.Fill(b, card, Quiet);
-                _ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, 4), sc);
-                Outline(b, card, sc * 0.7f, 2);
-                if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } g)
-                    b.Draw(g, new Rectangle(card.Center.X - 38, card.Y + 24, 76, 76), Color.White);
-                else _ui.Diamond(b, new Rectangle(card.Center.X - 32, card.Y + 28, 64, 64), sc);
-                // Title = the real skill identity (Source + Form); state line = the Vow (§8 concise state line).
-                _ui.TextCenterBig(b, $"{s.Source.ToString().ToUpperInvariant()} {SkillWord(s)}", card.Center.X, card.Y + 118, Bone, UiTypography.Body);
-                var vow = Vows.ById(s.VowId);
-                _ui.TextCenterBig(b, vow is null ? "NO VOW" : $"VOW · {vow.Short.ToUpperInvariant()}", card.Center.X, card.Y + 152, vow is null ? Slate : Gold, UiTypography.Secondary);
-            }
-            else
-            {
-                _ui.Fill(b, card, Quiet * 0.6f);
-                _ui.TextCenter(b, i == skills.Count ? "+ EDIT" : "—", card.Center.X, card.Center.Y - 8, Dim);
-            }
-        }
-    }
-
-    private void DrawPassives(SpriteBatch b, Point hit, MemoryDustTree tree)
-    {
-        _ui.PanelQuiet(b, PassivePanel);
-        // +44 clears the panel art's centred top crest, which a centred title at +24 ran into.
-        _ui.TextCenterBig(b, "PASSIVES & RESONANCE", PassivePanel.Center.X, UiKit.TitleTop(PassivePanel), Gold, UiTypography.PanelTitle);
-
-        // 52px, the width of the ornate border. At 32 the left column sat ON the frame and the
-        // right-aligned resonance percentages were clipped by the opposite edge.
-        var x = PassivePanel.X + 52;
-
-        // THE POINTS LINE GETS ITS OWN ROW. It shared one with the VIEW TREE button, whose left edge is
-        // at 1544 — 264px from the text's start, and the string needs about 300. It rendered as
-        // "MASTERY POINTS   18 SPENT  ·  6 FI" with the rest under the button. Shortening the label would
-        // have hidden it for now and brought it back the moment a player earned a third digit:
-        // points grow with per-region first-time depth (MasteryPoints), so three digits is a real
-        // endgame value, not a hypothetical. The row is free instead.
-        // ONE NAME FOR ONE POOL. This line called them SKILL POINTS while STATS calls the same number
-        // MASTERY POINTS and the rail tile that spends them is now labelled MASTERY. Three names for one
-        // currency is three currencies as far as a player is concerned.
-        _ui.TextBig(b, $"MASTERY POINTS   {Mastery.Spent} SPENT  ·  {Mastery.Available} FREE", x, PassivePanel.Y + 112, Bone, UiTypography.Body);
-
-        // PASSIVES — the real taken mastery nodes (notables + mastery). No invented "trait bonus %" table.
-        _ui.TextBig(b, "PASSIVES", x, PassivePanel.Y + 206, Gold, UiTypography.Secondary);
-        var taken = MasteryCatalog.Nodes.Where(n => n.Kind is MasteryKind.Notable or MasteryKind.Mastery && Mastery.IsTaken(n.Id)).ToList();
-        var py = PassivePanel.Y + 240;
-        if (taken.Count == 0) _ui.TextBig(b, "None yet — walk the tree.", x, py, Slate, UiTypography.Body);
-        // SHORTENED TO THE COLUMN. Node labels are authored freely and nothing caps their length —
-        // MARK MASTERY's runs off the panel and was drawn through the frame art, ending mid-word on
-        // "…HITS 40% HA". That reads as a rendering glitch rather than as a label that is too long,
-        // which is the worst way for it to fail: nobody files it, and the sentence a player needs in
-        // order to evaluate the node is the part that went missing.
-        // To the FRAME, not to the 52px text margin. That margin exists so the right-aligned resonance
-        // percentages clear the ornate border; these labels are left-aligned and run the other way, so
-        // holding them to it truncated three that fit with pixels to spare. The frame's own inset is
-        // the real edge.
-        var labelWidth = PassivePanel.Right - UiKit.PanelCorner - 4 - (x + 30);
-        foreach (var n in taken.Take(6))
-        {
-            _ui.Diamond(b, new Rectangle(x, py + 2, 18, 18), n.Kind == MasteryKind.Mastery ? Gold : Purple);
-            // WRAPPED, NOT SHORTENED. These labels are sentences — cutting them mid-clause left four of
-            // five reading as fragments while 150px of the same panel sat empty underneath. Bounded to
-            // two lines so six notables still cannot push the KEYSTONES block off the bottom.
-            var wrapped = _ui.WrapBig(n.Label, labelWidth, UiTypography.Body);
-            for (var li = 0; li < Math.Min(2, wrapped.Count); li++)
-            {
-                _ui.TextBig(b, wrapped[li], x + 30, py, Bone, UiTypography.Body);
-                py += 26;
-            }
-            py += 12;
-        }
-
-        // RESONANCE — the real source composition of the equipped skills (share per source).
-        //
-        // ANCHORED BELOW THE PASSIVES LIST, not pinned at a fixed +430, for the same reason KEYSTONES
-        // below is anchored below the resonance list: the block above it is variable-length. The list
-        // takes up to six nodes at 36px from +240, so a player who has walked six notables ends at
-        // +456 and this heading at +430 was drawn THROUGH their last passive. Six is not an unusual
-        // build; it is what the tree is for. The old fixed position stays as a floor, so a short list
-        // still puts the heading exactly where it has always been.
-        _ui.TextBig(b, "RESONANCE", x, Math.Max(PassivePanel.Y + 430, py + 16), Gold, UiTypography.Secondary);
-        var skills = Loadout.Skills;
-        var ry = Math.Max(PassivePanel.Y + 464, py + 50);
-        var groups = skills.GroupBy(s => s.Source).OrderByDescending(g => g.Count()).ToList();
-        if (groups.Count == 0) _ui.TextBig(b, "No skills equipped.", x, ry, Slate, UiTypography.Body);
-        foreach (var g in groups)
-        {
-            var pct = skills.Count == 0 ? 0 : 100 * g.Count() / skills.Count;
-            _ui.Diamond(b, new Rectangle(x, ry + 2, 18, 18), SourceColor.GetValueOrDefault(g.Key, Bone));
-            _ui.TextBig(b, $"{g.Key.ToString().ToUpperInvariant()} RESONANCE", x + 30, ry, Bone, UiTypography.Body);
-            _ui.TextRightBig(b, $"{pct}%", PassivePanel.Right - 52, ry, SourceColor.GetValueOrDefault(g.Key, Bone), UiTypography.Body);
-            ry += 40;
-            // A FLOOR, which the keystone block below already has and this loop did not. One row per
-            // Source in the loadout, so a six-Source build walks this list straight through the panel's
-            // bottom frame and out the other side — and the list is data, so "six" is not hypothetical.
-            if (ry > PassivePanel.Bottom - UiKit.PanelCorner - 58) break;
-        }
-
-        // KEYSTONES — worn sockets (real). Anchored BELOW the resonance list rather than at a fixed
-        // +596: the list is one row per Source in the loadout, so a four-Source build ran its last row
-        // (SPIRIT RESONANCE, at +584) straight through this heading. Four is the common case.
-        var worn = DustEffects.LearnedKeystones(tree).Where(k => Loadout.HasKeystone(k.Id)).ToList();
-
-        // AND CLAMPED, because pushing it down only moved the collision. Anchoring to the resonance
-        // list fixed the overlap and handed the block to the panel's bottom ornament instead — the
-        // heading and its line were being drawn on the frame art. The floor here is the last position
-        // at which BOTH rows still clear the frame, so the block gets pushed down by a long resonance
-        // list exactly as far as there is room for and no further.
-        const int keystoneBlockH = 34 + 24;                       // heading, then its line
-        var floor = PassivePanel.Bottom - UiKit.PanelCorner - keystoneBlockH;
-        var keyY = Math.Min(Math.Max(PassivePanel.Y + 596, ry + 16), floor);
-        _ui.TextBig(b, "KEYSTONES", x, keyY, Gold, UiTypography.Secondary);
-        if (worn.Count == 0) _ui.TextBig(b, "NONE YET — PICK ONE IN YOUR SKILLS", x, keyY + 34, Slate, UiTypography.Body);
-        else _ui.TextBig(b, string.Join("  \u00b7  ", worn.Select(k => k.Name.ToUpperInvariant())), x, keyY + 34, Bone, UiTypography.Body);
-    }
-
-    private void Big(SpriteBatch b, string label, string value, Color color, int x, ref int y)
-    {
-        _ui.TextBig(b, label, x, y, Slate, UiTypography.Secondary);
-        _ui.TextBig(b, value, x + 200, y - 4, color, UiTypography.Headline);
-        y += 74;
-    }
-
-    private void Row(SpriteBatch b, Rectangle panel, string label, string value, ref int y)
-    {
-        _ui.Fill(b, new Rectangle(panel.X + 24, y, panel.Width - 48, 44), Quiet);
-        _ui.TextBig(b, label, panel.X + 38, y + 12, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, value, panel.Right - 38, y + 10, Bone, UiTypography.Body);
-        y += 52;
     }
 
     /// <summary>
@@ -962,12 +626,7 @@ public sealed class MasteryScreen
         => _ui.Button(b, r, label, hit, false, enabled);
 
     private void DrawDebug(SpriteBatch b)
-    {
-        foreach (var r in new[] { SummaryPanel, CorePanel, AuraPanel, PassivePanel })
-            Outline(b, r, Ember, 2);
-        for (var i = 0; i < Loadout.SkillCapacity; i++) Outline(b, AuraCard(i, Loadout.SkillCapacity), Verd, 2);
-        _ui.TextBig(b, $"nav BUILD  overview  {Loadout.SkillCapacity} aura cards", 60, 112, Gold, UiTypography.Secondary);
-    }
+        => _ui.TextBig(b, $"nav MASTERY  tree  zoom {_zoom:0.00}  pan {_pan.X:0},{_pan.Y:0}", 60, 112, Gold, UiTypography.Secondary);
 
     // ── Edit sub-view (the existing tree + skill sidebar). ──
     private void DrawEditor(SpriteBatch b, Point hit, MemoryDustTree tree)
@@ -1001,7 +660,7 @@ public sealed class MasteryScreen
         //                                      moved into the node card, under the cost ladder.
         //
         // Nothing was deleted except the copy, and no line lost a home.
-        if (_attuneNodeId is not null) DrawAttunement(b, hit);
+        if (_specNodeId is not null) DrawSpecialisation(b, hit);
     }
 
     /// <summary>The scissor state the tree's batch runs under. One instance; the device keeps it.</summary>
@@ -1129,7 +788,7 @@ public sealed class MasteryScreen
         // something to say back, and then it is the message. The refusals ("NEEDS 3 POINTS — YOU HAVE
         // 0") used to print at the bottom-left corner of the screen, as far from the click that raised
         // them as the canvas allows; the screen's own voice row is where a screen speaks.
-        var say = _msg.Length > 0 ? _msg : "FOUR DIRECTIONS  ·  ONE DISCIPLINE  ·  TWELVE SKILLS TO LEARN";
+        var say = _msg.Length > 0 ? _msg : "FOUR DIRECTIONS  ·  ONE STYLE  ·  TWELVE SKILLS TO LEARN";
         _ui.TextCenterBig(b, say, 960, 80, _msg.Length > 0 ? Ember : Slate, UiTypography.Secondary);
 
         // ── THE CORNER PLATE: the mastery glyph and the points you can spend, and nothing else. ──
@@ -1292,7 +951,7 @@ public sealed class MasteryScreen
     private void DrawHexPanel(SpriteBatch b, Style? aff)
     {
         _ui.PanelQuiet(b, HexPanel);
-        _ui.TextCenterBig(b, "YOUR ATTUNEMENT", HexPanel.Center.X, UiKit.TitleTop(HexPanel), Gold,
+        _ui.TextCenterBig(b, "YOUR STYLE", HexPanel.Center.X, UiKit.TitleTop(HexPanel), Gold,
                           UiTypography.PanelTitle);
 
         // THE STATE, AS A PLATE. "UNATTUNED / TAKE A SPECIALISATION NODE" used to be two bare centred
@@ -1307,7 +966,7 @@ public sealed class MasteryScreen
                               UiTypography.Headline);
         else
         {
-            _ui.TextCenterBig(b, "UNATTUNED", plate.Center.X, plate.Y + 1, Slate, UiTypography.Body);
+            _ui.TextCenterBig(b, "NOT CHOSEN", plate.Center.X, plate.Y + 1, Slate, UiTypography.Body);
             _ui.TextCenterBig(b, "TAKE A SPECIALISATION NODE", plate.Center.X, plate.Y + 22, Slate,
                               UiTypography.Secondary);
         }
@@ -1377,31 +1036,31 @@ public sealed class MasteryScreen
     /// loom shown whole — six seals, your thread bound in gold — and a choice you may still hand
     /// back. Sealing changes nothing the Take didn't already do; the ceremony IS the information.
     /// </remarks>
-    private void DrawAttunement(SpriteBatch b, Point hit)
+    private void DrawSpecialisation(SpriteBatch b, Point hit)
     {
         _ui.Scrim(b, 0.75f);
-        _ui.Panel(b, AttunePanel, gold: true);
+        _ui.Panel(b, SpecPanel, gold: true);
 
-        var name = _attuneForm.ToString().ToUpperInvariant();
-        _ui.TextCenterBig(b, "THE ATTUNEMENT", 960, UiKit.TitleTop(AttunePanel), Gold, UiTypography.PanelTitle);
-        _ui.TextCenter(b, "SIX STYLES ON THE LOOM — ONE IS YOURS.", 960, UiKit.CaptionTop(AttunePanel), Slate);
+        var name = _specStyle.ToString().ToUpperInvariant();
+        _ui.TextCenterBig(b, "YOUR SPECIALISATION", 960, UiKit.TitleTop(SpecPanel), Gold, UiTypography.PanelTitle);
+        _ui.TextCenter(b, "SIX STYLES — ONE IS YOURS.", 960, UiKit.CaptionTop(SpecPanel), Slate);
 
         // THE CEREMONY STANDS ON THE SAME FIELD THE DOCKED CHART DOES. It used to have none — the
         // hexagon floated on the modal's black interior — so the game's founding moment was the one
         // place the chart was drawn without the surface that makes it a chart.
-        var field = new Rectangle(630, AttunePanel.Y + 86, 660, 492);
+        var field = new Rectangle(630, SpecPanel.Y + 86, 660, 492);
         StyleAffinityDiagram.Field(_ui, b, field);
-        StyleAffinityDiagram.Draw(_ui, b, field.Center, CeremonyRadius, _attuneForm, showFactors: true,
+        StyleAffinityDiagram.Draw(_ui, b, field.Center, CeremonyRadius, _specStyle, showFactors: true,
                             labelGap: CeremonyLabelGap, labelPx: UiTypography.Body,
                             factorPx: UiTypography.Secondary, sealPx: CeremonySealPx);
 
-        _ui.TextCenter(b, $"YOUR {name} SKILLS HIT TWICE AS HARD. THE FAR FORMS HIT SOFTER —",
-                       960, AttunePanel.Y + 604, Bone);
-        _ui.TextCenter(b, "A VOW ON A FAR-FORM SKILL PULLS IT ONE RING CLOSER.",
-                       960, AttunePanel.Y + 626, Bone);
+        _ui.TextCenter(b, $"YOUR {name} SKILLS HIT TWICE AS HARD. THE FAR STYLES HIT SOFTER —",
+                       960, SpecPanel.Y + 604, Bone);
+        _ui.TextCenter(b, "A VOW ON A FAR-STYLE SKILL PULLS IT ONE RING CLOSER.",
+                       960, SpecPanel.Y + 626, Bone);
 
-        Button(b, AttuneSealBtn, $"SEAL IT — {name} IS MINE", hit, true);
-        Button(b, AttuneUndoBtn, "NOT YET — TAKE THE POINTS BACK", hit, true);
+        Button(b, SpecSealBtn, $"CHOOSE {name}", hit, true);
+        Button(b, SpecUndoBtn, "NOT YET — TAKE THE POINTS BACK", hit, true);
     }
 
     /// <summary>
@@ -1496,12 +1155,12 @@ public sealed class MasteryScreen
             // what TAKING it would do is the same lie as a button that does nothing.
             var says =
                 taken2
-                    ? $"{f} IS YOUR DISCIPLINE. YOUR {f} SKILLS HIT TWICE AS HARD, AND SKILLS FAR "
+                    ? $"{f} IS YOUR STYLE. YOUR {f} SKILLS HIT TWICE AS HARD, AND SKILLS FAR "
                       + "FROM IT HIT SOFTER."
                 : mine is null
-                    ? $"TAKING IT MAKES {f} YOUR DISCIPLINE. YOUR {f} SKILLS THEN HIT TWICE AS HARD, "
-                      + "AND SKILLS FAR FROM IT HIT SOFTER. ONE DISCIPLINE PER HUNTER."
-                    : $"YOUR DISCIPLINE IS ALREADY {Short(mine.Value)}. ONE DISCIPLINE PER HUNTER — "
+                    ? $"TAKING IT MAKES {f} YOUR STYLE. YOUR {f} SKILLS THEN HIT TWICE AS HARD, "
+                      + "AND SKILLS FAR FROM IT HIT SOFTER. ONE STYLE PER HUNTER."
+                    : $"YOUR STYLE IS ALREADY {Short(mine.Value)}. ONE STYLE PER HUNTER — "
                       + "TAKE EVERY POINT BACK IF YOU WANT TO CHOOSE AGAIN.";
             var after = DrawWrapped(b, says, UiKit.ContentLeft(NodePanel), afterLabel + 14,
                                     NodePanel.Width - UiKit.PadX(NodePanel) * 2, taken2 || mine is null ? Gold : Slate);
@@ -1516,7 +1175,7 @@ public sealed class MasteryScreen
             var road = learned
                 ? "LEARNED — FOR GOOD. RESPEC RETURNS THE POINTS, NEVER THE SKILL."
                 : "TAKING IT TEACHES THIS SKILL PERMANENTLY — RESPEC RETURNS THE POINTS, NEVER THE "
-                  + "SKILL. WEAVE IT ON THE BUILD SCREEN (B).";
+                  + "SKILL. EQUIP IT ON THE BUILD SCREEN (B).";
             var afterRoad = DrawWrapped(b, road, UiKit.ContentLeft(NodePanel), afterLabel + 14,
                                         NodePanel.Width - UiKit.PadX(NodePanel) * 2, learned ? Gold : Slate);
             y = Math.Max(y, afterRoad + 20);
@@ -1539,7 +1198,7 @@ public sealed class MasteryScreen
         var state = taken2 ? "TAKEN" : can ? "AVAILABLE — CLICK THE NODE"
                     : Mastery.Available < n.Cost ? "NOT ENOUGH POINTS"
                     : n.Kind == MasteryKind.Specialisation && Mastery.Affinity() is not null
-                        ? "CLOSED — YOU ALREADY HAVE A DISCIPLINE"
+                        ? "CLOSED — YOU ALREADY CHOSE A STYLE"
                     : n.Kind == MasteryKind.Mastery && Mastery.MasteredBranch() is not null
                         ? "CLOSED — YOU ALREADY TOOK A CAPSTONE"
                     : "LOCKED — WALK TO IT FIRST";
@@ -1584,7 +1243,7 @@ public sealed class MasteryScreen
         MasteryKind.Greater => "GREATER",
         MasteryKind.Mastery => "BRANCH CAPSTONE",
         MasteryKind.Bridge => "BRIDGE",
-        MasteryKind.Specialisation => "SPECIALISATION — YOUR DISCIPLINE",
+        MasteryKind.Specialisation => "SPECIALISATION — CHOOSES YOUR STYLE",
         // A road node used to fall through to "START" — the tree's most consequential kind wearing
         // the label of its most trivial one.
         MasteryKind.SkillRoad => "SKILL — LEARNED FOR GOOD",

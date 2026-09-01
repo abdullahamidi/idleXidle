@@ -256,7 +256,7 @@ public static class Unlocks
              + "heavy hit beside a fast one fills the gap the heavy one leaves.",
         3 => "A THIRD SKILL. Room for a plan now: something to keep you alive, or a SIGN to make "
              + "the other two hit harder.",
-        4 => "A FOURTH SKILL. The full weave. Every skill and every style is open to you — the "
+        4 => "A FOURTH SKILL. A full build. Every skill and every style is open to you — the "
              + "build is now the main thing you are playing with.",
         _ => "",
     };

@@ -63,7 +63,7 @@ public class WaveLengthTest
             (Source.Body, "hammer_blow"), (Source.Mind, "volley_spray"),
             (Source.Nature, "field_mire"), (Source.Spirit, "sign_call"),
         };
-        foreach (var (src, id) in plan) b.Weave(TestBuilds.Skill(id, src));
+        foreach (var (src, id) in plan) b.Equip(TestBuilds.Skill(id, src));
         return b;
     }
 

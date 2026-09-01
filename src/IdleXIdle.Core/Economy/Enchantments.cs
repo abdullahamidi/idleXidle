@@ -163,7 +163,7 @@ public sealed record Enchantment(EnchantKind Kind, float Magnitude)
         EnchantKind.Venom => $"SKILLS POISON +{Magnitude * 100f:0}%",
         EnchantKind.Desperation => $"NEAR DEATH: +{Magnitude * 100f:0}% LOOT",
         EnchantKind.Overdraw => "VOLLEY FIRES +1",
-        EnchantKind.Linger => "AMPLIFY LASTS LONGER",
+        EnchantKind.Linger => "MARKS LAST LONGER",
         EnchantKind.Radiance => "FIELDS TICK FASTER",
         EnchantKind.Execute => "HAMMER CRUSHES WEAK",
         EnchantKind.Coiled => "SNARES RE-ARM SOONER",
@@ -190,7 +190,7 @@ public sealed record Enchantment(EnchantKind Kind, float Magnitude)
         // KIND and EFFECT, not style, for the two whose sim gate never asked about style (P11):
         // Radiance speeds ANY Field's tick — hammer_press's as much as field_mire's — and
         // Linger stretches ANY amplify window. The style-keyed need greyed those live combos.
-        EnchantKind.Linger => new EnchantNeed("AN AMPLIFY WINDOW", AnyAmplify: true),
+        EnchantKind.Linger => new EnchantNeed("A SKILL THAT MARKS", AnyAmplify: true),
         EnchantKind.Radiance => new EnchantNeed("A FIELD SKILL", Kind: Builds.SkillKind.Field),
         EnchantKind.Execute => new EnchantNeed("HAMMER", Style: Builds.Style.Hammer),
         EnchantKind.Coiled => new EnchantNeed("SNARE", Style: Builds.Style.Snare),

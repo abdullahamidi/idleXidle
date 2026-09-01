@@ -43,7 +43,7 @@ public class PacingTest
     {
         var b = new Build();
         for (var i = 0; i < 4; i++)
-            b.Weave(TestBuilds.Skill("hammer_blow"));
+            b.Equip(TestBuilds.Skill("hammer_blow"));
         return b;
     }
 

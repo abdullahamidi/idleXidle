@@ -547,7 +547,7 @@ public sealed class LoadoutScreen
     {
         VowDemand.SingleStyle => "EVERY SKILL THE SAME STYLE",
         VowDemand.SingleSource => "EVERY SKILL THE SAME SOURCE",
-        VowDemand.EveryWeaveFilled => "NO EMPTY SKILL SLOT",
+        VowDemand.EverySlotFilled => "NO EMPTY SKILL SLOT",
         VowDemand.NoCritInvestment => "NO CRITICAL BONUS",
         // SHORTENED SO THE NUMBER SURVIVES. "SKILL RATE AT OR BELOW 1.20x" is wider than the 338px the
         // row leaves, and Fit() cut it at "SKILL RATE AT OR BE..." — deleting the threshold, which is
@@ -575,8 +575,8 @@ public sealed class LoadoutScreen
     /// changing a Form flips a Vow from UNMET to MET while you watch, and a cache is how that stops
     /// being true one edit later.
     /// </remarks>
-    private WeaveContext Context =>
-        Hunter is { } h ? SoloBattle.DescribeBuild(Loadout.ToBuild(Tree, Mastery, Character, SkillLevels), h) : WeaveContext.Empty;
+    private BuildContext Context =>
+        Hunter is { } h ? SoloBattle.DescribeBuild(Loadout.ToBuild(Tree, Mastery, Character, SkillLevels), h) : BuildContext.Empty;
 
     public void Update(Point mouse, bool clicked, bool held, int wheel)
     {
@@ -644,7 +644,7 @@ public sealed class LoadoutScreen
                 Loadout.RemoveSkill(i);
                 _slot = Math.Max(0, Math.Min(_slot, Loadout.Skills.Count - 1));
                 Dirty = true; _buildRev++;
-                _msg = "SLOT UNWOVEN.";
+                _msg = "SLOT CLEARED.";
                 return;
             }
 
@@ -688,7 +688,7 @@ public sealed class LoadoutScreen
             // The guard above is the negation of the only way AddSkill refuses, and the button is only
             // drawn under the same guard — the old else-branch ("NO MORE SLOTS…") had never rendered.
             _slot = Loadout.AddSkill();
-            Dirty = true; _buildRev++; _msg = "SLOT WOVEN.";
+            Dirty = true; _buildRev++; _msg = "SKILL EQUIPPED.";
             return;
         }
 
@@ -857,16 +857,16 @@ public sealed class LoadoutScreen
         // you looked at and this was the page you used. The rail's BUILD tile opens this directly.
         _ui.TextCenterBig(b, "BUILD", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
-        _ui.TextCenterBig(b, "A SKILL IS LEARNED ON THE MASTERY TREE, THEN WOVEN INTO A SLOT",
+        _ui.TextCenterBig(b, "LEARN A SKILL ON THE MASTERY TREE, THEN EQUIP IT IN A SLOT",
                           960, 80, Slate, UiTypography.Secondary);
 
         // THE DISCIPLINE LINE — the Nen frame this game was born from, finally said out loud: your
         // skills are your specialisation's craft, and a sworn Vow buys back what it does not give you.
         if (ChosenStyle is { } disc)
-            _ui.TextCenterBig(b, $"DISCIPLINE: {disc.ToString().ToUpperInvariant()} — ITS SKILLS HIT TWICE AS HARD  ·  A VOW ON A FAR-STYLE SKILL PULLS IT ONE RING CLOSER",
+            _ui.TextCenterBig(b, $"YOUR STYLE: {disc.ToString().ToUpperInvariant()} — ITS SKILLS HIT TWICE AS HARD  ·  A VOW ON A FAR-STYLE SKILL PULLS IT ONE RING CLOSER",
                               960, 108, Gold, UiTypography.Secondary);
         else
-            _ui.TextCenterBig(b, "NO DISCIPLINE YET — A SPECIALISATION NODE ON THE MASTERY TREE (E) GIVES YOU ONE",
+            _ui.TextCenterBig(b, "NO STYLE CHOSEN YET — A SPECIALISATION NODE ON THE MASTERY TREE (E) CHOOSES ONE",
                               960, 108, Slate, UiTypography.Secondary);
 
         TickEffects();
@@ -923,7 +923,7 @@ public sealed class LoadoutScreen
     private void DrawSlots(SpriteBatch b, Point hit)
     {
         _ui.Panel(b, SlotsPanel);
-        _ui.TextCenterBig(b, "WHAT YOU ARE WEAVING", SlotsPanel.Center.X, UiKit.TitleTop(SlotsPanel), Gold, UiTypography.PanelTitle);
+        _ui.TextCenterBig(b, "YOUR LOADOUT", SlotsPanel.Center.X, UiKit.TitleTop(SlotsPanel), Gold, UiTypography.PanelTitle);
 
         var skills = Loadout.Skills;
         var ctx = Context;
@@ -1314,7 +1314,7 @@ public sealed class LoadoutScreen
         // Judged on the slots' BASE defs (this screen composes no build); the Forge's own badge
         // judges the RESOLVED ones. Keystone- and vow-shaped needs are not skill advice, so the
         // hint skips them.
-        var woven = Loadout.WovenDefs();
+        var woven = Loadout.EquippedDefs();
         return h.WornEnchantments
                 .Where(e => e.Needs is { Keystone: null, AnyVow: false } n && !n.MetBySkills(woven))
                 .Select(e => (e.Needs!.Label, e.Name))

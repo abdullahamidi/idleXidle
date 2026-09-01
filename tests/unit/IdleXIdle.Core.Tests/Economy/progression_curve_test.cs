@@ -68,7 +68,7 @@ public class ProgressionCurveTest
 
         var build = new Build();
         for (var i = 0; i < 4; i++)
-            build.Weave(TestBuilds.Skill("hammer_blow", Source.Nature));
+            build.Equip(TestBuilds.Skill("hammer_blow", Source.Nature));
 
         // One unkillable target, so the window measures throughput rather than time-to-kill.
         const int windowMs = 30_000;

@@ -67,7 +67,7 @@ public enum VowDemand
     SingleSource,
 
     /// <summary>No skill slot is empty. A real cost only while slots are scarce.</summary>
-    EveryWeaveFilled,
+    EverySlotFilled,
 
     /// <summary>Critical chance is untouched from base. Argues directly against TEMPO's FOCUS road.</summary>
     NoCritInvestment,
@@ -184,7 +184,7 @@ public sealed record VowTuning
 ///
 /// Static for a whole descent, so the sim builds one per wave and reuses it for every skill.
 /// </remarks>
-public readonly record struct WeaveContext(
+public readonly record struct BuildContext(
     int DistinctStyles,
     int DistinctSources,
     int SkillsWoven,
@@ -197,7 +197,7 @@ public readonly record struct WeaveContext(
     IReadOnlySet<BareSlot> WornSlots)
 {
     /// <summary>A build that satisfies nothing — the safe default for a caller with no build to hand.</summary>
-    public static WeaveContext Empty { get; } =
+    public static BuildContext Empty { get; } =
         new(0, 0, 0, 0, 0f, 0f, 1f, 0, 0, new HashSet<BareSlot>());
 }
 
@@ -272,7 +272,7 @@ public static class Vows
             // The one Vow most builds already satisfy, and priced accordingly — it exists so the
             // catalogue has an entry a new player can take without giving anything up yet.
             Id = "vow_complete", Name = "VOW OF COMPLETION", Kind = VowKind.Demand,
-            Demand = VowDemand.EveryWeaveFilled, Severity = 0.2f,
+            Demand = VowDemand.EverySlotFilled, Severity = 0.2f,
             Short = "NO EMPTY SLOT",
             Description = "EVERY SKILL SLOT YOU OWN MUST BE FILLED. NOTHING HELD BACK.",
         },
@@ -366,7 +366,7 @@ public static class Vows
     /// Static-cost Vows are always active — they are paying whether or not they are useful, which is the
     /// entire distinction from a demand.
     /// </remarks>
-    public static bool IsActive(Vow? vow, WeaveContext ctx)
+    public static bool IsActive(Vow? vow, BuildContext ctx)
     {
         if (vow is null) return false;
         if (vow.Kind == VowKind.StaticCost) return true;
@@ -375,7 +375,7 @@ public static class Vows
         {
             VowDemand.SingleStyle => ctx.DistinctStyles <= 1,
             VowDemand.SingleSource => ctx.DistinctSources <= 1,
-            VowDemand.EveryWeaveFilled => ctx.SkillsWoven >= ctx.SkillSlots,
+            VowDemand.EverySlotFilled => ctx.SkillsWoven >= ctx.SkillSlots,
             VowDemand.NoCritInvestment => ctx.CritPercent <= ctx.BaseCritPercent + 0.01f,
             VowDemand.CadenceAtOrBelow => ctx.SkillRate <= vow.Threshold + 0.001f,
             VowDemand.CadenceAtOrAbove => ctx.SkillRate >= vow.Threshold - 0.001f,

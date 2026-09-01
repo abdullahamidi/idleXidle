@@ -535,7 +535,7 @@ public sealed class MemoryDustTree
 
         // ── The quiet mark. Requires one node from each path's FIRST rung, so it says "you have seen
         //    all four roads", not "you bought the tree" — which is impossible and meant to be. ─────
-        new() { Id = "attunement", Name = "A MARK — NO EFFECT", Cost = 4, Effect = UnlockEffect.Convenience,
+        new() { Id = "attunement", Name = "A KEEPSAKE — NO EFFECT", Cost = 4, Effect = UnlockEffect.Convenience,
                 Requires = new[] { "ks_glass_cannon", "ks_ironclad", "ks_greed", "ks_echo", "socket_3" },
                 Description = "Does nothing in the fight. It only marks that you have started all four branches." },
     };

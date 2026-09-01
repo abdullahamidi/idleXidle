@@ -115,13 +115,13 @@ public class WeavingTests
     {
         // Two extremes of the build space. Nothing in between is needed: a demand that is true in both
         // or false in both is broken whichever way it leans.
-        var wide = new WeaveContext(
+        var wide = new BuildContext(
             DistinctStyles: 4, DistinctSources: 4, SkillsWoven: 4, SkillSlots: 4,
             CritPercent: 40f, BaseCritPercent: 5f, SkillRate: 2.0f, Defence: 60,
             KeystonesWorn: 3, WornSlots: new HashSet<BareSlot>
                 { BareSlot.Boots, BareSlot.Gloves, BareSlot.Helm, BareSlot.Ring, BareSlot.Charm });
 
-        var narrow = new WeaveContext(
+        var narrow = new BuildContext(
             DistinctStyles: 1, DistinctSources: 1, SkillsWoven: 1, SkillSlots: 4,
             CritPercent: 5f, BaseCritPercent: 5f, SkillRate: 0.6f, Defence: 0,
             KeystonesWorn: 0, WornSlots: new HashSet<BareSlot>());
@@ -146,7 +146,7 @@ public class WeavingTests
     [Fact]
     public void test_a_demand_does_not_depend_on_how_the_fight_goes()
     {
-        var fields = typeof(WeaveContext).GetProperties().Select(p => p.Name).ToList();
+        var fields = typeof(BuildContext).GetProperties().Select(p => p.Name).ToList();
 
         foreach (var banned in new[] { "Health", "Elapsed", "Boss", "Wave", "Damage" })
             Assert.DoesNotContain(fields, f => f.Contains(banned, StringComparison.OrdinalIgnoreCase));

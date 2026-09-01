@@ -208,7 +208,7 @@ public class CharactersRosterTest
     {
         var build = new Build { PassiveMods = BuildMods.None, Shape = shape };
         // The catalogue id is the skill's whole identity (P3-final); cadence comes from the def's Beats.
-        build.Weave(TestBuilds.Skill("hammer_blow", Source.Nature, vow));
+        build.Equip(TestBuilds.Skill("hammer_blow", Source.Nature, vow));
 
         var champ = new Champion { MaxHealth = 100_000, Health = 100_000 };
         var target = new WaveCreature { MaxHealth = 1e9f, Health = 1e9f, Damage = 0f };

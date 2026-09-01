@@ -80,7 +80,7 @@ public static class Career
     /// Not "was a Vow sworn". A Vow pays nothing while its demand is unmet, and a quest that
     /// counted sworn-but-unmet Vows would hand THE OATHBOUND to a player who never engaged with
     /// the system the character exists to reward. Judged the way the simulation judged it while
-    /// the run was paying out: the demand against the same <see cref="WeaveContext"/>.
+    /// the run was paying out: the demand against the same <see cref="BuildContext"/>.
     /// </remarks>
     public static bool VowWasKept(Build build, Hunter hunter)
     {

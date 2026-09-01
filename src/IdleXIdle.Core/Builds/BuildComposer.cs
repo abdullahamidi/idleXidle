@@ -168,7 +168,7 @@ public static class BuildComposer
                         resolved = rm(resolved);
 
             // The chosen variation owns the element; the woven element is the fallback before it.
-            build.Weave(new EquippedSkill(resolved, variation?.Source ?? s.Source, vow));
+            build.Equip(new EquippedSkill(resolved, variation?.Source ?? s.Source, vow));
         }
         return build;
     }

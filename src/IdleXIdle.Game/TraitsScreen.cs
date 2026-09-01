@@ -535,7 +535,7 @@ public sealed class TraitsScreen
         // wire (TreeComplete) had no reader — four points bought for something the player could
         // never see. A standing fact about the account belongs on the screen's own subtitle.
         if (DustEffects.TreeComplete(tree))
-            _ui.TextCenterBig(b, "ONE SPINE  ·  FOUR ROADS  ·  NO TAKING BACK  ·  ATTUNED",
+            _ui.TextCenterBig(b, "ONE SPINE  ·  FOUR ROADS  ·  NO TAKING BACK  ·  ALL FOUR ROADS WALKED",
                               960, 80, new Color(0xF0, 0xB2, 0x4A), UiTypography.Secondary);
         else
             _ui.TextCenterBig(b, "ONE SPINE  ·  FOUR ROADS  ·  NO TAKING BACK", 960, 80, Slate, UiTypography.Secondary);

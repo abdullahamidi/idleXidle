@@ -272,9 +272,9 @@ public static class Onboarding
                 "Four directions grow out of the centre. RESONANCE is your skills' power. LOOT is a "
                 + "richer haul. TEMPO is hitting first and often, and ENDURE outlasts the enemy."),
 
-            new TourStep(TourTarget.Specialisations, "ONE DISCIPLINE",
-                "A specialisation is your discipline: that STYLE's skills hit twice as hard, and "
-                + "its road teaches the style's two skills — learned for good."),
+            new TourStep(TourTarget.Specialisations, "ONE STYLE",
+                "A specialisation chooses your Style: that Style's skills hit twice as hard, and "
+                + "its road teaches the Style's two skills — learned for good."),
 
             new TourStep(TourTarget.NodeCard, "POINTS, AND TAKING THEM BACK",
                 "Rest the pointer on a node to read it here. Points come from reaching a depth you "

@@ -33,7 +33,7 @@ public class SkillStaggerTest
         // of scope here.
         var build = new Build();
         foreach (var id in new[] { "hammer_blow", "volley_spray", "drain_drink", "sign_call" })
-            build.Weave(Sk(id));
+            build.Equip(Sk(id));
 
         var champ = new Champion { MaxHealth = 200_000, Health = 200_000 };
         // One enormous creature, so the wave runs long enough for many casts of every skill.
