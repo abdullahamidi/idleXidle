@@ -3631,6 +3631,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
             Save();
         }
         if (_expedition.WantsMastery) { _expedition.WantsMastery = false; OpenNav(4); }   // MASTERY (E) — the tree where the points are spent
+        // The EXPEDITION LOG's doors (UX V2 P1.2): the screen closed its own log before raising these.
+        if (_expedition.WantsBuild) { _expedition.WantsBuild = false; OpenNav(3); }   // BUILD
+        if (_expedition.WantsGear) { _expedition.WantsGear = false; OpenNav(1); }     // GEAR
 
         // The first-run guide, or null once outgrown. Held on the HOST, not on the fight screen: it is
         // drawn as chrome by the host now (the HUNT's lesson card, a menu screen's hint slot, the rail's NEW mark), because a guide that vanishes the

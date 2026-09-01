@@ -73,7 +73,9 @@ public class HuntScreenFeedbackTests
         Assert.Contains("$\"SPEND {Mastery.Available} POINT{(Mastery.Available == 1 ? \"\" : \"S\")}\"", src);
         Assert.DoesNotContain("(E)\"", src);
         Assert.Contains("WantsMastery = true", src);
-        Assert.DoesNotContain("WantsBuild = true", src);
+        // Only the LOG's ADJUST BUILD door raises WantsBuild (UX V2 P1.2); the utility never does.
+        var utility = Slice(src, "private void DrawRightColumn", "// \u2500\u2500 The fall plate");
+        Assert.DoesNotContain("WantsBuild", utility);
     }
 
     [Fact]
