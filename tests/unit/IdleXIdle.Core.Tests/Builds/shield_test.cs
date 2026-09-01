@@ -62,6 +62,30 @@ public class ShieldTests
         return build;
     }
 
+    /// <summary>
+    /// A build carrying JAWS in its IRON variation — the trap that stops a whole bite.
+    /// </summary>
+    /// <remarks>
+    /// This is the OTHER hard preventer, and the one the brief names beside MACHINE's: "if JAWS / IRON
+    /// already stops the bite, MACHINE 5p must NOT waste its once-per-wave prevention". It used to be
+    /// tested against FORTIFY instead, which was a shape flag no keystone, node or set could grant —
+    /// so the composition being proved was one no player could ever assemble. IRON is one a player
+    /// weaves.
+    /// </remarks>
+    private static Build WithIron(SkillShape shape)
+    {
+        var def = SkillCatalogue.ById("snare_jaws");
+        var progress = new SkillProgress();
+        for (var i = 0; i < SkillProgress.UsesForLevel(SkillProgress.MaxLevel); i++) progress.RecordWave(def.Id);
+        Assert.True(progress.ChooseVariation(def, "IRON"));
+        var build = BuildComposer.Compose(
+            new MemoryDustTree(), EveryRoadWalked(), character: null,
+            skills: new List<BuildComposer.SkillPick> { new(Source.Machine, null, SkillId: def.Id) },
+            keystoneIds: Array.Empty<string>(), slotCapacity: 4, progress: progress);
+        build.Shape = SkillShape.Combine(build.Shape, shape);
+        return build;
+    }
+
     /// <summary>One wave against one creature that never dies, so only the bites matter.</summary>
     private static (WaveOutcome Outcome, List<BattleEvent> Events, WaveMetrics Metrics) Fight(
         Champion champ, Build build, float creatureHealth = 1_000_000f, int waveMs = 6_000)
@@ -267,9 +291,9 @@ public class ShieldTests
     [Fact]
     public void test_a_hard_prevented_bite_does_not_consume_shield()
     {
-        // FORTIFY stops the wave's first bite outright. The shield must still be whole afterwards.
+        // IRON stops a whole bite outright. The shield must still be whole afterwards.
         var champ = Fresh(1_000);
-        var build = WithShape(new SkillShape { WaveStartShieldFraction = 0.5f, FirstBiteFree = true });
+        var build = WithIron(new SkillShape { WaveStartShieldFraction = 0.5f });
         var (_, _, metrics) = Fight(champ, build, waveMs: 1_500);
 
         Assert.True(metrics.DamagePrevented > 0f, "nothing was prevented");
@@ -280,14 +304,15 @@ public class ShieldTests
     [Fact]
     public void test_plating_is_not_spent_on_a_bite_another_effect_already_stopped()
     {
-        // MACHINE 5p and FORTIFY both want the first bite. FORTIFY takes it, and PLATING must keep
-        // its once-a-wave charge for the next bite that would actually land.
+        // MACHINE 5p and IRON both want the first bite. IRON takes it, and PLATING must keep its
+        // once-a-wave charge for the next bite that would actually land.
         var champ = Fresh(100_000);
-        var build = WithShape(new SkillShape { FirstBiteFree = true, PreventFirstDamagingBite = true });
+        var build = WithIron(new SkillShape { PreventFirstDamagingBite = true });
         var (_, events, metrics) = Fight(champ, build, waveMs: 3_500);
 
-        // Two bites prevented, not one: FORTIFY's and then PLATING's.
-        Assert.InRange(metrics.DamagePrevented, BiteDamage * 2f - 1f, BiteDamage * 2f + 1f);
+        // More than one bite prevented: IRON's, and then PLATING's on a later one.
+        Assert.True(metrics.DamagePrevented > BiteDamage * 1.5f,
+                    $"only {metrics.DamagePrevented} prevented — PLATING spent its charge on IRON's bite");
         // And PLATING paid its shield for the bite it really stopped.
         Assert.True(Sum(events, BattleEventKind.ShieldGained) > 0, "PLATING granted no shield");
     }
@@ -367,7 +392,7 @@ public class ShieldTests
     public void test_attempted_prevented_absorbed_and_health_damage_are_separate_numbers()
     {
         var champ = Fresh(100_000);
-        var build = WithShape(new SkillShape { WaveStartShieldFraction = 0.001f, FirstBiteFree = true });
+        var build = WithIron(new SkillShape { WaveStartShieldFraction = 0.001f });
         var (_, _, m) = Fight(champ, build, waveMs: 4_000);
 
         // Everything the wave tried is accounted for exactly once.

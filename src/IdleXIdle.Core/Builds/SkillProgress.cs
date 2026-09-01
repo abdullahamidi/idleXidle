@@ -132,6 +132,44 @@ public sealed class SkillProgress
     /// a reinforcement mid-descent re-composes the fight at the next wave boundary; leaving it out
     /// was how the whole variation layer shipped dormant (audit 2026-08-31, finding #2).
     /// </summary>
+    // ── WHAT A SAVE FROM BEFORE THE COMBAT REWORK IS CALLED NOW ─────────────────────────────────
+    //
+    // The rule (brief §73/§74): a skill's USES AND LEVEL are permanent and are never touched by any of
+    // this. A NAME is mapped only where the new rule is honestly the old one; everywhere else the
+    // purchase is simply dropped and the level it cost comes back as unspent, which is what Restore
+    // below does for any name it does not recognise.
+    //
+    // The rework renamed twenty-six things. Twenty-four of them are renames in name only in the sense
+    // that matters LEAST — the slot is the same, the rule is different — so they are deliberately NOT
+    // here: a player who bought "the window holds 4s instead of 2s" did not buy "a critical hit is
+    // empowered without spending one of them", and handing them the second because it sits in the same
+    // position would be worse than handing them their level back.
+
+    /// <summary>Variations a save may name that the catalogue has since renamed.</summary>
+    /// <remarks>
+    /// A variation matters far more than a reinforcement, because losing one silently drops all three
+    /// purchases beneath it as well. DRINK's THIRST became SIPHON and moved to MACHINE — the same rule,
+    /// the same dial, a clearer word (§74) — so a hunter who chose it keeps it, and keeps PARCH and
+    /// TRICKLE with it.
+    /// </remarks>
+    private static readonly IReadOnlyDictionary<string, string> RenamedVariations =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["THIRST"] = "SIPHON",
+        };
+
+    /// <summary>Reinforcements a save may name whose rule survived the rework under another word.</summary>
+    /// <remarks>
+    /// Exactly one. GREEDY and PUMP are the same sentence — "Lifesteal is 50% stronger" — so mapping it
+    /// costs the player nothing and refusing to would cost them a level. Everything else that changed
+    /// name also changed what it DOES, and is left out on purpose.
+    /// </remarks>
+    private static readonly IReadOnlyDictionary<string, string> RenamedReinforcements =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["GREEDY"] = "PUMP",
+        };
+
     public string Signature =>
         string.Join(";", ToSave()
             .Where(r => r.Variation is not null || r.Taken.Count > 0)
@@ -159,14 +197,23 @@ public sealed class SkillProgress
             // outlives it; silently keeping a row for a deleted skill would let it come back to life
             // under a reused id.
             if (SkillCatalogue.Find(id) is not { } def) continue;
+
+            // THE LEVEL IS PERMANENT AND IS RESTORED FIRST, before anything below can fail. Everything
+            // that follows only decides what the level has been SPENT on; a name this build no longer
+            // knows leaves the level unspent, ready to be spent again.
             if (uses > 0) _uses[id] = uses;
-            if (variation is not null && def.Variations.Any(v => v.Name == variation))
-            {
-                _variation[id] = variation;
-                var valid = def.Variations.First(v => v.Name == variation).Reinforcements.Select(r => r.Name).ToHashSet();
-                var kept = (taken ?? Array.Empty<string>()).Where(valid.Contains).ToHashSet();
-                if (kept.Count > 0) _taken[id] = kept;
-            }
+
+            var wanted = variation is null ? null
+                : RenamedVariations.TryGetValue(variation, out var nowCalled) ? nowCalled : variation;
+            if (wanted is null || def.Variations.FirstOrDefault(v => v.Name == wanted) is not { } chosen) continue;
+
+            _variation[id] = chosen.Name;
+            var valid = chosen.Reinforcements.Select(r => r.Name).ToHashSet();
+            var kept = (taken ?? Array.Empty<string>())
+                .Select(name => RenamedReinforcements.TryGetValue(name, out var renamed) ? renamed : name)
+                .Where(valid.Contains)
+                .ToHashSet();
+            if (kept.Count > 0) _taken[id] = kept;
         }
     }
 }

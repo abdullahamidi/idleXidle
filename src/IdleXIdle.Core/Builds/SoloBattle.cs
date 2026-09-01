@@ -219,7 +219,7 @@ public sealed class WaveMetrics
     /// <summary>Post-mitigation damage the wave tried to deal — before prevention or Shield.</summary>
     public float DamageAttempted { get; set; }
 
-    /// <summary>Of that, what a hard preventer stopped outright (FORTIFY, IRON, PLATING).</summary>
+    /// <summary>Of that, what a hard preventer stopped outright (IRON, MACHINE's PLATING).</summary>
     public float DamagePrevented { get; set; }
 
     /// <summary>Of the rest, what SHIELD absorbed. Never counts as damage taken.</summary>
@@ -589,7 +589,6 @@ public static class SoloBattle
         var spiritPrimed = false;                               // SPIRIT
         var mindExtendBudget = 0;                               // MIND — refilled when a MARK opens
 
-        var firstBiteTaken = false;                     // FORTIFY
         var biteFuel = 0;                               // PAYBACK — bites banked for the next skill
         var castRamp = 0;                               // RHYTHM — casts since the last bite
         var staggeredThisBite = false;                  // STAGGER — one push-back per bite
@@ -924,11 +923,6 @@ public static class SoloBattle
                 else if (match < 1f) match += (1f - match) * Math.Min(1f, shape.WeakMatchupRelief);
                 m *= match;
             }
-
-            // THE ELEMENT SETS' own-skill rungs: a skill of the set's Source hits harder. The swing
-            // passes no Source and gets nothing here (the BODY set's fifth piece is its own rule).
-            if (skillSource is { } own && shape.SourceBonus.TryGetValue(own, out var setBonus) && setBonus > 0f)
-                m *= 1f + setBonus;
 
             // PURE — the reward for refusing the matchup game entirely. Read from the woven skills, so a
             // build that swaps one slot to another Source loses it the moment it does.
@@ -1266,16 +1260,6 @@ public static class SoloBattle
                 // turn a refund into a delay. Any kill counts — skill, poison bleed, carried overkill —
                 // because the card says EVERY KILL, and this is read here rather than in the skill loop
                 // so a kill by the auto-swing or a BREAKER spill pays the same as a kill by a cast.
-                if (shape.CooldownRefundOnKillMs > 0)
-                {
-                    foreach (var key in champ.ReadyAt.Keys.ToList())
-                        champ.ReadyAt[key] -= shape.CooldownRefundOnKillMs;
-                    // A beat-counted skill is refunded in beats — the refund's worth in beats, one at least.
-                    var refundBeats = Math.Max(1, (int)MathF.Round(shape.CooldownRefundOnKillMs / (float)tuning.BeatMs));
-                    foreach (var key in champ.ReadyAtBeat.Keys.ToList())
-                        champ.ReadyAtBeat[key] -= refundBeats;
-                }
-
                 // BREAKER — half of the overkill carries on. The design named a part-break bonus here;
                 // the sim has no part-break model, and this answers the same complaint from inside the
                 // model that exists, because discarded overkill IS the tax a large-hit build pays in a
@@ -1375,10 +1359,6 @@ public static class SoloBattle
             // the only way the two branches have of paying each other.
             if (shape.HealPerTargetStruck > 0f && struck > 0)
                 Heal((int)MathF.Round(champ.MaxHealth * shape.HealPerTargetStruck * struck), atMs);
-
-            // LEECH. Reads the total dealt across every creature touched, so a wide build heals wider.
-            if (shape.Leech > 0f && dealt > 0f)
-                Heal((int)MathF.Round(dealt * shape.Leech), atMs);
 
             return dealt;
         }
@@ -2228,15 +2208,6 @@ public static class SoloBattle
                 // refund it a hundred lines later, which made "was this bite stopped?" unanswerable at
                 // the moment anything else needed to know.
                 var prevented = 0f;
-
-                // FORTIFY — the first bite of each wave deals nothing. Worth most where bites are large
-                // and rare, which is precisely a Bruiser band.
-                if (shape.FirstBiteFree && !firstBiteTaken && taken > 0f)
-                {
-                    prevented += taken;
-                    taken = 0f;
-                }
-                firstBiteTaken = true;
 
                 // The traps that answer this bite, and whether one of them stops it outright. The arm
                 // is consumed here — a trap that fires has fired, whether it reflected or prevented.

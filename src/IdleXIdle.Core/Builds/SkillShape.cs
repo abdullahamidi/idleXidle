@@ -159,18 +159,6 @@ public sealed record SkillShape
     /// <summary>This STYLE's damage multiplier, or 1 when nothing favours it.</summary>
     public float StylePowerFor(Style style) => StylePower.TryGetValue(style, out var f) && f > 0f ? f : 1f;
 
-    /// <summary>
-    /// MOMENTUM — every kill takes this many milliseconds off every skill's remaining cooldown.
-    /// </summary>
-    /// <remarks>
-    /// Action economy that is FED BY KILLS, which is what makes it a Spread node and not a rate node: a
-    /// Swarm of eight is eight refunds and a single Bruiser is one, so the same node is a torrent in the
-    /// band the branch answers and a trickle in the band it does not. The sim reads it in LandOn at the
-    /// moment a creature falls — any kill, skill or poison or carried overkill, because the card says
-    /// EVERY KILL and a rule with an unstated exception is the kind this project keeps finding dormant.
-    /// </remarks>
-    public int CooldownRefundOnKillMs { get; init; }
-
     // ── CONDITIONAL DAMAGE. Each one is a shape: it asks a question about the target or the clock. ──
 
     /// <summary>Multiplier on the first hit each creature takes (FOLLOW THROUGH, OPENER, ALPHA).</summary>
@@ -327,12 +315,6 @@ public sealed record SkillShape
     public float AutoAttackDamage { get; init; } = 1f;
 
     /// <summary>
-    /// Extra damage for skills of a given SOURCE, additive per source (0.08 = +8%) — the element sets'
-    /// 2- and 4-piece rungs. Read in SoloBattle.Amp for the skill's own Source; the swing has none.
-    /// </summary>
-    public IReadOnlyDictionary<Source, float> SourceBonus { get; init; } = new Dictionary<Source, float>();
-
-    /// <summary>
     /// RHYTHM — every cast since the last bite raises skill rate by this fraction, up to
     /// <see cref="CastRampMax"/> casts. A bite resets the count.
     /// </summary>
@@ -358,9 +340,6 @@ public sealed record SkillShape
 
     // ── ENDURE. ───────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Fraction of damage dealt returned as health.</summary>
-    public float Leech { get; init; }
-
     /// <summary>FEEDBACK — health healed per creature struck, as a fraction of maximum.</summary>
     public float HealPerTargetStruck { get; init; }
 
@@ -372,9 +351,6 @@ public sealed record SkillShape
 
     /// <summary>ABSORB — extra mitigation as health falls, up to this fraction at death's door.</summary>
     public float AbsorbAtLowHealth { get; init; }
-
-    /// <summary>FORTIFY — the first bite of each wave deals nothing.</summary>
-    public bool FirstBiteFree { get; init; }
 
     /// <summary>
     /// THORNS — every creature that bites the champion takes this fraction of its own bite back.
@@ -469,10 +445,6 @@ public sealed record SkillShape
         foreach (var (style, f) in b.StylePower)
             power[style] = power.TryGetValue(style, out var had) ? had * f : f;
 
-        var sourceBonus = new Dictionary<Source, float>(a.SourceBonus);
-        foreach (var (src, bonus) in b.SourceBonus)
-            sourceBonus[src] = sourceBonus.GetValueOrDefault(src) + bonus;
-
         return new SkillShape
         {
             HitSize = a.HitSize * b.HitSize,
@@ -502,7 +474,6 @@ public sealed record SkillShape
             ExtraTargets = a.ExtraTargets + b.ExtraTargets,
             StyleTargets = targets,
             StylePower = power,
-            CooldownRefundOnKillMs = a.CooldownRefundOnKillMs + b.CooldownRefundOnKillMs,
 
             FirstHitMultiplier = a.FirstHitMultiplier * b.FirstHitMultiplier,
             LaterHitMultiplier = a.LaterHitMultiplier * b.LaterHitMultiplier,
@@ -549,18 +520,15 @@ public sealed record SkillShape
             AssassinateThreshold = Math.Max(a.AssassinateThreshold, b.AssassinateThreshold),
             AutoAttackRate = a.AutoAttackRate * b.AutoAttackRate,
             AutoAttackDamage = a.AutoAttackDamage * b.AutoAttackDamage,
-            SourceBonus = sourceBonus,
             CastRampPerCast = a.CastRampPerCast + b.CastRampPerCast,
             CastRampMax = Math.Max(a.CastRampMax, b.CastRampMax),
             FirstCastMultiplier = a.FirstCastMultiplier * b.FirstCastMultiplier,
             LaterCastMultiplier = a.LaterCastMultiplier * b.LaterCastMultiplier,
 
-            Leech = a.Leech + b.Leech,
             HealPerTargetStruck = a.HealPerTargetStruck + b.HealPerTargetStruck,
             FlatDamageReduction = a.FlatDamageReduction + b.FlatDamageReduction,
             DamageTaken = a.DamageTaken * b.DamageTaken,
             AbsorbAtLowHealth = Math.Max(a.AbsorbAtLowHealth, b.AbsorbAtLowHealth),
-            FirstBiteFree = a.FirstBiteFree || b.FirstBiteFree,
             ReflectFraction = a.ReflectFraction + b.ReflectFraction,
             HealOnClear = a.HealOnClear + b.HealOnClear,
             RegenFraction = a.RegenFraction + b.RegenFraction,

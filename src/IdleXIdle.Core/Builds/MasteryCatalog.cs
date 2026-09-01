@@ -343,7 +343,7 @@ public static class MasteryCatalog
     /// <see cref="SkillShape.BetweenWaveRegen"/> and MENDING's <c>RegenFraction</c> still reaches the
     /// sim from the element sets. PADDING and THICK SKIN were both flat bite reduction, so THICK SKIN
     /// goes. TOUGHNESS was a bare +15% maximum health, which is the shape HIDE, BULK and ROOTED
-    /// replace. LEECH and FORTIFY are both granted by element sets besides. BRACE is BULWARK with a
+    /// replace. LEECH and FORTIFY were element-set rungs and are gone with them. BRACE is BULWARK with a
     /// different price tag.
     ///
     /// SECOND WIND, PADDING and THORNS were PROMOTED rather than cut: each is the only thing feeding

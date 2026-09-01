@@ -208,3 +208,60 @@ an AFTERIMAGE's proof is that the cast CADENCE is untouched, not that the cast c
 that dies sooner casts a different number of times for reasons that have nothing to do with the rung.
 
 **Green:** 1287/1287 unit · all gates · boot.
+
+---
+
+## 6. C4 — what happens to a save written before the rework
+
+**Done.** The promise is narrow and absolute: **uses and levels are permanent.** What a level was spent
+on may stop existing; the level itself never does. `SkillProgress.Restore` now writes the uses back
+*first*, before any name-matching can fail, so every path below it only decides what the level has been
+spent on.
+
+### Two renames are mapped, and twenty-four deliberately are not
+
+The rework renamed one variation and twenty-five reinforcements. Only two are mapped:
+
+- **`THIRST` → `SIPHON`** (§74). A variation matters far more than a reinforcement, because losing one
+  silently drops all three purchases beneath it as well. Same rule, same dial, clearer word — so PARCH
+  and TRICKLE survive with it.
+- **`GREEDY` → `PUMP`.** Both cards read *"Lifesteal is 50% stronger"* word for word.
+
+Everything else that changed name also changed what it **does**. A player who bought "the window holds
+4s instead of 2s" did not buy "a critical hit is empowered without spending one of them", and handing
+them the second because it sits in the same position would be worse than handing back the level. Those
+purchases are dropped and the levels return as unspent — which is what `Restore` already did for any
+name it does not recognise.
+
+### §75 — a Source change is not a respec
+
+Eleven variations moved Source to satisfy the matrix. None changed name, and `Restore` matches by name,
+so FINISH, CLUSTER, TORRENT, SUP and SHRIVEL all keep their selection. Pinned as a theory.
+
+### §77 — the shield audit, not the shield assumption
+
+`SaveGame` carries no champion runtime state at all: no health, no shield, no shades, no beat count. A
+save records the **run**, not the instant, and `Champion` is constructed fresh for every wave. Nothing
+to remove and nothing to add. `Champion.Shades` persists between waves inside a session (§56) and does
+not survive a reload, which is honest for a run-scoped resource.
+
+### §78 — four dead dials, swept
+
+A script over `SkillShape` asked which dials the **game** never sets — a dial only a test produces is
+a dial the player can never own. Four, and all four are the residue of C3's deleted set rungs:
+
+| Dial | Was | Now |
+|---|---|---|
+| `SourceBonus` | the matching-Source 2p/4p rungs | deleted (§78 names it) |
+| `Leech` | NATURE 5p | deleted |
+| `FirstBiteFree` (FORTIFY) | MACHINE 5p | deleted |
+| `CooldownRefundOnKillMs` | SHADOW 5p | deleted |
+
+`ShieldInsteadOfDamage` was checked and **kept**: SNARE/BANKED sets it and `SoloBattle` grants through
+the one shield door, so it has a live consumer.
+
+The three shield tests that used FORTIFY as "a hard preventer that is not PLATING" now use **IRON** —
+which is the preventer the brief itself names beside MACHINE's, and the only one a player can weave. The
+composition being proved is now one someone can actually assemble.
+
+**Green:** 1296/1296 unit · all gates · boot.

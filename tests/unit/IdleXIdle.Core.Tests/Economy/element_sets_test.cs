@@ -149,13 +149,6 @@ public class element_sets_test
     [Fact]
     public void test_a_set_never_pays_a_build_for_matching_its_source()
     {
-        foreach (var el in Enum.GetValues<Source>())
-        {
-            Assert.Empty(GearShape.Of(Wearing(el, 5)).SourceBonus);
-            foreach (var tier in ElementSets.TiersOf(el))
-                Assert.Empty(tier.Shape.SourceBonus);
-        }
-
         // And measured. Not "the two builds deal the same" — they never would, because Source decides
         // the matchup they fight into before any gear is worn. What must be equal is what the SET IS
         // WORTH: the ratio each build gains over its own bare-handed self.
