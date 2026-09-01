@@ -99,7 +99,7 @@ public enum TourTarget
     RegionChain,
     /// <summary>The chosen region's detail column.</summary>
     RegionDetail,
-    /// <summary>The ENTER THIS REGION button.</summary>
+    /// <summary>The region's own button — HUNT HERE, or RESUME HERE where you already are.</summary>
     EnterRegion,
 
     // ── TRAITS ──
@@ -367,12 +367,12 @@ public static class Onboarding
                 + "than the last. Reach the goal depth in one to conquer it, which opens the next."),
 
             new TourStep(TourTarget.RegionDetail, "WHAT A REGION HOLDS",
-                "Click a region to read it here: its element, its enemies, the depth that conquers it, "
-                + "and what it drops. Where you hunt is a loot choice too."),
+                "Click a region to read it here: its element, how its enemies fight, the wave that "
+                + "conquers it, and what it drops. Where you hunt is a loot choice too."),
 
             new TourStep(TourTarget.EnterRegion, "GO THERE",
-                "ENTER THIS REGION moves the hunt there. Once every region is yours, a corruption "
-                + "ladder appears above this button: enemies hit harder and take more hits."),
+                "HUNT HERE moves the hunt to the region you picked. A locked region names the one to "
+                + "conquer first."),
         },
 
         Activity.Traits => new[]

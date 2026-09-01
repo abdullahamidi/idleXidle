@@ -1523,7 +1523,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // `telegraph`, `combat` and `boss2` posed the manual-combat screen for screenshots. That
             // screen is gone, so they had nothing to pose.
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
-                or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "welcome" or "boss" or "bossdebug"
+                or "region2" or "region3" or "conquered" or "mapdeep" or "maplocked" or "help" or "expedition" or "fight" or "welcome" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
                 or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "traitlit" or "traitterm" or "traitterminal"
                 or "roster" or "rosterlocked" or "weave" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
@@ -1943,8 +1943,40 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 {
                     // Show a mid-progression map: home conquered, Cinderworks unlocked.
                     _world.Conquer(VerdantHollow.RegionId);
-                    _conquerMsg = "VERDANT HOLLOW CONQUERED!  CINDERWORKS UNLOCKED — OPEN THE MAP (W).";
+                    _conquerMsg = "VERDANT HOLLOW CONQUERED!  CINDERWORKS IS OPEN.";
                     _showWorld = true;
+                }
+                // mapdeep: the same world, but the region you are in was conquered and held deep — the only
+                // pose in which the START AT WAVE chips exist (they need more than one option), and the one
+                // that photographs a checkpoint the player cannot afford (UX V2 P2.1).
+                if (sm == "mapdeep")
+                {
+                    _world.Conquer(VerdantHollow.RegionId);
+                    _world.Conquer("cinderworks");
+                    _world.Conquer("umbral_reach");
+                    _world.Conquer("marrow_wastes");
+                    SetActiveRegion("marrow_wastes");
+                    _world.RegionFarm("marrow_wastes").RestoreBestDepth(43);
+                    _world.RegionFarm("marrow_wastes").SetStartWave(40);
+                    _deepestEver = 43;
+                    _showWorld = true;
+                    _mapScreen.ActiveRegion = _activeRegion;
+                    _mapScreen.DevSelect("marrow_wastes");
+                    _hunter.AddGleam(131_900_000);
+                    _dust.AddDust(400);   // short of the 1,000 a wave-40 start costs, so the refusal line shows
+                }
+                // maplocked: the inspector on a region you cannot reach yet — YOU NEED FIRST and the
+                // requirement in place of a button.
+                if (sm == "maplocked")
+                {
+                    _world.Conquer(VerdantHollow.RegionId);
+                    _world.Conquer("cinderworks");
+                    SetActiveRegion("umbral_reach");
+                    _showWorld = true;
+                    _mapScreen.ActiveRegion = _activeRegion;
+                    _mapScreen.DevSelect("pale_choir");
+                    _hunter.AddGleam(131_900_000);
+                    _dust.AddDust(77_400);
                 }
                 if (sm == "map")
                 {
@@ -3453,7 +3485,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             Activity.Vault => VaultScreen.Spotlights(target),
             Activity.Forge => ForgeScreen.Spotlights(target),
             Activity.Warren => WarrenScreen.Spotlights(target),
-            Activity.Map => MapScreen.Spotlights(target),
+            Activity.Map => _mapScreen.Spotlights(target),
             Activity.Traits => TraitsScreen.Spotlights(target),
             Activity.Roster => RosterScreen.Spotlights(target),
             _ => Array.Empty<Rectangle>(),
@@ -3868,8 +3900,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _dust.AddDust(CorruptionScaling.ConquestDust(_world.CorruptionTier));
             _sound.PlayFirst(1f, "sfx_conquer", "sfx_levelup");
             _conquerMsg = unlocked is not null
-                ? $"{Regions.Get(_activeRegion).Name} CONQUERED!  {unlocked.Name} UNLOCKED — MAP (W)."
-                : "THE WORLD IS YOURS.  GO DEEPER INTO THE CORRUPTION ON THE MAP (W).";
+                // The message shows ON the map now, in its own strip inside the chart — so it no longer
+                // has to tell the player to go and open the screen it is already standing on.
+                ? $"{Regions.Get(_activeRegion).Name} CONQUERED!  {unlocked.Name} IS OPEN."
+                : "THE WORLD IS YOURS.";
             Save();
         }
     }
@@ -5244,7 +5278,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_mapScreen.ConsumeEnter() is { } id)
         {
             if (_world.IsUnlocked(id)) { SetActiveRegion(id); _showWorld = false; }
-            else _conquerMsg = $"{Regions.Get(id).Name} IS LOCKED — CONQUER THE PREVIOUS REGION.";
         }
         if (_mapScreen.ConsumeDeepen()) DeepenCorruption();
         if (_mapScreen.ConsumeEase()) EaseCorruption();
