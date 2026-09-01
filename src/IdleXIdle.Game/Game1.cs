@@ -1527,6 +1527,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
                 or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "traitlit" or "traitterm" or "traitterminal"
                 or "roster" or "rosterlocked" or "weave" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
+                or "vaultempty" or "vaultemptyfilter" or "vaultsell" or "vaultmany"
                 or "gemtour" or "intro" or "typespec")
             {
                 _showTitle = false;
@@ -2115,7 +2116,37 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _vault.KeepMinTier = 3; _vault.KeepSlots.Add(ItemBaseType.Helm); _vault.KeepSlots.Add(ItemBaseType.Boots);
                     _vault.FilterOpen = true;
                 }
-                if (sm is "vault" or "vaultfilter")
+
+                // vaultempty: the state no fixture could pose until UX V2 P1.8 — a vault with nothing
+                // in it. The empty state had been written, rewritten and shipped for months without
+                // ever being photographed, and it was wrong in three ways when it finally was.
+                // RestoreChests runs after LoadContent's own restore, so it wins.
+                if (sm is "vaultempty" or "vaultemptyfilter")
+                {
+                    _showVault = true;
+                    _forge.RestoreChests(Array.Empty<Chest>());
+                }
+                // ...and the same room with a keep-filter set, which is the only state in which the
+                // empty vault's third line — the one that says where your chests went — is drawn.
+                if (sm == "vaultemptyfilter")
+                {
+                    _chestKeepMinTier = 3; _chestKeepSlots.Add(ItemBaseType.Helm); _chestKeepSlots.Add(ItemBaseType.Boots);
+                    _vault.KeepMinTier = 3; _vault.KeepSlots.Add(ItemBaseType.Helm); _vault.KeepSlots.Add(ItemBaseType.Boots);
+                }
+
+                // vaultsell: the pile with both OPEN-ALL consequence traits bought, so the reserved
+                // row under the toolbar has something true to say. Nothing is special-cased — the
+                // traits are really purchased, UpdateExpedition sets the Forge's two flags from them,
+                // and the host feed hands them to the vault the way it does in a real save.
+                if (sm == "vaultsell")
+                {
+                    _dust.SetEarned(12);
+                    _dust.Purchase("ledger");
+                    _dust.Purchase("filter_common");
+                    _dust.Purchase("forge_insight");
+                    _dust.Purchase("auto_merge");
+                }
+                if (sm is "vault" or "vaultfilter" or "vaultsell" or "vaultmany")
                 {
                     _showVault = true;
                     var grades = new[] { Rarity.Legendary, Rarity.Epic, Rarity.Rare, Rarity.Rare,
@@ -2134,6 +2165,21 @@ public class Game1 : Microsoft.Xna.Framework.Game
                                 Region = regions[i],
                                 RunTilt = i == 0 ? 1.35f : 1f,
                             });
+                }
+
+                // vaultmany: three pages of chests, so the page indicator, the wheel and a SHORT last
+                // row are all in one capture — plus the two honest edge cases the six-chest pile has
+                // never held: a chest with no element and no region ("Plain — no element.", "No
+                // favoured gear.") and one won on a BAD hunt, whose tilt line reads the other way.
+                if (sm == "vaultmany")
+                {
+                    foreach (var gift in GiftChests.NewGameChests()) _forge.AddChest(gift);
+                    _forge.AddChest(new Chest { Rarity = Rarity.Rare, Tier = 18, Element = null, Region = null });
+                    _forge.AddChest(new Chest
+                    {
+                        Rarity = Rarity.Epic, Tier = 24, Element = Source.Spirit,
+                        Region = "pale_choir", RunTilt = 0.8f,
+                    });
                 }
 
                 if (sm == "weave")
@@ -2770,6 +2816,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _traderStockClass = traderClass;
             }
             _vault.Hunter = _hunter;
+            // What OPEN ALL will do to the drops before the player sees them. Both are Memory Dust
+            // traits the FORGE owns and UpdateExpedition (called above, this same frame) refreshes,
+            // so the vault's consequence row is never a frame stale.
+            _vault.AutoSellFloor = _forge.AutoSellFloor;
+            _vault.AutoMergeOnOpen = _forge.AutoMergeOnOpen;
             _vault.TraderStock = _traderStock;
             _vault.TraderBought = _traderBought;
 
@@ -3687,6 +3738,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Forge, and the errand belongs to the screen that owns the verb.
         // Indices, not names — they moved when MASTERY was inserted at 4. VAULT is 5 now.
         if (_expedition.WantsVault) { _expedition.WantsVault = false; OpenNav(5); }
+        // The empty vault's door out. Same shape as the HUNT's: the screen records the intent in Draw,
+        // the host reads it one frame later — only the host may change screens.
+        if (_vault.WantsHunt) { _vault.WantsHunt = false; OpenNav(0); }
         // TAKE ONLY edits (made in the HUNT screen's Draw) come back on the dirty flag only — never a
         // per-frame push of the saved value, which clobbered the vault's edit in playtest five.
         if (_vault.FilterDirty)

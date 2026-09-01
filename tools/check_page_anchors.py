@@ -59,6 +59,7 @@ CONVERTED = [
     "MasteryScreen.cs",   # MASTERY  — P1.5
     "TraitsScreen.cs",    # TRAITS   — P1.6
     "GearScreen.cs",      # GEAR     — P1.7
+    "VaultScreen.cs",     # VAULT    — P1.8
 ]
 
 # The canvas's own numbers. 540 is deliberately absent: it collides with too many honest sizes.

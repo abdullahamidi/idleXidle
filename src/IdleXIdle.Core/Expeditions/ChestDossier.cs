@@ -97,7 +97,12 @@ public sealed record ChestDossier
         : $"{MinItems}–{MaxItems} items at tier {Tier}.";
 
     /// <summary>The material payout.</summary>
-    public string MaterialsLine => $"{MinMaterials}–{MaxMaterials} materials.";
+    /// <remarks>
+    /// SCRAP, not "materials". The payout is literally <c>hunter.AddMaterials(reward.Materials)</c>
+    /// (ForgeScreen.LandChest) → <c>AddMaterial(Material.Scrap, …)</c>, and the pill on every screen
+    /// that shows a wallet already says SCRAP. "Materials" was a category name for a single currency.
+    /// </remarks>
+    public string MaterialsLine => $"{MinMaterials}–{MaxMaterials} Scrap.";
 
     /// <summary>The attunement, or that there is none.</summary>
     public string ElementLine => Element is { } e
@@ -127,20 +132,9 @@ public sealed record ChestDossier
         }
     }
 
-    /// <summary>The same fact at card width — no verb, no punctuation, just the slots.</summary>
-    /// <remarks>
-    /// A card is 256px wide and the sentence form truncated to "Favours HELM and CHEST an…", which
-    /// costs the reader the one word that mattered. Two vocabularies for one fact would be worse, so
-    /// both forms are derived from the same list.
-    /// </remarks>
-    public string RegionShort => Gift is { } g ? g.CardContents
-        : Favoured.Count == 0 ? "no lean" : string.Join(" · ", Favoured.Select(SlotName));
-
-    /// <summary>The floor promise at card width — or, on a gift, the word that it is one.</summary>
-    public string FloorShort => Gift is { } g ? g.CardPromise
-        : GuaranteedFloor <= Rarity.Common
-            ? "any rarity"
-            : $"{GuaranteedFloor.ToString().ToUpperInvariant()} or better";
+    // RegionShort and FloorShort — the two card-width fragments — are gone with UX V2 P1.8. The card
+    // is 884 px wide now and prints the whole of `Lines`, so a second, shortened vocabulary for the
+    // same two facts had no reader left. GiftChestDef.CardPromise/CardContents went with them.
 
     /// <summary>The run's own tilt, mentioned only when it actually did something.</summary>
     /// <remarks>

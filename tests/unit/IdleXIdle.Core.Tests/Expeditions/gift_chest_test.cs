@@ -105,8 +105,6 @@ public class GiftChestTest
 
         Assert.True(d.IsGift);
         Assert.Equal(GiftChests.Welcome.Title, d.Title);
-        Assert.Equal(GiftChests.Welcome.CardPromise, d.FloorShort);
-        Assert.Equal(GiftChests.Welcome.CardContents, d.RegionShort);
         Assert.Equal(GiftChests.Welcome.Lines, d.Lines);
         Assert.Contains("BLADE", d.Lines[0]);
         Assert.Contains(CharacterRoster.Get(CharacterRoster.StarterId).Name, d.Lines[0]);

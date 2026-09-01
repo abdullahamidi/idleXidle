@@ -58,7 +58,7 @@ Palette (D-tokens): `UiKit.Ink` — `Primary E8DFC8` · `Secondary 8A96A8` (≥ 
 
 ### P1 — loot loop
 - **P1.7 GEAR** — loadout column folded into the Equipped header; ~42/27/31 split (layout-tested); quiet empty cells; `SetBonusLadder`; EQUIP BEST → `EQUIP HIGHEST POWER` (the audit confirmed it compares `PowerRating` only).
-- **P1.8 VAULT** — big chest cards with OPEN; OPEN ALL primary, TRADER secondary, PASTE CODE tertiary; keep-filter control in the toolbar (D12); real empty state; OPEN ALL consequence line.
+- **P1.8 VAULT** — DONE. 2x2 cards of 884x349 carrying the WHOLE dossier (the 470 px peek tooltip and its glass are deleted); OPEN chip per card, never hover-only; OPEN ALL is the one `Primary` and is never disabled — one chest reads OPEN THE CHEST; CHEST FILTER and TRADER secondary; PASTE A CODE a plate; a reserved consequence row states the AUTO-SELL / AUTO-MERGE traits before the click; the empty state rewritten in real inks with its drop rate derived from `ChestTuning` and RETURN TO HUNT as its primary; four new fixtures (`vaultempty`, `vaultemptyfilter`, `vaultsell`, `vaultmany`) — the empty vault had never been photographed.
 - **P1.9 FORGE** — three columns + MATERIALS strip; YOUR CHARTS copy → tour/Help; BEFORE → AFTER prominent; per-tab honesty lines (what changes, cost, uncertainty, destruction).
 
 ### P2 — progression
@@ -83,7 +83,7 @@ real-720 captures have been looked at, not when the code compiles.
 Pre-existing (identical in the 2026-09-01 baselines), recorded here so the screen pass that owns them cannot miss them:
 - ~~**BUILD** — the `IN <REGION>` affinity block drew three rows below the panel's bottom frame.~~ CLOSED by P1.4: the matchup lives in the inspector.
 - **ItemTooltip** — `HeightFor` sums literal row heights that must mirror the draw's pitches by hand; the draw was left on its literals in P0.4 so the two could not drift apart before the pair is unified. → P1.7 (the inspector replaces the tooltip's measure/draw pair).
-- **Page anchors** — ~~every screen~~ the screens not yet passed still centre titles at 960 and subtract from 1920/1080. CLOSED for BUILD · MASTERY · TRAITS · GEAR (P1.7b): all four centre on `PageCenterX` and derive BOTH column edges from the page. The lesson that pass taught, for the screens still to come: a panel with a fixed LEFT edge and a page-relative RIGHT edge collapses — GEAR's inspector fell to ~200 px at 125%. Derive both edges, or fix the width and anchor one edge. → remaining screens in their own passes; P3.4 verifies all three scales.
+- **Page anchors** — ~~every screen~~ the screens not yet passed still centre titles at 960 and subtract from 1920/1080. CLOSED for BUILD · MASTERY · TRAITS · GEAR (P1.7b) · VAULT (P1.8; its panel was a `static readonly Rectangle`, frozen at class load, which cannot follow the page at all): all four centre on `PageCenterX` and derive BOTH column edges from the page. The lesson that pass taught, for the screens still to come: a panel with a fixed LEFT edge and a page-relative RIGHT edge collapses — GEAR's inspector fell to ~200 px at 125%. Derive both edges, or fix the width and anchor one edge. → remaining screens in their own passes; P3.4 verifies all three scales.
 - **Mouse quantisation** — `ToOverlay` still takes the 480-space `CanvasMouse` (×4), so menu hit-tests land on a 4 px grid (audit P1-3). → fold into the first screen pass that rewrites its hit-testing; `ChromeMouse` is the full-resolution source.
 
 Registered by P1.7b/c (UI SCALE):

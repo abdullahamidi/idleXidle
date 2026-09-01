@@ -204,7 +204,7 @@ public static class Unlocks
         Activity.Hunt => "THE HUNT",
         Activity.Training => "STATS — TRAIN YOUR CHAMPION",
         Activity.Gear => "GEAR — WHAT YOU WEAR",
-        Activity.Vault => "THE VAULT — CHESTS YOU HAVE NOT OPENED",
+        Activity.Vault => "VAULT — CHESTS YOU HAVE NOT OPENED",
         Activity.Forge => "THE FORGE — WHERE ITEMS ARE MADE",
         Activity.Build => "THE BUILD — THE ACTUAL GAME",
         Activity.Mastery => "THE MASTERY TREE — HOW YOUR SKILLS BEHAVE",

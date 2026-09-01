@@ -162,6 +162,10 @@ Rules:
   `SliderRow`. Close icons sit at `UiKit.CloseRect(panel)`; slot/card closes at `HintCloseRect`.
 - Hover = highlight + one-line tip (`UiKit.HoverTip`, flips inside `UiKit.Page`). Click = select (feeds
   the inspector). Primary button = commit. Nothing is hover-only; nothing commits on hover.
+- A card that IS the commit (the VAULT's chest) carries its action as a labelled `Plate` chip, not a
+  `Button`: the whole card is the click, so a real button inside it would be a second click source on
+  one gesture. The chip lights with the CARD, and it is drawn at rest — an action that appears only on
+  hover is the "hover-only" fault under another name.
 - Keyboard/gamepad reach every control by cycle-and-confirm; no stick-cursor emulation.
 
 ---
@@ -354,6 +358,11 @@ Measured in the 1080 capture AND the real 1280×720 capture:
 - copy in the D7 vocabulary; no retired-architecture word (`Form`, `weave`, `discipline`, `attunement`,
   `depth`, `champion` in player copy);
 - the inspector, where the screen has one, in the §6 grammar; the exception (VAULT) documented;
+- a screen may hold one `Primary` per STATE, not one per file: the VAULT's is OPEN ALL when a chest is
+  waiting and RETURN TO HUNT when none is, and the two are never drawn together;
+- every state a fixture cannot pose is a state that has never been checked — the VAULT's empty state
+  shipped for months in the hairline ink, describing a control that had been deleted, because no mode
+  could empty the pile (P1.8). A pass adds the fixture for each state it writes copy for;
 - gates green; suite green; the checkpoint committed with its captures inspected and its evidence kept.
 
 ---

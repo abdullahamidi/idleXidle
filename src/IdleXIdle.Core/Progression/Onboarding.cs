@@ -69,8 +69,6 @@ public enum TourTarget
     // ── VAULT ──
     /// <summary>The chest cards.</summary>
     ChestCards,
-    /// <summary>The ? chip on a chest card that reads its promise.</summary>
-    ChestQuestion,
     /// <summary>The header buttons: OPEN ALL, TRADER, PASTE A CODE.</summary>
     VaultButtons,
 
@@ -314,16 +312,12 @@ public static class Onboarding
         Activity.Vault => new[]
         {
             new TourStep(TourTarget.ChestCards, "YOUR CHESTS",
-                "Every chest you hold, one card per kind. Your first is a welcome gift. A card shows "
-                + "the grade, the tier and the element. Click a card to open one."),
+                "Every chest you hold, one card for each kind. Your first is a welcome gift. The card "
+                + "says what it promises before you open it. Click a card to open one."),
 
-            new TourStep(TourTarget.ChestQuestion, "WHAT IS INSIDE",
-                "Rest the pointer on the small glass to read what a chest promises. A boss's chest "
-                + "only promises a lowest rarity. The gift says exactly what it holds."),
-
-            new TourStep(TourTarget.VaultButtons, "THE HEADER BUTTONS",
-                "OPEN ALL opens every chest at once. TRADER opens a stall that changes every week. "
-                + "PASTE A CODE reads a code someone shared with you."),
+            new TourStep(TourTarget.VaultButtons, "THE TOOLBAR",
+                "OPEN ALL opens every chest at once. CHEST FILTER decides which chests you keep. "
+                + "TRADER is a stall that changes every week."),
         },
 
         Activity.Forge => new[]
