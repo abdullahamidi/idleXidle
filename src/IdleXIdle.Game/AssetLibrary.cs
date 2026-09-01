@@ -180,6 +180,14 @@ public sealed class AssetLibrary
         ["fx_crit"] = "fx_crit_strip8_512", ["fx_death"] = "fx_death_strip8_512",
         ["fx_heal"] = "fx_heal_strip8_512", ["fx_shield"] = "fx_shield_strip8_512",
         ["fx_levelup"] = "fx_levelup_strip8_512",
+        // SHIELD BROKEN (UI polish §70, §95): generated through PixelLab (a cracked dome bursting into
+        // shards) because fx_shield is a dome that flashes in and settles — a gain, not a break.
+        ["fx_shield_break"] = "fx_shield_break_strip8_512",
+        // THE SHIELD BAR (UI polish §66, §95). Reused, not generated: ui_bar_mana_* shipped with the bar
+        // family (the same ornate gold frame as the health bar, a cold blue fill) and no screen ever
+        // drew it — the game has no mana. A bar beside HEALTH that is the same frame in a cold colour
+        // is exactly what a SHIELD bar should be, so BarArt(…, "shield") resolves to it.
+        ["ui_bar_shield_frame"] = "ui_bar_mana_frame", ["ui_bar_shield_fill"] = "ui_bar_mana_fill",
     };
 
     private Texture2D? Resolve(string key)

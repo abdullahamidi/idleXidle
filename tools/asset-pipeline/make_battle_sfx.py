@@ -547,6 +547,31 @@ def upgrade(buf):
     bell(buf, 0.008, 1046.5, 0.55, 0.045, partials=(1.0, 2.76, 5.40))
 
 
+# ── The UI POLISH cues that need the fight's primitives (2026-09-01, brief §55, §70) ───────────
+
+def shield_break(buf):
+    """SHIELD BROKEN: a crack, not a thud. A bright crunch with a glass ring inside it and a short
+    fall under it — heavier than an absorbed hit, lighter than the champion falling (brief §70).
+    Cold where the hit is warm: the ring is glassy and the sub is brief."""
+    rng = Noise(0x5B2E)
+    add(buf, 0.0, click(rng, 0.003, 3200.0), 0.30)
+    add(buf, 0.0, crunch(rng, 0.024, 420.0, 4200.0, 0.007, sat=5.0), 0.60)
+    add(buf, 0.0, thump(0.22, 96.0, 48.0, 0.028, 0.07, sat=1.8), 0.55)
+    bell(buf, 0.004, 1567.98, 0.26, 0.09, partials=(1.0, 2.32, 4.25))   # the glass in the crack
+    add(buf, 0.01, dissolve(rng, 0.30, 2400.0, 500.0, 2.4, 0.10, 0.004, 0.003), 0.45)
+    add(buf, 0.003, tail(rng, 0.30, 900.0, 0.07), 0.25)
+
+
+def salvage(buf):
+    """SALVAGE: an item comes apart into scrap — a dry break. A crunch and a short crumble with no
+    ring at all; the forge's anvil and the gem's ping are for making, this is for unmaking."""
+    rng = Noise(0x5A17)
+    add(buf, 0.0, crunch(rng, 0.030, 260.0, 2200.0, 0.010, sat=3.5), 0.75)
+    add(buf, 0.0, thump(0.16, 90.0, 52.0, 0.020, 0.05, sat=1.5), 0.30)
+    add(buf, 0.02, dissolve(rng, 0.26, 900.0, 220.0, 2.0, 0.09, 0.006, 0.004), 0.70)
+    add(buf, 0.01, tail(rng, 0.22, 500.0, 0.06), 0.20)
+
+
 # ── The numeric ear ──────────────────────────────────────────────────────────────────────────
 # Nobody listens in CI, so the properties that make a cue heavy are MEASURED and asserted.
 
@@ -681,6 +706,8 @@ if __name__ == "__main__":
     make("sfx_equip", UI_DIR, 0.13, equip, target_peak=0.36)
     make("sfx_gem", UI_DIR, 0.25, gem, target_peak=0.36)
     make("sfx_upgrade", UI_DIR, 0.17, upgrade, target_peak=0.38)
+    make("sfx_shield_break", COMBAT_DIR, 0.42, shield_break, target_peak=0.40, max_ms=450, darken=6000.0)
+    make("sfx_salvage", UI_DIR, 0.30, salvage, target_peak=0.36, max_ms=350, darken=3500.0)
 
     rows = []
     bad = []
