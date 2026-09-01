@@ -466,6 +466,10 @@ public sealed class LoadoutScreen
                 if (!known.Contains(def.Id)) return ($"LEARN ON {StyleName(def.Style)}'S ROAD", false, $"LEARNED ON {StyleName(def.Style)}'S ROAD, ON THE MASTERY TREE.");
                 if (_slot >= skills.Count) return ("EQUIP", false, "PICK A SLOT ON THE LEFT FIRST.");
                 if (skills[_slot].SkillId == def.Id) return ($"EQUIPPED IN SLOT {_slot + 1}", false, "");
+                // LAW 13: one slot per skill. The button says WHERE it already is, in words, rather than
+                // going grey without a reason — the loadout itself refuses the write regardless.
+                if (Loadout.IndexOfSkill(def.Id) is var other && other >= 0)
+                    return ($"ALREADY EQUIPPED IN SLOT {other + 1}", false, $"A SKILL GOES IN ONE SLOT. IT IS IN SLOT {other + 1} — PICK THAT SLOT TO CHANGE IT.");
                 return ($"EQUIP TO SLOT {_slot + 1}", true, "");
             }
             case Pick.Variation:
@@ -519,7 +523,15 @@ public sealed class LoadoutScreen
         switch (_pick)
         {
             case Pick.Library:
-                Loadout.SetSkill(_slot, _pickSkillId); Dirty = true; _buildRev++;
+                // The loadout has the last word (LAW 13): a refusal here means Primary() and the model
+                // disagree, and the message says so instead of pretending the equip happened.
+                if (!Loadout.SetSkill(_slot, _pickSkillId))
+                {
+                    var where = Loadout.IndexOfSkill(_pickSkillId);
+                    _msg = where >= 0 ? $"ALREADY EQUIPPED IN SLOT {where + 1}." : "THAT SKILL CANNOT GO THERE.";
+                    break;
+                }
+                Dirty = true; _buildRev++;
                 _slotFlash[_slot] = SetFlashSeconds; Sound?.Play("sfx_weave", 0.45f);
                 _msg = $"{SkillCatalogue.Find(_pickSkillId)?.Name} EQUIPPED IN SLOT {_slot + 1}.";
                 _pick = Pick.Slot;
@@ -739,8 +751,11 @@ public sealed class LoadoutScreen
             var vy = bench.Y + UiTypography.Pitch(UiTypography.Secondary);
             _ui.TextBig(b, $"{_currentDps:N0} / s", bench.X, vy, Bone, UiTypography.PrimaryValue);
             // The library pick under inspection, previewed in the selected slot: measured on the real loadout, then put back.
+            // Not previewed when the pick is already worn elsewhere: SetSkill would refuse it (LAW 13) and
+            // the bench would measure the unchanged build and print NO CHANGE for a real difference.
             if (_pick == Pick.Library && SkillCatalogue.Find(_pickSkillId) is { } pd && known.Contains(pd.Id)
-                && _slot < skills.Count && skills[_slot].SkillId is { } keepId && keepId != pd.Id)
+                && _slot < skills.Count && skills[_slot].SkillId is { } keepId && keepId != pd.Id
+                && !Loadout.HasSkill(pd.Id))
             {
                 var key = (pd.Id, _slot, _buildRev);
                 if (_previewKey != key)
@@ -806,7 +821,7 @@ public sealed class LoadoutScreen
                 _ui.TextBig(b, _ui.ShortenBig(def.Name, tile.Width - 56 - 70, UiTypography.Body), tile.X + 52, tile.Y + 6, have ? (isEquipped ? Gold : Bone) : Slate, UiTypography.Body);
                 _ui.TextBig(b, def.TakesABeat ? "ACTIVE" : "PASSIVE", tile.X + 52, tile.Y + 6 + UiTypography.Pitch(UiTypography.Body) - 6, Slate, UiTypography.Caption);
                 if (!have) _ui.Icon(b, "ui_slot_locked", new Rectangle(tile.Right - 28, tile.Y + 14, 20, 20), Slate);
-                else if (isEquipped) _ui.TextRightBig(b, $"SLOT {skills.ToList().FindIndex(s => s.SkillId == def.Id) + 1}", tile.Right - 8, tile.Y + 16, Gold, UiTypography.Caption);
+                else if (isEquipped) _ui.TextRightBig(b, $"EQUIPPED · SLOT {Loadout.IndexOfSkill(def.Id) + 1}", tile.Right - 8, tile.Y + 16, Gold, UiTypography.Caption);
                 Tip(tile, hit, have ? $"{def.Name} — {def.Line}" : $"{def.Name} — learned on {StyleName(style)}'s road, on the MASTERY tree.");
             }
         }
@@ -999,7 +1014,9 @@ public sealed class LoadoutScreen
                         Line(f >= 1.99f ? $"YOUR STYLE IS {StyleName(dd)} — THIS SKILL HITS x2.0" : $"YOUR STYLE IS {StyleName(dd)} — THIS {StyleName(def.Style)} SKILL HITS x{f:0.0#}", f >= 1.99f ? Gold : Slate, UiTypography.Secondary, 2);
                     }
                     else Line("NO STYLE CHOSEN YET — A SPECIALISATION NODE ON THE MASTERY TREE CHOOSES ONE.", Slate, UiTypography.Secondary, 2);
-                    if (_pick == Pick.Library && _slot < skills.Count && skills[_slot].SkillId != def.Id && SkillCatalogue.Find(skills[_slot].SkillId) is { } replacing)
+                    if (_pick == Pick.Library && slotOf >= 0 && slotOf != _slot)
+                        Line($"EQUIPPED · SLOT {slotOf + 1} — A SKILL GOES IN ONE SLOT", Gold, UiTypography.Secondary);
+                    else if (_pick == Pick.Library && _slot < skills.Count && skills[_slot].SkillId != def.Id && SkillCatalogue.Find(skills[_slot].SkillId) is { } replacing)
                         Line($"EQUIP REPLACES {replacing.Name.ToUpperInvariant()} IN SLOT {_slot + 1}", Slate, UiTypography.Secondary);
                 }
                 _respecShown = slotOf >= 0 && have && SkillLevels.SpentOn(def.Id) > 0;

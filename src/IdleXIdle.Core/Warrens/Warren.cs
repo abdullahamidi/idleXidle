@@ -181,8 +181,9 @@ public sealed class Warren
             _facilities[info.Kind] = new Facility(info.Kind, 1, _t);
     }
 
-    /// <summary>The Warren's display name - the deepest conquered region's, set by the host.</summary>
-    public string Name { get; set; } = "THE WARREN";
+    // `Name` ("THE WARREN", "set by the host") lived here until 2026-09-01. Its writer and its only
+    // reader — the WARREN screen's caption — both went in UX V2 P2.4, it was never persisted, and no
+    // test touched it: a dormant field on a live class is exactly the shape the next bug hides in.
 
     /// <summary>Regions conquered - set by the host; drives <see cref="ConquestBonus"/> and the unlock ramp.</summary>
     public int ConqueredRegions { get; set; }

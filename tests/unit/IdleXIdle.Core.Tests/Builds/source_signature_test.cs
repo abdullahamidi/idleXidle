@@ -124,11 +124,13 @@ public class SourceSignatureTest
         var target = EqualTarget(Source.Spirit, Source.Shadow);
         var huge = () => WaveCreature.Single(5_000_000f, 1f, 0f, target);
 
+        // The second slot is a DIFFERENT active (a build holds a skill once — LAW 13); it is the same
+        // skill on both sides, which is all the control needs.
         Build Pair(Source first)
         {
             var b = new Build();
-            b.Equip(TestBuilds.Skill("hammer_blow", first));
-            b.Equip(TestBuilds.Skill("hammer_blow", Source.Body));
+            Assert.True(b.Equip(TestBuilds.Skill("hammer_blow", first)));
+            Assert.True(b.Equip(TestBuilds.Skill("volley_spray", Source.Body)));
             return b;
         }
 

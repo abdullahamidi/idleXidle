@@ -385,11 +385,17 @@ public sealed class Build
     public IReadOnlyList<EquippedSkill> Skills => _skills;
     public IReadOnlyList<Keystone> Keystones => _keystones;
 
-    /// <summary>Equip a skill. Returns false when the slots are full — a bounded budget is the point.</summary>
+    /// <summary>
+    /// Equip a skill. Returns false when the slots are full — a bounded budget is the point — or when
+    /// the same skill is already equipped (LAW 13: one slot per skill; <see cref="Unequip"/> removes by
+    /// id and has always assumed it).
+    /// </summary>
     public bool Equip(EquippedSkill skill)
     {
         ArgumentNullException.ThrowIfNull(skill);
         if (_skills.Count >= SlotCapacity) return false;
+        foreach (var worn in _skills)
+            if (worn.Def.Id == skill.Def.Id) return false;
         // PER-KIND CAPACITY. An active costs the champion an action and a passive never does, so they
         // are two different budgets and a build cannot spend one on the other. Enforced from the
         // moment the field exists rather than left switched off, because a capacity nothing checks is

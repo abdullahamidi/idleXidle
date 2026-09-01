@@ -108,9 +108,12 @@ public class SkillSlotKindTests
         // Today's behaviour, preserved exactly: until stage 2b sets the per-kind caps, a build's
         // budget is undivided. A fifth slot sold by the trait spine must not be clamped off by a
         // per-kind cap frozen at the old constant.
+        // Five DIFFERENT actives: a build holds a skill once (LAW 13), so the budget is filled with
+        // five of the six styles' actives rather than five copies of one.
         var b = new Build { SlotCapacity = 5 };
+        var actives = new[] { "hammer_blow", "snare_repay", "sign_call", "volley_spray", "field_pulse" };
         for (var i = 0; i < 5; i++)
-            Assert.True(b.Equip(TestBuilds.Skill("hammer_blow")), $"slot {i + 1} of 5 was refused");
+            Assert.True(b.Equip(TestBuilds.Skill(actives[i])), $"slot {i + 1} of 5 was refused");
         Assert.Equal(5, b.Skills.Count);
     }
 

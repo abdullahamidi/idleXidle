@@ -165,13 +165,35 @@ public sealed class PlayerLoadout
 
     /// <summary>
     /// Put a named SKILL in a slot — what picking one from the library does. The slot's kind is the
-    /// skill's own; there is nothing else to write.
+    /// skill's own; there is nothing else to write. Returns false when nothing was written.
     /// </summary>
-    public void SetSkill(int slot, string skillId)
+    /// <remarks>
+    /// <b>ONE SLOT PER SKILL (LAW 13).</b> A skill already worn in ANOTHER slot is refused here, at the
+    /// point of choice, rather than only on the screen: the weave screen used to refuse a pick only for
+    /// the slot it was already in, so slot 2 could take slot 1's skill, the composer equipped it twice
+    /// with two independent cooldowns (<c>Champion.ReadyAtBeat</c> is per slot) and every cleared wave
+    /// recorded two uses. Putting a skill into the slot it already holds is a no-op that returns true.
+    /// The slot that refuses keeps whatever it held.
+    /// </remarks>
+    public bool SetSkill(int slot, string skillId)
     {
-        if (!InRange(slot) || SkillCatalogue.Find(skillId) is not { } def) return;
+        if (!InRange(slot) || SkillCatalogue.Find(skillId) is not { } def) return false;
+        var elsewhere = IndexOfSkill(def.Id);
+        if (elsewhere >= 0 && elsewhere != slot) return false;
         _skills[slot] = _skills[slot] with { SkillId = def.Id, Passive = !def.TakesABeat };
+        return true;
     }
+
+    /// <summary>The slot that holds this skill, or -1 when no slot does.</summary>
+    public int IndexOfSkill(string skillId)
+    {
+        for (var i = 0; i < _skills.Count; i++)
+            if (_skills[i].SkillId == skillId) return i;
+        return -1;
+    }
+
+    /// <summary>True when some slot holds this skill.</summary>
+    public bool HasSkill(string skillId) => IndexOfSkill(skillId) >= 0;
 
     /// <summary>
     /// Swear a Vow on a slot, or clear it with null. Refuses a Vow that has not been studied.
@@ -290,6 +312,20 @@ public sealed class PlayerLoadout
                     && SkillCatalogue.Find(migrated) is { } def2)
                     _skills.Add(new SkillChoice(source, vow, passive ?? !def2.TakesABeat, def2.Id));
             }
+
+            // THE DUPLICATE MIGRATION (UI polish §5, LAW 13). A save written before the one-slot-per-
+            // skill rule can carry the same skill twice — two v3 rows with one id, or two legacy Form
+            // rows that resolve to one skill (two AURA rows both mean MIRE). The FIRST occurrence wins,
+            // because slot order is the sim's tie-break priority; the later one is CLEARED to an empty
+            // slot rather than removed, so every slot behind it keeps its position and its own Source
+            // and Vow. The skill's level, variation and reinforcements live in SkillProgress, keyed by
+            // id, and are untouched. Run after resolution so the legacy collision is caught too, and
+            // after the capacity cut — which never bites on a real load, since the host floors the
+            // capacity at the saved row count before calling this.
+            var resolved = new HashSet<string>(StringComparer.Ordinal);
+            for (var i = 0; i < _skills.Count; i++)
+                if (_skills[i].SkillId is { } id && !resolved.Add(id))
+                    _skills[i] = _skills[i] with { SkillId = null, Passive = null };
         }
 
         if (keystoneIds is not null)
