@@ -1,4 +1,6 @@
-# Creature Jobs & Evolution System: Resonance Hunter
+# Creature Jobs & Evolution System: IDLExIDLE
+
+> **SUPERSEDED 2026-09-01 by nothing — the subsystem was retired 2026-08-24.** Describes the creature jobs/evolution model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
 
 ## Document Status
 

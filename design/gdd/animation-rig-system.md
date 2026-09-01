@@ -1,4 +1,6 @@
-# Animation & Rig System: Resonance Hunter
+# Animation & Rig System: IDLExIDLE
+
+> **SUPERSEDED 2026-09-01 by ADR-002 and src Animation/Rig.cs (the cutout rig).** Describes the creature part-rig / weak-point targeting model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
 
 ## Document Status
 
@@ -40,7 +42,7 @@
 
 ## 1. Overview
 
-The animation & rig system is Resonance Hunter's answer to a hard constraint: MonoGame ships no
+The animation & rig system is IDLExIDLE's answer to a hard constraint: MonoGame ships no
 animation or rigging system whatsoever. This document specifies a **homebrew cutout rig** — a
 parent-child bone hierarchy built on vanilla `SpriteBatch`, with `MonoGame.Extended.Tweening`
 driving curve evaluation — that renders every creature's full performance surface (hostile

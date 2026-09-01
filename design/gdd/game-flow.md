@@ -13,7 +13,7 @@
 
 ## 1. Overview
 
-Resonance Hunter is a **build laboratory with an automatic benchmark**. The player
+IDLExIDLE is a **build laboratory with an automatic benchmark**. The player
 assembles a Hunter — four woven skills, two permanent trees, eight gear slots — and
 sends it down into a region. The descent runs itself: no targeting, no abilities to
 fire, no retreat. It ends when the Hunter dies, and it reports how deep it got and

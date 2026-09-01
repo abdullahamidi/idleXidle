@@ -1,4 +1,6 @@
-# Creature Data Schema: Resonance Hunter
+# Creature Data Schema: IDLExIDLE
+
+> **SUPERSEDED 2026-09-01 by the wave model (Archetypes.cs, Bands.cs) — creatures are archetypes now.** Describes the creature-roster schema model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
 
 ## Document Status
 
@@ -30,7 +32,7 @@
 ## 1. Overview
 
 The creature data schema is the single authoritative data model for every creature entity in
-Resonance Hunter — both the authored, static definition of a creature species/variant (a
+IDLExIDLE — both the authored, static definition of a creature species/variant (a
 **CreatureTemplate**: its Source, Role, targetable parts, base stats, and evolution tree shape)
 and the live, per-individual runtime record of a specific creature the player encounters or owns
 (a **CreatureInstance**: current health, part-break progress, vulnerability state, bind state,

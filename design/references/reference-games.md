@@ -1,6 +1,6 @@
 # Reference Games — Scenes & UI
 
-Resonance Hunter is a **genre hybrid**, so no single game is "the" reference — it pulls from precision
+IDLExIDLE is a **genre hybrid**, so no single game is "the" reference — it pulls from precision
 action combat, creature collection, idle/incremental, and roguelite map games at once. This doc names
 the best reference per part, and — because our recurring problem is "don't be a TEXT HELL" — compares
 them all on one axis: **does the screen read as a SCENE, or as a SPREADSHEET?**

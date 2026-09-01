@@ -31,18 +31,18 @@ the design docs. Numbers that only exist in prose do not get checked.
 **Three assemblies, with a strict one-way dependency.**
 
 ```
-ResonanceHunter.Core        (net8.0 classlib)   — ZERO MonoGame references
+IdleXIdle.Core        (net8.0 classlib)   — ZERO MonoGame references
         ▲
         │ referenced by
         │
-ResonanceHunter.Game        (net8.0, DesktopGL) — rendering, input, content, the game loop
-ResonanceHunter.Core.Tests  (net8.0, xUnit)     — headless, deterministic
+IdleXIdle.Game        (net8.0, DesktopGL) — rendering, input, content, the game loop
+IdleXIdle.Core.Tests  (net8.0, xUnit)     — headless, deterministic
 ```
 
-1. **`ResonanceHunter.Core` must never reference MonoGame.** No `Microsoft.Xna.Framework` using
+1. **`IdleXIdle.Core` must never reference MonoGame.** No `Microsoft.Xna.Framework` using
    directive may appear in it. All rules, formulas, state machines, and progression math live here as
    plain C#: `DamagePipeline`, `EfficiencyContract`, and everything that follows.
-2. **`ResonanceHunter.Game` owns everything MonoGame touches** — `SpriteBatch`, the content pipeline,
+2. **`IdleXIdle.Game` owns everything MonoGame touches** — `SpriteBatch`, the content pipeline,
    input polling, the animation rig's rendering. It *calls into* Core and renders the result.
 3. **Tuning is data, never literals.** Every formula takes a tuning record (e.g. `CombatTuning`)
    rather than reading constants inline. This satisfies *"Gameplay values must be data-driven
@@ -85,4 +85,4 @@ ResonanceHunter.Core.Tests  (net8.0, xUnit)     — headless, deterministic
 - `design/gdd/combat-encounter-system.md` §4 Formula 3, 3b, 7
 - `design/gdd/region-mastery-automation-system.md` §4 Formula 4, 6
 - `design/registry/entities.yaml` — the registered cross-system constants these formulas consume
-- `tests/unit/ResonanceHunter.Core.Tests/` — the executable form of the acceptance criteria
+- `tests/unit/IdleXIdle.Core.Tests/` — the executable form of the acceptance criteria

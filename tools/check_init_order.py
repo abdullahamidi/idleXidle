@@ -34,7 +34,7 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-GAME = os.path.join(ROOT, "src", "ResonanceHunter.Game")
+GAME = os.path.join(ROOT, "src", "IdleXIdle.Game")
 
 
 def strip_comments(text: str) -> str:

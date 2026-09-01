@@ -1,4 +1,6 @@
-# Settings Menu UI: Resonance Hunter
+# Settings Menu UI: IDLExIDLE
+
+> **SUPERSEDED 2026-09-01 by the live settings panel (DisplaySettings.cs).** Describes the manual-combat settings model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
 
 ## Document Status
 
@@ -36,7 +38,7 @@ for a single one of the settings it displays; those belong entirely to `accessib
 and are used here by exact field name, never redefined. This document exists to close a specific,
 named gap: `accessibility-settings-system` authored a complete settings surface with no screen to
 host it, and this is that screen. Its central and most interesting design problem is that the
-screen a player uses to make Resonance Hunter accessible to themselves must already be accessible,
+screen a player uses to make IDLExIDLE accessible to themselves must already be accessible,
 on its own, before a single one of its own settings has been touched — solved explicitly in §3.1,
 not glossed over.
 

@@ -1,4 +1,6 @@
-# Accessibility Settings System: Resonance Hunter
+# Accessibility Settings System: IDLExIDLE
+
+> **SUPERSEDED 2026-09-01 by the live settings panel (DisplaySettings.cs, Game1 settings overlay).** Describes the manual-combat model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
 
 ## Document Status
 
@@ -51,7 +53,7 @@ wind-up floor value (owned by `creature-ai-telegraph-system`) — this document'
 
 `input-targeting-system.md`'s Player Fantasy already stated this once for targeting specifically;
 this document states it for the whole game. Pillar 1 (Precision Over Reflexes) claims that mastery
-in Resonance Hunter is expressed through pattern recognition, not movement or twitch reflexes — a
+in IDLExIDLE is expressed through pattern recognition, not movement or twitch reflexes — a
 design thesis this game markets as fairer, calmer, and more cerebral than the genre's reflex-testing
 norm. That claim is not a marketing flourish this system merely supports; it is a claim this system
 is the mechanism that makes *true*. A game whose thesis is "success is a reading skill, never a

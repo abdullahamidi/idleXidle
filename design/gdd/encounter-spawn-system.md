@@ -1,4 +1,6 @@
-# Encounter Spawn System: Resonance Hunter
+# Encounter Spawn System: IDLExIDLE
+
+> **SUPERSEDED 2026-09-01 by the band cycle (design/gdd/regions-and-rosters.md §3); the template/par chain was deleted 2026-09-01 (P13).** Describes the manual-combat encounter/par model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
 
 ## Document Status
 
@@ -32,7 +34,7 @@
 
 ## 1. Overview
 
-The encounter spawn system is Resonance Hunter's **producer layer** — the system that answers the question every other combat- and progression-facing document had been silently deferring: *what creature does the player actually fight, at what power, and how often?* It owns three things: the **encounter template** schema (the authored content unit a region's hostile population is built from), the **`power_tier` assignment rule** (a deterministic-but-varied formula that scales a spawn's difficulty with the region's own progression, satisfying every downstream consumer that reads `CreatureInstance.power_tier`), and **`par_clear_time_seconds`** (a fixed, hand-authored-per-template reference clear time that is the single 100%-anchor both the active and idle efficiency contracts are measured against — the exact value Blocker B1's fix needs and did not, until now, have anywhere to read from). It exposes one call, `SpawnEncounter`, used identically by the player's active "Hunt" action and by a region's automated Attacker — the same pool, the same formula, the same guarantees, satisfying Pillar 3's requirement that idle and active draw from one real population, never two.
+The encounter spawn system is IDLExIDLE's **producer layer** — the system that answers the question every other combat- and progression-facing document had been silently deferring: *what creature does the player actually fight, at what power, and how often?* It owns three things: the **encounter template** schema (the authored content unit a region's hostile population is built from), the **`power_tier` assignment rule** (a deterministic-but-varied formula that scales a spawn's difficulty with the region's own progression, satisfying every downstream consumer that reads `CreatureInstance.power_tier`), and **`par_clear_time_seconds`** (a fixed, hand-authored-per-template reference clear time that is the single 100%-anchor both the active and idle efficiency contracts are measured against — the exact value Blocker B1's fix needs and did not, until now, have anywhere to read from). It exposes one call, `SpawnEncounter`, used identically by the player's active "Hunt" action and by a region's automated Attacker — the same pool, the same formula, the same guarantees, satisfying Pillar 3's requirement that idle and active draw from one real population, never two.
 
 ## 2. Player Fantasy
 

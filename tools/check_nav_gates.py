@@ -14,8 +14,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-GAME1 = ROOT / "src" / "ResonanceHunter.Game" / "Game1.cs"
-UNLOCKS = ROOT / "src" / "ResonanceHunter.Core" / "Progression" / "Unlocks.cs"
+GAME1 = ROOT / "src" / "IdleXIdle.Game" / "Game1.cs"
+UNLOCKS = ROOT / "src" / "IdleXIdle.Core" / "Progression" / "Unlocks.cs"
 
 
 def block(text: str, decl: str) -> str:

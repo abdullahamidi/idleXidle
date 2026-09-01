@@ -1,5 +1,7 @@
 # GDD: Vow Condition Tracking
 
+> **SUPERSEDED 2026-09-01 by design/gdd/vows.md (Vows read the BUILD, never the fight).** Describes the fight-watching Vow tracking — a design vows.md explicitly rejects model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
+
 ## Document Status
 
 - **Status**: Complete — all 8 sections authored autonomously this session (rush mode; no user

@@ -1,10 +1,10 @@
-# Playtest Guide — Resonance Hunter
+# Playtest Guide — IDLExIDLE
 
 A script to follow while playing, with the exact keys, what *should* happen, and the specific
 questions I most need answered. Every key here is verified against the current build.
 
 ```bash
-dotnet run --project src/ResonanceHunter.Game
+dotnet run --project src/IdleXIdle.Game
 ```
 
 The whole point of this build is to find out whether the **loop is fun**. It is flat greybox shapes

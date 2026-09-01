@@ -11,7 +11,7 @@ REM bottom is there so a crash cannot vanish before it is read.
 cd /d "%~dp0"
 
 echo Building...
-dotnet build src\ResonanceHunter.Game -v q --nologo
+dotnet build src\IdleXIdle.Game -v q --nologo
 if errorlevel 1 (
     echo.
     echo BUILD FAILED - the game was not started. The compiler errors are above.
@@ -19,8 +19,8 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo Starting Resonance Hunter...
-dotnet run --project src\ResonanceHunter.Game --no-build
+echo Starting IDLExIDLE...
+dotnet run --project src\IdleXIdle.Game --no-build
 if errorlevel 1 (
     echo.
     echo The game exited with an error. The details are above.

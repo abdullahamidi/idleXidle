@@ -30,7 +30,7 @@ FILE_PATH=${FILE_PATH//\\//}
 # that names keys, and the design docs that define new content.
 case "$FILE_PATH" in
     *tools/asset-pipeline/manifest.json) ;;
-    *src/ResonanceHunter.Game/*.cs) ;;
+    *src/IdleXIdle.Game/*.cs) ;;
     *design/gdd/*.md|*design/art/*.md) ;;
     *) exit 0 ;;
 esac

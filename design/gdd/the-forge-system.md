@@ -48,7 +48,7 @@ question for this document to confirm. It is resolved here, not deferred further
 
 ## 1. Overview
 
-The Forge is Resonance Hunter's central item-transformation and disposal hub — the single place
+The Forge is IDLExIDLE's central item-transformation and disposal hub — the single place
 where the constant stream of loot produced by combat gets turned into deliberate, permanent
 decisions. At MVP, the Forge performs exactly one creation operation (merging three compatible
 items into one stronger item) and three disposal operations (selling, dismantling, and feeding
@@ -66,7 +66,7 @@ above all a Vow-binding reads as a considered commitment rather than another men
 
 ## 2. Player Fantasy
 
-Every other screen in Resonance Hunter moves at combat's pace or automation's calm hum; the Forge
+Every other screen in IDLExIDLE moves at combat's pace or automation's calm hum; the Forge
 is the one place that stops entirely. The art bible's mood direction for this room is explicit: a
 single warm, localized light on the crafting surface, the periphery falling into a cozy, unlit
 dark, no timers, no urgency cues — "time feels suspended." The player fantasy this system exists
@@ -95,7 +95,7 @@ feel like something the Hunter did to themselves on purpose, in exchange for pow
 checkbox toggled in an options menu. And because a new Vow binds over an old one rather than
 replacing it cleanly — the old scar stays, pale, underneath the new one (art-bible §5.2) — every
 subsequent visit to the Forge to rebind is also a small, quiet reminder of every trade-off that
-came before it. The Forge is where Resonance Hunter's build-identity pillar (Pillar 4 — "Builds
+came before it. The Forge is where IDLExIDLE's build-identity pillar (Pillar 4 — "Builds
 Are Trade-offs, Not Stat Stacks") stops being an abstract design principle and becomes a room the
 player physically stands in to make the trade.
 
@@ -484,7 +484,7 @@ two specific loop risks the brief names.
   item's smaller number of slots (§4.4's worked example fills only 3 of 4 output slots from a
   3-input pool that could have held up to 6 values total), and each surviving value is scaled by
   only `merge_scaling_factor = 1.25`, not `3×`. Merge is not a value-creation engine; it's a
-  **concentration** mechanic — its real payoff is that Resonance Hunter's equip slots are limited
+  **concentration** mechanic — its real payoff is that IDLExIDLE's equip slots are limited
   (one weapon, one set of armor, a fixed charm count), so "one strictly stronger item" is worth
   more to a player *in practice* than "three weaker items I can't all equip anyway," even though
   the raw numbers say the operation lost value. This is the correct read of "stronger version"

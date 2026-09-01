@@ -109,7 +109,7 @@ contact with something executable.
 ## How to re-verify
 
 ```
-dotnet run --project src/ResonanceHunter.Game
+dotnet run --project src/IdleXIdle.Game
 ```
 **Tab** → spike · **Z** 4× zoom · **H** hold the worst frame · **D** slow-mo ·
 **Left/Right** change snap steps · **P** toggle render path.

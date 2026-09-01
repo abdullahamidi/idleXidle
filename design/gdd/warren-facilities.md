@@ -1,87 +1,75 @@
 # Warren Facility Economy
 
-> **Status**: Implemented (v1)
-> **System**: `ResonanceHunter.Core.Warrens.Warren`
-> **Screen**: `WarrenScreen` (nav: WARREN)
-> **Reference**: `warren_management_dashboard_in_dark_fantasy.png`, `warren_screen_production_spec_revision_1.md`
+> **Status**: Current · **Rewritten**: 2026-09-01 from the P12 Warren (commit 5f15730)
+> · **System**: `Core/Warrens/Warren.cs` · **Screen**: `WarrenScreen` · **Host**: `Game1` (tick,
+> offline credit, spend)
 
 ## 1. Overview
 
-The Warren is a global idle base of eight facilities that passively produce the game's real
-currencies. Each facility has a level and a per-minute output; the player spends currency to upgrade
-facilities, which raises their output and grants Warren XP; Warren levels grant a global production
-bonus. The creature-team automation that previously occupied the Warren nav slot is preserved as the
-Warren's **CREATURES** sub-view.
+The Warren is the idle economy: eight facilities that produce while the player is away — on every
+screen, and offline through the same tick. It pays the game's REAL wallets (Gleam, Memory Dust, and
+the Forge's Scrap and Essence), never points: idle buys gear, play buys identity. Facilities open by
+conquest, and every facility's level is capped by the champion's own deepest descent — the Warren
+multiplies progress and can never substitute for it.
 
 ## 2. Player Fantasy
 
-"My colony works for me while I'm away." The Warren is the visible, growing engine of passive
-progression — you watch numbers climb, choose which facility to pour resources into next, and feel the
-whole base get faster each time the Warren levels. It funds the rest of the game (build tree, prestige,
-gold), so investing in it is never a dead end.
+“My colony works for me while I’m away.” Leaving the game running is worth something; playing is
+worth more; and the base visibly grows because of what the CHAMPION did — conquests open doors,
+depth raises ceilings.
 
 ## 3. Detailed Rules
 
-- Eight facilities, fixed set: Nursery, Tunnels, Foraging Pits, Scavenger Runs, Breeding Chamber,
-  Ritual Nest, Hoard Vaults, Sentry Burrows. Each produces exactly one currency:
-  - **Gleam** (gold): Nursery, Tunnels, Scavenger Runs, Hoard Vaults
-  - **Mastery Points**: Breeding Chamber, Ritual Nest
-  - **Memory Dust** (the "Nature" track): Foraging Pits, Sentry Burrows
-- Production accrues every real second (on every screen) and during offline catch-up, using the same
-  24-hour offline cap the region farms use.
-- Gleam and Dust credit the player's real shared balances. Mastery credits a **produced-mastery pool**
-  that is added to the derived Mastery-Earned total — so a Breeding facility genuinely funds the build
-  tree, and spending that pool on an upgrade correctly lowers available tree points.
-- Upgrading a facility is **instant** (no build timer in v1). It costs Gleam + Mastery + Dust, raises the
-  facility's level by one, and grants Warren XP. Enough XP levels the Warren, which raises the global
-  "+% All Production" bonus and the per-currency bonus tracks.
-- Upgrades are gated honestly: the button disables when any of the three costs is unaffordable.
+- **Eight facilities, four outputs**, in unlock order: NURSERY (Gleam 30/min), FORAGING PITS
+  (Dust 15), TUNNELS (Gleam 29), SCAVENGER RUNS (Scrap 3), RITUAL NEST (Essence 1.5), SENTRY
+  BURROWS (Dust 6), HOARD VAULTS (Scrap 2), BREEDING CHAMBER (Essence 1). Base rates at level 1.
+- **Unlock ramp**: `UnlockedFacilityCount = min(8, 2 + regions conquered)`. The Warren itself opens
+  on the first conquest, so a fresh Warren shows three cards; all eight at six conquests. A facility
+  already raised past level 1 stays open under any ramp (the grandfather rule). Locked facilities
+  produce nothing and cannot upgrade; their cards say what opens them.
+- **Depth cap**: `FacilityLevelCap = max(1, deepestWaveAnywhere / 5)` (`Warren.CapForDepth`). A
+  blocked card names the depth its NEXT level needs (`DepthForNextLevel`), never the cap.
+- **Upgrades** cost Gleam + Dust (instant; no build timer), grant Warren XP = newLevel × 100;
+  Warren levels need `1000 × (level + 2)` XP each.
+- **Milestones**: every 5th facility level is a permanent +15% output step.
+- **Offline**: the same `Tick`, over the credited absence (capped 24 h), gated on the Warren being
+  unlocked — a player who has not conquered is not paid by a screen they cannot open.
 
 ## 4. Formulas
 
-Let `L` = facility level, `WL` = Warren level.
-
-- **Facility raw output/min** = `round(BaseRate × L)` (BaseRate per facility; e.g. Nursery 520).
-- **All-production bonus** = `(WL − 1) × 0.03`.
-- **Per-currency bonus** = `WL × k`, `k` = 0.02 Gleam / 0.013 Mastery / 0.009 Dust.
-- **Production multiplier(currency)** = `1 + AllProductionBonus + PerCurrencyBonus`.
-- **Total production/min(currency)** = `sum(raw outputs of that currency's facilities) × multiplier`.
-- **Upgrade cost** (to go `L → L+1`): `round(Base × Growth^L)` per currency —
-  Gleam `18700 × 1.40^L`, Mastery `43 × 1.25^L`, Dust `22 × 1.25^L`.
-- **XP per upgrade** = `newLevel × 100`. **XP to next Warren level** = `1000 × (WL + 2)`.
+- Facility output/min = `round(BaseRate × Level × (1 + 0.15 × floor(Level/5)))`.
+- Production multiplier per resource = `1 + (WarrenLevel−1)×0.03 + conquests×0.10 + track`,
+  where track = WarrenLevel × {Gleam 0.02, Dust 0.009, materials 0.013}.
+- Upgrade cost L→L+1 = `round(180 × 1.50^L)` Gleam + `round(22 × 1.25^L)` Dust.
+- Calibration: the two Gleam facilities keep the pre-P12 four-facility total (59/min at L1 ≈ half
+  an active champion); Dust was rebased ~27× down (a wave-40 checkpoint ≈ 45 min of idling);
+  Scrap/Essence are sized against the one-material-per-wave trickle.
 
 ## 5. Edge Cases
 
-- **Tick determinism**: production carries the un-credited `rate × seconds` and divides by 60 only at the
-  floor step, so 3600 one-second ticks credit exactly what one 3600-second tick does (unit-tested).
-- **Mastery is derived**: it cannot be stored on the tree, so the produced-mastery pool is persisted
-  separately and folded into `SetEarned` each frame.
-- **Save compatibility**: all Warren fields default (level 1, empty facilities, pool 0), so pre-Warren
-  saves load a fresh level-1 Warren with no version bump.
-- **Unknown facility key on load**: ignored (crash-safe), never throws.
-- **Warren name**: derived from the active region; a missing/invalid region id falls back to "THE WARREN".
+- A save whose facilities out-level a fallen depth record: the card answers with the depth the next
+  level needs, which can never contradict the level shown beside it.
+- Fractional production carries across ticks (`_carry`), so many small ticks equal one big tick; the
+  carry is not persisted — at most one unit per currency is lost per load (accepted).
+- Facility save keys are enum NAMES — never rename a `FacilityKind` member.
+- The retired INSIGHT pool (`WarrenMasteryPool`) is skipped on load; nothing to migrate.
 
 ## 6. Dependencies
 
-- `Hunter` (Gleam balance; `AddGleam`/`SpendGleam`).
-- `MemoryDustTree` (Dust balance; `AwardFromMastery`/`Spend`).
-- `MasteryTree` (Earned is derived; the pool is added in the host's `SetEarned`).
-- `SaveGame` / `SaveSystem` (persisted level, XP, facility levels, mastery pool).
-- `Regions` (Warren display name).
-- `AutomationScreen` (the CREATURES sub-view — unchanged).
+`Hunter` (Gleam + material wallets) · `MemoryDustTree` (Dust wallet) · `World.ConqueredIds` (ramp +
+conquest bonus) · `Career.DeepestAnywhere` (depth cap) · `Unlocks` (the Warren gate) ·
+`SaveSystem.CreditedOfflineSeconds` (offline window).
 
 ## 7. Tuning Knobs
 
-All in `WarrenTuning`: `AllProductionPerLevel`, `GleamBonusPerLevel`, `MasteryBonusPerLevel`,
-`DustBonusPerLevel`, the three `*CostBase` / `*CostGrowth` pairs, and `XpPerUpgradeLevel`. Per-facility
-`BaseRatePerMin` lives in the `Facilities` catalog.
+Everything on `WarrenTuning` (rates’ bonuses per level, cost bases/growth, XP per upgrade, conquest
+bonus, milestone cadence/step) plus the catalog base rates and `Warren.DepthPerFacilityLevel`.
 
 ## 8. Acceptance Criteria
 
-- New Warren: level 1, eight facilities at level 1, all three currencies produced. ✓ (unit)
-- Output scales with facility level; higher Warren level multiplies production. ✓ (unit)
-- Upgrade cost rises with level; `CanAfford` gates on all three currencies. ✓ (unit)
-- Upgrade raises level + grants XP; enough XP levels the Warren. ✓ (unit)
-- Many small ticks equal one big tick (determinism). ✓ (unit)
-- Save round-trips level, XP, and facility levels. ✓ (unit)
-- Screen renders 1920×1080 with the 4-panel layout, all real values, no forbidden assets. ✓ (screenshot)
+Pinned by `tests/unit/.../Warrens/WarrenTests.cs` and `Progression/PointIncomeTests.cs`: linear
+output inside a band and the milestone jump; the unlock ramp (3 cards at one conquest, all 8 at
+six); locked facilities produce nothing and cannot upgrade; the grandfather rule; the depth-cap
+derivation (floor 1, /5); both material channels pay; determinism (3600 one-second ticks equal one
+hour tick); restore round-trips; the cap binds every facility. Economy ratios live in
+`gleam_economy_test.cs`.

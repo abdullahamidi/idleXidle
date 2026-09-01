@@ -22,6 +22,6 @@ its narrow character set and small-size weakness cost nothing, and the data face
 it as a glyph fallback so a mark it lacks does not draw as nothing.
 
 **Adding or replacing a face:** drop the file here, add the copy rule in
-`src/ResonanceHunter.Game/ResonanceHunter.Game.csproj` if the pattern does not already catch it,
+`src/IdleXIdle.Game/IdleXIdle.Game.csproj` if the pattern does not already catch it,
 and run `bash tools/check_all.sh`. Keep the `OFL-*.txt` beside the fonts — the licence requires
 the copyright notice ship with them.

@@ -1,4 +1,6 @@
-# Onboarding & Tutorial System: Resonance Hunter
+# Onboarding & Tutorial System: IDLExIDLE
+
+> **SUPERSEDED 2026-09-01 by the live tour cards (Progression/Onboarding.cs, Tutorial.cs).** Describes the manual-combat tutorial model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
 
 ## Document Status
 
@@ -28,7 +30,7 @@
 
 ## 1. Overview
 
-The onboarding & tutorial system is Resonance Hunter's answer to a genuinely hard problem: this
+The onboarding & tutorial system is IDLExIDLE's answer to a genuinely hard problem: this
 game asks a first-time player to learn a glyph language, weak-point targeting across two input
 paths, telegraph reading, a three-tier defensive triad, part-break mechanics, a Resonance/Ultimate
 economy, a boss encounter, and — immediately after — an entirely new automation/Forge/creature-job

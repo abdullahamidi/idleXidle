@@ -1,4 +1,6 @@
-# Region Mastery & Automation System: Resonance Hunter
+# Region Mastery & Automation System: IDLExIDLE
+
+> **SUPERSEDED 2026-09-01 by the surviving descendant: region-mastery levels feed difficulty, Dust milestones and trait points (Automation/RegionAutomation.cs).** Describes the creature-team automation model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
 
 ## Document Status
 
@@ -50,7 +52,7 @@ internal consistency).
 
 ## 1. Overview
 
-The region mastery & automation system is Resonance Hunter's **thesis system** — the single
+The region mastery & automation system is IDLExIDLE's **thesis system** — the single
 document where Pillar 2 (Automation Is Earned, Not Assumed) and Pillar 3 (Active Is Better, Idle Is
 Never Worthless) both become concrete, testable rules rather than aspirations. It owns four things:
 the **region state machine** (unconquered → mastered, and the four-tier mastery-*level* ladder that

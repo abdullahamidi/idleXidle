@@ -1,6 +1,6 @@
 # IdleXIdle UX Screen Guide Standard
 
-This document defines the reusable standard for every remaining IdleXIdle / Resonance Hunter screen guide.
+This document defines the reusable standard for every remaining IdleXIdle / IDLExIDLE screen guide.
 
 It incorporates the implementation lessons learned from the Hunt screen and is intended to prevent asset misuse, layout ambiguity, rendering errors, invented data, and invalid fallback behavior.
 
@@ -331,7 +331,7 @@ public static class UiTypography
 > `OverlayTitle` were three more names for sizes the ladder already had and are aliases now, and
 > `Caption` was added at 14 to name the floor the arena had already drifted below (12 and 13).
 > The arena's three combat callouts (34 / 40 / 46) are a family beside the ladder, not rungs on it.
-> The live source is `src/ResonanceHunter.Game/UiTypography.cs`; `tools/check_ui_type.py` enforces it.
+> The live source is `src/IdleXIdle.Game/UiTypography.cs`; `tools/check_ui_type.py` enforces it.
 
 Rules:
 

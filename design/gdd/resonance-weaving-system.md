@@ -1,5 +1,7 @@
 # GDD: Resonance Weaving System
 
+> **SUPERSEDED 2026-09-01 by design/gdd/skill-slots-and-skill-trees.md (skills) and design/gdd/sources.md (the six Sources). Its §4.1 Vow uptime formula alone is still implemented verbatim in Weaving/ResonanceWeaving.cs — with the static conversion at 8.0, not 3.0.** Describes the Source×Form weaving model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
+
 ## Document Status
 
 - **Status**: Complete — all 8 sections authored
@@ -87,7 +89,7 @@ Master Visual Rule promises for every other system in the game. This is also whe
 Discovery and Expression pillars (game-concept.md's MDA table) become concrete: theorycrafting a
 Source/Form/Vow combo that lets a brutal Vow's condition hold *safely*, because of a specific Form
 choice or a specific creature matchup, is the build-identity payoff Path of Exile's itemization
-promises and Resonance Hunter is explicitly built to deliver without a passive skill tree — through
+promises and IDLExIDLE is explicitly built to deliver without a passive skill tree — through
 three deliberate choices instead of a hundred small ones.
 
 ## 3. Detailed Rules

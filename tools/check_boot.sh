@@ -9,7 +9,7 @@
 # FOR A LONGER HUNT, drive the mode directly with a frame count:
 #
 #   RH_BOOTCHECK=18000 RH_SAVE_DIR="$(cygpath -w "$TEMP/rh_soak")" \
-#     dotnet run --project src/ResonanceHunter.Game --no-build
+#     dotnet run --project src/IdleXIdle.Game --no-build
 #
 # That soaks the fight for about five minutes against a throwaway save directory, which is how the
 # DrawComposition crash was found — a Math.Clamp whose minimum overtook its maximum once a wave grew
@@ -31,7 +31,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 
 SAVE="${LOCALAPPDATA:-$HOME/.local/share}/ResonanceHunter/save.json"
 
-dn build src/ResonanceHunter.Game -v q --nologo >/dev/null 2>&1 \
+dn build src/IdleXIdle.Game -v q --nologo >/dev/null 2>&1 \
   || { echo "build failed" >&2; exit 1; }
 
 before=""
@@ -51,7 +51,7 @@ boot_run() {
     . tools/shellenv.sh || exit 1
     RH_ENV=(RH_BOOTCHECK=1)
     [ -n "$1" ] && RH_ENV+=(RH_SAVE_DIR="$1")
-    dn run --project src/ResonanceHunter.Game --no-build
+    dn run --project src/IdleXIdle.Game --no-build
   ' _ "$1" 2>&1
 }
 

@@ -34,7 +34,7 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-GAME = os.path.join(ROOT, "src", "ResonanceHunter.Game")
+GAME = os.path.join(ROOT, "src", "IdleXIdle.Game")
 FONT = os.path.join(GAME, "PixelFont.cs")
 
 # Characters that reach the screen through some other path than PixelFont, or that a string

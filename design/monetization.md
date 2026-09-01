@@ -8,7 +8,7 @@
 
 ## The decision
 
-Resonance Hunter is sold once, at a fair price, and everything that affects the fight is in the box.
+IDLExIDLE is sold once, at a fair price, and everything that affects the fight is in the box.
 After 1.0, optional DLC may add COSMETICS and the SOUNDTRACK — never power, never time.
 
 ## Why (each reason is structural, not taste)

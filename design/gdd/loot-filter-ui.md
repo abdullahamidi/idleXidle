@@ -1,5 +1,7 @@
 # GDD: Loot Filter UI
 
+> **SUPERSEDED 2026-09-01 by the auto-sell floor traits (filter_common/uncommon) and the vault keep-filter.** Describes the manual-combat loot-filter UI model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
+
 ## Document Status
 
 - **Status**: Complete — all 8 sections authored

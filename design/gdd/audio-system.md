@@ -1,4 +1,6 @@
-# Audio System: Resonance Hunter
+# Audio System: IDLExIDLE
+
+> **SUPERSEDED 2026-09-01 by src Game/SoundBank.cs + design/audio/asset-generation-audio.md.** Describes the manual-combat telegraph audio model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
 
 ## Document Status
 
@@ -28,7 +30,7 @@
 
 ## 1. Overview
 
-The audio system defines Resonance Hunter's complete sonic identity and, uniquely among this
+The audio system defines IDLExIDLE's complete sonic identity and, uniquely among this
 game's audio systems, carries **mechanical weight equal to the visual layer for one specific
 signal**: the telegraph pre-cue. Because `creature-ai-telegraph-system` §3.9 locks a redundant
 audio pre-cue on the telegraph's slow-build/hard-cutoff curve as a binding accessibility

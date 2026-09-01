@@ -1,4 +1,6 @@
-# Region View & World Map UI: Resonance Hunter
+# Region View & World Map UI: IDLExIDLE
+
+> **SUPERSEDED 2026-09-01 by the live MapScreen (checkpoints priced in Dust).** Describes the creature-era region map model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
 
 ## Document Status
 

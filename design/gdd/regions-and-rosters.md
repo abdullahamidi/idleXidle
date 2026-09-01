@@ -1,7 +1,9 @@
 # Regions, Rosters and Band Cycles
 
 *Created: 2026-08-12*
-*Status: Draft*
+*Status: Current for regions, archetypes, bands and affixes (the affix rules went live 2026-09-01, P13b).
+Older vocabulary ("Spread build", "Weight", "Mono-Form") survives in prose — read it as LOOT-lean,
+hit-size, mono-style.*
 
 > Depends on `game-flow.md` (§3.2 archetypes, §3.3 bands) and
 > `skill-and-trait-trees.md` (the four branches these bands interrogate).
@@ -99,13 +101,15 @@ affix is a second question stacked on its composition.
 | **BRITTLE** | enemy health ×0.6, enemy damage ×1.6 | Endure — everything dies fast, including you |
 | **ENTRENCHED** | the first hit on each creature deals 25% | Tempo — specifically punishes Alpha and First Strike |
 | **SWIFT** | enemy attack interval −30% | Endure |
-| **WARDED** | enemies take 60% less damage from whichever Form dealt the most damage last wave | Mono-Form builds |
-| **HOLLOW** | no chests drop; haul ×2 | Neither — an economy decision |
+| **WARDED** | enemies take 60% less damage from whichever STYLE's skills dealt the most damage last wave | Mono-style builds |
 | **LEGION** | each creature splits into two half-strength copies once on death | Spread |
+
+> *(HOLLOW — "no chests, doubled haul" — was cut 2026-09-01, P13b: implemented nowhere, authored
+> into no band, and its economy overlaps the region drop tilt.)*
 
 **WARDED deserves its own note.** It is the only affix that punishes *concentration*
 rather than a shape, and it is the strongest pressure toward carrying more than one
-Form. It reads the previous wave rather than the current one so that it is
+style. It reads the previous wave rather than the current one so that it is
 predictable — the player can see it coming and plan, which is required when they
 cannot react mid-run.
 
@@ -298,11 +302,10 @@ builds do not".
 |---|---|
 | A band's composition would roll zero creatures | Floor of 1. A wave always has an enemy. |
 | LEGION on a Swarm wave | Splits are capped at the wave's maximum creature count (8) so a Swarm band cannot become a soft lock. |
-| WARDED on the first wave of a region (no previous wave) | No Form is warded until wave 2. The affix needs history and must not guess. |
-| WARDED when two Forms tie for most damage | The tie breaks toward the Form with more total activations, then by Form enum order. Deterministic, because the player must be able to predict it. |
+| WARDED on the first wave of a region (no previous wave) | No style is warded until wave 2. The affix needs history and must not guess. |
+| WARDED when two styles tie for most damage | The tie breaks toward the style with more casts, then by style order. Deterministic, because the player must be able to predict it. |
 | A boss rolls an archetype with a multi-creature count | Bosses are always count 1; the dominant archetype supplies the stat shape only. |
 | PLATED on a band with no Armoured creatures | It still applies to whatever Defense exists, which for Swarm is zero. A wasted affix is acceptable; the alternative is re-rolling affixes, which breaks learnability. |
-| HOLLOW on a boss wave | No chest, doubled haul. This is the intended tension of the affix and is not exempted for bosses. |
 | Corruption tier adds an affix a band already has | The band keeps one instance; the tier's affix is substituted with the next in its fixed order. |
 | Fast-forward replays a wave whose seed inputs changed | Cannot happen — the seed uses `runIndex`, not wall time, and fast-forward replays the recorded depth, not a new roll. |
 

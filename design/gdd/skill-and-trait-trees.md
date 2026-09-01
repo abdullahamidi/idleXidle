@@ -1,5 +1,7 @@
 # Skill Tree and Trait Tree
 
+> **TWO HALVES, OPPOSITE FATES (2026-09-01).** The SKILL-tree half (§1, §3.1-3.3, §4.1) is SUPERSEDED by `skill-slots-and-skill-trees.md` — WEIGHT/SPREAD died at the 2026-08-30 re-axe. The TRAIT-tree half (§3.4-3.6, §4.2, §5) is the ONLY prose spec of the live trait tree (Prestige/MemoryDust.cs, TraitRoads.cs) — current, with the budget at 34 points since P7. The 256-node tree shape in §3.2 is also still the live tree (MasteryTreeTests pins it).
+
 *Created: 2026-08-12*
 *Status: Draft*
 

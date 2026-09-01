@@ -8,5 +8,5 @@ while proc_running "asset-pipeline.animate\.py"; do sleep 30; done
 echo "[$(date +%H:%M)] strips done; re-deriving statics"
 py -u tools/asset-pipeline/derive_statics.py 2>&1 | tail -5
 py -u tools/asset-pipeline/audit.py 2>&1 | head -6
-dn build src/ResonanceHunter.Game/ResonanceHunter.Game.csproj -v q --nologo 2>&1 | tail -4
+dn build src/IdleXIdle.Game/IdleXIdle.Game.csproj -v q --nologo 2>&1 | tail -4
 echo "[$(date +%H:%M)] HUNTER FINALIZE DONE"

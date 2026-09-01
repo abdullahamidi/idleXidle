@@ -1,5 +1,7 @@
 # GDD: Combat HUD
 
+> **SUPERSEDED 2026-09-01 by the hunt HUD in SoloExpeditionScreen.cs.** Describes the manual-combat HUD model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
+
 ## Document Status
 
 | Field | Value |

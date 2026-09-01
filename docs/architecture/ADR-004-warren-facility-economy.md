@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Accepted |
+| **Status** | Superseded 2026-09-01 — P12 (commit 5f15730) cut the INSIGHT currency (a closed loop), re-pointed two facilities at Forge materials (Scrap/Essence), added the conquest unlock ramp and the depth cap, and rebased the Dust rates. The creature den this ADR preserves was retired 2026-08-24. Current spec: design/gdd/warren-facilities.md |
 | **Date** | 2026-07-28 |
 | **Deciders** | user (chose "build facilities for real" + "3 real currencies") + Claude (implementation) |
 | **Supersedes** | — |
@@ -21,7 +21,7 @@ currencies (Gleam, Mastery Points, Memory Dust) into the player's actual balance
 
 ## Decision
 
-1. **A new pure Core model** `ResonanceHunter.Core.Warrens.Warren` owns facilities, levels/XP, production
+1. **A new pure Core model** `IdleXIdle.Core.Warrens.Warren` owns facilities, levels/XP, production
    formulas, and upgrade costs. It holds **no balances and no rendering**: `Tick(seconds)` returns what
    was produced and the host credits the real currencies (ADR-001 — logic stays MonoGame-free and
    unit-testable). Upgrades are instant in v1 (build timers are a documented follow-up).

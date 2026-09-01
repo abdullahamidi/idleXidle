@@ -1,6 +1,6 @@
 # Package 10 — UX Reference + Asset Placement Guide
 
-This package contains the improved Package 10 reference screens plus an implementation-oriented placement guide that maps each screen back to the asset families already produced for IdleXIdle / Resonance Hunter.
+This package contains the improved Package 10 reference screens plus an implementation-oriented placement guide that maps each screen back to the asset families already produced for IdleXIdle / IDLExIDLE.
 
 ## What is included
 - screens/ — clean reference screens

@@ -1,4 +1,6 @@
-# Rare Creature Capture System: Resonance Hunter
+# Rare Creature Capture System: IDLExIDLE
+
+> **SUPERSEDED 2026-09-01 by nothing — no capture code ever shipped.** Describes the creature capture model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
 
 ## Document Status
 
@@ -30,7 +32,7 @@
 
 ## 1. Overview
 
-The rare creature capture system is Resonance Hunter's second, additive path from a hostile encounter into a bound roster member — the live, skill-driven alternative to Core Hatching's guaranteed, encounter-independent seed. It owns exactly three things: **rarity** (which hostile standard-tier creatures are flagged rare, and at what tier, at spawn), **the capture window and its overkill safeguard** (an HP-band eligibility check, plus a one-time "Capture Ward" that guarantees the crossing hit into that band never accidentally ends the fight), and **the capture-vs-hatch value proposition** (why a captured creature is worth more than a free one, without ever being *required*). It builds directly on `combat-encounter-system`'s pre-built hooks (`AttemptCapture`, `capture_favorability_score`) rather than inventing new combat mechanics, and it hands off a fully-formed, evolution-ready `CreatureInstance` to `creature-jobs-evolution-system` using exactly the field shape that document already reserved for it. If Core Hatching answers "how do players get creatures at all," this document answers "why would a player ever choose the harder path" — and its central discipline is making that answer true without making hatching feel like the consolation prize.
+The rare creature capture system is IDLExIDLE's second, additive path from a hostile encounter into a bound roster member — the live, skill-driven alternative to Core Hatching's guaranteed, encounter-independent seed. It owns exactly three things: **rarity** (which hostile standard-tier creatures are flagged rare, and at what tier, at spawn), **the capture window and its overkill safeguard** (an HP-band eligibility check, plus a one-time "Capture Ward" that guarantees the crossing hit into that band never accidentally ends the fight), and **the capture-vs-hatch value proposition** (why a captured creature is worth more than a free one, without ever being *required*). It builds directly on `combat-encounter-system`'s pre-built hooks (`AttemptCapture`, `capture_favorability_score`) rather than inventing new combat mechanics, and it hands off a fully-formed, evolution-ready `CreatureInstance` to `creature-jobs-evolution-system` using exactly the field shape that document already reserved for it. If Core Hatching answers "how do players get creatures at all," this document answers "why would a player ever choose the harder path" — and its central discipline is making that answer true without making hatching feel like the consolation prize.
 
 ## 2. Player Fantasy
 

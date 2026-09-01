@@ -1,0 +1,230 @@
+using System;
+using System.Linq;
+using IdleXIdle.Core.Economy;
+using IdleXIdle.Core.Loot;
+using Xunit;
+
+namespace IdleXIdle.Core.Tests.Loot;
+
+public class LootSystemTests
+{
+    private static readonly LootTuning Tuning = LootTuning.Default;
+    private static Random Seeded() => new(9001);
+
+    private static KillContext Kill(int tier = 1, float partBreak = 0f)
+        => new()
+        {
+            PowerTier = tier,
+            LootTiltPercent = partBreak,
+        };
+
+    /// <summary>
+    /// Every rarity tier keeps a NON-ZERO chance, under every combination of tier and tilt —
+    /// no context can lock a player out of a rarity.
+    /// </summary>
+    [Fact]
+    public void test_no_rarity_tier_can_ever_be_zeroed_out()
+    {
+        foreach (var tier in new[] { 1, 10, 20 })
+        foreach (var partBreak in new[] { 0f, 20f, 40f })
+        {
+            var weights = LootSystem.RarityWeights(
+                Kill(tier: tier, partBreak: partBreak), Tuning);
+
+            Assert.All(weights, w => Assert.True(w > 0f, "A rarity tier was zeroed — Pillar 3 violated."));
+
+            // And no tier may fall BELOW its baseline weight: tilts only ever add.
+            for (var i = 0; i < 5; i++)
+                Assert.True(weights[i] >= Tuning.BaseRarityWeight[i] - 0.001f);
+        }
+    }
+
+    /// <summary>Common's weight is never suppressed — the i=0 term zeroes both bonuses by construction.</summary>
+    [Fact]
+    public void test_common_weight_is_never_tilted_away()
+    {
+        var extreme = LootSystem.RarityWeights(Kill(tier: 20, partBreak: 40f), Tuning);
+        Assert.Equal(Tuning.BaseRarityWeight[0], extreme[0], precision: 3);
+    }
+
+    /// <summary>Higher power_tier really does tilt toward better loot.</summary>
+    [Fact]
+    public void test_higher_power_tier_tilts_rarity_upward()
+    {
+        var low = LootSystem.RarityWeights(Kill(tier: 1), Tuning);
+        var high = LootSystem.RarityWeights(Kill(tier: 20), Tuning);
+
+        Assert.True(high[4] > low[4], "Legendary must be likelier at high tier.");
+        Assert.True(high[4] / high.Sum() > low[4] / low.Sum());
+    }
+
+    /// <summary>
+    /// THE CLAMP. Without it an extreme tilt compounds loot/kill on top of kills/hour, and
+    /// throughput grows without a ceiling.
+    /// </summary>
+    [Fact]
+    public void test_the_bonus_drop_chance_is_hard_clamped_at_100()
+    {
+        var absurd = Kill(tier: 20, partBreak: 1000f);
+        Assert.Equal(100f, LootSystem.EffectiveBonusDropChancePercent(absurd, Tuning));
+    }
+
+    /// <summary>Drop count is strictly bounded regardless of how extreme the inputs get.</summary>
+    [Fact]
+    public void test_drop_count_never_exceeds_its_hard_ceiling()
+    {
+        var rng = Seeded();
+        var absurd = Kill(tier: 20, partBreak: 1000f);
+
+        for (var i = 0; i < 1000; i++)
+        {
+            var n = LootSystem.DropCount(absurd, rng, Tuning);
+            Assert.InRange(n, Tuning.DropCountBaseStandard, Tuning.DropCountBaseStandard + Tuning.BonusRollAttempts);
+        }
+    }
+
+    /// <summary>A tilted kill must actually produce more loot — the premium the tilt exists for.</summary>
+    [Fact]
+    public void test_a_tilted_kill_yields_more_items_than_a_plain_one()
+    {
+        var plain = Mean(Kill(tier: 5));
+        var tilted = Mean(Kill(tier: 5, partBreak: 40f));
+
+        Assert.True(tilted > plain, $"Tilted ({tilted:F2}) must beat plain ({plain:F2}).");
+    }
+
+    private static float Mean(KillContext ctx)
+    {
+        var rng = new Random(123);
+        const int n = 3000;
+        var total = 0;
+        for (var i = 0; i < n; i++) total += LootSystem.DropCount(ctx, rng, Tuning);
+        return (float)total / n;
+    }
+}
+
+public class HunterProgressionTests
+{
+    private static readonly ProgressionTuning Tuning = ProgressionTuning.Default;
+
+    /// <summary>Defense starts at ZERO — the fact that broke vow_fragility's original pricing.</summary>
+    [Fact]
+    public void test_defense_starts_at_zero_and_caps_at_120()
+    {
+        var hunter = new Hunter();
+        Assert.Equal(0, hunter.Defense);
+
+        hunter.AddGleam(1_000_000);
+        for (var i = 0; i < Tuning.StatRankCap; i++) Assert.True(hunter.Train(HunterStat.Defense));
+
+        Assert.Equal(120, hunter.Defense);
+        Assert.False(hunter.Train(HunterStat.Defense)); // capped
+    }
+
+    [Fact]
+    public void test_training_costs_gleam_and_rises_geometrically()
+    {
+        var hunter = new Hunter();
+        hunter.AddGleam(10_000);
+
+        var first = hunter.NextRankCost(HunterStat.AttackPower);
+        hunter.Train(HunterStat.AttackPower);
+        var second = hunter.NextRankCost(HunterStat.AttackPower);
+
+        Assert.Equal(25, first);
+        Assert.True(second > first, "Each rank must cost more than the last, or maxing is trivial.");
+    }
+
+    [Fact]
+    public void test_a_broke_hunter_cannot_train()
+    {
+        var hunter = new Hunter();
+        Assert.False(hunter.CanTrain(HunterStat.AttackPower));
+        Assert.False(hunter.Train(HunterStat.AttackPower));
+        Assert.Equal(0, hunter.RankOf(HunterStat.AttackPower));
+    }
+
+    /// <summary>Gleam's sink exists and is geometric. Whether it BALANCES lives in GleamEconomyTest.</summary>
+    /// <remarks>
+    /// <b>THIS TEST USED TO CLAIM MORE THAN IT CHECKED, and that is how a 13x income imbalance shipped
+    /// through a green suite.</b> It asserted <c>total &gt; 50_000</c> with the message "too small to
+    /// absorb the faucet" — a one-sided assertion, naming a faucet it never measured. 79,578 passed
+    /// comfortably while the live faucet ran at 2,281 Gleam/min, funding the entire nine-stat
+    /// progression in under 40 minutes. The playtest found what the test could not: "çok fazla gold
+    /// geliyor."
+    ///
+    /// An economy is a RATIO, so it cannot be asserted from one side. This test now checks only the
+    /// property it can actually see from here — the sink is geometric and non-trivial — and the balance
+    /// question lives in <c>GleamEconomyTest</c>, which measures both sides and states the answer in
+    /// hours of play.
+    /// </remarks>
+    [Fact]
+    public void test_the_lifetime_gleam_sink_is_geometric_and_non_trivial()
+    {
+        var total = Hunter.TotalLifetimeSink(Tuning);
+
+        // Previously Gleam's only sink was vow-binding (~200 each), saturating in "low tens" of buys.
+        Assert.True(total > 50_000, $"Sink is only {total} Gleam.");
+
+        // The shape matters more than the size: a late rank must cost meaningfully more than an early
+        // one, or the "which stat" decision collapses into "buy everything in any order".
+        var first = Hunter.CostOfRank(0, Tuning);
+        var last = Hunter.CostOfRank(Tuning.StatRankCap - 1, Tuning);
+        Assert.True(last > first * 10,
+            $"rank {Tuning.StatRankCap} costs {last} against {first} for the first — the curve is flat, "
+            + "so there is no point at which a player must choose between stats.");
+    }
+
+    /// <summary>An equipped charm is ineligible for sale. The hole that got shipped once already.</summary>
+    /// <summary>
+    /// Pillar 1 survives progression: maxing offence does not trivialize combat.
+    /// </summary>
+    /// <remarks>
+    /// Measure the growth in <b>damage</b>, not in the raw stat. An earlier version of this test
+    /// asserted on the stat and failed — <c>attack_power</c> grows 13x (10 -> 130) across a full
+    /// Training track, which looks alarming. But the stat feeds damage sub-linearly (Formula 1's
+    /// coefficient is 0.008), so 13x of stat buys only ~1.9x of damage. The raw number was never the
+    /// thing that mattered; what reaches the creature is.
+    ///
+    /// That failure also exposed a real gap: <c>attack_power</c> was not wired into basic-attack
+    /// damage at all. The encounter used a flat base value, so Training had <i>zero</i> effect on
+    /// combat. Now it does.
+    /// </remarks>
+    [Fact]
+    public void test_maxing_offence_does_not_out_scale_the_difficulty_curve()
+    {
+        // Measured on the LIVE lever MIGHT feeds — AutoDamageMultiplier, the BASIC ATTACK's own since
+        // 2026-08-26 (skills read RESONANCE). Attack training must matter but not brute-force the tier.
+        var hunter = new Hunter();
+        hunter.AddGleam(10_000_000);
+
+        var untrained = hunter.AutoDamageMultiplier;
+
+        for (var i = 0; i < Tuning.StatRankCap; i++) hunter.Train(HunterStat.AttackPower);
+
+        var maxed = hunter.AutoDamageMultiplier;
+        var damageGrowth = maxed / untrained;
+
+        // Training must MATTER...
+        Assert.True(damageGrowth > 1.3f, $"Maxing attack only bought {damageGrowth:F2}x damage — pointless.");
+
+        // ...but content gets ~7x tankier across the tier range. If raw stats could cover that gap, the
+        // build/gear layer would become optional and everything collapses into a stat check.
+        Assert.True(damageGrowth < 3f,
+            $"Maxing attack bought {damageGrowth:F2}x damage — enough to brute-force the tier curve.");
+    }
+
+    /// <summary>Training must actually change what the fight deals. It previously did not.</summary>
+    [Fact]
+    public void test_training_attack_power_increases_damage()
+    {
+        var hunter = new Hunter();
+        hunter.AddGleam(100_000);
+
+        var before = hunter.AutoDamageMultiplier;   // MIGHT is the basic attack's stat (2026-08-26)
+        for (var i = 0; i < 20; i++) hunter.Train(HunterStat.AttackPower);
+        var after = hunter.AutoDamageMultiplier;
+
+        Assert.True(after > before);
+    }
+}

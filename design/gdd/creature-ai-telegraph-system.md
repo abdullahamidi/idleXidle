@@ -1,4 +1,6 @@
-# Creature AI & Telegraph System: Resonance Hunter
+# Creature AI & Telegraph System: IDLExIDLE
+
+> **SUPERSEDED 2026-09-01 by nothing — no telegraph code exists.** Describes the manual-combat telegraph AI model, none of which is in the runtime. Kept for vocabulary and history — do not treat its rules as current.
 
 ## Document Status
 
@@ -29,7 +31,7 @@
 
 ## 1. Overview
 
-The creature AI & telegraph system is Resonance Hunter's authored-behavior layer for hostile
+The creature AI & telegraph system is IDLExIDLE's authored-behavior layer for hostile
 creatures and the mechanism that makes every creature attack **readable before it is dangerous**.
 It has two halves that are inseparable in practice: an **attack-pattern engine** (a data-driven,
 per-creature pool of authored attacks, organized into `Phase`s that react to HP thresholds and

@@ -40,7 +40,7 @@ Assets live beside this file:
 >
 > **A world that gets harder on purpose.** Six regions, each clearly tougher than the last. Deepen the Corruption for richer rewards and enemies that wear it. Climb back down when it bites.
 >
-> **A Warren that works while you sleep.** Facilities produce Gleam, Insight and Memory Dust while you are away. Come back, spend, leave.
+> **A Warren that works while you sleep.** Facilities produce Gleam, Memory Dust and Forge materials while you are away. Come back, spend, leave.
 >
 > **Traits that never reset.** Memory Dust buys permanent traits along four roads — Ruin, Aegis, Artifice, Avarice — and the capstone you choose closes the other three forever.
 >
