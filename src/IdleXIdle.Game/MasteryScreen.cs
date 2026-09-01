@@ -800,12 +800,12 @@ public sealed class MasteryScreen
     private void DrawTreeChrome(SpriteBatch b, Point hit)
     {
         // ── THE TOP STRIP — the house pattern, to the pixel. ──
-        _ui.TextCenterBig(b, "MASTERY TREE", 960, 24, Gold, UiTypography.ScreenTitle, TextFace.Display);
-        _ui.Fill(b, new Rectangle(700, 74, 520, 3), Gold * 0.5f);
+        _ui.TextCenterBig(b, "MASTERY TREE", UiKit.PageCenterX, 24, Gold, UiTypography.ScreenTitle, TextFace.Display);
+        _ui.Fill(b, new Rectangle(UiKit.PageCenterX - 260, 74, 520, 3), Gold * 0.5f);
 
         // The caption is the screen's, and only the screen's. Refusals and results speak in the inspector,
         // beside the button that raised them (UX V2 P1.5) — not five hundred pixels away under the title.
-        _ui.TextCenterBig(b, "FOUR DIRECTIONS  ·  ONE STYLE  ·  TWELVE SKILLS TO LEARN", 960, 80, Slate, UiTypography.Secondary);
+        _ui.TextCenterBig(b, "FOUR DIRECTIONS  ·  ONE STYLE  ·  TWELVE SKILLS TO LEARN", UiKit.PageCenterX, 80, Slate, UiTypography.Secondary);
 
         // ── THE CORNER PLATE: the points you can spend, what you have spent, and your style. ──
         _ui.PanelQuiet(b, PointsPanel);

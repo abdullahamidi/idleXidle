@@ -777,7 +777,11 @@ public sealed class LoadoutScreen
         var known = KnownSkills();
         var skills = Loadout.Skills;
         _ui.TextBig(b, "SKILLS", SkillsX, panel.Y + 16, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, $"LEARNED {known.Count(id => SkillCatalogue.Find(id) is not null)} / 12  ·  LEARN MORE ON THE MASTERY TREE", SkillsX + SkillsW, panel.Y + 16, Slate, UiTypography.Secondary);
+        var learnedHead = $"LEARNED {known.Count(id => SkillCatalogue.Find(id) is not null)} / 12  ·  LEARN MORE ON THE MASTERY TREE";
+        // Shortened against the room LEFT of it, so a narrower page (UI SCALE) trims the sentence instead of
+        // printing it through the word SKILLS.
+        var headRoom = SkillsW - _ui.MeasureBig("SKILLS", UiTypography.Secondary) - 24;
+        _ui.TextRightBig(b, _ui.ShortenBig(learnedHead, headRoom, UiTypography.Secondary), SkillsX + SkillsW, panel.Y + 16, Slate, UiTypography.Secondary);
 
         var equipped = skills.Select(s => s.SkillId).ToHashSet(StringComparer.Ordinal);
         for (var st = 0; st < 6; st++)

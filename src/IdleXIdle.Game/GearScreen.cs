@@ -71,9 +71,15 @@ public sealed class GearScreen
     // 776/920 = 0.84 this panel wore the SQUARE frame, whose side ornament reaches 57 px in — past the
     // 40 px content margin, so the GEAR POWER label was drawn under it. At 740/920 = 0.80 it wears the
     // vertical frame, whose side rail is 24. The 36 px go to the inventory.
-    private static Rectangle EquippedPanel => new(24, Top, 740, UiKit.PageBottom(40) - Top);
-    private static Rectangle InventoryPanel => new(780, Top, 512, UiKit.PageBottom(40) - Top);
-    private static Rectangle DetailPanel => new(1308, Top, UiKit.PageRight(24) - 1308, UiKit.PageBottom(40) - Top);
+    //
+    // BOTH EDGES OF EVERY COLUMN FOLLOW THE PAGE. A fixed left edge against a page-relative right one
+    // collapsed the inspector to two hundred pixels at UI SCALE 125% — the columns are shares of the
+    // width that is actually there, in the brief's 42 / 27 / 31 proportion (§61), with 16 px gutters.
+    private const int Gutter = 16, Margin = 24;
+    private static int ColumnsWidth => UiKit.PageRight(Margin) - Margin - Gutter * 2;
+    private static Rectangle EquippedPanel => new(Margin, Top, ColumnsWidth * 42 / 100, UiKit.PageBottom(40) - Top);
+    private static Rectangle InventoryPanel => new(EquippedPanel.Right + Gutter, Top, ColumnsWidth * 27 / 100, UiKit.PageBottom(40) - Top);
+    private static Rectangle DetailPanel => new(InventoryPanel.Right + Gutter, Top, UiKit.PageRight(Margin) - (InventoryPanel.Right + Gutter), UiKit.PageBottom(40) - Top);
 
     /// <summary>The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates.</summary>
     internal static Rectangle[] Spotlights(TourTarget target) => target switch

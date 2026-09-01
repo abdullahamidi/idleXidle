@@ -193,7 +193,9 @@ public sealed class TraitsScreen
     // detail panel stays docked on the right.
 
     /// <summary>The tree's canvas: everything left of the detail panel, below the top strip.</summary>
-    private static readonly Rectangle View = new(40, 136, 1300, 934);
+    // The canvas ends where the inspector begins and follows the page, so a smaller page (UI SCALE) does
+    // not leave the tree drawing underneath the panel.
+    private static Rectangle View => new(40, 136, DetailPanel.X - 28 - 40, UiKit.PageBottom(10) - 136);
 
     /// <summary>The docked reading panel, at 1368..1868.</summary>
     private static Rectangle DetailPanel => new(UiKit.PageRight(52) - 500, 136, 500, UiKit.PageBottom(10) - 136);
@@ -577,8 +579,8 @@ public sealed class TraitsScreen
         // TRAITS, not DUST. The screen stopped spending Memory Dust when the tree stopped being buyable
         // by idling; a title naming a currency it does not charge is the kind of small lie that makes a
         // player mistrust every other number on the screen.
-        _ui.TextCenterBig(b, "TRAITS", 960, 24, UiInk.Accent, UiTypography.ScreenTitle, TextFace.Display);
-        _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
+        _ui.TextCenterBig(b, "TRAITS", UiKit.PageCenterX, 24, UiInk.Accent, UiTypography.ScreenTitle, TextFace.Display);
+        _ui.Fill(b, new Rectangle(UiKit.PageCenterX - 240, 74, 480, 3), Gold * 0.5f);
         // "NO TAKING BACK", not "NO RESPEC" — the reader plays in English as a second language, and
         // "respec" is a word only the genre knows.
         // THE QUIET MARK, finally visible (P7): attunement's whole promise is "a mark", and its
@@ -586,9 +588,9 @@ public sealed class TraitsScreen
         // never see. A standing fact about the account belongs on the screen's own subtitle.
         if (DustEffects.TreeComplete(tree))
             _ui.TextCenterBig(b, "ONE SPINE  ·  FOUR ROADS  ·  NO TAKING BACK  ·  ALL FOUR ROADS WALKED",
-                              960, 80, UiInk.Accent, UiTypography.Secondary);
+                              UiKit.PageCenterX, 80, UiInk.Accent, UiTypography.Secondary);
         else
-            _ui.TextCenterBig(b, "ONE SPINE  ·  FOUR ROADS  ·  NO TAKING BACK", 960, 80, Slate, UiTypography.Secondary);
+            _ui.TextCenterBig(b, "ONE SPINE  ·  FOUR ROADS  ·  NO TAKING BACK", UiKit.PageCenterX, 80, Slate, UiTypography.Secondary);
 
         // How many points you have to spend, how much of the tree you have learned, and what all of it
         // would cost. A header rather than a panel: a player checks "can I afford this" constantly and

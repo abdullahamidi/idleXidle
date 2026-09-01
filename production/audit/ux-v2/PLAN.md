@@ -83,7 +83,7 @@ real-720 captures have been looked at, not when the code compiles.
 Pre-existing (identical in the 2026-09-01 baselines), recorded here so the screen pass that owns them cannot miss them:
 - ~~**BUILD** — the `IN <REGION>` affinity block drew three rows below the panel's bottom frame.~~ CLOSED by P1.4: the matchup lives in the inspector.
 - **ItemTooltip** — `HeightFor` sums literal row heights that must mirror the draw's pitches by hand; the draw was left on its literals in P0.4 so the two could not drift apart before the pair is unified. → P1.7 (the inspector replaces the tooltip's measure/draw pair).
-- **Page anchors** — every screen still centres titles at 960 and subtracts from 1920/1080; at UI SCALE 125%/150% the page overflows the canvas to the right and bottom (posed with `RH_SHOT_UISCALE=125`). → each P1/P2 screen pass adopts `UiKit.Page` / `PageRight` / `PageBottom` / `PageCenterX`; P3.4 verifies all three scales.
+- **Page anchors** — ~~every screen~~ the screens not yet passed still centre titles at 960 and subtract from 1920/1080. CLOSED for BUILD · MASTERY · TRAITS · GEAR (P1.7b): all four centre on `PageCenterX` and derive BOTH column edges from the page. The lesson that pass taught, for the screens still to come: a panel with a fixed LEFT edge and a page-relative RIGHT edge collapses — GEAR's inspector fell to ~200 px at 125%. Derive both edges, or fix the width and anchor one edge. → remaining screens in their own passes; P3.4 verifies all three scales.
 - **Mouse quantisation** — `ToOverlay` still takes the 480-space `CanvasMouse` (×4), so menu hit-tests land on a 4 px grid (audit P1-3). → fold into the first screen pass that rewrites its hit-testing; `ChromeMouse` is the full-resolution source.
 
 Registered by P1.1 (HUNT):
