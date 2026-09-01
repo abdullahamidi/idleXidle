@@ -437,6 +437,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private float _sinceAutosave;
     private string _bootMessage = "";
     private Color _bootColor = Bone;
+
+    /// <summary>The return summary a real absence earned (UX V2 P1.3), held until CONTINUE. Null when there is none.</summary>
+    private WelcomeSummary? _welcome;
+    private bool _showWelcome;
+
+    /// <summary>The welcome panel is on screen: pending, and no tour has the screen. Under a tour it waits its turn.</summary>
+    private bool WelcomeUp => _showWelcome && !_tourActive;
     private float _bootTimer;   // the "welcome back" toast — a few seconds after boot, then it fades
 
     /// <summary>
@@ -793,10 +800,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // the simulated portion just measured — with the 50% haircut inside it (away is never as
         // good as playing; that's what brings you back).
         var champOffline = 0L;
+        OfflineHunt.Result offline = default;
         if (credited > 0)
         {
             var (obh, obd) = EnemyBaselineFor(_activeRegion);
-            var offline = OfflineHunt.Simulate(
+            offline = OfflineHunt.Simulate(
                 _loadout.ToBuild(_dust, _mastery, _characters.Active, _skillProgress),
                 _hunter, credited, _activeRegion, Regions.Get(_activeRegion).CombatBias, obh, obd,
                 seed: unchecked((int)Math.Round(result.OfflineSeconds)) ^ _deepestEver);
@@ -812,23 +820,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // (The creature-farm offline catch-up loop lived here until 2026-08-24. Its screen was never
         // reachable, so no farm was ever staffed and the loop always summed zero — the "0 KILLS ·
         // 0 CORES" every welcome-back toast showed. Retired with the subsystem.)
-        if (credited > 1.0 && (champOffline > 0 || credited >= 60))
+        // THE RETURN SUMMARY (UX V2 P1.3, brief §25). A real absence that paid gets a held PANEL — away time,
+        // what the hunt did (Gleam, waves, falls, deepest), what the Warren produced (all four outputs) —
+        // with CONTINUE, because the largest single payment in the game deserves more than a seven-second
+        // toast that named one number and dropped the rest. A short trip keeps the toast.
+        var summary = new WelcomeSummary(credited, offline, wOffline, Unlocks.IsOpen(Activity.Warren, GuideUnlockFacts()));
+        if (summary.ShowsPanel)
         {
-            var hours = credited / 3600.0;
-            var span = hours >= 1.0 ? $"{hours:0.0} HOURS" : $"{credited / 60.0:0} MIN";
-            // wOffline.Gleam WAS MISSING FROM THIS SUM. It is credited to the balance forty lines
-            // above and was then left out of the only report of it, so the largest single payment
-            // in the game was invisible to the player receiving it. Attribution matters more than
-            // the total: it is the difference between "the game gave me money" and knowing WHICH of
-            // your two economies is paying you.
-            _bootMessage = $"WELCOME BACK — {span} AWAY\n"
-                           + $"+{Abbrev(champOffline + (long)wOffline.Gleam)} GLEAM "
-                           + $"({Abbrev(wOffline.Gleam)} WARREN · {Abbrev(champOffline)} HUNT)";
-            _bootColor = Gold;
+            _welcome = summary;
+            _showWelcome = true;
         }
         else if (champOffline > 0)
         {
-            // A short trip that the farm ignores can still have earned the champion something.
             _bootMessage = $"WELCOME BACK\n+{Abbrev(champOffline)} GLEAM EARNED WHILE AWAY";
             _bootColor = Gold;
         }
@@ -1520,7 +1523,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // `telegraph`, `combat` and `boss2` posed the manual-combat screen for screenshots. That
             // screen is gone, so they had nothing to pose.
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
-                or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
+                or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "welcome" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
                 or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "traitlit" or "traitterm" or "traitterminal"
                 or "roster" or "rosterlocked" or "weave" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
@@ -1751,7 +1754,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _deepestEver = 23; _mastery.SetEarned(77400);   // fixture career values (Stats §13)
                 }
 
-                if (sm is "fight" or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "runlog")
+                if (sm is "fight" or "welcome" or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "runlog")
                 {
                     // `fightflash` pins the hit flash so a still capture can prove the white silhouette draws.
                     if (sm == "fightflash") _expedition.DevHoldFlash = true;
@@ -1824,10 +1827,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // attention cue (a waiting chest + unspent mastery points).
                     // Not for fightreport: the welcome-back toast outranks the HunterDown overlay in the
                     // arena's priority list, so it would hide the very screen that capture exists to show.
-                    if (sm is not ("fightreport" or "fightfall" or "runlog"))
+                    if (sm is not ("fightreport" or "fightfall" or "runlog" or "welcome"))
                     {
-                        _bootMessage = "WELCOME BACK — 18 MIN AWAY\n+140 GLEAM (90 WARREN · 50 HUNT)";
+                        _bootMessage = "WELCOME BACK\n+140 GLEAM EARNED WHILE AWAY";   // the short-trip toast
                         _bootColor = Gold; _bootTimer = 7f;
+                    }
+                    // welcome: a REAL six-hour-forty-two-minute absence, run through the same simulation
+                    // LoadOrStartFresh uses, so the panel shows figures the model produced (UX V2 P1.3).
+                    if (sm == "welcome")
+                    {
+                        const double away = 6 * 3600 + 42 * 60;
+                        var (obh, obd) = EnemyBaselineFor(_activeRegion);
+                        var offline = OfflineHunt.Simulate(_loadout.ToBuild(_dust, _mastery, _characters.Active, _skillProgress),
+                            _hunter, away, _activeRegion, Regions.Get(_activeRegion).CombatBias, obh, obd, seed: 42);
+                        _warren.ConqueredRegions = _world.ConqueredIds.Count;
+                        var warrenOpen = Unlocks.IsOpen(Activity.Warren, GuideUnlockFacts());
+                        _welcome = new WelcomeSummary(away, offline, warrenOpen ? _warren.Tick((float)away) : default, warrenOpen);
+                        _showWelcome = true;
                     }
                     _forge.AddChest(new Chest { Rarity = Rarity.Epic, Tier = 8, Element = Source.Nature });
                     // Points are DERIVED from depth every frame (SkillPointsEarned → MasteryPoints), so a
@@ -2285,7 +2301,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // screen opened by a hotkey, the rail or an errand button is toured all the same. Never over the
         // help, the settings, a chest reveal or the expedition log: a tour is about the screen the player
         // is looking at, and none of those is a screen.
-        if (!_tourActive && !_showHelp && !_showSettings && !_forge.RevealActive && !_expedition.LogOpen
+        if (!_tourActive && !_showHelp && !_showSettings && !WelcomeUp && !_forge.RevealActive && !_expedition.LogOpen
             && Onboarding.TourDue(ScreenActivity(), _explained) is not null)
             BeginTour(ScreenActivity());
 
@@ -2294,7 +2310,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // that, once its own tour is done. It arrives with the SOCKET tab open, so the light falls on
         // the tab the card names and the bag beside it lists the gem.
         var gemsHeld = GemsHeld();
-        if (!_tourActive && !_showHelp && !_showSettings && !_forge.RevealActive && !_expedition.LogOpen
+        if (!_tourActive && !_showHelp && !_showSettings && !WelcomeUp && !_forge.RevealActive && !_expedition.LogOpen
             && ScreenActivity() == Activity.Forge && _showForge
             && Onboarding.GemTourDue(gemsHeld, _explained) is { } gemKey)
         {
@@ -2332,6 +2348,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             else if (_showForge && _forge.ConfirmOpen) _forge.CancelConfirm();
             // The vault's modals outrank the settings reflex too — Esc on the stall means "close
             // the stall", not "stack the settings panel on top of it".
+            else if (WelcomeUp) _showWelcome = false;   // Esc reads the welcome as read
             else if (_showVault && _vault.ModalUp) _vault.CloseModals();
             // The vault's CHEST FILTER popover is the same kind of thing: Esc on it means "close it".
             else if (_showVault && _vault.FilterOpen) _vault.FilterOpen = false;
@@ -2372,6 +2389,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (DevKeysEnabled && Pressed(Keys.F8)) CycleUiScale();   // dev: UI SCALE 100 / 125 / 150 / AUTO, until the settings row lands (UX V2 P3.1)
         if (Pressed(Keys.F1)) _showHelp = !_showHelp;
         if (Pressed(Keys.F10)) _showSettings = !_showSettings;
+        if (WelcomeUp && (Pressed(Keys.Enter) || Pressed(Keys.Space))) _showWelcome = false;   // CONTINUE by key
+        // THE WELCOME IS A MODAL FOR INPUT, NOT FOR THE FRAME. It is up on the very first frame after a load,
+        // and an early return here would skip the block below that feeds every screen its dependencies —
+        // the first Draw would then hit a null (the boot check caught exactly that). So the frame runs on
+        // and only the input is spent: Pressed() and MouseClicked both honour _swallowInput / WelcomeUp.
+        if (WelcomeUp) _swallowInput = true;
 
         // A modal eats the frame's input, but NOT the frame. The farms above still tick and the
         // autosave above still fires — an idle game does not pause because you opened a menu. What it
@@ -2867,7 +2890,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // S/D/J kept working under the settings panel and the reveal. MouseClicked already carries
             // these gates; the keys did not. (Adversarial review, pass four.)
             _forge.Update(gameTime, ScreenKeys, CanvasMouse, MouseClicked, MouseWheel, _hunter,
-                          inputLocked: _swallowInput || _showSettings || _forge.RevealActive);
+                          inputLocked: _swallowInput || _showSettings || WelcomeUp || _forge.RevealActive);
             // The dialog's "don't ask me again" writes through to the prefs file the moment it is used.
             if (_forge.PrefsDirty) { _forge.PrefsDirty = false; _askBeforeScrap = _forge.AskBeforeScrap; SaveDisplay(); }
             Latch(gameTime);
@@ -3202,7 +3225,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>The fight rung to show on the HUNT this frame, or null.</summary>
     private TutorialStep? HuntLessonShowing()
     {
-        if (_showTitle || _tourActive || _showHelp || _showSettings || OverlayActive) return null;
+        if (_showTitle || _tourActive || _showHelp || _showSettings || WelcomeUp || OverlayActive) return null;
         if (_expedition.LogOpen) return null;
         if (_bootTimer > 0f && _bootMessage.Length > 0) return null;       // the welcome toast has the slot
         if (_noticeTimer > 0f && _notice.Length > 0) return null;          // so does a notice
@@ -3371,7 +3394,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private void DrawNoticeToast()
     {
         if (_noticeTimer <= 0f || _notice.Length == 0) return;
-        if (_showTitle || _showHelp || _showSettings) return;
+        if (_showTitle || _showHelp || _showSettings || WelcomeUp) return;
         // Never over a tour: the first-gem notice sits exactly where the Forge's tab strip is, and a
         // toast across a spotlight is two lessons at once. The tour IS the notice's payload.
         if (_tourActive) return;
@@ -3953,6 +3976,54 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private const int ToastHeight = 88;
 
+    /// <summary>
+    /// WELCOME BACK: the held return panel — AWAY · HUNT · WARREN · CONTINUE. The one gold frame on screen
+    /// while it is up; a modal, so nothing under it takes the click that closes it.
+    /// </summary>
+    /// <remarks>
+    /// Every figure is <see cref="WelcomeSummary"/>'s, which is <see cref="OfflineHunt.Result"/>'s and
+    /// <see cref="WarrenYield"/>'s: nothing here is estimated, and a zero is not printed. Under the intro
+    /// tour it waits (<see cref="WelcomeUp"/>) rather than competing with the spotlight.
+    /// </remarks>
+    private void DrawWelcomePanel()
+    {
+        if (_welcome is not { } w) { _showWelcome = false; return; }
+        var hunt = w.HuntParts();
+        var warren = w.WarrenParts();
+        const int width = 720, pad = 40;
+        var cw = width - pad * 2;
+        var huntLines = hunt.Count > 0 ? _ui.WrapBig(string.Join("  ·  ", hunt), cw, UiTypography.Body) : Array.Empty<string>();
+        var warrenLines = warren.Count > 0 ? _ui.WrapBig(string.Join("  ·  ", warren), cw, UiTypography.Body) : Array.Empty<string>();
+        int RowH(IReadOnlyList<string> lines) => lines.Count == 0 ? 0
+            : UiTypography.Pitch(UiTypography.Secondary) + lines.Count * UiTypography.Pitch(UiTypography.Body) + 12;
+        var h = UiTypography.ModalTitleTop + UiTypography.Pitch(UiTypography.PanelTitle) + UiTypography.Pitch(UiTypography.Headline) + 14
+                + RowH(huntLines) + RowH(warrenLines) + 16 + 56 + pad;
+        var r = new Rectangle((1920 - width) / 2, (1080 - h) / 2 - 40, width, h);
+
+        _ui.Fill(_batch, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10) * 0.55f);
+        _ui.Panel(_batch, r);   // gold: this is a modal, and the one thing on screen
+        var x = r.X + pad;
+        var y = r.Y + UiTypography.ModalTitleTop;
+        _ui.TextBig(_batch, "WELCOME BACK", x, y, Gold, UiTypography.PanelTitle, TextFace.Display);
+        y += UiTypography.Pitch(UiTypography.PanelTitle);
+        _ui.TextBig(_batch, $"AWAY {WelcomeSummary.AwayText(w.AwaySeconds)}", x, y, Bone, UiTypography.Headline);
+        y += UiTypography.Pitch(UiTypography.Headline) + 14;
+
+        void Row(string label, IReadOnlyList<string> lines)
+        {
+            if (lines.Count == 0) return;
+            _ui.TextBig(_batch, label, x, y, Slate, UiTypography.Secondary);
+            y += UiTypography.Pitch(UiTypography.Secondary);
+            foreach (var line in lines) { _ui.TextBig(_batch, line, x, y, Bone, UiTypography.Body); y += UiTypography.Pitch(UiTypography.Body); }
+            y += 12;
+        }
+        Row("HUNT", huntLines);
+        Row("WARREN", warrenLines);
+
+        var btn = new Rectangle(x, r.Bottom - pad - 56, cw, 56);
+        if (_ui.Button(_batch, btn, "CONTINUE", ChromeMouse, _clicked, true, ButtonStyle.Primary)) _showWelcome = false;
+    }
+
     /// <summary>Where a toast hangs: under the hunt's header stack, or under a menu screen's title.</summary>
     private int ToastTop => OverlayActive ? 176 : _expedition.HeaderStackBottom + 8;
 
@@ -4092,7 +4163,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>True while a modal explanation is up — every input path below reads it.</summary>
     private bool _swallowInput;
 
-    private bool MouseClicked => _clicked && !_showSettings && !_showHelp && !_swallowInput;
+    private bool MouseClicked => _clicked && !_showSettings && !_showHelp && !WelcomeUp && !_swallowInput;
     private bool MouseRightClicked => _rightClicked && !_showSettings;
 
 
@@ -4216,7 +4287,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (_training.ConsumeTrain() is { } stat && _hunter.Train(stat)) { _sound.Play("sfx_click", 0.8f); Save(); }
             if (_training.ConsumeReset() && _hunter.ResetTraining()) { _sound.Play("sfx_forge", 0.8f); Save(); }
         }
-        else _expedition.Draw(_batch, CanvasMouse, MouseClicked, Regions.Get(_activeRegion).Name, EnemyArtFor(_activeRegion), _bootTimer > 0f);
+        else _expedition.Draw(_batch, CanvasMouse, MouseClicked, Regions.Get(_activeRegion).Name, EnemyArtFor(_activeRegion), _bootTimer > 0f || WelcomeUp);
 
         // The LOG draws over everything, including the nav rail: it is a full-screen read, and the one
         // overlay a player opens to think rather than to act.
@@ -4236,6 +4307,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_showHelp) DrawHelp();
         if (_showTypeSpec) DrawTypeSpec();
         if (_showSettings) DrawSettings();
+        if (WelcomeUp) DrawWelcomePanel();
 
         DrawBootToast();
         DrawHuntLesson();

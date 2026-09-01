@@ -10,12 +10,13 @@
 #
 # Modes: fight boss expedition forge build character stats warren map dust world
 #        region2 region3 conquered lootforge reforge vow hybrid rig vfx help
-#        buildtree buildzoom itemmenu runlog fightgear vaultfilter traitlit intro typespec
+#        buildtree buildzoom itemmenu runlog fightgear vaultfilter traitlit intro typespec welcome
 #
 # `fight` takes a third argument: seconds into the wave to pose (default: about one).
 # The fixture's creatures are thick on purpose, so a bar only visibly moves a few
 # seconds in — pass 6 to photograph a damage number beside a bar it has drained.
 # `vaultfilter` is the VAULT with the CHEST FILTER popover open and a setting in it (it moved off the HUNT).
+# `welcome` is the HUNT under the WELCOME BACK panel after a simulated 6h 42m absence (real figures).
 #
 # `buildzoom` takes a third argument: the tree camera's zoom. With none it poses the
 # FIRST-OPEN framing — the centre node and ring 1, which is what a player sees the
