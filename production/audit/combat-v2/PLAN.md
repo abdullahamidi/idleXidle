@@ -383,3 +383,38 @@ pressure SUP's heal covers the whole difference. The answer to "when would I cho
   waves of a real expedition.
 
 **Green:** 1332/1332 unit · all gates · boot.
+
+---
+
+## 9. C7 — one current truth
+
+**Done.** `production/audit/combat-v2/REPORT.md` answers §92 in its order.
+
+### The design doc's skill tables are generated now
+
+`design/gdd/skill-slots-and-skill-trees.md` §6 listed all twelve skills, twenty-four variations and
+seventy-two reinforcements by hand — a second copy of the catalogue, and the copy that goes stale is
+always the prose. It had SHEAR, SPUR, SEAL, GROUPING and eighteen other reinforcements the rework
+replaced, THIRST for what is now SIPHON, and **no Source column at all** — so the six variations that
+moved Source could not have been wrong in it, because it never said.
+
+`tools/check_skill_doc.py` generates those tables from `SkillCatalogue` (with the Source column) and is
+enrolled in `check_all.sh`, so the doc can never disagree with the fight again. `--write` regenerates it
+after a catalogue change.
+
+### Stale claims removed
+
+- **`design/gdd/sources.md`** — the "+8% own-element skill damage at 2 and again at 4" ladder is gone,
+  replaced by the six named capstones and by the rule the deletion is for: a set's Source is the
+  philosophy of the equipment, not a requirement on the skills.
+- **The "Names, audited" paragraph** listed renames between words that no longer exist (WAKE four times,
+  MASS twice, DEEPEN twice, DREGS twice) — a record of collisions among deleted entries. Replaced by a
+  pointer to the tests that check the property.
+
+### `design/gdd/shield.md` — the page the mechanic never had
+
+All eight required sections. The resolution order, the cap and reset, what shield is **not** (a bite it
+ate is not damage taken; health-scaling reads health; it is not healing), every edge case, the tuning
+knobs, and the twenty acceptance criteria mapped to `shield_test.cs`.
+
+**Green:** 1332/1332 unit · all gates including the new one · boot.

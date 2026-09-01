@@ -30,9 +30,15 @@ a spread hedges the world’s themed regions.
   rosters draw a region’s own Source plus its two wheel neighbours (`BandCycles.RosterFor`), so no
   region is a single-matchup lookup and picking a Source is a bet, not an answer.
 - **Items**: a drop’s Element is the Source of the region whose chest paid it. Wearing 2/3/4/5
-  pieces of one element unlocks that element’s SET rungs — +8% own-element skill damage at 2 and
-  again at 4, a stat in the element’s character at 3, the element’s one special rule at 5
-  (`ElementSets`). Eight worn slots, so a full five-set leaves three free.
+  pieces of one element unlocks that element’s SET rungs, and **every rung is its own rule**
+  (`ElementSets`) — MOMENTUM, PLATING, CERTAINTY, OVERGROWTH, AFTERIMAGE, HARMONY at five pieces.
+  Eight worn slots, so a hunter may run 5+3, 4+4 or 3+3+2.
+- **A set’s Source is the philosophy of the EQUIPMENT, not a requirement on the skills.** A BODY build
+  may wear SHADOW plate and receive everything SHADOW offers. The old ladder paid +8% to your
+  matching-Source skills at two pieces and again at four; that is deleted and is not replaced by a
+  bigger number, because Source already decides the variation you may take, the matchup you fight into
+  and the Vows you may swear — paying you again for agreeing with your own gear was paying you twice
+  for one decision.
 - **Regions**: one region per Source, in conquest order — Verdant Hollow (Nature), Cinderworks
   (Machine), Umbral Reach (Shadow), Marrow Wastes (Body), The Still Archive (Mind), The Pale Choir
   (Spirit).
@@ -41,8 +47,8 @@ a spread hedges the world’s themed regions.
 
 Signature constants (in `SoloBattle`): wound +0.03/stack × max 5 · machine strip 1 flat, cap 5 ·
 shadow threshold 0.5, bonus +0.12 · mind extend 250 ms, cap 1000 ms · spirit bonus +0.15 · nature
-leech via `HealTuning.NatureSignatureLeech`. Set rungs: pieces {2,3,4,5}, own-skill +0.08 per
-damage rung. Matchup factors live in `SoloBattle.Amp` and are pinned by `source_signature_test.cs`.
+leech via `HealTuning.NatureSignatureLeech`. Set rungs: pieces {2,3,4,5}, each rung its own rule — see
+`ElementSets` for the six ladders and `element_sets_test.cs` for the measurement of every one of them. Matchup factors live in `SoloBattle.Amp` and are pinned by `source_signature_test.cs`.
 
 ## 5. Edge Cases
 
