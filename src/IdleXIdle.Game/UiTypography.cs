@@ -181,6 +181,27 @@ public static class UiTypography
     /// </remarks>
     public const int Caption = 14;
 
+    /// <summary>
+    /// THE LINE PITCH for text drawn at <paramref name="rung"/>: the distance from one baseline to the
+    /// next in a list, a paragraph, a table. 13/10 of the rung — Body 19 → 24, Secondary 16 → 20.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The 2026-09-01 UX audit counted ~110 hand-set pitches (<c>y += 26</c>, <c>lineH = 28</c>,
+    /// <c>px * 3 / 2</c>) across thirteen files, for the SAME 19 px text at 26, 28, 30 and 32 — four row
+    /// heights for one voice, chosen by whoever wrote the screen. Worse, none of them knew about the
+    /// ladder: a rung could grow and every row it sat in would silently overlap the next. This ties the
+    /// pitch to the rung, so the ladder can move (and UI SCALE can scale it) and the rows follow.
+    /// </para>
+    /// <para>
+    /// A pitch is NOT a gap. The space between a caption and the block under it, or between two
+    /// sections, is a layout offset and stays a named literal on the screen; this is only the step from
+    /// one line of the same text to the next. <c>tools/check_ui_type.py</c> refuses a bare number in a
+    /// <c>lineH</c> / <c>rowH</c> / <c>pitch</c> slot for the same reason it refuses one in a size slot.
+    /// </para>
+    /// </remarks>
+    public static int Pitch(int rung) => rung * 13 / 10;
+
     // ── THE PANEL GRID ────────────────────────────────────────────────────────────────────────────
     //
     // Every panel in the game is the same nine-sliced frame (UiKit.Panel / PanelQuiet — the same art,

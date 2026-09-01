@@ -289,7 +289,7 @@ public sealed class RosterScreen
         var y = UiKit.BodyTop(DetailPanel);
 
         _ui.TextCenterBig(b, c.Name, DetailPanel.Center.X, y, unlocked ? Bone : Slate, UiTypography.Headline);
-        y += 34;
+        y += UiTypography.Pitch(UiTypography.Headline);
         _ui.TextCenterBig(b, c.Blurb, DetailPanel.Center.X, y, Slate, UiTypography.Secondary);
         y += 34;
 
@@ -320,7 +320,7 @@ public sealed class RosterScreen
         _ui.TextBig(b, "ALWAYS ON", left, y, Slate, UiTypography.Secondary);
         y += 30;
         _ui.TextBig(b, c.PassiveName, left, y, Gold, UiTypography.Body);
-        y += 32;
+        y += UiTypography.Pitch(UiTypography.Body);
         y = DrawWrapped(b, c.PassiveText, left, y, width, Bone) + 40;
 
         _ui.Fill(b, new Rectangle(left, y, width, 2), Dim);
@@ -347,7 +347,7 @@ public sealed class RosterScreen
     private int DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c)
     {
         var lines = _ui.WrapBig(text.ToUpperInvariant(), width, UiTypography.Label);
-        for (var i = 0; i < lines.Count; i++) { _ui.Text(b, lines[i], x, y, c); if (i < lines.Count - 1) y += 28; }
+        for (var i = 0; i < lines.Count; i++) { _ui.Text(b, lines[i], x, y, c); if (i < lines.Count - 1) y += UiTypography.Pitch(UiTypography.Label); }
         return y;
     }
 }

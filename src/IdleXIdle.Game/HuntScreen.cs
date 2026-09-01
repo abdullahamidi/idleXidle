@@ -2157,7 +2157,7 @@ public sealed class HuntScreen
         foreach (var line in _ui.WrapBig(r.Verdict(), w, UiTypography.Headline).Take(2))
         {
             _ui.TextBig(b, line, x0, y, UiKit.Vellum, UiTypography.Headline);
-            y += 30;
+            y += UiTypography.Pitch(UiTypography.Headline);
         }
 
         // THE MEASUREMENTS. Each line is a lever. Figures right-aligned to one edge, units dimmer
@@ -2200,7 +2200,7 @@ public sealed class HuntScreen
         // CLAMPED TO THE ROOM THERE ACTUALLY IS, above the footer's buttons: the next row added to
         // RunReport's diff must never go under the frame. A report that quietly drops its last row is
         // better than one that draws it where it cannot be read — and the count is derived.
-        const int pitch = 26;
+        var pitch = UiTypography.Pitch(UiTypography.Secondary);
         var room = Math.Max(0, (panel.Bottom - 112 - dy) / pitch);
         var xa = x0 + 330;   // the "before" figures' right edge
         foreach (var e in entries.Take(room))
@@ -2762,7 +2762,7 @@ public sealed class HuntScreen
 
         // LOWEST TIER   [-]  ANY TIER / TIER N AND UP  [+]
         _ui.TextBig(b, "LOWEST TIER", inner.X, y, Bone, UiTypography.Secondary);
-        y += 22;
+        y += UiTypography.Pitch(UiTypography.Secondary);
         var minus = new Rectangle(inner.X, y, 34, 34);
         var plus = new Rectangle(inner.Right - 34, y, 34, 34);
         MiniButton(b, minus, "-", hit);
@@ -2775,7 +2775,7 @@ public sealed class HuntScreen
         // slot art the GEAR screen wears, lit when kept; ALL SLOTS under them clears the lot.
         y += 48;
         _ui.TextBig(b, "GEAR SLOTS THE CHEST IS FOR", inner.X, y, Bone, UiTypography.Secondary);
-        y += 24;
+        y += UiTypography.Pitch(UiTypography.Secondary);
         string? tip = null;
         const int cellH = 60;
         var cellW = inner.Width / 4;
@@ -3078,7 +3078,7 @@ public sealed class HuntScreen
                 foreach (var line in _ui.WrapBig(head, RailContentW, UiTypography.Caption).Take(2))
                 {
                     _ui.TextBig(b, line, RailContentX, hy, Gold, UiTypography.Caption);
-                    hy += 18;
+                    hy += UiTypography.Pitch(UiTypography.Caption);
                 }
             }
             else
@@ -3158,7 +3158,7 @@ public sealed class HuntScreen
     {
         var n = Math.Max(1, Loadout.SkillCapacity);
         var fixedH = RailHeadroom + SkillSlotMax + SkillTextBlock + RailFootroom;
-        var pitch = 128;
+        var pitch = 128;   // ui-size-ok: the skill rail's SLOT pitch in pixels, not a line of text
         if (n > 1 && fixedH + (n - 1) * pitch > RailMaxH)
             pitch = Math.Max(96, (RailMaxH - fixedH) / (n - 1));
         var h = Math.Clamp(fixedH + (n - 1) * pitch, RailMinH, RailMaxH);

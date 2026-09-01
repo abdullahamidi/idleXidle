@@ -417,7 +417,7 @@ public sealed class WarrenScreen
     private void DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c)
     {
         const int px = UiTypography.Body;
-        foreach (var line in _ui.WrapBig(text, width, px)) { _ui.TextBig(b, line, x, y, c, px); y += px * 3 / 2; }
+        foreach (var line in _ui.WrapBig(text, width, px)) { _ui.TextBig(b, line, x, y, c, px); y += UiTypography.Pitch(px); }
     }
 
     private void DrawDebug(SpriteBatch b)

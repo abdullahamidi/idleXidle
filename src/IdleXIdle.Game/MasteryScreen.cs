@@ -1214,7 +1214,7 @@ public sealed class MasteryScreen
     /// </remarks>
     private int DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c)
     {
-        foreach (var line in _ui.WrapBig(text, width, UiTypography.Label)) { _ui.Text(b, line, x, y, c); y += 30; }
+        foreach (var line in _ui.WrapBig(text, width, UiTypography.Label)) { _ui.Text(b, line, x, y, c); y += UiTypography.Pitch(UiTypography.Label); }
         return y;
     }
 

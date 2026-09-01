@@ -738,7 +738,7 @@ public sealed class VaultScreen
             y += 40;
 
             _ui.TextBig(b, "SKILLS", panel.X + 60, y, Slate, UiTypography.SectionLabel);
-            y += 26;
+            y += UiTypography.Pitch(UiTypography.SectionLabel);
             if (build.Skills.Count == 0) { _ui.TextBig(b, "NO SKILLS", panel.X + 80, y, Dim, UiTypography.Secondary); y += 26; }
             foreach (var s in build.Skills.Take(5))
             {
@@ -753,12 +753,12 @@ public sealed class VaultScreen
                 var line = word
                            + (vowName is null ? "" : $"  —  {vowName.ToUpperInvariant()}");
                 _ui.TextBig(b, line, panel.X + 80, y, Bone, UiTypography.Secondary);
-                y += 26;
+                y += UiTypography.Pitch(UiTypography.Secondary);
             }
 
             y += 14;
             _ui.TextBig(b, "KEYSTONES", panel.X + 60, y, Slate, UiTypography.SectionLabel);
-            y += 26;
+            y += UiTypography.Pitch(UiTypography.SectionLabel);
             if (build.Keystones.Count == 0) { _ui.TextBig(b, "NONE CHOSEN", panel.X + 80, y, Dim, UiTypography.Secondary); y += 26; }
             foreach (var k in build.Keystones.Take(3))
             {
@@ -810,7 +810,7 @@ public sealed class VaultScreen
             ? new List<string>()
             : _ui.WrapBig(d.RegionBlurb, TextW, UiTypography.Secondary).ToList();
 
-        var h = 96 + blocks.Count * 28 + (blurb.Count > 0 ? 40 + blurb.Count * 26 : 0) + 40;
+        var h = 96 + blocks.Count * UiTypography.Pitch(UiTypography.Body) + (blurb.Count > 0 ? 40 + blurb.Count * UiTypography.Pitch(UiTypography.Secondary) : 0) + 40;
 
         // Edge-aware: beside the "?" when it fits, flipped left near the right edge, clamped vertically.
         var x = card.Right + 12 + W <= 1900 ? card.Right + 12 : card.X - W - 12;
@@ -831,7 +831,7 @@ public sealed class VaultScreen
         {
             if (bullet) _ui.Fill(b, new Rectangle(panel.X + 28, ty + 10, 8, 8), grade * 0.8f);
             _ui.TextBig(b, line, panel.X + 48, ty, Bone, UiTypography.Body);
-            ty += 28;
+            ty += UiTypography.Pitch(UiTypography.Body);
         }
 
         if (blurb.Count > 0)
@@ -842,7 +842,7 @@ public sealed class VaultScreen
             foreach (var line in blurb)
             {
                 _ui.TextBig(b, line, panel.X + 28, ty, Slate, UiTypography.Secondary);
-                ty += 26;
+                ty += UiTypography.Pitch(UiTypography.Secondary);
             }
         }
     }

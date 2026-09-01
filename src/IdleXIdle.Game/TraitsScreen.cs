@@ -1264,7 +1264,7 @@ public sealed class TraitsScreen
         var badge = new Rectangle(left, y, 26, 26);
         var hasGlyph = _ui.Icon(b, RoadGlyph(u.Road), badge, roadCol);
         _ui.TextBig(b, RoadName(u.Road), hasGlyph ? badge.Right + 10 : left, y + 4, roadCol, UiTypography.Body);
-        y += 30;
+        y += UiTypography.Pitch(UiTypography.Body);
         _ui.TextBig(b, _ui.ShortenBig(TraitRoads.Sentence(u.Road), width, UiTypography.Secondary),
                     left, y, Slate, UiTypography.Secondary);
         y += 28;
@@ -1277,7 +1277,7 @@ public sealed class TraitsScreen
 
         _ui.TextCenterBig(b, _ui.ShortenBig(u.Name, width, UiTypography.Headline), DetailPanel.Center.X, y,
                           isOwned ? Gold : buyable ? Bone : Slate, UiTypography.Headline);
-        y += 32;
+        y += UiTypography.Pitch(UiTypography.Headline);
         // The state in a word — and only the state. The "kind" that used to sit beside it was a label
         // about the engine's categories, not a fact a player could do anything with.
         var state = isOwned ? "LEARNED" : buyable ? "AVAILABLE NOW" : "LOCKED";
@@ -1288,12 +1288,12 @@ public sealed class TraitsScreen
         //    into the blocks under it: the text gets as many lines as leave the cost and the
         //    prerequisites their room, and ends with an ellipsis past that (a long keystone blurb is
         //    the only thing that could get there).
-        const int lineH = 23;
+        var lineH = UiTypography.Pitch(UiTypography.Body);
         var floor = DetailPanel.Bottom - 176;   // the permanence line and the button own the panel below this
         _ui.Fill(b, new Rectangle(left, y, width, 2), Dim * 0.7f);
         y += 12;
         _ui.TextBig(b, "WHAT IT DOES", left, y, Slate, UiTypography.Secondary);
-        y += 26;
+        y += UiTypography.Pitch(UiTypography.Secondary);
         var reserve = (isOwned ? 44 : 66)                                    // the cost block
                       + 40 + 32 * Math.Max(1, Math.Min(u.Requires.Count, 3));  // and the prerequisite block's minimum
         var lines = _ui.WrapBig(MemoryDustText.Describe(u), width, UiTypography.Body);

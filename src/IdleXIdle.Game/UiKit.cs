@@ -1148,7 +1148,8 @@ public sealed class UiKit
     /// </remarks>
     public void HoverTip(SpriteBatch b, string text, Point anchor)
     {
-        const int width = 430, pad = 14, lineH = 22;
+        const int width = 430, pad = 14;
+        var lineH = UiTypography.Pitch(UiTypography.Secondary);
         var lines = WrapBig(text, width - pad * 2, UiTypography.Secondary);
         if (lines.Count == 0) return;
         var h = pad * 2 + lines.Count * lineH;

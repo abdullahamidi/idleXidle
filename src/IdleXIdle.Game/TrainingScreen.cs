@@ -589,7 +589,7 @@ public sealed class TrainingScreen
         if (_hoverTitle is null || _hoverBody is null) return;
 
         const int w = 640;
-        const int lineH = 26;
+        var lineH = UiTypography.Pitch(UiTypography.Secondary);
         var wrapped = new System.Collections.Generic.List<string>();
         var breaks = new System.Collections.Generic.List<int>();   // index of each paragraph's last line
         foreach (var para in _hoverBody)

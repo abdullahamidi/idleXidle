@@ -3133,7 +3133,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         foreach (var line in body)
         {
             _ui.TextBig(_batch, line, r.X + 22, ty, UiKit.Vellum, UiTypography.Secondary);
-            ty += 22;
+            ty += UiTypography.Pitch(UiTypography.Secondary);
         }
 
         // The x that closes THIS lesson for good — see the dismissal handler in Update.
@@ -3147,7 +3147,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         const int width = 980;
         var body = _ui.WrapBig(Tutorial.Body(step, GuideFacts()), width - 44, UiTypography.Secondary);
-        var height = 58 + body.Count * 22;
+        var height = 58 + body.Count * UiTypography.Pitch(UiTypography.Secondary);
         return new Rectangle((1920 - width) / 2, 1080 - height - 26, width, height);
     }
 
@@ -3229,7 +3229,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         var body = _ui.WrapBig(banner.Body, ScreenBannerWrap, UiTypography.Secondary);
         var x = NavRailWidth + (1920 - NavRailWidth - ScreenBannerWidth) / 2;
-        return new Rectangle(x, 86, ScreenBannerWidth, 58 + body.Count * 22);
+        return new Rectangle(x, 86, ScreenBannerWidth, 58 + body.Count * UiTypography.Pitch(UiTypography.Secondary));
     }
 
     /// <summary>
@@ -3256,7 +3256,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         foreach (var line in body)
         {
             _ui.TextBig(_batch, line, r.X + 22, ty, UiKit.Vellum, UiTypography.Secondary);
-            ty += 22;
+            ty += UiTypography.Pitch(UiTypography.Secondary);
         }
 
         var close = GuideCloseRect(r);
@@ -3432,7 +3432,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         const int width = 560, pad = 24;
         var lines = _ui.WrapBig(step.Body, width - pad * 2, UiTypography.Body);
-        var height = pad + 32 + 8 + lines.Count * 28 + 14 + 24 + pad;
+        var height = pad + 32 + 8 + lines.Count * UiTypography.Pitch(UiTypography.Body) + 14 + 24 + pad;
         var card = TourCardRect(holes, width, height);
 
         _ui.Fill(_batch, card, new Color(0x15, 0x0E, 0x24, 0xF6));
@@ -3447,7 +3447,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         foreach (var line in lines)
         {
             _ui.TextBig(_batch, line, card.X + pad, y, new Color(0xD8, 0xD2, 0xE4), UiTypography.Body);
-            y += 28;
+            y += UiTypography.Pitch(UiTypography.Body);
         }
 
         // The last card's footer says what the click does next: the intro's hands over to the first
@@ -5468,6 +5468,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         var row = 0;
         foreach (var line in _ui.WrapBig(text, maxWidth, UiTypography.Label))
-            Text(line, x, y + row++ * 36, c);   // 1920-space line height; WrapText is DrawHelp-only
+            Text(line, x, y + row++ * UiTypography.Pitch(UiTypography.Label), c);   // WrapText is DrawHelp-only
     }
 }

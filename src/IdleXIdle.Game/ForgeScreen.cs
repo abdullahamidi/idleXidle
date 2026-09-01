@@ -1590,7 +1590,7 @@ public sealed class ForgeScreen
         var nxt = refined is null ? null : ItemAffixes.Of(refined);
         var ay = Card.Y + 410;
         _ui.Text(b, cur.Count > 0 ? "STATS ON THIS ITEM" : "NO STATS — RARER ITEMS CARRY MORE", Card.X, ay, Slate);
-        ay += 32;
+        ay += UiTypography.Pitch(UiTypography.Label);
         // BUILT RIGHT TO LEFT, so the name gets whatever the numbers leave and never one pixel more —
         // drawn left-first, "CRIT CHANCE" ran under its own value.
         for (var i = 0; i < cur.Count; i++)
@@ -2040,7 +2040,7 @@ public sealed class ForgeScreen
         if (item.Gems.Count > 0)
         {
             _ui.TextBig(b, $"ITS {item.Gems.Count} GEM{(item.Gems.Count == 1 ? "" : "S")} COME BACK TO YOU FIRST.", x, ly, Met, UiTypography.Secondary);
-            ly += 26;
+            ly += UiTypography.Pitch(UiTypography.Secondary);
         }
 
         if (worn)
@@ -2248,7 +2248,7 @@ public sealed class ForgeScreen
                  })
         {
             _ui.TextBig(b, line, x, ty, Slate, UiTypography.Secondary);
-            ty += 24;
+            ty += UiTypography.Pitch(UiTypography.Secondary);
         }
     }
 
@@ -2349,7 +2349,7 @@ public sealed class ForgeScreen
         foreach (var line in _ui.WrapBig(text, width, px))
         {
             _ui.TextBig(b, line, x, y, c, px);
-            y += px + 8;
+            y += UiTypography.Pitch(px);
         }
         return y;
     }
@@ -2367,7 +2367,7 @@ public sealed class ForgeScreen
 
     private void DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c)
     {
-        foreach (var line in _ui.WrapBig(text, width, UiTypography.Label)) { _ui.Text(b, line, x, y, c); y += 26; }
+        foreach (var line in _ui.WrapBig(text, width, UiTypography.Label)) { _ui.Text(b, line, x, y, c); y += UiTypography.Pitch(UiTypography.Label); }
     }
 
     /// <summary>The stat's word. Core owns it — see <see cref="ItemAffixes.StatWord"/> for why.</summary>

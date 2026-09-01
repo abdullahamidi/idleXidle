@@ -1208,7 +1208,7 @@ public sealed class LoadoutScreen
 
         _ui.TextBig(b, "NOW", x, y, Slate, UiTypography.Secondary);
         _ui.TextRightBig(b, $"{_currentDps:N0} damage each second", x + width, y, Bone, UiTypography.Body);
-        y += 30;
+        y += UiTypography.Pitch(UiTypography.Body);
         if (y + 30 > floor) return;
 
         // THE SKILL UNDER THE CURSOR. A preview needs a slot that holds a real skill to swap out
@@ -1237,7 +1237,7 @@ public sealed class LoadoutScreen
 
             _ui.TextBig(b, "WITH THIS", x, y, Slate, UiTypography.Secondary);
             _ui.TextRightBig(b, $"{_previewDps:N0} damage each second", x + width, y, tint, UiTypography.Body);
-            y += 24;
+            y += UiTypography.Pitch(UiTypography.Body);
             _ui.TextRightBig(b, MathF.Abs(pct) < 0.5f ? "no change" : $"{(pct > 0 ? "+" : "")}{pct:0}%",
                              x + width, y, tint, UiTypography.Secondary);
             y += 30;
@@ -1262,7 +1262,7 @@ public sealed class LoadoutScreen
             {
                 _ui.Text(b, $"{enchant.ToUpperInvariant()} WANTS", x + 10, y, Slate);
                 _ui.TextRight(b, want, x + width, y, Met);
-                y += 24;
+                y += UiTypography.Pitch(UiTypography.Label);
             }
             y += 6;
         }
@@ -1276,7 +1276,7 @@ public sealed class LoadoutScreen
         _ui.Fill(b, new Rectangle(x, y, width, 2), Dim);
         y += 14;
         _ui.Text(b, $"IN {(RegionName.Length > 0 ? RegionName : RegionId).ToUpperInvariant()}", x, y, Slate);
-        y += 30;
+        y += UiTypography.Pitch(UiTypography.Label);
 
         var judged = _slot >= 0 && _slot < Loadout.Skills.Count
             ? Loadout.Skills[_slot].Source
@@ -1290,7 +1290,7 @@ public sealed class LoadoutScreen
 
             _ui.Text(b, SourceName(enemy), x + 10, y, SourceColor.GetValueOrDefault(enemy, Bone));
             _ui.TextRight(b, $"{verdict}  x{mult:0.00}", x + width, y, tint);
-            y += 24;
+            y += UiTypography.Pitch(UiTypography.Label);
         }
     }
 
@@ -1766,7 +1766,7 @@ public sealed class LoadoutScreen
         _ui.Fill(b, new Rectangle(VowColX, y, VowColW, 2), Dim);
         y += 16;
         _ui.TextBig(b, reading.Name.ToUpperInvariant(), VowColX, y, Gold, UiTypography.Body);
-        y += 32;
+        y += UiTypography.Pitch(UiTypography.Body);
         // Bounded, so a longer Vow than any in the catalogue today cannot reintroduce the overflow: the
         // panel's frame art reaches 40px in, and text drawn past that is text on the ornament.
         DrawWrapped(b, reading.Description, VowColX, y, VowColW, Bone, VowPanel.Bottom - 40);
@@ -1784,7 +1784,7 @@ public sealed class LoadoutScreen
     /// <summary>Wrap to <paramref name="width"/>, and stop at <paramref name="maxY"/> rather than run past it.</summary>
     private void DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c, int maxY = int.MaxValue)
     {
-        const int lineH = 28;
+        var lineH = UiTypography.Pitch(UiTypography.Label);
         var lines = _ui.WrapBig(text.ToUpperInvariant(), width, UiTypography.Label);
         for (var i = 0; i < lines.Count; i++)
         {

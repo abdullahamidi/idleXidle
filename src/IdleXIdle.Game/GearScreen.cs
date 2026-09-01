@@ -993,7 +993,7 @@ public sealed class GearScreen
         {
             _ui.TextBig(b, GearTraits.NameOf(tr), UiKit.ContentLeft(DetailPanel), sy, Gold, UiTypography.Body);
             _ui.TextRightBig(b, "TRAIT", UiKit.ContentRight(DetailPanel), sy, Slate, UiTypography.Secondary);
-            sy += 26;
+            sy += UiTypography.Pitch(UiTypography.Body);
 
             // THE NUMBERS, NOT THE ADJECTIVE. The blurb gives a direction — "far harder hits, skills come
             // slower" — and a direction alone is not a decision: "harder" is worth knowing only once you
@@ -1015,7 +1015,7 @@ public sealed class GearScreen
         {
             _ui.TextBig(b, ench.Name, UiKit.ContentLeft(DetailPanel), sy, Purple, UiTypography.Body);
             _ui.TextRightBig(b, "ENCHANT", UiKit.ContentRight(DetailPanel), sy, Slate, UiTypography.Secondary);
-            sy += 26;
+            sy += UiTypography.Pitch(UiTypography.Body);
             sy = Wrapped(b, ench.Blurb.ToUpperInvariant(), UiKit.ContentLeft(DetailPanel), sy,
                          DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, Bone) + 10;
         }
@@ -1041,11 +1041,11 @@ public sealed class GearScreen
             var tiers = ElementSets.TiersOf(setElement);
             var wornOf = ElementSets.WornCount(hunter, setElement);
             var limit = EquipBtn.Y - 8;
-            var pitch = sy + 4 + 26 + tiers.Count * 22 <= limit ? 22 : 20;
+            var pitch = sy + 4 + UiTypography.Pitch(UiTypography.Body) + tiers.Count * 22 <= limit ? 22 : 20;
             if (pitch == 22) sy += 4;
             _ui.TextBig(b, $"{ElementSets.Name(setElement)} — {ElementSets.Progress(wornOf)}", UiKit.ContentLeft(DetailPanel), sy, Bone, UiTypography.Body);
             _ui.TextRightBig(b, "SET", UiKit.ContentRight(DetailPanel), sy, Slate, UiTypography.Secondary);
-            sy += 26;
+            sy += UiTypography.Pitch(UiTypography.Body);
             const int gutter = 28;
             var entries = tiers.Select(t => ((string?)t.Pieces.ToString(),
                     _ui.WrapBig(t.Line, DetailPanel.Width - UiKit.PadX(DetailPanel) * 2 - gutter, UiTypography.Secondary),
@@ -1062,7 +1062,7 @@ public sealed class GearScreen
     /// <summary>Wrap to a width and return the y AFTER the last line. Two sentences, never one clipped.</summary>
     private int Wrapped(SpriteBatch b, string text, int x, int y, int width, Color c)
     {
-        const int lineH = 26;
+        var lineH = UiTypography.Pitch(UiTypography.Label);
         foreach (var line in _ui.WrapBig(text, width, UiTypography.Label)) { _ui.Text(b, line, x, y, c); y += lineH; }
         return y;
     }
