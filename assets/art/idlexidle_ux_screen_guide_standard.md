@@ -320,7 +320,7 @@ headlessly and exits. The out path must be repo-relative.
 
 ```text
 RH_SHOT_MODE      the fixture (weave/loadout, buildtree/mastery, character/gear, stats/training, dust/traits,
-                  fight/hunt, vault, vaultfirst, forge, warren, map, roster, rosterlocked, runlog, fightreport,
+                  fight/hunt, vault, vaultfirst, forge, warren, warrenready, warrenfresh, map, roster, rosterlocked, runlog, fightreport,
                   settings, settingsopen, help, intro <card>, tour <Activity> <card>, typespec, …)
 RH_SHOT_T / _ZOOM / _STEP / _MOUSE / _TAB / _DROPDOWN / _EXPLAIN   pose dials (see capture.sh header)
 RH_SHOT_UISCALE   100 | 125 | 150 | auto — the page scale (100 when unset)

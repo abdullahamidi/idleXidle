@@ -2,19 +2,33 @@ using System;
 using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using IdleXIdle.Core.Encounters;
+using IdleXIdle.Core.Persistence;
 using IdleXIdle.Core.Warrens;
 
 using IdleXIdle.Core.Progression;
 namespace IdleXIdle.Game;
 
 /// <summary>
-/// The WARREN screen (nav: WARREN): a facility-management dashboard. Overview + 8-facility grid + a bonuses
-/// strip + a facility detail/upgrade panel, built to the Warren production spec (rev 1).
+/// WARREN: what each facility pays, where that is spent, and what the place made while you were away.
+/// A summary strip, an eight-facility grid, and the shared inspector.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Every value is real, from the <see cref="Core.Warrens.Warren"/> model the host owns: facility levels
-/// and outputs, the Warren level/XP, the derived production bonuses, and the real upgrade costs in
-/// Gleam / Dust. The host sets the model + owned balances each frame and consumes the upgrade request.
+/// and outputs, the Warren level and XP, the derived production multipliers, and the real upgrade costs
+/// in Gleam and Dust. The host sets the model and the owned balances each frame and consumes the
+/// upgrade request.
+/// </para>
+/// <para>
+/// UX V2 P2.4 (brief §77–§81, as corrected by PLAN D11 — the Warren has no services, no targeting and
+/// no automation in Core, so those sections are honoured as what each facility PAYS and where that is
+/// spent). The screen used to answer a question nobody asked: its loudest panel was five derived
+/// percentages and the formula that produced them, while the two facts a player comes here for were
+/// missing — no card said whether it could be upgraded now, so the only way to find out was to click
+/// all eight, and what the place earned while the game was closed was never shown at all, though the
+/// host had already computed it.
+/// </para>
 /// </remarks>
 public sealed class WarrenScreen
 {
@@ -25,7 +39,6 @@ public sealed class WarrenScreen
     private static readonly Color Dim = UiInk.Rule;
     private static readonly Color Met = UiInk.Good;
     private static readonly Color GleamC = new(0xF0, 0xA8, 0x30);   // gold coin track
-    private static readonly Color Violet = new(0xC0, 0x6E, 0xE0);   // accent (crest fallback, caption)
     private static readonly Color DustC = new(0x5F, 0xE0, 0xC8);    // teal gem track
     private static readonly Color ScrapC = new(0x9A, 0xC0, 0x88);   // scrap green — the Forge wallet's tint
     private static readonly Color EssenceC = new(0x74, 0xC6, 0xE8); // essence blue — the Forge wallet's tint
@@ -39,21 +52,34 @@ public sealed class WarrenScreen
     public long DustOwned { get; set; }
     public bool DevWarrenDebug { get; set; }
 
+    /// <summary>The deepest wave held anywhere — the number the facility ceiling comes from. Host-set.</summary>
+    public int DeepestWave { get; set; }
+
+    /// <summary>What the last real absence paid, or null when there was none. Host-set.</summary>
+    public WelcomeSummary? LastReturn { get; set; }
+
     // ── Host-consumed requests ──────────────────────────────────────────────────────────────────
     private FacilityKind? _upgradeRequest;
     public FacilityKind? ConsumeUpgrade() { var r = _upgradeRequest; _upgradeRequest = null; return r; }
 
     private FacilityKind _selected = FacilityKind.Nursery;
 
-    // ── Spec §4 rectangles ──────────────────────────────────────────────────────────────────────
-    private static readonly Rectangle OverviewPanel = new(28, 154, 388, 708);
-    private static readonly Rectangle GridPanel = new(446, 154, 920, 500);
-    // TEN PIXELS TALLER, upward. Its title was at +12, which is INSIDE the medium frame's 20 px top
-    // rail — the one panel on this screen whose header was printed on its own ornament. Nothing here
-    // could move down (the strip already ends level with the two columns beside it), so the strip took
-    // the room from the gap above it, which had 22 to spare.
-    private static readonly Rectangle BonusStrip = new(446, 666, 920, 196);
-    private static readonly Rectangle DetailPanel = new(1400, 154, 480, 708);
+    // ── Layout: one summary strip, the grid under it, the inspector beside both. Every edge comes
+    //    from UiKit.Page, so 125 % shrinks the screen instead of clipping it. ─────────────────────
+    private const int Top = 150;            // the hint slot owns canvas y 86-134
+    private const int BottomMargin = 60;
+    private const int StripHeight = 200;
+    private const int GridPad = 24, CardGap = 18;
+
+    private static Rectangle InspectorPanel =>
+        new(UiKit.PageRight(40) - 496, Top, 496, UiKit.PageBottom(BottomMargin) - Top);
+
+    private static Rectangle SummaryStrip =>
+        new(38, Top, InspectorPanel.X - 20 - 38, StripHeight);
+
+    private static Rectangle GridPanel =>
+        new(38, Top + StripHeight + 16, SummaryStrip.Width,
+            UiKit.PageBottom(BottomMargin) - (Top + StripHeight + 16));
 
     /// <summary>
     /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
@@ -62,26 +88,44 @@ public sealed class WarrenScreen
     internal static Rectangle[] Spotlights(TourTarget target) => target switch
     {
         TourTarget.Facilities => new[] { GridPanel },
-        TourTarget.FacilityDetail => new[] { DetailPanel },
-        TourTarget.WarrenOverview => new[] { OverviewPanel },
+        TourTarget.FacilityDetail => new[] { InspectorPanel },
+        TourTarget.WarrenOverview => new[] { SummaryStrip },
         _ => Array.Empty<Rectangle>(),
     };
 
-    private static Rectangle Card(int i)
-    {
-        var col = i % 4;
-        var row = i / 4;
-        // Centred, not inset by a hand-picked 24: this panel's whole content is the grid, so the slack
-        // is split rather than assigned. Written as +24 it was symmetric by coincidence.
-        var left = (GridPanel.Width - (3 * 222 + 206)) / 2;
-        return new Rectangle(GridPanel.X + left + col * 222, GridPanel.Y + 58 + row * 212, 206, 200);
-    }
+    private static int CardW => (GridPanel.Width - GridPad * 2 - CardGap * 3) / 4;
+    private static int CardH => (GridPanel.Height - GridPad * 2 - CardGap) / 2;
+
+    private static Rectangle Card(int i) =>
+        new(GridPanel.X + GridPad + i % 4 * (CardW + CardGap),
+            GridPanel.Y + GridPad + i / 4 * (CardH + CardGap), CardW, CardH);
 
     private Color ResColor(WarrenResource r) => r switch
     {
         WarrenResource.Gleam => GleamC, WarrenResource.Dust => DustC,
         WarrenResource.Scrap => ScrapC, _ => EssenceC,
     };
+
+    private static string ResName(WarrenResource r) => r switch
+    {
+        WarrenResource.Gleam => "GLEAM", WarrenResource.Dust => "DUST",
+        WarrenResource.Scrap => "SCRAP", _ => "ESSENCE",
+    };
+
+    /// <summary>Where this currency is actually spent — the Warren's honest answer to "what for?".</summary>
+    private static string SinkLine(WarrenResource r) => r switch
+    {
+        WarrenResource.Gleam => "GLEAM PAYS FOR TRAINING AND THE FORGE",
+        WarrenResource.Dust => "DUST PAYS TO START A HUNT DEEPER",
+        WarrenResource.Scrap => "SCRAP PAYS FOR FORGE UPGRADES",
+        _ => "ESSENCE PAYS TO SET GEMS IN THE FORGE",
+    };
+
+    /// <summary>What this facility actually pays per minute — Core's raw output through Core's own
+    /// multiplier, which is what makes a card's figure reconcile with the strip's total.</summary>
+    private int Boosted(Facility f) => (int)MathF.Round(f.BaseOutputPerMin * Warren.Multiplier(f.Info.Produces));
+
+    private int BoostedNext(Facility f) => (int)MathF.Round(f.NextLevelOutput * Warren.Multiplier(f.Info.Produces));
 
     /// <summary>
     /// The currency's real icon (Gleam coin, Memory Dust, the Forge's material gems), the tinted
@@ -105,26 +149,49 @@ public sealed class WarrenScreen
         ? $"{v / 1_000_000.0:0.#}M"
         : v >= 1000 ? $"{v / 1000.0:0.#}K" : v.ToString();
 
+    private void Outline(SpriteBatch b, Rectangle r, Color c, int px)
+    {
+        _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, px), c);
+        _ui.Fill(b, new Rectangle(r.X, r.Bottom - px, r.Width, px), c);
+        _ui.Fill(b, new Rectangle(r.X, r.Y, px, r.Height), c);
+        _ui.Fill(b, new Rectangle(r.Right - px, r.Y, px, r.Height), c);
+    }
+
+    private string? _tip;
+    private Point _tipAt;
+
+    private void Tip(Rectangle r, Point hit, string text)
+    {
+        if (r.Contains(hit)) { _tip = text; _tipAt = hit; }
+    }
+
+    // The away line is built only when the summary it describes changes — this screen redraws sixty
+    // times a second and the string is the same every one of them.
+    private WelcomeSummary? _awayFrom;
+    // Seeded with the never-been-away line: both fields start null, so a cache keyed on "did it
+    // change?" would never build the first string and the row would draw empty.
+    private string _awayLine = AwayNever;
+    private bool _awayBuilt;
+
+    private static readonly string AwayNever =
+        $"THE WARREN KEEPS EARNING WHILE THE GAME IS CLOSED — UP TO {SaveSystem.MaxOfflineSeconds / 3600:0} HOURS AWAY";
+
     public void Draw(SpriteBatch b, Point mouse, bool clicked)
     {
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
         var hit = Game1.ToOverlay(mouse);
+        _tip = null;
 
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xC0));   // scrim so panels pop
-        _ui.TextCenterBig(b, "WARREN", 960, 24, UiInk.Accent, UiTypography.ScreenTitle, TextFace.Display);
-        _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
-        // THE SUBTITLE SAYS WHAT THIS SCREEN IS FOR, not what its panels are called.
-        //
-        // It used to recite the headers directly beneath it, which spends the largest 100px on the page
-        // to tell the player something they can already read, and teaches them that big text in this
-        // band is not worth reading. Same slot, same cost, real content.
-        _ui.TextCenterBig(b, "THE WARREN EARNS WHILE YOU ARE AWAY — COME BACK AND SPEND",
-                          960, 80, Slate, UiTypography.Secondary);
+        _ui.TextCenterBig(b, "WARREN", UiKit.PageCenterX, 24, Gold, UiTypography.ScreenTitle, TextFace.Display);
+        _ui.Fill(b, new Rectangle(UiKit.PageCenterX - 240, 74, 480, 3), Gold * 0.5f);
+        // (The subtitle is gone. What it promised — the place earns while you are away — is now the
+        //  strip's own last line, said with the figures from the absence that actually happened.)
 
-        DrawOverview(b, hit, clicked);
+        DrawSummary(b);
         DrawGrid(b, hit, clicked);
-        DrawBonuses(b);
-        DrawDetail(b, hit, clicked);
+        DrawInspector(b, hit, clicked);
+        if (_tip is { } tip) _ui.HoverTip(b, tip, _tipAt);
         if (DevWarrenDebug) DrawDebug(b);
     }
 
@@ -160,7 +227,7 @@ public sealed class WarrenScreen
     /// </remarks>
     private void LevelBadge(SpriteBatch b, Rectangle box, float progress)
     {
-        if (!_ui.Icon(b, "icon_warren_crest", box, Color.White)) _ui.Diamond(b, box, Violet);
+        if (!_ui.Icon(b, "icon_warren_crest", box, Color.White)) _ui.Diamond(b, box, UiInk.Empty);
 
         var centre = new Vector2(box.Center.X, box.Center.Y);
         var radius = box.Width * 0.54f;
@@ -178,230 +245,362 @@ public sealed class WarrenScreen
         }
     }
 
-    private void DrawOverview(SpriteBatch b, Point hit, bool clicked)
+    // ── THE SUMMARY STRIP. One region, five facts, and the away line. ────────────────────────
+    //
+    // It replaces a 388 px OVERVIEW column and a 920 px WARREN BONUSES panel that between them spent
+    // half the screen on five derived percentages and the formula behind them — a question nobody
+    // asked — while the ceiling that stops every upgrade was explained eight times, once per card,
+    // and the away earnings were not shown at all.
+    private void DrawSummary(SpriteBatch b)
     {
-        _ui.PanelQuiet(b, OverviewPanel);
-        var left = UiKit.ContentLeft(OverviewPanel);
-        var right = UiKit.ContentRight(OverviewPanel);
-        var width = right - left;
+        _ui.Plate(b, SummaryStrip);
+        var ix = SummaryStrip.X + GridPad;
+        var iw = SummaryStrip.Width - GridPad * 2;
+        // Proportional cells: written as fixed widths the third one ran off the strip at 125 %.
+        var aw = iw * 26 / 100;
+        var bw = iw * 28 / 100;
+        var cw = iw - aw - bw;
+        var ax = ix;
+        var bx = ax + aw;
+        var cx = bx + bw;
 
-        _ui.TextCenterBig(b, "WARREN OVERVIEW", OverviewPanel.Center.X, UiKit.TitleTop(OverviewPanel), Gold, UiTypography.PanelTitle);
-        // THE CAPTION SLOT CARRIES THE PLACE'S OWN NAME. It used to be the third line of a hand-placed
-        // stack beside the crest; the house grid keeps the line that says WHICH one of these you are
-        // looking at directly under the title, which is where every other panel in the game puts it.
-        _ui.TextCenterBig(b, _ui.ShortenBig(Warren.Name, width, UiTypography.Secondary),
-                          OverviewPanel.Center.X, UiKit.CaptionTop(OverviewPanel), Violet, UiTypography.Secondary);
-
-        // ── THE LEVEL, ON ITS BADGE, WITH WHAT THE LEVEL BUYS BESIDE IT ──
-        var crest = new Rectangle(left, UiKit.BodyTop(OverviewPanel), 84, 84);
-        LevelBadge(b, crest, Warren.XpToNext > 0 ? Warren.Xp / (float)Warren.XpToNext : 1f);
-        _ui.TextBig(b, $"WARREN LEVEL {Warren.Level}", crest.Right + 20, crest.Y + 12, Bone, UiTypography.Body);
-        _ui.TextBig(b, $"+{Warren.AllProductionBonus * 100f:0}% ALL PRODUCTION", crest.Right + 20, crest.Y + 48, Met, UiTypography.Body);
-
-        // XP BAR TO THE NEXT WARREN LEVEL — the ART's bar, at a height the art can hold.
-        //
-        // It was UiKit.Bar, which stretches the whole 256×64 ui_bar_frame into whatever rectangle it is
-        // handed: 332 × 26 here, so the end scrollwork was squashed to two fifths of its height and
-        // smeared across five times its width (playtest 2026-08-29: "the level bar's frame is stretched
-        // — its quality has dropped"). BarArt five-slices a WIDE bar, so the two cap ornaments and the
-        // centre scroll keep their proportions and only the plain stone between them stretches; 34 px of
-        // height then gives those caps 17 px to be drawn in rather than 13.
-        var bar = new Rectangle(left, crest.Bottom + 26, width, 34);
+        // CELL A — the Warren's own rank.
         var pct = Warren.XpToNext > 0 ? Warren.Xp / (float)Warren.XpToNext : 1f;
-        _ui.BarArt(b, bar, pct, "xp");
-        // ONE INK, not two. The old readout switched to near-black past 55% because cream on the GOLD
-        // fill measures about 1.6:1; the xp art's fill is deep violet, which cream clears at both ends
-        // of the bar, so the conditional goes with the gold it was compensating for.
-        _ui.TextCenterBig(b, $"{Warren.Xp:N0} / {Warren.XpToNext:N0}", bar.Center.X,
-                          bar.Y + (bar.Height - UiTypography.Secondary) / 2, Bone, UiTypography.Secondary);
-        _ui.TextBig(b, $"NEXT LEVEL {Warren.Level + 1}", left, bar.Bottom + 12, Slate, UiTypography.Secondary);
+        LevelBadge(b, new Rectangle(ax, Top + 20, 72, 72), pct);
+        // A SHORTER SENTENCE, NEVER A SHORTER NUMBER. Shortened to fit, this read "WARREN LEV..."
+        // at 125 % — the one thing the cell exists to say was the half that got cut. The word WARREN
+        // is the screen's own title, so it is what goes.
+        var levelLabel = $"WARREN LEVEL {Warren.Level}";
+        if (_ui.MeasureBig(levelLabel, UiTypography.Headline) > aw - 100) levelLabel = $"LEVEL {Warren.Level}";
+        _ui.TextBig(b, levelLabel, ax + 86, Top + 24, Bone, UiTypography.Headline);
+        _ui.BarArt(b, new Rectangle(ax + 86, Top + 60, aw - 94, 26), pct, "xp");
+        // UNDER the bar, not inside it: a number printed on a bar's own fill is a number read against
+        // whatever colour happens to be behind it.
+        var xpLabel = $"{Warren.Xp:N0} OF {Warren.XpToNext:N0} TO LEVEL {Warren.Level + 1}";
+        if (_ui.MeasureBig(xpLabel, UiTypography.Secondary) > aw - 100)
+            xpLabel = $"{Warren.Xp:N0} OF {Warren.XpToNext:N0}";
+        _ui.TextBig(b, xpLabel, ax + 86, Top + 94, Slate, UiTypography.Secondary);
 
-        var rule = bar.Bottom + 44;
-        _ui.Fill(b, new Rectangle(left, rule, width, 2), Dim);
+        // TWO HAIRLINES between the three cells. Without them cell B's right-aligned figures sat
+        // against cell C's first words and read as C's numbers.
+        _ui.Fill(b, new Rectangle(bx - 14, Top + 20, 1, StripHeight - 60), Dim);
+        _ui.Fill(b, new Rectangle(cx - 14, Top + 20, 1, StripHeight - 60), Dim);
 
-        // Total production, per real currency (bonuses applied).
-        _ui.TextBig(b, "TOTAL PRODUCTION", left, rule + 18, Gold, UiTypography.Body);
-        _ui.TextRightBig(b, "(IDLE RATE)", right, rule + 22, Slate, UiTypography.Secondary);
-        var y = rule + 60;
-        foreach (var r in new[] { WarrenResource.Gleam, WarrenResource.Dust, WarrenResource.Scrap, WarrenResource.Essence })
+        // CELL B — the ceiling, explained ONCE for all eight cards.
+        // THE LABEL AND ITS NUMBER SHARE A ROW WHEN THEY FIT AND STACK WHEN THEY DO NOT. Held on one
+        // row at every width, "FACILITIES CAN REACH LEVEL" was cut to "FACILITIES CAN REACH L..." at
+        // 125 %, which says nothing at all.
+        var factY = Top + 18;
+
+        void Fact(string label, string value)
         {
-            ResGlyph(b, new Rectangle(left, y - 2, 38, 38), r);
-            _ui.TextBig(b, $"+{Ab(Warren.ProductionPerMinute(r))} /min", left + 60, y + 2, Bone, UiTypography.Headline);
-            // Four rows (P12 traded the INSIGHT row for the two Forge materials), still spaced to REACH
-            // the rule above the closing paragraph rather than to a tight 52 — a panel that stops a
-            // hand-width short of its own rule reads as one that ran out of things to say.
-            y += 54;
+            var vw = _ui.MeasureBig(value, UiTypography.Headline);
+            if (_ui.MeasureBig(label, UiTypography.Secondary) + vw + 20 <= bw - 20)
+            {
+                _ui.TextBig(b, label, bx, factY + 8, Slate, UiTypography.Secondary);
+                _ui.TextRightBig(b, value, bx + bw - 28, factY, Bone, UiTypography.Headline);
+                factY += UiTypography.Pitch(UiTypography.Headline) + 6;
+                return;
+            }
+            _ui.TextBig(b, _ui.ShortenBig(label, bw - 20, UiTypography.Secondary), bx, factY, Slate, UiTypography.Secondary);
+            factY += UiTypography.Pitch(UiTypography.Secondary);
+            _ui.TextBig(b, value, bx, factY, Bone, UiTypography.Headline);
+            factY += UiTypography.Pitch(UiTypography.Headline);
         }
 
-        // Production runs on every screen (see Game1.TickFarms) — a quiet reminder that the base earns idle.
-        _ui.Fill(b, new Rectangle(left, OverviewPanel.Bottom - 124, width, 2), Dim);
-        // WHAT EACH OF THE FOUR IS FOR — one plain line, because a row of coloured diamonds teaches
-        // nothing. GLEAM buys stat training, DUST starts checkpoint descents and builds the warren,
-        // SCRAP and ESSENCE are the Forge's refine and socket fuel.
-        DrawWrapped(b, "The warren earns while you are away. GLEAM and DUST are spent all over the game. "
-                     + "SCRAP and ESSENCE feed the Forge.",
-            left, OverviewPanel.Bottom - 104, width, Slate);
+        Fact("YOUR DEEPEST WAVE", $"{DeepestWave}");
+        Fact("FACILITIES CAN REACH LEVEL", $"{Warren.FacilityLevelCap}");
+        var ruleY = factY + 4;
+        foreach (var line in _ui.WrapBig($"EVERY {Warren.DepthPerFacilityLevel} WAVES DEEPER RAISES IT BY ONE LEVEL",
+                                         bw - 8, UiTypography.Secondary).Take(2))
+        {
+            _ui.TextBig(b, line, bx, ruleY, Slate, UiTypography.Secondary);
+            ruleY += UiTypography.Pitch(UiTypography.Secondary);
+        }
+
+        // CELL C — what it all makes, per minute, with the bonuses already in it.
+        _ui.TextBig(b, "EVERY MINUTE, WITH WARREN BONUSES", cx, Top + 16, Slate, UiTypography.Secondary);
+        var chw = cw / 4;
+        var k = 0;
+        foreach (var r in new[] { WarrenResource.Gleam, WarrenResource.Dust, WarrenResource.Scrap, WarrenResource.Essence })
+        {
+            var v = Warren.ProductionPerMinute(r);
+            ResGlyph(b, new Rectangle(cx + k * chw, Top + 44, 28, 28), r);
+            // A zero rate is drawn in the placeholder ink — the honest fresh-Warren state, where both
+            // material facilities are still locked.
+            _ui.TextBig(b, $"+{Ab(v)}", cx + k * chw + 34, Top + 40, v > 0 ? Bone : UiInk.Empty, UiTypography.Headline);
+            _ui.TextBig(b, ResName(r), cx + k * chw, Top + 76, v > 0 ? ResColor(r) : Slate, UiTypography.Secondary);
+            k++;
+        }
+        // All that survives of WARREN BONUSES: the three multipliers themselves, and where they came from.
+        _ui.TextBig(b, _ui.ShortenBig(
+                        $"GLEAM ×{Warren.Multiplier(WarrenResource.Gleam):0.00}   ·   DUST ×{Warren.Multiplier(WarrenResource.Dust):0.00}   ·   SCRAP AND ESSENCE ×{Warren.Multiplier(WarrenResource.Scrap):0.00}",
+                        cw, UiTypography.Secondary),
+                    cx, Top + 104, Slate, UiTypography.Secondary);
+        _ui.TextBig(b, _ui.ShortenBig(
+                        Warren.ConqueredRegions == 1
+                            ? $"1 REGION TAKEN ADDS +{Warren.ConquestBonus * 100f:0}% TO ALL OF IT"
+                            : $"{Warren.ConqueredRegions} REGIONS TAKEN ADD +{Warren.ConquestBonus * 100f:0}% TO ALL OF IT",
+                        cw, UiTypography.Secondary),
+                    cx, Top + 132, Slate, UiTypography.Secondary);
+
+        // THE AWAY LINE — the screen's own question, answered with the figures from the absence that
+        // actually happened. The host already had them; this screen never showed them.
+        _ui.Fill(b, new Rectangle(ix, Top + 162, iw, 1), Dim);
+        if (!_awayBuilt || !Equals(_awayFrom, LastReturn))
+        {
+            _awayBuilt = true;
+            _awayFrom = LastReturn;
+            _awayLine = LastReturn is { } w && w.WarrenParts().Count > 0
+                ? $"WHILE YOU WERE AWAY {WelcomeSummary.AwayText(w.AwaySeconds)} THE WARREN MADE {string.Join("  ·  ", w.WarrenParts())}"
+                : AwayNever;
+        }
+        _ui.TextBig(b, _ui.ShortenBig(_awayLine, iw, UiTypography.Secondary), ix, Top + 170, Bone, UiTypography.Secondary);
     }
 
+    // ── THE GRID. Eight cards, each answering "can I upgrade this one?" without being clicked. ──
     private void DrawGrid(SpriteBatch b, Point hit, bool clicked)
     {
-        _ui.Panel(b, GridPanel);
+        // QUIET, not ornate: this is a grid of things to pick between, and it wore the gold frame
+        // while the column that explains them wore the brown.
+        _ui.Plate(b, GridPanel);
         var i = 0;
         foreach (var f in Warren.AllFacilities)
         {
-            var card = Card(i++);
+            var index = i++;
+            var card = Card(index);
+            var chip = new Rectangle(card.X + 18, card.Bottom - 54, card.Width - 36, 38);
 
-            // game-flow 3.8: facilities unlock by conquest. A locked card is a promise, not a faucet —
-            // it says what would open it and takes no clicks.
+            // Facilities unlock by conquest. A locked card is a promise, not a faucet — it says what
+            // would open it, by NAME, and takes no clicks.
             if (!Warren.IsUnlocked(f.Kind))
             {
-                _ui.Fill(b, card, new Color(0x10, 0x0C, 0x16, 0xD0));
-                _ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, 4), Dim);
-                _ui.Fill(b, new Rectangle(card.X, card.Bottom - 4, card.Width, 4), Dim);
-                _ui.TextCenterBig(b, f.Info.Name, card.Center.X, card.Y + 14, Dim, UiTypography.Secondary);
-                _ui.Hex(b, new Rectangle(card.Center.X - 44, card.Y + 46, 88, 76), Dim * 0.4f);
-                _ui.TextCenterBig(b, "LOCKED", card.Center.X, card.Bottom - 70, Slate, UiTypography.Body);
-                _ui.TextCenterBig(b, "TAKE ANOTHER REGION", card.Center.X, card.Bottom - 38, Slate, UiTypography.Secondary);
+                _ui.Plate(b, card);
+                // Centred in the space the LOCKED badge leaves, not in the whole card — BREEDING
+                // CHAMBER at Headline reached the badge and the two words touched.
+                _ui.TextCenterBig(b, _ui.ShortenBig(f.Info.Name, card.Width - 96, UiTypography.Headline),
+                                  card.X + (card.Width - 76) / 2, card.Y + 12, Bone, UiTypography.Headline);
+                _ui.TextRightBig(b, "LOCKED", card.Right - 18, card.Y + 16, UiInk.Disabled, UiTypography.Caption);
+
+                var plateBox = new Rectangle(card.Center.X - 44, card.Y + 78, 88, 76);
+                if (plateBox.Bottom < chip.Y - 8)
+                {
+                    _ui.Hex(b, plateBox, UiInk.Empty * 0.4f);
+                    _ui.Icon(b, "ui_slot_locked",
+                             new Rectangle(plateBox.Center.X - 20, plateBox.Center.Y - 20, 40, 40), UiInk.Empty);
+                }
+
+                // WHICH conquest, not "another region": the chain is linear, so the next one is known.
+                // Facility k opens at ConqueredRegions >= k - 1 (UnlockedFacilityCount = 2 + conquered),
+                // so the shortfall is measured from the card's OWN index — not the loop counter, which
+                // has already moved on and made every locked card ask for one region too many.
+                var need = index - 1 - Warren.ConqueredRegions;
+                var next = Warren.ConqueredRegions >= 0 && Warren.ConqueredRegions < Regions.All.Count
+                    ? Regions.All[Warren.ConqueredRegions].Name : "";
+                var line = need <= 1 && next.Length > 0 ? $"CONQUER {next}"
+                         : need <= 1 ? "CONQUER ONE MORE REGION"
+                         : $"CONQUER {need} MORE REGIONS";
+                _ui.Plate(b, chip);
+                _ui.Icon(b, "ui_slot_locked", new Rectangle(chip.X + 10, chip.Y + 9, 20, 20), Bone);
+                _ui.TextBig(b, _ui.ShortenBig(line, chip.Width - 48, UiTypography.Body),
+                            chip.X + 38, chip.Y + 7, Bone, UiTypography.Body);
+                Tip(card, hit, $"{f.Info.Name} — LOCKED. {line} TO OPEN IT.");
                 continue;
             }
 
             var sel = f.Kind == _selected;
             if (UiKit.ClickedIn(card, hit, clicked)) _selected = f.Kind;
-
-            _ui.Fill(b, card, new Color(0x16, 0x12, 0x20, 0xD0));
             var rc = ResColor(f.Info.Produces);
-            _ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, 4), sel ? Gold : rc * 0.6f);
-            _ui.Fill(b, new Rectangle(card.X, card.Bottom - 4, card.Width, 4), sel ? Gold : rc * 0.35f);
-            if (sel) { _ui.Fill(b, new Rectangle(card.X, card.Y, 4, card.Height), Gold); _ui.Fill(b, new Rectangle(card.Right - 4, card.Y, 4, card.Height), Gold); }
 
-            _ui.TextCenterBig(b, f.Info.Name, card.Center.X, card.Y + 14, sel ? Bone : Slate, UiTypography.Secondary);
-            // Milestone pips (top-right) — one gold gem per milestone crossed, the at-a-glance long-term goal.
-            for (var m = 0; m < f.MilestoneTier && m < 5; m++)
-                _ui.Diamond(b, new Rectangle(card.Right - 18 - m * 30, card.Y + 30, 11, 11), Gold);
-            // The facility's own picture, on a resource-tinted hex plate. Eight identical hexagons
-            // distinguished only by colour told the player nothing about what each place does.
-            var plate = new Rectangle(card.Center.X - 44, card.Y + 46, 88, 76);
-            _ui.Hex(b, plate, rc * (sel ? 0.55f : 0.38f));
-            var icon = $"icon_facility_{f.Kind.ToString().ToLowerInvariant()}";
-            if (!_ui.Icon(b, icon, new Rectangle(plate.X + 2, plate.Y - 4, plate.Width - 4, plate.Height + 8)))
-                _ui.Hex(b, plate, rc);
-            _ui.TextCenterBig(b, $"LEVEL {f.Level}", card.Center.X, card.Bottom - 70, Gold, UiTypography.Body);
-            ResGlyph(b, new Rectangle(card.Center.X - 68, card.Bottom - 42, 26, 26), f.Info.Produces, rc);
-            _ui.TextCenterBig(b, $"+{Ab(f.BaseOutputPerMin)} /min", card.Center.X + 8, card.Bottom - 38, Bone, UiTypography.Secondary);
+            _ui.Plate(b, card);
+            // The name is ALWAYS legible: unselected cards drew it in Slate, so "not selected" read as
+            // "unavailable" on seven of the eight.
+            _ui.TextCenterBig(b, _ui.ShortenBig(f.Info.Name, card.Width - 24, UiTypography.Headline),
+                              card.Center.X, card.Y + 12, Bone, UiTypography.Headline);
+
+            ResGlyph(b, new Rectangle(card.X + 18, card.Y + 47, 24, 24), f.Info.Produces, rc);
+            _ui.TextBig(b, ResName(f.Info.Produces), card.X + 48, card.Y + 45, rc, UiTypography.Body);
+            // GOLD ONLY WHEN SELECTED. Every card printed its LEVEL in gold, so selection had nothing
+            // left to win with.
+            _ui.TextRightBig(b, $"LEVEL {f.Level}", card.Right - 18, card.Y + 45, sel ? Gold : Bone, UiTypography.Body);
+
+            var plateTop = card.Y + 78;
+            var plateH = Math.Min(100, chip.Y - 62 - plateTop);
+            if (plateH >= 40)
+            {
+                var plate = new Rectangle(card.Center.X - 44, plateTop, 88, plateH);
+                _ui.Hex(b, plate, rc * (sel ? 0.55f : 0.38f));
+                var icon = $"icon_facility_{f.Kind.ToString().ToLowerInvariant()}";
+                if (!_ui.Icon(b, icon, new Rectangle(plate.X + 2, plate.Y - 4, plate.Width - 4, plate.Height + 8)))
+                    _ui.Hex(b, plate, rc);
+            }
+
+            // THE FIGURE THE CARD PAYS, with the bonuses in it — the raw one never reconciled with the
+            // strip's total, and nothing said which was which.
+            _ui.TextBig(b, $"+{Ab(Boosted(f))} /min", card.X + 18, chip.Y - 58, Bone, UiTypography.Headline);
+            if (f.MilestoneTier > 0)
+                _ui.TextRightBig(b, $"×{f.MilestoneMultiplier:0.00}", card.Right - 18, chip.Y - 54, Gold, UiTypography.Secondary);
+            _ui.TextBig(b, _ui.ShortenBig($"MILESTONE AT LEVEL {f.NextMilestoneLevel}", card.Width - 36, UiTypography.Secondary),
+                        card.X + 18, chip.Y - 26, Slate, UiTypography.Secondary);
+
+            // ── THE CHIP: the answer the player had to click eight cards to find. ──
+            if (Warren.CanUpgrade(f.Kind, GleamOwned, DustOwned))
+            {
+                _ui.Plate(b, chip, Gold);
+                _ui.TextBig(b, "UPGRADE READY", chip.X + 14, chip.Y + 7, Gold, UiTypography.Body);
+            }
+            else if (Warren.IsAtLevelCap(f.Kind))
+            {
+                _ui.Plate(b, chip);
+                _ui.Icon(b, "ui_slot_locked", new Rectangle(chip.X + 10, chip.Y + 9, 20, 20), Bone);
+                _ui.TextBig(b, _ui.ShortenBig($"REACH WAVE {Warren.DepthForNextLevel(f.Kind)}", chip.Width - 48, UiTypography.Body),
+                            chip.X + 38, chip.Y + 7, Bone, UiTypography.Body);
+            }
+            else
+            {
+                var cost = Warren.UpgradeCost(f.Kind);
+                var shortG = cost.Gleam - GleamOwned;
+                var shortD = cost.Dust - DustOwned;
+                var parts = new System.Collections.Generic.List<string>();
+                if (shortG > 0) parts.Add($"{Ab(shortG)} GLEAM");
+                if (shortD > 0) parts.Add($"{Ab(shortD)} DUST");
+                _ui.Plate(b, chip);
+                _ui.TextBig(b, _ui.ShortenBig($"NEEDS {string.Join("  ·  ", parts)}", chip.Width - 24, UiTypography.Body),
+                            chip.X + 14, chip.Y + 7, Ember, UiTypography.Body);
+            }
+
+            if (sel) Outline(b, card, Gold, 3);
+            else if (card.Contains(hit)) Outline(b, card, Bone, 1);
+            Tip(card, hit, $"{f.Info.Name} — {f.Info.Description}");
         }
     }
 
-    private void DrawBonuses(SpriteBatch b)
+    // ── THE INSPECTOR — the house grammar (§6). ─────────────────────────────────────────────────
+    private void DrawInspector(SpriteBatch b, Point hit, bool clicked)
     {
-        _ui.PanelQuiet(b, BonusStrip);
-        _ui.TextCenterBig(b, "WARREN BONUSES", BonusStrip.Center.X, UiKit.TitleTop(BonusStrip), Gold, UiTypography.PanelTitle);
-        // Playtest 2026-08-23: "ALL PRODUCTION, CONQUEST and WARREN have no icons, and I could not
-        // understand what they do. CONQUEST what, +40%?" Each chip now carries its own icon and the
-        // one line that says where its number comes from, and the strip opens by saying what the
-        // numbers DO. The old sixth chip (WARREN LV n) was not a bonus at all and repeated the
-        // overview panel two hand-widths to the left — it is gone.
-        // The first cut said "add them up", which is wrong: only ONE of the three currency chips ever
-        // applies to a given currency (Warren.Multiplier = 1 + all three + conquest + that currency's
-        // own chip). So the line gives the three answers instead, straight from Multiplier — the screen
-        // must never re-derive the sum.
-        _ui.TextCenterBig(b,
-            $"GLEAM x{Warren.Multiplier(WarrenResource.Gleam):0.00}   ·   "
-            + $"DUST x{Warren.Multiplier(WarrenResource.Dust):0.00}   ·   "
-            + $"MATERIALS x{Warren.Multiplier(WarrenResource.Scrap):0.00}"
-            + "   —   EACH IS 1 PLUS ALL THREE PLUS CONQUEST PLUS ITS OWN CHIP",
-            BonusStrip.Center.X, UiKit.CaptionTop(BonusStrip), Slate, UiTypography.Secondary);
-
-        var regions = Warren.ConqueredRegions;
-        var entries = new (string Key, Color Gem, string Value, string Label, string Why)[]
-        {
-            ("ui_gleam_coin", GleamC, $"+{Warren.ResourceBonus(WarrenResource.Gleam) * 100f:0}%", "GLEAM", "2% A LEVEL"),
-            ("ui_memory_dust", DustC, $"+{Warren.ResourceBonus(WarrenResource.Dust) * 100f:0}%", "DUST", "0.9% A LEVEL"),
-            ("mat_scrap", ScrapC, $"+{Warren.ResourceBonus(WarrenResource.Scrap) * 100f:0}%", "MATERIALS", "1.3% A LEVEL"),
-            ("icon_blessing_amplifier", Met, $"+{Warren.AllProductionBonus * 100f:0}%", "ALL THREE", "3% A LEVEL AFTER 1"),
-            ("icon_blessing_expansion", Ember, $"+{Warren.ConquestBonus * 100f:0}%", "CONQUEST",
-                regions == 1 ? "1 REGION TAKEN" : $"{regions} REGIONS TAKEN"),
-        };
-        var slot = (BonusStrip.Width - UiKit.PadX(BonusStrip) * 2) / entries.Length;
-        for (var i = 0; i < entries.Length; i++)
-        {
-            var (key, gem, value, label, why) = entries[i];
-            var cx = UiKit.ContentLeft(BonusStrip) + slot * i + slot / 2;
-            if (_ui.Assets.Get(key) is { } ic) b.Draw(ic, new Rectangle(cx - 76, BonusStrip.Y + 88, 40, 40), Color.White);
-            else _ui.Diamond(b, new Rectangle(cx - 74, BonusStrip.Y + 90, 36, 36), gem);
-            _ui.TextBig(b, value, cx - 26, BonusStrip.Y + 86, Bone, UiTypography.Headline);
-            _ui.TextCenterBig(b, label, cx, BonusStrip.Y + 134, Bone, UiTypography.Secondary);
-            _ui.TextCenterBig(b, why, cx, BonusStrip.Y + 160, Slate, UiTypography.Secondary);
-        }
-    }
-
-    private void DrawDetail(SpriteBatch b, Point hit, bool clicked)
-    {
-        _ui.PanelQuiet(b, DetailPanel);
+        _ui.PanelQuiet(b, InspectorPanel);
         // A locked selection can only arrive by state reset (the grid never selects a locked card);
         // fall back to the first open facility rather than posing a locked one.
         if (!Warren.IsUnlocked(_selected))
             _selected = Warren.AllFacilities.First(x => Warren.IsUnlocked(x.Kind)).Kind;
         var f = Warren.Facility(_selected);
-        var rc = ResColor(f.Info.Produces);
 
-        _ui.TextCenterBig(b, f.Info.Name, DetailPanel.Center.X, UiKit.TitleTop(DetailPanel), Gold, UiTypography.PanelTitle);
-        _ui.TextCenterBig(b, $"LEVEL {f.Level}", DetailPanel.Center.X, UiKit.CaptionTop(DetailPanel), Slate, UiTypography.Body);
-        _ui.Fill(b, new Rectangle(UiKit.ContentLeft(DetailPanel), UiKit.BodyTop(DetailPanel), DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, 2), Dim);
-
-        DrawWrapped(b, f.Info.Description, UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 112, DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, Bone);
-
-        // Output: current -> next (the NEXT figure includes any milestone jump the upgrade crosses).
-        _ui.TextBig(b, "OUTPUT", UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 190, Slate, UiTypography.Body);
-        ResGlyph(b, new Rectangle(UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 224, 34, 34), f.Info.Produces);
-        _ui.TextBig(b, $"+{Ab(f.BaseOutputPerMin)} /min", UiKit.ContentLeft(DetailPanel) + 44, DetailPanel.Y + 226, Bone, UiTypography.Headline);
-        _ui.TextRightBig(b, $"NEXT  +{Ab(f.NextLevelOutput)} /min", UiKit.ContentRight(DetailPanel), DetailPanel.Y + 230, Met, UiTypography.Secondary);
-
-        // Milestones — the long-term goal. Show the crossed multiplier and where the next one lands.
-        var mile = new Rectangle(UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 274, DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, 44);
-        _ui.Fill(b, mile, new Color(0x16, 0x12, 0x20, 0xC0));
-        _ui.TextBig(b, f.MilestoneTier > 0 ? $"MILESTONES  ×{f.MilestoneMultiplier:0.00} OUTPUT" : "MILESTONES  —", mile.X + 12, mile.Y + 12, Gold, UiTypography.Secondary);
-        _ui.TextRightBig(b, $"→ LEVEL {f.NextMilestoneLevel}", mile.Right - 12, mile.Y + 12, Slate, UiTypography.Secondary);
-
-        _ui.Fill(b, new Rectangle(UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 336, DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, 2), Dim);
-        _ui.TextBig(b, "COST TO UPGRADE", UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 352, Slate, UiTypography.Body);
-
+        var x = UiKit.ContentLeft(InspectorPanel);
+        var w = UiKit.ContentRight(InspectorPanel) - x;
+        var cta = new Rectangle(x, InspectorPanel.Bottom - 92, w, 68);
+        var capped = Warren.IsAtLevelCap(_selected);
         var cost = f.UpgradeCost();
-        var y = DetailPanel.Y + 388;
-        DrawReq(b, y, WarrenResource.Gleam, "GLEAM", GleamOwned, cost.Gleam);
-        DrawReq(b, y + 42, WarrenResource.Dust, "DUST", DustOwned, cost.Dust);
-
         var afford = GleamOwned >= cost.Gleam && DustOwned >= cost.Dust;
+        var refusalY = cta.Y - 8 - UiTypography.Pitch(UiTypography.Body);
+        var floor = refusalY - 8;
+        var y = UiKit.TitleTop(InspectorPanel);
 
-        // The cap is stated, not merely enforced. A greyed button with no reason reads as a bug; a
-        // player who is told the ceiling is theirs to raise knows the answer is to go and descend.
-        //
-        // It names the DEPTH the next level wants, not the cap. The cap is the wrong number twice over:
-        // it is not actionable (the player cannot spend a cap), and it can contradict the level printed
-        // directly above it — the ceiling comes from the deepest run anywhere, so if that figure ever
-        // falls the screen announces "CAPPED AT LEVEL 1" beneath a facility reading LEVEL 18.
-        var capped = Warren!.IsAtLevelCap(_selected);
-        _ui.Fill(b, new Rectangle(UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 502, DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, 2), Dim);
-        _ui.TextBig(b,
-            capped
-                ? $"REACH DEPTH {Warren.DepthForNextLevel(_selected)} ON AN EXPEDITION TO UPGRADE"
-                : "INSTANT UPGRADE  ·  NO WAIT",
-            UiKit.ContentLeft(DetailPanel), DetailPanel.Y + 518, capped ? GleamC : Met, UiTypography.Secondary);
+        void Head(string s)
+        {
+            if (y + UiTypography.Pitch(UiTypography.Secondary) > floor) return;
+            _ui.TextBig(b, s, x, y, Slate, UiTypography.Secondary);
+            y += UiTypography.Pitch(UiTypography.Secondary);
+        }
 
-        if (_ui.Button(b, new Rectangle(UiKit.ContentLeft(DetailPanel), DetailPanel.Bottom - 96,
-                                      DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, 72),
-                capped ? "DEPTH LOCKED" : "UPGRADE", hit, clicked, enabled: afford && !capped))
+        void Line(string s, Color c, int px = UiTypography.Body, int max = 3)
+        {
+            foreach (var l in _ui.WrapBig(s, w, px).Take(max))
+            {
+                if (y + UiTypography.Pitch(px) > floor) return;
+                _ui.TextBig(b, l, x, y, c, px);
+                y += UiTypography.Pitch(px);
+            }
+        }
+
+        void Rule()
+        {
+            if (y + 14 > floor) return;
+            _ui.Fill(b, new Rectangle(x, y + 4, w, 1), Dim);
+            y += 14;
+        }
+
+        Head($"FACILITY · {ResName(f.Info.Produces)}");
+        if (y + UiTypography.Pitch(UiTypography.Headline) <= floor)
+        {
+            _ui.TextBig(b, _ui.ShortenBig(f.Info.Name, w, UiTypography.Headline), x, y, Bone, UiTypography.Headline);
+            y += UiTypography.Pitch(UiTypography.Headline) + 4;
+        }
+        Line(f.Info.Description, Bone, UiTypography.Body, 3);
+        y += 6;
+        Rule();
+
+        Head("WHAT IT DOES");
+        if (y + UiTypography.Pitch(UiTypography.Headline) <= floor)
+        {
+            _ui.TextBig(b, $"+{Ab(Boosted(f))} /min", x, y, Bone, UiTypography.Headline);
+            _ui.TextRightBig(b, $"+{Ab(BoostedNext(f))} /min", x + w, y, Met, UiTypography.Headline);
+            _ui.TextCenterBig(b, "→", x + w / 2, y + 2, Slate, UiTypography.Headline);
+            y += UiTypography.Pitch(UiTypography.Headline);
+        }
+        // The ONLY place the raw figure appears — and it is labelled, so the two can never be mistaken
+        // for a disagreement.
+        Line($"BEFORE WARREN BONUSES: +{Ab(f.BaseOutputPerMin)} → +{Ab(f.NextLevelOutput)}", Slate, UiTypography.Secondary, 2);
+        Line(SinkLine(f.Info.Produces), Bone, UiTypography.Body, 2);
+        Line($"MILESTONE AT LEVEL {f.NextMilestoneLevel} — A PERMANENT STEP UP IN OUTPUT", Bone, UiTypography.Body, 2);
+        y += 6;
+        Rule();
+
+        // YOU NEED FIRST is drawn ONLY when there is a requirement. It used to hold "INSTANT UPGRADE ·
+        // NO WAIT" the rest of the time — filler in the slot reserved for the reason you cannot act.
+        if (capped)
+        {
+            Head("YOU NEED FIRST");
+            if (y + UiTypography.Pitch(UiTypography.Body) <= floor)
+            {
+                _ui.Icon(b, "ui_slot_locked", new Rectangle(x, y + 2, 22, 22), Bone);
+                _ui.TextBig(b, _ui.ShortenBig($"REACH WAVE {Warren.DepthForNextLevel(_selected)} ON A HUNT",
+                                              w - 30, UiTypography.Body),
+                            x + 30, y, Bone, UiTypography.Body);
+                y += UiTypography.Pitch(UiTypography.Body);
+            }
+            y += 6;
+            Rule();
+        }
+
+        Head("CURRENT STATE");
+        Line($"LEVEL {f.Level}", Bone, UiTypography.Body, 1);
+        Line(f.MilestoneTier == 0 ? "NO MILESTONE CROSSED YET"
+             : f.MilestoneTier == 1 ? $"1 MILESTONE CROSSED — ×{f.MilestoneMultiplier:0.00} OUTPUT"
+             : $"{f.MilestoneTier} MILESTONES CROSSED — ×{f.MilestoneMultiplier:0.00} OUTPUT",
+             Slate, UiTypography.Secondary, 2);
+        y += 6;
+        Rule();
+
+        Head("WHAT IT COSTS");
+        DrawCost(b, ref y, floor, x, w, WarrenResource.Gleam, "GLEAM", GleamOwned, cost.Gleam);
+        DrawCost(b, ref y, floor, x, w, WarrenResource.Dust, "DUST", DustOwned, cost.Dust);
+
+        if (!afford || capped)
+            _ui.TextBig(b, _ui.ShortenBig(capped ? "THE WARREN CANNOT PASS YOUR DEEPEST WAVE."
+                                                 : "YOU CANNOT PAY FOR THIS LEVEL YET.", w, UiTypography.Body),
+                        x, refusalY, Ember, UiTypography.Body);
+
+        // The label IS the reason when capped — a button reading DEPTH LOCKED told the player a state,
+        // not a next step.
+        if (_ui.Button(b, cta, capped ? $"REACH WAVE {Warren.DepthForNextLevel(_selected)}" : "UPGRADE",
+                       hit, clicked, enabled: afford && !capped, ButtonStyle.Primary))
             _upgradeRequest = _selected;
     }
 
-    private void DrawReq(SpriteBatch b, int y, WarrenResource res, string label, long owned, int required)
+    /// <summary>One cost row: what it takes, what you hold, and how much MORE you need — never an "X".</summary>
+    private void DrawCost(SpriteBatch b, ref int y, int floor, int x, int w,
+                          WarrenResource res, string label, long owned, int required)
     {
+        if (y + UiTypography.Pitch(UiTypography.Body) + UiTypography.Pitch(UiTypography.Secondary) > floor) return;
         var ok = owned >= required;
-        ResGlyph(b, new Rectangle(UiKit.ContentLeft(DetailPanel), y, 30, 30), res, ResColor(res));
-        _ui.TextBig(b, label, UiKit.ContentLeft(DetailPanel) + 40, y, Bone, UiTypography.Body);
-        // The verdict is a fixed 46px column; the ratio ends where that column starts. Previously both were
-        // right-aligned 28px apart, so "131.9M / 7.8M" ran straight through the "OK" beside it.
-        _ui.TextRightBig(b, $"{Ab(owned)} / {Ab(required)}", UiKit.ContentRight(DetailPanel) - 46, y, ok ? Met : Ember, UiTypography.Secondary);
-        _ui.TextRightBig(b, ok ? "OK" : "X", UiKit.ContentRight(DetailPanel), y, ok ? Met : Ember, UiTypography.Secondary);
+        ResGlyph(b, new Rectangle(x, y, 26, 26), res, ResColor(res));
+        _ui.TextBig(b, label, x + 36, y, Bone, UiTypography.Body);
+        _ui.TextRightBig(b, required.ToString("N0", System.Globalization.CultureInfo.InvariantCulture),
+                         x + w, y, ok ? Bone : Ember, UiTypography.Body);
+        y += UiTypography.Pitch(UiTypography.Body);
+        _ui.TextRightBig(b, ok ? $"YOU HAVE {Ab(owned)}" : $"YOU NEED {required - owned:N0} MORE",
+                         x + w, y, ok ? Slate : Ember, UiTypography.Secondary);
+        y += UiTypography.Pitch(UiTypography.Secondary) + 4;
     }
 
     /// <summary>
@@ -422,13 +621,13 @@ public sealed class WarrenScreen
 
     private void DrawDebug(SpriteBatch b)
     {
-        foreach (var r in new[] { OverviewPanel, GridPanel, BonusStrip, DetailPanel })
+        foreach (var r in new[] { SummaryStrip, GridPanel, InspectorPanel })
         {
             _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, 2), Ember);
             _ui.Fill(b, new Rectangle(r.X, r.Bottom - 2, r.Width, 2), Ember);
             _ui.Fill(b, new Rectangle(r.X, r.Y, 2, r.Height), Ember);
             _ui.Fill(b, new Rectangle(r.Right - 2, r.Y, 2, r.Height), Ember);
         }
-        _ui.TextBig(b, $"nav WARREN  facilities  sel {_selected}", 446, 118, Gold, UiTypography.Secondary);
+        _ui.TextBig(b, $"nav WARREN  facilities  sel {_selected}", GridPanel.X, 118, Gold, UiTypography.Secondary);
     }
 }

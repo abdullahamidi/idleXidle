@@ -1145,14 +1145,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     private void DrawWarren()
     {
-        _warren.Name = Regions.Find(_activeRegion)?.Name ?? "THE WARREN";
         _warren.ConqueredRegions = _world.ConqueredIds.Count;
         _warrenScreen.Warren = _warren;
 
         // One facility level per five waves of proven depth. Recomputed every frame it draws, so a
         // record set this session raises the ceiling without a restart. The arithmetic (and its floor
         // of 1) lives on the model, where a test pins it.
-        _warren.FacilityLevelCap = Warren.CapForDepth(DeepestAnywhere());
+        var deepest = DeepestAnywhere();
+        _warren.FacilityLevelCap = Warren.CapForDepth(deepest);
+        _warrenScreen.DeepestWave = deepest;      // the strip explains the ceiling ONCE, not per card
+        _warrenScreen.LastReturn = _welcome;      // what the last real absence actually paid
 
         _warrenScreen.GleamOwned = _hunter.Gleam;
         _warrenScreen.DustOwned = _dust.MemoryDust;
@@ -1526,7 +1528,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 or "region2" or "region3" or "conquered" or "mapdeep" or "maplocked" or "help" or "expedition" or "fight" or "welcome" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "trainingpoor" or "trainingreset" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
                 or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "traitlit" or "traitterm" or "traitterminal"
-                or "roster" or "rosterlocked" or "rosterswitch" or "weave" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
+                or "roster" or "rosterlocked" or "rosterswitch" or "warrenready" or "warrenfresh" or "weave" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
                 or "vaultempty" or "vaultemptyfilter" or "vaultsell" or "vaultmany" or "forgeempty"
                 or "gemtour" or "intro" or "typespec")
             {
@@ -2098,10 +2100,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
                     // ("hybrid" and the DevReforge pose retired with the pile screen — one workbench now.)
                 }
-                if (sm == "warren")
+                if (sm is "warren" or "warrenready")
                 {
                     _showWarren = true;
-                    _activeRegion = "pale_choir";   // so the Warren name reads "THE PALE CHOIR", per the reference
                     foreach (var id in new[] { "verdant_hollow", "cinderworks", "umbral_reach", "marrow_wastes" })
                         _world.Conquer(id);   // 4 conquered → the CONQUEST production bonus reads +40%
                     // Seed the reference's exact facility state (spec §6-9): level 23, the listed facility levels.
@@ -2111,9 +2112,26 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         [FacilityKind.ScavengerRuns] = 15, [FacilityKind.BreedingChamber] = 16, [FacilityKind.RitualNest] = 14,
                         [FacilityKind.HoardVaults] = 13, [FacilityKind.SentryBurrows] = 12,
                     });
-                    // Owned balances at the reference's scale so the upgrade requirements read as MET.
-                    _hunter.AddGleam(131_900_000);
+                    // BALANCES THAT POSE ALL THREE CARD STATES. At 131.9M Gleam every cost was
+                    // trivially met, so neither UPGRADE READY nor a shortfall could be photographed —
+                    // and with no depth at all the cap was 1, so all eight cards read as capped.
+                    _deepestEver = sm == "warrenready" ? 200 : 80;   // cap 40 (none capped) / 16 (four capped)
+                    _hunter.AddGleam(sm == "warrenready" ? 300_000 : 40_000);
                     _dust.AddDust(12_600);
+                    _hunter.AddMaterials(2_400);                      // SCRAP, so the pill agrees with the strip
+                    _hunter.AddMaterial(Material.Essence, 900);
+                }
+
+                // warrenfresh: the Warren a player meets on their FIRST conquest — three facilities
+                // open, five locked and naming the conquest that opens them, and two of the four
+                // resource chips honestly reading +0. Nobody had ever looked at that state.
+                if (sm == "warrenfresh")
+                {
+                    _showWarren = true;
+                    _world.Conquer(VerdantHollow.RegionId);
+                    _deepestEver = 20;
+                    _hunter.AddGleam(500);
+                    _dust.AddDust(60);
                 }
                 if (sm == "farm")
                 {
