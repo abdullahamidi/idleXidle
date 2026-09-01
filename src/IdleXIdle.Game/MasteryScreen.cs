@@ -411,9 +411,11 @@ public sealed class MasteryScreen
                                             UiKit.ContentRight(InspectorPanel) - UiKit.ContentLeft(InspectorPanel), 56);
     private const int InspectorHexRadius = 70;
     private const int InspectorSealPx = 30;   // ui-size-ok: the seal medallion's edge in pixels, not a text size
-    private static readonly Rectangle SpecPanel = new(480, 180, 960, 720);
-    private static readonly Rectangle SpecSealBtn = new(560, 816, 360, 52);
-    private static readonly Rectangle SpecUndoBtn = new(1000, 816, 360, 52);
+    // THE CEREMONY IS CENTRED ON THE PAGE, not on the canvas. It is drawn inside the overlay transform
+    // like everything else on this screen, so at UI SCALE 125% a modal pinned to 960 sat off to the right.
+    private static Rectangle SpecPanel => new(UiKit.PageCenterX - 480, 180, 960, 720);   // ui-page-ok: 960 is this modal's own width, and it fits the smallest page
+    private static Rectangle SpecSealBtn => new(SpecPanel.X + 80, SpecPanel.Bottom - 84, 360, 52);
+    private static Rectangle SpecUndoBtn => new(SpecPanel.Right - 80 - 360, SpecPanel.Bottom - 84, 360, 52);
     // Sized for FIVE skill cards, not four.
     //
     // The trait tree's spine sells a fifth weave, and the old geometry (four cards of 132 at a pitch of
@@ -883,22 +885,22 @@ public sealed class MasteryScreen
         _ui.Panel(b, SpecPanel, gold: true);
 
         var name = _specStyle.ToString().ToUpperInvariant();
-        _ui.TextCenterBig(b, "YOUR SPECIALISATION", 960, UiKit.TitleTop(SpecPanel), Gold, UiTypography.PanelTitle);
-        _ui.TextCenter(b, "SIX STYLES — ONE IS YOURS.", 960, UiKit.CaptionTop(SpecPanel), Slate);
+        _ui.TextCenterBig(b, "YOUR SPECIALISATION", SpecPanel.Center.X, UiKit.TitleTop(SpecPanel), Gold, UiTypography.PanelTitle);
+        _ui.TextCenter(b, "SIX STYLES — ONE IS YOURS.", SpecPanel.Center.X, UiKit.CaptionTop(SpecPanel), Slate);
 
         // THE CEREMONY STANDS ON THE SAME FIELD THE DOCKED CHART DOES. It used to have none — the
         // hexagon floated on the modal's black interior — so the game's founding moment was the one
         // place the chart was drawn without the surface that makes it a chart.
-        var field = new Rectangle(630, SpecPanel.Y + 86, 660, 492);
+        var field = new Rectangle(SpecPanel.Center.X - 330, SpecPanel.Y + 86, 660, 492);
         StyleAffinityDiagram.Field(_ui, b, field);
         StyleAffinityDiagram.Draw(_ui, b, field.Center, CeremonyRadius, _specStyle, showFactors: true,
                             labelGap: CeremonyLabelGap, labelPx: UiTypography.Body,
                             factorPx: UiTypography.Secondary, sealPx: CeremonySealPx);
 
         _ui.TextCenter(b, $"YOUR {name} SKILLS HIT TWICE AS HARD. THE FAR STYLES HIT SOFTER —",
-                       960, SpecPanel.Y + 604, Bone);
+                       SpecPanel.Center.X, SpecPanel.Y + 586, Bone);
         _ui.TextCenter(b, "A VOW ON A FAR-STYLE SKILL PULLS IT ONE RING CLOSER.",
-                       960, SpecPanel.Y + 626, Bone);
+                       SpecPanel.Center.X, SpecPanel.Y + 610, Bone);
 
         Button(b, SpecSealBtn, $"CHOOSE {name}", hit, true);
         Button(b, SpecUndoBtn, "NOT YET — TAKE THE POINTS BACK", hit, true);

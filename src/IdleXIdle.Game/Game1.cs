@@ -3403,6 +3403,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     {
         if (_noticeTimer <= 0f || _notice.Length == 0) return;
         if (_showTitle || _showHelp || _showSettings || WelcomeUp) return;
+        // Never over the SPECIALISATION ceremony: it is the one modal the game stops for, and a quest
+        // toast across it covered the panel's own title (seen at UI SCALE 125%).
+        if (_showMastery && _masteryScreen.SpecialisationOpen) return;
         // Never over a tour: the first-gem notice sits exactly where the Forge's tab strip is, and a
         // toast across a spotlight is two lessons at once. The tour IS the notice's payload.
         if (_tourActive) return;
