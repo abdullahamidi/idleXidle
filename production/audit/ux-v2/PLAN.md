@@ -36,6 +36,7 @@ Palette (D-tokens): `UiKit.Ink` — `Primary E8DFC8` · `Secondary 8A96A8` (≥ 
 ## 2. Checkpoints (each: compile · tests · gates · captures at 1080 + 720 · inspect · commit)
 
 ### P0 — global foundation (brief §97 #1–6)
+> **P0 COMPLETE 2026-09-01** — P0.1 bb65a2b · P0.2 c36b34c · P0.3 1c9c81d · P0.4 6e698da · P0.5 78ea8e4 · P0.6 eefe378 · P0.7 b1d5a5a · P0.8 (this commit: `assets/art/idlexidle_ux_screen_guide_standard.md` V2). The settings UI SCALE row moved to P3.1; the mouse-quantisation fix and the Page anchors are per-screen work (§4).
 - **P0.1 Renames** (D8) — mechanical, zero visual change: classes, files, Game1 fields, fixture-mode aliases, tools (`check_mouse_space.py` class→file, `check_nav_gates.py` Activity names), persisted-name read aliases + tests. Screenshots must be pixel-identical to baseline.
 - **P0.2 Legacy copy** — the exact-replacement table (`audit/global-legacy-terminology.md §8`, ~35 rows) + the help sheet; delete the dead MASTERY overview (`DrawSummary/DrawCore/DrawAuraCards`) so `MasteryScreen` is one screen.
 - **P0.3 Ink tokens + QUIET tier** — `UiKit.Ink`; `UiKit.Plate(rect, accent?)` as the real quiet surface (dark translucent + 1px rule); `Button(style: Primary/Secondary)` using the existing art variants; delete private palettes and the six private word-wrap copies (use `WrapBig`).
