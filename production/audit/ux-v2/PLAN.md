@@ -86,4 +86,9 @@ Pre-existing (identical in the 2026-09-01 baselines), recorded here so the scree
 - **Page anchors** — every screen still centres titles at 960 and subtracts from 1920/1080; at UI SCALE 125%/150% the page overflows the canvas to the right and bottom (posed with `RH_SHOT_UISCALE=125`). → each P1/P2 screen pass adopts `UiKit.Page` / `PageRight` / `PageBottom` / `PageCenterX`; P3.4 verifies all three scales.
 - **Mouse quantisation** — `ToOverlay` still takes the 480-space `CanvasMouse` (×4), so menu hit-tests land on a 4 px grid (audit P1-3). → fold into the first screen pass that rewrites its hit-testing; `ChromeMouse` is the full-resolution source.
 
+Registered by P1.1 (HUNT):
+- **Damage feedback (brief §21)** — multi-hit casts still print one number per Strike event; grouping by (AtMs, FromSkill) into `127 × 5` and ranking state > skill identity > damage is presentation-only work on the callout spawner. → P3.2 (transitions/feedback).
+- **Fixtures owed** — `fightstatus` (a build with a Field + a Reaction + a charge keystone, seeked past the first bite, so SHIELDED / UNDYING / CHARGE chips are photographed); a 5-slot strip (`Loadout.SkillCapacity = 5`) proving the ACTIVE/PASSIVE split at max capacity; three `fightreport` seeds for the ARMOUR / REACH / SUSTAIN limits. → P3.4.
+- **Log doors** — ADJUST BUILD · GEAR buttons belong in the EXPEDITION LOG's footer (D6); the fall plate is the door to the log only. → P1.2.
+
 Fixed in P0 and worth knowing: the GEAR compare plate's `EQUIPPED: <ELEMENT> <SLOT>` label collided with its right-aligned value when Secondary grew to 19 px (P0.6); it is a label beside a figure and now sits on Caption.

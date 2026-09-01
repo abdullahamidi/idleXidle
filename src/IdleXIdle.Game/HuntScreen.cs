@@ -60,7 +60,8 @@ public sealed class HuntScreen
     /// (Game1.NavHexRect), which frees that whole 146 px band back to the stage — so the ground line
     /// drops to 1000, giving the actors the full height of the arena to stand in.
     /// </remarks>
-    private const int GroundY = 1000;
+    // 1000 → 880 (UX V2 P1.1): the skill strip owns y 900–1064 now, so the actors stand above it.
+    private const int GroundY = 880;
     // A wave is resolved instantly then REPLAYED at this speed. It was 3.5x with no gap between waves, so
     // the whole run blurred past — playtest: "waves flow too fast". Slowed to a watchable pace, and a short
     // BREATH now sits between waves so each clear reads as its own beat. The champion's own skill rate
@@ -137,7 +138,7 @@ public sealed class HuntScreen
     /// read it" — the recovery beat is 1.6 seconds. So the banner deliberately stays up into the next
     /// descent, and the full report waits in the EXPEDITION LOG (L) for as long as the player needs.
     /// </remarks>
-    private const float FellBannerSeconds = 4.5f;
+    private const float FellBannerSeconds = 7.5f;   // long enough to read two lines and decide to open the log
 
     // Spec §12: the hunter is the DOMINANT figure, bottom-centred at (560,735), ~390px tall; the enemy grounds
     // at the front-melee anchor (1110,750), smaller (~250px) so the hunter reads as the focal point. The old
@@ -394,6 +395,7 @@ public sealed class HuntScreen
     // drift from the sim's). Live only when the build carries a keystone that reads the pool.
     private int _chargeNow;
     private bool _chargeLive;
+    private bool _undyingLive;
     private int _chargeCap = SoloBattle.ChargeCap;
     private WaveReplay? _replay;
     private float _champLunge, _enemyLunge, _enemyWindup;
@@ -474,6 +476,7 @@ public sealed class HuntScreen
     private float _deathFlash;    // 1 → 0: red flash on a fall — drawn over the WHOLE canvas (see Draw)
     private float _fellTimer;     // seconds left on the fallen banner (FellBannerSeconds)
     private int _fellWave = 1;    // the wave the champion fell at, named by that banner
+    private RunReport? _fellReport;   // the run's report, for the plate's MAIN LIMIT line
     private string _enemyArt = "";
 
     /// <summary>Deepest wave reached in this region, across restarts — what conquest is measured against.</summary>
@@ -545,7 +548,7 @@ public sealed class HuntScreen
     // THE STAGE THE ACTORS ARE LAID OUT ON. Widened right (1554 -> 1722) so the pack can actually stand
     // further right: the row's resting x is clamped to this rect, and a swarm of four already clamped to
     // ~1160 against a centre of 1320, so moving EnemyBox alone moved nothing at all.
-    private static readonly Rectangle ArenaRect = new(492, 100, 1230, 940);
+    private static readonly Rectangle ArenaRect = new(300, 150, 1500, 750);
 
     /// <summary>
     /// Where arena pixels may LAND — wider than the stage the actors are placed on.
@@ -566,7 +569,7 @@ public sealed class HuntScreen
     /// after the arena and cover whatever strays under them.
     /// </para>
     /// </remarks>
-    private static readonly Rectangle ArenaClip = new(186, 100, 1734, 940);
+    private static readonly Rectangle ArenaClip = new(186, 150, 1734, 750);
 
     /// <summary>
     /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
@@ -583,16 +586,16 @@ public sealed class HuntScreen
     /// </remarks>
     internal static Rectangle[] Spotlights(TourTarget target) => target switch
     {
-        TourTarget.Champion => new[] { new Rectangle(470, 560, 460, 450) },
-        TourTarget.Enemies => new[] { new Rectangle(940, 560, 680, 450), new Rectangle(620, 8, 580, 152) },
-        TourTarget.HunterHud => new[] { new Rectangle(186, 10, 440, 225) },
+        TourTarget.Champion => new[] { new Rectangle(470, 440, 460, 450) },
+        TourTarget.Enemies => new[] { new Rectangle(940, 440, 680, 450), new Rectangle(620, 8, 580, 152) },
+        TourTarget.HunterHud => new[] { new Rectangle(186, 4, 440, 160) },
         TourTarget.CurrencyPills => new[] { new Rectangle(1440, 4, 400, 84) },
-        TourTarget.Skills => new[] { new Rectangle(180, 226, 306, 370) },
+        TourTarget.Skills => new[] { new Rectangle(476, 890, 1020, 184) },
         // Idle rate, errands, the filter row (closed) — down to wherever the filter row LAST drew. The
         // rail's height depends on how many errands are up, and a new game now holds the welcome chest,
         // so the fixed 268 px measured for an empty rail sliced the filter row in half on every first
         // intro (review 2026-08-26). The screen draws before the tour asks, so the measure is fresh.
-        TourTarget.RightColumn => new[] { new Rectangle(1560, 100, 350, Math.Max(268, s_railBottom - 100)) },
+        TourTarget.RightColumn => new[] { new Rectangle(1560, 100, 350, Math.Max(150, s_railBottom - 100)) },
         TourTarget.NavRail => new[] { new Rectangle(0, 0, 184, 1080) },
         // The lesson card hangs under the header stack (UX V2 P0.7) — the same slot the toasts use.
         TourTarget.LessonSlot => new[] { new Rectangle(630, s_headerStackBottom + 8, 560, 130) },
@@ -784,6 +787,7 @@ public sealed class HuntScreen
                       || trig.Contains(BuildTrigger.Dynamo) || trig.Contains(BuildTrigger.Lodestone);
         _chargeCap = trig.Contains(BuildTrigger.Capacitor)
             ? SoloBattle.ChargeCapExtended : SoloBattle.ChargeCap;
+        _undyingLive = trig.Contains(BuildTrigger.Undying);   // the hunter card shows UNDYING only when the build has it
         return build;
     }
 
@@ -1342,6 +1346,7 @@ public sealed class HuntScreen
             LogDirty = true;
 
             _fellWave = Math.Max(1, _replayWave);
+            _fellReport = Log.Newest;   // the report the fall plate names (MAIN LIMIT — …)
             _fellTimer = DownedSeconds + FellBannerSeconds;
             _deathFlash = 1f;
             _mode = Mode.Downed;
@@ -1462,14 +1467,11 @@ public sealed class HuntScreen
         DrawLogButton(b, hit, clicked && !_logOpen);
         // Under the EXPEDITION LOG's full-screen scrim the rail is furniture — no TAKE ONLY edits, no errands.
         DrawRightColumn(b, hit, clicked && !_logOpen);
-        // Rail frame first, then its contents. The old order relied on the rail being TRANSLUCENT — the
-        // skill dock was drawn under it and read through as a washed-out ghost. With a real opaque panel
-        // that hid the dock outright.
-        DrawBattleControls(b, hit, clicked && !_logOpen);
         DrawSkillDock(b);
         HeaderStackBottom = StageHeaderBottomY;                   // the strip or the boss bar lowers it
         if (_isBossWave) DrawBossBar(b);                          // §10/§12: screen-space, NOT arena-clipped
         DrawEnemyLine(b);                                          // the wave's live strip under the header
+        if (overlay == HuntOverlay.HunterDown) DrawFallPlate(b, hit, clicked && !_logOpen);
         // The red flash on a fall covers the whole 1920x1080 canvas, so it draws in this UNCLIPPED
         // pass, over the rails and panels too — inside the arena batch the scissor cut it down to the
         // arena rectangle. The settings' SCREEN FLASH switch still governs it.
@@ -2246,18 +2248,8 @@ public sealed class HuntScreen
         switch (overlay)
         {
             case HuntOverlay.HunterDown:
-            {
-                // A short line, not a report. The full report is in the EXPEDITION LOG (L) — the
-                // popup that used to open here vanished with the next descent and taught nobody
-                // anything. Full strength while the champion is down, then it fades out.
-                var fade = _mode == Mode.Downed ? 1f : Math.Clamp(_fellTimer * 1.4f, 0f, 1f);
-                _ui.Fill(b, new Rectangle(500, 200, 920, 110), PanelBg * fade);
-                _ui.TextCenterBig(b, $"YOUR CHAMPION FELL AT WAVE {_fellWave}", 960, 222, Ember * fade,
-                    UiTypography.StageLabel, TextFace.Display);
-                _ui.TextCenterBig(b, "THE FULL REPORT IS IN THE LOG — PRESS L", 960, 266, Bone * fade,
-                    UiTypography.OverlayBody);
+                // Drawn in the unclipped HUD pass (DrawFallPlate), over everything, where it can be clicked.
                 break;
-            }
             case HuntOverlay.BossIncoming:
             {
                 var fade = Math.Clamp(_bossIncomingTimer * 1.4f, 0f, 1f);
@@ -2298,63 +2290,71 @@ public sealed class HuntScreen
     };
 
 
-    /// <summary>Top-left hunter HUD (package_10 region A): portrait medallion, name/level, HP, power, and a
-    /// row of Source icons for the build's elements.</summary>
+    /// <summary>The hunter card's frame — level with the stage header beside it.</summary>
+    private static readonly Rectangle HunterCard = new(196, 14, 420, 140);
+
+    /// <summary>
+    /// Top-left HUNTER CARD: who, level, POWER, life, and the statuses that change during a fight.
+    /// </summary>
+    /// <remarks>
+    /// UX V2 P1.1 (brief §19). It was a build sheet — a TEMPO multiplier, a mastery title, a row of the
+    /// build's Source gems — none of which moves during a wave. The card carries only what the fight changes
+    /// or is measured against: name · class · level; POWER, labelled; the life bar with its figure BESIDE it at
+    /// Body (the most combat-critical number on the screen used to be its smallest text, centred on a red
+    /// bar); and the live statuses Core already tracks — SHIELDED, UNDYING ready/spent, CHARGE n/cap — as chips
+    /// that exist only while they say something.
+    /// </remarks>
     private void DrawHunterHud(SpriteBatch b)
     {
-        // Spec §8: player summary, exact rectangles. Ornate primary frame; portrait AspectFit (it already
-        // carries its own frame — no second medallion); name/level/power/HP/tempo/source-icons per §8.3.
-        var panel = new Rectangle(196, 20, 420, 205);
+        var panel = HunterCard;
         _ui.PanelQuiet(b, panel);
 
-        var por = new Rectangle(214, 39, 104, 104);
+        var por = new Rectangle(panel.X + 18, panel.Y + 22, 96, 96);
         if (_ui.Assets.GetFirst(Character.PortraitKey, "hunter_portrait") is { } p) b.Draw(p, por, Color.White);
         else if (_ui.Assets.Get("ui_medallion_round") is { } mfr) b.Draw(mfr, por, Color.White);
 
-        // WHO, AND WHAT CLASS: "SEEKER · WANDERER", the class in its own colour. Playtest
-        // (2026-08-26): "I cannot see the characters' classes." The name used to be the mastery
-        // title ("STRIKE ADEPT"), which is not who you are; that moves to a small line beneath.
-        // The three pieces shrink together until they fit the column, so THE FALLING TOWER's
-        // long name and WARDEN sit on one line rather than running under the power figure.
+        var x = por.Right + 16;
+        var right = panel.Right - 24;
+        var y = panel.Y + 20;
+
+        // Line 1 — SEEKER · WANDERER  LV 12                         POWER / 222 (labelled; it was a bare ember number)
         var name = Character.ShortName;
         var cls = ItemClasses.NameOf(Character.Class);
+        var lv = $"LV {_hunter?.HunterLevel ?? 1}";
+        var powerVal = Game1.Abbrev(_hunter?.PowerRating ?? 0);
+        var powerW = Math.Max(_ui.MeasureBig("POWER", UiTypography.Secondary), _ui.MeasureBig(powerVal, UiTypography.PrimaryValue));
+        var nameRoom = right - powerW - 16 - x;
         const string sep = " · ";
-        const int nameColumn = 270;   // 334 to the panel's inner edge
-        var px = UiTypography.PanelTitle;
-        while (px > UiTypography.Secondary && _ui.MeasureBig(name, px) + _ui.MeasureBig(sep, px) + _ui.MeasureBig(cls, px) > nameColumn) px--;
-        var nx = 334;
-        var ny = 40 + (UiTypography.PanelTitle - px) / 2;
-        _ui.TextBig(b, name, nx, ny, Bone, px);
-        nx += _ui.MeasureBig(name, px);
-        _ui.TextBig(b, sep, nx, ny, Slate, px);
-        nx += _ui.MeasureBig(sep, px);
-        _ui.TextBig(b, cls, nx, ny, UiKit.ClassColor(Character.Class), px);
-        if (Mastery.Affinity() is { } mf)
-            _ui.TextBig(b, $"{mf.ToString().ToUpperInvariant()} ADEPT", 334, 67, Slate, UiTypography.Caption);   // mastery title
-        _ui.TextBig(b, $"LV {_hunter?.HunterLevel ?? 1}", 334, 86, Gold, UiTypography.Body);        // level
-        // Combat power — an icon + value (spec: an icon, not a "PWR" label).
-        if (_ui.Assets.Get("state_resonance_128") is { } pi) b.Draw(pi, new Rectangle(440, 81, 30, 30), Ember);
-        _ui.TextBig(b, Game1.Abbrev(_hunter?.PowerRating ?? 0), 476, 83, Ember, UiTypography.Headline);
-        // HP bar (162,112,220,24), value centred on it.
-        var hp = Math.Max(0, _replay?.HealthOf(0) ?? 0);
-        var hpBar = new Rectangle(334, 112, 220, 24);
-        _ui.BarArt(b, hpBar, _replay?.HealthFractionOf(0) ?? 1f, "health");
-        _ui.TextCenterBig(b, $"{hp}/{_champ?.MaxHealth ?? 0}", hpBar.Center.X, hpBar.Y + 3, Bone, UiTypography.Secondary);
-        // Secondary stat line — TEMPO × skill rate (spec §8.6: no fake mana bar; real SquadSkillRate).
-        _ui.TextBig(b, $"TEMPO {(_hunter?.SquadSkillRate ?? 1f):0.00}x ACTION SPEED", 334, 145, Slate, UiTypography.Secondary);
+        var px = UiTypography.Headline;
+        while (px > UiTypography.Secondary
+               && _ui.MeasureBig(name + sep + cls, px) + 10 + _ui.MeasureBig(lv, UiTypography.Secondary) > nameRoom) px--;
+        var nx = x;
+        _ui.TextBig(b, name, nx, y, Bone, px);                       nx += _ui.MeasureBig(name, px);
+        _ui.TextBig(b, sep, nx, y, Slate, px);                       nx += _ui.MeasureBig(sep, px);
+        _ui.TextBig(b, cls, nx, y, UiKit.ClassColor(Character.Class), px);   nx += _ui.MeasureBig(cls, px) + 10;
+        _ui.TextBig(b, lv, nx, y + (px - UiTypography.Secondary) / 2 + 1, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, "POWER", right, y - 2, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, powerVal, right, y + UiTypography.Pitch(UiTypography.Secondary) - 6, Bone, UiTypography.PrimaryValue);
 
-        // Source icons — the build's real elements. These sat at x=42, coordinates from the layout where
-        // the HUD panel started near the left edge. Once the panel moved to x=196 to clear the vertical nav
-        // rail, the row stayed behind and painted four medallions onto the NAV RAIL, where they showed
-        // through its 96%-opaque shelf as ghosts beside the GEAR tile. Aligned to the panel's text column.
-        var sx = 334;
-        foreach (var s in Loadout.Skills)
+        // Line 2 — the life bar, its figure beside it.
+        y += UiTypography.Pitch(UiTypography.Headline) + 6;
+        var hp = Math.Max(0, _replay?.HealthOf(0) ?? 0);
+        var hpText = $"{hp} / {_champ?.MaxHealth ?? 0}";
+        var hpTextW = _ui.MeasureBig(hpText, UiTypography.Body);
+        var hpBar = new Rectangle(x, y + 2, Math.Max(120, right - powerW - 16 - x - hpTextW - 12), 26);
+        _ui.BarArt(b, hpBar, _replay?.HealthFractionOf(0) ?? 1f, "health");
+        _ui.TextBig(b, hpText, hpBar.Right + 12, y, Bone, UiTypography.Body);
+
+        // Line 3 — statuses: only the ones this build has, only while they say something.
+        y += UiTypography.Pitch(UiTypography.Body) + 6;
+        var sx = x;
+        if (_replay?.IsShielded(0) == true) sx += Chip(b, sx, y, "SHIELDED", Steel, PlateEdge) + 8;
+        if (_undyingLive)
         {
-            var box = new Rectangle(sx, 172, 32, 32);
-            if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } g) b.Draw(g, box, Color.White);
-            else _ui.Diamond(b, box, SourceColor.GetValueOrDefault(s.Source, Slate));
-            sx += 40;
+            var spent = _champ?.UndyingSpent == true;
+            sx += Chip(b, sx, y, spent ? "UNDYING SPENT" : "UNDYING READY", spent ? UiInk.Disabled : Gold, PlateEdge) + 8;
         }
+        if (_chargeLive) Chip(b, sx, y, $"CHARGE {_chargeNow}/{_chargeCap}", _chargeNow >= _chargeCap ? Gold : Slate, PlateEdge);
     }
 
     /// <summary>Top-center stage header (region B): region name, current wave, and the conquest progress bar.</summary>
@@ -2559,273 +2559,90 @@ public sealed class HuntScreen
 
     private static readonly Color PlateEdge = new(0x74, 0x62, 0x3E);
 
-    // ── The right rail's measure. ─────────────────────────────────────────────────────────────────
-    //    Every plate is a UiKit.PanelQuiet, whose ornament reaches about 18 px in; the insets below are
-    //    measured against that frame, not the 40 px the gold modal frame needed.
+    // ── The right UTILITY (UX V2 P1.1, brief §20): idle rate · rewards · doors. Lightweight. ───────────
+    //    The CHEST FILTER row and its popover moved to the VAULT toolbar (D12): chest filtering is inventory
+    //    management, not combat state. DEEPEST WAVE REACHED went too — the header's CONQUEST n / 20 is the same
+    //    number. The doors name no keys in their labels; the tour and the help sheet teach the keys.
     private const int ColumnX = 1570, ColumnW = 326;
-    private const int RailInset = UiTypography.PanelPadNarrow;   // the house margin for a narrow plate
-    // THE PLATE TITLES ARE PANEL TITLES NOW. They were 17 px at +24 — every menu screen in the game
-    // sets a panel's title at 26 px on the standard line, and these three plates were the last ones
-    // speaking in their own voice. The band grows with them.
-    private const int RailTitleBand = UiTypography.PanelBodyTopBare;
-    private const int RailGap = 12;          // between plates
-    private const int IdlePlateHeight = RailTitleBand + 46;   // the coin and the rate on one line
-    private const int RewardButtonHeight = 44;
-    private const int RewardRowPitch = 48;
-    private const int RewardFootLine = 18;   // the DEEPEST WAVE line under the errands
-    private const int FilterRowHeight = 54;  // the CHEST FILTER button row
-    private const int FilterPopoverHeight = 420;   // measured: the footer line cleared the frame at 386 by nothing
+    private const int UtilityTop = 110;
+    private const int UtilityPad = UiTypography.PanelPadNarrow;
+    private const int DoorHeight = 44, DoorPitch = 52;
 
-    /// <summary>A plate in the right rail, in the house frame, returning the space its content may use.</summary>
-    /// <remarks>
-    /// THE QUIET FRAME, the one the hero card and the SKILLS rail already wear across the arena. The rail
-    /// spent one round (2026-08-26) in the gold modal frame to match the CHEST FILTER plate, and the
-    /// playtest chose the other way: "the right frames are gold while the left ones are brown — pick one;
-    /// I prefer the brown". One screen, one frame; the gold nine-slice is for modals (see
-    /// <see cref="UiKit.PanelQuiet"/>).
-    /// </remarks>
-    private Rectangle CleanPanel(SpriteBatch b, Rectangle r, string title)
-    {
-        _ui.PanelQuiet(b, r);
-        // CENTRED, like every other panel title in the game (playtest 2026-08-29: "the hunt panels'
-        // titles are left-aligned; make them centred"). The quiet frame's top rail is ~20 px deep, so the
-        // baseline comes from UiKit.TitleTop rather than a literal.
-        _ui.TextCenterBig(b, title, r.Center.X, UiKit.TitleTop(r), Gold, UiTypography.PanelTitle);
-        return new Rectangle(r.X + RailInset, r.Y + RailTitleBand, r.Width - RailInset * 2, r.Height - RailTitleBand - RailInset);
-    }
+    /// <summary>The utility's bottom edge as last drawn (+ margin) — the right column's true extent, for the tour.</summary>
+    private static int s_railBottom = 368;
 
-    /// <summary>Right context column: the idle rate, the errands worth doing now, and the chest filter's door.</summary>
+    /// <summary>Right utility: the idle rate, what is waiting, and the doors to it.</summary>
     /// <remarks>
-    /// It was four plates. OBJECTIVE and EXPEDITION printed the depth, the progress bar and the wave that
-    /// the banner over the arena already prints, so half the rail was a second copy of the header. Then
-    /// the two that remained were "too big" (playtest 2026-08-26): each is now about two-thirds its old
-    /// height, and the filter — which stood open at full height under them — is a row that opens a
-    /// popover on demand.
+    /// A reward whose screen is locked is hidden — not greyed, not clickable-into-a-refusal. A door this
+    /// column advertises must open; until the host says the screen is unlocked, the errand is not offered.
     /// </remarks>
     private void DrawRightColumn(SpriteBatch b, Point hit, bool clicked)
     {
-        // Rev 3 §20: right context rail from (1570,110) — secondary panels, all live data. The spec's
-        // "no keyboard hints" rule is deliberately broken by the two REWARD ACTIVITY buttons, which name
-        // their key: they are the one place on this screen that asks the player to go somewhere, and a
-        // door worth opening should say how. Idle rate → reward activity → chest filter.
-
-        // Idle rate: the coin and the rate on one line. Auto-credited, so no Claim button (§20.2).
-        var idle = new Rectangle(ColumnX, 110, ColumnW, IdlePlateHeight);
-        var inner = CleanPanel(b, idle, "IDLE RATE");
-        var rowY = inner.Y - 2;
-        if (_ui.Assets.Get("currency_gleam") is { } gi) b.Draw(gi, new Rectangle(inner.X, rowY, 30, 30), Color.White);
-        _ui.TextBig(b, $"+{Game1.Abbrev((long)(IdleGleamRate * 60f))}/min", inner.X + 40, rowY + 2, Gold, UiTypography.Headline);
-
-        // Reward activity — real summary, no fake loot grid (§20.4/§21). Sized to what it actually holds —
-        // two errands, one, or just the career line. An ornate frame around a void reads as content the
-        // eye has somehow failed to find.
         var chestRow = ChestCount > 0 && VaultOpen;
         var pointsRow = Mastery.Available > 0 && MasteryOpen;
-        var rows = (chestRow ? 1 : 0) + (pointsRow ? 1 : 0);
-        var reward = new Rectangle(ColumnX, idle.Bottom + RailGap, ColumnW,
-                                   RailTitleBand + rows * RewardRowPitch + RewardFootLine + RailInset);
-        inner = CleanPanel(b, reward, "REWARD ACTIVITY");
-        // THE TWO THINGS A PLAYER SHOULD DO NOW WERE INERT GREY TEXT, drawn in exactly the same style as
-        // the dead career stat below them — so "1 chest available" read as trivia rather than as an
-        // errand. They are buttons with verbs now, naming their own key. They only navigate: the actual
-        // work still happens on the screen that owns it. A rail that opened chests would be a second Forge.
-        // A REWARD WHOSE SCREEN IS LOCKED IS HIDDEN — not greyed, not clickable-into-a-refusal. A door
-        // this rail advertises must open; until the host says the screen is unlocked, the errand simply
-        // is not offered.
-        var ry = inner.Y;
-        var anyReward = false;
+        var doors = (chestRow ? 1 : 0) + (pointsRow ? 1 : 0);
+
+        var top = UiTypography.PanelTitleTop;
+        var idleBlock = UiTypography.Pitch(UiTypography.Secondary) + UiTypography.Pitch(UiTypography.PrimaryValue);
+        var rewardBlock = UiTypography.Pitch(UiTypography.Secondary) + UiTypography.Pitch(UiTypography.Body);
+        var doorBlock = doors > 0 ? 8 + doors * DoorPitch - (DoorPitch - DoorHeight) : 0;
+        var panel = new Rectangle(ColumnX, UtilityTop, ColumnW, top + idleBlock + 10 + rewardBlock + doorBlock + UtilityPad);
+        _ui.PanelQuiet(b, panel);
+        s_railBottom = panel.Bottom + 10;
+
+        var x = panel.X + UtilityPad;
+        var w = panel.Width - UtilityPad * 2;
+        var y = panel.Y + top;
+
+        _ui.TextBig(b, "IDLE", x, y, Slate, UiTypography.Secondary);
+        y += UiTypography.Pitch(UiTypography.Secondary);
+        if (_ui.Assets.Get("currency_gleam") is { } gi) b.Draw(gi, new Rectangle(x, y + 5, 30, 30), Color.White);
+        _ui.TextBig(b, $"+{Game1.Abbrev((long)(IdleGleamRate * 60f))}/min", x + 40, y, Bone, UiTypography.PrimaryValue);
+        y += UiTypography.Pitch(UiTypography.PrimaryValue) + 10;
+
+        _ui.TextBig(b, "REWARDS", x, y, Slate, UiTypography.Secondary);
+        y += UiTypography.Pitch(UiTypography.Secondary);
+        var chests = $"{ChestCount} CHEST{(ChestCount == 1 ? "" : "S")} READY";
+        var points = $"{Mastery.Available} MASTERY POINT{(Mastery.Available == 1 ? "" : "S")}";
+        var line = chestRow && pointsRow ? $"{chests} · {Mastery.Available} POINT{(Mastery.Available == 1 ? "" : "S")}"
+                 : chestRow ? chests : pointsRow ? points : "NOTHING WAITING";
+        _ui.TextBig(b, _ui.ShortenBig(line, w, UiTypography.Body), x, y, doors > 0 ? Bone : UiInk.Empty, UiTypography.Body);
+        y += UiTypography.Pitch(UiTypography.Body) + 8;
+
         if (chestRow)
         {
-            if (_ui.Button(b, new Rectangle(inner.X, ry, inner.Width, RewardButtonHeight),
-                           $"OPEN {ChestCount} CHEST{(ChestCount == 1 ? "" : "S")}  (K)", hit, clicked))
-                WantsVault = true;
-            ry += RewardRowPitch; anyReward = true;
+            if (_ui.Button(b, new Rectangle(x, y, w, DoorHeight), "OPEN VAULT", hit, clicked)) WantsVault = true;
+            y += DoorPitch;
         }
-        // Mastery points are spent on the MASTERY tree — the E screen — so that is where this button
-        // goes and the key it names.
         if (pointsRow)
         {
-            if (_ui.Button(b, new Rectangle(inner.X, ry, inner.Width, RewardButtonHeight),
-                           $"SPEND {Mastery.Available} POINT{(Mastery.Available == 1 ? "" : "S")}  (E)", hit, clicked))
+            if (_ui.Button(b, new Rectangle(x, y, w, DoorHeight), $"SPEND {Mastery.Available} POINT{(Mastery.Available == 1 ? "" : "S")}", hit, clicked))
                 WantsMastery = true;
-            ry += RewardRowPitch; anyReward = true;
         }
-        if (Deepest > 0) _ui.TextBig(b, $"DEEPEST WAVE REACHED  {Deepest}", inner.X, ry + 1, Slate, UiTypography.Secondary);
-        else if (!anyReward) _ui.TextBig(b, "NOTHING TO CLAIM YET", inner.X, ry + 1, Slate, UiTypography.Secondary);
-
-        DrawKeepFilter(b, new Rectangle(ColumnX, reward.Bottom + RailGap, ColumnW, FilterRowHeight), hit, clicked);
     }
 
-    // ── CHEST FILTER — on the screen whose drops it decides (2026-08-23). ─────────────────────────
-    //    It was a row on the VAULT; the playtest put it here: "drop filtresi hunt ekranını
-    //    ilgilendiriyor oraya taşınsın." Host-fed and host-persisted; this screen only edits it and
-    //    raises FilterDirty. NOTE for the host: the edit happens in DRAW, so read it back on the dirty
-    //    flag and never push the saved value every frame — that exact push clobbered the vault's edit
-    //    a frame later in playtest five.
-    /// <summary>Chests below this tier never land — they arrive as a little Scrap instead. 0 = all.</summary>
-    public int KeepMinTier { get; set; }
-    /// <summary>Keep only chests whose region favours ANY of these slots (no-lean chests always pass). Empty = any.</summary>
-    public HashSet<ItemBaseType> KeepSlots { get; } = new();
-    /// <summary>Set when the player edited the filter — the host copies it back and saves.</summary>
-    public bool FilterDirty { get; set; }
+    // ── The fall plate (UX V2 P1.1, brief §22 / D6). ──────────────────────────────────────────────────────
+    /// <summary>Under the header stack, where the toasts hang — one anchor per zone (D4).</summary>
+    private Rectangle FallPlate => new(560, HeaderStackBottom + 8, 800, 132);
 
     /// <summary>
-    /// The filter's popover is up. The row toggles it; its close icon, a click anywhere outside it, and
-    /// Escape (routed by the host) close it. The row keeps the setting readable while it is closed.
+    /// Two lines over the fight when the champion falls: the wave, and the MAIN LIMIT with the verdict
+    /// sentence — from <see cref="RunReport.Limit"/> and <see cref="RunReport.Verdict"/>, the same thresholds
+    /// the log applies. The whole plate is a door to the log; no buttons stand over the arena because the
+    /// champion is already getting up (the doors live in the LOG's footer).
     /// </summary>
-    /// <remarks>
-    /// It used to stand open at full height, permanently — the tallest thing in the rail, for a setting
-    /// most players touch once. Playtest 2026-08-26: "a button that opens it, I set it, it closes."
-    /// </remarks>
-    public bool FilterOpen { get; set; }
-
-    /// <summary>The bottom edge of the CHEST FILTER row as last drawn (+ margin) — the right column's true extent.</summary>
-    private static int s_railBottom = 368;
-
-    private static readonly ItemBaseType[] SlotChips =
+    private void DrawFallPlate(SpriteBatch b, Point hit, bool clicked)
     {
-        ItemBaseType.Weapon, ItemBaseType.Helm, ItemBaseType.Chest, ItemBaseType.Gloves,
-        ItemBaseType.Boots, ItemBaseType.Charm, ItemBaseType.AbilityFocus, ItemBaseType.Ring,
-    };
-
-    private static string SlotLabel(ItemBaseType t) => t switch
-    {
-        ItemBaseType.AbilityFocus => "FOCUS",
-        ItemBaseType.Chest => "ARMOUR",
-        _ => t.ToString().ToUpperInvariant(),
-    };
-
-    /// <summary>The slot's medallion, <c>item_slot_&lt;slot&gt;</c> — the same art the GEAR screen's paper doll wears.</summary>
-    private static string SlotIconKey(ItemBaseType t) => t switch
-    {
-        ItemBaseType.AbilityFocus => "item_slot_focus",
-        _ => "item_slot_" + t.ToString().ToLowerInvariant(),
-    };
-
-    /// <summary>What the medallion is, in plain words, for the hover tip (playtest 2026-08-26: icons, with the name on hover).</summary>
-    private static string SlotTip(ItemBaseType t) => t switch
-    {
-        ItemBaseType.Weapon => "WEAPON — what your champion strikes with.",
-        ItemBaseType.Helm => "HELM — head armour.",
-        ItemBaseType.Chest => "ARMOUR — body armour, worn on the chest.",
-        ItemBaseType.Gloves => "GLOVES — hand armour.",
-        ItemBaseType.Boots => "BOOTS — foot armour.",
-        ItemBaseType.Charm => "CHARM — a trinket worn for its power.",
-        ItemBaseType.AbilityFocus => "FOCUS — the piece that channels your skills.",
-        ItemBaseType.Ring => "RING — a ring worn for its power.",
-        _ => SlotLabel(t),
-    };
-
-    /// <summary>The filter's setting in words: "ANY TIER · ALL SLOTS", "TIER 3 AND UP · HELM, BOOTS".</summary>
-    private string FilterSummary()
-    {
-        var tier = KeepMinTier <= 0 ? "ANY TIER" : $"TIER {KeepMinTier} AND UP";
-        var slots = KeepSlots.Count == 0 ? "ALL SLOTS" : string.Join(", ", SlotChips.Where(KeepSlots.Contains).Select(SlotLabel));
-        return $"{tier} · {slots}";
-    }
-
-    /// <summary>The CHEST FILTER row — its name, its current setting in words, and the door to change it.</summary>
-    private void DrawKeepFilter(SpriteBatch b, Rectangle row, Point hit, bool clicked)
-    {
-        var pop = new Rectangle(row.X, row.Bottom + 8, row.Width, FilterPopoverHeight);
-        s_railBottom = row.Bottom + 10;
-        var wasOpen = FilterOpen;
-        var hot = row.Contains(hit);
-        if (UiKit.ClickedIn(row, hit, clicked)) FilterOpen = !wasOpen;
-        else if (wasOpen && clicked && !pop.Contains(hit)) FilterOpen = false;   // a click anywhere else closes it
-
-        // The row: the chip style of the filter's own buttons, lit gold while the popover is up.
-        _ui.Fill(b, row, new Color(0x14, 0x10, 0x1A, 0xE0));
-        Outline(b, row, wasOpen ? Gold * 0.8f : hot ? Bone : PlateEdge, 2);   // bronze at rest: a button, in the rail's own brown
-        _ui.TextBig(b, "CHEST FILTER", row.X + 14, row.Y + 6, wasOpen || hot ? Gold : Gold * 0.85f, UiTypography.Secondary);
-        var door = wasOpen ? "CLOSE  ×" : "CHANGE  ›";
-        _ui.TextRightBig(b, door, row.Right - 14, row.Y + 8, hot ? Bone : Slate, UiTypography.Caption);
-        _ui.TextBig(b, _ui.ShortenBig(FilterSummary(), row.Width - 28, UiTypography.Caption), row.X + 14, row.Y + 30,
-                    Bone, UiTypography.Caption);
-
-        if (wasOpen) DrawFilterPopover(b, pop, hit, clicked && pop.Contains(hit));
-        else if (hot) _ui.HoverTip(b, "CHEST FILTER — which chests to keep. The rest turn into a little Scrap. Click to change it.", hit);
-    }
-
-    /// <summary>The filter's controls: the lowest tier to keep, and the gear slots — as medallions.</summary>
-    /// <remarks>
-    /// Drawn after the rail, so it sits over whatever is under it. Only clicks INSIDE it reach here (the
-    /// row handles the outside click); the tip for the hovered medallion is drawn last, over everything.
-    /// </remarks>
-    private void DrawFilterPopover(SpriteBatch b, Rectangle pop, Point hit, bool clicked)
-    {
-        _ui.PanelQuiet(b, pop);
-        var inner = new Rectangle(pop.X + RailInset, pop.Y + RailInset, pop.Width - RailInset * 2, pop.Height - RailInset * 2);
-        // The title sits on the close icon's row, so the two read as one header.
-        var close = UiKit.CloseRect(pop, 36);
-        _ui.TextBig(b, "CHEST FILTER", inner.X, close.Y + 4, Gold, UiTypography.PanelTitle);
-        if (_ui.CloseButton(b, close, hit, clicked)) FilterOpen = false;
-        var y = close.Bottom + 8;
-        _ui.TextBig(b, "WHICH CHESTS TO KEEP", inner.X, y, Slate, UiTypography.Secondary);
-        y += 30;
-
-        // LOWEST TIER   [-]  ANY TIER / TIER N AND UP  [+]
-        _ui.TextBig(b, "LOWEST TIER", inner.X, y, Bone, UiTypography.Secondary);
-        y += UiTypography.Pitch(UiTypography.Secondary);
-        var minus = new Rectangle(inner.X, y, 34, 34);
-        var plus = new Rectangle(inner.Right - 34, y, 34, 34);
-        MiniButton(b, minus, "-", hit);
-        MiniButton(b, plus, "+", hit);
-        _ui.TextCenter(b, KeepMinTier <= 0 ? "ANY TIER" : $"TIER {KeepMinTier} AND UP", inner.Center.X, y + 6, KeepMinTier > 0 ? Gold : Slate);
-        if (UiKit.ClickedIn(minus, hit, clicked) && KeepMinTier > 0) { KeepMinTier -= 1; FilterDirty = true; }
-        if (UiKit.ClickedIn(plus, hit, clicked) && KeepMinTier < 99) { KeepMinTier += 1; FilterDirty = true; }
-
-        // The slots, as TOGGLES — several at once ("hem bot hem kolye"). Two rows of four medallions, the
-        // slot art the GEAR screen wears, lit when kept; ALL SLOTS under them clears the lot.
-        y += 48;
-        _ui.TextBig(b, "GEAR SLOTS THE CHEST IS FOR", inner.X, y, Bone, UiTypography.Secondary);
-        y += UiTypography.Pitch(UiTypography.Secondary);
-        string? tip = null;
-        const int cellH = 60;
-        var cellW = inner.Width / 4;
-        for (var i = 0; i < SlotChips.Length; i++)
-        {
-            var slot = SlotChips[i];
-            var cell = new Rectangle(inner.X + (i % 4) * cellW, y + (i / 4) * (cellH + 4), cellW, cellH);
-            var lit = KeepSlots.Contains(slot);
-            var hot = cell.Contains(hit);
-            if (lit) _ui.Fill(b, cell, Gold * 0.16f);
-            var box = hot ? new Rectangle(cell.Center.X - 27, cell.Center.Y - 27, 54, 54)
-                          : new Rectangle(cell.Center.X - 25, cell.Center.Y - 25, 50, 50);
-            var tint = lit || hot ? Color.White : new Color(0x8C, 0x86, 0x80);
-            if (!_ui.Icon(b, SlotIconKey(slot), box, tint))
-                _ui.TextCenterBig(b, SlotLabel(slot), cell.Center.X, cell.Center.Y - 8, tint, UiTypography.Caption);
-            if (lit) Outline(b, cell, Gold * 0.8f, 2);
-            if (hot) tip = SlotTip(slot) + (lit ? " Click to stop keeping its chests." : " Click to keep the chests made for it.");
-            if (UiKit.ClickedIn(cell, hit, clicked))
-            {
-                if (!KeepSlots.Remove(slot)) KeepSlots.Add(slot);
-                FilterDirty = true;
-            }
-        }
-        y += 2 * (cellH + 4) + 6;
-        var all = new Rectangle(inner.X, y, inner.Width, 30);
-        MiniButton(b, all, "ALL SLOTS", hit, KeepSlots.Count == 0);
-        if (UiKit.ClickedIn(all, hit, clicked) && KeepSlots.Count > 0) { KeepSlots.Clear(); FilterDirty = true; }
-        // The last line: what happens to the rest, only while a filter is set.
-        y += 40;
-        // Slate, not Dim: Dim on the quiet frame's black interior was a line the capture could not read.
-        _ui.TextBig(b, KeepMinTier > 0 || KeepSlots.Count > 0 ? "OTHER CHESTS TURN INTO A LITTLE SCRAP" : "EVERY CHEST IS KEPT",
-                    inner.X, y, Slate, UiTypography.Caption);
-        if (tip is not null) _ui.HoverTip(b, tip, hit);
-    }
-
-    private void MiniButton(SpriteBatch b, Rectangle r, string label, Point hit, bool lit = false)
-    {
+        var fade = _mode == Mode.Downed ? 1f : Math.Clamp(_fellTimer * 1.4f, 0f, 1f);
+        var r = FallPlate;
+        _ui.Plate(b, r, Ember, fade);
+        _ui.TextBig(b, $"FELL AT WAVE {_fellWave}", r.X + 24, r.Y + 14, Ember * fade, UiTypography.StageLabel, TextFace.Display);
+        var limit = _fellReport is { } rep ? $"MAIN LIMIT — {rep.LimitLabel()} · {rep.Verdict()}" : "THE FULL REPORT IS IN THE LOG";
+        _ui.TextBig(b, _ui.ShortenBig(limit, r.Width - 48, UiTypography.Body), r.X + 24,
+                    r.Y + 14 + UiTypography.Pitch(UiTypography.StageLabel), Bone * fade, UiTypography.Body);
         var hot = r.Contains(hit);
-        _ui.Fill(b, r, new Color(0x14, 0x10, 0x1A, 0xE0));
-        var edge = lit ? Gold * 0.8f : hot ? Bone : Dim;
-        _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, 2), edge);
-        _ui.Fill(b, new Rectangle(r.X, r.Bottom - 2, r.Width, 2), edge);
-        _ui.Fill(b, new Rectangle(r.X, r.Y, 2, r.Height), edge);
-        _ui.Fill(b, new Rectangle(r.Right - 2, r.Y, 2, r.Height), edge);
-        _ui.TextCenterBig(b, label, r.Center.X, r.Y + (r.Height - UiTypography.Secondary) / 2 - 1,
-                          lit ? Gold : hot ? Bone : Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, "READ THE LOG  ›", r.Right - 24, r.Bottom - 34, (hot ? Bone : Slate) * fade, UiTypography.Secondary);
+        if (UiKit.ClickedIn(r, hit, clicked)) WantsLog = true;
     }
 
     /// <summary>The run's state, or null when it is simply running and there is nothing to say.</summary>
@@ -2842,353 +2659,192 @@ public sealed class HuntScreen
         return null;
     }
 
-    /// <summary>Auto-skill dock (region F): the build as circular auto-cast medallions, centered under the
-    /// arena. Each shows its Source glyph, its Form, and the AUTO state the reference calls for.</summary>
+    // ── The SKILL STRIP (UX V2 P1.1, brief §17/§18) ─────────────────────────────────────────────────────
+    //    ACTIVE and PASSIVE groups across the foot of the stage, on a QUIET plate. The vertical SKILLS rail
+    //    it replaces was a 286×592 ornate frame down the left of the arena that printed each skill's rule
+    //    text (BUILD's job) at 9 px, and boxed the stage on a third side. A slot now says: glyph · name ·
+    //    readiness word · Source — what a player reads at a glance in a fight, nothing they read once.
+    private static readonly Rectangle SkillStrip = new(486, 900, 1000, 164);
+    private const int StripPad = 12, StripGroupGap = 28, SlotGap = 10, SlotH = 114, MedallionPx = 72;
+
+    /// <summary>What the strip knows about one skill's timing this frame, read off the resolved wave.</summary>
+    private readonly record struct SkillTiming(float Ready, float Swept, int RingSteps, float Telegraph, float Flash, int NextMs);
+
+    /// <summary>The ACTIVE / PASSIVE strip — the fight's own skills, grouped by whether they take a beat.</summary>
     private void DrawSkillDock(SpriteBatch b)
     {
-        // Spec §14: auto-skill dock centred under the arena (500,770,920,145). Hex slots (ui_slot_skill_hex),
-        // Source glyph inside, Form + AUTO beneath. Presentation Model C (§14.4): AUTO/READY, no fake cooldowns.
-        // THE FIGHT'S OWN SKILLS — the same list every event's Slot indexes. Rendering the
-        // editable loadout here was the UI-state/sim-state split this screen has already paid for.
+        // THE FIGHT'S OWN SKILLS — the same list every event's Slot indexes; the slot index is kept through
+        // the grouping because the replay is asked by it.
         var skills = _waveSkills;
-        var n = Loadout.SkillCapacity;     // the dock shows the slots you have, not the four everyone starts with
-        // Stacked down the control rail instead of a horizontal dock across the bottom centre, which
-        // sat over the stage and collided with the nav rail at y=934.
-        // PITCH IS DERIVED FROM THE SPACE, not fixed at 74. The dock was laid out against a four-slot
-        // maximum, but the loop runs to Loadout.SkillCapacity, which reaches five once the trait tree's
-        // weave_5 node is bought — and the fifth medallion then drew 60px BELOW the bottom of the panel
-        // it lives in (ControlRail ends at y=936). The reward for the largest single upgrade in the game
-        // was a slot hanging off the frame.
-        // STARTS AT THE TOP OF THE RAIL NOW. It used to begin at y=632 because BATTLE SPEED and AUTO HUNT
-        // occupied everything above it — so the one block a player actually reads sat in the bottom
-        // third, squeezed, while two thirds of the panel reported a constant and offered a control that
-        // should not have existed. With both gone the slots get the whole rail: bigger medallions, a
-        // pitch that breathes, and the Form's rule beside each one with room to be read.
-        // Each row is a medallion, a name beside it, and up to two wrapped lines under both — so the
-        // pitch has to clear the medallion PLUS that text, and the medallion shrinks to pay for it.
-        var (_, pitch, slot) = SkillRailMetrics();
-        const int y0 = RailTop + RailHeadroom;
-        _ui.TextCenterBig(b, "SKILLS", RailContentX + RailContentW / 2, RailTop + UiTypography.PanelTitleTop, Gold, UiTypography.PanelTitle);
-        // THE POOL, beside the header it feeds. Gold at the brim — the REND moment worth waiting for.
-        if (_chargeLive)
-            _ui.TextRightBig(b, $"CHARGE {_chargeNow}/{_chargeCap}", RailContentX + RailContentW,
-                             RailTop + UiTypography.PanelTitleTop + (UiTypography.PanelTitle - UiTypography.Secondary) / 2,
-                             _chargeNow >= _chargeCap ? Gold : Slate, UiTypography.Secondary);
-        for (var i = 0; i < n; i++)
+        var cap = Math.Max(1, Loadout.SkillCapacity);
+        var activeCap = Build.ActiveSlotsFor(cap);
+        var passiveCap = Build.PassiveSlotsFor(cap);
+        var actives = new List<int>();
+        var passives = new List<int>();
+        for (var i = 0; i < skills.Count; i++) (skills[i].Def.TakesABeat ? actives : passives).Add(i);
+        // A skill the build placed past a group's capacity still shows — the fight runs it; the strip never lies.
+        activeCap = Math.Max(activeCap, actives.Count);
+        passiveCap = Math.Max(passiveCap, passives.Count);
+
+        _ui.Plate(b, SkillStrip);
+        var groupGap = passiveCap > 0 ? StripGroupGap : 0;
+        var gaps = Math.Max(0, activeCap - 1) + Math.Max(0, passiveCap - 1);
+        var slotW = (SkillStrip.Width - StripPad * 2 - groupGap - gaps * SlotGap) / Math.Max(1, activeCap + passiveCap);
+        var y = SkillStrip.Y + 8;
+        var slotY = y + UiTypography.Pitch(UiTypography.Secondary) + 2;
+
+        var x = SkillStrip.X + StripPad;
+        x = DrawSkillGroup(b, "ACTIVE", x, y, slotY, slotW, activeCap, actives);
+        if (passiveCap > 0)
         {
-            var box = new Rectangle(RailContentX, y0 + i * pitch, slot, slot);
-            if (i < skills.Count)
-            {
-                var s = skills[i];
-                var sc = SourceColor.GetValueOrDefault(s.Source, Bone);
-
-                // THE RHYTHM OF THIS SKILL, read off the resolved wave rather than invented.
-                //
-                // WaveReplay carries a Skill event per cast, with the Form in Amount and the moment in
-                // AtMs, so "when did this last fire" and "when does it fire next" are both answerable —
-                // and a bar built on them is the fight's real cadence, not a decorative tick at a rate
-                // nobody chose. Before this the rail listed the skills and then never moved again, so a
-                // player could see WHAT their champion carries and never WHEN any of it happens.
-                // Keyed by SOURCE and FORM — one readout per skill. Keyed by Form alone, two Projectiles
-                // shared a bar and "fired at once" (playtest 2026-08-26).
-                var railDef = s.Def;
-                var flash = _skillFlash.TryGetValue(i, out var fl) ? Math.Clamp(fl / 0.42f, 0f, 1f) : 0f;
-                // A PASSIVE IS ALWAYS READY. Every branch below asks the replay when this skill last
-                // cast, and an Aura never "casts" — so ready stayed 0 and the dial shaded the whole
-                // medallion for the entire run, under a label reading ALWAYS ON (review 2026-08-30).
-                var isPassiveSlot = !railDef.TakesABeat;
-                var ready = isPassiveSlot ? 1f : 0f;
-                // How many notches the ring has. Set by the beat-counted branch to the plain actions in
-                // THIS cycle, so one action is always exactly one notch; 0 leaves the ring continuous.
-                var ringSteps = 0;
-                var telegraph = 0f;
-                if (_replay is not null)
-                {
-                    var next = _replay.NextSkillAfter(_playheadMs, i);
-                    var prev = _replay.LastSkillBefore(_playheadMs, i);
-                    // WHAT THE PREVIOUS WAVES ALREADY SPENT. Used only when THIS wave holds no cast to
-                    // measure from — once the skill has fired inside this replay, that cast is the
-                    // truth and the carry is stale. See _carryBeats.
-                    var carryBeats = prev >= 0 ? 0 : _carryBeats.GetValueOrDefault(i);
-                    var carryMs = prev >= 0 ? 0f : _carryMs.GetValueOrDefault(i);
-                    if (next != int.MaxValue && next - _playheadMs is > 0f and <= 300f) telegraph = 1f - (next - _playheadMs) / 300f;
-                    if (railDef.Beats is var bts and > 0)
-                    {
-                        // COUNTED IN BEATS, AND THE SIM'S OWN BEATS. The rail used to rebuild a count
-                        // by walking the damage stream — see WaveReplay.BeatAt for why that was a
-                        // guess. Champion.BeatCount is what the cooldown is actually measured against,
-                        // and it is in the event stream now, so this is the same number the fight used.
-                        //
-                        // THE DENOMINATOR IS THE CYCLE'S PLAIN ACTIONS — one fewer than the cooldown,
-                        // because the next cast is itself an action. A four-action skill's cycle is
-                        // cast, hit, hit, hit, cast: three hits to fill across (playtest 2026-08-28,
-                        // "skill henüz cooldowndayken atıyor" — dividing by four could only ever reach
-                        // three quarters, so the ring was never once seen full).
-                        //
-                        // It CAN sit full for an action, and that is now the truth rather than a bug:
-                        // only one action happens per beat, so a ready skill that loses the beat to an
-                        // earlier slot is ready and waiting its turn. The ring saying so is right.
-                        var beatNow = _replay!.BeatAt(_playheadMs);
-                        var since = prev >= 0
-                            ? Math.Max(0, beatNow - _replay.BeatAt(prev))
-                            : Math.Max(0, beatNow - _replay.FirstBeat + 1) + carryBeats;
-                        ringSteps = Math.Max(1, bts - 1);
-                        ready = Math.Clamp(since / (float)ringSteps, 0f, 1f);
-                    }
-                    else if (next != int.MaxValue)
-                    {
-                        // From the previous cast, or — for the first one of a wave — from wherever the
-                        // last wave left the cooldown, which is BEFORE this wave's zero.
-                        var from = prev >= 0 ? prev : -carryMs;
-                        var span = MathF.Max(1f, next - from);
-                        ready = Math.Clamp((_playheadMs - from) / span, 0f, 1f);
-                    }
-                    else if (prev >= 0)
-                    {
-                        // It fired and will not fire again THIS WAVE — but a bar pinned at full read
-                        // as "this skill never cools down" (playtest: "ilk skill hiç cooldown'a
-                        // girmiyor"). Refill over the form's base cooldown instead, so the rhythm
-                        // stays visible when a short wave outlives the last cast.
-                        var cdMs = MathF.Max(1f, RailCooldownMs(railDef));
-                        ready = Math.Clamp((_playheadMs - prev) / cdMs, 0f, 1f);
-                    }
-                    else
-                    {
-                        // A TIMED SKILL THAT NEITHER FIRED THIS WAVE NOR WILL. Its ring used to sit dead
-                        // at empty for the whole wave, which reads as a broken skill rather than a
-                        // waiting one — and it is the case a short wave produces most often. The carry
-                        // knows how long it has really been waiting, so it keeps filling.
-                        var cdMs = MathF.Max(1f, RailCooldownMs(railDef));
-                        ready = Math.Clamp((_playheadMs + carryMs) / cdMs, 0f, 1f);
-                    }
-                }
-
-                // THE DIAL'S OWN VALUE, needed here rather than below because the medallion is DIMMED
-                // while it is short of full. A beat-counted skill STEPS — a sixth of the circle unwinds
-                // per action for a six-action skill — so the player reads "two more swings" at a glance
-                // instead of a smooth clock that lies about being timed (playtest 2026-08-30: "no need
-                // for a bar; the radial gauge again, and each action takes 360/X off it"). A timed skill
-                // sweeps continuously.
-                var swept = ringSteps > 0
-                    ? Math.Clamp((int)MathF.Floor(ready * ringSteps + 0.001f), 0, ringSteps) / (float)ringSteps
-                    : ready;
-
-                // READY OR NOT, IN THE ICON'S OWN BRIGHTNESS (playtest 2026-08-28: "kullanılmaya hazır
-                // değilken skill'in ikonu kararsın"). The ring around the rim answers HOW MUCH LONGER;
-                // this answers WHETHER, and it is the faster read of the two — a glance down the rail
-                // sorts the rows into lit and unlit without counting anything.
-                //
-                // Deliberately a STEP and not a fade: brightening in proportion to the fill would be a
-                // second, blurrier copy of the ring, and the moment worth seeing is the one where the
-                // skill becomes available. A passive is always ready and so never dims, which is what
-                // its ALWAYS ON label promises. The ring itself is drawn at full strength over the top,
-                // so a dark medallion never costs the readout any contrast.
-                var waiting = swept < 1f && flash <= 0f;
-                var wake = waiting ? WaitingSkillDim : 1f;
-
-                // TELEGRAPH: the medallion warms to gold over the 300 ms before its cast, so the effect
-                // in the arena has a cause the eye already saw (playtest 2026-08-27).
-                var lit = Math.Max(flash, telegraph);
-                if (_ui.Assets.Get("ui_slot_skill_hex") is { } sl)
-                    b.Draw(sl, box, lit > 0f ? Color.Lerp(Color.White, Gold, lit) : Color.White * wake);
-                // §18.3 Layer 1: source-coloured inner glow (no Form-glyph asset ships, so the Source glyph is
-                // the central identity and the Form name labels it — a quieter composition per §36).
-
-                // THE SKILL'S OWN GLYPH IN THE SOURCE'S LIGHT. It used to be the Source gem alone,
-                // which meant every HAMMER skill wore the same picture and the medallion said what a
-                // skill was MADE OF rather than what it DID — the one thing an icon is read for. The
-                // element survives as the halo behind it, so both facts are still on the medallion.
-                _ui.Diamond(b, new Rectangle(box.Center.X - 24, box.Center.Y - 24, 48, 48), sc * (0.34f * wake));
-                var glyphBox = new Rectangle(box.X + 18, box.Y + 16, box.Width - 36, box.Height - 32);
-                if (_ui.Assets.Get($"icon_skill_{railDef.Id}") is { } sg)
-                    b.Draw(sg, glyphBox, Color.Lerp(sc, Color.White, 0.65f) * wake);
-                else if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } g)
-                    b.Draw(g, glyphBox, Color.White * wake);
-                else _ui.Diamond(b, glyphBox, sc * wake);
-                // (§16 Vow glyph omitted: the loadout SkillChoice doesn't carry the Vow — it lives on the built
-                // ability. Wiring the built skills through would add it; deferred, logged once below.)
-                // §16.2: a DESCRIPTIVE Source+Form label ("SHADOW STRIKE"), never a bare form name — shrunk to
-                // fit the slot pitch rather than clipped.
-                var label = railDef.Name;
-                var lpx = UiTypography.Secondary;
-                while (lpx > UiTypography.Caption && _ui.MeasureBig(label, lpx) > RailContentW - box.Width - 20) lpx--;
-                // Beside the slot: the name is short and pairs with the medallion.
-                _ui.TextBig(b, label, box.Right + 12, box.Y + 10, Bone, lpx);
-                // The rhythm, in words, under the name: what the pips count.
-                // AND ITS OWN CADENCE, read off the skill rather than off the Form: a Reaction waits to
-                // be bitten, a Field runs on its own clock, an Active counts beats.
-                var rhythm = railDef.Kind == SkillKind.Reaction
-                    ? "WHEN BITTEN"
-                    : railDef.Kind == SkillKind.Field
-                    ? "ALWAYS ON"
-                    : railDef.Beats switch
-                {
-                    2 => "EVERY OTHER ACTION",
-                    3 => "EVERY THIRD ACTION",
-                    // ORDINAL, like the two above it. "EVERY 4 ACTIONS" reads as four actions of
-                    // WAITING and the rule is the other one: the cast IS the fourth action, so the
-                    // cycle is cast, hit, hit, hit, cast (playtest 2026-08-28 — "it says 4 but it
-                    // casts on the 4th hit"). The dial already agrees: each action fills a quarter of
-                    // the ring and it is full exactly on the action it casts on.
-                    > 3 => $"EVERY {OrdinalWord(railDef.Beats)} ACTION",
-                    _ => "TIMED",
-                };
-                _ui.TextBig(b, rhythm, box.Right + 12, box.Y + 32, Slate, UiTypography.Caption);
-
-                // WHAT THE SKILL ACTUALLY DOES, on the screen where the player first meets it.
-                // This line used to read "AUTO" on every row — true of every skill in the game, so it
-                // distinguished nothing and used the only spare line for it. Playtest: "Skillerin
-                // açıklamaları yok, ne olduklarını anlamadım." The Weave screen explains a Form
-                // properly, but a player who has not gone looking for it never sees a word.
-                //
-                // From BuildGlossary, so this cannot drift from the rule the simulation runs.
-                // BENEATH BOTH, ACROSS THE FULL RAIL — not squeezed into the ~98px beside a medallion.
-                // Removing the speed control gave this rail its height back, and the sensible use of it
-                // is to let the one line that says what the skill DOES actually be read. Wrapped rather
-                // than shortened: "ONE HEAVY BL…" is a fragment, and a fragment teaches nothing.
-                // THE COOLDOWN IS ON THE ICON, not under it (playtest 2026-08-26: "the bars confused me —
-                // remove the progress bar; while a skill waits, wind a cooldown clockwise over its icon").
-                // The waiting share of the medallion is shaded and the shade unwinds clockwise as the
-                // skill comes ready; a lit medallion is a ready skill; the gold halo is the cast itself.
-                // A BEAT-COUNTED skill (Strike every third action, Projectile every other) shows BEATS: a
-                // row of pips under the medallion, one lit per action taken since its last cast, all lit
-                // when it is next. A clock on a skill that counts actions read as "still timed" (playtest
-                // 2026-08-28). Time-counted skills keep the clockwise sweep.
-                // ONE READOUT FOR BOTH KINDS: the clockwise sweep over the medallion — computed above the
-                // medallion's own draw, because the icon is dimmed while this is short of full.
-                //
-                // DRAWN LAST, AND AROUND THE RIM. The dial used to be painted before the medallion's
-                // own art, so the frame and the Source glyph covered it — the readout the player is
-                // watching sat behind the icon it belongs to (playtest 2026-08-28). It is a ring at the
-                // medallion's edge now, over everything, and it never hides the glyph.
-                if (flash <= 0f)
-                    _ui.CooldownSweep(b, new Vector2(box.Center.X, box.Center.Y), box.Width * 0.50f, swept,
-                                      new Color(0x0C, 0x09, 0x16, 0xE0), Gold * 0.95f);
-                if (flash > 0f)
-                {
-                    var halo = new Rectangle(box.X - 3, box.Y - 3, box.Width + 6, box.Height + 6);
-                    _ui.Fill(b, new Rectangle(halo.X, halo.Y, halo.Width, 2), Gold * flash);
-                    _ui.Fill(b, new Rectangle(halo.X, halo.Bottom - 2, halo.Width, 2), Gold * flash);
-                    _ui.Fill(b, new Rectangle(halo.X, halo.Y, 2, halo.Height), Gold * flash);
-                    _ui.Fill(b, new Rectangle(halo.Right - 2, halo.Y, 2, halo.Height), Gold * flash);
-                }
-
-                // THE SKILL'S OWN LINE, not the Form's headline. A Form headline said "ONE HEAVY BLOW"
-                // for BLOW and for PRESS alike — the two skills of one style, described identically.
-                var head = railDef.Line.ToUpperInvariant();
-                // CLEAR OF THE PIPS. The beat row sits at box.Bottom + 4 and is 10 px tall, so a
-                // headline at +12 printed through it — visible in every capture of a beat-counted skill.
-                var hy = box.Bottom + 12;
-                foreach (var line in _ui.WrapBig(head, RailContentW, UiTypography.Caption).Take(2))
-                {
-                    _ui.TextBig(b, line, RailContentX, hy, Gold, UiTypography.Caption);
-                    hy += UiTypography.Pitch(UiTypography.Caption);
-                }
-            }
-            else
-            {
-                if (_ui.Assets.Get("ui_slot_skill_hex") is { } sl) b.Draw(sl, box, Color.White * 0.5f);
-                _ui.TextCenterBig(b, i == skills.Count ? "+B" : "-", box.Center.X, box.Center.Y - 10, Dim, UiTypography.Secondary);
-            }
+            _ui.Fill(b, new Rectangle(x + groupGap / 2, SkillStrip.Y + 12, 1, SkillStrip.Height - 24), UiInk.Rule);
+            DrawSkillGroup(b, "PASSIVE", x + groupGap, y, slotY, slotW, passiveCap, passives);
         }
     }
 
-    /// <summary>Bottom-left battle controls (reference region G): adjustable BATTLE SPEED (x1/x2/x4/x8) driving
-    /// the real replay multiplier, plus the AUTO HUNT state.</summary>
-    private void DrawBattleControls(SpriteBatch b, Point mouse, bool clicked)
+    /// <summary>One group of the strip: its caption, its slots, and the empties up to its capacity. Returns the x after it.</summary>
+    private int DrawSkillGroup(SpriteBatch b, string caption, int x, int captionY, int slotY, int slotW, int capacity, List<int> members)
     {
-        // Spec §15 + §4.4: speed / auto-hunt controls, bottom-left (24,785,250,140). A QUIET surface (not a
-        // heavy ornate frame) — these are minor controls; the arena stays dominant. SPEED drives the real
-        // replay multiplier; AUTO HUNT is always ON (this is a pure idle-watch screen).
-        // Ornate frame art, like every other panel on this screen. A flat translucent slab was the only
-        // unstyled surface left in the scene, and because its alpha was constant it changed apparent
-        // brightness with whatever background it happened to be over — dark against the trunk, washed out
-        // against the foliage. A real panel is opaque, so it reads the same everywhere.
-        _ui.PanelQuiet(b, SkillRailMetrics().Rail);
-
-        // THE RAIL HELD TWO THINGS THAT ARE GONE, and the skills inherit the room.
-        //
-        // BATTLE SPEED (four buttons) was removed with the feature — see PlaybackSpeed. AUTO HUNT went
-        // with it: a bordered chip whose only state was the word "ON", occupying a sixth of the rail to
-        // report a constant. The tutorial's first line already says the champion fights on its own, and
-        // a control that cannot be changed is not a control, it is furniture.
-        //
-        // What is left is the thing a player actually reads here — WHAT THEIR CHAMPION IS — and it now
-        // starts at the top of the rail instead of two thirds of the way down it.
+        _ui.TextBig(b, caption, x + 4, captionY, Slate, UiTypography.Secondary);
+        for (var k = 0; k < capacity; k++)
+        {
+            var slot = new Rectangle(x, slotY, slotW, SlotH);
+            if (k < members.Count) DrawSkillSlot(b, slot, members[k]);
+            else DrawEmptySkillSlot(b, slot);
+            x += slotW + SlotGap;
+        }
+        return x - SlotGap;
     }
 
-    // THE GEAR OVERLAY IS GONE, by both routes it ever had.
-    //
-    // First a socket table: fixed fractions of the champion box, one per slot. That cannot track an
-    // articulated figure — a hand moves every frame, so any constant is wrong for all but one pose —
-    // and in play the weapon floated across the torso and the glove sat on the hip.
-    //
-    // Then bone-bound gear on the rig, which fixed the tracking and did not fix the look: an item icon
-    // carries its own perspective, light and palette, so it reads as a sticker wherever it is pinned,
-    // and four independently-chosen pieces never agree with each other. See HunterRigRenderer.
-    //
-    // The champion's appearance is FIXED. Gear is still worn, still carries every stat, and still shows
-    // in GEAR and the inventory — it just no longer decides what the character looks like.
-
-    /// <summary>
-    /// The vertical control rail down the left edge, replacing the old horizontal bottom strip.
-    /// </summary>
-    /// <remarks>
-    /// Bounded above by the hunter HUD panel (bottom 225) and below by the host nav rail (top 934),
-    /// so it occupies the full clear height between them. Moving the controls here is what frees the
-    /// stage to shift right.
-    /// </remarks>
-    // Sits just right of the vertical nav rail (width 180).
-    // Below the hunter HUD (bottom 225) and right of the nav rail (width 180).
-    private const int RailX = 190, RailTop = 236, RailW = 286, RailMaxH = 700;
-    private const int RailHeadroom = UiTypography.PanelBodyTopBare + 8;   // rail top to the first medallion
-    private const int RailFootroom = 34;      // the ornate frame's bottom band
-    private const int SkillSlotMax = 64;
-    private const int SkillTextBlock = 40;    // two wrapped lines under each medallion
-
-    /// <summary>The skills rail, its pitch and its medallion size — all derived from the slots you HAVE.</summary>
-    /// <remarks>
-    /// <b>THE RAIL WAS A FIXED 700px TALL AND ITS CONTENTS WERE NOT.</b> A player with two skills got two
-    /// medallions in the top third and four hundred pixels of framed nothing under them — on the screen
-    /// they spend nearly all their time on, in the most ornate frame in the game. An empty frame is not
-    /// neutral: it is a heavy border drawn around a void, and the eye reads it as content it has somehow
-    /// failed to find. Playtest, on this screen among others: "gizlenmiş gibi, iç içe geçmiş gibi".
-    ///
-    /// It is sized to its content now, so it grows as the trait tree buys slots instead of standing at
-    /// its five-slot maximum from the first minute of the game. The pitch only compresses at the largest
-    /// capacity, where the natural 128 would overrun the nav rail.
-    /// </remarks>
-    private (Rectangle Rail, int Pitch, int Slot) SkillRailMetrics()
+    /// <summary>An empty slot: the hex at half strength and where more slots come from. Shape, not tone, says "empty".</summary>
+    private void DrawEmptySkillSlot(SpriteBatch b, Rectangle slot)
     {
-        var n = Math.Max(1, Loadout.SkillCapacity);
-        var fixedH = RailHeadroom + SkillSlotMax + SkillTextBlock + RailFootroom;
-        var pitch = 128;   // ui-size-ok: the skill rail's SLOT pitch in pixels, not a line of text
-        if (n > 1 && fixedH + (n - 1) * pitch > RailMaxH)
-            pitch = Math.Max(96, (RailMaxH - fixedH) / (n - 1));
-        var h = Math.Clamp(fixedH + (n - 1) * pitch, RailMinH, RailMaxH);
-        return (new Rectangle(RailX, RailTop, RailW, h), pitch, Math.Min(SkillSlotMax, pitch - 56));
+        var box = new Rectangle(slot.X + 10, slot.Y + (SlotH - MedallionPx) / 2, MedallionPx, MedallionPx);
+        if (_ui.Assets.Get("ui_slot_skill_hex") is { } sl) b.Draw(sl, box, Color.White * 0.5f);
+        _ui.TextBig(b, "EMPTY SLOT", box.Right + 14, slot.Y + 24, UiInk.Empty, UiTypography.Body);
+        _ui.TextBig(b, "MORE SLOTS — TRAITS", box.Right + 14, slot.Y + 24 + UiTypography.Pitch(UiTypography.Body), UiInk.Empty, UiTypography.Caption);
+    }
+
+    /// <summary>One equipped skill: medallion with its cooldown ring and telegraph, name, readiness word, Source.</summary>
+    private void DrawSkillSlot(SpriteBatch b, Rectangle slot, int i)
+    {
+        var s = _waveSkills[i];
+        var def = s.Def;
+        var sc = SourceColor.GetValueOrDefault(s.Source, Bone);
+        var t = Timing(i, def);
+
+        // READY OR NOT, IN THE ICON'S OWN BRIGHTNESS: a step, not a fade — the moment worth seeing is the one
+        // where the skill becomes available. The ring around the rim answers HOW MUCH LONGER; this answers
+        // WHETHER. A passive is always ready and never dims.
+        var waiting = t.Swept < 1f && t.Flash <= 0f;
+        var wake = waiting ? WaitingSkillDim : 1f;
+        var lit = Math.Max(t.Flash, t.Telegraph);
+        var box = new Rectangle(slot.X + 10, slot.Y + (SlotH - MedallionPx) / 2, MedallionPx, MedallionPx);
+        if (_ui.Assets.Get("ui_slot_skill_hex") is { } sl)
+            b.Draw(sl, box, lit > 0f ? Color.Lerp(Color.White, Gold, lit) : Color.White * wake);
+        _ui.Diamond(b, new Rectangle(box.Center.X - 22, box.Center.Y - 22, 44, 44), sc * (0.34f * wake));
+        var glyphBox = new Rectangle(box.X + 16, box.Y + 14, box.Width - 32, box.Height - 28);
+        if (_ui.Assets.Get($"icon_skill_{def.Id}") is { } sg) b.Draw(sg, glyphBox, Color.Lerp(sc, Color.White, 0.65f) * wake);
+        else if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } g) b.Draw(g, glyphBox, Color.White * wake);
+        else _ui.Diamond(b, glyphBox, sc * wake);
+        // The cooldown ring at the rim, over everything; the gold halo is the cast itself.
+        if (t.Flash <= 0f)
+            _ui.CooldownSweep(b, new Vector2(box.Center.X, box.Center.Y), box.Width * 0.50f, t.Swept, new Color(0x0C, 0x09, 0x16, 0xE0), Gold * 0.95f);
+        else
+        {
+            var halo = new Rectangle(box.X - 3, box.Y - 3, box.Width + 6, box.Height + 6);
+            Outline(b, halo, Gold * t.Flash, 2);
+        }
+
+        // The words: NAME (Headline), then the readiness word and the Source on one Body line — colour AND text.
+        var tx = box.Right + 14;
+        var room = slot.Right - 8 - tx;
+        _ui.TextBig(b, _ui.ShortenBig(def.Name, room, UiTypography.Headline), tx, slot.Y + 16, Bone, UiTypography.Headline);
+        var word = ReadinessWord(def, t);
+        var ty = slot.Y + 16 + UiTypography.Pitch(UiTypography.Headline);
+        var source = s.Source.ToString().ToUpperInvariant();
+        var wordW = _ui.MeasureBig(word, UiTypography.Body);
+        _ui.TextBig(b, word, tx, ty, t.Swept >= 1f || !def.TakesABeat ? Bone : Slate, UiTypography.Body);
+        if (wordW + _ui.MeasureBig(" · " + source, UiTypography.Body) <= room)
+        {
+            _ui.TextBig(b, " · ", tx + wordW, ty, Slate, UiTypography.Body);
+            _ui.TextBig(b, source, tx + wordW + _ui.MeasureBig(" · ", UiTypography.Body), ty, sc, UiTypography.Body);
+        }
+        // The Source glyph in the corner — the third cue beside the colour and the word.
+        if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } sg2)
+            b.Draw(sg2, new Rectangle(slot.Right - 30, slot.Y + 8, 22, 22), Color.White * 0.9f);
+    }
+
+    /// <summary>The readiness in a word: READY · 2 ACTIONS · 1.4s · ACTIVE (a Field) · ON BITE (a Reaction).</summary>
+    private string ReadinessWord(SkillDef def, SkillTiming t)
+    {
+        if (def.Kind == SkillKind.Reaction) return "ON BITE";
+        if (def.Kind == SkillKind.Field || !def.TakesABeat) return "ACTIVE";
+        if (t.Swept >= 1f) return "READY";
+        if (t.RingSteps > 0)
+        {
+            var left = Math.Max(1, t.RingSteps - (int)MathF.Floor(t.Ready * t.RingSteps + 0.001f));
+            return left == 1 ? "1 ACTION" : $"{left} ACTIONS";
+        }
+        if (t.NextMs != int.MaxValue) return $"{MathF.Max(0.1f, (t.NextMs - _playheadMs) / 1000f):0.0}s";
+        return "WAITING";
     }
 
     /// <summary>
-    /// The shortest this rail may be — enough to keep <see cref="UiKit.Panel"/> on the same frame art.
+    /// A skill's timing this frame, read off the resolved wave — the fight's real cadence, not a decorative tick.
     /// </summary>
     /// <remarks>
-    /// <b>UiKit.Panel PICKS ITS TEXTURE BY ASPECT RATIO</b> — vertical below 0.82, square below 1.30,
-    /// medium above — so sizing this rail to its contents silently SWAPPED ITS FRAME. At two skills the
-    /// 286x330 rail crossed into the square art, whose corner ornament is proportionally heavier, and it
-    /// covered the SKILLS heading that had sat clear of the vertical frame for the whole project. The
-    /// panel would then have changed identity again at three slots and again at four, so the rail's
-    /// appearance would have depended on how far through the trait tree the player was.
-    ///
-    /// 350 is 286 / 0.82 rounded up: every capacity from one to five now lands in the vertical bucket.
-    /// It costs a little empty space at one skill and buys a frame that does not change under the player.
+    /// A beat-counted skill STEPS: one notch of the ring per plain action in its cycle, so "two more swings"
+    /// reads at a glance; a timed skill sweeps. Between waves the carry (<c>_carryBeats</c> / <c>_carryMs</c>)
+    /// says how long a skill has really been waiting, so a ring never sits dead through a short wave. A passive
+    /// is always ready. The playtest notes that shaped each branch are in the history of the rail this replaced.
     /// </remarks>
-    private const int RailMinH = 350;
-    // The house margin for a narrow plate. It was 44 a side on a 286-wide rail — a third of the column
-    // spent on a vertical frame whose side rail is 24 — which is why the skill lines had to drop to 12
-    // and 13 px to fit. At 28 they fit at the Caption rung with room to spare.
-    private const int RailContentX = RailX + UiTypography.PanelPadNarrow;
-    private const int RailContentW = RailW - UiTypography.PanelPadNarrow * 2;
+    private SkillTiming Timing(int i, SkillDef def)
+    {
+        var flash = _skillFlash.TryGetValue(i, out var fl) ? Math.Clamp(fl / 0.42f, 0f, 1f) : 0f;
+        var isPassiveSlot = !def.TakesABeat;
+        var ready = isPassiveSlot ? 1f : 0f;
+        var ringSteps = 0;
+        var telegraph = 0f;
+        var next = int.MaxValue;
+        if (_replay is not null && !isPassiveSlot)
+        {
+            next = _replay.NextSkillAfter(_playheadMs, i);
+            var prev = _replay.LastSkillBefore(_playheadMs, i);
+            var carryBeats = prev >= 0 ? 0 : _carryBeats.GetValueOrDefault(i);
+            var carryMs = prev >= 0 ? 0f : _carryMs.GetValueOrDefault(i);
+            if (next != int.MaxValue && next - _playheadMs is > 0f and <= 300f) telegraph = 1f - (next - _playheadMs) / 300f;
+            if (def.Beats is var bts and > 0)
+            {
+                var beatNow = _replay.BeatAt(_playheadMs);
+                var since = prev >= 0
+                    ? Math.Max(0, beatNow - _replay.BeatAt(prev))
+                    : Math.Max(0, beatNow - _replay.FirstBeat + 1) + carryBeats;
+                ringSteps = Math.Max(1, bts - 1);
+                ready = Math.Clamp(since / (float)ringSteps, 0f, 1f);
+            }
+            else if (next != int.MaxValue)
+            {
+                var from = prev >= 0 ? prev : -carryMs;
+                var span = MathF.Max(1f, next - from);
+                ready = Math.Clamp((_playheadMs - from) / span, 0f, 1f);
+            }
+            else if (prev >= 0)
+            {
+                var cdMs = MathF.Max(1f, RailCooldownMs(def));
+                ready = Math.Clamp((_playheadMs - prev) / cdMs, 0f, 1f);
+            }
+            else
+            {
+                var cdMs = MathF.Max(1f, RailCooldownMs(def));
+                ready = Math.Clamp((_playheadMs + carryMs) / cdMs, 0f, 1f);
+            }
+        }
+        var swept = ringSteps > 0
+            ? Math.Clamp((int)MathF.Floor(ready * ringSteps + 0.001f), 0, ringSteps) / (float)ringSteps
+            : ready;
+        return new SkillTiming(ready, swept, ringSteps, telegraph, flash, next);
+    }
 
     /// <summary>How bright a skill's medallion is while it is still waiting to come ready.</summary>
     /// <remarks>
@@ -3754,10 +3410,12 @@ public sealed class HuntScreen
         // title directly above a diff line showing the depth had FALLEN — a report contradicting
         // itself in the same panel. A fixture that lies cannot catch the bug it is posing for.
         Log.Add(_run.Report(isRecord: _run.Wave > (previous?.Depth ?? 0)));   // the same path the game takes
+        _fellReport = Log.Newest;   // so the fall plate names the MAIN LIMIT, as it does in play
         _mode = Mode.Downed;
         _downedTimer = DownedSeconds;
         _bannerTimer = 0f;   // the wave-cleared banner would otherwise sit over the fallen banner
         _fellWave = Math.Max(1, _run.Wave + 1);
+        _replayWave = _fellWave;   // the header says the wave the plate names, not the wave DevStart played (audit P1-8)
         _fellTimer = DownedSeconds + FellBannerSeconds;
 
         if (fallProgress is { } fp)

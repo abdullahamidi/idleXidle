@@ -1243,8 +1243,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _gemsHeldLast = GemsHeld();
         // The keep-filter (TAKE ONLY, on the HUNT screen since 2026-08-23), seeded ONCE — the screen
         // owns it from here; the host reads it back on FilterDirty (UpdateExpedition).
-        _expedition.KeepMinTier = _chestKeepMinTier;
-        _expedition.KeepSlots.Clear(); foreach (var sl in _chestKeepSlots) _expedition.KeepSlots.Add(sl);
+        _vault.KeepMinTier = _chestKeepMinTier;
+        _vault.KeepSlots.Clear(); foreach (var sl in _chestKeepSlots) _vault.KeepSlots.Add(sl);
         if (_pendingRunLog is not null) _expedition.Log.Restore(_pendingRunLog);
         if (_pendingTreeCamera is { } cam) _masteryScreen.RestoreCamera(cam.Zoom, cam.PanX, cam.PanY);
         SeedExplained();
@@ -1522,8 +1522,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
                 or "region2" or "region3" or "conquered" or "help" or "expedition" or "fight" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
-                or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightfilter" or "fightaura" or "fightflash" or "traitlit" or "traitterm" or "traitterminal"
-                or "roster" or "rosterlocked" or "weave" or "vault" or "vaultfirst" or "attune" or "attuned" or "trader"
+                or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "traitlit" or "traitterm" or "traitterminal"
+                or "roster" or "rosterlocked" or "weave" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
                 or "gemtour" or "intro" or "typespec")
             {
                 _showTitle = false;
@@ -1751,7 +1751,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     _deepestEver = 23; _mastery.SetEarned(77400);   // fixture career values (Stats §13)
                 }
 
-                if (sm is "fight" or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightfilter" or "fightaura" or "fightflash" or "runlog")
+                if (sm is "fight" or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "runlog")
                 {
                     // `fightflash` pins the hit flash so a still capture can prove the white silhouette draws.
                     if (sm == "fightflash") _expedition.DevHoldFlash = true;
@@ -1874,14 +1874,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             System.Globalization.NumberStyles.Float,
                             System.Globalization.CultureInfo.InvariantCulture, out var seekS))
                         _expedition.DevSeek(seekS);
-                    // fightfilter: the CHEST FILTER popover open, with a setting in it — so the row's
-                    // summary, the lit medallions and the tier line can all be checked in one frame.
-                    if (sm == "fightfilter")
-                    {
-                        _chestKeepMinTier = 3; _chestKeepSlots.Add(ItemBaseType.Helm); _chestKeepSlots.Add(ItemBaseType.Boots);
-                        _expedition.KeepMinTier = 3; _expedition.KeepSlots.Add(ItemBaseType.Helm); _expedition.KeepSlots.Add(ItemBaseType.Boots);
-                        _expedition.FilterOpen = true;
-                    }
                 }
                 if (sm is "boss" or "bossdebug" or "corruptedboss")
                 {
@@ -2061,7 +2053,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     }
                 }
 
-                if (sm == "vault")
+                // vaultfilter: the vault with the CHEST FILTER popover open and a setting in it (UX V2 P1.1: the
+                // filter moved here from the HUNT), so the lit medallions and the tier line can be checked.
+                if (sm == "vaultfilter")
+                {
+                    _chestKeepMinTier = 3; _chestKeepSlots.Add(ItemBaseType.Helm); _chestKeepSlots.Add(ItemBaseType.Boots);
+                    _vault.KeepMinTier = 3; _vault.KeepSlots.Add(ItemBaseType.Helm); _vault.KeepSlots.Add(ItemBaseType.Boots);
+                    _vault.FilterOpen = true;
+                }
+                if (sm is "vault" or "vaultfilter")
                 {
                     _showVault = true;
                     var grades = new[] { Rarity.Legendary, Rarity.Epic, Rarity.Rare, Rarity.Rare,
@@ -2333,8 +2333,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // The vault's modals outrank the settings reflex too — Esc on the stall means "close
             // the stall", not "stack the settings panel on top of it".
             else if (_showVault && _vault.ModalUp) _vault.CloseModals();
-            // The hunt's CHEST FILTER popover is the same kind of thing: Esc on it means "close it".
-            else if (!OverlayActive && !_expedition.LogOpen && _expedition.FilterOpen) _expedition.FilterOpen = false;
+            // The vault's CHEST FILTER popover is the same kind of thing: Esc on it means "close it".
+            else if (_showVault && _vault.FilterOpen) _vault.FilterOpen = false;
             else _showSettings = true;
         }
 
@@ -3623,11 +3623,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_expedition.WantsVault) { _expedition.WantsVault = false; OpenNav(5); }
         // TAKE ONLY edits (made in the HUNT screen's Draw) come back on the dirty flag only — never a
         // per-frame push of the saved value, which clobbered the vault's edit in playtest five.
-        if (_expedition.FilterDirty)
+        if (_vault.FilterDirty)
         {
-            _expedition.FilterDirty = false;
-            _chestKeepMinTier = _expedition.KeepMinTier;
-            _chestKeepSlots.Clear(); foreach (var sl in _expedition.KeepSlots) _chestKeepSlots.Add(sl);
+            _vault.FilterDirty = false;
+            _chestKeepMinTier = _vault.KeepMinTier;
+            _chestKeepSlots.Clear(); foreach (var sl in _vault.KeepSlots) _chestKeepSlots.Add(sl);
             Save();
         }
         if (_expedition.WantsMastery) { _expedition.WantsMastery = false; OpenNav(4); }   // MASTERY (E) — the tree where the points are spent
@@ -5450,7 +5450,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // invisible, and the player's first click on returning answered a dialog they had forgotten.
         _forge.CancelConfirm();
         _training.CancelConfirm();   // an armed RESET ALL TRAINING must not survive leaving the screen
-        _expedition.FilterOpen = false;   // the hunt's CHEST FILTER popover folds when the player walks away
+        _vault.FilterOpen = false;   // the vault's CHEST FILTER popover folds when the player walks away
         // Looked at: the tile's NEW mark goes (its banner, if any, waits on the screen until closed),
         // and the roster's "someone joined" mark is satisfied by a visit.
         _visited.Add(NavActivity[i]);

@@ -189,8 +189,11 @@ public sealed class VaultScreen
         return new Rectangle(x - width, UiKit.TitleTop(GridPanel), width, HeaderButtonH);
     }
 
-    /// <summary>Right to left: OPEN ALL, TRADER, PASTE A CODE. Widths sized to their own labels.</summary>
-    private static readonly int[] HeaderWidths = { 300, 200, 240 };
+    /// <summary>Right to left: OPEN ALL, TRADER, PASTE A CODE, CHEST FILTER. Widths sized to their own labels.</summary>
+    private static readonly int[] HeaderWidths = { 300, 200, 240, 240 };
+
+    /// <summary>The CHEST FILTER's door — the keep-filter moved here from the HUNT (UX V2 P1.1, D12).</summary>
+    private static Rectangle FilterBtn => HeaderButton(3, HeaderWidths[3]);
 
     private static Rectangle OpenAllBtn => HeaderButton(0, HeaderWidths[0]);
     private static Rectangle TraderBtn => HeaderButton(1, HeaderWidths[1]);
@@ -397,6 +400,8 @@ public sealed class VaultScreen
             PasteCode();
             _modalOpenedNow = true;
         }
+        // The keep-filter's door: chest filtering is inventory management, so it lives with the chests.
+        if (_ui.Button(b, FilterBtn, "CHEST FILTER", hit, uiClicked, true)) FilterOpen = !FilterOpen;
 
         // The hairline the action strip stands on, so the buttons read as a header and the cards below
         // as the panel's contents — one rule instead of a gap the eye has to guess at.
@@ -411,6 +416,7 @@ public sealed class VaultScreen
                         UiKit.ContentLeft(GridPanel), y, Dim, UiTypography.Body);
             _ui.TextBig(b, "When one arrives: click the chest to open it. Rest the pointer on the small glass to see what is inside.",
                         UiKit.ContentLeft(GridPanel), y + 34, Dim, UiTypography.Body);
+            DrawFilterIfOpen(b, hit, clicked && !_modalOpenedNow);
             DrawTrader(b, hit, clicked && !_modalOpenedNow);
             DrawInspect(b, hit, clicked && !_modalOpenedNow);
             _modalOpenedNow = false;
@@ -561,6 +567,7 @@ public sealed class VaultScreen
 
         DrawDossierTip(b, sorted);
 
+        DrawFilterIfOpen(b, hit, clicked && !_modalOpenedNow);
         DrawTrader(b, hit, clicked && !_modalOpenedNow);
         DrawInspect(b, hit, clicked && !_modalOpenedNow);
         _modalOpenedNow = false;
@@ -774,6 +781,130 @@ public sealed class VaultScreen
             if (_ui.Button(b, new Rectangle(880, panel.Bottom - 72, 160, 48), "CLOSE", hit, clicked, true))
                 _inspectBuild = null;
         }
+    }
+
+    // ── CHEST FILTER — which chests to keep (UX V2 P1.1: moved here from the HUNT; D12). ────────────────────────
+    //    Host-fed and host-persisted; this screen only edits it and raises FilterDirty. The edit happens in
+    //    DRAW, so the host reads it back on the dirty flag and never pushes the saved value every frame.
+    /// <summary>Chests below this tier never land — they arrive as a little Scrap instead. 0 = all.</summary>
+    public int KeepMinTier { get; set; }
+    /// <summary>Keep only chests whose region favours ANY of these slots (no-lean chests always pass). Empty = any.</summary>
+    public HashSet<ItemBaseType> KeepSlots { get; } = new();
+    /// <summary>Set when the player edited the filter — the host copies it back and saves.</summary>
+    public bool FilterDirty { get; set; }
+    /// <summary>The filter's popover is up. The toolbar button toggles it; its ×, a click outside it, and Escape close it.</summary>
+    public bool FilterOpen { get; set; }
+
+    private const int FilterPopoverW = 326, FilterPopoverH = 420;
+    private Rectangle FilterPopover => new(FilterBtn.X, FilterBtn.Bottom + 10, FilterPopoverW, FilterPopoverH);
+
+    private static readonly ItemBaseType[] SlotChips =
+    {
+        ItemBaseType.Weapon, ItemBaseType.Helm, ItemBaseType.Chest, ItemBaseType.Gloves,
+        ItemBaseType.Boots, ItemBaseType.Charm, ItemBaseType.AbilityFocus, ItemBaseType.Ring,
+    };
+
+    private static string SlotLabel(ItemBaseType t) => t switch
+    {
+        ItemBaseType.AbilityFocus => "FOCUS",
+        ItemBaseType.Chest => "ARMOUR",
+        _ => t.ToString().ToUpperInvariant(),
+    };
+
+    private static string SlotIconKey(ItemBaseType t) => t switch
+    {
+        ItemBaseType.AbilityFocus => "item_slot_focus",
+        _ => "item_slot_" + t.ToString().ToLowerInvariant(),
+    };
+
+    private static string SlotTip(ItemBaseType t) => t switch
+    {
+        ItemBaseType.Weapon => "WEAPON — what your hunter strikes with.",
+        ItemBaseType.Helm => "HELM — head armour.",
+        ItemBaseType.Chest => "ARMOUR — body armour, worn on the chest.",
+        ItemBaseType.Gloves => "GLOVES — hand armour.",
+        ItemBaseType.Boots => "BOOTS — foot armour.",
+        ItemBaseType.Charm => "CHARM — a trinket worn for its power.",
+        ItemBaseType.AbilityFocus => "FOCUS — the piece that channels your skills.",
+        ItemBaseType.Ring => "RING — a ring worn for its power.",
+        _ => SlotLabel(t),
+    };
+
+    /// <summary>The popover, when it is up; a click anywhere outside it (and off its button) closes it.</summary>
+    private void DrawFilterIfOpen(SpriteBatch b, Point hit, bool clicked)
+    {
+        if (!FilterOpen) return;
+        var pop = FilterPopover;
+        if (clicked && !pop.Contains(hit) && !FilterBtn.Contains(hit)) { FilterOpen = false; return; }
+        DrawFilterPopover(b, pop, hit, clicked && pop.Contains(hit));
+    }
+
+    /// <summary>The filter's controls: the lowest tier to keep, and the gear slots — as medallions.</summary>
+    private void DrawFilterPopover(SpriteBatch b, Rectangle pop, Point hit, bool clicked)
+    {
+        const int inset = UiTypography.PanelPadNarrow;
+        _ui.PanelQuiet(b, pop);
+        var inner = new Rectangle(pop.X + inset, pop.Y + inset, pop.Width - inset * 2, pop.Height - inset * 2);
+        var close = UiKit.CloseRect(pop, 36);
+        _ui.TextBig(b, "CHEST FILTER", inner.X, close.Y + 4, Gold, UiTypography.PanelTitle);
+        if (_ui.CloseButton(b, close, hit, clicked)) FilterOpen = false;
+        var y = close.Bottom + 8;
+        _ui.TextBig(b, "WHICH CHESTS TO KEEP", inner.X, y, Slate, UiTypography.Secondary);
+        y += 30;
+
+        _ui.TextBig(b, "LOWEST TIER", inner.X, y, Bone, UiTypography.Secondary);
+        y += UiTypography.Pitch(UiTypography.Secondary);
+        var minus = new Rectangle(inner.X, y, 34, 34);
+        var plus = new Rectangle(inner.Right - 34, y, 34, 34);
+        MiniButton(b, minus, "-", hit);
+        MiniButton(b, plus, "+", hit);
+        _ui.TextCenter(b, KeepMinTier <= 0 ? "ANY TIER" : $"TIER {KeepMinTier} AND UP", inner.Center.X, y + 6, KeepMinTier > 0 ? Gold : Slate);
+        if (UiKit.ClickedIn(minus, hit, clicked) && KeepMinTier > 0) { KeepMinTier -= 1; FilterDirty = true; }
+        if (UiKit.ClickedIn(plus, hit, clicked) && KeepMinTier < 99) { KeepMinTier += 1; FilterDirty = true; }
+
+        y += 48;
+        _ui.TextBig(b, "GEAR SLOTS THE CHEST IS FOR", inner.X, y, Bone, UiTypography.Secondary);
+        y += UiTypography.Pitch(UiTypography.Secondary);
+        string? tip = null;
+        const int cellH = 60;
+        var cellW = inner.Width / 4;
+        for (var i = 0; i < SlotChips.Length; i++)
+        {
+            var slot = SlotChips[i];
+            var cell = new Rectangle(inner.X + (i % 4) * cellW, y + (i / 4) * (cellH + 4), cellW, cellH);
+            var lit = KeepSlots.Contains(slot);
+            var hot = cell.Contains(hit);
+            if (lit) _ui.Fill(b, cell, Gold * 0.16f);
+            var box = hot ? new Rectangle(cell.Center.X - 27, cell.Center.Y - 27, 54, 54)
+                          : new Rectangle(cell.Center.X - 25, cell.Center.Y - 25, 50, 50);
+            var tint = lit || hot ? Color.White : new Color(0x8C, 0x86, 0x80);
+            if (!_ui.Icon(b, SlotIconKey(slot), box, tint))
+                _ui.TextCenterBig(b, SlotLabel(slot), cell.Center.X, cell.Center.Y - 8, tint, UiTypography.Caption);
+            if (lit) Outline(b, cell, Gold * 0.8f, 2);
+            if (hot) tip = SlotTip(slot) + (lit ? " Click to stop keeping its chests." : " Click to keep the chests made for it.");
+            if (UiKit.ClickedIn(cell, hit, clicked))
+            {
+                if (!KeepSlots.Remove(slot)) KeepSlots.Add(slot);
+                FilterDirty = true;
+            }
+        }
+        y += 2 * (cellH + 4) + 6;
+        var all = new Rectangle(inner.X, y, inner.Width, 30);
+        MiniButton(b, all, "ALL SLOTS", hit, KeepSlots.Count == 0);
+        if (UiKit.ClickedIn(all, hit, clicked) && KeepSlots.Count > 0) { KeepSlots.Clear(); FilterDirty = true; }
+        y += 40;
+        _ui.TextBig(b, KeepMinTier > 0 || KeepSlots.Count > 0 ? "OTHER CHESTS TURN INTO A LITTLE SCRAP" : "EVERY CHEST IS KEPT",
+                    inner.X, y, Slate, UiTypography.Caption);
+        if (tip is not null) _ui.HoverTip(b, tip, hit);
+    }
+
+    private void MiniButton(SpriteBatch b, Rectangle r, string label, Point hit, bool lit = false)
+    {
+        var hot = r.Contains(hit);
+        _ui.Fill(b, r, new Color(0x14, 0x10, 0x1A, 0xE0));
+        Outline(b, r, lit ? Gold * 0.8f : hot ? Bone : Dim, 2);
+        _ui.TextCenterBig(b, label, r.Center.X, r.Y + (r.Height - UiTypography.Secondary) / 2 - 1,
+                          lit ? Gold : hot ? Bone : Slate, UiTypography.Secondary);
     }
 
     private void Outline(SpriteBatch b, Rectangle r, Color c, int t)

@@ -67,9 +67,11 @@ public class HuntScreenFeedbackTests
     {
         var src = Source();
 
-        // Item 10: the label says (E) — the MASTERY key — and the press raises WantsMastery. The old
-        // button said (B) and raised WantsBuild, which landed on a screen where points cannot be spent.
-        Assert.Contains("POINT{(Mastery.Available == 1 ? \"\" : \"S\")}  (E)", src);
+        // Item 10: the press raises WantsMastery — the MASTERY tree is where points are spent. The old
+        // button raised WantsBuild, which landed on a screen where points cannot be spent. UX V2 P1.1: the
+        // label names no key any more (the tour and the help sheet teach the keys; a door says what it opens).
+        Assert.Contains("$\"SPEND {Mastery.Available} POINT{(Mastery.Available == 1 ? \"\" : \"S\")}\"", src);
+        Assert.DoesNotContain("(E)\"", src);
         Assert.Contains("WantsMastery = true", src);
         Assert.DoesNotContain("WantsBuild = true", src);
     }
@@ -93,9 +95,12 @@ public class HuntScreenFeedbackTests
 
         // Item 6: the report goes straight to the RunLog on the frame the run ends...
         Assert.Contains("Log.Add(_run!.Report(isRecord: _run.Wave > _recordToBeat))", src);
-        // ...the banner names the wave and points at the log...
-        Assert.Contains("YOUR CHAMPION FELL AT WAVE {_fellWave}", src);
-        Assert.Contains("THE FULL REPORT IS IN THE LOG — PRESS L", src);
+        // ...the fall plate names the wave, the MAIN LIMIT from the report's own thresholds, and is the door
+        // to the log (UX V2 P1.1, brief §22 / D6)...
+        Assert.Contains("FELL AT WAVE {_fellWave}", src);
+        Assert.Contains("MAIN LIMIT \u2014 {rep.LimitLabel()}", src);
+        Assert.Contains("READ THE LOG", src);
+        Assert.Contains("if (UiKit.ClickedIn(r, hit, clicked)) WantsLog = true;", src);
         // ...the log's panel carries the FELL marker...
         Assert.Contains("FELL AT WAVE {r.WallWave}", src);
         // ...and the auto-popup that covered the fall is gone.
