@@ -165,8 +165,21 @@ public static class Display
         bool ShowDamageNumbers = true, bool ShowSkillCallouts = true, bool ShowHitEffects = true, bool ShowScreenFlash = true,
         int UiScalePercent = 100);
 
-    /// <summary>The UI SCALE steps the game offers. 0 is AUTO.</summary>
-    public static readonly int[] UiScaleSteps = { 100, 125, 150, 0 };
+    /// <summary>
+    /// The UI SCALE steps the game OFFERS. 0 is AUTO.
+    /// </summary>
+    /// <remarks>
+    /// <b>150 IS NOT OFFERED YET, AND THE REASON IS VERTICAL.</b> The page a scale leaves is 1920/s wide by
+    /// 1080/s tall, so 150% gives a screen 720 logical pixels of height where its rows, its slot columns and
+    /// its grids were laid out against 1080. Posed at RH_SHOT_UISCALE=150 on 2026-09-01, every converted
+    /// screen overflowed: BUILD's bench readout printed through its third slot row, GEAR's paper doll ran out
+    /// of its panel, TRAITS' permanence line landed on YOU NEED FIRST. Width was fine everywhere — the columns
+    /// already follow <see cref="UiKit.Page"/> — so this is not a layout bug to nudge, it is work: every
+    /// vertical rhythm (row pitch, slot pitch, visible grid rows) has to be derived from the height that is
+    /// actually there rather than assumed. Until that pass lands, offering the step would ship a setting that
+    /// produces a broken screen. The rig can still pose 150 (RH_SHOT_UISCALE) so that work can see it.
+    /// </remarks>
+    public static readonly int[] UiScaleSteps = { 100, 125, 0 };
 
     /// <summary>What a UI SCALE preference resolves to for a present rect this wide: AUTO picks 125 under 1600 px.</summary>
     public static int ResolveUiScale(int percent, int presentWidth)
@@ -260,7 +273,9 @@ public static class Display
             {
                 if (!l.Trim().StartsWith(UiScaleKey, StringComparison.Ordinal)) continue;
                 var v = l.Trim()[UiScaleKey.Length..];
-                uiScale = v == "auto" ? 0 : int.TryParse(v, out var pct) && pct is 100 or 125 or 150 ? pct : 100;
+                // A saved 150 comes back as 125 while the step is not offered (see UiScaleSteps): a preference
+                // must never resolve to a state the game cannot draw.
+                uiScale = v == "auto" ? 0 : int.TryParse(v, out var pct) && pct is 100 or 125 ? pct : v == "150" ? 125 : 100;
             }
             // Lines 6-9 (2026-08-23): the fight's text and effects. Absent in an older file = on.
             return new GamePrefs(mode, window, sfx, music, ask,
