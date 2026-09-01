@@ -46,6 +46,9 @@ public sealed class WaveReplay
         _events = events;
         foreach (var (slot, hp) in startHealth) _health[slot] = hp;
         foreach (var (slot, hp) in maxHealth) _maxHealth[slot] = hp;
+        // The bar's ceiling comes from the pool, so the screen can draw a shield against its own
+        // capacity rather than against whatever the largest grant happened to be.
+        MaxShield = Builds.ShieldRules.CapFor(maxHealth.GetValueOrDefault(0));
 
         EnemyMaxHealth = MathF.Max(1f, enemyHealth);
         EnemyHealth = enemyHealth;
@@ -102,8 +105,14 @@ public sealed class WaveReplay
     /// <summary>True once every beat has been played out — the wave is done animating.</summary>
     public bool Finished => _cursor >= _events.Count;
 
-    /// <summary>The BANKED shield standing in front of the pool at the playhead, in health.</summary>
-    public int BankedShield { get; private set; }
+    /// <summary>
+    /// SHIELD held at the playhead. Reconstructed from the wave's own events, so scrubbing to the
+    /// middle of a fight shows the bar the fight actually had at that moment.
+    /// </summary>
+    public int CurrentShield { get; private set; }
+
+    /// <summary>The ceiling that Shield is drawn against — half the pool.</summary>
+    public int MaxShield { get; private set; }
 
     public int HealthOf(int slot) => _health.GetValueOrDefault(slot);
     private int MaxHealthOf(int slot) => _maxHealth.GetValueOrDefault(slot);
@@ -338,9 +347,19 @@ public sealed class WaveReplay
                 _shieldUntil[e.Slot] = e.AtMs + e.Amount;   // the sim tells us the reach; we just draw it
                 break;
 
-            // The BANKED shield's standing size, as of the playhead — a STATE, so scrubbing works.
-            case BattleEventKind.Shield:
-                BankedShield = e.Amount;
+            // SHIELD is a running total here: the events say what CHANGED, and the replay keeps the
+            // standing figure so a screen that joins mid-wave draws the bar without having seen the
+            // grant that filled it.
+            case BattleEventKind.ShieldGained:
+                CurrentShield += e.Amount;
+                break;
+
+            case BattleEventKind.ShieldAbsorbed:
+                CurrentShield = Math.Max(0, CurrentShield - e.Amount);
+                break;
+
+            case BattleEventKind.ShieldBroken:
+                CurrentShield = 0;
                 break;
         }
     }

@@ -194,6 +194,8 @@ public sealed record SkillDef(
     float ExecuteFraction = 0f,          // HAMMER/FINISH — kills a target under this share of health
     int StunMs = 0,                      // HAMMER/PIN
     bool ShieldInsteadOfDamage = false,  // SNARE/BANKED — the banked total becomes a shield
+    float ShieldFromStoppedBite = 0f,    // SNARE/IRON/PLATING — a stopped bite's share that becomes shield
+    float WaveStartShieldFraction = 0f,  // SNARE/BANKED/CARRIED — shield at each wave's start
     float ReflectFraction = 0f,          // SNARE/JAWS base, deepened by NET
     bool StopsWholeBite = false,         // SNARE/IRON
     float AmplifyPercent = 0f,           // SIGN — how much everything else is multiplied by

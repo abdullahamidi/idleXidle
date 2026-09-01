@@ -219,6 +219,17 @@ public sealed record SkillShape
     public bool FreeOpeningCast { get; init; }
 
     /// <summary>FOCUS — added to the champion's critical chance, in percentage points.</summary>
+    // ── SHIELD (combat-v2). Three dials, because three set rungs need them and nothing else does.
+
+    /// <summary>MACHINE 3p — Shield granted at the start of every wave, as a share of maximum health.</summary>
+    public float WaveStartShieldFraction { get; init; }
+
+    /// <summary>MACHINE 4p — incoming damage multiplier while any Shield is held. 1 = no change.</summary>
+    public float ShieldedDamageTaken { get; init; } = 1f;
+
+    /// <summary>MACHINE 5p — once a wave, prevent the first bite that would actually deal damage.</summary>
+    public bool PreventFirstDamagingBite { get; init; }
+
     public float BonusCritPercent { get; init; }
 
     /// <summary>MARK MASTERY — stretches the amplify window and deepens it.</summary>
@@ -432,6 +443,12 @@ public sealed record SkillShape
             SkillRate = a.SkillRate * b.SkillRate,
             FreeOpeningCast = a.FreeOpeningCast || b.FreeOpeningCast,
             BonusCritPercent = a.BonusCritPercent + b.BonusCritPercent,
+
+            // SHIELD: the wave-start grants add, the shielded-damage multipliers multiply, and
+            // prevention is a rule either half may carry.
+            WaveStartShieldFraction = a.WaveStartShieldFraction + b.WaveStartShieldFraction,
+            ShieldedDamageTaken = a.ShieldedDamageTaken * b.ShieldedDamageTaken,
+            PreventFirstDamagingBite = a.PreventFirstDamagingBite || b.PreventFirstDamagingBite,
             AmplifyWindowMultiplier = a.AmplifyWindowMultiplier * b.AmplifyWindowMultiplier,
             AmplifyPowerBonus = a.AmplifyPowerBonus + b.AmplifyPowerBonus,
             AssassinateThreshold = Math.Max(a.AssassinateThreshold, b.AssassinateThreshold),

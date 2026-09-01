@@ -7,6 +7,36 @@ using IdleXIdle.Core.Expeditions;
 
 namespace IdleXIdle.Core.Builds;
 
+/// <summary>
+/// The rules SHIELD obeys, in one place.
+/// </summary>
+/// <remarks>
+/// <para>
+/// SHIELD is a temporary combat resource that absorbs incoming damage before Health. <b>It is not
+/// Health.</b> It never changes what current health, maximum health, a low-health condition, a
+/// full-health condition, health scaling or a death threshold mean — every one of those reads
+/// <see cref="Champion.Health"/> and only that.
+/// </para>
+/// <para>
+/// One global capacity and one pool, deliberately: a Machine shield, a Nature shield and a Snare
+/// shield would be three resources the player has to hold in their head to read one bar. Everything
+/// that grants Shield grants THIS Shield, additively, to the same ceiling.
+/// </para>
+/// <para>
+/// <b>Wave-local.</b> It resets to zero at the start of every wave, and wave-start effects grant
+/// after that reset. An idle game whose shield accumulated while nothing was happening would make
+/// standing still the strongest defensive play.
+/// </para>
+/// </remarks>
+public static class ShieldRules
+{
+    /// <summary>The ceiling, as a share of the pool: half of maximum health.</summary>
+    public const float CapFraction = 0.5f;
+
+    /// <summary>The most Shield a hunter with this pool may hold.</summary>
+    public static int CapFor(int maxHealth) => (int)MathF.Round(Math.Max(0, maxHealth) * CapFraction);
+}
+
 /// <summary>Live state for ONE character across a whole expedition. Health and cooldowns persist.</summary>
 public sealed class Champion
 {
@@ -37,6 +67,54 @@ public sealed class Champion
 
     /// <summary>Per skill slot: the beat at which a beat-counted skill is ready again (see FormBehaviour.CooldownBeats).</summary>
     public Dictionary<int, int> ReadyAtBeat { get; } = new();
+
+    // ── SHIELD ───────────────────────────────────────────────────────────────────────────────────
+    //
+    // STATE, not an event trail. A screen that opens halfway through a fight must be able to draw the
+    // shield without having witnessed the grant that made it, so the figure lives here beside Health
+    // and the events exist to explain the CHANGES rather than to carry the value.
+
+    /// <summary>Shield held right now. Absorbs incoming damage before <see cref="Health"/> does.</summary>
+    public float CurrentShield { get; private set; }
+
+    /// <summary>The ceiling this hunter's Shield is clamped to — half the pool.</summary>
+    public int MaxShield => ShieldRules.CapFor(MaxHealth);
+
+    /// <summary>
+    /// Grant Shield, clamped to the cap. Returns what was ACTUALLY added, which is zero at the cap.
+    /// </summary>
+    /// <remarks>
+    /// Every producer goes through here — REPAY/BANKED, IRON/PLATING, the MACHINE set, NATURE's
+    /// OVERGROWTH — so the cap is enforced once rather than at four call sites, and a caller can
+    /// report what it really gave rather than what it offered.
+    /// </remarks>
+    public float GainShield(float amount)
+    {
+        if (amount <= 0f) return 0f;
+        var before = CurrentShield;
+        CurrentShield = MathF.Min(MaxShield, CurrentShield + amount);
+        return CurrentShield - before;
+    }
+
+    /// <summary>
+    /// Spend Shield against POST-MITIGATION damage. Returns what the Shield ate; the caller sends the
+    /// remainder to Health.
+    /// </summary>
+    /// <remarks>
+    /// Post-mitigation on purpose: the Shield absorbs the damage the hunter would actually have taken,
+    /// not the raw bite. Subtracting the raw figure would make every other defensive system worth less
+    /// the more Shield you held, which is the opposite of composable.
+    /// </remarks>
+    public float AbsorbWithShield(float damage)
+    {
+        if (damage <= 0f || CurrentShield <= 0f) return 0f;
+        var eaten = MathF.Min(CurrentShield, damage);
+        CurrentShield -= eaten;
+        return eaten;
+    }
+
+    /// <summary>Wave start: Shield is wave-local and always begins at zero.</summary>
+    public void ResetShield() => CurrentShield = 0f;
 }
 
 /// <summary>
@@ -126,6 +204,22 @@ public sealed class WaveMetrics
 
     /// <summary>Health the champion lost during this wave.</summary>
     public int HealthLost { get; set; }
+
+    // ── FOUR DIFFERENT FACTS, KEPT APART. "Damage taken" was one ambiguous number, and once a bite
+    //    can be prevented outright or eaten by a shield it stops answering any of the questions a
+    //    build asks: was I protected, or was I never hit?
+
+    /// <summary>Post-mitigation damage the wave tried to deal — before prevention or Shield.</summary>
+    public float DamageAttempted { get; set; }
+
+    /// <summary>Of that, what a hard preventer stopped outright (FORTIFY, IRON, PLATING).</summary>
+    public float DamagePrevented { get; set; }
+
+    /// <summary>Of the rest, what SHIELD absorbed. Never counts as damage taken.</summary>
+    public float ShieldAbsorbed { get; set; }
+
+    /// <summary>What actually reached the pool. This is the figure REPAY and low-health rules read.</summary>
+    public int HealthDamage { get; set; }
 
     public int DurationMs { get; set; }
 
@@ -597,7 +691,11 @@ public static class SoloBattle
         var secondBreak = 0f;      // DRAIN/HOLLOW — SHRIVEL reaching past the front enemy
         var bites = 0;             // SNARE/MESH and HARDEN — how many bites the trap has answered
         var breaks = new Dictionary<int, int>();   // HAMMER/PRESS — how deep each creature is broken
-        var bankedShield = 0f;     // SNARE/BANKED — what REPAY kept instead of spending, eaten by bites
+        // WHICH BITTEN REACTIONS ANSWER THIS BITE. Decided BEFORE the damage lands, so a trap that
+        // stops a bite prevents it rather than refunding it afterwards — which is what lets a second
+        // preventer see that the bite is already gone and keep its own charge. Hoisted out of the
+        // tick loop: this is walked on every bite and a fresh list per bite is a per-frame allocation.
+        var answering = new List<(int Index, float Reflect, bool Stops)>();
         var steadyAmp = 0f;        // SIGN/STEADY — the swell it has built this wave
         // VOLLEY/TORRENT pays the standing bleed out faster and CARRION makes it linger; both are
         // read from the WOVEN SKILLS at the wave's start rather than set by the first kill, because
@@ -647,6 +745,31 @@ public static class SoloBattle
         var heal = tuning.Heal;
         var healBudget = heal.BudgetFor(champ.MaxHealth, siphon: triggers.Contains(BuildTrigger.Siphon));
         long healedThisWave = 0;
+
+        // ── SHIELD IS WAVE-LOCAL. Zero at the start of every wave, before any wave-start effect
+        //    grants into it. Without the reset an idle run would accumulate a shield while nothing
+        //    was happening, and standing still would be the strongest defensive play in the game.
+        champ.ResetShield();
+
+        /// <summary>MACHINE 5p is once a wave and its charge is spent only on a bite that would land.</summary>
+        var platingSpent = false;
+
+        // Every producer goes through here so the cap is enforced once, the event reports what was
+        // ACTUALLY added, and a grant at the ceiling says so instead of lying about its size.
+        void GrantShield(float amount, int atMs)
+        {
+            var added = champ.GainShield(amount);
+            if (added > 0f)
+                events.Add(new BattleEvent(BattleEventKind.ShieldGained, 0, (int)MathF.Round(added), atMs));
+        }
+
+        // WAVE-START SHIELD — the MACHINE set's 3p rung and BANKED's CARRIED, granted AFTER the reset
+        // so they are a fresh start rather than a carry-over.
+        if (shape.WaveStartShieldFraction > 0f)
+            GrantShield(champ.MaxHealth * shape.WaveStartShieldFraction, 0);
+        foreach (var wsk in skills)
+            if (wsk.Def.WaveStartShieldFraction > 0f)
+                GrantShield(champ.MaxHealth * wsk.Def.WaveStartShieldFraction, 0);
         if (metrics is not null) metrics.CreaturesPresent = creatures.Count;
         // THE BEAT. Actions happen on it and only on it; the first beat of a wave is its breath.
         var beatLen = BeatFor(mods.SkillRate * shape.SkillRate, tuning.BeatMs);
@@ -1594,11 +1717,10 @@ public static class SoloBattle
                     }
 
                     // BANKED — SNARE keeps what it was owed instead of spending it. Through the same
-                    // shield the rest of the game uses, so it decays and is eaten like any other.
+                    // one Shield the rest of the game uses: same cap, same wave reset, same bar.
                     if (vdef.ShieldInsteadOfDamage)
                     {
-                        bankedShield += raw;
-                        events.Add(new BattleEvent(BattleEventKind.Shield, 0, (int)MathF.Round(bankedShield), ms));
+                        GrantShield(raw, ms);
                         continue;
                     }
 
@@ -1756,47 +1878,133 @@ public static class SoloBattle
 
                 // ABSORB — mitigation rises as health falls, to its cap at death's door. The node that
                 // makes a low-health build survivable without making a healthy one invincible.
+                // READS HEALTH, NEVER SHIELD: "how badly hurt am I" is a question about the pool.
                 if (shape.AbsorbAtLowHealth > 0f)
                 {
                     var missing = 1f - champ.Health / (float)Math.Max(1, champ.MaxHealth);
                     taken *= 1f - shape.AbsorbAtLowHealth * missing;
                 }
 
+                // MACHINE 4p — plate holds better while there is plate left. Applied HERE, before the
+                // shield spends itself, so the mitigation and the absorption are not counted twice.
+                if (shape.ShieldedDamageTaken < 1f && champ.CurrentShield > 0f)
+                    taken *= shape.ShieldedDamageTaken;
+
                 taken = MathF.Max(0f, taken - shape.FlatDamageReduction);
+
+                // ── FROM HERE `taken` IS THE POST-MITIGATION WOULD-BE DAMAGE — what the hunter would
+                //    actually lose if nothing else intervened. Everything below decides who pays it:
+                //    a preventer, the Shield, or the pool. The three are different facts and the
+                //    metrics keep them apart. ───────────────────────────────────────────────────────
+                var attempted = taken;
+                if (metrics is not null) metrics.DamageAttempted += attempted;
+
+                // ── HARD PREVENTION, BEFORE ANYTHING IS SPENT. ───────────────────────────────────
+                //
+                // A bite that deals nothing must not consume Shield, must not feed REPAY, and must not
+                // spend a SECOND preventer's once-per-wave charge. IRON used to charge the pool and
+                // refund it a hundred lines later, which made "was this bite stopped?" unanswerable at
+                // the moment anything else needed to know.
+                var prevented = 0f;
 
                 // FORTIFY — the first bite of each wave deals nothing. Worth most where bites are large
                 // and rare, which is precisely a Bruiser band.
-                if (shape.FirstBiteFree && !firstBiteTaken) taken = 0f;
+                if (shape.FirstBiteFree && !firstBiteTaken && taken > 0f)
+                {
+                    prevented += taken;
+                    taken = 0f;
+                }
                 firstBiteTaken = true;
 
-                // REPAY banks what the champion took, per slot, until that slot casts. Banked for
-                // every slot rather than only the one that pays it back, because a build may carry
-                // two and each has its own clock — and because the accumulator has to be running
-                // before the first cast, not started by it.
-                for (var k = 0; k < skills.Count; k++)
-                    if (skills[k].Def.PaysBackDamageTaken > 0f)
-                    {
-                        if (!takenSinceCast.TryGetValue(k, out var bank))
-                            takenSinceCast[k] = bank = new List<(int, float)>();
-                        bank.Add((ms, taken));
-                    }
-
-                // BANKED's shield stands in front of the pool and is eaten first.
-                if (bankedShield > 0f)
+                // The traps that answer this bite, and whether one of them stops it outright. The arm
+                // is consumed here — a trap that fires has fired, whether it reflected or prevented.
+                answering.Clear();
+                for (var idx = 0; idx < skills.Count; idx++)
                 {
-                    var absorbed = Math.Min(bankedShield, taken);
-                    bankedShield -= absorbed;
-                    taken -= absorbed;
+                    var sk = skills[idx];
+                    if (sk.Def.Kind != SkillKind.Reaction || sk.Def.On != ReactionOn.Bitten) continue;
+
+                    // COILED re-arms the TRAP far faster, so it answers more bites. This loop only runs
+                    // for an equipped Trap, so the enchant is naturally dead on any build without one.
+                    var trapBase = (int)(Math.Max(1_000, sk.Def.RearmMs) * sk.Def.CooldownMultiplier);   // RECOIL, BLUNT
+                    if (triggers.Contains(BuildTrigger.Coiled)) trapBase = (int)(trapBase * CoiledCooldownFactor);
+                    var cd = Math.Max(1, (int)(trapBase / Math.Max(0.1f, RateNow())));
+                    if (abs < champ.ReadyAt.GetValueOrDefault(idx, 0)) continue;
+                    champ.ReadyAt[idx] = abs + cd;
+
+                    // MESH and SPITE — the reflect grows with every bite the trap has answered this
+                    // wave, to its own ceiling. Zero growth at the base line, so a plain JAWS is flat.
+                    var reflect = sk.Def.ReflectFraction;
+                    if (sk.Def.ReflectGrowthPerBite > 0f)
+                        reflect += Math.Min(sk.Def.ReflectGrowthCap, sk.Def.ReflectGrowthPerBite * bites);
+                    bites++;
+                    answering.Add((idx, reflect, sk.Def.StopsWholeBite));
                 }
 
-                champ.Health -= (int)MathF.Round(taken);
-                events.Add(new BattleEvent(BattleEventKind.EnemyStrike, 0, (int)MathF.Round(taken), ms));
+                // IRON — the trap stops a whole bite. A stop is prevention now, decided before the pool
+                // or the shield is touched.
+                var ironStopped = 0f;
+                for (var a = 0; a < answering.Count; a++)
+                    if (answering[a].Stops && taken > 0f)
+                    {
+                        ironStopped = taken;
+                        prevented += taken;
+                        taken = 0f;
+                    }
+
+                // MACHINE 5p PLATING — once a wave, the first bite that would ACTUALLY deal damage is
+                // prevented outright, and its would-be damage becomes Shield. `taken > 0f` is the whole
+                // composition rule: a bite IRON already stopped is not eligible, so the charge is still
+                // there for the next real one.
+                var platingStopped = 0f;
+                if (shape.PreventFirstDamagingBite && !platingSpent && taken > 0f)
+                {
+                    platingSpent = true;
+                    platingStopped = taken;
+                    prevented += taken;
+                    taken = 0f;
+                }
+
+                if (metrics is not null) metrics.DamagePrevented += prevented;
+
+                // ── THE SHIELD EATS THE REMAINDER, AND ONLY WHAT GETS PAST IT IS HEALTH DAMAGE. ──
+                var absorbed = champ.AbsorbWithShield(taken);
+                var healthDamage = taken - absorbed;
+                if (absorbed > 0f)
+                {
+                    if (metrics is not null) metrics.ShieldAbsorbed += absorbed;
+                    events.Add(new BattleEvent(BattleEventKind.ShieldAbsorbed, 0, (int)MathF.Round(absorbed), ms));
+                    if (champ.CurrentShield <= 0f)
+                        events.Add(new BattleEvent(BattleEventKind.ShieldBroken, 0, 0, ms));
+                }
+
+                // REPAY banks what the hunter took, per slot, until that slot casts. HEALTH DAMAGE
+                // ONLY: a bite the Shield ate cost the hunter nothing, and paying it back would turn
+                // every defensive layer into an offensive one. Banked for every slot rather than only
+                // the one that pays it back, because a build may carry two and each has its own clock.
+                if (healthDamage > 0f)
+                    for (var k = 0; k < skills.Count; k++)
+                        if (skills[k].Def.PaysBackDamageTaken > 0f)
+                        {
+                            if (!takenSinceCast.TryGetValue(k, out var bank))
+                                takenSinceCast[k] = bank = new List<(int, float)>();
+                            bank.Add((ms, healthDamage));
+                        }
+
+                var healthLost = (int)MathF.Round(healthDamage);
+                champ.Health -= healthLost;
+                if (metrics is not null) metrics.HealthDamage += healthLost;
+                events.Add(new BattleEvent(BattleEventKind.EnemyStrike, 0, healthLost, ms));
 
                 // PAYBACK banks the bite for the next skill; REBOUND turns a share of what LANDED back
                 // into health — after the rest of the branch has had its say, so it reads the real bite.
                 if (shape.BiteFuelBonus > 0f && biteFuel < shape.BiteFuelMax) biteFuel++;
-                if (shape.HealOnBiteFraction > 0f && champ.Alive && taken > 0f)
-                    Heal((int)MathF.Round(taken * shape.HealOnBiteFraction), ms);
+                if (shape.HealOnBiteFraction > 0f && champ.Alive && healthDamage > 0f)
+                    Heal((int)MathF.Round(healthDamage * shape.HealOnBiteFraction), ms);
+
+                // PLATING's reward, once the bite it stopped is settled: the whole of what that bite
+                // would have dealt becomes Shield.
+                if (platingStopped > 0f) GrantShield(platingStopped, ms);
 
                 // THORNS — every biter takes a fraction of its own RAW bite back. Read against the
                 // creature's bite before the champion's mitigation, so PADDING and BULWARK do not
@@ -1826,55 +2034,41 @@ public static class SoloBattle
                     events.Add(new BattleEvent(BattleEventKind.Charge, 0, charge, ms));
                 }
 
-                // TRAP: the only Form that pays for being hit. This is why a build takes it.
-                for (var idx = 0; idx < skills.Count; idx++)
+                // ── THE TRAPS PAY OUT. Their arm was spent above; this is what they do with it. ──
+                //
+                // JAWS REFLECTS THE BITE, it does not throw a blow of its own — which is what "being
+                // attacked works in your favour" actually says. IRON gave that up for the stop, and
+                // REPRISAL buys it back: a stopped bite is ALSO returned, in full.
+                for (var a = 0; a < answering.Count; a++)
                 {
+                    var (idx, reflect, stops) = answering[a];
                     var sk = skills[idx];
-                    if (sk.Def.Kind != SkillKind.Reaction || sk.Def.On != ReactionOn.Bitten) continue;
 
-                    // COILED re-arms the TRAP far faster, so it answers more bites. This loop only runs for
-                    // a woven Trap, so the enchant is naturally dead on any build without one.
-                    var trapBase = (int)(Math.Max(1_000, sk.Def.RearmMs) * sk.Def.CooldownMultiplier);   // RECOIL, BLUNT
-                    if (triggers.Contains(BuildTrigger.Coiled)) trapBase = (int)(trapBase * CoiledCooldownFactor);
-                    var cd = Math.Max(1, (int)(trapBase / Math.Max(0.1f, RateNow())));
-                    if (abs < champ.ReadyAt.GetValueOrDefault(idx, 0)) continue;
-                    champ.ReadyAt[idx] = abs + cd;
-
-                    // JAWS REFLECTS THE BITE, it does not throw a blow of its own — which is what
-                    // "being attacked works in your favour" actually says. The Form's flat value is
-                    // the fallback for a build with no reflect dial at all.
-                    // MESH and HARDEN — the reflect grows with every bite the trap has answered this
-                    // wave, to its own ceiling. Zero growth at the base line, so a plain JAWS is a
-                    // flat fraction exactly as it was.
-                    var reflect = sk.Def.ReflectFraction;
-                    if (sk.Def.ReflectGrowthPerBite > 0f)
-                        reflect += Math.Min(sk.Def.ReflectGrowthCap, sk.Def.ReflectGrowthPerBite * bites);
-                    bites++;
+                    // The figure a reflect is a share OF: what this bite would have dealt. A stopped
+                    // bite reflects its own prevented size, so REPRISAL is worth what it says.
+                    var basis = stops ? ironStopped : attempted;
                     var trapRaw = reflect > 0f
-                        ? taken * reflect
-                        : SkillCatalogue.PoweredBase(sk.Def, resonance);
+                        ? basis * reflect
+                        : stops ? 0f : SkillCatalogue.PoweredBase(sk.Def, resonance);
                     trapRaw *= VowFactor(sk, weaveCtx, shape)
                                // OPENING VOLLEY — the Trap's first spring counts as its first cast.
                                * (castOnce.Add(idx) ? shape.FirstCastMultiplier : shape.LaterCastMultiplier);
 
-                    // IRON stops the whole bite instead of answering it. The champion has already been
-                    // charged for it above, so the stop is a refund — which is also what makes IRON's
-                    // slower re-arm a real price rather than a smaller number.
-                    if (sk.Def.StopsWholeBite)
-                    {
-                        champ.Health += (int)MathF.Round(taken);
-                        // REPRISAL buys the half IRON gave up: the stopped bite is ALSO returned. Without
-                        // this the reinforcement was silently erased one line after it was read, because
-                        // the stop cleared the raw unconditionally.
-                        if (reflect <= 0f) trapRaw = 0f;
-                    }
+                    // PLATING (the JAWS reinforcement) — a stopped bite is also armour: half of what it
+                    // would have dealt becomes Shield.
+                    if (stops && sk.Def.ShieldFromStoppedBite > 0f && ironStopped > 0f)
+                        GrantShield(ironStopped * sk.Def.ShieldFromStoppedBite, ms);
+
                     events.Add(new BattleEvent(BattleEventKind.Skill, idx, 0, ms));
-                    var trapDealt = LandSpread(trapRaw, ms, shape.TargetsFor(sk.Def), sk.Source, sk.Def, abs);
-                    // NATURE'S SIGNATURE follows the damage here too — a Trap that bites back heals
-                    // its sliver. A Trap never CASTS, so the cast-following rules (CHARGE, Spirit's
-                    // prime, Mind's stretch) are rightly silent on this path.
-                    if (sk.Source == Source.Nature && trapDealt > 0f)
-                        Heal((int)MathF.Round(trapDealt * heal.NatureSignatureLeech), ms);
+                    if (trapRaw > 0f)
+                    {
+                        var trapDealt = LandSpread(trapRaw, ms, shape.TargetsFor(sk.Def), sk.Source, sk.Def, abs);
+                        // NATURE'S SIGNATURE follows the damage here too — a Trap that bites back heals
+                        // its sliver. A Trap never CASTS, so the cast-following rules (CHARGE, Spirit's
+                        // prime, Mind's stretch) are rightly silent on this path.
+                        if (sk.Source == Source.Nature && trapDealt > 0f)
+                            Heal((int)MathF.Round(trapDealt * heal.NatureSignatureLeech), ms);
+                    }
                     if (alive == 0) return Kill(ms);
                 }
 

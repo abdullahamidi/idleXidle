@@ -240,7 +240,24 @@ public enum WaveOutcome { Cleared, Wiped, Stalled }
 // rather than re-deriving the sim's rules (a replayed rule is a rule that can drift).
 public enum BattleEventKind
 {
-    Strike, EnemyStrike, Down, Heal, EnemyDown, Skill, Shield, Charge, Aura, Beat,
+    Strike, EnemyStrike, Down, Heal, EnemyDown, Skill, Charge, Aura, Beat,
+
+    /// <summary>
+    /// SHIELD was granted. <c>Amount</c> is what was ACTUALLY added after the cap clamped it, so a
+    /// grant at the ceiling reports zero rather than what it offered.
+    /// </summary>
+    /// <remarks>
+    /// The three shield events explain CHANGES. The standing figure is state — see
+    /// <see cref="Builds.Champion.CurrentShield"/> — because a screen opened halfway through a fight
+    /// must be able to draw the bar without having witnessed the grant that filled it.
+    /// </remarks>
+    ShieldGained,
+
+    /// <summary>SHIELD ate part of a bite. <c>Amount</c> is what it absorbed, post-mitigation.</summary>
+    ShieldAbsorbed,
+
+    /// <summary>The Shield reached zero. Fires on the crossing, once, not on every bite at zero.</summary>
+    ShieldBroken,
 
     /// <summary>
     /// UNDYING caught a killing blow. <c>Amount</c> is how long the steel shows, in ms. Its own kind

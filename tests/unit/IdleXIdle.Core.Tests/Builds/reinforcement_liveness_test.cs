@@ -128,7 +128,7 @@ public class ReinforcementLivenessTests
                 {
                     case BattleEventKind.Strike: dealt += e.Amount; break;
                     case BattleEventKind.Heal: healed += e.Amount; break;
-                    case BattleEventKind.Shield: shielded += e.Amount; break;
+                    case BattleEventKind.ShieldGained: shielded += e.Amount; break;
                 }
         }
         return new Outcome(dealt, healed, shielded, champ.Health, run.Wave);
