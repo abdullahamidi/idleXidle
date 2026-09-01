@@ -107,6 +107,8 @@ public sealed class RunLog
             TargetsPerActivation = r.TargetsPerActivation,
             CreaturesPerWave = r.CreaturesPerWave,
             HealthLostPerWaveFraction = r.HealthLostPerWaveFraction,
+            ShieldAbsorbedFraction = r.ShieldAbsorbedFraction,
+            ShieldAbsorbedPerWaveFraction = r.ShieldAbsorbedPerWaveFraction,
             SecondsPerWave = r.SecondsPerWave,
             SampledWaves = r.SampledWaves,
         };
@@ -136,6 +138,8 @@ public sealed class RunLog
             TargetsPerActivation = s.TargetsPerActivation,
             CreaturesPerWave = s.CreaturesPerWave,
             HealthLostPerWaveFraction = s.HealthLostPerWaveFraction,
+            ShieldAbsorbedFraction = s.ShieldAbsorbedFraction,
+            ShieldAbsorbedPerWaveFraction = s.ShieldAbsorbedPerWaveFraction,
             SecondsPerWave = s.SecondsPerWave,
             SampledWaves = s.SampledWaves,
         };

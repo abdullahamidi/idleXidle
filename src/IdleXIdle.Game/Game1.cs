@@ -1538,7 +1538,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // `telegraph`, `combat` and `boss2` posed the manual-combat screen for screenshots. That
             // screen is gone, so they had nothing to pose.
             if (sm is "vfx" or "forge" or "farm" or "dust" or "world"
-                or "region2" or "region3" or "conquered" or "mapdeep" or "maplocked" or "help" or "expedition" or "fight" or "welcome" or "boss" or "bossdebug"
+                or "region2" or "region3" or "conquered" or "mapdeep" or "maplocked" or "help" or "expedition" or "fight" or "fightshield" or "welcome" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "trainingpoor" or "trainingreset" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
                 or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "traitlit" or "traitterm" or "traitterminal"
                 or "roster" or "rosterlocked" or "rosterswitch" or "warrenready" or "warrenfresh" or "weave" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
@@ -1793,7 +1793,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     if (sm == "trainingreset") _hunter.AddMaterial(Material.Crystal, 1);
                 }
 
-                if (sm is "fight" or "welcome" or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "runlog")
+                if (sm is "fight" or "welcome" or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "fightshield" or "runlog")
                 {
                     // `fightflash` pins the hit flash so a still capture can prove the white silhouette draws.
                     if (sm == "fightflash") _expedition.DevHoldFlash = true;
@@ -1809,7 +1809,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // (ALWAYS ON / WHEN BITTEN, rather than a beat count) went unphotographed for
                     // exactly that reason. One skill also cannot show the thing the rework is for: two
                     // actives leaving the plain swing most of its beats.
-                    if (sm is "fight" or "fightswing" or "fightflash")
+                    if (sm is "fight" or "fightswing" or "fightflash" or "fightshield")
                     {
                         _loadout.SkillCapacity = Math.Max(_loadout.SkillCapacity, 4);
                         // The roads, or every skill but the champion's own is refused and the fixture
@@ -1844,7 +1844,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // `fightgear` dresses the Hunter before the fight opens. A fresh save wears nothing, so
                     // a plain `fight` capture can never show worn equipment — and worn equipment is exactly
                     // what the rig bindings need verifying against.
-                    if (sm is "fightgear" or "fightswing" or "fightreport" or "fightfall" or "runlog")
+                    if (sm is "fightgear" or "fightswing" or "fightreport" or "fightfall" or "runlog" or "fightshield")
                     {
                         var worn = new[]
                         {
@@ -1852,11 +1852,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             ItemBaseType.Gloves, ItemBaseType.Boots,
                         };
                         var wrar = new[] { Rarity.Legendary, Rarity.Epic, Rarity.Rare, Rarity.Epic, Rarity.Rare };
+                        // `fightshield` wears the FULL MACHINE SET, because SHIELD has no other way onto
+                        // the screen: the strip, the standing barrier and the SHIELDED chip are all states
+                        // no existing capture mode could pose, and a state nothing can pose is a state
+                        // nobody has ever looked at. Five MACHINE pieces open the 3-piece wave-start
+                        // shield, so the bar is filled from the wave's first frame rather than depending
+                        // on a grant landing in the instant the shutter opens.
+                        var setEl = sm == "fightshield" ? Source.Machine : Source.Nature;
                         for (var i = 0; i < worn.Length; i++)
                             _hunter.Equip(new ItemInstance
                             {
                                 InstanceId = $"fg{i}", BaseType = worn[i], Rarity = wrar[i],
-                                SellValue = 40 + i * 20, Element = Source.Nature, ItemLevel = 30 + i * 5,
+                                SellValue = 40 + i * 20, Element = setEl, ItemLevel = 30 + i * 5,
                             });
                     }
                     _expedition.Loadout = _loadout;
@@ -1866,7 +1873,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // attention cue (a waiting chest + unspent mastery points).
                     // Not for fightreport: the welcome-back toast outranks the HunterDown overlay in the
                     // arena's priority list, so it would hide the very screen that capture exists to show.
-                    if (sm is not ("fightreport" or "fightfall" or "runlog" or "welcome"))
+                    // No toast over `fightshield`: it would sit on the very strip the capture is for.
+                    if (sm is not ("fightreport" or "fightfall" or "runlog" or "welcome" or "fightshield"))
                     {
                         _bootMessage = "WELCOME BACK\n+140 GLEAM EARNED WHILE AWAY";   // the short-trip toast
                         _bootColor = Gold; _bootTimer = 7f;

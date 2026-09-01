@@ -1112,6 +1112,7 @@ public sealed class HuntScreen
         // the aura off screen for nearly half the cycle — which is why it read as absent.
         PulseAuraOnClock(dt);
         HoldAura();   // re-asked every frame; VfxPlayer drops it the moment we stop
+        HoldShieldBarrier();
 
         if (_breakTimer > 0f)
         {
@@ -1333,6 +1334,33 @@ public sealed class HuntScreen
                 case BattleEventKind.Charge:
                     _chargeNow = e.Amount;   // the pool AFTER the change; 0 is REND's dump
                     break;
+
+                // ── SHIELD. Three events, three different weights of feedback. ────────────────────
+                case BattleEventKind.ShieldGained:
+                    // GAIN IS THE ONE WORTH A NUMBER (§24). It is a thing the build DID, it is rare
+                    // enough not to be spam, and the amount is the whole point of the rungs and skills
+                    // that grant it. The wave-start grant arrives at 0 ms with the bar already drawn,
+                    // so it is not said — nothing happened on screen for it to explain.
+                    _shieldSeen = true;
+                    if (e.AtMs > 0 && ShowDamageNumbers) Say($"+{e.Amount} SHIELD", Steel);
+                    _vfx.Play("fx_shield", ChampBox.Center.X, ChampBox.Center.Y - 20, scale: 3, fps: 12f, tint: Steel);
+                    break;
+
+                case BattleEventKind.ShieldAbsorbed:
+                    // ABSORPTION IS NOT A NUMBER. It happens on every bite a shielded champion takes,
+                    // and a figure on each one would bury the health damage beside it — which is the
+                    // number that actually matters. The bar falls, the barrier takes a small hit, and
+                    // that is the whole of it.
+                    _shieldSeen = true;
+                    _vfx.Play("fx_shield", ChampBox.Center.X, ChampBox.Center.Y - 20, scale: 2, fps: 16f, tint: Steel);
+                    break;
+
+                case BattleEventKind.ShieldBroken:
+                    // BREAKING IS LOUD, because from the next bite the player is paying in health.
+                    Say("SHIELD BROKEN", Steel);
+                    Sound?.Play("sfx_champ_down", 0.30f, vary: 0.05f);
+                    _vfx.Play("fx_shield", ChampBox.Center.X, ChampBox.Center.Y - 20, scale: 4, fps: 9f, tint: Steel);
+                    break;
             }
         }
 
@@ -1520,7 +1548,6 @@ public sealed class HuntScreen
         // Champion (arena left). Name/HP live in the top-left HUD.
         var push = (int)(_champLunge * 40f);
         var cbox = new Rectangle(ChampBox.X + push, ChampBox.Y, ChampBox.Width, ChampBox.Height);
-        if (_replay!.IsShielded(0)) Outline(b, new Rectangle(cbox.X - 4, cbox.Y - 4, cbox.Width + 8, cbox.Height + 8), Steel, 4);
         DrawChampion(b, cbox, dead: _mode == Mode.Downed);
 
         _vfx.Draw(b);
@@ -2244,6 +2271,11 @@ public sealed class HuntScreen
         Row("AVERAGE HIT", $"{r.AverageHitSize:F0}", "");
         Row("REACH", $"{r.TargetsPerActivation:F1}", $"of {r.CreaturesPerWave:F1} creatures per cast");
         Row("HEALTH LOST PER WAVE", $"{r.HealthLostPerWaveFraction * 100f:F0}", "% of your health");
+        // SHIELD ABSORBED sits beside HEALTH LOST because they are the two halves of one question —
+        // what the wave landed, and what it landed ON. Never shown at zero: a build with no shield
+        // would otherwise read a row of nothing every run and learn to skip past the rows.
+        if (r.ShieldAbsorbedFraction > 0f)
+            Row("SHIELD ABSORBED", $"{r.ShieldAbsorbedFraction * 100f:F0}", "% of what the wave landed");
         Row("TIME PER WAVE", $"{r.SecondsPerWave:F1}", "seconds");
 
         // RIGHT: what changed since the last run here — the core concept, ranked as such.
@@ -2400,14 +2432,51 @@ public sealed class HuntScreen
         var hp = Math.Max(0, _replay?.HealthOf(0) ?? 0);
         var hpText = $"{hp} / {_champ?.MaxHealth ?? 0}";
         var hpTextW = _ui.MeasureBig(hpText, UiTypography.Body);
-        var hpBar = new Rectangle(x, y + 2, Math.Max(120, right - powerW - 16 - x - hpTextW - 12), 26);
+        var barW = Math.Max(120, right - powerW - 16 - x - hpTextW - 12);
+
+        // ── SHIELD sits ABOVE the pool, never over it. ────────────────────────────────────────────
+        // The brief's own test of this line is that "400 health and no shield" must be one glance away
+        // from "400 health and 200 shield", and an overlay cannot do that: it hides the number the
+        // player is actually watching. So the shield gets its own strip, thinner than the pool because
+        // it is the smaller promise, and drawn only for a build that has one — a permanently empty
+        // strip on every other build would be noise that means nothing.
+        //
+        // NOT COLOUR ALONE (§22): steel rather than the pool's red, half the height, its own hard edge,
+        // vertical scoring across the fill, and the word SHIELD beside it. A player who cannot separate
+        // steel from red still has the geometry, the ticks and the label.
+        if (ShieldStripShown)
+        {
+            var sBar = new Rectangle(x, y - ShieldStripH - 3, barW, ShieldStripH);
+            _ui.Fill(b, sBar, new Color(0x0D, 0x11, 0x16));
+            Outline(b, sBar, PlateEdge, 1);
+            var frac = _replay!.MaxShield <= 0 ? 0f
+                     : Math.Clamp(_replay.CurrentShield / (float)_replay.MaxShield, 0f, 1f);
+            if (frac > 0f)
+            {
+                var fillW = Math.Max(1, (int)((sBar.Width - 2) * frac));
+                var fill = new Rectangle(sBar.X + 1, sBar.Y + 1, fillW, sBar.Height - 2);
+                _ui.Fill(b, fill, Steel);
+                // The scoring — plates, not a smooth meter. Reads as SHIELD without reading its colour.
+                for (var sx2 = fill.X + 5; sx2 < fill.Right - 1; sx2 += 6)
+                    _ui.Fill(b, new Rectangle(sx2, fill.Y, 1, fill.Height), new Color(0x0D, 0x11, 0x16, 0x90));
+            }
+            // The word AND the figure on one line. Split across the strip and a chip below they read
+            // as a column — SHIELD, then 243 / 243 under it — and a player scanning that column has
+            // every reason to think the pool's numbers belong to the shield.
+            _ui.TextBig(b, _replay.CurrentShield > 0 ? $"SHIELD {_replay.CurrentShield}" : "SHIELD",
+                        sBar.Right + 12, sBar.Y - 3,
+                        _replay.CurrentShield > 0 ? Steel : UiInk.Disabled, UiTypography.Caption);
+        }
+
+        var hpBar = new Rectangle(x, y + 2, barW, 26);
         _ui.BarArt(b, hpBar, _replay?.HealthFractionOf(0) ?? 1f, "health");
         _ui.TextBig(b, hpText, hpBar.Right + 12, y, Bone, UiTypography.Body);
 
         // Line 3 — statuses: only the ones this build has, only while they say something.
         y += UiTypography.Pitch(UiTypography.Body) + 6;
         var sx = x;
-        if (_replay?.IsShielded(0) == true) sx += Chip(b, sx, y, "SHIELDED", Steel, PlateEdge) + 8;
+        // NO SHIELD CHIP. The strip above says the word and the figure together; a chip repeating it
+        // is a second readout of one fact, and the status row exists for the states that have no bar.
         if (_undyingLive)
         {
             var spent = _champ?.UndyingSpent == true;
@@ -2623,6 +2692,22 @@ public sealed class HuntScreen
     private void Hairline(SpriteBatch b, int x, int y, int w, Color c) => _ui.Fill(b, new Rectangle(x, y, w, 1), c);
 
     private static readonly Color PlateEdge = new(0x74, 0x62, 0x3E);
+
+    /// <summary>How tall the shield strip is — half the life bar, because it is the smaller promise.</summary>
+    private const int ShieldStripH = 12;
+
+    /// <summary>
+    /// Whether this build has any shield at all, and so whether the strip is drawn.
+    /// </summary>
+    /// <remarks>
+    /// True from the moment a wave grants shield and for the rest of the run, rather than only while
+    /// some is standing: a strip that appears and vanishes as bites land is a flicker, and a player
+    /// cannot learn the shape of a bar they only see in the instants it is full. A build with no shield
+    /// mechanic never sees it at all.
+    /// </remarks>
+    private bool ShieldStripShown => _shieldSeen && _replay is not null;
+
+    private bool _shieldSeen;
 
     // ── The right UTILITY (UX V2 P1.1, brief §20): idle rate · rewards · doors. Lightweight. ───────────
     //    The CHEST FILTER row and its popover moved to the VAULT toolbar (D12): chest filtering is inventory
@@ -3229,6 +3314,39 @@ public sealed class HuntScreen
         _vfx.Hold(FxFor(_auraFxKey ?? "aura"), ChampBox.Center.X, (int)(ChampBox.Bottom + 18 - h / 2f),
                   AuraScale, 10f, colour * level);
     }
+
+    /// <summary>
+    /// THE STANDING BARRIER — held for exactly as long as the champion holds SHIELD (§23).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// It was an OUTLINE first, and the capture settled it: a 400×430 rectangle around a person does not
+    /// read as a barrier, it reads as a selection box in a level editor — and it enclosed a great deal
+    /// of empty arena, because the champion's layout box is far larger than the champion. The effect
+    /// layer already knows how to hold a state (<see cref="HoldAura"/>), and holding the shield strip is
+    /// both the smaller change and the better picture.
+    /// </para>
+    /// <para>
+    /// Restrained on purpose. It sits at about a third of the aura's size so it hugs the figure rather
+    /// than standing off it, its alpha rests low enough to read through, and it breathes slowly: SHIELD
+    /// is a STATE, and a state that flashes is indistinguishable from an event.
+    /// </para>
+    /// </remarks>
+    private void HoldShieldBarrier()
+    {
+        if (_replay?.HasShield != true || _mode == Mode.Downed) return;
+        var breathe = ShieldShellRest + ShieldShellSwing * (0.5f + 0.5f * MathF.Sin(_anim * 1.6f));
+        var h = ShieldShellScale * VfxPlayer.BaseUnitPx;
+        _vfx.Hold(FxFor("shield"), ChampBox.Center.X, (int)(ChampBox.Bottom - 40 - h / 2f),
+                  ShieldShellScale, 8f, Steel * breathe);
+    }
+
+    /// <summary>The shell's size — about a third of the aura, so it wraps the figure instead of the arena.</summary>
+    private const float ShieldShellScale = 2.6f;
+    /// <summary>How present it is while nothing is happening to it.</summary>
+    private const float ShieldShellRest = 0.16f;
+    /// <summary>...and how far the slow breath carries it above that.</summary>
+    private const float ShieldShellSwing = 0.14f;
 
     /// <summary>
     /// How big the field is, as a multiple of the effect layer's 104 px base unit.

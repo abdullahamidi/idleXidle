@@ -488,7 +488,9 @@ public sealed class GearScreen
             Ring(b, chip, Gold, 1);
             if (_ui.Assets.Get($"source_{a.Element.ToString().ToLowerInvariant()}") is { } g) b.Draw(g, new Rectangle(chip.X + 6, chip.Y + 5, 20, 20), Color.White);
             _ui.TextBig(b, text, chip.X + 30, chip.Y + 5, Gold, UiTypography.Secondary);
-            Tip(chip, hit, $"{ElementSets.Name(a.Element)} — {a.Tier.Line}");
+            Tip(chip, hit, a.Tier.Pieces == ElementSets.Rungs[^1]
+                ? $"{ElementSets.Name(a.Element)} · {ElementSets.CapstoneName(a.Element)} — {a.Tier.Line}"
+                : $"{ElementSets.Name(a.Element)} — {a.Tier.Line}");
             chipX -= 8;
         }
 
@@ -686,10 +688,39 @@ public sealed class GearScreen
                 var mark = new Rectangle(x + 2, y + 6, 12, 12);
                 if (reached) _ui.Fill(b, mark, Bone); else Ring(b, mark, reaches ? Gold : Slate, 1);
                 _ui.TextBig(b, $"{t.Pieces}", x + 22, y, reached ? Bone : reaches ? Gold : Slate, UiTypography.Body);
-                var lineText = _ui.ShortenBig(t.Line, w - 44 - 64, UiTypography.Body);
-                _ui.TextBig(b, lineText, x + 44, y, reached ? Bone : reaches ? Gold : Slate, UiTypography.Body);
-                _ui.TextRightBig(b, reached ? "ON" : reaches ? "WEARING THIS REACHES IT" : "", x + w, y, reached ? Green : Gold, UiTypography.Secondary);
-                y += UiTypography.Pitch(UiTypography.Body);
+                var ink = reached ? Bone : reaches ? Gold : Slate;
+                var lx = x + 44;
+                // THE CAPSTONE IS NAMED, and the name is what the rung is remembered by. A player talks
+                // about running MOMENTUM, not about their fifth Body piece — so the word is on the row,
+                // ahead of the sentence, and it keeps its emphasis whether or not the rung is reached:
+                // an unreached capstone is the thing the ladder is FOR.
+                if (t.Pieces == ElementSets.Rungs[^1])
+                {
+                    var cap = ElementSets.CapstoneName(el);
+                    _ui.TextBig(b, cap, lx, y, reached ? Gold : ink, UiTypography.Body);
+                    lx += _ui.MeasureBig(cap + "  ", UiTypography.Body);
+                }
+                // THE RIGHT LABEL'S ROOM IS MEASURED, not guessed at 64px. A fixed reserve was wrong in
+                // both directions: it truncated a rung's sentence when there was no label to make room
+                // for, and it was far too small for "WEARING THIS REACHES IT" when there was.
+                var right = reached ? "ON" : reaches ? "WEARING THIS REACHES IT" : "";
+                var rightW = right.Length == 0 ? 0 : _ui.MeasureBig(right, UiTypography.Secondary) + 12;
+                if (right.Length > 0)
+                    _ui.TextRightBig(b, right, x + w, y, reached ? Green : Gold, UiTypography.Secondary);
+
+                // THE RULE IS WRAPPED, NOT CUT. This column is 320 px wide and MACHINE's third rung is
+                // sixty-three characters, so a single line ended "…worth 12% of your maximum h…" — a
+                // sentence the player cannot finish is a rung they cannot evaluate, which is the whole
+                // job of this list. Continuation lines hang under the sentence, past the number and the
+                // capstone name, so the column still reads as one row per rung.
+                var first = true;
+                foreach (var wrapped in _ui.WrapBig(t.Line, x + w - (first ? rightW : 0) - lx, UiTypography.Body))
+                {
+                    if (y + UiTypography.Pitch(UiTypography.Body) > floor) break;
+                    _ui.TextBig(b, wrapped, lx, y, ink, UiTypography.Body);
+                    y += UiTypography.Pitch(UiTypography.Body);
+                    if (first) { lx = x + 44; first = false; }
+                }
             }
         }
 

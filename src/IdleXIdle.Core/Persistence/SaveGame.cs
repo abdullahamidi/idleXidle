@@ -359,6 +359,12 @@ public sealed record RunReportSave
     public float TargetsPerActivation { get; init; }
     public float CreaturesPerWave { get; init; }
     public float HealthLostPerWaveFraction { get; init; }
+
+    /// <summary>What SHIELD ate, as a share of everything the wave landed. Zero on a save from before shield existed.</summary>
+    public float ShieldAbsorbedFraction { get; init; }
+
+    /// <summary>Shield absorbed per wave as a share of the pool. Zero on a save from before shield existed.</summary>
+    public float ShieldAbsorbedPerWaveFraction { get; init; }
     public float SecondsPerWave { get; init; }
     public int SampledWaves { get; init; }
 }

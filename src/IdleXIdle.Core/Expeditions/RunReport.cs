@@ -74,6 +74,20 @@ public sealed record RunReport
     /// <summary>Share of the champion's pool lost per wave. Points at sustain.</summary>
     public required float HealthLostPerWaveFraction { get; init; }
 
+    /// <summary>
+    /// What SHIELD ate, as a share of everything the wave landed on the champion — absorbed plus what
+    /// reached health. Zero for a build with no shield, which is how the log knows not to draw the row.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately NOT folded into <see cref="AbsorbedFraction"/>, which answers a different question:
+    /// that one is armour eating the champion's OUTGOING damage, this one is shield eating the wave's
+    /// INCOMING damage. One number for both would be a number for neither.
+    /// </remarks>
+    public float ShieldAbsorbedFraction { get; init; }
+
+    /// <summary>Shield absorbed per wave, as a share of the champion's pool — the figure the log shows.</summary>
+    public float ShieldAbsorbedPerWaveFraction { get; init; }
+
     /// <summary>Seconds to clear a wave. Points at throughput.</summary>
     public required float SecondsPerWave { get; init; }
 
@@ -201,6 +215,8 @@ public sealed class RunRecorder
         var struck = sample.Sum(m => m.TargetsStruck);
         var present = sample.Sum(m => m.CreaturesPresent);
         var lost = sample.Sum(m => m.HealthLost);
+        var shieldAte = sample.Sum(m => m.ShieldAbsorbed);
+        var healthAte = (float)sample.Sum(m => m.HealthDamage);
         var ms = sample.Sum(m => m.DurationMs);
         var n = Math.Max(1, sample.Count);
 
@@ -219,6 +235,8 @@ public sealed class RunRecorder
             TargetsPerActivation = activations <= 0 ? 0f : struck / (float)activations,
             CreaturesPerWave = present / (float)n,
             HealthLostPerWaveFraction = championMaxHealth <= 0 ? 0f : lost / (float)n / championMaxHealth,
+            ShieldAbsorbedFraction = shieldAte + healthAte <= 0f ? 0f : shieldAte / (shieldAte + healthAte),
+            ShieldAbsorbedPerWaveFraction = championMaxHealth <= 0 ? 0f : shieldAte / n / championMaxHealth,
             SecondsPerWave = ms / 1000f / n,
             SampledWaves = sample.Count,
         };

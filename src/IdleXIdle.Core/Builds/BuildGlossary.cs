@@ -25,6 +25,21 @@ namespace IdleXIdle.Core.Builds;
 /// </remarks>
 public static class BuildGlossary
 {
+    /// <summary>
+    /// SHIELD — the one word the game uses for the resource, and the one sentence that explains it.
+    /// </summary>
+    /// <remarks>
+    /// The resource is called SHIELD everywhere a player can read it. PLATING, BANKED and OVERGROWTH
+    /// are the names of things that GRANT it — a capstone and a variation may have their own flavour,
+    /// the resource may not, because a player who has learned one word should never have to discover
+    /// that "barrier" and "ward" were the same bar. Written here rather than in a screen so the game
+    /// has exactly one copy of it (see the class remarks).
+    /// </remarks>
+    public const string ShieldWord = "SHIELD";
+
+    /// <summary>The sentence shown the first time SHIELD appears, and in the glossary after that.</summary>
+    public const string ShieldRule = "SHIELD absorbs incoming damage before HEALTH.";
+
     /// <summary>What a Source is for, and the shape of its matchup.</summary>
     /// <remarks>
     /// A Source is the only lever whose value depends on WHERE you are rather than on your build, so

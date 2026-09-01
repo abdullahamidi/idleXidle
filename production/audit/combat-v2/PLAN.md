@@ -265,3 +265,64 @@ which is the preventer the brief itself names beside MACHINE's, and the only one
 composition being proved is now one someone can actually assemble.
 
 **Green:** 1296/1296 unit · all gates · boot.
+
+---
+
+## 7. C5 — presentation
+
+**Done.** SHIELD is now something the player can see, in one word, in one place, everywhere.
+
+### The Hunt HUD
+
+A **thin steel strip immediately above the pool**, never over it — an overlay would hide the number the
+player is actually watching, and the brief's own test of the line is that "400 health and no shield"
+must be one glance from "400 health and 200 shield". Not colour alone (§22): half the pool's height,
+its own hard edge, vertical scoring across the fill so it reads as plates rather than a meter, and the
+word and figure beside it. Drawn from the moment a run first grants shield and for the rest of it,
+rather than only while some is standing — a strip that appears and vanishes as bites land is a flicker,
+and a bar you only see full is a bar you cannot learn.
+
+The **standing barrier** was an outline first, and the capture settled it: a 400×430 rectangle around a
+person reads as a selection box in a level editor, and it enclosed a great deal of empty arena because
+the champion's layout box is far larger than the champion. It is a held effect now (`VfxPlayer.Hold`,
+the same infrastructure the aura uses) at about a third of the aura's size, resting low and breathing
+slowly — SHIELD is a **state**, and a state that flashes is indistinguishable from an event.
+
+**Gain says `+42 SHIELD`; absorption says nothing** (§24). Absorption happens on every bite a shielded
+champion takes, and a figure on each would bury the health damage beside it — which is the number that
+matters. **Breaking is loud**, because from the next bite the player is paying in health.
+
+### The word collision §26 exists to prevent — found and fixed
+
+`WaveReplay.IsShielded(slot)` was fed by the **UNDYING** event. The chip it drew said `SHIELDED` and
+meant "undying is covering you", beside a bar that says SHIELD and means the resource — and UNDYING
+already has its own chip two positions along, so the screen was saying one thing twice under two names.
+It is `HasShield` now, meaning `CurrentShield > 0`, and the dead `_shieldUntil` window went with it.
+The duplicate SHIELD chip in the status row went too: the strip says the word and the figure together,
+and the status row is for the states that have no bar.
+
+### Telemetry and the log
+
+`RunReport` gained `ShieldAbsorbedFraction` and `ShieldAbsorbedPerWaveFraction`, carried through
+`RunLog` and the save. The Expedition Log shows **SHIELD ABSORBED** beside HEALTH LOST — the two halves
+of one question, what the wave landed and what it landed on — and never at zero, because a build with
+no shield would otherwise read a row of nothing every run and learn to skip the rows. `AbsorbedFraction`
+is untouched: that one is armour eating the champion's *outgoing* damage, a different question (§25).
+
+### The set ladder
+
+The capstone is **named on its rung** — a player talks about running MOMENTUM, not about their fifth
+Body piece — and keeps its emphasis whether reached or not, because an unreached capstone is what the
+ladder is *for*. Two fixture bugs fell out of photographing it: the right-hand label's room was a fixed
+64 px, which truncated a rung's sentence when there was no label and was far too small for "WEARING THIS
+REACHES IT" when there was; and the rules were cut rather than wrapped, so MACHINE's third rung ended
+`…worth 12% of your maximum h…`. A rule the player cannot finish reading is a rung they cannot evaluate.
+
+### `fightshield` — the fixture that made all of this visible
+
+Every one of these states — the strip, the barrier, the callout, the chip — was a state **no capture
+mode could pose**, and a state nothing can pose is a state nobody has ever looked at. `fightshield`
+wears the full MACHINE set, so the 3-piece wave-start shield fills the bar from the wave's first frame
+rather than depending on a grant landing in the instant the shutter opens.
+
+**Green:** 1303/1303 unit · all gates · boot · photographed at 1280×720.

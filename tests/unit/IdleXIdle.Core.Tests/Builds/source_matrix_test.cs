@@ -132,4 +132,27 @@ public class SourceMatrixTests
             foreach (var r in v.Reinforcements)
                 Assert.True(r.Modify is not null, $"{def.Id}/{v.Name}/{r.Name} carries no change at all");
     }
+
+    /// <summary>
+    /// THE SIX MOVES THE BRIEF NAMES, pinned one by one (§70).
+    /// </summary>
+    /// <remarks>
+    /// The matrix above proves the SHAPE is right — two Active and two Passive per Source — but a shape
+    /// can be satisfied by the wrong assignment. These six are the ones the design changed on purpose
+    /// and the ones every screen shows: the skill tree draws its glyph, its colour and its branch text
+    /// from <c>variation.Source</c>, so a stale association here is a stale association everywhere at
+    /// once. Named individually so a regression says WHICH one moved back.
+    /// </remarks>
+    [Theory]
+    [InlineData("hammer_blow", "FINISH", Source.Shadow)]
+    [InlineData("volley_spray", "CLUSTER", Source.Body)]
+    [InlineData("volley_weep", "TORRENT", Source.Nature)]
+    [InlineData("drain_drink", "SIPHON", Source.Machine)]
+    [InlineData("drain_wilt", "SUP", Source.Body)]
+    [InlineData("drain_wilt", "SHRIVEL", Source.Mind)]
+    public void test_a_variation_the_rework_moved_carries_its_new_source(string skillId, string variation, Source source)
+    {
+        var v = SkillCatalogue.ById(skillId).Variations.Single(x => x.Name == variation);
+        Assert.Equal(source, v.Source);
+    }
 }

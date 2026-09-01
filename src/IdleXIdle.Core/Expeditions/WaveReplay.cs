@@ -25,7 +25,6 @@ public sealed class WaveReplay
     private readonly IReadOnlyList<BattleEvent> _events;
     private readonly Dictionary<int, int> _health = new();
     private readonly Dictionary<int, int> _maxHealth = new();
-    private readonly Dictionary<int, int> _shieldUntil = new();
     private int _cursor;
     private float _playheadMs;
 
@@ -142,9 +141,17 @@ public sealed class WaveReplay
         return crossed;
     }
 
-    /// <summary>Whether a BULWARK is currently covering this slot — the Defender's reach, made visible.</summary>
-    public bool IsShielded(int slot) =>
-        _shieldUntil.TryGetValue(slot, out var until) && _playheadMs < until;
+    /// <summary>
+    /// Whether the champion is holding SHIELD right now — the one meaning that word has.
+    /// </summary>
+    /// <remarks>
+    /// This used to be <c>IsShielded(slot)</c>, fed by the UNDYING event and meaning "undying is
+    /// covering you". The chip it drew said SHIELDED beside a bar that says SHIELD and meant something
+    /// else, which is precisely the collision the brief's one-word rule exists to prevent — and
+    /// UNDYING already has its own chip two positions along, so the screen was saying the same thing
+    /// twice under two names.
+    /// </remarks>
+    public bool HasShield => CurrentShield > 0;
 
     /// <summary>The next enemy swing after <paramref name="ms"/>, for the anticipation windup.</summary>
     public int NextEnemyStrikeAfter(float ms) => NextAfter(ms, BattleEventKind.EnemyStrike);
@@ -341,10 +348,6 @@ public sealed class WaveReplay
                 // hits zero when the last one does.
                 if (e.Slot >= 0 && _creatureHealth.ContainsKey(e.Slot)) _creatureHealth[e.Slot] = 0f;
                 if (_creatureMax.Count == 0 || _creatureHealth.Values.All(h => h <= 0f)) EnemyHealth = 0f;
-                break;
-
-            case BattleEventKind.Undying:
-                _shieldUntil[e.Slot] = e.AtMs + e.Amount;   // the sim tells us the reach; we just draw it
                 break;
 
             // SHIELD is a running total here: the events say what CHANGED, and the replay keeps the
