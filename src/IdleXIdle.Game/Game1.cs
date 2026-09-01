@@ -516,10 +516,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
             (_sfxVolume, _musicVolume, _askBeforeScrap) = (prefs.SfxVolume, prefs.MusicVolume, prefs.AskBeforeScrap);
             (_showDamageNumbers, _showSkillCallouts, _showHitEffects, _showScreenFlash)
                 = (prefs.ShowDamageNumbers, prefs.ShowSkillCallouts, prefs.ShowHitEffects, prefs.ShowScreenFlash);
+            _uiScalePercent = prefs.UiScalePercent;
             ApplyDisplay();
         }
         else
         {
+            // The rig poses the UI SCALE too: RH_SHOT_UISCALE=100|125|150|auto, 100 when unset — never AUTO
+            // by default, or every fixture would silently capture at 125% in the rig's 1280-wide window.
+            var shotScale = Environment.GetEnvironmentVariable("RH_SHOT_UISCALE");
+            _uiScalePercent = shotScale == "auto" ? 0 : int.TryParse(shotScale, out var sp) && sp is 125 or 150 ? sp : 100;
             RecomputePresent();
         }
 
@@ -2340,6 +2345,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // a playtester could trip either and reasonably conclude the game was broken.
         if (DevKeysEnabled && Pressed(Keys.F6)) _expedition.DevForceBoss = !_expedition.DevForceBoss;   // dev: force the Crystal Lich boss render (Rev 4 §12)
         if (DevKeysEnabled && Pressed(Keys.F7)) { _expedition.DevBossDebug = !_expedition.DevBossDebug; _gear.DevGearDebug = !_gear.DevGearDebug; _training.DevStatsDebug = !_training.DevStatsDebug; _masteryScreen.DevBuildDebug = !_masteryScreen.DevBuildDebug; _forge.DevForgeDebug = !_forge.DevForgeDebug; _warrenScreen.DevWarrenDebug = !_warrenScreen.DevWarrenDebug; _mapScreen.DevMapDebug = !_mapScreen.DevMapDebug; _traits.DevDustDebug = !_traits.DevDustDebug; }   // dev layout overlays
+        if (DevKeysEnabled && Pressed(Keys.F8)) CycleUiScale();   // dev: UI SCALE 100 / 125 / 150 / AUTO, until the settings row lands (UX V2 P3.1)
         if (Pressed(Keys.F1)) _showHelp = !_showHelp;
         if (Pressed(Keys.F10)) _showSettings = !_showSettings;
 
@@ -3972,7 +3978,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// a resolution touches.
     /// </remarks>
     private void RecomputePresent()
-        => _present = Display.PresentFit(_graphics.PreferredBackBufferWidth, _graphics.PreferredBackBufferHeight);
+    {
+        _present = Display.PresentFit(_graphics.PreferredBackBufferWidth, _graphics.PreferredBackBufferHeight);
+        ApplyUiScale();
+    }
 
     /// <summary>Wheel notches this frame: + = scroll up/away, - = down/toward. Latched in Update.</summary>
     private int MouseWheel => _wheel;
@@ -4001,7 +4010,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private void BeginCanvas(int scale)
     {
         _ui.Scale = scale;
-        _ui.Text2.Scale = scale;
+        _ui.Text2.Density = scale;
         _batch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
             null, null, null, Matrix.CreateScale(scale));
     }
@@ -4010,7 +4019,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private void BeginOverlayCanvas()
     {
         _ui.Scale = 1;
-        _ui.Text2.Scale = 1;
+        // Glyphs rasterised at the page scale land 1:1 on the canvas after the matrix — crisp at 100% (where
+        // they were being shrunk to 0.9 from a 1080 raster) and at 125%/150% (where they would be blown up).
+        _ui.Text2.Density = OverlayScale;
         // The camera kick belongs to the screen that wants one. A global shake used to live in the
         // present blit, driven by manual combat, and sat at a permanent zero from the pivot onward
         // because nothing owned it; this asks the active screen instead, so the kick exists only while
@@ -4206,7 +4217,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     private void SaveDisplay() => Display.Save(new Display.GamePrefs(
         _displayMode, _windowSize, _sfxVolume, _musicVolume, _askBeforeScrap,
-        _showDamageNumbers, _showSkillCallouts, _showHitEffects, _showScreenFlash));
+        _showDamageNumbers, _showSkillCallouts, _showHitEffects, _showScreenFlash,
+        UiScalePercent: _uiScalePercent));
 
     // ── Settings ──────────────────────────────────────────────────────────────────────────────
     // 1920-space (scale-1 chrome). 2026-08-24, playtest nine: MODE and WINDOW SIZE became dropdowns
@@ -5322,8 +5334,45 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // The fight screen is NOT inset — its layout was rebuilt around the rail directly, and its arena
     // wants every pixel of the free space.
 
-    /// <summary>Free width right of the nav rail, as a fraction of the authored 1920.</summary>
-    internal const float OverlayScale = (1920f - NavRailWidth - 20f) / 1920f;
+    /// <summary>Free width right of the nav rail, as a fraction of the authored 1920 — the page scale at UI SCALE 100%.</summary>
+    internal const float BaseOverlayScale = (1920f - NavRailWidth - 20f) / 1920f;
+
+    /// <summary>
+    /// THE PAGE SCALE: what one logical page pixel is in canvas pixels. <see cref="BaseOverlayScale"/> times
+    /// the UI SCALE factor (1, 1.25 or 1.5). The overlay matrix, the mouse inverse, the font density and
+    /// <see cref="UiKit.Page"/> all read it, so a scale change is one number changing in one place.
+    /// </summary>
+    internal static float OverlayScale => BaseOverlayScale * UiScaleFactor;
+
+    /// <summary>The resolved UI SCALE as a factor: 1, 1.25 or 1.5. AUTO has already been decided.</summary>
+    internal static float UiScaleFactor { get; private set; } = 1f;
+
+    /// <summary>The UI SCALE preference: 100, 125, 150, or 0 for AUTO. Resolved in <see cref="ApplyUiScale"/>.</summary>
+    private int _uiScalePercent = 100;
+
+    /// <summary>
+    /// Resolve the UI SCALE preference against the present rect and push it to everything that reads it.
+    /// </summary>
+    /// <remarks>
+    /// Called from <see cref="RecomputePresent"/>, the one place the present rect changes, so AUTO follows a
+    /// window resize without anyone remembering to ask. The page shrinks as the scale grows — 1536×864 at
+    /// 125% — because the canvas is fixed and bigger text needs fewer logical pixels to fill it.
+    /// </remarks>
+    private void ApplyUiScale()
+    {
+        var pct = Display.ResolveUiScale(_uiScalePercent, _present.Width);
+        UiScaleFactor = pct / 100f;
+        UiKit.Page = new Rectangle(0, 0, (int)MathF.Round(1920f / UiScaleFactor), (int)MathF.Round(1080f / UiScaleFactor));
+    }
+
+    /// <summary>Dev (F8 under RH_DEV): step the UI SCALE 100 → 125 → 150 → AUTO → 100 and keep it.</summary>
+    private void CycleUiScale()
+    {
+        var steps = Display.UiScaleSteps;
+        _uiScalePercent = steps[(Array.IndexOf(steps, _uiScalePercent) + 1) % steps.Length];
+        ApplyUiScale();
+        SaveDisplay();
+    }
 
     /// <summary>Canvas x the inset content starts at.</summary>
     internal const float OverlayLeft = NavRailWidth;

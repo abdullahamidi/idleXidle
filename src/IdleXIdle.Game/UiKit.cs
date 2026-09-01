@@ -25,6 +25,27 @@ public sealed class UiKit
     /// </summary>
     public int Scale = 4;
 
+    /// <summary>
+    /// THE PAGE: the logical rectangle a menu screen lays out into, in the screen's own 1920-space units.
+    /// 1920×1080 at UI SCALE 100%, 1536×864 at 125%, 1280×720 at 150% — the page gets SMALLER as the
+    /// scale grows, because the same canvas has to hold bigger text. Set by Game1 whenever the scale changes.
+    /// </summary>
+    /// <remarks>
+    /// Not a layout engine (brief §91): the three anchors below are the numbers screens already subtract
+    /// from 1920 and 1080, given one name so that every right edge, bottom edge and centre can follow the
+    /// scale. A screen that still writes <c>1920 - 40</c> is a screen that clips at 125%.
+    /// </remarks>
+    public static Rectangle Page { get; internal set; } = new(0, 0, 1920, 1080);
+
+    /// <summary>The page's right edge, <paramref name="inset"/> px in.</summary>
+    public static int PageRight(int inset) => Page.Right - inset;
+
+    /// <summary>The page's bottom edge, <paramref name="inset"/> px up.</summary>
+    public static int PageBottom(int inset) => Page.Bottom - inset;
+
+    /// <summary>The page's horizontal centre — where a screen title sits.</summary>
+    public static int PageCenterX => Page.Center.X;
+
     private static readonly Color VoidInk = new(0x1B, 0x16, 0x20);
     private static readonly Color PanelBg = new(0x24, 0x20, 0x2C);
     private static readonly Color PanelEdge = new(0x39, 0x33, 0x44);
@@ -1154,9 +1175,9 @@ public sealed class UiKit
         if (lines.Count == 0) return;
         var h = pad * 2 + lines.Count * lineH;
         var x = anchor.X + 26;
-        if (x + width > 1912) x = anchor.X - width - 12;
+        if (x + width > PageRight(8)) x = anchor.X - width - 12;
         var y = anchor.Y + 30;
-        if (y + h > 1072) y = anchor.Y - h - 14;
+        if (y + h > PageBottom(8)) y = anchor.Y - h - 14;
         Fill(b, new Rectangle(x + 4, y + 5, width, h), new Color(0, 0, 0) * 0.45f);   // soft drop shadow
         Fill(b, new Rectangle(x, y, width, h), new Color(0x14, 0x0E, 0x20));
         Fill(b, new Rectangle(x, y, width, 2), new Color(0xC8, 0x9A, 0x3C));

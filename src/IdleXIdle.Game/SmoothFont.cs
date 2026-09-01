@@ -92,11 +92,17 @@ public sealed class SmoothFont
     private const int BoldFrom = 30;
 
     /// <summary>
-    /// Counter-scale for the xN canvas transform: 4 for 480x270 logical screens (default), 1 for screens
-    /// authored directly in 1920x1080. The atlas is rasterised at pixel size, then drawn at 1/Scale so it
-    /// lands 1:1 on the canvas. Set by the host before drawing per-region.
+    /// RASTER DENSITY: how many canvas pixels one logical pixel of text becomes under the batch's matrix.
+    /// 4 for the 480×270 logical screens, 1 for chrome authored in 1920×1080, and the PAGE scale (about
+    /// 0.9 at UI SCALE 100%, 1.12 at 125%) for a menu screen drawn through the overlay matrix. Glyphs are
+    /// rasterised at logicalPx × Density and drawn at 1/Density, so after the matrix they land 1:1 — crisp
+    /// at every scale instead of a 1080-authored glyph resampled by the overlay. Set by the host per batch.
     /// </summary>
-    public int Scale { get; set; } = 4;
+    /// <remarks>
+    /// Fonts are cached per (weight, pixel size). Only the four quantised densities ever reach this — never
+    /// a continuously varying present scale, which would mint a new atlas every frame.
+    /// </remarks>
+    public float Density { get; set; } = 4f;
 
     private readonly FontSystem? _regular;
     private readonly FontSystem? _semiBold;
@@ -183,17 +189,17 @@ public sealed class SmoothFont
     };
 
     private SpriteFontBase FontAt(int logicalPx, TextFace face)
-        => WeightFor(logicalPx, face).GetFont(Math.Max(6, logicalPx) * Scale);
+        => WeightFor(logicalPx, face).GetFont(Math.Max(6, logicalPx) * Density);
 
     /// <summary>Logical width of the text.</summary>
     public int Measure(string text)
-        => Loaded ? (int)MathF.Round(_font!.MeasureString(text).X * (1f / Scale)) : PixelFont.Measure(text);
+        => Loaded ? (int)MathF.Round(_font!.MeasureString(text).X * (1f / Density)) : PixelFont.Measure(text);
 
     public void Draw(SpriteBatch b, string text, int x, int y, Color c)
     {
         if (!Loaded) { _fallback.Draw(b, text, x, y, c); return; }
         // DrawText(batch, text, position, color, rotation, origin, scale?, …) — scale is the 7th arg.
-        _font!.DrawText(b, text, new Vector2(x, y + VOffset), c, 0f, Vector2.Zero, new Vector2(1f / Scale));
+        _font!.DrawText(b, text, new Vector2(x, y + VOffset), c, 0f, Vector2.Zero, new Vector2(1f / Density));
     }
 
     public void DrawRight(SpriteBatch b, string text, int right, int y, Color c) => Draw(b, text, right - Measure(text), y, c);
@@ -202,12 +208,12 @@ public sealed class SmoothFont
     // ── Sized variants: rasterise crisp at ANY logical height. Lets the UI build a real type hierarchy —
     // big titles and damage numbers, small labels — instead of one flat size. ────────────────────────────
     public int Measure(string text, int logicalPx, TextFace face = TextFace.Data)
-        => Loaded ? (int)MathF.Round(FontAt(logicalPx, face).MeasureString(text).X * (1f / Scale)) : PixelFont.Measure(text);
+        => Loaded ? (int)MathF.Round(FontAt(logicalPx, face).MeasureString(text).X * (1f / Density)) : PixelFont.Measure(text);
 
     public void Draw(SpriteBatch b, string text, int x, int y, Color c, int logicalPx, TextFace face = TextFace.Data)
     {
         if (!Loaded) { _fallback.Draw(b, text, x, y, c); return; }
-        FontAt(logicalPx, face).DrawText(b, text, new Vector2(x, y + VOffset), c, 0f, Vector2.Zero, new Vector2(1f / Scale));
+        FontAt(logicalPx, face).DrawText(b, text, new Vector2(x, y + VOffset), c, 0f, Vector2.Zero, new Vector2(1f / Density));
     }
 
     public void DrawRight(SpriteBatch b, string text, int right, int y, Color c, int logicalPx, TextFace face = TextFace.Data)
