@@ -13,6 +13,20 @@
 #        buildtree buildzoom itemmenu runlog fightgear vaultfilter traitlit intro typespec welcome
 #        vaultempty vaultemptyfilter vaultsell vaultmany forgeempty trainingpoor trainingreset
 #        rosterswitch warrenready warrenfresh
+#        fightshield fightshieldbroken fightstatus fightfive fightmulti fightreport
+# The fight poses (UI polish §21 / §108): `fight` is the STANDARD (two actives, two passives, several
+# creatures); `fightshield` a FULL wave-start shield; `fightshieldbroken` a bite heavy enough to empty
+# it — the split bite and SHIELD BROKEN in one instant; `fightstatus` the UNDYING / CHARGE chips;
+# `fightfive` the five-slot strip; `fightmulti` VOLLEY's CLUSTER folding five arrows into one "-N ×5".
+# All of them take RH_SHOT_T=<seconds into the wave> (capture.sh's third argument). `fightreport` takes
+# RH_SHOT_LIMIT=armour|reach|sustain to pose the log's diagnostic for that limit.
+# `fightshieldbroken` and `fightmulti` aim the shutter at an EVENT (the first SHIELD BROKEN, SPRAY's
+# cast) rather than a second: the seek applies two frames before the shot so the event is crossed live
+# on the photographed frame (the replay is rebuilt from the wave's events, so it can land anywhere).
+# RH_SHOT_LEAD=<seconds before the event> (0.02 default — under two frames keeps the event on the
+# shot frame). RH_SHOT_DUMP=1 writes <shot>.events.txt — the wave's events and the playhead at the
+# shutter — which is how a fight pose is checked against what the wave held.
+# RH_SHOT_PAGE_MOUSE=x,y poses the cursor in PAGE space (a hover, a tooltip) on any menu screen.
 # `forge` takes RH_SHOT_ITEM=<instanceId> (dev_hero | dev_rung | dev_cap | dev_low) and
 # RH_SHOT_FILTER=all|gear|gems, so every item state is a dial rather than a new mode.
 #

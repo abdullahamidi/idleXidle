@@ -899,6 +899,8 @@ public sealed class HuntScreen
         _auraColour = fieldSk is null ? null : SourceColor.GetValueOrDefault(fieldSk.Source, Bone);
 
         _replay = new WaveReplay(_run.LastWaveEvents, startHealth, maxHealth, enemyHp);
+        _waveStartHealth = startHealth[0];   // for a posed seek's rebuild (DevSeek) — see UpdateFight
+        _waveEnemyHp = enemyHp;
         _replayEndMs = _run.LastWaveEvents.Count == 0 ? 0f : _run.LastWaveEvents.Max(e => e.AtMs);
         _diedAt.Clear();          // the previous wave's fallen are gone with its replay
         _creatureRect.Clear();
@@ -1127,12 +1129,39 @@ public sealed class HuntScreen
         // air while the enemy is still off to the right ("hunter hits before the enemy arrives").
         if (_enemyEnter > 0f) { _enemyWindup = 0f; _clipName = null; return; }
 
-        // DEV: the fixture's seek (DevSeek) — the beats before it land silently, health only.
-        if (_devSeekMs is { } seek)
+        // DEV: a seek aimed at an EVENT (DevSeekBefore) resolves against this run's wave — and under
+        // the rig it waits for the frame before the shutter, so the event is crossed LIVE on the frame
+        // that is photographed: callout fresh, effect on its first frame. Applied any earlier, the
+        // wall-clock fades had already taken the callout by the time the shot was saved.
+        if (_devSeekPick is { } aim && _run is not null
+            && (!Game1.RigActive || Game1.ShotFrameNow >= Game1.ShotAtFrame - 2))
+        {
+            _devSeekPick = null;
+            foreach (var e in _run.LastWaveEvents)
+                if (aim.Pick(e)) { _devSeekMs = Math.Max(0f, e.AtMs - aim.Lead * 1000f); break; }
+        }
+        // DEV: the fixture's seek (DevSeek / DevSeekBefore) — the beats before it land silently, health
+        // only. THE REPLAY IS REBUILT from the wave's events first: a WaveReplay cannot rewind, and under
+        // the rig the playhead has usually run past the target by the time the seek applies (the run
+        // restarts once on the host's Source push, and a posed seek waits for the shutter). Seeking a
+        // replay whose cursor was already past the target crossed nothing — the shot showed callouts
+        // that had faded a second earlier and a dump that swore the playhead was at the target.
+        if (_devSeekMs is { } seek && _run is not null && _champ is not null)
         {
             _devSeekMs = null;
+            _replay = new WaveReplay(_run.LastWaveEvents,
+                new Dictionary<int, int> { [0] = _waveStartHealth },
+                new Dictionary<int, int> { [0] = _champ.MaxHealth }, _waveEnemyHp);
+            _replay.SetComposition(_run.LastWaveCreatures.Select(c => c.MaxHealth).ToList());
+            _diedAt.Clear();
+            _creatureRect.Clear();
+            _callouts.Clear();      // the pose shows THIS instant, not the second before it
+            _vfx.Clear();
+            _hitFlash.Clear();
             _playheadMs = seek;
-            _replay.Advance(seek);
+            foreach (var crossed in _replay.Advance(seek))
+                if (crossed.Kind is BattleEventKind.ShieldGained or BattleEventKind.ShieldAbsorbed)
+                    _shieldSeen = true;   // the strip must show a shield the seek granted silently
             _nextEnemyStrikeMs = _replay.NextEnemyStrikeAfter(seek);
             _nextChampStrikeMs = _replay.NextChampionStrikeAfter(seek);
         }
@@ -3575,7 +3604,13 @@ public sealed class HuntScreen
     /// report, so the collapse can be photographed uncovered — the report is a large centred panel and
     /// sits directly on top of the thing this poses.
     /// </param>
-    public void DevRunToDeath(Hunter hunter, float? fallProgress = null)
+    /// <param name="poseLimit">
+    /// DEV: pose the log's diagnostic for THIS limit. The death is the real seeded one; only the single
+    /// measurement that names the limit is set past its threshold (and the ones that would outrank it
+    /// held under theirs), so ARMOUR, REACH and SUSTAIN each have a picture — the three
+    /// <c>fightreport</c> seeds UX V2 left owed.
+    /// </param>
+    public void DevRunToDeath(Hunter hunter, float? fallProgress = null, RunLimit? poseLimit = null)
     {
         DevHoldReport = true;
         DevStart(hunter, 900f, 14f);
@@ -3592,7 +3627,26 @@ public sealed class HuntScreen
         // THE REAL COMPARISON, not a hard true. Forcing the flag made the capture print a NEW RECORD
         // title directly above a diff line showing the depth had FALLEN — a report contradicting
         // itself in the same panel. A fixture that lies cannot catch the bug it is posing for.
-        Log.Add(_run.Report(isRecord: _run.Wave > (previous?.Depth ?? 0)));   // the same path the game takes
+        var report = _run.Report(isRecord: _run.Wave > (previous?.Depth ?? 0));   // the same path the game takes
+        report = poseLimit switch
+        {
+            // RunReport.Limit reads these in order: Stalled, Armour (absorbed ≥ 0.45), Reach (creatures
+            // ≥ 2.5 and targets < half of them), Sustain (health lost ≥ 0.18), else OutScaled.
+            RunLimit.Armour => report with { AbsorbedFraction = 0.52f },
+            RunLimit.Reach => report with
+            {
+                AbsorbedFraction = MathF.Min(report.AbsorbedFraction, 0.30f),
+                CreaturesPerWave = MathF.Max(report.CreaturesPerWave, 3.4f), TargetsPerActivation = 1.0f,
+            },
+            RunLimit.Sustain => report with
+            {
+                AbsorbedFraction = MathF.Min(report.AbsorbedFraction, 0.30f),
+                TargetsPerActivation = MathF.Max(report.TargetsPerActivation, report.CreaturesPerWave),
+                HealthLostPerWaveFraction = 0.27f,
+            },
+            _ => report,
+        };
+        Log.Add(report);
         _fellReport = Log.Newest;   // so the fall plate names the MAIN LIMIT, as it does in play
         _mode = Mode.Downed;
         _downedTimer = DownedSeconds;
@@ -3644,5 +3698,44 @@ public sealed class HuntScreen
     /// identical). UpdateFight applies it on the first live frame of whichever run survives.
     /// </remarks>
     public void DevSeek(float seconds) => _devSeekMs = Math.Max(0f, seconds * 1000f);
+
+    /// <summary>
+    /// DEV: the current wave's events and the playhead, as text — written beside a capture under
+    /// RH_SHOT_DUMP so a pose can be checked against what the wave actually contained.
+    /// </summary>
+    public IEnumerable<string> DevWaveEvents()
+    {
+        yield return $"wave {_replayWave} playhead {_playheadMs:0} ms  health {_replay?.HealthOf(0)}  shield {_replay?.CurrentShield}/{_replay?.MaxShield}";
+        if (_run is null) yield break;
+        for (var i = 0; i < _run.Skills.Count; i++) yield return $"slot {i}: {_run.Skills[i].Def.Id} ({_run.Skills[i].Source})";
+        foreach (var e in _run.LastWaveEvents)
+            yield return $"{e.AtMs,6} ms  {e.Kind,-14} slot {e.Slot} amount {e.Amount} fromSkill {e.FromSkill}";
+    }
     private float? _devSeekMs;
+    private int _waveStartHealth;   // the champion's health when the replayed wave began
+    private float _waveEnemyHp;     // the replayed wave's total creature health
+
+    /// <summary>
+    /// DEV: seek to just before the first wave event that <paramref name="pick"/> accepts — the first
+    /// SHIELD BROKEN, the first cast of a given slot — so a capture photographs THAT instant rather
+    /// than a second somebody guessed. Resolved against the live run's events on the frame the seek
+    /// applies (see <see cref="DevSeek"/> for why it is pending). No such event: no seek.
+    /// </summary>
+    /// <param name="leadSeconds">
+    /// How far before the event to land. Under the rig the seek applies two frames before the shutter
+    /// (see UpdateFight), so a lead under two frames (33 ms) puts the event on the photographed frame:
+    /// crossed live, callout fresh, effect on its first frame.
+    /// </param>
+    public void DevSeekBefore(Func<BattleEvent, bool> pick, float leadSeconds = 0.02f)
+        => _devSeekPick = (pick, leadSeconds);
+    private (Func<BattleEvent, bool> Pick, float Lead)? _devSeekPick;
+
+    /// <summary>The build slot a skill occupies in the live run, or -1 — for <see cref="DevSeekBefore"/> picks.</summary>
+    public int DevSlotOf(string skillId)
+    {
+        if (_run is null) return -1;
+        for (var i = 0; i < _run.Skills.Count; i++)
+            if (_run.Skills[i].Def.Id == skillId) return i;
+        return -1;
+    }
 }

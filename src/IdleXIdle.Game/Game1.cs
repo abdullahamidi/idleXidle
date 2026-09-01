@@ -1543,6 +1543,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 or "region2" or "region3" or "conquered" or "mapdeep" or "maplocked" or "help" or "expedition" or "fight" or "fightshield" or "welcome" or "boss" or "bossdebug"
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "trainingpoor" or "trainingreset" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
                 or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "traitlit" or "traitterm" or "traitterminal"
+                or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti"
                 or "roster" or "rosterlocked" or "rosterswitch" or "warrenready" or "warrenfresh" or "weave" or "vault" or "vaultfirst" or "vaultfilter" or "attune" or "attuned" or "trader"
                 or "vaultempty" or "vaultemptyfilter" or "vaultsell" or "vaultmany" or "forgeempty"
                 or "gemtour" or "intro" or "typespec")
@@ -1795,7 +1796,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     if (sm == "trainingreset") _hunter.AddMaterial(Material.Crystal, 1);
                 }
 
-                if (sm is "fight" or "welcome" or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "fightshield" or "runlog")
+                if (sm is "fight" or "welcome" or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightaura" or "fightflash" or "fightshield" or "runlog"
+                    or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti")
                 {
                     // `fightflash` pins the hit flash so a still capture can prove the white silhouette draws.
                     if (sm == "fightflash") _expedition.DevHoldFlash = true;
@@ -1811,7 +1813,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // (ALWAYS ON / WHEN BITTEN, rather than a beat count) went unphotographed for
                     // exactly that reason. One skill also cannot show the thing the rework is for: two
                     // actives leaving the plain swing most of its beats.
-                    if (sm is "fight" or "fightswing" or "fightflash" or "fightshield")
+                    if (sm is "fight" or "fightswing" or "fightflash" or "fightshield"
+                        or "fightstatus" or "fightfive" or "fightshieldbroken" or "fightmulti")
                     {
                         _loadout.SkillCapacity = Math.Max(_loadout.SkillCapacity, 4);
                         // The roads, or every skill but the champion's own is refused and the fixture
@@ -1836,6 +1839,46 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             _loadout.SetSkill(slot, skillId);
                         }
                     }
+                    // THE THREE OWED FIGHT FIXTURES (UX V2 REPORT §4, UI polish §21 / §108), plus the
+                    // shield pose combat-v2 §36 owed. Each poses a state no capture could show before.
+                    //
+                    // `fightfive` — the FIVE-slot strip: FIFTH WEAVE owned on the trait tree (the host
+                    // derives the capacity from it every frame), a third active in the fifth slot.
+                    if (sm == "fightfive")
+                    {
+                        _dust.Restore(_dust.MemoryDust, _dust.OwnedIds.Concat(new[] { "weave_5" }));
+                        _loadout.SkillCapacity = Math.Max(_loadout.SkillCapacity, 5);
+                        var fifth = _loadout.AddSkill();
+                        if (fifth >= 0) { _loadout.SetSource(fifth, Source.Spirit); _loadout.SetSkill(fifth, "sign_call"); }
+                    }
+                    // `fightstatus` — the hunter card's status chips: UNDYING READY and CHARGE n/10 need
+                    // the keystones that grant them LEARNED (their trait nodes owned) and SOCKETED (two
+                    // sockets: socket_2). Nothing else on the screen changes, so the chips are the
+                    // difference between this and `fight`.
+                    if (sm == "fightstatus")
+                    {
+                        _dust.Restore(_dust.MemoryDust, _dust.OwnedIds.Concat(new[]
+                            { "socket_2", "ks_ironclad", "ks_juggernaut", "ks_undying", "ks_glass_cannon", "ks_rend" }));
+                        _loadout.KeystoneCapacity = 2;
+                        var learned = DustEffects.LearnedKeystones(_dust);
+                        _loadout.ToggleKeystone("undying", learned);
+                        _loadout.ToggleKeystone("rend", learned);
+                    }
+                    // `fightmulti` — VOLLEY as a MULTI-HIT: SPRAY's CLUSTER variation puts all five arrows
+                    // on one creature at the same instant, which the screen folds into one "-N ×5". The
+                    // level that unlocks the choice is earned the way the game earns it (waves recorded).
+                    if (sm == "fightmulti" && SkillCatalogue.Find("volley_spray") is { } sprayDef)
+                    {
+                        for (var u = 0; u < SkillProgress.UsesForLevel(1); u++) _skillProgress.RecordWave(sprayDef.Id);
+                        _skillProgress.ChooseVariation(sprayDef, "CLUSTER");
+                    }
+                    // `fightshieldbroken` cannot carry JAWS: it answers every bite by STOPPING it, so the
+                    // shield only ever met one leaked point. MIRE (a field) takes its passive slot.
+                    if (sm == "fightshieldbroken" && _loadout.IndexOfSkill("snare_jaws") is var jawsSlot && jawsSlot >= 0)
+                    {
+                        _loadout.SetSource(jawsSlot, Source.Nature);
+                        _loadout.SetSkill(jawsSlot, "field_mire");
+                    }
                     // fightswing holds the strike clip at its apex, so the one pose a timed capture can
                     // never catch — the blade at full extension — is checkable.
                     if (sm == "fightswing")
@@ -1846,7 +1889,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // `fightgear` dresses the Hunter before the fight opens. A fresh save wears nothing, so
                     // a plain `fight` capture can never show worn equipment — and worn equipment is exactly
                     // what the rig bindings need verifying against.
-                    if (sm is "fightgear" or "fightswing" or "fightreport" or "fightfall" or "runlog" or "fightshield")
+                    if (sm is "fightgear" or "fightswing" or "fightreport" or "fightfall" or "runlog" or "fightshield" or "fightshieldbroken")
                     {
                         var worn = new[]
                         {
@@ -1860,23 +1903,31 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         // nobody has ever looked at. Five MACHINE pieces open the 3-piece wave-start
                         // shield, so the bar is filled from the wave's first frame rather than depending
                         // on a grant landing in the instant the shutter opens.
-                        var setEl = sm == "fightshield" ? Source.Machine : Source.Nature;
+                        var setEl = sm is "fightshield" or "fightshieldbroken" ? Source.Machine : Source.Nature;
                         for (var i = 0; i < worn.Length; i++)
                             _hunter.Equip(new ItemInstance
                             {
                                 InstanceId = $"fg{i}", BaseType = worn[i], Rarity = wrar[i],
-                                SellValue = 40 + i * 20, Element = setEl, ItemLevel = 30 + i * 5,
+                                // `fightshieldbroken`: FOUR machine pieces, not five — the 5-piece
+                                // PLATING turns the first damaging bite into shield, and a shield
+                                // that refills at every bite is a shield no capture can show broken.
+                                SellValue = 40 + i * 20, ItemLevel = 30 + i * 5,
+                                Element = sm == "fightshieldbroken" && i == worn.Length - 1 ? Source.Nature : setEl,
                             });
                     }
                     _expedition.Loadout = _loadout;
                     _expedition.Tree = _dust;
                     _expedition.Mastery = _mastery;
+                    // The levels too — the run DevStart composes is the run the capture shows (nothing
+                    // restarts it), so a variation chosen above (fightmulti's CLUSTER) has to be in the
+                    // build before the fight starts, not pushed by the host on a later frame.
+                    _expedition.Progress = _skillProgress;
                     // Pose the new fight-screen UX: the welcome-back toast, and the "you have things to do"
                     // attention cue (a waiting chest + unspent mastery points).
                     // Not for fightreport: the welcome-back toast outranks the HunterDown overlay in the
                     // arena's priority list, so it would hide the very screen that capture exists to show.
                     // No toast over `fightshield`: it would sit on the very strip the capture is for.
-                    if (sm is not ("fightreport" or "fightfall" or "runlog" or "welcome" or "fightshield"))
+                    if (sm is not ("fightreport" or "fightfall" or "runlog" or "welcome" or "fightshield" or "fightshieldbroken" or "fightstatus"))
                     {
                         _bootMessage = "WELCOME BACK\n+140 GLEAM EARNED WHILE AWAY";   // the short-trip toast
                         _bootColor = Gold; _bootTimer = 7f;
@@ -1911,7 +1962,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     SetActiveRegion("umbral_reach");
                     if (sm == "fightreport")
                     {
-                        _expedition.DevRunToDeath(_hunter);
+                        // RH_SHOT_LIMIT=armour|reach|sustain poses the log's diagnostic for that limit: the
+                        // real seeded death, with the one measurement that names the limit set past its
+                        // threshold — so each of the three verdicts the log can give has a picture.
+                        var limit = Environment.GetEnvironmentVariable("RH_SHOT_LIMIT")?.ToLowerInvariant() switch
+                        {
+                            "armour" or "armor" => RunLimit.Armour,
+                            "reach" => RunLimit.Reach,
+                            "sustain" => RunLimit.Sustain,
+                            _ => (RunLimit?)null,
+                        };
+                        _expedition.DevRunToDeath(_hunter, poseLimit: limit);
                     }
                     else if (sm == "fightfall")
                     {
@@ -1932,10 +1993,41 @@ public class Game1 : Microsoft.Xna.Framework.Game
                         for (var i = 0; i < 3; i++) _expedition.DevRunToDeath(_hunter);
                         _expedition.ToggleLog();
                     }
-                    else _expedition.DevStart(_hunter, 1400f, 9f);
-                    // `fight` with RH_SHOT_T: seconds into the wave to pose (capture.sh's third argument),
-                    // so the bars can be photographed after the fight has moved them.
-                    if (sm == "fight" && float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_T"),
+                    // `fightshieldbroken`: a bite heavy enough that, after armour, it exceeds the 3-piece
+                    // wave-start shield — one bite absorbs the whole shield, BREAKS it, and the rest
+                    // reaches health: the split bite and the break, in one deterministic instant.
+                    // Measured in Core against this exact gear and build: the pool is 243, the wave-start
+                    // shield 29, and at 70 the swarm's first bite (1.5 s in) absorbs all 29, breaks the
+                    // shield and lands 51 on health. The creatures are thick (6000) so the wave outlasts
+                    // that bite. PINNED THROUGH THE HOST (_shotEnemyBaseline): the host pushes the
+                    // region's baseline every frame and the run restarts on its first live frame, so a
+                    // number handed to DevStart alone never survives to the shutter.
+                    else if (sm == "fightshieldbroken")
+                    {
+                        // 180, not 70: this region's FAST bias lands lighter bites, and at 70 only three
+                        // points leaked past the shield — a break with no visible split. (Measured with
+                        // RH_SHOT_DUMP, which is what it exists for.)
+                        _shotEnemyBaseline = (6000f, 180f);
+                        _expedition.DevStart(_hunter, 6000f, 180f);
+                        // The shutter opens on the break itself, not on a guessed second.
+                        _expedition.DevSeekBefore(e => e.Kind == BattleEventKind.ShieldBroken, ShotLead());
+                    }
+                    else
+                    {
+                        // PINNED THROUGH THE HOST, like the broken-shield pose: every fight fixture said
+                        // "a deliberately beefy enemy, 1400" and photographed the region's real baseline,
+                        // because the host pushes that baseline every frame and restarts the run once.
+                        _shotEnemyBaseline = (1400f, 9f);
+                        _expedition.DevStart(_hunter, 1400f, 9f);
+                    }
+                    // `fightmulti`: the shutter opens on SPRAY's cast, when its five CLUSTER hits print.
+                    if (sm == "fightmulti")
+                        _expedition.DevSeekBefore(e => e.Kind == BattleEventKind.Skill && e.Slot == _expedition.DevSlotOf("volley_spray"), ShotLead());
+                    // `fight` (and the shield / multi-hit poses) with RH_SHOT_T: seconds into the wave to
+                    // pose (capture.sh's third argument), so the bars can be photographed after the fight
+                    // has moved them — and a bite or a burst caught at its instant.
+                    if (sm is "fight" or "fightshield" or "fightshieldbroken" or "fightmulti" or "fightstatus" or "fightfive"
+                        && float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_T"),
                             System.Globalization.NumberStyles.Float,
                             System.Globalization.CultureInfo.InvariantCulture, out var seekS))
                         _expedition.DevSeek(seekS);
@@ -3964,7 +4056,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _forge.AutoMergeOnOpen = DustEffects.AutoMergeAfterRuns(_dust);
         // Every region is a rung up the ladder for the champion, not just a new element — see
         // EnemyBaselineFor, which is also what the offline simulation fights against.
-        var (ebh, ebd) = EnemyBaselineFor(_activeRegion);
+        var (ebh, ebd) = _shotEnemyBaseline ?? EnemyBaselineFor(_activeRegion);
         _expedition.Update(gameTime, _hunter, enemyBaseHealth: ebh, enemyBaseDamage: ebd);
 
         // Measure the champion's gleam/second over this session, for offline earnings later.
@@ -4099,6 +4191,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// linear on purpose: a difficulty a player opts into inside one place should stack in even
     /// increments rather than compound with the chain.
     /// </remarks>
+    /// <summary>
+    /// RIG ONLY: a fight fixture's enemy baseline, pinned so the per-frame push above cannot replace it.
+    /// The run restarts on its first live frame (the host's Source push), so a baseline handed to
+    /// DevStart alone is gone before the shutter opens; this is what `fightshieldbroken` fights.
+    /// </summary>
+    private (float Health, float Damage)? _shotEnemyBaseline;
+
+    /// <summary>
+    /// RIG ONLY: how far before its target event a posed seek lands (RH_SHOT_LEAD seconds). 0.02 when
+    /// unset: the seek applies two frames before the shutter, so anything under two frames (33 ms)
+    /// puts the event on the photographed frame itself — callout fresh, effect on its first frame.
+    /// </summary>
+    private static float ShotLead()
+        => float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_LEAD"), System.Globalization.NumberStyles.Float,
+                          System.Globalization.CultureInfo.InvariantCulture, out var lead) ? lead : 0.02f;
+
     private (float Health, float Damage) EnemyBaselineFor(string regionId)
     {
         var scale = CorruptionScaling.HealthMultiplier(_world.CorruptionTier);
@@ -4594,6 +4702,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // DEV SCREENSHOT HOOK: set RH_SHOT=<path> to dump one upscaled frame after ~1s, then exit.
         // Used to verify rendering headlessly; harmless and inert without the env var.
         _shotFrame++;
+        ShotFrameNow = _shotFrame;
         var shotPath = Environment.GetEnvironmentVariable("RH_SHOT");
         // RH_SHOT_SEQ="count,stride" turns the one posed frame into a FILMSTRIP: from frame 60 on, every
         // `stride` frames a full canvas is saved as <path>_NN.png, `count` times, then exit. A single
@@ -4616,6 +4725,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
         else if (shotPath is not null && _shotFrame == 60 && ShotWindow is null)
         {
+            // RH_SHOT_DUMP: the wave's events beside the shot, so a fight pose can be checked against
+            // what the wave actually contained rather than against a guess about the timeline.
+            if (Environment.GetEnvironmentVariable("RH_SHOT_DUMP") is not null)
+                System.IO.File.WriteAllLines(shotPath + ".events.txt", _expedition.DevWaveEvents());
+
             using var fs = System.IO.File.Create(shotPath);
             _canvas.SaveAsPng(fs, CanvasWidth * ArtScale, CanvasHeight * ArtScale);
             Exit();
@@ -4711,6 +4825,15 @@ public class Game1 : Microsoft.Xna.Framework.Game
     }
 
     private int _shotFrame;
+
+    /// <summary>RIG ONLY: true when RH_SHOT is set — the process exists to take one screenshot and exit.</summary>
+    internal static readonly bool RigActive = Environment.GetEnvironmentVariable("RH_SHOT") is not null;
+
+    /// <summary>RIG ONLY: the frame the shutter opens on. Every capture mode saves at this frame.</summary>
+    internal const int ShotAtFrame = 60;
+
+    /// <summary>RIG ONLY: the frame being drawn, so a screen can apply a posed seek just before the shutter.</summary>
+    internal static int ShotFrameNow { get; private set; }
 
     // ── Title screen ──────────────────────────────────────────────────────────────────────────
     private void ChooseTitleItem(int i)
