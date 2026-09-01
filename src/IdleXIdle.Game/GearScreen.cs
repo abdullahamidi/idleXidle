@@ -964,7 +964,7 @@ public sealed class GearScreen
         {
             var delta = hunter.PowerContribution(item) - hunter.PowerContribution(worn);
             _ui.TextBig(b, worn is null ? "SLOT EMPTY" : $"EQUIPPED: {(worn.Element?.ToString().ToUpperInvariant() ?? "PLAIN")} {SlotWord(worn.BaseType)}",
-                cmp.X + 16, cmp.Y + 12, Slate, UiTypography.Secondary);
+                cmp.X + 16, cmp.Y + 14, Slate, UiTypography.Caption);   // a label beside a value, not a sentence — Caption keeps it clear of the figure
             if (item.BaseType == ItemBaseType.Weapon)
             {
                 // A weapon answers in the fight's own unit: damage per second with THIS build, against

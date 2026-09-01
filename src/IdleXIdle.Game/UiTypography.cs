@@ -31,17 +31,24 @@ public static class UiTypography
     //
     // Eight rungs, each with one job. Read it top to bottom as "how loud is this line?".
     //
-    //   36  ScreenTitle      the screen's own name, in the ceremony face
-    //   30  PrimaryValue     a headline number
-    //   26  PanelTitle       the title of a panel
-    //   24  Headline         the biggest thing INSIDE a panel — an item's name, a rank
-    //   21  NavigationLabel  a thing you click: a nav tile, a button label
-    //   19  Body             prose, list rows, and the default an unsized call draws at
-    //   16  Secondary        captions, column heads, gold sub-headings
-    //   14  Caption          chips, badges, the tightest columns — never a sentence
+    //   38  ScreenTitle      the screen's own name, in the ceremony face
+    //   32  PrimaryValue     a headline number
+    //   28  PanelTitle       the title of a panel
+    //   26  Headline         the biggest thing INSIDE a panel — an item's name, a rank
+    //   24  NavigationLabel  a thing you click: a nav tile, a button label
+    //   22  Body             prose, list rows, and the default an unsized call draws at
+    //   19  Secondary        captions, column heads, gold sub-headings
+    //   16  Caption          chips, badges, the tightest columns — never a sentence
     //
-    // The weight follows the size on its own (see SmoothFont.WeightFor): ≤19 Regular, 21–26 SemiBold,
-    // ≥30 Bold. The rungs were chosen so that boundary lands where the meaning changes.
+    // THE LADDER MOVED UP on 2026-09-01 (UX V2 P0.6, typography audit §6). The game is presented at
+    // 1280×720 on the smaller half of its players' monitors, and there Body 19 landed at 12.7 physical
+    // px and Caption 14 at 9.3 — under the 12 px floor the brief sets for anything a player must read.
+    // Every rung is one step louder; Body 22 is 14.7 px at 720p. Rows follow through Pitch(), so the
+    // move cost no re-auditing of row heights — that is what P0.4 was for.
+    //
+    // The weight follows the size on its own (see SmoothFont.WeightFor): under NavigationLabel Regular,
+    // NavigationLabel..Headline SemiBold, PrimaryValue and up Bold. SmoothFont reads the thresholds FROM
+    // these two rungs, so the boundary moves with the ladder and always lands where the meaning changes.
     //
     // The combat callouts are a FAMILY BESIDE the ladder, not rungs on it — see below.
 
@@ -49,13 +56,13 @@ public static class UiTypography
     /// The screen's own name in the top strip — HUNT, THE FORGE, TRAITS. Always the ceremony face
     /// (<see cref="TextFace.Display"/>), always centred at the top, never more than one per screen.
     /// </summary>
-    public const int ScreenTitle = 36;
+    public const int ScreenTitle = 38;
 
     /// <summary>A banner over the arena — the region's name, BOSS INCOMING. The screen title's rung.</summary>
     public const int RegionTitle = ScreenTitle;
 
     /// <summary>A headline number: GEAR POWER's figure, MASTERY POINTS' figure, the idle rate.</summary>
-    public const int PrimaryValue = 30;
+    public const int PrimaryValue = 32;
 
     // ── THE COMBAT CALLOUTS — a family, not rungs ─────────────────────────────────────────────────
     //
@@ -88,7 +95,7 @@ public static class UiTypography
     /// than documented around: a name that lies is how the next drift starts. The value did not change,
     /// so nothing moved a pixel when the rename landed.
     /// </remarks>
-    public const int PanelTitle = 26;
+    public const int PanelTitle = 28;
 
     /// <summary>The arena's wave line — "WAVE 12 — RECOVERING". A panel title's rung, in the ceremony face.</summary>
     public const int StageLabel = PanelTitle;
@@ -97,7 +104,7 @@ public static class UiTypography
     /// The biggest thing INSIDE a panel: an item's name, a rank, a chest's tier, a champion's name.
     /// One rung under the panel's own title, so the panel still wins its own header.
     /// </summary>
-    public const int Headline = 24;
+    public const int Headline = 26;
 
     /// <summary>A toast's or a tour card's title. The in-panel headline rung.</summary>
     public const int OverlayTitle = Headline;
@@ -111,7 +118,7 @@ public static class UiTypography
     /// pixel under a rung nothing else in the game used. One size for every control; it shrinks only when
     /// the label genuinely does not fit, and never below <see cref="Caption"/>.
     /// </remarks>
-    public const int NavigationLabel = 21;
+    public const int NavigationLabel = 24;
 
     /// <inheritdoc cref="NavigationLabel"/>
     public const int ButtonText = NavigationLabel;
@@ -124,7 +131,7 @@ public static class UiTypography
     /// for body text; this clears it. Three separate values — Label 18, Body 19, OverlayBody 18 — used to
     /// do this one job, which is a distinction no reader can see and every author has to guess at.
     /// </remarks>
-    public const int Body = 19;
+    public const int Body = 22;
 
     /// <summary>
     /// The size an UNSIZED <c>_ui.Text</c> draws at. The default for a label.
@@ -158,7 +165,7 @@ public static class UiTypography
     /// A caption, a column head, a secondary value, a gold sub-heading inside a panel (SET BONUSES,
     /// WHAT IT DOES, COST TO UPGRADE).
     /// </summary>
-    public const int Secondary = 16;
+    public const int Secondary = 19;
 
     /// <summary>
     /// A sub-heading inside a panel. Deliberately the SAME size as the caption it heads.
@@ -179,11 +186,11 @@ public static class UiTypography
     /// narrow and the fix is the column. It exists because the arena had drifted to 12 and 13 px in its
     /// skill rail and its chest filter; naming the floor at 14 raises those and stops the next one.
     /// </remarks>
-    public const int Caption = 14;
+    public const int Caption = 16;
 
     /// <summary>
     /// THE LINE PITCH for text drawn at <paramref name="rung"/>: the distance from one baseline to the
-    /// next in a list, a paragraph, a table. 13/10 of the rung — Body 19 → 24, Secondary 16 → 20.
+    /// next in a list, a paragraph, a table. 13/10 of the rung — Body 22 → 28, Secondary 19 → 24.
     /// </summary>
     /// <remarks>
     /// <para>

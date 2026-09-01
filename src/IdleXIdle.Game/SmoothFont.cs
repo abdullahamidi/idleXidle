@@ -82,14 +82,14 @@ public sealed class SmoothFont
     /// splits: everything that is prose or a caption stays Regular, everything that is a title, a heading
     /// or a headline value gets weight. Nothing between 19 and 21 exists to be surprised by.
     /// </remarks>
-    private const int SemiBoldFrom = 21;
+    private const int SemiBoldFrom = UiTypography.NavigationLabel;   // the ladder decides; see UiTypography
 
     /// <summary>At and above this logical height, text is set Bold.</summary>
     /// <remarks>
     /// Catches PrimaryValue, the two damage sizes and ScreenTitle — the handful of things meant to be
     /// read from across the room, and the only ones a third weight earns its file size for.
     /// </remarks>
-    private const int BoldFrom = 30;
+    private const int BoldFrom = UiTypography.PrimaryValue;
 
     /// <summary>
     /// RASTER DENSITY: how many canvas pixels one logical pixel of text becomes under the batch's matrix.

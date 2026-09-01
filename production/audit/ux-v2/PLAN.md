@@ -77,3 +77,12 @@ No per-frame allocations · Core never references MonoGame · every displayed va
 (the audits' data-honesty tables are the whitelist) · no generic widget engine — components are `UiKit`
 methods or small static classes, extracted on their second real user · a screen is done when its 1080 and
 real-720 captures have been looked at, not when the code compiles.
+
+## 4. Defects register — found during P0, owned by a later checkpoint
+Pre-existing (identical in the 2026-09-01 baselines), recorded here so the screen pass that owns them cannot miss them:
+- **BUILD** — the `IN <REGION>` affinity block at the foot of YOUR LOADOUT draws three rows BELOW the panel's bottom frame (`LoadoutScreen` region block; baseline `weave.png` y≈870–920). → P1.4.
+- **ItemTooltip** — `HeightFor` sums literal row heights that must mirror the draw's pitches by hand; the draw was left on its literals in P0.4 so the two could not drift apart before the pair is unified. → P1.7 (the inspector replaces the tooltip's measure/draw pair).
+- **Page anchors** — every screen still centres titles at 960 and subtracts from 1920/1080; at UI SCALE 125%/150% the page overflows the canvas to the right and bottom (posed with `RH_SHOT_UISCALE=125`). → each P1/P2 screen pass adopts `UiKit.Page` / `PageRight` / `PageBottom` / `PageCenterX`; P3.4 verifies all three scales.
+- **Mouse quantisation** — `ToOverlay` still takes the 480-space `CanvasMouse` (×4), so menu hit-tests land on a 4 px grid (audit P1-3). → fold into the first screen pass that rewrites its hit-testing; `ChromeMouse` is the full-resolution source.
+
+Fixed in P0 and worth knowing: the GEAR compare plate's `EQUIPPED: <ELEMENT> <SLOT>` label collided with its right-aligned value when Secondary grew to 19 px (P0.6); it is a label beside a figure and now sits on Caption.

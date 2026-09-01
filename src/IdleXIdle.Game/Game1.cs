@@ -414,8 +414,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _graphics = new GraphicsDeviceManager(this)
         {
-            PreferredBackBufferWidth = CanvasWidth * 3,
-            PreferredBackBufferHeight = CanvasHeight * 3,
+            // RH_SHOT_WINDOW=WxH poses the rig at a REAL window size, so a capture can show what a 1280×720
+            // player sees — the canvas bilinearly shrunk — rather than the 1920 render target.
+            PreferredBackBufferWidth = ShotWindow?.X ?? CanvasWidth * 3,
+            PreferredBackBufferHeight = ShotWindow?.Y ?? CanvasHeight * 3,
             // FULLSCREEN IS A BORDERLESS WINDOW THE SIZE OF THE MONITOR, not an exclusive mode switch.
             // Playtest 2026-08-25: "Fullscreen yayın yapılmıyor" — an exclusive-mode surface is invisible
             // to Discord screen share, OBS window capture and the Windows Game Bar, and it flickers the
@@ -453,6 +455,24 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     /// <summary>True under the screenshot rig (RH_SHOT). The rig poses; it does not play.</summary>
     private static readonly bool CaptureRig = Environment.GetEnvironmentVariable("RH_SHOT") is not null;
+
+    /// <summary>
+    /// RH_SHOT_WINDOW=WxH: the rig's window size, when a capture should be the PRESENTED frame (the
+    /// backbuffer after the letterbox blit) rather than the 1920×1080 render target. Null when unset.
+    /// </summary>
+    /// <remarks>
+    /// The UX audit's 720p reviews were bilinear downscales of the 1080 capture done in Python — a good
+    /// approximation of what the present blit does, but an approximation. This photographs the real thing,
+    /// so "readable at 720p" is a claim about pixels a player actually receives.
+    /// </remarks>
+    private static readonly Point? ShotWindow =
+        Environment.GetEnvironmentVariable("RH_SHOT_WINDOW") is { } w
+        && w.Split('x', 'X') is [var sw, var sh]
+        && int.TryParse(sw, out var ww) && int.TryParse(sh, out var wh) && ww > 0 && wh > 0
+            ? new Point(ww, wh) : null;
+
+    /// <summary>The `typespec` fixture: draw the type ladder itself instead of a screen.</summary>
+    private bool _showTypeSpec;
 
     /// <summary>The screen a `tour` capture is about — RH_SHOT_TAB, an Activity name.</summary>
     private static Activity? ShotTab
@@ -1501,7 +1521,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 or "banked" or "lootforge" or "settings" or "settingsfull" or "settingsopen" or "vow" or "runlog" or "reforge" or "build" or "buildtree" or "buildzoom" or "character" or "itemmenu" or "stats" or "warren" or "map" or "rig" or "corrupted" or "corruptedboss"
                 or "fightgear" or "fightswing" or "fightreport" or "fightfall" or "fightfilter" or "fightaura" or "fightflash" or "traitlit" or "traitterm" or "traitterminal"
                 or "roster" or "rosterlocked" or "weave" or "vault" or "vaultfirst" or "attune" or "attuned" or "trader"
-                or "gemtour" or "intro")
+                or "gemtour" or "intro" or "typespec")
             {
                 _showTitle = false;
                 // (`expedition` and `vow` used to seed the retired creature den here; since its removal
@@ -1890,6 +1910,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     else { _expedition.DevForceBoss = true; _expedition.CorruptionTier = 3; }
                 }
                 if (sm == "help") _showHelp = true;
+                if (sm == "typespec") _showTypeSpec = true;
                 if (sm == "settings") _showSettings = true;
                 if (sm == "settingsfull") { _showSettings = true; _displayMode = DisplayMode.Fullscreen; }
                 // Poses the MODE dropdown OPEN, so the option list's z-order over the rows under
@@ -4140,6 +4161,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_forge.RevealActive) _forge.DrawRevealOverlay(_batch, _hunter);
 
         if (_showHelp) DrawHelp();
+        if (_showTypeSpec) DrawTypeSpec();
         if (_showSettings) DrawSettings();
 
         DrawBootToast();
@@ -4176,7 +4198,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 if (idx + 1 >= seqCount) Exit();
             }
         }
-        else if (shotPath is not null && _shotFrame == 60)
+        else if (shotPath is not null && _shotFrame == 60 && ShotWindow is null)
         {
             using var fs = System.IO.File.Create(shotPath);
             _canvas.SaveAsPng(fs, CanvasWidth * ArtScale, CanvasHeight * ArtScale);
@@ -4199,7 +4221,77 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _batch.Draw(_canvas, _present, Color.White);
         _batch.End();
 
+        // The posed-window capture: the backbuffer AFTER the blit — letterbox, bilinear shrink and all.
+        if (shotPath is not null && ShotWindow is not null && _shotFrame == 60)
+        {
+            SaveBackBuffer(shotPath);
+            Exit();
+        }
+
         base.Draw(gameTime);
+    }
+
+    /// <summary>Write the current backbuffer — the frame the player would receive — to a PNG.</summary>
+    private void SaveBackBuffer(string path)
+    {
+        var pp = GraphicsDevice.PresentationParameters;
+        var data = new Color[pp.BackBufferWidth * pp.BackBufferHeight];
+        GraphicsDevice.GetBackBufferData(data);
+        using var tex = new Texture2D(GraphicsDevice, pp.BackBufferWidth, pp.BackBufferHeight);
+        tex.SetData(data);
+        using var fs = System.IO.File.Create(path);
+        tex.SaveAsPng(fs, pp.BackBufferWidth, pp.BackBufferHeight);
+    }
+
+    /// <summary>
+    /// THE TYPE SPECIMEN (fixture <c>typespec</c>): every rung of the ladder with its name, size, pitch and
+    /// weight on the plain page, and the combat callouts beside it — the one picture that shows whether the
+    /// ladder reads as a hierarchy, at 1080 and, through RH_SHOT_WINDOW, at 720.
+    /// </summary>
+    private void DrawTypeSpec()
+    {
+        _ui.Fill(_batch, new Rectangle(0, 0, CanvasWidth * ArtScale, CanvasHeight * ArtScale), new Color(0x10, 0x0D, 0x18));
+        var rungs = new (string Name, int Px)[]
+        {
+            ("SCREEN TITLE", UiTypography.ScreenTitle), ("PRIMARY VALUE", UiTypography.PrimaryValue),
+            ("PANEL TITLE", UiTypography.PanelTitle), ("HEADLINE", UiTypography.Headline),
+            ("NAVIGATION LABEL", UiTypography.NavigationLabel), ("BODY", UiTypography.Body),
+            ("SECONDARY", UiTypography.Secondary), ("CAPTION", UiTypography.Caption),
+        };
+        const int x = 120;
+        var y = 60;
+        _ui.TextBig(_batch, "IDLE X IDLE — TYPE SPECIMEN", x, y, UiInk.Accent, UiTypography.PanelTitle);
+        y += UiTypography.Pitch(UiTypography.PanelTitle) + 16;
+        foreach (var (name, px) in rungs)
+        {
+            var pitch = UiTypography.Pitch(px);
+            _ui.TextBig(_batch, $"{name}  {px} PX · PITCH {pitch}", x, y, UiInk.Secondary, UiTypography.Caption);
+            y += UiTypography.Pitch(UiTypography.Caption);
+            _ui.TextBig(_batch, "The hunter fell at WAVE 13 — 12 waves cleared · 0123456789", x, y, UiInk.Primary, px);
+            y += pitch + 14;
+        }
+        _ui.TextBig(_batch, $"PAGE {UiKit.Page.Width} × {UiKit.Page.Height} · UI SCALE {(int)MathF.Round(UiScaleFactor * 100)}%"
+                            + (ShotWindow is { } sw ? $" · WINDOW {sw.X} × {sw.Y}" : ""),
+                    x, 1010, UiInk.Secondary, UiTypography.Secondary);
+
+        const int cx = 1360;
+        var cy = 120;
+        _ui.TextBig(_batch, "COMBAT CALLOUTS — A FAMILY BESIDE THE LADDER", cx, cy, UiInk.Secondary, UiTypography.Caption);
+        cy += UiTypography.Pitch(UiTypography.Caption) + 8;
+        _ui.TextBig(_batch, "1 240", cx, cy, UiInk.Primary, UiTypography.DamageNormal);
+        cy += UiTypography.Pitch(UiTypography.DamageNormal);
+        _ui.TextBig(_batch, "3 249", cx, cy, UiInk.Accent, UiTypography.DamageSkill);
+        cy += UiTypography.Pitch(UiTypography.DamageSkill);
+        _ui.TextBig(_batch, "9 870!", cx, cy, UiInk.Danger, UiTypography.DamageCritical);
+        cy += UiTypography.Pitch(UiTypography.DamageCritical) + 24;
+        _ui.TextBig(_batch, "INKS ON THE PANEL", cx, cy, UiInk.Secondary, UiTypography.Caption);
+        cy += UiTypography.Pitch(UiTypography.Caption) + 4;
+        foreach (var (label, ink) in new[] { ("PRIMARY", UiInk.Primary), ("SECONDARY", UiInk.Secondary), ("ACCENT", UiInk.Accent),
+                                             ("DISABLED", UiInk.Disabled), ("GOOD", UiInk.Good), ("DANGER", UiInk.Danger) })
+        {
+            _ui.TextBig(_batch, label, cx, cy, ink, UiTypography.Body);
+            cy += UiTypography.Pitch(UiTypography.Body);
+        }
     }
 
     private int _shotFrame;

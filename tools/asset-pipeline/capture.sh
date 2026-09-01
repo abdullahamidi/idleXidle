@@ -10,7 +10,7 @@
 #
 # Modes: fight boss expedition forge build character stats warren map dust world
 #        region2 region3 conquered lootforge reforge vow hybrid rig vfx help
-#        buildtree buildzoom itemmenu runlog fightgear fightfilter traitlit intro
+#        buildtree buildzoom itemmenu runlog fightgear fightfilter traitlit intro typespec
 #
 # `fight` takes a third argument: seconds into the wave to pose (default: about one).
 # The fixture's creatures are thick on purpose, so a bar only visibly moves a few
@@ -81,6 +81,8 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 [ -n "$RH_SHOT_DROPDOWN" ] && RH_ENV+=(RH_SHOT_DROPDOWN="$RH_SHOT_DROPDOWN")
 # UI SCALE for the page screens: 100 (the default) | 125 | 150 | auto.
 [ -n "$RH_SHOT_UISCALE" ] && RH_ENV+=(RH_SHOT_UISCALE="$RH_SHOT_UISCALE")
+# A REAL window size (e.g. 1280x720): the capture is then the presented backbuffer, not the 1920 render target.
+[ -n "$RH_SHOT_WINDOW" ] && RH_ENV+=(RH_SHOT_WINDOW="$RH_SHOT_WINDOW")
 # The third argument means "zoom" to buildzoom and "seconds into the flourish" to
 # traitlit/traitterm — both are the one dial that mode's capture needs.
 [ -n "$ZOOM" ] && RH_ENV+=(RH_SHOT_ZOOM="$ZOOM" RH_SHOT_T="$ZOOM")
