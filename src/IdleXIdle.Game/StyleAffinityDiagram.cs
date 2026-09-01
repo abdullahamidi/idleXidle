@@ -40,10 +40,10 @@ namespace IdleXIdle.Game;
 /// </remarks>
 internal static class StyleAffinityDiagram
 {
-    private static readonly Color Gold = new(0xF0, 0xB2, 0x4A);
-    private static readonly Color Met = new(0x5F, 0xC8, 0x8F);
-    private static readonly Color Slate = new(0x8A, 0x96, 0xA8);
-    private static readonly Color Ember = new(0xC0, 0x5C, 0x50);
+    private static readonly Color Gold = UiInk.Accent;
+    private static readonly Color Met = UiInk.Good;
+    private static readonly Color Slate = UiInk.Secondary;
+    private static readonly Color Ember = UiInk.Danger;
 
     // ── The field: a bezel, a well, a hairline. ──
     private static readonly Color Bezel = new(0x2E, 0x27, 0x38);

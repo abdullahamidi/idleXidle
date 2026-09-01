@@ -28,60 +28,17 @@ public sealed class UiKit
     private static readonly Color VoidInk = new(0x1B, 0x16, 0x20);
     private static readonly Color PanelBg = new(0x24, 0x20, 0x2C);
     private static readonly Color PanelEdge = new(0x39, 0x33, 0x44);
-    private static readonly Color Dim = new(0x3A, 0x3A, 0x44);
+    private static readonly Color Dim = UiInk.Rule;
 
-    // ── TEXT COLOURS. There are exactly two surfaces, and they want opposite ink. ─────────────────
-    //
-    // The hand-drawn UI made the panels PARCHMENT (measured mean luminance 180). Every text colour in
-    // this game was chosen for the old panels, which were near-black (L≈18). So the game was drawing
-    // Bone text (L=223) on a Bone panel: a contrast ratio of 1.22:1. Invisible.
-    //
-    // The fix is not a tweak, it is a rule, and it is MORE on-style rather than less: a manuscript is
-    // parchment with iron-gall ink on it. Light panel, dark text.
-    //
-    // Measured against the two real surfaces (ratios are WCAG; 4.5:1 is the bar for body text):
-    //
-    //                        on PARCHMENT (L=180)   on the DIM ARENA (L≈54)
-    //   Vellum   #EDE3C8          1.22:1  ✗              3.53:1  ok
-    //   Ink      #14101A          6.25:1  ✓              1.90:1  ✗
-    //   Slate    #57616F          1.77:1  ✗              1.63:1  ✗   <- failed on BOTH, always had
-    //
-    // Slate is the interesting one: it was never readable anywhere. It is why the muster screen's
-    // hints ("SLOT 1 TAKES THE HITS") have always looked like a ghost. It is retired.
+    // ── TEXT COLOURS live in UiInk (UX V2 P0.3). The block that stood here described PARCHMENT panels
+    //    the game has not drawn since the 2026-08 art pass; every panel is near-black now, and the inks
+    //    below are aliases kept for their remaining callers. ───────────────────────────────────────
 
-    /// <summary>Text ON CHROME — panels, buttons, anything parchment. 6.25:1. The default for UI.</summary>
+    /// <summary>The near-black of the letterbox and the deepest wells. Not a text colour on today's panels.</summary>
     public static readonly Color Ink = new(0x14, 0x10, 0x1A);
 
-    /// <summary>
-    /// Secondary text on chrome — hints, costs, units. 3.35:1: fine for a label, not for a sentence.
-    /// </summary>
-    /// <remarks>
-    /// There is no third option. On a parchment panel only near-black is readable, so hierarchy has to
-    /// come from SIZE and POSITION, not from a lighter grey — which is exactly how a real manuscript
-    /// does it. Reaching for "a slightly lighter ink" is how Slate happened.
-    /// </remarks>
-    public static readonly Color InkFaint = new(0x2C, 0x2C, 0x36);
-
-    /// <summary>Text ON THE SCENE — over the dim arena, never on a panel. 3.53:1.</summary>
-    public static readonly Color Vellum = new(0xED, 0xE3, 0xC8);
-
-    /// <summary>
-    /// "Gold" text ON PARCHMENT — a dark bronze, because Hearth Gold is invisible there.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Hearth Gold `#F0A830` is L=175. The parchment panel is L=180. That is <b>1.02:1</b> — gold text
-    /// on a gold panel, the single worst contrast in the game and, cruelly, reserved for the states the
-    /// player <i>earned</i>. Every "you did it" label was invisible.
-    /// </para>
-    /// <para>
-    /// So on parchment, <b>gold stops being a text colour and becomes a SURFACE</b> — that is what
-    /// <c>ui_panel_gold</c> is for. Where a word still has to carry earned-ness, this bronze does it at
-    /// 3.6:1. A medieval scribe had exactly this problem and solved it the same way: gold leaf is a
-    /// ground you letter ON, not an ink you letter WITH.
-    /// </para>
-    /// </remarks>
-    public static readonly Color Bronze = new(0x3D, 0x26, 0x04);
+    /// <summary>Text on the scene — the same Primary ink every panel uses; the second name is kept for its callers.</summary>
+    public static readonly Color Vellum = UiInk.Primary;
 
     /// <summary>
     /// The five ITEM CLASS colours, one per class, shared by every screen that names a class.
@@ -570,6 +527,29 @@ public sealed class UiKit
     private static readonly Color QuietFrame = new(0x58, 0x52, 0x62);
 
     /// <summary>
+    /// Tier 3, the QUIET surface: a dark translucent plate with a one-pixel rule — for lists, grids,
+    /// metadata rows, resource strips, toasts. No filigree at all.
+    /// </summary>
+    /// <remarks>
+    /// The 2026-09-01 UX audit found there was no quiet tier: <see cref="PanelQuiet"/> is the ORNATE frame
+    /// tinted bronze, so a stat row and a paper-doll wore the same corner gems, and at least eight screens
+    /// hand-drew this plate with their own fills. One method, so the hierarchy PRIMARY (ornate) /
+    /// SECONDARY (quiet frame) / QUIET (plate) is three calls a reader can tell apart.
+    /// </remarks>
+    /// <param name="accent">A 5 px left rule in this colour — the guide strip's gold, a Source's tint. Null for none.</param>
+    /// <param name="alpha">A fade for transient plates; 1 draws it solid.</param>
+    public void Plate(SpriteBatch b, Rectangle r, Color? accent = null, float alpha = 1f)
+    {
+        Fill(b, r, UiInk.Plate * alpha);
+        var rule = UiInk.Rule * alpha;
+        Fill(b, new Rectangle(r.X, r.Y, r.Width, 1), rule);
+        Fill(b, new Rectangle(r.X, r.Bottom - 1, r.Width, 1), rule);
+        Fill(b, new Rectangle(r.X, r.Y, 1, r.Height), rule);
+        Fill(b, new Rectangle(r.Right - 1, r.Y, 1, r.Height), rule);
+        if (accent is { } a) Fill(b, new Rectangle(r.X, r.Y, 5, r.Height), a * alpha);
+    }
+
+    /// <summary>
     /// WHICH FRAME ART a panel of this shape will wear. Chosen by aspect ratio, so resizing a panel
     /// silently changes its texture — and the three have visibly different ornaments.
     /// </summary>
@@ -854,13 +834,9 @@ public sealed class UiKit
     }
 
     // ── Buttons (mouse-clickable) ───────────────────────────────────────────────────────────────
-    private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
-    private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
-    // 0x8A96A8, was 0x57616F. The old value measured 1.77:1 on parchment and 1.63:1 on the dim
-    // arena — it failed on BOTH of this game's surfaces, which is why every secondary label ("TEMPO
-    // 4.94x SKILL RATE", "BATTLE SPEED", "Deepest wave reached") read as a ghost. This one measures
-    // ~6.9:1 on the dark panels while staying clearly below Bone, so the hierarchy survives.
-    private static readonly Color Slate = new(0x8A, 0x96, 0xA8);
+    private static readonly Color Bone = UiInk.Primary;
+    private static readonly Color Gold = UiInk.Accent;
+    private static readonly Color Slate = UiInk.Secondary;
 
     /// <summary>
     /// Draw a clickable button and return true if it was clicked this frame.
@@ -870,11 +846,16 @@ public sealed class UiKit
     /// the whole "click it" interaction model — every menu action is a labelled button, not a
     /// remembered key.
     /// </remarks>
-    public bool Button(SpriteBatch b, Rectangle r, string label, Point mouse, bool clicked, bool enabled = true)
+    public bool Button(SpriteBatch b, Rectangle r, string label, Point mouse, bool clicked, bool enabled = true,
+                       ButtonStyle style = ButtonStyle.Secondary)
     {
         var hover = enabled && r.Contains(mouse);
-        // package_01 ornate buttons: DARK (secondary) at rest, GREEN (primary) on hover, GREY when disabled.
-        var key = !enabled ? "ui_button_disabled" : hover ? "ui_button_primary" : "ui_button_secondary";
+        // package_01 ornate buttons: DARK (secondary) at rest, GREEN (primary) on hover — and, since UX V2
+        // P0.3, GREEN at rest too for the ONE button on a screen that is its primary action (brief §84:
+        // one clear primary decision per screen, never five equal gold claims). GREY when disabled.
+        var key = !enabled ? "ui_button_disabled"
+                : hover || style == ButtonStyle.Primary ? "ui_button_primary"
+                : "ui_button_secondary";
         var tex = Assets.Get(key);
         // Whole-image stretch for a button near the art's own aspect; a WIDE button is 3-sliced so its
         // ornamented ends keep their shape and only the plain middle stretches (playtest 2026-08-26:
@@ -889,7 +870,7 @@ public sealed class UiKit
 
         // Every button surface is dark or deep-green, so the label is always LIGHT — bright cream on hover
         // for feedback, dim when disabled. (No more dark-ink-on-hover; that was the unreadable flip.)
-        var label3 = !enabled ? new Color(0x7C, 0x76, 0x88) : hover ? new Color(0xF6, 0xEA, 0xC6) : Bone;
+        var label3 = !enabled ? UiInk.Disabled : hover ? new Color(0xF6, 0xEA, 0xC6) : Bone;
         // The SAME font as every other label. Buttons alone still went through the blocky pixel font, so
         // "UPGRADE" / "RE-ENTER" / "CONFIRM UPGRADE" rendered in a wide monospace face that belongs to no
         // other text on the screen — the single loudest inconsistency in the UI.
@@ -1251,7 +1232,17 @@ public sealed class UiKit
         // POSITION literals need this. Keeps the header pixel-identical across the coordinate migration.
         var s = 4 / Scale;
         Diamond(b, new Rectangle(8 * s, 5 * s, 13 * s, 13 * s), new Color(0x5F, 0xE0, 0xC8));
-        Text2.Draw(b, title, 26 * s, (sub is null ? 6 : 4) * s, new Color(0xF0, 0xB2, 0x4A));
+        Text2.Draw(b, title, 26 * s, (sub is null ? 6 : 4) * s, UiInk.Accent);
         if (sub is not null) Text2.Draw(b, sub, 26 * s, 14 * s, new Color(0x8A, 0x82, 0xA0));
     }
+}
+
+/// <summary>How loud a button is. One PRIMARY per screen — the decision the screen exists for.</summary>
+public enum ButtonStyle
+{
+    /// <summary>Dark at rest, lit on hover — every ordinary action.</summary>
+    Secondary,
+
+    /// <summary>Lit at rest: the screen's one primary decision (EQUIP, TAKE, OPEN ALL, HUNT HERE).</summary>
+    Primary,
 }

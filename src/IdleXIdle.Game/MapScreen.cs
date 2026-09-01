@@ -26,12 +26,12 @@ namespace IdleXIdle.Game;
 /// </remarks>
 public sealed class MapScreen
 {
-    private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
-    private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
-    private static readonly Color Ember = new(0xD8, 0x48, 0x3A);
-    private static readonly Color Slate = new(0x8A, 0x96, 0xA8);
-    private static readonly Color Dim = new(0x3A, 0x3A, 0x44);
-    private static readonly Color Met = new(0x6E, 0xC8, 0x7A);
+    private static readonly Color Bone = UiInk.Primary;
+    private static readonly Color Gold = UiInk.Accent;
+    private static readonly Color Ember = UiInk.Danger;
+    private static readonly Color Slate = UiInk.Secondary;
+    private static readonly Color Dim = UiInk.Rule;
+    private static readonly Color Met = UiInk.Good;
     private static readonly Color Violet = new(0xC8, 0x8A, 0xE0);
 
     private static readonly Dictionary<Source, Color> SourceColor = new()
@@ -276,7 +276,7 @@ public sealed class MapScreen
         var hit = Game1.ToOverlay(mouse);
 
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xB0));
-        _ui.TextCenterBig(b, "MAP", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle, TextFace.Display);
+        _ui.TextCenterBig(b, "MAP", 960, 24, UiInk.Accent, UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
         // THE SUBTITLE SAYS WHAT THIS SCREEN IS FOR, not what its panels are called.
         //

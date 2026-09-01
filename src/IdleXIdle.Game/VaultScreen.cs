@@ -39,10 +39,10 @@ namespace IdleXIdle.Game;
 /// </remarks>
 public sealed class VaultScreen
 {
-    private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
-    private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
-    private static readonly Color Slate = new(0x8A, 0x96, 0xA8);
-    private static readonly Color Dim = new(0x3A, 0x3A, 0x44);
+    private static readonly Color Bone = UiInk.Primary;
+    private static readonly Color Gold = UiInk.Accent;
+    private static readonly Color Slate = UiInk.Secondary;
+    private static readonly Color Dim = UiInk.Rule;
     private static readonly Color Gem = new(0x5F, 0xE0, 0xC8);
 
     /// <summary>The same ramp the Forge uses. A grade must read as one colour everywhere in the game.</summary>
@@ -73,7 +73,7 @@ public sealed class VaultScreen
 
     // ── THE WANDERING TRADER + SHARE CODES — the two future-content directions the designer kept
     //    (2026-08-20). Both live in the vault: the room where things arrive from outside. ─────────
-    private static readonly Color Ember = new(0xD8, 0x48, 0x3A);
+    private static readonly Color Ember = UiInk.Danger;
 
     /// <summary>Host-fed. The stall needs a wallet to price against and a bag to tooltip with.</summary>
     public Hunter? Hunter { get; set; }

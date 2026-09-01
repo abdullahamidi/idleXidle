@@ -35,16 +35,16 @@ public sealed class ForgeScreen
     //   DARK      (the header band, the footer hint, the item cards) -> Scene* (light text)
 
     // On the DARK background and the dark item cards — unchanged, and still correct there.
-    private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
-    private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
-    private static readonly Color Ember = new(0xD8, 0x48, 0x3A);
-    private static readonly Color Slate = new(0x8A, 0x96, 0xA8);
-    private static readonly Color Dim = new(0x3A, 0x3A, 0x44);
+    private static readonly Color Bone = UiInk.Primary;
+    private static readonly Color Gold = UiInk.Accent;
+    private static readonly Color Ember = UiInk.Danger;
+    private static readonly Color Slate = UiInk.Secondary;
+    private static readonly Color Dim = UiInk.Rule;
 
     // The reference art pack's panels are DARK glass, not parchment — so text on them is LIGHT, the same
     // as on the scene. The old dark "ink" ramp was invisible on the dark loot/item/merge panels.
     private static readonly Color Ink = Bone;                        // resting text — light on dark glass
-    private static readonly Color InkFaint = new(0x9A, 0x92, 0xA8);  // labels, units — dim light
+    private static readonly Color InkFaint = UiInk.Secondary;  // labels, units — dim light
     private static readonly Color InkGold = Gold;                    // "earned" — gold reads on dark glass
     private static readonly Color InkEmber = Ember;                  // danger — bright ember on dark
     private static readonly Color Bloom = new(0xC8, 0x8A, 0xE0);     // Tyrian violet, light enough to read
@@ -305,7 +305,7 @@ public sealed class ForgeScreen
     /// <summary>Open the SOCKET tab — the first-gem lesson arrives with it open, so the bag lists the gems.</summary>
     public void RequestSocketTab() { _tab = Tab.Socket; _confirm = null; _socketAsk = null; }
 
-    private static readonly Color Met = new(0x6E, 0xC8, 0x7A);
+    private static readonly Color Met = UiInk.Good;
     // Scrap / Essence / Core / Crystal. The REAL icons — assets/art/ItemsLoot/loot/materials — indexed
     // by (int)Material. The tint is the fallback gem if a file ever goes missing, one colour per tier.
     private static readonly string[] MatIcon = ["mat_scrap", "mat_essence", "mat_core", "mat_crystal"];
@@ -1224,7 +1224,7 @@ public sealed class ForgeScreen
         var uiRight = rightClicked;
 
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xC0));   // scrim so panels pop
-        _ui.TextCenterBig(b, "THE FORGE", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle, TextFace.Display);
+        _ui.TextCenterBig(b, "THE FORGE", 960, 24, UiInk.Accent, UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
         _ui.TextCenterBig(b, "PICK AN ITEM IN YOUR BAG, THEN CHOOSE A TAB — UPGRADE, RE-ROLL, SOCKET OR SALVAGE", 960, 80, Slate, UiTypography.Secondary);
 
@@ -2367,14 +2367,7 @@ public sealed class ForgeScreen
 
     private void DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c)
     {
-        var line = "";
-        foreach (var w in text.Split(' '))
-        {
-            var probe = line.Length == 0 ? w : line + " " + w;
-            if (_ui.Measure(probe) > width && line.Length > 0) { _ui.Text(b, line, x, y, c); y += 26; line = w; }
-            else line = probe;
-        }
-        if (line.Length > 0) _ui.Text(b, line, x, y, c);
+        foreach (var line in _ui.WrapBig(text, width, UiTypography.Label)) { _ui.Text(b, line, x, y, c); y += 26; }
     }
 
     /// <summary>The stat's word. Core owns it — see <see cref="ItemAffixes.StatWord"/> for why.</summary>
@@ -3053,7 +3046,7 @@ public sealed class ForgeScreen
         AffixStat.Damage => new Color(0xD6, 0x48, 0x5C),
         AffixStat.Health => new Color(0x6E, 0xC8, 0x7A),
         AffixStat.SkillRate => new Color(0x74, 0xC6, 0xE8),
-        AffixStat.Haul => new Color(0xF0, 0xB2, 0x4A),
+        AffixStat.Haul => UiInk.Accent,
         AffixStat.Crit => new Color(0xC8, 0x8A, 0xE0),
         _ => new Color(0x8A, 0x96, 0xA8),
     };

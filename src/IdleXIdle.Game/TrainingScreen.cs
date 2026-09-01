@@ -36,11 +36,11 @@ namespace IdleXIdle.Game;
 /// </remarks>
 public sealed class TrainingScreen
 {
-    private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
-    private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
-    private static readonly Color Ember = new(0xD8, 0x48, 0x3A);
-    private static readonly Color Slate = new(0x8A, 0x96, 0xA8);
-    private static readonly Color Dim = new(0x3A, 0x3A, 0x44);
+    private static readonly Color Bone = UiInk.Primary;
+    private static readonly Color Gold = UiInk.Accent;
+    private static readonly Color Ember = UiInk.Danger;
+    private static readonly Color Slate = UiInk.Secondary;
+    private static readonly Color Dim = UiInk.Rule;
     private static readonly Color Sky = new(0x7A, 0x9A, 0xC0);
     private static readonly Color RowBg = new(0x1A, 0x16, 0x24, 0xC0);
     private static readonly Color ArmedRed = new(0x8C, 0x1E, 0x1E);   // the settings panel's are-you-sure red
@@ -260,7 +260,7 @@ public sealed class TrainingScreen
             ("DEFENSE", HunterStat.Defense, "stat_defense", new(0x8A, 0x96, 0xA8)),
             ("CRITICAL", HunterStat.CriticalChance, "stat_critical", new(0xF0, 0xA8, 0x30)),
             ("FOCUS", HunterStat.Focus, "stat_focus", new(0xE8, 0xC8, 0x7A)),
-            ("GUILE", HunterStat.Guile, "stat_guile", new(0xF0, 0xB2, 0x4A)),
+            ("GUILE", HunterStat.Guile, "stat_guile", UiInk.Accent),
         };
 
         var y = UiKit.BodyTop(TrainPanel);

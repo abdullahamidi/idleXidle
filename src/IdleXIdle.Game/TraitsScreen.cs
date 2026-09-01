@@ -34,20 +34,20 @@ namespace IdleXIdle.Game;
 /// </remarks>
 public sealed class TraitsScreen
 {
-    private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
-    private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
-    private static readonly Color Ember = new(0xD8, 0x48, 0x3A);
-    private static readonly Color Slate = new(0x8A, 0x96, 0xA8);
+    private static readonly Color Bone = UiInk.Primary;
+    private static readonly Color Gold = UiInk.Accent;
+    private static readonly Color Ember = UiInk.Danger;
+    private static readonly Color Slate = UiInk.Secondary;
     // 0x5E5A6E, up from 0x3A3A44. Dim is the LOCKED outline and the divider rule, and at the old value a
     // locked node on the 0xC0-alpha scrim was a square of near-black on near-black — the playtest said
     // the tree was hard to read, and forty of its fifty-one nodes are locked at any given career. A
     // locked trait should look unbought, not absent.
-    private static readonly Color Dim = new(0x5E, 0x5A, 0x6E);
+    private static readonly Color Dim = UiInk.Rule;
     /// <summary>The tint of a locked node's icon — lighter than Dim, so the glyph still reads as a glyph.</summary>
     private static readonly Color LockedInk = new(0x84, 0x7E, 0x96);
     /// <summary>The dark plate a name sits on, so a wire running behind it never runs through it.</summary>
     private static readonly Color Plate = new(0x0A, 0x08, 0x10);
-    private static readonly Color Met = new(0x6E, 0xC8, 0x7A);
+    private static readonly Color Met = UiInk.Good;
     private static readonly Color Violet = new(0xC0, 0x6E, 0xE0);
     private static readonly Color Teal = new(0x5F, 0xE0, 0xC8);
 
@@ -527,7 +527,7 @@ public sealed class TraitsScreen
         // TRAITS, not DUST. The screen stopped spending Memory Dust when the tree stopped being buyable
         // by idling; a title naming a currency it does not charge is the kind of small lie that makes a
         // player mistrust every other number on the screen.
-        _ui.TextCenterBig(b, "TRAITS", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle, TextFace.Display);
+        _ui.TextCenterBig(b, "TRAITS", 960, 24, UiInk.Accent, UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
         // "NO TAKING BACK", not "NO RESPEC" — the reader plays in English as a second language, and
         // "respec" is a word only the genre knows.
@@ -536,7 +536,7 @@ public sealed class TraitsScreen
         // never see. A standing fact about the account belongs on the screen's own subtitle.
         if (DustEffects.TreeComplete(tree))
             _ui.TextCenterBig(b, "ONE SPINE  ·  FOUR ROADS  ·  NO TAKING BACK  ·  ALL FOUR ROADS WALKED",
-                              960, 80, new Color(0xF0, 0xB2, 0x4A), UiTypography.Secondary);
+                              960, 80, UiInk.Accent, UiTypography.Secondary);
         else
             _ui.TextCenterBig(b, "ONE SPINE  ·  FOUR ROADS  ·  NO TAKING BACK", 960, 80, Slate, UiTypography.Secondary);
 

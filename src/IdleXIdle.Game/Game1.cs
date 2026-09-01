@@ -97,11 +97,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// palette is the one that says so and stops the eye at the canvas edge.
     /// </remarks>
     private static readonly Color LetterboxInk = new(0x14, 0x10, 0x1A);
-    private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
-    private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
-    private static readonly Color Ember = new(0xD8, 0x48, 0x3A);
-    private static readonly Color Slate = new(0x8A, 0x96, 0xA8);
-    private static readonly Color Dim = new(0x3A, 0x3A, 0x44);
+    private static readonly Color Bone = UiInk.Primary;
+    private static readonly Color Gold = UiInk.Accent;
+    private static readonly Color Ember = UiInk.Danger;
+    private static readonly Color Slate = UiInk.Secondary;
+    private static readonly Color Dim = UiInk.Rule;
 
     /// <summary>A soft, dark panel tone for HUD bands — lighter than the void so UI sits on a surface,
     /// not floating text on black. This is most of what "softer" means at this resolution.</summary>
@@ -4866,7 +4866,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var e2 = l1 - 20;
         var l2 = _ui.Pill(_batch, e2, 16, "ui_memory_dust", default, Abbrev(dustVal), "", new Color(0x9E, 0x86, 0xFF));
         var e3 = l2 - 20;
-        var leftEdge = _ui.Pill(_batch, e3, 16, "ui_gleam_coin", default, Abbrev(gleamVal), "", new Color(0xF0, 0xB2, 0x4A));
+        var leftEdge = _ui.Pill(_batch, e3, 16, "ui_gleam_coin", default, Abbrev(gleamVal), "", UiInk.Accent);
         if (leftEdge < 1210) System.Diagnostics.Debug.WriteLine($"Currency bar (left {leftEdge}) crowds the stage header.");
 
         // WHAT AM I LOOKING AT. The pills are icon + "4.2M", which names neither the resource nor the
@@ -5162,7 +5162,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         ("ROSTER", 'R', "icon_class_hunter"),
     };
 
-    private static readonly Color NavGold = new(0xF0, 0xB2, 0x4A);
+    private static readonly Color NavGold = UiInk.Accent;
     private static readonly Color NavGem = new(0x5F, 0xE0, 0xC8);
     private static readonly Color NavIdle = new(0x1A, 0x14, 0x30);
     private static readonly Color NavHover = new(0x2C, 0x25, 0x44);
@@ -5466,23 +5466,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>Word-wrap, so explanatory copy does not run off the canvas.</summary>
     private void WrapText(string text, int x, int y, int maxWidth, Color c)
     {
-        var words = text.Split(' ');
-        var line = "";
         var row = 0;
-
-        foreach (var word in words)
-        {
-            var candidate = line.Length == 0 ? word : line + " " + word;
-
-            if (_ui.Measure(candidate) > maxWidth)
-            {
-                Text(line, x, y + row * 36, c);   // 1920-space line height (was 9 in 480-space); WrapText is DrawHelp-only
-                line = word;
-                row++;
-            }
-            else line = candidate;
-        }
-
-        if (line.Length > 0) Text(line, x, y + row * 36, c);
+        foreach (var line in _ui.WrapBig(text, maxWidth, UiTypography.Label))
+            Text(line, x, y + row++ * 36, c);   // 1920-space line height; WrapText is DrawHelp-only
     }
 }

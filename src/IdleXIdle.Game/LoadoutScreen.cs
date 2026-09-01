@@ -53,13 +53,13 @@ public sealed class LoadoutScreen
     private int _copyToastFrames;
     private string _copyToast = "";
 
-    private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
-    private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
-    private static readonly Color Ember = new(0xD8, 0x48, 0x3A);
-    private static readonly Color Slate = new(0x8A, 0x96, 0xA8);
-    private static readonly Color Dim = new(0x3A, 0x3A, 0x44);
-    private static readonly Color Met = new(0x6E, 0xC8, 0x7A);
-    private static readonly Color Quiet = new(0x16, 0x12, 0x20, 0xE0);
+    private static readonly Color Bone = UiInk.Primary;
+    private static readonly Color Gold = UiInk.Accent;
+    private static readonly Color Ember = UiInk.Danger;
+    private static readonly Color Slate = UiInk.Secondary;
+    private static readonly Color Dim = UiInk.Rule;
+    private static readonly Color Met = UiInk.Good;
+    private static readonly Color Quiet = UiInk.Plate;
 
     private static readonly Dictionary<Source, Color> SourceColor = new()
     {
@@ -855,7 +855,7 @@ public sealed class LoadoutScreen
         // sayfaya entegre edelim. Ana mantığı o aslında bu sayfanın." Right — the overview it used to
         // hang off showed the same skills without letting you change any of them, so BUILD was a page
         // you looked at and this was the page you used. The rail's BUILD tile opens this directly.
-        _ui.TextCenterBig(b, "BUILD", 960, 24, new Color(0xF0, 0xB2, 0x4A), UiTypography.ScreenTitle, TextFace.Display);
+        _ui.TextCenterBig(b, "BUILD", 960, 24, UiInk.Accent, UiTypography.ScreenTitle, TextFace.Display);
         _ui.Fill(b, new Rectangle(720, 74, 480, 3), Gold * 0.5f);
         _ui.TextCenterBig(b, "LEARN A SKILL ON THE MASTERY TREE, THEN EQUIP IT IN A SLOT",
                           960, 80, Slate, UiTypography.Secondary);
@@ -1785,20 +1785,16 @@ public sealed class LoadoutScreen
     private void DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c, int maxY = int.MaxValue)
     {
         const int lineH = 28;
-        var line = "";
-        foreach (var w in text.ToUpperInvariant().Split(' '))
+        var lines = _ui.WrapBig(text.ToUpperInvariant(), width, UiTypography.Label);
+        for (var i = 0; i < lines.Count; i++)
         {
-            var probe = line.Length == 0 ? w : line + " " + w;
-            if (_ui.Measure(probe) > width && line.Length > 0)
-            {
-                if (y + lineH > maxY) { _ui.Text(b, line + "\u2026", x, y, c); return; }
-                _ui.Text(b, line, x, y, c);
-                y += lineH;
-                line = w;
-            }
-            else line = probe;
+            if (y + lineH > maxY) return;
+            // The last line that FITS wears the ellipsis when more would have followed.
+            var last = i == lines.Count - 1 || y + lineH * 2 > maxY;
+            _ui.Text(b, last && i < lines.Count - 1 ? lines[i] + "\u2026" : lines[i], x, y, c);
+            if (last) return;
+            y += lineH;
         }
-        if (line.Length > 0 && y + lineH <= maxY) _ui.Text(b, line, x, y, c);
     }
 
     private void Outline(SpriteBatch b, Rectangle r, Color c, int t)

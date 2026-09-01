@@ -27,13 +27,13 @@ namespace IdleXIdle.Game;
 /// </remarks>
 public sealed class MasteryScreen
 {
-    private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
-    private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
-    private static readonly Color Ember = new(0xD8, 0x48, 0x3A);
-    private static readonly Color Slate = new(0x8A, 0x96, 0xA8);
-    private static readonly Color Dim = new(0x2C, 0x2C, 0x36);
+    private static readonly Color Bone = UiInk.Primary;
+    private static readonly Color Gold = UiInk.Accent;
+    private static readonly Color Ember = UiInk.Danger;
+    private static readonly Color Slate = UiInk.Secondary;
+    private static readonly Color Dim = UiInk.Rule;
     private static readonly Color PanelBg = new(0x14, 0x11, 0x1A, 0xC8);
-    private static readonly Color Quiet = new(0x16, 0x12, 0x20, 0xE0);
+    private static readonly Color Quiet = UiInk.Plate;
     private static readonly Color SbBg = new(0x0F, 0x0D, 0x15);
     private static readonly Color Hi = new(0x2A, 0x24, 0x14);
     private static readonly Color Path = new(0x39, 0x33, 0x44);
@@ -1214,14 +1214,7 @@ public sealed class MasteryScreen
     /// </remarks>
     private int DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c)
     {
-        var line = "";
-        foreach (var w in text.Split(' '))
-        {
-            var probe = line.Length == 0 ? w : line + " " + w;
-            if (_ui.Measure(probe) > width && line.Length > 0) { _ui.Text(b, line, x, y, c); y += 30; line = w; }
-            else line = probe;
-        }
-        if (line.Length > 0) { _ui.Text(b, line, x, y, c); y += 30; }
+        foreach (var line in _ui.WrapBig(text, width, UiTypography.Label)) { _ui.Text(b, line, x, y, c); y += 30; }
         return y;
     }
 

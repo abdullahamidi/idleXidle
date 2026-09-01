@@ -36,18 +36,18 @@ public enum ItemAction { Equip, Upgrade, Reforge, Salvage }
 /// </remarks>
 public sealed class GearScreen
 {
-    private static readonly Color Bone = new(0xE8, 0xDF, 0xC8);
-    private static readonly Color Gold = new(0xF0, 0xA8, 0x30);
-    private static readonly Color Ember = new(0xD8, 0x48, 0x3A);
-    private static readonly Color Slate = new(0x8A, 0x96, 0xA8);
-    private static readonly Color Dim = new(0x3A, 0x3A, 0x44);
+    private static readonly Color Bone = UiInk.Primary;
+    private static readonly Color Gold = UiInk.Accent;
+    private static readonly Color Ember = UiInk.Danger;
+    private static readonly Color Slate = UiInk.Secondary;
+    private static readonly Color Dim = UiInk.Rule;
     /// <summary>
     /// A rung not yet reached. Between Slate and Dim: Dim measured under 2:1 on this panel and an
     /// unreached rung is still something to read — it is the reason to wear one more piece.
     /// </summary>
-    private static readonly Color Faint = new(0x6A, 0x72, 0x82);
+    private static readonly Color Faint = UiInk.Secondary;
     private static readonly Color Bg = new(0x0E, 0x0C, 0x12);
-    private static readonly Color Quiet = new(0x16, 0x12, 0x20, 0xE0);
+    private static readonly Color Quiet = UiInk.Plate;
     private static readonly Color CellBg = new(0x1C, 0x18, 0x28);
     private static readonly Color CellHot = new(0x2C, 0x25, 0x44);
     private static readonly Color Purple = new(0x8A, 0x5A, 0xC8);
@@ -1063,19 +1063,7 @@ public sealed class GearScreen
     private int Wrapped(SpriteBatch b, string text, int x, int y, int width, Color c)
     {
         const int lineH = 26;
-        var line = "";
-        foreach (var w in text.Split(' '))
-        {
-            var probe = line.Length == 0 ? w : line + " " + w;
-            if (_ui.Measure(probe) > width && line.Length > 0)
-            {
-                _ui.Text(b, line, x, y, c);
-                y += lineH;
-                line = w;
-            }
-            else line = probe;
-        }
-        if (line.Length > 0) { _ui.Text(b, line, x, y, c); y += lineH; }
+        foreach (var line in _ui.WrapBig(text, width, UiTypography.Label)) { _ui.Text(b, line, x, y, c); y += lineH; }
         return y;
     }
 
