@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -115,6 +116,31 @@ public sealed class TrainingScreen
         return "TRAINED STAT";
     }
 
+    /// <summary>The nine stats in the order the list draws them.</summary>
+    private static readonly HunterStat[] Order = Groups.SelectMany(g => g.Stats).ToArray();
+
+    /// <summary>
+    /// One thing the list draws, top to bottom: a group's caption (<see cref="Stat"/> is -1) or one of its
+    /// rows. <see cref="Closes"/> marks a group's last row when another group follows — the group gap
+    /// hangs under it, so a caption scrolled to the top of the region starts flush, not a gap lower.
+    /// </summary>
+    private readonly record struct Entry(int Group, int Stat, bool Closes);
+
+    /// <summary>The list's entries — four captions and nine rows, in draw order. Built once.</summary>
+    private static readonly Entry[] Entries = BuildEntries();
+
+    private static Entry[] BuildEntries()
+    {
+        var list = new List<Entry>();
+        for (var g = 0; g < Groups.Length; g++)
+        {
+            list.Add(new Entry(g, -1, false));
+            for (var k = 0; k < Groups[g].Stats.Length; k++)
+                list.Add(new Entry(g, k, k == Groups[g].Stats.Length - 1 && g < Groups.Length - 1));
+        }
+        return list.ToArray();
+    }
+
     /// <summary>The row's icon and its flat-diamond fallback, if the art ever goes missing.</summary>
     private static (string Key, Color Gem) ArtFor(HunterStat s) => s switch
     {
@@ -143,20 +169,44 @@ public sealed class TrainingScreen
         _ => "How much a cleared wave pays.",
     };
 
-    // ── LAYOUT. Two columns to the page plus a reset footer, so UI SCALE can shrink the page under
-    //    them. Every rectangle here used to be a hand-placed 1920x1080 literal. ───────────────────
-    private const int Top = 150;          // under the hint slot's band (canvas y 86-134 stays free)
-    private const int BottomMargin = 60;
-    private const int ResetH = 84;
+    // ── LAYOUT. Two columns to the page plus a reset footer. Every rectangle here used to be a
+    //    hand-placed 1920x1080 literal; since the UI polish pass (brief §7–§11) every size that is not
+    //    a page anchor comes from UiMetrics, so the density profile grows the type, the rows and the
+    //    buttons while the page and its margins stay where they are. ────────────────────────────────
+    private const int Top = 150;          // under the hint slot's band (canvas y 86-134 stays free) — a page anchor
+    private const int BottomMargin = 60;  // the page's foot — a page anchor
+
+    /// <summary>
+    /// The inspector's width — the house 496 at every profile, deliberately NOT
+    /// <see cref="UiMetrics.InspectorWidth"/>. A wider inspector at 150 % would take its width from the list
+    /// beside it, whose rows need every pixel to keep NAME · RANK · NOW → AFTER · TRAIN on one line at
+    /// Headline 39 (the value column alone wants ~410 px, the button ~280). The inspector's prose scrolls
+    /// instead (§18), which costs a reader a wheel notch rather than costing the list its labels.
+    /// </summary>
+    private const int InspectorW = 496;
+
+    /// <summary>
+    /// The reset footer's height: two Body lines under a Space(12) head and over a Space(16) foot, and never
+    /// shorter than its button wants — 84 at 100 %.
+    /// </summary>
+    private static int ResetH => Math.Max(
+        UiMetrics.Space(12) + 2 * UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(16),
+        UiMetrics.ButtonHeight + 2 * UiMetrics.Space(16));
+
+    /// <summary>The gap between the two columns and the footer under them (16 at 100 %).</summary>
+    private static int FooterGap => UiMetrics.Space(16);
+
+    /// <summary>The gap between the list and the inspector (20 at 100 %).</summary>
+    private static int ColumnGap => UiMetrics.Space(20);
 
     private static Rectangle ResetBar =>
         new(38, UiKit.PageBottom(BottomMargin) - ResetH, UiKit.PageRight(40) - 38, ResetH);
 
     private static Rectangle InspectorPanel =>
-        new(UiKit.PageRight(40) - 496, Top, 496, ResetBar.Y - 16 - Top);
+        new(UiKit.PageRight(40) - InspectorW, Top, InspectorW, ResetBar.Y - FooterGap - Top);
 
     private static Rectangle ListPanel =>
-        new(38, Top, InspectorPanel.X - 20 - 38, ResetBar.Y - 16 - Top);
+        new(38, Top, InspectorPanel.X - ColumnGap - 38, ResetBar.Y - FooterGap - Top);
 
     /// <summary>
     /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
@@ -221,11 +271,23 @@ public sealed class TrainingScreen
     public void DevSelect(string word)
     {
         foreach (var s in Order)
-            if (string.Equals(WordFor(s), word, StringComparison.OrdinalIgnoreCase)) { _selected = s; return; }
+            if (string.Equals(WordFor(s), word, StringComparison.OrdinalIgnoreCase)) { _selected = s; _revealSelected = true; return; }
     }
 
     /// <summary>The row the inspector is reading. Set by a click, by the keys, or by the first draw.</summary>
     private HunterStat? _selected;
+
+    /// <summary>
+    /// Set when the selection moved by a path other than a click (the keys, the first draw, a capture's
+    /// RH_SHOT_SELECT), so a scrolled list brings the selected row into view on the next draw.
+    /// </summary>
+    private bool _revealSelected;
+
+    /// <summary>
+    /// The wheel notches this frame, latched here for <see cref="Draw"/> to spend on whichever scroll
+    /// region the cursor is over — the list or the inspector's prose. Only Draw hit-tests.
+    /// </summary>
+    private int _wheel;
 
     /// <summary>
     /// The keyboard path: up and down move the selection, Enter buys, Escape withdraws the armed reset.
@@ -237,18 +299,16 @@ public sealed class TrainingScreen
     public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, int wheel, Hunter hunter)
     {
         ArgumentNullException.ThrowIfNull(hunter);
+        _wheel = wheel;
         var order = Order;
         var at = _selected is { } s ? Math.Max(0, Array.IndexOf(order, s)) : 0;
 
         bool Pressed(Keys k) => keys.IsKeyDown(k) && !prev.IsKeyDown(k);
-        if (Pressed(Keys.Down)) _selected = order[(at + 1) % order.Length];
-        if (Pressed(Keys.Up)) _selected = order[(at - 1 + order.Length) % order.Length];
+        if (Pressed(Keys.Down)) { _selected = order[(at + 1) % order.Length]; _revealSelected = true; }
+        if (Pressed(Keys.Up)) { _selected = order[(at - 1 + order.Length) % order.Length]; _revealSelected = true; }
         if (Pressed(Keys.Enter) && _selected is { } pick && hunter.CanTrain(pick)) _trainRequest = pick;
         if (Pressed(Keys.Escape)) CancelConfirm();
     }
-
-    /// <summary>The nine stats in the order the list draws them.</summary>
-    private static HunterStat[] Order => Groups.SelectMany(g => g.Stats).ToArray();
 
     public void Draw(SpriteBatch b, Point mouse, Hunter hunter, bool clicked = false)
     {
@@ -275,6 +335,7 @@ public sealed class TrainingScreen
         var shape = build.Shape;
 
         // The panel is never empty (§82): it opens on the first thing you could actually buy.
+        if (_selected is null) _revealSelected = true;
         _selected ??= Array.Find(Order, s => hunter.CanTrain(s));
         _selected ??= HunterStat.AttackPower;
 
@@ -294,41 +355,63 @@ public sealed class TrainingScreen
         var right = UiKit.ContentRight(ListPanel);
 
         // THE HEADER LINE — what you have to spend, beside the prices, at the rung a number that
-        // matters is set in. Not gold: a wallet is neither earned, selected nor active.
+        // matters is set in. Not gold: a wallet is neither earned, selected nor active. The Body line
+        // sits on the Headline figure's baseline — 6 px lower at 100 %, derived from the two rungs.
         var hy = ListPanel.Y + UiTypography.PanelTitleTop;
+        var headDrop = (UiTypography.Headline - UiTypography.Body) * 3 / 2;
         _ui.TextBig(b, $"{hunter.TotalTrainedRanks} RANKS TRAINED  ·  HUNTER LEVEL {hunter.HunterLevel}",
-                    left, hy + 6, Slate, UiTypography.Body);
+                    left, hy + headDrop, Slate, UiTypography.Body);
         _ui.TextRightBig(b, $"GLEAM  {hunter.Gleam:N0}", right, hy, Bone, UiTypography.Headline);
         // LEVEL is a medal, not a stat — the honest answer stays, as a tip rather than a panel.
-        if (new Rectangle(left, hy, 460, UiTypography.Pitch(UiTypography.Body)).Contains(hit))
+        if (new Rectangle(left, hy, UiMetrics.Text(460), UiTypography.Pitch(UiTypography.Body)).Contains(hit))
             _tip = "HUNTER LEVEL IS ONE PER FIVE RANKS TRAINED. IT DOES NOT CHANGE THE FIGHT — IT IS A MEDAL, NOT A STAT.";
-        var ruleY = hy + UiTypography.Pitch(UiTypography.Body) + 8;
+        var ruleY = hy + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(8);
         _ui.Fill(b, new Rectangle(left, ruleY, right - left, 1), Dim);
 
-        var y = RowsTop;
-        var first = true;
-        foreach (var (caption, stats) in Groups)
+        // THE ROWS. Nine rows and four captions at the profile's pitch. When the panel cannot hold them
+        // all — 125 % and 150 % (brief §9, §17) — the region scrolls by the wheel behind a scrollbar in
+        // its own lane, and a keyboard move brings its row into view. An entry is drawn whole or not at
+        // all: nothing is clipped against the panel's foot, and a caption is never left orphaned at the
+        // bottom without the first row it introduces.
+        if (ListScrolls)
         {
-            if (!first) y += GroupGap;
-            first = false;
-            if (TightRows)
+            if (_wheel != 0 && ListPanel.Contains(hit)) _listFirst = Math.Clamp(_listFirst - _wheel, 0, ListMaxFirst);
+            if (_revealSelected && _selected is { } sel) RevealRow(sel);
+            _listFirst = Math.Clamp(_listFirst, 0, ListMaxFirst);
+            _ui.ScrollBar(b, new Rectangle(right - UiMetrics.ScrollbarWidth, RowsTop, UiMetrics.ScrollbarWidth, RowsAvail),
+                          _listFirst, Entries.Length - ListMaxFirst, Entries.Length);
+        }
+        else _listFirst = 0;
+        _revealSelected = false;
+
+        var y = RowsTop;
+        var bottom = RowsTop + RowsAvail;
+        for (var i = _listFirst; i < Entries.Length; i++)
+        {
+            if (!EntryFits(i, bottom - y)) break;
+            var (g, k, _) = Entries[i];
+            if (k < 0)
             {
-                _ui.Fill(b, new Rectangle(left, y + 4, right - left, 1), Dim);
-                y += 10;
+                _ui.TextBig(b, Groups[g].Caption, left, y, Slate, UiTypography.Secondary);
+                _ui.Fill(b, new Rectangle(left, y + UiTypography.Pitch(UiTypography.Secondary) - 2, RowW, 1), Dim);
             }
             else
-            {
-                _ui.TextBig(b, caption, left, y, Slate, UiTypography.Secondary);
-                _ui.Fill(b, new Rectangle(left, y + UiTypography.Pitch(UiTypography.Secondary) - 2, right - left, 1), Dim);
-                y += CaptionH;
-            }
-
-            foreach (var stat in stats)
-            {
-                DrawRow(b, hunter, build, mods, shape, stat, new Rectangle(left, y, right - left, RowH), hit, clicked);
-                y += RowPitch;
-            }
+                DrawRow(b, hunter, build, mods, shape, Groups[g].Stats[k], new Rectangle(left, y, RowW, RowH), hit, clicked);
+            y += EntryH(i);
         }
+    }
+
+    /// <summary>The first entry the scrolled list draws. Zero whenever the list fits.</summary>
+    private int _listFirst;
+
+    /// <summary>Scroll the list the least distance that shows <paramref name="stat"/>'s row — with its caption, when it is the group's first.</summary>
+    private void RevealRow(HunterStat stat)
+    {
+        var idx = Array.FindIndex(Entries, e => e.Stat >= 0 && Groups[e.Group].Stats[e.Stat] == stat);
+        if (idx < 0) return;
+        var top = idx > 0 && Entries[idx - 1].Stat < 0 ? idx - 1 : idx;
+        if (top < _listFirst) _listFirst = top;
+        while (_listFirst < ListMaxFirst && idx >= _listFirst + EntriesFitting(_listFirst)) _listFirst++;
     }
 
     // ── ROW METRICS, DERIVED. ────────────────────────────────────────────────────────────────
@@ -336,74 +419,181 @@ public sealed class TrainingScreen
     // Written as fixed pixels the list overflowed its own panel at UI SCALE 125 %: nine rows plus
     // four captions need 660 px and the page leaves 447, so the last two groups drew over the reset
     // footer, and the value column ran under the TRAIN button because its offset was written for a
-    // 1246 px row and the row was 862. Height comes from the space, the columns are fractions of the
-    // row, and when even the tightest row does not fit, the captions give way to a hairline — the
-    // grouping survives as spacing, which is what it was doing anyway.
-    private const int GroupGap = 12, IconCol = 6, NameCol = 54, BtnH = 44;   // ui-size-ok: control sizes
+    // 1246 px row and the row was 862. The first fix let the pitch shrink to whatever the height
+    // allowed, floored at 36 — and at 150 % that floor held 33 px names over a rank bar (UX V2 REPORT
+    // §4). Now every size is the profile's (UiMetrics), the pitch may shrink only as far as the row's
+    // own button allows, and past that the list SCROLLS rather than squeezes. The columns stay
+    // fractions of the row, which gives back the scrollbar's lane when it is drawn.
+    private static int GroupGap => UiMetrics.Gap;                                // 12 at 100 %
+    private static int IconCol => UiMetrics.Space(6);
+    private static int IconArt => UiMetrics.Control(36);
+    private static int NameCol => IconCol + IconArt + UiMetrics.Gap;             // 54 at 100 %
+    private static int RowButtonH => UiMetrics.Control(44);
+    private static int RowGap => UiMetrics.Space(4);                             // the plate's pitch minus its height
+    private static int RankBarH => UiMetrics.Control(6);
+
+    /// <summary>The comfortable pitch — 56 at 100 %; the derived pitch never exceeds it.</summary>
+    private static int RowPitchMax => UiMetrics.Control(56);
+
+    /// <summary>The tightest pitch a row can take and still frame its button. Past this the list scrolls.</summary>
+    private static int RowPitchMin => RowButtonH + UiMetrics.Space(8);
 
     private static int RowsTop =>
-        ListPanel.Y + UiTypography.PanelTitleTop + UiTypography.Pitch(UiTypography.Body) + 24;
+        ListPanel.Y + UiTypography.PanelTitleTop + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(24);
 
     private static int RowsAvail => UiKit.ContentBottom(ListPanel) - RowsTop;
 
-    private static int CaptionH => UiTypography.Pitch(UiTypography.Secondary) + 8;
+    private static int CaptionH => UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(8);
 
-    /// <summary>True when the captions do not fit and the groups are marked by a rule instead.</summary>
-    private static bool TightRows =>
-        RowsAvail < 9 * 40 + Groups.Length * CaptionH + (Groups.Length - 1) * GroupGap;
+    /// <summary>
+    /// The row pitch. When the nine rows and their captions fit, it is the pitch that fits them, up to
+    /// the comfortable one — 55 at 100 %. When they do not fit even at the tightest pitch, the list is
+    /// going to scroll whatever the pitch is, so the rows take the most comfortable pitch that still
+    /// shows as many rows as the tightest would: no row is squeezed to buy a band of empty panel.
+    /// </summary>
+    private static int RowPitch
+    {
+        get
+        {
+            var avail = RowsAvail;
+            if (_pitchFor.Percent == UiMetrics.Percent && _pitchFor.Avail == avail) return _pitchFor.Pitch;
+            var fit = (avail - Groups.Length * CaptionH - (Groups.Length - 1) * GroupGap) / Order.Length;
+            var pitch = Math.Min(fit, RowPitchMax);
+            if (fit < RowPitchMin)
+            {
+                var rows = RowsShowing(0, RowPitchMin, avail);
+                pitch = RowPitchMax;
+                while (pitch > RowPitchMin && RowsShowing(0, pitch, avail) < rows) pitch--;
+            }
+            _pitchFor = (UiMetrics.Percent, avail, pitch);
+            return pitch;
+        }
+    }
 
-    private static int RowPitch => Math.Clamp(
-        (RowsAvail - (TightRows ? Groups.Length * 10 : Groups.Length * CaptionH)
-                   - (Groups.Length - 1) * GroupGap) / 9,
-        36, 56);
+    /// <summary>The pitch last derived, keyed on what it was derived from — it is read many times a frame.</summary>
+    private static (int Percent, int Avail, int Pitch) _pitchFor = (-1, -1, 0);
 
-    private static int RowH => RowPitch - 4;
+    private static int RowH => RowPitch - RowGap;
 
-    private static int RowW => UiKit.ContentRight(ListPanel) - UiKit.ContentLeft(ListPanel);
+    /// <summary>An entry's pitch: a caption's line and breath, or a row's pitch plus the group gap it closes.</summary>
+    private static int EntryH(int i) => EntryH(i, RowPitch);
+
+    private static int EntryH(int i, int pitch) =>
+        Entries[i].Stat < 0 ? CaptionH : pitch + (Entries[i].Closes ? GroupGap : 0);
+
+    /// <summary>The part of an entry that is actually drawn — what must clear the region's foot.</summary>
+    private static int EntryVisibleH(int i) => EntryVisibleH(i, RowPitch);
+
+    private static int EntryVisibleH(int i, int pitch) =>
+        Entries[i].Stat < 0 ? UiTypography.Pitch(UiTypography.Secondary) : pitch - RowGap;
+
+    /// <summary>Whether entry <paramref name="i"/> may be drawn with <paramref name="room"/> left: a caption also needs its first row.</summary>
+    private static bool EntryFits(int i, int room) => EntryFits(i, room, RowPitch);
+
+    private static bool EntryFits(int i, int room, int pitch) =>
+        EntryVisibleH(i, pitch) <= room
+        && (Entries[i].Stat >= 0 || (i + 1 < Entries.Length && EntryH(i, pitch) + EntryVisibleH(i + 1, pitch) <= room));
+
+    /// <summary>How many entries draw from <paramref name="first"/> before the region's foot.</summary>
+    private static int EntriesFitting(int first)
+    {
+        int h = 0, n = 0;
+        for (var i = first; i < Entries.Length && EntryFits(i, RowsAvail - h); i++) { h += EntryH(i); n++; }
+        return n;
+    }
+
+    /// <summary>How many ROWS draw from <paramref name="first"/> at <paramref name="pitch"/> in <paramref name="avail"/> — the pitch's own question.</summary>
+    private static int RowsShowing(int first, int pitch, int avail)
+    {
+        int h = 0, n = 0;
+        for (var i = first; i < Entries.Length && EntryFits(i, avail - h, pitch); i++)
+        {
+            h += EntryH(i, pitch);
+            if (Entries[i].Stat >= 0) n++;
+        }
+        return n;
+    }
+
+    /// <summary>
+    /// The furthest the list scrolls: the first entry from which everything after it still fits. Zero
+    /// when the whole list fits, which is also the profile's "does it scroll?" answer.
+    /// </summary>
+    private static int ListMaxFirst
+    {
+        get
+        {
+            var h = 0;
+            for (var i = Entries.Length - 1; i >= 0; i--)
+            {
+                h += i == Entries.Length - 1 ? EntryVisibleH(i) : EntryH(i);
+                if (h > RowsAvail) return i + 1;
+            }
+            return 0;
+        }
+    }
+
+    private static bool ListScrolls => ListMaxFirst > 0;
+
+    /// <summary>The lane the scrollbar takes from the rows' right edge — nothing when the list fits.</summary>
+    private static int ListLane => ListScrolls ? UiMetrics.ScrollbarWidth + UiMetrics.Gap : 0;
+
+    private static int RowW => UiKit.ContentRight(ListPanel) - UiKit.ContentLeft(ListPanel) - ListLane;
     private static int RankCol => RowW * 20 / 100;
     private static int ValueCol => RowW * 39 / 100;
     private static int RankBarW => RowW * 16 / 100;
-    private static int BtnW => Math.Min(224, RowW * 19 / 100);
+
+    /// <summary>
+    /// The TRAIN button's width — 224 at 100 %, growing with its label, never more than 27 % of the
+    /// row. The share is what NEED 1,249 GLEAM needs at 150 % beside the button art's end ornament;
+    /// a narrower button would have the label shrunk to fit it, which §17 forbids.
+    /// </summary>
+    private static int BtnW => Math.Min(UiMetrics.Control(224), RowW * 27 / 100);
 
     private void DrawRow(SpriteBatch b, Hunter hunter, Build build, BuildMods mods, SkillShape shape,
                          HunterStat stat, Rectangle row, Point hit, bool clicked)
     {
         var selected = _selected == stat;
         var hot = row.Contains(hit);
-        // The 5 px gold left rule IS the selection mark — one accent, one meaning.
+        // The 5 px gold left rule IS the selection mark — one accent, one meaning. HOVER is a wash over
+        // the plate, never the rule, so the two states cannot be confused (LAW 4).
         _ui.Plate(b, row, selected ? Gold : null);
         if (hot && !selected)
             _ui.Fill(b, new Rectangle(row.X + 1, row.Y + 1, row.Width - 2, row.Height - 2), Slate * 0.10f);
         if (hot) _tip = IdentityOf(stat);
 
         var (key, gem) = ArtFor(stat);
-        var art = Math.Min(36, row.Height - 8);
+        var art = Math.Min(IconArt, row.Height - UiMetrics.Space(8));
         var iconBox = new Rectangle(row.X + IconCol, row.Y + (row.Height - art) / 2, art, art);
         if (!_ui.Icon(b, key, iconBox, Color.White))
-            _ui.Diamond(b, new Rectangle(iconBox.X + 6, iconBox.Y + 6, art - 12, art - 12), gem);
+        {
+            var inset = UiMetrics.Space(6);
+            _ui.Diamond(b, new Rectangle(iconBox.X + inset, iconBox.Y + inset, art - 2 * inset, art - 2 * inset), gem);
+        }
 
         var textY = row.Y + (row.Height - UiTypography.Body) / 2 - 2;
         _ui.TextBig(b, WordFor(stat), row.X + NameCol, textY, Bone, UiTypography.Body);
 
         // RANK AS A SHAPE as well as a number (§8): sixty ranks is a long way, and a bare "12 / 60"
-        // does not say how far.
-        _ui.TextBig(b, $"{hunter.RankOf(stat)} / {hunter.StatRankCap}", row.X + RankCol, row.Y + 4,
+        // does not say how far. The figure hangs from the row's top and the bar from its foot, so the
+        // two part as the row grows with the profile rather than meeting in the middle.
+        _ui.TextBig(b, $"{hunter.RankOf(stat)} / {hunter.StatRankCap}", row.X + RankCol, row.Y + UiMetrics.Space(4),
                     Slate, UiTypography.Secondary);
-        var barY = row.Y + row.Height - 14;
-        _ui.Fill(b, new Rectangle(row.X + RankCol, barY, RankBarW, 6), Dim);
+        var barY = row.Bottom - UiMetrics.Space(14);
+        _ui.Fill(b, new Rectangle(row.X + RankCol, barY, RankBarW, RankBarH), Dim);
         _ui.Fill(b, new Rectangle(row.X + RankCol, barY,
-                                  (int)(RankBarW * (hunter.RankOf(stat) / (float)hunter.StatRankCap)), 6), Bone);
+                                  (int)(RankBarW * (hunter.RankOf(stat) / (float)hunter.StatRankCap)), RankBarH), Bone);
 
         // NOW → AFTER, at Headline, because this is the decision. When the two format the same — at
         // the cap, or a gain too small to show — the arrow is dropped: a "96 → 96" promises a change
         // the number does not make.
         var (label, now, after) = Effect(stat, hunter, build, mods, shape);
-        var btn = new Rectangle(row.Right - BtnW, row.Y + (row.Height - BtnH) / 2, BtnW, BtnH);
+        var btn = new Rectangle(row.Right - BtnW, row.Y + (row.Height - RowButtonH) / 2, BtnW, RowButtonH);
         var x = row.X + ValueCol;
         var vy = row.Y + (row.Height - UiTypography.Headline) / 2 - 2;
         // The value column ends where the button begins — it used to be written as an offset for one
         // page width and ran straight under the button at any other.
-        var room = btn.X - 16 - x;
+        var valueGap = UiMetrics.Space(16);
+        var room = btn.X - valueGap - x;
         var head = $"{label} {now}";
         if (after != now)
         {
@@ -418,11 +608,18 @@ public sealed class TrainingScreen
             }
             else
             {
-                // Too narrow for both: the AFTER is the decision, so the label gives way first.
-                _ui.TextBig(b, _ui.ShortenBig($"{now}  →  ", room - _ui.MeasureBig(after, UiTypography.Headline),
-                                              UiTypography.Headline),
-                            x, vy, Bone, UiTypography.Headline);
-                _ui.TextRightBig(b, after, btn.X - 16, vy, Met, UiTypography.Headline);
+                // Too narrow for both — the widest labels at 150 % — so the AFTER, which is the decision,
+                // keeps its place and the label gives way; the row's name and the inspector still carry
+                // it. The figures flow on as one phrase, exactly as they do in the rows that fit.
+                var lead = $"{now}  →  ";
+                var leadW = _ui.MeasureBig(lead, UiTypography.Headline);
+                if (leadW + _ui.MeasureBig(after, UiTypography.Headline) <= room)
+                {
+                    _ui.TextBig(b, lead, x, vy, Bone, UiTypography.Headline);
+                    _ui.TextBig(b, after, x + leadW, vy, Met, UiTypography.Headline);
+                }
+                else
+                    _ui.TextBig(b, _ui.ShortenBig(lead + after, room, UiTypography.Headline), x, vy, Bone, UiTypography.Headline);
             }
         }
         else
@@ -450,100 +647,158 @@ public sealed class TrainingScreen
         var left = UiKit.ContentLeft(InspectorPanel);
         var right = UiKit.ContentRight(InspectorPanel);
         var width = right - left;
-        var cta = new Rectangle(left, InspectorPanel.Bottom - 92, width, 68);
-        var refusalY = cta.Y - 8 - 2 * UiTypography.Pitch(UiTypography.Secondary);
         var lineH = UiTypography.Pitch(UiTypography.Body);
-        // THE STATE BLOCK IS ANCHORED and the prose stops above it. Flowed, it walked into the button
-        // at 125 %, where the panel is 554 px tall instead of 770 and the prose fills the difference.
-        var stateH = UiTypography.Pitch(UiTypography.Secondary) + 8 + lineH
-                     + UiTypography.Pitch(UiTypography.PrimaryValue) + lineH * 2;
-        var stateTop = refusalY - 8 - stateH;
-        var floor = stateTop - 12;
+        var capH = UiTypography.Pitch(UiTypography.Secondary);
+        var breath = UiMetrics.Space(8);
+
+        // THE STATE BLOCK IS ANCHORED to the foot, the CTA under it, and the prose stops above it.
+        // Flowed, it walked into the button at 125 %, where the panel is 554 px tall instead of 770 and
+        // the prose fills the difference. The refusal line keeps two lines of room so a long one wraps.
+        var cta = new Rectangle(left, InspectorPanel.Bottom - UiMetrics.Space(24) - UiMetrics.ButtonHeightPrimary,
+                                width, UiMetrics.ButtonHeightPrimary);
+        var refusalY = cta.Y - breath - 2 * capH;
+        var stateH = capH + breath + lineH + UiTypography.Pitch(UiTypography.PrimaryValue) + lineH * 2;
+        var stateTop = refusalY - breath - stateH;
+        var floor = stateTop - UiMetrics.Space(12);
+
+        // THE HEADER stays put — the category and the name are what the scrolled prose is about.
         var y = InspectorPanel.Y + UiTypography.PanelTitleTop;
+        _ui.TextBig(b, _ui.ShortenBig($"{GroupOf(stat)}  ·  TRAINED STAT", width, UiTypography.Secondary),
+                    left, y, Slate, UiTypography.Secondary);
+        y += capH;
+        _ui.TextBig(b, _ui.ShortenBig(WordFor(stat), width, UiTypography.Headline), left, y, Bone, UiTypography.Headline);
+        y += UiTypography.Pitch(UiTypography.Headline);
 
-        void Line(string s, Color ink, int px)
+        // THE PROSE — the identity line, WHAT IT DOES and its paragraphs — fills the room between the
+        // header and the state block. At 100 % it fits. At the larger profiles it does not (three
+        // paragraphs at Body 33 in 416 px are twice the room), and rather than truncating a sentence it
+        // SCROLLS (brief §18: long inspectors): laid out at full width first, and only if that overflows
+        // laid out again beside a scrollbar's lane, so the 100 % wrap never moves for a lane it does not use.
+        var proseTop = y;
+        var proseH = floor - proseTop;
+        if (_inspectorFor != stat) { _inspectorFor = stat; _inspectorFirst = 0; }
+        var textW = width;
+        if (BuildProse(stat, hunter, build, mods, shape, textW, proseH)) _inspectorFirst = 0;
+        else
         {
-            if (y + UiTypography.Pitch(px) > floor) return;
-            _ui.TextBig(b, _ui.ShortenBig(s, width, px), left, y, ink, px);
-            y += UiTypography.Pitch(px);
+            textW = width - UiMetrics.ScrollbarWidth - UiMetrics.Gap;
+            BuildProse(stat, hunter, build, mods, shape, textW, proseH);
+            var maxFirst = ProseMaxFirst(proseH);
+            if (_wheel != 0 && InspectorPanel.Contains(hit)) _inspectorFirst = Math.Clamp(_inspectorFirst - _wheel, 0, maxFirst);
+            _inspectorFirst = Math.Clamp(_inspectorFirst, 0, maxFirst);
+            _ui.ScrollBar(b, new Rectangle(right - UiMetrics.ScrollbarWidth, proseTop, UiMetrics.ScrollbarWidth, proseH),
+                          _inspectorFirst, _prose.Count - maxFirst, _prose.Count);
         }
-
-        void Wrap(string s, Color ink, int px, int max)
+        for (var i = _inspectorFirst; i < _prose.Count; i++)
         {
-            foreach (var l in _ui.WrapBig(s, width, px).Take(max))
-            {
-                if (y + UiTypography.Pitch(px) > floor) return;
-                _ui.TextBig(b, l, left, y, ink, px);
-                y += UiTypography.Pitch(px);
-            }
-        }
-
-        void Rule()
-        {
-            if (y + 12 > floor) return;
-            _ui.Fill(b, new Rectangle(left, y + 4, width, 1), Dim);
-            y += 14;
-        }
-
-        void Pair(string k, string v, Color ink)
-        {
-            if (y + lineH > floor) return;
-            _ui.TextBig(b, k, left, y, Slate, UiTypography.Body);
-            _ui.TextRightBig(b, v, right, y, ink, UiTypography.Body);
-            y += lineH;
-        }
-
-        Line($"{GroupOf(stat)}  ·  TRAINED STAT", Slate, UiTypography.Secondary);
-        Line(WordFor(stat), Bone, UiTypography.Headline);
-        Wrap(IdentityOf(stat), Slate, UiTypography.Body, 2);
-
-        Rule();
-        Line("WHAT IT DOES", Slate, UiTypography.Secondary);
-        foreach (var para in Describe(stat, hunter, build, mods, shape))
-        {
-            Wrap(para, Bone, UiTypography.Body, 4);
-            y += 6;
+            var (text, ink, px, h) = _prose[i];
+            if (y + ProseVisibleH(i) > floor) break;
+            if (text is null) _ui.Fill(b, new Rectangle(left, y + UiMetrics.Space(4), textW, 1), ink);
+            else _ui.TextBig(b, text, left, y, ink, px);
+            y += h;
         }
 
         // CURRENT STATE — anchored to the foot so the loudest number sits in the same place on every
-        // stat, which is what the eye compares between rows.
+        // stat, which is what the eye compares between rows. Sized above, so nothing here can run
+        // into the button.
         var (_, now, after) = Effect(stat, hunter, build, mods, shape);
         var maxed = hunter.RankOf(stat) >= hunter.StatRankCap;
         var cost = hunter.NextRankCost(stat);
         var afford = hunter.CanTrain(stat);
 
-        // The closures stop at the prose's floor; the state block lives BELOW it, so the floor is
-        // lifted to the button before the block is drawn — otherwise Pair() politely refuses to draw
-        // the very rows the block exists for.
+        void Pair(string k, string v, Color ink)
+        {
+            _ui.TextBig(b, k, left, y, Slate, UiTypography.Body);
+            _ui.TextRightBig(b, v, right, y, ink, UiTypography.Body);
+            y += lineH;
+        }
+
         y = stateTop;
-        floor = cta.Y - 8;
         _ui.Fill(b, new Rectangle(left, y, width, 1), Dim);
-        y += 12;
+        y += UiMetrics.Space(12);
         _ui.TextBig(b, "CURRENT STATE", left, y, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, $"RANK {hunter.RankOf(stat)} OF {hunter.StatRankCap}", right, y - 4, Bone,
+        _ui.TextRightBig(b, $"RANK {hunter.RankOf(stat)} OF {hunter.StatRankCap}", right, y - UiMetrics.Space(4), Bone,
                          UiTypography.Headline);
-        y += UiTypography.Pitch(UiTypography.Secondary) + 4;
+        y += capH + UiMetrics.Space(4);
         Pair("NOW", now, Bone);
         if (!maxed)
         {
-            _ui.TextBig(b, "AFTER ONE RANK", left, y + 6, Slate, UiTypography.Body);
+            _ui.TextBig(b, "AFTER ONE RANK", left, y + UiMetrics.Space(6), Slate, UiTypography.Body);
             _ui.TextRightBig(b, after, right, y, Met, UiTypography.PrimaryValue);
             y += UiTypography.Pitch(UiTypography.PrimaryValue);
-            Line($"ONE RANK ADDS {hunter.GainPerRank(stat):0.##} {WordFor(stat)}", Slate, UiTypography.Body);
+            _ui.TextBig(b, _ui.ShortenBig($"ONE RANK ADDS {hunter.GainPerRank(stat):0.##} {WordFor(stat)}", width, UiTypography.Body),
+                        left, y, Slate, UiTypography.Body);
+            y += lineH;
         }
 
         Pair("WHAT IT COSTS", maxed ? "—" : $"{cost:N0} GLEAM", maxed ? Slate : afford ? Bone : Ember);
 
         if (!afford)
-            _ui.TextBig(b, _ui.ShortenBig(
-                            maxed ? $"THIS STAT IS FULLY TRAINED. RANK {hunter.StatRankCap} IS THE MOST IT CAN REACH."
-                                  : $"NOT ENOUGH GLEAM — {cost:N0} NEEDED, YOU HAVE {hunter.Gleam:N0}.",
-                            width, UiTypography.Secondary),
-                        left, refusalY, Ember, UiTypography.Secondary);
+        {
+            // Two lines of room were reserved for it: at the larger profiles the sentence needs both.
+            var refusal = maxed ? $"THIS STAT IS FULLY TRAINED. RANK {hunter.StatRankCap} IS THE MOST IT CAN REACH."
+                                : $"NOT ENOUGH GLEAM — {cost:N0} NEEDED, YOU HAVE {hunter.Gleam:N0}.";
+            var lines = _ui.WrapBig(refusal, width, UiTypography.Secondary);
+            var ry = refusalY;
+            for (var i = 0; i < Math.Min(2, lines.Count); i++, ry += capH)
+                _ui.TextBig(b, lines.Count > 2 && i == 1 ? _ui.ShortenBig(lines[i] + "…", width, UiTypography.Secondary) : lines[i],
+                            left, ry, Ember, UiTypography.Secondary);
+        }
 
         if (_ui.Button(b, cta, maxed ? "MAXED" : afford ? $"TRAIN  {cost:N0} GLEAM" : $"NEED  {cost:N0} GLEAM",
                        hit, clicked, enabled: afford, afford ? ButtonStyle.Primary : ButtonStyle.Secondary))
             _trainRequest = stat;
+    }
+
+    /// <summary>The inspector's prose this frame — one drawn line each; a null text is a hairline rule. Reused, not reallocated.</summary>
+    private readonly List<(string? Text, Color Ink, int Px, int H)> _prose = new();
+
+    /// <summary>The first prose line the inspector draws, and the stat it was scrolled for — a new stat starts at the top.</summary>
+    private int _inspectorFirst;
+    private HunterStat? _inspectorFor;
+
+    /// <summary>
+    /// Lay the selected stat's prose out at <paramref name="width"/> into <see cref="_prose"/>: the identity
+    /// line, a rule, WHAT IT DOES, and each paragraph with a breath after it. True when it all fits in
+    /// <paramref name="height"/>.
+    /// </summary>
+    private bool BuildProse(HunterStat stat, Hunter hunter, Build build, BuildMods mods, SkillShape shape, int width, int height)
+    {
+        _prose.Clear();
+        var lineH = UiTypography.Pitch(UiTypography.Body);
+        foreach (var l in _ui.WrapBig(IdentityOf(stat), width, UiTypography.Body))
+            _prose.Add((l, Slate, UiTypography.Body, lineH));
+        _prose.Add((null, Dim, 0, UiMetrics.Space(14)));
+        _prose.Add(("WHAT IT DOES", Slate, UiTypography.Secondary, UiTypography.Pitch(UiTypography.Secondary)));
+        foreach (var para in Describe(stat, hunter, build, mods, shape))
+        {
+            var lines = _ui.WrapBig(para, width, UiTypography.Body);
+            for (var i = 0; i < lines.Count; i++)
+                _prose.Add((lines[i], Bone, UiTypography.Body, lineH + (i == lines.Count - 1 ? UiMetrics.Space(6) : 0)));
+        }
+        var h = 0;
+        for (var i = 0; i < _prose.Count; i++)
+        {
+            if (h + ProseVisibleH(i) > height) return false;
+            h += _prose[i].H;
+        }
+        return true;
+    }
+
+    /// <summary>The drawn part of a prose line — its own pitch, without the paragraph breath folded under it.</summary>
+    private int ProseVisibleH(int i) =>
+        _prose[i].Text is null ? UiMetrics.Space(4) + 1 : UiTypography.Pitch(_prose[i].Px);
+
+    /// <summary>The furthest the prose scrolls: the first line from which the rest still fits in <paramref name="height"/>.</summary>
+    private int ProseMaxFirst(int height)
+    {
+        var h = 0;
+        for (var i = _prose.Count - 1; i >= 0; i--)
+        {
+            h += i == _prose.Count - 1 ? ProseVisibleH(i) : _prose[i].H;
+            if (h > height) return i + 1;
+        }
+        return 0;
     }
 
     /// <summary>The row's label, its NOW and its AFTER — the AFTER through <see cref="Hunter.Preview{T}"/>.</summary>
@@ -763,26 +1018,8 @@ public sealed class TrainingScreen
         }
     }
 
-    /// <summary>
-    /// One rank of one stat, priced. The cost is on the button because it changes every purchase.
-    /// </summary>
-    /// <remarks>
-    /// Geometric growth means the tenth rank of a stat costs many times the first, so a player choosing
-    /// where gleam goes is making a real decision — and a button that only said "TRAIN" would hide the
-    /// entire decision behind a click.
-    /// </remarks>
-    private void DrawTrain(SpriteBatch b, Hunter hunter, HunterStat stat, int x, int y, Point mouse, bool clicked)
-    {
-        var maxed = hunter.RankOf(stat) >= hunter.StatRankCap;
-        var cost = hunter.NextRankCost(stat);
-        var rect = new Rectangle(x, y, 176, 44);
-        var afford = hunter.CanTrain(stat);
-
-        var label = maxed ? "MAXED" : afford ? $"TRAIN  {cost:N0} GLEAM" : $"NEED  {cost:N0} GLEAM";
-
-        if (_ui.Button(b, rect, label, mouse, clicked, enabled: afford))
-            _trainRequest = stat;
-    }
+    // DrawTrain — a 176×44 button helper nothing called since the row grew its own — is gone with the
+    // density-profile pass: a dormant literal is the next overflow waiting to be copied.
 
     /// <summary>
     /// RESET ALL TRAINING — the respec footer. Costs one Crystal, and returns NO Gleam.
@@ -806,24 +1043,29 @@ public sealed class TrainingScreen
         var price = hunter.TrainingResetCrystalCost;
 
         // THE BUTTON IS BUTTON-SIZED. The ornate button art is a whole-image stretch, so a 960 px one
-        // smeared its corner scrollwork into a streak; the explanation lives in text beside it.
-        var button = new Rectangle(ResetBar.Right - 24 - 360, ResetBar.Y + 18, 360, 48);
-        var tx = ResetBar.X + 24;
-        var textW = button.X - 24 - tx;
-        var lineY = ResetBar.Y + 12 + UiTypography.Pitch(UiTypography.Body);
+        // smeared its corner scrollwork into a streak; the explanation lives in text beside it. It is
+        // the house button height, centred in the bar, and its width grows with its label.
+        var pad = UiMetrics.Space(24);
+        var button = new Rectangle(ResetBar.Right - pad - ResetButtonW, ResetBar.Y + (ResetBar.Height - UiMetrics.ButtonHeight) / 2,
+                                   ResetButtonW, UiMetrics.ButtonHeight);
+        var tx = ResetBar.X + pad;
+        var textW = button.X - pad - tx;
+        var titleY = ResetBar.Y + UiMetrics.Space(12);
+        var lineY = titleY + UiTypography.Pitch(UiTypography.Body);
 
         if (_resetArmed && Environment.TickCount64 - _resetArmedAtMs > (long)(ArmSeconds * 1000))
             _resetArmed = false;   // the settings pattern this mirrors auto-disarms; so does this
         if (_resetArmed)
         {
-            _ui.TextBig(b, $"SURE? ALL {ranks} RANKS GO BACK TO ZERO.", tx, ResetBar.Y + 12,
+            _ui.TextBig(b, $"SURE? ALL {ranks} RANKS GO BACK TO ZERO.", tx, titleY,
                         Color.White, UiTypography.Body);
             _ui.TextBig(b, _ui.ShortenBig("THE GLEAM YOU SPENT DOES NOT COME BACK. CLICK THE RED BUTTON AGAIN TO DO IT.",
                                           textW, UiTypography.Body),
                         tx, lineY, Ember, UiTypography.Body);
             _ui.Fill(b, button, ArmedRed);
-            _ui.Fill(b, new Rectangle(button.X, button.Y, button.Width, 3), Ember);
-            _ui.TextCenterBig(b, "YES, RESET — NO GLEAM BACK", button.Center.X, button.Center.Y - 10,
+            _ui.Fill(b, new Rectangle(button.X, button.Y, button.Width, UiMetrics.Control(3)), Ember);
+            _ui.TextCenterBig(b, _ui.ShortenBig("YES, RESET — NO GLEAM BACK", button.Width - 2 * UiTypography.ButtonPadX, UiTypography.Body),
+                              button.Center.X, button.Center.Y - UiTypography.Body * 10 / 22,
                               Color.White, UiTypography.Body, TextFace.Strong);
             if (UiKit.ClickedIn(button, hit, clicked))
             {
@@ -834,7 +1076,7 @@ public sealed class TrainingScreen
             return;
         }
 
-        _ui.TextBig(b, "RESET ALL TRAINING", tx, ResetBar.Y + 12, Bone, UiTypography.Body);
+        _ui.TextBig(b, "RESET ALL TRAINING", tx, titleY, Bone, UiTypography.Body);
         var cost = $"{ranks} RANKS GO BACK TO ZERO. IT COSTS {price:N0} CRYSTAL — YOU HAVE {crystals:N0}. THE GLEAM YOU SPENT DOES NOT COME BACK.";
         if (ranks <= 0)
         {
@@ -857,6 +1099,9 @@ public sealed class TrainingScreen
             }
         }
     }
+
+    /// <summary>The reset button's width — 360 at 100 %, wide enough for YES, RESET — NO GLEAM BACK at Body.</summary>
+    private static int ResetButtonW => UiMetrics.Control(360);
 
     // DrawProgression, LevelCard, SetHover and DrawHoverCard are gone with UX V2 P2.3.
     //
