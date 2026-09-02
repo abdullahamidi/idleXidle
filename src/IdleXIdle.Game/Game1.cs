@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
@@ -569,6 +569,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // by default, or every fixture would silently capture at 125% in the rig's 1280-wide window.
             var shotScale = Environment.GetEnvironmentVariable("RH_SHOT_UISCALE");
             _uiScalePercent = shotScale == "auto" ? 0 : int.TryParse(shotScale, out var sp) && sp is 125 or 150 ? sp : 100;
+            // RH_SHOT_REDUCED=1 poses REDUCED MOTION (the accessibility matrix, brief §102–§107): set here,
+            // before the first Update, so UiMotion.Reduced follows it on the very first frame and every
+            // idle animation holds still on the photographed one. Off when unset, like the real setting.
+            if (Environment.GetEnvironmentVariable("RH_SHOT_REDUCED") == "1") ReducedMotion = true;
             RecomputePresent();
         }
 
@@ -3434,8 +3438,47 @@ public class Game1 : Microsoft.Xna.Framework.Game
     }
 
 
-    /// <summary>The small close button top-right of a hint slot or lesson card.</summary>
-    private static Rectangle HintCloseRect(Rectangle slot) => new(slot.Right - 42, slot.Y + 10, 32, 32);
+    /// <summary>The small close button top-right of a hint slot or lesson card — a hit target, so it follows the profile.</summary>
+    /// <remarks>
+    /// It sits at the inset on any card tall enough to hold it, which is every card with a body. A
+    /// ONE-LINE hint is shorter than the icon at 150 % (43 px of plate, 48 px of icon), and pinned at
+    /// the inset the icon then hung 18 px past the plate onto the VAULT's own OPEN ALL button. So the
+    /// drop is the inset OR what the plate can give, whichever is less — and the icon rides the plate's
+    /// top edge rather than the screen's first control row. Draw rect and hit rect are this one rect.
+    /// </remarks>
+    private static Rectangle HintCloseRect(Rectangle slot)
+    {
+        var size = UiMetrics.Control(32);
+        var inset = UiMetrics.Space(10);
+        var band = Math.Min(slot.Height, inset * 2 + size);
+        return new Rectangle(slot.Right - inset - size, slot.Y + Math.Max(0, (band - size) / 2), size, size);
+    }
+
+    // ── THE CARD GRID — one shape for the hint slot, the fight's lesson card and the intro's preview
+    //    of it. A card is a title line over a wrapped body, closed with the × in its top-right corner;
+    //    its height is DERIVED from the lines it holds, so a bigger profile makes a taller card rather
+    //    than a card whose body runs out of its plate.
+
+    /// <summary>A card's text inset from its left edge.</summary>
+    private static int CardPadX => UiMetrics.Space(22);
+
+    /// <summary>The lane a card's text leaves for the close icon on its right: the icon, its inset, a breath.</summary>
+    private static int CardCloseLane => UiMetrics.Space(10) + UiMetrics.Control(32) + UiMetrics.Space(20);
+
+    /// <summary>Where a card's title sits below its top edge.</summary>
+    private static int CardTitleTop => UiMetrics.Space(14);
+
+    /// <summary>Where a card's body starts: one title line under the title, plus a breath.</summary>
+    private static int CardBodyTop => CardTitleTop + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(2);
+
+    /// <summary>A card's height for a wrapped body of <paramref name="lines"/> lines — title, body, pads.</summary>
+    private static int CardHeight(int lines) => CardBodyTop + lines * UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(14);
+
+    /// <summary>A one-line card's height: the line, with the same pad above and below.</summary>
+    private static int CardLineHeight => UiTypography.Body + UiMetrics.Space(13) * 2;
+
+    /// <summary>The toast column: the stage header's own width (630..1190). Page geometry, not a control.</summary>
+    private const int ToastLeft = 630, ToastWidth = 560;
 
     // ── The hint slot (UX V2 P0.7) ─────────────────────────────────────────────────────────────
     //
@@ -3545,8 +3588,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>Where the lesson card hangs: the toast slot, as tall as its wrapped body.</summary>
     private Rectangle HuntLessonRect(TutorialStep step)
     {
-        var body = _ui.WrapBig(Tutorial.Body(step, GuideFacts()), 560 - 44, UiTypography.Secondary);
-        return new Rectangle(630, ToastTop, 560, 58 + body.Count * UiTypography.Pitch(UiTypography.Secondary));
+        var body = _ui.WrapBig(Tutorial.Body(step, GuideFacts()), ToastWidth - CardPadX - CardCloseLane, UiTypography.Secondary);
+        return new Rectangle(ToastLeft, ToastTop, ToastWidth, CardHeight(body.Count));
     }
 
     private void DrawHuntLesson()
@@ -3558,13 +3601,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private void DrawLessonCard(TutorialStep step, float alpha)
     {
         var r = HuntLessonRect(step);
-        var body = _ui.WrapBig(Tutorial.Body(step, GuideFacts()), r.Width - 44, UiTypography.Secondary);
+        var body = _ui.WrapBig(Tutorial.Body(step, GuideFacts()), r.Width - CardPadX - CardCloseLane, UiTypography.Secondary);
         _ui.PanelQuiet(_batch, r, alpha);
-        _ui.TextBig(_batch, Tutorial.Title(step), r.X + 22, r.Y + 14, UiInk.Accent * alpha, UiTypography.Body);
-        var ty = r.Y + 44;
+        _ui.TextBig(_batch, Tutorial.Title(step), r.X + CardPadX, r.Y + CardTitleTop, UiInk.Accent * alpha, UiTypography.Body);
+        var ty = r.Y + CardBodyTop;
         foreach (var line in body)
         {
-            _ui.TextBig(_batch, line, r.X + 22, ty, UiInk.Primary * alpha, UiTypography.Secondary);
+            _ui.TextBig(_batch, line, r.X + CardPadX, ty, UiInk.Primary * alpha, UiTypography.Secondary);
             ty += UiTypography.Pitch(UiTypography.Secondary);
         }
         _ui.CloseButton(_batch, HintCloseRect(r), ChromeMouse, false);   // drawn here; the click is handled in Update
@@ -3615,13 +3658,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_lockedTimer <= 0f || _lockedMsg.Length == 0) return;
 
         var fade = MathF.Min(1f, _lockedTimer / 0.5f);
-        var w = 900;
-        var box = new Rectangle((1920 - w) / 2, 96, w, 62);
+        var w = LockedToastWidth;
+        var h = UiTypography.Pitch(UiTypography.OverlayBody) + UiMetrics.Space(17) * 2;   // one line, padded
+        var box = new Rectangle(UiKit.PageCenterX - w / 2, LockedToastTop, w, h);
         _ui.Fill(_batch, box, new Color(0x18, 0x10, 0x24) * (0.92f * fade));
         _ui.Fill(_batch, new Rectangle(box.X, box.Y, box.Width, 3), NavGem * fade);
-        _ui.TextCenterBig(_batch, _ui.ShortenBig(_lockedMsg, w - 40, UiTypography.OverlayBody), box.Center.X, box.Y + 18,
-                          Color.White * fade, UiTypography.OverlayBody);
+        _ui.TextCenterBig(_batch, _ui.ShortenBig(_lockedMsg, w - UiMetrics.Space(40), UiTypography.OverlayBody), box.Center.X,
+                          box.Y + (h - UiTypography.OverlayBody) / 2, Color.White * fade, UiTypography.OverlayBody);
     }
+
+    /// <summary>The locked-tile toast's width and where it hangs — a readable line under the pills. Page geometry.</summary>
+    private const int LockedToastWidth = 900, LockedToastTop = 96;
 
     // ── The slot-note banner ───────────────────────────────────────────────────────────────────
     //
@@ -3638,24 +3685,43 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     private const int ScreenBannerWidth = 1200;
 
-    /// <summary>The width the banner wraps its body to — inside the left rule and clear of the ×.</summary>
-    private const int ScreenBannerWrap = ScreenBannerWidth - 44 - 40;
+    /// <summary>The width the banner wraps its body to — inside the left inset and clear of the ×.</summary>
+    private static int ScreenBannerWrap => ScreenBannerWidth - CardPadX - CardCloseLane;
+
+    /// <summary>
+    /// Where the banner hangs: directly under the subtitle line of the screen's title strip — canvas 93
+    /// at 100 %, just under the currency capsules — so the plate never sits across the subtitle at any
+    /// profile (at 125 and 150 % a slot pinned at the 100 % literal let TRAITS' and MASTERY's subtitles
+    /// show through it as ghost text).
+    /// </summary>
+    private static int ScreenBannerTop => CanvasY(PageSubtitleBottom);
+
+    /// <summary>The least a one-line hint can be: its line, with the tightest pad above and below.</summary>
+    private static int HintLineMin => UiTypography.Body + UiMetrics.Space(4) * 2;
+
+    /// <summary>
+    /// A one-line hint's height: the card's comfortable line (48) when the band above the first panel
+    /// has room for it, else what the band has left — never under <see cref="HintLineMin"/>, so the
+    /// line itself is never squeezed. The band is 41 px at 100 % and gone by 150 %, where the hint
+    /// overruns the panel's top rail rather than the subtitle above it.
+    /// </summary>
+    private static int HintLineHeight => Math.Min(CardLineHeight, Math.Max(HintLineMin, CanvasY(PageContentTop) - ScreenBannerTop));
 
     /// <summary>
     /// Where the banner sits: under the screen's title band, centred over the content.
     /// </summary>
     /// <remarks>
-    /// y = 86 is just under the currency capsules, so the banner covers neither them nor the settings
-    /// gear — both are live chrome, and a banner over a button is a button the player cannot press.
-    /// It does cover the top of the screen's own content, which is the point: it is that screen's
-    /// explanation, and it is closed with one click.
+    /// Just under the currency capsules, so the banner covers neither them nor the settings gear — both
+    /// are live chrome, and a banner over a button is a button the player cannot press. A one-line hint
+    /// stays in the band the screens leave free; a hint with a body covers the top of the screen's own
+    /// content, which is the point: it is that screen's explanation, and it is closed with one click.
     /// </remarks>
     private Rectangle HintSlotRect(SlotContent slot)
     {
-        var x = NavRailWidth + (1920 - NavRailWidth - ScreenBannerWidth) / 2;
-        if (slot.Body.Length == 0) return new Rectangle(x, 86, ScreenBannerWidth, 48);   // a one-line hint
+        var x = NavRailWidth + (UiKit.Page.Width - NavRailWidth - ScreenBannerWidth) / 2;
+        if (slot.Body.Length == 0) return new Rectangle(x, ScreenBannerTop, ScreenBannerWidth, HintLineHeight);   // a one-line hint
         var body = _ui.WrapBig(slot.Body, ScreenBannerWrap, UiTypography.Secondary);
-        return new Rectangle(x, 86, ScreenBannerWidth, 58 + body.Count * UiTypography.Pitch(UiTypography.Secondary));
+        return new Rectangle(x, ScreenBannerTop, ScreenBannerWidth, CardHeight(body.Count));
     }
 
     /// <summary>
@@ -3676,15 +3742,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _ui.Plate(_batch, r, UiInk.Accent);
         if (slot.Body.Length == 0)
         {
-            _ui.TextBig(_batch, slot.Title, r.X + 22, r.Y + 11, UiInk.Primary, UiTypography.Body);
+            _ui.TextBig(_batch, _ui.ShortenBig(slot.Title, ScreenBannerWrap, UiTypography.Body), r.X + CardPadX,
+                        r.Y + (r.Height - UiTypography.Body) / 2, UiInk.Primary, UiTypography.Body);
         }
         else
         {
-            _ui.TextBig(_batch, slot.Title, r.X + 22, r.Y + 14, UiInk.Accent, UiTypography.Body);
-            var ty = r.Y + 44;
+            _ui.TextBig(_batch, _ui.ShortenBig(slot.Title, ScreenBannerWrap, UiTypography.Body), r.X + CardPadX,
+                        r.Y + CardTitleTop, UiInk.Accent, UiTypography.Body);
+            var ty = r.Y + CardBodyTop;
             foreach (var line in _ui.WrapBig(slot.Body, ScreenBannerWrap, UiTypography.Secondary))
             {
-                _ui.TextBig(_batch, line, r.X + 22, ty, UiInk.Primary, UiTypography.Secondary);
+                _ui.TextBig(_batch, line, r.X + CardPadX, ty, UiInk.Primary, UiTypography.Secondary);
                 ty += UiTypography.Pitch(UiTypography.Secondary);
             }
         }
@@ -3712,15 +3780,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         var fade = Math.Clamp(_noticeTimer / 1.0f, 0f, 1f);
         var parts = _notice.Split('\n');
-        var y = _bootTimer > 0f && _bootMessage.Length > 0 && !_tourActive ? ToastTop + ToastHeight + 8 : ToastTop;
-        var r = new Rectangle(560, y, 800, 96);
+        var y = _bootTimer > 0f && _bootMessage.Length > 0 && !_tourActive ? ToastTop + ToastHeight + UiMetrics.Space(8) : ToastTop;
+        // Two lines: the pad, a title line, a body line, a breath — the height follows the rungs.
+        var pad = UiMetrics.Space(22);
+        var h = pad + UiTypography.Pitch(UiTypography.OverlayTitle) + UiTypography.Pitch(UiTypography.OverlayBody) + UiMetrics.Space(12);
+        var r = new Rectangle(UiKit.PageCenterX - NoticeToastWidth / 2, y, NoticeToastWidth, h);
         _ui.PanelQuiet(_batch, r, fade);   // a toast is not a modal — the quiet frame (UiKit.PanelQuiet)
-        _ui.TextCenterBig(_batch, _ui.ShortenBig(parts[0], r.Width - 90, UiTypography.OverlayTitle),
-                          r.Center.X, r.Y + 22, NavGold * fade, UiTypography.OverlayTitle);
+        var room = r.Width - UiMetrics.Space(90);
+        _ui.TextCenterBig(_batch, _ui.ShortenBig(parts[0], room, UiTypography.OverlayTitle),
+                          r.Center.X, r.Y + pad, NavGold * fade, UiTypography.OverlayTitle);
         if (parts.Length > 1)
-            _ui.TextCenterBig(_batch, _ui.ShortenBig(parts[1], r.Width - 90, UiTypography.OverlayBody),
-                              r.Center.X, r.Y + 56, Bone * fade, UiTypography.OverlayBody);
+            _ui.TextCenterBig(_batch, _ui.ShortenBig(parts[1], room, UiTypography.OverlayBody),
+                              r.Center.X, r.Y + pad + UiTypography.Pitch(UiTypography.OverlayTitle), Bone * fade, UiTypography.OverlayBody);
     }
+
+    /// <summary>The notice toast's width — a readable two-line plate, centred. Page geometry.</summary>
+    private const int NoticeToastWidth = 800;
 
     // ── The tours ──────────────────────────────────────────────────────────────────────────────
 
@@ -3816,7 +3891,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     private static Rectangle TourCardRect(IReadOnlyList<Rectangle> holes, int width, int height)
     {
-        const int gap = 28;
+        var gap = UiMetrics.Space(28);
+        var edge = UiMetrics.Space(8);
         var a = holes[0];
         var candidates = new[]
         {
@@ -3825,15 +3901,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
             new Point(a.Left - gap - width, a.Center.Y - height / 2),
             new Point(a.Center.X - width / 2, a.Top - gap - height),
         };
+        var right = UiKit.PageRight(UiMetrics.Space(20));
+        var bottom = UiKit.PageBottom(edge);
         foreach (var p in candidates)
         {
-            if (p.Y < 8 || p.Y + height > 1072) continue;
-            var r = new Rectangle(Math.Clamp(p.X, NavRailWidth + 20, 1900 - width), p.Y, width, height);
+            if (p.Y < edge || p.Y + height > bottom) continue;
+            var r = new Rectangle(Math.Clamp(p.X, NavRailWidth + UiMetrics.Space(20), right - width), p.Y, width, height);
             if (holes.Any(h => h.Intersects(r))) continue;
             return r;
         }
-        return new Rectangle(1900 - width, 1072 - height, width, height);
+        return new Rectangle(right - width, bottom - height, width, height);
     }
+
+    /// <summary>A tour card's width at 100 % — a comfortable reading line; wider with the profile, never past half the page.</summary>
+    private const int TourCardWidth = 560;
 
     /// <summary>
     /// The click-through tour: the screen keeps working underneath, one region at a time is lit, and a
@@ -3860,9 +3941,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
         DrawScrimAround(holes, new Color(0x05, 0x03, 0x0A) * 0.74f);
         foreach (var h in holes) TourOutline(h, 3, NavGold);
 
-        const int width = 560, pad = 24;
+        // The card's height is its lines: a title line, the wrapped body at the paragraph pitch, a
+        // footer line — so a bigger profile makes a taller card, never a body that leaves its plate.
+        var width = Math.Min(UiMetrics.Control(TourCardWidth), UiKit.Page.Width / 2);
+        var pad = UiMetrics.Space(24);
         var lines = _ui.WrapBig(step.Body, width - pad * 2, UiTypography.Body);
-        var height = pad + 32 + 8 + lines.Count * UiTypography.Pitch(UiTypography.Body) + 14 + 24 + pad;
+        var bodyTop = pad + UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(6);
+        var footerH = UiMetrics.Space(14) + UiTypography.Pitch(UiTypography.Secondary);
+        var height = bodyTop + lines.Count * UiTypography.Pitch(UiTypography.Body) + footerH + pad;
         var card = TourCardRect(holes, width, height);
 
         _ui.Fill(_batch, card, new Color(0x15, 0x0E, 0x24, 0xF6));
@@ -3870,10 +3956,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _ui.Fill(_batch, new Rectangle(card.X, card.Bottom - 2, card.Width, 2), NavGem * 0.5f);
 
         _ui.TextBig(_batch, step.Title, card.X + pad, card.Y + pad, NavGold, UiTypography.Headline);
-        _ui.TextRightBig(_batch, $"{stepNo + 1} / {_tour.Count}", card.Right - pad, card.Y + pad + 5,
-                         NavLabel, UiTypography.Secondary);
+        _ui.TextRightBig(_batch, $"{stepNo + 1} / {_tour.Count}", card.Right - pad,
+                         card.Y + pad + (UiTypography.Headline - UiTypography.Secondary) / 2, NavLabel, UiTypography.Secondary);
 
-        var y = card.Y + pad + 32 + 8;
+        var y = card.Y + bodyTop;
         foreach (var line in lines)
         {
             _ui.TextBig(_batch, line, card.X + pad, y, new Color(0xD8, 0xD2, 0xE4), UiTypography.Body);
@@ -3885,7 +3971,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var last = stepNo + 1 >= _tour.Count;
         var footer = !last ? "CLICK TO CONTINUE  ·  ESC SKIPS"
                    : _tourScreen == Activity.Hunt ? "CLICK TO BEGIN" : "CLICK TO FINISH";
-        _ui.TextBig(_batch, footer, card.X + pad, card.Bottom - pad - 20, NavGem, UiTypography.Secondary);
+        _ui.TextBig(_batch, footer, card.X + pad, card.Bottom - pad - UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(4),
+                    NavGem, UiTypography.Secondary);
     }
 
     /// <summary>Where a region sits on the world chain. The curve itself lives in Core/RegionLadder.</summary>
@@ -4299,14 +4386,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // The stage header's own width (630..1190), hung under whatever the header stack ends with — the
         // enemy strip, or the boss bar — so the three read as one column rather than a toast across a
         // bar. On a menu screen there is no stack; it takes the old place under the title.
-        var r = new Rectangle(630, ToastTop, 560, ToastHeight);
+        var r = new Rectangle(ToastLeft, ToastTop, ToastWidth, ToastHeight);
         // The quiet frame, like the stage header it sits under — gold is for modals (UiKit.PanelQuiet).
         _ui.PanelQuiet(_batch, r, fade);
-        _ui.TextCenterBig(_batch, parts[0], r.Center.X, r.Y + 18, _bootColor * fade, UiTypography.OverlayTitle);
-        if (parts.Length > 1) _ui.TextCenterBig(_batch, parts[1], r.Center.X, r.Y + 50, Bone * fade, UiTypography.OverlayBody);
+        var pad = UiMetrics.Space(18);
+        _ui.TextCenterBig(_batch, parts[0], r.Center.X, r.Y + pad, _bootColor * fade, UiTypography.OverlayTitle);
+        if (parts.Length > 1)
+            _ui.TextCenterBig(_batch, parts[1], r.Center.X, r.Y + pad + UiTypography.Pitch(UiTypography.OverlayTitle),
+                              Bone * fade, UiTypography.OverlayBody);
     }
 
-    private const int ToastHeight = 88;
+    /// <summary>The two-line toast's height: its pad, a title line, a body line, a breath — it follows the rungs.</summary>
+    private static int ToastHeight
+        => UiMetrics.Space(18) + UiTypography.Pitch(UiTypography.OverlayTitle) + UiTypography.Pitch(UiTypography.OverlayBody) + UiMetrics.Space(8);
+
+    /// <summary>The WELCOME BACK panel's width at 100 % — wider with the profile so its lines keep their length.</summary>
+    private const int WelcomeWidth = 720;
 
     /// <summary>
     /// WELCOME BACK: the held return panel — AWAY · HUNT · WARREN · CONTINUE. The one gold frame on screen
@@ -4322,24 +4417,29 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_welcome is not { } w) { _showWelcome = false; return; }
         var hunt = w.HuntParts();
         var warren = w.WarrenParts();
-        const int width = 720, pad = 40;
+        // The panel's width follows the profile so the wrapped lines keep their length; its height is
+        // its lines. The inset is the frame's own (PanelPadX): the corner ornament reaches that far.
+        var width = Math.Min(UiMetrics.Control(WelcomeWidth), UiKit.Page.Width - UiMetrics.Space(40) * 2);
+        const int pad = UiTypography.PanelPadX;
         var cw = width - pad * 2;
         var huntLines = hunt.Count > 0 ? _ui.WrapBig(string.Join("  ·  ", hunt), cw, UiTypography.Body) : Array.Empty<string>();
         var warrenLines = warren.Count > 0 ? _ui.WrapBig(string.Join("  ·  ", warren), cw, UiTypography.Body) : Array.Empty<string>();
+        var rowGap = UiMetrics.Space(12);
         int RowH(IReadOnlyList<string> lines) => lines.Count == 0 ? 0
-            : UiTypography.Pitch(UiTypography.Secondary) + lines.Count * UiTypography.Pitch(UiTypography.Body) + 12;
-        var h = UiTypography.ModalTitleTop + UiTypography.Pitch(UiTypography.PanelTitle) + UiTypography.Pitch(UiTypography.Headline) + 14
-                + RowH(huntLines) + RowH(warrenLines) + 16 + 56 + pad;
-        var r = new Rectangle((1920 - width) / 2, (1080 - h) / 2 - 40, width, h);
+            : UiTypography.Pitch(UiTypography.Secondary) + lines.Count * UiTypography.Pitch(UiTypography.Body) + rowGap;
+        var button = UiMetrics.Control(56);
+        var h = UiTypography.ModalTitleTop + UiTypography.Pitch(UiTypography.PanelTitle) + UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(14)
+                + RowH(huntLines) + RowH(warrenLines) + UiMetrics.Space(16) + button + pad;
+        var r = new Rectangle(UiKit.PageCenterX - width / 2, (UiKit.Page.Height - h) / 2 - UiMetrics.Space(40), width, h);
 
-        _ui.Fill(_batch, new Rectangle(0, 0, 1920, 1080), new Color(0x0A, 0x08, 0x10) * 0.55f);
+        _ui.Fill(_batch, UiKit.Page, new Color(0x0A, 0x08, 0x10) * 0.55f);
         _ui.Panel(_batch, r);   // gold: this is a modal, and the one thing on screen
         var x = r.X + pad;
         var y = r.Y + UiTypography.ModalTitleTop;
         _ui.TextBig(_batch, "WELCOME BACK", x, y, Gold, UiTypography.PanelTitle, TextFace.Display);
         y += UiTypography.Pitch(UiTypography.PanelTitle);
         _ui.TextBig(_batch, $"AWAY {WelcomeSummary.AwayText(w.AwaySeconds)}", x, y, Bone, UiTypography.Headline);
-        y += UiTypography.Pitch(UiTypography.Headline) + 14;
+        y += UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(14);
 
         void Row(string label, IReadOnlyList<string> lines)
         {
@@ -4347,17 +4447,53 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _ui.TextBig(_batch, label, x, y, Slate, UiTypography.Secondary);
             y += UiTypography.Pitch(UiTypography.Secondary);
             foreach (var line in lines) { _ui.TextBig(_batch, line, x, y, Bone, UiTypography.Body); y += UiTypography.Pitch(UiTypography.Body); }
-            y += 12;
+            y += rowGap;
         }
         Row("HUNT", huntLines);
         Row("WARREN", warrenLines);
 
-        var btn = new Rectangle(x, r.Bottom - pad - 56, cw, 56);
+        var btn = new Rectangle(x, r.Bottom - pad - button, cw, button);
         if (_ui.Button(_batch, btn, "CONTINUE", ChromeMouse, _clicked, true, ButtonStyle.Primary)) _showWelcome = false;
     }
 
-    /// <summary>Where a toast hangs: under the hunt's header stack, or under a menu screen's title.</summary>
-    private int ToastTop => OverlayActive ? 176 : _expedition.HeaderStackBottom + 8;
+    // ── THE BAND UNDER A MENU SCREEN'S TITLE STRIP ─────────────────────────────────────────────
+    //
+    // Every inset screen draws its name at page y 24, a gold rule at page y 74, and — on TRAITS,
+    // MASTERY, VAULT — one Secondary subtitle line at page y 80; its first panel starts at page y 150
+    // (TrainingScreen.Top and its siblings). The band between the subtitle and the panel is the host's
+    // — the hint slot, and a toast — and it is PAGE geometry mapped to the canvas, because the chrome
+    // draws at scale 1 in true 1920×1080 while the screens draw through the overlay matrix: the same
+    // numbers through the same transform, so a card sits where the screen actually left room at every
+    // profile. (Before UI polish P2 the toast hung at a literal canvas 176 and the slot at 86: right at
+    // 100 %, and at 125 and 150 % a slot plate that sat across the subtitle, which showed through it as
+    // ghost text — build/shots/m150_dust.png, m150_buildtree.png, m150_vault.png.)
+    //
+    // THE THREE Y'S ARE THE SCREENS' OWN, NOT A DERIVED BAND. The screens write them as literals and do
+    // NOT move them with the profile — only the RUNG they draw at follows it. So the one number that
+    // grows here is the subtitle's line height, and anchoring to a band computed from ScreenTitle would
+    // put the slot ~20 px lower than the screen really left it, which at 150 % lands the plate's close
+    // icon on the VAULT's own OPEN ALL button. Anchor to what is drawn.
+
+    /// <summary>The page y a menu screen draws its one subtitle line at, under the rule at 74 and the name at 24.</summary>
+    private const int PageSubtitleTop = 80;
+
+    /// <summary>The page y under that subtitle line — one <see cref="UiTypography.Secondary"/> line at the profile's own rung (104 at 100 %, 117 at 150 %).</summary>
+    private static int PageSubtitleBottom => PageSubtitleTop + UiTypography.Pitch(UiTypography.Secondary);
+
+    /// <summary>The page y the screens' first panel starts at — the band above it is the host's.</summary>
+    private const int PageContentTop = 150;
+
+    /// <summary>A page y in canvas pixels, through the overlay matrix the screens are drawn with.</summary>
+    private static int CanvasY(int pageY) => (int)MathF.Round(pageY * OverlayScale);
+
+    /// <summary>
+    /// Where a toast hangs: under the hunt's header stack; on a menu screen, under the hint slot when one
+    /// is up, else a breath under the subtitle line — so it lands under the subtitle at every profile,
+    /// and never on top of the slot.
+    /// </summary>
+    private int ToastTop => !OverlayActive ? _expedition.HeaderStackBottom + 8
+        : SlotShowing() is { } slot ? HintSlotRect(slot).Bottom + UiMetrics.Space(8)
+        : CanvasY(PageSubtitleBottom + UiMetrics.Space(8));
 
     private bool Pressed(Keys k) => !_swallowInput && _keys.IsKeyDown(k) && _prevKeys.IsKeyUp(k);
 
@@ -4686,6 +4822,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // game asks the player to stop and look, so nothing on the page should sit on top of it.
         if (_forge.RevealActive) _forge.DrawRevealOverlay(_batch, _hunter);
 
+        // A CLOSED MODAL IS BACK AT ITS TOP. Both scrolls only ever leave zero at 150 %, where the
+        // rows outgrow the page — and the UI SCALE row is at the top of the settings panel, so a
+        // scroll that survived the close would hide the one control that can undo 150 %.
+        if (!_showHelp) _helpScroll = 0;
+        if (!_showSettings) _settingsScroll = 0;
+
         if (_showHelp) DrawHelp();
         if (_showTypeSpec) DrawTypeSpec();
         if (_showSettings) DrawSettings();
@@ -4858,51 +5000,210 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // 1920-space (scale-1 chrome). 2026-08-24, playtest nine: MODE and WINDOW SIZE became dropdowns
     // and the volume rows became draggable sliders, which freed two button rows of height — the panel
     // shrank from 1250x960 to 1250x880 and moved down under the title. Aspect 1250/880 = 1.42, still
-    // comfortably above UiKit.Panel's 1.30 medium-frame line, so the frame art is unchanged. The
-    // content column stays at x 536..1384, and CLOSE / QUIT now end 44px above the panel's bottom
-    // edge instead of sitting on its frame.
-    private static readonly Rectangle SettingsPanel = new(335, 100, 1250, 880);
-
+    // comfortably above UiKit.Panel's 1.30 medium-frame line, so the frame art is unchanged.
+    //
+    // LAID OUT, NOT WRITTEN (UI polish P2, brief §83–§85). The rectangles here used to be static
+    // readonly fields — frozen at class load, so UI SCALE could not move them, and at 150 % the title
+    // printed through the column headers, ASK BEFORE SELL OR SALVAGE through its own button and the
+    // UI SCALE caption through the AUDIO header. SettingsFrameNow lays the whole panel out from
+    // UiMetrics in one pass: the 100 % numbers above come out unchanged, the columns and rows grow
+    // with the profile, and when the rows outgrow the page they SCROLL under a fixed title and QUIT
+    // row — the close icon and the UI SCALE row stay reachable, so 150 % can always be switched off.
+    //
     // ── TWO COLUMNS, GROUPED BY PURPOSE (brief §36). One column of nine unrelated rows made the
     //    player read the whole list to find one switch, and it left the panel's right half empty
     //    while its controls stayed small enough to be a chore to hit (§35).
-    private const int SetColW = 560, SetLeftX = 372, SetRightX = 372 + 560 + 44;
-    private const int SetTop = 176, SetRowH = 64;
 
+    /// <summary>A column's width at 100 %. Two of them, a gap and the insets make the 1250 panel.</summary>
+    private const int SetColWBase = 560;
+
+    /// <summary>The content inset from the panel's edge — 3 px inside the frame's corner reach. Art geometry.</summary>
+    private const int SetInset = 37;
+
+    /// <summary>The panel's height at 100 % — the floor it grows from.</summary>
+    private const int SetDesignHeight = 880;
+
+    /// <summary>
+    /// The settings modal's geometry at the current profile — page space, rows UNSCROLLED. Pure
+    /// arithmetic over UiMetrics (no text is measured), so the static rects below hold at every
+    /// profile without a font. Every y is absolute; the draw adds the scroll.
+    /// </summary>
+    private struct SettingsFrame
+    {
+        public Rectangle Panel, Close, View, Quit;
+        /// <summary>True when the rows outgrow the room above the QUIT row and scroll under the header.</summary>
+        public bool Scrolls;
+        /// <summary>How tall the rows are from <see cref="Top"/> — what the scroll range is measured against.</summary>
+        public int ContentHeight;
+        public int LeftX, RightX, ColW, RightW, Top, Rule;
+        public int DisplayY, ScaleCaptionY, AudioY, ControlsY, ControlsTextY;
+        public Rectangle ModeRow, SizeRow, ScaleRow, FxTrack, MusicTrack;
+        public int GameplayY, AskLabelY, AccessY, ToggleY, TogglePitch, AccessCaptionY;
+        public Rectangle AskBtn, CopyFeedback, Danger, NewGame, NewGameArmed;
+        public int DangerTitleY, DangerTextY;
+    }
+
+    /// <summary>Lay the settings panel out for the current profile. See <see cref="SettingsFrame"/>.</summary>
+    private static SettingsFrame SettingsFrameNow()
+    {
+        var page = UiKit.Page;
+        var colW = UiMetrics.Control(SetColWBase);
+        var colGap = UiMetrics.Space(44);
+        var width = colW * 2 + colGap + SetInset * 2;
+        var labelW = UiMetrics.Control(230);      // the label column a field sits after
+        var fieldH = UiMetrics.Control(56);       // a dropdown field, and the UI SCALE button
+        var fieldPitch = UiMetrics.Control(64);
+        var sliderPitch = UiMetrics.Control(56);
+        var trackH = UiMetrics.Control(30);
+        var trackW = colW - UiMetrics.Control(300);
+        var button = UiMetrics.ButtonHeight;
+        var wide = UiMetrics.Control(360);        // COPY FEEDBACK CODE, QUIT TO DESKTOP, START A NEW GAME
+        var body = UiTypography.Body;
+        var bodyPitch = UiTypography.Pitch(body);
+        var captionPitch = UiTypography.Pitch(UiTypography.Secondary);
+        var rule = captionPitch + 2;              // a group's header text top → its hairline
+        var ruleToRow = UiMetrics.Space(8);
+        var sectionGap = UiMetrics.Space(16);
+        var headerH = UiTypography.ModalTitleTop + UiTypography.Pitch(UiTypography.PanelTitle) - 4;
+        var padBottom = UiMetrics.Space(44);
+        var footerH = UiMetrics.Space(8) + button + padBottom;
+
+        // The left column, flowing down from the header (y relative to the content top).
+        var modeY = rule + ruleToRow;
+        var sizeY = modeY + fieldPitch;
+        var scaleY = sizeY + fieldPitch;
+        var scaleCapY = scaleY + fieldH + UiMetrics.Space(6);
+        var audioY = scaleCapY + captionPitch + sectionGap;
+        var fxRowY = audioY + rule + ruleToRow;
+        var controlsY = fxRowY + sliderPitch * 2 + sectionGap;
+        var controlsTextY = controlsY + rule + ruleToRow + UiMetrics.Space(10);
+        var leftRows = controlsTextY + bodyPitch * 2;
+        var copyH = button + UiMetrics.Space(8) + captionPitch + UiMetrics.Space(10);
+        var leftFlow = leftRows + sectionGap + copyH;
+
+        // The right column.
+        var askY = rule + UiMetrics.Space(12);
+        var accessY = askY + button + UiMetrics.Space(22);
+        var toggleY = accessY + rule + UiMetrics.Space(20);
+        var togglePitch = UiMetrics.Control(58);
+        var accessCapY = toggleY + togglePitch * 4 + UiMetrics.RowHeight + UiMetrics.Space(6);
+        var rightRows = accessCapY + captionPitch;
+        var dangerTextY = UiMetrics.Space(44);
+        var dangerBtnY = dangerTextY + body + UiMetrics.Space(18);
+        var dangerH = dangerBtnY + button + UiMetrics.Space(20);
+        var rightFlow = rightRows + sectionGap + dangerH;
+
+        // The panel: the design height at 100 %, taller when the profile asks, never past the page.
+        var needed = headerH + Math.Max(leftFlow + footerH, rightFlow + padBottom);
+        var maxH = page.Height - UiMetrics.Space(12) * 2;
+        var h = Math.Clamp(needed, SetDesignHeight, maxH);
+        var scrolls = needed > h;
+        var f = new SettingsFrame
+        {
+            Panel = new Rectangle(UiKit.PageCenterX - width / 2, page.Y + (page.Height - h) / 2, width, h),
+            Scrolls = scrolls, ColW = colW, Rule = rule, TogglePitch = togglePitch,
+            DangerTitleY = UiMetrics.Space(12), DangerTextY = dangerTextY,
+            ContentHeight = Math.Max(leftFlow, rightFlow),
+        };
+        f.Close = UiKit.CloseRect(f.Panel);
+        f.Top = f.Panel.Y + headerH;
+        f.LeftX = f.Panel.X + SetInset;
+        f.RightX = f.LeftX + colW + colGap;
+        // In scroll mode the right column gives up a lane for the scrollbar.
+        f.RightW = scrolls ? colW - UiMetrics.ScrollbarWidth - UiMetrics.Space(8) : colW;
+        f.Quit = new Rectangle(f.LeftX, f.Panel.Bottom - padBottom - button, wide, button);
+        f.View = new Rectangle(f.Panel.X + SetInset / 2, f.Top, f.Panel.Width - SetInset, f.Quit.Y - UiMetrics.Space(8) - f.Top);
+
+        var t = f.Top;
+        f.DisplayY = t;
+        f.ModeRow = new Rectangle(f.LeftX + labelW, t + modeY, colW - labelW, fieldH);
+        f.SizeRow = new Rectangle(f.LeftX + labelW, t + sizeY, colW - labelW, fieldH);
+        f.ScaleRow = new Rectangle(f.LeftX + labelW, t + scaleY, colW - labelW, fieldH);
+        f.ScaleCaptionY = t + scaleCapY;
+        f.AudioY = t + audioY;
+        f.FxTrack = new Rectangle(f.LeftX + labelW, t + fxRowY + UiMetrics.Space(20), trackW, trackH);
+        f.MusicTrack = new Rectangle(f.LeftX + labelW, f.FxTrack.Y + sliderPitch, trackW, trackH);
+        f.ControlsY = t + controlsY;
+        f.ControlsTextY = t + controlsTextY;
+
+        f.GameplayY = t;
+        var askW = UiMetrics.Control(260);
+        f.AskBtn = new Rectangle(f.RightX + f.RightW - askW, t + askY, askW, button);
+        f.AskLabelY = f.AskBtn.Y + (button - body) / 2;
+        f.AccessY = t + accessY;
+        f.ToggleY = t + toggleY;
+        f.AccessCaptionY = t + accessCapY;
+
+        // The bottom blocks: pinned to the panel's foot when the rows fit, flowing after them when they scroll.
+        var copyY = scrolls ? t + leftRows + sectionGap
+                            : f.Quit.Y - UiMetrics.Space(10) - captionPitch - UiMetrics.Space(8) - button;
+        f.CopyFeedback = new Rectangle(f.LeftX, copyY, wide, button);
+        // THE DANGER ZONE (brief §37): its own bordered region, overhanging the column by a breath, so
+        // the button that deletes a save is not one of a pair of identical buttons.
+        var overhang = UiMetrics.Space(24);
+        var dangerY = scrolls ? t + rightRows + sectionGap : f.Panel.Bottom - padBottom - dangerH;
+        f.Danger = new Rectangle(f.RightX - overhang, dangerY, f.RightW + overhang, dangerH);
+        f.NewGame = new Rectangle(f.Danger.Right - overhang - wide, f.Danger.Y + dangerBtnY, wide, button);
+        var armedPad = UiMetrics.Space(16);
+        f.NewGameArmed = new Rectangle(f.Danger.X + armedPad, f.Danger.Y + dangerBtnY, f.Danger.Width - armedPad * 2, button);
+        return f;
+    }
+
+    // The frame's rectangles, as static properties — unscrolled — so the page-layout test can check
+    // every one of them at every profile. The draw reads the frame once per frame instead.
+    private static Rectangle SettingsPanel => SettingsFrameNow().Panel;
+    /// <summary>The panel's corner close icon — UiKit.CloseButton at UiKit.CloseRect, inside the ornament.</summary>
+    private static Rectangle SettingsCornerClose => SettingsFrameNow().Close;
     /// <summary>The closed MODE dropdown row — shows the current mode, opens the list on click.</summary>
-    private static readonly Rectangle SettingsModeRow = new(SetLeftX + 230, SetTop + 34, SetColW - 230, 56);
-
+    private static Rectangle SettingsModeRow => SettingsFrameNow().ModeRow;
     /// <summary>The closed WINDOW SIZE dropdown row. Dim and inert outside WINDOWED mode.</summary>
-    private static readonly Rectangle SettingsSizeRow = new(SetLeftX + 230, SetTop + 34 + SetRowH, SetColW - 230, 56);
-
-    /// <summary>The UI SCALE row — a button that steps through the offered scales.</summary>
-    private static readonly Rectangle SettingsScaleRow = new(SetLeftX + 230, SetTop + 34 + SetRowH * 2, SetColW - 230, 56);
-
+    private static Rectangle SettingsSizeRow => SettingsFrameNow().SizeRow;
+    /// <summary>The UI SCALE row — a button that steps through the offered scales. Applies at once.</summary>
+    private static Rectangle SettingsScaleRow => SettingsFrameNow().ScaleRow;
     /// <summary>The effects-volume slider track (the grab area is padded around it).</summary>
-    private static readonly Rectangle SettingsFxTrack = new(SetLeftX + 230, SetTop + 316, SetColW - 300, 30);
-
+    private static Rectangle SettingsFxTrack => SettingsFrameNow().FxTrack;
     /// <summary>The music-volume slider track.</summary>
-    private static readonly Rectangle SettingsMusicTrack = new(SetLeftX + 230, SetTop + 316 + 56, SetColW - 300, 30);
-
+    private static Rectangle SettingsMusicTrack => SettingsFrameNow().MusicTrack;
     // CLOSE sits on the RIGHT, where every other panel in the game puts its way out (playtest
     // 2026-08-25: "close is left behind on the left"); the exit to the desktop sits left of it.
     // The CLOSE button is gone (playtest 2026-08-26: "remove the CLOSE text; the corner icon closes");
-    // QUIT TO DESKTOP sits centred in the row it had shared.
-    private static readonly Rectangle SettingsQuit = new(SetLeftX, 884, 360, 52);
-    /// <summary>The panel's corner close icon — UiKit.CloseButton at UiKit.CloseRect, inside the ornament.</summary>
-    private static readonly Rectangle SettingsCornerClose = UiKit.CloseRect(SettingsPanel);
-
+    // QUIT TO DESKTOP is the panel's footer — anchored, never under the scroll.
+    private static Rectangle SettingsQuit => SettingsFrameNow().Quit;
     /// <summary>Copies the feedback code (build stamp + progress + run log) to the clipboard.</summary>
-    private static readonly Rectangle SettingsCopyFeedback = new(SetLeftX, 790, 360, 52);
-
-    // ── THE DANGER ZONE (brief §37). START A NEW GAME used to sit beside COPY FEEDBACK CODE, two
-    //    identical buttons in a row, one of which deletes the save. It has its own bordered region
-    //    now, with the sentence that says what it does, and it still takes two clicks.
-    private static readonly Rectangle SettingsDanger = new(SetRightX - 24, 780, SetColW + 24, 156);
-
+    private static Rectangle SettingsCopyFeedback => SettingsFrameNow().CopyFeedback;
+    private static Rectangle SettingsDanger => SettingsFrameNow().Danger;
     /// <summary>START A NEW GAME at rest, and its wider red armed state spanning the zone.</summary>
-    private static readonly Rectangle SettingsNewGame = new(SettingsDanger.Right - 24 - 360, SettingsDanger.Y + 84, 360, 52);
-    private static readonly Rectangle SettingsNewGameArmed = new(SettingsDanger.X + 16, SettingsDanger.Y + 84, SettingsDanger.Width - 32, 52);
+    private static Rectangle SettingsNewGame => SettingsFrameNow().NewGame;
+    private static Rectangle SettingsNewGameArmed => SettingsFrameNow().NewGameArmed;
+
+    /// <summary>How far the settings rows are scrolled, in page pixels. Only ever non-zero when they outgrow the page.</summary>
+    private int _settingsScroll;
+
+    /// <summary>How far the help sheet is scrolled, in page pixels. Only ever non-zero when it outgrows the page.</summary>
+    private int _helpScroll;
+
+    /// <summary>The rasterizer that honours the scissor rectangle — one instance, made on first use.</summary>
+    private RasterizerState? _clipState;
+    private RasterizerState ClipState => _clipState ??= new RasterizerState { ScissorTestEnable = true };
+
+    /// <summary>
+    /// Reopen the chrome batch clipped to <paramref name="view"/> — canvas pixels, which in the chrome
+    /// batch are page pixels. Pair with <see cref="EndChromeClip"/>. For the modals whose rows can
+    /// outgrow the page at 150 % (settings, help): what scrolls under a fixed header must stop at it.
+    /// </summary>
+    private void BeginChromeClip(Rectangle view)
+    {
+        _batch.End();
+        GraphicsDevice.ScissorRectangle = Rectangle.Intersect(view, new Rectangle(0, 0, CanvasWidth * ArtScale, CanvasHeight * ArtScale));
+        _batch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, null, ClipState, null, Matrix.Identity);
+    }
+
+    /// <summary>Close the clipped batch and reopen the plain chrome batch.</summary>
+    private void EndChromeClip()
+    {
+        _batch.End();
+        BeginCanvas(1);
+    }
 
     /// <summary>Which settings dropdown is open: 0 none, 1 MODE, 2 WINDOW SIZE. One at a time.</summary>
     private int _settingsDropdown;
@@ -4954,11 +5255,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // OPEN list: a flat #161022 rectangle with a gold line on top, rows of centred text, no frame, no
     // separators, no mark on the value you already had. It read as a debug box on a hand-drawn panel.
 
-    /// <summary>Height of one option row in an open settings dropdown.</summary>
-    private const int DropRowHeight = 44;
+    /// <summary>Height of one option row in an open settings dropdown — the house list row.</summary>
+    private static int DropRowHeight => UiMetrics.RowHeight;
 
     /// <summary>The gap between the closed field and the list that drops under it.</summary>
-    private const int DropGap = 4;
+    private static int DropGap => UiMetrics.Space(4);
 
     /// <summary>How far the list's ornate frame reaches in. Rows live inside this margin on every side.</summary>
     private const int DropListInset = UiKit.PanelCorner;
@@ -5004,7 +5305,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // Level with the currency pills (their capsules run y 22..70, centre 46): the gear used to sit at
     // y 8..68, centre 38 — eight pixels above the row it belongs to (playtest 2026-08-26: "it sits a
     // little higher and catches the eye").
-    private static readonly Rectangle SettingsGear = new(1842, 16, 60, 60);
+    // A page anchor: the pills' capsule is a fixed 60 (UiKit.Pill), so the gear's slot is too.
+    private static Rectangle SettingsGear => new(UiKit.PageRight(78), 16, 60, 60);
 
     /// <summary>
     /// Display options, drawn as an overlay over whatever is behind it.
@@ -5021,9 +5323,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     private void DrawSettings()
     {
+        var f = SettingsFrameNow();
+        var panel = f.Panel;
         _ui.Scrim(_batch, 0.75f);
-        _ui.Panel(_batch, SettingsPanel);
-        _ui.TextCenterBig(_batch, "SETTINGS", 960, SettingsPanel.Y + UiTypography.ModalTitleTop,
+        _ui.Panel(_batch, panel);
+        _ui.TextCenterBig(_batch, "SETTINGS", panel.Center.X, panel.Y + UiTypography.ModalTitleTop,
                           Gold, UiTypography.PanelTitle);
 
         // A click reaches the ordinary rows only while no dropdown list is open. The open list is
@@ -5031,61 +5335,83 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var uiClick = _clicked && _settingsDropdown == 0;
         var mouse = ChromeMouse;
 
-        // The COPIED confirmation, up under the title where no row lives.
-        if (_feedbackToastTimer > 0f) TextCenter(_feedbackToast, 960, SettingsPanel.Y + 74, Gold);
+        // The COPIED confirmation, in the header row beside the close icon — the one line no row shares.
+        if (_feedbackToastTimer > 0f)
+            _ui.TextRightBig(_batch, _feedbackToast, f.Close.X - UiMetrics.Space(16),
+                             panel.Y + UiTypography.ModalTitleTop + (UiTypography.PanelTitle - UiTypography.Secondary) / 2,
+                             Gold, UiTypography.Secondary);
+
+        // ── THE SCROLL. When the rows outgrow the room above the QUIT row (150 %), they scroll under
+        //    the header: a wheel notch is one list row, the range is the overflow, and a click lands
+        //    only where a row is actually visible. Nothing scrolls at 100 % or 125 %.
+        var maxScroll = f.Scrolls ? Math.Max(0, f.ContentHeight - f.View.Height) : 0;
+        if (maxScroll > 0 && _settingsDropdown == 0 && MouseWheel != 0 && f.View.Contains(mouse))
+            _settingsScroll -= MouseWheel * UiMetrics.RowHeight;
+        _settingsScroll = Math.Clamp(_settingsScroll, 0, maxScroll);
+        var dy = -_settingsScroll;
+        var rowsVisible = !f.Scrolls || f.View.Contains(mouse);
+        var rowClick = uiClick && rowsVisible;
+        Rectangle Row(Rectangle r) => new(r.X, r.Y + dy, r.Width, r.Height);
 
         // ── GROUPED BY PURPOSE, IN TWO COLUMNS (brief §36). Left: what the game looks and sounds
         //    like. Right: how it behaves, what it shows in a fight, and the one destructive door. ──
-        void Group(string name, int x, int y) =>
+        void Group(string name, int x, int y, int w)
+        {
             _ui.TextBig(_batch, name, x, y, Gold, UiTypography.Secondary);
+            _ui.Fill(_batch, new Rectangle(x, y + f.Rule, w, 1), new Color(0x3A, 0x3A, 0x44));
+        }
 
         void Label(string s, int x, int y, Color c) =>
             _ui.TextBig(_batch, s, x, y, c, UiTypography.Body);
 
-        void Rule(int x, int y) => _ui.Fill(_batch, new Rectangle(x, y, SetColW, 1), new Color(0x3A, 0x3A, 0x44));
+        if (f.Scrolls) BeginChromeClip(f.View);
 
         // ── DISPLAY ──────────────────────────────────────────────────────────────────────────────
-        Group("DISPLAY", SetLeftX, SetTop);
-        Rule(SetLeftX, SetTop + 26);
+        Group("DISPLAY", f.LeftX, f.DisplayY + dy, f.ColW);
 
-        Label("MODE", SetLeftX, SettingsModeRow.Y + 16, Bone);
+        var modeRow = Row(f.ModeRow);
+        Label("MODE", f.LeftX, modeRow.Y + (modeRow.Height - UiTypography.Body) / 2, Bone);
         var modeNames = new[] { "WINDOWED", "BORDERLESS", "FULLSCREEN" };
         var modeIdx = _displayMode == DisplayMode.Windowed ? 0 : _displayMode == DisplayMode.Borderless ? 1 : 2;
-        DropdownClosed(SettingsModeRow, modeNames[modeIdx], enabled: true, open: _settingsDropdown == 1);
+        DropdownClosed(modeRow, modeNames[modeIdx], enabled: true, open: _settingsDropdown == 1);
 
         var windowed = _displayMode == DisplayMode.Windowed;
         var desktop = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode;
         var sizes = Display.OfferedWindowSizes(desktop.Width, desktop.Height);
-        Label("WINDOW SIZE", SetLeftX, SettingsSizeRow.Y + 16, windowed ? Bone : Slate);
+        var sizeRow = Row(f.SizeRow);
+        Label("WINDOW SIZE", f.LeftX, sizeRow.Y + (sizeRow.Height - UiTypography.Body) / 2, windowed ? Bone : Slate);
         // Outside WINDOWED the size is the monitor's to decide, so the row says which one rather than
         // going blank — "AUTO" was a word about the setting; this is the answer the player wanted.
         var sizeValue = windowed
             ? Display.WindowSizeLabel(_windowSize, desktop.Width, desktop.Height)
             : $"YOUR SCREEN — {desktop.Width} × {desktop.Height}";
-        DropdownClosed(SettingsSizeRow, sizeValue, enabled: windowed, open: _settingsDropdown == 2);
+        DropdownClosed(sizeRow, sizeValue, enabled: windowed, open: _settingsDropdown == 2);
 
-        // UI SCALE, out of the dev keys and onto the panel (P0.5 built it; F8 was its only door).
-        Label("UI SCALE", SetLeftX, SettingsScaleRow.Y + 16, Bone);
-        if (_ui.Button(_batch, SettingsScaleRow, Display.UiScaleLabel(_uiScalePercent), mouse, uiClick))
+        // UI SCALE, out of the dev keys and onto the panel (P0.5 built it; F8 was its only door). It
+        // applies AT ONCE: the next frame is laid out at the new profile, this row included.
+        var scaleRow = Row(f.ScaleRow);
+        Label("UI SCALE", f.LeftX, scaleRow.Y + (scaleRow.Height - UiTypography.Body) / 2, Bone);
+        if (_ui.Button(_batch, scaleRow, Display.UiScaleLabel(_uiScalePercent), mouse, rowClick))
         {
             CycleUiScale();
             SaveDisplay();
         }
-        _ui.TextBig(_batch, "AUTO PICKS 125% IN A SMALL WINDOW", SetLeftX, SettingsScaleRow.Bottom + 6,
+        _ui.TextBig(_batch, "AUTO PICKS 125% IN A SMALL WINDOW", f.LeftX, f.ScaleCaptionY + dy,
                     Slate, UiTypography.Secondary);
 
         // ── AUDIO ────────────────────────────────────────────────────────────────────────────────
-        Group("AUDIO", SetLeftX, SetTop + 262);
-        Rule(SetLeftX, SetTop + 288);
+        Group("AUDIO", f.LeftX, f.AudioY + dy, f.ColW);
 
-        var fx = SliderRow("EFFECTS VOLUME", SettingsFxTrack, _sfxVolume, 1, uiClick, SetLeftX);
+        var fxTrack = Row(f.FxTrack);
+        var fx = SliderRow("EFFECTS VOLUME", fxTrack, _sfxVolume, 1, rowClick, f.LeftX);
         if (fx >= 0 && fx != _sfxVolume)
         {
             _sfxVolume = fx;
             _sound.SfxVolume = _sfxVolume / 100f;   // live, so the release click previews the new level
         }
 
-        var mu = SliderRow("MUSIC VOLUME", SettingsMusicTrack, _musicVolume, 2, uiClick, SetLeftX);
+        var musicTrack = Row(f.MusicTrack);
+        var mu = SliderRow("MUSIC VOLUME", musicTrack, _musicVolume, 2, rowClick, f.LeftX);
         if (mu >= 0 && mu != _musicVolume)
         {
             _musicVolume = mu;
@@ -5101,17 +5427,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
 
         // ── CONTROLS. Only what the game really has: the keys, and where they are listed. ────────
-        Group("CONTROLS", SetLeftX, SetTop + 424);
-        Rule(SetLeftX, SetTop + 450);
-        Label("EVERY KEY IS LISTED IN HELP — PRESS F1", SetLeftX, SetTop + 468, Slate);
-        Label("KEYS CANNOT BE REBOUND YET", SetLeftX, SetTop + 468 + UiTypography.Pitch(UiTypography.Body), Slate);
+        Group("CONTROLS", f.LeftX, f.ControlsY + dy, f.ColW);
+        Label("EVERY KEY IS LISTED IN HELP — PRESS F1", f.LeftX, f.ControlsTextY + dy, Slate);
+        Label("KEYS CANNOT BE REBOUND YET", f.LeftX, f.ControlsTextY + dy + UiTypography.Pitch(UiTypography.Body), Slate);
 
         // ── GAMEPLAY ─────────────────────────────────────────────────────────────────────────────
-        Group("GAMEPLAY", SetRightX, SetTop);
-        Rule(SetRightX, SetTop + 26);
-        Label("ASK BEFORE SELL OR SALVAGE", SetRightX, SetTop + 50, Bone);
-        var askBtn = new Rectangle(SetRightX + SetColW - 260, SetTop + 38, 260, 52);
-        if (_ui.Button(_batch, askBtn, _askBeforeScrap ? "ON — IT ASKS" : "OFF", mouse, uiClick))
+        Group("GAMEPLAY", f.RightX, f.GameplayY + dy, f.RightW);
+        var askBtn = Row(f.AskBtn);
+        // The label takes what the button leaves — it can never print through it.
+        Label(_ui.ShortenBig("ASK BEFORE SELL OR SALVAGE", askBtn.X - UiMetrics.Space(12) - f.RightX, UiTypography.Body),
+              f.RightX, f.AskLabelY + dy, Bone);
+        if (_ui.Button(_batch, askBtn, _askBeforeScrap ? "ON — IT ASKS" : "OFF", mouse, rowClick))
         {
             _askBeforeScrap = !_askBeforeScrap;
             _forge.AskBeforeScrap = _askBeforeScrap;
@@ -5119,29 +5445,29 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
 
         // ── ACCESSIBILITY. The fight's text and effects, and the motion switch. ──────────────────
-        Group("ACCESSIBILITY", SetRightX, SetTop + 112);
-        Rule(SetRightX, SetTop + 138);
+        Group("ACCESSIBILITY", f.RightX, f.AccessY + dy, f.RightW);
         // Five switches, one per row, each the full column width. Two to a row they were 260 px
         // apart and the second label sat under the first row's button.
         var changed = false;
-        var sy = SetTop + 158;
-        changed |= ToggleRow("DAMAGE NUMBERS", SetRightX, sy, SetColW, ref _showDamageNumbers, uiClick);
-        sy += 58;
-        changed |= ToggleRow("SKILL NAMES", SetRightX, sy, SetColW, ref _showSkillCallouts, uiClick);
-        sy += 58;
-        changed |= ToggleRow("FIGHT EFFECTS", SetRightX, sy, SetColW, ref _showHitEffects, uiClick);
-        sy += 58;
-        changed |= ToggleRow("RED FLASH", SetRightX, sy, SetColW, ref _showScreenFlash, uiClick);
-        sy += 58;
+        var sy = f.ToggleY + dy;
+        changed |= ToggleRow("DAMAGE NUMBERS", f.RightX, sy, f.RightW, ref _showDamageNumbers, rowClick);
+        sy += f.TogglePitch;
+        changed |= ToggleRow("SKILL NAMES", f.RightX, sy, f.RightW, ref _showSkillCallouts, rowClick);
+        sy += f.TogglePitch;
+        changed |= ToggleRow("FIGHT EFFECTS", f.RightX, sy, f.RightW, ref _showHitEffects, rowClick);
+        sy += f.TogglePitch;
+        changed |= ToggleRow("RED FLASH", f.RightX, sy, f.RightW, ref _showScreenFlash, rowClick);
+        sy += f.TogglePitch;
         var reduced = ReducedMotion;
-        changed |= ToggleRow("REDUCED MOTION", SetRightX, sy, SetColW, ref reduced, uiClick);
+        changed |= ToggleRow("REDUCED MOTION", f.RightX, sy, f.RightW, ref reduced, rowClick);
         if (reduced != ReducedMotion) ReducedMotion = reduced;
         if (changed) SaveDisplay();
-        _ui.TextBig(_batch, "REDUCED MOTION HOLDS IDLE ANIMATIONS STILL", SetRightX, sy + 54,
+        _ui.TextBig(_batch, "REDUCED MOTION HOLDS IDLE ANIMATIONS STILL", f.RightX, f.AccessCaptionY + dy,
                     Slate, UiTypography.Secondary);
 
-        // ── THE WAY OUT, and the one door that destroys something. ───────────────────────────────
-        if (_resetArmTimer <= 0f && _ui.Button(_batch, SettingsCopyFeedback, "COPY FEEDBACK CODE", mouse, uiClick))
+        // ── The feedback code, and the one door that destroys something. ─────────────────────────
+        var copyBtn = Row(f.CopyFeedback);
+        if (_resetArmTimer <= 0f && _ui.Button(_batch, copyBtn, "COPY FEEDBACK CODE", mouse, rowClick))
         {
             // The failure is NOT silent (same rule as the weave's copy button): no clipboard, no lie.
             _feedbackToast = ClipboardInterop.TrySet(FeedbackCode())
@@ -5149,21 +5475,25 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 : "COPY FAILED — TRY AGAIN";
             _feedbackToastTimer = 4f;
         }
-        _ui.TextBig(_batch, "SENDS THE DEVELOPER YOUR BUILD AND PROGRESS", SetLeftX,
-                    SettingsCopyFeedback.Bottom + 8, Slate, UiTypography.Secondary);
+        _ui.TextBig(_batch, "SENDS THE DEVELOPER YOUR BUILD AND PROGRESS", f.LeftX,
+                    copyBtn.Bottom + UiMetrics.Space(8), Slate, UiTypography.Secondary);
 
         // DANGER ZONE — its own bordered region, so the button that deletes a save is not one of a
         // pair of identical buttons (brief §37).
-        _ui.Plate(_batch, SettingsDanger, Ember);
-        _ui.TextBig(_batch, "DANGER ZONE", SettingsDanger.X + 16, SettingsDanger.Y + 12, Ember, UiTypography.Secondary);
+        var danger = Row(f.Danger);
+        var newGame = Row(f.NewGame);
+        var armed = Row(f.NewGameArmed);
+        var dangerPad = UiMetrics.Space(16);
+        _ui.Plate(_batch, danger, Ember);
+        _ui.TextBig(_batch, "DANGER ZONE", danger.X + dangerPad, danger.Y + f.DangerTitleY, Ember, UiTypography.Secondary);
         if (_resetArmTimer > 0f)
         {
-            _ui.Fill(_batch, SettingsNewGameArmed, new Color(0x8C, 0x1E, 0x1E));
-            _ui.Fill(_batch, new Rectangle(SettingsNewGameArmed.X, SettingsNewGameArmed.Y, SettingsNewGameArmed.Width, 3), Ember);
-            _ui.TextCenterBig(_batch, "SURE? THIS DELETES YOUR SAVE — CLICK AGAIN",
-                              SettingsNewGameArmed.Center.X, SettingsNewGameArmed.Center.Y - 12,
+            _ui.Fill(_batch, armed, new Color(0x8C, 0x1E, 0x1E));
+            _ui.Fill(_batch, new Rectangle(armed.X, armed.Y, armed.Width, 3), Ember);
+            _ui.TextCenterBig(_batch, _ui.ShortenBig("SURE? THIS DELETES YOUR SAVE — CLICK AGAIN", armed.Width - dangerPad * 2, UiTypography.Body),
+                              armed.Center.X, armed.Center.Y - UiTypography.Body * 27 / 40,
                               Color.White, UiTypography.Body);
-            if (UiKit.ClickedIn(SettingsNewGameArmed, mouse, uiClick))
+            if (UiKit.ClickedIn(armed, mouse, rowClick))
             {
                 _resetArmTimer = 0f;
                 _wantsNewGame = true;
@@ -5175,13 +5505,21 @@ public class Game1 : Microsoft.Xna.Framework.Game
         }
         else
         {
-            _ui.TextBig(_batch, "DELETES THIS SAVE AND STARTS OVER. NOTHING COMES BACK.",
-                        SettingsDanger.X + 16, SettingsDanger.Y + 44, Bone, UiTypography.Body);
-            if (_ui.Button(_batch, SettingsNewGame, "START A NEW GAME", mouse, uiClick))
+            _ui.TextBig(_batch, _ui.ShortenBig("DELETES THIS SAVE AND STARTS OVER. NOTHING COMES BACK.", danger.Width - dangerPad * 2, UiTypography.Body),
+                        danger.X + dangerPad, danger.Y + f.DangerTextY, Bone, UiTypography.Body);
+            if (_ui.Button(_batch, newGame, "START A NEW GAME", mouse, rowClick))
                 _resetArmTimer = ResetArmSeconds;
         }
 
-        if (_ui.CloseButton(_batch, SettingsCornerClose, mouse, uiClick))
+        if (f.Scrolls)
+        {
+            EndChromeClip();
+            var lane = UiMetrics.ScrollbarWidth;
+            _ui.ScrollBar(_batch, new Rectangle(panel.Right - SetInset - lane, f.View.Y, lane, f.View.Height),
+                          _settingsScroll, f.View.Height, f.ContentHeight);
+        }
+
+        if (_ui.CloseButton(_batch, f.Close, mouse, uiClick))
         {
             _showSettings = false;
             _settingsDropdown = 0;
@@ -5190,15 +5528,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // Esc no longer quits (it opens THIS panel), so the game needs a door that says what it does.
         // Hidden on the title screen, whose own menu already has QUIT — and whose Hunter may not exist
         // yet to save. It is the game's exit — the door Esc used to be — and it still saves on the way out.
-        if (!_showTitle && _ui.Button(_batch, SettingsQuit, "QUIT TO DESKTOP", mouse, uiClick))
+        if (!_showTitle && _ui.Button(_batch, f.Quit, "QUIT TO DESKTOP", mouse, uiClick))
         {
             Save();
             Exit();
         }
 
         // Which build this is — the same stamp the feedback code carries, so "which version are you
-        // on" is answerable from a screenshot.
-        Text($"BUILD {BuildStamp.Short}", 380, 1000, Slate);
+        // on" is answerable from a screenshot. Under the panel while the page has room for it; when the
+        // panel has grown to the page, in the header row's left end — the one line no row shares,
+        // mirroring the close icon. (Its first home up here was the footer's right end, which at 125 %
+        // is where the DANGER ZONE's button sits when the rows do not scroll.)
+        var stamp = $"BUILD {BuildStamp.Short}";
+        if (panel.Bottom + UiMetrics.Space(20) + UiTypography.Pitch(UiTypography.Body) <= UiKit.Page.Bottom)
+            Text(stamp, panel.X + UiMetrics.Space(45), panel.Bottom + UiMetrics.Space(20), Slate);
+        else
+            _ui.TextBig(_batch, stamp, f.LeftX, panel.Y + UiTypography.ModalTitleTop + (UiTypography.PanelTitle - UiTypography.Secondary) / 2,
+                        Slate, UiTypography.Secondary);
 
         // ── The OPEN dropdown list, drawn last so it sits over every row below it. A click on an
         //    option applies and closes; any other click just closes — and either way the rows under
@@ -5206,7 +5552,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var openList = Rectangle.Empty;
         if (_settingsDropdown == 1)
         {
-            openList = DropdownList(SettingsModeRow, modeNames, modeIdx, pick =>
+            openList = DropdownList(modeRow, modeNames, modeIdx, pick =>
             {
                 var modes = new[] { DisplayMode.Windowed, DisplayMode.Borderless, DisplayMode.Fullscreen };
                 if (_displayMode == modes[pick]) return;
@@ -5220,7 +5566,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             var labels = new string[sizes.Length];
             for (var i = 0; i < labels.Length; i++)
                 labels[i] = Display.WindowSizeLabel(sizes[i], desktop.Width, desktop.Height);
-            openList = DropdownList(SettingsSizeRow, labels, Array.IndexOf(sizes, _windowSize), pick =>
+            openList = DropdownList(sizeRow, labels, Array.IndexOf(sizes, _windowSize), pick =>
             {
                 if (_windowSize == sizes[pick]) return;
                 _windowSize = sizes[pick];
@@ -5228,16 +5574,47 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 SaveDisplay();
             });
         }
-        else if (_clicked)
+        else if (_clicked && rowsVisible)
         {
             // No list open: a click on a closed row opens its list, with the cursor unplaced so the
             // list puts it on the value the player already has.
-            if (SettingsModeRow.Contains(mouse)) OpenDropdown(1);
-            else if (windowed && SettingsSizeRow.Contains(mouse)) OpenDropdown(2);
+            if (modeRow.Contains(mouse)) OpenDropdown(1);
+            else if (windowed && sizeRow.Contains(mouse)) OpenDropdown(2);
         }
 
-        // ── HOVER EXPLANATIONS — one plain sentence per row, near the cursor, after a short rest. ──
-        DrawSettingsTips(mouse, windowed, openList);
+        // ── HOVER EXPLANATIONS — one plain sentence per row, near the cursor, after a short rest.
+        //    The zones ARE the rows just laid out (label and control), scrolled with them.
+        Rectangle Zone(int x, Rectangle r, int w) => new(x, r.Y, w, r.Height);
+        Rectangle SliderZone(Rectangle track) =>
+            new(f.LeftX, track.Y - UiMetrics.Space(8), f.ColW, track.Height + UiMetrics.Space(16));
+        Rectangle ToggleZone(int k) => new(f.RightX, f.ToggleY + dy + k * f.TogglePitch, f.RightW, UiMetrics.RowHeight);
+        var zones = new (Rectangle Zone, string Key, string Tip)[]
+        {
+            (Zone(f.LeftX, modeRow, f.ColW), "mode",
+                "How the game sits on your screen: in a window you can move, or filling the whole screen."),
+            (Zone(f.LeftX, sizeRow, f.ColW), "size",
+                windowed ? "How big the game window is. The picture is the same at every size — a bigger window just draws it bigger. Nothing larger than your screen is offered; (native) is your screen's own size."
+                         : "How big the game window is. You can change this only when MODE is WINDOWED — the other two modes always fill your screen."),
+            (SliderZone(fxTrack), "fx",
+                "How loud the hits, clicks and other short sounds are. Drag the handle, or click a spot on the line."),
+            (SliderZone(musicTrack), "music",
+                "How loud the background music is. Drag the handle, or click a spot on the line."),
+            (Zone(f.RightX, askBtn, f.RightW), "ask",
+                "When this is on, the game asks you to confirm before an item is sold or broken down."),
+            (ToggleZone(0), "dmg",
+                "Shows the damage of every hit as a small number in the fight."),
+            (ToggleZone(1), "skills",
+                "Shows the name of each skill as your hunter uses it."),
+            (ToggleZone(2), "hitfx",
+                "Shows the flashes and sparks when hits land in the fight."),
+            (ToggleZone(3), "flash",
+                "When your hunter falls, the screen glows red for a moment. Turn this off if you do not want it."),
+            (copyBtn, "feedback",
+                "Copies a short code that describes your game. Paste it to the developer with your feedback."),
+            (newGame, "newgame",
+                "Deletes your save and starts over from the beginning. It asks you to confirm first."),
+        };
+        DrawSettingsTips(mouse, openList, rowsVisible, zones);
     }
 
     /// <summary>Open one of the settings dropdowns, with its cursor unplaced and its list at the top.</summary>
@@ -5286,19 +5663,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var textX = r.X + cap + DropPadX;
         var chevronRight = r.Right - cap - DropPadX;
 
+        // A chevron: two strokes meeting at a point, 16 wide and 6 deep at 100 % — a glyph box, so it
+        // grows with the controls. A solid stroke reads heavier than type of the same colour, so an
+        // inert one is dimmed past the label it sits beside.
+        var half = UiMetrics.Control(8);
+        var depth = UiMetrics.Control(6);
         var ink = !enabled ? Slate : open ? Gold : hover ? Color.White : Bone;
-        var room = chevronRight - 22 - textX;
+        var room = chevronRight - half * 2 - UiMetrics.Space(6) - textX;
         _ui.TextBig(_batch, _ui.ShortenBig(value, room, DropTextPx), textX,
                     r.Center.Y - DropTextPx * 27 / 40, ink, DropTextPx);
 
-        // A chevron: two strokes meeting at a point, 16 wide and 6 deep. A solid stroke reads heavier
-        // than type of the same colour, so an inert one is dimmed past the label it sits beside.
         var caret = !enabled ? new Color(0x5C, 0x64, 0x70) : ink;
-        var cx = chevronRight - 8f;
-        var cy = r.Center.Y + (open ? 3f : -3f);
-        var dy = open ? -6f : 6f;
-        _ui.LineSeg(_batch, new Vector2(cx - 8f, cy), new Vector2(cx, cy + dy), 3f, caret);
-        _ui.LineSeg(_batch, new Vector2(cx, cy + dy), new Vector2(cx + 8f, cy), 3f, caret);
+        var cx = chevronRight - half;
+        var cy = r.Center.Y + (open ? depth / 2f : -depth / 2f);
+        var dy = open ? -depth : depth;
+        var stroke = UiMetrics.Control(3);
+        _ui.LineSeg(_batch, new Vector2(cx - half, cy), new Vector2(cx, cy + dy), stroke, caret);
+        _ui.LineSeg(_batch, new Vector2(cx, cy + dy), new Vector2(cx + half, cy), stroke, caret);
     }
 
     /// <summary>
@@ -5357,6 +5738,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var mouse = ChromeMouse;
         var inner = new Rectangle(list.X + DropListInset, list.Y + DropListInset,
                                   list.Width - DropListInset * 2, rows * DropRowHeight);
+        // A list that scrolls gives its rows up a lane on the right for the house scrollbar.
+        var scrolling = rows < options.Length;
+        var rowW = inner.Width - (scrolling ? UiMetrics.ScrollbarWidth + UiMetrics.Space(6) : 0);
+        var mark = UiMetrics.Control(10);   // the diamond on the value you already have
 
         if (_dropCommit)
         {
@@ -5370,7 +5755,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         for (var k = 0; k < rows; k++)
         {
             var i = _dropScroll + k;
-            var r = new Rectangle(inner.X, inner.Y + k * DropRowHeight, inner.Width, DropRowHeight);
+            var r = new Rectangle(inner.X, inner.Y + k * DropRowHeight, rowW, DropRowHeight);
             if (r.Contains(mouse)) _dropCursor = i;   // the mouse and the arrow keys share one cursor
             var lit = i == _dropCursor;
 
@@ -5381,8 +5766,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
             }
             if (k > 0) _ui.Fill(_batch, new Rectangle(r.X, r.Y, r.Width, 1), DropRowRule);
             if (i == currentIndex)
-                _ui.Diamond(_batch, new Rectangle(r.X + DropPadX, r.Center.Y - 5, 10, 10), Gold);
-            _ui.TextBig(_batch, options[i], r.X + DropPadX + 22, r.Center.Y - DropTextPx * 27 / 40,
+                _ui.Diamond(_batch, new Rectangle(r.X + DropPadX, r.Center.Y - mark / 2, mark, mark), Gold);
+            _ui.TextBig(_batch, _ui.ShortenBig(options[i], r.Right - DropPadX - (r.X + DropPadX + mark + UiMetrics.Space(12)), DropTextPx),
+                        r.X + DropPadX + mark + UiMetrics.Space(12), r.Center.Y - DropTextPx * 27 / 40,
                         lit ? Gold : Bone, DropTextPx);
 
             if (!_clicked || !r.Contains(mouse)) continue;
@@ -5391,15 +5777,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             return list;
         }
 
-        // The scroll thumb, only when there is something to scroll — a bar that is always full is noise.
-        if (rows < options.Length)
-        {
-            var track = new Rectangle(inner.Right - 6, inner.Y + 2, 3, inner.Height - 4);
-            _ui.Fill(_batch, track, DropRowRule);
-            var h = Math.Max(18, track.Height * rows / options.Length);
-            var y = track.Y + (track.Height - h) * _dropScroll / Math.Max(1, options.Length - rows);
-            _ui.Fill(_batch, new Rectangle(track.X, y, track.Width, h), Gold);
-        }
+        // The scrollbar, only when there is something to scroll — a bar that is always full is noise.
+        if (scrolling)
+            _ui.ScrollBar(_batch, new Rectangle(inner.Right - UiMetrics.ScrollbarWidth, inner.Y, UiMetrics.ScrollbarWidth, inner.Height),
+                          _dropScroll, rows, options.Length);
 
         // A click anywhere else — the closed field included — just closes the list.
         if (_clicked) CloseDropdown();
@@ -5417,8 +5798,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     private bool ToggleRow(string label, int x, int y, int width, ref bool value, bool clicked)
     {
-        _ui.TextBig(_batch, label, x, y + 12, Bone, UiTypography.Body);
-        var btn = new Rectangle(x + width - 116, y, 116, 48);
+        var h = UiMetrics.RowHeight;
+        var w = UiMetrics.Control(116);
+        _ui.TextBig(_batch, _ui.ShortenBig(label, width - w - UiMetrics.Space(12), UiTypography.Body), x,
+                    y + (h - UiTypography.Body) / 2, Bone, UiTypography.Body);
+        var btn = new Rectangle(x + width - w, y, w, h);
         if (!_ui.Button(_batch, btn, value ? "ON" : "OFF", ChromeMouse, clicked)) return false;
         value = !value;
         return true;
@@ -5435,17 +5819,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// </remarks>
     private int SliderRow(string label, Rectangle track, int current, int dragId, bool clickable, int labelX)
     {
-        _ui.TextBig(_batch, label, labelX, track.Y + 4, Bone, UiTypography.Body);
+        var textY = track.Y + (track.Height - UiTypography.Body) / 2;
+        _ui.TextBig(_batch, label, labelX, textY, Bone, UiTypography.Body);
 
-        var bed = new Rectangle(track.X, track.Center.Y - 4, track.Width, 8);
+        var bedH = UiMetrics.Control(8);
+        var bed = new Rectangle(track.X, track.Center.Y - bedH / 2, track.Width, bedH);
         _ui.Fill(_batch, bed, new Color(0x2A, 0x24, 0x38));
         var fillW = (int)(track.Width * (current / 100f));
-        if (fillW > 0) _ui.Fill(_batch, new Rectangle(bed.X, bed.Y, fillW, 8), new Color(0xC8, 0x9A, 0x3C));
-        _ui.Fill(_batch, new Rectangle(track.X + fillW - 7, track.Y, 14, track.Height), Bone);
-        _ui.TextBig(_batch, $"{current}%", track.Right + 14, track.Y + 4, Slate, UiTypography.Body);
+        if (fillW > 0) _ui.Fill(_batch, new Rectangle(bed.X, bed.Y, fillW, bedH), new Color(0xC8, 0x9A, 0x3C));
+        var handleW = UiMetrics.Control(14);
+        _ui.Fill(_batch, new Rectangle(track.X + fillW - handleW / 2, track.Y, handleW, track.Height), Bone);
+        _ui.TextBig(_batch, $"{current}%", track.Right + UiMetrics.Space(14), textY, Slate, UiTypography.Body);
 
         var mouse = ChromeMouse;
-        var grab = new Rectangle(track.X - 10, track.Y - 6, track.Width + 20, track.Height + 12);
+        var grabX = UiMetrics.Space(10);
+        var grabY = UiMetrics.Space(6);
+        var grab = new Rectangle(track.X - grabX, track.Y - grabY, track.Width + grabX * 2, track.Height + grabY * 2);
         if (clickable && _clicked && grab.Contains(mouse)) _dragSlider = dragId;
         if (_dragSlider == dragId && _mouse.LeftButton == ButtonState.Pressed)
             return Math.Clamp((int)MathF.Round((mouse.X - track.X) * 100f / track.Width), 0, 100);
@@ -5454,44 +5843,20 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     /// <summary>Hover explanations for every settings row — one plain sentence each.</summary>
     /// <remarks>
-    /// The zones cover the whole row (label and control), because a player hovers the words as often
-    /// as the widget. Suppressed while a slider is mid-drag, while the cursor is inside an open
-    /// dropdown list, and while START A NEW GAME is armed — an are-you-sure moment is not the moment
-    /// for furniture. The tip appears after <see cref="TipDelaySeconds"/> of rest on one row; the
-    /// clock ticks in Update and resets here whenever the hovered row changes.
+    /// The zones are the rows DrawSettings just laid out (label and control, scrolled with them),
+    /// because a player hovers the words as often as the widget — and because a zone written as a
+    /// literal goes stale the first time the rows move, which is how four of them came to point at
+    /// a two-column toggle grid that no longer existed. Suppressed while a slider is mid-drag, while
+    /// the cursor is inside an open dropdown list, while it is off the visible rows, and while START
+    /// A NEW GAME is armed — an are-you-sure moment is not the moment for furniture. The tip appears
+    /// after <see cref="TipDelaySeconds"/> of rest on one row; the clock ticks in Update and resets
+    /// here whenever the hovered row changes.
     /// </remarks>
-    private void DrawSettingsTips(Point mouse, bool windowed, Rectangle openList)
+    private void DrawSettingsTips(Point mouse, Rectangle openList, bool rowsVisible, (Rectangle Zone, string Key, string Tip)[] zones)
     {
-        var zones = new (Rectangle Zone, string Key, string Tip)[]
-        {
-            (new Rectangle(536, 198, 848, 64), "mode",
-                "How the game sits on your screen: in a window you can move, or filling the whole screen."),
-            (new Rectangle(536, 274, 848, 64), "size",
-                windowed ? "How big the game window is. The picture is the same at every size — a bigger window just draws it bigger. Nothing larger than your screen is offered; (native) is your screen's own size."
-                         : "How big the game window is. You can change this only when MODE is WINDOWED — the other two modes always fill your screen."),
-            (new Rectangle(536, 408, 848, 46), "fx",
-                "How loud the hits, clicks and other short sounds are. Drag the handle, or click a spot on the line."),
-            (new Rectangle(536, 464, 848, 46), "music",
-                "How loud the background music is. Drag the handle, or click a spot on the line."),
-            (new Rectangle(536, 552, 848, 56), "ask",
-                "When this is on, the game asks you to confirm before an item is sold or broken down."),
-            (new Rectangle(536, 680, 420, 50), "dmg",
-                "Shows the damage of every hit as a small number in the fight."),
-            (new Rectangle(1000, 680, 420, 50), "skills",
-                "Shows the name of each skill as your hunter uses it."),
-            (new Rectangle(536, 728, 420, 50), "hitfx",
-                "Shows the flashes and sparks when hits land in the fight."),
-            (new Rectangle(1000, 728, 420, 50), "flash",
-                "When your hunter falls, the screen glows red for a moment. Turn this off if you do not want it."),
-            (SettingsCopyFeedback, "feedback",
-                "Copies a short code that describes your game. Paste it to the developer with your feedback."),
-            (SettingsNewGame, "newgame",
-                "Deletes your save and starts over from the beginning. It asks you to confirm first."),
-        };
-
         var key = "";
         var tip = "";
-        var suppressed = _dragSlider != 0 || _resetArmTimer > 0f
+        var suppressed = _dragSlider != 0 || _resetArmTimer > 0f || !rowsVisible
                          || (openList != Rectangle.Empty && openList.Contains(mouse));
         if (!suppressed)
             foreach (var z in zones)
@@ -5547,9 +5912,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>The reference's top-right currency row — Gleam, Dust, Materials — on every gameplay screen.</summary>
     /// <summary>Compact number: 125802745 -> "125.8M". Keeps the top resource bar tight (late-game values
     /// hit the hundreds of millions and were blowing out the bar into the region title).</summary>
-    internal static string Abbrev(long n)
+    internal static string Abbrev(long n, bool compact = false)
     {
-        if (n < 0) return "-" + Abbrev(-n);
+        if (n < 0) return "-" + Abbrev(-n, compact);
+        // COMPACT drops the decimals — "131M" for "130.6M" — for a row that has run out of width
+        // (the currency pills at 150 %); the hover still carries every digit.
+        if (compact)
+            return n >= 1_000_000_000 ? $"{n / 1e9:0}B"
+                 : n >= 1_000_000 ? $"{n / 1e6:0}M"
+                 : n >= 10_000 ? $"{n / 1e3:0}K"
+                 : n.ToString();
         return n >= 1_000_000_000 ? $"{n / 1e9:0.##}B"
              : n >= 1_000_000 ? $"{n / 1e6:0.##}M"
              : n >= 10_000 ? $"{n / 1e3:0.#}K"
@@ -5569,13 +5941,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var dustVal = (long)_dust.MemoryDust;
         var gleamVal = _hunter.Gleam;
 
-        var e1 = 1826;   // right margin, left of the settings gear in the corner
-        var l1 = _ui.Pill(_batch, e1, 16, "mat_scrap", new Color(0x9A, 0xC0, 0x88), Abbrev(scrapVal), "", new Color(0x9A, 0xC0, 0x88));
-        var e2 = l1 - 20;
-        var l2 = _ui.Pill(_batch, e2, 16, "ui_memory_dust", default, Abbrev(dustVal), "", new Color(0x9E, 0x86, 0xFF));
-        var e3 = l2 - 20;
-        var leftEdge = _ui.Pill(_batch, e3, 16, "ui_gleam_coin", default, Abbrev(gleamVal), "", UiInk.Accent);
-        if (leftEdge < 1210) System.Diagnostics.Debug.WriteLine($"Currency bar (left {leftEdge}) crowds the stage header.");
+        // THE CHAIN IS MEASURED BEFORE IT IS DRAWN (UI polish P2). The value is drawn at the Label rung,
+        // which follows the profile, so at 150 % three late-game "130.6M"s would run the row into the
+        // stage header. When the chain would cross PillChainMinLeft every value drops its decimals —
+        // "131M" — the icon carries the identity and the hover the exact figure, so nothing is lost.
+        // UiKit.Pill itself is untouched: its capsule is a fixed 60 and the row's y stays with it.
+        var values = new[] { Abbrev(scrapVal), Abbrev(dustVal), Abbrev(gleamVal) };
+        if (PillChainLeft(values) < PillChainMinLeft)
+            values = new[] { Abbrev(scrapVal, compact: true), Abbrev(dustVal, compact: true), Abbrev(gleamVal, compact: true) };
+
+        var e1 = PillRowRight;
+        var l1 = _ui.Pill(_batch, e1, PillRowTop, "mat_scrap", new Color(0x9A, 0xC0, 0x88), values[0], "", new Color(0x9A, 0xC0, 0x88));
+        var e2 = l1 - PillGap;
+        var l2 = _ui.Pill(_batch, e2, PillRowTop, "ui_memory_dust", default, values[1], "", new Color(0x9E, 0x86, 0xFF));
+        var e3 = l2 - PillGap;
+        var leftEdge = _ui.Pill(_batch, e3, PillRowTop, "ui_gleam_coin", default, values[2], "", UiInk.Accent);
+        if (leftEdge < PillChainMinLeft) System.Diagnostics.Debug.WriteLine($"Currency bar (left {leftEdge}) crowds the stage header.");
 
         // WHAT AM I LOOKING AT. The pills are icon + "4.2M", which names neither the resource nor the
         // real figure — hover does both, in plain words and exact digits (playtest: "3 kaynağın ne
@@ -5589,21 +5970,50 @@ public class Game1 : Microsoft.Xna.Framework.Game
                       + $"  ·  CRYSTAL {_hunter.MaterialOf(Material.Crystal).ToString("N0", inv)}";
         var pillRows = new (Rectangle R, string Name, long V)[]
         {
-            (new Rectangle(l1, 16, e1 - l1, 60), allMats, -1),
-            (new Rectangle(l2, 16, e2 - l2, 60), "MEMORY DUST — STARTS A DESCENT FROM A WAVE YOU HAVE CLEARED (MAP) · BUILDS THE WARREN", dustVal),
-            (new Rectangle(leftEdge, 16, e3 - leftEdge, 60), "GLEAM — PAYS FOR TRAINING (V)", gleamVal),
+            (new Rectangle(l1, PillRowTop, e1 - l1, PillHeight), allMats, -1),
+            (new Rectangle(l2, PillRowTop, e2 - l2, PillHeight), "MEMORY DUST — STARTS A DESCENT FROM A WAVE YOU HAVE CLEARED (MAP) · BUILDS THE WARREN", dustVal),
+            (new Rectangle(leftEdge, PillRowTop, e3 - leftEdge, PillHeight), "GLEAM — PAYS FOR TRAINING (V)", gleamVal),
         };
         foreach (var (rr, name, v) in pillRows)
         {
             if (!rr.Contains(ChromeMouse)) continue;
             var text = v < 0 ? name : $"{name}  ·  {v.ToString("N0", inv)}";
-            var w = _ui.Measure(text) + 28;
-            var tip = new Rectangle(Math.Min(rr.Right, 1904) - w, 84, w, 42);
+            // The plate is its line plus a pad — 42 tall at 100 %, taller with the rung — hung under the capsules.
+            var padX = UiMetrics.Space(14);
+            var padY = UiMetrics.Space(10);
+            var w = _ui.Measure(text) + padX * 2;
+            var tip = new Rectangle(Math.Min(rr.Right, UiKit.PageRight(16)) - w, PillRowTop + PillHeight + UiMetrics.Space(8), w,
+                                    UiTypography.Label + padY * 2);
             _ui.Fill(_batch, tip, new Color(0x0E, 0x0A, 0x14, 0xF0));
             _ui.Fill(_batch, new Rectangle(tip.X, tip.Y, tip.Width, 2), NavGold * 0.6f);
-            _ui.TextRight(_batch, text, tip.Right - 14, tip.Y + 10, Bone);
+            _ui.TextRight(_batch, text, tip.Right - padX, tip.Y + padY, Bone);
             break;
         }
+    }
+
+    // ── The currency row's geometry. The capsules are UiKit.Pill's — a fixed 60 tall, icon 40, pads
+    //    24 / 12 / 24 around the value — so the row is page geometry: it neither grows nor moves with
+    //    the profile, only the value inside a capsule does.
+    /// <summary>The capsules' top edge — level with the settings gear beside them.</summary>
+    private const int PillRowTop = 16;
+    /// <summary>A capsule's height (UiKit.Pill's).</summary>
+    private const int PillHeight = 60;
+    /// <summary>The gap between two capsules.</summary>
+    private const int PillGap = 20;
+    /// <summary>What UiKit.Pill wraps around a value: its left pad, the icon, the gap, the right pad.</summary>
+    private const int PillCapsuleChrome = 24 + 40 + 12 + 24;
+    /// <summary>The row's right end: a breath left of the settings gear, so the two can never share a pixel.</summary>
+    private static int PillRowRight => SettingsGear.X - 16;
+    /// <summary>The least the row's left end may be: clear of the stage header (x 630..1190) with a breath.</summary>
+    private const int PillChainMinLeft = 1210;
+
+    /// <summary>Where the row's left end would land for these three values — the capsules' arithmetic, before any is drawn.</summary>
+    private int PillChainLeft(string[] values)
+    {
+        var x = PillRowRight;
+        for (var i = 0; i < values.Length; i++)
+            x -= PillCapsuleChrome + _ui.Measure(values[i]) + (i > 0 ? PillGap : 0);
+        return x;
     }
 
     private void DrawTitle()
@@ -5634,7 +6044,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // warm gold when selected, bone otherwise.
             // A 96 px menu plate carrying body-sized text read as a caption on a slab; these are the
             // three loudest choices in the game and they take the in-panel headline rung.
-            _ui.TextCenterBig(_batch, items[i], box.Center.X, box.Center.Y - 16,
+            // Centred on the plate by the rung's own optical middle (the house 27/40), so a 39 px label at
+            // 150 % sits where the 26 px one sat at 100 %.
+            _ui.TextCenterBig(_batch, items[i], box.Center.X, box.Center.Y - UiTypography.Headline * 27 / 40,
                 selected ? new Color(0xF6, 0xD8, 0x88) : new Color(0xEC, 0xE6, 0xF2), UiTypography.Headline);
 
             // Clickable as well as keyed — every other menu in the game is.
@@ -5651,8 +6063,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // a toast that fades. Saving being off changes what playing is worth.
         if (_saveLocked)
         {
+            // Two lines at the Label rung, one pitch and a breath apart (24 → 60 at 100 %), so the
+            // second cannot print through the first when the rung grows.
             TextCenter("SAVING IS OFF — " + _saveLockReason + ".", 960, 24, Ember);
-            TextCenter("YOUR OLD FILE IS KEPT ON DISK, UNTOUCHED. START A NEW GAME IN SETTINGS TO PLAY FRESH.", 960, 60, Bone);
+            TextCenter("YOUR OLD FILE IS KEPT ON DISK, UNTOUCHED. START A NEW GAME IN SETTINGS TO PLAY FRESH.", 960,
+                       24 + UiTypography.Pitch(UiTypography.Label) + UiMetrics.Space(8), Bone);
         }
     }
 
@@ -5731,15 +6146,42 @@ public class Game1 : Microsoft.Xna.Framework.Game
         ConsumeMapRequests();
     }
 
+    // ── THE HELP SHEET (F1) ────────────────────────────────────────────────────────────────────
+    //
+    // Page geometry at 100 %: the panel it grows from, and the two columns' split. The rows are FLOWED,
+    // not placed (UI polish P2): each sentence wraps to its column and the next row starts under it, so
+    // a bigger profile makes a longer column rather than rows that print through each other — and when
+    // the columns outgrow the page they scroll under the title, with the close icon anchored above the
+    // scroll (brief §17–§18). Before this the rows sat at literal 38 px pitches and the two prose
+    // blocks at literal y's; at 150 % the second block ran straight through the first.
+
+    /// <summary>The sheet at 100 %: where it stands, and the height it grows from.</summary>
+    private const int HelpLeft = 112, HelpTop = 92, HelpWidth = 1696, HelpDesignHeight = 840;
+
+    /// <summary>The left column's share of the sheet — the build's sentences are the longer ones.</summary>
+    private const int HelpLeftColumn = 964;
+
+    /// <summary>The columns' inset from the panel's edge: the frame's corner reach and a breath (64 at 100 %).</summary>
+    private static int HelpInset => UiTypography.PanelPadX + UiMetrics.Space(24);
+
     private void DrawHelp()
     {
         // Framed like every other surface. This was a bone rectangle with a black rectangle inside it —
         // the last flat two-rect panel in the game, on the screen a new player is most likely to open.
         _ui.Scrim(_batch, 0.72f);
-        var panel = new Rectangle(112, 92, 1696, 840);
-        _ui.Panel(_batch, panel);
-
-        _ui.TextCenterBig(_batch, "IDLExIDLE — CONTROLS", panel.Center.X, panel.Y + UiTypography.ModalTitleTop, Gold, UiTypography.PanelTitle);
+        var page = UiKit.Page;
+        var mouse = ChromeMouse;
+        var body = UiTypography.Body;
+        var pitch = UiTypography.Pitch(body);
+        var rowGap = UiMetrics.Space(10);                       // a row's breath under its last line: 38 px rows at 100 %
+        var headerH = UiTypography.ModalTitleTop + UiTypography.Pitch(UiTypography.PanelTitle) + UiMetrics.Space(28);   // the title row → the columns
+        var headToRows = pitch + UiMetrics.Space(26);           // a column's heading → its first row
+        var keyLeft = UiMetrics.Control(180);                   // the key column: a count, or a key's name
+        var keyRight = UiMetrics.Control(116);
+        var leftX = HelpLeft + HelpInset;
+        var leftW = HelpLeftColumn;
+        var rightX = leftX + leftW;
+        var rightW = HelpWidth - HelpInset * 2 - leftW;
 
         // Two columns: the build on the left, the screens on the right.
         // DERIVED where it can be, and honest where it cannot. This panel is the only place a new player
@@ -5784,34 +6226,95 @@ public class Game1 : Microsoft.Xna.Framework.Game
             ("F1", "CLOSE"),
         };
 
-        Text("YOUR BUILD", 176, 200, Bone);
-        for (var i = 0; i < build.Length; i++)
+        // EVERY ROW IS WRAPPED TO ITS COLUMN BEFORE ANYTHING IS DRAWN, so the sheet's height is known:
+        // two columns that share a page rather than two blocks that share pixels. (The prose used to be
+        // wrapped to 1568 px, the whole panel, and ran straight through the SCREENS list.)
+        IReadOnlyList<string>[] Wrap((string Key, string What)[] rows, int width)
         {
-            Text(build[i].Key, 176, 254 + i * 38, Gold);
-            Text(build[i].What, 356, 254 + i * 38, Bone);
+            var lines = new IReadOnlyList<string>[rows.Length];
+            for (var i = 0; i < rows.Length; i++) lines[i] = _ui.WrapBig(rows[i].What, width, body);
+            return lines;
         }
-
-        // 38px pitch, not 46: eleven rows at 46 would run to y=754 and through THE IDEA block below.
-        // The list is FOURTEEN rows now, so it reaches y=748 — and the two prose blocks below were
-        // wrapped to 1568px, the full width of the panel, so they ran straight through it. They are
-        // wrapped to the left column's width instead: two columns that share a page rather than two
-        // blocks that share pixels.
-        Text("SCREENS", 1140, 200, Bone);
-        for (var i = 0; i < world.Length; i++)
+        int ColumnHeight(IReadOnlyList<string>[] lines)
         {
-            Text(world[i].Key, 1140, 254 + i * 38, Gold);
-            Text(world[i].What, 1256, 254 + i * 38, Bone);
+            var h = headToRows;
+            foreach (var l in lines) h += Math.Max(1, l.Count) * pitch + rowGap;
+            return h;
         }
-
-        Text("THE IDEA:", 176, 620, Gold);
-        WrapText(
+        var proseW = leftW - UiMetrics.Space(64);   // a reading line: 900 at 100 %
+        var idea = _ui.WrapBig(
             "ONE HUNTER, YOUR BUILD. IT FIGHTS ON ITS OWN, ON EVERY SCREEN, EVEN WHILE THE GAME IS " +
             "CLOSED. EACH WAVE IT CLEARS PAYS GLEAM AT ONCE. EVERY 5TH WAVE IS A BOSS, AND ONLY A BOSS " +
-            "DROPS A CHEST. WHEN IT FALLS, IT GETS UP AND GOES AGAIN. YOU LOSE NOTHING.",
-            176, 664, 900, Bone);
-        WrapText(
+            "DROPS A CHEST. WHEN IT FALLS, IT GETS UP AND GOES AGAIN. YOU LOSE NOTHING.", proseW, body);
+        var next = _ui.WrapBig(
             $"SPEND GLEAM ON TRAINING (V) TO GROW STRONGER. REACH WAVE {ConquerWaveDepth} TO CONQUER A REGION AND UNLOCK THE NEXT.",
-            176, 788, 900, Bone * 0.7f);
+            proseW, body);
+        var buildLines = Wrap(build, leftW - keyLeft);
+        var leftH = ColumnHeight(buildLines) + UiMetrics.Space(48) + pitch + UiMetrics.Space(16)
+                    + idea.Count * pitch + UiMetrics.Space(40) + next.Count * pitch;
+        var worldLines = Wrap(world, rightW - keyRight);
+        var contentH = Math.Max(leftH, ColumnHeight(worldLines));
+
+        // THE PANEL: the design height at 100 %, taller when the profile asks, never past the page —
+        // and past that the columns scroll under the title, the right one giving up a lane for the bar.
+        var padBottom = UiTypography.PanelPadBottom;
+        var needed = headerH + contentH + padBottom;
+        var maxH = page.Height - UiMetrics.Space(12) * 2;
+        var h = Math.Clamp(needed, HelpDesignHeight, maxH);
+        var scrolls = needed > h;
+        if (scrolls)
+        {
+            rightW -= UiMetrics.ScrollbarWidth + UiMetrics.Space(8);
+            worldLines = Wrap(world, rightW - keyRight);
+            contentH = Math.Max(leftH, ColumnHeight(worldLines));
+        }
+        var panel = new Rectangle(HelpLeft, h > HelpDesignHeight ? page.Y + (page.Height - h) / 2 : HelpTop, HelpWidth, h);
+        var view = new Rectangle(panel.X + UiTypography.PanelPadX, panel.Y + headerH,
+                                 panel.Width - UiTypography.PanelPadX * 2, panel.Bottom - padBottom - (panel.Y + headerH));
+        var maxScroll = scrolls ? Math.Max(0, contentH - view.Height) : 0;
+        if (maxScroll > 0 && MouseWheel != 0 && view.Contains(mouse)) _helpScroll -= MouseWheel * UiMetrics.RowHeight;
+        _helpScroll = Math.Clamp(_helpScroll, 0, maxScroll);
+
+        _ui.Panel(_batch, panel);
+        _ui.TextCenterBig(_batch, "IDLExIDLE — CONTROLS", panel.Center.X, panel.Y + UiTypography.ModalTitleTop, Gold, UiTypography.PanelTitle);
+
+        if (scrolls) BeginChromeClip(view);
+        var top = view.Y - _helpScroll;
+
+        // A column: its heading, then each row's key beside its wrapped sentence. Returns the y under it.
+        int Column(string heading, (string Key, string What)[] rows, IReadOnlyList<string>[] lines, int x, int keyW, int y)
+        {
+            Text(heading, x, y, Bone);
+            y += headToRows;
+            for (var i = 0; i < rows.Length; i++)
+            {
+                if (rows[i].Key.Length > 0) Text(rows[i].Key, x, y, Gold);
+                foreach (var line in lines[i]) { Text(line, x + keyW, y, Bone); y += pitch; }
+                if (lines[i].Count == 0) y += pitch;
+                y += rowGap;
+            }
+            return y;
+        }
+
+        var y = Column("YOUR BUILD", build, buildLines, leftX, keyLeft, top) + UiMetrics.Space(48);
+        Text("THE IDEA:", leftX, y, Gold);
+        y += pitch + UiMetrics.Space(16);
+        foreach (var line in idea) { Text(line, leftX, y, Bone); y += pitch; }
+        y += UiMetrics.Space(40);
+        foreach (var line in next) { Text(line, leftX, y, Bone * 0.7f); y += pitch; }
+
+        Column("SCREENS", world, worldLines, rightX, keyRight, top);
+
+        if (scrolls)
+        {
+            EndChromeClip();
+            var lane = UiMetrics.ScrollbarWidth;
+            _ui.ScrollBar(_batch, new Rectangle(panel.Right - UiTypography.PanelPadX - lane, view.Y, lane, view.Height),
+                          _helpScroll, view.Height, contentH);
+        }
+
+        // The house close icon, anchored in the corner above anything that scrolls. F1 and Esc close it too.
+        if (_ui.CloseButton(_batch, UiKit.CloseRect(panel), mouse, _clicked)) _showHelp = false;
     }
 
     // ── Drawing helpers ───────────────────────────────────────────────────────────────────────
@@ -6078,6 +6581,21 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // hung 135px off the bottom of the screen.
     private static readonly int NavTileHeight = 1080 / Nav.Length;
 
+    // ── THE TILE'S GRID (UI polish P2). The label sits on the tile's foot and the icon takes what is
+    //    left above it, so the two cannot print through each other at any profile. Tile geometry — the
+    //    tile is 1080/11 = 98 px and the rail 180 wide at every profile — so these are constants, not
+    //    UiMetrics; what follows the profile is the label rung they are laid out around.
+    /// <summary>How far the label's bottom clears the tile's foot.</summary>
+    private const int NavLabelFoot = 10;
+    /// <summary>Where the icon starts under the tile's top edge at 100 %. It is the first thing to give way when the label grows.</summary>
+    private const int NavIconTop = 24;
+    /// <summary>The breath between the icon and the label.</summary>
+    private const int NavIconGap = 2;
+    /// <summary>The icon's edge: never past 48 (its art), never under 30 (a glyph stops reading).</summary>
+    private const int NavIconMax = 48, NavIconMin = 30;
+    /// <summary>The room a label leaves at each side of the tile — the rail's 3 px seam and its mirror.</summary>
+    private const int NavLabelInset = 3;
+
     private static Rectangle NavHexRect(int i)   // a rectangular TILE (guide: package_01 nav tiles)
     {
         // Vertical rail down the LEFT edge. It used to be eight 240px sections along the bottom
@@ -6132,23 +6650,31 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             // Icon above, label below, both centred in the shorter tile.
             var iconTint = !unlocked ? Color.White * 0.22f : on ? Color.White : Color.White * 0.75f;
-            // THE ICON IS SIZED FROM THE TILE, not from a literal 48. NavTileHeight is 1080/Nav.Length,
-            // so adding the eleventh tile took every tile from 108px to 98 — and at a fixed 48 starting
-            // at Y+24 the icon ran to Y+72 while the label is drawn at Bottom-34, i.e. Y+64. The rail
-            // would have rendered every glyph through its own caption. Pixel-identical at ten tiles.
-            var iconPx = Math.Clamp(NavTileHeight - 60, 30, 48);
+            // THE TILE'S LAYOUT IS DERIVED FROM THE LABEL RUNG, not written. The label (NavigationLabel:
+            // 24 / 30 / 36 px) sits NavLabelFoot above the tile's foot and the icon takes the room between
+            // NavIconTop and the label — 38 px at 100 % on the 98 px tile, pixel-identical to the old
+            // Clamp(NavTileHeight - 60, 30, 48) at Y+24 — and it gives up its top pad before its floor,
+            // so at 150 % a 36 px label gets a 30 px icon at Y+20 rather than an icon it prints through.
+            // (Before this, the icon was sized from the tile alone and the label drawn at Bottom-34: at
+            // 150 % the label ran two pixels past the tile's foot into the next tile's divider.)
+            var labelH = UiTypography.NavigationLabel;
+            var labelY = r.Bottom - NavLabelFoot - labelH;
+            var iconPx = Math.Clamp(labelY - NavIconGap - (r.Y + NavIconTop), NavIconMin, NavIconMax);
+            var iconY = labelY - NavIconGap - iconPx;
             if (_assets.Get(Nav[i].Glyph) is { } g)
-                _batch.Draw(g, new Rectangle(r.Center.X - iconPx / 2, r.Y + 24, iconPx, iconPx), iconTint);
+                _batch.Draw(g, new Rectangle(r.Center.X - iconPx / 2, iconY, iconPx, iconPx), iconTint);
             else
-                _ui.Diamond(_batch, new Rectangle(r.Center.X - iconPx / 2 + 4, r.Y + 28, iconPx - 8, iconPx - 8), on ? NavGold : NavGem * 0.75f);
-            _ui.TextCenterBig(_batch, Nav[i].Label, r.Center.X, r.Bottom - 34,
-                              !unlocked ? NavLabel * 0.35f : on ? NavGold : NavLabel * 0.9f, UiTypography.NavigationLabel);
+                _ui.Diamond(_batch, new Rectangle(r.Center.X - iconPx / 2 + 4, iconY + 4, iconPx - 8, iconPx - 8), on ? NavGold : NavGem * 0.75f);
+            // The label fits the tile or says so with an ellipsis — it is never shrunk; the rung is the rung.
+            _ui.TextCenterBig(_batch, _ui.ShortenBig(Nav[i].Label, NavRailWidth - NavLabelInset * 2, labelH), r.Center.X, labelY,
+                              !unlocked ? NavLabel * 0.35f : on ? NavGold : NavLabel * 0.9f, labelH);
 
             // The price, on the tile, so the rail teaches the progression without being clicked. Hover
             // only — nine requirement lines drawn permanently is the wall this pass exists to remove.
+            // It hangs off the label's foot (Bottom-16 at 100 %), under the caps' ink, at every profile.
             if (!unlocked && hover)
-                _ui.TextCenterBig(_batch, _ui.ShortenBig(Unlocks.Requirement(NavActivity[i]), NavRailWidth - 24, UiTypography.Secondary),
-                                  r.Center.X, r.Bottom - 16, NavGem * 0.8f, UiTypography.Secondary);
+                _ui.TextCenterBig(_batch, _ui.ShortenBig(Unlocks.Requirement(NavActivity[i]), NavRailWidth - UiMetrics.Space(24), UiTypography.Secondary),
+                                  r.Center.X, labelY + labelH - UiMetrics.Space(6), NavGem * 0.8f, UiTypography.Secondary);
 
 
             // A GOLD "NEW" MARK on a tile that is open with something unread on it — the quiet
@@ -6169,10 +6695,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             || (activity == Activity.Roster && _rosterNews));
             if (isNew)
             {
-                var mark = new Rectangle(r.X + 10, r.Y + 14, 50, 26);
+                // A chip sized from its word: the caption rung plus a pad (50 × 26 at 100 %). It keeps to
+                // the tile's top-left corner, clear of the icon beside it and the label under it — at
+                // 150 % the corner is smaller than the chip would like, and the chip yields, not the label.
+                var markH = UiTypography.Secondary + UiMetrics.Space(7);
+                var markW = _ui.MeasureBig("NEW", UiTypography.Secondary) + UiMetrics.Space(12);
+                var mark = new Rectangle(Math.Min(r.X + UiMetrics.Space(10), r.Center.X - iconPx / 2 - NavIconGap - markW),
+                                         Math.Min(r.Y + UiMetrics.Space(14), labelY - NavIconGap - markH), markW, markH);
                 _ui.Fill(_batch, mark, NavGold);
                 _ui.Fill(_batch, new Rectangle(mark.X, mark.Y, mark.Width, 3), new Color(0xFF, 0xE0, 0xA0));
-                _ui.TextCenterBig(_batch, "NEW", mark.Center.X, mark.Y + 4, new Color(0x2A, 0x1C, 0x08),
+                _ui.TextCenterBig(_batch, "NEW", mark.Center.X, mark.Y + (markH - UiTypography.Secondary) / 2, new Color(0x2A, 0x1C, 0x08),
                                   UiTypography.Secondary);
             }
 
@@ -6186,10 +6718,17 @@ public class Game1 : Microsoft.Xna.Framework.Game
             if (Nav[i].Label == "VAULT" && _forge is not null && _forge.UnopenedChests.Count > 0)
             {
                 var n = _forge.UnopenedChests.Count;
-                var badge = new Rectangle(r.Right - 54, r.Y + 16, 38, 30);
+                var count = n > 9 ? "9+" : n.ToString();
+                // A badge sized from its count: the caption rung plus a pad (38 × 30 at 100 %). Top-right,
+                // clear of the icon and the label the same way the NEW mark is — at 150 % it sat across
+                // the label's last letter.
+                var badgeH = UiTypography.Secondary + UiMetrics.Space(11);
+                var badgeW = Math.Max(UiMetrics.Control(38), _ui.MeasureBig(count, UiTypography.Secondary) + UiMetrics.Space(16));
+                var badge = new Rectangle(Math.Max(r.Right - UiMetrics.Space(16) - badgeW, r.Center.X + iconPx / 2 + NavIconGap),
+                                          Math.Min(r.Y + UiMetrics.Space(16), labelY - NavIconGap - badgeH), badgeW, badgeH);
                 _ui.Fill(_batch, badge, new Color(0xC8, 0x3A, 0x3A));
                 _ui.Fill(_batch, new Rectangle(badge.X, badge.Y, badge.Width, 3), new Color(0xF0, 0x8A, 0x6A));
-                _ui.TextCenterBig(_batch, n > 9 ? "9+" : n.ToString(), badge.Center.X, badge.Y + 4,
+                _ui.TextCenterBig(_batch, count, badge.Center.X, badge.Y + (badgeH - UiTypography.Secondary) / 2,
                                   Color.White, UiTypography.Secondary);
             }
         }
@@ -6201,13 +6740,5 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // NavHexRect is 1920-space chrome now, so hit-test the 1920-space cursor.
         for (var i = 0; i < Nav.Length; i++)
             if (NavHexRect(i).Contains(ChromeMouse)) { OpenNav(i); return; }
-    }
-
-    /// <summary>Word-wrap, so explanatory copy does not run off the canvas.</summary>
-    private void WrapText(string text, int x, int y, int maxWidth, Color c)
-    {
-        var row = 0;
-        foreach (var line in _ui.WrapBig(text, maxWidth, UiTypography.Label))
-            Text(line, x, y + row++ * UiTypography.Pitch(UiTypography.Label), c);   // WrapText is DrawHelp-only
     }
 }
