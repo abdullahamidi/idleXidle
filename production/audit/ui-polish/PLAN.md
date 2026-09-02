@@ -49,6 +49,43 @@ decisions that are not derivable from the diff.*
   mark each. MOMENTUM's wrecking ball is the weakest read and is on the re-roll list if it fails in context.
 - **Shield — one glyph, one medallion, one strip, one reuse.** See C5.
 
+## Phase 3–5 — interaction, screen polish, motion — the per-screen brief (after C6 merges)
+
+Shared already (C4): Button hover/pressed/disabled, UiMotion (Fast/Transition/Reward, Ease/Flash/Pulse),
+ScrollBar. Each screen's second pass wires FEEDBACK, not information (§22):
+
+- **HUNT** — Shield HUD on the reused bar art (`BarArt(…, "shield")`, thinner than health, `icon_shield`
+  before the word); ShieldGained → sfx_shield_gain + a quick rim build; ShieldAbsorbed → sfx_shield_hit +
+  a small impact at the barrier; ShieldBroken → `fx_shield_break` + sfx_shield_break, the loudest
+  non-boss moment; keep the shell subtle. A Reaction's blow stops being labelled CRITICAL (crit is an
+  expected value here) — it carries the skill's own name. Presentation priority §63; multi-hit fold
+  stays; `_shieldSeen` resets per run. Skill strip states in words (already) — no constant flashing.
+- **BUILD** — equip pulse on the slot (UiMotion.Flash Transition), inspector content fade on selection
+  change, variation choice brightens its branch once, reinforcement pulses once, EQUIPPED · SLOT N badge
+  (done), respec stays calm; sfx_error on ALREADY EQUIPPED; sfx_weave/sfx_bind as today.
+- **GEAR** — equip: target slot pulses + Gear Power ticks (UiMotion) + ladder rung reveal; set ladder
+  `● / ○` drawn as shapes (font gate), capstone rung with `icon_set_<capstone>` tinted by Source; first
+  five-piece completion → host toast "MACHINE SET COMPLETE · PLATING ACTIVE" + sfx_levelup (once, via
+  SaveGame.CompletedSets); empty cells quiet; ItemTooltip already reflowed.
+- **FORGE** — before → after values tick to the new number and flash once (UiMotion), materials strip
+  reacts to the spend, a brief forge flash on the item art; sfx_upgrade / sfx_reroll / sfx_gem /
+  sfx_salvage per operation; no screen shake.
+- **VAULT** — open: card responds at once, reveal stays short, rarity-scaled emphasis (the reveal's ring
+  count already scales); sfx_chest_open (+ sfx_chest_rare Epic+); OPEN ALL aggregates (already);
+  PASTE A CODE demoted to a plate at the far left (already) — confirm it never outranks OPEN.
+- **TRAINING** — hover/selected rows (already distinct), on TRAIN: cost pill reacts, NOW → AFTER value
+  ticks and flashes, rank bar eases, sfx_train; inspector updates without a modal.
+- **TRAITS** — smooth road framing (UiMotion.Transition; Reduced Motion jumps), purchase pulse along the
+  lit connection, terminal stronger; first-open framing kept.
+- **MASTERY** — take: node pulses once, connection lights; no continuous tree animation (the
+  unchosen-specialisation breath honours Reduced Motion).
+- **MAP** — card hover, selected bar (already), a one-time reveal pulse on a newly available region.
+- **ROSTER** — switch: card and inspector update, short highlight, no confirm (already), sfx_nav.
+- **WARREN** — upgrade: level flashes, output ticks, cost pill reacts, milestone stronger; sfx_upgrade.
+- **CHROME** — nav switch: 120 ms content fade-in + 8 px settle through OverlayTransform's kick (Reduced
+  Motion: fade only), sfx_nav; modals (settings, log): backdrop fade + short panel fade; resource pills
+  tick and flash on spend, `+N` on substantial gain (thresholded); locked tile → sfx_error.
+
 ## Phase 6 — audio — cues done, wiring with the screen polish
 
 Ten cues exist (README lists the vocabulary). Wiring plan: nav rail → sfx_nav; refusals (locked tile,
