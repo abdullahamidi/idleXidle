@@ -75,6 +75,13 @@
 # as already explained so no tour sits over the thing a fixture is photographing.
 # `tour` sets this for its own screen by itself.
 #
+# RH_SHOT_REDUCED=1 poses REDUCED MOTION — the accessibility setting that holds every idle
+# animation still. It is set before the first Update, so the state is already on in the frame
+# the shutter takes, and it is the only way to photograph it: the switch lives in SETTINGS and
+# a capture never clicks. Unset means off, exactly like a fresh save. Works with every mode:
+#
+#   RH_SHOT_REDUCED=1 bash tools/asset-pipeline/capture.sh fight build/shots/fight_reduced.png
+#
 # `dust` takes the same third argument for the TRAIT tree's camera (its home zoom
 # is about 0.55, fitting the whole tree; 1.2 frames one road with its art readable).
 MODE="${1:-fight}"
@@ -102,6 +109,8 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 [ -n "$RH_SHOT_UISCALE" ] && RH_ENV+=(RH_SHOT_UISCALE="$RH_SHOT_UISCALE")
 # A REAL window size (e.g. 1280x720): the capture is then the presented backbuffer, not the 1920 render target.
 [ -n "$RH_SHOT_WINDOW" ] && RH_ENV+=(RH_SHOT_WINDOW="$RH_SHOT_WINDOW")
+# REDUCED MOTION on, before the first Update — the accessibility state, posed rather than clicked.
+[ -n "$RH_SHOT_REDUCED" ] && RH_ENV+=(RH_SHOT_REDUCED="$RH_SHOT_REDUCED")
 # MASTERY: pin a node in the inspector (a MasteryCatalog id) for the buildtree/buildzoom modes;
 # TRAITS: select a trait (a MemoryDust id) for the dust mode.
 [ -n "$RH_SHOT_NODE" ] && RH_ENV+=(RH_SHOT_NODE="$RH_SHOT_NODE")
