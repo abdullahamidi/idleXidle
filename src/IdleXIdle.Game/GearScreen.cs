@@ -10,6 +10,7 @@ using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Loot;
 using IdleXIdle.Core.Prestige;
 using IdleXIdle.Core.Progression;
+using IdleXIdle.Core.Sources;
 
 namespace IdleXIdle.Game;
 
@@ -46,6 +47,17 @@ public enum ItemAction { Equip, Upgrade, Reforge, Salvage }
 /// three columns and scrolls, the tab row stacks, the inspector scrolls by whole items — and never by
 /// shrinking a font (§17).
 /// </para>
+/// <para>
+/// FEEDBACK, NOT INFORMATION (UI polish §22–§38, §48–§52). Nothing on this screen was added to say a new
+/// thing; what was added says that something CHANGED. An equip pulses the slot it landed in once, ticks
+/// GEAR POWER from the old number to the new over one Transition and lets the number flash, and reveals a
+/// set rung the moment it is reached with one Source-coloured pulse. The first time a set reaches five
+/// pieces the screen records it and hands the host one notice to toast. Every one of those is a
+/// <see cref="GearFeedback"/> event fired from <see cref="Update"/> by DIFFING the hunter — never by
+/// Draw, and never by the click that caused it, so the menu route the host equips through and the
+/// EQUIP HIGHEST POWER sweep pulse exactly like the EQUIP button does. Every pulse is a
+/// <see cref="UiMotion"/> one-shot, so Reduced Motion collapses it to the same end state.
+/// </para>
 /// </remarks>
 public sealed class GearScreen
 {
@@ -59,8 +71,77 @@ public sealed class GearScreen
     private static readonly Color Green = UiInk.Good;
     private static readonly Color Shadow = new(0x08, 0x07, 0x0B);
 
+    /// <summary>
+    /// The Source accent (§45–§46): the set ladder's capstone emblem and its reveal wear it. The same six
+    /// values VaultScreen and HuntScreen hold; a shared token belongs in UiKit, which this pass may not edit.
+    /// </summary>
+    private static readonly Dictionary<Source, Color> SourceColor = new()
+    {
+        [Source.Shadow] = new(0x9A, 0x7A, 0xD8), [Source.Body] = new(0xD6, 0x48, 0x5C),
+        [Source.Machine] = new(0xBC, 0x78, 0x40), [Source.Nature] = new(0x48, 0xB8, 0x88),
+        [Source.Mind] = new(0x74, 0xC6, 0xE8), [Source.Spirit] = new(0xDC, 0xD4, 0xEC),
+    };
+
+    /// <summary>The capstone emblem of each set — icon_set_momentum … icon_set_harmony, keyed once, not per frame.</summary>
+    private static readonly Dictionary<Source, string> CapstoneIconKey =
+        Enum.GetValues<Source>().ToDictionary(s => s, s => "icon_set_" + ElementSets.CapstoneName(s).ToLowerInvariant());
+
     private readonly UiKit _ui;
     private readonly ForgeScreen _forge;   // owns the item bag + the shared item-icon renderer
+
+    // ── THE FEEDBACK STATE — see GearFeedback at the foot of this file. ──
+    private readonly GearFeedback _feedback = new();
+    /// <summary>
+    /// When this screen last ran an Update, so a re-entry after time away re-primes the diff instead of
+    /// pulsing every slot the roster switch or the Forge changed while nobody was looking (§30: animate
+    /// CHANGE — a change the player did not make on this screen is not one to celebrate here).
+    /// </summary>
+    private long _lastUpdateMs = -1;
+    private string? _observedCharacterId;
+    private const int StaleMs = 700;
+
+    /// <summary>The sound cue for the last thing the player did here, cleared by reading — the host owns audio.</summary>
+    /// <remarks>Same shape as TraitsScreen.ConsumeCue. Cues raised: sfx_click (a tab or an item picked), sfx_equip (a piece put on or taken off by this screen's own controls), sfx_error (a refusal: CANNOT WEAR, or a button that is off).</remarks>
+    public string? ConsumeCue() => _feedback.ConsumeCue();
+
+    /// <summary>A set's first five-piece completion, as two lines for a toast ("NATURE SET COMPLETE" / "OVERGROWTH ACTIVE"), cleared by reading. The host toasts it and plays sfx_levelup.</summary>
+    public string? ConsumeNotice() => _feedback.ConsumeNotice();
+
+    /// <summary>The set that just completed for the first time (a <see cref="Source"/> name, the form SaveGame.CompletedSets holds), cleared by reading.</summary>
+    public string? ConsumeCompletedSet() => _feedback.ConsumeCompletedSet();
+
+    /// <summary>Every set completed so far — what the host writes to SaveGame.CompletedSets.</summary>
+    public IReadOnlyCollection<string> CompletedSets => _feedback.CompletedSets;
+
+    /// <summary>Seed the completed sets from a save, so a set completed in an earlier session never announces itself again.</summary>
+    public void RestoreCompletedSets(IEnumerable<string> sets) => _feedback.RestoreCompletedSets(sets);
+
+    // ── DEV: the capture pose. The rig shoots one frame, and a pulse is over in a fifth of a second, so
+    // the state "just equipped" can only be photographed by FIRING THE EQUIP A KNOWN NUMBER OF FRAMES
+    // BEFORE THE SHUTTER — the same reasoning as HuntScreen.DevSeekBefore. Read by this screen alone:
+    //
+    //   RH_SHOT_GEAR_POSE=equip[@N]   the character fixture takes four NATURE pieces off silently on its
+    //                                 first frame, then puts the chest back on N frames (5 when unsaid)
+    //                                 before the shot: one slot pulses, GEAR POWER is mid-tick, the
+    //                                 ladder's fifth rung reveals, and the set completes for the first
+    //                                 time (the notice is the host's to toast). @0 is the pulse's peak.
+    //   RH_SHOT_GEAR_POSE=best        runs EQUIP HIGHEST POWER on the first frame, so nothing in the bag
+    //                                 beats what is worn and the button draws OFF and says why.
+    //   RH_SHOT_GEAR_POSE=bare        takes everything off, so UNEQUIP ALL draws OFF and the doll is eight
+    //                                 quiet EMPTY slots.
+    //   RH_SHOT_GEAR_POSE=press       holds the mouse button down for the whole run, so a PRESSED cell,
+    //                                 tab, slot, menu row or verb can be photographed under RH_SHOT_PAGE_MOUSE.
+    private static readonly string? DevPoseSpec = Environment.GetEnvironmentVariable("RH_SHOT_GEAR_POSE");
+
+    /// <summary>
+    /// DEV: RH_SHOT_GEAR_REDUCED=1 forces Reduced Motion for a capture. The accessibility setting lives in
+    /// the host's SETTINGS and a rig run never reads a save, so the ONE law this pass must be judged on —
+    /// "the same end state, instantly" — had no way to be photographed at all. Applied from Update, before
+    /// this frame draws; inert without the variable, and rig-only.
+    /// </summary>
+    private static readonly bool DevReduced = Environment.GetEnvironmentVariable("RH_SHOT_GEAR_REDUCED") is { Length: > 0 };
+    private bool _devPosePrepared, _devPoseFired;
+    private ItemInstance? _devPoseItem;
 
     public PlayerLoadout Loadout { get; set; } = null!;
     public MasteryTree Mastery { get; set; } = null!;
@@ -315,6 +396,25 @@ public sealed class GearScreen
     public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, bool rightClicked, int wheel, Hunter hunter)
     {
         var hit = mouse;
+
+        if (DevReduced) UiMotion.Reduced = true;   // dev capture dial, see DevReduced
+
+        // THE DOLL'S IDLE, advanced here rather than in Draw, and not at all under Reduced Motion (§32:
+        // drop idle motion). Fixed-step: one Update is one sixtieth.
+        if (!UiMotion.Reduced) _anim += 1f / 60f;
+
+        // THE FEEDBACK OBSERVES THE HUNTER FIRST, every frame, and fires on what changed since the last
+        // look. Silent on the first look, on a change of character, and after time away (see _lastUpdateMs).
+        var now = Environment.TickCount64;
+        var stale = _lastUpdateMs < 0 || now - _lastUpdateMs > StaleMs || _observedCharacterId != Character.Id;
+        _lastUpdateMs = now;
+        _observedCharacterId = Character.Id;
+        DevPose(hunter);
+        var moved = _feedback.Observe(hunter, stale);
+        // EQUIP HIGHEST POWER's reason to be off costs a bench run per bag weapon (DamageBench), so it is
+        // taken when the gear actually moved — an equip, a re-entry — and never on a frame where nothing did.
+        if (moved || stale) _anyHigherPower = AnyHigherPower(hunter);
+
         var list = Filtered(hunter);
 
         // The selection is adopted only when the item is GONE from the bag, not merely off-tab.
@@ -362,33 +462,113 @@ public sealed class GearScreen
         }
 
         for (var i = 0; i < Tabs.Length; i++)
-            if (TabRect(i).Contains(hit)) { _tab = i; _invScroll = 0; _selectedId = Filtered(hunter).FirstOrDefault()?.InstanceId; return; }
+            if (TabRect(i).Contains(hit))
+            {
+                _tab = i; _invScroll = 0; _selectedId = Filtered(hunter).FirstOrDefault()?.InstanceId;
+                _feedback.Cue("sfx_click");
+                return;
+            }
 
         // A worn slot: select it. (Taking off is the inspector's TAKE OFF, or the menu — one gesture, said.)
         foreach (var (slot, _, col, row) in SlotLayout)
-            if (SlotRect(col, row).Contains(hit) && hunter.Worn(slot) is { } worn) { _selectedId = worn.InstanceId; return; }
+            if (SlotRect(col, row).Contains(hit) && hunter.Worn(slot) is { } worn) { _selectedId = worn.InstanceId; _feedback.Cue("sfx_click"); return; }
 
         for (var vis = 0; vis < InvCols * InvRows; vis++)
         {
             var idx = _invScroll * InvCols + vis;
             if (idx >= list.Count) break;
-            if (InvCellRect(vis).Contains(hit)) { _selectedId = list[idx].InstanceId; return; }
+            if (InvCellRect(vis).Contains(hit)) { _selectedId = list[idx].InstanceId; _feedback.Cue("sfx_click"); return; }
         }
 
         if (Selected(hunter) is { } sel)
         {
             if (EquipBtn.Contains(hit))
             {
-                if (IsWorn(hunter, sel) && Gear.SlotFor(sel.BaseType) is { } ws) { hunter.Unequip(ws); Dirty = true; }
-                else if (!IsWorn(hunter, sel) && CanWearNow(sel)) { hunter.Equip(sel); Dirty = true; }
+                // The equip itself is the cue's moment; the slot pulse and the power tick follow from the
+                // diff, not from here. A press on CANNOT WEAR is a refusal, and a refusal is heard (§86).
+                if (IsWorn(hunter, sel) && Gear.SlotFor(sel.BaseType) is { } ws) { hunter.Unequip(ws); Dirty = true; _feedback.Cue("sfx_equip"); }
+                else if (!IsWorn(hunter, sel) && CanWearNow(sel)) { hunter.Equip(sel); Dirty = true; _feedback.Cue("sfx_equip"); }
+                else _feedback.Cue("sfx_error");
                 return;
             }
             for (var v = 0; v < Verbs.Length; v++)
                 if (VerbText(v).Contains(hit)) { _itemAction = (sel.InstanceId, Verbs[v].Action); return; }
         }
 
-        if (EquipBestBtn.Contains(hit)) { EquipHighestPower(hunter); return; }
-        if (UnequipAllBtn.Contains(hit)) { foreach (var s in AllSlots) hunter.Unequip(s); Dirty = true; return; }
+        // A BUTTON DRAWN OFF DOES NOT ACT — it answers. Both utilities are disabled when they would
+        // change nothing (§29), and a press on one is a refusal, heard rather than swallowed (§86).
+        if (EquipBestBtn.Contains(hit))
+        {
+            _feedback.Cue(_anyHigherPower && EquipHighestPower(hunter) ? "sfx_equip" : "sfx_error");
+            return;
+        }
+        if (UnequipAllBtn.Contains(hit))
+        {
+            if (AllSlots.Any(s => hunter.Worn(s) is not null))
+            {
+                foreach (var s in AllSlots) hunter.Unequip(s);
+                Dirty = true;
+                _feedback.Cue("sfx_equip");
+            }
+            else _feedback.Cue("sfx_error");
+            return;
+        }
+    }
+
+    /// <summary>DEV: the capture pose — see <see cref="DevPoseSpec"/>. Inert without the variable.</summary>
+    private void DevPose(Hunter hunter)
+    {
+        if (DevPoseSpec is null) return;
+        var kind = DevPoseSpec;
+        var lead = 5;
+        var at = kind.IndexOf('@');
+        if (at > 0 && int.TryParse(kind[(at + 1)..], out var n)) { lead = Math.Max(0, n); kind = kind[..at]; }
+        // PRESSED is not an event but a HELD button, and the rig has no hands: this holds it down for the
+        // whole run, and RH_SHOT_PAGE_MOUSE says what it is held over.
+        if (kind == "press") { UiKit.MouseHeld = true; return; }
+        if (!_devPosePrepared)
+        {
+            _devPosePrepared = true;
+            switch (kind)
+            {
+                // Four NATURE pieces off on the first frame — the frame the feedback primes on, so nothing
+                // fires — leaves the set at four of five: the chest going back on is the 4 → 5 step.
+                case "equip":
+                    _devPoseItem = hunter.Unequip(GearSlot.Chest);
+                    hunter.Unequip(GearSlot.Helm);
+                    hunter.Unequip(GearSlot.Gloves);
+                    hunter.Unequip(GearSlot.Boots);
+                    break;
+                case "best": EquipHighestPower(hunter); break;
+                case "bare": foreach (var s in AllSlots) hunter.Unequip(s); break;
+            }
+        }
+        if (kind != "equip") return;
+        // ShotFrameNow is the last DRAWN frame; this Update precedes the next one. Firing when the drawn
+        // count is ShotAtFrame − 1 − lead puts the equip in the Update before Draw (ShotAtFrame − lead), so
+        // the shutter frame has seen exactly `lead` ticks of the pulse.
+        if (!_devPoseFired && _devPoseItem is { } it && Game1.ShotFrameNow >= Game1.ShotAtFrame - 1 - lead)
+        {
+            _devPoseFired = true;
+            hunter.Equip(it);
+            _selectedId = it.InstanceId;
+        }
+    }
+
+    // ── EQUIP HIGHEST POWER's reason to be off: nothing in the bag beats what is worn (§29). Once per CHANGE. ──
+    private bool _anyHigherPower;
+    private bool AnyHigherPower(Hunter hunter)
+    {
+        foreach (var item in _forge.Inventory)
+        {
+            if (Gear.SlotFor(item.BaseType) is not { } slot || !CanWearNow(item)) continue;
+            var worn = hunter.Worn(slot);
+            if (worn?.InstanceId == item.InstanceId) continue;
+            if (slot == GearSlot.Weapon ? WeaponDps(hunter, item) > WeaponDps(hunter, worn) * 1.001f
+                                        : hunter.PowerContribution(item) > hunter.PowerContribution(worn))
+                return true;
+        }
+        return false;
     }
 
     private void OpenMenu(string instanceId, Rectangle anchor)
@@ -407,7 +587,10 @@ public sealed class GearScreen
             if (!MenuRow(i).Contains(hit)) continue;
             if (MenuEntries[i].Action == ItemAction.Equip
                 && Wearable().FirstOrDefault(it => it.InstanceId == _menuItemId) is { } bagItem && !CanWearNow(bagItem))
-                return;   // CANNOT WEAR is not a verb
+            {
+                _feedback.Cue("sfx_error");   // CANNOT WEAR is not a verb — but a press on it is a refusal, and heard
+                return;
+            }
             _itemAction = (_menuItemId, MenuEntries[i].Action);
             return;
         }
@@ -426,9 +609,11 @@ public sealed class GearScreen
     /// <summary>
     /// EQUIP HIGHEST POWER: per slot, the wearable bag item with the highest ITEM POWER if it beats what is worn;
     /// the weapon by bench damage with THIS build. Named for what it compares (§65) — it does not see set bonuses.
+    /// Returns whether anything went on.
     /// </summary>
-    private void EquipHighestPower(Hunter hunter)
+    private bool EquipHighestPower(Hunter hunter)
     {
+        var changed = false;
         foreach (var slot in AllSlots)
         {
             if (slot == GearSlot.Weapon)
@@ -436,14 +621,16 @@ public sealed class GearScreen
                 var bestWeapon = Wearable().Where(i => Gear.SlotFor(i.BaseType) == GearSlot.Weapon && CanWearNow(i))
                     .OrderByDescending(i => WeaponDps(hunter, i)).FirstOrDefault();
                 if (bestWeapon is not null && WeaponDps(hunter, bestWeapon) > WeaponDps(hunter, hunter.Worn(GearSlot.Weapon)) * 1.001f)
-                    hunter.Equip(bestWeapon);
+                { hunter.Equip(bestWeapon); changed = true; }
                 continue;
             }
             var best = Wearable().Where(i => Gear.SlotFor(i.BaseType) == slot && CanWearNow(i))
                 .OrderByDescending(hunter.PowerContribution).FirstOrDefault();
-            if (best is not null && hunter.PowerContribution(best) > hunter.PowerContribution(hunter.Worn(slot))) hunter.Equip(best);
+            if (best is not null && hunter.PowerContribution(best) > hunter.PowerContribution(hunter.Worn(slot)))
+            { hunter.Equip(best); changed = true; }
         }
-        Dirty = true;
+        if (changed) Dirty = true;
+        return changed;
     }
 
     // ── The weapon's real number: bench DPS with it worn, swap-and-restore, cached by everything the bench reads. ──
@@ -472,7 +659,6 @@ public sealed class GearScreen
     // ── DRAW ────────────────────────────────────────────────────────────────────────────────────────────
     public void Draw(SpriteBatch b, Point mouse, Hunter hunter)
     {
-        _anim += 1f / 60f;
         var hit = mouse;
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xD8));
 
@@ -493,13 +679,19 @@ public sealed class GearScreen
         if (DevGearDebug) DrawDebug(b, hunter);
     }
 
-    /// <summary>Open the item menu on a cell — used by the headless capture to pose it.</summary>
+    /// <summary>
+    /// Open the item menu on a cell — used by the headless capture to pose it. RH_SHOT_GEAR_MENU=&lt;instanceId&gt;
+    /// picks WHICH item, so the menu's CANNOT WEAR row (a class-locked piece) is photographable too; without
+    /// it the menu opens on the first item in the bag, as it always has.
+    /// </summary>
     public void DevOpenItemMenu()
     {
-        var first = Wearable().FirstOrDefault();
-        if (first is null) return;
-        _selectedId = first.InstanceId;
-        OpenMenu(first.InstanceId, InvCellRect(0));
+        var bag = Wearable();
+        var want = Environment.GetEnvironmentVariable("RH_SHOT_GEAR_MENU");
+        var pick = (want is { Length: > 0 } ? bag.FirstOrDefault(i => i.InstanceId == want) : null) ?? bag.FirstOrDefault();
+        if (pick is null) return;
+        _selectedId = pick.InstanceId;
+        OpenMenu(pick.InstanceId, InvCellRect(0));
     }
 
     private void DrawItemMenu(SpriteBatch b, Point hit, Hunter hunter)
@@ -519,6 +711,7 @@ public sealed class GearScreen
         _ui.TextBig(b, _ui.ShortenBig(ItemNaming.FullName(item), box.Width - UiMetrics.Space(14) * 2, UiTypography.Secondary),
                     hx, box.Y + (MenuHeaderH - UiTypography.Secondary) / 2, rc, UiTypography.Secondary);
         _ui.Fill(b, new Rectangle(box.X + UiMetrics.Space(8), box.Y + MenuHeaderH - UiMetrics.Space(4), box.Width - UiMetrics.Space(8) * 2, 1), Dim);
+        string? lockedWhy = null;
         for (var i = 0; i < MenuEntries.Length; i++)
         {
             var (action, label) = MenuEntries[i];
@@ -526,10 +719,20 @@ public sealed class GearScreen
             var locked = action == ItemAction.Equip && !worn && !CanWearNow(item);
             var shown = action == ItemAction.Equip && worn ? "TAKE OFF" : locked ? "CANNOT WEAR" : label;
             var hover = row.Contains(hit) && !locked;
-            if (hover) _ui.Fill(b, row, new Color(0x36, 0x2A, 0x4E));
-            _ui.TextBig(b, shown, row.X + UiMetrics.Space(16), row.Y + (row.Height - UiTypography.Body) / 2,
+            // HOVER eases in (§26); PRESSED is the held button — the row's text drops a pixel (§27); a
+            // locked row keeps its label readable and says why under the pointer (§29).
+            var lift = UiMotion.Ease(UiMotion.KeyOf(row), hover ? 1f : 0f);
+            var pressed = hover && UiKit.MouseHeld;
+            if (lift > 0f) _ui.Fill(b, row, new Color(0x36, 0x2A, 0x4E) * lift);
+            if (pressed) _ui.Fill(b, row, Color.Black * 0.18f);
+            _ui.TextBig(b, shown, row.X + UiMetrics.Space(16), row.Y + (row.Height - UiTypography.Body) / 2 + (pressed ? 1 : 0),
                         locked ? UiInk.Disabled : hover ? Bone : Slate, UiTypography.Body);
+            if (locked && row.Contains(hit)) lockedWhy = ItemClasses.WhyNot(Character, item);
         }
+        // THE LOCKED ROW SAYS WHY, HERE. Not through Tip(): the deferred tip is suppressed while this menu
+        // is open (a card over a menu), so a Tip() on this row would have been a reason nobody ever saw —
+        // and this menu is the last thing drawn, so the card belongs on top of it.
+        if (lockedWhy is { } lw) _ui.HoverTip(b, lw, hit);
     }
 
     // ── EQUIPPED: the one ornate surface — who, what they wear, what it adds up to, two actions. ──────────
@@ -545,10 +748,17 @@ public sealed class GearScreen
         var hy = HeaderTop;
         var por = new Rectangle(x0, hy, PortraitSize, PortraitSize);
         if (_ui.Assets.GetFirst(Character.PortraitKey, "hunter_portrait") is { } p) b.Draw(p, por, Color.White);
-        var powerVal = $"{hunter.PowerRating:N0}";
+        // GEAR POWER TICKS (§36): the number the feedback shows runs from the old value to the new over one
+        // Transition, and the digits flash gold and settle back — the true value at once under Reduced Motion.
+        var powerVal = $"{_feedback.DisplayedPower:N0}";
         var powerW = Math.Max(_ui.MeasureBig("GEAR POWER", UiTypography.Secondary), _ui.MeasureBig(powerVal, UiTypography.PrimaryValue));
+        // The emphasis is the DIGITS' OWN COLOUR going gold and settling back — not a plate behind them.
+        // A lit rectangle here would be a panel the polish is not allowed to add (§22), and its right edge
+        // sat under the frame's corner ornament.
+        var emphasis = UiMotion.Smooth(_feedback.PowerEmphasis);
         _ui.TextRightBig(b, "GEAR POWER", x1, hy + UiMetrics.Space(4), Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, powerVal, x1, hy + UiTypography.Pitch(UiTypography.Secondary), Bone, UiTypography.PrimaryValue);
+        var powerY = hy + UiTypography.Pitch(UiTypography.Secondary);
+        _ui.TextRightBig(b, powerVal, x1, powerY, Color.Lerp(Bone, Gold, emphasis), UiTypography.PrimaryValue);
         var tx = por.Right + UiMetrics.Space(16);
         var nameW = x1 - powerW - UiMetrics.Space(24) - tx;
         var ny = hy + UiMetrics.Space(6);
@@ -575,12 +785,16 @@ public sealed class GearScreen
         foreach (var (slot, label, col, row) in SlotLayout)
         {
             var box = SlotRect(col, row);
-            var hot = box.Contains(hit);
             var worn = hunter.Worn(slot);
+            // A worn slot is a control (it selects); an empty one is not, and stays quiet under the pointer (§50).
+            var hot = worn is not null && box.Contains(hit);
             var selected = worn is not null && worn.InstanceId == _selectedId;
+            var lift = UiMotion.Ease(UiMotion.KeyOf(box), hot ? 1f : 0f);
+            var pressed = hot && UiKit.MouseHeld;
+            var pulse = _feedback.SlotPulse(slot);
             var round = slot is GearSlot.Charm or GearSlot.Focus or GearSlot.Ring;
             var slotArt = round ? "ui_slot_trinket_round" : "ui_slot_empty";
-            if (_ui.Assets.Get(slotArt) is { } sa) b.Draw(sa, box, worn is not null || hot ? Color.White : Color.White * 0.7f);
+            if (_ui.Assets.Get(slotArt) is { } sa) b.Draw(sa, box, worn is not null ? Color.White : Color.White * 0.7f);
             else _ui.Fill(b, box, CellBg);
             // The ring art's well and its rim, in the art's own proportion (12 and 14 of its 102 source px).
             var well = box.Width * 12 / 102;
@@ -589,7 +803,11 @@ public sealed class GearScreen
             if (worn is { } w2)
             {
                 if (hot) _hovered = w2;
-                _forge.DrawItemIcon(b, w2, new Rectangle(box.X + well, box.Y + well, box.Width - well * 2, box.Height - well * 2));
+                // PRESSED: the piece sits two pixels lower and darker for as long as the button is held (§27).
+                var drop = pressed ? 2 : 0;
+                _forge.DrawItemIcon(b, w2, new Rectangle(box.X + well, box.Y + well + drop, box.Width - well * 2, box.Height - well * 2));
+                if (lift > 0f) _ui.Fill(b, Shrink(box, rim), Color.White * (0.08f * lift));   // hover: a thin luminance lift (§26)
+                if (pressed) _ui.Fill(b, Shrink(box, rim), Color.Black * 0.18f);
                 _ui.Fill(b, new Rectangle(box.X, box.Y, box.Width, 4), RarityColor(w2.Rarity));
             }
             else
@@ -601,7 +819,16 @@ public sealed class GearScreen
                 if (emptyInRing) _ui.TextCenterBig(b, "EMPTY", box.Center.X, box.Center.Y - UiTypography.Caption / 2, UiInk.Empty, UiTypography.Caption);
             }
             if (selected) Ring(b, box, Gold, 3);   // gold = selected
-            else if (hot) Ring(b, box, Slate, 2);
+            else if (lift > 0f) Ring(b, box, Slate * lift, 2);
+            // JUST EQUIPPED (§49): one gold pulse on the slot the piece landed in — a fading wash inside the
+            // ring and a halo outside it, which steps out as it fades (a fade alone under Reduced Motion).
+            if (pulse > 0f)
+            {
+                var glow = UiMotion.Smooth(pulse);
+                var grow = UiMotion.Reduced ? 2 : 2 + (int)MathF.Round(UiMetrics.Space(4) * (1f - glow));
+                _ui.Fill(b, Shrink(box, rim), Gold * (0.28f * glow));
+                Ring(b, Shrink(box, -grow), Gold * glow, 3);
+            }
 
             var labelInk = worn is not null ? Bone : Slate;
             if (labelsUnder)
@@ -657,10 +884,15 @@ public sealed class GearScreen
         _ui.TextBig(b, _ui.ShortenBig($"{wornAll.Count} / 8 EQUIPPED  ·  AVERAGE ITEM LEVEL {il}", chipX - UiMetrics.Space(12) - countX, UiTypography.Body),
                     countX, strip.Y + (strip.Height - UiTypography.Body) / 2, Bone, UiTypography.Body);
 
-        // TWO UTILITY ACTIONS, secondary: named for what they do (§65).
-        _ui.Button(b, EquipBestBtn, "EQUIP HIGHEST POWER", hit, false, true);
-        Tip(EquipBestBtn, hit, "Puts on the highest ITEM POWER in each slot, and the weapon that benches the most damage with your build. It does not count set bonuses.");
+        // TWO UTILITY ACTIONS, secondary: named for what they do (§65). Each is off when it would do
+        // nothing, and says why under the pointer (§29) — a button that clicks and changes nothing is the
+        // silent failure the brief forbids.
+        _ui.Button(b, EquipBestBtn, "EQUIP HIGHEST POWER", hit, false, _anyHigherPower);
+        Tip(EquipBestBtn, hit, _anyHigherPower
+            ? "Puts on the highest ITEM POWER in each slot, and the weapon that benches the most damage with your build. It does not count set bonuses."
+            : "Nothing in the bag beats what you are wearing.");
         _ui.Button(b, UnequipAllBtn, "UNEQUIP ALL", hit, false, wornAll.Count > 0);
+        if (wornAll.Count == 0) Tip(UnequipAllBtn, hit, "You are not wearing anything to take off.");
     }
 
     // ── INVENTORY: a quiet plate; the items emerge, the empties do not (§63). ─────────────────────────────
@@ -677,9 +909,17 @@ public sealed class GearScreen
             var r = TabRect(i);
             var on = i == _tab;
             var hot = r.Contains(hit);
-            _ui.Fill(b, r, on ? new Color(0x2C, 0x25, 0x44) : hot ? new Color(0x1E, 0x18, 0x2C) : new Color(0x0E, 0x0B, 0x16) * 0.8f);
-            Ring(b, r, on ? Gold : hot ? Slate : Dim, on ? 2 : 1);
-            _ui.TextCenterBig(b, Tabs[i], r.Center.X, r.Y + (r.Height - UiTypography.Secondary) / 2, on ? Gold : hot ? Bone : Slate, UiTypography.Secondary);
+            // The four states, each its own thing (§25–§28): SELECTED is the gold ring and gold word, and
+            // stays so under the pointer; HOVER eases a lift in over the dark plate; PRESSED drops the word a
+            // pixel and dims for as long as the button is held.
+            var lift = UiMotion.Ease(UiMotion.KeyOf(r), hot ? 1f : 0f);
+            var pressed = hot && UiKit.MouseHeld;
+            _ui.Fill(b, r, on ? new Color(0x2C, 0x25, 0x44) : new Color(0x0E, 0x0B, 0x16) * 0.8f);
+            if (lift > 0f && !on) _ui.Fill(b, r, new Color(0x1E, 0x18, 0x2C) * lift);
+            if (pressed) _ui.Fill(b, r, Color.Black * 0.18f);
+            Ring(b, r, on ? Gold : Color.Lerp(Dim, Slate, lift), on ? 2 : 1);
+            _ui.TextCenterBig(b, Tabs[i], r.Center.X, r.Y + (r.Height - UiTypography.Secondary) / 2 + (pressed ? 1 : 0),
+                              on ? Gold : Color.Lerp(Slate, Bone, lift), UiTypography.Secondary);
         }
 
         var list = Filtered(hunter);
@@ -698,8 +938,15 @@ public sealed class GearScreen
             var hot = cell.Contains(hit);
             var sel = item.InstanceId == _selectedId;
             if (hot) _hovered = item;
-            if (hot && !sel) _ui.Fill(b, cell, CellHot);
-            _forge.DrawItemIcon(b, item, new Rectangle(cell.X + iconInset, cell.Y + iconInset, cell.Width - iconInset * 2, cell.Height - iconInset * 2));
+            // HOVER eases in (§26) and is never the selected look (§28); PRESSED sits the icon two pixels
+            // lower and darker while the button is held (§27); a LOCKED cell keeps its dimmed veil and lock
+            // and says who can wear it on the hover card (§29).
+            var lift = UiMotion.Ease(UiMotion.KeyOf(cell), hot ? 1f : 0f);
+            var pressed = hot && UiKit.MouseHeld;
+            if (lift > 0f && !sel) _ui.Fill(b, cell, CellHot * lift);
+            var drop = pressed ? 2 : 0;
+            _forge.DrawItemIcon(b, item, new Rectangle(cell.X + iconInset, cell.Y + iconInset + drop, cell.Width - iconInset * 2, cell.Height - iconInset * 2));
+            if (pressed) _ui.Fill(b, Shrink(cell, 5), Color.Black * 0.18f);
             _ui.Fill(b, new Rectangle(cell.X, cell.Y, 5, cell.Height), RarityColor(item.Rarity));   // rarity owns the left edge
             var wearable = CanWearNow(item);
             if (!wearable)
@@ -715,7 +962,7 @@ public sealed class GearScreen
                                                     : hunter.PowerContribution(item) > hunter.PowerContribution(wornPiece));
             if (better) Ring(b, Shrink(cell, 3), new Color(0x6E, 0xC8, 0x7A, 0x9E), 1);
             if (sel) { Ring(b, cell, Gold, 3); Ring(b, Shrink(cell, 3), new Color(0x14, 0x10, 0x1A, 0x88), 1); }   // gold = selected
-            else if (hot) Ring(b, cell, Slate, 2);
+            else if (lift > 0f) Ring(b, cell, Slate * lift, 2);
         }
 
         // THE SCROLLBAR, in the plate's right pad — drawn only when there is a row beyond the last visible one.
@@ -902,14 +1149,23 @@ public sealed class GearScreen
             Head($"{ElementSets.Name(el).ToUpperInvariant()}  ·  {ElementSets.Progress(wornOf).ToUpperInvariant()}");
             var rowH = UiTypography.Pitch(UiTypography.Body);
             var mark = UiMetrics.Control(12);
+            // The capstone's emblem is a little larger than a rung's disc, and still clears the number column.
+            var emblem = mark + UiMetrics.Space(6);
+            var sc = SourceColor.GetValueOrDefault(el, Slate);
             // The number column and the sentence column hang from the Body rung: one and two rungs in.
             var numX = x + UiTypography.Body;
+            // Where the mark column has to stop — the reveal's halo is clamped to it (see Halo).
+            var markRight = numX - UiMetrics.Space(3);
             var textX = x + UiTypography.Body * 2;
             foreach (var t in tiers)
             {
                 var reached = wornOf >= t.Pieces;
                 var reaches = !reached && !worn && whyNot is null && would >= t.Pieces;
+                // JUST REACHED (§51): the rung's one-time Source-accent reveal — the mark and its words
+                // borrow the Source colour and a halo steps out from the mark as the pulse fades.
+                var reveal = reached ? UiMotion.Smooth(_feedback.RungPulse(el, t.Pieces)) : 0f;
                 var ink = reached ? Bone : reaches ? Gold : Slate;
+                if (reveal > 0f) ink = Color.Lerp(ink, sc, reveal);
                 // THE CAPSTONE IS NAMED, and the name is what the rung is remembered by. A player talks
                 // about running MOMENTUM, not about their fifth Body piece — so the word is on the row,
                 // ahead of the sentence, and it keeps its emphasis whether or not the rung is reached:
@@ -935,10 +1191,25 @@ public sealed class GearScreen
                     {
                         if (first)
                         {
+                            // THE RUNG'S MARK IS A SHAPE — a filled disc reached, a hollow one not (§51's
+                            // ● / ○, drawn, because the font has neither glyph) — and the CAPSTONE'S is
+                            // its emblem in the set's Source colour, full when reached, dimmed until then
+                            // (§23: the capstone is the important rung; §24: Source colour is identity).
                             var m = new Rectangle(x + 2, y + (UiTypography.Body - mark) / 2 + 1, mark, mark);
-                            if (reached) _ui.Fill(b, m, Bone); else Ring(b, m, reaches ? Gold : Slate, 1);
+                            if (cap is not null && _ui.Assets.Get(CapstoneIconKey[el]) is { } emblemArt)
+                            {
+                                var e = new Rectangle(Math.Max(x, m.Center.X - emblem / 2), m.Center.Y - emblem / 2, emblem, emblem);
+                                if (reveal > 0f) DiscRing(b, Shrink(e, -Halo(reveal, markRight - e.Right)), sc * reveal, 2f);
+                                // An unreached capstone is the thing the ladder is FOR, so it is dim, not absent.
+                                b.Draw(emblemArt, e, reached ? Color.Lerp(sc, Color.White, reveal * 0.5f) : sc * 0.55f);
+                            }
+                            else
+                            {
+                                if (reveal > 0f) DiscRing(b, Shrink(m, -Halo(reveal, markRight - m.Right)), sc * reveal, 2f);
+                                if (reached) Disc(b, m, Color.Lerp(Bone, sc, reveal)); else DiscRing(b, m, reaches ? Gold : Slate, 1.5f);
+                            }
                             _ui.TextBig(b, $"{t.Pieces}", numX, y, ink, UiTypography.Body);
-                            if (cap is not null) _ui.TextBig(b, cap, textX, y, reached ? Gold : ink, UiTypography.Body);
+                            if (cap is not null) _ui.TextBig(b, cap, textX, y, reached ? Color.Lerp(Gold, sc, reveal) : ink, UiTypography.Body);
                             if (right.Length > 0) _ui.TextRightBig(b, right, x + w, y, reached ? Green : Gold, UiTypography.Secondary);
                         }
                         _ui.TextBig(b, wrapped, lx, y, ink, UiTypography.Body);
@@ -958,7 +1229,10 @@ public sealed class GearScreen
         {
             var r = VerbText(v);
             var over = r.Contains(hit);
-            _ui.TextCenterBig(b, Verbs[v].Label, r.Center.X, r.Y + (r.Height - UiTypography.Secondary) / 2, over ? Bone : Slate, UiTypography.Secondary);
+            var lift = UiMotion.Ease(UiMotion.KeyOf(r), over ? 1f : 0f);
+            var pressed = over && UiKit.MouseHeld;
+            _ui.TextCenterBig(b, Verbs[v].Label, r.Center.X, r.Y + (r.Height - UiTypography.Secondary) / 2 + (pressed ? 1 : 0),
+                              Color.Lerp(Slate, Bone, lift), UiTypography.Secondary);
             Tip(r, hit, Verbs[v].Action switch
             {
                 ItemAction.Upgrade => "Take it to the FORGE to raise its level.",
@@ -968,7 +1242,16 @@ public sealed class GearScreen
         }
         var label = worn ? "TAKE OFF" : whyNot is null ? "EQUIP" : "CANNOT WEAR";
         _ui.Button(b, EquipBtn, label, hit, false, worn || whyNot is null, !worn && whyNot is null ? ButtonStyle.Primary : ButtonStyle.Secondary);
+        if (!worn && whyNot is not null) Tip(EquipBtn, hit, whyNot);   // off, and says why (§29)
     }
+
+    /// <summary>
+    /// How far a reveal's halo has stepped out from its mark: tight at the peak, a breath by the end, and
+    /// never past <paramref name="room"/> — the mark column ends where the number column begins, and a halo
+    /// that crossed it would print on the rung's own number. No movement at all under Reduced Motion.
+    /// </summary>
+    private static int Halo(float reveal, int room)
+        => Math.Clamp(UiMotion.Reduced ? 2 : 2 + (int)MathF.Round(UiMetrics.Space(4) * (1f - reveal)), 1, Math.Max(1, room));
 
     private void Tip(Rectangle r, Point hit, string text) { if (r.Contains(hit)) { _tip = text; _tipAt = hit; } }
 
@@ -989,6 +1272,47 @@ public sealed class GearScreen
         _ui.Fill(b, new Rectangle(r.X, r.Bottom - t, r.Width, t), c);
         _ui.Fill(b, new Rectangle(r.X, r.Y, t, r.Height), c);
         _ui.Fill(b, new Rectangle(r.Right - t, r.Y, t, r.Height), c);
+    }
+
+    // ── DISCS from horizontal spans of the one pixel texture: no circle art, no glyph the font lacks, and
+    // they batch with everything else. A dozen spans for a 12 px mark. Shared shapes belong in UiKit,
+    // which this pass may not edit — the host pass lifts these. ──
+
+    /// <summary>A filled disc inscribed in <paramref name="box"/>.</summary>
+    private void Disc(SpriteBatch b, Rectangle box, Color c)
+    {
+        var r = box.Width / 2f;
+        var cx = box.X + r;
+        for (var row = 0; row < box.Height; row++)
+        {
+            var dy = row + 0.5f - r;
+            var half = MathF.Sqrt(MathF.Max(0f, r * r - dy * dy));
+            var x0 = (int)MathF.Round(cx - half);
+            var x1 = (int)MathF.Round(cx + half);
+            if (x1 > x0) _ui.Fill(b, new Rectangle(x0, box.Y + row, x1 - x0, 1), c);
+        }
+    }
+
+    /// <summary>A hollow disc — a circular ring of <paramref name="thickness"/> px inscribed in <paramref name="box"/>.</summary>
+    private void DiscRing(SpriteBatch b, Rectangle box, Color c, float thickness)
+    {
+        var r = box.Width / 2f;
+        var ri = MathF.Max(0f, r - thickness);
+        var cx = box.X + r;
+        for (var row = 0; row < box.Height; row++)
+        {
+            var dy = row + 0.5f - r;
+            var outer = MathF.Sqrt(MathF.Max(0f, r * r - dy * dy));
+            var inner = dy * dy < ri * ri ? MathF.Sqrt(ri * ri - dy * dy) : 0f;
+            var x0 = (int)MathF.Round(cx - outer);
+            var x1 = (int)MathF.Round(cx + outer);
+            if (x1 <= x0) continue;
+            if (inner <= 0f) { _ui.Fill(b, new Rectangle(x0, box.Y + row, x1 - x0, 1), c); continue; }
+            var i0 = (int)MathF.Round(cx - inner);
+            var i1 = (int)MathF.Round(cx + inner);
+            if (i0 > x0) _ui.Fill(b, new Rectangle(x0, box.Y + row, i0 - x0, 1), c);
+            if (x1 > i1) _ui.Fill(b, new Rectangle(i1, box.Y + row, x1 - i1, 1), c);
+        }
     }
 
     /// <summary>A small padlock from rectangles, in the locking class's colour.</summary>
@@ -1028,4 +1352,165 @@ public sealed class GearScreen
         Rarity.Common => Bone, Rarity.Uncommon => new Color(0x6E, 0xC8, 0x7A), Rarity.Rare => new Color(0x4A, 0x90, 0xD9),
         Rarity.Epic => new Color(0x8B, 0x3F, 0x82), _ => Gold,
     };
+}
+
+/// <summary>
+/// THE GEAR SCREEN'S FEEDBACK as a state machine with no drawing in it: what changed on the hunter since the
+/// last look, which pulses that starts, what the GEAR POWER number should read right now, and which set has
+/// just completed for the first time.
+/// </summary>
+/// <remarks>
+/// <para>
+/// It DIFFS rather than listens. Gear goes on by four routes — the EQUIP button, EQUIP HIGHEST POWER, the
+/// item menu (which the host equips through, a frame later), and TAKE OFF — and a pulse wired to one of
+/// them is a pulse the other three forget. <see cref="Observe"/> compares the hunter's worn pieces, power
+/// and per-Source counts with the previous frame's and fires once per change, whoever made it. It is called
+/// from the screen's Update, never from Draw, and a pulse is keyed to its event (the slot, the number, the
+/// rung), so a second Observe with nothing changed re-arms nothing.
+/// </para>
+/// <para>
+/// Every duration is <see cref="UiMotion"/>'s and every value is read back through it, so Reduced Motion
+/// collapses the number's run to the true value and leaves the one-shot fades — the brief keeps simple
+/// fades — with the same end state. It holds no UiKit, so the Game tests can drive it: an equip, then
+/// <see cref="UiMotion.Tick"/> at t = 0, mid and end, and the displayed number at each.
+/// </para>
+/// <para>
+/// The number's run is a <see cref="UiMotion.Flash"/> read back through <see cref="UiMotion.Pulse"/>, not
+/// <see cref="UiMotion.Ease"/>. Ease is shaped for a 0 → 1 target: it seeds an unseen key at
+/// <c>1 − target</c> and steps by <c>dt / seconds</c>, so handed a target of 397 it would start at −396 and
+/// take a minute to arrive. A one-shot with the old value interpolated against it is the same curve, the
+/// same duration, and honest about being one event.
+/// </para>
+/// <para>
+/// The completed-set record lives here because the screen cannot reach the save: the host copies
+/// <see cref="CompletedSets"/> into <c>SaveGame.CompletedSets</c> and seeds it back through
+/// <see cref="RestoreCompletedSets"/> on load. Names are <see cref="Source"/> names ("Machine"), the form
+/// the save's own test writes.
+/// </para>
+/// </remarks>
+public sealed class GearFeedback
+{
+    private static readonly GearSlot[] Slots = Enum.GetValues<GearSlot>();
+    private static readonly Source[] Sources = Enum.GetValues<Source>();
+
+    /// <summary>The pulse key of a slot that just received a piece.</summary>
+    public static int SlotKey(GearSlot slot) => HashCode.Combine("gear.slot", (int)slot);
+
+    /// <summary>The pulse key of the GEAR POWER number.</summary>
+    public static readonly int PowerKey = HashCode.Combine("gear.power", 0);
+
+    /// <summary>The pulse key of one set rung — the reveal it plays the moment it is reached.</summary>
+    public static int RungKey(Source element, int pieces) => HashCode.Combine("gear.rung", (int)element, pieces);
+
+    private readonly string?[] _wornIds = new string?[Slots.Length];
+    private readonly int[] _counts = new int[Sources.Length];
+    private readonly int[] _nextCounts = new int[Sources.Length];
+    private readonly HashSet<string> _completed = new(StringComparer.Ordinal);
+    private bool _primed;
+    private int _power, _powerFrom;
+    private string? _completedSet, _notice, _cue;
+
+    /// <summary>
+    /// Look at the hunter and fire on what changed since the last look. <paramref name="quiet"/> takes the
+    /// snapshot without firing — the first look, a change of character, a return after time away. Returns
+    /// whether anything moved at all, so a caller can hang expensive work off a change rather than off a frame.
+    /// </summary>
+    public bool Observe(Hunter hunter, bool quiet = false)
+    {
+        ArgumentNullException.ThrowIfNull(hunter);
+        var silent = quiet || !_primed;
+        var moved = false;
+        Array.Clear(_nextCounts);
+        for (var i = 0; i < Slots.Length; i++)
+        {
+            var worn = hunter.Worn(Slots[i]);
+            var id = worn?.InstanceId;
+            if (worn?.Element is { } el) _nextCounts[(int)el]++;
+            if (!string.Equals(id, _wornIds[i], StringComparison.Ordinal)) moved = true;
+            // A piece ARRIVING pulses; a slot emptying does not — taking off is not a reward (§30).
+            if (!silent && id is not null && !string.Equals(id, _wornIds[i], StringComparison.Ordinal))
+                UiMotion.Flash(SlotKey(Slots[i]), UiMotion.Transition);
+            _wornIds[i] = id;
+        }
+
+        var power = hunter.PowerRating;
+        if (power != _power) moved = true;
+        if (!silent && power != _power)
+        {
+            // From wherever the number IS — a second change mid-run continues from the shown value
+            // rather than jumping back to the old one.
+            _powerFrom = DisplayedPower;
+            _power = power;
+            UiMotion.Flash(PowerKey, UiMotion.Transition);
+        }
+        else _power = power;
+
+        var last = ElementSets.Rungs[^1];
+        for (var s = 0; s < Sources.Length; s++)
+        {
+            var before = _counts[s];
+            var after = _nextCounts[s];
+            if (!silent && after > before)
+            {
+                foreach (var rung in ElementSets.Rungs)
+                    if (before < rung && after >= rung)
+                        UiMotion.Flash(RungKey(Sources[s], rung), UiMotion.Reward);
+                // THE FIRST FIVE-PIECE COMPLETION, once per set, ever (§52): recorded, and one notice for the host.
+                if (before < last && after >= last && _completed.Add(Sources[s].ToString()))
+                {
+                    _completedSet = Sources[s].ToString();
+                    _notice = $"{ElementSets.Name(Sources[s])} COMPLETE\n{ElementSets.CapstoneName(Sources[s])} ACTIVE";
+                }
+            }
+            _counts[s] = after;
+        }
+        _primed = true;
+        return moved;
+    }
+
+    /// <summary>
+    /// What the GEAR POWER readout shows this frame: the true value, or — for one Transition after it
+    /// changed — a number on its way there from the old one. The true value at once under Reduced Motion.
+    /// </summary>
+    public int DisplayedPower
+    {
+        get
+        {
+            if (UiMotion.Reduced) return _power;
+            var p = UiMotion.Pulse(PowerKey);
+            if (p <= 0f) return _power;
+            return (int)MathF.Round(_power + (_powerFrom - _power) * UiMotion.Smooth(p));
+        }
+    }
+
+    /// <summary>How much of the number's flash is left, 1 → 0 — 0 at rest.</summary>
+    public float PowerEmphasis => UiMotion.Pulse(PowerKey);
+
+    /// <summary>How much of a slot's just-equipped pulse is left, 1 → 0 — 0 at rest.</summary>
+    public float SlotPulse(GearSlot slot) => UiMotion.Pulse(SlotKey(slot));
+
+    /// <summary>How much of a rung's reveal is left, 1 → 0 — 0 at rest.</summary>
+    public float RungPulse(Source element, int pieces) => UiMotion.Pulse(RungKey(element, pieces));
+
+    /// <summary>Every set completed so far, by <see cref="Source"/> name.</summary>
+    public IReadOnlyCollection<string> CompletedSets => _completed;
+
+    /// <summary>Seed the record from a save.</summary>
+    public void RestoreCompletedSets(IEnumerable<string> sets)
+    {
+        ArgumentNullException.ThrowIfNull(sets);
+        foreach (var s in sets) if (!string.IsNullOrEmpty(s)) _completed.Add(s);
+    }
+
+    /// <summary>The set that just completed for the first time, cleared by reading.</summary>
+    public string? ConsumeCompletedSet() { var c = _completedSet; _completedSet = null; return c; }
+
+    /// <summary>The completion notice, two lines, cleared by reading.</summary>
+    public string? ConsumeNotice() { var n = _notice; _notice = null; return n; }
+
+    /// <summary>Raise a sound cue at its semantic moment; the host reads it once through <see cref="ConsumeCue"/>.</summary>
+    public void Cue(string cue) => _cue = cue;
+
+    /// <summary>The pending cue, cleared by reading.</summary>
+    public string? ConsumeCue() { var c = _cue; _cue = null; return c; }
 }
