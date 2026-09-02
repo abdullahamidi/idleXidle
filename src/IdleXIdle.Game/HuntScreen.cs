@@ -317,14 +317,6 @@ public sealed class HuntScreen
     // Replay state.
     private float _playheadMs;
 
-    /// <summary>Seconds of flash left on each Form's medallion, keyed by (int)Form. Set when it fires.</summary>
-    /// <remarks>
-    /// Playtest: "Skill kullanımlarını ve cooldownlarını da takip edemiyorum." The screen already knew
-    /// the moment a skill went off — it plays a VFX and a callout for it — but nothing on the rail, the
-    /// one place the skills are listed, moved at all. So the medallions were a legend, not an instrument.
-    /// </remarks>
-    private readonly Dictionary<int, float> _skillFlash = new();
-
     /// <summary>
     /// Where each skill stood in its cycle when the LAST wave ended — BEATS taken since its last cast,
     /// and milliseconds since it, carried into the wave now being replayed.
@@ -628,6 +620,39 @@ public sealed class HuntScreen
     /// <summary>Dev boss-bounds overlay (F7): draws ground pivot / body / full / arena rects (Rev 5 §17).</summary>
     public bool DevBossDebug { get; set; }
 
+    /// <summary>
+    /// FIXTURE DIAL — <c>RH_SHOT_SHIELDFX=gain|absorb|break</c>: hold one shield transient at its peak
+    /// so the shutter can photograph it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The three shield feedbacks are 100–350 ms long and are fired by the SIMULATION, not by a click,
+    /// so a shutter at frame 60 lands on them only by luck — and a state no capture can pose has never
+    /// been looked at. This is the same shape as <see cref="DevSwingPhase"/> and
+    /// <c>RH_SHOT_SWING</c>: an environment dial the SCREEN reads (the host is not involved), which
+    /// freezes the effect rather than moving the shutter.
+    /// </para>
+    /// <para>
+    /// <c>gain</c> and <c>absorb</c> re-arm their one-shot from <see cref="UpdateFight"/> every frame, so
+    /// the bar's rim / notch stands at full when the frame is saved. <c>break</c> lets the real
+    /// <see cref="BattleEventKind.ShieldBroken"/> fire and then jumps the burst to the middle of its own
+    /// eight frames (see <see cref="PlayShieldBreak"/>), which is the widest moment of the shatter.
+    /// It also forces the bar on, so the pose works on any fight mode. Nothing here runs without the
+    /// variable, and it is read once at class load.
+    /// </para>
+    /// <para>
+    /// It travels as ordinary process environment — capture.sh forwards only the RH_SHOT_* names it
+    /// knows about through <c>RH_ENV</c>, but <c>dn</c> inherits the caller's environment, so:
+    /// <code>
+    /// RH_SHOT_SHIELDFX=absorb RH_SHOT_UISCALE=100 \
+    ///   bash tools/asset-pipeline/capture.sh fightshield build/shots/p2_hunt_absorb_100.png
+    /// </code>
+    /// </para>
+    /// </remarks>
+    private static readonly string? ShotShieldFx =
+        Environment.GetEnvironmentVariable("RH_SHOT_SHIELDFX")?.Trim().ToLowerInvariant() is { Length: > 0 } v
+            ? v : null;
+
     // Exactly ONE major overlay may show. Priority (high→low): Modal/WelcomeBack (host) > HunterDown >
     // BossIncoming > WaveCleared. The host draws WelcomeBack; when it does, the screen draws none of its own.
     private enum HuntOverlay { None, HunterDown, BossIncoming, WaveCleared }
@@ -821,6 +846,12 @@ public sealed class HuntScreen
         var build = ComposeBuild(hunter);
         _recordToBeat = BestDepthHere;   // before a wave is pushed, or the run competes with itself
         _chargeNow = 0;
+        // A NEW RUN HAS NOT SEEN A SHIELD YET. The flag latched for the life of the process, so the
+        // second descent opened with an empty steel strip on the card before anything had granted one —
+        // and the first SHIELD BROKEN of that run, which is the moment that teaches what the strip is,
+        // arrived to a bar the player had been staring at since the last champion died. Reset with the
+        // run and the introduction happens once per run, where it belongs (§65).
+        _shieldSeen = false;
 
         // A NEW DESCENT IS A NEW CHAMPION. The rail carries a skill's place in its cycle across wave
         // boundaries (see _carryBeats), and carrying it across a DEATH would open the next run with
@@ -1026,7 +1057,13 @@ public sealed class HuntScreen
     /// once the callers disagree about where line zero is, the slot arithmetic is spacing them from
     /// different places and the overlap it exists to prevent comes back.
     /// </remarks>
-    private void Say(string text, Color color)
+    /// <param name="px">
+    /// Its size, or 0 for the lane's own <see cref="SayPx"/>. §63 ranks the fight's moments — normal
+    /// damage &lt; critical &lt; major skill impact &lt; Break / Shield Break / major state — and size is
+    /// the loudest channel a callout has, so the top of that ladder is allowed off the default rung.
+    /// </param>
+    /// <param name="life">How long it holds before it starts to go; a crit lingers 1.3.</param>
+    private void Say(string text, Color color, int px = 0, float life = 1f)
     {
         _callouts.Add(new Callout
         {
@@ -1034,8 +1071,8 @@ public sealed class HuntScreen
             Color = color,
             X = ChampBox.Center.X,
             Y = ChampBox.Y - 40 - StackSlot(CalloutLane.Champion) * CalloutLineHeight,
-            Life = 1f,
-            Px = SayPx,
+            Life = life,
+            Px = px > 0 ? px : SayPx,
             Lane = CalloutLane.Champion,
         });
     }
@@ -1065,6 +1102,25 @@ public sealed class HuntScreen
         => _callouts.Count(c => c.Lane == lane && c.Life > 0f) % CalloutLanesDeep;
 
     /// <summary>
+    /// The WORDS of a damage callout: the number, what its grade is called, and the multi-hit fold.
+    /// </summary>
+    /// <remarks>
+    /// Public and pure so the wording is testable without a GraphicsDevice — the Game test project can
+    /// only reach statics, and "what does a Reaction's blow say" is a rule worth pinning rather than
+    /// re-reading off a screenshot. Three rules in one line:
+    /// <list type="bullet">
+    /// <item>a plain blow is its number and nothing else;</item>
+    /// <item>a graded blow names its grade — CRITICAL when the odds were beaten, and the SKILL'S OWN
+    /// NAME when a Reaction produced it, because there a crit is the expected value (§63): a Reaction
+    /// answers EVERY bite, so captioning it CRITICAL taught the player that a critical is the ordinary
+    /// case and left the skill that actually fired unnamed. The grade is unchanged; only the word;</item>
+    /// <item>a cast that landed more than once folds into one number with its count ("-635 ×5", §21).</item>
+    /// </list>
+    /// </remarks>
+    public static string DamageCalloutText(int total, bool crit, int hits, string? critWord = null)
+        => (crit ? $"-{total:N0} {critWord ?? "CRITICAL"}" : $"-{total:N0}") + (hits > 1 ? $" ×{hits}" : "");
+
+    /// <summary>
     /// A floating combat number over the creature a Strike event hit — THE EVENT'S OWN AMOUNT, which is
     /// what its bar just lost.
     /// </summary>
@@ -1080,9 +1136,13 @@ public sealed class HuntScreen
     /// always describe the same blow.
     /// </remarks>
     /// <param name="slot">The creature struck — the column the number rises from.</param>
-    /// <param name="crit">A Trap's bite: gold, larger, and it lingers.</param>
+    /// <param name="crit">The crit GRADE: gold, larger, and it lingers.</param>
     /// <param name="skill">A cast's hit, drawn a size up from the auto-swing's.</param>
-    private void SpawnDamage(int amount, int slot, bool crit, bool skill, int hits = 1)
+    /// <param name="critWord">
+    /// What the graded blow is CALLED — see <see cref="DamageCalloutText"/>. Null means CRITICAL; a
+    /// Reaction passes its own skill's name instead ("-4 JAWS").
+    /// </param>
+    private void SpawnDamage(int amount, int slot, bool crit, bool skill, int hits = 1, string? critWord = null)
     {
         if (!ShowDamageNumbers) return;   // settings: DAMAGE NUMBERS off
         // ABOVE the creature's health bar, and STACKED. Numbers used to spawn at EnemyBox.Y + 8..40,
@@ -1103,7 +1163,7 @@ public sealed class HuntScreen
         {
             // The count rides on the number rather than replacing it: "-635 ×5" says both what the
             // creature lost and that one cast did it.
-            Text = (crit ? $"-{amount:N0} CRITICAL" : $"-{amount:N0}") + (hits > 1 ? $" ×{hits}" : ""),
+            Text = DamageCalloutText(total: amount, crit: crit, hits: hits, critWord: critWord),
             Color = crit ? Gold : skill ? UiKit.Vellum : Bone,
             // Over the creature it struck, not the row's centre: in a swarm the row centre is the gap
             // between two creatures, and a number there names neither of them.
@@ -1201,12 +1261,9 @@ public sealed class HuntScreen
                 var left = _hitFlash[key] - dt * 5f;   // ~200 ms of life; FlashAt shapes it
                 if (left <= 0f) _hitFlash.Remove(key); else _hitFlash[key] = left;
             }
-        if (_skillFlash.Count > 0)
-            foreach (var key in _skillFlash.Keys.ToList())
-            {
-                var left = _skillFlash[key] - dt;
-                if (left <= 0f) _skillFlash.Remove(key); else _skillFlash[key] = left;
-            }
+        // The skill tiles' cast pulses used to decay here, on a private 0.42 s clock. They are
+        // UiMotion one-shots now (see SkillCastKey): the host ticks them, they collapse with the rest
+        // of the game's motion, and there is one fewer timer in this file that a Draw could re-arm.
 
         // THE WINDOW, NOT THE FPS, IS WHAT MAKES THIS SWING LEGIBLE — and getting that wrong is easy.
         // EnemyClipSeconds maps the windup 0..1 onto the clip's FULL length, so the clip always completes
@@ -1231,6 +1288,9 @@ public sealed class HuntScreen
         var skillAtMs = -1;
         var trapAtMs = -1;
         var auraAtMs = -1;
+        // ...and WHAT the reaction at that beat is called, so its blow can print its own name instead of
+        // the word CRITICAL (§63: a critical is the expected value there; the skill is the news).
+        string? trapName = null;
         for (var bi = 0; bi < batch.Count; bi++)
         {
             var e = batch[bi];
@@ -1302,7 +1362,7 @@ public sealed class HuntScreen
                             hits++;
                             _summed.Add(kj);        // its own turn still flashes and sounds; it draws no number
                         }
-                        if (!_summed.Contains(bi)) SpawnDamage(total, e.Slot, crit, skill, hits);
+                        if (!_summed.Contains(bi)) SpawnDamage(total, e.Slot, crit, skill, hits, crit ? trapName : null);
                     }
                     // The creature that took it FLASHES — but ONLY for a real blow, and only once its last
                     // flash has finished. An aura ticks twice a second and the swing lands every beat, and
@@ -1331,7 +1391,10 @@ public sealed class HuntScreen
                     if (e.Slot < 0 || e.Slot >= _waveSkills.Count) break;
                     var castSk = _waveSkills[e.Slot];
                     var castDef = castSk.Def;
-                    _skillFlash[e.Slot] = 0.42f;
+                    // ONE PULSE, ON THE CAST (§30, and the strip's own rule: nothing on it may flash on
+                    // its own). Keyed to the event's slot, armed here and nowhere else — a Draw that
+                    // re-armed it would be a tile that blinks for as long as you look at it.
+                    UiMotion.Flash(SkillCastKey(e.Slot), UiMotion.Transition);
                     var (text, colour) = CalloutFor(castDef.Style);
                     if (ShowSkillCallouts) Say(text, colour);   // settings: SKILL NAMES hides exactly this
                     // The creature this cast HITS is the one its own Strike in the same batch names — the
@@ -1345,7 +1408,7 @@ public sealed class HuntScreen
                     var isReaction = castDef.Kind == SkillKind.Reaction;
                     if (isReaction) Sound?.Play("sfx_crit", 0.46f, vary: 0.06f);   // the crit-graded blow
                     skillAtMs = e.AtMs;                          // the Strikes at this beat are this cast's
-                    if (isReaction) trapAtMs = e.AtMs;           // ...and a reaction's are the crit-graded ones
+                    if (isReaction) { trapAtMs = e.AtMs; trapName = castDef.Name; }   // ...and a reaction's are graded up, under its OWN name
                     break;
                 }
                 case BattleEventKind.Heal:
@@ -1383,7 +1446,9 @@ public sealed class HuntScreen
                     _chargeNow = e.Amount;   // the pool AFTER the change; 0 is REND's dump
                     break;
 
-                // ── SHIELD. Three events, three different weights of feedback. ────────────────────
+                // ── SHIELD. Three events, three different weights of feedback (§68–§70). ──────────
+                //    Each has its own cue in the §86 vocabulary — the cold shimmer, its tick, its crack —
+                //    and each is ONE SHOT, armed here on the event and never re-armed by a draw.
                 case BattleEventKind.ShieldGained:
                     // GAIN IS THE ONE WORTH A NUMBER (§24). It is a thing the build DID, it is rare
                     // enough not to be spam, and the amount is the whole point of the rungs and skills
@@ -1391,6 +1456,11 @@ public sealed class HuntScreen
                     // so it is not said — nothing happened on screen for it to explain.
                     _shieldSeen = true;
                     if (e.AtMs > 0 && ShowDamageNumbers) Say($"+{e.Amount} SHIELD", Steel);
+                    // The rim builds on the BAR, which is where the gain actually landed; the dome on
+                    // the champion says the same thing in the arena. A transition, not a reward — a
+                    // grant is a state change, and the run has many of them.
+                    UiMotion.Flash(ShieldGainKey, UiMotion.Transition);
+                    Sound?.Play("sfx_shield_gain", 0.40f, vary: 0.05f);
                     _vfx.Play("fx_shield", ChampBox.Center.X, ChampBox.Center.Y - 20, scale: 3, fps: 12f, tint: Steel);
                     break;
 
@@ -1398,18 +1468,44 @@ public sealed class HuntScreen
                     // ABSORPTION IS NOT A NUMBER. It happens on every bite a shielded champion takes,
                     // and a figure on each one would bury the health damage beside it — which is the
                     // number that actually matters. The bar falls, the barrier takes a small hit, and
-                    // that is the whole of it.
+                    // that is the whole of it. FAST, because it is the micro-feedback of a single bite;
+                    // the cue is throttled at 60 ms by SoundBank so a swarm reads as busy, not as a wall.
                     _shieldSeen = true;
+                    UiMotion.Flash(ShieldAbsorbKey, UiMotion.Fast);
+                    Sound?.Play("sfx_shield_hit", 0.26f, vary: 0.07f);
                     _vfx.Play("fx_shield", ChampBox.Center.X, ChampBox.Center.Y - 20, scale: 2, fps: 16f, tint: Steel);
                     break;
 
                 case BattleEventKind.ShieldBroken:
-                    // BREAKING IS LOUD, because from the next bite the player is paying in health.
-                    Say("SHIELD BROKEN", Steel);
-                    Sound?.Play("sfx_champ_down", 0.30f, vary: 0.05f);
-                    _vfx.Play("fx_shield", ChampBox.Center.X, ChampBox.Center.Y - 20, scale: 4, fps: 9f, tint: Steel);
+                    // BREAKING IS LOUD, because from the next bite the player is paying in health — the
+                    // loudest beat in the fight that is not a boss falling (§63's priority ladder puts
+                    // Shield Break at the top with Break / Stun / Execute). It gets the REWARD length
+                    // and its own art: fx_shield_break, a cracked dome bursting into shards, generated
+                    // for exactly this moment because fx_shield is a dome that flashes IN and settles —
+                    // a gain played backwards is not a break.
+                    //
+                    // The cue was sfx_champ_down at 0.30 — the champion's DEATH sample, quietened, for
+                    // an event that is not a death. sfx_shield_break is the crack the §86 vocabulary
+                    // shipped for it, and SoundBank holds it 300 ms clear of itself.
+                    // AND IT OUTRANKS A CRITICAL, which is what §63's ladder asks for and what the
+                    // callout could not say: it printed at the champion lane's 36 while a crit beside it
+                    // printed at 46, so the loudest event on the screen was the smallest word on it. At
+                    // the top of the damage ladder, and holding longer than a crit does.
+                    Say("SHIELD BROKEN", Steel, UiTypography.DamageCritical, life: 1.6f);
+                    Sound?.Play("sfx_shield_break", 0.58f, vary: 0.03f);
+                    PlayShieldBreak();
                     break;
             }
+        }
+
+        // FIXTURE DIAL ONLY (see ShotShieldFx) — inert without RH_SHOT_SHIELDFX. Inline rather than a
+        // method call because a call on `this` would reset the nullable flow state the rest of this
+        // method depends on; the break arm lives in PlayShieldBreak, where the burst is spawned.
+        if (ShotShieldFx is not null)
+        {
+            _shieldSeen = true;   // the bar has to exist for the pose to sit on it
+            if (ShotShieldFx == "gain") UiMotion.Flash(ShieldGainKey, UiMotion.Transition);
+            else if (ShotShieldFx == "absorb") UiMotion.Flash(ShieldAbsorbKey, UiMotion.Fast);
         }
 
         if (!_replay.Finished) return;
@@ -1426,7 +1522,9 @@ public sealed class HuntScreen
             // that lingers a touch longer. You FEEL the earn at the kill, then go crack it in the Forge.
             // A chest is no longer a given, so the boss banner no longer promises one — the host calls
             // FlashChest() and upgrades this banner only when a chest actually drops.
-            _bannerText = _run.LastWaveWasBoss ? "BOSS DOWN!" : $"WAVE {_run.Wave} CLEARED";
+            // `!`: UpdateFight returns on a null run at its first line and nothing between here and there
+            // clears it — the flow analysis simply loses the fact across the calls in the event loop.
+            _bannerText = _run!.LastWaveWasBoss ? "BOSS DOWN!" : $"WAVE {_run.Wave} CLEARED";
             _bannerTimer = _run.LastWaveWasBoss ? 1.6f : 1.2f;
             // Take a breath on the clear, THEN begin the next wave (see the break gate atop UpdateFight). A
             // boss's fall lingers a touch longer — it dropped a chest, and that beat should land.
@@ -1583,6 +1681,10 @@ public sealed class HuntScreen
         // arena rectangle. The settings' SCREEN FLASH switch still governs it.
         if (_deathFlash > 0f && ShowScreenFlash) _ui.Fill(b, new Rectangle(0, 0, 1920, 1080), Ember * (_deathFlash * 0.35f));
         if (_isBossWave && DevBossDebug) DrawBossDebugOverlay(b); // §17: fixture-only bounds visualization (F7)
+        // LAST, over every panel on the screen: a hover tip is an answer to the mouse, and nothing drawn
+        // for a cursor that is somewhere else may cover it (see DrawLogButton).
+        if (_logTipAt is { } tipAt)
+            _ui.HoverTip(b, "EXPEDITION LOG — every descent's report. The L key opens it too.", tipAt);
         // (the host closes this batch with b.End(); the shared hex nav is drawn by the host over every screen.)
     }
 
@@ -2606,8 +2708,18 @@ public sealed class HuntScreen
         var hpText = $"{hp} / {_champ?.MaxHealth ?? 0}";
         var hpTextW = _ui.MeasureBig(hpText, UiTypography.Body);
         var barGap = UiMetrics.Space(12);
-        var barW = Math.Max(Math.Min(UiMetrics.Control(120), full - hpTextW - barGap),
-                            full - (powerBeside ? powerCol : 0) - hpTextW - barGap);
+        // THE SHIELD'S LABEL IS IN THE SAME COLUMN AS THE POOL'S FIGURE, so it has to be in the same
+        // budget. It was not, and at 150 % the glyph pushed "SHIELD 30" past the card's edge and the
+        // figure was ellipsed away to "SHIELD…" — the bar kept its width by taking the room from the
+        // number the bar exists to quantify. Both readouts now bid for one column and the wider wins.
+        var shieldGlyph = UiMetrics.Control(16);
+        var shieldText = !ShieldStripShown ? ""
+            : _replay!.CurrentShield > 0 ? $"SHIELD {_replay.CurrentShield}" : "SHIELD";
+        var shieldTextW = shieldText.Length == 0 ? 0
+            : shieldGlyph + UiMetrics.Space(5) + _ui.MeasureBig(shieldText, UiTypography.Caption);
+        var readoutW = Math.Max(hpTextW, shieldTextW);
+        var barW = Math.Max(Math.Min(UiMetrics.Control(120), full - readoutW - barGap),
+                            full - (powerBeside ? powerCol : 0) - readoutW - barGap);
 
         // Line 3 — the statuses, as chips: a chip that does not fit its line starts the next one.
         var chips = new List<(string Text, Color Ink)>();
@@ -2671,31 +2783,57 @@ public sealed class HuntScreen
         // it is the smaller promise, and drawn only for a build that has one — a permanently empty
         // strip on every other build would be noise that means nothing.
         //
-        // NOT COLOUR ALONE (§22): steel rather than the pool's red, half the height, its own hard edge,
-        // vertical scoring across the fill, and the word SHIELD beside it. A player who cannot separate
-        // steel from red still has the geometry, the ticks and the label.
+        // NOT COLOUR ALONE (§22, §102): steel rather than the pool's red, well under its height, the
+        // shield glyph, and the word SHIELD with its figure beside it. A player who cannot separate
+        // steel from red still has the geometry, the picture and the label — and all four survive
+        // FIGHT EFFECTS being switched off, because none of them is a VFX.
+        //
+        // THE SAME BAR FAMILY AS HEALTH, in the cold colour (§66). It was hand-drawn fills — a flat
+        // steel block with hairline scoring — beside a health bar wearing the game's ornate frame art,
+        // which is exactly the "two different voices for one control" this pass exists to remove.
+        // ui_bar_mana_* shipped with that family and no screen ever drew it (the game has no mana), so
+        // AssetLibrary aliases ui_bar_shield_* onto it and this is one BarArt call like every other bar.
         if (ShieldStripShown)
         {
             var sBar = new Rectangle(x, y - ShieldStripH - UiMetrics.Space(3), barW, ShieldStripH);
-            _ui.Fill(b, sBar, new Color(0x0D, 0x11, 0x16));
-            Outline(b, sBar, PlateEdge, 1);
             var frac = _replay!.MaxShield <= 0 ? 0f
                      : Math.Clamp(_replay.CurrentShield / (float)_replay.MaxShield, 0f, 1f);
-            if (frac > 0f)
+            _ui.BarArt(b, sBar, frac, "shield");
+
+            // GAINED — a quick rim build around the bar (§68), one shot per grant. The bar has just
+            // grown; the rim says the growth was a thing the build DID rather than a wave starting.
+            // COLD AND TIGHT. Two pixels out in white it was a selection box in a level editor — the
+            // same mistake the standing barrier made before its capture settled it — and its top edge
+            // ran into the name above. Hugging the frame, in steel, it reads as the bar's own edge
+            // lighting up, which is what a barrier thickening looks like.
+            var gain = UiMotion.Pulse(ShieldGainKey);
+            if (gain > 0f)
+                Outline(b, new Rectangle(sBar.X - 1, sBar.Y - 1, sBar.Width + 2, sBar.Height + 2),
+                        Color.Lerp(Steel, Color.White, 0.45f) * (0.9f * gain), 2);
+
+            // ABSORBED — a small impact AT THE BARRIER (§69): a bright notch where the fill now ends,
+            // so the bar's fall reads as a bite rather than as a decay. Never a screen shake — the
+            // champion is not the one taking the blow while this bar has anything in it.
+            var absorbed = UiMotion.Pulse(ShieldAbsorbKey);
+            if (absorbed > 0f)
             {
-                var fillW = Math.Max(1, (int)((sBar.Width - 2) * frac));
-                var fill = new Rectangle(sBar.X + 1, sBar.Y + 1, fillW, sBar.Height - 2);
-                _ui.Fill(b, fill, Steel);
-                // The scoring — plates, not a smooth meter. Reads as SHIELD without reading its colour.
-                for (var sx2 = fill.X + 5; sx2 < fill.Right - 1; sx2 += 6)
-                    _ui.Fill(b, new Rectangle(sx2, fill.Y, 1, fill.Height), new Color(0x0D, 0x11, 0x16, 0x90));
+                var notchW = Math.Max(2, UiMetrics.Control(3));
+                var edge = Math.Clamp(sBar.X + 2 + (int)((sBar.Width - 4) * frac) - notchW / 2,
+                                      sBar.X + 1, sBar.Right - 1 - notchW);
+                _ui.Fill(b, new Rectangle(edge, sBar.Y + 2, notchW, Math.Max(1, sBar.Height - 4)),
+                         Color.Lerp(Steel, Color.White, 0.7f) * absorbed);
             }
-            // The word AND the figure on one line. Split across the strip and a chip below they read
-            // as a column — SHIELD, then 243 / 243 under it — and a player scanning that column has
-            // every reason to think the pool's numbers belong to the shield.
-            _ui.TextBig(b, _replay.CurrentShield > 0 ? $"SHIELD {_replay.CurrentShield}" : "SHIELD",
-                        sBar.Right + barGap, sBar.Y - 3,
-                        _replay.CurrentShield > 0 ? Steel : UiInk.Disabled, UiTypography.Caption);
+
+            // The GLYPH, then the word AND the figure on one line. Split across the strip and a chip
+            // below they read as a column — SHIELD, then 243 / 243 under it — and a player scanning that
+            // column has every reason to think the pool's numbers belong to the shield.
+            var ink = _replay.CurrentShield > 0 ? Steel : UiInk.Disabled;
+            var lx = sBar.Right + barGap;
+            var gBox = new Rectangle(lx, sBar.Y + (sBar.Height - shieldGlyph) / 2, shieldGlyph, shieldGlyph);
+            if (_ui.Icon(b, "icon_shield", gBox, Color.White * (_replay.CurrentShield > 0 ? 1f : 0.4f)))
+                lx = gBox.Right + UiMetrics.Space(5);
+            _ui.TextBig(b, _ui.ShortenBig(shieldText, Math.Max(1, right - lx), UiTypography.Caption), lx,
+                        sBar.Y + (sBar.Height - UiTypography.Caption) / 2 - 1, ink, UiTypography.Caption);
         }
 
         var hpBar = new Rectangle(x, y + 2, barW, UiMetrics.Control(26));
@@ -2748,20 +2886,34 @@ public sealed class HuntScreen
     {
         var r = LogButtonRect;
         var hot = r.Contains(hit);
-        // 52 px at rest, 56 under the mouse — the same lift the close icons use — centred in the 64 px hit
-        // box; all three at the profile, so the medallion and its target grow together.
-        var edge = UiMetrics.Control(hot ? 56 : 52);
-        var box = new Rectangle(r.X + (r.Width - edge) / 2, r.Y + (r.Height - edge) / 2, edge, edge);
+        // THE STANDARD STATES, on a custom-drawn control (§25–§29). NORMAL is the bone tint at 52 px;
+        // HOVER eases up to 56 over UiMotion.Fast (it was a hard 52→56 step, which reads as a twitch
+        // rather than as a lift, and ignored Reduced Motion); PRESSED drops the medallion 2 px and
+        // darkens it, exactly as UiKit.Button does, for as long as the mouse is held; SELECTED is gold,
+        // because the log is OPEN. There is no disabled state — the log is always reachable.
+        var lift = UiMotion.Ease(UiMotion.KeyOf(r), hot ? 1f : 0f);
+        var pressed = hot && UiKit.MouseHeld;
+        var edge = UiMetrics.Control(52) + (int)MathF.Round(UiMetrics.Control(4) * lift);
+        var box = new Rectangle(r.X + (r.Width - edge) / 2,
+                                r.Y + (r.Height - edge) / 2 + (pressed ? 2 : 0), edge, edge);
         var tint = _logOpen ? Gold : hot ? Color.White : new Color(0xE0, 0xD8, 0xC8);
+        if (pressed) tint = new Color((int)(tint.R * 0.78f), (int)(tint.G * 0.78f), (int)(tint.B * 0.78f), (int)tint.A);
         if (!_ui.Icon(b, "icon_log", box, tint))
         {
             // No medallion on disk: a plain page so the door still shows.
             _ui.Fill(b, box, new Color(0x14, 0x10, 0x1A, 0xE0));
             _ui.TextCenterBig(b, "LOG", box.Center.X, box.Center.Y - UiTypography.Caption / 2, tint, UiTypography.Caption);
         }
-        if (hot) _ui.HoverTip(b, "EXPEDITION LOG — every descent's report. The L key opens it too.", hit);
+        // THE TIP IS DEFERRED TO THE TOP OF THE HUD PASS. Drawn here it went under the idle/rewards
+        // panel two calls later, and the sentence was cut mid-word — "…every descent's report. The L k".
+        // A hover tip that a panel eats is worse than no tip: it says there is more to read and then
+        // hides it. It is remembered here and drawn last (see the foot of Draw).
+        _logTipAt = hot ? hit : null;
         if (UiKit.ClickedIn(r, hit, clicked)) WantsLog = true;
     }
+
+    /// <summary>Where the LOG button's hover tip is owed this frame, or null — drawn at the top of the HUD pass.</summary>
+    private Point? _logTipAt;
 
     /// <summary>Set by the log button; the host routes it through its own L handling and clears it.</summary>
     public bool WantsLog { get; set; }
@@ -2970,21 +3122,48 @@ public sealed class HuntScreen
 
     private static readonly Color PlateEdge = new(0x74, 0x62, 0x3E);
 
-    /// <summary>How tall the shield strip is — half the life bar, because it is the smaller promise.</summary>
-    private static int ShieldStripH => UiMetrics.Control(12);
+    /// <summary>How tall the shield strip is — well under the life bar's 26, because it is the smaller promise.</summary>
+    /// <remarks>
+    /// 16, not the 12 it was drawn at while it was a flat fill. The strip is <see cref="UiKit.BarArt"/>
+    /// now — the same ornate frame the health bar wears, in the cold colour — and that frame is 256×64
+    /// art whose scrollwork simply disappears under 14 px. 16 against the pool's 26 still reads as
+    /// "thinner" at a glance, which is the cue the colour-blind path depends on.
+    /// </remarks>
+    private static int ShieldStripH => UiMetrics.Control(16);
 
     /// <summary>
     /// Whether this build has any shield at all, and so whether the strip is drawn.
     /// </summary>
     /// <remarks>
-    /// True from the moment a wave grants shield and for the rest of the run, rather than only while
+    /// True from the moment a wave grants shield and for the rest of THIS run, rather than only while
     /// some is standing: a strip that appears and vanishes as bites land is a flicker, and a player
     /// cannot learn the shape of a bar they only see in the instants it is full. A build with no shield
     /// mechanic never sees it at all.
+    /// <para>
+    /// <b>It resets when a run does</b> (see <c>StartRun</c>). It used to be a one-way latch for the life
+    /// of the process, so a champion that fell holding a shield came back for its next descent with an
+    /// empty steel strip already on the card — the bar arrived before the mechanic that fills it, and the
+    /// SHIELD BROKEN moment that teaches what the bar is for had nothing left to introduce.
+    /// </para>
     /// </remarks>
     private bool ShieldStripShown => _shieldSeen && _replay is not null;
 
     private bool _shieldSeen;
+
+    /// <summary>
+    /// The motion keys for the shield bar's two one-shots: a rim on a grant, a notch on an absorb.
+    /// </summary>
+    /// <remarks>
+    /// Constants rather than <see cref="UiMotion.KeyOf"/> of the bar's rectangle, because that rectangle
+    /// MOVES — the hunter card reflows (a wrapped name row, a second chip row, any of the three density
+    /// profiles) and the bar slides with it. A pulse keyed to a rect that moves mid-flight is a pulse
+    /// that is silently dropped halfway through.
+    /// </remarks>
+    private static readonly int ShieldGainKey = HashCode.Combine("hunt.shield.gain");
+    private static readonly int ShieldAbsorbKey = HashCode.Combine("hunt.shield.absorb");
+
+    /// <summary>One skill tile's cast pulse, keyed by the slot the Skill event names.</summary>
+    private static int SkillCastKey(int slot) => HashCode.Combine("hunt.skill.cast", slot);
 
     // ── The right UTILITY (UX V2 P1.1, brief §20): idle rate · rewards · doors. Lightweight. ───────────
     //    The CHEST FILTER row and its popover moved to the VAULT toolbar (D12): chest filtering is inventory
@@ -3076,13 +3255,22 @@ public sealed class HuntScreen
         var r = FallPlate;
         var pad = UiMetrics.Space(24);
         var top = UiMetrics.Space(14);
-        _ui.Plate(b, r, Ember, fade);
-        _ui.TextBig(b, $"FELL AT WAVE {_fellWave}", r.X + pad, r.Y + top, Ember * fade, UiTypography.StageLabel, TextFace.Display);
-        var limit = _fellReport is { } rep ? $"MAIN LIMIT — {rep.LimitLabel()} · {rep.Verdict()}" : "THE FULL REPORT IS IN THE LOG";
-        _ui.TextBig(b, _ui.ShortenBig(limit, r.Width - pad * 2, UiTypography.Body), r.X + pad,
-                    r.Y + top + UiTypography.Pitch(UiTypography.StageLabel), Bone * fade, UiTypography.Body);
+        // THE WHOLE PLATE IS THE DOOR, so it carries the states a door carries (§25, §27). It had only
+        // HOVER (READ THE LOG brightens); PRESSED now drops the FACE 2 px while the mouse is held, the
+        // way every UiKit.Button does, so a click on the only clickable thing on the fallen screen
+        // answers before the log gets there.
+        //
+        // THE HIT RECT NEVER MOVES (§15, LAW "draw = hit"): `r` stays authoritative for hover and for
+        // the click; only `face` is depressed. A control that moves its own target under the cursor
+        // while being pressed is a control that can be released outside itself.
         var hot = r.Contains(hit);
-        _ui.TextRightBig(b, "READ THE LOG  ›", r.Right - pad, r.Bottom - UiMetrics.Space(15) - UiTypography.Secondary, (hot ? Bone : Slate) * fade, UiTypography.Secondary);
+        var face = hot && UiKit.MouseHeld ? new Rectangle(r.X, r.Y + 2, r.Width, r.Height) : r;
+        _ui.Plate(b, face, Ember, fade);
+        _ui.TextBig(b, $"FELL AT WAVE {_fellWave}", face.X + pad, face.Y + top, Ember * fade, UiTypography.StageLabel, TextFace.Display);
+        var limit = _fellReport is { } rep ? $"MAIN LIMIT — {rep.LimitLabel()} · {rep.Verdict()}" : "THE FULL REPORT IS IN THE LOG";
+        _ui.TextBig(b, _ui.ShortenBig(limit, face.Width - pad * 2, UiTypography.Body), face.X + pad,
+                    face.Y + top + UiTypography.Pitch(UiTypography.StageLabel), Bone * fade, UiTypography.Body);
+        _ui.TextRightBig(b, "READ THE LOG  ›", face.Right - pad, face.Bottom - UiMetrics.Space(15) - UiTypography.Secondary, (hot ? Bone : Slate) * fade, UiTypography.Secondary);
         if (UiKit.ClickedIn(r, hit, clicked)) WantsLog = true;
     }
 
@@ -3274,7 +3462,7 @@ public sealed class HuntScreen
     /// </remarks>
     private SkillTiming Timing(int i, SkillDef def)
     {
-        var flash = _skillFlash.TryGetValue(i, out var fl) ? Math.Clamp(fl / 0.42f, 0f, 1f) : 0f;
+        var flash = UiMotion.Pulse(SkillCastKey(i));   // 1 → 0 over a Transition, armed by the cast event
         var isPassiveSlot = !def.TakesABeat;
         var ready = isPassiveSlot ? 1f : 0f;
         var ringSteps = 0;
@@ -3658,11 +3846,43 @@ public sealed class HuntScreen
     private void HoldShieldBarrier()
     {
         if (_replay?.HasShield != true || _mode == Mode.Downed) return;
-        var breathe = ShieldShellRest + ShieldShellSwing * (0.5f + 0.5f * MathF.Sin(_anim * 1.6f));
+        // REDUCED MOTION HOLDS ITS BREATH (§32: drop idle motion, keep the state). The shell stays — it
+        // is the only picture that says "covered" in the arena — but it stands at the middle of the
+        // swing it would otherwise ride, so the end state is the same and nothing on screen is moving
+        // for a player who asked for nothing to move.
+        var breathe = UiMotion.Reduced
+            ? ShieldShellRest + ShieldShellSwing * 0.5f
+            : ShieldShellRest + ShieldShellSwing * (0.5f + 0.5f * MathF.Sin(_anim * 1.6f));
         var h = ShieldShellScale * VfxPlayer.BaseUnitPx;
         _vfx.Hold(FxFor("shield"), ChampBox.Center.X, (int)(ChampBox.Bottom - 40 - h / 2f),
                   ShieldShellScale, 8f, Steel * breathe);
     }
+
+    /// <summary>
+    /// THE BREAK BURST — <c>fx_shield_break</c> over the champion, once, across a REWARD.
+    /// </summary>
+    /// <remarks>
+    /// Eight frames in a row (assets/art/VFX/shield_break/fx_shield_break_strip8_512.png) played over
+    /// <see cref="UiMotion.Reward"/>, so the strip's fps follows the motion vocabulary's own longest
+    /// band rather than a number typed here: 8 / 0.35 s ≈ 23 fps. Scale 4 is the size the fight already
+    /// grades a death or a critical at — the break is that weight of moment.
+    /// <para>
+    /// It is NOT held and it does not loop: the shell that stands while the shield stands is
+    /// <see cref="HoldShieldBarrier"/>, and it stops being asked for on the very frame the shield hits
+    /// zero. There is no permanent glow left behind.
+    /// </para>
+    /// </remarks>
+    private void PlayShieldBreak()
+    {
+        _vfx.Play("fx_shield_break", ChampBox.Center.X, ChampBox.Center.Y - 20,
+                  scale: 4, fps: ShieldBreakFrames / UiMotion.Reward, tint: Color.White);
+        // FIXTURE ONLY (RH_SHOT_SHIELDFX=break): jump the burst to the middle of its own strip so the
+        // shutter photographs the shatter at its widest instead of its first frame. See ShotShieldFx.
+        if (ShotShieldFx == "break") _vfx.Update(UiMotion.Reward * 0.5f);
+    }
+
+    /// <summary>How many frames the break strip holds — the art is a 8×512 row.</summary>
+    private const float ShieldBreakFrames = 8f;
 
     /// <summary>The shell's size — about a third of the aura, so it wraps the figure instead of the arena.</summary>
     private const float ShieldShellScale = 2.6f;
