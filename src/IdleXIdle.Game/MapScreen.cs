@@ -66,6 +66,35 @@ public sealed class MapScreen
 
     private int _selected;
 
+    // ── THE INSPECTOR'S SCROLL (UI polish §17–§18). ──────────────────────────────────────────────
+    //
+    // The inspector is a flow of blocks under a fixed header, and at 125 % and 150 % the flow is longer
+    // than the column: the same eleven blocks that fit 1080 px at Body 22 do not at Body 33, and the
+    // brief forbids the one fix that used to be reached for (a smaller font). The flow scrolls by WHOLE
+    // ITEMS — a line, a plate, a rule, a chip row — so nothing is ever half-drawn and no clip is needed,
+    // which is how every row list in the game already scrolls. The one lit button stays anchored under
+    // the region (§18: never a primary action below a scroll).
+    private int _first;                                  // the first flow item the region shows
+    private int _shown;                                  // how many it held last frame — the page size
+    private readonly List<int> _itemHeights = new();     // the measured flow, reused each frame
+
+    /// <summary>
+    /// RIG: <c>RH_SHOT_SCROLL=&lt;items&gt;</c> poses the flow scrolled by that many items on its first
+    /// frame (a large number lands on the last page), so a state only the scroll reaches — the checkpoint
+    /// chips at 150 %, YOU NEED FIRST under the fold — is photographed rather than described. Read once,
+    /// under the capture rig only, the way FORGE and TRAINING read their own dials.
+    /// </summary>
+    private int _devScrollPending =
+        Environment.GetEnvironmentVariable("RH_SHOT") is not null
+        && Environment.GetEnvironmentVariable("RH_SHOT_SCROLL") is { } s && int.TryParse(s, out var n) ? n : 0;
+
+    /// <summary>Point the inspector at a region. A new region's flow starts at its top.</summary>
+    private void Select(int i)
+    {
+        if (i != _selected) _first = 0;
+        _selected = i;
+    }
+
     // ── THE TWO COLUMNS, BOTH EDGES FOLLOWING THE PAGE (UX V2 P2.1). ─────────────────────────────
     //
     // The campaign progress column is gone and the chart has its width: it was a second, worse copy of
@@ -73,29 +102,49 @@ public sealed class MapScreen
     // chart that shows all of it in one look.
     //
     // Top 150 clears the hint slot's band (canvas y 86..134), which this screen uses: MAP is one of the
-    // eight screens Onboarding.HintFor speaks on ("A NEW REGION IS AVAILABLE — CINDERWORKS").
+    // eight screens Onboarding.HintFor speaks on ("A NEW REGION IS AVAILABLE — CINDERWORKS"). Top and the
+    // bottom margin are PAGE anchors — the chrome above and below does not grow with the profile.
     private const int Top = 150;
     private const int BottomMargin = 54;
-    private const int Gutter = 20;
-    private const int InspectorMaxW = 496;
+    private const int TitleY = 24;
+    private static int Gutter => UiMetrics.Space(20);
     private static int ColumnH => UiKit.PageBottom(BottomMargin) - Top;
 
     /// <summary>
-    /// The inspector's width — capped so the panel keeps its VERTICAL frame art at every UI SCALE.
+    /// The inspector's width — the house inspector width for the profile, capped so the panel keeps its
+    /// VERTICAL frame art at every one of them.
     /// </summary>
     /// <remarks>
     /// <see cref="UiKit.PanelArtKey"/> chooses by aspect, and a fixed 496 against a short page crosses the
     /// 0.82 line into the SQUARE frame, whose side rails reach 57 px in — the fault that ate GEAR's
-    /// inspector label in P1.7. Tying the width to the height keeps the ratio on the right side of it.
+    /// inspector label in P1.7. Tying the width to the height keeps the ratio on the right side of it;
+    /// at 150 % it is this cap, not the profile, that decides (744 wanted, 700 allowed).
     /// </remarks>
-    private static int InspectorW => Math.Min(InspectorMaxW, ColumnH * 80 / 100);
+    private static int InspectorW => Math.Min(UiMetrics.InspectorWidth(UiKit.Page.Width), ColumnH * 80 / 100);
     private static Rectangle DetailPanel => new(UiKit.PageRight(40) - InspectorW, Top, InspectorW, ColumnH);
     private static Rectangle MapCanvas => new(34, Top, DetailPanel.X - Gutter - 34, ColumnH);
 
     /// <summary>The world's own row, inside the chart's top edge: the corruption ladder, or the last news.</summary>
-    private const int StripTop = 56, StripH = 52;
-    private static Rectangle WorldStrip => new(UiKit.PanelInner(MapCanvas).X + 16, MapCanvas.Y + StripTop,
-                                               UiKit.PanelInner(MapCanvas).Width - 32, StripH);
+    /// <remarks>Tall enough for the small button it carries, with a breath above and below it.</remarks>
+    private static int StripTop => UiKit.PanelCorner + UiMetrics.Space(16);
+    private static int StripH => UiMetrics.Space(6) * 2 + UiMetrics.ButtonHeightSmall;
+    private static Rectangle WorldStrip
+    {
+        get
+        {
+            var inner = UiKit.PanelInner(MapCanvas);
+            var inset = UiMetrics.Space(16);
+            return new Rectangle(inner.X + inset, MapCanvas.Y + StripTop, inner.Width - inset * 2, StripH);
+        }
+    }
+
+    /// <summary>The panel's one lit button: anchored above the frame's foot, never inside the scroll.</summary>
+    private static Rectangle CtaRect(Rectangle panel)
+    {
+        var x = UiKit.ContentLeft(panel);
+        var h = UiMetrics.ButtonHeightPrimary;
+        return new Rectangle(x, panel.Bottom - UiMetrics.Space(24) - h, UiKit.ContentRight(panel) - x, h);
+    }
 
     /// <summary>Has the world anything to say right now? The strip costs nothing when it has not.</summary>
     /// <remarks>
@@ -110,16 +159,52 @@ public sealed class MapScreen
         get
         {
             var inner = UiKit.PanelInner(MapCanvas);
-            var top = HasWorldStrip ? WorldStrip.Bottom + 18 : inner.Y + 12;
-            return new Rectangle(MapCanvas.X, top, MapCanvas.Width, inner.Bottom - 18 - top);
+            var top = HasWorldStrip ? WorldStrip.Bottom + UiMetrics.Space(18) : inner.Y + UiMetrics.Space(12);
+            return new Rectangle(MapCanvas.X, top, MapCanvas.Width, inner.Bottom - UiMetrics.Space(18) - top);
         }
     }
 
+    // ── THE CARD'S OWN GRID. ─────────────────────────────────────────────────────────────────────
+    //
     // A CARD BIG ENOUGH TO READ. At 196×146 the name, the element and the state band were all at
     // Secondary — a five-pixel cap at 720p. The card is sized from the field it sits in, so it grows
-    // with the chart and its three lines can sit on Body.
-    private int NodeH => Math.Clamp(NodeField.Height * 26 / 100, 116, 176);
-    private int NodeW => NodeH * 240 / 176;
+    // with the chart and its three lines can sit on Body — and, since the density profile, it is never
+    // shorter than the stack it carries, so a bigger emblem and a bigger Body push the band down rather
+    // than printing over it. Read top to bottom, at 100 %:
+    //
+    //      10  EmblemTop      the crest's drop from the card's top
+    //      56  EmblemSize     the crest
+    //       6                 … to the name
+    //      28  Pitch(Body)    the name's line
+    //       2                 … to the element row
+    //      28  GemSize        the Source gem, the element's name beside it
+    //      11                 … to the state band
+    //      32  BandH          the band, its word centred
+    //       3  FrameThick     the card's own edge
+    //     ───
+    //     176                 the card at 100 %, exactly what it was
+    private static int EmblemTop => UiMetrics.Space(10);
+    private static int EmblemSize => UiMetrics.Control(56);
+    private static int NameTop => EmblemTop + EmblemSize + UiMetrics.Space(6);
+    private static int GemSize => UiMetrics.Control(28);
+    private static int GemTop => NameTop + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(2);
+    private static int BandH => UiMetrics.Control(32);
+    private const int FrameThick = 3;   // the card's edge — a rule, not a control; the active card wears one more
+    private static int CardStack => GemTop + GemSize + UiMetrics.Space(11) + BandH + FrameThick;
+
+    /// <summary>The check glyph's box beside a word — the same shape on the card and in the inspector.</summary>
+    private static int CheckW => UiMetrics.Control(22);
+    private static int CheckH => UiMetrics.Control(18);
+
+    /// <summary>The row under a card: a breath, then POWER on one Body line.</summary>
+    private static int LabelGap => UiMetrics.Space(8);
+    private static int PowerRowH => LabelGap + UiTypography.Pitch(UiTypography.Body);
+
+    private int NodeH => Math.Max(CardStack, Math.Clamp(NodeField.Height * 26 / 100, UiMetrics.Control(116), UiMetrics.Control(176)));
+    // NEVER WIDER THAN ITS COLUMN. Three cards share the field's width at 0.20 / 0.50 / 0.80, so a card
+    // past 28 % of it would touch its neighbour; at 100 % the aspect wins by a wide margin (240 of 372),
+    // at 150 % the column does, and the card comes out a little squarer rather than overlapping.
+    private int NodeW => Math.Min(NodeH * 240 / 176, NodeField.Width * 28 / 100);
 
     // Six region nodes in a serpentine across the canvas: 0-1-2 along the top, 3-4-5 back along the bottom.
     private static readonly (float Fx, float Fy)[] NodeFrac =
@@ -130,9 +215,47 @@ public sealed class MapScreen
     private Rectangle Node(int i)
     {
         var f = NodeField;
+        var half = NodeH / 2;
         var cx = f.X + (int)(f.Width * NodeFrac[i].Fx);
-        var cy = f.Y + (int)(f.Height * NodeFrac[i].Fy);
-        return new Rectangle(cx - NodeW / 2, cy - NodeH / 2, NodeW, NodeH);
+        int cy;
+        if (NodeFrac[i].Fy < 0.5f) cy = TopRowY(f, i, half);
+        else
+        {
+            // FROM THE HEIGHT THAT IS THERE. The fractions place the rows on a tall field; on a short one
+            // (150 % cards, or a world strip over them) the bottom row is held up so its POWER line AND its
+            // CONQUER … line clear the frame's foot — the two bottom cards land at one height then, which
+            // is a reflow, not a fault (§9). But never so far up that it takes the top row's own POWER
+            // line: when the field cannot hold both, the requirement is the line that goes (its guard in
+            // DrawMap drops it), and the frame's foot stays the one edge a card never crosses.
+            var cyRaw = f.Y + (int)(f.Height * NodeFrac[i].Fy);
+            var withRequirement = f.Bottom - PowerRowH - UiTypography.Pitch(UiTypography.Secondary) - half;
+            var underTopRow = TopRowBottom(f, half) + PowerRowH + UiMetrics.Space(4) + half;
+            cy = Math.Max(Math.Min(cyRaw, withRequirement), underTopRow);
+            cy = Math.Min(cy, f.Bottom - PowerRowH - half);
+        }
+        return new Rectangle(cx - NodeW / 2, cy - half, NodeW, NodeH);
+    }
+
+    /// <summary>A top-row card's centre: its fraction of the field, held under the field's top on a short one.</summary>
+    private static int TopRowY(Rectangle f, int i, int half)
+        => Math.Max(f.Y + (int)(f.Height * NodeFrac[i].Fy), f.Y + UiMetrics.Space(4) + half);
+
+    /// <summary>The top row's lowest edge — what the bottom row must stay under, with the POWER line between.</summary>
+    private static int TopRowBottom(Rectangle f, int half)
+    {
+        var bottom = f.Y;
+        for (var j = 0; j < RegionCount; j++)
+            if (NodeFrac[j].Fy < 0.5f) bottom = Math.Max(bottom, TopRowY(f, j, half) + half);
+        return bottom;
+    }
+
+    /// <summary>The bottom-row card under a top-row one — the thing a label under it must not reach.</summary>
+    private Rectangle? Below(int i)
+    {
+        if (NodeFrac[i].Fy >= 0.5f) return null;
+        for (var j = 0; j < RegionCount; j++)
+            if (NodeFrac[j].Fy >= 0.5f && MathF.Abs(NodeFrac[j].Fx - NodeFrac[i].Fx) < 0.01f) return Node(j);
+        return null;
     }
 
     private static int RegionCount => Math.Min(Regions.All.Count, NodeFrac.Length);
@@ -149,79 +272,18 @@ public sealed class MapScreen
             case TourTarget.RegionChain:
                 var chain = Node(0);
                 for (var i = 1; i < RegionCount; i++) chain = Rectangle.Union(chain, Node(i));
-                chain.Inflate(12, 12);
-                chain.Height += 24 + UiTypography.Pitch(UiTypography.Body);   // the POWER and requirement rows under a node are part of it
+                chain.Inflate(UiMetrics.Space(12), UiMetrics.Space(12));
+                chain.Height += PowerRowH + UiMetrics.Space(16);   // the POWER row under a node is part of it
                 return new[] { chain };
             case TourTarget.RegionDetail:
                 return new[] { DetailPanel };
             case TourTarget.EnterRegion:
-                return new[] { new Rectangle(UiKit.ContentLeft(DetailPanel), DetailPanel.Bottom - 92,
-                                 DetailPanel.Width - UiKit.PadX(DetailPanel) * 2, 68) };
+                return new[] { CtaRect(DetailPanel) };
             default:
                 return Array.Empty<Rectangle>();
         }
     }
     private static RegionDefinition Def(int i) => Regions.All[i];
-
-    /// <summary>A real, monotonic "recommended power" derived from the region's boss power tier.</summary>
-    /// <summary>
-    /// START AT WAVE — the checkpoint chips of a conquered region (Checkpoints): 0 and every ten waves
-    /// the champion has held here. A chip is the wave the descent starts AFTER, priced in Memory Dust
-    /// per descent; the chosen one is gold, an unaffordable one is dim and says so.
-    /// </summary>
-    private void DrawCheckpoints(SpriteBatch b, RegionDefinition def, Region farm, Point hit, bool clicked,
-                                 ref int y, int x, int width, int floor)
-    {
-        var options = new List<int>(Checkpoints.Options(farm.BestDepth, conquered: true));
-        // The row holds so many chips. Past that the SHALLOW middle goes (TOP and the deepest ones stay —
-        // a player at wave 110 wants 100 and 110, not 10), never the deepest (review 2026-08-26).
-        int ChipW(int o) => Math.Max(44, _ui.MeasureBig(o == 0 ? "TOP" : o.ToString(), UiTypography.Secondary) + UiTypography.ChipPadX * 2);
-        int RowWidth() { var t = 0; foreach (var o in options) t += ChipW(o) + 4; return t; }
-        while (options.Count > 2 && RowWidth() > width) options.RemoveAt(1);
-
-        // ONE OPTION IS NOT A CHOICE. A region conquered at wave 1 offers only the top, and a header over a
-        // single inert chip is furniture — the block appears when there is somewhere else to start.
-        if (options.Count < 2) return;
-        // 30 px chips: Secondary plus the chip padding is 27, and the six pixels saved are what let the
-        // consequence line under them fit on a deep region.
-        const int ChipH = 30;
-        if (y + UiTypography.Pitch(UiTypography.Secondary) + ChipH > floor) return;
-
-        // THE COST RIDES THE HEADER'S OWN ROW. On its own line it was the first thing the flow dropped on a
-        // deep region — and it is the half that says what pressing a chip will charge you.
-        var chosen = Checkpoints.Clamp(farm.StartWave, farm.BestDepth, true);
-        var cost = Checkpoints.DustCost(chosen);
-        var affordChosen = DustOwned >= cost;
-        _ui.TextBig(b, "START AT WAVE", x, y, Slate, UiTypography.Secondary);
-        // WHEN IT CANNOT BE PAID, THE ROW SAYS WHAT WILL ACTUALLY HAPPEN. The host quietly starts the run at
-        // the top when the chosen checkpoint is unaffordable, and the map never said so — the player watched
-        // a gold chip and landed somewhere else. The price gives up its row to the consequence, because a
-        // player who cannot pay needs to know where they will wake up more than what it would have cost.
-        _ui.TextRightBig(b, chosen == 0 ? "FREE"
-                            : affordChosen ? $"{cost:N0} MEMORY DUST EACH TIME"
-                            : $"NEED {cost:N0} DUST — STARTS AT THE TOP",
-                         x + width, y, affordChosen ? Slate : Ember, UiTypography.Secondary);
-        y += UiTypography.Pitch(UiTypography.Secondary);
-        var cx = x;
-        foreach (var o in options)
-        {
-            var label = o == 0 ? "TOP" : o.ToString();
-            var chip = new Rectangle(cx, y, ChipW(o), ChipH);
-            var afford = DustOwned >= Checkpoints.DustCost(o);
-            var lit = o == chosen;
-            _ui.Fill(b, chip, lit ? new Color(0x3A, 0x2C, 0x14, 0xE0) : new Color(0x14, 0x10, 0x1A, 0xE0));
-            var edge = lit ? Gold : chip.Contains(hit) ? Bone : Dim;
-            _ui.Fill(b, new Rectangle(chip.X, chip.Y, chip.Width, 2), edge);
-            _ui.Fill(b, new Rectangle(chip.X, chip.Bottom - 2, chip.Width, 2), edge);
-            _ui.Fill(b, new Rectangle(chip.X, chip.Y, 2, chip.Height), edge);
-            _ui.Fill(b, new Rectangle(chip.Right - 2, chip.Y, 2, chip.Height), edge);
-            _ui.TextCenterBig(b, label, chip.Center.X, chip.Y + UiTypography.ChipPadY + 2,
-                              lit ? Gold : afford ? Bone : UiInk.Disabled, UiTypography.Secondary);
-            if (UiKit.ClickedIn(chip, hit, clicked)) _startRequest = (def.Id, o);
-            cx += chip.Width + 4;
-        }
-        y += ChipH + 4;
-    }
 
     private static int RegionPower(RegionDefinition def) => Regions.RecommendedPower(def);
 
@@ -313,29 +375,44 @@ public sealed class MapScreen
     };
 
 
-    public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked)
+    /// <param name="wheel">
+    /// Mouse-wheel notches this frame (+ away, - toward, as <c>Game1.MouseWheel</c> latches them), for the
+    /// inspector's flow. The host does not pass it yet — it passes GEAR's, FORGE's, BUILD's, VAULT's and
+    /// TRAINING's, and this screen's needs the same one-line change in Game1; until then the arrow keys,
+    /// PAGE UP / PAGE DOWN and a click on the scrollbar's track are the ways down the flow.
+    /// </param>
+    public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, int wheel = 0)
     {
         bool P(Keys k) => keys.IsKeyDown(k) && prev.IsKeyUp(k);
-        if (P(Keys.Left)) _selected = (_selected - 1 + RegionCount) % RegionCount;
-        if (P(Keys.Right)) _selected = (_selected + 1) % RegionCount;
+        if (P(Keys.Left)) Select((_selected - 1 + RegionCount) % RegionCount);
+        if (P(Keys.Right)) Select((_selected + 1) % RegionCount);
         // A locked region has no CTA any more, so Enter must not be the one path that can still ask for it.
         if (P(Keys.Enter) && World.IsUnlocked(Def(_selected).Id)) _enterRequest = Def(_selected).Id;
         if (P(Keys.D) && World.CanDeepenCorruption) _deepenRequest = true;
         if (P(Keys.S) && World.CanEaseCorruption) _easeRequest = true;
+
+        // THE INSPECTOR'S SCROLL: the wheel over the panel, or the arrow keys — the path that needs no
+        // pointer. The upper clamp is the flow's own, applied once it has measured itself in Draw.
+        var step = wheel != 0 && DetailPanel.Contains(mouse) ? -wheel : 0;
+        if (P(Keys.Down)) step++;
+        if (P(Keys.Up)) step--;
+        if (P(Keys.PageDown)) step += Math.Max(1, _shown);
+        if (P(Keys.PageUp)) step -= Math.Max(1, _shown);
+        if (step != 0) _first = Math.Max(0, _first + step);
     }
 
     /// <summary>DEV: point the inspector at a region, so a capture can photograph it read (RH_SHOT fixtures).</summary>
     public void DevSelect(string regionId)
     {
         var i = Regions.All.ToList().FindIndex(r => r.Id == regionId);
-        if (i >= 0 && i < RegionCount) _selected = i;
+        if (i >= 0 && i < RegionCount) Select(i);
     }
 
     /// <summary>Point the selection at the active region when the screen opens (host calls once on entry).</summary>
     public void SelectActive()
     {
         var idx = Regions.All.ToList().FindIndex(r => r.Id == ActiveRegion);
-        if (idx >= 0) _selected = idx;
+        if (idx >= 0) Select(idx);
     }
 
     public void Draw(SpriteBatch b, Point mouse, bool clicked)
@@ -344,8 +421,9 @@ public sealed class MapScreen
         var hit = mouse;
 
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xB0));
-        _ui.TextCenterBig(b, "MAP", UiKit.PageCenterX, 24, UiInk.Accent, UiTypography.ScreenTitle, TextFace.Display);
-        _ui.Fill(b, new Rectangle(UiKit.PageCenterX - 240, 74, 480, 3), Gold * 0.5f);
+        _ui.TextCenterBig(b, "MAP", UiKit.PageCenterX, TitleY, UiInk.Accent, UiTypography.ScreenTitle, TextFace.Display);
+        // The rule sits one title line under the title, so a 150 % title does not run through it.
+        _ui.Fill(b, new Rectangle(UiKit.PageCenterX - 240, TitleY + UiTypography.Pitch(UiTypography.ScreenTitle) + 1, 480, 3), Gold * 0.5f);
         // NO SUBTITLE. The band under the title is the hint slot's (D4): when a region opens, the screen
         // says so there, about this player's world, instead of reciting a balance figure on every visit.
 
@@ -389,6 +467,9 @@ public sealed class MapScreen
             DrawDottedLine(b, a, c, col);
         }
 
+        var body = UiTypography.Body;
+        var bodyPitch = UiTypography.Pitch(body);
+        var wordGap = UiMetrics.Space(8);
         for (var i = 0; i < RegionCount; i++)
         {
             var def = Def(i);
@@ -403,7 +484,7 @@ public sealed class MapScreen
             if (UiKit.ClickedIn(node, hit, clicked))
             {
                 if (sel && unlocked) _enterRequest = def.Id;
-                _selected = i;
+                Select(i);
             }
 
             var sc = SourceColor[def.Theme];
@@ -420,10 +501,15 @@ public sealed class MapScreen
             // Hollow has a purple icon") — the frame and the band below now say it in words.
             // Hover = highlight (D5): a card the pointer is on lifts and takes the pale edge, so the chart
             // answers the pointer before a click is spent.
+            // The lift is a PREMULTIPLIED white at a few percent, eased in the way UiKit.Button eases its
+            // own (§26). It was `new Color(0xE8, 0xDF, 0xC8, 0x14)` — a straight-alpha cream that the
+            // premultiplied blend read as near-opaque, so a hovered card washed to bone and its name
+            // vanished: hover and selected were not distinct, hover and unreadable were.
             var hot = node.Contains(hit);
-            if (hot) _ui.Fill(b, node, new Color(0xE8, 0xDF, 0xC8, 0x14));
+            var lift = UiMotion.Ease(UiMotion.KeyOf(node), hot ? 1f : 0f);
+            if (lift > 0f) _ui.Fill(b, node, Color.White * (0.07f * lift));
             var edge = active ? Gold : sel || hot ? Bone : conq ? Met : unlocked ? sc : Dim;
-            var thick = active ? 4 : 3;
+            var thick = active ? FrameThick + 1 : FrameThick;
             foreach (var e in new[] { new Rectangle(node.X, node.Y, node.Width, thick), new Rectangle(node.X, node.Bottom - thick, node.Width, thick),
                                       new Rectangle(node.X, node.Y, thick, node.Height), new Rectangle(node.Right - thick, node.Y, thick, node.Height) })
                 _ui.Fill(b, e, edge);
@@ -434,72 +520,74 @@ public sealed class MapScreen
 
             // Emblem — one crest per region; unknown ids still fall back to a Source gem.
             var emblem = EmblemKey(def.Id);
-            var eb = new Rectangle(node.Center.X - 28, node.Y + 10, 56, 56);
+            var eb = new Rectangle(node.Center.X - EmblemSize / 2, node.Y + EmblemTop, EmblemSize, EmblemSize);
             if (emblem is not null && _ui.Assets.Get(emblem) is { } em) b.Draw(em, eb, unlocked ? Color.White : new Color(0x55, 0x55, 0x60));
             else _ui.Diamond(b, eb, unlocked ? sc : Dim);
 
             // A LOCKED REGION KEEPS ITS WORDS. Its name, its element and its power used to be greyed, so
             // the one card a player most needs to read about — the place they cannot go yet — was the
             // hardest to read. The padlock and the band say "locked"; the letters do not have to.
-            _ui.TextCenterBig(b, _ui.ShortenBig(def.Name, node.Width - 16, UiTypography.Body),
-                              node.Center.X, node.Y + 72, Bone, UiTypography.Body);
+            _ui.TextCenterBig(b, _ui.ShortenBig(def.Name, node.Width - wordGap * 2, body),
+                              node.Center.X, node.Y + NameTop, Bone, body);
 
             // THE ELEMENT, READABLE: the Source gem with the element's name beside it, in the Source's
             // colour, centred as one group. What the creatures there are made of is the first thing a
             // build cares about, and it was only ever implied by the card's ground art.
             var element = def.Theme.ToString().ToUpperInvariant();
-            var ew = _ui.MeasureBig(element, UiTypography.Body);
-            var ex = node.Center.X - (28 + 8 + ew) / 2;
-            var gemBox = new Rectangle(ex, node.Y + 102, 28, 28);
+            var ew = _ui.MeasureBig(element, body);
+            var ex = node.Center.X - (GemSize + wordGap + ew) / 2;
+            var gemBox = new Rectangle(ex, node.Y + GemTop, GemSize, GemSize);
             if (_ui.Assets.Get(SourceGemKey(def.Theme)) is { } gem) b.Draw(gem, gemBox, Color.White);
             else _ui.Diamond(b, gemBox, sc);
-            _ui.TextBig(b, element, gemBox.Right + 8, node.Y + 105, sc, UiTypography.Body);
+            _ui.TextBig(b, element, gemBox.Right + wordGap, gemBox.Y + (GemSize - body) / 2, sc, body);
 
             // BELOW the card, not across its bottom border. Vellum, because these labels sit on the
             // parchment chart rather than on black.
-            _ui.TextCenterBig(b, $"POWER {RegionPower(def):N0}", node.Center.X, node.Bottom + 8,
-                              UiKit.Vellum, UiTypography.Body);
+            _ui.TextCenterBig(b, $"POWER {RegionPower(def):N0}", node.Center.X, node.Bottom + LabelGap,
+                              UiKit.Vellum, body);
 
             // AND, UNDER A LOCKED ONE, WHAT OPENS IT. The prerequisite's name was one lookup away and
             // appeared nowhere; "locked" without "locked by what" is a dead end on the screen whose whole
-            // job is deciding where to go next. Guarded so it never lands on the chart's bottom frame.
-            if (!unlocked && def.PrereqId is { } pid && Regions.Find(pid) is { } pdef
-                && node.Bottom + 8 + UiTypography.Pitch(UiTypography.Body) + UiTypography.Pitch(UiTypography.Secondary)
-                   <= UiKit.PanelInner(MapCanvas).Bottom)
-                _ui.TextCenterBig(b, $"CONQUER {pdef.Name}", node.Center.X,
-                                  node.Bottom + 8 + UiTypography.Pitch(UiTypography.Body),
+            // job is deciding where to go next. Guarded so it never lands on the chart's bottom frame —
+            // or, on the top row, on the card below it (150 % under a world strip is where that bites).
+            var reqBottom = node.Bottom + PowerRowH + UiTypography.Pitch(UiTypography.Secondary);
+            var reqLimit = Below(i) is { } under ? under.Y - UiMetrics.Space(4) : UiKit.PanelInner(MapCanvas).Bottom;
+            if (!unlocked && def.PrereqId is { } pid && Regions.Find(pid) is { } pdef && reqBottom <= reqLimit)
+                _ui.TextCenterBig(b, $"CONQUER {pdef.Name}", node.Center.X, node.Bottom + PowerRowH,
                                   Bone, UiTypography.Secondary);
 
             // THE STATE, IN WORDS, on a band along the card's foot — with the fourth state the chart never
             // had: a region that is open, not conquered and not where you are said nothing at all.
-            var band = new Rectangle(node.X + thick, node.Bottom - 32 - thick, node.Width - thick * 2, 32);
+            var band = new Rectangle(node.X + thick, node.Bottom - BandH - thick, node.Width - thick * 2, BandH);
+            var bandText = band.Y + (BandH - body) / 2;
             if (active)
             {
                 _ui.Fill(b, band, new Color(0x2A, 0x1E, 0x08, 0xE6));
-                _ui.TextCenterBig(b, "YOU ARE HERE", node.Center.X, band.Y + 5, Gold, UiTypography.Body);
-                if (conq) DrawCheck(b, new Rectangle(node.Right - 30, node.Y + 10, 22, 18), Met);
+                _ui.TextCenterBig(b, "YOU ARE HERE", node.Center.X, bandText, Gold, body);
+                if (conq) DrawCheck(b, new Rectangle(node.Right - wordGap - CheckW, node.Y + EmblemTop, CheckW, CheckH), Met);
             }
             else if (conq)
             {
                 _ui.Fill(b, band, new Color(0x08, 0x14, 0x0C, 0xE6));
-                var cw = _ui.MeasureBig("CONQUERED", UiTypography.Body);
-                var cx = node.Center.X - (22 + 8 + cw) / 2;
-                DrawCheck(b, new Rectangle(cx, band.Y + 6, 22, 18), Met);
-                _ui.TextBig(b, "CONQUERED", cx + 30, band.Y + 5, Met, UiTypography.Body);
+                var cw = _ui.MeasureBig("CONQUERED", body);
+                var cx = node.Center.X - (CheckW + wordGap + cw) / 2;
+                DrawCheck(b, new Rectangle(cx, band.Y + (BandH - CheckH) / 2, CheckW, CheckH), Met);
+                _ui.TextBig(b, "CONQUERED", cx + CheckW + wordGap, bandText, Met, body);
             }
             else if (unlocked)
             {
                 // AVAILABLE, not gold: it is neither earned nor where you are (D9).
                 _ui.Fill(b, band, new Color(0x14, 0x11, 0x1E, 0xE6));
-                _ui.TextCenterBig(b, "AVAILABLE", node.Center.X, band.Y + 5, Bone, UiTypography.Body);
+                _ui.TextCenterBig(b, "AVAILABLE", node.Center.X, bandText, Bone, body);
             }
             else
             {
                 _ui.Fill(b, band, new Color(0x10, 0x10, 0x16, 0xE6));
-                var lw = _ui.MeasureBig("LOCKED", UiTypography.Body);
-                var lx = node.Center.X - (18 + 8 + lw) / 2;
-                DrawLockArt(b, new Rectangle(lx, band.Y + 6, 18, 18));
-                _ui.TextBig(b, "LOCKED", lx + 26, band.Y + 5, Bone, UiTypography.Body);
+                var lockS = UiMetrics.Control(18);
+                var lw = _ui.MeasureBig("LOCKED", body);
+                var lx = node.Center.X - (lockS + wordGap + lw) / 2;
+                DrawLockArt(b, new Rectangle(lx, band.Y + (BandH - lockS) / 2, lockS, lockS));
+                _ui.TextBig(b, "LOCKED", lx + lockS + wordGap, bandText, Bone, body);
             }
 
             if (sel) _ui.Fill(b, new Rectangle(node.X - 4, node.Y - 4, node.Width + 8, 4), Gold);
@@ -521,22 +609,35 @@ public sealed class MapScreen
     private void DrawWorldStrip(SpriteBatch b, Point hit, bool clicked)
     {
         var r = WorldStrip;
+        var body = UiTypography.Body;
+        var pad = UiMetrics.Space(20);
         if (World.AllConquered)
         {
             _ui.Plate(b, r, Gold);
             var label = CorruptionLook.Label(World.CorruptionTier);
-            _ui.TextBig(b, label, r.X + 20, r.Y + 14, World.CorruptionTier > 0 ? Gold : Bone, UiTypography.Body);
-            _ui.TextBig(b, _ui.ShortenBig(CorruptionLook.For(World.CorruptionTier).Blurb, r.Width - 460, UiTypography.Secondary),
-                        r.X + 20 + _ui.MeasureBig(label, UiTypography.Body) + 24, r.Y + 15, Slate, UiTypography.Secondary);
-            var deep = new Rectangle(r.Right - 8 - 168, r.Y + 6, 168, 40);
-            var ease = new Rectangle(deep.X - 12 - 168, r.Y + 6, 168, 40);
+            // The two small buttons hang off the strip's right end; the blurb takes whatever is left
+            // between the label and them, and says nothing rather than an ellipsis alone.
+            var btnW = UiMetrics.Control(168);
+            var btnY = r.Y + UiMetrics.Space(6);
+            var deep = new Rectangle(r.Right - UiMetrics.Space(8) - btnW, btnY, btnW, UiMetrics.ButtonHeightSmall);
+            var ease = new Rectangle(deep.X - UiMetrics.Gap - btnW, btnY, btnW, UiMetrics.ButtonHeightSmall);
+            // The label stops short of the buttons too: at 150 % the longest tier name ends seventeen
+            // pixels before SHALLOWER (so the margin here is the small one — the bigger one cut it to an
+            // ellipsis), and a longer one would otherwise run under the button.
+            var labelX = r.X + pad;
+            var shownLabel = _ui.ShortenBig(label, ease.X - UiMetrics.Space(8) - labelX, body);
+            _ui.TextBig(b, shownLabel, labelX, r.Y + (r.Height - body) / 2, World.CorruptionTier > 0 ? Gold : Bone, body);
+            var blurbX = labelX + _ui.MeasureBig(shownLabel, body) + UiMetrics.Space(24);
+            var blurb = _ui.ShortenBig(CorruptionLook.For(World.CorruptionTier).Blurb, ease.X - UiMetrics.Space(16) - blurbX, UiTypography.Secondary);
+            if (blurb.Length > 1)
+                _ui.TextBig(b, blurb, blurbX, r.Y + (r.Height - UiTypography.Secondary) / 2, Slate, UiTypography.Secondary);
             if (_ui.Button(b, ease, "SHALLOWER", hit, clicked, World.CanEaseCorruption)) _easeRequest = true;
             if (_ui.Button(b, deep, "DEEPER", hit, clicked, World.CanDeepenCorruption)) _deepenRequest = true;
         }
         else if (Message.Length > 0)
         {
             _ui.Plate(b, r, Gold);
-            _ui.TextCenterBig(b, _ui.ShortenBig(Message, r.Width - 48, UiTypography.Body), r.Center.X, r.Y + 14, Gold, UiTypography.Body);
+            _ui.TextCenterBig(b, _ui.ShortenBig(Message, r.Width - UiMetrics.Space(24) * 2, body), r.Center.X, r.Y + (r.Height - body) / 2, Gold, body);
         }
     }
 
@@ -550,7 +651,8 @@ public sealed class MapScreen
     /// <c>DetailPanel.Y + n</c> with two conditional sections reserved as holes — about a hundred and sixty
     /// pixels held empty for a checkpoint row and a corruption ladder that are usually not there, while
     /// the text above them ran a rung too small for want of room. Blocks are drawn in order now and the
-    /// ones that do not apply cost nothing.
+    /// ones that do not apply cost nothing. The header (category, name) stays put and the button stays
+    /// anchored; the flow between them scrolls when the profile makes it longer than the column.
     /// </remarks>
     private void DrawDetail(SpriteBatch b, Point hit, bool clicked)
     {
@@ -565,134 +667,58 @@ public sealed class MapScreen
         var x = UiKit.ContentLeft(panel);
         var w = UiKit.ContentRight(panel) - x;
         var y = panel.Y + UiTypography.PanelTitleTop;
-        var cta = new Rectangle(x, panel.Bottom - 92, w, 68);
+        var cta = CtaRect(panel);
+
+        // ── CATEGORY · NAME — the header stays put; everything under it is the flow. ──
+        _ui.TextBig(b, $"REGION {_selected + 1} OF {RegionCount}", x, y, Slate, UiTypography.Secondary);
+        y += UiTypography.Pitch(UiTypography.Secondary);
+        _ui.TextBig(b, _ui.ShortenBig(def.Name, w, UiTypography.Headline), x, y,
+                    def.Id == ActiveRegion ? Gold : Bone, UiTypography.Headline);
+        y += UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(6);
+
         // 16, not 40. The flow ran five pixels short of the START AT WAVE block on a conquered region held
         // deep — so the one control the panel offers besides the button was correctly suppressed, for want
         // of air nobody had asked for. The button keeps a clear line above it either way.
-        var floor = cta.Y - 16;
+        var region = new Rectangle(x, y, w, cta.Y - UiMetrics.Space(16) - y);
 
-        void Section(string s)
+        // MEASURED, THEN DRAWN. The flow records every item's height first; if the whole of it is taller
+        // than the region, a scrollbar lane comes off the right and the flow is measured again at the
+        // narrower width (a wrapped line can only get longer). Then the first item is clamped so the last
+        // page is as full as it can be, and the flow is drawn from there.
+        _itemHeights.Clear();
+        Flow(b, def, unlocked, conq, farm, sc, region, hit, clicked, draw: false);
+        var lane = 0;
+        if (_itemHeights.Sum() > region.Height)
         {
-            if (y + UiTypography.Pitch(UiTypography.Secondary) > floor) return;
-            _ui.TextBig(b, s, x, y, Slate, UiTypography.Secondary);
-            y += UiTypography.Pitch(UiTypography.Secondary);
+            lane = UiMetrics.ScrollbarWidth + UiMetrics.Gap;
+            region.Width -= lane;
+            _itemHeights.Clear();
+            Flow(b, def, unlocked, conq, farm, sc, region, hit, clicked, draw: false);
         }
-        void Line(string s, Color c, int px = 0, int maxLines = 3)
+        var total = _itemHeights.Count;
+        var maxFirst = 0;
+        for (int i = total - 1, acc = 0; i >= 0; i--)
         {
-            if (px == 0) px = UiTypography.Body;   // a rung is a profile-scaled property, not a constant
-            foreach (var l in _ui.WrapBig(s, w, px).Take(maxLines))
-            {
-                if (y + UiTypography.Pitch(px) > floor) return;
-                _ui.TextBig(b, l, x, y, c, px);
-                y += UiTypography.Pitch(px);
-            }
+            acc += _itemHeights[i];
+            if (acc > region.Height) { maxFirst = i + 1; break; }
         }
-        void Rule() { if (y + 14 < floor) { _ui.Fill(b, new Rectangle(x, y + 6, w, 1), Dim); y += 16; } }
-        void Pair(string label, string figure, Color figureInk)
+        if (_devScrollPending != 0) { _first = _devScrollPending; _devScrollPending = 0; }
+        _first = Math.Clamp(_first, 0, maxFirst);
+        _shown = Flow(b, def, unlocked, conq, farm, sc, region, hit, clicked, draw: true);
+
+        if (lane > 0)
         {
-            if (y + UiTypography.Pitch(UiTypography.Headline) > floor) return;
-            _ui.TextBig(b, label, x, y + 6, Slate, UiTypography.Secondary);
-            _ui.TextRightBig(b, figure, x + w, y, figureInk, UiTypography.Headline);
-            y += UiTypography.Pitch(UiTypography.Headline);
-        }
-
-        // ── CATEGORY · NAME · IDENTITY ──
-        Section($"REGION {_selected + 1} OF {RegionCount}");
-        _ui.TextBig(b, _ui.ShortenBig(def.Name, w, UiTypography.Headline), x, y,
-                    def.Id == ActiveRegion ? Gold : Bone, UiTypography.Headline);
-        y += UiTypography.Pitch(UiTypography.Headline) + 6;
-        // The identity plate: the region's own ground, its gem, its element. The Source gem used to be
-        // drawn four times per region on this screen; it appears twice now — once on the node, once here.
-        var plate = new Rectangle(x, y, w, 84);
-        _ui.Plate(b, plate, sc);
-        if (_ui.Assets.Get(ArenaKey(def.Theme)) is { } ground) b.Draw(ground, plate, CentreCrop(ground, plate), Color.White);
-        _ui.Fill(b, plate, new Color(0x0A, 0x08, 0x14, 0x9E));
-        _ui.Fill(b, plate, sc * 0.16f);
-        if (_ui.Assets.Get(SourceGemKey(def.Theme)) is { } pgem)
-            b.Draw(pgem, new Rectangle(plate.X + 18, plate.Y + 14, 56, 56), Color.White);
-        _ui.TextBig(b, def.Theme.ToString().ToUpperInvariant(), plate.X + 90, plate.Y + 28, sc, UiTypography.Headline);
-        y += 84 + 12;
-        Line(Description(def.Theme), Bone, UiTypography.Body, 2);
-        Rule();
-
-        // ── CAN I SURVIVE IT — the two figures, and the gap between them IN WORDS. ──
-        //
-        // The verdict used to be carried by the colour of one number alone (green or red), which §8
-        // forbids. There is no difficulty word here on purpose: nothing in Core maps a power gap to
-        // EASY/FAIR/DEADLY, and inventing one would be the screen telling the player something the game
-        // does not know. Subtracting two figures that are already on screen is the honest version.
-        var need = RegionPower(def);
-        Pair("YOUR POWER", $"{HunterPower:N0}", Bone);
-        Pair("RECOMMENDED", $"{need:N0}", Bone);
-        Line(HunterPower > need ? $"{HunterPower - need:N0} ABOVE THE RECOMMENDED POWER"
-             : HunterPower == need ? "AT THE RECOMMENDED POWER"
-             : $"{need - HunterPower:N0} BELOW THE RECOMMENDED POWER",
-             HunterPower >= need ? Met : Ember, UiTypography.Body, 2);
-        Rule();
-
-        // ── WHAT YOU WILL FIGHT. How the place fights has been in the region model since it was written
-        //    and no screen ever showed it; the modifier's sentence is the most decision-relevant line on
-        //    the panel and was set at footnote size. ──
-        Section("WHAT YOU WILL FIGHT");
-        Line(def.CombatBias switch
-        {
-            AttackBias.Heavy => "HEAVY — SLOW, HARD HITS",
-            AttackBias.Fast => "FAST — QUICK, LIGHT HITS",
-            _ => "EVEN — A STEADY PACE",
-        }, Bone, UiTypography.Body, 1);
-        var mod = RegionModifiers.For(def.Id);
-        Line(mod.Name, sc, UiTypography.Body, 1);
-        Line(mod.Blurb, Bone, UiTypography.Body, 2);
-        Rule();
-
-        // ── WHAT IT DROPS. The region's theme becomes the chest's element (Chests.RollDrop), and each
-        //    region leans toward its own slots — which is the answer to "where should I farm". ──
-        var drops = RegionDrops.For(def.Id);
-        if (drops.Favoured.Count > 0)
-        {
-            Section("WHAT IT DROPS");
-            Line($"{def.Theme.ToString().ToUpperInvariant()} ITEMS", sc, UiTypography.Body, 1);
-            foreach (var slot in drops.Favoured)
+            var track = new Rectangle(region.Right + UiMetrics.Gap, region.Y, UiMetrics.ScrollbarWidth, region.Height);
+            _ui.ScrollBar(b, track, _first, _shown, total);
+            // A click on the track pages toward the click — the way down the flow for a pointer whose
+            // wheel does not reach this screen yet. The track maps to the flow in proportion, which is
+            // where the thumb is drawn.
+            if (UiKit.ClickedIn(track, hit, clicked))
             {
-                if (y + UiTypography.Pitch(UiTypography.Body) > floor) break;
-                if (SlotGlyph(slot) is { } key && _ui.Assets.Get(key) is { } gi)
-                    b.Draw(gi, new Rectangle(x, y + 1, 24, 24), Bone);
-                _ui.TextBig(b, RegionDrops.PlainName(slot), x + 34, y, Bone, UiTypography.Body);
-                y += UiTypography.Pitch(UiTypography.Body);
-            }
-            Rule();
-        }
-
-        // ── YOU NEED FIRST (a locked region), or CURRENT STATE. ──
-        if (!unlocked)
-        {
-            Section("YOU NEED FIRST");
-            if (def.PrereqId is { } pid && Regions.Find(pid) is { } pdef)
-            {
-                DrawLockArt(b, new Rectangle(x, y + 2, 20, 20));
-                _ui.TextBig(b, $"CONQUER {pdef.Name}", x + 30, y, Bone, UiTypography.Body);
-                y += UiTypography.Pitch(UiTypography.Body);
-                Line($"{pdef.Name} — BEST WAVE {World.RegionFarm(pdef.Id).BestDepth} OF {ConquerWaves}", Slate, UiTypography.Body, 1);
-            }
-            else Line("CONQUER THE REGION BEFORE THIS ONE.", Bone, UiTypography.Body, 1);
-        }
-        else
-        {
-            Section("CURRENT STATE");
-            if (conq)
-            {
-                DrawCheck(b, new Rectangle(x, y + 2, 22, 18), Met);
-                _ui.TextBig(b, "CONQUERED", x + 32, y, Met, UiTypography.Body);
-                y += UiTypography.Pitch(UiTypography.Body);
-                Line($"BEST WAVE {farm.BestDepth}", Bone, UiTypography.Body, 1);
-                DrawCheckpoints(b, def, farm, hit, clicked, ref y, x, w, floor);
-            }
-            else
-            {
-                Line($"BEST WAVE {farm.BestDepth} OF {ConquerWaves}", Bone, UiTypography.Body, 1);
-                // The rule is Game1's `Deepest >= ConquerWaveDepth`, and the guide already says "REACH
-                // WAVE 20" — "HOLD 20 WAVES" was the same rule in a second voice.
-                Line($"REACH WAVE {ConquerWaves} TO CONQUER THIS REGION", Slate, UiTypography.Body, 2);
+                var at = (hit.Y - track.Y) * total / Math.Max(1, track.Height);
+                var page = Math.Max(1, _shown);
+                if (at < _first) _first = Math.Max(0, _first - page);
+                else if (at >= _first + _shown) _first = Math.Min(maxFirst, _first + page);
             }
         }
 
@@ -708,9 +734,234 @@ public sealed class MapScreen
             _ui.Plate(b, cta);
             var pname = def.PrereqId is { } p2 && Regions.Find(p2) is { } pd2 ? pd2.Name : "";
             var say = pname.Length > 0 ? $"CONQUER {pname} FIRST" : "CONQUER THE REGION BEFORE THIS ONE FIRST";
-            DrawLockArt(b, new Rectangle(cta.X + 20, cta.Center.Y - 11, 22, 22));
-            _ui.TextCenterBig(b, _ui.ShortenBig(say, cta.Width - 80, UiTypography.NavigationLabel),
-                              cta.Center.X + 11, cta.Center.Y - 13, Bone, UiTypography.NavigationLabel);
+            var lockS = UiMetrics.Control(22);
+            var label = UiTypography.NavigationLabel;
+            DrawLockArt(b, new Rectangle(cta.X + UiMetrics.Space(20), cta.Center.Y - lockS / 2, lockS, lockS));
+            _ui.TextCenterBig(b, _ui.ShortenBig(say, cta.Width - UiMetrics.Space(40) * 2, label),
+                              cta.Center.X + lockS / 2, cta.Center.Y - label / 2 - 1, Bone, label);
+        }
+    }
+
+    /// <summary>
+    /// The inspector's flow, from the identity plate to the region's state. Each thing it draws is an
+    /// ITEM of a known height. With <paramref name="draw"/> false every item's height is recorded into
+    /// <see cref="_itemHeights"/> and nothing is drawn; with it true, items before <see cref="_first"/>
+    /// are skipped and the rest are drawn while the region holds them. Returns how many it drew.
+    /// </summary>
+    private int Flow(SpriteBatch b, RegionDefinition def, bool unlocked, bool conq, Region farm, Color sc,
+                     Rectangle region, Point hit, bool clicked, bool draw)
+    {
+        var x = region.X;
+        var w = region.Width;
+        var y = region.Y;
+        var idx = 0;
+        var shown = 0;
+        var full = false;
+        var body = UiTypography.Body;
+        var bodyPitch = UiTypography.Pitch(body);
+        var wordGap = UiMetrics.Space(10);
+
+        // One item, h tall: records it when measuring; when drawing, places it at `top` if it is past the
+        // scroll and the region still has room, and says whether to draw it. Once one item does not fit,
+        // none after it is drawn — the flow is in order, and a gap would read as a missing block.
+        // A HEADING KEEPS ITS FIRST LINE: "WHAT IT DROPS" over nothing, at the foot of a page, says
+        // nothing — so a heading that would be the page's last item is held for the next page (unless it
+        // is the page's first item, when holding it would leave the page blank).
+        bool Item(int h, out int top, bool keepWithNext = false)
+        {
+            top = y;
+            var i = idx++;
+            if (!draw) { _itemHeights.Add(h); return false; }
+            if (i < _first || full) return false;
+            var need = keepWithNext && i > _first && i + 1 < _itemHeights.Count ? h + _itemHeights[i + 1] : h;
+            if (y + need > region.Bottom) { full = true; return false; }
+            y += h;
+            shown++;
+            return true;
+        }
+        void Section(string s)
+        {
+            if (Item(UiTypography.Pitch(UiTypography.Secondary), out var t, keepWithNext: true))
+                _ui.TextBig(b, s, x, t, Slate, UiTypography.Secondary);
+        }
+        void Line(string s, Color c, int px, int maxLines = 3)
+        {
+            foreach (var l in _ui.WrapBig(s, w, px).Take(maxLines))
+                if (Item(UiTypography.Pitch(px), out var t)) _ui.TextBig(b, l, x, t, c, px);
+        }
+        void Rule()
+        {
+            if (Item(UiMetrics.Space(16), out var t)) _ui.Fill(b, new Rectangle(x, t + UiMetrics.Space(6), w, 1), Dim);
+        }
+        void Pair(string label, string figure, Color figureInk)
+        {
+            if (!Item(UiTypography.Pitch(UiTypography.Headline), out var t)) return;
+            _ui.TextBig(b, label, x, t + UiMetrics.Space(6), Slate, UiTypography.Secondary);
+            _ui.TextRightBig(b, figure, x + w, t, figureInk, UiTypography.Headline);
+        }
+
+        // ── IDENTITY: the region's own ground, its gem, its element. The Source gem used to be drawn
+        //    four times per region on this screen; it appears twice now — once on the node, once here. ──
+        var gemS = UiMetrics.Control(56);
+        var plateH = UiMetrics.Space(14) * 2 + gemS;
+        if (Item(plateH + UiMetrics.Space(12), out var pt))
+        {
+            var plate = new Rectangle(x, pt, w, plateH);
+            _ui.Plate(b, plate, sc);
+            if (_ui.Assets.Get(ArenaKey(def.Theme)) is { } ground) b.Draw(ground, plate, CentreCrop(ground, plate), Color.White);
+            _ui.Fill(b, plate, new Color(0x0A, 0x08, 0x14, 0x9E));
+            _ui.Fill(b, plate, sc * 0.16f);
+            var gemBox = new Rectangle(plate.X + UiMetrics.Space(18), plate.Y + UiMetrics.Space(14), gemS, gemS);
+            if (_ui.Assets.Get(SourceGemKey(def.Theme)) is { } pgem) b.Draw(pgem, gemBox, Color.White);
+            _ui.TextBig(b, def.Theme.ToString().ToUpperInvariant(), gemBox.Right + UiMetrics.Space(16),
+                        plate.Y + (plateH - UiTypography.Headline) / 2, sc, UiTypography.Headline);
+        }
+        Line(Description(def.Theme), Bone, body, 2);
+        Rule();
+
+        // ── CAN I SURVIVE IT — the two figures, and the gap between them IN WORDS. ──
+        //
+        // The verdict used to be carried by the colour of one number alone (green or red), which §8
+        // forbids. There is no difficulty word here on purpose: nothing in Core maps a power gap to
+        // EASY/FAIR/DEADLY, and inventing one would be the screen telling the player something the game
+        // does not know. Subtracting two figures that are already on screen is the honest version.
+        var need = RegionPower(def);
+        Pair("YOUR POWER", $"{HunterPower:N0}", Bone);
+        Pair("RECOMMENDED", $"{need:N0}", Bone);
+        Line(HunterPower > need ? $"{HunterPower - need:N0} ABOVE THE RECOMMENDED POWER"
+             : HunterPower == need ? "AT THE RECOMMENDED POWER"
+             : $"{need - HunterPower:N0} BELOW THE RECOMMENDED POWER",
+             HunterPower >= need ? Met : Ember, body, 2);
+        Rule();
+
+        // ── WHAT YOU WILL FIGHT. How the place fights has been in the region model since it was written
+        //    and no screen ever showed it; the modifier's sentence is the most decision-relevant line on
+        //    the panel and was set at footnote size. ──
+        Section("WHAT YOU WILL FIGHT");
+        Line(def.CombatBias switch
+        {
+            AttackBias.Heavy => "HEAVY — SLOW, HARD HITS",
+            AttackBias.Fast => "FAST — QUICK, LIGHT HITS",
+            _ => "EVEN — A STEADY PACE",
+        }, Bone, body, 1);
+        var mod = RegionModifiers.For(def.Id);
+        Line(mod.Name, sc, body, 1);
+        Line(mod.Blurb, Bone, body, 2);
+        Rule();
+
+        // ── WHAT IT DROPS. The region's theme becomes the chest's element (Chests.RollDrop), and each
+        //    region leans toward its own slots — which is the answer to "where should I farm". ──
+        var drops = RegionDrops.For(def.Id);
+        if (drops.Favoured.Count > 0)
+        {
+            Section("WHAT IT DROPS");
+            Line($"{def.Theme.ToString().ToUpperInvariant()} ITEMS", sc, body, 1);
+            var glyph = UiMetrics.IconSmall;
+            foreach (var slot in drops.Favoured)
+            {
+                if (!Item(bodyPitch, out var t)) continue;
+                if (SlotGlyph(slot) is { } key && _ui.Assets.Get(key) is { } gi)
+                    b.Draw(gi, new Rectangle(x, t + (bodyPitch - glyph) / 2, glyph, glyph), Bone);
+                _ui.TextBig(b, RegionDrops.PlainName(slot), x + glyph + wordGap, t, Bone, body);
+            }
+            Rule();
+        }
+
+        // ── YOU NEED FIRST (a locked region), or CURRENT STATE. ──
+        if (!unlocked)
+        {
+            Section("YOU NEED FIRST");
+            if (def.PrereqId is { } pid && Regions.Find(pid) is { } pdef)
+            {
+                var lockS = UiMetrics.Control(20);
+                if (Item(bodyPitch, out var t))
+                {
+                    DrawLockArt(b, new Rectangle(x, t + (bodyPitch - lockS) / 2, lockS, lockS));
+                    _ui.TextBig(b, $"CONQUER {pdef.Name}", x + lockS + wordGap, t, Bone, body);
+                }
+                Line($"{pdef.Name} — BEST WAVE {World.RegionFarm(pdef.Id).BestDepth} OF {ConquerWaves}", Slate, body, 1);
+            }
+            else Line("CONQUER THE REGION BEFORE THIS ONE.", Bone, body, 1);
+        }
+        else
+        {
+            Section("CURRENT STATE");
+            if (conq)
+            {
+                if (Item(bodyPitch, out var t))
+                {
+                    DrawCheck(b, new Rectangle(x, t + UiMetrics.Space(2), CheckW, CheckH), Met);
+                    _ui.TextBig(b, "CONQUERED", x + CheckW + wordGap, t, Met, body);
+                }
+                Line($"BEST WAVE {farm.BestDepth}", Bone, body, 1);
+                StartAtWave();
+            }
+            else
+            {
+                Line($"BEST WAVE {farm.BestDepth} OF {ConquerWaves}", Bone, body, 1);
+                // The rule is Game1's `Deepest >= ConquerWaveDepth`, and the guide already says "REACH
+                // WAVE 20" — "HOLD 20 WAVES" was the same rule in a second voice.
+                Line($"REACH WAVE {ConquerWaves} TO CONQUER THIS REGION", Slate, body, 2);
+            }
+        }
+        return shown;
+
+        // START AT WAVE — the checkpoint chips of a conquered region (Checkpoints): 0 and every ten waves
+        // the champion has held here. A chip is the wave the descent starts AFTER, priced in Memory Dust
+        // per descent; the chosen one is gold, an unaffordable one is dim and says so.
+        void StartAtWave()
+        {
+            var options = new List<int>(Checkpoints.Options(farm.BestDepth, conquered: true));
+            var gap = UiMetrics.Space(4);
+            // The row holds so many chips. Past that the SHALLOW middle goes (TOP and the deepest ones stay —
+            // a player at wave 110 wants 100 and 110, not 10), never the deepest (review 2026-08-26).
+            int ChipW(int o) => Math.Max(UiMetrics.Control(44), _ui.MeasureBig(o == 0 ? "TOP" : o.ToString(), UiTypography.Secondary) + UiTypography.ChipPadX * 2);
+            int RowWidth() { var t = 0; foreach (var o in options) t += ChipW(o) + gap; return t; }
+            while (options.Count > 2 && RowWidth() > w) options.RemoveAt(1);
+
+            // ONE OPTION IS NOT A CHOICE. A region conquered at wave 1 offers only the top, and a header over a
+            // single inert chip is furniture — the block appears when there is somewhere else to start.
+            if (options.Count < 2) return;
+            // 30 px chips at 100 %: Secondary plus the chip padding is 27, and the six pixels saved are what
+            // let the consequence line under them fit on a deep region. They follow the profile.
+            var chipH = UiMetrics.Control(30);
+
+            // THE COST RIDES THE HEADER'S OWN ROW. On its own line it was the first thing the flow dropped on a
+            // deep region — and it is the half that says what pressing a chip will charge you.
+            var chosen = Checkpoints.Clamp(farm.StartWave, farm.BestDepth, true);
+            var cost = Checkpoints.DustCost(chosen);
+            var affordChosen = DustOwned >= cost;
+            if (Item(UiTypography.Pitch(UiTypography.Secondary), out var ht, keepWithNext: true))
+            {
+                _ui.TextBig(b, "START AT WAVE", x, ht, Slate, UiTypography.Secondary);
+                // WHEN IT CANNOT BE PAID, THE ROW SAYS WHAT WILL ACTUALLY HAPPEN. The host quietly starts the run at
+                // the top when the chosen checkpoint is unaffordable, and the map never said so — the player watched
+                // a gold chip and landed somewhere else. The price gives up its row to the consequence, because a
+                // player who cannot pay needs to know where they will wake up more than what it would have cost.
+                _ui.TextRightBig(b, chosen == 0 ? "FREE"
+                                    : affordChosen ? $"{cost:N0} MEMORY DUST EACH TIME"
+                                    : $"NEED {cost:N0} DUST — STARTS AT THE TOP",
+                                 x + w, ht, affordChosen ? Slate : Ember, UiTypography.Secondary);
+            }
+            if (!Item(chipH + gap, out var ct)) return;
+            var cx = x;
+            foreach (var o in options)
+            {
+                var label = o == 0 ? "TOP" : o.ToString();
+                var chip = new Rectangle(cx, ct, ChipW(o), chipH);
+                var afford = DustOwned >= Checkpoints.DustCost(o);
+                var lit = o == chosen;
+                _ui.Fill(b, chip, lit ? new Color(0x3A, 0x2C, 0x14, 0xE0) : new Color(0x14, 0x10, 0x1A, 0xE0));
+                var edge = lit ? Gold : chip.Contains(hit) ? Bone : Dim;
+                _ui.Fill(b, new Rectangle(chip.X, chip.Y, chip.Width, 2), edge);
+                _ui.Fill(b, new Rectangle(chip.X, chip.Bottom - 2, chip.Width, 2), edge);
+                _ui.Fill(b, new Rectangle(chip.X, chip.Y, 2, chip.Height), edge);
+                _ui.Fill(b, new Rectangle(chip.Right - 2, chip.Y, 2, chip.Height), edge);
+                _ui.TextCenterBig(b, label, chip.Center.X, chip.Y + (chipH - UiTypography.Secondary) / 2,
+                                  lit ? Gold : afford ? Bone : UiInk.Disabled, UiTypography.Secondary);
+                if (UiKit.ClickedIn(chip, hit, clicked)) _startRequest = (def.Id, o);
+                cx += chip.Width + gap;
+            }
         }
     }
 
@@ -725,10 +976,14 @@ public sealed class MapScreen
         _ui.Fill(b, new Rectangle(r.X + 3, shTop, r.Width - 6, 3), c);
     }
 
+    /// <summary>A check mark drawn to fill its box — the 22×18 glyph at 100 %, and the same shape scaled with it.</summary>
     private void DrawCheck(SpriteBatch b, Rectangle r, Color c)
     {
-        for (var k = 0; k < 6; k++) _ui.Fill(b, new Rectangle(r.X + k, r.Bottom - 6 + k / 2 - 2, 3, 3), c);
-        for (var k = 0; k < 11; k++) _ui.Fill(b, new Rectangle(r.X + 6 + k, r.Bottom - 2 - k, 3, 3), c);
+        var f = r.Height / 18f;
+        int S(int v) => (int)MathF.Round(v * f, MidpointRounding.AwayFromZero);
+        var dot = Math.Max(2, S(3));
+        for (var k = 0; k < S(6); k++) _ui.Fill(b, new Rectangle(r.X + k, r.Bottom - S(8) + k / 2, dot, dot), c);
+        for (var k = 0; k < S(11); k++) _ui.Fill(b, new Rectangle(r.X + S(6) + k, r.Bottom - S(2) - k, dot, dot), c);
     }
 
     private void DrawDottedLine(SpriteBatch b, Point a, Point c, Color col)
