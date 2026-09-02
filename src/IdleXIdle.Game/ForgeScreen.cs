@@ -2042,8 +2042,14 @@ public sealed class ForgeScreen
         // A DISABLED CONTROL SAYS WHY (§29). The MERGE button has the preview line under it to explain
         // itself; this one sits on the panel's own foot with nothing below it, so the label carries the
         // reason instead of a count of zero — "(0)" is a number, not an answer.
+        //
+        // AND THE REASON HAS TO FIT AT 150 % (§9, §17). UiKit.Button shrinks a label only as far as
+        // Caption and then draws it anyway — "NO COMMON OR UNCOMMON GEAR TO SALVAGE" lost its first and
+        // last letter into the button art's end scrollwork at the accessibility profile. The verb is
+        // already written on the control the player is looking at, so the reason need not repeat it:
+        // what is missing is the gear.
         if (_ui.Button(b, SalvageJunkBtn,
-                       junk > 0 ? $"SALVAGE COMMON AND UNCOMMON  ({junk})" : "NO COMMON OR UNCOMMON GEAR TO SALVAGE",
+                       junk > 0 ? $"SALVAGE COMMON AND UNCOMMON  ({junk})" : "NO COMMON OR UNCOMMON GEAR",
                        hit, clicked, enabled: junk > 0))
             SalvageJunk(hunter);
     }
