@@ -2957,7 +2957,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
                 _lockedMsg = $"{Unlocks.Headline(Activity.Build)} IS NOT OPEN YET — "
                              + $"{Unlocks.Requirement(Activity.Build).ToUpperInvariant()}.";
                 _lockedTimer = 3.2f;
-                _sound.Play("sfx_click", 0.45f);
+                _sound.Play("sfx_error", 0.55f);   // the same refusal as a locked tile — see OpenNav
             }
             else
             {
@@ -6763,9 +6763,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
             var activity = NavActivity[i];
             _lockedMsg = $"{Unlocks.Headline(activity)} IS NOT OPEN YET — {Unlocks.Requirement(activity).ToUpperInvariant()}.";
             _lockedTimer = 3.2f;
-            // No dedicated refusal cue exists; the click at low volume reads as "heard you,
-            // nothing happened", which is exactly what a locked tile means.
-            _sound.Play("sfx_click", 0.45f);
+            // A REFUSAL HAS ITS OWN SOUND NOW (brief sec. 86-87). It used to borrow the ordinary click
+            // at low volume — "heard you, nothing happened" — which is the same cue as a button that
+            // WORKED, only quieter, and a quiet yes is not a no. sfx_error is a dull, short refusal,
+            // and it is the one cue every refusal in the game shares, so the sound means the thing
+            // rather than the place.
+            _sound.Play("sfx_error", 0.55f);
             return;
         }
 
@@ -6800,6 +6803,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
             case 10: _showRoster = true; break;
             // case 0 HUNT: everything cleared above → back to the fight.
         }
+
+        // THE RAIL HAS A VOICE (brief sec. 86-87): one soft page tick for every arrival, so moving
+        // through the game sounds like turning pages rather than like pressing the same button that
+        // buys things. Played here rather than in the click handler, so the hotkeys sound like the
+        // tiles do — they are the same act.
+        _sound.Play("sfx_nav", 0.6f);
     }
 
     /// <summary>Width of the vertical navigation rail down the left edge.</summary>
