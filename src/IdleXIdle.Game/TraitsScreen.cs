@@ -80,6 +80,29 @@ public sealed class TraitsScreen
     /// <summary>How long the flourish runs. A terminal ends a road; it is allowed to take twice as long.</summary>
     private float LitDuration => _litTerminal ? 2.2f : 1.0f;
 
+    // ── The purchase pulse (UI polish §31, §73–§82: "connection lights, short pulse") ─────────────
+    //
+    // The flourish above is the celebration; this is the DIAGRAM's own answer. A purchase lights one
+    // wire — from the prerequisite the node hangs off to the node itself — and a band of light runs
+    // along it over UiMotion.Reward and lands on the node as a short glow. Once per purchase, keyed to
+    // the node taken, fired from Buy and read by Draw; Reduced Motion drops the travel and simply
+    // lights the wire with a fade (brief §32: static highlight, simple fade).
+    private string? _pulseFrom;            // the prerequisite the lit wire runs from
+    private string? _pulseTo;              // the node just taken
+    private float? _pulsePosed;            // DEV: hold the pulse at this progress (0 fired → 1 done)
+
+    /// <summary>The purchase pulse's key: one per node, so a second purchase never re-arms the first's.</summary>
+    private static int PulseKey(string id) => HashCode.Combine("traits", "wire", id);
+
+    /// <summary>
+    /// A cue that must not talk over a trait being taken: the purchase cues are set by <see cref="BeginLit"/>
+    /// and win the frame; a navigation tick or a refusal only fills an empty slot.
+    /// </summary>
+    private void Cue(string cue)
+    {
+        if (_cue is null) _cue = cue;
+    }
+
     /// <summary>
     /// The camera kick, in 1920-space pixels. The host adds it to the overlay transform.
     /// </summary>
@@ -132,7 +155,7 @@ public sealed class TraitsScreen
         ClampPan();
     }
 
-    /// <summary>Frame one road: its nodes and its header, fitted to the view (brief §44).</summary>
+    /// <summary>Frame one road: its nodes and its header, fitted to the view (brief §44) — the camera glides there.</summary>
     private void FrameRoad(MemoryDustTree tree, TraitRoad road)
     {
         var nodes = tree.All.Where(u => u.Road == road).Select(u => Pos(u.Id)).ToList();
@@ -140,9 +163,119 @@ public sealed class TraitsScreen
         var min = new Vector2(nodes.Min(p => p.X) - TraitTreeLayout.NodeWidth, nodes.Min(p => p.Y) - HeaderRoom - 40f);
         var max = new Vector2(nodes.Max(p => p.X) + TraitTreeLayout.NodeWidth, nodes.Max(p => p.Y) + TraitTreeLayout.NodeHeight);
         var span = Vector2.Max(max - min, new Vector2(1f));
-        _zoom = Math.Clamp(MathF.Min(View.Width / span.X, View.Height / span.Y) * 0.92f, MinZoom, MaxZoom);
-        _pan = (min + max) / 2f;
-        ClampPan();
+        GlideTo((min + max) / 2f, MathF.Min(View.Width / span.X, View.Height / span.Y) * 0.92f);
+    }
+
+    // ── The camera's glide (UI polish §31 transition, §73–§82 "smooth road focus") ─────────────
+    //
+    // A road's name, the keys 1–4, HOME and ALL used to CUT: one frame the spine, the next frame a road,
+    // and the eye had to find where it was. The camera now eases pan and zoom together over
+    // UiMotion.Transition — one smoothstep for both, so the picture swoops rather than sliding and then
+    // zooming. The END STATE IS THE SAME as the cut was: the glide's target is exactly the framing
+    // FrameRoad computed, and under Reduced Motion UiMotion.Ease answers with the target on its first
+    // ask, which is the old jump. The first-open framing in the constructor is untouched. Advanced from
+    // Update (the eased value is asked once a frame there), never from Draw; any hand on the camera —
+    // a drag, the wheel, the arrows, +/- — cancels a glide in flight, because the player's hand wins.
+    private Vector2 _glideFromPan, _glideToPan;
+    private float _glideFromZoom, _glideToZoom;
+    private bool _gliding;
+    private float? _glidePosed;            // DEV: hold the glide at this eased progress (RH_SHOT_TRAITS_GLIDE)
+    private bool _drawnOnce;               // the foot band is measured by the first Draw; a fit before it is wrong at 150 %
+    private bool _devGlideApplied;
+    private static readonly int GlideKey = HashCode.Combine("traits", "glide");
+
+    /// <summary>The one door to a framing the player ASKED for: a road, HOME, ALL. Glides there, or jumps under Reduced Motion.</summary>
+    private void GlideTo(Vector2 pan, float zoom)
+    {
+        zoom = Math.Clamp(zoom, MinZoom, MaxZoom);
+        pan = new Vector2(Math.Clamp(pan.X, _worldMin.X, _worldMax.X), Math.Clamp(pan.Y, _worldMin.Y, _worldMax.Y));
+        if (UiMotion.Reduced)
+        {
+            _pan = pan;
+            _zoom = zoom;
+            _gliding = false;
+            return;
+        }
+        _glideFromPan = _pan;
+        _glideFromZoom = _zoom;
+        _glideToPan = pan;
+        _glideToZoom = zoom;
+        _gliding = true;
+        // A zero-length ease to 0 forgets the key, so the next ask starts the fade from the beginning
+        // rather than from a glide that settled at 1 last time.
+        UiMotion.Ease(GlideKey, 0f, 0f);
+    }
+
+    /// <summary>One frame of the glide — the eased value asked once, both axes moved by it, the target landed on exactly.</summary>
+    private void TickGlide()
+    {
+        if (!_gliding) return;
+        var t = _glidePosed ?? UiMotion.Ease(GlideKey, 1f, UiMotion.Transition);
+        (_pan, _zoom) = GlideAt(_glideFromPan, _glideFromZoom, _glideToPan, _glideToZoom, t);
+        if (t >= 1f && _glidePosed is null) _gliding = false;
+    }
+
+    /// <summary>The player's hand on the camera: whatever glide was running stops where it is.</summary>
+    private void CancelGlide() => _gliding = false;
+
+    /// <summary>
+    /// The camera part-way through a glide: pan and zoom interpolated by the same (already eased)
+    /// progress, and the endpoints returned EXACTLY at 0 and 1, so a finished glide is the target
+    /// framing to the bit rather than a lerp's rounding of it.
+    /// </summary>
+    public static (Vector2 Pan, float Zoom) GlideAt(Vector2 fromPan, float fromZoom, Vector2 toPan, float toZoom, float t)
+    {
+        if (t <= 0f) return (fromPan, fromZoom);
+        if (t >= 1f) return (toPan, toZoom);
+        return (Vector2.Lerp(fromPan, toPan, t), MathHelper.Lerp(fromZoom, toZoom, t));
+    }
+
+    /// <summary>
+    /// DEV ONLY — the glide is the one camera state a still cannot catch by accident. When
+    /// <c>RH_SHOT_TRAITS_GLIDE=&lt;road|all&gt;[@&lt;0..1&gt;]</c> is set (any TRAITS capture mode; the rig
+    /// inherits it, like RH_SHOT_PAGE_MOUSE), the first Update after the first Draw starts a glide from
+    /// the posed framing to that road (or to HOME for <c>all</c>) and HOLDS it at that eased progress
+    /// (0.5 when unnamed) for the shutter — the same freeze the flourish uses. <c>@1</c> photographs
+    /// the landing, which must be the exact picture a cut to the road used to give.
+    /// </summary>
+    private void ApplyDevGlide(MemoryDustTree tree)
+    {
+        if (_devGlideApplied || !_drawnOnce) return;
+        _devGlideApplied = true;
+        if (Environment.GetEnvironmentVariable("RH_SHOT_TRAITS_GLIDE") is not { Length: > 0 } spec) return;
+        var at = spec.IndexOf('@');
+        var target = at > 0 ? spec[..at] : spec;
+        var posed = at > 0 && float.TryParse(spec[(at + 1)..], System.Globalization.NumberStyles.Float,
+                                             System.Globalization.CultureInfo.InvariantCulture, out var f)
+            ? Math.Clamp(f, 0f, 1f) : 0.5f;
+        // FrameRoad and GlideTo move the camera and nothing else — the navigation tick is set by the
+        // hand that asked (a key, a header, the ALL button), so a posed camera is silent by construction
+        // rather than by wiping a cue back out afterwards.
+        if (Enum.TryParse<TraitRoad>(target, true, out var road)) FrameRoad(tree, road);
+        else GlideTo(_homePan, _homeZoom);
+        if (_gliding) _glidePosed = posed;
+    }
+
+    /// <summary>
+    /// DEV ONLY — the two capture dials that belong to the whole page rather than to this screen's own
+    /// state: <c>RH_SHOT_REDUCED=1</c> turns Reduced Motion on, and <c>RH_SHOT_HELD=1</c> holds the left
+    /// mouse button down so a PRESSED control can be photographed.
+    /// </summary>
+    /// <remarks>
+    /// Both settings live in the host — Reduced Motion in the player's preferences, the held button on the
+    /// real mouse — and the host reapplies both every frame BEFORE any screen updates; this screen's Update
+    /// runs after that, so writing them here (every frame, not once) is what makes two states a photograph
+    /// rather than a claim: the accessibility end state (a camera that jumps, a wire that simply lights)
+    /// and the pressed face of a custom-drawn button. Off unless the variable is set, so neither can reach
+    /// a player's session. <c>RH_SHOT_HELD</c> touches only the DRAWN state — a drag reads the host's own
+    /// held flag, and a click is still an edge, so nothing is bought or moved by posing it.
+    /// </remarks>
+    private static void ApplyDevCaptureDials()
+    {
+        if (Set("RH_SHOT_REDUCED")) UiMotion.Reduced = true;
+        if (Set("RH_SHOT_HELD")) UiKit.MouseHeld = true;
+
+        static bool Set(string name) => Environment.GetEnvironmentVariable(name) is { Length: > 0 } and not "0";
     }
 
     /// <summary>The road headers as last drawn, in screen space — click one to frame its road.</summary>
@@ -198,6 +331,7 @@ public sealed class TraitsScreen
     /// <summary>DEV ONLY: park the camera at a zoom, centred on a node, so a capture can prove the zoomed view.</summary>
     public void DevCamera(float zoom, string centreId)
     {
+        _gliding = false;
         _zoom = Math.Clamp(zoom, MinZoom, MaxZoom);
         _pan = Pos(DevSpec(centreId).Id);
         ClampPan();
@@ -214,12 +348,44 @@ public sealed class TraitsScreen
     {
         if (tree.All.FirstOrDefault(u => u.Id == id) is not { } u) return;
         _selectedId = id;
-        BeginLit(u);
+        // THE MOMENT AFTER THE PURCHASE, not a flourish over an unbought node. The pose used to leave the
+        // tree untouched, so the banner said TRAIT LEARNED over a node the inspector called LOCKED and a
+        // wire that was not lit — and the purchase pulse runs along a LIT wire, which a still of an unlit
+        // one could never show. Bought when the fixture can afford it; otherwise granted with what it
+        // needs, the way a save restores a career (the terminal pose costs twelve the fixture never has).
+        if (!tree.Owns(id) && !tree.Purchase(id))
+            tree.Restore(tree.MemoryDust, tree.OwnedIds.Concat(u.Requires).Append(id));
+        BeginLit(tree, u);
         _litT = t;
         // FROZEN, or the fixture is useless: the capture rig renders sixty frames before it saves, so
         // an un-frozen pose advances a full second and every mode would screenshot the same empty
         // moment after the flourish had already finished.
         _litFrozen = true;
+        // THE PULSE IS HELD TOO, at its own instant. Its clock is the flourish's first UiMotion.Reward
+        // seconds, so the flourish's own pose time answers for it by default; RH_SHOT_TRAITS_PULSE=<0..1>
+        // moves it alone, because the beat that reads best for the flourish (0.30 s, past the flash) and
+        // the beat that reads best for the band on the wire (about a third of the way across) are not the
+        // same beat and one dial cannot hold both.
+        _pulsePosed = Math.Clamp(t / UiMotion.Reward, 0f, 1f);
+        if (float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_TRAITS_PULSE"),
+                           System.Globalization.NumberStyles.Float,
+                           System.Globalization.CultureInfo.InvariantCulture, out var posedPulse))
+            _pulsePosed = Math.Clamp(posedPulse, 0f, 1f);
+        // AND THE CAMERA CAN BE PARKED ON THE WIRE — opt-in, so the signed-off `traitlit` framing is the
+        // one this fixture has always given. RH_SHOT_TRAITS_WIRE=<zoom> centres the camera on the wire the
+        // pulse runs along and zooms to it: at the home framing the whole tree is on screen and that wire
+        // is forty pixels long, which photographs a band nobody can see. The flourish is drawn in screen
+        // space and does not care where the tree is, so only the diagram behind it moves.
+        if (_pulseFrom is { } from
+            && float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_TRAITS_WIRE"),
+                              System.Globalization.NumberStyles.Float,
+                              System.Globalization.CultureInfo.InvariantCulture, out var wireZoom))
+        {
+            _gliding = false;
+            _zoom = Math.Clamp(wireZoom, MinZoom, MaxZoom);
+            _pan = (Pos(from) + Pos(id)) / 2f;
+            ClampPan();
+        }
         TickFlourish(0f);   // settle Shake for the posed instant, so the kick is in the picture too
     }
 
@@ -556,15 +722,21 @@ public sealed class TraitsScreen
     /// <param name="held">The left button is DOWN this frame — a held button drags the tree.</param>
     public void Update(KeyboardState keys, Point mouse, bool clicked, bool held, int wheel, MemoryDustTree tree, float dt)
     {
+        ApplyDevCaptureDials();
         TickFlourish(dt);
         _time += dt;
+        ApplyDevGlide(tree);
+        TickGlide();
 
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
         var over = mouse;
 
         // ── THE CAMERA — the mastery tree's, verbatim in spirit. ──────────────────────────────
         if (wheel != 0 && View.Contains(over))
+        {
+            CancelGlide();
             ZoomAt(over, wheel > 0 ? 1.16f : 1f / 1.16f);
+        }
         // Over the inspector the wheel scrolls the sheet instead (brief §18) — a row a notch, clamped so
         // the last page stays full. The page and the total are what the last Draw measured.
         else if (wheel != 0 && DetailPanel.Contains(over))
@@ -579,6 +751,7 @@ public sealed class TraitsScreen
             else
             {
                 var d = _dragFrom.Value;
+                CancelGlide();
                 _pan = _dragPanFrom + new Vector2((d.X - over.X) / _zoom, (d.Y - over.Y) / _zoom);
                 ClampPan();
             }
@@ -588,18 +761,19 @@ public sealed class TraitsScreen
         // Keyboard, for anyone who would rather not drag. Arrows pan (they used to step the selection
         // through the list, which a free canvas has no use for), +/- zoom about the centre, Home resets.
         var step = 260f / _zoom * 0.06f;
-        if (keys.IsKeyDown(Keys.Left)) { _pan.X -= step; ClampPan(); }
-        if (keys.IsKeyDown(Keys.Right)) { _pan.X += step; ClampPan(); }
-        if (keys.IsKeyDown(Keys.Up)) { _pan.Y -= step; ClampPan(); }
-        if (keys.IsKeyDown(Keys.Down)) { _pan.Y += step; ClampPan(); }
-        if (Pressed(keys, Keys.OemPlus) || Pressed(keys, Keys.Add)) ZoomAt(View.Center, 1.25f);
-        if (Pressed(keys, Keys.OemMinus) || Pressed(keys, Keys.Subtract)) ZoomAt(View.Center, 1f / 1.25f);
-        if (Pressed(keys, Keys.Home)) { _pan = _homePan; _zoom = _homeZoom; }
+        if (keys.IsKeyDown(Keys.Left)) { CancelGlide(); _pan.X -= step; ClampPan(); }
+        if (keys.IsKeyDown(Keys.Right)) { CancelGlide(); _pan.X += step; ClampPan(); }
+        if (keys.IsKeyDown(Keys.Up)) { CancelGlide(); _pan.Y -= step; ClampPan(); }
+        if (keys.IsKeyDown(Keys.Down)) { CancelGlide(); _pan.Y += step; ClampPan(); }
+        if (Pressed(keys, Keys.OemPlus) || Pressed(keys, Keys.Add)) { CancelGlide(); ZoomAt(View.Center, 1.25f); }
+        if (Pressed(keys, Keys.OemMinus) || Pressed(keys, Keys.Subtract)) { CancelGlide(); ZoomAt(View.Center, 1f / 1.25f); }
+        if (Pressed(keys, Keys.Home)) { GlideTo(_homePan, _homeZoom); Cue("sfx_nav"); }
 
-        if (Pressed(keys, Keys.D1)) FrameRoad(tree, TraitRoad.Ruin);
-        if (Pressed(keys, Keys.D2)) FrameRoad(tree, TraitRoad.Aegis);
-        if (Pressed(keys, Keys.D3)) FrameRoad(tree, TraitRoad.Artifice);
-        if (Pressed(keys, Keys.D4)) FrameRoad(tree, TraitRoad.Avarice);
+        // 1–4 frame a road; each is a navigation tick, the same sound the rail makes (brief §86).
+        if (Pressed(keys, Keys.D1)) { FrameRoad(tree, TraitRoad.Ruin); Cue("sfx_nav"); }
+        if (Pressed(keys, Keys.D2)) { FrameRoad(tree, TraitRoad.Aegis); Cue("sfx_nav"); }
+        if (Pressed(keys, Keys.D3)) { FrameRoad(tree, TraitRoad.Artifice); Cue("sfx_nav"); }
+        if (Pressed(keys, Keys.D4)) { FrameRoad(tree, TraitRoad.Avarice); Cue("sfx_nav"); }
 
         if (Pressed(keys, Keys.Enter)) TryBuy(tree, Selected(tree));
 
@@ -617,6 +791,7 @@ public sealed class TraitsScreen
         {
             _armedId = u.Id;
             _msg = $"THIS IS A PERMANENT IDENTITY CHOICE. PRESS AGAIN TO COMMIT TO {RoadName(u.Road)}.";
+            Cue("sfx_click");   // armed, not taken: the dry click, not the ritual
             return;
         }
         _armedId = null;
@@ -626,13 +801,15 @@ public sealed class TraitsScreen
     private void Buy(MemoryDustTree tree, MemoryDustUnlock u)
     {
         if (tree.Owns(u.Id)) _msg = "ALREADY LEARNED — A TRAIT IS PERMANENT.";
-        else if (tree.Purchase(u.Id)) { _msg = $"LEARNED: {u.Name}."; BeginLit(u); }
+        else if (tree.Purchase(u.Id)) { _msg = $"LEARNED: {u.Name}."; BeginLit(tree, u); return; }
         else if (tree.Available < u.Cost) _msg = "NOT ENOUGH TRAIT POINTS.";
         else _msg = "LOCKED — LEARN WHAT IT NEEDS FIRST.";
+        // A refusal sounds like one (brief §86: locked / error, dull) — the reason beside the button says why.
+        Cue("sfx_error");
     }
 
-    /// <summary>Arm the flourish for a trait that was just bought.</summary>
-    private void BeginLit(MemoryDustUnlock u)
+    /// <summary>Arm the flourish, and the pulse along the wire, for a trait that was just bought.</summary>
+    private void BeginLit(MemoryDustTree tree, MemoryDustUnlock u)
     {
         _litT = 0f;
         _litFrozen = false;
@@ -643,6 +820,64 @@ public sealed class TraitsScreen
         // Specific first, then generic: a terminal gets its own cue if one is authored, and falls back
         // to the ordinary one rather than to silence.
         _cue = _litTerminal ? "sfx_trait_terminal" : "sfx_trait_lit";
+        // THE WIRE THAT LIT: the same prerequisite the diagram draws the node's edge to, so the light
+        // runs along a line that is there. A root with nothing before it has no wire to run.
+        _pulseTo = u.Id;
+        _pulseFrom = NearestPrerequisite(tree, u);
+        _pulsePosed = null;
+        UiMotion.Flash(PulseKey(u.Id), UiMotion.Reward);
+    }
+
+    /// <summary>
+    /// Where the purchase pulse is at progress <paramref name="s"/> (0 just fired → 1 done): the band's head
+    /// and tail along the wire (0 = the prerequisite's rim, 1 = the node's rim), and the arrival glow on
+    /// the node. The band takes the first 70 % of the pulse to cross, eased with the house curve; the
+    /// glow pops on as it lands and fades over the rest — all inside UiMotion.Reward.
+    /// </summary>
+    public static (float Head, float Tail, float Glow) WirePulseAt(float s)
+    {
+        const float travel = 0.70f;   // the band's share of the pulse; the rest is the landing
+        const float band = 0.30f;     // the band's length, as a share of the wire
+        s = Math.Clamp(s, 0f, 1f);
+        var head = UiMotion.Smooth(Math.Clamp(s / travel, 0f, 1f));
+        var tail = Math.Max(0f, head - band);
+        var glow = s < travel ? 0f : 1f - Math.Clamp((s - travel) / (1f - travel), 0f, 1f);
+        return (head, tail, glow);
+    }
+
+    /// <summary>The pulse's progress this frame (0 fired → 1 done), or null when no purchase is pulsing.</summary>
+    private float? PulseProgress()
+    {
+        if (_pulseTo is null) return null;
+        if (_pulsePosed is { } posed) return posed;
+        var key = PulseKey(_pulseTo);
+        return UiMotion.Pulsing(key) ? 1f - UiMotion.Pulse(key) : null;
+    }
+
+    /// <summary>
+    /// The prerequisite a node's ONE drawn edge runs to — its nearest, with a taken prerequisite winning
+    /// once the node itself is taken, so a walked road reads as one continuous gold run. The diagram and
+    /// the purchase pulse ask the same question here, so the light can only run along a wire that is drawn.
+    /// </summary>
+    private string? NearestPrerequisite(MemoryDustTree tree, MemoryDustUnlock u)
+    {
+        if (u.Requires.Count == 0) return null;
+        var to = Pos(u.Id);
+        string? nearest = null;
+        var best = float.MaxValue;
+        foreach (var reqId in u.Requires)
+        {
+            // The owned-prerequisite bias exists so a WALKED road picks its gold continuation.
+            // It only applies once this node is owned too: on an unowned node the wire can never
+            // be gold, and the bias just dragged the wire across the diagram to whichever distant
+            // node happened to be lit.
+            var d = Vector2.DistanceSquared(Pos(reqId), to)
+                    - (tree.Owns(u.Id) && tree.Owns(reqId) ? 1e9f : 0f);
+            if (d >= best) continue;
+            best = d;
+            nearest = reqId;
+        }
+        return nearest;
     }
 
     /// <summary>
@@ -680,10 +915,19 @@ public sealed class TraitsScreen
 
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xC0));
 
+        // THE HOVER TIP IS CLEARED BEFORE ANYTHING DRAWS, not half-way down the method. It used to be
+        // reset just above the point plate — AFTER the tree — so every tip the tree set (a node's name
+        // and cost, a road header's "click to frame this road") was written and thrown away one call
+        // later, and no hover on the canvas had shown a tip since. The camera buttons' DISABLED reason
+        // (brief §29: a disabled control says why, in one plain line) goes through the same one slot and
+        // would have been born dead in exactly the same way.
+        _tip = null;
+
         // THE TREE FIRST, clipped to its canvas, so the strip and the panel are drawn over it rather
         // than a zoomed-in node being drawn over them.
         _hoverId = null;
         DrawTree(b, tree, hit, clicked);
+        _drawnOnce = true;
 
         // ── THE TOP STRIP ──
         // TRAITS, not DUST. The screen stopped spending Memory Dust when the tree stopped being buyable
@@ -705,7 +949,6 @@ public sealed class TraitsScreen
         // How many points you have to spend, how much of the tree you have learned, and what all of it
         // would cost. A header rather than a panel: a player checks "can I afford this" constantly and
         // "what does the whole tree cost" once, and neither is worth a third of the page.
-        _tip = null;
         DrawPointPlate(b, tree);
         DrawDetail(b, tree, hit, clicked);
         DrawFlourish(b);
@@ -985,20 +1228,44 @@ public sealed class TraitsScreen
             _ui.TextBig(b, hintLines[i], hintX, stackTop + i * hintPitch, Slate, UiTypography.Secondary);
         if (oneLine) _ui.TextRightBig(b, tally, tallyRight, hintY, Slate, UiTypography.Secondary);
         else _ui.TextRightBig(b, tally, CamBtn(2).Right, stackTop - hintPitch, Slate, UiTypography.Secondary);
+        // THE CAMERA BUTTONS wear the standard states (brief §25–§29), the way UiKit.Button does, on the
+        // quiet plate they always had: HOVER is a luminance lift eased in over UiMotion.Fast with the
+        // hairline the button showed before; PRESSED is the face dropped 2 px and darkened for as long as
+        // the mouse is held on it; DISABLED — the camera at its limit, or ALL with the whole tree already
+        // in view — keeps its label readable and says why in the hover tip.
         var camLabels = new[] { "–", "ALL", "+" };
+        var atHome = !_gliding && Vector2.DistanceSquared(_pan, _homePan) < 0.25f && MathF.Abs(_zoom - _homeZoom) < 1e-3f;
         for (var i = 0; i < 3; i++)
         {
             var r = CamBtn(i);
+            var enabled = i == 0 ? _zoom > MinZoom + 1e-4f
+                        : i == 2 ? _zoom < MaxZoom - 1e-4f
+                        : !atHome;
             var over = r.Contains(hit);
-            _ui.Plate(b, r);
-            if (over) Outline(b, r, Slate, 1);
+            var hover = enabled && over;
+            var lift = UiMotion.Ease(UiMotion.KeyOf(r), hover ? 1f : 0f);
+            var pressed = hover && UiKit.MouseHeld;
+            var face = pressed ? new Rectangle(r.X, r.Y + 2, r.Width, r.Height) : r;
+            _ui.Plate(b, face);
+            var inner = new Rectangle(face.X + 1, face.Y + 1, face.Width - 2, face.Height - 2);
+            if (lift > 0f) _ui.Fill(b, inner, Color.White * (0.07f * lift));
+            if (pressed) _ui.Fill(b, inner, Color.Black * 0.18f);
+            if (lift > 0f) Outline(b, face, Slate * lift, 1);
             var px = i == 1 ? UiTypography.Caption : UiTypography.Body;
-            _ui.TextCenterBig(b, camLabels[i], r.Center.X, r.Y + (r.Height - px) / 2 - UiMetrics.Space(2), over ? Bone : Slate, px);
-            if (clicked && over)
+            var ink = !enabled ? UiInk.Disabled : hover ? Bone : Slate;
+            _ui.TextCenterBig(b, camLabels[i], face.Center.X, face.Y + (face.Height - px) / 2 - UiMetrics.Space(2), ink, px);
+            if (over && !enabled)
             {
-                if (i == 0) ZoomAt(View.Center, 1f / 1.25f);
-                else if (i == 2) ZoomAt(View.Center, 1.25f);
-                else { _pan = _homePan; _zoom = _homeZoom; }
+                _tip = i == 0 ? "AS FAR OUT AS THE CAMERA GOES."
+                     : i == 2 ? "AS CLOSE AS THE CAMERA GOES."
+                     : "THE WHOLE TREE IS ALREADY IN VIEW.";
+                _tipAt = hit;
+            }
+            if (clicked && hover)
+            {
+                if (i == 0) { CancelGlide(); ZoomAt(View.Center, 1f / 1.25f); Cue("sfx_click"); }
+                else if (i == 2) { CancelGlide(); ZoomAt(View.Center, 1.25f); Cue("sfx_click"); }
+                else { GlideTo(_homePan, _homeZoom); Cue("sfx_nav"); }
             }
         }
     }
@@ -1048,27 +1315,9 @@ public sealed class TraitsScreen
         var thick = Math.Clamp((int)MathF.Round(5f * _zoom), 2, 9);
         foreach (var u in tree.All)
         {
-            if (u.Requires.Count == 0) continue;
-            var to = Pos(u.Id);
-
-            string? nearest = null;
-            var best = float.MaxValue;
-            foreach (var reqId in u.Requires)
-            {
-                // The owned-prerequisite bias exists so a WALKED road picks its gold continuation.
-                // It only applies once this node is owned too: on an unowned node the wire can never
-                // be gold, and the bias just dragged the wire across the diagram to whichever distant
-                // node happened to be lit.
-                var d = Vector2.DistanceSquared(Pos(reqId), to)
-                        - (tree.Owns(u.Id) && tree.Owns(reqId) ? 1e9f : 0f);
-                if (d >= best) continue;
-                best = d;
-                nearest = reqId;
-            }
-            if (nearest is null) continue;
-
+            if (NearestPrerequisite(tree, u) is not { } nearest) continue;
             var lit = tree.Owns(u.Id) && tree.Owns(nearest);
-            Line(b, ToScreen(Pos(nearest)), ToScreen(to),
+            Line(b, ToScreen(Pos(nearest)), ToScreen(Pos(u.Id)),
                  lit ? Gold : RoadColor(u.Road) * 0.42f, lit ? thick + 1 : thick);
         }
 
@@ -1079,7 +1328,58 @@ public sealed class TraitsScreen
         // Names first, then nodes, then their cost tags: a plate never covers a node, and a tag sits
         // over whatever wire runs under it.
         if (labels) foreach (var u in tree.All) DrawName(b, tree, u);
+        // THE PULSE RUNS OVER THE PLATES, not under them. Drawn with the wires it was hidden for its
+        // whole second half: a name sits UNDER its node, so the plate of the very node the light is
+        // travelling to lies across the wire's arrival end, and the band vanished into it about
+        // half-way (the 0.82 capture showed a gold wire and no band at all). It is drawn after the
+        // names and before the nodes instead, so the light crosses whatever it crosses and is covered
+        // only by the node it reaches — which is the light going IN, and is the point.
+        DrawWirePulse(b, tree, thick);
         foreach (var u in tree.All) DrawNode(b, tree, u, hit, clicked, labels);
+    }
+
+    /// <summary>
+    /// THE PURCHASE PULSE on the wire: a band of light running from the prerequisite's rim to the taken
+    /// node's rim, brightest at its head, over the gold the wire already turned. Drawn after the names
+    /// and before the nodes, so it crosses whatever plate is in its way and is covered only by the node
+    /// it reaches. Reduced Motion: no travel — the whole wire lights and fades (brief §32).
+    /// </summary>
+    private void DrawWirePulse(SpriteBatch b, MemoryDustTree tree, int thick)
+    {
+        if (PulseProgress() is not { } s || _pulseFrom is null || _pulseTo is null) return;
+        if (tree.All.FirstOrDefault(u => u.Id == _pulseTo) is not { } node) return;
+        var a = ToScreen(Pos(_pulseFrom));
+        var c = ToScreen(Pos(_pulseTo));
+        // A prerequisite the catalogue no longer names still gets a rim — the smallest one — so the band
+        // starts beside it rather than on top of it.
+        var rimA = Px(tree.All.FirstOrDefault(u => u.Id == _pulseFrom) is { } prereq ? RadiusOf(KindOf(tree, prereq)) : RadiusOf(SocketKind.Minor));
+        var rimC = Px(RadiusOf(KindOf(tree, node)));
+        var span = c - a;
+        var len = span.Length();
+        if (len <= rimA + rimC + 2f) return;   // touching nodes: no wire to run along
+        var dir = span / len;
+        var from = a + dir * rimA;
+        var to = c - dir * rimC;
+
+        if (UiMotion.Reduced)
+        {
+            // The connection simply lights: one pale wire, fading out as the pulse spends itself.
+            Line(b, from, to, Bone * (0.85f * (1f - s)), thick + 2);
+            return;
+        }
+
+        var (head, tail, _) = WirePulseAt(s);
+        if (head <= tail) return;
+        // A comet: six slices from the tail to the head, each brighter than the last, so the light has
+        // a direction — it is going TO the node, which is the whole sentence the pulse speaks.
+        const int slices = 6;
+        for (var k = 0; k < slices; k++)
+        {
+            var t0 = tail + (head - tail) * k / slices;
+            var t1 = tail + (head - tail) * (k + 1) / slices;
+            var bright = (k + 1) / (float)slices;
+            Line(b, Vector2.Lerp(from, to, t0), Vector2.Lerp(from, to, t1), Bone * (0.35f + 0.65f * bright), thick + 2);
+        }
     }
 
     /// <summary>
@@ -1138,7 +1438,7 @@ public sealed class TraitsScreen
             _headerRects[road] = headRect;
             var overHead = headRect.Contains(hit) && View.Contains(hit);
             if (overHead) { _ui.Fill(b, headRect, Bone * 0.06f); _tip = $"{RoadName(road)} — click to frame this road."; _tipAt = hit; }
-            if (clicked && overHead) FrameRoad(tree, road);
+            if (clicked && overHead) { FrameRoad(tree, road); Cue("sfx_nav"); }
             _ui.Icon(b, RoadGlyph(road), new Rectangle(x0, nameY + (Px(34) - glyphPx) / 2, glyphPx, glyphPx), col);
             _ui.TextBig(b, name, x0 + glyphPx + Px(8), nameY, col, namePx);
 
@@ -1328,7 +1628,10 @@ public sealed class TraitsScreen
         // unchosen specialisations. Quiet on purpose — an invitation, not an alarm.
         if (buyable && !isOwned)
         {
-            var pulse = 0.5f + 0.5f * MathF.Sin(_time * 2.6f);
+            // REDUCED MOTION STOPS THE BREATHING, not the halo (brief §32: drop idle motion, keep the
+            // state). The ring is held at the middle of the breath, so an affordable node still wears the
+            // one mark that says "you can take this" and nothing on the screen moves by itself.
+            var pulse = UiMotion.Reduced ? 0.5f : 0.5f + 0.5f * MathF.Sin(_time * 2.6f);
             for (var ring = 2; ring >= 1; ring--)
             {
                 var g = (int)(box.Width * 0.10f * ring + pulse * 4f * _zoom);
@@ -1337,8 +1640,29 @@ public sealed class TraitsScreen
             }
         }
 
+        // THE PULSE LANDS: as the band along the wire reaches this node, a pale glow pops on around it
+        // and fades — the node "activates" (brief §73–§82) in the diagram, not only in the flourish
+        // over it. Under Reduced Motion the same glow simply fades from the moment of purchase.
+        // The BLOOM goes behind the face; the RING goes outside the gold selection outline further
+        // down. Both used the same inflated box, and a trait is always SELECTED the instant it is
+        // bought — so the gold outline was drawn over the pale one, pixel for pixel, and the arrival
+        // never showed on the one node it is about.
+        var landing = u.Id == _pulseTo && PulseProgress() is { } s
+            ? (UiMotion.Reduced ? 1f - s : WirePulseAt(s).Glow) : 0f;
+        if (landing > 0f)
+        {
+            var g = Math.Max(4, (int)(box.Width * 0.22f * landing));
+            _ui.Diamond(b, new Rectangle(box.X - g, box.Y - g, box.Width + g * 2, box.Height + g * 2), Bone * (0.30f * landing));
+        }
+
         DrawFace(b, tree, u, box, hover || u.Id == _selectedId);
         if (u.Id == _selectedId) Outline(b, new Rectangle(box.X - 3, box.Y - 3, box.Width + 6, box.Height + 6), Gold, Math.Max(2, Px(3)));   // gold = selected
+        if (landing > 0f)
+        {
+            var ring = Math.Max(6, Px(9));
+            Outline(b, new Rectangle(box.X - ring, box.Y - ring, box.Width + ring * 2, box.Height + ring * 2),
+                    Bone * landing, Math.Max(2, Px(3)));
+        }
 
         // STATE IN A SHAPE, not only in a tint (brief §8): a lock on a locked node, a tick on a learned one.
         if (labels && box.Width >= 18)
