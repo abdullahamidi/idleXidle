@@ -1804,7 +1804,7 @@ public sealed class MasteryScreen
         var taken = Mastery.IsTaken(n.Id);
         var can = Mastery.CanTake(n.Id);
         var roadDef = n.Kind == MasteryKind.SkillRoad && n.GrantsSkillId is { } rs ? SkillCatalogue.Find(rs) : null;
-        var learned = roadDef is not null && Mastery.LearnedSkills().Contains(roadDef.Id);
+        var learned = roadDef is not null && Mastery.AvailableSkills().Contains(roadDef.Id);
 
         // CATEGORY · BRANCH, in the branch's colour; NAME at Headline — gold once it is yours.
         if (draw) _ui.Fill(b, new Rectangle(x, y - UiMetrics.Space(6), 5, UiTypography.Pitch(UiTypography.Secondary) + UiTypography.Pitch(UiTypography.Headline)), col);
@@ -2204,7 +2204,7 @@ public sealed class MasteryScreen
                  && _ui.Assets.Get($"icon_skill_{roadSkill}") is { } skillGlyph)
         {
             var g = (int)(box.Width * 0.50f);
-            var learnedRoad = Mastery.LearnedSkills().Contains(roadSkill);
+            var learnedRoad = Mastery.AvailableSkills().Contains(roadSkill);
             _ui.SpriteFit(b, skillGlyph, new Rectangle(cx - g / 2, cy - g / 2, g, g),
                           taken ? new Color(0x14, 0x11, 0x1E) : learnedRoad ? Gold : canTake ? branchCol : new Color(0x4A, 0x46, 0x58));
             if (learnedRoad && !taken)

@@ -135,7 +135,7 @@ public static class BuildComposer
         // WHAT THIS CHAMPION KNOWS: the roads it has walked, plus the one skill it was born with.
         // Without the second half a fresh champion could weave nothing at all, because all twelve are
         // learned on the tree now and a new game has no points.
-        var taughtSkills = mastery.LearnedSkills().ToHashSet(StringComparer.Ordinal);
+        var taughtSkills = mastery.AvailableSkills().ToHashSet(StringComparer.Ordinal);
         if (character?.StartingSkillId is { } born) taughtSkills.Add(born);
 
         for (var i = 0; i < picks.Count; i++)

@@ -481,7 +481,7 @@ public class SkillReachabilityTests
     {
         // The tree with every style road walked must know all twelve — a skill no road teaches is
         // unreachable, since composing an untaught skill is refused.
-        var taught = Taught.Everything().LearnedSkills();
+        var taught = Taught.Everything().AvailableSkills();
 
         var missing = SkillCatalogue.All.Select(s => s.Id).Where(id => !taught.Contains(id)).ToList();
         Assert.True(missing.Count == 0,

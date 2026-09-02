@@ -805,7 +805,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         _deepestEver = save.MasteryEarned;         // stored the deepest-ever; Earned re-derives from it
         _mastery.RestoreTaken(save.MasteryTaken);
-        _mastery.RestoreLearned(save.LearnedSkills);   // D7 — discoveries survive every respec
+        // save.LearnedSkills IS NO LONGER READ. It was the permanent-discovery latch (D7): a skill
+        // taught by a road stayed usable after the points moved on. Access now follows the CURRENT
+        // allocation (BRIEF sec.15-17), so the taken set above is the whole of it. The field is still
+        // WRITTEN for one version, so a player who rolls back to the previous build does not lose
+        // their skills on the way — see Save().
         // A SET ANNOUNCED IS ANNOUNCED FOR GOOD — but the screen that remembers it does not exist yet.
         // This runs from Initialize and GearScreen is built in LoadContent, which needs a GraphicsDevice,
         // so the list is PARKED here and handed over the moment the screen is there, exactly like the
@@ -1058,9 +1062,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // being closed.
             RunLog = _expedition.Log.Entries.Select(RunLog.ToSave).ToList(),
             MasteryTaken = _mastery.Taken.ToList(),
-            // D7: the UNION (latch + currently-taken roads), so a pre-D7 save latches everything
-            // its roads ever taught the first time it saves under this build.
-            LearnedSkills = _mastery.LearnedSkills().OrderBy(s => s, StringComparer.Ordinal).ToList(),
+            // WRITTEN, NEVER READ — a courtesy to the previous build for one version. Access is
+            // recomputed from MasteryTaken now; this list is what the OLD build would need to find
+            // if a player rolled back, so it keeps being written and stops being believed.
+            LearnedSkills = _mastery.AvailableSkills().OrderBy(s => s, StringComparer.Ordinal).ToList(),
             // Which five-piece sets have already had their one announcement (see the GEAR block).
             CompletedSets = _gear.CompletedSets.OrderBy(s => s, StringComparer.Ordinal).ToList(),
             // The tree's camera, so the zoom a player settled on is the zoom they come back to. The
@@ -4320,10 +4325,11 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _lastActiveCharacterId = _characters.ActiveId;
         // Four in five class-locked pieces a chest pays are the active champion's.
         _forge.FavouredClass = _characters.Active.Class;
-        // BIRTH SKILLS ARE LEARNED BY BEING SOMEONE (P9). Becoming a champion latches theirs into
-        // the permanent set (D7), so the roster's YOU KEEP SKILLS holds for the one skill a
-        // champion brings, not only for the tree's. Idempotent, so per-frame is free.
-        _mastery.LearnSkill(_characters.Active.StartingSkillId);
+        // THE ACCOUNT-WIDE LEAK IS GONE. This line used to latch the active champion's birth skill
+        // into the permanent learned set, every frame, for ever: play THE QUIVER once and every
+        // other champion could weave WEEP from then on. BRIEF sec.9 forbids exactly that, and it was
+        // already in every existing save. A champion's own skill reaches the build through its
+        // OWNER now, not by being banked account-wide the moment you meet them.
 
         _expedition.Character = _characters.Active;
         _gear.Character = _characters.Active;

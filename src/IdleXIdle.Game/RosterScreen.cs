@@ -744,7 +744,7 @@ public sealed class RosterScreen
         //   It is latched permanently into your skill set the moment you play them.
         Rule();
         _ui.TextBig(b, "STARTING SKILL", left, y, Slate, UiTypography.Secondary);
-        if (skill is not null && Mastery?.LearnedSkills().Contains(skill.Id) == true)
+        if (skill is not null && Mastery?.AvailableSkills().Contains(skill.Id) == true)
             _ui.TextRightBig(b, "ALREADY KNOWN", right, y, Met, UiTypography.Secondary);
         y += headH;
         if (skill is null)

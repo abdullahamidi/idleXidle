@@ -446,26 +446,33 @@ public static class MasteryCatalog
             $"MORPH SPECIALIST — LEECH DOUBLED, HEAL LIMIT {HealTuning.Default.CeilingText(siphon: true)} A WAVE",
             BuildTrigger.Siphon, S);
 
-        // ── THE SKILL ROADS. Each specialisation is the head of its style's road; TWO NODES PER
-        //    ROAD, one per skill — walked, not arrived at. Twelve skills, twelve nodes, and none is
-        //    free: a champion that has learned nothing still fights with its birth skill.
+        // ── THE SKILL ROADS. TWO NODES PER ROAD, one per skill — walked, not arrived at. Twelve
+        //    skills, twelve nodes, and none of them free.
         //
-        //    Priced at a GREATER (5): the cheapest path to a first taught skill is minor 1 +
-        //    notable 3 + specialisation 6 + road 5 = 15 points; the style's second skill is 5 more.
-        //    LEARNING IS PERMANENT (D7): the road is the discovery gate, and respec returns the
-        //    points, never the skill — which is how, one discipline at a time, a career reaches
-        //    the other styles' skills at all.
-        Teaches(n, Branch.Resonance, "road_hammer", "spec_strike", "hammer_blow");
+        //    EACH ROAD HANGS OFF ITS BRANCH'S FIRST MINOR, NOT OFF A SPECIALISATION (D11).
+        //    It used to head off spec_X, and that plus "one specialisation per hunter" (CanTake)
+        //    meant a hunter could reach exactly ONE style's two skills. That was survivable only
+        //    because learning was permanent: buy the road, respec, keep the skill, repeat. The
+        //    refactor makes access follow the CURRENT allocation (BRIEF sec.16), and under that rule
+        //    the old wiring gives a four-slot build two shared skills for ever.
+        //
+        //    So the price of a first taught skill falls from minor 1 + notable 3 + specialisation 6
+        //    + road 5 = 15, to minor 1 + road 5 = 6; the style's second skill is 5 more; and all
+        //    twelve roads cost about 64 of a full career's ~66 points. A hunter thirty points in
+        //    chooses four or five styles to invest in, which is the question MASTERY is supposed to
+        //    ask. The specialisation keeps what it is actually for: the affinity ring, its trigger,
+        //    and one per hunter.
+        Teaches(n, Branch.Resonance, "road_hammer", "chime", "hammer_blow");
         Teaches(n, Branch.Resonance, "road_hammer_2", "road_hammer", "hammer_press");
-        Teaches(n, Branch.Resonance, "road_snare", "spec_trap", "snare_jaws");
+        Teaches(n, Branch.Resonance, "road_snare", "hum", "snare_jaws");
         Teaches(n, Branch.Resonance, "road_snare_2", "road_snare", "snare_repay");
-        Teaches(n, Branch.Loot, "road_volley", "spec_projectile", "volley_spray");
+        Teaches(n, Branch.Loot, "road_volley", "glean", "volley_spray");
         Teaches(n, Branch.Loot, "road_volley_2", "road_volley", "volley_weep");
-        Teaches(n, Branch.Loot, "road_field", "spec_aura", "field_mire");
+        Teaches(n, Branch.Loot, "road_field", "pockets", "field_mire");
         Teaches(n, Branch.Loot, "road_field_2", "road_field", "field_pulse");
-        Teaches(n, Branch.Tempo, "road_sign", "spec_mark", "sign_call");
+        Teaches(n, Branch.Tempo, "road_sign", "swift", "sign_call");
         Teaches(n, Branch.Tempo, "road_sign_2", "road_sign", "sign_brand");
-        Teaches(n, Branch.Endure, "road_drain", "spec_transformation", "drain_drink");
+        Teaches(n, Branch.Endure, "road_drain", "knit", "drain_drink");
         Teaches(n, Branch.Endure, "road_drain_2", "road_drain", "drain_wilt");
     }
 
@@ -481,6 +488,10 @@ public static class MasteryCatalog
                   $"{def.Name} — {def.Line.ToUpperInvariant()}", S, null, new[] { spec })
         {
             GrantsSkillId = skillId,
+            // The road's STYLE, which is now the only thing tying it to its specialisation. D11 cut
+            // the prerequisite; the diagram still draws the road on the style's own spoke, and
+            // MasteryLayout finds that spoke by matching this against the specialisation's Style.
+            Style = def.Style,
         });
     }
 

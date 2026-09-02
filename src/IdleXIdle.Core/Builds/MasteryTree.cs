@@ -151,11 +151,17 @@ public sealed class MasteryTree
 {
     private readonly HashSet<string> _taken = new() { MasteryCatalog.StartId };
 
-    // ── DISCOVERY IS PERMANENT (D7, 2026-08-31). Taking a road node LATCHES its skill here; respec
-    //    and refund return points and never touch this set. Persisted (SaveGame.LearnedSkills) and
-    //    unioned with what the currently-taken roads teach, so a pre-D7 save seeds itself from its
-    //    own MasteryTaken on first load. ─────────────────────────────────────────────────────────────
-    private readonly HashSet<string> _learned = new(StringComparer.Ordinal);
+    // ── ACCESS IS TEMPORARY. EXPERIENCE IS PERMANENT. ─────────────────────────────────────────────
+    //
+    // There was a `_learned` set here: taking a road node latched its skill for good, and respec
+    // returned the points and never the skill (D7, 2026-08-31). It made every unlock node free —
+    // buy it, refund it, keep it — and the systems refactor removes it (BRIEF sec.15-17, LAWS 3-4).
+    // Access is now a pure function of what is CURRENTLY taken; see AvailableSkills.
+    //
+    // That was not a lazy rule. It was load-bearing: one specialisation at a time, every road hung
+    // off one, so permanence-through-respec was the only way a four-slot build ever filled from
+    // twelve skills. Removing it required the roads to leave the specialisations first — see
+    // MasteryCatalog's Teaches() and PLAN decision D11. The two changes are one change.
 
     /// <summary>Total points earned over the whole game. Derived by the host from depth every frame.</summary>
     public int Earned { get; private set; }
@@ -206,31 +212,9 @@ public sealed class MasteryTree
     {
         if (!CanTake(id)) return false;
         _taken.Add(id);
-        // THE LATCH (D7): a taught skill is learned the moment its node is taken, for good.
-        if (MasteryCatalog.ById(id)?.GrantsSkillId is { } learned) _learned.Add(learned);
         return true;
     }
 
-    /// <summary>Restore the permanently learned skills. Unknown ids are dropped, like RestoreTaken's.</summary>
-    public void RestoreLearned(IEnumerable<string> ids)
-    {
-        _learned.Clear();
-        if (ids is null) return;
-        foreach (var id in ids)
-            if (SkillCatalogue.Find(id) is not null) _learned.Add(id);
-    }
-
-    /// <summary>
-    /// Latch a skill as learned OUTSIDE the tree — a champion's birth skill, latched when the
-    /// player becomes them (P9). The roster promises YOU KEEP SKILLS, and it was true for
-    /// everything except the one skill a champion brings: switch away, and a build woven around
-    /// the old champion's birth skill silently lost it at the next compose. Idempotent; unknown
-    /// ids are ignored, like everywhere else.
-    /// </summary>
-    public void LearnSkill(string? skillId)
-    {
-        if (skillId is not null && SkillCatalogue.Find(skillId) is not null) _learned.Add(skillId);
-    }
 
     /// <summary>
     /// Give back one node, if nothing taken still depends on it.
@@ -301,13 +285,22 @@ public sealed class MasteryTree
     }
 
     /// <summary>
-    /// Every skill this champion has EVER learned: the permanent latch, plus whatever the
-    /// currently-taken road nodes teach — which is how a pre-D7 save seeds itself (its next save
-    /// writes the union, and the latch carries it from there).
+    /// The shared skills this hunter may weave RIGHT NOW: exactly what the currently-taken road
+    /// nodes teach, and nothing else.
     /// </summary>
-    public IReadOnlySet<string> LearnedSkills()
+    /// <remarks>
+    /// A pure function of <c>_taken</c>. Refund a road and the skill leaves this set on the same
+    /// frame; take it again and it comes back. What does NOT come or go with it is the skill's
+    /// EXPERIENCE, which lives in <see cref="SkillProgress"/>, is keyed by skill id and has never
+    /// heard of mastery — so "access is temporary, experience is permanent" is structural here
+    /// rather than a promise two systems have to keep in step.
+    ///
+    /// A character's own SIGNATURE skill is not in this set and never asks to be: it is exempt from
+    /// mastery entirely (BRIEF sec.18) and reaches the build through its owner instead.
+    /// </remarks>
+    public IReadOnlySet<string> AvailableSkills()
     {
-        var set = new HashSet<string>(_learned, StringComparer.Ordinal);
+        var set = new HashSet<string>(StringComparer.Ordinal);
         foreach (var n in _taken.Select(MasteryCatalog.ById))
             if (n?.GrantsSkillId is { } s) set.Add(s);
         return set;

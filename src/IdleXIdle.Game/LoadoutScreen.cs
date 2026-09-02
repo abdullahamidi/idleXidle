@@ -544,7 +544,7 @@ public sealed class LoadoutScreen
     /// <summary>Every skill this hunter can equip: the roads walked, plus what it was born with.</summary>
     private IReadOnlySet<string> KnownSkills()
     {
-        var set = Mastery.LearnedSkills().ToHashSet(StringComparer.Ordinal);
+        var set = Mastery.AvailableSkills().ToHashSet(StringComparer.Ordinal);
         if (Character?.StartingSkillId is { } born) set.Add(born);
         return set;
     }

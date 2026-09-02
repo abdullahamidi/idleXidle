@@ -325,13 +325,22 @@ public static class MasteryLayout
 
         if (node.Kind == MasteryKind.SkillRoad)
         {
-            // ON ITS SPECIALISATION'S OWN SPOKE, one step further out — the road IS that
-            // specialisation continued, and any other placement would make the wire cross the rim.
-            // FROM ITS PREREQUISITE'S OWN RADIUS, not from the specialisation's. A road is two nodes
-            // deep — the style's active, then its passive off that — so the second must step out from
-            // where the FIRST actually landed. Reading the fraction instead put both at one radius and
-            // the overlap gate caught them stacked.
-            var before = node.Prereqs.Select(MasteryCatalog.ById).FirstOrDefault(x => x is not null);
+            // ON ITS STYLE'S OWN SPOKE, one step further out for each node of the road.
+            //
+            // The anchor used to be the road's PREREQUISITE, because that prerequisite WAS the
+            // style's specialisation. D11 cut that wire — a road now hangs off its branch's first
+            // minor, which sits near the centre — so following the prerequisite would drag the roads
+            // inward on top of the ring-1 fan, which is exactly what the overlap gate caught
+            // (`keyed` and `road_hammer_2`, 114 world units apart against a 200 radius sum).
+            //
+            // So the ANGLE and the base radius come from the specialisation of the same STYLE, which
+            // is where the diagram has always drawn this road, and only the PREREQUISITE moved. The
+            // second node of a road still steps out from the first, so a two-node road reads as one
+            // line leaving the rim.
+            var before = node.Prereqs.Select(MasteryCatalog.ById)
+                                     .FirstOrDefault(x => x is { Kind: MasteryKind.SkillRoad })
+                         ?? MasteryCatalog.Nodes.FirstOrDefault(
+                                x => x.Kind == MasteryKind.Specialisation && x.Style == node.Style);
             if (before is not null)
             {
                 var at = PositionOf(before, maxRing);
