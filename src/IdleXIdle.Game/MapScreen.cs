@@ -66,6 +66,58 @@ public sealed class MapScreen
 
     private int _selected;
 
+    // ── THE REVEAL (UI polish §73, §30): a region that has JUST become available pulses once. ─────
+    //
+    // The screen remembers which regions it has already shown as available this session. A region
+    // that turns up unlocked and is not in that set was conquered open since the last visit, and gets
+    // ONE Reward-length pulse (UiMotion.Flash) the first time it is seen — then never again. No save
+    // change: a new session seeds the set silently from the world as it stands, because nothing "just"
+    // happened on a game's first frame (§30: animate CHANGE). Armed from Update, keyed to the region,
+    // never from Draw — so a redraw cannot re-fire it.
+    private readonly HashSet<string> _shownAvailable = new();
+    private bool _revealSeeded;
+    private World? _memoOf;      // the world the set was gathered from — a NEW GAME builds a new one
+
+    /// <summary>The pulse key for a region's reveal — public so a test can read <see cref="UiMotion.Pulse"/> of it.</summary>
+    public static int RevealKey(string regionId) => HashCode.Combine("map.reveal", regionId);
+
+    /// <summary>
+    /// RIG: <c>RH_SHOT_REVEAL=&lt;regionId&gt;</c> treats that region as newly available on the screen's
+    /// first frame and HOLDS its pulse at the peak for the shot — the rig shoots frame 60, a Reward pulse
+    /// is over by frame 21, and a state no capture can pose has never been looked at. Read once, under the
+    /// capture rig only, the way <c>RH_SHOT_SCROLL</c> is. The re-arm each frame is the freeze, not the
+    /// feature: outside the rig a pulse is armed once, by the event.
+    /// </summary>
+    private readonly string? _devRevealHold =
+        Environment.GetEnvironmentVariable("RH_SHOT") is not null ? Environment.GetEnvironmentVariable("RH_SHOT_REVEAL") : null;
+
+    /// <summary>
+    /// RIG: <c>RH_SHOT_HOLD=1</c> reads the posed cursor as a HELD mouse button, so PRESSED can be
+    /// photographed. <see cref="UiKit.MouseHeld"/> comes from the real device and the capture rig has no
+    /// device, so pressed is otherwise the one state of §25 that no screenshot can pose. Pair it with
+    /// <c>RH_SHOT_PAGE_MOUSE=x,y</c> over the card or chip whose held face is wanted.
+    /// </summary>
+    private static readonly bool DevHold =
+        Environment.GetEnvironmentVariable("RH_SHOT") is not null
+        && Environment.GetEnvironmentVariable("RH_SHOT_HOLD") is { Length: > 0 };
+
+    /// <summary>The mouse is down over this screen: the host's real button, or the rig's posed hold.</summary>
+    private static bool Held => UiKit.MouseHeld || DevHold;
+
+    // ── THE CUE (UI polish §86–§87): the host owns audio; the screen names the moment. ───────────
+    //
+    // sfx_click      a region card picked (click or arrow key)
+    // sfx_nav        leaving for the hunt — HUNT HERE / RESUME HERE, a second click on the card, Enter
+    // sfx_error      asked to go somewhere locked — a second click on a locked card, Enter on one
+    // sfx_reveal_tick a region's reveal pulse fired
+    private string? _cue;
+
+    /// <summary>The sound cue for what just happened here, returned once; null when nothing did.</summary>
+    public string? ConsumeCue() { var c = _cue; _cue = null; return c; }
+
+    /// <summary>The locked card's hover explanation, gathered in DrawMap and drawn last so it sits over everything.</summary>
+    private (string Text, Point At)? _lockTip;
+
     // ── THE INSPECTOR'S SCROLL (UI polish §17–§18). ──────────────────────────────────────────────
     //
     // The inspector is a flow of blocks under a fixed header, and at 125 % and 150 % the flow is longer
@@ -384,10 +436,16 @@ public sealed class MapScreen
     public void Update(KeyboardState keys, KeyboardState prev, Point mouse, bool clicked, int wheel = 0)
     {
         bool P(Keys k) => keys.IsKeyDown(k) && prev.IsKeyUp(k);
-        if (P(Keys.Left)) Select((_selected - 1 + RegionCount) % RegionCount);
-        if (P(Keys.Right)) Select((_selected + 1) % RegionCount);
-        // A locked region has no CTA any more, so Enter must not be the one path that can still ask for it.
-        if (P(Keys.Enter) && World.IsUnlocked(Def(_selected).Id)) _enterRequest = Def(_selected).Id;
+        ScanReveals();
+        if (P(Keys.Left)) { Select((_selected - 1 + RegionCount) % RegionCount); _cue = "sfx_click"; }
+        if (P(Keys.Right)) { Select((_selected + 1) % RegionCount); _cue = "sfx_click"; }
+        // A locked region has no CTA any more, so Enter must not be the one path that can still ask for it —
+        // and the refusal is audible (§29), the same dull error the locked card's second click gives.
+        if (P(Keys.Enter))
+        {
+            if (World.IsUnlocked(Def(_selected).Id)) { _enterRequest = Def(_selected).Id; _cue = "sfx_nav"; }
+            else _cue = "sfx_error";
+        }
         if (P(Keys.D) && World.CanDeepenCorruption) _deepenRequest = true;
         if (P(Keys.S) && World.CanEaseCorruption) _easeRequest = true;
 
@@ -400,6 +458,35 @@ public sealed class MapScreen
         if (P(Keys.PageUp)) step -= Math.Max(1, _shown);
         if (step != 0) _first = Math.Max(0, _first + step);
     }
+
+    /// <summary>
+    /// Which regions have become available since the screen last looked: each one it has not shown
+    /// available before is pulsed once and remembered. The first look of a session only remembers.
+    /// </summary>
+    private void ScanReveals()
+    {
+        if (World is null) return;
+        // A NEW GAME hands this screen a different World with the same region ids. Without this the set
+        // still holds the old world's regions, and the first region the new career opens — the one reveal
+        // a new player would ever see — would be remembered as already shown and pulse nothing.
+        if (!ReferenceEquals(_memoOf, World)) { _memoOf = World; _shownAvailable.Clear(); _revealSeeded = false; }
+        for (var i = 0; i < RegionCount; i++)
+        {
+            var id = Def(i).Id;
+            if (!World.IsUnlocked(id) || !_shownAvailable.Add(id)) continue;
+            // The first sight of the world this session seeds the set and pulses nothing — unless the rig
+            // has asked to see this region's reveal.
+            if (!_revealSeeded && id != _devRevealHold) continue;
+            UiMotion.Flash(RevealKey(id), UiMotion.Reward);
+            _cue = "sfx_reveal_tick";
+        }
+        _revealSeeded = true;
+        if (_devRevealHold is { } hold) UiMotion.Flash(RevealKey(hold), UiMotion.Reward);   // the rig's freeze, at the peak
+    }
+
+    /// <summary>What a locked region needs, in one plain line — the inspector's plate and the card's hover tip share it.</summary>
+    private static string LockedReason(RegionDefinition def)
+        => def.PrereqId is { } p && Regions.Find(p) is { } pd ? $"CONQUER {pd.Name} FIRST" : "CONQUER THE REGION BEFORE THIS ONE FIRST";
 
     /// <summary>DEV: point the inspector at a region, so a capture can photograph it read (RH_SHOT fixtures).</summary>
     public void DevSelect(string regionId)
@@ -427,8 +514,11 @@ public sealed class MapScreen
         // NO SUBTITLE. The band under the title is the hint slot's (D4): when a region opens, the screen
         // says so there, about this player's world, instead of reciting a balance figure on every visit.
 
+        _lockTip = null;
         DrawMap(b, hit, clicked);
         DrawDetail(b, hit, clicked);
+        // LAST, over both panels: a locked card's hover answer (§29) must not sit under the inspector.
+        if (_lockTip is { } tip) _ui.HoverTip(b, tip.Text, tip.At);
         if (DevMapDebug) DrawDebug(b);
     }
 
@@ -483,18 +573,31 @@ public sealed class MapScreen
             // button that disappeared at endgame, read as a map you could not use.
             if (UiKit.ClickedIn(node, hit, clicked))
             {
-                if (sel && unlocked) _enterRequest = def.Id;
+                // The click has a sound for what it meant (§27, §86): picking a card is a dry click, going
+                // is the navigation tick, and asking to go somewhere locked is the dull error — with the
+                // reason already on the card, under it and in the inspector.
+                if (sel && unlocked) { _enterRequest = def.Id; _cue = "sfx_nav"; }
+                else _cue = sel ? "sfx_error" : "sfx_click";
                 Select(i);
             }
 
             var sc = SourceColor[def.Theme];
+            // THE STANDARD STATES (§25–§28), the way UiKit.Button wears them. HOVER is a lift plus the
+            // edge easing to bone over Fast (below). PRESSED is the mouse held on the card: the whole
+            // face drops 2 px and darkens for exactly as long as it is held — the labels under the card,
+            // the selected bar and the hit rectangle stay put (§15: one authoritative rect). SELECTED
+            // keeps its gold bar and bone edge whether or not the pointer is on it, so hover and
+            // selected never read as one state.
+            var hot = node.Contains(hit);
+            var pressed = hot && Held;
+            var face = pressed ? new Rectangle(node.X, node.Y + 2, node.Width, node.Height) : node;
             // THE REGION'S OWN GROUND, not a flat swatch. The arena art the fight already draws for this
             // theme is cropped into the node and scrimmed back, so a place on the map looks like the
             // place you land in. A locked region gets a heavier, colder scrim: it reads as somewhere you
             // can SEE but have not been, which a uniform grey rectangle cannot say.
             if (_ui.Assets.Get(ArenaKey(def.Theme)) is { } ground)
-                b.Draw(ground, node, CentreCrop(ground, node), Color.White);
-            _ui.Fill(b, node, unlocked ? new Color(0x0A, 0x08, 0x14, 0xB4) : new Color(0x10, 0x10, 0x16, 0xE4));
+                b.Draw(ground, face, CentreCrop(ground, face), Color.White);
+            _ui.Fill(b, face, unlocked ? new Color(0x0A, 0x08, 0x14, 0xB4) : new Color(0x10, 0x10, 0x16, 0xE4));
             // THE FRAME SAYS WHERE YOU ARE. Gold, and a pixel thicker, on the region you are in; a pale
             // frame on the one you have selected; the conquest green and the Source colour otherwise.
             // The active region used to wear an unexplained purple diamond in its corner ("Verdant
@@ -505,22 +608,41 @@ public sealed class MapScreen
             // own (§26). It was `new Color(0xE8, 0xDF, 0xC8, 0x14)` — a straight-alpha cream that the
             // premultiplied blend read as near-opaque, so a hovered card washed to bone and its name
             // vanished: hover and selected were not distinct, hover and unreadable were.
-            var hot = node.Contains(hit);
             var lift = UiMotion.Ease(UiMotion.KeyOf(node), hot ? 1f : 0f);
-            if (lift > 0f) _ui.Fill(b, node, Color.White * (0.07f * lift));
-            var edge = active ? Gold : sel || hot ? Bone : conq ? Met : unlocked ? sc : Dim;
+            if (lift > 0f) _ui.Fill(b, face, Color.White * (0.07f * lift));
+            if (pressed) _ui.Fill(b, face, Color.Black * 0.18f);
+            var restEdge = active ? Gold : sel ? Bone : conq ? Met : unlocked ? sc : Dim;
+            var edge = active || sel ? restEdge : Color.Lerp(restEdge, Bone, lift);
             var thick = active ? FrameThick + 1 : FrameThick;
-            foreach (var e in new[] { new Rectangle(node.X, node.Y, node.Width, thick), new Rectangle(node.X, node.Bottom - thick, node.Width, thick),
-                                      new Rectangle(node.X, node.Y, thick, node.Height), new Rectangle(node.Right - thick, node.Y, thick, node.Height) })
+            foreach (var e in new[] { new Rectangle(face.X, face.Y, face.Width, thick), new Rectangle(face.X, face.Bottom - thick, face.Width, thick),
+                                      new Rectangle(face.X, face.Y, thick, face.Height), new Rectangle(face.Right - thick, face.Y, thick, face.Height) })
                 _ui.Fill(b, e, edge);
             if (active)
                 foreach (var e in new[] { new Rectangle(node.X - 3, node.Y - 3, node.Width + 6, 2), new Rectangle(node.X - 3, node.Bottom + 1, node.Width + 6, 2),
                                           new Rectangle(node.X - 3, node.Y - 3, 2, node.Height + 6), new Rectangle(node.Right + 1, node.Y - 3, 2, node.Height + 6) })
                     _ui.Fill(b, e, Gold * 0.45f);
 
+            // THE REVEAL (§73, §31 reward band): a region that has just become available wears a gold
+            // halo that fades over one Reward pulse, and its face takes a wash of gold that drains back
+            // to its own ground. Once, keyed to the region, armed in ScanReveals — never here. The halo
+            // does not move, so Reduced Motion has nothing to drop: the same short fade, the same end.
+            var reveal = UiMotion.Smooth(UiMotion.Pulse(RevealKey(def.Id)));
+            if (reveal > 0f)
+            {
+                for (var ring = 1; ring <= 3; ring++)
+                {
+                    var o = ring * 3;
+                    var a = reveal * (0.62f - 0.16f * ring);
+                    foreach (var e in new[] { new Rectangle(face.X - o, face.Y - o, face.Width + o * 2, 3), new Rectangle(face.X - o, face.Bottom + o - 3, face.Width + o * 2, 3),
+                                              new Rectangle(face.X - o, face.Y - o, 3, face.Height + o * 2), new Rectangle(face.Right + o - 3, face.Y - o, 3, face.Height + o * 2) })
+                        _ui.Fill(b, e, Gold * a);
+                }
+                _ui.Fill(b, face, Gold * (0.18f * reveal));
+            }
+
             // Emblem — one crest per region; unknown ids still fall back to a Source gem.
             var emblem = EmblemKey(def.Id);
-            var eb = new Rectangle(node.Center.X - EmblemSize / 2, node.Y + EmblemTop, EmblemSize, EmblemSize);
+            var eb = new Rectangle(face.Center.X - EmblemSize / 2, face.Y + EmblemTop, EmblemSize, EmblemSize);
             if (emblem is not null && _ui.Assets.Get(emblem) is { } em) b.Draw(em, eb, unlocked ? Color.White : new Color(0x55, 0x55, 0x60));
             else _ui.Diamond(b, eb, unlocked ? sc : Dim);
 
@@ -528,15 +650,15 @@ public sealed class MapScreen
             // the one card a player most needs to read about — the place they cannot go yet — was the
             // hardest to read. The padlock and the band say "locked"; the letters do not have to.
             _ui.TextCenterBig(b, _ui.ShortenBig(def.Name, node.Width - wordGap * 2, body),
-                              node.Center.X, node.Y + NameTop, Bone, body);
+                              face.Center.X, face.Y + NameTop, Bone, body);
 
             // THE ELEMENT, READABLE: the Source gem with the element's name beside it, in the Source's
             // colour, centred as one group. What the creatures there are made of is the first thing a
             // build cares about, and it was only ever implied by the card's ground art.
             var element = def.Theme.ToString().ToUpperInvariant();
             var ew = _ui.MeasureBig(element, body);
-            var ex = node.Center.X - (GemSize + wordGap + ew) / 2;
-            var gemBox = new Rectangle(ex, node.Y + GemTop, GemSize, GemSize);
+            var ex = face.Center.X - (GemSize + wordGap + ew) / 2;
+            var gemBox = new Rectangle(ex, face.Y + GemTop, GemSize, GemSize);
             if (_ui.Assets.Get(SourceGemKey(def.Theme)) is { } gem) b.Draw(gem, gemBox, Color.White);
             else _ui.Diamond(b, gemBox, sc);
             _ui.TextBig(b, element, gemBox.Right + wordGap, gemBox.Y + (GemSize - body) / 2, sc, body);
@@ -552,42 +674,56 @@ public sealed class MapScreen
             // or, on the top row, on the card below it (150 % under a world strip is where that bites).
             var reqBottom = node.Bottom + PowerRowH + UiTypography.Pitch(UiTypography.Secondary);
             var reqLimit = Below(i) is { } under ? under.Y - UiMetrics.Space(4) : UiKit.PanelInner(MapCanvas).Bottom;
+            var reqPrinted = false;
             if (!unlocked && def.PrereqId is { } pid && Regions.Find(pid) is { } pdef && reqBottom <= reqLimit)
+            {
                 _ui.TextCenterBig(b, $"CONQUER {pdef.Name}", node.Center.X, node.Bottom + PowerRowH,
                                   Bone, UiTypography.Secondary);
+                reqPrinted = true;
+            }
 
             // THE STATE, IN WORDS, on a band along the card's foot — with the fourth state the chart never
             // had: a region that is open, not conquered and not where you are said nothing at all.
-            var band = new Rectangle(node.X + thick, node.Bottom - BandH - thick, node.Width - thick * 2, BandH);
+            var band = new Rectangle(face.X + thick, face.Bottom - BandH - thick, face.Width - thick * 2, BandH);
             var bandText = band.Y + (BandH - body) / 2;
             if (active)
             {
                 _ui.Fill(b, band, new Color(0x2A, 0x1E, 0x08, 0xE6));
-                _ui.TextCenterBig(b, "YOU ARE HERE", node.Center.X, bandText, Gold, body);
-                if (conq) DrawCheck(b, new Rectangle(node.Right - wordGap - CheckW, node.Y + EmblemTop, CheckW, CheckH), Met);
+                _ui.TextCenterBig(b, "YOU ARE HERE", face.Center.X, bandText, Gold, body);
+                if (conq) DrawCheck(b, new Rectangle(face.Right - wordGap - CheckW, face.Y + EmblemTop, CheckW, CheckH), Met);
             }
             else if (conq)
             {
                 _ui.Fill(b, band, new Color(0x08, 0x14, 0x0C, 0xE6));
                 var cw = _ui.MeasureBig("CONQUERED", body);
-                var cx = node.Center.X - (CheckW + wordGap + cw) / 2;
+                var cx = face.Center.X - (CheckW + wordGap + cw) / 2;
                 DrawCheck(b, new Rectangle(cx, band.Y + (BandH - CheckH) / 2, CheckW, CheckH), Met);
                 _ui.TextBig(b, "CONQUERED", cx + CheckW + wordGap, bandText, Met, body);
             }
             else if (unlocked)
             {
-                // AVAILABLE, not gold: it is neither earned nor where you are (D9).
-                _ui.Fill(b, band, new Color(0x14, 0x11, 0x1E, 0xE6));
-                _ui.TextCenterBig(b, "AVAILABLE", node.Center.X, bandText, Bone, body);
+                // AVAILABLE, not gold: it is neither earned nor where you are (D9) — except for the one
+                // pulse of its reveal, when the word is lit gold and settles back to bone (§24: gold is
+                // "just became available", for exactly as long as that is news).
+                _ui.Fill(b, band, Color.Lerp(new Color(0x14, 0x11, 0x1E, 0xE6), new Color(0x2A, 0x1E, 0x08, 0xE6), reveal));
+                _ui.TextCenterBig(b, "AVAILABLE", face.Center.X, bandText, Color.Lerp(Bone, Gold, reveal), body);
             }
             else
             {
                 _ui.Fill(b, band, new Color(0x10, 0x10, 0x16, 0xE6));
                 var lockS = UiMetrics.Control(18);
                 var lw = _ui.MeasureBig("LOCKED", body);
-                var lx = node.Center.X - (lockS + wordGap + lw) / 2;
+                var lx = face.Center.X - (lockS + wordGap + lw) / 2;
                 DrawLockArt(b, new Rectangle(lx, band.Y + (BandH - lockS) / 2, lockS, lockS));
                 _ui.TextBig(b, "LOCKED", lx + lockS + wordGap, bandText, Bone, body);
+                // HOVER SAYS WHY (§29) — WHEN NOTHING ELSE DOES. The requirement is normally printed
+                // under the card, and a tooltip repeating a sentence the player is already reading is the
+                // "second, worse copy" this screen spent a pass deleting (§22: polish adds feel, not
+                // information). So the tip is the FALLBACK for the poses where the guard above dropped
+                // that line for want of room — a short field, a world strip over the chain, 150 % — where
+                // the card would otherwise say LOCKED and refuse to say by what. Gathered here, drawn
+                // last, over both panels.
+                if (hot && !reqPrinted) _lockTip = (LockedReason(def), hit);
             }
 
             if (sel) _ui.Fill(b, new Rectangle(node.X - 4, node.Y - 4, node.Width + 8, 4), Gold);
@@ -727,13 +863,15 @@ public sealed class MapScreen
         if (unlocked)
         {
             if (_ui.Button(b, cta, def.Id == ActiveRegion ? "RESUME HERE" : "HUNT HERE", hit, clicked, true, ButtonStyle.Primary))
+            {
                 _enterRequest = def.Id;
+                _cue = "sfx_nav";
+            }
         }
         else
         {
             _ui.Plate(b, cta);
-            var pname = def.PrereqId is { } p2 && Regions.Find(p2) is { } pd2 ? pd2.Name : "";
-            var say = pname.Length > 0 ? $"CONQUER {pname} FIRST" : "CONQUER THE REGION BEFORE THIS ONE FIRST";
+            var say = LockedReason(def);
             var lockS = UiMetrics.Control(22);
             var label = UiTypography.NavigationLabel;
             DrawLockArt(b, new Rectangle(cta.X + UiMetrics.Space(20), cta.Center.Y - lockS / 2, lockS, lockS));
@@ -951,13 +1089,22 @@ public sealed class MapScreen
                 var chip = new Rectangle(cx, ct, ChipW(o), chipH);
                 var afford = DustOwned >= Checkpoints.DustCost(o);
                 var lit = o == chosen;
-                _ui.Fill(b, chip, lit ? new Color(0x3A, 0x2C, 0x14, 0xE0) : new Color(0x14, 0x10, 0x1A, 0xE0));
-                var edge = lit ? Gold : chip.Contains(hit) ? Bone : Dim;
-                _ui.Fill(b, new Rectangle(chip.X, chip.Y, chip.Width, 2), edge);
-                _ui.Fill(b, new Rectangle(chip.X, chip.Bottom - 2, chip.Width, 2), edge);
-                _ui.Fill(b, new Rectangle(chip.X, chip.Y, 2, chip.Height), edge);
-                _ui.Fill(b, new Rectangle(chip.Right - 2, chip.Y, 2, chip.Height), edge);
-                _ui.TextCenterBig(b, label, chip.Center.X, chip.Y + (chipH - UiTypography.Secondary) / 2,
+                // The same states as the cards (§25–§27): the edge eases to bone under the pointer, and
+                // a held chip drops a pixel and darkens until it is let go. Hit-tested on `chip`, drawn
+                // on `cf`.
+                var chipHot = chip.Contains(hit);
+                var chipPressed = chipHot && Held;
+                var chipLift = UiMotion.Ease(UiMotion.KeyOf(chip), chipHot ? 1f : 0f);
+                var cf = chipPressed ? new Rectangle(chip.X, chip.Y + 1, chip.Width, chip.Height) : chip;
+                _ui.Fill(b, cf, lit ? new Color(0x3A, 0x2C, 0x14, 0xE0) : new Color(0x14, 0x10, 0x1A, 0xE0));
+                if (chipLift > 0f) _ui.Fill(b, cf, Color.White * (0.07f * chipLift));
+                if (chipPressed) _ui.Fill(b, cf, Color.Black * 0.18f);
+                var edge = lit ? Gold : Color.Lerp(Dim, Bone, chipLift);
+                _ui.Fill(b, new Rectangle(cf.X, cf.Y, cf.Width, 2), edge);
+                _ui.Fill(b, new Rectangle(cf.X, cf.Bottom - 2, cf.Width, 2), edge);
+                _ui.Fill(b, new Rectangle(cf.X, cf.Y, 2, cf.Height), edge);
+                _ui.Fill(b, new Rectangle(cf.Right - 2, cf.Y, 2, cf.Height), edge);
+                _ui.TextCenterBig(b, label, cf.Center.X, cf.Y + (chipH - UiTypography.Secondary) / 2,
                                   lit ? Gold : afford ? Bone : UiInk.Disabled, UiTypography.Secondary);
                 if (UiKit.ClickedIn(chip, hit, clicked)) _startRequest = (def.Id, o);
                 cx += chip.Width + gap;
