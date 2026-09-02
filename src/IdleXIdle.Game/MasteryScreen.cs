@@ -1052,8 +1052,15 @@ public sealed class MasteryScreen
         // Motion the number is the breath's brightest, held.
         _breathPhase = BreathPhase(_breath.Elapsed.TotalSeconds);
 
-        // THE CEREMONY'S FADE (brief §34), fired ONCE, from here, on the frame it opens — never
-        // re-armed by a draw. Sealing or backing out closes it; the next one fades in again.
+        // THE CEREMONY'S FADE (brief §34), fired ONCE, from Update, never re-armed by a draw.
+        //
+        // THE EDGE IS WATCHED HERE, BUT A TAKE FIRES IT ITSELF (see OpenCeremony). This check runs at
+        // the TOP of Update and the click that opens the ceremony is resolved at the BOTTOM of it, so
+        // watching the edge here alone was one frame too late: Draw ran once with the pulse not yet
+        // armed — a fully-lit modal — and only THEN blacked out and faded in. A pop, which is the one
+        // thing an arrival must not be. This is now the safety net for the paths that set _specNodeId
+        // without going through a take (DevSpecialise), and the record of the CLOSE edge, so the next
+        // ceremony fades in again.
         if ((_specNodeId is not null) != _specWasOpen)
         {
             _specWasOpen = _specNodeId is not null;
@@ -1265,6 +1272,23 @@ public sealed class MasteryScreen
             node.Id, "sfx_error");
     }
 
+    /// <summary>
+    /// Open the SPECIALISATION ceremony, and start its arrival on the SAME frame the take opened it.
+    /// </summary>
+    /// <remarks>
+    /// The fade is armed here rather than by <see cref="Update"/>'s edge watch because the watch runs
+    /// before the click that opens this — so the first Draw would find no pulse armed, read the modal
+    /// as already open, and paint it at full light for one frame before the fade blacked it out and
+    /// brought it back. The ceremony's own length is untouched: this is only its arrival (brief §34).
+    /// </remarks>
+    private void OpenCeremony(string nodeId, Style style)
+    {
+        _specNodeId = nodeId;
+        _specStyle = style;
+        _specWasOpen = true;
+        UiMotion.Flash(SpecKey, UiMotion.Transition);
+    }
+
     /// <summary>Take a node, or say exactly why not — for a click on the node and for the inspector's button alike.</summary>
     private void TakeNode(MasteryNode node)
     {
@@ -1282,7 +1306,7 @@ public sealed class MasteryScreen
             Dirty = true;
             // THE SPECIALISATION: your first is the moment this game is named for, so it gets a ceremony
             // instead of a click-sound — the hexagon shown whole, the choice sealed or taken back.
-            if (firstSpec && node.Style is { } nf) { _specNodeId = node.Id; _specStyle = nf; }
+            if (firstSpec && node.Style is { } nf) OpenCeremony(node.Id, nf);
             return;
         }
         // WHY THE CLICK DID NOTHING, NAMED EXACTLY — from the rule the refusal came from.
