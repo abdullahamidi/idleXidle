@@ -183,6 +183,42 @@ public sealed class VaultScreen
     /// <summary>The left button is down — the real one, or the rig's posed <c>hold</c>.</summary>
     private bool Held => UiKit.MouseHeld || _devHeld;
 
+    /// <summary>Keys this screen is still easing — asked while hot, and while cooling back down.</summary>
+    private readonly HashSet<int> _cooling = new(16);
+
+    /// <summary>
+    /// A hover ease that does not restart itself: 0 at rest, easing in while hot and out again after.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="UiMotion.Ease"/> DROPS a key the moment it settles at 0 (a rested control is meant to
+    /// cost nothing), and an absent key starts at the target's opposite — so asking it about something
+    /// already at rest hands back 0.93 and fades to 0 again, forever. Six frames on, six frames off: a
+    /// card with no pointer near it brightened its edge, lit its OPEN chip gold and grew its chest 6 %,
+    /// ten times a second. Continuous idle motion is what the brief forbids outright (§30 animate
+    /// CHANGE, §64 no constant flashing) and it drowns the hover it is supposed to be.
+    /// </para>
+    /// <para>
+    /// So ask only while there is something to ask about: a hot control eases in, and it keeps being
+    /// asked until the fade out reaches 0 — after which the key is at rest and is not asked again. The
+    /// root cause is in the shared vocabulary (every <see cref="UiKit.Button"/> in the game does the
+    /// same, this screen's toolbar included); this keeps the VAULT's own controls honest until that is
+    /// fixed, and costs nothing once it is.
+    /// </para>
+    /// </remarks>
+    private float Lift(int key, bool hot)
+    {
+        if (hot)
+        {
+            _cooling.Add(key);
+            return UiMotion.Ease(key, 1f);
+        }
+        if (!_cooling.Contains(key)) return 0f;
+        var v = UiMotion.Ease(key, 0f);
+        if (v <= 0f) _cooling.Remove(key);
+        return v;
+    }
+
     // ── THE WANDERING TRADER + SHARE CODES — the two future-content directions the designer kept
     //    (2026-08-20). Both live in the vault: the room where things arrive from outside. ─────────
     private static readonly Color Ember = UiInk.Danger;
@@ -739,7 +775,7 @@ public sealed class VaultScreen
         // THE SIDE DOOR keeps to the QUIET tier: a plate, a value-step hover, the same 2 px press
         // every button makes — and never gold, never a pulse, so it cannot outrank OPEN ALL (§60).
         var pasteHot = PasteRect.Contains(hit) && !ModalOpen;
-        var pasteLift = UiMotion.Ease(PasteKey, pasteHot ? 1f : 0f);
+        var pasteLift = Lift(PasteKey, pasteHot);
         var pastePressed = pasteHot && Held;
         var pastePlate = pastePressed
             ? new Rectangle(PasteRect.X, PasteRect.Y + 2, PasteRect.Width, PasteRect.Height)
@@ -850,7 +886,7 @@ public sealed class VaultScreen
         // HOVER through the one vocabulary (§26): ~100 ms in, and out again when the pointer leaves.
         // REDUCED MOTION keeps the value step and drops the movement: the card still brightens under
         // the pointer at once, it just does not grow or ease into it.
-        var ease = UiMotion.Ease(HashCode.Combine(CardKeyBase, idx), hovered ? 1f : 0f);
+        var ease = Lift(HashCode.Combine(CardKeyBase, idx), hovered);
         var pad = CardPad;
 
         // A STACK LOOKS LIKE A STACK. Two identical chests were one card with a small "x2" in the
