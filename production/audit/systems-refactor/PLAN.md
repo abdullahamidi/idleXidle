@@ -134,6 +134,51 @@ one per hunter. It stops being a toll gate on the catalogue.
 
 Each phase is its own commit or small series. Not one unreviewable commit (§114).
 
+## Decisions on what the design left open
+
+The five catalogue designs each end with open questions. They are answered here so no phase starts
+blocked, and each answer says what it costs.
+
+**Traits: TWENTY-SIX, not thirty.** The catalogue at thirty costs 38 new dials and 28 new read sites
+in a 2,600-line fight loop. Four go, in the design's own order of cheapness: THE LONG SWING (closest
+to a bare multiplier, which §34 forbids), DRUMBEAT (needs a new wave-local for a ramp SETTLING WEIGHT
+already provides), THE RETURNED BLOW (the third shield trait), THE SETTLED GROUND. That is
+twenty-six, inside the brief's 24-30 band, still two traits for most of the fifteen behaviours §36
+lists, and about six fewer dials.
+
+**`TraitRules` is a sub-record, not 38 more fields on `SkillShape`.** `SkillCatalogue.cs:130-141`
+already argues this case for `SkillRules` — a record at 125 fields is a field list nobody reads. The
+cost is one hop at each read site and a second `Combine` to keep in step.
+
+**STANDING PLATE carries HALF the shield, not all of it.** `ShieldRules` states in as many words that
+a shield accumulating while nothing happens would make standing still the strongest defensive play.
+Halving the carry keeps the invariant nearly intact and still says the sentence the trait is for. The
+full-carry version needed a sign-off nobody is here to give, and the conservative reading of a
+documented invariant is the right default.
+
+**THE MATCHED SUIT is the narrow version.** "+20% to skills that share the element of your completed
+set", not "the set's element becomes every skill's element". Forcing the source takes the player's
+own choice away and interacts with PURE, THE SINGLE NOTE and all six Source variations at once. A
+trait is a characteristic, not a build override.
+
+**The six retroactive discoveries arrive as ONE plate.** Six traits read save fields that already
+exist, so an established account awakens them all on first load. §32 asks for a meaningful awakening
+and warns against a ceremony every few minutes; six separate ceremonies in one second is the failure
+mode of both. One combined plate, then the ordinary one-at-a-time reveal from there.
+
+**WHAT KILLED YOU needs three consecutive deaths in ONE region.** Across regions the sentence reads
+oddly — angry at the armoured of one place because the armoured of another killed you. Slower to
+earn and coherent.
+
+**Discovery still requires a cleared wave.** That matches the skill-progression rule the game already
+has: a run that dies teaches nothing on its way out. WHAT KILLED YOU is the deliberate exception and
+is evaluated at run end, which is how §36's "failure" behaviour is covered.
+
+**Vow capacity becomes a real number.** The vow design's finding is that today's "capacity" is an
+accident of slot count, and that the dominant play is to wear the same vow on every skill because the
+sim bills a vow once and pays it per skill. That asymmetry was deliberate once; it is degenerate now
+that vows are meant to be earned. Capacity becomes a build-level number with automatic milestones.
+
 ## Standing risks the plan accepts
 
 - **The ten-second autosave window.** Autosave fires every 10 s and unknown JSON members are dropped
