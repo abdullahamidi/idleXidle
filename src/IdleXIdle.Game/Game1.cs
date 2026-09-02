@@ -3251,10 +3251,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // Taking a trait is permanent and there is no respec, so it is worth a sound and worth
             // writing to disk immediately. The screen owns neither: it hands back a cue the same way
             // TrainingScreen hands back a trained stat.
+            //
+            // BUT ONLY A PURCHASE IS WORTH A DISK WRITE. The screen speaks more than one cue now — it
+            // asks for a page tick when the camera frames a road, a click on the zoom buttons and a
+            // refusal on a purchase the rules turned down — and none of those changes a single byte of
+            // the save. Saving on any cue at all made panning the tree write the file, so the two
+            // purchase cues are named here and everything else is only a sound.
             if (_traits.ConsumeCue() is { } cue)
             {
                 _sound.PlayFirst(1f, cue, "sfx_conquer", "sfx_levelup", "sfx_click");
-                Save();
+                if (cue is "sfx_trait_lit" or "sfx_trait_terminal") Save();
             }
             Latch(gameTime);
             return;
