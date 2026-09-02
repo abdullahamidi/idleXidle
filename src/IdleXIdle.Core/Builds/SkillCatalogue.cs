@@ -159,6 +159,12 @@ public sealed record SkillVariation(
 /// <param name="RetargetOnDeath">VOLLEY/PUNCH THROUGH — hits left over when a target dies continue into another living enemy instead of vanishing.</param>
 /// <param name="BonusUnderHealth">VOLLEY/CLEANUP — the share of maximum health under which an enemy takes the finishing bonus.</param>
 /// <param name="BonusUnderHealthAmount">VOLLEY/CLEANUP — how much harder a hit lands on an enemy under that share.</param>
+/// <param name="SwingPower">HARD HANDS, OPEN HAND/BROAD KNUCKLE, OPEN HAND/SLOW HANDS — how much harder the champion's own basic attack lands while this skill is woven. Gathered once per wave from the weave and read on the swing, never on a cast.</param>
+/// <param name="DefenceBreakOnKill">HARDFACE, PLANISH/COLD SET — defence stripped from EVERY enemy still standing each time one dies, from any cause. Clamped by the definition's own DefenceBreakFloor.</param>
+/// <param name="DefenceBreakOnAnyHit">HARDFACE/PLANISH/PEENING — the cast strips the enemy in front even when it kills nothing. A flag rather than a second depth, so it is inert on a branch whose depth is zero.</param>
+/// <param name="HealGrowthPerPulse">HOLD FAST/DEEP ROOTS/TAPROOT — how much more each of this Field's heal pulses returns than the one before it, for the rest of the wave.</param>
+/// <param name="BossPower">PAYING WORK, STRIPPED BARE/CLEANED OUT — how much harder this skill lands on a BOSS wave. The only dial in the game that reads the wave's own boss flag.</param>
+/// <param name="PowerPerBiteAnswered">NARROWS, CHOKE/DEEP THORN — how much larger this Reaction's answer is for each bite THIS SLOT has already answered this wave. Read before its own increment, so the first answer is the plain one.</param>
 public sealed record SkillRules(
     float OverkillCarry = 0f,
     bool TrailNextSwing = false,
@@ -178,7 +184,13 @@ public sealed record SkillRules(
     bool SplitByHealth = false,
     bool RetargetOnDeath = false,
     float BonusUnderHealth = 0f,
-    float BonusUnderHealthAmount = 0f)
+    float BonusUnderHealthAmount = 0f,
+    float SwingPower = 0f,
+    float DefenceBreakOnKill = 0f,
+    bool DefenceBreakOnAnyHit = false,
+    float HealGrowthPerPulse = 0f,
+    float BossPower = 0f,
+    float PowerPerBiteAnswered = 0f)
 {
     /// <summary>The base line: a skill turns none of these on until a variation or reinforcement does.</summary>
     public static readonly SkillRules None = new();
@@ -279,6 +291,12 @@ public sealed record SkillDef(
     bool FrontEnemyOnly = false,         // DRAIN/SHRIVEL
     int MinimumHits = 0,                 // VOLLEY/SPLAY — arrows double up when the wave is small
     int HitsPerTarget = 1,               // VOLLEY/CLUSTER — arrows landed on EACH creature reached
+    float DamagePerDeadEnemy = 0f,       // GRAVE SONG — damage rises with the enemies the wave has LOST.
+                                         //   The mirror of DamagePerLivingEnemy, and read one line below
+                                         //   it, so a wave's living and dead can be sold in two directions.
+    float ShieldPerPulse = 0f,           // HOLD FAST — a Field that grants SHIELD instead of dealing.
+                                         //   The catalogue's only producer of standing shield; the fight's
+                                         //   Field fork tests it first and spares every shipped Field.
 
     // ── WHAT THE REINFORCEMENTS TURN. Ten, deliberately: a dial per reinforcement would be seventy
     //    of them, and most of what a reinforcement wants to say is "the same thing, more of it" —
@@ -320,12 +338,20 @@ public sealed record SkillDef(
 }
 
 /// <summary>
-/// The twelve skills — one active and one passive per style.
+/// The twelve SHARED skills — one active and one passive per style — and the TEN SIGNATURES.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Authored 2026-08-30 and gated against the two laws in
 /// <c>design/gdd/skill-slots-and-skill-trees.md</c> §8 and the mechanic ownership table in §6. Six
 /// entries were cut for cause during that gate; §6 records each and the rule it broke.
+/// </para>
+/// <para>
+/// The ten signatures arrived with the systems refactor's phase 2. A signature carries an
+/// <see cref="SkillDef.OwnerCharacterId"/> and only that champion may ever weave it; the shared twelve
+/// leave it null. Use <see cref="Shared"/> wherever a statement is about the twelve's shape — a style
+/// owning exactly one active, a Source fielding a whole loadout, a mastery road teaching every skill.
+/// </para>
 /// </remarks>
 public static class SkillCatalogue
 {
@@ -762,6 +788,344 @@ public static class SkillCatalogue
                      d => d with { AttackBreakFloor = -0.97f })),
             },
             AttackBreakPerTick: 0.10f, AttackBreakFloor: -0.50f),
+
+        // ── THE TEN SIGNATURES — one per champion, and only that champion may ever weave it.
+        //
+        //    They are NOT a thirteenth through twenty-second entry in the twelve's shape. No mastery
+        //    node teaches one (BuildComposer adds the active character's signature to the taught set
+        //    outright), no style "owns" one, and the Source matrix is the shared twelve's — a signature
+        //    is exclusive, so it can never be one of the four a Source fields a whole loadout from.
+        //    Everything a signature turns is a dial the fight already reads, or one of the eight added
+        //    for this set, each with exactly one consumer in SoloBattle.
+        //
+        //    In ROSTER order, so this list and CharacterRoster.All read side by side. ────────────────
+
+        // THE SEEKER — the champion with no lean, whose own hands are the build.
+        new("sig_seeker_hard_hands", "HARD HANDS", Style.Hammer, SkillKind.Active, SkillEffect.Damage,
+            "Heavy damage to one target every 6 beats. While it is woven, every basic attack you make lands 70% harder.",
+            Beats: 6, IntervalMs: 0, On: ReactionOn.None, Targets: 1, BasePower: 400f,
+            ClipKey: "strike", FxKey: "strike",
+            Rules: new SkillRules(SwingPower: 0.70f),
+            OwnerCharacterId: "seeker",
+            Variations: new[]
+            {
+                V("OPEN HAND", "The blow gives its weight to your hands: it deals a third as much, and your basic attacks land 210% harder.",
+                    Source.Body,
+                    d => d with { DamageMultiplier = 0.35f, Rules = d.Rule with { SwingPower = 2.10f } },
+                    ("BROAD KNUCKLE", "Your basic attacks land 330% harder instead of 210%.",
+                     d => d with { Rules = d.Rule with { SwingPower = d.Rule.SwingPower * 1.57f } }),
+                    ("SPLIT GRAIN", "Your basic attacks ignore defence.",
+                     d => d with { SwingIgnoresArmour = true }),
+                    // Was THROUGH GRAIN, a carry on the swing's own overkill: bounding it to one level
+                    // needed a re-entry flag threaded through the sim's hottest method for a single
+                    // purchase. This is the branch's own trade said once more — give the cast away,
+                    // take the beats back — on two dials that are already live.
+                    ("SLOW HANDS", "The blow comes round every 8 beats instead of 6, and your basic attacks land 400% harder instead of 210%.",
+                     d => d with { Beats = 8, Rules = d.Rule with { SwingPower = d.Rule.SwingPower * 1.90f } })),
+                V("SHUT FIST", "Your hands gain nothing more. The blow lands twice on the target, and it hits an enemy under half health 85% harder.",
+                    Source.Mind,
+                    d => d with { HitsPerTarget = 2, DamageMultiplier = 0.80f,
+                                  Rules = d.Rule with { SwingPower = 0f,
+                                                        BonusUnderHealth = 0.50f, BonusUnderHealthAmount = 0.85f } },
+                    ("THIRD FALL", "The blow lands three times instead of twice.",
+                     d => d with { HitsPerTarget = 3 }),
+                    ("CARRY ON", "If the target dies, the blows it had left drive into the next enemy.",
+                     d => d with { Rules = d.Rule with { RetargetOnDeath = true } }),
+                    // The AMOUNT only. Buying the threshold too would open the window on OPEN HAND,
+                    // which sets none — the same split WIDE SWEEP and BARBED SWEEP use.
+                    ("LAST INCH", "The finishing bonus is 140% instead of 85%.",
+                     d => d with { Rules = d.Rule with { BonusUnderHealthAmount = 1.40f } })),
+            }),
+
+        // THE ANVIL — what goes down leaves the next one softer.
+        new("sig_anvil_hardface", "HARDFACE", Style.Hammer, SkillKind.Active, SkillEffect.Damage,
+            "Heavy damage to one target every 6 beats. While it is woven, every enemy that dies strips 12 defence from every enemy still standing, for the rest of the wave, down to -48.",
+            Beats: 6, IntervalMs: 0, On: ReactionOn.None, Targets: 1, BasePower: 470f,
+            ClipKey: "strike", FxKey: "strike",
+            DefenceBreakFloor: -48f,
+            Rules: new SkillRules(DefenceBreakOnKill: 12f),
+            OwnerCharacterId: "anvil",
+            Variations: new[]
+            {
+                V("PLANISH", "The strip is 24 defence instead of 12, and defence can be driven down to -90.",
+                    Source.Machine,
+                    d => d with { DefenceBreakFloor = -90f, Rules = d.Rule with { DefenceBreakOnKill = 24f } },
+                    ("BEDPLATE", "Defence can be driven down to -150 instead of -90.",
+                     d => d with { DefenceBreakFloor = -150f }),
+                    ("COLD SET", "The strip is 40 defence instead of 24.",
+                     d => d with { Rules = d.Rule with { DefenceBreakOnKill = 40f } }),
+                    // A BOOL, not a second depth: a flag that enables a strip of zero subtracts zero,
+                    // which is what keeps it inert on the branch that sold the strip.
+                    ("PEENING", "The blow strips the enemy in front even when it does not kill.",
+                     d => d with { Rules = d.Rule with { DefenceBreakOnAnyHit = true } })),
+                V("UPSET", "No defence stripping. The weight falls on every enemy, twice, at 45% each.",
+                    Source.Body,
+                    d => d with { Targets = WholeWave, HitsPerTarget = 2, DamageMultiplier = 0.45f,
+                                  Rules = d.Rule with { DefenceBreakOnKill = 0f } },
+                    ("THIRD DROP", "The weight falls three times instead of twice.",
+                     d => d with { HitsPerTarget = 3 }),
+                    ("RUNOUT", "If an enemy dies, the falls it had left drive into the next enemy.",
+                     d => d with { Rules = d.Rule with { RetargetOnDeath = true } }),
+                    ("UNDERFOOT", "The falls hit an enemy under half health 75% harder.",
+                     d => d with { Rules = d.Rule with { BonusUnderHealth = 0.50f, BonusUnderHealthAmount = 0.75f } })),
+            }),
+
+        // THE CHORUS — the mirror of MANY MOUTHS, read off the wave's dead instead of its living.
+        new("sig_chorus_grave_song", "GRAVE SONG", Style.Field, SkillKind.Field, SkillEffect.Damage,
+            "Damages every enemy every 2s, and deals 35% more for each enemy the wave has already lost.",
+            Beats: 0, IntervalMs: 2000, On: ReactionOn.None, Targets: WholeWave, BasePower: 16f,
+            ClipKey: "aura", FxKey: "aura",
+            DamagePerDeadEnemy: 0.35f,
+            OwnerCharacterId: "chorus",
+            Variations: new[]
+            {
+                V("REQUIEM", "The song comes every 4s instead of every 2s, at more than twice the weight, and each enemy the wave has lost is worth 70%.",
+                    Source.Shadow,
+                    d => d with { IntervalMs = 4000, DamageMultiplier = 2.2f, DamagePerDeadEnemy = 0.70f },
+                    ("DIRGE", "Each enemy the wave has lost is worth 110% instead of 70%.",
+                     d => d with { DamagePerDeadEnemy = 1.10f }),
+                    ("TOLLING", "The song comes every 3s instead of every 4s.",
+                     d => d with { IntervalMs = 3000 }),
+                    ("OPEN GRAVE", "The song hits an enemy under 45% health 90% harder.",
+                     d => d with { Rules = d.Rule with { BonusUnderHealth = 0.45f, BonusUnderHealthAmount = 0.90f } })),
+                // The cap is 25%, not 45%: the read takes the LARGER of the two softenings, so a cap
+                // the wave cannot reach decides nothing. At 10% a corpse, 25% binds from the third
+                // death — which a five-creature band reaches while it is still being bitten.
+                V("CHANTRY", "The song stops counting the dead for damage and counts them against the wave: it deals its plain weight, and the wave bites 14% softer for every enemy it has lost, down to -25%.",
+                    Source.Spirit,
+                    d => d with { DamageMultiplier = 1.6f, DamagePerDeadEnemy = 0f,
+                                  Rules = d.Rule with { WeakenPerDeadEnemy = 0.14f, WeakenPerDeadCap = 0.25f } },
+                    ("HUSH", "The softening may reach -45% instead of -25%.",
+                     d => d with { Rules = d.Rule with { WeakenPerDeadCap = 0.45f } }),
+                    ("BLACK VEIL", "The wave bites 22% softer for each enemy it has lost instead of 14%.",
+                     d => d with { Rules = d.Rule with { WeakenPerDeadEnemy = 0.22f } }),
+                    ("SHROUD", "The song ignores defence.",
+                     d => d with { DefenceIgnore = true })),
+            }),
+
+        // THE METRONOME — the one Active counted in SECONDS. Nothing in the game hurries its clock.
+        new("sig_metronome_clockwork", "CLOCKWORK", Style.Volley, SkillKind.Active, SkillEffect.Damage,
+            "Fires on a clock, not on a count: three shots across the wave every 7s. No skill rate bonus makes the clock come sooner, and it still costs the action it lands on.",
+            Beats: 0, IntervalMs: 7000, On: ReactionOn.None, Targets: 3, BasePower: 330f,
+            ClipKey: "projectile", FxKey: "projectile",
+            OwnerCharacterId: "metronome",
+            Variations: new[]
+            {
+                // THE FORK IS REACH AGAINST CONCENTRATION, and the weights are what make it one. The
+                // first draft had HELD NOTE both widening (three targets to the whole wave) AND
+                // multiplying by six, so it beat ROLL by four to seventeen times in every band and
+                // there was no problem ROLL answered. Now ROLL leads where the wave is one or two
+                // creatures and HELD NOTE leads where it is a crowd.
+                V("ROLL", "Every shot lands twice on two enemies instead of once on three, each a sixth heavier, and the clock is half a second shorter: four strikes every 6.5s.",
+                    Source.Machine,
+                    d => d with { IntervalMs = 6500, Targets = 2, HitsPerTarget = 2, DamageMultiplier = 1.15f },
+                    ("RIM SHOT", "Every enemy is struck three times instead of twice.",
+                     d => d with { HitsPerTarget = 3 }),
+                    ("OFF BEAT", "If an enemy dies, the shots it had left drive into the next enemy.",
+                     d => d with { Rules = d.Rule with { RetargetOnDeath = true } }),
+                    ("STEADY HAND", "The shots ignore defence.",
+                     d => d with { DefenceIgnore = true })),
+                V("HELD NOTE", "One arrival every 9s instead of three shots every 7s, and it falls on the whole wave.",
+                    Source.Mind,
+                    d => d with { IntervalMs = 9000, Targets = WholeWave },
+                    ("WHOLE BAR", "The arrival comes every 7s instead of every 9s.",
+                     d => d with { IntervalMs = 7000 }),
+                    ("LATE BEAT", "The arrival hits an enemy under 40% health 110% harder.",
+                     d => d with { Rules = d.Rule with { BonusUnderHealth = 0.40f, BonusUnderHealthAmount = 1.10f } }),
+                    ("SPARE SHOT", "Against a thin wave the arrival doubles up: never fewer than 3 shots in all.",
+                     d => d with { MinimumHits = 3 })),
+            }),
+
+        // THE UNBROKEN — the catalogue's only producer of standing SHIELD.
+        new("sig_unbroken_hold_fast", "HOLD FAST", Style.Snare, SkillKind.Field, SkillEffect.Heal,
+            "Every 2s you gain shield worth 2.5% of your maximum health. It never takes your action.",
+            Beats: 0, IntervalMs: 2000, On: ReactionOn.None, Targets: 1,
+            ClipKey: "trap", FxKey: "trap",
+            ShieldPerPulse: 0.025f,
+            OwnerCharacterId: "unbroken",
+            Variations: new[]
+            {
+                V("BREASTWORK", "Twice the wall, half as often: shield worth 5.5% of your maximum health every 4s.",
+                    Source.Machine,
+                    d => d with { ShieldPerPulse = 0.055f, IntervalMs = 4000 },
+                    ("COURSED STONE", "Each pulse is worth half again as much: 8.5% of your maximum health instead of 5.5%.",
+                     d => d with { ShieldPerPulse = d.ShieldPerPulse * 1.55f }),
+                    ("FOOTINGS", "The wall is rebuilt every 2.5s instead of every 4s.",
+                     d => d with { IntervalMs = 2500 }),
+                    // Was GROUNDWORK, which edited the field arrears gate's `ms == 0` clause — a clause
+                    // the tick loop can never satisfy, since it opens at TickMs. This buys the same
+                    // sentence on a site that fires: the wave opens with the plate already on.
+                    ("GROUNDWORK", "The wall is already standing when the wave opens: every wave begins with shield worth 5.5% of your maximum health.",
+                     d => d with { WaveStartShieldFraction = 0.055f })),
+                V("DEEP ROOTS", "Half the wall. Each pulse also heals 1% of your maximum health.",
+                    Source.Spirit,
+                    d => d with { ShieldPerPulse = 0.012f, HealPerPulse = 0.010f },
+                    ("WELLSPRING", "Each pulse heals 1.8% of your maximum health instead of 1%.",
+                     d => d with { HealPerPulse = d.HealPerPulse * 1.8f }),
+                    ("TAPROOT", "Each pulse heals 30% more than the one before it, for the rest of the wave.",
+                     d => d with { Rules = d.Rule with { HealGrowthPerPulse = 0.30f } }),
+                    ("HEARTWOOD", "Each pulse is worth 3% of your maximum health instead of 1.2%.",
+                     d => d with { ShieldPerPulse = 0.030f })),
+            }),
+
+        // THE FALLING TOWER — a HAMMER field that lands real hits, on its own clock, on one creature.
+        new("sig_tower_slow_fall", "SLOW FALL", Style.Hammer, SkillKind.Field, SkillEffect.Damage,
+            "A stone falls on the front enemy every 3s. It never takes your action.",
+            Beats: 0, IntervalMs: 3000, On: ReactionOn.None, Targets: 1, BasePower: 42f,
+            ClipKey: "strike", FxKey: "strike",
+            OwnerCharacterId: "tower",
+            Variations: new[]
+            {
+                // THE FINISHING WINDOW IS THE VARIATION'S, and its two riders buy the two halves of it
+                // — the split the shipped WIDE SWEEP / BARBED SWEEP pair uses. Written the other way
+                // round, with one rider opening the window and the other widening it, the widener
+                // alone multiplied an amount of zero and was a level that did nothing at all.
+                V("COURSES", "The stones fall every 1.5s, each half as heavy, they ignore defence, and each stone hits an enemy under 45% health 55% harder.",
+                    Source.Body,
+                    d => d with { IntervalMs = 1500, DefenceIgnore = true,
+                                  Rules = d.Rule with { BonusUnderHealth = 0.45f, BonusUnderHealthAmount = 0.55f } },
+                    ("DRYSTONE", "The stones fall every 1s instead of every 1.5s.",
+                     d => d with { IntervalMs = 1000 }),
+                    ("PLUMBLINE", "The finishing bonus is 110% instead of 55%.",
+                     d => d with { Rules = d.Rule with { BonusUnderHealthAmount = 1.10f } }),
+                    ("HAIRLINE", "The finishing bonus reaches an enemy under 70% health instead of 45%.",
+                     d => d with { Rules = d.Rule with { BonusUnderHealth = 0.70f } })),
+                V("ONE STONE", "One stone every 6s, on the two enemies in front, and it lands at 2.4 times the weight.",
+                    Source.Nature,
+                    d => d with { IntervalMs = 6000, TargetsBonus = 1, DamageMultiplier = 2.4f },
+                    ("CAPSTONE", "The stone falls on the three enemies in front.",
+                     d => d with { TargetsBonus = 2 }),
+                    ("FULL COURSE", "The stone lands at 3.6 times the weight instead of 2.4.",
+                     d => d with { DamageMultiplier = 3.6f }),
+                    ("BEDDING IN", "The stone falls every 4s instead of every 6s.",
+                     d => d with { IntervalMs = 4000 })),
+            }),
+
+        // THE QUIVER — the shot that never had a cooldown to spend. Revives ReactionOn.Kill.
+        new("sig_quiver_backdraw", "BACKDRAW", Style.Volley, SkillKind.Reaction, SkillEffect.Damage,
+            "When an enemy dies, two arrows fly at whatever is still standing. Rearms every 2.5s.",
+            Beats: 0, IntervalMs: 0, On: ReactionOn.Kill, Targets: 2, BasePower: 175f, RearmMs: 2500,
+            ClipKey: "projectile", FxKey: "projectile",
+            OwnerCharacterId: "quiver",
+            Variations: new[]
+            {
+                V("CLEAN SWEEP", "The volley reaches every living enemy instead of two, at two thirds the weight, and every arrow hits an enemy under half health 85% harder.",
+                    Source.Mind,
+                    d => d with { Targets = WholeWave, DamageMultiplier = 0.65f,
+                                  Rules = d.Rule with { BonusUnderHealth = 0.50f, BonusUnderHealthAmount = 0.85f } },
+                    ("WIDE SWEEP", "The finishing bonus reaches an enemy under three-quarters health.",
+                     d => d with { Rules = d.Rule with { BonusUnderHealth = 0.75f } }),
+                    ("BARBED SWEEP", "The finishing bonus is 160% instead of 85%.",
+                     d => d with { Rules = d.Rule with { BonusUnderHealthAmount = 1.60f } }),
+                    ("SECOND STRING", "Every enemy is struck twice, and each strike is lighter.",
+                     d => d with { HitsPerTarget = 2, DamageMultiplier = 0.42f })),
+                V("ONE SHAFT", "One arrow instead of two, at six and a half times the weight, and it comes back only every 12s.",
+                    Source.Shadow,
+                    d => d with { Targets = 1, RearmMs = 12_000, DamageMultiplier = 6.5f },
+                    ("HEAVY SHAFT", "The arrow lands at ten times the weight instead of six and a half.",
+                     d => d with { DamageMultiplier = 10.0f }),
+                    ("SECOND SHAFT", "The arrow comes back every 7s instead of every 12s.",
+                     d => d with { RearmMs = 7_000 }),
+                    ("BROADHEAD", "Your casts leave bleed worth 25% of what they deal.",
+                     d => d with { BleedFromHits = 0.25f })),
+            }),
+
+        // THE THORNWALL — the only Reaction whose answer is its OWN number, growing with the count.
+        new("sig_thornwall_narrows", "NARROWS", Style.Snare, SkillKind.Reaction, SkillEffect.Damage,
+            "Every bite is answered by a fixed hit on the enemy in front, and the answer grows 22% for every bite this wall has already answered this wave. Rearms every 2.5s.",
+            Beats: 0, IntervalMs: 0, On: ReactionOn.Bitten, Targets: 1, BasePower: 170f, RearmMs: 2500,
+            ClipKey: "trap", FxKey: "trap",
+            Rules: new SkillRules(PowerPerBiteAnswered: 0.22f),
+            OwnerCharacterId: "thornwall",
+            Variations: new[]
+            {
+                // The same split as COURSES, for the same reason.
+                V("BRAMBLE", "The answer reaches every enemy instead of one, stops growing, and hits an enemy under half health 80% harder.",
+                    Source.Nature,
+                    d => d with { Targets = WholeWave, BasePower = 110f,
+                                  Rules = d.Rule with { PowerPerBiteAnswered = 0f,
+                                                        BonusUnderHealth = 0.50f, BonusUnderHealthAmount = 0.80f } },
+                    ("UNDERGROWTH", "The finishing bonus reaches an enemy under three-quarters health.",
+                     d => d with { Rules = d.Rule with { BonusUnderHealth = 0.75f } }),
+                    ("BLACK THORN", "The finishing bonus is 150% instead of 80%.",
+                     d => d with { Rules = d.Rule with { BonusUnderHealthAmount = 1.50f } }),
+                    ("BRIAR", "The answer is worth 170 instead of 110.",
+                     d => d with { BasePower = 170f })),
+                V("CHOKE", "The answer stays on the enemy in front, the wall answers every 2s, and the answer grows 34% for every bite it has already answered.",
+                    Source.Machine,
+                    d => d with { RearmMs = 2_000, Rules = d.Rule with { PowerPerBiteAnswered = 0.34f } },
+                    ("DEEP THORN", "The answer grows half again as fast: 55% for every bite instead of 34%.",
+                     d => d with { Rules = d.Rule with { PowerPerBiteAnswered = d.Rule.PowerPerBiteAnswered * 1.6f } }),
+                    ("SNAPBACK", "The wall rearms 30% sooner still.",
+                     d => d with { CooldownMultiplier = 0.70f }),
+                    ("SECOND STAKE", "The answer reaches the two enemies in front.",
+                     d => d with { Targets = 2 })),
+            }),
+
+        // THE OATHBOUND — the only amplifier whose price is being hit.
+        new("sig_oathbound_oathmark", "OATHMARK", Style.Sign, SkillKind.Reaction, SkillEffect.Amplify,
+            "Every bite you take opens the mark: all your damage +90% for 3s. Rearms every 4s.",
+            Beats: 0, IntervalMs: 0, On: ReactionOn.Bitten, Targets: WholeWave, RearmMs: 4_000,
+            ClipKey: "mark", FxKey: "mark",
+            AmplifyPercent: 0.90f, AmplifyMs: 3_000, AmplifyWholeWave: true,
+            OwnerCharacterId: "oathbound",
+            Variations: new[]
+            {
+                // The depth is carried by AmplifyFrontFull rather than by AmplifyPercent, which is what
+                // makes every depth purchase on this branch write a dial the sibling leaves at zero.
+                // AmplifyPercent stays above zero because the window gate reads it.
+                V("SEALED WORD", "The mark falls on the enemy in front only, and it is far deeper: +260% while it holds, for 1.8s.",
+                    Source.Spirit,
+                    d => d with { AmplifyWholeWave = false, AmplifyMs = 1_800,
+                                  Rules = d.Rule with { AmplifyFrontFull = 2.60f } },
+                    ("DEEP SEAL", "The mark is half again as deep: +390% instead of +260%.",
+                     d => d with { Rules = d.Rule with { AmplifyFrontFull = d.Rule.AmplifyFrontFull * 1.5f } }),
+                    ("LONG SEAL", "The mark holds 3s instead of 1.8s.",
+                     d => d with { AmplifyMs = 3_000 }),
+                    ("SHORTER OATH", "The mark reopens every 2.5s instead of every 4s.",
+                     d => d with { RearmMs = 2_500 })),
+                V("OPEN WORD", "The mark covers the whole wave but burns fast: +140% for 2s, and it reopens every 2.5s.",
+                    Source.Mind,
+                    d => d with { AmplifyPercent = 1.40f, AmplifyMs = 2_000, RearmMs = 2_500 },
+                    ("WIDER WORD", "The mark is +230% instead of +140%.",
+                     d => d with { AmplifyPercent = 2.30f }),
+                    ("SAID AGAIN", "Each time the mark reopens it is deeper: +45% more each time, up to +180%.",
+                     d => d with { AmplifyDeepenPerTick = 0.45f, AmplifyDeepenCap = 1.80f }),
+                    ("FIRST WORD", "The enemy in front takes a +220% mark while the rest of the wave keeps the spread.",
+                     d => d with { Rules = d.Rule with { AmplifyFrontFull = 2.20f } })),
+            }),
+
+        // THE MAGPIE — the only champion with no combat innate at all, aimed at the one wave it wants.
+        new("sig_magpie_paying_work", "PAYING WORK", Style.Drain, SkillKind.Active, SkillEffect.Heal,
+            "Heavy damage to one target every 5 beats, and you take 12% of what it deals back as health. Against a boss it lands 160% harder.",
+            Beats: 5, IntervalMs: 0, On: ReactionOn.None, Targets: 1, BasePower: 250f,
+            ClipKey: "transformation", FxKey: "transformation",
+            Lifesteal: 0.12f,
+            Rules: new SkillRules(BossPower: 1.60f),
+            OwnerCharacterId: "magpie",
+            Variations: new[]
+            {
+                V("STRIPPED BARE", "It takes nothing back, and against a boss it lands 340% harder instead of 160%.",
+                    Source.Shadow,
+                    d => d with { Lifesteal = 0f, Rules = d.Rule with { BossPower = 3.40f } },
+                    ("CLEANED OUT", "Against a boss it lands 520% harder instead of 340%.",
+                     d => d with { Rules = d.Rule with { BossPower = 5.20f } }),
+                    ("PRISED OPEN", "The blow ignores defence.",
+                     d => d with { DefenceIgnore = true }),
+                    ("LONG JOB", "It comes every 6 beats instead of 5, and lands half again as hard.",
+                     d => d with { Beats = 6, DamageMultiplier = 1.45f })),
+                V("LIGHT FINGERS", "No boss bonus. It strikes every enemy in the wave for a third of the weight, and each strike hits an enemy under half health 80% harder.",
+                    Source.Nature,
+                    d => d with { Targets = WholeWave, DamageMultiplier = 0.35f,
+                                  Rules = d.Rule with { BossPower = 0f,
+                                                        BonusUnderHealth = 0.50f, BonusUnderHealthAmount = 0.80f } },
+                    ("MANY POCKETS", "The finishing bonus reaches an enemy under 72% health instead of half.",
+                     d => d with { Rules = d.Rule with { BonusUnderHealth = 0.72f } }),
+                    ("SECOND HELPING", "Every enemy is struck twice, and each strike is lighter.",
+                     d => d with { HitsPerTarget = 2, DamageMultiplier = 0.22f }),
+                    ("FULL HANDS", "You take 38% of what it deals back instead of 12%.",
+                     d => d with { Lifesteal = 0.38f })),
+            }),
     };
 
     public static SkillDef ById(string id)
@@ -770,11 +1134,19 @@ public static class SkillCatalogue
 
     public static SkillDef? Find(string? id) => id is null ? null : All.FirstOrDefault(s => s.Id == id);
 
-    /// <summary>A style's ACTIVE skill — the one that costs the champion an action.</summary>
-    public static SkillDef ActiveOf(Style style) => All.First(s => s.Style == style && s.TakesABeat);
+    /// <summary>The twelve SHARED skills — everything any champion may learn on the mastery tree.</summary>
+    /// <remarks>
+    /// The ten signatures are excluded on purpose. "A style's active" is a statement about the shared
+    /// catalogue's shape (one active and one passive per style); a signature belongs to a champion, not
+    /// to a style's pair, and three styles now carry two of them.
+    /// </remarks>
+    public static IEnumerable<SkillDef> Shared => All.Where(s => s.OwnerCharacterId is null);
 
-    /// <summary>A style's PASSIVE skill — the one that never costs an action.</summary>
-    public static SkillDef PassiveOf(Style style) => All.First(s => s.Style == style && !s.TakesABeat);
+    /// <summary>A style's ACTIVE shared skill — the one that costs the champion an action.</summary>
+    public static SkillDef ActiveOf(Style style) => Shared.First(s => s.Style == style && s.TakesABeat);
+
+    /// <summary>A style's PASSIVE shared skill — the one that never costs an action.</summary>
+    public static SkillDef PassiveOf(Style style) => Shared.First(s => s.Style == style && !s.TakesABeat);
 
     /// <summary>
     /// Cyclic distance on the six-style ring, 0..3 — the affinity hexagon, unchanged in shape from

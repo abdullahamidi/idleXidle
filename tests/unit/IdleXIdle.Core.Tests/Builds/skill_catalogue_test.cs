@@ -36,12 +36,18 @@ public class SkillCatalogueTests
     [Fact]
     public void test_every_style_owns_exactly_one_active_and_one_passive()
     {
+        // THE SHARED TWELVE, not the whole catalogue. The ten signatures (P2 of the systems
+        // refactor) carry an OwnerCharacterId and belong to a CHAMPION rather than to a style's
+        // pair — three styles now hold two of them and one holds none, and that is the design. The
+        // statement "one active and one passive per style" was only ever about the twelve any
+        // champion may learn, which is exactly what SkillCatalogue.Shared is.
         Assert.Equal(6, Enum.GetValues<Style>().Length);
-        Assert.Equal(12, SkillCatalogue.All.Count);
+        Assert.Equal(12, SkillCatalogue.Shared.Count());
+        Assert.Equal(22, SkillCatalogue.All.Count);
 
         foreach (var style in Enum.GetValues<Style>())
         {
-            var owned = SkillCatalogue.All.Where(s => s.Style == style).ToList();
+            var owned = SkillCatalogue.Shared.Where(s => s.Style == style).ToList();
             Assert.True(owned.Count == 2, $"{style} owns {owned.Count} skills; it must own exactly two.");
             Assert.Single(owned, s => s.TakesABeat);
             Assert.Single(owned, s => !s.TakesABeat);
@@ -68,7 +74,8 @@ public class SkillCatalogueTests
     [Fact]
     public void test_ids_are_unique_and_safe_to_persist()
     {
-        Assert.Equal(12, SkillCatalogue.All.Select(s => s.Id).Distinct().Count());
+        // 22: the shared twelve plus the ten signatures. Was 12.
+        Assert.Equal(22, SkillCatalogue.All.Select(s => s.Id).Distinct().Count());
         Assert.All(SkillCatalogue.All, s =>
         {
             Assert.False(string.IsNullOrWhiteSpace(s.Id));
@@ -97,8 +104,13 @@ public class SkillCatalogueTests
             switch (d.Kind)
             {
                 case SkillKind.Active:
-                    Assert.True(d.Beats > 0, $"{d.Name} is Active and must count beats.");
-                    Assert.Equal(0, d.IntervalMs);
+                    // AN ACTIVE COUNTS BEATS **OR** SECONDS, never both and never neither. It used to
+                    // be beats only, and the sim's clock branch for a time-counted Active was shut as
+                    // a dead path in the 2026-08-31 audit with a note asking for exactly this test
+                    // before it was reopened. CLOCKWORK reopened it: its eligibility is a millisecond
+                    // clock nothing in the game can hurry, and it still spends the beat it lands on.
+                    Assert.True(d.Beats > 0 ^ d.IntervalMs > 0,
+                        $"{d.Name} is Active and must count either beats or milliseconds, not both and not neither.");
                     Assert.Equal(ReactionOn.None, d.On);
                     break;
                 case SkillKind.Field:
@@ -108,6 +120,12 @@ public class SkillCatalogueTests
                     // that is not a multiple of it never fires at all, and nothing would say so.
                     Assert.True(d.IntervalMs % 100 == 0,
                         $"{d.Name} ticks every {d.IntervalMs}ms; the sim's modulo would never land.");
+                    // AND IT MUST SURVIVE RADIANCE, which multiplies the clock by 3/5 before the same
+                    // modulo. A 2600ms field becomes 1560, which `ms` first reaches at 7800 — three
+                    // times SLOWER than the clock the player bought, and nothing would say so.
+                    Assert.True(d.IntervalMs * 3 / 5 % 100 == 0,
+                        $"{d.Name} ticks every {d.IntervalMs}ms, which RADIANCE turns into "
+                        + $"{d.IntervalMs * 3 / 5}ms — not a multiple of the 100ms tick.");
                     Assert.Equal(ReactionOn.None, d.On);
                     break;
                 case SkillKind.Reaction:
@@ -124,8 +142,16 @@ public class SkillCatalogueTests
         // Waves run 6-15 seconds; a cooldown longer than one can never fire. An Active's cooldown
         // is Beats * SoloBattle.DefaultBeatMs, so the beat count is the whole knob — pinned so a
         // new skill cannot reintroduce a cooldown that outlives the wave.
+        // STATED IN MILLISECONDS NOW, because an Active's cadence is no longer always a beat count:
+        // CLOCKWORK is counted in seconds outright. Six beats at the default beat is 9,000ms, which is
+        // the same ceiling the old `Beats <= 6` expressed — so nothing shipped moved, and a
+        // time-counted Active is held to the identical bound instead of skipping the gate.
         foreach (var d in SkillCatalogue.All.Where(s => s.TakesABeat))
-            Assert.True(d.Beats <= 6, $"{d.Name} waits {d.Beats} beats, which outlives a wave.");
+        {
+            var waitMs = d.Beats > 0 ? d.Beats * SoloBattle.DefaultBeatMs : d.IntervalMs;
+            Assert.True(waitMs <= 6 * SoloBattle.DefaultBeatMs,
+                        $"{d.Name} waits {waitMs}ms, which outlives a wave.");
+        }
     }
 
     [Fact]
@@ -189,7 +215,8 @@ public class SkillCatalogueTests
         var names = SkillCatalogue.All.SelectMany(EveryName).ToList();
         var dups = names.GroupBy(n => n).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
         Assert.True(dups.Count == 0, "repeated names: " + string.Join(", ", dups));
-        Assert.Equal(12 * (1 + 2 + 6), names.Count);
+        // 198 entries: the shared twelve's 108 plus the ten signatures' 90. Was 12 * 9.
+        Assert.Equal(22 * (1 + 2 + 6), names.Count);
     }
 
     [Fact]

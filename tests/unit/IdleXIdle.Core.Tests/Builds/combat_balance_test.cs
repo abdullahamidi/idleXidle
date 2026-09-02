@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using IdleXIdle.Core.Builds;
+using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Encounters;
 using IdleXIdle.Core.Expeditions;
@@ -80,8 +81,15 @@ public class CombatBalanceTests
             foreach (var r in def.Variations.Single(v => v.Name == variation).Reinforcements)
                 progress.TakeReinforcement(def, r.Name);
         }
+        // THE OWNER SITS IN THE CHAIR when one of the picks is a signature, and nobody does
+        // otherwise. A signature belongs to one champion and the composer refuses it to anyone else,
+        // so a null character would compose the bench's subject away and every measurement below
+        // would silently be of the partner alone. The champion brings its passive with it, which is
+        // correct: a signature is only ever fought with beside its own innate.
+        var owner = picks.Select(p => SkillCatalogue.ById(p.SkillId).OwnerCharacterId)
+                         .FirstOrDefault(o => o is not null);
         return BuildComposer.Compose(
-            new MemoryDustTree(), EveryRoadWalked(), character: null,
+            new MemoryDustTree(), EveryRoadWalked(), character: CharacterRoster.Find(owner ?? ""),
             skills: picks.Select(p => new BuildComposer.SkillPick(p.Source, null, SkillId: p.SkillId)).ToList(),
             keystoneIds: Array.Empty<string>(), slotCapacity: 4, progress: progress);
     }
@@ -377,24 +385,55 @@ public class CombatBalanceTests
     [Fact]
     public void test_two_actives_leave_the_basic_attack_most_of_the_beats()
     {
+        // How many of the champion's actions one cast of this skill is worth, in beats — the same
+        // number for a beat-counted Active and a clock-counted one.
+        static int Rotation(SkillDef d)
+            => d.Beats > 0 ? d.Beats : (int)MathF.Ceiling(d.IntervalMs / (float)SoloBattle.DefaultBeatMs);
+
         var actives = SkillCatalogue.All.Where(d => d.Kind == SkillKind.Active).ToList();
         var worst = 1f;
+        var measured = 0;
         string worstPair = "";
 
         foreach (var a in actives)
             foreach (var b in actives)
             {
                 if (string.CompareOrdinal(a.Id, b.Id) >= 0) continue;
+                // A PAIR NOBODY CAN BUILD IS NOT A PAIR. A hunter has exactly one signature, so two
+                // signatures belonging to different champions can never stand in one loadout — and
+                // measuring that combination would hold the beat budget to a build the ownership rule
+                // forbids. Every other pair (two shared, or a champion's own signature beside a
+                // shared active) is one a real player can weave, and is measured.
+                if (a.OwnerCharacterId is not null && b.OwnerCharacterId is not null
+                    && a.OwnerCharacterId != b.OwnerCharacterId) continue;
                 var build = Woven((a.Variations[0].Source, a.Id, a.Variations[0].Name),
                                   (b.Variations[0].Source, b.Id, b.Variations[0].Name));
                 var r = Fight(build, Wearing(null, 0), Archetype.Bruiser);
                 var beats = r.Casts + r.Swings;
-                if (beats == 0) continue;
+                // A WAVE THAT ENDS INSIDE ONE ROTATION HAS NOT POSED THE QUESTION. The share is only
+                // about cadence once both skills have had a chance to come round; before that it is
+                // about how much health the band was carrying. It used to be enough to skip a fight
+                // with no actions at all, because no shipped pair could end a Bruiser sooner — but a
+                // champion whose innate doubles the first hit on each enemy kills this band in ONE
+                // action, and one cast and no swing reads as 0% of the beats for a pair whose real
+                // demand is 0.38. Measured against the pair's own longest cadence instead.
+                var needed = Math.Max(Rotation(a), Rotation(b));
+                if (beats < needed)
+                {
+                    _out.WriteLine($"  {a.Name} + {b.Name}: SKIPPED — the wave ended in {beats} actions, "
+                                   + $"inside the pair's own {needed}-action rotation ({r.DurationMs}ms)");
+                    continue;
+                }
+                measured++;
                 var swingShare = r.Swings / (float)beats;
+                _out.WriteLine($"  {a.Name} + {b.Name}: {r.Casts} casts, {r.Swings} swings, {r.DurationMs}ms");
                 if (swingShare < worst) { worst = swingShare; worstPair = $"{a.Name} + {b.Name}"; }
             }
 
-        _out.WriteLine($"the hungriest pair is {worstPair}, leaving the swing {worst:P0} of the beats");
+        _out.WriteLine($"the hungriest pair is {worstPair}, leaving the swing {worst:P0} of the beats "
+                       + $"({measured} pairs measured)");
+        // The guard above must never empty the bench.
+        Assert.True(measured >= 10, $"only {measured} pairs ran long enough to measure — the bench is not posing the question");
         Assert.True(worst >= 0.25f,
                     $"{worstPair} left the basic attack only {worst:P0} of the beats — MOMENTUM is unbuyable beside it");
     }

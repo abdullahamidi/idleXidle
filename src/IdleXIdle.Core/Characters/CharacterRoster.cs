@@ -49,7 +49,7 @@ public static class CharacterRoster
         new()
         {
             Id = "seeker", Name = "THE SEEKER",
-            SignatureSkillId = "hammer_blow",   // the plainest of the twelve, for the champion with no lean
+            SignatureSkillId = "sig_seeker_hard_hands",   // HARD HANDS — the champion with no discipline fights with its hands
             Class = ItemClass.Wanderer, Tier = ClassTier.First,
             Blurb = "Walked every road far enough to know none of them is home.",
             Lean = null,
@@ -66,7 +66,7 @@ public static class CharacterRoster
         new()
         {
             Id = "anvil", Name = "THE ANVIL",
-            SignatureSkillId = "hammer_press",   // a weight that sits on the front enemy — an anvil, not a hammer
+            SignatureSkillId = "sig_anvil_hardface",   // HARDFACE — every enemy that goes down leaves the next one softer
             Class = ItemClass.Warden, Tier = ClassTier.First,
             Blurb = "Hits things until they are a different shape.",
             Lean = Branch.Resonance,
@@ -81,7 +81,7 @@ public static class CharacterRoster
         new()
         {
             Id = "chorus", Name = "THE CHORUS",
-            SignatureSkillId = "field_mire",   // many mouths, one field
+            SignatureSkillId = "sig_chorus_grave_song",   // GRAVE SONG — the charms get louder for every enemy the wave has lost
             Class = ItemClass.Ranger, Tier = ClassTier.First,
             Blurb = "Never speaks. The charms do it.",
             Lean = Branch.Loot,
@@ -95,7 +95,7 @@ public static class CharacterRoster
         new()
         {
             Id = "metronome", Name = "THE METRONOME",
-            SignatureSkillId = "volley_spray",   // the one that fires on a count
+            SignatureSkillId = "sig_metronome_clockwork",   // CLOCKWORK — the one skill counted in seconds, which nothing can hurry
             Class = ItemClass.Mystic, Tier = ClassTier.First,
             Blurb = "Keeps time. The fight is what happens between the beats.",
             Lean = Branch.Tempo,
@@ -111,7 +111,7 @@ public static class CharacterRoster
         new()
         {
             Id = "unbroken", Name = "THE UNBROKEN",
-            SignatureSkillId = "drain_wilt",   // it wears the wave down rather than out-hitting it
+            SignatureSkillId = "sig_unbroken_hold_fast",   // HOLD FAST — a wall put back up every two seconds, for free
             Class = ItemClass.Bulwark, Tier = ClassTier.First,
             Blurb = "Has been killed. Declined.",
             Lean = Branch.Endure,
@@ -125,7 +125,7 @@ public static class CharacterRoster
         new()
         {
             Id = "tower", Name = "THE FALLING TOWER",
-            SignatureSkillId = "hammer_blow",   // the falling tower IS one enormous hit
+            SignatureSkillId = "sig_tower_slow_fall",   // SLOW FALL — stones that arrive on their own clock, never on an action
             Class = ItemClass.Warden, Tier = ClassTier.Second,
             Blurb = "Slow. Arrives anyway.",
             Lean = Branch.Resonance,
@@ -142,7 +142,7 @@ public static class CharacterRoster
         new()
         {
             Id = "quiver", Name = "THE QUIVER",
-            SignatureSkillId = "volley_weep",   // what a quiver leaves behind it
+            SignatureSkillId = "sig_quiver_backdraw",   // BACKDRAW — a death sends arrows that never needed an action
             Class = ItemClass.Mystic, Tier = ClassTier.Second,
             Blurb = "Counts arrows the way other people count breaths.",
             Lean = Branch.Tempo,
@@ -164,7 +164,7 @@ public static class CharacterRoster
         new()
         {
             Id = "thornwall", Name = "THE THORNWALL",
-            SignatureSkillId = "snare_jaws",   // a wall that answers being touched
+            SignatureSkillId = "sig_thornwall_narrows",   // NARROWS — a fixed answer that grows with every bite it has answered
             Class = ItemClass.Bulwark, Tier = ClassTier.Second,
             Blurb = "Stands where the road narrows, and lets it narrow further.",
             Lean = Branch.Endure,
@@ -191,7 +191,7 @@ public static class CharacterRoster
         new()
         {
             Id = "oathbound", Name = "THE OATHBOUND",
-            SignatureSkillId = "sign_call",   // a vow-keeper opens the window for everyone else
+            SignatureSkillId = "sig_oathbound_oathmark",   // OATHMARK — the only amplifier whose price is being hit
             Class = ItemClass.Ranger, Tier = ClassTier.Second,
             Blurb = "Gave up their eyes for a better bargain.",
             Lean = null,
@@ -214,7 +214,7 @@ public static class CharacterRoster
         new()
         {
             Id = "magpie", Name = "THE MAGPIE",
-            SignatureSkillId = "snare_repay",   // it collects what it is owed
+            SignatureSkillId = "sig_magpie_paying_work",   // PAYING WORK — aimed at the one wave the Magpie actually wants
             Class = ItemClass.Wanderer, Tier = ClassTier.Second,
             Blurb = "Fights for the pockets, not the glory.",
             Lean = null,

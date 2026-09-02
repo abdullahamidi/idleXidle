@@ -4,6 +4,7 @@ using System.Linq;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
+using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Expeditions;
 using IdleXIdle.Core.Prestige;
@@ -79,12 +80,32 @@ public class VariationLivenessTests
             new(Source.Body, null, SkillId: def.Id),
         };
 
-        return BuildComposer.Compose(new MemoryDustTree(), EveryRoadWalked(), character: null,
+        // THE OWNER SITS IN THE CHAIR FOR A SIGNATURE, and for nothing else. Ten of the skills
+        // measured here belong to one champion each and the composer refuses a signature to anybody
+        // else, so a null character would compose nothing and every one of them would measure as
+        // dormant for a reason that has nothing to do with the design. The ownership rule is not
+        // weakened — the fixture supplies the champion it requires — and the shared twelve keep the
+        // null character, so no shipped measurement moved.
+        return BuildComposer.Compose(new MemoryDustTree(), EveryRoadWalked(),
+                                     character: CharacterRoster.Find(def.OwnerCharacterId ?? ""),
                                      skills: picks, keystoneIds: Array.Empty<string>(),
                                      slotCapacity: 4, progress: progress);
     }
 
-    private static (long Dealt, int Kept) Fight(Build build)
+    /// <summary>
+    /// EVERY CHANNEL A VARIATION CAN BUY, not damage and health alone.
+    /// </summary>
+    /// <remarks>
+    /// The same correction <see cref="ReinforcementLivenessTests"/> made for the same reason, and it
+    /// is not pedantry: HOLD FAST's two branches buy SHIELD and HEALING and neither deals a point of
+    /// damage, so against a champion with room to spare both are invisible in end-of-run health — the
+    /// bigger wall absorbs a bite the smaller one already absorbed, and the heal pours into a full
+    /// pool. Reading the shield and heal the fight actually published measures the variation instead
+    /// of the fixture's headroom.
+    /// </remarks>
+    private readonly record struct Outcome(long Dealt, int Kept, long Healed, long Shielded);
+
+    private static Outcome Fight(Build build)
     {
         // A SHORT RUN, not one wave. A single wave cannot exercise the whole set: an execute threshold
         // needs a cast that finds something already wounded, a bleed-on-kill needs a kill, and a
@@ -96,15 +117,21 @@ public class VariationLivenessTests
         var run = new SoloExpedition(build, champ, hunter, 260f, 26f,
                                      ExpeditionTuning.Default, new Random(19));
 
-        long dealt = 0;
+        long dealt = 0, healed = 0, shielded = 0;
         for (var w = 0; w < 6; w++)
         {
             var before = run.Wave;
             run.PushWave();
             if (run.Wave == before) break;
-            dealt += run.LastWaveEvents.Where(e => e.Kind == BattleEventKind.Strike).Sum(e => (long)e.Amount);
+            foreach (var e in run.LastWaveEvents)
+                switch (e.Kind)
+                {
+                    case BattleEventKind.Strike: dealt += e.Amount; break;
+                    case BattleEventKind.Heal: healed += e.Amount; break;
+                    case BattleEventKind.ShieldGained: shielded += e.Amount; break;
+                }
         }
-        return (dealt, champ.Health);
+        return new Outcome(dealt, champ.Health, healed, shielded);
     }
 
     [Theory]
@@ -115,11 +142,13 @@ public class VariationLivenessTests
         var plain = Fight(Build(def, null));
         var varied = Fight(Build(def, variationName));
 
-        _out.WriteLine($"{def.Name} / {variationName}: dealt {plain.Dealt} -> {varied.Dealt}, kept {plain.Kept} -> {varied.Kept}");
+        _out.WriteLine($"{def.Name} / {variationName}: dealt {plain.Dealt} -> {varied.Dealt}, "
+                       + $"kept {plain.Kept} -> {varied.Kept}, healed {plain.Healed} -> {varied.Healed}, "
+                       + $"shielded {plain.Shielded} -> {varied.Shielded}");
 
-        Assert.True(plain.Dealt != varied.Dealt || plain.Kept != varied.Kept,
-            $"{def.Name} / {variationName} changed NOTHING — the same damage dealt and the same health " +
-            "kept. The catalogue declares a delta the fight does not read, which is a choice the player " +
-            "can buy and cannot feel.");
+        Assert.True(plain != varied,
+            $"{def.Name} / {variationName} changed NOTHING — the same damage dealt, the same health " +
+            "kept, the same healing and shield. The catalogue declares a delta the fight does not read, " +
+            "which is a choice the player can buy and cannot feel.");
     }
 }

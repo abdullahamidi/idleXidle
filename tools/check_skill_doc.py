@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """THE SKILL TABLES IN THE DESIGN DOC ARE THE CATALOGUE, OR THEY ARE A LIE.
 
-`design/gdd/skill-slots-and-skill-trees.md` section 6 lists all twelve skills, their twenty-four
-variations, the Source each belongs to and the seventy-two reinforcements. It is the document a designer
+`design/gdd/skill-slots-and-skill-trees.md` section 6 lists all twenty-two skills — the twelve SHARED
+ones and the ten SIGNATURES, one per champion — their forty-four variations, the Source each belongs to
+and the hundred and thirty-two reinforcements. It is the document a designer
 reads to answer "what does this branch do", and every one of those rows also exists in
 `src/IdleXIdle.Core/Builds/SkillCatalogue.cs`, where it is the thing the fight actually runs.
 
@@ -54,6 +55,10 @@ def read_catalogue():
     skills = []
     for i, h in enumerate(heads):
         chunk = body[h.end():heads[i + 1].start() if i + 1 < len(heads) else len(body)]
+        # WHO OWNS IT. Null for the twelve shared skills; a character id for a signature, which only
+        # that champion may weave. A table that listed the two kinds side by side without saying so
+        # would read as twenty-two skills anyone can learn, which is the one thing they are not.
+        owner = re.search(r'OwnerCharacterId:\s*"([a-z_]+)"', chunk)
         variations = []
         for v in re.finditer(
                 r'V\("(?P<name>[A-Z ]+)",\s*"(?P<line>[^"]*)",\s*\n\s*Source\.(?P<source>\w+),', chunk):
@@ -64,7 +69,8 @@ def read_catalogue():
                               re.finditer(r'\("(?P<n>[A-Z ]+)",\s*"(?P<l>[^"]*)",', tail)]
             variations.append((v.group("name"), v.group("source"), v.group("line"), reinforcements))
         skills.append((h.group("id"), h.group("name"), h.group("style"),
-                       h.group("kind"), h.group("line"), variations))
+                       h.group("kind"), h.group("line"), variations,
+                       owner.group(1) if owner else None))
     return skills
 
 
@@ -79,9 +85,10 @@ def render(skills):
         out.append("")
         out.append("| | Entry | Source | Effect |")
         out.append("|---|---|---|---|")
-        for _id, name, _style, kind, line, variations in group:
+        for _id, name, _style, kind, line, variations, owner in group:
             slot = "**Active**" if kind == "Active" else "**Passive**"
-            out.append(f"| {slot} | **{name}** | — | {line} |")
+            tag = f" *({owner.upper()} only)*" if owner else ""
+            out.append(f"| {slot} | **{name}**{tag} | — | {line} |")
             for vname, vsource, vline, reinforcements in variations:
                 out.append(f"| ▸ | **{vname}** | {vsource.upper()} | {vline} |")
                 for rname, rline in reinforcements:
@@ -93,13 +100,16 @@ def render(skills):
 
 def main():
     skills = read_catalogue()
-    if len(skills) != 12:
-        sys.exit(f"check_skill_doc: read {len(skills)} skills, expected 12")
+    # 22 = the twelve shared skills plus the ten signatures (systems refactor, phase 2).
+    if len(skills) != 22:
+        sys.exit(f"check_skill_doc: read {len(skills)} skills, expected 22")
+    if sum(1 for s in skills if s[6] is None) != 12:
+        sys.exit("check_skill_doc: the shared catalogue is not twelve skills any more")
     variations = sum(len(s[5]) for s in skills)
     reinforcements = sum(len(r) for s in skills for _, _, _, r in s[5])
-    if variations != 24 or reinforcements != 72:
+    if variations != 44 or reinforcements != 132:
         sys.exit(f"check_skill_doc: read {variations} variations and {reinforcements} "
-                 "reinforcements, expected 24 and 72")
+                 "reinforcements, expected 44 and 132")
 
     wanted = render(skills)
     doc = io.open(DOC, encoding="utf-8").read()

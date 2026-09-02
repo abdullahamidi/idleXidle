@@ -695,13 +695,24 @@ public static class SoloBattle
         var slowTicks = 0;         // MIRE/NUMB — how many times the field has deepened its slow
         var executes = 0;          // HAMMER/FINISH — its execute is once a wave; TWICE buys a second
         var secondBreak = 0f;      // DRAIN/HOLLOW — SHRIVEL reaching past the front enemy
-        var bites = 0;             // SNARE/MESH and HARDEN — how many bites the trap has answered
+        // PER SLOT, not one shared counter. It was a single int, incremented once for EVERY Bitten
+        // reaction that answered a bite — so a build carrying two of them (NARROWS beside JAWS, or
+        // OATHMARK beside JAWS) counted each bite twice and silently deepened the shipped MESH/SPITE
+        // growth. A no-op for any build with one Reaction, and a correction for any build with two;
+        // it is also what makes NARROWS' card ("every bite THIS wall has already answered") literal.
+        var bites = new int[skills.Count];         // SNARE/MESH, SPITE and NARROWS — bites this slot has answered
         var breaks = new Dictionary<int, int>();   // HAMMER/PRESS — how deep each creature is broken
+        var pulses = new int[skills.Count];        // HOLD FAST/TAPROOT — heal pulses this slot has paid this wave
+        // BACKDRAW — held for the duration of the on-kill dispatch, so a volley's own kill cannot fire
+        // the volley inside itself. The shape `staggeredThisBite` already has.
+        var answeringAKill = false;
         // WHICH BITTEN REACTIONS ANSWER THIS BITE. Decided BEFORE the damage lands, so a trap that
         // stops a bite prevents it rather than refunding it afterwards — which is what lets a second
         // preventer see that the bite is already gone and keep its own charge. Hoisted out of the
         // tick loop: this is walked on every bite and a fresh list per bite is a per-frame allocation.
-        var answering = new List<(int Index, float Reflect, bool Stops)>();
+        // AnsweredBefore is captured in the ARM loop, before that loop's own increment — so NARROWS'
+        // growth is read against the answers this wall has ALREADY paid and its first answer is plain.
+        var answering = new List<(int Index, float Reflect, bool Stops, int AnsweredBefore)>();
 
         // ── THE RULES THE REINFORCEMENTS TURN (see SkillRules). Every one is wave-local, and every
         //    one is read in exactly one place below. ────────────────────────────────────────────────
@@ -759,12 +770,17 @@ public static class SoloBattle
         // HAMMER/TRAIL and DRAIN/TRICKLE — the plain swing borrows a skill's rule. Read here, once,
         // for the same reason the bleed rate is: the swing fires from the very first beat, and a rule
         // gathered at the first CAST would miss every swing before it.
+        // HARD HANDS and its OPEN HAND branch borrow it the other way: the SKILL makes the swing the
+        // payload. Gathered in the same pass and for the same reason — the swing lands from the very
+        // first beat, and a rule read at the first CAST would miss every swing before it.
         var swingIgnoresArmour = false;
         var swingLifesteal = 0f;
+        var swingPower = 0f;
         foreach (var wsk in skills)
         {
             if (wsk.Def.SwingIgnoresArmour) swingIgnoresArmour = true;
             swingLifesteal = Math.Max(swingLifesteal, wsk.Def.SwingLifesteal);
+            swingPower = Math.Max(swingPower, wsk.Def.Rule.SwingPower);
         }
         var ampBonus = 0f;         // SIGN — the amplifier's current depth
         var ampUntil = 0;          // SIGN — the absolute ms the window holds until. Wave-local.
@@ -831,6 +847,27 @@ public static class SoloBattle
         foreach (var wsk in skills)
             if (wsk.Def.WaveStartShieldFraction > 0f)
                 GrantShield(champ.MaxHealth * wsk.Def.WaveStartShieldFraction, 0);
+
+        // A TIME-COUNTED ACTIVE'S CLOCK IS SEEDED PER WAVE. champ.ReadyAt is run-cumulative, so a
+        // default consulted at the first wave is never consulted again — the "in arrears, not in
+        // advance" rule a Field obeys would silently stop being posed from wave two on. Seeded here
+        // it is re-posed every wave, and the innate that waives the opening wait for a BEAT-counted
+        // cast waives it for this one too. The Beats == 0 guard is what keeps this off every
+        // Reaction's entry in the same table.
+        //
+        // NEVER EARLIER THAN THE CLOCK ALREADY STANDING. Seeding OUTRIGHT would have made the interval
+        // almost unbuyable on the only champion that can carry one: its innate waives the opening
+        // wait, so every wave would open ready and the clock would only ever decide a SECOND arrival
+        // inside one wave — waves run 6-15 seconds, so a 7,000 ms clock and a 9,000 ms clock produced
+        // the identical number of arrivals and the reinforcement that buys the clock moved nothing.
+        // Taking the later of the two keeps the arrears rule for a champion without the waiver AND
+        // lets a clock that has not yet come round carry over the wave boundary, which is what "fires
+        // on a clock, not on a count" means.
+        for (var ck = 0; ck < skills.Count; ck++)
+            if (skills[ck].Def.TakesABeat && skills[ck].Def.Beats == 0 && skills[ck].Def.IntervalMs > 0)
+                champ.ReadyAt[ck] = Math.Max(champ.ReadyAt.GetValueOrDefault(ck, 0),
+                                             since + (shape.FreeOpeningCast ? 0 : skills[ck].Def.IntervalMs));
+
         if (metrics is not null) metrics.CreaturesPresent = creatures.Count;
         // THE BEAT. Actions happen on it and only on it; the first beat of a wave is its breath.
         var beatLen = BeatFor(mods.SkillRate * shape.SkillRate, tuning.BeatMs);
@@ -1027,6 +1064,19 @@ public static class SoloBattle
             // SWARMBANE — the more of them there are, the harder you hit. The mirror of what a Swarm
             // band does to a single-target build.
             if (shape.PerCreatureBonus > 0f) m *= 1f + shape.PerCreatureBonus * alive;
+
+            // GRAVE SONG — the exact mirror of the line above, read off the wave's DEAD. `alive` plus
+            // `deadThisWave` is the number the wave opened with, so the two are opposed clocks on one
+            // quantity: kill the front of a wave fast and the song is loud while the crowd bonus has
+            // collapsed; hold the wave alive and the crowd pays while the song says nothing. One site
+            // serves the field, the cast and the trap paths, because all three cross Amp.
+            if (skillDef.DamagePerDeadEnemy > 0f) m *= 1f + skillDef.DamagePerDeadEnemy * deadThisWave;
+
+            // PAYING WORK — the one dial in the game that reads the wave's own boss flag. `isBoss` is
+            // a ResolveWave parameter the wave body read NOWHERE until now: computed by
+            // WaveScaling.IsBossWave and passed by SoloExpedition, so this revives a dead parameter
+            // rather than adding plumbing.
+            if (isBoss && skillDef.Rule.BossPower > 0f) m *= 1f + skillDef.Rule.BossPower;
 
             // FIRST STRIKE — the opening seconds are everything, and everything after is nothing.
             if (shape.OpeningSeconds > 0f)
@@ -1243,6 +1293,26 @@ public static class SoloBattle
                             onKill *= 1f + wd.Rule.ExtraBleedWhileBleeding;
                         poison += onKill;
                     }
+
+                    // HARDFACE — every enemy that dies leaves the survivors softer, for the rest of the
+                    // wave. Read HERE, beside the bleed, for the same reason and with the same reach:
+                    // any kill pays, whether it was a cast, the plain swing, a carried overkill or the
+                    // bleed itself, which is exactly what the card promises. Clamped by the skill's own
+                    // floor; WaveCreature.Defense is settable for this kind of lasting strip, and a
+                    // creature broken past zero starts HELPING the next hit (see the armour branch).
+                    if (wd.Rule.DefenceBreakOnKill > 0f)
+                        for (var ci = 0; ci < creatures.Count; ci++)
+                        {
+                            var c = creatures[ci];
+                            if (!c.Alive) continue;
+                            var before = c.Defense;
+                            c.Defense = MathF.Max(wd.DefenceBreakFloor, c.Defense - wd.Rule.DefenceBreakOnKill);
+                            // Only when the number actually moved — a badge that kept counting past the
+                            // floor would be lying about the last strip.
+                            if (c.Defense < before)
+                                events.Add(new BattleEvent(BattleEventKind.Break, ci,
+                                                          breaks[ci] = breaks.GetValueOrDefault(ci) + 1, atMs));
+                        }
                 }
 
                 // LOOSE AGAIN — every skill is ready the instant something dies. Clearing the whole
@@ -1253,7 +1323,82 @@ public static class SoloBattle
                     // "ready forever" on the time side and "ready on the wave's first beat" on the beat
                     // side, and it also wiped the wave-opening breath. Zero means ready NOW and is a real
                     // entry, so the next cast writes an honest cooldown over it.
-                    for (var k = 0; k < skills.Count; k++) { champ.ReadyAt[k] = 0; champ.ReadyAtBeat[k] = 0; }
+                    for (var k = 0; k < skills.Count; k++)
+                    {
+                        // EXCEPT THE SLOT THAT ANSWERS THIS VERY DEATH. A Reaction dispatched ON a kill
+                        // is the one skill whose arm the innate must not clear: the clear runs on every
+                        // death, and the dispatch below runs on every death, so an entry wiped here is
+                        // an entry that never bounds anything and the volley fires on every corpse for
+                        // ever. Siting the stamp below the clear is not enough — it survives only until
+                        // the NEXT death clears it again. The card is "a kill sends the next SHOT
+                        // immediately", and this is the shot; its own re-arm is the bound, and it is the
+                        // only entry LOOSE AGAIN cannot touch.
+                        var kk = skills[k].Def;
+                        if (kk.Kind == SkillKind.Reaction && kk.On == ReactionOn.Kill && kk.BasePower > 0f) continue;
+                        champ.ReadyAt[k] = 0;
+                        champ.ReadyAtBeat[k] = 0;
+                    }
+
+                // ── BACKDRAW — the Reaction that answers a DEATH. ────────────────────────────────
+                //
+                // ReactionOn.Kill has been declared and dispatched nowhere: the wave body only ever
+                // tested `On == ReactionOn.Bitten`. This is its one site, and four things about it are
+                // the design rather than details.
+                //
+                // (1) IT IS SITED BELOW THE LOOSE AGAIN CLEAR, AND THE ARM IS STAMPED AFTER IT. That
+                //     trigger zeroes every ReadyAt entry on ANY death; an arm written above it is wiped
+                //     by the very death that produced it, and on the one champion that carries the
+                //     trigger the volley would re-fire on every kill with no re-arm at all. Sited
+                //     below, this skill's own arm is the one entry the innate cannot clear — which is
+                //     the bound on the chain.
+                // (2) THE TIME IS MADE ABSOLUTE HERE. LandOn only knows `atMs`, which is wave-relative,
+                //     and champ.ReadyAt stores run-cumulative values — a wave-relative stamp would
+                //     expire instantly on every wave after the first.
+                // (3) A RE-ENTRY FLAG, so a volley's own kill cannot fire the volley inside itself.
+                // (4) castCarry IS SAVED AND CLEARED, because the outer cast sets it around its own
+                //     landing and its overkill carry must not leak into the answering arrows.
+                //
+                // WEEP DECLARES ReactionOn.Kill TOO and is answered by the bleed scan above, so the
+                // gate reads BasePower as well: a Reaction with no number of its own is not a volley,
+                // and a dispatch written as the plain mirror of the Bitten gate would fire a skill
+                // event and a projectile on every corpse for a build that bought neither.
+                if (!answeringAKill)
+                {
+                    answeringAKill = true;
+                    var heldCarry = castCarry;
+                    castCarry = 0f;
+                    var absAt = since + atMs;
+                    for (var k = 0; k < skills.Count; k++)
+                    {
+                        var ks = skills[k];
+                        var kd = ks.Def;
+                        if (kd.Kind != SkillKind.Reaction || kd.On != ReactionOn.Kill || kd.BasePower <= 0f) continue;
+                        if (absAt < champ.ReadyAt.GetValueOrDefault(k, 0)) continue;
+
+                        // The same arm arithmetic the Bitten dispatch runs, on the same table.
+                        var armBase = (int)(Math.Max(1_000, kd.RearmMs) * kd.CooldownMultiplier);
+                        if (triggers.Contains(BuildTrigger.Coiled)) armBase = (int)(armBase * CoiledCooldownFactor);
+                        var arm = Math.Max(1, (int)(armBase / Math.Max(0.1f, RateNow())));
+                        champ.ReadyAt[k] = absAt + arm;
+
+                        var shot = SkillCatalogue.PoweredBase(kd, resonance)
+                                   * VowFactor(ks, weaveCtx, shape)
+                                   * (castOnce.Add(k) ? shape.FirstCastMultiplier : shape.LaterCastMultiplier)
+                                   * kd.DamageMultiplier;
+                        events.Add(new BattleEvent(BattleEventKind.Skill, k, 0, atMs));
+                        var shotDealt = LandSpread(shot, atMs, shape.TargetsFor(kd) + kd.TargetsBonus,
+                                                   ks.Source, kd, absAt,
+                                                   ignoresArmour: kd.DefenceIgnore,
+                                                   hitsPerTarget: kd.HitsPerTarget);
+                        // Re-stamped: an arrow that kills runs LandOn again, and that death's own
+                        // LOOSE AGAIN clear would otherwise wipe the arm this volley just paid for.
+                        champ.ReadyAt[k] = absAt + arm;
+                        if (ks.Source == Source.Nature && shotDealt > 0f)
+                            Heal((int)MathF.Round(shotDealt * heal.NatureSignatureLeech), atMs);
+                    }
+                    castCarry = heldCarry;
+                    answeringAKill = false;
+                }
 
                 // MOMENTUM — every kill takes time off every cooldown. It edits the entries that EXIST
                 // and adds none: a skill with no ReadyAt entry is already ready, and writing one would
@@ -1504,6 +1649,32 @@ public static class SoloBattle
                     //    one falls straight through to the damage path below. ─────────────────────
                     var def = sk.Def;
 
+                    // HOLD FAST — a Field that puts a PLATE up rather than dealing, healing or
+                    // breaking. First limb of the fork and it `continue`s, so every shipped Field
+                    // (which carries ShieldPerPulse 0) falls straight past it untouched.
+                    //
+                    // The heal inside it is a READ-SITE EXTENSION of HealPerPulse, which today is
+                    // reachable only inside the attack-break limb below — so a Field could not heal
+                    // without also carrying a break. Gated on ShieldPerPulse ALONE, which is what
+                    // keeps WILT/SUP on its own limb and what makes DEEP ROOTS' heal a real fork:
+                    // the sibling leaves HealPerPulse at zero and two of its purchases are locked
+                    // behind this `if`.
+                    if (def.ShieldPerPulse > 0f)
+                    {
+                        GrantShield(champ.MaxHealth * def.ShieldPerPulse, ms);
+                        if (def.HealPerPulse > 0f)
+                        {
+                            // TAPROOT — each pulse returns more than the one before it, counted per
+                            // SLOT and per WAVE. Read before its own increment, so the first pulse of
+                            // a wave is the plain figure the card promises. Through Heal, so the
+                            // per-wave ceiling and BLOOD MAGIC's refusal both still hold.
+                            Heal((int)MathF.Round(champ.MaxHealth * def.HealPerPulse
+                                                  * (1f + def.Rule.HealGrowthPerPulse * pulses[i])), ms);
+                            pulses[i]++;
+                        }
+                        continue;
+                    }
+
                     if (def.StunMs > 0)
                     {
                         // INTERCEPT — a stun spent just after a bite is very nearly wasted, and one
@@ -1641,8 +1812,13 @@ public static class SoloBattle
                                * VowFactor(sk, weaveCtx, shape)
                                * (def.IntervalMs > 0 ? def.IntervalMs / 1000f : 1f)
                                * def.DamageMultiplier;   // MIRE/SILT
+                    // A FIELD MAY IGNORE DEFENCE TOO. The cast path has always passed this argument
+                    // and this path took the default `false` — so DefenceIgnore was a dial a Field
+                    // could carry and could not turn. No shipped Field sets it, so nothing existing
+                    // moves; SLOW FALL/COURSES and GRAVE SONG/SHROUD are what ask.
                     var auraDealt = LandSpread(aura, ms, shape.TargetsFor(def) + def.TargetsBonus,
-                                               sk.Source, def, abs, countsAsActivation: false);
+                                               sk.Source, def, abs, countsAsActivation: false,
+                                               ignoresArmour: def.DefenceIgnore);
                     // NATURE'S SIGNATURE follows the DAMAGE, not the cast — an Aura that deals must heal.
                     if (sk.Source == Source.Nature && auraDealt > 0f)
                         Heal((int)MathF.Round(auraDealt * heal.NatureSignatureLeech), ms);
@@ -1686,10 +1862,22 @@ public static class SoloBattle
                 }
                 else
                 {
-                    // Unreachable for the current catalogue — every Active counts beats — and kept
-                    // shut rather than kept dead (2026-08-31 audit, dead path #8). A future
-                    // time-counted Active gets its clock back deliberately, with a test.
-                    continue;
+                    // COUNTED IN SECONDS: the clock the 2026-08-31 audit shut rather than deleted
+                    // (dead path #8), opened again deliberately and with a test. An Active with no
+                    // beat count and a clock of its own is ELIGIBLE on time and lands on the beat —
+                    // the two halves are separate on purpose, and everything above and below is
+                    // untouched: the beat gate still admits it and `acted = true` still spends the
+                    // action, so it costs exactly what every other Active costs.
+                    //
+                    // DELIBERATELY NOT DIVIDED BY RateNow(). Every other cadence in the game is asked
+                    // for through the champion's rate; this one is not, which is the whole card — a
+                    // haste build cannot hurry it and a slow build cannot delay it, so the champion's
+                    // own tempo becomes a real trade against it. The wave-start seeding above is what
+                    // keeps the "in arrears, not in advance" rule posed on every wave rather than the
+                    // first, since champ.ReadyAt is run-cumulative.
+                    if (sk.Def.IntervalMs <= 0) continue;
+                    if (abs < champ.ReadyAt.GetValueOrDefault(i, 0)) continue;
+                    champ.ReadyAt[i] = abs + sk.Def.IntervalMs;
                 }
                 acted = true;
                 // BODY 5p MOMENTUM — a skill has been thrown, and the body follows it. One pending at a
@@ -1977,6 +2165,24 @@ public static class SoloBattle
                                            hitsPerTarget: Math.Max(vdef.HitsPerTarget, minimumHits));
                     castCarry = 0f;
 
+                    // PEENING — the blow strips the enemy in front whether or not it kills. Gated on
+                    // the strip's own DEPTH as well as on the flag, so a branch that sold the strip
+                    // (depth 0) subtracts zero and emits no badge: a flag cannot be un-zeroed by a
+                    // write the way a float can. Same clamp and same event as the on-kill strip.
+                    if (vdef.Rule.DefenceBreakOnAnyHit && vdef.Rule.DefenceBreakOnKill > 0f
+                        && FirstAlive() is { } peened)
+                    {
+                        var was = peened.Defense;
+                        peened.Defense = MathF.Max(vdef.DefenceBreakFloor,
+                                                   peened.Defense - vdef.Rule.DefenceBreakOnKill);
+                        if (peened.Defense < was)
+                        {
+                            var pi = IndexOf(peened);
+                            events.Add(new BattleEvent(BattleEventKind.Break, pi,
+                                                      breaks[pi] = breaks.GetValueOrDefault(pi) + 1, ms));
+                        }
+                    }
+
                     // SHADOW 5p AFTERIMAGE — the blow falls a second time, half as hard, across the same
                     // enemies. It is NOT a cast: it takes no beat, starts no cooldown, counts as no
                     // activation (so it is not skill-progression use and stores no CHARGE), spends no
@@ -2114,8 +2320,15 @@ public static class SoloBattle
                 impactPending = false;
                 impactSwing = impact;
                 if (impact) castCarry = 1f;
+                // HARD HANDS — the one skill whose payload IS the champion's own hands. Gathered from
+                // the weave at the wave's start and spent here as one extra factor, so it lifts the
+                // action the champion takes on every beat no skill claims and nothing else. It is a
+                // SKILL's dial read on a swing, which is why it is gathered rather than read off a
+                // cast: the swing lands from the first beat, and a rule read at the first cast would
+                // miss most of them.
                 var swung = LandSpread(tuning.AutoAttackDamage * hunter.AutoDamageMultiplier * shape.AutoAttackDamage
-                                       * (impact ? 1f + shape.ImpactSwingBonus : 1f),
+                                       * (impact ? 1f + shape.ImpactSwingBonus : 1f)
+                                       * (1f + swingPower),
                                        ms, 1, null, null, abs, fromSkill: false, swing: true,
                                        ignoresArmour: swingIgnoresArmour || trailArmed);
                 impactSwing = false;
@@ -2258,9 +2471,14 @@ public static class SoloBattle
                     // wave, to its own ceiling. Zero growth at the base line, so a plain JAWS is flat.
                     var reflect = sk.Def.ReflectFraction;
                     if (sk.Def.ReflectGrowthPerBite > 0f)
-                        reflect += Math.Min(sk.Def.ReflectGrowthCap, sk.Def.ReflectGrowthPerBite * bites);
-                    bites++;
-                    answering.Add((idx, reflect, sk.Def.StopsWholeBite));
+                        reflect += Math.Min(sk.Def.ReflectGrowthCap, sk.Def.ReflectGrowthPerBite * bites[idx]);
+                    // CAPTURED BEFORE THE INCREMENT and carried to the payout, because this whole loop
+                    // runs before the payout loop reads anything — a count read there would already
+                    // include the answer being paid for, and NARROWS' first answer would be larger
+                    // than its card says.
+                    var answeredBefore = bites[idx];
+                    bites[idx]++;
+                    answering.Add((idx, reflect, sk.Def.StopsWholeBite, answeredBefore));
                 }
 
                 // IRON — the trap stops a whole bite. A stop is prevention now, decided before the pool
@@ -2363,8 +2581,41 @@ public static class SoloBattle
                 // REPRISAL buys it back: a stopped bite is ALSO returned, in full.
                 for (var a = 0; a < answering.Count; a++)
                 {
-                    var (idx, reflect, stops) = answering[a];
+                    var (idx, reflect, stops, answeredBefore) = answering[a];
                     var sk = skills[idx];
+
+                    // OATHMARK — a Reaction whose effect is a MARK rather than a blow. Kind says WHEN
+                    // a skill acts and Effect says WHAT it does; this is the third place the loop
+                    // forks on the second question, after the Field block and the cast block, and it
+                    // is what lets an amplifier be paid for by being hit instead of by an action.
+                    // It opens the window and leaves, so no trapRaw is ever computed for it.
+                    if (sk.Def.Effect == SkillEffect.Amplify)
+                    {
+                        var markWindow = sk.Def.AmplifyMs > 0 ? sk.Def.AmplifyMs : 6_000;
+                        if (triggers.Contains(BuildTrigger.Linger)) markWindow = markWindow * 9 / 5;
+                        markWindow = (int)(markWindow * shape.AmplifyWindowMultiplier);   // MARK MASTERY
+
+                        // FIRST WORD / SEALED WORD — the front enemy's own deeper mark.
+                        ampFrontFull = sk.Def.Rule.AmplifyFrontFull;
+                        var markDepth = sk.Def.AmplifyPercent;
+                        // SAID AGAIN — the same pair the Field branch deepens on its own clock, on the
+                        // one channel this champion can actually hurry: being bitten.
+                        if (sk.Def.AmplifyDeepenPerTick > 0f)
+                        {
+                            markDeepen = sk.Def.AmplifyDeepenCap > 0f
+                                ? Math.Min(sk.Def.AmplifyDeepenCap, markDeepen + sk.Def.AmplifyDeepenPerTick)
+                                : markDeepen + sk.Def.AmplifyDeepenPerTick;
+                            markDepth += markDeepen;
+                        }
+                        ampBonus = markDepth;
+                        ampWholeWave = sk.Def.AmplifyWholeWave;
+                        ampHitsLeft = sk.Def.Rule.AmplifyHits;
+                        ampCountsHits = sk.Def.Rule.AmplifyHits > 0;
+                        ampCritKeeps = sk.Def.Rule.CritKeepsAmplifyCharge;
+                        ampUntil = abs + markWindow;
+                        events.Add(new BattleEvent(BattleEventKind.Skill, idx, 0, ms));
+                        continue;
+                    }
 
                     // The figure a reflect is a share OF: what this bite would have dealt. A stopped
                     // bite reflects its own prevented size, so REPRISAL is worth what it says.
@@ -2375,6 +2626,13 @@ public static class SoloBattle
                     trapRaw *= VowFactor(sk, weaveCtx, shape)
                                // OPENING VOLLEY — the Trap's first spring counts as its first cast.
                                * (castOnce.Add(idx) ? shape.FirstCastMultiplier : shape.LaterCastMultiplier);
+
+                    // NARROWS — the answer that does not read the bite at all, and grows with how long
+                    // the wall has stood. Counted per SLOT and per WAVE, and read against the answers
+                    // already PAID rather than including this one, so the first answer of a wave is the
+                    // plain number the card promises.
+                    if (sk.Def.Rule.PowerPerBiteAnswered > 0f)
+                        trapRaw *= 1f + sk.Def.Rule.PowerPerBiteAnswered * answeredBefore;
 
                     // PLATING (the JAWS reinforcement) — a stopped bite is also armour: half of what it
                     // would have dealt becomes Shield.

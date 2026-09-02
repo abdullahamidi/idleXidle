@@ -148,7 +148,13 @@ public class RosterParityTest
     /// </remarks>
     private static Character Blank(SkillDef skill) => new()
     {
-        Id = "(none)", Name = "NO CHARACTER",
+        // THE ID IS THE OWNER'S when the measured skill is a signature, and "(none)" otherwise. The
+        // control exists to carry NO passive — no Mods, no Shape, no Grants — so the delta between a
+        // champion and it is the champion. But the composer refuses a signature to anybody but its
+        // owner, so a control with a made-up id would weave nothing at all and the fixture would
+        // measure bare hands and call it the skill. Borrowing the id (and nothing else) keeps the
+        // control passive-free AND lets it hold the skill it is measuring.
+        Id = skill.OwnerCharacterId ?? "(none)", Name = "NO CHARACTER",
         Blurb = "The control. The same skills, no passive.",
         Class = ItemClass.Wanderer, Tier = ClassTier.First,
         PassiveName = "NONE", PassiveText = "Nothing at all.",

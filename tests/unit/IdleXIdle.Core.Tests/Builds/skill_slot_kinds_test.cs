@@ -148,16 +148,26 @@ public class SkillSlotKindTests
         // The two shortest cooldowns woven together is the worst case a player can build. Even that
         // must leave the champion's own swing the majority of its beats, or the rework has not
         // actually fixed the thing it exists for.
+        // ORDERED BY REALISED DEMAND, not by beat count. An Active is no longer always counted in
+        // beats — CLOCKWORK is counted in milliseconds — and a Beats-0 Active sorted as the SHORTEST
+        // cooldown in the catalogue while contributing 0.00 to Build.BeatDemand, so the "worst pair"
+        // would have been the cheapest one. Demand is 1/beats for a beat-counted skill and
+        // beat/interval for a clock-counted one, which is what each really costs per action.
+        //
+        // ACROSS THE WHOLE CATALOGUE, signatures included: a champion may weave its own signature
+        // beside any shared active, so that pair is one a player can really build.
+        static float Demand(SkillDef d)
+            => d.Beats > 0 ? 1f / d.Beats
+             : d.IntervalMs > 0 ? SoloBattle.DefaultBeatMs / (float)d.IntervalMs
+             : 0f;
+
         var shortest = SkillCatalogue.All
-            .Where(s => s.TakesABeat).OrderBy(s => s.Beats).Take(2).ToList();
+            .Where(s => s.TakesABeat).OrderByDescending(Demand).Take(2).ToList();
 
-        var b = new Build { ActiveCapacity = 2 };
-        foreach (var def in shortest)
-            b.Equip(TestBuilds.Skill(def.Id));
-
-        Assert.True(b.BeatDemand < 0.5f,
+        var demand = shortest.Sum(Demand);
+        Assert.True(demand < 0.5f,
             $"the worst active pair ({string.Join(" + ", shortest.Select(s => s.Name))}) " +
-            $"demands {b.BeatDemand:0.00} of the beats");
+            $"demands {demand:0.00} of the beats");
     }
 }
 
@@ -479,11 +489,16 @@ public class SkillReachabilityTests
     [Fact]
     public void test_every_skill_in_the_catalogue_can_be_selected()
     {
-        // The tree with every style road walked must know all twelve — a skill no road teaches is
-        // unreachable, since composing an untaught skill is refused.
+        // The tree with every style road walked must know all twelve SHARED skills — one no road
+        // teaches is unreachable, since composing an untaught skill is refused.
+        //
+        // THE TEN SIGNATURES ARE EXCLUDED, and that is the law rather than an exemption: no mastery
+        // node teaches one (BRIEF sec.18), the composer adds the active champion's own signature to
+        // the taught set outright, and SignatureOwnershipTest asserts that a tree with EVERY node
+        // taken still cannot hand somebody else's over. A road that taught one would be the bug.
         var taught = Taught.Everything().AvailableSkills();
 
-        var missing = SkillCatalogue.All.Select(s => s.Id).Where(id => !taught.Contains(id)).ToList();
+        var missing = SkillCatalogue.Shared.Select(s => s.Id).Where(id => !taught.Contains(id)).ToList();
         Assert.True(missing.Count == 0,
             "no style road teaches: " + string.Join(", ", missing) +
             ". A skill the player cannot learn is dead weight in the catalogue.");

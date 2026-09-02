@@ -4,6 +4,7 @@ using System.Linq;
 using IdleXIdle.Core.Automation;
 using IdleXIdle.Core.Sources;
 using IdleXIdle.Core.Builds;
+using IdleXIdle.Core.Characters;
 using IdleXIdle.Core.Economy;
 using IdleXIdle.Core.Expeditions;
 using IdleXIdle.Core.Prestige;
@@ -78,7 +79,14 @@ public class ReinforcementLivenessTests
             new(Source.Body, null, SkillId: def.Id),
         };
 
-        return BuildComposer.Compose(new MemoryDustTree(), EveryRoadWalked(), character: null,
+        // THE OWNER SITS IN THE CHAIR FOR A SIGNATURE, and for nothing else. Ten of the skills
+        // measured here belong to one champion each, and the composer refuses a signature to anybody
+        // else — so a null character would compose NO skill at all and the whole set would measure as
+        // dormant for a reason that has nothing to do with the design. The ownership rule is not
+        // weakened: the fixture supplies the champion the rule requires. The shared twelve keep the
+        // null character, so no shipped measurement moved.
+        return BuildComposer.Compose(new MemoryDustTree(), EveryRoadWalked(),
+                                     character: CharacterRoster.Find(def.OwnerCharacterId ?? ""),
                                      skills: picks, keystoneIds: Array.Empty<string>(),
                                      slotCapacity: 4, progress: progress);
     }
@@ -202,6 +210,8 @@ public class ReinforcementLivenessTests
             .Select(t => $"{t.d.Name}/{t.v.Name}/{t.r.Name}")
             .ToList();
         Assert.True(mute.Count == 0, "reinforcements with no Modify: " + string.Join(", ", mute));
-        Assert.Equal(72, SkillCatalogue.All.SelectMany(d => d.Variations).Sum(v => v.Reinforcements.Count));
+        // 132: the shared twelve's seventy-two, plus sixty for the ten signatures (P2 of the
+        // systems refactor). Was 72.
+        Assert.Equal(132, SkillCatalogue.All.SelectMany(d => d.Variations).Sum(v => v.Reinforcements.Count));
     }
 }

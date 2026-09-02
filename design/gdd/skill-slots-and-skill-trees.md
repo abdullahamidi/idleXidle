@@ -288,6 +288,33 @@ Authored 2026-08-30, gated against the two laws (§8) and the ownership table, t
 | | HOLD | | The stun is 1.5s instead of 1s. |
 | | BUCKLE | | Each stun strips 10 defence from the front enemy. |
 | | INTERCEPT | | The stun waits for the wave's next bite instead of its own clock. |
+| **Active** | **HARD HANDS** *(SEEKER only)* | — | Heavy damage to one target every 6 beats. While it is woven, every basic attack you make lands 70% harder. |
+| ▸ | **OPEN HAND** | BODY | The blow gives its weight to your hands: it deals a third as much, and your basic attacks land 210% harder. |
+| | BROAD KNUCKLE | | Your basic attacks land 330% harder instead of 210%. |
+| | SPLIT GRAIN | | Your basic attacks ignore defence. |
+| | SLOW HANDS | | The blow comes round every 8 beats instead of 6, and your basic attacks land 400% harder instead of 210%. |
+| ▸ | **SHUT FIST** | MIND | Your hands gain nothing more. The blow lands twice on the target, and it hits an enemy under half health 85% harder. |
+| | THIRD FALL | | The blow lands three times instead of twice. |
+| | CARRY ON | | If the target dies, the blows it had left drive into the next enemy. |
+| | LAST INCH | | The finishing bonus is 140% instead of 85%. |
+| **Active** | **HARDFACE** *(ANVIL only)* | — | Heavy damage to one target every 6 beats. While it is woven, every enemy that dies strips 12 defence from every enemy still standing, for the rest of the wave, down to -48. |
+| ▸ | **PLANISH** | MACHINE | The strip is 24 defence instead of 12, and defence can be driven down to -90. |
+| | BEDPLATE | | Defence can be driven down to -150 instead of -90. |
+| | COLD SET | | The strip is 40 defence instead of 24. |
+| | PEENING | | The blow strips the enemy in front even when it does not kill. |
+| ▸ | **UPSET** | BODY | No defence stripping. The weight falls on every enemy, twice, at 45% each. |
+| | THIRD DROP | | The weight falls three times instead of twice. |
+| | RUNOUT | | If an enemy dies, the falls it had left drive into the next enemy. |
+| | UNDERFOOT | | The falls hit an enemy under half health 75% harder. |
+| **Passive** | **SLOW FALL** *(TOWER only)* | — | A stone falls on the front enemy every 3s. It never takes your action. |
+| ▸ | **COURSES** | BODY | The stones fall every 1.5s, each half as heavy, they ignore defence, and each stone hits an enemy under 45% health 55% harder. |
+| | DRYSTONE | | The stones fall every 1s instead of every 1.5s. |
+| | PLUMBLINE | | The finishing bonus is 110% instead of 55%. |
+| | HAIRLINE | | The finishing bonus reaches an enemy under 70% health instead of 45%. |
+| ▸ | **ONE STONE** | NATURE | One stone every 6s, on the two enemies in front, and it lands at 2.4 times the weight. |
+| | CAPSTONE | | The stone falls on the three enemies in front. |
+| | FULL COURSE | | The stone lands at 3.6 times the weight instead of 2.4. |
+| | BEDDING IN | | The stone falls every 4s instead of every 6s. |
 
 ### SNARE
 
@@ -311,6 +338,24 @@ Authored 2026-08-30, gated against the two laws (§8) and the ownership table, t
 | | BLUNT | | The trap rearms twice as fast. |
 | | REPRISAL | | A stopped bite is returned to the enemy that made it, in full. |
 | | PLATING | | A stopped bite also becomes SHIELD worth half of what it would have dealt. |
+| **Passive** | **HOLD FAST** *(UNBROKEN only)* | — | Every 2s you gain shield worth 2.5% of your maximum health. It never takes your action. |
+| ▸ | **BREASTWORK** | MACHINE | Twice the wall, half as often: shield worth 5.5% of your maximum health every 4s. |
+| | COURSED STONE | | Each pulse is worth half again as much: 8.5% of your maximum health instead of 5.5%. |
+| | FOOTINGS | | The wall is rebuilt every 2.5s instead of every 4s. |
+| | GROUNDWORK | | The wall is already standing when the wave opens: every wave begins with shield worth 5.5% of your maximum health. |
+| ▸ | **DEEP ROOTS** | SPIRIT | Half the wall. Each pulse also heals 1% of your maximum health. |
+| | WELLSPRING | | Each pulse heals 1.8% of your maximum health instead of 1%. |
+| | TAPROOT | | Each pulse heals 30% more than the one before it, for the rest of the wave. |
+| | HEARTWOOD | | Each pulse is worth 3% of your maximum health instead of 1.2%. |
+| **Passive** | **NARROWS** *(THORNWALL only)* | — | Every bite is answered by a fixed hit on the enemy in front, and the answer grows 22% for every bite this wall has already answered this wave. Rearms every 2.5s. |
+| ▸ | **BRAMBLE** | NATURE | The answer reaches every enemy instead of one, stops growing, and hits an enemy under half health 80% harder. |
+| | UNDERGROWTH | | The finishing bonus reaches an enemy under three-quarters health. |
+| | BLACK THORN | | The finishing bonus is 150% instead of 80%. |
+| | BRIAR | | The answer is worth 170 instead of 110. |
+| ▸ | **CHOKE** | MACHINE | The answer stays on the enemy in front, the wall answers every 2s, and the answer grows 34% for every bite it has already answered. |
+| | DEEP THORN | | The answer grows half again as fast: 55% for every bite instead of 34%. |
+| | SNAPBACK | | The wall rearms 30% sooner still. |
+| | SECOND STAKE | | The answer reaches the two enemies in front. |
 
 ### SIGN
 
@@ -334,6 +379,15 @@ Authored 2026-08-30, gated against the two laws (§8) and the ownership table, t
 | | SINK | | The mark deepens +80% each time instead of +50%. |
 | | GRAVEN | | The cap rises from +170% to +250%. |
 | | PACE | | The mark deepens every 1s instead of every 2s. |
+| **Passive** | **OATHMARK** *(OATHBOUND only)* | — | Every bite you take opens the mark: all your damage +90% for 3s. Rearms every 4s. |
+| ▸ | **SEALED WORD** | SPIRIT | The mark falls on the enemy in front only, and it is far deeper: +260% while it holds, for 1.8s. |
+| | DEEP SEAL | | The mark is half again as deep: +390% instead of +260%. |
+| | LONG SEAL | | The mark holds 3s instead of 1.8s. |
+| | SHORTER OATH | | The mark reopens every 2.5s instead of every 4s. |
+| ▸ | **OPEN WORD** | MIND | The mark covers the whole wave but burns fast: +140% for 2s, and it reopens every 2.5s. |
+| | WIDER WORD | | The mark is +230% instead of +140%. |
+| | SAID AGAIN | | Each time the mark reopens it is deeper: +45% more each time, up to +180%. |
+| | FIRST WORD | | The enemy in front takes a +220% mark while the rest of the wave keeps the spread. |
 
 ### VOLLEY
 
@@ -357,6 +411,24 @@ Authored 2026-08-30, gated against the two laws (§8) and the ownership table, t
 | | DREGS | | A kill leaves 45% of the enemy's health as bleed instead of 30%. |
 | | ONSET | | Your casts leave bleed worth 10% of what they deal, and it carries too. |
 | | LAST DROP | | The carried bleed pays out 50% faster. |
+| **Active** | **CLOCKWORK** *(METRONOME only)* | — | Fires on a clock, not on a count: three shots across the wave every 7s. No skill rate bonus makes the clock come sooner, and it still costs the action it lands on. |
+| ▸ | **ROLL** | MACHINE | Every shot lands twice on two enemies instead of once on three, each a sixth heavier, and the clock is half a second shorter: four strikes every 6.5s. |
+| | RIM SHOT | | Every enemy is struck three times instead of twice. |
+| | OFF BEAT | | If an enemy dies, the shots it had left drive into the next enemy. |
+| | STEADY HAND | | The shots ignore defence. |
+| ▸ | **HELD NOTE** | MIND | One arrival every 9s instead of three shots every 7s, and it falls on the whole wave. |
+| | WHOLE BAR | | The arrival comes every 7s instead of every 9s. |
+| | LATE BEAT | | The arrival hits an enemy under 40% health 110% harder. |
+| | SPARE SHOT | | Against a thin wave the arrival doubles up: never fewer than 3 shots in all. |
+| **Passive** | **BACKDRAW** *(QUIVER only)* | — | When an enemy dies, two arrows fly at whatever is still standing. Rearms every 2.5s. |
+| ▸ | **CLEAN SWEEP** | MIND | The volley reaches every living enemy instead of two, at two thirds the weight, and every arrow hits an enemy under half health 85% harder. |
+| | WIDE SWEEP | | The finishing bonus reaches an enemy under three-quarters health. |
+| | BARBED SWEEP | | The finishing bonus is 160% instead of 85%. |
+| | SECOND STRING | | Every enemy is struck twice, and each strike is lighter. |
+| ▸ | **ONE SHAFT** | SHADOW | One arrow instead of two, at six and a half times the weight, and it comes back only every 12s. |
+| | HEAVY SHAFT | | The arrow lands at ten times the weight instead of six and a half. |
+| | SECOND SHAFT | | The arrow comes back every 7s instead of every 12s. |
+| | BROADHEAD | | Your casts leave bleed worth 25% of what they deal. |
 
 ### FIELD
 
@@ -380,6 +452,15 @@ Authored 2026-08-30, gated against the two laws (§8) and the ownership table, t
 | | CLOG | | 10% for each living enemy instead of 6%, and the ceiling rises to 78%. |
 | | BRIM | | The slow starts at 40% instead of 25%, and its ceiling rises to 85%. |
 | | REMNANT | | The wave bites 5% softer for each enemy it has lost, down to -40%. |
+| **Passive** | **GRAVE SONG** *(CHORUS only)* | — | Damages every enemy every 2s, and deals 35% more for each enemy the wave has already lost. |
+| ▸ | **REQUIEM** | SHADOW | The song comes every 4s instead of every 2s, at more than twice the weight, and each enemy the wave has lost is worth 70%. |
+| | DIRGE | | Each enemy the wave has lost is worth 110% instead of 70%. |
+| | TOLLING | | The song comes every 3s instead of every 4s. |
+| | OPEN GRAVE | | The song hits an enemy under 45% health 90% harder. |
+| ▸ | **CHANTRY** | SPIRIT | The song stops counting the dead for damage and counts them against the wave: it deals its plain weight, and the wave bites 14% softer for every enemy it has lost, down to -25%. |
+| | HUSH | | The softening may reach -45% instead of -25%. |
+| | BLACK VEIL | | The wave bites 22% softer for each enemy it has lost instead of 14%. |
+| | SHROUD | | The song ignores defence. |
 
 ### DRAIN
 
@@ -403,6 +484,15 @@ Authored 2026-08-30, gated against the two laws (§8) and the ownership table, t
 | | HOLLOW | | The break also reaches the second enemy, at half depth. |
 | | SEIZED | | The break deepens 35% a pulse instead of 25%. |
 | | GAUNT | | The floor falls from -90% to -97%. |
+| **Active** | **PAYING WORK** *(MAGPIE only)* | — | Heavy damage to one target every 5 beats, and you take 12% of what it deals back as health. Against a boss it lands 160% harder. |
+| ▸ | **STRIPPED BARE** | SHADOW | It takes nothing back, and against a boss it lands 340% harder instead of 160%. |
+| | CLEANED OUT | | Against a boss it lands 520% harder instead of 340%. |
+| | PRISED OPEN | | The blow ignores defence. |
+| | LONG JOB | | It comes every 6 beats instead of 5, and lands half again as hard. |
+| ▸ | **LIGHT FINGERS** | NATURE | No boss bonus. It strikes every enemy in the wave for a third of the weight, and each strike hits an enemy under half health 80% harder. |
+| | MANY POCKETS | | The finishing bonus reaches an enemy under 72% health instead of half. |
+| | SECOND HELPING | | Every enemy is struck twice, and each strike is lighter. |
+| | FULL HANDS | | You take 38% of what it deals back instead of 12%. |
 
 <!-- /SKILLS -->
 

@@ -48,8 +48,17 @@ public class SourceMatrixTests
                                new[] { "sign_brand/ETCH", "field_mire/TEEMING" }),
         };
 
+    /// <summary>
+    /// Every variation of the SHARED twelve. The matrix is a statement about them and only them.
+    /// </summary>
+    /// <remarks>
+    /// The ten signatures (P2 of the systems refactor) each belong to ONE champion, so they cannot
+    /// take part in any of the claims below: "a Source fields a whole loadout from its own variations"
+    /// needs four DIFFERENT skills one hunter can weave at once, and a hunter has exactly one
+    /// signature. Counting them would make the matrix a table about something nobody can build.
+    /// </remarks>
     private static IEnumerable<(SkillDef Def, SkillVariation Var)> EveryVariation()
-        => SkillCatalogue.All.SelectMany(d => d.Variations.Select(v => (d, v)));
+        => SkillCatalogue.Shared.SelectMany(d => d.Variations.Select(v => (d, v)));
 
     private static string Key(SkillDef d, SkillVariation v) => $"{d.Id}/{v.Name}";
 
@@ -83,6 +92,7 @@ public class SourceMatrixTests
     [Fact]
     public void test_every_skill_has_two_variations_with_three_reinforcements_each()
     {
+        // The whole catalogue here: the two-and-three shape is every skill's, signature or shared.
         foreach (var def in SkillCatalogue.All)
         {
             Assert.Equal(2, def.Variations.Count);
