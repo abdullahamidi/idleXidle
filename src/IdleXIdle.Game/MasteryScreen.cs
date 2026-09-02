@@ -189,7 +189,39 @@ public sealed class MasteryScreen
     // the top left should be only the symbol and the number, as on the traits screen — the four tree
     // rows there are unnecessary"). The branch tally and the SPENT cell are gone; TAKE EVERY POINT BACK
     // is its own button under the plate, because it is an action and not a readout.
-    private static readonly Rectangle PointsPanel = new(40, 112, 300, 140);
+    //
+    // A PROPERTY, SIZED BY WHAT IT HOLDS (UI polish P2). It was `static readonly (40, 112, 300, 140)`,
+    // which is frozen at class load and cannot follow the UI SCALE setting — and 140 px was exactly the
+    // 100 % stack of its four lines. At 150 % the number is 48 px tall and the style line 33, so the
+    // plate is the sum of its rows: the number's row, the SPENT line, a breath, the style line, and the
+    // frame's clearance top and bottom. Its width is two insets plus a run of content that grows with
+    // the type it carries (the medallion beside a PrimaryValue figure beside the word AVAILABLE).
+    private static Rectangle PointsPanel => new(PointsPanelLeft, HeaderBottom, PointsPanelWidth, PointsPanelHeight);
+
+    /// <summary>The plate's left edge — the page's own margin past the nav rail, a page anchor.</summary>
+    private const int PointsPanelLeft = 40;
+
+    /// <summary>
+    /// The plate's width: two insets and a run of 256 at 100 %. The run grows at the SPACING rate, not
+    /// the control rate: at 100 % it is mostly air (the widest row, STYLE · HAMMER x2.0, is 167 of it),
+    /// and at 150 % the rows still fit with room (251 of 320) — while a plate grown at the full rate
+    /// (440 wide) reached under the tree's north-west arm at the overview and covered the HAMMER
+    /// specialisation's caption. The button under it fits its label at every profile (measured).
+    /// </summary>
+    private static int PointsPanelWidth => PointsPad * 2 + UiMetrics.Space(256);
+
+    private static int PointsPanelHeight
+        => PointsNumberTop + UiTypography.Pitch(UiTypography.PrimaryValue) + UiTypography.Pitch(UiTypography.Secondary)
+           + UiMetrics.Space(16) + UiTypography.Body + PointsPad;
+
+    /// <summary>The plate's inset from its frame — the medium frame's side rail, plus room.</summary>
+    private static int PointsPad => UiMetrics.Space(22);
+
+    /// <summary>Where the AVAILABLE figure's row starts, below the plate's top edge.</summary>
+    private static int PointsNumberTop => UiMetrics.Space(14);
+
+    /// <summary>The mastery medallion's edge on the plate — an icon box, so it grows with the controls.</summary>
+    private static int PointsMedalPx => UiMetrics.Control(56);
 
     // ON THE TREE PAGE, NOT THE OVERVIEW. Playtest: "'Take all mastery points back' buranın butonu
     // değil, mastery tree'nin butonu." Right — it un-spends every point in a tree the overview does not
@@ -198,8 +230,33 @@ public sealed class MasteryScreen
     // door reads as "you are somewhere nested" when you are not (playtest asked what it even meant).
     //
     // INSIDE THE POINTS PLATE now, on its content width, rather than floating on the tree beneath it.
-    private static readonly Rectangle ResetBtn =
-        new(PointsPanel.X, PointsPanel.Bottom + 12, 300, 52);
+    private static Rectangle ResetBtn
+        => new(PointsPanel.X, PointsPanel.Bottom + UiMetrics.Gap, PointsPanel.Width, UiMetrics.ButtonHeight);
+
+    // ── THE TOP STRIP'S GRID — derived from the rungs it stacks, so a bigger title pushes its rule and
+    //    caption down rather than printing through them (UI polish P2). At 100 % these are the house
+    //    pattern's own numbers: title at 24, rule at 74, caption at 80, content from 112. ─────────────
+
+    /// <summary>Where the screen's title sits — the top strip's one page anchor, the same on every screen.</summary>
+    private const int TitleTop = 24;
+
+    /// <summary>The gold rule under the title: one title's height below it, plus a breath. 74 at 100 %.</summary>
+    private static int RuleTop => TitleTop + UiTypography.ScreenTitle + UiMetrics.Space(12);
+
+    /// <summary>The screen's caption, just under the rule. 80 at 100 %.</summary>
+    private static int CaptionTop => RuleTop + UiMetrics.Space(6);
+
+    /// <summary>Where the page's content begins: under the caption's line and a breath. 112 at 100 %.</summary>
+    private static int HeaderBottom => CaptionTop + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(8);
+
+    /// <summary>The page's bottom margin under every column — the same inset the other screens keep.</summary>
+    private const int PageMarginBottom = 16;
+
+    /// <summary>
+    /// The slack a node's hit box keeps past its drawn radius — the same slack for the hover, the
+    /// left click and the right click, so what lights up is what takes the click (LAW 5).
+    /// </summary>
+    private static int HitSlop => UiMetrics.Space(6);
 
     // ══ THE TREE'S OWN SPACE ═══════════════════════════════════════════════════════════════════
     //
@@ -228,8 +285,185 @@ public sealed class MasteryScreen
     // TreeView is declared below — so a field here read a zero-height rectangle and framed the whole
     // tree at a negative zoom (the first capture after this change was a single dot). A property reads
     // the rectangle when it is asked, which is always after the type is initialised.
-    private static float WholeTreeZoom
-        => (TreeView.Height / 2f - HeaderHalfHeightPx) / (MasteryLayout.WorldRadius * HeaderRing);
+    private float WholeTreeZoom => Overview.Zoom;
+
+    /// <summary>
+    /// THE OVERVIEW'S GEOMETRY — the header ring and the zoom that fits it — derived TOGETHER from the
+    /// room the canvas has at this profile (UI polish P2).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two things stand between a capstone and the branch header past it, and only one of them scales
+    /// with the tree: the world-unit gap (<see cref="HeaderRing"/> − 1, times the zoom) and the TEXT —
+    /// the capstone's two caption lines and the header's promise, in screen pixels that follow the
+    /// profile and not the camera. At 125 % the captions had grown into the promise (CAPSTONE printed
+    /// through STRONGER SKILLS… on the north arm and through LOOT on the south); at 150 % the east and
+    /// west promises ran off the sides of a canvas the wider inspector had narrowed. So the ring is
+    /// SOLVED FOR, not pinned: the smallest ring at which, with the zoom that fits that ring in the
+    /// view, the header's text still clears the capstone's by <see cref="CaptionClearance"/> — and never
+    /// inside <see cref="HeaderRingBase"/>, the ring the tree was drawn at, so 100 % does not move.
+    /// </para>
+    /// <para>
+    /// The zoom fits the ring in BOTH axes: the view's half-height less a header's half-height, and its
+    /// half-width less half the widest side header — whose promise is WRAPPED to the room a
+    /// height-fitted ring leaves between itself and the canvas edge when one line will not fit there
+    /// (brief §9: wrap secondary text at 150 %; one line at 100 %, two at 150 %).
+    /// </para>
+    /// <para>
+    /// Memoised per profile and view: <see cref="LabelZoom"/> reads this for every node on every frame,
+    /// and the derivation measures text.
+    /// </para>
+    /// </remarks>
+    private OverviewGeometry Overview
+    {
+        get
+        {
+            if (_overview is null || _overview.Percent != UiMetrics.Percent || _overview.View != TreeView)
+                _overview = DeriveOverview();
+            return _overview;
+        }
+    }
+
+    private OverviewGeometry? _overview;
+
+    /// <param name="KindZoom">The zoom from which a capstone wears its CAPSTONE line — see <see cref="KindLineZoom"/>.</param>
+    private sealed record OverviewGeometry(int Percent, Rectangle View, float Ring, float Zoom, float KindZoom,
+                                           IReadOnlyDictionary<Branch, IReadOnlyList<string>> Promises);
+
+    private OverviewGeometry DeriveOverview()
+    {
+        var view = TreeView;
+        var byHeight = view.Height / 2f - HeaderHalfHeightPx;
+        var pitch = UiTypography.Pitch(UiTypography.Secondary);
+
+        // Every header's promise, wrapped to its room: the whole width for the poles, and for the sides
+        // what a height-fitted ring leaves beside it. A room too small for a word still gets one word
+        // a line — the width bound below then takes that word's width into account.
+        var promises = new Dictionary<Branch, IReadOnlyList<string>>();
+        var sideHalfWidth = 0;      // the widest side header, title or promise line, halved
+        var sidePromiseHalf = 0;    // the widest side promise LINE, halved
+        var sideLines = 1;
+        foreach (var br in Enum.GetValues<Branch>())
+        {
+            var side = IsSideHeader(br);
+            var room = side ? Math.Max(1, (int)(view.Width - byHeight * 2f)) : view.Width;
+            var lines = _ui.WrapBig(BranchPromise(br), room, UiTypography.Secondary);
+            promises[br] = lines;
+            if (!side) continue;
+            var promise = lines.Count == 0 ? 0 : lines.Max(l => _ui.MeasureBig(l, UiTypography.Secondary));
+            sidePromiseHalf = Math.Max(sidePromiseHalf, promise / 2);
+            sideHalfWidth = Math.Max(sideHalfWidth, Math.Max(_ui.MeasureBig(Short(br), UiTypography.PanelTitle), promise) / 2);
+            sideLines = Math.Max(sideLines, lines.Count);
+        }
+        var reach = MathF.Min(byHeight, view.Width / 2f - sideHalfWidth);
+
+        // The poles' promise height, and the side capstones' widest row (their NAME, or CAPSTONE).
+        var poleLines = Enum.GetValues<Branch>().Where(b => !IsSideHeader(b)).Max(b => Math.Max(1, promises[b].Count));
+        var poleHeight = UiTypography.Secondary + (poleLines - 1) * pitch;
+        var sideNameHalf = MasteryCatalog.Nodes.Where(n => n.Kind == MasteryKind.Mastery && IsSideHeader(n.Branch))
+                                               .Select(n => _ui.MeasureBig(Head(n.Label), UiTypography.Body) / 2)
+                                               .DefaultIfEmpty(0).Max();
+        var sideKindHalf = _ui.MeasureBig("CAPSTONE", UiTypography.Secondary) / 2;
+        var capR = MasteryLayout.NodeWorldRadius(MasteryKind.Mastery);
+        var capstone = capR / MasteryLayout.WorldRadius;
+
+        (float Ring, float Zoom) Solve(bool kindLine)
+        {
+            // THE POLES. The stack the ring must clear on whichever pole is tighter, in screen pixels —
+            // the capstone's captions as DrawNode stacks them and the header's lines as
+            // DrawBranchHeader places them. With z = reach / (R·ring):
+            //     (ring − 1)·R·z ≥ capstone·R·z + stack   ⇒   ring ≥ reach·(1 + capstone) / (reach − stack).
+            var kindUp = kindLine ? 1 + UiTypography.Secondary : 0;
+            var kindDown = kindLine ? UiTypography.Secondary : 0;
+            var north = UiMetrics.Space(2) + UiTypography.Body + kindUp + HeaderPromiseDrop + poleHeight + CaptionClearance;
+            var south = UiMetrics.Space(4) + UiTypography.Body + kindDown + HeaderTitleRise + CaptionClearance;
+            var stack = Math.Max(north, south);
+            var ring = reach > stack ? reach * (1f + capstone) / (reach - stack) : HeaderRingBase;
+            ring = MathF.Max(HeaderRingBase, ring);
+            var zoom = reach / (MasteryLayout.WorldRadius * ring);
+
+            // THE SIDES. The promise's lines run BESIDE the capstone's rows there. Where a line and a
+            // row share more than a line's leading, they have to be apart in x — (ring − 1)·R·z ≥ apart,
+            // i.e. ring ≥ reach / (reach − apart). At 100 % the promise ends above the name row and this
+            // never fires; at 150 % a two-line promise runs level with the name.
+            var promiseBottom = HeaderPromiseDrop + (sideLines - 1) * pitch + UiTypography.Secondary;
+            var rowTop = capR * zoom + UiMetrics.Space(4);
+            var rowBottom = rowTop + UiTypography.Body + kindDown;
+            var overlap = MathF.Min(promiseBottom, rowBottom) - MathF.Max(HeaderPromiseDrop, rowTop);
+            if (overlap > pitch - UiTypography.Secondary)
+            {
+                var apart = Math.Max(sideNameHalf, kindLine ? sideKindHalf : 0) + sidePromiseHalf + CaptionClearance;
+                if (reach > apart && reach / (reach - apart) > ring)
+                {
+                    ring = reach / (reach - apart);
+                    zoom = reach / (MasteryLayout.WorldRadius * ring);
+                }
+            }
+            return (ring, zoom);
+        }
+
+        // Solved WITH the capstone's kind line; if that overview sits under the zoom the kind line needs
+        // (KindLineZoom — it will not be drawn there), solved again without it, and the bare solution
+        // kept if it is consistent with itself (still under that zoom). Either way the line is only ever
+        // drawn at a zoom its ring was solved for.
+        var kindZoom = KindLineZoom();
+        var (ring, zoom) = Solve(kindLine: true);
+        if (zoom < kindZoom)
+        {
+            var bare = Solve(kindLine: false);
+            if (bare.Zoom < kindZoom) (ring, zoom) = bare;
+        }
+        return new OverviewGeometry(UiMetrics.Percent, view, ring, zoom, kindZoom, promises);
+    }
+
+    /// <summary>
+    /// The zoom from which a capstone may wear its KIND line (CAPSTONE, under its name) without that
+    /// line meeting a neighbouring specialisation's own caption — the two stacks face each other on
+    /// the east and west arms, where the capstone's rows run down and the south-half specialisation's
+    /// caption runs up (see <see cref="DrawNode"/>). Their world gap holds both stacks at 100 % and
+    /// 125 %; at 150 % it does not, and the KIND line is the one that yields (brief §9: less secondary
+    /// info at 150 % — the medallion's size, its halo and its name still say what it is, and one wheel
+    /// notch in the line is back). Measured over every capstone–specialisation pair, so it follows the
+    /// catalogue: for each, the zoom at which the boxes part in y, or the one at which they part in x,
+    /// whichever comes first.
+    /// </summary>
+    private float KindLineZoom()
+    {
+        var specs = MasteryCatalog.Nodes.Where(n => n.Kind == MasteryKind.Specialisation).ToList();
+        var specW = _ui.MeasureBig("SPECIALISATION", UiTypography.Secondary);
+        var kindW = _ui.MeasureBig("CAPSTONE", UiTypography.Secondary);
+        var capR = MasteryLayout.NodeWorldRadius(MasteryKind.Mastery);
+        var specR = MasteryLayout.NodeWorldRadius(MasteryKind.Specialisation);
+        var capStack = UiMetrics.Space(4) + UiTypography.Body + UiTypography.Secondary;   // name, then CAPSTONE, away from the medallion
+        var specStack = UiMetrics.Space(6) + UiTypography.Secondary;                      // the caption, toward the centre
+        var need = 0f;
+        foreach (var c in MasteryCatalog.Nodes.Where(n => n.Kind == MasteryKind.Mastery))
+        {
+            var cp = NodePos(c);
+            var capDown = cp.Y >= -1f;   // a north capstone stacks its captions UP; every other, DOWN
+            var capW = Math.Max(_ui.MeasureBig(Head(c.Label), UiTypography.Body), kindW);
+            foreach (var s in specs)
+            {
+                var sp = NodePos(s);
+                var specUp = sp.Y > 1f;  // a south-half specialisation's caption sits ABOVE it; a north-half's, BELOW
+                if (capDown != specUp) continue;                    // the stacks run the same way — they never meet
+                var dy = capDown ? sp.Y - cp.Y : cp.Y - sp.Y;
+                var clear = dy - capR - specR;                      // world units between the two boxes' edges
+                if (clear <= 0f) continue;                          // not a pair a zoom can part
+                var partY = (capStack + specStack) / clear;
+                var dx = MathF.Abs(sp.X - cp.X);
+                var partX = dx > 0f ? (capW + specW) / 2f / dx : float.MaxValue;
+                need = MathF.Max(need, MathF.Min(partX, partY));
+            }
+        }
+        return need;
+    }
+
+    /// <summary>The east and west headers — the ones the canvas's WIDTH has to hold.</summary>
+    private static bool IsSideHeader(Branch b) => MathF.Abs(MathF.Cos(MasteryLayout.AngleOf(b))) > 0.5f;
+
+    /// <summary>The air a header's line keeps off the capstone caption it faces, at the overview.</summary>
+    private static int CaptionClearance => UiMetrics.Space(8);
 
     /// <summary>
     /// The framing the tree opens with the FIRST time: the centre node and the ring of minors around it.
@@ -246,8 +480,19 @@ public sealed class MasteryScreen
 
     private const float FirstOpenMarginPx = 48f;
 
-    /// <summary>Half the height a branch header occupies on screen: its title line above, promise below.</summary>
-    private const float HeaderHalfHeightPx = 24f;
+    /// <summary>
+    /// Half the height a branch header occupies on screen: its title line above, promise below.
+    /// Measured from the two rungs it is drawn in (see <see cref="DrawBranchHeader"/>), so the framing
+    /// keeps the headers inside the view at every profile — 24 at 100 %, 37 at 150 %.
+    /// </summary>
+    private static float HeaderHalfHeightPx
+        => (UiTypography.PanelTitle + UiTypography.Secondary + UiMetrics.Space(2)) / 2f;
+
+    /// <summary>A branch header's title sits this far above its ring point — the title's own height, less a hair.</summary>
+    private static int HeaderTitleRise => UiTypography.PanelTitle - 5;
+
+    /// <summary>A branch header's promise sits this far below its ring point.</summary>
+    private static int HeaderPromiseDrop => UiMetrics.Space(7);
 
     /// <summary>
     /// Below this, every caption on the tree drops out and only shapes remain.
@@ -257,14 +502,20 @@ public sealed class MasteryScreen
     /// labels. It was once pinned at 0.28 against a default of 0.30 and silently hid every label when
     /// the default moved; tied to the framing instead of guessed at again.
     /// </remarks>
-    private static float LabelZoom => WholeTreeZoom - 0.02f;
+    private float LabelZoom => WholeTreeZoom - 0.02f;
 
     private float _zoom = FirstOpenZoom;  // screen pixels per world unit — a fresh game opens on ring 1
     private Point? _dragFrom;             // where a drag started, in screen space
     private bool _draggedThisPress;       // the drag moved far enough to swallow the click
     private Vector2 _dragPanFrom;
 
-    private const float MinZoom = 0.16f, MaxZoom = 1.40f;
+    /// <summary>
+    /// How far out the wheel may go: the base, or the overview itself where the profile has pushed
+    /// the overview under it — HOME must never land on a zoom the wheel then refuses to hold.
+    /// </summary>
+    private float MinZoom => MathF.Min(MinZoomBase, WholeTreeZoom);
+
+    private const float MinZoomBase = 0.16f, MaxZoom = 1.40f;
 
     /// <summary>Centre node and ring 1, dead centre.</summary>
     private void FrameFirstOpen()
@@ -304,7 +555,13 @@ public sealed class MasteryScreen
     /// </remarks>
     // THE CANVAS ENDS WHERE THE INSPECTOR BEGINS (UX V2 P1.5): the east ring used to be cut by a dock that
     // started 32 px inside the view. Both hang off UiKit.Page, so UI SCALE moves them together.
-    private static Rectangle TreeView => new(180, 112, InspectorPanel.X - 8 - 180, UiKit.PageBottom(16) - 112);
+    // Its TOP is the header's bottom, DERIVED (UI polish P2): at 150 % the title is 57 px tall and the
+    // caption 29, so the strip ends at 146 rather than 112, and the canvas starts where it ends.
+    private static Rectangle TreeView
+        => new(TreeLeft, HeaderBottom, InspectorPanel.X - UiMetrics.Space(8) - TreeLeft, UiKit.PageBottom(PageMarginBottom) - HeaderBottom);
+
+    /// <summary>The canvas's left edge — the nav rail's width, a page anchor the host owns.</summary>
+    private const int TreeLeft = 180;
 
     private Vector2 Screen(Vector2 world)
         => new(TreeView.Center.X + (world.X - _pan.X) * _zoom,
@@ -362,8 +619,16 @@ public sealed class MasteryScreen
     /// Held in WORLD units rather than screen ones so a header is fixed to its arm: pan and the header
     /// travels with its branch, zoom and it stays exactly as far outside the rim as it was.
     /// </para>
+    /// <para>
+    /// 1.30 is the FLOOR now (UI polish P2): the profile's type is what those "~44px" and "7px" are
+    /// made of, so at 125 % and 150 % the ring is derived — see <see cref="Overview"/> — and stands
+    /// further out, still in world units, still fixed to its arm.
+    /// </para>
     /// </remarks>
-    private const float HeaderRing = 1.30f;
+    private float HeaderRing => Overview.Ring;
+
+    /// <inheritdoc cref="HeaderRing"/>
+    private const float HeaderRingBase = 1.30f;
 
     /// <summary>What a branch IS, in one plain line — the promise its nodes then keep.</summary>
     /// <remarks>
@@ -399,23 +664,184 @@ public sealed class MasteryScreen
     /// so the two call sites below keep the multiply they have always had.
     /// </remarks>
     private static int NodeRadius(MasteryKind k) => (int)(MasteryLayout.NodeWorldRadius(k) / 1.9f);
-    private const int SbX = 1200;
+
+    /// <summary>A node's DRAWN radius in screen pixels at the current zoom — what its frame is drawn at.</summary>
+    private int NodeDrawRadius(MasteryKind k) => Math.Max(4, (int)(NodeRadius(k) * _zoom * 1.9f));
+
+    /// <summary>
+    /// Half the edge of a node's HIT BOX at the current zoom — the ONE square the hover, the left click
+    /// and the right click all test (LAW 5; they used to carry three copies of it with two different
+    /// floors). The drawn radius plus <see cref="HitSlop"/>, grown to the house minimum
+    /// (<see cref="UiMetrics.HitTargetMinimum"/>, brief §107) wherever the tree's spacing allows it:
+    /// never past half the closest pair's on-screen distance, so two boxes cannot claim one pixel.
+    /// </summary>
+    private int NodeHitHalf(MasteryKind k)
+    {
+        var room = (int)(ClosestPairWorld * _zoom / 2f) - 1;
+        return Math.Max(NodeDrawRadius(k) + HitSlop, Math.Min(UiMetrics.HitTargetMinimum / 2, room));
+    }
+
+    /// <summary>The closest two nodes in the catalogue, in world units — measured once from the layout.</summary>
+    private static readonly float ClosestPairWorld = MeasureClosestPair();
+
+    private static float MeasureClosestPair()
+    {
+        var pts = MasteryCatalog.Nodes.Select(NodePos).ToArray();
+        var best = float.MaxValue;
+        for (var i = 0; i < pts.Length; i++)
+            for (var j = i + 1; j < pts.Length; j++)
+                best = MathF.Min(best, Vector2.Distance(pts[i], pts[j]));
+        return best;
+    }
 
     /// <summary>
     /// THE INSPECTOR (UX V2 P1.5, D3): the whole right column. It replaced two equal ornate frames — a
     /// standing YOUR STYLE chart that was an empty state for most of the game, and a node card with no
     /// control in it. What a node is, what it does, what it needs, what it costs, and the one button.
     /// </summary>
-    private static Rectangle InspectorPanel => new(UiKit.PageRight(16) - 496, 112, 496, UiKit.PageBottom(16) - 112);
-    private static Rectangle TakeBtn => new(UiKit.ContentLeft(InspectorPanel), InspectorPanel.Bottom - 92,
-                                            UiKit.ContentRight(InspectorPanel) - UiKit.ContentLeft(InspectorPanel), 56);
-    private const int InspectorHexRadius = 70;
-    private const int InspectorSealPx = 30;   // ui-size-ok: the seal medallion's edge in pixels, not a text size
+    // ITS WIDTH IS THE HOUSE INSPECTOR'S (UiMetrics.InspectorWidth): 496 at 100 %, wider at the larger
+    // profiles so the bigger type keeps its line length — and the canvas beside it gives up the room.
+    private static Rectangle InspectorPanel
+        => new(UiKit.PageRight(PageMarginRight) - UiMetrics.InspectorWidth(UiKit.Page.Width), HeaderBottom,
+               UiMetrics.InspectorWidth(UiKit.Page.Width), UiKit.PageBottom(PageMarginBottom) - HeaderBottom);
+
+    /// <summary>The page's right margin beside the inspector — the same inset the other screens keep.</summary>
+    private const int PageMarginRight = 16;
+
+    /// <summary>The inspector's one button: anchored to the panel's foot, never inside the reading region.</summary>
+    private static Rectangle TakeBtn => new(UiKit.ContentLeft(InspectorPanel), InspectorPanel.Bottom - TakeBtnClearance - TakeBtnHeight,
+                                            UiKit.ContentRight(InspectorPanel) - UiKit.ContentLeft(InspectorPanel), TakeBtnHeight);
+
+    private static int TakeBtnHeight => UiMetrics.Control(56);
+
+    /// <summary>How far the button's foot clears the frame's bottom rail.</summary>
+    private static int TakeBtnClearance => UiMetrics.Space(36);
+
+    /// <summary>The refusal line sits this far above the button — its own height plus a breath.</summary>
+    private static int RefusalTop => TakeBtn.Y - UiTypography.Secondary - UiMetrics.Space(11);
+
+    /// <summary>
+    /// THE READING REGION of the inspector: from the panel's title line down to just above the refusal
+    /// line. What a node is, does, needs and costs is laid out into this; when the profile makes it
+    /// taller than the room (150 % on a Specialisation with its hexagon), the region scrolls under the
+    /// wheel and wears a scrollbar in its right lane, while the refusal and the button stay anchored
+    /// below it (brief §17–§18: scroll long inspectors, never a primary action below the scroll).
+    /// </summary>
+    private static Rectangle InspectorBody
+        => new(UiKit.ContentLeft(InspectorPanel), InspectorPanel.Y + UiTypography.PanelTitleTop,
+               UiKit.ContentRight(InspectorPanel) - UiKit.ContentLeft(InspectorPanel),
+               RefusalTop - UiMetrics.Space(10) - (InspectorPanel.Y + UiTypography.PanelTitleTop));
+
+    // THE DOCKED HEXAGON scales as one drawing: its seals are glyph boxes and its radius keeps the
+    // rails between them the same share of the seal, so a 150 % chart is the 100 % chart, larger.
+    private static int InspectorHexRadius => UiMetrics.Control(70);
+    private static int InspectorSealPx => UiMetrics.Control(30);   // ui-size-ok: the seal medallion's edge in pixels, not a text size
     // THE CEREMONY IS CENTRED ON THE PAGE, not on the canvas. It is drawn inside the overlay transform
     // like everything else on this screen, so at UI SCALE 125% a modal pinned to 960 sat off to the right.
-    private static Rectangle SpecPanel => new(UiKit.PageCenterX - 480, 180, 960, 720);   // ui-page-ok: 960 is this modal's own width, and it fits the smallest page
-    private static Rectangle SpecSealBtn => new(SpecPanel.X + 80, SpecPanel.Bottom - 84, 360, 52);
-    private static Rectangle SpecUndoBtn => new(SpecPanel.Right - 80 - 360, SpecPanel.Bottom - 84, 360, 52);
+    //
+    // SIZED BY WHAT IT HOLDS (UI polish P2). It was a fixed 960×720, laid out to the pixel for 100 %:
+    // the field at +86, the two lines at +586 and +610, the buttons at −84. At 150 % the caption ran
+    // into the field and the lines ran under the buttons. Its height is now the stack — title, caption,
+    // the field the hexagon needs, the two sentences (WRAPPED, since at 150 % the first is wider than
+    // the modal), the buttons, the frame's clearance — and it is centred on the page at that height.
+    // Its width grows at the spacing rate so the shoulder labels keep clear of the field's edge.
+    private Rectangle SpecPanel
+    {
+        get
+        {
+            var w = SpecWidth;
+            var h = SpecHeight;
+            return new Rectangle(UiKit.PageCenterX - w / 2, (UiKit.Page.Height - h) / 2, w, h);
+        }
+    }
+
+    /// <summary>
+    /// The modal's width: 960 at 100 %, grown at the spacing rate — and never narrower than
+    /// <see cref="MediumFrameAspect"/> times its height. The frame is chosen by aspect
+    /// (<see cref="UiKit.PanelArtKey"/>), and at 125 % the stack had grown the modal taller than 1/1.30
+    /// of its width, so it changed into the SQUARE frame: a crest 28 px deeper, side diamonds, and a
+    /// caption that <see cref="UiKit.CaptionTop"/> dropped by the crest while the field did not — so
+    /// SIX STYLES — ONE IS YOURS. was drawn under the field. One frame at every profile.
+    /// </summary>
+    private int SpecWidth => Math.Max(SpecWidthBase, (int)MathF.Ceiling(SpecHeight * MediumFrameAspect) + 1);
+
+    private static int SpecWidthBase => UiMetrics.Space(960);   // ui-page-ok: 960 is this modal's own width at 100 %, and it fits the page
+
+    /// <summary>The aspect from which <see cref="UiKit.PanelArtKey"/> hands a panel the medium frame — the one this modal wears.</summary>
+    private const float MediumFrameAspect = 1.30f;
+
+    /// <summary>The modal's height: its stack from the title to the buttons' foot. 730 at 100 %.</summary>
+    private int SpecHeight
+        => SpecFieldTop + SpecFieldHeight + UiMetrics.Space(8)
+           + SpecLineCount * UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(4)
+           + UiMetrics.ButtonHeight + UiTypography.PanelPadBottom;
+
+    /// <summary>Where the ceremony's field starts, below the modal's top: under the caption's line and a breath.</summary>
+    private static int SpecFieldTop => UiTypography.PanelCaptionTop + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(6);
+
+    /// <summary>The field's inset from the modal's sides. 150 each side at 100 %.</summary>
+    private static int SpecFieldInset => UiMetrics.Space(150);
+
+    /// <summary>
+    /// The field's height: the hexagon's reach to its farthest label, top and bottom, plus a margin —
+    /// the 492 the ceremony has always drawn at 100 %, and what the same drawing needs at 150 %.
+    /// </summary>
+    private static int SpecFieldHeight
+        => (CeremonyRadius + (int)(CeremonySealPx * StyleAffinityDiagram.RimFraction) + CeremonyLabelGap + UiTypography.Body) * 2
+           + UiMetrics.Space(16) * 2;
+
+    /// <summary>
+    /// The two sentences under the field, wrapped to the modal's BASE content width: the modal can only
+    /// be wider than that (<see cref="SpecWidth"/>), so lines that fit the base fit the modal — and the
+    /// height they give it cannot depend on the width that depends on the height.
+    /// </summary>
+    private IReadOnlyList<string> SpecLines(string name)
+    {
+        var w = SpecWidthBase - UiTypography.PanelPadX * 2;
+        return _ui.WrapBig($"YOUR {name} SKILLS HIT TWICE AS HARD. THE FAR STYLES HIT SOFTER —", w, UiTypography.Body)
+                  .Concat(_ui.WrapBig("A VOW ON A FAR-STYLE SKILL PULLS IT ONE RING CLOSER.", w, UiTypography.Body))
+                  .ToList();
+    }
+
+    /// <summary>
+    /// How many lines the sentences take at this profile — the longest style name is the one measured,
+    /// so the modal's height does not change with the style being sealed. Memoised per profile: the
+    /// modal's rectangle is read several times a frame and a wrap is not free.
+    /// </summary>
+    private int SpecLineCount
+    {
+        get
+        {
+            if (_specLinesFor != UiMetrics.Percent)
+            {
+                _specLineCount = SpecLines(SpecLongestName).Count;
+                _specLinesFor = UiMetrics.Percent;
+            }
+            return _specLineCount;
+        }
+    }
+
+    private int _specLinesFor = -1, _specLineCount;
+
+    /// <summary>The widest style name, so the modal's height does not change with the style being sealed.</summary>
+    private static readonly string SpecLongestName
+        = Enum.GetValues<Style>().Select(Short).OrderByDescending(s => s.Length).First();
+
+    /// <summary>Where the sentences start, below the modal's top.</summary>
+    private static int SpecLinesTop => SpecFieldTop + SpecFieldHeight + UiMetrics.Space(8);
+
+    /// <summary>Where the two buttons sit, below the modal's top.</summary>
+    private int SpecButtonsTop => SpecLinesTop + SpecLineCount * UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(4);
+
+    /// <summary>A ceremony button's width: 360 at 100 %, and never so wide that two cannot share the modal.</summary>
+    private int SpecButtonWidth
+        => Math.Min(UiMetrics.Control(360), (SpecWidth - UiTypography.PanelPadX * 3) / 2);
+
+    /// <summary>The air at each side of the two buttons and between them — three equal shares of what they leave.</summary>
+    private int SpecButtonGap => (SpecWidth - SpecButtonWidth * 2) / 3;
+
+    private Rectangle SpecSealBtn => new(SpecPanel.X + SpecButtonGap, SpecPanel.Y + SpecButtonsTop, SpecButtonWidth, UiMetrics.ButtonHeight);
+    private Rectangle SpecUndoBtn => new(SpecPanel.Right - SpecButtonGap - SpecButtonWidth, SpecPanel.Y + SpecButtonsTop, SpecButtonWidth, UiMetrics.ButtonHeight);
     // Sized for FIVE skill cards, not four.
     //
     // The trait tree's spine sells a fifth weave, and the old geometry (four cards of 132 at a pitch of
@@ -454,6 +880,12 @@ public sealed class MasteryScreen
 
             if (wheel != 0 && TreeView.Contains(over) && !OverDock(over))
                 ZoomAt(over, wheel > 0 ? 1.16f : 1f / 1.16f);
+
+            // THE INSPECTOR SCROLLS UNDER THE WHEEL when its reading is taller than its room (150 % on
+            // a Specialisation). A notch is one Body line; the last page stays full (UiKit.Scrolled).
+            if (wheel != 0 && InspectorPanel.Contains(over))
+                _inspectorScroll = UiKit.Scrolled(_inspectorScroll, wheel * UiTypography.Pitch(UiTypography.Body),
+                                                  _inspectorVisible, _inspectorTotal);
 
             // DRAG TO PAN. Held, not clicked: a click is a node take, and a tree you can only move with
             // a scrollbar is a tree nobody moves.
@@ -500,7 +932,7 @@ public sealed class MasteryScreen
             {
                 if (node.Kind == MasteryKind.Start) continue;
                 var rp = Screen(NodePos(node));
-                var rr = Math.Max(6, (int)(NodeRadius(node.Kind) * _zoom * 1.9f)) + 6;
+                var rr = NodeHitHalf(node.Kind);
                 if (Math.Abs(rhit.X - rp.X) > rr || Math.Abs(rhit.Y - rp.Y) > rr) continue;
                 _pinnedNodeId = node.Id;
                 if (Mastery.Refund(node.Id)) { _msg = "ONE POINT RETURNED."; Dirty = true; }
@@ -580,9 +1012,8 @@ public sealed class MasteryScreen
             if (node.Kind == MasteryKind.Start) continue;
             // The SAME transform the drawing uses, or the click lands where the node used to be.
             var sp = Screen(NodePos(node));
-            var rad = Math.Max(6, (int)(NodeRadius(node.Kind) * _zoom * 1.9f)) + 6;
-            var halfW = rad;
-            if (Math.Abs(hit.X - sp.X) > halfW || Math.Abs(hit.Y - sp.Y) > rad) continue;
+            var half = NodeHitHalf(node.Kind);
+            if (Math.Abs(hit.X - sp.X) > half || Math.Abs(hit.Y - sp.Y) > half) continue;
             // Clicking a node PINS it in the detail panel whether or not it could be taken — a node you
             // cannot afford is exactly the one you most want to read.
             _pinnedNodeId = node.Id;
@@ -648,7 +1079,7 @@ public sealed class MasteryScreen
         => _ui.Button(b, r, label, hit, false, enabled);
 
     private void DrawDebug(SpriteBatch b)
-        => _ui.TextBig(b, $"nav MASTERY  tree  zoom {_zoom:0.00}  pan {_pan.X:0},{_pan.Y:0}", 60, 112, Gold, UiTypography.Secondary);
+        => _ui.TextBig(b, $"nav MASTERY  tree  zoom {_zoom:0.00}  pan {_pan.X:0},{_pan.Y:0}", 60, HeaderBottom, Gold, UiTypography.Secondary);
 
     // ── Edit sub-view (the existing tree + skill sidebar). ──
     private void DrawEditor(SpriteBatch b, Point hit, MemoryDustTree tree)
@@ -801,30 +1232,36 @@ public sealed class MasteryScreen
     /// </remarks>
     private void DrawTreeChrome(SpriteBatch b, Point hit)
     {
-        // ── THE TOP STRIP — the house pattern, to the pixel. ──
-        _ui.TextCenterBig(b, "MASTERY TREE", UiKit.PageCenterX, 24, Gold, UiTypography.ScreenTitle, TextFace.Display);
-        _ui.Fill(b, new Rectangle(UiKit.PageCenterX - 260, 74, 520, 3), Gold * 0.5f);
+        // ── THE TOP STRIP — the house pattern, to the pixel at 100 %; derived so it stacks at 150 %. ──
+        _ui.TextCenterBig(b, "MASTERY TREE", UiKit.PageCenterX, TitleTop, Gold, UiTypography.ScreenTitle, TextFace.Display);
+        _ui.Fill(b, new Rectangle(UiKit.PageCenterX - 260, RuleTop, 520, 3), Gold * 0.5f);
 
         // The caption is the screen's, and only the screen's. Refusals and results speak in the inspector,
         // beside the button that raised them (UX V2 P1.5) — not five hundred pixels away under the title.
-        _ui.TextCenterBig(b, "FOUR DIRECTIONS  ·  ONE STYLE  ·  TWELVE SKILLS TO LEARN", UiKit.PageCenterX, 80, Slate, UiTypography.Secondary);
+        _ui.TextCenterBig(b, "FOUR DIRECTIONS  ·  ONE STYLE  ·  TWELVE SKILLS TO LEARN", UiKit.PageCenterX, CaptionTop, Slate, UiTypography.Secondary);
 
         // ── THE CORNER PLATE: the points you can spend, what you have spent, and your style. ──
         _ui.PanelQuiet(b, PointsPanel);
-        var px0 = PointsPanel.X + 22;
-        var medal = new Rectangle(px0, PointsPanel.Y + 20, 56, 56);
+        var px0 = PointsPanel.X + PointsPad;
+        var medal = new Rectangle(px0, PointsPanel.Y + UiMetrics.Space(20), PointsMedalPx, PointsMedalPx);
         if (_ui.Assets.Get("ui_medallion_round") is { } ring) b.Draw(ring, medal, Color.White);
         if (_ui.Assets.Get("state_mastery_128") is { } glyph)
-            b.Draw(glyph, new Rectangle(medal.X + 13, medal.Y + 13, 30, 30), Gold);
+        {
+            // The glyph fills the medallion's hollow — 30 of the ring's 56 source px, at whatever size it draws.
+            var g = medal.Width * 30 / 56;
+            b.Draw(glyph, new Rectangle(medal.X + (medal.Width - g) / 2, medal.Y + (medal.Height - g) / 2, g, g), Gold);
+        }
         // NEVER SLATE AT ZERO: the most important figure on the page must not read as switched off in
         // the exact state where the player most needs to read it. Gold when there is something to spend.
-        _ui.TextBig(b, $"{Mastery.Available}", medal.Right + 14, PointsPanel.Y + 14,
+        var figureX = medal.Right + UiMetrics.Space(14);
+        var figureY = PointsPanel.Y + PointsNumberTop;
+        _ui.TextBig(b, $"{Mastery.Available}", figureX, figureY,
                     Mastery.Available > 0 ? Gold : Bone, UiTypography.PrimaryValue);
-        _ui.TextBig(b, "AVAILABLE", medal.Right + 14 + _ui.MeasureBig($"{Mastery.Available}", UiTypography.PrimaryValue) + 10,
-                    PointsPanel.Y + 14 + UiTypography.PrimaryValue - UiTypography.Secondary - 2, Slate, UiTypography.Secondary);
-        _ui.TextBig(b, $"{Mastery.Spent} SPENT", medal.Right + 14, PointsPanel.Y + 14 + UiTypography.Pitch(UiTypography.PrimaryValue), Slate, UiTypography.Secondary);
+        _ui.TextBig(b, "AVAILABLE", figureX + _ui.MeasureBig($"{Mastery.Available}", UiTypography.PrimaryValue) + UiMetrics.Space(10),
+                    figureY + UiTypography.PrimaryValue - UiTypography.Secondary - 2, Slate, UiTypography.Secondary);
+        _ui.TextBig(b, $"{Mastery.Spent} SPENT", figureX, figureY + UiTypography.Pitch(UiTypography.PrimaryValue), Slate, UiTypography.Secondary);
         var styleLine = Mastery.Affinity() is { } st ? $"STYLE · {Short(st)}  x2.0" : "NO STYLE YET";
-        _ui.TextBig(b, _ui.ShortenBig(styleLine, PointsPanel.Width - 44, UiTypography.Body), px0, PointsPanel.Bottom - 22 - UiTypography.Body,
+        _ui.TextBig(b, _ui.ShortenBig(styleLine, PointsPanel.Width - PointsPad * 2, UiTypography.Body), px0, PointsPanel.Bottom - PointsPad - UiTypography.Body,
                     Mastery.Affinity() is not null ? Gold : Slate, UiTypography.Body);
 
         if (Mastery.Spent > 0)
@@ -847,9 +1284,15 @@ public sealed class MasteryScreen
         // the Start test WEIGHT burned as "walked" on a brand-new hunter who has spent nothing.
         var walked = MasteryCatalog.Nodes.Any(n => n.Branch == br && n.Kind != MasteryKind.Bridge
                                                    && n.Kind != MasteryKind.Start && Mastery.IsTaken(n.Id));
-        _ui.TextCenterBig(b, Short(br), (int)p.X, (int)p.Y - 23, walked ? col : col * 0.72f,
+        _ui.TextCenterBig(b, Short(br), (int)p.X, (int)p.Y - HeaderTitleRise, walked ? col : col * 0.72f,
                           UiTypography.PanelTitle);
-        _ui.TextCenterBig(b, BranchPromise(br), (int)p.X, (int)p.Y + 7, Slate, UiTypography.Secondary);
+        // The promise, on as many lines as its room gave it (see Overview) — one everywhere at 100 %.
+        var py = (int)p.Y + HeaderPromiseDrop;
+        foreach (var line in Overview.Promises[br])
+        {
+            _ui.TextCenterBig(b, line, (int)p.X, py, Slate, UiTypography.Secondary);
+            py += UiTypography.Pitch(UiTypography.Secondary);
+        }
     }
 
     /// <summary>
@@ -857,18 +1300,20 @@ public sealed class MasteryScreen
     /// to spare, so its names stand further off their seals — but off the SEAL, like the chart's, so
     /// the two drawings of the same object are the same drawing.
     /// </summary>
-    private const int CeremonyLabelGap = 20;
+    private static int CeremonyLabelGap => UiMetrics.Space(20);
 
     /// <summary>The ceremony's hexagon and seals — the same drawing, at the size a modal can afford.</summary>
     /// <remarks>
-    /// Derived the same way as <see cref="HexRadius"/>, against the ceremony's own field: 246 px per
-    /// half, less an 18 px margin, less the seal's rim (38) + the gap (20) + one Body line (19) —
-    /// which lands back on the 150 the ceremony has always drawn at.
+    /// 150 at 100 %: the ceremony's field is 492 tall there — 246 px per half, less a 16 px margin,
+    /// less the seal's rim (38) + the gap (20) + one Body line (22) — and the field is now derived from
+    /// this the other way round (<see cref="SpecFieldHeight"/>). The whole drawing — radius, seal and
+    /// gap — grows at the SPACING rate: the modal has to keep fitting under the page with its two
+    /// sentences and its buttons, and at the full rate it would not (1058 px tall at 150 %).
     /// </remarks>
-    private const int CeremonyRadius = 150;
+    private static int CeremonyRadius => UiMetrics.Space(150);
 
     /// <inheritdoc cref="CeremonyRadius"/>
-    private const int CeremonySealPx = 62;   // ui-size-ok: the seal medallion's edge in pixels, not a text size
+    private static int CeremonySealPx => UiMetrics.Space(62);   // ui-size-ok: the seal medallion's edge in pixels, not a text size
 
     /// <summary>
     /// THE ATTUNEMENT — the ceremony for the first Specialisation.
@@ -885,22 +1330,26 @@ public sealed class MasteryScreen
         _ui.Panel(b, SpecPanel, gold: true);
 
         var name = _specStyle.ToString().ToUpperInvariant();
-        _ui.TextCenterBig(b, "YOUR SPECIALISATION", SpecPanel.Center.X, UiKit.TitleTop(SpecPanel), Gold, UiTypography.PanelTitle);
-        _ui.TextCenter(b, "SIX STYLES — ONE IS YOURS.", SpecPanel.Center.X, UiKit.CaptionTop(SpecPanel), Slate);
+        var modal = SpecPanel;
+        _ui.TextCenterBig(b, "YOUR SPECIALISATION", modal.Center.X, UiKit.TitleTop(modal), Gold, UiTypography.PanelTitle);
+        _ui.TextCenterBig(b, "SIX STYLES — ONE IS YOURS.", modal.Center.X, UiKit.CaptionTop(modal), Slate, UiTypography.Body);
 
         // THE CEREMONY STANDS ON THE SAME FIELD THE DOCKED CHART DOES. It used to have none — the
         // hexagon floated on the modal's black interior — so the game's founding moment was the one
         // place the chart was drawn without the surface that makes it a chart.
-        var field = new Rectangle(SpecPanel.Center.X - 330, SpecPanel.Y + 86, 660, 492);
+        var field = new Rectangle(modal.X + SpecFieldInset, modal.Y + SpecFieldTop, modal.Width - SpecFieldInset * 2, SpecFieldHeight);
         StyleAffinityDiagram.Field(_ui, b, field);
         StyleAffinityDiagram.Draw(_ui, b, field.Center, CeremonyRadius, _specStyle, showFactors: true,
                             labelGap: CeremonyLabelGap, labelPx: UiTypography.Body,
                             factorPx: UiTypography.Secondary, sealPx: CeremonySealPx);
 
-        _ui.TextCenter(b, $"YOUR {name} SKILLS HIT TWICE AS HARD. THE FAR STYLES HIT SOFTER —",
-                       SpecPanel.Center.X, SpecPanel.Y + 586, Bone);
-        _ui.TextCenter(b, "A VOW ON A FAR-STYLE SKILL PULLS IT ONE RING CLOSER.",
-                       SpecPanel.Center.X, SpecPanel.Y + 610, Bone);
+        // WRAPPED, not pinned: at 150 % the first sentence is wider than the modal.
+        var ly = modal.Y + SpecLinesTop;
+        foreach (var line in SpecLines(name))
+        {
+            _ui.TextCenterBig(b, line, modal.Center.X, ly, Bone, UiTypography.Body);
+            ly += UiTypography.Pitch(UiTypography.Body);
+        }
 
         Button(b, SpecSealBtn, $"CHOOSE {name}", hit, true);
         Button(b, SpecUndoBtn, "NOT YET — TAKE THE POINTS BACK", hit, true);
@@ -927,33 +1376,112 @@ public sealed class MasteryScreen
     {
         var panel = InspectorPanel;
         _ui.PanelQuiet(b, panel);
-        var x = UiKit.ContentLeft(panel);
-        var w = UiKit.ContentRight(panel) - x;
-        var y = panel.Y + UiTypography.PanelTitleTop;
+
+        var id = _hoverNodeId ?? _pinnedNodeId;
+        var n = id is null ? null : MasteryCatalog.ById(id);
+        // A different reading starts at its top: a scroll position belongs to the text it was read in.
+        if ((n?.Id ?? "") != _inspectorKey) { _inspectorKey = n?.Id ?? ""; _inspectorScroll = 0; }
+
+        // ── THE READING REGION (UI polish P2). It used to lay out against a floor and silently DROP
+        //    whatever did not fit — the hexagon, YOU NEED FIRST, the cost — which at 150 % was most of a
+        //    Specialisation's card. It is measured first, then drawn; when it is taller than its room it
+        //    scrolls under a scissor and wears a scrollbar, and its lines give up the bar's lane. ──
+        var body = InspectorBody;
+        var w = body.Width;
+        var total = LayoutDetail(b, n, body.X, body.Y, w, draw: false);
+        var scrolls = total > body.Height;
+        if (scrolls)
+        {
+            w -= UiMetrics.ScrollbarWidth + UiMetrics.Gap;
+            total = LayoutDetail(b, n, body.X, body.Y, w, draw: false);
+        }
+        _inspectorTotal = total;
+        _inspectorVisible = body.Height;
+        _inspectorScroll = Math.Clamp(_inspectorScroll, 0, Math.Max(0, total - body.Height));
+
+        if (scrolls)
+        {
+            // The same batch dance the tree canvas does (DrawTreeWorld): close the host's batch, clip,
+            // draw, reopen unclipped for the chrome that follows.
+            b.End();
+            _ui.Device.ScissorRectangle =
+                Rectangle.Intersect(Game1.OverlayToCanvas(body, Vector2.Zero), new Rectangle(0, 0, 1920, 1080));
+            b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
+                    DepthStencilState.None, Clip, null, Game1.OverlayTransform(Vector2.Zero));
+            try
+            {
+                LayoutDetail(b, n, body.X, body.Y - _inspectorScroll, w, draw: true);
+            }
+            finally
+            {
+                b.End();
+                b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
+                        null, null, null, Game1.OverlayTransform(Vector2.Zero));
+            }
+            _ui.ScrollBar(b, new Rectangle(body.Right - UiMetrics.ScrollbarWidth, body.Y, UiMetrics.ScrollbarWidth, body.Height),
+                          _inspectorScroll, body.Height, total);
+        }
+        else LayoutDetail(b, n, body.X, body.Y, w, draw: true);
+
+        if (n is null) return;
+
+        // ── ANCHORED, never inside the scroll: the refusal beside the button that would have done it, then
+        //    the button — the panel's one action, always where the hand expects it. ──
         var btn = TakeBtn;
-        var floor = btn.Y - 40;
+        var taken = Mastery.IsTaken(n.Id);
+        var can = Mastery.CanTake(n.Id);
+        var refusal = _msg.Length > 0 ? _msg
+            : taken || can ? ""
+            : Mastery.Available < n.Cost ? $"NEEDS {n.Cost} POINTS — YOU HAVE {Mastery.Available}. GO DEEPER."
+            : n.Kind == MasteryKind.Specialisation && Mastery.Affinity() is not null ? "ONE STYLE PER HUNTER — ALREADY CHOSEN."
+            : n.Kind == MasteryKind.Mastery && Mastery.MasteredBranch() is not null ? "ONE CAPSTONE PER HUNTER — ALREADY TAKEN."
+            : "TAKE A CONNECTED NODE FIRST.";
+        if (refusal.Length > 0)
+            _ui.TextBig(b, _ui.ShortenBig(refusal, body.Width, UiTypography.Secondary), body.X, RefusalTop,
+                        _msg.Length > 0 && (taken || can) ? UiInk.Good : Ember, UiTypography.Secondary);
+        var label = taken ? "GIVE BACK" : $"TAKE  ·  {n.Cost} POINT{(n.Cost == 1 ? "" : "S")}";
+        _ui.Button(b, btn, label, hit, false, taken || can, !taken && can ? ButtonStyle.Primary : ButtonStyle.Secondary);
+    }
+
+    /// <summary>What the inspector last laid out, so the wheel knows how far it may scroll.</summary>
+    private int _inspectorScroll, _inspectorTotal, _inspectorVisible;
+    private string _inspectorKey = "";
+
+    /// <summary>
+    /// The inspector's reading, laid out from <paramref name="y"/> into a column <paramref name="w"/>
+    /// wide — CATEGORY · NAME · what it does · what you need first · what it costs — or, with no node,
+    /// the tree's own primer. Returns the height it took. With <paramref name="draw"/> false it only
+    /// measures, which is how <see cref="DrawNodeDetail"/> learns whether the region has to scroll.
+    /// </summary>
+    private int LayoutDetail(SpriteBatch b, MasteryNode? n, int x, int y, int w, bool draw)
+    {
+        var top = y;
 
         void Section(string s, Color? c = null)
         {
-            if (y + UiTypography.Pitch(UiTypography.Secondary) > floor) return;
-            _ui.TextBig(b, s, x, y, c ?? Slate, UiTypography.Secondary); y += UiTypography.Pitch(UiTypography.Secondary);
+            if (draw) _ui.TextBig(b, s, x, y, c ?? Slate, UiTypography.Secondary);
+            y += UiTypography.Pitch(UiTypography.Secondary);
         }
         void Line(string s, Color c, int px = 0, int maxLines = 3)
         {
             if (px == 0) px = UiTypography.Body;   // a rung is a profile-scaled property, not a constant
             foreach (var l in _ui.WrapBig(s, w, px).Take(maxLines))
             {
-                if (y + UiTypography.Pitch(px) > floor) return;
-                _ui.TextBig(b, l, x, y, c, px); y += UiTypography.Pitch(px);
+                if (draw) _ui.TextBig(b, l, x, y, c, px);
+                y += UiTypography.Pitch(px);
             }
         }
-        void Rule() { if (y + 14 < floor) { _ui.Fill(b, new Rectangle(x, y + 6, w, 1), Dim); y += 16; } }
+        void Rule()
+        {
+            if (draw) _ui.Fill(b, new Rectangle(x, y + UiMetrics.Space(6), w, 1), Dim);
+            y += UiMetrics.Space(16);
+        }
 
-        var id = _hoverNodeId ?? _pinnedNodeId;
-        if (id is null || MasteryCatalog.ById(id) is not { } n)
+        if (n is null)
         {
             Section("MASTERY TREE");
-            _ui.TextBig(b, "PICK A NODE TO READ IT", x, y, UiInk.Empty, UiTypography.Headline); y += UiTypography.Pitch(UiTypography.Headline) + 4;
+            if (draw) _ui.TextBig(b, "PICK A NODE TO READ IT", x, y, UiInk.Empty, UiTypography.Headline);
+            y += UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(4);
             Line("Hover shows a node here; click pins it. Take it with the button below.", Slate);
             Rule();
             Section("WHAT EACH KIND COSTS IN POINTS");
@@ -967,7 +1495,7 @@ public sealed class MasteryScreen
             Section("CONTROLS");
             Line("DRAG TO MOVE  ·  WHEEL TO ZOOM  ·  HOME SHOWS THE WHOLE TREE", Slate, UiTypography.Secondary, 2);
             Line("RIGHT-CLICK A TAKEN NODE TO GIVE IT BACK  ·  RESPEC IS FREE", Slate, UiTypography.Secondary, 2);
-            return;
+            return y - top;
         }
 
         var col = BranchColor(n.Branch);
@@ -977,17 +1505,26 @@ public sealed class MasteryScreen
         var learned = roadDef is not null && Mastery.LearnedSkills().Contains(roadDef.Id);
 
         // CATEGORY · BRANCH, in the branch's colour; NAME at Headline — gold once it is yours.
-        _ui.Fill(b, new Rectangle(x, y - 6, 5, UiTypography.Pitch(UiTypography.Secondary) + UiTypography.Pitch(UiTypography.Headline)), col);
-        var xs = x; x += 16; w -= 16;
+        if (draw) _ui.Fill(b, new Rectangle(x, y - UiMetrics.Space(6), 5, UiTypography.Pitch(UiTypography.Secondary) + UiTypography.Pitch(UiTypography.Headline)), col);
+        var xs = x; var indent = UiMetrics.Space(16); x += indent; w -= indent;
         var kindHead = n.Kind switch { MasteryKind.Specialisation => "SPECIALISATION", MasteryKind.SkillRoad => "SKILL", MasteryKind.Mastery => "CAPSTONE", _ => KindWord(n.Kind) };
         Section(_ui.ShortenBig($"{kindHead}  ·  {Short(n.Branch)}{(n.Link is { } lk ? $" + {Short(lk)}" : "")}", w, UiTypography.Secondary), col);
         var name = roadDef is not null ? roadDef.Name
                  : n.Kind == MasteryKind.Specialisation && n.Style is { } ss ? $"{Short(ss)} SPECIALISATION"
                  : Head(n.Label);
-        if (roadDef is not null) { _ui.Icon(b, $"icon_skill_{roadDef.Id}", new Rectangle(x, y - 2, 34, 34), learned || taken ? Gold : Bone); _ui.TextBig(b, name, x + 44, y, taken ? Gold : Bone, UiTypography.Headline); }
-        else _ui.TextBig(b, name, x, y, taken ? Gold : Bone, UiTypography.Headline);
-        y += UiTypography.Pitch(UiTypography.Headline) + 6;
-        x = xs; w += 16;
+        if (roadDef is not null)
+        {
+            // The skill's icon beside its name: a box one breath taller than the Headline it sits by.
+            var icon = UiTypography.Headline + UiMetrics.Space(8);
+            if (draw)
+            {
+                _ui.Icon(b, $"icon_skill_{roadDef.Id}", new Rectangle(x, y - 2, icon, icon), learned || taken ? Gold : Bone);
+                _ui.TextBig(b, name, x + icon + UiMetrics.Space(10), y, taken ? Gold : Bone, UiTypography.Headline);
+            }
+        }
+        else if (draw) _ui.TextBig(b, name, x, y, taken ? Gold : Bone, UiTypography.Headline);
+        y += UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(6);
+        x = xs; w += indent;
 
         // WHAT IT DOES: the label's tail, the stat lines, the kind's own sentence.
         Section("WHAT IT DOES");
@@ -1010,15 +1547,17 @@ public sealed class MasteryScreen
                  : $"YOUR STYLE IS ALREADY {Short(mine.Value)}. ONE STYLE PER HUNTER — TAKE EVERY POINT BACK TO CHOOSE AGAIN.",
                  taken || mine is null ? Bone : Slate, UiTypography.Body, 4);
             // THE HEXAGON, where the decision is made: this style at the centre, the six factors around it.
-            var need = (InspectorHexRadius + InspectorSealPx + 8 + UiTypography.Body) * 2 + 24;
-            if (y + need < floor)
+            // Always drawn now — the region scrolls rather than dropping it when the room runs out.
+            var gap = UiMetrics.Space(8);
+            var need = (InspectorHexRadius + InspectorSealPx + gap + UiTypography.Body) * 2 + UiMetrics.Space(24);
+            if (draw)
             {
-                var field = new Rectangle(x, y + 8, w, need - 16);
+                var field = new Rectangle(x, y + gap, w, need - gap * 2);
                 StyleAffinityDiagram.Field(_ui, b, field);
                 StyleAffinityDiagram.Draw(_ui, b, field.Center, InspectorHexRadius, specStyle, showFactors: true,
-                                          labelGap: 8, labelPx: UiTypography.Secondary, factorPx: UiTypography.Secondary, sealPx: InspectorSealPx);
-                y += need;
+                                          labelGap: gap, labelPx: UiTypography.Secondary, factorPx: UiTypography.Secondary, sealPx: InspectorSealPx);
             }
+            y += need;
         }
         if (n.Kind == MasteryKind.Mastery)
             Line(Mastery.MasteredBranch() is { } mb && mb != n.Branch ? $"YOU ALREADY TOOK THE {Short(mb)} CAPSTONE — ONE CAPSTONE PER HUNTER." : "THE BRANCH'S CAPSTONE — ONE PER HUNTER.",
@@ -1044,43 +1583,22 @@ public sealed class MasteryScreen
         }
 
         // WHAT IT COSTS · YOU HAVE.
-        if (y + UiTypography.Pitch(UiTypography.Headline) < floor)
+        if (draw)
         {
-            _ui.TextBig(b, taken ? "PAID" : "COST", x, y + 6, Slate, UiTypography.Secondary);
+            _ui.TextBig(b, taken ? "PAID" : "COST", x, y + UiMetrics.Space(6), Slate, UiTypography.Secondary);
             _ui.TextRightBig(b, $"{n.Cost} POINT{(n.Cost == 1 ? "" : "S")}", x + w, y, taken ? Gold : can ? Bone : Ember, UiTypography.Headline);
-            y += UiTypography.Pitch(UiTypography.Headline);
         }
-        if (!taken && y + UiTypography.Pitch(UiTypography.Headline) < floor)
+        y += UiTypography.Pitch(UiTypography.Headline);
+        if (!taken)
         {
-            _ui.TextBig(b, "YOU HAVE", x, y + 6, Slate, UiTypography.Secondary);
-            _ui.TextRightBig(b, $"{Mastery.Available}", x + w, y, Mastery.Available >= n.Cost ? Bone : Ember, UiTypography.Headline);
+            if (draw)
+            {
+                _ui.TextBig(b, "YOU HAVE", x, y + UiMetrics.Space(6), Slate, UiTypography.Secondary);
+                _ui.TextRightBig(b, $"{Mastery.Available}", x + w, y, Mastery.Available >= n.Cost ? Bone : Ember, UiTypography.Headline);
+            }
             y += UiTypography.Pitch(UiTypography.Headline);
         }
-
-        // THE REFUSAL, beside the button that would have done it; then the button.
-        var refusal = _msg.Length > 0 ? _msg
-            : taken || can ? ""
-            : Mastery.Available < n.Cost ? $"NEEDS {n.Cost} POINTS — YOU HAVE {Mastery.Available}. GO DEEPER."
-            : n.Kind == MasteryKind.Specialisation && Mastery.Affinity() is not null ? "ONE STYLE PER HUNTER — ALREADY CHOSEN."
-            : n.Kind == MasteryKind.Mastery && Mastery.MasteredBranch() is not null ? "ONE CAPSTONE PER HUNTER — ALREADY TAKEN."
-            : "TAKE A CONNECTED NODE FIRST.";
-        if (refusal.Length > 0)
-            _ui.TextBig(b, _ui.ShortenBig(refusal, w, UiTypography.Secondary), x, btn.Y - 30, _msg.Length > 0 && (taken || can) ? UiInk.Good : Ember, UiTypography.Secondary);
-        var label = taken ? "GIVE BACK" : $"TAKE  ·  {n.Cost} POINT{(n.Cost == 1 ? "" : "S")}";
-        _ui.Button(b, btn, label, hit, false, taken || can, !taken && can ? ButtonStyle.Primary : ButtonStyle.Secondary);
-    }
-
-    /// <summary>
-    /// Word-wrap a sentence into the panel, and return the y the NEXT block may start at.
-    /// </summary>
-    /// <remarks>
-    /// It used to return nothing, so every block under it was pinned to a hand-picked constant and the
-    /// panel could only ever hold one paragraph. The Specialisation card holds two.
-    /// </remarks>
-    private int DrawWrapped(SpriteBatch b, string text, int x, int y, int width, Color c)
-    {
-        foreach (var line in _ui.WrapBig(text, width, UiTypography.Label)) { _ui.Text(b, line, x, y, c); y += UiTypography.Pitch(UiTypography.Label); }
-        return y;
+        return y - top;
     }
 
     /// <summary>
@@ -1179,7 +1697,7 @@ public sealed class MasteryScreen
     {
         var w = NodePos(node);
         var sp = Screen(w);
-        var rad = Math.Max(4, (int)(NodeRadius(node.Kind) * _zoom * 1.9f));
+        var rad = NodeDrawRadius(node.Kind);
 
         // Cull. A tree meant to grow will one day have far more nodes off screen than on it.
         if (sp.X < TreeView.X - 200 || sp.X > TreeView.Right + 200
@@ -1188,8 +1706,10 @@ public sealed class MasteryScreen
         var cx = (int)sp.X;
         var cy = (int)sp.Y;
         var box = new Rectangle(cx - rad, cy - rad, rad * 2, rad * 2);
+        // The SAME square the click tests, so what lights up is what takes the click (LAW 5).
+        var half = NodeHitHalf(node.Kind);
         var hover = !OverDock(mouse)
-                    && Math.Abs(mouse.X - cx) <= rad + 6 && Math.Abs(mouse.Y - cy) <= rad + 6;
+                    && Math.Abs(mouse.X - cx) <= half && Math.Abs(mouse.Y - cy) <= half;
 
         var taken = Mastery.IsTaken(node.Id);
         var canTake = Mastery.CanTake(node.Id);
@@ -1288,7 +1808,7 @@ public sealed class MasteryScreen
         {
             // >= the default zoom, not >. The threshold was 0.3 and HOME resets to exactly 0.30, so the
             // one label naming the centre of the tree was absent from the default view of it.
-            if (_zoom > LabelZoom) _ui.TextCenter(b, "YOU", cx, cy - 12, Bone);
+            if (_zoom > LabelZoom) _ui.TextCenterBig(b, "YOU", cx, cy - UiTypography.Body / 2 - 1, Bone, UiTypography.Body);
         }
         else if (node.Kind == MasteryKind.Specialisation && _zoom > LabelZoom)
         {
@@ -1298,12 +1818,12 @@ public sealed class MasteryScreen
             // Bright while the discipline is still open, quiet once it is spent. The five a hunter did
             // NOT take are dead content — a bone-white Form name over an unlit frame read as a bug in
             // the capture, a caption floating in empty space.
-            _ui.TextCenterBig(b, node.Style is { } sf ? Short(sf) : "STYLE", cx, cy - 9,
+            _ui.TextCenterBig(b, node.Style is { } sf ? Short(sf) : "STYLE", cx, cy - UiTypography.Secondary / 2,
                               taken ? new Color(0x14, 0x11, 0x1E) : aff is null ? Bone : Muted(Bone, 0.62f),
                               UiTypography.Secondary);
             // INWARD, toward the centre: on the south arms the road node stands just outside this diamond and
             // used to print through the caption ("S ECIALISATION").
-            var specCapY = w.Y > 1f ? box.Top - 6 - UiTypography.Secondary : box.Bottom + 5;
+            var specCapY = w.Y > 1f ? box.Top - UiMetrics.Space(6) - UiTypography.Secondary : box.Bottom + UiMetrics.Space(5);
             _ui.TextCenterBig(b, "SPECIALISATION", cx, specCapY,
                               taken ? Gold : aff is null ? Muted(Gold, 0.90f) : Muted(Slate, 0.72f),
                               UiTypography.Secondary);
@@ -1364,15 +1884,21 @@ public sealed class MasteryScreen
         {
             var nameCol = owned || taken ? Bone : branchCol;
             var kindCol = owned || taken ? Gold : Slate;
+            // Stacked by their own rungs, so at 150 % the name and the kind still clear each other and
+            // the medallion: name one breath off the box, CAPSTONE one hair off the name. The KIND line
+            // waits for the zoom its neighbours allow it (KindLineZoom) — the name never does.
+            var kind = _zoom >= Overview.KindZoom;
             if (w.Y < -1f)
             {
-                _ui.TextCenterBig(b, Head(node.Label), cx, box.Top - 24, nameCol, UiTypography.Body);
-                _ui.TextCenterBig(b, "CAPSTONE", cx, box.Top - 44, kindCol, UiTypography.Secondary);
+                var nameY = box.Top - UiMetrics.Space(2) - UiTypography.Body;
+                _ui.TextCenterBig(b, Head(node.Label), cx, nameY, nameCol, UiTypography.Body);
+                if (kind) _ui.TextCenterBig(b, "CAPSTONE", cx, nameY - 1 - UiTypography.Secondary, kindCol, UiTypography.Secondary);
             }
             else
             {
-                _ui.TextCenterBig(b, Head(node.Label), cx, box.Bottom + 4, nameCol, UiTypography.Body);
-                _ui.TextCenterBig(b, "CAPSTONE", cx, box.Bottom + 26, kindCol, UiTypography.Secondary);
+                var nameY = box.Bottom + UiMetrics.Space(4);
+                _ui.TextCenterBig(b, Head(node.Label), cx, nameY, nameCol, UiTypography.Body);
+                if (kind) _ui.TextCenterBig(b, "CAPSTONE", cx, nameY + UiTypography.Body, kindCol, UiTypography.Secondary);
             }
         }
 
@@ -1385,13 +1911,13 @@ public sealed class MasteryScreen
         {
             var nm = node.Kind == MasteryKind.SkillRoad && node.GrantsSkillId is { } rs2 && SkillCatalogue.Find(rs2) is { } rd2 ? rd2.Name : Head(node.Label);
             var npx = _zoom >= FirstOpenZoom * 0.8f ? UiTypography.Body : UiTypography.Secondary;
-            var ny = w.Y < -1f ? box.Top - 6 - npx : box.Bottom + 4;
+            var ny = w.Y < -1f ? box.Top - UiMetrics.Space(6) - npx : box.Bottom + UiMetrics.Space(4);
             _ui.TextCenterBig(b, nm, cx, ny, taken || canTake ? Bone : Slate, npx);
         }
         else if (node.Kind == MasteryKind.Minor && _zoom >= FirstOpenZoom * 0.8f && node.Stats is { Count: > 0 } st0)
         {
             var kv0 = st0.First();
-            _ui.TextCenterBig(b, $"+{kv0.Value:0}", cx, box.Bottom + 2, taken ? Bone : Slate, UiTypography.Secondary);
+            _ui.TextCenterBig(b, $"+{kv0.Value:0}", cx, box.Bottom + UiMetrics.Space(2), taken ? Bone : Slate, UiTypography.Secondary);
         }
 
         if (hover && node.Kind != MasteryKind.Start)
@@ -1419,24 +1945,6 @@ public sealed class MasteryScreen
             _ui.LineSeg(b, prev, next, thickness, col);
             prev = next;
         }
-    }
-
-    /// <summary>
-    /// One cycling row of a skill card. <paramref name="label"/> names what is being cycled.
-    /// </summary>
-    /// <remarks>
-    /// The label is not decoration. All three rows of a card were arrow-flanked values with nothing
-    /// saying which was which, so the Vow row — the only one whose value can be NONE — read as a status
-    /// message rather than a control, and a player looking for "where do I set a Vow" had no reason to
-    /// think the row that said NO VOW was the answer.
-    /// </remarks>
-    private void DrawCell(SpriteBatch b, Rectangle r, string text, Color color, Point mouse, string label = "")
-    {
-        _ui.Fill(b, r, r.Contains(mouse) ? Hi : PanelBg);
-        _ui.Text(b, "<", r.X + 4, r.Y + 12, Slate);
-        _ui.Text(b, ">", r.Right - 28, r.Y + 12, Slate);
-        if (label.Length > 0) _ui.Text(b, label, r.X + 30, r.Y + 12, Dim);
-        _ui.TextCenter(b, text, r.Center.X, r.Y + 12, color);
     }
 
     /// <summary>
