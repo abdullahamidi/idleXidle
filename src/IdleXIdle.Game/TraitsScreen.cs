@@ -153,17 +153,53 @@ public sealed class TraitsScreen
     private string? _tip;
     private Point _tipAt;
 
-    /// <summary>The camera's three buttons at the canvas's foot: zoom out, the whole tree, zoom in.</summary>
-    private static Rectangle CamBtn(int i) => new(View.Right - 12 - (3 - i) * 50, View.Bottom - 56, 44, 44);
+    // ── The inspector's sheet: a wheel-scrolled region of whole rows (UI polish §17–§18) ─────────
+    /// <summary>The first row of the sheet on show. Reset whenever the selection changes.</summary>
+    private int _sheetFirst;
 
-    /// <summary>DEV ONLY: pose the detail panel on a specific blessing for the screenshot fixture.</summary>
-    public void DevSelect(string id) => _selectedId = id;
+    /// <summary>
+    /// How many rows the sheet's LAST page holds, and how many rows there are: total − page is the
+    /// furthest the sheet scrolls — what the wheel's clamp (<see cref="UiKit.Scrolled"/>) and the
+    /// scrollbar read. Both are what the last Draw measured.
+    /// </summary>
+    private int _sheetPage, _sheetTotal;
+
+    /// <summary>The sheet's row heights, measured every Draw — the scroll clamp's input. Reused, never reallocated.</summary>
+    private readonly List<int> _sheetRows = new();
+
+    /// <summary>The camera buttons' edge — a hit target, so it follows the profile (brief §107).</summary>
+    private static int CamBtnSize => UiMetrics.Control(44);
+
+    /// <summary>The camera's three buttons at the canvas's foot: zoom out, the whole tree, zoom in.</summary>
+    private static Rectangle CamBtn(int i)
+        => new(View.Right - UiMetrics.Gap - (3 - i) * (CamBtnSize + UiMetrics.Space(6)),
+               View.Bottom - UiMetrics.Gap - CamBtnSize, CamBtnSize, CamBtnSize);
+
+    /// <summary>
+    /// DEV ONLY: pose the detail panel on a specific trait for the screenshot fixture. An "@N" suffix
+    /// (RH_SHOT_NODE=ks_bloodlust@3) opens the sheet scrolled to its Nth row — the one state of this
+    /// panel no other dial can pose, and the one the 125 % and 150 % profiles put in front of every player.
+    /// </summary>
+    public void DevSelect(string spec)
+    {
+        var (id, first) = DevSpec(spec);
+        _selectedId = id;
+        _sheetFirst = first;
+    }
+
+    /// <summary>The trait id and the sheet row a fixture spec names: "id", or "id@row".</summary>
+    private static (string Id, int First) DevSpec(string spec)
+    {
+        var at = spec.IndexOf('@');
+        if (at > 0 && int.TryParse(spec[(at + 1)..], out var first)) return (spec[..at], Math.Max(0, first));
+        return (spec, 0);
+    }
 
     /// <summary>DEV ONLY: park the camera at a zoom, centred on a node, so a capture can prove the zoomed view.</summary>
     public void DevCamera(float zoom, string centreId)
     {
         _zoom = Math.Clamp(zoom, MinZoom, MaxZoom);
-        _pan = Pos(centreId);
+        _pan = Pos(DevSpec(centreId).Id);
         ClampPan();
     }
 
@@ -192,13 +228,44 @@ public sealed class TraitsScreen
     // strip is the tree's, edge to edge, and the camera decides what part of the world it shows. The
     // detail panel stays docked on the right.
 
+    // THE PAGE'S MARGINS are anchors, unscaled: the strip's top, the canvas's left edge, the right
+    // margin the top pills leave and the bottom margin. Everything INSIDE them — the strip's rows, the
+    // gap to the inspector, the inspector's width — follows the density profile through UiMetrics, so
+    // the canvas and the panel begin where the bigger subtitle actually ends rather than at a 136 that
+    // assumed 100 % type (brief §8–§9).
+    private const int StripTop = 24;
+    private const int PageLeft = 40;
+    private const int PageRightInset = 52;
+    private const int PageBottomInset = 10;
+
+    /// <summary>The gold rule under the screen's title: one screen-title line below it. 74 at 100 %.</summary>
+    private static int RuleY => StripTop + UiTypography.Pitch(UiTypography.ScreenTitle) + 1;
+
+    /// <summary>The subtitle's row, just under the rule. 80 at 100 %.</summary>
+    private static int SubtitleY => RuleY + UiMetrics.Space(6);
+
+    /// <summary>Where the canvas and the inspector begin: one subtitle line and a breath under the subtitle. 136 at 100 %.</summary>
+    private static int CanvasTop => SubtitleY + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(32);
+
     /// <summary>The tree's canvas: everything left of the detail panel, below the top strip.</summary>
     // The canvas ends where the inspector begins and follows the page, so a smaller page (UI SCALE) does
     // not leave the tree drawing underneath the panel.
-    private static Rectangle View => new(40, 136, DetailPanel.X - 28 - 40, UiKit.PageBottom(10) - 136);
+    private static Rectangle View
+        => new(PageLeft, CanvasTop, DetailPanel.X - UiMetrics.Space(28) - PageLeft, UiKit.PageBottom(PageBottomInset) - CanvasTop);
 
-    /// <summary>The docked reading panel, at 1368..1868.</summary>
-    private static Rectangle DetailPanel => new(UiKit.PageRight(52) - 500, 136, 500, UiKit.PageBottom(10) - 136);
+    /// <summary>
+    /// The docked reading panel, on the page's right edge — the house inspector width
+    /// (<see cref="UiMetrics.InspectorWidth"/>: 496 at 100 %, wider at the larger profiles so the bigger
+    /// type keeps its line length, brief §9).
+    /// </summary>
+    private static Rectangle DetailPanel
+    {
+        get
+        {
+            var w = UiMetrics.InspectorWidth(UiKit.Page.Width);
+            return new(UiKit.PageRight(PageRightInset) - w, CanvasTop, w, UiKit.PageBottom(PageBottomInset) - CanvasTop);
+        }
+    }
 
     /// <summary>
     /// THE POINT COUNTER'S PLATE — a framed readout in the band between the subtitle and the canvas.
@@ -213,7 +280,7 @@ public sealed class TraitsScreen
     /// the GEAR POWER and MASTERY POINTS readouts use for the same job.
     /// </para>
     /// <para>
-    /// <b>52 px tall, ending 4 px above <see cref="View"/>.</b> The tree is drawn FIRST and clipped to
+    /// <b>In the header band, above <see cref="View"/>.</b> The tree is drawn FIRST and clipped to
     /// its canvas, so anything drawn after it covers it; the plate therefore lives entirely in the header
     /// band — under the title rule, left of the centred subtitle, above the canvas — and never eats a
     /// road. Its width is FIXED rather than measured so the caption does not shuffle sideways as the
@@ -223,12 +290,14 @@ public sealed class TraitsScreen
     // Just the glyph and the number. The caption beside them ("TRAIT POINTS TO SPEND") made the plate a
     // 360-px ribbon around a one- or two-digit number (playtest 2026-08-30: "the frame is far too long
     // and thin — delete the text, dress the frame around the points and the icon only"). The size comes
-    // from the house grid: the frame's own corner plus the standard padding on each side, and a height
-    // that clears PrimaryValue with PanelBodyTop above it and PanelPadBottom below.
-    private static readonly Rectangle PointPlate = new(View.X, 76, 156, 84);
+    // from the house grid: the glyph's box plus a fixed shoulder each side, and a height that clears the
+    // glyph with a pad above and below. A PROPERTY, not a static readonly: it follows the profile, and a
+    // static readonly is frozen at class load.
+    private static Rectangle PointPlate
+        => new(View.X, RuleY + UiMetrics.Space(2), UiMetrics.Space(58) * 2 + PointGlyph, UiMetrics.Space(22) * 2 + PointGlyph);
 
-    /// <summary>The plate's glyph box — shared by the draw and the tour.</summary>
-    private const int PointGlyph = 40;
+    /// <summary>The plate's glyph box — shared by the draw and the tour. An icon beside a number: the house icon size.</summary>
+    private static int PointGlyph => UiMetrics.IconSize;
 
     /// <summary>
     /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
@@ -459,6 +528,10 @@ public sealed class TraitsScreen
         // ── THE CAMERA — the mastery tree's, verbatim in spirit. ──────────────────────────────
         if (wheel != 0 && View.Contains(over))
             ZoomAt(over, wheel > 0 ? 1.16f : 1f / 1.16f);
+        // Over the inspector the wheel scrolls the sheet instead (brief §18) — a row a notch, clamped so
+        // the last page stays full. The page and the total are what the last Draw measured.
+        else if (wheel != 0 && DetailPanel.Contains(over))
+            _sheetFirst = UiKit.Scrolled(_sheetFirst, wheel, _sheetPage, _sheetTotal);
 
         // DRAG TO PAN. Held, not clicked: a click pins a node for the panel, and a tree you can only
         // move with a scrollbar is a tree nobody moves. A drag that began inside the view keeps
@@ -579,8 +652,8 @@ public sealed class TraitsScreen
         // TRAITS, not DUST. The screen stopped spending Memory Dust when the tree stopped being buyable
         // by idling; a title naming a currency it does not charge is the kind of small lie that makes a
         // player mistrust every other number on the screen.
-        _ui.TextCenterBig(b, "TRAITS", UiKit.PageCenterX, 24, UiInk.Accent, UiTypography.ScreenTitle, TextFace.Display);
-        _ui.Fill(b, new Rectangle(UiKit.PageCenterX - 240, 74, 480, 3), Gold * 0.5f);
+        _ui.TextCenterBig(b, "TRAITS", UiKit.PageCenterX, StripTop, UiInk.Accent, UiTypography.ScreenTitle, TextFace.Display);
+        _ui.Fill(b, new Rectangle(UiKit.PageCenterX - 240, RuleY, 480, 3), Gold * 0.5f);
         // "NO TAKING BACK", not "NO RESPEC" — the reader plays in English as a second language, and
         // "respec" is a word only the genre knows.
         // THE QUIET MARK, finally visible (P7): attunement's whole promise is "a mark", and its
@@ -588,9 +661,9 @@ public sealed class TraitsScreen
         // never see. A standing fact about the account belongs on the screen's own subtitle.
         if (DustEffects.TreeComplete(tree))
             _ui.TextCenterBig(b, "ONE SPINE  ·  FOUR ROADS  ·  NO TAKING BACK  ·  ALL FOUR ROADS WALKED",
-                              UiKit.PageCenterX, 80, UiInk.Accent, UiTypography.Secondary);
+                              UiKit.PageCenterX, SubtitleY, UiInk.Accent, UiTypography.Secondary);
         else
-            _ui.TextCenterBig(b, "ONE SPINE  ·  FOUR ROADS  ·  NO TAKING BACK", UiKit.PageCenterX, 80, Slate, UiTypography.Secondary);
+            _ui.TextCenterBig(b, "ONE SPINE  ·  FOUR ROADS  ·  NO TAKING BACK", UiKit.PageCenterX, SubtitleY, Slate, UiTypography.Secondary);
 
         // How many points you have to spend, how much of the tree you have learned, and what all of it
         // would cost. A header rather than a panel: a player checks "can I afford this" constantly and
@@ -637,12 +710,13 @@ public sealed class TraitsScreen
         // never reach is a number without a meaning (brief §92).
         var num = $"{tree.Available}";
         var numW = _ui.MeasureBig(num, UiTypography.PrimaryValue);
-        const int gap = 14;
+        var gap = UiMetrics.Space(14);
+        var plate = PointPlate;
         var group = PointGlyph + gap + numW;
-        var x = PointPlate.X + (PointPlate.Width - group) / 2;
-        var glyph = new Rectangle(x, PointPlate.Y + (PointPlate.Height - PointGlyph) / 2, PointGlyph, PointGlyph);
+        var x = plate.X + (plate.Width - group) / 2;
+        var glyph = new Rectangle(x, plate.Y + (plate.Height - PointGlyph) / 2, PointGlyph, PointGlyph);
         if (!_ui.Icon(b, "nav_prestige", glyph, has ? Color.White : Bone)) _ui.Diamond(b, glyph, ink);
-        _ui.TextBig(b, num, glyph.Right + gap, PointPlate.Y + (PointPlate.Height - UiTypography.PrimaryValue) / 2 - 2,
+        _ui.TextBig(b, num, glyph.Right + gap, plate.Y + (plate.Height - UiTypography.PrimaryValue) / 2 - UiMetrics.Space(2),
                     has ? Gold : Bone, UiTypography.PrimaryValue);
     }
 
@@ -742,17 +816,24 @@ public sealed class TraitsScreen
 
         var y = (_litTerminal ? 706 : 626) + rise;
         // Edge to edge, so its two rules read as a banner the page is showing rather than a box dropped
-        // on it.
-        var plate = new Rectangle(0, y - 26, 1920, _litTerminal ? 154 : 114);
+        // on it. Its height is STACKED from the three lines it holds — the caption, the name at the
+        // screen-title rung, the road line — so at 150 % the bigger name pushes the road line down
+        // instead of printing through it.
+        var headY = UiMetrics.Space(16);
+        var nameY = headY + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(8);
+        var roadY = nameY + UiTypography.Pitch(UiTypography.ScreenTitle) + UiMetrics.Space(9);
+        var plateH = _litTerminal ? roadY + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(20)
+                                  : nameY + UiTypography.Pitch(UiTypography.ScreenTitle) + UiMetrics.Space(17);
+        var plate = new Rectangle(0, y - UiMetrics.Space(26), 1920, plateH);
         _ui.Fill(b, plate, new Color(0x0A, 0x08, 0x10) * (alpha * 0.86f));
         _ui.Fill(b, new Rectangle(plate.X, plate.Y, plate.Width, 3), accent * alpha);
         _ui.Fill(b, new Rectangle(plate.X, plate.Bottom - 3, plate.Width, 3), accent * alpha);
 
         _ui.TextCenterBig(b, _litTerminal ? "A ROAD ENDS HERE" : "TRAIT LEARNED — AND IT IS PERMANENT",
-                          centre.X, plate.Y + 16, accent * alpha, UiTypography.Secondary);
-        _ui.TextCenterBig(b, _litName, centre.X, plate.Y + 48, Bone * alpha, UiTypography.ScreenTitle, TextFace.Display);
+                          centre.X, plate.Y + headY, accent * alpha, UiTypography.Secondary);
+        _ui.TextCenterBig(b, _litName, centre.X, plate.Y + nameY, Bone * alpha, UiTypography.ScreenTitle, TextFace.Display);
         if (_litTerminal)
-            _ui.TextCenterBig(b, RoadName(_litRoad) + "  ·  WALKED TO ITS END", centre.X, plate.Y + 106,
+            _ui.TextCenterBig(b, RoadName(_litRoad) + "  ·  WALKED TO ITS END", centre.X, plate.Y + roadY,
                               Gold * alpha, UiTypography.Body);
     }
 
@@ -829,12 +910,34 @@ public sealed class TraitsScreen
         // header — both measured on a capture, not guessed.
         // The camera's controls, as controls (UX V2 P1.6): zoom out · the whole tree · zoom in — and one line
         // that says what a click on a road's name does. Readable Slate, never a dimmed Slate.
-        _ui.TextBig(b, "DRAG TO MOVE  ·  WHEEL TO ZOOM  ·  CLICK A ROAD'S NAME OR PRESS 1–4 TO FRAME IT", View.X + 12, View.Bottom - 40, Slate, UiTypography.Secondary);
-        // The tally, beside the camera's buttons — read once a session, not before every purchase. The
-        // "226 FOR EVERYTHING" that used to follow it is gone: a career earns about thirty-four points.
+        // THE FOOT FOLLOWS THE ROOM IT HAS (brief §9, §17). The hint sits on the buttons' row and the tally
+        // right-aligns beside them — the 100 % foot, unchanged — for as long as one line of each fits.
+        // When the profile's type no longer fits (at 150 % the hint and the tally together are wider than
+        // the canvas leaves), the tally takes its own row above the hint and the hint wraps at its own
+        // separators, stacked UPWARD from the same baseline: never shortened to an ellipsis, never drawn
+        // smaller, and never printed through the tally, which is what a capture of the old one-line foot
+        // showed at 150 %.
         var spent = tree.All.Where(u => tree.Owns(u.Id)).Sum(u => u.Cost);
         var learned = tree.All.Count(u => tree.Owns(u.Id));
-        _ui.TextRightBig(b, $"{spent} SPENT  ·  {learned} OF {tree.All.Count} LEARNED", CamBtn(0).X - 20, View.Bottom - 40, Slate, UiTypography.Secondary);
+        // The tally — read once a session, not before every purchase. The "226 FOR EVERYTHING" that used
+        // to follow it is gone: a career earns about thirty-four points.
+        var tally = $"{spent} SPENT  ·  {learned} OF {tree.All.Count} LEARNED";
+        var tallyW = _ui.MeasureBig(tally, UiTypography.Secondary);
+        var foot = CamBtn(0);
+        var hintX = View.X + UiMetrics.Gap;
+        var hintY = foot.Y + UiMetrics.Space(16);
+        var tallyRight = foot.X - UiMetrics.Space(20);
+        var hintPitch = UiTypography.Pitch(UiTypography.Secondary);
+        var hintLine = string.Join(HintSep, HintSegments);
+        var oneLine = hintX + _ui.MeasureBig(hintLine, UiTypography.Secondary) + UiMetrics.Space(20) + tallyW <= tallyRight;
+        // With the tally on its own row, the hint may run right up to the buttons.
+        var hintRoom = foot.X - UiMetrics.Space(20) - hintX;
+        var hintLines = oneLine ? new List<string> { hintLine } : PackSegments(HintSegments, HintSep, hintRoom, UiTypography.Secondary);
+        var stackTop = hintY - (hintLines.Count - 1) * hintPitch;
+        for (var i = 0; i < hintLines.Count; i++)
+            _ui.TextBig(b, hintLines[i], hintX, stackTop + i * hintPitch, Slate, UiTypography.Secondary);
+        if (oneLine) _ui.TextRightBig(b, tally, tallyRight, hintY, Slate, UiTypography.Secondary);
+        else _ui.TextRightBig(b, tally, CamBtn(2).Right, stackTop - hintPitch, Slate, UiTypography.Secondary);
         var camLabels = new[] { "–", "ALL", "+" };
         for (var i = 0; i < 3; i++)
         {
@@ -842,7 +945,8 @@ public sealed class TraitsScreen
             var over = r.Contains(hit);
             _ui.Plate(b, r);
             if (over) Outline(b, r, Slate, 1);
-            _ui.TextCenterBig(b, camLabels[i], r.Center.X, r.Y + (i == 1 ? 12 : 8), over ? Bone : Slate, i == 1 ? UiTypography.Caption : UiTypography.Body);
+            var px = i == 1 ? UiTypography.Caption : UiTypography.Body;
+            _ui.TextCenterBig(b, camLabels[i], r.Center.X, r.Y + (r.Height - px) / 2 - UiMetrics.Space(2), over ? Bone : Slate, px);
             if (clicked && over)
             {
                 if (i == 0) ZoomAt(View.Center, 1f / 1.25f);
@@ -850,6 +954,34 @@ public sealed class TraitsScreen
                 else { _pan = _homePan; _zoom = _homeZoom; }
             }
         }
+    }
+
+    /// <summary>
+    /// The camera hint's three clauses. One line joined by <see cref="HintSep"/> while the foot has the
+    /// room; packed into as few lines as fit when it does not — a clause is never split or shortened.
+    /// </summary>
+    private static readonly string[] HintSegments =
+        { "DRAG TO MOVE", "WHEEL TO ZOOM", "CLICK A ROAD'S NAME OR PRESS 1–4 TO FRAME IT" };
+
+    private const string HintSep = "  ·  ";
+
+    /// <summary>
+    /// Pack clauses into lines no wider than <paramref name="room"/> at <paramref name="px"/>: greedy and
+    /// in order, a clause never split. A clause wider than the room stands alone on its line rather than
+    /// being cut — the room is the canvas's width, and the longest clause fits it at every profile.
+    /// </summary>
+    private List<string> PackSegments(IReadOnlyList<string> segments, string sep, int room, int px)
+    {
+        var lines = new List<string>();
+        var cur = "";
+        foreach (var s in segments)
+        {
+            var joined = cur.Length == 0 ? s : cur + sep + s;
+            if (cur.Length > 0 && _ui.MeasureBig(joined, px) > room) { lines.Add(cur); cur = s; }
+            else cur = joined;
+        }
+        if (cur.Length > 0) lines.Add(cur);
+        return lines;
     }
 
     private void DrawWorld(SpriteBatch b, MemoryDustTree tree, Point hit, bool clicked)
@@ -952,7 +1084,10 @@ public sealed class TraitsScreen
             var nameW = _ui.MeasureBig(name, namePx);
             var x0 = (int)p.X - (nameW + glyphPx + Px(8)) / 2;
             // THE HEADER IS A DOOR (UX V2 P1.6, brief §44): click the road's name and the camera frames the road.
-            var headRect = new Rectangle(x0 - 8, nameY - 6, nameW + glyphPx + Px(8) + 16, Px(34) + 12);
+            // The slop around the header is hit padding in SCREEN pixels — it follows the profile, not the zoom.
+            var slopX = UiMetrics.Space(8);
+            var slopY = UiMetrics.Space(6);
+            var headRect = new Rectangle(x0 - slopX, nameY - slopY, nameW + glyphPx + Px(8) + slopX * 2, Px(34) + slopY * 2);
             _headerRects[road] = headRect;
             var overHead = headRect.Contains(hit) && View.Contains(hit);
             if (overHead) { _ui.Fill(b, headRect, Bone * 0.06f); _tip = $"{RoadName(road)} — click to frame this road."; _tipAt = hit; }
@@ -1135,7 +1270,7 @@ public sealed class TraitsScreen
         }
         var hover = View.Contains(hit) && hitBox.Contains(hit);
 
-        if (clicked && hover) { _selectedId = u.Id; _msg = ""; _armedId = null; }
+        if (clicked && hover) { _selectedId = u.Id; _msg = ""; _armedId = null; _sheetFirst = 0; }
         if (hover) { _hoverId = u.Id; _tip = $"{u.Name} — {u.Cost} TRAIT POINT{(u.Cost == 1 ? "" : "S")}"; _tipAt = hit; }
 
         var isOwned = tree.Owns(u.Id);
@@ -1163,7 +1298,9 @@ public sealed class TraitsScreen
         {
             var chip = Math.Max(10, Px(16));
             var cr = new Rectangle(box.Right - chip / 2, box.Y - chip / 3, chip, chip);
-            if (isOwned) { _ui.Fill(b, cr, Plate); DrawTick(b, cr, true); }
+            // The tick keeps its 100 % size on the chip's foot, as it always did: the chip follows the camera
+            // zoom, not the profile, and the tick's box is what DrawTick proportions itself to.
+            if (isOwned) { _ui.Fill(b, cr, Plate); DrawTick(b, new Rectangle(cr.X, cr.Bottom - TickBoxH, TickBoxW, TickBoxH), true); }
             else if (!buyable) _ui.Icon(b, "ui_slot_locked", cr, Bone);
         }
 
@@ -1330,6 +1467,14 @@ public sealed class TraitsScreen
     /// Click pins; hover only highlights and tips (D5) — the panel used to swap to whatever the pointer crossed
     /// on the way to the button, and the button's enabled state flipped with it. The words come from
     /// <see cref="MemoryDustText.Describe"/>, so the sheet a test holds and the one the player reads agree.
+    /// <para>
+    /// THE SHEET SCROLLS (UI polish §17–§18). The head (road, face, name, state) and the foot (the
+    /// permanence line, the reason, the one button) are ANCHORED; what lies between them — what it does,
+    /// what it costs, what it needs first — is a wheel-scrolled region of whole rows with a
+    /// <see cref="UiKit.ScrollBar"/> when they do not fit. At 100 % nearly every trait fits without it;
+    /// at 150 % the bigger type does not, and the answer is a scrollbar — never a smaller font and never a
+    /// button under the fold. Every size in here is the profile's, through <see cref="UiMetrics"/>.
+    /// </para>
     /// </remarks>
     private void DrawDetail(SpriteBatch b, MemoryDustTree tree, Point hit, bool clicked)
     {
@@ -1343,101 +1488,163 @@ public sealed class TraitsScreen
         var left = UiKit.ContentLeft(panel);
         var right = UiKit.ContentRight(panel);
         var width = right - left;
-        var btn = new Rectangle(left, panel.Bottom - 92, width, 68);
-        var permY = panel.Bottom - 204;   // the permanence line, clear of the reason above the button
-        var floor = permY - 12;
+
+        // THE FOOT, stacked UP from the panel's bottom pad: the button, two lines of reason above it, the
+        // permanence line above that — each at the profile's size, so at 150 % the reason does not print
+        // through the permanence line, which is what a fixed "Bottom - 204" did.
+        var btn = new Rectangle(left, panel.Bottom - UiMetrics.PanelPadding - UiMetrics.ButtonHeightPrimary, width, UiMetrics.ButtonHeightPrimary);
+        var reasonY = btn.Y - UiMetrics.Space(10) - 2 * UiTypography.Pitch(UiTypography.Secondary);
+        var permY = reasonY - UiMetrics.Space(16) - UiTypography.Pitch(UiTypography.Body) - UiMetrics.Space(10);
+        var floor = permY - UiMetrics.Space(12);   // the sheet ends here
         var y = panel.Y + UiTypography.PanelTitleTop;
 
         // CATEGORY: the road's glyph and name with the kind, then the road's own sentence.
-        var badge = new Rectangle(left, y, 26, 26);
+        var badgePx = UiMetrics.Control(26);
+        var badgeGap = UiMetrics.Space(10);
+        var badge = new Rectangle(left, y, badgePx, badgePx);
         var hasGlyph = _ui.Icon(b, RoadGlyph(u.Road), badge, roadCol);
-        _ui.TextBig(b, _ui.ShortenBig($"{RoadName(u.Road)}  —  {KindWord(KindOf(tree, u))}", width - 36, UiTypography.Secondary),
-                    hasGlyph ? badge.Right + 10 : left, y + 3, roadCol, UiTypography.Secondary);
-        y += UiTypography.Pitch(UiTypography.Secondary) + 4;
+        _ui.TextBig(b, _ui.ShortenBig($"{RoadName(u.Road)}  —  {KindWord(KindOf(tree, u))}", width - badgePx - badgeGap, UiTypography.Secondary),
+                    hasGlyph ? badge.Right + badgeGap : left, y + UiMetrics.Space(3), roadCol, UiTypography.Secondary);
+        y += UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(4);
         _ui.TextBig(b, _ui.ShortenBig(TraitRoads.Sentence(u.Road), width, UiTypography.Body), left, y, Slate, UiTypography.Body);
-        y += UiTypography.Pitch(UiTypography.Body) + 8;
+        y += UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(8);
 
         // THE FACE, NAME and STATE pill.
-        var size = terminal ? 96 : 76;
+        var size = UiMetrics.Control(terminal ? 96 : 76);
         var icon = new Rectangle(panel.Center.X - size / 2, y, size, size);
         DrawFace(b, tree, u, icon, hot: false);
-        y += size + 6;
+        y += size + UiMetrics.Space(6);
         _ui.TextCenterBig(b, _ui.ShortenBig(u.Name, width, UiTypography.PanelTitle), panel.Center.X, y, isOwned ? Gold : Bone, UiTypography.PanelTitle);
         y += UiTypography.Pitch(UiTypography.PanelTitle);
         var state = isOwned ? "LEARNED" : buyable ? "AVAILABLE NOW" : "LOCKED";
         var stateCol = isOwned ? Gold : buyable ? Met : Bone;
-        var pillW = _ui.MeasureBig(state, UiTypography.Secondary) + 44;
-        var pill = new Rectangle(panel.Center.X - pillW / 2, y, pillW, UiTypography.Secondary + 10);
+        // The pill is its parts added up — a pad, a glyph box, a gap, the word, a pad — so its width and its
+        // glyph follow the profile together instead of a hand-measured 44.
+        var pillPad = UiMetrics.Space(10);
+        var pillGlyph = UiMetrics.Control(16);
+        var pillTextX = pillPad + pillGlyph + UiMetrics.Space(6);
+        var pillW = pillTextX + _ui.MeasureBig(state, UiTypography.Secondary) + UiMetrics.Space(12);
+        var pill = new Rectangle(panel.Center.X - pillW / 2, y, pillW, UiTypography.Secondary + UiMetrics.Space(10));
         _ui.Fill(b, pill, stateCol * 0.14f);
         Outline(b, pill, stateCol, 1);
-        if (isOwned) DrawTick(b, new Rectangle(pill.X + 10, pill.Y + 5, 16, 14), true);
-        else if (buyable) _ui.Diamond(b, new Rectangle(pill.X + 12, pill.Y + 7, 12, 12), Met);
-        else _ui.Icon(b, "ui_slot_locked", new Rectangle(pill.X + 9, pill.Y + 3, 18, 18), Bone);
-        _ui.TextBig(b, state, pill.X + 32, pill.Y + 4, stateCol, UiTypography.Secondary);
-        y += pill.Height + 10;
-
-        void Rule() { _ui.Fill(b, new Rectangle(left, y, width, 1), Dim); y += 10; }
-
-        // 1. WHAT IT DOES — at Body, wrapped, bounded so the blocks under it keep their room.
-        Rule();
-        _ui.TextBig(b, "WHAT IT DOES", left, y, Slate, UiTypography.Secondary);
-        y += UiTypography.Pitch(UiTypography.Secondary);
-        var lineH = UiTypography.Pitch(UiTypography.Body);
-        var reserve = (isOwned ? 40 : 60) + 40 + lineH * Math.Max(1, Math.Min(u.Requires.Count, 3));
-        var lines = _ui.WrapBig(MemoryDustText.Describe(u), width, UiTypography.Body);
-        var room = Math.Max(1, (floor - reserve - y) / lineH);
-        for (var i = 0; i < Math.Min(lines.Count, room); i++)
+        if (isOwned) DrawTick(b, new Rectangle(pill.X + pillPad, pill.Y + UiMetrics.Space(3), pillGlyph, UiMetrics.Control(TickBoxH)), true);
+        else if (buyable)
         {
-            var text = i == room - 1 && lines.Count > room ? _ui.ShortenBig(lines[i] + " …", width, UiTypography.Body) : lines[i];
-            _ui.TextBig(b, text, left, y, Bone, UiTypography.Body);
-            y += lineH;
+            var d = UiMetrics.Control(12);
+            _ui.Diamond(b, new Rectangle(pill.X + pillPad + (pillGlyph - d) / 2, pill.Y + UiMetrics.Space(7), d, d), Met);
         }
-        y += 6;
-
-        // 2. WHAT IT COSTS — in TRAIT POINTS, beside how many you have; and, when short, where points come from.
-        Rule();
-        _ui.TextBig(b, "WHAT IT COSTS", left, y, Slate, UiTypography.Secondary);
-        if (isOwned) _ui.TextRightBig(b, "LEARNED", right, y - 4, Gold, UiTypography.Headline);
-        else _ui.TextRightBig(b, $"{u.Cost} TRAIT {(u.Cost == 1 ? "POINT" : "POINTS")}", right, y - 4, buyable ? Bone : Ember, UiTypography.Headline);
-        y += UiTypography.Pitch(UiTypography.Headline);
-        if (!isOwned)
-        {
-            _ui.TextBig(b, $"You have {tree.Available} trait {(tree.Available == 1 ? "point" : "points")}.", left, y,
-                        tree.Available >= u.Cost ? Bone : Ember, UiTypography.Body);
-            y += lineH;
-            if (tree.Available < u.Cost && y + UiTypography.Pitch(UiTypography.Secondary) * 2 < floor - reserve + 60)
-            {
-                foreach (var l in _ui.WrapBig("Points come from conquering regions, going deeper into the corruption, and raising a region's mastery.", width, UiTypography.Secondary).Take(2))
-                { _ui.TextBig(b, l, left, y, Slate, UiTypography.Secondary); y += UiTypography.Pitch(UiTypography.Secondary); }
-            }
-        }
-        y += 4;
-
-        // 3. YOU NEED FIRST — the real Requires, each with a tick once you have it; at Body, in words too.
-        Rule();
-        _ui.TextBig(b, "YOU NEED FIRST", left, y, Slate, UiTypography.Secondary);
-        y += UiTypography.Pitch(UiTypography.Secondary);
-        if (u.Requires.Count == 0) { _ui.TextBig(b, "Nothing. You can start here.", left, y, Bone, UiTypography.Body); y += lineH; }
         else
-            for (var i = 0; i < u.Requires.Count; i++)
+        {
+            var l = UiMetrics.Control(18);
+            _ui.Icon(b, "ui_slot_locked", new Rectangle(pill.X + pillPad + (pillGlyph - l) / 2, pill.Y + UiMetrics.Space(3), l, l), Bone);
+        }
+        _ui.TextBig(b, state, pill.X + pillTextX, pill.Y + UiMetrics.Space(4), stateCol, UiTypography.Secondary);
+        y += pill.Height + UiMetrics.Space(10);
+
+        // ── THE SHEET: whole rows between the pill and the foot, scrolled by the wheel ──
+        // Walked twice by one local function: once to MEASURE (does it all fit at the full width?), then
+        // to DRAW — narrower by the scrollbar's lane when it did not. Row() is the whole scroll model: it
+        // counts every row, skips the ones above _sheetFirst, and stops at the first one that would cross
+        // the floor, so no row is ever half-drawn over the permanence line.
+        var sheetTop = y;
+        var sheetW = width;
+        var lineH = UiTypography.Pitch(UiTypography.Body);
+        var headH = UiTypography.Pitch(UiTypography.Secondary);
+        var ruleGap = UiMetrics.Space(10);
+        var desc = MemoryDustText.Describe(u);
+        var lines = _ui.WrapBig(desc, sheetW, UiTypography.Body);
+        var poor = !isOwned && tree.Available < u.Cost;
+        var source = poor ? _ui.WrapBig(PointSource, sheetW, UiTypography.Secondary) : new List<string>();
+        var haveLine = $"You have {tree.Available} trait {(tree.Available == 1 ? "point" : "points")}.";
+        var costLine = isOwned ? "LEARNED" : $"{u.Cost} TRAIT {(u.Cost == 1 ? "POINT" : "POINTS")}";
+        var statusW = Math.Max(_ui.MeasureBig("learned", UiTypography.Body), _ui.MeasureBig("not yet", UiTypography.Body));
+        var tickW = UiMetrics.Control(TickBoxW);
+        var tickH = UiMetrics.Control(TickBoxH);
+        var nameX = UiMetrics.Space(2) + tickW + UiMetrics.Space(10);
+
+        int idx = 0, contentH = 0, cursor = 0, rowY = 0;
+        bool drawing = false, full = false;
+        bool Row(int h)
+        {
+            var i = idx++;
+            contentH += h;
+            if (!drawing) { _sheetRows.Add(h); return false; }
+            if (full || i < _sheetFirst) return false;
+            if (cursor + h > floor) { full = true; return false; }
+            rowY = cursor;
+            cursor += h;
+            return true;
+        }
+        void Walk()
+        {
+            idx = 0; contentH = 0; full = false; cursor = sheetTop;
+            if (!drawing) _sheetRows.Clear();
+            var rowRight = left + sheetW;
+            void Rule(int atY) => _ui.Fill(b, new Rectangle(left, atY, sheetW, 1), Dim);
+
+            // 1. WHAT IT DOES — at Body, wrapped, every line a row.
+            if (Row(ruleGap + headH)) { Rule(rowY); _ui.TextBig(b, "WHAT IT DOES", left, rowY + ruleGap, Slate, UiTypography.Secondary); }
+            foreach (var l in lines) if (Row(lineH)) _ui.TextBig(b, l, left, rowY, Bone, UiTypography.Body);
+
+            // 2. WHAT IT COSTS — in TRAIT POINTS, beside how many you have; and, when short, where points come from.
+            if (Row(UiMetrics.Space(6) + ruleGap + UiTypography.Pitch(UiTypography.Headline)))
             {
-                if (y + lineH > floor)
-                {
-                    _ui.TextBig(b, $"and {u.Requires.Count - i} more — hover them on the tree", left, y, Slate, UiTypography.Secondary);
-                    break;
-                }
-                var reqId = u.Requires[i];
-                var req = tree.All.FirstOrDefault(x => x.Id == reqId);
-                var got = tree.Owns(reqId);
-                DrawTick(b, new Rectangle(left + 2, y + 5, 20, 16), got);
-                _ui.TextBig(b, _ui.ShortenBig(req?.Name ?? reqId, width - 130, UiTypography.Body), left + 32, y, got ? Bone : Slate, UiTypography.Body);
-                _ui.TextRightBig(b, got ? "learned" : "not yet", right, y, got ? Met : Slate, UiTypography.Body);
-                y += lineH;
+                var ry = rowY + UiMetrics.Space(6);
+                Rule(ry);
+                _ui.TextBig(b, "WHAT IT COSTS", left, ry + ruleGap, Slate, UiTypography.Secondary);
+                _ui.TextRightBig(b, costLine, rowRight, ry + ruleGap - UiMetrics.Space(4), isOwned ? Gold : buyable ? Bone : Ember, UiTypography.Headline);
             }
+            if (!isOwned && Row(lineH)) _ui.TextBig(b, haveLine, left, rowY, poor ? Ember : Bone, UiTypography.Body);
+            foreach (var l in source) if (Row(headH)) _ui.TextBig(b, l, left, rowY, Slate, UiTypography.Secondary);
+
+            // 3. YOU NEED FIRST — the real Requires, each with a tick once you have it; at Body, in words too.
+            if (Row(UiMetrics.Space(4) + ruleGap + headH))
+            {
+                var ry = rowY + UiMetrics.Space(4);
+                Rule(ry);
+                _ui.TextBig(b, "YOU NEED FIRST", left, ry + ruleGap, Slate, UiTypography.Secondary);
+            }
+            if (u.Requires.Count == 0) { if (Row(lineH)) _ui.TextBig(b, "Nothing. You can start here.", left, rowY, Bone, UiTypography.Body); }
+            else
+                foreach (var reqId in u.Requires)
+                {
+                    if (!Row(lineH)) continue;
+                    var req = tree.All.FirstOrDefault(x => x.Id == reqId);
+                    var got = tree.Owns(reqId);
+                    DrawTick(b, new Rectangle(left + UiMetrics.Space(2), rowY + UiMetrics.Space(5), tickW, tickH), got);
+                    _ui.TextBig(b, _ui.ShortenBig(req?.Name ?? reqId, rowRight - (left + nameX) - statusW - UiMetrics.Gap, UiTypography.Body),
+                                left + nameX, rowY, got ? Bone : Slate, UiTypography.Body);
+                    _ui.TextRightBig(b, got ? "learned" : "not yet", rowRight, rowY, got ? Met : Slate, UiTypography.Body);
+                }
+        }
+
+        var room = floor - sheetTop;
+        Walk();   // measure, at the full width
+        var scrolls = contentH > room;
+        if (scrolls)
+        {
+            sheetW = width - UiMetrics.ScrollbarWidth - UiMetrics.Gap;
+            lines = _ui.WrapBig(desc, sheetW, UiTypography.Body);
+            if (poor) source = _ui.WrapBig(PointSource, sheetW, UiTypography.Secondary);
+            Walk();   // measure again, narrower: the wrap may have grown a line
+        }
+        // The furthest the sheet scrolls is the first row from which the TAIL fits, so the last page is
+        // always full: a wheel cannot leave one row over a field of nothing, and neither can a first row
+        // left over from a longer sheet, a bigger profile or another trait.
+        var maxFirst = Math.Max(0, _sheetRows.Count - 1);
+        for (int i = _sheetRows.Count - 1, tail = 0; i >= 0 && (tail += _sheetRows[i]) <= room; i--) maxFirst = i;
+        _sheetTotal = _sheetRows.Count;
+        _sheetPage = _sheetTotal - maxFirst;
+        _sheetFirst = Math.Clamp(_sheetFirst, 0, maxFirst);
+        drawing = true;
+        Walk();   // draw
+        if (scrolls)
+            _ui.ScrollBar(b, new Rectangle(right - UiMetrics.ScrollbarWidth, sheetTop, UiMetrics.ScrollbarWidth, floor - sheetTop),
+                          _sheetFirst, _sheetPage, _sheetTotal);
 
         // 4. PERMANENT. NEVER RESETS. — the last thing read before the button, in gold.
         _ui.Fill(b, new Rectangle(left, permY, width, 1), Dim);
-        _ui.TextCenterBig(b, MemoryDustText.Permanence, panel.Center.X, permY + 10, Gold * 0.85f, UiTypography.Body);
+        _ui.TextCenterBig(b, MemoryDustText.Permanence, panel.Center.X, permY + UiMetrics.Space(10), Gold * 0.85f, UiTypography.Body);
 
         // THE REASON, at Body, beside the button: success in Met, refusal in Ember, the standing reason otherwise.
         var reason = _msg.Length > 0 ? _msg
@@ -1447,7 +1654,7 @@ public sealed class TraitsScreen
         var armedHere = _armedId == u.Id;
         if (reason.Length > 0)
             foreach (var (l, k) in _ui.WrapBig(reason, width, UiTypography.Secondary).Take(2).Select((l, k) => (l, k)))
-                _ui.TextCenterBig(b, l, panel.Center.X, btn.Y - 58 + k * UiTypography.Pitch(UiTypography.Secondary), good ? Met : armedHere ? Gold : Ember, UiTypography.Secondary);
+                _ui.TextCenterBig(b, l, panel.Center.X, reasonY + k * UiTypography.Pitch(UiTypography.Secondary), good ? Met : armedHere ? Gold : Ember, UiTypography.Secondary);
 
         var label = isOwned ? "LEARNED"
                   : armedHere ? "PRESS AGAIN TO COMMIT"
@@ -1457,10 +1664,28 @@ public sealed class TraitsScreen
             TryBuy(tree, u);
     }
 
+    /// <summary>Where trait points come from — under the cost, when the player is short of them.</summary>
+    private const string PointSource = "Points come from conquering regions, going deeper into the corruption, and raising a region's mastery.";
+
+    /// <summary>The tick's box at 100 %: <see cref="DrawTick"/> proportions its squares to a box this tall.</summary>
+    private const int TickBoxW = 20;
+    private const int TickBoxH = 16;
+
+    /// <summary>
+    /// A tick (or, off, a dash) built from small squares, proportioned to the box's height: a box
+    /// <see cref="TickBoxH"/> tall draws 3-px squares — the 100 % tick, exactly — and a
+    /// <see cref="UiMetrics.Control"/>-scaled box draws a bigger one, so the inspector's ticks grow with its type.
+    /// </summary>
     private void DrawTick(SpriteBatch b, Rectangle r, bool on)
     {
-        if (on) { for (var k = 0; k < 5; k++) _ui.Fill(b, new Rectangle(r.X + k, r.Bottom - 6 + k / 2 - 2, 3, 3), Met); for (var k = 0; k < 10; k++) _ui.Fill(b, new Rectangle(r.X + 5 + k, r.Bottom - 2 - k, 3, 3), Met); }
-        else _ui.Fill(b, new Rectangle(r.X + 2, r.Center.Y - 2, r.Width - 4, 4), Slate);
+        var f = r.Height / (float)TickBoxH;
+        var s = Math.Max(2, (int)MathF.Round(3 * f));
+        if (on)
+        {
+            for (var k = 0; k < 5; k++) _ui.Fill(b, new Rectangle(r.X + (int)(k * f), r.Bottom - (int)(8 * f) + (int)(k / 2 * f), s, s), Met);
+            for (var k = 0; k < 10; k++) _ui.Fill(b, new Rectangle(r.X + (int)((5 + k) * f), r.Bottom - (int)(2 * f) - (int)(k * f), s, s), Met);
+        }
+        else _ui.Fill(b, new Rectangle(r.X + (int)(2 * f), r.Center.Y - (int)(2 * f), r.Width - (int)(4 * f), (int)(4 * f)), Slate);
     }
 
     private void DrawDebug(SpriteBatch b)
