@@ -1,7 +1,8 @@
 # FINAL UI POLISH — REPORT (brief §126, 56 items)
 
-Status: DRAFT — filled as each phase closes. Sections marked `[pending]` are not yet done.
-Commits are on `feat/hunter-cutout-rig`; checkpoints C1–C6 are listed in `PLAN.md`.
+All 56 items answered. Commits are on `feat/hunter-cutout-rig`; the checkpoint table is in `PLAN.md`.
+Where something was NOT done, it says so and says why — items 17 (keyboard focus) and 35 (the
+Expedition Log's own polish) are the two open ones.
 
 ## Correctness
 
@@ -194,8 +195,13 @@ interaction states on its own custom-drawn controls (items 13–18).
 40. **Sound families added and reused** — ten cues synthesised deterministically
     (`tools/asset-pipeline/make_sfx.py`, `make_battle_sfx.py`): sfx_nav, sfx_error, sfx_train,
     sfx_reroll, sfx_chest_open, sfx_chest_rare, sfx_shield_gain, sfx_shield_hit, sfx_salvage,
-    sfx_shield_break; vocabulary in `assets/audio/README.md`. Commit `e654d84` (C5). Wiring
-    `[pending — host pass]`.
+    sfx_shield_break; vocabulary in `assets/audio/README.md`. Commit `e654d84` (C5). All of it is
+    wired: the host reads a cue from each screen through one `PlayCue` reader (a screen may name two
+    sounds for one instant, so a comma-separated list is a list) and plays it, because the host owns
+    audio and a screen playing its own sound could not be muted, throttled or reordered. What stopped
+    borrowing another act's voice: every chest opened with the forge's hammer, TRAIN was the ordinary
+    click, the nav rail and every refusal shared one click at two volumes — a quiet yes is not a no.
+    HUNT keeps its own SoundBank and plays the three shield cues itself, in the battle-event switch.
 41. **Repetition testing** — `SoundBank` holds a per-cue minimum gap and drops a repeat inside it,
     with rapid repeats playing progressively quieter; a small random pitch offset per play stops a
     cue heard a thousand times from drawing attention through its own precision. The gaps that matter
@@ -236,10 +242,17 @@ centre gate the manifest assets went through.
 
     Every source image is authored well above its draw size and rendered with `SamplerState.LinearClamp`
     (non-integer scaling is the house path since the 2026-07-29 pivot), so the profile ladder scales them
-    without resampling artefacts. `[at-real-size verification pending — the round-two captures]`
-45. **Assets regenerated/refined after in-game review** — `icon_status_defense` is itself a regeneration:
-    the shipped file was reviewed in a TRAINING capture, found to be an empty ring, and replaced.
-    `[further refinements pending the round-two captures]`
+    without resampling artefacts. Verified at real size (§101): `build/shots/ladder_100_crop2.png`
+    shows the MACHINE ladder at 100 %, where the capstone emblem reads as a distinct tinted mark
+    against the hollow discs of the rungs below it. It does NOT read as an illustration at 18 px, and
+    was not meant to — the rung column's job is to say "this one is different, and it belongs to this
+    Source", which it does. `icon_shield` at 40 px and the break strip at 512 px both read as
+    themselves.
+45. **Assets regenerated / refined after in-game review** — one: `icon_status_defense`. The shipped
+    file was reviewed in a TRAINING capture, found to be an empty gold ring — the status family's frame
+    with no motif inside it — and replaced with a blue heater shield inside that same ring, so the row
+    matches its five siblings. Nothing else needed a second pass; the round-two captures put every
+    other generated file on screen at its real size and none of them were wrong.
 46. **Unused generation attempts removed** — no generation attempt was kept: `file_generated.py` writes
     exactly one file per job and staging lives in a gitignored `.staging/mcp`. The rule is now enforced
     rather than asserted: `tools/check_asset_consumers.py` (added to `tools/check_all.sh`) is the mirror
@@ -249,12 +262,31 @@ centre gate the manifest assets went through.
     boss animation strips nothing plays); those are carried in `tools/asset_orphans_baseline.txt` so the
     gate fails on any NEW orphan. The seven C5 files whose consumers round two owes (`icon_shield`, the
     six `icon_set_*`) sit on that list under their own heading and come off it when the gate reports them
-    healed. `[healed-check pending round two]`
+    healed — and they have: after round two the gate reports `icon_shield` and all six `icon_set_*`
+    consumed, and they have left the baseline, which now carries 115 pre-pivot files and nothing this
+    pass produced.
 
 ## Accessibility
 
-47. **Setting combinations tested** — `[matrix in progress]`
-48. **100 / 125 / 150 results** — `[matrix in progress]`
+47. **Setting combinations tested** — UI SCALE × window size is the full 54-cell matrix of item 48.
+    On top of it: Reduced Motion × 150 % photographed on TRAITS, SETTINGS and HUNT through the new
+    `RH_SHOT_REDUCED` dial; UI SCALE 150 % × 1280×720 × windowed, which is the Settings escape case;
+    and the pressed state × every screen through `RH_SHOT_HELD`. The combination that remains untested
+    by capture is Reduced Motion during a transition, because a still cannot photograph the absence of
+    movement — that one is held by `ui_motion_rest_test.cs` and the per-screen reduced-motion tests.
+48. **100 / 125 / 150 results** — the brief's matrix: BUILD, GEAR, FORGE, TRAITS, SETTINGS and VAULT ×
+    {100, 125, 150} × {1280×720, 1600×900, 1920×1080}, captured as PRESENTED frames at each real
+    window size, in `build/shots/matrix/` (54 files, plus `settings_150_scrolled.png`). Every one was
+    opened and judged against the reflow contract — no text over text, no text over a button, no
+    control under a footer, no clipped last row, no panel past the page edge. All 54 pass. What the
+    larger profiles actually do: BUILD keeps three columns and scrolls each; GEAR keeps three and
+    scrolls the inventory and the inspector; FORGE keeps three and scrolls the compare rows beside a
+    bar rather than dropping them; TRAITS refits the canvas and keeps its foot band below it; VAULT
+    keeps two columns and pages; SETTINGS scrolls under a fixed header from 150 % (and at 125 % only
+    in a 720p window). Known cosmetic residue, all documented rather than hidden: the GEAR footer
+    shortens to "AVERAGE ITE…", the WARREN card reads "BREEDING CHAMB…", and at 150 % the VAULT hint
+    slot's close icon sits within a few pixels of the OPEN ALL frame's top edge without covering its
+    label.
 49. **Colour-independent states** — no state in the pass is signalled by colour alone. Selected carries
     an edge as well as a tint; disabled carries the grey art and a printed reason; a set ladder rung is
     a filled or hollow shape, not a green or grey dot; a locked map region carries a padlock and a
@@ -271,9 +303,41 @@ centre gate the manifest assets went through.
 
 ## Validation
 
-51. **screenshot list** — `[pending]`
-52. **deterministic fixture results** — `[pending]`
-53. **hit-test results** — `[pending]`
-54. **test results** — at `4e4cb16`: Core 1368/1368, Game 21/21; gates green; boot green.
-55. **build results** — 0 errors at `4e4cb16`.
-56. **performance observations** — `[pending]`
+51. **Screenshot list** — everything is under `build/shots/`. The scale matrix in `matrix/` (55).
+    The eleven merged screens at 150 % as `m150_*` (the C6 judgement) and `r2_*` / `r2c_*` (round two).
+    The evidence for each fix named in this report: `c6_*` and `c6b_*` / `c6c_*` (the hint slot's
+    anchor and its opacity), `btn_before.png` / `btn_after.png` (the button lift), `pressed_100.png` /
+    `pressed2_100.png` (the pressed face and the transparent-art well), `motion_switch_075.png` and
+    `motion_modal_075.png` (the chrome's transients, posed), `reduced_150_*.png` (Reduced Motion),
+    `ladder_100_crop2.png` (the capstone emblem at real size), and each screen agent's own `p2_*` and
+    `v2_*` batches. Phase 1's fixtures are in `production/audit/ui-polish/evidence/`.
+52. **Deterministic fixture results** — every capture is the same rig: 60 frames, then the canvas is
+    written and the process exits, so a capture is reproducible from its command line alone. The fight
+    poses that depend on a wave event (`fightshieldbroken`, `fightmulti`) aim the shutter at the EVENT
+    rather than at a guessed second — the seek rebuilds the replay from the wave's own events and
+    applies two frames before the shutter — and `RH_SHOT_DUMP=1` writes the wave's event list beside
+    the image so a pose can be checked against what the wave actually held. New dials this pass:
+    `RH_SHOT_MOTION` (the chrome's four transients at any fraction of their run), `RH_SHOT_HELD` (the
+    pressed face), `RH_SHOT_REDUCED` (the accessibility setting), `RH_SHOT_SCROLL` on the settings
+    panel, and a screen-local dial per round-two screen for its own one-shots.
+53. **Hit-test results** — one cursor, mapped once. `Core.Presentation.PageFrame` does the whole
+    transform in floats and `Game1.ReadCursor` applies it once per frame; no screen converts or
+    quantises, so draw rect equals hit rect at every profile and every window size. The gate
+    `tools/check_mouse_space.py` enforces it (forbidden words, the host hands each screen the right
+    cursor, no scaling of a cursor parameter) and 21 `PageFrame` tests cover the arithmetic. Hit
+    targets grow with `UiMetrics.Control`, so a 44 px control is 55 at 125 % and 66 at 150 %. The
+    pressed face moves 2 px; the hit rect does not.
+54. **Test results** — Core 1368/1368, Game 162/162 (21 before this pass; the eleven screen agents and
+    the chrome pass added the rest). All nine gates green, including the new orphan-asset gate. Boot
+    green. `check_boot.sh` earned its keep: it caught a null reference that killed the game on start,
+    from calling the gear screen out of `Initialize` when it is built in `LoadContent`.
+55. **Build results** — 0 errors and 0 warnings across the solution. One pre-existing nullable warning
+    in `HuntScreen` was removed by the HUNT pass.
+56. **Performance observations** — nothing here costs a frame. The motion layer is two dictionaries in
+    `UiMotion` keyed by rectangle, advanced once per frame from `Update` and read during `Draw`; a
+    control at rest holds no entry at all, which is what the `Ease` fix restored — before it, every
+    resting control in the game held a key and rewrote it every frame. No new render targets, no new
+    `SpriteBatch` boundaries, no per-entity effect switching: the screen-switch scrim and the modal
+    fade are single `Fill` calls inside batches that already existed, and the shield break is one
+    strip through the existing `VfxPlayer`. Texture memory is unchanged apart from the nine C5 assets
+    (about 150 KB on disk, RGBA8 at load).
