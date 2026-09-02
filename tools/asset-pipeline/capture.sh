@@ -113,6 +113,7 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 # A REAL window size (e.g. 1280x720): the capture is then the presented backbuffer, not the 1920 render target.
 [ -n "$RH_SHOT_WINDOW" ] && RH_ENV+=(RH_SHOT_WINDOW="$RH_SHOT_WINDOW")
 [ -n "$RH_SHOT_MOTION" ] && RH_ENV+=(RH_SHOT_MOTION="$RH_SHOT_MOTION")
+[ -n "$RH_SHOT_SCROLL" ] && RH_ENV+=(RH_SHOT_SCROLL="$RH_SHOT_SCROLL")
 # REDUCED MOTION on, before the first Update — the accessibility state, posed rather than clicked.
 [ -n "$RH_SHOT_REDUCED" ] && RH_ENV+=(RH_SHOT_REDUCED="$RH_SHOT_REDUCED")
 # MASTERY: pin a node in the inspector (a MasteryCatalog id) for the buildtree/buildzoom modes;

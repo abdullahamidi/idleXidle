@@ -5477,6 +5477,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
         var maxScroll = f.Scrolls ? Math.Max(0, f.ContentHeight - f.View.Height) : 0;
         if (maxScroll > 0 && _settingsDropdown == 0 && MouseWheel != 0 && f.View.Contains(mouse))
             _settingsScroll -= MouseWheel * UiMetrics.RowHeight;
+        // DEV ONLY: pose the panel scrolled, so the state a 150 % player actually reaches can be
+        // photographed. RH_SHOT_SCROLL=<rows>, and "end" for the bottom of the list — the two rows
+        // that sit under the clip line at 150 % (COPY FEEDBACK CODE, START A NEW GAME) are otherwise
+        // a state no capture mode can pose, which in this project is the same as a state nobody has
+        // ever looked at. The same variable name the map and the warren already use for the same job.
+        if (RigActive && maxScroll > 0
+            && Environment.GetEnvironmentVariable("RH_SHOT_SCROLL") is { Length: > 0 } posed)
+            _settingsScroll = posed.Equals("end", StringComparison.OrdinalIgnoreCase) ? maxScroll
+                : int.TryParse(posed, out var rows) ? rows * UiMetrics.RowHeight
+                : _settingsScroll;
         _settingsScroll = Math.Clamp(_settingsScroll, 0, maxScroll);
         var dy = -_settingsScroll;
         var rowsVisible = !f.Scrolls || f.View.Contains(mouse);
