@@ -24,17 +24,27 @@ public enum ItemAction { Equip, Upgrade, Reforge, Salvage }
 /// UX V2 P1.7 (brief §60–§65, D3, D5, D9). Three panels. EQUIPPED is the one ornate surface: the hunter's
 /// header (portrait · name · class · GEAR POWER · innate), the paper doll with its eight slots, a footer that
 /// says how much is worn and which set rungs are on, and the two utility actions. INVENTORY is a quiet plate:
-/// a filter as a pill row, a 4×6 grid whose empty cells are flat so the items emerge (§63), a footer that
-/// counts. ITEM DETAIL is the inspector in the shared grammar — CATEGORY · NAME · the DECISION first (the
-/// verdict, what it replaces) · WHAT IT DOES · the SET as a ladder with reached and unreached rungs in three
-/// encodings (§64) · one primary EQUIP. The LOADOUT column that spent a sixth of the width on duplicates is
-/// gone (§61). EQUIP BEST is EQUIP HIGHEST POWER, because that is what it compares (§65).
+/// a filter as a pill row, a four-column grid (three at 150 %) whose empty cells are flat so the items emerge
+/// (§63), a footer that counts. ITEM DETAIL is the inspector in the shared grammar — CATEGORY · NAME · the
+/// DECISION first (the verdict, what it replaces) · WHAT IT DOES · the SET as a ladder with reached and
+/// unreached rungs in three encodings (§64) · one primary EQUIP. The LOADOUT column that spent a sixth of the
+/// width on duplicates is gone (§61). EQUIP BEST is EQUIP HIGHEST POWER, because that is what it compares (§65).
 /// </para>
 /// <para>
 /// Every value is the model's: <see cref="Hunter.PowerContribution"/>, <see cref="DamageBench"/> for the
 /// weapon's verdict, <see cref="ElementSets"/> for the ladder, <see cref="EnchantNeed"/> for whether an
 /// enchant works with the build, <see cref="ItemClasses.WhyNot"/> for who can wear it. There is no lock
 /// system, so there is no LOCK button.
+/// </para>
+/// <para>
+/// THE DENSITY PROFILE (UI polish §8–§9, LAW 7). The page is 1920×1080 at every UI SCALE; what grows is the
+/// type, the rows, the boxes and the pads, all read from <see cref="UiMetrics"/> and <see cref="UiTypography"/>.
+/// Every vertical rhythm here is derived from the room that is actually there: the header stack from the
+/// rungs it stacks, the slot pitch from the span between header and footer, the inventory's rows from the
+/// span between its tabs and its footer, the inspector's floor from the verbs and the button under it. Where
+/// the content no longer fits at 150 % it reflows — slot labels step beside their boxes, the grid drops to
+/// three columns and scrolls, the tab row stacks, the inspector scrolls by whole items — and never by
+/// shrinking a font (§17).
 /// </para>
 /// </remarks>
 public sealed class GearScreen
@@ -44,7 +54,6 @@ public sealed class GearScreen
     private static readonly Color Ember = UiInk.Danger;
     private static readonly Color Slate = UiInk.Secondary;
     private static readonly Color Dim = UiInk.Rule;
-    private static readonly Color Quiet = UiInk.Plate;
     private static readonly Color CellBg = new(0x14, 0x11, 0x1C);
     private static readonly Color CellHot = new(0x2C, 0x25, 0x44);
     private static readonly Color Green = UiInk.Good;
@@ -65,21 +74,31 @@ public sealed class GearScreen
 
     public GearScreen(UiKit ui, ForgeScreen forge) { _ui = ui; _forge = forge; }
 
-    // ── LAYOUT: three columns to the page — EQUIPPED 776 · INVENTORY 496 · DETAIL 568, 16 px gutters (§61). ──
+    // ── LAYOUT: three columns to the page — EQUIPPED · INVENTORY · DETAIL in the brief's 42 / 27 / 31 shares (§61). ──
+    // THE PAGE ANCHORS. Top, Margin and BottomInset are where the columns sit on the 1920×1080 page and do not
+    // follow the profile (§8, §11: the top-level layout keeps fitting; what grows is inside it). Everything
+    // that is a row, a button, an icon, a pad or a gap below is read from UiMetrics — never a per-screen factor.
     private const int Top = 120;
-    // 740 WIDE, NOT 776, AND THE REASON IS THE FRAME ART: UiKit.Panel picks its texture by aspect, and at
-    // 776/920 = 0.84 this panel wore the SQUARE frame, whose side ornament reaches 57 px in — past the
-    // 40 px content margin, so the GEAR POWER label was drawn under it. At 740/920 = 0.80 it wears the
-    // vertical frame, whose side rail is 24. The 36 px go to the inventory.
+    private const int Margin = 24, BottomInset = 40;
+    private static int Gutter => UiMetrics.Space(16);
+    // THE EQUIPPED COLUMN IS 42 %, NOT 776 PX, AND THE REASON IS THE FRAME ART: UiKit.Panel picks its texture
+    // by aspect, and at 776/920 = 0.84 this panel wore the SQUARE frame, whose side ornament reaches 57 px in —
+    // past the 40 px content margin, so the GEAR POWER label was drawn under it. At 0.80 and under it wears
+    // the vertical frame, whose side rail is 24.
     //
     // BOTH EDGES OF EVERY COLUMN FOLLOW THE PAGE. A fixed left edge against a page-relative right one
     // collapsed the inspector to two hundred pixels at UI SCALE 125% — the columns are shares of the
-    // width that is actually there, in the brief's 42 / 27 / 31 proportion (§61), with 16 px gutters.
-    private const int Gutter = 16, Margin = 24;
+    // width that is actually there.
     private static int ColumnsWidth => UiKit.PageRight(Margin) - Margin - Gutter * 2;
-    private static Rectangle EquippedPanel => new(Margin, Top, ColumnsWidth * 42 / 100, UiKit.PageBottom(40) - Top);
-    private static Rectangle InventoryPanel => new(EquippedPanel.Right + Gutter, Top, ColumnsWidth * 27 / 100, UiKit.PageBottom(40) - Top);
-    private static Rectangle DetailPanel => new(InventoryPanel.Right + Gutter, Top, UiKit.PageRight(Margin) - (InventoryPanel.Right + Gutter), UiKit.PageBottom(40) - Top);
+    // THE INSPECTOR TAKES THE LARGER of its 31 % share and the house InspectorWidth — §9: "wider inspectors" at
+    // the accessibility profiles, so 33 px prose keeps a readable line. At 100 % the share wins (570) and
+    // nothing moves; at 150 % it is 744, and the doll and the bag split what is left in the same 42 : 27.
+    private static int DetailWidth => Math.Max(ColumnsWidth * 31 / 100, UiMetrics.InspectorWidth(UiKit.Page.Width));
+    private static int EquippedWidth => (ColumnsWidth - DetailWidth) * 42 / 69;
+    private static int PanelHeight => UiKit.PageBottom(BottomInset) - Top;
+    private static Rectangle EquippedPanel => new(Margin, Top, EquippedWidth, PanelHeight);
+    private static Rectangle InventoryPanel => new(EquippedPanel.Right + Gutter, Top, ColumnsWidth - DetailWidth - EquippedWidth, PanelHeight);
+    private static Rectangle DetailPanel => new(InventoryPanel.Right + Gutter, Top, UiKit.PageRight(Margin) - (InventoryPanel.Right + Gutter), PanelHeight);
 
     /// <summary>The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates.</summary>
     internal static Rectangle[] Spotlights(TourTarget target) => target switch
@@ -90,54 +109,139 @@ public sealed class GearScreen
         _ => Array.Empty<Rectangle>(),
     };
 
+    // ── THE HEADER: portrait · name · class · GEAR POWER, then two full-width lines. Every y is derived from
+    // the rung above it, so at 150 % the stack grows instead of overprinting (the 2026-09-01 capture had
+    // WANDERER printed through WEARS… and the innate through the first slot ring). ──
+    /// <summary>
+    /// Where the header row starts: one title line and a breath under the panel's top edge — 216 at 100 %.
+    /// Measured from the EDGE, not from <see cref="UiKit.BodyTopBare"/>: this panel wears the square frame,
+    /// whose crest drop the title takes but the header never did, and the doll needs the 28 px more than
+    /// the header needs the air.
+    /// </summary>
+    private static int HeaderTop => EquippedPanel.Y + UiTypography.PanelBodyTopBare + UiMetrics.Space(34);
+    private static int PortraitSize => UiMetrics.Control(72);
+    /// <summary>The two full-width lines (what this hunter may wear, the innate) start under the portrait.</summary>
+    private static int WearsTop => HeaderTop + PortraitSize + UiMetrics.Space(10);
     // The doll and its eight slots: armour down the left, weapon and jewellery down the right.
-    // 356, not 300: the header's two full-width lines (what this hunter may wear, and the innate) end at
-    // about 346, and the slot columns used to be drawn straight through them.
-    // THE COLUMN FITS THE PANEL IT IS IN. Written as a fixed 102-box on a 130 pitch from y 356, the
-    // four rows needed 508 px and asked for 520 — which the 1080 page has and the 125 % page does not:
-    // at 864 the last two slots drew through the footer strip and out of the panel's bottom edge.
-    // Every figure below is derived from the room between the header and the footer.
-    private const int SlotsTop = 356;
+    // THE COLUMN FITS THE PANEL IT IS IN. Written as a fixed 102-box on a 130 pitch from y 356, the four rows
+    // needed 508 px and asked for 520 — which the 1080 page has and a 125 % page did not. Every figure below
+    // is derived from the room between the header and the footer.
+    private static int SlotsTop => WearsTop + UiTypography.Pitch(UiTypography.Secondary) + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(6);
 
-    private static int SlotSpan => FooterStrip.Y - 16 - SlotsTop;
-
-    private static int SlotPitch => Math.Clamp(SlotSpan / 4, 74, 130);
-
-    private static int SlotBox => Math.Min(102, SlotPitch - 28);
+    private static int SlotInset => UiMetrics.Space(6);
+    private static int SlotSpan => FooterStrip.Y - UiMetrics.Space(16) - SlotsTop;
+    private static int SlotPitch => Math.Max(1, SlotSpan / 4);
+    /// <summary>What a label UNDER its box costs the row: one Secondary line and a breath.</summary>
+    private static int SlotLabelRoom => UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(6);
+    /// <summary>The lane a label BESIDE its box takes — the widest label (WEAPON, GLOVES) at Secondary.</summary>
+    private static int SlotLabelLane => UiMetrics.Control(64);
+    /// <summary>A box that still holds an icon and its ring comfortably.</summary>
+    private static int SlotBoxComfortable => UiMetrics.IconSize + UiMetrics.Space(24);
+    /// <summary>
+    /// LABELS UNDER THEIR BOXES while four rows of box-and-label stack in the column with a comfortable box
+    /// (100 %); BESIDE them — toward the doll — once they would not (125 % and 150 %). The box keeps its size
+    /// and the label keeps its rung: the profile exists to make text bigger, never smaller (§17).
+    /// </summary>
+    private static bool SlotLabelsUnder => SlotPitch - SlotLabelRoom >= SlotBoxComfortable;
+    private static int SlotBox => Math.Clamp(SlotPitch - (SlotLabelsUnder ? SlotLabelRoom : UiMetrics.Space(8)),
+                                             UiMetrics.IconSmall, UiMetrics.Control(102));
     private static readonly (GearSlot Slot, string Label, int Column, int Row)[] SlotLayout =
     {
         (GearSlot.Helm, "HELM", 0, 0), (GearSlot.Chest, "CHEST", 0, 1), (GearSlot.Gloves, "GLOVES", 0, 2), (GearSlot.Boots, "BOOTS", 0, 3),
         (GearSlot.Weapon, "WEAPON", 1, 0), (GearSlot.Focus, "FOCUS", 1, 1), (GearSlot.Charm, "CHARM", 1, 2), (GearSlot.Ring, "RING", 1, 3),
     };
+    /// <summary>The slot columns' inset from the panel's EDGE — the house margin and a breath (46 at 100 %), the frame's crest drop not counted, as the doll has always been placed.</summary>
+    private static int SlotColumnInset => UiTypography.PanelPadX + SlotInset;
     private static Rectangle SlotRect(int column, int row)
-        => new(column == 0 ? EquippedPanel.X + 46 : EquippedPanel.Right - 46 - SlotBox, SlotsTop + row * SlotPitch, SlotBox, SlotBox);
-    private static Rectangle HunterBox =>
-        new(EquippedPanel.Center.X - 180, 346, 360, Math.Max(300, FooterStrip.Y - 16 - 346));
+        => new(column == 0 ? EquippedPanel.X + SlotColumnInset : EquippedPanel.Right - SlotColumnInset - SlotBox,
+               SlotsTop + row * SlotPitch, SlotBox, SlotBox);
+    /// <summary>The doll's frame at 100 % — sprite geometry (the idle strip is fitted by height), not a control.</summary>
+    private const int DollWidth = 360;
+    private static int DollTop => SlotsTop - UiMetrics.Space(10);
+    /// <summary>The width between the two slot columns (and their labels, when those sit beside the boxes).</summary>
+    private static int DollRoom => EquippedPanel.Width - 2 * (SlotColumnInset + SlotBox
+                                                              + (SlotLabelsUnder ? 0 : UiMetrics.Space(8) + SlotLabelLane));
+    private static Rectangle HunterBox
+    {
+        get
+        {
+            var w = Math.Clamp(DollRoom, UiMetrics.Control(120), DollWidth);
+            return new(EquippedPanel.Center.X - w / 2, DollTop, w, Math.Max(UiMetrics.Control(120), FooterStrip.Y - UiMetrics.Space(16) - DollTop));
+        }
+    }
     private static readonly GearSlot[] AllSlots =
     {
         GearSlot.Weapon, GearSlot.Charm, GearSlot.Focus, GearSlot.Helm,
         GearSlot.Chest, GearSlot.Gloves, GearSlot.Boots, GearSlot.Ring,
     };
-    private static Rectangle FooterStrip => new(UiKit.ContentLeft(EquippedPanel), EquippedPanel.Bottom - 150, UiKit.ContentRight(EquippedPanel) - UiKit.ContentLeft(EquippedPanel), 48);
-    private static Rectangle EquipBestBtn => new(UiKit.ContentLeft(EquippedPanel), EquippedPanel.Bottom - 92, (FooterStrip.Width - 16) / 2, 52);
-    private static Rectangle UnequipAllBtn => new(EquipBestBtn.Right + 16, EquippedPanel.Bottom - 92, (FooterStrip.Width - 16) / 2, 52);
 
-    // The inventory: a pill row, then 4 × 6 cells filling the content width; flat empty cells (§63).
-    private const int InvCols = 4, InvRows = 6, InvGap = 8;
+    // ── THE FOOTER: the count strip, then the two utility buttons, stacked up from the panel's content bottom. ──
+    /// <summary>Where the two buttons end: the house bottom pad and a breath above the panel's EDGE (1000 at 100 %) — the crest drop, again, not counted.</summary>
+    private static int FooterButtonsBottom => EquippedPanel.Bottom - UiTypography.PanelPadBottom - UiMetrics.Space(8);
+    /// <summary>One Body line and its breath: 48 at 100 %.</summary>
+    private static int FooterStripH => UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(20);
+    /// <summary>A set chip's height: one Secondary line in a bordered plate. 30 at 100 %.</summary>
+    private static int SetChipH => UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(6);
+    private static Rectangle FooterStrip
+        => new(UiKit.ContentLeft(EquippedPanel), FooterButtonsBottom - UiMetrics.ButtonHeight - UiMetrics.Space(10) - FooterStripH,
+               UiKit.ContentRight(EquippedPanel) - UiKit.ContentLeft(EquippedPanel), FooterStripH);
+    private static Rectangle EquipBestBtn
+        => new(FooterStrip.X, FooterButtonsBottom - UiMetrics.ButtonHeight, (FooterStrip.Width - Gutter) / 2, UiMetrics.ButtonHeight);
+    private static Rectangle UnequipAllBtn
+        => new(EquipBestBtn.Right + Gutter, EquipBestBtn.Y, FooterStrip.Width - EquipBestBtn.Width - Gutter, UiMetrics.ButtonHeight);
+
+    // ── THE INVENTORY: a pill row, then a grid filling the content width; flat empty cells (§63). ──
+    private static int InvGap => UiMetrics.Space(8);
     private static int InvX => UiKit.ContentLeft(InventoryPanel);
     private static int InvW => UiKit.ContentRight(InventoryPanel) - InvX;
-    private static int InvCell => (InvW - InvGap * (InvCols - 1)) / InvCols;
-    private static int InvTop => InventoryPanel.Y + 104;
-    private static Rectangle InvCellRect(int i)
-        => new(InvX + i % InvCols * (InvCell + InvGap), InvTop + i / InvCols * (InvCell + InvGap), InvCell, InvCell);
     private static readonly string[] Tabs = { "ALL", "WEAPONS", "ARMOR", "ACCESSORY" };
-    private static Rectangle TabRect(int i) => new(InvX + i * (InvCell + InvGap), InventoryPanel.Y + 54, InvCell, 38);
+    /// <summary>A tab's height: a Secondary line with its pad, never under the hit-target minimum (§107).</summary>
+    private static int TabH => Math.Max(UiMetrics.HitTargetMinimum, UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(14));
+    private static int TabsTop => InventoryPanel.Y + UiMetrics.Space(18) + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(12);
+    /// <summary>
+    /// ONE ROW OF FOUR while the widest label fits a quarter of the width; TWO ROWS OF TWO once it does not
+    /// (125 % and up — "ACCESSORY" at 24 px is wider than a 98 px tab). A stacked control (§9), not a shorter
+    /// word and not a smaller one.
+    /// </summary>
+    private int TabRows
+    {
+        get
+        {
+            var one = (InvW - InvGap * (Tabs.Length - 1)) / Tabs.Length;
+            var widest = 0;
+            foreach (var t in Tabs) widest = Math.Max(widest, _ui.MeasureBig(t, UiTypography.Secondary));
+            return widest + UiTypography.ChipPadX * 2 <= one ? 1 : 2;
+        }
+    }
+    private Rectangle TabRect(int i)
+    {
+        var per = Tabs.Length / TabRows;
+        var w = (InvW - InvGap * (per - 1)) / per;
+        return new(InvX + i % per * (w + InvGap), TabsTop + i / per * (TabH + InvGap), w, TabH);
+    }
+    private int InvTop => TabsTop + TabRows * (TabH + InvGap) - InvGap + UiMetrics.Space(12);
+    /// <summary>FOUR COLUMNS while a cell keeps a comfortable icon; THREE once it would not (150 %, §9).</summary>
+    private static int InvCols => (InvW - InvGap * 3) / 4 >= UiMetrics.Control(64) ? 4 : 3;
+    private static int InvCell => (InvW - InvGap * (InvCols - 1)) / InvCols;
+    private const string SortedLabel = "SORTED BY RARITY", MoreLabel = "RIGHT-CLICK FOR MORE";
+    /// <summary>The two footer lines share a row while both fit it; they stack once they do not (150 %).</summary>
+    private bool InvFooterStacked
+        => _ui.MeasureBig(SortedLabel, UiTypography.Secondary) + _ui.MeasureBig(MoreLabel, UiTypography.Secondary) + UiMetrics.Space(24) > InvW;
+    private int InvFooterTop
+        => InventoryPanel.Bottom - UiMetrics.Space(16) - UiTypography.Pitch(UiTypography.Secondary) * (InvFooterStacked ? 2 : 1);
+    /// <summary>ROWS FROM THE ROOM: as many as fit between the tabs and the footer, never printing over either.</summary>
+    private int InvRows => Math.Max(1, (InvFooterTop - UiMetrics.Space(12) - InvTop + InvGap) / (InvCell + InvGap));
+    private Rectangle InvCellRect(int i)
+        => new(InvX + i % InvCols * (InvCell + InvGap), InvTop + i / InvCols * (InvCell + InvGap), InvCell, InvCell);
 
-    // The inspector's actions.
+    // ── THE INSPECTOR'S ACTIONS: the verb row and the one primary button, anchored to the panel's bottom. ──
     private static int DetX => UiKit.ContentLeft(DetailPanel);
     private static int DetW => UiKit.ContentRight(DetailPanel) - DetX;
-    private static Rectangle EquipBtn => new(DetX, DetailPanel.Bottom - 92, DetW, 56);
-    private static Rectangle VerbText(int i) => new(DetX + i * (DetW / 3), EquipBtn.Y - 36, DetW / 3, 28);
+    /// <summary>The verb row's height: a Secondary line, never under the hit-target minimum (§107).</summary>
+    private static int VerbRowH => Math.Max(UiMetrics.HitTargetMinimum, UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(8));
+    private static Rectangle EquipBtn
+        => new(DetX, UiKit.ContentBottom(DetailPanel) - UiMetrics.Space(4) - UiMetrics.ButtonHeightPrimary, DetW, UiMetrics.ButtonHeightPrimary);
+    private static Rectangle VerbText(int i) => new(DetX + i * (DetW / 3), EquipBtn.Y - UiMetrics.Space(8) - VerbRowH, DetW / 3, VerbRowH);
     private static readonly (ItemAction Action, string Label)[] Verbs =
     {
         (ItemAction.Upgrade, "UPGRADE"), (ItemAction.Reforge, "REFORGE"), (ItemAction.Salvage, "SALVAGE"),
@@ -149,6 +253,13 @@ public sealed class GearScreen
     private ItemInstance? _hovered;
     private string? _tip;
     private Point _tipAt;
+
+    // THE INSPECTOR'S SCROLL, in whole items from the top (§18: long inspectors scroll; the verbs and EQUIP
+    // never do). What the last Draw measured tells the next Update whether there is anything below to reach.
+    private int _detScroll;
+    private string? _detScrollFor;
+    private bool _detOverflow;
+    private const int DetailScrollStep = 2;   // items per wheel notch
 
     /// <summary>Everything in the bag that fits a slot — whether or not THIS hunter may wear it.</summary>
     private List<ItemInstance> Wearable()
@@ -184,8 +295,17 @@ public sealed class GearScreen
     {
         (ItemAction.Equip, "EQUIP"), (ItemAction.Upgrade, "UPGRADE"), (ItemAction.Reforge, "REFORGE"), (ItemAction.Salvage, "SALVAGE"),
     };
-    private const int MenuW = 250, MenuRowH = 44, MenuHeaderH = 34;
-    private Rectangle MenuRect => new(_menuAt.X, _menuAt.Y, MenuW, MenuEntries.Length * MenuRowH + MenuHeaderH + 12);
+    // The right-click menu: a header naming the item, then one row per verb. The rows follow the Body rung
+    // they hold (44 at 100 %), so they are not tight at 150 % and each is a hit target of its own height.
+    private static int MenuW => UiMetrics.Control(250);
+    private static int MenuRowH => UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(16);
+    private static int MenuHeaderH => UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(10);
+    private static int MenuPad => UiMetrics.Space(6);
+    private static int MenuH => MenuEntries.Length * MenuRowH + MenuHeaderH + MenuPad * 2;
+    private Rectangle MenuRect => new(_menuAt.X, _menuAt.Y, MenuW, MenuH);
+    /// <summary>One menu row — drawn and hit-tested from the same rectangle (LAW 5).</summary>
+    private Rectangle MenuRow(int i)
+        => new(MenuRect.X + MenuPad, MenuRect.Y + MenuHeaderH + MenuPad + i * MenuRowH, MenuW - MenuPad * 2, MenuRowH - UiMetrics.Space(4));
 
     /// <summary>The character being played — the doll shows them.</summary>
     public Character Character { get; set; } = CharacterRoster.Get(CharacterRoster.StarterId);
@@ -201,9 +321,14 @@ public sealed class GearScreen
         if (_selectedId is null || (Wearable().All(i => i.InstanceId != _selectedId) && AllSlots.Select(hunter.Worn).All(w => w?.InstanceId != _selectedId)))
             _selectedId = list.FirstOrDefault()?.InstanceId;
 
-        var maxScroll = Math.Max(0, (list.Count - 1) / InvCols - (InvRows - 1));
-        if (wheel != 0 && InventoryPanel.Contains(hit)) _invScroll -= Math.Sign(wheel);
-        _invScroll = Math.Clamp(_invScroll, 0, maxScroll);
+        var rows = (list.Count + InvCols - 1) / InvCols;
+        _invScroll = UiKit.Scrolled(_invScroll, wheel != 0 && InventoryPanel.Contains(hit) ? Math.Sign(wheel) : 0, InvRows, rows);
+        if (wheel != 0 && DetailPanel.Contains(hit))
+        {
+            // Down only while the last Draw left something under the floor; up to the top.
+            if (wheel < 0 && _detOverflow) _detScroll += DetailScrollStep;
+            else if (wheel > 0) _detScroll = Math.Max(0, _detScroll - DetailScrollStep);
+        }
 
         if (rightClicked)
         {
@@ -269,8 +394,8 @@ public sealed class GearScreen
     private void OpenMenu(string instanceId, Rectangle anchor)
     {
         _menuItemId = instanceId;
-        var x = Math.Min(anchor.Right + 8, UiKit.PageRight(16) - MenuW);
-        var y = Math.Min(anchor.Y, UiKit.PageBottom(16) - (MenuEntries.Length * MenuRowH + MenuHeaderH + 12));
+        var x = Math.Min(anchor.Right + UiMetrics.Space(8), UiKit.PageRight(UiMetrics.Space(16)) - MenuW);
+        var y = Math.Min(anchor.Y, UiKit.PageBottom(UiMetrics.Space(16)) - MenuH);
         _menuAt = new Point(x, y);
     }
 
@@ -279,8 +404,7 @@ public sealed class GearScreen
         if (_menuItemId is null || !MenuRect.Contains(hit)) return;
         for (var i = 0; i < MenuEntries.Length; i++)
         {
-            var row = new Rectangle(MenuRect.X + 6, MenuRect.Y + MenuHeaderH + 6 + i * MenuRowH, MenuW - 12, MenuRowH - 4);
-            if (!row.Contains(hit)) continue;
+            if (!MenuRow(i).Contains(hit)) continue;
             if (MenuEntries[i].Action == ItemAction.Equip
                 && Wearable().FirstOrDefault(it => it.InstanceId == _menuItemId) is { } bagItem && !CanWearNow(bagItem))
                 return;   // CANNOT WEAR is not a verb
@@ -364,7 +488,7 @@ public sealed class GearScreen
 
         // The hover card answers "what is this" without a click — never to the right over the inspector.
         if (_hovered is { } hov && _menuItemId is null)
-            ItemTooltip.Draw(_ui, b, hov, hunter, hit, new Rectangle(0, 0, DetailPanel.X - 8, UiKit.Page.Height), Character);
+            ItemTooltip.Draw(_ui, b, hov, hunter, hit, new Rectangle(0, 0, DetailPanel.X - UiMetrics.Space(8), UiKit.Page.Height), Character);
         else if (_tip is { } tip && _menuItemId is null) _ui.HoverTip(b, tip, _tipAt);
         if (DevGearDebug) DrawDebug(b, hunter);
     }
@@ -391,17 +515,20 @@ public sealed class GearScreen
         _ui.Fill(b, new Rectangle(box.X + 4, box.Y + 4, box.Width, box.Height), new Color(0, 0, 0, 0xA0));
         _ui.Fill(b, box, new Color(0x14, 0x11, 0x1E, 0xF6));
         Ring(b, box, rc, 3);
-        _ui.TextBig(b, _ui.ShortenBig(ItemNaming.FullName(item), box.Width - 28, UiTypography.Secondary), box.X + 14, box.Y + 10, rc, UiTypography.Secondary);
-        _ui.Fill(b, new Rectangle(box.X + 8, box.Y + MenuHeaderH - 4, box.Width - 16, 1), Dim);
+        var hx = box.X + UiMetrics.Space(14);
+        _ui.TextBig(b, _ui.ShortenBig(ItemNaming.FullName(item), box.Width - UiMetrics.Space(14) * 2, UiTypography.Secondary),
+                    hx, box.Y + (MenuHeaderH - UiTypography.Secondary) / 2, rc, UiTypography.Secondary);
+        _ui.Fill(b, new Rectangle(box.X + UiMetrics.Space(8), box.Y + MenuHeaderH - UiMetrics.Space(4), box.Width - UiMetrics.Space(8) * 2, 1), Dim);
         for (var i = 0; i < MenuEntries.Length; i++)
         {
             var (action, label) = MenuEntries[i];
-            var row = new Rectangle(box.X + 6, box.Y + MenuHeaderH + 6 + i * MenuRowH, box.Width - 12, MenuRowH - 4);
+            var row = MenuRow(i);
             var locked = action == ItemAction.Equip && !worn && !CanWearNow(item);
             var shown = action == ItemAction.Equip && worn ? "TAKE OFF" : locked ? "CANNOT WEAR" : label;
             var hover = row.Contains(hit) && !locked;
             if (hover) _ui.Fill(b, row, new Color(0x36, 0x2A, 0x4E));
-            _ui.TextBig(b, shown, row.X + 16, row.Y + 9, locked ? UiInk.Disabled : hover ? Bone : Slate, UiTypography.Body);
+            _ui.TextBig(b, shown, row.X + UiMetrics.Space(16), row.Y + (row.Height - UiTypography.Body) / 2,
+                        locked ? UiInk.Disabled : hover ? Bone : Slate, UiTypography.Body);
         }
     }
 
@@ -415,28 +542,28 @@ public sealed class GearScreen
         // THE HEADER ROW (moved from the LOADOUT column, §61): portrait · name · class line · GEAR POWER · innate.
         var x0 = UiKit.ContentLeft(panel);
         var x1 = UiKit.ContentRight(panel);
-        // THREE LINES, each with the whole width it needs: the panel's title band ends above them (the
-        // square frame's crest reaches 28 px further in than the others), so the header starts clear of it.
-        var hy = panel.Y + 96;
-        var por = new Rectangle(x0, hy, 72, 72);
+        var hy = HeaderTop;
+        var por = new Rectangle(x0, hy, PortraitSize, PortraitSize);
         if (_ui.Assets.GetFirst(Character.PortraitKey, "hunter_portrait") is { } p) b.Draw(p, por, Color.White);
         var powerVal = $"{hunter.PowerRating:N0}";
         var powerW = Math.Max(_ui.MeasureBig("GEAR POWER", UiTypography.Secondary), _ui.MeasureBig(powerVal, UiTypography.PrimaryValue));
-        _ui.TextRightBig(b, "GEAR POWER", x1, hy + 4, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, powerVal, x1, hy + 4 + UiTypography.Pitch(UiTypography.Secondary) - 4, Bone, UiTypography.PrimaryValue);
-        var tx = por.Right + 16;
-        _ui.TextBig(b, _ui.ShortenBig(Character.Name.ToUpperInvariant(), x1 - powerW - 24 - tx, UiTypography.Headline), tx, hy + 6, Bone, UiTypography.Headline);
-        _ui.TextBig(b, _ui.ShortenBig(ItemClasses.NameOf(Character.Class), x1 - powerW - 24 - tx, UiTypography.Body),
-                    tx, hy + 6 + UiTypography.Pitch(UiTypography.Headline) - 2, UiKit.ClassColor(Character.Class), UiTypography.Body);
+        _ui.TextRightBig(b, "GEAR POWER", x1, hy + UiMetrics.Space(4), Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, powerVal, x1, hy + UiTypography.Pitch(UiTypography.Secondary), Bone, UiTypography.PrimaryValue);
+        var tx = por.Right + UiMetrics.Space(16);
+        var nameW = x1 - powerW - UiMetrics.Space(24) - tx;
+        var ny = hy + UiMetrics.Space(6);
+        _ui.TextBig(b, _ui.ShortenBig(Character.Name.ToUpperInvariant(), nameW, UiTypography.Headline), tx, ny, Bone, UiTypography.Headline);
+        _ui.TextBig(b, _ui.ShortenBig(ItemClasses.NameOf(Character.Class), nameW, UiTypography.Body),
+                    tx, ny + UiTypography.Pitch(UiTypography.Headline), UiKit.ClassColor(Character.Class), UiTypography.Body);
         // WHAT THIS HUNTER MAY WEAR — the sentence that explains every locked cell in the grid — and the
         // INNATE, the thing that most changes how a build performs, beside the gear it modifies. Each gets
         // the full content width; at the header's right column they were cut mid-clause.
-        var wy = por.Bottom + 10;
+        var wy = WearsTop;
         _ui.TextBig(b, _ui.ShortenBig(ItemClasses.WearsLine(Character.Class).ToUpperInvariant(), x1 - x0, UiTypography.Secondary), x0, wy, Slate, UiTypography.Secondary);
         wy += UiTypography.Pitch(UiTypography.Secondary);
         var innate = $"{Character.PassiveName.ToUpperInvariant()} — {Character.PassiveText}";
         _ui.TextBig(b, _ui.ShortenBig(innate, x1 - x0, UiTypography.Body), x0, wy, Gold, UiTypography.Body);
-        Tip(new Rectangle(x0, wy, x1 - x0, UiTypography.Body + 4), hit, $"INNATE — {Character.PassiveName}: {Character.PassiveText}");
+        Tip(new Rectangle(x0, wy, x1 - x0, UiTypography.Pitch(UiTypography.Body)), hit, $"INNATE — {Character.PassiveName}: {Character.PassiveText}");
 
         // THE DOLL, dressed: the same idle strip the arena draws.
         var doll = HunterBox;
@@ -444,6 +571,7 @@ public sealed class GearScreen
         if (!_ui.AnimSprite(b, Character.StripKey("idle"), doll, _anim, 10f, loop: true, Color.White, -1f))
             _ui.SpriteGrounded(b, Character.SpriteKey, doll, Color.White, 0.02f);
 
+        var labelsUnder = SlotLabelsUnder;
         foreach (var (slot, label, col, row) in SlotLayout)
         {
             var box = SlotRect(col, row);
@@ -454,45 +582,80 @@ public sealed class GearScreen
             var slotArt = round ? "ui_slot_trinket_round" : "ui_slot_empty";
             if (_ui.Assets.Get(slotArt) is { } sa) b.Draw(sa, box, worn is not null || hot ? Color.White : Color.White * 0.7f);
             else _ui.Fill(b, box, CellBg);
+            // The ring art's well and its rim, in the art's own proportion (12 and 14 of its 102 source px).
+            var well = box.Width * 12 / 102;
+            var rim = box.Width * 14 / 102;
+            var emptyInRing = false;
             if (worn is { } w2)
             {
                 if (hot) _hovered = w2;
-                _forge.DrawItemIcon(b, w2, new Rectangle(box.X + 12, box.Y + 12, box.Width - 24, box.Height - 24));
+                _forge.DrawItemIcon(b, w2, new Rectangle(box.X + well, box.Y + well, box.Width - well * 2, box.Height - well * 2));
                 _ui.Fill(b, new Rectangle(box.X, box.Y, box.Width, 4), RarityColor(w2.Rarity));
             }
             else
             {
-                // An empty slot says so in shape and in a word — not a dash.
-                Ring(b, Shrink(box, 14), UiInk.Empty, 1);
-                _ui.TextCenterBig(b, "EMPTY", box.Center.X, box.Center.Y - 8, UiInk.Empty, UiTypography.Caption);
+                // An empty slot says so in shape and in a word — not a dash. The word sits in the ring while it
+                // fits there; beside the box otherwise (a 150 % ring is narrower than EMPTY at its rung).
+                Ring(b, Shrink(box, rim), UiInk.Empty, 1);
+                emptyInRing = _ui.MeasureBig("EMPTY", UiTypography.Caption) <= box.Width - rim * 2;
+                if (emptyInRing) _ui.TextCenterBig(b, "EMPTY", box.Center.X, box.Center.Y - UiTypography.Caption / 2, UiInk.Empty, UiTypography.Caption);
             }
             if (selected) Ring(b, box, Gold, 3);   // gold = selected
             else if (hot) Ring(b, box, Slate, 2);
-            _ui.TextCenterBig(b, label, box.Center.X, box.Bottom + 6, worn is not null ? Bone : Slate, UiTypography.Secondary);
+
+            var labelInk = worn is not null ? Bone : Slate;
+            if (labelsUnder)
+                _ui.TextCenterBig(b, label, box.Center.X, box.Bottom + UiMetrics.Space(6), labelInk, UiTypography.Secondary);
+            else
+            {
+                // BESIDE THE BOX, toward the doll: the label at its own rung, and EMPTY under it when the ring
+                // could not hold the word.
+                var emptyBeside = worn is null && !emptyInRing;
+                var lh = UiTypography.Pitch(UiTypography.Secondary) + (emptyBeside ? UiTypography.Pitch(UiTypography.Caption) : 0);
+                var ly = box.Center.Y - lh / 2;
+                var text = _ui.ShortenBig(label, SlotLabelLane, UiTypography.Secondary);
+                if (col == 0)
+                {
+                    var lx = box.Right + UiMetrics.Space(8);
+                    _ui.TextBig(b, text, lx, ly, labelInk, UiTypography.Secondary);
+                    if (emptyBeside) _ui.TextBig(b, "EMPTY", lx, ly + UiTypography.Pitch(UiTypography.Secondary), UiInk.Empty, UiTypography.Caption);
+                }
+                else
+                {
+                    var rx = box.X - UiMetrics.Space(8);
+                    _ui.TextRightBig(b, text, rx, ly, labelInk, UiTypography.Secondary);
+                    if (emptyBeside) _ui.TextRightBig(b, "EMPTY", rx, ly + UiTypography.Pitch(UiTypography.Secondary), UiInk.Empty, UiTypography.Caption);
+                }
+            }
         }
 
         // THE FOOTER STRIP: how much is worn, the average item level, and the set rungs that are ON as chips.
         var wornAll = AllSlots.Select(hunter.Worn).OfType<ItemInstance>().ToList();
         var strip = FooterStrip;
         _ui.Plate(b, strip);
-        var il = wornAll.Count > 0 ? (int)Math.Round(wornAll.Average(i => i.ItemLevel)) : 0;
-        _ui.TextBig(b, $"{wornAll.Count} / 8 EQUIPPED  ·  AVERAGE ITEM LEVEL {il}", strip.X + 16, strip.Y + 12, Bone, UiTypography.Body);
-        var chipX = strip.Right - 12;
+        var chipX = strip.Right - UiMetrics.Space(12);
+        var gem = SetChipH - UiMetrics.Space(5) * 2;
         foreach (var a in ElementSets.Active(hunter).GroupBy(a => a.Element).Select(g => g.OrderByDescending(a => a.Tier.Pieces).First()))
         {
             var text = $"{a.Element.ToString().ToUpperInvariant()} {a.Tier.Pieces}";
-            var cw = _ui.MeasureBig(text, UiTypography.Secondary) + 24 + 20;
+            var textX = UiMetrics.Space(6) + gem + UiMetrics.Space(4);
+            var cw = textX + _ui.MeasureBig(text, UiTypography.Secondary) + UiMetrics.Space(14);
             chipX -= cw;
-            var chip = new Rectangle(chipX, strip.Y + 9, cw, 30);
+            var chip = new Rectangle(chipX, strip.Y + (strip.Height - SetChipH) / 2, cw, SetChipH);
             _ui.Fill(b, chip, Gold * 0.14f);
             Ring(b, chip, Gold, 1);
-            if (_ui.Assets.Get($"source_{a.Element.ToString().ToLowerInvariant()}") is { } g) b.Draw(g, new Rectangle(chip.X + 6, chip.Y + 5, 20, 20), Color.White);
-            _ui.TextBig(b, text, chip.X + 30, chip.Y + 5, Gold, UiTypography.Secondary);
+            if (_ui.Assets.Get($"source_{a.Element.ToString().ToLowerInvariant()}") is { } g)
+                b.Draw(g, new Rectangle(chip.X + UiMetrics.Space(6), chip.Y + (SetChipH - gem) / 2, gem, gem), Color.White);
+            _ui.TextBig(b, text, chip.X + textX, chip.Y + (SetChipH - UiTypography.Secondary) / 2, Gold, UiTypography.Secondary);
             Tip(chip, hit, a.Tier.Pieces == ElementSets.Rungs[^1]
                 ? $"{ElementSets.Name(a.Element)} · {ElementSets.CapstoneName(a.Element)} — {a.Tier.Line}"
                 : $"{ElementSets.Name(a.Element)} — {a.Tier.Line}");
-            chipX -= 8;
+            chipX -= UiMetrics.Space(8);
         }
+        var il = wornAll.Count > 0 ? (int)Math.Round(wornAll.Average(i => i.ItemLevel)) : 0;
+        var countX = strip.X + UiMetrics.Space(16);
+        _ui.TextBig(b, _ui.ShortenBig($"{wornAll.Count} / 8 EQUIPPED  ·  AVERAGE ITEM LEVEL {il}", chipX - UiMetrics.Space(12) - countX, UiTypography.Body),
+                    countX, strip.Y + (strip.Height - UiTypography.Body) / 2, Bone, UiTypography.Body);
 
         // TWO UTILITY ACTIONS, secondary: named for what they do (§65).
         _ui.Button(b, EquipBestBtn, "EQUIP HIGHEST POWER", hit, false, true);
@@ -505,9 +668,9 @@ public sealed class GearScreen
     {
         var panel = InventoryPanel;
         _ui.Plate(b, panel);
-        _ui.TextBig(b, "INVENTORY", InvX, panel.Y + 18, Slate, UiTypography.Secondary);
+        _ui.TextBig(b, "INVENTORY", InvX, panel.Y + UiMetrics.Space(18), Slate, UiTypography.Secondary);
         var total = Wearable().Count;
-        _ui.TextRightBig(b, $"{total} ITEM{(total == 1 ? "" : "S")}", InvX + InvW, panel.Y + 18, Slate, UiTypography.Secondary);
+        _ui.TextRightBig(b, $"{total} ITEM{(total == 1 ? "" : "S")}", InvX + InvW, panel.Y + UiMetrics.Space(18), Slate, UiTypography.Secondary);
 
         for (var i = 0; i < Tabs.Length; i++)
         {
@@ -516,13 +679,18 @@ public sealed class GearScreen
             var hot = r.Contains(hit);
             _ui.Fill(b, r, on ? new Color(0x2C, 0x25, 0x44) : hot ? new Color(0x1E, 0x18, 0x2C) : new Color(0x0E, 0x0B, 0x16) * 0.8f);
             Ring(b, r, on ? Gold : hot ? Slate : Dim, on ? 2 : 1);
-            _ui.TextCenterBig(b, Tabs[i], r.Center.X, r.Y + 8, on ? Gold : hot ? Bone : Slate, UiTypography.Secondary);
+            _ui.TextCenterBig(b, Tabs[i], r.Center.X, r.Y + (r.Height - UiTypography.Secondary) / 2, on ? Gold : hot ? Bone : Slate, UiTypography.Secondary);
         }
 
         var list = Filtered(hunter);
-        for (var vis = 0; vis < InvCols * InvRows; vis++)
+        var cols = InvCols;
+        var visibleRows = InvRows;
+        var iconInset = UiMetrics.Space(6);
+        var lockW = UiMetrics.Control(18);
+        var lockH = UiMetrics.Control(20);
+        for (var vis = 0; vis < cols * visibleRows; vis++)
         {
-            var idx = _invScroll * InvCols + vis;
+            var idx = _invScroll * cols + vis;
             var cell = InvCellRect(vis);
             _ui.Fill(b, cell, CellBg);   // flat, no border: an empty cell is nothing to look at
             if (idx >= list.Count) continue;
@@ -531,13 +699,14 @@ public sealed class GearScreen
             var sel = item.InstanceId == _selectedId;
             if (hot) _hovered = item;
             if (hot && !sel) _ui.Fill(b, cell, CellHot);
-            _forge.DrawItemIcon(b, item, new Rectangle(cell.X + 6, cell.Y + 6, cell.Width - 12, cell.Height - 12));
+            _forge.DrawItemIcon(b, item, new Rectangle(cell.X + iconInset, cell.Y + iconInset, cell.Width - iconInset * 2, cell.Height - iconInset * 2));
             _ui.Fill(b, new Rectangle(cell.X, cell.Y, 5, cell.Height), RarityColor(item.Rarity));   // rarity owns the left edge
             var wearable = CanWearNow(item);
             if (!wearable)
             {
                 _ui.Fill(b, Shrink(cell, 5), new Color(0x0A, 0x08, 0x10, 0xB4));
-                Lock(b, new Rectangle(cell.Right - 26, cell.Bottom - 28, 18, 20), UiKit.ClassColor(item.Class ?? Character.Class));
+                Lock(b, new Rectangle(cell.Right - UiMetrics.Space(8) - lockW, cell.Bottom - UiMetrics.Space(8) - lockH, lockW, lockH),
+                     UiKit.ClassColor(item.Class ?? Character.Class));
             }
             // BETTER: one green hairline inside the frame — a hint; the inspector makes the case. Judged by the
             // same ranking the inspector's verdict uses: bench damage for a weapon, ITEM POWER for the rest.
@@ -549,27 +718,25 @@ public sealed class GearScreen
             else if (hot) Ring(b, cell, Slate, 2);
         }
 
-        var rows = (list.Count + InvCols - 1) / InvCols;
-        if (rows > InvRows)
-        {
-            var track = new Rectangle(InvX + InvW + 6, InvTop, 6, InvRows * (InvCell + InvGap) - InvGap);
-            _ui.Fill(b, track, Quiet);
-            var maxScroll = rows - InvRows;
-            var th = Math.Max(28, track.Height * InvRows / rows);
-            var ty = track.Y + (track.Height - th) * _invScroll / Math.Max(1, maxScroll);
-            _ui.Fill(b, new Rectangle(track.X, ty, track.Width, th), Slate);
-        }
+        // THE SCROLLBAR, in the plate's right pad — drawn only when there is a row beyond the last visible one.
+        var rows = (list.Count + cols - 1) / cols;
+        _ui.ScrollBar(b, new Rectangle(InvX + InvW + UiMetrics.Space(6), InvTop, UiMetrics.ScrollbarWidth, visibleRows * (InvCell + InvGap) - InvGap),
+                      _invScroll, visibleRows, rows);
 
         if (list.Count == 0)
         {
-            var ey = InvTop + 40;
+            var ey = InvTop + UiMetrics.Space(40);
             _ui.TextBig(b, total == 0 ? "NOTHING IN THE BAG" : "NOTHING IN THIS FILTER", InvX, ey, UiInk.Empty, UiTypography.Headline);
-            _ui.TextBig(b, total == 0 ? "CHESTS DROP GEAR — BOSSES DROP CHESTS, AND THE VAULT OPENS THEM." : "TRY ANOTHER TAB, OR THE ALL TAB.", InvX, ey + UiTypography.Pitch(UiTypography.Headline), Slate, UiTypography.Body);
+            ey += UiTypography.Pitch(UiTypography.Headline);
+            var why = total == 0 ? "CHESTS DROP GEAR — BOSSES DROP CHESTS, AND THE VAULT OPENS THEM." : "TRY ANOTHER TAB, OR THE ALL TAB.";
+            foreach (var l in _ui.WrapBig(why, InvW, UiTypography.Body)) { _ui.TextBig(b, l, InvX, ey, Slate, UiTypography.Body); ey += UiTypography.Pitch(UiTypography.Body); }
         }
 
         // The footer. The four verbs are named in the inspector now, so this says only what the order is.
-        _ui.TextBig(b, "SORTED BY RARITY", InvX, panel.Bottom - 40, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, "RIGHT-CLICK FOR MORE", InvX + InvW, panel.Bottom - 40, Slate, UiTypography.Secondary);
+        var fy = InvFooterTop;
+        _ui.TextBig(b, SortedLabel, InvX, fy, Slate, UiTypography.Secondary);
+        if (InvFooterStacked) fy += UiTypography.Pitch(UiTypography.Secondary);
+        _ui.TextRightBig(b, MoreLabel, InvX + InvW, fy, Slate, UiTypography.Secondary);
     }
 
     // ── ITEM DETAIL: the inspector (D3). Decision first. ────────────────────────────────────────────────
@@ -578,33 +745,66 @@ public sealed class GearScreen
         var panel = DetailPanel;
         _ui.PanelQuiet(b, panel);
         var x = DetX; var w = DetW;
-        var y = panel.Y + UiTypography.PanelTitleTop;
-        var floor = VerbText(0).Y - 12;
+        var top = UiKit.TitleTop(panel);
+        var y = top;
+        var floor = VerbText(0).Y - UiMetrics.Space(12);
 
-        void Head(string s) { if (y + UiTypography.Pitch(UiTypography.Secondary) > floor) return; _ui.TextBig(b, s, x, y, Slate, UiTypography.Secondary); y += UiTypography.Pitch(UiTypography.Secondary); }
+        // THE SHEET SCROLLS when it is taller than the room (§18: long inspectors) — by whole items from the
+        // top, so the first visible line is always a complete one, and the verbs and EQUIP stay anchored under
+        // the floor (never below a scroll region). A new selection starts at the top.
+        if (_detScrollFor != _selectedId) { _detScroll = 0; _detScrollFor = _selectedId; }
+        var scrollable = _detScroll > 0 || _detOverflow;
+        if (scrollable) w -= UiMetrics.ScrollbarWidth + UiMetrics.Space(8);
+        int index = 0, shown = 0;
+        var overflow = false;
+        // Reserve h px for the next item: false when it is scrolled off the top or does not fit above the floor
+        // (and once one does not fit, nothing after it is drawn either, so the sheet keeps its order).
+        bool Take(int h)
+        {
+            var i = index++;
+            if (i < _detScroll) return false;
+            if (overflow || y + h > floor) { overflow = true; return false; }
+            shown++;
+            return true;
+        }
+
+        void Head(string s)
+        {
+            var h = UiTypography.Pitch(UiTypography.Secondary);
+            if (!Take(h)) return;
+            _ui.TextBig(b, s, x, y, Slate, UiTypography.Secondary); y += h;
+        }
         void Line(string s, Color c, int px = 0, int maxLines = 3)
         {
             if (px == 0) px = UiTypography.Body;   // a rung is a profile-scaled property, not a constant
+            var h = UiTypography.Pitch(px);
             foreach (var l in _ui.WrapBig(s, w, px).Take(maxLines))
             {
-                if (y + UiTypography.Pitch(px) > floor) return;
-                _ui.TextBig(b, l, x, y, c, px); y += UiTypography.Pitch(px);
+                if (!Take(h)) continue;
+                _ui.TextBig(b, l, x, y, c, px); y += h;
             }
         }
-        void Rule() { if (y + 14 < floor) { _ui.Fill(b, new Rectangle(x, y + 6, w, 1), Dim); y += 16; } }
+        void Rule()
+        {
+            var h = UiMetrics.Space(16);
+            if (!Take(h)) return;
+            _ui.Fill(b, new Rectangle(x, y + UiMetrics.Space(6), w, 1), Dim); y += h;
+        }
         void Pair(string k, string v, Color vc)
         {
-            if (y + UiTypography.Pitch(UiTypography.Body) > floor) return;
+            var h = UiTypography.Pitch(UiTypography.Body);
+            if (!Take(h)) return;
             _ui.TextBig(b, k, x, y, Slate, UiTypography.Body);
             _ui.TextRightBig(b, v, x + w, y, vc, UiTypography.Body);
-            y += UiTypography.Pitch(UiTypography.Body);
+            y += h;
         }
 
         var item = Selected(hunter);
         if (item is null)
         {
+            _detOverflow = false;
             Head("ITEM DETAIL");
-            _ui.TextBig(b, "NOTHING SELECTED", x, y, UiInk.Empty, UiTypography.Headline); y += UiTypography.Pitch(UiTypography.Headline) + 4;
+            _ui.TextBig(b, "NOTHING SELECTED", x, y, UiInk.Empty, UiTypography.Headline); y += UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(4);
             Line("Click an item in the bag or on the doll to read it here. EQUIP puts it on; TAKE OFF puts it back.", Slate);
             return;
         }
@@ -615,18 +815,27 @@ public sealed class GearScreen
         var wornPiece = slot is { } s0 ? hunter.Worn(s0) : null;
         var whyNot = ItemClasses.WhyNot(Character, item);
 
-        // CATEGORY, then NAME with the icon.
+        // CATEGORY, with the class line beside it while both fit the row — under it once they do not (150 %).
         var cat = $"{RarityShort(item.Rarity)} {SlotWord(item.BaseType)}  ·  {item.Element?.ToString().ToUpperInvariant() ?? "PLAIN"}  ·  LEVEL {item.ItemLevel}";
-        _ui.TextBig(b, _ui.ShortenBig(cat, w - 150, UiTypography.Secondary), x, y, rc, UiTypography.Secondary);
-        _ui.TextRightBig(b, ItemClasses.ClassLine(item), x + w, y,
-            item.Class is { } dc && ItemClasses.IsClassLocked(item.BaseType) ? UiKit.ClassColor(dc) : Slate, UiTypography.Secondary);
-        y += UiTypography.Pitch(UiTypography.Secondary) + 2;
-        var ico = new Rectangle(x, y, 64, 64);
-        _forge.DrawItemIcon(b, item, ico);
-        _ui.TextBig(b, _ui.ShortenBig(ItemNaming.FullName(item), w - 76, UiTypography.Headline), ico.Right + 12, y + 4, rc, UiTypography.Headline);
+        var cls = ItemClasses.ClassLine(item);
+        var clsInk = item.Class is { } dc && ItemClasses.IsClassLocked(item.BaseType) ? UiKit.ClassColor(dc) : Slate;
+        var catH = UiTypography.Pitch(UiTypography.Secondary);
+        if (_ui.MeasureBig(cat, UiTypography.Secondary) + UiMetrics.Space(16) + _ui.MeasureBig(cls, UiTypography.Secondary) <= w)
+        {
+            if (Take(catH + UiMetrics.Space(2)))
+            {
+                _ui.TextBig(b, cat, x, y, rc, UiTypography.Secondary);
+                _ui.TextRightBig(b, cls, x + w, y, clsInk, UiTypography.Secondary);
+                y += catH + UiMetrics.Space(2);
+            }
+        }
+        else
+        {
+            if (Take(catH)) { _ui.TextBig(b, _ui.ShortenBig(cat, w, UiTypography.Secondary), x, y, rc, UiTypography.Secondary); y += catH; }
+            if (Take(catH + UiMetrics.Space(2))) { _ui.TextRightBig(b, cls, x + w, y, clsInk, UiTypography.Secondary); y += catH + UiMetrics.Space(2); }
+        }
 
-        // THE DECISION FIRST: the verdict, then what it replaces.
-        var vy = y + 4 + UiTypography.Pitch(UiTypography.Headline);
+        // NAME with the icon, then THE DECISION FIRST: the verdict, then what it replaces.
         string verdict; Color vcol;
         if (worn) { verdict = "EQUIPPED"; vcol = Gold; }
         else if (whyNot is not null) { verdict = $"{Character.Name.ToUpperInvariant()} CANNOT WEAR THIS"; vcol = Ember; }
@@ -644,8 +853,18 @@ public sealed class GearScreen
             verdict = wornPiece is null ? $"SLOT EMPTY — +{hunter.PowerContribution(item):N0} POWER" : $"{(delta >= 0 ? "+" : "")}{delta:N0} POWER";
             vcol = wornPiece is null || delta > 0 ? Green : delta < 0 ? Ember : Slate;
         }
-        _ui.TextBig(b, _ui.ShortenBig(verdict, w - 76, UiTypography.Body), ico.Right + 12, vy, vcol, UiTypography.Body);
-        y = Math.Max(ico.Bottom, vy + UiTypography.Pitch(UiTypography.Body)) + 4;
+        var icoSize = UiMetrics.Control(64);
+        var nameTop = UiMetrics.Space(4);
+        var blockH = Math.Max(icoSize, nameTop + UiTypography.Pitch(UiTypography.Headline) + UiTypography.Pitch(UiTypography.Body)) + UiMetrics.Space(4);
+        if (Take(blockH))
+        {
+            var ico = new Rectangle(x, y, icoSize, icoSize);
+            _forge.DrawItemIcon(b, item, ico);
+            var nx = ico.Right + UiMetrics.Space(12);
+            _ui.TextBig(b, _ui.ShortenBig(ItemNaming.FullName(item), x + w - nx, UiTypography.Headline), nx, y + nameTop, rc, UiTypography.Headline);
+            _ui.TextBig(b, _ui.ShortenBig(verdict, x + w - nx, UiTypography.Body), nx, y + nameTop + UiTypography.Pitch(UiTypography.Headline), vcol, UiTypography.Body);
+            y += blockH;
+        }
         if (!worn && wornPiece is not null && whyNot is null)
             Line($"REPLACES {ItemNaming.FullName(wornPiece).ToUpperInvariant()}", Slate, UiTypography.Secondary, 1);
         if (whyNot is not null) Line(whyNot, Ember, UiTypography.Secondary, 2);
@@ -681,33 +900,27 @@ public sealed class GearScreen
             // What wearing THIS would make the count — the same element already in the slot changes nothing.
             var would = worn ? wornOf : wornOf + (wornPiece?.Element == el ? 0 : 1);
             Head($"{ElementSets.Name(el).ToUpperInvariant()}  ·  {ElementSets.Progress(wornOf).ToUpperInvariant()}");
+            var rowH = UiTypography.Pitch(UiTypography.Body);
+            var mark = UiMetrics.Control(12);
+            // The number column and the sentence column hang from the Body rung: one and two rungs in.
+            var numX = x + UiTypography.Body;
+            var textX = x + UiTypography.Body * 2;
             foreach (var t in tiers)
             {
-                if (y + UiTypography.Pitch(UiTypography.Body) > floor) break;
                 var reached = wornOf >= t.Pieces;
                 var reaches = !reached && !worn && whyNot is null && would >= t.Pieces;
-                var mark = new Rectangle(x + 2, y + 6, 12, 12);
-                if (reached) _ui.Fill(b, mark, Bone); else Ring(b, mark, reaches ? Gold : Slate, 1);
-                _ui.TextBig(b, $"{t.Pieces}", x + 22, y, reached ? Bone : reaches ? Gold : Slate, UiTypography.Body);
                 var ink = reached ? Bone : reaches ? Gold : Slate;
-                var lx = x + 44;
                 // THE CAPSTONE IS NAMED, and the name is what the rung is remembered by. A player talks
                 // about running MOMENTUM, not about their fifth Body piece — so the word is on the row,
                 // ahead of the sentence, and it keeps its emphasis whether or not the rung is reached:
                 // an unreached capstone is the thing the ladder is FOR.
-                if (t.Pieces == ElementSets.Rungs[^1])
-                {
-                    var cap = ElementSets.CapstoneName(el);
-                    _ui.TextBig(b, cap, lx, y, reached ? Gold : ink, UiTypography.Body);
-                    lx += _ui.MeasureBig(cap + "  ", UiTypography.Body);
-                }
+                var cap = t.Pieces == ElementSets.Rungs[^1] ? ElementSets.CapstoneName(el) : null;
+                var capW = cap is null ? 0 : _ui.MeasureBig(cap + "  ", UiTypography.Body);
                 // THE RIGHT LABEL'S ROOM IS MEASURED, not guessed at 64px. A fixed reserve was wrong in
                 // both directions: it truncated a rung's sentence when there was no label to make room
                 // for, and it was far too small for "WEARING THIS REACHES IT" when there was.
                 var right = reached ? "ON" : reaches ? "WEARING THIS REACHES IT" : "";
-                var rightW = right.Length == 0 ? 0 : _ui.MeasureBig(right, UiTypography.Secondary) + 12;
-                if (right.Length > 0)
-                    _ui.TextRightBig(b, right, x + w, y, reached ? Green : Gold, UiTypography.Secondary);
+                var rightW = right.Length == 0 ? 0 : _ui.MeasureBig(right, UiTypography.Secondary) + UiMetrics.Space(12);
 
                 // THE RULE IS WRAPPED, NOT CUT. This column is 320 px wide and MACHINE's third rung is
                 // sixty-three characters, so a single line ended "…worth 12% of your maximum h…" — a
@@ -715,22 +928,37 @@ public sealed class GearScreen
                 // job of this list. Continuation lines hang under the sentence, past the number and the
                 // capstone name, so the column still reads as one row per rung.
                 var first = true;
-                foreach (var wrapped in _ui.WrapBig(t.Line, x + w - (first ? rightW : 0) - lx, UiTypography.Body))
+                foreach (var wrapped in _ui.WrapBig(t.Line, x + w - rightW - textX - capW, UiTypography.Body))
                 {
-                    if (y + UiTypography.Pitch(UiTypography.Body) > floor) break;
-                    _ui.TextBig(b, wrapped, lx, y, ink, UiTypography.Body);
-                    y += UiTypography.Pitch(UiTypography.Body);
-                    if (first) { lx = x + 44; first = false; }
+                    var lx = first ? textX + capW : textX;
+                    if (Take(rowH))
+                    {
+                        if (first)
+                        {
+                            var m = new Rectangle(x + 2, y + (UiTypography.Body - mark) / 2 + 1, mark, mark);
+                            if (reached) _ui.Fill(b, m, Bone); else Ring(b, m, reaches ? Gold : Slate, 1);
+                            _ui.TextBig(b, $"{t.Pieces}", numX, y, ink, UiTypography.Body);
+                            if (cap is not null) _ui.TextBig(b, cap, textX, y, reached ? Gold : ink, UiTypography.Body);
+                            if (right.Length > 0) _ui.TextRightBig(b, right, x + w, y, reached ? Green : Gold, UiTypography.Secondary);
+                        }
+                        _ui.TextBig(b, wrapped, lx, y, ink, UiTypography.Body);
+                        y += rowH;
+                    }
+                    first = false;
                 }
             }
         }
+
+        _detOverflow = overflow;
+        if (scrollable || overflow)
+            _ui.ScrollBar(b, new Rectangle(x + w + UiMetrics.Space(8), top, UiMetrics.ScrollbarWidth, Math.Max(1, floor - top)), _detScroll, shown, index);
 
         // THE VERBS as text actions, then the ONE primary action.
         for (var v = 0; v < Verbs.Length; v++)
         {
             var r = VerbText(v);
             var over = r.Contains(hit);
-            _ui.TextCenterBig(b, Verbs[v].Label, r.Center.X, r.Y + 4, over ? Bone : Slate, UiTypography.Secondary);
+            _ui.TextCenterBig(b, Verbs[v].Label, r.Center.X, r.Y + (r.Height - UiTypography.Secondary) / 2, over ? Bone : Slate, UiTypography.Secondary);
             Tip(r, hit, Verbs[v].Action switch
             {
                 ItemAction.Upgrade => "Take it to the FORGE to raise its level.",
