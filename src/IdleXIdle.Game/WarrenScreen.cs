@@ -52,6 +52,9 @@ public sealed class WarrenScreen
     private static readonly Color DustC = new(0x5F, 0xE0, 0xC8);    // teal gem track
     private static readonly Color ScrapC = new(0x9A, 0xC0, 0x88);   // scrap green — the Forge wallet's tint
     private static readonly Color EssenceC = new(0x74, 0xC6, 0xE8); // essence blue — the Forge wallet's tint
+    // The lit end of every flash on this screen — the same cream UiKit.Button lights its label with,
+    // so a number that just changed and a button under the cursor speak with one voice.
+    private static readonly Color Flare = new(0xF6, 0xEA, 0xC6);
 
     private readonly UiKit _ui;
     public WarrenScreen(UiKit ui) => _ui = ui;
@@ -72,7 +75,259 @@ public sealed class WarrenScreen
     private FacilityKind? _upgradeRequest;
     public FacilityKind? ConsumeUpgrade() { var r = _upgradeRequest; _upgradeRequest = null; return r; }
 
+    /// <summary>
+    /// The sound this screen owes, taken once. The HOST owns audio (UI polish brief §86–§87): the screen
+    /// names what just happened and the host plays it, the same shape TraitsScreen hands back.
+    /// </summary>
+    /// <remarks>
+    /// Two moments, both semantic and both fired outside <c>Draw</c>'s per-frame path: an upgrade that
+    /// LANDED (the model's level actually moved) is <c>sfx_upgrade</c>; an upgrade the player asked for
+    /// and could not have — the capped UPGRADE button, a locked card — is <c>sfx_error</c>. Nothing here
+    /// plays a sound for merely looking at a card.
+    /// </remarks>
+    private string? _cue;
+
+    /// <summary>Take the pending sound cue, if any. Call it after <see cref="Draw"/>, once a frame.</summary>
+    public string? ConsumeCue() { var c = _cue; _cue = null; return c; }
+
     private FacilityKind _selected = FacilityKind.Nursery;
+
+    // ══ FEEDBACK (UI polish P3–P6, brief §22–§38) ════════════════════════════════════════════════
+    //
+    // The screen used to answer an upgrade by simply drawing different numbers on the next frame: the
+    // level was one higher, the figure was bigger, the wallet was smaller, and NOTHING said that you
+    // had done that. This section is the whole of what changed — no new label, no new panel, no new
+    // copy (§22): the same words, shown CHANGING.
+    //
+    // Every timer belongs to UiMotion, which the host ticks once a frame before anything draws, so
+    // Reduced Motion collapses the eases here and the durations stay inside the brief's bands (§31).
+    // A pulse is armed at the semantic moment — the model's level moved, the player asked for
+    // something they cannot have — and never by the act of drawing (LAW: once per event).
+
+    /// <summary>
+    /// What this screen animates: the four things an upgrade makes move — each keyed separately, because
+    /// they do not all last the same time — and the reason a refused one lights.
+    /// </summary>
+    private enum Feed { Level, Output, Cost, Frame, Refuse }
+
+    /// <summary>A stable key per facility per moving thing — the same shape <see cref="UiMotion.KeyOf"/> makes for a rect.</summary>
+    private static int FeedKey(FacilityKind kind, Feed what) => HashCode.Combine(0x5741_2E, (int)kind, (int)what);
+
+    /// <summary>
+    /// What an upgrade CHANGED — kept so the screen can show the change rather than only the result.
+    /// </summary>
+    /// <remarks>
+    /// Snapshotted when the player clicks UPGRADE (the values that are true one instant BEFORE the
+    /// spend), because the host applies the upgrade after <see cref="Draw"/> returns and by the next
+    /// frame the old numbers are gone. <c>Milestone</c> is read from Core — the facility's own
+    /// <c>MilestoneTier</c> crossing — never from a "% 5" written here.
+    /// </remarks>
+    private readonly record struct Landed(FacilityKind Kind, int FromOutput, int FromCostGleam, int FromCostDust,
+                                          long FromGleam, long FromDust, bool Milestone);
+
+    /// <summary>The upgrade whose feedback is currently running, or null when the screen is at rest.</summary>
+    private Landed? _landed;
+
+    /// <summary>The click that asked for an upgrade, waiting one frame for the host to apply it.</summary>
+    private (FacilityKind Kind, int Level, int Tier, int Output, WarrenCost Cost, long Gleam, long Dust)? _asked;
+
+    /// <summary>The facility whose refusal is lit — a capped or unaffordable UPGRADE, or a locked card.</summary>
+    private FacilityKind? _refused;
+
+    /// <summary>
+    /// Fire the feedback for an upgrade that actually landed, and let a finished one go.
+    /// </summary>
+    /// <remarks>
+    /// The screen has no <c>Update</c> of its own (the host draws it and consumes its request), so the
+    /// EVENT it keys on is the model's own change: the level the player asked for is now on the
+    /// facility. That can happen exactly once per request, which is what keeps the pulse one-per-event
+    /// rather than something the draw pass re-arms.
+    /// </remarks>
+    private void Settle()
+    {
+        if (_asked is { } a)
+        {
+            _asked = null;
+            var f = Warren.Facility(a.Kind);
+            if (f.Level > a.Level)
+            {
+                // A MILESTONE IS STRONGER, not different: the same four things move, the level and the
+                // frame for a REWARD rather than a TRANSITION, and the frame's envelope gains a second
+                // lobe. The number itself always ticks over a transition — a figure changing is a
+                // transition in the brief's table whatever occasioned it (§31).
+                var milestone = f.MilestoneTier > a.Tier;
+                var span = milestone ? UiMotion.Reward : UiMotion.Transition;
+                _landed = new Landed(a.Kind, a.Output, a.Cost.Gleam, a.Cost.Dust, a.Gleam, a.Dust, milestone);
+                UiMotion.Flash(FeedKey(a.Kind, Feed.Level), span);
+                UiMotion.Flash(FeedKey(a.Kind, Feed.Frame), span);
+                UiMotion.Flash(FeedKey(a.Kind, Feed.Output), UiMotion.Transition);
+                UiMotion.Flash(FeedKey(a.Kind, Feed.Cost), UiMotion.Transition);
+                _cue = "sfx_upgrade";
+            }
+        }
+        if (PosedPhase is not null || PosedRefusePhase is not null) return;   // the rig holds its pose
+        if (_landed is { } l && !UiMotion.Pulsing(FeedKey(l.Kind, Feed.Frame))
+                             && !UiMotion.Pulsing(FeedKey(l.Kind, Feed.Output))) _landed = null;
+        if (_refused is { } r && !UiMotion.Pulsing(FeedKey(r, Feed.Refuse))) _refused = null;
+    }
+
+    /// <summary>Snapshot what is true before the spend, and ask the host for the upgrade.</summary>
+    private void Ask(Facility f)
+    {
+        _upgradeRequest = f.Kind;
+        _asked = (f.Kind, f.Level, f.MilestoneTier, Boosted(f), f.UpgradeCost(), GleamOwned, DustOwned);
+    }
+
+    /// <summary>An action the player asked for and cannot have: one sound, one pulse on the reason.</summary>
+    private void Refuse(FacilityKind kind)
+    {
+        _refused = kind;
+        UiMotion.Flash(FeedKey(kind, Feed.Refuse), UiMotion.Transition);
+        _cue = "sfx_error";
+    }
+
+    /// <summary>
+    /// The cards whose hover is still fading out — the only ones that still have a question to ask
+    /// <see cref="UiMotion"/>.
+    /// </summary>
+    private readonly HashSet<int> _cooling = new(8);
+
+    /// <summary>
+    /// A card's hover lift: 0 at rest, easing to 1 under the cursor and back down when it leaves.
+    /// </summary>
+    /// <remarks>
+    /// IT ONLY ASKS WHILE SOMETHING IS MOVING, and that is not a micro-optimisation. UiMotion drops an
+    /// ease the moment it settles at 0, and a MISSING key is assumed to have been at the target's
+    /// opposite — so asking "ease to 0" for a control that is merely at rest starts a fresh fade from 1
+    /// every time the last one finishes: 0.93 · 0.74 · 0.50 · 0.26 · 0.07 · 0 · 0.93 … , a six-frame
+    /// sawtooth that never ends. (Probed 2026-09-02; the capture rig shoots frame 60, a multiple of six,
+    /// which is exactly the trough — which is why no screenshot has ever shown it.) A card that has not
+    /// been hovered since its last fade ended therefore asks for nothing and draws nothing, which is
+    /// what "nothing flashes continuously" requires. The same guard is owed by every caller of
+    /// UiMotion.Ease with a zero target — UiKit.Button included — and belongs in the kit, not here.
+    /// </remarks>
+    private float Hover(Rectangle card, bool hot)
+    {
+        var key = UiMotion.KeyOf(card);
+        if (hot) { _cooling.Add(key); return UiMotion.Ease(key, 1f); }
+        if (!_cooling.Contains(key)) return 0f;
+        var lift = UiMotion.Ease(key, 0f);
+        if (lift <= 0f) _cooling.Remove(key);
+        return lift;
+    }
+
+    /// <summary>How lit one part of a landed upgrade is: 1 the instant it fired, 0 when it is over.</summary>
+    /// <remarks>
+    /// UNDER THE RIG the four pulses are read at ONE INSTANT rather than at one phase. They do not all
+    /// last the same time — a milestone's level and frame run for a reward while the figures tick over a
+    /// transition — so freezing them all at "half" would photograph a moment that never happens. The dial
+    /// is the LONGEST pulse's value (1 = the instant it fired) and the shorter ones are derived from the
+    /// same elapsed time, which is exactly what a real frame would have caught.
+    /// </remarks>
+    private float Lit(FacilityKind kind, Feed what)
+    {
+        if (_landed is not { } l || l.Kind != kind) return 0f;
+        var key = FeedKey(kind, what);
+        if (PosedPhase is not { } dial) return UiMotion.Pulse(key);
+        var longest = l.Milestone ? UiMotion.Reward : UiMotion.Transition;
+        var mine = what is Feed.Level or Feed.Frame ? longest : UiMotion.Transition;
+        return Math.Clamp(1f - (1f - dial) * longest / mine, 0f, 1f);
+    }
+
+    /// <summary>How lit a refusal is, for the card or the line that says why.</summary>
+    private float RefusalLit(FacilityKind kind)
+        => _refused == kind ? PosedRefusePhase ?? UiMotion.Pulse(FeedKey(kind, Feed.Refuse)) : 0f;
+
+    /// <summary>
+    /// A number ON ITS WAY from one value to another. <paramref name="p"/> is a pulse — 1 the instant it
+    /// fired, 0 when it is done — so the figure leaves <paramref name="from"/> and arrives at
+    /// <paramref name="to"/>, on the house easing curve.
+    /// </summary>
+    /// <remarks>
+    /// Reduced Motion has no journey, only the destination: the END STATE is identical either way,
+    /// which is the whole contract a collapsed animation has to keep (brief §32).
+    /// </remarks>
+    public static long Ticked(long from, long to, float p)
+        => UiMotion.Reduced || p <= 0f ? to : to + (long)MathF.Round((from - to) * UiMotion.Smooth(Math.Clamp(p, 0f, 1f)));
+
+    /// <summary>
+    /// The envelope a card frame's one-shot glow follows: <paramref name="lobes"/> humps over the
+    /// pulse's life, each quieter than the last.
+    /// </summary>
+    /// <remarks>
+    /// A MILESTONE'S "extra pulse" is a second hump in ONE pulse, not a second <see cref="UiMotion.Flash"/>
+    /// armed when the first ends — re-arming from the draw pass is exactly the "flashes continuously"
+    /// the brief forbids, and a pulse that can only be armed by an event can only play once per event.
+    /// </remarks>
+    public static float Lobes(float p, int lobes)
+    {
+        p = Math.Clamp(p, 0f, 1f);
+        if (p <= 0f || lobes < 1) return 0f;
+        var t = 1f - p;                                            // 0 when it fires → 1 when it ends
+        var hump = MathF.Abs(MathF.Sin(t * lobes * MathF.PI));     // `lobes` humps across the life
+        return hump * (1f - t * 0.45f);                            // and each one quieter than the last
+    }
+
+    // ══ THE RIG'S DIALS ══════════════════════════════════════════════════════════════════════════
+    //
+    // A state no capture can pose has never been looked at (project rule), and every state above is a
+    // TRANSIENT: the shutter fires at frame 60 and an upgrade's feedback is over in a fifth of a
+    // second. So the rig can pose the whole sequence and FREEZE it at a chosen instant. The pose runs
+    // the real path — it asks for the real upgrade through the host, on the real model — and only the
+    // phase the pulses are read at is held still, so what is photographed is the shipping feedback.
+    //
+    //   RH_SHOT_FACILITY=<FacilityKind>  which card is selected and acted on (default NURSERY)
+    //   RH_SHOT_UPGRADE=<0..1>           ask for that facility's upgrade, freeze its feedback at that
+    //                                    phase (1 = the instant it fired, 0.5 = mid-tick, 0 = over)
+    //   RH_SHOT_REFUSE=<0..1>            ask for an upgrade that is refused, frozen the same way
+    //   RH_SHOT_PRESS=1                  the hovered card (and the button under the posed cursor) held
+    //   RH_SHOT_SCROLL=<first row>       the inspector scrolled (see PosedScroll below)
+    //
+    // Used with RH_SHOT_PAGE_MOUSE=x,y (the host's posed cursor) for the hover and pressed states.
+    // The shots this pass was checked against:
+    //
+    //   RH_SHOT_FACILITY=SentryBurrows RH_SHOT_UPGRADE=0.5   warrenready  ... an upgrade, mid-tick
+    //   RH_SHOT_FACILITY=RitualNest    RH_SHOT_UPGRADE=0.75  warrenready  ... a milestone, first hump
+    //   RH_SHOT_REFUSE=1                                     warren       ... refused: capped
+    //   RH_SHOT_FACILITY=RitualNest    RH_SHOT_REFUSE=1      warren       ... refused: cannot pay
+    //   RH_SHOT_FACILITY=RitualNest    RH_SHOT_REFUSE=1      warrenfresh  ... refused: a locked card
+    //   RH_SHOT_PAGE_MOUSE=520,500 [RH_SHOT_PRESS=1]         warrenready  ... hover / pressed
+    //
+    // A milestone's two humps peak a quarter and three quarters through its pulse, so 0.75 catches
+    // the first at its peak WITH the figures still travelling; 0.5 would photograph the trough.
+    //
+    private static readonly FacilityKind? PosedFacility =
+        Enum.TryParse<FacilityKind>(Environment.GetEnvironmentVariable("RH_SHOT_FACILITY"), true, out var pf) ? pf : null;
+
+    private static readonly float? PosedPhase = PosedPhaseOf("RH_SHOT_UPGRADE");
+    private static readonly float? PosedRefusePhase = PosedPhaseOf("RH_SHOT_REFUSE");
+    private static readonly bool PosedPress = Environment.GetEnvironmentVariable("RH_SHOT_PRESS") is not null;
+
+    private static float? PosedPhaseOf(string variable)
+    {
+        var raw = Environment.GetEnvironmentVariable(variable);
+        if (raw is null) return null;
+        return float.TryParse(raw, System.Globalization.NumberStyles.Float,
+                              System.Globalization.CultureInfo.InvariantCulture, out var v)
+            ? Math.Clamp(v, 0f, 1f) : 1f;
+    }
+
+    /// <summary>The rig's pose is set up once, on the first frame the screen draws.</summary>
+    private bool _posed;
+
+    private void PoseForTheRig()
+    {
+        if (_posed) return;
+        _posed = true;
+        if (PosedFacility is { } kind && Warren.IsUnlocked(kind)) _selected = kind;
+        if (PosedPhase is not null && Warren.CanUpgrade(_selected, GleamOwned, DustOwned))
+            Ask(Warren.Facility(_selected));
+        // A LOCKED facility can be the refusal's target without being selected — it has no inspector,
+        // and its refusal is the chip on its own card.
+        var refused = PosedFacility ?? _selected;
+        if (PosedRefusePhase is not null && !Warren.CanUpgrade(refused, GleamOwned, DustOwned))
+            Refuse(refused);
+    }
 
     // ── Layout: one summary strip, the grid under it, the inspector beside both. Every edge comes
     //    from UiKit.Page and every size from UiMetrics, so a profile reflows the screen instead of
@@ -300,6 +555,13 @@ public sealed class WarrenScreen
         // The cursor arrives in page space (Game1.PageCursor); it is hit-tested as it is.
         var hit = mouse;
         _tip = null;
+        // The host applied (or refused) last frame's request between then and now: light what changed
+        // BEFORE this frame's clicks can ask for anything else.
+        Settle();
+        PoseForTheRig();
+        // The rig cannot hold a mouse button down, so the PRESSED state of every control on the page —
+        // this screen's cards and the kit's own button — would be unphotographable without this.
+        if (PosedPress) UiKit.MouseHeld = true;
         // Latched every frame so a notch turned over the grid is not applied later over the inspector.
         var wheel = WheelNotches();
         if (!InspectorPanel.Contains(hit)) wheel = 0;
@@ -542,7 +804,19 @@ public sealed class WarrenScreen
         {
             var index = i++;
             var card = Card(index);
-            var rows = LayoutCard(card);
+            var open = Warren.IsUnlocked(f.Kind);
+            // ── THE STANDARD STATES (§25–§29), on a card the kit does not draw for us. HOVER is a thin
+            //    luminance lift eased in over ~100 ms, the same one UiKit.Button gets, so a card is
+            //    noticed without jumping. PRESSED drops the whole card two pixels and darkens it for
+            //    exactly as long as the button is held. SELECTED keeps its persistent gold frame, which
+            //    hover can never be mistaken for. DISABLED — a locked facility — takes neither hover nor
+            //    press and sits back under a wash, so "not yet" reads before a word of it is read.
+            var hot = open && card.Contains(hit);
+            var lift = Hover(card, hot);
+            var held = hot && UiKit.MouseHeld;
+            var drawn = held ? new Rectangle(card.X, card.Y + 2, card.Width, card.Height) : card;
+            var inner = new Rectangle(drawn.X + 3, drawn.Y + 3, drawn.Width - 6, drawn.Height - 6);
+            var rows = LayoutCard(drawn);
             var chip = rows.Chip;
             // The chip's icon and text sit centred in the chip's own height, whatever the profile made it.
             var chipIcon = new Rectangle(chip.X + UiMetrics.Space(10), chip.Y + (chip.Height - lockGlyph) / 2, lockGlyph, lockGlyph);
@@ -551,9 +825,18 @@ public sealed class WarrenScreen
 
             // Facilities unlock by conquest. A locked card is a promise, not a faucet — it says what
             // would open it, by NAME, and takes no clicks.
-            if (!Warren.IsUnlocked(f.Kind))
+            if (!open)
             {
                 _ui.Plate(b, card);
+                // DISABLED, at a glance: the card's ground goes back a step so the seven words on it are
+                // read as a promise rather than as a faucet. The wash sits UNDER the content — a
+                // disabled control has to stay readable and has to say why (§29), and the reason is the
+                // chip at the bottom of this card.
+                _ui.Fill(b, inner, Color.Black * 0.25f);
+                // A CLICK ON A LOCKED CARD IS AN ANSWER, not silence: the reason lights and the host
+                // plays the refusal. Selection is unchanged — a locked facility has no inspector.
+                if (UiKit.ClickedIn(card, hit, clicked)) Refuse(f.Kind);
+                var lockedLit = RefusalLit(f.Kind);
                 // Centred in the space the LOCKED badge leaves, not in the whole card — BREEDING
                 // CHAMBER at Headline reached the badge and the two words touched. And when that space
                 // cannot hold a locked name (125 % and up: "SCAVENGE...", "HOARD VAU..."), the badge
@@ -601,8 +884,12 @@ public sealed class WarrenScreen
                                               : need <= 1 ? "ONE MORE REGION"
                                               : $"{need} MORE REGIONS", chipRoom, UiTypography.Body);
                 _ui.Plate(b, chip);
+                // The refused click pulses the chip that holds the answer — once, and on the reason
+                // itself, so the eye is sent to the sentence rather than to a noise somewhere else.
+                if (lockedLit > 0f)
+                    _ui.Fill(b, new Rectangle(chip.X + 3, chip.Y + 3, chip.Width - 6, chip.Height - 6), Ember * (0.30f * lockedLit));
                 _ui.Icon(b, "ui_slot_locked", chipIcon, Bone);
-                _ui.TextBig(b, chipLine, chipTextX, chipTextY, Bone, UiTypography.Body);
+                _ui.TextBig(b, chipLine, chipTextX, chipTextY, Color.Lerp(Bone, Ember, 0.7f * lockedLit), UiTypography.Body);
                 Tip(card, hit, $"{f.Info.Name} — LOCKED. {line} TO OPEN IT.");
                 continue;
             }
@@ -612,22 +899,42 @@ public sealed class WarrenScreen
             if (UiKit.ClickedIn(card, hit, clicked) && !sel) { _selected = f.Kind; _inspectorFirst = 0; }
             var rc = ResColor(f.Info.Produces);
 
-            _ui.Plate(b, card);
+            _ui.Plate(b, drawn);
+            // HOVER lifts the card's own surface; PRESSED darkens it instead and drops the glow — the
+            // two are never on at once, which is what makes them tell apart.
+            if (held) _ui.Fill(b, inner, Color.Black * 0.18f);
+            else if (lift > 0f) _ui.Fill(b, inner, Color.White * (0.07f * lift));
             // The name is ALWAYS legible: unselected cards drew it in Slate, so "not selected" read as
             // "unavailable" on seven of the eight.
-            _ui.TextCenterBig(b, _ui.ShortenBig(f.Info.Name, card.Width - UiMetrics.Space(24), UiTypography.Headline),
-                              card.Center.X, rows.NameY, Bone, UiTypography.Headline);
+            _ui.TextCenterBig(b, _ui.ShortenBig(f.Info.Name, drawn.Width - UiMetrics.Space(24), UiTypography.Headline),
+                              drawn.Center.X, rows.NameY, Bone, UiTypography.Headline);
 
-            ResGlyph(b, new Rectangle(card.X + CardPadX, rows.RowY + 2, UiMetrics.IconSmall, UiMetrics.IconSmall), f.Info.Produces, rc);
-            _ui.TextBig(b, ResName(f.Info.Produces), card.X + CardPadX + UiMetrics.IconSmall + UiMetrics.Space(6), rows.RowY, rc, UiTypography.Body);
+            ResGlyph(b, new Rectangle(drawn.X + CardPadX, rows.RowY + 2, UiMetrics.IconSmall, UiMetrics.IconSmall), f.Info.Produces, rc);
+            _ui.TextBig(b, ResName(f.Info.Produces), drawn.X + CardPadX + UiMetrics.IconSmall + UiMetrics.Space(6), rows.RowY, rc, UiTypography.Body);
             // GOLD ONLY WHEN SELECTED. Every card printed its LEVEL in gold, so selection had nothing
             // left to win with.
-            _ui.TextRightBig(b, $"LEVEL {f.Level}", card.Right - CardPadX, rows.RowY, sel ? Gold : Bone, UiTypography.Body);
+            //
+            // AND THE LEVEL IS WHAT AN UPGRADE BUYS, so it is what flashes when one lands: one pulse,
+            // on the number that changed, behind it and in it. (§36 — the change is shown where the
+            // change is, not as a banner somewhere else.)
+            var levelLit = Lit(f.Kind, Feed.Level);
+            var levelText = $"LEVEL {f.Level}";
+            if (levelLit > 0f)
+            {
+                var lw = _ui.MeasureBig(levelText, UiTypography.Body);
+                _ui.Fill(b, new Rectangle(drawn.Right - CardPadX - lw - UiMetrics.Space(6), rows.RowY - 2,
+                                          lw + UiMetrics.Space(12), UiTypography.Pitch(UiTypography.Body)),
+                         Gold * (0.30f * levelLit));
+            }
+            _ui.TextRightBig(b, levelText, drawn.Right - CardPadX, rows.RowY,
+                             Color.Lerp(sel ? Gold : Bone, Flare, levelLit), UiTypography.Body);
 
             if (rows.HasPlate)
             {
                 var plate = rows.Plate;
-                _ui.Hex(b, plate, rc * (sel ? 0.55f : 0.38f));
+                // The hex behind the art warms under the cursor — the hover's luminance lift, on the
+                // one part of the card that carries the facility's colour.
+                _ui.Hex(b, plate, rc * (sel ? 0.55f : 0.38f + 0.10f * lift));
                 var icon = $"icon_facility_{f.Kind.ToString().ToLowerInvariant()}";
                 if (!_ui.Icon(b, icon, new Rectangle(plate.X + 2, plate.Y - 4, plate.Width - 4, plate.Height + 8)))
                     _ui.Hex(b, plate, rc);
@@ -635,14 +942,26 @@ public sealed class WarrenScreen
 
             // THE FIGURE THE CARD PAYS, with the bonuses in it — the raw one never reconciled with the
             // strip's total, and nothing said which was which.
-            _ui.TextBig(b, $"+{Ab(Boosted(f))} /min", card.X + CardPadX, rows.FigureY, Bone, UiTypography.Headline);
+            //
+            // AND IT TRAVELS: an upgrade leaves the old figure and arrives at the new one over a
+            // transition, so what the player bought is visibly the thing that moved (§36).
+            var outLit = Lit(f.Kind, Feed.Output);
+            var pay = _landed is { } paid && paid.Kind == f.Kind
+                ? Ticked(paid.FromOutput, Boosted(f), outLit) : Boosted(f);
+            _ui.TextBig(b, $"+{Ab(pay)} /min", drawn.X + CardPadX, rows.FigureY,
+                        Color.Lerp(Bone, Flare, outLit), UiTypography.Headline);
             if (f.MilestoneTier > 0)
-                _ui.TextRightBig(b, $"×{f.MilestoneMultiplier:0.00}", card.Right - CardPadX, rows.FigureY + UiMetrics.Space(4), Gold, UiTypography.Secondary);
+                _ui.TextRightBig(b, $"×{f.MilestoneMultiplier:0.00}", drawn.Right - CardPadX, rows.FigureY + UiMetrics.Space(4), Gold, UiTypography.Secondary);
             if (rows.HasMilestone)
-                _ui.TextBig(b, _ui.ShortenBig($"MILESTONE AT LEVEL {f.NextMilestoneLevel}", card.Width - CardPadX * 2, UiTypography.Secondary),
-                            card.X + CardPadX, rows.MilestoneY, Slate, UiTypography.Secondary);
+                _ui.TextBig(b, _ui.ShortenBig($"MILESTONE AT LEVEL {f.NextMilestoneLevel}", drawn.Width - CardPadX * 2, UiTypography.Secondary),
+                            drawn.X + CardPadX, rows.MilestoneY, Slate, UiTypography.Secondary);
 
             // ── THE CHIP: the answer the player had to click eight cards to find. ──
+            //
+            // It is also where a REFUSED upgrade is answered: asking for a level this facility cannot
+            // take pulses the chip that already says why, once. (The words do not change — §22.)
+            var refuseLit = RefusalLit(f.Kind);
+            var chipInner = new Rectangle(chip.X + 3, chip.Y + 3, chip.Width - 6, chip.Height - 6);
             if (Warren.CanUpgrade(f.Kind, GleamOwned, DustOwned))
             {
                 _ui.Plate(b, chip, Gold);
@@ -651,6 +970,7 @@ public sealed class WarrenScreen
             else if (Warren.IsAtLevelCap(f.Kind))
             {
                 _ui.Plate(b, chip);
+                if (refuseLit > 0f) _ui.Fill(b, chipInner, Ember * (0.30f * refuseLit));
                 _ui.Icon(b, "ui_slot_locked", chipIcon, Bone);
                 _ui.TextBig(b, _ui.ShortenBig($"REACH WAVE {Warren.DepthForNextLevel(f.Kind)}", chip.Right - UiMetrics.Space(10) - chipTextX, UiTypography.Body),
                             chipTextX, chipTextY, Bone, UiTypography.Body);
@@ -664,12 +984,20 @@ public sealed class WarrenScreen
                 if (shortG > 0) parts.Add($"{Ab(shortG)} GLEAM");
                 if (shortD > 0) parts.Add($"{Ab(shortD)} DUST");
                 _ui.Plate(b, chip);
+                if (refuseLit > 0f) _ui.Fill(b, chipInner, Ember * (0.30f * refuseLit));
                 _ui.TextBig(b, _ui.ShortenBig($"NEEDS {string.Join("  ·  ", parts)}", chip.Width - UiMetrics.Space(14) - UiMetrics.Space(10), UiTypography.Body),
-                            chip.X + UiMetrics.Space(14), chipTextY, Ember, UiTypography.Body);
+                            chip.X + UiMetrics.Space(14), chipTextY, Color.Lerp(Ember, Flare, 0.5f * refuseLit), UiTypography.Body);
             }
 
-            if (sel) Outline(b, card, Gold, 3);
-            else if (card.Contains(hit)) Outline(b, card, Bone, 1);
+            if (sel) Outline(b, drawn, Gold, 3);
+            else if (lift > 0f) Outline(b, drawn, Bone * lift, 1);
+            // THE ONE-SHOT ON THE FRAME. One hump for an upgrade; TWO for a milestone, inside a single
+            // pulse of a reward's length (see Lobes) — a second Flash armed when the first ended would
+            // be the draw pass re-arming its own animation.
+            var frameLit = Lobes(Lit(f.Kind, Feed.Frame),
+                                 _landed is { } lit && lit.Kind == f.Kind && lit.Milestone ? 2 : 1);
+            if (frameLit > 0f)
+                Outline(b, new Rectangle(drawn.X - 3, drawn.Y - 3, drawn.Width + 6, drawn.Height + 6), Gold * frameLit, 3);
             Tip(card, hit, $"{f.Info.Name} — {f.Info.Description}");
         }
     }
@@ -684,8 +1012,13 @@ public sealed class WarrenScreen
 
     private enum RowKind { Head, Name, Line, Gap, Rule, Pair, Locked, Cost }
 
+    /// <summary>
+    /// One built row. <c>Lit</c> is how much of a one-shot is on it — 1 the instant an upgrade landed,
+    /// 0 at rest — which is the only thing this pass added to the inspector's grammar.
+    /// </summary>
     private readonly record struct Row(RowKind Kind, int H, string A = "", string B = "", string C = "",
-                                       Color Ink = default, int Px = 0, WarrenResource Res = WarrenResource.Gleam, bool Ok = true);
+                                       Color Ink = default, int Px = 0, WarrenResource Res = WarrenResource.Gleam,
+                                       bool Ok = true, float Lit = 0f);
 
     private readonly List<Row> _rows = new();
     private int _inspectorFirst = PosedScroll;
@@ -717,8 +1050,17 @@ public sealed class WarrenScreen
         Gap();
         Rule();
 
+        // THE SAME THREE THINGS THE CARD LIGHTS, lit here too — the inspector is the same facility, and
+        // a change shown in one place and not the other reads as two facilities.
+        var outLit = Lit(f.Kind, Feed.Output);
+        var levelLit = Lit(f.Kind, Feed.Level);
+        var costLit = Lit(f.Kind, Feed.Cost);
+        var landed = _landed is { } l && l.Kind == f.Kind ? l : (Landed?)null;
+
         Head("WHAT IT DOES");
-        _rows.Add(new Row(RowKind.Pair, UiTypography.Pitch(UiTypography.Headline), $"+{Ab(Boosted(f))} /min", $"+{Ab(BoostedNext(f))} /min"));
+        _rows.Add(new Row(RowKind.Pair, UiTypography.Pitch(UiTypography.Headline),
+                          $"+{Ab(landed is { } p ? Ticked(p.FromOutput, Boosted(f), outLit) : Boosted(f))} /min",
+                          $"+{Ab(BoostedNext(f))} /min", Lit: outLit));
         // The ONLY place the raw figure appears — and it is labelled, so the two can never be mistaken
         // for a disagreement.
         Line($"BEFORE WARREN BONUSES: +{Ab(f.BaseOutputPerMin)} → +{Ab(f.NextLevelOutput)}", Slate, UiTypography.Secondary, 2);
@@ -739,7 +1081,8 @@ public sealed class WarrenScreen
         }
 
         Head("CURRENT STATE");
-        Line($"LEVEL {f.Level}", Bone, UiTypography.Body, 1);
+        _rows.Add(new Row(RowKind.Line, UiTypography.Pitch(UiTypography.Body), $"LEVEL {f.Level}",
+                          Ink: Bone, Px: UiTypography.Body, Lit: levelLit));
         Line(f.MilestoneTier == 0 ? "NO MILESTONE CROSSED YET"
              : f.MilestoneTier == 1 ? $"1 MILESTONE CROSSED — ×{f.MilestoneMultiplier:0.00} OUTPUT"
              : $"{f.MilestoneTier} MILESTONES CROSSED — ×{f.MilestoneMultiplier:0.00} OUTPUT",
@@ -748,36 +1091,49 @@ public sealed class WarrenScreen
         Rule();
 
         Head("WHAT IT COSTS");
-        CostRow(WarrenResource.Gleam, "GLEAM", GleamOwned, cost.Gleam);
-        CostRow(WarrenResource.Dust, "DUST", DustOwned, cost.Dust);
+        CostRow(WarrenResource.Gleam, "GLEAM", GleamOwned, cost.Gleam, costLit, landed?.FromGleam, landed?.FromCostGleam);
+        CostRow(WarrenResource.Dust, "DUST", DustOwned, cost.Dust, costLit, landed?.FromDust, landed?.FromCostDust);
     }
 
     /// <summary>One cost row: what it takes, what you hold, and how much MORE you need — never an "X".</summary>
-    private void CostRow(WarrenResource res, string label, long owned, int required)
+    /// <remarks>
+    /// WHAT A PURCHASE LOOKS LIKE HERE (§37 — spending reacts where the price is): the row pulses once
+    /// and both of its figures travel — what you hold ticks DOWN from the balance you had a moment ago,
+    /// and the price ticks up to what the next level asks. The row's WORDS are decided by the real
+    /// numbers, never by the travelling ones, so "YOU HAVE" can never turn into a lie mid-tick.
+    /// </remarks>
+    private void CostRow(WarrenResource res, string label, long owned, int required,
+                         float lit = 0f, long? fromOwned = null, int? fromRequired = null)
     {
         var ok = owned >= required;
+        var shownRequired = fromRequired is { } fr ? Ticked(fr, required, lit) : required;
+        var shownOwned = fromOwned is { } fo ? Ticked(fo, owned, lit) : owned;
         _rows.Add(new Row(RowKind.Cost,
                           UiTypography.Pitch(UiTypography.Body) + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(4),
                           label,
-                          required.ToString("N0", System.Globalization.CultureInfo.InvariantCulture),
-                          ok ? $"YOU HAVE {Ab(owned)}" : $"YOU NEED {required - owned:N0} MORE",
-                          Res: res, Ok: ok));
+                          shownRequired.ToString("N0", System.Globalization.CultureInfo.InvariantCulture),
+                          ok ? $"YOU HAVE {Ab(shownOwned)}" : $"YOU NEED {required - owned:N0} MORE",
+                          Res: res, Ok: ok, Lit: lit));
     }
 
     private void DrawRow(SpriteBatch b, in Row r, int x, int y, int w)
     {
+        // A ROW THAT JUST CHANGED is washed once behind its own words — the same gold, on the same
+        // pulse, as the card's level, so the two places showing one facility agree about the moment.
+        if (r.Lit > 0f)
+            _ui.Fill(b, new Rectangle(x - UiMetrics.Space(6), y - 2, w + UiMetrics.Space(12), r.H), Gold * (0.16f * r.Lit));
         switch (r.Kind)
         {
             case RowKind.Head:
             case RowKind.Name:
             case RowKind.Line:
-                _ui.TextBig(b, r.A, x, y, r.Ink, r.Px);
+                _ui.TextBig(b, r.A, x, y, Color.Lerp(r.Ink, Flare, r.Lit), r.Px);
                 break;
             case RowKind.Rule:
                 _ui.Fill(b, new Rectangle(x, y + UiMetrics.Space(4), w, 1), Dim);
                 break;
             case RowKind.Pair:
-                _ui.TextBig(b, r.A, x, y, Bone, UiTypography.Headline);
+                _ui.TextBig(b, r.A, x, y, Color.Lerp(Bone, Flare, r.Lit), UiTypography.Headline);
                 _ui.TextRightBig(b, r.B, x + w, y, Met, UiTypography.Headline);
                 _ui.TextCenterBig(b, "→", x + w / 2, y + 2, Slate, UiTypography.Headline);
                 break;
@@ -794,8 +1150,9 @@ public sealed class WarrenScreen
                 var glyph = UiMetrics.Control(26);
                 ResGlyph(b, new Rectangle(x, y, glyph, glyph), r.Res, ResColor(r.Res));
                 _ui.TextBig(b, r.A, x + glyph + UiMetrics.Space(10), y, Bone, UiTypography.Body);
-                _ui.TextRightBig(b, r.B, x + w, y, r.Ok ? Bone : Ember, UiTypography.Body);
-                _ui.TextRightBig(b, r.C, x + w, y + UiTypography.Pitch(UiTypography.Body), r.Ok ? Slate : Ember, UiTypography.Secondary);
+                _ui.TextRightBig(b, r.B, x + w, y, Color.Lerp(r.Ok ? Bone : Ember, Flare, r.Lit), UiTypography.Body);
+                _ui.TextRightBig(b, r.C, x + w, y + UiTypography.Pitch(UiTypography.Body),
+                                 Color.Lerp(r.Ok ? Slate : Ember, Flare, r.Lit), UiTypography.Secondary);
                 break;
             }
         }
@@ -870,12 +1227,23 @@ public sealed class WarrenScreen
             _ui.ScrollBar(b, new Rectangle(x + w - UiMetrics.ScrollbarWidth, top, UiMetrics.ScrollbarWidth, room),
                           _inspectorFirst, lastPage, total);
 
+        // ASKING FOR WHAT YOU CANNOT HAVE IS ANSWERED, not ignored. UiKit.Button never reports a click
+        // on a disabled control (correctly — it must not fire), so the refusal is caught here: the one
+        // line that already says why pulses once, and the host plays the refusal sound.
+        var canUpgrade = afford && !capped;
+        if (!canUpgrade && UiKit.ClickedIn(cta, hit, clicked)) Refuse(_selected);
+        var refusalLit = RefusalLit(_selected);
+
         if (!afford || capped)
         {
             var ry = refusalY;
+            if (refusalLit > 0f)
+                _ui.Fill(b, new Rectangle(x - UiMetrics.Space(6), refusalY - 2,
+                                          w + UiMetrics.Space(12), refusalRows * UiTypography.Pitch(UiTypography.Body)),
+                         Ember * (0.26f * refusalLit));
             foreach (var line in _ui.WrapBig(capped ? CappedRefusal : PoorRefusal, w, UiTypography.Body).Take(refusalRows))
             {
-                _ui.TextBig(b, line, x, ry, Ember, UiTypography.Body);
+                _ui.TextBig(b, line, x, ry, Color.Lerp(Ember, Flare, 0.55f * refusalLit), UiTypography.Body);
                 ry += UiTypography.Pitch(UiTypography.Body);
             }
         }
@@ -883,8 +1251,8 @@ public sealed class WarrenScreen
         // The label IS the reason when capped — a button reading DEPTH LOCKED told the player a state,
         // not a next step.
         if (_ui.Button(b, cta, capped ? $"REACH WAVE {Warren.DepthForNextLevel(_selected)}" : "UPGRADE",
-                       hit, clicked, enabled: afford && !capped, ButtonStyle.Primary))
-            _upgradeRequest = _selected;
+                       hit, clicked, enabled: canUpgrade, ButtonStyle.Primary))
+            Ask(f);   // snapshot what is true BEFORE the spend, then let the host apply it
     }
 
     /// <summary>
