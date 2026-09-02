@@ -65,7 +65,7 @@ internal static class StyleAffinityDiagram
     /// medallion is half of it, the bound ring rides just outside that. Labels are measured from here,
     /// so a name never lands on the ring a seal wears.
     /// </summary>
-    private const float RimFraction = 0.62f;
+    internal const float RimFraction = 0.62f;
 
     /// <summary>The Form's own art inside the medallion, as a fraction of the seal's edge.</summary>
     private const float IconFraction = 0.60f;
@@ -74,7 +74,10 @@ internal static class StyleAffinityDiagram
     private const float DimSeal = 0.58f;
 
     /// <summary>The air between a name and its factor when the two share one line.</summary>
-    private const int Gutter = 8;
+    private static int Gutter => UiMetrics.Space(8);
+
+    /// <summary>The hair a stacked name and factor each keep off the point's own line.</summary>
+    private static int StackGap => UiMetrics.Space(2);
 
     /// <summary>
     /// THE FIELD the chart is drawn on — a dark well, inlaid.
@@ -120,11 +123,14 @@ internal static class StyleAffinityDiagram
     /// half that size.
     /// </param>
     public static void Draw(UiKit ui, SpriteBatch b, Point centre, int radius, Style? native, bool showFactors,
-                            int labelGap = 26, int labelPx = 0,
-                            int factorPx = 0, int sealPx = 34)
+                            int labelGap = 0, int labelPx = 0,
+                            int factorPx = 0, int sealPx = 0)
     {
-        if (factorPx == 0) factorPx = UiTypography.Secondary;   // a rung is a profile-scaled property, not a constant
-        if (labelPx == 0) labelPx = UiTypography.Body;   // a rung is a profile-scaled property, not a constant
+        // The defaults are the profile's, not constants: a rung, a gap and a glyph box all follow UI SCALE.
+        if (factorPx == 0) factorPx = UiTypography.Secondary;
+        if (labelPx == 0) labelPx = UiTypography.Body;
+        if (labelGap == 0) labelGap = UiMetrics.Space(26);
+        if (sealPx == 0) sealPx = UiMetrics.Control(34);
         var forms = Enum.GetValues<Style>();
         var pos = new Vector2[forms.Length];
         var dir = new Vector2[forms.Length];
@@ -248,16 +254,17 @@ internal static class StyleAffinityDiagram
             else                                     // the four shoulder points
             {
                 var x = (int)(pos[i].X + MathF.Sign(dir[i].X) * (rim + labelGap));
-                var nameY = (int)pos[i].Y - labelPx - 2;   // the pair straddles the point's own line
+                var nameY = (int)pos[i].Y - labelPx - StackGap;   // the pair straddles the point's own line
+                var facY = (int)pos[i].Y + StackGap;
                 if (dir[i].X > 0f)
                 {
                     ui.TextBig(b, name, x, nameY, col, labelPx);
-                    if (showFactor) ui.TextBig(b, factorText, x, (int)pos[i].Y + 2, factorCol, factorPx);
+                    if (showFactor) ui.TextBig(b, factorText, x, facY, factorCol, factorPx);
                 }
                 else
                 {
                     ui.TextRightBig(b, name, x, nameY, col, labelPx);
-                    if (showFactor) ui.TextRightBig(b, factorText, x, (int)pos[i].Y + 2, factorCol, factorPx);
+                    if (showFactor) ui.TextRightBig(b, factorText, x, facY, factorCol, factorPx);
                 }
             }
         }
