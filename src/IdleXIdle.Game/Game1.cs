@@ -397,6 +397,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     // The character sheet — equipment + stat training + a live damage bench, apart from the fight it feeds.
     private GearScreen _gear = null!;
+
+    /// <summary>
+    /// The sets whose one five-piece announcement the save says has already been made, held between
+    /// <see cref="LoadOrStartFresh"/> (Initialize) and the GearScreen's construction (LoadContent).
+    /// </summary>
+    private List<string> _completedSetsLoaded = new();
     private bool _showGear;
     private TrainingScreen _training = null!;
     private bool _showTraining;
@@ -800,6 +806,12 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _deepestEver = save.MasteryEarned;         // stored the deepest-ever; Earned re-derives from it
         _mastery.RestoreTaken(save.MasteryTaken);
         _mastery.RestoreLearned(save.LearnedSkills);   // D7 — discoveries survive every respec
+        // A SET ANNOUNCED IS ANNOUNCED FOR GOOD — but the screen that remembers it does not exist yet.
+        // This runs from Initialize and GearScreen is built in LoadContent, which needs a GraphicsDevice,
+        // so the list is PARKED here and handed over the moment the screen is there, exactly like the
+        // tree camera two lines below. Calling the screen from here was a null reference that killed
+        // the boot outright.
+        _completedSetsLoaded = save.CompletedSets;
         // The tree's camera. PARKED like the run log below: _masteryScreen is built in LoadContent. A
         // save from before the camera existed carries zoom 0, which the screen answers with its
         // first-open framing — the same first sight of the tree a new game gets.
@@ -1049,6 +1061,8 @@ public class Game1 : Microsoft.Xna.Framework.Game
             // D7: the UNION (latch + currently-taken roads), so a pre-D7 save latches everything
             // its roads ever taught the first time it saves under this build.
             LearnedSkills = _mastery.LearnedSkills().OrderBy(s => s, StringComparer.Ordinal).ToList(),
+            // Which five-piece sets have already had their one announcement (see the GEAR block).
+            CompletedSets = _gear.CompletedSets.OrderBy(s => s, StringComparer.Ordinal).ToList(),
             // The tree's camera, so the zoom a player settled on is the zoom they come back to. The
             // ten-second autosave carries it; nothing marks the screen dirty per wheel-tick.
             MasteryZoom = _masteryScreen.CameraZoom,
@@ -1278,6 +1292,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _warrenScreen.GleamOwned = _hunter.Gleam;
         _warrenScreen.DustOwned = _dust.MemoryDust;
         _warrenScreen.Draw(_batch, PageCursor, MouseClicked);
+        PlayCue(_warrenScreen.ConsumeCue());   // an upgrade that landed, or a refusal
 
         if (_warrenScreen.ConsumeUpgrade() is { } kind
             && _warren.CanUpgrade(kind, _hunter.Gleam, _dust.MemoryDust))
@@ -1336,6 +1351,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _expedition.Sound = _sound;   // the fight's hits, casts, deaths and the boss horn
         _masteryScreen = new MasteryScreen(_ui);
         _gear = new GearScreen(_ui, _forge);
+        _gear.RestoreCompletedSets(_completedSetsLoaded);   // parked by LoadOrStartFresh, before this existed
         _training = new TrainingScreen(_ui);
         _warrenScreen = new WarrenScreen(_ui);
         _mapScreen = new MapScreen(_ui);
@@ -3014,6 +3030,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _masteryScreen.Update(ScreenKeys, _prevKeys, PageCursor, MouseClicked,
                                 _mouse.LeftButton == ButtonState.Pressed, MouseWheel, _dust, MouseRightClicked);
             if (_masteryScreen.Dirty) { _masteryScreen.ClearDirty(); Save(); }
+            PlayCue(_masteryScreen.ConsumeCue());   // a node taken, a style sealed, a point handed back, a refusal
 
             Latch(gameTime);
             return;
@@ -3025,6 +3042,18 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _gear.Mastery = _mastery;
             _gear.Tree = _dust;
             _gear.Update(ScreenKeys, _prevKeys, PageCursor, MouseClicked, MouseRightClicked, MouseWheel, _hunter);
+            PlayCue(_gear.ConsumeCue());
+
+            // A SET FINISHED IS NEWS, ONCE. The screen decides when a five-piece set is first complete
+            // and hands back two lines; the host toasts them, sounds the reward, and writes the set's
+            // name to the save so the next session does not announce it again (SaveGame.CompletedSets).
+            if (_gear.ConsumeNotice() is { } setNews)
+            {
+                var lines = setNews.Split('\n');
+                PostNotice(lines[0], lines.Length > 1 ? lines[1] : "");
+                _sound.Play("sfx_levelup", 0.8f);
+                Save();
+            }
 
             // ── THE ITEM MENU'S VERBS. Three of the four live in the Forge, so the gear screen names
             //    what it wants and the host carries the player there, already pointed at the item.
@@ -3081,7 +3110,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
                     // UPGRADE / GREATER UPGRADE / RE-ROLL / SELL — spending materials or a chart with no
                     // forge press (review 2026-08-23, high). Same one-frame latch the unlock panel uses.
                     _swallowInput = true;
-                    _sound.PlayFirst(1f, "sfx_forge", "sfx_click");
+                    // A NAVIGATION, not an operation: this only carries the player to the Forge with the
+                    // item already pointed at. The hammer belongs to the press that follows.
+                    _sound.Play("sfx_nav", 0.6f);
                 }
             }
             if (_gear.Dirty) { _gear.ClearDirty(); Save(); }
@@ -3165,14 +3196,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
                             ? sample
                             : sorted[Math.Clamp(_vault.SelectedIndex, 0, sorted.Count - 1)];
                         _forge.OpenOneChest(pick, _hunter);
-                        _sound.Play("sfx_forge", 0.9f);
+                        // The chest has its own voice now (sfx_chest_open, plus sfx_chest_rare for Epic
+                        // and better) — it used to borrow the FORGE's hammer, which is a different act.
+                        PlayCue(_vault.ConsumeCue(), 0.9f);
                         Save();
                     }
                     break;
                 }
                 case VaultScreen.OpenRequest.All:
                     _forge.OpenEveryChest(_hunter);
-                    _sound.Play("sfx_forge", 0.9f);
+                    PlayCue(_vault.ConsumeCue(), 0.9f);   // one pair for the whole pile, graded by its best chest
                     Save();
                     break;
             }
@@ -3858,6 +3891,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// panel was removed: it is on the screen it is about, and the player came here on purpose. A hint
     /// is one line and needs no timer at all — it leaves when its fact does.
     /// </remarks>
+    /// <summary>
+    /// Play what a screen just asked for, if anything. Every screen hands the host a cue the same way
+    /// (a private field set at the semantic moment, returned once and cleared), because the host owns
+    /// audio and a screen that played its own sound could not be muted, throttled or reordered.
+    /// </summary>
+    /// <remarks>
+    /// A screen may name more than one cue for one moment — the vault's rare chest is an open AND a
+    /// shimmer — so a comma-separated list is a list. SoundBank's per-cue minimum gap does the rest.
+    /// </remarks>
+    private void PlayCue(string? cue, float volume = 0.7f)
+    {
+        if (cue is null) return;
+        foreach (var name in cue.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            _sound.Play(name, volume);
+    }
+
     /// <summary>The hint slot's opaque ground: <see cref="UiInk.Plate"/>'s own colour at full alpha.</summary>
     private static readonly Color SlotGround = new(UiInk.Plate.R, UiInk.Plate.G, UiInk.Plate.B);
 
@@ -4930,7 +4979,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // Batch B — the active screen. Menu screens draw through the overlay inset (see OverlayScale).
         if (OverlayActive) BeginOverlayCanvas(); else BeginCanvas(ScreenScale());
-        if (_showForge) _forge.Draw(_batch, _hunter, PageCursor, MouseClicked, MouseRightClicked);
+        if (_showForge)
+        {
+            _forge.Draw(_batch, _hunter, PageCursor, MouseClicked, MouseRightClicked);
+            // Each operation names itself — upgrade, re-roll, socket, salvage — instead of every one of
+            // them borrowing the same hammer.
+            PlayCue(_forge.ConsumeCue(), 0.9f);
+        }
         else if (_showWorld) DrawWorld();
         else if (_showTraits) _traits.Draw(_batch, _dust, PageCursor, MouseClicked);
         else if (_showRoster)
@@ -4939,9 +4994,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _roster.Mastery = _mastery;
             _roster.Hunter = _hunter;
             _roster.Draw(_batch, _characters, PageCursor, MouseClicked);
+            PlayCue(_roster.ConsumeCue(), 0.6f);   // SET ACTIVE is a navigation: the rail's own page tick
         }
         else if (_showVault) _vault.Draw(_batch, _forge.UnopenedChests, PageCursor, MouseClicked);
-        else if (_showLoadout) _loadoutScreen.Draw(_batch, PageCursor, MouseClicked);
+        else if (_showLoadout)
+        {
+            _loadoutScreen.Draw(_batch, PageCursor, MouseClicked);
+            PlayCue(_loadoutScreen.ConsumeCue());   // the refusal LAW 13 already says in words
+        }
         else if (_showWarren) DrawWarren();
         else if (_showMastery) _masteryScreen.Draw(_batch, PageCursor, _dust);
         else if (_showGear) _gear.Draw(_batch, PageCursor, _hunter);
@@ -4951,7 +5011,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
             // Gleam is one of the three payouts a descent makes, and this is the layer it buys. The model
             // (geometric cost, rank cap) has always been here; until now nothing in the game called it.
-            if (_training.ConsumeTrain() is { } stat && _hunter.Train(stat)) { _sound.Play("sfx_click", 0.8f); Save(); }
+            // TRAIN has its own cue (two notes up) instead of the ordinary click, and the screen's
+            // own cue carries the refusal when the gleam is not there.
+            if (_training.ConsumeTrain() is { } stat && _hunter.Train(stat)) { _sound.Play("sfx_train", 0.8f); Save(); }
+            PlayCue(_training.ConsumeCue());
             if (_training.ConsumeReset() && _hunter.ResetTraining()) { _sound.Play("sfx_forge", 0.8f); Save(); }
         }
         else _expedition.Draw(_batch, ChromeMouse, MouseClicked, Regions.Get(_activeRegion).Name, EnemyArtFor(_activeRegion), _bootTimer > 0f || WelcomeUp);
@@ -6428,6 +6491,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>Act on the Map screen's ENTER / DEEPEN requests (set by keyboard in Update or buttons in Draw).</summary>
     private void ConsumeMapRequests()
     {
+        // Selecting a region, leaving for the hunt, being refused by a locked one, and a region that
+        // has just opened all sound different now; the screen decides which, the host plays it.
+        PlayCue(_mapScreen.ConsumeCue(), 0.6f);
         if (_mapScreen.ConsumeStart() is { } start)
         {
             var farm = _world.RegionFarm(start.RegionId);
