@@ -62,53 +62,148 @@ Commits are on `feat/hunter-cutout-rig`; checkpoints C1–C6 are listed in `PLAN
 
 ## Interaction
 
-13. **hover** — `[pending — round two]`
-14. **press** — `[pending — round two]`
-15. **selected** — `[pending — round two]`
-16. **disabled** — `[pending — round two]`
-17. **focus** — `[pending — round two]`
-18. **hitbox changes** — hit targets follow `UiMetrics.Control` at every profile; draw rect == hit rect
-    (item 4); `[details pending]`.
+The house control is `UiKit.Button`, which owns all six states; the eleven screens draw their own
+rows, cards, cells and tiles, and round two gave each of them the same six. Two shared-primitive bugs
+had to be fixed first — see items 19 and 22.
+
+13. **Hover** — an eased luminance lift over `UiMotion.Fast` (100 ms) on top of the art swap, so a
+    hover is noticed without anything jumping. Every custom row, card, cell, node and tile in the
+    eleven screens now does the same. Two fixes were needed: the lift was being tinted into
+    `UiKit.PanelInner`, whose inset is the 40 px PANEL corner ornament, which on a 64 px button leaves
+    a face four pixels tall — so the "lift" was a bright stripe drawn through the label, on every
+    button in the game, at every profile (`build/shots/btn_before.png` → `btn_after.png`). And
+    `ui_button_primary`'s interior is transparent, so a hovered button standing over the page's own
+    art showed the scene through itself; it now gets the well `UiKit.Field` always had
+    (`build/shots/pressed_100.png` → `pressed2_100.png`).
+14. **Press** — the whole face drops 2 px and darkens for exactly as long as the button is held; the
+    click still fires on release. The hit rect does not move. This state was invisible to the capture
+    rig until `RH_SHOT_HELD=1` was added (five of the eleven screen agents reported it as
+    unphotographable, and three had written into the host's own global from a screen file to get
+    around it).
+15. **Selected** — a persistent edge and a brighter face, never colour alone: the selected loadout
+    slot, gear cell, forge tab, vault card, map region, roster card and trait node each carry a shape
+    change as well as a tint.
+16. **Disabled** — the grey art with a label that stays readable (`UiInk.Disabled`), and the reason in
+    one plain line beside or under the control. Never a dead click: a refusal now also has a sound.
+17. **Focus** — **NOT IMPLEMENTED, and not faked.** The game has no keyboard focus model anywhere:
+    selection is the cursor's, the arrow keys move a screen's own selection (the map's region, the
+    log's entry) rather than a focus ring, and no screen receives a focus index from the host. Six of
+    the eleven agents reported this independently and none invented one, which is right — a focus ring
+    that lights on one screen and not the ten others is worse than none. Adding it is a feature: a
+    host-owned focus index, a cycle order per screen, and a visible ring in `UiKit`, which is also the
+    keyboard and motor-accessibility path the technical preferences already commit to
+    (cycle-and-confirm). It is the one interaction state of the six that this pass did not deliver.
+18. **Hitbox changes** — hit targets follow `UiMetrics.Control` at every profile, so a 44 px button is
+    66 px at 150 %. Draw rect equals hit rect everywhere (item 4): the pressed face moves, the hit rect
+    does not.
 
 ## Motion
 
-19. **screen transitions** — `[pending — host pass]`
-20. **inspector transitions** — `[pending — round two]`
-21. **number animations** — `[pending — round two]`
-22. **reward feedback** — `[pending — round two]`
-23. **Reduced Motion behavior** — `UiMotion.Reduced` collapses every Ease / Flash to the end state;
-    `[validation pending]`.
+All motion goes through `UiMotion`: `Fast` 0.10 s, `Transition` 0.18 s, `Reward` 0.35 s — the brief's
+three bands (§31) as three constants, so a screen names a speed rather than inventing one.
+
+19. **Screen transitions** — the page lifts its last 8 px into place under a scrim that clears over
+    130 ms, so a screen arrives rather than replaces. Drawn before the pills, the gear and the rail,
+    because §33 says the navigation stays: the rail did not change and dimming it would say it had.
+20. **Inspector transitions** — the content fades and the frame stays (§35): BUILD, GEAR, FORGE,
+    TRAINING, MAP, ROSTER and TRAITS each fade their inspector body on a selection change.
+21. **Number animations** — a figure the player just changed walks to its new value and flashes once:
+    the currency pills, GEAR POWER, the FORGE's before → after pair, TRAINING's NOW → AFTER, the
+    WARREN's per-minute output. The hover tooltip still reads the exact, true figure.
+22. **Reward feedback** — chest opens, set completion, a trait terminal and the shield break get the
+    `Reward` band and one extra beat of emphasis; nothing else does.
+23. **Reduced Motion behavior** — `UiMotion.Reduced` collapses every ease to its end state and keeps
+    short fades and immediate state changes, which is what §32 asks for. Fixing `Ease` was a
+    prerequisite for trusting any of this: an unseen key started at "the opposite of the target", and
+    because a value settling at 0 forgets its key, every control nobody was pointing at sawtoothed
+    between 0 and 0.9 forever — a permanent shimmer on every button, tile, card and row, measured by
+    one agent at a six-frame cycle on BUILD's library tiles. Four screens had written private guards
+    around the call; two independently arrived at the same fix. Zero is rest now, and
+    `ui_motion_rest_test.cs` plus `ui_motion_test.cs` pin the contract.
 
 ## Screen Polish
 
-24. HUNT — `[pending]`
-25. BUILD — `[pending]`
-26. GEAR — `[pending]`
-27. TRAINING — `[pending]`
-28. VAULT — `[pending]`
-29. FORGE — `[pending]`
-30. WARREN — `[pending]`
-31. MAP — `[pending]`
-32. TRAITS — foot band + point plate (`4e4cb16`); `[round two pending]`
-33. ROSTER — `[pending]`
-34. SETTINGS — reflowed to scroll at 125/150 with a fixed header; escape verified (item 11). `000e8bd`.
-35. Expedition Log — modal reflowed with the chrome pass (`000e8bd`); `[states and copy pending the host pass]`.
+Each screen's second pass was implemented in its own worktree and then reviewed by a second agent
+that rebuilt, recaptured and judged it before anything merged. Every screen also gained the six
+interaction states on its own custom-drawn controls (items 13–18).
+
+24. **HUNT** — SHIELD became the game's own bar: the reused mana-bar art at `UiMetrics.Control(16)`
+    against the health bar's 26, the `icon_shield` glyph before the word, and the strip present only
+    for a run that has a shield (`_shieldSeen` resets per descent, so SHIELD BROKEN teaches again).
+    The three shield events got their cues and one one-shot each: a cold rim build on gain, a bright
+    notch at the fill's leading edge on absorb, and the `fx_shield_break` strip over the champion at
+    `Reward` length on break — which replaced `sfx_champ_down` at 0.30, the champion's own death
+    sample played quietly. SHIELD BROKEN also moved to the top of the damage ladder, where §63 ranks
+    it: it had been printing smaller than a critical. A Reaction's blow now carries its skill's name
+    ("-4 JAWS") instead of CRITICAL, since a crit is the expected value there; a true critical from a
+    basic or active hit still says CRITICAL. The multi-hit fold is untouched.
+25. **BUILD** — the equipped slot pulses once, the inspector body fades on a selection change, a
+    variation brightens its branch once and a reinforcement pulses once. RESPEC stays calm. The LAW 13
+    refusal ("ALREADY EQUIPPED IN SLOT N") now sounds as well as reads.
+26. **GEAR** — equipping pulses the target slot and ticks GEAR POWER to its new figure. The set ladder
+    draws its rungs as shapes rather than glyph characters (the font gate forbids the filled/hollow
+    circle glyphs), with the capstone rung carrying `icon_set_<name>` tinted by the set's Source. At
+    real size the emblem reads as a coloured mark rather than an illustration, which is the job an
+    18 px rung column has. The first five-piece completion posts a two-line notice once and remembers
+    it in the save.
+27. **TRAINING** — the cost pill reacts, the NOW → AFTER figure ticks and flashes, the rank bar eases,
+    and TRAIN has its own cue instead of the ordinary click. A refusal for gleam flashes the cost pill
+    and sounds the refusal.
+28. **VAULT** — the card answers the press at once, the reveal stays inside `Reward`, and emphasis
+    scales with rarity. A chest open sounds like a chest instead of borrowing the forge's hammer, with
+    a second shimmer for Epic and better — graded, under OPEN ALL, by the best chest in the whole pile
+    rather than the visible page.
+29. **FORGE** — before → after values tick and flash, the material pill that paid reacts, and the item
+    art takes a brief forge flash with no screen shake. Each operation names its own cue: upgrade,
+    re-roll, socket, salvage.
+30. **WARREN** — an upgrade flashes the level, ticks the output, reacts at the cost pill, and a
+    milestone gets the `Reward` band and a second hump. A refused upgrade says so.
+31. **MAP** — region cards hover and press, a locked card's hover says what conquers it, and a region
+    that has just become available pulses once, the first time it is drawn available, and never again.
+32. **TRAITS** — road framing eases instead of jumping (and jumps under Reduced Motion), a purchase
+    runs a highlight along the lit connection, and terminals stay stronger. Separately, the camera's
+    foot moved out of the tree: the hint, the tally and the three camera buttons had been printed over
+    the clipped canvas and ran through the deepest nodes' names at 150 %.
+33. **ROSTER** — SET ACTIVE updates card and inspector with a short highlight and the rail's own page
+    tick; no confirm. READY and PLAYING are chips, not buttons, and do not look pressed.
+34. **SETTINGS** — reflowed to scroll under a fixed header at 125 and 150 %, with the escape hatch
+    verified (item 11) and both modal scrolls resetting on close.
+35. **Expedition Log** — reflowed with the chrome pass; its metric emphasis and per-entry transitions
+    are **not done** (§71–§72 remains open).
 
 ## Combat
 
-36. **semantic VFX hierarchy** — `[pending — HUNT round two]`
-37. **Shield HUD** — `[pending — HUNT round two]`
-38. **Shield gain/absorb/break presentation** — `[pending — HUNT round two]`
-39. **multi-hit readability** — fold `-N ×5` kept (fixture `fightmulti`); `[pending]`
+36. **Semantic VFX hierarchy** — the fight's effects are graded by what they mean, not by what is
+    available: a shield break is the loudest non-boss moment (§65–§70), above a critical, above a
+    normal hit. SHIELD BROKEN moved up the damage ladder to match, having been printing smaller than a
+    critical.
+37. **Shield HUD** — a thinner bar under the health bar on the reused mana-bar art, with `icon_shield`
+    before the word and the figure beside it. It appears for a run that has a shield and stays for
+    that run, including at zero: a bar visible only in the instants it is full cannot be learned, and
+    it would flicker on every bite. A build with no shield never sees it — confirmed in the `fight`,
+    `fightstatus` and `fightfive` fixtures.
+38. **Shield gain / absorb / break presentation** — gain is a cold rim building on the bar with
+    `sfx_shield_gain`; absorb is a bright notch at the fill's leading edge with `sfx_shield_hit` and no
+    screen shake; break is the `fx_shield_break` strip over the champion for one `Reward` beat with
+    `sfx_shield_break`. Fixtures `fightshield` and `fightshieldbroken` pose all three.
+39. **Multi-hit readability** — the fold ("-1,067 ×4") is unchanged and still proved by the `fightmulti`
+    fixture, which aims the shutter at the cast event rather than at a guessed second.
 
 ## Audio
 
-40. **sound families added/reused** — ten cues synthesised deterministically
+40. **Sound families added and reused** — ten cues synthesised deterministically
     (`tools/asset-pipeline/make_sfx.py`, `make_battle_sfx.py`): sfx_nav, sfx_error, sfx_train,
     sfx_reroll, sfx_chest_open, sfx_chest_rare, sfx_shield_gain, sfx_shield_hit, sfx_salvage,
     sfx_shield_break; vocabulary in `assets/audio/README.md`. Commit `e654d84` (C5). Wiring
     `[pending — host pass]`.
-41. **repetition testing** — SoundBank `MinGapMs` throttle per cue; `[validation pending]`.
+41. **Repetition testing** — `SoundBank` holds a per-cue minimum gap and drops a repeat inside it,
+    with rapid repeats playing progressively quieter; a small random pitch offset per play stops a
+    cue heard a thousand times from drawing attention through its own precision. The gaps that matter
+    here: `sfx_shield_hit` 60 ms (a swarm's bites should sound busy), `sfx_shield_break` 300 ms (one
+    moment), `sfx_chest_rare` 400 ms (the vault opens chests by the dozen and a shimmer restarting on
+    each would be one long wash), `sfx_train` 70 ms. One gap is still on the 90 ms default that its
+    two siblings do not use: `sfx_shield_gain`, flagged by the HUNT pass for a build with several
+    grant sources on one beat.
 
 ## PixelLab / Assets
 
@@ -158,10 +253,21 @@ centre gate the manifest assets went through.
 
 ## Accessibility
 
-47. **setting combinations tested** — `[pending — Phase 8]`
-48. **100/125/150 results** — `[pending — matrix]`
-49. **color-independent states** — `[pending]`
-50. **Reduced Motion validation** — `[pending]`
+47. **Setting combinations tested** — `[matrix in progress]`
+48. **100 / 125 / 150 results** — `[matrix in progress]`
+49. **Colour-independent states** — no state in the pass is signalled by colour alone. Selected carries
+    an edge as well as a tint; disabled carries the grey art and a printed reason; a set ladder rung is
+    a filled or hollow shape, not a green or grey dot; a locked map region carries a padlock and a
+    sentence; READY and PLAYING are words. The one place colour still does real work is the Source
+    tokens (BODY, MIND, MACHINE, NATURE, SHADOW, SPIRIT), and each is always printed as its name
+    beside its colour.
+50. **Reduced Motion validation** — the setting had no capture dial at all when round two ran, which
+    is why five screens proved it by test rather than by photograph and three wrote into the host's
+    own `UiMotion.Reduced` from a screen file to get a picture. `RH_SHOT_REDUCED=1` now poses it from
+    the host, so the combination the brief names (Reduced Motion × 150 %) can be photographed on any
+    screen. Under it every ease lands on its end state at once; short fades and immediate state
+    changes stay, which is what §32 asks. The screen-local dials that predate the host one are now
+    redundant and should be removed in a follow-up.
 
 ## Validation
 
