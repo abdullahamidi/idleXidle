@@ -34,6 +34,14 @@ public class ChromeReflowTests
         throw new Xunit.Sdk.XunitException($"Game1 has no static member named {name} — the chrome was renamed without its test.");
     }
 
+    /// <summary>Call a private static one-argument helper — the banner's geometry takes "does this screen draw a subtitle".</summary>
+    private static T Call<T>(string name, params object[] args)
+    {
+        var m = typeof(Game1).GetMethod(name, Statics)
+                ?? throw new Xunit.Sdk.XunitException($"Game1 has no static method named {name} — the chrome was renamed without its test.");
+        return (T)m.Invoke(null, args)!;
+    }
+
     /// <summary>
     /// THE ESCAPE HATCH. A player who picks 150 % on a small screen must be able to get back to 100 %,
     /// so the UI SCALE row has to be reachable at rest — inside the panel, above the anchored QUIT row
@@ -115,11 +123,18 @@ public class ChromeReflowTests
             const int screenSubtitleTop = 80;   // the literal the screens draw their subtitle at, in PAGE space
             var subtitleBottomCanvas = (int)MathF.Round(
                 (screenSubtitleTop + UiTypography.Pitch(UiTypography.Secondary)) * Read<float>("OverlayScale"));
-            var slotTop = Read<int>("ScreenBannerTop");
+            // ON A SCREEN THAT DRAWS ONE. Only VAULT, TRAITS and MASTERY do; on the other eight the
+            // subtitle's room is the slot's, and taking it is what keeps the slot off the first panel.
+            var slotTop = Call<int>("ScreenBannerTop", true);
             Assert.True(slotTop >= subtitleBottomCanvas,
                         $"the hint slot starts at canvas {slotTop} at {percent}%, over a subtitle that ends at {subtitleBottomCanvas}");
             // And it is never so low that it starts off the page.
             Assert.True(slotTop < UiKit.Page.Bottom, $"the hint slot starts at canvas {slotTop} at {percent}%, off the page");
+
+            // A screen with NO subtitle starts its slot higher — never lower, and never above the rule.
+            var bare = Call<int>("ScreenBannerTop", false);
+            Assert.True(bare <= slotTop, $"a subtitle-less screen's slot starts at {bare}, below a subtitled screen's {slotTop}");
+            Assert.True(bare > 0, $"a subtitle-less screen's slot starts at {bare}, off the top of the page");
         }
         finally { UiMetrics.Apply(100); }
     }
@@ -135,9 +150,13 @@ public class ChromeReflowTests
         UiMetrics.Apply(percent);
         try
         {
-            var height = Read<int>("HintLineHeight");
-            Assert.True(height >= UiTypography.Body,
-                        $"a one-line hint is {height} px tall at {percent}%, under its own {UiTypography.Body} px line");
+            foreach (var hasSubtitle in new[] { true, false })
+            {
+                var height = Call<int>("HintLineHeight", hasSubtitle);
+                Assert.True(height >= UiTypography.Body,
+                            $"a one-line hint is {height} px tall at {percent}% (subtitle: {hasSubtitle}), "
+                            + $"under its own {UiTypography.Body} px line");
+            }
         }
         finally { UiMetrics.Apply(100); }
     }

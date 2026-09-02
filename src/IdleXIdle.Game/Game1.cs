@@ -314,8 +314,22 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private readonly long[] _pillGainShow = new long[3];
     private readonly float[] _pillGainT = new float[3];
 
-    /// <summary>True until the first Update has read the pills — the first frame must not animate from zero.</summary>
-    private bool _pillsSeeded;
+    /// <summary>
+    /// Seconds the pills have been watching. Until <see cref="PillWarmSeconds"/> they only TRACK: they
+    /// follow the true values without ticking, flashing or banking anything.
+    /// </summary>
+    /// <remarks>
+    /// A world arrives in pieces. A save's offline credit is applied in Initialize, before the first
+    /// Update, but the capture rig installs a whole fixture — gear, chests, a five-figure Gleam balance —
+    /// over the first frames of Update, and a hunt's own first payout can land in the same breath. With
+    /// no warm-up the pills read that installation as EARNINGS and the GEAR capture announced "+4560"
+    /// for a balance the player had simply loaded (build/shots/r2_character_150.png). Half a second is
+    /// longer than any of that and far shorter than any moment a player would call a gain.
+    /// </remarks>
+    private float _pillWarm;
+
+    /// <summary>How long the pills track in silence before they start reporting.</summary>
+    private const float PillWarmSeconds = 0.5f;
 
     /// <summary>How long a "+N" stays up.</summary>
     private const float PillGainSeconds = 1.4f;
@@ -3783,12 +3797,27 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private static int ScreenBannerWrap => ScreenBannerWidth - CardPadX - CardCloseLane;
 
     /// <summary>
-    /// Where the banner hangs: directly under the subtitle line of the screen's title strip — canvas 93
-    /// at 100 %, just under the currency capsules — so the plate never sits across the subtitle at any
-    /// profile (at 125 and 150 % a slot pinned at the 100 % literal let TRAITS' and MASTERY's subtitles
-    /// show through it as ghost text).
+    /// Where the banner hangs: under the screen's title strip, and under its SUBTITLE when it has one.
     /// </summary>
-    private static int ScreenBannerTop => CanvasY(PageSubtitleBottom);
+    /// <remarks>
+    /// <para>
+    /// Only three screens draw a subtitle line — VAULT's rarity tally, TRAITS' "ONE SPINE · FOUR ROADS
+    /// · NO TAKING BACK" and MASTERY's "FOUR DIRECTIONS · ONE STYLE · TWELVE SKILLS TO LEARN" — and on
+    /// those the slot must clear it: at 125 and 150 % a slot pinned at the 100 % literal let all three
+    /// read straight through the plate as ghost text.
+    /// </para>
+    /// <para>
+    /// On the eight screens that draw NO subtitle, that line's room is the slot's, and taking it is not
+    /// a nicety: the band between the title strip and the first panel is only a few pixels at 150 %, so
+    /// a slot dropped by a subtitle that was never drawn lands on the panel instead and cuts its first
+    /// caption in half (TRAINING's "DAMAGE · TRAINED STAT", build/shots/r2_stats_150.png). Ask the
+    /// screen, rather than assuming every screen looks like the three that do.
+    /// </para>
+    /// </remarks>
+    private static int ScreenBannerTop(bool hasSubtitle) => CanvasY(hasSubtitle ? PageSubtitleBottom : PageSubtitleTop);
+
+    /// <summary>Whether the screen on the page prints a subtitle under its gold rule — see <see cref="ScreenBannerTop"/>.</summary>
+    private bool ScreenDrawsSubtitle => _showVault || _showTraits || _showMastery;
 
     /// <summary>The least a one-line hint can be: its line, with the tightest pad above and below.</summary>
     private static int HintLineMin => UiTypography.Body + UiMetrics.Space(4) * 2;
@@ -3799,7 +3828,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// line itself is never squeezed. The band is 41 px at 100 % and gone by 150 %, where the hint
     /// overruns the panel's top rail rather than the subtitle above it.
     /// </summary>
-    private static int HintLineHeight => Math.Min(CardLineHeight, Math.Max(HintLineMin, CanvasY(PageContentTop) - ScreenBannerTop));
+    private static int HintLineHeight(bool hasSubtitle) => Math.Min(CardLineHeight, Math.Max(HintLineMin, CanvasY(PageContentTop) - ScreenBannerTop(hasSubtitle)));
 
     /// <summary>
     /// Where the banner sits: under the screen's title band, centred over the content.
@@ -3813,9 +3842,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
     private Rectangle HintSlotRect(SlotContent slot)
     {
         var x = NavRailWidth + (UiKit.Page.Width - NavRailWidth - ScreenBannerWidth) / 2;
-        if (slot.Body.Length == 0) return new Rectangle(x, ScreenBannerTop, ScreenBannerWidth, HintLineHeight);   // a one-line hint
+        var sub = ScreenDrawsSubtitle;
+        if (slot.Body.Length == 0) return new Rectangle(x, ScreenBannerTop(sub), ScreenBannerWidth, HintLineHeight(sub));   // a one-line hint
         var body = _ui.WrapBig(slot.Body, ScreenBannerWrap, UiTypography.Secondary);
-        return new Rectangle(x, ScreenBannerTop, ScreenBannerWidth, CardHeight(body.Count));
+        return new Rectangle(x, ScreenBannerTop(sub), ScreenBannerWidth, CardHeight(body.Count));
     }
 
     /// <summary>
@@ -6108,9 +6138,10 @@ public class Game1 : Microsoft.Xna.Framework.Game
         now[1] = (long)_dust.MemoryDust;
         now[2] = _hunter.Gleam;
 
+        _pillWarm += dt;
         for (var i = 0; i < 3; i++)
         {
-            if (!_pillsSeeded)
+            if (_pillWarm < PillWarmSeconds)
             {
                 _pillTrue[i] = now[i];
                 _pillShown[i] = now[i];
@@ -6155,7 +6186,6 @@ public class Game1 : Microsoft.Xna.Framework.Game
             _pillFlash[i] = Math.Max(0f, _pillFlash[i] - dt);
             _pillGainT[i] = Math.Max(0f, _pillGainT[i] - dt);
         }
-        _pillsSeeded = true;
 
         PoseChromeMotion();
     }

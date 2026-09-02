@@ -1,14 +1,6 @@
 # Assets nothing consumed when tools/check_asset_consumers.py arrived (2026-09-02).
 # Pre-pivot debt: delete at the desk, or wire it. A NEW orphan is not allowed on this list
 # without saying why here; the gate fails on any orphan the list does not name.
-# --- UI polish C5 art, consumers owed by round two (HUNT: icon_shield; GEAR: icon_set_*); remove when the gate reports them healed ---
-assets/art/UI/icons/icon_shield.png
-assets/art/UI/icons/sets/icon_set_afterimage.png
-assets/art/UI/icons/sets/icon_set_certainty.png
-assets/art/UI/icons/sets/icon_set_harmony.png
-assets/art/UI/icons/sets/icon_set_momentum.png
-assets/art/UI/icons/sets/icon_set_overgrowth.png
-assets/art/UI/icons/sets/icon_set_plating.png
 # --- pre-pivot debt ---
 assets/art/Animations/Bosses/crystal_lich_attack/crystal_lich_attack_strip8_512.png
 assets/art/Animations/Bosses/crystal_lich_death/crystal_lich_death_strip8_512.png
