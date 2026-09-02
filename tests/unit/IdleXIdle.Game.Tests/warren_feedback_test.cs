@@ -88,9 +88,12 @@ public class WarrenFeedbackTests
     [Fact]
     public void test_an_upgrade_glows_once_and_a_milestone_glows_twice()
     {
+        UiMotion.Reduced = false;   // the flag is a static: this test pins its own, like the other five
+
         // The card frame's envelope. ONE pulse is armed per event either way (a second Flash armed when
         // the first ended would be the draw pass re-arming its own animation); what a milestone gets is
-        // a second hump inside that one pulse.
+        // a second hump inside that one pulse. (Under Reduced Motion the SCREEN asks for one hump
+        // instead of two — the lobe count is decided at the draw site; this curve stays pure.)
         Assert.Equal(0f, WarrenScreen.Lobes(1f, 1));    // the instant it fires: nothing yet
         Assert.Equal(0f, WarrenScreen.Lobes(0f, 1));    // and nothing left when it is over
         Assert.Equal(0f, WarrenScreen.Lobes(0f, 2));

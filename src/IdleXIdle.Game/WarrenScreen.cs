@@ -994,8 +994,14 @@ public sealed class WarrenScreen
             // THE ONE-SHOT ON THE FRAME. One hump for an upgrade; TWO for a milestone, inside a single
             // pulse of a reward's length (see Lobes) — a second Flash armed when the first ended would
             // be the draw pass re-arming its own animation.
+            //
+            // AND UNDER REDUCED MOTION THE SECOND HUMP GOES (brief §32). One hump is the sanctioned
+            // pulse — a short fade up and back, which is what UiMotion keeps when the setting is on.
+            // Two is a blink-blink, and flashing is the thing the setting exists to stop. A milestone
+            // is still the stronger moment either way: its level and its frame run for a REWARD where
+            // an ordinary upgrade's run for a transition, and the end state is identical.
             var frameLit = Lobes(Lit(f.Kind, Feed.Frame),
-                                 _landed is { } lit && lit.Kind == f.Kind && lit.Milestone ? 2 : 1);
+                                 !UiMotion.Reduced && _landed is { } lit && lit.Kind == f.Kind && lit.Milestone ? 2 : 1);
             if (frameLit > 0f)
                 Outline(b, new Rectangle(drawn.X - 3, drawn.Y - 3, drawn.Width + 6, drawn.Height + 6), Gold * frameLit, 3);
             Tip(card, hit, $"{f.Info.Name} — {f.Info.Description}");
