@@ -1574,7 +1574,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
         _keys = Keyboard.GetState();
         _mouse = Mouse.GetState();
         ReadCursor();
-        UiKit.MouseHeld = _mouse.LeftButton == ButtonState.Pressed;
+        // PRESSED IS A STATE NO CAPTURE COULD POSE. The mouse button comes from the real device, so
+        // every screen's pressed face — UiKit.Button's own, and the seven screens that draw their own
+        // to match it — was invisible to the rig, and five of the eleven polish agents reported it as
+        // unphotographable. RH_SHOT_HELD=1 holds the button down for the whole capture, so the state
+        // can be looked at on any screen with the cursor parked on any control (RH_SHOT_MOUSE /
+        // RH_SHOT_PAGE_MOUSE). Rig-only, and it feeds the same field the real mouse does rather than
+        // opening a second path.
+        UiKit.MouseHeld = _mouse.LeftButton == ButtonState.Pressed || (RigActive && ShotHeld);
         UiMotion.Reduced = ReducedMotion;
         UiMotion.Tick((float)gameTime.ElapsedGameTime.TotalSeconds);
         TickChromeMotion((float)gameTime.ElapsedGameTime.TotalSeconds);
@@ -5202,6 +5209,9 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
     /// <summary>RIG ONLY: true when RH_SHOT is set — the process exists to take one screenshot and exit.</summary>
     internal static readonly bool RigActive = Environment.GetEnvironmentVariable("RH_SHOT") is not null;
+
+    /// <summary>RIG: RH_SHOT_HELD=1 poses the mouse button held down, so a PRESSED face can be photographed.</summary>
+    private static readonly bool ShotHeld = Environment.GetEnvironmentVariable("RH_SHOT_HELD") == "1";
 
     /// <summary>RIG ONLY: the frame the shutter opens on. Every capture mode saves at this frame.</summary>
     internal const int ShotAtFrame = 60;

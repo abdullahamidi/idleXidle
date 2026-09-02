@@ -26,6 +26,9 @@
 # RH_SHOT_LEAD=<seconds before the event> (0.02 default — under two frames keeps the event on the
 # shot frame). RH_SHOT_DUMP=1 writes <shot>.events.txt — the wave's events and the playhead at the
 # shutter — which is how a fight pose is checked against what the wave held.
+# RH_SHOT_HELD=1 holds the mouse button down for the whole capture, so a PRESSED control can be
+#   photographed on any screen (park the cursor with RH_SHOT_MOUSE / RH_SHOT_PAGE_MOUSE first).
+# RH_SHOT_REDUCED=1 poses REDUCED MOTION, the accessibility setting the prefs file otherwise owns.
 # RH_SHOT_MOTION=<0..1> holds the CHROME's transients at that fraction of their run so they can be
 #   photographed at all: 1 is the first instant of a screen switch, a modal fade, a currency pill's
 #   spend flash and its banked "+N"; 0.5 is halfway; unset means the game animates normally.
@@ -114,6 +117,8 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 [ -n "$RH_SHOT_WINDOW" ] && RH_ENV+=(RH_SHOT_WINDOW="$RH_SHOT_WINDOW")
 [ -n "$RH_SHOT_MOTION" ] && RH_ENV+=(RH_SHOT_MOTION="$RH_SHOT_MOTION")
 [ -n "$RH_SHOT_SCROLL" ] && RH_ENV+=(RH_SHOT_SCROLL="$RH_SHOT_SCROLL")
+[ -n "$RH_SHOT_HELD" ] && RH_ENV+=(RH_SHOT_HELD="$RH_SHOT_HELD")
+[ -n "$RH_SHOT_REDUCED" ] && RH_ENV+=(RH_SHOT_REDUCED="$RH_SHOT_REDUCED")
 # REDUCED MOTION on, before the first Update — the accessibility state, posed rather than clicked.
 [ -n "$RH_SHOT_REDUCED" ] && RH_ENV+=(RH_SHOT_REDUCED="$RH_SHOT_REDUCED")
 # MASTERY: pin a node in the inspector (a MasteryCatalog id) for the buildtree/buildzoom modes;

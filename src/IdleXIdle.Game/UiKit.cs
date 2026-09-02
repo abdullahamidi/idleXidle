@@ -896,6 +896,13 @@ public sealed class UiKit
         var key = !enabled ? "ui_button_disabled"
                 : hover || style == ButtonStyle.Primary ? "ui_button_primary"
                 : "ui_button_secondary";
+        // THE WELL, FIRST — ui_button_primary's interior is fully TRANSPARENT (this is why
+        // <see cref="Field"/> paints one), so the moment a button took the lit art its face became a
+        // window: a hovered UNEQUIP ALL standing over the page's own art showed the scene through
+        // itself (build/shots/pressed_100.png, photographed the day RH_SHOT_HELD made a pressed face
+        // visible at all). The resting secondary art is opaque and needs nothing, so the well goes
+        // only under the lit one, inside the frame's own inset so no ornament is covered.
+        if (key == "ui_button_primary") Fill(b, ButtonFace(r), Ink);
         var tex = Assets.Get(key);
         // Whole-image stretch for a button near the art's own aspect; a WIDE button is 3-sliced so its
         // ornamented ends keep their shape and only the plain middle stretches (playtest 2026-08-26:
