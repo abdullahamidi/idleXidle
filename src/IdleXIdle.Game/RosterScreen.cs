@@ -668,7 +668,7 @@ public sealed class RosterScreen
         var headH = UiTypography.Pitch(UiTypography.Secondary);
         var ruleH = UiMetrics.Space(10);
         var stateGap = UiMetrics.Space(24);
-        var skill = c.StartingSkillId is { } sid ? SkillCatalogue.Find(sid) : null;
+        var skill = c.SignatureSkillId is { } sid ? SkillCatalogue.Find(sid) : null;
 
         // The state block FOLLOWS the content, and the content is cut so that it always can: the block
         // used to be reserved as a flat 232 px, which was one hunter's worth at one profile.

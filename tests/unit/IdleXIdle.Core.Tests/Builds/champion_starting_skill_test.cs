@@ -21,7 +21,7 @@ namespace IdleXIdle.Core.Tests.Builds;
 /// olabilir. Böylelikle karakterlerin de ayrımı daha net olabilir."
 /// </para>
 /// <para>
-/// It asserts the whole chain, not the field. A <c>StartingSkillId</c> that composes to nothing is the
+/// It asserts the whole chain, not the field. A <c>SignatureSkillId</c> that composes to nothing is the
 /// dormant-feature failure this project produces most reliably: declared on the champion, shown on its
 /// card, and never once woven. So each champion's skill is woven the way a player would reach it — the
 /// skill's own id in a pick, against a tree that has taught nothing — and the composed build has to
@@ -38,12 +38,12 @@ public class ChampionStartingSkillTests
     {
         foreach (var c in CharacterRoster.All)
         {
-            Assert.False(string.IsNullOrEmpty(c.StartingSkillId),
+            Assert.False(string.IsNullOrEmpty(c.SignatureSkillId),
                 $"{c.Name} brings no skill, and with every skill on the mastery tree it would stand "
                 + "in its first wave with nothing woven.");
 
-            var def = SkillCatalogue.Find(c.StartingSkillId!);
-            Assert.True(def is not null, $"{c.Name} names {c.StartingSkillId}, which is not a skill.");
+            var def = SkillCatalogue.Find(c.SignatureSkillId!);
+            Assert.True(def is not null, $"{c.Name} names {c.SignatureSkillId}, which is not a skill.");
 
             // The door a player would use: the skill's own id in a pick — the id is the identity
             // now, and a named skill brings its own slot kind. The tree is BARE, so the only thing
@@ -68,8 +68,8 @@ public class ChampionStartingSkillTests
         // The designer's reason for the rule was that it tells champions apart. A roster that all
         // opens with an active would be one champion with ten portraits.
         var kinds = CharacterRoster.All
-            .Where(c => c.StartingSkillId is not null)
-            .Select(c => SkillCatalogue.ById(c.StartingSkillId!).TakesABeat)
+            .Where(c => c.SignatureSkillId is not null)
+            .Select(c => SkillCatalogue.ById(c.SignatureSkillId!).TakesABeat)
             .ToList();
         Assert.Contains(true, kinds);
         Assert.Contains(false, kinds);

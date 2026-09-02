@@ -117,13 +117,25 @@ public sealed record Character
     /// The one skill this champion already knows, before a single mastery point is spent.
     /// </summary>
     /// <remarks>
-    /// Every one of the twelve is learned on the mastery tree now, so without this a fresh champion
-    /// would stand in its first wave with nothing to weave. The designer chose it as the answer AND
-    /// as a character rule: "Her karakterin basic pasif veya aktif bir skilli olabilir. Böylelikle
-    /// karakterlerin de ayrımı daha net olabilir." Some bring an active and some a passive, which is
-    /// a sharper difference between two champions than an aptitude multiplier is.
+    /// <para>
+    /// THE SKILL ONLY THIS CHAMPION CAN USE. It was <c>StartingSkillId</c> and it pointed at one of
+    /// the twelve shared skills, so nine distinct skills covered ten champions and two of them shared
+    /// BLOW. It now points at an exclusive skill authored for this champion alone, and
+    /// <see cref="SkillCatalogue"/> carries the other half of that fact as
+    /// <see cref="Builds.SkillDef.OwnerCharacterId"/> (BRIEF sec.2-14).
+    /// </para>
+    /// <para>
+    /// The designer's rule survives the rename and is the reason signatures are not all Actives:
+    /// "Her karakterin basic pasif veya aktif bir skilli olabilir. Böylelikle karakterlerin de ayrımı
+    /// daha net olabilir." Some bring an active, some a field, some a reaction, which is a sharper
+    /// difference between two champions than an aptitude multiplier is.
+    /// </para>
+    /// <para>
+    /// It is also what keeps a fresh champion able to fight at all: every shared skill is behind a
+    /// mastery node, and a new game has no points.
+    /// </para>
     /// </remarks>
-    public string? StartingSkillId { get; init; }
+    public string? SignatureSkillId { get; init; }
 
     public required string PassiveName { get; init; }
     public required string PassiveText { get; init; }

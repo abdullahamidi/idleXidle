@@ -81,7 +81,7 @@ public sealed record MasteryNode(
     /// </summary>
     /// <remarks>
     /// All twelve skills are learned on the tree; a champion that has learned nothing still fights
-    /// with its birth skill (<c>Character.StartingSkillId</c>).
+    /// with its birth skill (<c>Character.SignatureSkillId</c>).
     ///
     /// <b>Learning is PERMANENT</b> (D7, 2026-08-31 — it re-locked on respec until then). The node
     /// is the DISCOVERY gate: taking it latches the skill into the learned set for good, and respec

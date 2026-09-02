@@ -132,11 +132,15 @@ public static class BuildComposer
                 build.Take(k);
 
         var picks = skills as IReadOnlyList<SkillPick> ?? skills.ToList();
-        // WHAT THIS CHAMPION KNOWS: the roads it has walked, plus the one skill it was born with.
-        // Without the second half a fresh champion could weave nothing at all, because all twelve are
-        // learned on the tree now and a new game has no points.
+        // WHAT THIS CHAMPION MAY WEAVE: the shared skills its CURRENT mastery allocation reaches,
+        // plus its own signature — and nothing else, ever, by any route.
+        //
+        // Two sources, deliberately (BRIEF sec.10). Mastery access comes and goes with the points
+        // (sec.16); a signature is exempt from mastery entirely (sec.18) and belongs to one champion
+        // (sec.9). The second half is also what keeps a fresh champion able to fight, since every
+        // shared skill is behind a node and a new game has no points.
         var taughtSkills = mastery.AvailableSkills().ToHashSet(StringComparer.Ordinal);
-        if (character?.StartingSkillId is { } born) taughtSkills.Add(born);
+        if (character?.SignatureSkillId is { } own) taughtSkills.Add(own);
 
         for (var i = 0; i < picks.Count; i++)
         {
@@ -150,9 +154,17 @@ public static class BuildComposer
             // (Form-era picks stopped reaching this loop at P3-final: PlayerLoadout.Restore pins
             // every legacy row to its SkillId through LegacySkillForm before anything composes.)
             if (s.SkillId is not { } id || SkillCatalogue.Find(id) is not { } def) continue;
-            // THE GATE, AND IT IS UNCONDITIONAL. You weave what you know: all twelve skills are
-            // learned on the mastery tree — and since D7 (2026-08-31) learning is PERMANENT, so
-            // this set only ever grows and a respec moves points without unweaving anything.
+            // THE GATE, AND IT IS UNCONDITIONAL. You weave what you may weave right now: the shared
+            // skills the CURRENT mastery allocation reaches, plus this champion's own signature.
+            // Access is no longer permanent (BRIEF sec.16), so this set shrinks as well as grows and
+            // a respec silently stops carrying what it no longer allows — which is why the host warns
+            // before one and repairs the slots after (sec.19).
+            //
+            // AND OWNERSHIP IS CHECKED SEPARATELY, because taughtSkills is a set of ids and cannot
+            // say WHY an id is in it. A signature that belongs to somebody else is refused here
+            // however it arrived — an old save, a share code, or a slot left behind by a champion
+            // switch (sec.9, sec.13, LAW 1).
+            if (def.OwnerCharacterId is { } owner && owner != character?.Id) continue;
             if (!taughtSkills.Contains(def.Id)) continue;
 
             // WHAT THE PLAYER HAS SPENT ON THIS SKILL, applied ONCE, here. Null progress means an

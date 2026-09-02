@@ -545,7 +545,7 @@ public sealed class LoadoutScreen
     private IReadOnlySet<string> KnownSkills()
     {
         var set = Mastery.AvailableSkills().ToHashSet(StringComparer.Ordinal);
-        if (Character?.StartingSkillId is { } born) set.Add(born);
+        if (Character?.SignatureSkillId is { } born) set.Add(born);
         return set;
     }
 

@@ -297,7 +297,20 @@ public sealed record SkillDef(
 
     // ── THE RULES A REINFORCEMENT TURNS. One typed group (see SkillRules) rather than fifteen more
     //    flags on this record, which is already at the width where a reader stops reading. ────────
-    SkillRules? Rules = null)
+    SkillRules? Rules = null,
+
+    // ── WHO THIS SKILL BELONGS TO. Null for the twelve SHARED skills, which any champion may weave
+    //    once mastery allows it. A character id for a SIGNATURE, which only that champion may weave,
+    //    ever, by any route (BRIEF sec.2-14, LAWS 1-2).
+    //
+    //    A FIELD, not a naming rule and not a lookup table somewhere else. Ownership decides what the
+    //    composer will carry into a fight, so it has to live where the composer already looks; a
+    //    convention over the id string would be a rule with no compiler behind it, and a side table
+    //    would be a second place to forget.
+    //
+    //    Last and optional, so not one of the twelve shared skills changed a character, and
+    //    tools/check_skill_doc.py — whose regex pins the first line of a definition — never saw it.
+    string? OwnerCharacterId = null)
 {
     /// <summary>Does this skill cost the champion its action?</summary>
     public bool TakesABeat => Kind == SkillKind.Active;

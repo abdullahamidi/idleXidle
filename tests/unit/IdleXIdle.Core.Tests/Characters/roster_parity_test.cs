@@ -143,7 +143,7 @@ public class RosterParityTest
     /// <summary>The control: a character that is nothing but the same starting skill.</summary>
     /// <remarks>
     /// The composer's taught-skill gate only weaves what a champion knows, and "knows" is the mastery
-    /// tree plus <see cref="Character.StartingSkillId"/> — so the no-character control is a BLANK
+    /// tree plus <see cref="Character.SignatureSkillId"/> — so the no-character control is a BLANK
     /// champion born with the measured skill: same skills, same slots, and not one non-default channel.
     /// </remarks>
     private static Character Blank(SkillDef skill) => new()
@@ -152,7 +152,7 @@ public class RosterParityTest
         Blurb = "The control. The same skills, no passive.",
         Class = ItemClass.Wanderer, Tier = ClassTier.First,
         PassiveName = "NONE", PassiveText = "Nothing at all.",
-        StartingSkillId = skill.Id,
+        SignatureSkillId = skill.Id,
     };
 
     /// <summary>
@@ -274,7 +274,7 @@ public class RosterParityTest
 
     /// <summary>The skill a character is born knowing — what a fresh champion actually has woven.</summary>
     private static SkillDef PlayedSkill(Character c)
-        => c.StartingSkillId is { } id ? SkillCatalogue.ById(id) : Chassis;
+        => c.SignatureSkillId is { } id ? SkillCatalogue.ById(id) : Chassis;
 
     [Fact]
     public void test_single_target_throughput_per_skill_is_reported()
