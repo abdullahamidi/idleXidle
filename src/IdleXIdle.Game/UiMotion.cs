@@ -57,8 +57,8 @@ public static class UiMotion
 
     /// <summary>
     /// A value that eases toward <paramref name="target"/> (0 or 1, typically) over <paramref name="seconds"/>,
-    /// smoothstepped. Ask it EVERY frame, for every control, whether or not anything is happening — a
-    /// control that is standing still reads a flat 0 and costs nothing.
+    /// smoothstepped. Ask it EVERY frame, for every control, whether or not anything is happening: an
+    /// unknown key starts at 0, so a hover fades IN and a control standing still reads a flat 0.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -73,13 +73,21 @@ public static class UiMotion
     /// <para>
     /// Four of the eleven screens in the UI polish pass had independently written a private guard
     /// around this call — "only ask while something is actually moving" — which is what a shared
-    /// primitive looks like when it cannot be trusted. <c>tests/unit/IdleXIdle.Game.Tests/ui_motion_rest_test.cs</c>
-    /// pins the contract so the guards can come back out.
+    /// primitive looks like when it cannot be trusted, and two of the eleven arrived at THIS fix on
+    /// their own from opposite ends of the game. <c>ui_motion_rest_test.cs</c> and
+    /// <c>ui_motion_test.cs</c> in the Game test project pin the contract so the guards can come out.
     /// </para>
     /// </remarks>
     public static float Ease(int key, float target, float seconds = Fast)
     {
         if (Reduced) { Eased.Remove(key); return target; }
+        // AN ABSENT KEY MEANS ZERO, not "the target's opposite". A value that settles at 1 is REMEMBERED
+        // (below), so absence can only ever mean "rested at 0" — and reading it as 1 made every RESTING
+        // control fade 1 → 0, settle, be forgotten, and start over on the next frame: a permanent 10 Hz
+        // shimmer on every button, tile, card and row that asks for a hover it is not getting, which is
+        // the one thing brief §30 forbids and this class's own summary promises does not happen.
+        // Measured on BUILD's library tiles at 60 fps: mean ink 19,16,26 ↔ 42,37,59 on a six-frame cycle.
+        // A hover still fades IN from 0 — the only thing the "opposite" was ever for.
         var have = Eased.TryGetValue(key, out var v) ? v : 0f;
         var step = seconds <= 0f ? 1f : _dt / seconds;
         v = have < target ? MathF.Min(target, have + step) : MathF.Max(target, have - step);
