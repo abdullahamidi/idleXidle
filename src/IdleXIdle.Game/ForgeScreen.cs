@@ -176,6 +176,196 @@ public sealed class ForgeScreen
     /// <remarks>Every cue rides the bank's master effects volume; nothing here touches a raw SoundEffect.</remarks>
     public SoundBank? Sound { get; set; }
 
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+    // FEEL — what the last operation MOVED, so the screen can show it moving (brief §30–§38, §53–§55).
+    //
+    // The Forge is a screen of numbers that change when you press a button, and until this pass every
+    // one of them simply WAS a different number on the next frame: the item level, the item power, the
+    // stat rows, the balance that paid. §36 asks for the change to be readable AS a change ("160 → 162,
+    // brief emphasis; Forge stat highlight"), §37 for the spend to react AT the resource, and §53 for a
+    // brief forge flash on the piece the anvil struck.
+    //
+    // ONE MECHANISM, keyed by what a number MEANS rather than by where it is drawn — so the item
+    // column's ITEM POWER and the compare's BEFORE column, which are the same fact printed twice, tick
+    // together and flash together. An operation records where each watched number WAS; every draw asks
+    // where it is now and prints the value in between. Nothing loops: each key gets ONE UiMotion.Flash
+    // per press, fired from the operation (an event), never re-armed by a draw, and the clock that
+    // drains it is UiMotion.Tick — the host's, advanced from Update with dt.
+    // ══════════════════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>Where each watched number stood when the last operation ran, by feel key.</summary>
+    private readonly Dictionary<int, float> _tickFrom = new(16);
+
+    /// <summary>Every key the last operation flashed — the set a posed capture freezes (see RH_SHOT_FEEL).</summary>
+    private readonly HashSet<int> _feelKeys = new();
+
+    /// <summary>DEV ONLY: hold the last operation's one-shots at one phase, so a 0.18 s tick is photographable.</summary>
+    private bool _feelFrozen;
+
+    /// <summary>The phase a frozen capture holds: 1 the instant it fired, 0 landed. See <see cref="ApplyDevPose"/>.</summary>
+    private float _feelPhase = 1f;
+
+    // The watched numbers, named once. A name is a MEANING, not a place: two columns print ITEM POWER.
+    private const string LevelFeel = "level";
+    private const string PowerFeel = "power";
+    private const string EnchantFeel = "enchant";
+    private const string ArtFeel = "art";
+    private static string AffixFeel(int i) => "affix" + i;
+    private static string PurseFeel(string balance) => "purse." + balance;
+
+    /// <summary>A stable key for a named feel — its own space, so it can never collide with a rectangle's.</summary>
+    private static int FeelKey(string name) => HashCode.Combine("forge.feel", name);
+
+    /// <summary>
+    /// Which piece the item-scoped ticks belong to.
+    /// </summary>
+    /// <remarks>
+    /// A tick belongs to the thing it happened to. Click another bag row inside the 0.18 s and the
+    /// item column would otherwise animate the upgraded piece's ITEM POWER into the new piece's — one
+    /// item's number sliding into another's, which is worse than no motion at all. A salvage leaves
+    /// this null (the piece is gone), so the bench's next occupant simply prints its own figures.
+    /// </remarks>
+    private string? _feelFor;
+
+    /// <summary>Forget the last operation's one-shots — called as the next one commits, so a press is one event.</summary>
+    private void FeelStart() { _feelKeys.Clear(); _tickFrom.Clear(); _feelFor = null; }
+
+    /// <summary>A watched number moved: remember where it was, and flash it once.</summary>
+    private void Feel(string name, float from)
+    {
+        var key = FeelKey(name);
+        _tickFrom[key] = from;
+        _feelKeys.Add(key);
+        UiMotion.Flash(key, UiMotion.Transition);
+    }
+
+    /// <summary>A one-shot with no number behind it — the forge flash on the picture, a changed word.</summary>
+    private void FeelFlash(string name, float seconds)
+    {
+        var key = FeelKey(name);
+        _feelKeys.Add(key);
+        UiMotion.Flash(key, seconds);
+    }
+
+    /// <summary>How far through its one-shot a named flash is: 1 just fired → 0 done. Frozen for a capture.</summary>
+    private float Felt(string name)
+    {
+        var key = FeelKey(name);
+        return _feelFrozen && _feelKeys.Contains(key) ? _feelPhase : UiMotion.Pulse(key);
+    }
+
+    /// <summary>
+    /// Where a ticking number stands at a phase of its one-shot: 1 is the instant it fired (the old
+    /// number), 0 is landed (the new one), smoothstepped like every other motion in the game.
+    /// </summary>
+    public static float TickValue(float from, float to, float phase) => to + (from - to) * UiMotion.Smooth(phase);
+
+    /// <summary>
+    /// The number a watched value PRINTS at this phase — the end value at once under Reduced Motion.
+    /// </summary>
+    /// <remarks>
+    /// Public, and pure, because a 0.18 s tick has no other way to be asserted at t = 0, mid and end:
+    /// the Game test drives this directly (tests/unit/IdleXIdle.Game.Tests/forge_feedback_test.cs) and
+    /// the capture rig photographs the same three phases through <c>RH_SHOT_FEEL</c>.
+    /// </remarks>
+    public static float TickShown(float from, float to, float phase)
+        => UiMotion.Reduced || phase <= 0f ? to : TickValue(from, to, phase);
+
+    /// <summary>The value to print for a watched number right now.</summary>
+    private float Ticked(string name, float now)
+        => _tickFrom.TryGetValue(FeelKey(name), out var from) ? TickShown(from, now, Felt(name)) : now;
+
+    /// <summary>The same, rounded — a level count, a power, a balance.</summary>
+    private long TickedWhole(string name, long now) => (long)MathF.Round(Ticked(name, now));
+
+    // The item-scoped three: they answer with the resting value for any piece but the one that changed.
+    private float TickedFor(ItemInstance item, string name, float now)
+        => _feelFor == item.InstanceId ? Ticked(name, now) : now;
+
+    private long TickedWholeFor(ItemInstance item, string name, long now)
+        => _feelFor == item.InstanceId ? TickedWhole(name, now) : now;
+
+    private Color TickInkFor(ItemInstance item, string name, Color rest)
+        => _feelFor == item.InstanceId ? TickInk(name, rest) : rest;
+
+    /// <summary>The feel name a compare row should carry for this piece — null when the change was another's.</summary>
+    private string? FeelOf(ItemInstance item, string name) => _feelFor == item.InstanceId ? name : null;
+
+    /// <summary>
+    /// A watched number's ink while it lands: its resting colour, lifted once toward the accent.
+    /// </summary>
+    /// <remarks>
+    /// Reduced Motion keeps this — brief §32 drops movement and idle motion but keeps simple fades, and
+    /// the value beside it is already at its end (see <see cref="TickShown"/>), so the fade is the only
+    /// thing left saying WHICH number moved.
+    /// </remarks>
+    private Color TickInk(string name, Color rest)
+    {
+        var p = Felt(name);
+        return p <= 0f ? rest : Color.Lerp(rest, UiInk.Accent, UiMotion.Smooth(p));
+    }
+
+    /// <summary>The snapshot an operation takes of everything the two columns print about a piece.</summary>
+    private readonly record struct ItemNumbers(int Level, int Power, float[] Affixes);
+
+    private ItemNumbers NumbersOf(Hunter h, ItemInstance item)
+        => new(item.ItemLevel, h.PowerContribution(item), ItemAffixes.Of(item).Select(a => a.Magnitude).ToArray());
+
+    /// <summary>The piece changed: every number that moved ticks to its new value, and the art flashes once.</summary>
+    private void FeelItem(ItemNumbers was, Hunter h, ItemInstance now)
+    {
+        _feelFor = now.InstanceId;
+        var to = NumbersOf(h, now);
+        if (to.Level != was.Level) Feel(LevelFeel, was.Level);
+        if (to.Power != was.Power) Feel(PowerFeel, was.Power);
+        for (var i = 0; i < was.Affixes.Length && i < to.Affixes.Length; i++)
+            if (MathF.Abs(to.Affixes[i] - was.Affixes[i]) > 1e-4f) Feel(AffixFeel(i), was.Affixes[i]);
+        FeelFlash(ArtFeel, UiMotion.Fast);   // the forge flash on the picture — no shake (§53)
+    }
+
+    /// <summary>The five balances the strip prints, in one snapshot — so a spend needs no per-material bookkeeping.</summary>
+    private readonly record struct Purse(long Gleam, long Scrap, long Essence, long Core, long Crystal);
+
+    private static Purse PurseOf(Hunter h)
+        => new(h.Gleam, h.MaterialOf(Material.Scrap), h.MaterialOf(Material.Essence),
+               h.MaterialOf(Material.Core), h.MaterialOf(Material.Crystal));
+
+    /// <summary>Whatever the operation paid — or paid out — reacts at its own chip in the strip (§37).</summary>
+    private void FeelPurse(Purse was, Hunter h)
+    {
+        var now = PurseOf(h);
+        if (now.Gleam != was.Gleam) Feel(PurseFeel("gleam"), was.Gleam);
+        if (now.Scrap != was.Scrap) Feel(PurseFeel("scrap"), was.Scrap);
+        if (now.Essence != was.Essence) Feel(PurseFeel("essence"), was.Essence);
+        if (now.Core != was.Core) Feel(PurseFeel("core"), was.Core);
+        if (now.Crystal != was.Crystal) Feel(PurseFeel("crystal"), was.Crystal);
+    }
+
+    /// <summary>
+    /// The sound cue for the operation just committed, cleared by reading.
+    /// </summary>
+    /// <remarks>
+    /// The same shape as <c>TraitsScreen.ConsumeCue</c>, for a host that wants to own Forge audio
+    /// centrally. This screen ALSO holds a <see cref="Sound"/> bank and plays the cue itself, so the
+    /// Forge is never silent while the host is unwired — a host that starts playing what this returns
+    /// must clear <see cref="Sound"/> first, or every operation sounds twice.
+    /// </remarks>
+    public string? ConsumeCue()
+    {
+        var c = _cue;
+        _cue = null;
+        return c;
+    }
+
+    private string? _cue;
+
+    /// <summary>Say what just happened, once — the semantic cue, not the house anvil for everything.</summary>
+    private void Cue(string id, float volume)
+    {
+        _cue = id;
+        Sound?.Play(id, volume);
+    }
+
     /// <summary>The item the workbench acts on — resolved by id so a re-forge that
     /// replaces the object keeps the selection. Defaults to the first wearable in the bag.</summary>
     private string? _focusId;
@@ -648,6 +838,7 @@ public sealed class ForgeScreen
             {
                 "reroll" => Tab.Reroll, "socket" => Tab.Socket, "breakdown" => Tab.BreakDown, _ => Tab.Upgrade,
             };
+        ApplyDevFeel(hunter);
         if (Environment.GetEnvironmentVariable("RH_SHOT_ASK") is not { } asks || Target() is not { } item) return;
         foreach (var ask in asks.ToLowerInvariant().Split(',', StringSplitOptions.RemoveEmptyEntries))
         {
@@ -689,6 +880,77 @@ public sealed class ForgeScreen
                 case "say": Say("RE-ROLLED — THE ENCHANT IS NOW FERVOUR  (A REFORGE CHART PAID FOR IT).", Gold); break;
             }
         }
+    }
+
+    /// <summary>
+    /// DEV ONLY: RUN an operation and FREEZE the one-shots it started, so a 0.18 s tick is photographable.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A state no capture can pose has never been looked at, and every piece of feedback this pass added
+    /// is a transient: the rig renders sixty frames and saves the last, by which point a
+    /// <see cref="UiMotion.Transition"/> flash fired on frame one has been over for three quarters of a
+    /// second. So the pose runs the REAL operation — the same method the button calls, the same spend,
+    /// the same Core roll — and then holds every one-shot it started at one phase.
+    /// </para>
+    /// <para>
+    /// <b>The dials.</b> <c>RH_SHOT_FEEL=upgrade|greater|reroll|socket|crush|salvage|sell|merge</c> picks
+    /// the operation; <c>RH_SHOT_FEEL_T=&lt;0..1&gt;</c> the phase held — <b>1</b> (the default) is the
+    /// instant it fired, which is the old number under a full flash; <b>0.5</b> is halfway to the new
+    /// number; and the SAME capture with no dial at all is the settled end state. Three photographs,
+    /// t = 0 · mid · end. Both are read only while <c>RH_SHOT</c> is set, so a real run never sees them:
+    /// </para>
+    /// <code>
+    /// RH_SHOT_ITEM=dev_hero RH_SHOT_FEEL=upgrade RH_SHOT_FEEL_T=0.5 \
+    ///   bash tools/asset-pipeline/capture.sh forge build/shots/p2_forge_tick_mid_100.png
+    /// </code>
+    /// </remarks>
+    private void ApplyDevFeel(Hunter hunter)
+    {
+        if (Environment.GetEnvironmentVariable("RH_SHOT_FEEL") is not { Length: > 0 } feel) return;
+        if (Target() is not { } subject) return;
+
+        switch (feel.ToLowerInvariant())
+        {
+            case "upgrade": _tab = Tab.Upgrade; DoRefine(hunter, subject); break;
+            case "greater": _tab = Tab.Upgrade; DoGreaterRefine(hunter, subject); break;
+            case "reroll": _tab = Tab.Reroll; DoReforgeEnchant(hunter, subject); break;
+            case "socket":
+            {
+                // A gem to set, because the operation needs one and the plain forge fixture holds none.
+                var gem = GemCraft.MintGem(6, _rng);
+                _inv.Add(gem);
+                _gemId = gem.InstanceId;
+                _tab = Tab.Socket;
+                TrySocket(hunter, subject, gem);
+                break;
+            }
+            case "crush":
+            {
+                var gem = GemCraft.MintGem(6, _rng);
+                if (GemCraft.Socket(subject, gem).Product is { } set)
+                {
+                    ReplaceItem(hunter, subject, set);
+                    _tab = Tab.Socket;
+                    CrushNow(hunter, set, 0);
+                }
+                break;
+            }
+            // The *Now variants: the pose is the COMMITTED act, not the question in front of it.
+            case "salvage": _tab = Tab.BreakDown; DismantleNow(hunter, subject); break;
+            case "sell": _tab = Tab.BreakDown; SellNow(hunter, subject); break;
+            case "merge": AutoMergeAll(hunter); break;
+            // Leaves the bag with no junk left, which is also the only way to photograph the bulk
+            // verb's DISABLED state: it says what it needs instead of counting to zero.
+            case "junk": SalvageJunkNow(hunter); break;
+        }
+
+        _feelFrozen = true;
+        _feelPhase = Environment.GetEnvironmentVariable("RH_SHOT_FEEL_T") is { Length: > 0 } t
+                     && float.TryParse(t, System.Globalization.NumberStyles.Float,
+                                       System.Globalization.CultureInfo.InvariantCulture, out var phase)
+            ? Math.Clamp(phase, 0f, 1f)
+            : 1f;
     }
 
     /// <summary>
@@ -1070,7 +1332,16 @@ public sealed class ForgeScreen
             merged++;
         }
 
-        if (merged > 0) Sound?.Play("sfx_forge", 0.7f);
+        if (merged > 0)
+        {
+            // NO NUMBER TICK ON A MERGE. It consumes three pieces and mints a fourth, so the bench may
+            // be pointing at a different item afterwards — ticking "from" a destroyed piece's power
+            // would animate one item's number into another's. What is honest is the anvil: the cue and
+            // the forge flash on whatever the bench holds when the dust settles.
+            FeelStart();
+            FeelFlash(ArtFeel, UiMotion.Fast);
+            Cue("sfx_salvage", 0.7f);
+        }
         Say(merged > 0 ? $"MERGED {merged} TIMES — THE BAG HOLDS {_inv.Count} ITEMS NOW." : "NOTHING TO MERGE — YOU NEED THREE OF THE SAME GRADE AND CLASS.",
             merged > 0 ? Gold : Slate);
         return merged;
@@ -1099,6 +1370,7 @@ public sealed class ForgeScreen
     {
         var junk = JunkOf(hunter);
         if (junk.Count == 0) return;
+        var purse = PurseOf(hunter);
 
         // A SALVAGE CHART DOUBLES THE YIELD. Salvage is the one Forge operation that costs nothing, so
         // its charter cannot waive a price — it raises the return instead. Spent here, after the junk
@@ -1114,7 +1386,10 @@ public sealed class ForgeScreen
             _inv.Remove(it);
         }
 
-        Sound?.Play("sfx_forge", 0.7f);
+        FeelStart();
+        FeelPurse(purse, hunter);          // the tiers that filled up react at their own chips
+        FeelFlash(ArtFeel, UiMotion.Fast);
+        Cue("sfx_salvage", 0.7f);
         Say($"SALVAGED {junk.Count} JUNK ITEMS — +{gained} {MaterialTiers.Name(Material.Scrap)}"
             + (chart ? "  (YOUR SALVAGE CHART DOUBLED IT)." : "."), Gold);
     }
@@ -1139,11 +1414,15 @@ public sealed class ForgeScreen
 
     private void SellNow(Hunter hunter, ItemInstance item)
     {
+        var purse = PurseOf(hunter);
         TakeOffFirst(hunter, item);
         ReleaseGems(item);
         _inv.Remove(item);
         hunter.AddGleam(item.SellValue);
-        Sound?.Play("sfx_forge", 0.55f);
+        FeelStart();
+        FeelPurse(purse, hunter);          // GLEAM ticks UP at its own chip
+        FeelFlash(ArtFeel, UiMotion.Fast);
+        Cue("sfx_salvage", 0.55f);
         Say(item.Gems.Count > 0
                 ? $"SOLD FOR {item.SellValue} GLEAM — ITS {item.Gems.Count} GEMS CAME BACK TO YOU."
                 : $"SOLD FOR {item.SellValue} GLEAM.", Gold);
@@ -1167,13 +1446,17 @@ public sealed class ForgeScreen
 
     private void DismantleNow(Hunter hunter, ItemInstance item)
     {
+        var purse = PurseOf(hunter);
         TakeOffFirst(hunter, item);
         ReleaseGems(item);
         _inv.Remove(item);
         var m = Forge.Dismantle(item, Tuning);
         var tier = MaterialTiers.ForRarity(item.Rarity);   // salvage sorts by rarity into the right tier
         hunter.AddMaterial(tier, m);
-        Sound?.Play("sfx_forge", 0.55f);
+        FeelStart();
+        FeelPurse(purse, hunter);          // the tier it broke into ticks UP at its own chip
+        FeelFlash(ArtFeel, UiMotion.Fast);
+        Cue("sfx_salvage", 0.55f);
         Say(item.Gems.Count > 0
                 ? $"SALVAGED INTO {m} {MaterialTiers.Name(tier)} — ITS {item.Gems.Count} GEMS CAME BACK TO YOU."
                 : $"SALVAGED INTO {m} {MaterialTiers.Name(tier)}.", Slate);
@@ -1238,10 +1521,16 @@ public sealed class ForgeScreen
         var result = Reforge.ReforgeEnchant(item, _rng, ReforgeTuning.Default);
         if (!result.Success) { Say(result.Rejection!, Ember); return; }
 
+        var was = NumbersOf(hunter, item);
+        var purse = PurseOf(hunter);
         var paid = Reforge.PayWith(hunter, tier, result.Cost);
         if (!paid.Paid) { Say($"NEED {cost} {MaterialTiers.Name(tier)} TO RE-ROLL.", Ember); return; }
         ReplaceItem(hunter, item, result.Product!);
-        Sound?.Play("sfx_forge", 0.7f);   // RE-ROLL is an anvil verb — the house forge cue
+        FeelStart();
+        FeelItem(was, hunter, result.Product!);
+        FeelPurse(purse, hunter);          // nothing moves when a REFORGE CHART pays — and nothing flashes
+        FeelFlash(EnchantFeel, UiMotion.Transition);   // the word that changed is the point of this tab
+        Cue("sfx_reroll", 0.7f);           // the lighter shuffle (§55), not the house anvil
         var ench = Enchantments.Of(result.Product!);
         var how = paid.UsedChart ? "A REFORGE CHART PAID FOR IT" : $"{paid.MaterialSpent} {MaterialTiers.Name(tier)} SPENT";
         Say(ench is not null ? $"RE-ROLLED — THE ENCHANT IS NOW {ench.Name}  ({how})." : $"RE-ROLLED THE ENCHANT  ({how}).", Gold);
@@ -1269,12 +1558,19 @@ public sealed class ForgeScreen
             if (hunter.Gleam < r.Gold) { Say($"NEED {r.Gold} GLEAM TO UPGRADE — YOU HOLD {Ab(hunter.Gleam)}.", Ember); return; }
         }
 
+        var was = NumbersOf(hunter, item);
+        var purse = PurseOf(hunter);
         if (chart) hunter.SpendCharter(Charter.Refine);
         else { hunter.SpendMaterial(Material.Scrap, r.Scrap); hunter.SpendGleam(r.Gold); }
 
         var outcome = Forge.TryRefine(item, Tuning, _rng);
         ReplaceItem(hunter, item, outcome.Product);
-        if (!outcome.Failed) Sound?.Play("sfx_upgrade", 0.85f);   // the rung takes; a slip stays silent on purpose
+        // A SLIP MOVES THE NUMBERS TOO, and downward — so the tick runs either way. It is the one
+        // outcome the player most needs to SEE happen rather than discover on a re-read.
+        FeelStart();
+        FeelItem(was, hunter, outcome.Product);
+        FeelPurse(purse, hunter);
+        if (!outcome.Failed) Cue("sfx_upgrade", 0.85f);   // the rung takes; a slip stays silent on purpose
         var how = chart ? "A REFINE CHART PAID FOR IT" : $"{r.Scrap} SCRAP + {r.Gold} GLEAM SPENT";
         if (outcome.Failed)
             Say($"THE UPGRADE SLIPPED — BACK TO LEVEL {outcome.Product.ItemLevel}, UPGRADE {outcome.Product.Upgrades} OF {Tuning.MaxUpgrades}  ({how}).", Ember);
@@ -1296,10 +1592,15 @@ public sealed class ForgeScreen
         if (hunter.MaterialOf(Material.Crystal) < r.Crystal) { Say($"NEED {r.Crystal} CRYSTAL FOR A GREATER UPGRADE — YOU HOLD {hunter.MaterialOf(Material.Crystal):N0}.", Ember); return; }
         if (hunter.Gleam < r.Gold) { Say($"NEED {r.Gold} GLEAM FOR A GREATER UPGRADE — YOU HOLD {Ab(hunter.Gleam)}.", Ember); return; }
 
+        var was = NumbersOf(hunter, item);
+        var purse = PurseOf(hunter);
         hunter.SpendMaterial(Material.Crystal, r.Crystal);
         hunter.SpendGleam(r.Gold);
         ReplaceItem(hunter, item, r.Product);
-        Sound?.Play("sfx_upgrade", 0.9f);
+        FeelStart();
+        FeelItem(was, hunter, r.Product);
+        FeelPurse(purse, hunter);
+        Cue("sfx_upgrade", 0.9f);
         Say($"GREATER UPGRADE — LEVEL {r.Product.ItemLevel}, UPGRADE {r.Product.Upgrades} OF {Tuning.MaxUpgrades}  ({r.Crystal} CRYSTAL + {r.Gold} GLEAM SPENT — IT NEVER SLIPS).", Gold);
     }
 
@@ -1472,6 +1773,8 @@ public sealed class ForgeScreen
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
         var hit = mouse;
         _hovered = null;                 // re-established by whichever surface finds the pointer over an item
+        if (DevHeld) UiKit.MouseHeld = true;        // capture runs only — see DevHeld
+        if (DevReduced) UiMotion.Reduced = true;    // capture runs only — see DevReduced
         if (_devPosePending) ApplyDevPose(hunter);
 
         // A SELL / SALVAGE question is drawn IN PLACE (in the tab that raised it), not as a modal, so
@@ -1507,6 +1810,65 @@ public sealed class ForgeScreen
         if (DevForgeDebug) DrawDebug(b);
     }
 
+    // ── THE HOUSE STATES, ON A CONTROL THIS SCREEN DRAWS ITSELF (brief §25–§29). ─────────────────
+    //
+    // UiKit.Button already carries NORMAL · HOVER · PRESSED · DISABLED for anything shaped like a
+    // button. The Forge's tabs, filter chips, bag rows and socket cells are none of those — they are
+    // plates this file paints — and until this pass a hover on any of them changed nothing at all but
+    // the ink of a word, while a press changed nothing whatever. These two give them the same hand:
+    // HOVER eases in over UiMotion.Fast as a thin luminance lift, PRESSED sinks the face two pixels
+    // and darkens it for exactly as long as the mouse is held.
+    //
+    // THE HIT RECTANGLE NEVER MOVES (§15, LAW "draw = hit"): the depression is a DRAW offset only, and
+    // every caller keeps hit-testing the rectangle it laid out — the same thing UiKit.Button does.
+
+    /// <summary>
+    /// DEV ONLY: <c>RH_SHOT_HELD=1</c> makes a capture read the pointer as HELD DOWN.
+    /// </summary>
+    /// <remarks>
+    /// PRESSED is the one state on this screen no fixture could pose: <see cref="UiKit.MouseHeld"/> is
+    /// set from the real mouse at the top of the host's Update, and a headless run has no finger on the
+    /// button. Read only while <c>RH_SHOT</c> is set, and applied in <c>Draw</c> so it reaches
+    /// <c>UiKit.Button</c> as well as the plates this file paints — pair it with
+    /// <c>RH_SHOT_PAGE_MOUSE=x,y</c>, which decides WHICH control is under the finger.
+    /// </remarks>
+    private static readonly bool DevHeld =
+        Environment.GetEnvironmentVariable("RH_SHOT") is not null
+        && Environment.GetEnvironmentVariable("RH_SHOT_HELD") == "1";
+
+    /// <summary>
+    /// DEV ONLY: <c>RH_SHOT_REDUCED=1</c> poses the screen under Reduced Motion.
+    /// </summary>
+    /// <remarks>
+    /// The accessibility setting lives in the saved prefs file, which a headless capture has no way to
+    /// write, so the ACCESSIBILITY half of §102–§107 — "the same end state, immediately" — could not be
+    /// photographed beside the moving one. Applied in <c>Draw</c>, after the host has set the real
+    /// value for the frame; pair it with <c>RH_SHOT_FEEL</c> to shoot the same operation both ways.
+    /// </remarks>
+    private static readonly bool DevReduced =
+        Environment.GetEnvironmentVariable("RH_SHOT") is not null
+        && Environment.GetEnvironmentVariable("RH_SHOT_REDUCED") == "1";
+
+    /// <summary>Where a self-drawn control puts its face this frame: two pixels down while it is held.</summary>
+    private static Rectangle Face(Rectangle r, bool hover)
+        => hover && UiKit.MouseHeld ? new Rectangle(r.X, r.Y + 2, r.Width, r.Height) : r;
+
+    /// <summary>The hover lift and the press shadow — over the control's own surface, under its label.</summary>
+    private void Touch(SpriteBatch b, Rectangle hitRect, Rectangle face, bool hover)
+    {
+        var lift = UiMotion.Ease(UiMotion.KeyOf(hitRect), hover ? 1f : 0f);
+        if (lift > 0f) _ui.Fill(b, face, Color.White * (0.07f * lift));
+        if (hover && UiKit.MouseHeld) _ui.Fill(b, face, Color.Black * 0.18f);
+    }
+
+    /// <summary>The SELECTED edge: a thin gold outline (§23) — persistent structure a hover can never mimic.</summary>
+    private void SelectedEdge(SpriteBatch b, Rectangle r)
+    {
+        _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, 1), Gold);
+        _ui.Fill(b, new Rectangle(r.X, r.Bottom - 1, r.Width, 1), Gold);
+        _ui.Fill(b, new Rectangle(r.Right - 1, r.Y, 1, r.Height), Gold);
+    }
+
     /// <summary>
     /// The bag, as a list you can see and click.
     /// </summary>
@@ -1533,8 +1895,11 @@ public sealed class ForgeScreen
             var chip = FilterChip(i);
             var on = (int)_filter == i;
             var hot = chip.Contains(hit);
-            _ui.Plate(b, chip, on ? UiInk.Accent : null);
-            _ui.TextCenterBig(b, names[i], chip.Center.X, chip.Y + (chip.Height - UiTypography.Caption) / 2 - 1,
+            var face = Face(chip, hot);
+            _ui.Plate(b, face, on ? UiInk.Accent : null);
+            Touch(b, chip, face, hot);
+            if (on) SelectedEdge(b, face);
+            _ui.TextCenterBig(b, names[i], face.Center.X, face.Y + (face.Height - UiTypography.Caption) / 2 - 1,
                               on ? UiInk.Accent : hot ? Bone : Slate, UiTypography.Caption);
             if (UiKit.ClickedIn(chip, hit, clicked)) _filter = (BagFilter)i;
         }
@@ -1601,13 +1966,20 @@ public sealed class ForgeScreen
             }
             if (gem && !ConfirmOpen && UiKit.ClickedIn(row, hit, rightClicked)) Sell(hunter, it);
 
-            _ui.Plate(b, row, sel ? rc : null);
-            _ui.Fill(b, new Rectangle(row.X, row.Y, 5, row.Height), rc);
+            // NORMAL · HOVER · PRESSED · SELECTED, and they are four different things to look at: the
+            // rarity rule is the row's identity, the luminance lift is the pointer, the two-pixel sink
+            // is the press, and the gold outline is the piece on the bench. Before this pass a hovered
+            // row and a selected row were both "the same plate, one word in a different ink".
+            var face = Face(row, hover);
+            _ui.Plate(b, face, sel ? rc : null);
+            Touch(b, row, face, hover);
+            if (sel) SelectedEdge(b, face);
+            _ui.Fill(b, new Rectangle(face.X, face.Y, 5, face.Height), rc);
 
             // The icon fills the row less a breath; the name sits one breath past it, centred on the row.
-            var icon = row.Height - UiMetrics.Space(6);
-            var iconX = row.X + UiMetrics.Space(10);
-            DrawItemIcon(b, it, new Rectangle(iconX, row.Y + (row.Height - icon) / 2, icon, icon));
+            var icon = face.Height - UiMetrics.Space(6);
+            var iconX = face.X + UiMetrics.Space(10);
+            DrawItemIcon(b, it, new Rectangle(iconX, face.Y + (face.Height - icon) / 2, icon, icon));
 
             // ONE LINE PER ROW. A gem row used to draw two — a name at 19 px and its grant under it —
             // which needed 52 px inside a 40 px row once the type ladder settled. The gem's level moved
@@ -1615,12 +1987,12 @@ public sealed class ForgeScreen
             var right = gem ? GemCraft.Grant(it) : isWorn ? "WORN" : $"LEVEL {it.ItemLevel}";
             var rightInk = gem ? Met : isWorn ? Gold : Slate;
             var textX = iconX + icon + UiMetrics.Space(10);
-            var textY = row.Y + (row.Height - UiTypography.Body) / 2 - 1;
+            var textY = face.Y + (face.Height - UiTypography.Body) / 2 - 1;
             var pad = UiMetrics.Space(8);
-            var nameRoom = row.Right - pad - _ui.MeasureBig(right, UiTypography.Body) - UiMetrics.Space(16) - textX;
+            var nameRoom = face.Right - pad - _ui.MeasureBig(right, UiTypography.Body) - UiMetrics.Space(16) - textX;
             _ui.TextBig(b, _ui.ShortenBig(gem ? GemCraft.NameOf(it) : ItemNaming.FullName(it), nameRoom, UiTypography.Body),
                         textX, textY, sel ? Bone : rc, UiTypography.Body);
-            _ui.TextRightBig(b, right, row.Right - pad, textY, rightInk, UiTypography.Body);
+            _ui.TextRightBig(b, right, face.Right - pad, textY, rightInk, UiTypography.Body);
         }
 
         // A SCROLLBAR, so "there is more below" is something you can SEE rather than something you find
@@ -1667,7 +2039,12 @@ public sealed class ForgeScreen
             _ui.TextBig(b, _ui.ShortenBig("YOU NEED THREE OF THE SAME GRADE.", BagContentW, UiTypography.Secondary),
                         UiKit.ContentLeft(BagPanel), MergePreviewY, Slate, UiTypography.Secondary);
 
-        if (_ui.Button(b, SalvageJunkBtn, $"SALVAGE COMMON AND UNCOMMON  ({junk})", hit, clicked, enabled: junk > 0))
+        // A DISABLED CONTROL SAYS WHY (§29). The MERGE button has the preview line under it to explain
+        // itself; this one sits on the panel's own foot with nothing below it, so the label carries the
+        // reason instead of a count of zero — "(0)" is a number, not an answer.
+        if (_ui.Button(b, SalvageJunkBtn,
+                       junk > 0 ? $"SALVAGE COMMON AND UNCOMMON  ({junk})" : "NO COMMON OR UNCOMMON GEAR TO SALVAGE",
+                       hit, clicked, enabled: junk > 0))
             SalvageJunk(hunter);
     }
 
@@ -1735,14 +2112,19 @@ public sealed class ForgeScreen
         {
             var chip = MatChip(i);
             var r = rows[i];
+            // ── THE CHIP THAT PAID REACTS (§37). A short wash over the chip and its figure ticking from
+            //    what it was to what it is — no flying resources, no new label, nothing that repeats.
+            var feel = PurseFeel(r.Key);
+            var moved = Felt(feel);
+            if (moved > 0f) _ui.Fill(b, chip, UiInk.Accent * (0.16f * UiMotion.Smooth(moved)));
             DrawMatIcon(b, r.Icon, r.Tint, new Rectangle(chip.X, chip.Y + UiMetrics.Space(2), MatIconSize, MatIconSize));
             // The name gives way to the figure: a chip is one balance, and the number is the balance.
-            var held = Ab(r.Held);
+            var held = Ab(TickedWhole(feel, r.Held));
             var nameX = chip.X + MatIconSize + UiMetrics.Space(8);
             var nameRoom = chip.Right - _ui.MeasureBig(held, UiTypography.Headline) - UiMetrics.Space(8) - nameX;
             _ui.TextBig(b, _ui.ShortenBig(r.Name, nameRoom, UiTypography.Secondary), nameX, chip.Y + UiMetrics.Space(6),
                         Slate, UiTypography.Secondary);
-            _ui.TextRightBig(b, held, chip.Right, chip.Y, Bone, UiTypography.Headline);
+            _ui.TextRightBig(b, held, chip.Right, chip.Y, TickInk(feel, Bone), UiTypography.Headline);
             if (marks.TryGetValue(r.Key, out var mark))
                 _ui.TextRightBig(b, mark.Text, chip.Right, chip.Y + UiTypography.Pitch(UiTypography.Headline),
                                  mark.Colour, UiTypography.Secondary);
@@ -1932,11 +2314,13 @@ public sealed class ForgeScreen
             var r = TabRect(i);
             var on = (int)_tab == i;
             var hover = r.Contains(hit);
-            _ui.Plate(b, r, on ? UiInk.Accent : null);
-            if (on) _ui.Fill(b, new Rectangle(r.X, r.Bottom - 3, r.Width, 3), Gold);
+            var face = Face(r, hover);
+            _ui.Plate(b, face, on ? UiInk.Accent : null);
+            Touch(b, r, face, hover);
+            if (on) _ui.Fill(b, new Rectangle(face.X, face.Bottom - 3, face.Width, 3), Gold);
             // A THING YOU CLICK, at the rung things you click are set in, centred on the tab.
-            _ui.TextCenterBig(b, _ui.ShortenBig(TabNames[i], r.Width - UiMetrics.Space(12), UiTypography.NavigationLabel),
-                              r.Center.X, r.Y + (r.Height - UiTypography.NavigationLabel) / 2, on ? Gold : hover ? Bone : Slate,
+            _ui.TextCenterBig(b, _ui.ShortenBig(TabNames[i], face.Width - UiMetrics.Space(12), UiTypography.NavigationLabel),
+                              face.Center.X, face.Y + (face.Height - UiTypography.NavigationLabel) / 2, on ? Gold : hover ? Bone : Slate,
                               UiTypography.NavigationLabel, TextFace.Strong);
             // Switching tabs withdraws any question the old tab was asking — see NormaliseConfirm.
             if (UiKit.ClickedIn(r, hit, clicked) && !on) { _tab = (Tab)i; _confirm = null; _socketAsk = null; }
@@ -1994,8 +2378,9 @@ public sealed class ForgeScreen
             y += UiTypography.Pitch(size);
         }
         var kind = ItemNames.TryGetValue(item.BaseType, out var kn) ? kn : item.BaseType.ToString().ToUpperInvariant();
-        Header($"{RarityNames[(int)item.Rarity]}  ·  {kind}  ·  LEVEL {item.ItemLevel}" + (worn ? "  ·  WORN" : ""),
-               worn ? Gold : rc, UiTypography.Secondary);
+        // LEVEL ticks: an upgrade lands +1 and a GREATER UPGRADE +5, and the line brightens once as it does.
+        Header($"{RarityNames[(int)item.Rarity]}  ·  {kind}  ·  LEVEL {TickedWholeFor(item, LevelFeel, item.ItemLevel)}" + (worn ? "  ·  WORN" : ""),
+               TickInkFor(item, LevelFeel, worn ? Gold : rc), UiTypography.Secondary);
         Header(ItemNaming.FullName(item), rc, UiTypography.Headline);
 
         // THE ELEMENT, as one chip. It used to take two lines, the second of which defined the element
@@ -2027,6 +2412,7 @@ public sealed class ForgeScreen
         var art = Math.Clamp(ItemArtMax - Math.Max(0, need - roomAtFull), ItemArtMin, ItemArtMax);
         var iconBox = new Rectangle(ItemPanel.Center.X - art / 2, y + UiMetrics.Space(6), art, art);
         DrawItemIcon(b, item, iconBox);
+        ForgeFlash(b, iconBox);
         if (iconBox.Contains(hit)) _hovered = item;    // the big picture carries the full tooltip
         y = iconBox.Bottom + UiMetrics.Space(10);
 
@@ -2065,12 +2451,13 @@ public sealed class ForgeScreen
             walk.Y += UiTypography.Pitch(size);
         }
 
-        void Pair(string label, string value)
+        // A pair may name a WATCHED number: its value then brightens once while it lands (§36).
+        void Pair(string label, string value, string? feel = null)
         {
             if (!Room(UiTypography.Body)) return;
             var vw = _ui.MeasureBig(value, UiTypography.Body);
             _ui.TextBig(b, _ui.ShortenBig(label, rowW - vw - UiMetrics.Space(16), UiTypography.Body), x, walk.Y, Slate, UiTypography.Body);
-            _ui.TextRightBig(b, value, walk.Right, walk.Y, Bone, UiTypography.Body);
+            _ui.TextRightBig(b, value, walk.Right, walk.Y, feel is null ? Bone : TickInkFor(item, feel, Bone), UiTypography.Body);
             walk.Y += UiTypography.Pitch(UiTypography.Body);
         }
 
@@ -2083,9 +2470,16 @@ public sealed class ForgeScreen
 
         Rule();
         Head("WHAT IT DOES");
-        Pair("ITEM POWER", $"{hunter.PowerContribution(item):N0}");
+        Pair("ITEM POWER", $"{TickedWholeFor(item, PowerFeel, hunter.PowerContribution(item)):N0}", PowerFeel);
         if (affixes.Count == 0) Line("NO STATS — RARER ITEMS CARRY MORE.", UiInk.Empty, UiTypography.Secondary);
-        foreach (var a in affixes) Pair(ItemAffixes.StatWord(a.Stat), ItemAffixes.GrantLabel(a.Stat, a.Magnitude));
+        // THE CHANGED STATS HIGHLIGHT (§53). Each row ticks in its own stat's unit, through the same
+        // Core label the resting row uses — so a stat that did not move prints exactly as it always did.
+        for (var i = 0; i < affixes.Count; i++)
+        {
+            var a = affixes[i];
+            Pair(ItemAffixes.StatWord(a.Stat),
+                 ItemAffixes.GrantLabel(a.Stat, TickedFor(item, AffixFeel(i), a.Magnitude)), AffixFeel(i));
+        }
 
         if (trait is { } tr)
         {
@@ -2140,16 +2534,23 @@ public sealed class ForgeScreen
             for (var i = 0; i < slots; i++)
             {
                 var box = new Rectangle(x + i * boxPitch, boxTop, socketBox, socketBox);
-                _ui.Plate(b, box);
-                if (i < item.Gems.Count)
+                // A FILLED CELL IS A CONTROL (it crushes the gem) and gets the house states; an EMPTY one
+                // is not clickable, so it stays QUIET — a hover lift on it would promise an act that
+                // does not exist (§50: empty cells quiet; "draw = hit" both ways).
+                var filled = i < item.Gems.Count;
+                var over = filled && box.Contains(hit);
+                var face = Face(box, over);
+                _ui.Plate(b, face);
+                if (filled)
                 {
-                    DrawItemIcon(b, item.Gems[i], new Rectangle(box.X + inset, box.Y + inset, socketBox - 2 * inset, socketBox - 2 * inset));
+                    Touch(b, box, face, over);
+                    DrawItemIcon(b, item.Gems[i], new Rectangle(face.X + inset, face.Y + inset, socketBox - 2 * inset, socketBox - 2 * inset));
                     // A set gem can be CRUSHED — the existing question owns the act.
                     if (UiKit.ClickedIn(box, hit, clicked)) { _tab = Tab.Socket; RequestCrush(item, i); }
-                    if (box.Contains(hit)) _hovered = item.Gems[i];
+                    if (over) _hovered = item.Gems[i];
                 }
                 else
-                    _ui.TextCenterBig(b, "+", box.Center.X, box.Y + (socketBox - UiTypography.Body) / 2 - UiMetrics.Space(3),
+                    _ui.TextCenterBig(b, "+", face.Center.X, face.Y + (socketBox - UiTypography.Body) / 2 - UiMetrics.Space(3),
                                       UiInk.Empty, UiTypography.Body);
             }
         }
@@ -2167,12 +2568,38 @@ public sealed class ForgeScreen
         }
     }
 
+    /// <summary>
+    /// The forge flash: white light over the piece the anvil just struck, gone in a tenth of a second.
+    /// </summary>
+    /// <remarks>
+    /// Brief §53 asks for "a brief forge flash" on the item and explicitly rules out screen shake, so
+    /// this moves nothing — the picture stays exactly where it is and the light is the whole event. A
+    /// white fill over a near-black panel reads as additive without a second SpriteBatch pass (this
+    /// screen draws inside the host's one AlphaBlend batch; a Begin/End here would break the batching
+    /// budget for one frame's worth of glow). The halo outside the box is what makes it read as light
+    /// coming OFF the piece rather than as a card being covered up.
+    /// </remarks>
+    private void ForgeFlash(SpriteBatch b, Rectangle box)
+    {
+        var p = Felt(ArtFeel);
+        if (p <= 0f) return;
+        var a = UiMotion.Smooth(p);
+        _ui.Fill(b, Grow(box, UiMetrics.Space(10)), Color.White * (0.16f * a));
+        _ui.Fill(b, box, Color.White * (0.50f * a));
+    }
+
     // ── THE COMPARE — the centre of the screen (§56). ────────────────────────────────────────────
     //
     // One row: what it is called, what it is now, what it becomes. The AFTER value is set at Headline
     // and the arrow is 16 px, because this is the thing the player came to read; it used to be Body
     // values behind a 20 px arrow on a panel four hundred pixels from the button.
-    private void ChangeRow(ref RowWalk w, string label, string? before, string after, Color afterInk, SpriteBatch b)
+    /// <param name="feel">
+    /// The watched number this row's BEFORE value is. The compare's before IS the item's current value,
+    /// so after an operation it lands on a new figure — named here, it ticks there and brightens once
+    /// instead of simply being a different number on the next frame (§36).
+    /// </param>
+    private void ChangeRow(ref RowWalk w, string label, string? before, string after, Color afterInk, SpriteBatch b,
+                           string? feel = null)
     {
         if (!w.Take(CompareRowH)) return;
         var y = w.Y;
@@ -2188,7 +2615,7 @@ public sealed class ForgeScreen
             var arrowX = edge - used - gap - arrow / 2;
             Arrow(b, arrowX, y + UiTypography.Headline / 2 - 1, Slate, arrow);
             var beforeRight = arrowX - gap;
-            _ui.TextRightBig(b, before, beforeRight, y, Slate, UiTypography.Headline);
+            _ui.TextRightBig(b, before, beforeRight, y, feel is null ? Slate : TickInk(feel, Slate), UiTypography.Headline);
             used = edge - beforeRight + _ui.MeasureBig(before, UiTypography.Headline);
         }
         _ui.TextBig(b, _ui.ShortenBig(label, edge - FX - used - UiMetrics.Space(16), UiTypography.Body),
@@ -2250,13 +2677,16 @@ public sealed class ForgeScreen
         {
             // ── WHAT WILL CHANGE. The whole reason this column is the wide one. ──
             var rows = BeginRows(body);
-            ChangeRow(ref rows, "ITEM LEVEL", $"{item.ItemLevel}", $"{r.Product.ItemLevel}", Met, b);
-            ChangeRow(ref rows, "ITEM POWER", $"{hunter.PowerContribution(item):N0}",
-                      $"{hunter.PowerContribution(r.Product):N0}", Met, b);
+            ChangeRow(ref rows, "ITEM LEVEL", $"{TickedWholeFor(item, LevelFeel, item.ItemLevel)}", $"{r.Product.ItemLevel}", Met, b,
+                      FeelOf(item, LevelFeel));
+            ChangeRow(ref rows, "ITEM POWER", $"{TickedWholeFor(item, PowerFeel, hunter.PowerContribution(item)):N0}",
+                      $"{hunter.PowerContribution(r.Product):N0}", Met, b, FeelOf(item, PowerFeel));
             var cur = ItemAffixes.Of(item);
             var nxt = ItemAffixes.Of(r.Product);
             for (var i = 0; i < cur.Count && i < nxt.Count; i++)
-                ChangeRow(ref rows, ItemAffixes.StatWord(cur[i].Stat), AffixValPrecise(cur[i]), AffixValPrecise(nxt[i]), Met, b);
+                ChangeRow(ref rows, ItemAffixes.StatWord(cur[i].Stat),
+                          ItemAffixes.GrantLabelPrecise(cur[i].Stat, TickedFor(item, AffixFeel(i), cur[i].Magnitude)),
+                          AffixValPrecise(nxt[i]), Met, b, FeelOf(item, AffixFeel(i)));
             EndRows(rows);
 
             // ── WHAT IS UNCERTAIN — the step count and the risk, in one line. (The progress bar that
@@ -2324,7 +2754,7 @@ public sealed class ForgeScreen
         // candidate percentage: Core has no ordering over enchants, and printing one would invent it.
         // The list is walked like the compare, so a pool the column cannot hold scrolls on the wheel.
         var rows = BeginRows(body);
-        ChangeRow(ref rows, "ENCHANT", ench?.Name ?? "NONE", "ONE OF THESE", Gold, b);
+        ChangeRow(ref rows, "ENCHANT", ench?.Name ?? "NONE", "ONE OF THESE", Gold, b, FeelOf(item, EnchantFeel));
         var slot = Gear.SlotFor(item.BaseType);
         if (slot is { } sl)
             foreach (var kind in Enchantments.PoolFor(sl).Where(k => ench is null || k != ench.Kind))
@@ -2431,8 +2861,8 @@ public sealed class ForgeScreen
         {
             var product = GemCraft.Socket(item, gem).Product;
             var rows = BeginRows(body);
-            ChangeRow(ref rows, "ITEM POWER", $"{hunter.PowerContribution(item):N0}",
-                      product is null ? "—" : $"{hunter.PowerContribution(product):N0}", Met, b);
+            ChangeRow(ref rows, "ITEM POWER", $"{TickedWholeFor(item, PowerFeel, hunter.PowerContribution(item)):N0}",
+                      product is null ? "—" : $"{hunter.PowerContribution(product):N0}", Met, b, FeelOf(item, PowerFeel));
             ChangeRow(ref rows, $"ADDS {ItemAffixes.StatWord(GemCraft.StatOf(gem))}", null,
                       ItemAffixes.GrantLabel(GemCraft.StatOf(gem), GemCraft.Magnitude(gem)), Met, b);
             ChangeRow(ref rows, "SOCKETS USED", $"{item.Gems.Count} OF {slots}", $"{item.Gems.Count + 1} OF {slots}", Bone, b);
@@ -2489,6 +2919,8 @@ public sealed class ForgeScreen
         var (product, rejection) = GemCraft.Socket(host, gem);
         if (product is null) { Say(rejection!, Ember); return; }
 
+        var was = NumbersOf(hunter, host);
+        var purse = PurseOf(hunter);
         // A free first gem spends nothing (SpendMaterial refuses a zero anyway); either way the free
         // one is now USED, and every later socket is the Essence sink it always was.
         if (cost > 0) hunter.SpendMaterial(Material.Essence, cost);
@@ -2496,7 +2928,10 @@ public sealed class ForgeScreen
         FreeSocketUsed = true;
         _inv.Remove(gem);
         ReplaceItem(hunter, host, product);
-        Sound?.Play("sfx_gem", 0.8f);   // the crystalline ping — a gem set for good
+        FeelStart();
+        FeelItem(was, hunter, product);
+        FeelPurse(purse, hunter);          // a free first gem moves no balance, so no chip flashes
+        Cue("sfx_gem", 0.8f);   // the crystalline ping — a gem set for good
         var paid = wasFree ? "YOUR FIRST GEM WAS FREE" : $"{cost} ESSENCE SPENT";
         Say($"{GemCraft.NameOf(gem)} {gem.ItemLevel} SET — {ItemAffixes.GrantLabel(GemCraft.StatOf(gem), GemCraft.Magnitude(gem))} {AffixName(GemCraft.StatOf(gem))}  ({paid}).", Gold);
     }
@@ -2515,7 +2950,12 @@ public sealed class ForgeScreen
     private void CrushNow(Hunter hunter, ItemInstance host, int index)
     {
         if (GemCraft.Crush(host, index) is not { } result) return;
+        var was = NumbersOf(hunter, host);
         ReplaceItem(hunter, host, result.Product);
+        // The stat the gem was granting leaves — the same tick, downward, so a crush is as visible as a set.
+        FeelStart();
+        FeelItem(was, hunter, result.Product);
+        Cue("sfx_gem", 0.6f);
         Say($"{GemCraft.NameOf(result.Crushed)} CRUSHED — THE SOCKET IS OPEN.", Slate);
     }
 
