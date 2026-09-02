@@ -57,12 +57,30 @@ public static class UiMotion
 
     /// <summary>
     /// A value that eases toward <paramref name="target"/> (0 or 1, typically) over <paramref name="seconds"/>,
-    /// smoothstepped. Ask every frame; the first ask starts at the target's opposite so a hover fades IN.
+    /// smoothstepped. Ask it EVERY frame, for every control, whether or not anything is happening — a
+    /// control that is standing still reads a flat 0 and costs nothing.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ZERO IS REST. A key this has never seen is a control at rest, so it starts at 0 and a hover
+    /// (target 1) fades in from there. It used to start at <c>1 - target</c> instead, on the reasoning
+    /// that "the first ask starts at the target's opposite so a hover fades IN" — which is right for a
+    /// hover and wrong for everything else, because a settled 0 FORGETS its key (a rested control
+    /// costs nothing) and the very next ask then read a missing key as 1 and began fading down again.
+    /// A control nobody was pointing at sawtoothed between 0 and 0.9 forever, which is the opposite of
+    /// brief §30's "animate CHANGE, not everything".
+    /// </para>
+    /// <para>
+    /// Four of the eleven screens in the UI polish pass had independently written a private guard
+    /// around this call — "only ask while something is actually moving" — which is what a shared
+    /// primitive looks like when it cannot be trusted. <c>tests/unit/IdleXIdle.Game.Tests/ui_motion_rest_test.cs</c>
+    /// pins the contract so the guards can come back out.
+    /// </para>
+    /// </remarks>
     public static float Ease(int key, float target, float seconds = Fast)
     {
         if (Reduced) { Eased.Remove(key); return target; }
-        var have = Eased.TryGetValue(key, out var v) ? v : 1f - target;
+        var have = Eased.TryGetValue(key, out var v) ? v : 0f;
         var step = seconds <= 0f ? 1f : _dt / seconds;
         v = have < target ? MathF.Min(target, have + step) : MathF.Max(target, have - step);
         if (MathF.Abs(v - target) < 1e-4f)

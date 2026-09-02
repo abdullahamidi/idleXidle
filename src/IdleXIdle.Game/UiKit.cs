@@ -907,8 +907,8 @@ public sealed class UiKit
             else b.Draw(tex, r, Color.White);
         }
         else { Fill(b, r, hover ? Slate : PanelBg); Fill(b, new Rectangle(r.X + 1, r.Y + 1, r.Width - 2, r.Height - 2), enabled ? PanelEdge : Dim); }
-        if (lift > 0f) Fill(b, PanelInner(r), Color.White * (0.07f * lift));
-        if (pressed) Fill(b, PanelInner(r), Color.Black * 0.18f);
+        if (lift > 0f) Fill(b, ButtonFace(r), Color.White * (0.07f * lift));
+        if (pressed) Fill(b, ButtonFace(r), Color.Black * 0.18f);
 
         // Every button surface is dark or deep-green, so the label is always LIGHT — bright cream on hover
         // for feedback, dim when disabled. (No more dark-ink-on-hover; that was the unreadable flip.)
@@ -936,6 +936,27 @@ public sealed class UiKit
 
     /// <summary>The ornamented end of the 256×96 button art, in source pixels — everything past it is plain border.</summary>
     private const int ButtonCapSrcPx = 44;   // ui-size-ok: source pixels in the button art, not type
+
+    /// <summary>
+    /// The FACE of a button: the area inside its own frame art, which is what the hover lift and the
+    /// pressed darkening tint.
+    /// </summary>
+    /// <remarks>
+    /// This used to be <see cref="PanelInner"/>, whose inset is the PANEL corner ornament — 40 px, or
+    /// half the shorter side, whichever is less. On a button that is the whole button: a 64 px-tall
+    /// button inset by 30 leaves a face FOUR PIXELS tall, so the hover lift was not a face at all but a
+    /// bright stripe drawn straight through the label, and the pressed state was the same stripe in
+    /// black. Every button in the game had it, at every profile (build/shots/btn_before.png).
+    /// A button's frame is thin and proportional: an eighth of its height above and below, and the end
+    /// ornament's own width at the sides (<see cref="FieldCapWidth"/>), so the tint stops where the
+    /// scrollwork begins instead of washing over it.
+    /// </remarks>
+    private static Rectangle ButtonFace(Rectangle r)
+    {
+        var inset = Math.Max(2, r.Height / 8);
+        var side = Math.Min(FieldCapWidth(r.Height), Math.Max(2, r.Width / 2 - 2));
+        return new Rectangle(r.X + side, r.Y + inset, Math.Max(1, r.Width - side * 2), Math.Max(1, r.Height - inset * 2));
+    }
 
     /// <summary>
     /// How wide the button art's end ornament lands at a given control height — the inset a caller
