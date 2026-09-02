@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -233,6 +234,51 @@ public sealed class TrainingScreen
         return r;
     }
 
+    /// <summary>
+    /// The sound the host should play, read once and cleared — <c>sfx_error</c> the moment a TRAIN is
+    /// refused for Gleam (a click on a NEED button, or Enter on a row the purse cannot cover). The host
+    /// owns audio; the same shape as <see cref="TraitsScreen.ConsumeCue"/>.
+    /// </summary>
+    public string? ConsumeCue()
+    {
+        var c = _cue;
+        _cue = null;
+        return c;
+    }
+
+    private string? _cue;
+
+    /// <summary>
+    /// A NEED button was clicked, or Enter pressed on a row that costs more than the purse holds. Draw
+    /// only records it; the next Update turns it into the cue and the pill's one Ember flash.
+    /// </summary>
+    private bool _refused;
+
+    /// <summary>
+    /// What the row and the pill SHOWED the frame a TRAIN was requested — taken in Draw, where the figures
+    /// are, and answered in the next Update: if the Hunter's rank grew, the host bought it, and the
+    /// feedback plays from these values to the live ones. Shown, not true, values: a second click while
+    /// the first tick is still moving continues from where the number is, not from where it was.
+    /// </summary>
+    private readonly record struct Pending(HunterStat Stat, int Rank, float Gleam, float Now, float After, float RankShown);
+
+    private Pending? _pending;
+
+    /// <summary>The one TRAIN feedback in flight — cost paid → stat highlights → progress animates (§39).</summary>
+    private readonly TrainFeedback _fx = new();
+
+    /// <summary>The refusal's pulse: the pill flashes Ember ONCE, keyed to the event, never re-armed by Draw.</summary>
+    private static readonly int RefuseKey = HashCode.Combine("training-refused", 0);
+
+    /// <summary>How much of the refusal flash is left this frame, 1 → 0. Read in Update, drawn in Draw.</summary>
+    private float _refuseGlow;
+
+    /// <summary>The GLEAM figure the header drew this frame — mid-tick, the number a snapshot continues from.</summary>
+    private float _gleamShown;
+
+    /// <summary>The salt a row's hover ease is keyed under — by stat, so a scroll does not restart the fade.</summary>
+    private const int RowHoverSalt = 0x7A11;
+
     /// <summary>True once, after the armed RESET ALL TRAINING button's confirming second click.</summary>
     /// <remarks>
     /// The host answers it with <c>Hunter.ResetTraining()</c> — which validates again (Core is the
@@ -267,6 +313,40 @@ public sealed class TrainingScreen
         Environment.GetEnvironmentVariable("RH_SHOT") is not null
         && Environment.GetEnvironmentVariable("RH_SHOT_ARM") == "reset";
 
+    /// <summary>
+    /// DEV ONLY: <c>RH_SHOT_TRAIN=&lt;word&gt;</c> (MIGHT, TEMPO …) poses the feedback of a TRAIN just
+    /// bought, held at one instant, so the frame-60 shutter can photograph a 180 ms event.
+    /// </summary>
+    /// <remarks>
+    /// The pose goes through the REAL path. The screen selects the row and requests the train exactly as
+    /// a click would; the HOST spends the Gleam (this screen never touches the Hunter); the next Update
+    /// sees the rank grow and starts the feedback — then holds it at <c>RH_SHOT_TRAIN_T</c> (0..1 through
+    /// the Transition; 0.5 by default: numbers half-ticked, bar half-way, flash at half strength) instead
+    /// of reading the clock. A row the purse cannot afford poses the REFUSAL instead: the pill's Ember
+    /// flash, the moment sfx_error is cued. <c>RH_SHOT_HOLD=1</c> holds the left mouse button for the
+    /// capture, so RH_SHOT_PAGE_MOUSE over a row or a button poses its PRESSED state. All read once, and
+    /// only while <c>RH_SHOT</c> itself is set, so a normal run never looks at them.
+    /// </remarks>
+    private string? _devTrainPending =
+        Environment.GetEnvironmentVariable("RH_SHOT") is not null
+            ? Environment.GetEnvironmentVariable("RH_SHOT_TRAIN") : null;
+
+    /// <summary>DEV: the phase the posed feedback is held at — null outside a posed capture.</summary>
+    private readonly float? _devPhase =
+        Environment.GetEnvironmentVariable("RH_SHOT") is not null
+        && Environment.GetEnvironmentVariable("RH_SHOT_TRAIN") is { Length: > 0 }
+            ? float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_TRAIN_T"), NumberStyles.Float,
+                             CultureInfo.InvariantCulture, out var t) ? Math.Clamp(t, 0f, 1f) : 0.5f
+            : null;
+
+    /// <summary>DEV: hold the left mouse button, so a PRESSED state can be photographed.</summary>
+    private readonly bool _devHold =
+        Environment.GetEnvironmentVariable("RH_SHOT") is not null
+        && Environment.GetEnvironmentVariable("RH_SHOT_HOLD") == "1";
+
+    /// <summary>DEV: the posed refusal stays lit at the phase — its pulse alone would be over by frame 11.</summary>
+    private bool _devRefuseLit;
+
     /// <summary>DEV: pose the inspector on a named stat for a capture (RH_SHOT_SELECT).</summary>
     public void DevSelect(string word)
     {
@@ -300,14 +380,56 @@ public sealed class TrainingScreen
     {
         ArgumentNullException.ThrowIfNull(hunter);
         _wheel = wheel;
+        DevPose(hunter);
         var order = Order;
         var at = _selected is { } s ? Math.Max(0, Array.IndexOf(order, s)) : 0;
 
         bool Pressed(Keys k) => keys.IsKeyDown(k) && !prev.IsKeyDown(k);
         if (Pressed(Keys.Down)) { _selected = order[(at + 1) % order.Length]; _revealSelected = true; }
         if (Pressed(Keys.Up)) { _selected = order[(at - 1 + order.Length) % order.Length]; _revealSelected = true; }
-        if (Pressed(Keys.Enter) && _selected is { } pick && hunter.CanTrain(pick)) _trainRequest = pick;
+        if (Pressed(Keys.Enter) && _selected is { } pick)
+        {
+            if (hunter.CanTrain(pick)) _trainRequest = pick;
+            // The same refusal a click on NEED gets. A maxed row is not refused — nothing was asked for.
+            else if (hunter.RankOf(pick) < hunter.StatRankCap) _refused = true;
+        }
         if (Pressed(Keys.Escape)) CancelConfirm();
+
+        // ── THE FEEDBACK, advanced here with the host's dt — never from Draw. ────────────────────
+        // A request is answered one frame later: Draw asked, the host spent (or did not), and the rank
+        // is the proof. Every from-value was photographed by Draw at the click; every to-value is the
+        // live one the rows read anyway, so the tick cannot end anywhere but on the truth.
+        if (_pending is { } p)
+        {
+            _pending = null;
+            if (hunter.RankOf(p.Stat) > p.Rank) _fx.Start(p.Stat, p.Gleam, p.Now, p.After, p.RankShown);
+        }
+        if (_refused)
+        {
+            _refused = false;
+            _cue = "sfx_error";
+            UiMotion.Flash(RefuseKey, UiMotion.Transition);
+            if (_devPhase is not null) _devRefuseLit = true;
+        }
+        _fx.Advance(_devPhase);
+        _refuseGlow = _devPhase is { } phase && _devRefuseLit ? 1f - phase : UiMotion.Pulse(RefuseKey);
+    }
+
+    /// <summary>DEV: apply the capture dials once — see <see cref="_devTrainPending"/>.</summary>
+    private void DevPose(Hunter hunter)
+    {
+        if (_devHold) UiKit.MouseHeld = true;
+        if (_devTrainPending is not { } word) return;
+        _devTrainPending = null;
+        foreach (var s in Order)
+        {
+            if (!string.Equals(WordFor(s), word, StringComparison.OrdinalIgnoreCase)) continue;
+            _selected = s;
+            _revealSelected = true;
+            if (hunter.CanTrain(s)) _trainRequest = s;                   // the host spends; Draw snapshots
+            else if (hunter.RankOf(s) < hunter.StatRankCap) _refused = true;
+            return;
+        }
     }
 
     public void Draw(SpriteBatch b, Point mouse, Hunter hunter, bool clicked = false)
@@ -361,7 +483,23 @@ public sealed class TrainingScreen
         var headDrop = (UiTypography.Headline - UiTypography.Body) * 3 / 2;
         _ui.TextBig(b, $"{hunter.TotalTrainedRanks} RANKS TRAINED  ·  HUNTER LEVEL {hunter.HunterLevel}",
                     left, hy + headDrop, Slate, UiTypography.Body);
-        _ui.TextRightBig(b, $"GLEAM  {hunter.Gleam:N0}", right, hy, Bone, UiTypography.Headline);
+        // SPENDING REACTS AT THE PILL (§37): on TRAIN the figure ticks down from what it showed to what
+        // is left, over the Transition, under one gold flash — and a refused TRAIN flashes it Ember
+        // instead, because the purse is the answer to "why not". Each fades once; Reduced Motion keeps
+        // the fade and drops the tick.
+        var glow = _fx.Live ? _fx.Glow : 0f;
+        _gleamShown = _fx.Live ? TrainFeedback.Mix(_fx.GleamFrom, hunter.Gleam, _fx.Progress) : hunter.Gleam;
+        var purse = _fx.Live ? $"GLEAM  {MathF.Round(_gleamShown):N0}" : $"GLEAM  {hunter.Gleam:N0}";
+        var purseInk = Tint(Bone, glow);
+        if (_refuseGlow > 0f) purseInk = Color.Lerp(purseInk, Ember, _refuseGlow);
+        if (glow > 0f || _refuseGlow > 0f)
+        {
+            var w = _ui.MeasureBig(purse, UiTypography.Headline);
+            var pad = UiMetrics.Space(8);
+            _ui.Fill(b, new Rectangle(right - w - pad, hy - UiMetrics.Space(2), w + 2 * pad, UiTypography.Pitch(UiTypography.Headline)),
+                     (_refuseGlow > glow ? Ember : Gold) * (0.16f * MathF.Max(glow, _refuseGlow)));
+        }
+        _ui.TextRightBig(b, purse, right, hy, purseInk, UiTypography.Headline);
         // LEVEL is a medal, not a stat — the honest answer stays, as a tip rather than a panel.
         if (new Rectangle(left, hy, UiMetrics.Text(460), UiTypography.Pitch(UiTypography.Body)).Contains(hit))
             _tip = "HUNTER LEVEL IS ONE PER FIVE RANKS TRAINED. IT DOES NOT CHANGE THE FIGHT — IT IS A MEDAL, NOT A STAT.";
@@ -554,11 +692,25 @@ public sealed class TrainingScreen
     {
         var selected = _selected == stat;
         var hot = row.Contains(hit);
+        var btn = new Rectangle(row.Right - BtnW, row.Y + (row.Height - RowButtonH) / 2, BtnW, RowButtonH);
+        var onButton = btn.Contains(hit);
+        var playing = _fx.Playing(stat);
+        var glow = playing ? _fx.Glow : 0f;
         // The 5 px gold left rule IS the selection mark — one accent, one meaning. HOVER is a wash over
-        // the plate, never the rule, so the two states cannot be confused (LAW 4).
+        // the plate, never the rule, so the two states cannot be confused (LAW 4). THE STATES (§25–§27):
+        // hover eases in over Fast; PRESSED — the button held over the plate, not over its own TRAIN
+        // button, which presses itself — darkens the plate under a lit lip for exactly as long as it is
+        // held; a row just trained carries one faint gold wash that fades with its figures.
         _ui.Plate(b, row, selected ? Gold : null);
-        if (hot && !selected)
-            _ui.Fill(b, new Rectangle(row.X + 1, row.Y + 1, row.Width - 2, row.Height - 2), Slate * 0.10f);
+        var inner = new Rectangle(row.X + 1, row.Y + 1, row.Width - 2, row.Height - 2);
+        var lift = UiMotion.Ease(HashCode.Combine(RowHoverSalt, (int)stat), hot && !selected ? 1f : 0f);
+        if (lift > 0f) _ui.Fill(b, inner, Slate * (0.10f * lift));
+        if (hot && !onButton && UiKit.MouseHeld)
+        {
+            _ui.Fill(b, inner, Color.Black * 0.30f);
+            _ui.Fill(b, new Rectangle(inner.X, inner.Y, inner.Width, UiMetrics.Control(2)), Slate * 0.6f);
+        }
+        if (glow > 0f) _ui.Fill(b, inner, Gold * (0.06f * glow));
         if (hot) _tip = IdentityOf(stat);
 
         var (key, gem) = ArtFor(stat);
@@ -575,19 +727,30 @@ public sealed class TrainingScreen
 
         // RANK AS A SHAPE as well as a number (§8): sixty ranks is a long way, and a bare "12 / 60"
         // does not say how far. The figure hangs from the row's top and the bar from its foot, so the
-        // two part as the row grows with the profile rather than meeting in the middle.
-        _ui.TextBig(b, $"{hunter.RankOf(stat)} / {hunter.StatRankCap}", row.X + RankCol, row.Y + UiMetrics.Space(4),
-                    Slate, UiTypography.Secondary);
+        // two part as the row grows with the profile rather than meeting in the middle. ON TRAIN the bar
+        // EASES to its new length over the Transition (UiMotion.Ease, keyed to the row) and the figure
+        // flashes with it.
+        var rank = hunter.RankOf(stat);
+        var rankShown = playing ? TrainFeedback.Mix(_fx.RankFrom, rank, _fx.Progress) : rank;
+        _ui.TextBig(b, $"{rank} / {hunter.StatRankCap}", row.X + RankCol, row.Y + UiMetrics.Space(4),
+                    Tint(Slate, glow), UiTypography.Secondary);
         var barY = row.Bottom - UiMetrics.Space(14);
         _ui.Fill(b, new Rectangle(row.X + RankCol, barY, RankBarW, RankBarH), Dim);
         _ui.Fill(b, new Rectangle(row.X + RankCol, barY,
-                                  (int)(RankBarW * (hunter.RankOf(stat) / (float)hunter.StatRankCap)), RankBarH), Bone);
+                                  (int)MathF.Round(RankBarW * (rankShown / hunter.StatRankCap)), RankBarH), Tint(Bone, glow));
 
         // NOW → AFTER, at Headline, because this is the decision. When the two format the same — at
         // the cap, or a gain too small to show — the arrow is dropped: a "96 → 96" promises a change
-        // the number does not make.
-        var (label, now, after) = Effect(stat, hunter, build, mods, shape);
-        var btn = new Rectangle(row.Right - BtnW, row.Y + (row.Height - RowButtonH) / 2, BtnW, RowButtonH);
+        // the number does not make. ON TRAIN both figures tick to their new numbers over the
+        // Transition and flash once (§36: "160 → 162", brief emphasis); the label keeps its ink, so
+        // the flash lights the number, not the words.
+        var (label, style, nowV, aftV) = Effect(stat, hunter, build, mods, shape);
+        var nowShown = playing ? TrainFeedback.Mix(_fx.NowFrom, nowV, _fx.Progress) : nowV;
+        var aftShown = playing ? TrainFeedback.Mix(_fx.AfterFrom, aftV, _fx.Progress) : aftV;
+        var now = Fmt(style, nowShown);
+        var after = Fmt(style, aftShown);
+        var nowInk = Tint(Bone, glow);
+        var aftInk = Tint(Met, glow);
         var x = row.X + ValueCol;
         var vy = row.Y + (row.Height - UiTypography.Headline) / 2 - 2;
         // The value column ends where the button begins — it used to be written as an offset for one
@@ -600,11 +763,10 @@ public sealed class TrainingScreen
             var full = $"{head}  →  {after}";
             if (_ui.MeasureBig(full, UiTypography.Headline) <= room)
             {
-                _ui.TextBig(b, head, x, vy, Bone, UiTypography.Headline);
-                x += _ui.MeasureBig(head, UiTypography.Headline);
+                x = DrawFigure(b, label, now, x, vy, nowInk);
                 _ui.TextBig(b, "  →  ", x, vy, Slate, UiTypography.Headline);
                 x += _ui.MeasureBig("  →  ", UiTypography.Headline);
-                _ui.TextBig(b, after, x, vy, Met, UiTypography.Headline);
+                _ui.TextBig(b, after, x, vy, aftInk, UiTypography.Headline);
             }
             else
             {
@@ -615,26 +777,49 @@ public sealed class TrainingScreen
                 var leadW = _ui.MeasureBig(lead, UiTypography.Headline);
                 if (leadW + _ui.MeasureBig(after, UiTypography.Headline) <= room)
                 {
-                    _ui.TextBig(b, lead, x, vy, Bone, UiTypography.Headline);
-                    _ui.TextBig(b, after, x + leadW, vy, Met, UiTypography.Headline);
+                    _ui.TextBig(b, lead, x, vy, nowInk, UiTypography.Headline);
+                    _ui.TextBig(b, after, x + leadW, vy, aftInk, UiTypography.Headline);
                 }
                 else
-                    _ui.TextBig(b, _ui.ShortenBig(lead + after, room, UiTypography.Headline), x, vy, Bone, UiTypography.Headline);
+                    _ui.TextBig(b, _ui.ShortenBig(lead + after, room, UiTypography.Headline), x, vy, nowInk, UiTypography.Headline);
             }
         }
+        else if (_ui.MeasureBig(head, UiTypography.Headline) <= room)
+            DrawFigure(b, label, now, x, vy, nowInk);
         else
-            _ui.TextBig(b, _ui.ShortenBig(head, room, UiTypography.Headline), x, vy, Bone, UiTypography.Headline);
+            _ui.TextBig(b, _ui.ShortenBig(head, room, UiTypography.Headline), x, vy, nowInk, UiTypography.Headline);
 
-        var maxed = hunter.RankOf(stat) >= hunter.StatRankCap;
+        var maxed = rank >= hunter.StatRankCap;
         var cost = hunter.NextRankCost(stat);
         var afford = hunter.CanTrain(stat);
         if (_ui.Button(b, btn, maxed ? "MAXED" : afford ? $"TRAIN  {cost:N0} GLEAM" : $"NEED  {cost:N0} GLEAM",
                        hit, clicked, enabled: afford))
             _trainRequest = stat;
+        // A click on NEED is a refusal: felt at the pill, heard as sfx_error — never silent (§29).
+        else if (!afford && !maxed && UiKit.ClickedIn(btn, hit, clicked))
+            _refused = true;
         // A click anywhere else in the row SELECTS it — click selects, the button commits (D5).
-        else if (UiKit.ClickedIn(row, hit, clicked) && !btn.Contains(hit))
+        else if (UiKit.ClickedIn(row, hit, clicked) && !onButton)
             _selected = stat;
+        // The request's from-values, photographed where the figures are — a click here, Enter, or a pose.
+        if (_trainRequest == stat) _pending = new Pending(stat, rank, _gleamShown, nowShown, aftShown, rankShown);
     }
+
+    /// <summary>
+    /// A row's label and its NOW figure — the figure in its own ink, so a flash lights the number and not
+    /// the words. Returns the x after the figure.
+    /// </summary>
+    private int DrawFigure(SpriteBatch b, string label, string now, int x, int y, Color ink)
+    {
+        var lead = label + " ";
+        _ui.TextBig(b, lead, x, y, Bone, UiTypography.Headline);
+        x += _ui.MeasureBig(lead, UiTypography.Headline);
+        _ui.TextBig(b, now, x, y, ink, UiTypography.Headline);
+        return x + _ui.MeasureBig(now, UiTypography.Headline);
+    }
+
+    /// <summary>A figure's ink under the flash: its resting colour lifted toward gold by how much of the pulse is left.</summary>
+    private static Color Tint(Color rest, float glow) => glow <= 0f ? rest : Color.Lerp(rest, Gold, glow);
 
     // ── THE INSPECTOR — the house grammar (§6). It replaces a 640 px hover document that covered the
     //    rows beside the one it was explaining, and could only be read by holding the pointer still. ──
@@ -701,8 +886,18 @@ public sealed class TrainingScreen
         // CURRENT STATE — anchored to the foot so the loudest number sits in the same place on every
         // stat, which is what the eye compares between rows. Sized above, so nothing here can run
         // into the button.
-        var (_, now, after) = Effect(stat, hunter, build, mods, shape);
-        var maxed = hunter.RankOf(stat) >= hunter.StatRankCap;
+        // ON TRAIN the inspector updates IN PLACE (§39 — no modal): the rank, NOW and AFTER tick to
+        // their new numbers with the row and flash once with it — the same feedback, the same instant.
+        var playing = _fx.Playing(stat);
+        var glow = playing ? _fx.Glow : 0f;
+        var (_, style, nowV, aftV) = Effect(stat, hunter, build, mods, shape);
+        var rank = hunter.RankOf(stat);
+        var rankShown = playing ? TrainFeedback.Mix(_fx.RankFrom, rank, _fx.Progress) : rank;
+        var nowShown = playing ? TrainFeedback.Mix(_fx.NowFrom, nowV, _fx.Progress) : nowV;
+        var aftShown = playing ? TrainFeedback.Mix(_fx.AfterFrom, aftV, _fx.Progress) : aftV;
+        var now = Fmt(style, nowShown);
+        var after = Fmt(style, aftShown);
+        var maxed = rank >= hunter.StatRankCap;
         var cost = hunter.NextRankCost(stat);
         var afford = hunter.CanTrain(stat);
 
@@ -717,14 +912,14 @@ public sealed class TrainingScreen
         _ui.Fill(b, new Rectangle(left, y, width, 1), Dim);
         y += UiMetrics.Space(12);
         _ui.TextBig(b, "CURRENT STATE", left, y, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, $"RANK {hunter.RankOf(stat)} OF {hunter.StatRankCap}", right, y - UiMetrics.Space(4), Bone,
+        _ui.TextRightBig(b, $"RANK {rank} OF {hunter.StatRankCap}", right, y - UiMetrics.Space(4), Tint(Bone, glow),
                          UiTypography.Headline);
         y += capH + UiMetrics.Space(4);
-        Pair("NOW", now, Bone);
+        Pair("NOW", now, Tint(Bone, glow));
         if (!maxed)
         {
             _ui.TextBig(b, "AFTER ONE RANK", left, y + UiMetrics.Space(6), Slate, UiTypography.Body);
-            _ui.TextRightBig(b, after, right, y, Met, UiTypography.PrimaryValue);
+            _ui.TextRightBig(b, after, right, y, Tint(Met, glow), UiTypography.PrimaryValue);
             y += UiTypography.Pitch(UiTypography.PrimaryValue);
             _ui.TextBig(b, _ui.ShortenBig($"ONE RANK ADDS {hunter.GainPerRank(stat):0.##} {WordFor(stat)}", width, UiTypography.Body),
                         left, y, Slate, UiTypography.Body);
@@ -748,6 +943,11 @@ public sealed class TrainingScreen
         if (_ui.Button(b, cta, maxed ? "MAXED" : afford ? $"TRAIN  {cost:N0} GLEAM" : $"NEED  {cost:N0} GLEAM",
                        hit, clicked, enabled: afford, afford ? ButtonStyle.Primary : ButtonStyle.Secondary))
             _trainRequest = stat;
+        else if (!afford && !maxed && UiKit.ClickedIn(cta, hit, clicked))
+            _refused = true;
+        // Enter and a pose ask through the selection, whose row may be scrolled out of the list: the
+        // inspector photographs the from-values too.
+        if (_trainRequest == stat) _pending = new Pending(stat, rank, _gleamShown, nowShown, aftShown, rankShown);
     }
 
     /// <summary>The inspector's prose this frame — one drawn line each; a null text is a hairline rule. Reused, not reallocated.</summary>
@@ -801,9 +1001,30 @@ public sealed class TrainingScreen
         return 0;
     }
 
-    /// <summary>The row's label, its NOW and its AFTER — the AFTER through <see cref="Hunter.Preview{T}"/>.</summary>
-    private (string Label, string Now, string After) Effect(HunterStat stat, Hunter hunter, Build build,
-                                                            BuildMods mods, SkillShape shape)
+    /// <summary>
+    /// How a row's figure is written — the shape of the number, kept apart from its value, so a value
+    /// part-way through a tick is written exactly the way its ends are.
+    /// </summary>
+    private enum FigureStyle { Whole, Thousands, Percent, Percent1, PlusPercent, MinusPercent1, Times }
+
+    /// <summary>Write a figure in its style. The percentages arrive already ×100.</summary>
+    private static string Fmt(FigureStyle style, float v) => style switch
+    {
+        FigureStyle.Whole => $"{v:0}",
+        FigureStyle.Thousands => $"{v:N0}",
+        FigureStyle.Percent => $"{v:0}%",
+        FigureStyle.Percent1 => $"{v:0.0}%",
+        FigureStyle.PlusPercent => $"+{v:0}%",
+        FigureStyle.MinusPercent1 => $"-{v:0.0}%",
+        _ => $"{v:0.00}×",
+    };
+
+    /// <summary>
+    /// The row's label, how its figure is written, its NOW and its AFTER — the AFTER through
+    /// <see cref="Hunter.Preview{T}"/>. Numbers rather than strings, so a TRAIN can tick between them.
+    /// </summary>
+    private (string Label, FigureStyle Style, float Now, float After) Effect(HunterStat stat, Hunter hunter, Build build,
+                                                                             BuildMods mods, SkillShape shape)
     {
         switch (stat)
         {
@@ -811,57 +1032,57 @@ public sealed class TrainingScreen
             {
                 var now = SoloBattle.AutoAttackDamage * hunter.AutoDamageMultiplier * mods.Damage;
                 var aft = hunter.Preview(stat, h => SoloBattle.AutoAttackDamage * h.AutoDamageMultiplier * build.Resolve(h).Damage);
-                return ("BASIC HIT", $"{now:0}", $"{aft:0}");
+                return ("BASIC HIT", FigureStyle.Whole, now, aft);
             }
             case HunterStat.ResonanceAffinity:
             {
                 var per = 100f * SkillCatalogue.ResonancePerPoint;
                 var now = per * hunter.ValueOf(stat);
                 var aft = hunter.Preview(stat, h => per * h.ValueOf(stat));
-                return ("SKILL POWER", $"+{now:0}%", $"+{aft:0}%");
+                return ("SKILL POWER", FigureStyle.PlusPercent, now, aft);
             }
             case HunterStat.CriticalChance:
             {
                 var now = SoloBattle.CritChance(hunter, shape);
                 var aft = hunter.Preview(stat, h => SoloBattle.CritChance(h, shape));
-                return ("CRITICAL HITS", $"{100f * now:0.0}%", $"{100f * aft:0.0}%");
+                return ("CRITICAL HITS", FigureStyle.Percent1, 100f * now, 100f * aft);
             }
             case HunterStat.Focus:
             {
                 var now = SoloBattle.CritMultiplier(hunter);
                 var aft = hunter.Preview(stat, h => SoloBattle.CritMultiplier(h));
-                return ("CRITICAL DAMAGE", $"{100f * now:0}%", $"{100f * aft:0}%");
+                return ("CRITICAL DAMAGE", FigureStyle.Percent, 100f * now, 100f * aft);
             }
             case HunterStat.MaxHealth:
             {
                 var now = SoloBattle.ChampionHealth(build, hunter);
                 var aft = hunter.Preview(stat, h => SoloBattle.ChampionHealth(build, h));
-                return ("LIFE", $"{now:N0}", $"{aft:N0}");
+                return ("LIFE", FigureStyle.Thousands, now, aft);
             }
             case HunterStat.Defense:
             {
                 var k = SoloBattle.DefenseMitigationConstant;
                 var now = 100f - 100f * (k / (k + hunter.Defense));
                 var aft = hunter.Preview(stat, h => 100f - 100f * (k / (k + h.Defense)));
-                return ("DAMAGE TAKEN", $"-{now:0.0}%", $"-{aft:0.0}%");
+                return ("DAMAGE TAKEN", FigureStyle.MinusPercent1, now, aft);
             }
             case HunterStat.Vitality:
             {
                 var now = Regen(hunter, SoloBattle.ChampionHealth(build, hunter));
                 var aft = hunter.Preview(stat, h => Regen(h, SoloBattle.ChampionHealth(build, h)));
-                return ("LIFE EACH SECOND", $"{now:N0}", $"{aft:N0}");
+                return ("LIFE EACH SECOND", FigureStyle.Thousands, now, aft);
             }
             case HunterStat.Engineering:
             {
                 var now = mods.SkillRate * shape.SkillRate;
                 var aft = hunter.Preview(stat, h => build.Resolve(h).SkillRate * shape.SkillRate);
-                return ("ACTION SPEED", $"{now:0.00}×", $"{aft:0.00}×");
+                return ("ACTION SPEED", FigureStyle.Times, now, aft);
             }
             default:
             {
                 var now = 100f * (mods.Haul - 1f);
                 var aft = hunter.Preview(stat, h => 100f * (build.Resolve(h).Haul - 1f));
-                return ("LOOT", $"+{now:0}%", $"+{aft:0}%");
+                return ("LOOT", FigureStyle.PlusPercent, now, aft);
             }
         }
     }
@@ -1062,10 +1283,21 @@ public sealed class TrainingScreen
             _ui.TextBig(b, _ui.ShortenBig("THE GLEAM YOU SPENT DOES NOT COME BACK. CLICK THE RED BUTTON AGAIN TO DO IT.",
                                           textW, UiTypography.Body),
                         tx, lineY, Ember, UiTypography.Body);
-            _ui.Fill(b, button, ArmedRed);
-            _ui.Fill(b, new Rectangle(button.X, button.Y, button.Width, UiMetrics.Control(3)), Ember);
-            _ui.TextCenterBig(b, _ui.ShortenBig("YES, RESET — NO GLEAM BACK", button.Width - 2 * UiTypography.ButtonPadX, UiTypography.Body),
-                              button.Center.X, button.Center.Y - UiTypography.Body * 10 / 22,
+            // THE ARMED PLATE IS DRAWN BY HAND, so it owes its own states (§25–§27) — every other
+            // control on this page gets them from UiKit.Button, and without them the one irreversible
+            // control on the screen was the only one that did not answer the cursor. HOVER eases a
+            // luminance lift over Fast; PRESSED drops the face 2 px and darkens it for exactly as long
+            // as the button is held, the same depression the ornate buttons beside it make.
+            var armedHot = button.Contains(hit);
+            var armedLift = UiMotion.Ease(UiMotion.KeyOf(button), armedHot ? 1f : 0f);
+            var armedHeld = armedHot && UiKit.MouseHeld;
+            var armedFace = armedHeld ? new Rectangle(button.X, button.Y + 2, button.Width, button.Height) : button;
+            _ui.Fill(b, armedFace, ArmedRed);
+            if (armedLift > 0f) _ui.Fill(b, armedFace, Color.White * (0.10f * armedLift));
+            if (armedHeld) _ui.Fill(b, armedFace, Color.Black * 0.22f);
+            _ui.Fill(b, new Rectangle(armedFace.X, armedFace.Y, armedFace.Width, UiMetrics.Control(3)), Ember);
+            _ui.TextCenterBig(b, _ui.ShortenBig("YES, RESET — NO GLEAM BACK", armedFace.Width - 2 * UiTypography.ButtonPadX, UiTypography.Body),
+                              armedFace.Center.X, armedFace.Center.Y - UiTypography.Body * 10 / 22,
                               Color.White, UiTypography.Body, TextFace.Strong);
             if (UiKit.ClickedIn(button, hit, clicked))
             {
@@ -1112,6 +1344,98 @@ public sealed class TrainingScreen
     //
     // The 640 px hover document is replaced by the inspector: it covered the rows beside the one it
     // explained, and it could only be read by holding the pointer perfectly still.
+
+    /// <summary>
+    /// The feedback for one TRAIN — what the row and the pill showed the moment it was bought, and how far
+    /// the change has played. The TARGET values are never stored: they are the live ones the screen reads
+    /// from the Hunter every frame, so the tick cannot end anywhere but on the truth (LAW 10: motion
+    /// explains a change; it never states a number of its own).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Time comes from <see cref="UiMotion"/> — the host's Tick — never from a clock of its own. The tick
+    /// and the bar are one <see cref="UiMotion.Ease"/> keyed to the row, rewound at <see cref="Start"/> so
+    /// a second rank on the same row plays again from the start; the flash is one
+    /// <see cref="UiMotion.Flash"/> under the same key, once per event. Under Reduced Motion the ease
+    /// jumps and only the flash fades: the same end state, at once.
+    /// </para>
+    /// <para>
+    /// Public because the Game tests drive it: a capture can hold it at one instant
+    /// (<c>RH_SHOT_TRAIN</c>) but cannot photograph t = 0, mid and end of a 180 ms event.
+    /// </para>
+    /// </remarks>
+    public sealed class TrainFeedback
+    {
+        /// <summary>The row that was trained; null once the feedback has played out.</summary>
+        public HunterStat? Stat { get; private set; }
+
+        /// <summary>What the pill showed when the rank was bought.</summary>
+        public float GleamFrom { get; private set; }
+
+        /// <summary>What the row's NOW showed when the rank was bought.</summary>
+        public float NowFrom { get; private set; }
+
+        /// <summary>What the row's AFTER showed when the rank was bought.</summary>
+        public float AfterFrom { get; private set; }
+
+        /// <summary>How far the rank bar had reached, in ranks, when the rank was bought.</summary>
+        public float RankFrom { get; private set; }
+
+        /// <summary>
+        /// How far the numbers and the bar have moved: 0 → 1 over <see cref="UiMotion.Transition"/>, and 1
+        /// at once under Reduced Motion.
+        /// </summary>
+        public float Progress { get; private set; } = 1f;
+
+        /// <summary>The flash: 1 the frame it fires → 0 over <see cref="UiMotion.Transition"/>.</summary>
+        public float Glow { get; private set; }
+
+        /// <summary>True while anything is still moving or fading.</summary>
+        public bool Live => Stat is not null;
+
+        /// <summary>True while THIS row's feedback is playing.</summary>
+        public bool Playing(HunterStat stat) => Stat == stat;
+
+        /// <summary>The key the row's ease and its flash live under.</summary>
+        public static int KeyFor(HunterStat stat) => HashCode.Combine("train", (int)stat);
+
+        /// <summary>Begin — from what was SHOWN at the click, toward whatever the Hunter now says.</summary>
+        public void Start(HunterStat stat, float gleamFrom, float nowFrom, float afterFrom, float rankFrom)
+        {
+            Stat = stat;
+            GleamFrom = gleamFrom;
+            NowFrom = nowFrom;
+            AfterFrom = afterFrom;
+            RankFrom = rankFrom;
+            var key = KeyFor(stat);
+            UiMotion.Ease(key, 0f, 0f);                 // rewind the row's ease: a settled 1 would answer 1 at once
+            UiMotion.Flash(key, UiMotion.Transition);   // ONE flash, keyed to this event
+            Progress = 0f;
+            Glow = 1f;
+        }
+
+        /// <summary>
+        /// Advance — from Update, with the host's dt already in <see cref="UiMotion"/>. <paramref name="pin"/>
+        /// holds the phase for a capture (0..1 through the Transition) instead of reading the clock.
+        /// </summary>
+        public void Advance(float? pin = null)
+        {
+            if (Stat is not { } stat) return;
+            if (pin is { } t)
+            {
+                Progress = UiMotion.Smooth(t);
+                Glow = 1f - t;
+                return;
+            }
+            var key = KeyFor(stat);
+            Progress = UiMotion.Ease(key, 1f, UiMotion.Transition);
+            Glow = UiMotion.Pulse(key);
+            if (Progress >= 1f && Glow <= 0f) Stat = null;
+        }
+
+        /// <summary>A figure part-way through its tick.</summary>
+        public static float Mix(float from, float to, float progress) => from + (to - from) * progress;
+    }
 
     private void DrawDebug(SpriteBatch b)
     {
