@@ -57,12 +57,20 @@ public static class UiMotion
 
     /// <summary>
     /// A value that eases toward <paramref name="target"/> (0 or 1, typically) over <paramref name="seconds"/>,
-    /// smoothstepped. Ask every frame; the first ask starts at the target's opposite so a hover fades IN.
+    /// smoothstepped. Ask every frame; an unknown key starts at 0, so a hover fades IN and a control at
+    /// rest simply reads 0.
     /// </summary>
     public static float Ease(int key, float target, float seconds = Fast)
     {
         if (Reduced) { Eased.Remove(key); return target; }
-        var have = Eased.TryGetValue(key, out var v) ? v : 1f - target;
+        // AN ABSENT KEY MEANS ZERO, not "the target's opposite". A value that settles at 1 is REMEMBERED
+        // (below), so absence can only ever mean "rested at 0" — and reading it as 1 made every RESTING
+        // control fade 1 → 0, settle, be forgotten, and start over on the next frame: a permanent 10 Hz
+        // shimmer on every button, tile, card and row that asks for a hover it is not getting, which is
+        // the one thing brief §30 forbids and this class's own summary promises does not happen.
+        // Measured on BUILD's library tiles at 60 fps: mean ink 19,16,26 ↔ 42,37,59 on a six-frame cycle.
+        // A hover still fades IN from 0 — the only thing the "opposite" was ever for.
+        var have = Eased.TryGetValue(key, out var v) ? v : 0f;
         var step = seconds <= 0f ? 1f : _dt / seconds;
         v = have < target ? MathF.Min(target, have + step) : MathF.Max(target, have - step);
         if (MathF.Abs(v - target) < 1e-4f)
