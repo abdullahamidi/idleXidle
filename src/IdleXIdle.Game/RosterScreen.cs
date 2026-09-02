@@ -59,16 +59,81 @@ public sealed class RosterScreen
 
     // The card's own surfaces — the GearScreen cell precedent. A card is a QUIET plate with a state.
     private static readonly Color CardBg = new(0x1C, 0x18, 0x28, 0xF0);
-    private static readonly Color CardHot = new(0x2C, 0x25, 0x44, 0xF0);
     private static readonly Color CardLocked = new(0x12, 0x0F, 0x1A, 0xF0);
     private static readonly Color CardActive = new(0x2A, 0x22, 0x10, 0xF0);
+
+    // ── THE CARD'S STATES (UI polish §25–§29), each a number the draw reads, none a second surface.
+    //
+    // HOVER is the same lift a UiKit.Button gets — a thin white luminance on the face and the edge
+    // nudged a quarter of the way to white — eased in over UiMotion.Fast, so a card is noticed without
+    // jumping. PRESSED is the mouse held over the card: the whole face drops PressDrop px and darkens
+    // for exactly as long as the button is down, and the glow goes with it (§27); the click still
+    // lands on release, on the card's AUTHORITATIVE rect, which never moves (§15). SELECTED is the
+    // bone rule, ACTIVE the gold edge — both persistent structure, neither a luminance (§28). A
+    // LOCKED card keeps its own dark surface and says why in its band; it still lifts on hover,
+    // because it can still be picked to read.
+    private const float HoverLift = 0.07f;
+    private const float EdgeLift = 0.25f;
+    private const float PressShade = 0.18f;
+    private const int PressDrop = 2;
+
+    // THE SWITCH HIGHLIGHT (§31 transition, §73–§82 "card / inspector update + short highlight"): a
+    // gold wash over the card you just became and behind the inspector's header, UiMotion.Transition
+    // long, 1 → 0. Armed ONCE, in Confirm, the moment the switch lands — never from Draw.
+    private const float FlashWash = 0.26f;
+    private const float HeaderWash = 0.22f;
 
     private readonly UiKit _ui;
     private string _selectedId = CharacterRoster.StarterId;
     private float _anim;
     private string? _notice;
+    private string? _cue;                   // sound cue waiting for the host to play — the host owns audio
     private string? _tip;
     private Point _tipAt;
+
+    /// <summary>
+    /// DEV (capture rig only): pose a transient no frame-60 shutter can catch. Read from
+    /// <c>RH_SHOT_ROSTER</c>, and only under <c>RH_SHOT</c>: <c>flash</c> holds the switch highlight
+    /// at its peak on the active card and the inspector header; <c>held</c> draws the card under the
+    /// posed cursor (<c>RH_SHOT_PAGE_MOUSE</c>) as PRESSED.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The rig shoots frame 60 and a Transition is eleven frames, so a real switch is long gone by the
+    /// shutter; and the rig never holds the mouse button, so a pressed card cannot be posed at all. A
+    /// state no capture can pose has never been looked at (project rule). Both dials change nothing
+    /// outside the rig: <see cref="DevPose"/> is null unless RH_SHOT is set.
+    /// </para>
+    /// <para>
+    /// The dial is read here rather than added to <c>capture.sh</c>'s forwarding list because the
+    /// rig's <c>dn</c> helper runs dotnet through <c>env</c>, so an exported variable reaches the game
+    /// as it stands. The four poses, as run:
+    /// </para>
+    /// <code>
+    /// RH_SHOT_UISCALE=100 RH_SHOT_PAGE_MOUSE=173,399 \
+    ///     bash tools/asset-pipeline/capture.sh roster build/shots/p2_roster_hover_100.png
+    /// RH_SHOT_UISCALE=100 RH_SHOT_PAGE_MOUSE=173,399 RH_SHOT_ROSTER=held \
+    ///     bash tools/asset-pipeline/capture.sh roster build/shots/p2_roster_pressed_100.png
+    /// RH_SHOT_UISCALE=100 RH_SHOT_ROSTER=flash \
+    ///     bash tools/asset-pipeline/capture.sh rosterswitch build/shots/p2_roster_switchflash_100.png
+    /// RH_SHOT_UISCALE=100 \
+    ///     bash tools/asset-pipeline/capture.sh rosterswitch build/shots/p2_roster_switchsettled_100.png
+    /// </code>
+    /// <para>
+    /// 173,399 is page space, and it lands inside the top-left card at 100 % AND at 150 % — the grid
+    /// shrinks toward its own top-left as the profile grows, so one posed cursor serves both. The
+    /// <c>rosterswitch</c> fixture is the one that poses the switch's OWN subject: it makes the
+    /// selected hunter the active one, which is the only arrangement in which the card that lights and
+    /// the header that lights describe the same hunter.
+    /// </para>
+    /// </remarks>
+    private static readonly string? DevPose =
+        Environment.GetEnvironmentVariable("RH_SHOT") is not null
+            ? Environment.GetEnvironmentVariable("RH_SHOT_ROSTER")?.Trim().ToLowerInvariant()
+            : null;
+
+    private static bool DevFlashFrozen => DevPose == "flash";
+    private static bool DevHeld => DevPose == "held";
 
     public RosterScreen(UiKit ui) => _ui = ui;
 
@@ -76,6 +141,40 @@ public sealed class RosterScreen
     public void DevSelect(string id) => _selectedId = id;
 
     public bool DevRosterDebug { get; set; }
+
+    /// <summary>
+    /// The sound cue for a switch just made, cleared by reading — the host owns audio, this screen
+    /// does not. <c>sfx_nav</c>: becoming another hunter is a navigation, not a purchase.
+    /// </summary>
+    /// <remarks>Same shape as TraitsScreen.ConsumeCue, so the host's Update reads one way everywhere.</remarks>
+    public string? ConsumeCue()
+    {
+        var c = _cue;
+        _cue = null;
+        return c;
+    }
+
+    // The highlight's keys are the EVENT's, not a rectangle's: a card's rect changes with the profile,
+    // and the inspector has one header whichever hunter it shows.
+    private static int CardFlashKey(string characterId) => HashCode.Combine("roster.switch.card", characterId);
+    private static readonly int InspectorFlashKey = HashCode.Combine("roster.switch.inspector");
+
+    /// <summary>
+    /// How strong the "you just became this hunter" highlight is on a card right now: 1 the frame the
+    /// switch lands, 0 once it has settled, one <see cref="UiMotion.Transition"/> later. Exposed so a
+    /// test can drive the switch and read the displayed value at t = 0, mid and end.
+    /// </summary>
+    /// <remarks>
+    /// Under Reduced Motion this stays a short fade and settles at the same 0: it is a highlight
+    /// marking "this just changed", which brief §32 keeps (it drops movement, scale and idle motion,
+    /// not simple fades), and <see cref="UiMotion"/> runs pulses under Reduced for that reason. What
+    /// Reduced does collapse on this screen is the card's hover, which is a
+    /// <see cref="UiMotion.Ease"/> and therefore its target on the first ask.
+    /// </remarks>
+    public float SwitchHighlight(string characterId) => UiMotion.Pulse(CardFlashKey(characterId));
+
+    /// <summary>The same highlight behind the inspector's header — it lights with the card it describes.</summary>
+    public float InspectorHighlight => UiMotion.Pulse(InspectorFlashKey);
 
     /// <summary>The permanent skill set, so the inspector can say a starting skill is already known.</summary>
     public MasteryTree? Mastery { get; set; }
@@ -225,13 +324,25 @@ public sealed class RosterScreen
         foreach (var cell in CharacterRoster.Grid)
             if (UiKit.ClickedIn(Card(cell), hit, clicked))
                 _selectedId = cell.Character.Id;
+
+        // THE SWITCH IS TAKEN HERE, in Update, on the button's authoritative rect — not in Draw off
+        // the button's return value, which is where it used to land. The switch arms a highlight and
+        // a sound cue, and neither may start from a draw pass; the button in Draw only shows itself.
+        if (CanSetActive(state) && UiKit.ClickedIn(ActionRect, hit, clicked)) Confirm(state);
+    }
+
+    /// <summary>The one condition under which SET ACTIVE exists: the selected hunter is yours and not already you.</summary>
+    private bool CanSetActive(CharacterState state)
+    {
+        var c = CharacterRoster.Get(_selectedId);
+        return state.IsUnlocked(c.Id) && state.ActiveId != c.Id;
     }
 
     /// <summary>Try to become the selected hunter. Returns true when the active hunter changed.</summary>
     /// <remarks>
     /// Stays defensive about both refusals but no longer writes player text for them: the button is
     /// not drawn at all when the hunter is already active or still locked, so a refusal message here
-    /// would be for a press that cannot happen.
+    /// would be for a press that cannot happen. A refusal arms nothing — no cue, no highlight.
     /// </remarks>
     public bool Confirm(CharacterState state)
     {
@@ -240,6 +351,11 @@ public sealed class RosterScreen
         if (state.ActiveId == c.Id || !state.IsUnlocked(c.Id)) return false;
         state.Select(c.Id);
         _notice = c.Name;
+        // The card you became and the header that now names you light together, once, for one
+        // Transition — the "at once, with a short highlight" the brief asks for, and no dialog.
+        UiMotion.Flash(CardFlashKey(c.Id), UiMotion.Transition);
+        UiMotion.Flash(InspectorFlashKey, UiMotion.Transition);
+        _cue = "sfx_nav";
         return true;
     }
 
@@ -340,26 +456,39 @@ public sealed class RosterScreen
             }
 
             var t = active || sel ? EdgeLit : Edge;
-            // HOVER eases in (UiMotion.Fast) rather than snapping — the same lift a button gets. A locked
-            // card and the active one keep their own surfaces: hover is a luminance, not a claim.
+            // HOVER eases in (UiMotion.Fast; at once under Reduced Motion) — the same lift a button
+            // gets, on every card, because every card can be picked to read: hover is a luminance, not
+            // a claim, and the three surfaces (quiet, locked, active) stay what they are under it.
+            // PRESSED reads the held button straight: the face drops and darkens, the glow goes. The
+            // AUTHORITATIVE rect — the hit, the tip's anchor, the click Update takes — is Card(cell);
+            // only the DRAWN face moves, the way UiKit.Button's does.
+            var held = hot && (UiKit.MouseHeld || DevHeld);
             var lift = UiMotion.Ease(UiMotion.KeyOf(card), hot ? 1f : 0f);
-            _ui.Fill(b, card, active ? CardActive : !unlocked ? CardLocked : Color.Lerp(CardBg, CardHot, lift));
+            var glow = held ? 0f : lift;
+            var flash = Math.Max(SwitchHighlight(c.Id), DevFlashFrozen && active ? 1f : 0f);
+            if (held) card = new Rectangle(card.X, card.Y + PressDrop, card.Width, card.Height);
+            var inner = new Rectangle(card.X + t, card.Y + t, card.Width - 2 * t, card.Height - 2 * t);
+            _ui.Fill(b, card, active ? CardActive : !unlocked ? CardLocked : CardBg);
+            if (glow > 0f) _ui.Fill(b, inner, Color.White * (HoverLift * glow));
+            if (held) _ui.Fill(b, inner, Color.Black * PressShade);
 
             // ACTIVE WINS. The edge used to read `sel ? Bone : active ? Gold : …`, so clicking the
             // hunter you are playing took its gold away — the one law the colour carries, lost on the
             // one card it matters most on. Selection adds a second cue instead of replacing the first.
+            // Hover nudges the edge a quarter of the way to white — the small accent shift of §26 —
+            // and never changes WHICH colour it is.
             var edge = active ? Gold : unlocked ? UiKit.ClassColor(c.Class) : Dim;
+            if (glow > 0f) edge = Color.Lerp(edge, Color.White, EdgeLift * glow);
             _ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, t), edge);
             _ui.Fill(b, new Rectangle(card.X, card.Bottom - t, card.Width, t), edge);
             _ui.Fill(b, new Rectangle(card.X, card.Y, t, card.Height), edge);
             _ui.Fill(b, new Rectangle(card.Right - t, card.Y, t, card.Height), edge);
             if (sel)
             {
-                var s = new Rectangle(card.X + t, card.Y + t, card.Width - 2 * t, card.Height - 2 * t);
-                _ui.Fill(b, new Rectangle(s.X, s.Y, s.Width, SelectRule), Bone);
-                _ui.Fill(b, new Rectangle(s.X, s.Bottom - SelectRule, s.Width, SelectRule), Bone);
-                _ui.Fill(b, new Rectangle(s.X, s.Y, SelectRule, s.Height), Bone);
-                _ui.Fill(b, new Rectangle(s.Right - SelectRule, s.Y, SelectRule, s.Height), Bone);
+                _ui.Fill(b, new Rectangle(inner.X, inner.Y, inner.Width, SelectRule), Bone);
+                _ui.Fill(b, new Rectangle(inner.X, inner.Bottom - SelectRule, inner.Width, SelectRule), Bone);
+                _ui.Fill(b, new Rectangle(inner.X, inner.Y, SelectRule, inner.Height), Bone);
+                _ui.Fill(b, new Rectangle(inner.Right - SelectRule, inner.Y, SelectRule, inner.Height), Bone);
             }
 
             // THE CLASS BADGE, at FULL strength whether locked or not. It was drawn at 0.45 alpha on a
@@ -436,6 +565,13 @@ public sealed class RosterScreen
                                   card.Center.X, ny + headlineH * nameRows, Slate, UiTypography.Body);
 
             DrawStatusBand(b, c, new Rectangle(card.X, statusTop, card.Width, StatusH), unlocked, active);
+
+            // THE SWITCH HIGHLIGHT: one gold wash over the whole card — art, name, chip — for one
+            // Transition after you became this hunter. OVER the content, so it reads as a flash on
+            // the card rather than a fourth surface under it. The PLAYING chip lights with the rest
+            // of the card and has no state of its own: it is a label, not a button, and it never
+            // lifts, drops or darkens on its own account.
+            if (flash > 0f) _ui.Fill(b, card, Gold * (FlashWash * flash));
         }
     }
 
@@ -571,6 +707,22 @@ public sealed class RosterScreen
         // (No WHO THEY ARE panel title: a generic gold headline that outranked the hunter's own name
         //  thirty pixels beneath it. The name IS the title.)
 
+        // THE HEADER LIGHTS WITH THE CARD: the same gold wash, behind CATEGORY and NAME, for the same
+        // Transition — so the inspector is SEEN to update, not merely found updated (§35). The frame
+        // stays; only the header's ground flashes.
+        var flash = Math.Max(InspectorHighlight, DevFlashFrozen && active ? 1f : 0f);
+        if (flash > 0f)
+        {
+            var headerH = headH + UiMetrics.Space(6) + UiTypography.Pitch(UiTypography.Headline);
+            var pad = UiMetrics.Space(8);
+            // CLIPPED TO THE PANEL'S INSIDE. The wash breathes a pad past the content column so it reads
+            // as a ground BEHIND the two header lines rather than a stripe under them — and that pad is
+            // then cut back to UiKit.PanelInner, because the frame's ornament is the panel's own art and
+            // a wash lying over it would read as a fault in the frame rather than as feedback.
+            var wash = new Rectangle(left - pad, y - pad, width + pad * 2, headerH + pad * 2);
+            _ui.Fill(b, Rectangle.Intersect(wash, UiKit.PanelInner(Inspector)), Gold * (HeaderWash * flash));
+        }
+
         // 1 CATEGORY
         var catIcon = UiMetrics.Control(26);
         _ui.ClassIcon(b, c.Class, new Rectangle(left, y, catIcon, catIcon));
@@ -644,8 +796,9 @@ public sealed class RosterScreen
 
         // 8 ONE BUTTON, and only when it can be pressed. A disabled PLAYING / LOCKED button is a
         // control that invites a click with no answer; the state block above already said both.
-        if (showButton && _ui.Button(b, ActionRect, "SET ACTIVE", hit, clicked, true, ButtonStyle.Primary))
-            Confirm(state);
+        // The press is TAKEN IN UPDATE on this same rect (see Update); here the button only shows
+        // its hover and its press, so nothing — no switch, no cue, no highlight — starts from Draw.
+        if (showButton) _ui.Button(b, ActionRect, "SET ACTIVE", hit, clicked, true, ButtonStyle.Primary);
     }
 
     /// <summary>How many worn pieces this hunter could not wear — what a switch to them sheds.</summary>
