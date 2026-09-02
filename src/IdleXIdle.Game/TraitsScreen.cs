@@ -170,10 +170,10 @@ public sealed class TraitsScreen
     /// <summary>The camera buttons' edge — a hit target, so it follows the profile (brief §107).</summary>
     private static int CamBtnSize => UiMetrics.Control(44);
 
-    /// <summary>The camera's three buttons at the canvas's foot: zoom out, the whole tree, zoom in.</summary>
+    /// <summary>The camera's three buttons in the foot band, under the canvas: zoom out, the whole tree, zoom in.</summary>
     private static Rectangle CamBtn(int i)
         => new(View.Right - UiMetrics.Gap - (3 - i) * (CamBtnSize + UiMetrics.Space(6)),
-               View.Bottom - UiMetrics.Gap - CamBtnSize, CamBtnSize, CamBtnSize);
+               UiKit.PageBottom(PageBottomInset) - UiMetrics.Gap - CamBtnSize, CamBtnSize, CamBtnSize);
 
     /// <summary>
     /// DEV ONLY: pose the detail panel on a specific trait for the screenshot fixture. An "@N" suffix
@@ -244,14 +244,51 @@ public sealed class TraitsScreen
     /// <summary>The subtitle's row, just under the rule. 80 at 100 %.</summary>
     private static int SubtitleY => RuleY + UiMetrics.Space(6);
 
-    /// <summary>Where the canvas and the inspector begin: one subtitle line and a breath under the subtitle. 136 at 100 %.</summary>
-    private static int CanvasTop => SubtitleY + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(32);
+    /// <summary>
+    /// Where the canvas and the inspector begin: one subtitle line and a breath under the subtitle
+    /// (136 at 100 %) — or a breath under the point plate, whichever is lower. The plate grows with
+    /// the profile faster than the header band does; at 150 % it reached into the canvas and sat on
+    /// the top-left road's names (the C6 capture), so the canvas now starts where the plate ends.
+    /// </summary>
+    private static int CanvasTop
+        => Math.Max(SubtitleY + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(32),
+                    PlateTop + PlateHeight + UiMetrics.Space(10));
+
+    /// <summary>The point plate's top edge and height — shared by <see cref="PointPlate"/> and <see cref="CanvasTop"/>, so neither can drift from the other.</summary>
+    private static int PlateTop => RuleY + UiMetrics.Space(2);
+    private static int PlateHeight => UiMetrics.Space(22) * 2 + PointGlyph;
 
     /// <summary>The tree's canvas: everything left of the detail panel, below the top strip.</summary>
     // The canvas ends where the inspector begins and follows the page, so a smaller page (UI SCALE) does
     // not leave the tree drawing underneath the panel.
     private static Rectangle View
-        => new(PageLeft, CanvasTop, DetailPanel.X - UiMetrics.Space(28) - PageLeft, UiKit.PageBottom(PageBottomInset) - CanvasTop);
+        => new(PageLeft, CanvasTop, DetailPanel.X - UiMetrics.Space(28) - PageLeft, FootTop - CanvasTop);
+
+    // ── The foot band ────────────────────────────────────────────────────────────────────────────
+    //
+    // The camera hint, the tally and the three camera buttons used to be printed in screen space OVER
+    // the clipped tree, in "the canvas's empty bottom-left corner" — empty at 100 % with the tree at
+    // home, and not empty at all once a player pans, or at 150 %, where the wrapped hint and the tally's
+    // own row printed straight through the deepest nodes' names (the 150 % capture of the merged
+    // reflow). Brief §17 forbids text over text and a control under a footer, so the foot is now a BAND
+    // BELOW THE VIEW: the tree's clip ends where the band begins, and the band's height follows how
+    // many rows the foot needs at the current profile — measured every Draw, not guessed.
+
+    /// <summary>
+    /// Rows of text the foot holds at the current profile: 1 while the hint and the tally share the
+    /// buttons' row; the hint's lines plus a tally row once they stack. Static because <see cref="View"/>
+    /// is static (the tour reads it); the last Draw's measurement, 1 until the first.
+    /// </summary>
+    private static int _footRows = 1;
+
+    /// <summary>The band's height: the buttons' row, plus whatever the stacked rows rise above it, plus a breath.</summary>
+    private static int FootBand
+        => UiMetrics.Gap + CamBtnSize
+           + Math.Max(0, (_footRows - 1) * UiTypography.Pitch(UiTypography.Secondary) - UiMetrics.Space(16))
+           + UiMetrics.Space(10);
+
+    /// <summary>Where the band begins — the view's bottom edge, and the tree's clip.</summary>
+    private static int FootTop => UiKit.PageBottom(PageBottomInset) - FootBand;
 
     /// <summary>
     /// The docked reading panel, on the page's right edge — the house inspector width
@@ -294,7 +331,7 @@ public sealed class TraitsScreen
     // glyph with a pad above and below. A PROPERTY, not a static readonly: it follows the profile, and a
     // static readonly is frozen at class load.
     private static Rectangle PointPlate
-        => new(View.X, RuleY + UiMetrics.Space(2), UiMetrics.Space(58) * 2 + PointGlyph, UiMetrics.Space(22) * 2 + PointGlyph);
+        => new(View.X, PlateTop, UiMetrics.Space(58) * 2 + PointGlyph, PlateHeight);
 
     /// <summary>The plate's glyph box — shared by the draw and the tour. An icon beside a number: the house icon size.</summary>
     private static int PointGlyph => UiMetrics.IconSize;
@@ -318,7 +355,7 @@ public sealed class TraitsScreen
     // ── The camera ──────────────────────────────────────────────────────────────────────────────
     private Vector2 _pan;                  // world point at the centre of the view
     private float _zoom;                   // screen pixels per world unit
-    private readonly float _homeZoom;      // the framing HOME returns to: the whole tree, fitted
+    private float _homeZoom;               // the framing HOME returns to: the whole tree, fitted — refitted when the foot band changes
     private readonly Vector2 _homePan;
     private readonly Vector2 _worldMin, _worldMax;   // the world the pan may not leave
     private Point? _dragFrom;              // where a drag started, in screen space
@@ -888,35 +925,6 @@ public sealed class TraitsScreen
     /// </remarks>
     private void DrawTree(SpriteBatch b, MemoryDustTree tree, Point hit, bool clicked)
     {
-        b.End();
-        var canvas = Game1.OverlayToCanvas(View, Shake);
-        _ui.Device.ScissorRectangle = Rectangle.Intersect(canvas, new Rectangle(0, 0, 1920, 1080));
-        b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
-                DepthStencilState.None, Clip, null, Game1.OverlayTransform(Shake));
-        try
-        {
-            DrawWorld(b, tree, hit, clicked);
-        }
-        finally
-        {
-            b.End();
-            b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
-                    null, null, null, Game1.OverlayTransform(Shake));
-        }
-
-        // How to move, in words, in the canvas's empty bottom-left corner — the one thing a free canvas
-        // has to say that a framed one did not. Screen space, over the clipped tree. Two SHORT lines:
-        // one long line ran into the spine's caption at the foot, and at the head it ran into the RUIN
-        // header — both measured on a capture, not guessed.
-        // The camera's controls, as controls (UX V2 P1.6): zoom out · the whole tree · zoom in — and one line
-        // that says what a click on a road's name does. Readable Slate, never a dimmed Slate.
-        // THE FOOT FOLLOWS THE ROOM IT HAS (brief §9, §17). The hint sits on the buttons' row and the tally
-        // right-aligns beside them — the 100 % foot, unchanged — for as long as one line of each fits.
-        // When the profile's type no longer fits (at 150 % the hint and the tally together are wider than
-        // the canvas leaves), the tally takes its own row above the hint and the hint wraps at its own
-        // separators, stacked UPWARD from the same baseline: never shortened to an ellipsis, never drawn
-        // smaller, and never printed through the tally, which is what a capture of the old one-line foot
-        // showed at 150 %.
         var spent = tree.All.Where(u => tree.Owns(u.Id)).Sum(u => u.Cost);
         var learned = tree.All.Count(u => tree.Owns(u.Id));
         // The tally — read once a session, not before every purchase. The "226 FOR EVERYTHING" that used
@@ -933,6 +941,45 @@ public sealed class TraitsScreen
         // With the tally on its own row, the hint may run right up to the buttons.
         var hintRoom = foot.X - UiMetrics.Space(20) - hintX;
         var hintLines = oneLine ? new List<string> { hintLine } : PackSegments(HintSegments, HintSep, hintRoom, UiTypography.Secondary);
+        // The row count sets the band, the band sets the view, and the view is the clip — measured
+        // BEFORE the clip so the tree is cut where the foot begins on this very frame. A new count
+        // (first Draw, or a profile change) refits HOME so ALL still shows the whole tree.
+        var rows = oneLine ? 1 : hintLines.Count + 1;
+        if (rows != _footRows)
+        {
+            _footRows = rows;
+            _homeZoom = FitZoom();
+            _zoom = Math.Clamp(_zoom, MinZoom, MaxZoom);
+            ClampPan();
+        }
+
+        b.End();
+        var canvas = Game1.OverlayToCanvas(View, Shake);
+        _ui.Device.ScissorRectangle = Rectangle.Intersect(canvas, new Rectangle(0, 0, 1920, 1080));
+        b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
+                DepthStencilState.None, Clip, null, Game1.OverlayTransform(Shake));
+        try
+        {
+            DrawWorld(b, tree, hit, clicked);
+        }
+        finally
+        {
+            b.End();
+            b.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
+                    null, null, null, Game1.OverlayTransform(Shake));
+        }
+
+        // THE FOOT, in its band under the view (see FootBand): how to move, in words, and the camera's
+        // controls as controls (UX V2 P1.6): zoom out · the whole tree · zoom in — and one line that says
+        // what a click on a road's name does. Readable Slate, never a dimmed Slate. THE FOOT FOLLOWS THE
+        // ROOM IT HAS (brief §9, §17): the hint sits on the buttons' row and the tally right-aligns beside
+        // them — the 100 % foot, unchanged — for as long as one line of each fits. When the profile's type
+        // no longer fits (at 150 % the hint and the tally together are wider than the canvas leaves), the
+        // tally takes its own row above the hint and the hint wraps at its own separators, stacked UPWARD
+        // from the same baseline: never shortened to an ellipsis, never drawn smaller, never printed
+        // through the tally — and never through a node, because the band is not part of the view.
+        // A hairline where the clip ends, so a node cut at the band reads as an edge, not as a bug.
+        _ui.Fill(b, new Rectangle(View.X, View.Bottom, View.Width, 1), Slate * 0.28f);
         var stackTop = hintY - (hintLines.Count - 1) * hintPitch;
         for (var i = 0; i < hintLines.Count; i++)
             _ui.TextBig(b, hintLines[i], hintX, stackTop + i * hintPitch, Slate, UiTypography.Secondary);
