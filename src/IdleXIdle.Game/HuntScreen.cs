@@ -61,7 +61,10 @@ public sealed class HuntScreen
     /// drops to 1000, giving the actors the full height of the arena to stand in.
     /// </remarks>
     // 1000 → 880 (UX V2 P1.1): the skill strip owns y 900–1064 now, so the actors stand above it.
-    private const int GroundY = 880;
+    // DERIVED FROM THE STRIP since UI SCALE became a density profile (UI polish P2): the strip grows
+    // with its type at 125 / 150 % and the arena gives up that room — the ground line rises with the
+    // strip's top edge rather than letting the actors' feet run under it. 880 at 100 %, as before.
+    private static int GroundY => SkillStrip.Y - UiMetrics.Space(20);
     // A wave is resolved instantly then REPLAYED at this speed. It was 3.5x with no gap between waves, so
     // the whole run blurred past — playtest: "waves flow too fast". Slowed to a watchable pace, and a short
     // BREATH now sits between waves so each clear reads as its own beat. The champion's own skill rate
@@ -156,12 +159,14 @@ public sealed class HuntScreen
     // designer's answer was the right one — "gerekirse rectangle ile birlikte" — so ArenaClip moved
     // instead and the figure is free to stand where the composition wants it. The floor is now
     // ArenaClip.X + 259 = 445.
-    private static readonly Rectangle ChampBox = new(620 - 200, GroundY - 430, 400, 430);
+    // A PROPERTY, not a static readonly: the ground line follows the profile, and a static readonly is
+    // frozen at class load — it would stand on the 100 % floor whatever the setting said.
+    private static Rectangle ChampBox => new(620 - 200, GroundY - 430, 400, 430);
     // Rev 3 §16.1: one normal enemy bottom-centred at (1160,735), visible ~320px (range 280–360). A boss is
     // drawn far larger from its own anchor (see the draw), so this box is the NORMAL-enemy size only.
     // 1320 -> 1380 -> 1430. The pack carries the separation the designer asked for, because the champion
     // could not: see the measured left limit above.
-    private static readonly Rectangle EnemyBox = new(1500 - 218, GroundY - 440, 436, 440);
+    private static Rectangle EnemyBox => new(1500 - 218, GroundY - 440, 436, 440);
 
     /// <summary>
     /// Does the champion need mirroring to face the enemies?
@@ -203,7 +208,7 @@ public sealed class HuntScreen
     private const int BossTargetBodyHeight = 540;   // §6/§25: rendered figure height — the boss box is a 540 square
     // Pulled in from x=1360: the boss is far wider than an ordinary creature, and anchored that far right
     // its wing ran into the arena's scissor edge at 1554 and read as sliced off behind the side panels.
-    private static readonly Point BossAnchor = new(1330, GroundY + 10);   // travels with the pack
+    private static Point BossAnchor => new(1330, GroundY + 10);   // travels with the pack — and with the ground line
     private Rectangle _bossBodyRect, _bossFullRect;   // rendered screen rects, set by DrawBoss for the bar/overlay
     private int _bossFrame;
     private string _bossName = "BOSS";
@@ -502,8 +507,9 @@ public sealed class HuntScreen
     /// This was 44 while damage numbers drew at 52px and crits at 72px, so consecutive numbers were
     /// guaranteed to overlap by 8 to 28 pixels — the stack existed, did its arithmetic correctly, and
     /// still produced a smear, because the spacing was smaller than the glyphs it was spacing.
+    /// Derived from the crit rung it has to clear, so the profile that grows the numbers grows the lane.
     /// </remarks>
-    private const int CalloutLineHeight = 54;
+    private static int CalloutLineHeight => CritPx + UiMetrics.Space(8);
 
     /// <summary>
     /// How many lines the stack climbs before wrapping back to the bottom.
@@ -520,6 +526,8 @@ public sealed class HuntScreen
     private static int DamagePx => UiTypography.DamageNormal;
     private static int SkillHitPx => UiTypography.DamageSkill;
     private static int CritPx => UiTypography.DamageCritical;
+    /// <summary>The champion's own callout — a skill's name as it is cast. Between a hit and a skill hit, and it follows the profile like them.</summary>
+    private static int SayPx => UiMetrics.Text(36);
 
     /// <summary>Where the enemy wave label sits, relative to the row anchor.</summary>
     /// <remarks>
@@ -551,7 +559,8 @@ public sealed class HuntScreen
     // THE STAGE THE ACTORS ARE LAID OUT ON. Widened right (1554 -> 1722) so the pack can actually stand
     // further right: the row's resting x is clamped to this rect, and a swarm of four already clamped to
     // ~1160 against a centre of 1320, so moving EnemyBox alone moved nothing at all.
-    private static readonly Rectangle ArenaRect = new(300, 150, 1500, 750);
+    // Its foot is the skill strip's top: the strip grows with the profile and the stage yields to it.
+    private static Rectangle ArenaRect => new(300, 150, 1500, SkillStrip.Y - 150);
 
     /// <summary>
     /// Where arena pixels may LAND — wider than the stage the actors are placed on.
@@ -572,7 +581,7 @@ public sealed class HuntScreen
     /// after the arena and cover whatever strays under them.
     /// </para>
     /// </remarks>
-    private static readonly Rectangle ArenaClip = new(186, 150, 1734, 750);
+    private static Rectangle ArenaClip => new(186, 150, 1734, SkillStrip.Y - 150);
 
     /// <summary>
     /// The spotlight cut-outs for one of this screen's tour cards, in the screen's own coordinates. The
@@ -587,13 +596,16 @@ public sealed class HuntScreen
     /// over, so the one-skill rail height is the right one. The fight screen is not inset, so these are
     /// already chrome coordinates and the host adds no margin of its own.
     /// </remarks>
+    // DERIVED from the rects the screen draws (UI polish P2): the card, the strip and the stage move
+    // with the profile, and a light measured for the 100 % layout would fall beside them at 150 %.
+    // The numbers are the same as the hand-measured ones at 100 %.
     internal static Rectangle[] Spotlights(TourTarget target) => target switch
     {
-        TourTarget.Champion => new[] { new Rectangle(470, 440, 460, 450) },
-        TourTarget.Enemies => new[] { new Rectangle(940, 440, 680, 450), new Rectangle(620, 8, 580, 152) },
-        TourTarget.HunterHud => new[] { new Rectangle(186, 4, 440, 160) },
+        TourTarget.Champion => new[] { new Rectangle(ChampBox.X + 50, ChampBox.Y - 10, ChampBox.Width + 60, ChampBox.Height + 20) },
+        TourTarget.Enemies => new[] { new Rectangle(940, EnemyBox.Y, 680, EnemyBox.Height + 10), Inflated(StageHeader, 10) },
+        TourTarget.HunterHud => new[] { new Rectangle(HunterCard.X - 10, HunterCard.Y - 10, HunterCard.Width + 20, s_hunterCardBottom - HunterCard.Y + 20) },
         TourTarget.CurrencyPills => new[] { new Rectangle(1440, 4, 400, 84) },
-        TourTarget.Skills => new[] { new Rectangle(476, 890, 1020, 184) },
+        TourTarget.Skills => new[] { Inflated(SkillStrip, 10) },
         // Idle rate, errands, the filter row (closed) — down to wherever the filter row LAST drew. The
         // rail's height depends on how many errands are up, and a new game now holds the welcome chest,
         // so the fixed 268 px measured for an empty rail sliced the filter row in half on every first
@@ -604,6 +616,9 @@ public sealed class HuntScreen
         TourTarget.LessonSlot => new[] { new Rectangle(630, s_headerStackBottom + 8, 560, 130) },
         _ => Array.Empty<Rectangle>(),
     };
+
+    /// <summary>A rectangle grown by <paramref name="by"/> on every side — a spotlight's margin around the thing it lights.</summary>
+    private static Rectangle Inflated(Rectangle r, int by) => new(r.X - by, r.Y - by, r.Width + by * 2, r.Height + by * 2);
     private RasterizerState? _arenaRasterizer;
     private RasterizerState ArenaRasterizer => _arenaRasterizer ??= new RasterizerState { ScissorTestEnable = true };
     private float _bossIncomingTimer;
@@ -718,6 +733,10 @@ public sealed class HuntScreen
         _hunter = hunter;
         var dt = (float)time.ElapsedGameTime.TotalSeconds;
         _anim += dt;
+        // The wheel's notches since last frame, for the log's scroll regions. A delta, not a position.
+        var wheelNow = Mouse.GetState().ScrollWheelValue;
+        _wheel = (wheelNow - _wheelLast) / 120;
+        _wheelLast = wheelNow;
         // _strikeTime WAS THE OLD SWING CLOCK and is gone. It was armed by the impact and counted down,
         // so the clip played entirely AFTER the blow it was meant to deliver. The champion now runs on
         // _champWindup, the same anticipation model the enemy already used. Leaving a decaying timer
@@ -1016,7 +1035,7 @@ public sealed class HuntScreen
             X = ChampBox.Center.X,
             Y = ChampBox.Y - 40 - StackSlot(CalloutLane.Champion) * CalloutLineHeight,
             Life = 1f,
-            Px = 36,
+            Px = SayPx,
             Lane = CalloutLane.Champion,
         });
     }
@@ -2025,7 +2044,10 @@ public sealed class HuntScreen
     {
         // Below the stage header (which ends at y=153) and right of the Hunter HUD (which ends at x=596).
         // At (510,145,900,46) it drove straight through both of them.
-        var bar = new Rectangle(660, 200, 600, 54);
+        // HUNG FROM THE HEADER'S FOOT, one name line and a breath under it, so a header that grew with the
+        // profile pushes the bar down rather than the name up into it. (660, 200, 600, 54) at 100 %.
+        var barY = StageHeaderBottomY + UiMetrics.Space(14) + UiTypography.Pitch(UiTypography.Headline);
+        var bar = new Rectangle(660, barY, 600, UiMetrics.Control(54));
         HeaderStackBottom = bar.Bottom;   // the host's toasts hang under the boss bar, not across it
         // The dev fixture's underlying wave-2 enemy is already dead (0%), so pose a representative fill.
         var frac = DevForceBoss ? 0.78f : Math.Clamp(_replay!.EnemyHealthFraction, 0f, 1f);
@@ -2033,8 +2055,8 @@ public sealed class HuntScreen
         // one label that has to land, was the least readable thing on screen. Same rule as the parchment
         // panels: when the surface is already gold, the word moves off it.
         _ui.BarArt(b, bar, frac, "boss");
-        _ui.TextCenterBig(b, _bossName, bar.Center.X, bar.Y - 34, UiKit.Vellum, UiTypography.Headline);
-        _ui.TextCenterBig(b, $"{(int)(frac * 100)}%", bar.Center.X, bar.Y + 17, UiKit.Ink, UiTypography.OverlayBody);
+        _ui.TextCenterBig(b, _bossName, bar.Center.X, bar.Y - UiTypography.Pitch(UiTypography.Headline) - 1, UiKit.Vellum, UiTypography.Headline);
+        _ui.TextCenterBig(b, $"{(int)(frac * 100)}%", bar.Center.X, bar.Y + (bar.Height - UiTypography.OverlayBody) / 2 + 1, UiKit.Ink, UiTypography.OverlayBody);
     }
 
     /// <summary>Rev 5 §17: fixture-only bounds visualization (ground pivot, body, full silhouette, arena).</summary>
@@ -2081,6 +2103,7 @@ public sealed class HuntScreen
     {
         _logOpen = !_logOpen;
         _logIndex = 0;
+        _logNumbersFirst = _logDiffFirst = 0;
     }
 
     public bool LogOpen => _logOpen;
@@ -2089,7 +2112,21 @@ public sealed class HuntScreen
     {
         if (Log.Count == 0) return;
         _logIndex = Math.Clamp(_logIndex + dir, 0, Log.Count - 1);
+        _logNumbersFirst = _logDiffFirst = 0;   // a new entry reads from its top
     }
+
+    /// <summary>
+    /// The first visible row of the log's two columns when they have more rows than the profile leaves
+    /// room for (150 % on a report with a shield row). Zero — everything shown — at 100 %.
+    /// </summary>
+    private int _logNumbersFirst, _logDiffFirst;
+
+    /// <summary>
+    /// The mouse wheel's notches this frame, read in <see cref="Update"/>. The host hands this screen a
+    /// cursor and a click and nothing else; the log's scroll regions need the wheel, so the screen reads
+    /// the wheel's DELTA itself — a delta is not a cursor and converts nothing (LAW 6 is about position).
+    /// </summary>
+    private int _wheel, _wheelLast;
 
     /// <summary>
     /// The EXPEDITION LOG: a full-screen read of one run's report, with a way to walk back through the others.
@@ -2134,9 +2171,10 @@ public sealed class HuntScreen
 
         if (Log.Count == 0)
         {
-            _ui.TextCenterBig(b, "NO EXPEDITIONS YET", panel.Center.X, panel.Y + 380, Slate, UiTypography.RegionTitle, TextFace.Display);
-            var lines = _ui.WrapBig("Your first report is written the moment your hunter falls or stalls. Every report stays here.", x1 - x0 - 200, UiTypography.Body);
-            var ey = panel.Y + 380 + UiTypography.Pitch(UiTypography.RegionTitle) + 8;
+            var emptyY = panel.Center.Y - UiMetrics.Space(70);
+            _ui.TextCenterBig(b, "NO EXPEDITIONS YET", panel.Center.X, emptyY, Slate, UiTypography.RegionTitle, TextFace.Display);
+            var lines = _ui.WrapBig("Your first report is written the moment your hunter falls or stalls. Every report stays here.", x1 - x0 - UiMetrics.Space(200), UiTypography.Body);
+            var ey = emptyY + UiTypography.Pitch(UiTypography.RegionTitle) + UiMetrics.Space(8);
             foreach (var line in lines) { _ui.TextCenterBig(b, line, panel.Center.X, ey, Bone, UiTypography.Body); ey += UiTypography.Pitch(UiTypography.Body); }
             return;
         }
@@ -2147,28 +2185,53 @@ public sealed class HuntScreen
         var region = Regions.Find(shown.RegionId)?.Name ?? shown.RegionId;
         var entry = $"ENTRY {_logIndex + 1} OF {Log.Count}";
         _ui.TextRightBig(b, region.Length > 0 ? $"{region.ToUpperInvariant()}  ·  {entry}" : entry,
-                         close.X - 20, panel.Y + UiTypography.ModalTitleTop + 6, Slate, UiTypography.Body);
+                         close.X - UiMetrics.Space(20), panel.Y + UiTypography.ModalTitleTop + UiMetrics.Space(6), Slate, UiTypography.Body);
 
-        DrawReportPanel(b, panel, shown, older);
+        DrawReportPanel(b, panel, shown, older, hit);
 
         // ZONE E — the footer: paging on the left as ordinary buttons; the doors on the right, ADJUST BUILD
-        // the one primary decision this screen offers. No RETRY — the hunter already regroups.
-        var fy = panel.Bottom - 104;
-        var prev = new Rectangle(x0, fy, 180, 56);
-        var next = new Rectangle(x0 + 196, fy, 180, 56);
-        if (_ui.Button(b, prev, "‹  OLDER", hit, clicked, enabled: _logIndex < Log.Count - 1) && _logIndex < Log.Count - 1) _logIndex++;
-        if (_ui.Button(b, next, "NEWER  ›", hit, clicked, enabled: _logIndex > 0) && _logIndex > 0) _logIndex--;
-        var build = new Rectangle(x1 - 280, fy, 280, 56);
-        var gear = new Rectangle(build.X - 16 - 200, fy, 200, 56);
+        // the one primary decision this screen offers. No RETRY — the hunter already regroups. ANCHORED to
+        // the panel's foot at every profile — the doors are the screen's primary actions and never sit
+        // under a scroll region (brief §18).
+        var fy = LogFooterY(panel);
+        var bh = LogButtonHeight;
+        var prev = new Rectangle(x0, fy, UiMetrics.Space(180), bh);
+        var next = new Rectangle(x0 + UiMetrics.Space(196), fy, UiMetrics.Space(180), bh);
+        if (_ui.Button(b, prev, "‹  OLDER", hit, clicked, enabled: _logIndex < Log.Count - 1) && _logIndex < Log.Count - 1) { _logIndex++; _logNumbersFirst = _logDiffFirst = 0; }
+        if (_ui.Button(b, next, "NEWER  ›", hit, clicked, enabled: _logIndex > 0) && _logIndex > 0) { _logIndex--; _logNumbersFirst = _logDiffFirst = 0; }
+        var build = new Rectangle(x1 - UiMetrics.Space(280), fy, UiMetrics.Space(280), bh);
+        var gear = new Rectangle(build.X - UiMetrics.Space(16) - UiMetrics.Space(200), fy, UiMetrics.Space(200), bh);
         if (_ui.Button(b, build, "ADJUST BUILD", hit, clicked, true, ButtonStyle.Primary)) { _logOpen = false; WantsBuild = true; }
         if (_ui.Button(b, gear, "GEAR", hit, clicked)) { _logOpen = false; WantsGear = true; }
     }
 
     /// <summary>
-    /// The log's panel: 1200×900, aspect 1.33 — held at or above 1.30 on purpose, because <see cref="UiKit.Panel"/>
-    /// picks its frame art by aspect and the squarer frame's edge diamonds reach thirty pixels into the panel.
+    /// The log's panel: 1200×900 at 100 %, aspect 1.33 — held at or above 1.30 on purpose, because
+    /// <see cref="UiKit.Panel"/> picks its frame art by aspect and the squarer frame's edge diamonds reach
+    /// thirty pixels into the panel. At the larger profiles it grows at the spacing rate and is capped by
+    /// the page's height, so it stays a modal on the page rather than a page of its own; centred on the
+    /// page either way. A property: its size follows the setting.
     /// </summary>
-    private static readonly Rectangle LogPanel = new(360, 90, 1200, 900);
+    private static Rectangle LogPanel
+    {
+        get
+        {
+            // The cap keeps the panel's top under the host's currency pills' foot, so the close icon
+            // (PanelCorner - 4 below the top) and the title row are never under them.
+            var w = UiMetrics.Space(1200);
+            var h = Math.Min(UiMetrics.Space(900), UiKit.Page.Height - UiMetrics.Space(60));
+            return new((UiKit.Page.Width - w) / 2, (UiKit.Page.Height - h) / 2, w, h);
+        }
+    }
+
+    /// <summary>The footer buttons' height — the log's own 56, at the profile.</summary>
+    private static int LogButtonHeight => UiMetrics.Control(56);
+
+    /// <summary>Where the footer's buttons sit: one button and a pad above the panel's foot.</summary>
+    private static int LogFooterY(Rectangle panel) => panel.Bottom - UiMetrics.Space(48) - LogButtonHeight;
+
+    /// <summary>Where the outcome band starts under the title row: the modal title, its line, and a breath. 100 at 100 %.</summary>
+    private static int LogBandTop => UiTypography.ModalTitleTop + UiTypography.Pitch(UiTypography.PanelTitle) + UiMetrics.Space(20);
 
     /// <summary>What a diff row is called on screen — the table's own names, so the two blocks agree.</summary>
     private static string DiffLabel(string coreLabel) => coreLabel switch
@@ -2222,96 +2285,126 @@ public sealed class HuntScreen
     /// The report, as the log shows it: the outcome band, the diagnosis, the numbers and the diff side by side.
     /// Nothing here is measured; every number is <see cref="RunReport"/>'s. The footer is the caller's.
     /// </summary>
-    private void DrawReportPanel(SpriteBatch b, Rectangle panel, RunReport r, RunReport? previous)
+    private void DrawReportPanel(SpriteBatch b, Rectangle panel, RunReport r, RunReport? previous, Point hit)
     {
         var x0 = UiKit.ContentLeft(panel);
         var x1 = UiKit.ContentRight(panel);
         var w = x1 - x0;
+        var pad = UiMetrics.Space(24);   // the inset of text inside the band and the diagnosis plate
 
         // ZONE B — the outcome band. FELL, in the title: every entry is the end of a run and must say so.
         // Ember for a fall, gold for a stall (the clock ran out, the hunter stood); a record is a chip.
         var stalled = r.Outcome == WaveOutcome.Stalled;
         var tint = stalled ? Gold : Ember;
-        var band = new Rectangle(x0, panel.Y + 100, w, 62);
+        var band = new Rectangle(x0, panel.Y + LogBandTop, w, UiMetrics.Space(24) + UiTypography.RegionTitle);
         _ui.Fill(b, band, tint * 0.16f);
         _ui.Fill(b, new Rectangle(band.X, band.Y, 5, band.Height), tint);
         Hairline(b, band.X, band.Bottom - 1, band.Width, tint * 0.5f);
         _ui.TextBig(b, stalled ? $"STALLED AT WAVE {r.WallWave}" : $"FELL AT WAVE {r.WallWave}",
-            band.X + 24, band.Y + 10, tint, UiTypography.RegionTitle, TextFace.Display);
+            band.X + pad, band.Y + UiMetrics.Space(10), tint, UiTypography.RegionTitle, TextFace.Display);
         var cleared = $"{r.Depth} WAVE{(r.Depth == 1 ? "" : "S")} CLEARED";
-        var clearedRight = band.Right - 24;
-        _ui.TextRightBig(b, cleared, clearedRight, band.Y + 20, Bone, UiTypography.Body);
+        var clearedRight = band.Right - pad;
+        _ui.TextRightBig(b, cleared, clearedRight, band.Y + (band.Height - UiTypography.Body) / 2, Bone, UiTypography.Body);
         if (r.IsRecord)
         {
-            var chipX = clearedRight - _ui.MeasureBig(cleared, UiTypography.Body) - 16 - ChipWidth("NEW RECORD", UiTypography.Secondary);
-            Chip(b, chipX, band.Y + 17, "NEW RECORD", Gold, Gold * 0.7f, UiTypography.Secondary);
+            var chipX = clearedRight - _ui.MeasureBig(cleared, UiTypography.Body) - UiMetrics.Space(16) - ChipWidth("NEW RECORD", UiTypography.Secondary);
+            var chipH = UiTypography.Secondary + UiTypography.ChipPadY * 2;
+            Chip(b, chipX, band.Y + (band.Height - chipH) / 2, "NEW RECORD", Gold, Gold * 0.7f, UiTypography.Secondary);
         }
 
-        // ENDED BY — the wave, named plainly, with its affixes in the words that say what they do.
+        // ENDED BY — the wave, named plainly, with its affixes in the words that say what they do. The affix
+        // list takes whatever the line has left after the wave's name, and is shortened to it.
         var affixes = r.WallAffixes.Count > 0
             ? string.Join(", ", r.WallAffixes.Select(AffixWords))
             : "NO AFFIX";
-        var y = band.Bottom + 14;
-        Runs(b, x0, y, UiTypography.Body,
+        var y = band.Bottom + UiMetrics.Space(14);
+        var ax = Runs(b, x0, y, UiTypography.Body,
             ("ENDED BY   ", Slate),
             ($"{r.WallArchetype.ToString().ToUpperInvariant()} × {r.WallCreatures}", UiKit.Vellum),
-            ("   ·   ", Slate),
-            (_ui.ShortenBig(affixes, w - 420, UiTypography.Body), Bone));
-        y += UiTypography.Pitch(UiTypography.Body) + 14;
+            ("   ·   ", Slate));
+        _ui.TextBig(b, _ui.ShortenBig(affixes, x1 - ax, UiTypography.Body), ax, y, Bone, UiTypography.Body);
+        y += UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(14);
 
         // ZONE C — the diagnosis: the limit's NAME, the verdict SENTENCE, and what to LOOK AT. A quiet plate
         // with the gold rule — this gold means "the thing that matters", and it is the only gold below the band.
-        var diag = new Rectangle(x0, y, w, 14 + UiTypography.Pitch(UiTypography.Headline) + UiTypography.Pitch(UiTypography.Body) + UiTypography.Pitch(UiTypography.Secondary) + 10);
+        var diagPad = UiMetrics.Space(14);
+        var diag = new Rectangle(x0, y, w, diagPad + UiTypography.Pitch(UiTypography.Headline) + UiTypography.Pitch(UiTypography.Body) + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(10));
         _ui.Plate(b, diag, Gold);
-        var dx = diag.X + 24;
-        var dy = diag.Y + 14;
+        var dx = diag.X + pad;
+        var dy = diag.Y + diagPad;
         _ui.TextBig(b, $"MAIN LIMIT — {r.LimitLabel()}", dx, dy, Bone, UiTypography.Headline);
         dy += UiTypography.Pitch(UiTypography.Headline);
-        _ui.TextBig(b, _ui.ShortenBig(r.Verdict(), diag.Width - 48, UiTypography.Body), dx, dy, Bone, UiTypography.Body);
+        _ui.TextBig(b, _ui.ShortenBig(r.Verdict(), diag.Width - pad * 2, UiTypography.Body), dx, dy, Bone, UiTypography.Body);
         dy += UiTypography.Pitch(UiTypography.Body);
-        _ui.TextBig(b, _ui.ShortenBig($"WHAT TO LOOK AT — {LookAt(r.Limit)}", diag.Width - 48, UiTypography.Secondary), dx, dy, Slate, UiTypography.Secondary);
-        y = diag.Bottom + 20;
+        _ui.TextBig(b, _ui.ShortenBig($"WHAT TO LOOK AT — {LookAt(r.Limit)}", diag.Width - pad * 2, UiTypography.Secondary), dx, dy, Slate, UiTypography.Secondary);
+        y = diag.Bottom + UiMetrics.Space(20);
 
         // ZONE D — two columns. LEFT: the numbers, each a lever; the row the diagnosis names wears the rule.
-        var leftW = 620;
-        var rightX = x0 + leftW + 40;
+        // The split is the 100 % one (620 of 1120) kept as a share, so a wider panel widens both columns.
+        var leftW = w * 620 / 1120;
+        var rightX = x0 + leftW + UiMetrics.Space(40);
         var rightW = x1 - rightX;
-        var footerTop = panel.Bottom - 120;
+        var footerTop = LogFooterY(panel) - UiMetrics.Space(16);
 
         _ui.TextBig(b, $"THE NUMBERS  ·  LAST {r.SampledWaves} WAVE{(r.SampledWaves == 1 ? "" : "S")}", x0, y, Slate, UiTypography.Body);
-        var ty = y + UiTypography.Pitch(UiTypography.Body) + 6;
+        var ty = y + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(6);
         Hairline(b, x0, ty, leftW, Slate * 0.45f);
-        ty += 8;
-        var xv = x0 + 330;   // the figures' right edge
-        var rowPitch = UiTypography.Pitch(UiTypography.Headline) + 18;
-        var litRow = LimitRow(r.Limit);
-        var row = 0;
-        void Row(string label, string figure, string unit)
+        ty += UiMetrics.Space(8);
+
+        // THE ROWS, gathered before they are drawn: their labels size the figure column, and their count
+        // sets the rhythm. SHIELD ABSORBED sits beside HEALTH LOST because they are the two halves of one
+        // question — what the wave landed, and what it landed ON. Never shown at zero: a build with no
+        // shield would otherwise read a row of nothing every run and learn to skip past the rows.
+        var rows = new List<(string Label, string Figure, string Unit)>
         {
-            if (row == litRow) _ui.Fill(b, new Rectangle(x0 - 14, ty - 4, 4, rowPitch - 8), Gold);
-            _ui.TextBig(b, label, x0, ty + 5, Bone, UiTypography.Body);
-            _ui.TextRightBig(b, figure, xv, ty, UiKit.Vellum, UiTypography.Headline);
-            if (unit.Length > 0) _ui.TextBig(b, _ui.ShortenBig(unit, x0 + leftW - xv - 12, UiTypography.Body), xv + 12, ty + 5, Slate, UiTypography.Body);
-            ty += rowPitch;
-            Hairline(b, x0, ty - 10, leftW, Slate * 0.18f);
-            row++;
-        }
-        Row("ARMOUR ABSORBED", $"{r.AbsorbedFraction * 100f:F0}", "% of your damage");
-        Row("AVERAGE HIT", $"{r.AverageHitSize:F0}", "");
-        Row("REACH", $"{r.TargetsPerActivation:F1}", $"of {r.CreaturesPerWave:F1} creatures per cast");
-        Row("HEALTH LOST PER WAVE", $"{r.HealthLostPerWaveFraction * 100f:F0}", "% of your health");
-        // SHIELD ABSORBED sits beside HEALTH LOST because they are the two halves of one question —
-        // what the wave landed, and what it landed ON. Never shown at zero: a build with no shield
-        // would otherwise read a row of nothing every run and learn to skip past the rows.
+            ("ARMOUR ABSORBED", $"{r.AbsorbedFraction * 100f:F0}", "% of your damage"),
+            ("AVERAGE HIT", $"{r.AverageHitSize:F0}", ""),
+            ("REACH", $"{r.TargetsPerActivation:F1}", $"of {r.CreaturesPerWave:F1} creatures per cast"),
+            ("HEALTH LOST PER WAVE", $"{r.HealthLostPerWaveFraction * 100f:F0}", "% of your health"),
+            ("TIME PER WAVE", $"{r.SecondsPerWave:F1}", "seconds"),
+        };
+        var litRow = LimitRow(r.Limit);   // indexes the five rows above; the shield row is inserted AFTER it is resolved
         if (r.ShieldAbsorbedFraction > 0f)
-            Row("SHIELD ABSORBED", $"{r.ShieldAbsorbedFraction * 100f:F0}", "% of what the wave landed");
-        Row("TIME PER WAVE", $"{r.SecondsPerWave:F1}", "seconds");
+        {
+            rows.Insert(4, ("SHIELD ABSORBED", $"{r.ShieldAbsorbedFraction * 100f:F0}", "% of what the wave landed"));
+            if (litRow >= 4) litRow++;
+        }
+        // The figures' right edge: the house 330 at 100 %, or further right when the profile's labels need it.
+        var labelW = rows.Max(row => _ui.MeasureBig(row.Label, UiTypography.Body));
+        var figureW = rows.Max(row => _ui.MeasureBig(row.Figure, UiTypography.Headline));
+        var xv = x0 + Math.Max(UiMetrics.Space(330), labelW + UiMetrics.Space(16) + figureW);
+        // THE RHYTHM COMES FROM THE ROOM THERE IS (brief §17): the house pitch when the rows fit, tighter
+        // down to a floor when they do not, and past the floor the column scrolls under the wheel — the
+        // footer's doors are never covered. At 100 % every row fits at the house pitch, as before.
+        var pitchMax = UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(18);
+        var pitchMin = UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(6);
+        var roomH = Math.Max(0, footerTop - ty);
+        var rowPitch = Math.Clamp(roomH / Math.Max(1, rows.Count), pitchMin, pitchMax);
+        var visible = Math.Min(rows.Count, roomH / rowPitch);
+        var leftHot = new Rectangle(x0, y, leftW, footerTop - y).Contains(hit);
+        _logNumbersFirst = UiKit.Scrolled(_logNumbersFirst, leftHot ? _wheel : 0, visible, rows.Count);
+        var scrolls = rows.Count > visible;
+        var rowRight = x0 + leftW - (scrolls ? UiMetrics.ScrollbarWidth + UiMetrics.Gap : 0);
+        var drop = UiMetrics.Space(5);   // a Body label's baseline nudge beside a Headline figure
+        var rowsTop = ty;
+        for (var i = _logNumbersFirst; i < Math.Min(rows.Count, _logNumbersFirst + visible); i++)
+        {
+            var (label, figure, unit) = rows[i];
+            if (i == litRow) _ui.Fill(b, new Rectangle(x0 - UiMetrics.Space(14), ty - UiMetrics.Space(4), 4, rowPitch - UiMetrics.Space(8)), Gold);
+            _ui.TextBig(b, label, x0, ty + drop, Bone, UiTypography.Body);
+            _ui.TextRightBig(b, figure, xv, ty, UiKit.Vellum, UiTypography.Headline);
+            if (unit.Length > 0) _ui.TextBig(b, _ui.ShortenBig(unit, rowRight - xv - UiMetrics.Space(12), UiTypography.Body), xv + UiMetrics.Space(12), ty + drop, Slate, UiTypography.Body);
+            ty += rowPitch;
+            Hairline(b, x0, ty - UiMetrics.Space(10), rowRight - x0, Slate * 0.18f);
+        }
+        if (scrolls)
+            _ui.ScrollBar(b, new Rectangle(x0 + leftW - UiMetrics.ScrollbarWidth, rowsTop, UiMetrics.ScrollbarWidth, visible * rowPitch), _logNumbersFirst, visible, rows.Count);
 
         // RIGHT: what changed since the last run here — the core concept, ranked as such.
         _ui.TextBig(b, "SINCE YOUR LAST RUN HERE", rightX, y, Gold, UiTypography.Headline);
-        var ry = y + UiTypography.Pitch(UiTypography.Headline) + 6;
-        Hairline(b, rightX, ry - 4, rightW, Slate * 0.45f);
-        ry += 8;
+        var ry = y + UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(6);
+        Hairline(b, rightX, ry - UiMetrics.Space(4), rightW, Slate * 0.45f);
+        ry += UiMetrics.Space(8);
         var entries = r.DiffEntries(previous).ToList();
         if (entries.Count == 0)
         {
@@ -2323,11 +2416,21 @@ public sealed class HuntScreen
             }
         }
         // CLAMPED TO THE ROOM THERE ACTUALLY IS, above the footer: a row added to RunReport's diff must never
-        // go under the frame — a report that quietly drops its last row beats one drawn where it cannot be read.
-        var diffPitch = UiTypography.Pitch(UiTypography.Body) * 2 + 8;
-        var room = Math.Max(0, (footerTop - ry) / diffPitch);
-        foreach (var e in entries.Take(room))
+        // go under the frame. The same rhythm as the numbers: the house pitch when the entries fit, tighter
+        // down to a floor when they do not, and past the floor they scroll under the wheel.
+        var diffMax = UiTypography.Pitch(UiTypography.Body) * 2 + UiMetrics.Space(8);
+        var diffMin = UiTypography.Pitch(UiTypography.Body) * 2 + UiMetrics.Space(2);
+        var diffRoom = Math.Max(0, footerTop - ry);
+        var diffPitch = Math.Clamp(diffRoom / Math.Max(1, entries.Count), diffMin, diffMax);
+        var diffVisible = Math.Min(entries.Count, diffRoom / diffPitch);
+        var rightHot = new Rectangle(rightX, y, rightW, footerTop - y).Contains(hit);
+        _logDiffFirst = UiKit.Scrolled(_logDiffFirst, rightHot ? _wheel : 0, diffVisible, entries.Count);
+        var diffScrolls = entries.Count > diffVisible;
+        var entryRight = rightX + rightW - (diffScrolls ? UiMetrics.ScrollbarWidth + UiMetrics.Gap : 0);
+        var diffTop = ry;
+        for (var i = _logDiffFirst; i < Math.Min(entries.Count, _logDiffFirst + diffVisible); i++)
         {
+            var e = entries[i];
             _ui.TextBig(b, DiffLabel(e.Label), rightX, ry, Slate, UiTypography.Body);
             var vy = ry + UiTypography.Pitch(UiTypography.Body);
             var was = e.Numeric ? DiffValue(e.Label, e.Was, e.Unit) : e.WasText.ToUpperInvariant();
@@ -2338,10 +2441,12 @@ public sealed class HuntScreen
                 var sign = e.Delta >= 0f ? "+" : "";
                 var change = e.Improved switch { true => UiInk.Good, false => Ember, null => Slate };
                 var text = e.Improved is null ? "NO CHANGE" : $"{sign}{DiffValue(e.Label, e.Delta, e.Unit)}";
-                Chip(b, Math.Max(vx + 16, rightX + rightW - ChipWidth(text, UiTypography.Secondary)), vy, text, change, change * 0.6f, UiTypography.Secondary);
+                Chip(b, Math.Max(vx + UiMetrics.Space(16), entryRight - ChipWidth(text, UiTypography.Secondary)), vy, text, change, change * 0.6f, UiTypography.Secondary);
             }
             ry += diffPitch;
         }
+        if (diffScrolls)
+            _ui.ScrollBar(b, new Rectangle(rightX + rightW - UiMetrics.ScrollbarWidth, diffTop, UiMetrics.ScrollbarWidth, diffVisible * diffPitch), _logDiffFirst, diffVisible, entries.Count);
     }
 
     /// <summary>
@@ -2373,9 +2478,13 @@ public sealed class HuntScreen
             case HuntOverlay.BossIncoming:
             {
                 var fade = Math.Clamp(_bossIncomingTimer * 1.4f, 0f, 1f);
-                _ui.Fill(b, new Rectangle(610, 200, 700, 110), PanelBg * fade);
-                _ui.TextCenterBig(b, "BOSS INCOMING", 960, 224, Gold * fade, UiTypography.RegionTitle, TextFace.Display);
-                _ui.TextCenterBig(b, "GET READY", 960, 274, Bone * fade, UiTypography.OverlayBody);
+                // The plate is as tall as its two lines: (610, 200, 700, 110) at 100 %.
+                var titleY = 200 + UiMetrics.Space(24);
+                var subY = titleY + UiTypography.Pitch(UiTypography.RegionTitle) + 1;
+                var plateH = subY + UiTypography.OverlayBody + UiMetrics.Space(14) - 200;
+                _ui.Fill(b, new Rectangle(610, 200, 700, plateH), PanelBg * fade);
+                _ui.TextCenterBig(b, "BOSS INCOMING", 960, titleY, Gold * fade, UiTypography.RegionTitle, TextFace.Display);
+                _ui.TextCenterBig(b, "GET READY", 960, subY, Bone * fade, UiTypography.OverlayBody);
                 break;
             }
             case HuntOverlay.WaveCleared:
@@ -2410,8 +2519,31 @@ public sealed class HuntScreen
     };
 
 
-    /// <summary>The hunter card's frame — level with the stage header beside it.</summary>
-    private static readonly Rectangle HunterCard = new(196, 14, 420, 140);
+    /// <summary>
+    /// The hunter card's frame — level with the stage header beside it. Its height is the three lines it
+    /// holds at this profile; the draw grows it further when a line has to reflow (see DrawHunterHud), and
+    /// <see cref="s_hunterCardBottom"/> is where it actually ended. A property: the lines follow the setting.
+    /// </summary>
+    private static Rectangle HunterCard => new(196, 14, 420, HunterCardBaseHeight);
+
+    /// <summary>The card's height when nothing reflows: the name line, the life line, the status row. 140 at 100 %.</summary>
+    private static int HunterCardBaseHeight
+        => UiMetrics.Space(20) + UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(6)
+         + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(6)
+         + ChipHeight + UiMetrics.Space(22);
+
+    /// <summary>A Caption chip's height — the status row's, and the enemy strip's affix chips'.</summary>
+    private static int ChipHeight => UiTypography.Caption + UiTypography.ChipPadY * 2;
+
+    /// <summary>
+    /// THE PORTRAIT IS A PICTURE, NOT AN ICON BESIDE A ROW. The card's width is fixed by the header beside
+    /// it, so the picture keeps its 96 px at every profile and the room goes to the text the profile grew:
+    /// at 150 % a portrait at the control rate would leave the name 80 px to live in.
+    /// </summary>
+    private const int PortraitEdge = 96;
+
+    /// <summary>The card's bottom as last drawn — the tour's spotlight follows the reflowed card, not the base one.</summary>
+    private static int s_hunterCardBottom = HunterCard.Bottom;
 
     /// <summary>
     /// Top-left HUNTER CARD: who, level, POWER, life, and the statuses that change during a fight.
@@ -2426,42 +2558,111 @@ public sealed class HuntScreen
     /// </remarks>
     private void DrawHunterHud(SpriteBatch b)
     {
-        var panel = HunterCard;
-        _ui.PanelQuiet(b, panel);
+        var frame = HunterCard;
+        var por = new Rectangle(frame.X + UiMetrics.Space(18), frame.Y + UiMetrics.Space(22), PortraitEdge, PortraitEdge);
+        var x = por.Right + UiMetrics.Space(16);
+        var right = frame.Right - UiMetrics.Space(24);
+        var full = right - x;   // the text column's width
+        var y = frame.Y + UiMetrics.Space(20);
 
-        var por = new Rectangle(panel.X + 18, panel.Y + 22, 96, 96);
-        if (_ui.Assets.GetFirst(Character.PortraitKey, "hunter_portrait") is { } p) b.Draw(p, por, Color.White);
-        else if (_ui.Assets.Get("ui_medallion_round") is { } mfr) b.Draw(mfr, por, Color.White);
-
-        var x = por.Right + 16;
-        var right = panel.Right - 24;
-        var y = panel.Y + 20;
-
+        // ── EVERYTHING ON THE CARD IS MEASURED BEFORE ANYTHING IS DRAWN: the frame is as tall as the sum. ──
         // Line 1 — SEEKER · WANDERER  LV 12                         POWER / 222 (labelled; it was a bare ember number)
         var name = Character.ShortName;
         var cls = ItemClasses.NameOf(Character.Class);
         var lv = $"LV {_hunter?.HunterLevel ?? 1}";
         var powerVal = Game1.Abbrev(_hunter?.PowerRating ?? 0);
         var powerW = Math.Max(_ui.MeasureBig("POWER", UiTypography.Secondary), _ui.MeasureBig(powerVal, UiTypography.PrimaryValue));
-        var nameRoom = right - powerW - 16 - x;
+        var powerCol = powerW + UiMetrics.Space(16);   // the POWER column, when it shares a line
+        var lvGap = UiMetrics.Space(10);
+        var lvW = lvGap + _ui.MeasureBig(lv, UiTypography.Secondary);
         const string sep = " · ";
-        var px = UiTypography.Headline;
-        while (px > UiTypography.Secondary
-               && _ui.MeasureBig(name + sep + cls, px) + 10 + _ui.MeasureBig(lv, UiTypography.Secondary) > nameRoom) px--;
-        var nx = x;
-        _ui.TextBig(b, name, nx, y, Bone, px);                       nx += _ui.MeasureBig(name, px);
-        _ui.TextBig(b, sep, nx, y, Slate, px);                       nx += _ui.MeasureBig(sep, px);
-        _ui.TextBig(b, cls, nx, y, UiKit.ClassColor(Character.Class), px);   nx += _ui.MeasureBig(cls, px) + 10;
-        _ui.TextBig(b, lv, nx, y + (px - UiTypography.Secondary) / 2 + 1, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, "POWER", right, y - 2, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, powerVal, right, y + UiTypography.Pitch(UiTypography.Secondary) - 6, Bone, UiTypography.PrimaryValue);
+        var line = name + sep + cls;
+        // THE LINE REFLOWS BEFORE IT SHRINKS PAST THE FLOOR (brief §9, §17). In order: the whole line beside
+        // POWER (the 100 % layout, where it always fits); the whole line with POWER moved to a row of its
+        // own under the life bar; the name and class alone, LV moved down beside POWER; and last the class
+        // on a line of its own under the name. The name steps from Headline down to Secondary at each stage
+        // and never below it (the profile exists to make the text bigger), and is never cut while it fits.
+        int Fits(string s, int extra, int room)
+        {
+            for (var p = UiTypography.Headline; p >= UiTypography.Secondary; p--)
+                if (_ui.MeasureBig(s, p) + extra <= room) return p;
+            return -1;
+        }
+        var px = Fits(line, lvW, full - powerCol);
+        var powerBeside = px > 0;
+        var lvOnLine1 = true;
+        var clsOnLine2 = false;
+        if (!powerBeside)
+        {
+            if ((px = Fits(line, lvW, full)) > 0) { }
+            else if ((px = Fits(line, 0, full)) > 0) lvOnLine1 = false;
+            else { clsOnLine2 = true; px = Math.Max(UiTypography.Secondary, Fits(name, 0, full)); }
+        }
 
-        // Line 2 — the life bar, its figure beside it.
-        y += UiTypography.Pitch(UiTypography.Headline) + 6;
+        // Line 2 — the life bar, its figure beside it. The POWER figure hangs into this line when it sits
+        // beside the name, so the bar leaves that column free; the bar keeps the house 120 px where the
+        // column can afford it and yields to the figure — which must always land — where it cannot.
         var hp = Math.Max(0, _replay?.HealthOf(0) ?? 0);
         var hpText = $"{hp} / {_champ?.MaxHealth ?? 0}";
         var hpTextW = _ui.MeasureBig(hpText, UiTypography.Body);
-        var barW = Math.Max(120, right - powerW - 16 - x - hpTextW - 12);
+        var barGap = UiMetrics.Space(12);
+        var barW = Math.Max(Math.Min(UiMetrics.Control(120), full - hpTextW - barGap),
+                            full - (powerBeside ? powerCol : 0) - hpTextW - barGap);
+
+        // Line 3 — the statuses, as chips: a chip that does not fit its line starts the next one.
+        var chips = new List<(string Text, Color Ink)>();
+        if (_undyingLive)
+        {
+            var spent = _champ?.UndyingSpent == true;
+            chips.Add((spent ? "UNDYING SPENT" : "UNDYING READY", spent ? UiInk.Disabled : Gold));
+        }
+        if (_chargeLive) chips.Add(($"CHARGE {_chargeNow}/{_chargeCap}", _chargeNow >= _chargeCap ? Gold : Slate));
+        var chipGap = UiMetrics.Space(8);
+        var chipRows = 1;
+        for (int i = 0, cx = 0; i < chips.Count; i++)
+        {
+            var cw = ChipWidth(chips[i].Text);
+            if (cx > 0 && cx + cw > full) { chipRows++; cx = 0; }
+            cx += cw + chipGap;
+        }
+
+        var height = HunterCardBaseHeight
+                   + (clsOnLine2 ? UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(2) : 0)
+                   + (powerBeside ? 0 : UiTypography.Pitch(UiTypography.PrimaryValue) + UiMetrics.Space(2))
+                   + (chipRows - 1) * (ChipHeight + UiMetrics.Space(6));
+        var panel = new Rectangle(frame.X, frame.Y, frame.Width, height);
+        _ui.PanelQuiet(b, panel);
+        s_hunterCardBottom = panel.Bottom;
+
+        if (_ui.Assets.GetFirst(Character.PortraitKey, "hunter_portrait") is { } p) b.Draw(p, por, Color.White);
+        else if (_ui.Assets.Get("ui_medallion_round") is { } mfr) b.Draw(mfr, por, Color.White);
+
+        // ── Line 1. ──
+        var nx = x;
+        _ui.TextBig(b, _ui.ShortenBig(name, full, px), nx, y, Bone, px);   nx += _ui.MeasureBig(name, px);
+        if (!clsOnLine2)
+        {
+            _ui.TextBig(b, sep, nx, y, Slate, px);                       nx += _ui.MeasureBig(sep, px);
+            _ui.TextBig(b, cls, nx, y, UiKit.ClassColor(Character.Class), px);   nx += _ui.MeasureBig(cls, px);
+        }
+        if (lvOnLine1) _ui.TextBig(b, lv, nx + lvGap, y + (px - UiTypography.Secondary) / 2 + 1, Slate, UiTypography.Secondary);
+        if (powerBeside)
+        {
+            _ui.TextRightBig(b, "POWER", right, y - 2, Slate, UiTypography.Secondary);
+            _ui.TextRightBig(b, powerVal, right, y + UiTypography.Pitch(UiTypography.Secondary) - 6, Bone, UiTypography.PrimaryValue);
+        }
+        y += UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(6);
+        if (clsOnLine2)
+        {
+            var cx2 = x;
+            _ui.TextBig(b, cls, cx2, y, UiKit.ClassColor(Character.Class), UiTypography.Secondary);
+            cx2 += _ui.MeasureBig(cls, UiTypography.Secondary) + lvGap;
+            _ui.TextBig(b, lv, cx2, y, Slate, UiTypography.Secondary);
+            lvOnLine1 = true;   // said here; the POWER row below need not repeat it
+            y += UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(2);
+        }
+
+        // ── Line 2. ──
 
         // ── SHIELD sits ABOVE the pool, never over it. ────────────────────────────────────────────
         // The brief's own test of this line is that "400 health and no shield" must be one glance away
@@ -2475,7 +2676,7 @@ public sealed class HuntScreen
         // steel from red still has the geometry, the ticks and the label.
         if (ShieldStripShown)
         {
-            var sBar = new Rectangle(x, y - ShieldStripH - 3, barW, ShieldStripH);
+            var sBar = new Rectangle(x, y - ShieldStripH - UiMetrics.Space(3), barW, ShieldStripH);
             _ui.Fill(b, sBar, new Color(0x0D, 0x11, 0x16));
             Outline(b, sBar, PlateEdge, 1);
             var frac = _replay!.MaxShield <= 0 ? 0f
@@ -2493,30 +2694,42 @@ public sealed class HuntScreen
             // as a column — SHIELD, then 243 / 243 under it — and a player scanning that column has
             // every reason to think the pool's numbers belong to the shield.
             _ui.TextBig(b, _replay.CurrentShield > 0 ? $"SHIELD {_replay.CurrentShield}" : "SHIELD",
-                        sBar.Right + 12, sBar.Y - 3,
+                        sBar.Right + barGap, sBar.Y - 3,
                         _replay.CurrentShield > 0 ? Steel : UiInk.Disabled, UiTypography.Caption);
         }
 
-        var hpBar = new Rectangle(x, y + 2, barW, 26);
+        var hpBar = new Rectangle(x, y + 2, barW, UiMetrics.Control(26));
         _ui.BarArt(b, hpBar, _replay?.HealthFractionOf(0) ?? 1f, "health");
-        _ui.TextBig(b, hpText, hpBar.Right + 12, y, Bone, UiTypography.Body);
+        _ui.TextBig(b, hpText, hpBar.Right + barGap, y, Bone, UiTypography.Body);
+        y += UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(6);
 
-        // Line 3 — statuses: only the ones this build has, only while they say something.
-        y += UiTypography.Pitch(UiTypography.Body) + 6;
-        var sx = x;
+        // ── The POWER row, only when line 1 had no room beside the name: label and figure on one baseline,
+        // right-aligned where the figure was; LV on the left if line 1 could not carry it either. ──
+        if (!powerBeside)
+        {
+            var rowH = UiTypography.PrimaryValue;
+            var smallY = y + (rowH - UiTypography.Secondary) / 2 + 1;
+            if (!lvOnLine1) _ui.TextBig(b, lv, x, smallY, Slate, UiTypography.Secondary);
+            _ui.TextRightBig(b, powerVal, right, y, Bone, UiTypography.PrimaryValue);
+            _ui.TextRightBig(b, "POWER", right - _ui.MeasureBig(powerVal, UiTypography.PrimaryValue) - lvGap, smallY, Slate, UiTypography.Secondary);
+            y += UiTypography.Pitch(UiTypography.PrimaryValue) + UiMetrics.Space(2);
+        }
+
+        // ── Line 3 — statuses: only the ones this build has, only while they say something. ──
         // NO SHIELD CHIP. The strip above says the word and the figure together; a chip repeating it
         // is a second readout of one fact, and the status row exists for the states that have no bar.
-        if (_undyingLive)
+        var sx = x;
+        foreach (var (text, ink) in chips)
         {
-            var spent = _champ?.UndyingSpent == true;
-            sx += Chip(b, sx, y, spent ? "UNDYING SPENT" : "UNDYING READY", spent ? UiInk.Disabled : Gold, PlateEdge) + 8;
+            var cw = ChipWidth(text);
+            if (sx > x && sx + cw > right) { sx = x; y += ChipHeight + UiMetrics.Space(6); }
+            sx += Chip(b, sx, y, text, ink, PlateEdge) + chipGap;
         }
-        if (_chargeLive) Chip(b, sx, y, $"CHARGE {_chargeNow}/{_chargeCap}", _chargeNow >= _chargeCap ? Gold : Slate, PlateEdge);
     }
 
     /// <summary>Top-center stage header (region B): region name, current wave, and the conquest progress bar.</summary>
-    /// <summary>Where the EXPEDITION LOG button sits: just right of the stage header, clear of the pills.</summary>
-    private static readonly Rectangle LogButtonRect = new(1206, 40, 64, 64);
+    /// <summary>Where the EXPEDITION LOG button sits: just right of the stage header, clear of the pills. A hit target — its edge follows the profile.</summary>
+    private static Rectangle LogButtonRect => new(1206, 40, UiMetrics.Control(64), UiMetrics.Control(64));
 
     /// <summary>
     /// The EXPEDITION LOG's own button — the log was reachable only by the L key, which a player who has
@@ -2535,14 +2748,16 @@ public sealed class HuntScreen
     {
         var r = LogButtonRect;
         var hot = r.Contains(hit);
-        // 52 px at rest, 56 under the mouse — the same lift the close icons use — inside the 64 px hit box.
-        var box = hot ? new Rectangle(r.X + 4, r.Y + 4, 56, 56) : new Rectangle(r.X + 6, r.Y + 6, 52, 52);
+        // 52 px at rest, 56 under the mouse — the same lift the close icons use — centred in the 64 px hit
+        // box; all three at the profile, so the medallion and its target grow together.
+        var edge = UiMetrics.Control(hot ? 56 : 52);
+        var box = new Rectangle(r.X + (r.Width - edge) / 2, r.Y + (r.Height - edge) / 2, edge, edge);
         var tint = _logOpen ? Gold : hot ? Color.White : new Color(0xE0, 0xD8, 0xC8);
         if (!_ui.Icon(b, "icon_log", box, tint))
         {
             // No medallion on disk: a plain page so the door still shows.
             _ui.Fill(b, box, new Color(0x14, 0x10, 0x1A, 0xE0));
-            _ui.TextCenterBig(b, "LOG", box.Center.X, box.Center.Y - 8, tint, UiTypography.Caption);
+            _ui.TextCenterBig(b, "LOG", box.Center.X, box.Center.Y - UiTypography.Caption / 2, tint, UiTypography.Caption);
         }
         if (hot) _ui.HoverTip(b, "EXPEDITION LOG — every descent's report. The L key opens it too.", hit);
         if (UiKit.ClickedIn(r, hit, clicked)) WantsLog = true;
@@ -2577,48 +2792,74 @@ public sealed class HuntScreen
         Outline(b, strip, PlateEdge, 2);
         HeaderStackBottom = strip.Bottom;
 
-        // LEFT: the wave's Source glyph, then its kind.
-        var glyph = new Rectangle(strip.X + 12, strip.Y + 7, 30, 30);
+        // LEFT: the wave's Source glyph, then its kind. Everything on the strip is centred on its height,
+        // which is the Body line plus its pads — so a taller profile's strip keeps its middle line.
+        var glyphEdge = UiMetrics.Control(30);
+        var glyph = new Rectangle(strip.X + UiMetrics.Space(12), strip.Y + (strip.Height - glyphEdge) / 2, glyphEdge, glyphEdge);
         if (EnemySource is { } es && _ui.Assets.Get($"source_{es.ToString().ToLowerInvariant()}") is { } g)
             b.Draw(g, glyph, Color.White);
-        else _ui.Diamond(b, new Rectangle(glyph.X + 6, glyph.Y + 6, 18, 18), EnemySource is { } s2 ? SourceGlow(s2) : Slate);
-        var x = glyph.Right + 10;
+        else
+        {
+            var inset = glyphEdge * 6 / 30;   // the diamond's proportion of its box
+            _ui.Diamond(b, new Rectangle(glyph.X + inset, glyph.Y + inset, glyphEdge - inset * 2, glyphEdge - inset * 2), EnemySource is { } s2 ? SourceGlow(s2) : Slate);
+        }
+        var x = glyph.Right + UiMetrics.Space(10);
         var kind = _run.LastWaveArchetype.ToString().ToUpperInvariant();
-        _ui.TextBig(b, kind, x, strip.Y + 12, UiKit.Vellum, UiTypography.Body);
-        x += _ui.MeasureBig(kind, UiTypography.Body) + 10;
+        _ui.TextBig(b, kind, x, strip.Y + (strip.Height - UiTypography.Body) / 2 + 1, UiKit.Vellum, UiTypography.Body);
+        x += _ui.MeasureBig(kind, UiTypography.Body) + UiMetrics.Space(10);
 
         // RIGHT: how many still stand. (The pack's life bar that stood here was "unnecessary" — every
         // creature wears its own pip, playtest 2026-08-28.)
         var total = _replay.CreatureCount;
         var alive = 0;
         for (var i = 0; i < total; i++) if (_replay.CreatureAlive(i)) alive++;
-        var countLeft = strip.Right - 16;
+        var countLeft = strip.Right - UiMetrics.Space(16);
         if (total > 0)
-            countLeft = RunsRight(b, countLeft, strip.Y + 13, UiTypography.Secondary, ($"{alive} OF {total}", Bone), ("  STANDING", Slate));
+            countLeft = RunsRight(b, countLeft, strip.Y + (strip.Height - UiTypography.Secondary) / 2 + 1, UiTypography.Secondary, ($"{alive} OF {total}", Bone), ("  STANDING", Slate));
 
         // BETWEEN: the affixes as chips, as many as fit; the rest fold into a "+N" chip.
         var affixes = _run.LastWaveAffixes ?? Array.Empty<Affix>();
-        var limit = countLeft - 16;
+        var limit = countLeft - UiMetrics.Space(16);
+        var chipY = strip.Y + (strip.Height - ChipHeight) / 2 + 1;
+        var chipGap = UiMetrics.Space(6);
         for (var i = 0; i < affixes.Count; i++)
         {
             var text = affixes[i].ToString().ToUpperInvariant();
             var rest = affixes.Count - i;
-            var more = rest > 1 ? ChipWidth($"+{rest - 1}") + 6 : 0;
+            var more = rest > 1 ? ChipWidth($"+{rest - 1}") + chipGap : 0;
             if (x + ChipWidth(text) + more > limit)
             {
-                if (x + ChipWidth($"+{rest}") <= limit) Chip(b, x, strip.Y + 11, $"+{rest}", Bone, PlateEdge);
+                if (x + ChipWidth($"+{rest}") <= limit) Chip(b, x, chipY, $"+{rest}", Bone, PlateEdge);
                 break;
             }
-            x += Chip(b, x, strip.Y + 11, text, Bone, PlateEdge) + 6;
+            x += Chip(b, x, chipY, text, Bone, PlateEdge) + chipGap;
         }
     }
 
-    /// <summary>The stage header's centre and bottom edge — the enemy strip hangs from it.</summary>
+    // ── The stage header's geometry (630, 18, 560, 135) at 100 %: derived line by line from the rungs it
+    //    stacks — the region title, the wave line, the conquest bar — so a bigger profile lengthens the
+    //    header rather than printing the wave over the title. The enemy strip and the boss bar hang from
+    //    its foot. The x and width are page anchors and stay. ──
     private const int StageHeaderCentreX = 910;
-    private const int StageHeaderBottomY = 153;
+    private const int StageHeaderTop = 18;
+    /// <summary>Where the region title sits: a breath under the frame's top.</summary>
+    private static int StageHeaderTitleY => StageHeaderTop + UiMetrics.Space(10);
+    /// <summary>The wave line, one title under the title. 70 at 100 %.</summary>
+    private static int StageHeaderWaveY => StageHeaderTitleY + UiTypography.RegionTitle + UiMetrics.Space(4);
+    /// <summary>The conquest bar's line, one wave line under the wave. 106 at 100 %.</summary>
+    private static int StageHeaderBarY => StageHeaderWaveY + UiTypography.StageLabel + UiMetrics.Space(8);
+    /// <summary>The conquest bar's height.</summary>
+    private static int StageHeaderBarH => UiMetrics.Control(16);
+    /// <summary>The header's bottom edge — the enemy strip hangs from it. 153 at 100 %.</summary>
+    private static int StageHeaderBottomY => StageHeaderBarY + StageHeaderBarH + UiMetrics.Space(31);
+    /// <summary>The header's frame.</summary>
+    private static Rectangle StageHeader => new(630, StageHeaderTop, 560, StageHeaderBottomY - StageHeaderTop);
 
-    /// <summary>The enemy strip: the header's width, six pixels under its frame.</summary>
-    private static readonly Rectangle EnemyStrip = new(630, StageHeaderBottomY + 7, 560, 44);
+    /// <summary>The enemy strip's height: the Body line it carries and its pads. 44 at 100 %.</summary>
+    private static int EnemyStripHeight => UiMetrics.Space(12) + UiTypography.Body + UiMetrics.Space(10);
+
+    /// <summary>The enemy strip: the header's width, a few pixels under its frame.</summary>
+    private static Rectangle EnemyStrip => new(630, StageHeaderBottomY + UiMetrics.Space(7), 560, EnemyStripHeight);
 
     /// <summary>
     /// Where the header stack ends this frame — the enemy strip's foot, the boss bar's, or the header's
@@ -2637,16 +2878,17 @@ public sealed class HuntScreen
         // conquest, a small label and a thin bar on one line). WHAT is being fought hangs under the panel
         // in DrawEnemyLine at the same width, so the two read as one stack (playtest 2026-08-28: "the wave
         // information texts look quite bad" — three lines of three sizes with a bar between two of them).
-        var bar = new Rectangle(630, 18, 560, 135);
+        var bar = StageHeader;
         // The quiet frame, like every other panel on this screen (UiKit.PanelQuiet: gold is for modals).
         _ui.PanelQuiet(b, bar);
         const int cx = StageHeaderCentreX;
-        // §19.2: render the region title at 36, shrinking to a floor of 28 to fit 490px — never ellipsize the
-        // ACTIVE region title. (Two-line fallback below 28 is a noted follow-up; region names fit at 28.)
+        // §19.2: render the region title at its rung, shrinking to the panel-title rung to fit 490px — never
+        // ellipsize the ACTIVE region title. (A two-line fallback below that is a noted follow-up; region
+        // names fit.) The floor is a rung, so it follows the profile with the title.
         var title = regionName.ToUpperInvariant();
         var titlePx = UiTypography.RegionTitle;
-        while (titlePx > 28 && _ui.MeasureBig(title, titlePx) > 490) titlePx--;
-        _ui.TextCenterBig(b, title, cx, 28 + (UiTypography.RegionTitle - titlePx) / 2, Gold, titlePx, TextFace.Display);
+        while (titlePx > UiTypography.PanelTitle && _ui.MeasureBig(title, titlePx) > 490) titlePx--;
+        _ui.TextCenterBig(b, title, cx, StageHeaderTitleY + (UiTypography.RegionTitle - titlePx) / 2, Gold, titlePx, TextFace.Display);
 
         // THE WAVE LINE CARRIES THE RUN'S STATE, which is what the deleted EXPEDITION plate was for.
         // Nothing is appended while the run is simply running: "ACTIVE" was true of every frame this
@@ -2654,7 +2896,7 @@ public sealed class HuntScreen
         var wave = $"WAVE {Math.Max(1, _replayWave)}";
         if (CorruptionTier > 0) wave += $"  ·  {CorruptionLook.For(CorruptionTier).Name}";
         var waveTint = isBossWave ? Gold : Bone;
-        const int waveY = 70;
+        var waveY = StageHeaderWaveY;
         if (RunState() is { } st)
             RunsCenter(b, cx, waveY, UiTypography.StageLabel, (wave, waveTint), ("  —  ", Slate), (st.Text, st.Tint));
         else _ui.TextCenterBig(b, wave, cx, waveY, waveTint, UiTypography.StageLabel);
@@ -2669,8 +2911,13 @@ public sealed class HuntScreen
         var label = conquered
             ? new[] { (over > 0 ? $"CONQUERED  ·  OVERWAVE +{over}" : "CONQUERED", Gold) }
             : new[] { ("CONQUEST  ", Slate), ($"{Deepest} / {ConquerAt}", Bone) };
-        const int barW = 240, barH = 16, gap = 16, barY = 106;
+        // The bar keeps the house 240 where the label leaves it room, and yields to a longer label at a
+        // larger profile rather than pushing the group past the frame's side rails.
+        var gap = UiMetrics.Space(16);
+        var barH = StageHeaderBarH;
+        var barY = StageHeaderBarY;
         var labelW = RunsWidth(UiTypography.Secondary, label);
+        var barW = Math.Max(UiMetrics.Space(80), Math.Min(UiMetrics.Space(240), bar.Width - UiTypography.PanelPadNarrow * 2 - labelW - gap));
         var groupX = cx - (labelW + gap + barW) / 2;
         Runs(b, groupX, barY - 1, UiTypography.Secondary, label);
         _ui.BarArt(b, new Rectangle(groupX + labelW + gap, barY, barW, barH),
@@ -2724,7 +2971,7 @@ public sealed class HuntScreen
     private static readonly Color PlateEdge = new(0x74, 0x62, 0x3E);
 
     /// <summary>How tall the shield strip is — half the life bar, because it is the smaller promise.</summary>
-    private const int ShieldStripH = 12;
+    private static int ShieldStripH => UiMetrics.Control(12);
 
     /// <summary>
     /// Whether this build has any shield at all, and so whether the strip is drawn.
@@ -2743,10 +2990,12 @@ public sealed class HuntScreen
     //    The CHEST FILTER row and its popover moved to the VAULT toolbar (D12): chest filtering is inventory
     //    management, not combat state. DEEPEST WAVE REACHED went too — the header's CONQUEST n / 20 is the same
     //    number. The doors name no keys in their labels; the tour and the help sheet teach the keys.
-    private const int ColumnX = 1570, ColumnW = 326;
+    private const int ColumnX = 1570, ColumnW = 326;   // page anchors: the column's place beside the arena
     private const int UtilityTop = 110;
     private static int UtilityPad => UiTypography.PanelPadNarrow;
-    private const int DoorHeight = 44, DoorPitch = 52;
+    /// <summary>A door button's height and the step to the next — controls, at the profile. 44 / 52 at 100 %.</summary>
+    private static int DoorHeight => UiMetrics.Control(44);
+    private static int DoorPitch => DoorHeight + UiMetrics.Space(8);
 
     /// <summary>The utility's bottom edge as last drawn (+ margin) — the right column's true extent, for the tour.</summary>
     private static int s_railBottom = 368;
@@ -2765,8 +3014,8 @@ public sealed class HuntScreen
         var top = UiTypography.PanelTitleTop;
         var idleBlock = UiTypography.Pitch(UiTypography.Secondary) + UiTypography.Pitch(UiTypography.PrimaryValue);
         var rewardBlock = UiTypography.Pitch(UiTypography.Secondary) + UiTypography.Pitch(UiTypography.Body);
-        var doorBlock = doors > 0 ? 8 + doors * DoorPitch - (DoorPitch - DoorHeight) : 0;
-        var panel = new Rectangle(ColumnX, UtilityTop, ColumnW, top + idleBlock + 10 + rewardBlock + doorBlock + UtilityPad);
+        var doorBlock = doors > 0 ? UiMetrics.Space(8) + doors * DoorPitch - (DoorPitch - DoorHeight) : 0;
+        var panel = new Rectangle(ColumnX, UtilityTop, ColumnW, top + idleBlock + UiMetrics.Space(10) + rewardBlock + doorBlock + UtilityPad);
         _ui.PanelQuiet(b, panel);
         s_railBottom = panel.Bottom + 10;
 
@@ -2776,9 +3025,10 @@ public sealed class HuntScreen
 
         _ui.TextBig(b, "IDLE", x, y, Slate, UiTypography.Secondary);
         y += UiTypography.Pitch(UiTypography.Secondary);
-        if (_ui.Assets.Get("currency_gleam") is { } gi) b.Draw(gi, new Rectangle(x, y + 5, 30, 30), Color.White);
-        _ui.TextBig(b, $"+{Game1.Abbrev((long)(IdleGleamRate * 60f))}/min", x + 40, y, Bone, UiTypography.PrimaryValue);
-        y += UiTypography.Pitch(UiTypography.PrimaryValue) + 10;
+        var gem = UiMetrics.Control(30);   // the gleam icon beside the rate — an icon box, at the profile
+        if (_ui.Assets.Get("currency_gleam") is { } gi) b.Draw(gi, new Rectangle(x, y + UiMetrics.Space(5), gem, gem), Color.White);
+        _ui.TextBig(b, $"+{Game1.Abbrev((long)(IdleGleamRate * 60f))}/min", x + gem + UiMetrics.Space(10), y, Bone, UiTypography.PrimaryValue);
+        y += UiTypography.Pitch(UiTypography.PrimaryValue) + UiMetrics.Space(10);
 
         _ui.TextBig(b, "REWARDS", x, y, Slate, UiTypography.Secondary);
         y += UiTypography.Pitch(UiTypography.Secondary);
@@ -2787,7 +3037,7 @@ public sealed class HuntScreen
         var line = chestRow && pointsRow ? $"{chests} · {Mastery.Available} POINT{(Mastery.Available == 1 ? "" : "S")}"
                  : chestRow ? chests : pointsRow ? points : "NOTHING WAITING";
         _ui.TextBig(b, _ui.ShortenBig(line, w, UiTypography.Body), x, y, doors > 0 ? Bone : UiInk.Empty, UiTypography.Body);
-        y += UiTypography.Pitch(UiTypography.Body) + 8;
+        y += UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(8);
 
         if (chestRow)
         {
@@ -2802,8 +3052,17 @@ public sealed class HuntScreen
     }
 
     // ── The fall plate (UX V2 P1.1, brief §22 / D6). ──────────────────────────────────────────────────────
-    /// <summary>Under the header stack, where the toasts hang — one anchor per zone (D4).</summary>
-    private Rectangle FallPlate => new(560, HeaderStackBottom + 8, 800, 132);
+    /// <summary>Under the header stack, where the toasts hang — one anchor per zone (D4). (560, +8, 800, 132) at 100 %.</summary>
+    /// <remarks>
+    /// Its height is its two lines and the READ THE LOG line under them; its width grows at the spacing
+    /// rate so the verdict sentence keeps its length at a larger profile, centred on the page and always
+    /// short of the right column at 1570.
+    /// </remarks>
+    private Rectangle FallPlate => new(960 - FallPlateWidth / 2, HeaderStackBottom + UiMetrics.Space(8), FallPlateWidth, FallPlateHeight);
+    private static int FallPlateWidth => UiMetrics.Space(800);
+    private static int FallPlateHeight
+        => UiMetrics.Space(14) + UiTypography.Pitch(UiTypography.StageLabel) + UiTypography.Pitch(UiTypography.Body)
+         + UiMetrics.Space(20) + UiTypography.Secondary + UiMetrics.Space(15);
 
     /// <summary>
     /// Two lines over the fight when the champion falls: the wave, and the MAIN LIMIT with the verdict
@@ -2815,13 +3074,15 @@ public sealed class HuntScreen
     {
         var fade = _mode == Mode.Downed ? 1f : Math.Clamp(_fellTimer * 1.4f, 0f, 1f);
         var r = FallPlate;
+        var pad = UiMetrics.Space(24);
+        var top = UiMetrics.Space(14);
         _ui.Plate(b, r, Ember, fade);
-        _ui.TextBig(b, $"FELL AT WAVE {_fellWave}", r.X + 24, r.Y + 14, Ember * fade, UiTypography.StageLabel, TextFace.Display);
+        _ui.TextBig(b, $"FELL AT WAVE {_fellWave}", r.X + pad, r.Y + top, Ember * fade, UiTypography.StageLabel, TextFace.Display);
         var limit = _fellReport is { } rep ? $"MAIN LIMIT — {rep.LimitLabel()} · {rep.Verdict()}" : "THE FULL REPORT IS IN THE LOG";
-        _ui.TextBig(b, _ui.ShortenBig(limit, r.Width - 48, UiTypography.Body), r.X + 24,
-                    r.Y + 14 + UiTypography.Pitch(UiTypography.StageLabel), Bone * fade, UiTypography.Body);
+        _ui.TextBig(b, _ui.ShortenBig(limit, r.Width - pad * 2, UiTypography.Body), r.X + pad,
+                    r.Y + top + UiTypography.Pitch(UiTypography.StageLabel), Bone * fade, UiTypography.Body);
         var hot = r.Contains(hit);
-        _ui.TextRightBig(b, "READ THE LOG  ›", r.Right - 24, r.Bottom - 34, (hot ? Bone : Slate) * fade, UiTypography.Secondary);
+        _ui.TextRightBig(b, "READ THE LOG  ›", r.Right - pad, r.Bottom - UiMetrics.Space(15) - UiTypography.Secondary, (hot ? Bone : Slate) * fade, UiTypography.Secondary);
         if (UiKit.ClickedIn(r, hit, clicked)) WantsLog = true;
     }
 
@@ -2844,8 +3105,24 @@ public sealed class HuntScreen
     //    it replaces was a 286×592 ornate frame down the left of the arena that printed each skill's rule
     //    text (BUILD's job) at 9 px, and boxed the stage on a third side. A slot now says: glyph · name ·
     //    readiness word · Source — what a player reads at a glance in a fight, nothing they read once.
-    private static readonly Rectangle SkillStrip = new(486, 900, 1000, 164);
-    private const int StripPad = 12, StripGroupGap = 28, SlotGap = 10, SlotH = 114, MedallionPx = 72;
+    //    (486, 900, 1000, 164) at 100 %. DERIVED since the density profile (UI polish P2): the strip is
+    //    anchored to the page's foot and grows UPWARD by the type it holds — the group caption, then a slot
+    //    that is a Headline name over a Body line — and the arena above it yields the room (GroundY). It
+    //    widens at the control rate too, centred where it was, so the slot text keeps its length at 150 %
+    //    rather than shortening every skill's name; the arena clip is wider still, so it never leaves it.
+    //    HUNT never scrolls (brief §18): the strip is as tall as its content, and the stage gives way.
+    private static Rectangle SkillStrip => new(SkillStripCentreX - SkillStripWidth / 2, UiKit.PageBottom(16) - SkillStripHeight, SkillStripWidth, SkillStripHeight);
+    private const int SkillStripCentreX = 986;
+    private static int SkillStripWidth => UiMetrics.Control(1000);
+    private static int SkillStripHeight => UiMetrics.Space(8) + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(2) + SlotH + UiMetrics.Space(16);
+    private static int StripPad => UiMetrics.Space(12);
+    private static int StripGroupGap => UiMetrics.Space(28);
+    private static int SlotGap => UiMetrics.Space(10);
+    /// <summary>The skill medallion's edge — an icon box, at the profile.</summary>
+    private static int MedallionPx => UiMetrics.Control(72);
+    /// <summary>A slot's height: the name over the readiness line with their pads, and never less than the medallion needs. 114 at 100 %.</summary>
+    private static int SlotH => Math.Max(MedallionPx + UiMetrics.Space(20),
+        UiMetrics.Space(16) + UiTypography.Pitch(UiTypography.Headline) + UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(36));
 
     /// <summary>What the strip knows about one skill's timing this frame, read off the resolved wave.</summary>
     private readonly record struct SkillTiming(float Ready, float Swept, int RingSteps, float Telegraph, float Flash, int NextMs);
@@ -2866,18 +3143,20 @@ public sealed class HuntScreen
         activeCap = Math.Max(activeCap, actives.Count);
         passiveCap = Math.Max(passiveCap, passives.Count);
 
-        _ui.Plate(b, SkillStrip);
+        var strip = SkillStrip;
+        _ui.Plate(b, strip);
         var groupGap = passiveCap > 0 ? StripGroupGap : 0;
         var gaps = Math.Max(0, activeCap - 1) + Math.Max(0, passiveCap - 1);
-        var slotW = (SkillStrip.Width - StripPad * 2 - groupGap - gaps * SlotGap) / Math.Max(1, activeCap + passiveCap);
-        var y = SkillStrip.Y + 8;
-        var slotY = y + UiTypography.Pitch(UiTypography.Secondary) + 2;
+        var slotW = (strip.Width - StripPad * 2 - groupGap - gaps * SlotGap) / Math.Max(1, activeCap + passiveCap);
+        var y = strip.Y + UiMetrics.Space(8);
+        var slotY = y + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(2);
 
-        var x = SkillStrip.X + StripPad;
+        var x = strip.X + StripPad;
         x = DrawSkillGroup(b, "ACTIVE", x, y, slotY, slotW, activeCap, actives);
         if (passiveCap > 0)
         {
-            _ui.Fill(b, new Rectangle(x + groupGap / 2, SkillStrip.Y + 12, 1, SkillStrip.Height - 24), UiInk.Rule);
+            var ruleInset = UiMetrics.Space(12);
+            _ui.Fill(b, new Rectangle(x + groupGap / 2, strip.Y + ruleInset, 1, strip.Height - ruleInset * 2), UiInk.Rule);
             DrawSkillGroup(b, "PASSIVE", x + groupGap, y, slotY, slotW, passiveCap, passives);
         }
     }
@@ -2885,7 +3164,7 @@ public sealed class HuntScreen
     /// <summary>One group of the strip: its caption, its slots, and the empties up to its capacity. Returns the x after it.</summary>
     private int DrawSkillGroup(SpriteBatch b, string caption, int x, int captionY, int slotY, int slotW, int capacity, List<int> members)
     {
-        _ui.TextBig(b, caption, x + 4, captionY, Slate, UiTypography.Secondary);
+        _ui.TextBig(b, caption, x + UiMetrics.Space(4), captionY, Slate, UiTypography.Secondary);
         for (var k = 0; k < capacity; k++)
         {
             var slot = new Rectangle(x, slotY, slotW, SlotH);
@@ -2899,11 +3178,17 @@ public sealed class HuntScreen
     /// <summary>An empty slot: the hex at half strength and where more slots come from. Shape, not tone, says "empty".</summary>
     private void DrawEmptySkillSlot(SpriteBatch b, Rectangle slot)
     {
-        var box = new Rectangle(slot.X + 10, slot.Y + (SlotH - MedallionPx) / 2, MedallionPx, MedallionPx);
+        var box = MedallionBox(slot);
         if (_ui.Assets.Get("ui_slot_skill_hex") is { } sl) b.Draw(sl, box, Color.White * 0.5f);
-        _ui.TextBig(b, "EMPTY SLOT", box.Right + 14, slot.Y + 24, UiInk.Empty, UiTypography.Body);
-        _ui.TextBig(b, "MORE SLOTS — TRAITS", box.Right + 14, slot.Y + 24 + UiTypography.Pitch(UiTypography.Body), UiInk.Empty, UiTypography.Caption);
+        var tx = box.Right + UiMetrics.Space(14);
+        var ty = slot.Y + UiMetrics.Space(24);
+        _ui.TextBig(b, "EMPTY SLOT", tx, ty, UiInk.Empty, UiTypography.Body);
+        _ui.TextBig(b, "MORE SLOTS — TRAITS", tx, ty + UiTypography.Pitch(UiTypography.Body), UiInk.Empty, UiTypography.Caption);
     }
+
+    /// <summary>Where a slot's medallion sits: inset from the slot's left, centred on its height.</summary>
+    private static Rectangle MedallionBox(Rectangle slot)
+        => new(slot.X + UiMetrics.Space(10), slot.Y + (SlotH - MedallionPx) / 2, MedallionPx, MedallionPx);
 
     /// <summary>One equipped skill: medallion with its cooldown ring and telegraph, name, readiness word, Source.</summary>
     private void DrawSkillSlot(SpriteBatch b, Rectangle slot, int i)
@@ -2919,11 +3204,15 @@ public sealed class HuntScreen
         var waiting = t.Swept < 1f && t.Flash <= 0f;
         var wake = waiting ? WaitingSkillDim : 1f;
         var lit = Math.Max(t.Flash, t.Telegraph);
-        var box = new Rectangle(slot.X + 10, slot.Y + (SlotH - MedallionPx) / 2, MedallionPx, MedallionPx);
+        var box = MedallionBox(slot);
         if (_ui.Assets.Get("ui_slot_skill_hex") is { } sl)
             b.Draw(sl, box, lit > 0f ? Color.Lerp(Color.White, Gold, lit) : Color.White * wake);
-        _ui.Diamond(b, new Rectangle(box.Center.X - 22, box.Center.Y - 22, 44, 44), sc * (0.34f * wake));
-        var glyphBox = new Rectangle(box.X + 16, box.Y + 14, box.Width - 32, box.Height - 28);
+        // The diamond and the glyph are PROPORTIONS of the medallion art (44 and 40×44 of 72), so they
+        // sit in the hex's window at any size.
+        var half = box.Width * 22 / 72;
+        _ui.Diamond(b, new Rectangle(box.Center.X - half, box.Center.Y - half, half * 2, half * 2), sc * (0.34f * wake));
+        int gx = box.Width * 16 / 72, gy = box.Height * 14 / 72;
+        var glyphBox = new Rectangle(box.X + gx, box.Y + gy, box.Width - gx * 2, box.Height - gy * 2);
         if (_ui.Assets.Get($"icon_skill_{def.Id}") is { } sg) b.Draw(sg, glyphBox, Color.Lerp(sc, Color.White, 0.65f) * wake);
         else if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } g) b.Draw(g, glyphBox, Color.White * wake);
         else _ui.Diamond(b, glyphBox, sc * wake);
@@ -2937,11 +3226,12 @@ public sealed class HuntScreen
         }
 
         // The words: NAME (Headline), then the readiness word and the Source on one Body line — colour AND text.
-        var tx = box.Right + 14;
-        var room = slot.Right - 8 - tx;
-        _ui.TextBig(b, _ui.ShortenBig(def.Name, room, UiTypography.Headline), tx, slot.Y + 16, Bone, UiTypography.Headline);
+        var tx = box.Right + UiMetrics.Space(14);
+        var room = slot.Right - UiMetrics.Space(8) - tx;
+        var nameY = slot.Y + UiMetrics.Space(16);
+        _ui.TextBig(b, _ui.ShortenBig(def.Name, room, UiTypography.Headline), tx, nameY, Bone, UiTypography.Headline);
         var word = ReadinessWord(def, t);
-        var ty = slot.Y + 16 + UiTypography.Pitch(UiTypography.Headline);
+        var ty = nameY + UiTypography.Pitch(UiTypography.Headline);
         var source = s.Source.ToString().ToUpperInvariant();
         var wordW = _ui.MeasureBig(word, UiTypography.Body);
         _ui.TextBig(b, word, tx, ty, t.Swept >= 1f || !def.TakesABeat ? Bone : Slate, UiTypography.Body);
@@ -2952,7 +3242,10 @@ public sealed class HuntScreen
         }
         // The Source glyph in the corner — the third cue beside the colour and the word.
         if (_ui.Assets.Get($"source_{s.Source.ToString().ToLowerInvariant()}") is { } sg2)
-            b.Draw(sg2, new Rectangle(slot.Right - 30, slot.Y + 8, 22, 22), Color.White * 0.9f);
+        {
+            var gem = UiMetrics.Control(22);   // a small glyph in the corner — an icon box, at the profile
+            b.Draw(sg2, new Rectangle(slot.Right - UiMetrics.Space(8) - gem, slot.Y + UiMetrics.Space(8), gem, gem), Color.White * 0.9f);
+        }
     }
 
     /// <summary>The readiness in a word: READY · 2 ACTIONS · 1.4s · ACTIVE (a Field) · ON BITE (a Reaction).</summary>
@@ -3559,7 +3852,7 @@ public sealed class HuntScreen
         {
             var rise = (int)((1f - c.Life) * 40f);
             var fade = Math.Clamp(c.Life * 1.8f, 0f, 1f);
-            _ui.TextCenterBig(b, c.Text, c.X, c.Y - rise, c.Color * fade, c.Px <= 0 ? 36 : c.Px);
+            _ui.TextCenterBig(b, c.Text, c.X, c.Y - rise, c.Color * fade, c.Px <= 0 ? SayPx : c.Px);
         }
     }
 
