@@ -3734,11 +3734,23 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// panel was removed: it is on the screen it is about, and the player came here on purpose. A hint
     /// is one line and needs no timer at all — it leaves when its fact does.
     /// </remarks>
+    /// <summary>The hint slot's opaque ground: <see cref="UiInk.Plate"/>'s own colour at full alpha.</summary>
+    private static readonly Color SlotGround = new(UiInk.Plate.R, UiInk.Plate.G, UiInk.Plate.B);
+
     private void DrawHintSlot()
     {
         if (SlotShowing() is not { } slot) return;
 
         var r = HintSlotRect(slot);
+        // OPAQUE, unlike every other plate in the game. UiInk.Plate is 0xE0 alpha, which is right for a
+        // plate that sits on a screen's own background and wrong for the ONE plate that sits on a
+        // screen's own CONTENT: the slot deliberately covers the top of what is behind it (that is the
+        // design — it is this screen's explanation, closed with one click), and at 12 % see-through the
+        // thing it covers reads straight through it. At 150 % that put MASTERY's road name and its
+        // "STRONGER SKILLS, BEFORE YOU PICK ONE" caption inside the sentence about mastery points
+        // (build/shots/c6b_buildtree_150.png, before this fill). A flat ground under the plate makes
+        // the slot say one thing at a time, at every profile.
+        _ui.Fill(_batch, r, SlotGround);
         _ui.Plate(_batch, r, UiInk.Accent);
         if (slot.Body.Length == 0)
         {
@@ -4468,16 +4480,29 @@ public class Game1 : Microsoft.Xna.Framework.Game
     // 100 %, and at 125 and 150 % a slot plate that sat across the subtitle, which showed through it as
     // ghost text — build/shots/m150_dust.png, m150_buildtree.png, m150_vault.png.)
     //
-    // THE THREE Y'S ARE THE SCREENS' OWN, NOT A DERIVED BAND. The screens write them as literals and do
-    // NOT move them with the profile — only the RUNG they draw at follows it. So the one number that
-    // grows here is the subtitle's line height, and anchoring to a band computed from ScreenTitle would
-    // put the slot ~20 px lower than the screen really left it, which at 150 % lands the plate's close
-    // icon on the VAULT's own OPEN ALL button. Anchor to what is drawn.
+    // THE THREE Y'S ARE THE SCREENS' OWN, AND THE SCREENS DERIVE THEM. Every converted screen writes the
+    // same three lines — the name at 24, the rule one title line under it, the subtitle a breath under
+    // the rule — and each of those steps is the PROFILE'S line, not a literal:
+    //
+    //     var ruleY = ScreenTitleTop + UiTypography.Pitch(UiTypography.ScreenTitle) + 1;   (VaultScreen)
+    //     _ui.TextCenterBig(..., ruleY + UiMetrics.Space(6), ..., UiTypography.Secondary);
+    //
+    // so the band ends at page 104 at 100 % and page 144 at 150 %. Pinning the subtitle's own top at the
+    // 100 % literal 80 is right at 100 % and 27 px too high at 150 %, which is exactly the ghost text
+    // this anchoring was written to remove: the plate landed across the subtitle's lower half and the
+    // words read straight through it (build/shots/c6_vault_150.png, before this fix). The same three
+    // steps, at the same rungs, put the slot where the screen really left it at every profile.
 
-    /// <summary>The page y a menu screen draws its one subtitle line at, under the rule at 74 and the name at 24.</summary>
-    private const int PageSubtitleTop = 80;
+    /// <summary>The page y a menu screen prints its own name at — the first of the three lines above.</summary>
+    private const int PageScreenTitleTop = 24;
 
-    /// <summary>The page y under that subtitle line — one <see cref="UiTypography.Secondary"/> line at the profile's own rung (104 at 100 %, 117 at 150 %).</summary>
+    /// <summary>The page y of the gold rule under that name: one screen-title line below it. 74 at 100 %, 99 at 150 %.</summary>
+    private static int PageRuleY => PageScreenTitleTop + UiTypography.Pitch(UiTypography.ScreenTitle) + 1;
+
+    /// <summary>The page y a menu screen draws its one subtitle line at, a breath under the rule. 80 at 100 %, 107 at 150 %.</summary>
+    private static int PageSubtitleTop => PageRuleY + UiMetrics.Space(6);
+
+    /// <summary>The page y under that subtitle line — one <see cref="UiTypography.Secondary"/> line at the profile's own rung (104 at 100 %, 144 at 150 %).</summary>
     private static int PageSubtitleBottom => PageSubtitleTop + UiTypography.Pitch(UiTypography.Secondary);
 
     /// <summary>The page y the screens' first panel starts at — the band above it is the host's.</summary>
