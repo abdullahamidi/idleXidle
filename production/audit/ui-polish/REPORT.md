@@ -100,15 +100,49 @@ Commits are on `feat/hunter-cutout-rig`; checkpoints C1–C6 are listed in `PLAN
 
 ## PixelLab / Assets
 
-42. **existing assets reused** — the mana bar art as the shield bar (`ui_bar_shield_frame/fill` aliases);
-    Source glyphs kept after audit.
-43. **assets derived from existing art** — `[to list]`
-44. **assets generated through PixelLab MCP** — `icon_shield`, six `icon_set_*` capstone emblems,
-    `fx_shield_break_strip8_512`, `icon_status_defense` (replaced). Per-asset table `[to complete: path,
-    purpose, where used, render size, why existing art was insufficient]`.
-45. **assets regenerated/refined after in-game review** — `[to list]`
-46. **unused generation attempts removed** — `tools/check_asset_consumers.py` (orphan audit)
-    `[result pending]`.
+The brief's order is reuse, then derive, then generate (§88–§101). Commit `e654d84` (C5) holds all of it;
+`tools/asset-pipeline/file_generated.py` filed every generated image through the same knockout / trim /
+centre gate the manifest assets went through.
+
+42. **Existing assets reused** — `ui_bar_mana_frame` and `ui_bar_mana_fill` shipped with the UI pack and
+    were never drawn (the game has no mana). They are the SHIELD bar, reached through the AssetLibrary
+    aliases `ui_bar_shield_frame` / `ui_bar_shield_fill`: the health bar's own ornate frame in a cold
+    blue, so the shield reads as the same kind of object as health without a second art style. The
+    Source glyphs (`source_*`) were audited and kept as they are — all six exist and the vault's
+    per-element chest glyph resolves them; nothing was regenerated.
+43. **Assets derived from existing art** — none. Nothing in the owed set could be produced by recolouring
+    or recomposing a shipped file: the shield family needed a shape the tree does not contain, and the
+    set capstones needed six distinct motifs.
+44. **Assets generated through PixelLab MCP**
+
+    | File | Purpose | Where used | Source px | Drawn at (100 % / 150 %) | Why existing art was insufficient |
+    |---|---|---|---|---|---|
+    | `assets/art/UI/icons/icon_shield.png` | The SHIELD glyph — a heater shield in cold steel | HUNT shield bar label, the expedition log's shield row, the help sheet | 64² | `UiMetrics.IconSize` = 40 / 60 px | No shield glyph existed. The nearest shipped icon was `icon_status_defense`, which was an EMPTY gold ring (see below), and the armour item icons are equipment art, not a status glyph. |
+    | `assets/art/Characters/Hunter/icons/status/icon_status_defense.png` | The TRAINING screen's DEFENSE row medallion | TRAINING stat row, stat inspector | 256² | ~40 / 60 px | The shipped file was an empty gold ring — the status family's frame with no motif inside it. Regenerated as a blue heater shield inside that same ring, so the row matches its five siblings. |
+    | `assets/art/VFX/shield_break/fx_shield_break_strip8_512.png` | The shield breaking — a cracked dome bursting into shards | HUNT, played once on `ShieldBroken` | 8 × 512² | 512 px at the champion | `fx_shield` (the shipped aura) is a shield HOLDING, not a shield failing; playing it backwards reads as a shield forming. The break is the loudest non-boss moment in the brief's hierarchy (§65–§70) and needed its own strip. Whitened and feathered for additive tinting. |
+    | `assets/art/UI/icons/sets/icon_set_momentum.png` | MOMENTUM set capstone emblem | GEAR set ladder, capstone rung | 192² | ladder rung, ~28 / 42 px | The set ladder's capstone rung had no art at all — the rung that ends a five-piece climb looked the same as the four below it. Authored in the skill icons' engraved bone-white style so all six tint by Source at draw time. |
+    | `assets/art/UI/icons/sets/icon_set_plating.png` | PLATING (Machine) set capstone | same | 192² | same | same |
+    | `assets/art/UI/icons/sets/icon_set_certainty.png` | CERTAINTY (Mind) set capstone | same | 192² | same | same |
+    | `assets/art/UI/icons/sets/icon_set_overgrowth.png` | OVERGROWTH (Nature) set capstone | same | 192² | same | same |
+    | `assets/art/UI/icons/sets/icon_set_afterimage.png` | AFTERIMAGE (Shadow) set capstone | same | 192² | same | same |
+    | `assets/art/UI/icons/sets/icon_set_harmony.png` | HARMONY (Spirit) set capstone | same | 192² | same | same |
+
+    Every source image is authored well above its draw size and rendered with `SamplerState.LinearClamp`
+    (non-integer scaling is the house path since the 2026-07-29 pivot), so the profile ladder scales them
+    without resampling artefacts. `[at-real-size verification pending — the round-two captures]`
+45. **Assets regenerated/refined after in-game review** — `icon_status_defense` is itself a regeneration:
+    the shipped file was reviewed in a TRAINING capture, found to be an empty ring, and replaced.
+    `[further refinements pending the round-two captures]`
+46. **Unused generation attempts removed** — no generation attempt was kept: `file_generated.py` writes
+    exactly one file per job and staging lives in a gitignored `.staging/mcp`. The rule is now enforced
+    rather than asserted: `tools/check_asset_consumers.py` (added to `tools/check_all.sh`) is the mirror
+    of the asset-key gate — every art file and cue on disk must be reached by a literal, an alias target,
+    an interpolated family, a strip / direction / frame stem, or a content list. It found 122 orphans,
+    all pre-pivot debt (squad-era creature icons, nav tabs for dropped features, an unused button kit,
+    boss animation strips nothing plays); those are carried in `tools/asset_orphans_baseline.txt` so the
+    gate fails on any NEW orphan. The seven C5 files whose consumers round two owes (`icon_shield`, the
+    six `icon_set_*`) sit on that list under their own heading and come off it when the gate reports them
+    healed. `[healed-check pending round two]`
 
 ## Accessibility
 

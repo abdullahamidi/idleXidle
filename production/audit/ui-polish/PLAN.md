@@ -86,6 +86,27 @@ ScrollBar. Each screen's second pass wires FEEDBACK, not information (§22):
   Motion: fade only), sfx_nav; modals (settings, log): backdrop fade + short panel fade; resource pills
   tick and flash on spend, `+N` on substantial gain (thresholded); locked tile → sfx_error.
 
+## Host pass (Game1) — after polish/chrome and the eleven polish2/<screen> branches merge
+
+The screens hand the host cues and notices; the host owns audio, toasts, transitions and the pills.
+One branch `polish2/host`, Game1.cs (+ capture.sh docs), in this order:
+
+1. Cues: read every screen's `ConsumeCue()` once per frame next to `_traits.ConsumeCue()` and play it;
+   swap the host's own sounds where a screen now says what it means — TRAIN sfx_click → sfx_train,
+   FORGE sfx_forge → the screen's cue (upgrade / reroll / gem / salvage), VAULT sfx_forge → chest cues,
+   ROSTER switch sfx_click → sfx_nav, HUNT keeps its own SoundBank. Nav rail → sfx_nav; locked tile and
+   every refusal → sfx_error.
+2. GEAR set completion: `ConsumeNotice()` / `ConsumeCompletedSet()` → `SaveGame.CompletedSets` +
+   the notice toast + sfx_levelup, once per set.
+3. Motion: nav switch 120 ms content fade-in + 8 px settle through OverlayTransform's kick (Reduced:
+   fade only); settings / log / help modals: backdrop fade + short panel fade; resource pills tick on
+   spend and flash, `+N` on a substantial gain (thresholded); the notice / boot toasts use UiMotion.
+4. Expedition Log (§71–§72) and Settings (§83–§85) per the brief — states, copy, scroll at 150.
+5. `RH_SHOT_REDUCED=1` documented in capture.sh; Phase 8 combinations: {100,125,150} × {Reduced on/off}
+   × {1280×720, 1920×1080} × {windowed, borderless} on BUILD and HUNT; Settings escape at each scale.
+6. Re-run `tools/check_asset_consumers.py`: icon_shield and icon_set_* must report healed → drop them
+   from the baseline.
+
 ## Phase 6 — audio — cues done, wiring with the screen polish
 
 Ten cues exist (README lists the vocabulary). Wiring plan: nav rail → sfx_nav; refusals (locked tile,

@@ -141,8 +141,16 @@ const VERDICT = {
   },
 }
 
+const RESUME = [
+  'RESUME. A previous agent began this exact task in your worktree and died mid-flight (its API credits ran out). It committed NOTHING, but it may have left UNCOMMITTED edits in your files.',
+  'BEFORE ANY EDIT: run `git -C <your worktree> status --short` and `git diff`. If a diff exists, read ALL of it and judge it against the spec below. It was written by an agent that never got to build or capture, so treat it as a draft, not as truth: keep what is right, fix what is wrong, and `git checkout --` any file whose diff is confused enough that starting from the base is cheaper. Say in your report what you inherited and what you did with it.',
+  'If the worktree is clean, start from the base as normal.',
+  '',
+].join('\n')
+
 function rules(s) {
   return [
+    RESUME,
     'You are the UI programmer for the ' + s.name + ' screen of IDLExIDLE (MonoGame 3.8.4.1, C#, .NET 8), doing the FINAL UI POLISH Phases 3-6 (interaction states, screen feedback, motion, audio cues) for this one screen.',
     '',
     'WHERE: the repository is ' + REPO + '. Your worktree is ' + WT + '/' + s.key + ' on branch polish2/' + s.key + ', already checked out at ' + BASE + ' (the merged density reflow). Work ONLY in that worktree; never touch the main checkout or any other worktree. Use `git -C ' + WT + '/' + s.key + ' ...` and run dotnet / bash from inside that worktree.',
