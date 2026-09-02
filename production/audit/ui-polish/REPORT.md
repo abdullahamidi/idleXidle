@@ -41,10 +41,22 @@ Commits are on `feat/hunter-cutout-rig`; checkpoints C1–C6 are listed in `PLAN
    `--no-ff` (HEAD `76724a3`): BUILD three scroll regions; GEAR three-column inventory + inspector
    scroll; FORGE bag/inspector scroll; TRAINING row scroll; VAULT two-column pages; MAP six cards
    refit; ROSTER two rows; WARREN eight cards; MASTERY / TRAITS canvases refit; HUNT card/strip/log.
-10. **150 % fixes** — all eleven 150 % captures viewed (`build/shots/m150_*.png`); TRAITS foot printed
-    over node names → foot band below the view (`4e4cb16`); chrome (hint slot, toasts, settings modal,
-    nav rail) `[pending — chrome branch]`.
-11. **Settings escape behavior** — `[pending — matrix run]`.
+10. **150 % fixes** — every 150 % capture was viewed, not just produced. Screens (`build/shots/m150_*.png`):
+    ten passed; TRAITS printed its camera hint, tally and buttons over the tree's deepest node names, so
+    the tree's clip now ends where a foot band begins, the band's height follows the rows the foot needs,
+    and the canvas starts under the point plate (`4e4cb16`). Chrome (`000e8bd`, `d01581a`): the settings
+    panel overflowed at 125 and 150 and now scrolls under a fixed header; the nav rail's eleven tiles fit
+    1080 with ROSTER unclipped; the help sheet flows and scrolls; every toast, tour card and WELCOME BACK
+    height is derived from its lines. The hint slot needed two fixes — its anchor was pinned to the page
+    literal 80, which is the 100 % value of a band the screens derive (`24 + Pitch(ScreenTitle) + 1 +
+    Space(6)`), so at 150 % it sat 27 px too high and across VAULT's, TRAITS' and MASTERY's subtitles;
+    and being the one plate that sits on a screen's own content, `UiInk.Plate`'s 0xE0 alpha let that
+    content read through it. Both fixed; 100 % is unchanged to the pixel.
+11. **Settings escape behavior** — verified at the worst case: UI SCALE 150 % in a real 1280×720 window
+    (`build/shots/c6_settings_150_720.png`). MODE, WINDOW SIZE and UI SCALE sit at the top of the panel
+    and are clickable, the close icon and QUIT TO DESKTOP are reachable, and the rows scroll under a
+    fixed header. A player who picks 150 % on a small screen can always get back to 100 %. The two
+    modal scrolls reset when the modal closes, so a scrolled-away UI SCALE row cannot persist.
 12. **Remaining scale limitations** — GEAR footer count shortens at 150 (`AVERAGE ITE…`); WARREN
     `BREEDING CHAMB…`; `[to complete after the matrix]`.
 
@@ -79,8 +91,8 @@ Commits are on `feat/hunter-cutout-rig`; checkpoints C1–C6 are listed in `PLAN
 31. MAP — `[pending]`
 32. TRAITS — foot band + point plate (`4e4cb16`); `[round two pending]`
 33. ROSTER — `[pending]`
-34. SETTINGS — `[pending — chrome]`
-35. Expedition Log — `[pending — chrome]`
+34. SETTINGS — reflowed to scroll at 125/150 with a fixed header; escape verified (item 11). `000e8bd`.
+35. Expedition Log — modal reflowed with the chrome pass (`000e8bd`); `[states and copy pending the host pass]`.
 
 ## Combat
 

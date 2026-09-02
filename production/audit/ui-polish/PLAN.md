@@ -33,7 +33,7 @@ decisions that are not derivable from the diff.*
 | C3 | The owed fixtures: fightstatus · fightfive · fightmulti · fightshieldbroken · fightreport×3 limits; rig: event-aimed seek, dump, pinned baseline, page-space posed cursor | `1fda3a8` |
 | C4 | UiMetrics + scale-aware ladder + Button states + UiMotion + ScrollBar; 150 % offered; Game test project (21 tests) | `645db62` |
 | C5 | Ten synthesised cues (the §86 vocabulary); Shield art (icon_shield, the defence medallion, fx_shield_break, the mana bar reused as the shield bar); six capstone emblems; ADR-005 | `e654d84` |
-| C6 | Per-screen density reflow — twelve branches `polish/<screen>` merged | — |
+| C6 | Per-screen density reflow — eleven `polish/<screen>` branches merged (`76724a3`), TRAITS foot band (`4e4cb16`), the orphan gate + matrix runner (`6e8925b`), `polish/chrome` merged (`000e8bd`), the hint slot's anchor and opacity (`d01581a`) | `d01581a` |
 
 ## Asset decisions (brief §89, §96–§97)
 
