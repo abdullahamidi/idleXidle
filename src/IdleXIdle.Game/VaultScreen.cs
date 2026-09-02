@@ -80,9 +80,144 @@ public sealed class VaultScreen
     private int _scroll;     // first visible card, in steps of a row
     private float _anim;
 
-    // Hover state, tracked in Update (where dt lives) and read by Draw the same frame.
+    // Hover state, resolved in Update and read by Draw the same frame. The EASE of it lives in
+    // UiMotion (keyed per card, asked in Draw the way UiKit.Button asks for its own), so Reduced
+    // Motion collapses it to the same end state without a second switch here.
     private int _hoverIdx = -1;    // card under the pointer, or -1
-    private float _hoverT;         // eased 0..1 — ~120ms in, ~80ms out
+
+    // ── UI POLISH P3–P6: the states, the open burst, the cues (brief §22–§38, §56–§60, §86). ──
+    //
+    // THE CHEST IS THE BUTTON, so the card has to do what UiKit.Button does for itself: HOVER eases
+    // in, PRESSED drops the plate 2 px and darkens it for as long as the button is held, and the
+    // click — the host's click is the PRESS edge (Game1._clicked), the same edge every button in
+    // the game fires on — starts the open BURST on that frame. The host removes the chest in the
+    // same Update, so the burst is drawn from rectangles remembered at the click, not from a card
+    // that may no longer be there: a grade-coloured glow on the card's edge that fades, and a ring
+    // that sweeps out from where the chest was. Epic and up add ONE echo ring inside the same
+    // window — never a longer wait (§56–§60). Nothing here loops; a pulse is armed by an event in
+    // Update and only read in Draw.
+
+    /// <summary>One card of the burst: where it was, where its chest was, and its grade.</summary>
+    private readonly List<(Rectangle Card, Rectangle Art, Rarity Grade)> _burst = new(8);
+
+    private static readonly int BurstKey = HashCode.Combine("vault", "open");
+    private static readonly int TallyKey = HashCode.Combine("vault", "tally");
+    private static readonly int CardKeyBase = HashCode.Combine("vault", "card");
+    private static readonly int PasteKey = HashCode.Combine("vault", "paste");
+
+    /// <summary>How long the open burst runs — the brief's REWARD band, through the one vocabulary.</summary>
+    public const float OpenBurstSeconds = UiMotion.Reward;
+
+    /// <summary>Where, in the burst, the Epic-and-up echo ring starts (a fraction of the window).</summary>
+    public const float EchoStart = 0.4f;
+
+    /// <summary>The pile's size last frame, so a pile that just SHRANK can light the tally once.</summary>
+    private int _lastCount = -1;
+
+    private string? _cue;
+
+    /// <summary>
+    /// The sound cue for an open, cleared by reading — the host owns audio (the same shape as
+    /// <c>TraitsScreen.ConsumeCue</c>).
+    /// </summary>
+    /// <remarks>
+    /// <c>sfx_chest_open</c> for every open; a chest of Epic or better grade — or an OPEN ALL whose
+    /// best chest is — adds <c>sfx_chest_rare</c> in the SAME frame, so the two names come back
+    /// joined by a comma (<c>"sfx_chest_open,sfx_chest_rare"</c>) and the host plays each. OPEN
+    /// ALL sets the pair once for the whole pile, not once per chest. Set at the semantic moment
+    /// (the click that opens), never from Draw.
+    /// </remarks>
+    public string? ConsumeCue()
+    {
+        var c = _cue;
+        _cue = null;
+        return c;
+    }
+
+    /// <summary>
+    /// The cue, or the pair, for a chest of this grade — the grade is known before the roll, so the
+    /// sound is chosen at the click rather than after the contents come back.
+    /// </summary>
+    /// <remarks>
+    /// Public because it is the contract the host wires to, and the one a test can hold: the names
+    /// are the audio vocabulary's own (<c>assets/audio/ui</c>), not strings invented here.
+    /// </remarks>
+    public static string CueFor(Rarity grade) =>
+        grade >= Rarity.Epic ? "sfx_chest_open,sfx_chest_rare" : "sfx_chest_open";
+
+    // DEV: PRESSED lasts as long as a thumb and the open burst is over in a third of a second, while
+    // the rig shoots frame 60 with no mouse button and no clock of its own — so a capture can only
+    // prove either of them if the screen HOLDS them. RH_SHOT_VAULT_POSE, read once and only under
+    // RH_SHOT (the house rule for a screen's own dial):
+    //
+    //   hold             the left button is treated as held ALL frame, so whatever the rig's posed
+    //                    cursor (RH_SHOT_PAGE_MOUSE=x,y) is over draws in its PRESSED state — a card,
+    //                    PASTE A CODE, and inside the chest filter its mini buttons and slot cells
+    //   open:<n>[@t]     the burst of the n-th visible card, frozen t seconds in (0.08 when unsaid)
+    //   openall[@t]      the OPEN ALL burst over every visible card, frozen the same way
+    //   ,reduced         appended to any of the above, turns Reduced Motion on for the capture
+    //
+    //   RH_SHOT_VAULT_POSE=open:1@0.22 bash tools/asset-pipeline/capture.sh vault build/shots/x.png
+    //   RH_SHOT_VAULT_POSE=hold RH_SHOT_PAGE_MOUSE=1440,410 bash tools/asset-pipeline/capture.sh vault …
+    //   RH_SHOT_VAULT_POSE=open:0@0.14,reduced RH_SHOT_UISCALE=150 …
+    //
+    // `hold` poses WHERE the cursor already is rather than naming a control, so one dial photographs
+    // every pressed state on the screen and no control needs a dial of its own.
+    //
+    // The pose does not open anything — the host is not told — so the burst is photographed over
+    // the card it came from, which is exactly what a STACK looks like at play (the pile stays, one
+    // shorter); a single chest's card is gone under its burst. It freezes the whole opened FRAME,
+    // the tally's answer included, because at play those are one instant.
+    //
+    // REDUCED MOTION is the one state the rig cannot reach on its own: the accessibility settings are
+    // read from the player's prefs file, which a shot run deliberately skips, so UiMotion.Reduced is
+    // false in every capture ever taken. §106 asks for Reduced Motion AT 150 % specifically, and this
+    // screen's reward beat is exactly what that setting changes — so `,reduced` re-asserts the flag
+    // each Update (the host rewrites it from the real setting every frame, before any screen runs).
+    // Guarded by RH_SHOT, and it is the only global this screen ever writes.
+    private bool _devPosePending = Environment.GetEnvironmentVariable("RH_SHOT") is not null;
+    private float? _devBurstT;
+    private bool _devHeld;
+    private bool _devReduced;
+
+    /// <summary>The left button is down — the real one, or the rig's posed <c>hold</c>.</summary>
+    private bool Held => UiKit.MouseHeld || _devHeld;
+
+    /// <summary>Keys this screen is still easing — asked while hot, and while cooling back down.</summary>
+    private readonly HashSet<int> _cooling = new(16);
+
+    /// <summary>
+    /// A hover ease that does not restart itself: 0 at rest, easing in while hot and out again after.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="UiMotion.Ease"/> DROPS a key the moment it settles at 0 (a rested control is meant to
+    /// cost nothing), and an absent key starts at the target's opposite — so asking it about something
+    /// already at rest hands back 0.93 and fades to 0 again, forever. Six frames on, six frames off: a
+    /// card with no pointer near it brightened its edge, lit its OPEN chip gold and grew its chest 6 %,
+    /// ten times a second. Continuous idle motion is what the brief forbids outright (§30 animate
+    /// CHANGE, §64 no constant flashing) and it drowns the hover it is supposed to be.
+    /// </para>
+    /// <para>
+    /// So ask only while there is something to ask about: a hot control eases in, and it keeps being
+    /// asked until the fade out reaches 0 — after which the key is at rest and is not asked again. The
+    /// root cause is in the shared vocabulary (every <see cref="UiKit.Button"/> in the game does the
+    /// same, this screen's toolbar included); this keeps the VAULT's own controls honest until that is
+    /// fixed, and costs nothing once it is.
+    /// </para>
+    /// </remarks>
+    private float Lift(int key, bool hot)
+    {
+        if (hot)
+        {
+            _cooling.Add(key);
+            return UiMotion.Ease(key, 1f);
+        }
+        if (!_cooling.Contains(key)) return 0f;
+        var v = UiMotion.Ease(key, 0f);
+        if (v <= 0f) _cooling.Remove(key);
+        return v;
+    }
 
     // ── THE WANDERING TRADER + SHARE CODES — the two future-content directions the designer kept
     //    (2026-08-20). Both live in the vault: the room where things arrive from outside. ─────────
@@ -434,10 +569,37 @@ public sealed class VaultScreen
         var stacks = ChestDossiers.Stacked(chests);
         var sorted = stacks.Select(st => st.Sample).ToList();
         Clamp(sorted.Count);
+        var onPage = OnPage(sorted.Count);
 
-        // While the stall or an inspect card is open, the grid underneath is furniture: no hover,
-        // no wheel, and — decisive — no chest-opening click. The modals' own buttons live in Draw.
-        if (ModalOpen) { _hoverIdx = -1; return; }
+        if (_devPosePending) ApplyDevPose(sorted, onPage);
+        if (_devReduced) UiMotion.Reduced = true;   // RH_SHOT only — see the pose dial's note
+
+        // THE TALLY ANSWERS THE OPEN (brief §36). The pile only ever SHRINKS because the player
+        // opened something — a boss drop grows it — so the count line brightens once and settles.
+        if (_lastCount >= 0 && chests.Count < _lastCount) UiMotion.Flash(TallyKey, UiMotion.Transition);
+        _lastCount = chests.Count;
+
+        // A burst that has finished is forgotten HERE, in Update — Draw only reads it.
+        if (_devBurstT is null && !UiMotion.Pulsing(BurstKey)) _burst.Clear();
+
+        // OPEN ALL was clicked in the last Draw (UiKit.Button answers there, like every button in the
+        // game) and the host takes the request the moment this call returns — so this is the one
+        // frame the pile is still here to be remembered: every visible card's burst, and the cue for
+        // the pile's best chest, once.
+        if (_pending == OpenRequest.All && onPage > 0) BeginBurst(sorted, onPage, 0, all: true);
+
+        // While the stall, an inspect card OR THE CHEST FILTER'S POPOVER is open, the grid underneath
+        // is furniture: no hover, no wheel, and — decisive — no chest-opening click. The overlays' own
+        // buttons live in Draw.
+        //
+        // FilterOpen was missing from this gate, and the polish pass is what made it visible. The
+        // popover sits ON the top-right card, so its `+`, its `-` and its slot medallions all lie
+        // inside that card's rectangle: a click on `+` raised the tier AND opened the chest under it,
+        // and the card lit and pressed under a pointer that was inside a different control. Nothing
+        // announced either, which is why it survived — a burst on a chest nobody meant to open is
+        // what finally said it out loud. (Closing on a click outside is unaffected: that lives in
+        // DrawFilterIfOpen, and Draw still sees every click.)
+        if (ModalOpen || FilterOpen) { _hoverIdx = -1; return; }
 
         // The wheel moves the window one ROW at a time, never past a page that is still full.
         if (wheel != 0)
@@ -447,28 +609,78 @@ public sealed class VaultScreen
         // more: the peek glass that used to win over the card it sat on is gone, and with it the rule
         // that the card's OPEN affordance stood down while the pointer was on it.
         var overCard = -1;
-        var onPage = OnPage(sorted.Count);
         for (var vis = 0; vis < onPage; vis++)
         {
             if (!Card(vis, onPage).Contains(hit)) continue;
             overCard = _scroll + vis;
             break;
         }
-
-        if (overCard != _hoverIdx) _hoverT = 0f;
         _hoverIdx = overCard;
-        _hoverT = _hoverIdx >= 0 ? MathF.Min(1f, _hoverT + dt / 0.12f) : 0f;
 
         if (!clicked) return;
 
         // THE CHEST IS THE BUTTON. A click anywhere on the card opens THAT chest — including on the
-        // OPEN chip, which is a label on the card and deliberately not a second click source.
+        // OPEN chip, which is a label on the card and deliberately not a second click source. The
+        // burst and the cue are armed on this same edge: the card answers the click at once, and
+        // the host removes the chest before the next Draw.
         if (overCard >= 0)
         {
             _cursor = overCard;
             SelectedChest = sorted[overCard];
             _pending = OpenRequest.Selected;
+            BeginBurst(sorted, onPage, overCard - _scroll, all: false);
         }
+    }
+
+    /// <summary>
+    /// Remember where the burst plays and arm it: one visible card, or under OPEN ALL every visible
+    /// card (the ring goes on the first — the best, the pile is sorted best-first). Sets the cue.
+    /// </summary>
+    private void BeginBurst(List<Chest> sorted, int onPage, int vis, bool all)
+    {
+        _burst.Clear();
+        var best = Rarity.Common;
+        if (all)
+        {
+            for (var v = 0; v < onPage; v++)
+                _burst.Add((Card(v, onPage), ArtBox(Card(v, onPage)), sorted[_scroll + v].Rarity));
+            // The cue is for the PILE, which can be deeper than the page.
+            for (var i = 0; i < sorted.Count; i++)
+                if (sorted[i].Rarity > best) best = sorted[i].Rarity;
+        }
+        else
+        {
+            var card = Card(vis, onPage);
+            best = sorted[_scroll + vis].Rarity;
+            _burst.Add((card, ArtBox(card), best));
+        }
+        _cue = CueFor(best);
+        UiMotion.Flash(BurstKey, OpenBurstSeconds);
+    }
+
+    /// <summary>RH_SHOT_VAULT_POSE, applied once (see the field's note). A pose opens nothing and cues nothing.</summary>
+    private void ApplyDevPose(List<Chest> sorted, int onPage)
+    {
+        _devPosePending = false;
+        if (Environment.GetEnvironmentVariable("RH_SHOT_VAULT_POSE") is not { Length: > 0 } pose) return;
+        // "open:1@0.22,reduced" — the verb, its dials, then any flags.
+        var parts = pose.Split(',');
+        foreach (var flag in parts)
+            if (flag.Trim().Equals("reduced", StringComparison.OrdinalIgnoreCase)) _devReduced = true;
+        var at = parts[0].Split('@');
+        var t = at.Length > 1
+                && float.TryParse(at[1], System.Globalization.NumberStyles.Float,
+                                  System.Globalization.CultureInfo.InvariantCulture, out var s)
+            ? s : 0.08f;
+        var verb = at[0].Split(':');
+        var n = verb.Length > 1 && int.TryParse(verb[1], out var i) ? i : 0;
+        switch (verb[0].ToLowerInvariant())
+        {
+            case "hold": _devHeld = true; break;
+            case "open" when n >= 0 && n < onPage: BeginBurst(sorted, onPage, n, all: false); _devBurstT = t; break;
+            case "openall" when onPage > 0: BeginBurst(sorted, onPage, 0, all: true); _devBurstT = t; break;
+        }
+        _cue = null;
     }
 
     public void Draw(SpriteBatch b, IReadOnlyList<Chest> chests, Point mouse, bool clicked)
@@ -505,7 +717,14 @@ public sealed class VaultScreen
         var summary = tally.Count == 0
             ? "nothing waiting"
             : string.Join("   ", tally.Select(t => $"{t.Count} {t.Grade.ToString().ToUpperInvariant()}"));
-        _ui.TextCenterBig(b, summary.ToUpperInvariant(), UiKit.PageCenterX, ruleY + UiMetrics.Space(6), Slate,
+        // Lit once when an open shrank the pile (armed in Update), settling back to its own grey.
+        // A posed burst freezes the tally at the SAME instant: at play the pile shrinks on the very
+        // frame the burst starts, so the shot has to hold one moment, not two.
+        var tallyPulse = _devBurstT is { } tallyHeld
+            ? Math.Clamp(1f - tallyHeld / UiMotion.Transition, 0f, 1f)
+            : UiMotion.Pulse(TallyKey);
+        var tallyInk = Color.Lerp(Slate, Bone, UiMotion.Smooth(tallyPulse));
+        _ui.TextCenterBig(b, summary.ToUpperInvariant(), UiKit.PageCenterX, ruleY + UiMetrics.Space(6), tallyInk,
                           UiTypography.Secondary);
 
         // QUIET, NOT GOLD. The house frame rule (UiKit.PanelQuiet): the gold filigree is for MODALS —
@@ -537,6 +756,15 @@ public sealed class VaultScreen
         }
 
         if (_ui.Button(b, FilterBtn, "CHEST FILTER", hit, uiClicked, true)) FilterOpen = !FilterOpen;
+        // SELECTED IS NOT HOVER (§28). While its popover is up the button wears a gold ring —
+        // persistent structure that does not leave with the pointer, at the SELECTED tier's weight
+        // (§23) rather than the primary's ornate art, and it is the very mark this screen already
+        // puts on a lit filter cell and a lit MiniButton, so "on" looks the same everywhere on it.
+        //
+        // It was a thin rule along the button's foot first, and the 150 % capture killed that: the
+        // button art's own gold ornament is thicker at every step of the density profile, and a
+        // 2 px line inside it disappeared into the frame it was meant to be distinguished from.
+        if (FilterOpen) Outline(b, FilterBtn, Gold * 0.8f, 2);
 
         if (_ui.Button(b, TraderBtn, "TRADER", hit, uiClicked, TraderStock.Count > 0))
         {
@@ -544,12 +772,22 @@ public sealed class VaultScreen
             _modalOpenedNow = true;
         }
 
+        // THE SIDE DOOR keeps to the QUIET tier: a plate, a value-step hover, the same 2 px press
+        // every button makes — and never gold, never a pulse, so it cannot outrank OPEN ALL (§60).
         var pasteHot = PasteRect.Contains(hit) && !ModalOpen;
-        _ui.Plate(b, PasteRect);
-        Outline(b, PasteRect, pasteHot ? Slate : Dim, 1);
-        _ui.TextCenterBig(b, "PASTE A CODE", PasteRect.Center.X,
-                          PasteRect.Y + (ToolbarH - UiTypography.ButtonText) / 2 - 2,
-                          pasteHot ? Bone : Slate, UiTypography.ButtonText);
+        var pasteLift = Lift(PasteKey, pasteHot);
+        var pastePressed = pasteHot && Held;
+        var pastePlate = pastePressed
+            ? new Rectangle(PasteRect.X, PasteRect.Y + 2, PasteRect.Width, PasteRect.Height)
+            : PasteRect;
+        _ui.Plate(b, pastePlate);
+        var pasteWell = new Rectangle(pastePlate.X + 1, pastePlate.Y + 1, pastePlate.Width - 2, pastePlate.Height - 2);
+        if (pasteLift > 0f) _ui.Fill(b, pasteWell, Color.White * (0.05f * pasteLift));
+        if (pastePressed) _ui.Fill(b, pasteWell, Color.Black * 0.18f);
+        Outline(b, pastePlate, Color.Lerp(Dim, Slate, pasteLift), 1);
+        _ui.TextCenterBig(b, "PASTE A CODE", pastePlate.Center.X,
+                          pastePlate.Y + (ToolbarH - UiTypography.ButtonText) / 2 - 2,
+                          Color.Lerp(Slate, Bone, pasteLift), UiTypography.ButtonText);
         if (UiKit.ClickedIn(PasteRect, hit, uiClicked))
         {
             PasteCode();
@@ -598,6 +836,9 @@ public sealed class VaultScreen
         if (sorted.Count == 0)
         {
             DrawEmpty(b, frame, hit, uiClicked);
+            // OPEN ALL empties the room in the same frame it is clicked; its burst still plays here,
+            // over where the pile was, while the Forge's cascade takes over above it.
+            DrawBurst(b);
             DrawFilterIfOpen(b, hit, clicked && !_modalOpenedNow);
             DrawTrader(b, hit, clicked && !_modalOpenedNow);
             DrawInspect(b, hit, clicked && !_modalOpenedNow);
@@ -607,11 +848,19 @@ public sealed class VaultScreen
 
         var onPage = OnPage(sorted.Count);
         for (var vis = 0; vis < onPage; vis++)
-            DrawCard(b, sorted[_scroll + vis], stacks[_scroll + vis].Count, Card(vis, onPage),
-                     _scroll + vis == _hoverIdx);
+        {
+            var idx = _scroll + vis;
+            var hovered = idx == _hoverIdx && !ModalOpen;
+            // PRESSED is the button held over the card (the rig poses it with `hold`).
+            var pressed = hovered && Held;
+            DrawCard(b, sorted[idx], stacks[idx].Count, Card(vis, onPage), idx, hovered, pressed);
+        }
 
         // The pile's depth, in the frame's own margin: drawn only when a wheel step would show more.
         _ui.ScrollBar(b, ScrollTrack(frame, rows), _scroll / Cols, Rows, TotalRows(sorted.Count));
+
+        // Over the cards, so the ring is not under the neighbour that slid into the opened slot.
+        DrawBurst(b);
 
         DrawFilterIfOpen(b, hit, clicked && !_modalOpenedNow);
         DrawTrader(b, hit, clicked && !_modalOpenedNow);
@@ -630,13 +879,14 @@ public sealed class VaultScreen
     // them so the two fragments would match the TIER line above. Two fragments in capitals is a label;
     // six sentences in capitals is shouting, and it is the readability fault the whole pass exists to
     // remove. The header, the tier and the chip stay capitals — they are labels, and they still are.
-    private void DrawCard(SpriteBatch b, Chest chest, int stackCount, Rectangle card, bool hovered)
+    private void DrawCard(SpriteBatch b, Chest chest, int stackCount, Rectangle card, int idx, bool hovered, bool pressed)
     {
         var d = ChestDossiers.For(chest);
         var grade = RarityColors[(int)chest.Rarity];
+        // HOVER through the one vocabulary (§26): ~100 ms in, and out again when the pointer leaves.
         // REDUCED MOTION keeps the value step and drops the movement: the card still brightens under
-        // the pointer, it just does not grow or ease into it.
-        var ease = hovered ? Game1.ReducedMotion ? 1f : _hoverT * _hoverT * (3f - 2f * _hoverT) : 0f;   // smoothstep
+        // the pointer at once, it just does not grow or ease into it.
+        var ease = Lift(HashCode.Combine(CardKeyBase, idx), hovered);
         var pad = CardPad;
 
         // A STACK LOOKS LIKE A STACK. Two identical chests were one card with a small "x2" in the
@@ -651,12 +901,19 @@ public sealed class VaultScreen
             _ui.Fill(b, new Rectangle(off.X, off.Bottom - 2, off.Width, 2), grade * 0.25f);
         }
 
+        // PRESSED (§27): the plate drops 2 px onto its own pile and darkens, for exactly as long as
+        // the button is held — the depression UiKit.Button makes, so a card and a button under the
+        // same thumb are the same material. Immediate; nothing eases. Everything on the card rides
+        // the dropped rectangle, so the chip, the pips and the facts press together.
+        if (pressed) card = new Rectangle(card.X, card.Y + 2, card.Width, card.Height);
+
         // The QUIET tier, which is what this is: a plate inside a panel. It used to hand-draw the
         // plate that UiKit.Plate exists to be. Hover brightens the EDGE one value step — never a new
         // hue (art bible chrome rules).
         _ui.Plate(b, card);
         _ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, 6), grade);
-        if (hovered)
+        if (pressed) _ui.Fill(b, new Rectangle(card.X + 1, card.Y + 6, card.Width - 2, card.Height - 7), Color.Black * 0.18f);
+        if (ease > 0f)
         {
             var edge = Bone * (0.35f + 0.45f * ease);
             _ui.Fill(b, new Rectangle(card.X, card.Bottom - 2, card.Width, 2), edge);
@@ -666,8 +923,8 @@ public sealed class VaultScreen
 
         // THE CHEST IS THE PICTURE, lifted toward white so grade never decides how VISIBLE it is
         // (SpriteBatch tint multiplies). On hover it grows 6% about its own centre.
-        var artBox = new Rectangle(card.X + pad, card.Y + CardHeadTop, ArtSize, ArtSize);
-        var icon = Grow(artBox, Game1.ReducedMotion ? 1f : 1f + 0.06f * ease);
+        var artBox = ArtBox(card);
+        var icon = Grow(artBox, UiMotion.Reduced ? 1f : 1f + 0.06f * ease);
         if (_ui.Assets.Get("chest_loot") is { } chestArt)
             _ui.SpriteFit(b, chestArt, icon, Color.Lerp(grade, Color.White, 0.45f + 0.1f * ease));
         else _ui.Diamond(b, icon, grade);
@@ -698,10 +955,10 @@ public sealed class VaultScreen
         // chests on one click. It lights with the CARD, which is what you are actually clicking.
         var chip = new Rectangle(card.X + pad, card.Bottom - pad - ChipH, ChipW, ChipH);
         _ui.Plate(b, chip);
-        Outline(b, chip, hovered ? Gold : Dim, 2);
+        Outline(b, chip, Color.Lerp(Dim, Gold, ease), 2);
         _ui.TextCenterBig(b, stackCount > 1 ? "OPEN ONE" : "OPEN", chip.Center.X,
                           chip.Y + (ChipH - UiTypography.ButtonText) / 2 - 2,
-                          hovered ? Gold : Gold * 0.75f, UiTypography.ButtonText);
+                          Color.Lerp(Gold * 0.75f, Gold, ease), UiTypography.ButtonText);
 
         // ── The text column. ─────────────────────────────────────────────────────────────────────
         var tx = card.X + pad + ArtSize + UiMetrics.Space(20);
@@ -763,6 +1020,113 @@ public sealed class VaultScreen
                 _ui.TextBig(b, wrapped, tx, y, Slate, UiTypography.Secondary);
                 y += blurbStep;
             }
+        }
+    }
+
+    /// <summary>The chest art's box on a card — the picture the click is about, and the burst's centre.</summary>
+    private static Rectangle ArtBox(Rectangle card) =>
+        new(card.X + CardPad, card.Y + CardHeadTop, ArtSize, ArtSize);
+
+    // ── THE OPEN BURST ───────────────────────────────────────────────────────────────────────────
+    //
+    // The card's answer to the click, in the REWARD band and no longer: the card's edge lights in the
+    // chest's grade colour and fades, and a ring sweeps out from where the chest was — plotted the way
+    // the trait tree plots its shockwave, so the game's two celebrations are one family. Rarity scales
+    // the EMPHASIS, not the wait: the ring reaches further for a richer grade (see Reach), and Epic and
+    // up add ONE echo ring inside the same window — a second pulse, never a second's more waiting
+    // (§56–§60: "no gacha fireworks"). Under Reduced Motion the ring — movement — is dropped and the
+    // edge's fade stays, and both end on the same empty frame.
+
+    /// <summary>
+    /// The burst at one instant: the edge glow's strength, how far the ring has swept (0..1) and
+    /// its alpha, and the same for the Epic-and-up echo ring (0 when there is none).
+    /// </summary>
+    public readonly record struct BurstFrame(float Edge, float Ring, float RingAlpha, float Echo, float EchoAlpha);
+
+    /// <summary>
+    /// The burst at one instant, from the pulse <see cref="UiMotion.Pulse"/> reports (1 just fired,
+    /// 0 done). Pure, so a test can hold it at 0, the middle and the end — the rig cannot.
+    /// </summary>
+    public static BurstFrame BurstAt(float pulse, Rarity grade, bool reduced)
+    {
+        pulse = Math.Clamp(pulse, 0f, 1f);
+        var t = 1f - pulse;
+        var edge = pulse;   // a plain fade — the one motion Reduced Motion keeps
+        if (reduced) return new BurstFrame(edge, 0f, 0f, 0f, 0f);
+        var ring = UiMotion.Smooth(t);
+        var ringAlpha = (1f - t) * (1f - t);
+        var echo = 0f;
+        var echoAlpha = 0f;
+        if (grade >= Rarity.Epic && t >= EchoStart)
+        {
+            echo = UiMotion.Smooth((t - EchoStart) / (1f - EchoStart));
+            echoAlpha = (1f - echo) * (1f - echo);
+        }
+        return new BurstFrame(edge, ring, ringAlpha, echo, echoAlpha);
+    }
+
+    /// <summary>The burst over the grid. Reads the pulse (or the rig's frozen instant); arms nothing.</summary>
+    private void DrawBurst(SpriteBatch b)
+    {
+        if (_burst.Count == 0) return;
+        var pulse = _devBurstT is { } held
+            ? Math.Clamp(1f - held / OpenBurstSeconds, 0f, 1f)
+            : UiMotion.Pulse(BurstKey);
+        if (pulse <= 0f) return;
+
+        for (var i = 0; i < _burst.Count; i++)
+        {
+            var (card, art, grade) = _burst[i];
+            var f = BurstAt(pulse, grade, UiMotion.Reduced);
+            var ink = RarityColors[(int)grade];
+
+            // The edge: the card's own hover edge, in the grade's colour, with a softer halo a step out.
+            Outline(b, card, ink * (0.9f * f.Edge), 3);
+            Outline(b, new Rectangle(card.X - 3, card.Y - 3, card.Width + 6, card.Height + 6), ink * (0.35f * f.Edge), 3);
+
+            // The ring — on the FIRST card only under OPEN ALL (the best; the pile is sorted best-first):
+            // one burst for the pile, not one per card.
+            if (i > 0 || f.RingAlpha <= 0f) continue;
+            Ring(b, art.Center, ArtSize / 2f + Reach(grade) * f.Ring, ink * f.RingAlpha, f.Ring);
+            if (f.EchoAlpha > 0f)
+                Ring(b, art.Center, ArtSize / 2f + Reach(grade) * 0.55f * f.Echo, ink * f.EchoAlpha, f.Echo);
+        }
+    }
+
+    /// <summary>
+    /// How far past the chest a grade's wave travels — the EMPHASIS dial, measured in chest-widths so
+    /// it follows the density profile with everything else.
+    /// </summary>
+    /// <remarks>
+    /// §58's three tiers: common small, uncommon and rare stronger, epic and legendary richer. It stays
+    /// a CARD-sized flourish on purpose — at 100 % the largest wave finishes at about 220 px, roughly
+    /// the card's own half-height, so the vault answers a click rather than staging a lottery draw
+    /// across the page (§57, "no gacha fireworks"). The reach grows, the WAIT never does.
+    /// </remarks>
+    private static float Reach(Rarity grade) => ArtSize * (0.35f + 0.13f * (int)grade);
+
+    /// <summary>
+    /// A hollow circle of small squares, thinning as it sweeps out.
+    /// </summary>
+    /// <remarks>
+    /// The step count follows the RADIUS, not a constant — the lesson the trait tree's shockwave
+    /// already learned: a fixed step count draws a solid band when the ring is small and a dotted one
+    /// when it is large, which is exactly backwards for an expanding wave. Anything off the page is
+    /// skipped rather than drawn and clipped, so the biggest grade on the left-hand column costs
+    /// nothing for the arc nobody can see.
+    /// </remarks>
+    private void Ring(SpriteBatch b, Point centre, float radius, Color ink, float sweep)
+    {
+        var steps = Math.Clamp((int)(radius * 4f), 48, 1600);
+        var w = Math.Max(2, (int)(7 * (1f - sweep)));
+        for (var i = 0; i < steps; i++)
+        {
+            var a = i / (float)steps * MathF.Tau;
+            var px = centre.X + (int)(MathF.Cos(a) * radius);
+            var py = centre.Y + (int)(MathF.Sin(a) * radius);
+            if (px < UiKit.Page.Left - w || px > UiKit.Page.Right + w
+                || py < UiKit.Page.Top - w || py > UiKit.Page.Bottom + w) continue;
+            _ui.Fill(b, new Rectangle(px - w / 2, py - w / 2, w, w), ink);
         }
     }
 
@@ -1313,6 +1677,8 @@ public sealed class VaultScreen
             var lit = KeepSlots.Contains(slot);
             var hot = cell.Contains(hit);
             if (lit) _ui.Fill(b, cell, Gold * 0.16f);
+            // PRESSED: the cell darkens under the held button; the medallion keeps its hover size.
+            if (hot && Held) _ui.Fill(b, cell, Color.Black * 0.18f);
             var iconEdge = hot ? FilterIconHot : FilterIconRest;
             var box = new Rectangle(cell.Center.X - iconEdge / 2, cell.Center.Y - iconEdge / 2, iconEdge, iconEdge);
             var tint = lit || hot ? Color.White : new Color(0x8C, 0x86, 0x80);
@@ -1345,9 +1711,13 @@ public sealed class VaultScreen
     private void MiniButton(SpriteBatch b, Rectangle r, string label, Point hit, bool lit = false)
     {
         var hot = r.Contains(hit);
+        // The same states as every control (§25): HOVER lifts the edge and the ink a value step,
+        // PRESSED darkens the well while the button is held, LIT (selected) is gold and stays.
+        var pressed = hot && Held;
         _ui.Fill(b, r, new Color(0x14, 0x10, 0x1A, 0xE0));
+        if (pressed) _ui.Fill(b, r, Color.Black * 0.18f);
         Outline(b, r, lit ? Gold * 0.8f : hot ? Bone : Dim, 2);
-        _ui.TextCenterBig(b, label, r.Center.X, r.Y + (r.Height - UiTypography.Secondary) / 2 - 1,
+        _ui.TextCenterBig(b, label, r.Center.X, r.Y + (r.Height - UiTypography.Secondary) / 2 - 1 + (pressed ? 1 : 0),
                           lit ? Gold : hot ? Bone : Slate, UiTypography.Secondary);
     }
 
