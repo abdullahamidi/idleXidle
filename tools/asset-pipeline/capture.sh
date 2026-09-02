@@ -26,6 +26,9 @@
 # RH_SHOT_LEAD=<seconds before the event> (0.02 default — under two frames keeps the event on the
 # shot frame). RH_SHOT_DUMP=1 writes <shot>.events.txt — the wave's events and the playhead at the
 # shutter — which is how a fight pose is checked against what the wave held.
+# RH_SHOT_MOTION=<0..1> holds the CHROME's transients at that fraction of their run so they can be
+#   photographed at all: 1 is the first instant of a screen switch, a modal fade, a currency pill's
+#   spend flash and its banked "+N"; 0.5 is halfway; unset means the game animates normally.
 # RH_SHOT_PAGE_MOUSE=x,y poses the cursor in PAGE space (a hover, a tooltip) on any menu screen.
 # `forge` takes RH_SHOT_ITEM=<instanceId> (dev_hero | dev_rung | dev_cap | dev_low) and
 # RH_SHOT_FILTER=all|gear|gems, so every item state is a dial rather than a new mode.
@@ -109,6 +112,7 @@ RH_ENV=(RH_SHOT="$WINDIR\\$OUT" RH_SHOT_MODE="$MODE")
 [ -n "$RH_SHOT_UISCALE" ] && RH_ENV+=(RH_SHOT_UISCALE="$RH_SHOT_UISCALE")
 # A REAL window size (e.g. 1280x720): the capture is then the presented backbuffer, not the 1920 render target.
 [ -n "$RH_SHOT_WINDOW" ] && RH_ENV+=(RH_SHOT_WINDOW="$RH_SHOT_WINDOW")
+[ -n "$RH_SHOT_MOTION" ] && RH_ENV+=(RH_SHOT_MOTION="$RH_SHOT_MOTION")
 # REDUCED MOTION on, before the first Update — the accessibility state, posed rather than clicked.
 [ -n "$RH_SHOT_REDUCED" ] && RH_ENV+=(RH_SHOT_REDUCED="$RH_SHOT_REDUCED")
 # MASTERY: pin a node in the inspector (a MasteryCatalog id) for the buildtree/buildzoom modes;

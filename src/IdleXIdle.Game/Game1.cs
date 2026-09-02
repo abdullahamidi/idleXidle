@@ -236,6 +236,93 @@ public class Game1 : Microsoft.Xna.Framework.Game
     /// <summary>Notices waiting their turn — "QUEST COMPLETE", "X JOINS YOU" — shown one at a time.</summary>
     private readonly Queue<string> _noticeQueue = new();
     private string _notice = "";
+
+    // ── SCREEN AND MODAL MOTION (brief sec. 33, 34) ─────────────────────────────────────────────
+    //
+    // A screen used to APPEAR: one frame the page was BUILD, the next it was GEAR, with nothing in
+    // between to say a change had happened. The brief asks for a quick content crossfade and a short
+    // settle, 100-150 ms, with the nav rail staying put — the rail is the one thing that did not
+    // change, and moving it would say it had.
+    //
+    // The fade is drawn as a scrim over the page (never over the rail) that lifts from the background
+    // colour, so it costs no render target and reads as the content arriving rather than as a flash.
+    // The settle rides the kick vector the overlay batch already takes for the traits camera.
+
+    /// <summary>Which screen owned the last frame — a change starts the switch motion.</summary>
+    private string _screenKey = "";
+
+    /// <summary>Seconds left of the screen-switch fade; zero when nothing is switching.</summary>
+    private float _screenFade;
+
+    /// <summary>Seconds left of a modal's fade-in.</summary>
+    private float _modalFade;
+
+    /// <summary>Whether a modal owned the last frame — the edge starts the modal fade.</summary>
+    private bool _modalWasUp;
+
+    /// <summary>How long a screen switch takes. 130 ms: inside the brief's 100-150 ms band for a screen.</summary>
+    private const float ScreenFadeSeconds = 0.13f;
+
+    /// <summary>How far the page rises into place, in canvas pixels. Dropped entirely under Reduced Motion.</summary>
+    private const float ScreenSettlePx = 8f;
+
+    /// <summary>The switch scrim's colour — the darkest ground in the palette, so the page clears out of the dark it sits on.</summary>
+    private static readonly Color ScreenFadeInk = new(0x08, 0x06, 0x0E);
+
+    /// <summary>How dark the scrim ever gets. A full blackout between screens is a cut, not a transition.</summary>
+    private const float ScreenFadeMax = 0.55f;
+
+    /// <summary>The screen-switch progress, 1 at the instant of the switch falling to 0 — eased, so it lands softly.</summary>
+    private float ScreenFadeT => _screenFade <= 0f ? 0f : UiMotion.Smooth(_screenFade / ScreenFadeSeconds);
+
+    /// <summary>The page's settle offset for this frame: a short rise, and nothing at all under Reduced Motion.</summary>
+    private Vector2 ScreenSettle => UiMotion.Reduced || _screenFade <= 0f
+        ? Vector2.Zero
+        : new Vector2(0f, ScreenSettlePx * ScreenFadeT);
+
+    /// <summary>The key that names the screen on the page right now — any change is a switch.</summary>
+    private string ScreenKeyNow =>
+        _showForge ? "forge" : _showWorld ? "world" : _showTraits ? "traits" : _showRoster ? "roster"
+        : _showVault ? "vault" : _showLoadout ? "loadout" : _showWarren ? "warren"
+        : _showMastery ? "mastery" : _showGear ? "gear" : _showTraining ? "training" : "hunt";
+
+    /// <summary>True while one of the host's own modals is up — the two that fade in.</summary>
+    private bool ModalUpNow => _showSettings || _showHelp;
+
+    // ── THE CURRENCY PILLS REACT (brief sec. 36-38) ─────────────────────────────────────────────
+    //
+    // Spending was silent: the number was one figure on one frame and a smaller figure on the next,
+    // in the corner of the screen furthest from the button that spent it. sec. 37 asks the SPEND to
+    // react at the pill rather than fly resources across the page, and sec. 36 asks the number to
+    // move to its new value rather than jump. sec. 38 allows a "+N" for a substantial GAIN — with a
+    // threshold, because Gleam arrives a few at a time all through a hunt and a badge on every kill
+    // is not feedback, it is weather.
+
+    /// <summary>The three pills' true values as of the last Update — the tick's target.</summary>
+    private readonly long[] _pillTrue = new long[3];
+
+    /// <summary>What each pill is currently PRINTING; eases to <see cref="_pillTrue"/>.</summary>
+    private readonly double[] _pillShown = new double[3];
+
+    /// <summary>Seconds left of a pill's reaction flash.</summary>
+    private readonly float[] _pillFlash = new float[3];
+
+    /// <summary>Gains banked but not yet worth announcing, per pill.</summary>
+    private readonly long[] _pillGainAcc = new long[3];
+
+    /// <summary>The gain each pill is announcing, and the seconds left of that announcement.</summary>
+    private readonly long[] _pillGainShow = new long[3];
+    private readonly float[] _pillGainT = new float[3];
+
+    /// <summary>True until the first Update has read the pills — the first frame must not animate from zero.</summary>
+    private bool _pillsSeeded;
+
+    /// <summary>How long a "+N" stays up.</summary>
+    private const float PillGainSeconds = 1.4f;
+
+    /// <summary>The smallest gain each pill will ever announce, before the proportional rule.</summary>
+    private static readonly long[] PillGainFloor = { 25, 25, 100 };   // scrap, dust, gleam
+
     private float _noticeTimer;
 
     /// <summary>How long a notice toast stays. Long enough to read twice; it fades over the last second.</summary>
@@ -1460,6 +1547,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         UiKit.MouseHeld = _mouse.LeftButton == ButtonState.Pressed;
         UiMotion.Reduced = ReducedMotion;
         UiMotion.Tick((float)gameTime.ElapsedGameTime.TotalSeconds);
+        TickChromeMotion((float)gameTime.ElapsedGameTime.TotalSeconds);
 
         // Latch the click EDGE once per frame, here, before anything reads it. The edge lives for
         // exactly one Update, and _prevMouse is overwritten in Latch() at the end of Update — so a
@@ -4728,7 +4816,7 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // present blit, driven by manual combat, and sat at a permanent zero from the pivot onward
         // because nothing owned it; this asks the active screen instead, so the kick exists only while
         // something is actually asking for it.
-        var kick = _showTraits ? _traits.Shake : Vector2.Zero;
+        var kick = (_showTraits ? _traits.Shake : Vector2.Zero) + ScreenSettle;
         _batch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp,
             null, null, null, OverlayTransform(kick));
     }
@@ -4839,6 +4927,16 @@ public class Game1 : Microsoft.Xna.Framework.Game
 
         // Batch C — the shared overlays (pills, nav, help/settings, boot toast), authored in true 1920 coords.
         BeginCanvas(1);
+
+        // THE SWITCH READS AS AN ARRIVAL (brief sec. 33). The page lifts the last few pixels into place
+        // (the kick above) under a scrim that clears over 130 ms, so a new screen arrives rather than
+        // replaces. Drawn BEFORE the pills, the gear and the rail, because sec. 33 says the navigation
+        // stays: the rail did not change, and dimming it would say it had. Reduced Motion keeps the
+        // scrim — a fade is the one kind of motion sec. 32 allows — and drops the lift.
+        if (_screenFade > 0f)
+            _ui.Fill(_batch, new Rectangle(NavRailWidth, 0, UiKit.Page.Width - NavRailWidth, UiKit.Page.Height),
+                     ScreenFadeInk * (ScreenFadeT * ScreenFadeMax));
+
         DrawCurrencyPills();   // shared Gleam / Dust / Materials row, top-right of every screen
         DrawSettingsGear();    // the corner gear — settings from any screen, including mid-hunt
         DrawHexNav();   // the shared nav bar, over every screen
@@ -4856,6 +4954,13 @@ public class Game1 : Microsoft.Xna.Framework.Game
         if (_showHelp) DrawHelp();
         if (_showTypeSpec) DrawTypeSpec();
         if (_showSettings) DrawSettings();
+
+        // A MODAL FADES UP (brief sec. 34): backdrop and panel together over one fast beat, so the
+        // settings panel stops appearing between two frames. Over the modal, under everything the
+        // modal must not hide — the toasts and the tour below draw after it.
+        if (_modalFade > 0f)
+            _ui.Fill(_batch, new Rectangle(0, 0, UiKit.Page.Width, UiKit.Page.Height),
+                     ScreenFadeInk * (UiMotion.Smooth(_modalFade / UiMotion.Fast) * ScreenFadeMax));
         if (WelcomeUp) DrawWelcomePanel();
 
         DrawBootToast();
@@ -5953,6 +6058,127 @@ public class Game1 : Microsoft.Xna.Framework.Game
              : n.ToString();
     }
 
+    /// <summary>
+    /// Advance the chrome's own motion: the screen switch, the modal fade, and the three currency
+    /// pills' numbers, flashes and banked gains.
+    /// </summary>
+    /// <remarks>
+    /// Every one of these is driven from Update by dt, never from Draw — a value advanced in Draw
+    /// moves at the frame rate rather than at the clock, and a pulse re-armed in Draw never ends.
+    /// Under Reduced Motion nothing eases: the numbers land, the flashes still happen (a flash is a
+    /// state change, not movement) and the page does not slide.
+    /// </remarks>
+    private void TickChromeMotion(float dt)
+    {
+        // THE SCREEN SWITCH. The key names what is on the page; a change starts the fade.
+        var key = ScreenKeyNow;
+        if (key != _screenKey)
+        {
+            _screenKey = key;
+            _screenFade = ScreenFadeSeconds;
+        }
+        _screenFade = Math.Max(0f, _screenFade - dt);
+
+        // THE MODAL. The rising edge starts it; a closed modal leaves nothing behind.
+        var modal = ModalUpNow;
+        if (modal && !_modalWasUp) _modalFade = UiMotion.Fast;
+        if (!modal) _modalFade = 0f;
+        _modalWasUp = modal;
+        _modalFade = Math.Max(0f, _modalFade - dt);
+
+        // THE PILLS. Order matches DrawCurrencyPills: scrap, dust, gleam.
+        Span<long> now = stackalloc long[3];
+        now[0] = (long)_hunter.MaterialOf(Material.Scrap);
+        now[1] = (long)_dust.MemoryDust;
+        now[2] = _hunter.Gleam;
+
+        for (var i = 0; i < 3; i++)
+        {
+            if (!_pillsSeeded)
+            {
+                _pillTrue[i] = now[i];
+                _pillShown[i] = now[i];
+                continue;
+            }
+
+            var delta = now[i] - _pillTrue[i];
+            if (delta != 0)
+            {
+                _pillTrue[i] = now[i];
+                _pillFlash[i] = UiMotion.Transition;
+                if (delta > 0)
+                {
+                    // BANKED, NOT ANNOUNCED. A hunt pays Gleam a few at a time; a badge per kill is
+                    // noise. The bank empties into one "+N" once it is worth a glance — a twentieth
+                    // of what is already held, and never under the pill's own floor.
+                    _pillGainAcc[i] += delta;
+                    var bar = Math.Max(PillGainFloor[i], (long)(_pillShown[i] / 20));
+                    if (_pillGainAcc[i] >= bar)
+                    {
+                        _pillGainShow[i] = _pillGainAcc[i];
+                        _pillGainT[i] = PillGainSeconds;
+                        _pillGainAcc[i] = 0;
+                    }
+                }
+                else
+                {
+                    // A SPEND CANCELS THE BANK. Money that arrived and left is not a gain to report.
+                    _pillGainAcc[i] = 0;
+                }
+            }
+
+            // The printed number walks to the true one over a transition; Reduced Motion lands it.
+            if (UiMotion.Reduced) _pillShown[i] = _pillTrue[i];
+            else if (Math.Abs(_pillShown[i] - _pillTrue[i]) < 1.0) _pillShown[i] = _pillTrue[i];
+            else
+            {
+                var step = dt / UiMotion.Transition;
+                _pillShown[i] += (_pillTrue[i] - _pillShown[i]) * Math.Min(1.0, step);
+            }
+
+            _pillFlash[i] = Math.Max(0f, _pillFlash[i] - dt);
+            _pillGainT[i] = Math.Max(0f, _pillGainT[i] - dt);
+        }
+        _pillsSeeded = true;
+
+        PoseChromeMotion();
+    }
+
+    /// <summary>
+    /// DEV ONLY: hold the chrome's transients at a chosen point so a capture can photograph them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every effect above lasts between 100 and 350 ms and the rig's shutter opens on frame 60, so
+    /// none of them would ever appear in a screenshot — and this project's rule is that a state no
+    /// capture mode can pose has never been looked at. <c>RH_SHOT_MOTION=&lt;0..1&gt;</c> pins the
+    /// screen switch, the modal fade, the pill flash and a banked gain at that fraction of their run
+    /// (1 = the first instant, 0.5 = halfway, 0 = finished), so each can be judged at real size.
+    /// </para>
+    /// <para>
+    /// It runs only under the rig and only after the ordinary tick, so it never changes what the game
+    /// does for a player — it re-poses the same fields the real motion drives, rather than adding a
+    /// second path through them.
+    /// </para>
+    /// </remarks>
+    private void PoseChromeMotion()
+    {
+        if (!RigActive) return;
+        if (Environment.GetEnvironmentVariable("RH_SHOT_MOTION") is not { } spec
+            || !float.TryParse(spec, System.Globalization.NumberStyles.Float,
+                               System.Globalization.CultureInfo.InvariantCulture, out var t)) return;
+
+        t = Math.Clamp(t, 0f, 1f);
+        _screenFade = ScreenFadeSeconds * t;
+        _modalFade = UiMotion.Fast * t;
+        for (var i = 0; i < 3; i++)
+        {
+            _pillFlash[i] = UiMotion.Transition * t;
+            _pillGainShow[i] = Math.Max(PillGainFloor[i], (long)(_pillShown[i] / 20));
+            _pillGainT[i] = PillGainSeconds * t;
+        }
+    }
+
     private void DrawCurrencyPills()
     {
         // Rev 4 §20: ONE currency per capsule — no packed "S.. E.. C.. X..". The three most Hunt-relevant
@@ -5971,9 +6197,14 @@ public class Game1 : Microsoft.Xna.Framework.Game
         // stage header. When the chain would cross PillChainMinLeft every value drops its decimals —
         // "131M" — the icon carries the identity and the hover the exact figure, so nothing is lost.
         // UiKit.Pill itself is untouched: its capsule is a fixed 60 and the row's y stays with it.
-        var values = new[] { Abbrev(scrapVal), Abbrev(dustVal), Abbrev(gleamVal) };
+        // WHAT THE PILL PRINTS is the walking number (see TickChromeMotion), not the true one — a spend
+        // or a payout moves it to its new figure over a transition instead of swapping it between two
+        // frames. The HOVER still reads the exact, true value: the animation is for the corner of the
+        // eye, and the tooltip is for the question "how much exactly".
+        var walk = new[] { (long)Math.Round(_pillShown[0]), (long)Math.Round(_pillShown[1]), (long)Math.Round(_pillShown[2]) };
+        var values = new[] { Abbrev(walk[0]), Abbrev(walk[1]), Abbrev(walk[2]) };
         if (PillChainLeft(values) < PillChainMinLeft)
-            values = new[] { Abbrev(scrapVal, compact: true), Abbrev(dustVal, compact: true), Abbrev(gleamVal, compact: true) };
+            values = new[] { Abbrev(walk[0], compact: true), Abbrev(walk[1], compact: true), Abbrev(walk[2], compact: true) };
 
         var e1 = PillRowRight;
         var l1 = _ui.Pill(_batch, e1, PillRowTop, "mat_scrap", new Color(0x9A, 0xC0, 0x88), values[0], "", new Color(0x9A, 0xC0, 0x88));
@@ -5999,6 +6230,35 @@ public class Game1 : Microsoft.Xna.Framework.Game
             (new Rectangle(l2, PillRowTop, e2 - l2, PillHeight), "MEMORY DUST — STARTS A DESCENT FROM A WAVE YOU HAVE CLEARED (MAP) · BUILDS THE WARREN", dustVal),
             (new Rectangle(leftEdge, PillRowTop, e3 - leftEdge, PillHeight), "GLEAM — PAYS FOR TRAINING (V)", gleamVal),
         };
+        // THE SPEND REACTS HERE (brief sec. 37), at the pill, rather than by flying a coin across the
+        // page: the capsule takes a rim in its own colour that fades over a transition. A flash is a
+        // state change rather than movement, so Reduced Motion keeps it — what Reduced drops is the
+        // easing, and TickChromeMotion has already landed the number by the time it gets here.
+        var pillInk = new[] { new Color(0x9A, 0xC0, 0x88), new Color(0x9E, 0x86, 0xFF), UiInk.Accent };
+        for (var i = 0; i < 3; i++)
+        {
+            var rr = pillRows[i].R;
+            if (_pillFlash[i] > 0f)
+            {
+                var a = _pillFlash[i] / UiMotion.Transition;
+                var ink = pillInk[i] * (a * 0.75f);
+                _ui.Fill(_batch, new Rectangle(rr.X, rr.Y, rr.Width, 2), ink);
+                _ui.Fill(_batch, new Rectangle(rr.X, rr.Bottom - 2, rr.Width, 2), ink);
+                _ui.Fill(_batch, new Rectangle(rr.X, rr.Y, 2, rr.Height), ink);
+                _ui.Fill(_batch, new Rectangle(rr.Right - 2, rr.Y, 2, rr.Height), ink);
+            }
+
+            // AND A SUBSTANTIAL GAIN SAYS SO (brief sec. 38), under its own pill, once — the bank in
+            // TickChromeMotion decides what counts as substantial. Never while the pill is hovered:
+            // the tooltip lives on that line and two answers in one place is neither.
+            if (_pillGainT[i] > 0f && _pillGainShow[i] > 0 && !rr.Contains(ChromeMouse))
+            {
+                var fade = Math.Min(1f, _pillGainT[i] / 0.3f);
+                _ui.TextRight(_batch, "+" + Abbrev(_pillGainShow[i]), rr.Right, rr.Bottom + UiMetrics.Space(4),
+                              pillInk[i] * fade);
+            }
+        }
+
         foreach (var (rr, name, v) in pillRows)
         {
             if (!rr.Contains(ChromeMouse)) continue;
