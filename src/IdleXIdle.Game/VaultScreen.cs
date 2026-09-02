@@ -42,6 +42,16 @@ namespace IdleXIdle.Game;
 /// a floor or a range — the text comes from <see cref="ChestDossier"/>, which derives every line from
 /// the same tuning the roll reads, so this screen cannot drift into lying.
 /// </para>
+/// <para>
+/// <b>UI polish P2: the density profile.</b> Every row pitch, chip, icon box, pad and gap on this
+/// screen is read from <see cref="UiMetrics"/> (a control at the full factor, a spacing at half), and
+/// every vertical rhythm is DERIVED from the height that is there: the grid holds as many whole rows
+/// of cards as fit above the page's bottom margin — two at 100 %, one at 125 and 150 %, where a card
+/// that has to hold Body 33 dossier lines beside a chest is taller than half the page — and the pile
+/// scrolls by rows with a scrollbar in the frame's own margin, so no card moves to make room for it.
+/// At 100 % nothing here moved: the numbers below are the 100 % values the captures were checked
+/// against, and the profile's arithmetic reproduces them exactly.
+/// </para>
 /// </remarks>
 public sealed class VaultScreen
 {
@@ -164,6 +174,11 @@ public sealed class VaultScreen
     // lives on the HUNT screen now (HuntScreen.DrawKeepFilter); the host still persists it.
 
     // ── Layout ──────────────────────────────────────────────────────────────────────────────────
+    //
+    // NOTHING IN THIS BLOCK IS A `static readonly`. Every rectangle here is a property computed when it
+    // is asked for, because every one of them depends on UiMetrics, and UiMetrics follows a SETTING —
+    // a value frozen at class load would be the 100 % layout at every profile.
+
     /// <summary>
     /// Full width now — the detail column is gone. Height decided per-frame; see below.
     /// </summary>
@@ -177,6 +192,9 @@ public sealed class VaultScreen
 
     /// <summary>Where the panel starts — under the screen's name and its tally, as on every screen.</summary>
     private const int PanelTop = 150;
+
+    /// <summary>Where the screen's name sits in the strip above the panel — the same 24 every screen uses.</summary>
+    private const int ScreenTitleTop = 24;
 
     /// <summary>
     /// The one panel, sized to the pile in it.
@@ -199,15 +217,22 @@ public sealed class VaultScreen
     /// <remarks>
     /// Two backs at 7 px each. Without the reservation a stacked chest in the right column or the
     /// bottom row drew its pile straight through the panel's ornate border: the card fitted, the
-    /// pile behind it did not, and only a stacked chest in those positions showed it.
+    /// pile behind it did not, and only a stacked chest in those positions showed it. The look of a
+    /// pile, not a control — it does not grow with the profile.
     /// </remarks>
     private const int PileDepth = 14;
 
+    /// <summary>One card back's offset — half the pile's depth.</summary>
+    private const int PileStep = PileDepth / 2;
+
     /// <summary>The toolbar's controls — OPEN ALL, CHEST FILTER, TRADER, PASTE A CODE — all one height.</summary>
-    private const int ToolbarH = 56;
+    private static int ToolbarH => UiMetrics.Control(56);
 
     /// <summary>The gap between the toolbar's buttons.</summary>
-    private const int HeaderButtonGap = 16;
+    private static int HeaderButtonGap => UiMetrics.Space(16);
+
+    /// <summary>The hairline the toolbar stands on.</summary>
+    private const int StripH = 2;
 
     // THE TOOLBAR. Rectangles derived from ONE anchor, so the empty vault and the full one put the
     // same button in the same place. They used to be hand-placed off GridPanel.Right at -770, -558
@@ -215,19 +240,22 @@ public sealed class VaultScreen
     private static Rectangle HeaderButton(int slotFromRight, int width)
     {
         var x = UiKit.ContentRight(Frame);
-        for (var i = 0; i < slotFromRight; i++) x -= HeaderWidths[i] + HeaderButtonGap;
+        for (var i = 0; i < slotFromRight; i++) x -= HeaderWidth(i) + HeaderButtonGap;
         return new Rectangle(x - width, UiKit.TitleTop(Frame), width, ToolbarH);
     }
 
-    /// <summary>Right to left: OPEN ALL, CHEST FILTER, TRADER. Widths sized to their own labels.</summary>
-    private static readonly int[] HeaderWidths = { 340, 240, 200 };
+    /// <summary>Right to left: OPEN ALL, CHEST FILTER, TRADER. Widths sized to their own labels at 100 %.</summary>
+    private static readonly int[] HeaderBaseWidths = { 340, 240, 200 };
 
-    private static Rectangle OpenAllBtn => HeaderButton(0, HeaderWidths[0]);
+    /// <summary>A toolbar button's width at this profile — a label's room grows with the label.</summary>
+    private static int HeaderWidth(int slotFromRight) => UiMetrics.Control(HeaderBaseWidths[slotFromRight]);
+
+    private static Rectangle OpenAllBtn => HeaderButton(0, HeaderWidth(0));
 
     /// <summary>The CHEST FILTER's door — the keep-filter moved here from the HUNT (UX V2 P1.1, D12).</summary>
-    private static Rectangle FilterBtn => HeaderButton(1, HeaderWidths[1]);
+    private static Rectangle FilterBtn => HeaderButton(1, HeaderWidth(1));
 
-    private static Rectangle TraderBtn => HeaderButton(2, HeaderWidths[2]);
+    private static Rectangle TraderBtn => HeaderButton(2, HeaderWidth(2));
 
     /// <summary>
     /// PASTE A CODE, at the far LEFT of the toolbar and drawn as a plate rather than a button.
@@ -239,7 +267,7 @@ public sealed class VaultScreen
     /// ordinary actions, and this is a side door.
     /// </remarks>
     private static Rectangle PasteRect =>
-        new(UiKit.ContentLeft(Frame), UiKit.TitleTop(Frame), 240, ToolbarH);
+        new(UiKit.ContentLeft(Frame), UiKit.TitleTop(Frame), UiMetrics.Control(240), ToolbarH);
 
     // THE GRID. Two columns of very large cards, not six of very small ones.
     //
@@ -248,21 +276,56 @@ public sealed class VaultScreen
     // visit showing one 242 px card marooned in a 1650 px panel. The pile is small (a vault holds
     // stacks, not hundreds), so the cards can be enormous: at 884x349 the whole dossier fits beside
     // the chest at Body, with room for the region's blurb underneath.
-    private const int Cols = 2, CardGapX = 24, CardGapY = 20;
-    private const int MinCardH = 300, MaxCardH = 380;
+    private const int Cols = 2;
+    private static int CardGapX => UiMetrics.Space(24);
+    private static int CardGapY => UiMetrics.Space(20);
+
+    /// <summary>A card never grows past this, however much room the page has under it.</summary>
+    private static int MaxCardH => UiMetrics.Control(380);
+
+    /// <summary>The card's inner inset on every side.</summary>
+    private static int CardPad => UiMetrics.Space(24);
+
+    /// <summary>How far under the card's top edge its first row (the chest, the kind line) sits.</summary>
+    private static int CardHeadTop => UiMetrics.Space(40);
+
+    /// <summary>The chest art's box: the picture the click is about, so it grows with the card.</summary>
+    private static int ArtSize => UiMetrics.Control(160);
+
+    /// <summary>The OPEN chip — a label shaped like a button, so it is a button's height.</summary>
+    private static int ChipH => UiMetrics.Control(56);
+    private static int ChipW => UiMetrics.Control(160);
+
+    /// <summary>The grade pips: five small diamonds, readable in greyscale.</summary>
+    private static int PipSize => UiMetrics.Control(18);
+    private static int PipPitch => UiMetrics.Control(30);
+
+    /// <summary>
+    /// The shortest card that holds its own left column — chest, pips, OPEN chip — without one
+    /// printing on the next. The text column budgets itself to whatever height the card gets.
+    /// </summary>
+    private static int CardMinH =>
+        CardHeadTop + ArtSize + UiMetrics.Space(14) + PipSize + UiMetrics.Space(12) + ChipH + CardPad;
 
     /// <summary>The first card row — under the toolbar, its rule, and the consequence row.</summary>
-    private static int CardTop => UiTypography.PanelTitleTop + ToolbarH + 14 + 2 + 10
-                                  + UiTypography.Pitch(UiTypography.Secondary) + 4;
+    private static int CardTop => UiTypography.PanelTitleTop + ToolbarH + UiMetrics.Space(14) + StripH
+                                  + UiMetrics.Space(10) + UiTypography.Pitch(UiTypography.Secondary)
+                                  + UiMetrics.Space(4);
 
     private static int GridTop => PanelTop + CardTop;
     private static int GridBottom => UiKit.PageBottom(40) - UiKit.PanelCorner;
 
-    /// <summary>Two rows when the page can hold two whole cards; one when it cannot (UI SCALE 150 %).</summary>
-    private static int Rows => GridBottom - GridTop - PileDepth >= MinCardH * 2 + CardGapY ? 2 : 1;
+    /// <summary>The height the grid has for whole cards, once the pile's backs are reserved.</summary>
+    private static int GridRoom => GridBottom - GridTop - PileDepth;
 
-    private static int CardH =>
-        Math.Min(MaxCardH, (GridBottom - GridTop - CardGapY * (Rows - 1) - PileDepth) / Rows);
+    /// <summary>
+    /// As many rows of whole cards as the page holds — two at 100 %, one at 125 and 150 %, where the
+    /// card that holds the bigger dossier is taller than half the room. Never a row that would print
+    /// its OPEN chip through the panel's bottom frame.
+    /// </summary>
+    private static int Rows => Math.Max(1, (GridRoom + CardGapY) / (CardMinH + CardGapY));
+
+    private static int CardH => Math.Min(MaxCardH, (GridRoom - CardGapY * (Rows - 1)) / Rows);
     private static int PerPage => Cols * Rows;
 
     private static int ContentW => UiKit.ContentRight(Frame) - UiKit.ContentLeft(Frame);
@@ -285,6 +348,29 @@ public sealed class VaultScreen
     /// <summary>How many cards this page actually shows — the last page is usually short.</summary>
     private int OnPage(int count) => Math.Clamp(count - _scroll, 0, PerPage);
 
+    /// <summary>How many rows the whole pile takes.</summary>
+    private static int TotalRows(int count) => (count + Cols - 1) / Cols;
+
+    /// <summary>
+    /// How far the medium frame's SIDE rail reaches in from the panel's edge, away from the corners.
+    /// Measured off the art (the corner ornament reaches <see cref="UiKit.PanelCorner"/>; the plain
+    /// rail between the corners is a fraction of that). Art geometry — unscaled.
+    /// </summary>
+    private const int FrameRailReach = 14;
+
+    /// <summary>
+    /// The scrollbar's lane: the plain strip of frame between the content's right edge and the side
+    /// rail, so the bar marks the pile's depth without taking a pixel from the cards beside it. Only
+    /// drawn when there is more pile than page.
+    /// </summary>
+    private static Rectangle ScrollTrack(Rectangle frame, int rows)
+    {
+        var band = UiTypography.PanelPadX - FrameRailReach;
+        var w = UiMetrics.ScrollbarWidth;
+        return new Rectangle(UiKit.ContentRight(frame) + (band - w) / 2, GridTop, w,
+                             rows * CardH + (rows - 1) * CardGapY + PileDepth);
+    }
+
     /// <summary>The asset key of an element's glyph — <c>source_nature</c>. Files under ItemsLoot/glyphs/source.</summary>
     private static string SourceGlyphKey(Source e) => $"source_{e.ToString().ToLowerInvariant()}";
 
@@ -304,11 +390,17 @@ public sealed class VaultScreen
             case TourTarget.ChestCards:
                 // DERIVED FROM THE GRID IT LIGHTS, not from a remembered offset — and no longer from
                 // Card(), which now has to be told how many cards share its row.
-                return new[] { new Rectangle(Frame.X + 30, GridTop - 12, Frame.Width - 60, CardH + 24) };
+                var halo = UiMetrics.Space(12);
+                return new[]
+                {
+                    new Rectangle(Frame.X + UiMetrics.Space(30), GridTop - halo,
+                                  Frame.Width - UiMetrics.Space(30) * 2, CardH + halo * 2),
+                };
             case TourTarget.VaultButtons:
                 var strip = PasteRect;
-                strip.Inflate(10, 10);
-                return new[] { new Rectangle(strip.X, strip.Y, OpenAllBtn.Right + 10 - strip.X, ToolbarH + 20) };
+                var breath = UiMetrics.Space(10);
+                strip.Inflate(breath, breath);
+                return new[] { new Rectangle(strip.X, strip.Y, OpenAllBtn.Right + breath - strip.X, ToolbarH + breath * 2) };
             default:
                 return Array.Empty<Rectangle>();
         }
@@ -320,7 +412,7 @@ public sealed class VaultScreen
     /// scroll kept the BEST cards (BestFirst sorts them first) hidden with the wheel gate dead. The
     /// pile is consumed while displayed, so the clamp must pull the window back as it shrinks.
     /// </remarks>
-    private static int MaxScroll(int count) => Math.Max(0, (count + Cols - 1) / Cols * Cols - PerPage);
+    private static int MaxScroll(int count) => Math.Max(0, TotalRows(count) - Rows) * Cols;
 
     private void Clamp(int count)
     {
@@ -334,7 +426,7 @@ public sealed class VaultScreen
         ArgumentNullException.ThrowIfNull(chests);
         _anim += dt;
 
-        // Authored 1920, cursor arrives 480 — the same one line every inset screen carries.
+        // The host hands the cursor in PAGE space already; it is hit-tested as it arrives.
         var hit = mouse;
 
         // One card per STACK of identical chests (ChestDossiers.Stacked); the grid, the hover and the
@@ -347,8 +439,9 @@ public sealed class VaultScreen
         // no wheel, and — decisive — no chest-opening click. The modals' own buttons live in Draw.
         if (ModalOpen) { _hoverIdx = -1; return; }
 
+        // The wheel moves the window one ROW at a time, never past a page that is still full.
         if (wheel != 0)
-            _scroll = Math.Clamp(_scroll - Math.Sign(wheel) * Cols, 0, MaxScroll(sorted.Count));
+            _scroll = UiKit.Scrolled(_scroll / Cols, Math.Sign(wheel), Rows, TotalRows(sorted.Count)) * Cols;
 
         // Hover, resolved here where dt lives. There is nothing on the card to hover SEPARATELY any
         // more: the peek glass that used to win over the card it sat on is gone, and with it the rule
@@ -398,23 +491,28 @@ public sealed class VaultScreen
         // in the game states its name centred above the panels, under a gold rule. And the tally that
         // says what is waiting was a caption hanging off that corner rather than the screen's own
         // subtitle. The words are unchanged; only where they stand is.
+        //
+        // The rule sits one title line under the title and the tally one breath under the rule, so a
+        // 150 % title (57 px) pushes them down rather than printing through them.
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xD8));
         // VAULT, without the article — the rail says VAULT and D7 settled that the screen agrees.
-        _ui.TextCenterBig(b, "VAULT", UiKit.PageCenterX, 24, Gold, UiTypography.ScreenTitle, TextFace.Display);
-        _ui.Fill(b, new Rectangle(UiKit.PageCenterX - 240, 74, 480, 3), Gold * 0.5f);
+        _ui.TextCenterBig(b, "VAULT", UiKit.PageCenterX, ScreenTitleTop, Gold, UiTypography.ScreenTitle, TextFace.Display);
+        var ruleY = ScreenTitleTop + UiTypography.Pitch(UiTypography.ScreenTitle) + 1;
+        _ui.Fill(b, new Rectangle(UiKit.PageCenterX - 240, ruleY, 480, 3), Gold * 0.5f);
 
         // The tally, so the pile reads at a glance without counting cards.
         var tally = ChestDossiers.Tally(chests);   // every chest, not every stack
         var summary = tally.Count == 0
             ? "nothing waiting"
             : string.Join("   ", tally.Select(t => $"{t.Count} {t.Grade.ToString().ToUpperInvariant()}"));
-        _ui.TextCenterBig(b, summary.ToUpperInvariant(), UiKit.PageCenterX, 80, Slate, UiTypography.Secondary);
+        _ui.TextCenterBig(b, summary.ToUpperInvariant(), UiKit.PageCenterX, ruleY + UiMetrics.Space(6), Slate,
+                          UiTypography.Secondary);
 
         // QUIET, NOT GOLD. The house frame rule (UiKit.PanelQuiet): the gold filigree is for MODALS —
         // the stall and the two share-code cards below still wear it — and every panel that lives IN a
         // screen wears the brown. This was the last in-screen panel in the game still shouting.
-        var rows = Math.Clamp((sorted.Count + Cols - 1) / Cols, 1, Rows);
-        var frame = PanelAt(rows);
+        var rows = Math.Clamp(TotalRows(sorted.Count), 1, Rows);
+        var frame = sorted.Count == 0 ? EmptyFrame : PanelAt(rows);
         _ui.PanelQuiet(b, frame);
 
         var uiClicked = clicked && !ModalOpen;
@@ -462,8 +560,8 @@ public sealed class VaultScreen
 
         // The hairline the toolbar stands on, so the buttons read as a header and the cards below as
         // the panel's contents — one rule instead of a gap the eye has to guess at.
-        var strip = new Rectangle(UiKit.ContentLeft(frame), UiKit.TitleTop(frame) + ToolbarH + 14,
-                                  UiKit.ContentRight(frame) - UiKit.ContentLeft(frame), 2);
+        var strip = new Rectangle(UiKit.ContentLeft(frame), UiKit.TitleTop(frame) + ToolbarH + UiMetrics.Space(14),
+                                  UiKit.ContentRight(frame) - UiKit.ContentLeft(frame), StripH);
         _ui.Fill(b, strip, Dim);
 
         // ── THE CONSEQUENCE ROW. What OPEN ALL will do to the drops BEFORE you see them, said once,
@@ -474,7 +572,7 @@ public sealed class VaultScreen
         //    not "items": LandChest sells only wearable pieces and deliberately spares gems. And "CAN
         //    GIVE", not "will": Chests.Open elevates a roll UP to the chest's floor and never down, so
         //    a chest whose floor is at or under the sell line can still produce a sellable piece. ────
-        var conseqY = strip.Bottom + 10;
+        var conseqY = strip.Bottom + UiMetrics.Space(10);
         var clauses = new List<string>();
         if (AutoSellFloor is { } floor)
         {
@@ -486,11 +584,12 @@ public sealed class VaultScreen
         }
         if (AutoMergeOnOpen) clauses.Add("AUTO-MERGE SPARE ITEMS IS ON.");
         if (clauses.Count > 0)
-            _ui.TextBig(b, _ui.ShortenBig(string.Join("   ·   ", clauses), ContentW - 460, UiTypography.Secondary),
+            _ui.TextBig(b, _ui.ShortenBig(string.Join("   ·   ", clauses), ContentW - UiMetrics.Control(460),
+                                          UiTypography.Secondary),
                         UiKit.ContentLeft(frame), conseqY, Slate, UiTypography.Secondary);
 
-        // The page position, on the same row's right end — and a scrollbar-less screen has to say in
-        // words what moves it, because there is no bar to drag.
+        // The page position, on the same row's right end — the words still say what moves the pile,
+        // and since the P2 reflow the bar in the frame's margin shows how deep it is.
         if (sorted.Count > PerPage)
             _ui.TextRightBig(b, $"PAGE {_scroll / PerPage + 1} OF {(sorted.Count + PerPage - 1) / PerPage}"
                                 + "  —  THE MOUSE WHEEL SCROLLS",
@@ -510,6 +609,9 @@ public sealed class VaultScreen
         for (var vis = 0; vis < onPage; vis++)
             DrawCard(b, sorted[_scroll + vis], stacks[_scroll + vis].Count, Card(vis, onPage),
                      _scroll + vis == _hoverIdx);
+
+        // The pile's depth, in the frame's own margin: drawn only when a wheel step would show more.
+        _ui.ScrollBar(b, ScrollTrack(frame, rows), _scroll / Cols, Rows, TotalRows(sorted.Count));
 
         DrawFilterIfOpen(b, hit, clicked && !_modalOpenedNow);
         DrawTrader(b, hit, clicked && !_modalOpenedNow);
@@ -535,13 +637,14 @@ public sealed class VaultScreen
         // REDUCED MOTION keeps the value step and drops the movement: the card still brightens under
         // the pointer, it just does not grow or ease into it.
         var ease = hovered ? Game1.ReducedMotion ? 1f : _hoverT * _hoverT * (3f - 2f * _hoverT) : 0f;   // smoothstep
+        var pad = CardPad;
 
         // A STACK LOOKS LIKE A STACK. Two identical chests were one card with a small "x2" in the
         // corner, and testers did not see it (playtest 2026-08-25). Now the card sits on two offset
         // card backs, the way a pile of cards does, before anything else on it is drawn.
         for (var back = Math.Min(2, stackCount - 1); back >= 1; back--)
         {
-            var off = new Rectangle(card.X + back * 7, card.Y + back * 7, card.Width, card.Height);
+            var off = new Rectangle(card.X + back * PileStep, card.Y + back * PileStep, card.Width, card.Height);
             _ui.Fill(b, off, new Color(0x0E, 0x0C, 0x14));
             _ui.Fill(b, new Rectangle(off.X, off.Y, off.Width, 5), grade * 0.45f);
             _ui.Fill(b, new Rectangle(off.Right - 2, off.Y, 2, off.Height), grade * 0.25f);
@@ -563,8 +666,8 @@ public sealed class VaultScreen
 
         // THE CHEST IS THE PICTURE, lifted toward white so grade never decides how VISIBLE it is
         // (SpriteBatch tint multiplies). On hover it grows 6% about its own centre.
-        var icon = Grow(new Rectangle(card.X + 24, card.Y + 40, ArtSize, ArtSize),
-                        Game1.ReducedMotion ? 1f : 1f + 0.06f * ease);
+        var artBox = new Rectangle(card.X + pad, card.Y + CardHeadTop, ArtSize, ArtSize);
+        var icon = Grow(artBox, Game1.ReducedMotion ? 1f : 1f + 0.06f * ease);
         if (_ui.Assets.Get("chest_loot") is { } chestArt)
             _ui.SpriteFit(b, chestArt, icon, Color.Lerp(grade, Color.White, 0.45f + 0.1f * ease));
         else _ui.Diamond(b, icon, grade);
@@ -573,24 +676,27 @@ public sealed class VaultScreen
         // still opens every chest. Playtest: "ayni chestler stacklensin."
         if (stackCount > 1)
         {
-            var badge = new Rectangle(card.X + 16, card.Y + 24, 76, 36);
+            var badge = new Rectangle(card.X + UiMetrics.Space(16), card.Y + UiMetrics.Space(24),
+                                      UiMetrics.Control(76), UiMetrics.Control(36));
             _ui.Fill(b, badge, Gold);
             _ui.Fill(b, new Rectangle(badge.X + 2, badge.Y + 2, badge.Width - 4, badge.Height - 4),
                      new Color(0x3A, 0x2A, 0x10));
-            _ui.TextCenterBig(b, $"×{stackCount}", badge.Center.X, badge.Y + 4, Gold, UiTypography.Headline);
+            _ui.TextCenterBig(b, $"×{stackCount}", badge.Center.X,
+                              badge.Y + (badge.Height - UiTypography.Headline) / 2 - 1, Gold, UiTypography.Headline);
         }
 
         // The pip row: grade as a COUNT, readable in greyscale. Common one pip, Legendary five.
+        var pipY = artBox.Bottom + UiMetrics.Space(14);
         for (var pip = 0; pip < 5; pip++)
         {
-            var dot = new Rectangle(card.X + 24 + pip * 30, card.Y + 214, 18, 18);
+            var dot = new Rectangle(card.X + pad + pip * PipPitch, pipY, PipSize, PipSize);
             _ui.Diamond(b, dot, pip <= (int)chest.Rarity ? grade : Dim);
         }
 
         // OPEN — the label the click fulfils, always visible rather than fading in on hover. It is
         // NOT a button: the whole card commits, and a second click source inside it would open two
         // chests on one click. It lights with the CARD, which is what you are actually clicking.
-        var chip = new Rectangle(card.X + 24, card.Bottom - 24 - ChipH, 160, ChipH);
+        var chip = new Rectangle(card.X + pad, card.Bottom - pad - ChipH, ChipW, ChipH);
         _ui.Plate(b, chip);
         Outline(b, chip, hovered ? Gold : Dim, 2);
         _ui.TextCenterBig(b, stackCount > 1 ? "OPEN ONE" : "OPEN", chip.Center.X,
@@ -598,30 +704,35 @@ public sealed class VaultScreen
                           hovered ? Gold : Gold * 0.75f, UiTypography.ButtonText);
 
         // ── The text column. ─────────────────────────────────────────────────────────────────────
-        var tx = card.X + 24 + ArtSize + 20;
-        var tw = card.Right - 24 - tx;
+        var tx = card.X + pad + ArtSize + UiMetrics.Space(20);
+        var tw = card.Right - pad - tx;
 
         // The kind of chest, in its grade's colour — "EPIC CHEST", or a gift's own title.
+        var titleY = card.Y + CardHeadTop;
         _ui.TextBig(b, d.Title + (stackCount > 1 ? $" · {stackCount} WAITING" : ""),
-                    tx, card.Y + 40, grade, UiTypography.Secondary);
+                    tx, titleY, grade, UiTypography.Secondary);
 
         // The element as its SOURCE GLYPH — the same art the skills and the map use, right-aligned on
         // the title's row. The coloured diamond stays as the fallback for a glyph not on disk.
         if (chest.Element is { } e)
         {
-            var glyph = new Rectangle(card.Right - 24 - 28, card.Y + 36, 28, 28);
+            var g = UiMetrics.Control(28);
+            var glyph = new Rectangle(card.Right - pad - g, titleY - UiMetrics.Space(4), g, g);
             if (!_ui.Icon(b, SourceGlyphKey(e), glyph, Color.White))
                 _ui.Diamond(b, new Rectangle(glyph.X + 4, glyph.Y + 4, glyph.Width - 8, glyph.Height - 8),
                             SourceColor.GetValueOrDefault(e, Slate));
         }
 
-        _ui.TextBig(b, $"TIER {chest.Tier}", tx, card.Y + 66, Bone, UiTypography.PrimaryValue);
+        // The tier one kind-line under the kind, and the dossier one headline under that: derived, so
+        // a 150 % TIER (48 px) pushes the facts down instead of printing over their first line.
+        var tierY = titleY + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(2);
+        _ui.TextBig(b, $"TIER {chest.Tier}", tx, tierY, Bone, UiTypography.PrimaryValue);
 
         // THE DOSSIER, on the card. The first line is the PROMISE — the fact worth the click — so it
         // takes Good when there is one and Secondary when the honest answer is "any rarity, a
         // gamble". Never Dim: "there isn't a promise" is a fact, not a disabled control.
-        var y = card.Y + 120;
-        var bottom = card.Bottom - 24;
+        var y = tierY + UiTypography.Pitch(UiTypography.PrimaryValue) + UiMetrics.Space(12);
+        var bottom = card.Bottom - pad;
         var step = UiTypography.Pitch(UiTypography.Body);
         var lines = d.Lines;
         for (var li = 0; li < lines.Count && y + step <= bottom; li++)
@@ -631,8 +742,8 @@ public sealed class VaultScreen
                 : Bone;
             foreach (var wrapped in _ui.WrapBig(lines[li], tw, UiTypography.Body))
             {
-                // The line budget is what keeps the card HONEST at UI SCALE 150 %, where the card is
-                // 358 tall: it stops emitting rather than drawing a fact through the OPEN chip.
+                // The line budget is what keeps the card HONEST when the card is short: it stops
+                // emitting rather than drawing a fact through the OPEN chip.
                 if (y + step > bottom) break;
                 _ui.TextBig(b, wrapped, tx, y, ink, UiTypography.Body);
                 y += step;
@@ -641,10 +752,11 @@ public sealed class VaultScreen
 
         // The region's own voice — the last thing the deleted tooltip said that the card did not.
         var blurbStep = UiTypography.Pitch(UiTypography.Secondary);
-        if (!string.IsNullOrWhiteSpace(d.RegionBlurb) && y + 18 + blurbStep <= bottom)
+        var blurbDrop = UiMetrics.Space(18);
+        if (!string.IsNullOrWhiteSpace(d.RegionBlurb) && y + blurbDrop + blurbStep <= bottom)
         {
-            _ui.Fill(b, new Rectangle(tx, y + 8, tw, 1), Dim);
-            y += 18;
+            _ui.Fill(b, new Rectangle(tx, y + UiMetrics.Space(8), tw, 1), Dim);
+            y += blurbDrop;
             foreach (var wrapped in _ui.WrapBig(d.RegionBlurb, tw, UiTypography.Secondary))
             {
                 if (y + blurbStep > bottom) break;
@@ -653,9 +765,6 @@ public sealed class VaultScreen
             }
         }
     }
-
-    /// <summary>The chest art's box, and the OPEN chip's height — the card's two fixed shapes.</summary>
-    private const int ArtSize = 160, ChipH = 56;   // ui-size-ok: an art box and a chip, not a text pitch
 
     // ── THE EMPTY VAULT ──────────────────────────────────────────────────────────────────────────
     //
@@ -668,14 +777,45 @@ public sealed class VaultScreen
     // the boss drop, the new-game gift seed, the save restore, or a capture fixture. The Warren pays
     // Gleam, Dust, Scrap and Essence and the trader sells items — neither ever mints a chest — so
     // "and through progression" would have been a lie.
+
+    /// <summary>The empty room's chest picture — the card's chest, a little wider and lower.</summary>
+    private static int EmptyArtW => UiMetrics.Control(180);
+    private static int EmptyArtH => UiMetrics.Control(140);
+
+    /// <summary>The empty room's door out: the screen's one primary while there is nothing to open.</summary>
+    private static int EmptyButtonW => UiMetrics.Control(320);
+    private static int EmptyButtonH => UiMetrics.Control(60);
+
+    /// <summary>Where the empty room's title and its first line sit, under the picture.</summary>
+    private static int EmptyTitleTop => GridTop + EmptyArtH + UiMetrics.Space(16);
+    private static int EmptyLinesTop => EmptyTitleTop + UiTypography.Pitch(UiTypography.PanelTitle) + UiMetrics.Space(4);
+
+    /// <summary>How many lines the empty room says: where chests come from, plus your filter if it is eating them.</summary>
+    private int EmptyLineCount => KeepMinTier > 0 || KeepSlots.Count > 0 ? 3 : 2;
+
+    /// <summary>
+    /// The empty vault's panel: one card row deep, as it always was — or deeper, when the lines and
+    /// the door under them need more than a row, so the door never prints through the last line.
+    /// </summary>
+    private Rectangle EmptyFrame
+    {
+        get
+        {
+            var need = EmptyLinesTop - PanelTop + EmptyLineCount * UiTypography.Pitch(UiTypography.Body)
+                       + UiMetrics.Space(12) + EmptyButtonH + UiTypography.PanelPadBottom + UiKit.PanelCorner;
+            var panel = PanelAt(1);
+            return new Rectangle(panel.X, panel.Y, panel.Width, Math.Max(panel.Height, need));
+        }
+    }
+
     private void DrawEmpty(SpriteBatch b, Rectangle frame, Point hit, bool clicked)
     {
         if (_ui.Assets.Get("chest_loot") is { } art)
-            _ui.SpriteFit(b, art, new Rectangle(frame.Center.X - 90, GridTop, 180, 140), UiInk.Empty);
+            _ui.SpriteFit(b, art, new Rectangle(frame.Center.X - EmptyArtW / 2, GridTop, EmptyArtW, EmptyArtH), UiInk.Empty);
 
-        _ui.TextCenterBig(b, "THE VAULT IS EMPTY", frame.Center.X, GridTop + 156, Bone, UiTypography.PanelTitle);
+        _ui.TextCenterBig(b, "THE VAULT IS EMPTY", frame.Center.X, EmptyTitleTop, Bone, UiTypography.PanelTitle);
 
-        var y = GridTop + 196;
+        var y = EmptyLinesTop;
         var oneIn = (int)MathF.Round(1f / MathF.Max(0.01f, Chests.DropChance(0)));
         _ui.TextCenterBig(b, $"CHESTS COME FROM BOSSES — ABOUT ONE BOSS IN {oneIn} DROPS ONE.",
                           frame.Center.X, y, Slate, UiTypography.Body);
@@ -698,43 +838,92 @@ public sealed class VaultScreen
 
         // With no chests there is no OPEN ALL, so THIS is the screen's one primary action — a door
         // out, rather than a room with nothing in it and no way on.
-        if (_ui.Button(b, new Rectangle(frame.Center.X - 160, UiKit.ContentBottom(frame) - 60, 320, 60),
-                       "RETURN TO HUNT", hit, clicked, true, ButtonStyle.Primary))
+        var door = new Rectangle(frame.Center.X - EmptyButtonW / 2, UiKit.ContentBottom(frame) - EmptyButtonH,
+                                 EmptyButtonW, EmptyButtonH);
+        if (_ui.Button(b, door, "RETURN TO HUNT", hit, clicked, true, ButtonStyle.Primary))
             WantsHunt = true;
     }
 
     // ── THE WANDERING TRADER — the weekly stall. Identity from the week, level from the buyer,
     //    prices in materials. See Core's WanderingTrader for the design reasoning. ────────────────
 
+    /// <summary>Where the stall stands at 100 %; at a larger profile it rises to keep its four cards whole.</summary>
+    private const int TraderTop = 170;
+
+    /// <summary>An offer card's height at 100 %, and the stall's room under the cards.</summary>
+    private static int TraderCardH => UiMetrics.Control(470);
+    private static int TraderFoot => UiMetrics.Space(134);
+
+    /// <summary>
+    /// The least room the stall keeps under its cards: the frame's own bottom clearance. The 100 %
+    /// foot is 134 px of air; when the page cannot hold the stall at its natural height the air goes
+    /// first and the cards keep their height, so BUY never rises to meet the price lines above it.
+    /// </summary>
+    private static int TraderFootMin => UiTypography.PanelPadBottom + UiKit.PanelCorner;
+
+    /// <summary>
+    /// The highest a modal's top may sit, in page space. The host's currency pills and settings gear
+    /// are live chrome drawn over everything (their capsules end at canvas y 70, the gear at 76 — see
+    /// <c>Game1.DrawCurrencyPills</c> / <c>SettingsGear</c>), and the page is presented under them at
+    /// <c>Game1.BaseOverlayScale</c>. At 150 % the stall clamps to the page's height and, anchored at
+    /// the 40 px margin, put its CLOSE against the materials pill — a button under a button. 96 lands
+    /// at canvas 86, where the host's own hint banner already sits "just under the capsules".
+    /// </summary>
+    private const int ModalCeiling = 96;
+
     private void DrawTrader(SpriteBatch b, Point hit, bool clicked)
     {
         if (!_traderOpen) return;
 
         _ui.Scrim(b, 0.72f);
-        var pw = Math.Min(1320, UiKit.Page.Width - 80);
-        var ph = Math.Min(724, UiKit.PageBottom(40) - 170);
-        var panel = new Rectangle(UiKit.PageCenterX - pw / 2, 170, pw, ph);
+        var pw = Math.Min(UiMetrics.Control(1320), UiKit.Page.Width - 80);
+        // The stall's height is what its four cards need: the header, a card at this profile, and the
+        // foot — clamped to the room under the chrome, and raised off its 100 % anchor only when it
+        // would run past the bottom margin otherwise.
+        var probe = new Rectangle(0, 0, pw, UiMetrics.Control(724));
+        var captionW = UiKit.ContentRight(probe) - UiKit.ContentLeft(probe);
+        var caption = _ui.WrapBig(
+            "NEW GOODS EVERY WEEK, THE SAME FOR EVERY HUNTER. YOU PAY IN SCRAP, ESSENCE, CORE OR CRYSTAL.",
+            captionW, UiTypography.Secondary);
+        var cardsTopOff = UiTypography.PanelCaptionTop + caption.Count * UiTypography.Pitch(UiTypography.Secondary)
+                          + UiMetrics.Space(40);
+        var ph = Math.Min(cardsTopOff + TraderCardH + TraderFoot, UiKit.PageBottom(40) - ModalCeiling);
+        var py = Math.Max(ModalCeiling, Math.Min(TraderTop, (UiKit.Page.Height - ph) / 2));
+        var panel = new Rectangle(UiKit.PageCenterX - pw / 2, py, pw, ph);
         _ui.Panel(b, panel, gold: true);
 
         _ui.TextCenterBig(b, "THE WANDERING TRADER", panel.Center.X, UiKit.TitleTop(panel), Gold, UiTypography.PanelTitle);
         // The four currencies by name — all four appear in WanderingTrader.PriceOf, so naming them is
         // accurate rather than decorative, and "materials" was a category word for things the player
         // only ever sees called SCRAP, ESSENCE, CORE and CRYSTAL.
-        _ui.TextCenterBig(b, "NEW GOODS EVERY WEEK, THE SAME FOR EVERY HUNTER. YOU PAY IN SCRAP, ESSENCE, CORE OR CRYSTAL.",
-                          panel.Center.X, UiKit.CaptionTop(panel), Slate, UiTypography.Secondary);
+        for (var i = 0; i < caption.Count; i++)
+            _ui.TextCenterBig(b, caption[i], panel.Center.X,
+                              UiKit.CaptionTop(panel) + i * UiTypography.Pitch(UiTypography.Secondary), Slate,
+                              UiTypography.Secondary);
 
-        if (_ui.Button(b, new Rectangle(panel.Right - 170, UiKit.TitleTop(panel), 130, 44), "CLOSE", hit, clicked, true))
+        var closeW = UiMetrics.Control(130);
+        var closeBtn = new Rectangle(UiKit.ContentRight(panel) - closeW, UiKit.TitleTop(panel), closeW,
+                                     UiMetrics.Control(44));
+        if (_ui.Button(b, closeBtn, "CLOSE", hit, clicked, true))
         {
             _traderOpen = false;
             return;
         }
 
         ItemInstance? hoverOffer = null;
+        var cardGap = UiMetrics.Space(20);
+        var cardsTop = panel.Y + cardsTopOff;
+        // The air under the cards gives way before the cards do: at 100 % the foot is the full 134,
+        // at 150 % (the stall clamped to the page) it is the frame's clearance and the cards are whole.
+        var foot = Math.Max(TraderFootMin, panel.Height - cardsTopOff - TraderCardH);
+        var cardH = panel.Bottom - foot - cardsTop;
+        var cw = (UiKit.ContentRight(panel) - UiKit.ContentLeft(panel) - 3 * cardGap) / 4;
+        var buyH = UiMetrics.Control(54);
+        var buyInset = UiMetrics.Space(40);
         for (var i = 0; i < TraderStock.Count && i < 4; i++)
         {
             var offer = TraderStock[i];
-            var cw = (panel.Width - 80 - 3 * 20) / 4;
-            var card = new Rectangle(panel.X + 40 + i * (cw + 20), panel.Y + 120, cw, panel.Height - 254);
+            var card = new Rectangle(UiKit.ContentLeft(panel) + i * (cw + cardGap), cardsTop, cw, cardH);
             var grade = RarityColors[(int)offer.Rarity];
             var over = card.Contains(hit);
             if (over) hoverOffer = offer;
@@ -743,29 +932,47 @@ public sealed class VaultScreen
             _ui.Fill(b, new Rectangle(card.X, card.Y, card.Width, 6), grade);
             Outline(b, card, over ? Bone : Dim, 2);
 
-            _ui.TextCenterBig(b, offer.Rarity.ToString().ToUpperInvariant(), card.Center.X, card.Y + 22,
+            // The card's rows, one under the other: the grade, the name, the level, (a gem's face,)
+            // the price. Each step is the line above's pitch plus a breath, so the rows keep their
+            // order at every profile instead of meeting in the middle.
+            var y = card.Y + UiMetrics.Space(22);
+            _ui.TextCenterBig(b, offer.Rarity.ToString().ToUpperInvariant(), card.Center.X, y,
                               grade, UiTypography.Secondary);
+            y += UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(6);
+
+            // THE NAME WRAPS RATHER THAN SHRINKS. A loop used to take a long name down toward the
+            // Caption floor to fit the column; the profile exists to make text bigger, so a name that
+            // does not fit on one line takes a second (brief §17).
+            var name = ItemNaming.FullName(offer);
+            var nameW = card.Width - UiMetrics.Space(24);
+            foreach (var part in _ui.WrapBig(name, nameW, UiTypography.Body))
+            {
+                _ui.TextCenterBig(b, _ui.ShortenBig(part, nameW, UiTypography.Body), card.Center.X, y, Bone,
+                                  UiTypography.Body);
+                y += UiTypography.Pitch(UiTypography.Body);
+            }
+            y += UiMetrics.Space(8);
+            _ui.TextCenterBig(b, $"LEVEL {offer.ItemLevel} — SAME AS YOURS", card.Center.X, y, Slate,
+                              UiTypography.Secondary);
+            y += UiTypography.Pitch(UiTypography.Secondary);
 
             // THE STALL'S GEM HAD NO PICTURE. Every other offer at least reads as a shape from its
             // name; a gem is a stone whose whole identity is its stat, so a card with a price, a name
             // and no face was the one offer you could not recognise. The medallion is the same art the
-            // Forge draws for it (AssetLibrary's gem_<stat> aliases), so the two screens agree.
-            if (GemCraft.IsGem(offer) && _ui.Assets.Get(GemMedallion(offer)) is { } face)
-                b.Draw(face, new Rectangle(card.Center.X - 34, card.Y + 108, 68, 68), Color.White);
-            var name = ItemNaming.FullName(offer);
-            var px = UiTypography.Body;
-            // The floor is a NAMED RUNG: a loop the type gate cannot see was free to shrink a card's
-            // name to 13 px, three under the Caption floor the standard sets for anything readable.
-            while (px > UiTypography.Caption && _ui.MeasureBig(name, px) > card.Width - 24) px--;
-            _ui.TextCenterBig(b, name, card.Center.X, card.Y + 52, Bone, px);
-            _ui.TextCenterBig(b, $"LEVEL {offer.ItemLevel} — SAME AS YOURS", card.Center.X, card.Y + 88, Slate,
-                              UiTypography.Secondary);
+            // Forge draws for it (AssetLibrary's gem_<stat> aliases), so the two screens agree. A gem
+            // card's price starts below the picture rather than through it.
+            if (GemCraft.IsGem(offer))
+            {
+                var face = UiMetrics.Control(68);
+                if (_ui.Assets.Get(GemMedallion(offer)) is { } medallion)
+                    b.Draw(medallion, new Rectangle(card.Center.X - face / 2, y, face, face), Color.White);
+                y += face + UiMetrics.Space(10);
+            }
+            else y += UiMetrics.Space(28);
 
-            // The price, line by line, each in the wallet's verdict colour. A gem card carries its
-            // medallion at 108, so its price starts below the picture rather than through it.
-            var y = card.Y + (GemCraft.IsGem(offer) ? 186 : 140);
+            // The price, line by line, each in the wallet's verdict colour.
             _ui.TextCenterBig(b, "PRICE", card.Center.X, y, Slate, UiTypography.SectionLabel);
-            y += 28;
+            y += UiTypography.Pitch(UiTypography.SectionLabel) + UiMetrics.Space(4);
             var affordable = true;
             foreach (var (m, amount) in WanderingTrader.PriceOf(offer, TraderTuning.Default))
             {
@@ -777,11 +984,13 @@ public sealed class VaultScreen
                 y += UiTypography.Pitch(UiTypography.Body);
             }
 
-            var buyBtn = new Rectangle(card.X + 40, card.Bottom - 82, card.Width - 80, 54);
+            var buyBtn = new Rectangle(card.X + buyInset, card.Bottom - UiMetrics.Space(28) - buyH,
+                                       card.Width - buyInset * 2, buyH);
             if (TraderBought.Contains(i))
                 // Disabled ink, correctly: it IS unavailable, and its second cue is that where every
                 // other card has a BUY button this one has none.
-                _ui.TextCenterBig(b, "ALREADY BOUGHT", buyBtn.Center.X, buyBtn.Y + 16, UiInk.Disabled,
+                _ui.TextCenterBig(b, "ALREADY BOUGHT", buyBtn.Center.X,
+                                  buyBtn.Y + (buyH - UiTypography.ButtonText) / 2, UiInk.Disabled,
                                   UiTypography.ButtonText);
             else if (_ui.Button(b, buyBtn, "BUY", hit, clicked, affordable && Hunter is not null))
                 _traderBuy = i;
@@ -827,16 +1036,38 @@ public sealed class VaultScreen
         }
     }
 
+    /// <summary>The share-code cards' one button — OK, CLOSE — and the room it keeps under itself.</summary>
+    private static int InspectButtonW => UiMetrics.Control(160);
+    private static int InspectButtonH => UiMetrics.Control(48);
+    private static int InspectButtonPad => UiMetrics.Space(24);
+
+    /// <summary>The item card's floor: the tooltip inside it does not follow the profile, so a short item still gets a card this deep.</summary>
+    private const int ItemCardMinH = 680;
+
+    /// <summary>The build card at 100 %: 800x600, a ratio the frame picker reads as the medium frame (see below).</summary>
+    private const int BuildCardW = 800, BuildCardH = 600, BuildCardTop = 230;
+
     private void DrawInspect(SpriteBatch b, Point hit, bool clicked)
     {
         if (_inspectError.Length > 0)
         {
             _ui.Scrim(b, 0.6f);
-            var panel = new Rectangle(UiKit.PageCenterX - 400, 420, 800, 240);
+            // Sized to the sentence: the message wraps to the card's width and the card is as tall as
+            // the wrapped message, its title and its OK need — 800x240 at 100 %, with one line.
+            var pw = Math.Min(UiMetrics.Control(800), UiKit.Page.Width - 80);
+            var probe = new Rectangle(0, 0, pw, UiMetrics.Control(240));
+            var lines = _ui.WrapBig(_inspectError, UiKit.ContentRight(probe) - UiKit.ContentLeft(probe), UiTypography.Body);
+            var ph = UiTypography.PanelBodyTop + lines.Count * UiTypography.Pitch(UiTypography.Body)
+                     + UiMetrics.Space(44) + InspectButtonH + UiMetrics.Space(28);
+            var panel = new Rectangle(UiKit.PageCenterX - pw / 2, (UiKit.Page.Height - ph) / 2, pw, ph);
             _ui.Panel(b, panel);
             _ui.TextCenterBig(b, "THE CODE DIDN'T OPEN", panel.Center.X, UiKit.TitleTop(panel), Ember, UiTypography.PanelTitle);
-            _ui.TextCenterBig(b, _inspectError, panel.Center.X, UiKit.BodyTop(panel), Bone, UiTypography.Body);
-            if (_ui.Button(b, new Rectangle(panel.Center.X - 80, panel.Bottom - 76, 160, 48), "OK", hit, clicked, true))
+            for (var i = 0; i < lines.Count; i++)
+                _ui.TextCenterBig(b, lines[i], panel.Center.X,
+                                  UiKit.BodyTop(panel) + i * UiTypography.Pitch(UiTypography.Body), Bone, UiTypography.Body);
+            var ok = new Rectangle(panel.Center.X - InspectButtonW / 2, panel.Bottom - UiMetrics.Space(28) - InspectButtonH,
+                                   InspectButtonW, InspectButtonH);
+            if (_ui.Button(b, ok, "OK", hit, clicked, true))
                 _inspectError = "";
             return;
         }
@@ -844,7 +1075,14 @@ public sealed class VaultScreen
         if (_inspectItem is { } item)
         {
             _ui.Scrim(b, 0.7f);
-            var panel = new Rectangle(UiKit.PageCenterX - 340, 200, 680, 680);
+            // The tooltip sits one caption line and a breath under the caption; the card is as tall
+            // as the tooltip needs, never shorter than its 100 % height, never past the page.
+            var tipTop = UiTypography.PanelCaptionTop + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(24);
+            var need = tipTop + ItemTooltip.HeightFor(item, Hunter) + InspectButtonPad + InspectButtonH + InspectButtonPad;
+            var pw = Math.Min(UiMetrics.Control(680), UiKit.Page.Width - 80);
+            var ph = Math.Min(Math.Max(need, ItemCardMinH), UiKit.PageBottom(40) - ModalCeiling);
+            var panel = new Rectangle(UiKit.PageCenterX - pw / 2, Math.Max(ModalCeiling, (UiKit.Page.Height - ph) / 2),
+                                      pw, ph);
             // Fill+Outline, not Panel: this rect is nearly square and the frame picker would grab
             // the square art meant for icons (UiKit.Panel picks by aspect ratio).
             _ui.Fill(b, panel, new Color(0x12, 0x0E, 0x18, 0xF4));
@@ -853,8 +1091,10 @@ public sealed class VaultScreen
             _ui.TextCenterBig(b, "YOU CAN ONLY LOOK. IT NEVER JOINS YOUR BAG.", panel.Center.X,
                               panel.Y + UiTypography.PanelCaptionTop, Slate, UiTypography.Secondary);
             ItemTooltip.Draw(_ui, b, item, Hunter,
-                             new Point(panel.Center.X - ItemTooltip.Width / 2, panel.Y + 104), UiKit.Page);
-            if (_ui.Button(b, new Rectangle(panel.Center.X - 80, panel.Bottom - 72, 160, 48), "CLOSE", hit, clicked, true))
+                             new Point(panel.Center.X - ItemTooltip.Width / 2, panel.Y + tipTop), UiKit.Page);
+            var close = new Rectangle(panel.Center.X - InspectButtonW / 2, panel.Bottom - InspectButtonPad - InspectButtonH,
+                                      InspectButtonW, InspectButtonH);
+            if (_ui.Button(b, close, "CLOSE", hit, clicked, true))
                 _inspectItem = null;
             return;
         }
@@ -864,14 +1104,20 @@ public sealed class VaultScreen
             _ui.Scrim(b, 0.7f);
             // 800x600, not 620: at 620 the ratio was 1.29 and UiKit.Panel's aspect picker handed
             // this card the SQUARE frame meant for icons — the exact trap the item card above
-            // dodges with Fill+Outline.
-            var panel = new Rectangle(UiKit.PageCenterX - 400, 230, 800, 600);
+            // dodges with Fill+Outline. Both edges grow at the same rate, so the ratio holds.
+            var pw = Math.Min(UiMetrics.Control(BuildCardW), UiKit.Page.Width - 80);
+            var ph = Math.Min(UiMetrics.Control(BuildCardH), UiKit.PageBottom(40) - ModalCeiling);
+            var py = Math.Max(ModalCeiling, Math.Min(BuildCardTop, (UiKit.Page.Height - ph) / 2));
+            var panel = new Rectangle(UiKit.PageCenterX - pw / 2, py, pw, ph);
             _ui.Panel(b, panel, gold: true);
             _ui.TextCenterBig(b, "A FRIEND'S BUILD", panel.Center.X, UiKit.TitleTop(panel), Gold, UiTypography.PanelTitle);
             _ui.TextCenterBig(b, "READ IT, COPY THE IDEA. YOUR OWN BUILD STAYS THE SAME.", panel.Center.X,
                               UiKit.CaptionTop(panel), Slate, UiTypography.Secondary);
 
-            var y = panel.Y + 112;
+            var y = UiKit.CaptionTop(panel) + UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(32);
+            var x1 = UiKit.ContentLeft(panel) + UiMetrics.Space(20);   // a heading
+            var x2 = UiKit.ContentLeft(panel) + UiMetrics.Space(40);   // the rows under it
+            var sectionGap = UiMetrics.Space(14);
 
             // The discipline first — the Nen identity is the headline of any build now.
             var spec = build.Mastery
@@ -880,14 +1126,14 @@ public sealed class VaultScreen
             _ui.TextBig(b, spec?.Style is { } f
                             ? $"STYLE: {f.ToString().ToUpperInvariant()}"
                             : "NO STYLE CHOSEN",
-                        panel.X + 60, y, spec is null ? Slate : Gold, UiTypography.Body);
-            y += 40;
+                        x1, y, spec is null ? Slate : Gold, UiTypography.Body);
+            y += UiTypography.Pitch(UiTypography.Body) + UiMetrics.Space(12);
 
-            _ui.TextBig(b, "SKILLS", panel.X + 60, y, Slate, UiTypography.SectionLabel);
+            _ui.TextBig(b, "SKILLS", x1, y, Slate, UiTypography.SectionLabel);
             y += UiTypography.Pitch(UiTypography.SectionLabel);
             if (build.Skills.Count == 0)
             {
-                _ui.TextBig(b, "NO SKILLS", panel.X + 80, y, UiInk.Empty, UiTypography.Secondary);
+                _ui.TextBig(b, "NO SKILLS", x2, y, UiInk.Empty, UiTypography.Secondary);
                 y += UiTypography.Pitch(UiTypography.Secondary);
             }
             foreach (var s in build.Skills.Take(5))
@@ -902,30 +1148,32 @@ public sealed class VaultScreen
                            ?? "UNKNOWN SKILL";
                 var line = word
                            + (vowName is null ? "" : $"  —  {vowName.ToUpperInvariant()}");
-                _ui.TextBig(b, line, panel.X + 80, y, Bone, UiTypography.Secondary);
+                _ui.TextBig(b, line, x2, y, Bone, UiTypography.Secondary);
                 y += UiTypography.Pitch(UiTypography.Secondary);
             }
 
-            y += 14;
-            _ui.TextBig(b, "KEYSTONES", panel.X + 60, y, Slate, UiTypography.SectionLabel);
+            y += sectionGap;
+            _ui.TextBig(b, "KEYSTONES", x1, y, Slate, UiTypography.SectionLabel);
             y += UiTypography.Pitch(UiTypography.SectionLabel);
             if (build.Keystones.Count == 0)
             {
-                _ui.TextBig(b, "NONE CHOSEN", panel.X + 80, y, UiInk.Empty, UiTypography.Secondary);
+                _ui.TextBig(b, "NONE CHOSEN", x2, y, UiInk.Empty, UiTypography.Secondary);
                 y += UiTypography.Pitch(UiTypography.Secondary);
             }
             foreach (var k in build.Keystones.Take(3))
             {
-                _ui.TextBig(b, Keystones.ById(k)?.Name ?? k.ToUpperInvariant(), panel.X + 80, y, Bone,
+                _ui.TextBig(b, Keystones.ById(k)?.Name ?? k.ToUpperInvariant(), x2, y, Bone,
                             UiTypography.Secondary);
                 y += UiTypography.Pitch(UiTypography.Secondary);
             }
 
-            y += 14;
-            _ui.TextBig(b, $"MASTERY: {build.Mastery.Count} NODES TAKEN", panel.X + 60, y, Slate,
+            y += sectionGap;
+            _ui.TextBig(b, $"MASTERY: {build.Mastery.Count} NODES TAKEN", x1, y, Slate,
                         UiTypography.SectionLabel);
 
-            if (_ui.Button(b, new Rectangle(panel.Center.X - 80, panel.Bottom - 72, 160, 48), "CLOSE", hit, clicked, true))
+            var close = new Rectangle(panel.Center.X - InspectButtonW / 2, panel.Bottom - InspectButtonPad - InspectButtonH,
+                                      InspectButtonW, InspectButtonH);
+            if (_ui.Button(b, close, "CLOSE", hit, clicked, true))
                 _inspectBuild = null;
         }
     }
@@ -942,13 +1190,47 @@ public sealed class VaultScreen
     /// <summary>The filter's popover is up. The toolbar button toggles it; its ×, a click outside it, and Escape close it.</summary>
     public bool FilterOpen { get; set; }
 
-    // 460, not 420: the closing sentence was set at Caption — a size the standard allows for a label
-    // and forbids for a sentence — because at 420 that was the only way it fitted. It wraps at
-    // Secondary now, and 326/460 keeps the same vertical frame art, so nothing else about it moves.
-    private const int FilterPopoverW = 326, FilterPopoverH = 460;
+    // 326, not 286: the closing sentence was set at Caption — a size the standard allows for a label
+    // and forbids for a sentence — because at 286 that was the only way it fitted. It wraps at
+    // Secondary now. The height is no longer a number: it is the sum of the rows the popover draws,
+    // so a profile that makes the medallions and the tier buttons taller makes the popover taller.
+    private static int FilterPopoverW => UiMetrics.Control(326);
+
+    /// <summary>The slot medallions' cell, and the icon inside it at rest and under the pointer.</summary>
+    private static int FilterCellH => UiMetrics.Control(60);
+    private static int FilterCellGap => UiMetrics.Space(4);
+    private static int FilterIconRest => UiMetrics.Control(50);
+    private static int FilterIconHot => UiMetrics.Control(54);
+
+    /// <summary>The -/+ tier steppers and ALL SLOTS: small buttons, never under the hit-target floor (§107).</summary>
+    private static int FilterStepper => Math.Max(UiMetrics.Control(34), UiMetrics.HitTargetMinimum);
+    private static int FilterAllH => Math.Max(UiMetrics.Control(30), UiMetrics.HitTargetMinimum);
+
+    /// <summary>
+    /// The popover's height, row by row — the same rows <see cref="DrawFilterPopover"/> walks, with
+    /// two lines budgeted for the closing sentence (its longer reading wraps at 100 %).
+    /// </summary>
+    private static int FilterPopoverH
+    {
+        get
+        {
+            var inset = UiTypography.PanelPadNarrow;
+            var closeSize = UiMetrics.HitTargetMinimum;
+            var pitch = UiTypography.Pitch(UiTypography.Secondary);
+            var h = UiKit.PanelCorner - 4 + closeSize + UiMetrics.Space(8);   // the title row, off CloseRect
+            h += pitch + UiMetrics.Space(6);                                   // WHICH CHESTS TO KEEP
+            h += pitch;                                                        // LOWEST TIER
+            h += FilterStepper + UiMetrics.Space(14);                          // - ANY TIER +
+            h += pitch;                                                        // GEAR SLOTS THE CHEST IS FOR
+            h += 2 * (FilterCellH + FilterCellGap) + UiMetrics.Space(6);       // the medallions
+            h += FilterAllH + UiMetrics.Space(10);                             // ALL SLOTS
+            h += 2 * pitch;                                                    // the closing sentence
+            return h + inset;
+        }
+    }
 
     private Rectangle FilterPopover =>
-        new(Math.Min(FilterBtn.X, UiKit.PageRight(24) - FilterPopoverW), FilterBtn.Bottom + 10,
+        new(Math.Min(FilterBtn.X, UiKit.PageRight(24) - FilterPopoverW), FilterBtn.Bottom + UiMetrics.Space(10),
             FilterPopoverW, FilterPopoverH);
 
     private static readonly ItemBaseType[] SlotChips =
@@ -996,43 +1278,46 @@ public sealed class VaultScreen
     private void DrawFilterPopover(SpriteBatch b, Rectangle pop, Point hit, bool clicked)
     {
         var inset = UiTypography.PanelPadNarrow;
+        var pitch = UiTypography.Pitch(UiTypography.Secondary);
         _ui.PanelQuiet(b, pop);
         var inner = new Rectangle(pop.X + inset, pop.Y + inset, pop.Width - inset * 2, pop.Height - inset * 2);
-        var close = UiKit.CloseRect(pop, 36);
-        _ui.TextBig(b, "CHEST FILTER", inner.X, close.Y + 4, Gold, UiTypography.PanelTitle);
+        var close = UiKit.CloseRect(pop, UiMetrics.HitTargetMinimum);
+        _ui.TextBig(b, "CHEST FILTER", inner.X, close.Y + (close.Height - UiTypography.PanelTitle) / 2, Gold, UiTypography.PanelTitle);
         if (_ui.CloseButton(b, close, hit, clicked)) FilterOpen = false;
-        var y = close.Bottom + 8;
+        var y = close.Bottom + UiMetrics.Space(8);
         _ui.TextBig(b, "WHICH CHESTS TO KEEP", inner.X, y, Slate, UiTypography.Secondary);
-        y += 30;
+        y += pitch + UiMetrics.Space(6);
 
         _ui.TextBig(b, "LOWEST TIER", inner.X, y, Bone, UiTypography.Secondary);
-        y += UiTypography.Pitch(UiTypography.Secondary);
-        var minus = new Rectangle(inner.X, y, 34, 34);
-        var plus = new Rectangle(inner.Right - 34, y, 34, 34);
+        y += pitch;
+        var stepper = FilterStepper;
+        var minus = new Rectangle(inner.X, y, stepper, stepper);
+        var plus = new Rectangle(inner.Right - stepper, y, stepper, stepper);
         MiniButton(b, minus, "-", hit);
         MiniButton(b, plus, "+", hit);
-        _ui.TextCenter(b, KeepMinTier <= 0 ? "ANY TIER" : $"TIER {KeepMinTier} AND UP", inner.Center.X, y + 6, KeepMinTier > 0 ? Gold : Slate);
+        _ui.TextCenter(b, KeepMinTier <= 0 ? "ANY TIER" : $"TIER {KeepMinTier} AND UP", inner.Center.X,
+                       y + (stepper - UiTypography.Label) / 2, KeepMinTier > 0 ? Gold : Slate);
         if (UiKit.ClickedIn(minus, hit, clicked) && KeepMinTier > 0) { KeepMinTier -= 1; FilterDirty = true; }
         if (UiKit.ClickedIn(plus, hit, clicked) && KeepMinTier < 99) { KeepMinTier += 1; FilterDirty = true; }
 
-        y += 48;
+        y += stepper + UiMetrics.Space(14);
         _ui.TextBig(b, "GEAR SLOTS THE CHEST IS FOR", inner.X, y, Bone, UiTypography.Secondary);
-        y += UiTypography.Pitch(UiTypography.Secondary);
+        y += pitch;
         string? tip = null;
-        const int cellH = 60;
+        var cellH = FilterCellH;
         var cellW = inner.Width / 4;
         for (var i = 0; i < SlotChips.Length; i++)
         {
             var slot = SlotChips[i];
-            var cell = new Rectangle(inner.X + (i % 4) * cellW, y + (i / 4) * (cellH + 4), cellW, cellH);
+            var cell = new Rectangle(inner.X + (i % 4) * cellW, y + (i / 4) * (cellH + FilterCellGap), cellW, cellH);
             var lit = KeepSlots.Contains(slot);
             var hot = cell.Contains(hit);
             if (lit) _ui.Fill(b, cell, Gold * 0.16f);
-            var box = hot ? new Rectangle(cell.Center.X - 27, cell.Center.Y - 27, 54, 54)
-                          : new Rectangle(cell.Center.X - 25, cell.Center.Y - 25, 50, 50);
+            var iconEdge = hot ? FilterIconHot : FilterIconRest;
+            var box = new Rectangle(cell.Center.X - iconEdge / 2, cell.Center.Y - iconEdge / 2, iconEdge, iconEdge);
             var tint = lit || hot ? Color.White : new Color(0x8C, 0x86, 0x80);
             if (!_ui.Icon(b, SlotIconKey(slot), box, tint))
-                _ui.TextCenterBig(b, SlotLabel(slot), cell.Center.X, cell.Center.Y - 8, tint, UiTypography.Caption);
+                _ui.TextCenterBig(b, SlotLabel(slot), cell.Center.X, cell.Center.Y - UiTypography.Caption / 2, tint, UiTypography.Caption);
             if (lit) Outline(b, cell, Gold * 0.8f, 2);
             if (hot) tip = SlotTip(slot) + (lit ? " Click to stop keeping its chests." : " Click to keep the chests made for it.");
             if (UiKit.ClickedIn(cell, hit, clicked))
@@ -1041,18 +1326,18 @@ public sealed class VaultScreen
                 FilterDirty = true;
             }
         }
-        y += 2 * (cellH + 4) + 6;
-        var all = new Rectangle(inner.X, y, inner.Width, 30);
+        y += 2 * (cellH + FilterCellGap) + UiMetrics.Space(6);
+        var all = new Rectangle(inner.X, y, inner.Width, FilterAllH);
         MiniButton(b, all, "ALL SLOTS", hit, KeepSlots.Count == 0);
         if (UiKit.ClickedIn(all, hit, clicked) && KeepSlots.Count > 0) { KeepSlots.Clear(); FilterDirty = true; }
-        y += 40;
+        y += FilterAllH + UiMetrics.Space(10);
         foreach (var l in _ui.WrapBig(KeepMinTier > 0 || KeepSlots.Count > 0
                                           ? "OTHER CHESTS TURN INTO A LITTLE SCRAP"
                                           : "EVERY CHEST IS KEPT",
                                       inner.Width, UiTypography.Secondary))
         {
             _ui.TextBig(b, l, inner.X, y, Slate, UiTypography.Secondary);
-            y += UiTypography.Pitch(UiTypography.Secondary);
+            y += pitch;
         }
         if (tip is not null) _ui.HoverTip(b, tip, hit);
     }
