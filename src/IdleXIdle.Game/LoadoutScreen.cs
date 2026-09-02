@@ -51,6 +51,19 @@ public sealed class LoadoutScreen
     private static readonly Color Dim = UiInk.Rule;
     private static readonly Color Met = UiInk.Good;
     private static readonly Color Quiet = UiInk.Plate;
+    // THE STANDARD STATES of a custom-drawn cell (brief §23, §25–§28). SELECTED is a persistent fill under
+    // the gold outline. HOVER is a lavender lift EASED on top of whatever fill the cell already has — never a
+    // fill swap, so a hover reads on a selected cell too and the two are never confused. PRESSED darkens the
+    // whole cell for exactly as long as the mouse is down, the acknowledgement UiKit.Button already gives its
+    // own face. The tile / card / chip surfaces are the quiet plates they always were, named instead of
+    // repeated at six call sites.
+    private static readonly Color Selected = new(0x2C, 0x25, 0x44);
+    private static readonly Color HoverWash = new Color(0x8A, 0x7A, 0xC0) * 0.22f;
+    private static readonly Color PressWash = Color.Black * 0.30f;
+    private static readonly Color PressLip = Color.Black * 0.40f;
+    private static readonly Color TileBg = new Color(0x0E, 0x0B, 0x16) * 0.8f;
+    private static readonly Color CardBg = new Color(0x0E, 0x0B, 0x16) * 0.85f;
+    private static readonly Color ChipBg = new Color(0x0E, 0x0B, 0x16) * 0.7f;
 
     private static readonly Dictionary<Source, Color> SourceColor = new()
     {
@@ -97,17 +110,142 @@ public sealed class LoadoutScreen
     private bool _wasHeld;
     private const int DragSlop = 7;
 
-    private const float SetFlashSeconds = 0.34f;
-    private const float BindFlashSeconds = 0.85f;
+    // ── FEEDBACK (UI polish P3–P6: brief §22–§38, §39–§44). Every change the player makes is answered AT
+    // THE THING THAT CHANGED: an equip pulses the slot it landed in; a chosen variation brightens its branch
+    // of the tree; a reinforcement taken pulses its chip; the inspector's content fades in when the selection
+    // changes; a bound Vow plays its chain. Every one-shot is armed ONCE, from Update, at the moment the model
+    // changed — Draw only reads a phase, so drawing can never re-arm anything and nothing here loops.
+    //
+    // RESPEC STAYS CALM (§44). It is free and reversible and it says what it did in words; a flash would be
+    // claiming an event the player did not have.
+    //
+    // KEYS ARE SEMANTIC — the slot, the skill's branch, the chip — not rectangles. A list that scrolls while a
+    // pulse is running moves the rectangle out from under it, and the pulse would be orphaned mid-play. Hover,
+    // which lives and dies inside one frame's geometry, is keyed by rect like every other screen's.
+    //
+    // REDUCED MOTION is UiMotion's contract, not a second implementation here: eases collapse to their target,
+    // and one-shots stay, because a pulse is the short fade §32 keeps. Either way the END STATE is the same.
+    private static int SlotKey(int slot) => HashCode.Combine("build.slot", slot);
+    private static int BindKey(int slot) => HashCode.Combine("build.bind", slot);
+    private static int BranchKey(string skillId, int vi) => HashCode.Combine("build.branch", skillId, vi);
+    private static int ReinfKey(string skillId, int vi, int ri) => HashCode.Combine("build.reinf", skillId, vi, ri);
+    /// <summary>The inspector's content fade. One key, because one inspector is on screen (§35).</summary>
+    private static readonly int InsFadeKey = HashCode.Combine("build.inspector");
+    /// <summary>How much of the chain strip the flourish's phase is mapped over — see <see cref="DrawBindChain"/>.</summary>
     private const float ChainClipSeconds = 0.55f;
-    private readonly Dictionary<int, float> _slotFlash = new();
-    private readonly Dictionary<int, float> _bindFlash = new();
-    private bool _devHoldChain;
-    private static readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
-    private double _lastTick;
+    /// <summary>What the inspector is about, folded to one value; when it changes, the content fades in (§35).</summary>
+    private int _insSignature;
+    /// <summary>The inspector body's ink alpha this frame — read once per Draw, applied by <see cref="Ins"/>.</summary>
+    private float _insAlpha = 1f;
+    /// <summary>The sound cue waiting for the host — set at the semantic moment, cleared by <see cref="ConsumeCue"/>.</summary>
+    private string? _cue;
+    /// <summary>DEV: the bind chain held at this phase (1 = just bound, 0 = done) for the `vow` capture; null when it plays.</summary>
+    private float? _devChainAt;
+
+    /// <summary>
+    /// DEV: <c>RH_SHOT_BUILD_FX=&lt;t&gt;</c> holds the change feedback at phase <c>t</c> (1 = the instant it fired,
+    /// 0 = settled), so a still frame can prove it draws: the selected slot's equip pulse, its chosen variation's
+    /// branch brightening, that branch's first reinforcement chip, and the inspector part-faded — all at once,
+    /// each on the rectangle it would really play on. Only the CLOCK is the dial's; the drawing is the shipped
+    /// path. Without it the rig shoots frame 60, a full second after a 180 ms pulse has ended.
+    ///
+    ///   RH_SHOT_BUILD_FX=1 bash tools/asset-pipeline/capture.sh weave build/shots/p2_loadout_fx_100.png
+    /// </summary>
+    private static readonly float? DevFxPose = float.TryParse(Environment.GetEnvironmentVariable("RH_SHOT_BUILD_FX"),
+        System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var fx) ? Math.Clamp(fx, 0f, 1f) : null;
+
+    /// <summary>
+    /// DEV: <c>RH_SHOT_BUILD_HOLD=1</c> counts the mouse as held, so whatever <c>RH_SHOT_PAGE_MOUSE</c> is over
+    /// is photographed in its PRESSED state. The rig has no way to hold a mouse button down.
+    /// </summary>
+    private static readonly bool DevHold = Environment.GetEnvironmentVariable("RH_SHOT_BUILD_HOLD") == "1";
+
+    /// <summary>
+    /// DEV: <c>RH_SHOT_BUILD_PICK=&lt;skillId&gt;</c> selects that library skill exactly as a click on its tile
+    /// would. Point it at a skill the fixture already wears in another slot and the screen poses the refusal
+    /// — ALREADY EQUIPPED IN SLOT N with its reason line (brief §4, LAW 13); add RH_SHOT_BUILD_HOLD and a
+    /// cursor on the button and the refused click's PRESSED state is photographable too.
+    /// </summary>
+    private static readonly string? DevPick = Environment.GetEnvironmentVariable("RH_SHOT_BUILD_PICK") is { Length: > 0 } dp ? dp : null;
+
+    /// <summary>The mouse is down — the PRESSED state's condition, posed by <see cref="DevHold"/> for a capture.</summary>
+    private static bool MouseDown => UiKit.MouseHeld || DevHold;
+
+    /// <summary>Is the cell the cursor is over being pressed right now?</summary>
+    private static bool Down(bool over) => over && MouseDown;
+
+    /// <summary>
+    /// A custom cell's eased HOVER lift, 0 → 1 over <see cref="UiMotion.Fast"/> — the same call
+    /// <see cref="UiKit.Button"/>, MapScreen and RosterScreen make, keyed by the cell's own rectangle.
+    /// </summary>
+    private static float Lift(Rectangle r, bool over) => UiMotion.Ease(UiMotion.KeyOf(r), over ? 1f : 0f);
+
+    /// <summary>The phase of a one-shot — or the phase the capture dial holds it at, for a posed target.</summary>
+    private static float Phase(int key, bool posed) => DevFxPose is { } t && posed ? t : UiMotion.Pulse(key);
+
+    /// <summary>
+    /// THE THREE STATES every custom-drawn row, tile, card and chip on this screen wears, in one method so
+    /// they cannot drift apart: the surface it rests on, SELECTED as a persistent fill, HOVER eased on top of
+    /// that (so a hover reads on a selected cell and is never mistaken for one), PRESSED as a darkening for
+    /// as long as the mouse is down. DISABLED is not a fill — it is the cell's own words, and every disabled
+    /// cell here says why in one plain line (§29).
+    /// </summary>
+    private void Cell(SpriteBatch b, Rectangle r, Color surface, bool selected, bool over)
+    {
+        _ui.Fill(b, r, selected ? Selected : surface);
+        var down = Down(over);
+        // §27: PRESSED is a depression with REDUCED glow — so the hover's lift comes OFF while the mouse is
+        // down and the cell darkens under a lip at its top edge. Without dropping the lift, pressed was a
+        // 20 % shade of hover: a difference a meter can find and an eye cannot.
+        var lift = Lift(r, over);
+        if (lift > 0f && !down) _ui.Fill(b, r, HoverWash * lift);
+        if (down)
+        {
+            _ui.Fill(b, r, PressWash);
+            _ui.Fill(b, new Rectangle(r.X, r.Y, r.Width, 2), PressLip);
+        }
+    }
+
+    /// <summary>An inspector-body ink at this frame's content-fade alpha (§35: the content fades, the frame stays).</summary>
+    private Color Ins(Color c) => c * _insAlpha;
+
+    /// <summary>
+    /// The inspector body's alpha. The content fades in over <see cref="UiMotion.Fast"/> whenever the
+    /// selection changes — from a floor rather than from nothing, so the panel never blinks empty.
+    /// </summary>
+    private static float InspectorAlpha => 0.18f + 0.82f * UiMotion.Smooth(1f - (DevFxPose ?? UiMotion.Pulse(InsFadeKey)));
+
+    // ── ARMING. One call per event, from Update, on the key that event belongs to. ───────────────
+    private static void PulseSlot(int slot) => UiMotion.Flash(SlotKey(slot), UiMotion.Transition);
+    private void BrightenBranch(int vi) { if (SlotDef(_slot) is { } d) UiMotion.Flash(BranchKey(d.Id, vi), UiMotion.Transition); }
+    private void PulseReinforcement(int vi, int ri) { if (SlotDef(_slot) is { } d) UiMotion.Flash(ReinfKey(d.Id, vi, ri), UiMotion.Transition); }
+
+    /// <summary>Which fork of the skill this variation is — the branch a reinforcement hangs from.</summary>
+    private static int BranchOf(SkillDef def, SkillVariation v)
+    {
+        for (var i = 0; i < def.Variations.Count; i++)
+            if (def.Variations[i].Name == v.Name) return i;
+        return 0;
+    }
 
     /// <summary>Cues, host-fed like every other screen's.</summary>
     public SoundBank? Sound { get; set; }
+
+    /// <summary>
+    /// The sound cue for the last refused click, cleared by reading — the host owns audio, this screen does not.
+    /// </summary>
+    /// <remarks>
+    /// Same shape as <c>TraitsScreen.ConsumeCue</c>, so the host's Update reads one way everywhere. The only
+    /// cue that comes this way is <c>sfx_error</c>, for a refused equip. The two cues this screen already
+    /// owned (<c>sfx_weave</c> on an equip or a reorder, <c>sfx_bind</c> on a Vow bound) still go straight to
+    /// the host-fed <see cref="Sound"/>, so nothing that works today waits on new wiring.
+    /// </remarks>
+    public string? ConsumeCue()
+    {
+        var c = _cue;
+        _cue = null;
+        return c;
+    }
 
     public LoadoutScreen(UiKit ui) => _ui = ui;
 
@@ -133,11 +271,7 @@ public sealed class LoadoutScreen
         _pick = Pick.Slot;
         _vowListOpen = vowId is not null;
         _vowListReveal = _vowListOpen ? 2 : 0;
-        if (chainAt > 0f)
-        {
-            _bindFlash[slot] = BindFlashSeconds * Math.Clamp(chainAt, 0f, 1f);
-            _devHoldChain = true;
-        }
+        if (chainAt > 0f) _devChainAt = Math.Clamp(chainAt, 0f, 1f);
     }
 
     /// <summary>DEV: kept for the fixtures that call it — the skill tree is always on screen now.</summary>
@@ -341,8 +475,16 @@ public sealed class LoadoutScreen
     private static Rectangle CopyText => new(InsX + InsW / 2 + UiMetrics.Space(8), RespecText.Y, InsW / 2 - UiMetrics.Space(8), ActionRowH);
     private static int RefusalY => RespecText.Y - UiMetrics.Space(4) - UiTypography.Pitch(UiTypography.Secondary);
     private static int InsBodyTop => InspectorPanel.Y + UiTypography.PanelTitleTop;
-    /// <summary>The body's room: from the title row down to the refusal line. The body is clipped to it when it scrolls.</summary>
-    private static Rectangle InsRegion => new(InspectorPanel.X + UiKit.PanelCorner / 2, InsBodyTop, InspectorPanel.Width - UiKit.PanelCorner, RefusalY - UiMetrics.Space(4) - InsBodyTop);
+    /// <summary>
+    /// The second line the refusal needs, when one line of this column cannot hold it. A DISABLED CONTROL
+    /// SAYS WHY (§29) — and a reason that ends "… PICK THAT SLOT TO CH…" has not said it. The refusal wraps
+    /// upward from its anchor and the BODY gives up the room, because the body scrolls and the reason does
+    /// not. It cannot oscillate: the wrap depends only on the refusal's own words and the column's width,
+    /// never on how tall the body came out.
+    /// </summary>
+    private int _refusalRise;
+    /// <summary>The body's room: from the title row down to the refusal. The body is clipped to it when it scrolls.</summary>
+    private Rectangle InsRegion => new(InspectorPanel.X + UiKit.PanelCorner / 2, InsBodyTop, InspectorPanel.Width - UiKit.PanelCorner, RefusalY - _refusalRise - UiMetrics.Space(4) - InsBodyTop);
     private int _insScroll;
     private int _insOverflow;
     /// <summary>The body's width — the content column less the scrollbar's lane while it scrolls. Wrapping follows, and the two states cannot flip-flop: text in the narrower column is never shorter.</summary>
@@ -456,6 +598,34 @@ public sealed class LoadoutScreen
     // ── UPDATE ──────────────────────────────────────────────────────────────────────────────────────────
     public void Update(Point mouse, bool clicked, bool held, int wheel)
     {
+        if (_copyToastFrames > 0) _copyToastFrames--;
+        UpdateInput(mouse, clicked, held, wheel);
+        // After the input, whatever path it took — UpdateInput returns early from a dozen places, and the
+        // fade must not depend on which one. RH_SHOT_BUILD_PICK poses a selection the way a click would;
+        // then the inspector learns whether what it is about has changed. This is the ONLY place any of
+        // this screen's one-shots is armed by something other than the player's own edit.
+        if (DevPick is { } posed && SkillCatalogue.Find(posed) is not null)
+        {
+            _pick = Pick.Library; _pickSkillId = posed; _vowListOpen = false;
+        }
+        TrackSelection();
+    }
+
+    /// <summary>
+    /// The inspector is ABOUT something; when that something changes, its content fades in (§35). The
+    /// signature is every field the body reads to decide WHAT it is showing — not the values it shows, so a
+    /// bench figure ticking over or a Vow going live does not restart the fade.
+    /// </summary>
+    private void TrackSelection()
+    {
+        var sig = HashCode.Combine((int)_pick, _slot, _pickSkillId, _pickIndex, _pickKeystoneId, _vowListOpen);
+        if (sig == _insSignature) return;
+        _insSignature = sig;
+        UiMotion.Flash(InsFadeKey, UiMotion.Fast);
+    }
+
+    private void UpdateInput(Point mouse, bool clicked, bool held, int wheel)
+    {
         var hit = mouse;
         var skills = Loadout.Skills;
         var known = Known;
@@ -493,7 +663,7 @@ public sealed class LoadoutScreen
                 {
                     _slot = onto; _pick = Pick.Slot;
                     Dirty = true; _buildRev++;
-                    _slotFlash[onto] = SetFlashSeconds;
+                    PulseSlot(onto);
                     Sound?.Play("sfx_weave", 0.5f);
                     _msg = onto == 0 ? "FIRST IN LINE — IT WINS EVERY TIED BEAT." : $"NOW SLOT {onto + 1}.";
                 }
@@ -580,7 +750,7 @@ public sealed class LoadoutScreen
                     {
                         Dirty = true; _buildRev++;
                         if (already) _msg = $"{v.Name.ToUpperInvariant()} BROKEN.";
-                        else { _msg = $"{v.Name.ToUpperInvariant()} BOUND TO SLOT {_slot + 1}."; _bindFlash[_slot] = BindFlashSeconds; Sound?.Play("sfx_bind", 0.55f); }
+                        else { _msg = $"{v.Name.ToUpperInvariant()} BOUND TO SLOT {_slot + 1}."; UiMotion.Flash(BindKey(_slot), UiMotion.Reward); Sound?.Play("sfx_bind", 0.55f); }
                     }
                     else _msg = "THIS SLOT CANNOT TAKE THAT VOW.";
                 }
@@ -620,7 +790,16 @@ public sealed class LoadoutScreen
             _copyToastFrames = 240;
             return;
         }
-        if (PrimaryBtn.Contains(hit)) Commit();
+        if (PrimaryBtn.Contains(hit))
+        {
+            var (_, enabled, refusal) = Primary();
+            if (enabled) Commit();
+            // A refused click is ANSWERED, not swallowed (brief §29, LAW 13): the button gives the pressed
+            // state while the mouse is down on it (drawn in DrawInspector), and the host plays the dull
+            // refusal cue. A disabled button with nothing to refuse — CHOSEN, OWNED, EQUIPPED IN THIS
+            // SLOT — only presses; there is nothing to say no to.
+            else if (refusal.Length > 0) _cue = "sfx_error";
+        }
     }
 
     /// <summary>The primary button's verb for the current selection, and whether it may be pressed.</summary>
@@ -639,7 +818,7 @@ public sealed class LoadoutScreen
                 // LAW 13: one slot per skill. The button says WHERE it already is, in words, rather than
                 // going grey without a reason — the loadout itself refuses the write regardless.
                 if (Loadout.IndexOfSkill(def.Id) is var other && other >= 0)
-                    return ($"ALREADY EQUIPPED IN SLOT {other + 1}", false, $"A SKILL GOES IN ONE SLOT. IT IS IN SLOT {other + 1} — PICK THAT SLOT TO CHANGE IT.");
+                    return ($"ALREADY EQUIPPED IN SLOT {other + 1}", false, $"IT IS IN SLOT {other + 1} — PICK THAT SLOT TO CHANGE IT.");
                 return ($"EQUIP TO SLOT {_slot + 1}", true, "");
             }
             case Pick.Variation:
@@ -699,10 +878,11 @@ public sealed class LoadoutScreen
                 {
                     var where = Loadout.IndexOfSkill(_pickSkillId);
                     _msg = where >= 0 ? $"ALREADY EQUIPPED IN SLOT {where + 1}." : "THAT SKILL CANNOT GO THERE.";
+                    _cue = "sfx_error";
                     break;
                 }
                 Dirty = true; _buildRev++;
-                _slotFlash[_slot] = SetFlashSeconds; Sound?.Play("sfx_weave", 0.45f);
+                PulseSlot(_slot); Sound?.Play("sfx_weave", 0.45f);
                 _msg = $"{SkillCatalogue.Find(_pickSkillId)?.Name} EQUIPPED IN SLOT {_slot + 1}.";
                 _pick = Pick.Slot;
                 break;
@@ -712,14 +892,17 @@ public sealed class LoadoutScreen
                 var v = def.Variations[_pickIndex];
                 SkillLevels.ChooseVariation(def, v.Name); Dirty = true; _buildRev++;
                 _msg = $"{def.Name} IS NOW {v.Name}, AND IT IS {SourceName(v.Source)}.";
+                BrightenBranch(_pickIndex);   // the fork taken lights once (§43)
                 break;
             }
             case Pick.Reinforcement:
             {
                 var def = SlotDef(_slot)!;
-                var r = SkillLevels.VariationOf(def)!.Reinforcements[_pickIndex];
+                var chosen = SkillLevels.VariationOf(def)!;
+                var r = chosen.Reinforcements[_pickIndex];
                 SkillLevels.TakeReinforcement(def, r.Name); Dirty = true; _buildRev++;
                 _msg = $"{r.Name}: {r.Line.ToUpperInvariant()}";
+                PulseReinforcement(BranchOf(def, chosen), _pickIndex);   // the chip just taken pulses once (§43)
                 break;
             }
             case Pick.Keystone:
@@ -757,7 +940,6 @@ public sealed class LoadoutScreen
         _tip = null;
         LayoutRows();
         LayoutSkills();
-        TickEffects();
 
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xC8));
         _ui.TextCenterBig(b, "BUILD", UiKit.PageCenterX, 24, Gold, UiTypography.ScreenTitle, TextFace.Display);
@@ -770,7 +952,6 @@ public sealed class LoadoutScreen
         if (_msg.Length > 0) _ui.TextCenterBig(b, _msg, UiKit.PageCenterX, UiKit.PageBottom(BottomMargin) + UiMetrics.Space(16), Gold, UiTypography.Body);
         if (_copyToastFrames > 0)
         {
-            _copyToastFrames--;
             _ui.TextCenterBig(b, _copyToast, InspectorPanel.Center.X, InspectorPanel.Bottom + UiMetrics.Space(14),
                               _copyToast.StartsWith("COPIED", StringComparison.Ordinal) ? Gold : Ember, UiTypography.Secondary);
         }
@@ -805,16 +986,22 @@ public sealed class LoadoutScreen
             var def = SkillCatalogue.Find(s.SkillId);
             var filled = def is not null && known.Contains(def.Id);
             var on = slot == _slot && _pick != Pick.Keystone;
-            var over = shown.Contains(hit) && _carrying == Carry.None;
+            // The row you are HOLDING keeps its hover and takes the pressed state; a row you are dragging
+            // OVER gets the drop mark instead, which is a different answer to a different question.
+            var over = shown.Contains(hit) && (_carrying == Carry.None || _carrySlot == slot);
             var dropping = _carrying == Carry.Slot && _carryMoved && SlotUnder(_carryAt) == slot && _carrySlot != slot;
             var inHand = _carrying == Carry.Slot && _carryMoved && _carrySlot == slot;
             var col = SourceColor.GetValueOrDefault(s.Source, Bone);
 
-            _ui.Fill(b, row, on ? new Color(0x2C, 0x25, 0x44) : over ? new Color(0x1E, 0x18, 0x2C) : Quiet);
+            Cell(b, row, Quiet, on, over);
             if (dropping) { _ui.Fill(b, row, col * 0.16f); Outline(b, row, Bone, 3); }
             if (inHand) _ui.Fill(b, row, new Color(0x0C, 0x09, 0x14) * 0.6f);
-            if (_slotFlash.TryGetValue(slot, out var sf)) { var t = Math.Clamp(sf / SetFlashSeconds, 0f, 1f); _ui.Fill(b, row, col * (0.30f * t)); }
-            if (_bindFlash.TryGetValue(slot, out var bf)) DrawBindChain(b, row, bf / BindFlashSeconds);
+            // THE EQUIP PULSE (§40): the slot that just took a skill answers once, in that skill's own Source
+            // colour, over Transition. Armed at the equip in Update; this only reads how far along it is.
+            var pulse = Phase(SlotKey(slot), slot == _slot);
+            if (pulse > 0f) _ui.Fill(b, row, col * (0.34f * pulse));
+            var chain = slot == _slot && _devChainAt is { } dc ? dc : UiMotion.Pulse(BindKey(slot));
+            if (chain > 0f) DrawBindChain(b, row, chain);
             if (on && !dropping) Outline(b, row, Gold, 2);   // gold = selected
 
             // The numbered spine: this order IS cast priority.
@@ -930,7 +1117,7 @@ public sealed class LoadoutScreen
             var worn = Loadout.HasKeystone(k.Id);
             var on = _pick == Pick.Keystone && _pickKeystoneId == k.Id;
             var over = shown.Contains(hit);
-            _ui.Fill(b, chip, on ? new Color(0x2C, 0x25, 0x44) : over ? new Color(0x1E, 0x18, 0x2C) : Quiet);
+            Cell(b, chip, Quiet, on, over);
             if (worn) _ui.Fill(b, new Rectangle(chip.X, chip.Y, 5, chip.Height), Gold);
             if (on) Outline(b, chip, Gold, 2);
             _ui.TextBig(b, k.Name.ToUpperInvariant(), chip.X + UiMetrics.Space(16), textY, worn ? Gold : Bone, UiTypography.Body);
@@ -977,8 +1164,11 @@ public sealed class LoadoutScreen
 
     private void DrawEmptyRow(SpriteBatch b, Rectangle row, Rectangle shown, Point hit)
     {
-        var over = shown.Contains(hit);
+        var over = shown.Contains(hit) && _carrying == Carry.None;
         _ui.Plate(b, row);
+        var lift = Lift(row, over);
+        if (lift > 0f) _ui.Fill(b, row, HoverWash * lift);
+        if (Down(over)) _ui.Fill(b, row, PressWash);
         if (over) Outline(b, row, Slate, 1);
         var gbox = GlyphRect(row);
         Outline(b, gbox, UiInk.Empty, 1);
@@ -1049,7 +1239,7 @@ public sealed class LoadoutScreen
                 var isEquipped = equipped.Contains(def.Id);
                 var on = _pick == Pick.Library && _pickSkillId == def.Id;
                 var over = shown.Contains(hit);
-                _ui.Fill(b, tile, on ? new Color(0x2C, 0x25, 0x44) : over ? new Color(0x1E, 0x18, 0x2C) : new Color(0x0E, 0x0B, 0x16) * 0.8f);
+                Cell(b, tile, TileBg, on, over);
                 Outline(b, tile, on ? Bone : isEquipped ? Gold : over ? Slate : Dim, on || isEquipped ? 2 : 1);
                 var ico = new Rectangle(tile.X + edgePad, tile.Y + edgePad, icoEdge, icoEdge);
                 if (!_ui.Icon(b, $"icon_skill_{def.Id}", ico, have ? (isEquipped ? Gold : Bone) : Slate)) _ui.Diamond(b, ico, Slate);
@@ -1106,13 +1296,20 @@ public sealed class LoadoutScreen
             var v = treeDef.Variations[vi];
             var card = VarCard(vi);
             var shown = In(card, region);
-            _ui.Fill(b, new Rectangle(card.Center.X - 1, railY, 2, card.Y - railY), Dim);
             var taken = chosen?.Name == v.Name;
             var other = chosen is not null && !taken;
             var on = _pick == Pick.Variation && _pickIndex == vi;
             var over = shown.Contains(hit);
             var col = SourceColor.GetValueOrDefault(v.Source, Bone);
-            _ui.Fill(b, card, on ? new Color(0x2C, 0x25, 0x44) : over ? new Color(0x1E, 0x18, 0x2C) : new Color(0x0E, 0x0B, 0x16) * 0.85f);
+            // THE FORK TAKEN LIGHTS ONCE (§43): the rail down to the chosen card, the card itself and its
+            // chips brighten in the variation's own Source colour for one Transition. What is left afterwards
+            // is the gold rule that says CHOSEN — the motion explained the change, it did not become the state.
+            var branch = Phase(BranchKey(treeDef.Id, vi), taken);
+            var rail = new Rectangle(card.Center.X - 1, railY, 2, card.Y - railY);
+            _ui.Fill(b, rail, Dim);
+            if (branch > 0f) _ui.Fill(b, rail, col * branch);
+            Cell(b, card, CardBg, on, over);
+            if (branch > 0f) { _ui.Fill(b, card, col * (0.30f * branch)); Outline(b, card, Gold * branch, 2); }
             Outline(b, card, on ? Bone : taken ? Gold : Dim, on || taken ? 2 : 1);
             if (taken) _ui.Fill(b, new Rectangle(card.X, card.Y, 5, card.Height), Gold);
             var gem = new Rectangle(card.X + UiMetrics.Space(16), card.Y + cardPad, UiMetrics.IconSize, UiMetrics.IconSize);
@@ -1135,11 +1332,21 @@ public sealed class LoadoutScreen
                 var can = taken && !owned && free > 0;
                 var onR = _pick == Pick.Reinforcement && taken && _pickIndex == ri;
                 var overR = shownChip.Contains(hit);
-                _ui.Fill(b, chip, onR ? new Color(0x2C, 0x25, 0x44) : overR ? new Color(0x1E, 0x18, 0x2C) : new Color(0x0E, 0x0B, 0x16) * 0.7f);
+                // A REINFORCEMENT TAKEN PULSES ONCE (§43), and every chip on the chosen fork rides that fork's
+                // brightening, so the branch reads as one thing lighting rather than four separate flickers.
+                var chipPulse = Phase(ReinfKey(treeDef.Id, vi, ri), taken && ri == 0);
+                Cell(b, chip, ChipBg, onR, overR);
+                if (branch > 0f) _ui.Fill(b, chip, col * (0.18f * branch));
+                if (chipPulse > 0f) { _ui.Fill(b, chip, Met * (0.34f * chipPulse)); Outline(b, chip, Met * chipPulse, 2); }
                 Outline(b, chip, onR ? Bone : owned ? Met : Dim, onR || owned ? 2 : 1);
                 var chipPad = UiMetrics.Space(10);
-                _ui.TextBig(b, r.Name.ToUpperInvariant(), chip.X + chipPad, chip.Y + (chip.Height - UiTypography.Secondary) / 2, owned ? Met : can ? Gold : taken ? Bone : Slate, UiTypography.Secondary);
-                _ui.TextRightBig(b, owned ? "OWNED" : can ? "READY" : taken ? $"LEVEL {level + 1}" : "", chip.Right - chipPad, chip.Y + (chip.Height - UiTypography.Caption) / 2, owned ? Met : can ? Gold : Slate, UiTypography.Caption);
+                // DISABLED SAYS WHY (§29). A chip under the fork you did NOT take cannot be bought, and it used
+                // to say nothing at all — the reason only appeared as a message after you had clicked it. The
+                // name gives way to the state, so the two never print through each other at a bigger profile.
+                var chipState = owned ? "OWNED" : can ? "READY" : taken ? $"LEVEL {level + 1}" : "CHOOSE FIRST";
+                var chipRoom = chip.Width - chipPad * 2 - _ui.MeasureBig(chipState, UiTypography.Caption) - UiMetrics.Space(10);
+                _ui.TextBig(b, _ui.ShortenBig(r.Name.ToUpperInvariant(), chipRoom, UiTypography.Secondary), chip.X + chipPad, chip.Y + (chip.Height - UiTypography.Secondary) / 2, owned ? Met : can ? Gold : taken ? Bone : Slate, UiTypography.Secondary);
+                _ui.TextRightBig(b, chipState, chip.Right - chipPad, chip.Y + (chip.Height - UiTypography.Caption) / 2, owned ? Met : can ? Gold : Slate, UiTypography.Caption);
                 Tip(shownChip, hit, $"{r.Name} — {r.Line}");
             }
         }
@@ -1148,6 +1355,17 @@ public sealed class LoadoutScreen
     // ── THE INSPECTOR (D3) ──────────────────────────────────────────────────────────────────────────────
     private void DrawInspector(SpriteBatch b, Point hit)
     {
+        // THE CONTENT FADE (§35), read once for the whole frame. The BODY fades in when the selection
+        // changes; the frame, the refusal line, the two text actions and the primary button do not — they
+        // are the panel's structure, and structure that blinked on every click is the opposite of calm.
+        _insAlpha = InspectorAlpha;
+        // THE REFUSAL IS MEASURED BEFORE THE BODY IS CLIPPED, so a two-line reason takes its room from the
+        // body rather than printing through it. Primary() is a pure read of the selection, so asking it
+        // here costs nothing and cannot disagree with the button drawn from the same answer below.
+        var (label, enabled, refusal) = Primary();
+        var refusalWrap = refusal.Length > 0 ? _ui.WrapBig(refusal, InsW, UiTypography.Secondary) : System.Array.Empty<string>();
+        var refusalRows = Math.Min(3, refusalWrap.Count);   // two is the longest any refusal here needs; three is the net
+        _refusalRise = Math.Max(0, refusalRows - 1) * UiTypography.Pitch(UiTypography.Secondary);
         var panel = InspectorPanel;
         _ui.PanelQuiet(b, panel);
         // The body is a scrolling region (brief §18: long inspectors) between the title row and the refusal
@@ -1165,7 +1383,7 @@ public sealed class LoadoutScreen
         _changeVowShown = false;
         _respecShown = false;
 
-        void Head(string s) { _ui.TextBig(b, s, x, y, Slate, UiTypography.Secondary); y += UiTypography.Pitch(UiTypography.Secondary); }
+        void Head(string s) { _ui.TextBig(b, s, x, y, Ins(Slate), UiTypography.Secondary); y += UiTypography.Pitch(UiTypography.Secondary); }
         void Line(string s, Color c, int px = 0, int maxLines = 3)
         {
             if (px == 0) px = UiTypography.Body;   // a rung is a profile-scaled property, not a constant
@@ -1175,15 +1393,15 @@ public sealed class LoadoutScreen
             var cap = (int)MathF.Ceiling(maxLines * UiMetrics.TextScale * InsW / (float)w);
             foreach (var l in _ui.WrapBig(s, w, px).Take(cap))
             {
-                _ui.TextBig(b, l, x, y, c, px); y += UiTypography.Pitch(px);
+                _ui.TextBig(b, l, x, y, Ins(c), px); y += UiTypography.Pitch(px);
             }
         }
         void Gap() { y += UiMetrics.Space(10); }
-        void Rule() { _ui.Fill(b, new Rectangle(x, y + UiMetrics.Space(4), w, 1), Dim); y += UiTypography.HairlineGap; }
+        void Rule() { _ui.Fill(b, new Rectangle(x, y + UiMetrics.Space(4), w, 1), Ins(Dim)); y += UiTypography.HairlineGap; }
         void Pair(string k, string v)
         {
-            _ui.TextBig(b, k, x, y, Slate, UiTypography.Secondary);
-            _ui.TextRightBig(b, _ui.ShortenBig(v, w - UiMetrics.Text(120), UiTypography.Body), x + w, y - 2, Bone, UiTypography.Body);
+            _ui.TextBig(b, k, x, y, Ins(Slate), UiTypography.Secondary);
+            _ui.TextRightBig(b, _ui.ShortenBig(v, w - UiMetrics.Text(120), UiTypography.Body), x + w, y - 2, Ins(Bone), UiTypography.Body);
             y += UiTypography.Pitch(UiTypography.Body);
         }
 
@@ -1196,23 +1414,44 @@ public sealed class LoadoutScreen
         _ui.ScrollBar(b, ScrollTrack(InsX + InsW, region), _insScroll, region.Height, region.Height + _insOverflow);
 
         // ── The actions: a refusal line, one primary button, two text actions. ───────────────────────
-        var (label, enabled, refusal) = Primary();
-        if (refusal.Length > 0)
-            _ui.TextBig(b, _ui.ShortenBig(refusal, InsW, UiTypography.Secondary), InsX, RefusalY, Ember, UiTypography.Secondary);
+        var refusalY = RefusalY - _refusalRise;
+        for (var i = 0; i < refusalRows; i++)
+        {
+            _ui.TextBig(b, refusalWrap[i], InsX, refusalY, Ember, UiTypography.Secondary);
+            refusalY += UiTypography.Pitch(UiTypography.Secondary);
+        }
         var actionTextY = (ActionRowH - UiTypography.Secondary) / 2;
+        // The two text actions get the same three states a button does: the ink LIFTS toward bone over
+        // Fast rather than snapping, and while the mouse is down the line settles a pixel and dims — the
+        // same depression, at the weight a text action deserves. RESPEC gets no flourish beyond that: it
+        // is free and reversible, and it stays calm (§44).
         if (_respecShown)
         {
             var over = RespecText.Contains(hit);
-            _ui.TextBig(b, "RESPEC — FREE", RespecText.X, RespecText.Y + actionTextY, over ? Bone : Slate, UiTypography.Secondary);
+            var press = Down(over);
+            _ui.TextBig(b, "RESPEC — FREE", RespecText.X, RespecText.Y + actionTextY + (press ? 1 : 0),
+                        Color.Lerp(Slate, Bone, Lift(RespecText, over)) * (press ? 0.75f : 1f), UiTypography.Secondary);
             Tip(RespecText, hit, "Give this skill's levels back. Free, and it keeps every level it has earned.");
         }
         {
             var over = CopyText.Contains(hit);
-            _ui.TextRightBig(b, "COPY BUILD CODE", CopyText.Right, CopyText.Y + actionTextY, over ? Bone : Slate, UiTypography.Secondary);
+            var press = Down(over);
+            _ui.TextRightBig(b, "COPY BUILD CODE", CopyText.Right, CopyText.Y + actionTextY + (press ? 1 : 0),
+                             Color.Lerp(Slate, Bone, Lift(CopyText, over)) * (press ? 0.75f : 1f), UiTypography.Secondary);
             Tip(CopyText, hit, "Copies this build as a code. A friend pastes it in the VAULT.");
         }
         if (label.Length > 0)
-            _ui.Button(b, PrimaryBtn, label, hit, false, enabled, enabled ? ButtonStyle.Primary : ButtonStyle.Secondary);
+        {
+            // A REFUSED CLICK IS ANSWERED, NOT SWALLOWED (§29, LAW 13). UiKit.Button gives a disabled face no
+            // pressed state at all, so pressing ALREADY EQUIPPED IN SLOT 4 moved nothing on screen and read as
+            // a dead control rather than as a NO. The depression is drawn here for the one case that has
+            // something to refuse: a button that is off AND has a reason printed above it. A button that is off
+            // with nothing to say no to — CHOSEN, OWNED, EQUIPPED IN THIS SLOT — is simply already true.
+            var refused = !enabled && refusal.Length > 0 && Down(PrimaryBtn.Contains(hit));
+            var face = refused ? new Rectangle(PrimaryBtn.X, PrimaryBtn.Y + 2, PrimaryBtn.Width, PrimaryBtn.Height) : PrimaryBtn;
+            _ui.Button(b, face, label, hit, false, enabled, enabled ? ButtonStyle.Primary : ButtonStyle.Secondary);
+            if (refused) _ui.Fill(b, UiKit.PanelInner(face), PressWash);
+        }
 
         void Body()
         {
@@ -1229,7 +1468,7 @@ public sealed class LoadoutScreen
                 var k = DustEffects.LearnedKeystones(Tree).FirstOrDefault(ks => ks.Id == _pickKeystoneId);
                 if (k is null) { _pick = Pick.Slot; return; }
                 Head("KEYSTONE");
-                _ui.TextBig(b, k.Name.ToUpperInvariant(), x, y, Loadout.HasKeystone(k.Id) ? Gold : Bone, UiTypography.Headline); y += UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(4);
+                _ui.TextBig(b, k.Name.ToUpperInvariant(), x, y, Ins(Loadout.HasKeystone(k.Id) ? Gold : Bone), UiTypography.Headline); y += UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(4);
                 Head("WHAT IT DOES"); Line(k.Blurb, Bone, UiTypography.Body, 6); Gap();
                 Head("CURRENT STATE"); Line(Loadout.HasKeystone(k.Id) ? "IN USE" : "NOT IN USE", Bone);
                 Line($"SOCKETS {Loadout.KeystoneIds.Count} / {Loadout.KeystoneCapacity} — MORE ON THE TRAITS SCREEN", Slate, UiTypography.Secondary);
@@ -1238,7 +1477,7 @@ public sealed class LoadoutScreen
             if (def is null || (_pick == Pick.Slot && !known.Contains(def.Id)))
             {
                 Head(_slot < skills.Count ? $"SLOT {_slot + 1}" : "NOTHING SELECTED");
-                _ui.TextBig(b, "EMPTY", x, y, UiInk.Empty, UiTypography.Headline); y += UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(4);
+                _ui.TextBig(b, "EMPTY", x, y, Ins(UiInk.Empty), UiTypography.Headline); y += UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(4);
                 Line("Pick a skill from the library and press EQUIP. A skill is learned on the MASTERY tree; once learned it is yours for good.", Slate);
                 return;
             }
@@ -1254,8 +1493,8 @@ public sealed class LoadoutScreen
                 var v = def.Variations[_pickIndex];
                 var col = SourceColor.GetValueOrDefault(v.Source, Bone);
                 Head($"VARIATION OF {def.Name.ToUpperInvariant()}");
-                _ui.TextBig(b, v.Name.ToUpperInvariant(), x, y, chosen?.Name == v.Name ? Gold : Bone, UiTypography.Headline);
-                _ui.TextRightBig(b, SourceName(v.Source), x + w, y + UiMetrics.Space(6), col, UiTypography.Body);
+                _ui.TextBig(b, v.Name.ToUpperInvariant(), x, y, Ins(chosen?.Name == v.Name ? Gold : Bone), UiTypography.Headline);
+                _ui.TextRightBig(b, SourceName(v.Source), x + w, y + UiMetrics.Space(6), Ins(col), UiTypography.Body);
                 y += UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(4);
                 Line($"{v.Line} {BuildGlossary.SourceLine(v.Source)}.", Bone); Gap(); Rule();
                 Head("WHAT IT BUYS NEXT");
@@ -1274,7 +1513,7 @@ public sealed class LoadoutScreen
                 var r = cv.Reinforcements[_pickIndex];
                 var owned = SkillLevels.HasReinforcement(def.Id, r.Name);
                 Head($"REINFORCEMENT OF {def.Name.ToUpperInvariant()} · {cv.Name.ToUpperInvariant()}");
-                _ui.TextBig(b, r.Name.ToUpperInvariant(), x, y, owned ? Met : Bone, UiTypography.Headline); y += UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(4);
+                _ui.TextBig(b, r.Name.ToUpperInvariant(), x, y, Ins(owned ? Met : Bone), UiTypography.Headline); y += UiTypography.Pitch(UiTypography.Headline) + UiMetrics.Space(4);
                 Head("WHAT IT DOES"); Line(r.Line, Bone); Gap(); Rule();
                 Head("YOU NEED FIRST");
                 Line(owned ? "OWNED" : free > 0 ? $"ONE FREE LEVEL — YOU HAVE {free}" : $"LEVEL {level + 1} — {WavesToNext(def)} MORE WAVES WITH {def.Name.ToUpperInvariant()} EQUIPPED", owned ? Met : free > 0 ? Gold : Bone);
@@ -1285,8 +1524,8 @@ public sealed class LoadoutScreen
             // A skill: from a slot, or from the library.
             Head($"SKILL · {StyleName(def.Style)} · {(def.TakesABeat ? "ACTIVE" : "PASSIVE")}{(slotOf >= 0 ? $" · SLOT {slotOf + 1}" : "")}");
             var ico = new Rectangle(x, y, TreeIcon, TreeIcon);
-            _ui.Icon(b, $"icon_skill_{def.Id}", ico, have ? Gold : Slate);
-            _ui.TextBig(b, _ui.ShortenBig(def.Name.ToUpperInvariant(), x + w - ico.Right - UiMetrics.Space(12), UiTypography.Headline), ico.Right + UiMetrics.Space(12), y + UiMetrics.Space(8), Bone, UiTypography.Headline);
+            _ui.Icon(b, $"icon_skill_{def.Id}", ico, Ins(have ? Gold : Slate));
+            _ui.TextBig(b, _ui.ShortenBig(def.Name.ToUpperInvariant(), x + w - ico.Right - UiMetrics.Space(12), UiTypography.Headline), ico.Right + UiMetrics.Space(12), y + UiMetrics.Space(8), Ins(Bone), UiTypography.Headline);
             y += TreeIcon + UiMetrics.Space(8);
             Line(def.Line, Bone); Gap(); Rule();
             Head("WHAT IT DOES");
@@ -1305,8 +1544,8 @@ public sealed class LoadoutScreen
             {
                 Head("YOU NEED FIRST");
                 var lockEdge = UiMetrics.Control(20);
-                _ui.Icon(b, "ui_slot_locked", new Rectangle(x, y + 2, lockEdge, lockEdge), Bone);
-                _ui.TextBig(b, _ui.ShortenBig($"LEARNED ON {StyleName(def.Style)}'S ROAD, ON THE MASTERY TREE", w - lockEdge - UiMetrics.Space(8), UiTypography.Body), x + lockEdge + UiMetrics.Space(8), y, Bone, UiTypography.Body); y += UiTypography.Pitch(UiTypography.Body);
+                _ui.Icon(b, "ui_slot_locked", new Rectangle(x, y + 2, lockEdge, lockEdge), Ins(Bone));
+                _ui.TextBig(b, _ui.ShortenBig($"LEARNED ON {StyleName(def.Style)}'S ROAD, ON THE MASTERY TREE", w - lockEdge - UiMetrics.Space(8), UiTypography.Body), x + lockEdge + UiMetrics.Space(8), y, Ins(Bone), UiTypography.Body); y += UiTypography.Pitch(UiTypography.Body);
             }
             else
             {
@@ -1341,8 +1580,8 @@ public sealed class LoadoutScreen
                     else
                     {
                         var live = Vows.IsActive(vow, ctx);
-                        _ui.TextBig(b, vow.Name.ToUpperInvariant(), x, y, live ? Gold : Bone, UiTypography.Body);
-                        _ui.TextRightBig(b, $"x{Vows.Multiplier(vow):0.00}", x + w, y, live ? Gold : Slate, UiTypography.Body);
+                        _ui.TextBig(b, vow.Name.ToUpperInvariant(), x, y, Ins(live ? Gold : Bone), UiTypography.Body);
+                        _ui.TextRightBig(b, $"x{Vows.Multiplier(vow):0.00}", x + w, y, Ins(live ? Gold : Slate), UiTypography.Body);
                         y += UiTypography.Pitch(UiTypography.Body);
                         Pair("DEMAND", DemandText(vow));
                         Pair("YOUR BUILD", YourBuildText(vow, ctx));
@@ -1354,9 +1593,9 @@ public sealed class LoadoutScreen
                         _changeVowShown = true;
                         var btn = ChangeVowBtn(_changeVowY);
                         var overBtn = In(btn, region).Contains(hit);
-                        _ui.Fill(b, btn, overBtn ? new Color(0x2C, 0x25, 0x44) : Quiet);
-                        Outline(b, btn, overBtn ? Bone : Dim, 1);
-                        _ui.TextCenterBig(b, vow is null ? "BIND A VOW" : "CHANGE VOW", btn.Center.X, btn.Y + (btn.Height - UiTypography.Body) / 2, overBtn ? Bone : Slate, UiTypography.Body);
+                        Cell(b, btn, Quiet, false, overBtn);
+                        Outline(b, btn, Ins(overBtn ? Bone : Dim), 1);
+                        _ui.TextCenterBig(b, vow is null ? "BIND A VOW" : "CHANGE VOW", btn.Center.X, btn.Y + (btn.Height - UiTypography.Body) / 2, Ins(overBtn ? Bone : Slate), UiTypography.Body);
                         y = btn.Bottom + UiMetrics.Space(8);
                     }
                 }
@@ -1371,8 +1610,8 @@ public sealed class LoadoutScreen
                 {
                     var mult = SourceMatchup.Effectiveness(chosen.Source, enemy);
                     var verdict = mult > 1.01f ? "STRONG" : mult < 0.99f ? "WEAK" : "EVEN";
-                    _ui.TextBig(b, SourceName(enemy), x, y, SourceColor.GetValueOrDefault(enemy, Bone), UiTypography.Body);
-                    _ui.TextRightBig(b, $"{verdict}  x{mult:0.00}", x + w, y, mult > 1.01f ? Met : mult < 0.99f ? Ember : Slate, UiTypography.Body);
+                    _ui.TextBig(b, SourceName(enemy), x, y, Ins(SourceColor.GetValueOrDefault(enemy, Bone)), UiTypography.Body);
+                    _ui.TextRightBig(b, $"{verdict}  x{mult:0.00}", x + w, y, Ins(mult > 1.01f ? Met : mult < 0.99f ? Ember : Slate), UiTypography.Body);
                     y += UiTypography.Pitch(UiTypography.Body);
                 }
             }
@@ -1395,8 +1634,8 @@ public sealed class LoadoutScreen
         var skills = Loadout.Skills;
         var sworn = _slot < skills.Count ? skills[_slot].VowId : null;
         var w = InsBodyW;
-        _ui.TextBig(b, $"BIND TO SLOT {_slot + 1}", InsX, y, Slate, UiTypography.Secondary);
-        _ui.TextRightBig(b, "CLICK ONE", InsX + w, y, Slate, UiTypography.Secondary);
+        _ui.TextBig(b, $"BIND TO SLOT {_slot + 1}", InsX, y, Ins(Slate), UiTypography.Secondary);
+        _ui.TextRightBig(b, "CLICK ONE", InsX + w, y, Ins(Slate), UiTypography.Secondary);
         y += UiTypography.Pitch(UiTypography.Secondary) + UiMetrics.Space(4);
         _vowListTop = y;
         var pad = UiMetrics.Space(12);
@@ -1413,20 +1652,20 @@ public sealed class LoadoutScreen
             var subY = nameY + UiTypography.Pitch(UiTypography.Body) - UiMetrics.Space(6);
             if (idx < 0)
             {
-                _ui.Fill(b, row, over ? new Color(0x1E, 0x18, 0x2C) : Quiet);
-                Outline(b, row, sworn is null ? Gold : over ? Slate : Dim, sworn is null ? 2 : 1);
-                _ui.TextBig(b, "NO VOW", row.X + pad, row.Y + (row.Height - UiTypography.Body) / 2, sworn is null ? Gold : Bone, UiTypography.Body);
+                Cell(b, row, Quiet, sworn is null, over);
+                Outline(b, row, Ins(sworn is null ? Gold : over ? Slate : Dim), sworn is null ? 2 : 1);
+                _ui.TextBig(b, "NO VOW", row.X + pad, row.Y + (row.Height - UiTypography.Body) / 2, Ins(sworn is null ? Gold : Bone), UiTypography.Body);
                 continue;
             }
             var v = known[idx];
             var live = Vows.IsActive(v, ctx);
             var on = v.Id == sworn;
-            _ui.Fill(b, row, on ? new Color(0x2C, 0x25, 0x44) : over ? new Color(0x1E, 0x18, 0x2C) : Quiet);
-            Outline(b, row, on ? Gold : over ? Slate : Dim, on ? 2 : 1);
-            _ui.TextBig(b, _ui.ShortenBig(v.Name.ToUpperInvariant(), row.Width - tail, UiTypography.Body), row.X + pad, nameY, on ? Gold : Bone, UiTypography.Body);
-            _ui.TextBig(b, _ui.ShortenBig(DemandText(v), row.Width - tail, UiTypography.Caption), row.X + pad, subY, Slate, UiTypography.Caption);
-            _ui.TextRightBig(b, $"x{Vows.Multiplier(v):0.00}", row.Right - pad, nameY, live ? Gold : Slate, UiTypography.Body);
-            _ui.TextRightBig(b, live ? "HOLDS" : "BROKEN", row.Right - pad, subY, live ? Met : Ember, UiTypography.Caption);
+            Cell(b, row, Quiet, on, over);
+            Outline(b, row, Ins(on ? Gold : over ? Slate : Dim), on ? 2 : 1);
+            _ui.TextBig(b, _ui.ShortenBig(v.Name.ToUpperInvariant(), row.Width - tail, UiTypography.Body), row.X + pad, nameY, Ins(on ? Gold : Bone), UiTypography.Body);
+            _ui.TextBig(b, _ui.ShortenBig(DemandText(v), row.Width - tail, UiTypography.Caption), row.X + pad, subY, Ins(Slate), UiTypography.Caption);
+            _ui.TextRightBig(b, $"x{Vows.Multiplier(v):0.00}", row.Right - pad, nameY, Ins(live ? Gold : Slate), UiTypography.Body);
+            _ui.TextRightBig(b, live ? "HOLDS" : "BROKEN", row.Right - pad, subY, Ins(live ? Met : Ember), UiTypography.Caption);
             Tip(shown, hit, v.Description);
         }
         y = _vowListTop + (known.Count + 1) * VowRowPitch - UiMetrics.Space(4);
@@ -1434,9 +1673,9 @@ public sealed class LoadoutScreen
         _changeVowShown = true;
         var btn = ChangeVowBtn(_changeVowY);
         var overBtn = In(btn, region).Contains(hit);
-        _ui.Fill(b, btn, overBtn ? new Color(0x2C, 0x25, 0x44) : Quiet);
-        Outline(b, btn, Dim, 1);
-        _ui.TextCenterBig(b, "CLOSE", btn.Center.X, btn.Y + (btn.Height - UiTypography.Body) / 2, overBtn ? Bone : Slate, UiTypography.Body);
+        Cell(b, btn, Quiet, false, overBtn);
+        Outline(b, btn, Ins(Dim), 1);
+        _ui.TextCenterBig(b, "CLOSE", btn.Center.X, btn.Y + (btn.Height - UiTypography.Body) / 2, Ins(overBtn ? Bone : Slate), UiTypography.Body);
         y = btn.Bottom + UiMetrics.Space(8);
         if (_vowListReveal > 0 && --_vowListReveal == 0)
         {
@@ -1460,7 +1699,7 @@ public sealed class LoadoutScreen
             var ghostW = UiMetrics.Text(180);   // a name-sized ghost, one chip tall
             var r = new Rectangle(p.X - ghostW / 2, p.Y - ChipH / 2, ghostW, ChipH);
             _ui.Fill(b, new Rectangle(r.X + 4, r.Y + 5, r.Width, r.Height), new Color(0, 0, 0) * 0.45f);
-            _ui.Fill(b, r, new Color(0x2C, 0x25, 0x44));
+            _ui.Fill(b, r, Selected);
             _ui.Fill(b, new Rectangle(r.X, r.Y, 5, r.Height), col);
             Outline(b, r, Bone, 2);
             var pad = UiMetrics.Space(16);
@@ -1480,20 +1719,6 @@ public sealed class LoadoutScreen
         var alpha = Math.Clamp(t * 1.9f, 0f, 1f);
         if (!_ui.AnimSprite(b, "fx_bind_chain_strip8_512", box, played * ChainClipSeconds, 8f, loop: false, Color.White * alpha))
             Outline(b, row, Gold * alpha, 3);
-    }
-
-    private void TickEffects()
-    {
-        var now = _clock.Elapsed.TotalSeconds;
-        var dt = (float)Math.Clamp(now - _lastTick, 0.0, 0.10);
-        _lastTick = now;
-        Decay(_slotFlash, dt);
-        if (!_devHoldChain) Decay(_bindFlash, dt);
-        static void Decay(Dictionary<int, float> d, float dt)
-        {
-            if (d.Count == 0) return;
-            foreach (var k in d.Keys.ToList()) { var left = d[k] - dt; if (left <= 0f) d.Remove(k); else d[k] = left; }
-        }
     }
 
     private void Outline(SpriteBatch b, Rectangle r, Color c, int t)
