@@ -62,19 +62,195 @@ public sealed class MasteryScreen
     private readonly UiKit _ui;
 
     /// <summary>
-    /// The one animated thing on this page: the breath under an unchosen Specialisation.
+    /// The one IDLE motion on this page: the breath under an unchosen Specialisation.
     /// </summary>
     /// <remarks>
     /// A wall clock rather than an accumulated delta because this screen's Update takes no frame time
-    /// and the host's call site is not this file's to change. Nothing reads it but the halo, so a
-    /// dropped frame costs a hair of phase and nothing else.
+    /// and the host's call site is not this file's to change. It is SAMPLED in <see cref="Update"/>
+    /// into <see cref="_breathPhase"/> — Draw reads a number, never the clock — and under Reduced
+    /// Motion the sample is held at the breath's brightest, so the six still say "not ordinary" as a
+    /// static highlight rather than as motion (brief §32: drop idle motion, keep the highlight).
     /// </remarks>
     private static readonly System.Diagnostics.Stopwatch _breath = System.Diagnostics.Stopwatch.StartNew();
 
+    /// <summary>The breath's brightness this frame, 0.10 → 1; 1 and still under Reduced Motion.</summary>
+    private float _breathPhase = 1f;
+
+    /// <summary>
+    /// The breath's brightness at a moment — and the whole of its Reduced Motion answer: HELD, at the
+    /// top of its own breath, so the six unchosen Specialisations keep the highlight and lose the motion
+    /// (brief §32).
+    /// </summary>
+    /// <remarks>
+    /// Public and pure because it is the one piece of this screen's motion a test can reach: the screen
+    /// itself cannot be constructed without a GraphicsDevice, and the capture rig has no Reduced Motion
+    /// dial, so this state can only be PROVEN here. See <c>mastery_motion_test.cs</c>.
+    /// </remarks>
+    public static float BreathPhase(double seconds)
+        => UiMotion.Reduced ? 1f : 0.55f + 0.45f * MathF.Sin((float)seconds * 2.4f);
+
+    /// <summary>
+    /// How far the SPECIALISATION ceremony has faded in, from how much of its one-shot is left
+    /// (<see cref="UiMotion.Pulse"/>): 0 as it fires, 1 once it is open — and 1 AT ONCE under Reduced
+    /// Motion, the same end state with no fade (brief §32, §34).
+    /// </summary>
+    /// <inheritdoc cref="BreathPhase" path="/remarks"/>
+    public static float CeremonyFade(float pulseLeft)
+        => UiMotion.Reduced ? 1f : UiMotion.Smooth(1f - pulseLeft);
+
+    // ══ FEEDBACK (UI polish P3–P6) ══════════════════════════════════════════════════════════════
+    //
+    // Every motion on this page is a UiMotion value: a one-shot pulse FIRED FROM UPDATE at the event
+    // it marks (a take, a refund, the ceremony opening) and only READ by Draw; or a hover / selection
+    // ease. Nothing here loops and nothing is re-armed by a draw.
+    //
+    // NOT ONE OF THEM MOVES ANYTHING. Every pulse is a fade at a fixed size and a fixed place — the
+    // take's bloom is two rings at a fixed radius, the ceremony's entrance is a veil clearing, the
+    // spend is a figure brightening — which is why Reduced Motion has nothing to strip from them
+    // (brief §32 drops scale, movement, idle motion and slides, and keeps simple fades). The two
+    // things that WOULD read as motion under that setting answer it themselves: the eases collapse to
+    // their target (UiMotion.Ease), and the idle breath holds at its brightest (BreathPhase).
+    //
+    // The one deliberate DISPLACEMENT is the 2 px a pressed node drops — held only while the button
+    // is, which is a state and not an animation, and the same two pixels UiKit.Button drops.
+
+    /// <summary>The take pulse on a node — a gold bloom that plays once, keyed to the node taken.</summary>
+    private static int NodeKey(string id) => HashCode.Combine("node", id);
+
+    /// <summary>The wire into a node lighting up, keyed to the node whose take lit it.</summary>
+    private static int WireKey(string id) => HashCode.Combine("wire", id);
+
+    /// <summary>A node's hover lift.</summary>
+    private static int HoverKey(string id) => HashCode.Combine("hover", id);
+
+    /// <summary>A node's SELECTED ring — the pinned node, the one the inspector is reading (brief §28).</summary>
+    private static int SelKey(string id) => HashCode.Combine("pin", id);
+
+    /// <summary>The AVAILABLE figure reacting to a spend or a refund (brief §36–§37).</summary>
+    private static readonly int PointsKey = HashCode.Combine("points");
+
+    /// <summary>The ceremony's backdrop and panel fading in (brief §34).</summary>
+    private static readonly int SpecKey = HashCode.Combine("ceremony");
+
+    /// <summary>
+    /// A hover-style ease that costs nothing at rest.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="UiMotion.Ease"/> starts a key it has never seen at the OPPOSITE of its target — right
+    /// for a hover fading in, but a control at rest that asks for 0 every frame is handed a 1 that
+    /// then fades, is forgotten at 0, and is handed a 1 again: a sawtooth on every idle control
+    /// (measured: 0.93, 0.74, 0.50, 0.26, 0.07, 0, 0.93 …). So a key is only asked for 0 while it is
+    /// known to be lit, and dropped the moment it reaches rest. The set holds the lit keys and nothing
+    /// else; a page at rest asks UiMotion for nothing.
+    /// </remarks>
+    private float Lift(int key, bool on, float seconds = UiMotion.Fast)
+    {
+        if (on) { _lit.Add(key); return UiMotion.Ease(key, 1f, seconds); }
+        if (!_lit.Contains(key)) return 0f;
+        var v = UiMotion.Ease(key, 0f, seconds);
+        if (v <= 0f) _lit.Remove(key);
+        return v;
+    }
+
+    private readonly HashSet<int> _lit = new();
+
+    /// <summary>How far a pressed node sinks, in page pixels — the same two the house button drops.</summary>
+    private const int PressDepth = 2;
+
+    /// <summary>The left button is down — the real one, or the one a capture dial is holding down.</summary>
+    private static bool Held => UiKit.MouseHeld || DevHold;
+
+    /// <summary>The sound the host should play for what just happened here, read once and cleared.</summary>
+    /// <remarks>
+    /// The host owns audio; this screen only names the moment (the shape of
+    /// <c>TraitsScreen.ConsumeCue</c>). The vocabulary is the audio README's: <c>sfx_weave</c> for a
+    /// node clicking into the tree, <c>sfx_bind</c> for the two commitments (a branch capstone, a style
+    /// sealed), <c>sfx_click</c> for a point handed back or a two-step button armed, <c>sfx_error</c>
+    /// for a click the rules refused.
+    /// </remarks>
+    public string? ConsumeCue()
+    {
+        var c = _cue;
+        _cue = null;
+        return c;
+    }
+
+    private string? _cue;
+
+    // ── DEV DIALS for the capture rig (the rig shoots Game1.ShotAtFrame; a transient needs a pose). ──
+    //
+    //   RH_SHOT_TAKE=<nodeId>   take that node FOR REAL, through TakeNode, at the posed instant below —
+    //       so the shutter catches its bloom, its wire lighting and the AVAILABLE figure reacting. A
+    //       node the fixture cannot take poses the REFUSAL instead, which is the other half of §29.
+    //   RH_SHOT_HOVER=<nodeId>  put the cursor on that node's centre; the screen's own hit test then
+    //       hovers it, so what is photographed is the real state and not a painted-on one.
+    //   RH_SHOT_HOLD=1          the button is held over it: the PRESSED state.
+    //   RH_SHOT_POSE=<0..1>     FREEZE the posed transient partway through and photograph it there:
+    //       0 is the instant it fires, 1 is settled, 0.5 is halfway. Unset, the shot catches the take
+    //       on its own peak and the ceremony already open. It poses the take's bloom, the wire that
+    //       take lights, and the ceremony's fade — each on its OWN clock, so a frozen frame is a true
+    //       frame: the bloom runs over a Transition and the wire over Fast, which is 1.8× quicker, so
+    //       at pose 0.5 the bloom is half gone and the wire is already lit.
+    //
+    // WHY A FREEZE AND NOT A DELAY. The first version aimed the event so many frames before the
+    // shutter. It is not reproducible: this rig runs Update more often than Draw while it catches up
+    // from the content load, and a pulse is advanced by UiMotion.Tick (an Update) while an ease is
+    // advanced by the ask (a Draw) — so "five frames" meant five steps of one and fifteen of the other,
+    // and the same command produced a different fraction on a different machine. A pose that names the
+    // FRACTION drives the same drawing code with a known input, which is what TraitsScreen.DevPoseLit
+    // does with its own flourish.
+    //
+    // Read once here; consumed in Update and read in Draw. Nothing in the host had to change — the
+    // dials are this screen's own, the way HuntScreen.DevSeekBefore and TraitsScreen._litFrozen are.
+    private static readonly string? DevTakeId = Env("RH_SHOT_TAKE");
+    private static readonly string? DevHoverId = Env("RH_SHOT_HOVER");
+    private static readonly bool DevHold = Env("RH_SHOT_HOLD") == "1";
+    private static readonly float? DevPose = ParsePose();
+    private bool _devFired;
+
+    private static string? Env(string k)
+    {
+        var v = Environment.GetEnvironmentVariable(k);
+        return string.IsNullOrEmpty(v) ? null : v;
+    }
+
+    private static float? ParsePose()
+        => float.TryParse(Env("RH_SHOT_POSE"), System.Globalization.NumberStyles.Float,
+                          System.Globalization.CultureInfo.InvariantCulture, out var p)
+            ? Math.Clamp(p, 0f, 1f)
+            : null;
+
+    /// <summary>
+    /// The frame the posed take fires on: one before <see cref="Game1.ShotAtFrame"/>, because Update N
+    /// runs before Draw N and the host's frame counter is the last Draw's — so the take lands in the
+    /// Update the photographed Draw follows.
+    /// </summary>
+    private static int DevFireFrame => Game1.ShotAtFrame - 1;
+
+    /// <summary>
+    /// Where the WIRE stands at a posed fraction of the take's bloom. The bloom runs over a Transition
+    /// and the wire over Fast, so the wire is 1.8× ahead of it and is already lit when the bloom is
+    /// half gone — the same relationship the two have when they run for real.
+    /// </summary>
+    private static float PosedWire(float pose) => MathF.Min(1f, pose * UiMotion.Transition / UiMotion.Fast);
+
+    /// <summary>The cursor the screen works with: the real one, or the posed one a dev dial put on a node.</summary>
+    private Point Cursor(Point mouse)
+        => DevHoverId is { } id && MasteryCatalog.ById(id) is { } n ? Screen(NodePos(n)).ToPoint() : mouse;
+
     private string _msg = "";
+
+    /// <summary>The node <see cref="_msg"/> was raised for, or null for a message about the whole tree.</summary>
+    /// <remarks>
+    /// A refusal is read beside the button that raised it — so it is shown while the inspector shows
+    /// THAT node, and every other node keeps its own reason (brief §29: a disabled control says why,
+    /// its own why). Before this the last refusal followed the pointer from node to node.
+    /// </remarks>
+    private string? _msgNodeId;
     private string? _hoverNodeId;          // the node under the pointer this frame
     private string? _pinnedNodeId;         // the last node clicked — what the detail panel shows when nothing is hovered
     private string? _specNodeId;         // non-null: the SPECIALISATION ceremony is open for this just-taken node
+    private bool _specWasOpen;           // last frame's answer, so the ceremony's fade fires ONCE when it opens
     private Style _specStyle;
 
     /// <summary>The host reads this to hold the rail, its hotkeys, L and T while the ceremony is open.</summary>
@@ -870,6 +1046,30 @@ public sealed class MasteryScreen
                        bool held, int wheel, MemoryDustTree tree, bool rightClicked = false)
     {
         Tree = tree;
+        mouse = Cursor(mouse);
+
+        // THE BREATH is sampled here, so Draw reads a number and not a clock — and under Reduced
+        // Motion the number is the breath's brightest, held.
+        _breathPhase = BreathPhase(_breath.Elapsed.TotalSeconds);
+
+        // THE CEREMONY'S FADE (brief §34), fired ONCE, from here, on the frame it opens — never
+        // re-armed by a draw. Sealing or backing out closes it; the next one fades in again.
+        if ((_specNodeId is not null) != _specWasOpen)
+        {
+            _specWasOpen = _specNodeId is not null;
+            if (_specWasOpen) UiMotion.Flash(SpecKey, UiMotion.Transition);
+        }
+
+        // DEV: the posed take, landing in the Update the shutter's Draw follows (see the dial block
+        // above). It goes through the REAL TakeNode, so what is photographed is the rule's own answer —
+        // a node the fixture cannot afford poses the refusal instead of a staged one.
+        if (!_devFired && Game1.RigActive && DevTakeId is { } devId
+            && Game1.ShotFrameNow >= DevFireFrame && MasteryCatalog.ById(devId) is { } devNode)
+        {
+            _devFired = true;
+            _pinnedNodeId = devNode.Id;
+            TakeNode(devNode);
+        }
 
         // ── THE CAMERA. Only while the tree page is open; the overview has nothing to pan. ────────
         if (_specNodeId is not null) { _dragFrom = null; _draggedThisPress = false; }
@@ -935,10 +1135,7 @@ public sealed class MasteryScreen
                 var rr = NodeHitHalf(node.Kind);
                 if (Math.Abs(rhit.X - rp.X) > rr || Math.Abs(rhit.Y - rp.Y) > rr) continue;
                 _pinnedNodeId = node.Id;
-                if (Mastery.Refund(node.Id)) { _msg = "ONE POINT RETURNED."; Dirty = true; }
-                else _msg = Mastery.IsTaken(node.Id)
-                    ? "ANOTHER NODE DEPENDS ON THIS ONE."
-                    : "NOTHING SPENT HERE.";
+                GiveBack(node, "ONE POINT RETURNED.");
                 return;
             }
         }
@@ -958,14 +1155,16 @@ public sealed class MasteryScreen
             if (SpecSealBtn.Contains(hit))
             {
                 _specNodeId = null;
-                _msg = $"{_specStyle.ToString().ToUpperInvariant()} IS YOUR STYLE — ITS SKILLS HIT TWICE AS HARD.";
+                // THE ONE COMMITMENT THIS SCREEN MAKES, so it gets the cue with weight (audio README).
+                Say($"{_specStyle.ToString().ToUpperInvariant()} IS YOUR STYLE — ITS SKILLS HIT TWICE AS HARD.", attId, "sfx_bind");
             }
             else if (SpecUndoBtn.Contains(hit))
             {
                 Mastery.Refund(attId);
                 _specNodeId = null;
                 Dirty = true;
-                _msg = "THE POINTS ARE BACK. CHOOSE A STYLE WHEN YOU ARE READY.";
+                Say("THE POINTS ARE BACK. CHOOSE A STYLE WHEN YOU ARE READY.", attId, "sfx_click");
+                UiMotion.Flash(PointsKey, UiMotion.Transition);
             }
             return;
         }
@@ -980,10 +1179,16 @@ public sealed class MasteryScreen
             // anywhere else in this game. The respec itself stays free and instant — that is the
             // load-bearing difference between this tree and the permanent one — so the guard is
             // deliberation, not cost.
-            if (!_resetArmed) { _resetArmed = true; _msg = "PRESS AGAIN TO TAKE EVERY POINT BACK."; return; }
+            //
+            // AND IT STAYS CALM (the polish spec for this screen). Arming and confirming each get the
+            // dry click every ordinary button gets, and the only motion is the one flash on the figure
+            // that changed. No bloom on the twenty nodes it emptied: a respec is a correction, not a
+            // reward, and twenty simultaneous celebrations would read as a fault.
+            if (!_resetArmed) { _resetArmed = true; Say("PRESS AGAIN TO TAKE EVERY POINT BACK.", null, "sfx_click"); return; }
             _resetArmed = false;
             Mastery.Respec();
-            _msg = "ALL MASTERY POINTS RETURNED.";
+            Say("ALL MASTERY POINTS RETURNED.", null, "sfx_click");
+            UiMotion.Flash(PointsKey, UiMotion.Transition);
             Dirty = true;
             return;
         }
@@ -996,11 +1201,7 @@ public sealed class MasteryScreen
         // rules a click on the node itself runs, so the two doors cannot disagree.
         if (TakeBtn.Contains(hit) && _pinnedNodeId is { } pinId && MasteryCatalog.ById(pinId) is { } pinned)
         {
-            if (Mastery.IsTaken(pinId))
-            {
-                if (Mastery.Refund(pinId)) { _msg = "POINTS RETURNED."; Dirty = true; }
-                else _msg = "ANOTHER NODE DEPENDS ON THIS ONE.";
-            }
+            if (Mastery.IsTaken(pinId)) GiveBack(pinned, "POINTS RETURNED.");
             else TakeNode(pinned);
             return;
         }
@@ -1026,13 +1227,58 @@ public sealed class MasteryScreen
         // Skills, Vows and keystone sockets are all LoadoutScreen's now.
     }
 
+    /// <summary>
+    /// Say something in the inspector's one line, ABOUT one node — and name the sound the host should
+    /// play for it.
+    /// </summary>
+    /// <remarks>
+    /// The line and the node it belongs to are set together because they were drifting apart: the
+    /// message was a single field with no owner, so a refusal raised by one node followed the pointer
+    /// onto every other node's card and told the player the wrong reason (brief §29 wants a disabled
+    /// control to say ITS OWN why). A null <paramref name="nodeId"/> is a line about the whole tree —
+    /// the respec's two — and is shown whatever the inspector is reading.
+    /// </remarks>
+    private void Say(string msg, string? nodeId, string? cue)
+    {
+        _msg = msg;
+        _msgNodeId = nodeId;
+        if (cue is not null) _cue = cue;
+    }
+
+    /// <summary>Hand a node's points back, or say exactly why not — the right click and the inspector's button alike.</summary>
+    /// <remarks>
+    /// The two doors used to carry a copy each, and the copies had already drifted (one tested
+    /// <c>IsTaken</c> and one did not). The words each door says are still its own; the RULE is shared.
+    /// A refund is the calm inverse of a take: the AVAILABLE figure reacts, the wire this node lit
+    /// eases back down on its own (<see cref="Lift"/> reads the tree, not an event), and nothing blooms.
+    /// </remarks>
+    private void GiveBack(MasteryNode node, string returned)
+    {
+        if (Mastery.Refund(node.Id))
+        {
+            Say(returned, node.Id, "sfx_click");
+            UiMotion.Flash(PointsKey, UiMotion.Transition);
+            Dirty = true;
+            return;
+        }
+        Say(Mastery.IsTaken(node.Id) ? "ANOTHER NODE DEPENDS ON THIS ONE." : "NOTHING SPENT HERE.",
+            node.Id, "sfx_error");
+    }
+
     /// <summary>Take a node, or say exactly why not — for a click on the node and for the inspector's button alike.</summary>
     private void TakeNode(MasteryNode node)
     {
         var firstSpec = node.Kind == MasteryKind.Specialisation && Mastery.Affinity() is null;
         if (Mastery.Take(node.Id))
         {
-            _msg = "";
+            // THE TAKE, FELT (brief §30–§31, the polish spec for this screen): the node blooms ONCE over
+            // a Transition, the AVAILABLE figure it just cost reacts (§36–§37), and the wire into it
+            // lights over Fast — that last one is not fired here because it is not an event, it is a
+            // state: DrawTreeNodes eases every wire toward "both ends taken", so the light arrives on
+            // the take and leaves on the refund without a second copy of the rule.
+            Say("", node.Id, node.Kind == MasteryKind.Mastery ? "sfx_bind" : "sfx_weave");
+            UiMotion.Flash(NodeKey(node.Id), UiMotion.Transition);
+            UiMotion.Flash(PointsKey, UiMotion.Transition);
             Dirty = true;
             // THE SPECIALISATION: your first is the moment this game is named for, so it gets a ceremony
             // instead of a click-sound — the hexagon shown whole, the choice sealed or taken back.
@@ -1040,14 +1286,15 @@ public sealed class MasteryScreen
             return;
         }
         // WHY THE CLICK DID NOTHING, NAMED EXACTLY — from the rule the refusal came from.
-        _msg = Mastery.IsTaken(node.Id) ? "ALREADY TAKEN." :
+        Say(Mastery.IsTaken(node.Id) ? "ALREADY TAKEN." :
             Mastery.Available < node.Cost
                 ? $"NEEDS {node.Cost} POINTS — YOU HAVE {Mastery.Available}. GO DEEPER." :
             node.Kind == MasteryKind.Mastery && Mastery.MasteredBranch() is { } heldBranch
                 ? $"YOU ALREADY TOOK THE {Short(heldBranch)} CAPSTONE — ONE CAPSTONE PER HUNTER." :
             node.Kind == MasteryKind.Specialisation && Mastery.Affinity() is not null
                 ? "YOU ALREADY CHOSE A STYLE — ONE STYLE PER HUNTER." :
-            "TAKE A CONNECTED NODE FIRST.";
+            "TAKE A CONNECTED NODE FIRST.",
+            node.Id, "sfx_error");
     }
 
     // ── Draw ─────────────────────────────────────────────────────────────────────────────────────
@@ -1056,7 +1303,8 @@ public sealed class MasteryScreen
         Tree = tree;
         _hoverNodeId = null;
         // Inverts the overlay inset this screen is drawn through (Game1.OverlayScale).
-        var hit = mouse;
+        // The SAME posed cursor Update works with, or a capture would hit-test one point and draw another.
+        var hit = Cursor(mouse);
         _ui.Fill(b, UiKit.OverlayScrim, new Color(0x0A, 0x08, 0x10, 0xD8));
 
         DrawEditor(b, hit, tree);
@@ -1192,8 +1440,15 @@ public sealed class MasteryScreen
             // AN UNWALKED WIRE IS DIMMER THAN THE NODE IT TOUCHES, which it was not before: Path is also
             // the locked-node frame tint, so a node and the fatter wire running into it were the same
             // colour and the node disappeared into the web. Half-alpha puts the wire behind the studs.
+            // THE CONNECTION LIGHTS OVER FAST when the take joins both ends, and eases back down when a
+            // refund parts them (the polish spec for this screen; brief §31's 80–120 ms band). It is a
+            // STATE, eased, not a fired pulse: the wire is gold exactly while the tree says both ends
+            // are taken, so a save that loads a walked branch cannot get stuck half-lit, and Reduced
+            // Motion lands on the same end colour with no fade (UiMotion.Ease does that itself).
             var walked = Mastery.IsTaken(node.Id) && Mastery.IsTaken(nearest.Id);
-            _ui.LineSeg(b, a, c, WireThickness, walked ? Gold : Path * 0.55f);
+            var lit = Lift(WireKey(node.Id), walked, UiMotion.Fast);
+            if (DevPose is { } wp && node.Id == DevTakeId) lit = PosedWire(wp);
+            _ui.LineSeg(b, a, c, WireThickness, lit <= 0f ? Path * 0.55f : Color.Lerp(Path * 0.55f, Gold, lit));
         }
         // THE FOUR DIRECTIONS, NAMED OUTSIDE THE RIM. Between the wires and the nodes, so a header is
         // never drawn over a plaque even if the arithmetic in HeaderRing is one day wrong.
@@ -1255,8 +1510,14 @@ public sealed class MasteryScreen
         // the exact state where the player most needs to read it. Gold when there is something to spend.
         var figureX = medal.Right + UiMetrics.Space(14);
         var figureY = PointsPanel.Y + PointsNumberTop;
-        _ui.TextBig(b, $"{Mastery.Available}", figureX, figureY,
-                    Mastery.Available > 0 ? Gold : Bone, UiTypography.PrimaryValue);
+        // IT REACTS WHERE THE POINTS LIVE (brief §36–§37). A take, a refund and a respec each fire one
+        // Transition flash on THIS figure — the resource pill of this screen — so a spend is felt at
+        // the number it changed instead of by flying something across the page. It is a brief emphasis
+        // on a figure that is already there: no new label, no counter, no toast.
+        var spend = UiMotion.Pulse(PointsKey);
+        var figureCol = Mastery.Available > 0 ? Gold : Bone;
+        if (spend > 0f) figureCol = Color.Lerp(figureCol, Color.White, 0.85f * spend);
+        _ui.TextBig(b, $"{Mastery.Available}", figureX, figureY, figureCol, UiTypography.PrimaryValue);
         _ui.TextBig(b, "AVAILABLE", figureX + _ui.MeasureBig($"{Mastery.Available}", UiTypography.PrimaryValue) + UiMetrics.Space(10),
                     figureY + UiTypography.PrimaryValue - UiTypography.Secondary - 2, Slate, UiTypography.Secondary);
         _ui.TextBig(b, $"{Mastery.Spent} SPENT", figureX, figureY + UiTypography.Pitch(UiTypography.PrimaryValue), Slate, UiTypography.Secondary);
@@ -1326,7 +1587,13 @@ public sealed class MasteryScreen
     /// </remarks>
     private void DrawSpecialisation(SpriteBatch b, Point hit)
     {
-        _ui.Scrim(b, 0.75f);
+        // IT ARRIVES, IT DOES NOT APPEAR (brief §34: a quick backdrop fade and a short panel fade).
+        // ONE Transition, fired from Update on the frame the ceremony opens — the CEREMONY ITSELF keeps
+        // its length: it stays open until the player seals it or hands the points back, exactly as
+        // before. A fade and nothing else: no scale, no slide, so Reduced Motion has nothing to strip —
+        // and it takes the instant path there anyway, landing on the same fully-lit panel.
+        var open = CeremonyFade(DevPose is { } cp ? 1f - cp : UiMotion.Pulse(SpecKey));
+        _ui.Scrim(b, 0.75f * open);
         _ui.Panel(b, SpecPanel, gold: true);
 
         var name = _specStyle.ToString().ToUpperInvariant();
@@ -1353,6 +1620,11 @@ public sealed class MasteryScreen
 
         Button(b, SpecSealBtn, $"CHOOSE {name}", hit, true);
         Button(b, SpecUndoBtn, "NOT YET — TAKE THE POINTS BACK", hit, true);
+
+        // The panel fading UP from the page's own black — one veil over the modal rather than an alpha
+        // threaded through thirty draw calls, which is what a "fade the panel in" would otherwise cost.
+        // Drawn last, so it covers the buttons too; gone entirely once the fade has run.
+        if (open < 1f) _ui.Fill(b, modal, new Color(0x0A, 0x08, 0x10) * (1f - open));
     }
 
     /// <summary>The label's tail — what the node DOES, after the em dash that follows its name.</summary>
@@ -1430,7 +1702,13 @@ public sealed class MasteryScreen
         var btn = TakeBtn;
         var taken = Mastery.IsTaken(n.Id);
         var can = Mastery.CanTake(n.Id);
-        var refusal = _msg.Length > 0 ? _msg
+        // EVERY DISABLED NODE SAYS ITS OWN WHY (brief §29). The spoken line — the one a click just
+        // raised — belongs to the node it was raised for, so it is only read here while THAT node is
+        // the one on the card; every other node falls through to the reason its own rules give. Before
+        // this, one refusal followed the pointer across the tree and told the player the wrong thing
+        // about every node they hovered next.
+        var said = _msg.Length > 0 && (_msgNodeId is null || _msgNodeId == n.Id) ? _msg : "";
+        var refusal = said.Length > 0 ? said
             : taken || can ? ""
             : Mastery.Available < n.Cost ? $"NEEDS {n.Cost} POINTS — YOU HAVE {Mastery.Available}. GO DEEPER."
             : n.Kind == MasteryKind.Specialisation && Mastery.Affinity() is not null ? "ONE STYLE PER HUNTER — ALREADY CHOSEN."
@@ -1438,7 +1716,7 @@ public sealed class MasteryScreen
             : "TAKE A CONNECTED NODE FIRST.";
         if (refusal.Length > 0)
             _ui.TextBig(b, _ui.ShortenBig(refusal, body.Width, UiTypography.Secondary), body.X, RefusalTop,
-                        _msg.Length > 0 && (taken || can) ? UiInk.Good : Ember, UiTypography.Secondary);
+                        said.Length > 0 && (taken || can) ? UiInk.Good : Ember, UiTypography.Secondary);
         var label = taken ? "GIVE BACK" : $"TAKE  ·  {n.Cost} POINT{(n.Cost == 1 ? "" : "S")}";
         _ui.Button(b, btn, label, hit, false, taken || can, !taken && can ? ButtonStyle.Primary : ButtonStyle.Secondary);
     }
@@ -1633,6 +1911,22 @@ public sealed class MasteryScreen
     /// </remarks>
     private static Color Muted(Color c, float f) => new((int)(c.R * f), (int)(c.G * f), (int)(c.B * f));
 
+    /// <summary>
+    /// A node's own colour carrying its HOVER and PRESSED states — the one place the two are applied,
+    /// so the art path and the greybox path cannot disagree about what a hovered node looks like.
+    /// </summary>
+    /// <remarks>
+    /// Hover ARRIVES at exactly the Bone the screen has always used — the end state is not touched, only
+    /// the way it is reached (§26: ~80–120 ms, restrained; LAW 1: this is polish, not a redesign).
+    /// PRESSED takes the light back out with <see cref="Muted"/> rather than with an alpha, so a held
+    /// node DIMS instead of turning translucent over the wallpaper.
+    /// </remarks>
+    private static Color StateTint(Color c, float hoverLift, bool pressed)
+    {
+        if (hoverLift > 0f) c = Color.Lerp(c, Bone, hoverLift);
+        return pressed ? Muted(c, 0.74f) : c;
+    }
+
     private static Color BranchColor(Branch b) => b switch
     {
         Branch.Resonance => new Color(0xD6, 0x48, 0x5C),
@@ -1704,16 +1998,39 @@ public sealed class MasteryScreen
             || sp.Y < TreeView.Y - 200 || sp.Y > TreeView.Bottom + 200) return;
 
         var cx = (int)sp.X;
-        var cy = (int)sp.Y;
-        var box = new Rectangle(cx - rad, cy - rad, rad * 2, rad * 2);
-        // The SAME square the click tests, so what lights up is what takes the click (LAW 5).
+        // The SAME square the click tests, so what lights up is what takes the click (LAW 5). Tested
+        // against the node's TRUE centre, never the pressed one: a control that moved out from under
+        // the pointer as you pressed it would be a bug, not feedback (UiKit.Button does the same).
+        var cyHit = (int)sp.Y;
         var half = NodeHitHalf(node.Kind);
         var hover = !OverDock(mouse)
-                    && Math.Abs(mouse.X - cx) <= half && Math.Abs(mouse.Y - cy) <= half;
+                    && Math.Abs(mouse.X - cx) <= half && Math.Abs(mouse.Y - cyHit) <= half;
 
         var taken = Mastery.IsTaken(node.Id);
         var canTake = Mastery.CanTake(node.Id);
         var branchCol = BranchColor(node.Branch);
+
+        // ══ THE STANDARD STATES, ON A NODE (brief §25–§29). A node is a control, drawn by hand, so it
+        //    has to answer all six itself — UiKit.Button cannot do it for a diamond on a camera.
+        //
+        //    NORMAL   colour says branch, brightness says taken / takeable / locked (below).
+        //    HOVER    a luminance lift toward Bone, eased in over Fast. Restrained: no size change,
+        //             nothing jumps, and it reads at the whole-tree framing where a node is 28 px.
+        //    PRESSED  the same 2 px depression the house button drops, and the light banked down —
+        //             immediate, and held for exactly as long as the button is.
+        //    SELECTED a persistent gold ring OUTSIDE the node: the node the inspector is reading. It
+        //             is a different channel from hover on purpose (§28) — hover brightens the node
+        //             itself, selection draws a ring around it — so a hovered node and the pinned node
+        //             are told apart at a glance, including when they are the same node.
+        //    DISABLED the locked treatment, which stays readable rather than vanishing; the REASON is
+        //             one plain line in the inspector, that node's own (see Say / DrawNodeDetail).
+        //    FOCUSED  this screen has no keyboard focus ring — the arrows drive the camera, not a
+        //             cursor between nodes — so there is no focused state to draw. See the report.
+        var hoverLift = Lift(HoverKey(node.Id), hover && node.Kind != MasteryKind.Start);
+        var pressed = hover && Held && node.Kind != MasteryKind.Start;
+        var selLift = Lift(SelKey(node.Id), _pinnedNodeId == node.Id && node.Kind != MasteryKind.Start);
+        var cy = pressed ? cyHit + PressDepth : cyHit;
+        var box = new Rectangle(cx - rad, cy - rad, rad * 2, rad * 2);
 
         // Colour says BRANCH; brightness says state. A field of identical grey boxes told the player
         // neither, and the tree's whole shape — four opposed roads — was invisible until they read
@@ -1750,16 +2067,35 @@ public sealed class MasteryScreen
         // reason to land on — six nodes among sixty-three. A slow gold halo is the cheapest honest way
         // to say "these are not ordinary nodes"; the moment a discipline exists it stops, because then
         // the announcement would be nagging about a choice already made.
+        //
+        // UNDER REDUCED MOTION IT DOES NOT BREATHE — it HOLDS, at the top of its own breath (brief §32:
+        // drop idle motion, keep the static highlight). _breathPhase is sampled once per Update, so this
+        // is the whole of that decision and Draw only reads a number.
         if (node.Kind == MasteryKind.Specialisation && aff is null && !taken)
-        {
-            var pulse = 0.55f + 0.45f * MathF.Sin((float)_breath.Elapsed.TotalSeconds * 2.4f);
             for (var ring = 3; ring >= 1; ring--)
             {
                 var g = (int)(box.Width * 0.09f * ring);
                 _ui.Diamond(b, new Rectangle(box.X - g, box.Y - g, box.Width + g * 2, box.Height + g * 2),
-                            Gold * (0.14f * pulse));
+                            Gold * (0.14f * _breathPhase));
             }
+
+        // THE TAKE — the node blooms ONCE. Fired from Update at the take (see TakeNode), keyed to this
+        // node, read here and never re-armed by a draw. A pure fade at a FIXED radius: a bloom that
+        // expanded would be movement, and movement is the thing Reduced Motion drops — this one plays
+        // the same on both settings, which is what the brief's "keep simple fades" allows.
+        var bloom = DevPose is { } bp && node.Id == DevTakeId ? 1f - bp : UiMotion.Pulse(NodeKey(node.Id));
+        if (bloom > 0f)
+        {
+            DrawRing(b, new Vector2(cx, cy), rad * 1.22f, Math.Max(2f, rad * 0.14f), Gold * (0.90f * bloom));
+            DrawRing(b, new Vector2(cx, cy), rad * 1.50f, Math.Max(1.5f, rad * 0.09f), Gold * (0.45f * bloom));
         }
+
+        // SELECTED — the node the inspector is reading, ringed in gold outside its own frame. Eased,
+        // so moving the pin from one node to the next is a hand-off rather than a jump cut; instant
+        // under Reduced Motion, with the same ring at the end of it.
+        if (selLift > 0f)
+            DrawRing(b, new Vector2(cx, cy), rad + Math.Max(3f, rad * 0.34f), Math.Max(1.5f, rad * 0.10f),
+                     Gold * (0.85f * selLift));
 
         if (frame is not null)
         {
@@ -1792,15 +2128,21 @@ public sealed class MasteryScreen
             else if (node.Kind == MasteryKind.Notable || node.Kind == MasteryKind.Bridge) _ui.Hex(b, field, fieldCol);
             else _ui.Diamond(b, Circleish(field), fieldCol);
 
-            b.Draw(frame, box, hover ? Bone : owned || taken ? Gold : canTake ? branchCol
-                               : lockedSpec ? Muted(branchCol, 0.72f) : Path);
+            // HOVER ARRIVES, IT NO LONGER SNAPS. It was `hover ? Bone : <state>` — the same bone white
+            // this still lands on, but reached in one frame, so crossing a node was a flicker rather
+            // than a response. It eases there over Fast now (§26: luminance, restrained, 80–120 ms),
+            // and PRESSED banks the light back down (§27) — three degrees of the same node, and the
+            // resting colour and the fully-hovered colour are both exactly what shipped (LAW 1).
+            var frameCol = owned || taken ? Gold : canTake ? branchCol
+                           : lockedSpec ? Muted(branchCol, 0.72f) : Path;
+            b.Draw(frame, box, StateTint(frameCol, hoverLift, pressed));
         }
         else
         {
             // No art on disk: the flat shapes this screen shipped with. The game must run with an empty
             // assets/art, so every draw site keeps its greybox rather than borrowing someone else's art.
             _ui.Fill(b, box, node.Kind == MasteryKind.Start ? PanelBg : fill);
-            Outline(b, box, node.Kind == MasteryKind.Start ? Slate : hover ? Bone : edge,
+            Outline(b, box, node.Kind == MasteryKind.Start ? Slate : StateTint(edge, hoverLift, pressed),
                     owned ? thick * 2 : thick);
         }
 
